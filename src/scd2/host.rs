@@ -434,6 +434,11 @@ pub const FG_SYSTEM_MOVIE: u8 = 22;
 pub const FG_SYSTEM_8000: u8 = 16;
 /// `fg_status`'s `0x4000000`: EASY's.
 const FG_STATUS_EASY: u8 = 5;
+/// `fg_status`'s `0x40000000`: scenario B.
+const FG_STATUS_SCENARIO_B: u8 = 1;
+/// `fg_system`'s `0x200000`, which `Stage_init_item` tests before it gives
+/// EASY's hint file. No writer is known.
+const FG_SYSTEM_200000: u8 = 10;
 
 /// The script's task slots.
 const TASK_SLOTS: usize = super::vm::TASKS;
@@ -970,6 +975,29 @@ impl Re2State {
         self.set_flag(STATUS_BANK, FG_STATUS_EASY, u8::from(easy));
         self.hard_mode = hard_mode;
         self.censorship_off = censorship_off;
+    }
+
+    /// `fg_status`'s `0x4000000`: the game is on EASY.
+    pub fn easy(&self) -> bool {
+        self.flag(STATUS_BANK, FG_STATUS_EASY)
+    }
+
+    /// Whether `Stage_init_item` (`0x500EE0`) gives a new game EASY's
+    /// handgun bullets: `fg_system`'s `0x20` (the difficulty confirm's EASY)
+    /// without its `0x80000` (EASY in ARRANGE MODE, whose start isn't
+    /// ported).
+    pub fn gets_easy_ammo(&self) -> bool {
+        self.flag(0, FG_SYSTEM_EASY) && !self.flag(0, FG_SYSTEM_EASY_CENSORSHIP_OFF)
+    }
+
+    /// Whether `Stage_init_item` (`0x500EE0`, asm `0x5012E5`) gives a new
+    /// game EASY's hint file: on EASY, without `fg_system`'s `0x200000`, and
+    /// not in scenario B (`fg_status`'s `0x40000000`).
+    pub fn gets_hint_file(&self) -> bool {
+        self.easy()
+            && !self.flag(0, FG_SYSTEM_200000)
+            && !self.scenario_b
+            && !self.flag(STATUS_BANK, FG_STATUS_SCENARIO_B)
     }
 
     /// The choice's two bytes, as the routines that read them see them.

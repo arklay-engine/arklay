@@ -2496,7 +2496,7 @@ impl GameSession {
         game.re2.scenario_b = scenario_b;
         seed_re2_music_table(pack, &mut game, scenario_b);
         seed_new_game(pack, &mut game, character);
-        seed_new_game_choice(&mut game, options);
+        seed_new_game_choice(&mut game, options, loaded.re2_vm.is_some());
         let mut player_state = player::spawn(id, &loaded.room);
         let own_start = pack_start_room(pack, character).is_some();
         if scenario_b {
@@ -2551,7 +2551,7 @@ impl GameSession {
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_new_game(pack, &mut game, character);
-        seed_new_game_choice(&mut game, options);
+        seed_new_game_choice(&mut game, options, loaded.re2_vm.is_some());
         let mut player_state = player::spawn(id, &loaded.room);
         player_state.pos = [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z];
         player_state.angle = NEW_GAME_ANGLE;
@@ -2678,7 +2678,7 @@ impl GameSession {
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_fresh_state(pack, &mut game);
-        seed_new_game_choice(&mut game, options);
+        seed_new_game_choice(&mut game, options, loaded.re2_vm.is_some());
         let player_state = player::spawn(id, &loaded.room);
         game.sync_entity_from_player(&player_state);
         let mut session = Self::from_loaded(pack, loaded, game, player_state, save_dir, options)?;
@@ -9295,12 +9295,17 @@ fn pack_start_room(pack: &Pack, character: u8) -> Option<RoomId> {
 /// RE 2's new-game choice in the run options (`--difficulty`, `--arrange`,
 /// or the title's), as `FUN_004b73c0` and `Title_game_init` leave it: before
 /// the room's boot, so that the room's scripts and the enemies' inits read
-/// it. No choice leaves the game as it starts.
-fn seed_new_game_choice(game: &mut game::GameState, options: player::Options) {
+/// it. No choice leaves the game as it starts. EASY's start items
+/// (`Stage_init_item`) are RE 2's only (`re2_room`): an RE 1 pack's slots stay
+/// as its own new game seeds them.
+fn seed_new_game_choice(game: &mut game::GameState, options: player::Options, re2_room: bool) {
     let choice = options.new_game;
     if choice != crate::ui::NewGameChoice::default() {
         game.re2
             .start_new_game(choice.easy, choice.hard_mode, choice.censorship_off);
+        if re2_room {
+            game.seed_re2_easy();
+        }
     }
 }
 

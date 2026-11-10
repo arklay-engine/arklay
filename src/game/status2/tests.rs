@@ -1005,3 +1005,54 @@ fn a_held_left_in_sub_3_moves_only_on_flag_ticks() {
     assert_eq!(page(&game).sub, FILE_LEFT);
     assert_eq!(sounds, vec![Sound::Turn]);
 }
+
+/// `Stage_init_item`'s EASY steps: Leon's hint file or Claire's in slot 0
+/// at last page 1 (none off EASY or in scenario B), the bullets and the
+/// sprays; `St_init00` then grows the character's from the flags on each
+/// opening.
+#[test]
+fn easy_new_game_holds_the_hint_file() {
+    use crate::scd2::host::NO_FILE;
+    for (room, file) in [("1020", 0x17), ("1021", 0x18)] {
+        let mut game = GameState::new(RoomId::parse(room).unwrap(), &RoomState::default());
+        game.re2.start_new_game(true, false, false);
+        game.seed_re2_easy();
+        assert_eq!(game.re2.files[0], file, "room {room}");
+        assert_eq!(game.re2_slot(3), [0x14, 120]);
+        assert_eq!(game.re2.item_box[1..4], [[0x23, 1, 0]; 3]);
+        assert_eq!(game.re2_file.pages_last(file), 1);
+        game.re2.set_flag(4, 0x0F, 1);
+        game.init_re2_status();
+        assert_eq!(game.re2_file.pages_last(file), 2);
+    }
+    let mut normal = GameState::new(RoomId::parse("1020").unwrap(), &RoomState::default());
+    normal.re2.start_new_game(false, false, false);
+    normal.seed_re2_easy();
+    assert_eq!(normal.re2.files[0], NO_FILE);
+    let mut scenario_b = GameState::new(RoomId::parse("1020").unwrap(), &RoomState::default());
+    scenario_b.re2.scenario_b = true;
+    scenario_b.re2.start_new_game(true, false, false);
+    scenario_b.seed_re2_easy();
+    assert_eq!(scenario_b.re2.files[0], NO_FILE);
+}
+
+/// `Sort_item` at `Status`'s start: the slots after the first empty one move
+/// up one and the last is cleared, so EASY's bullets in slot 3 move to slot
+/// 2; an inventory with no gap before its end stays as it is.
+#[test]
+fn the_status_start_closes_the_first_gap() {
+    let mut game = GameState::new(RoomId::parse("1020").unwrap(), &RoomState::default());
+    game.set_re2_slot(0, [0x01, 1]);
+    game.set_re2_slot(1, [0x02, 15]);
+    game.set_re2_slot(2, [0, 0]);
+    game.set_re2_slot(3, [0x14, 120]);
+    game.init_re2_status();
+    let slots = |game: &GameState| (0..4).map(|slot| game.re2_slot(slot)).collect::<Vec<_>>();
+    assert_eq!(slots(&game), [[0x01, 1], [0x02, 15], [0x14, 120], [0, 0]]);
+    game.init_re2_status();
+    assert_eq!(
+        slots(&game),
+        [[0x01, 1], [0x02, 15], [0x14, 120], [0, 0]],
+        "compact"
+    );
+}

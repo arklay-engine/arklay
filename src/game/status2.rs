@@ -543,6 +543,11 @@ fn re2_file(
     // Whether the tick ends with `ST_Om_trans` (`0x500470`), the binders'
     // draw: every sub to 0xC but 0xB's load tick.
     let mut binders_drawn = true;
+    // `St_disp_file` draws the page at the end of every tick that starts in
+    // subs 0xD to 0x12.
+    if (FILE_PAGE..=FILE_PREV_IN).contains(&page.sub) {
+        work.page_draws = work.page_draws.saturating_add(1);
+    }
     match page.sub {
         FILE_LOAD | FILE_IN | FILE_OUT => {
             if page.sub == FILE_LOAD {
@@ -709,6 +714,7 @@ fn reader(
                 // page sliding in from the right, the background black.
                 work.x = PAGE_X_NEXT;
                 work.shown_page = work.page;
+                work.page_draws = 0;
                 page.sub = FILE_NEXT_IN;
                 page.command = 0;
                 out.sounds.push(Sound::Page);
@@ -737,7 +743,7 @@ fn reader(
                 }
             };
             if input.right {
-                if files::pages_last(file) <= u16::from(work.page) {
+                if work.pages_last(file) <= u16::from(work.page) {
                     page.sub = FILE_END;
                     out.sounds.push(Sound::Cursor);
                     if back(page, work) {
@@ -858,6 +864,13 @@ fn move_cursor(cursor: &mut u8, slots: u8, input: Input, tabs: bool) -> bool {
     false
 }
 
+/// EASY's start (`Stage_init_item`): a First Aid Spray in each of the item
+/// box's slots 1 to 3, and handgun bullets in the inventory's slot 3.
+const EASY_BOX_ITEM: u8 = 0x23;
+const EASY_AMMO_SLOT: u8 = 3;
+const EASY_AMMO: u8 = 0x14;
+const EASY_AMMO_COUNT: u8 = 120;
+
 impl GameState {
     /// Open the item page with the screen: the inventory takes its slots'
     /// places, empty ones included, until [`GameState::close_re2_items`].
@@ -875,8 +888,51 @@ impl GameState {
     /// open's sixth tick, the frame before the fade in's first.
     pub fn init_re2_status(&mut self) {
         self.re2_file.blink = Blink::OPEN;
+        // `St_init00` (`0x4F7CD0`): on EASY, the character's hint file's
+        // last page from the flags.
+        if self.re2.easy() {
+            let character = self.id.player_flag & 1;
+            let re2 = &self.re2;
+            self.re2_file.hint_pages[usize::from(character)] =
+                files::hint_pages_last(character, |bank, index| re2.flag(bank, index));
+        }
         // `Pad_rep_set(0xF01C, 0x60A)`, in `Status`'s start.
         self.pad_repeat.set(super::pad_repeat::STATUS_SETTING);
+        // `Sort_item` (`0x502690`), at the end of `Status`'s start: the
+        // slots after the first empty one move up one and the last is
+        // cleared. Only a start that leaves a gap (EASY's bullets in slot
+        // 3) shows it.
+        let size = self.inventory_capacity().min(self.inventory.len());
+        if let Some(empty) = self.inventory[..size]
+            .iter()
+            .position(|stack| stack.id == 0)
+        {
+            self.inventory[empty..size].rotate_left(1);
+            self.inventory[size - 1] = super::InventoryItem::default();
+        }
+    }
+
+    /// `Stage_init_item`'s (`0x500EE0`) EASY steps at a new game: Leon's
+    /// hint file (0x17) or Claire's (0x18) in slot 0 of the files, with its
+    /// last page 1 (see [`crate::scd2::host::Re2State::gets_hint_file`]), a
+    /// First Aid Spray in each of the item box's slots 1 to 3, and 120
+    /// handgun bullets in slot 3 of the inventory
+    /// ([`crate::scd2::host::Re2State::gets_easy_ammo`]).
+    pub fn seed_re2_easy(&mut self) {
+        if !self.re2.easy() {
+            return;
+        }
+        if self.re2.gets_hint_file() {
+            let character = usize::from(self.id.player_flag & 1);
+            self.re2.files[0] = files::HINT_FILES[character];
+            self.re2_file.hint_pages[character] = 1;
+        }
+        for slot in &mut self.re2.item_box[1..=3] {
+            *slot = [EASY_BOX_ITEM, 1, 0];
+        }
+        if self.re2.gets_easy_ammo() {
+            self.set_re2_slot(EASY_AMMO_SLOT, [EASY_AMMO, EASY_AMMO_COUNT]);
+        }
     }
 
     /// Close the item page: the inventory compacts again.

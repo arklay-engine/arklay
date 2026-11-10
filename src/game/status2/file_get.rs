@@ -73,6 +73,7 @@ pub fn open(work: &mut FileWork, files: &mut [u8; FILE_SLOTS], file: u8) -> File
     work.slot = (slot % 8) as i8;
     work.page = 0;
     work.shown_page = 0;
+    work.page_draws = 0;
     work.x = PAGE_X_NEXT;
     FileGet {
         sub: NEXT_IN,
@@ -139,7 +140,7 @@ impl FileGet {
                     }
                 };
                 if input.right {
-                    if files::pages_last(file) <= u16::from(work.page) {
+                    if work.pages_last(file) <= u16::from(work.page) {
                         self.sub = END;
                         sounds.push(Sound::Cursor);
                         if back(self, work) {

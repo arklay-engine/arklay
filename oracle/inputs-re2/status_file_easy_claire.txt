@@ -1,0 +1,39 @@
+# room 102 as Claire on EASY with fg_common 0xF and fg_map 0x40 raised, holding the hint file from the new game (slot 0): FILE, open the binder, read the hint file to its end marker, close it, the binder and the screen (oracle/re2.md, "Status screen")
+364 start
+368
+400 up
+404
+420 up
+424
+440 left
+444
+460 left
+464
+480 confirm
+484
+520 confirm
+524
+660 confirm
+664
+780 right
+784
+820 right
+824
+860 right
+864
+900 right
+904
+940 right
+944
+980 right
+984
+1020 right
+1024
+1060 right
+1064
+1100 cancel
+1104
+1160 cancel
+1164
+1220 start
+1224

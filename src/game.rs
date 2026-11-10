@@ -9000,6 +9000,11 @@ impl GameState {
             }
             phase => (phase, get.ticks),
         };
+        // `St_init02`'s fade draws the page through `St_disp_file` on each
+        // of its ticks.
+        if phase == Re2ItemGetPhase::FileFade {
+            self.re2_file.page_draws = self.re2_file.page_draws.saturating_add(1);
+        }
         get.phase = phase;
         get.ticks = ticks;
         self.re2_item_get = Some(get);
