@@ -16,8 +16,10 @@
 --   - save safety: no save that a reload would turn straight back into the
 --     same death. Health under BotSurvival's critical floor with no heal
 --     item held, or with too few rounds for one kill of the hardest `fight`
---     monster (BotSave.dead_end), is a dead end: the reload starts there
---     with nothing to fight or heal with, and a death since such a save
+--     monster, or under LOW_HEALTH with no heal item and either too few
+--     rounds or an uncured poison (BotSave.dead_end), is a dead end: the
+--     reload starts there with nothing to fight or heal with, or with the
+--     poison running, and a death since such a save
 --     repeats until the run gives up. A dead end is saved only when there
 --     is no other choice (BotSave.no_choice): no save exists yet, or the
 --     latest save is no better (no more health, rounds or heals; recorded
@@ -164,18 +166,33 @@ end
 
 -- The save-safety test (see the header), from plain values: health,
 -- max_health, risk, heals (heal stacks held), rounds (the equipped gun's
--- clip plus its ammunition) and shots (hits for one kill of the hardest
--- `fight` monster, nil unknown). Returns why a save here is a dead end, or
--- nil.
+-- clip plus its ammunition), shots (hits for one kill of the hardest
+-- `fight` monster, nil unknown) and poisoned (poisoned with no cure held).
+-- Returns why a save here is a dead end, or nil.
 function BotSave.dead_end(o)
-    if o.health >= o.max_health * BotSurvival.critical_fraction(o.risk) then
+    local no_rounds = (o.rounds or 0) < (o.shots or 1)
+    if o.health < o.max_health * BotSurvival.critical_fraction(o.risk) then
+        if (o.heals or 0) == 0 then
+            return "critical health with no heal item"
+        end
+        if no_rounds then
+            return "critical health without the rounds for one kill"
+        end
         return nil
     end
-    if (o.heals or 0) == 0 then
-        return "critical health with no heal item"
+    -- Low health with no heal item is a dead end too when the bot cannot
+    -- hold the monsters off or the health keeps falling: seed 1 saved at
+    -- 20/96 with no rounds and no heal, and every reload walked past two
+    -- zombies to a herb and died; seed 6 saved poisoned at 16/96 with no
+    -- cure, and the poison took the rest on each reload.
+    if o.health >= o.max_health * LOW_HEALTH or (o.heals or 0) > 0 then
+        return nil
     end
-    if (o.rounds or 0) < (o.shots or 1) then
-        return "critical health without the rounds for one kill"
+    if no_rounds then
+        return "low health with no heal item and without the rounds for one kill"
+    end
+    if o.poisoned then
+        return "low health and poisoned with no heal or cure item"
     end
     return nil
 end
@@ -195,6 +212,15 @@ function BotSave.no_choice(latest, now)
         and latest.heals <= now.heals
 end
 
+-- Whether the player is poisoned with no cure for it held.
+function BotSave.uncured(bot, player)
+    if not (player.poisoned or player.seriously_poisoned) then
+        return false
+    end
+    return BotSurvival.pick_cure(bot:knowledge().cures, player,
+        function(item) return bot:item_count(item) > 0 end, true) == nil
+end
+
 -- What the save-safety rule reads from the live state.
 local function condition(bot, player)
     local rounds, shots = BotSurvival.rounds(bot)
@@ -205,6 +231,7 @@ local function condition(bot, player)
         heals = BotSurvival.heal_count(bot),
         rounds = rounds,
         shots = shots,
+        poisoned = BotSave.uncured(bot, player),
     }
 end
 
