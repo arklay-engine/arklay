@@ -217,7 +217,10 @@ struct Sequence {
     state: u8,
     /// `Seq_ctr[1]`: 0 plays on the room's load.
     hold: u8,
-    /// `Seq_ctr[2]`: a bank is loaded.
+    /// A track is loaded. The original's `Seq_ctr[2]` (0 or more) means its
+    /// bank loaded; the two differ only for a bank whose row names no track
+    /// (main 9, some subs), where nothing can play, so the steps this guards
+    /// change nothing audible there.
     loaded: bool,
     /// `ss_timer`.
     fade: u8,
@@ -1083,7 +1086,9 @@ mod tests {
     }
 
     #[test]
-    fn the_banks_are_the_retail_datas() {
+    fn the_bank_tables_leave_out_the_missing_banks() {
+        // The retail `Common/Sound/BGM` folder and the six Steam language
+        // folders all lack exactly these banks.
         let mains: Vec<u8> = (0..64).filter(|&id| !main_bank(id)).collect();
         assert_eq!(mains, [0x26, 0x32, 0x3b, 0x3c, 0x3f]);
         let subs: Vec<u8> = (0..64).filter(|&id| sub_bank(id)).collect();

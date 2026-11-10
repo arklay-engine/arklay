@@ -7,9 +7,11 @@ ticks = 20620
 setup_script = "route_200_208.lua"
 input = "route_200_208.txt"
 voice_from_ref = true
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,zp,fgstat,fgitem,fgroom"
 frames = [0, 20619]
 frame_max_mean = 0.8
+# each room past the card on its own, from its hand back to its door's press (the doors' frames count in the whole run's mean): 200 from the card's, 201, 204, 205, 207 and 208
+frame_windows = [[14475, 15335, 0.6], [15702, 15826, 0.3], [16167, 17654, 0.55], [17995, 18435, 0.25], [18776, 19722, 1.05], [20063, 20619, 0.5]]
 expect = "match"
 record = ""
 # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): route_200_computer's ten, then 200, 201, 204, 205 and 207's
@@ -44,4 +46,7 @@ ignore = [
     [18436, "rseed"],
     [19723, "rng"],
     [19723, "rseed"],
+    # room 100's opening (not this route's change; no other run compares it): slot 1's angle on the load's tick, and slots 0 and 1 drawn at 0x404040 by the original until 183
+    [0, "zm1"],
+    [0, 183, "zp"],
 ]
