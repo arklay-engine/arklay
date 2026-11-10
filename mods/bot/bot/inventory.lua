@@ -583,7 +583,12 @@ function BotInventory.context(bot)
     end
     local near, used = {}, {}
     for _, fact in ipairs(bot:use_facts()) do
-        if BotPuzzle.use_open(bot, fact) then
+        -- So is one whose use waits only on an `after` flag that a learned
+        -- door ride sets (BotPlanner.after_door): the ride is a trip once
+        -- the item is held. Riding 302's elevator down closed 301's refill,
+        -- and the crank stayed in the box for good.
+        if BotPuzzle.use_open(bot, fact)
+            or (BotPlanner and BotPlanner.after_door and BotPlanner.after_door(bot, fact)) then
             ctx.uses[fact.item] = true
             used[fact.item] = true
             if stages[string.sub(fact.room, 1, 1)] then
