@@ -47,6 +47,23 @@ local function on_damage(bot, player)
     BotTactics.note_hurt(bot, nearest)
 end
 
+-- A tick of the trace a `trace` memory note asks for (a driver script's
+-- `remember = { trace = "1" }`; scripts/bot-rooms.py play --trace): where
+-- the player and every monster stand and what they are doing, to read a
+-- fight tick by tick.
+local function trace(bot, player)
+    local w = bot:weapon()
+    local parts = { string.format("trace p=(%d,%d) a=%d hp=%d st=%d w=%d/%d",
+        player.x, player.z, player.angle, player.health, player.state,
+        w.behavior, w.state) }
+    for _, e in ipairs(bot:enemies()) do
+        parts[#parts + 1] = string.format("| %d:%02X (%d,%d) d=%d hp=%d %s b=%d/%d st=%d f=%02X h=%d",
+            e.slot, e.id, e.x, e.z, e.distance, e.health, e.visible and "v" or "-",
+            e.action_behavior, e.action_state, e.state, e.status_flags, e.hit_state)
+    end
+    bot:log(table.concat(parts, " "))
+end
+
 local function enter_room(bot, room)
     local p = bot:player()
     bot:log(string.format("room %s pos=(%d,%d) camera=%d health=%d/%d",
@@ -63,6 +80,9 @@ function on_bot_tick(bot)
     -- First, so the memory the engine checkpoints with a save holds it.
     BotSave.observe(bot)
     on_damage(bot, player)
+    if bot:memory().trace then
+        trace(bot, player)
+    end
 
     if BOT_STATE.room ~= room.id then
         enter_room(bot, room)

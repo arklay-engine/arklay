@@ -212,6 +212,11 @@ pub(super) struct BotStats {
     /// Health drops above [`HIT_THRESHOLD`], in all and per room.
     hits: u32,
     room_hits: BTreeMap<String, u32>,
+    /// The hits by the kind of the nearest living enemy (`"06"`; `"none"`
+    /// with no enemy in the room: poison, a trap).
+    enemy_hits: BTreeMap<String, u32>,
+    /// The most living enemies of each kind seen at once.
+    enemy_kinds: BTreeMap<String, u32>,
     /// The bot's compute cost per tick.
     compute: ComputeLoad,
     deaths: u32,
@@ -480,6 +485,13 @@ impl BotStats {
             if last - health > HIT_THRESHOLD {
                 self.hits += 1;
                 *self.room_hits.entry(room.clone()).or_default() += 1;
+                let nearest = snapshot
+                    .enemies
+                    .iter()
+                    .filter(|enemy| enemy.health > 0)
+                    .min_by_key(|enemy| enemy.distance)
+                    .map_or_else(|| "none".to_string(), |enemy| format!("{:02X}", enemy.id));
+                *self.enemy_hits.entry(nearest).or_default() += 1;
             }
         }
         self.first_health.get_or_insert(health);
@@ -526,6 +538,14 @@ impl BotStats {
             now.insert((*slot, *id), *health);
         }
         self.prev_enemies = now;
+        let mut living: BTreeMap<u8, u32> = BTreeMap::new();
+        for enemy in snapshot.enemies.iter().filter(|enemy| enemy.health > 0) {
+            *living.entry(enemy.id).or_default() += 1;
+        }
+        for (id, count) in living {
+            let most = self.enemy_kinds.entry(format!("{id:02X}")).or_default();
+            *most = (*most).max(count);
+        }
 
         self.pending_activity = Some(snapshot_activity(snapshot));
         self.pos = (snapshot.player.x, snapshot.player.z);
@@ -650,6 +670,8 @@ impl BotStats {
             },
             "hits": self.hits,
             "room_hits": self.room_hits,
+            "enemy_hits": self.enemy_hits,
+            "enemy_kinds": self.enemy_kinds,
             "room_loads": room_loads,
             "compute": compute,
             "rooms_reached": self.room_entries.len(),
