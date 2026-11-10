@@ -625,7 +625,8 @@ impl Effects {
     ) -> Option<usize> {
         let first = self.call(kind, row, size, 0, at, false)?;
         for (index, slot) in self.slots.iter_mut().enumerate() {
-            if index == first || slot.parent != 0 && usize::from(slot.parent) == first {
+            if index == first || slot.flags != 0 && first != 0 && usize::from(slot.parent) == first
+            {
                 slot.object = Some(object);
             }
         }

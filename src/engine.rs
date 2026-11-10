@@ -2947,12 +2947,13 @@ impl GameSession {
         // arrives in room 207's cut 3, inside a zone to cut 4. The cut the
         // init script's `cut_chg` set (room 101's 5, kept after its
         // `cut_auto`) goes on screen now.
-        if self.game.is_re2_room && from.is_some() {
-            if self.game.camera.current_cut < self.loaded.room.cuts.len() {
-                self.loaded.room.current_cut = self.game.camera.current_cut;
-            }
-        } else {
-            apply_camera(&mut self.loaded.room, &mut self.game, Some(self.player.pos));
+        match arrival_cut_kept(
+            self.game.is_re2_room && from.is_some(),
+            self.game.camera.current_cut,
+            self.loaded.room.cuts.len(),
+        ) {
+            Some(cut) => self.loaded.room.current_cut = cut,
+            None => apply_camera(&mut self.loaded.room, &mut self.game, Some(self.player.pos)),
         }
         drain_mask_toggles(&mut self.loaded.room, &mut self.game);
         // The original runs `update_room_bgm` after the destination's init
@@ -17543,6 +17544,14 @@ fn reset_room_camera_id(game: &mut game::GameState) {
 /// `g_roomCameraId` write, and the zone scan has to start from it for the
 /// camera-zone walk to re-home there. `None` keeps the current cut when no
 /// position is available yet (room load and capture).
+/// The cut a room's arrival keeps on screen without testing the zones: an RE2
+/// door's (`re2_door`) keeps the cut `Door_load` or the init script's
+/// `cut_chg` named until the door ends. Anything else, or a cut the room
+/// doesn't have, tests the zones now (`None`).
+fn arrival_cut_kept(re2_door: bool, cut: usize, cuts: usize) -> Option<usize> {
+    (re2_door && cut < cuts).then_some(cut)
+}
+
 fn apply_camera(room: &mut RoomState, game: &mut game::GameState, pos: Option<[i32; 3]>) {
     // `game_loop` consumes a pending deferred redisplay before it tests the
     // zones: the cut the previous frame's walk chose is the one drawn this
@@ -35109,6 +35118,15 @@ off_0010:
         let away = [500_000, 0, 0];
         assert_eq!(cut_showing_player(&room, away, &[2]), Some(2), "none does");
         assert_eq!(cut_showing_player(&room, away, &[]), None);
+    }
+
+    /// An RE2 door's arrival keeps its cut until the door ends; a load, an RE1
+    /// room, or a cut the room lacks tests the zones as the room loads.
+    #[test]
+    fn only_an_re2_doors_arrival_keeps_its_cut_under_the_door() {
+        assert_eq!(arrival_cut_kept(true, 3, 5), Some(3), "room 207's cut 3");
+        assert_eq!(arrival_cut_kept(true, 5, 5), None, "no such cut");
+        assert_eq!(arrival_cut_kept(false, 3, 5), None, "a load or RE1");
     }
 
     /// An RE2 room has no walk zones to fall back on: a door with no way back

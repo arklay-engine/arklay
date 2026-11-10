@@ -26,10 +26,10 @@ ignore = [
   # when the load's pass clears the objects' areas; arklay's setup script raises it after
   [344, 483, "om2"],
   # the three loads: the original lists the old room's objects until the new room's are set up, about 90 ticks into
-  # the load, where arklay lists the new room's from the load; nothing is drawn then (as `hk`)
-  [484, 574, "om0"], [484, 574, "om1"], [484, 574, "om2"], [484, 574, "om3"], [484, 574, "hk"],
-  [975, 1148, "om0"], [975, 1148, "om1"], [975, 1148, "om2"], [975, 1148, "hk"],
-  [3759, 3849, "om0"], [3759, 3849, "om1"], [3759, 3849, "om2"], [3759, 3849, "hk"],
+  # the load, where arklay lists the new room's from the load; nothing reads them then
+  [484, 574, "om0"], [484, 574, "om1"], [484, 574, "om2"],
+  [975, 1148, "om0"], [975, 1148, "om1"], [975, 1148, "om2"],
+  [3759, 3849, "om0"], [3759, 3849, "om1"], [3759, 3849, "om2"],
   # the head's point as a push starts (the count's six ticks) and as clips 7 and 8 change (docs/internals/deviations/re2.md, "The head in a push")
   [1532, 1537, "pneck"], [1786, 1791, "pneck"], [2022, "pneck"], [2034, 2037, "pneck"], [2058, 2064, "pneck"],
   [2118, 2123, "pneck"], [2199, "pneck"], [2211, 2217, "pneck"], [2288, 2293, "pneck"], [2530, 2535, "pneck"],
