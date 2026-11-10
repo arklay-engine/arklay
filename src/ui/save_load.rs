@@ -77,6 +77,12 @@ pub trait SaveScreen: Screen {
     fn native_canvas(&self) -> Option<&gui::Canvas> {
         None
     }
+
+    /// A value a script screen published with `api:set(key, value)`;
+    /// `None` for a screen that publishes none.
+    fn value(&self, _key: &str) -> Option<i64> {
+        None
+    }
 }
 
 /// A screen drawn at the window's resolution: the app hands it the menus'

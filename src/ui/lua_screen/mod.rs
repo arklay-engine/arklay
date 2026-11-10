@@ -506,6 +506,10 @@ impl crate::ui::save_load::SaveScreen for LuaScreen {
     fn take_outcome(&mut self) -> Option<SaveOutcome> {
         LuaScreen::take_outcome(self)
     }
+
+    fn value(&self, key: &str) -> Option<i64> {
+        self.host.values.get(key).copied()
+    }
 }
 
 /// The sandboxed VM one screen script runs in.
@@ -1140,6 +1144,8 @@ fn no_draw() -> mlua::Error {
 
 #[cfg(test)]
 mod re2_computer_tests;
+#[cfg(test)]
+mod re2_save_tests;
 #[cfg(test)]
 mod re2_title_tests;
 #[cfg(test)]

@@ -2172,6 +2172,10 @@ struct GameSession {
     /// The `fg_stop` the hand-off puts back on R+1 (`0x6897C8`): the word
     /// `Sce_Save` saved before its prompt, and whatever the screen set.
     re2_save_stop: u32,
+    /// `Card_access`'s rows shown (`0x986394`) and the folder's saves
+    /// (`cnt0`, `0x663188`): globals the screen's state 1 sets and nothing
+    /// clears, so a screen shows the last one's until its own state 1.
+    re2_card_rows: [i64; 2],
     /// How many `Game_loop` passes ran the enemies under `fg_stop` outside
     /// the room's own tick ([`GameSession::re2_stopped_enemy_pass`]).
     #[cfg(test)]
@@ -2551,6 +2555,7 @@ impl GameSession {
         game.re2.scenario_b = scenario_b;
         seed_re2_music_table(pack, &mut game, scenario_b);
         seed_new_game(pack, &mut game, character);
+        seed_re2_save_count(&mut game, loaded.re2_vm.is_some());
         seed_new_game_choice(&mut game, options, loaded.re2_vm.is_some());
         let mut player_state = player::spawn(id, &loaded.room);
         let own_start = pack_start_room(pack, character).is_some();
@@ -2606,6 +2611,7 @@ impl GameSession {
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_new_game(pack, &mut game, character);
+        seed_re2_save_count(&mut game, loaded.re2_vm.is_some());
         seed_new_game_choice(&mut game, options, loaded.re2_vm.is_some());
         let mut player_state = player::spawn(id, &loaded.room);
         player_state.pos = [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z];
@@ -2765,11 +2771,14 @@ impl GameSession {
         // the block predates its visit; the map tab highlights it.
         game.mark_room_visited(id);
         // `InitializeGame`'s continue branch: a zero save counter also zeroes
-        // the play timer, then every load advances the counter.
+        // the play timer, then every load advances the counter. RE 2's count
+        // (`0x98E9BC`) is the saves made: only `Card_access`'s write raises it.
         if game.state_bytes[usize::from(game::STATE_BYTE_SAVES)] == 0 {
             game.state_bytes[0x24..0x28].fill(0);
         }
-        game.increment_saves();
+        if file.re2.is_none() {
+            game.increment_saves();
+        }
         let mut player_state = player::spawn(id, &loaded.room);
         // The original loads at height 0; the port-only height puts an
         // autosave taken on a stair landing or raised floor back on it.
@@ -2892,6 +2901,7 @@ impl GameSession {
             re2_status_return: None,
             re2_save: None,
             re2_save_stop: 0,
+            re2_card_rows: [0; 2],
             #[cfg(test)]
             re2_stopped_enemy_passes: 0,
             #[cfg(test)]
@@ -4768,6 +4778,14 @@ impl GameSession {
 
     /// Whether a pause-menu screen owns the tick, so the room is frozen and
     /// the original runs on its 16 ms non-gameplay limiter.
+    /// Whether the interactive loop ticks at the screens' 60 Hz: a frozen
+    /// room's screen, except RE 2's typewriter save screen, whose
+    /// `Card_access` runs at the game's 30 Hz (`Cardaccess_init` keeps
+    /// `bVSyncRate`, `0x98F07A`, at 2).
+    fn ui_tick_rate(&self) -> bool {
+        self.room_frozen() && self.re2_save != Some(Re2Save::Screen)
+    }
+
     fn room_frozen(&self) -> bool {
         self.menu_fade_phase != MenuFadePhase::None
             || self.menu.is_some()
@@ -6483,6 +6501,37 @@ impl GameSession {
         self.play_ui_cue_names(pack, cues);
     }
 
+    /// The oracle's `sv` field: the RE 2 save screen's `Card_access` work
+    /// while the typewriter's screen is up, as the screen script publishes
+    /// it (`sv_*`, `games/re2/ui/save_load.lua`), then the save count; `-`
+    /// otherwise (`Mem_card` isn't task 1).
+    fn re2_save_screen_trace(&self) -> String {
+        let screen = self
+            .save_screen
+            .as_ref()
+            .filter(|_| self.re2_save == Some(Re2Save::Screen));
+        let Some(screen) = screen.filter(|screen| screen.value("sv_sub").is_some()) else {
+            return "-".to_string();
+        };
+        let value = |key: &str| screen.value(key).unwrap_or(0);
+        let [rows, saves] = self.re2_card_rows;
+        format!(
+            "{},{},{:x},{},{},{},{},{},{},{},{},{}",
+            value("sv_sub"),
+            value("sv_step"),
+            value("sv_state"),
+            value("sv_mode"),
+            value("sv_cursor"),
+            value("sv_top"),
+            rows,
+            value("sv_timer"),
+            value("sv_choice"),
+            value("sv_typed"),
+            saves,
+            self.game.state_bytes[usize::from(game::STATE_BYTE_SAVES)],
+        )
+    }
+
     /// Capture the current game state as a save block with the hardcoded
     /// BioCard prefix.
     fn snapshot_save(&self) -> save::SaveFile {
@@ -6639,7 +6688,32 @@ impl GameSession {
             let result = screen.update(&cx, ui);
             (result, cx.cues.into_inner())
         };
-        self.play_ui_cue_names(pack, cues);
+        let re2_screen = self.re2_save == Some(Re2Save::Screen);
+        if re2_screen {
+            // The script publishes these from its state 1 on.
+            if let Some(screen) = self.save_screen.as_ref() {
+                for (kept, key) in self.re2_card_rows.iter_mut().zip(["sv_rows", "sv_saves"]) {
+                    if let Some(shown) = screen.value(key) {
+                        *kept = shown;
+                    }
+                }
+            }
+            self.play_re2_screen_cues(pack, cues);
+            // `Card_access`'s state 3 changes the live state on the write
+            // tick, while the screen goes on: the ribbon and the count.
+            if let Some(outcome) = self
+                .save_screen
+                .as_mut()
+                .and_then(|screen| screen.take_outcome())
+            {
+                self.game.re2_typewriter_write(outcome.ink_ribbon);
+                if outcome.slot.is_some() {
+                    self.saved_slot = outcome.slot;
+                }
+            }
+        } else {
+            self.play_ui_cue_names(pack, cues);
+        }
         if result == ScreenResult::Continue {
             return;
         }
@@ -6667,10 +6741,14 @@ impl GameSession {
             .as_mut()
             .and_then(|screen| screen.take_outcome())
         {
-            if outcome.ink_ribbon {
-                self.game.consume_ink_ribbon();
+            if self.game.is_re2_room {
+                self.game.re2_typewriter_write(outcome.ink_ribbon);
+            } else {
+                if outcome.ink_ribbon {
+                    self.game.consume_ink_ribbon();
+                }
+                self.game.increment_saves();
             }
-            self.game.increment_saves();
             if outcome.slot.is_some() {
                 self.saved_slot = outcome.slot;
             }
@@ -7214,6 +7292,32 @@ impl GameSession {
         self.play_re2_tick_sounds(pack);
         self.tick_re2_fades();
         true
+    }
+
+    /// The RE 2 save screen's cues: its `Snd_se_on`s (`api:core_sound`,
+    /// `0x4nn0000`, and `api:room_sound`, `0x2nn0000`) go through RE 2's
+    /// sound path, so they play from the loaded banks and reach the
+    /// trace's `snd`; any other cue plays by name.
+    fn play_re2_screen_cues(&mut self, pack: &Pack, cues: Vec<ui::UiCue>) {
+        let mut named = Vec::new();
+        for cue in cues {
+            let id = match cue {
+                ui::UiCue::Core(slot) => 0x0400_0000 | u32::from(slot) << 16,
+                ui::UiCue::RoomSound(slot) => 0x0200_0000 | u32::from(slot) << 16,
+                other => {
+                    named.push(other);
+                    continue;
+                }
+            };
+            if let Some(id) = crate::se2::SoundId::decode(id) {
+                self.game
+                    .re2
+                    .sounds
+                    .push(crate::scd2::host::SoundRequest::new(id, [0; 3]));
+            }
+        }
+        self.play_re2_tick_sounds(pack);
+        self.play_ui_cue_names(pack, named);
     }
 
     /// `Snd_se_call`'s part of `Psx_main` on a tick the game task doesn't
@@ -8424,8 +8528,7 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.re2_save.map_or(0, Re2Save::game_mode)),
-            // The save screen isn't the original's `Card_access` yet.
-            re2_save_screen: self.game.is_re2_room.then(|| "-".to_string()),
+            re2_save_screen: self.game.is_re2_room.then(|| self.re2_save_screen_trace()),
             re2_computer: self.game.is_re2_room.then(|| {
                 let common: String = self.game.re2.banks[4]
                     .iter()
@@ -9503,6 +9606,14 @@ fn seed_new_game_choice(game: &mut game::GameState, options: player::Options, re
 
 /// Apply the character-specific new-game seed over the fresh state:
 /// `SetInitialItems`, the save counter and the Jill first-run flags. The
+/// RE 2's save count (`0x98E9BC`) starts at 0: it counts the saves made,
+/// where RE 1's `InitializeGame` starts its counter at 1.
+fn seed_re2_save_count(game: &mut game::GameState, re2: bool) {
+    if re2 {
+        game.state_bytes[usize::from(game::STATE_BYTE_SAVES)] = 0;
+    }
+}
+
 /// room-BGM bytes, item box and room-item bank come from
 /// `game/initial_state.lua`, which `new_game_state` already ran.
 fn seed_new_game(pack: &Pack, game: &mut game::GameState, character: u8) {
@@ -10060,7 +10171,7 @@ impl App {
             }
             Mode::Boot | Mode::Select(_) | Mode::Load(_) | Mode::Save(_) => UI_TICK_MS,
             Mode::Play(session) => {
-                session_tick_interval(session.transition.is_some(), session.room_frozen())
+                session_tick_interval(session.transition.is_some(), session.ui_tick_rate())
             }
             Mode::Movie(_) => TICK_MS,
             // The RESULT/epilogue state machines step once per 30 Hz frame,
@@ -11987,7 +12098,7 @@ fn run_game_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()
         // the 16 ms limiter, and `--sound-wav` mixes that much sound for it.
         let frame_ms = match &app.mode {
             Mode::Play(session) => {
-                session_tick_interval(session.transition.is_some(), session.room_frozen())
+                session_tick_interval(session.transition.is_some(), session.ui_tick_rate())
             }
             _ => TICK_MS,
         };

@@ -343,32 +343,44 @@ impl UserData for Api<'_> {
             Ok(())
         });
 
-        methods.add_method_mut("save", |_lua, api, name: String| {
-            let Some(path) = save::file_path(&api.host.save_dir, &name) else {
-                return Ok((
-                    false,
-                    Some(format!("`{name}` is not a valid save file name")),
-                ));
-            };
-            let Mode::Save { file, ink_ribbon } = &api.host.mode else {
-                return Ok((false, Some("the screen is not in save mode".to_string())));
-            };
-            let mut file = file.clone();
-            if *ink_ribbon {
-                consume_snapshot_ribbon(&mut file);
-            }
-            match save::save_to_path(&path, &file) {
-                Ok(()) => {
-                    api.host.outcome = Some(SaveOutcome {
-                        slot: None,
-                        ink_ribbon: *ink_ribbon,
-                    });
-                    api.host.rescan();
-                    Ok((true, None))
+        // `save(name, carry_on)`: write the pending block to `name`. With
+        // `carry_on`, a failed write still counts as a save (the engine
+        // takes the ribbon and raises the count), as RE 2's `Card_access`
+        // carries on after a failed `WriteSaveFile`.
+        methods.add_method_mut(
+            "save",
+            |_lua, api, (name, carry_on): (String, Option<bool>)| {
+                let Some(path) = save::file_path(&api.host.save_dir, &name) else {
+                    return Ok((
+                        false,
+                        Some(format!("`{name}` is not a valid save file name")),
+                    ));
+                };
+                let Mode::Save { file, ink_ribbon } = &api.host.mode else {
+                    return Ok((false, Some("the screen is not in save mode".to_string())));
+                };
+                let file = written_file(file, *ink_ribbon, api.game());
+                match save::save_to_path(&path, &file) {
+                    Ok(()) => {
+                        api.host.outcome = Some(SaveOutcome {
+                            slot: None,
+                            ink_ribbon: *ink_ribbon,
+                        });
+                        api.host.rescan();
+                        Ok((true, None))
+                    }
+                    Err(err) => {
+                        if carry_on == Some(true) {
+                            api.host.outcome = Some(SaveOutcome {
+                                slot: None,
+                                ink_ribbon: *ink_ribbon,
+                            });
+                        }
+                        Ok((false, Some(format!("{err:#}"))))
+                    }
                 }
-                Err(err) => Ok((false, Some(format!("{err:#}")))),
-            }
-        });
+            },
+        );
 
         // Write the pending block to numbered slot `slot` (0-7), consuming
         // an ink ribbon when the opener asked: `true, info` with the
@@ -386,10 +398,7 @@ impl UserData for Api<'_> {
                     Value::String(lua.create_string(format!("no save slot {slot}"))?),
                 ));
             }
-            let mut file = file.clone();
-            if *ink_ribbon {
-                consume_snapshot_ribbon(&mut file);
-            }
+            let file = written_file(file, *ink_ribbon, api.game());
             match save::save(&api.host.save_dir, slot, &file) {
                 Ok(()) => {
                     api.host.outcome = Some(SaveOutcome {
@@ -782,4 +791,24 @@ impl UserData for Api<'_> {
         draw::add_methods(methods);
         game_api::add_methods(methods);
     }
+}
+
+/// The block a save screen writes: the pending one with an ink ribbon
+/// taken. An RE 2 save is `Card_access`'s state 3 on the session's state,
+/// which is suspended while the screen runs, so the block is that state
+/// after the write tick's ribbon and count
+/// ([`GameState::re2_typewriter_write`]), as the engine applies them live.
+fn written_file(file: &SaveFile, ink_ribbon: bool, game: Option<&GameState>) -> SaveFile {
+    if file.re2.is_some()
+        && let Some(game) = game
+    {
+        let mut game = game.clone();
+        game.re2_typewriter_write(ink_ribbon);
+        return SaveFile::from_state(&game);
+    }
+    let mut file = file.clone();
+    if ink_ribbon {
+        consume_snapshot_ribbon(&mut file);
+    }
+    file
 }
