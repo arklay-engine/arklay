@@ -573,3 +573,115 @@ fn presses_match_an_input_file() {
         "a press holds for one tick"
     );
 }
+
+/// A bot that walks nowhere and ends its run on its fifth tick.
+const FIVE_TICK_BOT: &[u8] = b"function on_bot_tick(bot)
+    if bot:tick() >= 5 then
+        bot:finish('five ticks')
+    end
+end
+";
+
+#[test]
+fn bot_run_plays_the_packs_bot_until_it_finishes() {
+    let dir = TempDir::new("bot-run");
+    write_pack(&dir.join("game.akpak"), &[("bot/init.lua", FIVE_TICK_BOT)]);
+    let out = success(&script(
+        &dir,
+        &lenient(
+            r#"
+        load_game_pack("game.akpak")
+        load_room("100")
+        local run = bot_run({ max_ticks = 50, stats = "stats.json", log = false })
+        local finished, reason = bot_finished()
+        print(run.outcome, run.finish_reason, run.ticks, run.score.completed, finished, reason)
+        print(bot_stats().score.ticks, run.score.hits, run.score.deaths, run.score.room_loads)
+        print(bot_story(1, 0x4B), #run.story.common)
+        "#,
+        ),
+        &[],
+    ));
+    assert_eq!(
+        out,
+        "finished\tfive ticks\t5\tfalse\ttrue\tfive ticks\n5\t0\t0\t0\nfalse\t0\n"
+    );
+    let stats = std::fs::read_to_string(dir.join("stats.json")).unwrap();
+    assert!(stats.contains("\"outcome\": \"finished\""), "{stats}");
+}
+
+#[test]
+fn bot_start_attaches_the_bot_for_the_scripts_own_ticks() {
+    let dir = TempDir::new("bot-start");
+    write_pack(&dir.join("game.akpak"), &[("bot/init.lua", FIVE_TICK_BOT)]);
+    let out = success(&script(
+        &dir,
+        &lenient(
+            r#"
+        load_game_pack("game.akpak")
+        load_room("100")
+        bot_start({ seed = 7, risk = 0.5, log = false })
+        tick(2)
+        print(bot_finished())
+        local ticks = tick_until(function() return (bot_finished()) end, 20)
+        print(ticks, select(2, bot_finished()))
+        "#,
+        ),
+        &[],
+    ));
+    assert_eq!(out, "false\tnil\n3\tfive ticks\n");
+}
+
+#[test]
+fn bot_run_stops_at_its_tick_budget() {
+    let dir = TempDir::new("bot-budget");
+    write_pack(&dir.join("game.akpak"), &[("bot/init.lua", FIVE_TICK_BOT)]);
+    let out = success(&script(
+        &dir,
+        &lenient(
+            r#"
+        load_game_pack("game.akpak")
+        load_room("100")
+        local run = bot_run({ max_ticks = 3, log = false })
+        print(run.outcome, run.ticks)
+        "#,
+        ),
+        &[],
+    ));
+    assert_eq!(out, "max_ticks\t3\n");
+}
+
+#[test]
+fn the_bot_calls_fail_with_a_message() {
+    let dir = TempDir::new("bot-errors");
+    write_pack(&dir.join("game.akpak"), &[("bot/init.lua", FIVE_TICK_BOT)]);
+    write_pack(&dir.join("plain.akpak"), &[]);
+    for (source, needle) in [
+        ("bot_stats()", "no game pack is open"),
+        (
+            "load_game_pack('game.akpak') bot_start()",
+            "no game session is running",
+        ),
+        (
+            "load_game_pack('game.akpak') load_room('100') bot_stats()",
+            "no bot is attached",
+        ),
+        (
+            "load_game_pack('game.akpak') load_room('100') bot_run({ ticks = 3 })",
+            "unknown option `ticks`",
+        ),
+        (
+            "load_game_pack('game.akpak') load_room('100') bot_start({ risk = 2 })",
+            "risk 2 is not within 0..=1",
+        ),
+        (
+            "load_game_pack('game.akpak') load_room('100') bot_start({ params = { richard = 'leave' } })",
+            "richard",
+        ),
+        (
+            "load_game_pack('plain.akpak') load_room('100') bot_start()",
+            "bot",
+        ),
+    ] {
+        assert_failure(&script(&dir, &lenient(source), &[]), needle);
+    }
+}
