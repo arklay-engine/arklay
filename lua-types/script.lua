@@ -194,7 +194,7 @@ function mode() end
 
 ---Attach the pack's bot to the running session. It plays from the next
 ---`tick` on, until it ends its run (see [`bot_finished`](#bot_finished)).
----@param options? { params?: table<string, string>, risk?: number, seed?: integer, goal_room?: string, invincible?: boolean, log?: boolean } `params` are the story decisions to take, by name (the pack's `params/<game>.xml` declares them; an unknown name or value is an error); `risk` is how much danger the planner accepts, `0..=1` (default 0.25); `seed` varies the game's random stream, the same in every run with that seed (default: the game's own stream); `goal_room` ends the run on entering that room (e.g. `"20D"`); `invincible` turns on the INVINCIBLE cheat, to time a route without deaths; `log = false` drops the bot's log. An unknown key is an error.
+---@param options? { params?: table<string, string>, risk?: number, seed?: integer, goal_room?: string, invincible?: boolean, log?: boolean, memory?: string, remember?: table<string, string> } `params` are the story decisions to take, by name (the pack's `params/<game>.xml` declares them; an unknown name or value is an error); `risk` is how much danger the planner accepts, `0..=1` (default 0.25); `seed` varies the game's random stream, the same in every run with that seed (default: the game's own stream); `goal_room` ends the run on entering that room (e.g. `"20D"`); `invincible` turns on the INVINCIBLE cheat, to time a route without deaths; `log = false` drops the bot's log; `memory` is a file an earlier run wrote with [`bot_memory`](#bot_memory): the bot starts where that run stood, with what it had learned and planned (use it with [`load_save`](#load_save) of a save written at the same moment, to play on from the middle of a game); `remember` are notes to put in the bot's memory before its first tick, as its own `bot:remember` does (the checked-in bot reads `head_for`, a room to walk to first). An unknown key is an error.
 function bot_start(options) end
 
 ---Whether the attached bot's run has ended: the bot finished (the game is
@@ -216,6 +216,16 @@ function bot_finished() end
 ---@return table report
 function bot_stats() end
 
+---Write where the attached bot stands to a file, for `bot_start`'s
+---`memory`: what it has learned (the rooms, doors and items it has seen,
+---what it took and pressed, the notes it keeps) and what it has planned
+---(the route's own state, as data: a job running at that moment loses its
+---callbacks, so write it where no job spans the moment, such as a room
+---change). With a [`save_game`](#save_game) at the same moment it is a
+---point a later run can play on from.
+---@param path string
+function bot_memory(path) end
+
 ---Whether a story flag became set at any tick of the attached bot's run,
 ---whatever cleared it later: the scenes the run reached. The report lists
 ---them all as `story.scenario` and `story.common`.
@@ -226,7 +236,7 @@ function bot_story(bank, bit) end
 
 ---Attach the bot as [`bot_start`](#bot_start) does and tick until its run
 ---ends or `max_ticks` ticks have run.
----@param options? { params?: table<string, string>, risk?: number, seed?: integer, goal_room?: string, invincible?: boolean, log?: boolean, max_ticks?: integer, stats?: string } `bot_start`'s options, and: `max_ticks`, the tick budget (default 100000; a whole game takes about 200000); `stats`, a file to write the report to as JSON.
+---@param options? { params?: table<string, string>, risk?: number, seed?: integer, goal_room?: string, invincible?: boolean, log?: boolean, memory?: string, remember?: table<string, string>, max_ticks?: integer, stats?: string } `bot_start`'s options, and: `max_ticks`, the tick budget (default 100000; a whole game takes about 200000); `stats`, a file to write the report to as JSON.
 ---@return table report The report of [`bot_stats`](#bot_stats); its `outcome` is `finished`, `death` (dead with no save) or `max_ticks`.
 function bot_run(options) end
 

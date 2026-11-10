@@ -43,6 +43,15 @@ PACK`): each boots a new game, sets the [story parameters](#story-parameters)
 of its route and plays to the ending, and `scripts/bot-routes.py` plays
 them all and tabulates the scores. See `mods/bot/routes/README.md`.
 
+To work on one room without playing the game up to it, record a game as
+scenes and replay the room: `scripts/bot-rooms.py record` writes a scene at
+every room entry (the save, and the bot's memory with the route's
+`BOT_STATE`: the driver scripts' `bot_memory` and `bot_start { memory = }`),
+and `scripts/bot-rooms.py play -r ROOM -s 1-8` starts the bot at that room's
+door in each scene, over the seeds, and counts the ticks, hits, deaths and
+shots of each stay. A game's 557 rooms replay in 16 seconds; see the
+script's `--help`.
+
 A bot run saves at typewriters through the game's own save screen. Without
 an explicit `--save-dir` it writes to a fresh directory of its own,
 `<temp>/arklay-bot-saves-<pid>`, so it never overwrites the player's saves.

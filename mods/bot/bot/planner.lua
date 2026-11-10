@@ -3392,6 +3392,23 @@ function BotPlanner.step(bot)
             room, STUCK_TICKS))
         return
     end
+    -- A run told to walk to a room first (the `head_for` note a driver
+    -- script leaves, as scripts/bot-room-play.lua does for the room the
+    -- recorded run went to next) pursues it once, like a room entered again.
+    if not p.goal and not p.headed then
+        p.headed = true
+        local head = bot:memory().head_for
+        if head then
+            bot:remember("head_for", nil)
+            local steps = head ~= room and route(bot, bot:world(), room, head)
+            if steps and steps[1] then
+                p.target = { kind = "revisit", room = head, slot = "revisit",
+                    label = string.format("room %s first (asked)", head),
+                    best = #steps, stalls = 0 }
+                bot:log("heading for " .. p.target.label)
+            end
+        end
+    end
     if not p.goal then
         local fact = BotPlanner.awaiting_use(bot, p.last_done, USE_ARM_TICKS)
         if fact then
