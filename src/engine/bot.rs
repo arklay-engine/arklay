@@ -30,7 +30,7 @@ mod world;
 
 use std::cell::{Cell, RefCell};
 use std::cmp::Reverse;
-use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap};
 use std::rc::Rc;
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -1627,9 +1627,13 @@ struct BotNav {
     driving: bool,
     stuck: u32,
     replans: u32,
-    /// The narrow-passage fallback lattice of this room ([`find_path`]),
-    /// built on the first search the coarse lattice fails.
-    fine: RefCell<Option<FineGrid>>,
+    /// The lattices of this room that [`find_path`] keeps between searches.
+    grids: Grids,
+    /// The lattices of the room states left behind, the latest last. A room
+    /// entered again with the same collision takes its own back: building
+    /// the fine one takes 2.4 ms, and a playthrough of 600 room loads built
+    /// it 650 times, each on the tick of a room's first way-out choice.
+    grid_store: Vec<StoredGrids>,
 }
 
 /// One collision query snapshot for a room, refreshed on a room change.
@@ -1796,6 +1800,73 @@ fn line_clear(
     true
 }
 
+/// [`line_clear`] for a lattice edge, whose end `to` is a node known to be
+/// free: the last sample, the end itself, is not taken again.
+fn edge_clear(
+    room: &RoomState,
+    from: (i32, i32),
+    to: (i32, i32),
+    y: i32,
+    radius: i32,
+    flags: u8,
+) -> bool {
+    let length = distance_xz(from, to);
+    if length > MAX_SEGMENT {
+        return false;
+    }
+    let samples = ((length + 95) / 96).max(1);
+    for step in 1..samples {
+        let x = from.0 + (to.0 - from.0) * step / samples;
+        let z = from.1 + (to.1 - from.1) * step / samples;
+        if blocked(room, x, z, y, radius, flags) {
+            return false;
+        }
+    }
+    true
+}
+
+/// A segment's two ends.
+type Segment = ((i32, i32), (i32, i32));
+
+/// The [`line_clear`] results of the segments [`smooth_path`] asked about
+/// in one room state, by their end points. The approach points of one zone
+/// are reached over much the same lattice nodes, so their paths ask about
+/// the same long segments again and again.
+#[derive(Debug, Default)]
+struct Lines {
+    /// The body the results are for ([`FineGrid::key`]).
+    key: Cell<Option<(i32, i32, u8)>>,
+    clear: RefCell<HashMap<Segment, bool>>,
+}
+
+/// The segments [`Lines`] keeps before it starts over.
+const LINES_KEPT: usize = 1 << 16;
+
+impl Lines {
+    /// Forget every segment: the room or its collision changed.
+    fn reset(&self) {
+        self.key.set(None);
+        self.clear.borrow_mut().clear();
+    }
+
+    /// Whether the segment is clear for the body of `key`: the kept answer,
+    /// or `test`'s, kept.
+    fn clear(
+        &self,
+        key: (i32, i32, u8),
+        from: (i32, i32),
+        to: (i32, i32),
+        test: impl FnOnce() -> bool,
+    ) -> bool {
+        let mut clear = self.clear.borrow_mut();
+        if self.key.get() != Some(key) || clear.len() >= LINES_KEPT {
+            clear.clear();
+            self.key.set(Some(key));
+        }
+        *clear.entry((from, to)).or_insert_with(test)
+    }
+}
+
 /// A square planning lattice over `0..=GRID_MAX` with its blocked nodes.
 ///
 /// The coarse lattice ([`GRID_STEP`]) is built for each search; the fine one
@@ -1807,7 +1878,106 @@ struct Lattice<'a> {
     step: i32,
     dim: usize,
     blocked: &'a [bool],
+    /// The edge tests a kept lattice remembers between searches.
+    edges: Option<&'a Edges>,
+    /// The working arrays a kept lattice's searches share.
+    scratch: Option<&'a RefCell<Scratch>>,
 }
+
+/// The [`line_clear`] results of a kept lattice's edges, by node and
+/// direction ([`SEARCH_DIRS`]): each is sampled against the room once, on
+/// the first search that crosses it. An edge is kept per direction, since
+/// the samples of a segment are not those of its reverse.
+#[derive(Debug)]
+struct Edges(Vec<Cell<u16>>);
+
+impl Edges {
+    fn new(nodes: usize) -> Self {
+        Self(vec![Cell::new(0); nodes])
+    }
+
+    /// Whether the edge from `node` in direction `dir` is clear: the kept
+    /// answer, or `test`'s, kept.
+    fn clear(&self, node: usize, dir: usize, test: impl FnOnce() -> bool) -> bool {
+        let (tested, clear) = (1u16 << dir, 0x100u16 << dir);
+        let cell = &self.0[node];
+        if cell.get() & tested == 0 {
+            cell.set(cell.get() | tested | if test() { clear } else { 0 });
+        }
+        cell.get() & clear != 0
+    }
+}
+
+/// One node of a search: the search that wrote it (an older one's is
+/// stale), the cost of the best way to it so far, the node before it on
+/// that way and whether it was expanded.
+#[derive(Clone, Copy, Debug)]
+struct SearchNode {
+    search: u32,
+    cost: u32,
+    parent: u32,
+    closed: bool,
+}
+
+/// No node: the parent of a search's start.
+const NO_NODE: u32 = u32::MAX;
+
+/// The working arrays of [`Lattice::search`], kept between searches: the
+/// fine lattice's are a megabyte, more to clear than most searches read.
+#[derive(Debug, Default)]
+struct Scratch {
+    nodes: Vec<SearchNode>,
+    /// The number of the search the arrays are in use by.
+    search: u32,
+    open: BinaryHeap<(Reverse<u32>, usize)>,
+}
+
+impl Scratch {
+    /// Start a search over `nodes` nodes: every node is unseen again.
+    fn begin(&mut self, nodes: usize) {
+        self.open.clear();
+        self.search = self.search.wrapping_add(1);
+        if self.nodes.len() != nodes || self.search == 0 {
+            // Another lattice, or the counter wrapped: a node of an old
+            // search would read as live.
+            let stale = SearchNode {
+                search: 0,
+                cost: u32::MAX,
+                parent: NO_NODE,
+                closed: false,
+            };
+            self.nodes.clear();
+            self.nodes.resize(nodes, stale);
+            self.search = 1;
+        }
+    }
+
+    /// Node `index` in this search.
+    fn node(&mut self, index: usize) -> &mut SearchNode {
+        let node = &mut self.nodes[index];
+        if node.search != self.search {
+            *node = SearchNode {
+                search: self.search,
+                cost: u32::MAX,
+                parent: NO_NODE,
+                closed: false,
+            };
+        }
+        node
+    }
+}
+
+/// A search's eight neighbours: the step in nodes and its cost.
+const SEARCH_DIRS: [(i32, i32, u32); 8] = [
+    (1, 0, 10),
+    (-1, 0, 10),
+    (0, 1, 10),
+    (0, -1, 10),
+    (1, 1, 14),
+    (1, -1, 14),
+    (-1, 1, 14),
+    (-1, -1, 14),
+];
 
 impl Lattice<'_> {
     fn xy(&self, index: usize) -> (i32, i32) {
@@ -1890,22 +2060,19 @@ impl Lattice<'_> {
         flags: u8,
         zones: &[steer::EnemyZone],
     ) -> Option<Vec<(i32, i32)>> {
-        const DIRS: [(i32, i32, u32); 8] = [
-            (1, 0, 10),
-            (-1, 0, 10),
-            (0, 1, 10),
-            (0, -1, 10),
-            (1, 1, 14),
-            (1, -1, 14),
-            (-1, 1, 14),
-            (-1, -1, 14),
-        ];
-        let nodes = self.dim * self.dim;
         let goal_xy = self.xy(goal);
-        let mut open: BinaryHeap<(Reverse<u32>, usize)> = BinaryHeap::new();
-        let mut cost = vec![u32::MAX; nodes];
-        let mut parent = vec![usize::MAX; nodes];
-        let mut closed = vec![false; nodes];
+        let (mut own, mut kept);
+        let scratch: &mut Scratch = match self.scratch {
+            Some(scratch) => {
+                kept = scratch.borrow_mut();
+                &mut kept
+            }
+            None => {
+                own = Scratch::default();
+                &mut own
+            }
+        };
+        scratch.begin(self.dim * self.dim);
         let heuristic = |index: usize| -> u32 {
             let (x, z) = self.xy(index);
             let dx = (x - goal_xy.0).unsigned_abs() / self.step as u32;
@@ -1913,31 +2080,33 @@ impl Lattice<'_> {
             let diagonal = dx.min(dz);
             (dx + dz - diagonal) * 10 + diagonal * 14
         };
-        cost[start] = 0;
-        open.push((Reverse(heuristic(start)), start));
-        while let Some((Reverse(_), index)) = open.pop() {
+        scratch.node(start).cost = 0;
+        scratch.open.push((Reverse(heuristic(start)), start));
+        while let Some((Reverse(_), index)) = scratch.open.pop() {
             if index == goal {
                 let mut path = vec![self.xy(index)];
                 let mut current = index;
-                while parent[current] != usize::MAX {
-                    current = parent[current];
+                while scratch.node(current).parent != NO_NODE {
+                    current = scratch.node(current).parent as usize;
                     path.push(self.xy(current));
                 }
                 path.reverse();
                 return Some(path);
             }
-            if closed[index] {
+            let node = scratch.node(index);
+            if node.closed {
                 continue;
             }
-            closed[index] = true;
+            node.closed = true;
+            let cost = node.cost;
             let (x, z) = self.xy(index);
-            for (dx, dz, step_cost) in DIRS {
+            for (dir, (dx, dz, step_cost)) in SEARCH_DIRS.into_iter().enumerate() {
                 let nx = x + dx * self.step;
                 let nz = z + dz * self.step;
                 let Some(next) = self.index(nx, nz) else {
                     continue;
                 };
-                if closed[next] || self.blocked[next] {
+                if self.blocked[next] || scratch.node(next).closed {
                     continue;
                 }
                 // A diagonal may not cut a blocked corner: both orthogonal
@@ -1951,18 +2120,26 @@ impl Lattice<'_> {
                 }
                 // The wall can be thinner than the grid step, so an
                 // endpoint-only test would jump it. Sample the edge itself.
-                if !line_clear(room, (x, z), (nx, nz), y, radius, flags) {
+                let sample = || edge_clear(room, (x, z), (nx, nz), y, radius, flags);
+                let clear = match self.edges {
+                    Some(edges) => edges.clear(index, dir, sample),
+                    None => sample(),
+                };
+                if !clear {
                     continue;
                 }
                 let penalty = u64::from(steer::zone_penalty(zones, nx, nz)) * self.step as u64
                     / GRID_STEP as u64;
-                let next_cost = cost[index]
+                let next_cost = cost
                     .saturating_add(step_cost)
                     .saturating_add(penalty.min(u64::from(u32::MAX)) as u32);
-                if next_cost < cost[next] {
-                    cost[next] = next_cost;
-                    parent[next] = index;
-                    open.push((Reverse(next_cost + heuristic(next)), next));
+                let node = scratch.node(next);
+                if next_cost < node.cost {
+                    node.cost = next_cost;
+                    node.parent = index as u32;
+                    scratch
+                        .open
+                        .push((Reverse(next_cost + heuristic(next)), next));
                 }
             }
         }
@@ -1977,6 +2154,8 @@ fn nearest_grid(x: i32, z: i32) -> (i32, i32) {
         step: GRID_STEP,
         dim: GRID_DIM,
         blocked: &[],
+        edges: None,
+        scratch: None,
     }
     .snap(x, z)
 }
@@ -2014,12 +2193,14 @@ fn find_grid_path(
     radius: i32,
     flags: u8,
 ) -> Option<Vec<(i32, i32)>> {
-    find_grid_path_with(room, start, goal, y, radius, flags, &[])
+    find_grid_path_with(room, &Grids::default(), start, goal, y, radius, flags, &[])
 }
 
 /// [`find_grid_path`] with each node also paying the enemy zones' cost.
+#[allow(clippy::too_many_arguments)]
 fn find_grid_path_with(
     room: &RoomState,
+    grids: &Grids,
     start: (i32, i32),
     goal: (i32, i32),
     y: i32,
@@ -2027,19 +2208,19 @@ fn find_grid_path_with(
     flags: u8,
     zones: &[steer::EnemyZone],
 ) -> Option<Vec<(i32, i32)>> {
-    let mut nodes = vec![false; GRID_NODES];
-    let probe = Lattice {
+    let key = FineGrid::key(room, y, radius, flags);
+    let mut cache = grids.coarse.borrow_mut();
+    if cache.as_ref().is_none_or(|grid| grid.key != key) {
+        *cache = Some(CoarseGrid::build(room, y, radius, flags));
+    }
+    let grid = cache.as_ref()?;
+    let nodes = &grid.blocked;
+    let lattice = Lattice {
         step: GRID_STEP,
         dim: GRID_DIM,
-        blocked: &[],
-    };
-    for (index, node) in nodes.iter_mut().enumerate() {
-        let (x, z) = probe.xy(index);
-        *node = blocked(room, x, z, y, radius, flags);
-    }
-    let lattice = Lattice {
-        blocked: &nodes,
-        ..probe
+        blocked: nodes,
+        edges: Some(&grid.edges),
+        scratch: Some(&grids.scratch[0]),
     };
     let start_index = lattice.nearest_free(start.0, start.1, 4, |_| true)?;
     // The player may start wedged in a soft spot, but a goal the route names
@@ -2066,6 +2247,67 @@ const FINE_RINGS: i32 = 4;
 /// point that one does: 4096 units.
 const FINE_BEND_STEPS: i32 = 64;
 
+/// The coarse lattice of one room and body, kept between searches: its
+/// blocked nodes and the edges the searches sampled so far. A way-out choice
+/// in a hall asks for some 240 paths in one tick (48 approach points for
+/// each of five doors), and building the lattice and sampling its edges
+/// anew for each took 50 ms.
+#[derive(Debug)]
+struct CoarseGrid {
+    key: (i32, i32, u8),
+    blocked: Vec<bool>,
+    edges: Edges,
+}
+
+impl CoarseGrid {
+    fn build(room: &RoomState, y: i32, radius: i32, flags: u8) -> Self {
+        let probe = Lattice {
+            step: GRID_STEP,
+            dim: GRID_DIM,
+            blocked: &[],
+            edges: None,
+            scratch: None,
+        };
+        let blocked_nodes = (0..GRID_NODES)
+            .map(|index| {
+                let (x, z) = probe.xy(index);
+                blocked(room, x, z, y, radius, flags)
+            })
+            .collect();
+        Self {
+            key: FineGrid::key(room, y, radius, flags),
+            blocked: blocked_nodes,
+            edges: Edges::new(GRID_NODES),
+        }
+    }
+}
+
+/// The lattices [`find_path`] keeps for one room and collision: both are
+/// put away when the room or its collision changes ([`BotNav::stash_grids`]).
+#[derive(Debug, Default)]
+struct Grids {
+    coarse: RefCell<Option<CoarseGrid>>,
+    /// The narrow-passage fallback, built on the first search the coarse
+    /// lattice fails.
+    fine: RefCell<Option<FineGrid>>,
+    /// The working arrays of the coarse and the fine searches.
+    scratch: [RefCell<Scratch>; 2],
+    /// The segments the smoothing asked about.
+    lines: Lines,
+}
+
+/// The lattices of a room state the bot left ([`BotNav::stash_grids`]).
+#[derive(Debug)]
+struct StoredGrids {
+    room: RoomId,
+    collision: crate::state::Collision,
+    coarse: Option<CoarseGrid>,
+    fine: Option<FineGrid>,
+}
+
+/// How many room states' lattices are kept: about half a megabyte each.
+const GRID_STORE: usize = 32;
+
 /// The fine lattice of one room and body: its blocked nodes and the
 /// four-connected component of each free node, so a goal in another part of
 /// the room fails without a search.
@@ -2074,6 +2316,7 @@ struct FineGrid {
     key: (i32, i32, u8),
     blocked: Vec<bool>,
     component: Vec<u32>,
+    edges: Edges,
 }
 
 impl FineGrid {
@@ -2089,6 +2332,8 @@ impl FineGrid {
             step: FINE_STEP,
             dim: FINE_DIM,
             blocked: &[],
+            edges: None,
+            scratch: None,
         };
         let blocked_nodes: Vec<bool> = (0..nodes)
             .map(|index| {
@@ -2114,7 +2359,7 @@ impl FineGrid {
                     };
                     if blocked_nodes[next]
                         || component[next] != u32::MAX
-                        || !line_clear(room, (x, z), (nx, nz), y, radius, flags)
+                        || !edge_clear(room, (x, z), (nx, nz), y, radius, flags)
                     {
                         continue;
                     }
@@ -2128,14 +2373,17 @@ impl FineGrid {
             key: Self::key(room, y, radius, flags),
             blocked: blocked_nodes,
             component,
+            edges: Edges::new(nodes),
         }
     }
 
-    fn lattice(&self) -> Lattice<'_> {
+    fn lattice<'a>(&'a self, scratch: &'a RefCell<Scratch>) -> Lattice<'a> {
         Lattice {
             step: FINE_STEP,
             dim: FINE_DIM,
             blocked: &self.blocked,
+            edges: Some(&self.edges),
+            scratch: Some(scratch),
         }
     }
 
@@ -2145,6 +2393,7 @@ impl FineGrid {
     fn path(
         &self,
         room: &RoomState,
+        scratch: &RefCell<Scratch>,
         start: (i32, i32),
         goal: (i32, i32),
         y: i32,
@@ -2155,7 +2404,7 @@ impl FineGrid {
         if blocked(room, goal.0, goal.1, y, radius, flags) {
             return None;
         }
-        let lattice = self.lattice();
+        let lattice = self.lattice(scratch);
         // The goal node must see the exact goal, so the tail cannot hop a
         // wall thinner than the step.
         let sighted = |point: (i32, i32)| {
@@ -2196,7 +2445,7 @@ impl FineGrid {
 #[allow(clippy::too_many_arguments)]
 fn find_path(
     room: &RoomState,
-    fine: &RefCell<Option<FineGrid>>,
+    grids: &Grids,
     start: (i32, i32),
     goal: (i32, i32),
     y: i32,
@@ -2204,23 +2453,36 @@ fn find_path(
     flags: u8,
     zones: &[steer::EnemyZone],
 ) -> Option<Vec<(i32, i32)>> {
-    if let Some(path) = find_grid_path_with(room, start, goal, y, radius, flags, zones) {
+    if let Some(path) = find_grid_path_with(room, grids, start, goal, y, radius, flags, zones) {
         return Some(path);
     }
     let key = FineGrid::key(room, y, radius, flags);
-    let mut cache = fine.borrow_mut();
+    let mut cache = grids.fine.borrow_mut();
     if cache.as_ref().is_none_or(|grid| grid.key != key) {
         *cache = Some(FineGrid::build(room, y, radius, flags));
     }
-    cache
-        .as_ref()
-        .and_then(|grid| grid.path(room, start, goal, y, radius, flags, zones))
+    cache.as_ref().and_then(|grid| {
+        grid.path(
+            room,
+            &grids.scratch[1],
+            start,
+            goal,
+            y,
+            radius,
+            flags,
+            zones,
+        )
+    })
 }
 
 /// Greedily drop waypoints whose straight segment is clear (and, with enemy
 /// zones, does not cut back into a zone the grid path went around).
+///
+/// `lines` keeps the segment tests between calls ([`Lines`]).
+#[allow(clippy::too_many_arguments)]
 fn smooth_path(
     room: &RoomState,
+    lines: Option<&Lines>,
     start: (i32, i32),
     path: Vec<(i32, i32)>,
     y: i32,
@@ -2228,15 +2490,19 @@ fn smooth_path(
     flags: u8,
     zones: &[steer::EnemyZone],
 ) -> Vec<(i32, i32)> {
+    let key = FineGrid::key(room, y, radius, flags);
     let mut out = Vec::new();
     let mut anchor = start;
     let mut index = 0;
     while index < path.len() {
         let mut best = None;
         for candidate in (index..path.len()).rev() {
-            if line_clear(room, anchor, path[candidate], y, radius, flags)
-                && steer::segment_avoids(zones, anchor, path[candidate])
-            {
+            let sample = || line_clear(room, anchor, path[candidate], y, radius, flags);
+            let clear = match lines {
+                Some(lines) => lines.clear(key, anchor, path[candidate], sample),
+                None => sample(),
+            };
+            if clear && steer::segment_avoids(zones, anchor, path[candidate]) {
                 best = Some(candidate);
                 break;
             }
@@ -2257,6 +2523,46 @@ fn smooth_path(
 }
 
 impl BotNav {
+    /// Put this room state's lattices away, before its collision changes.
+    /// An RE2 room's (SCA records) are dropped as before.
+    fn stash_grids(&mut self) {
+        let (coarse, fine) = (self.grids.coarse.take(), self.grids.fine.take());
+        self.grids.lines.reset();
+        let Some(room) = self.room_id else {
+            return;
+        };
+        if self.collision.sca.is_some() || (coarse.is_none() && fine.is_none()) {
+            return;
+        }
+        let collision = &self.collision.collision;
+        self.grid_store
+            .retain(|kept| !(kept.room == room && kept.collision == *collision));
+        if self.grid_store.len() >= GRID_STORE {
+            self.grid_store.remove(0);
+        }
+        self.grid_store.push(StoredGrids {
+            room,
+            collision: collision.clone(),
+            coarse,
+            fine,
+        });
+    }
+
+    /// Take back the lattices kept for this room and collision, if any,
+    /// after [`Self::stash_grids`] and the change.
+    fn fetch_grids(&mut self) {
+        let collision = &self.collision.collision;
+        let kept = self
+            .grid_store
+            .iter()
+            .position(|kept| Some(kept.room) == self.room_id && kept.collision == *collision);
+        if let Some(at) = kept {
+            let kept = self.grid_store.remove(at);
+            self.grids.coarse.replace(kept.coarse);
+            self.grids.fine.replace(kept.fine);
+        }
+    }
+
     fn sync_room(&mut self, id: RoomId, room: &RoomState) {
         if self.room_id == Some(id) {
             // A scripted collision rewrite (`inst_cfg`) can land after the
@@ -2265,21 +2571,23 @@ impl BotNav {
             // until its init opens it, so a stale copy kept the platform
             // out of reach. Take the live boundaries again.
             if room.collision != self.base_collision {
+                self.stash_grids();
                 self.collision = collision_room(room);
                 self.base_collision = self.collision.collision.clone();
                 self.object_boxes.clear();
-                self.fine = RefCell::new(None);
+                self.fetch_grids();
                 self.drop_path();
                 self.unreachable_goal = None;
                 self.blocked_goal = None;
             }
             return;
         }
+        self.stash_grids();
         self.room_id = Some(id);
         self.collision = collision_room(room);
         self.base_collision = self.collision.collision.clone();
         self.object_boxes.clear();
-        self.fine = RefCell::new(None);
+        self.fetch_grids();
         self.goal = None;
         self.path.clear();
         self.index = 0;
@@ -2348,9 +2656,10 @@ impl BotNav {
                 quadrant.push(rect);
             }
         }
+        self.stash_grids();
         self.collision.collision = collision;
         self.object_boxes = boxes;
-        self.fine = RefCell::new(None);
+        self.fetch_grids();
         self.drop_path();
         self.unreachable_goal = None;
         self.blocked_goal = None;
@@ -2394,17 +2703,35 @@ impl BotNav {
                     && distance_xz(pos, goal) > FACE_LEAD / 2
             });
         if let Some(point) = approach
-            && let Some(path) = find_path(room, &self.fine, pos, point, y, radius, flags, zones)
+            && let Some(path) = find_path(room, &self.grids, pos, point, y, radius, flags, zones)
         {
-            let mut path = smooth_path(room, pos, path, y, radius, flags, zones);
+            let mut path = smooth_path(
+                room,
+                Some(&self.grids.lines),
+                pos,
+                path,
+                y,
+                radius,
+                flags,
+                zones,
+            );
             if path.last() == Some(&point) {
                 path.push(goal);
                 let pin = path.len() - 2;
                 return Some((path, Some(pin)));
             }
         }
-        let path = find_path(room, &self.fine, pos, goal, y, radius, flags, zones)?;
-        let path = smooth_path(room, pos, path, y, radius, flags, zones);
+        let path = find_path(room, &self.grids, pos, goal, y, radius, flags, zones)?;
+        let path = smooth_path(
+            room,
+            Some(&self.grids.lines),
+            pos,
+            path,
+            y,
+            radius,
+            flags,
+            zones,
+        );
         (!path.is_empty()).then_some((path, None))
     }
 
@@ -4507,7 +4834,10 @@ impl BotRuntime {
         let started = std::time::Instant::now();
         let input = self.tick_inner(session, pack);
         let micros = u32::try_from(started.elapsed().as_micros()).unwrap_or(u32::MAX);
-        self.stats.note_compute(self.tick, micros);
+        let profile = &self.shares.profile;
+        self.stats.note_compute(self.tick, micros, |worst| {
+            profile.borrow_mut().end_tick(worst)
+        });
         input
     }
 
@@ -5361,7 +5691,7 @@ mod tests {
         let room = corridor_room(3100, 3550);
         let (start, goal) = ((4000, 16000), (16000, 16000));
         assert!(find_grid_path(&room, start, goal, 0, 100, 0).is_none());
-        let fine = RefCell::new(None);
+        let fine = Grids::default();
         let path = find_path(&room, &fine, start, goal, 0, 100, 0, &[])
             .expect("the fine lattice finds the corridor");
         assert_eq!(path.last().copied(), Some(goal));
@@ -5372,16 +5702,16 @@ mod tests {
         );
         assert_path_clear(&room, start, &path);
         // The smoothed walk path stays clear too.
-        let smooth = smooth_path(&room, start, path, 0, 100, 0, &[]);
+        let smooth = smooth_path(&room, None, start, path, 0, 100, 0, &[]);
         assert_path_clear(&room, start, &smooth);
-        assert!(fine.borrow().is_some(), "the fine lattice is cached");
+        assert!(fine.fine.borrow().is_some(), "the fine lattice is cached");
     }
 
     #[test]
     fn fine_fallback_never_squeezes_through_a_gap_narrower_than_the_body() {
         // A 200-unit gap: narrower than the 236-unit body plus skin.
         let room = corridor_room(3100, 3300);
-        let fine = RefCell::new(None);
+        let fine = Grids::default();
         assert!(find_path(&room, &fine, (4000, 16000), (16000, 16000), 0, 100, 0, &[]).is_none());
         // The same gap is open to a body that fits it (radius 60).
         assert!(find_path(&room, &fine, (4000, 16000), (16000, 16000), 0, 60, 0, &[]).is_some());
@@ -5396,9 +5726,9 @@ mod tests {
         let start = (7950, 16000);
         let goal = (4000, 16000);
         assert!(blocked(&room, start.0, start.1, 0, 100, 0));
-        let raw = find_path(&room, &RefCell::new(None), start, goal, 0, 100, 0, &[])
+        let raw = find_path(&room, &Grids::default(), start, goal, 0, 100, 0, &[])
             .expect("the search starts from the nearest free node");
-        let path = smooth_path(&room, start, raw, 0, 100, 0, &[]);
+        let path = smooth_path(&room, None, start, raw, 0, 100, 0, &[]);
         assert_eq!(path.last().copied(), Some(goal));
         assert_path_clear(&room, path[0], &path[1..]);
         assert!(!blocked(&room, path[0].0, path[0].1, 0, 100, 0));
@@ -5413,12 +5743,12 @@ mod tests {
         room.collision.quadrants[0].push(wall(0, 10000, 9000, 32768));
         room.collision.quadrants[0].push(wall(10300, 32768, 9000, 32768));
         let (start, goal) = ((4000, 4000), (10150, 11000));
-        let fine = RefCell::new(None);
+        let fine = Grids::default();
         let path = find_path(&room, &fine, start, goal, 0, 100, 0, &[])
             .expect("the bend reaches the dead end");
         assert_eq!(path.last().copied(), Some(goal));
         assert_path_clear(&room, start, &path);
-        let smooth = smooth_path(&room, start, path, 0, 100, 0, &[]);
+        let smooth = smooth_path(&room, None, start, path, 0, 100, 0, &[]);
         assert_eq!(smooth.last().copied(), Some(goal));
         assert_path_clear(&room, start, &smooth);
     }
@@ -5426,13 +5756,109 @@ mod tests {
     #[test]
     fn fine_fallback_rejects_a_blocked_goal_and_another_part() {
         let room = corridor_room(3100, 3300);
-        let fine = RefCell::new(None);
+        let fine = Grids::default();
         // Inside the wall itself.
         assert!(find_path(&room, &fine, (4000, 16000), (10000, 16000), 0, 100, 0, &[]).is_none());
         // A free goal in the sealed east half.
         assert!(find_path(&room, &fine, (4000, 16000), (16000, 9000), 0, 100, 0, &[]).is_none());
         // A free goal in the start's own half still plans.
         assert!(find_path(&room, &fine, (4000, 16000), (4000, 9000), 0, 100, 0, &[]).is_some());
+    }
+
+    #[test]
+    fn kept_lattices_plan_as_fresh_ones_do() {
+        // The lattices, their sampled edges, the working arrays and the
+        // smoothing's segments are kept between searches: every answer must
+        // be the one a search that keeps nothing gives, whatever was asked
+        // before. The corridor is found on the fine lattice only, so both
+        // lattices are in play.
+        let room = corridor_room(3100, 3550);
+        let starts = [(4000, 16000), (16000, 9000), (7950, 3300)];
+        let goals: Vec<(i32, i32)> = (0..8)
+            .flat_map(|x| (0..8).map(move |z| (1500 + x * 2600, 1500 + z * 2600)))
+            .chain([(10000, 3325), (8100, 3300), (11900, 3400)])
+            .collect();
+        let kept = Grids::default();
+        for round in 0..2 {
+            for &start in &starts {
+                for &goal in &goals {
+                    let fresh = find_path(&room, &Grids::default(), start, goal, 0, 100, 0, &[]);
+                    let again = find_path(&room, &kept, start, goal, 0, 100, 0, &[]);
+                    assert_eq!(again, fresh, "round {round}: {start:?} -> {goal:?}");
+                    let Some(path) = fresh else {
+                        continue;
+                    };
+                    let smooth = smooth_path(&room, None, start, path.clone(), 0, 100, 0, &[]);
+                    let lines = Some(&kept.lines);
+                    assert_eq!(
+                        smooth_path(&room, lines, start, path, 0, 100, 0, &[]),
+                        smooth,
+                        "round {round}: smoothing {start:?} -> {goal:?}"
+                    );
+                }
+            }
+        }
+        // Another body is another lattice: nothing kept for the first one
+        // answers for it.
+        let narrow = find_path(&room, &kept, (4000, 16000), (16000, 16000), 0, 60, 0, &[]);
+        assert_eq!(
+            narrow,
+            find_path(
+                &room,
+                &Grids::default(),
+                (4000, 16000),
+                (16000, 16000),
+                0,
+                60,
+                0,
+                &[]
+            )
+        );
+    }
+
+    #[test]
+    fn a_room_entered_again_takes_its_lattices_back() {
+        let room = corridor_room(3100, 3550);
+        let other = corridor_room(3100, 3300);
+        let id = |room| RoomId {
+            stage: 1,
+            room,
+            player_flag: 1,
+            mansion2: false,
+        };
+        let (a, b) = (id(0x06), id(0x07));
+        let mut nav = BotNav::default();
+        nav.sync_room(a, &room);
+        let plan = |nav: &BotNav| {
+            find_path(
+                &nav.collision,
+                &nav.grids,
+                (4000, 16000),
+                (16000, 16000),
+                0,
+                100,
+                0,
+                &[],
+            )
+        };
+        let first = plan(&nav).expect("through the corridor");
+        assert!(
+            nav.grids.fine.borrow().is_some(),
+            "the fine lattice was built"
+        );
+        // Left: the lattices are put away with the room and its collision.
+        nav.sync_room(b, &other);
+        assert!(nav.grids.fine.borrow().is_none());
+        assert!(plan(&nav).is_none(), "this room's gap is too narrow");
+        // Back: they are this room's again, and plan the same path.
+        nav.sync_room(a, &room);
+        assert!(nav.grids.fine.borrow().is_some(), "taken back, not rebuilt");
+        assert_eq!(plan(&nav), Some(first));
+        // The same room with another collision has none to take.
+        nav.sync_room(b, &room);
+        nav.sync_room(a, &other);
+        assert!(nav.grids.fine.borrow().is_none());
+        assert!(plan(&nav).is_none());
     }
 
     #[test]
@@ -7626,14 +8052,35 @@ mod tests {
             dead_end(&format!("{{ {low}, heals = 1, rounds = 8, shots = 9 }}")),
             "critical health without the rounds for one kill"
         );
-        // Critical health with a heal and a kill's worth of rounds is fine,
-        // and so is anything above the floor.
+        // Critical health with a heal and a kill's worth of rounds is fine.
         assert_eq!(
             dead_end(&format!("{{ {low}, heals = 1, rounds = 9, shots = 9 }}")),
             "nil"
         );
+        // Above the floor but low, with no heal item: a dead end without
+        // the rounds for one kill, or poisoned with no cure.
+        let hurt = "health = 16, max_health = 96, risk = 0.25, heals = 0";
         assert_eq!(
-            dead_end("{ health = 16, max_health = 96, risk = 0.25, heals = 0, rounds = 0 }"),
+            dead_end(&format!("{{ {hurt}, rounds = 0 }}")),
+            "low health with no heal item and without the rounds for one kill"
+        );
+        assert_eq!(
+            dead_end(&format!(
+                "{{ {hurt}, rounds = 30, shots = 9, poisoned = true }}"
+            )),
+            "low health and poisoned with no heal or cure item"
+        );
+        assert_eq!(
+            dead_end(&format!("{{ {hurt}, rounds = 30, shots = 9 }}")),
+            "nil"
+        );
+        // A heal held, or health that is not low, is none.
+        assert_eq!(
+            dead_end("{ health = 16, max_health = 96, risk = 0.25, heals = 1, poisoned = true }"),
+            "nil"
+        );
+        assert_eq!(
+            dead_end("{ health = 60, max_health = 96, risk = 0.25, heals = 0, rounds = 0 }"),
             "nil"
         );
         // No other choice: no save yet, or the latest one is no better.
