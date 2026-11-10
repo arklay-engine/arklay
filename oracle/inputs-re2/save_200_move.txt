@@ -1,0 +1,29 @@
+# room 200: the typewriter's Yes, down held then up held on the save screen (the cursor wraps every 4 ticks), cancel; then a second Yes and decide on the "leave" row (oracle/re2.md, "The save screen")
+364 action
+368
+410 action
+414
+460 action
+464
+540 action
+544
+600 down
+612
+640 up
+652
+680 cancel
+684
+760 action
+764
+810 action
+814
+860 action
+864
+940 action
+944
+1000 down
+1004
+1020 action
+1024
+1100 down
+1140

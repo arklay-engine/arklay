@@ -649,6 +649,7 @@ pub fn run_with_options(
                         re2_banks: None,
                         re2_typewriter: None,
                         re2_game_mode: None,
+                        re2_save_screen: None,
                         re2_computer: None,
                         re2_hikidashi: None,
                         re2_objects: None,
@@ -8423,6 +8424,8 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.re2_save.map_or(0, Re2Save::game_mode)),
+            // The save screen isn't the original's `Card_access` yet.
+            re2_save_screen: self.game.is_re2_room.then(|| "-".to_string()),
             re2_computer: self.game.is_re2_room.then(|| {
                 let common: String = self.game.re2.banks[4]
                     .iter()

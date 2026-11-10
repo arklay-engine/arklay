@@ -51,3 +51,16 @@ frames = [380, 546]
 frame_max_mean = 0.1
 expect = "match"
 record = "--start claire --no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200 --give 2:0x1E:3"
+
+[[run]]
+name = "typewriter_200_yes_cancel"
+room = "200"
+# the typewriter's Yes and a cancel on the save screen: the return's game modes 3 and 5, then play (oracle/re2.md, "The typewriter" and "The save screen")
+setup_script = "typewriter_200_ribbon.lua"
+input = "typewriter_200_yes_cancel.txt"
+input_shift = 344
+ticks = 760
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,snd,msg,tw,gm,fgstat,sv"
+frames = [380, 759]
+expect = { tick = 547, fields = ["sv"], note = "the save screen is RE 1's until the port of Mem_card and Card_access (#590): sv shows Cardaccess_init from 547, the first tick of the screen (docs/internals/deviations/re2.md, \"The typewriter\")" }
+record = "--no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200 --give 2:0x1E:3"

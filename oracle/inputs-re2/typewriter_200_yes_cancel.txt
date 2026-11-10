@@ -1,0 +1,13 @@
+# room 200: the typewriter's Yes, then cancel on the save screen; the room comes back with game modes 3 and 5 and the player walks off (oracle/re2.md, "The typewriter")
+364 action
+368
+410 action
+414
+460 action
+464
+540 action
+544
+600 cancel
+604
+680 down
+720
