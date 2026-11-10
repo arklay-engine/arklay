@@ -21,3 +21,33 @@ ticks = 840
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,snd,msg,tw,gm,fgstat"
 expect = "match"
 record = "--no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200 --give 2:0x1E:3"
+
+[[run]]
+name = "typewriter_200_yes"
+room = "200"
+# the typewriter's Yes: game modes 1 and 2 fade the room out with the status screen's ticks under fg_stop, and Mem_card starts on the sixth (oracle/re2.md, "The typewriter")
+setup_script = "typewriter_200_ribbon.lua"
+input = "typewriter_200_yes.txt"
+input_shift = 344
+ticks = 548
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,snd,msg,tw,gm,fgstat"
+frames = [380, 546]
+frame_max_mean = 0.1
+expect = "match"
+record = "--no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200 --give 2:0x1E:3"
+
+[[run]]
+name = "typewriter_200_yes_claire"
+room = "200"
+player = 1
+character = 1
+# typewriter_200_yes on Claire A: the same areas, hand-off and ticks (oracle/re2.md, "The typewriter")
+setup_script = "typewriter_200_claire.lua"
+input = "typewriter_200_yes.txt"
+input_shift = 344
+ticks = 548
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,snd,msg,tw,gm,fgstat"
+frames = [380, 546]
+frame_max_mean = 0.1
+expect = "match"
+record = "--start claire --no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200 --give 2:0x1E:3"

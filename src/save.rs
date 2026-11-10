@@ -320,6 +320,10 @@ impl SaveFile {
             if state.re2.load_save_bytes(re2).is_none() {
                 crate::warning!("warning: the save's RE2 state has the wrong size; ignoring it");
             }
+            // `Game_loop`'s step 1 starts a loaded game with `fg_stop` and
+            // `0x6897C8` at 0 whatever the save holds, so a save taken under
+            // a hold never loads frozen.
+            *state.re2.fg_stop_mut() = 0;
         }
         state
             .rebecca_inventory
@@ -1072,6 +1076,18 @@ mod tests {
             assert_eq!(parsed.pos_y, pos_y);
             assert_eq!(parsed.re2.as_deref(), Some(&[1, 2, 3][..]));
         }
+    }
+
+    #[test]
+    fn an_re2_load_clears_fg_stop() {
+        let mut state = GameState::new(RoomId::parse("200").unwrap(), &RoomState::default());
+        state.is_re2_room = true;
+        *state.re2.fg_stop_mut() = 0xFF00_0000;
+        let file = SaveFile::from_state(&state);
+        let mut restored = GameState::default();
+        file.apply_to(&mut restored);
+        assert!(restored.is_re2_room);
+        assert_eq!(*restored.re2.fg_stop_mut(), 0);
     }
 
     #[test]
