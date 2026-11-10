@@ -272,6 +272,8 @@ def prepare_saves(tree: Path) -> None:
     """Empty the game's save folder, or fill it from `--saves`: the save screen lists what is there, so a
     record must not depend on the saves an earlier one left."""
     saves = tree / "savedata"
+    if SAVES_FROM is not None and (SAVES_FROM == saves.resolve() or saves.resolve() in SAVES_FROM.parents):
+        raise SystemExit(f"--saves {SAVES_FROM} is inside the work tree's save folder, which a record empties")
     if saves.exists():
         shutil.rmtree(saves)
     saves.mkdir(parents=True)
@@ -282,8 +284,11 @@ def prepare_saves(tree: Path) -> None:
 
 
 def keep_saves(tree: Path, dest: Path) -> None:
-    """Copy the save folder a record left to `--keep-saves`, with the files' times."""
-    dest.mkdir(parents=True, exist_ok=True)
+    """Copy the save folder a record left to `--keep-saves`, with the files' times. They replace what the folder
+    held: a save's name comes from the wall clock, so a record again over an earlier one would list both."""
+    if dest.exists():
+        shutil.rmtree(dest)
+    dest.mkdir(parents=True)
     for source in sorted((tree / "savedata").iterdir()):
         if source.is_file():
             shutil.copy2(source, dest / source.name)
@@ -1608,7 +1613,8 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
             print(f"{boot_tick + args.ticks} ticks in {elapsed:.1f}s")
     finally:
         session.close()
-    if args.keep_saves:
+    # `scenario`, `pixels` and `determinism` record through here too, without the option.
+    if getattr(args, "keep_saves", None):
         keep_saves(work / "game", Path(args.keep_saves))
 
 
@@ -1665,6 +1671,8 @@ def boot_trace_line(game: Game, tick: int, pad: int) -> str:
 
 def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
     """Record `args.ticks` ticks from boot, the title's included: `--input`'s ticks count from boot."""
+    if getattr(args, "keep_saves", None):
+        raise SystemExit("--keep-saves isn't supported with --boot yet")
     entries = parse_input(Path(args.input) if args.input else None)
     if args.shot_dir:
         Path(args.shot_dir).mkdir(parents=True, exist_ok=True)
