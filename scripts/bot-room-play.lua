@@ -7,7 +7,8 @@
 -- SCENE is the scene's path without its extension. EXIT, when given and not
 -- empty, is a room to walk to first, whatever the bot would choose. The
 -- result is one JSON line: the ticks the room took, the hits and damage
--- taken, the shots fired, whether the player died, and where the bot went.
+-- taken, the shots fired and how many health drops they gave a monster,
+-- whether the player died, and where the bot went.
 -- `log` keeps the bot's log on stderr; `trace` adds a line a tick to it, of
 -- the player and every monster.
 local pack, scene = arg[1], arg[2]
@@ -43,6 +44,7 @@ print(json({
     hits = stats.hits,
     damage = stats.health.damage_taken,
     shots = stats.combat.shots_fired_proxy,
+    landed = stats.combat.enemy_hit_events_proxy,
     enemies = stats.enemy_kinds,
     enemy_hits = stats.enemy_hits,
     -- The report counts a death on the tick after it; the replay ends on it.
