@@ -2944,8 +2944,14 @@ impl GameSession {
         // An RE2 door's arrival keeps the cut `Door_load` named while the door
         // plays: `Set_door` tests the zones once its animation is over
         // ([`GameSession::end_transition_after_bgm`]). Room 208's door 0
-        // arrives in room 207's cut 3, inside a zone to cut 4.
-        if !(self.game.is_re2_room && from.is_some()) {
+        // arrives in room 207's cut 3, inside a zone to cut 4. The cut the
+        // init script's `cut_chg` set (room 101's 5, kept after its
+        // `cut_auto`) goes on screen now.
+        if self.game.is_re2_room && from.is_some() {
+            if self.game.camera.current_cut < self.loaded.room.cuts.len() {
+                self.loaded.room.current_cut = self.game.camera.current_cut;
+            }
+        } else {
             apply_camera(&mut self.loaded.room, &mut self.game, Some(self.player.pos));
         }
         drain_mask_toggles(&mut self.loaded.room, &mut self.game);
