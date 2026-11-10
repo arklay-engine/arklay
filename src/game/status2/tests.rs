@@ -1005,3 +1005,33 @@ fn a_held_left_in_sub_3_moves_only_on_flag_ticks() {
     assert_eq!(page(&game).sub, FILE_LEFT);
     assert_eq!(sounds, vec![Sound::Turn]);
 }
+
+/// `Stage_init_item`'s EASY steps: Leon's hint file or Claire's in slot 0
+/// at last page 1 (none off EASY or in scenario B), the bullets and the
+/// sprays; `St_init00` then grows the character's from the flags on each
+/// opening.
+#[test]
+fn easy_new_game_holds_the_hint_file() {
+    use crate::scd2::host::NO_FILE;
+    for (room, file) in [("1020", 0x17), ("1021", 0x18)] {
+        let mut game = GameState::new(RoomId::parse(room).unwrap(), &RoomState::default());
+        game.re2.start_new_game(true, false, false);
+        game.seed_re2_easy();
+        assert_eq!(game.re2.files[0], file, "room {room}");
+        assert_eq!(game.re2_slot(3), [0x14, 120]);
+        assert_eq!(game.re2.item_box[1..4], [[0x23, 1, 0]; 3]);
+        assert_eq!(game.re2_file.pages_last(file), 1);
+        game.re2.set_flag(4, 0x0F, 1);
+        game.init_re2_status();
+        assert_eq!(game.re2_file.pages_last(file), 2);
+    }
+    let mut normal = GameState::new(RoomId::parse("1020").unwrap(), &RoomState::default());
+    normal.re2.start_new_game(false, false, false);
+    normal.seed_re2_easy();
+    assert_eq!(normal.re2.files[0], NO_FILE);
+    let mut scenario_b = GameState::new(RoomId::parse("1020").unwrap(), &RoomState::default());
+    scenario_b.re2.scenario_b = true;
+    scenario_b.re2.start_new_game(true, false, false);
+    scenario_b.seed_re2_easy();
+    assert_eq!(scenario_b.re2.files[0], NO_FILE);
+}

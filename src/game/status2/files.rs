@@ -47,10 +47,53 @@ pub const FILE_DATA: [(u16, u16); FILES] = [
 /// tick (1 to 11) on the way out and by 11 minus it on the way in.
 pub const ST_MV: [u8; 12] = [1, 2, 4, 6, 8, 10, 16, 32, 48, 64, 96, 112];
 
-/// File `file`'s last page (`file_data`'s `+0`). EASY's hint files (0x17
-/// and 0x18) grow theirs from flags (`St_init00`), which isn't ported.
+/// File `file`'s last page in the table (`file_data`'s `+0`). EASY's hint
+/// files change theirs ([`FileWork::pages_last`]).
 pub fn pages_last(file: u8) -> u16 {
     FILE_DATA.get(usize::from(file)).map_or(0, |data| data.0)
+}
+
+/// EASY's hint files: Leon's (Hint Files 1) and Claire's (Hint Files 2).
+pub const HINT_FILES: [u8; 2] = [0x17, 0x18];
+
+/// `St_init00`'s (`0x4F7CD0`) ladders for the hint files' last page, Leon's
+/// and Claire's: `(bank, flag, pages_last)`, tested in order, the last set
+/// flag winning, over a start of 1. The banks are `fg_scenario` (3),
+/// `fg_common` (4), `fg_map` (9) and `fg_item_2` (34, which arklay doesn't
+/// model, so its step never counts).
+const HINT_LADDERS: [&[(u8, u8, u16)]; 2] = [
+    &[
+        (4, 0x0F, 2),
+        (9, 0x40, 3),
+        (9, 0x3C, 4),
+        (9, 0x4F, 5),
+        (9, 0x5A, 6),
+        (9, 0x69, 7),
+        (34, 0x2B, 8),
+        (3, 0x24, 9),
+        (9, 0x7B, 10),
+    ],
+    &[
+        (4, 0x0F, 2),
+        (4, 0x00, 3),
+        (9, 0x40, 4),
+        (9, 0x4F, 5),
+        (9, 0x5A, 6),
+        (9, 0x69, 7),
+        (34, 0x2B, 8),
+        (3, 0x43, 10),
+        (9, 0x7B, 11),
+    ],
+];
+
+/// The last page `St_init00` gives character `character`'s hint file (0
+/// Leon, 1 Claire) from the flags `flag(bank, index)` reads.
+pub fn hint_pages_last(character: u8, flag: impl Fn(u8, u8) -> bool) -> u16 {
+    HINT_LADDERS[usize::from(character & 1)]
+        .iter()
+        .filter(|&&(bank, index, _)| flag(bank, index))
+        .last()
+        .map_or(1, |&(_, _, pages)| pages)
 }
 
 /// The height of file `file`'s picture in rows (`file_data`'s `+2`).
@@ -182,6 +225,16 @@ pub struct FileWork {
     pub turn: i16,
     /// The page's x (`0x691FBC`).
     pub x: i16,
+    /// The hint files' last pages, Leon's and Claire's (`file_data`'s `+0`
+    /// for files 0x17 and 0x18): the table's until a new game on EASY sets
+    /// them to 1 (`Stage_init_item`) and `St_init00` grows them from flags.
+    /// The original keeps them in the executable's data, not in a save.
+    pub hint_pages: [u16; 2],
+    /// How many frames `St_disp_file` (`0x500270`) has drawn the page on
+    /// since the file's sprites were set up (`St_init_disp_file`), this
+    /// tick's included. Each draw buffer's first draws a tall picture as it
+    /// was set up, 0x10 rows higher; see [`page_draw`].
+    pub page_draws: u8,
 }
 
 impl Default for FileWork {
@@ -202,11 +255,22 @@ impl Default for FileWork {
             spin: 0,
             turn: 0,
             x: 0,
+            hint_pages: HINT_FILES.map(pages_last),
+            page_draws: 0,
         }
     }
 }
 
 impl FileWork {
+    /// File `file`'s last page (`file_data`'s `+0`), the hint files' as
+    /// [`Self::hint_pages`] has them.
+    pub fn pages_last(&self, file: u8) -> u16 {
+        match HINT_FILES.iter().position(|&hint| hint == file) {
+            Some(index) => self.hint_pages[index],
+            None => pages_last(file),
+        }
+    }
+
     /// The oracle's `fl` field: the binder, slot, page, the blink's level
     /// and way, the zoom, the carousel's turn and the page's x, then the 24
     /// bytes of `File_tag_bk` in hex.
@@ -234,6 +298,9 @@ pub const PAGE_Y: i16 = 0x1E;
 /// Where the file's picture is drawn.
 pub const PICTURE_X: i16 = 100;
 pub const PICTURE_Y: i16 = 0x3C;
+/// The draws a tall picture keeps its set-up height for: one per draw
+/// buffer.
+const TALL_FIRST_DRAWS: u8 = 2;
 /// The arrows' and the end marker's y.
 const ARROW_Y: i16 = 0x6E;
 /// The status sheets the arrows (texture 0x14) and the end marker (0x19)
@@ -278,6 +345,10 @@ pub struct PageLit {
     pub lit: bool,
     pub left: bool,
     pub dim_way: bool,
+    /// The draw is `St_disp_file`'s, whose tall branch moves the picture by
+    /// the height it reads ([`page_draw`]); `St_disp_file2` keeps it in
+    /// place.
+    pub raises_tall: bool,
 }
 
 impl PageLit {
@@ -291,6 +362,7 @@ impl PageLit {
             lit: sub == super::FILE_END,
             left: sub == super::FILE_PAGE,
             dim_way: sub != super::FILE_PAGE,
+            raises_tall: true,
         }
     }
 
@@ -303,6 +375,7 @@ impl PageLit {
             lit: sub == 1,
             left: sub == 0,
             dim_way: false,
+            raises_tall: false,
         }
     }
 }
@@ -314,14 +387,24 @@ impl PageLit {
 /// page's x; the picture is the bottom `height` rows of chunk 1. The arrows
 /// sit by the blink's way (`0x691F89`); the marker is dim (0x30) unless lit.
 ///
-/// A tall picture (a height of 0x80 or more) is drawn as both functions
-/// draw it from their second frame on, chunk 1's 0x80 rows at the
-/// picture's place; their first frame on each draw buffer, which adds chunk
-/// 0, isn't modelled.
+/// A tall picture (a height `H` of 0x80 or more) is chunk 1's 0x80 rows.
+/// `St_disp_file` reads `H` from the draw buffer's copy of the sprite and
+/// places the picture at `0xBC - H`, then leaves the copy at 0x80, so the
+/// first frame on each of the two buffers (the first two draws) puts it
+/// `H - 0x80` rows above its place and the later ones at its place. The
+/// same branch's chunk-0 sprite has the height `0x80 - H`, negative for
+/// 0x90, and draws nothing (`status_file_easy`'s frames). `St_disp_file2`
+/// always puts it at its place.
 pub fn page_draw(work: &FileWork, file: u8, lit: PageLit) -> Vec<PageSprite> {
     let h = height(file);
     let mut sprites = Vec::with_capacity(4);
     let (v, rows) = if h < 0x80 { (0x80 - h, h) } else { (0, 0x80) };
+    let raised = h >= 0x80 && lit.raises_tall && work.page_draws <= TALL_FIRST_DRAWS;
+    let picture_y = if raised {
+        PICTURE_Y + 0x80 - h as i16
+    } else {
+        PICTURE_Y
+    };
     sprites.push(PageSprite {
         texture: PageTexture::Chunk(1),
         u: 0,
@@ -329,7 +412,7 @@ pub fn page_draw(work: &FileWork, file: u8, lit: PageLit) -> Vec<PageSprite> {
         w: 0x80,
         h: rows,
         x: PICTURE_X,
-        y: PICTURE_Y,
+        y: picture_y,
         colour: BRIGHT,
     });
     sprites.push(PageSprite {
@@ -344,7 +427,7 @@ pub fn page_draw(work: &FileWork, file: u8, lit: PageLit) -> Vec<PageSprite> {
     });
     let way = i16::from(work.blink.falling);
     if lit.right {
-        let sprite = if u16::from(work.page) == pages_last(file) {
+        let sprite = if u16::from(work.page) == work.pages_last(file) {
             PageSprite {
                 texture: PageTexture::Sheet(SHEET_MARKER),
                 u: 0,
@@ -392,6 +475,58 @@ pub fn page_draw(work: &FileWork, file: u8, lit: PageLit) -> Vec<PageSprite> {
 mod tests {
     use super::*;
     use crate::game::status2::{FILE_END, FILE_NEXT_OUT, FILE_PAGE};
+
+    /// `St_init00`'s ladders: 1 with no flag, the last set flag winning, and
+    /// Claire's skipping 9.
+    #[test]
+    fn the_hint_file_grows_with_its_flags() {
+        let none = |_: u8, _: u8| false;
+        assert_eq!(hint_pages_last(0, none), 1);
+        assert_eq!(hint_pages_last(1, none), 1);
+        let set = |flags: &'static [(u8, u8)]| move |bank, index| flags.contains(&(bank, index));
+        assert_eq!(hint_pages_last(0, set(&[(4, 0x0F)])), 2);
+        assert_eq!(hint_pages_last(0, set(&[(4, 0x0F), (9, 0x7B)])), 10);
+        // A later rung without the earlier ones still wins.
+        assert_eq!(hint_pages_last(0, set(&[(9, 0x4F)])), 5);
+        assert_eq!(hint_pages_last(1, set(&[(4, 0x0F), (9, 0x40)])), 4);
+        assert_eq!(hint_pages_last(1, set(&[(3, 0x43)])), 10);
+        assert_eq!(hint_pages_last(1, set(&[(9, 0x7B)])), 11);
+    }
+
+    #[test]
+    fn the_hint_files_last_pages_are_the_works() {
+        let mut work = FileWork::default();
+        assert_eq!(work.pages_last(0x17), pages_last(0x17));
+        work.hint_pages = [3, 7];
+        assert_eq!(work.pages_last(0x17), 3);
+        assert_eq!(work.pages_last(0x18), 7);
+        assert_eq!(work.pages_last(1), 5);
+    }
+
+    /// A tall picture's first two `St_disp_file` draws put it at `0xBC -
+    /// H`, 0x10 rows up for the developed films; the later ones, and every
+    /// `St_disp_file2` draw, at its place.
+    #[test]
+    fn a_tall_picture_draws_its_first_frame_per_buffer_higher() {
+        let picture_y = |draws: u8, lit: PageLit| {
+            let work = FileWork {
+                page_draws: draws,
+                ..work(0, false)
+            };
+            page_draw(&work, 0x0B, lit)[0].y
+        };
+        let reader = PageLit::reader(FILE_PAGE);
+        assert_eq!(picture_y(1, reader), 0x2C);
+        assert_eq!(picture_y(2, reader), 0x2C);
+        assert_eq!(picture_y(3, reader), PICTURE_Y);
+        assert_eq!(picture_y(1, PageLit::pickup(0)), PICTURE_Y);
+        // A picture under 0x80 rows never moves.
+        let work = FileWork {
+            page_draws: 1,
+            ..work(0, false)
+        };
+        assert_eq!(page_draw(&work, 1, reader)[0].y, PICTURE_Y);
+    }
 
     fn work(page: u8, falling: bool) -> FileWork {
         FileWork {

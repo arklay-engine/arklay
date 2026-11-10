@@ -9301,6 +9301,7 @@ fn seed_new_game_choice(game: &mut game::GameState, options: player::Options) {
     if choice != crate::ui::NewGameChoice::default() {
         game.re2
             .start_new_game(choice.easy, choice.hard_mode, choice.censorship_off);
+        game.seed_re2_easy();
     }
 }
 

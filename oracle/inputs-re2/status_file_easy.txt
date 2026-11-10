@@ -1,0 +1,83 @@
+# room 102 as Leon on EASY, holding the hint file from the new game (slot 0) and the developed films A (0xB) and D (0x13), tall pictures, in slots 1 and 2: FILE, open the binder, read the hint file to its end marker, read each film to its end marker and back a page, close the binder and the screen (oracle/re2.md, "Status screen")
+364 start
+368
+400 up
+404
+420 up
+424
+440 left
+444
+460 left
+464
+480 confirm
+484
+520 confirm
+524
+660 confirm
+664
+780 right
+784
+820 right
+824
+860 right
+864
+900 right
+904
+940 right
+944
+980 right
+984
+1020 right
+1024
+1060 right
+1064
+1100 right
+1104
+1140 right
+1144
+1180 right
+1184
+1220 right
+1224
+1260 right
+1264
+1300 right
+1304
+1340 right
+1344
+1380 right
+1384
+1420 right
+1424
+1460 cancel
+1464
+1520 down
+1524
+1560 confirm
+1564
+1680 right
+1684
+1720 right
+1724
+1760 right
+1764
+1800 left
+1804
+1840 cancel
+1844
+1900 down
+1904
+1940 confirm
+1944
+2060 right
+2064
+2100 right
+2104
+2140 left
+2144
+2180 cancel
+2184
+2240 cancel
+2244
+2300 start
+2304
