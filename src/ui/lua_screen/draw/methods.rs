@@ -130,25 +130,42 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
         )))
     });
 
-    // `draw_re2_binders(model, front, sub, command, top)`: FILE's three
-    // binders as the original draws them, with binder `front` in front,
-    // FILE's `sub` `command` ticks in, and the panel's top at `top`
+    // `draw_re2_binders(model, page, top)`: FILE's three binders and their
+    // labels as the original draws them, from `page` (a `re2_items()`
+    // table: its `binder`, `slot`, `sub`, `command`, `zoom`, `view_zoom`,
+    // `spin` and `files`), with the panel's top at `top`
     // ([`crate::game::status2::binders::polygons`]).
     methods.add_method_mut(
         "draw_re2_binders",
-        |_lua, api, (handle, front, sub, command, top): (usize, u8, u8, u8, i32)| {
+        |_lua, api, (handle, page, top): (usize, mlua::Table, i32)| {
             use crate::game::status2::binders;
+            use crate::scd2::host::{FILE_SLOTS, NO_FILE};
+            let mut files = [NO_FILE; FILE_SLOTS];
+            if let Some(held) = page.get::<Option<mlua::Table>>("files")? {
+                for (index, file) in files.iter_mut().enumerate() {
+                    *file = held.get::<Option<u8>>(index + 1)?.unwrap_or(NO_FILE);
+                }
+            }
+            let field = |name: &str| -> mlua::Result<i64> {
+                Ok(page.get::<Option<i64>>(name)?.unwrap_or(0))
+            };
+            let at = binders::BinderView {
+                front: field("binder")? as u8,
+                slot: field("slot")? as i8,
+                sub: field("sub")? as u8,
+                command: field("command")? as u8,
+                zoom: field("zoom")? as i16,
+                view_zoom: field("view_zoom")? as i16,
+                spin: field("spin")? as i16,
+                files,
+                top,
+            };
             let Api {
                 host, framebuffer, ..
             } = api;
             let framebuffer = framebuffer.as_deref_mut().ok_or_else(no_draw)?;
             let model = host.assets.model(handle)?;
-            let turn = binders::turn(sub, command);
-            let polygons = model
-                .objects
-                .first()
-                .map(|binder| binders::polygons(binder, front, turn, top))
-                .unwrap_or_default();
+            let polygons = binders::polygons(model, &at);
             // The page has a CLUT row per binder, so a replacement of one
             // row's colours doesn't apply.
             framebuffer.draw_screen_polygons(model, &polygons, None);

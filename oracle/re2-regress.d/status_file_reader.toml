@@ -1,12 +1,13 @@
 [[run]]
 name = "status_file_reader"
-# the FILE page's reader (St_menu0_file subs 6 to 0x12) with files 1 and 3 in binder 0: open the binder, move its list, read file 1 to its end marker and back, read file 3 and close it, reopen the binder, turn to an empty one (oracle/re2.md, "Status screen"). The whole run's frames are reported, not judged, until the binders' zoom and the screen's slides are drawn; the page windows (file 1's, 676 to 1119, and file 3's, 1216 to 1379) are judged.
+# the FILE page's reader (St_menu0_file subs 6 to 0x12) with files 1 and 3 in binder 0: open the binder, move its list, read file 1 to its end marker and back, read file 3 and close it, reopen the binder, turn to an empty one (oracle/re2.md, "Status screen"). The whole run's frames are judged, and each part on its own (`frame_windows`): the binders at rest, zoomed, spun and stacked (360 to 659, 1134 to 1199, 1394 to 1899), the screen's parts sliding out (660 to 675, 1200 to 1215) and back (1120 to 1133, 1380 to 1393), and the pages (676 to 1119, 1216 to 1379). Each limit is a little above the measured mean; the binders' windows sit near 1.4, the error of their textures drawn at 320 x 240 against the original's 640 x 480.
 setup_script = "status_file_reader.lua"
 input = "status_file_reader.txt"
 input_shift = 344
 ticks = 1900
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,fl,snd,fgstat"
 frames = [360, 1899]
-frame_windows = [[676, 1119, 0.25], [1216, 1379, 0.35]]
+frame_max_mean = 0.8
+frame_windows = [[360, 519, 0.95], [520, 659, 1.5], [660, 675, 0.45], [676, 1119, 0.25], [1120, 1133, 0.55], [1134, 1199, 1.5], [1200, 1215, 0.45], [1216, 1379, 0.35], [1380, 1393, 0.55], [1394, 1599, 1.55], [1600, 1899, 1.0]]
 expect = "match"
 record = "--no-enemies --warp 102:-11378:0:-4587:0 --life 200 --file 0:1 --file 1:3"
