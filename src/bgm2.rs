@@ -217,7 +217,10 @@ struct Sequence {
     state: u8,
     /// `Seq_ctr[1]`: 0 plays on the room's load.
     hold: u8,
-    /// `Seq_ctr[2]`: a bank is loaded.
+    /// A track is loaded. The original's `Seq_ctr[2]` (0 or more) means its
+    /// bank loaded; the two differ only for a bank whose row names no track
+    /// (main 9, some subs), where nothing can play, so the steps this guards
+    /// change nothing audible there.
     loaded: bool,
     /// `ss_timer`.
     fade: u8,
@@ -350,14 +353,15 @@ impl Music {
         };
     }
 
-    /// `Snd_bgm_main`: the room's main replaces what's loaded.
+    /// `Snd_bgm_main`: the room's main replaces what's loaded. It succeeds
+    /// when the id's `.BGM` bank loads ([`main_bank`]), whether or not its
+    /// `bgm_lut` row names a track: main 9's names none, but it loads, so
+    /// `Snd_bgm_set` gives its sequence the word's hold. Without a bank it
+    /// returns before `SsLoadBanks`, so no track loads.
     fn load_main(&mut self, word: u8, system: u32) -> bool {
         let id = word & 0x3f;
-        let tracks = if word == 0xff {
-            [None; 3]
-        } else {
-            main_tracks(id)
-        };
+        let bank = word != 0xff && main_bank(id);
+        let tracks = if bank { main_tracks(id) } else { [None; 3] };
         let base = self.sequences[0].volume;
         for (index, &track) in tracks.iter().enumerate() {
             let audible = main_audible(id, index) || system & SYSTEM_ALL_AUDIBLE != 0;
@@ -366,28 +370,28 @@ impl Music {
         let sequence = &mut self.sequences[0];
         sequence.state = 0;
         sequence.loaded = tracks.iter().any(Option::is_some);
-        sequence.loaded
+        bank
     }
 
     /// `Snd_bgm_sub`: the room's sub replaces what's loaded. Its channels start
-    /// silent, but in two rooms of the first stage.
+    /// silent, but in two rooms of the first stage. Like [`Music::load_main`]
+    /// it succeeds when the id's `.BGM` bank loads ([`sub_bank`]).
     fn load_sub(&mut self, word: u8, place: Place) -> bool {
-        let tracks = if word == 0xff {
-            [None; SUB_CHANNELS]
-        } else {
+        let bank = word != 0xff && sub_bank(word & 0x3f);
+        let tracks = if bank {
             sub_tracks(word & 0x3f)
+        } else {
+            [None; SUB_CHANNELS]
         };
         let audible = place.stage == 0 && matches!(place.room, 0 | 4);
-        let mut any = false;
         for (channel, &track) in tracks.iter().enumerate() {
             let base = self.sequences[1 + channel].volume;
             self.load(3 + channel, track, if audible { base } else { 0 });
             let sequence = &mut self.sequences[1 + channel];
             sequence.state = 0;
             sequence.loaded = track.is_some();
-            any |= track.is_some();
         }
-        any
+        bank
     }
 
     fn fade(&mut self, sequence: usize) {
@@ -779,6 +783,23 @@ pub fn sub_tracks(id: u8) -> [Option<&'static str>; SUB_CHANNELS] {
     })
 }
 
+/// The main ids with a `Common/Sound/BGM/MAINxx.BGM` bank in the retail
+/// data, a bit each: all but 0x26, 0x32, 0x3B, 0x3C and 0x3F. None of them is
+/// over `Snd_bgm_main`'s size limit (0x38800), so these are the ids it loads.
+const MAIN_BANKS: u64 = !(1 << 0x26 | 1 << 0x32 | 1 << 0x3b | 1 << 0x3c | 1 << 0x3f);
+/// The sub ids with a `SUB_xx.BGM` bank: 0x00 to 0x37, and 0x3E.
+const SUB_BANKS: u64 = ((1 << 0x38) - 1) | (1 << 0x3e);
+
+/// Whether `Snd_bgm_main` loads main id `id`: `BufferizeFile` finds its bank.
+pub fn main_bank(id: u8) -> bool {
+    id < 64 && MAIN_BANKS >> id & 1 != 0
+}
+
+/// Whether `Snd_bgm_sub` loads sub id `id`.
+pub fn sub_bank(id: u8) -> bool {
+    id < 64 && SUB_BANKS >> id & 1 != 0
+}
+
 /// Whether main id `id`'s `channel` starts audible ([`MAIN_AUDIBLE`]).
 pub fn main_audible(id: u8, channel: usize) -> bool {
     MAIN_AUDIBLE
@@ -1033,6 +1054,50 @@ mod tests {
         music.control([0, 1, 0, 101, 0], street());
         assert_eq!(music.channels[0].play, None);
         assert_eq!(music.channels[0].volume, 0);
+    }
+
+    #[test]
+    fn a_main_with_a_bank_but_no_track_holds_by_its_word() {
+        // Room 201's licker scene writes 0xc449: main 9, whose `bgm_lut` row
+        // names no track, but MAIN09.BGM loads, so the hold is 0x49 >> 6
+        // (route_200_208 in the original, `c449,0001,...`).
+        assert_eq!(main_tracks(9), [None; 3]);
+        let mut music = Music::default();
+        music.enter_room(word(0x49, 0xc4), street());
+        assert_eq!(&music.trace_field()[..9], "c449,0001");
+        assert_eq!(music.channels[0].track, None);
+    }
+
+    #[test]
+    fn a_main_without_a_bank_holds_nothing() {
+        let mut music = Music::default();
+        music.enter_room(word(0x26, 0xff), street());
+        assert_eq!(&music.trace_field()[..9], "ff26,00ff");
+        music.control([0, 1, 0, 101, 0], street());
+        assert_eq!(music.channels[0].volume, 0);
+        // `Snd_bgm_main` returns before `SsLoadBanks`: `bgm_lut`'s row for
+        // 0x3b names main00_1 three times, but nothing loads.
+        assert!(main_tracks(0x3b).iter().all(Option::is_some));
+        music.enter_room(word(0x3b, 0xff), street());
+        assert_eq!(
+            music.channels.map(|channel| channel.track),
+            [None; CHANNELS]
+        );
+    }
+
+    #[test]
+    fn the_bank_tables_leave_out_the_missing_banks() {
+        // The retail `Common/Sound/BGM` folder and the six Steam language
+        // folders all lack exactly these banks.
+        let mains: Vec<u8> = (0..64).filter(|&id| !main_bank(id)).collect();
+        assert_eq!(mains, [0x26, 0x32, 0x3b, 0x3c, 0x3f]);
+        let subs: Vec<u8> = (0..64).filter(|&id| sub_bank(id)).collect();
+        assert_eq!(subs, (0..0x38).chain([0x3e]).collect::<Vec<u8>>());
+        // A sub whose `sbgm_lut` row names no track still loads its bank.
+        assert_eq!(sub_tracks(0x1d), [None; 2]);
+        let mut music = Music::default();
+        music.enter_room(word(0xff, 0x1d), street());
+        assert_eq!(&music.trace_field()[..19], "1dff,00ff,0100,0100");
     }
 
     #[test]
