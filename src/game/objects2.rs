@@ -124,6 +124,9 @@ impl GameState {
         }
         player.pos = pl.pos;
         self.entities[0].pos = player.pos;
+        // The head's `+0x5C` is made after `Om_move`, from the body the objects
+        // held out, as after `Sca_ck_em`'s pushes.
+        crate::player2::follow_pushes(&mut self.re2.player, player.pos);
         if let Some(index) = box_touched
             && !BOX_WARNED.swap(true, Ordering::Relaxed)
         {
@@ -367,6 +370,22 @@ mod tests {
         game.om_move(room, player);
         game.om_trans_old((player.pos, player.angle));
         crate::character2::keep_old_boxes(game, player.pos);
+    }
+
+    #[test]
+    fn the_head_is_held_out_with_the_body() {
+        let (mut game, room, mut player) = hall(&[statue(-13000)]);
+        // The move placed the head on the body's step into the statue.
+        player.pos[2] -= STEP;
+        game.re2.player.neck.position = Some([-22905, -5900, REST - STEP - 30]);
+        game.re2.player.neck.body = Some(player.pos);
+        game.om_move(&room, &mut player);
+        assert_eq!(player.pos[2], REST, "held out");
+        assert_eq!(
+            game.re2.player.neck.position,
+            Some([-22905, -5900, REST - 30]),
+            "the head is on the held-out body"
+        );
     }
 
     #[test]

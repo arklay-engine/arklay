@@ -30,10 +30,6 @@ ignore = [
   [484, 574, "om0"], [484, 574, "om1"], [484, 574, "om2"],
   [975, 1148, "om0"], [975, 1148, "om1"], [975, 1148, "om2"],
   [3759, 3849, "om0"], [3759, 3849, "om1"], [3759, 3849, "om2"],
-  # the head's point as a push starts (the count's six ticks) and as clips 7 and 8 change (docs/internals/deviations/re2.md, "The head in a push")
-  [1532, 1537, "pneck"], [1786, 1791, "pneck"], [2022, "pneck"], [2034, 2037, "pneck"], [2058, 2064, "pneck"],
-  [2118, 2123, "pneck"], [2199, "pneck"], [2211, 2217, "pneck"], [2288, 2293, "pneck"], [2530, 2535, "pneck"],
-  [2766, "pneck"], [2789, 2797, "pneck"], [2871, 2876, "pneck"], [2928, "pneck"],
   # room 114's slot 0, which stands: its `Spd` is what the slot held before (the slots' leftovers,
   # docs/internals/deviations/re2.md, "What a zombie's slot held before")
   [3850, 4149, "zm0"],
@@ -127,10 +123,7 @@ ignore = [
     # the objects are compared in 10C only, from the end of its load (as leon_a_208_114's): elsewhere the slots out of play keep what the last room's objects left in them in the original, where arklay's are zero (docs/internals/deviations/re2.md, "What an object's slot held before")
     [0, 21424, "om0"], [0, 21424, "om1"], [0, 21424, "om2"],
     [24035, 27249, "om0"], [24035, 27249, "om1"], [24035, 27249, "om2"],
-    # the head's point as a push starts and as clips 7 and 8 change (docs/internals/deviations/re2.md, "The head in a push"), and through 114's door 1 with the head turned toward a zombie ("The head through a door")
-    [21808, 21813, "pneck"], [22062, 22067, "pneck"], [22298, "pneck"], [22310, 22313, "pneck"], [22334, 22340, "pneck"],
-    [22394, 22399, "pneck"], [22475, "pneck"], [22487, 22493, "pneck"], [22564, 22569, "pneck"], [22806, 22811, "pneck"],
-    [23042, "pneck"], [23065, 23073, "pneck"], [23147, 23152, "pneck"], [23204, "pneck"],
+    # the head through 114's door 1 with the head turned toward a zombie (docs/internals/deviations/re2.md, "The head through a door")
     [24561, 24774, "pneck"],
     # room 100's opening (not this route's change; no other run compares it): slot 1's angle on the load's tick, and slots 0 and 1 drawn at 0x404040 by the original until 183
     [0, "zm1"],

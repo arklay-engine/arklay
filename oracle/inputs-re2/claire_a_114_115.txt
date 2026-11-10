@@ -1,0 +1,82 @@
+# Claire A from the corridor (114) to the S.T.A.R.S. office (115), as claire_a_208_114 leaves her at door 2's arrival: down the empty corridor to door 1, then 115's desk (Chris's Diary and the Unicorn Medal), the handgun rounds and door 0, which runs the room's exit scene (oracle/re2.md, "Claire A to the S.T.A.R.S. office")
+0
+# 114: leon_a_114_115's presses: turn toward -z and run down the corridor (empty: the Spade Key isn't taken) to door 1, in the east wall
+350 left
+364
+366 up run
+418
+420 left
+434
+# door 1: room 115 loads on 471
+436 action
+438
+# 115: walk east along z -18700 to the desk, turn to face it (+z) and step up to it
+785 up
+868
+870 left
+884
+886 up
+893
+# the desk (area 1, event 5): cut 9, then Chris's Diary through the file window, paged to its end marker, filed, and message 10 closed
+895 action
+897
+989 right
+991
+1019 right
+1021
+1049 right
+1051
+1079 right
+1081
+1109 right
+1111
+1139 right
+1141
+1189 action
+1191
+1289 action
+1291
+# the Unicorn Medal's question: Yes, into slot 5; then close the message
+1615 action
+1617
+1815 action
+1817
+# west round the desk's west end, north, and east to the handgun rounds' stand, then turn to face them (-z)
+1830 left
+1843
+1845 up
+1875
+1877 right
+1890
+1892 up
+1949
+1951 right
+1964
+1966 up
+1997
+1999 right
+2013
+# the 15 handgun rounds: the question, Yes (into slot 2's 20) and the message
+2016 action
+2018
+2100 action
+2102
+2200 action
+2202
+# west, south and west to the west wall by door 0
+2215 right
+2229
+2231 up
+2261
+2263 left
+2276
+2278 up
+2342
+2344 right
+2357
+2359 up
+2420
+# door 0, event 3 with both pick-ups made: the exit scene (main_03), which hands back about 2729
+2425 action
+2427
+2849

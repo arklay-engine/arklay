@@ -1,0 +1,149 @@
+# Claire A from the darkroom (208) to the S.T.A.R.S. office's corridor (114), as route_claire_a_208 leaves her at the typewriter: out of 208 by door 0, back west through 207 to the stairs door 3, up 10C's stairs, the statue puzzle (leon_a_208_114's, with the approaches and holds made again for Claire's width and push), the Red Jewel and door 2 (oracle/re2.md, "Claire A to the S.T.A.R.S. office")
+0
+# 208: turn from the typewriter to face +z
+350 left
+365
+# along the table's west side until the wall stops Claire at z -15462
+367 up
+425
+# turn to face +x
+427 right
+439
+# east, sliding along the counter, until the east wall stops her at x -14346
+441 up
+518
+# turn to face +z, toward door 0
+520 left
+532
+# door 0: room 207 loads on 570, play comes back on 875
+535 action
+537
+# 207: leon_a_208_114's presses 86 ticks later: turn west-southwest, toward the gap
+878 left
+883
+# run west past the four dead zombies' places, through the gap
+885 up run
+970
+# turn to face east
+972 right
+995
+# east until door 3's box stops Claire
+997 up
+1024
+# door 3, the stairs (type 4): room 10C loads on 1061
+1026 action
+1028
+# 10C: one tick of turn, then up the stairs with action held
+1236 right
+1237
+1238 up action
+1379
+# at the top: a turn on the spot and a running turn to exactly 2048 (west), then run west along the hall's +z side
+1381 right
+1391 up run right
+1396 up run
+1544
+# turn to 1008 and walk toward statue 1's +z face; then push it toward -z, 4 ticks longer than Leon (Claire's push is slower), to z -14450
+1554 left
+1568
+1571 up
+1589
+1618 up
+1702
+# back off, walk round to statue 1's -x side, and on to 90 units past its centre (Claire starts her push 100 further out, so a step short of Leon's path keeps her on the face until the count is through)
+1778 down
+1782
+1786 right
+1799
+1802 up
+1815
+1820 left
+1833
+1836 up
+1849
+1856 left
+1869
+# push statue 1 toward +x to the wall (x -17009), 20 ticks longer than Leon
+1874 up
+2148
+# round to statue 1's -z face and push it toward +z onto the east plate (4:38)
+2152 right
+2165
+2168 up
+2176
+2180 left
+2193
+2196 up
+2207
+2211 left
+2224
+2228 up
+2328
+# back off, run west and push statue 2 toward +z, 5 ticks longer than Leon, to z -11259
+2332 down
+2337
+2342 left
+2356
+2359 up run
+2376
+2380 right
+2394
+2397 up
+2480
+# back off and round to statue 2's +x face; push it toward -x, 24 ticks longer than Leon, to x -25990
+2552 down
+2556
+2560 right
+2573
+2576 up
+2589
+2593 left
+2606
+2609 up
+2624
+2628 left
+2641
+2644 up
+2906
+# turn 9 ticks to 2688 and walk to the hall's west wall, then turn and push statue 2 toward -z onto the west plate (4:39), 15 ticks longer than Leon: the jewel scene
+2914 right
+2923
+2925 up
+2964
+2968 left
+2990
+2992 up
+3087
+# back off, run east to the pedestal and take the Red Jewel (into slot 4)
+3191 down
+3196
+3201 left
+3215
+3218 up run
+3241
+3245 right
+3258
+3261 up
+3273
+3277 action
+3281
+3551 action
+3555
+3751 action
+3755
+# run west, then south along the hall to door 2
+3764 right
+3779
+3781 up run
+3798
+3800 left
+3814
+3816 up run
+3844
+3846 right
+3860
+3862 up
+3876
+# door 2: room 114 loads on 3913
+3878 action
+3880
