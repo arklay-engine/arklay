@@ -24,6 +24,7 @@ mod params;
 
 pub use params::parse_assignment as parse_bot_param;
 mod stats;
+pub(crate) use stats::RunFacts;
 mod steer;
 mod world;
 
@@ -305,7 +306,9 @@ impl BotMemory {
     }
 
     fn log(&mut self, line: String) {
-        eprintln!("[bot] {line}");
+        if LOG.load(std::sync::atomic::Ordering::Relaxed) {
+            eprintln!("[bot] {line}");
+        }
     }
 
     /// Carry the values a reload keeps over from `current` (the memory at
@@ -318,6 +321,15 @@ impl BotMemory {
             }
         }
     }
+}
+
+/// Whether the bot's log lines (`[bot] tick ...`) are written to stderr.
+static LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+/// Write the bot's log lines to stderr (the default), or drop them: a
+/// driver script's `log = false`.
+pub(crate) fn set_log(on: bool) {
+    LOG.store(on, std::sync::atomic::Ordering::Relaxed);
 }
 
 /// `BOT_BOOT_IDLE`: ticks the bot idles at the start of the run (0 unset).
@@ -473,9 +485,9 @@ fn computer_snapshot(game: &game::GameState) -> Option<ComputerSnapshot> {
             .and_then(|record| record.field("text"))
             .map_or(0, |text| {
                 (0..9)
-                    .take_while(|&at| {
-                        matches!(text.index(at), Some(ScriptValue::Int(byte)) if *byte != 0)
-                    })
+                    .take_while(
+                        |&at| matches!(text.index(at), Some(ScriptValue::Int(byte)) if *byte != 0),
+                    )
                     .count()
             })
     };
@@ -2699,6 +2711,8 @@ impl NavOutcome {
 
 /// The values shared between [`BotRuntime`] and the Lua userdata.
 struct BotShares {
+    /// What the route's API calls cost, by method.
+    profile: Rc<RefCell<stats::ApiProfile>>,
     memory: Rc<RefCell<BotMemory>>,
     nav: Rc<RefCell<BotNav>>,
     input: Rc<RefCell<BotInput>>,
@@ -2710,6 +2724,7 @@ impl BotShares {
     /// Another handle on the same shared values.
     fn share(&self) -> Self {
         Self {
+            profile: Rc::clone(&self.profile),
             memory: Rc::clone(&self.memory),
             nav: Rc::clone(&self.nav),
             input: Rc::clone(&self.input),
@@ -2722,6 +2737,7 @@ impl BotShares {
 impl Default for BotShares {
     fn default() -> Self {
         Self {
+            profile: Rc::default(),
             memory: Rc::new(RefCell::new(BotMemory::default())),
             nav: Rc::new(RefCell::new(BotNav::default())),
             input: Rc::new(RefCell::new(BotInput::default())),
@@ -2884,8 +2900,34 @@ fn outcome_table(lua: &Lua, outcome: NavOutcome) -> mlua::Result<Table> {
     Ok(table)
 }
 
+/// Registers [`BotCtx`]'s methods so that every call's time is added to the
+/// run's API profile (`compute.api` of the report).
+struct Profiled<'a, M>(&'a mut M);
+
+impl<M: UserDataMethods<BotCtx>> Profiled<'_, M> {
+    fn add_method<A, R>(
+        &mut self,
+        name: &'static str,
+        method: impl Fn(&Lua, &BotCtx, A) -> mlua::Result<R> + 'static,
+    ) where
+        A: mlua::FromLuaMulti,
+        R: mlua::IntoLuaMulti,
+    {
+        self.0.add_method(name, move |lua, bot, args| {
+            let started = std::time::Instant::now();
+            let result = method(lua, bot, args);
+            bot.shares
+                .profile
+                .borrow_mut()
+                .note(name, started.elapsed());
+            result
+        });
+    }
+}
+
 impl UserData for BotCtx {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        let methods = &mut Profiled(methods);
         methods.add_method("tick", |_lua, bot, ()| Ok(bot.tick));
 
         methods.add_method("room", |lua, bot, ()| {
@@ -4110,6 +4152,9 @@ pub struct BotRuntime {
     /// each bit that changes is logged (`story: ...`), the coverage record
     /// of which scenes and branches a run played.
     story: Option<[game::FlagBank; STORY_BANKS]>,
+    /// The story flags a tick of the run saw become set, per bank: the
+    /// scenes the run reached, whatever cleared them later.
+    story_seen: [BTreeSet<u8>; STORY_BANKS],
     /// The `--bot-goal-room` setting; kept across [`Self::reset`].
     goal_room: Option<Rc<str>>,
     /// Run statistics for `--bot-stats`.
@@ -4152,6 +4197,7 @@ impl BotRuntime {
             risk: DEFAULT_RISK,
             params: Rc::new(params::load(pack, &[])?),
             story: None,
+            story_seen: Default::default(),
             goal_room: None,
             stats: stats::BotStats::default(),
             save_log: SaveLog::default(),
@@ -4184,6 +4230,9 @@ impl BotRuntime {
                 for sel in 0..=u8::MAX {
                     let (was, is) = (before[bank].bit(sel), now[bank].bit(sel));
                     if was != is {
+                        if is {
+                            self.story_seen[bank].insert(sel);
+                        }
                         let what = if is { "set" } else { "cleared" };
                         self.shares.memory.borrow_mut().log(format!(
                             "tick {} room {room}: story: {name} {sel:#04X} {what}",
@@ -4241,6 +4290,14 @@ impl BotRuntime {
     /// The tick counter advances even when the script fails, so the error can
     /// name the exact tick and room.
     pub fn tick(&mut self, session: &GameSession, pack: &Pack) -> Result<BotInput> {
+        let started = std::time::Instant::now();
+        let input = self.tick_inner(session, pack);
+        let micros = u32::try_from(started.elapsed().as_micros()).unwrap_or(u32::MAX);
+        self.stats.note_compute(self.tick, micros);
+        input
+    }
+
+    fn tick_inner(&mut self, session: &GameSession, pack: &Pack) -> Result<BotInput> {
         self.tick = self.tick.saturating_add(1);
         let room_id = session.loaded.id;
         if self.meta_room != Some(room_id) {
@@ -4263,7 +4320,10 @@ impl BotRuntime {
             self.door_vias = Rc::new(meta::load_door_vias(pack, Some(jill), Some(&self.params))?);
             self.avoid_facts = Rc::new(meta::load_avoids(pack, Some(jill), Some(&self.params))?);
         }
+        let started = std::time::Instant::now();
         let snapshot = SessionSnapshot::build(session);
+        self.stats.note_phase(0, started.elapsed());
+        let started = std::time::Instant::now();
         self.observe_story(&snapshot);
         self.stats.observe_snapshot(self.tick, &snapshot);
         let saved = self.observe_saves(&snapshot);
@@ -4306,7 +4366,12 @@ impl BotRuntime {
             goal_room: self.goal_room.clone(),
             shares: self.shares.share(),
         };
-        if let Err(err) = self.vm.call(ctx) {
+        self.stats.note_phase(1, started.elapsed());
+        let started = std::time::Instant::now();
+        let called = self.vm.call(ctx);
+        self.stats.note_phase(2, started.elapsed());
+        let started = std::time::Instant::now();
+        if let Err(err) = called {
             self.shares.finished.set(true);
             if self.shares.finish_reason.borrow().is_none() {
                 *self.shares.finish_reason.borrow_mut() = Some(format!("Lua error: {err}"));
@@ -4338,6 +4403,7 @@ impl BotRuntime {
             // (its slot, room and tick) is part of the checkpoint.
             self.checkpoint = Some(self.shares.memory.borrow().clone());
         }
+        self.stats.note_phase(3, started.elapsed());
         Ok(input)
     }
 
@@ -4484,12 +4550,33 @@ impl BotRuntime {
     }
 
     /// The run statistics as JSON (see [`stats`]).
-    pub fn stats_json(&self, outcome: &str, elapsed_secs: f64) -> serde_json::Value {
+    /// Whether a tick of the run saw story flag `sel` of `bank` (0 scenario,
+    /// 1 common) become set.
+    pub fn story_seen(&self, bank: usize, sel: u8) -> bool {
+        self.story_seen
+            .get(bank)
+            .is_some_and(|seen| seen.contains(&sel))
+    }
+
+    pub fn stats_json(&self, outcome: &str, elapsed_secs: f64, run: RunFacts) -> serde_json::Value {
+        let mut report = self.stats_report(outcome, elapsed_secs, run);
+        let story: serde_json::Map<String, serde_json::Value> = STORY_BANK_NAMES
+            .iter()
+            .zip(&self.story_seen)
+            .map(|(name, seen)| ((*name).to_string(), serde_json::json!(seen)))
+            .collect();
+        report["story"] = serde_json::Value::Object(story);
+        report
+    }
+
+    fn stats_report(&self, outcome: &str, elapsed_secs: f64, run: RunFacts) -> serde_json::Value {
         self.stats.to_json(
             outcome,
             self.finish_reason().as_deref(),
             self.tick,
             elapsed_secs,
+            run,
+            &self.shares.profile.borrow(),
         )
     }
 
@@ -7363,7 +7450,7 @@ mod tests {
         assert_eq!(runtime.save_log.reloads, 1);
         assert_eq!(runtime.save_log.count, 1);
         assert!(runtime.has_save());
-        let json = runtime.stats_json("finished", 0.0);
+        let json = runtime.stats_json("finished", 0.0, RunFacts::default());
         assert_eq!(json["saves"], 1);
         assert_eq!(json["reloads"], 1);
         assert_eq!(json["deaths_before_reload"], 1);

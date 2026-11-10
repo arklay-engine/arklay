@@ -40,6 +40,24 @@
 //! (left or right only), `uncontrolled` (no control for another reason) and
 //! `waiting` (in control with no input).
 //!
+//! `hits` counts the ticks where the player's health fell by more than
+//! [`HIT_THRESHOLD`] (poison and web ticks take 2 and are not hits), in all
+//! and per room; a death's reload restores health and is no hit.
+//!
+//! `compute` is the bot's own cost per tick: the wall-clock time of the
+//! snapshot, the Lua route and the path queries, in microseconds. A 30 Hz
+//! tick has 33.3 ms for the whole frame, so a bot tick over a few
+//! milliseconds can show as a stutter in the window; `over_ms` counts the
+//! ticks over each bound and `worst` lists the slowest ones. `phases_secs`
+//! splits the total by tick phase ([`PHASES`], with the script phase split
+//! again into the route's own Lua and its API calls) and `api` lists the
+//! API methods by the time their calls took. Unlike the rest of the report
+//! it depends on the machine and its load.
+//!
+//! `score` gathers the numbers a playthrough is judged by: whether the game
+//! was completed, the ticks it took, the game's own clear time, hits,
+//! deaths, room loads and the compute load.
+//!
 //! `timeline` is the run-length encoding of the buckets, `[start tick,
 //! length, bucket]` rows, for `scripts/bot-idle-report.py` to join with the
 //! log. `stalled_walk_ticks` counts ticks after a walking tick that left
@@ -59,6 +77,128 @@ struct UnlockRecord {
     ticks_to_room_change: Option<u64>,
 }
 
+/// A health drop above this is a hit (see the module docs).
+const HIT_THRESHOLD: i16 = 2;
+/// The bounds, in milliseconds, `compute.over_ms` counts bot ticks over.
+const COMPUTE_BOUNDS_MS: [u32; 5] = [1, 4, 8, 16, 33];
+/// How many of the slowest bot ticks `compute.worst` lists.
+const COMPUTE_WORST: usize = 10;
+
+/// The phases of a bot tick `compute.phases_secs` splits the cost into:
+/// building the snapshot, observing it (statistics, navigation and the
+/// world model), the Lua route (with the API calls it makes) and the
+/// bookkeeping after it.
+pub(super) const PHASES: [&str; 4] = ["snapshot", "observe", "script", "finish"];
+
+/// What the Lua route's calls into the bot API cost, by method.
+#[derive(Debug, Default)]
+pub(super) struct ApiProfile {
+    /// Per method: calls, total nanoseconds, the slowest call's nanoseconds.
+    methods: BTreeMap<&'static str, (u64, u64, u64)>,
+}
+
+impl ApiProfile {
+    pub(super) fn note(&mut self, name: &'static str, elapsed: std::time::Duration) {
+        let nanos = u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
+        let entry = self.methods.entry(name).or_default();
+        entry.0 += 1;
+        entry.1 += nanos;
+        entry.2 = entry.2.max(nanos);
+    }
+
+    /// The methods by total time, costliest first, and their sum in seconds.
+    fn to_json(&self) -> (Value, f64) {
+        let mut rows: Vec<_> = self.methods.iter().collect();
+        rows.sort_by(|a, b| b.1.1.cmp(&a.1.1).then(a.0.cmp(b.0)));
+        let total: u64 = rows.iter().map(|(_, cost)| cost.1).sum();
+        let rows: Vec<Value> = rows
+            .into_iter()
+            .map(|(name, (calls, nanos, max))| {
+                json!({
+                    "method": name,
+                    "calls": calls,
+                    "secs": *nanos as f64 / 1e9,
+                    "max_us": max / 1000,
+                })
+            })
+            .collect();
+        (Value::Array(rows), total as f64 / 1e9)
+    }
+}
+
+/// The bot's compute cost per tick (see the module docs).
+#[derive(Debug, Default)]
+struct ComputeLoad {
+    /// The total nanoseconds per phase ([`PHASES`]).
+    phases: [u64; 4],
+    /// Every tick's cost in microseconds, in tick order.
+    micros: Vec<u32>,
+    /// The slowest ticks so far: `(microseconds, tick, room)`, slowest first.
+    worst: Vec<(u32, u64, String)>,
+}
+
+impl ComputeLoad {
+    fn note(&mut self, tick: u64, room: Option<&str>, micros: u32) {
+        self.micros.push(micros);
+        if self.worst.len() < COMPUTE_WORST
+            || self.worst.last().is_some_and(|(least, ..)| micros > *least)
+        {
+            self.worst
+                .push((micros, tick, room.unwrap_or_default().to_string()));
+            self.worst.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+            self.worst.truncate(COMPUTE_WORST);
+        }
+    }
+
+    fn to_json(&self, api: &ApiProfile) -> Value {
+        if self.micros.is_empty() {
+            return Value::Null;
+        }
+        let (api, api_secs) = api.to_json();
+        let mut phases: BTreeMap<&str, f64> = PHASES
+            .iter()
+            .zip(self.phases)
+            .map(|(name, nanos)| (*name, nanos as f64 / 1e9))
+            .collect();
+        // The route's own Lua: the script phase less its API calls.
+        phases.insert("script_lua", phases["script"] - api_secs);
+        phases.insert("script_api", api_secs);
+        let mut sorted = self.micros.clone();
+        sorted.sort_unstable();
+        let percentile = |p: usize| sorted[(sorted.len() - 1) * p / 1000];
+        let total: u64 = sorted.iter().map(|&us| u64::from(us)).sum();
+        let over: BTreeMap<String, usize> = COMPUTE_BOUNDS_MS
+            .iter()
+            .map(|&ms| {
+                let bound = ms * 1000;
+                (
+                    ms.to_string(),
+                    sorted.len() - sorted.partition_point(|&us| us <= bound),
+                )
+            })
+            .collect();
+        let worst: Vec<Value> = self
+            .worst
+            .iter()
+            .map(|(us, tick, room)| json!({ "us": us, "tick": tick, "room": room }))
+            .collect();
+        json!({
+            "ticks": sorted.len(),
+            "min_us": sorted[0],
+            "avg_us": total / sorted.len() as u64,
+            "p50_us": percentile(500),
+            "p99_us": percentile(990),
+            "p999_us": percentile(999),
+            "max_us": sorted[sorted.len() - 1],
+            "total_secs": total as f64 / 1e6,
+            "over_ms": over,
+            "worst": worst,
+            "phases_secs": phases,
+            "api": api,
+        })
+    }
+}
+
 /// The accumulated run statistics.
 #[derive(Debug, Default)]
 pub(super) struct BotStats {
@@ -69,6 +209,11 @@ pub(super) struct BotStats {
     last_health: Option<i16>,
     min_health: Option<i16>,
     damage_taken: u64,
+    /// Health drops above [`HIT_THRESHOLD`], in all and per room.
+    hits: u32,
+    room_hits: BTreeMap<String, u32>,
+    /// The bot's compute cost per tick.
+    compute: ComputeLoad,
     deaths: u32,
     was_dead: bool,
     /// Saves the typewriter screen wrote.
@@ -268,6 +413,17 @@ impl MenuCounters {
 }
 
 impl BotStats {
+    /// What bot tick `tick` cost to compute, in microseconds.
+    pub(super) fn note_compute(&mut self, tick: u64, micros: u32) {
+        self.compute
+            .note(tick, self.current_room.as_deref(), micros);
+    }
+
+    /// Add `elapsed` to phase `phase` of [`PHASES`].
+    pub(super) fn note_phase(&mut self, phase: usize, elapsed: std::time::Duration) {
+        self.compute.phases[phase] += u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
+    }
+
     /// A save the save screen completed.
     pub(super) fn note_save(&mut self) {
         self.saves += 1;
@@ -321,6 +477,10 @@ impl BotStats {
             && health < last
         {
             self.damage_taken += (last - health) as u64;
+            if last - health > HIT_THRESHOLD {
+                self.hits += 1;
+                *self.room_hits.entry(room.clone()).or_default() += 1;
+            }
         }
         self.first_health.get_or_insert(health);
         self.last_health = Some(health);
@@ -438,6 +598,8 @@ impl BotStats {
         finish_reason: Option<&str>,
         ticks: u64,
         elapsed_secs: f64,
+        run: RunFacts,
+        api: &ApiProfile,
     ) -> Value {
         let entries: Vec<Value> = self
             .room_entries
@@ -462,11 +624,34 @@ impl BotStats {
             .iter()
             .filter_map(|u| u.ticks_to_room_change)
             .collect();
+        let compute = self.compute.to_json(api);
+        let room_loads = self.room_entries.len().saturating_sub(1);
         json!({
             "outcome": outcome,
             "finish_reason": finish_reason,
             "ticks": ticks,
             "elapsed_secs": elapsed_secs,
+            "score": {
+                "completed": run.ending.is_some(),
+                "ending": run.ending,
+                "ticks": ticks,
+                "game_time_ticks": run.game_time_ticks,
+                "game_time": run.game_time_ticks.map(clock),
+                "hits": self.hits,
+                "deaths": self.deaths,
+                "room_loads": room_loads,
+                "compute": {
+                    "min_us": compute.get("min_us"),
+                    "avg_us": compute.get("avg_us"),
+                    "p99_us": compute.get("p99_us"),
+                    "max_us": compute.get("max_us"),
+                    "over_ms": compute.get("over_ms"),
+                },
+            },
+            "hits": self.hits,
+            "room_hits": self.room_hits,
+            "room_loads": room_loads,
+            "compute": compute,
             "rooms_reached": self.room_entries.len(),
             "unique_rooms": path.iter().collect::<std::collections::BTreeSet<_>>().len(),
             "last_room": path.last(),
@@ -510,6 +695,24 @@ impl BotStats {
             "unlock_to_room_change_ticks_total": known.iter().sum::<u64>(),
         })
     }
+}
+
+/// What the report says about the run that the per-tick snapshots do not
+/// carry: read from the session when the report is written.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct RunFacts {
+    /// The ending the game's own rule picked (rows 1 to 7 of
+    /// `src/ending.rs`), once the escape scene completed the game.
+    pub ending: Option<u8>,
+    /// The game's play timer in 30 Hz ticks, the clear time the RESULT
+    /// screen shows. A reload winds it back to the save's.
+    pub game_time_ticks: Option<u32>,
+}
+
+/// 30 Hz ticks as `h:mm:ss`.
+fn clock(ticks: u32) -> String {
+    let secs = ticks / 30;
+    format!("{}:{:02}:{:02}", secs / 3600, secs / 60 % 60, secs % 60)
 }
 
 #[cfg(test)]
