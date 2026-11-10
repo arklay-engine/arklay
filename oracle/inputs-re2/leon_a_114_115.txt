@@ -1,0 +1,50 @@
+# Leon A from the corridor (114) to the S.T.A.R.S. office (115), as leon_a_208_114 leaves him at door 2's arrival: run down the corridor past the three zombies to door 1, then 115's desk: Chris's Diary, the Unicorn Medal and the scene with Claire (oracle/re2.md, "Leon A to the S.T.A.R.S. office")
+0
+# 114: turn from the arrival toward -z, a little toward +x, so that the run slides down the corridor's east wall
+350 left
+364
+# run down the corridor past slot 1 (it turns to follow, too far off to reach) to door 1, in the east wall
+366 up run
+418
+# turn to face east (-32)
+420 left
+434
+# door 1: room 115 loads on 472, play comes back on 778 (the room runs below are 115's warp input 435 ticks later)
+436 action
+438
+# 115: walk east along z -18700 to the desk
+785 up
+868
+# turn to face the desk (+z) and step up to it
+870 left
+884
+886 up
+893
+# the desk (area 1, event 2): cut 9, then Chris's Diary through the file window (St_get_file)
+895 action
+897
+# the diary's pages to its end marker (file_pickup_115's presses, 545 ticks later)
+989 right
+991
+1019 right
+1021
+1049 right
+1051
+1079 right
+1081
+1109 right
+1111
+1139 right
+1141
+# file it, then close message 10
+1189 action
+1191
+1289 action
+1291
+# the Unicorn Medal's question (its window opens on 1342): Yes, into slot 5
+1615 action
+1617
+# close the message: the scene with Claire runs (main_03) with no presses, and play comes back on about 3083
+1815 action
+1817
+3249

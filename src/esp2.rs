@@ -42,6 +42,9 @@ const FLAG_SEMI: u16 = 0x1000;
 const FLAG_VISIBLE: u16 = 0x2000;
 /// `Esp_call3`'s: start on the next tick's second pass.
 const FLAG_DEFERRED: u16 = 0x4000;
+/// `Esp_pos` copies the matrix `Esp_call` was given from where it points
+/// (`+0x6c` to `+0x4c`), so the slot follows it.
+const FLAG_FOLLOW: u16 = 0x0800;
 /// The kinds `Esp_move` still moves under `fg_stop`'s `0x10000000`.
 const MOVE_WHEN_STOPPED: [u8; 5] = [0x15, 0x16, 0x1A, 0x1C, 0x28];
 const FLAG_LIVE: u16 = 0x8000;
@@ -385,6 +388,10 @@ struct Slot {
     local: [i16; 3],
     /// `+0x42` as a word, as `Esp_1E` sets it: a count for the blocks after.
     countdown: u16,
+    /// `+0x6c` when it points at a room object's matrix (`Sce_kirakira_set`'s
+    /// twinkles): the object's slot, which `Esp_kill` matches and
+    /// [`FLAG_FOLLOW`] follows.
+    object: Option<u8>,
 }
 
 /// What `FUN_004d6150` writes over a grenade's first block, and the hand's
@@ -450,6 +457,9 @@ pub struct Effects {
     pub blasts: Vec<crate::weapon2::BlastEffect>,
     /// The player's `Type & 0xFFF`, which `Esp_11` reads.
     pub weapon: u8,
+    /// Where each room object's twinkle sits on its matrix now, by slot: the
+    /// caller sets them before a tick, for the slots that follow an object.
+    pub objects: Vec<Option<[i16; 3]>>,
 }
 
 /// The player as `FUN_004d8260` tests them against an effect, and what the
@@ -603,6 +613,34 @@ impl Effects {
         }
     }
 
+    /// `Esp_call` on a room object's matrix, with the point on it worked out
+    /// already (`at`): the slot and those that die with it keep the object.
+    pub fn call_on_object(
+        &mut self,
+        kind: u8,
+        row: u8,
+        size: u16,
+        object: u8,
+        at: [i16; 3],
+    ) -> Option<usize> {
+        let first = self.call(kind, row, size, 0, at, false)?;
+        for (index, slot) in self.slots.iter_mut().enumerate() {
+            if index == first || slot.parent != 0 && usize::from(slot.parent) == first {
+                slot.object = Some(object);
+            }
+        }
+        Some(first)
+    }
+
+    /// `Esp_kill` with an object's matrix: only the slots on that object.
+    pub fn kill_on_object(&mut self, kind: u8, row: u8, object: u8) {
+        for slot in &mut self.slots {
+            if slot.kind == kind && slot.row == row && slot.object == Some(object) {
+                slot.kill();
+            }
+        }
+    }
+
     /// A slot and those that die with it follow a matrix `Esp_call` was given.
     pub fn move_to(&mut self, index: usize, at: [i16; 3]) {
         for (other, slot) in self.slots.iter_mut().enumerate() {
@@ -620,15 +658,6 @@ impl Effects {
     pub fn kill(&mut self, kind: u8, row: u8) {
         for slot in &mut self.slots {
             if slot.kind == kind && slot.row == row {
-                slot.kill();
-            }
-        }
-    }
-
-    /// `Esp_kill` with a matrix: only those at `at`.
-    pub fn kill_at(&mut self, kind: u8, row: u8, at: [i16; 3]) {
-        for slot in &mut self.slots {
-            if slot.kind == kind && slot.row == row && slot.base == at {
                 slot.kill();
             }
         }
@@ -1554,6 +1583,14 @@ impl Effects {
 
     /// The second half of a slot's tick (`FUN_004b9590`).
     fn advance(&mut self, index: usize, sca: Option<&Sca>) {
+        let slot = &mut self.slots[index];
+        if slot.flags & FLAG_FOLLOW != 0
+            && let Some(Some(at)) = slot
+                .object
+                .and_then(|object| self.objects.get(usize::from(object)))
+        {
+            slot.base = *at;
+        }
         Self::place(&mut self.slots[index]);
         let update = self.slots[index].update;
         self.behave(index, update, sca);
@@ -2121,6 +2158,37 @@ mod tests {
             let after = format!("{:?}", effects.slots[slot]);
             assert_eq!(before != after, carries_on, "kind {kind}");
         }
+    }
+
+    /// `Sce_kirakira_set`'s twinkle is called on its object's matrix:
+    /// `Esp_pos` takes the object's place while the slot's `0x0800` is up
+    /// (room 10C's jewel twinkle follows the statue's part down), and
+    /// `Esp_kill` with the matrix takes only the slots on that object.
+    #[test]
+    fn a_twinkle_follows_its_object_and_dies_with_it() {
+        let mut block = [0u8; BLOCK_LEN];
+        block[18..20].copy_from_slice(&0x8001u16.to_le_bytes());
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[block]));
+        let on_object = effects
+            .call_on_object(7, 0, 0x2800, 1, [10, -90, 20])
+            .unwrap();
+        let other = effects
+            .call_on_object(7, 0, 0x2800, 2, [30, -90, 40])
+            .unwrap();
+        effects.objects = vec![None, Some([-21550, -5690, -12500]), None];
+        effects.tick(&mut Default::default(), None);
+        assert_eq!(
+            effects.slots[on_object].pos,
+            [10, -90, 20],
+            "no 0x0800, no follow"
+        );
+        effects.slots[on_object].flags |= FLAG_FOLLOW;
+        effects.tick(&mut Default::default(), None);
+        assert_eq!(effects.slots[on_object].pos, [-21550, -5690, -12500]);
+        effects.kill_on_object(7, 0, 1);
+        assert!(!effects.slots[on_object].live());
+        assert!(effects.slots[other].live());
     }
 
     #[test]

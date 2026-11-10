@@ -2941,7 +2941,13 @@ impl GameSession {
         if !self.game.is_re2_room {
             reset_room_camera_id(&mut self.game);
         }
-        apply_camera(&mut self.loaded.room, &mut self.game, Some(self.player.pos));
+        // An RE2 door's arrival keeps the cut `Door_load` named while the door
+        // plays: `Set_door` tests the zones once its animation is over
+        // ([`GameSession::end_transition_after_bgm`]). Room 208's door 0
+        // arrives in room 207's cut 3, inside a zone to cut 4.
+        if !(self.game.is_re2_room && from.is_some()) {
+            apply_camera(&mut self.loaded.room, &mut self.game, Some(self.player.pos));
+        }
         drain_mask_toggles(&mut self.loaded.room, &mut self.game);
         // The original runs `update_room_bgm` after the destination's init
         // script (so a `room_bgm_state_set` it performs is visible) and after
@@ -4189,10 +4195,12 @@ impl GameSession {
         if self.game.is_re2_room {
             self.tick_re2_weapon(pack);
             let water = crate::character2::water_areas(&self.game);
+            let objects = crate::character2::twinkle_points(&self.game);
             let weapon = self.game.equipped_weapon_id;
             let re2 = &mut self.game.re2;
             re2.tick_before();
             re2.effects.water = water;
+            re2.effects.objects = objects;
             re2.effects.weapon = weapon;
             let player = self
                 .game
@@ -7043,6 +7051,7 @@ impl GameSession {
     fn re2_stopped_frame_draw(&mut self, stopped: bool) {
         #[cfg(test)]
         self.re2_stopped_frame_draws.push(stopped);
+        self.game.re2.effects.objects = crate::character2::twinkle_points(&self.game);
         self.game.re2.tick_before();
         let player = self
             .game
@@ -7494,6 +7503,12 @@ impl GameSession {
             return;
         };
         play_room_close_sfx(&mut self.music, &mut self.sfx_cache, pack, session);
+        // `Set_door`'s `Cut_check(1)`, once the door's animation has let
+        // `fg_system`'s `0x2000000` go: the arrival's zones are first tested
+        // here, not while the room loads under the door.
+        if session.entered && session.door.re2.is_some() {
+            apply_camera(&mut self.loaded.room, &mut self.game, Some(self.player.pos));
+        }
         if session.entered {
             self.arm_room_entry_fade();
             self.autosave_pending = true;
@@ -16484,16 +16499,18 @@ fn run_re2_init(
     vm.tick(&mut host);
     game.re2.sce_se_set();
     // `Sce_kirakira_set`: the items' objects start to twinkle.
-    for record in &game.objects.records {
+    for (slot, record) in game.objects.records.iter().enumerate() {
         if record.be_flg & 1 != 0
             && let Some((row, at)) = crate::objects::twinkle(record)
         {
-            game.re2.effects.call(5, row, 0x2800, 0, at, false);
+            game.re2
+                .effects
+                .call_on_object(5, row, 0x2800, slot as u8, at);
         }
     }
     // The load's pass ends as every pass does.
     game.re2.sce_work_clr();
-    game.re2.sce_work_clr_at();
+    sce_work_clr_at(game);
     game.re2.room_loading = false;
     // An init script's `cut_chg` is part of the room's first `Bg_loadPC`.
     game.re2.bg_load = false;
@@ -16502,6 +16519,18 @@ fn run_re2_init(
     // stood on, for the MAP page.
     game.re2_room_set();
     game.re2.vm = Some(Box::new(vm));
+}
+
+/// `Sce_work_clr_at`: the player's, every enemy's and every room object's
+/// area found this pass (`At_sce_no`, an object's member 9) go back to none.
+fn sce_work_clr_at(game: &mut game::GameState) {
+    game.re2.sce_work_clr_at();
+    for record in &mut game.objects.records {
+        if record.be_flg & 1 != 0 {
+            record.at_obj_no = crate::scd2::host::NO_AREA;
+            record.at_sce_no = crate::scd2::host::NO_AREA;
+        }
+    }
 }
 
 /// One tick of an RE2 room's scripts: the events the areas raised last tick
@@ -16544,14 +16573,7 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
     // `Sce_scheduler_main` ends every pass in `Sce_work_clr` and
     // `Sce_work_clr_at`, a script door's pass included.
     context.game.re2.sce_work_clr();
-    context.game.re2.sce_work_clr_at();
-    // And every object in play (`At_sce_no`, member 9).
-    for record in &mut context.game.objects.records {
-        if record.be_flg & 1 != 0 {
-            record.at_obj_no = crate::scd2::host::NO_AREA;
-            record.at_sce_no = crate::scd2::host::NO_AREA;
-        }
-    }
+    sce_work_clr_at(context.game);
     context.game.re2.vm = Some(vm);
     crate::character2::run_esprs(context.game, context.room, context.pack, context.npc_models);
     for edit in std::mem::take(&mut context.game.re2.pending_cuts) {

@@ -9217,8 +9217,8 @@ impl GameState {
         if model < 0x20
             && let Some(record) = self.objects.record_mut(model)
         {
-            if let Some((row, at)) = crate::objects::twinkle(record) {
-                self.re2.effects.kill_at(5, row, at);
+            if let Some((row, _)) = crate::objects::twinkle(record) {
+                self.re2.effects.kill_on_object(5, row, model as u8);
             }
             record.be_flg = 0;
             record.flag = 0;
