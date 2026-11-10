@@ -52,6 +52,13 @@ pub const PLAYER_BODY: u8 = 0xFE;
 const FLAG_DOWN: u16 = 2;
 const FLAG_THROWN: u16 = 8;
 const FLAG_NECK_STILL: u16 = 0x200;
+/// Claire's stomp has kicked the crawler's head off (`FUN_00453510`), and
+/// `FUN_0045b870` sends it flying on the next move.
+const FLAG_HEAD_LEFT: u16 = 0x80;
+/// `FUN_0045b870`'s head is in the air.
+const FLAG_HEAD_FLYING: u16 = 0x100;
+/// The head, `pSin_parts_ptr[8]`.
+const HEAD_PART: u8 = 8;
 /// `Status_flg`'s bit: `Root_ck`'s line to the player is clear.
 const STATUS_IN_SIGHT: u16 = 0x800;
 /// `Now_seq`'s bit.
@@ -209,6 +216,20 @@ pub struct PulledArm {
     /// `M` under the player's first part, and where the hand is kept there.
     local: player2::Matrix,
     hold: [i32; 3],
+}
+
+/// `FUN_0045b870`'s head: off the body after Claire's stomp, it spins, falls
+/// and bounces three times, bleeding and knocking (the zombie's sound 7) on
+/// each, and is gone after the third.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KickedHead {
+    /// The part's `Workm`, no longer following the skeleton (`Be_flg`'s
+    /// `0x8040`).
+    matrix: player2::Matrix,
+    /// The part's `+0x38`.
+    speed: [i16; 3],
+    /// `+0x79`: the bounces left after the next.
+    bounces: u8,
 }
 
 /// What `Sce_parts_down` asks of `Parts_down`.
@@ -508,6 +529,7 @@ pub struct Zombie {
     /// `Sce_parts_down`s since it last ran.
     pub script_drops: Vec<ScriptDrop>,
     pulled: Option<PulledArm>,
+    head: Option<KickedHead>,
     /// A cockroach's part 0 as its last move left it, which the player's
     /// head turns to from the move after (`run_roach`).
     roach_head: Option<[i32; 3]>,
@@ -605,7 +627,11 @@ impl Zombie {
             .thrown
             .iter()
             .map(|part| (part.part, joint_matrix(&part.matrix)));
-        pulled.chain(thrown)
+        let head = self
+            .head
+            .iter()
+            .map(|head| (HEAD_PART, joint_matrix(&head.matrix)));
+        pulled.chain(thrown).chain(head)
     }
 
     /// `FUN_00456780`'s colours scale what lights the parts, around a half for
@@ -1453,6 +1479,7 @@ impl Em<'_, '_, '_> {
         self.work().lean = 0;
         self.script();
         self.pull_arm();
+        self.kicked_head();
         let held = self.kind() & TYPE_HELD != 0 || self.z.flags & FLAG_NECK_STILL != 0;
         let neck = &mut self.work().neck;
         neck.flags = (neck.flags & !2) | if held { 2 } else { 0 };
@@ -1835,6 +1862,101 @@ impl Em<'_, '_, '_> {
     }
 
     /// `FUN_0045bd20`, the arm the shove's end took off.
+    /// `FUN_0045b870`, which `Em_Zombie` calls after the arm's pull: the head
+    /// that Claire's stomp raised `FLAG_HEAD_LEFT` for leaves the body at
+    /// `(300, -300, 0)` turned by the facing and a half turn, then each move
+    /// turns `0x80` about z and `0x40` about x, moves, and is pushed back off
+    /// the room's walls (`PARTS_MASK`, 100 wide), which turn it round. Falling
+    /// at 50 a tick, it bounces 200 above the ground with half its speed along
+    /// and a quarter back up; each bounce off the ground (and each off a wall)
+    /// bleeds (`Esp_call` of size 1000, a `Rnd` direction) and the ground's
+    /// also knocks (sound 7). After its third the part is turned off.
+    ///
+    /// The original also writes `1` to the work's `+0x1C0`, which nothing
+    /// ported reads, and on the end takes the blood that follows the part
+    /// away (`FUN_004b9260`); here the blood stays where it starts.
+    fn kicked_head(&mut self) {
+        const GRAVITY: i16 = 0x32;
+        const RADIUS: i32 = 100;
+        const ABOVE: i32 = 200;
+        if self.z.flags & (FLAG_HEAD_LEFT | FLAG_HEAD_FLYING) == 0 {
+            return;
+        }
+        if self.z.flags & FLAG_HEAD_LEFT != 0 {
+            self.z.flags = (self.z.flags & !FLAG_HEAD_LEFT) | FLAG_HEAD_FLYING;
+            let Some(matrix) = self.mover.part_matrix(usize::from(HEAD_PART)) else {
+                return;
+            };
+            let (x, z) = player2::rotate(self.mover.player.angle.wrapping_add(0x800), 300, 0);
+            self.z.head = Some(KickedHead {
+                matrix,
+                speed: [x as i16, -300, z as i16],
+                bounces: 2,
+            });
+        }
+        let Some(mut head) = self.z.head.take() else {
+            return;
+        };
+        let spin = player2::rot_matrix([0x40, 0, 0x80]);
+        head.matrix.m = player2::mul_matrix(&head.matrix.m, &spin);
+        let old = head.matrix.t;
+        for (axis, speed) in head.matrix.t.iter_mut().zip(head.speed) {
+            *axis += i32::from(speed);
+        }
+        let sca = self.mover.tick.room.sca.as_ref();
+        let ground = sca.map_or(0, |sca| {
+            i32::from(crate::sca::ground_at(sca, old, RADIUS, PARTS_MASK).height as i16)
+        });
+        let hits = |from: [i32; 3], at: [i32; 3]| {
+            sca.is_some_and(|sca| {
+                let floor = (-at[1] / 1800).clamp(0, 31) as u8;
+                crate::sca::resolve_on_floor(sca, PARTS_MASK, from, at, RADIUS, floor).hit
+            })
+        };
+        if hits(old, head.matrix.t) {
+            head.matrix.t = old;
+            head.speed[0] = head.speed[0].wrapping_neg();
+            head.speed[2] = head.speed[2].wrapping_neg();
+            self.head_blood(&head);
+            let left = head.bounces;
+            head.bounces = left.wrapping_sub(1);
+            if left == 0 || hits(old, old) {
+                self.head_gone();
+                return;
+            }
+        }
+        head.speed[1] = head.speed[1].wrapping_add(GRAVITY);
+        if head.matrix.t[1] > ground - ABOVE {
+            head.speed[0] >>= 1;
+            head.speed[2] >>= 1;
+            head.speed[1] = (head.speed[1] >> 2).wrapping_neg();
+            head.matrix.t[1] = ground - ABOVE;
+            self.head_blood(&head);
+            self.z.sounds.push((7, self.mover.player.pos));
+            let left = head.bounces;
+            head.bounces = left.wrapping_sub(1);
+            if left == 0 {
+                self.head_gone();
+                return;
+            }
+        }
+        self.z.head = Some(head);
+    }
+
+    /// `FUN_0045b870`'s blood where the head is: `Esp_call(0x3E8)`.
+    fn head_blood(&mut self, head: &KickedHead) {
+        let dir = (u16::from(self.rnd()) << 4) as i16;
+        let at = head.matrix.t.map(|axis| axis as i16);
+        self.world.effects.call(0, 0, 1000, dir, at, false);
+    }
+
+    /// `FUN_0045b870`'s end: the head is turned off.
+    fn head_gone(&mut self) {
+        self.z.flags &= !FLAG_HEAD_FLYING;
+        self.z.head = None;
+        player2::set_part_flags(self.mover.work, HEAD_PART, 0);
+    }
+
     fn pull_arm(&mut self) {
         let Some(mut arm) = self.z.pulled.take() else {
             return;

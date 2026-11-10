@@ -3534,6 +3534,12 @@ impl GameSession {
         if self.game.is_re2_room && input.fire_pressed {
             ui.confirm = true;
         }
+        // Its cancel and run are one button too (raw 0x40): a new press of
+        // run cancels where the cancel key does (the item page's grid,
+        // `0x4F8177`, backs out on it).
+        if self.game.is_re2_room && input.run_pressed {
+            ui.cancel = true;
+        }
         // The trace's `snd` is this tick's `SsPlay`s, whichever path plays them.
         if self.game.is_re2_room {
             self.re2_sounds.played.clear();
@@ -3963,14 +3969,17 @@ impl GameSession {
         // (pause 0) does not. The gate runs before the room tick, so it reads
         // the previous tick's entity state; a script that raises the flag
         // during this frame's SCD pass would therefore differ by one frame
-        // (the reference checks after the script pass).
+        // (the reference checks after the script pass). RE2's `Game_loop`
+        // instead tests `fg_status`'s `0x40` (`0x4C02C7`), which the aim and
+        // an enemy's hold keep up (`crate::player2::Work::holds_game`).
         let message_pauses_menu = (was_active && self.game.message.pause & START_MESSAGE_BITS != 0)
             || self.game.message_flags & START_MESSAGE_BITS != START_MESSAGE_BITS
             || self.menu_close_freeze > 0;
         // The request does not stop the frame: `game_loop` clears the player's
         // bits for it, runs the rest of the tick, and only then leaves for the
         // menu.
-        if !message_pauses_menu && self.game.entities[0].is_being_attacked == 0 {
+        let re2_holds_game = self.game.is_re2_room && self.game.re2.player.holds_game;
+        if !message_pauses_menu && self.game.entities[0].is_being_attacked == 0 && !re2_holds_game {
             let request = if ui.start {
                 Some(MenuRequest::Menu)
             } else if ui.map {

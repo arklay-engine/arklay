@@ -1,0 +1,41 @@
+# Claire A, room 200 after the Blue Card Key: from where the computer hands back, round the upper floor to the counter, take its 30 handgun rounds, run down the east ramp and west along the ground floor to door 1, into 201 (oracle/re2.md, "Claire A past the card")
+350 left
+376
+380 up run
+398
+400 right
+414
+416 up run
+430
+432 left
+446
+448 up run
+463
+465 left
+479
+481 up
+494
+497 action
+501
+732 action
+736
+932 action
+936
+946 right
+958
+961 up run
+985
+988 right
+1003
+1004 up run
+1070
+1073 right
+1085
+1089 up run
+1182
+1186 left
+1190
+1192 up run
+1206
+1210 action
+1214

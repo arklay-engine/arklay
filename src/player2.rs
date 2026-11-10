@@ -323,6 +323,12 @@ pub struct Work {
     /// The routines hold the first tick of `pl_mv_00` that a room started on
     /// its own assumes ([`Work::default`]), and no tick has run them yet.
     pub first_tick_assumed: bool,
+    /// `fg_status`'s `0x40` as the aim (`pl_mv_05`) and an enemy's hold
+    /// (`Pl_Em_damage`, `Pl_Em_die`) keep it: a tick that ends in either
+    /// raises it and the next tick that starts outside both drops it, so it
+    /// outlasts each by a tick. While it is up START doesn't open the status
+    /// screen (`Game_loop`, `0x4C02C7`).
+    pub holds_game: bool,
     /// `Water` (`+0x10c`): the level of the water the player stands in, or 0.
     /// `Sce_at` clears it each tick after `Player_move` and a water area
     /// (`Sce_Water`, `aot_set` kind 7) sets it again, so a footfall reads the
@@ -897,6 +903,7 @@ impl Default for Work {
             posed: false,
             init_pose: false,
             first_tick_assumed: true,
+            holds_game: false,
             routine: [MODE_MOVE, MOVE_IDLE, 1, 0],
             move_no: IDLE_CLIPS[0],
             move_cnt: 1,
@@ -1001,6 +1008,12 @@ impl Work {
     /// `0x80` and so holds the cut on screen (`Re2State::view_held`).
     pub fn holds_view(&self) -> bool {
         self.routine[0] == MODE_MOVE && self.routine[1] == MOVE_AIM
+    }
+
+    /// The routines that raise `fg_status`'s `0x40` ([`Work::holds_game`]):
+    /// the aim and an enemy's hold.
+    fn holds_game_now(&self) -> bool {
+        self.holds_view() || matches!(self.routine[0], MODE_HELD | MODE_HELD_DIE)
     }
 
     /// `Be_flg`'s bits 4 and 8: on the stairs, or going up or down a box and
@@ -1354,6 +1367,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         return None;
     }
     work.first_tick_assumed = false;
+    let held_game = work.holds_game_now();
     if work.damage_cnt & !DAMAGE_LOCK != 0 {
         work.damage_cnt -= 1;
     }
@@ -1382,6 +1396,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
     mover.work.latch_kage_probe(mover.player.angle);
     mover.work.root = mover.part_matrix(0);
     mover.latch_parts();
+    mover.work.holds_game = held_game || mover.work.holds_game_now();
     mover.arrived
 }
 
@@ -4862,8 +4877,7 @@ impl Mover<'_, '_> {
 
     /// `FUN_004960d0`, `em_damage_table[0x31]`'s `Routine_1` 0: in G2's hand
     /// on its clip 0, turning to it, while G2's grab carries the player.
-    /// `fg_status`'s `0x40` isn't ported, nor are its `Routine_1` 2 to 4, the
-    /// kill.
+    /// Its `Routine_1` 2 to 4, the kill, aren't ported.
     fn em31_held(&mut self, held: &mut Held<'_>) {
         if matches!(self.work.routine[1], 2..=4) {
             return;
@@ -4990,8 +5004,8 @@ impl Mover<'_, '_> {
     /// claws, on its clip 0 from `Null_pos_set` turned half round, then 30
     /// ticks' wait. Its blood at the player's parts (an `Esp_call` each fourth
     /// frame from frame 8 and two at frames 0x59 and 0x62, with their `Rnd`s,
-    /// which are drawn), the parts its frame 10 hides, `fg_status`' `0x40` and
-    /// frame 0x59's and 0x62's footfall sound aren't ported.
+    /// which are drawn), the parts its frame 10 hides and frame 0x59's and
+    /// 0x62's footfall sound aren't ported.
     fn em31_killed(&mut self, held: &mut Held<'_>) {
         if self.work.routine[1] != 0 {
             return;
@@ -7796,6 +7810,20 @@ mod tests {
         assert_eq!((setup.work.routine[0], life), (MODE_MOVE, 190));
         hit(&mut setup, &mut life);
         assert_eq!((setup.work.routine[0], life), (MODE_DAMAGE, 180));
+    }
+
+    #[test]
+    fn an_enemys_hold_holds_the_game_until_a_tick_starts_free() {
+        let mut setup = Setup::new(0);
+        setup.tick(Input::default(), 190);
+        assert!(!setup.work.holds_game);
+        setup.work.routine = [MODE_HELD, 0, 0, 0];
+        setup.tick(Input::default(), 190);
+        assert!(setup.work.holds_game);
+        // The next tick that starts free of the hold drops it.
+        setup.work.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
+        setup.tick(Input::default(), 190);
+        assert!(!setup.work.holds_game);
     }
 
     #[test]

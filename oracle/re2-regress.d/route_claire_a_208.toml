@@ -1,0 +1,252 @@
+# Claire A's route past the Blue Card Key, from room 200's computer to the darkroom (208), room by room from warps
+# (oracle/re2.md, "Claire A past the card"). Rooms 204, 205, 207 and 208's scripts are Leon's.
+
+# Room 200 after the card: from the computer's hand back, the counter's 30 rounds, the east ramp and door 1.
+[[run]]
+name = "claire_a_200_out"
+room = "200"
+player = 1
+character = 1
+setup_script = "claire_a_200_out.lua"
+input = "claire_a_200_out.txt"
+input_shift = 344
+ticks = 1300
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,fgscn,fgstat,fgitem"
+# from the camera's leaving the upper floor's scrolled cut to the door; 0.09 measured
+frames = [970, 1209]
+frame_max_mean = 0.2
+expect = "match"
+ignore = [[1210, "rng"], [1210, "rseed"]]
+record = "--start claire --no-enemies --warp 200:-14847:-1800:1892:2136:6 --flag 4:6 --flag 4:7 --flag 4:102 --flag 4:70 --life 200 --give 0:3:7 --give 2:0x14:6"
+
+# Room 201 from 200's door, with the licker behind the window: cut 4 starts its scene as Claire walks to door 1.
+[[run]]
+name = "claire_a_201"
+ref = "claire_a_204"
+room = "201"
+player = 1
+character = 1
+setup_script = "claire_a_204.lua"
+input = "claire_a_204.txt"
+input_shift = 344
+# to tick 593: the door arrives in 204 on 503, and the room's own entry and body are claire_a_204_entry's
+ticks = 594
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,zm0,zp,fgscn,fgstat"
+frames = [380, 502]
+# 0.19 measured
+frame_max_mean = 0.3
+expect = "match"
+# the door's own tick (oracle/re2.md, docs/internals/deviations/re2.md)
+ignore = [[468, "rng"], [468, "rseed"]]
+record = "--start claire --warp 201:-15773:0:-21630:2040:0 --life 200 --give 0:3:7 --give 2:0x14:36"
+
+# The same recording on through room 204: door 1's arrival and `main_06`'s move, the body's two checks and its 15
+# rounds, and the walk north to just short of area 7, where the window licker's scene (`main_09`) starts.
+[[run]]
+name = "claire_a_204_entry"
+ref = "claire_a_204"
+room = "201"
+player = 1
+character = 1
+setup_script = "claire_a_204.lua"
+input = "claire_a_204.txt"
+input_shift = 344
+ticks = 1700
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,zm0,zm1,zp,fgroom,fgstat"
+frames = [380, 1699]
+# 0.82 measured, 0.60 with the message box blanked
+frame_max_mean = 0.9
+boxes = [[0, 170, 320, 222]]
+expect = "match"
+ignore = [[468, "rng"], [468, "rseed"]]
+record = "--start claire --warp 201:-15773:0:-21630:2040:0 --life 200 --give 0:3:7 --give 2:0x14:36"
+
+# And on: area 7's window scene (main_09, Claire's film 10 with the oracle's films off), the fight with the licker
+# from the east wall, and the run north to door 1 and room 205's load.
+[[run]]
+name = "claire_a_204"
+room = "201"
+player = 1
+character = 1
+setup_script = "claire_a_204.lua"
+input = "claire_a_204.txt"
+input_shift = 344
+ticks = 2500
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,zm0,zm1,zp"
+frames = [1700, 2499]
+# 0.34 measured
+frame_max_mean = 0.45
+expect = "match"
+# the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md)
+ignore = [[468, "rng"], [468, "rseed"], [2380, "rng"], [2380, "rseed"]]
+record = "--start claire --warp 201:-15773:0:-21630:2040:0 --life 200 --give 0:3:7 --give 2:0x14:36"
+
+# Room 205 from room 204's door 1, past the frozen bodies in the walls (4:48 clear) to door 2 and room 207's load.
+[[run]]
+name = "claire_a_205"
+room = "205"
+player = 1
+character = 1
+setup_script = "claire_a_205.lua"
+input = "claire_a_205.txt"
+input_shift = 344
+ticks = 900
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 899]
+# 0.33 measured
+frame_max_mean = 0.45
+expect = "match"
+ignore = [[781, "rng"], [781, "rseed"]]
+record = "--start claire --warp 205:-25670:0:-25775:3072:0 --life 119 --give 0:3:9 --give 2:0x14:38"
+
+# Room 207 from room 205's door 2, with its four zombies: slot 3 shot from the north, slot 0, a crawler after its
+# fall, takes hold of Claire's legs and is stamped on, which kicks its head off (FUN_0045b870's three bounces), and the
+# others take her down to 24 life. It doesn't reach the door: claire_a_207_door does.
+[[run]]
+name = "claire_a_207"
+room = "207"
+player = 1
+character = 1
+setup_script = "claire_a_207.lua"
+input = "claire_a_207.txt"
+input_shift = 344
+ticks = 1580
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,zm0,zm1,zm2,zm3,zd,fgstat"
+frames = [650, 1579]
+# 1.54 measured: the bodies close to cut 1's camera
+frame_windows = [[650, 1579, 1.6]]
+expect = "match"
+record = "--start claire --warp 207:-25640:0:-16590:0:1 --life 119 --give 0:3:8 --give 2:0x14:38"
+
+# The same start, another fight: START while a zombie has hold of Claire, which the original refuses (`fg_status`'s
+# 0x40, which the hold and the aim keep up), and a status screen whose item grid backs out on run, the cancel key.
+[[run]]
+name = "claire_a_207_grab"
+room = "207"
+player = 1
+character = 1
+setup_script = "claire_a_207.lua"
+input = "claire_a_207_grab.txt"
+input_shift = 344
+ticks = 1880
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,zm0,zm1,zm2,zm3,zd,fgstat"
+frames = [650, 1879]
+# 1.02 measured
+frame_windows = [[650, 1879, 1.1]]
+expect = "match"
+record = "--start claire --warp 207:-25640:0:-16590:0:1 --life 119 --give 0:3:8 --give 2:0x14:38"
+
+# The same start, with a fight that puts all four down and the run north and east to door 2 and room 208's load.
+[[run]]
+name = "claire_a_207_door"
+room = "207"
+player = 1
+character = 1
+setup_script = "claire_a_207.lua"
+input = "claire_a_207_door.txt"
+input_shift = 344
+ticks = 1910
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,zm0,zm1,zm2,zm3,zd,fgstat"
+frames = [650, 1909]
+# 1.12 measured: the bodies close to cut 1's camera
+frame_windows = [[650, 1784, 1.2]]
+expect = "match"
+ignore = [[1785, "rng"], [1785, "rseed"]]
+record = "--start claire --warp 207:-25640:0:-16590:0:1 --life 119 --give 0:3:8 --give 2:0x14:38"
+
+# Room 207's door 2 into the darkroom (208) with the enemies off, the walk to the ink ribbons and their take, and the
+# typewriter's prompt answered No.
+[[run]]
+name = "claire_a_208_entry"
+room = "207"
+player = 1
+character = 1
+setup_script = "claire_a_208_entry.lua"
+input = "claire_a_208_entry.txt"
+input_shift = 344
+ticks = 1450
+# no `hk`, as leon_a_208_entry: the original lists the old room's objects until the new ones are set up
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,tw,fgstat,fgitem"
+frames = [720, 1449]
+# 0.46 measured
+frame_max_mean = 0.6
+expect = "match"
+ignore = [[367, "rng"], [367, "rseed"]]
+record = "--start claire --no-enemies --warp 207:-15162:0:-13112:49:4 --life 119 --give 0:3:6 --give 2:0x14:20"
+
+# The same walk, take and typewriter from a warp to door 2's arrival in 208.
+[[run]]
+name = "claire_a_208"
+room = "208"
+player = 1
+character = 1
+setup_script = "claire_a_208.lua"
+input = "claire_a_208.txt"
+input_shift = 344
+ticks = 1100
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,tw,fgstat,fgitem"
+frames = [360, 1099]
+# 0.46 measured
+frame_max_mean = 0.6
+expect = "match"
+record = "--start claire --warp 208:-15462:0:-15336:1029:0 --life 119 --give 0:3:6 --give 2:0x14:20"
+
+# Claire A's route from the new game to the darkroom (208)'s typewriter in one run: route_claire_a_card's input to the
+# Blue Card Key's use at room 200's computer, then the room runs above joined on from each door's hand back, through
+# rooms 200, 201, 204, 205, 207 and 208. The voice lines end by the recording's clock, so the run takes their lengths
+# from the reference.
+[[run]]
+name = "route_claire_a_208"
+room = "new"
+character = 1
+offset = 0
+ticks = 21300
+setup_script = "route_claire_a_208.lua"
+input = "route_claire_a_208.txt"
+voice_from_ref = true
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,tw,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,zp,fgstat,fgitem,fgroom,fgcom,pc"
+frames = [0, 21299]
+frame_max_mean = 0.85
+# each room past the card on its own, from its hand back to its door's press: 200 from the card's, 201, 204, 205, 207 and 208
+# measured 0.53, 0.24, 0.48, 0.20, 1.19 (the zombies close to cut 1's camera) and 0.46
+frame_windows = [[14625, 15491, 0.6], [15858, 15982, 0.3], [16323, 17906, 0.55], [18247, 18684, 0.25], [19025, 20234, 1.25], [20575, 21299, 0.55]]
+expect = "match"
+record = "--start claire"
+# zombie 1's angle on the first tick, then the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md):
+# route_claire_a_card's ten, then 200, 201, 204, 205 and 207's
+ignore = [
+    [0, "zm1"],
+    [356, "rng"],
+    [356, "rseed"],
+    [2627, "rng"],
+    [2627, "rseed"],
+    [5527, "rng"],
+    [5527, "rseed"],
+    [6656, "rng"],
+    [6656, "rseed"],
+    [7008, "rng"],
+    [7008, "rseed"],
+    [8062, "rng"],
+    [8062, "rseed"],
+    [8379, "rng"],
+    [8379, "rseed"],
+    [8892, "rng"],
+    [8892, "rseed"],
+    [10086, "rng"],
+    [10086, "rseed"],
+    # route_claire_a_card's 12936: this recording's original drew the door's number 4 ticks sooner
+    [12932, "rng"],
+    [12932, "rseed"],
+    [15492, "rng"],
+    [15492, "rseed"],
+    [15983, "rng"],
+    [15983, "rseed"],
+    [17907, "rng"],
+    [17907, "rseed"],
+    [18685, "rng"],
+    [18685, "rseed"],
+    [20235, "rng"],
+    [20235, "rseed"],
+    # room 100's opening, as route_200_208: slots 0 and 1 drawn at 0x404040 by the original until 183
+    [0, 183, "zp"],
+]

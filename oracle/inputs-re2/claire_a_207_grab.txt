@@ -1,0 +1,177 @@
+# Claire A, room 207 from room 205's door 2, with the warp's zombies (65, 65, 118 and 55 life): the reload from the status screen, slot 3 from the north and slot 0 from a step back, then raises from steps back as slots 2 and 1 come. START at 1085 comes while a zombie has hold of Claire, which the original refuses (fg_status 0x40, the hold's and the aim's), so she is bitten; the status screen at 1369 is reloaded in, and its item grid backs out on run at 1644 and 1676, run being the cancel key (oracle/re2.md, "Claire A past the card")
+352 start
+356
+388 down
+392
+408 confirm
+412
+428 down
+432
+448 down
+452
+468 confirm
+472
+488 up
+492
+508 confirm
+512
+588 confirm
+592
+600 cancel
+604
+616 cancel
+620
+636 start
+640
+652 left
+660
+661 up
+676
+677 aim
+685 aim fire
+688 aim
+697 aim fire
+700 aim
+709 aim fire
+712 aim
+721 aim fire
+724 aim
+733 aim fire
+736 aim
+745 aim fire
+748 aim
+757 aim fire
+760 aim
+769 aim fire
+772 aim
+781
+782 down
+794
+795 aim
+803 aim fire
+806 aim
+815 aim fire
+818 aim
+827 aim fire
+830 aim
+839 aim fire
+842 aim
+851 aim fire
+854 aim
+863 aim fire
+866 aim
+875 aim fire
+878 aim
+887 aim fire
+890 aim
+899
+900 down
+910
+911 aim
+919 aim fire
+922 aim
+931 aim fire
+934 aim
+943 aim fire
+946 aim
+955 aim fire
+958 aim
+967 aim fire
+970 aim
+979 aim fire
+982 aim
+991 aim fire
+994 aim
+1003
+1004 aim
+1012 aim fire
+1015 aim
+1024 aim fire
+1027 aim
+1036 aim fire
+1039 aim
+1048 aim fire
+1051 aim
+1060 aim fire
+1063 aim
+1072 aim fire
+1075 aim
+1084
+1085 start
+1089
+1121 down
+1125
+1141 confirm
+1145
+1161 down
+1165
+1181 down
+1185
+1201 confirm
+1205
+1221 up
+1225
+1241 confirm
+1245
+1321 confirm
+1325
+1333 cancel
+1337
+1349 cancel
+1353
+1369 start
+1373
+1385 aim
+1393 aim fire
+1396 aim
+1405 aim fire
+1408 aim
+1417 aim fire
+1420 aim
+1429
+1430 right
+1437
+1438 aim
+1446 aim fire
+1449 aim
+1458 aim fire
+1461 aim
+1470 aim fire
+1473 aim
+1482 aim fire
+1485 aim
+1494 aim fire
+1497 aim
+1506 aim fire
+1509 aim
+1518 aim fire
+1521 aim
+1530 aim fire
+1533 aim
+1542 aim fire
+1545 aim
+1554 aim fire
+1557 aim
+1566 aim fire
+1569 aim
+1578 aim fire
+1581 aim
+1590 aim fire
+1593 aim
+1602 aim fire
+1605 aim
+1614
+1635 left
+1643
+1644 up run
+1655
+1656 right
+1675
+1676 up run
+1729
+1730 right
+1750
+1751 up
+1755
+1756 action
+1760
