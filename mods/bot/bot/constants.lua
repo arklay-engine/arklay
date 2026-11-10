@@ -120,11 +120,10 @@ BotConst.WOLF_MEDAL = 0x24
 -- FULL_TURN.
 BotConst.EXAMINE_YAW = { low = 0x340, high = 0x4C0 }
 
--- The lab computer terminal (games/re1/ui/computer_lab.lua): the login the
--- player reads on the lab's files (UI_LAB_PASSWORD_USER and _ENTRY), the
--- command that releases a cell door (UI_LAB_PASSWORD_COMMAND), the
--- keyboard's ENTER and BACKSPACE cells, and the LOCK_BANK bits the door
--- menu's rows release (close_computer's DOOR_LOCK_BITS).
+-- The lab computer terminal (games/re1/interactive/computer_lab.lua): the
+-- login the player reads on the lab's files, the command that releases a
+-- cell door, the keyboard's ENTER and BACKSPACE cells, and the LOCK_BANK
+-- bits the door menu's rows release (its `cl_cmd_unlock` step).
 BotConst.TERMINAL = {
     user = "JOHN", password = "ADA", command = "MOLE",
     enter = 0x17, backspace = 0x1D, door_bits = { 0x25, 0x26 },
