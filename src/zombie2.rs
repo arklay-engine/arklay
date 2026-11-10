@@ -1861,7 +1861,6 @@ impl Em<'_, '_, '_> {
         result
     }
 
-    /// `FUN_0045bd20`, the arm the shove's end took off.
     /// `FUN_0045b870`, which `Em_Zombie` calls after the arm's pull: the head
     /// that Claire's stomp raised `FLAG_HEAD_LEFT` for leaves the body at
     /// `(300, -300, 0)` turned by the facing and a half turn, then each move
@@ -1909,7 +1908,7 @@ impl Em<'_, '_, '_> {
         });
         let hits = |from: [i32; 3], at: [i32; 3]| {
             sca.is_some_and(|sca| {
-                let floor = (-at[1] / 1800).clamp(0, 31) as u8;
+                let floor = ((-at[1] / 1800) & 0x1F) as u8;
                 crate::sca::resolve_on_floor(sca, PARTS_MASK, from, at, RADIUS, floor).hit
             })
         };
@@ -1957,6 +1956,7 @@ impl Em<'_, '_, '_> {
         player2::set_part_flags(self.mover.work, HEAD_PART, 0);
     }
 
+    /// `FUN_0045bd20`, the arm the shove's end took off.
     fn pull_arm(&mut self) {
         let Some(mut arm) = self.z.pulled.take() else {
             return;

@@ -3970,8 +3970,9 @@ impl GameSession {
         // the previous tick's entity state; a script that raises the flag
         // during this frame's SCD pass would therefore differ by one frame
         // (the reference checks after the script pass). RE2's `Game_loop`
-        // instead tests `fg_status`'s `0x40` (`0x4C02C7`), which the aim and
-        // an enemy's hold keep up (`crate::player2::Work::holds_game`).
+        // instead tests `fg_status`'s `0x40` (`0x4C02C7`), which the aim, a
+        // hit, a hold, the stairs and the climb keep up
+        // (`crate::player2::Work::holds_game`).
         let message_pauses_menu = (was_active && self.game.message.pause & START_MESSAGE_BITS != 0)
             || self.game.message_flags & START_MESSAGE_BITS != START_MESSAGE_BITS
             || self.menu_close_freeze > 0;

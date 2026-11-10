@@ -59,6 +59,8 @@ const MOVE_CLIMB: u8 = 8;
 const MOVE_JUMP_DOWN: u8 = 9;
 /// `pl_mv_0a`: pushing a room object.
 const MOVE_PUSH: u8 = 10;
+/// `pl_mv_0b`, which raises `fg_status`'s `0x40` too ([`Work::holds_game`]).
+const MOVE_0B: u8 = 11;
 /// The port's optional quick turn, past the original's table.
 const MOVE_QUICK_TURN: u8 = 0x40;
 /// `Spl_Init`'s `Joint_move` late step.
@@ -323,11 +325,13 @@ pub struct Work {
     /// The routines hold the first tick of `pl_mv_00` that a room started on
     /// its own assumes ([`Work::default`]), and no tick has run them yet.
     pub first_tick_assumed: bool,
-    /// `fg_status`'s `0x40` as the aim (`pl_mv_05`) and an enemy's hold
-    /// (`Pl_Em_damage`, `Pl_Em_die`) keep it: a tick that ends in either
-    /// raises it and the next tick that starts outside both drops it, so it
-    /// outlasts each by a tick. While it is up START doesn't open the status
-    /// screen (`Game_loop`, `0x4C02C7`).
+    /// `fg_status`'s `0x40`. The aim (`pl_mv_05`), a hit (`Pl_damage`), the
+    /// death (`Pl_die`), `pl_mv_0b` and an enemy's hold (`Pl_Em_damage`,
+    /// `Pl_Em_die`) raise it and leave it to the next routine's case 0, so it
+    /// outlasts each by a tick. The pick-up (`pl_mv_06`), the stairs
+    /// (`pl_mv_07`) and the climb (`pl_mv_08`) raise it on their first tick and
+    /// drop it themselves on their last. While it is up START doesn't open the
+    /// status screen (`Game_loop`, `0x4C02C7`).
     pub holds_game: bool,
     /// `Water` (`+0x10c`): the level of the water the player stands in, or 0.
     /// `Sce_at` clears it each tick after `Player_move` and a water area
@@ -1010,10 +1014,22 @@ impl Work {
         self.routine[0] == MODE_MOVE && self.routine[1] == MOVE_AIM
     }
 
-    /// The routines that raise `fg_status`'s `0x40` ([`Work::holds_game`]):
-    /// the aim and an enemy's hold.
+    /// The routines that raise `fg_status`'s `0x40` and leave it up for the
+    /// next routine to drop ([`Work::holds_game`]).
     fn holds_game_now(&self) -> bool {
-        self.holds_view() || matches!(self.routine[0], MODE_HELD | MODE_HELD_DIE)
+        self.holds_view()
+            || matches!(
+                self.routine[0],
+                MODE_DAMAGE | MODE_DEAD | MODE_HELD | MODE_HELD_DIE
+            )
+            || (self.routine[0] == MODE_MOVE && self.routine[1] == MOVE_0B)
+    }
+
+    /// The routines that raise `fg_status`'s `0x40` and drop it themselves on
+    /// their last tick ([`Work::holds_game`]).
+    fn holds_game_in_routine(&self) -> bool {
+        self.routine[0] == MODE_MOVE
+            && matches!(self.routine[1], MOVE_ITEM | MOVE_STAIRS | MOVE_CLIMB)
     }
 
     /// `Be_flg`'s bits 4 and 8: on the stairs, or going up or down a box and
@@ -1396,7 +1412,8 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
     mover.work.latch_kage_probe(mover.player.angle);
     mover.work.root = mover.part_matrix(0);
     mover.latch_parts();
-    mover.work.holds_game = held_game || mover.work.holds_game_now();
+    mover.work.holds_game =
+        held_game || mover.work.holds_game_now() || mover.work.holds_game_in_routine();
     mover.arrived
 }
 
@@ -7824,6 +7841,21 @@ mod tests {
         setup.work.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
         setup.tick(Input::default(), 190);
         assert!(!setup.work.holds_game);
+        // A hit holds it as the hold does.
+        setup.work.routine = [MODE_DAMAGE, 0, 0, 0];
+        setup.tick(Input::default(), 190);
+        assert!(setup.work.holds_game);
+    }
+
+    #[test]
+    fn the_stairs_hold_the_game_only_while_they_run() {
+        let mut setup = Setup::new(0);
+        setup.work.routine = [MODE_MOVE, MOVE_STAIRS, 1, 0];
+        assert!(setup.work.holds_game_in_routine() && !setup.work.holds_game_now());
+        // Their last tick drops it itself, so a tick that ends idle is free
+        // whatever it started in.
+        setup.work.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
+        assert!(!setup.work.holds_game_in_routine() && !setup.work.holds_game_now());
     }
 
     #[test]
