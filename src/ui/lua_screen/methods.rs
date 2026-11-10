@@ -232,6 +232,7 @@ impl UserData for Api<'_> {
                     row.set("stage", info.stage)?;
                     row.set("room", info.room)?;
                     row.set("mansion2", info.mansion2)?;
+                    row.set("re2", info.re2)?;
                     if let Some(text) = api.cx.text {
                         let save = text.save();
                         row.set(

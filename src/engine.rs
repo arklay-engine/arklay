@@ -396,6 +396,7 @@ pub fn run(pack: &Path, id: RoomId, capture: Option<&Path>, ticks: u32) -> Resul
         id,
         capture,
         ticks,
+        &save::default_save_dir(),
         &ModOptions::default(),
         false,
         false,
@@ -425,6 +426,7 @@ pub fn run_with_options(
     id: RoomId,
     capture: Option<&Path>,
     ticks: u32,
+    save_dir: &Path,
     mods: &ModOptions,
     stats: bool,
     _debug_menu: bool,
@@ -433,7 +435,7 @@ pub fn run_with_options(
     trace: trace::TraceOptions<'_>,
     authoring: Authoring<'_>,
 ) -> Result<()> {
-    let save_dir = save::default_save_dir();
+    let save_dir = save_dir.to_path_buf();
     let pack = open_game_pack(pack, mods, language)?;
 
     if capture.is_some()
@@ -2770,15 +2772,7 @@ impl GameSession {
         // the save resumes in is visited (`room_set_visited_flag`) even when
         // the block predates its visit; the map tab highlights it.
         game.mark_room_visited(id);
-        // `InitializeGame`'s continue branch: a zero save counter also zeroes
-        // the play timer, then every load advances the counter. RE 2's count
-        // (`0x98E9BC`) is the saves made: only `Card_access`'s write raises it.
-        if game.state_bytes[usize::from(game::STATE_BYTE_SAVES)] == 0 {
-            game.state_bytes[0x24..0x28].fill(0);
-        }
-        if file.re2.is_none() {
-            game.increment_saves();
-        }
+        continue_save_counter(&mut game, file);
         let mut player_state = player::spawn(id, &loaded.room);
         // The original loads at height 0; the port-only height puts an
         // autosave taken on a stair landing or raised floor back on it.
@@ -4776,8 +4770,6 @@ impl GameSession {
         }
     }
 
-    /// Whether a pause-menu screen owns the tick, so the room is frozen and
-    /// the original runs on its 16 ms non-gameplay limiter.
     /// Whether the interactive loop ticks at the screens' 60 Hz: a frozen
     /// room's screen, except RE 2's typewriter save screen, whose
     /// `Card_access` runs at the game's 30 Hz (`Cardaccess_init` keeps
@@ -4786,6 +4778,8 @@ impl GameSession {
         self.room_frozen() && self.re2_save != Some(Re2Save::Screen)
     }
 
+    /// Whether a pause-menu screen owns the tick, so the room is frozen and
+    /// the original runs on its 16 ms non-gameplay limiter.
     fn room_frozen(&self) -> bool {
         self.menu_fade_phase != MenuFadePhase::None
             || self.menu.is_some()
@@ -9604,8 +9598,21 @@ fn seed_new_game_choice(game: &mut game::GameState, options: player::Options, re
     }
 }
 
-/// Apply the character-specific new-game seed over the fresh state:
-/// `SetInitialItems`, the save counter and the Jill first-run flags. The
+/// RE 1's `InitializeGame` continue branch on a loaded block: a zero save
+/// counter also zeroes the play timer, then every load advances the
+/// counter. RE 2's count (`0x98E9BC`) is the saves made, which only
+/// `Card_access`'s write raises, and its load keeps the play time, so an RE
+/// 2 block (one with the RE 2 trailer) is left as it was.
+fn continue_save_counter(game: &mut game::GameState, file: &save::SaveFile) {
+    if file.re2.is_some() {
+        return;
+    }
+    if game.state_bytes[usize::from(game::STATE_BYTE_SAVES)] == 0 {
+        game.state_bytes[0x24..0x28].fill(0);
+    }
+    game.increment_saves();
+}
+
 /// RE 2's save count (`0x98E9BC`) starts at 0: it counts the saves made,
 /// where RE 1's `InitializeGame` starts its counter at 1.
 fn seed_re2_save_count(game: &mut game::GameState, re2: bool) {
@@ -9614,6 +9621,8 @@ fn seed_re2_save_count(game: &mut game::GameState, re2: bool) {
     }
 }
 
+/// Apply the character-specific new-game seed over the fresh state:
+/// `SetInitialItems`, the save counter and the Jill first-run flags. The
 /// room-BGM bytes, item box and room-item bank come from
 /// `game/initial_state.lua`, which `new_game_state` already ran.
 fn seed_new_game(pack: &Pack, game: &mut game::GameState, character: u8) {
@@ -23603,6 +23612,123 @@ mod tests {
     impl ui::save_load::SaveScreen for EndingSaveScreen {
         fn take_outcome(&mut self) -> Option<ui::save_load::SaveOutcome> {
             None
+        }
+    }
+
+    /// A save screen that stays up and reports one write on its first tick,
+    /// as RE 2's does on its write tick (a failed write too, with
+    /// `api:save`'s `carry_on`), publishing `values` for the trace's `sv`.
+    struct WritingSaveScreen {
+        outcome: Option<ui::save_load::SaveOutcome>,
+        values: std::collections::HashMap<&'static str, i64>,
+    }
+
+    impl crate::ui::Screen for WritingSaveScreen {
+        fn open(&mut self, _: &mut UiContext<'_>) -> Result<()> {
+            Ok(())
+        }
+
+        fn update(&mut self, _: &UiContext<'_>, _: UiInput) -> ScreenResult {
+            ScreenResult::Continue
+        }
+
+        fn draw(&mut self, _: &UiContext<'_>, _: &mut crate::render::Framebuffer) {}
+    }
+
+    impl ui::save_load::SaveScreen for WritingSaveScreen {
+        fn take_outcome(&mut self) -> Option<ui::save_load::SaveOutcome> {
+            self.outcome.take()
+        }
+
+        fn value(&self, key: &str) -> Option<i64> {
+            self.values.get(key).copied()
+        }
+    }
+
+    fn writing_screen(values: &[(&'static str, i64)]) -> Box<WritingSaveScreen> {
+        Box::new(WritingSaveScreen {
+            outcome: Some(ui::save_load::SaveOutcome {
+                slot: None,
+                ink_ribbon: true,
+            }),
+            values: values.iter().copied().collect(),
+        })
+    }
+
+    /// `Card_access`'s state 3 carries on after a failed write in save mode:
+    /// the ribbon and the count go on the write tick, while the screen is
+    /// still up, and its close takes nothing more.
+    #[test]
+    fn a_failed_write_keeps_the_ribbon_spent() {
+        let dir = TempDir::new();
+        let (pack, mut session) = re2_typewriter_session(&dir);
+        session.game.inventory = vec![game::InventoryItem {
+            id: crate::scd2::host::ITEM_INK_RIBBON,
+            quantity: 3,
+        }];
+        let saves =
+            |session: &GameSession| session.game.state_bytes[usize::from(game::STATE_BYTE_SAVES)];
+        let before = saves(&session);
+        session.save_screen = Some(writing_screen(&[]));
+        session.re2_save = Some(Re2Save::Screen);
+        session.tick_save_screen(&pack, UiInput::default());
+        assert_eq!(
+            session.re2_save,
+            Some(Re2Save::Screen),
+            "the screen goes on"
+        );
+        assert_eq!(session.game.inventory[0].quantity, 2);
+        assert_eq!(saves(&session), before.wrapping_add(1));
+        session.tick_save_screen(&pack, UiInput::default());
+        assert_eq!(session.game.inventory[0].quantity, 2, "taken once");
+    }
+
+    /// The trace's `sv`: the screen's work and the save count while the
+    /// typewriter's screen runs, the rows and `cnt0` kept from the last
+    /// screen until its state 1, and `-` otherwise.
+    #[test]
+    fn the_trace_writes_sv_while_the_screen_runs() {
+        let dir = TempDir::new();
+        let (pack, mut session) = re2_typewriter_session(&dir);
+        assert_eq!(session.re2_save_screen_trace(), "-");
+        session.game.state_bytes[usize::from(game::STATE_BYTE_SAVES)] = 0;
+        session.re2_card_rows = [2, 0];
+        let mut screen = writing_screen(&[("sv_sub", 3), ("sv_step", 1)]);
+        screen.outcome = None;
+        session.save_screen = Some(screen);
+        assert_eq!(session.re2_save_screen_trace(), "-", "not the typewriter's");
+        session.re2_save = Some(Re2Save::Screen);
+        assert_eq!(session.re2_save_screen_trace(), "3,1,0,0,0,0,2,0,0,0,0,0");
+        session.save_screen = Some(writing_screen(&[
+            ("sv_sub", 2),
+            ("sv_state", 0x22),
+            ("sv_rows", 5),
+            ("sv_saves", 3),
+            ("sv_typed", 4),
+        ]));
+        session.tick_save_screen(&pack, UiInput::default());
+        assert_eq!(session.re2_save_screen_trace(), "2,0,22,0,0,0,5,0,0,4,3,1");
+    }
+
+    /// RE 1's `InitializeGame` zeroes the play timer on a load with no
+    /// save made and counts the load; an RE 2 block keeps both.
+    #[test]
+    fn only_an_re1_load_counts_and_clears_the_timer() {
+        for re2 in [false, true] {
+            let mut game = game::GameState::default();
+            game.state_bytes[0x24..0x28].copy_from_slice(&900u32.to_le_bytes());
+            let file = save::SaveFile {
+                re2: re2.then(Default::default),
+                ..save::SaveFile::default()
+            };
+            continue_save_counter(&mut game, &file);
+            let timer = u32::from_le_bytes(game.state_bytes[0x24..0x28].try_into().unwrap());
+            let saves = game.state_bytes[usize::from(game::STATE_BYTE_SAVES)];
+            assert_eq!(
+                (timer, saves),
+                if re2 { (900, 0) } else { (0, 1) },
+                "re2 {re2}"
+            );
         }
     }
 

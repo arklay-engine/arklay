@@ -100,26 +100,43 @@ local function label_of(name)
     return (name:gsub("%^", ":"))
 end
 
--- The folder's saves, newest first (`Card_write` sorts by the file's
--- last-write time).
-local function list_saves(api)
-    local saves = {}
-    for _, entry in ipairs(api:saves()) do
-        if entry.loadable and not entry.autosave then
-            saves[#saves + 1] = entry
-        end
+local function newest_first(a, b)
+    if a.timestamp ~= b.timestamp then
+        return a.timestamp > b.timestamp
     end
-    table.sort(saves, function(a, b)
-        if a.timestamp ~= b.timestamp then
-            return a.timestamp > b.timestamp
-        end
-        return a.name < b.name
-    end)
-    return saves
+    return a.name < b.name
 end
 
+-- The folder's RE 2 saves, newest first (`Card_write` sorts by the file's
+-- last-write time); an RE 1 block in the same folder isn't listed. In load
+-- mode the RE 2 autosaves (port-only) follow as extra rows, newest first,
+-- as RE 1's load screen lists them; `cnt0` counts the saves alone.
+local function list_saves(api, load)
+    local saves, autosaves = {}, {}
+    for _, entry in ipairs(api:saves()) do
+        if entry.loadable and entry.re2 then
+            if not entry.autosave then
+                saves[#saves + 1] = entry
+            elseif load then
+                autosaves[#autosaves + 1] = entry
+            end
+        end
+    end
+    table.sort(saves, newest_first)
+    table.sort(autosaves, function(a, b)
+        return a.autosave < b.autosave
+    end)
+    local cnt0 = #saves
+    for _, entry in ipairs(autosaves) do
+        saves[#saves + 1] = entry
+    end
+    return saves, cnt0
+end
+
+-- The list's rows past the folder's own: the new file in save mode, the
+-- saves (and the autosaves in load mode), the leave row.
 local function total_rows()
-    return s.cnt0 - s.mode + 2
+    return s.count - s.mode + 2
 end
 
 local function start_exit()
@@ -134,9 +151,9 @@ local function picked()
     local i = s.cursor + s.top
     if i == -s.mode then
         return 0
-    elseif i < s.cnt0 - s.mode + 1 then
+    elseif i < s.count - s.mode + 1 then
         return 1
-    elseif i == s.cnt0 - s.mode + 1 then
+    elseif i == s.count - s.mode + 1 then
         return 4
     end
     return 99
@@ -263,8 +280,8 @@ local function step(api, input)
     if state == STATE_FONT then
         s.state = STATE_LIST
     elseif state == STATE_LIST then
-        s.saves = list_saves(api)
-        s.cnt0 = #s.saves
+        s.saves, s.cnt0 = list_saves(api, s.mode == 1)
+        s.count = #s.saves
         s.rows = total_rows() < 10 and total_rows() or 10
         s.listed = true
         s.state = STATE_BROWSE
@@ -292,7 +309,7 @@ function M.open(api)
     end
     s.mode = api:mode() == "load" and 1 or 0
     s.state = STATE_FONT
-    s.cursor, s.top, s.rows, s.timer, s.choice, s.typed, s.cnt0 = 0, 0, 0, 0, 0, 0, 0
+    s.cursor, s.top, s.rows, s.timer, s.choice, s.typed, s.cnt0, s.count = 0, 0, 0, 0, 0, 0, 0, 0
     s.saves = {}
     -- `Cardaccess_init`'s step 0: fade 0 from black, a step already taken
     -- on this tick's draw.
@@ -388,7 +405,7 @@ function M.draw(api)
             else
                 centred(api, y, "Create New")
             end
-        elseif i <= s.cnt0 - s.mode then
+        elseif i <= s.count - s.mode then
             local entry = s.saves[i + s.mode]
             if entry then
                 centred(api, y, label_of(entry.base))
@@ -403,9 +420,9 @@ function M.draw(api)
         end
     else
         local i = s.cursor + s.top
-        if i > -s.mode and i <= s.cnt0 - s.mode then
+        if i > -s.mode and i <= s.count - s.mode then
             draw_footer(api, s.saves[i + s.mode])
-        elseif i == s.cnt0 - s.mode + 1 and s.mode == 1 then
+        elseif i == s.count - s.mode + 1 and s.mode == 1 then
             centred(api, FOOTER_Y, "Do not load")
         end
     end

@@ -1076,6 +1076,7 @@ fn slot_table(lua: &Lua, info: &save::SaveSlotInfo) -> mlua::Result<Table> {
     row.set("stage", info.stage)?;
     row.set("room", info.room)?;
     row.set("mansion2", info.mansion2)?;
+    row.set("re2", info.re2)?;
     Ok(row)
 }
 

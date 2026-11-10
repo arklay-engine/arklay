@@ -573,6 +573,9 @@ def run_one(run: dict, ctx: dict) -> dict:
     offset = run.get("offset", 344)
     ticks = run["ticks"] - offset
     compare_from, why = comparison_start(run)
+    if not why and run.get("saves_from"):
+        # The reference's saves are the original's `.BIOHAZARD2` files, which arklay can't read yet.
+        why = "saves_from seeds only the original's record: arklay can't start with the reference's saves yet"
     if why:
         result["text"] = why
         result["problems"].append(why)

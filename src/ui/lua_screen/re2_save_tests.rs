@@ -29,12 +29,34 @@ fn pack() -> &'static Pack {
     })
 }
 
-/// A fresh, empty save folder for one test.
-fn folder(name: &str) -> PathBuf {
+/// A fresh, empty save folder for one test, removed when it drops.
+struct Folder(PathBuf);
+
+impl std::ops::Deref for Folder {
+    type Target = Path;
+
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl AsRef<Path> for Folder {
+    fn as_ref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for Folder {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn folder(name: &str) -> Folder {
     let dir = std::env::temp_dir().join(format!("arklay-re2-save-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    dir
+    Folder(dir)
 }
 
 fn context(dir: &Path) -> UiContext<'_> {
@@ -52,8 +74,13 @@ fn context(dir: &Path) -> UiContext<'_> {
 
 /// Room 200's block with `saves` saves made.
 fn block(saves: u8) -> SaveFile {
+    re_block(saves, true)
+}
+
+/// A block with `saves` saves made, RE 2's (with its trailer) or RE 1's.
+fn re_block(saves: u8, re2: bool) -> SaveFile {
     let mut game = GameState::new(RoomId::parse("2000").unwrap(), &RoomState::default());
-    game.is_re2_room = true;
+    game.is_re2_room = re2;
     game.state_bytes[usize::from(crate::game::STATE_BYTE_SAVES)] = saves;
     SaveFile::from_state(&game)
 }
@@ -61,22 +88,37 @@ fn block(saves: u8) -> SaveFile {
 /// `count` saves in `dir`, the first the oldest.
 fn saves_in(dir: &Path, count: u8) {
     for index in 0..count {
-        let path = dir.join(format!("save{index}.dat"));
-        crate::save::save_to_path(&path, &block(index + 1)).unwrap();
-        let time = std::time::SystemTime::UNIX_EPOCH
-            + std::time::Duration::from_secs(1_000_000 + u64::from(index) * 60);
-        std::fs::File::options()
-            .write(true)
-            .open(&path)
-            .unwrap()
-            .set_modified(time)
-            .unwrap();
+        write_at(
+            dir,
+            &format!("save{index:02}.dat"),
+            &block(index + 1),
+            index,
+        );
     }
+}
+
+/// `file` written as `name`, `minute` minutes into the test's clock.
+fn write_at(dir: &Path, name: &str, file: &SaveFile, minute: u8) {
+    let path = dir.join(name);
+    crate::save::save_to_path(&path, file).unwrap();
+    let time = std::time::SystemTime::UNIX_EPOCH
+        + std::time::Duration::from_secs(1_000_000 + u64::from(minute) * 60);
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(time)
+        .unwrap();
 }
 
 fn open(dir: &Path) -> LuaScreen {
     let mut cx = context(dir);
     LuaScreen::open_save("ui/save_load.lua", &mut cx, block(0), true).unwrap()
+}
+
+fn open_load(dir: &Path) -> LuaScreen {
+    let mut cx = context(dir);
+    LuaScreen::open_load("ui/save_load.lua", &mut cx).unwrap()
 }
 
 /// One tick, with its cues.
@@ -147,7 +189,7 @@ fn the_save_screen_steps_one_state_a_tick() {
     assert_eq!(sv(&screen), [2, 0, 2, 0, 0, 0, 5, 0, 0, 0, 3], "555");
     // `Card_write`'s order: the newest first.
     let first: String = screen.test_eval("return M.state.saves[1].name");
-    assert_eq!(first, "save2.dat");
+    assert_eq!(first, "save02.dat");
 }
 
 #[test]
@@ -322,4 +364,87 @@ fn the_save_list_reads_player_count_and_place() {
          return a.character, a.saves, a.stage, a.room, b.character, b.saves",
     );
     assert_eq!(rows, (0, 2, 2, 0, 0, 1));
+}
+
+fn held_up() -> UiInput {
+    UiInput {
+        up: true,
+        held_up: true,
+        ..UiInput::default()
+    }
+}
+
+#[test]
+fn more_saves_than_rows_scroll_and_up_wraps_to_the_bottom() {
+    let dir = folder("scroll");
+    // Eleven saves: the new file, the saves and leave are 13 rows, 10 shown.
+    saves_in(&dir, 11);
+    let mut screen = open(&dir);
+    to_the_list(&mut screen, &dir);
+    assert_eq!(sv(&screen)[6], 10, "the rows shown");
+    // Up from the top wraps to the last row: the cursor on the bottom one
+    // shown, the list scrolled to its end.
+    tick(&mut screen, &dir, held_up());
+    assert_eq!(sv(&screen)[4..6], [9, 3]);
+    for _ in 0..3 {
+        tick(&mut screen, &dir, UiInput::default());
+    }
+    // Down from the last row wraps to the top.
+    tick(&mut screen, &dir, held_down());
+    assert_eq!(sv(&screen)[4..6], [0, 0]);
+    for _ in 0..3 {
+        tick(&mut screen, &dir, UiInput::default());
+    }
+    // Down past the bottom one shown scrolls the list a row at a time.
+    let mut places = Vec::new();
+    for _ in 0..12 {
+        tick(&mut screen, &dir, held_down());
+        places.push((sv(&screen)[4], sv(&screen)[5]));
+        for _ in 0..3 {
+            tick(&mut screen, &dir, UiInput::default());
+        }
+    }
+    let expected: Vec<(i64, i64)> = (1..=9)
+        .map(|cursor| (cursor, 0))
+        .chain([(9, 1), (9, 2), (9, 3)])
+        .collect();
+    assert_eq!(places, expected);
+}
+
+#[test]
+fn only_re2_saves_are_listed_and_load_mode_adds_the_autosaves() {
+    let dir = folder("kinds");
+    saves_in(&dir, 2);
+    write_at(&dir, "savedat1.dat", &re_block(4, false), 5);
+    write_at(&dir, "autosave1.dat", &block(3), 6);
+    write_at(&dir, "autosave2.dat", &block(3), 7);
+    let names = |screen: &LuaScreen| -> Vec<String> {
+        screen.test_eval(
+            "local out = {}
+             for i, entry in ipairs(M.state.saves) do out[i] = entry.name end
+             return out",
+        )
+    };
+    // Save mode: the original's list, the RE 2 saves alone.
+    let mut screen = open(&dir);
+    to_the_list(&mut screen, &dir);
+    assert_eq!(names(&screen), ["save01.dat", "save00.dat"]);
+    assert_eq!(
+        sv(&screen)[6..],
+        [4, 0, 0, 0, 2],
+        "new, 2 saves, leave; cnt0 2"
+    );
+    // Load mode: the autosaves follow, newest first, before the leave row.
+    let mut screen = open_load(&dir);
+    to_the_list(&mut screen, &dir);
+    assert_eq!(
+        names(&screen),
+        ["save01.dat", "save00.dat", "autosave1.dat", "autosave2.dat"]
+    );
+    assert_eq!(sv(&screen)[3], 1, "load mode");
+    assert_eq!(
+        sv(&screen)[6..],
+        [5, 0, 0, 0, 2],
+        "4 rows and leave; cnt0 2"
+    );
 }
