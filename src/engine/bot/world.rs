@@ -51,7 +51,7 @@ const BANK_LOCKS: u8 = 2;
 const BANK_MAIN_STATE: usize = 5;
 
 /// One remembered door.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 struct DoorRecord {
     target: Option<String>,
     key: u8,
@@ -64,7 +64,7 @@ struct DoorRecord {
 }
 
 /// One remembered room item.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 struct ItemRecord {
     item: u8,
     quantity: u8,
@@ -75,9 +75,10 @@ struct ItemRecord {
 }
 
 /// One remembered room action and the bot's presses on it.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 struct ActionRecord {
-    kind: &'static str,
+    #[serde(deserialize_with = "super::stored_kind")]
+    kind: super::KindName,
     /// The zone centre when last seen: the mental map's box positions.
     x: i32,
     z: i32,
@@ -88,7 +89,7 @@ struct ActionRecord {
 }
 
 /// One room the bot has entered.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 struct RoomRecord {
     entries: u32,
     last_entry: Option<u64>,
@@ -98,7 +99,7 @@ struct RoomRecord {
 }
 
 /// The last press whose result is still being watched.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 struct Pending {
     room: String,
     slot: u8,
@@ -115,12 +116,16 @@ pub(super) struct LuaKey {
 }
 
 /// The world model. Reset with the bot's memory on a new game.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub(super) struct World {
     rooms: BTreeMap<String, RoomRecord>,
     current: Option<String>,
     /// The action-key slot the reach point is in this tick, if controllable.
     probe: Option<u8>,
+    /// The last tick's flags. Not kept in a memory file: the first tick
+    /// after it is read back has nothing to compare with, as a session's
+    /// first tick has not.
+    #[serde(skip)]
     prev_flags: Option<[FlagBank; game::FLAG_BANK_COUNT]>,
     prev_counts: BTreeMap<u8, u32>,
     pending: Option<Pending>,

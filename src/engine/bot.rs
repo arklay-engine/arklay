@@ -46,6 +46,88 @@ use crate::ui::UiInput;
 use crate::ui::save_load::SaveScreenView;
 use crate::weapons::WeaponState;
 
+/// The format of a bot memory file ([`BotRuntime::memory_json`]).
+const MEMORY_FORMAT: u64 = 1;
+/// The global the route keeps its progress in (`mods/bot/bot/init.lua`).
+const ROUTE_STATE: &str = "BOT_STATE";
+/// The deepest table nesting a memory file keeps of the route's state.
+const ROUTE_STATE_DEPTH: usize = 32;
+
+/// The route's state as a memory file keeps it: its data, without what
+/// only the running Lua state can hold. A boolean, a number and a string
+/// are themselves; a table is `{"t": [[key, value], ...]}`, sorted by key
+/// (integers, then strings). A function, a userdata, a number JSON cannot
+/// write and a table inside itself are left out, with their key: a running
+/// job loses its callbacks, and the goal it belongs to ends with the room
+/// change a memory file is written at.
+fn route_state_json(
+    value: &Value,
+    stack: &mut Vec<*const std::ffi::c_void>,
+) -> Option<serde_json::Value> {
+    Some(match value {
+        Value::Boolean(on) => serde_json::Value::Bool(*on),
+        Value::Integer(number) => serde_json::json!(number),
+        Value::Number(number) => serde_json::Number::from_f64(*number)?.into(),
+        Value::String(text) => serde_json::Value::String(text.to_string_lossy()),
+        Value::Table(table) => {
+            let pointer = table.to_pointer();
+            if stack.len() >= ROUTE_STATE_DEPTH || stack.contains(&pointer) {
+                return None;
+            }
+            stack.push(pointer);
+            let mut integers = Vec::new();
+            let mut strings = Vec::new();
+            for (key, value) in table.pairs::<Value, Value>().flatten() {
+                let Some(value) = route_state_json(&value, stack) else {
+                    continue;
+                };
+                match key {
+                    Value::Integer(key) => integers.push((key, value)),
+                    Value::String(key) => strings.push((key.to_string_lossy(), value)),
+                    _ => {}
+                }
+            }
+            stack.pop();
+            integers.sort_by_key(|(key, _)| *key);
+            strings.sort_by(|a, b| a.0.cmp(&b.0));
+            let pairs: Vec<serde_json::Value> = integers
+                .into_iter()
+                .map(|(key, value)| serde_json::json!([key, value]))
+                .chain(
+                    strings
+                        .into_iter()
+                        .map(|(key, value)| serde_json::json!([key, value])),
+                )
+                .collect();
+            serde_json::json!({ "t": pairs })
+        }
+        _ => return None,
+    })
+}
+
+/// The Lua value [`route_state_json`] wrote.
+fn route_state_value(lua: &Lua, json: &serde_json::Value) -> mlua::Result<Value> {
+    Ok(match json {
+        serde_json::Value::Bool(on) => Value::Boolean(*on),
+        serde_json::Value::Number(number) => match number.as_i64() {
+            Some(integer) => Value::Integer(integer),
+            None => Value::Number(number.as_f64().unwrap_or_default()),
+        },
+        serde_json::Value::String(text) => Value::String(lua.create_string(text)?),
+        serde_json::Value::Object(table) => {
+            let out = lua.create_table()?;
+            let pairs = table.get("t").and_then(serde_json::Value::as_array);
+            for pair in pairs.into_iter().flatten() {
+                if let (Some(key), Some(value)) = (pair.get(0), pair.get(1)) {
+                    out.raw_set(route_state_value(lua, key)?, route_state_value(lua, value)?)?;
+                }
+            }
+            Value::Table(out)
+        }
+        _ => Value::Nil,
+    })
+}
+
 /// The default headless tick budget (about 55 minutes at 30 Hz).
 pub const DEFAULT_MAX_TICKS: u64 = 100_000;
 
@@ -201,11 +283,29 @@ impl BotInput {
     }
 }
 
+/// An action kind name. An alias, so that the memory types' derived
+/// `Deserialize` does not take the field for one borrowed from its input.
+type KindName = &'static str;
+
+/// A remembered action kind read back from a memory file: the name
+/// [`action_kind_name`] gave it.
+fn stored_kind<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<&'static str, D::Error> {
+    let name = <String as serde::Deserialize>::deserialize(deserializer)?;
+    ACTION_KIND_NAMES
+        .iter()
+        .copied()
+        .find(|known| *known == name)
+        .ok_or_else(|| serde::de::Error::custom(format!("unknown action kind `{name}`")))
+}
+
 /// The remembered state of one room action, kept per room in [`BotMemory`].
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 struct ActionMemory {
     slot: u8,
-    kind: &'static str,
+    #[serde(deserialize_with = "stored_kind")]
+    kind: KindName,
     x: i32,
     z: i32,
     width: i32,
@@ -220,7 +320,7 @@ struct ActionMemory {
 }
 
 /// The remembered state of one door.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 struct DoorMemory {
     slot: u8,
     target: Option<String>,
@@ -233,8 +333,9 @@ struct DoorMemory {
     depth: i32,
 }
 
-/// What the bot has seen and remembered this run. In-memory only.
-#[derive(Clone, Debug, Default)]
+/// What the bot has seen and remembered this run. In memory, and in the
+/// file [`BotRuntime::memory_json`] writes for a later run to start from.
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 struct BotMemory {
     /// The rooms entered, in order (repeats included when the room changes).
     room_path: Vec<String>,
@@ -1046,6 +1147,26 @@ fn combine_result_table(
 fn player_can_fire(flags: u8) -> bool {
     flags & 0x01 != 0
 }
+
+/// Every action kind name a snapshot gives: [`action_kind_name`]'s, an
+/// item not yet live, and a record without a kind.
+const ACTION_KIND_NAMES: [&str; 15] = [
+    "",
+    "door",
+    "item",
+    "item_dormant",
+    "item_box",
+    "event",
+    "message",
+    "typewriter",
+    "effect_zone",
+    "desk",
+    "stairs_zone",
+    "stairs_height",
+    "door_check",
+    "flag_bank_set",
+    "other",
+];
 
 fn action_kind_name(kind: RoomActionKind) -> &'static str {
     match kind {
@@ -4643,6 +4764,62 @@ impl BotRuntime {
     }
 
     /// The run statistics as JSON (see [`stats`]).
+    /// What the bot knows and has planned so far, for a later run to start
+    /// from ([`Self::with_memory`]): its memory and world model, the tick
+    /// they were taken at, and the route's own state (its `BOT_STATE`
+    /// global, as data: see [`route_state_json`]).
+    pub fn memory_json(&self) -> Result<serde_json::Value> {
+        let state = self
+            .vm
+            .lua
+            .globals()
+            .get::<Value>(ROUTE_STATE)
+            .map_err(|err| anyhow!("{err}"))?;
+        Ok(serde_json::json!({
+            "format": MEMORY_FORMAT,
+            "tick": self.tick,
+            "memory": serde_json::to_value(&*self.shares.memory.borrow())?,
+            "state": route_state_json(&state, &mut Vec::new()),
+        }))
+    }
+
+    /// Start from where an earlier run stood ([`Self::memory_json`]): its
+    /// memory, its tick count (the memory's ticks are that run's) and the
+    /// route's state. The statistics and the save history start afresh.
+    pub fn with_memory(mut self, json: serde_json::Value) -> Result<Self> {
+        let format = json.get("format").and_then(serde_json::Value::as_u64);
+        if format != Some(MEMORY_FORMAT) {
+            bail!("the bot memory's format is {format:?}, not {MEMORY_FORMAT}");
+        }
+        let tick = json
+            .get("tick")
+            .and_then(serde_json::Value::as_u64)
+            .context("the bot memory has no tick")?;
+        let memory: BotMemory = serde_json::from_value(
+            json.get("memory")
+                .cloned()
+                .context("the bot memory has no memory")?,
+        )
+        .context("reading the bot memory")?;
+        self.tick = tick;
+        *self.shares.memory.borrow_mut() = memory;
+        if let Some(state) = json.get("state").filter(|state| !state.is_null()) {
+            let lua = &self.vm.lua;
+            route_state_value(lua, state)
+                .and_then(|state| lua.globals().set(ROUTE_STATE, state))
+                .map_err(|err| anyhow!("restoring the route's state: {err}"))?;
+        }
+        Ok(self)
+    }
+
+    /// Put a note in the bot's memory, as the route's `bot:remember` does.
+    pub fn remember(&self, key: &str, value: &str) {
+        self.shares
+            .memory
+            .borrow_mut()
+            .remember(key.to_string(), Some(value.to_string()));
+    }
+
     /// Whether a tick of the run saw story flag `sel` of `bank` (0 scenario,
     /// 1 common) become set.
     pub fn story_seen(&self, bank: usize, sel: u8) -> bool {
@@ -5853,6 +6030,58 @@ mod tests {
         assert_eq!(
             vm.lua.globals().get::<String>("RESULT").unwrap(),
             "2|0|4|1|34|statue|no|6|nil|7|plant|117|1|0.6|20D|2:38:1:169:pump|nil:9:1:161:clear|1:173:1:172:zombie:1"
+        );
+    }
+
+    /// A memory file keeps the route's state as data: the tables with
+    /// their integer and string keys, without the functions, the keys of
+    /// other kinds and a table inside itself.
+    #[test]
+    fn the_routes_state_round_trips_as_data() {
+        let lua = Lua::new();
+        let state: Value = lua
+            .load(
+                r#"
+                local state = {
+                    count = 3, ratio = 0.5, done = true, name = "hall",
+                    list = { "a", "b", [5] = "e" },
+                    nested = { deep = { [0x105] = { tries = 2 } } },
+                    job = function() end,
+                    [true] = "dropped",
+                }
+                state.loop = state
+                state.nested.back = state.nested
+                return state
+                "#,
+            )
+            .eval()
+            .unwrap();
+        let json = route_state_json(&state, &mut Vec::new()).unwrap();
+        let text = serde_json::to_string(&json).unwrap();
+        let back = route_state_value(&lua, &serde_json::from_str(&text).unwrap()).unwrap();
+        lua.globals().set("back", back).unwrap();
+        let told: String = lua
+            .load(
+                r#"
+                local keys = {}
+                for key in pairs(back) do keys[#keys + 1] = tostring(key) end
+                table.sort(keys)
+                return table.concat(keys, ",") .. " " .. back.count .. " " .. back.ratio .. " "
+                    .. tostring(back.done) .. " " .. back.name .. " " .. #back.list .. back.list[5]
+                    .. " " .. back.nested.deep[0x105].tries .. " " .. tostring(back.nested.back)
+                    .. " " .. math.type(back.count)
+                "#,
+            )
+            .eval()
+            .unwrap();
+        assert_eq!(
+            told,
+            "count,done,list,name,nested,ratio 3 0.5 true hall 2e 2 nil integer"
+        );
+        // Written the same whatever order the Lua table hands its keys in.
+        assert_eq!(
+            text,
+            serde_json::to_string(&route_state_json(&state, &mut Vec::new()).unwrap()).unwrap()
         );
     }
 

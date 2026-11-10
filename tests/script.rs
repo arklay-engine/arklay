@@ -650,6 +650,59 @@ fn bot_run_stops_at_its_tick_budget() {
     assert_eq!(out, "max_ticks\t3\n");
 }
 
+/// A bot that counts its ticks in the route's state, keeps a note on its
+/// second tick, and ends its run on its sixth with all it knows.
+const COUNTING_BOT: &[u8] = b"BOT_STATE = BOT_STATE or { count = 0, seen = { ticks = {} } }
+function on_bot_tick(bot)
+    local state = BOT_STATE
+    state.count = state.count + 1
+    state.seen.ticks[#state.seen.ticks + 1] = bot:tick()
+    state.job = function() end
+    if bot:tick() == 2 then
+        bot:remember('second', 'kept')
+    end
+    if bot:tick() >= 6 then
+        local memory = bot:memory()
+        bot:finish(string.format('count %d ticks %s second %s told %s job %s', state.count,
+            table.concat(state.seen.ticks, ','), tostring(memory.second),
+            tostring(memory.told), type(state.job)))
+    end
+end
+";
+
+#[test]
+fn a_bot_plays_on_from_a_memory_file() {
+    let dir = TempDir::new("bot-memory");
+    write_pack(&dir.join("game.akpak"), &[("bot/init.lua", COUNTING_BOT)]);
+    let out = success(&script(
+        &dir,
+        &lenient(
+            r#"
+        load_game_pack("game.akpak")
+        load_room("100")
+        bot_start({ log = false })
+        tick(3)
+        bot_memory("memory.json")
+        load_room("100")
+        bot_start({ log = false, memory = "memory.json", remember = { told = "yes" } })
+        local ticks = tick_until(function() return (bot_finished()) end, 20)
+        print(ticks, select(2, bot_finished()))
+        local run = bot_run({ log = false, max_ticks = 20 })
+        print(run.ticks, run.finish_reason)
+        "#,
+        ),
+        &[],
+    ));
+    // The second run starts at the first's fourth tick, with its state (but
+    // not the function in it) and its note; the third starts from nothing
+    // and takes all six ticks, without the note the second was told.
+    assert_eq!(
+        out,
+        "3\tcount 6 ticks 1,2,3,4,5,6 second kept told yes job function\n\
+         6\tcount 6 ticks 1,2,3,4,5,6 second kept told nil job function\n"
+    );
+}
+
 #[test]
 fn the_bot_calls_fail_with_a_message() {
     let dir = TempDir::new("bot-errors");
@@ -680,6 +733,18 @@ fn the_bot_calls_fail_with_a_message() {
         (
             "load_game_pack('plain.akpak') load_room('100') bot_start()",
             "bot",
+        ),
+        (
+            "load_game_pack('game.akpak') load_room('100') bot_memory('memory.json')",
+            "no bot is attached",
+        ),
+        (
+            "load_game_pack('game.akpak') load_room('100') bot_start({ memory = 'none.json' })",
+            "reading the bot memory none.json",
+        ),
+        (
+            "load_game_pack('game.akpak') load_room('100') bot_start({ remember = { a = {} } })",
+            "`a` of `remember` is a table",
         ),
     ] {
         assert_failure(&script(&dir, &lenient(source), &[]), needle);

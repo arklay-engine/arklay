@@ -521,6 +521,23 @@ impl Driver {
             start.invincible,
         )
         .map_err(engine_error)?;
+        if let Some(path) = &start.memory {
+            let json = std::fs::read_to_string(path)
+                .with_context(|| format!("reading the bot memory {path}"))
+                .and_then(|text| {
+                    serde_json::from_str(&text)
+                        .with_context(|| format!("parsing the bot memory {path}"))
+                })
+                .map_err(engine_error)?;
+            if let Some(runtime) = app.bot.take() {
+                app.bot = Some(runtime.with_memory(json).map_err(engine_error)?);
+            }
+        }
+        if let Some(runtime) = app.bot.as_ref() {
+            for (key, value) in &start.remember {
+                runtime.remember(key, value);
+            }
+        }
         app.unbounded_cutscene_skip = true;
         if let Mode::Play(session) = &mut app.mode {
             session.cutscene_skip_burst = None;
@@ -665,6 +682,10 @@ struct BotStart {
     params: Vec<(String, String)>,
     invincible: bool,
     log: bool,
+    /// A memory file an earlier run wrote with `bot_memory`, to start from.
+    memory: Option<String>,
+    /// Notes to put in the bot's memory before its first tick.
+    remember: Vec<(String, String)>,
 }
 
 impl BotStart {
@@ -678,6 +699,8 @@ impl BotStart {
         let params: Option<Table> = options.get("params")?;
         let invincible: Option<bool> = options.get("invincible")?;
         let log: Option<bool> = options.get("log")?;
+        let memory: Option<String> = options.get("memory")?;
+        let remember: Option<Table> = options.get("remember")?;
         let risk = risk.unwrap_or(bot::DEFAULT_RISK);
         if !(0.0..=1.0).contains(&risk) {
             return Err(mlua::Error::RuntimeError(format!(
@@ -686,11 +709,14 @@ impl BotStart {
         }
         // Sorted by name, so the run does not depend on the table's order;
         // the pack's parameter file checks the names and values.
-        let mut pairs = Vec::new();
-        if let Some(params) = params {
-            for pair in params.pairs::<String, Value>() {
+        let strings = |option: &str, table: Option<Table>| -> mlua::Result<Vec<(String, String)>> {
+            let mut pairs = Vec::new();
+            let Some(table) = table else {
+                return Ok(pairs);
+            };
+            for pair in table.pairs::<String, Value>() {
                 let (name, value) = pair.map_err(|err| {
-                    mlua::Error::RuntimeError(format!("{function}: option `params`: {err}"))
+                    mlua::Error::RuntimeError(format!("{function}: option `{option}`: {err}"))
                 })?;
                 let value = match value {
                     Value::String(text) => text.to_string_lossy(),
@@ -698,22 +724,25 @@ impl BotStart {
                     Value::Integer(number) => number.to_string(),
                     other => {
                         return Err(mlua::Error::RuntimeError(format!(
-                            "{function}: parameter `{name}` is a {}, not a string",
+                            "{function}: `{name}` of `{option}` is a {}, not a string",
                             other.type_name()
                         )));
                     }
                 };
                 pairs.push((name, value));
             }
-        }
-        pairs.sort();
+            pairs.sort();
+            Ok(pairs)
+        };
         Ok(Self {
             risk,
             goal_room,
             seed,
-            params: pairs,
+            params: strings("params", params)?,
             invincible: invincible.unwrap_or(false),
             log: log.unwrap_or(true),
+            memory,
+            remember: strings("remember", remember)?,
         })
     }
 }
@@ -1392,6 +1421,20 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                 driver.bot_report(outcome)
             })?;
             from_json(lua, &report)
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "bot_memory",
+        lua.create_function(move |_lua, path: String| {
+            with(&shared, |driver| {
+                let json = driver.bot()?.memory_json().map_err(engine_error)?;
+                let text = serde_json::to_string(&json).map_err(mlua::Error::external)?;
+                std::fs::write(&path, text).map_err(|err| {
+                    mlua::Error::RuntimeError(format!("bot_memory: writing {path}: {err}"))
+                })
+            })
         })?,
     )?;
 
