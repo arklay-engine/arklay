@@ -53,6 +53,9 @@ local OPEN_TIMEOUT = 5 * SECOND
 local STEP_TIMEOUT = 90
 local JOB_TIMEOUT = 40 * SECOND
 local SETTLE_TIMEOUT = 4 * SECOND
+-- Ticks the controls must stay free after a key item went in before the
+-- job hands the pad back (the settle stage).
+local USE_CALM = SECOND // 3
 local EXAMINE_YAW_LOW = BotConst.EXAMINE_YAW.low
 local EXAMINE_YAW_HIGH = BotConst.EXAMINE_YAW.high
 local DOOM_BOOK_2 = BotConst.DOOM_BOOK_2
@@ -565,7 +568,21 @@ function BotMenu.step(bot)
         local scene = bot:scene()
         local other_scene = scene.film or scene.transition or scene.skippable
             or scene.cutscene_skip or scene.pickup or scene.message_takes_input
-        if scene.controllable or other_scene or job.stage_ticks > SETTLE_TIMEOUT then
+        if scene.controllable then
+            job.calm = (job.calm or 0) + 1
+        else
+            job.calm = 0
+        end
+        -- An item used where the room takes it: the room reacts a tick
+        -- after the menu has closed, with a short freeze, and a menu
+        -- opened in that tick loses the reaction while the item is spent.
+        -- So the job holds the pad until the controls have stayed free for
+        -- USE_CALM ticks or a scene comes up. 509's zombies opened the
+        -- equip menu 21 ticks after an MO disk went in, at the tick the
+        -- computer would have printed pass code 01: the disk was gone and
+        -- the code never came.
+        local calm = (job.kind == "use" and job.ok) and USE_CALM or 1
+        if job.calm >= calm or other_scene or job.stage_ticks > SETTLE_TIMEOUT then
             finish(bot, job)
             return false
         end

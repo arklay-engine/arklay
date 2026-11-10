@@ -84,7 +84,8 @@
 -- A goal that fails is marked with the inventory it failed with; it is tried
 -- again (at most MAX_ATTEMPTS times; a key or <use> item without limit for
 -- a full inventory) once the inventory changes. A <use>
--- that failed in its room is retried there, never travelled to.
+-- that failed in its room is travelled to again once its mark has lifted
+-- (a failed approach only from another side).
 --
 -- The loop rule. Real progress is a change of the rooms entered, the items
 -- taken, the doors unlocked or the inventory, or a puzzle step done. Without
@@ -2380,7 +2381,14 @@ local function choose(bot)
             unreachable_here = true
         end
     end
-    if unreachable_here then
+    -- Not while a remote target is pursued and a passage check already
+    -- moved the bot on this entry: the part left behind waits for a later
+    -- entry, and the way out does its own passage check (leave). 207's
+    -- stairs took the bot down toward the door to 10B, the unvisited door
+    -- to 20B upstairs sent it straight back up, the door below was then
+    -- unreachable, and the sun crest's trip was marked looping for good.
+    local moved = plan().target and next((plan().stairs or {})[room] or {}) ~= nil
+    if unreachable_here and not moved then
         local stair = passage_goal(bot, room)
         if stair then
             return stair
@@ -2902,10 +2910,16 @@ local function choose(bot)
         -- one (m.bad_from): 507's computer, entered from 50C, is behind a
         -- wall, and the sandwich and rope=leave routes looped in 505 with
         -- pass code 02 never entered.
+        -- Any other mark that has lifted (blocked: the inventory changed,
+        -- or the empty-frontier retry forgave it) makes the use a trip
+        -- again, except a failed approach, which only the side retry
+        -- tries again. 509's computer timed out while its zombies held
+        -- the bot with no rounds; the empty frontier forgave it with an
+        -- MO disk still held, but no trip went back and the run looped in
+        -- 505 with pass code 01 never entered.
         local side = side_retry(m)
         if fact.room ~= room and bot:has_item(fact.item) and BotPuzzle.use_open(bot, fact)
-            and (not m or side or ((m.reason:find("inventory full", 1, true)
-                    or m.reason:find("looping", 1, true))
+            and (not m or side or (not m.reason:find("approach", 1, true)
                 and not blocked(bot, "use", fact.room, fact.slot, true))) then
             local steps = route(bot, world, room, fact.room, side and m.bad_from or nil)
             local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)

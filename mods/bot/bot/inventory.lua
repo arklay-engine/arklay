@@ -186,7 +186,8 @@ BotInventory.SOFT_HEALS = 1
 -- prefers it), then, only to make room for a key or <use> item, boxed or
 -- on the frontier (ctx.swap), a held firearm other than the equipped one
 -- and the loadout, fewest rounds first (ctx.spare_guns: {[id] = rounds}),
--- the staple (the handgun, ctx.staple_guns) last.
+-- the staple (the handgun, ctx.staple_guns) last; then, for a key or <use>
+-- item or a heal, rounds kept only for a gun's other loading.
 function BotInventory.soft_deposits(items, ctx, needed)
     local out = {}
     if not ctx.full or (needed or 0) == 0 then
@@ -260,13 +261,19 @@ function BotInventory.soft_deposits(items, ctx, needed)
     -- For a heal (ctx.heal_swap), last: rounds kept only for a gun's other
     -- loading (no held gun's own ammunition): the flame rounds held for
     -- the launcher, which still had its own (30C, every slot used and the
-    -- spray in the box).
-    for _, row in ipairs(ctx.heal_swap and items or {}) do
+    -- spray in the box). For a key or <use> item (ctx.swap), the rounds
+    -- for the other loading only, not the ones a fight ahead prefers: 504
+    -- found the slots full of the equipped launcher with its own rounds,
+    -- the handgun it keeps behind it, the clips, one heal, two MO disks
+    -- and the acid rounds, so the key to 50C never fit, and the computers
+    -- behind it were never read.
+    for _, row in ipairs((ctx.heal_swap or ctx.swap) and items or {}) do
         if #out >= needed then
             return out
         end
         local why = row.item ~= 0 and row.kind == "ammo" and BotInventory.keep(row, ctx)
-        if (why == "a fight ahead prefers it" or why == "rounds for the gun's other loading")
+        if (why == "rounds for the gun's other loading"
+                or (ctx.heal_swap and why == "a fight ahead prefers it"))
             and not (ctx.ammo and ctx.ammo[row.item]) then
             out[#out + 1] = row
         end

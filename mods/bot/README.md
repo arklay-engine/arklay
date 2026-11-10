@@ -221,7 +221,13 @@ Priorities, highest first:
    fact names, since a script may start the climb from an event. One press
    per slot per room entry, nearest first. A slot that is a door to
    another room is no passage (307's ladder up to 302 was climbed on
-   every entry while its door to 30B was out of reach). A puzzle step
+   every entry while its door to 30B was out of reach). While a remote
+   target is pursued and a passage check already moved the bot on this
+   entry, the part left behind waits for a later entry; the way out still
+   takes its own passage check (step 6). 207's stairs took the bot down
+   toward the door to 10B, the unvisited door to 20B upstairs sent it
+   straight back up, the door below was then out of reach, and the sun
+   crest's trip was marked looping for good. A puzzle step
    done here lifts this room's door marks of a room event's message too
    (302's battery powers the elevator whose call showed message 132).
    A door press whose message turns into a yes/no prompt is the door's own
@@ -263,8 +269,13 @@ Priorities, highest first:
    ([Ammunition](#ammunition)). The lowest cost wins and a remote winner becomes
    the pursued target; the pick is logged as `way out: <why>, cost N`. An
    exit with no planned approach from where the bot stands (another level
-   of the room) gets a passage check first. A `<use>` that failed in its
-   room is retried there, never travelled to. A held item whose `<use>`
+   of the room) gets a passage check first. A `<use>` whose approach
+   failed in its room is retried there, or travelled to from another side
+   (the side retry); any other mark on a `<use>` (it timed out, or went in
+   and left its done flag clear) makes it a trip again once the mark lifts
+   (the inventory changed, or the empty-frontier retry forgave it): 509's
+   computer timed out while its zombies held the bot with no rounds, and
+   with the mark forgiven and an MO disk held no trip went back. A held item whose `<use>`
    waits only on its `after` flag (not done, its `until` flag clear) is a
    trip to a door ride that sets that flag, at the same 280 reach off
    (`door slot N of R, which sets the flag of use ...`): every door goal
@@ -772,6 +783,12 @@ between pulses), each step waiting on `bot:menu()`:
 7. `close`: cancel out of the submenu and the panel (a key item's use closes
    the menu itself), then `settle` waits through the closing fade and the
    room's post-menu freeze without pressing, so no press leaks into the room.
+   After an item use that went in, the job holds the pad until the
+   controls have stayed free for `USE_CALM` (10) ticks or a scene comes
+   up: the room reacts to the item a tick after the menu closes, and a
+   menu opened then loses the reaction while the item is spent. 509's
+   zombies opened the equip menu 21 ticks after an MO disk went in; the
+   disk was gone and pass code 01 never came.
 
 The stats JSON's `menu` block counts, from the engine's menu state alone:
 `opens` (inventory panel opened), `viewer_opens` (the same menu slot under a
@@ -830,7 +847,12 @@ drives the box screen with pad input only.
   common) after every other, never one the loadout or a `<use>` needs
   (408's guardhouse key found the slots full of the equipped shotgun's
   kit, the loadout's launcher and the handgun). The rearm brings the
-  handgun back once its clips are held.
+  handgun back once its clips are held. Last, rounds kept only for a
+  held gun's other loading (none of a held gun's own ammunition) go in,
+  for a key or `<use>` item, and for a heal also the rounds a fight ahead
+  prefers: 504 found the slots full of the equipped launcher and its own
+  rounds, the handgun kept behind it, the clips, one heal, two MO disks
+  and the acid rounds, and the key to 50C never fit.
 - Heal to make room (`BotInventory.heal_for_room`, `use heal 0xNN to make
   room`): every slot used, a known pickup in this room the run needs (a
   key, a `<use>` item, or the ammunition of a gun held or boxed) that
