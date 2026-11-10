@@ -172,6 +172,64 @@ function tick_until(condition, max) end
 ---@return string
 function mode() end
 
+-- # The bot
+
+---A pack's bot is the `bot/**.lua` route of one of its mod layers (the
+---checked-in one is `mods/bot`): it plays the game through the pad, as a
+---player does. A driver script attaches it to a booted session and lets it
+---play; `mods/bot/routes/` holds one script per route through the game.
+---
+---```lua
+---load_game_pack("re1.akpak", { mods = { "mods/bot" }, quick_turn = true })
+---new_game({ character = 1 })
+---local run = bot_run({ params = { richard = "leave" }, max_ticks = 400000 })
+---print(json(run.score))
+---```
+---
+---While a bot is attached and still playing, it owns the pad: `hold` and
+---`press` do nothing until it ends its run. A scene it skips runs to its
+---end in one tick, so the run is the same with a window and without. A
+---headless run draws no frames while the bot is attached (`capture` still
+---draws the one it writes). The bot's log (`[bot] tick ...`) goes to stderr.
+
+---Attach the pack's bot to the running session. It plays from the next
+---`tick` on, until it ends its run (see [`bot_finished`](#bot_finished)).
+---@param options? { params?: table<string, string>, risk?: number, seed?: integer, goal_room?: string, invincible?: boolean, log?: boolean } `params` are the story decisions to take, by name (the pack's `params/<game>.xml` declares them; an unknown name or value is an error); `risk` is how much danger the planner accepts, `0..=1` (default 0.25); `seed` varies the game's random stream, the same in every run with that seed (default: the game's own stream); `goal_room` ends the run on entering that room (e.g. `"20D"`); `invincible` turns on the INVINCIBLE cheat, to time a route without deaths; `log = false` drops the bot's log. An unknown key is an error.
+function bot_start(options) end
+
+---Whether the attached bot's run has ended: the bot finished (the game is
+---completed, its goal room is entered, or it is stuck) or the player died
+---with no save to load.
+---@return boolean finished
+---@return string? reason The bot's own reason, when the run has ended.
+function bot_finished() end
+
+---The attached bot's report so far, as `--bot-stats` writes it. `score`
+---holds what a playthrough is judged by: `completed` and the `ending` (the
+---game's rows 1 to 7, once the escape completed the game), `ticks`,
+---`game_time` (the game's clear time, `h:mm:ss`), `hits` (health drops of
+---more than 2), `deaths`, `room_loads`, and `compute`, the bot's cost per
+---tick in microseconds (`min_us`, `avg_us`, `p99_us`, `max_us`, and
+---`over_ms`, the ticks over 1, 4, 8, 16 and 33 ms). The rest is the detail:
+---`outcome`, `finish_reason`, `room_path`, `health`, `combat`, `movement`,
+---`menu`, `activity`, `room_hits` and more.
+---@return table report
+function bot_stats() end
+
+---Whether a story flag became set at any tick of the attached bot's run,
+---whatever cleared it later: the scenes the run reached. The report lists
+---them all as `story.scenario` and `story.common`.
+---@param bank integer `0` scenario or `1` common.
+---@param bit integer
+---@return boolean
+function bot_story(bank, bit) end
+
+---Attach the bot as [`bot_start`](#bot_start) does and tick until its run
+---ends or `max_ticks` ticks have run.
+---@param options? { params?: table<string, string>, risk?: number, seed?: integer, goal_room?: string, invincible?: boolean, log?: boolean, max_ticks?: integer, stats?: string } `bot_start`'s options, and: `max_ticks`, the tick budget (default 100000; a whole game takes about 200000); `stats`, a file to write the report to as JSON.
+---@return table report The report of [`bot_stats`](#bot_stats); its `outcome` is `finished`, `death` (dead with no save) or `max_ticks`.
+function bot_run(options) end
+
 -- # Output
 
 ---Write the arguments to stdout, separated by tabs, with a newline: the

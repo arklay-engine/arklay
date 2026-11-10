@@ -37,6 +37,12 @@ target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bo
 target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bot --bot-headless
 ```
 
+`mods/bot/routes/` holds one driver script per route through the game
+(`arklay script [--headless] mods/bot/routes/re1_jill_best_ending.lua
+PACK`): each boots a new game, sets the [story parameters](#story-parameters)
+of its route and plays to the ending, and `scripts/bot-routes.py` plays
+them all and tabulates the scores. See `mods/bot/routes/README.md`.
+
 A bot run saves at typewriters through the game's own save screen. Without
 an explicit `--save-dir` it writes to a fresh directory of its own,
 `<temp>/arklay-bot-saves-<pid>`, so it never overwrites the player's saves.
