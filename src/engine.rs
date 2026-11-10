@@ -3172,8 +3172,9 @@ impl GameSession {
     /// and goes to mode 2, whose ticks count to step 5's; case 5 on R+1 puts
     /// `fg_stop` back (`0x6897C8`) and play resumes.
     ///
-    /// Case 1 also waits for the message's bit 7 and an idle fade 0; both
-    /// hold at room 200's typewriter, so the step here doesn't test them.
+    /// Case 1 also waits until `fg_message`'s bit 7 is clear and fade 0 has
+    /// finished; both hold at room 200's typewriter, so the step here
+    /// doesn't test them.
     fn step_re2_save(&mut self) {
         self.re2_save = match self.re2_save {
             Some(Re2Save::Requested) => Some(Re2Save::Open(1)),
@@ -5941,7 +5942,11 @@ impl GameSession {
                     );
                 }
             }
-            DebugMenuEvent::SaveGame => self.open_typewriter_save(pack, false),
+            // Not while a typewriter's Yes hands the room to its own screen.
+            DebugMenuEvent::SaveGame if self.re2_save.is_none() => {
+                self.open_typewriter_save(pack, false);
+            }
+            DebugMenuEvent::SaveGame => {}
             DebugMenuEvent::ItemBox => self.begin_item_box_open(pack),
             DebugMenuEvent::ClearGame(id) => self.clear_game_requested = Some(id),
         }
@@ -6649,6 +6654,11 @@ impl GameSession {
             self.save_screen = None;
             self.load_from_system_menu = false;
             self.load_requested = Some(request);
+            // The screen has ended: a load that boots replaces this session,
+            // and one that fails hands the room back as a close does.
+            if self.re2_save == Some(Re2Save::Screen) {
+                self.re2_save = Some(Re2Save::Closed);
+            }
             return;
         }
         if let Some(outcome) = self
@@ -23627,6 +23637,65 @@ mod tests {
                 .tick(&pack, start, player::Input::default(), false)
                 .unwrap();
             assert_eq!(session.menu_request.is_some(), taken, "{back:?}");
+        }
+    }
+
+    /// A save screen that asks for a load.
+    struct LoadingSaveScreen;
+
+    impl crate::ui::Screen for LoadingSaveScreen {
+        fn open(&mut self, _: &mut UiContext<'_>) -> Result<()> {
+            Ok(())
+        }
+
+        fn update(&mut self, _: &UiContext<'_>, _: UiInput) -> ScreenResult {
+            ScreenResult::Done(ScreenAction::LoadGame { slot: 0 })
+        }
+
+        fn draw(&mut self, _: &UiContext<'_>, _: &mut crate::render::Framebuffer) {}
+    }
+
+    impl ui::save_load::SaveScreen for LoadingSaveScreen {
+        fn take_outcome(&mut self) -> Option<ui::save_load::SaveOutcome> {
+            None
+        }
+    }
+
+    /// A load from the typewriter's screen ends the screen: if the app can't
+    /// boot the save, the room still comes back through the return.
+    #[test]
+    fn a_load_from_the_typewriters_screen_hands_the_room_back() {
+        let dir = TempDir::new();
+        let (pack, mut session) = re2_typewriter_session(&dir);
+        session.save_screen = Some(Box::new(LoadingSaveScreen));
+        session.re2_save = Some(Re2Save::Screen);
+        session.tick_save_screen(&pack, UiInput::default());
+        assert!(session.save_screen.is_none());
+        assert!(session.load_requested.is_some());
+        assert_eq!(session.re2_save, Some(Re2Save::Closed));
+    }
+
+    /// START is refused through the hand-off, and taken on R+1, whose
+    /// game mode 5 clears it before the test.
+    #[test]
+    fn start_is_refused_through_the_hand_off() {
+        let start = UiInput {
+            start: true,
+            ..UiInput::default()
+        };
+        for (save, taken) in [
+            (Re2Save::Open(2), false),
+            (Re2Save::Screen, false),
+            (Re2Save::Return, true),
+        ] {
+            let dir = TempDir::new();
+            let (pack, mut session) = re2_typewriter_session(&dir);
+            session.game.message_flags |= START_MESSAGE_BITS;
+            session.re2_save = Some(save);
+            session
+                .tick(&pack, start, player::Input::default(), false)
+                .unwrap();
+            assert_eq!(session.menu_request.is_some(), taken, "{save:?}");
         }
     }
 
