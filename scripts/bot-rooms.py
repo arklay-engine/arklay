@@ -32,8 +32,8 @@ play     Replay the scenes of the rooms (-r, repeatable; `all` is every
 
 play prints one row per room (or per scene with one room) and the totals:
 replays, how many left the room (`out`) and by the door the recorded game
-took (`same`), and over those that left the mean ticks; hits, damage, deaths
-and shots over all of them. Results go to target/bot-rooms/play-<timestamp>/.
+took (`same`), and over those that left the mean ticks; hits, damage, deaths,
+shots and the shots that landed (a monster's health drops) over all of them. Results go to target/bot-rooms/play-<timestamp>/.
 
 Common options:
   -p, --pack PATH  the RE1 game pack (default $BOT_PACK, else
@@ -253,10 +253,11 @@ def play(args):
         return (f"{name:42} {len(rows):>4} {len(left):>4} {same:>4} {ticks:>7.0f} "
                 f"{sum(row['hits'] for row in rows):>5} {sum(row['damage'] for row in rows):>6} "
                 f"{sum(1 for row in rows if row['died']):>6} "
-                f"{sum(row.get('shots', 0) for row in rows):>5}")
+                f"{sum(row.get('shots', 0) for row in rows):>5} "
+                f"{sum(row.get('landed', 0) for row in rows):>6}")
 
     lines = [f"{'room' if by_room else 'scene':42} {'runs':>4} {'out':>4} {'same':>4} {'ticks':>7} "
-             f"{'hits':>5} {'damage':>6} {'deaths':>6} {'shots':>5}"]
+             f"{'hits':>5} {'damage':>6} {'deaths':>6} {'shots':>5} {'landed':>6}"]
     lines += [line(name, rows) for name, rows in sorted(groups.items())]
     lines.append(line("total", results))
     by_kind = {}

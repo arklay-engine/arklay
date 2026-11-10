@@ -497,7 +497,9 @@ impl BotStats {
         self.first_health.get_or_insert(health);
         self.last_health = Some(health);
         self.min_health = Some(self.min_health.map_or(health, |m| m.min(health)));
-        let dead = snapshot.scene.dead || health <= 0;
+        // The escape scene ends the game through the death machine (its
+        // scripted variant): that is the ending, not a death.
+        let dead = (snapshot.scene.dead || health <= 0) && !snapshot.scene.ending;
         if dead && !self.was_dead {
             self.deaths += 1;
         }

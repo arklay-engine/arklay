@@ -859,7 +859,7 @@ end
 -- hit reaction (a knowledge <react>): when the reaction ends, and whether
 -- its sidestep follows (its `hits`th hit inside `window` ticks of the first,
 -- counted as the reaction ends: enemy/06 behavior_dispatch and act_swipe).
-function BotTactics.note_hit(s, entry, now)
+function BotTactics.note_hit(s, entry, now, hit_state)
     local react = entry and entry.react
     if not react then
         return
@@ -871,6 +871,9 @@ function BotTactics.note_hit(s, entry, now)
     end
     r.hits = r.hits + 1
     r.clear = now + react.stun
+    -- The reaction the stun is known for shows this hit state to its end.
+    s.react_state = hit_state
+    s.react_stun = r.clear
     if react.hits and r.hits >= react.hits and r.clear - r.first < react.window then
         r.clear = r.clear + react.evade
         s.react = nil
@@ -883,10 +886,19 @@ end
 -- when it would land inside it, nil when the bot does not know (no <react>,
 -- no `lands` for the weapon, or no reaction running). The hunter swipes
 -- the tick after its reaction and the claw lands six ticks on: a shot
--- pressed only once the reaction is over lands with the claw.
-function BotTactics.fire_early(s, wrow, now)
+-- pressed only once the reaction is over lands with the claw. Only while
+-- the monster shows the hit state it took the hit with (`hit_state`, its
+-- now): a zombie that falls instead of staggering changes it within a tick
+-- or two (its poise spent: 0 at once; knocked down from a crawl: 1 for
+-- 56 ticks), and a shot timed to the stagger's end met the floor, 311 shots
+-- of 2904 in the zombie rooms.
+function BotTactics.fire_early(s, wrow, now, hit_state)
     local clear = s.react_clear
     if not clear or not (wrow and wrow.lands) or now > clear + 1 then
+        return nil
+    end
+    if now < s.react_stun and hit_state ~= s.react_state then
+        s.react_clear = nil
         return nil
     end
     -- The reaction's last tick still shows no aim bit: land two past it.
@@ -2680,7 +2692,7 @@ function BotTactics.step(bot, scene, player)
     if s.last_health and target.health < s.last_health then
         bot:log(string.format("combat hit slot=%d health=%d->%d",
             target.slot, s.last_health, target.health))
-        BotTactics.note_hit(s, entry, s.now)
+        BotTactics.note_hit(s, entry, s.now, target.hit_state)
         -- A fight that lands hits is not timed out: 40C's plant, shot from
         -- past its vines' reach, took the shotgun's hits past MAX_TICKS,
         -- and the bot walked back into the vines between the fights.
@@ -2924,7 +2936,7 @@ function BotTactics.step(bot, scene, player)
     -- (BotTactics.fire_early). And none at a target out of sight: 308's
     -- hunter stepped behind the corner as the aim came up, the shell hit
     -- the wall and its pump held the bot for the swipe.
-    local early = BotTactics.fire_early(s, wrow, s.now)
+    local early = BotTactics.fire_early(s, wrow, s.now, target.hit_state)
     if early == true then
         reacting = false
         pose = pose or s.held_pose
