@@ -159,7 +159,11 @@ Priorities, highest first:
    anything else (507's gas drains health until the room changes). While
    a `<leave>` flag is still clear (`BotPuzzle.leave_ahead`) the heal
    threshold is `0.85 * max_health` and the puzzle waits as for a fight
-   (`not ready for the room's hazard`), so the gas finds the bot healed. An
+   (`not ready for the room's hazard`), so the gas finds the bot healed.
+   Such a readiness mark (a fight's or a hazard's) is no failure: it waits
+   for the inventory to change however often it was tried, and never runs
+   out of attempts (507's gas step was held three times in one entry, each
+   pickup there a new inventory, and given up for good). An
    `escape="yes"` leave is a chase, not a drain, and asks no heal-up: its
    flag is set only while the chase runs (30F's boulder). Then
    the room puzzle: the next `<interact>`/`<camera>`/`<push>` fact in
@@ -220,6 +224,11 @@ Priorities, highest first:
    every entry while its door to 30B was out of reach). A puzzle step
    done here lifts this room's door marks of a room event's message too
    (302's battery powers the elevator whose call showed message 132).
+   A door press whose message turns into a yes/no prompt is the door's own
+   question, not a room event's refusal: once it is answered the goal waits
+   5 seconds (`DOOR_PROMPT_WAIT`) for the room change before it fails as
+   one. 307's ladder asks before the climb (message 130); marked after
+   every climb, it cut the caves off from 302 in the mental map.
 6. The way out. A pursued target keeps its course: the bot takes the first
    door of the route to it until it is reached, real progress (a room
    entered for the first time, an item taken, a door unlocked or newly made a
@@ -255,7 +264,19 @@ Priorities, highest first:
    the pursued target; the pick is logged as `way out: <why>, cost N`. An
    exit with no planned approach from where the bot stands (another level
    of the room) gets a passage check first. A `<use>` that failed in its
-   room is retried there, never travelled to. `planner.lua`'s header has
+   room is retried there, never travelled to. A held item whose `<use>`
+   waits only on its `after` flag (not done, its `until` flag clear) is a
+   trip to a door ride that sets that flag, at the same 280 reach off
+   (`door slot N of R, which sets the flag of use ...`): every door goal
+   notes the `<use>` facts' `after` flags as it begins, and the room
+   change after it records each one it changed as that door's effect
+   (`door effect: door slot 0 of 302 sets flag 0:49`); a later ride that
+   leaves the flag unchanged forgets it (`BotPlanner.after_door`). Flags a
+   ride toggles both ways are preconditions the bot can restore: 301's
+   refill waits for the north elevator to stand at 300, which the ride up
+   from 302 sets and any trip riding it down clears; before this the
+   refill closed on the way to 403's box, the crank stopped counting as
+   needed, and five seeds of 24 ended on an empty frontier. `planner.lua`'s header has
    the formula.
 7. Nothing left: every approach or time-out mark under 3 attempts gets one
    more try (the bot may now stand elsewhere). Within 30 seconds of
@@ -781,6 +802,10 @@ drives the box screen with pad input only.
   kept, and it is withdrawn only once one of those stages is entered: the
   boxes share one store, so it waits in one and comes out at 502's box.
   Carried, two disks and the crank filled the slot 306's Doom Book needed.
+  A `<use>` whose `after` flag a learned door ride sets counts as open
+  here (`BotPlanner.after_door`, step 6 of the planner): the crank stays
+  needed, and comes out of the box, while 301's refill waits for the
+  elevator to be ridden back up.
 - Soft deposits, when a slot is still short: heals beyond the first stack
   (only for a key, a `<use>` item or the loadout, never for ammunition
   alone: a first aid spray boxed for acid rounds left the bot one herb
@@ -1116,7 +1141,7 @@ walk paths, have no children, and are an error in a format-1 file:
 | `<answer>` | `choice` (`yes` or `no`), any of `slot`, `bank`+`bit` and `message`, optional `label` | At the yes/no prompt opened by AOT `slot`, while flag `bank`/`bit` is set, and/or showing message id `message` (less the fast-reveal bit), choose `choice`; every given key must match. `message` tells apart prompts a scene opens with no press and no flag between them (308's Barry prompts 23, 24 and 25). At least one key is required; `bank` and `bit` go together. |
 | `<avoid>` | `slot`, `reason`, optional `bank`+`bit`+`while`, optional `unless_held` | The planner should not use AOT `slot`; `reason` is a non-empty note. With `bank`, `bit` and `while` (`set` or `clear`), only while that flag is in that state; remote planning reads every room's avoids (`bot:avoid_facts()`) and never heads for a door one holds shut, nor routes through it. With `unless_held`, not while that item is held (a swap: lift one item only while holding the one that goes in its place). |
 | `<push>` | `object`, `slot`, optional `direction` (and `clear="full"` or `until="stop"`) or `axis`, optional `bank` + `bit`, optional `after_bank` + `after_bit`, optional `reveals`, optional `label` | Push room object `object` (a `bot:objects()` slot) until its centre is in the middle half of AOT `slot`'s zone, usually an object-position probe. It is one step of the `<interact>` sequence, done while the object stays there. The push is cardinal: one axis at a time, standing behind the object (600, then 450, 400 and 300 units behind its face; on the face's middle, then a third of its half size to either side) and holding forward; an axis that stalls twice is given up for the other. With `direction` (`north` = +z, `south`, `east` = +x, `west`) the object is pushed off the zone instead: that way only, until its trailing face passes the zone's far quarter, or with `clear="full"` its far edge (an object pushed out of another one's way). With `until="stop"` it is pushed that way until it stalls against a wall, whatever the zone. Without a direction, `axis` (`x` or `z`) lines the centre up with the zone on that axis only. Such a step is also done once the zone is gone or the item it names was taken. With `bank` and `bit` (both or neither) the step is also done once that flag is set: a zone event that takes the object away (a statue that falls). A push the bot stops for a fight or a heal walks back behind the object before it measures a stall. With an `after` flag the step holds the sequence until that flag is set, as for `<interact>` (306's box waits for the crank). With `reveals` (the item AOT slot the puzzle makes live), a full inventory holds the step until a slot is free (306's box resets once the slab is cranked). |
-| `<use>` | `slot`, `item`, `bank`, `bit`, optional `done`, optional `after_bank` + `after_bit`, optional `until_bank` + `until_bit`, optional `label` | Use `item` (non-zero) from the menu while standing in AOT `slot`, a use-item probe; flag `bank`/`bit` set means done, or clear with `done="clear"`. With an `after` flag the use is open only while that flag is set, and with an `until` flag only while that flag is clear, so one item can take one zone twice (301's crank drains the pool, then fills it after Plant 42). A use whose menu closes by itself counts as done when the item stays held: the cranks are picked up with quantity 0 and never used up. A use that goes in but leaves its done flag clear is tried again at once, up to three times, for a piece that turns one step a use (30F's crank). |
+| `<use>` | `slot`, `item`, `bank`, `bit`, optional `done`, optional `after_bank` + `after_bit`, optional `until_bank` + `until_bit`, optional `label` | Use `item` (non-zero) from the menu while standing in AOT `slot`, a use-item probe; flag `bank`/`bit` set means done, or clear with `done="clear"`. With an `after` flag the use is open only while that flag is set, and with an `until` flag only while that flag is clear, so one item can take one zone twice (301's crank drains the pool, then fills it after Plant 42). While the `after` flag is clear and a door ride was seen to set it, the item stays needed and, once held, the ride is a trip (planner step 6). A use whose menu closes by itself counts as done when the item stays held: the cranks are picked up with quantity 0 and never used up. A use that goes in but leaves its done flag clear is tried again at once, up to three times, for a piece that turns one step a use (30F's crank). |
 | `<climb>` | `object`, `slot`, `bank`, `bit`, optional `done`, optional `label` | Take an item off a high shelf, or press an event zone only reachable from on top (507's air shaft): push room object `object` until it covers AOT `slot`'s zone (and has stalled against the wall at least once; an object an earlier `<push>` step of the entry left over the zone is climbed at once), stand behind its face away from the zone, press action to climb it, press facing the zone to take the item, then face away and press to climb down. A climb whose flag is not a bank-7 item bit needs no free inventory slot. The engine's vault only starts facing along the object's yaw, so the face away from the zone must be that one. It is one step of the `<interact>` sequence, done once flag `bank`/`bit` reads done (`done="clear"` for a bank-7 item bit) and the player is off the object. |
 | `<watch>` | `bank`, `bit`, optional `after_bank` + `after_bit`, optional `label` | Let a skippable scene play instead of skipping it while flag `bank`/`bit` is clear and, if given, the `after` flag is set: a scene a skip breaks. |
 | `<door>` | `slot`, `via` (another slot), optional `bank` + `bit` + `while`, optional `label` | Door AOT `slot` is parked at the room origin (or, with a gate, held elsewhere) until the player presses AOT `via`, whose event sets the door around the player. With a gate the fact holds only while flag `bank`/`bit` is `while` (`set` or `clear`), and the door is routed through `via` even when it is not at the origin. Routes may pass through it (any other door zone at the origin is a scripted transfer and never routed), and leaving by it presses `via`; the room's `<answer>` settles a prompt. The via goal is done once the room changes or the fact no longer holds (305's stairs event leaves the player beside the door). A body-probe `via` (flag `0x40`, as 302's elevator call) is walked into instead of pressed, and a `via` zone is never taken for a passage check. Read by `bot:door_facts()` for every room. |

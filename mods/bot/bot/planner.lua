@@ -211,6 +211,9 @@ local MONSTER_EVERY = C.SECOND // 2
 -- only once nothing else is left, and not before it has waited this long
 -- (doubled per attempt): the event may clear with time, on a room entry.
 local EVENT_WAIT = 60 * C.SECOND
+-- How long a door whose press asked a yes/no question has, after the
+-- question, to take the player out of the room (BotPlanner.note_message).
+local DOOR_PROMPT_WAIT = 5 * C.SECOND
 
 -- A room whose only ways out are doors parked at its origin (310's lift)
 -- may carry the player through one by itself once its event ends: with
@@ -1625,6 +1628,81 @@ end
 -- A <use> mark planned unreachable from the side the bot came in by
 -- (m.bad_from): the remote trip comes in another way, when the map has
 -- one (route's `bad_from`). Its attempts still count, so this ends.
+-- The door rides that set a <use> fact's `after` flag: rides[room|slot] =
+-- {[bank:bit] = the state the ride left the flag in}, learned on each room
+-- change from the flags as the door goal began (BotPlanner.note_door_effects). A
+-- flag that toggles both ways is a precondition the bot can restore, not
+-- one only the story sets: 302's elevator ride up sets the flag 301's
+-- refill waits on, and the ride back down clears it.
+local function flag_key(bank, bit)
+    return bank .. ":" .. bit
+end
+
+-- The `after` flags of the <use> facts as they stand now, for a door goal
+-- to compare against once it has changed rooms.
+local function after_flags(bot)
+    local out = {}
+    for _, fact in ipairs(bot:use_facts()) do
+        if fact.after_bank ~= nil then
+            out[flag_key(fact.after_bank, fact.after_bit)] = bot:flag(fact.after_bank, fact.after_bit)
+        end
+    end
+    return out
+end
+
+-- Learn what the ride through door `slot` of room `from_room` did to the
+-- flags in `before`: a flag it changed is the ride's effect; one a learned
+-- ride left unchanged from the other state is not (a misattributed change,
+-- or a door that no longer does it), so a ride is never sought for nothing
+-- twice.
+local function note_door_effects(p, bot, from_room, slot, before)
+    p.door_effects = p.door_effects or {}
+    local key = from_room .. "|" .. slot
+    local effects = p.door_effects[key] or {}
+    for flag, was in pairs(before) do
+        local bank, bit = flag:match("^(%d+):(%d+)$")
+        local now = bot:flag(tonumber(bank), tonumber(bit))
+        if now ~= was then
+            if effects[flag] ~= now then
+                bot:log(string.format("door effect: door slot %s of %s %s flag %s", slot, from_room,
+                    now and "sets" or "clears", flag))
+            end
+            effects[flag] = now
+        elseif effects[flag] ~= nil and effects[flag] ~= was then
+            effects[flag] = nil
+        end
+    end
+    p.door_effects[key] = next(effects) and effects or nil
+end
+
+-- The <use> fact `fact` waits only on its `after` flag (not done, its
+-- `until` flag clear), and a learned door ride sets that flag: the ride's
+-- room and door slot, the first by key, or nil. Its item is then still
+-- needed (BotInventory.context), and with the item held the ride is a
+-- trip (choose). Without this the refill of 301's pool was open only while
+-- the north elevator stood at 300: any trip that rode it down closed the
+-- use, the crank in the box stopped counting as needed, and nothing set the
+-- flag again (seeds 2, 5, 10, 16 and 19 ended on an empty frontier).
+function BotPlanner.after_door(bot, fact)
+    if fact.after_bank == nil or bot:flag(fact.after_bank, fact.after_bit)
+        or BotPuzzle.use_done(bot, fact)
+        or (fact.until_bank ~= nil and bot:flag(fact.until_bank, fact.until_bit)) then
+        return nil
+    end
+    local flag = flag_key(fact.after_bank, fact.after_bit)
+    local best = nil
+    for key, effects in pairs(plan().door_effects or {}) do
+        if effects[flag] == true and (not best or key < best) then
+            best = key
+        end
+    end
+    if not best then
+        return nil
+    end
+    local room, slot = best:match("^(.*)|(%d+)$")
+    return room, tonumber(slot)
+end
+
 local function side_retry(m)
     return m ~= nil and m.bad_from ~= nil and not m.permanent and m.attempts < MAX_ATTEMPTS
         and m.reason:find("every approach failed", 1, true) ~= nil
@@ -1670,6 +1748,16 @@ local function target_goal(bot, world, t)
         end
         if live and not blocked(bot, t.kind, t.room, t.slot, true) then
             return { kind = t.kind, room = t.room, slot = t.slot }
+        end
+        return nil
+    end
+    if t.kind == "setter" then
+        -- A door ride that sets a held item's <use> `after` flag
+        -- (BotPlanner.after_door): live while the use still waits on it.
+        local door_room, door_slot = BotPlanner.after_door(bot, t.fact)
+        if door_room == t.room and door_slot == t.slot and bot:has_item(t.fact.item)
+            and not blocked(bot, "door", t.room, t.slot, true) then
+            return { kind = "setter", room = t.room, slot = t.slot }
         end
         return nil
     end
@@ -2027,6 +2115,15 @@ local function choose(bot)
                 bot:remember(BotNav.fight_met_key(room, fight.enemy), "1")
             end
             mark(bot, "interact", room, BotPuzzle.step_key(fact), why)
+            if not ready then
+                -- A readiness hold is no failure: it waits for the
+                -- inventory to change however often it was tried (as a
+                -- full inventory does for a needed pickup). 507's gas step
+                -- was held three times in one entry, each pickup there a
+                -- new inventory, and was given up for good; back at 88/96
+                -- the bot never pushed the box, and pass code 02 never came.
+                plan().marks[mark_key("interact", room, BotPuzzle.step_key(fact))].needed = true
+            end
         end
     end
 
@@ -2576,6 +2673,11 @@ local function choose(bot)
             p.target = nil
             goal = nil
         end
+        if goal and goal.kind == "setter" and goal.room == room then
+            -- Here: the ride's door is a way out of this room (below).
+            p.target = nil
+            goal = nil
+        end
         if goal and goal.room == room and goal.kind == "door" then
             for _, row in ipairs(doors_here) do
                 if row.door.slot == goal.slot then
@@ -2611,7 +2713,8 @@ local function choose(bot)
             end
             steps = goal and goal.room ~= room
                 and (goal.kind == "use" or goal.kind == "deliver" or goal.kind == "fetch"
-                    or goal.kind == "fight" or goal.kind == "revisit" or usable(goal))
+                    or goal.kind == "fight" or goal.kind == "revisit" or goal.kind == "setter"
+                    or usable(goal))
                 and route(bot, world, room, goal.room, bad_from)
         end
         local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
@@ -2797,6 +2900,44 @@ local function choose(bot)
                         item = fact.item, bank = fact.bank, bit = fact.bit, fact = fact,
                         label = label, best = #steps, stalls = 0 },
                 })
+            end
+        end
+    end
+    -- A held item whose <use> waits only on its `after` flag, which a
+    -- learned door ride sets (BotPlanner.after_door): ride it, from here
+    -- or from its room. The use itself is the trip above once the flag
+    -- is set.
+    for _, fact in ipairs(bot:use_facts()) do
+        local door_room, door_slot = BotPlanner.after_door(bot, fact)
+        if door_room and bot:has_item(fact.item)
+            and not blocked(bot, "door", door_room, door_slot, true) then
+            local label = string.format("door slot %d of %s, which sets the flag of use 0x%02X in %s (%s)",
+                door_slot, door_room, fact.item, fact.room, fact.label or "unnamed")
+            if door_room == room then
+                local door = BotNav.door_by_slot(bot, door_slot)
+                if door and door.target and door_len(door_slot) < UNPLANNED_COST
+                    and (not BotNav.is_origin_zone(door) or via_action(bot, door))
+                    and not avoid_holds(bot, room, door_slot)
+                    and not reach_closed(bot, room, door_slot) then
+                    order = order + 1
+                    consider({
+                        cost = door_len(door_slot) - HELD_USE_BONUS,
+                        order = order, door = door, why = label,
+                    })
+                end
+            else
+                local steps = route(bot, world, room, door_room)
+                local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
+                if first then
+                    order = order + 1
+                    consider({
+                        cost = door_len(first.slot) - HELD_USE_BONUS + route_monsters(steps),
+                        order = order, door = first,
+                        why = string.format("toward %s, %d door(s)", label, #steps),
+                        target = { kind = "setter", room = door_room, slot = door_slot, fact = fact,
+                            label = label, best = #steps, stalls = 0 },
+                    })
+                end
             end
         end
     end
@@ -3255,6 +3396,9 @@ function BotPlanner.enter_room(bot, room)
         p.arrival_fix = room.id
     end
     p.last_from = p.last_room ~= room.id and p.last_room or nil
+    if from and from.kind == "door" and from.flags and p.last_room and p.last_room ~= room.id then
+        note_door_effects(p, bot, p.last_room, from.slot, from.flags)
+    end
     note_story(p, bot, room.id)
     note_revisits(p, bot, room.id)
     note_reaches(p, bot, room.id)
@@ -3333,12 +3477,23 @@ end
 -- Give up the current goal without marking it, for a layer that takes the
 -- pad for a while (a save at a typewriter); it is chosen again afterwards.
 -- A message is up. If the current goal is a door the bot pressed, the
--- press opened a message instead of the door (a room event's lock).
-function BotPlanner.note_message(bot, message)
+-- press opened a message instead of the door (a room event's lock). A
+-- message that asks a yes/no question (`prompt`) is the door's own
+-- question, not a refusal: the answer takes the player through, so the
+-- goal waits DOOR_PROMPT_WAIT for the room change before it fails. 307's
+-- ladder asks before the climb (message 130); marked a room event's door
+-- after every climb, it cut the caves off from 302 in the mental map, and
+-- the bot went on to the lab with 217's MO disk never fetched.
+function BotPlanner.note_message(bot, message, prompt)
     local goal = plan().goal
     if goal and goal.kind == "door" and not goal.was_locked and goal.job
-        and goal.job.pressed and not goal.door_message then
-        goal.door_message = message
+        and goal.job.pressed then
+        if not goal.door_message then
+            goal.door_message = message
+        end
+        if prompt and goal.door_message == message and not goal.door_prompt then
+            goal.door_prompt = bot:tick()
+        end
     end
 end
 
@@ -3519,6 +3674,10 @@ function BotPlanner.step(bot)
         if goal.avoided_at_start == nil then
             goal.avoided_at_start = avoid ~= nil
         end
+        -- The flags a ride may change, as the goal begins (note_door_effects).
+        if goal.flags == nil then
+            goal.flags = after_flags(bot)
+        end
         if avoid and not goal.avoided_at_start then
             bot:log(string.format("goal dropped: door slot %d is avoided now: %s", goal.slot, avoid))
             p.goal = nil
@@ -3551,7 +3710,8 @@ function BotPlanner.step(bot)
             BotInventory.expect_box(bot)
         end
     end
-    if goal.door_message then
+    if goal.door_message and not (goal.door_prompt
+            and bot:tick() - goal.door_prompt <= DOOR_PROMPT_WAIT) then
         -- The press opened a message, not the door: a room event holds it.
         status = "failed"
         goal.job.reason = string.format("a room event made the door a message (%d)",

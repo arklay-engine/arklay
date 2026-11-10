@@ -123,7 +123,7 @@ function on_bot_tick(bot)
         return
     end
     if scene.message then
-        BotPlanner.note_message(bot, scene.message)
+        BotPlanner.note_message(bot, scene.message, scene.prompt)
     end
     if BotScene.handle(bot, scene) then
         return
