@@ -1,0 +1,52 @@
+# Leon A from the stair corridor (207) to the west office (201), as leon_a_115_207 leaves him at 10C's door 0's arrival: past 207's dead zombies to door 1, the corridor of bodies with 4:48 set (both groups come out, out of reach) and 204 to door 0 (oracle/re2.md, "Leon A to the Spade Key")
+0
+# 207: run west to the corridor's west wall
+350 up run
+362
+# turn to face south and run down the corridor
+364 left
+377
+379 up run
+420
+# turn to face west and press door 1: room 205 loads on 471, play comes back on 777
+422 right
+434
+436 action
+438
+# 205: turn toward the north-west and run up to the north corridor
+778 right
+786
+788 up run
+868
+# turn to face west (2009) and run along the north corridor, about 2100 from the east group's wall
+870 left
+879
+881 up run
+# a running turn toward +z (2121), so the run passes north of the wall's corner at x -18881
+904 up run right
+906 up run
+961
+# turn to face south (921) and run down the west corridor along its east wall, out of the west group's reach
+963 left
+979
+981 up run
+1064
+# turn to 1081 and run to the wall by door 0
+1066 right
+1069
+1071 up run
+1084
+# door 0: room 204 loads on 1121, play comes back on 1427
+1086 action
+1088
+# 204: run south along the corridor
+1428 up run
+1523
+# turn to face east (4080) and run to door 0's frame
+1525 left
+1539
+1541 up run
+1648
+# door 0: room 201 loads on 1685, play comes back on 1991
+1650 action
+1652

@@ -1,0 +1,49 @@
+# Leon A from the S.T.A.R.S. office (115) to the stair corridor (207), as route_200_115 leaves him once the scene with Claire hands back: past Claire to door 0, up 114's corridor past its zombies to door 2, along 10C's upper floor and down its stairs to door 0 (oracle/re2.md, "Leon A to the Spade Key")
+0
+# 115: turn toward the north-west and run to z -17200
+350 right
+358
+360 up run
+374
+# turn to face west and run to the west wall by door 0
+376 left
+385
+388 up run
+420
+# door 0: room 114 loads on 457, play comes back on 763
+422 action
+424
+# 114: slot 0 stands by the door, so turn on the spot to face north (3120) before running
+764 right
+780
+# run up the corridor's east wall to its north end
+781 up run
+846
+# turn to face east (4080) and press door 2: room 10C loads on 899, play comes back on 1205
+848 right
+861
+864 action
+866
+# 10C: turn to face north and run to the upper floor's north side
+1206 left
+1219
+1221 up run
+1252
+# turn to face east and run along the upper floor past the statues to the stairs' head
+1254 right
+1266
+1268 up run
+1430
+# turn to face south (3136) and go down the stairs with action held
+1432 left
+1444
+1446 up action
+1562
+# turn to face west and walk to door 0's frame
+1564 left
+1577
+1579 up
+1596
+# door 0, the stairs door: room 207 loads on 1633, play comes back on 1803
+1598 action
+1600

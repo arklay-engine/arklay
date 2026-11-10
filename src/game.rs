@@ -8903,6 +8903,12 @@ impl GameState {
         };
         let mut cues = Vec::new();
         get.ticks = get.ticks.saturating_add(1);
+        // The window is the status task's, so its close ends in `St_exit`
+        // too: `Cut_no` comes back and this tick's `Swap_Cbuff` loads the
+        // room's view again (`BYTE_0098f07b`, `Movie_set(2)`).
+        if get.phase == Re2ItemGetPhase::Close && get.ticks == ITEM_GET_UNCUT_TICK {
+            self.re2.bg_load = true;
+        }
         let item = get.action.params[0];
         if get.phase == Re2ItemGetPhase::Open && get.ticks == ITEM_GET_CUT_TICK {
             // `Status`'s start, on the window's sixth tick: `Pad_rep_set(0xF01C,
@@ -9225,6 +9231,9 @@ impl GameState {
             }),
         }
         self.rebuild_slots();
+        // `WORD_0098eaea`: the area's first data word, which the next
+        // pass's `Sce_work_clr` sets back to 0xFFFF.
+        self.re2.vars[crate::scd2::host::VAR_TAKEN_ITEM] = u16::from(item);
         self.re2.set_flag(ITEM_BANK, flag, 1);
         // `St_get_item`: its object goes, and the twinkle with it.
         let model = usize::from(action.params[3]);
@@ -9249,8 +9258,8 @@ impl GameState {
     /// and no count, only the area's flag (bank 8, the same gap as an
     /// item's), its object (any index but 0xFF) and the area itself. The
     /// area's twinkle (an action byte with bit 7, `Esp_kill`) and
-    /// `WORD_0098eaea` (the area's first data word, which the item path
-    /// leaves out too) aren't modelled.
+    /// `WORD_0098eaea` (a data word of the area, which the item path writes
+    /// as variable 3) aren't modelled.
     fn take_re2_file(&mut self, action: RoomAction) {
         use crate::scd2::host::ITEM_BANK;
         let [_, _, flag, model, flags, ..] = action.params;

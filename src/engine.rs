@@ -7198,6 +7198,11 @@ impl GameSession {
         };
         *ticks += 1;
         let ticks = *ticks;
+        // `St_exit` puts `Cut_no` back and raises `BYTE_0098f07b`, so this
+        // tick's `Swap_Cbuff` loads the room's view again (`Movie_set(2)`).
+        if ticks == RE2_STATUS_UNCUT_TICK {
+            self.game.re2.bg_load = true;
+        }
         // The box's routines and its draw run until the screen's task ends
         // (`St_exit`), on the close's seventh tick.
         if ticks <= RE2_BOX_CLOSE_DRAWN {
@@ -23497,6 +23502,31 @@ mod tests {
             .unwrap();
         assert!(session.menu.is_none(), "the close ended");
         assert!(session.game.re2_items.is_none());
+    }
+
+    /// `St_exit` puts `Cut_no` back on the close's eighth tick and raises
+    /// `BYTE_0098f07b`, so that tick's `Swap_Cbuff` loads the room's view
+    /// again: `Movie_set(2)`, which the trace's `movie` shows as 1.
+    #[test]
+    fn re2_status_close_loads_the_view_as_the_cut_comes_back() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.open_menu(&pack);
+        session.re2_status_close = Some(0);
+        let mut held = Vec::new();
+        for _ in 0..RE2_STATUS_CLOSE_TICKS {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            held.push((session.re2_trace_cut(), session.present_skip.left()));
+        }
+        let at = usize::from(RE2_STATUS_UNCUT_TICK) - 1;
+        assert_eq!(held[at - 1].0, 0, "the cut is cleared before");
+        assert_eq!(held[at - 1].1, 0, "nothing held before");
+        assert_eq!(held[at].1, 1, "the load's first held frame");
+        assert_eq!(held[at + 1].1, 0);
     }
 
     /// `Psx_main` (0x4C3C70) runs `Pad_set` on the status screen's frames
