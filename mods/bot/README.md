@@ -852,7 +852,12 @@ drives the box screen with pad input only.
   for a key or `<use>` item, and for a heal also the rounds a fight ahead
   prefers: 504 found the slots full of the equipped launcher and its own
   rounds, the handgun kept behind it, the clips, one heal, two MO disks
-  and the acid rounds, and the key to 50C never fit.
+  and the acid rounds, and the key to 50C never fit. Last of all, for a
+  key or `<use>` item with nothing softer held: the cure stack while no
+  poison runs, then the rounds of a gun other than the equipped one. The
+  box gives either back for a trip, while a key left behind ends the run
+  (the same key met the launcher and its grenades, the handgun and its
+  clips, two MO disks, the spray and a blue herb).
 - Heal to make room (`BotInventory.heal_for_room`, `use heal 0xNN to make
   room`): every slot used, a known pickup in this room the run needs (a
   key, a `<use>` item, or the ammunition of a gun held or boxed) that
@@ -860,11 +865,18 @@ drives the box screen with pad input only.
   none), and at least `MAKE_ROOM_HURT` (24) health missing: the largest
   heal stack is used, as `BotSurvival` heals. 219 left twelve grenade
   rounds behind at 56/96 health with four heal stacks held.
-- Under the equipped gun's floor, a frontier firearm the bot has none of
-  (`BotInventory.new_guns`) is a needed pickup, so the soft deposits make
-  room for it: with `barry_early=chemical`, 212's grenade launcher met a
+- A frontier firearm the bot has none of (`BotInventory.new_guns`) is a
+  needed pickup, worth a spare heal's slot, and a trip ranked like the
+  ammunition's: with `barry_early=chemical`, 212's grenade launcher met a
   full inventory of keys, herbs and the knife, stayed on the floor for
   100k ticks, and the handgun ran dry in the mansion.
+- So is what a held `<use>` item's room hands over before the use
+  (`BotInventory.handed_over`: an `<avoid>` on an item there that holding
+  the use's item lifts), which counts like a key; and the planner makes
+  no trip to that `<use>` while the handover has no slot. A full inventory
+  of keys, a spray and three herb mixes carried the broken shotgun ten
+  doors to 116's rack, could not take the shotgun down, left, and came
+  back for it twice more, in every run; now the box is visited first.
 - Deposit when every slot is used and a known frontier pickup needs a
   free slot (it merges into no held stack, and the planner has not given
   up on it for a reason other than the full inventory). At a box in this
@@ -915,13 +927,19 @@ drives the box screen with pad input only.
   with rope=leave 403's swap boxed the handgun and three heals for 401's
   red book, the next open took the handgun and two heals straight back,
   the pair of visits repeated on every trip, and the bot met 201's
-  hunters with no heal.
+  hunters with no heal. The equipped gun's ammunition under the floor
+  does not take those slots either: 403's box took the flame rounds in
+  for a pickup and handed them back out for the floor, for 250k ticks.
 - Loadout: the `prefer` weapon (a hand weapon too: 30C's knife) of each
   pending `<fight>` the bot has met (`BotNav.fight_met`: it entered the
   fight's room and fought or held back, or saw the boss there), and its
   ammunition, are kept, and withdrawn first into free slots, from any box:
   a trip is made for them, and a full inventory makes room for them the
-  way it does for a needed pickup (`loadout: a fight ahead prefers it`). A
+  way it does for a needed pickup (`loadout: a fight ahead prefers it`).
+  The weapons come out before their rounds, and a boxed loadout gun may
+  swap out a spare gun like a key: with one slot free the box handed over
+  the grenades and kept the launcher, every slot was then used with
+  nothing to deposit, and 20C's fight waited on the launcher for good. A
   preferred hand weapon is required, not only preferred: its fight's step
   holds until it is held, so it counts as a needed pickup on the frontier
   (while none is boxed) and its inventory-full mark waits for the
