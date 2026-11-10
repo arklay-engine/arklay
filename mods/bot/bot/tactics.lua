@@ -773,6 +773,8 @@ local function reset(s)
     s.retreat_ticks = 0
     s.retreat_shots = nil
     s.must = nil
+    s.react = nil
+    s.react_clear = nil
 end
 
 local function stop(bot, s, reason, calm)
@@ -853,6 +855,44 @@ end
 -- Whether knowledge enemy `entry` is fought with a hand weapon (the web
 -- and the knife): it is fought only as a <fight> step's target, never with
 -- a firearm.
+-- A hit on the fight's target at tick `now`, for a monster with a known
+-- hit reaction (a knowledge <react>): when the reaction ends, and whether
+-- its sidestep follows (its `hits`th hit inside `window` ticks of the first,
+-- counted as the reaction ends: enemy/06 behavior_dispatch and act_swipe).
+function BotTactics.note_hit(s, entry, now)
+    local react = entry and entry.react
+    if not react then
+        return
+    end
+    local r = s.react
+    if not r or (react.window and now - r.first >= react.window) then
+        r = { first = now, hits = 0 }
+        s.react = r
+    end
+    r.hits = r.hits + 1
+    r.clear = now + react.stun
+    if react.hits and r.hits >= react.hits and r.clear - r.first < react.window then
+        r.clear = r.clear + react.evade
+        s.react = nil
+    end
+    s.react_clear = r.clear
+end
+
+-- Whether to press fire now at a target in a known hit reaction: true when
+-- the shot lands as the reaction (and the sidestep after it) ends, false
+-- when it would land inside it, nil when the bot does not know (no <react>,
+-- no `lands` for the weapon, or no reaction running). The hunter swipes
+-- the tick after its reaction and the claw lands six ticks on: a shot
+-- pressed only once the reaction is over lands with the claw.
+function BotTactics.fire_early(s, wrow, now)
+    local clear = s.react_clear
+    if not clear or not (wrow and wrow.lands) or now > clear + 1 then
+        return nil
+    end
+    -- The reaction's last tick still shows no aim bit: land two past it.
+    return now + wrow.lands >= clear + 2
+end
+
 local function by_hand(k, entry)
     local weapon = entry and entry.prefer and k.weapons[entry.prefer]
     return weapon ~= nil and weapon.melee == true
@@ -2640,6 +2680,7 @@ function BotTactics.step(bot, scene, player)
     if s.last_health and target.health < s.last_health then
         bot:log(string.format("combat hit slot=%d health=%d->%d",
             target.slot, s.last_health, target.health))
+        BotTactics.note_hit(s, entry, s.now)
         -- A fight that lands hits is not timed out: 40C's plant, shot from
         -- past its vines' reach, took the shotgun's hits past MAX_TICKS,
         -- and the bot walked back into the vines between the fights.
@@ -2878,7 +2919,20 @@ function BotTactics.step(bot, scene, player)
     -- missed, and its pump cost the shot at the swipe's rise (0x80, up).
     local leaping = target.id == HUNTER and target.action_behavior == HUNTER_DODGE
         and target.action_state <= 1
+    -- A shot lands some ticks after its press: one pressed while the hit
+    -- reaction runs out lands as it ends, before the monster's next move
+    -- (BotTactics.fire_early). And none at a target out of sight: 308's
+    -- hunter stepped behind the corner as the aim came up, the shell hit
+    -- the wall and its pump held the bot for the swipe.
+    local early = BotTactics.fire_early(s, wrow, s.now)
+    if early == true then
+        reacting = false
+        pose = pose or s.held_pose
+    elseif early == false then
+        reacting = true
+    end
     if not pose or leaping or weapon.behavior ~= C.HOLD_BEHAVIOR or reacting
+        or not target.visible
         or (not locked and s.aim_ticks < AIM_SETTLE)
         or abs(face.angle_error) > FACE_BAND * 2 then
         -- Waiting out a parts monster's shared hit state is no lock trouble.
