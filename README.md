@@ -107,9 +107,10 @@ cargo run -- convert-game /path/to/steam/4249100_Biohazard --out re1.akpak
 # items, the typewriter, saves and the scripts' scenes with their characters and
 # voice lines work. The title, the new-game choice, the inventory, the status
 # screen and the item box are drawn from the original's art. Leon A's route from
-# the new game to the main hall, and on through Marvin's room 202 and back to the
-# computer in room 200, matches the original tick for tick, zombies included, and
-# so does Claire A's route, as far as the Blue Card Key's use at that computer,
+# the new game to the main hall, on through Marvin's room 202 and back to the
+# computer in room 200, and past the Blue Card Key to the darkroom (208), matches
+# the original tick for tick, zombies and lickers included, and so does Claire
+# A's route, as far as the Blue Card Key's use at that computer,
 # apart from the differences in docs/internals/deviations/re2.md. Zombies,
 # lickers, dogs, crows, Mr. X, the plants, the spiders, the cockroaches (in part),
 # room 205's bodies and the alligator are ported; the G forms are part way (G1,

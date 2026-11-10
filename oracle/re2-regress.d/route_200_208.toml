@@ -1,0 +1,47 @@
+# Leon A's route from the new game to the darkroom (208) in one run (oracle/re2.md, "Leon A past the card"): route_200_computer's input to the Blue Card Key's use at room 200's computer, then the room runs past the card joined on from each door's hand back, through rooms 200, 201, 204, 205, 207 and 208 to the ink ribbons' take. The voice lines end by the recording's clock, so the run takes their lengths from the reference.
+[[run]]
+name = "route_200_208"
+room = "new"
+offset = 0
+ticks = 20620
+setup_script = "route_200_208.lua"
+input = "route_200_208.txt"
+voice_from_ref = true
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk"
+frames = [0, 20619]
+frame_max_mean = 0.8
+expect = "match"
+record = ""
+# the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): route_200_computer's ten, then 200, 201, 204, 205 and 207's
+ignore = [
+    [356, "rng"],
+    [356, "rseed"],
+    [2627, "rng"],
+    [2627, "rseed"],
+    [5455, "rng"],
+    [5455, "rseed"],
+    [6548, "rng"],
+    [6548, "rseed"],
+    [6900, "rng"],
+    [6900, "rseed"],
+    [7954, "rng"],
+    [7954, "rseed"],
+    [8271, "rng"],
+    [8271, "rseed"],
+    [8784, "rng"],
+    [8784, "rseed"],
+    [10012, "rng"],
+    [10012, "rseed"],
+    [12783, "rng"],
+    [12783, "rseed"],
+    [15336, "rng"],
+    [15336, "rseed"],
+    [15827, "rng"],
+    [15827, "rseed"],
+    [17655, "rng"],
+    [17655, "rseed"],
+    [18436, "rng"],
+    [18436, "rseed"],
+    [19723, "rng"],
+    [19723, "rseed"],
+]
