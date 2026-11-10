@@ -1356,7 +1356,13 @@ impl Re2State {
         sca: Option<&crate::state::Sca>,
         player: Option<([i32; 3], &mut i16)>,
     ) {
-        // `Joint_trans2` comes just before `Esp_move`, and makes `Parts_down`'s calls.
+        self.tick_parts_down(sca);
+        self.tick_esp_move(sca, player);
+    }
+
+    /// `Joint_trans2`, which comes just before `Esp_move` in the draw pass,
+    /// makes `Parts_down`'s calls: the zombies' thrown parts fall.
+    pub fn tick_parts_down(&mut self, sca: Option<&crate::state::Sca>) {
         for character in self.characters.0.iter_mut().flatten() {
             let Some(zombie) = character.zombie.as_mut() else {
                 continue;
@@ -1380,6 +1386,15 @@ impl Re2State {
                 falling
             });
         }
+    }
+
+    /// `Esp_move`: the effects move, only the kinds that move while stopped
+    /// under `fg_stop`'s effects bit.
+    fn tick_esp_move(
+        &mut self,
+        sca: Option<&crate::state::Sca>,
+        player: Option<([i32; 3], &mut i16)>,
+    ) {
         let atd = self.player.atd;
         self.effects.target = player.as_ref().map(|(pos, life)| crate::esp2::Target {
             pos: *pos,

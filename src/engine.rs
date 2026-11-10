@@ -2121,6 +2121,9 @@ struct GameSession {
     /// the room's own tick ([`GameSession::re2_stopped_enemy_pass`]).
     #[cfg(test)]
     re2_stopped_enemy_passes: u32,
+    /// The `stopped` of each [`GameSession::re2_stopped_frame_draw`].
+    #[cfg(test)]
+    re2_stopped_frame_draws: Vec<bool>,
     /// RE2's get-item window's art: the status screen's script in its
     /// `get` mode, while the window is up.
     re2_item_screen: Option<Box<LuaScreen>>,
@@ -2834,6 +2837,8 @@ impl GameSession {
             re2_status_return: None,
             #[cfg(test)]
             re2_stopped_enemy_passes: 0,
+            #[cfg(test)]
+            re2_stopped_frame_draws: Vec::new(),
             re2_item_screen: None,
             re2_computer_screen: None,
             re2_item_ticks: 0,
@@ -3902,18 +3907,7 @@ impl GameSession {
                 self.re2_stopped_enemy_pass(pack);
             }
             if let Some(stopped) = self.game.re2_item_get_effects_frame() {
-                // `Game_loop`'s draw pass runs each body's `pTbefore_func`
-                // (`Em22_before`'s `Rnd`) before `Joint_trans2` and `Esp_move`,
-                // on these frames as on any.
-                self.game.re2.tick_before();
-                let player = self
-                    .game
-                    .entities
-                    .first_mut()
-                    .map(|player| (player.pos, &mut player.health));
-                self.game
-                    .re2
-                    .tick_effects_as(stopped, self.loaded.room.sca.as_ref(), player);
+                self.re2_stopped_frame_draw(stopped);
             }
             let window_input = {
                 use game::status2::Input;
@@ -4004,6 +3998,10 @@ impl GameSession {
                 }
             }
         }
+        // START's own tick leaves `Game_loop` for the draw pass before
+        // `DWORD_00991fc0 |= 1`, so the bodies' `pTbefore_func`s run but
+        // `Esp_move` doesn't.
+        let re2_start_tick = self.game.re2_status_start;
         // The port's equip buttons and weapon cycle.
         if !was_active {
             self.equip_hotkeys(ui);
@@ -4191,7 +4189,11 @@ impl GameSession {
                 .entities
                 .first_mut()
                 .map(|player| (player.pos, &mut player.health));
-            re2.tick_effects(self.loaded.room.sca.as_ref(), player);
+            if re2_start_tick {
+                re2.tick_parts_down(self.loaded.room.sca.as_ref());
+            } else {
+                re2.tick_effects(self.loaded.room.sca.as_ref(), player);
+            }
             // `played` was cleared at the tick's start. A yes/no's cue, which
             // the message window played above, comes after the room's sounds
             // in the trace's `snd`: `Mess_disp` runs after the scheduler.
@@ -5014,6 +5016,7 @@ impl GameSession {
             return;
         }
         self.re2_stopped_enemy_pass(pack);
+        self.re2_stopped_frame_draw(true);
         self.game
             .re2_stopped_area_pass(self.player.pos, self.player.angle);
         for (zone, kind, damage) in std::mem::take(&mut self.game.re2.pending_damage) {
@@ -7014,12 +7017,37 @@ impl GameSession {
         self.game.re2.player.init_pose = false;
         self.place_re2_neck(true);
         if self.game.is_re2_room {
+            // Game mode 3 under `fg_stop`'s 0xEF: the effects move, every
+            // kind of them.
             self.re2_stopped_enemy_pass(pack);
+            self.re2_stopped_frame_draw(false);
         }
     }
 
+    /// The rest of a `Game_loop` frame under `fg_stop` that shows the room
+    /// (the get-item window's and the status screen's open and close): the
+    /// draw pass runs each body's `pTbefore_func` (`Em22_before`'s `Rnd`)
+    /// before `Joint_trans2`, and `Esp_move` runs at the frame's end
+    /// (`DWORD_00991fc0 |= 1`), only the kinds that move while stopped when
+    /// `stopped`.
+    fn re2_stopped_frame_draw(&mut self, stopped: bool) {
+        #[cfg(test)]
+        self.re2_stopped_frame_draws.push(stopped);
+        self.game.re2.tick_before();
+        let player = self
+            .game
+            .entities
+            .first_mut()
+            .map(|player| (player.pos, &mut player.health));
+        self.game
+            .re2
+            .tick_effects_as(stopped, self.loaded.room.sca.as_ref(), player);
+    }
+
     /// A `Game_loop` pass under `fg_stop` outside the room's own tick: each
-    /// enemy does its `Root_ck`, which counts its turn on, and nothing else.
+    /// enemy does its `Root_ck`, which counts its turn on
+    /// ([`GameSession::re2_stopped_frame_draw`] does the frame's draw pass
+    /// and effects).
     fn re2_stopped_enemy_pass(&mut self, pack: &Pack) {
         #[cfg(test)]
         {
@@ -23196,6 +23224,10 @@ mod tests {
             1,
             "mode 3's pass"
         );
+        // Each pass also runs the frame's `pTbefore_func`s and `Esp_move`:
+        // the stopped kinds only under the open's 0xFF, every kind under
+        // mode 3's 0xEF.
+        assert_eq!(session.re2_stopped_frame_draws, [true, true, true, false]);
     }
 
     #[test]
