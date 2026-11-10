@@ -123,6 +123,34 @@ impl GameState {
         }
     }
 
+    /// `Card_access`'s state 3 (`0x4C58A0`), the save screen's write tick:
+    /// one ink ribbon off the inventory and the save count up, before
+    /// `Save_push` and the file. `Search_item_id(0x1E)` finds the slot
+    /// whatever its count and the count goes down with no test, so a stack
+    /// of 0 wraps to 255; at 0 the slot is cleared and `Sort_item` moves the
+    /// slots after the first empty one up. The count is `0x98E9BC`'s low
+    /// word in the original and a byte here, wrapping the same way below
+    /// 256. Without a ribbon nothing is taken (the typewriter can't get
+    /// here without one); `ink_ribbon` false takes none either (a save the
+    /// debug menu opens).
+    pub fn re2_typewriter_write(&mut self, ink_ribbon: bool) {
+        if let Some(slot) = self.re2_item_slot(ITEM_INK_RIBBON).filter(|_| ink_ribbon) {
+            let stack = &mut self.inventory[slot];
+            stack.quantity = stack.quantity.wrapping_sub(1);
+            if stack.quantity == 0 {
+                *stack = Default::default();
+                // `Sort_item`: arklay's inventory has no slot past its
+                // length, so the move up is the first empty slot's removal.
+                if let Some(empty) = self.inventory.iter().position(|stack| stack.id == 0) {
+                    self.inventory.remove(empty);
+                }
+                self.rebuild_slots();
+            }
+        }
+        let saves = &mut self.state_bytes[usize::from(super::STATE_BYTE_SAVES)];
+        *saves = saves.wrapping_add(1);
+    }
+
     /// The oracle's `tw` field: slot 2's routine, its state byte and the
     /// save place.
     pub fn re2_typewriter_trace(&self) -> String {
@@ -161,6 +189,35 @@ mod tests {
         }
         *game.re2.fg_stop_mut() = HELD;
         game
+    }
+
+    fn ribbons(game: &GameState) -> Vec<(u8, u8)> {
+        game.inventory
+            .iter()
+            .map(|stack| (stack.id, stack.quantity))
+            .collect()
+    }
+
+    #[test]
+    fn a_typewriter_save_takes_the_ribbon_on_the_write_tick() {
+        let saves = |game: &GameState| game.state_bytes[usize::from(crate::game::STATE_BYTE_SAVES)];
+        let mut game = game(Some((2, 3)));
+        game.re2_typewriter_write(true);
+        assert_eq!(ribbons(&game), [(2, 18), (1, 1), (ITEM_INK_RIBBON, 2)]);
+        assert_eq!(saves(&game), 1);
+        // The last ribbon: the slot goes and the ones after it move up.
+        let mut game = super::tests::game(Some((1, 1)));
+        game.inventory.push(InventoryItem {
+            id: 0x2F,
+            quantity: 1,
+        });
+        game.re2_typewriter_write(true);
+        assert_eq!(ribbons(&game), [(2, 18), (0x2F, 1)]);
+        // A stack of 0 wraps, as `Card_access` takes it with no test.
+        let mut game = super::tests::game(Some((2, 0)));
+        game.re2_typewriter_write(true);
+        assert_eq!(ribbons(&game), [(2, 18), (1, 1), (ITEM_INK_RIBBON, 255)]);
+        assert_eq!(saves(&game), 1);
     }
 
     fn fg_stop(game: &mut GameState) -> u32 {

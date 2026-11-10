@@ -708,6 +708,10 @@ fn copy_text(
         ),
         ("ui/title.lua", include_str!("../games/re2/ui/title.lua")),
         (
+            "ui/save_load.lua",
+            include_str!("../games/re2/ui/save_load.lua"),
+        ),
+        (
             "lib/zombie.lua",
             include_str!("../games/re2/lib/zombie.lua"),
         ),

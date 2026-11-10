@@ -1696,6 +1696,7 @@ fn main() -> Result<()> {
                     id,
                     cli.capture.as_deref(),
                     cli.ticks,
+                    &save_dir,
                     &mods,
                     cli.stats,
                     cli.debug_menu,

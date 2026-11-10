@@ -136,8 +136,8 @@ pub struct TraceTick<'a> {
     /// RE2's game mode (`Game`), the oracle's `gm` (`gi`'s first value).
     /// arklay follows it only on the typewriter's path.
     pub re2_game_mode: Option<u8>,
-    /// RE2's save screen, the oracle's `sv` field: `-` while none runs
-    /// (`Mem_card` and `Card_access` aren't ported yet, so always `-`).
+    /// RE2's save screen, the oracle's `sv` field: `Card_access`'s work
+    /// while the typewriter's screen runs, `-` otherwise.
     pub re2_save_screen: Option<String>,
     /// RE2: the common flags (`fgcom`, `fg_common`'s eight words as their
     /// bytes) and the computer's state (`pc`, `-` without one).

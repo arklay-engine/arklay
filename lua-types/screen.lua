@@ -464,11 +464,16 @@ function ScreenApi:pending() end
 
 ---Write the pending block to `<save_dir>/<name>`, consuming an ink ribbon
 ---when the opener asked for one. Save mode only. `name` is one plain file
----name with no directory part; the extension is the script's choice.
+---name with no directory part; the extension is the script's choice. An RE 2
+---block is the paused session's state after the typewriter's write tick
+---(the ribbon off, the save count up), which the engine applies to the
+---session on the same tick; a pending block the opener passed in is not
+---used for it.
 ---@param name string
+---@param carry_on? boolean A failed write still counts as a save (the ribbon taken, the count raised), as RE 2's `Card_access` carries on after a failed write. Default false.
 ---@return boolean ok
 ---@return string? err Why it failed: an invalid name, not in save mode, or the write error.
-function ScreenApi:save(name) end
+function ScreenApi:save(name, carry_on) end
 
 ---Write the pending block to numbered slot `slot`, consuming an ink ribbon
 ---when the opener asked for one. Save mode only.
@@ -1108,6 +1113,7 @@ local NewGameChoice = {}
 ---@field stage? integer The 1-based stage of the room the block was saved in.
 ---@field room? integer
 ---@field mansion2? boolean Whether the room was on its second mansion visit.
+---@field re2? boolean Whether a loadable file is an RE 2 session's block (it carries the RE 2 state).
 ---@field location? string The resolved room label, with a text table.
 local SaveEntry = {}
 
@@ -1118,6 +1124,7 @@ local SaveEntry = {}
 ---@field stage integer The 1-based stage.
 ---@field room integer
 ---@field mansion2 boolean Whether the room was on its second mansion visit.
+---@field re2 boolean Whether the block is an RE 2 session's (it carries the RE 2 state).
 local SlotInfo = {}
 
 ---The local wall-clock time.

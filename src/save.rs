@@ -671,6 +671,9 @@ pub struct SaveSlotInfo {
     pub room: u8,
     /// Whether the room was on its second mansion visit.
     pub mansion2: bool,
+    /// Whether the block carries an RE 2 state trailer: a save an RE 2
+    /// session wrote.
+    pub re2: bool,
 }
 
 impl SaveSlotInfo {
@@ -683,6 +686,7 @@ impl SaveSlotInfo {
             stage: id.stage,
             room: file.room,
             mansion2: id.mansion2,
+            re2: file.re2.is_some(),
         }
     }
 }

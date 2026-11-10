@@ -506,6 +506,10 @@ impl crate::ui::save_load::SaveScreen for LuaScreen {
     fn take_outcome(&mut self) -> Option<SaveOutcome> {
         LuaScreen::take_outcome(self)
     }
+
+    fn value(&self, key: &str) -> Option<i64> {
+        self.host.values.get(key).copied()
+    }
 }
 
 /// The sandboxed VM one screen script runs in.
@@ -1072,6 +1076,7 @@ fn slot_table(lua: &Lua, info: &save::SaveSlotInfo) -> mlua::Result<Table> {
     row.set("stage", info.stage)?;
     row.set("room", info.room)?;
     row.set("mansion2", info.mansion2)?;
+    row.set("re2", info.re2)?;
     Ok(row)
 }
 
@@ -1140,6 +1145,8 @@ fn no_draw() -> mlua::Error {
 
 #[cfg(test)]
 mod re2_computer_tests;
+#[cfg(test)]
+mod re2_save_tests;
 #[cfg(test)]
 mod re2_title_tests;
 #[cfg(test)]

@@ -573,6 +573,9 @@ def run_one(run: dict, ctx: dict) -> dict:
     offset = run.get("offset", 344)
     ticks = run["ticks"] - offset
     compare_from, why = comparison_start(run)
+    if not why and run.get("saves_from"):
+        # The reference's saves are the original's `.BIOHAZARD2` files, which arklay can't read yet.
+        why = "saves_from seeds only the original's record: arklay can't start with the reference's saves yet"
     if why:
         result["text"] = why
         result["problems"].append(why)
@@ -600,6 +603,12 @@ def run_one(run: dict, ctx: dict) -> dict:
     ark_trace = out / f"{name}.ark.trace"
     frames_dir = ctx["capture_root"] / f"{name}.frames"
     stream = want_frames and not ctx["keep"]  # compare frames as arklay writes them, and delete each
+    # A save folder of its own, empty, as the original's record starts with: the save screen lists
+    # it, and a run never writes the user's.
+    saves_dir = out / f"{name}.saves"
+    if saves_dir.exists():
+        shutil.rmtree(saves_dir)
+    saves_dir.mkdir(parents=True)
     # `room = "new"` starts arklay's new game, as the original's record does, with no `--room`.
     start = [] if run["room"] == "new" else ["--room", str(run["room"]), "--player", str(run.get("player", 0))]
     if screen != "game":
@@ -607,6 +616,7 @@ def run_one(run: dict, ctx: dict) -> dict:
         command = [
             str(ctx["arklay"]), str(ctx["pack"]), "--ui", screen,
             "--no-mods", "--ticks", str(ticks), "--trace", str(ark_trace), "--input", str(input_path),
+            "--save-dir", str(saves_dir),
         ]
         if "special" in run:
             # config.ini's SPECIAL, which the record's `--config SPECIAL=N` sets.
@@ -617,6 +627,7 @@ def run_one(run: dict, ctx: dict) -> dict:
             "--character", str(run.get("character", 0)),
             "--no-mods", "--ticks", str(ticks), "--trace", str(ark_trace),
             "--setup-script", str(setup), "--input", str(input_path), *choice_args(run),
+            "--save-dir", str(saves_dir),
         ]
         if run.get("sound", True):
             command.append("--sound")
@@ -628,6 +639,8 @@ def run_one(run: dict, ctx: dict) -> dict:
         return finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks, offset, compare_from,
                           ref_dir, ref_trace, ark_trace)
     finally:
+        if not ctx["keep"]:
+            shutil.rmtree(saves_dir, ignore_errors=True)
         if stream:
             keep_failed_frames(result, frames_dir, out / f"{name}.frames")
 
