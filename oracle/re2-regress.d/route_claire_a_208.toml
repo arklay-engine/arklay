@@ -131,7 +131,7 @@ input_shift = 344
 ticks = 1880
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,zm0,zm1,zm2,zm3,zd,fgstat"
 frames = [650, 1879]
-# 1.02 measured
+# 1.01 measured
 frame_windows = [[650, 1879, 1.1]]
 expect = "match"
 record = "--start claire --warp 207:-25640:0:-16590:0:1 --life 119 --give 0:3:8 --give 2:0x14:38"
