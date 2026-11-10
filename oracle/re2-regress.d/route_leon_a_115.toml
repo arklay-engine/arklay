@@ -1,0 +1,138 @@
+# Leon A's route from the darkroom (208) to the S.T.A.R.S. office (115), room by room from warps (oracle/re2.md,
+# "Leon A to the S.T.A.R.S. office"), each warp starting Leon as route_200_208 leaves him: 156 life, 2 rounds in the
+# handgun and 38 spare, the ink ribbons in slot 3.
+
+# Rooms 208, 207 and 10C: out of the darkroom, back past 207's dead zombies to the stairs door, up 10C's stairs, the
+# statue puzzle and the Red Jewel, and door 2 into 114.
+[[run]]
+name = "leon_a_208_114"
+room = "208"
+setup_script = "leon_a_208_114.lua"
+input = "leon_a_208_114.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 4150
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgcom,om0,om1,om2,zm0,zm1,zm2,zm3"
+frames = [360, 4149]
+# the doors' frames count only in the whole run's mean: 10C's stairs door (type 4) draws its steps wider and brighter than the original's (docs/internals/deviations/re2.md, "The stairs door's frames"), a mean of 5.5 over its 210 ticks
+frame_max_mean = 0.95
+# each room on its own, from its hand back to its door's press: 208, 207, 10C, 114
+frame_windows = [[360, 448, 0.2], [789, 939, 0.25], [1150, 3723, 0.6], [4066, 4149, 0.2]]
+expect = "match"
+ignore = [
+  # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 208's door 0, 207's door 3 and 10C's door 2
+  [449, "rng"], [449, "rseed"], [940, "rng"], [940, "rseed"], [3724, "rng"], [3724, "rseed"],
+  # the warp's flags: the original raises 8:141 before 208's init, so the taken ribbons' object (slot 2) is out of play
+  # when the load's pass clears the objects' areas; arklay's setup script raises it after
+  [344, 483, "om2"],
+  # the three loads: the original lists the old room's objects until the new room's are set up, about 90 ticks into
+  # the load, where arklay lists the new room's from the load; nothing reads them then
+  [484, 574, "om0"], [484, 574, "om1"], [484, 574, "om2"],
+  [975, 1148, "om0"], [975, 1148, "om1"], [975, 1148, "om2"],
+  [3759, 3849, "om0"], [3759, 3849, "om1"], [3759, 3849, "om2"],
+  # the head's point as a push starts (the count's six ticks) and as clips 7 and 8 change (docs/internals/deviations/re2.md, "The head in a push")
+  [1532, 1537, "pneck"], [1786, 1791, "pneck"], [2022, "pneck"], [2034, 2037, "pneck"], [2058, 2064, "pneck"],
+  [2118, 2123, "pneck"], [2199, "pneck"], [2211, 2217, "pneck"], [2288, 2293, "pneck"], [2530, 2535, "pneck"],
+  [2766, "pneck"], [2789, 2797, "pneck"], [2871, 2876, "pneck"], [2928, "pneck"],
+  # room 114's slot 0, which stands: its `Spd` is what the slot held before (the slots' leftovers,
+  # docs/internals/deviations/re2.md, "What a zombie's slot held before")
+  [3850, 4149, "zm0"],
+]
+record = "--warp 208:-19005:0:-16920:1029:0 --flag 8:141 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --life 156 --give 0:2:2 --give 2:0x14:38 --give 3:0x1E:3"
+
+# Rooms 114 and 115: down the corridor past its three zombies to door 1, then the desk: Chris's Diary, the Unicorn
+# Medal and the scene with Claire. The voice lines end by the recording's clock, so the run takes their lengths from
+# the reference.
+[[run]]
+name = "leon_a_114_115"
+room = "114"
+setup_script = "leon_a_114_115.lua"
+input = "leon_a_114_115.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 3250
+voice_from_ref = true
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,scene,fl,fgstat,fgitem,fgcom,zm0,zm1,zm2"
+frames = [360, 3249]
+# 115's frames 1342 to 1345 keep the desk's close-up in the original as the screen fades (`cut_chg` with bit 7, docs/internals/deviations/re2.md, "The frames of a cut"), and the scene's props on the hands aren't drawn (oracle/re2.md, "Room 115's scene")
+frame_max_mean = 1.15
+# 114 from the warp to the door's press, then 115 from the hand back to the close-up's fade and from the fade to the end, past the scene
+frame_windows = [[360, 435, 0.45], [778, 1341, 0.3], [1346, 3249, 1.1]]
+expect = "match"
+ignore = [
+  # 114's door 1
+  [436, "rng"], [436, "rseed"],
+  # the head through the door while it was turned toward a zombie: the original places it at 115's setup, arklay keeps
+  # 114's until the door's last frame (docs/internals/deviations/re2.md, "The head through a door")
+  [562, 775, "pneck"],
+]
+record = "--warp 114:-25260:0:-3420:2048:5 --life 156 --give 0:2:2 --give 2:0x14:38 --give 3:0x1E:3 --give 4:0x33:1"
+
+# Leon A's route from the new game to the Unicorn Medal in the S.T.A.R.S. office (115) in one run (oracle/re2.md, "Leon A to the S.T.A.R.S. office"): route_200_208's input to the ink ribbons' take in the darkroom, then leon_a_208_114's and leon_a_114_115's joined on from each door's hand back. The voice lines end by the recording's clock, so the run takes their lengths from the reference.
+[[run]]
+name = "route_200_115"
+room = "new"
+offset = 0
+ticks = 27250
+setup_script = "route_200_115.lua"
+input = "route_200_115.txt"
+voice_from_ref = true
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,scene,om0,om1,om2,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,zp,fgstat,fgitem,fgroom"
+frames = [0, 27249]
+frame_max_mean = 0.85
+# each room past the card on its own, from its hand back to its door's press (the doors' frames, 10C's stairs door's among them, count in the whole run's mean): 200 from the card's, 201, 204, 205, 207, 208, 207 again, 10C, 114, and 115 to the medal's close-up and from its fade on (its frames 25341 to 25344 keep the close-up in the original, docs/internals/deviations/re2.md, "The frames of a cut")
+frame_windows = [[14475, 15335, 0.6], [15702, 15826, 0.3], [16167, 17654, 0.55], [17995, 18435, 0.25], [18776, 19722, 1.05], [20063, 20724, 0.5], [21065, 21215, 0.25], [21426, 23999, 0.6], [24342, 24434, 0.45], [24777, 25340, 0.3], [25345, 27249, 1.1]]
+expect = "match"
+record = ""
+# the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): route_200_computer's ten, then 200, 201, 204, 205, 207 and 208's, 207's stairs door, 10C's and 114's
+ignore = [
+    [356, "rng"],
+    [356, "rseed"],
+    [2627, "rng"],
+    [2627, "rseed"],
+    [5455, "rng"],
+    [5455, "rseed"],
+    [6548, "rng"],
+    [6548, "rseed"],
+    [6900, "rng"],
+    [6900, "rseed"],
+    [7954, "rng"],
+    [7954, "rseed"],
+    [8271, "rng"],
+    [8271, "rseed"],
+    [8784, "rng"],
+    [8784, "rseed"],
+    [10012, "rng"],
+    [10012, "rseed"],
+    [12783, "rng"],
+    [12783, "rseed"],
+    [15336, "rng"],
+    [15336, "rseed"],
+    [15827, "rng"],
+    [15827, "rseed"],
+    [17655, "rng"],
+    [17655, "rseed"],
+    [18436, "rng"],
+    [18436, "rseed"],
+    [19723, "rng"],
+    [19723, "rseed"],
+    [20725, "rng"],
+    [20725, "rseed"],
+    [21216, "rng"],
+    [21216, "rseed"],
+    [24000, "rng"],
+    [24000, "rseed"],
+    [24435, "rng"],
+    [24435, "rseed"],
+    # the objects are compared in 10C only, from the end of its load (as leon_a_208_114's): elsewhere the slots out of play keep what the last room's objects left in them in the original, where arklay's are zero (docs/internals/deviations/re2.md, "What an object's slot held before")
+    [0, 21424, "om0"], [0, 21424, "om1"], [0, 21424, "om2"],
+    [24035, 27249, "om0"], [24035, 27249, "om1"], [24035, 27249, "om2"],
+    # the head's point as a push starts and as clips 7 and 8 change (docs/internals/deviations/re2.md, "The head in a push"), and through 114's door 1 with the head turned toward a zombie ("The head through a door")
+    [21808, 21813, "pneck"], [22062, 22067, "pneck"], [22298, "pneck"], [22310, 22313, "pneck"], [22334, 22340, "pneck"],
+    [22394, 22399, "pneck"], [22475, "pneck"], [22487, 22493, "pneck"], [22564, 22569, "pneck"], [22806, 22811, "pneck"],
+    [23042, "pneck"], [23065, 23073, "pneck"], [23147, 23152, "pneck"], [23204, "pneck"],
+    [24561, 24774, "pneck"],
+    # room 100's opening (not this route's change; no other run compares it): slot 1's angle on the load's tick, and slots 0 and 1 drawn at 0x404040 by the original until 183
+    [0, "zm1"],
+    [0, 183, "zp"],
+]

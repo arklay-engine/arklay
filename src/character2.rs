@@ -499,6 +499,16 @@ pub fn take_hit(game: &mut GameState) {
     }
 }
 
+/// Where each room object's twinkle sits on it now (`Sce_kirakira_set`'s
+/// point on the object's matrix), for the twinkles that follow their object.
+pub(crate) fn twinkle_points(game: &GameState) -> Vec<Option<[i16; 3]>> {
+    game.objects
+        .records
+        .iter()
+        .map(|record| crate::objects::twinkle(record).map(|(_, at)| at))
+        .collect()
+}
+
 /// The water areas (`aot_set` kind 7) in `aot_table`'s order, for `Water_ck`.
 pub(crate) fn water_areas(game: &GameState) -> Vec<crate::zombie2::WaterArea> {
     game.room_actions
@@ -1134,6 +1144,7 @@ pub fn init(
     if std::mem::take(&mut game.re2.load_pass) {
         game.re2.tick_before();
         game.re2.effects.water = water_areas(game);
+        game.re2.effects.objects = twinkle_points(game);
         game.re2.effects.weapon = game.equipped_weapon_id;
         let player = game
             .entities

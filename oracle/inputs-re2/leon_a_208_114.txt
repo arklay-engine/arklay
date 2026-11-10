@@ -1,0 +1,144 @@
+# Leon A from the darkroom (208) to the S.T.A.R.S. office's corridor (114), as route_200_208 leaves him at the ink ribbons' table: out of 208 by door 0, back west through 207 to the stairs door 3, up 10C's stairs, the statue puzzle (statues_10c's pushes), the Red Jewel and door 2 (oracle/re2.md, "Leon A to the S.T.A.R.S. office")
+0
+# 208: turn from the ribbons' table to face east (+x, a little toward +z)
+350 left
+364
+# east until the counter's end stops Leon at x -15676
+366 up
+410
+# turn to face south (+z)
+412 left
+425
+# south to door 0
+427 up
+447
+# door 0: room 207 loads on 484, play comes back on 789
+449 action
+451
+# 207: turn west-southwest, toward the gap
+792 left
+797
+# run west past the four dead zombies' places, through the gap at x -25771
+799 up run
+884
+# turn to face east
+886 right
+909
+# east until door 3's box stops Leon at x -23561
+911 up
+938
+# door 3, the stairs (type 4): room 10C loads on 975, play comes back on about 1146
+940 action
+942
+# 10C: one tick of turn, then up the stairs with action held (the climb squares the heading to 1024)
+1150 right
+1151
+1152 up action
+1293
+# at the top: turn on the spot 9 ticks, then 5 of the run's turn, to exactly 2048 (west)
+1295 right
+1305 up run right
+# run west along the hall's +z side to x -23009
+1310 up run
+1458
+# statues_10c's input from its 376 (1092 ticks later): turn to 1008 and walk to statue 1's +z face, push it toward -z
+1468 left
+1482
+1485 up
+1503
+1532 up
+1612
+1688 down
+1692
+# from statues_10c's 522 (1090 later; the first push ended two ticks sooner): back off, walk round to statue 1's -x side (a tick less west, this route starts 80 further west) and on through both statues, the jewel scene and the Red Jewel (into slot 4)
+1696 right
+1709
+1712 up
+1725
+1730 left
+1743
+1746 up
+1762
+1766 left
+1779
+1784 up
+2038
+2042 right
+2055
+2058 up
+2066
+2070 left
+2083
+2086 up
+2097
+2101 left
+2114
+2118 up
+2218
+2222 down
+2227
+2232 left
+2246
+2249 up run
+2266
+2270 right
+2284
+2287 up
+2365
+2437 down
+2441
+2445 right
+2458
+2461 up
+2474
+2478 left
+2491
+2494 up
+2509
+2513 left
+2526
+2529 up
+2767
+2775 right
+2788
+2789 up
+2825
+2829 left
+2851
+2853 up
+2933
+3037 down
+3042
+3047 left
+3061
+3064 up run
+3087
+3091 right
+3104
+3107 up
+3119
+3123 action
+3127
+3397 action
+3401
+3597 action
+3601
+# after the jewel's message: turn to 2064 and run west along the pedestal's +z side
+3610 right
+3625
+3627 up run
+3644
+# turn to 1024 and run south past statue 2's east side to the hall's south wall
+3646 left
+3660
+3662 up run
+3690
+# turn west and walk to the west wall, into door 2's box
+3692 right
+3706
+3708 up
+3722
+# door 2: room 114 loads on 3759, play comes back on about 4064
+3724 action
+3726
+4149
