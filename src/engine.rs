@@ -1939,6 +1939,55 @@ const RE2_STATUS_UNCUT_TICK: u8 = 8;
 /// The open's tick on which the item box's page starts (`St_init01`'s step
 /// 0, after its loads).
 const RE2_BOX_START: u8 = 6;
+/// RE2's typewriter hand-off to the save screen and back: `Game_loop`'s
+/// game modes (`0x4BF810`) on the `fg_system & 0x40000` path, which step 5
+/// takes to `Mem_card` instead of `Status`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Re2Save {
+    /// G: the back routine took the Yes (game mode 1).
+    Requested,
+    /// The open's tick, 1 on G+1 (game mode 2): the room fades out over
+    /// three `Game_loop` frames under `fg_stop`, then black; `Mem_card`
+    /// starts on [`RE2_SAVE_START`].
+    Open(u8),
+    /// The save screen is up (game mode 2; `Game_loop` suspended in step 9).
+    Screen,
+    /// X: the screen has ended (`Cardaccess_exit`'s state 2); still black.
+    Closed,
+    /// R: step 9, game modes 3 and 5; R+1's case 5 puts `fg_stop` back.
+    Return,
+}
+
+impl Re2Save {
+    /// The trace's `gm`: `Game`'s low byte at the end of the tick. Mode 3
+    /// never shows, R overwrites it with 5.
+    fn game_mode(self) -> u8 {
+        match self {
+            Self::Requested => 1,
+            Self::Open(_) | Self::Screen | Self::Closed => 2,
+            Self::Return => 5,
+        }
+    }
+
+    /// What the frame shows: the status screen's open ticks, then black
+    /// under the save screen; G's and R's frames are ordinary ones.
+    fn view(self) -> Option<Re2StatusView> {
+        match self {
+            Self::Requested | Self::Return => None,
+            Self::Open(ticks) => Some(re2_status_open_view(ticks)),
+            Self::Screen | Self::Closed => Some(Re2StatusView::Black),
+        }
+    }
+
+    /// Whether the open's tick still runs a `Game_loop` frame under
+    /// `fg_stop` (cases 1 and 2 break to the play body until the fade out
+    /// ends, `Fade_status`).
+    fn stopped_frame(self) -> bool {
+        matches!(self, Self::Open(1..=3))
+    }
+}
+/// The open's tick on which step 5 starts `Mem_card` (as [`RE2_BOX_START`]).
+const RE2_SAVE_START: u8 = 6;
 /// The open's first tick the status screen draws (the fade in's), and the
 /// close's first tick it no longer does (`main_menu.lua`'s `OPEN_SHOWN` and
 /// `CLOSE_BLACK`).
@@ -2117,6 +2166,11 @@ struct GameSession {
     /// RE2's status screen has closed: the ticks since the room came back,
     /// 1 on the first, while it fades in ([`re2_status_return_alpha`]).
     re2_status_return: Option<u8>,
+    /// RE2's typewriter hand-off to the save screen and back ([`Re2Save`]).
+    re2_save: Option<Re2Save>,
+    /// The `fg_stop` the hand-off puts back on R+1 (`0x6897C8`): the word
+    /// `Sce_Save` saved before its prompt, and whatever the screen set.
+    re2_save_stop: u32,
     /// How many `Game_loop` passes ran the enemies under `fg_stop` outside
     /// the room's own tick ([`GameSession::re2_stopped_enemy_pass`]).
     #[cfg(test)]
@@ -2835,6 +2889,8 @@ impl GameSession {
             re2_status_close: None,
             re2_status_open: None,
             re2_status_return: None,
+            re2_save: None,
+            re2_save_stop: 0,
             #[cfg(test)]
             re2_stopped_enemy_passes: 0,
             #[cfg(test)]
@@ -3101,6 +3157,7 @@ impl GameSession {
             .re2_status_return
             .map(|ticks| ticks + 1)
             .filter(|&ticks| re2_status_return_alpha(ticks).is_some());
+        self.step_re2_save();
         let result = self.tick_session(pack, ui, input, action);
         self.swap_cbuff();
         if start_box {
@@ -3108,6 +3165,25 @@ impl GameSession {
         }
         self.animate_re2_status(pack);
         result
+    }
+
+    /// The typewriter hand-off's game modes at the top of `Game_loop`, before
+    /// anything of the tick reads them: case 1 on G+1 starts the fade out
+    /// and goes to mode 2, whose ticks count to step 5's; case 5 on R+1 puts
+    /// `fg_stop` back (`0x6897C8`) and play resumes.
+    ///
+    /// Case 1 also waits for the message's bit 7 and an idle fade 0; both
+    /// hold at room 200's typewriter, so the step here doesn't test them.
+    fn step_re2_save(&mut self) {
+        self.re2_save = match self.re2_save {
+            Some(Re2Save::Requested) => Some(Re2Save::Open(1)),
+            Some(Re2Save::Open(ticks)) if ticks < RE2_SAVE_START => Some(Re2Save::Open(ticks + 1)),
+            Some(Re2Save::Return) => {
+                *self.game.re2.fg_stop_mut() = self.re2_save_stop;
+                None
+            }
+            other => other,
+        };
     }
 
     /// `Pad_set`, at the top of `Psx_main`, before `Game_loop`, `Status`
@@ -3283,6 +3359,7 @@ impl GameSession {
             || self.typewriter_arm.is_some()
             || self.typewriter_fade.is_some()
             || self.typewriter_open.is_some()
+            || self.re2_save.is_some()
             || self.itembox_open_delay > 0
     }
 
@@ -3755,6 +3832,13 @@ impl GameSession {
             self.tick_movie(ui, input);
             return Ok(());
         }
+        // RE2's typewriter hand-off: `Game_loop`'s game mode 2 fades the
+        // room out over three frames that still run under `fg_stop`, then
+        // holds black; step 5 starts `Mem_card` on the sixth tick. After
+        // the screen, step 9's game modes 3 and 5 restart the player.
+        if self.tick_re2_save_hand_off(pack) {
+            return Ok(());
+        }
         if self.save_screen.is_some() {
             self.tick_save_screen(pack, ui);
             return Ok(());
@@ -3986,9 +4070,16 @@ impl GameSession {
         // instead tests `fg_status`'s `0x40` (`0x4C02C7`), which the aim, a
         // hit, a hold, the stairs and the climb keep up
         // (`crate::player2::Work::holds_game`).
+        // RE2's `Game_loop` also refuses it under `fg_stop`'s `0x1000000`,
+        // which a slot 2 routine holds (`Sce_Save` to its answer's next tick,
+        // `Item_box_entrance` while the lid swings), and while `Game` isn't
+        // 0 (the typewriter's hand-off).
         let message_pauses_menu = (was_active && self.game.message.pause & START_MESSAGE_BITS != 0)
             || self.game.message_flags & START_MESSAGE_BITS != START_MESSAGE_BITS
-            || self.menu_close_freeze > 0;
+            || self.menu_close_freeze > 0
+            || (self.game.is_re2_room
+                && (self.game.re2_back != game::save2::BackRoutine::None
+                    || self.re2_save.is_some()));
         // The request does not stop the frame: `game_loop` clears the player's
         // bits for it, runs the rest of the tick, and only then leaves for the
         // menu.
@@ -4146,12 +4237,11 @@ impl GameSession {
         // screen opens when it completes; the rest of the room's tick is
         // skipped.
         // RE2's prompt is `Sce_Save_backfunc`'s (`game::save2`), which saw its
-        // Yes in the room tick. Until the original's game modes 1 and 2 are
-        // ported, it takes RE1's hand-off, with `fg_stop` put back first.
+        // Yes in the room tick and set game mode 1 with `fg_stop` still held:
+        // the rest of the tick runs, and the hand-off starts on the next
+        // ([`GameSession::step_re2_save`]).
         if self.game.is_re2_room && std::mem::take(&mut self.game.re2_save_requested) {
-            *self.game.re2.fg_stop_mut() = self.game.re2_box_entrance.saved_stop;
-            self.typewriter_arm = Some(true);
-            return Ok(());
+            self.re2_save = Some(Re2Save::Requested);
         }
         if !self.game.is_re2_room
             && let Some(ink_ribbon) = self.game.take_typewriter_confirm()
@@ -5302,6 +5392,9 @@ impl GameSession {
     /// What RE2's status screen draws this frame, while it is up: the room
     /// or the screen and the fade over it.
     fn re2_status_view(&self) -> Option<Re2StatusView> {
+        if let Some(save) = self.re2_save.filter(|_| self.game.is_re2_room) {
+            return save.view();
+        }
         if self.menu.is_none() || !self.game.is_re2_room {
             return None;
         }
@@ -6575,6 +6668,14 @@ impl GameSession {
         // Leaving the save screen runs `cut_set`, which rebuilds the room's
         // sprite table.
         self.game.mask_reload = true;
+        // RE2's typewriter: this is X, `Cardaccess_exit`'s state 2, whose
+        // `BYTE_0098f07b = 2` has this tick's `Swap_Cbuff` load the view;
+        // `Game_loop`'s step 9 runs on the next tick.
+        if self.re2_save == Some(Re2Save::Screen) {
+            self.game.re2.bg_load = true;
+            self.re2_save = Some(Re2Save::Closed);
+            return;
+        }
         // Backing out of the in-game menu's LOAD GAME returns to the menu.
         if std::mem::take(&mut self.load_from_system_menu) {
             self.system_menu_requested = true;
@@ -7038,15 +7139,86 @@ impl GameSession {
             self.map = None;
         }
         self.game.message_menu = false;
+        self.return_re2_room(pack);
+    }
+
+    /// `Game_loop`'s game mode 3 on the room's return from a screen
+    /// (`0x4C000D`): the player's routines restart (`Player_move`'s
+    /// `Pl_init`), mode 5 fades the room in, and the pass still runs the
+    /// enemy slots under `fg_stop`'s 0xEF, each doing its `Root_ck`, with
+    /// the effects moving, every kind of them.
+    fn return_re2_room(&mut self, pack: &Pack) {
+        self.re2_status_return = Some(1);
         crate::player2::pl_init(&mut self.game.re2.player);
         self.game.re2.player.init_pose = false;
         self.place_re2_neck(true);
         if self.game.is_re2_room {
-            // Game mode 3 under `fg_stop`'s 0xEF: the effects move, every
-            // kind of them.
             self.re2_stopped_enemy_pass(pack);
             self.re2_stopped_frame_draw(false);
         }
+    }
+
+    /// One tick of RE2's typewriter hand-off, outside the save screen's own
+    /// ticks. Returns whether it took the tick.
+    ///
+    /// The open's ticks 1 to 3 are `Game_loop` frames under `fg_stop` (the
+    /// get-item window's), 4 and 5 are black with the game task asleep, and
+    /// on 6 step 5 zeroes `fg_stop` and `0x6897C8`, keeps the word
+    /// `Sce_Save` saved (`0x991FC4`) for the return, and starts `Mem_card`
+    /// in the same pass. On R, step 9 falls into game modes 3 and 5:
+    /// `0x6897C8 |= fg_stop`, `fg_stop |= 0xEF000000` and the fade in.
+    /// `Psx_main` still runs the fades and the sounds outside the task.
+    fn tick_re2_save_hand_off(&mut self, pack: &Pack) -> bool {
+        let Some(save) = self.re2_save else {
+            return false;
+        };
+        match save {
+            Re2Save::Requested | Re2Save::Screen | Re2Save::Return => return false,
+            Re2Save::Open(ticks) if ticks < RE2_SAVE_START => {
+                if save.stopped_frame() {
+                    self.re2_stopped_enemy_pass(pack);
+                    self.re2_stopped_frame_draw(true);
+                }
+            }
+            Re2Save::Open(_) => {
+                self.re2_save_stop = self.game.re2_box_entrance.saved_stop;
+                self.game.re2_box_entrance.saved_stop = 0;
+                *self.game.re2.fg_stop_mut() = 0;
+                self.open_typewriter_save(pack, true);
+                // A screen that can't open hands the room straight back.
+                self.re2_save = Some(if self.save_screen.is_some() {
+                    Re2Save::Screen
+                } else {
+                    Re2Save::Closed
+                });
+            }
+            Re2Save::Closed => {
+                self.return_re2_room(pack);
+                let fg_stop = self.game.re2.fg_stop_mut();
+                self.re2_save_stop |= *fg_stop;
+                *fg_stop |= 0xEF00_0000;
+                self.re2_save = Some(Re2Save::Return);
+            }
+        }
+        self.play_re2_tick_sounds(pack);
+        self.tick_re2_fades();
+        true
+    }
+
+    /// `Snd_se_call`'s part of `Psx_main` on a tick the game task doesn't
+    /// run: the sounds queued so far play.
+    fn play_re2_tick_sounds(&mut self, pack: &Pack) {
+        let cut = self.sound_cut();
+        play_re2_sounds(
+            &mut self.music,
+            &mut self.sfx_cache,
+            &mut self.re2_sounds,
+            pack,
+            &self.loaded.room,
+            &mut self.game,
+            &mut self.player,
+            cut,
+        );
     }
 
     /// The rest of a `Game_loop` frame under `fg_stop` that shows the room
@@ -8236,8 +8408,11 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.game.re2_typewriter_trace()),
-            // The typewriter's game modes are RE1's hand-off for now.
-            re2_game_mode: self.game.is_re2_room.then_some(0),
+            // Only the typewriter's hand-off sets a game mode so far.
+            re2_game_mode: self
+                .game
+                .is_re2_room
+                .then(|| self.re2_save.map_or(0, Re2Save::game_mode)),
             re2_computer: self.game.is_re2_room.then(|| {
                 let common: String = self.game.re2.banks[4]
                     .iter()
@@ -8490,6 +8665,10 @@ impl GameSession {
             self.gpu_scene_visible = false;
         } else if re2_item.is_some() && !re2_room {
             // The get-item window's screen and its black cover the room.
+            self.framebuffer.clear();
+            self.gpu_scene_visible = false;
+        } else if self.re2_save.and_then(Re2Save::view) == Some(Re2StatusView::Black) {
+            // The typewriter hand-off's black, and the save screen over it.
             self.framebuffer.clear();
             self.gpu_scene_visible = false;
         } else if self.document_pickup_hides_menu() {
@@ -23280,6 +23459,189 @@ mod tests {
         // the stopped kinds only under the open's 0xFF, every kind under
         // mode 3's 0xEF.
         assert_eq!(session.re2_stopped_frame_draws, [true, true, true, false]);
+    }
+
+    /// A save screen that ends on its first tick, with no write.
+    struct EndingSaveScreen;
+
+    impl crate::ui::Screen for EndingSaveScreen {
+        fn open(&mut self, _: &mut UiContext<'_>) -> Result<()> {
+            Ok(())
+        }
+
+        fn update(&mut self, _: &UiContext<'_>, _: UiInput) -> ScreenResult {
+            ScreenResult::Done(ScreenAction::Title)
+        }
+
+        fn draw(&mut self, _: &UiContext<'_>, _: &mut crate::render::Framebuffer) {}
+    }
+
+    impl ui::save_load::SaveScreen for EndingSaveScreen {
+        fn take_outcome(&mut self) -> Option<ui::save_load::SaveOutcome> {
+            None
+        }
+    }
+
+    /// A session on the debug pack's room, as an RE 2 room.
+    fn re2_typewriter_session(dir: &TempDir) -> (Pack, Box<GameSession>) {
+        let (pack, a, _) = debug_menu_pack(dir);
+        let mut session = GameSession::from_room(&pack, a, &dir.0.join("saves")).unwrap();
+        session.game.is_re2_room = true;
+        (pack, session)
+    }
+
+    fn idle_tick(session: &mut GameSession, pack: &Pack) {
+        session
+            .tick(pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+    }
+
+    #[test]
+    fn re2_save_game_modes() {
+        assert_eq!(Re2Save::Requested.game_mode(), 1);
+        for ticks in 1..=RE2_SAVE_START {
+            assert_eq!(Re2Save::Open(ticks).game_mode(), 2);
+        }
+        assert_eq!(Re2Save::Screen.game_mode(), 2);
+        assert_eq!(Re2Save::Closed.game_mode(), 2);
+        assert_eq!(Re2Save::Return.game_mode(), 5);
+        assert_eq!(None::<Re2Save>.map_or(0, Re2Save::game_mode), 0);
+        let stopped: Vec<bool> = (1..=RE2_SAVE_START)
+            .map(|ticks| Re2Save::Open(ticks).stopped_frame())
+            .collect();
+        assert_eq!(stopped, [true, true, true, false, false, false]);
+    }
+
+    /// `Game_loop` case 1 on G+1, case 2's fade out and black, and step 5
+    /// on the open's sixth tick: `fg_stop` and `0x6897C8` zeroed, the word
+    /// `Sce_Save` saved kept for the return, and `Mem_card` started.
+    #[test]
+    fn the_typewriter_hand_off_opens_the_save_screen_on_its_sixth_tick() {
+        let dir = TempDir::new();
+        let (pack, mut session) = re2_typewriter_session(&dir);
+        *session.game.re2.fg_stop_mut() = 0xFF00_0000;
+        session.game.re2_box_entrance.saved_stop = 0x0100_0000;
+        session.re2_save = Some(Re2Save::Requested);
+        let mut views = Vec::new();
+        let mut passes = Vec::new();
+        for tick in 1..=RE2_SAVE_START {
+            assert!(
+                session.save_screen.is_none(),
+                "no screen before tick {tick}"
+            );
+            let before = session.re2_stopped_enemy_passes;
+            idle_tick(&mut session, &pack);
+            views.push(session.re2_status_view());
+            passes.push(session.re2_stopped_enemy_passes - before);
+            if tick < RE2_SAVE_START {
+                assert_eq!(
+                    *session.game.re2.fg_stop_mut(),
+                    0xFF00_0000,
+                    "held on {tick}"
+                );
+            }
+        }
+        assert_eq!(
+            views,
+            [
+                Some(Re2StatusView::Room(None)),
+                Some(Re2StatusView::Room(Some(96))),
+                Some(Re2StatusView::Room(Some(192))),
+                Some(Re2StatusView::Black),
+                Some(Re2StatusView::Black),
+                Some(Re2StatusView::Black),
+            ]
+        );
+        assert_eq!(passes, [1, 1, 1, 0, 0, 0], "three frames under fg_stop");
+        assert_eq!(session.re2_stopped_frame_draws, [true, true, true]);
+        assert!(session.save_screen.is_some(), "Mem_card started");
+        assert_eq!(session.re2_save, Some(Re2Save::Screen));
+        assert_eq!(*session.game.re2.fg_stop_mut(), 0);
+        assert_eq!(session.re2_save_stop, 0x0100_0000);
+        assert_eq!(session.game.re2_box_entrance.saved_stop, 0);
+    }
+
+    /// The save the screen writes is taken after step 5's zeroing.
+    #[test]
+    fn a_typewriter_snapshot_never_holds_fg_stop() {
+        let dir = TempDir::new();
+        let (pack, mut session) = re2_typewriter_session(&dir);
+        *session.game.re2.fg_stop_mut() = 0xFF00_0000;
+        session.re2_save = Some(Re2Save::Open(RE2_SAVE_START - 1));
+        idle_tick(&mut session, &pack);
+        assert!(session.save_screen.is_some());
+        let bytes = session.snapshot_save().re2.expect("an RE 2 trailer");
+        let mut state = game::GameState::default();
+        state.re2.load_save_bytes(&bytes).unwrap();
+        assert_eq!(*state.re2.fg_stop_mut(), 0);
+    }
+
+    /// X, R and R+1: the screen ends, step 9's game modes 3 and 5 restart
+    /// the player under `0xEF000000` and fade the room in, and case 5 puts
+    /// the saved word back with whatever the screen left in `fg_stop`.
+    #[test]
+    fn the_return_runs_game_modes_3_and_5() {
+        let dir = TempDir::new();
+        let (pack, mut session) = re2_typewriter_session(&dir);
+        session.save_screen = Some(Box::new(EndingSaveScreen));
+        session.re2_save = Some(Re2Save::Screen);
+        session.re2_save_stop = 0x0100_0000;
+        *session.game.re2.fg_stop_mut() = 4;
+        session.tick_save_screen(&pack, UiInput::default());
+        assert!(session.save_screen.is_none());
+        assert_eq!(session.re2_save, Some(Re2Save::Closed), "X");
+        assert!(session.game.re2.bg_load, "Cardaccess_exit's BYTE_0098f07b");
+        assert!(!session.typewriter_exit_fade, "no RE 1 exit fade");
+
+        session.game.re2.player.move_no = 7;
+        idle_tick(&mut session, &pack);
+        assert_eq!(session.re2_save, Some(Re2Save::Return), "R");
+        assert_eq!(*session.game.re2.fg_stop_mut(), 0xEF00_0004);
+        assert_eq!(session.re2_save_stop, 0x0100_0004);
+        assert_eq!(session.re2_status_return, Some(1));
+        assert_eq!(session.re2_status_view(), None);
+        assert_eq!(session.game.re2.player.move_no, 2, "Pl_init");
+
+        idle_tick(&mut session, &pack);
+        assert_eq!(session.re2_save, None, "R+1");
+        assert_eq!(*session.game.re2.fg_stop_mut(), 0x0100_0004);
+    }
+
+    /// START is tested before `Sce_at`: on the answer's next tick slot 2
+    /// still holds `fg_stop`'s `0x1000000`, so it is refused.
+    #[test]
+    fn start_is_refused_on_the_answers_next_tick() {
+        let start = UiInput {
+            start: true,
+            ..UiInput::default()
+        };
+        for (back, taken) in [
+            (game::save2::BackRoutine::Save, false),
+            (game::save2::BackRoutine::None, true),
+        ] {
+            let dir = TempDir::new();
+            let (pack, mut session) = re2_typewriter_session(&dir);
+            session.game.message_flags |= START_MESSAGE_BITS;
+            session.game.re2_back = back;
+            session
+                .tick(&pack, start, player::Input::default(), false)
+                .unwrap();
+            assert_eq!(session.menu_request.is_some(), taken, "{back:?}");
+        }
+    }
+
+    /// The debug menu's SAVE GAME opens the same screen with no hand-off:
+    /// its end keeps RE 1's exit fade.
+    #[test]
+    fn a_debug_save_keeps_re1s_exit() {
+        let dir = TempDir::new();
+        let (pack, mut session) = re2_typewriter_session(&dir);
+        session.save_screen = Some(Box::new(EndingSaveScreen));
+        session.tick_save_screen(&pack, UiInput::default());
+        assert!(session.save_screen.is_none());
+        assert!(session.typewriter_exit_fade);
+        assert_eq!(session.re2_save, None);
+        assert!(!session.game.re2.bg_load);
     }
 
     #[test]
