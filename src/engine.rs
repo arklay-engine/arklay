@@ -10877,6 +10877,22 @@ impl App {
         })
     }
 
+    /// What the bot's report reads from the session when it is written: the
+    /// ending the game's own rule picks, once the escape scene has completed
+    /// the game (the scripted death variant), and the play timer.
+    fn bot_run_facts(&self) -> bot::RunFacts {
+        let Mode::Play(session) = &self.mode else {
+            return bot::RunFacts::default();
+        };
+        let game = &session.game;
+        let completed = game.flags[5].bit(game::MSF2_DEATH_VARIANT)
+            && !game.flags[5].bit(game::MSF2_ATTRACT_DEMO);
+        bot::RunFacts {
+            ending: completed.then(|| ui::debug_menu::default_ending(game)),
+            game_time_ticks: Some(game.play_timer()),
+        }
+    }
+
     /// Follow the subtitle options of `[game]`.
     fn set_subtitle_options(&mut self, game: &crate::config::Game) {
         self.subtitles = game.subtitles;
@@ -12780,7 +12796,7 @@ fn write_bot_stats(
     let (Some(path), Some(runtime)) = (path, app.bot.as_ref()) else {
         return Ok(());
     };
-    let json = runtime.stats_json(outcome, elapsed.as_secs_f64());
+    let json = runtime.stats_json(outcome, elapsed.as_secs_f64(), app.bot_run_facts());
     if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     }
