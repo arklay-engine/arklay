@@ -2713,6 +2713,8 @@ impl NavOutcome {
 struct BotShares {
     /// What the route's API calls cost, by method.
     profile: Rc<RefCell<stats::ApiProfile>>,
+    /// What the last `bot:world()` table was built from.
+    world_key: Rc<RefCell<Option<world::LuaKey>>>,
     memory: Rc<RefCell<BotMemory>>,
     nav: Rc<RefCell<BotNav>>,
     input: Rc<RefCell<BotInput>>,
@@ -2725,6 +2727,7 @@ impl BotShares {
     fn share(&self) -> Self {
         Self {
             profile: Rc::clone(&self.profile),
+            world_key: Rc::clone(&self.world_key),
             memory: Rc::clone(&self.memory),
             nav: Rc::clone(&self.nav),
             input: Rc::clone(&self.input),
@@ -2738,6 +2741,7 @@ impl Default for BotShares {
     fn default() -> Self {
         Self {
             profile: Rc::default(),
+            world_key: Rc::default(),
             memory: Rc::new(RefCell::new(BotMemory::default())),
             nav: Rc::new(RefCell::new(BotNav::default())),
             input: Rc::new(RefCell::new(BotInput::default())),
@@ -2900,11 +2904,83 @@ fn outcome_table(lua: &Lua, outcome: NavOutcome) -> mlua::Result<Table> {
     Ok(table)
 }
 
+/// The registry name of the Lua table holding the results of the tick's
+/// calls to the methods [`Profiled::add_tick_method`] registered. Slot 0 is
+/// the tick they belong to.
+const TICK_MEMO: &str = "bot.tick_memo";
+/// The registry name of the table holding the results
+/// [`Profiled::add_run_method`]'s methods built for this Lua state.
+const RUN_MEMO: &str = "bot.run_memo";
+
+/// The memo table registered as `name`, fresh when it is missing or, with
+/// a `tick`, was filled on another tick.
+fn memo_table(lua: &Lua, name: &str, tick: Option<u64>) -> mlua::Result<Table> {
+    if let Some(memo) = lua.named_registry_value::<Option<Table>>(name)?
+        && tick.is_none_or(|tick| memo.raw_get::<Option<u64>>(0).ok().flatten() == Some(tick))
+    {
+        return Ok(memo);
+    }
+    let memo = lua.create_table()?;
+    if let Some(tick) = tick {
+        memo.raw_set(0, tick)?;
+    }
+    lua.set_named_registry_value(name, &memo)?;
+    Ok(memo)
+}
+
+/// The result `memo` holds for `method`, or the one `build` makes, kept
+/// there. A nil result is kept as the memo table itself.
+fn memoised(
+    memo: &Table,
+    method: &'static str,
+    build: impl FnOnce() -> mlua::Result<Value>,
+) -> mlua::Result<Value> {
+    match memo.raw_get::<Value>(method)? {
+        Value::Nil => {}
+        Value::Table(held) if held == *memo => return Ok(Value::Nil),
+        held => return Ok(held),
+    }
+    let value = build()?;
+    match &value {
+        Value::Nil => memo.raw_set(method, memo)?,
+        value => memo.raw_set(method, value)?,
+    }
+    Ok(value)
+}
+
 /// Registers [`BotCtx`]'s methods so that every call's time is added to the
 /// run's API profile (`compute.api` of the report).
 struct Profiled<'a, M>(&'a mut M);
 
 impl<M: UserDataMethods<BotCtx>> Profiled<'_, M> {
+    /// A method without arguments whose result is the same for the whole
+    /// tick (it reads the tick's snapshot or the room's facts): the first
+    /// call of a tick builds it and the later ones get the same value, so
+    /// the route must not write to it.
+    fn add_tick_method<R: mlua::IntoLua>(
+        &mut self,
+        name: &'static str,
+        method: impl Fn(&Lua, &BotCtx, ()) -> mlua::Result<R> + 'static,
+    ) {
+        self.add_method(name, move |lua, bot, ()| {
+            let memo = memo_table(lua, TICK_MEMO, Some(bot.tick))?;
+            memoised(&memo, name, || method(lua, bot, ())?.into_lua(lua))
+        });
+    }
+
+    /// As [`Self::add_tick_method`], for a result that is the same for the
+    /// whole run: built once for the Lua state.
+    fn add_run_method<R: mlua::IntoLua>(
+        &mut self,
+        name: &'static str,
+        method: impl Fn(&Lua, &BotCtx, ()) -> mlua::Result<R> + 'static,
+    ) {
+        self.add_method(name, move |lua, bot, ()| {
+            let memo = memo_table(lua, RUN_MEMO, None)?;
+            memoised(&memo, name, || method(lua, bot, ())?.into_lua(lua))
+        });
+    }
+
     fn add_method<A, R>(
         &mut self,
         name: &'static str,
@@ -2930,7 +3006,7 @@ impl UserData for BotCtx {
         let methods = &mut Profiled(methods);
         methods.add_method("tick", |_lua, bot, ()| Ok(bot.tick));
 
-        methods.add_method("room", |lua, bot, ()| {
+        methods.add_tick_method("room", |lua, bot, ()| {
             let id = bot.snapshot.room;
             let table = lua.create_table()?;
             table.set("id", id.room3())?;
@@ -2943,7 +3019,7 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("room_meta", |lua, bot, ()| {
+        methods.add_tick_method("room_meta", |lua, bot, ()| {
             let Some(meta) = &bot.meta else {
                 return Ok(Value::Nil);
             };
@@ -3145,7 +3221,7 @@ impl UserData for BotCtx {
             Ok(Value::Table(table))
         });
 
-        methods.add_method("use_facts", |lua, bot, ()| {
+        methods.add_tick_method("use_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
             for entry in bot.uses.iter() {
                 let row = lua.create_table()?;
@@ -3161,7 +3237,7 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("item_facts", |lua, bot, ()| {
+        methods.add_tick_method("item_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
             for entry in bot.holds.iter() {
                 let row = lua.create_table()?;
@@ -3173,7 +3249,7 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("fight_facts", |lua, bot, ()| {
+        methods.add_tick_method("fight_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
             for entry in bot.fights.iter() {
                 let row = lua.create_table()?;
@@ -3191,7 +3267,7 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("ride_facts", |lua, bot, ()| {
+        methods.add_tick_method("ride_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
             for entry in bot.rides.iter() {
                 let row = lua.create_table()?;
@@ -3204,7 +3280,7 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("revisit_facts", |lua, bot, ()| {
+        methods.add_tick_method("revisit_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
             for entry in bot.revisits.iter() {
                 let row = lua.create_table()?;
@@ -3218,7 +3294,7 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("reach_facts", |lua, bot, ()| {
+        methods.add_tick_method("reach_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
             for entry in bot.reaches.iter() {
                 let row = lua.create_table()?;
@@ -3238,7 +3314,7 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("door_facts", |lua, bot, ()| {
+        methods.add_tick_method("door_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
             for entry in bot.door_vias.iter() {
                 let row = lua.create_table()?;
@@ -3254,7 +3330,7 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("avoid_facts", |lua, bot, ()| {
+        methods.add_tick_method("avoid_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
             for entry in bot.avoid_facts.iter() {
                 let row = lua.create_table()?;
@@ -3279,7 +3355,7 @@ impl UserData for BotCtx {
         // Every room's open-or-not <brew> facts with that room's taps:
         // `{room, item, bottle, bank, bit, after_bank, after_bit,
         // after_clear, label, taps = {{slot, item, label}, ...}}`.
-        methods.add_method("brew_facts", |lua, bot, ()| {
+        methods.add_tick_method("brew_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
             for entry in bot.brews.iter() {
                 let fact = &entry.fact;
@@ -3307,7 +3383,7 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("errand_facts", |lua, bot, ()| {
+        methods.add_tick_method("errand_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
             for entry in bot.errands.iter() {
                 let fact = &entry.fact;
@@ -3334,8 +3410,23 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("world", |lua, bot, ()| {
-            bot.shares.memory.borrow().world.to_lua(lua, &bot.snapshot)
+        // The whole world model is a large table and changes on few ticks:
+        // the last one built is handed out again while what it was built
+        // from still holds.
+        methods.add_tick_method("world", |lua, bot, ()| {
+            let memo = memo_table(lua, RUN_MEMO, None)?;
+            let memory = bot.shares.memory.borrow();
+            let mut key = bot.shares.world_key.borrow_mut();
+            if let Some(key) = key.as_ref()
+                && memory.world.lua_key_holds(key, &bot.snapshot)
+                && let Some(table) = memo.raw_get::<Option<Table>>("world")?
+            {
+                return Ok(table);
+            }
+            let table = memory.world.to_lua(lua, &bot.snapshot)?;
+            memo.raw_set("world", &table)?;
+            *key = Some(memory.world.lua_key(&bot.snapshot));
+            Ok(table)
         });
 
         methods.add_method("risk", |_lua, bot, ()| Ok(bot.risk));
@@ -3349,7 +3440,7 @@ impl UserData for BotCtx {
                 .ok_or_else(|| mlua::Error::RuntimeError(format!("unknown bot parameter `{name}`")))
         });
 
-        methods.add_method("knowledge", |lua, bot, ()| match &bot.knowledge {
+        methods.add_run_method("knowledge", |lua, bot, ()| match &bot.knowledge {
             Some(knowledge) => knowledge.to_lua(lua),
             None => {
                 let table = lua.create_table()?;
@@ -3396,7 +3487,7 @@ impl UserData for BotCtx {
             Ok(bot.goal_room.as_deref().map(str::to_owned))
         });
 
-        methods.add_method("player", |lua, bot, ()| {
+        methods.add_tick_method("player", |lua, bot, ()| {
             let p = &bot.snapshot.player;
             let table = lua.create_table()?;
             table.set("x", p.x)?;
@@ -3422,7 +3513,7 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("enemies", |lua, bot, ()| {
+        methods.add_tick_method("enemies", |lua, bot, ()| {
             let table = lua.create_table()?;
             for (index, enemy) in bot.snapshot.enemies.iter().enumerate() {
                 let row = lua.create_table()?;
@@ -3446,7 +3537,7 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("projectiles", |lua, bot, ()| {
+        methods.add_tick_method("projectiles", |lua, bot, ()| {
             let table = lua.create_table()?;
             for (index, pos) in bot.snapshot.projectiles.iter().enumerate() {
                 let row = lua.create_table()?;
@@ -3458,7 +3549,7 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("weapon", |lua, bot, ()| {
+        methods.add_tick_method("weapon", |lua, bot, ()| {
             let weapon = bot.snapshot.weapon;
             let table = lua.create_table()?;
             table.set("equipped", weapon.equipped)?;
@@ -3473,7 +3564,7 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("scene", |lua, bot, ()| {
+        methods.add_tick_method("scene", |lua, bot, ()| {
             let scene = &bot.snapshot.scene;
             let table = lua.create_table()?;
             table.set("mode", scene.mode)?;
@@ -3517,11 +3608,11 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("saves", |lua, bot, ()| {
+        methods.add_tick_method("saves", |lua, bot, ()| {
             saves_table(lua, &bot.saves, Some(&bot.snapshot.saves))
         });
 
-        methods.add_method("actions", |lua, bot, ()| {
+        methods.add_tick_method("actions", |lua, bot, ()| {
             let table = lua.create_table()?;
             for (index, action) in bot.snapshot.actions.iter().enumerate() {
                 let row = lua.create_table()?;
@@ -3552,7 +3643,7 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("cameras", |lua, bot, ()| {
+        methods.add_tick_method("cameras", |lua, bot, ()| {
             let table = lua.create_table()?;
             for (index, zone) in bot.snapshot.cameras.iter().enumerate() {
                 let row = lua.create_table()?;
@@ -3565,7 +3656,7 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("objects", |lua, bot, ()| {
+        methods.add_tick_method("objects", |lua, bot, ()| {
             let table = lua.create_table()?;
             for (index, object) in bot.snapshot.objects.iter().enumerate() {
                 let row = lua.create_table()?;
@@ -3580,7 +3671,7 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_method("doors", |lua, bot, ()| {
+        methods.add_tick_method("doors", |lua, bot, ()| {
             let table = lua.create_table()?;
             for (index, door) in bot.snapshot.doors.iter().enumerate() {
                 let row = lua.create_table()?;
@@ -3610,7 +3701,7 @@ impl UserData for BotCtx {
             Ok(bot.snapshot.item_count(item))
         });
 
-        methods.add_method("inventory", |lua, bot, ()| {
+        methods.add_tick_method("inventory", |lua, bot, ()| {
             let table = lua.create_table()?;
             for (index, stack) in bot.snapshot.inventory.iter().enumerate() {
                 let row = lua.create_table()?;
@@ -3636,7 +3727,7 @@ impl UserData for BotCtx {
             Ok(bot.snapshot.ammo_for(weapon))
         });
 
-        methods.add_method("menu", |lua, bot, ()| {
+        methods.add_tick_method("menu", |lua, bot, ()| {
             let menu = &bot.snapshot.menu;
             let table = lua.create_table()?;
             table.set("open", menu.open)?;
@@ -3737,7 +3828,7 @@ impl UserData for BotCtx {
                 .is_some_and(|enemy| enemy.visible))
         });
 
-        methods.add_method("memory", |lua, bot, ()| {
+        methods.add_tick_method("memory", |lua, bot, ()| {
             let table = lua.create_table()?;
             for (key, value) in &bot.memory().values {
                 table.set(key.clone(), value.clone())?;
@@ -3749,7 +3840,7 @@ impl UserData for BotCtx {
             Ok(bot.memory().is_visited(&room))
         });
 
-        methods.add_method("remember", |_lua, bot, (key, value): (String, Value)| {
+        methods.add_method("remember", |lua, bot, (key, value): (String, Value)| {
             let value = match value {
                 Value::Nil => None,
                 Value::String(text) => Some(text.to_string_lossy()),
@@ -3763,6 +3854,8 @@ impl UserData for BotCtx {
                 }
             };
             bot.memory().remember(key, value);
+            // The tick's `memory` table is stale now.
+            memo_table(lua, TICK_MEMO, Some(bot.tick))?.raw_set("memory", Value::Nil)?;
             Ok(())
         });
 
@@ -5760,6 +5853,88 @@ mod tests {
         assert_eq!(
             vm.lua.globals().get::<String>("RESULT").unwrap(),
             "2|0|4|1|34|statue|no|6|nil|7|plant|117|1|0.6|20D|2:38:1:169:pump|nil:9:1:161:clear|1:173:1:172:zombie:1"
+        );
+    }
+
+    /// The tables the API hands out are built once per tick (the knowledge
+    /// once per run, the world once per change) and shared by every call.
+    #[test]
+    fn snapshot_tables_are_built_once_a_tick_and_the_world_once_a_change() {
+        let temp = TempDir::new("memo");
+        let bot = temp.path.join("bot");
+        fs::create_dir_all(&bot).unwrap();
+        fs::write(
+            bot.join("init.lua"),
+            br#"function on_bot_tick(bot)
+                local same = bot:player() == bot:player() and bot:menu() == bot:menu()
+                    and bot:knowledge() == bot:knowledge() and bot:world() == bot:world()
+                    and bot:room_meta() == nil and bot:room_meta() == nil
+                local before = bot:memory()
+                bot:remember("key", tostring(bot:tick()))
+                local after = bot:memory()
+                RESULT = string.format("%s|%s|%s|%s|%s|%s|%d", tostring(same),
+                    tostring(bot:player() == PLAYER), tostring(bot:knowledge() == KNOWLEDGE),
+                    tostring(bot:world() == WORLD), tostring(before.key), after.key,
+                    #bot:world().frontier)
+                PLAYER, KNOWLEDGE, WORLD = bot:player(), bot:knowledge(), bot:world()
+            end
+"#,
+        )
+        .unwrap();
+        let pack = Pack::open(&temp.path).unwrap();
+        let vm = BotVm::load(&pack).unwrap();
+        let shares = BotShares::default();
+        let mut results = Vec::new();
+        for tick in 1..=3 {
+            let mut snapshot = world::tests::snapshot(0x117, 0, 0);
+            if tick == 3 {
+                // A door comes into view: the world changed.
+                snapshot.doors.push(DoorSnapshot {
+                    slot: 1,
+                    target: Some("118".to_string()),
+                    next_room: 0x18,
+                    key: 0,
+                    lock: 0,
+                    x: 0,
+                    z: 0,
+                    width: 100,
+                    depth: 100,
+                });
+            }
+            shares.memory.borrow_mut().world.observe(tick, &snapshot);
+            vm.call(BotCtx {
+                snapshot,
+                saves: SaveLog::default(),
+                meta: None,
+                uses: Rc::default(),
+                holds: Rc::default(),
+                fights: Rc::default(),
+                rides: Rc::default(),
+                revisits: Rc::default(),
+                reaches: Rc::default(),
+                errands: Rc::default(),
+                brews: Rc::default(),
+                door_vias: Rc::default(),
+                avoid_facts: Rc::default(),
+                knowledge: None,
+                tick,
+                risk: 0.25,
+                params: Rc::default(),
+                goal_room: None,
+                shares: shares.share(),
+            })
+            .unwrap();
+            results.push(vm.lua.globals().get::<String>("RESULT").unwrap());
+        }
+        assert_eq!(
+            results,
+            [
+                // same in the tick | player | knowledge | world as last tick |
+                // memory before and after remember | frontier
+                "true|false|false|false|nil|1|0",
+                "true|false|true|true|1|2|0",
+                "true|false|true|false|2|3|1",
+            ]
         );
     }
 
