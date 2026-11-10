@@ -7398,7 +7398,68 @@ mod tests {
             end
             return table.concat(out, ",")"#,
         );
-        assert_eq!(rearm, "0C,03");
+        // The gun before its rounds, whatever the box's order: with one
+        // slot the rounds alone would come out and the gun stay in.
+        assert_eq!(rearm, "03,0C");
+        let one_slot = eval::<String>(
+            &vm,
+            r#"local ctx = { heals = 1, rearm = { [0x03] = true, [0x0C] = true } }
+            local rows = {
+                { slot = 0, item = 0x0C, kind = "ammo" },
+                { slot = 1, item = 0x03, kind = "weapon" },
+            }
+            local out = {}
+            for _, row in ipairs(BotInventory.withdrawals(rows, ctx, 1)) do
+                out[#out + 1] = string.format("%02X", row.item)
+            end
+            return table.concat(out, ",")"#,
+        );
+        assert_eq!(one_slot, "03");
+        // Ammunition under the floor leaves the slots a deposit freed for
+        // needed pickups (ctx.room_for) alone.
+        let held = eval::<String>(
+            &vm,
+            r#"local rows = { { slot = 0, item = 0x0B, kind = "ammo" } }
+            local function take(room_for)
+                local ctx = { heals = 1, ammo_low = 0x0B, room_for = room_for }
+                return #BotInventory.withdrawals(rows, ctx, 1)
+            end
+            return take(nil) .. "," .. take(1)"#,
+        );
+        assert_eq!(held, "1,0");
+        // The last resort of the soft deposits, for a key or <use> item
+        // only: the cure while no poison runs, then the rounds of a gun
+        // that is not the equipped one; never the equipped gun's own.
+        let last = |extra: &str, needed: u32| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local ctx = {{ full = true, equipped = 0x07,
+                        guns = {{ [0x07] = true, [0x02] = true }},
+                        ammo = {{ [0x10] = true, [0x0B] = true }},
+                        own_ammo = {{ [0x07] = 0x10, [0x02] = 0x0B }},
+                        keys = {{ [0x28] = true }}, cures = {{ [0x45] = true }}, {extra} }}
+                    local rows = {{
+                        {{ slot = 0, item = 0x07, kind = "weapon" }},
+                        {{ slot = 1, item = 0x10, kind = "ammo" }},
+                        {{ slot = 2, item = 0x02, kind = "weapon" }},
+                        {{ slot = 3, item = 0x0B, kind = "ammo" }},
+                        {{ slot = 4, item = 0x28, kind = "key" }},
+                        {{ slot = 5, item = 0x41, kind = "heal" }},
+                        {{ slot = 6, item = 0x45, kind = "heal", heals = false }},
+                    }}
+                    local out = {{}}
+                    for _, row in ipairs(BotInventory.soft_deposits(rows, ctx, {needed})) do
+                        out[#out + 1] = string.format("%02X", row.item)
+                    end
+                    return table.concat(out, ",")"#
+                ),
+            )
+        };
+        assert_eq!(last("swap = true", 1), "45");
+        assert_eq!(last("swap = true", 2), "45,0B");
+        assert_eq!(last("swap = true, cure_now = { [0x45] = true }", 2), "0B");
+        assert_eq!(last("heals_may_go = true", 2), "");
         // Two boxed knives the loadout wants: one comes out (the deposit
         // rule would box the second again).
         let knives = eval::<String>(

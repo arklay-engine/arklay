@@ -1871,6 +1871,9 @@ function BotPlanner.item_bonus(item, kind, ammo, needed, hurt, guns, cure)
     if ammo and guns and guns[item] then
         return ITEM_BONUS + AMMO_BONUS, "a gun, the ammunition low"
     end
+    if guns and guns[item] then
+        return ITEM_BONUS + AMMO_BONUS, "a gun the bot has none of"
+    end
     return ITEM_BONUS, nil
 end
 
@@ -2899,6 +2902,25 @@ local function choose(bot)
     end
     consider_frontier(false)
 
+    -- Whether the room of `fact` hands over a pickup before the use (an
+    -- <avoid> on it that holding the use's item lifts) which does not fit.
+    local handed = BotInventory.handed_over(bot)
+    local function use_waits(fact)
+        for _, goal in ipairs(world.frontier) do
+            if goal.kind == "item" and goal.room == fact.room
+                and handed[goal.room .. ":" .. goal.slot]
+                and not blocked(bot, "item", goal.room, goal.slot, true)
+                and not pickup_fits(bot, goal.item, full) then
+                for _, avoid in ipairs(bot:avoid_facts()) do
+                    if avoid.room == goal.room and avoid.slot == goal.slot
+                        and avoid.unless_held == fact.item then
+                        return true
+                    end
+                end
+            end
+        end
+        return false
+    end
     -- A held item with a <use> fact in another room: go there.
     for _, fact in ipairs(bot:use_facts()) do
         local m = plan().marks[mark_key("use", fact.room, fact.slot)]
@@ -2918,7 +2940,10 @@ local function choose(bot)
         -- MO disk still held, but no trip went back and the run looped in
         -- 505 with pass code 01 never entered.
         local side = side_retry(m)
+        -- No trip while the item its room hands over first has no slot
+        -- (use_waits): the box comes first (BotInventory.needed_pickups).
         if fact.room ~= room and bot:has_item(fact.item) and BotPuzzle.use_open(bot, fact)
+            and not use_waits(fact)
             and (not m or side or (not m.reason:find("approach", 1, true)
                 and not blocked(bot, "use", fact.room, fact.slot, true))) then
             local steps = route(bot, world, room, fact.room, side and m.bad_from or nil)
