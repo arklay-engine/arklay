@@ -24,7 +24,10 @@ The score of a playthrough is: the ticks it took (30 a second; `time` is the
 game's own clear time), the hits (health drops of more than 2), the deaths,
 the room loads, and the bot's compute per tick (average, 99th percentile and
 worst, in milliseconds, with the ticks over 16 and 33 ms: a 30 Hz tick has
-33.3 ms for the whole frame).
+33.3 ms for the whole frame). Under the table of several runs: how many
+reached their ending, the mean score of those, and the hits and deaths of
+all of them (a run that ends early has fewer of both: compare the completed
+ones, or the counts over the same seeds).
 """
 import argparse
 import concurrent.futures
@@ -64,8 +67,10 @@ def run_one(route, seed, pack, out, timeout):
     try:
         with open(stem + ".out") as f:
             row.update(json.loads(f.readline()))
+        with open(stem + ".json") as f:
+            row["enemy_hits"] = json.load(f).get("enemy_hits")
     except (OSError, ValueError):
-        row["outcome"] = "error"
+        row.setdefault("outcome", "error")
         with open(stem + ".log", errors="replace") as f:
             lines = f.read().strip().splitlines()
         row["reason"] = lines[-1][:200] if lines else "no output"
@@ -74,6 +79,33 @@ def run_one(route, seed, pack, out, timeout):
 
 def ms(micros):
     return "-" if micros is None else f"{micros / 1000:.1f}"
+
+
+def totals(rows):
+    """The lines under the table: how many runs reached their ending, the
+    mean score of those, and the hits and deaths of them all."""
+    if len(rows) < 2:
+        return []
+    scores = [row.get("score") or {} for row in rows]
+    done = [score for row, score in zip(rows, scores) if row["exit"] == 0]
+    lines = [f"completed {len(done)}/{len(rows)}"]
+    if done:
+        def mean(key):
+            return sum(score.get(key, 0) for score in done) / len(done)
+        worst = max((score.get("compute") or {}).get("max_us", 0) for score in done)
+        lines.append(f"a completed run: {mean('ticks'):.0f} ticks, {mean('hits'):.1f} hits, "
+                     f"{mean('deaths'):.2f} deaths, {mean('room_loads'):.0f} room loads, "
+                     f"worst tick {worst / 1000:.1f} ms")
+    kinds = {}
+    for row in rows:
+        for kind, count in (row.get("enemy_hits") or {}).items():
+            kinds[kind] = kinds.get(kind, 0) + count
+    by_kind = ", ".join(f"{kind} {count}" for kind, count in
+                        sorted(kinds.items(), key=lambda item: -item[1])[:8])
+    lines.append(f"all runs: {sum(score.get('hits', 0) for score in scores)} hits, "
+                 f"{sum(score.get('deaths', 0) for score in scores)} deaths"
+                 + (f"; hits by the nearest enemy's kind: {by_kind}" if by_kind else ""))
+    return lines
 
 
 def table(rows):
@@ -102,6 +134,7 @@ def table(rows):
     for line in cells:
         lines.append("  ".join(cell.ljust(widths[i]) if i == 0 else cell.rjust(widths[i])
                                for i, cell in enumerate(line)).rstrip())
+    lines += totals(rows)
     for row in rows:
         for miss in row.get("missed") or []:
             lines.append(f"{row['route']} s{row['seed']}: missed {miss}")
