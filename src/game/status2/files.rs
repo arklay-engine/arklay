@@ -59,8 +59,9 @@ pub const HINT_FILES: [u8; 2] = [0x17, 0x18];
 /// `St_init00`'s (`0x4F7CD0`) ladders for the hint files' last page, Leon's
 /// and Claire's: `(bank, flag, pages_last)`, tested in order, the last set
 /// flag winning, over a start of 1. The banks are `fg_scenario` (3),
-/// `fg_common` (4), `fg_map` (9) and `fg_item_2` (34, which arklay doesn't
-/// model, so its step never counts).
+/// `fg_common` (4), `fg_map` (9) and `fg_item_2` (34; arklay's item
+/// pick-ups don't write that bank yet, so only a script or `--flag 34:...`
+/// reaches its step).
 const HINT_LADDERS: [&[(u8, u8, u16)]; 2] = [
     &[
         (4, 0x0F, 2),

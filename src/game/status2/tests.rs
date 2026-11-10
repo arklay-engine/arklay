@@ -1035,3 +1035,24 @@ fn easy_new_game_holds_the_hint_file() {
     scenario_b.seed_re2_easy();
     assert_eq!(scenario_b.re2.files[0], NO_FILE);
 }
+
+/// `Sort_item` at `Status`'s start: the slots after the first empty one move
+/// up one and the last is cleared, so EASY's bullets in slot 3 move to slot
+/// 2; an inventory with no gap before its end stays as it is.
+#[test]
+fn the_status_start_closes_the_first_gap() {
+    let mut game = GameState::new(RoomId::parse("1020").unwrap(), &RoomState::default());
+    game.set_re2_slot(0, [0x01, 1]);
+    game.set_re2_slot(1, [0x02, 15]);
+    game.set_re2_slot(2, [0, 0]);
+    game.set_re2_slot(3, [0x14, 120]);
+    game.init_re2_status();
+    let slots = |game: &GameState| (0..4).map(|slot| game.re2_slot(slot)).collect::<Vec<_>>();
+    assert_eq!(slots(&game), [[0x01, 1], [0x02, 15], [0x14, 120], [0, 0]]);
+    game.init_re2_status();
+    assert_eq!(
+        slots(&game),
+        [[0x01, 1], [0x02, 15], [0x14, 120], [0, 0]],
+        "compact"
+    );
+}
