@@ -712,6 +712,8 @@ pub const SCE_EVENT: u8 = 5;
 pub const SCE_FLAG_CHANGE: u8 = 6;
 /// `Sce_Water`'s area: the player's `Water` while inside it.
 pub const SCE_WATER: u8 = 7;
+/// `Sce_Move`'s area (`0x4E98A0`): moves its caller by the area's words.
+pub const SCE_MOVE: u8 = 8;
 pub const SCE_SAVE: u8 = 9;
 const SCE_ITEMBOX: u8 = 10;
 /// `Sce_Hikidashi`'s area (`0x4E9CB0`): a drawer
@@ -1325,11 +1327,16 @@ impl Re2State {
     /// `Sce_work_clr_at` (`0x4E3DE0`), after [`Self::sce_work_clr`] at the
     /// end of `Sce_scheduler_main`'s pass: the player and every enemy in play
     /// forget their area, so a script sees only the one the last `Sce_at`
-    /// found them in.
+    /// found them in. The partner isn't in its walk.
     pub fn sce_work_clr_at(&mut self) {
         self.player.at_sce = NO_AREA;
-        for character in self.characters.0.iter_mut().flatten() {
-            if character.be_flg & 1 != 0 {
+        // `enemy_work` (`0x98A114`) starts past `splayer_work` (`0x98A110`):
+        // the partner keeps its last area.
+        for (slot, character) in self.characters.0.iter_mut().enumerate() {
+            if slot != SPLAYER_SLOT
+                && let Some(character) = character.as_deref_mut()
+                && character.be_flg & 1 != 0
+            {
                 character.area = NO_AREA;
             }
         }
@@ -1652,16 +1659,33 @@ pub struct ActionGate {
     /// player, then the enemy slots) or a room object, by that one's `x` and
     /// `z` (`Sce_at_check`, `0x4E9227`).
     pub parent: Option<u8>,
+    /// The area's `Sat` byte as the script wrote it: the callers in its low
+    /// nibble, `0x10` the action key, `0x20` the point ahead and `0x40` the
+    /// body (`Sce_at_check`). `None` for an area put in the table by hand,
+    /// whose [`RoomAction::flags`] stand in for it ([`Self::sat`]).
+    pub sat: Option<u8>,
 }
 
 impl ActionGate {
-    /// A gate from an area's floor and `Super` bytes.
-    pub fn new(quad: Option<[[i16; 2]; 4]>, floor: u8, parent: u8) -> Self {
+    /// A gate from an area's `Sat`, floor and `Super` bytes.
+    pub fn new(quad: Option<[[i16; 2]; 4]>, sat: u8, floor: u8, parent: u8) -> Self {
         Self {
             quad,
             floor: (floor < 0x80).then_some(floor),
             parent: (parent & 0x80 != 0).then_some(parent),
+            sat: Some(sat),
         }
+    }
+
+    /// The area's `Sat` byte, or one rebuilt from `flags`
+    /// (`probe_flags`'s reading) for an area with none: its callers, the
+    /// action key from `0x80`, and the body (`0x40`) or else the point ahead.
+    pub fn sat(&self, flags: u8) -> u8 {
+        self.sat.unwrap_or_else(|| {
+            let probe = if flags & 0x40 != 0 { 0x40 } else { 0x20 };
+            let action = if flags & 0x80 != 0 { 0x10 } else { 0 };
+            (flags & 0x0F) | action | probe
+        })
     }
 
     /// The gate and box moved by `origin`, as `Sce_at_check` adds its
@@ -1690,9 +1714,11 @@ impl ActionGate {
             }
             .contains_signed(x, z),
             None => {
-                let [left, near, width, depth] = zone.map(i32::from);
-                let (width, depth) = (width & 0xFFFF, depth & 0xFFFF);
-                (0..width).contains(&(x - left)) && (0..depth).contains(&(z - near))
+                // `Hit_ck_box` (`0x4C4FB0`): an unsigned test, so the far
+                // edge is in and a point short of the near one wraps out.
+                let [left, near, width, depth] = zone;
+                (x.wrapping_sub(i32::from(left)) as u32) <= u32::from(width as u16)
+                    && (z.wrapping_sub(i32::from(near)) as u32) <= u32::from(depth as u16)
             }
         }
     }
@@ -1959,7 +1985,7 @@ impl GameHost<'_> {
             crate::warning!("warning: RE2 area {slot} is past the action slots");
             return;
         }
-        self.game.re2.gates[slot] = ActionGate::new(quad, floor, parent);
+        self.game.re2.gates[slot] = ActionGate::new(quad, sat, floor, parent);
         self.game.doors[slot] = None;
         self.game.room_actions[slot] = Some(area_action(slot as u8, sce, sat, zone, params));
     }
@@ -1998,6 +2024,7 @@ impl GameHost<'_> {
             };
             params[6..].copy_from_slice(&kept);
         }
+        self.game.re2.gates[slot].sat = Some(at(2) as u8);
         self.game.room_actions[slot] = Some(area_action(
             slot as u8,
             at(1) as u8,
@@ -2432,7 +2459,7 @@ impl GameHost<'_> {
         };
         let next = |index: usize| at(rest + index);
         let flags = probe_flags(sat);
-        self.game.re2.gates[slot] = ActionGate::new(quad, floor, at(4) as u8);
+        self.game.re2.gates[slot] = ActionGate::new(quad, sat, floor, at(4) as u8);
         self.game.room_actions[slot] = Some(RoomAction {
             slot: slot as u8,
             kind: RoomActionKind::Door,
@@ -3737,6 +3764,290 @@ mod tests {
         game.objects.record_mut(1).unwrap().pos = [-19000, -3600, -12500];
         game.interact([0, 0, 0], 0, false);
         assert!(on_plate_3(&mut game));
+    }
+
+    /// `Sce_at_check` writes `At_sce_no` before it calls the handler, and
+    /// `SCE_AUTO`'s (`Nothing`, `0x4E9440`) only puts the area variables
+    /// back: a plate built from a kind-0 area still holds its statue, and an
+    /// enemy in a kind-0 area still has it as member 9.
+    #[test]
+    fn a_kind_0_area_is_its_callers_member_9_and_leaves_the_variables() {
+        let mut game = plate_hall([-17000, -3600, -12500], 2);
+        let plate = [3, i64::from(SCE_AUTO), 0x44, 2, 0, -17250, -12700, 600, 400];
+        exec(&mut game, "aot_set", &plate);
+        // An enemy-only kind-0 area on every floor round an enemy.
+        let licker = [
+            0, 1, 0x22, 16, 69, 0, 14, 0, 61, 32000, -5700, 32000, 1024, 0, 0,
+        ];
+        exec(&mut game, "sce_em_set", &licker);
+        let area = [
+            6,
+            i64::from(SCE_AUTO),
+            0x42,
+            255,
+            0,
+            31000,
+            31000,
+            2000,
+            2000,
+        ];
+        exec(&mut game, "aot_set", &area);
+        game.re2.vars[VAR_BODY_AREA] = 0x1234;
+        game.interact([0, 0, 0], 0, false);
+        assert_eq!(game.objects.record(1).unwrap().at_sce_no, 3);
+        assert_eq!(game.re2.characters.0[1].as_deref().unwrap().area, 6);
+        assert_eq!(
+            game.re2.vars[VAR_BODY_AREA], 0x1234,
+            "`Nothing` puts it back"
+        );
+    }
+
+    /// `Hit_ck_box` (`0x4C4FB0`) compares `x - left` with the width unsigned:
+    /// the far edge is in, a point short of the near edge wraps out.
+    #[test]
+    fn an_areas_box_holds_its_far_edge() {
+        let gate = ActionGate::default();
+        let zone = [100, 200, 50, 60];
+        assert!(gate.contains(zone, 100, 200, 0));
+        assert!(gate.contains(zone, 150, 260, 0), "the far corner");
+        assert!(!gate.contains(zone, 151, 230, 0));
+        assert!(!gate.contains(zone, 120, 261, 0));
+        assert!(!gate.contains(zone, 99, 230, 0));
+        assert!(!gate.contains(zone, 120, 199, 0));
+        // An object pushed exactly to a plate's far edge is on it.
+        let mut game = plate_hall([-16650, -3600, -12300], 2);
+        game.interact([0, 0, 0], 0, false);
+        assert_eq!(game.objects.record(1).unwrap().at_sce_no, 3);
+    }
+
+    /// `Sce_at`'s last pass, `Sce_at_check(splayer_work, 8, 0)`, runs the
+    /// partner's areas' handlers, and `Sce_work_clr_at` walks only
+    /// `enemy_work`, which starts past `splayer_work`: the partner keeps its
+    /// last area from pass to pass.
+    #[test]
+    fn the_partners_area_runs_and_outlasts_the_scripts_pass() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        place_sherry(&mut game, 0x50);
+        // A partner-only flag change round her (`Sce_Flg_chg`, 5:8 on).
+        let area = [
+            7,
+            i64::from(SCE_FLAG_CHANGE),
+            0x48,
+            255,
+            0,
+            -17000,
+            -24000,
+            1000,
+            1000,
+            5,
+            0,
+            8,
+            0,
+            1,
+            0,
+        ];
+        exec(&mut game, "aot_set", &area);
+        game.interact([0, 0, 0], 0, false);
+        assert!(game.re2.flag(5, 8), "the handler ran");
+        assert_eq!(splayer(&game).area, 7);
+        game.re2.sce_work_clr_at();
+        assert_eq!(splayer(&game).area, 7, "not in `enemy_work`");
+        assert_eq!(game.re2.player.at_sce, NO_AREA);
+    }
+
+    /// `Sce_at_check`: with `Sat & 0x40` the body is tested, and on a miss
+    /// the point ahead with `Sat & 0x20`; an area with neither bit is never
+    /// hit, and one with only 0x20 never tests the body.
+    #[test]
+    fn a_missed_body_falls_through_to_the_point_ahead() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let (dx, dz) = crate::player::reach_offset_re2(1024);
+        let ahead = [5000 + dx, 0, 5000 + dz];
+        let flag_area = |slot: i64, sat: i64, centre: [i32; 3], bit: i64| {
+            [
+                slot,
+                i64::from(SCE_FLAG_CHANGE),
+                sat,
+                255,
+                0,
+                i64::from(centre[0]) - 100,
+                i64::from(centre[2]) - 100,
+                200,
+                200,
+                5,
+                0,
+                bit,
+                0,
+                1,
+                0,
+            ]
+        };
+        let mut host = GameHost { game: &mut game };
+        let aot_set = crate::scd2::opcode::by_mnemonic("aot_set").unwrap();
+        // Body and ahead, round the point ahead: the body misses, the point hits.
+        host.exec(0, aot_set, &flag_area(1, 0x61, ahead, 8));
+        // Neither bit, round the body.
+        host.exec(0, aot_set, &flag_area(2, 0x01, [5000, 0, 5000], 9));
+        // Ahead only, round the body.
+        host.exec(0, aot_set, &flag_area(3, 0x21, [5000, 0, 5000], 10));
+        game.interact([5000, 0, 5000], 1024, false);
+        assert!(game.re2.flag(5, 8), "the fall-through");
+        assert_eq!(game.re2.vars[VAR_FORWARD_AREA], 1);
+        assert!(!game.re2.flag(5, 9), "no probe bit");
+        assert!(!game.re2.flag(5, 10), "no body bit");
+        assert_eq!(game.re2.player.at_sce, 1);
+    }
+
+    /// `Sce_at` runs only while the player's `Life` (`0x98A046`) is not
+    /// below 0: a dead player's areas, and everyone else's, stay as they
+    /// were, `Water` included.
+    #[test]
+    fn a_dead_players_tick_runs_no_area_pass() {
+        let mut game = plate_hall([-17000, -3600, -12500], 2);
+        game.re2.player.water = -180;
+        game.entities[0].health = -1;
+        game.interact([0, 0, 0], 0, false);
+        assert_eq!(game.objects.record(1).unwrap().at_sce_no, NO_AREA);
+        assert_eq!(game.re2.player.water, -180);
+        game.entities[0].health = 0;
+        game.interact([0, 0, 0], 0, false);
+        assert_eq!(game.objects.record(1).unwrap().at_sce_no, 3);
+        assert_eq!(game.re2.player.water, 0);
+    }
+
+    /// Room 10C's hall, cut down from `pl0-ROOM10C0`: the statues, the
+    /// plates (areas 3 and 4, objects only, events 4 and 5) and their
+    /// messages (7 and 8), the jewel's area (5, off until both are down), and
+    /// the events and the jewel scene as the room has them.
+    const PLATES_10C: &str = "#version 1\n#game re2\n\
+        proc main_00\n{\n\
+        obj_model_set(0, 0, 0, 0, 0, 2, 0, 10, 18, -21294, -7560, -12600, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);\n\
+        obj_model_set(1, 0, 0, 0, 0, 2, 0, 132, 0, -22900, -3600, -13000, 0, 2048, 0, 0, -900, 0, 432, 132, 3, 176, 1);\n\
+        obj_model_set(2, 0, 0, 0, 0, 2, 0, 132, 0, -20100, -3600, -13000, 0, 0, 0, 0, -900, 0, 432, 132, 3, 176, 1);\n\
+        aot_set(3, 5, 68, 2, 0, -17250, -12700, 600, 400, 255, 0, 24, 4, 0, 0);\n\
+        aot_set(7, 4, 49, 2, 0, -17450, -13000, 1200, 800, 2, 0, 0, 0, 255, 255);\n\
+        aot_set(4, 5, 68, 2, 0, -26400, -12850, 600, 400, 255, 0, 24, 5, 0, 0);\n\
+        aot_set(8, 4, 49, 2, 0, -27170, -12950, 1600, 800, 2, 0, 0, 0, 255, 255);\n\
+        item_aot_set(5, 2, 49, 2, 0, -22000, -12800, 1000, 1000, 51, 1, 32, 0, 224);\n\
+        aot_reset(5, 0, 0, 0, 0, 0, 0, 0, 0);\n\
+        evt_end(0);\n}\n\
+        proc main_01\n{\n    evt_end(0);\n}\n\
+        proc main_02\n{\n    evt_end(0);\n}\n\
+        proc main_03\n{\n    evt_end(0);\n}\n\
+        proc main_04\n{\n    work_set(4, 1);\n    nop();\n    if (member_cmp(0, 9, 0, 3))\n    {\n\
+        aot_reset(3, 0, 0, 0, 0, 0, 0, 0, 0);\n        aot_reset(7, 0, 0, 0, 0, 0, 0, 0, 0);\n\
+        set(4, 38, 1);\n        se_on(2, 10, 0, 0, -3600, 0);\n        vib_set1(100, 1, 0);\n\
+        vib_set1(180, 5, 1);\n        work_set(4, 1);\n        nop();\n        member_copy(16, 0);\n\
+        nop();\n        calc(0, 6, 16, -129);\n        member_set2(0, 16);\n        nop();\n\
+        if (ck(4, 39, 1))\n        {\n            gosub(6);\n\
+        aot_reset(5, 2, 49, 51, 0, 1, 0, 32, 0);\n        }\n    }\n    evt_end(0);\n}\n\
+        proc main_05\n{\n    work_set(4, 2);\n    nop();\n    if (member_cmp(0, 9, 0, 4))\n    {\n\
+        aot_reset(4, 0, 0, 0, 0, 0, 0, 0, 0);\n        aot_reset(8, 0, 0, 0, 0, 0, 0, 0, 0);\n\
+        set(4, 39, 1);\n        se_on(2, 10, 0, 0, -3600, 0);\n        vib_set1(100, 1, 0);\n\
+        vib_set1(180, 5, 1);\n        work_set(4, 2);\n        nop();\n        member_copy(16, 0);\n\
+        nop();\n        calc(0, 6, 16, -129);\n        member_set2(0, 16);\n        nop();\n\
+        if (ck(4, 38, 1))\n        {\n            gosub(6);\n\
+        aot_reset(5, 2, 49, 51, 0, 1, 0, 32, 0);\n        }\n    }\n    evt_end(0);\n}\n\
+        proc main_06\n{\n    set(2, 7, 1);\n    set(1, 27, 1);\n    sleep(10, 20);\n    cut_chg(9);\n\
+        sleep(10, 30);\n    gosub(7);\n    sleep(10, 30);\n    cut_old();\n    nop();\n\
+        sleep(10, 10);\n    gosub(8);\n    evt_end(0);\n}\n\
+        proc main_07\n{\n    work_set(4, 0);\n    nop();\n    speed_set(2, 0);\n    speed_set(7, 20);\n\
+        speed_set(3, 0);\n    speed_set(9, -21);\n    while (member_cmp(0, 12, 3, -5600))\n    {\n\
+        evt_next();\n        add_speed();\n        add_aspeed();\n        nop();\n    }\n\
+        se_on(2, 267, 4, 0, 0, 0);\n    pos_set(0, -21550, -5600, -12500);\n    member_set(14, 0);\n\
+        member_set(15, 0);\n    member_set(16, 0);\n    evt_end(0);\n}\n\
+        proc main_08\n{\n    work_set(1, 0);\n    plc_ret();\n    set(2, 7, 0);\n    set(1, 27, 0);\n\
+        cut_auto(1);\n    evt_end(0);\n}\n";
+
+    /// One tick of [`PLATES_10C`] as `Game_loop` runs it: the events the
+    /// last `Sce_at` raised start, the scheduler's pass and its clears, then
+    /// `Sce_at` with the player away on floor 0.
+    fn plates_10c_tick(game: &mut GameState, vm: &mut crate::scd2::vm::Vm) {
+        for (task, event) in std::mem::take(&mut game.re2.pending_events) {
+            vm.exec_event(usize::from(task), usize::from(event));
+        }
+        vm.tick(&mut GameHost { game: &mut *game });
+        game.re2.sce_work_clr();
+        game.re2.sce_work_clr_at();
+        for record in &mut game.objects.records {
+            if record.be_flg & 1 != 0 {
+                record.at_sce_no = NO_AREA;
+            }
+        }
+        game.interact([0, 0, 0], 0, false);
+    }
+
+    fn plates_10c() -> (GameState, crate::scd2::vm::Vm) {
+        let scripts = crate::scd2::akscr::compile(PLATES_10C).unwrap();
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.objects = crate::objects::ObjectTable::new(3);
+        let mut vm = crate::scd2::vm::Vm::new(&scripts);
+        vm.start_main();
+        plates_10c_tick(&mut game, &mut vm);
+        (game, vm)
+    }
+
+    fn sounded(game: &GameState, slot: u8) -> bool {
+        game.re2.sounds.iter().any(|sound| sound.id.slot == slot)
+    }
+
+    #[test]
+    fn a_statue_on_its_plate_sets_the_flag_and_locks() {
+        let (mut game, mut vm) = plates_10c();
+        assert_eq!(game.objects.record(1).unwrap().be_flg & 0x81, 0x81);
+        assert_eq!(game.room_actions[3].unwrap().sce, SCE_EVENT);
+        game.objects.record_mut(1).unwrap().pos = [-17000, -3600, -12500];
+        game.re2.sounds.clear();
+        plates_10c_tick(&mut game, &mut vm);
+        assert!(!game.re2.flag(4, 38), "the event starts on the next pass");
+        plates_10c_tick(&mut game, &mut vm);
+        assert!(game.re2.flag(4, 38));
+        assert!(sounded(&game, 0x0A), "snd 2:a");
+        let statue = game.objects.record(1).unwrap();
+        assert_eq!(statue.be_flg & 0x80, 0, "no longer pushed");
+        assert_eq!(statue.be_flg & 1, 1);
+        for slot in [3, 7] {
+            assert_eq!(
+                game.room_actions[slot].unwrap().sce,
+                SCE_AUTO,
+                "area {slot}"
+            );
+        }
+        // The other plate and the jewel are as they were.
+        assert!(!game.re2.flag(4, 39));
+        assert_eq!(game.room_actions[4].unwrap().sce, SCE_EVENT);
+        assert_eq!(game.room_actions[5].unwrap().sce, SCE_AUTO);
+        // `aot_reset` cleared the plate's `Sat` too, so it holds no one now.
+        assert_eq!(game.re2.gates[3].sat, Some(0));
+        assert_eq!(game.objects.record(1).unwrap().at_sce_no, NO_AREA);
+    }
+
+    #[test]
+    fn both_plates_run_the_jewel_scene() {
+        let (mut game, mut vm) = plates_10c();
+        game.objects.record_mut(1).unwrap().pos = [-17000, -3600, -12500];
+        for _ in 0..3 {
+            plates_10c_tick(&mut game, &mut vm);
+        }
+        assert!(game.re2.flag(4, 38) && !game.re2.flag(4, 39));
+        game.objects.record_mut(2).unwrap().pos = [-26000, -3600, -12500];
+        game.re2.sounds.clear();
+        let mut ticks = 0;
+        while game.room_actions[5].unwrap().sce != SCE_ITEM {
+            plates_10c_tick(&mut game, &mut vm);
+            ticks += 1;
+            assert!(ticks < 1000, "the jewel scene never ended");
+        }
+        assert!(game.re2.flag(4, 39));
+        assert_eq!(game.objects.record(2).unwrap().be_flg & 0x80, 0);
+        assert_eq!(game.objects.record(0).unwrap().pos, [-21550, -5600, -12500]);
+        assert!(sounded(&game, 0x0B), "snd 2:b, the jewel's fall");
+        let jewel = game.room_actions[5].unwrap();
+        assert_eq!(jewel.kind, RoomActionKind::Item);
+        assert_eq!(jewel.params[0], 0x33, "the Red Jewel");
     }
 
     /// Room 205's `main_00` hangs object 3 on object 2 (`obj_model_set`
