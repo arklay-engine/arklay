@@ -1,0 +1,37 @@
+# Claire A, room 208 from room 207's door 2: the walk to the ink ribbons' table as route_200_208.txt has it, their take into slot 3, round the counter's west end to the typewriter, and its prompt paged and answered No (oracle/re2.md, "Claire A past the card")
+350 up
+369
+374 right
+387
+397 up
+441
+449 left
+462
+472 up
+482
+486 action
+488
+642 action
+644
+722 action
+724
+730 right
+743
+744 up
+762
+763 left
+776
+777 up
+814
+815 left
+822
+825 action
+829
+871 action
+875
+921 action
+925
+971 right
+975
+1001 action
+1005

@@ -47,14 +47,15 @@ const MESSAGE_NO_RIBBON: u8 = 0;
 const MESSAGE_PROMPT: u8 = 1;
 
 /// The save place a new game starts with (`0x98E9A7`), by the scenario's
-/// index (`0x989E7E`: Leon A, Claire A, Leon B, Claire B, then the two
-/// extras), from the new game's set-up (`0x4B73C0`).
+/// index (`0x989E7E`: the character times two, plus one for scenario B, so
+/// Leon A, Leon B, Claire A, Claire B, then the two extras), from the new
+/// game's set-up (`0x4B73C0`). Claire A starts at `0x0F`, as Leon A does.
 const NEW_GAME_PLACES: [u8; 6] = [0x0F, 0x10, 0x0F, 0x10, 0x11, 0x12];
 
 /// The save place before any typewriter fires, for a new game as
 /// `character` (0 Leon, 1 Claire) in scenario A or B.
 pub fn new_game_place(character: u8, scenario_b: bool) -> u8 {
-    NEW_GAME_PLACES[usize::from(character & 1) + 2 * usize::from(scenario_b)]
+    NEW_GAME_PLACES[2 * usize::from(character & 1) + usize::from(scenario_b)]
 }
 
 /// The stop word the two messages hold the world with (`Stop_data`
@@ -176,8 +177,8 @@ mod tests {
     #[test]
     fn a_new_game_starts_on_its_scenarios_place() {
         assert_eq!(new_game_place(0, false), 0x0F);
-        assert_eq!(new_game_place(1, false), 0x10);
-        assert_eq!(new_game_place(0, true), 0x0F);
+        assert_eq!(new_game_place(0, true), 0x10);
+        assert_eq!(new_game_place(1, false), 0x0F);
         assert_eq!(new_game_place(1, true), 0x10);
     }
 

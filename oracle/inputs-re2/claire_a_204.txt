@@ -1,0 +1,115 @@
+# Claire A, rooms 201 and 204 from room 200's door 1: leon_a_204.txt's walk past the bar, the window licker's start, door 1 into 204, the body's 15 rounds and the window licker's fight, with seven more presses of fire after the reload (her handgun takes nine hits where Leon's took ten shots), then the run north to door 1 into 205 (oracle/re2.md, "Claire A past the card")
+350 right
+352
+354 up run
+386
+388 left
+390
+392 up run
+424
+426 left
+439
+441 up run
+461
+463 right
+466
+468 action
+472
+812 up run
+913
+916 right
+928
+930 up
+941
+944 action
+948
+1005 action
+1009
+1030 action
+1034
+1060 action
+1064
+1322 action
+1326
+1522 action
+1526
+1560 up run
+1595
+1700 up
+1760
+1790 right
+1806
+1806 up run
+1822
+1822 left
+1837
+1838 aim down
+1846 aim down fire
+1850 aim down
+1858 aim down fire
+1862 aim down
+1870 aim down fire
+1874 aim down
+1882 aim down fire
+1886 aim down
+1894 aim down fire
+1898 aim down
+1906 aim down fire
+1910 aim down
+1918 aim down fire
+1922 aim down
+1930 aim down fire
+1934 aim down
+1942 aim down fire
+1946 aim down
+1954 aim down fire
+1958 aim down
+1966 aim down fire
+1970 aim down
+1978 aim down fire
+1982 aim down
+1990 aim down fire
+1994 aim down
+2002 aim down fire
+2006 aim down
+2014 aim down fire
+2018 aim down
+2026 aim down fire
+2030 aim down
+2038 aim down fire
+2042 aim down
+2050 aim down fire
+2054 aim down
+2062 aim down fire
+2066 aim down
+2074 aim down fire
+2078 aim down
+2086 aim down fire
+2090 aim down
+2098 aim down fire
+2102 aim down
+2110 aim down fire
+2114 aim down
+2122 aim down fire
+2126 aim down
+2134 aim down fire
+2138 aim down
+2146 aim down fire
+2150 aim down
+2158 aim down fire
+2162 aim down
+2170 aim down fire
+2174 aim down
+2182 aim down fire
+2186 aim down
+2194 aim down fire
+2198 aim down
+2206 aim down fire
+2210 aim down
+2224
+2234 right
+2236
+2236 up run
+2370
+2380 action
+2384

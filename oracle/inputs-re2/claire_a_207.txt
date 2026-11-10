@@ -1,0 +1,151 @@
+# Claire A, room 207 from room 205's door 2, with the warp's zombies (65, 65, 118 and 55 life): the reload from the status screen, slot 3 from the north, slot 0 from a step back, then raises from steps back as slots 2 and 1 come; the run north and east along the corridor to door 2 into 208 (oracle/re2.md, "Claire A past the card")
+352 start
+356
+388 down
+392
+408 confirm
+412
+428 down
+432
+448 down
+452
+468 confirm
+472
+488 up
+492
+508 confirm
+512
+588 confirm
+592
+600 cancel
+604
+616 cancel
+620
+636 start
+640
+652 left
+660
+661 up
+676
+677 aim
+685 aim fire
+688 aim
+697 aim fire
+700 aim
+709 aim fire
+712 aim
+721 aim fire
+724 aim
+733 aim fire
+736 aim
+745 aim fire
+748 aim
+757 aim fire
+760 aim
+769 aim fire
+772 aim
+781
+782 down
+794
+795 aim
+803 aim fire
+806 aim
+815 aim fire
+818 aim
+827 aim fire
+830 aim
+839 aim fire
+842 aim
+851 aim fire
+854 aim
+863 aim fire
+866 aim
+875 aim fire
+878 aim
+887 aim fire
+890 aim
+899
+900 down
+911
+912 aim
+920 aim fire
+923 aim
+932 aim fire
+935 aim
+944 aim fire
+947 aim
+956 aim fire
+959 aim
+968 aim fire
+971 aim
+980 aim fire
+983 aim
+992 aim fire
+995 aim
+1004 aim fire
+1007 aim
+1016 aim fire
+1019 aim
+1028 aim fire
+1031 aim
+1040 aim fire
+1043 aim
+1052 aim fire
+1055 aim
+1064
+1065 down
+1071
+1072 aim
+1080 aim fire
+1083 aim
+1092 aim fire
+1095 aim
+1104 aim fire
+1107 aim
+1116 aim fire
+1119 aim
+1128 aim fire
+1131 aim
+1140 aim fire
+1143 aim
+1152 aim fire
+1155 aim
+1164 aim fire
+1167 aim
+1176 aim fire
+1179 aim
+1188 aim fire
+1191 aim
+1200 aim fire
+1203 aim
+1212 aim fire
+1215 aim
+1224
+1225 aim
+1233 aim fire
+1236 aim
+1245 aim fire
+1248 aim
+1257 aim fire
+1260 aim
+1269 aim fire
+1272 aim
+1281 aim fire
+1284 aim
+1293 aim fire
+1296 aim
+1305
+1326 left
+1329
+1330 up run
+1343
+1344 right
+1363
+1364 up run
+1420
+1421 right
+1442
+1443 up
+1451
+1452 action
+1456

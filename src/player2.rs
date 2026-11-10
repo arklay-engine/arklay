@@ -59,6 +59,8 @@ const MOVE_CLIMB: u8 = 8;
 const MOVE_JUMP_DOWN: u8 = 9;
 /// `pl_mv_0a`: pushing a room object.
 const MOVE_PUSH: u8 = 10;
+/// `pl_mv_0b`, which raises `fg_status`'s `0x40` too ([`Work::holds_game`]).
+const MOVE_0B: u8 = 11;
 /// The port's optional quick turn, past the original's table.
 const MOVE_QUICK_TURN: u8 = 0x40;
 /// `Spl_Init`'s `Joint_move` late step.
@@ -323,6 +325,14 @@ pub struct Work {
     /// The routines hold the first tick of `pl_mv_00` that a room started on
     /// its own assumes ([`Work::default`]), and no tick has run them yet.
     pub first_tick_assumed: bool,
+    /// `fg_status`'s `0x40`. The aim (`pl_mv_05`), a hit (`Pl_damage`), the
+    /// death (`Pl_die`), `pl_mv_0b` and an enemy's hold (`Pl_Em_damage`,
+    /// `Pl_Em_die`) raise it and leave it to the next routine's case 0, so it
+    /// outlasts each by a tick. The pick-up (`pl_mv_06`), the stairs
+    /// (`pl_mv_07`) and the climb (`pl_mv_08`) raise it on their first tick and
+    /// drop it themselves on their last. While it is up START doesn't open the
+    /// status screen (`Game_loop`, `0x4C02C7`).
+    pub holds_game: bool,
     /// `Water` (`+0x10c`): the level of the water the player stands in, or 0.
     /// `Sce_at` clears it each tick after `Player_move` and a water area
     /// (`Sce_Water`, `aot_set` kind 7) sets it again, so a footfall reads the
@@ -897,6 +907,7 @@ impl Default for Work {
             posed: false,
             init_pose: false,
             first_tick_assumed: true,
+            holds_game: false,
             routine: [MODE_MOVE, MOVE_IDLE, 1, 0],
             move_no: IDLE_CLIPS[0],
             move_cnt: 1,
@@ -1001,6 +1012,24 @@ impl Work {
     /// `0x80` and so holds the cut on screen (`Re2State::view_held`).
     pub fn holds_view(&self) -> bool {
         self.routine[0] == MODE_MOVE && self.routine[1] == MOVE_AIM
+    }
+
+    /// The routines that raise `fg_status`'s `0x40` and leave it up for the
+    /// next routine to drop ([`Work::holds_game`]).
+    fn holds_game_now(&self) -> bool {
+        self.holds_view()
+            || matches!(
+                self.routine[0],
+                MODE_DAMAGE | MODE_DEAD | MODE_HELD | MODE_HELD_DIE
+            )
+            || (self.routine[0] == MODE_MOVE && self.routine[1] == MOVE_0B)
+    }
+
+    /// The routines that raise `fg_status`'s `0x40` and drop it themselves on
+    /// their last tick ([`Work::holds_game`]).
+    fn holds_game_in_routine(&self) -> bool {
+        self.routine[0] == MODE_MOVE
+            && matches!(self.routine[1], MOVE_ITEM | MOVE_STAIRS | MOVE_CLIMB)
     }
 
     /// `Be_flg`'s bits 4 and 8: on the stairs, or going up or down a box and
@@ -1354,6 +1383,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         return None;
     }
     work.first_tick_assumed = false;
+    let held_game = work.holds_game_now();
     if work.damage_cnt & !DAMAGE_LOCK != 0 {
         work.damage_cnt -= 1;
     }
@@ -1382,6 +1412,8 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
     mover.work.latch_kage_probe(mover.player.angle);
     mover.work.root = mover.part_matrix(0);
     mover.latch_parts();
+    mover.work.holds_game =
+        held_game || mover.work.holds_game_now() || mover.work.holds_game_in_routine();
     mover.arrived
 }
 
@@ -4862,8 +4894,7 @@ impl Mover<'_, '_> {
 
     /// `FUN_004960d0`, `em_damage_table[0x31]`'s `Routine_1` 0: in G2's hand
     /// on its clip 0, turning to it, while G2's grab carries the player.
-    /// `fg_status`'s `0x40` isn't ported, nor are its `Routine_1` 2 to 4, the
-    /// kill.
+    /// Its `Routine_1` 2 to 4, the kill, aren't ported.
     fn em31_held(&mut self, held: &mut Held<'_>) {
         if matches!(self.work.routine[1], 2..=4) {
             return;
@@ -4990,8 +5021,8 @@ impl Mover<'_, '_> {
     /// claws, on its clip 0 from `Null_pos_set` turned half round, then 30
     /// ticks' wait. Its blood at the player's parts (an `Esp_call` each fourth
     /// frame from frame 8 and two at frames 0x59 and 0x62, with their `Rnd`s,
-    /// which are drawn), the parts its frame 10 hides, `fg_status`' `0x40` and
-    /// frame 0x59's and 0x62's footfall sound aren't ported.
+    /// which are drawn), the parts its frame 10 hides and frame 0x59's and
+    /// 0x62's footfall sound aren't ported.
     fn em31_killed(&mut self, held: &mut Held<'_>) {
         if self.work.routine[1] != 0 {
             return;
@@ -7796,6 +7827,35 @@ mod tests {
         assert_eq!((setup.work.routine[0], life), (MODE_MOVE, 190));
         hit(&mut setup, &mut life);
         assert_eq!((setup.work.routine[0], life), (MODE_DAMAGE, 180));
+    }
+
+    #[test]
+    fn an_enemys_hold_holds_the_game_until_a_tick_starts_free() {
+        let mut setup = Setup::new(0);
+        setup.tick(Input::default(), 190);
+        assert!(!setup.work.holds_game);
+        setup.work.routine = [MODE_HELD, 0, 0, 0];
+        setup.tick(Input::default(), 190);
+        assert!(setup.work.holds_game);
+        // The next tick that starts free of the hold drops it.
+        setup.work.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
+        setup.tick(Input::default(), 190);
+        assert!(!setup.work.holds_game);
+        // A hit holds it as the hold does.
+        setup.work.routine = [MODE_DAMAGE, 0, 0, 0];
+        setup.tick(Input::default(), 190);
+        assert!(setup.work.holds_game);
+    }
+
+    #[test]
+    fn the_stairs_hold_the_game_only_while_they_run() {
+        let mut setup = Setup::new(0);
+        setup.work.routine = [MODE_MOVE, MOVE_STAIRS, 1, 0];
+        assert!(setup.work.holds_game_in_routine() && !setup.work.holds_game_now());
+        // Their last tick drops it itself, so a tick that ends idle is free
+        // whatever it started in.
+        setup.work.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
+        assert!(!setup.work.holds_game_in_routine() && !setup.work.holds_game_now());
     }
 
     #[test]

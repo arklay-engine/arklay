@@ -1,0 +1,17 @@
+# Claire A, room 205 from room 204's door 1: one round fired into the corridor, then the walk at Fine's pace as route_200_208.txt has it, past the frozen bodies to door 2 into 207 (oracle/re2.md, "Claire A past the card")
+345 aim
+353 aim fire
+356 aim
+377 aim fire
+380 aim
+397
+401 up run
+501
+503 right
+513 up run
+641
+641 right
+654 up run
+775
+781 action
+785

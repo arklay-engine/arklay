@@ -1,0 +1,43 @@
+# Claire A, room 207's door 2 to the darkroom (208) with the enemies off: a turn and a step into the door's area, the door, then claire_a_208.txt 364 ticks later (oracle/re2.md, "Claire A past the card")
+350 right
+362
+363 up
+366
+367 action
+371
+714 up
+733
+738 right
+751
+761 up
+805
+813 left
+826
+836 up
+846
+850 action
+852
+1006 action
+1008
+1086 action
+1088
+1094 right
+1107
+1108 up
+1126
+1127 left
+1140
+1141 up
+1178
+1179 left
+1186
+1189 action
+1193
+1235 action
+1239
+1285 action
+1289
+1335 right
+1339
+1365 action
+1369
