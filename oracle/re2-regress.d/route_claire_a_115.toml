@@ -1,0 +1,84 @@
+# Claire A's route from the darkroom (208) to the Unicorn Medal in the S.T.A.R.S. office (115), room by room from
+# warps (oracle/re2.md, "Claire A to the S.T.A.R.S. office"). Rooms 208, 207, 10C and 114 run Leon's scripts; 115's is
+# Claire's own.
+
+# Room 10C's statue 1 pushed by Claire, from Leon's push_statue_10c start and input: her own push clips and her width.
+[[run]]
+name = "push_statue_10c_claire"
+room = "10C"
+player = 1
+character = 1
+setup_script = "push_statue_10c_claire.lua"
+input = "push_statue_10c.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 900
+frames = [360, 899]
+frame_max_mean = 0.1
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,snd,fgcom,om1,om2"
+expect = "match"
+record = "--start claire --no-enemies --warp 10C:-22905:-3600:-11900:1024 --life 200"
+
+# Rooms 208, 207 and 10C, from the typewriter as route_claire_a_208 leaves Claire (119 life, 6 rounds in the handgun,
+# 20 spare, the ink ribbons in slot 3): out of the darkroom, back past 207's dead zombies to the stairs door, up 10C's
+# stairs, the statue puzzle and the Red Jewel, and door 2 into 114.
+[[run]]
+name = "claire_a_208_114"
+room = "208"
+player = 1
+character = 1
+setup_script = "claire_a_208_114.lua"
+input = "claire_a_208_114.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 4310
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgcom,om0,om1,om2,zm0,zm1,zm2,zm3"
+frames = [360, 4309]
+# the doors' frames count only in the whole run's mean: 10C's stairs door (type 4) draws its steps wider and brighter than the original's (docs/internals/deviations/re2.md, "The stairs door's frames"); 0.82 measured
+frame_max_mean = 0.95
+# each room on its own, from its hand back to its door's press: 208, 207, 10C, 114; measured 0.16, 0.14, 0.53 (the jewel's question and item view included) and 0.11
+frame_windows = [[360, 534, 0.25], [875, 1025, 0.25], [1236, 3877, 0.6], [4220, 4309, 0.2]]
+expect = "match"
+ignore = [
+  # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 208's door 0, 207's door 3 and 10C's door 2
+  [535, "rng"], [535, "rseed"], [1026, "rng"], [1026, "rseed"], [3878, "rng"], [3878, "rseed"],
+  # the warp's flags, as in leon_a_208_114: the original raises 8:141 before 208's init, so the taken ribbons' object
+  # (slot 2) is out of play when the load's pass clears the objects' areas; arklay's setup script raises it after
+  [344, 569, "om2"],
+  # the three loads, as in leon_a_208_114: the original lists the old room's objects until the new room's are set up,
+  # about 90 ticks into the load, where arklay lists the new room's from the load; nothing reads them then
+  [570, 660, "om0"], [570, 660, "om1"], [570, 660, "om2"],
+  [1061, 1153, "om0"], [1061, 1153, "om1"], [1061, 1153, "om2"],
+  [3913, 4003, "om0"], [3913, 4003, "om1"], [3913, 4003, "om2"],
+  # 10C's object 0 (the pedestal) takes its floor from its height a tick sooner in arklay as play comes back after
+  # the stairs door (leon_a_208_114's load range covers the same tick, its 1148)
+  [1234, "om0"],
+]
+record = "--start claire --warp 208:-19956:0:-19363:149:1 --flag 8:141 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --life 119 --give 0:3:6 --give 2:0x14:20 --give 3:0x1E:3"
+
+# Rooms 114 and 115: down the empty corridor to door 1, then the desk: Chris's Diary and the Unicorn Medal (event 5, no
+# scene on Claire A), the 15 handgun rounds, and door 0, which both pick-ups have made event 3: the exit scene.
+[[run]]
+name = "claire_a_114_115"
+room = "114"
+player = 1
+character = 1
+setup_script = "claire_a_114_115.lua"
+input = "claire_a_114_115.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 2850
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,scene,fl,esp,fgscn,fgstat,fgitem,fgroom,fgcom,om3,om7,om8,om9,zm0"
+frames = [360, 2849]
+# 115's frames 1342 to 1345 keep the desk's close-up in the original as the screen fades (`cut_chg` with bit 7, docs/internals/deviations/re2.md, "The frames of a cut"); 0.78 measured
+frame_max_mean = 0.9
+# 114 from the warp to the door's press, then 115 from the hand back to the close-up's fade, from the fade to door 0's press (the medal's and the rounds' windows), and the exit scene; measured 0.16, 0.21, 0.67 and 0.25
+frame_windows = [[360, 435, 0.25], [777, 1341, 0.3], [1346, 2424, 0.8], [2425, 2849, 0.35]]
+expect = "match"
+ignore = [
+  # 114's door 1
+  [436, "rng"], [436, "rseed"],
+  # the load, as in claire_a_208_114: the original lists 114's objects (none) until 115's are set up, 90 ticks in
+  [471, 561, "om3"], [471, 561, "om7"], [471, 561, "om8"], [471, 561, "om9"],
+]
+record = "--start claire --warp 114:-25260:0:-3420:2048:5 --life 119 --give 0:3:6 --give 2:0x14:20 --give 3:0x1E:3 --give 4:0x33:1"
