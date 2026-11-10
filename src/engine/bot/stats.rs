@@ -48,7 +48,8 @@
 //! snapshot, the Lua route and the path queries, in microseconds. A 30 Hz
 //! tick has 33.3 ms for the whole frame, so a bot tick over a few
 //! milliseconds can show as a stutter in the window; `over_ms` counts the
-//! ticks over each bound and `worst` lists the slowest ones. `phases_secs`
+//! ticks over each bound and `worst` lists the slowest ones, each with the
+//! API methods that cost it the most (calls and microseconds). `phases_secs`
 //! splits the total by tick phase ([`PHASES`], with the script phase split
 //! again into the route's own Lua and its API calls) and `api` lists the
 //! API methods by the time their calls took. Unlike the rest of the report
@@ -83,6 +84,8 @@ const HIT_THRESHOLD: i16 = 2;
 const COMPUTE_BOUNDS_MS: [u32; 5] = [1, 4, 8, 16, 33];
 /// How many of the slowest bot ticks `compute.worst` lists.
 const COMPUTE_WORST: usize = 10;
+/// How many API methods each of them names, costliest first.
+const WORST_API: usize = 3;
 
 /// The phases of a bot tick `compute.phases_secs` splits the cost into:
 /// building the snapshot, observing it (statistics, navigation and the
@@ -95,6 +98,8 @@ pub(super) const PHASES: [&str; 4] = ["snapshot", "observe", "script", "finish"]
 pub(super) struct ApiProfile {
     /// Per method: calls, total nanoseconds, the slowest call's nanoseconds.
     methods: BTreeMap<&'static str, (u64, u64, u64)>,
+    /// This tick's calls per method: calls and total nanoseconds.
+    tick: Vec<(&'static str, u32, u64)>,
 }
 
 impl ApiProfile {
@@ -104,6 +109,33 @@ impl ApiProfile {
         entry.0 += 1;
         entry.1 += nanos;
         entry.2 = entry.2.max(nanos);
+        match self.tick.iter_mut().find(|row| row.0 == name) {
+            Some(row) => {
+                row.1 += 1;
+                row.2 += nanos;
+            }
+            None => self.tick.push((name, 1, nanos)),
+        }
+    }
+
+    /// End a tick: its [`WORST_API`] costliest methods as `(method, calls,
+    /// microseconds)`, costliest first, when `wanted` (the tick is one of
+    /// the slowest); the next tick starts empty either way.
+    pub(super) fn end_tick(&mut self, wanted: bool) -> Vec<(&'static str, u32, u32)> {
+        let mut top = Vec::new();
+        if wanted {
+            self.tick.sort_by(|a, b| b.2.cmp(&a.2).then(a.0.cmp(b.0)));
+            top = self
+                .tick
+                .iter()
+                .take(WORST_API)
+                .map(|&(name, calls, nanos)| {
+                    (name, calls, u32::try_from(nanos / 1000).unwrap_or(u32::MAX))
+                })
+                .collect();
+        }
+        self.tick.clear();
+        top
     }
 
     /// The methods by total time, costliest first, and their sum in seconds.
@@ -133,18 +165,33 @@ struct ComputeLoad {
     phases: [u64; 4],
     /// Every tick's cost in microseconds, in tick order.
     micros: Vec<u32>,
-    /// The slowest ticks so far: `(microseconds, tick, room)`, slowest first.
-    worst: Vec<(u32, u64, String)>,
+    /// The slowest ticks so far: `(microseconds, tick, room, API methods)`,
+    /// slowest first.
+    worst: Vec<WorstTick>,
 }
 
+/// One of the slowest ticks: its cost in microseconds, the tick, the room
+/// and its costliest API methods ([`ApiProfile::end_tick`]).
+type WorstTick = (u32, u64, String, Vec<(&'static str, u32, u32)>);
+
 impl ComputeLoad {
-    fn note(&mut self, tick: u64, room: Option<&str>, micros: u32) {
-        self.micros.push(micros);
-        if self.worst.len() < COMPUTE_WORST
+    /// Whether a tick of `micros` would be listed among the slowest.
+    fn is_worst(&self, micros: u32) -> bool {
+        self.worst.len() < COMPUTE_WORST
             || self.worst.last().is_some_and(|(least, ..)| micros > *least)
-        {
+    }
+
+    fn note(
+        &mut self,
+        tick: u64,
+        room: Option<&str>,
+        micros: u32,
+        api: Vec<(&'static str, u32, u32)>,
+    ) {
+        self.micros.push(micros);
+        if self.is_worst(micros) {
             self.worst
-                .push((micros, tick, room.unwrap_or_default().to_string()));
+                .push((micros, tick, room.unwrap_or_default().to_string(), api));
             self.worst.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
             self.worst.truncate(COMPUTE_WORST);
         }
@@ -180,7 +227,15 @@ impl ComputeLoad {
         let worst: Vec<Value> = self
             .worst
             .iter()
-            .map(|(us, tick, room)| json!({ "us": us, "tick": tick, "room": room }))
+            .map(|(us, tick, room, api)| {
+                let api: Vec<Value> = api
+                    .iter()
+                    .map(
+                        |(method, calls, us)| json!({ "method": method, "calls": calls, "us": us }),
+                    )
+                    .collect();
+                json!({ "us": us, "tick": tick, "room": room, "api": api })
+            })
             .collect();
         json!({
             "ticks": sorted.len(),
@@ -419,9 +474,17 @@ impl MenuCounters {
 
 impl BotStats {
     /// What bot tick `tick` cost to compute, in microseconds.
-    pub(super) fn note_compute(&mut self, tick: u64, micros: u32) {
+    /// `api` ends the tick's API profile ([`ApiProfile::end_tick`]), told
+    /// whether the tick is one of the slowest.
+    pub(super) fn note_compute(
+        &mut self,
+        tick: u64,
+        micros: u32,
+        api: impl FnOnce(bool) -> Vec<(&'static str, u32, u32)>,
+    ) {
+        let api = api(self.compute.is_worst(micros));
         self.compute
-            .note(tick, self.current_room.as_deref(), micros);
+            .note(tick, self.current_room.as_deref(), micros, api);
     }
 
     /// Add `elapsed` to phase `phase` of [`PHASES`].
