@@ -1,0 +1,26 @@
+# room 208 from a warp to room 207's door 2 arrival, as leon_a_207 leaves Leon: walk to the ink ribbons' table and take the three ribbons (oracle/re2.md, "Leon A past the card")
+# south from the arrival
+350 up
+372
+# turn to face west
+374 right
+395
+# west along the counter to x -19000
+397 up
+447
+# turn back to face north (-z)
+449 left
+470
+# up to the ribbons' table
+472 up
+482
+# the ribbons: the get-item window opens, its question on the 7th tick
+486 action
+488
+# Yes: 0x1E x3 into slot 3 20 ticks later, then "You've taken"
+642 action
+644
+# close the message: play comes back
+722 action
+724
+899

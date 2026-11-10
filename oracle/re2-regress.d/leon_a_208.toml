@@ -1,0 +1,40 @@
+# Leon A past the card, room 208, the darkroom (oracle/re2.md, "Leon A past the card"): room 207's door 2 from where
+# leon_a_207 leaves Leon, with the enemies off, a step forward, the door's hold and 208's music, then the walk to the ink ribbons'
+# table and their take into slot 3.
+[[run]]
+name = "leon_a_208_entry"
+room = "207"
+setup_script = "leon_a_208_entry.lua"
+input = "leon_a_208_entry.txt"
+input_shift = 344
+ticks = 1250
+# no `hk`: the original lists the old room's objects until its new ones are set up, 90 ticks into the load, where
+# arklay lists the new room's from the load (nothing is drawn then); leon_a_208 checks it in 208
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,fgstat,fgitem"
+# from play's return after the door's hold
+frames = [700, 1249]
+# 0.47 measured
+frame_max_mean = 0.6
+expect = "match"
+# the warp's first ticks: the original's neck starts where the warp's load left the last pose, arklay's from the arrival's, and they meet by 356
+ignore = [[344, "pneck"], [345, "pneck"], [346, "pneck"], [347, "pneck"], [348, "pneck"], [349, "pneck"], [350, "pneck"], [351, "pneck"], [352, "pneck"], [353, "pneck"], [354, "pneck"], [355, "pneck"],
+  # the door's own tick (oracle/re2.md, docs/internals/deviations/re2.md)
+  [356, "rng"], [356, "rseed"]]
+record = "--no-enemies --warp 207:-15328:0:-12706:990 --life 60 --give 0:2:10 --give 2:0x14:21"
+
+# The same walk and take from a warp to door 2's arrival in 208.
+[[run]]
+name = "leon_a_208"
+room = "208"
+setup_script = "leon_a_208.lua"
+input = "leon_a_208.txt"
+input_shift = 344
+ticks = 900
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem"
+frames = [360, 899]
+# 0.47 measured
+frame_max_mean = 0.6
+expect = "match"
+# the warp's first ticks: the original's neck starts where the warp's load left the last pose, arklay's from the arrival's, and they meet by 356
+ignore = [[344, "pneck"], [345, "pneck"], [346, "pneck"], [347, "pneck"], [348, "pneck"], [349, "pneck"], [350, "pneck"], [351, "pneck"], [352, "pneck"], [353, "pneck"], [354, "pneck"], [355, "pneck"]]
+record = "--warp 208:-15462:0:-15336:1029:0 --life 60 --give 0:2:10 --give 2:0x14:21"
