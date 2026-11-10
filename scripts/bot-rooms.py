@@ -8,8 +8,8 @@ replay only that room, over many seeds, after each change.
   scripts/bot-rooms.py record [-s SEEDS] [-n NAME] [NAME=VALUE ...]
   scripts/bot-rooms.py list   [NAME ...]
   scripts/bot-rooms.py play   [NAME ...] [-r ROOM ...] [-e SCENE ...] [-s SEEDS]
-                              [-m TICKS] [--from ROOM] [--to ROOM] [--steer]
-                              [--scenes] [--log]
+                              [-m TICKS] [--from ROOM] [--to ROOM] [-k KIND ...]
+                              [--steer] [--scenes] [--log | --trace]
 
 record   Play a game per seed (default 1) and write a scene at every room
          entry to target/bot-rooms/NAME-s<seed>/: the save, the bot's memory
@@ -22,10 +22,13 @@ play     Replay the scenes of the rooms (-r, repeatable; `all` is every
          (default 1-4): the bot starts at the room's door with what it knew
          and had planned then, and the replay ends when it leaves the room,
          dies, or after -m ticks (default 3000). --from and --to keep only
-         the entries from or to that room. --steer has the bot walk to the
+         the entries from or to that room; -k KIND (repeatable, as `06`)
+         only the scenes whose room held an enemy of that kind in an earlier
+         replay (`play -r all` once to learn them). --steer has the bot walk to the
          room the recorded game went to next, whatever it would choose.
          --scenes prints a row per scene whatever the rooms. --log keeps
-         each replay's bot log beside its result.
+         each replay's bot log beside its result; --trace adds a line a
+         tick to it, of the player and every monster.
 
 play prints one row per room (or per scene with one room) and the totals:
 replays, how many left the room (`out`) and by the door the recorded game
@@ -111,6 +114,22 @@ def scenes(path):
     return rows
 
 
+def kinds(row):
+    """The enemy kinds a scene's room held, from the recording's enemies.json
+    (which `play -r all` writes)."""
+    path = os.path.join(row["dir"], "enemies.json")
+    if path not in KINDS:
+        try:
+            with open(path) as f:
+                KINDS[path] = json.load(f)
+        except (OSError, ValueError):
+            KINDS[path] = {}
+    return KINDS[path].get(row["scene"], [])
+
+
+KINDS = {}
+
+
 def record(args):
     if not build(args):
         return 1
@@ -169,6 +188,9 @@ def play(args):
             if args.to and row["to"] != args.to:
                 continue
             picked.append(row)
+    if args.enemy:
+        # The kinds each scene's room held are in the last play's results.
+        picked = [row for row in picked if set(args.enemy) & set(kinds(row))]
     if not (args.room or args.scene):
         print("name the rooms (-r) or the scenes (-e) to replay", file=sys.stderr)
         return 2
@@ -184,10 +206,10 @@ def play(args):
         stem = os.path.join(row["dir"], row["scene"])
         tag = f"{os.path.basename(row['dir'])}-{row['scene']}-s{seed}"
         steer = row["to"] if args.steer else ""
-        if args.log:
+        if args.log or args.trace:
             with open(os.path.join(out, tag + ".log"), "w") as log:
                 result = script("bot-room-play.lua", args.pack, stem, seed, args.max,
-                                steer, "log", stderr=log)
+                                steer, "trace" if args.trace else "log", stderr=log)
         else:
             result = script("bot-room-play.lua", args.pack, stem, seed, args.max, steer)
         result = result or {"ticks": 0, "hits": 0, "damage": 0, "died": False, "error": True}
@@ -200,6 +222,22 @@ def play(args):
         results = list(pool.map(one, jobs))
     with open(os.path.join(out, "results.json"), "w") as f:
         json.dump(results, f, indent=1)
+    # Remember the enemy kinds each scene's room held, for -k.
+    seen = {}
+    for row, result in zip((row for row, _ in jobs), results):
+        seen.setdefault(row["dir"], {}).setdefault(row["scene"], set()).update(
+            result.get("enemies") or {})
+    for path, found in seen.items():
+        name = os.path.join(path, "enemies.json")
+        KINDS.pop(name, None)
+        known = {}
+        if os.path.isfile(name):
+            with open(name) as f:
+                known = json.load(f)
+        known.update({scene: sorted(set(known.get(scene, [])) | ids)
+                      for scene, ids in found.items()})
+        with open(name, "w") as f:
+            json.dump(known, f)
 
     by_room = len({row["room"] for row in picked}) > 1 and not args.scenes
     groups = {}
@@ -221,6 +259,13 @@ def play(args):
              f"{'hits':>5} {'damage':>6} {'deaths':>6} {'shots':>5}"]
     lines += [line(name, rows) for name, rows in sorted(groups.items())]
     lines.append(line("total", results))
+    by_kind = {}
+    for result in results:
+        for kind, count in (result.get("enemy_hits") or {}).items():
+            by_kind[kind] = by_kind.get(kind, 0) + count
+    if by_kind:
+        lines.append("hits by the nearest enemy's kind: " + ", ".join(
+            f"{kind} {count}" for kind, count in sorted(by_kind.items(), key=lambda item: -item[1])))
     text = "\n".join(lines)
     print(text)
     with open(os.path.join(out, "summary.txt"), "w") as f:
@@ -243,9 +288,11 @@ def main():
     parser.add_argument("-m", "--max", type=int, default=3000)
     parser.add_argument("--from", dest="came_from")
     parser.add_argument("--to")
+    parser.add_argument("-k", "--enemy", action="append")
     parser.add_argument("--scenes", action="store_true")
     parser.add_argument("--steer", action="store_true")
     parser.add_argument("--log", action="store_true")
+    parser.add_argument("--trace", action="store_true")
     parser.add_argument("--no-build", action="store_true")
     parser.add_argument("-h", "--help", action="store_true")
     args = parser.parse_args()
