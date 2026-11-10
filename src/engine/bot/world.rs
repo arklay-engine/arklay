@@ -105,6 +105,15 @@ struct Pending {
     tick: u64,
 }
 
+/// Everything a `bot:world()` table is built from (see [`World::lua_key`]).
+#[derive(Clone, Debug)]
+pub(super) struct LuaKey {
+    rooms: BTreeMap<String, RoomRecord>,
+    current: Option<String>,
+    /// The door lock flags, which decide a door's `locked`.
+    locks: FlagBank,
+}
+
 /// The world model. Reset with the bot's memory on a new game.
 #[derive(Clone, Debug, Default)]
 pub(super) struct World {
@@ -337,6 +346,23 @@ impl World {
 
     fn visited(&self, room: &str) -> bool {
         self.rooms.get(room).is_some_and(|room| room.entries > 0)
+    }
+
+    /// What [`Self::to_lua`] reads: while a table's key still holds, the
+    /// table is still the world.
+    pub(super) fn lua_key(&self, snapshot: &SessionSnapshot) -> LuaKey {
+        LuaKey {
+            rooms: self.rooms.clone(),
+            current: self.current.clone(),
+            locks: snapshot.flags[usize::from(BANK_LOCKS)],
+        }
+    }
+
+    /// Whether a table built at `key` is still the world.
+    pub(super) fn lua_key_holds(&self, key: &LuaKey, snapshot: &SessionSnapshot) -> bool {
+        key.locks == snapshot.flags[usize::from(BANK_LOCKS)]
+            && key.current == self.current
+            && key.rooms == self.rooms
     }
 
     /// The `bot:world()` table (see the module docs and mods/bot/README.md).
