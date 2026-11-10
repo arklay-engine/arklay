@@ -59,7 +59,9 @@
 --             - HEAL_BONUS for a route to a heal pickup or to the box for
 --               one while hurt with none held (BotSurvival.needs_heal)
 --             - for a route to a <fetch> of a cure for the player's
---               poison, CURE_BONUS (twice HELD_USE_BONUS), no door steps
+--               poison, CURE_BONUS (twice HELD_USE_BONUS), no door steps;
+--               for a route to a frontier pickup of one, CURE_BONUS
+--               with the door steps (item_bonus)
 --             - BOX_BONUS for a route to a remembered typewriter when a
 --               save trip is due (BotSave.trip_reason), picked like a
 --               remote box
@@ -1847,7 +1849,13 @@ end
 -- the ammunition the equipped gun needs (`ammo`). Returns the bonus and a
 -- label tag (nil for a plain item). A heal item gets the plain bonus,
 -- unless `hurt` (the item heals and the bot needs a heal): HEAL_BONUS.
-function BotPlanner.item_bonus(item, kind, ammo, needed, hurt, guns)
+-- `cure` (the item cures the player's poison and none is held) gets
+-- CURE_BONUS, ahead of a heal: a heal only buys time while the poison
+-- drains.
+function BotPlanner.item_bonus(item, kind, ammo, needed, hurt, guns, cure)
+    if cure then
+        return ITEM_BONUS + CURE_BONUS, "cure: poisoned with none held"
+    end
     if hurt and kind == "heal" then
         return ITEM_BONUS + HEAL_BONUS, "heal: hurt with none held"
     end
@@ -2618,13 +2626,25 @@ local function choose(bot)
     -- real progress re-ranks, or the loop rule drops it. Getting hurt with
     -- no heal held drops it once, so a heal can be ranked first.
     local hurt = BotSurvival.needs_heal(bot)
-    -- Poisoned with no cure held: a cure pickup ranks like a heal.
+    -- Poisoned with no cure held: a cure pickup ranks ahead of a heal.
     local cure_now = BotInventory.context(bot).cure_now
     if not hurt then
         p.hurt_dropped = nil
-    elseif p.target and not p.target.heal and not p.hurt_dropped then
+    elseif p.target and not p.target.heal and not p.target.cure and not p.hurt_dropped then
         p.hurt_dropped = true
         bot:log("target dropped: hurt with no heal held: " .. p.target.label)
+        p.target = nil
+    end
+    -- Poisoned with no cure held drops it once too, so a cure the bot knows
+    -- of is ranked first: after Yawn's bite the moon crest's trip to 11A
+    -- kept the pursuit while the serum's fetch waited, and seed 6 walked
+    -- 38k ticks poisoned toward 30C, the heals it fetched on the way only
+    -- buying time, and died at the boss with the poison still on.
+    if not cure_now then
+        p.poison_dropped = nil
+    elseif p.target and not p.target.cure and not p.poison_dropped then
+        p.poison_dropped = true
+        bot:log("target dropped: poisoned with no cure held: " .. p.target.label)
         p.target = nil
     end
     if p.target then
@@ -2803,13 +2823,13 @@ local function choose(bot)
                         + (p.lens[mark_key(goal.kind, goal.room, goal.slot)] or 0)
                         + route_monsters(steps)
                     local why, label
-                    local heal_target = nil
+                    local heal_target, cure_target = nil, nil
                     if goal.kind == "item" then
                         local _, _, heals = bot:item_kind(goal.item)
-                        heals = (hurt and heals == true)
-                            or (cure_now ~= nil and cure_now[goal.item] == true)
+                        local cures = cure_now ~= nil and cure_now[goal.item] == true
+                        heals = (hurt and heals == true) or cures
                         local bonus, tag = BotPlanner.item_bonus(goal.item, goal.item_kind, ammo,
-                            needed, heals, new_guns)
+                            needed, heals, new_guns, cures)
                         local left = plan().marks[mark_key("item", goal.room, goal.slot)]
                         if not tag and left and left.reason:find("inventory full", 1, true) then
                             -- An item an open <use> needs, left behind on a
@@ -2839,6 +2859,7 @@ local function choose(bot)
                             end
                         end
                         heal_target = heals and goal.item_kind == "heal" or nil
+                        cure_target = cures or nil
                         cost = cost - bonus
                         label = string.format("item 0x%02X in %s", goal.item, goal.room)
                         if tag then
@@ -2862,7 +2883,7 @@ local function choose(bot)
                         cost = cost, order = order, door = first, why = why,
                         target = { kind = goal.kind, room = goal.room, slot = goal.slot,
                             label = label, best = #steps, stalls = 0, heal = heal_target,
-                            unfit = allow_unfit or nil },
+                            cure = cure_target, unfit = allow_unfit or nil },
                     })
                 end
             end

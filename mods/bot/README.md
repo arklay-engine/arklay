@@ -693,7 +693,15 @@ The decision (`BotSave.wants`), scaled by `bot:risk()`:
 - save safety (`BotSave.dead_end`): no save the reload would turn straight
   back into the same death, that is health under the critical floor
   (`max_health * (0.2 - 0.15 * risk)`) with no heal item held or with fewer
-  rounds than one kill of the hardest `fight` monster takes. Such a save is
+  rounds than one kill of the hardest `fight` monster takes; or health
+  under half of max health with no heal item held and either fewer rounds
+  than that kill takes or a poison no held item cures. Seed 1 saved at
+  20/96 with no rounds and no heal (a `low health` save, above the
+  critical floor) and each reload walked past zombies to a herb and died;
+  seed 6 saved poisoned at 16/96 and the poison finished it on each
+  reload. Refused, the death that follows loads the older, better save
+  (the engine reloads only the latest save, so a dead end written once
+  is the one every reload starts from). Such a save is
   made only when there is no other choice (`BotSave.no_choice`): no save
   exists yet, or the latest save is no better in health, rounds and heals
   (recorded with each save as `save_health`, `save_rounds`, `save_heals`);
@@ -912,8 +920,15 @@ drives the box screen with pad input only.
 - Cure: poisoned with no cure for that poison held, the `<cure>` items
   for it come out of the box the way the loadout does (`a cure for the
   poison`), and the trip to a remote box for them is weighted like one for
-  a heal (`HEAL_BONUS`), and so is a route to a frontier pickup of one: a
-  run walked 17k ticks poisoned by 408's wasps past 304's blue herb.
+  a heal (`HEAL_BONUS`): a run walked 17k ticks poisoned by 408's wasps
+  past 304's blue herb. A route to a frontier pickup of one ranks
+  `CURE_BONUS`, ahead of a heal (`cure: poisoned with none held`), since a
+  heal only buys time while the poison drains, and the pursued target is
+  dropped once per poisoning (`target dropped: poisoned with no cure
+  held`), as it is once per hurt episode: after Yawn's bite the moon
+  crest's trip kept the pursuit while the serum's fetch waited, and seed 6
+  walked 38k ticks poisoned toward 30C, fetching heals on the way, and
+  died there.
 - Rearm: a firearm in the remembered box (not a `reserve` one) comes out
   with its ammunition, the way the loadout does
   (`rearm: a boxed gun's ammunition is at hand`), when that ammunition is

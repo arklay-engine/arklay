@@ -11,9 +11,10 @@
 --   4. saving at a typewriter here when the risk-scaled decision says so
 --      (bot/save.lua), never one a reload would turn straight back into
 --      the same death (critical health with no heal item or no rounds for
---      one kill) while a better save exists; at critical health with no
---      heal item, a save if that allows one, else play on when a save
---      exists, else stop;
+--      one kill; low health with no heal item and no rounds for one kill
+--      or an uncured poison) while a better save exists; at critical
+--      health with no heal item, a save if that allows one, else play on
+--      when a save exists, else stop;
 --   5. combat (bot/tactics.lua): fight or run past each monster by the
 --      knowledge file's entry, the risk setting, health and rounds;
 --   6. the planner (bot/planner.lua): room puzzle facts, items, stairs,
