@@ -1,5 +1,5 @@
 -- arklay's start for leon_a_201_spade: where --warp 201:-26492:0:-25629:0:4 leaves the player
--- room 204's door 0's arrival in the west office, as leon_a_207_201 leaves Leon (the route's state,
+-- room 204's door 0's arrival in the west office, as leon_a_207_201_licker leaves Leon (the route's state,
 -- route_200_115's end, carried on).
 local api = ...
 api:set_player_pos(-26492, 0, -25629)

@@ -1,4 +1,4 @@
--- arklay's start for leon_a_207_201: where --warp 207:-23650:0:-8000:2048:2 leaves the player
+-- arklay's start for leon_a_207_201_licker: where --warp 207:-23650:0:-8000:2048:2 leaves the player
 -- room 10C's door 0's arrival in the stair corridor, as leon_a_115_207 leaves Leon (the route's state,
 -- route_200_115's end, carried on).
 local api = ...
@@ -7,7 +7,6 @@ api:set_player_angle(2048)
 api:set_health(156)
 api:set_re2_rnd(6114)
 api:set_room_camera(2)
-api:set_re2_flag(6, 61)
 api:set_re2_flag(6, 71)
 api:set_re2_flag(6, 72)
 api:set_re2_flag(6, 115)

@@ -1,4 +1,4 @@
-# Leon A from the west office (201) to the main hall's statue (200), as leon_a_207_201 leaves him at 204's door 0's arrival: door 0, the hall to the statue's south face, USE of the Unicorn Medal (event 8) and a press on the statue for the Spade Key (event 7) (oracle/re2.md, "Leon A to the Spade Key")
+# Leon A from the west office (201) to the main hall's statue (200), as leon_a_207_201_licker leaves him at 204's door 0's arrival: door 0, the hall to the statue's south face, USE of the Unicorn Medal (event 8) and a press on the statue for the Spade Key (event 7) (oracle/re2.md, "Leon A to the Spade Key")
 0
 # 201: turn to face north and run to z -20100
 350 left

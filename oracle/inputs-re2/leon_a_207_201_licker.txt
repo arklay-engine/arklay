@@ -39,14 +39,14 @@
 # door 0: room 204 loads on 1121, play comes back on 1427
 1086 action
 1088
-# 204: run south along the corridor
-1428 up run
-1523
-# turn to face east (4080) and run to door 0's frame
-1525 left
-1539
-1541 up run
-1648
-# door 0: room 201 loads on 1685, play comes back on 1991
-1650 action
-1652
+# 204: the licker that route_200_208 left alive hangs from the ceiling at -16169, -6579 (4:86 set, 6:61 clear). Turn a little east (864) and run south down the corridor's east wall: it drops as Leon passes, too far off to reach him
+1428 left
+1431
+1433 up run
+# a running turn east (24) into the east corridor, and on to door 0's frame
+1518 up run left
+1533 up run
+1620
+# door 0: room 201 loads on 1657, play comes back on 1963
+1622 action
+1624

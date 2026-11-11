@@ -1,4 +1,4 @@
-# Leon A's route from the S.T.A.R.S. office (115) back to the main hall's statue (200) and the Spade Key, room by room from warps (oracle/re2.md, "Leon A to the Spade Key"), each warp starting Leon as route_200_115 leaves him: 156 life, 2 rounds in the handgun and 38 spare, the ink ribbons in slot 3, the Red Jewel in slot 4, the Unicorn Medal in slot 5, the route's common and item flags, and room 204's licker and room 207's four zombies dead.
+# Leon A's route from the S.T.A.R.S. office (115) back to the main hall's statue (200) and the Spade Key, room by room from warps (oracle/re2.md, "Leon A to the Spade Key"), each warp starting Leon as route_200_115 leaves him: 156 life, 2 rounds in the handgun and 38 spare, the ink ribbons in slot 3, the Red Jewel in slot 4, the Unicorn Medal in slot 5, the route's common and item flags, and room 207's four zombies dead. leon_a_115_207 and leon_a_201_spade were recorded with 6:61 (204's licker's dead flag) raised as well, which the route doesn't raise; none of their rooms reads it.
 
 # Rooms 115, 114 and 10C: past Claire to door 0, up the corridor past its three zombies to door 2, east along 10C's upper floor, down the stairs and door 0 into 207.
 [[run]]
@@ -22,12 +22,12 @@ ignore = [
 ]
 record = "--warp 115:-23037:0:-19397:2107:2 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:48 --flag 4:70 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --life 156 --give 0:2:2 --give 2:0x14:38 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x47:1"
 
-# Rooms 207, 205 and 204: past 207's dead zombies to door 1, the corridor of bodies with 4:48 set (both groups come out of the walls, out of reach), and 204 to door 0 into 201.
+# Rooms 207, 205 and 204: past 207's dead zombies to door 1, the corridor of bodies with 4:48 set (both groups come out of the walls, out of reach), and 204 to door 0 into 201. route_200_208 leaves 204's licker alive (6:61 clear), so with 4:86 set the room hangs a new one from the corridor's ceiling, which drops as Leon runs past.
 [[run]]
-name = "leon_a_207_201"
+name = "leon_a_207_201_licker"
 room = "207"
-setup_script = "leon_a_207_201.lua"
-input = "leon_a_207_201.txt"
+setup_script = "leon_a_207_201_licker.lua"
+input = "leon_a_207_201_licker.txt"
 input_shift = 344
 input_drop_early = true
 ticks = 2000
@@ -35,13 +35,13 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,s
 frames = [360, 1999]
 frame_max_mean = 0.9
 # each room on its own, from its hand back to its door's press: 207, 205, 204, and 201 from its hand back
-frame_windows = [[360, 435, 0.25], [777, 1085, 0.45], [1427, 1649, 0.45], [1991, 1999, 0.4]]
+frame_windows = [[360, 435, 0.25], [777, 1085, 0.45], [1427, 1621, 0.45], [1963, 1999, 0.4]]
 expect = "match"
 ignore = [
   # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 207's door 1, 205's door 0 and 204's door 0
-  [436, "rng"], [436, "rseed"], [1086, "rng"], [1086, "rseed"], [1650, "rng"], [1650, "rseed"],
+  [436, "rng"], [436, "rseed"], [1086, "rng"], [1086, "rseed"], [1622, "rng"], [1622, "rseed"],
 ]
-record = "--warp 207:-23650:0:-8000:2048:2 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:48 --flag 4:70 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --life 156 --give 0:2:2 --give 2:0x14:38 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x47:1"
+record = "--warp 207:-23650:0:-8000:2048:2 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:48 --flag 4:70 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --life 156 --give 0:2:2 --give 2:0x14:38 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x47:1"
 
 # Rooms 201 and 200: to door 0, then the main hall to the statue's south side, USE of the Unicorn Medal (event 8, the statue opens and the medal is lost) and a press on the statue (event 7, the Spade Key).
 [[run]]
