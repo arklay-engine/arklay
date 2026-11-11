@@ -40,6 +40,9 @@ Common options:
                    target/bot-pack/re1.akpak)
   -j, --jobs N     runs at once (default: the CPU count)
       --no-build   skip `cargo build --profile test-release`
+
+$BOT_TREE names a directory whose mods/ the runs load instead of this
+checkout's: a copy with a change to try, against the same recordings.
 """
 import argparse
 import concurrent.futures
@@ -52,6 +55,9 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "target", "bot-rooms")
 BIN = os.path.join(ROOT, "target", "test-release", "arklay")
+# The directory whose mods/ the runs load: this checkout, or $BOT_TREE (a
+# copy with a change to try, compared against the same recordings).
+TREE = os.environ.get("BOT_TREE", ROOT)
 
 
 def seeds(text):
@@ -79,9 +85,9 @@ def build(args):
 
 def script(name, *args, stderr=subprocess.DEVNULL):
     """Run a driver script headless; its first stdout line as JSON, or None."""
-    done = subprocess.run([BIN, "script", "--headless", os.path.join("scripts", name),
+    done = subprocess.run([BIN, "script", "--headless", os.path.join(ROOT, "scripts", name),
                            *[str(arg) for arg in args]],
-                          cwd=ROOT, stdout=subprocess.PIPE, stderr=stderr, text=True)
+                          cwd=TREE, stdout=subprocess.PIPE, stderr=stderr, text=True)
     try:
         return json.loads(done.stdout.splitlines()[0])
     except (IndexError, ValueError):
