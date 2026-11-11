@@ -902,14 +902,24 @@ fn parse_hex_byte(text: &str) -> Result<u8, String> {
 }
 
 /// A bot run's own empty save directory, `arklay-bot-saves-<pid>` under the
-/// system temp directory.
-fn bot_save_dir() -> Result<PathBuf> {
-    let dir = std::env::temp_dir().join(format!("arklay-bot-saves-{}", std::process::id()));
-    if dir.exists() {
-        fs::remove_dir_all(&dir).with_context(|| format!("clearing {}", dir.display()))?;
+/// system temp directory, removed again when the run ends.
+struct BotSaveDir(PathBuf);
+
+impl BotSaveDir {
+    fn create() -> Result<Self> {
+        let dir = std::env::temp_dir().join(format!("arklay-bot-saves-{}", std::process::id()));
+        if dir.exists() {
+            fs::remove_dir_all(&dir).with_context(|| format!("clearing {}", dir.display()))?;
+        }
+        fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+        Ok(Self(dir))
     }
-    fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-    Ok(dir)
+}
+
+impl Drop for BotSaveDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
 }
 
 /// `--bot-param`: `NAME=VALUE`, checked against the pack's declarations
@@ -1787,10 +1797,14 @@ fn main() -> Result<()> {
             // A bot run saves at typewriters through the game's save screen;
             // without an explicit --save-dir it writes to a fresh directory of
             // its own, never over the player's saves.
-            let save_dir = match &cli.save_dir {
-                Some(dir) => dir.clone(),
-                None if bot_enabled => bot_save_dir()?,
-                None => config
+            let bot_saves = match &cli.save_dir {
+                None if bot_enabled => Some(BotSaveDir::create()?),
+                _ => None,
+            };
+            let save_dir = match (&cli.save_dir, &bot_saves) {
+                (Some(dir), _) => dir.clone(),
+                (None, Some(saves)) => saves.0.clone(),
+                (None, None) => config
                     .save_dir
                     .clone()
                     .unwrap_or_else(arklay::config::Config::default_save_dir),

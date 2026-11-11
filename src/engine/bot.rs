@@ -1342,11 +1342,8 @@ impl SessionSnapshot {
             frozen,
             controls_locked,
             controllable,
-            dead: !session.death.is_idle()
-                || game.flags[5].bit(game::MSF_PLAYER_DEAD)
-                || entity.health < 0,
-            ending: game.flags[5].bit(game::MSF2_DEATH_VARIANT)
-                && !game.flags[5].bit(game::MSF2_ATTRACT_DEMO),
+            dead: session.player_dead(),
+            ending: session.game_completed(),
             typewriter: session.typewriter_arm.is_some()
                 || session.typewriter_fade.is_some()
                 || session.typewriter_open.is_some()
@@ -4567,6 +4564,11 @@ impl BotVm {
     /// every chunk succeeds; a failing chunk returns the error and leaves the
     /// previous function callable.
     fn reload(&mut self, pack: &Pack) -> Result<()> {
+        // The run-memoised results (the knowledge table) were built from the
+        // files being reloaded.
+        self.lua
+            .unset_named_registry_value(RUN_MEMO)
+            .map_err(|err| anyhow!("{err}"))?;
         let paths = chunk_paths(pack)?;
         run_chunks(&self.lua, &self.budget, &paths, pack)?;
         self.on_tick = find_on_tick(&self.lua)?;
@@ -4717,6 +4719,9 @@ pub struct BotRuntime {
     /// The bot drove an app screen (the title or the load screen) since the
     /// last session started, so the next session is its reload.
     screen_driven: bool,
+    /// A route error is logged and the pad handed back to the player
+    /// rather than ending the app (the interactive `--bot`).
+    errors_logged: bool,
 }
 
 impl BotRuntime {
@@ -4750,7 +4755,29 @@ impl BotRuntime {
             was_dead: false,
             checkpoint: None,
             screen_driven: false,
+            errors_logged: false,
         })
+    }
+
+    /// Log a route error and hand the pad back instead of failing the app's
+    /// update: the interactive `--bot`, where `--watch` can fix the route.
+    pub fn log_errors(&mut self) {
+        self.errors_logged = true;
+    }
+
+    /// Whether a route error should be logged rather than returned.
+    pub fn errors_logged(&self) -> bool {
+        self.errors_logged
+    }
+
+    /// End the run with `reason` (the first reason given is kept): the
+    /// host could not carry the route on.
+    pub fn fail(&self, reason: String) {
+        self.shares.finished.set(true);
+        let mut kept = self.shares.finish_reason.borrow_mut();
+        if kept.is_none() {
+            *kept = Some(reason);
+        }
     }
 
     /// Set the room whose entry ends the run (`--bot-goal-room`). The id is
@@ -5068,8 +5095,8 @@ impl BotRuntime {
     /// the Lua VM from the pack so route globals (`BOT_STATE`) cannot leak
     /// across a restart.
     ///
-    /// A fresh load failure returns the error. The caller drops the runtime
-    /// rather than reusing the old VM's route state.
+    /// A fresh load failure returns the error. The caller ends the run
+    /// ([`Self::fail`]) rather than reusing the old VM's route state.
     pub fn reset(&mut self, pack: &Pack) -> Result<()> {
         self.shares = BotShares::default();
         self.story = None;
@@ -5097,7 +5124,6 @@ impl BotRuntime {
         self.tick
     }
 
-    /// The run statistics as JSON (see [`stats`]).
     /// What the bot knows and has planned so far, for a later run to start
     /// from ([`Self::with_memory`]): its memory and world model, the tick
     /// they were taken at, and the route's own state (its `BOT_STATE`
@@ -5162,6 +5188,7 @@ impl BotRuntime {
             .is_some_and(|seen| seen.contains(&sel))
     }
 
+    /// The run statistics as JSON (see [`stats`]).
     pub fn stats_json(&self, outcome: &str, elapsed_secs: f64, run: RunFacts) -> serde_json::Value {
         let mut report = self.stats_report(outcome, elapsed_secs, run);
         let story: serde_json::Map<String, serde_json::Value> = STORY_BANK_NAMES

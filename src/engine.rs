@@ -6778,6 +6778,31 @@ impl GameSession {
         }
     }
 
+    /// The player has died: the death sequence runs, the dead flag is up or
+    /// the health is gone.
+    pub(crate) fn player_dead(&self) -> bool {
+        !self.death.is_idle()
+            || self.game.flags[5].bit(game::MSF_PLAYER_DEAD)
+            || self.game.entities[0].health < 0
+    }
+
+    /// The escape scene has completed the game (its scripted death variant,
+    /// outside the attract demo).
+    pub(crate) fn game_completed(&self) -> bool {
+        self.game.flags[5].bit(game::MSF2_DEATH_VARIANT)
+            && !self.game.flags[5].bit(game::MSF2_ATTRACT_DEMO)
+    }
+
+    /// A save screen wrote a save: the app's restart point and the player
+    /// bot's read-only count of completed saves.
+    fn note_save_written(&mut self, slot: Option<usize>) {
+        self.saves_written = self.saves_written.saturating_add(1);
+        if slot.is_some() {
+            self.saved_slot = slot;
+            self.last_saved_slot = slot;
+        }
+    }
+
     /// One frozen tick of the typewriter save screen. The screen writes the
     /// block itself; on completion the engine mirrors the write into the live
     /// state (ribbon and save counter) and resumes gameplay.
@@ -6826,9 +6851,7 @@ impl GameSession {
                 .and_then(|screen| screen.take_outcome())
             {
                 self.game.re2_typewriter_write(outcome.ink_ribbon);
-                if outcome.slot.is_some() {
-                    self.saved_slot = outcome.slot;
-                }
+                self.note_save_written(outcome.slot);
             }
         } else {
             self.play_ui_cue_names(pack, cues);
@@ -6868,11 +6891,7 @@ impl GameSession {
                 }
                 self.game.increment_saves();
             }
-            self.saves_written = self.saves_written.saturating_add(1);
-            if outcome.slot.is_some() {
-                self.saved_slot = outcome.slot;
-                self.last_saved_slot = outcome.slot;
-            }
+            self.note_save_written(outcome.slot);
         }
         self.save_screen = None;
         // Leaving the save screen runs `cut_set`, which rebuilds the room's
@@ -10816,65 +10835,48 @@ impl App {
             return;
         }
         let count = changed.len();
-        let lua_changed = changed.iter().any(|path| {
-            path.extension()
-                .and_then(|extension| extension.to_str())
-                .is_some_and(|extension| extension.eq_ignore_ascii_case("lua"))
-        });
-        let metadata_changed = changed.iter().any(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.eq_ignore_ascii_case("bot.xml"))
-        });
-        if let Mode::Play(session) = &mut self.mode {
-            if metadata_changed && let Some(bot) = self.bot.as_mut() {
-                bot.reload_meta();
-                eprintln!("[watch] invalidated the bot room metadata");
-            }
-            let lua_ok = if lua_changed {
-                match session.reload_lua(&self.pack) {
-                    Ok(()) => {
-                        // The app caches the save/load screen entry from
-                        // `App::new`'s throwaway VM. A changed `on_init`
-                        // registration must replace it along with the session's
-                        // hooks.
-                        self.save_screen = crate::lua::registered_save_screen(&self.pack);
-                        if let Some(bot) = self.bot.as_mut() {
-                            match bot.reload(&self.pack) {
-                                Ok(()) => eprintln!("[watch] reloaded the bot route"),
-                                Err(err) => {
-                                    eprintln!("[watch] bot route reload failed: {err:#}")
-                                }
-                            }
-                        }
-                        true
-                    }
-                    Err(err) => {
-                        eprintln!("[watch] Lua hook reload failed: {err:#}");
-                        false
-                    }
-                }
-            } else {
-                true
-            };
-            if lua_ok {
-                eprintln!("[watch] reloaded {count} script/metadata file(s)");
-            }
-        } else {
+        let Some(watch) = self.watch.as_ref() else {
+            return;
+        };
+        let kinds: Vec<watch::Changed> = changed.iter().map(|path| watch.classify(path)).collect();
+        let Mode::Play(session) = &mut self.mode else {
             eprintln!(
                 "[watch] {count} script/metadata file(s) changed; waiting for a game session"
             );
+            return;
+        };
+        // Each change reloads only what it belongs to: a bot file never
+        // re-runs the pack's hooks, which write the live game.
+        if kinds.contains(&watch::Changed::Hooks) {
+            match session.reload_lua(&self.pack) {
+                Ok(()) => {
+                    // The app caches the save/load screen entry from
+                    // `App::new`'s throwaway VM. A changed `on_init`
+                    // registration must replace it along with the session's
+                    // hooks.
+                    self.save_screen = crate::lua::registered_save_screen(&self.pack);
+                    eprintln!("[watch] reloaded the Lua hooks");
+                }
+                Err(err) => eprintln!("[watch] Lua hook reload failed: {err:#}"),
+            }
         }
+        if let Some(bot) = self.bot.as_mut() {
+            if kinds.contains(&watch::Changed::BotRoute) {
+                match bot.reload(&self.pack) {
+                    Ok(()) => eprintln!("[watch] reloaded the bot route"),
+                    Err(err) => eprintln!("[watch] bot route reload failed: {err:#}"),
+                }
+            } else if kinds.contains(&watch::Changed::BotMeta) {
+                bot.reload_meta();
+                eprintln!("[watch] invalidated the bot room metadata");
+            }
+        }
+        eprintln!("[watch] {count} script/metadata file(s) changed");
     }
 
     /// Whether the running bot's player has died.
     fn bot_player_dead(&self) -> bool {
-        matches!(&self.mode, Mode::Play(session) if {
-            let entity = &session.game.entities[0];
-            !session.death.is_idle()
-                || session.game.flags[5].bit(game::MSF_PLAYER_DEAD)
-                || entity.health < 0
-        })
+        matches!(&self.mode, Mode::Play(session) if session.player_dead())
     }
 
     /// What the bot's report reads from the session when it is written: the
@@ -10885,10 +10887,10 @@ impl App {
             return bot::RunFacts::default();
         };
         let game = &session.game;
-        let completed = game.flags[5].bit(game::MSF2_DEATH_VARIANT)
-            && !game.flags[5].bit(game::MSF2_ATTRACT_DEMO);
         bot::RunFacts {
-            ending: completed.then(|| ui::debug_menu::default_ending(game)),
+            ending: session
+                .game_completed()
+                .then(|| ui::debug_menu::default_ending(game)),
             game_time_ticks: Some(game.play_timer()),
         }
     }
@@ -10923,10 +10925,13 @@ impl App {
     fn start_session(&mut self, mut session: Box<GameSession>) {
         // A session the bot reached through the load screen is its reload
         // and carries the run on; any other is a fresh run.
-        let reset = self.bot.as_mut().map(|bot| bot.start_session(&self.pack));
-        if let Some(Err(err)) = reset {
-            eprintln!("[bot] warning: could not reset the bot route: {err:#}");
-            self.bot = None;
+        if let Some(bot) = self.bot.as_mut()
+            && let Err(err) = bot.start_session(&self.pack)
+        {
+            // Ending the run (rather than dropping the bot) keeps the old
+            // route state from running on and lets a headless run report it.
+            eprintln!("[bot] could not reset the bot route: {err:#}");
+            bot.fail(format!("could not reset the route: {err:#}"));
         }
         // `--bot-seed`: every session the bot runs gets its own stream, the
         // reload after a death included (a save does not carry the RNG state).
@@ -11460,8 +11465,16 @@ impl App {
                 // The bot's only output is pad/UI input: equip, heal, item
                 // use and room actions go through the menu and the action
                 // button exactly as a player's input does.
-                let input = runtime.tick(session, &self.pack)?;
-                Some(input)
+                match runtime.tick(session, &self.pack) {
+                    Ok(input) => Some(input),
+                    // The tick has already ended the run; the pad is the
+                    // player's again.
+                    Err(err) if runtime.errors_logged() => {
+                        eprintln!("[bot] {err:#}; the pad is yours");
+                        None
+                    }
+                    Err(err) => return Err(err),
+                }
             } else {
                 None
             }
@@ -11509,7 +11522,14 @@ impl App {
             Mode::Load(screen) => bot::BotScreen::Load(screen.bot_view()),
             _ => return Ok(None),
         };
-        runtime.tick_screen(screen).map(Some)
+        match runtime.tick_screen(screen) {
+            Ok(input) => Ok(Some(input)),
+            Err(err) if runtime.errors_logged() => {
+                eprintln!("[bot] {err:#}; the pad is yours");
+                Ok(None)
+            }
+            Err(err) => Err(err),
+        }
     }
 
     /// Advance the title/select/load screen; Play reports `Continue` here.
@@ -12388,6 +12408,9 @@ fn run_ui_impl(
             &bot.params,
             bot.invincible,
         )?;
+        if let Some(runtime) = app.bot.as_mut() {
+            runtime.log_errors();
+        }
     }
     let mut owned = None;
     let display = match shared {

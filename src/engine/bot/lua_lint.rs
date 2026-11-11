@@ -219,12 +219,26 @@ fn constants_violations(source: &str) -> Vec<String> {
     found
 }
 
+/// Every `.lua` file below `dir`, subdirectories included: the bot VM loads
+/// `bot/**.lua`, so the lint must see the same files.
 fn lua_files(dir: &Path) -> Vec<PathBuf> {
-    let mut files: Vec<PathBuf> = std::fs::read_dir(dir)
-        .unwrap_or_else(|err| panic!("read {}: {err}", dir.display()))
-        .map(|entry| entry.unwrap().path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "lua"))
-        .collect();
+    fn walk(dir: &Path, files: &mut Vec<PathBuf>) {
+        for entry in
+            std::fs::read_dir(dir).unwrap_or_else(|err| panic!("read {}: {err}", dir.display()))
+        {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                walk(&path, files);
+            } else if path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"))
+            {
+                files.push(path);
+            }
+        }
+    }
+    let mut files = Vec::new();
+    walk(dir, &mut files);
     files.sort();
     files
 }
@@ -241,7 +255,7 @@ fn the_bot_lua_has_no_room_literals_outside_the_constants_module() {
     let mut report = Vec::new();
     for path in files {
         let source = std::fs::read_to_string(&path).unwrap();
-        let constants = path.ends_with(CONSTANTS_FILE);
+        let constants = path == dir.join(CONSTANTS_FILE);
         let mut found = violations(&source, constants);
         if constants {
             found.extend(constants_violations(&source));
