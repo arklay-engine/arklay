@@ -2601,6 +2601,21 @@ mod tests {
         );
     }
 
+    /// `Pl_life_down` (0x4DCA40): a bite that leaves exactly 0 returns 0, so
+    /// the player lives on at nothing, and a crawler's (mode 1) never kills:
+    /// it sets the near-death bit and lets go, whatever the life.
+    #[test]
+    fn a_bite_to_nothing_leaves_the_player_alive_and_a_crawlers_never_kills() {
+        assert_eq!(
+            life_down(20, 20, false, false, Difficulty::default()),
+            (0, false, 0)
+        );
+        assert_eq!(
+            life_down(0, 5, true, true, Difficulty::default()),
+            (0, true, 1)
+        );
+    }
+
     #[test]
     fn a_bite_kills_once_the_player_is_near_death_or_it_goes_deep() {
         assert_eq!(

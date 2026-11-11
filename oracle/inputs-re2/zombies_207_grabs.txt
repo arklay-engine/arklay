@@ -1,0 +1,101 @@
+# room 207's four zombies take hold of a standing Leon (205's door 2 arrival, 200 life): a tapped struggle, a held key, a mashed struggle, then none, with START in and after the holds (oracle/re2.md, "Room 207's zombies")
+# grab 1 (slot 3, 0x1F, front, on 487): left every other tick from two ticks after the grab
+489 left
+490
+491 left
+492
+493 left
+494
+495 left
+496
+497 left
+498
+499 left
+500
+501 left
+502
+503 left
+504
+505 left
+506
+507 left
+508
+509 left
+510
+511 left
+512
+513 left
+514
+515 left
+516
+517 left
+518
+519 left
+520
+521 left
+522
+523 left
+524
+525 left
+526
+527 left
+528
+529 left
+530
+531 left
+532
+# grab 2 (slot 0, 0x13, back, on 630): left held from two ticks after the grab, which counts once
+632 left
+721
+# grab 3 (slot 2, 0x1F, front, on 868): left and right in turn on every tick from two ticks after the grab
+870 left
+871 right
+872 left
+873 right
+874 left
+875 right
+876 left
+877 right
+878 left
+879 right
+880 left
+881 right
+882 left
+883 right
+884 left
+885 right
+886 left
+887 right
+888 left
+889 right
+890 left
+891 right
+892 left
+893 right
+894 left
+895 right
+896 left
+897 right
+898 left
+899 right
+900 left
+901 right
+902 left
+903 right
+904 left
+905 right
+906 left
+907 right
+908 left
+909
+# grab 4 (slot 1, 0x1F with Type 0, front, on 1044, free 1149): START ten ticks after the grab and on the tick after the free, both refused (fg_status 0x40)
+1054 start
+1055
+1150 start
+1151
+# grab 5 (slot 0, back, on 1179, free 1284): START two ticks after the free opens the status screen, and START closes it
+1286 start
+1287
+1330 start
+1331
+# grab 6 (slot 3, on 1411): the bite takes the last 10 life, so it lets go at once; grab 7 (slot 1, on 1558) kills, and the others come to eat

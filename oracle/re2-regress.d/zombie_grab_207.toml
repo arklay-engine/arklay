@@ -1,0 +1,31 @@
+# Room 207's zombies take hold of a standing Leon from the zombies_207 warp (oracle/re2.md, "Room 207's zombies"): the
+# struggle tapped, held and mashed (`Gacha_ch`), START refused in a hold and on the tick after its free and taken two
+# ticks after the free, the last-legs release and the death in their hands, to the game over's return to the title.
+# Recorded with --sound and every frame, through the original's last tick before the title (2123); zombies_207_grabs_snd
+# compares the sound.
+[[run]]
+name = "zombies_207_grabs"
+room = "207"
+ticks = 2124
+sound = false
+setup_script = "zombies_207.lua"
+input = "zombies_207_grabs.txt"
+input_shift = 344
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,zm0,zm1,zm2,zm3,zd,fgstat"
+frames = [650, 2123]
+# 0.89 measured; two frames, 1698 and 1702, differ by 23
+frame_windows = [[650, 2123, 0.95]]
+expect = "match"
+record = "--warp 207:-25640:0:-16590:0:1 --life 200 --sound"
+
+[[run]]
+name = "zombies_207_grabs_snd"
+ref = "zombies_207_grabs"
+room = "207"
+ticks = 2124
+setup_script = "zombies_207.lua"
+input = "zombies_207_grabs.txt"
+input_shift = 344
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,snd,bgm,xavol"
+keep_sound_3 = true
+expect = "match"

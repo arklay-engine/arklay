@@ -1507,6 +1507,10 @@ pub fn player_held(
         work.damage_cnt -= 1;
     }
     work.noise &= 0xE0;
+    // `Pl_Em_damage` and `Pl_Em_die` raise `fg_status`'s `0x40` on every
+    // held tick, the free tick included, so START is refused from the tick
+    // after the grab until the tick after the free ([`Work::holds_game`]).
+    work.holds_game = true;
     work.be_flg &= !4;
     let mut mover = Mover::new(work, player, tick);
     mover.em10_held(held);
@@ -7152,6 +7156,29 @@ mod tests {
             }
         }
         panic!("never got there: {:?}", setup.work.routine);
+    }
+
+    /// `Pl_Em_damage` raises `fg_status`'s `0x40` on each held tick, so a hold
+    /// that starts from a free stance refuses START too, not only one that
+    /// catches the player aiming. `zombies_207_grabs` checks it against the
+    /// original: START opens the status screen on a grab's tick, not ten
+    /// ticks after it or on the tick after the free, and opens it again two
+    /// ticks after the free.
+    #[test]
+    fn a_zombies_hold_holds_the_game_on_every_held_tick() {
+        let mut setup = Setup::new(0);
+        setup.tick(Input::default(), 190);
+        assert!(!setup.work.holds_game);
+        (setup.clips, setup.keyframes) = bank(0x11, 4, 0);
+        setup.work.routine = [MODE_HELD, 0, 0, 0];
+        let mut life = 190;
+        run_held(&mut setup, &mut life, |_| true);
+        assert!(setup.work.holds_game);
+        // The free tick's hold raises it once more; the next tick, free of
+        // the hold from its start, drops it.
+        setup.work.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
+        setup.tick(Input::default(), 190);
+        assert!(!setup.work.holds_game);
     }
 
     #[test]
