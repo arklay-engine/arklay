@@ -58,6 +58,22 @@
 ---shared state block: the dispatcher sets all four to `0` on the frame the
 ---gate rises, and `func` to `0` when a room loads.
 ---
+---## The published view
+---
+---`s.view` is what the screen shows a player, for observers such as the
+---player bot: a table the script sets at the end of each `display`. It is
+---the screen's contract with them. Nothing outside the script reads any
+---other field of `s`, so its state machine may change freely as long as the
+---view keeps its meaning. The lab computer publishes:
+---
+---| Field | Meaning |
+---|---|---|
+---| `stage` | What the terminal waits for: `"login"`, `"menu"` (the door menu), `"exit"` (the menu's leave question), `"command"`, `"unlocked"` (a press dismisses it), or `"busy"` while it takes no input. |
+---| `field` | The field being typed, `"user"` or `"secret"`; `""` otherwise. |
+---| `typed` | How many characters that field holds. |
+---| `cell` | The keyboard cursor's cell, `row * 8 + column`. |
+---| `menu_row` | The door menu's highlighted row: 0 and 1 the cell doors, 2 exit. |
+---
 ---## Errors
 ---
 ---A screen whose `display` raises an error, runs out of its instruction

@@ -11514,11 +11514,7 @@ impl App {
             return Ok(None);
         };
         let screen = match &self.mode {
-            Mode::Title(screen) => bot::BotScreen::Title {
-                stage: screen.state_str("stage").unwrap_or_default(),
-                selection: screen.state_int("selection").unwrap_or(0),
-                any_saves: screen.state_int("any_saves").unwrap_or(0) != 0,
-            },
+            Mode::Title(screen) => bot::BotScreen::title(screen.view().as_ref()),
             Mode::Load(screen) => bot::BotScreen::Load(screen.bot_view()),
             _ => return Ok(None),
         };
