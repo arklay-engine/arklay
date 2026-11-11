@@ -1605,6 +1605,88 @@ pub fn tick_of<'a>(
     }
 }
 
+/// `Joint_trans2`'s parts for a character: the pose its banks show, with
+/// its work's height and head, composed on its body's matrix (turned by a
+/// surface's `super_matrix` when it has one). Returns the parts' world
+/// matrices and the pose, or `None` when no pose is up.
+pub fn pose_joints(
+    room: &RoomState,
+    game: &GameState,
+    character: &Character,
+    slot: usize,
+    model: &Emd,
+) -> Option<(Vec<crate::anim::Mat4x3>, Keyframe)> {
+    let tick = tick_of(
+        room,
+        game,
+        character,
+        slot,
+        model,
+        character.held_bank.as_deref(),
+    );
+    let (clips, keyframes) = tick.banks.get(character.work.bank);
+    let mut keyframe = character.body.anim.pose_keyframe(clips, keyframes)?;
+    character.work.apply_to_pose(&mut keyframe);
+    let [pitch, roll] = character
+        .zombie
+        .as_ref()
+        .map_or([0; 2], |zombie| zombie.tilt);
+    let mut matrix = crate::anim::entity_matrix_rotated_scaled(
+        character.body.pos,
+        pitch,
+        character.body.angle,
+        roll,
+        0,
+    );
+    if let Some(surface) = character.work.super_matrix {
+        // `matrix.r` turns a flipped Y, and the surface a real one.
+        let flip = |row: usize, column: usize| i32::from(row == 1) ^ i32::from(column == 1) != 0;
+        let surface = std::array::from_fn(|row| {
+            std::array::from_fn(|column| {
+                let value = i32::from(surface[row][column]);
+                if flip(row, column) { -value } else { value }
+            })
+        });
+        matrix.r = crate::anim::mul_matrix0(&surface, &matrix.r);
+    }
+    let joints = crate::anim::joint_matrices(&model.skeleton, &keyframe, &matrix);
+    Some((joints, keyframe))
+}
+
+/// `Joint_trans2` for every character in play, before `Om_trans`: keep each
+/// slot's parts' world matrices
+/// ([`crate::scd2::host::Re2State::character_joints`]), which an object
+/// hung on a character's joint composes on.
+pub fn keep_joints(
+    game: &mut GameState,
+    room: &RoomState,
+    pack: &Pack,
+    npc_models: &mut EntityModelCache,
+) {
+    let characters = &game.re2.characters.0;
+    let mut kept = vec![Vec::new(); characters.len()];
+    for (slot, character) in characters.iter().enumerate() {
+        let Some(character) = character
+            .as_deref()
+            .filter(|c| c.be_flg & 1 != 0 && !awaits_script(c))
+        else {
+            continue;
+        };
+        let skin = character
+            .zombie
+            .as_ref()
+            .map_or(0, |zombie| zombie.skin.saturating_sub(1));
+        let Some(model) = npc_models.get_skinned(pack, character.model, room.player_flag & 1, skin)
+        else {
+            continue;
+        };
+        if let Some((joints, _)) = pose_joints(room, game, character, slot, &model) {
+            kept[slot] = joints;
+        }
+    }
+    game.re2.character_joints = kept;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

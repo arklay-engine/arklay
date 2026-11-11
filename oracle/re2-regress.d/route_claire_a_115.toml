@@ -72,10 +72,10 @@ input_drop_early = true
 ticks = 2850
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,scene,fl,esp,fgscn,fgstat,fgitem,fgroom,fgcom,om3,om7,om8,om9,zm0"
 frames = [360, 2849]
-# 115's frames 1342 to 1345 keep the desk's close-up in the original as the screen fades (`cut_chg` with bit 7, docs/internals/deviations/re2.md, "The frames of a cut"); 0.78 measured
-frame_max_mean = 0.9
-# 114 from the warp to the door's press, then 115 from the hand back to the close-up's fade, from the fade to door 0's press (the medal's and the rounds' windows), and the exit scene; measured 0.16, 0.21, 0.67 and 0.25
-frame_windows = [[360, 435, 0.25], [777, 1341, 0.3], [1346, 2424, 0.8], [2425, 2849, 0.35]]
+# 0.71 measured; 115's frames 1342 to 1345 keep the desk's close-up as the original's do (`cut_chg` with bit 7, docs/internals/deviations/re2.md, "The frames of a cut")
+frame_max_mean = 0.8
+# 114 from the warp to the door's press, then 115 from the hand back to the medal's question, from there to door 0's press (the medal's and the rounds' windows), and the exit scene; measured 0.16, 0.21, 0.67 and 0.25
+frame_windows = [[360, 435, 0.25], [777, 1341, 0.3], [1342, 2424, 0.75], [2425, 2849, 0.35]]
 expect = "match"
 ignore = [
   # 114's door 1

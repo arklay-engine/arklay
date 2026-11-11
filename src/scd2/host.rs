@@ -113,6 +113,11 @@ pub struct Re2State {
     pub key_read: bool,
     /// Characters in the enemy slots.
     pub characters: Characters,
+    /// Each character slot's parts' world matrices (`Joint_trans2`'s, at
+    /// `pSin_parts_ptr + 0x48` a part), composed for the frame before
+    /// `Om_trans`: what an object hung on a character's joint composes on.
+    /// Empty for a slot with no character in play.
+    pub character_joints: Vec<Vec<crate::anim::Mat4x3>>,
     /// Room flags of `plc_dest`s on works that aren't modelled, not yet raised.
     pub unmodelled_arrivals: Vec<u8>,
     /// A room's load is running its init scripts.
@@ -766,6 +771,7 @@ impl Default for Re2State {
             key_was_stopped: false,
             key_read: false,
             characters: Characters::default(),
+            character_joints: Vec::new(),
             unmodelled_arrivals: Vec::new(),
             room_loading: false,
             player: crate::player2::Work::default(),
@@ -2247,6 +2253,45 @@ impl GameHost<'_> {
         });
     }
 
+    /// `Super_on` (`0x4E5BC0`): the task's work goes to the point its
+    /// operands give on a parent's matrix (`Super_set`'s parents), at that
+    /// matrix as it is now, and turns to face along the composed x axis:
+    /// `Cdir` is no roll, the axis's yaw and its pitch plus 0x400. Nothing is
+    /// hung: the work stays where it is put.
+    fn super_on(&mut self, task: usize, operands: &[i64]) {
+        let at = |index: usize| operands.get(index).copied().unwrap_or(0);
+        let parent = crate::objects::SuperParent::decode(at(1) as u8, at(2) as u8);
+        let player = (self.game.entities[0].pos, self.game.entities[0].angle);
+        let parent = self.game.super_matrix(parent, player);
+        let local = crate::anim::Mat4x3 {
+            r: crate::anim::rotation_matrix(
+                i32::from(at(6) as i16),
+                i32::from(at(7) as i16),
+                i32::from(at(8) as i16),
+            ),
+            t: [at(3), at(4), at(5)].map(|v| i32::from(v as i16)),
+        };
+        let world = crate::anim::compose(&parent, &local);
+        // `ApplyMatrixSV` of (1000, 0, 0): the rotation alone, to shorts. The
+        // port's matrices hold the original's with y flipped (`D R D`).
+        let axis: [i16; 3] = std::array::from_fn(|row| {
+            let value = (world.r[row][0] * 1000) >> 12;
+            (if row == 1 { -value } else { value }) as i16
+        });
+        let [_, yaw, pitch] = crate::bow2::angles_of(axis);
+        let rotation = [0, yaw, pitch.wrapping_add(0x400)];
+        if let Some(object) = self.task_object(task) {
+            object.pos = world.t;
+            object.rotation = rotation;
+        } else if let Some(character) = self.task_character(task) {
+            character.body.pos = world.t;
+            character.body.angle = yaw as u16;
+        } else if self.work_is_player(task) {
+            self.game.re2.pending_player.pos = Some(world.t);
+            self.game.re2.pending_player.angle = Some(yaw as u16 & 0x0FFF);
+        }
+    }
+
     fn work_is_player(&self, task: usize) -> bool {
         self.game.re2.work.get(task) == Some(&Work::Player)
     }
@@ -2669,8 +2714,8 @@ impl Host for GameHost<'_> {
                 }
             }
             // `Super_set` (`0x4E59E0`): the object hangs on a parent, and its
-            // position and rotation become offsets on it. `Om_trans` draws it
-            // there (not drawn yet).
+            // position and rotation become offsets on it. `Om_trans` composes
+            // and draws it there each frame.
             "super_set" if self.task_object(task).is_some() => {
                 let parent = crate::objects::SuperParent::decode(at(1) as u8, at(2) as u8);
                 if let Some(object) = self.task_object(task) {
@@ -2690,6 +2735,7 @@ impl Host for GameHost<'_> {
                     object.rotation = [at(1), at(2), at(3)].map(|v| v as i16);
                 }
             }
+            "super_on" => self.super_on(task, operands),
             "dir_set" if self.task_object(task).is_some() => {
                 if let Some(object) = self.task_object(task) {
                     object.rotation = [at(1) as i16, at(2) as i16, at(3) as i16];
@@ -3318,6 +3364,39 @@ mod tests {
             (game.pad_repeat.mask, game.pad_repeat.delays),
             STATUS_SETTING
         );
+    }
+
+    /// `Super_on` puts the work at the point on its parent and turns it
+    /// along the parent's x axis; nothing is hung.
+    #[test]
+    fn super_on_places_the_work_on_its_parent() {
+        use crate::objects::SuperParent;
+        let mut game = GameState::default();
+        game.objects.records = vec![crate::objects::ObjectRecord::default(); 3];
+        game.entities[0].pos = [1000, 0, 2000];
+        game.entities[0].angle = 0;
+        exec(&mut game, "work_set", &[WK_OBJECT, 2]);
+        // Rooms 601 and 700's: the player's own matrix, 353 ahead.
+        exec(&mut game, "super_on", &[0, 64, 0, 353, 0, 39, 0, 0, 0]);
+        let player = crate::anim::entity_matrix([1000, 0, 2000], 0);
+        let local = crate::anim::Mat4x3 {
+            r: crate::anim::rotation_matrix(0, 0, 0),
+            t: [353, 0, 39],
+        };
+        let object = game.objects.record(2).unwrap();
+        assert_eq!(object.pos, crate::anim::compose(&player, &local).t);
+        assert_eq!(object.super_parent, SuperParent::World, "not hung");
+        // Facing along +x: no yaw, a level pitch.
+        assert_eq!(object.rotation, [0, 0, 0x1000]);
+        // A quarter turn about y turns it a quarter.
+        game.entities[0].angle = 1024;
+        exec(&mut game, "super_on", &[0, 64, 0, 0, 0, 0, 0, 0, 0]);
+        let yaw = game.objects.record(2).unwrap().rotation[1];
+        assert!(yaw == 0x400 || yaw == 0xC00, "{yaw:#x}");
+        // On another object's world matrix.
+        game.objects.records[1].world = crate::anim::entity_matrix([5000, -100, 7000], 0);
+        exec(&mut game, "super_on", &[0, 0xC1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(game.objects.record(2).unwrap().pos, [5000, -100, 7000]);
     }
 
     #[test]

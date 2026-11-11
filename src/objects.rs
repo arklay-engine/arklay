@@ -709,9 +709,9 @@ impl ObjectRecord {
         self.parent = parent.selector().unwrap_or(0xFF);
     }
 
-    /// Whether the object hangs on a joint or a character's matrix, which
-    /// the draw doesn't compose yet: `pos` is then an offset on that
-    /// matrix, not a place in the room, so the object isn't drawn.
+    /// Whether the object hangs on a joint or a character's matrix: `pos` is
+    /// then an offset on that matrix, not a place in the room. RE 2's draw
+    /// takes the matrix `Om_trans` composed on it ([`Self::world`]).
     pub fn hangs_on_a_character(&self) -> bool {
         self.super_parent.selector().is_none()
     }

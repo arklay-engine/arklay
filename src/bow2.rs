@@ -250,7 +250,7 @@ fn angle_of(x: i32, y: i32) -> i16 {
 
 /// `FUN_004d7d80`: the turn that points `y` along `v`: no roll, its yaw and
 /// its pitch.
-fn angles_of(v: [i16; 3]) -> [i16; 3] {
+pub(crate) fn angles_of(v: [i16; 3]) -> [i16; 3] {
     let [x, y, z] = v.map(i32::from);
     let yaw = angle_of(x, z);
     let across = square_root0(x * x + z * z);

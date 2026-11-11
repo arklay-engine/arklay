@@ -220,10 +220,22 @@ impl GameState {
     /// and `Old2`. An `Id` 2 box's world y is lifted 900 after the compose.
     /// An object's parent of a later slot gives last frame's matrix, as in
     /// the original. `player` is the player's position and angle.
+    ///
+    /// `Game_loop` runs it while `Can_draw` is 0, and `WinMain` runs it after
+    /// the frame's draw when a script's `sce_line_main` has set `Can_draw`
+    /// (and clears it), so it composes every frame either way.
     pub fn om_trans_old(&mut self, player: ([i32; 3], u16)) {
+        // Room 409's cut 12 turns slot 4 to -40 about z each frame it draws
+        // (`Get_room_id(1) == 0xC0409`).
+        let room_409_cut_12 = self.is_re2_room
+            && (self.id.stage, self.id.room) == (4, 9)
+            && self.camera.current_cut == 12;
         for index in 0..self.objects.records.len() {
             let record = self.objects.records[index];
             if record.be_flg & BE_ACTIVE != 0 && record.be_flg & BE_HIDDEN == 0 {
+                if room_409_cut_12 && index == 4 {
+                    self.objects.records[index].rotation[2] = -40;
+                }
                 self.compose_object_world(index, player);
                 let record = &mut self.objects.records[index];
                 if record.id == ID_BOX {
@@ -249,23 +261,34 @@ impl GameState {
         self.objects.records[index].world = crate::anim::compose(&parent, &local);
     }
 
-    /// The matrix an object's `+0x80` points at. The identity, the player's
-    /// own matrix, the player's joint (the pose the last frame drew) and
-    /// another object's world matrix are the original's. For the second
-    /// player's or an enemy's work the character's own matrix is used, joint
-    /// or not: the port doesn't keep their joints between frames.
-    fn super_matrix(&self, parent: SuperParent, (pos, angle): ([i32; 3], u16)) -> Mat4x3 {
+    /// The matrix an object's `+0x80` points at (`Super_set`, `Super_on`):
+    /// the identity, the player's own matrix or a joint of its pose, the
+    /// second player's or an enemy's own matrix or a joint of its pose
+    /// ([`crate::scd2::host::Re2State::character_joints`]), or another
+    /// object's world matrix. A joint is the one the frame composed for the
+    /// draw: `Game_loop` runs `Joint_trans2` for every character before
+    /// `Om_trans`.
+    pub(crate) fn super_matrix(
+        &self,
+        parent: SuperParent,
+        (pos, angle): ([i32; 3], u16),
+    ) -> Mat4x3 {
         let player = crate::anim::entity_matrix(pos, angle);
+        let player_joint = |joint: u8| {
+            self.joint_worlds[0]
+                .get(usize::from(joint))
+                .copied()
+                .unwrap_or(player)
+        };
+        let character_slot = |work: u8| match work {
+            1 => crate::scd2::host::SPLAYER_SLOT,
+            n => usize::from(n.wrapping_sub(2)),
+        };
         let character = |work: u8| {
-            let slot = match work {
-                0 => return player,
-                1 => crate::scd2::host::SPLAYER_SLOT,
-                n => usize::from(n - 2),
-            };
             self.re2
                 .characters
                 .0
-                .get(slot)
+                .get(character_slot(work))
                 .and_then(|character| character.as_deref())
                 .map_or(IDENTITY, |character| {
                     crate::anim::entity_matrix(character.body.pos, character.body.angle)
@@ -274,12 +297,17 @@ impl GameState {
         match parent {
             SuperParent::World => IDENTITY,
             SuperParent::Player | SuperParent::Work(0) => player,
-            SuperParent::PlayerJoint(joint) | SuperParent::WorkJoint(0, joint) => self.joint_worlds
-                [0]
-            .get(usize::from(joint))
-            .copied()
-            .unwrap_or(player),
-            SuperParent::Work(work) | SuperParent::WorkJoint(work, _) => character(work),
+            SuperParent::PlayerJoint(joint) | SuperParent::WorkJoint(0, joint) => {
+                player_joint(joint)
+            }
+            SuperParent::Work(work) => character(work),
+            SuperParent::WorkJoint(work, joint) => self
+                .re2
+                .character_joints
+                .get(character_slot(work))
+                .and_then(|joints| joints.get(usize::from(joint)))
+                .copied()
+                .unwrap_or_else(|| character(work)),
             SuperParent::Object(n) => self
                 .objects
                 .records
@@ -621,5 +649,111 @@ mod tests {
             Some(1),
             "the player walks in"
         );
+    }
+
+    /// An object in play, at `pos` on `parent`.
+    fn hung(parent: SuperParent, pos: [i32; 3]) -> ObjectRecord {
+        let mut record = ObjectRecord {
+            flag: crate::objects::OBJECT_FLAG_ACTIVE,
+            be_flg: BE_ACTIVE,
+            pos,
+            ..ObjectRecord::default()
+        };
+        record.set_super_parent(parent);
+        record
+    }
+
+    fn objects(records: &[ObjectRecord]) -> GameState {
+        let mut game = GameState {
+            is_re2_room: true,
+            objects: ObjectTable::new(records.len()),
+            ..GameState::default()
+        };
+        game.objects.records.copy_from_slice(records);
+        game
+    }
+
+    fn on(parent: &Mat4x3, pos: [i32; 3]) -> Mat4x3 {
+        let r = crate::anim::rotation_matrix(0, 0, 0);
+        crate::anim::compose(parent, &Mat4x3 { r, t: pos })
+    }
+
+    #[test]
+    fn om_trans_composes_a_hung_object_on_each_frames_joint() {
+        // Room 115's `main_18`: object 8 on Claire's (enemy slot 0, work 2)
+        // joint 14.
+        let mut game = objects(&[hung(SuperParent::WorkJoint(2, 14), [-1, 365, -40])]);
+        let mut joints = vec![IDENTITY; 15];
+        joints[14] = crate::anim::entity_matrix([-24000, -800, -19000], 1024);
+        game.re2.character_joints = vec![joints.clone()];
+        game.om_trans_old(([0; 3], 0));
+        assert_eq!(
+            game.objects.records[0].world,
+            on(&joints[14], [-1, 365, -40])
+        );
+        // The next frame's pose moves the hand, and the object with it.
+        joints[14] = crate::anim::entity_matrix([-23900, -820, -19050], 1100);
+        game.re2.character_joints = vec![joints.clone()];
+        game.om_trans_old(([0; 3], 0));
+        assert_eq!(
+            game.objects.records[0].world,
+            on(&joints[14], [-1, 365, -40])
+        );
+        // With no pose kept for the slot, the character's own matrix; with
+        // no character, the identity.
+        game.re2.character_joints.clear();
+        game.om_trans_old(([0; 3], 0));
+        assert_eq!(game.objects.records[0].world, on(&IDENTITY, [-1, 365, -40]));
+        // The player's joint: the pose the tick composed.
+        game.objects.records[0].set_super_parent(SuperParent::PlayerJoint(1));
+        game.joint_worlds[0] = joints.clone();
+        game.om_trans_old(([0; 3], 0));
+        assert_eq!(
+            game.objects.records[0].world,
+            on(&joints[1], [-1, 365, -40])
+        );
+    }
+
+    #[test]
+    fn a_parent_in_a_later_slot_gives_last_frames_matrix() {
+        let mut game = objects(&[
+            hung(SuperParent::Object(1), [0, 100, 0]),
+            hung(SuperParent::World, [1000, 0, 2000]),
+            hung(SuperParent::Object(1), [0, 100, 0]),
+        ]);
+        game.om_trans_old(([0; 3], 0));
+        let first = game.objects.records[1].world;
+        game.objects.records[1].pos = [3000, 0, 4000];
+        game.om_trans_old(([0; 3], 0));
+        let second = game.objects.records[1].world;
+        assert_eq!(second.t, [3000, 0, 4000]);
+        // Slot 0 composes before slot 1 does: last frame's matrix.
+        assert_eq!(game.objects.records[0].world, on(&first, [0, 100, 0]));
+        // Slot 2 composes after it: this frame's.
+        assert_eq!(game.objects.records[2].world, on(&second, [0, 100, 0]));
+        // The frame after, slot 0 catches up.
+        game.om_trans_old(([0; 3], 0));
+        assert_eq!(game.objects.records[0].world, on(&second, [0, 100, 0]));
+        // An object out of play isn't composed.
+        game.objects.records[2].be_flg = BE_ACTIVE | BE_HIDDEN;
+        game.objects.records[1].pos = [0; 3];
+        game.om_trans_old(([0; 3], 0));
+        assert_eq!(game.objects.records[2].world, on(&second, [0, 100, 0]));
+    }
+
+    #[test]
+    fn room_409s_cut_12_turns_slot_4_about_z() {
+        let records = [hung(SuperParent::World, [0; 3]); 6];
+        for (room, cut, turned) in [((4, 9), 12, true), ((4, 9), 11, false), ((4, 8), 12, false)] {
+            let mut game = objects(&records);
+            game.id.stage = room.0;
+            game.id.room = room.1;
+            game.camera.current_cut = cut;
+            game.om_trans_old(([0; 3], 0));
+            let z = |slot: usize| game.objects.records[slot].rotation[2];
+            assert_eq!(z(4), if turned { -40 } else { 0 }, "{room:?} cut {cut}");
+            assert_eq!(z(3), 0);
+            assert_eq!(z(5), 0);
+        }
     }
 }
