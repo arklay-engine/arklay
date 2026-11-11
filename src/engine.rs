@@ -4348,6 +4348,11 @@ impl GameSession {
                 .map(|player| (player.pos, &mut player.health));
             if re2_start_tick {
                 re2.tick_parts_down(self.loaded.room.sca.as_ref());
+            } else if transition.is_some() {
+                // A door taken this tick has raised `fg_stop |= 0xFF000000`
+                // (`Sce_Door`) before `Esp_move`: only the kinds that carry
+                // on under a stop move.
+                re2.tick_effects_as(true, self.loaded.room.sca.as_ref(), player);
             } else {
                 re2.tick_effects(self.loaded.room.sca.as_ref(), player);
             }
@@ -17014,6 +17019,7 @@ fn run_re2_init(
     game.re2.pending_damage.clear();
     game.re2.pending_cuts.clear();
     game.re2.pending_sca.clear();
+    game.re2.pending_flr.clear();
     game.re2.scroll = 0;
     game.re2.pending_player = Default::default();
     // `Pl_init`, which runs before a room's first tick of play.
@@ -17065,6 +17071,9 @@ fn run_re2_init(
     game.re2.player.damage_cnt = 0;
     game.re2.room_loading = true;
     game.re2.load_pass = true;
+    // A door the last room's scripts opened stopped the characters on that
+    // tick only: the new room's load and its last pass run them.
+    game.re2.script_door = false;
     // `Sce_scheduler_set` rolls `Sce_rnd` before the room's first scripts.
     game.re2.sce_rnd_set();
     // And clears the last room's script work before them (`Sce_work_clr`).
@@ -17170,6 +17179,9 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
         {
             record.set_id(id);
         }
+    }
+    for (index, on) in std::mem::take(&mut context.game.re2.pending_flr) {
+        crate::se2::flr_set(&mut context.room.footstep_zones, index, on);
     }
     let moved = std::mem::take(&mut context.game.re2.pending_player);
     if let Some(warp) = moved.warp {
@@ -38453,6 +38465,20 @@ end
         }
         assert!(!game.scene_bars());
         assert_eq!(game.re2.scroll, 0);
+    }
+
+    #[test]
+    fn a_rooms_load_ends_the_stop_of_a_door_the_scripts_opened() {
+        // Room 108's event 13 opens door 0 (`aot_on`) into 107: the zombies
+        // the load places run their first routine in the load's last pass,
+        // not stopped for the rest of the door.
+        let mut game = game::GameState::default();
+        game.re2.script_door = true;
+        assert!(game.re2.character_stopped(0));
+        let mut vm = crate::scd2::vm::Vm::new(&crate::scd2::Scripts::default());
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game);
+        assert!(!game.re2.script_door);
+        assert!(!game.re2.character_stopped(0));
     }
 
     #[test]
