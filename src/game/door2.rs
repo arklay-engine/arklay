@@ -319,6 +319,8 @@ mod tests {
                 body,
                 kind: 0x400,
                 kage: None,
+                l_spl: 0,
+                dir_spl: 0,
                 start: (0, 0),
                 sound_type: 0,
                 distance: 0,

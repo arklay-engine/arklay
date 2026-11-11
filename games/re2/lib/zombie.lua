@@ -1723,12 +1723,27 @@ local function wall_check(e)
     end
 end
 
+-- The first test of `FUN_00452930` and `FUN_00453010`: on the partner's list
+-- (`L_spl`'s top bits), within 2000 of her and facing her within 0x100, the
+-- zombie spits at her.
+local function spit_at_partner(e)
+    local l_spl = e:l_spl()
+    return e:var(BITE) == 0
+        and l_spl & 0xC0000000 ~= 0
+        and l_spl & 0x3FFFFFFF < 2000
+        and e:turn_to(e:dir_spl(), 0x100) == 0
+end
+
 -- `FUN_00452930`.
 local function look_walk(e)
     local distance = e:distance()
     local wide = e:turn_to_player(0x400)
     local narrow = e:turn_to_player(0x200)
     local noise = e:noise() & 0xFF
+    if spit_at_partner(e) then
+        state(e, 0xE, 0)
+        return
+    end
     if e:var(BITE) == 0 then
         if narrow == 0 and distance < 2000 and not e:same_floor() and e:pl_damage_cnt() == 0 then
             state(e, 0xE, 0)
@@ -1859,6 +1874,10 @@ local function look_chase(e)
     local distance = e:distance()
     local wide = e:turn_to_player(0x400)
     local narrow = e:turn_to_player(0x200)
+    if spit_at_partner(e) then
+        state(e, 0xE, 0)
+        return
+    end
     if e:var(BITE) == 0
         and narrow == 0
         and distance < 2000

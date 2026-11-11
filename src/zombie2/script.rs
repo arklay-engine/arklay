@@ -1355,7 +1355,8 @@ impl UserData for Api {
         });
         // The player's `At_em_flg`: a body touched them this tick.
         methods.add_method_mut("player_touched", |_, e, ()| {
-            Ok(e.em().world.pl.at_em_flg != 0)
+            let pl = &e.em().world.pl;
+            Ok(pl.at_em_flg != 0 || pl.at_em_partner)
         });
         methods.add_method_mut("set_player_angle", |_, e, angle: i64| {
             e.em().world.turn_player = Some(angle as u16 & 0xFFF);
@@ -1626,6 +1627,8 @@ impl UserData for Api {
             Ok((r[0], r[1], r[2]))
         });
         methods.add_method_mut("partner", |_, e, ()| Ok(e.em().world.partner));
+        methods.add_method_mut("l_spl", |_, e, ()| Ok(e.em().world.l_spl));
+        methods.add_method_mut("dir_spl", |_, e, ()| Ok(e.em().world.dir_spl));
         methods.add_method_mut("enemies", |_, e, ()| Ok(e.em().world.enemies));
         methods.add_method_mut("has_guides", |_, e, ()| Ok(!e.em().world.guides.is_empty()));
         methods.add_method_mut("scene_target", |_, e, ()| {

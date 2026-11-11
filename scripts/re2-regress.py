@@ -336,13 +336,17 @@ def comparison_start(run: dict) -> tuple[int, str | None]:
     """The reference tick the comparison starts at (`compare_from`, else `offset`), and why it can't be used, if it can't.
 
     `compare_from` must lie in the run: at or past `offset` (before it, arklay's index would go negative) and before
-    `ticks` (at or past it, nothing would be compared)."""
+    `ticks` (at or past it, nothing would be compared). An `ignore` entry that ends before it is never used, so it is
+    refused as stale."""
     offset = run.get("offset", 344)
     start = run.get("compare_from", offset)
     if start < offset:
         return start, f"compare_from {start} is before the run's offset {offset}"
     if start >= run["ticks"]:
         return start, f"compare_from {start} is not before the run's last tick {run['ticks']}"
+    stale = [entry for entry in run.get("ignore", []) if entry[-2] < start]
+    if stale:
+        return start, f"ignore {stale} ends before the comparison starts at tick {start}: drop it"
     return start, None
 
 
@@ -373,7 +377,9 @@ def self_test() -> int:
         pass
     starts = [comparison_start({"ticks": 3000, **extra}) for extra in ({}, {"compare_from": 1818})]
     bad = [comparison_start({"ticks": 3000, "compare_from": at})[1] for at in (343, 3000, 4000)]
-    if starts != [(344, None), (1818, None)] or None in bad:
+    bad.append(comparison_start({"ticks": 3000, "compare_from": 1818, "ignore": [[400, 1817, "rng"]]})[1])
+    kept = comparison_start({"ticks": 3000, "compare_from": 1818, "ignore": [[400, 1818, "rng"], [1900, "inv"]]})
+    if starts != [(344, None), (1818, None)] or None in bad or kept != (1818, None):
         print(f"re2-regress self-test FAILED: compare_from {starts} {bad}", file=sys.stderr)
         return 1
     print("re2-regress self-test ok")
@@ -729,7 +735,8 @@ def finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks
         result["problems"].append("no ticks compared")
     elif cmp["ticks"] < ticks - (compare_from - offset):
         # compare_pair stops at the shorter trace, so a short one would otherwise pass.
-        result["problems"].append(f"only {cmp['ticks']} of {ticks} ticks compared (a trace ended early)")
+        wanted = ticks - (compare_from - offset)
+        result["problems"].append(f"only {cmp['ticks']} of {wanted} ticks compared (a trace ended early)")
     why = judge_trace(run, cmp)
     if why:
         result["problems"].append(why)

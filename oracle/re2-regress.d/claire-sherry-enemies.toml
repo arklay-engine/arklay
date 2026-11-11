@@ -1,0 +1,16 @@
+# Sherry as Claire's partner in room 502 with its zombies, from a warp to the door from room 508 with the
+# partner flag (1:3): `main_02` places her at (-6119, -25087), and the zombie in slot 3 walks up the corridor.
+
+[[run]]
+name = "sherry_502_zombie"
+room = "502"
+player = 1
+character = 1
+sound = false
+ticks = 900
+input = "sherry_502_zombie.txt"
+input_shift = 344
+setup = { pos = [-5950, 0, -25750], angle = 2048, health = 200, rnd = 6114, camera = 0, flags = [[1, 3]] }
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,es,spl,spe,zm*,fgstat"
+expect = "match"
+record = "--start claire --warp 502:-5950:0:-25750:2048:0 --flag 1:3 --life 200"

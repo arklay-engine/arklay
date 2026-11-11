@@ -641,6 +641,7 @@ pub fn run_with_options(
                         re2_character: None,
                         re2_splayer: None,
                         re2_partner: None,
+                        re2_partner_enemies: None,
                         re2_zombies: None,
                         re2_zombie_parts: None,
                         re2_zombie_dests: None,
@@ -8485,6 +8486,10 @@ impl GameSession {
                 .re2
                 .character_trace(crate::scd2::host::SPLAYER_SLOT),
             re2_partner: self.game.is_re2_room.then(|| self.game.re2.partner_trace()),
+            re2_partner_enemies: self
+                .game
+                .is_re2_room
+                .then(|| self.game.re2.partner_enemy_trace()),
             re2_zombies: self.game.is_re2_room.then(|| self.game.re2.zombie_trace()),
             re2_zombie_parts: self
                 .game
