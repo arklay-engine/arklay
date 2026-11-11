@@ -73,10 +73,17 @@ pub struct Re2State {
     pub pending_damage: Vec<([i16; 4], u8, i16)>,
     /// `fg_stop & 0x2000000` while `Sce_at` runs: the status screen's open
     /// stops the scheduler. Of the area handlers only `Sce_Event` tests it,
-    /// so an event area starts nothing and every other kind acts as it
-    /// would (`Sce_Door` has a guard of its own, `0x98A0D4`, which isn't
-    /// modelled).
+    /// so an event area starts nothing. `Sce_Door` acts through `Game_loop`'s
+    /// mode switch, which on these ticks takes the status path instead
+    /// ([`Self::stopped_door`]); every other kind acts as it would.
     pub areas_stopped: bool,
+    /// `Sce_Door` (`0x4E9460`) opened a door in a stopped pass: it sets
+    /// `Game` to 1, raises `fg_stop` and stores the area in
+    /// `em_die_table[0x54]`, and nothing more. `Game_loop`'s case 1 goes to
+    /// `Set_door` only while `fg_status` has no `0x8000`, which the status
+    /// open has, so the door is dropped and case 1 instead sets the open's
+    /// fade again once it is done: the open starts over.
+    pub stopped_door: bool,
     /// `scd_var_cut`, the cut `Snd_se_3D` places every positional sound
     /// from: the tick's cut when it starts, the new room's entry cut at a
     /// load, and moved at once by a script's `cut_chg` or `cut_old`
@@ -772,6 +779,7 @@ impl Default for Re2State {
             pending_events: Vec::new(),
             pending_damage: Vec::new(),
             areas_stopped: false,
+            stopped_door: false,
             var_cut: None,
             pending_cuts: Vec::new(),
             pending_sca: Vec::new(),
