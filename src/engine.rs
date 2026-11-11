@@ -3294,10 +3294,10 @@ impl GameSession {
             self.menu_request = None;
         }
         self.finish_menu_request(pack);
-        self.re2_status_open_areas(pack);
         if std::mem::take(&mut self.game.re2_box_open) {
             self.begin_re2_box_open(pack);
         }
+        self.re2_status_open_areas(pack);
         self.tick_cut = Some((self.loaded.id, self.loaded.room.current_cut));
         self.game.re2.var_cut = u8::try_from(self.loaded.room.current_cut).ok();
         self.game.re2.films = self.films;
@@ -5153,10 +5153,12 @@ impl GameSession {
     /// off, but `def_4BFB36` still runs the enemy slots and `Sce_at`. A
     /// stopped enemy does only its `Root_ck`, which counts its turn
     /// (`+0x150`) on, and the key item an area wants is in `fg_use` again
-    /// when the status's USE looks.
+    /// when the status's USE looks. The item box's open is the same: case 2
+    /// of `Item_box_entrance` sets `Game` to 1 and `fg_status`'s `0x8000`
+    /// as START does, so from the next tick its modes 1 and 2 run these
+    /// passes too, the lid's count among them.
     fn re2_status_open_areas(&mut self, pack: &Pack) {
         if !self.game.is_re2_room
-            || self.game.re2_box.is_some()
             || !matches!(
                 self.re2_status_open.map(re2_status_open_view),
                 Some(Re2StatusView::Room(_))
@@ -23764,7 +23766,9 @@ mod tests {
     /// own tick, which leaves before them) and on the close's mode 3 tick: a
     /// stopped zombie does its `Root_ck` there, which counts its turn on. In
     /// room 207 (`leon_a_207`) a zombie's turn came out 4 ticks on (mod 7)
-    /// from the original's after a status screen.
+    /// from the original's after a status screen. The room here has no
+    /// enemies, so this counts the passes; what a pass does to a zombie is
+    /// `character2`'s `a_stopped_pass_counts_a_zombies_turn_and_nothing_else`.
     #[test]
     fn re2_status_open_and_close_run_the_stopped_enemies() {
         let dir = TempDir::new();
@@ -23805,6 +23809,50 @@ mod tests {
         // Each pass also runs the frame's `pTbefore_func`s and `Esp_move`:
         // the stopped kinds only under the open's 0xFF, every kind under
         // mode 3's 0xEF.
+        assert_eq!(session.re2_stopped_frame_draws, [true, true, true, false]);
+    }
+
+    /// `Item_box_entrance`'s case 2 opens the item box as START opens the
+    /// status screen (`Game` 1 and `fg_status`'s `0x8000`), in the room
+    /// pass's back routine, so the next tick is mode 1's: from there the
+    /// open's room ticks run the enemy slots under `fg_stop` as the status
+    /// screen's do, and the close's mode 3 tick runs them once more.
+    #[test]
+    fn re2_item_box_open_and_close_run_the_stopped_enemies() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        // The lid stopped in the last tick's room pass.
+        session.game.re2_box_open = true;
+        let mut open = Vec::new();
+        for _ in 0..12 {
+            let before = session.re2_stopped_enemy_passes;
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            open.push(session.re2_stopped_enemy_passes - before);
+        }
+        assert!(session.game.re2_box.is_some(), "the item box is up");
+        assert_eq!(
+            open,
+            [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            "the open's room ticks"
+        );
+
+        session.re2_status_close = Some(0);
+        let before = session.re2_stopped_enemy_passes;
+        for _ in 0..u32::from(RE2_STATUS_CLOSE_TICKS) + 8 {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        }
+        assert!(session.game.re2_box.is_none(), "the close ended");
+        assert_eq!(
+            session.re2_stopped_enemy_passes - before,
+            1,
+            "mode 3's pass"
+        );
         assert_eq!(session.re2_stopped_frame_draws, [true, true, true, false]);
     }
 

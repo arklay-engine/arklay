@@ -715,6 +715,12 @@ impl Zombie {
     pub fn set_sight_turn(&mut self, turn: u8) {
         self.sight_turn = turn;
     }
+
+    /// `+0x150`, `Root_ck`'s turn.
+    #[cfg(test)]
+    pub fn sight_turn(&self) -> u8 {
+        self.sight_turn
+    }
 }
 
 /// The slot's first state: what `Sce_em_set` leaves.
