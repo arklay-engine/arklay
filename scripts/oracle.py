@@ -159,6 +159,7 @@ SCREEN_FIELDS = (
     "fguse",
     "fl",
     "gm",
+    "hk",
     "ib",
     "mapfg",
     "pc",

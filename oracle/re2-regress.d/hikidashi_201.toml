@@ -21,7 +21,7 @@ input_shift = 344
 input_drop_early = true
 ticks = 900
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,hk,snd"
-expect = { tick = 820, fields = ["cam", "snd"], note = "the second press opens the unlocked drawer: its close-up on cut 6 and the open sound 2:28 are Part 2 (docs/internals/deviations/re2.md, \"Drawers\")" }
+expect = { tick = 820, fields = ["cam", "hk", "snd"], note = "the second press opens the unlocked drawer: its close-up on cut 6 and the open sound 2:28 are Part 2 (docs/internals/deviations/re2.md, \"Drawers\")" }
 record = "--no-enemies --warp 201:-25400:0:-18450:3072 --life 200 --give 2:0x1F:1"
 
 [[run]]
@@ -47,5 +47,5 @@ input_shift = 344
 input_drop_early = true
 ticks = 900
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,hk,snd,msg,fgkey"
-expect = { tick = 820, fields = ["cam", "snd"], note = "the second press opens the unlocked drawer: its close-up on cut 6 and the open sound 2:28 are Part 2 (docs/internals/deviations/re2.md, \"Drawers\")" }
+expect = { tick = 820, fields = ["cam", "hk", "snd"], note = "the second press opens the unlocked drawer: its close-up on cut 6 and the open sound 2:28 are Part 2 (docs/internals/deviations/re2.md, \"Drawers\")" }
 record = "--start claire --no-enemies --warp 201:-25400:0:-18450:3072 --life 200"
