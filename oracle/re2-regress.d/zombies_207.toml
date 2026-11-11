@@ -25,3 +25,38 @@ input_shift = 344
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,zm0,zm1,zm2,zm3,zd"
 expect = "match"
 record = "--start claire --warp 207:-25640:0:-16590:0:1 --life 200"
+
+# A handgun fight from the same warp, with 13 rounds in the gun and 39 spare: all four shot, three grabs held without a
+# press, a crawler's grab, a reload on an empty fire press, and the run east to door 2 and room 208's load. Recorded
+# with --sound and every frame, and played with sound, which holds the door's clear and load as it does in the original
+# (`Snd_bgm_ck`); zombies_207_fight_snd compares the sound.
+[[run]]
+name = "zombies_207_fight"
+room = "207"
+ticks = 2060
+setup_script = "zombies_207_fight.lua"
+input = "zombies_207_fight.txt"
+input_shift = 344
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,zm0,zm1,zm2,zm3,zd,fgstat"
+frames = [650, 2059]
+# from the fight's start to the door's press. 0.84 measured: the zombies close to cut 1's camera, their shading and
+# their blood's place (docs/internals/deviations/re2.md, "Zombies")
+frame_windows = [[650, 1976, 0.9]]
+expect = "match"
+# the door's own tick (oracle/re2.md, docs/internals/deviations/re2.md)
+ignore = [[1977, "rng"], [1977, "rseed"]]
+record = "--warp 207:-25640:0:-16590:0:1 --life 200 --give 0:2:13 --give 2:0x14:39"
+
+# The fight's sound: room 207's sound types (44, 42) are a swapped pair, bank 0x38, so slot 0 plays its second half.
+[[run]]
+name = "zombies_207_fight_snd"
+ref = "zombies_207_fight"
+room = "207"
+ticks = 2060
+setup_script = "zombies_207_fight.lua"
+input = "zombies_207_fight.txt"
+input_shift = 344
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,snd,bgm,xavol"
+keep_sound_3 = true
+expect = "match"
+ignore = [[1977, "rng"], [1977, "rseed"]]

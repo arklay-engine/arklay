@@ -1,0 +1,172 @@
+# room 207 from room 205's door 2 with 200 life, 13 rounds in the handgun and 39 spare, the four zombies fought with no presses in a grab (oracle/re2.md, "Room 207's zombies")
+# turn north and step up: slot 3 is the one in sight. Eight shots, four hits, kill it
+350 left
+372 up
+388
+390 aim
+398 aim fire
+401 aim
+410 aim fire
+413 aim
+422 aim fire
+425 aim
+434 aim fire
+437 aim
+446 aim fire
+449 aim
+458 aim fire
+461 aim
+470 aim fire
+473 aim
+482 aim fire
+485 aim
+494
+# step back: slot 0 comes from the south, takes a hit, falls toward Leon, takes hold of his legs as a crawler and dies at the hold's end
+496 down
+508
+510 aim
+518 aim fire
+521 aim
+530 aim fire
+533 aim
+542 aim fire
+545 aim
+554 aim fire
+557 aim
+566 aim fire
+569 aim
+578 aim fire
+581 aim
+590 aim fire
+593 aim
+602 aim fire
+605 aim
+614 aim fire
+617 aim
+626 aim fire
+629 aim
+638 aim fire
+641 aim
+650 aim fire
+653 aim
+662
+# slot 2 has had hold of him since 781; after its free, slot 1 comes and is put down at 1 life
+888 aim
+896 aim fire
+899 aim
+908 aim fire
+911 aim
+920 aim fire
+923 aim
+932 aim fire
+935 aim
+944 aim fire
+947 aim
+956 aim fire
+959 aim
+968 aim fire
+971 aim
+980 aim fire
+983 aim
+992 aim fire
+995 aim
+1004
+# slot 1 gets up and is killed; the gun runs dry and reloads (18 of the 39); slot 2 is hit twice above 0x50 life, which draws its stagger counter again (Type without 0x40), and takes hold of him at 1341
+1100 aim
+1108 aim fire
+1111 aim
+1120 aim fire
+1123 aim
+1132 aim fire
+1135 aim
+1144 aim fire
+1147 aim
+1156 aim fire
+1159 aim
+1168 aim fire
+1171 aim
+1180 aim fire
+1183 aim
+1192 aim fire
+1195 aim
+1204 aim fire
+1207 aim
+1216 aim fire
+1219 aim
+1228 aim fire
+1231 aim
+1240 aim fire
+1243 aim
+1252 aim fire
+1255 aim
+1264 aim fire
+1267 aim
+1276 aim fire
+1279 aim
+1288 aim fire
+1291 aim
+1300 aim fire
+1303 aim
+1312 aim fire
+1315 aim
+1324 aim fire
+1327 aim
+1336 aim fire
+1339 aim
+1348 aim fire
+1351 aim
+1360 aim fire
+1363 aim
+1372 aim fire
+1375 aim
+1384 aim fire
+1387 aim
+1396
+# slot 2 gets up from its shove: seven hits kill it
+1636 aim
+1644 aim fire
+1647 aim
+1656 aim fire
+1659 aim
+1668 aim fire
+1671 aim
+1680 aim fire
+1683 aim
+1692 aim fire
+1695 aim
+1704 aim fire
+1707 aim
+1716 aim fire
+1719 aim
+1728 aim fire
+1731 aim
+1740 aim fire
+1743 aim
+1752 aim fire
+1755 aim
+1764 aim fire
+1767 aim
+1776 aim fire
+1779 aim
+1788 aim fire
+1791 aim
+1800 aim fire
+1803 aim
+1812 aim fire
+1815 aim
+1824 aim fire
+1827 aim
+1836 aim fire
+1839 aim
+1848 aim fire
+1851 aim
+1860
+# run east along the corridor, turn south and open door 2: room 208 loads on 2012
+1880 right
+1883 up run
+1935
+1937 right
+1961 up run
+1975
+1977 action
+1979
