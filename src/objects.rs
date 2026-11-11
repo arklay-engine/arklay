@@ -695,6 +695,260 @@ pub fn sca_ck_hit_om(obj: &ObjectRecord, sca: &crate::state::Sca, exclude: u16) 
     hit
 }
 
+/// `Be_flg`'s bits of an object a character can climb onto and stand on: in
+/// play (`0x01`) and climbable (`0x100`).
+pub const BE_CLIMBABLE: u32 = 0x101;
+/// `Be_flg`: nothing touches the object.
+const BE_GHOST: u32 = 2;
+/// `Be_flg` of a character: nothing holds or pulls it.
+const BE_UNHELD: u32 = 0x40;
+
+/// `Omd_in_check` (`0x4CEEF0`): whether `point` is over the object's box
+/// grown by `radius` (its edges in), and with `height`, also inside it in
+/// height: below its top and at or above its bottom.
+pub fn omd_in_check(point: [i32; 3], obj: &ObjectRecord, radius: i32, height: bool) -> bool {
+    let (w, d) = obj.half_size();
+    if outside(point[0].wrapping_sub(obj.at[0]), i32::from(w) + radius)
+        || outside(point[2].wrapping_sub(obj.at[2]), i32::from(d) + radius)
+    {
+        return false;
+    }
+    if height {
+        let at_h = i32::from(obj.atd2.at_h);
+        let below = at_h - 1;
+        if below < 0 || outside_from(point[1].wrapping_sub(obj.at[1]), below, at_h) {
+            return false;
+        }
+    }
+    true
+}
+
+/// `(reach_low + reach_high) as u32 < (delta + reach_low) as u32`: whether
+/// `delta` is outside `-reach_low..=reach_high`.
+fn outside_from(delta: i32, reach_low: i32, reach_high: i32) -> bool {
+    (reach_high.wrapping_add(reach_low) as u32) < delta.wrapping_add(reach_low) as u32
+}
+
+/// The top of an object's box: `Atd.Y - At_h`.
+pub fn object_top(obj: &ObjectRecord) -> i32 {
+    obj.at[1] - i32::from(obj.atd2.at_h)
+}
+
+/// `Sca_ck_hit` (`0x4E2AE0`) with its object pass, the callers that pass
+/// `param_4` 0: before the room's records, each object in play (`Be_flg`
+/// `0x01`) whose box, grown by `radius`, holds the point in x and z. One
+/// whose top is at or below the point gives its top as a ground; one the
+/// point is inside of in height gives `y - 1`, and is a ceiling (`blocked`,
+/// `DWORD_00695E74`). An object whose bottom is above the point is ignored.
+/// The objects' boxes are taken anew from their positions (`Oma_set_ofs`).
+pub fn sca_ck_hit(
+    sca: Option<&crate::state::Sca>,
+    objects: &[ObjectRecord],
+    pos: [i32; 3],
+    radius: i32,
+    mask: u16,
+) -> crate::sca::Ground {
+    let mut ground = match sca {
+        Some(sca) => crate::sca::ground_at(sca, pos, radius, mask),
+        None => crate::sca::Ground {
+            blocked: pos[1] > 0,
+            ..crate::sca::Ground::default()
+        },
+    };
+    for obj in objects {
+        if obj.be_flg & 1 == 0 {
+            continue;
+        }
+        let mut obj = *obj;
+        obj.set_ofs();
+        if !omd_in_check(pos, &obj, radius, false) {
+            continue;
+        }
+        let top = object_top(&obj);
+        let mut height = top;
+        if top < pos[1] {
+            if obj.at[1] + i32::from(obj.atd2.at_h) < pos[1] {
+                continue;
+            }
+            ground.blocked = true;
+            ground.ceiling = ground.ceiling.min(top);
+            height = pos[1] - 1;
+        }
+        ground.height = ground.height.min(height);
+    }
+    ground
+}
+
+/// `Oma_front_ck` (`0x4CE3E0`): whether a character at `pos`, heading
+/// `angle`, faces the object squarely enough to climb onto it. It is
+/// [`oma_ck_front`]'s test with a longer arm, `At_w * 135 / 100 + 128`, and
+/// with the other axis not widened by the character's width.
+pub fn oma_front_ck(pos: [i32; 3], angle: u16, at_w: u16, obj: &ObjectRecord) -> bool {
+    let arm = (u32::from(at_w) * 135 / 100 + 0x80) as u16 as i16;
+    let (ahead_x, ahead_z) = crate::player2::rotate(angle, i32::from(arm), 0);
+    let dx = obj.pos[0].wrapping_sub(pos[0]);
+    let dz = obj.pos[2].wrapping_sub(pos[2]);
+    let (obj_w, obj_d) = obj.half_size();
+    let across_x = i32::from(obj_w) - 0x80;
+    let across_z = i32::from(obj_d) - 0x80;
+    if outside(dx, across_x) && outside(dz, across_z) {
+        return false;
+    }
+    let (point_x, point_z) = if dz.wrapping_abs() < dx.wrapping_abs() {
+        (
+            i32::from((ahead_x as i16).wrapping_add(pos[0] as i16)) - obj.at[0],
+            pos[2] - obj.at[2],
+        )
+    } else {
+        (
+            pos[0] - obj.at[0],
+            i32::from((ahead_z as i16).wrapping_add(pos[2] as i16)) - obj.at[2],
+        )
+    };
+    !outside(point_x, across_x) && !outside(point_z, across_z)
+}
+
+/// `Oma_on_check` (`0x4CE510`): the first object a character at `pos`,
+/// heading `angle`, on floor `floor`, can climb onto: [`BE_CLIMBABLE`], on
+/// the same floor, not the one it already stands on, and faced
+/// ([`oma_front_ck`]).
+pub fn oma_on_check(
+    objects: &[ObjectRecord],
+    floor: u8,
+    on_object: Option<u8>,
+    pos: [i32; 3],
+    angle: u16,
+    at_w: u16,
+) -> Option<u8> {
+    objects
+        .iter()
+        .enumerate()
+        .find(|&(index, obj)| {
+            obj.be_flg & BE_CLIMBABLE == BE_CLIMBABLE
+                && obj.floor == floor
+                && on_object != Some(index as u8)
+                && oma_front_ck(pos, angle, at_w, obj)
+        })
+        .map(|(index, _)| index as u8)
+}
+
+/// `Oma_get_on_om` (`0x4CED30`): the first object the character stands on,
+/// else `current`. It stands on a [`BE_CLIMBABLE`] object, not a ghost,
+/// whose top is the character's height, when its box's centre is within the
+/// object's half-sizes less half its width (the edges in).
+pub fn oma_get_on_om(objects: &[ObjectRecord], chr: &CharBox, current: Option<u8>) -> Option<u8> {
+    let half = i32::from(chr.at_w >> 1);
+    objects
+        .iter()
+        .enumerate()
+        .find(|&(_, obj)| {
+            let (w, d) = obj.half_size();
+            obj.be_flg & BE_CLIMBABLE == BE_CLIMBABLE
+                && obj.be_flg & BE_GHOST == 0
+                && chr.pos[1] == object_top(obj)
+                && !outside(obj.at[2].wrapping_sub(chr.at[2]), i32::from(d) - half)
+                && !outside(obj.at[0].wrapping_sub(chr.at[0]), i32::from(w) - half)
+        })
+        .map_or(current, |(index, _)| Some(index as u8))
+}
+
+/// What [`oma_pull`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Pull {
+    /// `pOn_om` after it.
+    pub on_object: Option<u8>,
+    /// The character stepped off an edge next to which another climbable
+    /// object stands at the same height: the original hands the character
+    /// over to it (`Oma_pull_hosei_x`/`_z`), which isn't ported.
+    pub next_box: bool,
+}
+
+/// `Oma_pull` (`0x4CE580`) on the object `index` the character stands on:
+/// `pOn_om` taken again ([`oma_get_on_om`]) and, while that is still the
+/// object, a character whose box has just stepped past an edge of the
+/// object's top (its half-sizes less half the character's width), and was
+/// inside on that axis last frame (`old2`), put back on that edge. Only the
+/// plain pull is ported: the hand-over to another box of the same height next
+/// to it is reported in [`Pull::next_box`] and not done.
+pub fn oma_pull(
+    objects: &[ObjectRecord],
+    chr: &mut CharBox,
+    index: usize,
+    current: Option<u8>,
+) -> Pull {
+    let obj = objects[index];
+    let mut pull = Pull {
+        on_object: current,
+        next_box: false,
+    };
+    if chr.be_flg & BE_UNHELD != 0 || obj.be_flg & BE_GHOST != 0 {
+        return pull;
+    }
+    pull.on_object = oma_get_on_om(objects, chr, current);
+    if pull.on_object != Some(index as u8) {
+        return pull;
+    }
+    let half = i32::from(chr.at_w >> 1);
+    let (w, d) = obj.half_size();
+    let (reach_x, reach_z) = (i32::from(w) - half, i32::from(d) - half);
+    let dx = obj.at[0].wrapping_sub(chr.at[0]);
+    let dz = obj.at[2].wrapping_sub(chr.at[2]);
+    let now = u8::from(outside(dx, reach_x)) | u8::from(outside(dz, reach_z)) << 1;
+    let was = u8::from(outside(obj.at[0] - i32::from(chr.old2[0]), reach_x))
+        | u8::from(outside(obj.at[2] - i32::from(chr.old2[2]), reach_z)) << 1;
+    let top = object_top(&obj);
+    pull.next_box = now != 0
+        && objects.iter().enumerate().any(|(other, next)| {
+            other != index
+                && next.be_flg & BE_CLIMBABLE == BE_CLIMBABLE
+                && next.be_flg & BE_GHOST == 0
+                && object_top(next) == top
+        });
+    let step = now & !was;
+    if step & 1 != 0 {
+        let edge = if dx >= 0 { -reach_x } else { reach_x };
+        let moved = obj.at[0] + edge - chr.pos[0];
+        chr.pos[0] += moved;
+        chr.at[0] += moved;
+    }
+    if step & 2 != 0 {
+        let edge = if dz >= 0 { -reach_z } else { reach_z };
+        let moved = obj.at[2] + edge - chr.pos[2];
+        chr.pos[2] += moved;
+        chr.at[2] += moved;
+    }
+    pull.on_object = oma_get_on_om(objects, chr, pull.on_object);
+    pull
+}
+
+/// `Oma_ob_pull2` (`0x4CEDE0`): a character whose box is outside the
+/// object's top (its half-sizes less half the character's width) moved
+/// toward it, at most `max` on each axis it is outside on.
+pub fn oma_ob_pull2(chr: &mut CharBox, obj: &ObjectRecord, max: u32) {
+    if chr.be_flg & BE_UNHELD != 0 || obj.be_flg & BE_GHOST != 0 {
+        return;
+    }
+    let half = i32::from(chr.at_w >> 1);
+    let (w, d) = obj.half_size();
+    let (reach_x, reach_z) = (i32::from(w) - half, i32::from(d) - half);
+    let dx = obj.at[0].wrapping_sub(chr.at[0]);
+    let dz = obj.at[2].wrapping_sub(chr.at[2]);
+    let step = |delta: i32, reach: i32| {
+        let amount = (delta.wrapping_abs().wrapping_sub(reach) as u32).min(max) as i32;
+        if delta >= 0 { amount } else { -amount }
+    };
+    if outside(dx, reach_x) {
+        let moved = step(dx, reach_x);
+        chr.pos[0] += moved;
+        chr.at[0] += moved;
+    }
+    if outside(dz, reach_z) {
+        let moved = step(dz, reach_z);
+        chr.pos[2] += moved;
+        chr.at[2] += moved;
+    }
+}
+
 /// `nFloor` of a height, as `Om_move` takes it: `Pos_y / -1800`, toward 0.
 pub fn floor_of_height(y: i32) -> u8 {
     let high = ((i64::from(y) * 0x6E5D_4C3B) >> 32) as i32 - y;
@@ -2032,6 +2286,182 @@ mod tests {
             },
             ..ObjectRecord::default()
         })
+    }
+
+    /// Room 203's box (`Id` 2, `Be_flg` 0x181), turned a quarter, at `z`:
+    /// its box is 600 by 675 about `(x, z + 50)`, its top at -1800.
+    fn box_203(z: i32) -> ObjectRecord {
+        placed(ObjectRecord {
+            flag: OBJECT_FLAG_ACTIVE,
+            pos: [-18673, 0, z],
+            rotation: [0, -1024, 0],
+            be_flg: 0x181,
+            id: 2,
+            atd2: ObjectAtd {
+                ofs: [50, -900, 0],
+                at_w: 675,
+                at_h: 900,
+                at_d: 600,
+            },
+            ..ObjectRecord::default()
+        })
+    }
+
+    /// Where `box_203.txt`'s push leaves the box: its box's centre at z
+    /// -25186.
+    const BOX_Z: i32 = -25236;
+    const BOX_AT_Z: i32 = BOX_Z + 50;
+
+    #[test]
+    fn omd_in_check_takes_both_edges_and_the_box_in_height() {
+        let obj = box_203(BOX_Z);
+        assert_eq!(obj.at, [-18673, -900, BOX_AT_Z]);
+        assert!(omd_in_check(
+            [-18673 + 600, 0, BOX_AT_Z + 675],
+            &obj,
+            0,
+            false
+        ));
+        assert!(!omd_in_check([-18673 + 601, 0, BOX_AT_Z], &obj, 0, false));
+        assert!(omd_in_check([-18673 + 601, 0, BOX_AT_Z], &obj, 1, false));
+        // In height: below the top, down to the bottom.
+        assert!(!omd_in_check([-18673, -1800, BOX_AT_Z], &obj, 0, true));
+        assert!(omd_in_check([-18673, -1799, BOX_AT_Z], &obj, 0, true));
+        assert!(omd_in_check([-18673, 0, BOX_AT_Z], &obj, 0, true));
+        assert!(!omd_in_check([-18673, 1, BOX_AT_Z], &obj, 0, true));
+    }
+
+    #[test]
+    fn the_ground_takes_an_objects_top() {
+        let objects = [box_203(BOX_Z)];
+        let over = sca_ck_hit(None, &objects, [-18673, -1800, BOX_AT_Z], 0, 0xFF);
+        assert_eq!((over.height, over.blocked), (-1800, false));
+        // Grown by the reach, both edges in.
+        let edge = [-18673 + 600 + 450, -1800, BOX_AT_Z];
+        assert_eq!(sca_ck_hit(None, &objects, edge, 450, 0xFF).height, -1800);
+        let past = [-18673 + 601 + 450, -1800, BOX_AT_Z];
+        assert_eq!(sca_ck_hit(None, &objects, past, 450, 0xFF).height, 0);
+        // A point inside the box is under a ceiling, its ground just above it.
+        let inside = sca_ck_hit(None, &objects, [-18673, -1000, BOX_AT_Z], 0, 0xFF);
+        assert_eq!(
+            (inside.height, inside.blocked, inside.ceiling),
+            (-1001, true, -1800)
+        );
+        // With no objects, the records' own answer.
+        assert_eq!(
+            sca_ck_hit(None, &[], [-18673, -1800, BOX_AT_Z], 0, 0xFF).height,
+            0
+        );
+        // An object out of play is no ground.
+        let mut gone = objects;
+        gone[0].be_flg &= !1;
+        assert_eq!(
+            sca_ck_hit(None, &gone, [-18673, -1800, BOX_AT_Z], 0, 0xFF).height,
+            0
+        );
+    }
+
+    #[test]
+    fn oma_front_ck_reaches_735_and_up_to_38_degrees_off_square() {
+        let obj = box_203(BOX_Z);
+        // `box_203`'s climb: 1126 from the box's centre, facing -z.
+        let pos = [-18700, 0, BOX_AT_Z + 1126];
+        assert!(oma_front_ck(pos, 1024, 450, &obj));
+        assert!(oma_front_ck(pos, 1024 + 0x180, 450, &obj), "34 degrees");
+        assert!(!oma_front_ck(pos, 1024 + 0x1C0, 450, &obj), "39 degrees");
+        assert!(!oma_front_ck(pos, 3072, 450, &obj), "facing away");
+        // The arm reaches 547 short of the far side: 735 + 547 = 1282.
+        assert!(oma_front_ck([-18700, 0, BOX_AT_Z + 1282], 1024, 450, &obj));
+        assert!(!oma_front_ck([-18700, 0, BOX_AT_Z + 1283], 1024, 450, &obj));
+        // Across, the player's own position stays within 472 of the centre.
+        assert!(oma_front_ck(
+            [-18673 + 472, 0, BOX_AT_Z + 1126],
+            1024,
+            450,
+            &obj
+        ));
+        assert!(!oma_front_ck(
+            [-18673 + 473, 0, BOX_AT_Z + 1126],
+            1024,
+            450,
+            &obj
+        ));
+    }
+
+    #[test]
+    fn oma_on_check_wants_a_climbable_object_on_the_players_floor() {
+        let pos = [-18700, 0, BOX_AT_Z + 1126];
+        let objects = [statue_10c(), box_203(BOX_Z)];
+        assert_eq!(oma_on_check(&objects, 0, None, pos, 1024, 450), Some(1));
+        assert_eq!(oma_on_check(&objects, 1, None, pos, 1024, 450), None);
+        assert_eq!(oma_on_check(&objects, 0, Some(1), pos, 1024, 450), None);
+        // 10C's statues and 216's van (`Be_flg` 0x81) can't be climbed.
+        let mut van = box_203(BOX_Z);
+        van.be_flg = 0x81;
+        assert_eq!(oma_on_check(&[van], 0, None, pos, 1024, 450), None);
+    }
+
+    #[test]
+    fn oma_get_on_om_wants_the_top_and_the_box_within_its_inner_edges() {
+        let objects = [box_203(BOX_Z)];
+        let on = |pos: [i32; 3]| oma_get_on_om(&objects, &leon_at(pos, pos), Some(7));
+        assert_eq!(on([-18673, -1800, BOX_AT_Z]), Some(0));
+        assert_eq!(on([-18673 + 375, -1800, BOX_AT_Z - 450]), Some(0));
+        assert_eq!(
+            on([-18673 + 376, -1800, BOX_AT_Z]),
+            Some(7),
+            "else the current"
+        );
+        assert_eq!(on([-18673, -1800, BOX_AT_Z - 451]), Some(7));
+        assert_eq!(on([-18673, -1799, BOX_AT_Z]), Some(7), "not at the top");
+        let mut statue = box_203(BOX_Z);
+        statue.be_flg = 0x85;
+        assert_eq!(
+            oma_get_on_om(&[statue], &leon_at([-18673, -1800, BOX_AT_Z], [0; 3]), None),
+            None
+        );
+    }
+
+    #[test]
+    fn oma_pull_puts_a_player_who_steps_off_back_on_the_edge() {
+        let objects = [box_203(BOX_Z)];
+        // `box_203`: walking -z on the top, Leon stops at -25636.
+        let edge = BOX_AT_Z - 450;
+        let mut leon = leon_at([-18700, -1800, edge - 4], [-18700, -1800, edge + 76]);
+        let pull = oma_pull(&objects, &mut leon, 0, Some(0));
+        assert_eq!(leon.pos, [-18700, -1800, edge]);
+        assert_eq!(leon.at[2], edge, "the box moves with the body");
+        assert_eq!(
+            pull,
+            Pull {
+                on_object: Some(0),
+                next_box: false
+            }
+        );
+        // Outside last frame too: the climb's approach isn't pulled.
+        let mut leon = leon_at([-18700, -1800, edge - 4], [-18700, -1800, edge - 2]);
+        oma_pull(&objects, &mut leon, 0, Some(0));
+        assert_eq!(leon.pos[2], edge - 4);
+        // A second box of the same height reports the hand-over.
+        let next = box_203(BOX_Z - 1350);
+        let mut leon = leon_at([-18700, -1800, edge - 4], [-18700, -1800, edge + 76]);
+        assert!(oma_pull(&[objects[0], next], &mut leon, 0, Some(0)).next_box);
+    }
+
+    #[test]
+    fn oma_ob_pull2_draws_the_player_in_by_at_most_the_step() {
+        let obj = box_203(BOX_Z);
+        // `box_203`'s climb, at rest 1126 from the centre: 4 a frame.
+        let mut leon = leon_at([-18700, 0, BOX_AT_Z + 1126], [0; 3]);
+        oma_ob_pull2(&mut leon, &obj, 4);
+        assert_eq!(leon.pos, [-18700, 0, BOX_AT_Z + 1122]);
+        oma_ob_pull2(&mut leon, &obj, 1000);
+        assert_eq!(leon.pos, [-18700, 0, BOX_AT_Z + 450], "to the inner edge");
+        oma_ob_pull2(&mut leon, &obj, 1000);
+        assert_eq!(leon.pos, [-18700, 0, BOX_AT_Z + 450], "inside: no pull");
+        let mut leon = leon_at([-18673 - 1000, 0, BOX_AT_Z], [0; 3]);
+        oma_ob_pull2(&mut leon, &obj, 0x30);
+        assert_eq!(leon.pos[0], -18673 - 1000 + 0x30);
     }
 
     #[test]

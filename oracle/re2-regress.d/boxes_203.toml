@@ -1,0 +1,17 @@
+# Room 203's box, an `Id` 2 object (oracle/re2.md, "Climbing onto an object"): pushed to the shelf, climbed (`Oma_pl_updown_ck`'s object branch), stood on (`pOn_om`, `Oma_pull`), and jumped down from; the Crank is taken from its top. The enemies are off.
+
+[[run]]
+name = "box_203"
+room = "203"
+setup_script = "box_203.lua"
+input = "box_203.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1160
+frames = [360, 1159]
+# Measured: 0.01 a frame outside the Crank's question and item view (697 to 997: 0.84, as in the item runs); 0.34 in all. The windows hold the push, the climb, the box top and the jump down at 0.05, so a draw regression there can't hide in the whole run's mean.
+frame_max_mean = 0.36
+frame_windows = [[360, 696, 0.05], [697, 997, 0.95], [998, 1159, 0.05]]
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgcom,om0,om3,om4,pon"
+expect = "match"
+record = "--no-enemies --warp 203:-18700:0:-19000:1024 --life 200"

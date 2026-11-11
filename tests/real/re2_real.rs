@@ -1338,6 +1338,7 @@ fn no_event_holds_the_player_for_good() {
                         neck_targets: &[],
                         enemies: 0,
                         pushing: false,
+                        objects: &[],
                         key_trg: 0,
                     };
                     let arrived =

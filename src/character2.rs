@@ -92,7 +92,7 @@ pub fn tick(
             for step in character.body.take_footsteps() {
                 let floor = crate::sca::floor_of(step.pos[1]);
                 game.re2.sounds.push(crate::scd2::host::SoundRequest::new(
-                    crate::se2::footstep_sound(&room.footstep_zones, &step, floor),
+                    crate::se2::footstep_sound(&room.footstep_zones, &step, floor, false),
                     step.pos,
                 ));
             }
@@ -1732,6 +1732,7 @@ pub fn tick_of<'a>(
         neck_targets: &[],
         enemies: 0,
         pushing: false,
+        objects: &[],
         key_trg: 0,
     }
 }
@@ -2188,6 +2189,7 @@ mod tests {
             neck_targets: &[],
             enemies: 0,
             pushing: false,
+            objects: &[],
             key_trg: 0,
         }
     }

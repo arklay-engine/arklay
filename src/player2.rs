@@ -401,7 +401,7 @@ pub struct Work {
     /// `Damage_cnt`, and `Status_flg`, for `Pl_damage`, `Sce_Damage` and the
     /// enemies: its top bit is also an enemy having hold of them.
     pub(crate) damage_cnt: u8,
-    status_flg: u16,
+    pub(crate) status_flg: u16,
     /// `FUN_004f6800`'s blood this tick, whose `Rnd` the caller holds: whether
     /// it's the spray, and where.
     pub(crate) sce_blood: Option<(bool, [i16; 3])>,
@@ -473,6 +473,9 @@ pub struct Work {
     /// A character's `Old_x2`, `Old_y2` and `Old_z2`: its `Atd[0]` box as
     /// `Game_loop`'s draw left it last tick, which `Om_move` reads.
     pub old_box: Option<[i32; 3]>,
+    /// `pOn_om` (`+0x1E4`): the room object the player stands on, or is
+    /// climbing onto. `Set_room` clears it.
+    pub on_object: Option<u8>,
     /// `+0x154`'s `0x1000`: `Pl_life_down` has already let the player live once.
     pub near_death: bool,
     /// `poison_status`: an ivy's spit poisoned the player. The life level
@@ -790,6 +793,8 @@ const MAGAZINE_HAND: usize = 11;
 const MAGAZINE_OFFSET: i32 = 150;
 /// `BYTE_0053a422`.
 const MAGAZINE_SPEED: i32 = 0x1E;
+/// `Status_flg`'s bits that go with `pOn_om`.
+const STATUS_ON_OBJECT: u16 = 0x0600;
 /// `Status_flg`: there's a magazine in the gun to drop.
 const STATUS_MAGAZINE: u16 = 1;
 
@@ -818,11 +823,18 @@ impl Work {
         self.move_no = IDLE_CLIPS[usize::from(level)];
     }
 
+    /// `Om_move`'s end with no `pOn_om`: `Status_flg` loses `0x0600`, which
+    /// `Set_room` clears with `pOn_om` too.
+    pub(crate) fn leave_object(&mut self) {
+        self.status_flg &= !STATUS_ON_OBJECT;
+    }
+
     /// `Player_set`: the magazine is gone, and the next reload drops one if
     /// there's a round in the gun.
     pub(crate) fn enter_room(&mut self, loaded: bool) {
         self.status_flg = if loaded { STATUS_MAGAZINE } else { 0 };
         self.magazine = None;
+        self.on_object = None;
     }
 
     /// The aim's splashes' `Rnd`, in the order the original draws it: two for
@@ -945,6 +957,7 @@ impl Default for Work {
             atd: None,
             old: None,
             old_box: None,
+            on_object: None,
             near_death: false,
             poisoned: false,
             poison_timer: 0,
@@ -1123,6 +1136,9 @@ pub struct Tick<'a> {
     pub enemies: u8,
     /// `fg_status`'s `0x2000`: last tick's `Om_move` pushed an object.
     pub pushing: bool,
+    /// The room's objects (`pOm`), as last tick's `Om_move` left them: the
+    /// climb onto one, standing on it, and the ground their tops make.
+    pub objects: &'a [crate::objects::ObjectRecord],
     /// `Key_trg`: the keys `Pad_set` saw go down this tick
     /// ([`crate::scd2::host::Re2State::set_key`]). Under an input stop it
     /// keeps only [`KEYS_IN_A_STOP`], and the tick the stop ends raises
@@ -1640,9 +1656,22 @@ impl Mover<'_, '_> {
 
     /// `Pl_move`: the branch on the keys, then the movement it chose.
     fn pl_move(&mut self) {
-        self.stairs = self.tick.room.sca.as_ref().and_then(|sca| {
-            crate::sca::stairs_ahead(sca, self.player.pos, self.player.angle, self.player.radius)
-        });
+        // `Sca_ck_em` leaves `Sca_info` empty while the player stands on an
+        // object.
+        self.stairs = self
+            .tick
+            .room
+            .sca
+            .as_ref()
+            .filter(|_| self.work.on_object.is_none())
+            .and_then(|sca| {
+                crate::sca::stairs_ahead(
+                    sca,
+                    self.player.pos,
+                    self.player.angle,
+                    self.player.radius,
+                )
+            });
         let (input, target) = player::analog_input(
             self.player,
             self.tick.room,
@@ -1734,8 +1763,10 @@ impl Mover<'_, '_> {
         }
     }
 
-    /// `Oma_pl_updown_ck`, without the object models: a box to climb in front
-    /// of the player, or a drop.
+    /// `Oma_pl_updown_ck` (`0x4CDE00`): a box to climb in front of the
+    /// player, a climb record's or a room object's, or a drop, off a drop
+    /// record or off the object the player stands on (`pOn_om`). The other
+    /// characters at the point (`Oma_obj_ck_all`) aren't looked at.
     fn updown_ck(&mut self) -> bool {
         use crate::sca::{FLOOR_HEIGHT, INFO_DOWN, INFO_UP, PLAYER_MASK};
         let Some(sca) = self.tick.room.sca.as_ref() else {
@@ -1749,22 +1780,94 @@ impl Mover<'_, '_> {
         let reach = |table: &[i32; 20]| table[(usize::from(self.tick.id) + 4) % table.len()];
         let (dx, dz) = rotate(facing, reach(&CLIMB_REACH), 0);
         let up = [x + dx, y - FLOOR_HEIGHT, z + dz];
-        if floor < 31 && crate::sca::info_at(sca, PLAYER_MASK, up, floor) & INFO_UP != 0 {
-            let ground = crate::sca::ground_at(sca, up, radius, PLAYER_MASK);
-            if ground.height <= up[1] && !ground.blocked {
-                self.work.routine = [MODE_MOVE, MOVE_CLIMB, 0, 0];
-                return true;
+        if floor < 31 {
+            let info = crate::sca::info_at(sca, PLAYER_MASK, up, floor);
+            // `Oma_on_check` faces the object with the player's own heading.
+            let object = crate::objects::oma_on_check(
+                self.tick.objects,
+                floor,
+                self.work.on_object,
+                self.player.pos,
+                self.player.angle,
+                radius as u16,
+            );
+            if info & INFO_UP != 0 || object.is_some() {
+                let ground = self.object_ground(up, radius);
+                if ground.height <= up[1] && !ground.blocked {
+                    self.work.routine = [MODE_MOVE, MOVE_CLIMB, 0, 0];
+                    self.work.on_object = object;
+                    return true;
+                }
             }
         }
         let (dx, dz) = rotate(facing, reach(&DROP_REACH), 0);
-        let down = [x + dx, y, z + dz];
-        let ground = crate::sca::ground_at(sca, down, radius, PLAYER_MASK);
+        let mut down = [x + dx, y, z + dz];
+        let ground = self.object_ground(down, radius);
         let landing = ground.height.min(ground.ceiling);
-        if landing > y && crate::sca::info_at(sca, PLAYER_MASK, down, floor) & INFO_DOWN != 0 {
-            self.work.routine = [MODE_MOVE, MOVE_CLIMB, CLIMB_IS_DROP, 0];
-            return true;
+        if landing <= y
+            || (crate::sca::info_at(sca, PLAYER_MASK, down, floor) & INFO_DOWN == 0
+                && self.work.on_object.is_none())
+        {
+            return false;
         }
-        false
+        // No other object may stand where the player lands, nor at the
+        // player's own height there.
+        down[1] = landing;
+        let in_the_way = self
+            .tick
+            .objects
+            .iter()
+            .enumerate()
+            .filter(|&(index, obj)| {
+                obj.be_flg & 1 != 0
+                    && obj.be_flg & 2 == 0
+                    && self.work.on_object != Some(index as u8)
+            })
+            .any(|(_, obj)| {
+                crate::objects::omd_in_check(down, obj, radius, true)
+                    || crate::objects::omd_in_check([down[0], y, down[2]], obj, radius, true)
+            });
+        if in_the_way {
+            return false;
+        }
+        self.work.on_object = None;
+        self.work.routine = [MODE_MOVE, MOVE_CLIMB, CLIMB_IS_DROP, 0];
+        true
+    }
+
+    /// `Sca_ck_hit` with the room objects' tops (`param_4` 0) at `pos`.
+    fn object_ground(&self, pos: [i32; 3], radius: i32) -> crate::sca::Ground {
+        crate::objects::sca_ck_hit(
+            self.tick.room.sca.as_ref(),
+            self.tick.objects,
+            pos,
+            radius,
+            crate::sca::PLAYER_MASK,
+        )
+    }
+
+    /// `Oma_ob_pull2` toward the object the player stands on, at most `max`
+    /// on each axis.
+    fn pull_to_object(&mut self, max: u32) {
+        let Some(obj) = self
+            .work
+            .on_object
+            .and_then(|index| self.tick.objects.get(usize::from(index)))
+        else {
+            return;
+        };
+        let height = crate::character2::PLAYER_HEIGHT;
+        let pos = self.player.pos;
+        let mut chr = crate::objects::CharBox::standing(
+            pos,
+            pos,
+            -(height as i16),
+            self.player.radius as u16,
+            height,
+        );
+        chr.be_flg = self.work.be_flg;
+        crate::objects::oma_ob_pull2(&mut chr, obj, max);
+        self.player.pos = chr.pos;
     }
 
     /// The first steps of `pl_mv_08`: turn square to the box. It answers
@@ -1848,10 +1951,13 @@ impl Mover<'_, '_> {
             }
             3 => {}
             _ => {
+                self.pull_to_object(1000);
                 self.set_routine(MOVE_IDLE);
                 return;
             }
         }
+        // Drawn in to the object being climbed, 4 a frame on each axis.
+        self.pull_to_object(4);
         // The body lifts on the clip's frame: the move and the height together.
         let small = self.tick.id == SMALL_ID;
         let (lift, reach, end) = if small {
@@ -1933,7 +2039,9 @@ impl Mover<'_, '_> {
                 self.work.move_no = LAND_CLIP;
                 self.work.move_cnt = 4;
                 self.work.hokan = FULL_BLEND;
-                self.player.pos[1] = self.ground();
+                self.player.pos[1] = self
+                    .object_ground(self.player.pos, self.player.radius)
+                    .height;
                 self.work.damage_cnt &= !DAMAGE_LOCK;
                 self.work.be_flg &= !BE_NO_PUSH;
                 // `Snd_se_walk(1, 4, w)`, with its ripples in water.
@@ -1943,7 +2051,10 @@ impl Mover<'_, '_> {
                 self.land();
             }
             5 => self.land(),
-            _ => self.set_routine(MOVE_IDLE),
+            _ => {
+                self.pull_to_object(1000);
+                self.set_routine(MOVE_IDLE);
+            }
         }
     }
 
@@ -1963,10 +2074,10 @@ impl Mover<'_, '_> {
     /// `Ground` as `Game_loop` left it after the last tick: `Sca_ck_hit`
     /// with no reach at the shadow's probe, `Kage_ofs` along the body.
     fn drawn_ground(&self) -> i32 {
-        let (Some(sca), Some(probe)) = (self.tick.room.sca.as_ref(), self.work.kage_probe) else {
+        let (Some(_), Some(probe)) = (self.tick.room.sca.as_ref(), self.work.kage_probe) else {
             return self.ground();
         };
-        i32::from(crate::sca::ground_at(sca, probe, 0, crate::sca::PLAYER_MASK).height as i16)
+        i32::from(self.object_ground(probe, 0).height as i16)
     }
 
     fn jump_step(&mut self) {
@@ -1983,7 +2094,23 @@ impl Mover<'_, '_> {
     fn fall(&mut self) {
         self.player.pos[1] += i32::from(self.work.timer0 as i16) * 0x1E;
         self.work.timer0 += 1;
-        let ground = self.ground();
+        let ground = self
+            .object_ground(self.player.pos, self.player.radius)
+            .height;
+        // Landing on an object's top: the player stands on it.
+        let pos = self.player.pos;
+        let radius = self.player.radius;
+        if let Some(index) = self.tick.objects.iter().position(|obj| {
+            let mut obj = *obj;
+            obj.set_ofs();
+            obj.be_flg & 1 != 0
+                && obj.be_flg & 2 == 0
+                && crate::objects::omd_in_check(pos, &obj, radius, false)
+                && i32::from(ground as i16) == crate::objects::object_top(&obj)
+        }) {
+            self.work.on_object = Some(index as u8);
+        }
+        self.pull_to_object(0x30);
         self.joint_move();
         if i32::from(self.work.water) < ground && self.work.back_wait == 0 {
             self.work.back_wait = JUMP_SPLASH;
@@ -2002,6 +2129,7 @@ impl Mover<'_, '_> {
         if self.work.move_cnt == 6 {
             self.foot_down(1, true);
         }
+        self.pull_to_object(0x30);
         if self.joint_move() {
             self.work.routine[3] = 6;
         }
@@ -6349,6 +6477,8 @@ mod tests {
         pushing: bool,
         /// `Pad_set`'s last `Key`, for [`Self::tick`]'s `Key_trg`.
         last_key: u16,
+        /// The room's objects.
+        objects: Vec<crate::objects::ObjectRecord>,
     }
 
     /// `angle` from the player, as far as `distance`.
@@ -6684,6 +6814,7 @@ mod tests {
             neck_targets: &setup.neck_targets,
             enemies: setup.neck_targets.len() as u8,
             pushing: false,
+            objects: &[],
             key_trg: 0,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
@@ -6754,6 +6885,7 @@ mod tests {
             neck_targets: &[],
             enemies: 0,
             pushing: false,
+            objects: &[],
             key_trg: 0,
         };
         pose_init(&mut setup.work, &mut setup.player, &tick);
@@ -6801,6 +6933,7 @@ mod tests {
             neck_targets: &setup.neck_targets,
             enemies: setup.neck_targets.len() as u8,
             pushing: false,
+            objects: &[],
             key_trg: 0,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
@@ -6863,6 +6996,7 @@ mod tests {
             neck_targets: &setup.neck_targets,
             enemies: setup.neck_targets.len() as u8,
             pushing: false,
+            objects: &[],
             key_trg: 0,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
@@ -6922,6 +7056,7 @@ mod tests {
             neck_targets: &setup.neck_targets,
             enemies: setup.neck_targets.len() as u8,
             pushing: false,
+            objects: &[],
             key_trg: 0,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
@@ -7138,6 +7273,7 @@ mod tests {
                 enemies: None,
                 pushing: false,
                 last_key: 0,
+                objects: Vec::new(),
             }
         }
 
@@ -7174,6 +7310,7 @@ mod tests {
                 neck_targets: &self.neck_targets,
                 enemies: self.enemies.unwrap_or(self.neck_targets.len() as u8),
                 pushing: self.pushing,
+                objects: &self.objects,
                 key_trg,
             };
             player_move(&mut self.work, &mut self.player, &tick)
@@ -7204,6 +7341,7 @@ mod tests {
                 neck_targets: &self.neck_targets,
                 enemies: 0,
                 pushing: false,
+                objects: &[],
                 key_trg: 0,
             };
             seed_pose(&mut self.work, &mut self.player, &tick);
@@ -7234,6 +7372,7 @@ mod tests {
                 neck_targets: &self.neck_targets,
                 enemies: 0,
                 pushing: false,
+                objects: &[],
                 key_trg: 0,
             };
             let mover = Mover {
@@ -7328,6 +7467,7 @@ mod tests {
             neck_targets: &[],
             enemies: 0,
             pushing: false,
+            objects: &[],
             key_trg: 0,
         };
         let mut rnd = crate::zombie2::Rnd::default();
@@ -7427,6 +7567,7 @@ mod tests {
             neck_targets: &[],
             enemies: 0,
             pushing: false,
+            objects: &[],
             key_trg: 0,
         };
         let Setup {
@@ -7623,6 +7764,7 @@ mod tests {
                         neck_targets: &[],
                         enemies: 0,
                         pushing: false,
+                        objects: &[],
                         key_trg: 0,
                     };
                     let mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
@@ -7852,6 +7994,116 @@ mod tests {
             action_held: true,
             ..Input::default()
         }
+    }
+
+    /// Room 203's box at rest against the shelf (`box_203`): its box's
+    /// centre at z -25186, 600 by 675, its top at -1800.
+    fn box_203() -> crate::objects::ObjectRecord {
+        let mut record = crate::objects::ObjectRecord {
+            flag: crate::objects::OBJECT_FLAG_ACTIVE,
+            pos: [-18673, 0, -25236],
+            rotation: [0, -1024, 0],
+            be_flg: 0x181,
+            id: 2,
+            atd2: crate::objects::ObjectAtd {
+                ofs: [50, -900, 0],
+                at_w: 675,
+                at_h: 900,
+                at_d: 600,
+            },
+            ..crate::objects::ObjectRecord::default()
+        };
+        record.set_ofs();
+        record
+    }
+
+    /// Leon in a room with no walls and 203's box, at `pos`, heading `angle`.
+    fn by_the_box(pos: [i32; 3], angle: u16) -> Setup {
+        let mut setup = Setup::new(0);
+        (setup.clips, setup.keyframes) = bank(10, 60, 0);
+        setup.room.sca = Some(crate::state::Sca::default());
+        setup.objects = vec![box_203()];
+        setup.player.pos = pos;
+        setup.player.angle = angle;
+        setup.player.radius = 450;
+        setup.work.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
+        setup
+    }
+
+    /// `box_203`: the action key at the box's +z face, facing it.
+    #[test]
+    fn the_action_key_climbs_onto_a_box_it_faces() {
+        let mut setup = by_the_box([-18700, 0, -24060], 1024);
+        setup.tick(action(), 200);
+        assert_eq!(setup.work.routine[..3], [MODE_MOVE, MOVE_CLIMB, 0]);
+        assert_eq!(setup.work.on_object, Some(0));
+        // `Oma_front_ck`'s arm takes no more than 38 degrees.
+        let mut setup = by_the_box([-18700, 0, -24060], 1024 + 0x1C0);
+        setup.tick(action(), 200);
+        assert_ne!(setup.work.routine[1], MOVE_CLIMB);
+        // Nor an object that can't be climbed (10C's statues, 216's van).
+        let mut setup = by_the_box([-18700, 0, -24060], 1024);
+        setup.objects[0].be_flg = 0x81;
+        setup.tick(action(), 200);
+        assert_ne!(setup.work.routine[1], MOVE_CLIMB);
+        assert_eq!(setup.work.on_object, None);
+    }
+
+    /// `pl_mv_08`'s `Oma_ob_pull2`: 4 a frame toward the box, nothing once
+    /// the player is on its top.
+    #[test]
+    fn a_climb_onto_an_object_draws_the_player_in() {
+        let mut setup = by_the_box([-18700, 0, -24060], 1024);
+        setup.work.on_object = Some(0);
+        setup.work.routine = [MODE_MOVE, MOVE_CLIMB, 0, 2];
+        setup.tick(Input::default(), 200);
+        assert_eq!(setup.player.pos, [-18700, 0, -24064]);
+        let mut setup = by_the_box([-18700, -1800, -25064], 1024);
+        setup.work.on_object = Some(0);
+        setup.work.routine = [MODE_MOVE, MOVE_CLIMB, 0, 4];
+        setup.tick(Input::default(), 200);
+        assert_eq!(setup.player.pos, [-18700, -1800, -25064]);
+        assert_eq!(setup.work.routine[1], MOVE_IDLE);
+    }
+
+    /// `box_203`'s way down: off the top's +z edge, with no drop record.
+    #[test]
+    fn the_action_key_jumps_down_off_the_object_stood_on() {
+        // As `box_203` presses it, a little off square.
+        let mut setup = by_the_box([-18574, -1800, -24736], 3120);
+        setup.work.floor = 1;
+        setup.work.on_object = Some(0);
+        setup.tick(action(), 200);
+        assert_eq!(
+            setup.work.routine[..3],
+            [MODE_MOVE, MOVE_CLIMB, CLIMB_IS_DROP]
+        );
+        assert_eq!(setup.work.on_object, None);
+        // From the middle the point ahead is still over the box.
+        let mut setup = by_the_box([-18673, -1800, -25186], 3072);
+        setup.work.floor = 1;
+        setup.work.on_object = Some(0);
+        setup.tick(action(), 200);
+        assert_ne!(setup.work.routine[1], MOVE_CLIMB);
+        // Off the floor with no object stood on and no drop record, nothing.
+        let mut setup = by_the_box([0, -1800, 0], 3072);
+        setup.tick(action(), 200);
+        assert_ne!(setup.work.routine[1], MOVE_CLIMB);
+    }
+
+    /// `pl_mv_09` lands on an object's top and stands on it.
+    #[test]
+    fn a_jump_down_lands_on_an_objects_top() {
+        let mut setup = by_the_box([-18673, -3600, -25186 + 1000], 1024);
+        setup.work.routine = [MODE_MOVE, MOVE_JUMP_DOWN, 2, 2];
+        for _ in 0..100 {
+            if setup.work.routine[1] != MOVE_JUMP_DOWN {
+                break;
+            }
+            setup.tick(Input::default(), 200);
+        }
+        assert_eq!(setup.work.on_object, Some(0));
+        assert_eq!(setup.player.pos, [-18673, -1800, -25186]);
     }
 
     #[test]
@@ -8445,6 +8697,7 @@ mod tests {
             neck_targets: &[],
             enemies: 0,
             pushing: false,
+            objects: &[],
             key_trg: KEY_FORWARD | KEY_TILT_UP,
         };
         player_move(&mut setup.work, &mut setup.player, &tick);
@@ -8506,6 +8759,7 @@ mod tests {
             neck_targets: &[],
             enemies: 0,
             pushing: false,
+            objects: &[],
             key_trg: 0,
         };
         player_move(&mut setup.work, &mut setup.player, &tick);
@@ -8767,6 +9021,7 @@ mod tests {
             neck_targets: &[],
             enemies: 0,
             pushing: false,
+            objects: &[],
             key_trg: 0,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);

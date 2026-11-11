@@ -8695,7 +8695,8 @@ impl GameState {
         true
     }
 
-    /// `Sce_Door` (`0x4E9460`): an open door starts the transition. A
+    /// `Sce_Door` (`0x4E9460`): nothing while `pOn_om` holds an object; else
+    /// an open door starts the transition. A
     /// locked one (bit `0x80` of its lock byte, unlocked by its bit in
     /// `door_locks`) shows its message and plays its sound; a key turn or
     /// an unlock raises the bit, and the door opens on a later press.
@@ -8710,6 +8711,10 @@ impl GameState {
             door_locked_message, door_message,
         };
         use door2::{DOOR_PARTNER, SOUND_DOOR_LOCKED, SOUND_KEY_USED, SOUND_UNLOCKED};
+        // Nothing while the player climbs onto or stands on an object.
+        if self.re2.player.on_object.is_some() {
+            return false;
+        }
         if self.re2_partner_blocks_door() {
             self.show_re2_door_message(door_message(DOOR_PARTNER));
             return false;

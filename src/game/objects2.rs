@@ -3,7 +3,8 @@
 //! of where each was drawn.
 //!
 //! Not ported: `Om_move_box` and the falls of the `Id` 2 boxes (rooms 203,
-//! 216, 306, 603 and F03), and `Oma_pull`, standing on an object.
+//! 216, 306, 603 and F03), `Sca_ck_hit_om`'s push of a box out of a wall,
+//! and `Oma_pull`'s hand-over from one box to the next.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -12,7 +13,7 @@ use crate::anim::Mat4x3;
 use crate::character2::{PLAYER_HEIGHT, player_width};
 use crate::objects::{
     CharBox, ObjectRecord, Oma, SCA_HIT_WALL, SuperParent, floor_of_height, oma_ck_front,
-    oma_ck_oba, oma_ck_om, sca_ck_hit_om,
+    oma_ck_oba, oma_ck_om, oma_pull, sca_ck_hit_om,
 };
 use crate::player::PlayerState;
 use crate::state::RoomState;
@@ -42,7 +43,12 @@ const ROUTINE_PUSH: u8 = 10;
 const PUSH_TRY: u8 = 6;
 const PUSH_STEP: u8 = 7;
 
+/// `Sca_ck_hit_om`'s mask for the fall's test: the records with `0x100` in
+/// their id don't count.
+const FALL_EXCLUDE: u16 = 0x100;
+
 static BOX_WARNED: AtomicBool = AtomicBool::new(false);
+static NEXT_BOX_WARNED: AtomicBool = AtomicBool::new(false);
 
 impl GameState {
     /// `Om_move`, after the player's move and before `Sce_at`: each object's
@@ -57,8 +63,12 @@ impl GameState {
     /// `fg_status`'s `0x2000` comes up and the step is undone, from the
     /// seventh it stays. A refused step puts the count back to 0.
     ///
-    /// Returns the first falling box (`Id` 2) a character touched, whose
-    /// `Om_move_box` isn't ported: the first such touch warns.
+    /// The object the player stands on (`pOn_om`) is never counted or
+    /// pushed: `Oma_pull` keeps the player on its top instead.
+    ///
+    /// Returns the first falling box (`Id` 2) whose fall would start, or that
+    /// `Sca_ck_hit_om` would push out of a wall, neither of which is ported:
+    /// the first such box warns.
     pub fn om_move(&mut self, room: &RoomState, player: &mut PlayerState) -> Option<usize> {
         if self.re2.objects_stopped() {
             return None;
@@ -76,6 +86,7 @@ impl GameState {
         let mut touched = 0;
         let mut candidate = None;
         let mut box_touched = None;
+        let mut next_box = false;
         for index in 0..self.objects.records.len() {
             let mut record = self.objects.records[index];
             if record.be_flg & BE_ACTIVE == 0 {
@@ -86,21 +97,35 @@ impl GameState {
             if !keeps_count {
                 record.push_cnt = 0;
             }
-            let mut hit = self.characters_oma(&mut record, Oma::Hold) != 0;
-            if record.be_flg & BE_SHOVED == 0 {
-                if oma_ck_oba(&mut pl, &mut record, Oma::Touch) {
-                    hit = true;
-                    touched += 1;
-                    if self.re2.player.floor == record.floor
-                        && oma_ck_front(pl.pos, player.angle, width, width, &record)
-                    {
-                        candidate = Some(index);
-                    }
+            self.characters_oma(&mut record, Oma::Hold);
+            if record.be_flg & BE_SHOVED != 0 {
+                oma_ck_oba(&mut pl, &mut record, Oma::Push);
+            } else if self.re2.player.on_object == Some(index as u8) {
+                self.objects.records[index] = record;
+                let pull = oma_pull(
+                    &self.objects.records,
+                    &mut pl,
+                    index,
+                    self.re2.player.on_object,
+                );
+                self.re2.player.on_object = pull.on_object;
+                next_box |= pull.next_box;
+            } else if oma_ck_oba(&mut pl, &mut record, Oma::Touch) {
+                touched += 1;
+                if self.re2.player.floor == record.floor
+                    && oma_ck_front(pl.pos, player.angle, width, width, &record)
+                {
+                    candidate = Some(index);
                 }
-            } else {
-                hit |= oma_ck_oba(&mut pl, &mut record, Oma::Push);
             }
-            if hit && record.id == ID_BOX {
+            // The fall's test, which also pushes the box out of any wall it
+            // touches.
+            if record.id == ID_BOX
+                && room
+                    .sca
+                    .as_ref()
+                    .is_some_and(|sca| sca_ck_hit_om(&record, sca, FALL_EXCLUDE) != 0)
+            {
                 box_touched = box_touched.or(Some(index));
             }
             self.objects.records[index] = record;
@@ -114,13 +139,13 @@ impl GameState {
             }
         }
 
-        for (index, record) in self.objects.records.iter_mut().enumerate() {
-            if record.be_flg & BE_ACTIVE != 0
-                && oma_ck_oba(&mut pl, record, Oma::Hold)
-                && record.id == ID_BOX
-            {
-                box_touched = box_touched.or(Some(index));
+        for record in self.objects.records.iter_mut() {
+            if record.be_flg & BE_ACTIVE != 0 {
+                oma_ck_oba(&mut pl, record, Oma::Hold);
             }
+        }
+        if self.re2.player.on_object.is_none() {
+            self.re2.player.leave_object();
         }
         player.pos = pl.pos;
         self.entities[0].pos = player.pos;
@@ -131,7 +156,12 @@ impl GameState {
             && !BOX_WARNED.swap(true, Ordering::Relaxed)
         {
             crate::warning!(
-                "warning: room object {index} is a falling box (Id 2), and Om_move_box isn't ported"
+                "warning: room object {index} is a falling box (Id 2) over a hole or against a wall, and Om_move_box's fall and Sca_ck_hit_om's push out aren't ported"
+            );
+        }
+        if next_box && !NEXT_BOX_WARNED.swap(true, Ordering::Relaxed) {
+            crate::warning!(
+                "warning: the player stepped off a room object next to another of the same height, and Oma_pull's hand-over isn't ported"
             );
         }
         box_touched
@@ -313,6 +343,15 @@ impl GameState {
                 .records
                 .get(usize::from(n))
                 .map_or(IDENTITY, |record| record.world),
+        }
+    }
+
+    /// The trace's `pon` field: the slot of the object the player stands on
+    /// (`pOn_om`), or `-`.
+    pub fn re2_on_object_trace(&self) -> String {
+        match self.re2.player.on_object {
+            Some(index) => format!("pon={index}"),
+            None => "pon=-".to_string(),
         }
     }
 
@@ -636,21 +675,96 @@ mod tests {
     }
 
     #[test]
-    fn only_a_touched_falling_box_warns() {
-        let mut far = statue(-20000);
-        far.id = ID_BOX;
-        let (mut game, room, mut player) = hall(&[statue(-13000), far]);
-        walk(&mut game, &room, &mut player);
+    fn a_falling_box_warns_only_over_a_hole_or_against_a_wall() {
+        // Pushed or touched, a box clear of the walls starts no fall.
         let mut near = statue(-13000);
         near.id = ID_BOX;
-        let (mut game2, room2, mut player2) = hall(&[statue(-20000), near]);
-        assert_eq!(game.om_move(&room, &mut player), None, "nothing touches it");
-        player2.pos[2] -= STEP;
+        let (mut game, room, mut player) = hall(&[near]);
+        player.pos[2] -= STEP;
         assert_eq!(
-            game2.om_move(&room2, &mut player2),
-            Some(1),
+            game.om_move(&room, &mut player),
+            None,
             "the player walks in"
         );
+        // One touching a wall record would be pushed out of it.
+        let (mut game, mut room, mut player) = hall(&[statue(-20000), near]);
+        room.sca.as_mut().unwrap().records.push(ScaRect {
+            x: -24000,
+            z: -13500,
+            width: 3000,
+            depth: 100,
+            id: 0xFC80,
+            kind: 0xF,
+            floor: 0x1F,
+        });
+        assert_eq!(game.om_move(&room, &mut player), Some(1));
+        // A wall of the fall's own kind (0x100 in its id) doesn't count.
+        room.sca.as_mut().unwrap().records[0].id = 0xFD80;
+        assert_eq!(game.om_move(&room, &mut player), None);
+    }
+
+    /// Room 203's box at rest against the shelf, as `box_203` leaves it.
+    fn box_203() -> ObjectRecord {
+        let mut record = ObjectRecord {
+            flag: crate::objects::OBJECT_FLAG_ACTIVE,
+            pos: [-18673, 0, -25236],
+            rotation: [0, -1024, 0],
+            be_flg: 0x181,
+            id: ID_BOX,
+            atd2: ObjectAtd {
+                ofs: [50, -900, 0],
+                at_w: 675,
+                at_h: 900,
+                at_d: 600,
+            },
+            ..ObjectRecord::default()
+        };
+        record.set_ofs();
+        record.om_trans_old();
+        record
+    }
+
+    /// Leon on 203's box top at `z`, walking -z.
+    fn on_box(z: i32) -> (GameState, RoomState, PlayerState) {
+        let (mut game, room, mut player) = hall(&[box_203()]);
+        game.re2.player.floor = 1;
+        game.re2.player.on_object = Some(0);
+        player.pos = [-18700, -1800, z];
+        crate::character2::keep_old_boxes(&mut game, player.pos);
+        (game, room, player)
+    }
+
+    #[test]
+    fn the_object_stood_on_is_pulled_on_not_pushed() {
+        let edge = -25186 - 450;
+        let (mut game, room, mut player) = on_box(edge + 60);
+        for _ in 0..10 {
+            walk(&mut game, &room, &mut player);
+            let record = game.objects.records[0];
+            assert_eq!(record.push_cnt, 0, "never counted");
+            assert_eq!(record.pos[2], -25236, "never pushed");
+            assert_eq!(game.re2.player.on_object, Some(0));
+        }
+        assert_eq!(player.pos, [-18700, -1800, edge], "held on the edge");
+    }
+
+    #[test]
+    fn the_object_bits_go_with_the_object() {
+        let (mut game, room, mut player) = on_box(-25186);
+        game.re2.player.status_flg = 0x0601;
+        game.om_move(&room, &mut player);
+        assert_eq!(game.re2.player.status_flg, 0x0601, "still on it");
+        game.re2.player.on_object = None;
+        game.om_move(&room, &mut player);
+        assert_eq!(game.re2.player.status_flg, 0x0001, "off it");
+    }
+
+    #[test]
+    fn the_trace_names_the_object_stood_on() {
+        let (mut game, _, _) = on_box(-25186);
+        assert_eq!(game.re2_on_object_trace(), "pon=0");
+        game.re2.player.on_object = None;
+        assert_eq!(game.re2_on_object_trace(), "pon=-");
     }
 
     /// An object in play, at `pos` on `parent`.
