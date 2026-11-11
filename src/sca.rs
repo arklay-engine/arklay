@@ -795,18 +795,25 @@ pub struct Ground {
 
 /// `Sca_ck_hit`, without the object models.
 pub fn ground_at(sca: &Sca, pos: [i32; 3], radius: i32, mask: u16) -> Ground {
+    ground_at_from(sca, pos, pos, radius, mask)
+}
+
+/// [`ground_at`] for a point that moved during the call: `Sca_ck_hit` reads
+/// it at `entry` for its `y > 0` test, the area and each record's grown box,
+/// and at `pos` for the shapes and the heights.
+pub fn ground_at_from(sca: &Sca, entry: [i32; 3], pos: [i32; 3], radius: i32, mask: u16) -> Ground {
     let mut ground = Ground {
-        blocked: pos[1] > 0,
+        blocked: entry[1] > 0,
         below: sca.ceiling,
         above: sca.ceiling,
         ..Ground::default()
     };
-    let area = area(sca, pos[0], pos[2]);
+    let area = area(sca, entry[0], entry[2]);
     for record in &sca.records {
         if record.kind & area == 0
             || record.id & mask == 0
             || record.shape() == 10
-            || !inside_grown(record, pos[0], pos[2], radius)
+            || !inside_grown(record, entry[0], entry[2], radius)
             || !inside_shape(record, pos[0], pos[2], radius)
         {
             continue;

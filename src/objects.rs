@@ -386,10 +386,6 @@ pub struct ObjectRecord {
     /// RE2's `Sca_old_x` and `Sca_old_z` (`+0x118`): `Atd X` and `Z` as the
     /// end of the last `Om_move` left them, which `Sca_hit_box` pushes from.
     pub sca_old: [i16; 2],
-    /// RE2's matrix at `+0x24`, which `Rot_add_matrix` turns as a box falls
-    /// and takes `Cdir` from; `None` until a fall turns it, the matrix of
-    /// `rotation` until then.
-    pub turn_matrix: Option<[[i16; 3]; 3]>,
 }
 
 impl Default for ObjectRecord {
@@ -434,7 +430,6 @@ impl Default for ObjectRecord {
             super_parent: SuperParent::World,
             world: Mat4x3::default(),
             sca_old: [0; 2],
-            turn_matrix: None,
         }
     }
 }
@@ -726,19 +721,46 @@ pub fn sca_ck_hit(
     radius: i32,
     mask: u16,
 ) -> crate::sca::Ground {
-    let mut ground = match sca {
-        Some(sca) => crate::sca::ground_at(sca, pos, radius, mask),
-        None => crate::sca::Ground {
-            blocked: pos[1] > 0,
-            ..crate::sca::Ground::default()
-        },
+    ck_hit(sca, objects, pos, None, radius, mask)
+}
+
+/// [`sca_ck_hit`] at object `own`'s own box (`&Atd`, as `Om_move_box`
+/// passes it). The object pass's `Oma_set_ofs` on `own` rewrites the point
+/// itself, so the objects before it in the table, the `y > 0` test, the
+/// area and the records' grown boxes see its box as it was (`at`), and the
+/// objects from it on, the shapes and the heights see it on its position.
+pub fn sca_ck_hit_own(
+    sca: Option<&crate::state::Sca>,
+    objects: &[ObjectRecord],
+    own: usize,
+    radius: i32,
+    mask: u16,
+) -> crate::sca::Ground {
+    ck_hit(sca, objects, objects[own].at, Some(own), radius, mask)
+}
+
+fn ck_hit(
+    sca: Option<&crate::state::Sca>,
+    objects: &[ObjectRecord],
+    entry: [i32; 3],
+    own: Option<usize>,
+    radius: i32,
+    mask: u16,
+) -> crate::sca::Ground {
+    let mut pos = entry;
+    let mut ground = crate::sca::Ground {
+        blocked: entry[1] > 0,
+        ..crate::sca::Ground::default()
     };
-    for obj in objects {
+    for (index, obj) in objects.iter().enumerate() {
         if obj.be_flg & 1 == 0 {
             continue;
         }
         let mut obj = *obj;
         obj.set_ofs();
+        if own == Some(index) {
+            pos = obj.at;
+        }
         if !omd_in_check(pos, &obj, radius, false) {
             continue;
         }
@@ -754,7 +776,14 @@ pub fn sca_ck_hit(
         }
         ground.height = ground.height.min(height);
     }
-    ground
+    let Some(sca) = sca else {
+        return ground;
+    };
+    let mut rooms = crate::sca::ground_at_from(sca, entry, pos, radius, mask);
+    rooms.blocked |= ground.blocked;
+    rooms.ceiling = rooms.ceiling.min(ground.ceiling);
+    rooms.height = rooms.height.min(ground.height);
+    rooms
 }
 
 /// `Oma_front_ck` (`0x4CE3E0`): whether a character at `pos`, heading
@@ -1243,6 +1272,8 @@ struct Carried {
     push_cnt: u8,
     at_sce_no: u8,
     at_obj_no: u8,
+    /// `Sca_old` (`+0x118`): `Obj_model_set` doesn't write it.
+    sca_old: [i16; 2],
 }
 
 impl ObjectTable {
@@ -1272,6 +1303,7 @@ impl ObjectTable {
                 push_cnt: record.push_cnt,
                 at_sce_no: record.at_sce_no,
                 at_obj_no: record.at_obj_no,
+                sca_old: record.sca_old,
             };
         }
         self.records.clear();
@@ -1282,6 +1314,7 @@ impl ObjectTable {
             record.push_cnt = carried.push_cnt;
             record.at_sce_no = carried.at_sce_no;
             record.at_obj_no = carried.at_obj_no;
+            record.sca_old = carried.sca_old;
         }
         self.built = 0;
         self.last_asset = None;
@@ -1405,7 +1438,6 @@ impl ObjectTable {
             super_parent: SuperParent::World,
             world: Mat4x3::default(),
             sca_old: [0; 2],
-            turn_matrix: None,
         };
         self.built = self.built.wrapping_add(1);
         self.last_asset = Some(slot as u8);
@@ -2646,22 +2678,24 @@ mod tests {
     /// Two of room 306's boxes (900 square, tops at -5400) side by side
     /// along x, 1800 apart: a bridge.
     fn bridge() -> [ObjectRecord; 2] {
-        let crate_at = |x: i32| {
-            placed(ObjectRecord {
-                flag: OBJECT_FLAG_ACTIVE,
-                pos: [x, -3600, -26081],
-                be_flg: 0x181,
-                id: 2,
-                atd2: ObjectAtd {
-                    ofs: [0, -900, 0],
-                    at_w: 900,
-                    at_h: 900,
-                    at_d: 900,
-                },
-                ..ObjectRecord::default()
-            })
-        };
-        [crate_at(-20617), crate_at(-22417)]
+        [crate_306(-20617, -26081), crate_306(-22417, -26081)]
+    }
+
+    /// One of room 306's boxes, at `x`, `z`.
+    fn crate_306(x: i32, z: i32) -> ObjectRecord {
+        placed(ObjectRecord {
+            flag: OBJECT_FLAG_ACTIVE,
+            pos: [x, -3600, z],
+            be_flg: 0x181,
+            id: 2,
+            atd2: ObjectAtd {
+                ofs: [0, -900, 0],
+                at_w: 900,
+                at_h: 900,
+                at_d: 900,
+            },
+            ..ObjectRecord::default()
+        })
     }
 
     #[test]
@@ -2689,6 +2723,67 @@ mod tests {
         // Far enough that box 1 takes the player: its own top.
         let mut leon = leon_at([-22417 + 600, -5400, -26081], [-22417 + 640, -5400, -26081]);
         assert_eq!(oma_pull(&objects, &mut leon, 0, Some(0)), Some(1));
+    }
+
+    /// `Om_move_box`'s ground at its own `Atd`: an object before it in the
+    /// table sees last tick's box, one after it the box `Oma_set_ofs` placed.
+    #[test]
+    fn sca_ck_hit_own_moves_the_point_at_the_object_itself() {
+        let mut fallen = crate_306(-20617, -26081);
+        // Last tick's box, 10000 off in x.
+        fallen.at[0] = -10617;
+        // A pillar 2000 high (top -7600) around the old box.
+        let mut pillar = crate_306(-10617, -26081);
+        pillar.atd2.ofs[1] = -2000;
+        pillar.atd2.at_h = 2000;
+        let pillar = placed(pillar);
+        let before = sca_ck_hit_own(None, &[pillar, fallen], 1, 450, 0x4000);
+        assert_eq!(before.ceiling, -7600, "the pillar holds the old point");
+        assert_eq!(before.height, -4501);
+        let after = sca_ck_hit_own(None, &[fallen, pillar], 0, 450, 0x4000);
+        assert_eq!(after.ceiling, -5400, "only the box itself");
+        assert_eq!(after.height, -4501);
+    }
+
+    /// `Oma_pull`'s second loop: room 306's boxes as a bridge along z.
+    #[test]
+    fn oma_pull_hands_the_player_over_along_z() {
+        let objects = [crate_306(-20617, -26081), crate_306(-20617, -27881)];
+        // Walking -z past box 0's inner edge onto the seam, both tops under
+        // the player: not pulled back.
+        let edge = -26081 - 675;
+        let mut leon = leon_at([-20617, -5400, edge - 10], [-20617, -5400, edge + 30]);
+        assert_eq!(oma_pull(&objects, &mut leon, 0, Some(0)), Some(0));
+        assert_eq!(leon.pos, [-20617, -5400, edge - 10]);
+        // Alone, box 0 pulls the same step back.
+        let mut leon = leon_at([-20617, -5400, edge - 10], [-20617, -5400, edge + 30]);
+        assert_eq!(oma_pull(&objects[..1], &mut leon, 0, Some(0)), Some(0));
+        assert_eq!(leon.pos, [-20617, -5400, edge]);
+        // Far enough that box 1 takes the player.
+        let mut leon = leon_at([-20617, -5400, -27881 + 600], [-20617, -5400, -27881 + 640]);
+        assert_eq!(oma_pull(&objects, &mut leon, 0, Some(0)), Some(1));
+    }
+
+    /// `bVar10 == 1`: the player is within box 0's top across the seam but
+    /// not box 1's, and was already past the edge last frame. The first loop
+    /// puts z `reach_z` inside box 1's edge (`Oma_pull_hosei_z` from its
+    /// `Atd Z`), the second x inside box 1's (`_x`).
+    #[test]
+    fn oma_pull_puts_a_player_off_the_next_boxs_side_back_on_it() {
+        // Along x, box 1 400 further +z: 499 -z of box 0's centre is 899
+        // from box 1's, inside its box but not its top.
+        let objects = [crate_306(-20617, -26081), crate_306(-22417, -25681)];
+        let edge = -20617 - 675;
+        let mut leon = leon_at([edge - 10, -5400, -26580], [edge - 5, -5400, -26580]);
+        assert_eq!(oma_pull(&objects, &mut leon, 0, Some(0)), Some(0));
+        assert_eq!(leon.pos, [edge - 10, -5400, -25681 - 675]);
+        assert_eq!(leon.at[2], -25681 - 675, "the box moves with the body");
+        // Along z, box 1 400 further +x.
+        let objects = [crate_306(-20617, -26081), crate_306(-20217, -27881)];
+        let edge = -26081 - 675;
+        let mut leon = leon_at([-21116, -5400, edge - 10], [-21116, -5400, edge - 5]);
+        assert_eq!(oma_pull(&objects, &mut leon, 0, Some(0)), Some(0));
+        assert_eq!(leon.pos, [-20217 - 675, -5400, edge - 10]);
     }
 
     #[test]
@@ -2946,6 +3041,7 @@ mod tests {
         record.old2 = [4, 5, 6];
         record.push_cnt = 7;
         record.at_sce_no = 2;
+        record.sca_old = [8, 9];
         // Through a room with one slot, into one with three.
         objects.reset(1);
         objects.reset(3);
@@ -2954,6 +3050,7 @@ mod tests {
         assert_eq!(record.old2, [4, 5, 6]);
         assert_eq!(record.push_cnt, 7);
         assert_eq!(record.at_sce_no, 2);
+        assert_eq!(record.sca_old, [8, 9]);
         assert_eq!(record.pos, [0, 0, 0], "the rest starts again");
         assert_eq!(record.be_flg, 0);
         assert_eq!(objects.records[0], ObjectRecord::default());

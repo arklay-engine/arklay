@@ -10,8 +10,8 @@ use crate::anim::Mat4x3;
 use crate::character2::{PLAYER_HEIGHT, player_width};
 use crate::objects::{
     CharBox, ObjectRecord, Oma, SCA_HIT_HOLE, SCA_HIT_WALL, SuperParent, floor_of_height,
-    om_set_fall_dir, oma_ck_front, oma_ck_oba, oma_ck_om, oma_pull, sca_ck_hit, sca_ck_hit_om,
-    sca_ck_hit_om_push,
+    om_set_fall_dir, oma_ck_front, oma_ck_oba, oma_ck_om, oma_pull, sca_ck_hit_om,
+    sca_ck_hit_om_push, sca_ck_hit_own,
 };
 use crate::player::PlayerState;
 use crate::state::RoomState;
@@ -211,17 +211,18 @@ impl GameState {
                     obj.pos[1] += i32::from(fall.drop);
                     fall.drop = fall.drop.wrapping_add(0xA0);
                     if obj.routine[1] == FALL_LOOK {
-                        // The point is the box's own `Atd`, and `Sca_ck_hit`
-                        // places every object's box first, this one's too.
-                        obj.set_ofs();
+                        // The point is the box's own `Atd`, last tick's
+                        // until `Sca_ck_hit`'s object pass places this box
+                        // too (`Oma_set_ofs`).
                         self.objects.records[index] = obj;
-                        let ground = sca_ck_hit(
+                        let ground = sca_ck_hit_own(
                             room.sca.as_ref(),
                             &self.objects.records,
-                            obj.at,
+                            index,
                             450,
                             0x4000,
                         );
+                        obj.set_ofs();
                         fall.ground = ground.height as i16;
                         obj.old[0] = obj.pos[0] as i16;
                         obj.old[2] = obj.pos[2] as i16;
@@ -245,11 +246,9 @@ impl GameState {
             }
             _ => return,
         }
-        let matrix = obj
-            .turn_matrix
-            .unwrap_or_else(|| crate::player2::rot_matrix(obj.rotation));
-        let (matrix, cdir) = rot_add_matrix(&matrix, fall.turn);
-        obj.turn_matrix = Some(matrix);
+        // `Om_trans` builds the object's matrix from `Cdir` every frame, so
+        // the turn starts from it.
+        let (_, cdir) = rot_add_matrix(&crate::player2::rot_matrix(obj.rotation), fall.turn);
         obj.rotation = cdir;
         self.objects.box_fall = fall;
         self.objects.records[index] = obj;
@@ -462,55 +461,66 @@ impl GameState {
 }
 
 /// `Rot_add_matrix` (`0x503210`): `matrix` turned by `turn` (`RotMatrix`,
-/// then `MulMatrix2` and `NormalMatrix_0`), and the `Cdir` it takes from the
-/// result. The arc tangents and the square root are the floating point ones.
+/// `MulMatrix2`), its first two rows made unit vectors (`NormalMatrix_0`),
+/// and `Cdir` taken back from it with `ratan2` and `SquareRoot12`, all on
+/// the x87 as the PC original has them.
 fn rot_add_matrix(matrix: &[[i16; 3]; 3], turn: [i16; 3]) -> ([[i16; 3]; 3], [i16; 3]) {
     let turned = crate::player2::mul_matrix(&crate::player2::rot_matrix(turn), matrix);
     let m = normal_matrix(&turned);
-    let ratan2 =
-        |y: i32, x: i32| (f64::from(y).atan2(f64::from(x)) * 2048.0 / std::f64::consts::PI) as i16;
     let column: [i32; 3] = [m[0][2], m[1][2], m[2][2]].map(i32::from);
-    let length = (column.iter().map(|v| v * v).sum::<i32>()) >> 12;
+    // The divisor is a plain `/ 4096` of a sum that can't be negative; the
+    // original divides by zero where the guard gives 0.
+    let length = (column[0] * column[0] + column[1] * column[1] + column[2] * column[2]) >> 12;
     let sine = if length == 0 {
         0
     } else {
         (column[0] << 12) / length
     };
-    let vx = ratan2(-column[1], column[2]);
-    let cosine = f64::from(0x1000 - ((sine * sine) >> 12)).max(0.0).sqrt() * 64.0;
-    let vy = ratan2(sine, cosine as i32);
+    let vx = ratan2(-column[1], column[2]) as i16;
+    let vy = ratan2(sine, square_root12(0x1000 - ((sine * sine) >> 12))) as i16;
     let undo = crate::player2::rot_matrix([vx, vy, 0]);
     let first = [m[0][0], m[1][0], m[2][0]].map(i32::from);
-    // The transpose of `undo` applied to the first column.
+    // `TransposeMatrix` then `ApplyMatrix` on the first column.
     let apply = |row: usize| {
         (0..3)
             .map(|k| i32::from(undo[k][row]) * first[k])
             .sum::<i32>()
             >> 12
     };
-    let vz = ratan2(apply(1), apply(0));
+    let vz = ratan2(apply(1), apply(0)) as i16;
     (m, [vx, vy, vz])
 }
 
-/// `NormalMatrix_0`: the first row made a unit vector, the third the unit
-/// cross product of the first two, the second the cross product of those.
+/// `ratan2` (`0x450910`): `fpatan`, times 2048 and the executable's
+/// `1 / 3.14`, truncated (`__ftol`).
+fn ratan2(y: i32, x: i32) -> i32 {
+    const ONE_OVER_PI: f64 = 0.318_471_337_579_617_8;
+    (f64::from(y).atan2(f64::from(x)) * 2048.0 * ONE_OVER_PI) as i32
+}
+
+/// `SquareRoot12` (`0x4508D0`): `sqrt(v / 4096) * 4096`, truncated. A
+/// negative `v` gives `__ftol`'s integer indefinite.
+fn square_root12(value: i32) -> i32 {
+    let root = (f64::from(value) * (1.0 / 4096.0)).sqrt() * 4096.0;
+    if root.is_nan() { i32::MIN } else { root as i32 }
+}
+
+/// `NormalMatrix_0` (`0x450BC0`): `NormalMatrix` (`0x450B00`) on rows 0 and
+/// 1, each made a unit vector on its own: scaled by 1/4096, `1 / sqrt` of
+/// its squares' sum (1e-9 for a zero length), times 4096 and that,
+/// truncated. Row 2 is left as it is.
 fn normal_matrix(m: &[[i16; 3]; 3]) -> [[i16; 3]; 3] {
-    let row = |r: usize| m[r].map(f64::from);
-    let unit = |v: [f64; 3]| {
-        let length = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt().max(1.0);
-        v.map(|axis| axis / length)
-    };
-    let cross = |a: [f64; 3], b: [f64; 3]| {
-        [
-            a[1] * b[2] - a[2] * b[1],
-            a[2] * b[0] - a[0] * b[2],
-            a[0] * b[1] - a[1] * b[0],
-        ]
-    };
-    let first = unit(row(0));
-    let third = unit(cross(first, unit(row(1))));
-    let second = cross(third, first);
-    [first, second, third].map(|line| line.map(|axis| (axis * 4096.0) as i16))
+    let mut out = *m;
+    for row in &mut out[..2] {
+        let [x, y, z] = row.map(|v| f64::from(v) * (1.0 / 4096.0));
+        let mut length = (z * z + y * y + x * x).sqrt();
+        if length == 0.0 {
+            length = 1e-9;
+        }
+        let inverse = 1.0 / length;
+        *row = [x, y, z].map(|v| (v * 4096.0 * inverse) as i32 as i16);
+    }
+    out
 }
 
 #[cfg(test)]
@@ -857,7 +867,7 @@ mod tests {
         room.sca.as_mut().unwrap().records[0].id = 0xDC0A;
         assert_eq!(game.om_move(&room, &mut player), Some(1));
         assert_eq!(game.objects.records[1].routine[0], FALL_START);
-        // Within 900 of the player in x: along z, away from the player (+z).
+        // Within 900 of the player in x: along z, away from the player (-z).
         assert_eq!(game.objects.box_fall.dir, [0, -1]);
         // Once falling it isn't tested again.
         let fall = game.objects.box_fall;
@@ -918,21 +928,52 @@ mod tests {
         assert_eq!(game.objects.records[0], at_rest, "at rest it does nothing");
     }
 
+    /// `Rot_add_matrix` on the x87: exact, not within a unit.
     #[test]
     fn rot_add_matrix_takes_cdir_back_from_the_turned_matrix() {
-        // Within a unit: the arc tangents are the floating point ones.
-        let near = |got: [i16; 3], want: [i16; 3]| {
-            got.iter()
-                .zip(want)
-                .all(|(g, w)| (i32::from(*g) - i32::from(w)).abs() <= 1)
-        };
         let start = crate::player2::rot_matrix([0, 0, 0]);
         let (matrix, cdir) = rot_add_matrix(&start, [0x100, 0, 0]);
-        assert!(near(cdir, [0x100, 0, 0]), "{cdir:?}");
-        let (_, cdir) = rot_add_matrix(&matrix, [0x100, 0, 0]);
-        assert!(near(cdir, [0x200, 0, 0]), "{cdir:?}");
-        let (_, cdir) = rot_add_matrix(&start, [0, 0, -0x80]);
-        assert!(near(cdir, [0, 0, -0x80]), "{cdir:?}");
+        assert_eq!(matrix, [[4096, 0, 0], [0, 3784, -1567], [0, 1567, 3784]]);
+        assert_eq!(cdir, [0x100, 0, 0]);
+        // Row 2 isn't normalised: 2895 against row 1's 2896.
+        let (matrix, cdir) = rot_add_matrix(&matrix, [0x100, 0, 0]);
+        assert_eq!(matrix, [[4096, 0, 0], [0, 2896, -2896], [0, 2895, 2896]]);
+        assert_eq!(cdir, [0x200, 0, 0]);
+        let (matrix, cdir) = rot_add_matrix(&start, [0, 0, -0x80]);
+        assert_eq!(matrix, [[4017, 799, 0], [-799, 4017, 0], [0, 0, 4096]]);
+        assert_eq!(cdir, [0, 0, -0x80]);
+        let (matrix, cdir) =
+            rot_add_matrix(&crate::player2::rot_matrix([100, -1024, 30]), [-64, 0, 200]);
+        assert_eq!(
+            matrix,
+            [[131, -1229, -3904], [-19, 3906, -1230], [4093, 56, 122]]
+        );
+        assert_eq!(cdir, [960, -824, 954]);
+    }
+
+    /// A +z fall's `Cdir`, each tick from `RotMatrix(Cdir)` as `Om_trans`
+    /// rebuilds it: x ends at -619, as a model of the original's x87 path
+    /// gives (the kept matrix gave -622).
+    #[test]
+    fn a_falls_tilt_restarts_from_cdir_each_tick() {
+        let (mut game, room, _) = hall(&[crate_at(-13000)]);
+        game.objects.records[0].pos[1] = 0;
+        game.objects.records[0].routine[0] = FALL_START;
+        game.objects.box_fall.dir = [0, 1];
+        let mut xs = Vec::new();
+        for _ in 0..16 {
+            game.om_move_box(&room, 0);
+            let cdir = game.objects.records[0].rotation;
+            assert_eq!(cdir[1..], [0, 0]);
+            xs.push(cdir[0]);
+        }
+        assert_eq!(
+            xs,
+            [
+                0, -7, -22, -45, -77, -117, -164, -220, -283, -355, -435, -523, -619, -649, -619,
+                -619
+            ]
+        );
     }
 
     /// Room 203's box at rest against the shelf, as `box_203` leaves it.
