@@ -7203,8 +7203,8 @@ impl GameSession {
         if ticks == RE2_STATUS_UNCUT_TICK {
             self.game.re2.bg_load = true;
         }
-        // The box's routines and its draw run until the screen's task ends
-        // (`St_exit`), on the close's seventh tick.
+        // The box's routines and its draw run through the close's seventh
+        // tick, the last before the screen's task reaches `St_exit`.
         if ticks <= RE2_BOX_CLOSE_DRAWN {
             self.game.tick_re2_box_close();
         }
