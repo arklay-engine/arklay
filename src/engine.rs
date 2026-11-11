@@ -2018,6 +2018,9 @@ const RE2_SAVE_START: u8 = 6;
 /// close's first tick it no longer does (`main_menu.lua`'s `OPEN_SHOWN` and
 /// `CLOSE_BLACK`).
 const RE2_STATUS_SHOWN: u8 = 7;
+/// The open's first tick past the room's: case 2 finds the fade done and
+/// the game task sleeps.
+const RE2_STATUS_BLACK: u8 = 4;
 /// The open's tick on which `Status` (`0x501BD0`) runs its start, once
 /// `St_load_gfx` is done.
 const RE2_STATUS_INIT: u8 = 6;
@@ -3169,6 +3172,12 @@ impl GameSession {
     fn tick(&mut self, pack: &Pack, ui: UiInput, input: player::Input, action: bool) -> Result<()> {
         if let Some(ticks) = self.re2_status_open.as_mut() {
             *ticks = ticks.saturating_add(1);
+            // A door the room ticks' `Sce_at` opened put `Game` back to 1:
+            // on the tick the fade is done, case 1 sets it again from 0 and
+            // goes to mode 2, as on the open's first tick.
+            if *ticks == RE2_STATUS_BLACK && std::mem::take(&mut self.game.re2.stopped_door) {
+                *ticks = 1;
+            }
             // The lid's last state counts on through the screen's first
             // three ticks, as the original's does, then holds until the
             // close.
@@ -5145,6 +5154,7 @@ impl GameSession {
         self.arm_menu_open_fade();
         if self.game.is_re2_room {
             self.re2_status_open = Some(1);
+            self.game.re2.stopped_door = false;
         }
     }
 
@@ -5169,6 +5179,12 @@ impl GameSession {
         }
         self.re2_stopped_enemy_pass(pack);
         self.re2_stopped_frame_draw(true);
+        self.re2_stopped_areas();
+    }
+
+    /// `Sce_at` with the scheduler off ([`GameState::re2_stopped_area_pass`]),
+    /// and the damage its `Sce_Damage` areas did to the player.
+    fn re2_stopped_areas(&mut self) {
         self.game
             .re2_stopped_area_pass(self.player.pos, self.player.angle);
         for (zone, kind, damage) in std::mem::take(&mut self.game.re2.pending_damage) {
@@ -5213,6 +5229,7 @@ impl GameSession {
         // The screen's own fades are `re2_status_open`'s; its page waits
         // for `St_init01` rather than for RE 1's menu fade.
         self.re2_status_open = Some(1);
+        self.game.re2.stopped_door = false;
     }
 
     /// One tick of RE2's status screen's own drawing state, its open and
@@ -7286,6 +7303,14 @@ impl GameSession {
         if self.game.is_re2_room {
             self.re2_stopped_enemy_pass(pack);
             self.re2_stopped_frame_draw(false);
+            // Mode 3 falls into the room pass, `Sce_at` included, under
+            // `fg_stop`'s 0xEF; mode 5 puts `fg_stop` back on the next tick.
+            self.re2_stopped_areas();
+            // A door here would set `Game` to 1, and case 1 would take it
+            // once the fade in is done. It can't happen: the player hasn't
+            // moved since the open, whose pass would have restarted the open
+            // on that door's area until the player left it.
+            self.game.re2.stopped_door = false;
         }
     }
 
@@ -23759,6 +23784,120 @@ mod tests {
             .tick(&pack, UiInput::default(), fire(true), false)
             .unwrap();
         assert_ne!(session.game.re2.key_trg & 0x40, 0, "a new press");
+    }
+
+    /// An area under the player at `pos`, for the RE 2 session tests: a
+    /// walk-in (`Sat` 0x41) door when `door`, else a flag area raising 5:8.
+    fn re2_area_at(session: &mut GameSession, pos: [i32; 3], door: bool) {
+        let zone = [(pos[0] - 1000) as i16, (pos[2] - 1000) as i16, 2000, 2000];
+        let slot = 1u8;
+        let (kind, sce, params) = if door {
+            (
+                game::RoomActionKind::Door,
+                1,
+                [0, 0x0A, 0, 0x41, 0, 0, 0, 0],
+            )
+        } else {
+            (
+                game::RoomActionKind::Other,
+                crate::scd2::host::SCE_FLAG_CHANGE,
+                [5, 0, 8, 0, 1, 0, 0, 0],
+            )
+        };
+        session.game.room_actions[usize::from(slot)] = Some(game::RoomAction {
+            slot,
+            kind,
+            zone,
+            sce,
+            handler: 1,
+            flags: 0x41,
+            params,
+            item_data: None,
+            room_items_flag: 0xFF,
+            reach_animation: false,
+        });
+        if door {
+            session.game.doors[usize::from(slot)] = Some(game::Door {
+                slot,
+                zone,
+                direction: 0,
+                sfx: 0,
+                door_type: 0,
+                camera: 0,
+                next_room: 0x0A,
+                next_pos: [0; 3],
+                next_angle: 0,
+                lock: 0,
+                key: 0,
+                sub_type: 0x41,
+                re2: Some(crate::scd2::host::Re2Door {
+                    stage: 1,
+                    room: 0x0A,
+                    cut: 0,
+                }),
+            });
+        }
+    }
+
+    /// `Sce_Door` under the player on the open's room ticks sets `Game` to
+    /// 1, and once the fade is done `Game_loop`'s case 1 sets it again from
+    /// 0 rather than going on to the screen: the open starts over for as long
+    /// as the door's area holds the player, and no door is taken.
+    #[test]
+    fn re2_status_open_starts_over_over_an_open_door() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = re2_status_open_session(&pack, a);
+        let pos = session.player.pos;
+        re2_area_at(&mut session, pos, true);
+        let mut opens = Vec::new();
+        for _ in 0..7 {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            opens.push(session.re2_status_open.unwrap());
+        }
+        assert_eq!(opens, [2, 3, 1, 2, 3, 1, 2], "the open starts over");
+        assert!(session.game.transition.is_none(), "no door is taken");
+        // Out of the area, the open runs on.
+        session.game.room_actions[1] = None;
+        let mut opens = Vec::new();
+        for _ in 0..3 {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            opens.push(session.re2_status_open.unwrap());
+        }
+        assert_eq!(opens, [3, 1, 2], "the door's last hit");
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        assert_eq!(session.re2_status_open, Some(RE2_STATUS_BLACK));
+    }
+
+    /// The return's mode 3 tick falls into the room pass under `fg_stop`'s
+    /// 0xEF, `Sce_at` included: an area under the player answers on the
+    /// close's last tick, before the room's own pass on the next.
+    #[test]
+    fn re2_status_return_runs_the_stopped_areas() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.open_menu(&pack);
+        let pos = session.player.pos;
+        re2_area_at(&mut session, pos, false);
+        session.re2_status_close = Some(0);
+        while session.menu.is_some() {
+            assert!(!session.game.re2.flag(5, 8), "no pass under the screen");
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        }
+        assert!(session.game.re2.flag(5, 8), "mode 3's pass");
     }
 
     /// `Game_loop` runs the enemy slots under `fg_stop` on the status

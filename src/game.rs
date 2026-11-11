@@ -6615,11 +6615,16 @@ impl GameState {
     }
 
     /// `Sce_at` on the ticks of the status screen's open that still show the
-    /// room (`Game_loop`'s modes 1 and 2 until the fade is done): the
-    /// scheduler is off (`fg_stop & 0x2000000`), so the areas the player is
-    /// in record their hit and raise `fg_use` again for the status's USE,
-    /// and only `Sce_Event` gates itself off. The press pass is off too
-    /// (`fg_status & 0x200000`).
+    /// room (`Game_loop`'s modes 1 and 2 until the fade is done) and on the
+    /// return's mode 3 tick: the scheduler is off (`fg_stop & 0x2000000`),
+    /// so the areas the player is in record their hit and raise `fg_use`
+    /// again for the status's USE, `Sce_Event` gates itself off, and an
+    /// open door only sets `Game` to 1
+    /// ([`stopped_door`](crate::scd2::host::Re2State::stopped_door)). The
+    /// press pass is off too (`fg_status & 0x200000`). The other kinds that
+    /// act through `Game`'s mode switch (`Sce_Item`, `Sce_Status`,
+    /// `Sce_Windows`) and the back routines (`Sce_Save`, `Sce_Itembox`) are
+    /// press areas in every room script, so this pass never reaches them.
     pub fn re2_stopped_area_pass(&mut self, pos: [i32; 3], angle: u16) {
         self.re2.areas_stopped = true;
         self.interact(pos, angle, false);
@@ -8704,6 +8709,12 @@ impl GameState {
         let word = usize::from(bit >> 5) & 1;
         let mask = 0x8000_0000 >> (bit & 31);
         if door.lock & 0x80 == 0 || self.re2.door_locks[word] & mask != 0 {
+            if self.re2.areas_stopped {
+                // `Game` 1 under the status open's `fg_status & 0x8000`:
+                // `Game_loop` takes the status path, not `Set_door`.
+                self.re2.stopped_door = true;
+                return false;
+            }
             return self.begin_transition(door);
         }
         // `sce_door`: a locked door opens on a later press once this one has
@@ -8747,8 +8758,8 @@ impl GameState {
     pub fn fire_re2_area(&mut self, action: RoomAction) {
         let slot = action.slot;
         // Of the handlers, only `Sce_Event` (`0x4E9800`) tests the
-        // scheduler's stop (`fg_stop & 0x2000000`); `Sce_Door`'s own guard
-        // (`0x98A0D4`) isn't modelled, and the rest test nothing.
+        // scheduler's stop (`fg_stop & 0x2000000`). An open door only sets
+        // `Game` to 1 ([`Re2State::stopped_door`]); the rest test nothing.
         if self.re2.areas_stopped && action.sce == crate::scd2::host::SCE_EVENT {
             return;
         }
@@ -19303,6 +19314,70 @@ mod tests {
                 "the flag area answers (press {press})"
             );
         }
+    }
+
+    /// `Sce_Door` (0x4E9460) in a stopped pass (the status open's room
+    /// ticks): an open door only sets `Game` to 1, which `Game_loop` doesn't
+    /// take to `Set_door` under the open's `fg_status & 0x8000`, so nothing
+    /// is queued. A locked door's own work (here a 0xFE door's unlock) is
+    /// done in the handler, so it acts as in play. The walk goes on to the
+    /// areas after the door.
+    #[test]
+    fn a_door_in_a_stopped_pass_only_sets_game_to_1() {
+        use crate::scd2::host::KEY_UNLOCK;
+        let re2_door = |slot: u8, lock: u8, key: u8| Door {
+            slot,
+            zone: [-1000, -1000, 2000, 2000],
+            sub_type: 0x41,
+            key,
+            re2: Some(crate::scd2::host::Re2Door {
+                stage: 1,
+                room: 0x0A,
+                cut: 0,
+            }),
+            ..door(0x0A, lock)
+        };
+        let flag_area = RoomAction {
+            slot: 3,
+            kind: RoomActionKind::Other,
+            zone: [-1000, -1000, 2000, 2000],
+            sce: crate::scd2::host::SCE_FLAG_CHANGE,
+            handler: 1,
+            flags: 0x41,
+            params: [5, 0, 8, 0, 1, 0, 0, 0],
+            item_data: None,
+            room_items_flag: 0xFF,
+            reach_animation: false,
+        };
+        let with_door = |door: Door| {
+            let mut state = game();
+            state.is_re2_room = true;
+            state.room_actions[usize::from(door.slot)] = Some(door_action(door));
+            state.doors[usize::from(door.slot)] = Some(door);
+            state.room_actions[3] = Some(flag_area);
+            state
+        };
+
+        let mut state = with_door(re2_door(1, 0, 0));
+        state.re2_stopped_area_pass([0, 0, 0], 0);
+        assert!(state.transition.is_none(), "the door is dropped");
+        assert!(state.re2.stopped_door, "`Game` is 1");
+        assert!(state.re2.flag(5, 8), "the later area answers");
+        assert_eq!(state.re2.player.at_sce, 3);
+        state.re2.stopped_door = false;
+        state.interact([0, 0, 0], 0, false);
+        assert!(state.transition.is_some(), "play's pass takes it");
+        assert!(!state.re2.stopped_door);
+
+        // A door unlocked from this side: `Sce_Door` raises its bit itself.
+        let mut state = with_door(re2_door(1, 0x80 | 5, KEY_UNLOCK));
+        state.re2_stopped_area_pass([0, 0, 0], 0);
+        assert!(state.transition.is_none());
+        assert!(!state.re2.stopped_door, "a lock doesn't set `Game`");
+        assert_ne!(state.re2.door_locks[0] & (0x8000_0000 >> 5), 0, "unlocked");
+        state.re2_stopped_area_pass([0, 0, 0], 0);
+        assert!(state.re2.stopped_door, "now open, it sets `Game`");
+        assert!(state.transition.is_none());
     }
 
     /// `Sce_at` (0x4EA0D0): with `fg_status`'s 0x200000 up, the first action
