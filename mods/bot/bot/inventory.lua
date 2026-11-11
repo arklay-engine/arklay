@@ -110,6 +110,10 @@ function BotInventory.keep(row, ctx)
     if item == ctx.equipped then
         return "equipped"
     end
+    -- Dead weight going in for the reserve gun's kit (ctx.swap_out).
+    if ctx.swap_out and ctx.swap_out[item] then
+        return nil
+    end
     if row.kind == "weapon" and ctx.guns and ctx.guns[item] then
         return "firearm"
     end
@@ -353,7 +357,7 @@ BotInventory.CURE = CURE
 local REARM_HERE = "rearm: no held firearm has a round"
 -- A boxed reserve gun's rounds (and the gun) taken out at a box the bot is
 -- at anyway while sourcing ammunition (ctx.rearm_reserve).
-local REARM_RESERVE = "rearm: sourcing, and the box holds a reserve gun's rounds"
+local REARM_RESERVE = "rearm: the box holds a reserve gun's rounds"
 -- The gear-up after a death: while a room the bot died in is still to be
 -- walked out of alive (BotNav.died_in), the box's heals (up to GEAR_HEALS
 -- stacks held) and the rounds and gun BotInventory.context picks
@@ -1178,7 +1182,14 @@ function BotInventory.context(bot)
         -- four zombies with four handgun rounds, four deaths. With
         -- barry_early=chemical the launcher and both kinds of rounds sat in
         -- 100's box while the bot walked the mansion on one shell.
-        if BotSurvival.sourcing_now(bot) then
+        -- Not only while sourcing: whenever it fits (the guard below), or
+        -- a held gun that is dead weight can go in for it (ctx.swap_out).
+        -- Of 2676 replays of rooms with a hunter, the 692 with the
+        -- launcher and its rounds boxed took 383 of the 669 hits, 0.55 a
+        -- replay to 0.09 with five rounds for it held; in over half of
+        -- them the bot carried an empty shotgun with no shell anywhere.
+        do
+            local sourcing_reserve = BotSurvival.sourcing_now(bot)
             local bases = {}
             for id, row in pairs(knowledge.weapons) do
                 if row.reserve and not row.melee and bot:ammo_for(id) then
@@ -1205,12 +1216,19 @@ function BotInventory.context(bot)
                     held_rounds = held_rounds or bot:item_count(ammo) > 0
                     boxed_rounds = boxed_rounds or (box[ammo] and ammo) or nil
                 end
-                if boxed_rounds and not held_rounds and clip == 0 and (held_gun or boxed_gun) then
+                if boxed_gun and not held_gun and (held_rounds or boxed_rounds) then
+                    -- The boxed gun, to rounds held for it too: 403's box
+                    -- kept the launcher while the bot carried six flame
+                    -- rounds out past it, and met seven hunters with the
+                    -- handgun.
+                    ctx.rearm_reserve = ctx.rearm_reserve or {}
+                    ctx.rearm_reserve[boxed_gun] = true
+                    if not held_rounds then
+                        ctx.rearm_reserve[boxed_rounds] = true
+                    end
+                elseif held_gun and boxed_rounds and not held_rounds and clip == 0 then
                     ctx.rearm_reserve = ctx.rearm_reserve or {}
                     ctx.rearm_reserve[boxed_rounds] = true
-                    if not held_gun then
-                        ctx.rearm_reserve[boxed_gun] = true
-                    end
                 end
                 -- What the rearm has taken out stays out until the gun is
                 -- loaded: once held, the gun and its rounds no longer
@@ -1233,14 +1251,27 @@ function BotInventory.context(bot)
                 -- four shells and that one round.
                 if held_gun and (held_rounds or (clip == 0 and boxed_rounds)) then
                     ctx.keep_reserve = ctx.keep_reserve or {}
+                    local own = nil
                     for _, id in ipairs(b.guns) do
                         if bot:has_item(id) then
                             ctx.keep_reserve[id] = true
+                            own = own or bot:ammo_for(id)
                         end
                     end
+                    -- One stack of rounds with it, its own loading's first
+                    -- (every stack, while sourcing): the launcher with two
+                    -- kinds of rounds held three slots for good, 403's box
+                    -- took the knife in for a heal, and 30C's web was
+                    -- never cut.
+                    local kept = false
+                    if own and bot:item_count(own) > 0 then
+                        ctx.keep_reserve[own] = true
+                        kept = true
+                    end
                     for _, ammo in ipairs(b.rounds) do
-                        if bot:item_count(ammo) > 0 then
+                        if bot:item_count(ammo) > 0 and (sourcing_reserve or not kept) then
                             ctx.keep_reserve[ammo] = true
+                            kept = true
                         end
                     end
                 end
@@ -1343,8 +1374,19 @@ function BotInventory.context(bot)
             hold = ctx.room_for
         end
         slots = slots + hold
-        if ctx.capacity - ctx.used - (ctx.hold_free or 0) < slots then
-            ctx.rearm_reserve = nil
+        local free = ctx.capacity - ctx.used - (ctx.hold_free or 0)
+        if free < slots then
+            -- A held firearm that is dead weight (ctx.empty_guns) gives
+            -- its slot: it goes in on the same visit (BotInventory.keep).
+            local give = 0
+            for _ in pairs(ctx.empty_guns or {}) do
+                give = give + 1
+            end
+            if give > 0 and free + give >= slots then
+                ctx.swap_out = ctx.empty_guns
+            else
+                ctx.rearm_reserve = nil
+            end
         end
     end
     if ctx.loadout then
@@ -1905,7 +1947,7 @@ local function plan_visit(bot, menu, view)
     -- both takes and makes room.
     local taking = #BotInventory.withdrawals(view.items, ctx, free)
     local after = { capacity = ctx.capacity, used = ctx.used + taking }
-    if (ctx.full and (pickups > 0 or ctx.heal_swap))
+    if (ctx.full and (pickups > 0 or ctx.heal_swap)) or ctx.swap_out
         or BotInventory.reserve_due(after, #deposits, pickups) then
         for _, row in ipairs(deposits) do
             ops[#ops + 1] = { kind = "deposit", item = row.item }

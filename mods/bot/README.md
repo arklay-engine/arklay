@@ -1060,7 +1060,13 @@ drives the box screen with pad input only.
   marks generation (`plan().marks_gen`, bumped whenever a mark is added,
   removed or changes what it holds): pickup_fits asks for every frontier
   item, and rebuilding them per candidate ran the planner out of its
-  instruction budget.
+  instruction budget. On an empty frontier the hold is given up while the
+  inventory stays as it is (`frontier empty; the slot held for a needed
+  pickup is given up`, `p.no_hold`): what it waits for cannot be reached
+  now, and it shuts out everything else. A door a room event had locked
+  cut 214's item off, its hold kept the one free slot from the boxed
+  knife and from every other pickup, and with 30C's web uncut the run
+  ended in the caves.
 - Withdraw an item the bot remembers in the box (`bot:memory().box_items`,
   written whenever the box screen is up) when a `<use>` fact or an open
   `<brew>`'s recipe (`BotMix.needs`: its bottle and chemicals) needs it, a
@@ -1140,14 +1146,23 @@ drives the box screen with pad input only.
   way: with three MO disks to carry, 502's deposit boxed the empty
   launcher for a pickup, that rearm took it straight back out, and the
   two visits repeated for 265k ticks, to the run's limit. At a box in this
-  room while sourcing ammunition, a `reserve` gun (the launcher), held or
-  boxed, comes out with one kind of rounds the box holds for any of its
-  loadings while none of them is held (`rearm: sourcing, and the box holds
-  a reserve gun's rounds`; no trip is made for it), and the planner loads
-  the empty launcher with them: 502's swap boxed the empty launcher for
-  the MO disks beside its acid and flame rounds, and the bot met 509's
-  four zombies with four handgun rounds. While the bot sources
-  ammunition, the held reserve gun and the rounds held for it stay held
+  room, a boxed `reserve` gun (the launcher) comes out to rounds held
+  for any of its loadings, or with one kind the box holds while none is
+  held, and a held one with nothing loaded takes one kind from the box
+  (`rearm: the box holds a reserve gun's rounds`; no trip is made for
+  it), and the planner loads the empty launcher with them: 502's swap
+  boxed the empty launcher for the MO disks beside its acid and flame
+  rounds, and the bot met 509's four zombies with four handgun rounds;
+  403's box kept the launcher while the bot carried six flame rounds out
+  past it and met seven hunters with the handgun. It takes every slot it
+  needs or none, and leaves the slots a key or `<use>` pickup waits for;
+  short of slots, a held firearm that is dead weight (not equipped,
+  nothing loaded, no round for it held or boxed) goes in for it on the
+  same visit (`ctx.swap_out`): in over half of the hunter rooms entered
+  with the launcher and its rounds boxed, the bot carried an empty
+  shotgun with no shell anywhere. The held reserve gun and one stack of
+  rounds held for it, its own loading's first (every stack while the bot
+  sources ammunition), stay held
   (`a reserve gun being rearmed`), with a round still in the gun too:
   50E's rearm took the launcher out with one explosive round loaded, the
   acid rounds it came with went back in for the slot reserve, and 513's
@@ -1168,8 +1183,9 @@ drives the box screen with pad input only.
   one), with them. 513 holds a clip and its Tyrant falls to it, a kiting
   bot fetches rounds only for a gun it holds, and all 15 deaths there in
   two sets of 96 runs had the handgun in the box and no round for
-  anything else: one run died there four times and gave up. That gear stays held (`gear for a
-  room the bot died in`), and so does the held gun whose rounds are
+  anything else: one run died there four times and gave up. That gear
+  stays held (`gear for a room the bot died in`), and so does the held
+  gun whose rounds are
   still boxed: 502's box handed the launcher out as gear and, its rounds
   not yet out, took it back in for an MO disk 500 ticks later, and 509
   killed the bot again with five handgun rounds. It is bounded so: every kind of grenade round and three heals
