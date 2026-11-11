@@ -1,0 +1,168 @@
+# Leon A from the statue hall (10C), as leon_a_204_10c leaves him at the stairs door's arrival, to room 113: up the stairs and west along the upper floor past the statues on their plates to door 2, room 114's three zombies shot from the corridor's north end as they come (no damage), down the corridor's east wall to door 0, and the Spade Key's last use there: the used-key message, the close (the key's last use comes off, and the discard question), Yes (the slot goes), and a press that opens it (oracle/re2.md, "Leon A to the Diamond Key")
+0
+# 10C: turn a little toward the stairs and go up them with action held
+350 right
+351
+352 up action
+493
+# turn to face west and run along the upper floor to the corridor's turn south
+495 right
+509
+511 up run
+669
+671 left
+684
+686 up run
+716
+718 right
+731
+733 up
+747
+# door 2: room 114 loads on 784, play comes back on 1091
+749 action
+751
+# 114: turn to face south down the corridor, raise the handgun and fire every 6 ticks at the nearest standing zombie within 7000 (slot 1, then slot 0, then slot 2, which is left with 1 life and walks off north), then run down the east wall
+1091 left
+1104
+1105 aim
+1554 aim fire
+1556 aim
+1560 aim fire
+1562 aim
+1566 aim fire
+1568 aim
+1572 aim fire
+1574 aim
+1578 aim fire
+1580 aim
+1584 aim fire
+1586 aim
+1590 aim fire
+1592 aim
+1596 aim fire
+1598 aim
+1602 aim fire
+1604 aim
+1608 aim fire
+1610 aim
+1662 aim fire
+1664 aim
+1668 aim fire
+1670 aim
+1674 aim fire
+1676 aim
+1680 aim fire
+1682 aim
+1686 aim fire
+1688 aim
+1783 aim fire
+1784 aim
+1884 aim fire
+1886 aim
+1890 aim fire
+1892 aim
+1896 aim fire
+1898 aim
+1902 aim fire
+1904 aim
+1908 aim fire
+1910 aim
+1914 aim fire
+1916 aim
+1920 aim fire
+1922 aim
+1926 aim fire
+1928 aim
+1932 aim fire
+1934 aim
+2010 aim fire
+2012 aim
+2016 aim fire
+2018 aim
+2022 aim fire
+2024 aim
+2028 aim fire
+2030 aim
+2034 aim fire
+2036 aim
+2124 aim fire
+2126 aim
+2334 aim fire
+2336 aim
+2341 aim fire
+2342 aim
+2346 aim fire
+2348 aim
+2352 aim fire
+2354 aim
+2358 aim fire
+2360 aim
+2364 aim fire
+2366 aim
+2370 aim fire
+2372 aim
+2376 aim fire
+2378 aim
+2382 aim fire
+2384 aim
+2388 aim fire
+2390 aim
+2394 aim fire
+2396 aim
+2400 aim fire
+2402 aim
+2406 aim fire
+2408 aim
+2412 aim fire
+2414 aim
+2418 aim fire
+2420 aim
+2424 aim fire
+2426 aim
+2430 aim fire
+2432 aim
+2436 aim fire
+2438 aim
+2442 aim fire
+2444
+2448 up run left
+2455 up run
+2464 up run left
+2465 up run
+2490 up run left
+2491 up run
+2493 up run left
+2494 up run
+2496 up run left
+2497 up run
+2506 up run left
+2507 up run
+2509 up run left
+2510 up run right
+2515 up run
+2563 up run right
+2564 up run
+2566 up run left
+2574 up run
+2578 up run left
+2589 up run
+2603 up run left
+2604 up run
+2627 up run left
+2628 up run
+2631 up run right
+2633 up run
+2635 up run right
+2636 up run
+2638
+2642 left
+2644
+# door 0: the Spade Key's used-key message (fg_key bit 9); then the close (its last use comes off, and the discard question, message 9), Yes (the slot goes), and a press that opens it: room 113 loads on 2861, play comes back on 3168
+2646 action
+2648
+2706 action
+2708
+2766 action
+2768
+2826 action
+2828

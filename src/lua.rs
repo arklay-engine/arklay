@@ -419,6 +419,16 @@ mod imp {
 
             methods.add_method("health", |_lua, game, ()| Ok(game.entities[0].health));
 
+            // `re2_zombies()`: RE 2's enemies in play as the oracle trace's
+            // `zm` field writes them (`-` for none, or outside an RE 2 room).
+            methods.add_method("re2_zombies", |_lua, game, ()| {
+                Ok(if game.is_re2_room {
+                    game.re2.zombie_trace()
+                } else {
+                    "-".to_string()
+                })
+            });
+
             methods.add_method("max_health", |_lua, game, ()| Ok(game.max_health));
 
             // `character()`: 0 Chris/Leon, 1 Jill/Claire.

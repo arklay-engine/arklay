@@ -140,6 +140,13 @@ function HookApi:player_angle() end
 ---@return integer
 function HookApi:health() end
 
+---RE 2's enemies in play, as the oracle trace's `zm` field writes them
+---(`oracle/trace-v1.md`): `slot:id,x,y,z,angle,...,life,...` rows joined by
+---`;`, or `-` when there are none or the room isn't RE 2's. A driver script
+---(`arklay script`) reads it to time a fight.
+---@return string
+function HookApi:re2_zombies() end
+
 ---The player's maximum health.
 ---@return integer
 function HookApi:max_health() end

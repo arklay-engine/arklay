@@ -1,0 +1,73 @@
+# Leon A's route from the main hall's statue (200) and the Spade Key through the key's two doors (204's door 2 to 203, 114's door 0 to 113) to the Diamond Key (10B), room by room from warps (oracle/re2.md, "Leon A to the Diamond Key"), each warp starting Leon as route_200_spade leaves him: 156 life, 2 rounds in the handgun and 38 spare, the ink ribbons in slot 3, the Red Jewel in slot 4, the Spade Key (two uses) in slot 5, every common (bank 4) and item (bank 8) flag and both of fg_key's bits (31:17, 31:27) the route has raised by its end, and room 207's four zombies dead; room 114's three zombies and room 204's licker are alive.
+
+# Rooms 200, 201, 204 and 203: from the statue to door 1, 201 to door 1, 204's licker from the ceiling (killed with the handgun), the Spade Key at door 2, and 203's door 0 back into 204.
+[[run]]
+name = "leon_a_200_203"
+room = "200"
+setup_script = "leon_a_200_203.lua"
+input = "leon_a_200_203.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 2600
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1"
+frames = [825, 2599]
+# 1.08 measured: the doors' frames count only in the whole run's mean (204's door 2 and 203's door 0 are about 5 to 6 at worst)
+frame_max_mean = 1.2
+# each room on its own, from its hand back to its door's press: 201, 204 (the licker and the Spade Key), 203, and 204 from its hand back
+frame_windows = [[825, 948, 0.4], [1291, 1839, 0.45], [2177, 2207, 0.25], [2550, 2599, 0.3]]
+expect = "match"
+ignore = [
+  # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 200's door 1, 201's door 1, 204's door 2 and 203's door 0
+  [457, "rng"], [457, "rseed"], [949, "rng"], [949, "rseed"], [1840, "rng"], [1840, "rseed"], [2208, "rng"], [2208, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [492, 582, "hk"], [984, 1074, "hk"], [1875, 1965, "hk"], [2243, 2333, "hk"],
+]
+record = "--warp 200:-13862:0:-10012:3080:8 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:17 --flag 31:27 --life 156 --give 0:2:2 --give 2:0x14:38 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x59:2"
+
+# Rooms 204, 205, 207 and 10C: from 203's door 0's arrival north to door 1, the corridor of bodies with 4:48 set (both groups come out of the walls, out of reach), 207 past its dead zombies to the stairs door, into 10C.
+[[run]]
+name = "leon_a_204_10c"
+room = "204"
+setup_script = "leon_a_204_10c.lua"
+input = "leon_a_204_10c.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1750
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 1749]
+# 1.37 measured: the doors' frames count only in the whole run's mean: 207's door 3 is the stairs door, which draws its steps wider and brighter than the original's (docs/internals/deviations/re2.md, "The stairs door's frames")
+frame_max_mean = 1.5
+# each room on its own, from its hand back to its door's press: 204, 205, 207, and 10C from its hand back
+frame_windows = [[360, 419, 0.35], [762, 1059, 0.4], [1402, 1489, 0.3], [1700, 1749, 0.3]]
+expect = "match"
+ignore = [
+  # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 204's door 1, 205's door 2 and 207's stairs door
+  [420, "rng"], [420, "rseed"], [1060, "rng"], [1060, "rseed"], [1490, "rng"], [1490, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [455, 545, "hk"], [1095, 1185, "hk"], [1525, 1617, "hk"],
+]
+record = "--warp 204:-14423:0:-7289:2024:4 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:17 --flag 31:27 --life 134 --give 0:2:14 --give 2:0x14:20 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x59:1"
+
+# Rooms 10C, 114 and 113: up the stairs and along the upper floor to door 2, room 114's three zombies shot from the corridor's north end (slot 2 left at 1 life, walking off north), down the corridor to door 0 and the Spade Key's last use (the used-key message, the close and the discard question, Yes, and the press that opens it), into 113.
+[[run]]
+name = "leon_a_10c_113"
+room = "10C"
+setup_script = "leon_a_10c_113.lua"
+input = "leon_a_10c_113.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 3180
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4"
+frames = [360, 3179]
+# 0.63 measured
+frame_max_mean = 0.75
+# each room on its own, from its hand back to its door's press: 10C, 114 (the fight and the Spade Key), and 113 from its hand back
+frame_windows = [[360, 748, 0.35], [1091, 2825, 0.75], [3168, 3179, 0.6]]
+expect = "match"
+ignore = [
+  # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 10C's door 2 and 114's door 0
+  [749, "rng"], [749, "rseed"], [2826, "rng"], [2826, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [784, 874, "hk"], [2861, 2951, "hk"],
+]
+record = "--warp 10C:7390:0:944:960:0 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:17 --flag 31:27 --life 134 --give 0:2:14 --give 2:0x14:20 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x59:1"

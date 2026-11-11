@@ -184,10 +184,17 @@ impl GameState {
         self.rebuild_slots();
     }
 
-    /// The oracle's `hk` field: the hook (0 none, 1 `Hikidashi_entrance`),
-    /// its state, then each of the room's `objects` objects' `Be_flg & 0x11`.
+    /// The oracle's `hk` field: the hook (0 none, 1 `Hikidashi_entrance`,
+    /// 2 `Key_lost`), its state, then each of the room's `objects` objects'
+    /// `Be_flg & 0x11`. The two hooks share the state byte (`0x98E541`):
+    /// `Key_lost` holds its slot + 1 there until the key's message closes,
+    /// and 0 while the discard question waits.
     pub fn re2_hikidashi_trace(&self, objects: usize) -> String {
         let hook = self.re2_hikidashi;
+        let (kind, state) = match self.re2_key_lost {
+            Some(key) => (2, if key.first { key.slot + 1 } else { 0 }),
+            None => (u8::from(hook.active), hook.state),
+        };
         let flags: Vec<String> = (0..objects.min(32))
             .map(|index| {
                 let be_flg = self.objects.records.get(index).map_or(0, |r| r.be_flg);
@@ -196,8 +203,8 @@ impl GameState {
             .collect();
         format!(
             "hk={},{},{}",
-            u8::from(hook.active),
-            hook.state,
+            kind,
+            state,
             if flags.is_empty() {
                 "-".to_owned()
             } else {
@@ -440,5 +447,27 @@ mod tests {
         assert_eq!(game.re2_hikidashi_trace(2), "hk=1,2,0/11");
         // Past the records the room declares, a slot reads 0.
         assert_eq!(game.re2_hikidashi_trace(3), "hk=1,2,0/11/0");
+    }
+
+    #[test]
+    fn hk_trace_reads_key_lost_and_its_slot() {
+        use crate::game::door2::KeyLost;
+        let mut game = game();
+        // A key turned from slot 5: the hook holds slot + 1 until the
+        // message closes (`Key_lost`, `0x98E541`), as leon_a_200_203's
+        // Spade Key at 204's door 2 has it.
+        game.re2_key_lost = Some(KeyLost {
+            slot: 5,
+            first: true,
+        });
+        assert_eq!(game.re2_hikidashi_trace(0), "hk=2,6,-");
+        // The discard question's phase: the byte is 0.
+        game.re2_key_lost = Some(KeyLost {
+            slot: 5,
+            first: false,
+        });
+        assert_eq!(game.re2_hikidashi_trace(0), "hk=2,0,-");
+        game.re2_key_lost = None;
+        assert_eq!(game.re2_hikidashi_trace(0), "hk=0,0,-");
     }
 }
