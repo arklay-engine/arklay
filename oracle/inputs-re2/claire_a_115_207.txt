@@ -1,0 +1,42 @@
+# Claire A from the S.T.A.R.S. office (115) to the stair corridor (207), as route_claire_a_115 leaves her at the end of the exit scene: door 0, up 114's empty corridor to door 2, along 10C's upper floor and down its stairs to door 0 (oracle/re2.md, "Claire A to the Spade Key")
+0
+# 115: turn to face west, to door 0
+350 left
+361
+# door 0: room 114 loads on 399, play comes back on 705
+364 action
+366
+# 114, on leon_a_115_207's presses 58 ticks sooner: the corridor is empty on Claire A, but the turn on the spot to face north (3120) before the run is kept
+706 right
+722
+# run up the corridor's east wall to its north end
+723 up run
+788
+# turn to face east (4080) and press door 2: room 10C loads on 841, play comes back on 1147
+790 right
+803
+806 action
+808
+# 10C: turn to face north and run to the upper floor's north side
+1148 left
+1161
+1163 up run
+1194
+# turn to face east and run along the upper floor past the statues to the stairs' head
+1196 right
+1208
+1210 up run
+1372
+# turn to face south (3136) and go down the stairs with action held
+1374 left
+1386
+1388 up action
+1504
+# turn to face west and walk to door 0's frame
+1506 left
+1519
+1521 up
+1538
+# door 0, the stairs door: room 207 loads on 1575, play comes back on 1745
+1540 action
+1542

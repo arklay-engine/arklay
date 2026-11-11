@@ -1,0 +1,52 @@
+# Claire A from the stair corridor (207) to the west office (201), as claire_a_115_207 leaves her at 10C's door 0's arrival, on leon_a_207_201_licker's presses: past 207's dead zombies to door 1, the corridor of bodies with 4:48 set (both groups come out, out of reach) and 204 to door 0 (oracle/re2.md, "Claire A to the Spade Key")
+0
+# 207: run west to the corridor's west wall
+350 up run
+362
+# turn to face south and run down the corridor
+364 left
+377
+379 up run
+420
+# turn to face west and press door 1: room 205 loads on 471, play comes back on 777
+422 right
+434
+436 action
+438
+# 205: turn toward the north-west and run up to the north corridor
+778 right
+786
+788 up run
+868
+# turn to face west (2009) and run along the north corridor, about 2100 from the east group's wall
+870 left
+879
+881 up run
+# a running turn toward +z (2121), so the run passes north of the wall's corner at x -18881
+904 up run right
+906 up run
+961
+# turn to face south (921) and run down the west corridor along its east wall, out of the west group's reach
+963 left
+979
+981 up run
+1064
+# turn to 1081 and run to the wall by door 0
+1066 right
+1069
+1071 up run
+1084
+# door 0: room 204 loads on 1121, play comes back on 1427
+1086 action
+1088
+# 204: Claire killed the window licker on the way out (6:61), so main_02 hangs no new one. Turn a little east (864) and run south down the corridor's east wall
+1428 left
+1431
+1433 up run
+# a running turn east (24) into the east corridor, and on to door 0's frame
+1518 up run left
+1533 up run
+1620
+# door 0: room 201 loads on 1657, play comes back on 1963
+1622 action
+1624
