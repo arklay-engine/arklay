@@ -9241,6 +9241,19 @@ impl GameSession {
                 font.draw_text_8x14(screen, font.countdown_x(), 0x20, tint, hud.text.as_bytes());
             });
         }
+        // An interactive screen's `PrintText8x14` strings (the guardhouse
+        // panel's key labels).
+        let texts = self.game.interactive.texts();
+        if !texts.is_empty()
+            && let Some(font) = &self.font
+        {
+            self.framebuffer.with_screen(|screen| {
+                for text in texts {
+                    let tint = font::Tint::from_clut_row(i32::from(text.row));
+                    font.draw_text_8x14(screen, text.x, text.y, tint, &text.bytes);
+                }
+            });
+        }
         if self.draws_message_window()
             && let Some(font) = &self.font
         {

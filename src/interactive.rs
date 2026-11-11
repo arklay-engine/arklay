@@ -9,7 +9,8 @@
 //! themselves are pack Lua ([`SCREENS`]); this module is the engine half: the
 //! dispatcher, the pad words the screens read, the texture slots they load,
 //! the sprite primitives they draw through (`AddSpriteEx_Core`,
-//! `PrintText8x8`, the perspective quad) and the game state they touch.
+//! `PrintText8x8`, `PrintText8x14`, the perspective quad) and the game state
+//! they touch.
 //!
 //! # State
 //!
@@ -364,6 +365,19 @@ impl Desc {
     }
 }
 
+/// A `PrintText8x14` string a screen drew this frame, in the message font.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Text8x14 {
+    /// Screen pixel x of the first glyph.
+    pub x: i32,
+    /// Screen pixel y.
+    pub y: i32,
+    /// The font CLUT row (the colour's low nibble).
+    pub row: u8,
+    /// The glyph bytes.
+    pub bytes: Vec<u8>,
+}
+
 /// The interactive screens' engine state, kept in [`GameState`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct InteractiveState {
@@ -379,6 +393,8 @@ pub struct InteractiveState {
     pages: Vec<String>,
     /// This frame's sprites, in submission order.
     sprites: Vec<EffectQuad>,
+    /// This frame's 8x14 strings, in submission order.
+    texts: Vec<Text8x14>,
     /// What the screen up now may change, as it was when the gate rose.
     entered: Option<Entered>,
 }
@@ -454,11 +470,17 @@ impl InteractiveState {
         self.textures.clear();
         self.pages.clear();
         self.sprites.clear();
+        self.texts.clear();
     }
 
     /// This frame's sprites. Their `page` indexes [`Self::pages`].
     pub fn sprites(&self) -> &[EffectQuad] {
         &self.sprites
+    }
+
+    /// This frame's 8x14 strings, drawn over the scene in the message font.
+    pub fn texts(&self) -> &[Text8x14] {
+        &self.texts
     }
 
     /// The pack entries this frame's sprites draw from.
@@ -671,6 +693,7 @@ pub fn tick(host: &mut Host<'_>, lua: &mut crate::enemy::LuaEnemyHost, cancel_he
         .pad_from_dpad(game.dpad_held, game.dpad_pressed, cancel_held);
     game.interactive.sprites.clear();
     game.interactive.pages.clear();
+    game.interactive.texts.clear();
     if game.flag_test(game::BANK_SCENARIO, SCENARIO_INTERACTIVE, false) {
         if !game.interactive.was_up {
             for state in game.interactive.states.values_mut() {
@@ -703,6 +726,7 @@ fn abort(host: &mut Host<'_>) {
     state.textures.clear();
     state.sprites.clear();
     state.pages.clear();
+    state.texts.clear();
     host.game
         .apply_flag(game::BANK_SCENARIO, SCENARIO_INTERACTIVE, 1);
 }
@@ -843,6 +867,10 @@ impl UserData for ScreenApi {
         fields.add_field_method_get("player_character", |_, api| {
             Ok(api.game().id.player_flag & 1)
         });
+        fields.add_field_method_get("player_id", |_, api| Ok(api.game().entities[0].id));
+        fields.add_field_method_get("menu_choice", |_, api| {
+            Ok(api.game().message.menu_choice_id())
+        });
         fields.add_field_method_get("camera", |_, api| Ok(api.game().camera.current_cut as i64));
         fields.add_field_method_get("fov", |_, api| {
             let room = api.room();
@@ -910,6 +938,26 @@ impl UserData for ScreenApi {
             Ok(())
         });
         methods.add_method("voice_playing", |_, api, ()| Ok(api.game().voice_playing()));
+        methods.add_method_mut("message", |_, api, (id, pause): (i64, i64)| {
+            api.game_mut().show_message_word(id as u16, pause as u16);
+            Ok(())
+        });
+        methods.add_method_mut("set_camera_fov", |_, api, (camera, fov): (i64, i64)| {
+            if let Some(cut) = usize::try_from(camera)
+                .ok()
+                .and_then(|camera| api.room_mut().cuts.get_mut(camera))
+            {
+                cut.fov = fov as i32;
+            }
+            Ok(())
+        });
+        methods.add_method_mut("set_room_sprite", |_, api, (id, active): (i64, bool)| {
+            api.game_mut().mask_toggles.push(game::MaskToggle {
+                group: id as u8,
+                active,
+            });
+            Ok(())
+        });
         methods.add_method_mut("switch_camera", |_, api, camera: i64| {
             if let Ok(camera) = usize::try_from(camera) {
                 api.switch_camera(camera);
@@ -1019,6 +1067,18 @@ impl UserData for ScreenApi {
                     &text.as_bytes(),
                     colour as u8,
                 );
+                Ok(())
+            },
+        );
+        methods.add_method_mut(
+            "print8x14",
+            |_, api, (x, y, text, colour): (i64, i64, mlua::String, i64)| {
+                api.game_mut().interactive.texts.push(Text8x14 {
+                    x: x as i16 as i32,
+                    y: y as i16 as i32,
+                    row: colour as u8 & 0xf,
+                    bytes: text.as_bytes().to_vec(),
+                });
                 Ok(())
             },
         );
@@ -1488,6 +1548,295 @@ mod tests {
         assert_eq!(word(), [1, 2, 3, 4, 5, 6, 7, 9]);
         append.call::<()>((s.clone(), -3, 0)).unwrap();
         assert_eq!(word(), [1, 2, 3, 4, 5, 6, 7]);
+    }
+
+    // ---- room 408's numeric panel ------------------------------------------
+
+    const PANEL: &str = "interactive/passcode_panel.lua";
+
+    /// Room 408 with the panel up: the shipped script, six cameras, the
+    /// gate raised and system flag 0x1D selecting the panel.
+    fn panel_scene() -> (GameState, RoomState, PlayerState, Pack) {
+        let script = crate::enemy::ENEMY_SCRIPTS
+            .iter()
+            .find(|(entry, _)| *entry == PANEL)
+            .expect("the checked-in panel")
+            .1;
+        let mut writer = crate::pack::PackWriter::new();
+        writer.add(PANEL, script.as_bytes().to_vec()).unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let mut room = RoomState {
+            cuts: vec![crate::state::Cut::default(); 6],
+            ..RoomState::default()
+        };
+        room.current_cut = 2;
+        let player = crate::player::spawn(
+            crate::state::RoomId {
+                stage: 4,
+                room: 8,
+                ..Default::default()
+            },
+            &room,
+        );
+        let mut game = GameState::default();
+        game.set_camera_cut(2);
+        game.message_flags = 0xffff;
+        game.apply_flag(game::BANK_SCENARIO, SCENARIO_INTERACTIVE, 0);
+        game.apply_flag(game::BANK_SYSTEM, 0x1d, 0);
+        (game, room, player, pack)
+    }
+
+    /// One frame of the panel with `pressed` (arklay's remapped D-pad word:
+    /// up 1, down 2, left 4, right 8, confirm 0x80) and the cancel key.
+    fn panel_frame(
+        scene: &mut (GameState, RoomState, PlayerState, Pack),
+        lua: &mut crate::enemy::LuaEnemyHost,
+        pressed: u16,
+        cancel: bool,
+    ) {
+        let (game, room, player, pack) = scene;
+        game.dpad_held = pressed;
+        game.dpad_pressed = pressed;
+        game.mask_toggles.clear();
+        game.snd3d_requests.clear();
+        tick(
+            &mut Host {
+                game,
+                room,
+                player,
+                pack,
+            },
+            lua,
+            cancel,
+        );
+    }
+
+    fn panel_state(game: &GameState) -> &ScriptValue {
+        game.interactive.state(PANEL).expect("the panel ran")
+    }
+
+    /// The nine lamps as the frame's room-sprite toggles left them.
+    fn lamps(game: &GameState) -> [bool; 9] {
+        let mut lamps = [false; 9];
+        assert_eq!(game.mask_toggles.len(), 9, "one toggle per lamp a frame");
+        for toggle in &game.mask_toggles {
+            lamps[usize::from(toggle.group) - 1] = toggle.active;
+        }
+        lamps
+    }
+
+    /// Open the panel and answer its prompt: `yes` or no.
+    fn opened(
+        yes: bool,
+    ) -> (
+        (GameState, RoomState, PlayerState, Pack),
+        crate::enemy::LuaEnemyHost,
+    ) {
+        let mut scene = panel_scene();
+        let mut lua = crate::enemy::LuaEnemyHost::new();
+        panel_frame(&mut scene, &mut lua, 0, false);
+        scene.0.message.set_menu_choice_id(if yes { 0 } else { 1 });
+        panel_frame(&mut scene, &mut lua, 0, false);
+        (scene, lua)
+    }
+
+    #[test]
+    fn the_panel_cuts_to_the_pad_and_asks_its_question() {
+        let mut scene = panel_scene();
+        let mut lua = crate::enemy::LuaEnemyHost::new();
+        panel_frame(&mut scene, &mut lua, 0, false);
+        let (game, room, _, _) = &scene;
+        assert_eq!(room.current_cut, 5);
+        assert_eq!(game.camera.current_cut, 5);
+        assert_eq!(room.cuts[5].fov, 0xC0);
+        assert_eq!(game.message.id_word(), Some(0x0E), "room message 14");
+        assert_ne!(game.message.menu_choice_id() & 0x80, 0);
+        assert_eq!(game.message_flags & !0xFEB0, 0, "the player is held");
+        assert_eq!(
+            lamps(game),
+            [false, false, false, false, false, false, false, false, true]
+        );
+        assert!(
+            game.interactive.texts().is_empty(),
+            "no labels before the answer"
+        );
+        // The pad waits while the prompt is up.
+        panel_frame(&mut scene, &mut lua, 0x80, false);
+        assert_eq!(panel_state(&scene.0).int("sub"), Some(0));
+    }
+
+    #[test]
+    fn no_at_the_prompt_puts_the_camera_back() {
+        let (mut scene, mut lua) = opened(false);
+        assert_eq!(panel_state(&scene.0).int("func"), Some(2));
+        panel_frame(&mut scene, &mut lua, 0, false);
+        let (game, room, _, _) = &scene;
+        assert_eq!(room.current_cut, 2);
+        assert!(!game.flag_test(game::BANK_SCENARIO, SCENARIO_INTERACTIVE, false));
+        assert_eq!(game.message_flags & 0x014F, 0x014F);
+        assert!(!game.flag_test(game::BANK_SCENARIO, 0x21, false));
+    }
+
+    #[test]
+    fn cancel_on_the_pad_closes_it() {
+        let (mut scene, mut lua) = opened(true);
+        panel_frame(&mut scene, &mut lua, 0, true);
+        panel_frame(&mut scene, &mut lua, 0, false);
+        assert_eq!(scene.1.current_cut, 2);
+        assert!(
+            !scene
+                .0
+                .flag_test(game::BANK_SCENARIO, SCENARIO_INTERACTIVE, false)
+        );
+    }
+
+    #[test]
+    fn the_pad_labels_follow_the_cursor() {
+        let (mut scene, mut lua) = opened(true);
+        let texts = scene.0.interactive.texts();
+        assert_eq!(texts.len(), 2 + 3 * 5);
+        let label = |texts: &[Text8x14], digit: u8| {
+            texts
+                .iter()
+                .find(|t| t.bytes == [digit, b'$'])
+                .map(|t| (t.x, t.y, t.row))
+        };
+        assert_eq!(label(texts, b'1'), Some((0x8B, 0x9A, 1)));
+        assert_eq!(label(texts, b'9'), Some((0xAB, 0xB6, 3)));
+        // Left and up clamp at the corner; right then down moves to key 5.
+        for pressed in [4, 1, 8, 2] {
+            panel_frame(&mut scene, &mut lua, pressed, false);
+        }
+        let texts = scene.0.interactive.texts();
+        assert_eq!(label(texts, b'5'), Some((0x9B, 0xA8, 1)));
+        assert_eq!(label(texts, b'1').map(|l| l.2), Some(3));
+    }
+
+    /// The key set that lights every lamp from `lamps`.
+    fn solve(lamps: [bool; 9]) -> Vec<usize> {
+        let flip = |state: &mut [bool; 9], key: usize| {
+            let (row, column) = (key / 3, key % 3);
+            state[key] ^= true;
+            if row > 0 {
+                state[key - 3] ^= true;
+            }
+            if row < 2 {
+                state[key + 3] ^= true;
+            }
+            if column > 0 {
+                state[key - 1] ^= true;
+            }
+            if column < 2 {
+                state[key + 1] ^= true;
+            }
+        };
+        (0u16..512)
+            .map(|mask| {
+                (0..9)
+                    .filter(|key| mask & (1 << key) != 0)
+                    .collect::<Vec<_>>()
+            })
+            .find(|keys| {
+                let mut state = lamps;
+                for &key in keys {
+                    flip(&mut state, key);
+                }
+                state.iter().all(|&lit| lit)
+            })
+            .expect("a solution")
+    }
+
+    #[test]
+    fn lighting_every_lamp_solves_the_panel() {
+        let (mut scene, mut lua) = opened(true);
+        let start = lamps(&scene.0);
+        let mut cursor = (0usize, 0usize);
+        for key in solve(start) {
+            let target = (key % 3, key / 3);
+            while cursor != target {
+                let pressed = if cursor.0 < target.0 {
+                    cursor.0 += 1;
+                    8
+                } else if cursor.0 > target.0 {
+                    cursor.0 -= 1;
+                    4
+                } else if cursor.1 < target.1 {
+                    cursor.1 += 1;
+                    2
+                } else {
+                    cursor.1 -= 1;
+                    1
+                };
+                panel_frame(&mut scene, &mut lua, pressed, false);
+            }
+            panel_frame(&mut scene, &mut lua, 0x80, false);
+            panel_frame(&mut scene, &mut lua, 0, false);
+            let sound = &scene.0.snd3d_requests;
+            assert_eq!((sound[0].bank, sound[0].id), (2, 0x17), "the key's sound");
+        }
+        assert!(lamps(&scene.0).iter().all(|&lit| lit));
+        assert!(scene.0.interactive.texts().is_empty(), "the labels go");
+        let mut frames = 0;
+        while !scene.0.flag_test(game::BANK_SCENARIO, 0x21, false) {
+            panel_frame(&mut scene, &mut lua, 0, false);
+            frames += 1;
+            assert!(frames < 1000, "the animation never finished");
+        }
+        // 30 frames' wait, the first lamp, the nine lamps' delays and 30 more.
+        assert_eq!(frames, 30 + 1 + 92 + 30);
+        let sound = &scene.0.snd3d_requests;
+        assert_eq!((sound[0].bank, sound[0].id), (2, 0x18), "the success sound");
+        assert!(lamps(&scene.0).iter().all(|&lit| !lit));
+        panel_frame(&mut scene, &mut lua, 0, false);
+        assert_eq!(scene.1.current_cut, 2);
+        assert!(
+            !scene
+                .0
+                .flag_test(game::BANK_SCENARIO, SCENARIO_INTERACTIVE, false)
+        );
+    }
+
+    #[test]
+    fn the_initial_lamps_follow_the_variant_and_the_character() {
+        for (variant, jill, expected) in [
+            (None, true, [0, 0, 0, 0, 0, 0, 0, 0, 1]),
+            (Some(0x1e), true, [0, 1, 0, 1, 1, 1, 0, 0, 1]),
+            (Some(0x1e), false, [0, 0, 0, 0, 0, 0, 0, 0, 1]),
+            (Some(0x1f), true, [1, 0, 1, 0, 1, 1, 0, 0, 1]),
+            (Some(0x1f), false, [1, 0, 0, 1, 1, 0, 1, 0, 1]),
+        ] {
+            let mut scene = panel_scene();
+            if let Some(flag) = variant {
+                scene.0.apply_flag(game::BANK_SCENARIO, flag, 0);
+            }
+            scene.0.entities[0].id = u8::from(jill);
+            let mut lua = crate::enemy::LuaEnemyHost::new();
+            panel_frame(&mut scene, &mut lua, 0, false);
+            assert_eq!(
+                lamps(&scene.0),
+                expected.map(|lamp| lamp == 1),
+                "variant {variant:?}, jill {jill}"
+            );
+        }
+    }
+
+    /// The panel waits on room message 14's yes/no answer: every language's
+    /// text for it must ask the question, or the pad opens unasked.
+    #[test]
+    fn every_language_asks_the_panel_question() {
+        let xml = include_str!("../games/re1/room/408/room.xml");
+        let languages: Vec<&str> = xml.split("<language lang=\"").skip(1).collect();
+        assert_eq!(languages.len(), 8);
+        for language in languages {
+            let lang = &language[..language.find('"').unwrap()];
+            let body = &language[..language.find("</language>").unwrap()];
+            let start = body
+                .find("<string key=\"14\">")
+                .unwrap_or_else(|| panic!("{lang}: no message 14"));
+            let text = &body[start..];
+            let text = &text[..text.find("</string>").unwrap()];
+            assert!(text.contains("{branch "), "{lang}: {text}");
+        }
     }
 
     #[test]

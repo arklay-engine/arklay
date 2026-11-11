@@ -12,7 +12,7 @@
 #define AOT_01_DOOR_409 0x01                                // "It's locked." until F_SCENARIO_PANEL_SOLVED.
 #define AOT_02_DOOR_40A 0x02
 #define AOT_03_DOOR_40C 0x03                                // Obstructed from the other side until F_SCENARIO_PLANT42_ROOM_ENTERED.
-#define AOT_04_USEITEM_PANEL 0x04                           // Guess: the 409 door's lock panel (data 0, 0, 32).
+#define AOT_04_USEITEM_PANEL 0x04                           // The numeric panel: raises F_SCENARIO_INTERACTIVE_SCREEN (data 0, 0, 32).
 #define AOT_05_ITEM_KEY_GUARDHOUSE_002_0 0x05
 #define AOT_06_ITEM_KEY_RADIO_1 0x06                        // Richard's radio, given by Rebecca.
 #define CAM_02 0x02
@@ -28,7 +28,7 @@
 #define ENEMY_07_WASP 0x07
 #define F_ROOM_PLAYER_ANIM_DONE 0x20                        // The player's animation finished (one frame).
 #define F_ROOM_REBECCA_ANIM_DONE 0x21                       // Rebecca's animation finished (one frame); a wasp in the dead Jill branches.
-#define F_ROOM_UNUSED_1D 0x1D                               // Set by init; nothing reads it.
+#define F_ROOM_SCREEN_PANEL 0x1D                            // Selects the numeric panel as the interactive screen (system bit 0x1D).
 #define IMDL_00_KEY_GUARDHOUSE_002 0x00
 #define IMDL_01_KEY_RADIO 0x01
 #define SE_DOOR_00 0x00
@@ -71,7 +71,7 @@ proc init
         }
         else
         {
-            aot_set(AOT_03_DOOR_40C, 27800, 2100, 3000, 4000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 14, 0, 255, 0, 0, 0);
+            aot_set(AOT_03_DOOR_40C, 27800, 2100, 3000, 4000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 16, 0, 255, 0, 0, 0);
         }
     }
     aot_set(AOT_04_USEITEM_PANEL, 7200, 11000, 800, 800, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 32, 0, 1, 0);
@@ -97,7 +97,7 @@ proc init
             set(FG_COMMON, F_COMMON_J_BARRY_002_MISSED_408, TRUE);
         }
     }
-    set(FG_ROOM, F_ROOM_UNUSED_1D, TRUE);
+    set(FG_ROOM, F_ROOM_SCREEN_PANEL, TRUE);
     aot_reset(AOT_01_DOOR_409, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 143, 255, 0);
     evt_exec(0, TASK_09, place_key_002);
     if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))

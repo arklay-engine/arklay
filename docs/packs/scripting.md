@@ -36,7 +36,8 @@ Helpers shared by several screens go in `ui/lib/` (`ui/lib/fade.lua`,
 
 A few of the original's screens draw over the live room instead of pausing
 it: the room keeps running, and the screen moves its camera and props. RE 1's
-lab computer in room 506 is `interactive/computer_lab.lua`. While scenario
+numeric panel in room 408 is `interactive/passcode_panel.lua` and its lab
+computer in room 506 is `interactive/computer_lab.lua`. While scenario
 flag `0x20` is up, the engine calls the script that a system flag selects
 once a tick, between the room's scripts and its camera switch. It runs in the
 enemy scripts' VM and keeps its state in a table the engine stores with the
