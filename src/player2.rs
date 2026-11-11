@@ -45,6 +45,9 @@ pub(crate) const MODE_HELD: u8 = 5;
 pub(crate) const MODE_HELD_DIE: u8 = 6;
 /// `Be_flg`'s 8, which keeps `Sca_ck_em` from running.
 pub(crate) const BE_NO_SCA: u32 = 8;
+/// `Be_flg`'s 4: `Oba_ck_hit` doesn't push this body out of the others (the
+/// climb and the jump down).
+pub(crate) const BE_NO_PUSH: u32 = 4;
 /// `routine[1]` under [`MODE_MOVE`]: the `pl_br_*` and `pl_mv_*` tables.
 const MOVE_IDLE: u8 = 0;
 const MOVE_FORWARD: u8 = 1;
@@ -144,6 +147,9 @@ const PUSH_END_SOUND: u32 = 0x200_0001;
 const JUMP_CLIP: u8 = 7;
 const JUMP_FALL_CLIP: u8 = 8;
 const LAND_CLIP: u8 = 9;
+/// `pl_mv_09`'s `Timer3` once the fall is in water: five splashes, and the
+/// top bit keeps it from starting again.
+const JUMP_SPLASH: u8 = 0x85;
 /// The small character (id 0xF) has its own timing, on the same clips.
 const SMALL_ID: u8 = 0xF;
 /// `pl_mv05_w1`'s clips: raising; holding, then firing, at each tilt.
@@ -1409,7 +1415,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         _ => {}
     }
     if mover.work.routine[0] == MODE_MOVE && mover.work.routine[1] == MOVE_JUMP_DOWN {
-        mover.work.floor = crate::sca::floor_of(mover.player.pos[1]);
+        mover.work.floor = crate::sca::floor_toward_zero(mover.player.pos[1]);
     }
     mover.pl_neck();
     mover.rot_neck();
@@ -1819,6 +1825,9 @@ impl Mover<'_, '_> {
             self.work.move_cnt = 0;
             self.work.hokan = FULL_BLEND;
             self.work.spd[0] = 0x32;
+            // Not pushed out of the other bodies (`Oba_ck_hit`) until the
+            // climb is done.
+            self.work.be_flg |= BE_NO_PUSH;
         }
         match self.work.routine[3] {
             1 => {
@@ -1856,6 +1865,7 @@ impl Mover<'_, '_> {
         if frame == 0x11 {
             self.work.damage_cnt |= DAMAGE_LOCK;
             self.work.floor = self.work.floor.wrapping_add(1);
+            self.work.be_flg |= BE_NO_SCA;
         }
         if frame == lift {
             self.work.spd[0] = reach;
@@ -1864,14 +1874,21 @@ impl Mover<'_, '_> {
         }
         if frame == end {
             self.work.damage_cnt &= !DAMAGE_LOCK;
+            self.work.be_flg &= !(BE_NO_PUSH | BE_NO_SCA);
         }
         if self.joint_move_late(STAIRS_FIRST_STEP) {
             self.work.routine[3] = 4;
         }
+        // Out of water: `Pl_water` on the clip's odd frames below 0xF.
+        let frame = self.work.move_cnt;
+        if i32::from(self.work.water) < self.drawn_ground() && frame < 0xF && frame & 1 != 0 {
+            let root = self.part_matrix(0);
+            self.pl_water(root);
+        }
         // `pl_mv_08`'s footfalls are a run's noise.
         if self.work.now_seq & FRAME_FOOTSTEP != 0 {
             self.work.noise |= NOISE_RUN;
-            self.player.emit_footstep(self.work.move_cnt, 1);
+            self.footstep(1);
         }
     }
 
@@ -1884,6 +1901,7 @@ impl Mover<'_, '_> {
                 self.work.move_no = JUMP_CLIP;
                 self.work.move_cnt = 0;
                 self.work.hokan = FULL_BLEND;
+                self.work.be_flg |= BE_NO_PUSH;
                 self.jump_step();
             }
             1 => self.jump_step(),
@@ -1904,6 +1922,9 @@ impl Mover<'_, '_> {
                 self.work.timer0 = timer;
                 self.work.spd[2] = 0;
                 self.add_speed_xz();
+                // `Timer3` (`+0x16B`, the back walk's wait): the splash's
+                // ticks.
+                self.work.back_wait = 0;
                 self.fall();
             }
             3 => self.fall(),
@@ -1914,7 +1935,9 @@ impl Mover<'_, '_> {
                 self.work.hokan = FULL_BLEND;
                 self.player.pos[1] = self.ground();
                 self.work.damage_cnt &= !DAMAGE_LOCK;
-                self.player.emit_footstep(self.work.move_cnt, 1);
+                self.work.be_flg &= !BE_NO_PUSH;
+                // `Snd_se_walk(1, 4, w)`, with its ripples in water.
+                self.foot_down(1, false);
                 // The landing is heard as loud as a running step.
                 self.work.noise |= 4;
                 self.land();
@@ -1937,6 +1960,15 @@ impl Mover<'_, '_> {
         })
     }
 
+    /// `Ground` as `Game_loop` left it after the last tick: `Sca_ck_hit`
+    /// with no reach at the shadow's probe, `Kage_ofs` along the body.
+    fn drawn_ground(&self) -> i32 {
+        let (Some(sca), Some(probe)) = (self.tick.room.sca.as_ref(), self.work.kage_probe) else {
+            return self.ground();
+        };
+        i32::from(crate::sca::ground_at(sca, probe, 0, crate::sca::PLAYER_MASK).height as i16)
+    }
+
     fn jump_step(&mut self) {
         let ended = self.joint_move();
         let last = if self.tick.id == SMALL_ID { 0x1A } else { 0xE };
@@ -1946,18 +1978,29 @@ impl Mover<'_, '_> {
         }
     }
 
+    /// The fall, and into water a splash (`Pl_water`) on each of its first
+    /// five ticks there (`Timer3` 0x85).
     fn fall(&mut self) {
         self.player.pos[1] += i32::from(self.work.timer0 as i16) * 0x1E;
         self.work.timer0 += 1;
+        let ground = self.ground();
         self.joint_move();
-        if self.ground() - 300 < self.player.pos[1] {
+        if i32::from(self.work.water) < ground && self.work.back_wait == 0 {
+            self.work.back_wait = JUMP_SPLASH;
+        }
+        if self.work.back_wait & 0x7F != 0 {
+            self.work.back_wait -= 1;
+            let root = self.part_matrix(0);
+            self.pl_water(root);
+        }
+        if ground - 300 < self.player.pos[1] {
             self.work.routine[3] = 4;
         }
     }
 
     fn land(&mut self) {
         if self.work.move_cnt == 6 {
-            self.player.emit_footstep(self.work.move_cnt, 1);
+            self.foot_down(1, true);
         }
         if self.joint_move() {
             self.work.routine[3] = 6;
@@ -3273,28 +3316,34 @@ impl Mover<'_, '_> {
         if water == 0 {
             return;
         }
-        let dir = self.player.angle as i16;
         if i32::from(water) < self.ground() && self.work.move_cnt < 6 && self.work.move_cnt & 1 != 0
         {
-            // `Pl_water`: on part 0's `Workm`, at the water's level.
-            let root = drawn[0].map_or(self.player.pos, |part| part.t);
-            let at = [root[0] as i16, water, root[2] as i16];
-            for ring in 0..4u16 {
-                self.work.water_draws.push(WaterDraw {
-                    effect: self.work.effects.len(),
-                    ring: Some(ring),
-                });
-                self.work.effects.push(EffectCall {
-                    kind: 0x1A,
-                    row: 0,
-                    size: 0,
-                    dir: dir.wrapping_add((ring * 0x400) as i16),
-                    at,
-                    motion: None,
-                });
-            }
+            self.pl_water(drawn[0]);
         }
         self.hand_splashes(hand14, drawn);
+    }
+
+    /// `Pl_water` (`0x4d49c0`): four rings (`Esp_call` kind 0x1a) a quarter
+    /// turn apart on part 0's `Workm`, at the water's level. Their `Rnd`
+    /// waits for [`Work::water_draws`].
+    fn pl_water(&mut self, root: Option<Matrix>) {
+        let dir = self.player.angle as i16;
+        let root = root.map_or(self.player.pos, |part| part.t);
+        let at = [root[0] as i16, self.work.water, root[2] as i16];
+        for ring in 0..4u16 {
+            self.work.water_draws.push(WaterDraw {
+                effect: self.work.effects.len(),
+                ring: Some(ring),
+            });
+            self.work.effects.push(EffectCall {
+                kind: 0x1A,
+                row: 0,
+                size: 0,
+                dir: dir.wrapping_add((ring * 0x400) as i16),
+                at,
+                motion: None,
+            });
+        }
     }
 
     /// The splashes off the hands (parts 11 and 14) the water reaches: one
@@ -3500,7 +3549,17 @@ impl Mover<'_, '_> {
         }
         self.footstep(0);
         self.wading_splashes(drawn);
+        self.slow_in_deep_water();
         self.add_speed_xz();
+    }
+
+    /// `pl_mv_01` to `pl_mv_03`: in water more than 500 over the ground, a
+    /// third off the step.
+    fn slow_in_deep_water(&mut self) {
+        if i32::from(self.work.water) < self.drawn_ground() - 500 {
+            let spd = self.work.spd[0];
+            self.work.spd[0] = spd - spd / 3;
+        }
     }
 
     fn pl_mv_run(&mut self, drawn: Option<&DrawnParts>) {
@@ -3518,6 +3577,7 @@ impl Mover<'_, '_> {
         if self.work.d_life_u < 2 {
             self.work.spd[0] = self.work.spd[0].wrapping_sub(RUN_SLOWDOWN);
         }
+        self.slow_in_deep_water();
         self.add_speed_xz();
     }
 
@@ -3559,6 +3619,7 @@ impl Mover<'_, '_> {
         }
         self.footstep(0);
         self.wading_splashes(drawn);
+        self.slow_in_deep_water();
         self.add_speed_xz();
     }
 
@@ -5314,14 +5375,20 @@ impl Mover<'_, '_> {
     /// `Snd_se_walk` on a frame marked as a footfall.
     pub(crate) fn footstep(&mut self, sound_type: u8) {
         if self.work.now_seq & FRAME_FOOTSTEP != 0 {
-            let water = self.work.water != 0;
-            self.player
-                .emit_footstep_in(self.work.move_cnt, sound_type, water);
-            if water {
-                // The callers' foot: part 4 or 7 by the frame's other bit.
-                let right = self.work.now_seq & FRAME_FOOTSTEP_ALT != 0;
-                self.water_ripples(sound_type, right);
-            }
+            // The callers' foot: part 4 or 7 by the frame's other bit.
+            let right = self.work.now_seq & FRAME_FOOTSTEP_ALT != 0;
+            self.foot_down(sound_type, right);
+        }
+    }
+
+    /// `Snd_se_walk(sound_type, 4 or 7, w)`: a footfall of the left foot
+    /// (part 4) or the right (part 7), with its ripples in water.
+    pub(crate) fn foot_down(&mut self, sound_type: u8, right: bool) {
+        let water = self.work.water != 0;
+        self.player
+            .emit_footstep_in(self.work.move_cnt, sound_type, water);
+        if water {
+            self.water_ripples(sound_type, right);
         }
     }
 
@@ -6442,6 +6509,92 @@ mod tests {
         assert!(
             tick(&mut setup, &mut pad, true),
             "a new press after the stop"
+        );
+    }
+
+    /// `pl_mv_01`: in water more than 500 over the ground (room 402's channel,
+    /// -700) each step is a third shorter; room 302's -180 isn't deep enough.
+    #[test]
+    fn deep_water_takes_a_third_off_the_walk() {
+        let walked = |water: i16| {
+            let mut setup = Setup::new(30);
+            setup.player.pos = [0; 3];
+            setup.player.angle = 0;
+            setup.work.water = water;
+            let up = Input {
+                up: true,
+                ..Input::default()
+            };
+            for _ in 0..12 {
+                setup.tick(up, 200);
+            }
+            setup.player.pos[0]
+        };
+        let dry = walked(0);
+        assert!(dry > 0);
+        assert_eq!(walked(-180), dry);
+        let deep = walked(-700);
+        assert!(deep < dry && deep * 3 >= dry * 2 - 30, "{deep} of {dry}");
+    }
+
+    /// `pl_mv_09`'s fall with the water over the ground: `Pl_water`'s four
+    /// rings on each of its first five ticks (`Timer3` 0x85), then none.
+    #[test]
+    fn a_fall_into_water_splashes_on_five_ticks() {
+        let mut setup = Setup::new(0);
+        (setup.clips, setup.keyframes) = bank(10, 40, 0);
+        setup.player.pos = [0, -3600, 0];
+        setup.work.water = -700;
+        setup.work.routine = [MODE_MOVE, MOVE_JUMP_DOWN, 2, 2];
+        let mut rings = Vec::new();
+        while setup.work.routine[3] < 4 {
+            setup.tick(Input::default(), 200);
+            let effects = std::mem::take(&mut setup.work.effects);
+            rings.push(effects.iter().filter(|call| call.kind == 0x1A).count());
+        }
+        assert!(rings.len() > 6, "{rings:?}");
+        assert_eq!(rings[..5], [4; 5]);
+        assert!(rings[5..].iter().all(|&count| count == 0), "{rings:?}");
+        // Out of water, none.
+        let mut setup = Setup::new(0);
+        (setup.clips, setup.keyframes) = bank(10, 40, 0);
+        setup.player.pos = [0, -3600, 0];
+        setup.work.routine = [MODE_MOVE, MOVE_JUMP_DOWN, 2, 2];
+        setup.tick(Input::default(), 200);
+        assert!(setup.work.effects.is_empty());
+    }
+
+    /// `pl_mv_08` raises `Be_flg`'s 4 (no push out of the other bodies) as it
+    /// starts and 8 on frame 0x11, and drops both on frame 0x31; the jump down
+    /// holds the 4 until it lands.
+    #[test]
+    fn the_climb_and_the_jump_are_not_pushed_out_of_bodies() {
+        let mut setup = Setup::new(0);
+        (setup.clips, setup.keyframes) = bank(10, 60, 0);
+        setup.player.angle = 0;
+        setup.work.routine = [MODE_MOVE, MOVE_CLIMB, 0, 0];
+        let mut seen = Vec::new();
+        while setup.work.routine[1] == MOVE_CLIMB && seen.len() < 200 {
+            setup.tick(Input::default(), 200);
+            seen.push(setup.work.be_flg & (BE_NO_PUSH | BE_NO_SCA));
+        }
+        assert_eq!(seen[0], BE_NO_PUSH);
+        assert!(seen.contains(&(BE_NO_PUSH | BE_NO_SCA)));
+        assert_eq!(seen.last(), Some(&0));
+        let mut setup = Setup::new(0);
+        (setup.clips, setup.keyframes) = bank(10, 40, 0);
+        setup.player.pos = [0, -1800, 0];
+        setup.work.routine = [MODE_MOVE, MOVE_JUMP_DOWN, 2, 0];
+        let mut pushed = Vec::new();
+        while setup.work.routine[1] == MOVE_JUMP_DOWN && pushed.len() < 200 {
+            setup.tick(Input::default(), 200);
+            pushed.push((setup.work.routine[3], setup.work.be_flg & BE_NO_PUSH));
+        }
+        // Up from the first step to the landing's (`Routine_3` 4 runs next).
+        let held = |step: u8| (1..=4).contains(&step);
+        assert!(
+            pushed.iter().all(|&(step, bit)| (bit != 0) == held(step)),
+            "{pushed:?}"
         );
     }
 

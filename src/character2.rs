@@ -80,6 +80,9 @@ pub fn tick(
             if let Some(flag) = arrived {
                 game.re2.raise_room_flag(flag);
             }
+            // The ripples of her footfalls in water (`Snd_se_walk`).
+            let calls = std::mem::take(&mut character.work.effects);
+            esp_calls(game, calls);
             if character.partner.is_some() && game.re2.partner_bit() {
                 partner_oba_ck_em(game, &mut character, old);
             }
@@ -466,6 +469,19 @@ pub fn shoot_camera(game: &mut GameState, cut: Option<&crate::state::Cut>) {
     }
 }
 
+/// A move's `Esp_call`s, in the order it made them.
+fn esp_calls(game: &mut GameState, calls: Vec<player2::EffectCall>) {
+    for call in calls {
+        let index = game
+            .re2
+            .effects
+            .call(call.kind, call.row, call.size, call.dir, call.at, false);
+        if let (Some(index), Some(motion)) = (index, call.motion) {
+            game.re2.effects.launch(index, motion);
+        }
+    }
+}
+
 /// What the player's tick asked of the effects and the slots: the shot's
 /// `Esp_call`s, and what it found goes to who it hit.
 pub fn take_hit(game: &mut GameState) {
@@ -477,15 +493,8 @@ pub fn take_hit(game: &mut GameState) {
                 .push(crate::scd2::host::SoundRequest::new(id, pos));
         }
     }
-    for call in std::mem::take(&mut game.re2.player.effects) {
-        let index = game
-            .re2
-            .effects
-            .call(call.kind, call.row, call.size, call.dir, call.at, false);
-        if let (Some(index), Some(motion)) = (index, call.motion) {
-            game.re2.effects.launch(index, motion);
-        }
-    }
+    let calls = std::mem::take(&mut game.re2.player.effects);
+    esp_calls(game, calls);
     let Some(hit) = game.re2.player.hit.take() else {
         return;
     };
@@ -1395,14 +1404,17 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
             nearest_dist: game.re2.nearest_dist,
             rnd: &mut game.re2.rnd,
             pos_ck_timer: &mut timer,
-            water: 0,
-            ground: character.body.pos[1],
+            ground: partner_ground(tick.room, character.body.pos),
+            be_flg: character.be_flg,
+            noise: 0,
             poisoned: game.re2.partner_poisoned,
         };
         let kind = &mut character.kind;
         player2::spl_auto(&mut character.work, &mut character.body, tick, |mover| {
             crate::partner2::spl_auto(mover, words, kind, &mut world);
         });
+        character.be_flg = world.be_flg;
+        game.re2.player.noise |= world.noise;
         game.re2.spl_pos_ck_timer = timer;
         None
     } else {
@@ -1413,6 +1425,15 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
         spl_mv4a(character);
     }
     arrived
+}
+
+/// The partner's `Ground`, which `Game_loop` writes after the moves:
+/// `Sca_ck_hit` under her with no reach and her `Sc_id`'s mask (`Sce_em_set`
+/// gives every `Id` from 0x40 the player's 0x80).
+fn partner_ground(room: &RoomState, pos: [i32; 3]) -> i16 {
+    room.sca.as_ref().map_or(0, |sca| {
+        crate::sca::ground_at(sca, pos, 0, crate::sca::PLAYER_MASK).height as i16
+    })
 }
 
 /// `Em_Zombie`'s `Root_ck` target: the partner, when she has this zombie
@@ -1603,7 +1624,13 @@ fn spl_sca_ck_em(room: &RoomState, character: &mut Character) {
     let [old_x, old_z] = body.collision_mirror;
     let prev = [old_x, body.pos[1], old_z];
     let mask = sca_mask(character.id);
-    let resolved = crate::sca::resolve_masked(sca, mask, prev, body.pos, body.radius);
+    // `1 << nFloor`: the partner keeps hers through the climb and the jump.
+    let floor = if character.partner.is_some() {
+        character.work.floor
+    } else {
+        crate::sca::floor_of(body.pos[1])
+    };
+    let resolved = crate::sca::resolve_on_floor(sca, mask, prev, body.pos, body.radius, floor);
     body.pos = resolved.pos;
     body.collision_mirror = [body.pos[0], body.pos[2]];
     if let Some(partner) = character.partner.as_deref_mut() {

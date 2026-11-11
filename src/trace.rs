@@ -80,6 +80,9 @@ pub struct TraceTick<'a> {
     /// What the partner's `Spl_enemy_ck` left: the `spe` field
     /// ([`crate::scd2::host::Re2State::partner_enemy_trace`]).
     pub re2_partner_enemies: Option<String>,
+    /// The partner's climb and water words: the `spc` field
+    /// ([`crate::scd2::host::Re2State::partner_climb_trace`]).
+    pub re2_partner_climb: Option<String>,
     /// The zombies in play, as the oracle's `zm` field writes them.
     pub re2_zombies: Option<String>,
     /// Their hidden and coloured parts, as the oracle's `zp` field writes them.
@@ -309,6 +312,9 @@ impl TraceWriter {
         if let Some(enemies) = &tick.re2_partner_enemies {
             write!(self.out, " spe={enemies}")?;
         }
+        if let Some(climb) = &tick.re2_partner_climb {
+            write!(self.out, " spc={climb}")?;
+        }
         if let Some(zombies) = &tick.re2_zombies {
             write!(self.out, " zm={zombies}")?;
         }
@@ -503,6 +509,7 @@ mod tests {
             re2_splayer: None,
             re2_partner: None,
             re2_partner_enemies: None,
+            re2_partner_climb: None,
             re2_zombies: None,
             re2_zombie_parts: None,
             re2_zombie_dests: None,
@@ -574,6 +581,7 @@ mod tests {
                 re2_splayer: None,
                 re2_partner: None,
                 re2_partner_enemies: None,
+                re2_partner_climb: None,
                 re2_zombies: None,
                 re2_zombie_parts: None,
                 re2_zombie_dests: None,
@@ -641,6 +649,7 @@ mod tests {
                 re2_splayer: None,
                 re2_partner: None,
                 re2_partner_enemies: None,
+                re2_partner_climb: None,
                 re2_zombies: None,
                 re2_zombie_parts: None,
                 re2_zombie_dests: None,
@@ -705,6 +714,7 @@ mod tests {
             re2_splayer: None,
             re2_partner: None,
             re2_partner_enemies: None,
+            re2_partner_climb: None,
             re2_zombies: None,
             re2_zombie_parts: None,
             re2_zombie_dests: None,
@@ -781,6 +791,7 @@ mod tests {
             re2_splayer: None,
             re2_partner: None,
             re2_partner_enemies: None,
+            re2_partner_climb: None,
             re2_zombies: None,
             re2_zombie_parts: None,
             re2_zombie_dests: None,
@@ -867,6 +878,7 @@ mod tests {
             re2_splayer: None,
             re2_partner: None,
             re2_partner_enemies: None,
+            re2_partner_climb: None,
             re2_zombies: None,
             re2_zombie_parts: None,
             re2_zombie_dests: None,
@@ -933,6 +945,7 @@ mod tests {
             re2_splayer: Some([69, 0, 0, 0, 0, 1, 0, 0, 0, 2, 1, 6, 0, 0, 0, 0]),
             re2_partner: Some("400,1,2,0,3".to_string()),
             re2_partner_enemies: None,
+            re2_partner_climb: None,
             re2_zombies: Some("-".to_string()),
             re2_zombie_parts: None,
             re2_zombie_dests: None,

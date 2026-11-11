@@ -876,6 +876,15 @@ def partner_enemy_trace(game: Game) -> str:
     return "spe=" + ",".join(f"{d}" for d in dists) + "," + ",".join(listed) + "|" + (";".join(rows) or "-")
 
 
+def partner_climb_trace(game: Game) -> str:
+    """`splayer_work`'s climb and water words: `Water` (`+0x10C`), `nFloor` (`+0x106`), `Damage_cnt` (`+0x1D3`) and `Be_flg`'s 4."""
+    work = game.u32(SPLAYER)
+    if work == 0 or game.u8(work + ENTITY_ID) < 0x40:
+        return "spc=-"
+    values = [game.i16(work + 0x10C), game.u8(work + 0x106), game.u8(work + 0x1D3), game.u32(work) & 4]
+    return "spc=" + ",".join(str(value) for value in values)
+
+
 def partner_trace(game: Game) -> str:
     """`splayer_work`'s own words for `Spl_Auto`: `Type`, the follow point, its state, distance and wall turn, the wall and touch counts, the timers, `Dest`, the life, `Sca_info & 1`, `Root_ck`'s count, `Spl_pos_ck_timer`, `Neck_flg` and `At_em_flg`."""
     work = game.u32(SPLAYER)
@@ -1113,6 +1122,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
             )
     fields.append(partner_trace(game))
     fields.append(partner_enemy_trace(game))
+    fields.append(partner_climb_trace(game))
     fields.append(zombie_trace(game))
     fields.append(zombie_parts_trace(game))
     fields.append(zombie_dest_trace(game))

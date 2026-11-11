@@ -1,0 +1,17 @@
+# Claire A in room 402 with Sherry as the partner: walk east along the walkway to its edge, jump down into the channel, wade north, turn, wade back and climb out west; Sherry jumps down after her, wades and climbs back up (oracle/re2.md)
+344
+364 up
+469
+474 action
+476
+524 right
+540 up
+594
+634 right
+657
+664 up
+719
+729 left
+741
+749 action
+751
