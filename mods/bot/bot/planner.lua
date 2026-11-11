@@ -372,6 +372,9 @@ end
 local steps_cache = {}
 function BotPlanner.steps_needing_room(bot, any_sig)
     local sig = inventory_sig(bot)
+    if plan().no_hold == sig then
+        return 0
+    end
     local key = string.format("%d|%s|%s|%d", bot:tick(), sig, tostring(any_sig == true),
         plan().marks_gen or 0)
     local hit = steps_cache[any_sig and "any" or "sig"]
@@ -401,6 +404,9 @@ end
 -- item, and bot:world() builds the whole world table.
 local needed_cache = { key = nil, n = 0 }
 function BotPlanner.needed_items_left(bot)
+    if plan().no_hold == inventory_sig(bot) then
+        return 0
+    end
     local key = string.format("%d|%s|%d|%s", bot:tick(), inventory_sig(bot),
         plan().marks_gen or 0, bot:memory().box_items or "")
     if needed_cache.key == key then
@@ -3844,6 +3850,20 @@ function BotPlanner.step(bot)
                     return
                 end
             end
+        end
+        -- A free slot held for a needed pickup or step (pickup_fits,
+        -- ctx.hold_free) is given up while the inventory stays as it is
+        -- (p.no_hold): what it waits for cannot be reached now, and it
+        -- shuts out everything else. A door a room event locked cut 214's
+        -- item off, its hold kept the one free slot from the boxed knife
+        -- and from every other pickup, and with 30C's web uncut the run
+        -- ended on an empty frontier in the caves.
+        if not p.goal and p.no_hold ~= inventory_sig(bot)
+            and BotPlanner.steps_needing_room(bot, true) + BotPlanner.needed_items_left(bot) > 0 then
+            p.no_hold = inventory_sig(bot)
+            marks_changed()
+            bot:log("frontier empty; the slot held for a needed pickup is given up")
+            p.goal = choose(bot)
         end
         if not p.goal and forgive_fight(bot) then
             p.goal = choose(bot)
