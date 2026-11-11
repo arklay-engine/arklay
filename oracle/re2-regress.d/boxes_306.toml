@@ -1,0 +1,16 @@
+# Room 306's boxes (`Id` 2), drained, from the pit (oracle/re2.md, "Climbing onto an object"): climbed, walked across from one top to the next and back (`Oma_pull`'s hand-over), and jumped down from. The enemies are off.
+
+[[run]]
+name = "boxes_306"
+room = "306"
+setup_script = "boxes_306.lua"
+input = "boxes_306.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 760
+frames = [360, 759]
+# Measured: 0.20 (0.10 to tick 399, then 0.20 to 0.24; worst 0.27), from the room's own draw: the sprite of the console's lights (`sce_espr3d_on`) and the edges of the railing's mask in the foreground. Leon and the boxes draw as the original's.
+frame_max_mean = 0.22
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,om0,om1,om2,pon"
+expect = "match"
+record = "--no-enemies --warp 306:-21200:0:-22850:1024 --life 200"

@@ -2,18 +2,16 @@
 //! pushable ones and holds the characters out of them, and `Om_trans`' copies
 //! of where each was drawn.
 //!
-//! Not ported: `Om_move_box` and the falls of the `Id` 2 boxes (rooms 203,
-//! 216, 306, 603 and F03), `Sca_ck_hit_om`'s push of a box out of a wall,
-//! and `Oma_pull`'s hand-over from one box to the next.
-
-use std::sync::atomic::{AtomicBool, Ordering};
+//! The `Id` 2 boxes (rooms 203, 216, 306, 603 and F03) fall when one stands
+//! over a hole record (`Om_set_fall_dir`, `Om_move_box`).
 
 use super::GameState;
 use crate::anim::Mat4x3;
 use crate::character2::{PLAYER_HEIGHT, player_width};
 use crate::objects::{
-    CharBox, ObjectRecord, Oma, SCA_HIT_WALL, SuperParent, floor_of_height, oma_ck_front,
-    oma_ck_oba, oma_ck_om, oma_pull, sca_ck_hit_om,
+    CharBox, ObjectRecord, Oma, SCA_HIT_HOLE, SCA_HIT_WALL, SuperParent, floor_of_height,
+    om_set_fall_dir, oma_ck_front, oma_ck_oba, oma_ck_om, oma_pull, sca_ck_hit_om,
+    sca_ck_hit_om_push, sca_ck_hit_own,
 };
 use crate::player::PlayerState;
 use crate::state::RoomState;
@@ -46,9 +44,15 @@ const PUSH_STEP: u8 = 7;
 /// `Sca_ck_hit_om`'s mask for the fall's test: the records with `0x100` in
 /// their id don't count.
 const FALL_EXCLUDE: u16 = 0x100;
-
-static BOX_WARNED: AtomicBool = AtomicBool::new(false);
-static NEXT_BOX_WARNED: AtomicBool = AtomicBool::new(false);
+/// `Om_move_box`'s `Routine_0`: at rest, starting, falling, and the two
+/// ticks of the bounce.
+const FALL_REST: u8 = 0;
+const FALL_START: u8 = 1;
+const FALL_SLIDE: u8 = 2;
+const FALL_BOUNCE_UP: u8 = 3;
+const FALL_BOUNCE_DOWN: u8 = 4;
+/// The tick of the fall that finds the ground.
+const FALL_LOOK: u8 = 13;
 
 impl GameState {
     /// `Om_move`, after the player's move and before `Sce_at`: each object's
@@ -66,9 +70,10 @@ impl GameState {
     /// The object the player stands on (`pOn_om`) is never counted or
     /// pushed: `Oma_pull` keeps the player on its top instead.
     ///
-    /// Returns the first falling box (`Id` 2) whose fall would start, or that
-    /// `Sca_ck_hit_om` would push out of a wall, neither of which is ported:
-    /// the first such box warns.
+    /// A box (`Id` 2) at rest over a hole record of its floor starts to fall
+    /// (`Om_set_fall_dir`), and the same test pushes its box out of any wall
+    /// it touches; [`Self::om_move_box`] moves a falling one first in its
+    /// turn. Returns the box whose fall started.
     pub fn om_move(&mut self, room: &RoomState, player: &mut PlayerState) -> Option<usize> {
         if self.re2.objects_stopped() {
             return None;
@@ -85,13 +90,15 @@ impl GameState {
 
         let mut touched = 0;
         let mut candidate = None;
-        let mut box_touched = None;
-        let mut next_box = false;
+        let mut fell = None;
         for index in 0..self.objects.records.len() {
-            let mut record = self.objects.records[index];
-            if record.be_flg & BE_ACTIVE == 0 {
+            if self.objects.records[index].be_flg & BE_ACTIVE == 0 {
                 continue;
             }
+            if self.objects.records[index].id == ID_BOX {
+                self.om_move_box(room, index);
+            }
+            let mut record = self.objects.records[index];
             record.set_ofs();
             record.floor = floor_of_height(record.pos[1]);
             if !keeps_count {
@@ -102,14 +109,12 @@ impl GameState {
                 oma_ck_oba(&mut pl, &mut record, Oma::Push);
             } else if self.re2.player.on_object == Some(index as u8) {
                 self.objects.records[index] = record;
-                let pull = oma_pull(
+                self.re2.player.on_object = oma_pull(
                     &self.objects.records,
                     &mut pl,
                     index,
                     self.re2.player.on_object,
                 );
-                self.re2.player.on_object = pull.on_object;
-                next_box |= pull.next_box;
             } else if oma_ck_oba(&mut pl, &mut record, Oma::Touch) {
                 touched += 1;
                 if self.re2.player.floor == record.floor
@@ -121,12 +126,14 @@ impl GameState {
             // The fall's test, which also pushes the box out of any wall it
             // touches.
             if record.id == ID_BOX
-                && room
-                    .sca
-                    .as_ref()
-                    .is_some_and(|sca| sca_ck_hit_om(&record, sca, FALL_EXCLUDE) != 0)
+                && record.routine[0] == FALL_REST
+                && room.sca.as_ref().is_some_and(|sca| {
+                    sca_ck_hit_om_push(&mut record, sca, FALL_EXCLUDE) & SCA_HIT_HOLE != 0
+                })
             {
-                box_touched = box_touched.or(Some(index));
+                om_set_fall_dir(&mut self.objects.box_fall, &record, pl.pos);
+                record.routine[0] = FALL_START;
+                fell = fell.or(Some(index));
             }
             self.objects.records[index] = record;
         }
@@ -143,6 +150,7 @@ impl GameState {
             if record.be_flg & BE_ACTIVE != 0 {
                 oma_ck_oba(&mut pl, record, Oma::Hold);
             }
+            record.sca_old = [record.at[0] as i16, record.at[2] as i16];
         }
         if self.re2.player.on_object.is_none() {
             self.re2.player.leave_object();
@@ -152,19 +160,98 @@ impl GameState {
         // The head's `+0x5C` is made after `Om_move`, from the body the objects
         // held out, as after `Sca_ck_em`'s pushes.
         crate::player2::follow_pushes(&mut self.re2.player, player.pos);
-        if let Some(index) = box_touched
-            && !BOX_WARNED.swap(true, Ordering::Relaxed)
-        {
-            crate::warning!(
-                "warning: room object {index} is a falling box (Id 2) over a hole or against a wall, and Om_move_box's fall and Sca_ck_hit_om's push out aren't ported"
-            );
+        fell
+    }
+
+    /// `Om_move_box` (`0x4CD290`): a falling box (`Routine_0` 1 to 4). It
+    /// slides along the fall's way 13 a tick, 13 faster each tick, and tips
+    /// toward it to a quarter turn; for 12 ticks it sinks a third of the
+    /// slide, then drops 0, 160, 320, ... a tick. On the thirteenth tick it
+    /// finds its ground (`Sca_ck_hit` at its own box, which it finds itself
+    /// in: see `docs/internals/deviations/re2.md`), lands on it once below,
+    /// and bounces 30 up and down. `Rot_add_matrix` turns it each tick.
+    pub fn om_move_box(&mut self, room: &RoomState, index: usize) {
+        let mut fall = self.objects.box_fall;
+        let mut obj = self.objects.records[index];
+        let [dir_x, dir_z] = fall.dir.map(i32::from);
+        match obj.routine[0] {
+            FALL_START | FALL_SLIDE => {
+                if obj.routine[0] == FALL_START {
+                    fall.tilt = 0;
+                    fall.slide_accel = 13;
+                    fall.slide = 13;
+                    fall.tilt_step = 0;
+                    fall.tilt_accel = 8;
+                    fall.turn[1] = 0;
+                    fall.drop = 0;
+                    fall.wet = false;
+                    obj.routine[0] = FALL_SLIDE;
+                    obj.routine[1] = 0;
+                }
+                obj.pos[0] += dir_x * i32::from(fall.slide);
+                obj.pos[2] += dir_z * i32::from(fall.slide);
+                if fall.tilt < 0x400 {
+                    fall.tilt = fall.tilt.wrapping_add(fall.tilt_step);
+                    if fall.tilt > 0x400 {
+                        fall.tilt_step = fall.tilt_step.wrapping_add(0x400 - fall.tilt);
+                    }
+                    fall.turn[0] = fall.dir[1].wrapping_mul(fall.tilt_step).wrapping_neg();
+                    fall.turn[2] = fall.dir[0].wrapping_mul(fall.tilt_step);
+                } else {
+                    fall.turn[0] = 0;
+                    fall.turn[2] = 0;
+                }
+                fall.tilt_step = fall.tilt_step.wrapping_add(fall.tilt_accel);
+                fall.slide = fall.slide.wrapping_add(fall.slide_accel);
+                obj.routine[1] = obj.routine[1].wrapping_add(1);
+                if obj.routine[1] < FALL_LOOK {
+                    obj.pos[1] += i32::from(fall.slide) / 3;
+                } else {
+                    fall.slide_accel = 0;
+                    obj.pos[1] += i32::from(fall.drop);
+                    fall.drop = fall.drop.wrapping_add(0xA0);
+                    if obj.routine[1] == FALL_LOOK {
+                        // The point is the box's own `Atd`, last tick's
+                        // until `Sca_ck_hit`'s object pass places this box
+                        // too (`Oma_set_ofs`).
+                        self.objects.records[index] = obj;
+                        let ground = sca_ck_hit_own(
+                            room.sca.as_ref(),
+                            &self.objects.records,
+                            index,
+                            450,
+                            0x4000,
+                        );
+                        obj.set_ofs();
+                        fall.ground = ground.height as i16;
+                        obj.old[0] = obj.pos[0] as i16;
+                        obj.old[2] = obj.pos[2] as i16;
+                        obj.floor = floor_of_height(i32::from(fall.ground));
+                    }
+                    if i32::from(fall.ground) < obj.pos[1] {
+                        obj.pos[1] = i32::from(fall.ground);
+                        obj.routine[0] = FALL_BOUNCE_UP;
+                    }
+                }
+            }
+            FALL_BOUNCE_UP | FALL_BOUNCE_DOWN => {
+                let up = obj.routine[0] == FALL_BOUNCE_UP;
+                let lift = if up { -30 } else { 30 };
+                obj.pos[1] += lift;
+                obj.pos[0] += dir_x * 20;
+                obj.pos[2] += dir_z * 20;
+                fall.turn[0] = fall.dir[1].wrapping_mul(lift as i16);
+                fall.turn[2] = fall.dir[0].wrapping_mul(-lift as i16);
+                obj.routine[0] = if up { FALL_BOUNCE_DOWN } else { FALL_REST };
+            }
+            _ => return,
         }
-        if next_box && !NEXT_BOX_WARNED.swap(true, Ordering::Relaxed) {
-            crate::warning!(
-                "warning: the player stepped off a room object next to another of the same height, and Oma_pull's hand-over isn't ported"
-            );
-        }
-        box_touched
+        // `Om_trans` builds the object's matrix from `Cdir` every frame, so
+        // the turn starts from it.
+        let (_, cdir) = rot_add_matrix(&crate::player2::rot_matrix(obj.rotation), fall.turn);
+        obj.rotation = cdir;
+        self.objects.box_fall = fall;
+        self.objects.records[index] = obj;
     }
 
     /// `Om_move`'s count and step for the one object the player walks into.
@@ -371,6 +458,69 @@ impl GameState {
             format!("om={}", rows.join(";"))
         }
     }
+}
+
+/// `Rot_add_matrix` (`0x503210`): `matrix` turned by `turn` (`RotMatrix`,
+/// `MulMatrix2`), its first two rows made unit vectors (`NormalMatrix_0`),
+/// and `Cdir` taken back from it with `ratan2` and `SquareRoot12`, all on
+/// the x87 as the PC original has them.
+fn rot_add_matrix(matrix: &[[i16; 3]; 3], turn: [i16; 3]) -> ([[i16; 3]; 3], [i16; 3]) {
+    let turned = crate::player2::mul_matrix(&crate::player2::rot_matrix(turn), matrix);
+    let m = normal_matrix(&turned);
+    let column: [i32; 3] = [m[0][2], m[1][2], m[2][2]].map(i32::from);
+    // The divisor is a plain `/ 4096` of a sum that can't be negative; the
+    // original divides by zero where the guard gives 0.
+    let length = (column[0] * column[0] + column[1] * column[1] + column[2] * column[2]) >> 12;
+    let sine = if length == 0 {
+        0
+    } else {
+        (column[0] << 12) / length
+    };
+    let vx = ratan2(-column[1], column[2]) as i16;
+    let vy = ratan2(sine, square_root12(0x1000 - ((sine * sine) >> 12))) as i16;
+    let undo = crate::player2::rot_matrix([vx, vy, 0]);
+    let first = [m[0][0], m[1][0], m[2][0]].map(i32::from);
+    // `TransposeMatrix` then `ApplyMatrix` on the first column.
+    let apply = |row: usize| {
+        (0..3)
+            .map(|k| i32::from(undo[k][row]) * first[k])
+            .sum::<i32>()
+            >> 12
+    };
+    let vz = ratan2(apply(1), apply(0)) as i16;
+    (m, [vx, vy, vz])
+}
+
+/// `ratan2` (`0x450910`): `fpatan`, times 2048 and the executable's
+/// `1 / 3.14`, truncated (`__ftol`).
+fn ratan2(y: i32, x: i32) -> i32 {
+    const ONE_OVER_PI: f64 = 0.318_471_337_579_617_8;
+    (f64::from(y).atan2(f64::from(x)) * 2048.0 * ONE_OVER_PI) as i32
+}
+
+/// `SquareRoot12` (`0x4508D0`): `sqrt(v / 4096) * 4096`, truncated. A
+/// negative `v` gives `__ftol`'s integer indefinite.
+fn square_root12(value: i32) -> i32 {
+    let root = (f64::from(value) * (1.0 / 4096.0)).sqrt() * 4096.0;
+    if root.is_nan() { i32::MIN } else { root as i32 }
+}
+
+/// `NormalMatrix_0` (`0x450BC0`): `NormalMatrix` (`0x450B00`) on rows 0 and
+/// 1, each made a unit vector on its own: scaled by 1/4096, `1 / sqrt` of
+/// its squares' sum (1e-9 for a zero length), times 4096 and that,
+/// truncated. Row 2 is left as it is.
+fn normal_matrix(m: &[[i16; 3]; 3]) -> [[i16; 3]; 3] {
+    let mut out = *m;
+    for row in &mut out[..2] {
+        let [x, y, z] = row.map(|v| f64::from(v) * (1.0 / 4096.0));
+        let mut length = (z * z + y * y + x * x).sqrt();
+        if length == 0.0 {
+            length = 1e-9;
+        }
+        let inverse = 1.0 / length;
+        *row = [x, y, z].map(|v| (v * 4096.0 * inverse) as i32 as i16);
+    }
+    out
 }
 
 #[cfg(test)]
@@ -665,33 +815,165 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_falling_box_warns_only_over_a_hole_or_against_a_wall() {
-        // Pushed or touched, a box clear of the walls starts no fall.
-        let mut near = statue(-13000);
-        near.id = ID_BOX;
-        let (mut game, room, mut player) = hall(&[near]);
-        player.pos[2] -= STEP;
-        assert_eq!(
-            game.om_move(&room, &mut player),
-            None,
-            "the player walks in"
-        );
-        // One touching a wall record would be pushed out of it.
-        let (mut game, mut room, mut player) = hall(&[statue(-20000), near]);
-        room.sca.as_mut().unwrap().records.push(ScaRect {
+    /// Statue 1 of the hall as an `Id` 2 box.
+    fn crate_at(z: i32) -> ObjectRecord {
+        let mut record = statue(z);
+        record.id = ID_BOX;
+        record
+    }
+
+    /// A record across the hall's x from z `z` for `depth`.
+    fn across(z: i16, depth: u16, id: u16) -> ScaRect {
+        ScaRect {
             x: -24000,
-            z: -13500,
+            z,
             width: 3000,
-            depth: 100,
-            id: 0xFC80,
+            depth,
+            id,
             kind: 0xF,
             floor: 0x1F,
-        });
-        assert_eq!(game.om_move(&room, &mut player), Some(1));
-        // A wall of the fall's own kind (0x100 in its id) doesn't count.
-        room.sca.as_mut().unwrap().records[0].id = 0xFD80;
+        }
+    }
+
+    #[test]
+    fn a_box_against_a_wall_has_its_box_pushed_out_not_itself() {
+        let (mut game, mut room, mut player) = hall(&[crate_at(-20000), crate_at(-13000)]);
+        // The box reaches z -13432; the wall's +z face is at -13400.
+        room.sca
+            .as_mut()
+            .unwrap()
+            .records
+            .push(across(-13500, 100, 0xFC80));
+        game.objects.records[1].sca_old = [-22900, -13000 + 200];
         assert_eq!(game.om_move(&room, &mut player), None);
+        let record = game.objects.records[1];
+        assert_eq!(record.pos[2], -13000, "the position stays");
+        assert_eq!(record.at[2], -13400 + 432 + 1, "the box is out of the wall");
+        assert_eq!(record.routine[0], 0);
+        assert_eq!(record.sca_old, [-22900, -13400 + 432 + 1]);
+    }
+
+    #[test]
+    fn a_box_over_a_hole_falls_away_from_the_player() {
+        let (mut game, mut room, mut player) = hall(&[crate_at(-20000), crate_at(-13000)]);
+        room.sca
+            .as_mut()
+            .unwrap()
+            .records
+            .push(across(-13200, 400, 0xDC0A));
+        // A hole whose id has 0x100 isn't the fall's.
+        room.sca.as_mut().unwrap().records[0].id = 0xDD0A;
+        assert_eq!(game.om_move(&room, &mut player), None);
+        room.sca.as_mut().unwrap().records[0].id = 0xDC0A;
+        assert_eq!(game.om_move(&room, &mut player), Some(1));
+        assert_eq!(game.objects.records[1].routine[0], FALL_START);
+        // Within 900 of the player in x: along z, away from the player (-z).
+        assert_eq!(game.objects.box_fall.dir, [0, -1]);
+        // Once falling it isn't tested again.
+        let fall = game.objects.box_fall;
+        game.objects.records[1].routine[0] = FALL_SLIDE;
+        assert_eq!(game.om_move(&room, &mut player), None);
+        assert_eq!(game.objects.box_fall.dir, fall.dir);
+    }
+
+    #[test]
+    fn om_set_fall_dir_takes_the_axis_by_the_players_x() {
+        let mut fall = crate::objects::BoxFall::default();
+        let obj = crate_at(-13000);
+        crate::objects::om_set_fall_dir(&mut fall, &obj, [-22900 + 899, 0, -13000]);
+        assert_eq!(fall.dir, [0, 1], "a difference of 0 is +1");
+        crate::objects::om_set_fall_dir(&mut fall, &obj, [-22900 + 900, 0, 0]);
+        assert_eq!(fall.dir, [-1, 0]);
+        crate::objects::om_set_fall_dir(&mut fall, &obj, [-22900 - 900, 0, 0]);
+        assert_eq!(fall.dir, [1, 0]);
+    }
+
+    /// `Om_move_box` from `Routine_0` 1, falling +z in an empty hall: the
+    /// slide, the tilt, the sink and the drop, then the ground the box finds
+    /// at its own box on the thirteenth tick (its own `Atd.Y - 1`, 901 above
+    /// its position) and the bounce.
+    #[test]
+    fn om_move_box_slides_tips_drops_and_lands() {
+        let (mut game, room, _) = hall(&[crate_at(-13000)]);
+        game.objects.records[0].pos[1] = 0;
+        game.objects.records[0].routine[0] = FALL_START;
+        game.objects.box_fall.dir = [0, 1];
+        let mut zs = Vec::new();
+        let mut ys = Vec::new();
+        for _ in 0..13 {
+            let before = game.objects.records[0].pos;
+            game.om_move_box(&room, 0);
+            let after = game.objects.records[0].pos;
+            zs.push(after[2] - before[2]);
+            ys.push(after[1] - before[1]);
+        }
+        assert_eq!(
+            zs,
+            [13, 26, 39, 52, 65, 78, 91, 104, 117, 130, 143, 156, 169]
+        );
+        assert_eq!(ys[..12], [8, 13, 17, 21, 26, 30, 34, 39, 43, 47, 52, 56]);
+        let record = game.objects.records[0];
+        assert_eq!(game.objects.box_fall.ground, 386 - 900 - 1);
+        assert_eq!((record.pos[1], record.routine[0]), (-515, FALL_BOUNCE_UP));
+        assert_eq!(record.old[2], record.pos[2] as i16);
+        assert_eq!(game.objects.box_fall.tilt, 4 * 12 * 13);
+        game.om_move_box(&room, 0);
+        assert_eq!(game.objects.records[0].pos[1], -545);
+        assert_eq!(game.objects.records[0].pos[2], record.pos[2] + 20);
+        game.om_move_box(&room, 0);
+        assert_eq!(game.objects.records[0].pos[1], -515);
+        assert_eq!(game.objects.records[0].routine[0], FALL_REST);
+        let at_rest = game.objects.records[0];
+        game.om_move_box(&room, 0);
+        assert_eq!(game.objects.records[0], at_rest, "at rest it does nothing");
+    }
+
+    /// `Rot_add_matrix` on the x87: exact, not within a unit.
+    #[test]
+    fn rot_add_matrix_takes_cdir_back_from_the_turned_matrix() {
+        let start = crate::player2::rot_matrix([0, 0, 0]);
+        let (matrix, cdir) = rot_add_matrix(&start, [0x100, 0, 0]);
+        assert_eq!(matrix, [[4096, 0, 0], [0, 3784, -1567], [0, 1567, 3784]]);
+        assert_eq!(cdir, [0x100, 0, 0]);
+        // Row 2 isn't normalised: 2895 against row 1's 2896.
+        let (matrix, cdir) = rot_add_matrix(&matrix, [0x100, 0, 0]);
+        assert_eq!(matrix, [[4096, 0, 0], [0, 2896, -2896], [0, 2895, 2896]]);
+        assert_eq!(cdir, [0x200, 0, 0]);
+        let (matrix, cdir) = rot_add_matrix(&start, [0, 0, -0x80]);
+        assert_eq!(matrix, [[4017, 799, 0], [-799, 4017, 0], [0, 0, 4096]]);
+        assert_eq!(cdir, [0, 0, -0x80]);
+        let (matrix, cdir) =
+            rot_add_matrix(&crate::player2::rot_matrix([100, -1024, 30]), [-64, 0, 200]);
+        assert_eq!(
+            matrix,
+            [[131, -1229, -3904], [-19, 3906, -1230], [4093, 56, 122]]
+        );
+        assert_eq!(cdir, [960, -824, 954]);
+    }
+
+    /// A +z fall's `Cdir`, each tick from `RotMatrix(Cdir)` as `Om_trans`
+    /// rebuilds it: x ends at -619, as a model of the original's x87 path
+    /// gives (the kept matrix gave -622).
+    #[test]
+    fn a_falls_tilt_restarts_from_cdir_each_tick() {
+        let (mut game, room, _) = hall(&[crate_at(-13000)]);
+        game.objects.records[0].pos[1] = 0;
+        game.objects.records[0].routine[0] = FALL_START;
+        game.objects.box_fall.dir = [0, 1];
+        let mut xs = Vec::new();
+        for _ in 0..16 {
+            game.om_move_box(&room, 0);
+            let cdir = game.objects.records[0].rotation;
+            assert_eq!(cdir[1..], [0, 0]);
+            xs.push(cdir[0]);
+        }
+        assert_eq!(
+            xs,
+            [
+                0, -7, -22, -45, -77, -117, -164, -220, -283, -355, -435, -523, -619, -649, -619,
+                -619
+            ]
+        );
     }
 
     /// Room 203's box at rest against the shelf, as `box_203` leaves it.
