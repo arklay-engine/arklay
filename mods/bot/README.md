@@ -537,6 +537,13 @@ boss can't reach the way to it first, and equips it on the run while the
 gap is wide (`kite_step` in `tactics.lua`). With no gun left, it fetches
 rounds lying in the room for a held gun the same way (513's handgun
 ammunition), and a launcher's general reserve is spent rather than kept.
+With no round in any held gun and none to fetch for `KITE_LOST` (20
+seconds), the fight is lost and the bot stands (`kite: lost`): the room
+holds it until the fight ends, the death loads the last save, and the met
+fight then asks the box for its loadout before the bot comes back. One run
+circled 513's ring for 240000 ticks with the launcher's rounds in the box.
+Not while the `prefer`red weapon is still to come (an `open` entry: 303's
+rocket launcher).
 `staple="yes"` on a `<weapon>` marks the firearm whose ammunition is the
 most common (the handgun): a full inventory never boxes it.
 `melee="yes"` on a `<weapon>` marks a hand weapon (the knife): it has no
@@ -865,6 +872,14 @@ drives the box screen with pad input only.
   none), and at least `MAKE_ROOM_HURT` (24) health missing: the largest
   heal stack is used, as `BotSurvival` heals. 219 left twelve grenade
   rounds behind at 56/96 health with four heal stacks held.
+- A pickup the run has no use for stays where it lies
+  (`BotInventory.unwanted`): a document, rounds for a gun the bot neither
+  holds, has boxed nor knows of on the frontier, and a cure while one is
+  held or boxed and no poison runs. It is no goal in its room, no remote
+  trip, and needs no slot; the item stays on the frontier, so the rounds
+  are wanted again once their gun is found. A pickup costs about 275
+  ticks with its walk and viewer, and 124 of them a run made a fifth of
+  its time.
 - A frontier firearm the bot has none of (`BotInventory.new_guns`) is a
   needed pickup, worth a spare heal's slot, and a trip ranked like the
   ammunition's: with `barry_early=chemical`, 212's grenade launcher met a
@@ -987,9 +1002,13 @@ drives the box screen with pad input only.
   a reserve gun's rounds`; no trip is made for it), and the planner loads
   the empty launcher with them: 502's swap boxed the empty launcher for
   the MO disks beside its acid and flame rounds, and the bot met 509's
-  four zombies with four handgun rounds. Until the held reserve gun is
-  loaded, it and its rounds stay held (`a reserve gun being rearmed`);
-  rounds held beside a boxed launcher are not kept that way, so they can
+  four zombies with four handgun rounds. While the bot sources
+  ammunition, the held reserve gun and the rounds held for it stay held
+  (`a reserve gun being rearmed`), with a round still in the gun too:
+  50E's rearm took the launcher out with one explosive round loaded, the
+  acid rounds it came with went back in for the slot reserve, and 513's
+  Tyrant met four shells and that round. Rounds held beside a boxed
+  launcher are not kept that way, so they can
   go in (kept, they stopped the rearm and held two slots: with
   `vjolt=yes` 409's V-JOLT brew found no slot for its last bottle).
 - A box visit takes out one copy of a weapon: the deposit rule boxes a

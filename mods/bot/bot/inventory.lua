@@ -959,7 +959,12 @@ function BotInventory.context(bot)
                 -- launcher, and 409's V-JOLT brew found no slot for its
                 -- last bottle; with sandwich=yes 100's first deposit kept
                 -- the acid rounds and boxed the next item.
-                if clip == 0 and held_gun and (held_rounds or boxed_rounds) then
+                -- A round still in the gun changes nothing for the rounds
+                -- held beside it: 50E's rearm took the launcher out with
+                -- one explosive round loaded, and the acid rounds it came
+                -- with went back in for the slot reserve; 513's Tyrant met
+                -- four shells and that one round.
+                if held_gun and (held_rounds or (clip == 0 and boxed_rounds)) then
                     ctx.keep_reserve = ctx.keep_reserve or {}
                     for _, id in ipairs(b.guns) do
                         if bot:has_item(id) then
@@ -1087,6 +1092,52 @@ function BotInventory.new_guns(bot)
     return out
 end
 
+-- Why a pickup of `item` is not worth its slot and its seconds, or nil:
+-- a document (it unlocks nothing), rounds no gun the bot has found fires
+-- (held, boxed or seen on the frontier, any loading of it; or no weapon of
+-- the knowledge file at all), or a cure while one is held or boxed and no
+-- poison runs. It is left where it lies and stays on the frontier: the
+-- gun's pickup or a poison makes it wanted. A run took eight blue herbs
+-- and used two, and carried three stacks of magnum rounds to the box for
+-- a gun it never held; each cost its seconds in the viewer and a slot of
+-- an inventory that was full 110 times a run.
+function BotInventory.unwanted(bot, item)
+    local kind, _, heals = bot:item_kind(item)
+    if kind == "file" then
+        return "a document"
+    end
+    local box = BotInventory.remembered(bot)
+    if kind == "ammo" then
+        local weapons = (bot:knowledge() or {}).weapons or {}
+        local have = {}
+        for id, row in pairs(weapons) do
+            if bot:has_item(id) or box[id] then
+                have[row.variant_of or id] = true
+            end
+        end
+        for _, goal in ipairs(bot:world().frontier) do
+            local row = goal.kind == "item" and weapons[goal.item]
+            if row then
+                have[row.variant_of or goal.item] = true
+            end
+        end
+        for id, row in pairs(weapons) do
+            if bot:ammo_for(id) == item and have[row.variant_of or id] then
+                return nil
+            end
+        end
+        return "rounds for a gun not found"
+    end
+    if kind == "heal" and heals == false then
+        local player = bot:player()
+        if (bot:has_item(item) or box[item])
+            and not (player.poisoned or player.seriously_poisoned) then
+            return "a cure is held already"
+        end
+    end
+    return nil
+end
+
 -- What the bot remembers the box holds: {[item] = true}.
 function BotInventory.remembered(bot)
     local out = {}
@@ -1145,7 +1196,8 @@ function BotInventory.pickups_needing_room(bot, skip)
     local n = #BotPuzzle.fetches_due(bot) + held_elsewhere(bot)
         + (BotPlanner and BotPlanner.steps_needing_room and BotPlanner.steps_needing_room(bot) or 0)
     for _, goal in ipairs(bot:world().frontier) do
-        if goal.kind == "item" and not (skip and skip(goal)) then
+        if goal.kind == "item" and not (skip and skip(goal))
+            and not BotInventory.unwanted(bot, goal.item) then
             local _, merge = bot:item_kind(goal.item)
             if not (merge and bot:has_item(goal.item)) then
                 n = n + 1

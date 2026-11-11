@@ -2281,6 +2281,9 @@ local function choose(bot)
                     best, best_len, best_key, best_desk = action, len, key, action
                 end
             end
+        elseif action.kind == "item" and BotInventory.unwanted(bot, action.item) then
+            -- Left where it lies, unmarked: it stays on the frontier
+            -- until something makes it wanted.
         elseif action.kind == "item" and not blocked(bot, "item", room, action.slot) then
             local avoid, gate = BotPuzzle.avoided(bot, action.slot)
             if avoid then
@@ -2824,7 +2827,8 @@ local function choose(bot)
                 fits = false
             end
             local useless = goal.kind == "item" and (goal.item_kind == "file"
-                or goal.item_kind == "ammo" and not gun_rounds[goal.item])
+                or goal.item_kind == "ammo" and not gun_rounds[goal.item]
+                or BotInventory.unwanted(bot, goal.item) ~= nil)
             if goal.room ~= room and fits and not useless then
                 local steps = usable(goal) and route(bot, world, room, goal.room)
                 local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
