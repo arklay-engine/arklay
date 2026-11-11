@@ -2082,6 +2082,24 @@ local function choose(bot)
         end
     end
 
+    -- 0b. A retreat (BotPlanner.retreat): back out the way the bot came.
+    local retreat = plan().retreat
+    if retreat and retreat.room == room and retreat.entry == plan().entries[room] then
+        local best, best_len
+        for _, door in ipairs(bot:doors()) do
+            if door.target == retreat.to and not blocked(bot, "door", room, door.slot) then
+                local len = BotNav.reach_length(bot, via_action(bot, door) or door)
+                if len and (not best_len or len < best_len) then
+                    best, best_len = door, len
+                end
+            end
+        end
+        if best then
+            return door_goal(bot, best, "retreat: outgunned here, the box holds the gear")
+        end
+        plan().retreat = nil
+    end
+
     -- 1. The room puzzle.
     local fact, index, count = BotPuzzle.next_interact(bot)
     local held_full = false
@@ -3616,6 +3634,59 @@ function BotPlanner.hold_clock()
     if goal and goal.started then
         goal.started = goal.started + 1
     end
+end
+
+-- A retreat: just inside a room whose monsters the held rounds do not
+-- cover (BotTactics' death trap), with gear for them in the box
+-- (BotInventory.gear_boxed), the bot backs out the way it came, fetches the
+-- gear and comes back, as it does after a death there (BotNav.died_in: the
+-- room holds a lesson from now until the bot leaves it alive another time).
+-- A death teaches the same, some thousands of ticks later: of 96 runs' 23
+-- deaths, 6 were first walks into 509's four zombies, and in a quarter of
+-- the runs the box held the guns that the bot did not. Once for a room,
+-- while the bot still stands within RETREAT_NEAR of where it came in, and
+-- not while a lesson stands. Returns whether the bot retreats.
+local RETREAT_NEAR = C.FIGHT_RANGE
+
+function BotPlanner.retreat(bot)
+    local p = plan()
+    local room = bot:room().id
+    p.retreated = p.retreated or {}
+    local came = p.last_from and (p.arrivals[room] or {})[p.last_from]
+    if p.retreated[room] or not came or p.last_from == room
+        or bot:distance(came.x, came.z) > RETREAT_NEAR
+        or BotNav.died_anywhere(bot) then
+        return false
+    end
+    p.retreated[room] = true
+    if not BotInventory.gear_boxed(bot) then
+        return false
+    end
+    local back = false
+    for _, door in ipairs(bot:doors()) do
+        back = back or door.target == p.last_from
+    end
+    if not back then
+        return false
+    end
+    bot:remember(BotNav.died_key(room), "1")
+    BOT_STATE.retreat = room
+    BotInventory.regear()
+    p.retreat = { room = room, entry = p.entries[room], to = p.last_from }
+    bot:log(string.format("retreat from %s: outgunned, and the box holds the gear", room))
+    if p.goal then
+        bot:log("goal dropped: " .. p.goal.label)
+    end
+    p.goal = nil
+    p.target = nil
+    return true
+end
+
+-- Whether the bot is backing out of this room now (choose's step 0b).
+function BotPlanner.retreating(bot)
+    local p = plan()
+    local room = bot:room().id
+    return p.retreat ~= nil and p.retreat.room == room and p.retreat.entry == p.entries[room]
 end
 
 function BotPlanner.drop_goal(bot)

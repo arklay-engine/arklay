@@ -813,6 +813,26 @@ room holds such a lesson:
 The key is cleared when the bot leaves the room alive (`left 509 alive:
 its 1 death(s) answered`).
 
+A retreat teaches the same without the death (`BotPlanner.retreat`,
+`retreat from 509: outgunned, and the box holds the gear`). Still within
+`FIGHT_RANGE` of where it came in, facing a death trap
+([Combat](#combat)) that its held rounds do not cover, or cover only
+with a gun slower than the crowd closes (no fast gun and no reserve gun
+downs it all), and with gear for it in the remembered box
+(`BotInventory.gear_boxed`), the bot leaves by the door it came through
+(right after a `<leave>`, step 3, and ahead of the room's puzzle), the
+room gets the lesson, and the gear-up above follows; the lesson stands
+until the bot walks out of the room alive on a later visit. The trap is
+not fought while the bot backs out (`BotPlanner.retreating`). Once for a
+room, and not while another lesson stands. The gear-up also takes a
+boxed firearm when only the staple one (the handgun) is armed: thirty
+handgun rounds "covered" 509's three zombies, and four replays of that
+entry took 34 hits and a death. Of 96 runs' 23 deaths, 6 were first
+walks into 509, and in a quarter of the runs the box held the guns the
+bot did not. 509's eight recorded entries, four seeds each: 78 hits and
+a death before, 36 hits and none after (three of the eight entries back
+out).
+
 The bot reads the shipped save screen's state; a mod's registered save
 screen or the modern screen shows the bot nothing, and the save or load
 finishes with a reason.

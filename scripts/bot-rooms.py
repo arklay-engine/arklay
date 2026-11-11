@@ -177,7 +177,10 @@ def play(args):
     picked = []
     for path in recordings(args.names):
         for row in scenes(path):
-            if not row["to"] or row["to"] == row["room"]:
+            # A game's last scene has no room after it: replayed only when
+            # named (-e), which is how the room a run got stuck in is studied.
+            named = args.scene and row["scene"] in args.scene
+            if (not row["to"] or row["to"] == row["room"]) and not named:
                 continue
             if args.room and "all" not in args.room and row["room"] not in args.room:
                 continue
