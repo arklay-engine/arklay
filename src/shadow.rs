@@ -21,6 +21,7 @@
 
 use anyhow::{Context, Result};
 
+use crate::game::STAGE_GUARDHOUSE;
 use crate::player::PlayerState;
 use crate::state::{Image, RoomId, RoomState};
 
@@ -36,8 +37,6 @@ pub const PLAYER_HALF_Z: i32 = 700;
 /// The living player's billboard tint (`0x808080` in the original header).
 pub const PLAYER_COLOR: u32 = 0x0080_8080;
 
-/// 1-based stage digit of the guardhouse (the original's 0-indexed stage 3).
-const STAGE_GUARDHOUSE: u8 = 4;
 /// Room id of the water tank entry, where the shadow is never skipped.
 const ROOM_WATER_TANK_ENTRY: u8 = 0x0D;
 

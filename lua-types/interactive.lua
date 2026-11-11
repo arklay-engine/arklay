@@ -1,7 +1,8 @@
 ---@meta arklay.interactive
 
 -- RE 1 interactive screens: the `interactive/*.lua` scripts of the screens
--- the game loop keeps running underneath (the lab computer).
+-- the game loop keeps running underneath (the guardhouse panel, the lab
+-- computer).
 --
 -- This file is the source of the "Interactive screens" page of the
 -- documentation, and a LuaLS definition file for linting and completion in
@@ -25,7 +26,8 @@
 ---| `0x1F` | `interactive/slides.lua` |
 ---
 ---The first set flag wins; a pack without its script shows nothing. RE 1's
----pack carries `interactive/computer_lab.lua`. The scripts run in the enemy
+---pack carries `interactive/passcode_panel.lua` (room 408's numeric panel)
+---and `interactive/computer_lab.lua`. The scripts run in the enemy
 ---scripts' VM, with the same sandbox, instruction budget and pack-scoped
 ---`require`.
 ---
@@ -97,6 +99,8 @@ function display(api, s) end
 ---@field raw_held integer The raw D-pad held (`g_button_pressed_id & 0xF000`): `0x1000` up, `0x2000` right, `0x4000` down, `0x8000` left.
 ---@field raw_edge integer The raw D-pad's press edges (`g_PlayerPadHeld & 0xF000`), same bits.
 ---@field player_character integer `0` Chris, `1` Jill.
+---@field player_id integer The player entity's id (`g_playerEntity.id`): `1` is Jill.
+---@field menu_choice integer The message window's choice byte (`g_menu_choice_id`): bit `0x80` while a message is up, then `0` for the first answer (yes) and nonzero for the other.
 ---@field camera integer The selected camera (`g_roomCameraId`), which a deferred switch may have moved ahead of the drawn one.
 ---@field fov integer The drawn camera's projection distance (589 without a camera).
 ---@field message_flags integer The message window's flag word (`g_message_flags`), read and write.
@@ -150,11 +154,31 @@ function ScreenApi:voice(id) end
 ---@return boolean
 function ScreenApi:voice_playing() end
 
+---Show room message `id` (`set_message_display`), masking `pause` out of
+---the message flags until it closes. Refused while a message is up.
+---[`menu_choice`](#ScreenApi.menu_choice) reads a yes/no answer.
+---@param id integer
+---@param pause integer
+function ScreenApi:message(id, pause) end
+
 ---Cut to room camera `camera` now (`g_roomCameraId = camera;
 ---check_camera_switch(1)`). A camera without a switch-zone group leaves the
 ---zone tests on the group they were on, as the original's zone pointer does.
 ---@param camera integer
 function ScreenApi:switch_camera(camera) end
+
+---Set room camera `camera`'s projection distance, as the original's write
+---into the RDT's camera record. It lasts until the room loads again.
+---@param camera integer
+---@param fov integer
+function ScreenApi:set_camera_fov(camera, fov) end
+
+---Turn room sprite (mask group) `id` of the current camera on or off
+---(`RoomSpr_SetActive`/`RoomSpr_SetInactive`). A camera switch puts every
+---group back on.
+---@param id integer
+---@param active boolean
+function ScreenApi:set_room_sprite(id, active) end
 
 ---Room light `index` (0-2): position, colour, kind and radius.
 ---@param index integer
@@ -263,6 +287,16 @@ function ScreenApi:add_sprite(desc, depth, slot, count) end
 ---@param text string
 ---@param colour integer
 function ScreenApi:print8x8(x, y, text, colour) end
+
+---`PrintText8x14`: `text` in the message font at screen pixel `(x, y)`,
+---over the scene. `colour`'s low nibble is the font's CLUT row (`0` white,
+---`1` green, `2` red, `3` grey, otherwise yellow). The glyphs are opaque:
+---the original's half-transparent flag is not modelled.
+---@param x integer
+---@param y integer
+---@param text string
+---@param colour integer
+function ScreenApi:print8x14(x, y, text, colour) end
 
 ---A textured quad with free corners (`MarniDrawTrianglesPersp`): the
 ---`w`x`h` texels at `(u, v)` of slot `slot`'s page, sampled bilinearly and

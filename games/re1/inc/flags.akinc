@@ -38,7 +38,7 @@
 #define F_SCENARIO_PANEL_VARIANT_A 0x1E                     // Picks the passcode panel's starting state (engine).
 #define F_SCENARIO_PANEL_VARIANT_B 0x1F                     // Picks the passcode panel's starting state (engine).
 #define F_SCENARIO_INTERACTIVE_SCREEN 0x20                  // An interactive screen is up (engine).
-#define F_SCENARIO_PANEL_SOLVED 0x21                        // The lab passcode panel is solved (engine).
+#define F_SCENARIO_PANEL_SOLVED 0x21                        // Room 408's numeric panel is solved (engine).
 #define F_SCENARIO_WATER_DRAINED 0x23                       // The 411 lever drained the guardhouse water (40D, 40E, 40F, 411).
 #define F_SCENARIO_BLANK_BOOK_SHELVED 0x24                  // The blank book was put in the V-JOLT report's gap on room 003's shelf (40A).
 #define F_SCENARIO_BOOKCASE_SLID_ASIDE 0x25                 // Likely: room 003's bookcase stands slid aside (40A); cleared when the player steps into the gap toward 40C.

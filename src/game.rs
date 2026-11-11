@@ -506,13 +506,11 @@ pub const HERB_MAX: u8 = 0x4B;
 pub const CHEMICAL_MIN: u8 = 0x13;
 /// Last chemical id.
 pub const CHEMICAL_MAX: u8 = 0x1A;
-/// Stage id of the guardhouse (1-based).
-pub const STAGE_GUARDHOUSE: u8 = 3;
+/// 1-based stage digit of the guardhouse ([`RoomId::stage`]; the original's
+/// 0-indexed `STAGE_GUARDHOUSE` is 3).
+pub const STAGE_GUARDHOUSE: u8 = 4;
 /// Room id of the drug storehouse in the guardhouse.
 pub const ROOM_DRUG_STOREHOUSE: u8 = 9;
-/// 1-based stage digit of the guardhouse (the original's 0-indexed stage 3),
-/// used by the desk flow's save-room reset.
-const GUARDHOUSE_STAGE: u8 = 4;
 /// The scrapped heliport (`ROOM3110.RDT`), which the game never enters but whose
 /// backgrounds room 303's death replay shows.
 pub const ROOM_SCRAPPED_HELIPORT: u8 = 0x11;
@@ -7209,7 +7207,7 @@ impl GameState {
         if alpha == 0 {
             return None;
         }
-        let draws = if id.stage == GUARDHOUSE_STAGE && id.room == ROOM_CONTROL_ROOM {
+        let draws = if id.stage == STAGE_GUARDHOUSE && id.room == ROOM_CONTROL_ROOM {
             2
         } else {
             1
@@ -7288,7 +7286,31 @@ impl GameState {
         };
         // `room_event_take_item`: award the action (the radio raises its
         // scenario flag instead of adding an inventory stack).
-        self.pick_up(slot)
+        let Some(action) = self.got_item_action(slot) else {
+            return false;
+        };
+        self.award_item(slot, action)
+    }
+
+    /// The room action a got-item award (`give_item`'s viewer) takes its item
+    /// from.
+    ///
+    /// The original's `cmd_got_item` runs handler 4 (`set_key_flag`) on the
+    /// entry whatever its own handler byte, `main_menu` opens mode 4 from the
+    /// flag alone, and `room_event_take_item` (0x004631c0) reads the item from
+    /// the record the entry points at (+8) without testing the handler byte.
+    /// So an entry an earlier award disarmed (handler 0) still awards its
+    /// item: room 409's taps `give_item` the same AOT on every fill. That
+    /// record is the `item_aot_set` operand block ([`RoomAction::item_data`]),
+    /// which survives the disarm and an `aot_reset`. An entry that never had
+    /// one (an `aot_set` entry, whose record is not an item) awards nothing:
+    /// the original would read its operands as an item.
+    pub fn got_item_action(&self, slot: u8) -> Option<RoomAction> {
+        self.room_actions
+            .get(usize::from(slot))
+            .copied()
+            .flatten()
+            .filter(|action| action.kind == RoomActionKind::Item || action.item_data.is_some())
     }
 
     /// `set_key_flag` (handler 4): arm the item viewer for the ground item in
@@ -7424,6 +7446,9 @@ impl GameState {
         } else {
             return None;
         };
+        if request.kind == ItemViewKind::GotItem {
+            return self.got_item_action(request.slot).map(|_| request);
+        }
         self.room_actions
             .get(usize::from(request.slot))
             .is_some_and(|action| action.is_some_and(|action| action.handler != 0))
@@ -7806,7 +7831,7 @@ impl GameState {
     pub fn check_desk_state(&mut self) {
         // The guardhouse save room restarts the flow for Jill's first
         // playthrough, so a desk can never be left mid-state across the save.
-        if self.id.stage == GUARDHOUSE_STAGE
+        if self.id.stage == STAGE_GUARDHOUSE
             && self.id.room == ROOM_GUARDHOUSE_SAVE
             && self.id.player_flag & 3 == 1
             && !self.flag_test(BANK_SCENARIO, SCENARIO_FLAG_SECOND_PLAYTHROUGH, false)
@@ -8349,6 +8374,13 @@ impl GameState {
         if action.kind != RoomActionKind::Item {
             return false;
         }
+        self.award_item(slot, action)
+    }
+
+    /// The award body shared by [`Self::pick_up`] and the got-item viewer
+    /// (`room_event_take_item` / `room_event_item_pickup`): add the action's
+    /// item and tear its model down.
+    fn award_item(&mut self, slot: u8, action: RoomAction) -> bool {
         let item = action.item_id();
         if item == ITEM_COMM_RADIO {
             // `room_event_take_item`'s radio arm raises the flag and returns
@@ -15869,7 +15901,7 @@ mod tests {
     fn desk_guardhouse_save_room_resets_jills_first_playthrough() {
         let mut state = desk_game();
         state.id = RoomId {
-            stage: GUARDHOUSE_STAGE,
+            stage: STAGE_GUARDHOUSE,
             room: ROOM_GUARDHOUSE_SAVE,
             player_flag: 1,
             mansion2: false,
@@ -17141,6 +17173,94 @@ mod tests {
         assert_eq!(state.got_item_slot, None);
     }
 
+    /// `item_aot_set` slot 6: water (0x15), quantity 1, room-items flag 5.
+    fn water_item_aot(state: &mut GameState) {
+        let mut host = ScdGameHost::new(state);
+        host.on_item(
+            op(0x18),
+            &operands(&[6, 0, 0, 1, 1, 0x15, 1, 5, 255, 0, 0, 0, 0, 0x41, 0, 0]),
+        );
+    }
+
+    /// `give_item(slot, 4, 0)`, then the viewer opens and closes: whether the
+    /// viewer opened and whether it awarded.
+    fn give_and_close(state: &mut GameState, slot: u8) -> (bool, bool) {
+        {
+            let mut host = ScdGameHost::new(state);
+            host.on_room_action(
+                op(0x2D),
+                &operands(&[i64::from(slot), i64::from(HANDLER_ITEM), 0]),
+            );
+        }
+        let opened = state
+            .item_view_request()
+            .is_some_and(|r| r.kind == ItemViewKind::GotItem);
+        let awarded = state.close_got_item_viewer();
+        (opened, awarded)
+    }
+
+    #[test]
+    fn give_item_awards_again_from_a_slot_an_earlier_award_disarmed() {
+        // Room 409's taps: one `item_aot_set` at init, then a `give_item` of
+        // the same AOT on every fill. `room_event_take_item` reads the
+        // entry's item record (+8) without testing the handler byte.
+        let mut state = game();
+        water_item_aot(&mut state);
+        for fill in 1..=3u8 {
+            assert_eq!(give_and_close(&mut state, 6), (true, true), "fill {fill}");
+            assert_eq!(state.inventory.len(), usize::from(fill));
+            assert!(state.inventory.iter().all(|i| i.id == 0x15));
+            assert!(!state.flags[5].bit(MSF_MENU_GOT_ITEM));
+            let action = state.room_actions[6].expect("the entry stays");
+            assert_eq!(action.handler, 0, "each award disarms it again");
+        }
+    }
+
+    #[test]
+    fn give_item_awards_from_an_item_record_an_aot_reset_kept() {
+        // `aot_reset` rewrites the entry's bytes 0..7 and keeps the record
+        // pointer, so the original's award still reads the item from it.
+        let mut state = game();
+        water_item_aot(&mut state);
+        {
+            let mut host = ScdGameHost::new(&mut state);
+            host.on_room_action(
+                op(0x12),
+                &operands(&[6, i64::from(HANDLER_MESSAGE), 0x81, 3, 0, 0, 0]),
+            );
+        }
+        assert_eq!(state.room_actions[6].unwrap().kind, RoomActionKind::Message);
+        assert_eq!(give_and_close(&mut state, 6), (true, true));
+        assert_eq!(state.inventory[0].id, 0x15);
+    }
+
+    #[test]
+    fn give_item_on_an_entry_without_an_item_record_awards_nothing() {
+        // An `aot_set` entry's record is its own operands, not an item: the
+        // viewer stays shut and nothing is added.
+        let mut state = game();
+        {
+            let mut host = ScdGameHost::new(&mut state);
+            host.on_room_action(
+                op(0x0D),
+                &operands(&[
+                    2,
+                    100,
+                    200,
+                    300,
+                    400,
+                    i64::from(HANDLER_MESSAGE),
+                    0x81,
+                    7,
+                    8,
+                    9,
+                ]),
+            );
+        }
+        assert_eq!(give_and_close(&mut state, 2), (false, false));
+        assert!(state.inventory.is_empty());
+    }
+
     #[test]
     fn aot_on_arms_the_viewer_for_an_item_action() {
         let mut state = game();
@@ -18185,9 +18305,10 @@ mod tests {
         assert_eq!(weapon.quantity, 4);
         assert!(!state.inventory.iter().any(|slot| slot.id == 0x10));
 
-        // The chemical flag effect.
+        // The chemical flag effect, in the drug storehouse (409).
         let mut state = game();
-        state.id = RoomId::parse("309").unwrap();
+        state.id = RoomId::parse("409").unwrap();
+        assert!(state.is_drug_store());
         state.add_item(0x15, 1);
         state.add_item(0x18, 1);
         assert_eq!(
@@ -18199,13 +18320,32 @@ mod tests {
         );
         assert!(state.flag_test(0, SCENARIO_FLAG_CHEMICAL_COMBINE, false));
 
-        // Outside the drug store the same recipe is refused untouched.
+        // Outside the drug store the same recipe is refused untouched, in
+        // room 309 too (the caves' stage digit is the guardhouse's 0-based
+        // stage, which the check used to compare against).
+        for room in [None, Some("309")] {
+            let mut state = game();
+            if let Some(room) = room {
+                state.id = RoomId::parse(room).unwrap();
+            }
+            assert!(!state.is_drug_store());
+            state.add_item(0x15, 1);
+            state.add_item(0x18, 1);
+            assert_eq!(state.combine_slots(0, 1), CombineResult::NeedsDrugStore);
+            assert_eq!(state.inventory[0].id, 0x15);
+            assert_eq!(state.inventory[1].id, 0x18);
+        }
+
+        // Water onto UMB No.2 makes NP-003 there, leaving an empty bottle.
         let mut state = game();
+        state.id = RoomId::parse("409").unwrap();
+        state.add_item(0x14, 1);
         state.add_item(0x15, 1);
-        state.add_item(0x18, 1);
-        assert_eq!(state.combine_slots(0, 1), CombineResult::NeedsDrugStore);
-        assert_eq!(state.inventory[0].id, 0x15);
-        assert_eq!(state.inventory[1].id, 0x18);
+        assert!(matches!(
+            state.combine_slots(0, 1),
+            CombineResult::Applied { .. }
+        ));
+        assert_eq!((state.inventory[0].id, state.inventory[1].id), (0x13, 0x1A));
     }
 
     #[test]
