@@ -249,4 +249,6 @@ ignore = [
     [20235, "rseed"],
     # room 100's opening, as route_200_208: slots 0 and 1 drawn at 0x404040 by the original until 183
     [0, 183, "zp"],
+    # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+    [391, 481, "hk"], [2662, 2752, "hk"], [5562, 5652, "hk"], [7043, 7133, "hk"], [8097, 8187, "hk"], [8927, 9019, "hk"], [10121, 10211, "hk"], [12967, 13057, "hk"], [15527, 15617, "hk"], [16018, 16108, "hk"], [17942, 18032, "hk"], [18720, 18810, "hk"], [20270, 20360, "hk"],
 ]

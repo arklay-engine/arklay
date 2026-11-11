@@ -53,6 +53,8 @@ ignore = [
   # 10C's object 0 (the pedestal) takes its floor from its height a tick sooner in arklay as play comes back after
   # the stairs door (leon_a_208_114's load range covers the same tick, its 1148)
   [1234, "om0"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [570, 660, "hk"], [1061, 1153, "hk"], [3913, 4003, "hk"],
 ]
 record = "--start claire --warp 208:-19956:0:-19363:149:1 --flag 8:141 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --life 119 --give 0:3:6 --give 2:0x14:20 --give 3:0x1E:3"
 
@@ -80,6 +82,8 @@ ignore = [
   [436, "rng"], [436, "rseed"],
   # the load, as in claire_a_208_114: the original lists 114's objects (none) until 115's are set up, 90 ticks in
   [471, 561, "om3"], [471, 561, "om7"], [471, 561, "om8"], [471, 561, "om9"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [471, 561, "hk"],
 ]
 record = "--start claire --warp 114:-25260:0:-3420:2048:5 --life 119 --give 0:3:6 --give 2:0x14:20 --give 3:0x1E:3 --give 4:0x33:1"
 
@@ -128,4 +132,6 @@ ignore = [
     [0, 25329, "om3"], [0, 25329, "om7"], [0, 25329, "om8"], [0, 25329, "om9"],
     # room 100's opening, as route_claire_a_208: slots 0 and 1 drawn at 0x404040 by the original until 183
     [0, 183, "zp"],
+    # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+    [391, 481, "hk"], [2662, 2752, "hk"], [5562, 5652, "hk"], [7043, 7133, "hk"], [8097, 8187, "hk"], [8927, 9019, "hk"], [10121, 10211, "hk"], [12967, 13057, "hk"], [15527, 15617, "hk"], [16018, 16108, "hk"], [17942, 18032, "hk"], [18720, 18810, "hk"], [20270, 20360, "hk"], [21461, 21551, "hk"], [21952, 22044, "hk"], [24804, 24894, "hk"], [25239, 25329, "hk"],
 ]

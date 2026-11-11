@@ -33,6 +33,8 @@ ignore = [
   # room 114's slot 0, which stands: its `Spd` is what the slot held before (the slots' leftovers,
   # docs/internals/deviations/re2.md, "What a zombie's slot held before")
   [3850, 4149, "zm0"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [484, 574, "hk"], [975, 1067, "hk"], [3759, 3849, "hk"],
 ]
 record = "--warp 208:-19005:0:-16920:1029:0 --flag 8:141 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --life 156 --give 0:2:2 --give 2:0x14:38 --give 3:0x1E:3"
 
@@ -61,6 +63,8 @@ ignore = [
   # the head through the door while it was turned toward a zombie: the original places it at 115's setup, arklay keeps
   # 114's until the door's last frame (docs/internals/deviations/re2.md, "The head through a door")
   [562, 775, "pneck"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [471, 561, "hk"],
 ]
 record = "--warp 114:-25260:0:-3420:2048:5 --life 156 --give 0:2:2 --give 2:0x14:38 --give 3:0x1E:3 --give 4:0x33:1"
 
@@ -128,4 +132,6 @@ ignore = [
     # room 100's opening (not this route's change; no other run compares it): slot 1's angle on the load's tick, and slots 0 and 1 drawn at 0x404040 by the original until 183
     [0, "zm1"],
     [0, 183, "zp"],
+    # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+    [391, 481, "hk"], [2662, 2752, "hk"], [5490, 5580, "hk"], [6935, 7025, "hk"], [7989, 8079, "hk"], [8819, 8911, "hk"], [10047, 10137, "hk"], [12818, 12908, "hk"], [15371, 15461, "hk"], [15952, "hk"], [17690, 17780, "hk"], [18471, 18561, "hk"], [19758, 19848, "hk"], [20760, 20850, "hk"], [21251, 21343, "hk"], [24035, 24125, "hk"], [24470, 24560, "hk"],
 ]
