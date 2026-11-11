@@ -9,7 +9,7 @@ input = "leon_a_115_207.txt"
 input_shift = 344
 input_drop_early = true
 ticks = 1960
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,em,zm0,zm1,zm2"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,em,zm0,zm1,zm2,zd"
 frames = [360, 1959]
 # the doors' frames count only in the whole run's mean: 10C's door 0 is the stairs door (type 4), which draws its steps wider and brighter than the original's (docs/internals/deviations/re2.md, "The stairs door's frames"), a mean of 4.1 over its 205 ticks
 frame_max_mean = 1.4
@@ -80,7 +80,7 @@ ticks = 31316
 setup_script = "route_200_spade.lua"
 input = "route_200_spade.txt"
 voice_from_ref = true
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,scene,om0,om1,om2,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,zp,fgstat,fgitem,fgroom,fgcom,movie,fguse,scv,atsce"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,scene,om0,om1,om2,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,zp,zd,fgstat,fgitem,fgroom,fgcom,movie,fguse,scv,atsce"
 frames = [0, 31315]
 frame_max_mean = 0.85
 # each room on its own, from its hand back to its door's press: route_200_115's windows (115 to the scene's hand back), then 115 again, 114, 10C, 207, 205, 204, 201, and 200 to START, the status screen, event 8 and event 7 with the key's window
@@ -155,4 +155,6 @@ ignore = [
     # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do: route_200_115's, then this segment's
     [391, 481, "hk"], [2662, 2752, "hk"], [5490, 5580, "hk"], [6935, 7025, "hk"], [7989, 8079, "hk"], [8819, 8911, "hk"], [10047, 10137, "hk"], [12818, 12908, "hk"], [15371, 15461, "hk"], [15952, "hk"], [17690, 17780, "hk"], [18471, 18561, "hk"], [19758, 19848, "hk"], [20760, 20850, "hk"], [21251, 21343, "hk"], [24035, 24125, "hk"], [24470, 24560, "hk"],
     [27195, 27285, "hk"], [27637, 27727, "hk"], [28371, 28463, "hk"], [28668, 28758, "hk"], [29318, 29408, "hk"], [30321, 30411, "hk"],
+    # `zd` (docs/internals/deviations/re2.md, "What a zombie's slot held before"): the load's tick in room 100, room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load
+    [0, "zd"], [482, 2751, "zd"], [8397, 8909, "zd"],
 ]

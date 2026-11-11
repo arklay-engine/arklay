@@ -490,6 +490,8 @@ const STATUS_ENEMY_FLAGS: u8 = 6;
 pub const STATUS_PLAYER: u8 = 0;
 /// `fg_status`'s `0x10000000`: the partner is with the player.
 const PARTNER_BIT: u8 = 3;
+/// `fg_status`'s `0x10000`: the room has a mirror (`Sce_mirror_init`).
+const MIRROR_STATUS: u8 = 15;
 /// `fg_status`'s `0x2000`: `Om_move` pushed an object this tick.
 const PUSH_BIT: u8 = 18;
 /// `fg_stop`'s `0x8000000`: the objects don't move.
@@ -2186,6 +2188,17 @@ impl GameHost<'_> {
         if dead != NO_ENEMY_FLAG && self.game.re2.flag(bank, dead) {
             return;
         }
+        // The work goes at `Mem_top`, and its memory holds what it held.
+        let files = self.game.re2_heap_files.clone();
+        let held = self.game.re2_heap.em_set(
+            &files,
+            slot,
+            id,
+            at(7) as u8,
+            self.game.id.player_flag & 1,
+            self.game.re2.flag(1, MIRROR_STATUS),
+            self.game.re2.room_loading,
+        );
         if slot != SPLAYER_SLOT {
             self.game.re2.enemies = self.game.re2.enemies.wrapping_add(1);
         }
@@ -2235,6 +2248,9 @@ impl GameHost<'_> {
         let kind = (at(3) as u16) | (at(4) as u16) << 8;
         if zombie {
             work.kind = kind;
+            if let Some(dest) = held {
+                work.dest = dest;
+            }
             let room = u16::from(self.game.id.stage) << 8 | u16::from(self.game.id.room);
             let given = &mut self.game.re2_enemy_dest;
             if let Some(index) = given.iter().position(|&(r, s, _)| (r, s) == (room, slot)) {
@@ -2770,6 +2786,16 @@ impl Host for GameHost<'_> {
                 }
             }
             "sce_em_set" => self.sce_em_set(at),
+            // Neither is modelled; `Mem_top` stops being known
+            // (`crate::heap2`).
+            "rbj_reset" => {
+                self.game.re2_heap.rbj_reset();
+                log_unmodelled(op.mnemonic);
+            }
+            "sce_em_set2" => {
+                self.game.re2_heap.em_set2();
+                log_unmodelled(op.mnemonic);
+            }
             "obj_model_set" => self.obj_model_set(at),
             "speed_set" => {
                 if let Some(speed) = self

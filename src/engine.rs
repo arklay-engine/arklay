@@ -3013,6 +3013,7 @@ impl GameSession {
                 self.loaded.re2_vm.as_mut(),
                 &self.loaded.re2_effects,
                 &mut self.game,
+                false,
             );
         }
         self.apply_screen_border();
@@ -3979,6 +3980,8 @@ impl GameSession {
             match re2_computer_strings(pack) {
                 Some(strings) => {
                     self.game.re2_computer = Some(game::computer2::Computer::new(request, strings));
+                    // Its work goes at `Mem_top` until `Computer_exit`.
+                    self.game.re2_heap.scratch(crate::heap2::COMPUTER_SIZE);
                     self.open_re2_computer_screen(pack);
                 }
                 None => eprintln!(
@@ -6649,6 +6652,7 @@ impl GameSession {
                 self.loaded.re2_vm.as_mut(),
                 &self.loaded.re2_effects,
                 &mut self.game,
+                true,
             );
             self.game.re2.pending_player = placed;
         }
@@ -9541,7 +9545,7 @@ fn room_door_state(pack: &Pack, id: RoomId) -> Result<game::GameState> {
     let mut re2_vm = loaded
         .re2_scripts(pack)?
         .map(|scripts| crate::scd2::vm::Vm::new(&scripts));
-    run_re2_init(re2_vm.as_mut(), &Default::default(), &mut game);
+    run_re2_init(re2_vm.as_mut(), &Default::default(), &mut game, false);
     Ok(game)
 }
 
@@ -16766,6 +16770,7 @@ fn new_game_state(
 ) -> game::GameState {
     let mut game = game::GameState::new(id, room);
     game.set_region(pack_region(pack));
+    game.re2_heap_files = crate::heap2::Files::of_pack(pack);
     game.player_options = options;
     game.music = crate::music::load(pack, options);
     seed_start_health(&mut game, id.player_flag);
@@ -16818,7 +16823,7 @@ fn run_room_init(loaded: &mut LoadedRoom, game: &mut game::GameState) {
     let mut command_vm = scd::vm::CommandVm::new(&loaded.scripts);
     let mut host = game::ScdGameHost::new(game);
     command_vm.run_init(&mut host);
-    run_re2_init(loaded.re2_vm.as_mut(), &loaded.re2_effects, game);
+    run_re2_init(loaded.re2_vm.as_mut(), &loaded.re2_effects, game, false);
     game.apply_room_edits(&mut loaded.room);
     apply_screen_border(game, &mut loaded.room);
 }
@@ -16899,10 +16904,13 @@ fn on_screen_cut<R>(
 }
 
 /// An RE2 room's init procedure.
+/// `again` is a load whose init runs a second time (a setup script changed the
+/// flags it read).
 fn run_re2_init(
     vm: Option<&mut crate::scd2::vm::Vm>,
     effects: &std::sync::Arc<crate::esp2::Bank>,
     game: &mut game::GameState,
+    again: bool,
 ) {
     game.is_re2_room = vm.is_some();
     // The room's first `Bg_loadPC` (a door's, a load's, a warp's, the same
@@ -16951,6 +16959,22 @@ fn run_re2_init(
     let scenario = u8::from(game.re2.scenario_b);
     game.re2.set_flag(1, 0, character);
     game.re2.set_flag(1, 1, scenario);
+    // The last room's works keep their `Dest`s, then `Set_room` loads the
+    // music banks and the RDT over `Work_buffer`.
+    if !again {
+        let characters = &game.re2.characters.0;
+        game.re2_heap.leave_room(|slot| {
+            let character = characters.get(slot)?.as_deref()?;
+            character.zombie.as_ref()?;
+            Some(character.work.dest)
+        });
+    }
+    game.re2_heap.enter_room(
+        &game.re2_heap_files,
+        &game.id.code(),
+        u16::from_le_bytes([word.main, word.sub]),
+        again,
+    );
     game.re2.characters = Default::default();
     game.re2.enemies = 0;
     game.re2.room_enemy = 0;
@@ -16992,6 +17016,8 @@ fn run_re2_init(
     // The load's last step (`0x5023D0`) marks the room visited and its floor
     // stood on, for the MAP page.
     game.re2_room_set();
+    // `Psp_init0` and `Psp_init1`, after the scheduler's first pass.
+    game.re2_heap.after_load();
     game.re2.vm = Some(Box::new(vm));
 }
 
@@ -38177,7 +38203,7 @@ end
         let mut game = game::GameState::default();
         game.re2.banks[1][0] = 0xFFFF_FFFF;
         let mut vm = crate::scd2::vm::Vm::new(&crate::scd2::Scripts::default());
-        run_re2_init(Some(&mut vm), &Default::default(), &mut game);
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game, false);
         let status = game.re2.banks[1][0];
         assert_eq!(status & 0x000F_BFFF, 0, "{status:#x}");
         // `Set_room` keeps the character's and the scenario's bits too, but
@@ -38202,7 +38228,7 @@ end
         game.re2.vars[0] = 5;
         game.re2.vars[2] = 5;
         game.re2.set_flag(10, 71, 1);
-        run_re2_init(Some(&mut vm), &Default::default(), &mut game);
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game, false);
         assert_eq!(game.re2.vars[16..18], [0xFFFF; 2]);
         assert!(!game.re2.flag(10, 71));
     }
@@ -38216,14 +38242,14 @@ end
         .unwrap();
         let mut vm = crate::scd2::vm::Vm::new(&scripts);
         let mut game = game::GameState::default();
-        run_re2_init(Some(&mut vm), &Default::default(), &mut game);
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game, false);
         assert!(game.scene_bars());
         // Without 4:6 a second start raises the bit again (`scene_200`).
-        run_re2_init(Some(&mut vm), &Default::default(), &mut game);
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game, false);
         assert!(game.scene_bars());
         // With it, the second start clears what the first one began.
         game.re2.set_flag(4, 6, 1);
-        run_re2_init(Some(&mut vm), &Default::default(), &mut game);
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game, false);
         assert!(!game.scene_bars());
     }
 }

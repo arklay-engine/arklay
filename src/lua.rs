@@ -789,7 +789,8 @@ mod imp {
 
             // `set_re2_enemy_dest("ROOM:SLOT", x, z)`: the `Dest` the next
             // zombie placed in that slot of that room starts with, which the
-            // original takes from whatever its new work's memory held.
+            // original takes from whatever its new work's memory held, for a
+            // run whose memory `crate::heap2` doesn't know (a warp, a save).
             methods.add_method_mut(
                 "set_re2_enemy_dest",
                 |_lua, game, (pair, x, z): (String, i16, i16)| {

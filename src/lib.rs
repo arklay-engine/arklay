@@ -45,6 +45,7 @@ pub mod gui;
 pub mod hash;
 #[cfg(feature = "hd")]
 pub mod hdfilm;
+pub mod heap2;
 pub mod hires;
 pub mod interactive;
 pub mod item_art;

@@ -3345,8 +3345,15 @@ pub struct GameState {
     /// in a slot (`set_re2_enemy_dest`), as `(room, slot, [x, z])` with the
     /// room as in `re2_no_enemies`. Neither `Sce_em_set` nor `Em10_Init` sets
     /// `Dest`, so the original's new work starts with whatever its memory
-    /// held, which arklay doesn't model; each entry is used once.
+    /// held ([`crate::heap2`]), which a run that didn't load its rooms in
+    /// order from a new game doesn't know; each entry is used once, and it
+    /// wins over the heap's.
     pub re2_enemy_dest: Vec<(u16, usize, [i16; 2])>,
+    /// `Work_buffer`, as far as the files the original loads into it tell
+    /// ([`crate::heap2`]): what a new enemy work's memory holds.
+    pub re2_heap: crate::heap2::Heap,
+    /// The files [`GameState::re2_heap`] reads.
+    pub re2_heap_files: crate::heap2::Files,
     /// A setup script's `Spd_x`, `Spd_y` and `Spd_z` for the next zombie a
     /// room's `sce_em_set` puts in a slot (`set_re2_enemy_speed`), as
     /// `re2_enemy_dest` gives `Dest`: `Sce_em_set` leaves the speeds as the
@@ -3846,6 +3853,8 @@ impl Default for GameState {
             re2_key_lost: None,
             re2_no_enemies: None,
             re2_enemy_dest: Vec::new(),
+            re2_heap: Default::default(),
+            re2_heap_files: Default::default(),
             re2_enemy_speed: Vec::new(),
             re2_enemy_vars: Vec::new(),
             stair_zones: StairZones::default(),

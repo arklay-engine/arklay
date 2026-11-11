@@ -11,5 +11,3 @@ api:set_room_camera(1)
 api:set_item_slot(0, 0x03, 8)
 api:set_item_slot(1, 0x01, 1)
 api:set_item_slot(2, 0x14, 38)
--- slot 2's Dest from the work's memory, as leon_a_207.lua
-api:set_re2_enemy_dest("207:2", -5586, 128)
