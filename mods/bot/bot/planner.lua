@@ -3288,7 +3288,9 @@ local function forgive_fight(bot)
     local forgiven = false
     local remote_key, remote
     for key, m in pairs(p.marks) do
-        if m.reason:find("not ready for the fight", 1, true) then
+        -- (Not one given up with no round left: forcing it again only
+        -- stands the bot in front of the boss.)
+        if m.reason:find("not ready for the fight", 1, true) and m.reason ~= BotNav.NO_ROUNDS then
             if m.room == room then
                 p.marks[key] = nil
                 marks_changed()
@@ -3879,6 +3881,13 @@ function BotPlanner.step(bot)
         end
         if goal.job.reenter then
             p.reenter = room
+        end
+        -- A fight given up with no round left (BotNav.NO_ROUNDS) is held
+        -- back like one the bot was not ready for: the mark waits for the
+        -- inventory to change, and the entry's forcing ends.
+        if goal.job.reason == BotNav.NO_ROUNDS then
+            p.marks[mark_key(kind, where, goal.slot)].needed = true
+            p.forced_fight = nil
         end
         p.goal = nil
     end

@@ -125,7 +125,13 @@ Priorities, highest first:
    (`no firearm with rounds`, whatever the `<keep>` bands know: 30C's
    Black Tiger met with an empty handgun), or while the held rounds'
    damage (each gun's rounds times its `<keep>` damage) is under the
-   enemy's health.
+   enemy's health. A step already running fails the same way once no held
+   gun has a round for its enemy for 5 seconds with no fight on (`not
+   ready for the fight: no round left for it`, `BotTactics.any_round_for`):
+   the mark waits for the inventory, is not forgiven as a `fighting
+   anyway` fight, and the planner goes for rounds instead. 30C's tiger
+   step held a bot with an empty launcher, its rounds in the box, until
+   the run was called stuck.
    Fight steps are seen only in their own room, so once a held-back
    fight is ready (a heal fetched from the box), the planner heads back
    to its room from anywhere (`toward the fight in 40C ... now ready`,

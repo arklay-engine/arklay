@@ -855,6 +855,35 @@ function BotTactics.armed_for(bot, id, health)
     return gun ~= nil and entry.keep[gun] ~= nil and not k.weapons[gun].melee
 end
 
+-- Whether the bot holds a round for any gun the knowledge gives a band
+-- against enemy `id`: in the gun, as its ammunition, or as another
+-- loading's rounds of it (BotInventory.load_now loads those into an empty
+-- one). The reserve counts: this asks whether a fight is possible at all.
+function BotTactics.any_round_for(bot, id)
+    local k = bot:knowledge()
+    local entry = k and k.enemies[id]
+    if not (entry and entry.keep) then
+        return true
+    end
+    for _, row in ipairs(bot:menu().items or {}) do
+        local gun = row.kind == "weapon" and k.weapons[row.item]
+        if gun and not gun.melee then
+            if entry.keep[row.item] and held_rounds(bot, row) > 0 then
+                return true
+            end
+            local base = gun.variant_of or row.item
+            for other_id, other in pairs(k.weapons) do
+                local ammo = bot:ammo_for(other_id)
+                if other_id ~= row.item and (other_id == base or other.variant_of == base)
+                    and entry.keep[other_id] and ammo and bot:item_count(ammo) > 0 then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
 function BotTactics.avoiding()
     local s = state()
     return s.sourcing == true or (s.avoid_until or 0) > (s.now or 0)
