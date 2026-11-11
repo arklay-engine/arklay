@@ -917,19 +917,37 @@ drives the box screen with pad input only.
   clips, two MO disks, the spray and a blue herb).
 - Heal to make room (`BotInventory.heal_for_room`, `use heal 0xNN to make
   room`): every slot used, a known pickup in this room the run needs (a
-  key, a `<use>` item, or the ammunition of a gun held or boxed) that
-  merges into no held stack, at least two heal stacks held (a cure is
-  none), and at least `MAKE_ROOM_HURT` (24) health missing: the largest
-  heal stack is used, as `BotSurvival` heals. 219 left twelve grenade
-  rounds behind at 56/96 health with four heal stacks held.
+  key, a `<use>` item, or the ammunition of a gun held or boxed, any
+  loading of it: the launcher held with acid rounds loads the grenade and
+  flame rounds once it is empty) that merges into no held stack, at least
+  two heal stacks held (a cure is none), and at least `MAKE_ROOM_HURT`
+  (24) health missing, or `HEAL_STACKS` (3) heal stacks held at any
+  health: the largest heal stack is used, as `BotSurvival` heals. 219 left
+  twelve grenade rounds behind at 56/96 health with four heal stacks held,
+  and over 48 runs each left 8.9 shells and 6.3 launcher rounds lying for
+  a full inventory.
 - A pickup the run has no use for stays where it lies
   (`BotInventory.unwanted`): a document, rounds for a gun the bot neither
-  holds, has boxed nor knows of on the frontier, and a cure while one is
-  held or boxed and no poison runs. It is no goal in its room, no remote
+  holds, has boxed nor knows of on the frontier, a cure while one is
+  held or boxed and no poison runs, and a heal while `HEAL_STACKS` (3)
+  heal stacks are held (`enough heals held`; one that merges into a held
+  stack takes no slot and is taken). It is no goal in its room, no remote
   trip, and needs no slot; the item stays on the frontier, so the rounds
   are wanted again once their gun is found. A pickup costs about 275
   ticks with its walk and viewer, and 124 of them a run made a fifth of
-  its time.
+  its time. A heal in another room is left one stack sooner, merging or
+  not (`enough heals held for a trip`): no walk back, and no box visit to
+  make room, for a heal while two stacks are held. With the cap alone
+  each heal passed with three held drew the bot back once one was used,
+  15 heal trips a run where there had been 11.
+- A heal on the frontier is a needed pickup while none is held and the
+  bot is hurt under half, under a fight's health, or has a met boss still
+  to win (`BotInventory.heal_wanted`): its inventory-full mark waits for
+  the inventory to change, and a box visit swaps a spare gun or a
+  loading's rounds out for it, as it does for a boxed heal. With guns,
+  rounds and a key in every slot, no heal held or boxed and 20C's Yawn
+  held back at 50/96, thirty pickups stood marked `inventory full`, the
+  herbs among them, and the run ended on an empty frontier.
 - A frontier firearm the bot has none of (`BotInventory.new_guns`) is a
   needed pickup, worth a spare heal's slot, and a trip ranked like the
   ammunition's: with `barry_early=chemical`, 212's grenade launcher met a

@@ -469,7 +469,7 @@ local function full_mark_needed(bot, item)
     end
     local kind, _, heals = bot:item_kind(item)
     if kind == "heal" then
-        return heals == true and BotSurvival.needs_heal(bot)
+        return heals == true and BotInventory.heal_wanted(bot)
     end
     if kind ~= "ammo" then
         return false
@@ -2859,7 +2859,7 @@ local function choose(bot)
             end
             local useless = goal.kind == "item" and (goal.item_kind == "file"
                 or goal.item_kind == "ammo" and not gun_rounds[goal.item]
-                or BotInventory.unwanted(bot, goal.item) ~= nil)
+                or BotInventory.unwanted(bot, goal.item, goal.room ~= room) ~= nil)
             if goal.room ~= room and fits and not useless then
                 local steps = usable(goal) and route(bot, world, room, goal.room)
                 local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)

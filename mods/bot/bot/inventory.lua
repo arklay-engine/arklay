@@ -1236,14 +1236,17 @@ end
 -- Why a pickup of `item` is not worth its slot and its seconds, or nil:
 -- a document (it unlocks nothing), rounds no gun the bot has found fires
 -- (held, boxed or seen on the frontier, any loading of it; or no weapon of
--- the knowledge file at all), or a cure while one is held or boxed and no
--- poison runs. It is left where it lies and stays on the frontier: the
--- gun's pickup or a poison makes it wanted. A run took eight blue herbs
+-- the knowledge file at all), a cure while one is held or boxed and no
+-- poison runs, or a heal while HEAL_STACKS are held. It is left where it
+-- lies and stays on the frontier: the gun's pickup, a poison or a heal
+-- used makes it wanted. A run took eight blue herbs
 -- and used two, and carried three stacks of magnum rounds to the box for
 -- a gun it never held; each cost its seconds in the viewer and a slot of
 -- an inventory that was full 110 times a run.
-function BotInventory.unwanted(bot, item)
-    local kind, _, heals = bot:item_kind(item)
+BotInventory.HEAL_STACKS = 3
+
+function BotInventory.unwanted(bot, item, remote)
+    local kind, merge, heals = bot:item_kind(item)
     if kind == "file" then
         return "a document"
     end
@@ -1274,6 +1277,29 @@ function BotInventory.unwanted(bot, item)
         if (bot:has_item(item) or box[item])
             and not (player.poisoned or player.seriously_poisoned) then
             return "a cure is held already"
+        end
+    end
+    -- A heal while HEAL_STACKS are held (one that merges into a held stack
+    -- takes no slot). The bot held four sprays and a blue herb beside an
+    -- empty shotgun and left 401's shells for a full inventory; over 48
+    -- runs each left nine shells and six launcher rounds lying that way.
+    -- In another room (`remote`) one stack fewer is enough, merging or
+    -- not: no walk back for a heal while two stacks are held. Left to the
+    -- cap alone, each heal passed with three held drew the bot back once
+    -- one was used: 15 heal trips a run where there had been 11.
+    if kind == "heal" and heals ~= false then
+        local stacks = 0
+        for _, row in ipairs(bot:menu().items or {}) do
+            if row.kind == "heal" and row.heals ~= false and row.quantity > 0 then
+                stacks = stacks + 1
+            end
+        end
+        if remote then
+            if stacks >= BotInventory.HEAL_STACKS - 1 then
+                return "enough heals held for a trip"
+            end
+        elseif stacks >= BotInventory.HEAL_STACKS and not (merge and bot:has_item(item)) then
+            return "enough heals held"
         end
     end
     return nil
@@ -1336,9 +1362,10 @@ function BotInventory.pickups_needing_room(bot, skip)
     -- A due <fetch> hands over an item that needs a slot too.
     local n = #BotPuzzle.fetches_due(bot) + held_elsewhere(bot)
         + (BotPlanner and BotPlanner.steps_needing_room and BotPlanner.steps_needing_room(bot) or 0)
+    local here = bot:room().id
     for _, goal in ipairs(bot:world().frontier) do
         if goal.kind == "item" and not (skip and skip(goal))
-            and not BotInventory.unwanted(bot, goal.item) then
+            and not BotInventory.unwanted(bot, goal.item, goal.room ~= here) then
             local _, merge = bot:item_kind(goal.item)
             if not (merge and bot:has_item(goal.item)) then
                 n = n + 1
@@ -1376,9 +1403,22 @@ function BotInventory.needed_pickups(bot, ctx, skip)
     local progress = n
     local guns = 0
     local handed = BotInventory.handed_over(bot)
+    -- One heal, while none is held and the bot is hurt or a fight waits on
+    -- one (BotInventory.heal_wanted): a swap like the boxed heal's
+    -- (make_room). With guns, rounds and a key in every slot, no heal held
+    -- or boxed and 20C's Yawn held back at 50/96, thirty pickups stood
+    -- marked `inventory full`, the herbs among them, and the run ended on
+    -- an empty frontier.
+    local heal_due = BotInventory.heal_wanted(bot)
     for _, goal in ipairs(bot:world().frontier) do
         if goal.kind == "item" and not (skip and skip(goal)) then
-            local kind, merge = bot:item_kind(goal.item)
+            local kind, merge, heals = bot:item_kind(goal.item)
+            if heal_due and kind == "heal" and heals ~= false then
+                heal_due = false
+                n = n + 1
+                progress = progress + 1
+                ctx.heal_swap = true
+            end
             -- A required hand weapon (ctx.required) counts here only while
             -- none is boxed: the box's loadout withdrawal counts that one,
             -- and one slot takes either.
@@ -1401,6 +1441,15 @@ function BotInventory.needed_pickups(bot, ctx, skip)
         end
     end
     return n, progress, guns
+end
+
+-- Whether a heal lying on the frontier is worth a slot swap: none is held,
+-- and the bot is hurt under half (BotSurvival.needs_heal), under a fight's
+-- health (BotSurvival.health_ready), or a met boss is still to be won.
+function BotInventory.heal_wanted(bot)
+    return BotSurvival.heal_count(bot) == 0
+        and (BotSurvival.needs_heal(bot) or not BotSurvival.health_ready(bot, "a fight")
+            or BotInventory.met_fight_pending(bot))
 end
 
 -- Whether a <fight> the bot has met (BotNav.fight_met) is still to be won.
@@ -1537,9 +1586,9 @@ BotInventory.MAKE_ROOM_HURT = 24
 -- or nil: every slot used, a frontier pickup here (one the planner has not
 -- given up on, `skip`) that merges into no held stack and that the run
 -- needs (a key, a <use> item, or the ammunition of a gun held or in the
--- box), at least two heal stacks held (a cure is none; one will do for a
--- doom book a push on this entry made reachable), and MAKE_ROOM_HURT health
--- missing.
+-- box, any loading of it), at least two heal stacks held (a cure is none;
+-- one will do for a doom book a push on this entry made reachable), and
+-- MAKE_ROOM_HURT health missing (any, with HEAL_STACKS held).
 -- 219 left 12 grenade rounds for a full inventory at 56/96 health with
 -- four heal stacks held.
 function BotInventory.heal_for_room(bot, skip)
@@ -1559,11 +1608,24 @@ function BotInventory.heal_for_room(bot, skip)
     if #heals == 0 then
         return nil
     end
+    -- Every loading's rounds of a gun held or in the box (knowledge
+    -- variant_of): the launcher held with acid rounds loads the grenade
+    -- and flame rounds once it is empty (BotInventory.load_now). Seed 33
+    -- left 309's grenade rounds and 30B's flame rounds for a full
+    -- inventory, three heals held, and met 30C's Black Tiger with three
+    -- acid rounds: the run ended there.
     local box = BotInventory.remembered(bot)
+    local weapons = (bot:knowledge() or {}).weapons or {}
+    local have = {}
+    for id, _ in pairs(ctx.guns) do
+        if bot:has_item(id) or box[id] then
+            have[weapons[id] and weapons[id].variant_of or id] = true
+        end
+    end
     local guns_ammo = {}
     for id, _ in pairs(ctx.guns) do
         local ammo = bot:ammo_for(id)
-        if ammo and (bot:has_item(id) or box[id]) then
+        if ammo and have[weapons[id] and weapons[id].variant_of or id] then
             guns_ammo[ammo] = true
         end
     end
@@ -1584,7 +1646,10 @@ function BotInventory.heal_for_room(bot, skip)
     -- A key, a <use> item or a doom book takes a heal at any hurt: 306's
     -- book lies in its zone only while the pushed box stands in the probe,
     -- and the room puts the box back once the bot leaves.
-    if not wanted or (not needed and hurt < BotInventory.MAKE_ROOM_HURT) then
+    -- With HEAL_STACKS held one is spare: it goes for ammunition at any
+    -- health short of full.
+    if not wanted or (not needed and hurt < BotInventory.MAKE_ROOM_HURT
+            and #heals < BotInventory.HEAL_STACKS) then
         return nil
     end
     -- The last heal goes only for a doom book a push on this entry made
