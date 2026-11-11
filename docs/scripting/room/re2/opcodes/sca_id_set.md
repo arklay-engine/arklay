@@ -31,7 +31,7 @@ shape, stay; the upper bits, which say what the record blocks, are
 replaced.
 
 The change is made after the tick's pass of the scripts, and lasts until the
-room is loaded again. An `index` past the room's records does nothing.
+room is loaded again. A room's load applies what its own passes changed before anything moves, so a door's end and its last stopped tick see it, as the original's do (the original writes the room as the script runs). An `index` past the room's records does nothing.
 
 ## Example
 

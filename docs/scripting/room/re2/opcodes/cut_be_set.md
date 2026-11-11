@@ -35,7 +35,7 @@ listed under the camera, which the switch check does not test, so the zones
 that switch are 1 and up.
 
 The change is made after the tick's pass of the scripts, and lasts until the
-room is loaded again. A camera with no records, or an `index` past the end
+room is loaded again. A room's load applies what its own passes changed before anything moves, so a door's end and its last stopped tick see it, as the original's do (the original writes the room as the script runs). A camera with no records, or an `index` past the end
 of the table, changes nothing.
 
 ## Example

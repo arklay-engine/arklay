@@ -33,7 +33,7 @@ that wherever the room would have shown `a` it now shows `b`, and the other
 way round. Doing it twice undoes it.
 
 The change is made after the tick's pass of the scripts, and lasts until the
-room is loaded again. It does not switch the camera on screen.
+room is loaded again. A room's load applies what its own passes changed before anything moves, so a door's end and its last stopped tick see it, as the original's do (the original writes the room as the script runs). It does not switch the camera on screen.
 
 ## Example
 
