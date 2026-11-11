@@ -502,11 +502,23 @@ while 509's four naked zombies, taken on with the handgun to keep three
 grenades for it, killed the bot in six of forty-eight runs. A trap no one
 gun can clear is fought with the gun that downs the nearest zombie in the
 fewest shots while it has the rounds (three grenades first, then the
-handgun), and a crowd of `TRAP_CROWD` grabbers that is no trap yet (the
-first fight in a room, before the planner has a goal there) spends the
-reserve gun first, without the general reserve, when no ordinary gun
-holds the rounds for all of them (a monster's health reads 0 on the entry
-tick, so the knowledge's stands in). A downed zombie more than its
+handgun), and so is one that a gun covers only slowly (more than
+`TRAP_FAST` shots a zombie: thirty handgun rounds covered 509's four
+zombies, two flame rounds stayed in the launcher, and the first zombie
+took seven shots while the other three closed). A crowd of `TRAP_CROWD`
+grabbers that is no trap yet (the first fight in a room, before the
+planner has a goal there) spends the reserve gun first, without the
+general reserve, when no ordinary gun holds the rounds for all of them
+(a monster's health reads 0 on the entry tick, so the knowledge's stands
+in). For the first second in a room such a crowd opens no fight while
+the planner has no goal yet (`GOAL_WAIT`): the trap is judged by the walk
+to the goal, and a fight opened on the first tick held the planner off
+to its end, so no trap was seen and no retreat
+([Saving and reloading](#saving-and-reloading)) came. A fight that ends
+with its gun empty is followed by no calm while another held gun, or
+another loading, has a round for that monster: the launcher's last round
+went into 509's second zombie, and the bot walked on into the other two
+for six seconds with thirty handgun rounds held. A downed zombie more than its
 `down_reach` (4300) away is walked in on before the shot: an aim
 pointed down meets the floor near 4400, and raising the aim sets the bot
 back up to 700, so fights opened inside that reach ended outside it and
@@ -841,14 +853,22 @@ downs it all), and with gear for it in the remembered box
 room gets the lesson, and the gear-up above follows; the lesson stands
 until the bot walks out of the room alive on a later visit. The trap is
 not fought while the bot backs out (`BotPlanner.retreating`). Once for a
-room, and not while another lesson stands. The gear-up also takes a
+room. A lesson already standing, this room's or another's, is no bar:
+the gear-up after a death takes what fits at the first box, three MO
+disks then fill the slots, and 509 was walked into again with the
+handgun and the launcher boxed. The gear-up also takes a
 boxed firearm when only the staple one (the handgun) is armed: thirty
 handgun rounds "covered" 509's three zombies, and four replays of that
 entry took 34 hits and a death. Of 96 runs' 23 deaths, 6 were first
 walks into 509, and in a quarter of the runs the box held the guns the
 bot did not. 509's eight recorded entries, four seeds each: 78 hits and
 a death before, 36 hits and none after (three of the eight entries back
-out).
+out). In 48 later recordings none of 509's 58 entries backed out: a
+fight opened before the planner's goal hid the trap (`GOAL_WAIT`,
+[Combat](#combat)), one shell in the shotgun counted as a gun in hand
+(`GEAR_ROUNDS`, [Inventory room](#inventory-room)), or a lesson stood. With those
+closed 17 of the 58 do, the ones that took 314 of the 458 hits and all 6
+deaths of six seeds' replays.
 
 The bot reads the shipped save screen's state; a mod's registered save
 screen or the modern screen shows the bot nothing, and the save or load
@@ -1137,11 +1157,16 @@ drives the box screen with pad input only.
   a room the bot died in is still to be left alive
   ([Saving and reloading](#saving-and-reloading)), the box hands out heals
   until two stacks are held (`GEAR_HEALS`), the rounds of each held
-  firearm, one other loading's rounds for a held firearm with no round of
-  its own anywhere, and, when no held firearm is armed that way, one boxed
-  firearm whose rounds are boxed or held (an ordinary one before a
-  `reserve` one) with them. That gear stays held (`gear for a room the bot
-  died in`). It is bounded so: every kind of grenade round and three heals
+  firearm, one other loading's rounds for a held firearm with under
+  `GEAR_ROUNDS` (4) rounds of its own and none boxed, and, when no held
+  firearm but the staple one is armed that way (`GEAR_ROUNDS` loaded and
+  held, or its rounds boxed: one shell in the shotgun is no gun in hand),
+  one boxed firearm whose rounds are boxed or held (an ordinary one
+  before a `reserve` one) with them. That gear stays held (`gear for a
+  room the bot died in`), and so does the held gun whose rounds are
+  still boxed: 502's box handed the launcher out as gear and, its rounds
+  not yet out, took it back in for an MO disk 500 ticks later, and 509
+  killed the bot again with five handgun rounds. It is bounded so: every kind of grenade round and three heals
   filled the slots 503's MO disk needed, and the lab's last door never
   opened. The planner makes one trip for it after each reload; later
   it comes out only at a box the bot is at anyway. When every slot is

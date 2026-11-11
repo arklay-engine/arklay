@@ -246,6 +246,7 @@ function BotInventory.soft_deposits(items, ctx, needed)
     for _, row in ipairs(ctx.swap and items or {}) do
         local rounds = row.item ~= 0 and ctx.spare_guns and ctx.spare_guns[row.item]
         if rounds and not (ctx.gear and ctx.empty_guns and ctx.empty_guns[row.item])
+            and not (ctx.gear and ctx.gear[row.item])
             and not (ctx.loadout and ctx.loadout[row.item])
             and not (ctx.uses and ctx.uses[row.item]) then
             guns[#guns + 1] = { row = row, rounds = rounds,
@@ -318,6 +319,7 @@ function BotInventory.soft_deposits(items, ctx, needed)
             else
                 go = why ~= nil and why ~= false and row.kind == "ammo"
                     and row.item ~= equipped_ammo
+                    and not (ctx.gear and ctx.gear[row.item])
             end
             if go then
                 listed[row] = true
@@ -362,6 +364,11 @@ local REARM_RESERVE = "rearm: sourcing, and the box holds a reserve gun's rounds
 local GEAR = "gear up: the bot died in a room ahead"
 BotInventory.GEAR = GEAR
 BotInventory.GEAR_HEALS = 2
+-- The rounds (loaded and held) under which a held firearm is not armed
+-- for the gear-up: 509 was entered four times with one shell in the
+-- shotgun and the launcher and its rounds in the box, and the shell
+-- counted as a gun in hand.
+BotInventory.GEAR_ROUNDS = 4
 local FIRST = { [LOADOUT] = true, [REARM] = true, [REARM_HERE] = true,
     [REARM_RESERVE] = true, [CURE] = true, [GEAR] = true }
 
@@ -707,22 +714,37 @@ local function gear_set(bot, knowledge)
         local row = knowledge.weapons[id]
         local own = bot:ammo_for(id)
         if bot:has_item(id) then
-            local has = bot:item_count(id) + bot:item_count(own) > 0
+            local count = bot:item_count(id) + bot:item_count(own)
+            local has = count > 0
+            -- Boxed rounds have no count in the memory: taken as enough.
+            local enough = count >= BotInventory.GEAR_ROUNDS
             if box[own] then
                 gear[own] = true
+                -- And the gun stays held for them (soft_deposits): 502's
+                -- box handed the launcher out as gear and, its rounds
+                -- still boxed, took it back in for an MO disk 500 ticks
+                -- later; 509 killed the bot again with five handgun rounds.
+                gear[id] = true
                 has = true
-            elseif not has then
+                enough = true
+            elseif not enough then
+                -- (Under GEAR_ROUNDS counts as none here: three flame
+                -- rounds met 509's four zombies with the explosive ones
+                -- boxed.)
                 local others, held = other_rounds(id)
+                local found = false
                 for _, ammo in ipairs(held and {} or others) do
                     if box[ammo] then
                         gear[ammo] = true
-                        has = true
+                        gear[id] = true
+                        found = true
                         break
                     end
                 end
-                has = has or held
+                has = has or found or held
+                enough = found or held
             end
-            armed = armed or (has and not row.staple)
+            armed = armed or (enough and not row.staple)
         end
     end
     if not armed then
