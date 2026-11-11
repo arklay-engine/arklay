@@ -14,8 +14,8 @@
 #                        seed 0 is the default run, without --bot-seed)
 #   -r, --risk R         --bot-risk              (BATCH_RISK, default 0.25)
 #   -j, --jobs N         parallel runs           (BATCH_JOBS, default: CPU count)
-#   -p, --pack PATH      game pack               (BOT_PACK, default
-#                        target/bot-pack/re1.akpak, from the repository root)
+#   -p, --pack PACK      game pack: an installed pack's id or a path (BOT_PACK,
+#                        default `re1`, the installed RE1 pack)
 #   -t, --timeout SEC    per-run timeout         (BATCH_TIMEOUT, default 1100)
 #       --max-ticks N    --bot-max-ticks         (BATCH_MAX_TICKS, default 400000)
 #   -P, --param K=V      --bot-param, repeatable (BATCH_PARAMS, space-separated K=V list):
@@ -44,7 +44,7 @@ OUT="${BATCH_OUT:-target/bot-batches}"
 SEEDS="${BATCH_SEEDS:-1,2,3,4,5,6,7,8}"
 RISK="${BATCH_RISK:-0.25}"
 JOBS="${BATCH_JOBS:-$(nproc)}"
-PACK="${BOT_PACK:-target/bot-pack/re1.akpak}"
+PACK="${BOT_PACK:-re1}"
 TIMEOUT="${BATCH_TIMEOUT:-1100}"
 MAX_TICKS="${BATCH_MAX_TICKS:-400000}"
 PARAMS="${BATCH_PARAMS:-}"
@@ -84,7 +84,10 @@ print("\n".join(map(str, out)))
 P
 )" || { echo "bad --seeds '$SEEDS'" >&2; exit 2; }
 
-[ -f "$PACK" ] || { echo "pack not found: $PACK" >&2; exit 2; }
+# A pack id (`re1`) is the installed pack, which arklay finds; a path must exist.
+if [[ ! "$PACK" =~ ^[A-Za-z0-9_-]+$ ]] || [ -e "$PACK" ]; then
+  [ -f "$PACK" ] || { echo "pack not found: $PACK" >&2; exit 2; }
+fi
 if [ "$BUILD" = 1 ]; then
   cargo build --profile test-release 2>&1 | grep -E "^(error|warning)|Finished" || true
 fi

@@ -19,8 +19,8 @@ CACHE="${HOME}/.cache/arklay-biorand"
 OUT=target/bot-bench
 BIN=target/test-release/arklay
 declare -A PACKS=(
-  [re1]="$CACHE/re1.akpak"
-  [re1-full]="$CACHE/re1.akpak"
+  [re1]="${BOT_PACK:-re1}"
+  [re1-full]="${BOT_PACK:-re1}"
   [rando-123456]="$CACHE/games/biorand-123456.akpak"
   [rando-777777]="$CACHE/games/biorand-777777.akpak"
 )
@@ -63,7 +63,10 @@ results=()
 failed=()
 for label in "${LABELS[@]}"; do
   pack="${PACKS[$label]}"
-  [ -f "$pack" ] || { echo "FAIL: pack not found: $pack" >&2; exit 1; }
+  # A pack id (`re1`) is the installed pack, which arklay finds.
+  if [[ ! "$pack" =~ ^[A-Za-z0-9_-]+$ ]] || [ -e "$pack" ]; then
+    [ -f "$pack" ] || { echo "FAIL: pack not found: $pack" >&2; exit 1; }
+  fi
   json="$OUT/$label-$stamp.json"
   log="$OUT/$label-$stamp.log"
   echo "== $label ($pack)"

@@ -36,8 +36,8 @@ took (`same`), and over those that left the mean ticks; hits, damage, deaths,
 shots and the shots that landed (a monster's health drops) over all of them. Results go to target/bot-rooms/play-<timestamp>/.
 
 Common options:
-  -p, --pack PATH  the RE1 game pack (default $BOT_PACK, else
-                   target/bot-pack/re1.akpak)
+  -p, --pack PACK  the RE1 game pack: an installed pack's id or a path
+                   (default $BOT_PACK, else `re1`, the installed RE1 pack)
   -j, --jobs N     runs at once (default: the CPU count)
       --no-build   skip `cargo build --profile test-release`
 
@@ -49,6 +49,7 @@ import concurrent.futures
 import datetime
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -284,12 +285,21 @@ def play(args):
     return 0
 
 
+def resolve_pack(pack):
+    """The pack argument for arklay: a pack id such as `re1` as given (the
+    engine finds the installed pack, as the launcher does), a path made
+    absolute; `None` when the path is missing."""
+    if re.fullmatch(r"[A-Za-z0-9_-]+", pack) and not os.path.exists(pack):
+        return pack
+    pack = os.path.abspath(pack)
+    return pack if os.path.isfile(pack) else None
+
+
 def main():
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("command", nargs="?")
     parser.add_argument("names", nargs="*")
-    parser.add_argument("-p", "--pack", default=os.environ.get(
-        "BOT_PACK", os.path.join(ROOT, "target", "bot-pack", "re1.akpak")))
+    parser.add_argument("-p", "--pack", default=os.environ.get("BOT_PACK", "re1"))
     parser.add_argument("-s", "--seed")
     parser.add_argument("-j", "--jobs", type=int, default=os.cpu_count() or 1)
     parser.add_argument("-n", "--name", default="game")
@@ -309,10 +319,11 @@ def main():
     if args.help or args.command not in ("record", "list", "play"):
         print(__doc__.strip())
         return 0 if args.help else 2
-    args.pack = os.path.abspath(args.pack)
-    if not os.path.isfile(args.pack):
+    pack = resolve_pack(args.pack)
+    if pack is None:
         print(f"pack not found: {args.pack} (see -p)", file=sys.stderr)
         return 2
+    args.pack = pack
     if args.command == "record":
         args.params = [name for name in args.names if "=" in name]
         args.seed = args.seed or "1"

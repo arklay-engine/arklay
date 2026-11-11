@@ -17,7 +17,9 @@ use arklay::progress::{Progress, format_duration};
     about = "A from-scratch engine for the classic Resident Evil games"
 )]
 struct Cli {
-    /// Game pack to launch
+    /// Game pack to launch: a path, or the id of an installed pack (`re1`,
+    /// `re2`), found under the data roots' `games/` folders as the launcher
+    /// finds it
     #[arg(value_name = "PACK")]
     pack: Option<PathBuf>,
 
@@ -1572,6 +1574,9 @@ fn main() -> Result<()> {
             let Some(pack) = cli.pack else {
                 return arklay::launcher::run();
             };
+            // A pack id (`re1`) names the installed pack, as the launcher
+            // finds it.
+            let pack = arklay::pack::resolve_game_pack(&pack)?;
             let tracing = cli.trace.is_some();
             let (config, warnings) = arklay::config::Config::load_default();
             for warning in warnings {

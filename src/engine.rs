@@ -4863,6 +4863,18 @@ impl GameSession {
             || self.system_menu_open
     }
 
+    /// Whether a host overlay the player opened owns the session: the native
+    /// in-game menu (open or asked for), its LOAD GAME screen, the F1 debug
+    /// menu or the F9 return-to-title prompt. A running bot is suspended
+    /// under it and the player drives it.
+    fn host_overlay(&self) -> bool {
+        self.system_menu_open
+            || self.system_menu_requested
+            || (self.load_from_system_menu && self.save_screen.is_some())
+            || self.debug_menu.is_some()
+            || self.return_title.is_some()
+    }
+
     /// One frozen tick of the active film: advance it against the wall clock
     /// with the mixer's device-playback cursor as a bounded secondary clock
     /// (or the wall clock alone when no device is open), queue the frame of
@@ -11300,6 +11312,13 @@ impl App {
         screen.native()
     }
 
+    /// Whether a host overlay the player opened is up: the native in-game
+    /// menu or one of the session's ([`GameSession::host_overlay`]).
+    fn host_overlay(&self) -> bool {
+        self.system_menu.is_some()
+            || matches!(&self.mode, Mode::Play(session) if session.host_overlay())
+    }
+
     /// Whether the session asked for the in-game menu; taken once.
     fn take_system_menu_request(&mut self) -> bool {
         match &mut self.mode {
@@ -11455,6 +11474,9 @@ impl App {
         if let ScreenResult::Done(action) = result {
             return self.apply(action);
         }
+        if let Some(flow) = self.bot_host_update(ui, input, action)? {
+            return Ok(flow);
+        }
         // A running bot owns the pad: its tick runs once, before the game
         // tick, and its input replaces the human one. Once it finishes the
         // normal input returns.
@@ -11489,6 +11511,52 @@ impl App {
             None => (ui, input, action),
         };
         self.play_update(ui, input, action)
+    }
+
+    /// The player's host keys while a bot plays: the bot owns the pad, but
+    /// not Escape, F1 or F9. Escape asks for the native in-game menu and
+    /// freezes the update; F1 and F9 reach the session alone. While an
+    /// overlay they opened is up ([`GameSession::host_overlay`]) the bot is
+    /// not ticked and the player's input drives the overlay; it resumes when
+    /// the overlay closes. `None` when the bot plays this update as usual,
+    /// which is every update of a run nobody presses those keys in, so the
+    /// bot's ticks for a seed are unchanged.
+    fn bot_host_update(
+        &mut self,
+        ui: UiInput,
+        input: player::Input,
+        action: bool,
+    ) -> Result<Option<AppFlow>> {
+        if !self.bot.as_ref().is_some_and(|bot| !bot.finished()) {
+            return Ok(None);
+        }
+        let Mode::Play(session) = &mut self.mode else {
+            return Ok(None);
+        };
+        // The in-game menu freezes the room wherever it is: nothing ticks
+        // under it, not even a door's animation.
+        if session.system_menu_open || session.system_menu_requested {
+            return Ok(Some(AppFlow::Continue));
+        }
+        if ui.system_menu && session.attract.is_none() {
+            session.system_menu_requested = true;
+            return Ok(Some(AppFlow::Continue));
+        }
+        if session.host_overlay() {
+            return self.play_update(ui, input, action).map(Some);
+        }
+        if ui.debug_menu || ui.return_title {
+            let host = UiInput {
+                debug_menu: ui.debug_menu,
+                return_title: ui.return_title,
+                any: ui.any,
+                ..UiInput::default()
+            };
+            return self
+                .play_update(host, player::Input::default(), false)
+                .map(Some);
+        }
+        Ok(None)
     }
 
     /// Hand the running bot's pad presses to the open native save/load
@@ -12888,20 +12956,7 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
         // Hot reload happens between frames, never in the middle of a tick.
         app.watch_tick();
         screenshot |= keys.screenshot;
-        if keys.cut_delta != 0 {
-            app.step_camera_cut(keys.cut_delta);
-        }
-        if keys.speed_delta != 0 {
-            let speed = clock.step_speed(keys.speed_delta);
-            hud.notify("speed", format!("Game speed {speed:.1}x"));
-        }
-        for _ in 0..keys.debug_overlay {
-            hud.cycle();
-        }
-        for _ in 0..keys.render_mode {
-            let mode = debug_view::cycle();
-            hud.notify("render", format!("Render mode: {}", mode.label()));
-        }
+        apply_port_keys(app, &keys, &mut clock, &mut hud);
         drive_system_menu(app, display, &mut input, &mut clock)?;
 
         clock.advance();
@@ -12928,70 +12983,119 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
             }
         };
         app.set_tween_alpha(alpha);
-        let draw = Instant::now();
-        let (width, height) = display.drawable_size();
-        if let Some(menu) = app.system_menu.as_mut() {
-            menu.set_recording(display.gpu_active());
-            menu.draw(width, height);
-        } else if !app.draw_debug_menu(width, height, display.gpu_active())
-            && let Some(screen) = app.native_screen()
-        {
-            screen.draw(width, height, display.gpu_active());
-        }
-        // A voiced line's subtitle is drawn by the GUI when its faces can
-        // spell it; the in-game menu, debug menu or save screen covers it.
-        let subtitle = app.subtitle().filter(|subtitle| hud.can_draw(subtitle));
-        app.set_native_subtitle(subtitle.is_some());
-        let covered = app.native_layer().is_some();
-        hud.set_subtitle(
-            subtitle
-                .filter(|_| !covered)
-                .map(|subtitle| (subtitle, app.subtitle_style)),
-        );
-        hud.draw(app, display, &clock, &input);
-        // A frame the GPU fails to draw switches the whole run to the
-        // software backend, which then draws it; no frame mixes the two.
-        let gpu_drawn = match display.gpu().map(|gpu| app.draw_layers(gpu)) {
-            Some(Ok(())) => true,
-            Some(Err(err)) => {
-                display.fall_back_to_software(&err)?;
-                false
-            }
-            None => false,
-        };
-        if gpu_drawn {
-            clock.frame_drawn(draw);
-            let native = hud.layer().or(app.native_layer());
-            if let Some(film) = app.hd_frame() {
-                display.present_film(app.frame(), film)?;
-            } else {
-                display.present_frame(app.frame(), None, native)?;
-            }
-        } else {
-            app.draw();
-            clock.frame_drawn(draw);
-            let native = hud.layer().or(app.native_layer());
-            display.present_frame(app.frame(), None, native)?;
-        }
-        if std::mem::take(&mut screenshot) {
-            let film = app
-                .hd_frame()
-                .map(|film| (&film.rgba[..], (film.width, film.height)));
-            match display.screenshot(app.frame(), film) {
-                Ok(image) => {
-                    let name = crate::screenshot::save_in_background(image);
-                    hud.notify("screenshot", format!("Screenshot saved: {name}"));
-                }
-                Err(err) => {
-                    crate::warning!("warning: screenshot failed: {err:#}");
-                    hud.notify("screenshot", "Screenshot failed");
-                }
-            }
-        }
-        display.show()?;
-        hud.frame_presented();
+        present_app_frame(
+            app,
+            display,
+            &mut hud,
+            &mut clock,
+            &input,
+            std::mem::take(&mut screenshot),
+        )?;
         app.post_present();
     }
+}
+
+/// Carry out this frame's port-only keys: the camera-cut step, the F2/F3
+/// game speed, the F6 debug overlay and the F4 render mode. F12's
+/// screenshot is the caller's, taken from the next presented frame.
+fn apply_port_keys(
+    app: &mut App,
+    keys: &PortKeys,
+    clock: &mut LoopClock,
+    hud: &mut debug_hud::DebugHud,
+) {
+    if keys.cut_delta != 0 {
+        app.step_camera_cut(keys.cut_delta);
+    }
+    if keys.speed_delta != 0 {
+        let speed = clock.step_speed(keys.speed_delta);
+        hud.notify("speed", format!("Game speed {speed:.1}x"));
+    }
+    for _ in 0..keys.debug_overlay {
+        hud.cycle();
+    }
+    for _ in 0..keys.render_mode {
+        let mode = debug_view::cycle();
+        hud.notify("render", format!("Render mode: {}", mode.label()));
+    }
+}
+
+/// Draw and present one frame of the app as the interactive window shows
+/// it: the in-game menu, debug menu or native screen over the game, the
+/// debug HUD, the GPU scene (or the software frame when there is no GPU or
+/// it fails), the F12 screenshot when `screenshot`. Returns whether the
+/// software framebuffer was drawn.
+fn present_app_frame(
+    app: &mut App,
+    display: &mut Display,
+    hud: &mut debug_hud::DebugHud,
+    clock: &mut LoopClock,
+    input: &InputState,
+    screenshot: bool,
+) -> Result<bool> {
+    let draw = Instant::now();
+    let (width, height) = display.drawable_size();
+    if let Some(menu) = app.system_menu.as_mut() {
+        menu.set_recording(display.gpu_active());
+        menu.draw(width, height);
+    } else if !app.draw_debug_menu(width, height, display.gpu_active())
+        && let Some(screen) = app.native_screen()
+    {
+        screen.draw(width, height, display.gpu_active());
+    }
+    // A voiced line's subtitle is drawn by the GUI when its faces can
+    // spell it; the in-game menu, debug menu or save screen covers it.
+    let subtitle = app.subtitle().filter(|subtitle| hud.can_draw(subtitle));
+    app.set_native_subtitle(subtitle.is_some());
+    let covered = app.native_layer().is_some();
+    hud.set_subtitle(
+        subtitle
+            .filter(|_| !covered)
+            .map(|subtitle| (subtitle, app.subtitle_style)),
+    );
+    hud.draw(app, display, clock, input);
+    // A frame the GPU fails to draw switches the whole run to the
+    // software backend, which then draws it; no frame mixes the two.
+    let gpu_drawn = match display.gpu().map(|gpu| app.draw_layers(gpu)) {
+        Some(Ok(())) => true,
+        Some(Err(err)) => {
+            display.fall_back_to_software(&err)?;
+            false
+        }
+        None => false,
+    };
+    if gpu_drawn {
+        clock.frame_drawn(draw);
+        let native = hud.layer().or(app.native_layer());
+        if let Some(film) = app.hd_frame() {
+            display.present_film(app.frame(), film)?;
+        } else {
+            display.present_frame(app.frame(), None, native)?;
+        }
+    } else {
+        app.draw();
+        clock.frame_drawn(draw);
+        let native = hud.layer().or(app.native_layer());
+        display.present_frame(app.frame(), None, native)?;
+    }
+    if screenshot {
+        let film = app
+            .hd_frame()
+            .map(|film| (&film.rgba[..], (film.width, film.height)));
+        match display.screenshot(app.frame(), film) {
+            Ok(image) => {
+                let name = crate::screenshot::save_in_background(image);
+                hud.notify("screenshot", format!("Screenshot saved: {name}"));
+            }
+            Err(err) => {
+                crate::warning!("warning: screenshot failed: {err:#}");
+                hud.notify("screenshot", "Screenshot failed");
+            }
+        }
+    }
+    display.show()?;
+    hud.frame_presented();
+    Ok(!gpu_drawn)
 }
 
 /// One presented frame of the native in-game menu: open it when the session
@@ -34368,6 +34472,157 @@ off_0010:
             session.movie.is_none(),
             "the bot confirm must reach the film through the fixed tick"
         );
+    }
+
+    /// An app playing a new game with a bot that does nothing but count its
+    /// ticks.
+    fn idle_bot_app(dir: &TempDir) -> App {
+        let pack_path =
+            new_game_pack_with(dir, &[("bot/init.lua", b"function on_bot_tick(bot) end\n")]);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut app = App::new(pack, dir.0.join("saves"), false);
+        let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+        app.start_session(session);
+        app.attach_bot(bot::DEFAULT_RISK, None, None, &[], false)
+            .unwrap();
+        app
+    }
+
+    fn update_with(app: &mut App, ui: UiInput) {
+        app.update(ui, player::Input::default(), false).unwrap();
+    }
+
+    fn bot_ticks(app: &App) -> u64 {
+        app.bot.as_ref().unwrap().ticks()
+    }
+
+    fn play_frame(app: &App) -> u64 {
+        let Mode::Play(session) = &app.mode else {
+            panic!("expected a play mode");
+        };
+        session.game.frame
+    }
+
+    #[test]
+    fn escape_suspends_a_running_bot_until_the_in_game_menu_closes() {
+        let dir = TempDir::new();
+        let mut app = idle_bot_app(&dir);
+        for _ in 0..3 {
+            update_with(&mut app, UiInput::default());
+        }
+        assert_eq!(bot_ticks(&app), 3);
+        assert!(!app.host_overlay());
+
+        // The player's Escape reaches the session past the bot's pad.
+        let frame = play_frame(&app);
+        update_with(
+            &mut app,
+            UiInput {
+                system_menu: true,
+                cancel: true,
+                ..UiInput::default()
+            },
+        );
+        assert!(app.host_overlay(), "Escape asks for the in-game menu");
+        // Until the host opens it nothing ticks, the bot included.
+        update_with(&mut app, UiInput::default());
+        assert!(app.take_system_menu_request());
+        let Mode::Play(session) = &mut app.mode else {
+            panic!("expected a play mode");
+        };
+        session.open_system_menu();
+        for _ in 0..5 {
+            update_with(&mut app, UiInput::default());
+        }
+        assert!(app.host_overlay());
+        assert_eq!(bot_ticks(&app), 3, "the bot is not ticked under the menu");
+        assert_eq!(play_frame(&app), frame, "the room is frozen under it");
+
+        app.close_system_menu();
+        assert!(!app.host_overlay());
+        update_with(&mut app, UiInput::default());
+        assert_eq!(bot_ticks(&app), 4, "the bot resumes when the menu closes");
+    }
+
+    #[test]
+    fn a_running_bot_leaves_the_f9_prompt_to_the_player() {
+        let dir = TempDir::new();
+        let mut app = idle_bot_app(&dir);
+        // Into free play, where F9 opens its prompt.
+        for _ in 0..60 {
+            update_with(&mut app, UiInput::default());
+        }
+        let before = bot_ticks(&app);
+        let f9 = UiInput {
+            return_title: true,
+            any: true,
+            ..UiInput::default()
+        };
+        update_with(&mut app, f9);
+        assert!(app.host_overlay(), "F9 reaches the session past the bot");
+        assert_eq!(bot_ticks(&app), before, "the press is the player's");
+        for _ in 0..3 {
+            update_with(&mut app, UiInput::default());
+        }
+        // Any other key cancels the prompt; here, a cancel press.
+        update_with(
+            &mut app,
+            UiInput {
+                cancel: true,
+                any: true,
+                ..UiInput::default()
+            },
+        );
+        let mut resumed = false;
+        for _ in 0..30 {
+            update_with(&mut app, UiInput::default());
+            if !app.host_overlay() && bot_ticks(&app) > before {
+                resumed = true;
+                break;
+            }
+        }
+        assert!(resumed, "the bot resumes once the prompt closes");
+    }
+
+    #[test]
+    fn a_running_bot_plays_the_same_ticks_with_no_host_key_pressed() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack_with(
+            &dir,
+            &[(
+                "bot/init.lua",
+                b"function on_bot_tick(bot)\n  if bot:tick() % 3 == 0 then bot:pulse_confirm() end\nend\n",
+            )],
+        );
+        let run = |ui: UiInput| {
+            let pack = Pack::open(&pack_path).unwrap();
+            let mut app = App::new(pack, dir.0.join("saves"), false);
+            let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+            app.start_session(session);
+            app.attach_bot(bot::DEFAULT_RISK, None, Some(7), &[], false)
+                .unwrap();
+            let mut frames = Vec::new();
+            for _ in 0..90 {
+                update_with(&mut app, ui);
+                let Mode::Play(session) = &app.mode else {
+                    panic!("expected a play mode");
+                };
+                frames.push((session.game.frame, session.game.rand_state));
+            }
+            (bot_ticks(&app), frames)
+        };
+        let (ticks, frames) = run(UiInput::default());
+        assert_eq!(ticks, 90, "the bot ticks on every update");
+        assert_eq!(run(UiInput::default()), (ticks, frames.clone()));
+        // The player's game keys never reach the session while the bot plays.
+        let keys = UiInput {
+            confirm: true,
+            cancel: true,
+            up: true,
+            start: true,
+            ..UiInput::default()
+        };
+        assert_eq!(run(keys), (ticks, frames));
     }
 
     #[test]

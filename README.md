@@ -177,7 +177,7 @@ cargo run -- re1.akpak --ui game --room 101 \
 # print or capture what happens (docs/scripting/lua/script.md). Without
 # --headless a window shows every tick
 cat > walk.lua <<'LUA'
-load_game_pack("re1.akpak")
+load_game_pack("re1")
 load_room("10A")
 hold("forward")
 tick(30)

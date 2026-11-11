@@ -1235,6 +1235,76 @@ pub fn read_manifest(path: &Path) -> Result<Option<manifest::Manifest>> {
     ))
 }
 
+/// The installed game pack whose id is `id`, ignoring case: the first
+/// `games/*.akpak` under the data roots ([`crate::paths::data_roots`], in
+/// their search order) whose manifest names it, or, for a pack without a
+/// readable manifest, whose file stem is `id`. The launcher picks a game's
+/// installed pack the same way.
+pub fn find_installed(id: &str) -> Option<PathBuf> {
+    find_installed_in(&crate::paths::data_roots(), id)
+}
+
+/// [`find_installed`] over the given data roots.
+pub fn find_installed_in(roots: &[PathBuf], id: &str) -> Option<PathBuf> {
+    roots.iter().find_map(|root| {
+        let entries = std::fs::read_dir(crate::paths::games_dir(root)).ok()?;
+        let mut files: Vec<PathBuf> = entries
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.is_file()
+                    && path
+                        .extension()
+                        .is_some_and(|extension| extension.eq_ignore_ascii_case("akpak"))
+            })
+            .collect();
+        files.sort();
+        files.into_iter().find(|path| {
+            let pack_id = match read_manifest(path) {
+                Ok(Some(manifest)) => manifest.id,
+                _ => path
+                    .file_stem()
+                    .map(|stem| stem.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+            };
+            pack_id.eq_ignore_ascii_case(id)
+        })
+    })
+}
+
+/// Whether `name` reads as a pack id (`re1`, `biorand-123456`) rather than a
+/// path: letters, digits, `-` and `_` only.
+pub fn is_pack_id(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// The game pack `name` names: an existing path as given, else, when it
+/// reads as a pack id, the installed pack with that id ([`find_installed`]).
+/// Anything else is returned as given, for the open to report.
+pub fn resolve_game_pack(name: &Path) -> Result<PathBuf> {
+    if name.exists() {
+        return Ok(name.to_path_buf());
+    }
+    let Some(id) = name.to_str().filter(|name| is_pack_id(name)) else {
+        return Ok(name.to_path_buf());
+    };
+    let roots = crate::paths::data_roots();
+    find_installed_in(&roots, id).ok_or_else(|| {
+        let dirs: Vec<String> = roots
+            .iter()
+            .map(|root| crate::paths::games_dir(root).display().to_string())
+            .collect();
+        anyhow!(
+            "no game pack `{id}` is installed (looked in {}); install it with the launcher, \
+             set ARKLAY_DATA, or pass the pack's path",
+            dirs.join(", ")
+        )
+    })
+}
+
 /// Read one entry of the pack at `path` (an image or a directory) without
 /// loading the rest, as the launcher does for a pack's thumbnail. `None`
 /// when the pack has no such entry.
@@ -3922,6 +3992,59 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("invalid manifest.toml"), "{err}");
+    }
+
+    #[test]
+    fn an_installed_pack_is_found_by_its_manifest_id_in_root_order() {
+        let dir =
+            std::env::temp_dir().join(format!("arklay-find-installed-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (first, second) = (dir.join("local"), dir.join("install"));
+        let pack_with_id = |path: &Path, id: &str| {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let mut writer = PackWriter::new();
+            writer
+                .add(
+                    manifest::ENTRY,
+                    manifest::Manifest::base(id).render().into_bytes(),
+                )
+                .unwrap();
+            writer.write(path).unwrap();
+        };
+        // The file name does not matter: the manifest's id does.
+        pack_with_id(&second.join("games/biohazard.akpak"), "re1");
+        pack_with_id(&second.join("games/re2.akpak"), "re2");
+        let roots = vec![first.clone(), second.clone()];
+        assert_eq!(
+            find_installed_in(&roots, "re1"),
+            Some(second.join("games/biohazard.akpak"))
+        );
+        assert_eq!(
+            find_installed_in(&roots, "RE2"),
+            Some(second.join("games/re2.akpak")),
+            "ids match ignoring case"
+        );
+        assert_eq!(find_installed_in(&roots, "re3"), None);
+        // An earlier root shadows a later one, as in the launcher; a pack
+        // with no readable manifest goes by its file stem.
+        std::fs::create_dir_all(first.join("games")).unwrap();
+        std::fs::write(first.join("games/re1.akpak"), b"not a pack").unwrap();
+        assert_eq!(
+            find_installed_in(&roots, "re1"),
+            Some(first.join("games/re1.akpak"))
+        );
+
+        assert!(is_pack_id("re1"));
+        assert!(is_pack_id("biorand-123456"));
+        assert!(!is_pack_id("re1.akpak"));
+        assert!(!is_pack_id("games/re1"));
+        assert!(!is_pack_id(""));
+        // An existing path wins over an id, and a path is never looked up.
+        let existing = first.join("games/re1.akpak");
+        assert_eq!(resolve_game_pack(&existing).unwrap(), existing);
+        let missing = dir.join("missing.akpak");
+        assert_eq!(resolve_game_pack(&missing).unwrap(), missing);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

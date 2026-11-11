@@ -5,24 +5,29 @@ attaches the bot with the story parameters that steer it down the route
 (`mods/bot/params/re1.xml` declares them) and lets it play to the ending.
 
 ```sh
-# Watch it play, in a window at the game's own pace.
-arklay script mods/bot/routes/re1_jill_best_ending.lua re1.akpak
+# Watch it play, in a window at the game's own pace. The host keys work
+# (F2/F3 game speed, F12 screenshot, ...), and Escape opens the in-game menu,
+# options included: the bot waits until it closes.
+arklay script mods/bot/routes/re1_jill_best_ending.lua
 
 # As fast as the machine allows, with no window.
-arklay script --headless mods/bot/routes/re1_jill_best_ending.lua re1.akpak
+arklay script --headless mods/bot/routes/re1_jill_best_ending.lua
 
 # From stdin.
-arklay script --headless - re1.akpak < mods/bot/routes/re1_jill_best_ending.lua
+arklay script --headless - < mods/bot/routes/re1_jill_best_ending.lua
+
+# Another pack: an installed pack's id, or a path.
+arklay script --headless mods/bot/routes/re1_jill_best_ending.lua path/to/re1.akpak
 
 # Every route (or the ones named), in parallel, as a table.
-scripts/bot-routes.py [-p re1.akpak] [-s SEEDS] [ROUTE ...]
+scripts/bot-routes.py [-p PACK] [-s SEEDS] [ROUTE ...]
 ```
 
 Run them from the repository root: the bot is the mod layer `mods/bot`.
 
 | Argument | |
 |---|---|
-| `PACK` | The RE1 game pack (default `games/re1.akpak`). |
+| `PACK` | The RE1 game pack: an installed pack's id, or a path to an `.akpak` (default `re1`, the installed RE1 pack, found under the data roots' `games/` folders as the launcher finds it). |
 | `SEED` | A bot seed: it varies the game's random stream, the same way in every run with that seed. Empty or absent: the game's own stream. |
 | `STATS` | A file to write the full report to, as `--bot-stats` does. |
 
