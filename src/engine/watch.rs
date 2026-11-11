@@ -1,11 +1,12 @@
 //! Hot reload for mod source directories.
 //!
 //! `--watch` polls the filesystem pack and every layered mod source directory
-//! for changed `.lua` files and `bot.xml` metadata. The engine reloads the
-//! pack's `lua/**.lua` hooks, the restricted `bot/**.lua` route, and invalidates
-//! the bot's room metadata when either kind changes; room XML, room scripts,
-//! assets and `.akpak` layers are deliberately out of scope and need a room
-//! reload or a restart.
+//! for changed `.lua` files, `bot.xml` metadata and the bot's
+//! `knowledge/*.xml`. [`Watch::classify`] sorts each change by what it
+//! belongs to, so the engine reloads only that: the pack's Lua hooks, the
+//! restricted `bot/**.lua` route (with its knowledge), or the bot's room
+//! metadata. Room XML, room scripts, assets and `.akpak` layers are
+//! deliberately out of scope and need a room reload or a restart.
 //!
 //! A directory pack's entries are read lazily from disk ([`Pack::read`]), so a
 //! changed file is visible to a fresh [`crate::lua::LuaVm`] or to the bot VM
@@ -25,6 +26,18 @@ pub const POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 /// One file's metadata, the unit the baseline compares.
 type Stamp = (Option<SystemTime>, u64);
+
+/// What a changed file belongs to, which decides what the engine reloads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Changed {
+    /// Any other `.lua` file: the pack's hooks and screens, which run in the
+    /// session's VM.
+    Hooks,
+    /// The bot's `bot/**.lua` route or its `knowledge/*.xml`.
+    BotRoute,
+    /// A room's `bot.xml` metadata.
+    BotMeta,
+}
 
 /// The watched source directories and the last scan's file stamps.
 pub struct Watch {
@@ -113,6 +126,31 @@ impl Watch {
         self.last_poll = Some(Instant::now());
         changed
     }
+
+    /// What `path`, one of [`Self::poll`]'s changes, belongs to. The top
+    /// directory is read relative to the watched source that holds it.
+    pub fn classify(&self, path: &Path) -> Changed {
+        if is_bot_meta(path) {
+            return Changed::BotMeta;
+        }
+        let relative = self
+            .dirs
+            .iter()
+            .find_map(|dir| path.strip_prefix(dir).ok())
+            .unwrap_or(path);
+        let top = relative
+            .components()
+            .next()
+            .and_then(|component| component.as_os_str().to_str());
+        let bot = top.is_some_and(|top| top.eq_ignore_ascii_case("bot"))
+            || (top.is_some_and(|top| top.eq_ignore_ascii_case("knowledge"))
+                && has_extension(path, "xml"));
+        if bot {
+            Changed::BotRoute
+        } else {
+            Changed::Hooks
+        }
+    }
 }
 
 /// Add one pack source if it is a directory. A file source is an `.akpak` (or
@@ -164,17 +202,29 @@ fn scan_dir(dir: &Path, files: &mut BTreeMap<PathBuf, Stamp>) {
 }
 
 fn is_watched(path: &Path) -> bool {
-    is_lua(path)
-        || path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.eq_ignore_ascii_case("bot.xml"))
+    has_extension(path, "lua") || is_bot_meta(path) || is_bot_knowledge(path)
 }
 
-fn is_lua(path: &Path) -> bool {
+fn is_bot_meta(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.eq_ignore_ascii_case("bot.xml"))
+}
+
+/// A `knowledge/<game>.xml`, the bot's combat knowledge.
+fn is_bot_knowledge(path: &Path) -> bool {
+    has_extension(path, "xml")
+        && path
+            .parent()
+            .and_then(Path::file_name)
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.eq_ignore_ascii_case("knowledge"))
+}
+
+fn has_extension(path: &Path, wanted: &str) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("lua"))
+        .is_some_and(|extension| extension.eq_ignore_ascii_case(wanted))
 }
 
 #[cfg(test)]
@@ -254,5 +304,35 @@ mod tests {
         let mut expected = vec![added, changed, removed];
         expected.sort();
         assert_eq!(changed_paths, expected);
+    }
+
+    #[test]
+    fn classify_sorts_changes_by_what_they_reload() {
+        let temp = TempDir::new("classify");
+        for dir in ["lua", "bot/sub", "knowledge", "room/117"] {
+            fs::create_dir_all(temp.path.join(dir)).unwrap();
+        }
+        let hook = temp.path.join("lua/hook.lua");
+        let route = temp.path.join("bot/sub/planner.lua");
+        let knowledge = temp.path.join("knowledge/re1.xml");
+        let meta = temp.path.join("room/117/bot.xml");
+        for path in [&hook, &route, &knowledge, &meta] {
+            fs::write(path, b"-- 1\n").unwrap();
+        }
+
+        let pack = Pack::open(&temp.path).unwrap();
+        let mut watch = Watch::new(true, &pack, &[]).expect("a directory source");
+        assert!(watch.poll().is_empty());
+        for path in [&hook, &route, &knowledge, &meta] {
+            fs::write(path, b"-- 2, changed\n").unwrap();
+        }
+        watch.interval = Duration::ZERO;
+        let changed = watch.poll();
+        assert_eq!(changed.len(), 4, "every kind is watched: {changed:?}");
+        let canonical = |path: &Path| fs::canonicalize(path).unwrap();
+        assert_eq!(watch.classify(&canonical(&hook)), Changed::Hooks);
+        assert_eq!(watch.classify(&canonical(&route)), Changed::BotRoute);
+        assert_eq!(watch.classify(&canonical(&knowledge)), Changed::BotRoute);
+        assert_eq!(watch.classify(&canonical(&meta)), Changed::BotMeta);
     }
 }
