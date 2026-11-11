@@ -77,3 +77,59 @@ ignore = [
   [505, 595, "hk"],
 ]
 record = "--start claire --warp 201:-26492:0:-25629:0:4 --flag 3:100 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:48 --flag 4:70 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --life 119 --give 0:3:6 --give 2:0x14:35 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x47:1"
+
+# Claire A's route from the new game to the Spade Key in one run (oracle/re2.md, "Claire A to the Spade Key"):
+# route_claire_a_115's input to the exit scene's hand back in room 115, then each warp's presses above joined on
+# from each room's hand back. The voice lines end by the recording's clock, so the run takes their lengths from the
+# reference.
+[[run]]
+name = "route_claire_a_spade"
+room = "new"
+character = 1
+offset = 0
+ticks = 31673
+setup_script = "route_claire_a_spade.lua"
+input = "route_claire_a_spade.txt"
+voice_from_ref = true
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,tw,scene,fl,om0,om1,om2,om3,om7,om8,om9,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,zp,fgscn,fgstat,fgitem,fgroom,fgcom,pc,movie,fguse,scv,atsce"
+frames = [0, 31672]
+# 0.81 measured; 115's frames 26110 to 26113 keep the desk's close-up as the screen fades, as the original's do (`cut_chg` with bit 7, docs/internals/deviations/re2.md, "The frames of a cut")
+frame_max_mean = 0.9
+# each room past the card on its own, from its hand back to its door's press (the doors' frames, 10C's stairs door's and the main hall's door's among them, count in the whole run's mean): route_claire_a_115's windows (the exit scene to its hand back on 27496), then 115 again, 114, 10C, 207, 205, 204, 201, and in the hall to START, the status screen, event 8 and event 7 with the key's window
+# measured 0.54, 0.25, 0.48, 0.20, 1.20, 0.40, 0.14, 0.53, 0.15, 0.18, 0.67, 0.27, then 0.21, 0.12, 0.33 (10C's 28332: this recording shows cut 6 a frame late, 42.6 on its own), 0.14, 0.33, 0.21, 0.26, 0.09, 0.72, 0.24 and 0.57
+frame_windows = [[14625, 15491, 0.6], [15858, 15982, 0.3], [16323, 17906, 0.55], [18247, 18684, 0.25], [19025, 20234, 1.25], [20575, 21425, 0.5], [21766, 21916, 0.25], [22127, 24768, 0.6], [25111, 25203, 0.25], [25545, 26109, 0.3], [26110, 27192, 0.75], [27193, 27496, 0.35], [27497, 27516, 0.35], [27858, 27958, 0.25], [28300, 28692, 0.45], [28898, 28989, 0.3], [29331, 29639, 0.45], [29981, 30175, 0.35], [30517, 30642, 0.4], [31010, 31098, 0.25], [31099, 31227, 0.85], [31228, 31333, 0.4], [31334, 31672, 0.7]]
+expect = "match"
+record = "--start claire"
+# zombie 1's angle on the first tick, then the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md):
+# route_claire_a_208's fifteen, then 208's door 0, 207's stairs door, 10C's door 2 and 114's door 1, and this segment's seven
+ignore = [
+    [0, "zm1"],
+    [356, "rng"], [356, "rseed"], [2627, "rng"], [2627, "rseed"], [5527, "rng"], [5527, "rseed"],
+    [6656, "rng"], [6656, "rseed"], [7008, "rng"], [7008, "rseed"], [8062, "rng"], [8062, "rseed"],
+    [8379, "rng"], [8379, "rseed"], [8892, "rng"], [8892, "rseed"], [10086, "rng"], [10086, "rseed"],
+    # route_claire_a_card's 12936: this recording's original drew the door's number 3 ticks sooner (route_claire_a_115's 4)
+    [12933, "rng"], [12933, "rseed"],
+    [15492, "rng"], [15492, "rseed"], [15983, "rng"], [15983, "rseed"], [17907, "rng"], [17907, "rseed"],
+    [18685, "rng"], [18685, "rseed"], [20235, "rng"], [20235, "rseed"],
+    [21426, "rng"], [21426, "rseed"], [21917, "rng"], [21917, "rseed"], [24769, "rng"], [24769, "rseed"],
+    [25204, "rng"], [25204, "rseed"],
+    # this segment's doors: 115's door 0, 114's door 2, 10C's stairs door, 207's door 1, 205's door 0, 204's door 0 and 201's door 0
+    [27517, "rng"], [27517, "rseed"], [27959, "rng"], [27959, "rseed"], [28693, "rng"], [28693, "rseed"],
+    [28990, "rng"], [28990, "rseed"], [29640, "rng"], [29640, "rseed"], [30176, "rng"], [30176, "rseed"],
+    [30643, "rng"], [30643, "rseed"],
+    # the objects are compared in 10C from the end of its load to door 2's load (as route_200_115's), and in 115 from
+    # the end of its load on: elsewhere the slots out of play keep what the last room's objects left in them in the
+    # original, where arklay's are zero (docs/internals/deviations/re2.md, "What an object's slot held before")
+    [0, 22044, "om0"], [0, 22044, "om1"], [0, 22044, "om2"],
+    [24804, 31672, "om0"], [24804, 31672, "om1"], [24804, 31672, "om2"],
+    # 10C's object 0's floor as play comes back after the stairs door (claire_a_208_114's 1234)
+    [22125, "om0"],
+    [0, 25329, "om3"], [0, 25329, "om7"], [0, 25329, "om8"], [0, 25329, "om9"],
+    [27552, 31672, "om3"], [27552, 31672, "om7"], [27552, 31672, "om8"], [27552, 31672, "om9"],
+    # room 100's opening, as route_claire_a_208: slots 0 and 1 drawn at 0x404040 by the original until 183
+    [0, 183, "zp"],
+    # and the view's load on the new game's first tick (`movie` 1 in the original, 0 in arklay), as route_200_spade's
+    [0, "movie"],
+    # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do (the card's door's to 13058: this recording's original runs it a tick later than route_claire_a_115's)
+    [391, 481, "hk"], [2662, 2752, "hk"], [5562, 5652, "hk"], [7043, 7133, "hk"], [8097, 8187, "hk"], [8927, 9019, "hk"], [10121, 10211, "hk"], [12967, 13058, "hk"], [15527, 15617, "hk"], [16018, 16108, "hk"], [17942, 18032, "hk"], [18720, 18810, "hk"], [20270, 20360, "hk"], [21461, 21551, "hk"], [21952, 22044, "hk"], [24804, 24894, "hk"], [25239, 25329, "hk"], [27552, 27642, "hk"], [27994, 28084, "hk"], [28728, 28820, "hk"], [29025, 29115, "hk"], [29675, 29765, "hk"], [30211, 30301, "hk"], [30678, 30768, "hk"],
+]

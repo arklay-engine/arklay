@@ -3,7 +3,7 @@
 # 115: turn to face west, to door 0
 350 left
 361
-# door 0: room 114 loads on 399, play comes back on 705
+# door 0: room 114 loads, play comes back
 364 action
 366
 # 114, on leon_a_115_207's presses 58 ticks sooner: the corridor is empty on Claire A, but the turn on the spot to face north (3120) before the run is kept
@@ -12,7 +12,7 @@
 # run up the corridor's east wall to its north end
 723 up run
 788
-# turn to face east (4080) and press door 2: room 10C loads on 841, play comes back on 1147
+# turn to face east (4080) and press door 2: room 10C loads, play comes back
 790 right
 803
 806 action
@@ -37,6 +37,6 @@
 1519
 1521 up
 1538
-# door 0, the stairs door: room 207 loads on 1575, play comes back on 1745
+# door 0, the stairs door: room 207 loads, play comes back
 1540 action
 1542
