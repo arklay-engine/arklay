@@ -4013,6 +4013,7 @@ impl GameState {
         state.max_health = character_max_health(id.player_flag);
         state.resolve_room_effects(room);
         state.objects.reset(usize::from(room.omodel_slot_count));
+        state.objects.set_no_model(room);
         state.items.reset(usize::from(room.item_count));
         state
     }
@@ -5290,6 +5291,7 @@ impl GameState {
         self.last_tracked_effect = None;
         self.effect_missing_logged.clear();
         self.objects.reset(usize::from(room.omodel_slot_count));
+        self.objects.set_no_model(room);
         self.items.reset(usize::from(room.item_count));
         self.item_palette_edits.clear();
         self.object_palette_edits.clear();

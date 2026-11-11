@@ -2377,6 +2377,7 @@ impl GameHost<'_> {
                 .pending_cuts
                 .push(CutEdit::BlendObject { slot: slot as u8 });
         }
+        let no_model = slot < 32 && self.game.objects.no_model & 1 << slot != 0;
         let Some(record) = self.game.objects.record_mut(slot) else {
             return;
         };
@@ -2392,6 +2393,12 @@ impl GameHost<'_> {
         };
         if attr & 0x20 != 0 {
             be_flg &= !1;
+        }
+        // A slot whose model table entry has no MD1 (its offset 0 relocates
+        // to `rdt` itself) only shares a texture (`ObjTexture_43D580`) and
+        // stays out of play: room 206's desk objects 2 to 4.
+        if no_model {
+            be_flg = 0;
         }
         let selector = (at(5) as u16 >> 8) as u8;
         let parent = crate::objects::SuperParent::decode(selector, 0);
@@ -3694,6 +3701,28 @@ mod tests {
         assert_eq!(object.old2, [4, 5, 6]);
         assert_eq!(object.push_cnt, 7);
         assert_eq!(object.at_sce_no, 3);
+    }
+
+    /// Room 206 (`ROOM2060`): object slots 2 to 4 have a TIM but no MD1,
+    /// so `Obj_model_set` leaves them out of play where slots with a model go
+    /// in, even on a second call.
+    #[test]
+    fn obj_model_set_leaves_a_slot_with_no_model_out_of_play() {
+        let mut game = GameState::default();
+        game.objects = crate::objects::ObjectTable::new(7);
+        game.objects.no_model = 0b1_1100;
+        let call = |slot| [slot, 0, 0, 0, 0, 0, 0, 10, 16, -22200, -180, -26600];
+        for slot in [0, 2, 3, 4] {
+            exec(&mut game, "obj_model_set", &call(slot));
+        }
+        assert_eq!(game.objects.record_mut(0).unwrap().be_flg, 0x0B);
+        for slot in 2..=4 {
+            let object = game.objects.record_mut(slot).unwrap();
+            assert_eq!(object.be_flg, 0, "slot {slot}");
+            assert_eq!(object.flag, 0, "slot {slot}");
+        }
+        exec(&mut game, "obj_model_set", &call(2));
+        assert_eq!(game.objects.record_mut(2).unwrap().be_flg, 0);
     }
 
     #[test]

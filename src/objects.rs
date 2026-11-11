@@ -789,6 +789,11 @@ pub struct ObjectTable {
     /// `Push_cnt`, `At_obj_no` and `At_sce_no` stay in the slot. Kept by slot, so a smaller
     /// room in between doesn't lose them.
     carried: Vec<Carried>,
+    /// RE2: the slots below the RDT's object count whose model table entry
+    /// has no MD1 (offset 0). `Obj_model_set` leaves them out of play. Set at
+    /// each room's entry ([`ObjectTable::set_no_model`]); a reset keeps it,
+    /// so the init's second pass after a setup script sees it too.
+    pub no_model: u32,
 }
 
 /// An object slot's fields that outlast a room load.
@@ -809,6 +814,7 @@ impl ObjectTable {
             built: 0,
             last_asset: None,
             carried: Vec::new(),
+            no_model: 0,
         }
     }
 
@@ -839,6 +845,19 @@ impl ObjectTable {
         }
         self.built = 0;
         self.last_asset = None;
+    }
+
+    /// RE2: note which of the room's object slots have no model, those below
+    /// its object count (`rdt + 2`) with no MD1 in the model table.
+    pub fn set_no_model(&mut self, room: &crate::state::RoomState) {
+        self.no_model = (0..u32::from(room.re2_object_count.min(32)))
+            .filter(|slot| {
+                !room
+                    .object_models
+                    .iter()
+                    .any(|asset| asset.pair_index == *slot as usize)
+            })
+            .fold(0, |mask, slot| mask | 1 << slot);
     }
 
     /// One record by slot.
@@ -2187,6 +2206,35 @@ mod tests {
 
     fn table(slots: usize) -> ObjectTable {
         ObjectTable::new(slots)
+    }
+
+    #[test]
+    fn no_model_marks_the_slots_below_the_count_with_no_model() {
+        let asset = |pair_index| ObjectAsset {
+            pair_index,
+            hd_name: None,
+            model: crate::model::Tmd::default(),
+            texture: crate::model::Texture8 {
+                width: 0,
+                height: 0,
+                indices: Vec::new(),
+                palettes: Vec::new(),
+                stp: Vec::new(),
+            },
+        };
+        // Room 206's table: seven slots, with models in 0, 1, 5 and 6.
+        let room = crate::state::RoomState {
+            re2_object_count: 7,
+            object_models: [0, 1, 5, 6].into_iter().map(asset).collect(),
+            ..crate::state::RoomState::default()
+        };
+        let mut objects = table(32);
+        objects.set_no_model(&room);
+        assert_eq!(objects.no_model, 0b1_1100);
+        objects.reset(32);
+        assert_eq!(objects.no_model, 0b1_1100, "the init's second pass");
+        objects.set_no_model(&crate::state::RoomState::default());
+        assert_eq!(objects.no_model, 0);
     }
 
     #[test]
