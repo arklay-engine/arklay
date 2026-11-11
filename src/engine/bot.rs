@@ -538,8 +538,8 @@ struct PanelSnapshot {
     lamps: [bool; 9],
 }
 
-/// The lab computer terminal's state machine as its screen keeps it
-/// (`games/re1/interactive/computer_lab.lua`'s state table), read-only.
+/// The lab computer terminal as its screen publishes it
+/// (`games/re1/interactive/computer_lab.lua`'s `s.view`), read-only.
 #[derive(Clone, Debug, Default)]
 struct ComputerSnapshot {
     /// What the terminal waits for: `"login"`, `"menu"`, `"exit"` (the
@@ -556,61 +556,46 @@ struct ComputerSnapshot {
     typed: usize,
 }
 
-/// The lab terminal's state while it is up (scenario flag 0x20 with the
-/// system bit that selects it), read from the screen script's state table.
-///
-/// The stages follow `computer_lab.lua`'s `func`/`sub`/`sub2`/`sub3` block:
-/// `sub` 1 is the login (its steps 1 and 3 type the user and the password),
-/// 2 the door menu (step 1 picks a row, step 3 asks whether to leave), 3 the
-/// command prompt and 4 the unlocked screen, which a press dismisses.
+/// The lab terminal while it is up, from the view its script publishes
+/// ([`crate::interactive::InteractiveState::view`]). The screen is the one
+/// the dispatcher has selected, by its script's name; the view is the only
+/// part of its state read; `"busy"` while the screen has none (reset and not
+/// drawn since). A stage or field the bot does not know reads as
+/// `"busy"`/empty.
 fn computer_snapshot(game: &game::GameState) -> Option<ComputerSnapshot> {
-    use crate::interactive::ScriptValue;
-    let (flag, entry) = crate::interactive::SCREENS[1];
-    if !game.flag_test(game::BANK_SCENARIO, 0x20, false)
-        || !game.flag_test(game::BANK_SYSTEM, flag, false)
-    {
+    use crate::interactive::{COMPUTER_LAB, selected_screen};
+    if selected_screen(game) != Some(COMPUTER_LAB) {
         return None;
     }
-    let state = game.interactive.state(entry)?;
-    let int = |key: &str| state.int(key).unwrap_or(0);
-    let window_busy = |index: i64| {
-        state
-            .field("win")
-            .and_then(|windows| windows.index(index))
-            .and_then(|window| window.int("anim_cmd"))
-            .unwrap_or(0)
-            != 0
+    let Some(view) = game.interactive.view(COMPUTER_LAB) else {
+        // Up but reset since it last drew (a room load): it takes no input
+        // until its next frame.
+        return Some(ComputerSnapshot {
+            stage: "busy",
+            ..ComputerSnapshot::default()
+        });
     };
-    let typed = |record: i64| {
-        state
-            .field("text")
-            .and_then(|records| records.index(record))
-            .and_then(|record| record.field("text"))
-            .map_or(0, |text| {
-                (0..9)
-                    .take_while(
-                        |&at| matches!(text.index(at), Some(ScriptValue::Int(byte)) if *byte != 0),
-                    )
-                    .count()
-            })
+    let int = |key: &str| view.int(key).unwrap_or(0);
+    let text = |key: &str| view.bytes(key).unwrap_or_default();
+    let stage = match text("stage") {
+        b"login" => "login",
+        b"menu" => "menu",
+        b"exit" => "exit",
+        b"command" => "command",
+        b"unlocked" => "unlocked",
+        _ => "busy",
     };
-    let (func, sub, sub2, sub3) = (int("func"), int("sub"), int("sub2"), int("sub3"));
-    let input = int("input_enabled") != 0;
-    let (stage, field, typed) = match (func, sub, sub2, sub3) {
-        (1, 1, 1, 1) => ("login", "user", typed(0)),
-        (1, 1, 1, 3) => ("login", "secret", typed(1)),
-        (1, 2, 1.., 1) if input => ("menu", "", 0),
-        (1, 2, 1.., 3) => ("exit", "", 0),
-        (1, 3, 1, 0) if !window_busy(2) && !window_busy(3) => ("command", "user", typed(0)),
-        (1, 4.., 2.., _) => ("unlocked", "", 0),
-        _ => ("busy", "", 0),
+    let sub = match text("field") {
+        b"user" => "user",
+        b"secret" => "secret",
+        _ => "",
     };
     Some(ComputerSnapshot {
         stage,
-        sub: field,
-        cell: int("row") * 8 + int("col"),
-        menu_row: int("caret_pos"),
-        typed,
+        sub,
+        cell: int("cell"),
+        menu_row: int("menu_row"),
+        typed: usize::try_from(int("typed")).unwrap_or(0),
     })
 }
 
@@ -4434,6 +4419,25 @@ pub enum BotScreen {
     },
     /// The load screen; `None` for a screen with no readable state.
     Load(Option<SaveScreenView>),
+}
+
+impl BotScreen {
+    /// The title from the view its script publishes (`M.view()`,
+    /// [`crate::ui::lua_screen::LuaScreen::view`]); a title that publishes
+    /// none, or leaves a field out, reads as an empty stage, selection 0 and
+    /// no saves.
+    pub fn title(view: Option<&crate::interactive::ScriptValue>) -> Self {
+        BotScreen::Title {
+            stage: view
+                .and_then(|view| view.bytes("stage"))
+                .map(|stage| String::from_utf8_lossy(stage).into_owned())
+                .unwrap_or_default(),
+            selection: view.and_then(|view| view.int("selection")).unwrap_or(0),
+            any_saves: view
+                .and_then(|view| view.bool("any_saves"))
+                .unwrap_or(false),
+        }
+    }
 }
 
 /// The Lua handle `on_bot_screen(bot)` gets on an app screen. Like

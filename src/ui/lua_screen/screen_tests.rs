@@ -126,6 +126,33 @@ fn title_any_button_opens_the_option_menu() {
     assert_eq!(stage(&screen), "menu");
 }
 
+/// The title publishes its view, `M.view()`: the player bot's contract with
+/// it, and all the bot reads.
+#[test]
+fn title_publishes_its_view() {
+    let harness = Harness::new("title-view");
+    let mut screen = harness.open("title", &[]);
+    let read = |screen: &LuaScreen| {
+        let view = screen.view().expect("the title publishes M.view()");
+        (
+            view.bytes("stage").map(<[u8]>::to_vec),
+            view.int("selection"),
+            view.bool("any_saves"),
+        )
+    };
+    assert_eq!(
+        read(&screen),
+        (Some(b"press".to_vec()), Some(1), Some(false))
+    );
+    screen.update(&harness.context(), press(|i| i.any = true));
+    assert_eq!(
+        read(&screen),
+        (Some(b"menu".to_vec()), Some(1), Some(false))
+    );
+    let screen = title_menu(&harness, true);
+    assert_eq!(read(&screen), (Some(b"menu".to_vec()), Some(2), Some(true)));
+}
+
 #[test]
 fn title_selection_starts_on_new_game_without_saves() {
     let harness = Harness::new("title-nosaves");

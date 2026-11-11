@@ -310,6 +310,21 @@ impl LuaScreen {
         self.host.values.get(key).copied().unwrap_or(0)
     }
 
+    /// What the screen shows a player, as its script's `view()` publishes
+    /// it, for observers such as the player bot. The view is the screen's
+    /// contract with them: they read nothing else of its state. `None` when
+    /// the script defines no `view`, or it failed (logged; the screen runs
+    /// on).
+    pub fn view(&self) -> Option<crate::interactive::ScriptValue> {
+        match self.vm.call_view() {
+            Ok(view) => view,
+            Err(err) => {
+                crate::warning!("[lua] screen {} {err}", self.entry);
+                None
+            }
+        }
+    }
+
     /// A number or boolean field of the script's own `M.state` table (the
     /// pause menu exposes its cursor state there), read without running any
     /// script code; `None` when the script keeps no such field. A boolean
@@ -592,6 +607,8 @@ struct ScreenVm {
     on_open: Option<Function>,
     update: Option<Function>,
     draw: Option<Function>,
+    /// The published view, `view()` (see [`LuaScreen::view`]).
+    view: Option<Function>,
 }
 
 impl ScreenVm {
@@ -629,6 +646,7 @@ impl ScreenVm {
             on_open: lookup("open").or_else(|| lookup("on_open")),
             update,
             draw: lookup("draw"),
+            view: lookup("view"),
             lua,
             budget,
             env,
@@ -720,6 +738,21 @@ impl ScreenVm {
             })
             .map_err(|err| anyhow::anyhow!("{err}"))?;
         Ok(())
+    }
+
+    /// Run `view()`: the table it returns as a state tree, `None` when the
+    /// script defines no `view`.
+    fn call_view(&self) -> Result<Option<crate::interactive::ScriptValue>> {
+        let Some(function) = &self.view else {
+            return Ok(None);
+        };
+        self.budget.begin();
+        let table: Table = function
+            .call(())
+            .map_err(|err| anyhow::anyhow!("view(): {err}"))?;
+        let view =
+            crate::interactive::from_lua(&table).map_err(|err| anyhow::anyhow!("view(): {err}"))?;
+        Ok(Some(view))
     }
 
     /// Run `draw(api)`.
