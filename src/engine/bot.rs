@@ -3630,6 +3630,8 @@ impl UserData for BotCtx {
                 row.set("slot", fact.slot)?;
                 row.set("bank", fact.flag.0)?;
                 row.set("bit", fact.flag.1)?;
+                row.set("until_bank", fact.until.map(|(bank, _)| bank))?;
+                row.set("until_bit", fact.until.map(|(_, bit)| bit))?;
                 row.set("escape", fact.escape)?;
                 row.set("label", fact.label.as_deref())?;
                 leaves.push(row)?;
