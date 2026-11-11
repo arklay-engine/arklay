@@ -1,0 +1,92 @@
+# Leon A from the main hall's statue (200), as route_200_spade leaves him with the Spade Key, to room 203 and back: door 1 into 201, door 1 into 204, the licker that drops from the corridor's ceiling, the Spade Key at door 2 (the used-key message, the close, the press that opens it), and room 203's door 0 back into 204 (oracle/re2.md, "Leon A to the Diamond Key")
+0
+# 200: turn from the statue toward door 1 (1800) and run west along the hall, onto the door's wall
+350 left
+367
+369 up run
+455
+# door 1: room 201 loads on 492, play comes back on 825
+457 action
+459
+# 201: leon_a_201's walk (past the bar's north end, then south) to door 1, 481 ticks later
+831 right
+833
+835 up run
+867
+869 left
+871
+873 up run
+905
+907 left
+920
+922 up run
+942
+944 right
+947
+949 action
+953
+# 204 (on 984, play back on 1291): with 4:86 set and 6:61 clear, main_02 hangs the licker from the ceiling, and it drops as play starts. Run west along the corridor, turn toward the branch north and fire aimed down every 12 ticks until it dies
+1291 up run
+1378
+1380 right
+1392
+1394 aim down
+1402 aim down fire
+1406 aim down
+1414 aim down fire
+1418 aim down
+1426 aim down fire
+1430 aim down
+1438 aim down fire
+1442 aim down
+1450 aim down fire
+1454 aim down
+1462 aim down fire
+1466 aim down
+1474 aim down fire
+1478 aim down
+1486 aim down fire
+1490 aim down
+1498 aim down fire
+1502 aim down
+1510 aim down fire
+1514 aim down
+1522 aim down fire
+1526 aim down
+1534 aim down fire
+1538 aim down
+1546 aim down fire
+1550 aim down
+1558 aim down fire
+1562 aim down
+1570 aim down fire
+1574 aim down
+1582 aim down fire
+1586 aim down
+1594 aim down fire
+1598 aim down
+# the licker is dead: turn north and run up the branch to door 2's frame
+1600
+1630 right
+1638
+1640 up run
+1670 up run right
+1672 up run
+1700
+# turn to face east, onto door 2
+1704 right
+1717
+# door 2: the Spade Key's used-key message (fg_key bit 5)
+1720 action
+1722
+# the close: one use off the key (59:2 to 59:1)
+1780 action
+1782
+# a press that opens it: room 203 loads on 1875, play comes back on 2177
+1840 action
+1842
+# 203: turn about and press door 0: 204 loads on 2243, play comes back on 2550
+2180 left
+2206
+2208 action
+2210

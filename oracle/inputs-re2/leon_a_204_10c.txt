@@ -1,0 +1,44 @@
+# Leon A from room 204, as leon_a_200_203 leaves him at 203's door 0's arrival with 204's licker dead, to the statue hall (10C): door 1 into 205, the corridor of bodies with 4:48 set (both groups come out, out of reach), door 2 into 207, and the stairs door into 10C (oracle/re2.md, "Leon A to the Diamond Key")
+0
+# 204 (203's door 0's arrival): turn toward the north-west and run up the corridor to its north wall, by door 1
+350 right
+361
+363 up run
+418
+# door 1: room 205 loads on 455, play comes back on 762
+420 action
+422
+# 205, with 4:48 set (both groups of bodies come out of the walls): north up the west corridor along its east wall, past the west group
+763 up run
+849
+# turn to face east and run along the north corridor, about 1900 from the east group's wall
+851 right
+865
+867 up run
+953
+# turn to face south at its east end and run down the corridor
+955 right
+968
+970 up run
+1010
+# turn to face east and run to door 2
+1012 left
+1024
+1026 up run
+1058
+# door 2: room 207 loads on 1095, play comes back on 1402
+1060 action
+1062
+# 207: turn to face north and run up the corridor past the four dead zombies
+1403 left
+1416
+1418 up run
+1460
+# turn to face east and run to the stairs door
+1462 right
+1476
+1478 up run
+1488
+# door 3, the stairs door: room 10C loads on 1525, play comes back on 1700
+1490 action
+1492
