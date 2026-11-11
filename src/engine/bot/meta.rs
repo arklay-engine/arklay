@@ -33,6 +33,8 @@
 //! 507's plate starts the gas. `<leave slot bank bit>` sends the bot out
 //! through door AOT `slot` as soon as the flag is set: a room event that
 //! keeps hurting until the player leaves (507's gas, after the air shaft).
+//! With `until_bank`/`until_bit` it stops once that flag is set (30B's
+//! boulder has come to rest).
 //! `<revisit bank bit while>` brings the bot back into the room once the
 //! flag reaches that state, if it last left the room before then: a door
 //! the room's init adds only later (50B's cell door to 512, live only in
@@ -146,11 +148,15 @@ pub struct KiteLoop {
 /// first; the computer there waits for the next entry.
 /// `escape="yes"` marks a chase rather than a drain: the flag is set only
 /// while it runs (30F's boulder, room bit 0x13), so the steps leading into
-/// it wait for no heal-up.
+/// it wait for no heal-up. `until_bank`/`until_bit` name a flag that ends
+/// it: 30B's boulder sets a scenario flag for good as it starts, and a room
+/// flag once it has come to rest.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Leave {
     pub slot: u8,
     pub flag: (u8, u8),
+    /// The leave no longer applies once this flag is set.
+    pub until: Option<(u8, u8)>,
     pub escape: bool,
     pub label: Option<String>,
 }
@@ -1695,6 +1701,8 @@ fn parse_leave(node: Node<'_, '_>) -> Result<Leave> {
             "slot",
             "bank",
             "bit",
+            "until_bank",
+            "until_bit",
             "escape",
             "label",
             "character",
@@ -1702,6 +1710,24 @@ fn parse_leave(node: Node<'_, '_>) -> Result<Leave> {
         ],
     )?;
     check_leaf(node)?;
+    let until = match (node.attribute("until_bank"), node.attribute("until_bit")) {
+        (Some(_), Some(_)) => {
+            let bank: u8 = attr(node, "until_bank")?;
+            if usize::from(bank) >= FLAG_BANK_COUNT {
+                bail!(
+                    "{}: until_bank {bank} is out of range 0..={}",
+                    at(node),
+                    FLAG_BANK_COUNT - 1
+                );
+            }
+            Some((bank, attr(node, "until_bit")?))
+        }
+        (None, None) => None,
+        _ => bail!(
+            "{}: <leave> needs both `until_bank` and `until_bit`, or neither",
+            at(node)
+        ),
+    };
     let escape = match node.attribute("escape") {
         None | Some("no") => false,
         Some("yes") => true,
@@ -1713,6 +1739,7 @@ fn parse_leave(node: Node<'_, '_>) -> Result<Leave> {
     Ok(Leave {
         slot: attr(node, "slot")?,
         flag: (bank_attr(node)?, attr(node, "bit")?),
+        until,
         escape,
         label: node.attribute("label").map(str::to_string),
     })
@@ -2198,6 +2225,7 @@ mod tests {
             <keep_out slot="9" reason="always"/>
             <leave slot="0" bank="4" bit="7" label="out"/>
             <leave slot="1" bank="4" bit="0x13" escape="yes"/>
+            <leave slot="2" bank="0" bit="0x3D" until_bank="4" until_bit="0x17" escape="yes"/>
         </bot>"#;
         let meta = parse(text).unwrap();
         assert_eq!(
@@ -2224,12 +2252,21 @@ mod tests {
                 Leave {
                     slot: 0,
                     flag: (4, 7),
+                    until: None,
                     escape: false,
                     label: Some("out".to_string()),
                 },
                 Leave {
                     slot: 1,
                     flag: (4, 0x13),
+                    until: None,
+                    escape: true,
+                    label: None,
+                },
+                Leave {
+                    slot: 2,
+                    flag: (0, 0x3D),
+                    until: Some((4, 0x17)),
                     escape: true,
                     label: None,
                 },

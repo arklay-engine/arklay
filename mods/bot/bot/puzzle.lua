@@ -21,7 +21,7 @@
 --                                   let a scene play, not skip it, while
 --                                   the flag is clear (and the `after` flag
 --                                   set): a scene a skip would break
---   <leave slot bank bit [escape] label>
+--   <leave slot bank bit [until_bank until_bit] [escape] label>
 --                                   once the flag is set, out through door
 --                                   AOT `slot` before anything else; an
 --                                   escape asks no heal-up before it
@@ -397,11 +397,12 @@ function BotPuzzle.pushed(_bot, index)
     end
 end
 
--- The first <leave> fact whose flag is set: the room wants the bot out
--- through that door now. Nil when none applies.
+-- The first <leave> fact whose flag is set, and whose `until` flag is not:
+-- the room wants the bot out through that door now. Nil when none applies.
 function BotPuzzle.leave(bot)
     for _, fact in ipairs(meta(bot).leaves or {}) do
-        if bot:flag(fact.bank, fact.bit) then
+        if bot:flag(fact.bank, fact.bit)
+            and not (fact.until_bank and bot:flag(fact.until_bank, fact.until_bit)) then
             return fact
         end
     end

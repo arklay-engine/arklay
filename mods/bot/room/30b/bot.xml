@@ -3,9 +3,14 @@
      reaches on under the boulder, so only its east end is floor) sets room
      flag 31; the room's main clears the flag at once and arms AOT 5 as an
      event. Walking into AOT 5 runs event_00: scenario 0x3D is set and the
-     boulder rolls east; AOT 9 by the entrance is the dodge. Afterwards the
-     init opens the way to door 1 (30C) and the item. -->
+     boulder rolls east; AOT 9 by the entrance is the dodge. The boulder
+     crushes a player in its path within 4500 of it, and no menu stops it:
+     the <leave> takes the bot out to 307 from the moment it rolls until it
+     has come to rest (room flag 0x17, which the init also sets on every
+     later entry). Afterwards the init opens the way to door 1 (30C) and
+     the item. -->
 <bot format="2">
   <interact slot="10" bank="0" bit="0x3D" reveals="5" label="walk to the corridor's end"/>
   <interact slot="5" bank="0" bit="0x3D" label="set the boulder rolling"/>
+  <leave slot="0" bank="0" bit="0x3D" until_bank="4" until_bit="0x17" escape="yes" label="the boulder rolls: out to 307"/>
 </bot>
