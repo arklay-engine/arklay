@@ -304,7 +304,8 @@ end
 -- melee (a hand weapon: closes in past the band's far edge),
 -- headshot (the weapon's headshot distance or nil), crawl_reach (a downed
 -- enemy's reach or nil), reach and speed (the enemy's attack reach and
--- chase speed, nil when unknown). Returns "back", "retreat", "close" or
+-- chase speed, nil when unknown), low_reach (how far a shot aimed down
+-- lands, the knowledge's down_reach, or nil). Returns "back", "retreat", "close", "approach" or
 -- "hold", and the distance to walk to. Reloading backs off to the band's
 -- far edge: the aim is down anyway. A target inside the band's near edge
 -- (or a crawler's reach) is held and shot, never backed off from: leaving
@@ -349,6 +350,19 @@ function BotTactics.spacing(o)
     end
     if o.distance < min then
         return "hold", o.distance
+    end
+    -- A downed target past where a low shot lands (o.low_reach): walk in
+    -- ("approach") to the band's far edge, or just inside that reach.
+    -- Raising the aim sets the bot back (240 to 720 measured): 214's
+    -- fight opened at 3732, the draw put the bot at 4430, and it stood
+    -- there and fired at the floor in front of the zombie. Nine in ten of
+    -- the shots from past 4400 missed, eight handgun rounds a run. (A walk
+    -- in far enough for the draw to end inside the reach was tried: over
+    -- the zombie rooms it cost 12 more hits than this one, which shoots
+    -- from where the second draw leaves it.)
+    if o.low_reach and o.crawl_reach and not o.melee and o.distance > o.low_reach then
+        local want = o.max < o.low_reach and o.max or o.low_reach - C.APPROACH
+        return "approach", want > min and want or min
     end
     -- A hand weapon reaches only inside its band: walk in.
     if o.melee and o.distance > o.max then
@@ -540,7 +554,14 @@ end
 -- Rounds of weapon `base` the <fight>s of the current stage still to be
 -- won need, met or not (a fact's `stage`, else its room's): each one's
 -- `save`, else the kill at its `base` band's damage. A death trap that an
--- ordinary gun can clear leaves them (513's Tyrant, from 505's zombies).
+-- ordinary gun can clear leaves them (505's zombies took the flame rounds
+-- a stood-and-fought Tyrant then lacked). A boss the bot kites (a
+-- knowledge <kite>) keeps none: any gun's rounds do for it from the run,
+-- and the ordinary gun the grenades spare here is the one it then has.
+-- 513's Tyrant, kited with the handgun alone, took 1700 ticks to the
+-- launcher's 900 and hurt the bot in four of twenty fights, none lost;
+-- 509's four naked zombies, taken on with the handgun to keep three
+-- grenades for it, killed the bot in six of forty-eight runs.
 local function stage_fight_rounds(bot, k, base)
     local stage = string.sub(bot:room().id, 1, 1)
     local total = 0
@@ -548,6 +569,7 @@ local function stage_fight_rounds(bot, k, base)
         local entry = k.enemies[fight.enemy]
         local here = (fight.stage or string.sub(fight.room, 1, 1)) == stage
         if here and entry and (entry.prefer == base or entry.open == base)
+            and not entry.kite
             and not (fight.bank and bot:flag(fight.bank, fight.bit)) then
             local band = entry.keep and entry.keep[base]
             local damage = band and band.damage
@@ -565,7 +587,7 @@ end
 -- fight's own enemy spends them all (rationing 40C's Plant 42 for the later
 -- bosses killed the bot there), so it gives 0. Bosses not met yet keep
 -- nothing beyond the general reserve: the bot does not know them.
-function BotTactics.saved_rounds(bot, k, base, enemy_id)
+function BotTactics.saved_rounds(bot, k, base, enemy_id, swamped)
     local saved = 0
     for _, fight in ipairs(bot:fight_facts()) do
         local rounds = fight_rounds(bot, k, fight, base)
@@ -577,7 +599,7 @@ function BotTactics.saved_rounds(bot, k, base, enemy_id)
         end
     end
     local row = k.weapons[base]
-    if row and row.reserve then
+    if row and row.reserve and not swamped then
         saved = saved + general_reserve(bot)
     end
     return saved
@@ -661,13 +683,22 @@ local function firearm(bot, k, enemy, crowd, trap)
         if not row.reserve and damage and damage > 0 and enemy and enemy.health then
             local shots = 0
             for _, e in ipairs(crowd or { enemy }) do
-                shots = shots + e.health // damage + 1
+                -- (A monster's health reads 0 on the tick the room is
+                -- entered: the knowledge's then.)
+                local health = e.health > 0 and e.health or (entry.health or 0)
+                shots = shots + health // damage + 1
             end
             if shots * margin <= row.rounds then
                 finish = true
             end
         end
     end
+    -- A crowd of TRAP_CROWD grabbers that no ordinary gun holds the rounds
+    -- for: the reserve gun goes first, and only a met boss keeps its share
+    -- of its rounds (no general reserve). 509's four naked zombies met a
+    -- handgun holding thirty rounds (up to nine a zombie) beside a launcher
+    -- holding four grenades, kept for a boss not met yet.
+    local swamped = not trap and not finish and crowd ~= nil and #crowd >= TRAP_CROWD
     -- A reserve gun spends only the rounds the <fight>s ahead leave
     -- (BotTactics.saved_rounds).
     for i = #guns, 1, -1 do
@@ -685,7 +716,7 @@ local function firearm(bot, k, enemy, crowd, trap)
                 and state().hurt_by[hurt_key(bot:room().id, enemy.slot)]
             local keep = band and finish and not hurt and band.spare or 0
             local spare = family_rounds(bot, k, base)
-                - BotTactics.saved_rounds(bot, k, base, enemy and enemy.id)
+                - BotTactics.saved_rounds(bot, k, base, enemy and enemy.id, swamped)
                 - keep
             -- A death trap spends everything: the bosses are no use dead.
             -- The launcher's last flame round goes first, then the reload
@@ -714,12 +745,13 @@ local function firearm(bot, k, enemy, crowd, trap)
     for _, row in ipairs(guns) do
         if row.reserve and crowd_n >= 2 and not trap then
             local base = row.base or row.item
-            if family_rounds(bot, k, base) - BotTactics.saved_rounds(bot, k, base) <= 0 then
+            if family_rounds(bot, k, base) - BotTactics.saved_rounds(bot, k, base, nil, swamped) <= 0 then
                 crowd_n = 0
             end
         end
     end
-    local best = BotTactics.pick_gun(guns, entry, enemy and enemy.health, margin, crowd_n, trap)
+    local best = BotTactics.pick_gun(guns, entry, enemy and enemy.health, margin, crowd_n,
+        trap or swamped)
     if not best then
         return nil, 0, guns
     end
@@ -1081,6 +1113,18 @@ local function choose(bot, s, k, enemies, player)
                             or (tier == best_tier and need < best_need) then
                         best_row, best_tier, best_need = row, tier, need
                     end
+                end
+            end
+        end
+        -- No gun downs the whole crowd: the one that downs the nearest in
+        -- the fewest shots, while it has the rounds (three grenades and
+        -- thirty handgun rounds met 509's four zombies: the handgun took
+        -- them all on, the grenades stayed held, and the bot died).
+        if not best_row then
+            for _, row in ipairs(guns or {}) do
+                local need = rounds_for(nearest, nentry, row.item)
+                if need > 0 and need <= row.rounds and (not best_need or need < best_need) then
+                    best_row, best_need = row, need
                 end
             end
         end
@@ -2792,6 +2836,7 @@ function BotTactics.step(bot, scene, player)
         headshot = entry and entry.head and wrow and wrow.headshot or nil,
         crawl_reach = target.status_flags & C.STATUS_TORSO == 0 and entry
             and entry.crawl_reach or nil,
+        low_reach = entry and entry.down_reach or nil,
         reach = entry and entry.reach,
         speed = entry and entry.speed,
         back_speed = C.SPEED.back,
@@ -2839,6 +2884,25 @@ function BotTactics.step(bot, scene, player)
     end
     if move == "retreat" then
         move = "hold"
+    end
+    -- The walk in on a downed target (spacing's "approach"): straight at
+    -- it, no shot on the way. Given up after SPACE_TICKS without getting
+    -- inside the low shot's reach (something in the way): then the bot
+    -- shoots from where it is.
+    if move == "approach" then
+        s.approach_ticks = (s.approach_ticks or 0) + 1
+        if not s.reload_started and s.approach_ticks <= SPACE_TICKS then
+            bot:walk_to(target.x, target.z, {
+                run = target.distance - want >= C.RUN_MIN_DISTANCE,
+                tolerance = SPACE_TOLERANCE,
+                avoid_enemies = true,
+            })
+            s.aim_ticks = 0
+            return true
+        end
+        move = "hold"
+    else
+        s.approach_ticks = nil
     end
     if s.space_rest > 0 then
         s.space_rest = s.space_rest - 1

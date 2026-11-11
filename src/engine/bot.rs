@@ -6868,6 +6868,32 @@ mod tests {
             space("{ distance = 2300, min = 2000, max = 4000, crawl_reach = 2200 }"),
             "hold:2300"
         );
+        // A shot aimed down lands up to 4300 away: past that a downed
+        // zombie is walked in on, to the band's far edge (or just inside
+        // the low shot's reach for a longer band); a standing one, or a
+        // downed one inside the reach, is held and shot.
+        assert_eq!(
+            space(
+                "{ distance = 4500, min = 2000, max = 4000, crawl_reach = 2200, low_reach = 4300 }"
+            ),
+            "approach:4000"
+        );
+        assert_eq!(
+            space(
+                "{ distance = 4500, min = 2500, max = 5000, crawl_reach = 2200, low_reach = 4300 }"
+            ),
+            "approach:4000"
+        );
+        assert_eq!(
+            space(
+                "{ distance = 4200, min = 2000, max = 4000, crawl_reach = 2200, low_reach = 4300 }"
+            ),
+            "hold:4200"
+        );
+        assert_eq!(
+            space("{ distance = 4500, min = 2000, max = 4000, low_reach = 4300 }"),
+            "hold:4500"
+        );
         // The shotgun (band 1800..2800, headshot 3000) steps in from just
         // past the band, but not from across the room.
         assert_eq!(
