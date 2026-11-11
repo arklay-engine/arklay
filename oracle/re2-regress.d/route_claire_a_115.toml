@@ -104,7 +104,7 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,s
 frames = [0, 27619]
 # 0.75 measured; 115's frames 26110 to 26113 keep the desk's close-up as the screen fades, as the original's do (`cut_chg` with bit 7, docs/internals/deviations/re2.md, "The frames of a cut")
 frame_max_mean = 0.85
-# each room past the card on its own, from its hand back to its door's press (the doors' frames, 10C's stairs door's among them, count in the whole run's mean): route_claire_a_208's 200, 201, 204, 205 and 207, then 208 from its door 2's hand back to door 0, 207 again, 10C, 114, and 115 to the desk's close-up, from its fade to door 0 and the exit scene
+# each room past the card on its own, from its hand back to its door's press (the doors' frames, 10C's stairs door's among them, count in the whole run's mean): route_claire_a_208's 200, 201, 204, 205 and 207, then 208 from its door 2's hand back to door 0, 207 again, 10C, 114, and 115 to the desk's close-up, from the medal's question (26110, whose first four frames keep the close-up) to door 0, and the exit scene
 # measured 0.53, 0.24, 0.48, 0.20, 1.19 (the zombies close to cut 1's camera), 0.40, 0.14, 0.53, 0.15, 0.18, 0.67 and 0.25
 frame_windows = [[14625, 15491, 0.6], [15858, 15982, 0.3], [16323, 17906, 0.55], [18247, 18684, 0.25], [19025, 20234, 1.25], [20575, 21425, 0.5], [21766, 21916, 0.25], [22127, 24768, 0.6], [25111, 25203, 0.25], [25545, 26109, 0.3], [26110, 27192, 0.75], [27193, 27619, 0.35]]
 expect = "match"

@@ -9132,16 +9132,25 @@ impl GameState {
     /// sixth tick to the close's eighth, while the room isn't drawn, so
     /// only the trace's `cam` shows it.
     pub fn re2_item_get_cut(&self, cut: usize) -> usize {
+        if self.re2_item_get_clears_cut() {
+            0
+        } else {
+            cut
+        }
+    }
+
+    /// Whether the get-item window has `Cut_no` at 0 this tick: from the
+    /// open's `ITEM_GET_CUT_TICK` to the close's `ITEM_GET_UNCUT_TICK`.
+    pub fn re2_item_get_clears_cut(&self) -> bool {
         let Some(get) = self.re2_item_get else {
-            return cut;
+            return false;
         };
-        let cleared = match get.phase {
+        match get.phase {
             Re2ItemGetPhase::Open => get.ticks >= ITEM_GET_CUT_TICK,
             Re2ItemGetPhase::Close => get.ticks < ITEM_GET_UNCUT_TICK,
             Re2ItemGetPhase::FileFade | Re2ItemGetPhase::FileRead => true,
             _ => true,
-        };
-        if cleared { 0 } else { cut }
+        }
     }
 
     /// The flying picture the get-item window draws this tick: from the

@@ -61,6 +61,11 @@ pub struct Re2State {
     /// `scd_var_cut` with the live cut and drops the pending load, so
     /// `Swap_Cbuff` sees no change to load.
     pub cut_no_load: bool,
+    /// The cut on screen while a `cut_chg` with bit 7 has moved the live cut
+    /// with no load: `Swap_Cbuff` loads nothing, so the old cut's picture,
+    /// view and masks stay up (the models drawn through its view) until the
+    /// next load. `None` while the live cut is the one on screen.
+    pub view_cut: Option<usize>,
     /// Interaction-area events waiting for the VM (`Sce_event`): task, event.
     pub pending_events: Vec<(u8, u8)>,
     /// `Sce_Damage` areas the player's position probe hit this tick: the box,
@@ -750,6 +755,7 @@ impl Default for Re2State {
             view_held: false,
             bg_load: false,
             cut_no_load: false,
+            view_cut: None,
             voice: VoiceLine::default(),
             voice_ticks: Default::default(),
             xa_volume: XA_VOLUME,
@@ -2448,8 +2454,10 @@ impl GameHost<'_> {
         let selector = (at(5) as u16 >> 8) as u8;
         let parent = crate::objects::SuperParent::decode(selector, 0);
         let mut x = at(9) as i32;
-        // `Obj_model_set` and `Om_trans`' own room: its first four 0x28 to -x (`Pos_x`, +0x38).
-        if stage_room == (2, 3) && slot < 4 {
+        // Room 303 (`Obj_model_set` tests `(scd_var_stage + 1) << 8 | room ==
+        // 0x303`, and `RoomId::stage` is that 1-based stage): its first four
+        // objects 0x28 to -x (`Pos_x`, +0x38).
+        if stage_room == (3, 3) && slot < 4 {
             x -= 0x28;
         }
         *record = crate::objects::ObjectRecord {
@@ -3366,6 +3374,31 @@ mod tests {
         );
     }
 
+    /// `Obj_model_set` moves room 303's first four objects 0x28 toward -x,
+    /// and no other room's.
+    #[test]
+    fn obj_model_set_shifts_room_303s_first_four_objects() {
+        for ((stage, room), shifted) in [((3, 3), true), ((2, 3), false), ((3, 4), false)] {
+            let mut game = GameState::default();
+            game.id.stage = stage;
+            game.id.room = room;
+            game.objects = crate::objects::ObjectTable::new(6);
+            for slot in [3, 4] {
+                let call = [
+                    slot, 0, 0, 0, 0, 0, 0, 0x10, 0, 1000, 0, 2000, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                ];
+                exec(&mut game, "obj_model_set", &call);
+            }
+            let x = |slot: usize| game.objects.record(slot).unwrap().pos[0];
+            assert_eq!(
+                x(3),
+                if shifted { 1000 - 0x28 } else { 1000 },
+                "{stage}:{room}"
+            );
+            assert_eq!(x(4), 1000, "{stage}:{room}");
+        }
+    }
+
     /// `Super_on` puts the work at the point on its parent and turns it
     /// along the parent's x axis; nothing is hung.
     #[test]
@@ -3388,11 +3421,11 @@ mod tests {
         assert_eq!(object.super_parent, SuperParent::World, "not hung");
         // Facing along +x: no yaw, a level pitch.
         assert_eq!(object.rotation, [0, 0, 0x1000]);
-        // A quarter turn about y turns it a quarter.
+        // A quarter turn about y (`Cdir_y` 1024) takes +x to -z, whose
+        // `FUN_004d7de0` angle is 0x400.
         game.entities[0].angle = 1024;
         exec(&mut game, "super_on", &[0, 64, 0, 0, 0, 0, 0, 0, 0]);
-        let yaw = game.objects.record(2).unwrap().rotation[1];
-        assert!(yaw == 0x400 || yaw == 0xC00, "{yaw:#x}");
+        assert_eq!(game.objects.record(2).unwrap().rotation[1], 0x400);
         // On another object's world matrix.
         game.objects.records[1].world = crate::anim::entity_matrix([5000, -100, 7000], 0);
         exec(&mut game, "super_on", &[0, 0xC1, 0, 0, 0, 0, 0, 0, 0]);
@@ -3802,20 +3835,6 @@ mod tests {
         }
         exec(&mut game, "obj_model_set", &call(2));
         assert_eq!(game.objects.record_mut(2).unwrap().be_flg, 0);
-    }
-
-    #[test]
-    fn room_303s_first_four_objects_sit_0x28_to_minus_x() {
-        let mut game = GameState::default();
-        game.id.stage = 2;
-        game.id.room = 3;
-        game.objects = crate::objects::ObjectTable::new(5);
-        for slot in [3, 4] {
-            let call = [slot, 0, 0, 0, 0, 0, 0, 0x10, 0, 100, -200, 300];
-            exec(&mut game, "obj_model_set", &call);
-        }
-        assert_eq!(game.objects.record_mut(3).unwrap().pos, [60, -200, 300]);
-        assert_eq!(game.objects.record_mut(4).unwrap().pos, [100, -200, 300]);
     }
 
     /// Room 10C's east plate: area 3, objects only (`sat` 0x44), on floor 2,
