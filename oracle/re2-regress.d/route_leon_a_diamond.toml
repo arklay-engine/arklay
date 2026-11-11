@@ -95,3 +95,48 @@ ignore = [
   [537, 627, "hk"], [974, 1064, "hk"], [1782, 1872, "hk"], [2200, 2290, "hk"],
 ]
 record = "--warp 113:-26100:0:-24800:0:0 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 134 --give 0:2:16 --give 2:0x14:2 --give 3:0x1E:3 --give 4:0x33:1"
+
+# Rooms 10A, 109, 108, 107 and 106: with 10A on fire (4:0 clear), the way round to the valve handle, past 109's crows, down 108's stairs (area 11's event) into 107 and round its zombies.
+[[run]]
+name = "leon_a_10a_106b"
+room = "10A"
+setup_script = "leon_a_10a_106b.lua"
+input = "leon_a_10a_106b.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 2590
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5"
+frames = [360, 2589]
+# 2.20 measured, most of it the stairs from 108 into 107 (door 14), which the original draws darker
+frame_max_mean = 2.5
+# each room on its own, from its hand back to its door's press: 10A, 109, 108, 107 (from the run's first tick there) and 106 from its hand back
+frame_windows = [[360, 417, 0.4], [758, 1077, 0.55], [1420, 1552, 0.9], [1880, 2234, 0.4], [2572, 2589, 0.2]]
+expect = "match"
+ignore = [
+  # the doors' own ticks: 10A's door 0, 109's door 0, the tick after 108's area 11 press, whose event opens door 0 (`aot_on`), and 107's door 0
+  [418, "rng"], [418, "rseed"], [1078, "rng"], [1078, "rseed"], [1554, "rng"], [1554, "rseed"], [2235, "rng"], [2235, "rseed"],
+  # the drawers' trace (`hk`) over each load
+  [453, 543, "hk"], [1113, 1203, "hk"], [1589, 1679, "hk"], [2270, 2360, "hk"],
+]
+record = "--warp 10A:-25854:0:-19443:4016:1 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 134 --give 0:2:16 --give 2:0x14:2 --give 3:0x1E:3 --give 4:0x33:1"
+
+# Rooms 106, 107 and 108: the valve handle and the rounds, back through 107 past its four zombies, and USE at 108's water tank, whose scene raises 4:0 and puts the fire out.
+[[run]]
+name = "leon_a_106_108"
+room = "106"
+setup_script = "leon_a_106_108.lua"
+input = "leon_a_106_108.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 3780
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3"
+frames = [360, 3779]
+frame_max_mean = 1.2
+# The two doors' loads are left out: 106's door 1 (1258) and 107's door 1 (2562).
+frame_windows = [[360, 1257, 0.55], [1600, 2561, 0.4], [2772, 3779, 1.25]]
+# The warp's head on its first ticks; the two doors' Rnd and rseed and their loads' hk; on 2064 a shell case's
+# bounce sound, placed by the case, which the shot's effects throw from where arklay doesn't yet put them
+# (docs/internals/deviations/re2.md, "Effects").
+ignore = [[344, 351, "pneck"], [1258, "rng"], [1258, "rseed"], [2562, "rng"], [2562, "rseed"], [1293, 1383, "hk"], [2597, 2687, "hk"], [2064, "snd"]]
+expect = "match"
+record = "--warp 106:-17416:0:-559:1888:1 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 84 --give 0:2:16 --give 2:0x14:2 --give 3:0x1E:3 --give 4:0x33:1"

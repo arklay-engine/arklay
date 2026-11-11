@@ -1,0 +1,338 @@
+# Leon A, 106 to 108's water tank (#615 Part 3): the valve handle and the rounds, back through 107, and USE at the tank, which puts out 10A's and 108's fire (oracle/re2.md, "Leon A to the Diamond Key")
+344 up run right
+# 106 from 107's door 0: west, then north up the aisle to the valve handle's shelf
+348 up run
+353 up run right
+354 up run
+360 up run right
+361 up run
+373 up run left
+374 up run
+381 up run right
+434 up run left
+554 up run
+558 up run right
+559
+561 right
+# the valve handle (item 50): a press every 12 ticks finishes the question's text, Yes (660), finishes and closes "taken" (740)
+564 action
+566
+576 action
+578
+588 action
+590
+600 action
+602
+612 action
+614
+624 action
+626
+636 action
+638
+648 action
+650
+660 action
+662
+672 action
+674
+740 action
+742
+# west to the rounds (item 20, 15 of them), pressed facing west the same way: Yes on 930, closed on 1010
+746 up  left
+806 up 
+809 up  right
+846 left
+858 action
+860
+870 action
+872
+882 action
+884
+894 action
+896
+906 action
+908
+918 action
+920
+930 action
+932
+942 action
+944
+1010 action
+# back south and east to door 1
+1012
+1016 up run left
+1098 up run
+1102 up run right
+1103 up run
+1105 up run right
+1106 up run
+1108 up run right
+1109 up run
+1111 up run right
+1112 up run
+1114 up run right
+1115 up run
+1117 up run right
+1118 up run
+1121 up run right
+1122 up run
+1127 up run right
+1128 up run
+1138 up run right
+1139 up run
+1142 up run right
+1186 up run
+1192 up run right
+1193 up run
+1198 up run right
+1199 up run
+1201 up run left
+1226 up run
+1240 up run left
+1241 up run
+1245 up run left
+1246 up run
+1248 up run left
+1249
+1251 right
+1256
+# door 1 into 107 (loads 1293, back 1600)
+1258 action
+1260
+1600 up run
+# 107: east along the north side, then shoot slot 1 at the corner and slots 2 and 3 down the east corridor (the handgun reloads itself when empty)
+1621 up run right
+1622 up run
+1653 up run right
+1654 up run
+1657 up run right
+1658 up run left
+1674 up run
+1678 up run left
+1679 up run
+1689 up run left
+1690 up run
+1694 up run right
+1727
+1729 right
+1733 aim
+1740 aim fire
+1742 aim
+1748 aim fire
+1750 aim
+1756 aim fire
+1758 aim
+1764 aim fire
+1766 aim
+1772 aim fire
+1774 aim
+1780 aim fire
+1782 aim
+1788 aim fire
+1790 aim
+1796 aim fire
+1798 aim
+1804 aim fire
+1806 aim
+1812 aim fire
+1814 aim
+1820 aim fire
+1822 aim
+1828 aim fire
+1830 aim
+1836 aim fire
+1838 aim
+1844 aim fire
+1846 aim
+1852 aim fire
+1854 aim
+1860 aim fire
+1862 aim
+1868 aim fire
+1870 aim
+1876 aim fire
+1878 aim
+1884 aim fire
+1886 aim
+1892 aim fire
+1894 aim
+1900 aim fire
+1902 aim
+1908 aim fire
+1910 aim
+1916 aim fire
+1918 aim
+1924 aim fire
+1926 aim
+1932 aim fire
+1934 aim
+1940 aim fire
+1942 aim
+1948 aim fire
+1950 aim
+1956 aim fire
+1958 aim
+1964 aim fire
+1966 aim
+1972 aim fire
+1974 aim
+1980 aim fire
+1982 aim
+1988 aim fire
+1990 aim
+1996 aim fire
+1998 aim
+2004 aim fire
+2006 aim
+2012 aim fire
+2014 aim
+2020 aim fire
+2022 aim
+2028 aim fire
+2030 aim
+2036 aim fire
+2038 up run left
+2051 up run
+2086 up run left
+2087 up run
+2110 up run left
+2111 up run
+2113 aim
+2120 aim fire
+2122 aim
+2128 aim fire
+2130 aim
+2136 aim fire
+2138 aim
+2144 aim fire
+2146 aim
+2152 aim fire
+2154 aim
+2160 aim fire
+2162 aim
+2168 aim fire
+2170 aim
+2176 aim fire
+2178 aim
+2184 aim fire
+2186 aim
+2192 aim fire
+2194 aim
+2200 aim fire
+2202 aim
+2208 aim fire
+2210 aim
+2216 aim fire
+2218 aim
+2224 aim fire
+2226 aim
+2232 aim fire
+2234 aim
+2240 aim fire
+2242 aim
+2248 aim fire
+2250 aim
+2256 aim fire
+2258 aim
+2259 up run right
+2271 up run
+2294 up run right
+2295 up run
+2298 left
+2300 aim
+2307 aim fire
+2309 aim
+2315 aim fire
+2317 aim
+2323 aim fire
+2325 aim
+2331 aim fire
+2333 aim
+2339 aim fire
+2341 aim
+2347 aim fire
+2349 aim
+2355 aim fire
+2357 aim
+2363 aim fire
+2365 aim
+2371 aim fire
+2373 aim
+2379 aim fire
+2381 aim
+2387 aim fire
+2389 aim
+2395 aim fire
+2397 aim
+2403 aim fire
+2405 aim
+2411 aim fire
+2413 aim
+2419 aim fire
+2421 aim
+2427 aim fire
+2429 aim
+2435 aim fire
+2437 aim
+2443 aim fire
+2445 aim
+2451 aim fire
+2453 aim
+2459 aim fire
+2461 aim
+2466 up run right
+2487 up run
+2503 up run right
+2504 up run
+2508 up run right
+2518 up run
+2524 up run right
+2555
+2557 right
+2560
+# door 1 into 108 (loads 2597, back 2772)
+2562 action
+2564
+2599 up
+# 108: west and south to the water tank's area 3
+2773 up run right
+2774 up run
+2786 up run right
+2787 up run
+2804 up run right
+2805 up run
+2807 up run right
+2808 up run
+2809 up run right
+2812 up run left
+2841 up run
+2856 up run left
+2857 up run
+2913 up run left
+2914 up run
+2922 up run right
+2923 up run
+2926 up run right
+2927 up run
+2939 up run right
+2963 up run
+2979 up run right
+2980 up run
+2987 up run right
+2988 up run
+2990 up run right
+2992
+2994 left
+3000
+# START, down twice to the valve handle in slot 4, its menu, USE: event 6 runs the extinguish scene, 4:0 on 3678
+3010 start
+3014
+3050 down
+3054
+3070 down
+3074
+3090 confirm
+3094
+3110 confirm
+3114
