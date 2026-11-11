@@ -79,6 +79,13 @@ local function enter_room(bot, room)
     bot:log(string.format("held %s; equipped %s; box %s", table.concat(held, " "),
         p.equipped and string.format("%02X", p.equipped) or "none",
         bot:memory().box_items or "?"))
+    -- Out of a room the bot died in, alive: its lesson is answered.
+    local left = BOT_STATE.room
+    if left and left ~= room.id and p.health > 0 and BotNav.died_in(bot, left) > 0 then
+        bot:log(string.format("left %s alive: its %d death(s) answered", left,
+            BotNav.died_in(bot, left)))
+        bot:remember(BotNav.died_key(left), nil)
+    end
     BOT_STATE.room = room.id
     BotInventory.enter_room()
     BotPlanner.enter_room(bot, room)

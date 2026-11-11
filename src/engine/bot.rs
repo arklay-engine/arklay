@@ -413,11 +413,13 @@ impl BotMemory {
     }
 
     /// Carry the values a reload keeps over from `current` (the memory at
-    /// the death): the bosses met (`fight_met:` keys). A player who died to
-    /// a boss knows it is there, though the save was written before it.
+    /// the death): the bosses met (`fight_met:` keys) and the rooms the bot
+    /// died in and has not left alive since (`died:` keys). A player who
+    /// died to a boss knows it is there, though the save was written before
+    /// it, and does not walk into the room that killed them the same way.
     fn keep_lessons(&mut self, current: &BotMemory) {
         for (key, value) in &current.values {
-            if key.starts_with(LESSON_PREFIX) {
+            if LESSON_PREFIXES.iter().any(|prefix| key.starts_with(prefix)) {
                 self.values.insert(key.clone(), value.clone());
             }
         }
@@ -445,7 +447,7 @@ fn boot_idle_ticks() -> u64 {
 }
 
 /// The memory keys a reload keeps ([`BotMemory::keep_lessons`]).
-const LESSON_PREFIX: &str = "fight_met:";
+const LESSON_PREFIXES: [&str; 2] = ["fight_met:", "died:"];
 
 impl From<&ActionSnapshot> for ActionMemory {
     fn from(action: &ActionSnapshot) -> Self {
@@ -5608,13 +5610,18 @@ mod tests {
     }
 
     #[test]
-    fn reload_keeps_the_bosses_met_only() {
+    fn reload_keeps_the_lessons_only() {
         let mut checkpoint = BotMemory::default();
         checkpoint.remember("steps_done".to_string(), Some("1".to_string()));
         let mut current = BotMemory::default();
         current.remember("steps_done".to_string(), Some("4".to_string()));
         current.remember("fight_met:30C:04".to_string(), Some("1".to_string()));
+        current.remember("died:509".to_string(), Some("2".to_string()));
         checkpoint.keep_lessons(&current);
+        assert_eq!(
+            checkpoint.values.get("died:509").map(String::as_str),
+            Some("2")
+        );
         assert_eq!(
             checkpoint.values.get("steps_done").map(String::as_str),
             Some("1")

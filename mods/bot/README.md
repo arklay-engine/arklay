@@ -467,7 +467,10 @@ opens the fight only with more (a zombie gets one grenade only while six
 more are held). A reserve gun also keeps, from any monster but a met
 boss's own, the rounds the met bosses still to be won need (`save`, else
 the kill) and a general reserve for bosses not met yet: four rounds at
-full health, fewer as health drops (`BotTactics.saved_rounds`). A death
+full health, fewer as health drops (`BotTactics.saved_rounds`). In a room
+the bot died in and has not left alive since (`BotNav.died_in`,
+[Saving and reloading](#saving-and-reloading)) nothing is saved: the same
+kit spent the same way dies there again. A death
 trap (grabbers on the way) spends every round, except the kills of the
 current stage's `<fight>`s still to be won (met or not), while an
 ordinary gun holds the rounds for the whole crowd with the margin: 505's
@@ -683,7 +686,8 @@ round a room where a cerberus already bit. A route into a room whose
 `<fight>` is still ahead while the bot is not ready for it
 (`BotSurvival.fight_ready`) adds `BOSS_ROOM_COST` (a cure fetch's bonus),
 so it is taken only with no other way left: 30C's Black Tiger killed a bot
-that walked in unvisited at 5 health.
+that walked in unvisited at 5 health. A room the bot died in and has not
+left alive since adds the same for each death there.
 
 At finish the log lists every ammunition pickup the world model saw and
 its fate (`ammo account: ROOM slot N item 0x.. xQ taken|left|gone (mark)`).
@@ -778,6 +782,26 @@ navigation cache is dropped and the Lua VM is rebuilt (`BOT_STATE` starts
 fresh). Without a save the run finishes `dead, no save`; more than 3 deaths
 since one save finish the run too. The stats JSON counts `saves`,
 `reloads` and `deaths_before_reload`.
+
+The reload keeps two kinds of memory key from the death, the lessons: the
+bosses met (`fight_met:ROOM:ENEMY`) and the deaths (`died:ROOM`, the
+deaths in that room since the bot last walked out of it alive:
+`BotNav.died_in`). Without the second the reload plays the same room with
+the same kit the same way: one seed walked into 509's four zombies four
+times from one save, an empty launcher, an empty shotgun and the knife
+held, the handgun and a clip in the box, and the run ended there. While a
+room holds such a lesson:
+
+- the box gears the bot up (`gear up: the bot died in a room ahead`,
+  [Inventory room](#inventory-room)), with one trip made for it after each
+  reload, weighted like a heal fetch;
+- a route through the room costs one `BOSS_ROOM_COST` more for each death
+  there, so another way is taken while there is one;
+- a fight in that room spends the reserve gun's saved rounds
+  ([Combat](#combat)).
+
+The key is cleared when the bot leaves the room alive (`left 509 alive:
+its 1 death(s) answered`).
 
 The bot reads the shipped save screen's state; a mod's registered save
 screen or the modern screen shows the bot nothing, and the save or load
@@ -1033,6 +1057,24 @@ drives the box screen with pad input only.
   launcher are not kept that way, so they can
   go in (kept, they stopped the rearm and held two slots: with
   `vjolt=yes` 409's V-JOLT brew found no slot for its last bottle).
+- Gear-up after a death (`gear up: the bot died in a room ahead`): while
+  a room the bot died in is still to be left alive
+  ([Saving and reloading](#saving-and-reloading)), the box hands out heals
+  until two stacks are held (`GEAR_HEALS`), the rounds of each held
+  firearm, one other loading's rounds for a held firearm with no round of
+  its own anywhere, and, when no held firearm is armed that way, one boxed
+  firearm whose rounds are boxed or held (an ordinary one before a
+  `reserve` one) with them. That gear stays held (`gear for a room the bot
+  died in`). It is bounded so: every kind of grenade round and three heals
+  filled the slots 503's MO disk needed, and the lab's last door never
+  opened. The planner makes one trip for it after each reload; later
+  it comes out only at a box the bot is at anyway. When every slot is
+  used, the first thing to go in for it is a firearm that is dead weight:
+  not equipped, nothing loaded, and no round for any of its loadings held
+  or boxed. Like the reserve-floor top-up, the gear-up and the ammunition
+  of a held gun that is not equipped leave the slots a needed pickup was
+  just given: the clip went in for a key and came back out for the held
+  handgun at 502's box for 240000 ticks.
 - A box visit takes out one copy of a weapon: the deposit rule boxes a
   second, and two boxed knives the loadout wanted came out and went back
   in turn until the run's ticks ran out.
