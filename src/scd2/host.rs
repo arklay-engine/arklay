@@ -94,6 +94,9 @@ pub struct Re2State {
     pub pending_cuts: Vec<CutEdit>,
     /// Collision-record edits waiting for the room (`sca_id_set`).
     pub pending_sca: Vec<(u8, u16)>,
+    /// Floor-zone switches waiting for the room (`flr_set`): the zone and
+    /// whether it goes on.
+    pub pending_flr: Vec<(u8, u8)>,
     /// A door has just handed back, and `fg_stop` hasn't come down yet.
     pub door_settling: bool,
     /// The same tick, as the enemy slots see it.
@@ -785,6 +788,7 @@ impl Default for Re2State {
             var_cut: None,
             pending_cuts: Vec::new(),
             pending_sca: Vec::new(),
+            pending_flr: Vec::new(),
             door_settling: false,
             door_stop: false,
             door_key_stop: false,
@@ -2766,6 +2770,7 @@ impl Host for GameHost<'_> {
                 b: at(1) as u8,
             }),
             "sca_id_set" => self.game.re2.pending_sca.push((at(0) as u8, at(1) as u16)),
+            "flr_set" => self.game.re2.pending_flr.push((at(0) as u8, at(1) as u8)),
             "work_set" => {
                 let work = if at(0) == WK_PLAYER {
                     Work::Player
