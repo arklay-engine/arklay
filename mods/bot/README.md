@@ -456,7 +456,7 @@ XML: an unknown attribute is an error, and `unknown` or `none` is `nil`.
 Each `<weapon>` gives the cone (`near`, `side`), `cadence`, the shotgun's
 `headshot` and `weak` distances; each `<enemy>` gives `policy`
 (`fight`/`pass`/`avoid`), the poses (`stand`, `downed`, `up`), `reach`,
-`crawl_reach`, `grabs`, `outrun`, `speed`, `health`, the optional `parts`
+`crawl_reach`, `down_reach`, `grabs`, `outrun`, `speed`, `health`, the optional `parts`
 and `prefer`, and one `<keep>` band per weapon. A band's optional `spare`
 is the rounds of that weapon (every loading) it leaves held: a reserve gun
 opens the fight only with more (a zombie gets one grenade only while six
@@ -467,7 +467,25 @@ full health, fewer as health drops (`BotTactics.saved_rounds`). A death
 trap (grabbers on the way) spends every round, except the kills of the
 current stage's `<fight>`s still to be won (met or not), while an
 ordinary gun holds the rounds for the whole crowd with the margin: 505's
-zombies took the flame rounds 513's Tyrant needed. Every entry has a comment saying how it was
+zombies took the flame rounds a stood-and-fought Tyrant needed. A boss the
+bot kites (a `<kite>` entry) keeps none of them: any gun does for it from
+the run, and the ordinary gun the grenades spare in the trap is the one
+the kite then has. 513's Tyrant kited with the handgun alone took about
+1700 ticks to the launcher's 900 and was never lost in twenty fights,
+while 509's four naked zombies, taken on with the handgun to keep three
+grenades for it, killed the bot in six of forty-eight runs. A trap no one
+gun can clear is fought with the gun that downs the nearest zombie in the
+fewest shots while it has the rounds (three grenades first, then the
+handgun), and a crowd of `TRAP_CROWD` grabbers that is no trap yet (the
+first fight in a room, before the planner has a goal there) spends the
+reserve gun first, without the general reserve, when no ordinary gun
+holds the rounds for all of them (a monster's health reads 0 on the entry
+tick, so the knowledge's stands in). A downed zombie more than its
+`down_reach` (4300) away is walked in on before the shot: an aim
+pointed down meets the floor near 4400, and raising the aim sets the bot
+back up to 700, so fights opened inside that reach ended outside it and
+nine in ten of those shots missed, eight handgun rounds a run. Every
+entry has a comment saying how it was
 measured. `parts="yes"` marks a monster made of several entities (Plant 42's
 body and vines): a hit holds only the part it struck, so the bot fires on
 while its target is still reacting instead of waiting for the reaction to
@@ -1083,7 +1101,7 @@ leaves the game session.
 | `bot:objects()` | The room's active objects (blocks, statues, shelves): `{slot, x, z, half_x, half_z, pushable}`, `x`/`z` the live centre and `half_*` the collision half-extents. `pushable` is solid and without the not-pushable flag. The walk and path planner treat every solid object as an obstacle, a box 128 units inside the object on each side, rebuilt when an object moves. |
 | `bot:enemies()` | Array of active monsters (`id < 0x20`, `health > 0`), nearest first: `{slot, id, x, y, z, angle, bearing, health, state, status_flags, action_behavior, action_state, hit_state, distance, visible}`. `bearing` is the absolute 12-bit angle from the player; `distance` is horizontal; `visible` is the weapon line-of-sight result. Boss ids are included. |
 | `bot:weapon()` | `{equipped, weapon, clip, reserve, ammo, behavior, state, aim_state, target}`. `equipped` is the inventory item (or nil), `weapon` is `equipped_weapon_id`, `clip` is the rounds in the equipped weapon's stack, `reserve` is `item_count(weapon + 9)`, `ammo` is `bot:ammo_for(weapon)`, and `target` is the locked entity slot or nil. |
-| `bot:knowledge()` | The game's combat knowledge, read-only: `{source, enemies, weapons, cures}`. `enemies[id]` is `{name, policy, stand, downed, up, reach, crawl_reach, grabs, outrun, speed, health, parts, keep}` with `keep[weapon] = {min, max, damage}`; `weapons[id]` is `{name, near, side, cadence, headshot, weak, status_bit, melee}`. `cures` is an array of `{item, poison, heals}` from `<cure>` rows, in file order: `poison` is `"poison"` or `"serious"` and `heals` whether the item also restores health. An `unknown` value is `nil`. With no file, the tables are empty. See [Combat](#combat). |
+| `bot:knowledge()` | The game's combat knowledge, read-only: `{source, enemies, weapons, cures}`. `enemies[id]` is `{name, policy, stand, downed, up, reach, crawl_reach, down_reach, grabs, outrun, speed, health, parts, keep}` with `keep[weapon] = {min, max, damage}`; `weapons[id]` is `{name, near, side, cadence, headshot, weak, status_bit, melee}`. `cures` is an array of `{item, poison, heals}` from `<cure>` rows, in file order: `poison` is `"poison"` or `"serious"` and `heals` whether the item also restores health. An `unknown` value is `nil`. With no file, the tables are empty. See [Combat](#combat). |
 | `bot:spacing_point(slot, want)` | A point `want` from monster `slot` that is free of collision, at least `want` from every other monster, in a clear line from the player and not reached by walking past the monster: `{x, z}` (the nearest such point) or `nil`. |
 | `bot:can_see(slot)` | Whether monster `slot` is in the current snapshot with a clear weapon sight line. |
 | `bot:flag(bank, bit)` | A flag bit, read-only. |

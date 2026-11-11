@@ -104,6 +104,9 @@ pub struct Enemy {
     pub reach: Option<i32>,
     /// The same for a downed, crawling one (optional attribute).
     pub crawl_reach: Option<i32>,
+    /// How far away a shot aimed down still hits a downed one (optional
+    /// attribute): past it the aim's line meets the floor first.
+    pub down_reach: Option<i32>,
     pub grabs: Option<bool>,
     /// Whether Jill's run is faster than its chase.
     pub outrun: Option<bool>,
@@ -608,6 +611,7 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
             "up",
             "reach",
             "crawl_reach",
+            "down_reach",
             "grabs",
             "outrun",
             "speed",
@@ -729,6 +733,10 @@ fn parse_enemy(node: Node<'_, '_>) -> Result<Enemy> {
         reach: distance(node, "reach")?,
         crawl_reach: match node.attribute("crawl_reach") {
             Some(_) => distance(node, "crawl_reach")?,
+            None => None,
+        },
+        down_reach: match node.attribute("down_reach") {
+            Some(_) => distance(node, "down_reach")?,
             None => None,
         },
         grabs: yes_no(node, "grabs")?,
@@ -854,6 +862,7 @@ impl Knowledge {
             )?;
             row.set("reach", enemy.reach)?;
             row.set("crawl_reach", enemy.crawl_reach)?;
+            row.set("down_reach", enemy.down_reach)?;
             row.set("grabs", enemy.grabs)?;
             row.set("outrun", enemy.outrun)?;
             row.set("speed", enemy.speed)?;

@@ -30,7 +30,9 @@
     enemy: policy fight|pass|avoid; stand = the pose that hits it standing;
       downed = the pose for a downed or crawling enemy; up = which weapons an
       aim-up shot can hit it with; reach = the distance its attack starts at;
-      crawl_reach = the same for a crawler; grabs = it holds the player;
+      crawl_reach = the same for a crawler; down_reach (optional) = how
+      far away a shot aimed down still hits a downed one (past it the aim's
+      line meets the floor first); grabs = it holds the player;
       outrun = Jill's run (210 a tick) beats its chase; speed = its chase
       speed in units a tick; health = its largest
       starting health; prefer (optional) = the weapon to fight it with
@@ -108,9 +110,12 @@
        of a run that ran dry in the guardhouse. A plain grenade (row 6:
        201) kills one in a shot: spent only while more than `spare` rounds
        are held, as the corridor zombie the bot cannot pass (213's grabbed
-       it on six passes) is worth one, and the lab's fights the rest. -->
+       it on six passes) is worth one, and the lab's fights the rest.
+       down_reach 4300 (all three zombies): over 48 runs, 195 of 198
+       handgun shots aimed down at a downed zombie landed from 3000 to
+       4399 away, and 44 of 439 from 4400 to 4599. -->
   <enemy id="0x00" name="zombie" policy="fight" stand="torso" downed="down"
-         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99"
+         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" down_reach="4300" grabs="yes" outrun="yes" speed="45" health="99"
          head="yes">
     <keep weapon="0x02" min="2000" max="4000" damage="12"/>
     <keep weapon="0x03" min="1800" max="2800" damage="53"/>
@@ -120,7 +125,7 @@
   </enemy>
   <!-- Naked zombie: the same driver as 0x00, collision radius 322. -->
   <enemy id="0x01" name="naked zombie" policy="fight" stand="torso" downed="down"
-         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99"
+         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" down_reach="4300" grabs="yes" outrun="yes" speed="45" health="99"
          head="yes">
     <keep weapon="0x02" min="2000" max="4000" damage="12"/>
     <keep weapon="0x03" min="1800" max="2800" damage="53"/>
@@ -130,7 +135,7 @@
   </enemy>
   <!-- Green zombie: the same driver as 0x00. -->
   <enemy id="0x11" name="green zombie" policy="fight" stand="torso" downed="down"
-         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" grabs="yes" outrun="yes" speed="45" health="99"
+         up="shotgun" prefer="0x03" reach="1500" crawl_reach="2200" down_reach="4300" grabs="yes" outrun="yes" speed="45" health="99"
          head="yes">
     <keep weapon="0x02" min="2000" max="4000" damage="12"/>
     <keep weapon="0x03" min="1800" max="2800" damage="53"/>

@@ -69,6 +69,16 @@ local function enter_room(bot, room)
     local p = bot:player()
     bot:log(string.format("room %s pos=(%d,%d) camera=%d health=%d/%d",
         room.id, p.x, p.z, room.camera, p.health, p.max_health))
+    -- What the bot carries into the room (item x count), and the box.
+    local held = {}
+    for _, row in ipairs(bot:menu().items or {}) do
+        if row.item ~= 0 then
+            held[#held + 1] = string.format("%02Xx%d", row.item, row.quantity)
+        end
+    end
+    bot:log(string.format("held %s; equipped %s; box %s", table.concat(held, " "),
+        p.equipped and string.format("%02X", p.equipped) or "none",
+        bot:memory().box_items or "?"))
     BOT_STATE.room = room.id
     BotInventory.enter_room()
     BotPlanner.enter_room(bot, room)
