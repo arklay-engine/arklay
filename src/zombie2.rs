@@ -915,6 +915,12 @@ pub struct World<'a> {
     pub camera_cut: u8,
     /// Room objects a script took away.
     pub hidden_objects: Vec<usize>,
+    /// Where `Em_Zombie`'s `Root_ck` heads: the partner when she has this
+    /// zombie first on her list, else the player.
+    pub root_target: [i32; 3],
+    /// `L_spl` and `Dir_spl`, as the partner's `Spl_enemy_ck` left them.
+    pub l_spl: u32,
+    pub dir_spl: u16,
 }
 
 /// A water area (`aot_set` kind 7) as `Water_ck` reads it from `aot_table`.
@@ -1466,7 +1472,7 @@ impl Em<'_, '_, '_> {
                 ));
             }
         }
-        self.root_ck();
+        self.root_ck_zombie();
         if self.world.stopped {
             return;
         }
@@ -1769,6 +1775,17 @@ impl Em<'_, '_, '_> {
     /// `Root_ck`, toward the player.
     fn root_ck(&mut self) {
         let [x, _, z] = self.world.player;
+        self.root_ck_to([x as i16, z as i16], None);
+    }
+
+    /// `Em_Zombie`'s `Root_ck`, toward [`World::root_target`]: the partner
+    /// when she has this zombie nearest.
+    fn root_ck_zombie(&mut self) {
+        if !(0x10..=0x1F).contains(&self.mover.tick.id) {
+            self.root_ck();
+            return;
+        }
+        let [x, _, z] = self.world.root_target;
         self.root_ck_to([x as i16, z as i16], None);
     }
 
@@ -2686,6 +2703,8 @@ mod tests {
             em_set: (0, 0, 0xFF),
             arms: Default::default(),
             kage: None,
+            l_spl: 0,
+            dir_spl: 0,
             be_flg: 1,
             work: Work::default(),
             body: crate::player::spawn(

@@ -180,13 +180,19 @@ fn slot_bodies(game: &GameState) -> Vec<crate::zombie2::Oba> {
 pub fn oba_ck_em2(game: &mut GameState, player: &mut crate::player::PlayerState, old: [i32; 3]) {
     let mut atd = player_atd(game, player.pos);
     let be_flg = game.re2.player.be_flg;
-    let mut touching = 0;
+    let mut touching = 0u32;
+    let mut partner = false;
     for other in slot_bodies(game) {
         if crate::zombie2::oba_hit(&other, be_flg, &mut atd, &mut player.pos, Some(old)) {
-            touching |= 1 << other.slot;
+            if usize::from(other.slot) == SPLAYER_SLOT {
+                partner = true;
+            } else {
+                touching |= 1u32.checked_shl(u32::from(other.slot)).unwrap_or(0);
+            }
         }
     }
     game.re2.player.at_em_flg = touching;
+    game.re2.player.at_em_partner = partner;
     game.re2.player.atd = Some(atd);
     game.re2.player.old = Some(old);
 }
@@ -668,6 +674,7 @@ fn run_zombie(
         .0
         .get(SPLAYER_SLOT)
         .is_some_and(|other| other.as_deref().is_some_and(|other| other.be_flg & 1 != 0));
+    let root_target = zombie_root_target(game, room, character);
     let stopped = game.re2.character_stopped(slot);
     let easy = game.re2.flag(0, FG_SYSTEM_EASY);
     let difficulty = game.re2.difficulty();
@@ -804,6 +811,9 @@ fn run_zombie(
         sub1: false,
         camera_cut,
         hidden_objects: Vec::new(),
+        root_target,
+        l_spl: character.l_spl,
+        dir_spl: character.dir_spl,
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
     let spawns = std::mem::take(&mut world.spawns);
@@ -1374,14 +1384,15 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
             .entities
             .first()
             .map_or(([0; 3], 0), |p| (p.pos, p.angle));
+        let nearest = spl_enemy_ck(game, tick, character.body.pos, character.work.neck.position);
         let mut timer = game.re2.spl_pos_ck_timer;
         let mut world = crate::partner2::PartnerWorld {
             player,
             player_angle,
             player_routine: game.re2.player.routine[1],
             distance: character.distance,
-            enemy: None,
-            enemy_dist: game.re2.nearest_dist[0],
+            nearest,
+            nearest_dist: game.re2.nearest_dist,
             rnd: &mut game.re2.rnd,
             pos_ck_timer: &mut timer,
             water: 0,
@@ -1402,6 +1413,85 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
         spl_mv4a(character);
     }
     arrived
+}
+
+/// `Em_Zombie`'s `Root_ck` target: the partner, when she has this zombie
+/// first on her list and stands in a guide area, else the player.
+fn zombie_root_target(game: &GameState, room: &RoomState, character: &Character) -> [i32; 3] {
+    let player = game.entities[0].pos;
+    if !game.re2.partner_bit() || character.l_spl & crate::partner2::L_SPL_LISTED != 1 << 30 {
+        return player;
+    }
+    let Some(partner) = game
+        .re2
+        .characters
+        .0
+        .get(SPLAYER_SLOT)
+        .and_then(Option::as_deref)
+    else {
+        return player;
+    };
+    let [x, _, z] = partner.body.pos;
+    match crate::zombie2::guide_check(&room.guides, x as i16, z as i16) {
+        Some(_) => partner.body.pos,
+        None => player,
+    }
+}
+
+/// `Sherry_move`'s first call, `Spl_enemy_ck`, over the enemy slots: it
+/// writes each enemy's `L_spl` and `Dir_spl` and the nearest-enemy cache, and
+/// answers where the listed enemies stand.
+fn spl_enemy_ck(
+    game: &mut GameState,
+    tick: &Tick<'_>,
+    body: [i32; 3],
+    neck: Option<[i32; 3]>,
+) -> [Option<[i32; 3]>; 3] {
+    let re2 = &mut game.re2;
+    let slots: Vec<usize> = (0..SPLAYER_SLOT)
+        .filter(|&slot| re2.characters.0.get(slot).is_some_and(Option::is_some))
+        .collect();
+    let mut views: Vec<crate::partner2::EnemyView> = slots
+        .iter()
+        .filter_map(|&slot| re2.characters.0[slot].as_deref())
+        .map(|enemy| {
+            let (kind, life) = match enemy.zombie.as_ref() {
+                Some(zombie) => (enemy.work.kind, zombie.life),
+                // A script character's `Life` is -1.
+                None => (enemy.kind, -1),
+            };
+            crate::partner2::EnemyView {
+                be_flg: enemy.be_flg,
+                kind,
+                life,
+                pos: enemy.body.pos,
+                neck: enemy.work.neck.position,
+                l_spl: enemy.l_spl,
+                dir_spl: enemy.dir_spl,
+            }
+        })
+        .collect();
+    let sca = tick
+        .room
+        .sca
+        .as_ref()
+        .map_or(&[][..], |sca| sca.records.as_slice());
+    let listed = crate::partner2::spl_enemy_ck(
+        &mut views,
+        re2.enemies,
+        body,
+        neck,
+        sca,
+        &mut re2.nearest_dist,
+    );
+    for (&slot, view) in slots.iter().zip(&views) {
+        if let Some(enemy) = re2.characters.0[slot].as_deref_mut() {
+            enemy.l_spl = view.l_spl;
+            enemy.dir_spl = view.dir_spl;
+        }
+    }
+    re2.nearest_slots = listed.map(|index| index.map(|index| slots[index]));
+    listed.map(|index| index.map(|index| views[index].pos))
 }
 
 /// `Type`'s bit that gives a character to `Spl_Auto`.
@@ -1820,6 +1910,8 @@ mod tests {
             body: crate::player::spawn(RoomId::parse("1140").unwrap(), &RoomState::default()),
             kind: 0,
             kage: None,
+            l_spl: 0,
+            dir_spl: 0,
             start: (0, 0),
             sound_type: 0,
             distance: 0,
@@ -1850,6 +1942,8 @@ mod tests {
             body: crate::player::spawn(room, &RoomState::default()),
             kind: 0,
             kage: None,
+            l_spl: 0,
+            dir_spl: 0,
             start: (0, 0),
             sound_type: 0,
             distance: 0,
@@ -1915,6 +2009,8 @@ mod tests {
             body,
             kind: 0,
             kage: None,
+            l_spl: 0,
+            dir_spl: 0,
             start: (0, 0),
             sound_type: 0,
             distance: 0,
@@ -1937,6 +2033,23 @@ mod tests {
         }
     }
 
+    #[test]
+    fn touching_the_partner_is_not_a_touch_of_enemy_slot_0() {
+        let room = RoomId::parse("5021").unwrap();
+        let mut partner = sherry(0x400);
+        partner.be_flg = 0x2005;
+        let mut game = GameState::default();
+        game.id = room;
+        game.id.player_flag = 1;
+        game.re2.characters.0 = vec![None; SPLAYER_SLOT + 1];
+        game.re2.characters.0[SPLAYER_SLOT] = Some(Box::new(partner));
+        let mut player = crate::player::spawn(room, &RoomState::default());
+        player.pos = [-400, 0, 0];
+        oba_ck_em2(&mut game, &mut player, [-400, 0, 0]);
+        assert_eq!(game.re2.player.at_em_flg, 0);
+        assert!(game.re2.player.at_em_partner);
+    }
+
     fn sherry(kind: u16) -> Character {
         let mut body = crate::player::spawn(RoomId::parse("21B1").unwrap(), &RoomState::default());
         body.pos = [0, 0, 0];
@@ -1953,6 +2066,8 @@ mod tests {
             body,
             kind,
             kage: None,
+            l_spl: 0,
+            dir_spl: 0,
             start: (0, 0),
             sound_type: 0,
             distance: 0,
@@ -2088,6 +2203,8 @@ mod tests {
             body: crate::player::spawn(RoomId::parse("2020").unwrap(), &RoomState::default()),
             kind: 0x5800,
             kage: None,
+            l_spl: 0,
+            dir_spl: 0,
             start: (0, 0),
             sound_type: 0,
             distance: 0,
@@ -2125,6 +2242,8 @@ mod tests {
             body: crate::player::spawn(RoomId::parse("2020").unwrap(), &RoomState::default()),
             kind: 0x5000,
             kage: None,
+            l_spl: 0,
+            dir_spl: 0,
             start: (0, 0),
             sound_type: 0,
             distance: 0,

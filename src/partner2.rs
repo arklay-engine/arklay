@@ -4,12 +4,15 @@
 //! with `fg_status`'s `0x10000000`), `_Spl` runs her own routine: each tick
 //! `Spl_Root_ck_sys` picks a point beside Claire to follow ([`root_ck_sys`]),
 //! and `Sherry_move` (`spl_auto`) stands, walks, runs or turns toward it.
-//! Enemies, climbing and water are not ported yet: the nearest-enemy list is
-//! always empty, `Oma_Spl_updown_ck` finds no step and `Water` is 0.
+//! Every sixteenth tick she looks where the nearest enemies are
+//! ([`spl_enemy_ck`], `Spl_em_pos_ck`) to choose a point beside Claire or
+//! behind her, and her states turn her away from the nearest. Climbing and
+//! water are not ported yet: `Oma_Spl_updown_ck` finds no step and `Water` is
+//! 0.
 
 use crate::player2::{Bank, Mover, direction_ck, goto};
 use crate::state::{Guide, ScaRect};
-use crate::zombie2::{Rnd, RootCk, RootWorld, root_ck, turn_within};
+use crate::zombie2::{Rnd, RootCk, RootWorld, root_ck, sca_ck_line, turn_within};
 
 /// `Spl_r_pos` (`0x53cda0`): the follow points' length and two angles from
 /// Claire's facing, beside her then behind her, Ada's row then Sherry's.
@@ -19,6 +22,138 @@ pub const SPL_R_POS: [i16; 12] = [
 /// `Sherry_St_pos` (`0x53d148`): the follow point's kind for each answer of
 /// `Spl_em_pos_ck`, 0 beside and 2 behind.
 pub const SHERRY_ST_POS: [u8; 12] = [0, 2, 2, 0, 0, 2, 2, 0, 0, 2, 2, 0];
+/// `Spl_em_pos_ck`'s reach: the enemies nearer than this count as close.
+const EM_POS_NEAR: u16 = 3000;
+/// `L_spl`'s top two bits: which of the nearest three an enemy is (1, 2, 3).
+pub const L_SPL_LISTED: u32 = 0xC000_0000;
+/// The mask `Spl_enemy_ck`'s line of sight is blocked by.
+const SIGHT_MASK: u16 = 0x2080;
+
+/// What [`spl_enemy_ck`] reads of an enemy work, and the two words it writes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EnemyView {
+    pub be_flg: u32,
+    /// `Type`: a high byte with `0xC0` keeps it off the list.
+    pub kind: u16,
+    pub life: i16,
+    pub pos: [i32; 3],
+    /// The part `+0x1C1` names, where the line of sight ends.
+    pub neck: Option<[i32; 3]>,
+    /// `L_spl` (`+0x1F4`): its distance from her, with [`L_SPL_LISTED`].
+    pub l_spl: u32,
+    /// `Dir_spl` (`+0x1F8`): the way from it to her.
+    pub dir_spl: u16,
+}
+
+/// `Spl_enemy_ck` (`0x4f5b70`): with enemies in the room (`count`, the room's
+/// `BYTE_00989eeb`), every enemy in play and not held off (`Type`'s
+/// `0xC000`) takes its distance from her in `L_spl`, and the three nearest
+/// she sees (`Sca_ck_line` from her head to its with `0x2080`) and that are
+/// alive go on the list, nearest first, a tie after the one already there.
+/// Each listed enemy has its place in `L_spl`'s top bits and the way from it
+/// to her in `Dir_spl`. The list's distances go to `cache`, which a room
+/// without enemies leaves alone. The answer is the listed indices.
+pub fn spl_enemy_ck(
+    enemies: &mut [EnemyView],
+    count: u8,
+    body: [i32; 3],
+    neck: Option<[i32; 3]>,
+    sca: &[ScaRect],
+    cache: &mut [u16; 3],
+) -> [Option<usize>; 3] {
+    let mut listed: [Option<usize>; 3] = [None; 3];
+    if count == 0 {
+        return listed;
+    }
+    let mut dist = [u32::MAX >> 1; 3];
+    for (index, enemy) in enemies.iter_mut().enumerate() {
+        if enemy.be_flg & 1 == 0 || (enemy.kind >> 8) & 0xC0 != 0 {
+            continue;
+        }
+        let dx = enemy.pos[0].wrapping_sub(body[0]);
+        let dz = enemy.pos[2].wrapping_sub(body[2]);
+        let d =
+            crate::sca::square_root0(dz.wrapping_mul(dz).wrapping_add(dx.wrapping_mul(dx))) as u32;
+        enemy.l_spl = d;
+        let seen = match (neck, enemy.neck) {
+            (Some(from), Some(to)) => !sca_ck_line(sca, from, to, SIGHT_MASK),
+            _ => false,
+        };
+        if !seen || enemy.life < 0 {
+            continue;
+        }
+        if let Some(place) = (0..3).find(|&place| d < dist[place]) {
+            for later in (place + 1..3).rev() {
+                dist[later] = dist[later - 1];
+                listed[later] = listed[later - 1];
+            }
+            dist[place] = d;
+            listed[place] = Some(index);
+        }
+    }
+    for place in 0..3 {
+        cache[place] = dist[place] as u16;
+        if let Some(index) = listed[place] {
+            let enemy = &mut enemies[index];
+            let to = direction_ck(body[0], body[2], enemy.pos[0], enemy.pos[2]);
+            enemy.l_spl |= (place as u32 + 1) << 30;
+            enemy.dir_spl = to.wrapping_sub(0x800) & 0xFFF;
+        }
+    }
+    listed
+}
+
+/// `Spl_em_pos_ck(w, 3000)` (`0x4f5df0`): where the listed enemies are, 0 to
+/// 10. With none it is 0. Each close one (under 3000) counts, with whether she
+/// faces it within 0x400 (bit `0x10000`) or not (`0x20000`); every one has
+/// whether Claire faces it (bit 1) or not (2). With none close the answer is
+/// twice the low bits, 4 more for two or more listed; otherwise it is the
+/// high bits over `0x8000` less 1, or 3 more for two or more close.
+fn em_pos_ck(
+    nearest: &[Option<[i32; 3]>; 3],
+    dist: &[u16; 3],
+    body: [i32; 3],
+    angle: u16,
+    player: [i32; 3],
+    player_angle: u16,
+) -> u8 {
+    let listed = nearest.iter().filter(|enemy| enemy.is_some()).count();
+    if listed == 0 {
+        return 0;
+    }
+    let faces = |from: [i32; 3], facing: u16, to: [i32; 3]| {
+        turn_within(facing, direction_ck(from[0], from[2], to[0], to[2]), 0x400) == 0
+    };
+    let mut bits = 0u32;
+    let mut close = 0;
+    for (place, enemy) in nearest.iter().take(listed).enumerate() {
+        // The count is of the three, so a gap would read a null work; the
+        // list is always filled from the front.
+        let Some(enemy) = *enemy else { continue };
+        if dist[place] < EM_POS_NEAR {
+            bits |= if faces(body, angle, enemy) {
+                0x10000
+            } else {
+                0x20000
+            };
+            close += 1;
+        }
+        bits |= if faces(player, player_angle, enemy) {
+            1
+        } else {
+            2
+        };
+    }
+    let answer = if bits & 0xFFFF_0000 == 0 {
+        bits * 2 + if listed < 2 { 0 } else { 4 }
+    } else if close < 2 {
+        (bits >> 15) - 1
+    } else {
+        (bits >> 15) + 3
+    };
+    answer as u8
+}
+
 /// `Spl_pos_ck_timer`'s start (`0x53cdef`): `Sherry_move` checks the enemies
 /// every sixteenth tick.
 pub const SPL_POS_CK_START: u8 = 0x0F;
@@ -153,11 +288,14 @@ pub struct PartnerWorld<'a> {
     pub player_routine: u8,
     /// `L_pl` (`+0x1F0`): her distance from the player.
     pub distance: u32,
-    /// The nearest seen live enemy (`0x692fe0`): none until part 3.
-    pub enemy: Option<[i32; 3]>,
-    /// `0x692fc8`: the first entry of the nearest-enemy cache, which only a
-    /// room with enemies rewrites, so it can be stale.
-    pub enemy_dist: u16,
+    /// Where the nearest three seen live enemies stand (`0x692fe0`,
+    /// `0x692fe4`, `0x692fe8`), nearest first, as [`spl_enemy_ck`] listed
+    /// them this tick.
+    pub nearest: [Option<[i32; 3]>; 3],
+    /// `0x692fc8`'s three distances: [`spl_enemy_ck`] rewrites them only in a
+    /// room with enemies, so they can be stale, and the states read the first
+    /// without a test for an enemy.
+    pub nearest_dist: [u16; 3],
     pub rnd: &'a mut Rnd,
     /// `Spl_pos_ck_timer`.
     pub pos_ck_timer: &'a mut u8,
@@ -300,7 +438,8 @@ impl Auto<'_, '_, '_, '_> {
     /// `Sherry_move`: the enemy check every sixteenth tick, then the
     /// decision of `Routine_1` and the state it leaves, both this tick.
     fn sherry_move(&mut self) {
-        // `Spl_enemy_ck`: nothing to list in a room without enemies.
+        // `Spl_enemy_ck` has listed the enemies: the caller runs it, as it
+        // reads the other works.
         if *self.w.pos_ck_timer == 0 {
             let was = *self.kind & 0xFF;
             *self.kind &= 0xFF00;
@@ -317,10 +456,26 @@ impl Auto<'_, '_, '_, '_> {
         self.move_type();
     }
 
-    /// `Spl_em_pos_ck(w, 3000)`: where the nearest enemies are, 0 to 10. With
-    /// none listed it is 0.
+    /// `Spl_em_pos_ck(w, 3000)`: where the nearest enemies are, 0 to 10.
     fn spl_em_pos_ck(&self) -> u8 {
-        0
+        em_pos_ck(
+            &self.w.nearest,
+            &self.w.nearest_dist,
+            self.pos(),
+            self.m.player.angle,
+            self.w.player,
+            self.w.player_angle,
+        )
+    }
+
+    /// `0x692fe0`: the nearest listed enemy.
+    fn enemy(&self) -> Option<[i32; 3]> {
+        self.w.nearest[0]
+    }
+
+    /// `0x692fc8`'s first distance, which may be stale.
+    fn enemy_dist(&self) -> u16 {
+        self.w.nearest_dist[0]
     }
 
     /// `Sherry_Move_type`'s body, the same for every answer.
@@ -417,7 +572,7 @@ impl Auto<'_, '_, '_, '_> {
     }
 
     fn enemy_near(&self, within: u16) -> bool {
-        self.w.enemy.is_some() && self.w.enemy_dist < within
+        self.enemy().is_some() && self.enemy_dist() < within
     }
 
     fn clip(&mut self, bank: Bank, clip: u8) {
@@ -459,7 +614,7 @@ impl Auto<'_, '_, '_, '_> {
                     .angle
                     .wrapping_sub(bit * 0x100)
                     .wrapping_add(0x880);
-                if let Some(enemy) = self.w.enemy.filter(|_| self.w.enemy_dist < FOUND) {
+                if let Some(enemy) = self.enemy().filter(|_| self.enemy_dist() < FOUND) {
                     self.p.turn = self.direction_to(enemy[0], enemy[2]);
                     self.p.stuck = WALL_TURN_ENEMY_TICKS;
                 }
@@ -621,9 +776,9 @@ impl Auto<'_, '_, '_, '_> {
                 self.set(MV_DODGE, 0);
                 return;
             }
-            match self.w.enemy {
+            match self.enemy() {
                 Some(enemy)
-                    if self.w.enemy_dist < WALK
+                    if self.enemy_dist() < WALK
                         && self.ahead(enemy[0], enemy[2], 0x4B0)
                         && !self.sca_hit() =>
                 {
@@ -633,12 +788,12 @@ impl Auto<'_, '_, '_, '_> {
             }
             self.updown_ck();
         } else {
-            if let Some(enemy) = self.w.enemy {
-                if self.w.enemy_dist < 5000 {
+            if let Some(enemy) = self.enemy() {
+                if self.enemy_dist() < 5000 {
                     self.set(MV_RUN, 0);
                     return;
                 }
-                if self.w.enemy_dist > 7000 {
+                if self.enemy_dist() > 7000 {
                     self.set(MV_STAND, 0);
                     return;
                 }
@@ -679,8 +834,8 @@ impl Auto<'_, '_, '_, '_> {
         }
         let dist = self.p.dist;
         if self.lost() {
-            if let Some(enemy) = self.w.enemy {
-                if self.w.enemy_dist > 7000 {
+            if let Some(enemy) = self.enemy() {
+                if self.enemy_dist() > 7000 {
                     self.set(MV_STAND, 0);
                     return;
                 }
@@ -700,9 +855,9 @@ impl Auto<'_, '_, '_, '_> {
             self.set(MV_WALK, 0);
             return;
         }
-        match self.w.enemy {
+        match self.enemy() {
             Some(enemy)
-                if self.w.enemy_dist < RUN
+                if self.enemy_dist() < RUN
                     && self.ahead(enemy[0], enemy[2], 0x400)
                     && !self.sca_hit() =>
             {
@@ -736,7 +891,7 @@ impl Auto<'_, '_, '_, '_> {
         if self.p.timer0 == 0 {
             self.set(MV_FACE_POINT, 0);
         }
-        if self.w.enemy_dist < WALK && !self.sca_hit() {
+        if self.enemy_dist() < WALK && !self.sca_hit() {
             let [x, _, z] = self.pos();
             self.goto00(x, z, 0x30);
         } else {
@@ -981,6 +1136,7 @@ mod tests {
         player_routine: u8,
         distance: u32,
         enemy_dist: u16,
+        nearest: [Option<[i32; 3]>; 3],
         poisoned: bool,
     }
 
@@ -1011,6 +1167,7 @@ mod tests {
                 player_routine: 0,
                 distance: 1000,
                 enemy_dist: 0xFFFF,
+                nearest: [None; 3],
                 poisoned: false,
             }
         }
@@ -1047,8 +1204,8 @@ mod tests {
                 player_angle: self.player_angle,
                 player_routine: self.player_routine,
                 distance: self.distance,
-                enemy: None,
-                enemy_dist: self.enemy_dist,
+                nearest: self.nearest,
+                nearest_dist: [self.enemy_dist, 0xFFFF, 0xFFFF],
                 rnd: &mut self.rnd,
                 pos_ck_timer: &mut self.timer,
                 water: 0,
@@ -1163,6 +1320,152 @@ mod tests {
         assert_eq!(rig.timer, SPL_POS_CK_START);
         assert_eq!(rig.kind & 0xF, 0);
         assert_eq!(rig.partner.state, 2, "the kind stays with no enemies");
+    }
+
+    fn enemy_at(pos: [i32; 3]) -> EnemyView {
+        EnemyView {
+            be_flg: 1,
+            kind: 0,
+            life: 100,
+            pos,
+            neck: Some([pos[0], -1500, pos[2]]),
+            l_spl: 0x1234,
+            dir_spl: 7,
+        }
+    }
+
+    #[test]
+    fn the_enemy_check_lists_the_nearest_three_she_sees() {
+        let mut enemies = vec![
+            enemy_at([4000, 0, 0]),
+            enemy_at([1000, 0, 0]),
+            enemy_at([0, 0, 2000]),
+            enemy_at([-2000, 0, 0]),
+            EnemyView {
+                life: -1,
+                ..enemy_at([500, 0, 0])
+            },
+            EnemyView {
+                kind: 0x4000,
+                ..enemy_at([600, 0, 0])
+            },
+            EnemyView {
+                be_flg: 0,
+                ..enemy_at([700, 0, 0])
+            },
+        ];
+        let mut cache = [0; 3];
+        let neck = Some([0, -1500, 0]);
+        let listed = spl_enemy_ck(&mut enemies, 7, [0; 3], neck, &[], &mut cache);
+        // A tie goes after the one already listed.
+        assert_eq!(listed, [Some(1), Some(2), Some(3)]);
+        // `SquareRoot0` is the executable's, a little under.
+        let r = |d: i32| crate::sca::square_root0(d * d) as u32;
+        assert_eq!(cache, [r(1000), r(2000), r(2000)].map(|d| d as u16));
+        let l_spl: Vec<u32> = enemies.iter().map(|enemy| enemy.l_spl).collect();
+        assert_eq!(
+            l_spl,
+            [
+                r(4000),
+                0x4000_0000 | r(1000),
+                0x8000_0000 | r(2000),
+                0xC000_0000 | r(2000),
+                r(500),
+                0x1234,
+                0x1234
+            ]
+        );
+        // The way from the enemy to her: from +x, -x.
+        assert_eq!(enemies[1].dir_spl, 0x800);
+        assert_eq!(enemies[3].dir_spl, 0);
+        assert_eq!(enemies[0].dir_spl, 7, "an unlisted enemy keeps its own");
+    }
+
+    #[test]
+    fn a_room_without_enemies_keeps_the_cache() {
+        let mut enemies = vec![enemy_at([1000, 0, 0])];
+        let mut cache = [5, 6, 7];
+        let listed = spl_enemy_ck(&mut enemies, 0, [0; 3], Some([0; 3]), &[], &mut cache);
+        assert_eq!(listed, [None; 3]);
+        assert_eq!(cache, [5, 6, 7]);
+        assert_eq!(enemies[0].l_spl, 0x1234);
+        // With enemies but none seen, the cache is rewritten as unfound.
+        let mut unseen = vec![EnemyView {
+            neck: None,
+            ..enemy_at([1000, 0, 0])
+        }];
+        spl_enemy_ck(&mut unseen, 1, [0; 3], Some([0; 3]), &[], &mut cache);
+        assert_eq!(cache, [0xFFFF; 3]);
+        assert_eq!(
+            unseen[0].l_spl,
+            crate::sca::square_root0(1000 * 1000) as u32
+        );
+    }
+
+    #[test]
+    fn where_the_enemies_are_picks_the_point() {
+        // She is at the origin facing +x; Claire 1000 behind her, facing +x.
+        let answer = |enemies: &[[i32; 3]]| {
+            let mut nearest = [None; 3];
+            let mut dist = [0xFFFF; 3];
+            for (place, &pos) in enemies.iter().enumerate() {
+                nearest[place] = Some(pos);
+                dist[place] = crate::sca::square_root0(pos[0] * pos[0] + pos[2] * pos[2]) as u16;
+            }
+            em_pos_ck(&nearest, &dist, [0; 3], 0, [-1000, 0, 0], 0)
+        };
+        assert_eq!(answer(&[]), 0);
+        // Far: twice Claire's bits, 4 more for two.
+        assert_eq!(answer(&[[5000, 0, 0]]), 2);
+        assert_eq!(answer(&[[-5000, 0, 0]]), 4);
+        assert_eq!(answer(&[[5000, 0, 0], [6000, 0, 0]]), 6);
+        assert_eq!(answer(&[[5000, 0, 0], [-6000, 0, 0]]), 10);
+        // Close: ahead of her and of Claire, behind her, and two.
+        assert_eq!(answer(&[[1000, 0, 0]]), 1);
+        assert_eq!(answer(&[[-500, 0, 0]]), 3);
+        assert_eq!(answer(&[[1000, 0, 0], [2000, 0, 0]]), 5);
+        assert_eq!(answer(&[[1000, 0, 0], [-500, 0, 0]]), 9);
+        assert_eq!(
+            SHERRY_ST_POS[1], 2,
+            "one close ahead puts her behind Claire"
+        );
+    }
+
+    #[test]
+    fn an_enemy_close_by_moves_her_point_behind_claire() {
+        let mut rig = Rig::new();
+        rig.partner.dist = 1000;
+        rig.nearest = [Some([2000, 0, 0]), None, None];
+        rig.enemy_dist = 2000;
+        for _ in 0..=SPL_POS_CK_START {
+            rig.tick();
+        }
+        assert_eq!(rig.timer, SPL_POS_CK_START);
+        // She faces it, Claire (along +x, facing her) doesn't: answer 1.
+        assert_eq!(rig.kind & 0xF, 1);
+        assert_eq!(
+            rig.partner.state & (STATE_KIND | STATE_CHANGED),
+            2 | STATE_CHANGED
+        );
+    }
+
+    #[test]
+    fn the_walk_turns_away_from_an_enemy_ahead() {
+        let walk = |enemy: Option<[i32; 3]>| {
+            let mut rig = Rig::new();
+            rig.work.routine = [1, MV_WALK, 1, 0];
+            rig.work.dest = [0, 3000];
+            rig.partner.dist = 1000;
+            rig.distance = 3000;
+            rig.nearest = [enemy, None, None];
+            rig.enemy_dist = 1000;
+            rig.tick();
+            rig.body.angle
+        };
+        let away = goto(0, direction_ck(0, 0, 1000, 300), -0x28);
+        assert_eq!(walk(Some([1000, 0, 300])), away);
+        assert_eq!(walk(None), goto(0, direction_ck(0, 0, 0, 3000), 0x28));
+        assert_ne!(away, walk(None));
     }
 
     #[test]

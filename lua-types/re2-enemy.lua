@@ -1729,6 +1729,17 @@ function Re2EnemyApi:call_kin(flags, skip, bits, one, two) end
 ---@return boolean partner
 function Re2EnemyApi:partner() end
 
+---`L_spl` (`+0x1F4`): how far the body was from the partner when her
+---`Spl_enemy_ck` last measured it, with its place on her list of the nearest
+---three in the top two bits (1 nearest to 3, 0 off the list).
+---@return integer l_spl
+function Re2EnemyApi:l_spl() end
+
+---`Dir_spl` (`+0x1F8`): the way from the body to the partner, when she last
+---listed it.
+---@return integer dir_spl
+function Re2EnemyApi:dir_spl() end
+
 ---How many enemies the room has.
 ---@return integer count
 function Re2EnemyApi:enemies() end

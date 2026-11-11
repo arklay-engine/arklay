@@ -854,6 +854,28 @@ def esp_trace(game: Game) -> str:
 SPL_POS_CK_TIMER = 0x0053CDEF  # `Spl_pos_ck_timer`, `Sherry_move`'s count to its enemy check
 
 
+SPL_NEAREST_DIST = 0x00692FC8  # `Spl_enemy_ck`'s three distances (u16), nearest first
+SPL_NEAREST = 0x00692FE0  # and its three enemy works
+
+
+def partner_enemy_trace(game: Game) -> str:
+    """What the partner's `Spl_enemy_ck` left: the cache's three distances and the slots of the works it listed (`-` for none), then, after a `|`, each enemy `zombie_trace` lists as its slot, `L_spl` (`+0x1F4`) in hex and, if listed (its top two bits), `Dir_spl` (`+0x1F8`)."""
+    dists = struct.unpack("<3H", game.read(SPL_NEAREST_DIST, 6))
+    pointers = struct.unpack("<3I", game.read(SPL_NEAREST, 12))
+    slots = enemy_slots(game)
+    listed = [str(slots.index(pointer)) if pointer != 0 and pointer in slots else "-" for pointer in pointers]
+    rows = []
+    for slot, pointer in enumerate(slots):
+        if pointer == 0 or game.u32(pointer) & 1 == 0 or not traced_enemy(game.u8(pointer + ENTITY_ID)):
+            continue
+        l_spl = game.u32(pointer + 0x1F4)
+        if l_spl & 0xC0000000:
+            rows.append(f"{slot}:{l_spl:x},{game.u16(pointer + 0x1F8)}")
+        else:
+            rows.append(f"{slot}:{l_spl:x}")
+    return "spe=" + ",".join(f"{d}" for d in dists) + "," + ",".join(listed) + "|" + (";".join(rows) or "-")
+
+
 def partner_trace(game: Game) -> str:
     """`splayer_work`'s own words for `Spl_Auto`: `Type`, the follow point, its state, distance and wall turn, the wall and touch counts, the timers, `Dest`, the life, `Sca_info & 1`, `Root_ck`'s count, `Spl_pos_ck_timer`, `Neck_flg` and `At_em_flg`."""
     work = game.u32(SPLAYER)
@@ -1090,6 +1112,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
                 f"{speed[0]},{speed[1]},{speed[2]}"
             )
     fields.append(partner_trace(game))
+    fields.append(partner_enemy_trace(game))
     fields.append(zombie_trace(game))
     fields.append(zombie_parts_trace(game))
     fields.append(zombie_dest_trace(game))

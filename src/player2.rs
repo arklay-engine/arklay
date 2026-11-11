@@ -452,8 +452,12 @@ pub struct Work {
     pub base: [i16; 3],
     /// `Timer0`, `Timer1` and `Timer2` of the held states.
     pub timers: [u16; 3],
-    /// `At_em_flg`: the slots `Oba_ck_em2` found the player touching.
+    /// `At_em_flg`: the enemy slots `Oba_ck_em2` found the player touching,
+    /// a bit each.
     pub at_em_flg: u32,
+    /// `At_em_flg`'s `0x4000`: `Oba_ck_em2` found the player touching the
+    /// body in `splayer_work`, which the enemy slots' shove leaves alone.
+    pub at_em_partner: bool,
     /// `Atd[0]`, as the last `Oba_ck_em2` left it: the box the bodies push
     /// against, which does not follow a hit that moves the player afterwards.
     pub atd: Option<crate::zombie2::Atd>,
@@ -931,6 +935,7 @@ impl Default for Work {
             base: [0; 3],
             timers: [0; 3],
             at_em_flg: 0,
+            at_em_partner: false,
             atd: None,
             old: None,
             old_box: None,

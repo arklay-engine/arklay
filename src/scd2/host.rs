@@ -217,6 +217,9 @@ pub struct Re2State {
     /// rewrites them only in a room with enemies, so a room without any keeps
     /// the last room's, or a fresh process's 0. Another static.
     pub nearest_dist: [u16; 3],
+    /// The slots of the enemies `Spl_enemy_ck` last listed (`0x692fe0` to
+    /// `0x692fe8`), nearest first: the `spe` field's.
+    pub nearest_slots: [Option<usize>; 3],
     /// `saved_splayer_health` (`0x98ee7c`): the partner's life, 200 at a new
     /// game.
     pub partner_life: i16,
@@ -357,6 +360,13 @@ pub struct Character {
     pub partner: Option<Box<crate::partner2::Partner>>,
     /// The last `kage_set`, in place of `Em_init`'s shadow.
     pub kage: Option<Kage>,
+    /// `L_spl` (`+0x1F4`): how far it was from the partner when
+    /// `Spl_enemy_ck` last measured it, with its place on her list in the top
+    /// two bits. `Sce_em_set` starts it at 0.
+    pub l_spl: u32,
+    /// `Dir_spl` (`+0x1F8`): the way from it to the partner when she last
+    /// listed it.
+    pub dir_spl: u16,
 }
 
 /// Which of Marvin's arms his joints draw, and the fade between them.
@@ -816,6 +826,7 @@ impl Default for Re2State {
             sound_init: false,
             spl_pos_ck_timer: crate::partner2::SPL_POS_CK_START,
             nearest_dist: [0; 3],
+            nearest_slots: [None; 3],
             partner_life: PARTNER_LIFE,
             partner_poisoned: false,
         }
@@ -1185,6 +1196,42 @@ impl Re2State {
             motion[7],
             motion[8],
         ])
+    }
+
+    /// The `spe` field: what the partner's `Spl_enemy_ck` left. The cache's
+    /// three distances and the slots it listed (`-` for none), then, after a
+    /// `|`, each zombie in play as its slot, `L_spl` in hex and, if listed,
+    /// `Dir_spl`.
+    pub fn partner_enemy_trace(&self) -> String {
+        let [d0, d1, d2] = self.nearest_dist;
+        let [s0, s1, s2] = self
+            .nearest_slots
+            .map(|slot| slot.map_or("-".to_string(), |slot| slot.to_string()));
+        let rows: Vec<String> = self
+            .characters
+            .0
+            .iter()
+            .enumerate()
+            .take(SPLAYER_SLOT)
+            .filter_map(|(slot, character)| {
+                let character = character.as_deref()?;
+                character.zombie.as_ref()?;
+                if character.be_flg & 1 == 0 {
+                    return None;
+                }
+                Some(if character.l_spl & crate::partner2::L_SPL_LISTED != 0 {
+                    format!("{slot}:{:x},{}", character.l_spl, character.dir_spl)
+                } else {
+                    format!("{slot}:{:x}", character.l_spl)
+                })
+            })
+            .collect();
+        let rows = if rows.is_empty() {
+            "-".to_string()
+        } else {
+            rows.join(";")
+        };
+        format!("{d0},{d1},{d2},{s0},{s1},{s2}|{rows}")
     }
 
     /// The `spl` field: `splayer_work`'s own words for `Spl_Auto`, `-` with no
@@ -2190,6 +2237,8 @@ impl GameHost<'_> {
             with_room: self.game.re2.room_loading,
             held_bank: None,
             kage: None,
+            l_spl: 0,
+            dir_spl: 0,
             partner: (slot == SPLAYER_SLOT && !zombie)
                 .then(|| Box::new(crate::partner2::Partner::placed())),
             zombie: zombie.then(|| {
