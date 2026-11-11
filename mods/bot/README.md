@@ -1291,7 +1291,7 @@ leaves the game session.
 | `bot:inventory()` | Read-only array of the live inventory slots: `{slot, item, quantity, kind}` rows, including zero-quantity weapon slots. `kind` is the catalog kind. |
 | `bot:item_kind(item)` | The item catalog's kind (`"weapon"`, `"ammo"`, `"key"`, `"heal"`, ...) and whether a pickup merges into a held stack (two values). |
 | `bot:ammo_for(weapon)` | The ammunition item `weapon` fires, or `nil` when the catalog does not list it as a weapon with an ammunition item. |
-| `bot:use_facts()` | Every room's `<use>` facts from the pack's `room/<id>/bot.xml` files, by room id then document order: `{room, slot, item, bank, bit, label}`. Read once per pack. |
+| `bot:use_facts()` | Every room's `<use>` facts from the pack's `room/<id>/bot.xml` files, by room id then document order: `{room, slot, item, bank, bit, label}`. Read once per pack; the table is built once and handed out again until the facts reload (a `bot.xml` change, a reload, a character change), so a route must not write to it. |
 | `bot:item_facts()` | Every room's `<holds>` facts, the same way: `{room, item, label}`. |
 | `bot:fight_facts()` | Every room's `<fight>` steps, the same way: `{room, enemy, bank, bit}` (the flag its death sets, or nil). |
 | `bot:ride_facts()` | Every room's `<ride>` facts: `{room, slot, from, label}`. |

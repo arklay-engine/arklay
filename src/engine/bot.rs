@@ -3270,26 +3270,9 @@ struct BotCtx {
     saves: SaveLog,
     /// The current room's authored metadata, cached by [`BotRuntime`].
     meta: Option<Rc<meta::RoomMeta>>,
-    /// Every room's `<use>` facts, cached by [`BotRuntime`].
-    uses: Rc<Vec<meta::RoomUse>>,
-    /// Every room's `<holds>` facts, cached by [`BotRuntime`].
-    holds: Rc<Vec<meta::RoomHolds>>,
-    /// Every room's `<fight>` facts, cached by [`BotRuntime`].
-    fights: Rc<Vec<meta::RoomFight>>,
-    /// Every room's `<ride>` facts, cached by [`BotRuntime`].
-    rides: Rc<Vec<meta::RoomRide>>,
-    /// Every room's `<revisit>` facts, cached by [`BotRuntime`].
-    revisits: Rc<Vec<meta::RoomRevisit>>,
-    /// Every room's `<reach>` facts, cached by [`BotRuntime`].
-    reaches: Rc<Vec<meta::RoomReach>>,
-    /// Every room's `<deliver>`/`<fetch>` facts, cached by [`BotRuntime`].
-    errands: Rc<Vec<meta::RoomErrand>>,
-    /// Every room's `<brew>` facts with its taps, cached by [`BotRuntime`].
-    brews: Rc<Vec<meta::RoomBrew>>,
-    /// Every room's `<avoid>` facts, cached by [`BotRuntime`].
-    avoid_facts: Rc<Vec<meta::RoomAvoid>>,
-    /// Every room's `<door>` facts, cached by [`BotRuntime`].
-    door_vias: Rc<Vec<meta::RoomDoorVia>>,
+    /// Every room's facts the `*_facts` methods read, cached by
+    /// [`BotRuntime`].
+    facts: Rc<meta::GameFacts>,
     /// The game's combat knowledge file, if the pack carries one.
     knowledge: Option<Rc<knowledge::Knowledge>>,
     tick: u64,
@@ -3358,6 +3341,20 @@ const TICK_MEMO: &str = "bot.tick_memo";
 /// The registry name of the table holding the results
 /// [`Profiled::add_run_method`]'s methods built for this Lua state.
 const RUN_MEMO: &str = "bot.run_memo";
+/// The run-memoised methods built from [`meta::GameFacts`]: dropped from
+/// [`RUN_MEMO`] whenever the facts are reloaded.
+const FACT_METHODS: &[&str] = &[
+    "use_facts",
+    "item_facts",
+    "fight_facts",
+    "ride_facts",
+    "revisit_facts",
+    "reach_facts",
+    "door_facts",
+    "avoid_facts",
+    "brew_facts",
+    "errand_facts",
+];
 
 /// The memo table registered as `name`, fresh when it is missing or, with
 /// a `tick`, was filled on another tick.
@@ -3670,9 +3667,9 @@ impl UserData for BotCtx {
             Ok(Value::Table(table))
         });
 
-        methods.add_tick_method("use_facts", |lua, bot, ()| {
+        methods.add_run_method("use_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
-            for entry in bot.uses.iter() {
+            for entry in &bot.facts.uses {
                 let row = lua.create_table()?;
                 row.set("room", entry.room.as_str())?;
                 row.set("slot", entry.fact.slot)?;
@@ -3686,9 +3683,9 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_tick_method("item_facts", |lua, bot, ()| {
+        methods.add_run_method("item_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
-            for entry in bot.holds.iter() {
+            for entry in &bot.facts.holds {
                 let row = lua.create_table()?;
                 row.set("room", entry.room.as_str())?;
                 row.set("item", entry.fact.item)?;
@@ -3698,27 +3695,27 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_tick_method("fight_facts", |lua, bot, ()| {
+        methods.add_run_method("fight_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
-            for entry in bot.fights.iter() {
+            for entry in &bot.facts.fights {
                 let row = lua.create_table()?;
                 row.set("room", entry.room.as_str())?;
-                row.set("enemy", entry.enemy)?;
-                row.set("bank", entry.flag.map(|(bank, _)| bank))?;
-                row.set("bit", entry.flag.map(|(_, bit)| bit))?;
+                row.set("enemy", entry.fact.enemy)?;
+                row.set("bank", entry.fact.flag.map(|(bank, _)| bank))?;
+                row.set("bit", entry.fact.flag.map(|(_, bit)| bit))?;
                 row.set(
                     "stage",
-                    entry.stage.map(|byte| char::from(byte).to_string()),
+                    entry.fact.stage.map(|byte| char::from(byte).to_string()),
                 )?;
-                row.set("optional", entry.optional)?;
+                row.set("optional", entry.fact.optional)?;
                 table.push(row)?;
             }
             Ok(table)
         });
 
-        methods.add_tick_method("ride_facts", |lua, bot, ()| {
+        methods.add_run_method("ride_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
-            for entry in bot.rides.iter() {
+            for entry in &bot.facts.rides {
                 let row = lua.create_table()?;
                 row.set("room", entry.room.as_str())?;
                 row.set("slot", entry.fact.slot)?;
@@ -3729,9 +3726,9 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_tick_method("revisit_facts", |lua, bot, ()| {
+        methods.add_run_method("revisit_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
-            for entry in bot.revisits.iter() {
+            for entry in &bot.facts.revisits {
                 let row = lua.create_table()?;
                 row.set("room", entry.room.as_str())?;
                 row.set("bank", entry.fact.gate.flag.0)?;
@@ -3743,9 +3740,9 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_tick_method("reach_facts", |lua, bot, ()| {
+        methods.add_run_method("reach_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
-            for entry in bot.reaches.iter() {
+            for entry in &bot.facts.reaches {
                 let row = lua.create_table()?;
                 row.set("room", entry.room.as_str())?;
                 row.set("slot", entry.fact.slot)?;
@@ -3763,9 +3760,9 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_tick_method("door_facts", |lua, bot, ()| {
+        methods.add_run_method("door_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
-            for entry in bot.door_vias.iter() {
+            for entry in &bot.facts.doors {
                 let row = lua.create_table()?;
                 row.set("room", entry.room.as_str())?;
                 row.set("slot", entry.fact.slot)?;
@@ -3779,9 +3776,9 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_tick_method("avoid_facts", |lua, bot, ()| {
+        methods.add_run_method("avoid_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
-            for entry in bot.avoid_facts.iter() {
+            for entry in &bot.facts.avoids {
                 let row = lua.create_table()?;
                 row.set("room", entry.room.as_str())?;
                 row.set("slot", entry.fact.slot)?;
@@ -3804,10 +3801,10 @@ impl UserData for BotCtx {
         // Every room's open-or-not <brew> facts with that room's taps:
         // `{room, item, bottle, bank, bit, after_bank, after_bit,
         // after_clear, label, taps = {{slot, item, label}, ...}}`.
-        methods.add_tick_method("brew_facts", |lua, bot, ()| {
+        methods.add_run_method("brew_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
-            for entry in bot.brews.iter() {
-                let fact = &entry.fact;
+            for entry in &bot.facts.brews {
+                let fact = &entry.fact.brew;
                 let row = lua.create_table()?;
                 row.set("room", entry.room.as_str())?;
                 row.set("item", fact.item)?;
@@ -3819,7 +3816,7 @@ impl UserData for BotCtx {
                 row.set("after_clear", fact.after_clear)?;
                 row.set("label", fact.label.as_deref())?;
                 let taps = lua.create_table()?;
-                for tap in &entry.taps {
+                for tap in &entry.fact.taps {
                     let t = lua.create_table()?;
                     t.set("slot", tap.slot)?;
                     t.set("item", tap.item)?;
@@ -3832,9 +3829,9 @@ impl UserData for BotCtx {
             Ok(table)
         });
 
-        methods.add_tick_method("errand_facts", |lua, bot, ()| {
+        methods.add_run_method("errand_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
-            for entry in bot.errands.iter() {
+            for entry in &bot.facts.errands {
                 let fact = &entry.fact;
                 let row = lua.create_table()?;
                 row.set("room", entry.room.as_str())?;
@@ -4556,6 +4553,23 @@ impl BotVm {
         })
     }
 
+    /// Drop the run-memoised `*_facts` tables, built from the
+    /// [`meta::GameFacts`] being replaced.
+    fn forget_facts(&self) -> Result<()> {
+        let Some(memo) = self
+            .lua
+            .named_registry_value::<Option<Table>>(RUN_MEMO)
+            .map_err(|err| anyhow!("{err}"))?
+        else {
+            return Ok(());
+        };
+        for method in FACT_METHODS {
+            memo.raw_set(*method, Value::Nil)
+                .map_err(|err| anyhow!("{err}"))?;
+        }
+        Ok(())
+    }
+
     /// Re-execute the pack's bot chunks in this VM.
     ///
     /// The Lua state is kept, so globals a route stores outside `on_bot_tick`
@@ -4667,27 +4681,10 @@ pub struct BotRuntime {
     meta: Option<Rc<meta::RoomMeta>>,
     /// The room `meta` was loaded for, so each room loads it once.
     meta_room: Option<RoomId>,
-    /// Every room's `<use>` facts for one character (`true`: Jill), read
-    /// from the pack on the first tick and again if the character changes.
-    uses: Option<(bool, Rc<Vec<meta::RoomUse>>)>,
-    /// Every room's `<holds>` facts, loaded with `uses`.
-    holds: Rc<Vec<meta::RoomHolds>>,
-    /// Every room's `<fight>` facts, loaded with `uses`.
-    fights: Rc<Vec<meta::RoomFight>>,
-    /// Every room's `<ride>` facts, loaded with `uses`.
-    rides: Rc<Vec<meta::RoomRide>>,
-    /// Every room's `<revisit>` facts, loaded with `uses`.
-    revisits: Rc<Vec<meta::RoomRevisit>>,
-    /// Every room's `<reach>` facts, loaded with `uses`.
-    reaches: Rc<Vec<meta::RoomReach>>,
-    /// Every room's errand facts, loaded with `uses`.
-    errands: Rc<Vec<meta::RoomErrand>>,
-    /// Every room's `<brew>` facts, loaded with `uses`.
-    brews: Rc<Vec<meta::RoomBrew>>,
-    /// Every room's `<avoid>` facts, loaded with `uses`.
-    avoid_facts: Rc<Vec<meta::RoomAvoid>>,
-    /// Every room's `<door>` facts, loaded with `uses`.
-    door_vias: Rc<Vec<meta::RoomDoorVia>>,
+    /// Every room's facts for one character (`true`: Jill), read from the
+    /// pack on the first tick and again if the character changes or the
+    /// metadata is reloaded.
+    facts: Option<(bool, Rc<meta::GameFacts>)>,
     /// `knowledge/<game>.xml`, read with the chunks.
     knowledge: Option<Rc<knowledge::Knowledge>>,
     /// The `--bot-risk` setting; kept across [`Self::reset`].
@@ -4733,16 +4730,7 @@ impl BotRuntime {
             tick: 0,
             meta: None,
             meta_room: None,
-            uses: None,
-            holds: Rc::default(),
-            fights: Rc::default(),
-            rides: Rc::default(),
-            revisits: Rc::default(),
-            reaches: Rc::default(),
-            errands: Rc::default(),
-            brews: Rc::default(),
-            door_vias: Rc::default(),
-            avoid_facts: Rc::default(),
+            facts: None,
             knowledge: knowledge::load(pack)?.map(Rc::new),
             risk: DEFAULT_RISK,
             params: Rc::new(params::load(pack, &[])?),
@@ -4850,11 +4838,12 @@ impl BotRuntime {
         self.vm.reload(pack)
     }
 
-    /// Drop the cached room metadata so the next tick reparses it.
+    /// Drop the cached room metadata and game facts so the next tick
+    /// reparses them.
     pub fn reload_meta(&mut self) {
         self.meta = None;
         self.meta_room = None;
-        self.uses = None;
+        self.facts = None;
     }
 
     /// Run one `on_bot_tick`, returning the input it asked for.
@@ -4880,21 +4869,17 @@ impl BotRuntime {
             self.meta_room = Some(room_id);
         }
         let jill = meta::jill(room_id.player_flag);
-        if self.uses.as_ref().is_none_or(|(held, _)| *held != jill) {
-            self.uses = Some((
-                jill,
-                Rc::new(meta::load_uses(pack, Some(jill), Some(&self.params))?),
-            ));
-            self.holds = Rc::new(meta::load_holds(pack, Some(jill), Some(&self.params))?);
-            self.fights = Rc::new(meta::load_fights(pack, Some(jill), Some(&self.params))?);
-            self.rides = Rc::new(meta::load_rides(pack, Some(jill), Some(&self.params))?);
-            self.revisits = Rc::new(meta::load_revisits(pack, Some(jill), Some(&self.params))?);
-            self.reaches = Rc::new(meta::load_reaches(pack, Some(jill), Some(&self.params))?);
-            self.errands = Rc::new(meta::load_errands(pack, Some(jill), Some(&self.params))?);
-            self.brews = Rc::new(meta::load_brews(pack, Some(jill), Some(&self.params))?);
-            self.door_vias = Rc::new(meta::load_door_vias(pack, Some(jill), Some(&self.params))?);
-            self.avoid_facts = Rc::new(meta::load_avoids(pack, Some(jill), Some(&self.params))?);
-        }
+        let facts = match &self.facts {
+            Some((held, facts)) if *held == jill => facts.clone(),
+            _ => {
+                let facts = Rc::new(meta::load_facts(pack, Some(jill), Some(&self.params))?);
+                // The `*_facts` tables the route was handed were built from
+                // the facts being replaced.
+                self.vm.forget_facts()?;
+                self.facts = Some((jill, facts.clone()));
+                facts
+            }
+        };
         let started = std::time::Instant::now();
         let snapshot = SessionSnapshot::build(session);
         self.stats.note_phase(0, started.elapsed());
@@ -4920,20 +4905,7 @@ impl BotRuntime {
             snapshot,
             saves: self.save_log,
             meta: self.meta.clone(),
-            uses: self
-                .uses
-                .as_ref()
-                .map(|(_, uses)| uses.clone())
-                .unwrap_or_default(),
-            holds: self.holds.clone(),
-            fights: self.fights.clone(),
-            rides: self.rides.clone(),
-            revisits: self.revisits.clone(),
-            reaches: self.reaches.clone(),
-            errands: self.errands.clone(),
-            brews: self.brews.clone(),
-            door_vias: self.door_vias.clone(),
-            avoid_facts: self.avoid_facts.clone(),
+            facts,
             knowledge: self.knowledge.clone(),
             tick: self.tick,
             risk: self.risk,
@@ -6471,16 +6443,7 @@ mod tests {
             snapshot,
             saves: SaveLog::default(),
             meta: Some(Rc::new(meta)),
-            uses: Rc::default(),
-            holds: Rc::default(),
-            fights: Rc::default(),
-            rides: Rc::default(),
-            revisits: Rc::default(),
-            reaches: Rc::default(),
-            errands: Rc::default(),
-            brews: Rc::default(),
-            door_vias: Rc::default(),
-            avoid_facts: Rc::default(),
+            facts: Rc::default(),
             knowledge: None,
             tick: 1,
             risk: 0.6,
@@ -6597,16 +6560,7 @@ mod tests {
                 snapshot,
                 saves: SaveLog::default(),
                 meta: None,
-                uses: Rc::default(),
-                holds: Rc::default(),
-                fights: Rc::default(),
-                rides: Rc::default(),
-                revisits: Rc::default(),
-                reaches: Rc::default(),
-                errands: Rc::default(),
-                brews: Rc::default(),
-                door_vias: Rc::default(),
-                avoid_facts: Rc::default(),
+                facts: Rc::default(),
                 knowledge: None,
                 tick,
                 risk: 0.25,
@@ -6625,6 +6579,85 @@ mod tests {
                 "true|false|false|false|nil|1|0",
                 "true|false|true|true|1|2|0",
                 "true|false|true|false|2|3|1",
+            ]
+        );
+    }
+
+    /// The `*_facts` tables are built once and handed out on every later
+    /// tick, until the facts are replaced ([`BotVm::forget_facts`]).
+    #[test]
+    fn fact_tables_are_built_once_until_the_facts_reload() {
+        let temp = TempDir::new("facts");
+        let bot = temp.path.join("bot");
+        fs::create_dir_all(&bot).unwrap();
+        fs::write(
+            bot.join("init.lua"),
+            br#"function on_bot_tick(bot)
+                local uses, fights = bot:use_facts(), bot:fight_facts()
+                RESULT = string.format("%s|%s|%s|%d:%s|%d:%s", tostring(uses == USES),
+                    tostring(fights == FIGHTS), tostring(bot:knowledge() == KNOWLEDGE),
+                    #uses, uses[1] and uses[1].room or "-",
+                    #fights, fights[1] and fights[1].stage or "-")
+                USES, FIGHTS, KNOWLEDGE = uses, fights, bot:knowledge()
+            end
+"#,
+        )
+        .unwrap();
+        let pack = Pack::open(&temp.path).unwrap();
+        let vm = BotVm::load(&pack).unwrap();
+        let shares = BotShares::default();
+        let one = |room: &str| meta::GameFacts {
+            uses: vec![meta::RoomFact {
+                room: room.to_string(),
+                fact: meta::Use {
+                    slot: 2,
+                    item: 0x26,
+                    flag: (1, 0xA9),
+                    done_clear: false,
+                    after: None,
+                    until: None,
+                    label: None,
+                },
+            }],
+            fights: vec![meta::RoomFact {
+                room: room.to_string(),
+                fact: meta::FightFact {
+                    enemy: 3,
+                    flag: None,
+                    stage: Some(b'5'),
+                    optional: false,
+                },
+            }],
+            ..meta::GameFacts::default()
+        };
+        let mut results = Vec::new();
+        for (tick, facts) in [(1, one("10C")), (2, one("10C")), (3, one("20D"))] {
+            if tick == 3 {
+                vm.forget_facts().unwrap();
+            }
+            vm.call(BotCtx {
+                snapshot: world::tests::snapshot(0x117, 0, 0),
+                saves: SaveLog::default(),
+                meta: None,
+                facts: Rc::new(facts),
+                knowledge: None,
+                tick,
+                risk: 0.25,
+                params: Rc::default(),
+                goal_room: None,
+                shares: shares.share(),
+            })
+            .unwrap();
+            results.push(vm.lua.globals().get::<String>("RESULT").unwrap());
+        }
+        assert_eq!(
+            results,
+            [
+                // uses | fights | knowledge the same as last tick | rows
+                "false|false|false|1:10C|1:5",
+                "true|true|true|1:10C|1:5",
+                // The facts reloaded: new tables, the knowledge kept.
+                "false|false|true|1:20D|1:5",
             ]
         );
     }
@@ -7934,16 +7967,7 @@ mod tests {
             snapshot,
             saves: SaveLog::default(),
             meta: None,
-            uses: Rc::default(),
-            holds: Rc::default(),
-            fights: Rc::default(),
-            rides: Rc::default(),
-            revisits: Rc::default(),
-            reaches: Rc::default(),
-            errands: Rc::default(),
-            brews: Rc::default(),
-            door_vias: Rc::default(),
-            avoid_facts: Rc::default(),
+            facts: Rc::default(),
             knowledge: None,
             tick: 1,
             risk: 0.25,
