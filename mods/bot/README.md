@@ -142,7 +142,11 @@ Priorities, highest first:
    bot back. A held-back fight in the room the bot stands in is fought
    anyway once nothing else is left (`frontier empty; fighting anyway`,
    for the rest of that room entry): 303's heliport locks every door
-   behind the flare, and holding back there only ended the run. Then a save at a
+   behind the flare, and holding back there only ended the run. One held
+   back in another room is walked to and fought the same way (`going to
+   fight anyway`), once for each fight: 30C's Black Tiger was forced, its
+   web was then held back for health with no heal left anywhere, and the
+   run ended on an empty frontier in the guardhouse. Then a save at a
    typewriter here when the save decision allows it
    ([Saving and reloading](#saving-and-reloading)). Below
    `max_health * (0.2 - 0.15 * risk)`, with no heal item and damage taken
