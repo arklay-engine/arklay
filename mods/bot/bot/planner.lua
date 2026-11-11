@@ -600,6 +600,7 @@ local function gave_up(goal)
     end
     return m.permanent or m.attempts >= MAX_ATTEMPTS
 end
+BotPlanner.gave_up = gave_up
 
 -- Unreachable marks of this room are stale after a warp (a stair climb).
 -- With `doors`, so are the door marks of every room: a puzzle step in one
@@ -2155,8 +2156,10 @@ local function choose(bot)
             local ready, not_ready = true, nil
             if fight and not fight_forced(bot, room) then
                 ready, not_ready = BotSurvival.fight_ready(bot, fight)
-            elseif not BotTactics.active() and BotPuzzle.leave_ahead(bot) then
-                -- So do steps into a hazard that drains health (507's gas).
+            elseif not BotTactics.active() and BotPuzzle.leave_ahead(bot)
+                and not (plan().forced_hazard or {})[room] then
+                -- So do steps into a hazard that drains health (507's gas),
+                -- until nothing else is left (forgive_hazard).
                 ready, not_ready = BotSurvival.health_ready(bot, "the room's hazard")
             end
             local goal, why = nil, not_ready
@@ -3344,6 +3347,49 @@ local function forgive_fight(bot)
     return forgiven
 end
 
+-- Before the run finishes, on an empty frontier or as a loop: a step held
+-- back from a room's hazard (`not ready for the room's hazard`) is taken
+-- as the bot is, for the rest of the run (p.forced_hazard). Nothing else
+-- is left to heal it: three runs of 96 stood in the lab with no heal held,
+-- boxed or reachable (the way up needs a key from past the gas), 507's
+-- plate held back at 60/96 in one of them, until the loop rule ended them.
+-- Returns whether one was.
+local function forgive_hazard(bot)
+    local p = plan()
+    local here = bot:room().id
+    local keys = {}
+    for key, m in pairs(p.marks) do
+        if m.reason:find("not ready for the room's hazard", 1, true) then
+            keys[#keys + 1] = key
+        end
+    end
+    if #keys == 0 then
+        return false
+    end
+    table.sort(keys)
+    local away = nil
+    for _, key in ipairs(keys) do
+        local m = p.marks[key]
+        p.forced_hazard = p.forced_hazard or {}
+        p.forced_hazard[m.room] = true
+        p.marks[key] = nil
+        if m.room ~= here then
+            away = away or m.room
+        end
+        bot:log("nothing else left; into the hazard anyway: " .. key .. " (" .. m.reason .. ")")
+    end
+    marks_changed()
+    -- From another room the step is no goal: its room is the target.
+    local steps = away and route(bot, bot:world(), here, away)
+    if steps and steps[1] then
+        p.target = { kind = "revisit", room = away, slot = "revisit",
+            label = string.format("room %s again (its hazard, as the bot is)", away),
+            best = #steps, stalls = 0 }
+        bot:log("heading for " .. p.target.label)
+    end
+    return true
+end
+
 -- The story flags (the scenario and common banks, 0 and 1) as a string of
 -- the set bits: what a room's init reads to pick its variant.
 local STORY_BANK_COUNT = 2
@@ -3539,6 +3585,11 @@ function BotPlanner.enter_room(bot, room)
     -- The loop rules: a room entered again and again without real progress,
     -- and a pursued target whose route does not get shorter.
     local verdict, n = BotPlanner.repeat_check(p.since, room.id)
+    if verdict == "finish" and forgive_hazard(bot) then
+        -- A held-back hazard is the way on: the counts start over.
+        p.since = {}
+        verdict, n = "ok", 0
+    end
     if verdict == "finish" then
         BotPlanner.finish(bot, string.format(
             "looping: entered %s %d times without progress, every other goal marked",
@@ -3791,6 +3842,9 @@ function BotPlanner.step(bot)
             end
         end
         if not p.goal and forgive_fight(bot) then
+            p.goal = choose(bot)
+        end
+        if not p.goal and forgive_hazard(bot) then
             p.goal = choose(bot)
         end
         -- A just-won fight's scene can still be coming (303's Tyrant falls

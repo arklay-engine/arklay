@@ -380,6 +380,38 @@ end
 
 function BotInventory.enter_room()
     state().room_for = nil
+    state().box_moves = nil
+end
+
+-- The box moves of one item, in or out, within one stay in a room, after
+-- which it stays where it is until the bot leaves (ctx.settled, {[item] =
+-- true}): two rules that each undo the other's visit end there. No run of
+-- 192 moved an item more than three times in a stay but the ones that
+-- never stopped: 403's box took the flame rounds in as "the gun's other
+-- loading" for a pickup and gave them back as "a fight ahead prefers it",
+-- 1469 times, to the run's last tick.
+BotInventory.BOX_MOVES = 3
+
+local function note_box_move(bot, item)
+    local moves = state().box_moves or {}
+    state().box_moves = moves
+    moves[item] = (moves[item] or 0) + 1
+    if moves[item] == BotInventory.BOX_MOVES then
+        log(bot, string.format("0x%02X moved %d times at this box: it stays until the bot leaves",
+            item, moves[item]))
+    end
+end
+
+-- The items settled for this stay (note_box_move), or nil.
+local function settled()
+    local out = nil
+    for item, n in pairs(state().box_moves or {}) do
+        if n >= BotInventory.BOX_MOVES then
+            out = out or {}
+            out[item] = true
+        end
+    end
+    return out
 end
 
 local function slots_to_leave(_, ctx)
@@ -400,6 +432,9 @@ function BotInventory.wanted_back(row, ctx)
     end
     if ctx.cure_now and ctx.cure_now[item] then
         return CURE
+    end
+    if ctx.settled and ctx.settled[item] then
+        return nil
     end
     if ctx.uses and ctx.uses[item] and not (ctx.far and ctx.far[item]) then
         return "a <use> fact needs it"
@@ -743,6 +778,7 @@ end
 function BotInventory.context(bot)
     local ctx = { uses = {}, guns = {}, ammo = {}, keys = {}, cures = {}, heals = 0 }
     ctx.equipped = bot:player().equipped
+    ctx.settled = settled()
     local knowledge = bot:knowledge()
     -- Poisoned with no cure for it held: the cures for it come out of the
     -- box first (ctx.cure_now; 408's wasps poisoned the bot and it walked
@@ -1214,13 +1250,27 @@ function BotInventory.context(bot)
             end
         end
         local after = ctx.capacity - ctx.used - slots
-        local _, progress = BotInventory.needed_pickups(bot, ctx)
+        local _, progress = BotInventory.needed_pickups(bot, ctx, BotPlanner and BotPlanner.gave_up)
         local need = progress
         if (ctx.room_for or 0) > need then
             need = ctx.room_for
         end
         if need > 0 and after < need then
             ctx.rearm = nil
+        end
+    end
+    -- The rearm at a box here leaves those slots too: with every gun empty
+    -- and three MO disks to carry, 502's deposit boxed the empty launcher
+    -- for a pickup, "no held firearm has a round" took it straight back
+    -- out, and the two visits repeated for 265k ticks, to the run's limit.
+    if ctx.rearm_here then
+        local _, progress = BotInventory.needed_pickups(bot, ctx, BotPlanner and BotPlanner.gave_up)
+        local hold = progress or 0
+        if (ctx.room_for or 0) > hold then
+            hold = ctx.room_for
+        end
+        if hold > 0 and ctx.capacity - ctx.used - (ctx.hold_free or 0) <= hold then
+            ctx.rearm_here = nil
         end
     end
     -- The reserve rearm takes every slot it needs at once, or none: the
@@ -1238,7 +1288,11 @@ function BotInventory.context(bot)
         -- And it leaves the slots a key or a <use> item waits for: 502's
         -- deposit freed one for 504's lab key, the rearm took it back for
         -- the launcher's rounds, and Barry's branch stalled in the lab.
-        local _, progress = BotInventory.needed_pickups(bot, ctx)
+        -- Not one the planner has given up on (BotPlanner.gave_up): 215's
+        -- red jewel, a scripted handover no fact reaches, held a slot from
+        -- the first floor to the lab, and 513's Tyrant met eight shells
+        -- with the launcher and four stacks of its rounds in the box.
+        local _, progress = BotInventory.needed_pickups(bot, ctx, BotPlanner and BotPlanner.gave_up)
         local hold = progress or 0
         if (ctx.room_for or 0) > hold then
             hold = ctx.room_for
@@ -1510,6 +1564,16 @@ end
 -- What a deposit puts in the box: the keep rule's leftovers, else the soft
 -- keeps (BotInventory.soft_deposits) when a needed pickup has no slot.
 function BotInventory.make_room(bot, ctx, items, skip)
+    -- An item settled for this stay (ctx.settled) does not go back in.
+    if ctx.settled then
+        local rest = {}
+        for _, row in ipairs(items) do
+            if not ctx.settled[row.item] then
+                rest[#rest + 1] = row
+            end
+        end
+        items = rest
+    end
     local deposits = BotInventory.deposits(items, ctx)
     if #deposits == 0 and ctx.full then
         local needed, progress, guns = BotInventory.needed_pickups(bot, ctx, skip)
@@ -1870,12 +1934,14 @@ local function drive_op(bot, s, menu, view, op)
         or not bot:has_item(op.item)) then
         s.deposits = (s.deposits or 0) + 1
         log(bot, string.format("deposited 0x%02X", op.item))
+        note_box_move(bot, op.item)
         return true
     end
     if op.kind == "withdraw" and (bot:item_count(op.item) > op.before
         or (bot:has_item(op.item) and not op.held)) then
         s.withdrawals = (s.withdrawals or 0) + 1
         log(bot, string.format("withdrew 0x%02X", op.item))
+        note_box_move(bot, op.item)
         return true
     end
     if view.sliding then

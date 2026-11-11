@@ -50,7 +50,9 @@ every room entry (the save, and the bot's memory with the route's
 and `scripts/bot-rooms.py play -r ROOM -s 1-8` starts the bot at that room's
 door in each scene, over the seeds, and counts the ticks, hits, deaths and
 shots of each stay. A game's 557 rooms replay in 16 seconds; see the
-script's `--help`.
+script's `--help`. With `BOT_TREE=DIR` the replays load `DIR/mods`
+instead of this checkout's: a copy of the bot with a change to try,
+measured against the same scenes.
 
 A bot run saves at typewriters through the game's own save screen. Without
 an explicit `--save-dir` it writes to a fresh directory of its own,
@@ -173,7 +175,14 @@ Priorities, highest first:
    Such a readiness mark (a fight's or a hazard's) is no failure: it waits
    for the inventory to change however often it was tried, and never runs
    out of attempts (507's gas step was held three times in one entry, each
-   pickup there a new inventory, and given up for good). An
+   pickup there a new inventory, and given up for good). A hazard's
+   mark is given up once: with nothing else left, on an empty frontier or
+   before the loop rule ends the run, the step is taken as the bot is
+   (`nothing else left; into the hazard anyway`, for the rest of the
+   run), and from another room its room is the target (`heading for room
+   507 again`). Three runs of 96 stood in the lab with no heal held, boxed or in
+   reach (the way up needs a key from past the gas), the plate held back
+   at 60/96 in one of them, until the loop rule ended them. An
    `escape="yes"` leave is a chase, not a drain, and asks no heal-up: its
    flag is set only while the chase runs (30F's boulder). Then
    the room puzzle: the next `<interact>`/`<camera>`/`<push>` fact in
@@ -1100,7 +1109,15 @@ drives the box screen with pad input only.
   rearm counts the slots it takes (the gun, and its ammunition when
   boxed) and waits while a key or `<use>` pickup needs the free slots,
   or while the soft deposits' slots are held (above); otherwise the swap
-  would put the gun straight back. At a box in this
+  would put the gun straight back. A pickup the planner has given up on
+  (a permanent mark, or one out of attempts) holds no slot: 215's red
+  jewel, which no fact reaches, held one from the first floor to the lab,
+  and 513's Tyrant met eight shells with the launcher and four stacks of
+  its rounds in the box. The rearm with every held gun empty
+  (`rearm: no held firearm has a round`, at a box here) waits the same
+  way: with three MO disks to carry, 502's deposit boxed the empty
+  launcher for a pickup, that rearm took it straight back out, and the
+  two visits repeated for 265k ticks, to the run's limit. At a box in this
   room while sourcing ammunition, a `reserve` gun (the launcher), held or
   boxed, comes out with one kind of rounds the box holds for any of its
   loadings while none of them is held (`rearm: sourcing, and the box holds
@@ -1177,6 +1194,15 @@ needed pickup waits for a slot than when it was made (`m.needs`): what
 the box may take is wider for a key. 502's box, marked while the
 inventory was full of rounds, stayed marked when 504's key was left on
 the same full inventory, and the run stood at the pass-code door.
+
+An item moved `BOX_MOVES` (3) times at the box, in or out, within one
+stay in a room stays where it is until the bot leaves (`0x12 moved 3
+times at this box: it stays until the bot leaves`; a cure while poisoned
+still comes out). Two rules that each undo the other's visit end there.
+No run of 192 moved an item more than three times in a stay but the ones
+that never stopped: 403's box took the flame rounds in as the launcher's
+other loading, for a pickup, and gave them back as the rounds a fight
+ahead prefers, 1469 times, to the run's last tick.
 
 
 ## API
