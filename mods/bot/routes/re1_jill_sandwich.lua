@@ -1,6 +1,18 @@
--- RE1, Jill: the shotgun is lifted from 116's rack without the broken one, so
--- 115's ceiling comes down and Barry kicks the door in ("Jill Sandwich").
--- The Best ending.
+-- RE1, Jill: the Jill Sandwich. Ending 7: Jill, Chris and Barry.
+--
+-- sandwich=yes: the shotgun is lifted from 116's rack without the broken one,
+--   so 115's ceiling comes down and Barry kicks the door in ("Jill
+--   Sandwich").
+--
+-- These parameters decide whether Barry and Chris reach the helicopter, so
+-- they fix the ending:
+--   rope=wait: Jill waits in 20C's pit until Barry is back with the rope.
+--   cave_q1=yes cave_q2=yes: in 308 Jill goes with Barry and lets him go
+--     first.
+--   cave_exit=follow: Jill leaves 308 after him by door 1 (the other doors
+--     are held shut while he is ahead): Barry's branch.
+--   chris=save: Chris is freed from 512's cell before the escape lift.
+-- The other parameters keep their defaults: none of them changes who escapes.
 --
 --   arklay script [--headless] mods/bot/routes/re1_jill_sandwich.lua [PACK [SEED [STATS.json]]]
 --   arklay script --headless - PACK < mods/bot/routes/re1_jill_sandwich.lua
@@ -9,7 +21,14 @@
 load_game_pack(arg[1] or "re1", { mods = { "mods/bot" }, quick_turn = true, tactical_reload = true })
 new_game({ character = 1 })
 local run = bot_run({
-    params = { sandwich = "yes" },
+    params = {
+        sandwich = "yes",
+        rope = "wait",
+        cave_q1 = "yes",
+        cave_q2 = "yes",
+        cave_exit = "follow",
+        chris = "save",
+    },
     seed = tonumber(arg[2]),
     stats = arg[3],
     max_ticks = 400000,

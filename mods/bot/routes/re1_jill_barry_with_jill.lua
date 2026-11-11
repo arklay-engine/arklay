@@ -1,5 +1,13 @@
--- RE1, Jill: in the caves Jill goes with Barry but not behind him (Yes, No),
--- so he walks with her: Barry's branch. The Best ending.
+-- RE1, Jill: Barry walks with Jill in the caves. Ending 7: Jill, Chris and Barry.
+--
+-- These parameters decide whether Barry and Chris reach the helicopter, so
+-- they fix the ending:
+--   rope=wait: Jill waits in 20C's pit until Barry is back with the rope.
+--   cave_q1=yes cave_q2=no: in 308 Jill goes with Barry and goes first: he
+--     walks with her (Barry's branch).
+--   chris=save: Chris is freed from 512's cell before the escape lift.
+-- cave_exit does nothing after this answer, and the other parameters keep
+-- their defaults: none of them changes who escapes.
 --
 --   arklay script [--headless] mods/bot/routes/re1_jill_barry_with_jill.lua [PACK [SEED [STATS.json]]]
 --   arklay script --headless - PACK < mods/bot/routes/re1_jill_barry_with_jill.lua
@@ -8,7 +16,12 @@
 load_game_pack(arg[1] or "re1", { mods = { "mods/bot" }, quick_turn = true, tactical_reload = true })
 new_game({ character = 1 })
 local run = bot_run({
-    params = { cave_q2 = "no" },
+    params = {
+        rope = "wait",
+        cave_q1 = "yes",
+        cave_q2 = "no",
+        chris = "save",
+    },
     seed = tonumber(arg[2]),
     stats = arg[3],
     max_ticks = 400000,

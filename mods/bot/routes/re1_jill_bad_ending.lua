@@ -1,6 +1,14 @@
--- RE1, Jill: the Bad ending. Jill climbs out of 20C's pit before Barry is
--- back with the rope, so he is lost in the lab, and Chris is left in his
--- cell: Jill leaves on the helicopter alone.
+-- RE1, Jill: the Bad ending. Ending 2: Jill alone.
+--
+-- These parameters decide whether Barry and Chris reach the helicopter, so
+-- they fix the ending:
+--   rope=leave: Jill pushes the switch below 20C's hatch and goes down the
+--     ladder to the basement (21A) before Barry is back with the rope: he
+--     skips the caves and dies in the lab (502, "Tell my family").
+--   chris=leave: Jill keeps off 50B's door to 512: Chris stays in his cell.
+-- Without the rope Barry's 308 scene never plays, so the cave parameters do
+-- nothing here; the other parameters keep their defaults, and none of them
+-- changes who escapes.
 --
 --   arklay script [--headless] mods/bot/routes/re1_jill_bad_ending.lua [PACK [SEED [STATS.json]]]
 --   arklay script --headless - PACK < mods/bot/routes/re1_jill_bad_ending.lua
@@ -9,7 +17,10 @@
 load_game_pack(arg[1] or "re1", { mods = { "mods/bot" }, quick_turn = true, tactical_reload = true })
 new_game({ character = 1 })
 local run = bot_run({
-    params = { rope = "leave", chris = "leave" },
+    params = {
+        rope = "leave",
+        chris = "leave",
+    },
     seed = tonumber(arg[2]),
     stats = arg[3],
     max_ticks = 400000,
