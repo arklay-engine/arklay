@@ -167,7 +167,9 @@ function HookApi:is_re2() end
 ---@return { id: integer, quantity: integer }[]
 function HookApi:inventory() end
 
----Whether a flag bit is set.
+---Whether a flag bit is set. In an RE 2 room this reads RE 2's flag banks,
+---numbered as the room scripts' `ck` numbers them (bank 4's 0 is `ck(4, 0, 1)`);
+---elsewhere, RE 1's.
 ---@param bank integer
 ---@param bit integer
 ---@return boolean
@@ -180,7 +182,8 @@ function HookApi:item_count(item) end
 
 -- # Flags
 
----Set or clear a flag bit.
+---Set or clear a flag bit. In an RE 2 room this writes RE 2's flag banks, as
+---`set_re2_flag` does; elsewhere, RE 1's.
 ---@param bank integer
 ---@param bit integer
 ---@param value? boolean Defaults to `true`, so `api:flag_set(0, 1)` sets the bit.
