@@ -526,8 +526,8 @@ struct SessionSnapshot {
     panel: Option<PanelSnapshot>,
 }
 
-/// Room 408's numeric panel (`super::passcode_panel`) as the screen shows
-/// it, read-only.
+/// Room 408's numeric panel as its screen publishes it
+/// (`games/re1/interactive/passcode_panel.lua`'s `s.view`), read-only.
 #[derive(Clone, Copy, Debug, Default)]
 struct PanelSnapshot {
     /// Whether the pad takes input (the prompt was answered, not yet solved).
@@ -596,6 +596,37 @@ fn computer_snapshot(game: &game::GameState) -> Option<ComputerSnapshot> {
         cell: int("cell"),
         menu_row: int("menu_row"),
         typed: usize::try_from(int("typed")).unwrap_or(0),
+    })
+}
+
+/// Room 408's panel while it is up, from the view its script publishes. A
+/// panel reset since it last drew takes no input until its next frame.
+fn panel_snapshot(game: &game::GameState) -> Option<PanelSnapshot> {
+    use crate::interactive::{PASSCODE_PANEL, selected_screen};
+    if selected_screen(game) != Some(PASSCODE_PANEL) {
+        return None;
+    }
+    let Some(view) = game.interactive.view(PASSCODE_PANEL) else {
+        return Some(PanelSnapshot::default());
+    };
+    let coord = |key: &str| {
+        view.int(key)
+            .and_then(|v| u8::try_from(v).ok())
+            .unwrap_or(0)
+    };
+    let mut lamps = [false; 9];
+    if let Some(list) = view.field("lamps") {
+        for (index, lamp) in lamps.iter_mut().enumerate() {
+            *lamp = matches!(
+                list.index(index as i64 + 1),
+                Some(crate::interactive::ScriptValue::Bool(true))
+            );
+        }
+    }
+    Some(PanelSnapshot {
+        active: view.bool("active").unwrap_or(false),
+        cursor: (coord("x"), coord("y")),
+        lamps,
     })
 }
 
@@ -1471,11 +1502,7 @@ impl SessionSnapshot {
             item_defs: game.item_defs.clone(),
             drug_store: game.is_drug_store(),
             computer: computer_snapshot(game),
-            panel: session.passcode_panel.as_ref().map(|panel| PanelSnapshot {
-                active: panel.active(),
-                cursor: panel.cursor(),
-                lamps: panel.lamps(),
-            }),
+            panel: panel_snapshot(game),
         }
     }
 
