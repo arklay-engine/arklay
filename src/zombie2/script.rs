@@ -2642,6 +2642,52 @@ mod tests {
         assert_ne!(chase([0, 0x8C00 - 0x10000])[1], 0xA);
     }
 
+    /// A handgun hit (`Routine_1` 2) on a standing zombie with life 100 and
+    /// `At_sce_no` 1, its moan still waiting: `(At_obj_no, At_sce_no,
+    /// Routine_2, the clip, the draws)` after the hit's first tick.
+    fn handgun_hit(kind: u16) -> (i64, i64, i64, i64, i64) {
+        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        let library = include_str!("../../games/re2/lib/zombie.lua");
+        lua.globals().set("KIND", kind).unwrap();
+        lua.load(format!(
+            "local w = {{ r = {{ [0] = 2, 2, 0, 0 }}, vars = {{ [1] = 5, [3] = 0, [4] = 1 }},
+                 clip = -1, drawn = 0 }}
+             local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+             function e:routine(i) return w.r[i] end
+             function e:set_routine(i, v) w.r[i] = v end
+             function e:routines(a, b, c, d) w.r = {{ [0] = a, b, c, d }} end
+             function e:var(i) return w.vars[i] or 0 end
+             function e:set_var(i, v) w.vars[i] = v end
+             function e:kind() return KIND end
+             function e:life() return 100 end
+             function e:move_no() return 9 end
+             function e:clip(n) w.clip = n end
+             function e:speed() return 0, 0, 0 end
+             function e:rnd() w.drawn = w.drawn + 1 return 7 end
+             local zombie = (function() {library} end)()
+             zombie.run(e, {{}})
+             R = {{ w.vars[3], w.vars[4], w.r[2], w.clip, w.drawn }}"
+        ))
+        .exec()
+        .unwrap();
+        let r: Vec<i64> = lua.globals().get("R").unwrap();
+        (r[0], r[1], r[2], r[3], r[4])
+    }
+
+    /// `Em10Dm00` (0x455BB0): when a hit takes `At_sce_no` below 1 on a
+    /// zombie whose `Type` has no 0x40 and whose life is over 0x50, it draws
+    /// `At_sce_no` again, `(Rnd & 0xF) + 0x10`. Room 207's four are such
+    /// zombies. With 0x40, `Em10_Damage` (0x455780) compares `At_sce_no`
+    /// against 0x17 instead of 0: 1 is under it, so it marks the zombie
+    /// staggered (`At_obj_no` 1) and `Em10Dm00` hands the hit to `Em10Dm01`,
+    /// the knock-back (clip 4 from the front), with no draw.
+    #[test]
+    fn a_zombie_without_0x40_draws_its_stagger_counter_again() {
+        // The walk's clip 0, its stagger, one draw: 7 & 0xF + 0x10.
+        assert_eq!(handgun_hit(6), (0, 0x17, 1, 0, 1));
+        assert_eq!(handgun_hit(0x46), (1, 1, 1, 4, 0));
+    }
+
     /// `Em10_Init` under the new game's choice: what it leaves as
     /// `(life, flags, At_sce_no, draws)`. `Rnd` gives `draws` in turn and 0
     /// after; the room has one enemy, so the life gets its 15.
