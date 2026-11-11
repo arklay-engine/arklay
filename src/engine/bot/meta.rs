@@ -501,34 +501,17 @@ fn load_for(
         .with_context(|| path)
 }
 
-/// One room's `<use>` fact, with the room it belongs to.
+/// One room's fact, with the room it belongs to.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RoomUse {
+pub struct RoomFact<T> {
     /// The room id as `bot:room().id` spells it (`"10C"`).
     pub room: String,
-    pub fact: Use,
+    pub fact: T,
 }
 
-/// Every room's `<use>` facts, by room id then document order: the
-/// planner's index of where a held item has a use (`bot:use_facts()`).
-/// A file that does not parse is an error, as for [`load`]. With `jill`,
-/// only that character's facts (see [`parse_for`]).
-pub fn load_uses(pack: &Pack, jill: Option<bool>, params: Option<&Params>) -> Result<Vec<RoomUse>> {
-    let mut uses = Vec::new();
-    for (id, meta) in load_all(pack, jill, params)? {
-        uses.extend(meta.uses.into_iter().map(|fact| RoomUse {
-            room: id.clone(),
-            fact,
-        }));
-    }
-    Ok(uses)
-}
-
-/// One room's `<fight>` fact, with the room it belongs to.
+/// A `<fight>` fact, as the game-wide index keeps it.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RoomFight {
-    /// The room id as `bot:room().id` spells it (`"513"`).
-    pub room: String,
+pub struct FightFact {
     /// The knowledge enemy id the fight is against.
     pub enemy: u8,
     /// The flag its death sets, when the fact names one.
@@ -540,247 +523,91 @@ pub struct RoomFight {
     pub optional: bool,
 }
 
-/// Every room's `<fight>` facts, by room id then document order
-/// (`bot:fight_facts()`): the box loadout's index of the fights ahead.
-pub fn load_fights(
-    pack: &Pack,
-    jill: Option<bool>,
-    params: Option<&Params>,
-) -> Result<Vec<RoomFight>> {
-    let mut fights = Vec::new();
-    for (id, meta) in load_all(pack, jill, params)? {
-        for fact in meta.interacts {
-            if let Target::Fight {
-                enemy,
-                stage,
-                optional,
-            } = fact.target
-            {
-                fights.push(RoomFight {
-                    room: id.clone(),
+/// A `<brew>` fact with its room's `<tap>` facts.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BrewFact {
+    pub brew: Brew,
+    pub taps: Vec<Tap>,
+}
+
+/// Every room's facts the planner reads across rooms, for one character and
+/// set of story parameters: each list by room id, then document order. A
+/// route reads them through the `bot:*_facts()` methods.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct GameFacts {
+    /// `<use>`: where a held item has a use (`bot:use_facts()`).
+    pub uses: Vec<RoomFact<Use>>,
+    /// `<holds>`: where an item lies (`bot:item_facts()`).
+    pub holds: Vec<RoomFact<Holds>>,
+    /// `<fight>`: the box loadout's index of the fights ahead
+    /// (`bot:fight_facts()`).
+    pub fights: Vec<RoomFact<FightFact>>,
+    /// `<ride>` (`bot:ride_facts()`).
+    pub rides: Vec<RoomFact<Ride>>,
+    /// `<revisit>` (`bot:revisit_facts()`).
+    pub revisits: Vec<RoomFact<Revisit>>,
+    /// `<reach>` (`bot:reach_facts()`).
+    pub reaches: Vec<RoomFact<Reach>>,
+    /// `<door>` (`bot:door_facts()`).
+    pub doors: Vec<RoomFact<DoorVia>>,
+    /// `<avoid>` (`bot:avoid_facts()`): remote planning skips a door a gated
+    /// avoid holds shut.
+    pub avoids: Vec<RoomFact<Avoid>>,
+    /// `<deliver>`/`<fetch>`: which room wants an item and which hands it
+    /// over (`bot:errand_facts()`).
+    pub errands: Vec<RoomFact<Errand>>,
+    /// `<brew>` with its room's taps (`bot:brew_facts()`): what the
+    /// inventory keeps for a brew from any room.
+    pub brews: Vec<RoomFact<BrewFact>>,
+}
+
+impl GameFacts {
+    /// Add one room's parsed facts, after the rooms before it.
+    fn add_room(&mut self, room: &str, meta: RoomMeta) {
+        fn add<T>(list: &mut Vec<RoomFact<T>>, room: &str, facts: Vec<T>) {
+            list.extend(facts.into_iter().map(|fact| RoomFact {
+                room: room.to_string(),
+                fact,
+            }));
+        }
+        add(&mut self.uses, room, meta.uses);
+        add(&mut self.holds, room, meta.holds);
+        let fights = meta
+            .interacts
+            .into_iter()
+            .filter_map(|fact| match fact.target {
+                Target::Fight {
+                    enemy,
+                    stage,
+                    optional,
+                } => Some(FightFact {
                     enemy,
                     flag: fact.flag,
                     stage,
                     optional,
-                });
-            }
-        }
-    }
-    Ok(fights)
-}
-
-/// One room's `<holds>` fact, with the room it belongs to.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RoomHolds {
-    /// The room id as `bot:room().id` spells it (`"102"`).
-    pub room: String,
-    pub fact: Holds,
-}
-
-/// Every room's `<holds>` facts, by room id then document order: the
-/// planner's index of where an item lies (`bot:item_facts()`).
-pub fn load_holds(
-    pack: &Pack,
-    jill: Option<bool>,
-    params: Option<&Params>,
-) -> Result<Vec<RoomHolds>> {
-    let mut holds = Vec::new();
-    for (id, meta) in load_all(pack, jill, params)? {
-        holds.extend(meta.holds.into_iter().map(|fact| RoomHolds {
-            room: id.clone(),
-            fact,
-        }));
-    }
-    Ok(holds)
-}
-
-/// One room's `<ride>` fact, with the room it belongs to.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RoomRide {
-    /// The room id as `bot:room().id` spells it (`"515"`).
-    pub room: String,
-    pub fact: Ride,
-}
-
-/// Every room's `<ride>` facts, by room id then document order
-/// (`bot:ride_facts()`).
-pub fn load_rides(
-    pack: &Pack,
-    jill: Option<bool>,
-    params: Option<&Params>,
-) -> Result<Vec<RoomRide>> {
-    let mut rides = Vec::new();
-    for (id, meta) in load_all(pack, jill, params)? {
-        rides.extend(meta.rides.into_iter().map(|fact| RoomRide {
-            room: id.clone(),
-            fact,
-        }));
-    }
-    Ok(rides)
-}
-
-/// One room's `<revisit>` fact, with the room it belongs to.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RoomRevisit {
-    /// The room id as `bot:room().id` spells it (`"50B"`).
-    pub room: String,
-    pub fact: Revisit,
-}
-
-/// Every room's `<revisit>` facts, by room id then document order
-/// (`bot:revisit_facts()`).
-pub fn load_revisits(
-    pack: &Pack,
-    jill: Option<bool>,
-    params: Option<&Params>,
-) -> Result<Vec<RoomRevisit>> {
-    let mut revisits = Vec::new();
-    for (id, meta) in load_all(pack, jill, params)? {
-        revisits.extend(meta.revisits.into_iter().map(|fact| RoomRevisit {
-            room: id.clone(),
-            fact,
-        }));
-    }
-    Ok(revisits)
-}
-
-/// One room's `<reach>` fact, with the room it belongs to.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RoomReach {
-    /// The room id as `bot:room().id` spells it (`"20C"`).
-    pub room: String,
-    pub fact: Reach,
-}
-
-/// Every room's `<reach>` facts, by room id then document order
-/// (`bot:reach_facts()`).
-pub fn load_reaches(
-    pack: &Pack,
-    jill: Option<bool>,
-    params: Option<&Params>,
-) -> Result<Vec<RoomReach>> {
-    let mut reaches = Vec::new();
-    for (id, meta) in load_all(pack, jill, params)? {
-        reaches.extend(meta.reaches.into_iter().map(|fact| RoomReach {
-            room: id.clone(),
-            fact,
-        }));
-    }
-    Ok(reaches)
-}
-
-/// One room's `<door>` fact, with the room it belongs to.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RoomDoorVia {
-    /// The room id as `bot:room().id` spells it (`"406"`).
-    pub room: String,
-    pub fact: DoorVia,
-}
-
-/// Every room's `<door>` facts, by room id then document order
-/// (`bot:door_facts()`).
-pub fn load_door_vias(
-    pack: &Pack,
-    jill: Option<bool>,
-    params: Option<&Params>,
-) -> Result<Vec<RoomDoorVia>> {
-    let mut doors = Vec::new();
-    for (id, meta) in load_all(pack, jill, params)? {
-        doors.extend(meta.doors.into_iter().map(|fact| RoomDoorVia {
-            room: id.clone(),
-            fact,
-        }));
-    }
-    Ok(doors)
-}
-
-/// One room's `<avoid>` fact, with the room it belongs to.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RoomAvoid {
-    /// The room id as `bot:room().id` spells it (`"302"`).
-    pub room: String,
-    pub fact: Avoid,
-}
-
-/// Every room's `<avoid>` facts, by room id then document order
-/// (`bot:avoid_facts()`): remote planning skips a door a gated avoid holds
-/// shut.
-pub fn load_avoids(
-    pack: &Pack,
-    jill: Option<bool>,
-    params: Option<&Params>,
-) -> Result<Vec<RoomAvoid>> {
-    let mut avoids = Vec::new();
-    for (id, meta) in load_all(pack, jill, params)? {
-        avoids.extend(meta.avoids.into_iter().map(|fact| RoomAvoid {
-            room: id.clone(),
-            fact,
-        }));
-    }
-    Ok(avoids)
-}
-
-/// One room's `<deliver>` or `<fetch>` fact, with the room it belongs to.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RoomErrand {
-    /// The room id as `bot:room().id` spells it (`"20D"`).
-    pub room: String,
-    pub fact: Errand,
-}
-
-/// Every room's errand facts, by room id then document order: the planner's
-/// index of which room wants an item and which hands it over
-/// (`bot:errand_facts()`).
-pub fn load_errands(
-    pack: &Pack,
-    jill: Option<bool>,
-    params: Option<&Params>,
-) -> Result<Vec<RoomErrand>> {
-    let mut errands = Vec::new();
-    for (id, meta) in load_all(pack, jill, params)? {
-        errands.extend(meta.errands.into_iter().map(|fact| RoomErrand {
-            room: id.clone(),
-            fact,
-        }));
-    }
-    Ok(errands)
-}
-
-/// One room's `<brew>` fact, with the room it belongs to and that room's
-/// `<tap>` facts.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RoomBrew {
-    /// The room id as `bot:room().id` spells it (`"409"`).
-    pub room: String,
-    pub fact: Brew,
-    pub taps: Vec<Tap>,
-}
-
-/// Every room's `<brew>` facts, by room id then document order
-/// (`bot:brew_facts()`): what the inventory keeps for a brew from any room.
-pub fn load_brews(
-    pack: &Pack,
-    jill: Option<bool>,
-    params: Option<&Params>,
-) -> Result<Vec<RoomBrew>> {
-    let mut brews = Vec::new();
-    for (id, meta) in load_all(pack, jill, params)? {
+                }),
+                _ => None,
+            });
+        add(&mut self.fights, room, fights.collect());
+        add(&mut self.rides, room, meta.rides);
+        add(&mut self.revisits, room, meta.revisits);
+        add(&mut self.reaches, room, meta.reaches);
+        add(&mut self.doors, room, meta.doors);
+        add(&mut self.avoids, room, meta.avoids);
+        add(&mut self.errands, room, meta.errands);
         let taps = meta.taps;
-        brews.extend(meta.brews.into_iter().map(|fact| RoomBrew {
-            room: id.clone(),
-            fact,
+        let brews = meta.brews.into_iter().map(|brew| BrewFact {
+            brew,
             taps: taps.clone(),
-        }));
+        });
+        add(&mut self.brews, room, brews.collect());
     }
-    Ok(brews)
 }
 
-/// Every room's parsed `bot.xml`, by room id (upper case).
-fn load_all(
-    pack: &Pack,
-    jill: Option<bool>,
-    params: Option<&Params>,
-) -> Result<Vec<(String, RoomMeta)>> {
+/// Every room's [`GameFacts`], each room's `bot.xml` parsed once. A file
+/// that does not parse is an error, as for [`load`]. With `jill`, only that
+/// character's facts (see [`parse_for`]).
+pub fn load_facts(pack: &Pack, jill: Option<bool>, params: Option<&Params>) -> Result<GameFacts> {
     let mut rooms: Vec<String> = pack
         .paths()
         .filter_map(|path| {
@@ -792,7 +619,7 @@ fn load_all(
         .collect();
     rooms.sort();
     rooms.dedup();
-    let mut all = Vec::new();
+    let mut facts = GameFacts::default();
     for room in rooms {
         let path = format!("room/{room}/bot.xml");
         let bytes = pack
@@ -801,9 +628,9 @@ fn load_all(
         let text =
             std::str::from_utf8(&bytes).with_context(|| format!("{path} is not valid UTF-8"))?;
         let meta = parse_for(text, jill, params).with_context(|| path.clone())?;
-        all.push((room.to_ascii_uppercase(), meta));
+        facts.add_room(&room.to_ascii_uppercase(), meta);
     }
-    Ok(all)
+    Ok(facts)
 }
 
 /// Parse one `bot.xml` document, keeping every fact.
@@ -2810,20 +2637,63 @@ mod tests {
         let mut params = Params::new(super::super::params::parse(&shipped).unwrap());
         // The brew is the V-JOLT branch's: the default drops it.
         assert!(
-            load_brews(&pack, Some(true), Some(&params))
+            load_facts(&pack, Some(true), Some(&params))
                 .unwrap()
+                .brews
                 .is_empty()
         );
         params.set("vjolt", "yes").unwrap();
-        let brews = load_brews(&pack, Some(true), Some(&params)).unwrap();
+        let brews = load_facts(&pack, Some(true), Some(&params)).unwrap().brews;
         let rows: Vec<(&str, u8, Vec<u8>)> = brews
             .iter()
             .map(|entry| {
-                let taps = entry.taps.iter().map(|tap| tap.item).collect();
-                (entry.room.as_str(), entry.fact.item, taps)
+                let taps = entry.fact.taps.iter().map(|tap| tap.item).collect();
+                (entry.room.as_str(), entry.fact.brew.item, taps)
             })
             .collect();
         assert_eq!(rows, vec![("409", 0x1B, vec![0x14, 0x15, 0x16])]);
+    }
+
+    #[test]
+    fn the_game_facts_gather_each_rooms_facts_in_one_pass() {
+        let pack = Pack::open(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot")).unwrap();
+        for jill in [Some(true), Some(false), None] {
+            let facts = load_facts(&pack, jill, None).unwrap();
+            // The same lists, room by room, as each room's own bot.xml.
+            let mut want = GameFacts::default();
+            let mut rooms: Vec<String> = pack
+                .paths()
+                .filter_map(|path| {
+                    let room = path.strip_prefix("room/")?.strip_suffix("/bot.xml")?;
+                    Some(room.to_ascii_uppercase())
+                })
+                .collect();
+            rooms.sort();
+            for room in &rooms {
+                let bytes = pack
+                    .read(&format!("room/{}/bot.xml", room.to_ascii_lowercase()))
+                    .unwrap();
+                let text = std::str::from_utf8(&bytes).unwrap();
+                want.add_room(room, parse_for(text, jill, None).unwrap());
+            }
+            assert_eq!(facts, want);
+            for list in [facts.uses.len(), facts.fights.len(), facts.doors.len()] {
+                assert!(list > 0, "{jill:?}: an empty index");
+            }
+            let rooms: Vec<&str> = facts
+                .fights
+                .iter()
+                .map(|entry| entry.room.as_str())
+                .collect();
+            assert!(rooms.is_sorted(), "{rooms:?}");
+        }
+        // A <fight> keeps the flag its death sets.
+        let facts = load_facts(&pack, Some(true), None).unwrap();
+        assert!(
+            facts.fights.iter().any(|entry| entry.fact.flag.is_some()),
+            "{:?}",
+            facts.fights
+        );
     }
 
     #[test]
@@ -2844,7 +2714,7 @@ mod tests {
     #[test]
     fn the_use_index_lists_every_rooms_use_facts_by_room() {
         let pack = Pack::open(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot")).unwrap();
-        let uses = load_uses(&pack, Some(true), None).unwrap();
+        let uses = load_facts(&pack, Some(true), None).unwrap().uses;
         let rows: Vec<(&str, u8, u8)> = uses
             .iter()
             .map(|entry| (entry.room.as_str(), entry.fact.slot, entry.fact.item))
@@ -2888,14 +2758,17 @@ mod tests {
         );
         assert_eq!(uses[1].fact.flag, (1, 0xA9));
         // Chris's 105 numbers the fireplace's gold-emblem zone 8, not 11.
-        let chris = load_uses(&pack, Some(false), None).unwrap();
+        let chris = load_facts(&pack, Some(false), None).unwrap().uses;
         let chris_105: Vec<(u8, u8, (u8, u8))> = chris
             .iter()
             .filter(|entry| entry.room == "105")
             .map(|entry| (entry.fact.slot, entry.fact.item, entry.fact.flag))
             .collect();
         assert_eq!(chris_105, vec![(8, 0x20, (1, 0xA8))]);
-        assert_eq!(load_uses(&pack, None, None).unwrap().len(), uses.len() + 1);
+        assert_eq!(
+            load_facts(&pack, None, None).unwrap().uses.len(),
+            uses.len() + 1
+        );
     }
 
     #[test]
@@ -2927,7 +2800,7 @@ mod tests {
         }
         // The index over the checked-in files: 102's broken shotgun.
         let pack = Pack::open(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot")).unwrap();
-        let holds = load_holds(&pack, Some(true), None).unwrap();
+        let holds = load_facts(&pack, Some(true), None).unwrap().holds;
         assert!(
             holds
                 .iter()
@@ -3083,7 +2956,7 @@ mod tests {
     #[test]
     fn the_errand_index_lists_the_serum_errand() {
         let pack = Pack::open(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods/bot")).unwrap();
-        let errands = load_errands(&pack, Some(true), None).unwrap();
+        let errands = load_facts(&pack, Some(true), None).unwrap().errands;
         let rooms: Vec<(&str, ErrandKind)> = errands
             .iter()
             .map(|entry| (entry.room.as_str(), entry.fact.kind))
@@ -3098,7 +2971,10 @@ mod tests {
             ]
         );
         assert!(
-            load_errands(&pack, Some(false), None).unwrap().is_empty(),
+            load_facts(&pack, Some(false), None)
+                .unwrap()
+                .errands
+                .is_empty(),
             "Jill's only"
         );
     }
