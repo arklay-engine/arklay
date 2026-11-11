@@ -19,7 +19,11 @@
        No, Yes: event_06 sets 0x52; 502 then plays "Tell my family" (lab).
 
      Story parameters cave_q1, cave_q2 and cave_exit (params/re1.xml) pick
-     the branch. Without them: Yes, Yes, Follow. -->
+     the branch. Without them: Yes, Yes, Follow. While 0x5C is set, the
+     exit decides Barry's fate, so each value holds the other exits shut:
+     follow keeps off door 0 (to 307) and door 2 (309's south door), so the
+     only way out is door 1, through AOT 3's gunshot (the bot's own route
+     took it, but nothing made it); backtrack keeps off door 1. -->
 <bot format="2">
   <answer message="23" choice="yes" when="cave_q1=yes" label="go with Barry"/>
   <answer message="23" choice="no" when="cave_q1=no" label="do not go with Barry"/>
@@ -27,6 +31,10 @@
   <answer message="24" choice="no" when="cave_q2=no" label="go first, Barry behind"/>
   <answer message="25" choice="yes" when="cave_q2=yes" label="stay here"/>
   <answer message="25" choice="no" when="cave_q2=no" label="take another way"/>
-  <avoid slot="1" bank="1" bit="0x5C" while="set" when="cave_exit=backtrack"
+  <avoid slot="1" bank="1" bit="0x5C" while="set" character="jill" when="cave_exit=backtrack"
          reason="backtrack: door 1 behind Barry would follow him"/>
+  <avoid slot="0" bank="1" bit="0x5C" while="set" character="jill" when="cave_exit=follow"
+         reason="follow: door 0 back to 307 while Barry is ahead would backtrack, and he dies in 307"/>
+  <avoid slot="2" bank="1" bit="0x5C" while="set" character="jill" when="cave_exit=follow"
+         reason="follow: 309's south door while Barry is ahead would backtrack, and he dies in 307"/>
 </bot>
