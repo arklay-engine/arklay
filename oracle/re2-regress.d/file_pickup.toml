@@ -25,7 +25,7 @@ ticks = 700
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,fl,msg,snd,hk,fgstat"
 frames = [360, 699]
 frame_max_mean = 0.36
-expect = { tick = 344, fields = ["hk"], note = "objects 2 to 4 (the desk's, `obj_model_set` 2 to 4 in main_00) are in play in arklay (`Be_flg & 1`) but not in the original from the first tick; the frames match (#596)" }
+expect = "match"
 record = "--no-enemies --warp 206:-17200:0:-9100:3072 --life 200"
 
 [[run]]
