@@ -293,11 +293,15 @@ Priorities, highest first:
    refill closed on the way to 403's box, the crank stopped counting as
    needed, and five seeds of 24 ended on an empty frontier. `planner.lua`'s header has
    the formula.
-7. Nothing left: every approach or time-out mark under 3 attempts gets one
-   more try (the bot may now stand elsewhere). Within 30 seconds of
-   entering a room with a door parked at its origin, the bot then idles
-   (`waiting for door slot N -> X at the room origin`): the room's event
-   may carry the player through it (310's lift down to 500). Then
+7. Nothing left: within 30 seconds of entering a room with a door
+   parked at its origin, the bot idles (`waiting for door slot N -> X at
+   the room origin`): the room's event may carry the player through it
+   (310's lift), and nothing routes from inside a lift, which is no empty
+   frontier. (Read as one, 310's ride up forgave every message door of
+   the lab below, those nearer doors outranked the unvisited rooms the bot
+   had come up for, and it rode straight back down.) Then every approach
+   or time-out mark under 3 attempts gets one more try (the bot may now
+   stand elsewhere). Then
    each visited room of this stage that the bot left before the story
    flags (scenario and common banks) last changed is entered again,
    nearest first, once per story state and only in a state it was never
@@ -1006,7 +1010,10 @@ drives the box screen with pad input only.
   (while none is boxed) and its inventory-full mark waits for the
   inventory to change, and it may swap out a spare gun like a key (30C's
   web met a full inventory of guns, rounds, the crank and the medal, with
-  one knife boxed and one on its floor, and the run ended there). A
+  one knife boxed and one on its floor, and the run ended there). It
+  also takes the free slot that a needed item elsewhere holds
+  (`pickup_fits`): with one slot free and 217's MO disk waiting on it,
+  30C's knife was left as `inventory full` beside its own web. A
   boss not met yet asks nothing: the bot does not peek at what is ahead.
   Meeting one is remembered past a reload (a player who died to it knows it
   is there). Another loading of the preferred launcher keeps its rounds
@@ -1113,7 +1120,11 @@ deposit is done when the item's count drops, a withdrawal when it rises.
 Then cancel closes the box and the menu, and the visit ends once the
 player has been controllable for a second. A visit that moved nothing is
 marked and not chosen again until the inventory changes, except a first
-look (the contents are now remembered).
+look (the contents are now remembered). The mark also lifts once one more
+needed pickup waits for a slot than when it was made (`m.needs`): what
+the box may take is wider for a key. 502's box, marked while the
+inventory was full of rounds, stayed marked when 504's key was left on
+the same full inventory, and the run stood at the pass-code door.
 
 
 ## API
@@ -1406,7 +1417,7 @@ files. The checked-in facts:
 | 301 | `<use>` the square crank (`0x1D`) at slot 4; done flag scenario `0x2F`, which the drain event sets. `<watch>` the same flag: the drain scene is not skipped. Using a crank from the menu leaves the player in the crank turn, whose completion the event waits on. The drained pool is crossed by its two ladders (AOT 2 and 3, passage checks) to the door to 302. `<avoid slot="7" bank="0" bit="0x2F" while="set">`: the elevator call back down to 302 on the landing the 302 door brings you to. Once the north elevator stands at 300 (scenario `0x31`, after 302's battery) a second `<use>` of the crank (`done="clear"`, `after`) fills the pool again, which stops 302's waterfall; with the pool full `<door slot="1" via="7">` takes the elevator down to 302. |
 | 302 | `<avoid slot="7">`: the elevator call on the platform the 301 door lands on; it rides straight back up to 301. `<avoid slot="0" bank="0" bit="0x32" while="clear">`: door 0 to 300 is the north elevator's far end, called only with the power on (scenario `0x32`). `<use>` the battery (`0x27`) at slot 4 turns the power on (scenario `0x32`), and `<door slot="0" via="8">` (while scenario `0x31` is clear) rides the north elevator up to 300. `<door slot="3" via="10">` while scenario `0x2F` is clear: with the pool full the waterfall is gone and AOT 10 at the ladder asks to climb down to 307 (`<answer>` Yes). |
 | 305 | `<use slot="6" item="0x24" bank="0" bit="28">` and `<use slot="5" item="0x25" bank="0" bit="27">`: the Wolf and Eagle medals into the fountain; with both in, the main drains it (scenario 29). `<door slot="2" via="14">`: the passage to 30F, a door parked at the origin that the AOT 14 event at the west end fires. `<door slot="1" via="9" bank="4" bit="29" while="clear">`: once drained, the stairs zone AOT 9 (a touch event: the reach point fires it, no press needed) runs event_00 down to the fountain floor, which sets room 29; the via goal is then done and door 1 to 310 is an ordinary door. `<avoid slot="12" bank="4" bit="28" while="clear">`: AOT 0C, the stairs bottom, is reached only down the stairwell (room bit `0x1C`, set by event_00 or an entry from 310), so it is never taken for a stair check from the top. |
-| 310 | No facts. The lift: entered from 305, event_01 rides down and turns on door 1 to 500 at the room origin, which takes the player through by itself; the bot waits for it (step 7). |
+| 310 | The lift under the fountain. Both doors sit at the room origin: entered from 305, the event rides down and turns on door 1 to 500, which takes the player through by itself; entered from 500 it rides up to door 0 and 305. `<ride slot="0" from="500">` and `<ride slot="1" from="305">` make both ways routes, and in the lift the bot waits (step 7). Without the facts nothing routed out of the lab: a run that came down one MO disk short stood at the pass-code doors until the loop rule ended it (6 runs of 96). |
 | 306 | Doom Book II (AOT 6) is live only while box object 2 stands in object probe AOT 5. The box starts against the north wall, so: `<push slot="5" axis="x">` puts it under the wall slab, `<use slot="1" item="0x1E" bank="0" bit="60">` cranks the slab out and it shoves the box off the wall, then `<push slot="7" axis="x">` and `<push slot="5">`, both `after` scenario 60, take it west of the slab, south and east into AOT 5. The book is taken from the floor and opened for its medal. |
 | 307 | `<use>` the hex crank (`0x1E`) at slot 4 turns the bridge (common `0x47`), which opens door 2 to 30B. In the BioRand pack slot 3 is a handover item at the room origin. |
 | 30A | `<interact slot="2">` (Jill): the body probe in front of Enrico runs his scene (common `0x48`), which hands over the hex crank. |

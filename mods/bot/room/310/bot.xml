@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 310, the lift under the fountain. Both doors are parked at the room
+     origin: entered from 305 the lift rides down and its event turns on
+     door 1 to 500; entered from 500 it rides up and turns on door 0 to 305
+     (ride_down_from_305 / ride_up_from_500). Without the facts no route
+     led out of the lab: a run that came down one MO disk short stood at the
+     pass-code doors until the loop rule ended it. -->
+<bot format="2">
+  <ride slot="0" from="500" label="up to 305"/>
+  <ride slot="1" from="305" label="down to 500"/>
+</bot>

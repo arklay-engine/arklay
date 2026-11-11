@@ -350,6 +350,10 @@ local function mark(bot, kind, room, slot, reason, permanent)
     else
         m.reach_state = nil
     end
+    -- A box: the needed pickups waiting for a slot now (blocked lifts the
+    -- mark once there are more).
+    m.needs = kind == "box"
+        and BotPlanner.steps_needing_room(bot, true) + BotPlanner.needed_items_left(bot) or nil
     p.marks[key] = m
     marks_changed()
     bot:log(string.format("mark %s: %s (attempt %d)", key, reason, m.attempts))
@@ -488,6 +492,18 @@ end
 local function blocked(bot, kind, room, slot, remote)
     local m = plan().marks[mark_key(kind, room, slot)]
     if not m then
+        return false
+    end
+    if m.needs ~= nil and not m.permanent
+        and BotPlanner.steps_needing_room(bot, true) + BotPlanner.needed_items_left(bot) > m.needs then
+        -- A box visit that changed nothing is tried again once another
+        -- needed pickup waits for a slot: what the box may take is wider
+        -- for a key (BotInventory.soft_deposits). 502's box, marked while
+        -- the inventory was full of rounds, stayed marked when 504's key
+        -- was left on the same full inventory, and the run stood at the
+        -- pass-code door until it was called stuck.
+        plan().marks[mark_key(kind, room, slot)] = nil
+        marks_changed()
         return false
     end
     if m.reach_state ~= nil then
@@ -1791,7 +1807,18 @@ local function context_uses(bot)
     local key = string.format("%d|%s|%d|%s", bot:tick(), inventory_sig(bot),
         plan().marks_gen or 0, bot:memory().box_items or "")
     if uses_cache.key ~= key then
-        uses_cache.key, uses_cache.uses = key, BotInventory.context(bot).uses
+        -- With the hand weapon a met fight needs (ctx.required): 30C's
+        -- knife, in the web's own room, lost the one free slot to a needed
+        -- item rooms away, and with the web uncut the caves ended there.
+        local ctx = BotInventory.context(bot)
+        local uses = {}
+        for item, _ in pairs(ctx.uses or {}) do
+            uses[item] = true
+        end
+        for item, _ in pairs(ctx.required or {}) do
+            uses[item] = true
+        end
+        uses_cache.key, uses_cache.uses = key, uses
     end
     return uses_cache.uses
 end
@@ -3651,6 +3678,24 @@ function BotPlanner.step(bot)
         end
         p.awaiting = nil
         p.goal = choose(bot)
+        -- A lift carries the player out by itself (TRANSFER_WAIT): nothing
+        -- routes from inside it, and that is no empty frontier. Read as
+        -- one, 310's ride up forgave every message door of the lab, and
+        -- those nearer doors outranked the unvisited rooms the bot had
+        -- come up for: it rode straight back down, until the loop rule
+        -- ended the run.
+        if not p.goal and bot:tick() - (p.entered_tick or 0) < TRANSFER_WAIT then
+            for _, door in ipairs(bot:doors()) do
+                if door.target and door.target ~= room and BotNav.is_origin_zone(door) then
+                    if not p.transfer_wait then
+                        p.transfer_wait = true
+                        bot:log(string.format("waiting for door slot %d -> %s at the room origin",
+                            door.slot, door.target))
+                    end
+                    return
+                end
+            end
+        end
         if not p.goal and forgive_approaches(bot) > 0 then
             p.goal = choose(bot)
         end
@@ -3674,18 +3719,6 @@ function BotPlanner.step(bot)
         end
         if not p.goal and forgive_fight(bot) then
             p.goal = choose(bot)
-        end
-        if not p.goal and bot:tick() - (p.entered_tick or 0) < TRANSFER_WAIT then
-            for _, door in ipairs(bot:doors()) do
-                if door.target and door.target ~= room and BotNav.is_origin_zone(door) then
-                    if not p.transfer_wait then
-                        p.transfer_wait = true
-                        bot:log(string.format("frontier empty; waiting for door slot %d -> %s at the room origin",
-                            door.slot, door.target))
-                    end
-                    return
-                end
-            end
         end
         -- A just-won fight's scene can still be coming (303's Tyrant falls
         -- off the heliport, then the ending plays): an empty frontier waits
