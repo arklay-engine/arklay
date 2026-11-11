@@ -285,6 +285,10 @@ pub fn read(data: &[u8]) -> Result<RoomSource> {
     let footstep_zones =
         parse_footsteps(data, offset(data, FLR_SLOT)?).context("footstep zones")?;
     let guides = parse_guides(data, offset(data, GUIDE_SLOT)?).context("guide areas")?;
+    // `rdt[2]` counts the trailing slots with no model too, which the
+    // object folder's files cannot show.
+    let object_count = usize::from(data.get(2).copied().unwrap_or(0));
+    let modelled = object_models(data).last().map_or(0, |&(slot, ..)| slot + 1);
     Ok(RoomSource {
         cameras,
         zones,
@@ -293,6 +297,7 @@ pub fn read(data: &[u8]) -> Result<RoomSource> {
         footstep_count: footstep_zones.len() as u16,
         footstep_zones,
         guides,
+        object_slots: (object_count > modelled).then_some(object_count),
         dialect: Dialect::Re2,
         ..RoomSource::default()
     })

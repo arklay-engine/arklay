@@ -888,6 +888,20 @@ fn an_re2_rdt_converts_to_a_room_that_builds_the_same() {
     assert_eq!(snapshot(&loaded.state), snapshot(&expected.state));
 }
 
+/// Rooms 30D0 and 6120 count object slots past their last model: the XML
+/// keeps the RDT's count rather than the files'.
+#[test]
+fn an_re2_rooms_trailing_empty_object_slots_survive_the_xml() {
+    let mut data = crate::rdt2::tests::sample();
+    data[2] = 2;
+    let id = RoomId::parse("1000").unwrap();
+    let pack = pack_of(convert_rdt2(&data, id, Vec::new()).unwrap());
+    let loaded = load(&pack, id).unwrap();
+    assert_eq!(loaded.state.re2_object_count, 2);
+    let expected = Loaded::from_rdt(&pack, id, data).unwrap();
+    assert_eq!(snapshot(&loaded.state), snapshot(&expected.state));
+}
+
 /// A room the XML loses a field of falls back to a raw RDT at conversion.
 #[test]
 fn an_re2_rooms_guide_areas_survive_the_xml() {

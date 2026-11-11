@@ -77,8 +77,9 @@ pub struct RoomSource {
     /// RE2's guide areas.
     pub guides: Vec<crate::state::Guide>,
     /// The object-model table's slot count when it is longer than its last
-    /// slot with a model (`object/<slot>.tmd`): trailing null slots the SCD
-    /// still sees. `None` when the files give the count.
+    /// slot with a model (`object/<slot>.tmd`, or RE2's `object/<slot>.md1`):
+    /// trailing null slots the SCD still sees. `None` when the files give the
+    /// count.
     pub object_slots: Option<usize>,
     /// The item-model table's slot count, like [`RoomSource::object_slots`].
     pub item_slots: Option<usize>,
@@ -611,13 +612,15 @@ impl RoomSource {
             player_flag: id.player_flag,
             omodel_slot_count,
             // The converted room keeps no RDT header: its byte 2, the
-            // object count, is the last object model's slot plus one.
+            // object count, is the last object model's slot plus one, or
+            // `objectSlots` where trailing slots have no model.
             re2_object_count: if self.dialect == Dialect::Re2 {
                 object_models
                     .iter()
                     .map(|model| model.pair_index + 1)
                     .max()
                     .unwrap_or(0)
+                    .max(self.object_slots.unwrap_or(0))
                     .min(usize::from(RE2_OBJECT_SLOTS)) as u8
             } else {
                 0
