@@ -6181,6 +6181,12 @@ impl GameSession {
             self.game
                 .selected_item
                 .filter(|&item| self.game.has_item(item))
+        } else if request.kind == game::ItemViewKind::GotItem {
+            // Mode 4 reads the entry's item record whatever its handler byte
+            // (`GameState::got_item_action`).
+            self.game
+                .got_item_action(request.slot)
+                .map(|action| action.item_id())
         } else {
             self.game
                 .room_actions
@@ -34932,6 +34938,32 @@ off_0010:
         });
         settle_menu_fade(&mut session, &pack);
         assert!(session.menu.is_none());
+    }
+
+    #[test]
+    fn a_scripted_give_item_reopens_the_viewer_on_a_slot_already_awarded() {
+        // Room 409's taps `give_item` one item AOT per fill: the second fill
+        // finds the entry disarmed by the first award, and mode 4 still opens
+        // on the entry's item record.
+        let dir = TempDir::new();
+        let pack_path = message_pack(&dir);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut session =
+            GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
+                .unwrap();
+        let mut action = item_room_action(1, ITEM_FIRST_AID_SPRAY, 1, 4);
+        action.item_data = Some(action.params);
+        action.handler = 0;
+        action.sce = 0;
+        action.kind = game::RoomActionKind::Other;
+        session.game.room_actions[1] = Some(action);
+        session.game.arm_got_item(1);
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        assert!(session.pickup_view.is_some(), "the viewer opens");
+        assert!(session.game.close_got_item_viewer());
+        assert!(session.game.has_item(ITEM_FIRST_AID_SPRAY));
     }
 
     #[test]
