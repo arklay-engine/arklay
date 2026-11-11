@@ -3335,6 +3335,10 @@ pub struct GameState {
     /// The lid's swing ended this tick: the box's screen opens on the next
     /// (game mode 1).
     pub re2_box_open: bool,
+    /// `Sce_Status` (`0x4E9C80`, kind 12) fired this tick: `Game` 1 and
+    /// `fg_status`'s `0x8000`, so the status screen opens on the next tick
+    /// as START's does.
+    pub re2_status_request: bool,
     /// The `pG + 0x82B0` hook while a key turn armed `Key_lost`. It is not
     /// saved: it is only armed while a door message holds the game.
     pub re2_key_lost: Option<door2::KeyLost>,
@@ -3854,6 +3858,7 @@ impl Default for GameState {
             re2_box: None,
             re2_box_bytes: itembox2::BoxPage::default(),
             re2_box_open: false,
+            re2_status_request: false,
             re2_key_lost: None,
             re2_no_enemies: None,
             re2_enemy_dest: Vec::new(),
@@ -8832,6 +8837,14 @@ impl GameState {
             };
             let op = u8::from(word(2) != 0);
             self.re2.set_flag(word(0) as u8, word(1) as u8, op);
+            return;
+        }
+        if action.sce == crate::scd2::host::SCE_STATUS {
+            // `Sce_Status` (`0x4E9C80`): `Game` 1 and `fg_status`'s `0x8000`
+            // with the box byte (`0x691F70`) 0, so `Game_loop` opens the
+            // status screen on the next tick, as it does for START (room
+            // 108's event 7 ends with one, after the water tank).
+            self.re2_status_request = true;
             return;
         }
         if action.sce == crate::scd2::host::SCE_HIKIDASHI {

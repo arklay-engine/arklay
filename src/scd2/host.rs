@@ -755,6 +755,8 @@ const SCE_ITEMBOX: u8 = 10;
 /// ([`crate::game::hikidashi2`]).
 pub const SCE_HIKIDASHI: u8 = 13;
 pub const SCE_DAMAGE: u8 = 11;
+/// `Sce_Status`'s area (`0x4E9C80`): opens the status screen.
+pub const SCE_STATUS: u8 = 12;
 /// `Sce_Windows` (`0x4EA0B0`): game mode 7, the computer
 /// ([`crate::game::computer2`]).
 pub const SCE_WINDOWS: u8 = 14;
@@ -6021,6 +6023,24 @@ mod tests {
         exec(&mut game, "aot_on", &[8]);
         assert!(game.re2_computer_request.is_some(), "`Sce_Windows` acts");
         assert!(game.re2_computer.is_none() && !game.message.active);
+        assert_eq!(game.re2.banks, flags);
+    }
+
+    /// Room 108's area 4 is `Sce_Status` (kind 12): event 7's closing
+    /// `aot_on 4` opens the status screen on the next tick, as START does,
+    /// and changes nothing else.
+    #[test]
+    fn aot_on_of_sce_status_opens_the_status_screen() {
+        let mut game = GameState::default();
+        exec(
+            &mut game,
+            "aot_set",
+            &[4, SCE_STATUS.into(), 81, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0],
+        );
+        let flags = game.re2.banks;
+        exec(&mut game, "aot_on", &[4]);
+        assert!(game.re2_status_request, "`Sce_Status` acts");
+        assert!(game.re2_computer_request.is_none() && !game.message.active);
         assert_eq!(game.re2.banks, flags);
     }
 

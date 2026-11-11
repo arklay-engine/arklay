@@ -3310,6 +3310,9 @@ impl GameSession {
         if std::mem::take(&mut self.game.re2_box_open) {
             self.begin_re2_box_open(pack);
         }
+        if std::mem::take(&mut self.game.re2_status_request) {
+            self.begin_menu_open(pack);
+        }
         self.re2_status_open_areas(pack);
         self.tick_cut = Some((self.loaded.id, self.loaded.room.current_cut));
         self.game.re2.var_cut = u8::try_from(self.loaded.room.current_cut).ok();
