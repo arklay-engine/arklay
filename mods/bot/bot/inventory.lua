@@ -628,6 +628,117 @@ local function used_slots(items)
     return n
 end
 
+-- The gear the box hands out after a death or a retreat (GEAR). For each
+-- held firearm, its own rounds from the box; for one with no round of its
+-- own loaded, held or boxed, one other loading's kind while none is held
+-- (the planner loads it, BotInventory.load_now). With no held firearm but
+-- the staple one armed that way (the handgun alone is what the room beat:
+-- thirty rounds "covered" 509's three zombies, and four replays of that
+-- walk took 34 hits and a death), one boxed firearm with rounds boxed or
+-- held, any loading's, comes out with them: an ordinary one before a
+-- reserve one, the staple one last. No more than that: every kind of
+-- grenade round and three heals filled the slots 503's MO disk needed, and
+-- the lab's last door never opened. {[item] = true}.
+local function gear_set(bot, knowledge)
+    local box = BotInventory.remembered(bot)
+    local gear = {}
+    local armed = false
+    local ids = {}
+    for id, row in pairs(knowledge.weapons) do
+        if not row.melee and bot:ammo_for(id) then
+            ids[#ids + 1] = id
+        end
+    end
+    table.sort(ids)
+    -- The other loadings' rounds of `id` (sorted), and whether one is held.
+    local function other_rounds(id)
+        local row = knowledge.weapons[id]
+        local own = bot:ammo_for(id)
+        local base = row.variant_of or id
+        local others, held = {}, false
+        for _, other_id in ipairs(ids) do
+            local other = knowledge.weapons[other_id]
+            local ammo = bot:ammo_for(other_id)
+            if other_id ~= id and ammo ~= own
+                and (other_id == base or other.variant_of == base) then
+                others[#others + 1] = ammo
+                held = held or bot:item_count(ammo) > 0
+            end
+        end
+        table.sort(others)
+        return others, held
+    end
+    for _, id in ipairs(ids) do
+        local row = knowledge.weapons[id]
+        local own = bot:ammo_for(id)
+        if bot:has_item(id) then
+            local has = bot:item_count(id) + bot:item_count(own) > 0
+            if box[own] then
+                gear[own] = true
+                has = true
+            elseif not has then
+                local others, held = other_rounds(id)
+                for _, ammo in ipairs(held and {} or others) do
+                    if box[ammo] then
+                        gear[ammo] = true
+                        has = true
+                        break
+                    end
+                end
+                has = has or held
+            end
+            armed = armed or (has and not row.staple)
+        end
+    end
+    if not armed then
+        local pick, pick_rank, pick_ammo
+        for _, id in ipairs(ids) do
+            local row = knowledge.weapons[id]
+            local own = bot:ammo_for(id)
+            local base = row.variant_of or id
+            local family_held = false
+            for _, other_id in ipairs(ids) do
+                local other = knowledge.weapons[other_id]
+                if (other_id == base or other.variant_of == base) and bot:has_item(other_id) then
+                    family_held = true
+                end
+            end
+            local ammo = (box[own] or bot:item_count(own) > 0) and own or nil
+            if not ammo then
+                local others = other_rounds(id)
+                for _, kind in ipairs(others) do
+                    if not ammo and (box[kind] or bot:item_count(kind) > 0) then
+                        ammo = kind
+                    end
+                end
+            end
+            local rank = row.staple and 2 or (row.reserve and 1 or 0)
+            if box[id] and not family_held and ammo and (not pick or rank < pick_rank) then
+                pick, pick_rank, pick_ammo = id, rank, ammo
+            end
+        end
+        if pick then
+            gear[pick] = true
+            if box[pick_ammo] then
+                gear[pick_ammo] = true
+            end
+        end
+    end
+    return gear
+end
+
+-- Whether the remembered box holds such gear now (BotPlanner.retreat).
+function BotInventory.gear_boxed(bot)
+    local knowledge = bot:knowledge()
+    return knowledge ~= nil and next(gear_set(bot, knowledge)) ~= nil
+end
+
+-- A new lesson (a retreat) is worth its own trip to the box: see
+-- state().geared.
+function BotInventory.regear()
+    state().geared = nil
+end
+
 -- The policy context from the live state.
 function BotInventory.context(bot)
     local ctx = { uses = {}, guns = {}, ammo = {}, keys = {}, cures = {}, heals = 0 }
@@ -935,75 +1046,9 @@ function BotInventory.context(bot)
             end
         end
     end
-    -- The gear-up after a death (GEAR). For each held firearm, its own
-    -- rounds from the box; for one with no round of its own loaded, held
-    -- or boxed, one other loading's kind while none is held (the planner
-    -- loads it, BotInventory.load_now). With no held firearm armed that
-    -- way, one boxed firearm whose rounds are boxed or held comes out
-    -- with them, an ordinary one before a reserve one. No more than that:
-    -- every kind of grenade round and three heals filled the slots 503's
-    -- MO disk needed, and the lab's last door never opened.
+    -- The gear-up after a death or a retreat (gear_set).
     if knowledge and BotNav.died_anywhere(bot) then
-        local box = BotInventory.remembered(bot)
-        ctx.gear = {}
-        local armed = false
-        local ids = {}
-        for id, row in pairs(knowledge.weapons) do
-            if not row.melee and bot:ammo_for(id) then
-                ids[#ids + 1] = id
-            end
-        end
-        table.sort(ids)
-        for _, id in ipairs(ids) do
-            local row = knowledge.weapons[id]
-            local own = bot:ammo_for(id)
-            if bot:has_item(id) then
-                if bot:item_count(id) + bot:item_count(own) > 0 then
-                    armed = true
-                end
-                if box[own] then
-                    ctx.gear[own] = true
-                    armed = true
-                elseif bot:item_count(id) + bot:item_count(own) == 0 then
-                    local base = row.variant_of or id
-                    local others, held = {}, false
-                    for _, other_id in ipairs(ids) do
-                        local other = knowledge.weapons[other_id]
-                        local ammo = bot:ammo_for(other_id)
-                        if other_id ~= id and ammo ~= own
-                            and (other_id == base or other.variant_of == base) then
-                            others[#others + 1] = ammo
-                            held = held or bot:item_count(ammo) > 0
-                        end
-                    end
-                    table.sort(others)
-                    for _, ammo in ipairs(held and {} or others) do
-                        if box[ammo] then
-                            ctx.gear[ammo] = true
-                            armed = true
-                            break
-                        end
-                    end
-                    armed = armed or held
-                end
-            end
-        end
-        if not armed then
-            local pick
-            for _, id in ipairs(ids) do
-                local row = knowledge.weapons[id]
-                local own = bot:ammo_for(id)
-                if box[id] and not bot:has_item(id)
-                    and (box[own] or bot:item_count(own) > 0)
-                    and (not pick or (knowledge.weapons[pick].reserve and not row.reserve)) then
-                    pick = id
-                end
-            end
-            if pick then
-                ctx.gear[pick] = true
-                ctx.gear[bot:ammo_for(pick)] = true
-            end
-        end
+        ctx.gear = gear_set(bot, knowledge)
     end
     -- The rearm: a firearm (not a reserve one) the remembered box holds,
     -- with its ammunition held (useless without it: the shells picked up

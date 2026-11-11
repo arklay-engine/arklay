@@ -1131,7 +1131,7 @@ local function choose(bot, s, k, enemies, player)
     -- else clears the crowd fast; spent on every crowd, 303's Tyrant met
     -- an empty launcher four times), then the rest by fewest shots; else
     -- whatever the guns cover between them.
-    local trap_covered = nil
+    local trap_covered, trap_slow = nil, false
     if trap and gun then
         local share, best_row, best_tier, best_need = 0, nil, nil, nil
         for _, row in ipairs(guns or {}) do
@@ -1166,6 +1166,17 @@ local function choose(bot, s, k, enemies, player)
             gun, rounds = best_row.item, best_row.rounds
         end
         trap_covered = share >= 1
+        -- Covered only by a gun slower than the crowd closes (no fast gun,
+        -- no reserve gun downs it all).
+        trap_slow = best_tier == nil or best_tier > 1
+    end
+    -- A trap the held rounds do not cover, or cover only that slowly, met
+    -- near the door with the gear for it in the box: back out and fetch it
+    -- (BotPlanner.retreat).
+    if trap and (BotPlanner.retreating(bot)
+            or ((not trap_covered or trap_slow) and BotPlanner.retreat(bot))) then
+        s.avoid_until = bot:tick() + RUN_HOLD
+        return nil
     end
     local near, fightable = {}, {}
     for i = 1, #enemies do
