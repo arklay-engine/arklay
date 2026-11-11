@@ -2786,6 +2786,16 @@ impl Host for GameHost<'_> {
                 }
             }
             "sce_em_set" => self.sce_em_set(at),
+            // Neither is modelled; `Mem_top` stops being known
+            // (`crate::heap2`).
+            "rbj_reset" => {
+                self.game.re2_heap.rbj_reset();
+                log_unmodelled(op.mnemonic);
+            }
+            "sce_em_set2" => {
+                self.game.re2_heap.em_set2();
+                log_unmodelled(op.mnemonic);
+            }
             "obj_model_set" => self.obj_model_set(at),
             "speed_set" => {
                 if let Some(speed) = self

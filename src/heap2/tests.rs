@@ -10,10 +10,11 @@ impl Source for Fake {
     }
 }
 
-/// An RDT of `len` bytes (a counting pattern) whose section 2 is at `vb`, 0 for none.
+/// An RDT of `len` bytes (a counting pattern) whose section 2 is at `vb`, 0 for none, and whose
+/// other header bytes are 0.
 fn rdt(len: usize, vb: u32) -> Vec<u8> {
     let mut bytes: Vec<u8> = (0..len).map(|at| (at * 7) as u8).collect();
-    bytes[7] = 0;
+    bytes[..RDT_HEADER.min(len)].fill(0);
     bytes[16..20].copy_from_slice(&vb.to_le_bytes());
     bytes
 }
@@ -266,4 +267,190 @@ fn the_music_banks_load_when_their_ids_change() {
     assert_eq!(heap.image.word(0x2800), Some(0xCDCD_CDCD));
     assert_eq!(heap.image.word(0x2810), Some(0xABAB_ABAB));
     assert_eq!(heap.image.word(0x3010), None);
+}
+
+/// The original's numbers, stated as the decompilation has them rather than through the constants:
+/// the work's 0x248 bytes (`Mem_top + 0x248` is the model's buffer), the part's 0xAC, `Dest` at
+/// 0x1C4, the part's `Poly_rgb` at 0x70, the banks at 0x10 and the 100-byte header.
+#[test]
+fn the_originals_numbers() {
+    let mut room = rdt(0x2000, 0x100);
+    room[0x2C4..0x2C8].copy_from_slice(&[0x34, 0x12, 0x78, 0x56]);
+    let model = zombie_model();
+    let files = files(vec![
+        (rdt_entry("1000"), room),
+        (emd_entry(ZOMBIE, 0), model.clone()),
+        (bgm_entry(false, 1), vec![0xEE; 0x40]),
+        (rdt_entry("1010"), rdt(0x20, 0)),
+    ]);
+    let mut heap = Heap::default();
+    // The first work at section 2 (0x100): its `Dest` at 0x2C4.
+    heap.enter_room(&files, "1000", NO_MUSIC, false);
+    assert_eq!(
+        heap.em_set(&files, 0, ZOMBIE, 0, 0, false, true),
+        Some([0x1234, 0x5678])
+    );
+    // The model at 0x348; its TMD (0x3000, 0x800 long) ends at 0x3B48, then two parts of 0xAC, the
+    // first's `Poly_rgb` at 0x3BB8; the next work at 0x3CA0 reads the model's byte 0x3B1C.
+    assert_eq!(heap.image.word(0x3BB8), Some(0x80_8080));
+    assert_eq!(heap.image.word(0x3BB8 + 0xAC), Some(0x80_8080));
+    assert_eq!(heap.top, Some(0x3CA0));
+    assert_eq!(
+        heap.em_set(&files, 1, ZOMBIE, 0, 0, false, true),
+        Some(word_at(&model, 0x3B1C))
+    );
+    // The header's section 2 offset is relocated to `Work_buffer`'s 0x8FF8A0.
+    assert_eq!(heap.image.word(16), Some(0x8F_F8A0 + 0x100));
+    // A main bank loads at 0x10; a 0x20-byte RDT goes over its start.
+    heap.enter_room(&files, "1010", 0xFF00, false);
+    heap.enter_room(&files, "1010", 0xFF01, false);
+    assert_eq!(heap.image.word(0x20), Some(0xEEEE_EEEE));
+    assert_eq!(heap.image.word(0x4C), Some(0xEEEE_EEEE));
+    assert_eq!(heap.image.word(0x50), None);
+}
+
+#[test]
+fn model_type_0x40_moves_what_follows_the_sub_animations_down() {
+    let model = zombie_model();
+    let files = files(vec![
+        (rdt_entry("1000"), rdt(0x2000, 0x100)),
+        (emd_entry(ZOMBIE, 0), model.clone()),
+    ]);
+    let mut heap = Heap::default();
+    heap.enter_room(&files, "1000", NO_MUSIC, false);
+    heap.em_set(&files, 0, ZOMBIE, 0x40, 0, false, true);
+    // From the first sub-animation (0x1000) on, down to the main ones (0xC): the TMD is at 0x200C.
+    let buffer = 0x100 + WORK_SIZE;
+    assert_eq!(
+        &heap.image.bytes[buffer + 0x200C..buffer + 0x2010],
+        &model[0x3000..0x3004]
+    );
+    assert_eq!(heap.top, Some(buffer + 0x200C + 0x800 + 2 * PART_SIZE));
+}
+
+#[test]
+fn the_tmds_pointers_are_mapped() {
+    let model = zombie_model();
+    let files = files(vec![
+        (rdt_entry("1000"), rdt(0x2000, 0x100)),
+        (emd_entry(ZOMBIE, 0), model.clone()),
+    ]);
+    let mut heap = Heap::default();
+    heap.enter_room(&files, "1000", NO_MUSIC, false);
+    heap.em_set(&files, 0, ZOMBIE, 0, 0, false, true);
+    let tmd = 0x100 + WORK_SIZE + 0x3000;
+    assert_eq!(heap.image.word(tmd + 4), Some(1));
+    let table = tmd + 0xC;
+    let by = 0x8F_F8A0 + table as u32;
+    let file = |at: usize| u32::from_le_bytes(model[at..at + 4].try_into().unwrap());
+    // Four objects (two parts); dwords 0, 2, 4 and 6 of each, and not 1.
+    for object in 0..4 {
+        let at = table + object * 0x1C;
+        let in_file = 0x3000 + 0xC + object * 0x1C;
+        assert_eq!(heap.image.word(at), Some(file(in_file).wrapping_add(by)));
+        assert_eq!(
+            heap.image.word(at + 24),
+            Some(file(in_file + 24).wrapping_add(by))
+        );
+        assert_eq!(heap.image.word(at + 4), Some(file(in_file + 4)));
+    }
+}
+
+#[test]
+fn the_rdts_relocated_entries_are_addresses() {
+    let mut room = rdt(0x2000, 0x100);
+    // Two camera entries (section 7 at 0x400) and one model pair (section 10 at 0x600).
+    room[1] = 2;
+    room[2] = 1;
+    room[8 + 7 * 4..8 + 7 * 4 + 4].copy_from_slice(&0x400u32.to_le_bytes());
+    room[8 + 10 * 4..8 + 10 * 4 + 4].copy_from_slice(&0x600u32.to_le_bytes());
+    let word = |at: usize| u32::from_le_bytes(room[at..at + 4].try_into().unwrap());
+    let expected = [0x41C, 0x43C, 0x600, 0x604].map(|at| (at, word(at).wrapping_add(0x8F_F8A0)));
+    let files = files(vec![(rdt_entry("1000"), room.clone())]);
+    let mut heap = Heap::default();
+    heap.enter_room(&files, "1000", NO_MUSIC, false);
+    for (at, value) in expected {
+        assert_eq!(heap.image.word(at), Some(value), "{at:#x}");
+    }
+    assert_eq!(heap.image.word(0x420), Some(word(0x420)), "not relocated");
+}
+
+#[test]
+fn the_zapping_models_a_mirror_and_an_em_set2_end_what_is_known() {
+    let files = files(vec![
+        (rdt_entry("1000"), rdt(0x2000, 0x100)),
+        (emd_entry(ZOMBIE, 0), zombie_model()),
+        (emd_entry(0x55, 0), zombie_model()),
+    ]);
+    let after = |first: &dyn Fn(&mut Heap)| {
+        let mut heap = Heap::default();
+        heap.enter_room(&files, "1000", NO_MUSIC, false);
+        first(&mut heap);
+        heap.em_set(&files, 1, ZOMBIE, 0, 0, false, true)
+    };
+    // `Emd_load` picks 0x50 to 0x5A's files by the zapping flags.
+    for id in [0x50, 0x55, 0x5A] {
+        assert_eq!(
+            after(&|heap: &mut Heap| {
+                assert!(heap.em_set(&files, 0, id, 0, 0, false, true).is_some());
+            }),
+            None,
+            "{id:#x}"
+        );
+    }
+    // `Mirror_model_cp`.
+    assert_eq!(
+        after(&|heap: &mut Heap| {
+            heap.em_set(&files, 0, ZOMBIE, 0, 0, true, true);
+        }),
+        None
+    );
+    assert_eq!(after(&|heap: &mut Heap| heap.em_set2()), None);
+    assert!(after(&|_: &mut Heap| {}).is_some());
+}
+
+#[test]
+fn rbj_reset_forgets_what_it_moves() {
+    let mut room = rdt(0x2000, 0x1000);
+    room[8 + 22 * 4..8 + 22 * 4 + 4].copy_from_slice(&0x800u32.to_le_bytes());
+    let files = files(vec![(rdt_entry("1000"), room)]);
+    let mut heap = Heap::default();
+    heap.enter_room(&files, "1000", NO_MUSIC, false);
+    assert!(heap.image.word(0x900).is_some());
+    heap.rbj_reset();
+    assert_eq!(heap.image.word(0x800), None);
+    assert_eq!(heap.image.word(0xFFC), None);
+    assert!(heap.image.word(0x7FC).is_some());
+    assert!(heap.image.word(0x1000).is_some());
+    assert_eq!(heap.em_set(&files, 0, ZOMBIE, 0, 0, false, true), None);
+}
+
+#[test]
+fn the_computers_work_is_unknown() {
+    let files = files(vec![(rdt_entry("2000"), rdt(0x8000, 0x100))]);
+    let mut heap = Heap::default();
+    heap.enter_room(&files, "2000", NO_MUSIC, false);
+    heap.after_load();
+    heap.scratch(COMPUTER_SIZE);
+    assert_eq!(heap.image.word(0x100), None);
+    assert_eq!(heap.image.word(0x100 + 0x53DC), None);
+    assert!(heap.image.word(0x100 + 0x53E0).is_some());
+    // `Computer_exit` gives the memory back: the next work goes where the computer's was.
+    assert_eq!(heap.top, Some(0x100));
+}
+
+#[test]
+fn nothing_past_the_cap_is_kept() {
+    let files = files(vec![
+        (rdt_entry("1000"), rdt(0x100, 0x7FFF_FFF0)),
+        (rdt_entry("1010"), rdt(0x2000, (CAP - 0x10) as u32)),
+        (emd_entry(ZOMBIE, 0), zombie_model()),
+    ]);
+    let mut heap = Heap::default();
+    heap.enter_room(&files, "1000", NO_MUSIC, false);
+    assert_eq!(heap.em_set(&files, 0, ZOMBIE, 0, 0, false, true), None);
+    heap.enter_room(&files, "1010", NO_MUSIC, false);
+    heap.em_set(&files, 0, ZOMBIE, 0, 0, false, true);
+    assert!(heap.image.bytes.len() <= CAP);
+    assert_eq!(heap.top, None);
 }

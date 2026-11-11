@@ -30,6 +30,14 @@ const PART_POLY_RGB: usize = 0x70;
 const BGM_AT: usize = 0x10;
 /// The RDT's header (8 bytes and 23 section offsets), which `Set_room` relocates.
 const RDT_HEADER: usize = 100;
+/// `Work_buffer`'s address, which the relocated pointers hold.
+const BASE: u32 = 0x8F_F8A0;
+/// How far the image goes: `Work_buffer` (0x28000 bytes) runs on into `Bg_buffer`, which ends at
+/// `pCom_work` (0x9800A0). The largest RDT is 0x6FDF8 bytes. Nothing past this is kept, and a
+/// `Mem_top` past it is unknown.
+pub const CAP: usize = 0x9800A0 - BASE as usize;
+/// The models and banks [`Files::of_pack`] keeps read at once, at most.
+const CACHE_ENTRIES: usize = 64;
 /// `Psp_init0` and `Psp_init1`'s works for each of the room's `rdt[7]` sprites.
 const PSP_SIZE: usize = 4 + 0x40;
 /// `Computer200`'s work, which it puts at `Mem_top` and takes back on its exit.
@@ -95,10 +103,11 @@ impl Source for PackSource {
             .ok()
             .map(|bytes| Arc::from(&*bytes));
         if keep {
-            self.cache
-                .lock()
-                .ok()?
-                .insert(entry.to_owned(), bytes.clone());
+            let mut cache = self.cache.lock().ok()?;
+            if cache.len() >= CACHE_ENTRIES {
+                cache.clear();
+            }
+            cache.insert(entry.to_owned(), bytes.clone());
         }
         bytes
     }
@@ -111,7 +120,8 @@ impl Files {
         let Some(path) = pack.source() else {
             return Self(None);
         };
-        if !pack.paths().any(|entry| entry.starts_with("heap/")) {
+        // Every RE 2 install has room 100's RDT.
+        if !pack.contains(&rdt_entry("1000")) {
             return Self(None);
         }
         match crate::pack::Pack::open(path) {
@@ -153,34 +163,55 @@ struct Image {
 }
 
 impl Image {
-    fn reach(&mut self, end: usize) {
+    /// Grow to `end`, up to [`CAP`]; returns how far the image goes.
+    fn reach(&mut self, end: usize) -> usize {
+        let end = end.min(CAP);
         if self.bytes.len() < end {
             self.bytes.resize(end, 0);
             self.known.resize(end, false);
         }
+        self.bytes.len()
     }
 
+    /// Write `data` at `at`; what goes past [`CAP`] is dropped.
     fn write(&mut self, at: usize, data: &[u8]) {
-        self.reach(at + data.len());
-        self.bytes[at..at + data.len()].copy_from_slice(data);
-        self.known[at..at + data.len()].fill(true);
+        let end = at.saturating_add(data.len());
+        let end = end.min(self.reach(end));
+        if at >= end {
+            return;
+        }
+        let len = end - at;
+        self.bytes[at..end].copy_from_slice(&data[..len]);
+        self.known[at..end].fill(true);
+    }
+
+    /// Add `by` to the word at `at` (a relocation): known when the word was.
+    fn relocate(&mut self, at: usize, by: u32) {
+        match self.word(at) {
+            Some(word) => self.write(at, &word.wrapping_add(by).to_le_bytes()),
+            None => self.forget(at, 4),
+        }
     }
 
     fn forget(&mut self, at: usize, len: usize) {
-        let end = (at + len).min(self.known.len());
+        let end = at.saturating_add(len).min(self.known.len());
         if at < end {
             self.known[at..end].fill(false);
         }
     }
 
     fn copy_within(&mut self, from: usize, len: usize, to: usize) {
-        self.reach(from.max(to) + len);
+        let end = self.reach(from.max(to).saturating_add(len));
+        let len = len.min(end.saturating_sub(from.max(to)));
+        if len == 0 {
+            return;
+        }
         self.bytes.copy_within(from..from + len, to);
         self.known.copy_within(from..from + len, to);
     }
 
     fn word(&self, at: usize) -> Option<u32> {
-        let known = self.known.get(at..at + 4)?;
+        let known = self.known.get(at..at.checked_add(4)?)?;
         known
             .iter()
             .all(|&k| k)
@@ -223,6 +254,8 @@ pub struct Heap {
     pending_init: bool,
     /// The RDT's sprites (`rdt[7]`), for [`Heap::after_load`].
     sprites: u8,
+    /// The RDT's RBJ section (`rdt + 0x60`) and section 2, for [`Heap::rbj_reset`].
+    rbj: Option<(usize, usize)>,
     /// The image as the load found it, so that a load whose init runs again (a setup script's flags)
     /// starts from it again.
     before: Option<(Arc<Image>, Option<u16>)>,
@@ -248,6 +281,7 @@ impl Heap {
         self.model = None;
         self.kind = 0xFF;
         self.top = None;
+        self.rbj = None;
         self.load_bgm(files, bgm);
         let Some(rdt) = files.read(&rdt_entry(code)) else {
             // Without the room's bytes nothing after them is known.
@@ -257,18 +291,40 @@ impl Heap {
         self.sprites = rdt.get(7).copied().unwrap_or(0);
         let image = Arc::make_mut(&mut self.image);
         image.write(0, &rdt);
-        image.forget(0, RDT_HEADER);
+        relocate_rdt(image, &rdt);
         let section = |slot: usize| {
             let at = 8 + slot * 4;
             rdt.get(at..at + 4)
                 .map(|word| u32::from_le_bytes(word.try_into().unwrap()) as usize)
         };
-        self.top = Some(section(2).filter(|&vb| vb != 0).unwrap_or(rdt.len()));
+        let top = section(2).filter(|&vb| vb != 0).unwrap_or(rdt.len());
+        self.rbj = section(22)
+            .filter(|&rbj| rbj != 0 && rbj < top)
+            .map(|rbj| (rbj, top));
+        self.top = Some(top).filter(|&top| top < CAP);
+    }
+
+    /// `rbj_reset` (`Replace_rdt`) compacts the RDT's RBJ section, moves sections 0 and 1 down after
+    /// it, and sets `Mem_top` short of section 2. That isn't followed: the bytes it moves are
+    /// unknown, and so is `Mem_top` for the rest of the room.
+    pub fn rbj_reset(&mut self) {
+        if let Some((rbj, top)) = self.rbj {
+            Arc::make_mut(&mut self.image).forget(rbj, top - rbj);
+        }
+        self.top = None;
+    }
+
+    /// `Sce_em_set2` allocates at `Mem_top` as `Sce_em_set` does, which isn't followed: `Mem_top`
+    /// is unknown for the rest of the room.
+    pub fn em_set2(&mut self) {
+        self.top = None;
     }
 
     /// `Snd_bgm_set`: `Snd_bgm_main` loads the main bank when its id changed, and `Snd_bgm_sub` the
     /// sub bank when its id changed or the main was loaded, both at [`BGM_AT`]; an id of 0xFF loads
-    /// nothing.
+    /// nothing. (`Snd_bgm_set` returns early under `fg_system`'s 0x2000, the attract demos, which
+    /// don't play rooms here. A new game's `Snd_sys_init_sub2` sets `Bgm` to 0xFFFF, so its first room
+    /// loads both banks; arklay leaves that room's banks unknown, which changes no run's `Dest`.)
     fn load_bgm(&mut self, files: &Files, word: u16) {
         let [main, sub] = word.to_le_bytes();
         let last = self.bgm.map(u16::to_le_bytes);
@@ -356,7 +412,8 @@ impl Heap {
                 }
             }
         };
-        let Some(top) = self.top else {
+        let Some(top) = self.top.filter(|&top| top < CAP) else {
+            self.top = None;
             return start;
         };
         image.forget(top, parts * PART_SIZE);
@@ -366,7 +423,7 @@ impl Heap {
                 &0x80_8080u32.to_le_bytes(),
             );
         }
-        self.top = Some(top + parts * PART_SIZE);
+        self.top = Some(top + parts * PART_SIZE).filter(|&top| top < CAP);
         // A mirror's copy of the model, and an init that allocates more after its work at its first
         // move (Mr. X's and the G's joints, Ada's, Leon's as a partner), leave `Mem_top` where this
         // doesn't follow it.
@@ -388,7 +445,7 @@ impl Heap {
         let sprites = usize::from(self.sprites);
         if let Some(top) = self.top {
             Arc::make_mut(&mut self.image).forget(top, sprites * PSP_SIZE);
-            self.top = Some(top + sprites * PSP_SIZE);
+            self.top = Some(top + sprites * PSP_SIZE).filter(|&top| top < CAP);
         }
         if std::mem::take(&mut self.pending_init) {
             self.top = None;
@@ -461,14 +518,68 @@ fn load_model(
         image.copy_within(buffer + sub0_seq, emd.len() - sub0_seq, buffer + main_seq);
         tmd_at -= sub0_seq - main_seq;
     }
-    let size = image.word(buffer + tmd_at)? as usize;
-    let parts = image.word(buffer + tmd_at + 8)? as usize >> 1;
-    Some((buffer + tmd_at + (size & !3), parts))
+    let tmd = buffer + tmd_at;
+    let size = image.word(tmd)? as usize;
+    let parts = image.word(tmd + 8)? as usize >> 1;
+    map_tmd(image, tmd);
+    Some((tmd + (size & !3), parts))
+}
+
+/// `Mapping_tmd`'s `mapModelingData(tmd + 4)`: the word at `tmd + 4` becomes 1, and each of the
+/// `word(tmd + 8)` objects (0x1C bytes from `tmd + 0xC`) has `tmd + 0xC`'s address added to its
+/// dwords 0, 2, 4 and 6.
+fn map_tmd(image: &mut Image, tmd: usize) {
+    let objects = image.word(tmd + 8);
+    image.write(tmd + 4, &1u32.to_le_bytes());
+    let table = tmd + 0xC;
+    let Some(objects) = objects.map(|n| n as usize).filter(|&n| n != 0) else {
+        // An unknown count, or 0 (where the original's loop runs on): the table is unknown.
+        image.forget(table, CAP);
+        return;
+    };
+    let by = BASE.wrapping_add(table as u32);
+    for object in 0..objects.min(CAP / 0x1C) {
+        for dword in [0, 2, 4, 6] {
+            image.relocate(table + object * 0x1C + dword * 4, by);
+        }
+    }
+}
+
+/// `Set_room`'s relocations: the header's nonzero section offsets, the `+0x1C` word of each of
+/// section 7's `rdt[1]` 0x20-byte entries, and both words of each of section 10's `rdt[2]` 8-byte
+/// pairs, each made an address in `Work_buffer`.
+fn relocate_rdt(image: &mut Image, rdt: &[u8]) {
+    let word = |at: usize| {
+        rdt.get(at..at + 4)
+            .map(|word| u32::from_le_bytes(word.try_into().unwrap()) as usize)
+    };
+    for at in (8..RDT_HEADER).step_by(4) {
+        if word(at).is_some_and(|offset| offset != 0) {
+            image.relocate(at, BASE);
+        }
+    }
+    let count = |at: usize| usize::from(rdt.get(at).copied().unwrap_or(0));
+    if count(1) != 0
+        && let Some(cameras) = word(8 + 7 * 4)
+    {
+        for entry in 0..count(1) {
+            image.relocate(cameras + 0x1C + entry * 0x20, BASE);
+        }
+    }
+    if count(2) != 0
+        && let Some(models) = word(8 + 10 * 4)
+    {
+        for pair in 0..count(2) {
+            image.relocate(models + pair * 8, BASE);
+            image.relocate(models + pair * 8 + 4, BASE);
+        }
+    }
 }
 
 /// Whether the id's init leaves `Mem_top` as `Sce_em_set` left it: the zombies (`Em10_Init`), the
-/// dog (`Em20_Init`), the crow, the licker (`Em22_Init`), the spider, and the people other than Ada
-/// (`Spl_in41`) and Leon (`Spl_in5a`).
+/// dog (`Em20_Init`), the crow, the licker (`Em22_Init`), `Em_2D` (room 205's ten, which replays
+/// show allocate nothing between them), and the people other than Ada (`Spl_in41`) and Leon
+/// (`Spl_in5a`). The spider (0x25) calls `Set_enemy_work`, so it isn't one.
 fn plain_init(id: u8) -> bool {
     matches!(id, 0x10..=0x22 | 0x2D | 0x40 | 0x42..=0x4F)
 }
