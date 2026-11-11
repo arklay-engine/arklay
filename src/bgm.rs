@@ -589,7 +589,12 @@ fn apply_re2_music(mixer: &mut Mixer, game: &mut GameState, cache: &mut BgmCache
     for (index, channel) in game.re2.music.channels.iter_mut().enumerate() {
         if std::mem::take(&mut channel.load) {
             mixer.stop_bgm_channel(index);
+            channel.ticks = None;
             if let Some(wav) = channel.track.and_then(|track| cache.load(pack, track)) {
+                // `Music` ends a sub played without its loop by this.
+                let frames = wav.frame_count() as u64 * 30;
+                let rate = u64::from(wav.sample_rate.max(1));
+                channel.ticks = u32::try_from(frames.div_ceil(rate)).ok();
                 mixer.load_bgm_channel(index, wav, true);
                 mixer.set_bgm_channel_kind(
                     index,
