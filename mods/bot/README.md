@@ -606,6 +606,8 @@ seconds), the fight is lost and the bot stands (`kite: lost`): the room
 holds it until the fight ends, the death loads the last save, and the met
 fight then asks the box for its loadout before the bot comes back. One run
 circled 513's ring for 240000 ticks with the launcher's rounds in the box.
+(The fight is marked met before the kite takes the tick: behind it,
+513's Tyrant was never met in 96 runs, and nothing was asked of the box.)
 Not while the `prefer`red weapon is still to come (an `open` entry: 303's
 rocket launcher).
 `staple="yes"` on a `<weapon>` marks the firearm whose ammunition is the
@@ -1161,8 +1163,12 @@ drives the box screen with pad input only.
   `GEAR_ROUNDS` (4) rounds of its own and none boxed, and, when no held
   firearm but the staple one is armed that way (`GEAR_ROUNDS` loaded and
   held, or its rounds boxed: one shell in the shotgun is no gun in hand),
-  one boxed firearm whose rounds are boxed or held (an ordinary one
-  before a `reserve` one) with them. That gear stays held (`gear for a
+  one boxed firearm whose rounds are boxed or held, or lie as a known
+  pickup in the room the bot died in (an ordinary one before a `reserve`
+  one), with them. 513 holds a clip and its Tyrant falls to it, a kiting
+  bot fetches rounds only for a gun it holds, and all 15 deaths there in
+  two sets of 96 runs had the handgun in the box and no round for
+  anything else: one run died there four times and gave up. That gear stays held (`gear for a
   room the bot died in`), and so does the held gun whose rounds are
   still boxed: 502's box handed the launcher out as gear and, its rounds
   not yet out, took it back in for an MO disk 500 ticks later, and 509

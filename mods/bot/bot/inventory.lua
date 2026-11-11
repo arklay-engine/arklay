@@ -681,8 +681,26 @@ end
 -- reserve one, the staple one last. No more than that: every kind of
 -- grenade round and three heals filled the slots 503's MO disk needed, and
 -- the lab's last door never opened. {[item] = true}.
+-- The items lying as known pickups in the rooms the bot died in and has
+-- not left alive since ({[item] = true}), read once a tick: bot:world()
+-- builds the whole world table.
+local lying_cache = { tick = nil, items = {} }
+local function lying_where_died(bot)
+    if lying_cache.tick ~= bot:tick() then
+        local items = {}
+        for _, goal in ipairs(bot:world().frontier or {}) do
+            if goal.kind == "item" and goal.item and BotNav.died_in(bot, goal.room) > 0 then
+                items[goal.item] = true
+            end
+        end
+        lying_cache = { tick = bot:tick(), items = items }
+    end
+    return lying_cache.items
+end
+
 local function gear_set(bot, knowledge)
     local box = BotInventory.remembered(bot)
+    local lying = lying_where_died(bot)
     local gear = {}
     local armed = false
     local ids = {}
@@ -760,7 +778,12 @@ local function gear_set(bot, knowledge)
                     family_held = true
                 end
             end
-            local ammo = (box[own] or bot:item_count(own) > 0) and own or nil
+            -- Its rounds may also lie in the room the bot died in: 513
+            -- holds a clip, the Tyrant falls to it (a kiting bot fetches
+            -- rounds for a held gun), and every one of 15 deaths there
+            -- in two sets of 96 runs had the handgun in the box and no
+            -- other round anywhere.
+            local ammo = (box[own] or bot:item_count(own) > 0 or lying[own]) and own or nil
             if not ammo then
                 local others = other_rounds(id)
                 for _, kind in ipairs(others) do
