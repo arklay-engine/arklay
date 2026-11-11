@@ -3695,8 +3695,11 @@ end
 -- A death teaches the same, some thousands of ticks later: of 96 runs' 23
 -- deaths, 6 were first walks into 509's four zombies, and in a quarter of
 -- the runs the box held the guns that the bot did not. Once for a room,
--- while the bot still stands within RETREAT_NEAR of where it came in, and
--- not while a lesson stands. Returns whether the bot retreats.
+-- while the bot still stands within RETREAT_NEAR of where it came in.
+-- A lesson already standing, this room's or another's, is no bar: the
+-- gear-up after a death takes what fits at the first box, three MO disks
+-- then fill the slots, and 509 was walked into again with the handgun and
+-- the launcher boxed. Returns whether the bot retreats.
 local RETREAT_NEAR = C.FIGHT_RANGE
 
 function BotPlanner.retreat(bot)
@@ -3705,8 +3708,7 @@ function BotPlanner.retreat(bot)
     p.retreated = p.retreated or {}
     local came = p.last_from and (p.arrivals[room] or {})[p.last_from]
     if p.retreated[room] or not came or p.last_from == room
-        or bot:distance(came.x, came.z) > RETREAT_NEAR
-        or BotNav.died_anywhere(bot) then
+        or bot:distance(came.x, came.z) > RETREAT_NEAR then
         return false
     end
     p.retreated[room] = true
@@ -3720,7 +3722,9 @@ function BotPlanner.retreat(bot)
     if not back then
         return false
     end
-    bot:remember(BotNav.died_key(room), "1")
+    if not bot:memory()[BotNav.died_key(room)] then
+        bot:remember(BotNav.died_key(room), "1")
+    end
     BOT_STATE.retreat = room
     BotInventory.regear()
     p.retreat = { room = room, entry = p.entries[room], to = p.last_from }

@@ -1018,6 +1018,9 @@ end
 -- and TRAP_CROWD or more lie near enough to gather on it. Once seen, the room stays
 -- a trap until its last one is down (they all come). Returns the list or nil.
 local TRAP_RECHECK = C.SECOND
+-- How long after the first controllable tick in a room a crowd of grabbers
+-- waits for the planner's goal before a fight is opened (choose).
+local GOAL_WAIT = C.SECOND
 local TRAP_CONTACT = 2
 local TRAP_GATHER = 4
 function BotTactics.trap(bot, enemies)
@@ -1041,7 +1044,8 @@ function BotTactics.trap(bot, enemies)
     local goal = BOT_STATE.plan and BOT_STATE.plan.goal
     local zone = goal and goal.job and goal.job.zone
     if not zone then
-        return nil
+        -- A crowd, and no goal to judge it by yet (BotTactics.step).
+        return nil, goal == nil
     end
     -- Where the walk ends: the job's approach point, else the zone's centre
     -- (often inside the desk or wall it is pressed from, with no path).
@@ -1142,9 +1146,19 @@ local function choose(bot, s, k, enemies, player)
     end
     -- A death trap: TRAP_CROWD or more live grabbers anywhere in the room
     -- (they all come). The crowd is all of them, and the reserve gives way.
-    local trap = BotTactics.trap(bot, enemies)
+    local trap, unjudged = BotTactics.trap(bot, enemies)
     if trap then
         crowd = trap
+    end
+    -- A crowd met before the planner has a goal for this entry: no fight
+    -- is opened for GOAL_WAIT, so the planner's tick comes first and the
+    -- trap is judged by the walk to its goal. A fight opened on the first
+    -- tick held the planner off to its end: 509 was entered with the
+    -- handgun and one clip against four zombies, the fight started nine
+    -- ticks in, no trap was seen, and the retreat for the boxed launcher
+    -- never came.
+    if unjudged and not s.active and s.room_tick and s.now - s.room_tick < GOAL_WAIT then
+        return nil
     end
     local gun, rounds, guns = firearm(bot, k, nearest, crowd, trap ~= nil)
     -- A trap's crowd: the gun that downs all of it, ranked an ordinary gun
@@ -1176,11 +1190,16 @@ local function choose(bot, s, k, enemies, player)
         -- the fewest shots, while it has the rounds (three grenades and
         -- thirty handgun rounds met 509's four zombies: the handgun took
         -- them all on, the grenades stayed held, and the bot died).
-        if not best_row then
+        -- Nor does a gun that downs it all only slowly (tier 2) keep a
+        -- faster one's rounds held: the handgun's thirty rounds covered
+        -- 509's four zombies, two flame rounds stayed in the launcher, and
+        -- the first zombie took seven shots while the other three closed.
+        if not best_row or best_tier == 2 then
+            local pick_need = best_row and rounds_for(nearest, nentry, best_row.item) or nil
             for _, row in ipairs(guns or {}) do
                 local need = rounds_for(nearest, nentry, row.item)
-                if need > 0 and need <= row.rounds and (not best_need or need < best_need) then
-                    best_row, best_need = row, need
+                if need > 0 and need <= row.rounds and (not pick_need or need < pick_need) then
+                    best_row, pick_need = row, need
                 end
             end
         end
@@ -2720,6 +2739,7 @@ function BotTactics.step(bot, scene, player)
     if s.room ~= room then
         stop(bot, s, "left the room")
         s.room = room
+        s.room_tick = s.now
         s.cross_tick = nil
         s.run_logs = {}
         s.no_aim = {}
@@ -2870,7 +2890,12 @@ function BotTactics.step(bot, scene, player)
         if menu_reload(bot, s, weapon) then
             return true
         end
-        stop(bot, s, "out of ammunition", LOST_CALM)
+        -- No calm while another gun (or another loading) has a round for
+        -- it: the launcher's last round went into 509's second zombie,
+        -- and the bot walked on into the other two for six seconds with
+        -- thirty handgun rounds held.
+        stop(bot, s, "out of ammunition",
+            not BotTactics.any_round_for(bot, target.id) and LOST_CALM or nil)
         return false
     end
     -- A target no aim can hit (not woken yet) is let go; choose skips it
