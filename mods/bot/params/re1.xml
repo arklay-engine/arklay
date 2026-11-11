@@ -12,7 +12,10 @@
 <params format="1">
   <!-- 20D: Richard, poisoned by Yawn, waits for the serum from 100. `save`
        brings it within his seven minutes; `leave` never does, so he dies
-       and the door to 20E opens once the timer runs out. -->
+       and the door to 20E opens once the timer runs out. In Chris's game
+       only after rebecca_meet=richard (Richard is found dead otherwise):
+       his death arms the upstairs call, and 206's hunter attack (see
+       `rebecca`). -->
   <param name="richard" values="save|leave" default="save"
          label="bring poisoned Richard the serum in 20D"/>
   <!-- The guardhouse's Plant 42. `no` takes the bookcase passage in 40A
@@ -33,9 +36,12 @@
          label="308: go with Barry (message 23)"/>
   <param name="cave_q2" values="yes|no" default="yes"
          label="308: the second prompt (message 24 or 25)"/>
-  <!-- 308, after Barry goes ahead: `follow` walks after him through AOT 3
-       and door 1 (Barry's branch); `backtrack` keeps off door 1, so 307
-       plays "Tell my family" (cave) and Barry is gone. -->
+  <!-- 308, after Barry goes ahead (Yes, Yes or No, No): `follow` keeps
+       off doors 0 and 2 while he is ahead, so the bot leaves by door 1
+       after him, through AOT 3's gunshot (Barry's branch); `backtrack`
+       keeps off door 1, so 307 plays "Tell my family" (cave) and Barry is
+       gone. No effect after Yes, No or No, Yes, or without 308's scene
+       (rope=leave). -->
   <param name="cave_exit" values="follow|backtrack" default="follow"
          label="308: follow Barry through door 1, or backtrack"/>
   <!-- Barry's first meeting after the lockpick. `forest` is the bot's own
@@ -70,5 +76,45 @@
        50B's door to 512, so Chris stays locked up: with Barry (common 0xC0
        clear) the Barry ending, without him the Bad ending. -->
   <param name="chris" values="save|leave" default="save"
-         label="free Chris from 512's cell before the Tyrant"/>
+         label="Jill: free Chris from 512's cell before the Tyrant"/>
+
+  <!-- Chris's game. Two flags decide his ending: common 0xC0 (Rebecca
+       lost) and 0x4B (Jill freed from 512's cell). Rebecca is lost only to
+       a hunter attack the player abandons, in 101 or 206, and both are
+       settled before the caves; nothing later sets 0xC0 for Chris. -->
+  <!-- Whom Chris meets first. `save_room` holds the doors into 20D (204's
+       and 20E's) until Rebecca is met in 100 (common 0x24): Richard is
+       then found dead, with no serum to bring. `richard` holds 101's door
+       to 100 until Richard is found in 20D (common 0x62): Rebecca is with
+       him, the 100 meeting never plays, and `richard` decides whether he
+       lives. -->
+  <param name="rebecca_meet" values="save_room|richard" default="save_room"
+         label="Chris: meet Rebecca in 100 before Richard in 20D, or Richard first"/>
+  <!-- 100, after rebecca_meet=save_room: "Will you take Rebecca with you?"
+       (message 16) as Chris leaves by door 0. `yes` takes her along: no
+       hunter is ever sent after her. `no` leaves her in the save room
+       (common 0x22): after 10A's hunter film her radio call plays, and the
+       first 101 entry past 180 seconds plays the hunter attack there
+       (common 0x2F). No effect after rebecca_meet=richard. -->
+  <param name="rebecca_along" values="yes|no" default="yes"
+         label="Chris: take Rebecca along from the save room (message 16)"/>
+  <!-- A hunter attack on Rebecca: in 101 (rebecca_along=no, Chris back past
+       180 seconds after her call) or in 206 (common 0x36, the upstairs
+       call: Richard dead, or a slow serum run after Yawn's bite). `save`
+       comes back to the room once the call is due and fights its hunter
+       there; `leave` walks out during the attack, and keeps out of 206
+       after the upstairs call, so she dies (common 0xC0). 206's attack is
+       lost whatever the timing; 101's plays only if Chris comes back late,
+       so leaving her there is not certain: a route that must lose Rebecca
+       takes 206's (rebecca_meet=richard richard=leave). -->
+  <param name="rebecca" values="save|leave" default="save"
+         label="Chris: answer the hunter attacks on Rebecca (101, 206)"/>
+  <!-- The lab, Chris's game: as `chris` for Jill. `save` keeps off 50C's
+       elevator switch until 508's pass-code lamps are lit (scenario 0x50),
+       comes back to 50B for the cell door (after the Tyrant, or in the
+       self-destruct with Rebecca alive) and holds 501's escape battery
+       until 512 has freed Jill (common 0x4B); `leave` keeps off 50B's door
+       to 512. -->
+  <param name="jill" values="save|leave" default="save"
+         label="Chris: free Jill from 512's cell before the escape"/>
 </params>

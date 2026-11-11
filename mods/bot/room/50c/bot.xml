@@ -9,10 +9,13 @@
      only after that, through 508's door to 50B, which the lamps open. So
      under chris=save the switch is off limits until all three lamps are
      lit (scenario 0x50). The bot comes back for it on its own: 50C door
-     4's unpowered-elevator message is retried on an empty frontier. -->
+     4's unpowered-elevator message is retried on an empty frontier.
+     In Chris's game the `jill` parameter holds the switch the same way. -->
 <bot format="2">
   <interact slot="5" bank="0" bit="1" after_bank="0" after_bit="45" label="the elevator switch: call it down"/>
   <answer choice="yes" slot="5" label="push the elevator switch"/>
-  <avoid slot="5" bank="0" bit="0x50" while="clear" when="chris=save"
+  <avoid slot="5" bank="0" bit="0x50" while="clear" character="jill" when="chris=save"
+         reason="the elevator to the Tyrant: light 508's three lamps first"/>
+  <avoid slot="5" bank="0" bit="0x50" while="clear" character="chris" when="jill=save"
          reason="the elevator to the Tyrant: light 508's three lamps first"/>
 </bot>

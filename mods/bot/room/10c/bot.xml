@@ -9,21 +9,38 @@
      (item AOT 4, x 5000..5800): the way to it runs through their reach.
      The six herbs (item AOTs 5..10, x 6000..8900, z 2000..3000) lie in
      their reach too: each try at one cost about 24 health, and a hurt bot
-     with no heal walked there on its last 8 health. -->
+     with no heal walked there on its last 8 health.
+
+     Chris: the same slots, but the withering sets common 0xA6. -->
 <bot format="2">
-  <use slot="2" item="0x26" bank="1" bit="0xA9" label="herbicide at the pump"/>
-  <avoid slot="4" bank="1" bit="0xA9" while="clear"
+  <use slot="2" item="0x26" bank="1" character="jill" bit="0xA9" label="herbicide at the pump"/>
+  <avoid slot="4" bank="1" character="jill" bit="0xA9" while="clear"
          reason="the plant fountains stand across the way until the herbicide (common 0xA9)"/>
-  <avoid slot="5" bank="1" bit="0xA9" while="clear"
+  <avoid slot="5" bank="1" character="jill" bit="0xA9" while="clear"
          reason="the plant fountains reach the herb until the herbicide (common 0xA9)"/>
-  <avoid slot="6" bank="1" bit="0xA9" while="clear"
+  <avoid slot="6" bank="1" character="jill" bit="0xA9" while="clear"
          reason="the plant fountains reach the herb until the herbicide (common 0xA9)"/>
-  <avoid slot="7" bank="1" bit="0xA9" while="clear"
+  <avoid slot="7" bank="1" character="jill" bit="0xA9" while="clear"
          reason="the plant fountains reach the herb until the herbicide (common 0xA9)"/>
-  <avoid slot="8" bank="1" bit="0xA9" while="clear"
+  <avoid slot="8" bank="1" character="jill" bit="0xA9" while="clear"
          reason="the plant fountains reach the herb until the herbicide (common 0xA9)"/>
-  <avoid slot="9" bank="1" bit="0xA9" while="clear"
+  <avoid slot="9" bank="1" character="jill" bit="0xA9" while="clear"
          reason="the plant fountains reach the herb until the herbicide (common 0xA9)"/>
-  <avoid slot="10" bank="1" bit="0xA9" while="clear"
+  <avoid slot="10" bank="1" character="jill" bit="0xA9" while="clear"
          reason="the plant fountains reach the herb until the herbicide (common 0xA9)"/>
+  <use slot="2" item="0x26" bank="1" character="chris" bit="0xA6" label="herbicide at the pump"/>
+  <avoid slot="4" bank="1" character="chris" bit="0xA6" while="clear"
+         reason="the plant fountains stand across the way until the herbicide (common 0xA6)"/>
+  <avoid slot="5" bank="1" character="chris" bit="0xA6" while="clear"
+         reason="the plant fountains reach the herb until the herbicide (common 0xA6)"/>
+  <avoid slot="6" bank="1" character="chris" bit="0xA6" while="clear"
+         reason="the plant fountains reach the herb until the herbicide (common 0xA6)"/>
+  <avoid slot="7" bank="1" character="chris" bit="0xA6" while="clear"
+         reason="the plant fountains reach the herb until the herbicide (common 0xA6)"/>
+  <avoid slot="8" bank="1" character="chris" bit="0xA6" while="clear"
+         reason="the plant fountains reach the herb until the herbicide (common 0xA6)"/>
+  <avoid slot="9" bank="1" character="chris" bit="0xA6" while="clear"
+         reason="the plant fountains reach the herb until the herbicide (common 0xA6)"/>
+  <avoid slot="10" bank="1" character="chris" bit="0xA6" while="clear"
+         reason="the plant fountains reach the herb until the herbicide (common 0xA6)"/>
 </bot>

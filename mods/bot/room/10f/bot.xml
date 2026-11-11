@@ -9,9 +9,23 @@
        north passage, and the hollow's SCE_USEITEM probe AOT 6 arms the wood
        emblem. USE it there: the room swaps the emblems, sets common 0xA7 and
        reopens the passage. AOT 6 is deleted until the pickup, so the planner
-       only sees this step once it applies. -->
+       only sees this step once it applies. Jill only.
+
+     Chris cannot read music. Using the score at the piano (AOT 14) gives it
+     to Rebecca (common 0xA0) and asks "Will you have Rebecca practice?"
+     (message 11); Yes sets 0xA1, and she plays on the next entry (0xA2),
+     which opens the alcove. Taking the gold emblem sets 0xA3 and closes
+     the wall behind Chris until the wood emblem goes in the hollow (0xA4),
+     so the gold emblem is taken only while the wood emblem is held. -->
 <bot format="2">
   <push object="1" slot="5" direction="east" label="bookshelf off the music score"/>
-  <use slot="13" item="0x23" bank="1" bit="0xA5" label="music score at the piano"/>
-  <use slot="6" item="0x1F" bank="1" bit="0xA7" label="wood emblem in the hollow"/>
+  <use slot="13" item="0x23" bank="1" bit="0xA5" character="jill" label="music score at the piano"/>
+  <use slot="6" item="0x1F" bank="1" bit="0xA7" character="jill" label="wood emblem in the hollow"/>
+  <use slot="14" item="0x23" bank="1" bit="0xA0" character="chris" label="music score to Rebecca"/>
+  <answer message="11" choice="yes" character="chris" label="have Rebecca practise"/>
+  <revisit bank="1" bit="0xA1" while="set" character="chris"
+           label="Rebecca has practised: she plays on the next visit"/>
+  <use slot="6" item="0x1F" bank="1" bit="0xA4" character="chris" label="wood emblem in the hollow"/>
+  <avoid slot="4" unless_held="0x1F" character="chris"
+         reason="the gold emblem's pickup closes the wall behind Chris: the wood emblem goes in its place"/>
 </bot>
