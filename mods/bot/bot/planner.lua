@@ -3261,6 +3261,8 @@ local function forgive_fight(bot)
                 p.marks[key] = nil
                 marks_changed()
                 p.forced_fight = { room = room, entry = (p.entries or {})[room] }
+                p.forced_keys = p.forced_keys or {}
+                p.forced_keys[key] = true
                 forgiven = true
                 bot:log("frontier empty; fighting anyway: " .. key .. " (" .. m.reason .. ")")
             elseif not remote_key or key < remote_key then
@@ -3270,11 +3272,16 @@ local function forgive_fight(bot)
     end
     -- A fight held back in another room is walked to and fought on the next
     -- entry (fight_due): 20C's Yawn 2, short of rounds, ended two runs on an
-    -- empty frontier in 216.
-    if not forgiven and remote and not (p.forced_fight and p.forced_fight.room == remote.room) then
+    -- empty frontier in 216. Once for each fight (p.forced_keys), not once
+    -- for its room: 30C's Black Tiger was forced, its web was then held
+    -- back for health with no heal left anywhere, and the run ended on an
+    -- empty frontier in the guardhouse.
+    if not forgiven and remote and not (p.forced_keys and p.forced_keys[remote_key]) then
+        p.forced_keys = p.forced_keys or {}
         for key, m in pairs(p.marks) do
             if m.room == remote.room and m.reason:find("not ready for the fight", 1, true) then
                 p.marks[key] = nil
+                p.forced_keys[key] = true
                 marks_changed()
             end
         end
