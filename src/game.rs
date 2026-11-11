@@ -506,13 +506,11 @@ pub const HERB_MAX: u8 = 0x4B;
 pub const CHEMICAL_MIN: u8 = 0x13;
 /// Last chemical id.
 pub const CHEMICAL_MAX: u8 = 0x1A;
-/// Stage id of the guardhouse (1-based).
-pub const STAGE_GUARDHOUSE: u8 = 3;
+/// 1-based stage digit of the guardhouse ([`RoomId::stage`]; the original's
+/// 0-indexed `STAGE_GUARDHOUSE` is 3).
+pub const STAGE_GUARDHOUSE: u8 = 4;
 /// Room id of the drug storehouse in the guardhouse.
 pub const ROOM_DRUG_STOREHOUSE: u8 = 9;
-/// 1-based stage digit of the guardhouse (the original's 0-indexed stage 3),
-/// used by the desk flow's save-room reset.
-const GUARDHOUSE_STAGE: u8 = 4;
 /// The scrapped heliport (`ROOM3110.RDT`), which the game never enters but whose
 /// backgrounds room 303's death replay shows.
 pub const ROOM_SCRAPPED_HELIPORT: u8 = 0x11;
@@ -7199,7 +7197,7 @@ impl GameState {
         if alpha == 0 {
             return None;
         }
-        let draws = if id.stage == GUARDHOUSE_STAGE && id.room == ROOM_CONTROL_ROOM {
+        let draws = if id.stage == STAGE_GUARDHOUSE && id.room == ROOM_CONTROL_ROOM {
             2
         } else {
             1
@@ -7796,7 +7794,7 @@ impl GameState {
     pub fn check_desk_state(&mut self) {
         // The guardhouse save room restarts the flow for Jill's first
         // playthrough, so a desk can never be left mid-state across the save.
-        if self.id.stage == GUARDHOUSE_STAGE
+        if self.id.stage == STAGE_GUARDHOUSE
             && self.id.room == ROOM_GUARDHOUSE_SAVE
             && self.id.player_flag & 3 == 1
             && !self.flag_test(BANK_SCENARIO, SCENARIO_FLAG_SECOND_PLAYTHROUGH, false)
@@ -15859,7 +15857,7 @@ mod tests {
     fn desk_guardhouse_save_room_resets_jills_first_playthrough() {
         let mut state = desk_game();
         state.id = RoomId {
-            stage: GUARDHOUSE_STAGE,
+            stage: STAGE_GUARDHOUSE,
             room: ROOM_GUARDHOUSE_SAVE,
             player_flag: 1,
             mansion2: false,
@@ -18175,9 +18173,10 @@ mod tests {
         assert_eq!(weapon.quantity, 4);
         assert!(!state.inventory.iter().any(|slot| slot.id == 0x10));
 
-        // The chemical flag effect.
+        // The chemical flag effect, in the drug storehouse (409).
         let mut state = game();
-        state.id = RoomId::parse("309").unwrap();
+        state.id = RoomId::parse("409").unwrap();
+        assert!(state.is_drug_store());
         state.add_item(0x15, 1);
         state.add_item(0x18, 1);
         assert_eq!(
@@ -18189,13 +18188,32 @@ mod tests {
         );
         assert!(state.flag_test(0, SCENARIO_FLAG_CHEMICAL_COMBINE, false));
 
-        // Outside the drug store the same recipe is refused untouched.
+        // Outside the drug store the same recipe is refused untouched, in
+        // room 309 too (the caves' stage digit is the guardhouse's 0-based
+        // stage, which the check used to compare against).
+        for room in [None, Some("309")] {
+            let mut state = game();
+            if let Some(room) = room {
+                state.id = RoomId::parse(room).unwrap();
+            }
+            assert!(!state.is_drug_store());
+            state.add_item(0x15, 1);
+            state.add_item(0x18, 1);
+            assert_eq!(state.combine_slots(0, 1), CombineResult::NeedsDrugStore);
+            assert_eq!(state.inventory[0].id, 0x15);
+            assert_eq!(state.inventory[1].id, 0x18);
+        }
+
+        // Water onto UMB No.2 makes NP-003 there, leaving an empty bottle.
         let mut state = game();
+        state.id = RoomId::parse("409").unwrap();
+        state.add_item(0x14, 1);
         state.add_item(0x15, 1);
-        state.add_item(0x18, 1);
-        assert_eq!(state.combine_slots(0, 1), CombineResult::NeedsDrugStore);
-        assert_eq!(state.inventory[0].id, 0x15);
-        assert_eq!(state.inventory[1].id, 0x18);
+        assert!(matches!(
+            state.combine_slots(0, 1),
+            CombineResult::Applied { .. }
+        ));
+        assert_eq!((state.inventory[0].id, state.inventory[1].id), (0x13, 0x1A));
     }
 
     #[test]

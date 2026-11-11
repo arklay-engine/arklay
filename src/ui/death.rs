@@ -15,6 +15,7 @@
 //! fade to wrap negative and then opens the screen. A room that is running
 //! the attract demo or the scripted death variant skips the screen entirely.
 //!
+use crate::game::STAGE_GUARDHOUSE;
 use crate::state::RoomId;
 use crate::transition::{Fade, FadeColor, Overlay};
 
@@ -35,8 +36,6 @@ const ROOM_ATTIC: u8 = 0x10;
 /// The lesson room, where the second Yawn's death (on the second visit)
 /// skips the delay.
 const ROOM_LESSON: u8 = 0x0C;
-/// Stage digit of the guardhouse.
-const STAGE_GUARDHOUSE: u8 = 4;
 /// The water tank, where the Neptune death skips the delay.
 const ROOM_WATER_TANK: u8 = 0x0E;
 /// The armor room, whose scripted death skips the blood pool.
