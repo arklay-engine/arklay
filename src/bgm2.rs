@@ -413,8 +413,14 @@ impl Music {
                 }
             }
         } else if (word.sub ^ self.current.sub) & 0x3f != 0 {
+            // A sub fades only while its channel's buffer plays (`0x4347B0`'s
+            // status bit 0 for BGM channel `sequence - 1`): a sub sequence
+            // with no track has none, so its state stays (room 107's sub 5,
+            // whose second channel names no track, into room 108).
             for sequence in 1..SEQUENCES {
-                if self.sequences[sequence].state == STATE_PLAYING {
+                if self.sequences[sequence].state == STATE_PLAYING
+                    && self.sequences[sequence].loaded
+                {
                     self.fade(sequence);
                     self.sequences[sequence].state = STATE_SCRIPT_FADE;
                 }
@@ -1026,6 +1032,30 @@ mod tests {
         assert_eq!(music.channels[3].volume, 0);
         music.control([1, 0, 1, 81, 0], street());
         assert_eq!(music.channels[3].volume, 80);
+    }
+
+    /// `Snd_bgm_ck` on a new sub fades the sub sequences whose channel
+    /// plays: one with no track keeps its state.
+    #[test]
+    fn a_door_to_a_new_sub_fades_only_the_sub_channels_that_play() {
+        let mut music = Music::default();
+        let id = (0..0x38)
+            .find(|&id| {
+                let tracks = sub_tracks(id);
+                tracks[0].is_some() && tracks[1].is_none()
+            })
+            .unwrap();
+        let other = (0..0x38)
+            .find(|&other| other != id && sub_bank(other))
+            .unwrap();
+        music.enter_room(word(0xff, id), street());
+        assert_eq!(music.sequences[1].state, STATE_PLAYING);
+        assert_eq!(music.sequences[2].state, STATE_PLAYING);
+        music.leave_room(word(0xff, other), 0);
+        assert_eq!(music.sequences[1].state, STATE_SCRIPT_FADE);
+        assert!(music.fading(1));
+        assert_eq!(music.sequences[2].state, STATE_PLAYING);
+        assert!(!music.fading(2));
     }
 
     #[test]
