@@ -383,6 +383,13 @@ pub struct ObjectRecord {
     /// writes and `Om_trans` writes again each frame it draws the object.
     /// `Super_reset` takes the position from it.
     pub world: Mat4x3,
+    /// RE2's `Sca_old_x` and `Sca_old_z` (`+0x118`): `Atd X` and `Z` as the
+    /// end of the last `Om_move` left them, which `Sca_hit_box` pushes from.
+    pub sca_old: [i16; 2],
+    /// RE2's matrix at `+0x24`, which `Rot_add_matrix` turns as a box falls
+    /// and takes `Cdir` from; `None` until a fall turns it, the matrix of
+    /// `rotation` until then.
+    pub turn_matrix: Option<[[i16; 3]; 3]>,
 }
 
 impl Default for ObjectRecord {
@@ -426,6 +433,8 @@ impl Default for ObjectRecord {
             tween: TweenScratch::default(),
             super_parent: SuperParent::World,
             world: Mat4x3::default(),
+            sca_old: [0; 2],
+            turn_matrix: None,
         }
     }
 }
@@ -661,38 +670,7 @@ pub const SCA_HIT_HOLE: u16 = 4;
 /// the object's floor, in the cell of the box's centre. A box that reaches a
 /// record's low edge touches it, one that reaches its high edge doesn't.
 pub fn sca_ck_hit_om(obj: &ObjectRecord, sca: &crate::state::Sca, exclude: u16) -> u16 {
-    if obj.be_flg & 8 != 0 {
-        return 0;
-    }
-    let (atw_x, atw_z) = obj.atw();
-    let centre = [i32::from(atw_x) + obj.pos[0], i32::from(atw_z) + obj.pos[2]];
-    let cell = crate::sca::area(sca, centre[0], centre[1]);
-    let (w, d) = obj.half_size();
-    let (w, d) = (i32::from(w), i32::from(d));
-    let mut hit = 0;
-    for record in &sca.records {
-        if record.kind & cell == 0 {
-            continue;
-        }
-        let in_x = ((centre[0] + w - i32::from(record.x)) as u32)
-            < u32::from(record.width) + (w * 2) as u32;
-        let in_z = ((centre[1] + d - i32::from(record.z)) as u32)
-            < u32::from(record.depth) + (d * 2) as u32;
-        if !in_x
-            || !in_z
-            || record.id & 0x4000 == 0
-            || exclude & record.id != 0
-            || record.floor & (1u32 << (obj.floor & 31)) == 0
-        {
-            continue;
-        }
-        hit |= if record.shape() == 10 {
-            SCA_HIT_HOLE
-        } else {
-            SCA_HIT_WALL
-        };
-    }
-    hit
+    sca_ck_hit_om_push(&mut obj.clone(), sca, exclude)
 }
 
 /// `Be_flg`'s bits of an object a character can climb onto and stand on: in
@@ -852,113 +830,191 @@ pub fn oma_get_on_om(objects: &[ObjectRecord], chr: &CharBox, current: Option<u8
         .map_or(current, |(index, _)| Some(index as u8))
 }
 
-/// What [`oma_pull`] did.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Pull {
-    /// `pOn_om` after it.
-    pub on_object: Option<u8>,
-    /// The character stepped off an edge next to which another climbable
-    /// object stands at the same height: the original hands the character
-    /// over to it (`Oma_pull_hosei_x`/`_z`), which isn't ported.
-    pub next_box: bool,
-}
-
-/// `Oma_pull` (`0x4CE580`) on the object `index` the character stands on:
-/// `pOn_om` taken again ([`oma_get_on_om`]) and, while that is still the
-/// object, a character whose box has just stepped past an edge of the
-/// object's top (its half-sizes less half the character's width), and was
-/// inside on that axis last frame (`old2`), put back on that edge. Only the
-/// plain pull is ported: the hand-over to another box of the same height next
-/// to it is reported in [`Pull::next_box`] and not done.
-pub fn oma_pull(
-    objects: &[ObjectRecord],
-    chr: &mut CharBox,
-    index: usize,
-    current: Option<u8>,
-) -> Pull {
-    let obj = objects[index];
-    let mut pull = Pull {
-        on_object: current,
-        next_box: false,
-    };
-    if chr.be_flg & BE_UNHELD != 0 || obj.be_flg & BE_GHOST != 0 {
-        return pull;
-    }
-    pull.on_object = oma_get_on_om(objects, chr, current);
-    if pull.on_object != Some(index as u8) {
-        return pull;
-    }
-    let half = i32::from(chr.at_w >> 1);
-    let (w, d) = obj.half_size();
-    let (reach_x, reach_z) = (i32::from(w) - half, i32::from(d) - half);
-    let dx = obj.at[0].wrapping_sub(chr.at[0]);
-    let dz = obj.at[2].wrapping_sub(chr.at[2]);
-    let now = u8::from(outside(dx, reach_x)) | u8::from(outside(dz, reach_z)) << 1;
-    let was = u8::from(outside(obj.at[0] - i32::from(chr.old2[0]), reach_x))
-        | u8::from(outside(obj.at[2] - i32::from(chr.old2[2]), reach_z)) << 1;
-    pull.next_box = now != 0 && next_box(objects, chr, index, now);
-    let step = now & !was;
-    if step & 1 != 0 {
-        let edge = if dx >= 0 { -reach_x } else { reach_x };
-        let moved = obj.at[0] + edge - chr.pos[0];
-        chr.pos[0] += moved;
-        chr.at[0] += moved;
-    }
-    if step & 2 != 0 {
-        let edge = if dz >= 0 { -reach_z } else { reach_z };
-        let moved = obj.at[2] + edge - chr.pos[2];
-        chr.pos[2] += moved;
-        chr.at[2] += moved;
-    }
-    pull.on_object = oma_get_on_om(objects, chr, pull.on_object);
-    pull
-}
-
 /// `(delta + reach) as u32 < (reach * 2) as u32`: `delta` in
 /// `-reach..reach`, the high edge out.
 fn inside_low(delta: i32, reach: i32) -> bool {
     (delta.wrapping_add(reach) as u32) < (reach.wrapping_mul(2) as u32)
 }
 
-/// Whether `Oma_pull`'s loops would find another climbable object of the
-/// same height next to the edge of object `index` the character is past
-/// (`now`: bit 0 past an x edge, bit 1 a z edge): along that edge, its far
-/// side within the object's depth less the character's width, the
-/// character's box within it across, within `W + 200` of the object on the
-/// side being stepped toward, and on that side (the sign test on the
-/// object-to-character delta).
-fn next_box(objects: &[ObjectRecord], chr: &CharBox, index: usize, now: u8) -> bool {
+/// `Oma_pull_hosei_x` (`0x4CEC90`): the character's `Pos_x` put `reach` to
+/// the side of `edge_x` (an object's `Atd X`) it stands on by `toward`'s sign,
+/// its box moved with it, and `pOn_om` taken again.
+fn oma_pull_hosei_x(
+    objects: &[ObjectRecord],
+    chr: &mut CharBox,
+    edge_x: i32,
+    toward: i32,
+    reach: i32,
+    current: Option<u8>,
+) -> Option<u8> {
+    let reach = if toward >= 0 { -reach } else { reach };
+    let moved = reach + edge_x - chr.pos[0];
+    chr.pos[0] += moved;
+    chr.at[0] += moved;
+    oma_get_on_om(objects, chr, current)
+}
+
+/// `Oma_pull_hosei_z` (`0x4CECE0`), [`oma_pull_hosei_x`] along z.
+fn oma_pull_hosei_z(
+    objects: &[ObjectRecord],
+    chr: &mut CharBox,
+    edge_z: i32,
+    toward: i32,
+    reach: i32,
+    current: Option<u8>,
+) -> Option<u8> {
+    let reach = if toward >= 0 { -reach } else { reach };
+    let moved = reach + edge_z - chr.pos[2];
+    chr.pos[2] += moved;
+    chr.at[2] += moved;
+    oma_get_on_om(objects, chr, current)
+}
+
+/// `Oma_pull` (`0x4CE580`) on the object `index` the character stands on:
+/// `pOn_om` taken again ([`oma_get_on_om`]) and, while that is still the
+/// object, a character whose box is past an edge of the object's top (its
+/// half-sizes less half the character's width) handed over to another
+/// climbable object of the same height next to that edge
+/// (`Oma_pull_hosei_x`/`_z`), or, if it was inside on that axis last frame
+/// (`old2`), put back on the edge. Returns `pOn_om`.
+///
+/// The character's box sits on its position (`Ofs_x` and `Ofs_z` 0), and
+/// its depth is its width, as the player's is.
+pub fn oma_pull(
+    objects: &[ObjectRecord],
+    chr: &mut CharBox,
+    index: usize,
+    current: Option<u8>,
+) -> Option<u8> {
     let obj = objects[index];
+    if chr.be_flg & BE_UNHELD != 0 || obj.be_flg & BE_GHOST != 0 {
+        return current;
+    }
+    let on = oma_get_on_om(objects, chr, current);
+    if on != Some(index as u8) {
+        return on;
+    }
+    let chr_half = i32::from(chr.at_w >> 1);
     let (obj_w, obj_d) = obj.half_size();
     let (obj_w, obj_d) = (i32::from(obj_w), i32::from(obj_d));
     let chr_w = i32::from(chr.at_w);
+    let (reach_x, reach_z) = (obj_w - chr_half, obj_d - chr_half);
     let [obj_x, _, obj_z] = obj.at;
     let to_x = obj_x.wrapping_sub(chr.at[0]);
     let to_z = obj_z.wrapping_sub(chr.at[2]);
+    let (old_x, old_z) = (i32::from(chr.old2[0]), i32::from(chr.old2[2]));
+    let out_x = outside(to_x, reach_x);
+    let mut now = u8::from(outside(to_z, reach_z)) << 1 | u8::from(out_x);
+    let was =
+        u8::from(outside(obj_z - old_z, reach_z)) << 1 | u8::from(outside(obj_x - old_x, reach_x));
     let top = object_top(&obj);
-    objects.iter().enumerate().any(|(other, next)| {
-        if other == index
-            || next.be_flg & BE_CLIMBABLE != BE_CLIMBABLE
-            || next.be_flg & BE_GHOST != 0
-            || object_top(next) != top
-        {
-            return false;
+    let next_to = |other: usize, next: &ObjectRecord| {
+        other != index
+            && next.be_flg & BE_CLIMBABLE == BE_CLIMBABLE
+            && next.be_flg & BE_GHOST == 0
+            && object_top(next) == top
+    };
+    if out_x {
+        for (other, next) in objects.iter().enumerate() {
+            if !next_to(other, next) {
+                continue;
+            }
+            let (next_w, next_d) = next.half_size();
+            let (next_w, next_d) = (i32::from(next_w), i32::from(next_d));
+            let [next_x, _, next_z] = next.at;
+            let along = obj_d - chr_w + next_d;
+            let next_to_chr = next_z - chr.at[2];
+            if !inside_low(next_z - obj_z, along) || outside(next_to_chr, next_d) {
+                continue;
+            }
+            if outside(next_x - obj_x, next_w + 200 + obj_w) || (obj_x - next_x) ^ to_x <= 0 {
+                continue;
+            }
+            let reach_obj = obj_d - chr_half;
+            let reach_next = next_d - chr_half;
+            let on_obj = inside_low(obj_z - chr.at[2], reach_obj);
+            let both = u8::from(on_obj) | u8::from(inside_low(next_to_chr, reach_next)) << 1;
+            if both == 3 {
+                if outside(next_z - old_z, reach_next) || outside(obj_z - old_z, reach_obj) {
+                    return oma_pull_hosei_x(objects, chr, obj_x, to_x, reach_x, on);
+                }
+                return on;
+            }
+            if was == 0 && on_obj {
+                return oma_pull_hosei_x(objects, chr, obj_x, to_x, reach_x, on);
+            }
+            now = 2;
+            if both == 1 {
+                return oma_pull_hosei_z(objects, chr, next_z, next_to_chr, reach_z, on);
+            }
+            if inside_low(obj_z - old_z, reach_obj) && inside_low(next_z - old_z, reach_next) {
+                return oma_pull_hosei_z(objects, chr, obj_z, to_z, reach_z, on);
+            }
+            if (obj_z - next_z) ^ to_z < 0 {
+                oma_pull_hosei_x(objects, chr, obj_x, to_x, reach_x, on);
+            }
         }
-        let (next_w, next_d) = next.half_size();
-        let (next_w, next_d) = (i32::from(next_w), i32::from(next_d));
-        let [next_x, _, next_z] = next.at;
-        let across_x = now & 1 != 0
-            && inside_low(next_z - obj_z, obj_d - chr_w + next_d)
-            && !outside(next_z - chr.at[2], next_d)
-            && !outside(next_x - obj_x, next_w + 200 + obj_w)
-            && (obj_x - next_x) ^ to_x > 0;
-        let across_z = now & 2 != 0
-            && inside_low(next_x - obj_x, obj_w - chr_w + next_w)
-            && !outside(next_x - chr.at[0], next_w)
-            && !outside(next_z - obj_z, next_d + 200 + obj_d)
-            && (obj_z - next_z) ^ to_z > 0;
-        across_x || across_z
-    })
+    }
+    if now & 2 != 0 {
+        for (other, next) in objects.iter().enumerate() {
+            if !next_to(other, next) {
+                continue;
+            }
+            let (next_w, next_d) = next.half_size();
+            let (next_w, next_d) = (i32::from(next_w), i32::from(next_d));
+            let [next_x, _, next_z] = next.at;
+            if !inside_low(next_x - obj_x, obj_w - chr_w + next_w) {
+                continue;
+            }
+            let next_to_chr = next_x - chr.at[0];
+            if outside(next_to_chr, next_w)
+                || outside(next_z - obj_z, next_d + 200 + obj_d)
+                || (obj_z - next_z) ^ to_z <= 0
+            {
+                continue;
+            }
+            let reach_obj = obj_w - chr_half;
+            let reach_next = next_w - chr_half;
+            let on_obj = inside_low(obj_x - chr.at[0], reach_obj);
+            let both = u8::from(on_obj) | u8::from(inside_low(next_to_chr, reach_next)) << 1;
+            if both == 3 {
+                if u8::from(inside_low(next_x - old_x, reach_next)) << 1
+                    | u8::from(inside_low(obj_x - old_x, reach_obj))
+                    == 3
+                {
+                    return on;
+                }
+                return oma_pull_hosei_z(objects, chr, obj_z, to_z, reach_z, on);
+            }
+            if was == 0 && on_obj {
+                return oma_pull_hosei_z(objects, chr, obj_z, to_z, reach_z, on);
+            }
+            now = 1;
+            if both == 1 {
+                return oma_pull_hosei_x(objects, chr, next_x, next_to_chr, reach_x, on);
+            }
+            if inside_low(obj_x - old_x, reach_obj) && inside_low(next_x - old_x, reach_next) {
+                return oma_pull_hosei_x(objects, chr, obj_x, to_x, reach_x, on);
+            }
+            if (obj_x - next_x) ^ to_x < 0 {
+                oma_pull_hosei_z(objects, chr, obj_z, to_z, reach_z, on);
+            }
+        }
+    }
+    let step = now & !was;
+    if step & 1 != 0 {
+        let edge = if to_x >= 0 { -reach_x } else { reach_x };
+        let moved = obj_x + edge - chr.pos[0];
+        chr.pos[0] += moved;
+        chr.at[0] += moved;
+    }
+    if step & 2 != 0 {
+        let edge = if to_z >= 0 { -reach_z } else { reach_z };
+        let moved = obj_z + edge - chr.pos[2];
+        chr.pos[2] += moved;
+        chr.at[2] += moved;
+    }
+    oma_get_on_om(objects, chr, on)
 }
 
 /// `Oma_ob_pull2` (`0x4CEDE0`): a character whose box is outside the
@@ -987,6 +1043,93 @@ pub fn oma_ob_pull2(chr: &mut CharBox, obj: &ObjectRecord, max: u32) {
         chr.pos[2] += moved;
         chr.at[2] += moved;
     }
+}
+
+/// `Sca_ck_hit_om` (`0x4E07E0`) with a nonzero `exclude`: as
+/// [`sca_ck_hit_om`], and each wall record the box touches pushes its box
+/// (`Atd X` and `Z`, not its position) out of it (`Sca_hit_box`, from
+/// `Sca_old`). The records after a push are still tested from the position.
+pub fn sca_ck_hit_om_push(obj: &mut ObjectRecord, sca: &crate::state::Sca, exclude: u16) -> u16 {
+    if obj.be_flg & 8 != 0 {
+        return 0;
+    }
+    let (atw_x, atw_z) = obj.atw();
+    let centre = [i32::from(atw_x) + obj.pos[0], i32::from(atw_z) + obj.pos[2]];
+    let cell = crate::sca::area(sca, centre[0], centre[1]);
+    let (w, d) = obj.half_size();
+    let (w, d) = (i32::from(w), i32::from(d));
+    let mut hit = 0;
+    for record in &sca.records {
+        if record.kind & cell == 0 {
+            continue;
+        }
+        let in_x = ((centre[0] + w - i32::from(record.x)) as u32)
+            < u32::from(record.width) + (w * 2) as u32;
+        let in_z = ((centre[1] + d - i32::from(record.z)) as u32)
+            < u32::from(record.depth) + (d * 2) as u32;
+        if !in_x
+            || !in_z
+            || record.id & 0x4000 == 0
+            || exclude & record.id != 0
+            || record.floor & (1u32 << (obj.floor & 31)) == 0
+        {
+            continue;
+        }
+        if record.shape() == 10 {
+            hit |= SCA_HIT_HOLE;
+        } else {
+            if exclude != 0 {
+                let prev = [i32::from(obj.sca_old[0]), 0, i32::from(obj.sca_old[1])];
+                let mut at = obj.at;
+                crate::sca::hit_box(record, prev, &mut at, [w, d]);
+                obj.at[0] = at[0];
+                obj.at[2] = at[2];
+            }
+            hit |= SCA_HIT_WALL;
+        }
+    }
+    hit
+}
+
+/// `Om_move_box`'s state, which the original keeps in globals
+/// (`0x9813EC..0x9813F2`, `0x689B10..0x689B24`): one fall at a time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct BoxFall {
+    /// The way the box falls, `x` and `z`, each -1, 0 or 1 (`0x9813F0`).
+    pub dir: [i16; 2],
+    /// `Cdir_x` and `Cdir_z` as the fall began (`0x9813EC`); nothing reads
+    /// them.
+    pub cdir: [i16; 2],
+    /// The tilt so far, toward `0x400` (`0x689B12`).
+    pub tilt: i16,
+    /// The tilt's step, and what each tick adds to it (`0x689B1C`, `0x689B18`).
+    pub tilt_step: i16,
+    pub tilt_accel: i16,
+    /// The slide's step, and what each tick adds to it (`0x689B1E`, `0x689B14`).
+    pub slide: i16,
+    pub slide_accel: i16,
+    /// The drop's step from the thirteenth tick (`0x689B10`).
+    pub drop: i16,
+    /// The box went under the water (`0x689B16`); nothing reads it.
+    pub wet: bool,
+    /// The ground the thirteenth tick found (`0x689B1A`).
+    pub ground: i16,
+    /// This tick's turn, `Rot_add_matrix`'s vector (`0x689B20`).
+    pub turn: [i16; 3],
+}
+
+/// `Om_set_fall_dir` (`0x4CD580`): a box falls away from the player, along z
+/// when they are within 900 of each other in x, else along x. A difference of
+/// 0 counts as +1.
+pub fn om_set_fall_dir(fall: &mut BoxFall, obj: &ObjectRecord, player: [i32; 3]) {
+    let dx = (obj.pos[0] as i16).wrapping_sub(player[0] as i16);
+    let sign = |v: i16| (v >> 15) | 1;
+    fall.dir = if i32::from(dx).abs() < 900 {
+        [0, sign((obj.pos[2] as i16).wrapping_sub(player[2] as i16))]
+    } else {
+        [sign(dx), 0]
+    };
+    fall.cdir = [obj.rotation[0], obj.rotation[2]];
 }
 
 /// `nFloor` of a height, as `Om_move` takes it: `Pos_y / -1800`, toward 0.
@@ -1078,6 +1221,8 @@ pub struct ObjectTable {
     /// The pair the last `obj` bound, the original's `DAT_00bca0d4`
     /// last-model cache that gates the palette fix-ups.
     pub last_asset: Option<u8>,
+    /// `Om_move_box`'s state, which the original keeps in globals.
+    pub box_fall: BoxFall,
     /// What each slot carries into the next room: RE2's `Set_room` and
     /// `Sce_model_init` clear only `Be_flg` and `Free0`, so `Old`, `Old2`,
     /// `Push_cnt`, `At_obj_no` and `At_sce_no` stay in the slot. Kept by slot, so a smaller
@@ -1107,6 +1252,7 @@ impl ObjectTable {
             records: vec![ObjectRecord::default(); slot_count],
             built: 0,
             last_asset: None,
+            box_fall: BoxFall::default(),
             carried: Vec::new(),
             no_model: 0,
         }
@@ -1258,6 +1404,8 @@ impl ObjectTable {
             tween: TweenScratch::default(),
             super_parent: SuperParent::World,
             world: Mat4x3::default(),
+            sca_old: [0; 2],
+            turn_matrix: None,
         };
         self.built = self.built.wrapping_add(1);
         self.last_asset = Some(slot as u8);
@@ -2468,25 +2616,16 @@ mod tests {
         // `box_203`: walking -z on the top, Leon stops at -25636.
         let edge = BOX_AT_Z - 450;
         let mut leon = leon_at([-18700, -1800, edge - 4], [-18700, -1800, edge + 76]);
-        let pull = oma_pull(&objects, &mut leon, 0, Some(0));
+        assert_eq!(oma_pull(&objects, &mut leon, 0, Some(0)), Some(0));
         assert_eq!(leon.pos, [-18700, -1800, edge]);
         assert_eq!(leon.at[2], edge, "the box moves with the body");
-        assert_eq!(
-            pull,
-            Pull {
-                on_object: Some(0),
-                next_box: false
-            }
-        );
         // Outside last frame too: the climb's approach isn't pulled.
         let mut leon = leon_at([-18700, -1800, edge - 4], [-18700, -1800, edge - 2]);
         oma_pull(&objects, &mut leon, 0, Some(0));
         assert_eq!(leon.pos[2], edge - 4);
-        // A second box of the same height reports the hand-over.
+        // A box of the same height far off, behind him, or off to the side
+        // takes no part: the step is pulled back.
         let next = box_203(BOX_Z - 1350);
-        let mut leon = leon_at([-18700, -1800, edge - 4], [-18700, -1800, edge + 76]);
-        assert!(oma_pull(&[objects[0], next], &mut leon, 0, Some(0)).next_box);
-        // Not one of the same height far off, behind him, or off to the side.
         for next in [
             box_203(BOX_Z - 3000),
             box_203(BOX_Z + 1350),
@@ -2496,8 +2635,60 @@ mod tests {
             },
         ] {
             let mut leon = leon_at([-18700, -1800, edge - 4], [-18700, -1800, edge + 76]);
-            assert!(!oma_pull(&[objects[0], next], &mut leon, 0, Some(0)).next_box);
+            assert_eq!(
+                oma_pull(&[objects[0], next], &mut leon, 0, Some(0)),
+                Some(0)
+            );
+            assert_eq!(leon.pos, [-18700, -1800, edge]);
         }
+    }
+
+    /// Two of room 306's boxes (900 square, tops at -5400) side by side
+    /// along x, 1800 apart: a bridge.
+    fn bridge() -> [ObjectRecord; 2] {
+        let crate_at = |x: i32| {
+            placed(ObjectRecord {
+                flag: OBJECT_FLAG_ACTIVE,
+                pos: [x, -3600, -26081],
+                be_flg: 0x181,
+                id: 2,
+                atd2: ObjectAtd {
+                    ofs: [0, -900, 0],
+                    at_w: 900,
+                    at_h: 900,
+                    at_d: 900,
+                },
+                ..ObjectRecord::default()
+            })
+        };
+        [crate_at(-20617), crate_at(-22417)]
+    }
+
+    #[test]
+    fn oma_pull_hands_the_player_over_to_the_next_box() {
+        let objects = bridge();
+        // Walking -x across the gap from box 0's top onto box 1's: box 0's
+        // inner edge is at -20617 - 675.
+        let edge = -20617 - 675;
+        let mut leon = leon_at([edge - 10, -5400, -26081], [edge + 30, -5400, -26081]);
+        let on = oma_pull(&objects, &mut leon, 0, Some(0));
+        // Past box 0's edge onto the seam with box 1, both tops under the
+        // player: not pulled back, still on box 0.
+        assert_eq!(leon.pos, [edge - 10, -5400, -26081]);
+        assert_eq!(on, Some(0));
+        // With no box next to it, the same step is pulled back.
+        let mut leon = leon_at([edge - 10, -5400, -26081], [edge + 30, -5400, -26081]);
+        assert_eq!(oma_pull(&objects[..1], &mut leon, 0, Some(0)), Some(0));
+        assert_eq!(leon.pos, [edge, -5400, -26081]);
+        // Off the bridge's side (z) at the seam: `Oma_pull_hosei_z` puts the
+        // player back on box 0's side edge, and x stays past its end.
+        let side = -26081 + 675;
+        let mut leon = leon_at([edge - 10, -5400, side + 10], [edge + 30, -5400, side - 30]);
+        oma_pull(&objects, &mut leon, 0, Some(0));
+        assert_eq!(leon.pos, [edge - 10, -5400, side]);
+        // Far enough that box 1 takes the player: its own top.
+        let mut leon = leon_at([-22417 + 600, -5400, -26081], [-22417 + 640, -5400, -26081]);
+        assert_eq!(oma_pull(&objects, &mut leon, 0, Some(0)), Some(1));
     }
 
     #[test]

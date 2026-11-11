@@ -178,12 +178,23 @@ pub fn resolve_with_offset(
 /// one pushed, out of the side the body came from. Its far edge rounds an odd
 /// size down, as the original halves it.
 fn push_box(record: &ScaRect, prev: [i32; 3], pos: &mut [i32; 3], radius: i32) -> bool {
+    hit_box(record, prev, pos, [radius, radius])
+}
+
+/// `Sca_hit_box` (`0x4E0A00`) for a body `half` wide in x and z (`W` and
+/// `D`) at `pos`, that was at `prev` (`Sca_old_x` and `Sca_old_z`).
+pub(crate) fn hit_box(
+    record: &ScaRect,
+    prev: [i32; 3],
+    pos: &mut [i32; 3],
+    [half_x, half_z]: [i32; 2],
+) -> bool {
     let (x, z) = (i32::from(record.x), i32::from(record.z));
     let (width, depth) = (i32::from(record.width), i32::from(record.depth));
-    let old_x = prev[0] as i16 as i32 + radius - x;
-    let old_z = prev[2] as i16 as i32 + radius - z;
-    let span_x = width + radius * 2;
-    let span_z = depth + radius * 2;
+    let old_x = prev[0] as i16 as i32 + half_x - x;
+    let old_z = prev[2] as i16 as i32 + half_z - z;
+    let span_x = width + half_x * 2;
+    let span_z = depth + half_z * 2;
     let outside = |old: i32, span: i32| old < 0 || old >= span;
     let mut clear_x = outside(old_x, span_x);
     let mut clear_z = outside(old_z, span_z);
@@ -193,12 +204,12 @@ fn push_box(record: &ScaRect, prev: [i32; 3], pos: &mut [i32; 3], radius: i32) -
     if old_z == -1 || old_z == span_z + 1 {
         (clear_x, clear_z) = (false, true);
     } else if !clear_x && !clear_z {
-        leave_box(record, prev, pos, radius);
+        leave_box(record, prev, pos, [half_x, half_z]);
         return true;
     }
     if clear_x {
         let half = width >> 1;
-        let reach = half + 1 + radius;
+        let reach = half + 1 + half_x;
         let reach = if pos[0] - prev[0] as i16 as i32 >= 0 {
             -reach
         } else {
@@ -208,7 +219,7 @@ fn push_box(record: &ScaRect, prev: [i32; 3], pos: &mut [i32; 3], radius: i32) -
     }
     if clear_z {
         let half = depth >> 1;
-        let reach = half + 1 + radius;
+        let reach = half + 1 + half_z;
         let reach = if pos[2] - prev[2] as i16 as i32 >= 0 {
             -reach
         } else {
@@ -227,16 +238,16 @@ const LEAVE_AGAINST_MOTION: i32 = 0x321;
 /// A body already inside a box (`FUN_004e0980`, `FUN_004e0b40`) leaves by the
 /// nearer side on each axis. It takes the one shorter way out, and if that's
 /// too far for how it was moving it goes back to where it was.
-fn leave_box(record: &ScaRect, prev: [i32; 3], pos: &mut [i32; 3], radius: i32) {
+fn leave_box(record: &ScaRect, prev: [i32; 3], pos: &mut [i32; 3], [half_x, half_z]: [i32; 2]) {
     let (x, z) = (i32::from(record.x), i32::from(record.z));
     let nearer = |low: i32, high: i32| if -low < high { low } else { high };
     let out_x = nearer(
-        x - pos[0] - radius - 1,
-        i32::from(record.width) - pos[0] + x + 1 + radius,
+        x - pos[0] - half_x - 1,
+        i32::from(record.width) - pos[0] + x + 1 + half_x,
     );
     let out_z = nearer(
-        z - pos[2] - radius - 1,
-        i32::from(record.depth) - pos[2] + z + 1 + radius,
+        z - pos[2] - half_z - 1,
+        i32::from(record.depth) - pos[2] + z + 1 + half_z,
     );
     let moved_x = pos[0] - prev[0] as i16 as i32;
     let moved_z = pos[2] - prev[2] as i16 as i32;

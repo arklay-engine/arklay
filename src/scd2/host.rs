@@ -2590,6 +2590,8 @@ impl GameHost<'_> {
             push_cnt: kept.push_cnt,
             at_sce_no: kept.at_sce_no,
             at_obj_no: kept.at_obj_no,
+            // `Obj_model_set` doesn't write `Sca_old_x`/`_z` (`+0x118`).
+            sca_old: record.sca_old,
             ..crate::objects::ObjectRecord::default()
         };
         record.set_super_parent(parent);
