@@ -6595,6 +6595,18 @@ impl GameState {
         for index in 0..self.objects.records.len() {
             self.sce_at_check(AreaCaller::Object(index), OBJECT_AREA_MASK, false);
         }
+        // The partner's `Water` (`+0x10C`) is cleared before her walk, and a
+        // water area with her bit sets it again.
+        if let Some(partner) = self
+            .re2
+            .characters
+            .0
+            .get_mut(crate::scd2::host::SPLAYER_SLOT)
+            .and_then(|slot| slot.as_deref_mut())
+            && partner.be_flg & 1 != 0
+        {
+            partner.work.water = 0;
+        }
         self.sce_at_check(
             AreaCaller::Character(crate::scd2::host::SPLAYER_SLOT),
             PARTNER_AREA_MASK,
@@ -6653,7 +6665,9 @@ impl GameState {
     /// bit 0).
     fn area_caller_at(&self, caller: AreaCaller) -> Option<([i32; 3], u16, u8)> {
         match caller {
-            AreaCaller::Player { pos, angle } => Some((pos, angle, crate::sca::floor_of(pos[1]))),
+            // The player's `nFloor`, which the climb and the jump change on
+            // their own frames rather than with the height.
+            AreaCaller::Player { pos, angle } => Some((pos, angle, self.re2.player.floor)),
             AreaCaller::Object(index) => {
                 let record = self.objects.records.get(index)?;
                 (record.be_flg & 1 != 0).then_some((
@@ -6668,10 +6682,12 @@ impl GameState {
                     return None;
                 }
                 let pos = character.body.pos;
-                let floor = character
-                    .zombie
-                    .as_ref()
-                    .map_or_else(|| crate::sca::floor_of(pos[1]), |zombie| zombie.floor);
+                let floor = match (&character.zombie, &character.partner) {
+                    (Some(zombie), _) => zombie.floor,
+                    // The partner's `nFloor`, which her climb and jump keep.
+                    (None, Some(_)) => character.work.floor,
+                    (None, None) => crate::sca::floor_of(pos[1]),
+                };
                 Some((pos, character.body.angle, floor))
             }
         }
@@ -6689,7 +6705,7 @@ impl GameState {
     /// back. With `press`, the first hit whose kind isn't `SCE_AUTO` is
     /// recorded, runs and ends the walk. The handlers that act on the caller
     /// itself (`Sce_Water`, `Sce_Move`, `Sce_Damage`) run only for the
-    /// player. Returns whether a press area fired.
+    /// player, but for `Sce_Water` the partner's too. Returns whether a press area fired.
     fn sce_at_check(&mut self, caller: AreaCaller, mask: u8, press: bool) -> bool {
         use crate::scd2::host::{
             SCE_AUTO, SCE_DAMAGE, SCE_MOVE, SCE_WATER, VAR_BODY_AREA, VAR_FORWARD_AREA,
@@ -6754,6 +6770,15 @@ impl GameState {
             let on_caller = matches!(room_action.sce, SCE_WATER | SCE_DAMAGE | SCE_MOVE);
             if is_player || !on_caller {
                 self.fire_re2_area(room_action);
+            } else if room_action.sce == SCE_WATER
+                && let AreaCaller::Character(index) = caller
+                && index == crate::scd2::host::SPLAYER_SLOT
+                && let Some(partner) = self.re2.characters.0[index].as_deref_mut()
+            {
+                // `Sce_Water` writes the caller's `Water`. Only the partner's
+                // is modelled.
+                partner.work.water =
+                    i16::from_le_bytes([room_action.params[0], room_action.params[1]]);
             }
             // Only the action pass returns on its hit: the other walk goes on
             // past a door it or the action pass queued, as `Sce_Door`

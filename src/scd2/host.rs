@@ -1234,6 +1234,29 @@ impl Re2State {
         format!("{d0},{d1},{d2},{s0},{s1},{s2}|{rows}")
     }
 
+    /// The `spc` field: the partner's climb and water words, `-` with no
+    /// character there. `Water` (`+0x10C`), `nFloor` (`+0x106`), `Damage_cnt`
+    /// (`+0x1D3`) and `Be_flg`'s 4.
+    pub fn partner_climb_trace(&self) -> String {
+        let Some(character) = self
+            .characters
+            .0
+            .get(SPLAYER_SLOT)
+            .and_then(|character| character.as_deref())
+            .filter(|character| character.zombie.is_none() && character.id >= 0x40)
+        else {
+            return "-".to_string();
+        };
+        let work = &character.work;
+        format!(
+            "{},{},{},{}",
+            work.water,
+            work.floor,
+            work.damage_cnt,
+            character.be_flg & crate::partner2::BE_CLIMBING
+        )
+    }
+
     /// The `spl` field: `splayer_work`'s own words for `Spl_Auto`, `-` with no
     /// character there. `Type`, the follow point, its state, distance and
     /// wall turn, the wall and touch counts, the wait, `Timer0` to `Timer3`,
@@ -2197,6 +2220,10 @@ impl GameHost<'_> {
         };
         let mut work = crate::player2::Work::default();
         work.routine = [0; 4];
+        if !zombie {
+            // `nFloor` (`+0x106`), which the partner's climb and jump keep.
+            work.floor = at(5) as u8;
+        }
         let kind = (at(3) as u16) | (at(4) as u16) << 8;
         if zombie {
             work.kind = kind;
@@ -5003,6 +5030,39 @@ mod tests {
         assert_eq!(game.re2.player.water, -180);
         game.interact([0, 0, 10000], 2048, false);
         assert_eq!(game.re2.player.water, 0);
+    }
+
+    /// Room 402's channel (`aot_set 0, 7, 79, ...`, level -700): `Sat`'s 8
+    /// is the partner's, so `Sce_at`'s pass for `splayer_work` gives Sherry
+    /// the water's level while she is in it and clears it once she is out. An
+    /// area without the bit leaves her dry. Her `sce_em_set` floor is her
+    /// `nFloor`, which the areas test.
+    #[test]
+    fn a_water_area_with_the_partners_bit_sets_sherrys_water() {
+        let water = |sat: i64, x: i32| {
+            let mut game = GameState::default();
+            game.is_re2_room = true;
+            let sherry = [
+                0, 255, 0x45, 0, 4, 1, 32, 0, 255, -26179, -1800, -9642, 249, 0, 0,
+            ];
+            exec(&mut game, "sce_em_set", &sherry);
+            let ops = [
+                0, 7, sat, 0, 0, -18245, -27441, 4500, 22600, 68, 253, 0, 0, 0, 0,
+            ];
+            let mut host = GameHost { game: &mut game };
+            host.exec(0, crate::scd2::opcode::lookup(0x2C).unwrap(), &ops);
+            // Down in the channel, as her jump leaves her: floor 0.
+            let partner = game.re2.characters.0[SPLAYER_SLOT].as_mut().unwrap();
+            assert_eq!(partner.work.floor, 1, "`sce_em_set`'s floor");
+            partner.body.pos = [x, 0, -20000];
+            partner.work.floor = 0;
+            game.interact([-26000, -1800, -9000], 2048, false);
+            let partner = game.re2.characters.0[SPLAYER_SLOT].as_ref().unwrap();
+            partner.work.water
+        };
+        assert_eq!(water(79, -16000), -700);
+        assert_eq!(water(79, -26000), 0);
+        assert_eq!(water(79 & !8, -16000), 0);
     }
 
     #[test]

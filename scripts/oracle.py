@@ -69,6 +69,7 @@ class Tick:
     splayer: str | None = None
     partner: str | None = None
     partner_enemies: str | None = None
+    partner_climb: str | None = None
     music: str | None = None
     zombies: str | None = None
     # RE2's `zp` field: the enemies' hidden parts and `Poly_rgb`.
@@ -133,6 +134,7 @@ OPT_IN_FIELDS = {
     "scene",
     "scv",
     "snd",
+    "spc",
     "spe",
     "spl",
     "sv",
@@ -293,6 +295,7 @@ def parse_trace(path: str) -> list[Tick]:
                     splayer=fields.get("es"),
                     partner=fields.get("spl"),
                     partner_enemies=fields.get("spe"),
+                    partner_climb=fields.get("spc"),
                     music=fields.get("bgm"),
                     zombies=fields.get("zm"),
                     zombie_parts=fields.get("zp"),
@@ -342,6 +345,8 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
         items.append(("spl", ",".join(values[:11] + values[13:])))
     if tick.partner_enemies is not None:
         items.append(("spe", tick.partner_enemies))
+    if tick.partner_climb is not None:
+        items.append(("spc", tick.partner_climb))
     if tick.music is not None:
         items.append(("bgm", tick.music))
     if tick.neck_position is not None:

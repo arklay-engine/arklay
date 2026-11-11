@@ -1,0 +1,17 @@
+# Sherry as Claire's partner in room 402's sewer channel, from a warp onto the walkway with the partner flag (1:3): `main_05` places her
+# at (-26179, -1800, -9642) on floor 1 (her place when the room before isn't 304, as after a warp). The channel is room 402's water
+# area (`aot_set 0`, level -700), with a box to climb out of it to the west and the walkway's edge to jump down from.
+
+[[run]]
+name = "sherry_402_climb"
+room = "402"
+player = 1
+character = 1
+sound = false
+ticks = 1050
+input = "sherry_402_climb.txt"
+input_shift = 344
+setup = { pos = [-24000, -1800, -10200], angle = 0, health = 200, rnd = 6114, camera = 0, flags = [[1, 3]] }
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,es,spl,spc,fgstat"
+expect = "match"
+record = "--start claire --warp 402:-24000:-1800:-10200:0:0 --flag 1:3 --life 200"

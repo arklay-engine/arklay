@@ -40,6 +40,15 @@ pub fn floor_of(y: i32) -> u8 {
     ((900 - y) / FLOOR_HEIGHT).clamp(0, 31) as u8
 }
 
+/// `nFloor` as the jump down (`pl_mv_09`, `Aida_mv09`) works it out from a
+/// height, with `0x6e5d4c3b`'s multiply: `-y / 1800`, toward zero, so a body
+/// on its way down is on the lower floor from its first tick off the edge.
+pub fn floor_toward_zero(y: i32) -> u8 {
+    let high = ((i64::from(y) * 0x6E5D_4C3B) >> 32) as i32;
+    let x = high.wrapping_sub(y);
+    ((x >> 10) - (x >> 31)) as u8
+}
+
 /// The result of one collision pass.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Resolved {
@@ -1029,6 +1038,21 @@ pub fn stairs_ends(stairs: &ScaRect) -> (i32, i32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_jumps_floor_is_minus_y_over_1800_toward_zero() {
+        for (y, floor) in [
+            (0, 0),
+            (100, 0),
+            (-1250, 0),
+            (-1799, 0),
+            (-1800, 1),
+            (-3599, 1),
+            (-3600, 2),
+        ] {
+            assert_eq!(floor_toward_zero(y), floor, "{y}");
+        }
+    }
 
     #[test]
     fn a_climbable_box_answers_its_height_and_bits() {
