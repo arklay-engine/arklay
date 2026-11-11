@@ -871,6 +871,11 @@ end
 -- the tactics layer engages only what is in front. Returns "done" or
 -- "busy"; the planner's job.timeout ends it.
 local FIGHT_RANGE = C.FIGHT_RANGE
+-- A fight step with no round held for its enemy this long fails
+-- (BotNav.hold_fight), with this reason: a readiness hold the planner does
+-- not force.
+local UNARMED_TICKS = 5 * C.SECOND
+BotNav.NO_ROUNDS = "not ready for the fight: no round left for it"
 
 -- Whether knowledge enemy `entry` never attacks: no reach, no speed and no
 -- grab (30C's web).
@@ -959,6 +964,21 @@ function BotNav.hold_fight(bot, job)
     local entry = k.enemies and k.enemies[job.enemy]
     local hand = entry and entry.prefer and k.weapons[entry.prefer]
     local band = hand and hand.melee and bot:has_item(entry.prefer) and entry.keep[entry.prefer]
+    -- No round left for any gun that hurts it: the step fails, held back
+    -- like a fight the bot is not ready for, so the planner goes for
+    -- ammunition and comes back (a forced fight, BotPlanner's
+    -- forgive_fight, checks no readiness). Seed 33 spent its three acid
+    -- rounds on 30C's Black Tiger and dodged its spit for 9000 ticks, the
+    -- flame rounds lying next door, until the run was ended.
+    if not band and not BotTactics.active() and not BotTactics.any_round_for(bot, job.enemy) then
+        job.unarmed = (job.unarmed or 0) + 1
+        if job.unarmed > UNARMED_TICKS then
+            job.reason = BotNav.NO_ROUNDS
+            return "failed"
+        end
+    else
+        job.unarmed = nil
+    end
     if band then
         if target.distance > band.max then
             job.stand = job.stand or BotNav.stand_near(bot, target, band.min, band.max)
