@@ -670,6 +670,9 @@ function BotSave.on_death(bot)
     local s = state()
     if not s.death_logged then
         s.death_logged = true
+        -- The lesson the reload keeps (BotNav.died_key).
+        local room = bot:room().id
+        bot:remember(BotNav.died_key(room), tostring(BotNav.died_in(bot, room) + 1))
         bot:log(string.format("died: loading the save in slot %d (room %s, tick %s)",
             saves.slot, tostring(saves.room), tostring(saves.tick)))
     end

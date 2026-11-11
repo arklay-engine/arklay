@@ -2622,6 +2622,10 @@ local function choose(bot)
         if boss_rooms[id] then
             cost = cost + BOSS_ROOM_COST
         end
+        -- So does a room the bot died in and has not left alive since
+        -- (BotNav.died_in), for each death: the box's gear first
+        -- (BotInventory's GEAR), or another way while there is one.
+        cost = cost + BotNav.died_in(bot, id) * BOSS_ROOM_COST
         if hurt_now then
             local h = BotTactics.hurt_count(id)
             cost = cost + (h > MONSTER_CAP and MONSTER_CAP or h) * HURT_ROOM_COST
@@ -3093,7 +3097,8 @@ local function choose(bot)
             order = order + 1
             local label = string.format("the item box in %s (%s)", box.room, box_why)
             local heal = (hurt and box_why:find("no heal item held", 1, true) ~= nil)
-                or box_why:find(BotInventory.CURE, 1, true) ~= nil or nil
+                or box_why:find(BotInventory.CURE, 1, true) ~= nil
+                or box_why:find(BotInventory.GEAR, 1, true) ~= nil or nil
             consider({
                 cost = box.cost - (heal and HEAL_BONUS or BOX_BONUS) + route_monsters(box.steps),
                 order = order, door = first,

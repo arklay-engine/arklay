@@ -672,6 +672,7 @@ local function firearm(bot, k, enemy, crowd, trap)
         end
     end
     local margin = 1 + 0.5 * (1 - risk(bot))
+    local died = BotNav.died_in(bot, bot:room().id) > 0
     -- An ordinary gun holds the rounds for the kill, with the margin.
     -- With a crowd it holds the rounds for all of them: 509's four naked
     -- zombies met a handgun holding enough for one, the launcher's spare
@@ -730,6 +731,10 @@ local function firearm(bot, k, enemy, crowd, trap)
                 if finish then
                     spare = spare - stage_fight_rounds(bot, k, base)
                 end
+            elseif died then
+                -- So does a room the bot died in (BotNav.died_in): the
+                -- same kit spent the same way dies there again.
+                spare = family_rounds(bot, k, base)
             end
             if spare < row.rounds then
                 row.rounds = spare
@@ -743,7 +748,7 @@ local function firearm(bot, k, enemy, crowd, trap)
     -- reserve leave: 308's hunters took the rounds 513's Tyrant needed.
     local crowd_n = crowd and #crowd or 0
     for _, row in ipairs(guns) do
-        if row.reserve and crowd_n >= 2 and not trap then
+        if row.reserve and crowd_n >= 2 and not trap and not died then
             local base = row.base or row.item
             if family_rounds(bot, k, base) - BotTactics.saved_rounds(bot, k, base, nil, swamped) <= 0 then
                 crowd_n = 0

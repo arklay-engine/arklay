@@ -42,6 +42,34 @@ function BotNav.fight_met(bot, fight)
     return bot:memory()[BotNav.fight_met_key(fight.room, fight.enemy)] ~= nil
 end
 
+-- The memory key (bot:remember) of the deaths in `room` not answered yet:
+-- set when the bot dies there (BotSave.on_death), kept past the reload
+-- like a met fight (the engine keeps the `died:` keys), and cleared once
+-- the bot walks out of the room alive (init.lua). While it stands the
+-- box's heals and rounds are worth a trip (BotInventory.context's gear),
+-- a route through the room costs more (BotPlanner) and its fights spend
+-- the reserve (BotTactics).
+local DIED_PREFIX = "died:"
+
+function BotNav.died_key(room)
+    return DIED_PREFIX .. room
+end
+
+-- How often the bot has died in `room` since it last left it alive.
+function BotNav.died_in(bot, room)
+    return tonumber(bot:memory()[BotNav.died_key(room)]) or 0
+end
+
+-- Whether any room holds such a lesson.
+function BotNav.died_anywhere(bot)
+    for key, value in pairs(bot:memory()) do
+        if string.sub(key, 1, #DIED_PREFIX) == DIED_PREFIX and (tonumber(value) or 0) > 0 then
+            return true
+        end
+    end
+    return false
+end
+
 function BotNav.abs(value)
     if value < 0 then
         return -value
