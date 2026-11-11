@@ -1773,6 +1773,8 @@ local KITE_DASH = C.WARP_DISTANCE * 2
 local KITE_TURN_WAIT = 2 * C.SECOND // 3
 local KITE_REACH = C.REACH + C.APPROACH // 2
 local KITE_FETCH_TICKS = 3 * C.SECOND
+-- How long a kite runs on with no gun and nothing to fetch before it is lost.
+local KITE_LOST = 20 * C.SECOND
 local KITE_TURN_TICKS = 8
 local KITE_STEER_MAX = C.FULL_TURN // 12
 local KITE_QUICK_FROM = C.FULL_TURN * 5 // 16
@@ -2265,6 +2267,24 @@ local function kite_step(bot, s, player)
         return true
     elseif kk.mode == "fetch" then
         set_mode("run", "fetch off")
+    end
+    -- No gun with a round, and none to fetch here: the fight is lost. The
+    -- room holds the bot until it ends, so the run would go on for good
+    -- (513's tyrant walked the bot round its ring for 240000 ticks, the
+    -- launcher's rounds in the box). The bot stands: the death loads the
+    -- last save, and the met fight then asks the box for its loadout
+    -- (BotInventory.context) before the bot comes back. Not while the
+    -- killing weapon is still to come (`open`: 303's rocket launcher).
+    local to_come = entry.prefer and entry.open and not bot:has_item(entry.prefer)
+    if not gun and not goal and not to_come then
+        kk.lost = kk.lost or now
+        if now - kk.lost >= KITE_LOST then
+            set_mode("lost", "no gun, and none to fetch")
+            bot:face_to(e.x, e.z)
+            return true
+        end
+    else
+        kk.lost = nil
     end
     -- The stop's gun: the killing weapon when held; from past the charge's
     -- edge, combat's own pick (the launcher's rounds land while the gap is
