@@ -1650,6 +1650,9 @@ impl Mover<'_, '_> {
         {
             self.set_routine(MOVE_QUICK_TURN);
         }
+        // The hands as the last tick drew them (`Workm`), before the
+        // branches and the analog stick turn the player.
+        let wading = self.wading_parts();
         match self.work.routine[1] {
             MOVE_IDLE => self.pl_br_idle(key),
             MOVE_FORWARD => self.pl_br_forward(key),
@@ -1666,10 +1669,10 @@ impl Mover<'_, '_> {
         }
         match self.work.routine[1] {
             MOVE_IDLE => self.pl_mv_idle(),
-            MOVE_FORWARD => self.pl_mv_forward(),
-            MOVE_RUN => self.pl_mv_run(),
-            MOVE_BACKWARD => self.pl_mv_backward(),
-            MOVE_ROTATE => self.pl_mv_rotate(),
+            MOVE_FORWARD => self.pl_mv_forward(wading.as_ref()),
+            MOVE_RUN => self.pl_mv_run(wading.as_ref()),
+            MOVE_BACKWARD => self.pl_mv_backward(wading.as_ref()),
+            MOVE_ROTATE => self.pl_mv_rotate(wading.as_ref()),
             MOVE_AIM => self.pl_mv_aim(key),
             MOVE_ITEM => self.pl_mv_item(),
             MOVE_STAIRS => self.pl_mv_stairs(),
@@ -3286,6 +3289,18 @@ impl Mover<'_, '_> {
                 });
             }
         }
+        self.hand_splashes(hand14, drawn);
+    }
+
+    /// The splashes off the hands (parts 11 and 14) the water reaches: one
+    /// `Esp_call` kind 0x1a, row 0, 300 along each hand's matrix, while
+    /// `Water` is within 300 of part 11 and `hand14` of part 14. Each one's
+    /// size is a `Rnd` (`* 4 + 0x60C`), which waits for
+    /// [`Work::water_draws`]. `drawn` is [`Mover::drawn_parts`] from before
+    /// the move, since the original reads the parts' `Workm`.
+    fn hand_splashes(&mut self, hand14: i32, drawn: &DrawnParts) {
+        let water = self.work.water;
+        let dir = self.player.angle as i16;
         for (hand, reach) in [(drawn[1], 300), (drawn[2], hand14)] {
             let Some(hand) = hand else {
                 continue;
@@ -3468,7 +3483,7 @@ impl Mover<'_, '_> {
         self.joint_move();
     }
 
-    fn pl_mv_forward(&mut self) {
+    fn pl_mv_forward(&mut self, drawn: Option<&DrawnParts>) {
         if self.work.routine[2] == 0 {
             self.start_motion(Bank::Weapon, self.life_clip(&WALK_CLIPS));
             self.work.noise |= 2;
@@ -3479,10 +3494,11 @@ impl Mover<'_, '_> {
             self.work.noise |= 2;
         }
         self.footstep(0);
+        self.wading_splashes(drawn);
         self.add_speed_xz();
     }
 
-    fn pl_mv_run(&mut self) {
+    fn pl_mv_run(&mut self, drawn: Option<&DrawnParts>) {
         if self.work.routine[2] == 0 {
             self.start_motion(Bank::Weapon, self.life_clip(&RUN_CLIPS));
             self.work.noise |= 4;
@@ -3493,6 +3509,7 @@ impl Mover<'_, '_> {
             self.work.noise |= 4;
         }
         self.footstep(1);
+        self.wading_splashes(drawn);
         if self.work.d_life_u < 2 {
             self.work.spd[0] = self.work.spd[0].wrapping_sub(RUN_SLOWDOWN);
         }
@@ -3502,7 +3519,7 @@ impl Mover<'_, '_> {
     /// `pl_mv03` (`0x4da7c0`). Every 15 ticks, unhurt, it swaps to the clip
     /// that looks at an enemy while one is in view, and back when none is,
     /// keeping the frame (the plain clip's on a multiple of 7).
-    fn pl_mv_backward(&mut self) {
+    fn pl_mv_backward(&mut self, drawn: Option<&DrawnParts>) {
         if self.work.routine[2] == 0 {
             self.start_motion(Bank::Pld, self.life_clip(&BACK_CLIPS));
             self.work.back_look = false;
@@ -3536,6 +3553,7 @@ impl Mover<'_, '_> {
             self.work.noise |= 2;
         }
         self.footstep(0);
+        self.wading_splashes(drawn);
         self.add_speed_xz();
     }
 
@@ -3574,7 +3592,7 @@ impl Mover<'_, '_> {
 
     /// `pl_mv_04` (`0x4DAE70`): the turn on the spot. Its footfalls are a
     /// step's noise (`0x989EEE |= 2`), which a listening licker hears.
-    fn pl_mv_rotate(&mut self) {
+    fn pl_mv_rotate(&mut self, drawn: Option<&DrawnParts>) {
         if self.work.routine[2] == 0 {
             self.start_motion(Bank::Weapon, self.life_clip(&ROTATE_CLIPS));
             self.work.spd = [0; 3];
@@ -3584,6 +3602,25 @@ impl Mover<'_, '_> {
             self.work.noise |= 2;
         }
         self.footstep(0);
+        self.wading_splashes(drawn);
+    }
+
+    /// The walk's, run's, back step's and turn's splashes in water
+    /// (`pl_mv_01`, `_02`, `_03` and `_04`, after `Snd_se_walk`): off the
+    /// hands, within 300 of both, on odd `Move_cnt` (the frame `Joint_move`
+    /// has just moved to).
+    fn wading_splashes(&mut self, drawn: Option<&DrawnParts>) {
+        if let Some(drawn) = drawn
+            && self.work.move_cnt & 1 != 0
+        {
+            self.hand_splashes(300, drawn);
+        }
+    }
+
+    /// [`Mover::drawn_parts`] for [`Mover::wading_splashes`], taken before
+    /// the tick turns or moves the player, and only in water.
+    fn wading_parts(&self) -> Option<DrawnParts> {
+        (self.work.water != 0).then(|| self.drawn_parts())
     }
 
     /// `pl_mv06` (`0x4DAFF0`): the crouching pick-up. Sub 0 and 1 play the
@@ -7321,6 +7358,187 @@ mod tests {
         setup.tick(left, 200);
         assert_eq!(setup.work.routine[1], MOVE_ROTATE);
         assert_ne!(setup.work.noise & 2, 0, "a footfall's noise");
+    }
+
+    /// A setup in water `water` whose skeleton has parts 11 and 14 (the
+    /// hands) on the root, at heights `hand11` and `hand14`.
+    fn wading(water: i16, hand11: i16, hand14: i16) -> Setup {
+        let mut setup = Setup::new(10);
+        (setup.clips, setup.keyframes) = bank(10, 40, 10);
+        for keyframe in &mut setup.keyframes {
+            keyframe.rotations = vec![[0; 3]; 15];
+        }
+        setup.skeleton.relative = vec![[0; 3]; 15];
+        setup.skeleton.relative[11] = [-200, hand11, 0];
+        setup.skeleton.relative[14] = [200, hand14, 0];
+        setup.skeleton.children = vec![Vec::new(); 15];
+        setup.skeleton.children[0] = vec![11, 14];
+        setup.work.water = water;
+        setup.seed();
+        setup
+    }
+
+    /// Runs `ticks` ticks of `input` and gives, for each, `Move_cnt` after
+    /// the move, the `Esp_call`s it made (with their `Rnd` drawn from `rnd`)
+    /// and the `Rnd` draws they took.
+    fn wade(
+        setup: &mut Setup,
+        input: Input,
+        ticks: usize,
+        rnd: &mut crate::zombie2::Rnd,
+    ) -> Vec<(u8, Vec<EffectCall>, Vec<u16>)> {
+        (0..ticks)
+            .map(|_| {
+                setup.tick(input, 200);
+                let before = *rnd;
+                setup.work.water_draws(rnd);
+                let effects = std::mem::take(&mut setup.work.effects);
+                let mut replay = before;
+                let mut draws = Vec::new();
+                while replay != *rnd && draws.len() < 16 {
+                    draws.push(u16::from(replay.draw()));
+                }
+                (setup.work.move_cnt, effects, draws)
+            })
+            .collect()
+    }
+
+    fn turn_left() -> Input {
+        Input {
+            left: true,
+            ..Input::default()
+        }
+    }
+
+    fn walk_forward() -> Input {
+        Input {
+            up: true,
+            ..Input::default()
+        }
+    }
+
+    /// `pl_mv_01`'s, `_02`'s, `_03`'s and `_04`'s splashes: in water within
+    /// 300 of a hand, on each odd `Move_cnt`, one `Esp_call(Rnd() * 4 +
+    /// 0x60C | 0x1A000000)` off part 11, then one off part 14, 300 down each
+    /// hand's matrix as the last tick drew it, and nothing on even ones.
+    #[test]
+    fn the_walk_and_the_turn_splash_off_the_hands_on_odd_frames_in_deep_water() {
+        let run = Input {
+            up: true,
+            run: true,
+            ..Input::default()
+        };
+        for (input, routine) in [
+            (walk_forward(), MOVE_FORWARD),
+            (turn_left(), MOVE_ROTATE),
+            (run, MOVE_RUN),
+            (back(), MOVE_BACKWARD),
+        ] {
+            let mut setup = wading(-800, -900, -900);
+            setup.player.pos = [1000, 0, 2000];
+            setup.seed();
+            let mut rnd = crate::zombie2::Rnd::default();
+            let mut odd = 0;
+            for tick in 0..12 {
+                let angle = setup.player.angle;
+                let hands = {
+                    let bank = (setup.clips.as_slice(), setup.keyframes.as_slice());
+                    let tick = Tick {
+                        room: &setup.room,
+                        skeleton: &setup.skeleton,
+                        morphs: &[],
+                        banks: Banks {
+                            pld: bank,
+                            weapon: bank,
+                            room: bank,
+                            held: bank,
+                        },
+                        input,
+                        options: Options::default(),
+                        id: 0,
+                        life: 200,
+                        poisoned: false,
+                        stopped: false,
+                        weapon: setup.weapon,
+                        necks: [None; NECK_WORKS],
+                        targets: &[],
+                        neck_targets: &[],
+                        enemies: 0,
+                        pushing: false,
+                        key_trg: 0,
+                    };
+                    let mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
+                    [
+                        mover.part_point(11, [0, 300, 0]),
+                        mover.part_point(14, [0, 300, 0]),
+                    ]
+                };
+                let [(move_cnt, effects, draws)] =
+                    <[_; 1]>::try_from(wade(&mut setup, input, 1, &mut rnd)).unwrap();
+                assert_eq!(setup.work.routine[1], routine, "tick {tick}");
+                if move_cnt & 1 == 0 {
+                    assert!(
+                        effects.is_empty(),
+                        "{routine}: an even frame splashes nothing"
+                    );
+                    assert!(draws.is_empty(), "{routine}: nor draws");
+                    continue;
+                }
+                odd += 1;
+                assert_eq!(draws.len(), 2, "{routine}: a draw for each hand");
+                let dir = setup.player.angle as i16;
+                let expected: Vec<_> = (0..2)
+                    .map(|hand| {
+                        // The hands the last tick drew, before this
+                        // tick's move.
+                        let at = hands[hand].expect("a drawn hand");
+                        EffectCall {
+                            kind: 0x1A,
+                            row: 0,
+                            size: draws[hand] * 4 + 0x60C,
+                            dir,
+                            at: at.map(|axis| axis as i16),
+                            motion: None,
+                        }
+                    })
+                    .collect();
+                assert_eq!(effects, expected, "{routine}, tick {tick}");
+                if routine != MOVE_ROTATE {
+                    assert_eq!(angle as i16, dir, "{routine}: the walks don't turn");
+                }
+            }
+            assert!(odd >= 5, "{routine}: {odd} odd frames");
+        }
+    }
+
+    /// Each hand splashes only while the water is within 300 of it.
+    #[test]
+    fn a_wading_splash_wants_the_water_within_300_of_the_hand() {
+        // Part 11 at -500 (within 300 from -200), part 14 at -900 (from -600).
+        for (water, splashes) in [(-400, 1), (-700, 2), (-180, 0), (-150, 0)] {
+            let mut setup = wading(water, -500, -900);
+            let mut rnd = crate::zombie2::Rnd::default();
+            for (move_cnt, effects, draws) in wade(&mut setup, walk_forward(), 6, &mut rnd) {
+                let expected = if move_cnt & 1 != 0 { splashes } else { 0 };
+                assert_eq!(effects.len(), expected, "water {water}, frame {move_cnt}");
+                assert_eq!(draws.len(), expected, "water {water}, frame {move_cnt}");
+            }
+        }
+    }
+
+    /// Out of the water (`Water` 0) the walk and the turn splash nothing and
+    /// draw nothing, though `0 < hand + 300` would hold.
+    #[test]
+    fn out_of_the_water_the_walk_and_the_turn_splash_nothing() {
+        for input in [walk_forward(), turn_left()] {
+            let mut setup = wading(0, 0, 0);
+            let mut rnd = crate::zombie2::Rnd::default();
+            for (_, effects, draws) in wade(&mut setup, input, 6, &mut rnd) {
+                assert!(effects.is_empty());
+                assert!(draws.is_empty());
+            }
+            assert_eq!(rnd, crate::zombie2::Rnd::default());
+        }
     }
 
     #[test]
