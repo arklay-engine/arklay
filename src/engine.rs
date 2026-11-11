@@ -38476,7 +38476,7 @@ end
         game.re2.script_door = true;
         assert!(game.re2.character_stopped(0));
         let mut vm = crate::scd2::vm::Vm::new(&crate::scd2::Scripts::default());
-        run_re2_init(Some(&mut vm), &Default::default(), &mut game);
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game, false);
         assert!(!game.re2.script_door);
         assert!(!game.re2.character_stopped(0));
     }
