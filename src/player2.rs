@@ -8111,56 +8111,99 @@ mod tests {
         assert_eq!(setup.work.neck.position, Some([100, -1700, 200]));
     }
 
-    /// Mark every frame of every clip a footfall.
-    fn all_footfalls(setup: &mut Setup) {
+    /// The one frame of each clip marked a footfall in the noise tests.
+    const FOOTFALL_FRAME: usize = 3;
+
+    /// Mark frame [`FOOTFALL_FRAME`] of every clip a footfall, and no other.
+    fn one_footfall(setup: &mut Setup) {
         for clip in &mut setup.clips {
-            for frame in &mut clip.frames {
-                frame.flags = FRAME_FOOTSTEP;
+            for (index, frame) in clip.frames.iter_mut().enumerate() {
+                frame.flags = if index == FOOTFALL_FRAME {
+                    FRAME_FOOTSTEP
+                } else {
+                    0
+                };
             }
         }
     }
 
-    /// The noise each tick leaves, while `running` holds, for up to 200 ticks.
-    fn noises(setup: &mut Setup, running: impl Fn(&Work) -> bool) -> Vec<u8> {
+    /// Tick once: whether the frame the routine tests is the footfall (the
+    /// one `Joint_move` leaves when `after`, else the one it starts from),
+    /// and the noise the tick leaves.
+    fn footfall_tick(setup: &mut Setup, after: bool) -> (bool, u8) {
+        let before = setup.work.now_seq & FRAME_FOOTSTEP != 0;
+        setup.tick(Input::default(), 200);
+        let after_move = setup.work.now_seq & FRAME_FOOTSTEP != 0;
+        (if after { after_move } else { before }, setup.work.noise)
+    }
+
+    /// [`footfall_tick`] while `running` holds, for up to 200 ticks.
+    fn footfall_ticks(
+        setup: &mut Setup,
+        after: bool,
+        running: impl Fn(&Work) -> bool,
+    ) -> Vec<(bool, u8)> {
         let mut seen = Vec::new();
         for _ in 0..200 {
             if !running(&setup.work) {
                 break;
             }
-            setup.tick(Input::default(), 200);
-            seen.push(setup.work.noise);
+            seen.push(footfall_tick(setup, after));
         }
         seen
     }
 
+    /// `noise` is made on the ticks of `seen` whose frame is the footfall,
+    /// and only on them; `seen` has ticks of both kinds.
+    fn assert_noise_on_footfalls(seen: &[(bool, u8)], noise: u8, what: &str) {
+        assert!(
+            seen.iter().any(|&(footfall, _)| footfall),
+            "{what}: no footfall: {seen:?}"
+        );
+        assert!(
+            seen.iter().any(|&(footfall, _)| !footfall),
+            "{what}: only footfalls: {seen:?}"
+        );
+        for (tick, &(footfall, made)) in seen.iter().enumerate() {
+            assert_eq!(
+                made & noise != 0,
+                footfall,
+                "{what}: tick {tick} of {seen:?}"
+            );
+        }
+    }
+
+    /// `pl_mv_07` tests the frame after `Joint_move`.
     #[test]
     fn a_stairs_footfall_is_a_runs_noise() {
         let mut setup = at_stairs([1500, 0, 700], 0xC00);
-        all_footfalls(&mut setup);
+        one_footfall(&mut setup);
         setup.tick(action(), 200);
         assert_eq!(setup.work.routine[1], MOVE_STAIRS);
-        let seen = noises(&mut setup, |work| work.routine[1] == MOVE_STAIRS);
-        assert!(seen.iter().any(|noise| noise & NOISE_RUN != 0), "{seen:?}");
+        let seen = footfall_ticks(&mut setup, true, |work| work.routine[1] == MOVE_STAIRS);
+        assert_noise_on_footfalls(&seen, NOISE_RUN, "the stairs");
     }
 
+    /// `pl_mv_08` tests the frame after `Joint_move`.
     #[test]
     fn a_climbs_footfall_is_a_runs_noise() {
         let mut setup = Setup::new(0);
         (setup.clips, setup.keyframes) = bank(10, 60, 0);
-        all_footfalls(&mut setup);
+        one_footfall(&mut setup);
         setup.work.routine = [MODE_MOVE, MOVE_CLIMB, 0, 2];
-        let seen = noises(&mut setup, |work| work.routine[1] == MOVE_CLIMB);
-        assert!(seen.iter().any(|noise| noise & NOISE_RUN != 0), "{seen:?}");
+        let seen = footfall_ticks(&mut setup, true, |work| work.routine[1] == MOVE_CLIMB);
+        assert_noise_on_footfalls(&seen, NOISE_RUN, "the climb");
     }
 
     /// `Spl_sce_mv01`'s turn and `Spl_sce_mv02`'s walk make a step's noise,
-    /// and `Spl_sce_mv02`'s run a run's.
+    /// and `Spl_sce_mv02`'s run a run's, testing the frame before
+    /// `Joint_move`.
     #[test]
     fn a_scripted_walks_footfalls_are_steps_and_a_runs_are_runs() {
         for (routine, noise) in [(4, NOISE_STEP), (5, NOISE_RUN)] {
             let mut setup = Setup::new(50);
             (setup.clips, setup.keyframes) = bank(10, 40, 10);
-            all_footfalls(&mut setup);
+            one_footfall(&mut setup);
             setup.player.pos = [0, 0, 0];
             setup.player.angle = 0x800;
             plc_dest(&mut setup.work, 0, routine, 7, 4000, 0);
@@ -8171,37 +8214,32 @@ mod tests {
                     break;
                 }
                 let phase = setup.work.routine[2];
-                setup.tick(Input::default(), 200);
-                if phase == 2 { &mut walk } else { &mut turn }.push(setup.work.noise);
+                let seen = footfall_tick(&mut setup, false);
+                if phase == 2 { &mut walk } else { &mut turn }.push(seen);
             }
+            assert_noise_on_footfalls(&turn, NOISE_STEP, "the turn");
             assert!(
-                turn.iter().any(|n| n & NOISE_STEP != 0),
-                "the turn: {turn:?}"
+                walk.iter()
+                    .all(|(_, made)| made & (NOISE_STEP | NOISE_RUN) & !noise == 0),
+                "the walk makes only its own noise: {walk:?}"
             );
-            assert!(
-                walk.iter().all(|n| n & NOISE_RUN == noise & NOISE_RUN),
-                "{walk:?}"
-            );
-            assert!(walk.iter().any(|n| n & noise != 0), "the walk: {walk:?}");
+            assert_noise_on_footfalls(&walk, noise, "the walk");
         }
     }
 
     /// `Spl_sce_mv04`'s clip and `Spl_sce15`'s turn (`Spl_sce_mv03`) make a
-    /// step's noise.
+    /// step's noise, testing the frame before `Joint_move`.
     #[test]
     fn a_scripted_clip_and_turn_make_a_steps_noise() {
         for routine in [0x0A, 0x15] {
             let mut setup = Setup::new(50);
             (setup.clips, setup.keyframes) = bank(10, 40, 10);
-            all_footfalls(&mut setup);
+            one_footfall(&mut setup);
             setup.player.angle = 0;
             setup.work.routine = [MODE_SCENARIO, routine, 0, 0];
             setup.work.dest = [0x800, 64];
-            let seen = noises(&mut setup, |work| work.routine[1] == routine);
-            assert!(
-                seen.iter().any(|noise| noise & NOISE_STEP != 0),
-                "{routine:#x}: {seen:?}"
-            );
+            let seen = footfall_ticks(&mut setup, false, |work| work.routine[1] == routine);
+            assert_noise_on_footfalls(&seen, NOISE_STEP, &format!("{routine:#x}"));
         }
     }
 
