@@ -1,0 +1,91 @@
+# Leon A from room 113, as leon_a_10c_113 leaves him at 114's door 0's arrival, to room 10A: past 113's zombies to door 1, through the library's ground floor (112), along 110's corridors past its three zombies and through 10F (oracle/re2.md, "Leon A to the Diamond Key")
+0
+# 113 (114's door 0's arrival): run north up the west side past the lying zombies (area 16 wakes them, event 6) and east along the north strip before they are up, to door 1
+345 up run left
+376 up run right
+394 up run
+398 up run left
+399 up run
+400 up run left
+401 up run
+402 up run left
+405 up run
+408 up run left
+409 up run right
+427 up run
+457 up run right
+458 up run
+482 up run left
+494
+496 left
+# door 1: room 112 loads on 537, play comes back on 842
+502 action
+504
+# 112: east of the floor that gives way (area 3), to door 0
+842 up run
+858 up run right
+859 up run
+862 up run right
+874 up run
+877 up run right
+878 up run
+902 up run right
+903 up run
+907 up run right
+908 up run
+913 up run right
+914 up run
+917 up run right
+918 up run
+926 up run left
+927 up run
+937
+# door 0: room 110 loads on 974, play comes back on 1307
+939 action
+941
+# 110: north up the west corridor, east along the north corridor and south down the east corridor past its three zombies, to door 0
+1307 up run left
+1333 up run
+1336 up run right
+1339 up run
+1342 up run right
+1343 up run
+1402 up run right
+1403 up run
+1409 up run right
+1426 up run
+1442 up run right
+1443 up run
+1528 up run right
+1529 up run
+1533 up run left
+1534 up run right
+1551 up run
+1639 up run right
+1640 up run
+1702 up run right
+1703 up run
+1707 up run left
+1737
+1739 right
+# door 0: room 10F loads on 1782, play comes back on 2099
+1747 action
+1749
+# 10F: east to door 0
+2099 up run left
+2107 up run
+2121 up run right
+2127 up run
+2133 up run right
+2134 up run
+2146 up run left
+2147 up run
+2149 up run right
+2151 up run
+2157 up run left
+2159 up run
+2161
+2163 right
+# door 0: room 10A loads on 2200, play comes back on 2507
+2165 action
+2167
