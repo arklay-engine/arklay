@@ -2765,9 +2765,12 @@ mod tests {
             .map(|entry| (entry.fact.slot, entry.fact.item, entry.fact.flag))
             .collect();
         assert_eq!(chris_105, vec![(8, 0x20, (1, 0xA8))]);
+        // Without a character both games' facts load: Chris's 105 use, his
+        // 10C herbicide, his 10F score and wood emblem, and his two 501
+        // battery uses (the `jill` parameter's).
         assert_eq!(
             load_facts(&pack, None, None).unwrap().uses.len(),
-            uses.len() + 1
+            uses.len() + 6
         );
     }
 
@@ -2970,12 +2973,16 @@ mod tests {
                 ("20D", ErrandKind::Deliver { cut: 3 }),
             ]
         );
-        assert!(
-            load_facts(&pack, Some(false), None)
-                .unwrap()
-                .errands
-                .is_empty(),
-            "Jill's only"
+        // Chris's game has the same serum errand, on his own flags: the
+        // shelf's 0x2D and 0x2E in 100, Richard's 0x63 in 20D.
+        let chris = load_facts(&pack, Some(false), None).unwrap().errands;
+        let flags: Vec<(&str, (u8, u8))> = chris
+            .iter()
+            .map(|entry| (entry.room.as_str(), entry.fact.flag))
+            .collect();
+        assert_eq!(
+            flags,
+            vec![("100", (1, 0x2D)), ("100", (1, 0x2E)), ("20D", (1, 0x63))]
         );
     }
 

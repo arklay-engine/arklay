@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 206, the doll room. Chris's game: the upstairs radio call (common
+     0x36, armed in 10A once Richard is dead or after a slow serum run)
+     starts timer W_04. The first 206 entry after it sets 0x67 at 180
+     seconds or less and the hunter attacks Rebecca, or 0x68 past it and
+     the hunter kills her (common 0xC0). Killing hunter 1 (enemy bit 0x6F)
+     ends the attack (0x6C, 0x6D): she lives. Leaving to 204 before then
+     sets 0x6B, and 204's init sets 0xC0. Never entering 206 before the
+     caves loses her too (307's init).
+
+     rebecca=save: come back here once the call is due and fight the
+     hunter. rebecca=leave: 204 keeps out after the call; entered during
+     the attack anyway, walk out by door 0 to 204. -->
+<bot format="2">
+  <revisit bank="1" bit="0x36" while="set" character="chris" when="rebecca=save"
+           label="Rebecca's upstairs call: 206 within 180 seconds"/>
+  <fight enemy="0x06" bank="3" bit="0x6F" after_bank="1" after_bit="0x67" character="chris"
+         when="rebecca=save" label="the hunter attacking Rebecca"/>
+  <leave slot="0" bank="1" bit="0x67" until_bank="1" until_bit="0x6C" character="chris"
+         when="rebecca=leave" label="out to 204 during the hunter attack: Rebecca dies"/>
+</bot>

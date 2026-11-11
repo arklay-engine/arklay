@@ -15,4 +15,6 @@
 <bot format="2">
   <deliver item="0x42" cut="3" bank="1" bit="0x61" after_bank="1" after_bit="0x62"
            character="jill" when="richard=save" label="the serum to Richard"/>
+  <deliver item="0x42" cut="3" bank="1" bit="0x63" after_bank="1" after_bit="0x62"
+           character="chris" when="richard=save" label="the serum to Richard"/>
 </bot>

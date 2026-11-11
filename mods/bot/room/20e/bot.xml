@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 20E, the passage before the attic. Chris's game: door 0 leads to 20D
+     (Richard) and door 3 to the save room, 100. Under
+     rebecca_meet=save_room door 0 is held shut until Rebecca is met in
+     100 (common 0x24); under rebecca_meet=richard door 3 until Richard is
+     found in 20D (common 0x62). -->
+<bot format="2">
+  <avoid slot="0" bank="1" bit="0x24" while="clear" character="chris"
+         when="rebecca_meet=save_room"
+         reason="rebecca_meet=save_room: meet Rebecca in 100 before Richard"/>
+  <avoid slot="3" bank="1" bit="0x62" while="clear" character="chris"
+         when="rebecca_meet=richard"
+         reason="rebecca_meet=richard: find Richard in 20D before the save room"/>
+</bot>
