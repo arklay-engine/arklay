@@ -2709,19 +2709,10 @@ function BotTactics.step(bot, scene, player)
     if not scene.controllable or player.grabbed then
         return false
     end
-    if spit_dodge(bot, s, player) then
-        return true
-    end
-    if kite_step(bot, s, player) then
-        return true
-    end
-    if player.state == 1 and dodge(bot, s, player) then
-        s.aim_ticks = 0
-        return true
-    end
     local room = bot:room().id
     -- A boss seen in its <fight>'s room is met (BotNav.fight_met): what the
-    -- bot carries and saves now counts it.
+    -- bot carries and saves now counts it. Before the kite takes the tick:
+    -- behind it, 513's Tyrant was never met in 96 runs.
     if s.met_tick ~= s.now // C.SECOND then
         s.met_tick = s.now // C.SECOND
         for _, fight in ipairs(bot:fight_facts()) do
@@ -2735,6 +2726,16 @@ function BotTactics.step(bot, scene, player)
                 end
             end
         end
+    end
+    if spit_dodge(bot, s, player) then
+        return true
+    end
+    if kite_step(bot, s, player) then
+        return true
+    end
+    if player.state == 1 and dodge(bot, s, player) then
+        s.aim_ticks = 0
+        return true
     end
     if s.room ~= room then
         stop(bot, s, "left the room")
