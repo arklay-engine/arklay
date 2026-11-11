@@ -19,6 +19,8 @@ expect = "match"
 ignore = [
   # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 115's door 0, 114's door 2 and 10C's door 0
   [422, "rng"], [422, "rseed"], [864, "rng"], [864, "rseed"], [1598, "rng"], [1598, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [457, 547, "hk"], [899, 989, "hk"], [1633, 1725, "hk"],
 ]
 record = "--warp 115:-23037:0:-19397:2107:2 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:48 --flag 4:70 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --life 156 --give 0:2:2 --give 2:0x14:38 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x47:1"
 
@@ -40,6 +42,8 @@ expect = "match"
 ignore = [
   # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 207's door 1, 205's door 0 and 204's door 0
   [436, "rng"], [436, "rseed"], [1086, "rng"], [1086, "rseed"], [1622, "rng"], [1622, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [471, 561, "hk"], [1121, 1211, "hk"],
 ]
 record = "--warp 207:-23650:0:-8000:2048:2 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:48 --flag 4:70 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --life 156 --give 0:2:2 --give 2:0x14:38 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x47:1"
 
@@ -62,5 +66,7 @@ expect = "match"
 ignore = [
   # the door's own tick (oracle/re2.md, docs/internals/deviations/re2.md): 201's door 0
   [470, "rng"], [470, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [505, 595, "hk"],
 ]
 record = "--warp 201:-26492:0:-25629:0:4 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:48 --flag 4:70 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --life 156 --give 0:2:2 --give 2:0x14:38 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x47:1"
