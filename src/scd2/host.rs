@@ -6026,7 +6026,8 @@ mod tests {
         assert_eq!(game.re2.banks, flags);
     }
 
-    /// Room 108's area 4 is `Sce_Status` (kind 12): event 7's closing
+    /// Room 108's area 4 is `Sce_Status` (kind 12), set by
+    /// `2c 04 0c 51 00 00` with an empty box and no data: event 7's closing
     /// `aot_on 4` opens the status screen on the next tick, as START does,
     /// and changes nothing else.
     #[test]
@@ -6035,7 +6036,7 @@ mod tests {
         exec(
             &mut game,
             "aot_set",
-            &[4, SCE_STATUS.into(), 81, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0],
+            &[4, 0x0c, 0x51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         );
         let flags = game.re2.banks;
         exec(&mut game, "aot_on", &[4]);

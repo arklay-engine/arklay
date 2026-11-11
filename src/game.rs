@@ -3309,6 +3309,10 @@ pub struct GameState {
     /// START opened RE2's status screen this tick: `Game_loop` leaves for game
     /// mode 1 before the moves (`0x4C03A9`), so no one moves this tick.
     pub re2_status_start: bool,
+    /// The scripts set `Game` on the tick a START was pressed
+    /// (`Sce_Status`, `Sce_Windows`), so `Game_loop` didn't take it: the
+    /// next tick drops the menu request.
+    pub re2_status_start_dropped: bool,
     /// RE2's item box lid (`Item_box_entrance`), whose state byte and saved
     /// `fg_stop` the typewriter's back routine shares.
     pub re2_box_entrance: itembox2::Entrance,
@@ -3849,6 +3853,7 @@ impl Default for GameState {
             pad_repeat: pad_repeat::PadRepeat::default(),
             re2_items_start: None,
             re2_status_start: false,
+            re2_status_start_dropped: false,
             re2_box_entrance: itembox2::Entrance::default(),
             re2_back: save2::BackRoutine::None,
             re2_save_place: 0,

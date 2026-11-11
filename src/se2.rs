@@ -834,17 +834,21 @@ mod tests {
 
     #[test]
     fn flr_set_turns_a_floor_zone_on_and_off() {
-        // Room 109's puddle (zone 1, sound 0x1a) loads switched off; its
-        // event's `flr_set(1, 1)` turns it on.
-        let zone = |base_x: i16, sound_data, flags| crate::state::FootstepZone {
-            base_x: base_x as u16,
-            base_z: (-14000i16) as u16,
-            width: 12900,
-            height: 3290,
+        // Room 109's (`ROOM1090.RDT`) first two zones: the floor, and the
+        // puddle (sound 0x1a), which loads switched off; its event's
+        // `flr_set(1, 1)` turns it on.
+        let zone = |x: i16, z: i16, width, height, sound_data, flags| crate::state::FootstepZone {
+            base_x: x as u16,
+            base_z: z as u16,
+            width,
+            height,
             sound_data,
             flags,
         };
-        let mut zones = [zone(-29300, 0x1d, 0), zone(-13430, 0x1a, 0x80)];
+        let mut zones = [
+            zone(-29300, -27600, 31130, 29410, 0x1d, 0),
+            zone(-13430, -14000, 12900, 3290, 0x1a, 0x80),
+        ];
         let (x, z) = (-3079, -12450);
         assert_eq!(floor_sound(&zones, x, z, 0), 0x1d);
         flr_set(&mut zones, 1, 1);
