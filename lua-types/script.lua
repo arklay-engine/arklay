@@ -39,9 +39,11 @@
 ---  for it, and the run ends when the script returns.
 ---- **One tick is one app update**, the unit `--ticks` counts: a fixed
 ---  30 Hz tick while a room plays, a 16 ms step on a UI screen.
----- **Deterministic.** The game options of the user's `arklay.toml` and the
----  installed mods are ignored, and the run options are the oracle runs'
----  unless the script sets them in [`load_game_pack`](#load_game_pack). No
+---- **Deterministic.** The game options of the user's `arklay.toml` are
+---  ignored, and the run options are the oracle runs' unless the script sets
+---  them in [`load_game_pack`](#load_game_pack). A `--headless` run also
+---  ignores the installed mods; a windowed run layers them (an HD pack, say)
+---  as a normal launch does, unless `user_mods = false`. No
 ---  audio device opens and no film plays. In-game saves go to a scratch
 ---  directory that is removed at the end of the run, unless `save_dir` names
 ---  one.
@@ -57,7 +59,8 @@
 ---  run nobody opens a menu in plays the ticks a `--headless` run plays.
 ---  The window's own warnings (a renderer falling back to software, an
 ---  option not saved) are printed but never fail a strict run. Closing the
----  window fails the run. Where no window can open, the run fails
+---  window, or Quit in the in-game menu, ends the run as `exit(0)` does.
+---  Where no window can open, the run fails
 ---  and says to pass `--headless`.
 ---- **Output.** Only [`print`](#print) writes to stdout. Engine messages and
 ---  warnings go to stderr.
@@ -109,7 +112,7 @@ game = {}
 ---load_game_pack("re2.akpak", { difficulty = "hard", mods = { "mods/hd.akpak" } })
 ---```
 ---@param path string The game pack: the id of an installed pack (`"re1"`, `"re2"`), found under the data roots' `games/` folders as the launcher finds it, or a path to an `.akpak`.
----@param options? { mods?: string[], language?: string, save_dir?: string, quick_turn?: boolean, tactical_reload?: boolean, authentic?: boolean, auto_aim?: boolean, blood?: boolean, difficulty?: "normal"|"easy"|"hard", arrange?: boolean } `mods` are the mod layers to apply in order (none by default); `language` the pack language to use; `save_dir` where in-game saves go (default: a scratch directory removed at exit). The rest are the run options, as the command-line flags of the same names set them: all off by default except `auto_aim` and `blood`, and `difficulty` defaults to `normal`. An unknown key is an error.
+---@param options? { mods?: string[], user_mods?: boolean, language?: string, save_dir?: string, quick_turn?: boolean, tactical_reload?: boolean, authentic?: boolean, auto_aim?: boolean, blood?: boolean, difficulty?: "normal"|"easy"|"hard", arrange?: boolean } `mods` are the mod layers to apply in order (none by default); `user_mods` also layers the user's installed mods under them, as `arklay.toml` selects them for a normal launch (default: on with a window, off with `--headless`); `language` the pack language to use; `save_dir` where in-game saves go (default: a scratch directory removed at exit). The rest are the run options, as the command-line flags of the same names set them: all off by default except `auto_aim` and `blood`, and `difficulty` defaults to `normal`. An unknown key is an error.
 function load_game_pack(path, options) end
 
 ---Boot a room directly, like `arklay PACK --room ROOM`: a fresh game state
