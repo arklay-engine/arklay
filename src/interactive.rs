@@ -42,10 +42,13 @@ use crate::state::{Image, RoomState};
 /// The screens by the system flag that selects them, in the dispatcher's
 /// test order. A pack without a screen's script shows nothing for it.
 pub const SCREENS: [(u8, &str); 3] = [
-    (0x1d, "interactive/passcode_panel.lua"),
+    (0x1d, PASSCODE_PANEL),
     (0x1e, COMPUTER_LAB),
     (0x1f, "interactive/slides.lua"),
 ];
+
+/// The guardhouse number panel's script (room 408).
+pub const PASSCODE_PANEL: &str = "interactive/passcode_panel.lua";
 
 /// The lab computer terminal's script (room 5060).
 pub const COMPUTER_LAB: &str = "interactive/computer_lab.lua";
@@ -1630,7 +1633,7 @@ mod tests {
 
     // ---- room 408's numeric panel ------------------------------------------
 
-    const PANEL: &str = "interactive/passcode_panel.lua";
+    const PANEL: &str = PASSCODE_PANEL;
 
     /// Room 408 with the panel up: the shipped script, six cameras, the
     /// gate raised and system flag 0x1D selecting the panel.
@@ -1788,6 +1791,23 @@ mod tests {
         let texts = scene.0.interactive.texts();
         assert_eq!(label(texts, b'5'), Some((0x9B, 0xA8, 1)));
         assert_eq!(label(texts, b'1').map(|l| l.2), Some(3));
+        // The published view, the panel's contract with the player bot.
+        let view = scene
+            .0
+            .interactive
+            .view(PANEL)
+            .expect("the panel publishes s.view");
+        assert_eq!(view.bool("active"), Some(true), "{view:?}");
+        assert_eq!((view.int("x"), view.int("y")), (Some(1), Some(1)));
+        let shown: Vec<bool> = (1..=9)
+            .map(|i| {
+                matches!(
+                    view.field("lamps").and_then(|l| l.index(i)),
+                    Some(ScriptValue::Bool(true))
+                )
+            })
+            .collect();
+        assert_eq!(shown, lamps(&scene.0));
     }
 
     /// The key set that lights every lamp from `lamps`.

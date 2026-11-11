@@ -1,11 +1,12 @@
--- The guardhouse's number panel (room 408, src/engine/passcode_panel.rs):
+-- The guardhouse's number panel (room 408, games/re1/interactive/passcode_panel.lua):
 -- a 3x3 pad whose keys each flip their own lamp and their orthogonal
 -- neighbours'; lighting all nine solves it. bot:scene().panel reads it
 -- ({active, x, y, lamps}: the cursor's column and row, the nine lamps row
 -- by row). The bot works out which keys light the pad (each key at most
 -- once; the order does not matter), walks the cursor to the first and
--- presses it, one pad edge every other tick, and plans again after each
--- press. The prompt that opens the pad is the scene handler's (Yes).
+-- presses it, one game-pad edge (D-pad or action) every other tick, and
+-- plans again after each press. The prompt that opens the pad is the scene
+-- handler's (Yes).
 
 BotPanel = BotPanel or {}
 
@@ -79,17 +80,19 @@ function BotPanel.step(bot, scene)
         return true
     end
     local row, col = key // SIDE, key % SIDE
+    -- The screen reads the game pad (its D-pad edges and the action key),
+    -- as the lab terminal does, not the menus' UI keys.
     local edge
     if view.y < row then
-        edge = "down_pressed"
+        edge = "down"
     elseif view.y > row then
-        edge = "up_pressed"
+        edge = "up"
     elseif view.x < col then
-        edge = "right_pressed"
+        edge = "right"
     elseif view.x > col then
-        edge = "left_pressed"
+        edge = "left"
     else
-        edge = "confirm"
+        edge = "action"
         bot:log(string.format("panel: press key %d", key + 1))
     end
     bot:set_input({ [edge] = true })

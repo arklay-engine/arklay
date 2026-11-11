@@ -74,6 +74,14 @@
 ---| `cell` | The keyboard cursor's cell, `row * 8 + column`. |
 ---| `menu_row` | The door menu's highlighted row: 0 and 1 the cell doors, 2 exit. |
 ---
+---The guardhouse number panel publishes:
+---
+---| Field | Meaning |
+---|---|---|
+---| `active` | Whether the pad takes input: the prompt was answered Yes and the pad is not yet solved. |
+---| `x`, `y` | The cursor's column and row, `0..=2`. |
+---| `lamps` | The nine lamps, row-major, `true` when lit. |
+---
 ---## Errors
 ---
 ---A screen whose `display` raises an error, runs out of its instruction

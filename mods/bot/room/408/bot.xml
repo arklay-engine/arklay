@@ -4,7 +4,7 @@
      main turns it back into the door once scenario 0x21 is set. 0x21 is
      the number panel beside the door: AOT 4 raises the interactive-screen
      gate (scenario 0x20) and init's system bit 0x1D picks the panel
-     (src/engine/passcode_panel.rs). Lighting all nine keys sets 0x21.
+     (games/re1/interactive/passcode_panel.lua). Lighting all nine keys sets 0x21.
      Until then the door is avoided: each retry walked the bot back through
      the room's wasps. The panel is only for the V-JOLT branch, once the
      V-JOLT report (40A, item bit 0x4E) is taken: before it, 409's taps give
