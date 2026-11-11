@@ -43,7 +43,3 @@ api:set_item_slot(2, 0x14, 38)
 api:set_item_slot(3, 0x1E, 3)
 api:set_item_slot(4, 0x33, 1)
 api:set_item_slot(5, 0x47, 1)
--- Room 114's slot 2 starts with the Dest its work's memory holds in the original, -32768, -32768
--- (docs/internals/deviations/re2.md, "What a zombie's slot held before"); the reference has it on
--- the room's first tick (`zd`).
-api:set_re2_enemy_dest("114:2", -32768, -32768)

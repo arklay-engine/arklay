@@ -386,6 +386,9 @@ function HookApi:set_re2_no_enemies(keep) end
 
 ---Set the `Dest` the next zombie placed in that slot of that room starts
 ---with, which the original takes from whatever its new work's memory held.
+---arklay follows that memory from a new game's rooms (`heap2`), so only a
+---run that starts from a warp or a save, whose memory isn't known, needs it;
+---it wins over what arklay's memory holds.
 ---@param pair string `"ROOM:SLOT"`, the room in three hex digits.
 ---@param x integer
 ---@param z integer

@@ -36,6 +36,7 @@
 //! | `Common/Sound/{arms,enemy,core}/*.EDH` | `sound/<kind>/<id>/bank.edh` |
 //! | RDT sections 0 and 1 (sound table, VAB header) | `room/<id>/sound.edh` |
 //! | `Common/DOOR/DOOR<nn>.DO2` | `door/<nn>.do2` |
+//! | `ROOM<id>.RDT`, `EM<s><id>.TIM` and `Common/Sound/BGM/{MAIN,SUB_}<nn>.BGM`, as they are | `heap/<id>.rdt`, `heap/em<s><id>.tim`, `heap/{main,sub_}<nn>.bgm`: what the original loads into `Work_buffer` ([`crate::heap2`]) |
 //! | `Zmovie`, `Pl{0,1}/Zmovie` `*.bin` | `movie/<stem>.mpg` |
 //! | `Pl0/PLD/PDEMO0n.DAT`, `Pl1/PLD/PDEMO1n.DAT` | `demo/<nn>.dat` |
 //!
@@ -502,6 +503,13 @@ pub(crate) fn convert(
         for (entry, data) in files {
             tally.add(&mut writer, "room", &entry, data)?;
         }
+        // The bytes the original loads into `Work_buffer` (`crate::heap2`).
+        tally.add(
+            &mut writer,
+            "heap",
+            &crate::heap2::rdt_entry(&id.code()),
+            room.bytes.clone(),
+        )?;
         match crate::rdt2::effect_container(&room.bytes) {
             Ok(Some(body)) => {
                 let entry = format!("room/{folder}/{}", crate::esp2::ROOM_ENTRY);
@@ -1202,6 +1210,20 @@ fn copy_enemies(
     progress.begin("enemy", files.len() as u64);
     for (entry, (path, _)) in files {
         let data = read(&path)?;
+        if let Some((id, disc)) = entry
+            .strip_suffix(".tim")
+            .and_then(|stem| stem.strip_prefix("enemy/"))
+            .and_then(|rest| rest.split_once("/enemy_"))
+            .and_then(|(id, disc)| Some((hex_byte(id)?, disc.parse::<u8>().ok()?)))
+        {
+            // As the original loads it into `Work_buffer` (`crate::heap2`).
+            tally.add(
+                writer,
+                "heap",
+                &crate::heap2::tim_entry(id, disc),
+                data.clone(),
+            )?;
+        }
         let Some(stem) = entry.strip_suffix(".tim") else {
             tally.add(writer, "enemy", &entry, data)?;
             progress.advance(&entry);
@@ -1374,7 +1396,34 @@ fn copy_bgm(
     if dir.is_none() && layout.common.is_some() {
         warnings.push("no Common/Sound/BGM directory; the music will be missing".into());
     }
-    let files: Vec<PathBuf> = files_in(dir)?
+    let all = files_in(dir)?;
+    // The banks' `.BGM` files, as the original loads them into `Work_buffer` (`crate::heap2`).
+    for path in &all {
+        let Some((stem, extension)) = upper_parts(path) else {
+            continue;
+        };
+        if extension != "BGM" {
+            continue;
+        }
+        let bank = stem
+            .strip_prefix("MAIN")
+            .map(|id| (false, id))
+            .or_else(|| stem.strip_prefix("SUB_").map(|id| (true, id)))
+            .and_then(|(sub, id)| Some((sub, hex_byte(id)?)));
+        match bank {
+            Some((sub, id)) => tally.add(
+                writer,
+                "heap",
+                &crate::heap2::bgm_entry(sub, id),
+                read(path)?,
+            )?,
+            None => warnings.push(format!(
+                "{}: not a numbered BGM bank; skipped",
+                path.display()
+            )),
+        }
+    }
+    let files: Vec<PathBuf> = all
         .into_iter()
         .filter(|path| upper_parts(path).is_some_and(|(_, extension)| extension == "SAP"))
         .collect();

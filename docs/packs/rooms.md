@@ -55,6 +55,14 @@ one per variant, named for it (`room/<id>/jill-mansion2.rdt`,
 `room/<id>/chris.rdt`). When both a `room.xml` and an RDT define the room,
 the one from the higher layer wins, and the XML wins a tie.
 
+An RE 2 pack also keeps, under `heap/`, the files the original loads into its
+work memory, as they are: each room's RDT (`heap/<id>.rdt`), each enemy's TIM
+(`heap/em<s><id>.tim`) and the music banks (`heap/main<nn>.bgm`,
+`heap/sub_<nn>.bgm`). The engine reads them only to know what a new enemy's
+memory holds before its init sets it (see "What a zombie's slot held before"
+in `docs/internals/deviations/re2.md`); a pack without them plays the same,
+except that those leftover values start at 0.
+
 ## The room definition
 
 `room.xml` is the room as the engine reads it: hand-edit it to move a

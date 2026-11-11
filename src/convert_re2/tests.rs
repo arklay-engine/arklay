@@ -310,6 +310,13 @@ fn converts_every_category() {
     assert!(!pack.contains("enemy/10/enemy_0.tim"));
     assert_eq!(read(&pack, "enemy/10/enemy_1.emd"), b"emd-110");
     assert_eq!(read(&pack, "enemy/3a/enemy_1.tim"), b"tim-13a");
+    // The TIMs and the RDT, as the original loads them (`crate::heap2`).
+    assert_eq!(
+        read(&pack, "heap/em010.tim"),
+        crate::emd2::tests::enemy_tim()
+    );
+    assert_eq!(read(&pack, "heap/em13a.tim"), b"tim-13a");
+    assert_eq!(read(&pack, "heap/1000.rdt"), rdt(2));
 
     assert_eq!(read(&pack, "player/00/model_0.pld"), b"leon-0");
     assert_eq!(read(&pack, "player/00/model_1.pld"), b"leon-1");
@@ -327,7 +334,13 @@ fn converts_every_category() {
             .paths()
             .any(|path| read(&pack, path) == riff(b"WAVEextra"))
     );
-    assert!(!pack.paths().any(|path| path.ends_with(".bgm")));
+    // The music banks' sequences are kept only as the original loads them
+    // into `Work_buffer` (`crate::heap2`).
+    assert_eq!(read(&pack, "heap/main00.bgm"), b"sequence");
+    assert_eq!(
+        pack.paths().filter(|path| path.ends_with(".bgm")).count(),
+        1
+    );
 
     // Each bank slot is its own WAV, in a hex-numbered bank folder.
     assert_eq!(read(&pack, "sound/room/10a/01.wav"), riff(b"WAVE1"));
