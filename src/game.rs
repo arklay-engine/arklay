@@ -8903,6 +8903,12 @@ impl GameState {
         };
         let mut cues = Vec::new();
         get.ticks = get.ticks.saturating_add(1);
+        // The window is the status task's, so its close ends in `St_exit`
+        // too: `Cut_no` comes back and this tick's `Swap_Cbuff` loads the
+        // room's view again (`BYTE_0098f07b`, `Movie_set(2)`).
+        if get.phase == Re2ItemGetPhase::Close && get.ticks == ITEM_GET_UNCUT_TICK {
+            self.re2.bg_load = true;
+        }
         let item = get.action.params[0];
         if get.phase == Re2ItemGetPhase::Open && get.ticks == ITEM_GET_CUT_TICK {
             // `Status`'s start, on the window's sixth tick: `Pad_rep_set(0xF01C,
@@ -9225,6 +9231,9 @@ impl GameState {
             }),
         }
         self.rebuild_slots();
+        // `WORD_0098eaea`: the area's first data word, which the next
+        // pass's `Sce_work_clr` sets back to 0xFFFF.
+        self.re2.vars[crate::scd2::host::VAR_TAKEN_ITEM] = u16::from(item);
         self.re2.set_flag(ITEM_BANK, flag, 1);
         // `St_get_item`: its object goes, and the twinkle with it.
         let model = usize::from(action.params[3]);
@@ -9248,15 +9257,16 @@ impl GameState {
     /// `St_get_file`'s sub 6 once message 10 is down: a file has no stack
     /// and no count, only the area's flag (bank 8, the same gap as an
     /// item's), its object (any index but 0xFF) and the area itself. The
-    /// area's twinkle (an action byte with bit 7, `Esp_kill`) and
-    /// `WORD_0098eaea` (the area's first data word, which the item path
-    /// leaves out too) aren't modelled.
+    /// area's twinkle (an action byte with bit 7, `Esp_kill`) isn't
+    /// modelled. Its case 6 writes the area's first data word to
+    /// `WORD_0098eaea` (variable 3), as the item path does.
     fn take_re2_file(&mut self, action: RoomAction) {
         use crate::scd2::host::ITEM_BANK;
         let [_, _, flag, model, flags, ..] = action.params;
         if flags & 0x80 != 0 {
             crate::warning!("warning: the file area's twinkle (Esp_kill) isn't killed");
         }
+        self.re2.vars[crate::scd2::host::VAR_TAKEN_ITEM] = u16::from(action.params[0]);
         self.re2.set_flag(ITEM_BANK, flag, 1);
         if model != 0xFF
             && let Some(record) = self.objects.record_mut(usize::from(model))
@@ -16374,6 +16384,32 @@ mod tests {
             !state.flags[0].bit(3),
             "0x100 must not fold onto the scenario bank"
         );
+    }
+
+    /// `St_get_file`'s case 6 writes the area's first data word to
+    /// `WORD_0098eaea` (variable 3), as the item path's sub 3 does.
+    #[test]
+    fn taking_a_file_writes_its_area_word_to_variable_3() {
+        let mut game = GameState {
+            is_re2_room: true,
+            ..GameState::default()
+        };
+        game.room_actions[4] = Some(RoomAction {
+            slot: 4,
+            kind: RoomActionKind::Item,
+            zone: [0, 0, 100, 100],
+            sce: 2,
+            handler: 0,
+            flags: 0,
+            params: [0x05, 0, 0x20, 0xFF, 0, 0, 0, 0],
+            item_data: None,
+            room_items_flag: 0xFF,
+            reach_animation: false,
+        });
+        let action = game.room_actions[4].unwrap();
+        game.take_re2_file(action);
+        assert_eq!(game.re2.vars[crate::scd2::host::VAR_TAKEN_ITEM], 0x05);
+        assert!(game.re2.flag(crate::scd2::host::ITEM_BANK, 0x20));
     }
 
     #[test]

@@ -1,0 +1,45 @@
+# Leon A from the west office (201) to the main hall's statue (200), as leon_a_207_201_licker leaves him at 204's door 0's arrival: door 0, the hall to the statue's south face, USE of the Unicorn Medal (event 8) and a press on the statue for the Spade Key (event 7) (oracle/re2.md, "Leon A to the Spade Key")
+0
+# 201: turn to face north and run to z -20100
+350 left
+364
+366 up run
+394
+# turn to face east and run to door 0's frame
+396 right
+410
+412 up run
+468
+# door 0: room 200 loads on 505, play comes back on 837
+470 action
+472
+# 200: turn toward the statue (3720) and run onto its south face, whose area 13 the probe reaches on 910
+838 left
+843
+845 up run
+910
+# turn to face north (3080)
+912 left
+921
+# the status screen: START, down twice and right to slot 5, the Unicorn Medal, the menu, USE: the screen closes on 1052 and event 8 starts on 1055
+926 start
+930
+962 down
+966
+982 down
+986
+1002 right
+1006
+1022 confirm
+1026
+1042 confirm
+1046
+# once event 8 has handed back (cut 8 on 1140), a press on the statue: event 7, the Spade Key's question on 1197
+1160 action
+1162
+# Yes: 59:2 into slot 5 on 1320
+1300 action
+1302
+# the close: cut 8 on 1392
+1380 action
+1382

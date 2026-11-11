@@ -697,6 +697,9 @@ pub const VAR_FORWARD_AREA: usize = 0;
 pub const VAR_BODY_AREA: usize = 1;
 /// `scd_var_used_item` (`0x98EAE8`): the key item USE gave, for one pass.
 pub const VAR_USED_ITEM: usize = 2;
+/// Variable 3 (`0x98EAEA`): the area's first data word, the item, that the
+/// get-item window's take wrote (`St_get_item`), for one pass.
+pub const VAR_TAKEN_ITEM: usize = 3;
 const VAR_STAGE: u8 = 24;
 const VAR_ROOM: u8 = 25;
 const VAR_CUT: u8 = 26;
@@ -5227,6 +5230,47 @@ mod tests {
         // `0x502027` on the close's eighth tick.
         assert_eq!(cuts, [0, 0, 0, 0, 0, 0, 0, 0, 3, 3]);
         assert_eq!(game.re2_item_get_cut(3), 3);
+    }
+
+    /// The get-item window's close ends in `St_exit`, whose
+    /// `BYTE_0098f07b` has that tick's `Swap_Cbuff` load the room's view
+    /// again: on the close's eighth tick, as `Cut_no` comes back.
+    #[test]
+    fn the_get_item_windows_close_loads_the_view_as_the_cut_comes_back() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let ops = [8, 2, 49, 0, 0, -100, -100, 200, 200, 0x14, 30, 154, 1, 0];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        let action = game.room_actions[8].unwrap();
+        game.fire_re2_area(action);
+        while game
+            .re2_item_get
+            .is_some_and(|get| get.phase != crate::game::Re2ItemGetPhase::Close)
+        {
+            game.tick_re2_item_get(crate::game::status2::Input::default());
+            game.message.active = false;
+            assert!(
+                !std::mem::take(&mut game.re2.bg_load),
+                "no load before the close"
+            );
+        }
+        // `St_get_item`'s take wrote the area's first data word, the item,
+        // to variable 3.
+        assert_eq!(game.re2.vars[VAR_TAKEN_ITEM], 0x14);
+        let mut loads = Vec::new();
+        while game.re2_item_get.is_some() {
+            game.tick_re2_item_get(crate::game::status2::Input::default());
+            loads.push((
+                std::mem::take(&mut game.re2.bg_load),
+                game.re2_item_get_cut(3),
+            ));
+        }
+        let load = loads.iter().position(|&(load, _)| load);
+        assert_eq!(load, Some(7), "the close's eighth tick");
+        assert_eq!(loads.iter().filter(|&&(load, _)| load).count(), 1);
+        assert_eq!(loads[7].1, 3, "the tick the cut comes back");
+        assert_eq!(loads[6].1, 0);
     }
 
     #[test]

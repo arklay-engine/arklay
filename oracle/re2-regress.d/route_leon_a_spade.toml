@@ -1,0 +1,72 @@
+# Leon A's route from the S.T.A.R.S. office (115) back to the main hall's statue (200) and the Spade Key, room by room from warps (oracle/re2.md, "Leon A to the Spade Key"), each warp starting Leon as route_200_115 leaves him: 156 life, 2 rounds in the handgun and 38 spare, the ink ribbons in slot 3, the Red Jewel in slot 4, the Unicorn Medal in slot 5, the route's common and item flags, and room 207's four zombies dead. leon_a_115_207 and leon_a_201_spade were recorded with 6:61 (204's licker's dead flag) raised as well, which the route doesn't raise; none of their rooms reads it.
+
+# Rooms 115, 114 and 10C: past Claire to door 0, up the corridor past its three zombies to door 2, east along 10C's upper floor, down the stairs and door 0 into 207.
+[[run]]
+name = "leon_a_115_207"
+room = "115"
+setup_script = "leon_a_115_207.lua"
+input = "leon_a_115_207.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1960
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,em,zm0,zm1,zm2"
+frames = [360, 1959]
+# the doors' frames count only in the whole run's mean: 10C's door 0 is the stairs door (type 4), which draws its steps wider and brighter than the original's (docs/internals/deviations/re2.md, "The stairs door's frames"), a mean of 4.1 over its 205 ticks
+frame_max_mean = 1.4
+# each room on its own, from its hand back to its door's press: 115, 114, 10C, and 207 from its hand back
+frame_windows = [[360, 421, 0.45], [763, 863, 0.5], [1205, 1597, 0.35], [1803, 1959, 0.3]]
+expect = "match"
+ignore = [
+  # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 115's door 0, 114's door 2 and 10C's door 0
+  [422, "rng"], [422, "rseed"], [864, "rng"], [864, "rseed"], [1598, "rng"], [1598, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [457, 547, "hk"], [899, 989, "hk"], [1633, 1725, "hk"],
+]
+record = "--warp 115:-23037:0:-19397:2107:2 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:48 --flag 4:70 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --life 156 --give 0:2:2 --give 2:0x14:38 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x47:1"
+
+# Rooms 207, 205 and 204: past 207's dead zombies to door 1, the corridor of bodies with 4:48 set (both groups come out of the walls, out of reach), and 204 to door 0 into 201. route_200_208 leaves 204's licker alive (6:61 clear), so with 4:86 set the room hangs a new one from the corridor's ceiling, which drops as Leon runs past.
+[[run]]
+name = "leon_a_207_201_licker"
+room = "207"
+setup_script = "leon_a_207_201_licker.lua"
+input = "leon_a_207_201_licker.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 2000
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 1999]
+frame_max_mean = 0.9
+# each room on its own, from its hand back to its door's press: 207, 205, 204, and 201 from its hand back
+frame_windows = [[360, 435, 0.25], [777, 1085, 0.45], [1427, 1621, 0.45], [1963, 1999, 0.4]]
+expect = "match"
+ignore = [
+  # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 207's door 1, 205's door 0 and 204's door 0
+  [436, "rng"], [436, "rseed"], [1086, "rng"], [1086, "rseed"], [1622, "rng"], [1622, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [471, 561, "hk"], [1121, 1211, "hk"],
+]
+record = "--warp 207:-23650:0:-8000:2048:2 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:48 --flag 4:70 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --life 156 --give 0:2:2 --give 2:0x14:38 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x47:1"
+
+# Rooms 201 and 200: to door 0, then the main hall to the statue's south side, USE of the Unicorn Medal (event 8, the statue opens and the medal is lost) and a press on the statue (event 7, the Spade Key).
+[[run]]
+name = "leon_a_201_spade"
+room = "201"
+setup_script = "leon_a_201_spade.lua"
+input = "leon_a_201_spade.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1500
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,movie,fguse,scv,atsce"
+frames = [360, 1499]
+# the door's frames count only in the whole run's mean: room 201's door 0 into the main hall draws its doors smoother and brighter than the original (docs/internals/deviations/re2.md, "The main hall's door's frames"), a mean of 3.3 over its 367 ticks
+frame_max_mean = 1.6
+# 201 from the warp to its door's press, then 200 from the hand back to START, the status screen to USE's close, event 8 (film 5 off), and event 7 with the key's window
+frame_windows = [[360, 469, 0.4], [837, 925, 0.25], [926, 1054, 0.85], [1055, 1160, 0.4], [1161, 1499, 0.7]]
+expect = "match"
+ignore = [
+  # the door's own tick (oracle/re2.md, docs/internals/deviations/re2.md): 201's door 0
+  [470, "rng"], [470, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [505, 595, "hk"],
+]
+record = "--warp 201:-26492:0:-25629:0:4 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:48 --flag 4:70 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --life 156 --give 0:2:2 --give 2:0x14:38 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x47:1"
