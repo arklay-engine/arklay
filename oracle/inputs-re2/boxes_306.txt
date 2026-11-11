@@ -1,0 +1,12 @@
+# Room 306's pit, drained (oracle/re2.md, "Climbing onto an object"): climb box 0, walk -z across onto box 1 (Oma_pull's hand-over) to its far edge, turn about, walk back onto box 0 to its +z edge and jump down into the pit.
+0
+360 action
+364
+420 up
+475
+480 left
+506
+515 up
+575
+590 action
+594
