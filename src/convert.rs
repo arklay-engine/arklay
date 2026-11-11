@@ -2740,6 +2740,12 @@ fn base_manifest(language: &str, region: Option<crate::scd::akscr::Region>) -> m
         start_pos: None,
         start_angle: None,
         start_health: None,
+        seed: None,
+        generator_version: None,
+        biorand_flags: None,
+        plan_version: None,
+        setup: Default::default(),
+        character: None,
         region,
         // The title screen: a 4:3 picture the launcher's PLAY grid shows.
         thumbnail: Some(BASE_THUMBNAIL.to_string()),

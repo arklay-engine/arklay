@@ -2585,6 +2585,7 @@ impl GameSession {
         seed_new_game(pack, &mut game, character);
         seed_re2_save_count(&mut game, loaded.re2_vm.is_some());
         seed_new_game_choice(&mut game, options, loaded.re2_vm.is_some());
+        apply_pack_setup(pack, &mut game);
         let mut player_state = player::spawn(id, &loaded.room);
         let own_start = pack_start_room(pack, character).is_some();
         if scenario_b {
@@ -2641,6 +2642,7 @@ impl GameSession {
         seed_new_game(pack, &mut game, character);
         seed_re2_save_count(&mut game, loaded.re2_vm.is_some());
         seed_new_game_choice(&mut game, options, loaded.re2_vm.is_some());
+        apply_pack_setup(pack, &mut game);
         let mut player_state = player::spawn(id, &loaded.room);
         player_state.pos = [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z];
         player_state.angle = NEW_GAME_ANGLE;
@@ -2847,6 +2849,7 @@ impl GameSession {
         // typewriter.
         let lua = load_lua(pack);
         let mut game = game;
+        apply_pack_session(pack, &mut game);
         // The run options land before `on_init`, so the hooks read them on the
         // first room as well as after a door.
         game.player_options = options;
@@ -9711,6 +9714,57 @@ fn seed_re2_save_count(game: &mut game::GameState, re2: bool) {
     }
 }
 
+/// What a generated pack's manifest sets on every path into a session, new
+/// game or continue, since a save keeps neither: the bank-5 system flags
+/// ([`crate::manifest::Manifest::system_flags`]) and the inventory slot counts
+/// (`chris_slots`, `jill_slots`). A pack that raises no system flag (every
+/// ordinary pack) leaves bank 5 as the game set it, and one without slot
+/// counts keeps the characters' own.
+fn apply_pack_session(pack: &Pack, game: &mut game::GameState) {
+    let Some(manifest) = pack.manifest() else {
+        return;
+    };
+    game.pack_inventory_slots = [manifest.setup.chris_slots, manifest.setup.jill_slots];
+    let raised = manifest.system_flags();
+    if !raised.is_empty() {
+        for flag in scd::opcode::system::managed() {
+            // `apply_flag` mode 0 sets the bit and mode 1 clears it.
+            game.apply_flag(
+                scd::opcode::system::BANK,
+                flag,
+                u8::from(!raised.contains(&flag)),
+            );
+        }
+    }
+}
+
+/// The new-game part of a generated pack's [`crate::manifest::GameSetup`]:
+/// the slot counts (so the start items fit them), the start items in place of
+/// `game/new_game.lua`'s, then the scenario flags. An ordinary pack's setup is
+/// empty and changes nothing.
+fn apply_pack_setup(pack: &Pack, game: &mut game::GameState) {
+    let Some(manifest) = pack.manifest() else {
+        return;
+    };
+    apply_pack_session(pack, game);
+    let setup = &manifest.setup;
+    if let Some(items) = &setup.start_items {
+        game.inventory.clear();
+        let capacity = game.inventory_capacity();
+        game.inventory.extend(
+            items
+                .iter()
+                .take(capacity)
+                .map(|&(id, quantity)| game::InventoryItem { id, quantity }),
+        );
+        game.rebuild_slots();
+    }
+    for &(flag, raised) in &setup.scenario_flags {
+        // `apply_flag` mode 0 sets the bit and mode 1 clears it.
+        game.apply_flag(game::BANK_SCENARIO, flag, u8::from(!raised));
+    }
+}
+
 /// Apply the character-specific new-game seed over the fresh state:
 /// `SetInitialItems`, the save counter and the Jill first-run flags. The
 /// room-BGM bytes, item box and room-item bank come from
@@ -11016,7 +11070,16 @@ impl App {
     /// Apply a completed screen action.
     fn apply(&mut self, action: ScreenAction) -> Result<AppFlow> {
         match action {
-            ScreenAction::CharSelect => self.open_select()?,
+            ScreenAction::CharSelect => {
+                // A randomizer's seed has already picked the character. RE 1's
+                // select screen picks only the character (its `new_game` exit
+                // carries no choice), so the default choice is what it gives;
+                // RE 2's title makes its choice itself and never comes here.
+                match self.pack.manifest().and_then(|manifest| manifest.character) {
+                    Some(character) => self.start_new_game(character, Default::default())?,
+                    None => self.open_select()?,
+                }
+            }
             ScreenAction::SaveLoad => self.open_load()?,
             ScreenAction::NewGame { character, choice } => {
                 // The interactive root boot plays the prologue film (id 1)
@@ -27720,6 +27783,137 @@ mod tests {
         let unnamed = crate::manifest::Manifest::base("re1");
         assert_eq!(window_title(Some(&unnamed)), "Arklay");
         assert_eq!(window_title(None), "Arklay");
+    }
+
+    /// A generated pack's manifest: a seed, two system flags, Jill, and a
+    /// setup with start items, scenario flags and slot counts.
+    fn seeded_manifest() -> crate::manifest::Manifest {
+        let mut manifest = crate::manifest::Manifest::base("biorand-000042");
+        manifest.seed = Some(42);
+        manifest.character = Some(1);
+        manifest.biorand_flags = Some(vec!["ITEM_RANDOMIZER".to_string(), "LAB".to_string()]);
+        manifest.setup = crate::manifest::GameSetup {
+            scenario_flags: vec![(122, true), (123, false)],
+            start_items: Some(vec![(2, 15), (0x41, 1)]),
+            chris_slots: Some(8),
+            jill_slots: Some(4),
+        };
+        manifest
+    }
+
+    /// [`new_game_pack`] with `manifest`.
+    fn new_game_pack_of(dir: &TempDir, manifest: &crate::manifest::Manifest) -> Pack {
+        let text = manifest.render();
+        Pack::open(&new_game_pack_with(
+            dir,
+            &[(crate::manifest::ENTRY, text.as_bytes())],
+        ))
+        .unwrap()
+    }
+
+    /// The system flags (and the proof of concept's bits) that are up.
+    fn system_bits(game: &game::GameState) -> Vec<u8> {
+        let bank = &game.flags[usize::from(scd::opcode::system::BANK)];
+        scd::opcode::system::managed()
+            .filter(|&bit| bank.bit(bit))
+            .collect()
+    }
+
+    #[test]
+    fn a_generated_packs_session_takes_its_manifest() {
+        use scd::opcode::system;
+        let dir = TempDir::new();
+        let pack = new_game_pack_of(&dir, &seeded_manifest());
+        let saves = dir.0.join("saves");
+        let jill = GameSession::new(&pack, 1, &saves).unwrap();
+        let raised = [system::RANDOMIZER, system::ITEM_RANDOMIZER, system::LAB];
+        assert_eq!(system_bits(&jill.game), raised);
+        assert_eq!(jill.game.inventory_capacity(), 4);
+        assert_eq!(
+            jill.game.inventory,
+            [
+                game::InventoryItem {
+                    id: 2,
+                    quantity: 15
+                },
+                game::InventoryItem {
+                    id: 0x41,
+                    quantity: 1
+                },
+            ]
+        );
+        let scenario = &jill.game.flags[usize::from(game::BANK_SCENARIO)];
+        assert!(scenario.bit(122));
+        assert!(!scenario.bit(123));
+        let chris = GameSession::new(&pack, 0, &saves).unwrap();
+        assert_eq!(chris.game.inventory_capacity(), 8);
+
+        // A save keeps neither the system flags nor the slot counts, so a
+        // continue takes them from the pack again.
+        let file = jill.snapshot_save();
+        let continued = GameSession::from_save(&pack, &file, &saves).unwrap();
+        assert_eq!(system_bits(&continued.game), raised);
+        assert_eq!(continued.game.inventory_capacity(), 4);
+        assert_eq!(continued.game.inventory.len(), 2);
+    }
+
+    #[test]
+    fn an_ordinary_pack_leaves_bank_5_and_the_slots_alone() {
+        use scd::opcode::system;
+        let dir = TempDir::new();
+        let pack = new_game_pack_of(&dir, &crate::manifest::Manifest::base("re1"));
+        let mut session = GameSession::new(&pack, 0, &dir.0.join("saves")).unwrap();
+        assert!(system_bits(&session.game).is_empty());
+        assert_eq!(
+            session.game.inventory_capacity(),
+            game::INVENTORY_SLOTS_CHRIS
+        );
+        // Bits a room script set stay as it set them.
+        let bank = usize::from(system::BANK);
+        session.game.flags[bank].apply(system::LAB, 0);
+        session.game.flags[bank].apply(0xF1, 0);
+        apply_pack_session(&pack, &mut session.game);
+        assert_eq!(system_bits(&session.game), [system::LAB, 0xF1]);
+
+        // A seeded pack without `biorand_flags` predates the list: it raises
+        // the proof of concept's flags and clears every other managed bit.
+        let mut old = crate::manifest::Manifest::base("biorand-000007");
+        old.seed = Some(7);
+        let old = new_game_pack_of(&TempDir::new(), &old);
+        apply_pack_session(&old, &mut session.game);
+        assert_eq!(
+            system_bits(&session.game),
+            [
+                system::RANDOMIZER,
+                system::DOOR_RANDOMIZER,
+                system::ENEMY_RANDOMIZER,
+                0xF0,
+                0xF1,
+                0xF2
+            ]
+        );
+    }
+
+    #[test]
+    fn a_generated_packs_character_stands_in_for_the_select_screen() {
+        let dir = TempDir::new();
+        let pack = new_game_pack_of(&dir, &seeded_manifest());
+        let mut app = App::new(pack, dir.0.join("saves"), false);
+        app.apply(ScreenAction::CharSelect).unwrap();
+        let Mode::Play(session) = &app.mode else {
+            panic!("the manifest's character should start the game");
+        };
+        assert_eq!(session.game.id.player_flag, 1);
+        assert_eq!(
+            session.game.player_options.new_game,
+            crate::ui::NewGameChoice::default()
+        );
+
+        let ordinary = TempDir::new();
+        let pack = new_game_pack_of(&ordinary, &crate::manifest::Manifest::base("re1"));
+        let mut app = App::new(pack, ordinary.0.join("saves"), false);
+        app.apply(ScreenAction::CharSelect).unwrap();
+        assert!(matches!(app.mode, Mode::Select(_)));
     }
 
     #[test]
