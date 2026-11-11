@@ -8,18 +8,21 @@ setup_script = "leon_a_208_entry.lua"
 input = "leon_a_208_entry.txt"
 input_shift = 344
 ticks = 1250
-# no `hk`: the original lists the old room's objects until its new ones are set up, 90 ticks into the load, where
-# arklay lists the new room's from the load (nothing is drawn then); leon_a_208 checks it in 208
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,fgstat,fgitem"
-# from play's return after the door's hold
-frames = [700, 1249]
-# 0.47 measured
-frame_max_mean = 0.6
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem"
+# from the door's press: its fade (356 to 391), the door's model through 208's load (0.9 to 1.3 a frame) and play's return
+frames = [356, 1249]
+# 0.65 measured
+frame_max_mean = 0.75
+# the door to play's return (0.93 measured), then the walk to the ribbons and their take (0.47 measured)
+frame_windows = [[356, 699, 1.05], [700, 1249, 0.55]]
 expect = "match"
 # the warp's first ticks: the original's neck starts where the warp's load left the last pose, arklay's from the arrival's, and they meet by 356
 ignore = [[344, "pneck"], [345, "pneck"], [346, "pneck"], [347, "pneck"], [348, "pneck"], [349, "pneck"], [350, "pneck"], [351, "pneck"], [352, "pneck"], [353, "pneck"], [354, "pneck"], [355, "pneck"],
   # the door's own tick (oracle/re2.md, docs/internals/deviations/re2.md)
-  [356, "rng"], [356, "rseed"]]
+  [356, "rng"], [356, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too: the original lists 207's until 208's are set up, 90 ticks
+  # into the load, where arklay lists 208's from the load (nothing is drawn then)
+  [391, 481, "hk"]]
 record = "--no-enemies --warp 207:-15328:0:-12706:990 --life 60 --give 0:2:10 --give 2:0x14:21"
 
 # The same walk and take from a warp to door 2's arrival in 208.
@@ -33,7 +36,7 @@ ticks = 900
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem"
 frames = [360, 899]
 # 0.47 measured
-frame_max_mean = 0.6
+frame_max_mean = 0.55
 expect = "match"
 # the warp's first ticks: the original's neck starts where the warp's load left the last pose, arklay's from the arrival's, and they meet by 356
 ignore = [[344, "pneck"], [345, "pneck"], [346, "pneck"], [347, "pneck"], [348, "pneck"], [349, "pneck"], [350, "pneck"], [351, "pneck"], [352, "pneck"], [353, "pneck"], [354, "pneck"], [355, "pneck"]]

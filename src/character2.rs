@@ -1280,8 +1280,9 @@ pub fn joint_meshes(character: &Character, joints: usize, meshes: usize) -> Opti
 }
 
 /// A `Game_loop` pass under `fg_stop` outside the room's own tick (the
-/// get-item window's first and last frames): each enemy does its `Root_ck`
-/// and nothing else.
+/// get-item window's, the status screen's and the item box's open and
+/// close, the typewriter's open): each enemy does its `Root_ck` and nothing
+/// else.
 pub fn tick_stopped(
     game: &mut GameState,
     room: &RoomState,
@@ -1298,9 +1299,22 @@ fn run_load_stop(
     room: &RoomState,
     pack: &Pack,
     npc_models: &mut EntityModelCache,
-    mut lua: Option<&mut crate::enemy::LuaEnemyHost>,
+    lua: Option<&mut crate::enemy::LuaEnemyHost>,
 ) {
     let scenario = game.id.player_flag & 1;
+    run_load_stop_with(game, room, pack, lua, |model| {
+        npc_models.get(pack, model, scenario)
+    });
+}
+
+/// [`run_load_stop`] with each character's model from `model`.
+fn run_load_stop_with(
+    game: &mut GameState,
+    room: &RoomState,
+    pack: &Pack,
+    mut lua: Option<&mut crate::enemy::LuaEnemyHost>,
+    mut model: impl FnMut(u8) -> Option<std::sync::Arc<Emd>>,
+) {
     let was_stopped = game.re2.enemies_stopped();
     game.re2.set_enemies_stopped(true);
     for slot in run_order() {
@@ -1315,7 +1329,7 @@ fn run_load_stop(
         if moves(&character)
             && let Some(mut zombie) = character.zombie.take()
         {
-            if let Some(model) = npc_models.get(pack, character.model, scenario) {
+            if let Some(model) = model(character.model) {
                 // A stopped enemy only does its `Root_ck`, and sends nothing.
                 let _ = run_zombie(
                     game,
@@ -1891,6 +1905,46 @@ mod tests {
             },
             morphs: Vec::new(),
         }
+    }
+
+    /// `Game_loop`'s pass under `fg_stop` outside the room's own tick (the
+    /// status screen's and the item box's open and close, the get-item
+    /// window's): a stopped zombie does its `Root_ck`, which counts its turn
+    /// (`+0x150`) down, 7 again after 0, and nothing else: it doesn't move,
+    /// its routine and damage count hold, and the room's own stop is left
+    /// as it was.
+    #[test]
+    fn a_stopped_pass_counts_a_zombies_turn_and_nothing_else() {
+        let model = std::sync::Arc::new(posable_model());
+        let pack = Pack::from_bytes(crate::pack::PackWriter::new().to_bytes().unwrap()).unwrap();
+        let mut zombie = crate::zombie2::Zombie::default();
+        zombie.set_sight_turn(3);
+        zombie.damage_cnt = 2;
+        let mut character = sherry(0);
+        character.id = 0x10;
+        character.model = 0x10;
+        character.partner = None;
+        character.body.pos = [1000, 0, 2000];
+        character.body.angle = 0x400;
+        character.work.routine = [1, 0, 0, 0];
+        character.zombie = Some(zombie);
+        let mut game = GameState::default();
+        game.re2.characters.0 = vec![Some(Box::new(character))];
+        let mut turns = Vec::new();
+        for _ in 0..5 {
+            run_load_stop_with(&mut game, &RoomState::default(), &pack, None, |_| {
+                Some(model.clone())
+            });
+            let character = game.re2.characters.0[0].as_deref().unwrap();
+            let zombie = character.zombie.as_ref().unwrap();
+            turns.push(zombie.sight_turn());
+            assert_eq!(character.body.pos, [1000, 0, 2000], "no move");
+            assert_eq!(character.body.angle, 0x400, "no turn");
+            assert_eq!(character.work.routine, [1, 0, 0, 0], "its routine holds");
+            assert_eq!(zombie.damage_cnt, 2, "its damage count holds");
+        }
+        assert_eq!(turns, [2, 1, 0, 6, 5], "Root_ck's turn");
+        assert!(!game.re2.enemies_stopped(), "the room's stop as it was");
     }
 
     #[test]
