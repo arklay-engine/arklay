@@ -154,6 +154,9 @@ pub struct TraceTick<'a> {
     /// RE2: each room object's `Be_flg`, position, `Cdir_y`, `Push_cnt`,
     /// `At_sce_no` and `nFloor`, the oracle's `om`.
     pub re2_objects: Option<String>,
+    /// RE2: the slot of the room object the player stands on (`pOn_om`),
+    /// the oracle's `pon` (`-` for none).
+    pub re2_on_object: Option<Option<u8>>,
     /// RE2: the script work `Sce_work_clr` resets, as the oracle's `fguse`
     /// (`fg_use`'s four words as their bytes) and `scv` (variables 0 to 3).
     pub re2_script_work: Option<String>,
@@ -397,6 +400,11 @@ impl TraceWriter {
         if let Some(fields) = &tick.re2_objects {
             write!(self.out, " {fields}")?;
         }
+        match tick.re2_on_object {
+            Some(Some(index)) => write!(self.out, " pon={index}")?,
+            Some(None) => write!(self.out, " pon=-")?,
+            None => {}
+        }
         if let Some(fields) = &tick.re2_script_work {
             write!(self.out, " {fields}")?;
         }
@@ -535,6 +543,7 @@ mod tests {
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
+            re2_on_object: None,
             re2_script_work: None,
             re2_sounds: None,
             frame_hash: 0xDEAD_BEEF,
@@ -607,6 +616,7 @@ mod tests {
                 re2_computer: None,
                 re2_hikidashi: None,
                 re2_objects: None,
+                re2_on_object: None,
                 re2_script_work: None,
                 re2_sounds: None,
                 frame_hash: 0,
@@ -675,6 +685,7 @@ mod tests {
                 re2_computer: None,
                 re2_hikidashi: None,
                 re2_objects: None,
+                re2_on_object: None,
                 re2_script_work: None,
                 re2_sounds: None,
                 frame_hash: 0,
@@ -688,6 +699,74 @@ mod tests {
         assert_eq!(lines.len(), 2);
         assert!(lines[0].contains(" esp=1/95:2,0,7,0,a003,0,100,0,0"));
         assert!(!lines[1].contains("esp="));
+    }
+
+    #[test]
+    fn an_re2_tick_writes_the_object_stood_on() {
+        let game = GameState::default();
+        let path = temp_path("re2-on-object");
+        let mut writer = TraceWriter::create(&path).unwrap();
+        for on_object in [Some(Some(2)), Some(None), None] {
+            let tick = TraceTick {
+                room: RoomId {
+                    stage: 2,
+                    room: 0x00,
+                    player_flag: 0,
+                    mansion2: false,
+                },
+                rng: 0,
+                rseed: 0,
+                fade_counter: 0,
+                fade_state: -1,
+                cam: 0,
+                player_flags: 0,
+                entities: &*game.entities,
+                re2_player: Some(([1, 0], [0; 9])),
+                re2_character: None,
+                re2_splayer: None,
+                re2_partner: None,
+                re2_partner_enemies: None,
+                re2_partner_climb: None,
+                re2_zombies: None,
+                re2_zombie_parts: None,
+                re2_zombie_dests: None,
+                re2_effects: None,
+                re2_music: None,
+                re2_die: None,
+                re2_neck: None,
+                re2_neck_position: None,
+                re2_xa_volume: None,
+                re2_movie: None,
+                re2_inventory: None,
+                re2_map_flags: None,
+                re2_item_page: None,
+                re2_item_box: None,
+                re2_file: None,
+                re2_pad_repeat: None,
+                re2_doors: None,
+                re2_scene: None,
+                re2_banks: None,
+                re2_typewriter: None,
+                re2_game_mode: None,
+                re2_save_screen: None,
+                re2_computer: None,
+                re2_hikidashi: None,
+                re2_objects: None,
+                re2_on_object: on_object,
+                re2_script_work: None,
+                re2_sounds: None,
+                frame_hash: 0,
+            };
+            writer.write_tick(&tick).unwrap();
+        }
+        writer.flush().unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        let lines: Vec<&str> = text.lines().skip(1).collect();
+        assert_eq!(lines.len(), 3);
+        assert!(lines[0].ends_with(" pon=2"));
+        assert!(lines[1].ends_with(" pon=-"));
+        assert!(!lines[2].contains("pon="));
     }
 
     #[test]
@@ -740,6 +819,7 @@ mod tests {
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
+            re2_on_object: None,
             re2_script_work: None,
             re2_sounds: None,
             frame_hash: 0,
@@ -817,6 +897,7 @@ mod tests {
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
+            re2_on_object: None,
             re2_script_work: None,
             re2_sounds: Some(String::new()),
             frame_hash: 0,
@@ -904,6 +985,7 @@ mod tests {
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
+            re2_on_object: None,
             re2_script_work: None,
             re2_sounds: Some(String::new()),
             frame_hash: 0,
@@ -971,6 +1053,7 @@ mod tests {
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
+            re2_on_object: None,
             re2_script_work: None,
             re2_sounds: None,
             frame_hash: 0,

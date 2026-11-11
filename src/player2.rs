@@ -1811,7 +1811,8 @@ impl Mover<'_, '_> {
             return false;
         }
         // No other object may stand where the player lands, nor at the
-        // player's own height there.
+        // player's own height there. `Sca_ck_hit` has just put every
+        // object's box on its position (`Oma_set_ofs`).
         down[1] = landing;
         let in_the_way = self
             .tick
@@ -1824,8 +1825,10 @@ impl Mover<'_, '_> {
                     && self.work.on_object != Some(index as u8)
             })
             .any(|(_, obj)| {
-                crate::objects::omd_in_check(down, obj, radius, true)
-                    || crate::objects::omd_in_check([down[0], y, down[2]], obj, radius, true)
+                let mut obj = *obj;
+                obj.set_ofs();
+                crate::objects::omd_in_check(down, &obj, radius, true)
+                    || crate::objects::omd_in_check([down[0], y, down[2]], &obj, radius, true)
             });
         if in_the_way {
             return false;
@@ -2039,9 +2042,9 @@ impl Mover<'_, '_> {
                 self.work.move_no = LAND_CLIP;
                 self.work.move_cnt = 4;
                 self.work.hokan = FULL_BLEND;
-                self.player.pos[1] = self
-                    .object_ground(self.player.pos, self.player.radius)
-                    .height;
+                // `Pos_y = (short)Ground`: the shadow probe's, objects
+                // included, as `Game_loop` left it.
+                self.player.pos[1] = self.drawn_ground();
                 self.work.damage_cnt &= !DAMAGE_LOCK;
                 self.work.be_flg &= !BE_NO_PUSH;
                 // `Snd_se_walk(1, 4, w)`, with its ripples in water.
@@ -8091,7 +8094,44 @@ mod tests {
         assert_ne!(setup.work.routine[1], MOVE_CLIMB);
     }
 
-    /// `pl_mv_09` lands on an object's top and stands on it.
+    /// No jump down onto another object: one 900 high under the landing
+    /// point holds it. Its box is stale (`Atd` at the origin), as
+    /// `Sca_ck_hit`'s `Oma_set_ofs` finds it.
+    #[test]
+    fn no_jump_down_onto_another_object() {
+        let mut setup = by_the_box([-18574, -1800, -24736], 3120);
+        setup.work.floor = 1;
+        setup.work.on_object = Some(0);
+        setup.objects.push(crate::objects::ObjectRecord {
+            flag: crate::objects::OBJECT_FLAG_ACTIVE,
+            pos: [-18574, 0, -23736],
+            be_flg: 0x81,
+            atd2: crate::objects::ObjectAtd {
+                ofs: [0, -900, 0],
+                at_w: 675,
+                at_h: 900,
+                at_d: 600,
+            },
+            ..crate::objects::ObjectRecord::default()
+        });
+        setup.tick(action(), 200);
+        assert_ne!(setup.work.routine[1], MOVE_CLIMB);
+        assert_eq!(setup.work.on_object, Some(0));
+    }
+
+    /// `Sca_ck_em` leaves `Sca_info` empty on an object: no stairs.
+    #[test]
+    fn no_stairs_from_an_object() {
+        let mut setup = at_stairs([1500, 0, 700], 0xC00);
+        setup.objects = vec![box_203()];
+        setup.work.on_object = Some(0);
+        setup.tick(action(), 200);
+        assert_ne!(setup.work.routine[1], MOVE_STAIRS);
+    }
+
+    /// `pl_mv_09` lands on an object's top and stands on it. The landing
+    /// takes `Ground` from the shadow's probe (`Game_loop`'s), here the
+    /// body.
     #[test]
     fn a_jump_down_lands_on_an_objects_top() {
         let mut setup = by_the_box([-18673, -3600, -25186 + 1000], 1024);
@@ -8100,6 +8140,7 @@ mod tests {
             if setup.work.routine[1] != MOVE_JUMP_DOWN {
                 break;
             }
+            setup.work.kage_pos = Some(setup.player.pos);
             setup.tick(Input::default(), 200);
         }
         assert_eq!(setup.work.on_object, Some(0));

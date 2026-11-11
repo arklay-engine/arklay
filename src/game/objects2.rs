@@ -346,15 +346,6 @@ impl GameState {
         }
     }
 
-    /// The trace's `pon` field: the slot of the object the player stands on
-    /// (`pOn_om`), or `-`.
-    pub fn re2_on_object_trace(&self) -> String {
-        match self.re2.player.on_object {
-            Some(index) => format!("pon={index}"),
-            None => "pon=-".to_string(),
-        }
-    }
-
     /// The trace's `om` field: for each of the room's `count` objects,
     /// `n:Be_flg,x,y,z,Cdir_y,Push_cnt,At_sce_no,nFloor`, joined with `;`.
     pub fn re2_objects_trace(&self, count: usize) -> String {
@@ -757,14 +748,6 @@ mod tests {
         game.re2.player.on_object = None;
         game.om_move(&room, &mut player);
         assert_eq!(game.re2.player.status_flg, 0x0001, "off it");
-    }
-
-    #[test]
-    fn the_trace_names_the_object_stood_on() {
-        let (mut game, _, _) = on_box(-25186);
-        assert_eq!(game.re2_on_object_trace(), "pon=0");
-        game.re2.player.on_object = None;
-        assert_eq!(game.re2_on_object_trace(), "pon=-");
     }
 
     /// An object in play, at `pos` on `parent`.

@@ -896,14 +896,7 @@ pub fn oma_pull(
     let now = u8::from(outside(dx, reach_x)) | u8::from(outside(dz, reach_z)) << 1;
     let was = u8::from(outside(obj.at[0] - i32::from(chr.old2[0]), reach_x))
         | u8::from(outside(obj.at[2] - i32::from(chr.old2[2]), reach_z)) << 1;
-    let top = object_top(&obj);
-    pull.next_box = now != 0
-        && objects.iter().enumerate().any(|(other, next)| {
-            other != index
-                && next.be_flg & BE_CLIMBABLE == BE_CLIMBABLE
-                && next.be_flg & BE_GHOST == 0
-                && object_top(next) == top
-        });
+    pull.next_box = now != 0 && next_box(objects, chr, index, now);
     let step = now & !was;
     if step & 1 != 0 {
         let edge = if dx >= 0 { -reach_x } else { reach_x };
@@ -919,6 +912,53 @@ pub fn oma_pull(
     }
     pull.on_object = oma_get_on_om(objects, chr, pull.on_object);
     pull
+}
+
+/// `(delta + reach) as u32 < (reach * 2) as u32`: `delta` in
+/// `-reach..reach`, the high edge out.
+fn inside_low(delta: i32, reach: i32) -> bool {
+    (delta.wrapping_add(reach) as u32) < (reach.wrapping_mul(2) as u32)
+}
+
+/// Whether `Oma_pull`'s loops would find another climbable object of the
+/// same height next to the edge of object `index` the character is past
+/// (`now`: bit 0 past an x edge, bit 1 a z edge): along that edge, its far
+/// side within the object's depth less the character's width, the
+/// character's box within it across, within `W + 200` of the object on the
+/// side being stepped toward, and on that side (the sign test on the
+/// object-to-character delta).
+fn next_box(objects: &[ObjectRecord], chr: &CharBox, index: usize, now: u8) -> bool {
+    let obj = objects[index];
+    let (obj_w, obj_d) = obj.half_size();
+    let (obj_w, obj_d) = (i32::from(obj_w), i32::from(obj_d));
+    let chr_w = i32::from(chr.at_w);
+    let [obj_x, _, obj_z] = obj.at;
+    let to_x = obj_x.wrapping_sub(chr.at[0]);
+    let to_z = obj_z.wrapping_sub(chr.at[2]);
+    let top = object_top(&obj);
+    objects.iter().enumerate().any(|(other, next)| {
+        if other == index
+            || next.be_flg & BE_CLIMBABLE != BE_CLIMBABLE
+            || next.be_flg & BE_GHOST != 0
+            || object_top(next) != top
+        {
+            return false;
+        }
+        let (next_w, next_d) = next.half_size();
+        let (next_w, next_d) = (i32::from(next_w), i32::from(next_d));
+        let [next_x, _, next_z] = next.at;
+        let across_x = now & 1 != 0
+            && inside_low(next_z - obj_z, obj_d - chr_w + next_d)
+            && !outside(next_z - chr.at[2], next_d)
+            && !outside(next_x - obj_x, next_w + 200 + obj_w)
+            && (obj_x - next_x) ^ to_x > 0;
+        let across_z = now & 2 != 0
+            && inside_low(next_x - obj_x, obj_w - chr_w + next_w)
+            && !outside(next_x - chr.at[0], next_w)
+            && !outside(next_z - obj_z, next_d + 200 + obj_d)
+            && (obj_z - next_z) ^ to_z > 0;
+        across_x || across_z
+    })
 }
 
 /// `Oma_ob_pull2` (`0x4CEDE0`): a character whose box is outside the
@@ -2446,6 +2486,18 @@ mod tests {
         let next = box_203(BOX_Z - 1350);
         let mut leon = leon_at([-18700, -1800, edge - 4], [-18700, -1800, edge + 76]);
         assert!(oma_pull(&[objects[0], next], &mut leon, 0, Some(0)).next_box);
+        // Not one of the same height far off, behind him, or off to the side.
+        for next in [
+            box_203(BOX_Z - 3000),
+            box_203(BOX_Z + 1350),
+            ObjectRecord {
+                at: [next.at[0] + 2000, next.at[1], next.at[2]],
+                ..next
+            },
+        ] {
+            let mut leon = leon_at([-18700, -1800, edge - 4], [-18700, -1800, edge + 76]);
+            assert!(!oma_pull(&[objects[0], next], &mut leon, 0, Some(0)).next_box);
+        }
     }
 
     #[test]
