@@ -6755,8 +6755,11 @@ impl GameState {
             if is_player || !on_caller {
                 self.fire_re2_area(room_action);
             }
-            if press || self.transition.is_some() {
-                return press;
+            // Only the action pass returns on its hit: the other walk goes on
+            // past a door it or the action pass queued, as `Sce_Door`
+            // returns 0 (`Sce_at_check`, 0x4E9150).
+            if press {
+                return true;
             }
         }
         false
@@ -19223,6 +19226,58 @@ mod tests {
         }
         state.sce_at_check(at([0, 0, 0]), PLAYER_AREA_MASK, false);
         assert!(!state.re2.flag(5, 8));
+    }
+
+    /// `Sce_Door` returns 0, so a door doesn't end `Sce_at_check`'s walk of
+    /// the other areas (0x4E9150): on the tick a door is taken by its press
+    /// or by walking in, a flag area later in the table still sets its flag,
+    /// and a second door the walk reaches doesn't replace the first.
+    #[test]
+    fn a_ticks_door_leaves_the_later_areas_answering() {
+        let re2_door = |slot: u8, room: u8, sub_type: u8| Door {
+            slot,
+            zone: [-1000, -1000, 2000, 2000],
+            sub_type,
+            re2: Some(crate::scd2::host::Re2Door {
+                stage: 1,
+                room,
+                cut: 0,
+            }),
+            ..door(room, 0)
+        };
+        let flag_area = RoomAction {
+            slot: 3,
+            kind: RoomActionKind::Other,
+            zone: [-1000, -1000, 2000, 2000],
+            sce: crate::scd2::host::SCE_FLAG_CHANGE,
+            handler: 1,
+            flags: 0x41,
+            params: [5, 0, 8, 0, 1, 0, 0, 0],
+            item_data: None,
+            room_items_flag: 0xFF,
+            reach_animation: false,
+        };
+        // The first door by its press (`Sat` 0x10 at the body), then by
+        // walking in.
+        for (first, press) in [(0xC1, true), (0x41, false)] {
+            let mut state = game();
+            state.is_re2_room = true;
+            for door in [re2_door(1, 0x0A, first), re2_door(2, 0x0B, 0x41)] {
+                state.room_actions[usize::from(door.slot)] = Some(door_action(door));
+                state.doors[usize::from(door.slot)] = Some(door);
+            }
+            state.room_actions[3] = Some(flag_area);
+            state.interact([0, 0, 0], 0, press);
+            assert_eq!(
+                state.transition.as_ref().map(|t| t.target.room),
+                Some(0x0A),
+                "the first door queued is taken (press {press})"
+            );
+            assert!(
+                state.re2.flag(5, 8),
+                "the flag area answers (press {press})"
+            );
+        }
     }
 
     /// `Sce_at` (0x4EA0D0): with `fg_status`'s 0x200000 up, the first action
