@@ -11,13 +11,19 @@ action. A unit test (`bot_ctx_has_no_state_changing_method_but_input`) lists
 the Lua handle's registered methods and fails on any method that is not a
 read, the bot's own bookkeeping, or input.
 
+`re1` is the installed RE1 pack, found under the data roots' `games/`
+folders as the launcher finds it; a path to an `.akpak` works too. In a
+window the host keys work while the bot plays (F2/F3 game speed, F4, F6,
+F8, F12), and Escape opens the in-game menu: the bot is suspended until it
+closes, as it is under the F1 debug menu and the F9 prompt.
+
 ```sh
 # Watch the bot in the normal window (bare --bot implies --ui game --character 1)
-target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bot
+target/test-release/arklay re1 --mod mods/bot --bot
 
 # Edit bot/**.lua while the bot runs: --watch re-executes the chunks in the
 # same Lua state, so BOT_STATE and the engine's bot memory keep their progress.
-target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bot --watch
+target/test-release/arklay re1 --mod mods/bot --bot --watch
 
 # --bot-risk 0.0..1.0 (default 0.25) is how much danger the planner may accept;
 # the planner reads it as bot:risk(). Values outside the range are an error.
@@ -34,7 +40,7 @@ target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bo
 # see "Story parameters" below. Example: --bot-param richard=leave
 
 # Headless: runs as fast as the simulation allows and reports ticks/rooms/reason
-target/test-release/arklay ~/.cache/arklay-biorand/re1.akpak --mod mods/bot --bot --bot-headless
+target/test-release/arklay re1 --mod mods/bot --bot --bot-headless
 ```
 
 `mods/bot/routes/` holds one driver script per route through the game

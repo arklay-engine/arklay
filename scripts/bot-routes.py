@@ -4,8 +4,8 @@
   scripts/bot-routes.py [options] [ROUTE ...]
 
   ROUTE            a route name or a part of one (default: every route)
-  -p, --pack PATH  the RE1 game pack (default: $BOT_PACK, else
-                   target/bot-pack/re1.akpak)
+  -p, --pack PACK  the RE1 game pack: an installed pack's id or a path
+                   (default: $BOT_PACK, else `re1`, the installed RE1 pack)
   -s, --seed LIST  bot seeds, as "1", "1,2,5" or "1-4"; 0 is the game's own
                    random stream (default 0)
   -j, --jobs N     runs at once (default: the CPU count). The compute columns
@@ -34,6 +34,7 @@ import concurrent.futures
 import datetime
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -143,11 +144,20 @@ def table(rows):
     return "\n".join(lines)
 
 
+def resolve_pack(pack):
+    """The pack argument for arklay: a pack id such as `re1` as given (the
+    engine finds the installed pack, as the launcher does), a path made
+    absolute; `None` when the path is missing."""
+    if re.fullmatch(r"[A-Za-z0-9_-]+", pack) and not os.path.exists(pack):
+        return pack
+    pack = os.path.abspath(pack)
+    return pack if os.path.isfile(pack) else None
+
+
 def main():
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("routes", nargs="*")
-    parser.add_argument("-p", "--pack", default=os.environ.get(
-        "BOT_PACK", os.path.join(ROOT, "target", "bot-pack", "re1.akpak")))
+    parser.add_argument("-p", "--pack", default=os.environ.get("BOT_PACK", "re1"))
     parser.add_argument("-s", "--seed", default="0")
     parser.add_argument("-j", "--jobs", type=int, default=os.cpu_count() or 1)
     parser.add_argument("-n", "--name",
@@ -168,7 +178,8 @@ def main():
         print(f"no route matches {args.routes}; the routes are: {', '.join(known)}",
               file=sys.stderr)
         return 2
-    if not os.path.isfile(args.pack):
+    pack = resolve_pack(args.pack)
+    if pack is None:
         print(f"pack not found: {args.pack} (see -p)", file=sys.stderr)
         return 2
     if not args.no_build:
@@ -185,7 +196,7 @@ def main():
     print(f"{len(jobs)} run(s), {args.jobs} at once -> {out}", file=sys.stderr)
     rows = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
-        futures = [pool.submit(run_one, route, seed, os.path.abspath(args.pack), out,
+        futures = [pool.submit(run_one, route, seed, pack, out,
                                args.timeout) for route, seed in jobs]
         for future in concurrent.futures.as_completed(futures):
             row = future.result()

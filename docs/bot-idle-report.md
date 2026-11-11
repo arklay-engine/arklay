@@ -10,7 +10,7 @@ Re-run it:
 ```sh
 cargo build --profile test-release
 mkdir -p out/r25 out/s25
-target/test-release/arklay target/bot-pack/re1.akpak --mod mods/bot --bot --bot-headless \
+target/test-release/arklay re1 --mod mods/bot --bot --bot-headless \
   --bot-max-ticks 400000 --bot-risk 0.25 --bot-stats out/r25/stats.json --save-dir out/s25 \
   > out/r25/run.log 2>&1
 python3 scripts/bot-idle-report.py out/r25/stats.json   # markdown to stdout; log defaults to run.log beside it

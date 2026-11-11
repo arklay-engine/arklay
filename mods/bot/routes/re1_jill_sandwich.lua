@@ -6,7 +6,7 @@
 --   arklay script --headless - PACK < mods/bot/routes/re1_jill_sandwich.lua
 --
 -- See mods/bot/routes/README.md for the arguments and the result line.
-load_game_pack(arg[1] or "games/re1.akpak", { mods = { "mods/bot" }, quick_turn = true, tactical_reload = true })
+load_game_pack(arg[1] or "re1", { mods = { "mods/bot" }, quick_turn = true, tactical_reload = true })
 new_game({ character = 1 })
 local run = bot_run({
     params = { sandwich = "yes" },
