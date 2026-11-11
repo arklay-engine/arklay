@@ -501,8 +501,16 @@ tick, so the knowledge's stands in). A downed zombie more than its
 `down_reach` (4300) away is walked in on before the shot: an aim
 pointed down meets the floor near 4400, and raising the aim sets the bot
 back up to 700, so fights opened inside that reach ended outside it and
-nine in ten of those shots missed, eight handgun rounds a run. Every
-entry has a comment saying how it was
+nine in ten of those shots missed, eight handgun rounds a run. Lowering
+the gun steps the bot forward again, so while the low aim is up the
+spacing rule is given the distance from where the raise began, and the
+aimed distance only for that reach; the walk in goes on until the next
+draw will end inside it (the reach less the set-back the last draw
+measured). Read raw, the draw took the bot out of its band, the walk
+back lowered the gun, which put it in the band again, and it raised and
+lowered for 25 seconds without a shot until the fight timed out: 214 and
+21C, 1.5 fights and 1100 ticks a run, and a grab after most of them.
+Every entry has a comment saying how it was
 measured. `parts="yes"` marks a monster made of several entities (Plant 42's
 body and vines): a hit holds only the part it struck, so the bot fires on
 while its target is still reacting instead of waiting for the reaction to

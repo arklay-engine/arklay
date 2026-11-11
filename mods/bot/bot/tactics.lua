@@ -36,6 +36,8 @@ local SPACE_TICKS = C.SECOND + C.SECOND // 2
 local SPACE_REST = 2 * C.SECOND
 -- A walk this close to the spacing point is there.
 local SPACE_TOLERANCE = C.APPROACH
+-- The most a draw is taken to set the bot back (240 to 720 measured).
+local SETBACK_MAX = 3 * C.APPROACH
 -- A backward-walk retreat that has not reached its distance by now shoots.
 local RETREAT_TICKS = 2 * C.SECOND
 -- A monster showing no aim bit this long is not fought until it shows one.
@@ -360,9 +362,26 @@ function BotTactics.spacing(o)
     -- in far enough for the draw to end inside the reach was tried: over
     -- the zombie rooms it cost 12 more hits than this one, which shoots
     -- from where the second draw leaves it.)
-    if o.low_reach and o.crawl_reach and not o.melee and o.distance > o.low_reach then
-        local want = o.max < o.low_reach and o.max or o.low_reach - C.APPROACH
-        return "approach", want > min and want or min
+    -- The reach is the aimed distance's (o.aimed: with the low aim up the
+    -- bot stands a set-back further off than o.distance, see the fight
+    -- tick). The walk in, once begun (o.walking_in), goes on until the next
+    -- draw will end inside the reach: the reach less the set-back the last
+    -- draw measured (o.setback). Without that the draw put the bot back
+    -- past the reach and the walk in began again, for good.
+    if o.low_reach and o.crawl_reach and not o.melee then
+        local limit = o.low_reach
+        local far = o.aimed or o.distance
+        if o.walking_in then
+            far = o.distance
+            limit = o.low_reach - (o.setback or 0) - C.APPROACH // 2
+            if limit < min then
+                limit = min
+            end
+        end
+        if far > limit then
+            local want = o.max < o.low_reach and o.max or o.low_reach - C.APPROACH
+            return "approach", want > min and want or min
+        end
     end
     -- A hand weapon reaches only inside its band: walk in.
     if o.melee and o.distance > o.max then
@@ -806,6 +825,9 @@ local function reset(s)
     s.space = nil
     s.space_ticks = 0
     s.space_rest = 0
+    s.setback = nil
+    s.draw_from = nil
+    s.approach_ticks = nil
     s.fired_tick = nil
     s.retreat_ticks = 0
     s.retreat_shots = nil
@@ -2867,11 +2889,33 @@ function BotTactics.step(bot, scene, player)
         s.fired_left = true
     end
 
+    -- The low aim's set-back: raising the gun at a downed target steps the
+    -- bot back (240 to 720), and lowering it steps it forward again. So
+    -- with that aim up the target reads further away than from where the
+    -- bot will walk: spacing gets the distance less the set-back (where the
+    -- raise began), and the aimed one for the low shot's reach. Read
+    -- raw, the draw took the bot out of its band, the walk back in lowered
+    -- the gun, which put it in the band again, and it raised and lowered
+    -- for 25 seconds without a shot: 214 and 21C, 1.5 fights and 1100 ticks
+    -- a run, and a grab after most of them.
+    local back = 0
+    if s.draw_from and s.aim_ticks > 0 and s.pose == "down" then
+        back = target.distance - s.draw_from
+        if back < 0 then
+            back = 0
+        elseif back > SETBACK_MAX then
+            back = SETBACK_MAX
+        end
+        if back > (s.setback or 0) then
+            s.setback = back
+        end
+    end
     -- Spacing first: a walk drops the aim.
     local min, max = band_of(entry, s.gun)
     local reloading = not melee and weapon.clip <= 0
     local move, want = BotTactics.spacing({
-        distance = target.distance,
+        distance = target.distance - back,
+        aimed = target.distance,
         min = min,
         max = max,
         melee = melee,
@@ -2882,6 +2926,8 @@ function BotTactics.step(bot, scene, player)
         crawl_reach = target.status_flags & C.STATUS_TORSO == 0 and entry
             and entry.crawl_reach or nil,
         low_reach = entry and entry.down_reach or nil,
+        walking_in = s.approach_ticks ~= nil,
+        setback = s.setback,
         reach = entry and entry.reach,
         speed = entry and entry.speed,
         back_speed = C.SPEED.back,
@@ -2937,6 +2983,7 @@ function BotTactics.step(bot, scene, player)
     if move == "approach" then
         s.approach_ticks = (s.approach_ticks or 0) + 1
         if not s.reload_started and s.approach_ticks <= SPACE_TICKS then
+            s.draw_from = nil
             bot:walk_to(target.x, target.z, {
                 run = target.distance - want >= C.RUN_MIN_DISTANCE,
                 tolerance = SPACE_TOLERANCE,
@@ -3037,6 +3084,10 @@ function BotTactics.step(bot, scene, player)
     local input = BotTactics.aim_input(pose or s.held_pose or "torso")
     if pose then
         s.held_pose = pose
+    end
+    -- Where the raise began (the draw's set-back is measured from it).
+    if s.aim_ticks == 0 then
+        s.draw_from = target.distance
     end
     s.aim_ticks = s.aim_ticks + 1
     -- Keep turning onto the target while the aim is up.
