@@ -2681,6 +2681,244 @@ mod tests {
     /// against 0x17 instead of 0: 1 is under it, so it marks the zombie
     /// staggered (`At_obj_no` 1) and `Em10Dm00` hands the hit to `Em10Dm01`,
     /// the knock-back (clip 4 from the front), with no draw.
+    /// What a grab did, tick by tick ([`grab_run`]).
+    struct Grab {
+        /// The zombie's `Routine_2` after each tick.
+        steps: Vec<u8>,
+        /// `Timer0` after each tick.
+        timers: Vec<i32>,
+        /// Each `Pl_life_down`: (tick, damage, low).
+        bites: Vec<(usize, i64, bool)>,
+        /// The player's routines as the grab's first tick set them.
+        player: Vec<i64>,
+        /// The player's `Routine_2` writes: (tick, value).
+        player_steps: Vec<(usize, i64)>,
+        /// The zombie's routines at the end.
+        routines: Vec<u8>,
+    }
+
+    /// `FUN_00453510` from its first tick (`1,3,0,0`), or `1,1,0,0` for a
+    /// crawler, for `ticks` ticks. `setup` runs first: `KIND`, `V` (the id's
+    /// variant), `BEHIND` (`Cdir_ck`), `PRESS(t)` (`Gacha_ch` on tick `t`,
+    /// from 1), `LIFE_DOWN` (what `Pl_life_down` returns) and `STEP`/`TIMER0`/
+    /// `COUNT` to start part way. The grab's clip ends on its fifth frame and
+    /// the struggle's loops in 38, as the motion banks have them.
+    fn grab_run(setup: &str, ticks: usize) -> Grab {
+        let (lua, budget) = crate::lua::new_sandboxed_state().unwrap();
+        budget.begin();
+        let library = include_str!("../../games/re2/lib/zombie.lua");
+        lua.load(format!(
+            "KIND, V, BEHIND, LIFE_DOWN = 6, {{}}, false, 0
+             STEP, TIMER0, COUNT = 0, 0, 0
+             function PRESS(t) return false end
+             {setup}
+             local LENGTHS = {{ [0xB] = 5, [0xC] = 38, [0xD] = 8, [0xE] = 10, [0xF] = 20, [0x10] = 40 }}
+             local w = {{ r = {{ [0] = 1, KIND & 1 ~= 0 and 1 or 3, STEP, 0 }}, timers = {{ [0] = TIMER0 }},
+                 vars = {{ [1] = 5 }}, clip = 0xC, count = COUNT, tick = 0, pl_dc = 0 }}
+             STEPS, TIMERS, BITES, PLAYER, PLAYER_STEPS = {{}}, {{}}, {{}}, {{}}, {{}}
+             local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+             function e:routine(i) return w.r[i] end
+             function e:set_routine(i, v) w.r[i] = v end
+             function e:routines(a, b, c, d) w.r = {{ [0] = a, b, c, d }} end
+             function e:kind() return KIND end
+             function e:var(i) return w.vars[i] or 0 end
+             function e:set_var(i, v) w.vars[i] = v end
+             function e:timer(i) return w.timers[i] or 0 end
+             function e:set_timer(i, v) w.timers[i] = v end
+             function e:clip(n) w.clip = n; w.count = 0 end
+             function e:move_no() return w.clip end
+             function e:move_cnt() return w.count end
+             function e:joint_bank()
+                 w.count = w.count + 1
+                 if w.count >= (LENGTHS[w.clip] or 30) then
+                     w.count = 0
+                     return true
+                 end
+                 return false
+             end
+             function e:step(ended) if ended then w.r[2] = w.r[2] + 1 end end
+             function e:speed() return 0, 0, 0 end
+             function e:cdir_player() return BEHIND end
+             function e:gacha() return PRESS(w.tick) end
+             function e:pl_damage_cnt() return w.pl_dc end
+             function e:pl_set_damage_cnt(v) w.pl_dc = v end
+             function e:pl_set_routine(a, b, c, d) PLAYER = {{ a, b, c, d }} end
+             function e:pl_set_routine_at(i, v) table.insert(PLAYER_STEPS, {{ w.tick, v }}) end
+             function e:pl_life_down(damage, low)
+                 table.insert(BITES, {{ w.tick, damage, low }})
+                 return LIFE_DOWN
+             end
+             function e:at_em_no() return 0xFF end
+             local zombie = (function() {library} end)()
+             function TICK(t)
+                 w.tick = t
+                 zombie.run(e, V)
+                 STEPS[t] = w.r[2]
+                 TIMERS[t] = w.timers[0] or 0
+                 ROUTINES = {{ w.r[0], w.r[1], w.r[2], w.r[3] }}
+             end"
+        ))
+        .exec()
+        .unwrap();
+        let globals = lua.globals();
+        let tick: mlua::Function = globals.get("TICK").unwrap();
+        for t in 1..=ticks {
+            budget.begin();
+            tick.call::<()>(t).unwrap();
+        }
+        let pairs = |name: &str| -> Vec<(usize, i64)> {
+            let rows: Vec<Vec<i64>> = globals.get(name).unwrap();
+            rows.iter().map(|row| (row[0] as usize, row[1])).collect()
+        };
+        let bites: Vec<mlua::Table> = globals.get("BITES").unwrap();
+        Grab {
+            steps: globals.get("STEPS").unwrap(),
+            timers: globals.get("TIMERS").unwrap(),
+            bites: bites
+                .iter()
+                .map(|row| {
+                    (
+                        row.get::<usize>(1).unwrap(),
+                        row.get(2).unwrap(),
+                        row.get(3).unwrap(),
+                    )
+                })
+                .collect(),
+            player: globals.get("PLAYER").unwrap(),
+            player_steps: pairs("PLAYER_STEPS"),
+            routines: globals.get("ROUTINES").unwrap(),
+        }
+    }
+
+    /// The tick of the grab on which the struggle let go (`Routine_2` 4).
+    fn released(grab: &Grab) -> usize {
+        grab.steps.iter().position(|&step| step == 4).unwrap() + 1
+    }
+
+    /// `FUN_00453510`'s struggle: `Timer0` starts at 0x94 on the clip's
+    /// first tick and loses 2 a tick, 7 on a tick `Gacha_ch` counts a fresh
+    /// press, and the zombie lets go (`Routine_2` 4, the player's too) on the
+    /// tick it goes below 0. The grab's clip is the first five ticks, so the
+    /// struggle's first tick is the sixth: 75 struggle ticks without a press,
+    /// 22 with one on every tick, 33 or 34 with one every other tick.
+    #[test]
+    fn the_struggle_lets_go_by_the_presses() {
+        let none = grab_run("", 120);
+        assert_eq!(none.steps[..6], [1, 1, 1, 1, 2, 3]);
+        assert_eq!(none.timers[5], 0x94 - 2);
+        assert_eq!(released(&none), 5 + 75);
+        assert_eq!(none.player_steps, [(80, 4)]);
+        let mashed = grab_run("function PRESS(t) return t > 5 end", 60);
+        assert_eq!(released(&mashed), 5 + 22);
+        // Struggle tick 21 leaves 148 - 7 * 21 = 1.
+        assert_eq!(mashed.timers[5 + 20], 1);
+        let odd = grab_run("function PRESS(t) return (t - 5) % 2 == 1 end", 60);
+        assert_eq!(released(&odd), 5 + 33);
+        let even = grab_run(
+            "function PRESS(t) return t > 5 and (t - 5) % 2 == 0 end",
+            60,
+        );
+        assert_eq!(released(&even), 5 + 34);
+    }
+
+    /// The bite's frame and damage go by `Type & 1` and the tough ids (0x11,
+    /// 0x17) alone: a standing 0x13 or 0x1F bites for 0x14 on the struggle's
+    /// frame 0x10 (struggle ticks 16 and 54), a tough one for 0x1E, and a
+    /// crawler for 5 (10 tough) on frame 1, with `Pl_life_down`'s mode 1.
+    /// `Model_type` and the skin play no part.
+    #[test]
+    fn the_bites_go_by_crawling_and_toughness() {
+        for variant in ["{ parts0_y = 0xE66 }", "{ skins = true }"] {
+            let grab = grab_run(&format!("V = {variant}"), 80);
+            assert_eq!(grab.bites, [(5 + 16, 0x14, false), (5 + 54, 0x14, false)]);
+        }
+        let tough = grab_run("V = { tough = true }", 30);
+        assert_eq!(tough.bites, [(5 + 16, 0x1E, false)]);
+        // A crawler's grab clip is ten frames, and its struggle (0xF) bites
+        // on frame 1.
+        let low = grab_run("KIND = 1", 12);
+        assert_eq!(low.bites, [(11, 5, true)]);
+        let low = grab_run("KIND = 1; V = { tough = true }", 12);
+        assert_eq!(low.bites, [(11, 10, true)]);
+    }
+
+    /// The counter's test comes before the bite's on the same tick
+    /// (`FUN_00453510` l.88 and l.92): a struggle that runs out on the bite's
+    /// frame lets go and still bites.
+    #[test]
+    fn the_counter_comes_before_the_bite() {
+        let grab = grab_run("STEP, TIMER0, COUNT = 3, 1, 0xF", 1);
+        assert_eq!(grab.steps, [4]);
+        assert_eq!(grab.bites, [(1, 0x14, false)]);
+        assert_eq!(grab.player_steps, [(1, 4)]);
+    }
+
+    /// `Pl_life_down`'s results: 1 (the player at nothing) lets go at once,
+    /// with one more blood (the player's `Timer2`); 2 kills, and the zombie
+    /// drops the body (`1,6`) as the player dies in its hands (`5` to `6`,
+    /// facing as the grab did).
+    #[test]
+    fn a_last_bite_lets_go_and_a_lethal_one_kills() {
+        let last = grab_run("LIFE_DOWN = 1", 21);
+        assert_eq!(released(&last), 21);
+        assert_eq!(last.player_steps, [(21, 4)]);
+        let lethal = grab_run("LIFE_DOWN, BEHIND = 2, true", 21);
+        assert_eq!(lethal.routines, [1, 6, 0, 0]);
+        assert_eq!(lethal.player, [6, 1, 0, 0]);
+    }
+
+    /// The grab's first tick holds the player (`5`, `Cdir_ck` in
+    /// `Routine_1`, plus 2 for a crawler's low hold) and raises the player's
+    /// `Damage_cnt` 0x80, which keeps every other zombie's reach off.
+    #[test]
+    fn a_grab_holds_the_player_front_or_back() {
+        assert_eq!(grab_run("", 1).player, [5, 0, 0, 0]);
+        assert_eq!(grab_run("BEHIND = true", 1).player, [5, 1, 0, 0]);
+        assert_eq!(grab_run("KIND = 1", 1).player, [5, 2, 0, 0]);
+        assert_eq!(grab_run("KIND, BEHIND = 1, true", 1).player, [5, 3, 0, 0]);
+    }
+
+    /// `FUN_00452930`'s reach: a walking zombie within 0x4B0 that faces the
+    /// player grabs (`1,3`) only while the player's `Damage_cnt` has no 0x80,
+    /// so a held player is never grabbed by a second zombie.
+    #[test]
+    fn a_held_player_is_not_reached_for() {
+        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        let library = include_str!("../../games/re2/lib/zombie.lua");
+        let walk = |held: u8| -> Vec<u8> {
+            lua.globals().set("HELD", held).unwrap();
+            lua.load(format!(
+                "local w = {{ r = {{ [0] = 1, 1, 1, 0 }}, vars = {{ [1] = 5, [2] = 5 }}, timers = {{ [0] = 9, 9, 9, 9 }} }}
+                 local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+                 function e:routine(i) return w.r[i] end
+                 function e:set_routine(i, v) w.r[i] = v end
+                 function e:routines(a, b, c, d) w.r = {{ [0] = a, b, c, d }} end
+                 function e:var(i) return w.vars[i] or 0 end
+                 function e:set_var(i, v) w.vars[i] = v end
+                 function e:timer(i) return w.timers[i] or 0 end
+                 function e:set_timer(i, v) w.timers[i] = v end
+                 function e:kind() return 6 end
+                 function e:distance() return 1000 end
+                 function e:turn_to_player() return 0 end
+                 function e:same_floor() return true end
+                 function e:player_id() return 0 end
+                 function e:player_within() return true end
+                 function e:player_life() return 200 end
+                 function e:joint_bank() return false end
+                 function e:speed() return 0, 0, 0 end
+                 function e:pl_damage_cnt() return HELD end
+                 local zombie = (function() {library} end)()
+                 zombie.run(e, {{}})
+                 R = {{ w.r[0], w.r[1] }}"
+            ))
+            .exec()
+            .unwrap();
+            lua.globals().get("R").unwrap()
+        };
+        assert_eq!(walk(0), [1, 3]);
+        assert_ne!(walk(0x80)[1], 3);
+    }
+
     #[test]
     fn a_zombie_without_0x40_draws_its_stagger_counter_again() {
         // The walk's clip 0, its stagger, one draw: 7 & 0xF + 0x10.
