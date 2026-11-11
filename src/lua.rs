@@ -459,7 +459,12 @@ mod imp {
                 Ok(items)
             });
 
+            // `flag_get(bank, bit)`: in an RE 2 room, a bit of RE 2's flag
+            // banks (the scripts' `ck` numbering), else of RE 1's.
             methods.add_method("flag_get", |_lua, game, (bank, bit): (u8, u8)| {
+                if game.is_re2_room {
+                    return Ok(game.re2.flag(bank, bit));
+                }
                 Ok(game
                     .flags
                     .get(usize::from(bank))
@@ -467,12 +472,21 @@ mod imp {
             });
 
             // `flag_set(bank, bit, value)`: `value` defaults to true, so
-            // `api:flag_set(0, 1)` sets the bit.
+            // `api:flag_set(0, 1)` sets the bit. In an RE 2 room it writes RE 2's
+            // banks, as `set_re2_flag` does.
             methods.add_method_mut(
                 "flag_set",
                 |_lua, game, (bank, bit, value): (u8, u8, Option<bool>)| {
+                    let value = value.unwrap_or(true);
+                    if game.is_re2_room {
+                        game.re2.set_flag(bank, bit, u8::from(value));
+                        if bank == 1 && bit == 1 {
+                            game.re2.scenario_b = value;
+                        }
+                        return Ok(());
+                    }
                     if let Some(flags) = game.flags.get_mut(usize::from(bank)) {
-                        flags.apply(bit, if value.unwrap_or(true) { 0 } else { 1 });
+                        flags.apply(bit, if value { 0 } else { 1 });
                     }
                     Ok(())
                 },
@@ -1519,6 +1533,31 @@ end
 
         assert_eq!(vm.filter_message(&mut game, 9), Some(10));
         assert_eq!(vm.filter_message(&mut game, 9), Some(10));
+    }
+
+    #[test]
+    fn flag_hooks_use_re2s_banks_in_an_re2_room() {
+        let source = r#"
+function on_room_load(api)
+    assert(api:flag_get(4, 0) == false)
+    api:flag_set(4, 0, true)
+    assert(api:flag_get(4, 0) == true)
+    api:flag_set(8, 9)
+    api:flag_set(4, 3, false)
+end
+"#;
+        let pack = lua_pack(&["lua/hooks.lua"], &[("lua/hooks.lua", source)]);
+        let vm = LuaVm::load(&pack).unwrap().expect("a Lua VM");
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.re2.set_flag(4, 3, 1);
+        let id = game.id;
+        vm.call_room_load(&mut game, id);
+        // 108's extinguish raises 4:0 (`set(4, 0, 1)`), the scripts' numbering.
+        assert!(game.re2.flag(4, 0));
+        assert!(game.re2.flag(8, 9));
+        assert!(!game.re2.flag(4, 3));
+        assert!(!game.flags[4].bit(0), "RE 1's banks are left alone");
     }
 
     #[test]

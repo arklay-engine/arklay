@@ -94,6 +94,9 @@ pub struct Re2State {
     pub pending_cuts: Vec<CutEdit>,
     /// Collision-record edits waiting for the room (`sca_id_set`).
     pub pending_sca: Vec<(u8, u16)>,
+    /// Floor-zone switches waiting for the room (`flr_set`): the zone and
+    /// whether it goes on.
+    pub pending_flr: Vec<(u8, u8)>,
     /// A door has just handed back, and `fg_stop` hasn't come down yet.
     pub door_settling: bool,
     /// The same tick, as the enemy slots see it.
@@ -752,6 +755,8 @@ const SCE_ITEMBOX: u8 = 10;
 /// ([`crate::game::hikidashi2`]).
 pub const SCE_HIKIDASHI: u8 = 13;
 pub const SCE_DAMAGE: u8 = 11;
+/// `Sce_Status`'s area (`0x4E9C80`): opens the status screen.
+pub const SCE_STATUS: u8 = 12;
 /// `Sce_Windows` (`0x4EA0B0`): game mode 7, the computer
 /// ([`crate::game::computer2`]).
 pub const SCE_WINDOWS: u8 = 14;
@@ -785,6 +790,7 @@ impl Default for Re2State {
             var_cut: None,
             pending_cuts: Vec::new(),
             pending_sca: Vec::new(),
+            pending_flr: Vec::new(),
             door_settling: false,
             door_stop: false,
             door_key_stop: false,
@@ -2768,6 +2774,7 @@ impl Host for GameHost<'_> {
                 b: at(1) as u8,
             }),
             "sca_id_set" => self.game.re2.pending_sca.push((at(0) as u8, at(1) as u16)),
+            "flr_set" => self.game.re2.pending_flr.push((at(0) as u8, at(1) as u8)),
             "work_set" => {
                 let work = if at(0) == WK_PLAYER {
                     Work::Player
@@ -6018,6 +6025,25 @@ mod tests {
         exec(&mut game, "aot_on", &[8]);
         assert!(game.re2_computer_request.is_some(), "`Sce_Windows` acts");
         assert!(game.re2_computer.is_none() && !game.message.active);
+        assert_eq!(game.re2.banks, flags);
+    }
+
+    /// Room 108's area 4 is `Sce_Status` (kind 12), set by
+    /// `2c 04 0c 51 00 00` with an empty box and no data: event 7's closing
+    /// `aot_on 4` opens the status screen on the next tick, as START does,
+    /// and changes nothing else.
+    #[test]
+    fn aot_on_of_sce_status_opens_the_status_screen() {
+        let mut game = GameState::default();
+        exec(
+            &mut game,
+            "aot_set",
+            &[4, 0x0c, 0x51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        );
+        let flags = game.re2.banks;
+        exec(&mut game, "aot_on", &[4]);
+        assert!(game.re2_status_request, "`Sce_Status` acts");
+        assert!(game.re2_computer_request.is_none() && !game.message.active);
         assert_eq!(game.re2.banks, flags);
     }
 

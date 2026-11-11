@@ -662,6 +662,19 @@ pub fn floor_sound(zones: &[crate::state::FootstepZone], x: i32, z: i32, floor: 
         .map_or(0x1d, |zone| zone.sound_data as u8)
 }
 
+/// `Flr_set` (`0x4E8BE0`, `flr_set(index, on)`): `on` 1 turns floor zone
+/// `index` on, clearing its flags' `0x80`, and anything else turns it off. An
+/// index past the room's zones changes nothing.
+pub fn flr_set(zones: &mut [crate::state::FootstepZone], index: u8, on: u8) {
+    if let Some(zone) = zones.get_mut(usize::from(index)) {
+        if on == 1 {
+            zone.flags &= !0x80;
+        } else {
+            zone.flags |= 0x80;
+        }
+    }
+}
+
 /// `Snd_se_walk`'s sound column for a footfall in water.
 const WATER_FOOTSTEP: u8 = 0x1A;
 /// `Snd_se_walk`'s sound slot for a footfall on a room object.
@@ -824,6 +837,36 @@ mod tests {
         let left = place(from, to, [-5000, 0, 5000]).1;
         let right = place(from, to, [5000, 0, 5000]).1;
         assert!(left != 0 && right != 0 && left.signum() != right.signum());
+    }
+
+    #[test]
+    fn flr_set_turns_a_floor_zone_on_and_off() {
+        // Room 109's (`ROOM1090.RDT`) first two zones: the floor, and the
+        // puddle (sound 0x1a), which loads switched off; its event's
+        // `flr_set(1, 1)` turns it on.
+        let zone = |x: i16, z: i16, width, height, sound_data, flags| crate::state::FootstepZone {
+            base_x: x as u16,
+            base_z: z as u16,
+            width,
+            height,
+            sound_data,
+            flags,
+        };
+        let mut zones = [
+            zone(-29300, -27600, 31130, 29410, 0x1d, 0),
+            zone(-13430, -14000, 12900, 3290, 0x1a, 0x80),
+        ];
+        let (x, z) = (-3079, -12450);
+        assert_eq!(floor_sound(&zones, x, z, 0), 0x1d);
+        flr_set(&mut zones, 1, 1);
+        assert_eq!(zones[1].flags, 0);
+        assert_eq!(floor_sound(&zones, x, z, 0), 0x1a);
+        flr_set(&mut zones, 1, 0);
+        assert_eq!(zones[1].flags, 0x80);
+        assert_eq!(floor_sound(&zones, x, z, 0), 0x1d);
+        // Past the room's zones, nothing changes.
+        flr_set(&mut zones, 2, 1);
+        assert_eq!(zones[1].flags, 0x80);
     }
 
     #[test]

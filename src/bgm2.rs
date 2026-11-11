@@ -209,6 +209,9 @@ pub struct Channel {
     pub volume: u8,
     /// `SsSetPan`'s argument.
     pub pan: u8,
+    /// The loaded track's length in ticks at 30 a second, once the mixer
+    /// has read it ([`crate::bgm`]); `None` without a mixer.
+    pub ticks: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -226,6 +229,9 @@ struct Sequence {
     fade: u8,
     /// The volume a start gives it (`DWORD_00693804` and on).
     volume: u8,
+    /// The ticks since `SsPlay` started it without its loop, while it
+    /// isn't stopped: its buffer ends with its track.
+    once: Option<u32>,
 }
 
 /// Where `sce_bgm_control` runs, which some of its cases ask.
@@ -281,6 +287,7 @@ impl Default for Music {
                 loaded: false,
                 fade: 0,
                 volume: SEQUENCE_VOLUME,
+                once: None,
             }; SEQUENCES],
             door_fade: 0,
             door_wait: 0,
@@ -333,9 +340,26 @@ impl Music {
         for index in sequence_channels(sequence) {
             self.channels[index].play = Some(looping);
         }
+        self.sequences[sequence].once = (!looping).then_some(0);
+    }
+
+    /// Sub sequence `sequence`'s channel plays (`0x4347B0`'s status bit 0):
+    /// a track is loaded, and one started without its loop hasn't reached
+    /// its end. The end is counted in ticks at 30 a second from the
+    /// track's length, as the voice lines' are, where the original's
+    /// DirectSound buffer ends by the clock.
+    fn sub_playing(&self, sequence: usize) -> bool {
+        let state = &self.sequences[sequence];
+        let length = self.channels[2 + sequence].ticks;
+        state.loaded
+            && !state
+                .once
+                .zip(length)
+                .is_some_and(|(played, length)| played >= length)
     }
 
     fn stop(&mut self, sequence: usize) {
+        self.sequences[sequence].once = None;
         for index in sequence_channels(sequence) {
             self.channels[index].stop = true;
             self.channels[index].play = None;
@@ -350,6 +374,7 @@ impl Music {
             stop: true,
             volume,
             pan: 0,
+            ticks: None,
         };
     }
 
@@ -370,6 +395,7 @@ impl Music {
         let sequence = &mut self.sequences[0];
         sequence.state = 0;
         sequence.loaded = tracks.iter().any(Option::is_some);
+        sequence.once = None;
         bank
     }
 
@@ -390,6 +416,7 @@ impl Music {
             let sequence = &mut self.sequences[1 + channel];
             sequence.state = 0;
             sequence.loaded = track.is_some();
+            sequence.once = None;
         }
         bank
     }
@@ -413,8 +440,13 @@ impl Music {
                 }
             }
         } else if (word.sub ^ self.current.sub) & 0x3f != 0 {
+            // A sub fades only while its channel's buffer plays (`0x4347B0`'s
+            // status bit 0 for BGM channel `sequence - 1`): a sub sequence
+            // with no track has none, so its state stays (room 107's sub 5,
+            // whose second channel names no track, into room 108), and so
+            // does one whose track played once to its end.
             for sequence in 1..SEQUENCES {
-                if self.sequences[sequence].state == STATE_PLAYING {
+                if self.sequences[sequence].state == STATE_PLAYING && self.sub_playing(sequence) {
                     self.fade(sequence);
                     self.sequences[sequence].state = STATE_SCRIPT_FADE;
                 }
@@ -610,6 +642,9 @@ impl Music {
             return;
         }
         for sequence in 0..SEQUENCES {
+            if let Some(played) = self.sequences[sequence].once.as_mut() {
+                *played = played.saturating_add(1);
+            }
             if self.sequences[sequence].fade > 0 {
                 self.sequences[sequence].fade -= 1;
                 for index in sequence_channels(sequence) {
@@ -1026,6 +1061,62 @@ mod tests {
         assert_eq!(music.channels[3].volume, 0);
         music.control([1, 0, 1, 81, 0], street());
         assert_eq!(music.channels[3].volume, 80);
+    }
+
+    /// `Snd_bgm_ck` on a new sub fades the sub sequences whose channel
+    /// plays: one with no track keeps its state.
+    #[test]
+    fn a_door_to_a_new_sub_fades_only_the_sub_channels_that_play() {
+        // Room 107's word is 0x0500 (main 0, sub 5) and 108's 0xC200
+        // (main 0, sub 2 held); sub 5 has a track on its first channel only.
+        let tracks = sub_tracks(5);
+        assert!(tracks[0].is_some() && tracks[1].is_none());
+        let room_107 = Place {
+            stage: 0,
+            room: 7,
+            ..Place::default()
+        };
+        let mut music = Music::default();
+        music.enter_room(RoomMusic::from_word(0x0500), room_107);
+        assert_eq!(music.sequences[1].state, STATE_PLAYING);
+        assert_eq!(music.sequences[2].state, STATE_PLAYING);
+        music.leave_room(RoomMusic::from_word(0xC200), 0);
+        assert_eq!(music.sequences[1].state, STATE_SCRIPT_FADE);
+        assert!(music.fading(1));
+        assert_eq!(music.sequences[2].state, STATE_PLAYING);
+        assert!(!music.fading(2));
+    }
+
+    /// A sub `sce_bgm_control`'s op 3 started without its loop plays its
+    /// track once: past its end its buffer no longer plays, so the door
+    /// leaves its state, and before the end the door fades it.
+    #[test]
+    fn a_door_leaves_a_sub_that_played_once_to_its_end() {
+        let room_107 = Place {
+            stage: 0,
+            room: 7,
+            ..Place::default()
+        };
+        for (ticks, fades) in [(4, true), (5, false)] {
+            let mut music = Music::default();
+            music.enter_room(RoomMusic::from_word(0x0500), room_107);
+            music.control([1, 3, 0, 0, 0], room_107);
+            assert_eq!(music.channels[3].play, Some(false), "once");
+            music.channels[3].ticks = Some(5);
+            for _ in 0..ticks {
+                music.tick();
+            }
+            music.leave_room(RoomMusic::from_word(0xC200), 0);
+            assert_eq!(music.fading(1), fades, "after {ticks} ticks");
+            assert_eq!(
+                music.sequences[1].state,
+                if fades {
+                    STATE_SCRIPT_FADE
+                } else {
+                    STATE_PLAYING
+                }
+            );
+        }
     }
 
     #[test]

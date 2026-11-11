@@ -3306,15 +3306,24 @@ impl GameSession {
     ) -> Result<()> {
         self.game.countdown_hud = None;
         self.game.apply_re2_no_enemies();
-        if self.game.re2_computer_request.is_some() {
+        if std::mem::take(&mut self.game.re2_status_start_dropped) {
             // `Game_loop` takes START only while `Game` is 0, and
-            // `Sce_Windows` made it 7 in the script pass of the tick a START
-            // was taken on.
-            self.menu_request = None;
+            // `Sce_Windows` (7) or `Sce_Status` (1) set it in the script pass
+            // of the tick a START was pressed on.
+            if let Some((_, message_flags)) = self.menu_request.take() {
+                self.game.message_flags = message_flags;
+            }
         }
         self.finish_menu_request(pack);
         if std::mem::take(&mut self.game.re2_box_open) {
             self.begin_re2_box_open(pack);
+        }
+        if std::mem::take(&mut self.game.re2_status_request)
+            && self.transition.is_none()
+            && self.movie.is_none()
+            && self.death.is_idle()
+        {
+            self.begin_menu_open(pack);
         }
         self.re2_status_open_areas(pack);
         self.tick_cut = Some((self.loaded.id, self.loaded.room.current_cut));
@@ -4156,23 +4165,17 @@ impl GameSession {
                 self.game.message_flags &= 0xFF7A;
                 // RE2's `Game_loop` takes START after the scripts: it plays
                 // the decide cue and leaves for game mode 1 before anyone
-                // moves (`0x4C0379`).
+                // moves (`0x4C0379`). The room's tick plays the cue, after
+                // the scripts, or drops the START if they set `Game`.
                 if self.game.is_re2_room && kind == MenuRequest::Menu {
                     self.game.re2_status_start = true;
-                    if let Some(id) = crate::se2::SoundId::decode(game::status2::Sound::Decide.id())
-                    {
-                        self.game
-                            .re2
-                            .sounds
-                            .push(crate::scd2::host::SoundRequest::new(id, [0; 3]));
-                    }
                 }
             }
         }
         // START's own tick leaves `Game_loop` for the draw pass before
         // `DWORD_00991fc0 |= 1`, so the bodies' `pTbefore_func`s run but
         // `Esp_move` doesn't.
-        let re2_start_tick = self.game.re2_status_start;
+        let mut re2_start_tick = self.game.re2_status_start;
         // The port's equip buttons and weapon cycle.
         if !was_active {
             self.equip_hotkeys(ui);
@@ -4230,6 +4233,19 @@ impl GameSession {
         );
         if std::mem::take(&mut self.re2_door_neck) {
             self.place_re2_door_neck();
+        }
+        if self.game.re2_status_start_dropped {
+            re2_start_tick = false;
+        }
+        // `Sce_Status` and a door on one tick both set `Game` to 1, and
+        // `Game_loop`'s case 1 opens the status screen while `fg_status` has
+        // `0x8000`, so the door is never loaded. Its stop still held this
+        // tick's effects.
+        let transition_held = transition.is_some();
+        let transition = transition.filter(|_| !self.game.re2_status_request);
+        if transition_held && transition.is_none() {
+            self.game.transition_door = None;
+            self.game.door_yield = None;
         }
         self.game.apply_invincible();
         // While the pad-driven locomotion owns the player, mirror its
@@ -4363,6 +4379,11 @@ impl GameSession {
                 .map(|player| (player.pos, &mut player.health));
             if re2_start_tick {
                 re2.tick_parts_down(self.loaded.room.sca.as_ref());
+            } else if transition_held {
+                // A door taken this tick has raised `fg_stop |= 0xFF000000`
+                // (`Sce_Door`) before `Esp_move`: only the kinds that carry
+                // on under a stop move.
+                re2.tick_effects_as(true, self.loaded.room.sca.as_ref(), player);
             } else {
                 re2.tick_effects(self.loaded.room.sca.as_ref(), player);
             }
@@ -17049,6 +17070,7 @@ fn run_re2_init(
     game.re2.pending_damage.clear();
     game.re2.pending_cuts.clear();
     game.re2.pending_sca.clear();
+    game.re2.pending_flr.clear();
     game.re2.scroll = 0;
     game.re2.pending_player = Default::default();
     // `Pl_init`, which runs before a room's first tick of play.
@@ -17100,6 +17122,12 @@ fn run_re2_init(
     game.re2.player.damage_cnt = 0;
     game.re2.room_loading = true;
     game.re2.load_pass = true;
+    // A door the last room's scripts opened stopped the characters on that
+    // tick only: the new room's load and its last pass run them.
+    game.re2.script_door = false;
+    // A `Sce_Status` the last room's scripts fired doesn't open the screen
+    // in this one.
+    game.re2_status_request = false;
     // `Sce_scheduler_set` rolls `Sce_rnd` before the room's first scripts.
     game.re2.sce_rnd_set();
     // And clears the last room's script work before them (`Sce_work_clr`).
@@ -17205,6 +17233,9 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
         {
             record.set_id(id);
         }
+    }
+    for (index, on) in std::mem::take(&mut context.game.re2.pending_flr) {
+        crate::se2::flr_set(&mut context.room.footstep_zones, index, on);
     }
     let moved = std::mem::take(&mut context.game.re2.pending_player);
     if let Some(warp) = moved.warp {
@@ -17761,7 +17792,20 @@ fn tick_room_timed(
     // the enemies' and the player's moves (`0x4C03B0`), so the player keeps
     // the frame it had.
     if context.game.is_re2_room && std::mem::take(&mut context.game.re2_status_start) {
-        return context.game.transition.take();
+        if context.game.re2_status_request || context.game.re2_computer_request.is_some() {
+            // The scripts set `Game` (`Sce_Status`, `Sce_Windows`): START is
+            // tested only while it is 0, so the tick runs on.
+            context.game.re2_status_start_dropped = true;
+        } else {
+            if let Some(id) = crate::se2::SoundId::decode(game::status2::Sound::Decide.id()) {
+                context
+                    .game
+                    .re2
+                    .sounds
+                    .push(crate::scd2::host::SoundRequest::new(id, [0; 3]));
+            }
+            return context.game.transition.take();
+        }
     }
     // `Game_loop` runs the enemy slots whether or not the player may move.
     if context.game.is_re2_room {
@@ -24035,6 +24079,169 @@ mod tests {
             .tick(&pack, UiInput::default(), player::Input::default(), false)
             .unwrap();
         assert_eq!(session.re2_status_open, Some(RE2_STATUS_BLACK));
+    }
+
+    /// A walk-in `Sce_Status` area (kind 12) under the player in slot 2,
+    /// for the RE 2 session tests.
+    fn re2_status_area_at(session: &mut GameSession, pos: [i32; 3]) {
+        let zone = [(pos[0] - 1000) as i16, (pos[2] - 1000) as i16, 2000, 2000];
+        session.game.room_actions[2] = Some(game::RoomAction {
+            slot: 2,
+            kind: game::RoomActionKind::Other,
+            zone,
+            sce: crate::scd2::host::SCE_STATUS,
+            handler: 1,
+            flags: 0x41,
+            params: [0; 8],
+            item_data: None,
+            room_items_flag: 0xFF,
+            reach_animation: false,
+        });
+    }
+
+    fn re2_tick(session: &mut GameSession, pack: &Pack, ui: UiInput) {
+        session
+            .tick(pack, ui, player::Input::default(), false)
+            .unwrap();
+    }
+
+    /// A door taken on a tick has raised `fg_stop` (`Sce_Door`) before
+    /// `Esp_move`: an effect of a kind that doesn't carry on under a stop
+    /// (7) holds on the door's tick, where it moved on the tick before.
+    #[test]
+    fn re2_a_doors_tick_moves_the_effects_as_stopped() {
+        let dir = TempDir::new();
+        let (pack, a, b) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        let effects = &mut session.game.re2.effects;
+        effects.enter_room(crate::esp2::test_moving_bank());
+        let at = session.player.pos.map(|axis| axis as i16);
+        effects.call(7, 0, 0x1000, 0, at, false).unwrap();
+        let before = session.game.re2.effects.trace_field();
+        re2_tick(&mut session, &pack, UiInput::default());
+        let moved = session.game.re2.effects.trace_field();
+        assert_ne!(moved, before, "a tick in play moves it");
+        re2_tick(&mut session, &pack, UiInput::default());
+        let moved_again = session.game.re2.effects.trace_field();
+        assert_ne!(moved_again, moved, "and moves it again");
+        let moved = moved_again;
+        let pos = session.player.pos;
+        re2_area_at(&mut session, pos, true);
+        // Into the test pack's other room.
+        let door = session.game.doors[1].as_mut().unwrap();
+        door.next_room = b.room;
+        door.re2 = Some(crate::scd2::host::Re2Door {
+            stage: 1,
+            room: b.room,
+            cut: 0,
+        });
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(session.transition.is_some(), "the door is taken");
+        assert_eq!(
+            session.game.re2.effects.trace_field(),
+            moved,
+            "the door's tick moves it as stopped"
+        );
+    }
+
+    /// `Sce_Status` sets `Game` to 1: the status screen opens on the next
+    /// tick, through START's open.
+    #[test]
+    fn re2_sce_status_opens_the_status_screen() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.re2_status_request = true;
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(!session.game.re2_status_request);
+        assert!(session.menu.is_some(), "the screen opens");
+        assert_eq!(session.re2_status_open, Some(1));
+    }
+
+    /// The open waits as START's does for a dying player: the request goes,
+    /// and no screen opens.
+    #[test]
+    fn re2_sce_status_opens_nothing_for_a_dying_player() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.death.start(false, false, false);
+        session.game.re2_status_request = true;
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(!session.game.re2_status_request);
+        assert!(session.menu.is_none());
+    }
+
+    /// `Sce_Status` and a door on one tick: both set `Game` to 1, and case 1
+    /// opens the status screen while `fg_status` has `0x8000`, so the door
+    /// is never loaded.
+    #[test]
+    fn re2_sce_status_wins_over_a_door_on_its_tick() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        let pos = session.player.pos;
+        re2_area_at(&mut session, pos, true);
+        re2_status_area_at(&mut session, pos);
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(session.game.re2_status_request, "the status area fired");
+        assert!(session.transition.is_none(), "no door");
+        assert!(session.game.transition_door.is_none());
+        session.game.room_actions[1] = None;
+        session.game.room_actions[2] = None;
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(session.menu.is_some(), "the screen opens");
+        assert!(session.transition.is_none());
+        assert_eq!(session.loaded.id, a);
+    }
+
+    /// `Game_loop` tests START after `Sce_scheduler`, and only while `Game`
+    /// is 0: a START pressed on the tick the scripts' `aot_on` fires an
+    /// `Sce_Status` (room 108's event 7) isn't taken, and its mask on the
+    /// message word is undone. The screen opens once, for the area.
+    #[test]
+    fn re2_start_on_the_tick_of_an_sce_status_is_not_taken() {
+        let start = UiInput {
+            start: true,
+            any: true,
+            ..UiInput::default()
+        };
+        for scripted in [false, true] {
+            let dir = TempDir::new();
+            let (pack, a, _) = debug_menu_pack(&dir);
+            let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+            session.game.is_re2_room = true;
+            if scripted {
+                let scripts = crate::scd2::akscr::compile(
+                    "#version 1\n#game re2\nproc main_00 { evt_end(0); }\nproc main_01 { aot_set(4, 12, 0x51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0); aot_on(4); evt_end(0); }",
+                )
+                .unwrap();
+                session.game.re2.vm = Some(Box::new(crate::scd2::vm::Vm::new(&scripts)));
+            }
+            // The controls are the player's, so the gate takes START.
+            session.game.message_flags |= START_MESSAGE_BITS;
+            let flags = session.game.message_flags;
+            re2_tick(&mut session, &pack, start);
+            assert!(session.menu_request.is_some(), "START is asked for");
+            // The decide cue goes with the START it is taken on (the test
+            // pack has no bank to log it from).
+            assert_eq!(session.game.re2_status_start_dropped, scripted);
+            assert!(!session.game.re2_status_start);
+            assert_eq!(session.game.re2_status_request, scripted);
+            re2_tick(&mut session, &pack, UiInput::default());
+            assert!(
+                session.menu.is_some(),
+                "scripted {scripted}: the screen opens"
+            );
+            assert!(session.menu_request.is_none());
+            if scripted {
+                assert_eq!(session.game.message_flags, flags, "START's mask is undone");
+            }
+        }
     }
 
     /// The return's mode 3 tick falls into the room pass under `fg_stop`'s
@@ -38522,6 +38729,31 @@ end
         }
         assert!(!game.scene_bars());
         assert_eq!(game.re2.scroll, 0);
+    }
+
+    #[test]
+    fn a_rooms_load_ends_the_stop_of_a_door_the_scripts_opened() {
+        // Room 108's event 13 opens door 0 (`aot_on`) into 107: the zombies
+        // the load places run their first routine in the load's last pass,
+        // not stopped for the rest of the door.
+        let mut game = game::GameState::default();
+        game.re2.script_door = true;
+        assert!(game.re2.character_stopped(0));
+        let mut vm = crate::scd2::vm::Vm::new(&crate::scd2::Scripts::default());
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game, false);
+        assert!(!game.re2.script_door);
+        assert!(!game.re2.character_stopped(0));
+    }
+
+    #[test]
+    fn a_rooms_load_drops_the_last_rooms_sce_status() {
+        // A `Sce_Status` fired with a door on one tick opens nothing in the
+        // next room.
+        let mut game = game::GameState::default();
+        game.re2_status_request = true;
+        let mut vm = crate::scd2::vm::Vm::new(&crate::scd2::Scripts::default());
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game, false);
+        assert!(!game.re2_status_request);
     }
 
     #[test]

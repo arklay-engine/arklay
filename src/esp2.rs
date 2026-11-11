@@ -2022,6 +2022,15 @@ pub fn core_container(esp: &[u8], sheet: &[u8]) -> Result<Vec<u8>> {
     Ok(container(&parts))
 }
 
+/// A one-type bank of kind 7, which doesn't move under a stop, whose block
+/// moves 10 along x a tick, for other modules' tests.
+#[cfg(test)]
+pub(crate) fn test_moving_bank() -> Arc<Bank> {
+    let mut block = tests::fire_block();
+    block[12..14].copy_from_slice(&10u16.to_le_bytes());
+    tests::bank_of(7, &[block])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2032,7 +2041,7 @@ mod tests {
         bank_of(7, blocks)
     }
 
-    fn bank_of(kind: u8, blocks: &[[u8; BLOCK_LEN]]) -> Arc<Bank> {
+    pub(super) fn bank_of(kind: u8, blocks: &[[u8; BLOCK_LEN]]) -> Arc<Bank> {
         let mut record = Vec::new();
         record.extend_from_slice(&3u16.to_le_bytes());
         record.extend_from_slice(&1u16.to_le_bytes());
@@ -2062,7 +2071,7 @@ mod tests {
         Arc::new(Bank::load(None, Some(&data)))
     }
 
-    fn fire_block() -> [u8; BLOCK_LEN] {
+    pub(super) fn fire_block() -> [u8; BLOCK_LEN] {
         let mut block = [0u8; BLOCK_LEN];
         block[0] = 2;
         block[4..6].copy_from_slice(&0x1000u16.to_le_bytes());
