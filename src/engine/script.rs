@@ -9,9 +9,10 @@
 //! this API rather than into more command-line flags.
 //!
 //! A tick is one app update, the unit `--ticks` counts: a fixed 30 Hz tick in
-//! a room. The run is deterministic: the user's mods and game options are
-//! ignored, the run options are the oracle runs' unless the script passes
-//! them, no audio device opens and no film plays. With a window (the default)
+//! a room. The run is deterministic: the user's game options are ignored
+//! (and, headless, their installed mods), the run options are the oracle
+//! runs' unless the script passes them, no audio device opens and no film
+//! plays. With a window (the default)
 //! the ticks run at the game's own pace in a window opened as a normal launch
 //! opens it: the renderer and window options of `arklay.toml` (the frame keeps
 //! the 4:3 shape a trace compares against), the host keys (F2/F3 speed, F4,
@@ -20,7 +21,8 @@
 //! overlays is up the script's tick waits, a running bot is suspended and the
 //! player drives the overlay. The window's game keys are otherwise ignored,
 //! so a run nobody presses a host key in plays the ticks a `--headless` run
-//! plays.
+//! plays. Closing the window (or the menu's Quit) ends the run as `exit(0)`
+//! does.
 //!
 //! Errors are strict. A Lua error, a failed boot or (unless the script calls
 //! `strict(false)`) an engine warning raised while the script drives the game
@@ -161,6 +163,16 @@ impl Stop {
             .get()
             .then(|| mlua::Error::RuntimeError(self.timeout_message()))
     }
+
+    /// The player closed the window or quit from the game's menu: the run
+    /// ends as `exit(0)` ends it, with no error, unless it is already
+    /// stopping with a status of its own.
+    fn player_quit(&self) -> mlua::Error {
+        if self.exit.get().is_none() {
+            self.exit.set(Some(0));
+        }
+        mlua::Error::RuntimeError("exit".into())
+    }
 }
 
 /// Make every instruction from now on fail with the stop's error.
@@ -176,7 +188,7 @@ fn halt(lua: &Lua, stop: &Rc<Stop>) {
 }
 
 /// The script's Lua state: base, `string`, `table`, `math` and `utf8`, the
-/// loaders removed, the allocation ceiling and the timeout hook installed.
+/// loaders removed, the allocation ceiling and the stop hook installed.
 fn new_state(stop: &Rc<Stop>) -> Result<Lua> {
     let lua = Lua::new_with(
         StdLib::STRING | StdLib::TABLE | StdLib::MATH | StdLib::UTF8,
@@ -191,21 +203,20 @@ fn new_state(stop: &Rc<Stop>) -> Result<Lua> {
     }
     lua.set_memory_limit(MEMORY_LIMIT)
         .map_err(|err| anyhow::anyhow!("failed to set the Lua memory limit: {err}"))?;
-    if stop.deadline.is_some() {
-        let check = Rc::clone(stop);
-        lua.set_hook(
-            HookTriggers::new().every_nth_instruction(HOOK_INTERVAL),
-            move |lua, _debug| match check.error() {
-                Some(err) => {
-                    // From the deadline on, fail every instruction: a
-                    // `pcall` around the loop cannot outlast it.
-                    halt(lua, &check);
-                    Err(err)
-                }
-                None => Ok(VmState::Continue),
-            },
-        );
-    }
+    // The deadline, or the player closing the window, stops the run.
+    let check = Rc::clone(stop);
+    lua.set_hook(
+        HookTriggers::new().every_nth_instruction(HOOK_INTERVAL),
+        move |lua, _debug| match check.error() {
+            Some(err) => {
+                // From then on, fail every instruction: a `pcall` around
+                // the loop cannot outlast it.
+                halt(lua, &check);
+                Err(err)
+            }
+            None => Ok(VmState::Continue),
+        },
+    );
     Ok(lua)
 }
 
@@ -388,9 +399,20 @@ impl Driver {
         self.warnings = crate::logging::warnings_since(self.warnings).0;
     }
 
+    /// The game quit (its menu's Quit): with a window that is the player
+    /// ending the run, as closing the window is; a headless game that quits
+    /// fails the run.
+    fn stop_on_quit(&self) -> mlua::Error {
+        if self.window.is_some() {
+            self.stop.player_quit()
+        } else {
+            mlua::Error::RuntimeError("the game quit".into())
+        }
+    }
+
     /// Drain the window's events between ticks, so it stays responsive, and
     /// carry out the host keys and the in-game menu's input as the
-    /// interactive loop does; closing the window fails the run.
+    /// interactive loop does; closing the window ends the run.
     fn pump(&mut self) -> mlua::Result<()> {
         if self.window.is_none() {
             return Ok(());
@@ -415,7 +437,7 @@ impl Driver {
             &mut keys,
             Some(&mut window.display),
         ) {
-            return Err(mlua::Error::RuntimeError("the window was closed".into()));
+            return Err(self.stop.player_quit());
         }
         window.screenshot |= keys.screenshot;
         let Some(app) = self.app.as_mut() else {
@@ -455,7 +477,7 @@ impl Driver {
                 .update(tick.ui, tick.player, tick.action)
                 .map_err(engine_error)?
             {
-                return Err(mlua::Error::RuntimeError("the game quit".into()));
+                return Err(self.stop.player_quit());
             }
             self.absorb_host_warnings();
             self.present()?;
@@ -595,7 +617,7 @@ impl Driver {
             .update(tick.ui, tick.player, tick.action)
             .map_err(engine_error)?
         {
-            return Err(mlua::Error::RuntimeError("the game quit".into()));
+            return Err(self.stop_on_quit());
         }
         // Films never play: the frames stay deterministic and audio-free, as
         // on the `--trace` path.
@@ -922,11 +944,33 @@ fn from_json(lua: &Lua, value: &serde_json::Value) -> mlua::Result<Value> {
     })
 }
 
-/// Open `path` with only the `mods` layers the script names: no mod
+/// Open `path` with the `mods` layers the script names. With `user_mods` the
+/// user's installed mods are layered under them too, discovered and selected
+/// by `arklay.toml` as a normal launch layers them; without it there is no
 /// discovery and no config selection.
-fn open_pack(path: &Path, mods: &[PathBuf], language: Option<&str>) -> Result<Pack> {
+fn open_pack(
+    path: &Path,
+    mods: &[PathBuf],
+    user_mods: bool,
+    language: Option<&str>,
+) -> Result<Pack> {
     // `re1` names the installed RE1 pack, found as the launcher finds it.
     let path = &crate::pack::resolve_game_pack(path)?;
+    if user_mods {
+        let (config, _) = crate::config::Config::load_default();
+        let options = ModOptions {
+            explicit: mods.to_vec(),
+            no_mods: false,
+            layers: crate::pack::LayerOptions {
+                enabled: config.mods.enabled,
+                disabled: config.mods.disabled,
+                order: config.mods.order,
+            },
+            global_dirs: crate::config::Config::mod_dirs(),
+            watch: false,
+        };
+        return open_game_pack(path, &options, language);
+    }
     let mut pack = if mods.is_empty() {
         Pack::open(path)?
     } else {
@@ -1222,6 +1266,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
             with(&shared, |driver| {
                 let mut options = Options::new("load_game_pack", table);
                 let mods: Vec<String> = options.get("mods")?.unwrap_or_default();
+                let user_mods: Option<bool> = options.get("user_mods")?;
                 let language: Option<String> = options.get("language")?;
                 let save_dir: Option<String> = options.get("save_dir")?;
                 let quick_turn: Option<bool> = options.get("quick_turn")?;
@@ -1243,7 +1288,10 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                     }
                 };
                 let mods: Vec<PathBuf> = mods.into_iter().map(PathBuf::from).collect();
-                let pack = open_pack(Path::new(&path), &mods, language.as_deref())
+                // A window shows the user's game: their HD and audio packs
+                // too. A headless run stays isolated from what is installed.
+                let user_mods = user_mods.unwrap_or(!driver.headless);
+                let pack = open_pack(Path::new(&path), &mods, user_mods, language.as_deref())
                     .map_err(engine_error)?;
                 let (saves, save_dir) = match save_dir {
                     Some(dir) => (None, PathBuf::from(dir)),
