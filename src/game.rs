@@ -3262,6 +3262,11 @@ pub struct GameState {
     /// the player model is Rebecca; the port records them so the save block
     /// round-trips.
     pub rebecca_inventory: [InventoryItem; INVENTORY_SLOTS_CHRIS],
+    /// Chris's and Jill's inventory slot counts from a generated pack's
+    /// manifest (`chris_slots`, `jill_slots`), in place of their own six and
+    /// eight in an RE 1 room. Not saved: every path into a session sets them
+    /// from the pack.
+    pub pack_inventory_slots: [Option<u8>; 2],
     /// The room's action table.
     pub room_actions: [Option<RoomAction>; ROOM_ACTION_SLOTS],
     /// Door records, one per door action slot.
@@ -3824,6 +3829,7 @@ impl Default for GameState {
             fmv: FmvState::default(),
             inventory: Vec::new(),
             rebecca_inventory: [InventoryItem::default(); INVENTORY_SLOTS_CHRIS],
+            pack_inventory_slots: [None; 2],
             room_actions: [None; ROOM_ACTION_SLOTS],
             doors: [None; ROOM_ACTION_SLOTS],
             re2: Default::default(),
@@ -5607,7 +5613,11 @@ impl GameState {
         if self.is_re2_room {
             return INVENTORY_SLOTS_JILL;
         }
-        if self.id.player_flag & 1 == 1 {
+        let character = usize::from(self.id.player_flag & 1);
+        if let Some(slots) = self.pack_inventory_slots[character] {
+            return usize::from(slots);
+        }
+        if character == 1 {
             INVENTORY_SLOTS_JILL
         } else {
             INVENTORY_SLOTS_CHRIS

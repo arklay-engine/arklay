@@ -1461,6 +1461,13 @@ impl Pack {
             .expect("a base manifest always exists here")
             .id
             .clone();
+        // A generated pack (a randomizer's) runs the game it was made from
+        // under its own id, so that game's mods layer over it as well.
+        let generated_from = pack
+            .manifest
+            .as_ref()
+            .and_then(manifest::Manifest::generated_from)
+            .map(str::to_owned);
 
         let mut applied = Vec::with_capacity(layers.len());
         let mut discovered_ids: HashSet<String> = HashSet::new();
@@ -1493,6 +1500,7 @@ impl Pack {
             // mod builder's check.
             if let Some(declared) = &manifest.base
                 && declared != &base_id
+                && generated_from.as_deref() != Some(declared.as_str())
                 && !opened.only_hd_textures()
             {
                 // A shared mods folder holds every game's mods; an explicit
@@ -3351,6 +3359,12 @@ mod tests {
             start_pos: None,
             start_angle: None,
             start_health: None,
+            seed: None,
+            generator_version: None,
+            biorand_flags: None,
+            plan_version: None,
+            setup: Default::default(),
+            character: None,
             region: None,
             ..manifest::Manifest::base("")
         }
@@ -3568,6 +3582,59 @@ mod tests {
             &[(manifest::ENTRY, &mod_manifest("empty", "re1", 0))],
         );
         assert!(Pack::open_layered(&base, &[empty]).is_err());
+    }
+
+    #[test]
+    fn a_generated_pack_layers_the_mods_of_the_game_it_was_made_from() {
+        let dir = TempDir::new("generated");
+        let layer = |name: &str, base: &str| {
+            let path = dir.join(&format!("{name}.akpak"));
+            write_pack(
+                &path,
+                &[
+                    (manifest::ENTRY, mod_manifest(name, base, 0).as_slice()),
+                    ("x.txt", name.as_bytes()),
+                ],
+            );
+            path
+        };
+        let base_pack = |name: &str, seed: Option<u32>, from: Option<&str>| {
+            let mut manifest = manifest::Manifest::base(name);
+            manifest.seed = seed;
+            manifest.base = from.map(str::to_owned);
+            let path = dir.join(&format!("{name}.akpak"));
+            write_pack(
+                &path,
+                &[
+                    (manifest::ENTRY, manifest.render().as_bytes()),
+                    ("x.txt", b"base".as_slice()),
+                ],
+            );
+            path
+        };
+        let layered = |base: &Path, layer: PathBuf| {
+            Pack::open_layered(base, &[layer]).map(|pack| pack.read("x.txt").unwrap().into_owned())
+        };
+
+        // A seeded pack written before the generator recorded its base is
+        // BioRand's, so RE 1's.
+        let old = base_pack("biorand-000007", Some(7), None);
+        assert_eq!(layered(&old, layer("one", "re1")).unwrap(), b"one");
+        assert!(layered(&old, layer("two", "re2")).is_err());
+        // One that names its base layers that game's mods, and its own id's.
+        let named = base_pack("biorand-000042", Some(42), Some("re2"));
+        assert_eq!(layered(&named, layer("three", "re2")).unwrap(), b"three");
+        assert_eq!(
+            layered(&named, layer("four", "biorand-000042")).unwrap(),
+            b"four"
+        );
+        assert!(layered(&named, layer("five", "re1")).is_err());
+        // Without a seed, `base` on a base pack changes nothing.
+        let ordinary = base_pack("plain", None, Some("re1"));
+        let err = layered(&ordinary, layer("six", "re1"))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("declares base"), "{err}");
     }
 
     #[test]
