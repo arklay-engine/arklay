@@ -2413,6 +2413,10 @@ struct GameSession {
     /// 0 to 1) runs while the gate is still nominally closed. The freeze
     /// starts one tick later.
     room_boot_grace: bool,
+    /// An entry fade was armed and has not finished: when its accumulator
+    /// drops below 1, scenario flag `0x7D` (the slow-fade latch) is cleared,
+    /// as `main_loop`'s menu-flag state machine clears it (state 3 to 0).
+    fade_latch_clear: bool,
     /// An arbitrary-room boot (`--ui game --room`) re-places the player at the
     /// room's first walk zone centre after the room-set event pass, exactly
     /// like the reference's `TestHooks_PlaceRoomSpawn` runs after `init_room`.
@@ -2916,6 +2920,7 @@ impl GameSession {
             tween: Tween::default(),
             room_boot_gate: false,
             room_boot_grace: false,
+            fade_latch_clear: false,
             room_boot_respawn: false,
             menu_fade: transition::Fade::inactive(),
             menu_fade_phase: MenuFadePhase::None,
@@ -3779,6 +3784,15 @@ impl GameSession {
         // RE2's room entry doesn't hold the game: its fade is only drawn.
         let events_enabled =
             !self.room_boot_gate || self.game.is_re2_room || self.room_fade.state() < 1;
+        // The latch picks one slow fade-in (room 100's wake-up after the
+        // poison sets it); the original clears it once that fade is done
+        // (GameLoop.cpp 0x00481133), so the later rooms fade in at the
+        // normal speed.
+        if self.fade_latch_clear && self.room_fade.state() < 1 {
+            self.fade_latch_clear = false;
+            self.game
+                .apply_flag(game::BANK_SCENARIO, game::SCENARIO_FLAG_MENU_FADE_LATCH, 1);
+        }
         if events_enabled {
             if self.room_boot_gate {
                 self.room_boot_gate = false;
@@ -8062,6 +8076,7 @@ impl GameSession {
             .set(2, if slow { -163 } else { -6144 }, 0x7FFF);
         self.room_fade_draw = self.room_fade.overlay();
         self.room_fade.tick();
+        self.fade_latch_clear = true;
     }
 
     /// The new-game boot sequence the oracle trace compares against: one
@@ -29927,6 +29942,14 @@ mod tests {
         }
         session.render(&pack);
         assert!(session.room_fade_alpha().is_some());
+        let latch = |session: &GameSession| {
+            session.game.flag_test(
+                game::BANK_SCENARIO,
+                game::SCENARIO_FLAG_MENU_FADE_LATCH,
+                false,
+            )
+        };
+        assert!(latch(&session), "the latch holds while its fade runs");
         // It does run out eventually (about 200 frames).
         for _ in 0..220 {
             session
@@ -29935,6 +29958,16 @@ mod tests {
         }
         session.render(&pack);
         assert_eq!(session.room_fade_alpha(), None);
+        // The finished fade clears the latch, as the original's menu-flag
+        // state machine does, so the next entry fades at the normal speed.
+        assert!(!latch(&session), "the finished fade clears the latch");
+        session.arm_room_entry_fade();
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        session.render(&pack);
+        // 48 a step (the slow counter's first value here is 253).
+        assert_eq!(session.room_fade_alpha(), Some(159));
     }
 
     /// A voiced line becomes the GUI's subtitle: the message window leaves it
