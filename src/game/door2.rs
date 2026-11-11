@@ -162,6 +162,18 @@ mod tests {
         assert_eq!(game.re2.door_locks, [0x0000_4000, 0]);
     }
 
+    /// `Sce_Door`'s first test: a player on a room object (`pOn_om`) gets
+    /// no message and no sound.
+    #[test]
+    fn a_door_does_nothing_for_a_player_on_an_object() {
+        let mut game = game_with(&[]);
+        game.re2.player.on_object = Some(0);
+        assert!(!game.try_re2_door_for_test(&door(0x91, 0xFE)));
+        assert!(!game.message.active);
+        assert!(sounds(&game).is_empty());
+        assert_eq!(game.re2.door_locks, [0, 0]);
+    }
+
     #[test]
     fn a_door_locked_from_inside_plays_0x216_and_keeps_its_bit_down() {
         let mut game = game_with(&[]);

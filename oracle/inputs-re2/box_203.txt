@@ -1,0 +1,20 @@
+# Room 203's box (oracle/re2.md, "Climbing onto an object"): walk into its +z face and push it south to the shelf, climb onto it, walk to its -z edge, take the Crank (the window, yes, close), turn about, walk to its +z edge and jump down.
+0
+350 up
+580
+600 action
+604
+660 up
+680
+690 action
+694
+926 action
+930
+990 action
+994
+1010 left
+1036
+1040 up
+1066
+1075 action
+1079

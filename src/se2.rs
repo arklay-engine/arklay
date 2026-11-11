@@ -664,15 +664,19 @@ pub fn floor_sound(zones: &[crate::state::FootstepZone], x: i32, z: i32, floor: 
 
 /// `Snd_se_walk`'s sound column for a footfall in water.
 const WATER_FOOTSTEP: u8 = 0x1A;
+/// `Snd_se_walk`'s sound slot for a footfall on a room object.
+pub const OBJECT_FOOTSTEP: u8 = 6;
 
 /// `Snd_se_walk`'s sound for a footfall, the player's or a script
 /// character's: the room bank's slot of the zone on the walker's `Floor`
 /// (`+0x106`) under the foot (or the water's), plus the walk's or run's 0 or
-/// 1, placed in 3D from where it fell.
+/// 1, placed in 3D from where it fell. On a room object (`pOn_om`) every
+/// footfall is the slot [`OBJECT_FOOTSTEP`].
 pub fn footstep_sound(
     zones: &[crate::state::FootstepZone],
     step: &crate::player::Footstep,
     floor: u8,
+    on_object: bool,
 ) -> SoundId {
     let zone = if step.water {
         WATER_FOOTSTEP
@@ -681,7 +685,11 @@ pub fn footstep_sound(
     };
     SoundId {
         kind: Kind::Room,
-        slot: step.sound_type + (zone & 0x7f),
+        slot: if on_object {
+            OBJECT_FOOTSTEP
+        } else {
+            step.sound_type + (zone & 0x7f)
+        },
         positional: true,
         muffled: true,
     }
@@ -774,17 +782,16 @@ mod tests {
             sound_type: 1,
             water: false,
         };
-        let id = footstep_sound(&[], &step, 0);
+        let id = footstep_sound(&[], &step, 0, false);
         assert_eq!((id.kind, id.slot, id.positional), (Kind::Room, 0x1e, true));
-        let id = footstep_sound(
-            &[],
-            &crate::player::Footstep {
-                water: true,
-                ..step
-            },
-            0,
-        );
-        assert_eq!(id.slot, 0x1b);
+        let water = crate::player::Footstep {
+            water: true,
+            ..step
+        };
+        assert_eq!(footstep_sound(&[], &water, 0, false).slot, 0x1b);
+        // On a room object, the walk, the run and the water alike.
+        assert_eq!(footstep_sound(&[], &step, 0, true).slot, 6);
+        assert_eq!(footstep_sound(&[], &water, 0, true).slot, 6);
     }
 
     #[test]

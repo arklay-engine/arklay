@@ -1072,6 +1072,15 @@ def objects_trace(game: Game) -> str:
     return "om=" + (";".join(rows) or "-")
 
 
+ON_OBJECT = 0x98A0D4  # `pOn_om`, the player work's +0x1E4: the room object the player stands on or climbs
+
+
+def on_object_trace(game: Game) -> str:
+    """`pon`: the slot of the room object the player stands on (`pOn_om`), or `-`."""
+    pointer = game.u32(ON_OBJECT)
+    return f"pon={(pointer - OBJECTS) // 0x1F8}" if pointer else "pon=-"
+
+
 def trace_line(game: Game, tick: int, pad: int) -> str:
     """One tick's state: the `oracle-trace v1` fields RE2 has, then RE2's own."""
     x, y, z = game.i32s(PL + ENTITY_POS, 3)
@@ -1162,6 +1171,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     fields.append(computer_trace(game))
     fields.append(hikidashi_trace(game))
     fields.append(objects_trace(game))
+    fields.append(on_object_trace(game))
     fields.append(f"fguse={game.read(FG_USE, 16).hex()}")
     fields.append("scv=" + ",".join(f"{game.u16(SCD_VARIABLES + 2 * n):04x}" for n in range(4)))
     fields.append(f"atsce={game.u8(PL_AT_SCE):02x}")

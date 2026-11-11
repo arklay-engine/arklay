@@ -668,6 +668,7 @@ pub fn run_with_options(
                         re2_computer: None,
                         re2_hikidashi: None,
                         re2_objects: None,
+                        re2_on_object: None,
                         re2_script_work: None,
                         re2_sounds: None,
                         entities: &*game.entities,
@@ -7816,6 +7817,7 @@ impl GameSession {
             neck_targets: &[],
             enemies: 0,
             pushing: false,
+            objects: &[],
             key_trg: 0,
         };
         if init {
@@ -8649,6 +8651,10 @@ impl GameSession {
                 self.game
                     .re2_objects_trace(self.loaded.room.re2_object_count.into())
             }),
+            re2_on_object: self
+                .game
+                .is_re2_room
+                .then_some(self.game.re2.player.on_object),
             re2_script_work: self
                 .game
                 .is_re2_room
@@ -15316,9 +15322,10 @@ fn play_re2_sounds(
     // `Snd_se_walk` reads the player's `Floor`, which the stairs step at their
     // start rather than with the height.
     let floor = game.re2.player.floor;
+    let on_object = game.re2.player.on_object.is_some();
     for footstep in footsteps {
         play(
-            se2::footstep_sound(&room.footstep_zones, &footstep, floor),
+            se2::footstep_sound(&room.footstep_zones, &footstep, floor, on_object),
             footstep.pos,
             None,
             None,
@@ -15402,6 +15409,7 @@ fn re2_player_shadow<'a>(
     let at = work.kage_pos().unwrap_or(player_state.pos);
     re2_shadow(
         room,
+        &game.objects.records,
         player_state,
         at,
         (work.kage_probe.unwrap_or(at), 0),
@@ -15421,11 +15429,22 @@ fn kage_at(at: [i32; 3], (off_x, off_z): (i32, i32), angle: u16) -> [i32; 3] {
     [at[0] + along(turn[0]), at[1], at[2] + along(turn[2])]
 }
 
+/// Whether `Sca_ck_em` leaves the RE 2 player's step to the room's walls
+/// alone and only remembers where the body is: `Be_flg`'s no-SCA bit, or on
+/// an object (`pOn_om`), where `Oma_pull` holds the player instead.
+fn re2_walls_skipped(game: &game::GameState) -> bool {
+    game.is_re2_room
+        && (game.re2.player.be_flg & crate::player2::BE_NO_SCA != 0
+            || game.re2.player.on_object.is_some())
+}
+
 /// A body's shadow in an RE2 room at `at`, on the ground `Sca_ck_hit` finds
-/// at `probe` (`MulKage`), if `Kage_work_sort` finds it in the camera's zone.
+/// at `probe` (`MulKage`), the tops of `objects` included, if
+/// `Kage_work_sort` finds it in the camera's zone.
 #[allow(clippy::too_many_arguments)]
 fn re2_shadow<'a>(
     room: &RoomState,
+    objects: &[crate::objects::ObjectRecord],
     body: &player::PlayerState,
     at: [i32; 3],
     (probe, radius): ([i32; 3], i32),
@@ -15442,9 +15461,10 @@ fn re2_shadow<'a>(
         .iter()
         .find(|zone| i32::from(zone.cam_from) == cut)
         .filter(|zone| zone.contains_signed(body.pos[0], body.pos[2]))?;
-    let ground = room.sca.as_ref().map_or(pos[1], |sca| {
-        crate::sca::ground_at(sca, probe, radius, mask).height
-    });
+    let ground = match room.sca.as_ref() {
+        Some(sca) => crate::objects::sca_ck_hit(Some(sca), objects, probe, radius, mask).height,
+        None => pos[1],
+    };
     let mut shadow_pos = [pos[0], ground, pos[2]];
     let mut shadow_angle = body.angle;
     tween.shadow(key, &mut shadow_pos, &mut shadow_angle);
@@ -17384,6 +17404,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     let targets = crate::character2::targets(context.game);
     let neck_targets = context.game.re2.neck_targets();
     let held_bank = context.game.player_damage.clone();
+    let objects = context.game.objects.records.clone();
     let tick = crate::player2::Tick {
         room: context.room,
         skeleton: &assets.emd.skeleton,
@@ -17408,6 +17429,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         neck_targets: &neck_targets,
         enemies: context.game.re2.enemies,
         pushing: context.game.re2.pushing(),
+        objects: &objects,
         // Only the keys the pad still holds: a tick whose input a message
         // or a stop blanked starts nothing.
         key_trg: context.game.re2.key_trg & crate::player2::key_word(&pad),
@@ -17843,10 +17865,7 @@ fn tick_room_timed(
     if context.game.re2.player.climbing() {
         context.player.collision_mirror = [context.player.pos[0], context.player.pos[2]];
         context.game.entities[0].pos = context.player.pos;
-    } else if context.game.is_re2_room
-        && context.game.re2.player.be_flg & crate::player2::BE_NO_SCA != 0
-    {
-        // `Sca_ck_em` only remembers where the body is.
+    } else if re2_walls_skipped(context.game) {
         if let Some(pre) = context.player.collision_pre.take() {
             context.player.pos = pre.step;
         }
@@ -19581,8 +19600,10 @@ fn render_frame_on(
                 (None, Some(kage)) => kage.color,
                 (None, None) => shadow::PLAYER_COLOR,
             };
+            // The characters' grounds don't see the room objects yet.
             let shadow = re2_shadow(
                 room,
+                &[],
                 &character.body,
                 at,
                 (character.body.pos, character.body.radius),
@@ -23836,6 +23857,21 @@ mod tests {
             .unwrap();
         assert!(session.menu.is_none(), "the close ended");
         assert!(session.game.re2_items.is_none());
+    }
+
+    /// `Sca_ck_em` takes no walls while the player stands on an object.
+    #[test]
+    fn re2_walls_are_skipped_on_an_object() {
+        let mut game = game::GameState::default();
+        game.is_re2_room = true;
+        assert!(!re2_walls_skipped(&game));
+        game.re2.player.on_object = Some(0);
+        assert!(re2_walls_skipped(&game));
+        game.re2.player.on_object = None;
+        game.re2.player.be_flg |= crate::player2::BE_NO_SCA;
+        assert!(re2_walls_skipped(&game));
+        game.is_re2_room = false;
+        assert!(!re2_walls_skipped(&game));
     }
 
     /// `St_exit` puts `Cut_no` back on the close's eighth tick and raises
