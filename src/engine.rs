@@ -537,6 +537,7 @@ pub fn run_with_options(
                     }
                 } else {
                     let message_before = game.message.menu_choice_id() & 0x80 != 0;
+                    let tick_cut = Some((loaded.id, loaded.room.current_cut));
                     let requested = tick_room_timed(
                         &mut command_vm,
                         &mut event_vm,
@@ -553,6 +554,10 @@ pub fn run_with_options(
                         Some(&mut timings.phases),
                     );
                     run_lua_tick_hooks(lua.as_ref(), &mut game, message_before);
+                    // `Swap_Cbuff`: the cut a `cut_chg` with bit 7 leaves on
+                    // screen (the frames it skips aren't modelled here).
+                    let now = (loaded.id, loaded.room.current_cut);
+                    swap_cbuff_view(&mut game, tick_cut, now, false);
                     if let Some(request) = requested {
                         let record = game.transition_door.take().unwrap_or_default();
                         game.door_yield = None;
@@ -590,7 +595,7 @@ pub fn run_with_options(
                 if let Some(presentation) = presentation.as_mut() {
                     presentation.tick(
                         &pack,
-                        &loaded,
+                        &mut loaded,
                         &player_state,
                         &mut game,
                         &mut npc_models,
@@ -604,19 +609,25 @@ pub fn run_with_options(
                 // fade: step 0, accumulator -1.
                 if let Some(writer) = trace_writer.as_mut() {
                     let index = writer.tick_index();
-                    render_frame(
-                        &mut framebuffer,
-                        &pack,
-                        loaded.id,
-                        &loaded.room,
-                        &player_state,
-                        &mut game,
-                        loaded.player_assets.as_ref(),
-                        &mut npc_models,
-                        &mut masks,
-                        &mut shadows,
-                        &mut effect_pages,
-                    );
+                    {
+                        let view_cut = game.re2.view_cut;
+                        let (id, assets) = (loaded.id, loaded.player_assets.as_ref());
+                        on_screen_cut(&mut loaded.room, view_cut, |room| {
+                            render_frame(
+                                &mut framebuffer,
+                                &pack,
+                                id,
+                                room,
+                                &player_state,
+                                &mut game,
+                                assets,
+                                &mut npc_models,
+                                &mut masks,
+                                &mut shadows,
+                                &mut effect_pages,
+                            )
+                        });
+                    }
                     let inactive = transition::Fade::inactive();
                     writer.write_tick(&trace::TraceTick {
                         room: loaded.id,
@@ -677,19 +688,25 @@ pub fn run_with_options(
         }
 
         let render_start = Instant::now();
-        render_frame(
-            &mut framebuffer,
-            &pack,
-            loaded.id,
-            &loaded.room,
-            &player_state,
-            &mut game,
-            loaded.player_assets.as_ref(),
-            &mut npc_models,
-            &mut masks,
-            &mut shadows,
-            &mut effect_pages,
-        );
+        {
+            let view_cut = game.re2.view_cut;
+            let (id, assets) = (loaded.id, loaded.player_assets.as_ref());
+            on_screen_cut(&mut loaded.room, view_cut, |room| {
+                render_frame(
+                    &mut framebuffer,
+                    &pack,
+                    id,
+                    room,
+                    &player_state,
+                    &mut game,
+                    assets,
+                    &mut npc_models,
+                    &mut masks,
+                    &mut shadows,
+                    &mut effect_pages,
+                )
+            });
+        }
         timings.phases.render += render_start.elapsed();
 
         if let Some(capture_path) = capture {
@@ -774,7 +791,7 @@ impl Presentation {
     fn tick(
         &mut self,
         pack: &Pack,
-        loaded: &LoadedRoom,
+        loaded: &mut LoadedRoom,
         player_state: &player::PlayerState,
         game: &mut game::GameState,
         npc_models: &mut enemy::EntityModelCache,
@@ -787,21 +804,25 @@ impl Presentation {
         for alpha in Self::alphas(self.render.frame_rate, self.ticks) {
             self.tween.set_alpha(alpha);
             let start = Instant::now();
-            render_frame_on(
-                &mut self.framebuffer,
-                None,
-                pack,
-                loaded.id,
-                &loaded.room,
-                player_state,
-                game,
-                loaded.player_assets.as_ref(),
-                npc_models,
-                masks,
-                shadows,
-                effect_cache,
-                &mut self.tween,
-            )
+            let view_cut = game.re2.view_cut;
+            let (id, assets) = (loaded.id, loaded.player_assets.as_ref());
+            on_screen_cut(&mut loaded.room, view_cut, |room| {
+                render_frame_on(
+                    &mut self.framebuffer,
+                    None,
+                    pack,
+                    id,
+                    room,
+                    player_state,
+                    game,
+                    assets,
+                    npc_models,
+                    masks,
+                    shadows,
+                    effect_cache,
+                    &mut self.tween,
+                )
+            })
             .expect("the software scene cannot fail");
             self.render.record_frame(start.elapsed());
         }
@@ -3219,17 +3240,15 @@ impl GameSession {
     /// a hold restarts it, so an A-B-A change two ticks apart skips four
     /// frames in a row.
     fn swap_cbuff(&mut self) {
-        let re2 = &mut self.game.re2;
-        let pending = std::mem::take(&mut re2.bg_load);
-        let no_load = std::mem::take(&mut re2.cut_no_load);
         // The scripts' `movie_on` (`Movie_set(2)`) runs before `Swap_Cbuff`,
         // whose load overwrites it. Its frames keep the screen as it was.
-        let script = std::mem::take(&mut re2.movie_set).filter(|_| self.game.is_re2_room);
+        let script = std::mem::take(&mut self.game.re2.movie_set).filter(|_| self.game.is_re2_room);
         if let Some(frames) = script {
             self.present_skip.movie_set(frames);
         }
         let now = (self.loaded.id, self.loaded.room.current_cut);
-        let load = self.game.is_re2_room && swap_cbuff_loads(self.tick_cut, now, pending, no_load);
+        let screen = self.re2_screen_clears_cut();
+        let load = swap_cbuff_view(&mut self.game, self.tick_cut, now, screen);
         if load {
             self.present_skip.movie_set(transition::RE2_CUT_LOAD_FRAMES);
         }
@@ -5392,15 +5411,35 @@ impl GameSession {
     /// eighth, as the window does, while the room isn't drawn.
     fn re2_trace_cut(&self) -> usize {
         let cut = self.game.re2_item_get_cut(self.loaded.room.current_cut);
+        if self.re2_status_clears_cut() { 0 } else { cut }
+    }
+
+    /// Whether the status screen (or the item box on it) has `Cut_no` at 0
+    /// this tick: from the open's sixth tick to the close's eighth.
+    fn re2_status_clears_cut(&self) -> bool {
         if self.menu.is_none() || !self.game.is_re2_room {
-            return cut;
+            return false;
         }
-        let cleared = match (self.re2_status_open, self.re2_status_close) {
+        match (self.re2_status_open, self.re2_status_close) {
             (_, Some(close)) => close < RE2_STATUS_UNCUT_TICK,
             (Some(open), None) => open >= RE2_STATUS_CUT_TICK,
             (None, None) => false,
-        };
-        if cleared { 0 } else { cut }
+        }
+    }
+
+    /// Whether a screen over the room has taken the cut this tick: the
+    /// status screen and the item box ([`Self::re2_status_clears_cut`]),
+    /// the get-item window (`Cut_no` 0 likewise), and the save screen while
+    /// it covers the room (`Mem_card`; game modes 3 and 5 load the room's
+    /// cut again). Each puts the cut back with a `Bg_loadPC`, which ends a
+    /// cut held by `cut_chg`'s bit 7; the room isn't drawn in between, so
+    /// ending the hold from the take on shows the same picture. These are the
+    /// screens' own states, not the cut's value, so a live cut of 0 ends it
+    /// too.
+    fn re2_screen_clears_cut(&self) -> bool {
+        self.re2_status_clears_cut()
+            || self.game.re2_item_get_clears_cut()
+            || matches!(self.re2_save, Some(Re2Save::Screen | Re2Save::Closed))
     }
 
     /// What RE2's status screen draws this frame, while it is up: the room
@@ -7754,6 +7793,7 @@ impl GameSession {
             self.present_held = !self.present_skip.present();
             self.game.re2.bg_load = false;
             self.game.re2.cut_no_load = false;
+            self.game.re2.view_cut = None;
             // The door's write comes after the scripts' `movie_on`.
             self.game.re2.movie_set = None;
         }
@@ -8804,21 +8844,25 @@ impl GameSession {
             } else {
                 None
             };
-            let visible = render_frame_on(
-                &mut self.framebuffer,
-                gpu,
-                pack,
-                self.loaded.id,
-                &self.loaded.room,
-                &self.player,
-                &mut self.game,
-                self.loaded.player_assets.as_ref(),
-                &mut self.npc_models,
-                &mut self.masks,
-                &mut self.shadows,
-                &mut self.effect_pages,
-                &mut self.tween,
-            );
+            // A `cut_chg` with bit 7 may have left the old cut on screen.
+            let view_cut = self.game.re2.view_cut;
+            let visible = on_screen_cut(&mut self.loaded.room, view_cut, |room| {
+                render_frame_on(
+                    &mut self.framebuffer,
+                    gpu,
+                    pack,
+                    self.loaded.id,
+                    room,
+                    &self.player,
+                    &mut self.game,
+                    self.loaded.player_assets.as_ref(),
+                    &mut self.npc_models,
+                    &mut self.masks,
+                    &mut self.shadows,
+                    &mut self.effect_pages,
+                    &mut self.tween,
+                )
+            });
             self.gpu_scene_visible = visible?;
             // The cutscene letterbox bars sit on the scene after the
             // room-entry fade has darkened it: `main_loop` draws the fading
@@ -16758,6 +16802,65 @@ fn swap_cbuff_loads(
     pending || (zone && !no_load)
 }
 
+/// The cut on screen after `Swap_Cbuff` (`Re2State::view_cut`): a
+/// load puts the live cut up, and a `cut_chg` with bit 7 (`no_load`) that
+/// moved the live cut keeps the one on screen as it was. A new room's load
+/// is the door's own.
+fn re2_view_cut(
+    held: Option<usize>,
+    before: Option<(RoomId, usize)>,
+    now: (RoomId, usize),
+    load: bool,
+    no_load: bool,
+) -> Option<usize> {
+    let (room, cut) = before?;
+    if load || room != now.0 {
+        return None;
+    }
+    let shown = held.or((no_load && cut != now.1).then_some(cut))?;
+    (shown != now.1).then_some(shown)
+}
+
+/// `Swap_Cbuff` at a tick's end: whether a cut's `Bg_loadPC` runs, and the
+/// cut that leaves on screen ([`crate::scd2::host::Re2State::view_cut`]). It
+/// takes the pending load and `cut_chg`'s bit 7. `before` is the room and cut
+/// as the tick began; `screen` is a screen over the room that has taken the
+/// cut, whose return loads it again.
+fn swap_cbuff_view(
+    game: &mut game::GameState,
+    before: Option<(RoomId, usize)>,
+    now: (RoomId, usize),
+    screen: bool,
+) -> bool {
+    let pending = std::mem::take(&mut game.re2.bg_load);
+    let no_load = std::mem::take(&mut game.re2.cut_no_load);
+    let re2 = game.is_re2_room;
+    let load = re2 && swap_cbuff_loads(before, now, pending, no_load);
+    game.re2.view_cut =
+        re2_view_cut(game.re2.view_cut, before, now, load, no_load).filter(|_| re2 && !screen);
+    load
+}
+
+/// Draw `room` through the cut on screen: `view_cut` (a cut `cut_chg`'s bit 7
+/// left up) in place of the live cut for the whole draw (its picture, view,
+/// masks, lights and culls). The live cut is put back afterwards whatever
+/// `draw` returns. A parameter of the draw would have to reach every helper
+/// that reads `RoomState::current_cut` (`Lighting::from_room`,
+/// `RoomState::in_cut_view` and others), so the room is lent with it set.
+fn on_screen_cut<R>(
+    room: &mut RoomState,
+    view_cut: Option<usize>,
+    draw: impl FnOnce(&RoomState) -> R,
+) -> R {
+    let live = room.current_cut;
+    if let Some(cut) = view_cut.filter(|&cut| cut < room.cuts.len()) {
+        room.current_cut = cut;
+    }
+    let result = draw(room);
+    room.current_cut = live;
+    result
+}
+
 /// An RE2 room's init procedure.
 fn run_re2_init(
     vm: Option<&mut crate::scd2::vm::Vm>,
@@ -16765,6 +16868,11 @@ fn run_re2_init(
     game: &mut game::GameState,
 ) {
     game.is_re2_room = vm.is_some();
+    // The room's first `Bg_loadPC` (a door's, a load's, a warp's, the same
+    // room's again) puts its cut up: no earlier cut stays on screen, and no
+    // earlier room's characters' joints are kept.
+    game.re2.view_cut = None;
+    game.re2.character_joints.clear();
     let Some(vm) = vm else {
         return;
     };
@@ -17779,6 +17887,22 @@ fn tick_room_timed(
     // all read the frame's final player state.
     context.game.tick_objects(context.room, context.player);
     if context.game.is_re2_room {
+        // `Joint_trans2` for the player and the characters, then
+        // `Om_trans`, as the frame draws them: an object on a joint composes
+        // on this frame's pose, the player's where `Om_move` and `Sce_at`
+        // left them.
+        store_player_joint_worlds(
+            context.game,
+            context.player,
+            context.player_assets,
+            context.room,
+        );
+        crate::character2::keep_joints(
+            context.game,
+            context.room,
+            context.pack,
+            context.npc_models,
+        );
         // `Om_trans`, as the frame draws the objects.
         context
             .game
@@ -18861,12 +18985,19 @@ fn store_player_joint_worlds(
 /// current camera's zone. The original walks `g_omodel_table` in order and
 /// culls each record with `is_entity_in_switch_zone(record + 0x54)`; the port
 /// uses the record's live position as that probe point.
+///
+/// For RE 2 (`re2`) the matrix is the world matrix `Om_trans` composed this
+/// frame (`ObjectRecord::world`, `+0x54`): on its parent's, a joint of a
+/// character's pose included, with an `Id` 2 box's 900 lift and the slot
+/// order's lag on a later slot's parent. `Om_trans` neither composes nor
+/// draws an object with `Be_flg`'s `0x80000`.
 fn visible_objects<'a>(
     room: &'a RoomState,
     objects: &'a objects::ObjectTable,
     camera: usize,
     player_pos: [i32; 3],
     player_angle: u16,
+    re2: bool,
 ) -> Vec<(
     &'a objects::ObjectAsset,
     &'a objects::ObjectRecord,
@@ -18876,10 +19007,15 @@ fn visible_objects<'a>(
     let view = room.cuts.get(camera).map(Camera::from_cut);
     let mut visible = Vec::new();
     for (slot, record) in objects.records.iter().enumerate() {
-        // On a joint or a character's matrix `pos` is an offset (`Super_set`),
-        // which isn't composed yet: the object isn't drawn, rather than drawn
-        // at the room's origin.
-        if !record.active() || record.hangs_on_a_character() {
+        if !record.active() {
+            continue;
+        }
+        if re2 && record.be_flg & 0x80000 != 0 {
+            continue;
+        }
+        // RE 1 has no `Super_set`: a record on a joint or a character's
+        // matrix would be at an offset nothing composes.
+        if !re2 && record.hangs_on_a_character() {
             continue;
         }
         let Some(asset) = record.asset.and_then(|pair| {
@@ -18891,14 +19027,20 @@ fn visible_objects<'a>(
         };
         // The camera-switch cull uses the composed world translation, the
         // original's `is_entity_in_switch_zone(record + 0x54)`.
-        let mut world = objects::world_matrix(objects, slot, player_pos, player_angle);
+        let mut world = if re2 {
+            record.world
+        } else {
+            objects::world_matrix(objects, slot, player_pos, player_angle)
+        };
         if !debug_view::unculled()
             && record.be_flg & 0x10 == 0
             && !enemy::in_camera_zone(room, camera, world.t)
         {
             continue;
         }
-        world.t[1] -= record.draw_lift;
+        if !re2 {
+            world.t[1] -= record.draw_lift;
+        }
         if object_render_skipped(room, camera, record) {
             continue;
         }
@@ -19572,43 +19714,11 @@ fn render_frame_on(
         else {
             continue;
         };
-        let tick = crate::character2::tick_of(
-            room,
-            game,
-            character,
-            slot,
-            &model,
-            character.held_bank.as_deref(),
-        );
-        let (clips, keyframes) = tick.banks.get(character.work.bank);
-        let Some(mut keyframe) = character.body.anim.pose_keyframe(clips, keyframes) else {
+        let Some((mut joints, keyframe)) =
+            crate::character2::pose_joints(room, game, character, slot, &model)
+        else {
             continue;
         };
-        character.work.apply_to_pose(&mut keyframe);
-        let [pitch, roll] = character
-            .zombie
-            .as_ref()
-            .map_or([0; 2], |zombie| zombie.tilt);
-        let mut matrix = anim::entity_matrix_rotated_scaled(
-            character.body.pos,
-            pitch,
-            character.body.angle,
-            roll,
-            0,
-        );
-        if let Some(surface) = character.work.super_matrix {
-            // `matrix.r` turns a flipped Y, and the surface a real one.
-            let flip =
-                |row: usize, column: usize| i32::from(row == 1) ^ i32::from(column == 1) != 0;
-            let surface = std::array::from_fn(|row| {
-                std::array::from_fn(|column| {
-                    let value = i32::from(surface[row][column]);
-                    if flip(row, column) { -value } else { value }
-                })
-            });
-            matrix.r = anim::mul_matrix0(&surface, &matrix.r);
-        }
-        let mut joints = anim::joint_matrices(&model.skeleton, &keyframe, &matrix);
         let mut hidden_parts = character.work.hidden_parts;
         let mut flung = 0;
         for (part, matrix) in character.zombie.iter().flat_map(|zombie| zombie.detached()) {
@@ -19730,6 +19840,7 @@ fn render_frame_on(
         room.current_cut,
         game.entities[0].pos,
         game.entities[0].angle,
+        game.is_re2_room,
     );
     let visible_item_models = visible_items(
         room,
@@ -21188,6 +21299,46 @@ mod tests {
         assert_eq!(simulated.player.pos, session.player.pos);
     }
 
+    /// A cut held by `cut_chg`'s bit 7 stays on screen through the ticks
+    /// after it, and a screen that takes the cut (the save screen here) or a
+    /// load of the room, the same room's included, puts the live cut up.
+    #[test]
+    fn a_held_cut_ends_on_a_screen_or_a_room_load() {
+        let mut manifest = crate::manifest::Manifest::base("re2");
+        manifest.start_room = Some("100".to_string());
+        let mut writer = PackWriter::new();
+        writer
+            .add(crate::manifest::ENTRY, manifest.render().into_bytes())
+            .unwrap();
+        writer
+            .add("room/1000/room.rdt", crate::rdt2::tests::sample())
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let dir = TempDir::new();
+        let mut session = GameSession::new(&pack, 0, &dir.0).unwrap();
+        session.game.is_re2_room = true;
+        let id = session.loaded.id;
+        let live = session.loaded.room.current_cut;
+        let held = live + 1;
+        let hold = |session: &mut GameSession| {
+            session.game.re2.view_cut = Some(held);
+            session.tick_cut = Some((id, live));
+            session.swap_cbuff();
+        };
+        hold(&mut session);
+        assert_eq!(session.game.re2.view_cut, Some(held), "no load: kept");
+        session.re2_save = Some(Re2Save::Screen);
+        hold(&mut session);
+        assert_eq!(session.game.re2.view_cut, None, "the save screen");
+        session.re2_save = None;
+        hold(&mut session);
+        session.debug_jump(&pack, id).unwrap();
+        assert_eq!(
+            session.game.re2.view_cut, None,
+            "the same room loaded again"
+        );
+    }
+
     /// `--difficulty` and `--arrange` reach the game before the room's boot,
     /// whichever way the session starts it, as the original sets the choice
     /// before room 100 loads.
@@ -21400,12 +21551,15 @@ mod tests {
             record.asset = Some(0);
             record.pos = [2000, 0, 2300];
         }
-        assert_eq!(visible_objects(&room, &objects, 0, [0, 0, 0], 0).len(), 1);
+        assert_eq!(
+            visible_objects(&room, &objects, 0, [0, 0, 0], 0, false).len(),
+            1
+        );
 
         // Inside the zone but behind the camera: `FUN_00483270` returns on a
         // negative GTE depth before queueing any triangle.
         objects.record_mut(0).unwrap().pos = [2000, 0, 1700];
-        assert!(visible_objects(&room, &objects, 0, [0, 0, 0], 0).is_empty());
+        assert!(visible_objects(&room, &objects, 0, [0, 0, 0], 0, false).is_empty());
 
         // A room pinned to the fixed ordering-table slot keeps it.
         let pinned = RoomState {
@@ -21413,11 +21567,14 @@ mod tests {
             room: 0x0E,
             ..room
         };
-        assert_eq!(visible_objects(&pinned, &objects, 0, [0, 0, 0], 0).len(), 1);
+        assert_eq!(
+            visible_objects(&pinned, &objects, 0, [0, 0, 0], 0, false).len(),
+            1
+        );
     }
 
     #[test]
-    fn a_super_set_object_stays_where_the_original_draws_it() {
+    fn a_super_set_object_is_drawn_where_om_trans_composed_it() {
         use crate::objects::{OBJECT_FLAG_ACTIVE, ObjectAsset, ObjectTable, SuperParent};
 
         let room = RoomState {
@@ -21461,20 +21618,37 @@ mod tests {
             .record_mut(0)
             .unwrap()
             .set_super_parent(SuperParent::World);
-        assert_eq!(visible_objects(&room, &objects, 0, [0, 0, 0], 0).len(), 1);
-        // On a joint or a work's matrix `Om_trans` composes it with that
-        // matrix, which isn't done yet, so it isn't drawn at `pos`.
+        assert_eq!(
+            visible_objects(&room, &objects, 0, [0, 0, 0], 0, false).len(),
+            1
+        );
+        // On a joint or a work's matrix `pos` is an offset: RE 1 has nothing
+        // to compose it on and doesn't draw it, and RE 2 draws it where
+        // `Om_trans` composed it (`world`), here out of the camera's zone.
         for parent in [
             SuperParent::PlayerJoint(1),
             SuperParent::WorkJoint(2, 14),
             SuperParent::Work(0),
         ] {
-            objects.record_mut(0).unwrap().set_super_parent(parent);
+            let record = objects.record_mut(0).unwrap();
+            record.set_super_parent(parent);
+            record.world.t = [9000, 0, 9000];
             assert!(
-                visible_objects(&room, &objects, 0, [0, 0, 0], 0).is_empty(),
+                visible_objects(&room, &objects, 0, [0, 0, 0], 0, false).is_empty(),
                 "{parent:?}"
             );
+            assert!(
+                visible_objects(&room, &objects, 0, [0, 0, 0], 0, true).is_empty(),
+                "{parent:?}"
+            );
+            objects.record_mut(0).unwrap().world.t = [2100, -800, 2400];
+            let visible = visible_objects(&room, &objects, 0, [0, 0, 0], 0, true);
+            assert_eq!(visible.len(), 1, "{parent:?}");
+            assert_eq!(visible[0].2.t, [2100, -800, 2400], "{parent:?}");
         }
+        // `Om_trans` skips an object with `Be_flg`'s `0x80000`.
+        objects.record_mut(0).unwrap().be_flg = 0x80001;
+        assert!(visible_objects(&room, &objects, 0, [0, 0, 0], 0, true).is_empty());
         // The player's own matrix is composed, as before.
         objects
             .record_mut(0)
@@ -21529,7 +21703,7 @@ mod tests {
             record.pos = [5000, 0, 5000];
         }
 
-        let visible = visible_objects(&room, &objects, 0, [0, 0, 0], 0);
+        let visible = visible_objects(&room, &objects, 0, [0, 0, 0], 0, false);
         assert_eq!(visible.len(), 1);
         assert_eq!(visible[0].0.pair_index, 1);
         assert_eq!(visible[0].1, objects.record(1).unwrap());
@@ -21537,11 +21711,11 @@ mod tests {
 
         // A record whose declared pair failed to decode is skipped.
         objects.record_mut(1).unwrap().asset = Some(9);
-        assert!(visible_objects(&room, &objects, 0, [0, 0, 0], 0).is_empty());
+        assert!(visible_objects(&room, &objects, 0, [0, 0, 0], 0, false).is_empty());
 
         // A camera with no zone keeps every record out.
         objects.record_mut(1).unwrap().asset = Some(1);
-        assert!(visible_objects(&room, &objects, 3, [0, 0, 0], 0).is_empty());
+        assert!(visible_objects(&room, &objects, 3, [0, 0, 0], 0, false).is_empty());
     }
 
     #[test]
@@ -21716,7 +21890,7 @@ mod tests {
             ..ObjectRecord::default()
         };
 
-        let visible = visible_objects(&room, &objects, 0, [0, 0, 0], 0);
+        let visible = visible_objects(&room, &objects, 0, [0, 0, 0], 0, false);
         assert_eq!(visible.len(), 1);
         assert_eq!(
             visible[0].2.t,
@@ -21727,10 +21901,10 @@ mod tests {
 
         // Type 0 (and out-of-range types) stay put.
         objects.record_mut(0).unwrap().model = 0;
-        let visible = visible_objects(&room, &objects, 0, [0, 0, 0], 0);
+        let visible = visible_objects(&room, &objects, 0, [0, 0, 0], 0, false);
         assert_eq!(object_view_z_shift(&room, visible[0].1), 0);
         objects.record_mut(0).unwrap().model = 5;
-        let visible = visible_objects(&room, &objects, 0, [0, 0, 0], 0);
+        let visible = visible_objects(&room, &objects, 0, [0, 0, 0], 0, false);
         assert_eq!(object_view_z_shift(&room, visible[0].1), 0);
     }
 
@@ -24522,6 +24696,45 @@ mod tests {
         // A new room's first load is the door's own.
         assert!(!swap_cbuff_loads(Some((other, 4)), (id, 1), false, false));
         assert!(!swap_cbuff_loads(None, (id, 1), false, false));
+    }
+
+    #[test]
+    fn a_cut_change_with_no_load_keeps_the_old_cut_on_screen() {
+        let id = RoomId::parse("1150").unwrap();
+        let other = RoomId::parse("1140").unwrap();
+        // `cut_chg(133)` from cut 9: cut 9 stays up.
+        assert_eq!(
+            re2_view_cut(None, Some((id, 9)), (id, 5), false, true),
+            Some(9)
+        );
+        // It stays through the ticks after, and through another bit-7 change.
+        assert_eq!(
+            re2_view_cut(Some(9), Some((id, 5)), (id, 5), false, false),
+            Some(9)
+        );
+        assert_eq!(
+            re2_view_cut(Some(9), Some((id, 5)), (id, 6), false, true),
+            Some(9)
+        );
+        // Back to the cut on screen, or a load: the live cut is up.
+        assert_eq!(
+            re2_view_cut(Some(9), Some((id, 5)), (id, 9), false, true),
+            None
+        );
+        assert_eq!(
+            re2_view_cut(Some(9), Some((id, 5)), (id, 5), true, false),
+            None
+        );
+        // A plain change loads; a new room's load is the door's.
+        assert_eq!(
+            re2_view_cut(None, Some((id, 9)), (id, 5), true, false),
+            None
+        );
+        assert_eq!(
+            re2_view_cut(Some(9), Some((other, 5)), (id, 5), false, false),
+            None
+        );
+        assert_eq!(re2_view_cut(None, None, (id, 5), false, true), None);
     }
 
     #[test]

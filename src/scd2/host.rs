@@ -61,6 +61,11 @@ pub struct Re2State {
     /// `scd_var_cut` with the live cut and drops the pending load, so
     /// `Swap_Cbuff` sees no change to load.
     pub cut_no_load: bool,
+    /// The cut on screen while a `cut_chg` with bit 7 has moved the live cut
+    /// with no load: `Swap_Cbuff` loads nothing, so the old cut's picture,
+    /// view and masks stay up (the models drawn through its view) until the
+    /// next load. `None` while the live cut is the one on screen.
+    pub view_cut: Option<usize>,
     /// Interaction-area events waiting for the VM (`Sce_event`): task, event.
     pub pending_events: Vec<(u8, u8)>,
     /// `Sce_Damage` areas the player's position probe hit this tick: the box,
@@ -113,6 +118,11 @@ pub struct Re2State {
     pub key_read: bool,
     /// Characters in the enemy slots.
     pub characters: Characters,
+    /// Each character slot's parts' world matrices (`Joint_trans2`'s, at
+    /// `pSin_parts_ptr + 0x48` a part), composed for the frame before
+    /// `Om_trans`: what an object hung on a character's joint composes on.
+    /// Empty for a slot with no character in play.
+    pub character_joints: Vec<Vec<crate::anim::Mat4x3>>,
     /// Room flags of `plc_dest`s on works that aren't modelled, not yet raised.
     pub unmodelled_arrivals: Vec<u8>,
     /// A room's load is running its init scripts.
@@ -745,6 +755,7 @@ impl Default for Re2State {
             view_held: false,
             bg_load: false,
             cut_no_load: false,
+            view_cut: None,
             voice: VoiceLine::default(),
             voice_ticks: Default::default(),
             xa_volume: XA_VOLUME,
@@ -766,6 +777,7 @@ impl Default for Re2State {
             key_was_stopped: false,
             key_read: false,
             characters: Characters::default(),
+            character_joints: Vec::new(),
             unmodelled_arrivals: Vec::new(),
             room_loading: false,
             player: crate::player2::Work::default(),
@@ -2247,6 +2259,45 @@ impl GameHost<'_> {
         });
     }
 
+    /// `Super_on` (`0x4E5BC0`): the task's work goes to the point its
+    /// operands give on a parent's matrix (`Super_set`'s parents), at that
+    /// matrix as it is now, and turns to face along the composed x axis:
+    /// `Cdir` is no roll, the axis's yaw and its pitch plus 0x400. Nothing is
+    /// hung: the work stays where it is put.
+    fn super_on(&mut self, task: usize, operands: &[i64]) {
+        let at = |index: usize| operands.get(index).copied().unwrap_or(0);
+        let parent = crate::objects::SuperParent::decode(at(1) as u8, at(2) as u8);
+        let player = (self.game.entities[0].pos, self.game.entities[0].angle);
+        let parent = self.game.super_matrix(parent, player);
+        let local = crate::anim::Mat4x3 {
+            r: crate::anim::rotation_matrix(
+                i32::from(at(6) as i16),
+                i32::from(at(7) as i16),
+                i32::from(at(8) as i16),
+            ),
+            t: [at(3), at(4), at(5)].map(|v| i32::from(v as i16)),
+        };
+        let world = crate::anim::compose(&parent, &local);
+        // `ApplyMatrixSV` of (1000, 0, 0): the rotation alone, to shorts. The
+        // port's matrices hold the original's with y flipped (`D R D`).
+        let axis: [i16; 3] = std::array::from_fn(|row| {
+            let value = (world.r[row][0] * 1000) >> 12;
+            (if row == 1 { -value } else { value }) as i16
+        });
+        let [_, yaw, pitch] = crate::bow2::angles_of(axis);
+        let rotation = [0, yaw, pitch.wrapping_add(0x400)];
+        if let Some(object) = self.task_object(task) {
+            object.pos = world.t;
+            object.rotation = rotation;
+        } else if let Some(character) = self.task_character(task) {
+            character.body.pos = world.t;
+            character.body.angle = yaw as u16;
+        } else if self.work_is_player(task) {
+            self.game.re2.pending_player.pos = Some(world.t);
+            self.game.re2.pending_player.angle = Some(yaw as u16 & 0x0FFF);
+        }
+    }
+
     fn work_is_player(&self, task: usize) -> bool {
         self.game.re2.work.get(task) == Some(&Work::Player)
     }
@@ -2403,8 +2454,10 @@ impl GameHost<'_> {
         let selector = (at(5) as u16 >> 8) as u8;
         let parent = crate::objects::SuperParent::decode(selector, 0);
         let mut x = at(9) as i32;
-        // `Obj_model_set` and `Om_trans`' own room: its first four 0x28 to -x (`Pos_x`, +0x38).
-        if stage_room == (2, 3) && slot < 4 {
+        // Room 303 (`Obj_model_set` tests `(scd_var_stage + 1) << 8 | room ==
+        // 0x303`, and `RoomId::stage` is that 1-based stage): its first four
+        // objects 0x28 to -x (`Pos_x`, +0x38).
+        if stage_room == (3, 3) && slot < 4 {
             x -= 0x28;
         }
         *record = crate::objects::ObjectRecord {
@@ -2669,8 +2722,8 @@ impl Host for GameHost<'_> {
                 }
             }
             // `Super_set` (`0x4E59E0`): the object hangs on a parent, and its
-            // position and rotation become offsets on it. `Om_trans` draws it
-            // there (not drawn yet).
+            // position and rotation become offsets on it. `Om_trans` composes
+            // and draws it there each frame.
             "super_set" if self.task_object(task).is_some() => {
                 let parent = crate::objects::SuperParent::decode(at(1) as u8, at(2) as u8);
                 if let Some(object) = self.task_object(task) {
@@ -2690,6 +2743,7 @@ impl Host for GameHost<'_> {
                     object.rotation = [at(1), at(2), at(3)].map(|v| v as i16);
                 }
             }
+            "super_on" => self.super_on(task, operands),
             "dir_set" if self.task_object(task).is_some() => {
                 if let Some(object) = self.task_object(task) {
                     object.rotation = [at(1) as i16, at(2) as i16, at(3) as i16];
@@ -3320,6 +3374,64 @@ mod tests {
         );
     }
 
+    /// `Obj_model_set` moves room 303's first four objects 0x28 toward -x,
+    /// and no other room's.
+    #[test]
+    fn obj_model_set_shifts_room_303s_first_four_objects() {
+        for ((stage, room), shifted) in [((3, 3), true), ((2, 3), false), ((3, 4), false)] {
+            let mut game = GameState::default();
+            game.id.stage = stage;
+            game.id.room = room;
+            game.objects = crate::objects::ObjectTable::new(6);
+            for slot in [3, 4] {
+                let call = [
+                    slot, 0, 0, 0, 0, 0, 0, 0x10, 0, 1000, 0, 2000, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                ];
+                exec(&mut game, "obj_model_set", &call);
+            }
+            let x = |slot: usize| game.objects.record(slot).unwrap().pos[0];
+            assert_eq!(
+                x(3),
+                if shifted { 1000 - 0x28 } else { 1000 },
+                "{stage}:{room}"
+            );
+            assert_eq!(x(4), 1000, "{stage}:{room}");
+        }
+    }
+
+    /// `Super_on` puts the work at the point on its parent and turns it
+    /// along the parent's x axis; nothing is hung.
+    #[test]
+    fn super_on_places_the_work_on_its_parent() {
+        use crate::objects::SuperParent;
+        let mut game = GameState::default();
+        game.objects.records = vec![crate::objects::ObjectRecord::default(); 3];
+        game.entities[0].pos = [1000, 0, 2000];
+        game.entities[0].angle = 0;
+        exec(&mut game, "work_set", &[WK_OBJECT, 2]);
+        // Rooms 601 and 700's: the player's own matrix, 353 ahead.
+        exec(&mut game, "super_on", &[0, 64, 0, 353, 0, 39, 0, 0, 0]);
+        let player = crate::anim::entity_matrix([1000, 0, 2000], 0);
+        let local = crate::anim::Mat4x3 {
+            r: crate::anim::rotation_matrix(0, 0, 0),
+            t: [353, 0, 39],
+        };
+        let object = game.objects.record(2).unwrap();
+        assert_eq!(object.pos, crate::anim::compose(&player, &local).t);
+        assert_eq!(object.super_parent, SuperParent::World, "not hung");
+        // Facing along +x: no yaw, a level pitch.
+        assert_eq!(object.rotation, [0, 0, 0x1000]);
+        // A quarter turn about y (`Cdir_y` 1024) takes +x to -z, whose
+        // `FUN_004d7de0` angle is 0x400.
+        game.entities[0].angle = 1024;
+        exec(&mut game, "super_on", &[0, 64, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(game.objects.record(2).unwrap().rotation[1], 0x400);
+        // On another object's world matrix.
+        game.objects.records[1].world = crate::anim::entity_matrix([5000, -100, 7000], 0);
+        exec(&mut game, "super_on", &[0, 0xC1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(game.objects.record(2).unwrap().pos, [5000, -100, 7000]);
+    }
+
     #[test]
     fn super_set_writes_the_parent_and_the_offsets() {
         use crate::objects::SuperParent;
@@ -3723,20 +3835,6 @@ mod tests {
         }
         exec(&mut game, "obj_model_set", &call(2));
         assert_eq!(game.objects.record_mut(2).unwrap().be_flg, 0);
-    }
-
-    #[test]
-    fn room_303s_first_four_objects_sit_0x28_to_minus_x() {
-        let mut game = GameState::default();
-        game.id.stage = 2;
-        game.id.room = 3;
-        game.objects = crate::objects::ObjectTable::new(5);
-        for slot in [3, 4] {
-            let call = [slot, 0, 0, 0, 0, 0, 0, 0x10, 0, 100, -200, 300];
-            exec(&mut game, "obj_model_set", &call);
-        }
-        assert_eq!(game.objects.record_mut(3).unwrap().pos, [60, -200, 300]);
-        assert_eq!(game.objects.record_mut(4).unwrap().pos, [100, -200, 300]);
     }
 
     /// Room 10C's east plate: area 3, objects only (`sat` 0x44), on floor 2,

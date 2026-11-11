@@ -52,10 +52,10 @@ ticks = 3250
 voice_from_ref = true
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,scene,fl,fgstat,fgitem,fgcom,zm0,zm1,zm2"
 frames = [360, 3249]
-# 115's frames 1342 to 1345 keep the desk's close-up in the original as the screen fades (`cut_chg` with bit 7, docs/internals/deviations/re2.md, "The frames of a cut"), and the scene's props on the hands aren't drawn (oracle/re2.md, "Room 115's scene")
-frame_max_mean = 1.15
-# 114 from the warp to the door's press, then 115 from the hand back to the close-up's fade and from the fade to the end, past the scene
-frame_windows = [[360, 435, 0.45], [778, 1341, 0.3], [1346, 3249, 1.1]]
+# 0.97 measured; the scene's Leon and Claire, close to the camera, are most of it (oracle/re2.md, "Room 115's scene")
+frame_max_mean = 1.05
+# 114 from the warp to the door's press, then 115 from the hand back to the medal's question and from there to the end, past the scene (its frames 1342 to 1345 keep the desk's close-up, as the original's do: docs/internals/deviations/re2.md, "The frames of a cut")
+frame_windows = [[360, 435, 0.45], [778, 1341, 0.3], [1342, 3249, 1.05]]
 expect = "match"
 ignore = [
   # 114's door 1
@@ -80,8 +80,8 @@ voice_from_ref = true
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,scene,om0,om1,om2,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,zp,fgstat,fgitem,fgroom"
 frames = [0, 27249]
 frame_max_mean = 0.85
-# each room past the card on its own, from its hand back to its door's press (the doors' frames, 10C's stairs door's among them, count in the whole run's mean): 200 from the card's, 201, 204, 205, 207, 208, 207 again, 10C, 114, and 115 to the medal's close-up and from its fade on (its frames 25341 to 25344 keep the close-up in the original, docs/internals/deviations/re2.md, "The frames of a cut")
-frame_windows = [[14475, 15335, 0.6], [15702, 15826, 0.3], [16167, 17654, 0.55], [17995, 18435, 0.25], [18776, 19722, 1.05], [20063, 20724, 0.5], [21065, 21215, 0.25], [21426, 23999, 0.6], [24342, 24434, 0.45], [24777, 25340, 0.3], [25345, 27249, 1.1]]
+# each room past the card on its own, from its hand back to its door's press (the doors' frames, 10C's stairs door's among them, count in the whole run's mean): 200 from the card's, 201, 204, 205, 207, 208, 207 again, 10C, 114, and 115 to the medal's close-up and from there on (its frames 25341 to 25344 keep the close-up, as the original's do, docs/internals/deviations/re2.md, "The frames of a cut"); 0.78 measured, 115's last window 0.97 (Leon and Claire close to the scene's camera)
+frame_windows = [[14475, 15335, 0.6], [15702, 15826, 0.3], [16167, 17654, 0.55], [17995, 18435, 0.25], [18776, 19722, 1.05], [20063, 20724, 0.5], [21065, 21215, 0.25], [21426, 23999, 0.6], [24342, 24434, 0.45], [24777, 25340, 0.3], [25341, 27249, 1.05]]
 expect = "match"
 record = ""
 # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): route_200_computer's ten, then 200, 201, 204, 205, 207 and 208's, 207's stairs door, 10C's and 114's

@@ -11,6 +11,8 @@ voice_from_ref = true
 ticks = 1880
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,scene"
 frames = [360, 1879]
+# 0.94 measured: the props on the hands are drawn and the desk's close-up stays up through cut 5's change with no load (oracle/re2.md, "Room 115's scene"); what is left is Leon and Claire close to the camera
+frame_max_mean = 1.05
 expect = "match"
 record = "--warp 115:-20000:0:-18100:3072 --flag 8:20 --flag 8:104 --life 200"
 
@@ -26,6 +28,8 @@ voice_from_ref = true
 ticks = 2100
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,scene"
 frames = [360, 2099]
+# 0.90 measured: the props on the hands are drawn and the desk's close-up stays up through cut 5's change with no load (oracle/re2.md, "Room 115's scene"); what is left is Leon and Claire close to the camera
+frame_max_mean = 1.0
 expect = "match"
 record = "--warp 115:-20000:0:-18100:3072 --flag 8:20 --flag 8:104 --life 200"
 
@@ -41,5 +45,7 @@ voice_from_ref = true
 ticks = 2000
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,scene"
 frames = [360, 1999]
+# 0.92 measured (its reference's frame 520 repeats 519, a late capture, at 38.7): the props on the hands are drawn and the desk's close-up stays up through cut 5's change with no load (oracle/re2.md, "Room 115's scene"); what is left is Leon and Claire close to the camera
+frame_max_mean = 1.05
 expect = "match"
 record = "--warp 115:-20000:0:-18100:3072 --flag 8:20 --flag 8:104 --life 200"

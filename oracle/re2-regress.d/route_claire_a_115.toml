@@ -72,10 +72,10 @@ input_drop_early = true
 ticks = 2850
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,scene,fl,esp,fgscn,fgstat,fgitem,fgroom,fgcom,om3,om7,om8,om9,zm0"
 frames = [360, 2849]
-# 115's frames 1342 to 1345 keep the desk's close-up in the original as the screen fades (`cut_chg` with bit 7, docs/internals/deviations/re2.md, "The frames of a cut"); 0.78 measured
-frame_max_mean = 0.9
-# 114 from the warp to the door's press, then 115 from the hand back to the close-up's fade, from the fade to door 0's press (the medal's and the rounds' windows), and the exit scene; measured 0.16, 0.21, 0.67 and 0.25
-frame_windows = [[360, 435, 0.25], [777, 1341, 0.3], [1346, 2424, 0.8], [2425, 2849, 0.35]]
+# 0.71 measured; 115's frames 1342 to 1345 keep the desk's close-up as the original's do (`cut_chg` with bit 7, docs/internals/deviations/re2.md, "The frames of a cut")
+frame_max_mean = 0.8
+# 114 from the warp to the door's press, then 115 from the hand back to the medal's question, from there to door 0's press (the medal's and the rounds' windows), and the exit scene; measured 0.16, 0.21, 0.67 and 0.25
+frame_windows = [[360, 435, 0.25], [777, 1341, 0.3], [1342, 2424, 0.75], [2425, 2849, 0.35]]
 expect = "match"
 ignore = [
   # 114's door 1
@@ -102,11 +102,11 @@ input = "route_claire_a_115.txt"
 voice_from_ref = true
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,tw,scene,fl,om0,om1,om2,om3,om7,om8,om9,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,zp,fgscn,fgstat,fgitem,fgroom,fgcom,pc"
 frames = [0, 27619]
-# 0.76 measured; 115's frames 26110 to 26113 keep the desk's close-up in the original as the screen fades (`cut_chg` with bit 7, docs/internals/deviations/re2.md, "The frames of a cut")
+# 0.75 measured; 115's frames 26110 to 26113 keep the desk's close-up as the screen fades, as the original's do (`cut_chg` with bit 7, docs/internals/deviations/re2.md, "The frames of a cut")
 frame_max_mean = 0.85
-# each room past the card on its own, from its hand back to its door's press (the doors' frames, 10C's stairs door's among them, count in the whole run's mean): route_claire_a_208's 200, 201, 204, 205 and 207, then 208 from its door 2's hand back to door 0, 207 again, 10C, 114, and 115 to the desk's close-up, from its fade to door 0 and the exit scene
+# each room past the card on its own, from its hand back to its door's press (the doors' frames, 10C's stairs door's among them, count in the whole run's mean): route_claire_a_208's 200, 201, 204, 205 and 207, then 208 from its door 2's hand back to door 0, 207 again, 10C, 114, and 115 to the desk's close-up, from the medal's question (26110, whose first four frames keep the close-up) to door 0, and the exit scene
 # measured 0.53, 0.24, 0.48, 0.20, 1.19 (the zombies close to cut 1's camera), 0.40, 0.14, 0.53, 0.15, 0.18, 0.67 and 0.25
-frame_windows = [[14625, 15491, 0.6], [15858, 15982, 0.3], [16323, 17906, 0.55], [18247, 18684, 0.25], [19025, 20234, 1.25], [20575, 21425, 0.5], [21766, 21916, 0.25], [22127, 24768, 0.6], [25111, 25203, 0.25], [25545, 26109, 0.3], [26114, 27192, 0.8], [27193, 27619, 0.35]]
+frame_windows = [[14625, 15491, 0.6], [15858, 15982, 0.3], [16323, 17906, 0.55], [18247, 18684, 0.25], [19025, 20234, 1.25], [20575, 21425, 0.5], [21766, 21916, 0.25], [22127, 24768, 0.6], [25111, 25203, 0.25], [25545, 26109, 0.3], [26110, 27192, 0.75], [27193, 27619, 0.35]]
 expect = "match"
 record = "--start claire"
 # zombie 1's angle on the first tick, then the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md):

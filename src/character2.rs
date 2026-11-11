@@ -1605,6 +1605,100 @@ pub fn tick_of<'a>(
     }
 }
 
+/// `Joint_trans2`'s parts for a character: the pose its banks show, with
+/// its work's height and head, composed on its body's matrix (turned by a
+/// surface's `super_matrix` when it has one). Returns the parts' world
+/// matrices and the pose, or `None` when no pose is up.
+pub fn pose_joints(
+    room: &RoomState,
+    game: &GameState,
+    character: &Character,
+    slot: usize,
+    model: &Emd,
+) -> Option<(Vec<crate::anim::Mat4x3>, Keyframe)> {
+    let tick = tick_of(
+        room,
+        game,
+        character,
+        slot,
+        model,
+        character.held_bank.as_deref(),
+    );
+    let (clips, keyframes) = tick.banks.get(character.work.bank);
+    let mut keyframe = character.body.anim.pose_keyframe(clips, keyframes)?;
+    character.work.apply_to_pose(&mut keyframe);
+    let [pitch, roll] = character
+        .zombie
+        .as_ref()
+        .map_or([0; 2], |zombie| zombie.tilt);
+    let mut matrix = crate::anim::entity_matrix_rotated_scaled(
+        character.body.pos,
+        pitch,
+        character.body.angle,
+        roll,
+        0,
+    );
+    if let Some(surface) = character.work.super_matrix {
+        // `matrix.r` turns a flipped Y, and the surface a real one.
+        let flip = |row: usize, column: usize| i32::from(row == 1) ^ i32::from(column == 1) != 0;
+        let surface = std::array::from_fn(|row| {
+            std::array::from_fn(|column| {
+                let value = i32::from(surface[row][column]);
+                if flip(row, column) { -value } else { value }
+            })
+        });
+        matrix.r = crate::anim::mul_matrix0(&surface, &matrix.r);
+    }
+    let joints = crate::anim::joint_matrices(&model.skeleton, &keyframe, &matrix);
+    Some((joints, keyframe))
+}
+
+/// `Joint_trans2` for every character in play, before `Om_trans`: keep each
+/// slot's parts' world matrices
+/// ([`crate::scd2::host::Re2State::character_joints`]), which an object
+/// hung on a character's joint composes on.
+pub fn keep_joints(
+    game: &mut GameState,
+    room: &RoomState,
+    pack: &Pack,
+    npc_models: &mut EntityModelCache,
+) {
+    keep_joints_with(game, room, |character| {
+        let skin = character
+            .zombie
+            .as_ref()
+            .map_or(0, |zombie| zombie.skin.saturating_sub(1));
+        npc_models.get_skinned(pack, character.model, room.player_flag & 1, skin)
+    });
+}
+
+/// [`keep_joints`] with each character's model from `model`: the slots of
+/// the characters the draw poses (in play, and not a zombie waiting for the
+/// room's scripts), the others empty.
+fn keep_joints_with(
+    game: &mut GameState,
+    room: &RoomState,
+    mut model: impl FnMut(&Character) -> Option<std::sync::Arc<Emd>>,
+) {
+    let characters = &game.re2.characters.0;
+    let mut kept = vec![Vec::new(); characters.len()];
+    for (slot, character) in characters.iter().enumerate() {
+        let Some(character) = character
+            .as_deref()
+            .filter(|c| c.be_flg & 1 != 0 && !awaits_script(c))
+        else {
+            continue;
+        };
+        let Some(model) = model(character) else {
+            continue;
+        };
+        if let Some((joints, _)) = pose_joints(room, game, character, slot, &model) {
+            kept[slot] = joints;
+        }
+    }
+    game.re2.character_joints = kept;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1639,6 +1733,79 @@ mod tests {
             morphs: Vec::new(),
         };
         assert_eq!(parts_num(&model), 17);
+    }
+
+    /// A model of 15 joints with one clip of one keyframe, at rest.
+    fn posable_model() -> Emd {
+        use crate::model::{Clip, ClipFrame, Skeleton, Texture8, Tmd, TmdObject};
+        Emd {
+            skeleton: Skeleton {
+                relative: vec![[0, -100, 0]; 15],
+                children: (0..15)
+                    .map(|joint| {
+                        if joint < 14 {
+                            vec![joint + 1]
+                        } else {
+                            Vec::new()
+                        }
+                    })
+                    .collect(),
+            },
+            keyframes: vec![Keyframe {
+                offset: [0; 3],
+                vertex: [0; 3],
+                rotations: vec![[0; 3]; 15],
+            }],
+            clips: vec![Clip {
+                frames: vec![ClipFrame::default()],
+            }],
+            damage_clips: Vec::new(),
+            damage_keyframes: Vec::new(),
+            banks: Vec::new(),
+            mesh: Tmd {
+                objects: vec![TmdObject::default(); 15],
+            },
+            texture: Texture8 {
+                width: 0,
+                height: 0,
+                indices: Vec::new(),
+                palettes: Vec::new(),
+                stp: Vec::new(),
+            },
+            morphs: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn keep_joints_poses_the_characters_in_play() {
+        let model = std::sync::Arc::new(posable_model());
+        let mut placed = sherry(0);
+        placed.partner = None;
+        placed.body.pos = [-24000, 0, -19000];
+        placed.work.bank = player2::Bank::Pld;
+        let mut out = placed.clone();
+        out.be_flg = 0;
+        let mut waiting = placed.clone();
+        waiting.with_room = true;
+        waiting.zombie = Some(crate::zombie2::Zombie::default());
+        let mut game = GameState::default();
+        game.re2.characters.0 = vec![
+            Some(Box::new(placed)),
+            Some(Box::new(out)),
+            None,
+            Some(Box::new(waiting)),
+        ];
+        keep_joints_with(&mut game, &RoomState::default(), |_| Some(model.clone()));
+        let kept = &game.re2.character_joints;
+        assert_eq!(kept.len(), 4);
+        assert_eq!(kept[0].len(), 15, "in play: its parts");
+        assert_eq!(kept[0][0].t, [-24000, 0, -19000], "on its body's matrix");
+        assert!(kept[1].is_empty(), "out of play");
+        assert!(kept[2].is_empty(), "no character");
+        assert!(kept[3].is_empty(), "waiting for the room's scripts");
+        // No model: nothing kept.
+        keep_joints_with(&mut game, &RoomState::default(), |_| None);
+        assert!(game.re2.character_joints.iter().all(Vec::is_empty));
     }
 
     #[test]
