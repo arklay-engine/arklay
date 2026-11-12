@@ -2840,6 +2840,9 @@ impl GameSession {
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         file.apply_to(&mut game);
+        // `room_set` after `InitializeGame`: a block saved on one of
+        // Rebecca's turns (model 3) loads with Rebecca's player id.
+        game.apply_model_switch();
         // The original's room init runs over the loaded flags, so the room
         // the save resumes in is visited (`room_set_visited_flag`) even when
         // the block predates its visit; the map tab highlights it.
@@ -37296,6 +37299,126 @@ off_0010:
             app_step(session, pack, walk);
         }
         session.player.pos != before
+    }
+
+    /// Walk the player into door `slot` of the current room (facing it from
+    /// its reach distance, the action key pressed) and step until the room
+    /// changes or `steps` run out.
+    fn walk_through_door(
+        session: &mut GameSession,
+        pack: &Pack,
+        slot: usize,
+        angle: u16,
+        steps: u32,
+    ) {
+        let door = session.game.doors[slot].expect("door record");
+        let center = [
+            i32::from(door.zone[0]) + i32::from(door.zone[2]) / 2,
+            0,
+            i32::from(door.zone[1]) + i32::from(door.zone[3]) / 2,
+        ];
+        let (dx, dz) = player::reach_offset(angle);
+        session.player.pos = [center[0] - dx, 0, center[2] - dz];
+        session.player.angle = angle;
+        session.game.sync_entity_from_player(&session.player);
+        let from = session.game.id;
+        let press = player::Input {
+            action_pressed: true,
+            action_held: true,
+            ..player::Input::default()
+        };
+        for step in 0..steps {
+            let input = if step % 8 == 0 {
+                press
+            } else {
+                player::Input::default()
+            };
+            app_step(session, pack, input);
+            if session.game.id != from && session.transition.is_none() {
+                return;
+            }
+        }
+    }
+
+    /// Rebecca's turn in Chris's game. 40C's first entry plays the Plant 42
+    /// scene, stores model 3 and opens the door to 408, where the player is
+    /// Rebecca; 408's door back into 40C carries lock bit 0x40 and refuses
+    /// her. Once the V-JOLT pour in 40F stores model 0 and points its door at
+    /// 40C's offstage corner, Chris arrives there and the held Plant 42 lifts
+    /// him back onto the floor.
+    #[test]
+    #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
+    fn real_rebecca_cannot_reenter_40c_and_chris_returns_to_the_floor() {
+        let Ok(path) = std::env::var("ARKLAY_RE1_PACK") else {
+            return;
+        };
+        let pack = Pack::open(Path::new(&path)).unwrap();
+        let model = usize::from(game::STATE_BYTE_CHARACTER_MODEL);
+
+        // The scene ends with the room load into 408 as Rebecca.
+        let mut session =
+            GameSession::from_room(&pack, RoomId::parse("40C").unwrap(), Path::new("saves"))
+                .unwrap();
+        for _ in 0..20_000 {
+            if session.game.id.room == 0x08 && session.transition.is_none() {
+                break;
+            }
+            session
+                .game
+                .press_through_message(&session.loaded.room, &session.text);
+            app_step(&mut session, &pack, player::Input::default());
+        }
+        assert_eq!(
+            session.game.id.room3(),
+            "408",
+            "the scene hands over in 408"
+        );
+        assert_eq!(session.game.state_bytes[model], 3);
+        assert_eq!(session.game.entities[0].id, 3, "the player is Rebecca");
+        assert!(
+            session.game.flags[1].bit(0x38),
+            "Plant 42 still holds Chris"
+        );
+
+        // Door 3, back into 40C, refuses her.
+        walk_through_door(&mut session, &pack, 3, 0, 120);
+        assert_eq!(session.game.id.room3(), "408", "40C stays shut to Rebecca");
+        assert!(session.game.flags[1].bit(0x38));
+        assert!(!session.game.flags[0].bit(0x29), "Plant 42 is not dead yet");
+        let flags = session.game.flags;
+
+        // 40F after the pour, with the flags her turn left: model 0 and door
+        // 0 into 40C's offstage corner.
+        let mut session =
+            GameSession::from_room(&pack, RoomId::parse("40F").unwrap(), Path::new("saves"))
+                .unwrap();
+        // The game-wide banks: scenario, common, locks and enemies.
+        session.game.flags[..4].copy_from_slice(&flags[..4]);
+        session.game.flags[0].apply(0x13, 0);
+        session.game.entities[0].id = 3;
+        session.game.state_bytes[model] = 0;
+        let mut door = session.game.doors[0].expect("door 0");
+        door.next_room = 0x0C;
+        door.next_pos = [28400, 0, 29300];
+        session.game.doors[0] = Some(door);
+        walk_through_door(&mut session, &pack, 0, 2048, 600);
+        assert_eq!(session.game.id.room3(), "40C");
+        assert_eq!(session.game.entities[0].id, 0, "Chris again");
+        for _ in 0..900 {
+            session
+                .game
+                .press_through_message(&session.loaded.room, &session.text);
+            app_step(&mut session, &pack, player::Input::default());
+        }
+        // The room's floor; past 22000 on either axis is the collision-free
+        // void around it, where the door left him before the hold.
+        let [x, y, z] = session.player.pos;
+        assert!(
+            x < 22000 && z < 22000 && y == 0,
+            "Chris stands on 40C's floor, not at {:?}",
+            session.player.pos
+        );
+        assert!(session.game.flags[0].bit(0x29), "Plant 42 died");
     }
 
     /// Skipping Jill's opening (room 106, through the door, into 105) lands
