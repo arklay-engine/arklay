@@ -22,7 +22,6 @@
 ----- enemy/10/enemy.lua: zombie 0x10, a variant of the shared machine
 ---local zombie = require("/lib/zombie")
 ---
----local VARIANT <const> = { burns_unmarked = true }
 ---
 ---function update(e)
 ---    zombie.run(e, VARIANT)
@@ -76,7 +75,6 @@
 ---
 ---| Key | Effect |
 ---| --- | --- |
----| `burns_unmarked` | The body burns without the charred mark (`e:set_burnt(false)`). |
 ---| `life` | The starting life, in place of the room's. |
 ---| `tough` | The bite does more damage (10 crawling, `0x1E` standing). |
 ---| `init_draws` | How many `e:rnd()` draws the init makes first, as the original's do. |
@@ -1020,17 +1018,16 @@ function Re2EnemyApi:pool() end
 ---@param pool integer Truncated to 16 bits.
 function Re2EnemyApi:set_pool(pool) end
 
----How far a burnt body's colours have gone down.
----@return integer charred
-function Re2EnemyApi:charred() end
+---`FUN_00456780`: a burning body's darker parts, each part's `Poly_rgb`
+---(`0x404040` for the first, `0x808080` lighting it as it is).
+function Re2EnemyApi:burn_parts() end
 
----Set how far a burnt body's colours have gone down.
----@param charred integer Truncated to a byte.
-function Re2EnemyApi:set_charred(charred) end
+---`Em10_Scenario`'s charring: the first 15 parts' `Poly_rgb` each down by
+---`0x10101`, until the first part's red is `0x10`.
+function Re2EnemyApi:char_parts() end
 
----Mark the body burnt, for its draw.
----@param burnt boolean
-function Re2EnemyApi:set_burnt(burnt) end
+---`FUN_004c1620`'s reset of every part's `Poly_rgb` to `0x808080`.
+function Re2EnemyApi:reset_part_colours() end
 
 ---`FUN_00456780`: light a flame on a part, which the engine then carries with
 ---the part.

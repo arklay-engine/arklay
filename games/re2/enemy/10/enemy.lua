@@ -1,8 +1,8 @@
--- Zombie 0x10: burning leaves its colours alone.
+-- Zombie 0x10.
 
 local zombie = require("/lib/zombie")
 
-local VARIANT <const> = { burns_unmarked = true }
+local VARIANT <const> = {}
 
 function update(e)
     zombie.run(e, VARIANT)

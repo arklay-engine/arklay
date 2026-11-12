@@ -129,8 +129,6 @@ ignore = [
     # 10C's object 0's floor as play comes back after the stairs door (claire_a_208_114's 1234)
     [22125, "om0"],
     [0, 25329, "om3"], [0, 25329, "om7"], [0, 25329, "om8"], [0, 25329, "om9"],
-    # room 100's opening, as route_claire_a_208: slots 0 and 1 drawn at 0x404040 by the original until 183
-    [0, 183, "zp"],
     # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
     [391, 481, "hk"], [2662, 2752, "hk"], [5562, 5652, "hk"], [7043, 7133, "hk"], [8097, 8187, "hk"], [8927, 9019, "hk"], [10121, 10211, "hk"], [12967, 13057, "hk"], [15527, 15617, "hk"], [16018, 16108, "hk"], [17942, 18032, "hk"], [18720, 18810, "hk"], [20270, 20360, "hk"], [21461, 21551, "hk"], [21952, 22044, "hk"], [24804, 24894, "hk"], [25239, 25329, "hk"],
     # `zd` (docs/internals/deviations/re2.md, "What a zombie's slot held before"): the load's tick in room 100, room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load

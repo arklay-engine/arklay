@@ -20130,10 +20130,6 @@ fn render_frame_on(
             hidden_parts = hidden;
             part_rgb = rgb_by_mesh;
         }
-        let tint = character
-            .zombie
-            .as_ref()
-            .map_or([255; 3], crate::zombie2::Zombie::tint);
         // The parts' colours multiply the light (`ko_joint_trans2`): one draw
         // for each colour, the others' objects hidden in it.
         let mut colours: Vec<u32> = Vec::new();
@@ -20165,9 +20161,7 @@ fn render_frame_on(
             models.push(Arc::clone(&model));
             npc_joints.push(joints.clone());
             npc_hidden.push(hidden);
-            npc_tints.push(std::array::from_fn(|channel| {
-                (u16::from(tint[channel]) * u16::from(part[channel]) / 255) as u8
-            }));
+            npc_tints.push(part);
             npc_joint_colours.push(crate::render::NO_JOINT_COLOURS);
             npc_weapons.push(None);
             npc_zone_gate.push(true);

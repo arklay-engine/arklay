@@ -799,13 +799,16 @@ impl UserData for Api {
             e.em().z.pool = pool as u16;
             Ok(())
         });
-        methods.add_method_mut("charred", |_, e, ()| Ok(e.em().z.charred));
-        methods.add_method_mut("set_charred", |_, e, charred: i64| {
-            e.em().z.charred = charred as u8;
+        methods.add_method_mut("burn_parts", |_, e, ()| {
+            crate::zombie2::burn_parts(&mut e.em().work().part_rgb);
             Ok(())
         });
-        methods.add_method_mut("set_burnt", |_, e, burnt: bool| {
-            e.em().z.burnt = burnt;
+        methods.add_method_mut("char_parts", |_, e, ()| {
+            crate::zombie2::char_parts(&mut e.em().work().part_rgb);
+            Ok(())
+        });
+        methods.add_method_mut("reset_part_colours", |_, e, ()| {
+            e.em().work().part_rgb = [player2::DEFAULT_PART_RGB; 32];
             Ok(())
         });
         methods.add_method_mut("model_type", |_, e, ()| Ok(e.em().z.model_type));
@@ -3059,7 +3062,7 @@ mod tests {
         lua.globals().set("DRAWS", draws.to_vec()).unwrap();
         lua.load(format!(
             "HARD, ARRANGE, ROOM, KIND, V = false, false, 0x11B, 0, {{}}
-             ENEMIES, MODEL_TYPE, SKIN, PARTS0_Y = 1, 0, 0, 0x1000
+             ENEMIES, MODEL_TYPE, SKIN, PARTS0_Y, BURNS = 1, 0, 0, 0x1000, 0
              {setup}
              local w = {{ r = {{ [0] = 0, 0, 0, 0 }}, vars = {{}}, flags = 0, life = 0,
                  kind = KIND, drawn = 0 }}
@@ -3084,6 +3087,7 @@ mod tests {
              function e:model_type() return MODEL_TYPE end
              function e:set_skin(v) SKIN = v end
              function e:set_parts0_y(v) PARTS0_Y = v end
+             function e:burn_parts() BURNS = BURNS + 1 end
              local zombie = (function() {library} end)()
              zombie.run(e, V)
              R = {{ w.life, w.flags, w.vars[4], w.drawn }}
@@ -3092,6 +3096,27 @@ mod tests {
         .exec()
         .unwrap();
         lua
+    }
+
+    /// `FUN_00456780` darkens the parts unless the work's `Routine_1` (byte
+    /// +5) is 0x10, which `Em10_Init` never leaves it at: room 10A's burning
+    /// zombie, an 0x10, reads 0x404040 in the original's `zp`, as room 100's
+    /// 0x1F do. An unburnt body isn't darkened.
+    #[test]
+    fn a_burning_0x10_darkens_its_parts_as_every_id_does() {
+        let file = include_str!("../../games/re2/enemy/10/enemy.lua");
+        let variant = file
+            .lines()
+            .find_map(|line| line.strip_prefix("local VARIANT <const> = "))
+            .unwrap();
+        for (kind, burns) in [(0x86, 1), (0x06, 0)] {
+            let lua = zombie_init_state(&format!("V = {variant}; KIND = {kind}"), &[]);
+            assert_eq!(
+                lua.globals().get::<i64>("BURNS").unwrap(),
+                burns,
+                "Type {kind:#x}"
+            );
+        }
     }
 
     /// Room 207's three 0x1F zombies have `Model_type` 1: `Em10_Init`

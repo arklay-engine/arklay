@@ -63,9 +63,6 @@ local MODE_HELD_DIE <const> = 6
 -- `At_em_no` when nothing's touching.
 local NO_BODY <const> = 0xFF
 
--- `Em10_Scenario` takes a burnt body's colours down this far.
-local CHARRED_MAX <const> = 0x30
-
 -- `Em10_Life` and `Em10_Life_easy`.
 local LIFE <const> = {
     [0] = 70, 84, 118, 65, 50, 85, 48, 65, 40, 73, 69, 56, 70, 55, 72, 55,
@@ -1476,15 +1473,18 @@ local function em10_corpse(e)
         e:set_routine(1, e:routine(1) + 1)
     end
     e:set_timer(1, e:timer(1) + 1)
-    if e:kind() & TYPE_BURNT ~= 0 and e:charred() < CHARRED_MAX and e:timer(1) & 3 == 0 then
-        e:set_charred(e:charred() + 1)
+    if e:kind() & TYPE_BURNT ~= 0 and e:timer(1) & 3 == 0 then
+        e:char_parts()
     end
 end
 
--- `FUN_00456780`: fire on the body and darker colours.
-local function light_flames(e, v)
+-- `FUN_00456780`: fire on the body and, unless `Routine_1` is 0x10, darker
+-- parts.
+local function light_flames(e)
     local first_row = e:rnd() & 1 == 0
-    e:set_burnt(not v.burns_unmarked)
+    if e:routine(1) ~= 0x10 then
+        e:burn_parts()
+    end
     if first_row then
         e:light_flame(10000, 0, 0, 0, 0)
         e:light_flame(5000, 3, 0, 200, 0)
@@ -1608,7 +1608,7 @@ local function init(e, v)
         e:set_skin(skin)
     end
     if e:kind() & TYPE_BURNT ~= 0 then
-        light_flames(e, v)
+        light_flames(e)
     end
     e:set_hidden_parts(e:hidden_parts() | 1 << 0xF | 1 << 0x10)
 end
@@ -2647,6 +2647,7 @@ local function mv_rise_again(e, v)
         e:set_skin(e:rnd() % 3 + 1)
     end
     e:set_hidden_parts(1 << 0xF | 1 << 0x10)
+    e:reset_part_colours()
 end
 
 -- `FUN_00455620`: `Esp_call`'s spit isn't ported.
