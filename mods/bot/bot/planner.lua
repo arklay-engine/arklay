@@ -105,6 +105,13 @@ BotPlanner = BotPlanner or {}
 local C = BotConst
 
 local MAX_ATTEMPTS = 3
+-- A <use> that went in but left its done flag clear MAX_ATTEMPTS times
+-- gets one more try each time the story flags change, this many times: a
+-- room event may refuse it for now (10F's piano, Chris's music score:
+-- "There's no time to play the piano!" while Richard waits in 20D).
+local STORY_RETRIES = 4
+-- The story flags as a string (defined with BotPlanner.revisit_room).
+local story_sig
 local GOAL_TIMEOUT = 40 * C.SECOND
 -- After a goal is done here, a <use> fact of this room whose item is held
 -- but whose probe is not live yet holds the next goal choice (and so the way
@@ -214,6 +221,13 @@ local MONSTER_EVERY = C.SECOND // 2
 -- only once nothing else is left, and not before it has waited this long
 -- (doubled per attempt): the event may clear with time, on a room entry.
 local EVENT_WAIT = 60 * C.SECOND
+-- The longest of those waits. Away from the door's room the bot waits too,
+-- a fraction of it, as the walk back is part of the wait: with no wait
+-- there, Jill (richard=leave) bounced between 204 and 20D until the loop
+-- check ended the run, long before Richard's seven minutes were up and
+-- the entry that finds him dead opens the door.
+local EVENT_WAIT_MAX = 4 * EVENT_WAIT
+local EVENT_AWAY_SHARE = 2
 -- How long a door whose press asked a yes/no question has, after the
 -- question, to take the player out of the room (BotPlanner.note_message).
 local DOOR_PROMPT_WAIT = 5 * C.SECOND
@@ -266,6 +280,16 @@ local function inventory_sig(bot)
     table.sort(ids)
     local flag = C.LOCKPICK_FLAG
     return table.concat(ids, ",") .. (bot:flag(flag.bank, flag.bit) and "+" or "")
+end
+
+-- Whether an inventory slot is empty.
+local function free_slot(bot)
+    for _, row in ipairs(bot:inventory()) do
+        if row.item == 0 then
+            return true
+        end
+    end
+    return false
 end
 
 local function mark_key(kind, room, slot)
@@ -334,6 +358,13 @@ local function mark(bot, kind, room, slot, reason, permanent)
     m.permanent = permanent or false
     m.entry = (p.entries or {})[room]
     m.kind, m.room, m.slot = kind, room, slot
+    -- A use whose done flag stayed clear, or whose zone could not be
+    -- reached, is tried again once the story flags change (blocked()): a
+    -- room event can arm or open it. 10F's hollow, tried while the gold
+    -- emblem stood in it, is armed by that emblem's pickup.
+    m.story = kind == "use" and (reason:find("done flag stayed clear", 1, true)
+        or reason:find("approach", 1, true) or reason:find("timed out", 1, true))
+        and story_sig(bot) or nil
     -- A goal planned unreachable from where the bot came in: the room it
     -- was entered from, so a remote trip comes in another way (507's
     -- computer, behind the wall from the door to 50C, is reached from 505).
@@ -563,13 +594,33 @@ local function blocked(bot, kind, room, slot, remote)
     -- item, m.needed: 401's red book, three passes with every slot used):
     -- it waits for the inventory to change however often it was tried.
     local needed = m.needed or (m.item and full_mark_needed(bot, m.item))
+    if m.story and not m.permanent and m.attempts >= MAX_ATTEMPTS
+        and (m.retries or 0) < STORY_RETRIES and story_sig(bot) ~= m.story then
+        m.retries = (m.retries or 0) + 1
+        m.attempts = MAX_ATTEMPTS - 1
+        -- Tried again now, not on the next entry or inventory change: 10F's
+        -- gold emblem pickup armed the hollow and walled the bot in with
+        -- it, and the lifted approach mark held for the rest of the entry.
+        m.sig, m.entry = nil, nil
+        marks_changed()
+        bot:log(string.format("mark %s lifted: the story flags changed (retry %d/%d)",
+            mark_key(kind, room, slot), m.retries, STORY_RETRIES))
+    end
     if m.permanent or (m.attempts >= MAX_ATTEMPTS and not needed) then
         return true
     end
     if m.hold and bot:tick() >= m.hold then
         return false
     end
-    return BotPlanner.mark_holds(m, inventory_sig(bot), (plan().entries or {})[room], remote)
+    local sig = inventory_sig(bot)
+    if plan().no_hold == sig and m.reason:find("inventory full", 1, true) and free_slot(bot) then
+        -- Marked while a free slot was held for a needed pickup, which the
+        -- empty frontier has since given up: the slot is this item's now.
+        -- 30A's hex crank was left on five items of six with the sixth held,
+        -- and the run ended in the caves with the slot free.
+        return false
+    end
+    return BotPlanner.mark_holds(m, sig, (plan().entries or {})[room], remote)
 end
 
 -- Whether a plain mark `m` (no desk, gate, permanent flag or hold) still
@@ -809,6 +860,35 @@ end
 -- The plan().revisit_seen key of a <revisit> fact (bot:revisit_facts()).
 local function revisit_key(fact)
     return string.format("%s|%d|%d|%s", fact.room, fact.bank, fact.bit, tostring(fact.set))
+end
+
+-- A timed <revisit> (`after_seconds`) is tried again this long after an
+-- entry that left its gate holding: the bot's ticks run ahead of the game's
+-- own seconds counter (doors and menus), so the first return can be early.
+local REVISIT_RETRY = 60 * C.SECOND
+
+-- Whether a timed <revisit> is due: its gate holds, its `after` flag has
+-- been set for `after_seconds` (counted from when the bot first saw it set)
+-- and no early entry is waiting out REVISIT_RETRY. Untimed facts: whether
+-- the gate holds.
+local function revisit_due(p, bot, fact)
+    if bot:flag(fact.bank, fact.bit) ~= fact.set then
+        return false
+    end
+    if fact.after_seconds == nil then
+        return true
+    end
+    local key = revisit_key(fact)
+    p.revisit_since = p.revisit_since or {}
+    if not bot:flag(fact.after_bank, fact.after_bit) then
+        p.revisit_since[key] = nil
+        return false
+    end
+    local now = bot:tick()
+    p.revisit_since[key] = p.revisit_since[key] or now
+    local retry = (p.revisit_retry or {})[key]
+    return now - p.revisit_since[key] >= fact.after_seconds * C.SECOND
+        and (retry == nil or now >= retry)
 end
 
 -- Whether the bot's map has room `id` as visited.
@@ -1197,9 +1277,32 @@ local function interact_goal(bot, fact, index, count)
     }
 end
 
+-- The mark slot of a <deliver>: its camera cut, or the slot it presses.
+local function deliver_slot(fact)
+    return fact.cut and ("camera" .. fact.cut) or fact.slot
+end
+
 -- A <deliver> here with its item held: walk into its camera cut; the room
--- script takes the item there and sets the done flag.
+-- script takes the item there and sets the done flag. With a `slot`
+-- instead, press that zone: an event that takes the item (20D's door to
+-- 20E while Rebecca runs with Chris's serum).
 local function deliver_goal(bot, fact)
+    if not fact.cut then
+        local action = BotNav.action_by_slot(bot, fact.slot)
+        if not action then
+            return nil
+        end
+        local label = string.format("deliver 0x%02X at slot %d (%s)", fact.item, fact.slot,
+            fact.label or "unnamed")
+        return {
+            kind = "deliver", slot = fact.slot, label = label,
+            job = {
+                zone = zone_of(action), label = label, pattern = "edge",
+                presses = 2, gap = 20, side = 4 * C.SECOND,
+                done = function(b) return b:flag(fact.bank, fact.bit) end,
+            },
+        }
+    end
     local label = string.format("deliver 0x%02X into camera %d (%s)", fact.item, fact.cut,
         fact.label or "unnamed")
     return {
@@ -1495,12 +1598,18 @@ local function door_goal(bot, door, why)
             },
         }
     end
+    -- A body-probe door (301's door over the drained pool, SAT_UNDER) fires
+    -- on the player standing in it: stand inside. From its edge Chris, a
+    -- wider body than Jill, never reached the one approach just inside it.
+    local zone = zone_of(door)
+    local row = BotNav.action_by_slot(bot, door.slot)
+    zone.inside = row ~= nil and row.kind == "door" and (row.flags // C.PROBE_BODY) % 2 == 1
     return {
         kind = "door", slot = door.slot, target = door.target, label = label,
         -- A locked door's press opens the key's message: not an event's.
         was_locked = live_locked(bot, door),
         job = {
-            zone = zone_of(door), label = label, pattern = "door",
+            zone = zone, label = label, pattern = "door",
             side = 4 * C.SECOND - 10, timeout = GOAL_TIMEOUT,
         },
     }
@@ -1838,6 +1947,13 @@ local function pickup_fits(bot, item, full)
         -- <use> or step needs leaves it (30E's herbs took the slot a box
         -- visit freed for 306's Doom Book, again and again).
         local held = BotPlanner.steps_needing_room(bot, true) + BotPlanner.needed_items_left(bot)
+        -- So do the bottles of a brew the story has opened, for anything
+        -- it does not take: Rebecca, the player while Plant 42 holds
+        -- Chris, has no item box (403's is off for her), and the rounds
+        -- and herbs she took on the way left 409's bottles no slot.
+        if not BotMix.needs(bot)[item] then
+            held = held + BotMix.slots_needed(bot, true)
+        end
         if held == 0 or kind == "key" or kind == "file" or (merge and bot:has_item(item)) then
             return true
         end
@@ -2275,8 +2391,11 @@ local function choose(bot)
     for _, fact in ipairs(BotPuzzle.errands(bot)) do
         if fact.room == room and BotPuzzle.deliver_wanted(bot, fact)
             and bot:has_item(fact.item)
-            and not blocked(bot, "deliver", room, "camera" .. fact.cut) then
-            return deliver_goal(bot, fact)
+            and not blocked(bot, "deliver", room, deliver_slot(fact)) then
+            local goal = deliver_goal(bot, fact)
+            if goal then
+                return goal
+            end
         end
     end
     for _, fact in ipairs(BotPuzzle.fetches_due(bot)) do
@@ -2356,9 +2475,15 @@ local function choose(bot)
                 local ctx = BotInventory.context(bot)
                 local m = plan().marks[mark_key("item", room, action.slot)]
                 m.item = action.item
-                -- So is a hand weapon a met fight needs (30C's knife).
+                -- So is a hand weapon a met fight needs (30C's knife), and a
+                -- gun the bot has neither held nor boxed: Chris's six slots
+                -- passed 116's shotgun on a full inventory, it was given up,
+                -- and he met 301's adders with an empty handgun.
+                local new_gun = bot:item_kind(action.item) == "weapon"
+                    and bot:item_count(action.item) == 0
+                    and BotInventory.boxed_count(bot, action.item) == 0
                 if bot:item_kind(action.item) == "key" or ctx.uses[action.item]
-                    or (ctx.required and ctx.required[action.item]) then
+                    or (ctx.required and ctx.required[action.item]) or new_gun then
                     m.needed = true
                     marks_changed()
                 end
@@ -3086,8 +3211,8 @@ local function choose(bot)
     -- whose cell door to 512 shows only in the self-destruct.
     local seen = plan().revisit_seen or {}
     for _, fact in ipairs(bot:revisit_facts()) do
-        if fact.room ~= room and not seen[revisit_key(fact)]
-            and bot:flag(fact.bank, fact.bit) == fact.set and visited_room(world, fact.room) then
+        if fact.room ~= room and (fact.after_seconds ~= nil or not seen[revisit_key(fact)])
+            and revisit_due(plan(), bot, fact) and visited_room(world, fact.room) then
             local steps = route(bot, world, room, fact.room)
             local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
             if first then
@@ -3115,7 +3240,7 @@ local function choose(bot)
             go = wanted[fact.item] and not bot:has_item(fact.item)
                 and BotPuzzle.fetch_offered(bot, fact)
         end
-        local slot = fact.kind == "deliver" and ("camera" .. fact.cut) or fact.slot
+        local slot = fact.kind == "deliver" and deliver_slot(fact) or fact.slot
         if go and fact.room ~= room and not blocked(bot, fact.kind, fact.room, slot, true) then
             local steps = route(bot, world, room, fact.room)
             local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
@@ -3124,8 +3249,14 @@ local function choose(bot)
                 local label = string.format("%s 0x%02X in %s (%s)", fact.kind, fact.item,
                     fact.room, fact.label or "unnamed")
                 local cure = fact.kind == "fetch" and wanted[fact.item].cure
+                -- A deliver an `after` flag opened is a timed scene (Richard's
+                -- seven minutes, Rebecca's five with Chris's serum): it goes
+                -- ahead of every other errand, as a cure does. Rebecca went
+                -- to 11A with a crest first and Chris died of the poison.
+                local deliver = fact.kind == "deliver" and fact or wanted[fact.item]
+                local timed = deliver and deliver.kind == "deliver" and deliver.after_bank ~= nil
                 consider({
-                    cost = (cure and door_len(first.slot) - CURE_BONUS
+                    cost = ((cure or timed) and door_len(first.slot) - CURE_BONUS
                         or door_len(first.slot) + #steps * DOOR_COST - ERRAND_BONUS)
                         + route_monsters(steps),
                     order = order, door = first,
@@ -3400,7 +3531,12 @@ end
 -- the set bits: what a room's init reads to pick its variant.
 local STORY_BANK_COUNT = 2
 local BANK_BITS = 1 << 8
-local function story_sig(bot)
+local story_cache = { tick = nil, sig = nil }
+story_sig = function(bot)
+    local now = bot:tick()
+    if story_cache.tick == now then
+        return story_cache.sig
+    end
     local parts = {}
     for bank = 0, STORY_BANK_COUNT - 1 do
         for sel = 0, BANK_BITS - 1 do
@@ -3409,7 +3545,9 @@ local function story_sig(bot)
             end
         end
     end
-    return table.concat(parts, ",")
+    -- Read once per tick: the bot's flags are a snapshot of the tick.
+    story_cache.tick, story_cache.sig = now, table.concat(parts, ",")
+    return story_cache.sig
 end
 
 -- Before the run finishes on an empty frontier: a room of this stage left
@@ -3478,10 +3616,17 @@ end
 
 -- Called on every room change: each <revisit> fact of this room whose
 -- flag is in its state now is done (its init has read the flag).
+-- A timed one is never done: an entry that left its gate holding waits
+-- REVISIT_RETRY before the next.
 local function note_revisits(p, bot, room_id)
     p.revisit_seen = p.revisit_seen or {}
+    p.revisit_retry = p.revisit_retry or {}
     for _, fact in ipairs(bot:revisit_facts()) do
-        if fact.room == room_id and bot:flag(fact.bank, fact.bit) == fact.set then
+        if fact.after_seconds ~= nil then
+            if fact.room == room_id and revisit_due(p, bot, fact) then
+                p.revisit_retry[revisit_key(fact)] = bot:tick() + REVISIT_RETRY
+            end
+        elseif fact.room == room_id and bot:flag(fact.bank, fact.bit) == fact.set then
             p.revisit_seen[revisit_key(fact)] = true
         end
     end
@@ -3504,19 +3649,29 @@ fight_forced = function(bot, room)
 end
 
 -- Before the run finishes on an empty frontier: each door a room event
--- made a message is retried. Away from its room, at once: the walk back is
--- the wait. In its room, once it has waited EVENT_WAIT (doubled per
--- attempt) since it failed; standing there on the entry it failed on, the
--- bot then steps out (p.reenter): the room's script decides the door again
--- only on an entry. Returns the forgiven count and whether a mark is still
+-- made a message is retried once it has waited EVENT_WAIT (doubled per
+-- attempt, up to EVENT_WAIT_MAX) since it failed; away from its room, half
+-- that, since the walk back is part of the wait. Standing in its room on
+-- the entry it failed on, the bot then steps out (p.reenter): the room's
+-- script decides the door again only on an entry. Returns the forgiven count and whether a mark is still
 -- waiting (the bot then idles instead of finishing).
 forgive_events = function(bot)
     local p = plan()
     local n, waiting = 0, false
     for key, m in pairs(p.marks) do
         if m.event and not m.event.forgiven then
-            local wait = EVENT_WAIT * (1 << (m.attempts - 1))
-            if m.room ~= bot:room().id or bot:tick() - m.event.tick >= wait then
+            local doublings = m.attempts - 1
+            if doublings > 2 then
+                doublings = 2
+            end
+            local wait = EVENT_WAIT * (1 << doublings)
+            if wait > EVENT_WAIT_MAX then
+                wait = EVENT_WAIT_MAX
+            end
+            if m.room ~= bot:room().id then
+                wait = wait // EVENT_AWAY_SHARE
+            end
+            if bot:tick() - m.event.tick >= wait then
                 m.event.forgiven = true
                 n = n + 1
                 if m.room == bot:room().id and p.entries[m.room] == m.event.entry then

@@ -80,13 +80,22 @@ way and keep their defaults otherwise; none of them changes who escapes.
 | `re1_chris_rebecca_save_room` | `rebecca_meet=save_room rebecca_along=no rebecca=save jill=save` | 6: Chris, Jill and Rebecca |
 | `re1_chris_ceiling_trap` | `sandwich=yes rebecca_meet=save_room rebecca_along=yes rebecca=save jill=save` | 6: Chris, Jill and Rebecca |
 
-The Chris routes are not played through yet. On seed 1
-`re1_chris_best_ending` plays the first mansion visit (Rebecca met and taken
-along, the piano, the emblems, and the sword, armor and shield keys) and stops in 301,
-the courtyard pool, at about 134,000 ticks: out of handgun rounds among the
-adders, with the shotgun never lifted from 116's rack (Chris's six slots
-were full). Many room facts beyond the mansion still name Jill's slots and
-flags, which differ in Chris's game.
+The Chris routes are not played through yet: none completes on seeds 1
+and 2. Each one now plays past the mansion's story steps (Richard's serum
+or death, Rebecca's piano, the emblems, 115's ceiling trap) into the
+courtyard, the caves or the guardhouse. Where they stop:
+
+- 20C/21A: the bot keeps rerunning 20C's ladder event (AOT 7, the way down
+  to 21A and on to the 200 lift) as a passage check, until the loop rule
+  ends the run (`alone`, `jill_ending`, `rebecca_save_room`).
+- 400: Rebecca, the player while Plant 42 holds Chris, gets no item box
+  (403's is off for her) and keeps pressing the gate to 304, a message
+  while she plays (`best_ending`, `rebecca_ending`).
+- 40C: after the skipped intro Chris can stand outside the room's walls,
+  pushed out the far side of a wall box. The cause is not pinned down.
+- 401: a fight at the desk can wedge Chris where no path plans out.
+- Early deaths: on unlucky seeds Chris runs out of rounds in the mansion
+  and saves rarely, so four deaths since the last save end the run.
 
 The routes play with the port's default options (quick turn and tactical
 reload on). A new route is a copy of one of these with other `params`,

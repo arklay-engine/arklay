@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- 30A, the cave chamber where Enrico waits (Jill's route). AOT 2 is a
-     body-probe trigger in front of him: walking into it runs his scene,
-     which sets common 0x48, hands over the hex crank (0x1E, AOT 9) and
-     lets the hunters out on the way back. -->
+<!-- 30A, the cave chamber where Enrico waits. AOT 2 is a body-probe
+     trigger in front of him: walking into it runs his scene, which sets
+     common 0x48, hands over the hex crank (0x1E, AOT 9) and lets the
+     hunters out on the way back. Both games: Jill's init sets AOT 2 to
+     enrico_scene_jill, Chris's to enrico_shot_chris_or_with_barry, and
+     both set 0x48 (Enrico shot). Until then Chris's hex crank stands off
+     the map (30000, 30000), so the scene is the only way to it. -->
 <bot format="2">
-  <interact slot="2" bank="1" bit="0x48" character="jill" label="Enrico's scene"/>
+  <interact slot="2" bank="1" bit="0x48" label="Enrico's scene"/>
 </bot>

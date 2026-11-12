@@ -60,9 +60,29 @@ end
 -- (MOVE a onto b), the shallowest first. An item reached in a round keeps
 -- every pair of that round that makes it, so the plan can pick the one
 -- that uses what is held.
+-- The tree is the same for a fact and its taps on every call (the engine's
+-- combine table does not change): it is built once per brew and tap set,
+-- since the inventory rules ask for it every tick.
+local recipe_cache = {}
 function BotMix.recipes(bot, fact, taps)
+    taps = taps or meta(bot).taps or {}
+    local key = { tostring(fact.item), tostring(fact.bottle) }
+    for _, tap in ipairs(taps) do
+        key[#key + 1] = tostring(tap.slot) .. "=" .. tostring(tap.item)
+    end
+    key = table.concat(key, ",")
+    local cached = recipe_cache[key]
+    if cached then
+        return cached
+    end
+    local made = BotMix.build_recipes(bot, fact, taps)
+    recipe_cache[key] = made
+    return made
+end
+
+function BotMix.build_recipes(bot, fact, taps)
     local made, order = {}, {}
-    for _, tap in ipairs(taps or meta(bot).taps or {}) do
+    for _, tap in ipairs(taps) do
         if not made[tap.item] then
             made[tap.item] = { { tap = tap } }
             order[#order + 1] = tap.item
@@ -116,7 +136,12 @@ end
 -- The most bottles a brew holds at once, made from nothing held: the
 -- slots it takes (a mix leaves its cursor bottle empty, so bottles are
 -- never used up).
+local peak_cache = {}
 local function peak_bottles(bot, fact, made)
+    -- Planned from nothing held, so the same for a tree every time.
+    if peak_cache[made] then
+        return peak_cache[made]
+    end
     local ops = {}
     BotMix.plan(made, fact.item, {}, ops)
     local held, peak = 0, 0
@@ -130,15 +155,18 @@ local function peak_bottles(bot, fact, made)
             peak = held
         end
     end
+    peak_cache[made] = peak
     return peak
 end
 
 -- The free slots the open brews of any room still need: each one's
--- bottle peak less the bottles and recipe chemicals already held.
-function BotMix.slots_needed(bot)
+-- bottle peak less the bottles and recipe chemicals already held. With
+-- `gated`, only the brews an `after` flag opened: a story step running now
+-- (Rebecca's V-JOLT once Plant 42 has Chris), not one open all game.
+function BotMix.slots_needed(bot, gated)
     local need = 0
     for _, fact in ipairs(bot:brew_facts()) do
-        if BotMix.open(bot, fact) then
+        if BotMix.open(bot, fact) and (not gated or fact.after_bank ~= nil) then
             local made = BotMix.recipes(bot, fact, fact.taps)
             local held = BotMix.count(bot, fact.bottle)
             for item, _ in pairs(made) do
@@ -177,12 +205,52 @@ local function fills(ops)
     return n
 end
 
+-- The most chemicals `ops` hold at once, beyond the stock: the bottles
+-- they need (a fill fills one, a mix leaves one of its two empty).
+local function peak(ops)
+    local held, most = 0, 0
+    for _, op in ipairs(ops) do
+        held = held + (op.kind == "fill" and 1 or -1)
+        if held > most then
+            most = held
+        end
+    end
+    return most
+end
+
 -- The cheapest way to make `item` from the stock in `have` (item ->
 -- count): its ops and the stock left, or nil when the taps cannot lead to
--- it. Cheapest is the fewest tap fills, then the fewest ops; each
--- alternative recipe is tried on its own copy of the stock. `depth` bounds
--- the search (the tree is a handful of chemicals deep).
-local function cheapest(made, item, have, depth)
+-- it. Cheapest is the fewest tap fills, then the fewest bottles at once,
+-- then the fewest ops; each alternative recipe is tried on its own copy of
+-- the stock, with either half made first. Making the half that is mixed
+-- last, last, keeps a bottle free: V-JOLT is UMB No.13 and NP-003, and
+-- NP-003 made first sat in a bottle while UMB No.13 took three more, one
+-- more than Rebecca's free slots in Chris's game. `depth` bounds the
+-- search (the tree is a handful of chemicals deep).
+local function stock_key(have)
+    local keys = {}
+    for k, v in pairs(have) do
+        if v > 0 then
+            keys[#keys + 1] = tostring(k) .. "x" .. tostring(v)
+        end
+    end
+    table.sort(keys)
+    return table.concat(keys, ",")
+end
+
+local cheapest
+local function cheapest_memo(made, item, have, depth, memo)
+    local key = string.format("%d|%d|%s", item, depth, stock_key(have))
+    local hit = memo[key]
+    if hit then
+        return hit[1], hit[2]
+    end
+    local ops, left = cheapest(made, item, have, depth, memo)
+    memo[key] = { ops, left }
+    return ops, left
+end
+
+cheapest = function(made, item, have, depth, memo)
     if (have[item] or 0) > 0 then
         local left = copy(have)
         left[item] = left[item] - 1
@@ -194,37 +262,50 @@ local function cheapest(made, item, have, depth)
     local best, best_left
     for _, how in ipairs(made[item] or {}) do
         local ops, left
+        local tries = {}
         if how.tap then
-            ops, left = { { kind = "fill", tap = how.tap, item = item } }, have
+            tries[1] = { { { kind = "fill", tap = how.tap, item = item } }, have }
         else
-            local a_ops, after_a = cheapest(made, how.a, have, depth - 1)
-            local b_ops, after_b
-            if a_ops then
-                b_ops, after_b = cheapest(made, how.b, after_a, depth - 1)
-            end
-            if b_ops then
-                ops = {}
-                append(ops, a_ops)
-                append(ops, b_ops)
-                ops[#ops + 1] = { kind = "mix", a = how.a, b = how.b, item = item }
-                left = after_b
+            for _, order in ipairs({ { how.a, how.b }, { how.b, how.a } }) do
+                local first_ops, after_first = cheapest_memo(made, order[1], have, depth - 1, memo)
+                local second_ops, after_second
+                if first_ops then
+                    second_ops, after_second = cheapest_memo(made, order[2], after_first,
+                        depth - 1, memo)
+                end
+                if second_ops then
+                    local both = {}
+                    append(both, first_ops)
+                    append(both, second_ops)
+                    both[#both + 1] = { kind = "mix", a = how.a, b = how.b, item = item }
+                    tries[#tries + 1] = { both, after_second }
+                end
             end
         end
-        if ops and (not best or fills(ops) < fills(best)
-                or (fills(ops) == fills(best) and #ops < #best)) then
-            best, best_left = ops, left
+        for _, try in ipairs(tries) do
+            ops, left = try[1], try[2]
+            local better = not best or fills(ops) < fills(best)
+            if not better and fills(ops) == fills(best) then
+                better = peak(ops) < peak(best)
+                    or (peak(ops) == peak(best) and #ops < #best)
+            end
+            if better then
+                best, best_left = ops, left
+            end
         end
     end
     return best, best_left
 end
 
-local PLAN_DEPTH = 8
+-- V-JOLT's tree is five chemicals deep; deeper only walks the recipes'
+-- cycles (UMB No.4 from NP-003 and water, NP-003 from water and UMB No.2).
+local PLAN_DEPTH = 6
 
 -- Append to `ops` what making `item` takes beyond the stock in `have`
 -- (item -> count; the plan's claims are taken out of it). False when the
 -- taps cannot lead to it.
 function BotMix.plan(made, item, have, ops)
-    local best, left = cheapest(made, item, have, PLAN_DEPTH)
+    local best, left = cheapest_memo(made, item, have, PLAN_DEPTH, {})
     if not best then
         return false
     end

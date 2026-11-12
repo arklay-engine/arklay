@@ -1665,6 +1665,10 @@ enum Turn {
 
 /// A planned path and the index of its face approach point, if it has one.
 type PlannedPath = (Vec<(i32, i32)>, Option<usize>);
+/// A path's first lattice node, and, if the body does not see it from
+/// where it stands, the free point it steps out to (the start itself
+/// unless it stands inside the planner's skin) and the point it bends at.
+type StartNode = Option<(usize, Option<((i32, i32), (i32, i32))>)>;
 
 /// The result of the read-only `bot:path` query.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -2257,6 +2261,10 @@ const FINE_RINGS: i32 = 4;
 /// Half steps a goal no node sees walks out along an axis, looking for a
 /// point that one does: 4096 units.
 const FINE_BEND_STEPS: i32 = 64;
+/// How far a start inside the planner's skin looks for free floor, and
+/// how many of the nearest free points it tries.
+const SKIN_ESCAPE: i32 = 192;
+const SKIN_ESCAPE_POINTS: usize = 6;
 
 /// The coarse lattice of one room and body, kept between searches: its
 /// blocked nodes and the edges the searches sampled so far. A way-out choice
@@ -2328,6 +2336,11 @@ struct FineGrid {
     blocked: Vec<bool>,
     component: Vec<u32>,
     edges: Edges,
+    /// The start's node in each part, with its bend, for the last start
+    /// asked about: the approach points of one goal, and every goal of one
+    /// tick, are planned from the same spot, and an unreachable goal asks
+    /// for the start's node in every part a bend of it sees.
+    starts: RefCell<((i32, i32), HashMap<u32, StartNode>)>,
 }
 
 impl FineGrid {
@@ -2385,6 +2398,7 @@ impl FineGrid {
             blocked: blocked_nodes,
             component,
             edges: Edges::new(nodes),
+            starts: RefCell::new(((i32::MIN, i32::MIN), HashMap::new())),
         }
     }
 
@@ -2416,36 +2430,158 @@ impl FineGrid {
             return None;
         }
         let lattice = self.lattice(scratch);
-        // The goal node must see the exact goal, so the tail cannot hop a
-        // wall thinner than the step.
-        let sighted = |point: (i32, i32)| {
+        // The nearest node of an allowed part that sees `point`. The goal
+        // node must see the exact goal, so the tail cannot hop a wall
+        // thinner than the step.
+        let sighted = |point: (i32, i32), allowed: &dyn Fn(u32) -> bool| {
             lattice.nearest_free(point.0, point.1, FINE_RINGS, |index| {
-                line_clear(room, lattice.xy(index), point, y, radius, flags)
+                allowed(self.component[index])
+                    && line_clear(room, lattice.xy(index), point, y, radius, flags)
+            })
+        };
+        // The start's node in a part, and the bend to reach it. A body
+        // standing in a band narrower than the step (401's red book:
+        // Chris's floor in front of the desk) may have only a pocket's nodes
+        // nearby: walk out along an axis to a point a node of the part sees.
+        // A start inside the skin bends from the free floor nearest it,
+        // its first waypoint: each of the nearest few points in turn.
+        let start_points = if blocked(room, start.0, start.1, y, radius, flags) {
+            nearest_free_points(room, start, y, radius, flags)
+        } else {
+            vec![start]
+        };
+        let mut start_bends: Vec<Option<Vec<(i32, i32)>>> = vec![None; start_points.len()];
+        let mut starts = self.starts.borrow_mut();
+        if starts.0 != start {
+            *starts = (start, HashMap::new());
+        }
+        let mut start_for = |part: u32| -> StartNode {
+            *starts.1.entry(part).or_insert_with(|| {
+                let in_part = |index: usize| self.component[index] == part;
+                if let Some(index) = lattice.nearest_free(start.0, start.1, FINE_RINGS, in_part) {
+                    return Some((index, None));
+                }
+                for (from, bends) in start_points.iter().zip(start_bends.iter_mut()) {
+                    let found = bends
+                        .get_or_insert_with(|| bend_points(room, *from, y, radius, flags))
+                        .iter()
+                        .find_map(|&point| {
+                            sighted(point, &|p| p == part)
+                                .map(|index| (index, Some((*from, point))))
+                        });
+                    if found.is_some() {
+                        return found;
+                    }
+                }
+                None
             })
         };
         // A goal at the end of a corridor narrower than the step (406's
         // strip beside the crate) has no node in sight: walk out of it along
-        // an axis, in sight of the goal, to the first point a node sees, and
-        // bend there.
-        let (goal_index, bend) = match sighted(goal) {
-            Some(index) => (index, None),
-            None => (1..=FINE_BEND_STEPS)
-                .flat_map(|step| {
-                    let reach = step * FINE_STEP / 2;
-                    [(reach, 0), (-reach, 0), (0, reach), (0, -reach)]
-                })
-                .map(|(dx, dz)| (goal.0 + dx, goal.1 + dz))
-                .filter(|&point| line_clear(room, goal, point, y, radius, flags))
-                .find_map(|point| sighted(point).map(|index| (index, Some(point))))?,
-        };
-        let part = self.component[goal_index];
-        let start_index = lattice.nearest_free(start.0, start.1, FINE_RINGS, |index| {
-            self.component[index] == part
-        })?;
+        // an axis, in sight of the goal, to the first point a node of a part
+        // the start reaches sees, and bend there. A nearer point may be seen
+        // only by a pocket the band cuts off (401's desk again). A part the
+        // start does not reach is ruled out before any sight line is drawn.
+        let mut failed: Vec<u32> = Vec::new();
+        let mut found = None;
+        let goal_bends = std::iter::once(None).chain(
+            bend_points(room, goal, y, radius, flags)
+                .into_iter()
+                .map(Some),
+        );
+        for bend in goal_bends {
+            let point = bend.unwrap_or(goal);
+            while let Some(index) = sighted(point, &|p| !failed.contains(&p)) {
+                let part = self.component[index];
+                match start_for(part) {
+                    Some(start_node) => {
+                        found = Some((start_node, index, bend));
+                        break;
+                    }
+                    None => failed.push(part),
+                }
+            }
+            if found.is_some() {
+                break;
+            }
+        }
+        let ((start_index, start_bend), goal_index, goal_bend) = found?;
         let mut path = lattice.search(room, start_index, goal_index, y, radius, flags, zones)?;
-        path.extend(bend);
+        if let Some((from, point)) = start_bend {
+            path.insert(0, point);
+            if from != start {
+                path.insert(0, from);
+            }
+        }
+        path.extend(goal_bend);
         Some(end_at_exact_goal(room, path, goal, y, radius, flags))
     }
+}
+
+/// The points a fine-lattice path can bend at near `from`: out along each
+/// axis, half a step further each time, nearest first, while the axis stays
+/// in sight of `from`. Each axis stops at its first blocked step, so a ray
+/// costs one sample a point.
+fn bend_points(
+    room: &RoomState,
+    from: (i32, i32),
+    y: i32,
+    radius: i32,
+    flags: u8,
+) -> Vec<(i32, i32)> {
+    const AXES: [(i32, i32); 4] = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+    let mut open = [true; 4];
+    let mut points = Vec::new();
+    for step in 1..=FINE_BEND_STEPS {
+        for (axis, (dx, dz)) in AXES.iter().enumerate() {
+            if !open[axis] {
+                continue;
+            }
+            let reach = step * FINE_STEP / 2;
+            let last = (step - 1) * FINE_STEP / 2;
+            let point = (from.0 + dx * reach, from.1 + dz * reach);
+            let prev = (from.0 + dx * last, from.1 + dz * last);
+            if line_clear(room, prev, point, y, radius, flags) {
+                points.push(point);
+            } else {
+                open[axis] = false;
+            }
+        }
+        if open == [false; 4] {
+            break;
+        }
+    }
+    points
+}
+
+/// The free points nearest `from` within [`SKIN_ESCAPE`], on a 16-unit
+/// grid, nearest first, at most [`SKIN_ESCAPE_POINTS`]: where a body the
+/// room's push left inside the planner's skin (Chris in 401's desk pocket,
+/// hit into its corner) steps out to first.
+fn nearest_free_points(
+    room: &RoomState,
+    from: (i32, i32),
+    y: i32,
+    radius: i32,
+    flags: u8,
+) -> Vec<(i32, i32)> {
+    const STEP: i32 = 16;
+    let rings = SKIN_ESCAPE / STEP;
+    let mut free = Vec::new();
+    for dz in -rings..=rings {
+        for dx in -rings..=rings {
+            let point = (from.0 + dx * STEP, from.1 + dz * STEP);
+            let d = distance_xz(from, point);
+            if d <= SKIN_ESCAPE && !blocked(room, point.0, point.1, y, radius, flags) {
+                free.push((d, point));
+            }
+        }
+    }
+    free.sort_unstable();
+    free.into_iter()
+        .take(SKIN_ESCAPE_POINTS)
+        .map(|(_, point)| point)
+        .collect()
 }
 
 /// The path search behind `walk_to` and `bot:path`: the coarse lattice
@@ -3746,6 +3882,9 @@ impl UserData for BotCtx {
                 row.set("bank", entry.fact.gate.flag.0)?;
                 row.set("bit", entry.fact.gate.flag.1)?;
                 row.set("set", entry.fact.gate.set)?;
+                row.set("after_bank", entry.fact.after.map(|(bank, _)| bank))?;
+                row.set("after_bit", entry.fact.after.map(|(_, bit)| bit))?;
+                row.set("after_seconds", entry.fact.after_seconds)?;
                 row.set("label", entry.fact.label.as_deref())?;
                 table.push(row)?;
             }
@@ -3851,6 +3990,10 @@ impl UserData for BotCtx {
                     meta::ErrandKind::Deliver { cut } => {
                         row.set("kind", "deliver")?;
                         row.set("cut", cut)?;
+                    }
+                    meta::ErrandKind::DeliverAt { slot } => {
+                        row.set("kind", "deliver")?;
+                        row.set("slot", slot)?;
                     }
                     meta::ErrandKind::Fetch { slot } => {
                         row.set("kind", "fetch")?;
@@ -5790,6 +5933,48 @@ mod tests {
         let smooth = smooth_path(&room, None, start, path, 0, 100, 0, &[]);
         assert_eq!(smooth.last().copied(), Some(goal));
         assert_path_clear(&room, start, &smooth);
+    }
+
+    /// A band of free centres z 10118..10232, narrower than the fine step,
+    /// joins the open west of the room to a pocket in the east (x 12118..
+    /// 13882, z 10118..11882) that has lattice nodes of its own: 401's desk
+    /// front for Chris, the red book on the band at the pocket's mouth.
+    fn pocket_room() -> RoomState {
+        let mut room = RoomState::default();
+        let quadrant = &mut room.collision.quadrants[0];
+        quadrant.push(wall(8000, 32768, 0, 10000));
+        quadrant.push(wall(8000, 12000, 10350, 32768));
+        quadrant.push(wall(12000, 32768, 12000, 32768));
+        quadrant.push(wall(14000, 32768, 0, 32768));
+        room
+    }
+
+    #[test]
+    fn fine_fallback_bends_past_a_pocket_into_the_starts_part() {
+        let room = pocket_room();
+        let fine = Grids::default();
+        let (open, band) = ((4000, 4000), (11800, 10175));
+        // The band point is in sight of the pocket's nodes only: the path
+        // must bend along the band to the open part's nodes, both ways.
+        let path = find_path(&room, &fine, open, band, 0, 100, 0, &[])
+            .expect("the goal on the band is reached from the open part");
+        assert_eq!(path.last().copied(), Some(band));
+        assert_path_clear(&room, open, &path);
+        let back = find_path(&room, &fine, band, open, 0, 100, 0, &[])
+            .expect("the open part is reached from the band");
+        assert_eq!(back.last().copied(), Some(open));
+        assert_path_clear(&room, band, &back);
+        // A start the room's push left inside the skin (z 10240, 8 units
+        // into the north wall's margin) steps out to the band first.
+        let skin = (11800, 10240);
+        assert!(blocked(&room, skin.0, skin.1, 0, 100, 0));
+        let out = find_path(&room, &fine, skin, open, 0, 100, 0, &[])
+            .expect("a start inside the skin steps out and bends");
+        assert_eq!(out.last().copied(), Some(open));
+        assert_path_clear(&room, out[0], &out[1..]);
+        // A path bends only at its ends: a goal deep in the pocket, whose
+        // way runs through the whole band between two parts, stays out of
+        // reach (no room needs it yet).
     }
 
     #[test]

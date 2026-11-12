@@ -8,11 +8,20 @@
      only in this room (the menu's MOVE); a wrong pair turns both into
      empty bottles, and effect 4 fumes the room (scenario 0x16).
      V-JOLT (0x1B) is UMB No.13 and NP-003; the brew plans the tree from
-     the engine's recipes. It is done once 40F's root has it (0x13). -->
+     the engine's recipes. It is done once 40F's root has it (0x13).
+
+     Chris's game: the bottles are out and the taps flow only while
+     Rebecca is the player (character model 3), which 40C's Plant 42 scene
+     with her starts (common 0x3D) when she is with Chris. She brews the
+     V-JOLT here and pours it in 40F; Chris then fights the plant weakened.
+     Without that scene (she is in 100, or Richard died) Chris fights it
+     alone. -->
 <bot format="2">
   <tap slot="8" item="0x14" label="water"/>
   <tap slot="11" item="0x15" label="UMB No.2"/>
   <tap slot="12" item="0x16" label="UMB No.4"/>
   <brew item="0x1B" bottle="0x13" bank="0" bit="0x13" after_bank="7" after_bit="0x4E"
-        after_while="clear" when="vjolt=yes" label="V-JOLT for Plant 42's root"/>
+        after_while="clear" when="vjolt=yes" character="jill" label="V-JOLT for Plant 42's root"/>
+  <brew item="0x1B" bottle="0x13" bank="0" bit="0x13" after_bank="1" after_bit="0x3D"
+        character="chris" label="Rebecca's V-JOLT for Plant 42's root"/>
 </bot>

@@ -100,8 +100,19 @@ function BotSurvival.cure(bot, player)
         return false
     end
     local low = player.health < player.max_health * heal_fraction(bot)
+    -- Not an item a wanted <deliver> at a zone carries: the serum Rebecca
+    -- runs for poisoned Chris (20D's door) is his, and using it on the way
+    -- left the door shut. A deliver into a cut (Richard's serum) does not
+    -- hold it back: a player bitten on the way cures first, and dying with
+    -- the serum for someone else in the pocket helps no one.
+    local carried = {}
+    for _, fact in ipairs(BotPuzzle.errands(bot)) do
+        if fact.slot ~= nil and BotPuzzle.deliver_wanted(bot, fact) then
+            carried[fact.item] = true
+        end
+    end
     local cure = BotSurvival.pick_cure(bot:knowledge().cures, player,
-        function(item) return bot:item_count(item) > 0 end, low)
+        function(item) return bot:item_count(item) > 0 and not carried[item] end, low)
     if not cure then
         if not s.poison_logged then
             s.poison_logged = true
