@@ -592,9 +592,6 @@ pub struct Zombie {
     /// each slot with the body's position at the call, since `Snd_se_3D` pans
     /// it there and then, before `Oba_ck_em` and `Sca_ck_em` push the body.
     pub sounds: Vec<(u8, [i32; 3])>,
-    burnt: bool,
-    /// How far `Em10_Scenario` has taken a burnt body's colours down.
-    charred: u8,
     /// `pEnemy_ptr`: the slot of the ivy a vine grew from.
     pub parent: Option<u8>,
     /// Where G3's frame grips a knocked-back player (`0x49a890`): the part
@@ -652,14 +649,41 @@ impl Zombie {
             .map(|head| (HEAD_PART, joint_matrix(&head.matrix)));
         pulled.chain(thrown).chain(head)
     }
+}
 
-    /// `FUN_00456780`'s colours scale what lights the parts, around a half for
-    /// most, and `Em10_Scenario` takes them all down together until the first
-    /// part's reach `0x10`. They're a tint of the whole model here.
-    pub fn tint(&self) -> [u8; 3] {
-        const PARTS_MEAN: u32 = 0x4E;
-        let burnt = 0xA0 * (PARTS_MEAN - u32::from(self.charred)) / PARTS_MEAN;
-        [if self.burnt { burnt as u8 } else { 0xFF }; 3]
+/// `FUN_00456780`'s colours for a burning body (its `Id` not `0x10`): each
+/// part's `Poly_rgb`, which scales what lights it. The parts it leaves keep
+/// theirs.
+pub const BURNT_PART_RGB: [(usize, u32); 11] = [
+    (0, 0x40_4040),
+    (1, 0x48_4848),
+    (2, 0x70_7070),
+    (5, 0x70_7070),
+    (8, 0x50_5050),
+    (9, 0x50_5050),
+    (10, 0x48_4848),
+    (11, 0x40_4040),
+    (12, 0x50_5050),
+    (13, 0x40_4040),
+    (14, 0x40_4040),
+];
+
+/// `FUN_00456780`'s writes to the parts' `Poly_rgb`.
+pub fn burn_parts(part_rgb: &mut [u32; 32]) {
+    for (part, rgb) in BURNT_PART_RGB {
+        part_rgb[part] = rgb;
+    }
+}
+
+/// `Em10_Scenario`'s charring, every fourth tick of a burnt body's: the
+/// first 15 parts' `Poly_rgb` each down by `0x10101`, until the first part's
+/// red is `0x10`.
+pub fn char_parts(part_rgb: &mut [u32; 32]) {
+    if part_rgb[0] & 0xFF == 0x10 {
+        return;
+    }
+    for rgb in &mut part_rgb[..15] {
+        *rgb = rgb.wrapping_sub(0x1_0101);
     }
 }
 
@@ -2876,16 +2900,25 @@ mod tests {
     }
 
     #[test]
-    fn a_burnt_body_chars_and_an_unburnt_one_doesnt() {
-        let mut zombie = Zombie {
-            burnt: true,
-            ..Zombie::default()
-        };
-        assert_eq!(zombie.tint(), [0xA0; 3]);
-        zombie.charred = 0x30;
-        assert_eq!(zombie.tint(), [0x3D; 3]);
-        zombie.burnt = false;
-        assert_eq!(zombie.tint(), [0xFF; 3]);
+    fn a_burning_body_takes_fun_00456780s_part_colours_and_chars_to_0x10() {
+        let mut rgb = [crate::player2::DEFAULT_PART_RGB; 32];
+        burn_parts(&mut rgb);
+        // What the original's `zp` reads in room 100's opening for slots 0
+        // and 1: part 0 and the sum over the zombie's 17 parts.
+        assert_eq!(rgb[0], 0x40_4040);
+        let sum = rgb[..17].iter().fold(0u32, |sum, &c| sum.wrapping_add(c));
+        assert_eq!(sum, 0x666_6660);
+        assert_eq!(rgb[3], crate::player2::DEFAULT_PART_RGB);
+        assert_eq!(rgb[15], crate::player2::DEFAULT_PART_RGB);
+        char_parts(&mut rgb);
+        assert_eq!(rgb[0], 0x3F_3F3F);
+        assert_eq!(rgb[14], 0x3F_3F3F);
+        assert_eq!(rgb[15], crate::player2::DEFAULT_PART_RGB);
+        for _ in 0..0x40 {
+            char_parts(&mut rgb);
+        }
+        assert_eq!(rgb[0], 0x10_1010);
+        assert_eq!(rgb[2], 0x40_4040);
     }
 
     #[test]

@@ -147,9 +147,7 @@ ignore = [
     [24035, 31315, "om0"], [24035, 31315, "om1"], [24035, 31315, "om2"],
     # the head through 114's door 1 with the head turned toward a zombie (docs/internals/deviations/re2.md, "The head through a door")
     [24561, 24774, "pneck"],
-    # room 100's opening (not this route's change; no other run compares it): slots 0 and 1 drawn at 0x404040 by the original until 183
-    [0, 183, "zp"],
-    # and the view's load on the new game's first tick (`movie` 1 in the original, 0 in arklay), which no other run from room 100 compares
+    # the view's load on the new game's first tick (`movie` 1 in the original, 0 in arklay), which no other run from room 100 compares
     [0, "movie"],
     # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do: route_200_115's, then this segment's
     [391, 481, "hk"], [2662, 2752, "hk"], [5490, 5580, "hk"], [6935, 7025, "hk"], [7989, 8079, "hk"], [8819, 8911, "hk"], [10047, 10137, "hk"], [12818, 12908, "hk"], [15371, 15461, "hk"], [15952, "hk"], [17690, 17780, "hk"], [18471, 18561, "hk"], [19758, 19848, "hk"], [20760, 20850, "hk"], [21251, 21343, "hk"], [24035, 24125, "hk"], [24470, 24560, "hk"],
