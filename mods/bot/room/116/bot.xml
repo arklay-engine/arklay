@@ -28,7 +28,9 @@
      the ceiling down a second time, so from then on Chris lifts it only
      for the broken-shotgun swap. The put-back and 115's next entry leave
      every flag as it was before the trap, so the avoid holds once the bot
-     has seen common 0x20 set (seen_bank). -->
+     has seen common 0x20 set (seen_bank). The swap waits for that too: with
+     the broken shotgun already held, the first lift swapped it in at once
+     and the ceiling never came down. -->
 <bot format="2">
   <use slot="5" item="0x1C" bank="7" bit="0x01" when="sandwich=no"
        label="broken shotgun on the rack"/>
@@ -37,8 +39,8 @@
   <avoid slot="1" seen_bank="1" seen_bit="0x20" unless_held="0x1C"
          character="chris" when="sandwich=yes"
          reason="the trap has sprung: a bare rack brings 115's ceiling down again"/>
-  <use slot="5" item="0x1C" bank="7" bit="0x01" character="chris" when="sandwich=yes"
-       label="broken shotgun on the rack, after the trap"/>
+  <use slot="5" item="0x1C" bank="7" bit="0x01" seen_bank="1" seen_bit="0x20"
+       character="chris" when="sandwich=yes" label="broken shotgun on the rack, after the trap"/>
   <interact slot="6" bank="7" bit="0x00" after_bank="1" after_bit="0x20" mark="no"
             character="chris" when="sandwich=yes"
             label="the shotgun back on the rack: the door to 115 comes back"/>

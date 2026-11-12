@@ -5,10 +5,13 @@
      the pour once V-JOLT is used there, setting scenario 0x13: 40C loads
      Plant 42 weakened and skips Barry's rescue. Chris's game: Rebecca
      pours it (409's notes), and door 0 then becomes the event that takes
-     her back to Chris at Plant 42. -->
+     her back to Chris at Plant 42. Plant 42 killed without it sets 0x00
+     (40C) and the probe is gone for good, so both uses end there (until). -->
 <bot format="2">
-  <use slot="2" item="0x1B" bank="0" bit="0x13" when="vjolt=yes" character="jill"
+  <use slot="2" item="0x1B" bank="0" bit="0x13" until_bank="0" until_bit="0x00"
+       when="vjolt=yes" character="jill"
        label="V-JOLT on Plant 42's root"/>
-  <use slot="2" item="0x1B" bank="0" bit="0x13" character="chris"
+  <use slot="2" item="0x1B" bank="0" bit="0x13" until_bank="0" until_bit="0x00"
+       character="chris"
        label="Rebecca's V-JOLT on Plant 42's root"/>
 </bot>

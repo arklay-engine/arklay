@@ -1024,6 +1024,8 @@ fn set_use_gates(row: &Table, fact: &meta::Use) -> mlua::Result<()> {
     row.set("after_bit", fact.after.map(|(_, bit)| bit))?;
     row.set("until_bank", fact.until.map(|(bank, _)| bank))?;
     row.set("until_bit", fact.until.map(|(_, bit)| bit))?;
+    row.set("seen_bank", fact.seen.map(|(bank, _)| bank))?;
+    row.set("seen_bit", fact.seen.map(|(_, bit)| bit))?;
     Ok(())
 }
 
@@ -1673,9 +1675,10 @@ enum Turn {
 /// A planned path and the index of its face approach point, if it has one.
 type PlannedPath = (Vec<(i32, i32)>, Option<usize>);
 /// A path's first lattice node, and, if the body does not see it from
-/// where it stands, the free point it steps out to (the start itself
-/// unless it stands inside the planner's skin) and the point it bends at.
-type StartNode = Option<(usize, Option<((i32, i32), (i32, i32))>)>;
+/// where it stands, the waypoints it walks to first: the free point it
+/// steps out to (when it stands inside the planner's skin), then the bend
+/// or the lead-in out of a pocket ([`lead_in`]).
+type StartNode = Option<(usize, Vec<(i32, i32)>)>;
 
 /// The result of the read-only `bot:path` query.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -2462,26 +2465,55 @@ impl FineGrid {
         if starts.0 != start {
             *starts = (start, HashMap::new());
         }
+        let step_out = |from: (i32, i32)| (from != start).then_some(from);
         let mut start_for = |part: u32| -> StartNode {
-            *starts.1.entry(part).or_insert_with(|| {
-                let in_part = |index: usize| self.component[index] == part;
-                if let Some(index) = lattice.nearest_free(start.0, start.1, FINE_RINGS, in_part) {
-                    return Some((index, None));
-                }
-                for (from, bends) in start_points.iter().zip(start_bends.iter_mut()) {
-                    let found = bends
-                        .get_or_insert_with(|| bend_points(room, *from, y, radius, flags))
-                        .iter()
-                        .find_map(|&point| {
-                            sighted(point, &|p| p == part)
-                                .map(|index| (index, Some((*from, point))))
-                        });
-                    if found.is_some() {
-                        return found;
+            starts
+                .1
+                .entry(part)
+                .or_insert_with(|| {
+                    let in_part = |index: usize| self.component[index] == part;
+                    // A free start must see its node: the nearest one of the
+                    // part may be across the desk's round end (Chris at
+                    // 9632, 12393 in 401). One inside the skin sees none,
+                    // and the smoothing steps out to the nearest.
+                    let near = if start_points == [start] {
+                        sighted(start, &|p| p == part)
+                    } else {
+                        lattice.nearest_free(start.0, start.1, FINE_RINGS, in_part)
+                    };
+                    if let Some(index) = near {
+                        return Some((index, Vec::new()));
                     }
-                }
-                None
-            })
+                    for (from, bends) in start_points.iter().zip(start_bends.iter_mut()) {
+                        let found = bends
+                            .get_or_insert_with(|| bend_points(room, *from, y, radius, flags))
+                            .iter()
+                            .find_map(|&point| {
+                                sighted(point, &|p| p == part).map(|index| {
+                                    (index, step_out(*from).into_iter().chain([point]).collect())
+                                })
+                            });
+                        if found.is_some() {
+                            return found;
+                        }
+                    }
+                    // A pocket joined to the part by a strip no single bend
+                    // follows (401's desk front for Chris: the strip over the
+                    // desk's round end, off both axes of the start): flood
+                    // out to the nearest point a node of the part sees.
+                    start_points.iter().find_map(|&from| {
+                        let seen = |point: (i32, i32)| {
+                            lattice.nearest_free(point.0, point.1, 1, |index| {
+                                in_part(index)
+                                    && line_clear(room, lattice.xy(index), point, y, radius, flags)
+                            })
+                        };
+                        lead_in(room, from, y, radius, flags, seen).map(|(index, points)| {
+                            (index, step_out(from).into_iter().chain(points).collect())
+                        })
+                    })
+                })
+                .clone()
         };
         // A goal at the end of a corridor narrower than the step (406's
         // strip beside the crate) has no node in sight: walk out of it along
@@ -2512,14 +2544,9 @@ impl FineGrid {
                 break;
             }
         }
-        let ((start_index, start_bend), goal_index, goal_bend) = found?;
+        let ((start_index, lead), goal_index, goal_bend) = found?;
         let mut path = lattice.search(room, start_index, goal_index, y, radius, flags, zones)?;
-        if let Some((from, point)) = start_bend {
-            path.insert(0, point);
-            if from != start {
-                path.insert(0, from);
-            }
-        }
+        path.splice(0..0, lead);
         path.extend(goal_bend);
         Some(end_at_exact_goal(room, path, goal, y, radius, flags))
     }
@@ -2559,6 +2586,85 @@ fn bend_points(
         }
     }
     points
+}
+
+/// How far, and over how many 16-unit cells, [`lead_in`] floods out of a
+/// pocket. 401's desk front is some 900 units of strip from the floor's
+/// nodes and takes under 512 cells; a flood toward a part it never reaches
+/// fills them all, some 0.4 ms, once per start and part.
+const LEAD_IN_REACH: i32 = 1536;
+const LEAD_IN_CELLS: usize = 2048;
+
+/// The way out of a pocket the fine lattice's nodes do not see into: a
+/// flood over a 16-unit grid of free points from `from` (free itself),
+/// within [`LEAD_IN_REACH`], to the nearest point `seen` names a node for.
+/// Returns that node and the flood's way there, cut down to the points
+/// where it turns out of sight of the last one kept. Every point is free
+/// and every leg clear, so the lead-in never crosses collision: a strip
+/// narrower than the lattice step (16 units here) is followed along its
+/// bends, as no axis bend can.
+fn lead_in(
+    room: &RoomState,
+    from: (i32, i32),
+    y: i32,
+    radius: i32,
+    flags: u8,
+    seen: impl Fn((i32, i32)) -> Option<usize>,
+) -> Option<(usize, Vec<(i32, i32)>)> {
+    const STEP: i32 = 16;
+    const NEIGHBOURS: [(i32, i32); 8] = [
+        (1, 0),
+        (-1, 0),
+        (0, 1),
+        (0, -1),
+        (1, 1),
+        (1, -1),
+        (-1, 1),
+        (-1, -1),
+    ];
+    let mut parent: HashMap<(i32, i32), (i32, i32)> = HashMap::new();
+    parent.insert(from, from);
+    let mut queue = std::collections::VecDeque::from([from]);
+    let (index, end) = loop {
+        let point = queue.pop_front()?;
+        if point != from
+            && let Some(index) = seen(point)
+        {
+            break (index, point);
+        }
+        for (dx, dz) in NEIGHBOURS {
+            let next = (point.0 + dx * STEP, point.1 + dz * STEP);
+            if parent.len() >= LEAD_IN_CELLS
+                || parent.contains_key(&next)
+                || distance_xz(from, next) > LEAD_IN_REACH
+                || blocked(room, next.0, next.1, y, radius, flags)
+            {
+                continue;
+            }
+            parent.insert(next, point);
+            queue.push_back(next);
+        }
+    };
+    let mut chain = vec![end];
+    while let Some(&back) = parent.get(chain.last()?) {
+        if back == *chain.last()? {
+            break;
+        }
+        chain.push(back);
+    }
+    chain.reverse();
+    // `chain` runs from `from` to `end`: keep the last point in sight of
+    // the previous one kept, and the end.
+    let mut points = Vec::new();
+    let mut anchor = from;
+    for pair in chain.windows(2).skip(1) {
+        if !line_clear(room, anchor, pair[1], y, radius, flags) {
+            points.push(pair[0]);
+            anchor = pair[0];
+        }
+    }
+    points.push(end);
+    Some((index, points))
 }
 
 /// The free points nearest `from` within [`SKIN_ESCAPE`], on a 16-unit
@@ -3719,10 +3825,14 @@ impl UserData for BotCtx {
                         enemy,
                         stage,
                         optional,
+                        urgent,
+                        carry,
                     } => {
                         row.set("kind", "fight")?;
                         row.set("enemy", enemy)?;
                         row.set("optional", optional)?;
+                        row.set("urgent", urgent)?;
+                        row.set("carry", carry)?;
                         row.set("stage", stage.map(|byte| char::from(byte).to_string()))?;
                     }
                     meta::Target::Wait => {
@@ -3831,6 +3941,8 @@ impl UserData for BotCtx {
                 row.set("after_bank", fact.after.map(|(bank, _)| bank))?;
                 row.set("after_bit", fact.after.map(|(_, bit)| bit))?;
                 row.set("after_clear", fact.after_clear)?;
+                row.set("until_bank", fact.until.map(|(bank, _)| bank))?;
+                row.set("until_bit", fact.until.map(|(_, bit)| bit))?;
                 row.set("label", fact.label.as_deref())?;
                 brews.push(row)?;
             }
@@ -3889,6 +4001,8 @@ impl UserData for BotCtx {
                     entry.fact.stage.map(|byte| char::from(byte).to_string()),
                 )?;
                 row.set("optional", entry.fact.optional)?;
+                row.set("urgent", entry.fact.urgent)?;
+                row.set("carry", entry.fact.carry)?;
                 // A room-bank `after` flag (303's flare) reads only in its
                 // own room, so the game-wide row leaves it out.
                 let after = entry.fact.after.filter(|&(bank, _)| bank != ROOM_FLAG_BANK);
@@ -3924,6 +4038,7 @@ impl UserData for BotCtx {
                 row.set("after_bank", entry.fact.after.map(|(bank, _)| bank))?;
                 row.set("after_bit", entry.fact.after.map(|(_, bit)| bit))?;
                 row.set("after_seconds", entry.fact.after_seconds)?;
+                row.set("within_seconds", entry.fact.within_seconds)?;
                 row.set("label", entry.fact.label.as_deref())?;
                 table.push(row)?;
             }
@@ -3994,7 +4109,7 @@ impl UserData for BotCtx {
 
         // Every room's open-or-not <brew> facts with that room's taps:
         // `{room, item, bottle, bank, bit, after_bank, after_bit,
-        // after_clear, label, taps = {{slot, item, label}, ...}}`.
+        // after_clear, until_bank, until_bit, label, taps = {{slot, item, label}, ...}}`.
         methods.add_run_method("brew_facts", |lua, bot, ()| {
             let table = lua.create_table()?;
             for entry in &bot.facts.brews {
@@ -4008,6 +4123,8 @@ impl UserData for BotCtx {
                 row.set("after_bank", fact.after.map(|(bank, _)| bank))?;
                 row.set("after_bit", fact.after.map(|(_, bit)| bit))?;
                 row.set("after_clear", fact.after_clear)?;
+                row.set("until_bank", fact.until.map(|(bank, _)| bank))?;
+                row.set("until_bit", fact.until.map(|(_, bit)| bit))?;
                 if let Some(flags) = &fact.ahead_unless {
                     let unless = lua.create_table()?;
                     for &(bank, bit) in flags {
@@ -6072,6 +6189,84 @@ mod tests {
         // reach (no room needs it yet).
     }
 
+    /// 401's quadrant around the desk for Chris (radius 422, flags 0x10),
+    /// from the room's records: the desk's circle (kind 3) and the box
+    /// behind it, the bookcase wall to the north, the east wall.
+    fn room_401() -> RoomState {
+        let rect = |x_min, x_max, z_min, z_max, kind| CollisionRect {
+            x_max,
+            z_max,
+            x_min,
+            z_min,
+            kind,
+            flags: 512,
+        };
+        let mut room = RoomState::default();
+        room.collision.cell_x = 5022;
+        room.collision.cell_z = 5094;
+        room.collision.quadrants[0] = vec![
+            rect(10782, 12654, 882, 16038, 1),
+            rect(126, 12726, 15030, 18054, 1),
+            rect(198, 8460, 900, 9594, 1),
+            rect(9576, 12654, 10242, 11736, 1),
+            rect(6858, 12780, 12852, 16074, 1),
+            rect(9054, 10044, 10962, 11952, 3),
+        ];
+        room
+    }
+
+    #[test]
+    fn a_start_in_401s_desk_pocket_leads_out_along_the_strip() {
+        // Where the red book's pickup leaves Chris: free, in the pocket east
+        // of the desk's round end, which joins the floor to the west only by
+        // a strip some 20 units deep over the circle's top (z 12390..12410).
+        // No lattice node lies on the strip, and neither axis bend from the
+        // start (up onto the strip, or west along the pocket) is in sight of
+        // a floor node: the start floods out along the strip.
+        let room = room_401();
+        let (radius, flags) = (422, 0x10);
+        let floor = (8000, 12250);
+        let grids = Grids::default();
+        for start in [(9998, 12343), (9632, 12393), (10200, 12300)] {
+            assert!(!blocked(&room, start.0, start.1, 0, radius, flags));
+            let path = find_path(&room, &grids, start, floor, 0, radius, flags, &[])
+                .unwrap_or_else(|| panic!("{start:?} leads out of the pocket"));
+            assert_eq!(path.last().copied(), Some(floor));
+            let mut from = start;
+            for &point in &path {
+                assert!(
+                    line_clear(&room, from, point, 0, radius, flags),
+                    "{start:?}: leg {from:?} -> {point:?} crosses the collision: {path:?}"
+                );
+                from = point;
+            }
+        }
+        // Only a start floods: a goal deep in the pocket stays out of reach
+        // from the floor (the book's approach point is on the strip, and
+        // plans with a bend).
+        let approach = (9750, 12400);
+        let to_book = find_path(&room, &grids, floor, approach, 0, radius, flags, &[]);
+        assert_eq!(
+            to_book.and_then(|path| path.last().copied()),
+            Some(approach)
+        );
+        // The desk itself still blocks: a body that does not fit the strip
+        // (radius 440) finds no way out.
+        assert!(
+            find_path(
+                &room,
+                &Grids::default(),
+                (10100, 12300),
+                floor,
+                0,
+                440,
+                flags,
+                &[]
+            )
+            .is_none()
+        );
+    }
+
     #[test]
     fn fine_fallback_rejects_a_blocked_goal_and_another_part() {
         let room = corridor_room(3100, 3300);
@@ -6927,6 +7122,7 @@ mod tests {
                     done_clear: false,
                     after: None,
                     until: None,
+                    seen: None,
                     label: None,
                 },
             }],
@@ -6937,6 +7133,8 @@ mod tests {
                     flag: None,
                     stage: Some(b'5'),
                     optional: false,
+                    urgent: false,
+                    carry: false,
                     after: None,
                     after_clear: false,
                 },
@@ -7035,6 +7233,46 @@ mod tests {
         let table = knowledge.to_lua(&vm.lua).unwrap();
         vm.lua.globals().set("K", table).unwrap();
         vm
+    }
+
+    #[test]
+    fn a_firearm_with_no_round_held_or_boxed_is_dry() {
+        let vm = tactics_vm();
+        // The shotgun (0x03, shells 0x0C); `held` maps an item to its count,
+        // `box` the remembered box rows ("03x0,..." with their counts).
+        let dry = |held: &str, boxed: &str| -> bool {
+            eval(
+                &vm,
+                &format!(
+                    r#"local held = {{ {held} }}
+                    local memory = {{ box_counts = "{boxed}" }}
+                    local bot = {{}}
+                    function bot:knowledge() return K end
+                    function bot:memory() return memory end
+                    function bot:has_item(id) return held[id] ~= nil end
+                    function bot:item_count(id) return held[id] or 0 end
+                    local ammo = {{ [0x02] = 0x0B, [0x03] = 0x0C }}
+                    function bot:ammo_for(id) return ammo[id] end
+                    local box = {{}}
+                    for hex in string.gmatch("{boxed}", "(%x+)x") do box[tonumber(hex, 16)] = true end
+                    return BotInventory.dry_gun(bot, 0x03, box)"#
+                ),
+            )
+        };
+        assert!(dry("[0x03] = 0", ""));
+        assert!(!dry("[0x03] = 2", ""));
+        assert!(!dry("[0x03] = 0, [0x0C] = 6", ""));
+        assert!(!dry("[0x03] = 0", "0Cx6"));
+        // Boxed: its loaded rounds as last seen, unknown counting as loaded.
+        assert!(dry("", "03x0"));
+        assert!(!dry("", "03x4"));
+        // A hand weapon is never dry.
+        assert!(!eval::<bool>(
+            &vm,
+            r#"local bot = {}
+            function bot:knowledge() return K end
+            return BotInventory.dry_gun(bot, 0x01, {})"#
+        ));
     }
 
     #[test]
@@ -7471,6 +7709,26 @@ mod tests {
             ""
         );
         assert_eq!(run("ribbon = 0x2F, ribbons = 1", boxed), "");
+        // As a top-up it leaves the slot reserve free, but not when a save
+        // here waits on it (ribbon_swap): the slot a soft keep freed is its.
+        let one_free = boxed.replace("ctx, 4", "ctx, 1");
+        assert_eq!(run("ribbon = 0x2F, ribbons = 0", &one_free), "");
+        assert_eq!(
+            run("ribbon = 0x2F, ribbons = 0, ribbon_swap = true", &one_free),
+            "2F"
+        );
+        // An empty gun with no rounds anywhere goes in for it.
+        let soft = r#"local items = {
+                { slot = 0, item = 0x02, kind = "weapon", quantity = 0 },
+                { slot = 1, item = 0x03, kind = "weapon", quantity = 0 },
+            }
+            for _, row in ipairs(BotInventory.soft_deposits(items, ctx, 1)) do
+                out[#out + 1] = string.format("%02X", row.item)
+            end"#;
+        let empty = "equipped = 0x02, full = true, guns = { [0x03] = true }, \
+                     empty_guns = { [0x03] = true }";
+        assert_eq!(run(empty, soft), "");
+        assert_eq!(run(&format!("{empty}, ribbon_swap = true"), soft), "03");
     }
 
     #[test]
@@ -7906,6 +8164,29 @@ mod tests {
         // The gun before its rounds, whatever the box's order: with one
         // slot the rounds alone would come out and the gun stay in.
         assert_eq!(rearm, "03,0C");
+        // With no held firearm a round, a held gun's rounds come ahead of
+        // the gear-up's heal and take a slot held for pickups; armed, the
+        // heal comes first and the rounds leave that slot alone.
+        let dry = |unarmed: bool| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local ctx = {{ heals = 1, gear = {{}}, gun_ammo = {{ [0x0C] = true }},
+                        ammo = {{ [0x0C] = true }}, room_for = 1, unarmed = {unarmed} }}
+                    local rows = {{
+                        {{ slot = 0, item = 0x44, kind = "heal" }},
+                        {{ slot = 1, item = 0x0C, kind = "ammo" }},
+                    }}
+                    local out = {{}}
+                    for _, row in ipairs(BotInventory.withdrawals(rows, ctx, 2)) do
+                        out[#out + 1] = string.format("%02X", row.item)
+                    end
+                    return table.concat(out, ",")"#
+                ),
+            )
+        };
+        assert_eq!(dry(true), "0C");
+        assert_eq!(dry(false), "44");
         let one_slot = eval::<String>(
             &vm,
             r#"local ctx = { heals = 1, rearm = { [0x03] = true, [0x0C] = true } }
@@ -7934,7 +8215,8 @@ mod tests {
         assert_eq!(held, "1,0");
         // The last resort of the soft deposits, for a key or <use> item
         // only: the cure while no poison runs, then the rounds of a gun
-        // that is not the equipped one; never the equipped gun's own.
+        // that is not the equipped one; the equipped gun's own only while
+        // it is loaded (equipped_loaded), last.
         let last = |extra: &str, needed: u32| -> String {
             eval(
                 &vm,
@@ -7965,6 +8247,31 @@ mod tests {
         assert_eq!(last("swap = true", 2), "45,0B");
         assert_eq!(last("swap = true, cure_now = { [0x45] = true }", 2), "0B");
         assert_eq!(last("heals_may_go = true", 2), "");
+        assert_eq!(last("swap = true", 3), "45,0B");
+        // Only when nothing else goes in, one stack, for a key or <use> item.
+        assert_eq!(last("swap = true, swaps = 1, equipped_loaded = 6", 3), "45,0B");
+        let only = |extra: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local ctx = {{ full = true, equipped = 0x07, swap = true,
+                        guns = {{ [0x07] = true }}, ammo = {{ [0x10] = true }},
+                        own_ammo = {{ [0x07] = 0x10 }}, {extra} }}
+                    local rows = {{
+                        {{ slot = 0, item = 0x07, kind = "weapon" }},
+                        {{ slot = 1, item = 0x10, kind = "ammo" }},
+                    }}
+                    local out = {{}}
+                    for _, row in ipairs(BotInventory.soft_deposits(rows, ctx, 2)) do
+                        out[#out + 1] = string.format("%02X", row.item)
+                    end
+                    return table.concat(out, ",")"#
+                ),
+            )
+        };
+        assert_eq!(only("swaps = 1, equipped_loaded = 6"), "10");
+        assert_eq!(only("swaps = 1, equipped_loaded = 0"), "");
+        assert_eq!(only("swaps = 0, equipped_loaded = 6"), "", "not for ammunition alone");
         // Two boxed knives the loadout wants: one comes out (the deposit
         // rule would box the second again).
         let knives = eval::<String>(
@@ -8546,6 +8853,32 @@ mod tests {
         );
         assert_eq!(
             decide("{ milestone = true, since_save = 5400 }"),
+            "true:a milestone since the last save"
+        );
+        // The last ribbon waits twice the gap; with two or fewer left the
+        // first milestone waits half a gap into the run.
+        assert_eq!(
+            decide("{ milestone = true, since_save = 5400, ribbons_left = 2 }"),
+            "true:a milestone since the last save"
+        );
+        assert_eq!(
+            decide("{ milestone = true, since_save = 5400, ribbons_left = 1 }"),
+            "false:a milestone, but the last save is recent"
+        );
+        assert_eq!(
+            decide("{ milestone = true, since_save = 10800, ribbons_left = 1 }"),
+            "true:a milestone since the last save"
+        );
+        assert_eq!(
+            decide("{ milestone = true, age = 1500, ribbons_left = 2 }"),
+            "false:the first milestone, but ink ribbons are scarce"
+        );
+        assert_eq!(
+            decide("{ milestone = true, age = 2700, ribbons_left = 2 }"),
+            "true:the first milestone of the run (no save yet)"
+        );
+        assert_eq!(
+            decide("{ milestone = true, since_save = 5400, ribbons_left = 3 }"),
             "true:a milestone since the last save"
         );
         // Low health, or a monster in the next room below 3/4 health.

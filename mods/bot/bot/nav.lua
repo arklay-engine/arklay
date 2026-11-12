@@ -922,6 +922,30 @@ function BotNav.push_object(bot, job)
             return "busy"
         end
         if job.walk_ticks > 3 * LEAN_TICKS then
+            -- Stopped short of the line but behind the object and on its
+            -- face (the push's own `across` tolerance): push from here, on
+            -- the nearest lateral line. 20A's shelf: the floor behind its
+            -- west face reaches only its north edge, 101 from the nearest
+            -- line, and the squeeze gave up on every try.
+            local half = axis == "x" and object.half_z or object.half_x
+            local centre = axis == "x" and object.z or object.x
+            local at = axis == "x" and here.z or here.x
+            local gap = axis == "x" and sign * (object.x - here.x) or sign * (object.z - here.z)
+            if gap > 0 and BotNav.abs(at - centre) <= half // 2 then
+                local best, best_d = 1, nil
+                for i, l in ipairs(PUSH_LATERALS) do
+                    local d = BotNav.abs(at - (centre + l * half // 3))
+                    if not best_d or d < best_d then
+                        best, best_d = i, d
+                    end
+                end
+                job.lateral[axis] = best
+                job.phase = "push"
+                job.mark, job.mark_tick = along, bot:tick()
+                bot:log(string.format("%s: squeezed in to (%d,%d), pushing from there",
+                    job.label, here.x, here.z))
+                return "busy"
+            end
             job.phase = "approach"
             job.stand[axis] = 1
             job.lateral[axis] = 1

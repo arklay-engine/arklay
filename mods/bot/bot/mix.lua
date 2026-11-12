@@ -2,9 +2,11 @@
 --   <tap slot item label>             AOT `slot`'s event fills one held
 --                                     empty bottle with `item` (Yes at
 --                                     its prompt)
---   <brew item bottle bank bit [after_bank after_bit after_while] label>
+--   <brew item bottle bank bit [after_bank after_bit after_while]
+--         [until_bank until_bit] label>
 --                                     make `item` here; done once the
---                                     flag is set or `item` is held
+--                                     flag is set or `item` is held, and
+--                                     dropped once the `until` flag is set
 -- The recipe tree comes from the engine's combine table (bot:recipe),
 -- searched outward from the tap items: a MOVE of item a onto item b that
 -- leaves an empty `bottle` in a's slot makes what b's slot becomes. A
@@ -19,10 +21,17 @@ local function meta(bot)
     return bot:room_meta() or {}
 end
 
+-- Whether a <brew> fact's `until` flag is set: its item is no use any
+-- more (Plant 42 dead disarms 40F's root for the V-JOLT).
+function BotMix.expired(bot, fact)
+    return fact.until_bank ~= nil and bot:flag(fact.until_bank, fact.until_bit)
+end
+
 -- Whether a <brew> fact still wants its item made: not done, the item
--- not held, and its `after` flag (if any) in the state it waits for.
+-- not held, not expired, and its `after` flag (if any) in the state it
+-- waits for.
 function BotMix.open(bot, fact)
-    if bot:flag(fact.bank, fact.bit) or bot:has_item(fact.item) then
+    if bot:flag(fact.bank, fact.bit) or bot:has_item(fact.item) or BotMix.expired(bot, fact) then
         return false
     end
     if fact.after_bank ~= nil then
@@ -210,7 +219,7 @@ function BotMix.slots_ahead(bot)
     local need = 0
     for _, fact in ipairs(bot:brew_facts()) do
         if fact.after_bank ~= nil and fact.room:sub(1, 1) == stage
-            and not ahead_ruled_out(bot, fact)
+            and not ahead_ruled_out(bot, fact) and not BotMix.expired(bot, fact)
             and not bot:flag(fact.bank, fact.bit) and not bot:has_item(fact.item)
             and bot:flag(fact.after_bank, fact.after_bit) == (fact.after_clear == true) then
             local made = BotMix.recipes(bot, fact, fact.taps)

@@ -10,7 +10,12 @@
      V-JOLT report (40A, item bit 0x4E) is taken: before it, 409's taps give
      only water. Chris's game: the panel is Rebecca's, once 40C's Plant 42
      scene with her (common 0x3D) makes her the player to brew the V-JOLT
-     (409's notes). -->
+     (409's notes). Door 3 back to 40C carries DOOR_LOCK_40, which turns
+     her (model 3) away with the wrong-character message until 40F's pour
+     (scenario 0x13) makes Chris the player again. When the port let her
+     through, 40C's init took her for Chris back from the pour, loaded the
+     withered plant, and she shot it dead: Plant 42's death (scenario 0x00)
+     disarmed 40F's root and her turn never ended. -->
 <bot format="2">
   <avoid slot="1" bank="0" bit="0x21" while="clear"
          reason="the door to 409 is message 143 until the number panel is solved"/>
@@ -18,4 +23,7 @@
             when="vjolt=yes" character="jill" label="the number panel beside the door to 409"/>
   <interact slot="4" bank="0" bit="0x21" after_bank="1" after_bit="0x3D" character="chris"
             label="Rebecca: the number panel beside the door to 409"/>
+  <avoid slot="3" bank="1" bit="0x3D" while="set" until_bank="0" until_bit="0x13"
+         character="chris"
+         reason="Rebecca's turn: the door to 40C turns her away (DOOR_LOCK_40) until 40F's pour"/>
 </bot>

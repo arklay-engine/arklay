@@ -166,6 +166,11 @@ local CURE_BONUS = 2 * HELD_USE_BONUS
 -- A route to a heal pickup, or to the box for one, while the bot is hurt
 -- with none held (BotSurvival.needs_heal): ahead of every target but a cure.
 local HEAL_BONUS = CURE_BONUS - KEY_BONUS
+-- Under this many rounds in every held firearm together, a box trip for
+-- ammunition goes ahead as a heal does (HEAL_BONUS): seed 2 left the box
+-- with four handgun rounds for an eight-door herbicide errand (a held use,
+-- HELD_USE_BONUS), and 207's zombies killed it on the way back.
+local DRY_ROUNDS = 8
 -- A route to a remembered item box room when a box visit is due.
 local BOX_BONUS = 60 * C.REACH
 -- A route into a room whose <fight> is still ahead while the bot is not
@@ -733,8 +738,37 @@ local function real_progress(bot, note)
     local p = plan()
     p.since = {}
     if p.target then
-        bot:log(string.format("progress (%s): target %s re-ranked", note, p.target.label))
+        local t = p.target
+        bot:log(string.format("progress (%s): target %s re-ranked", note, t.label))
         p.target = nil
+        -- A <use> or <fetch> target of this room whose probe is not live is
+        -- marked as on arrival: the re-rank dropped it before the arrival
+        -- check. 10F's bookshelf push, back in place on every entry, counted
+        -- as progress each time, and the wood emblem's hollow (deleted until
+        -- the gold emblem's pickup) drew the bot back from 207 for 370k
+        -- ticks while the music score lay there for a full inventory.
+        -- A use's probe is live as a use-item probe only (BotPuzzle.uses):
+        -- Chris's 10F keeps AOT 6 as another kind until the pickup.
+        local action = (t.kind == "use" or t.kind == "fetch") and t.room == bot:room().id
+            and type(t.slot) == "number" and BotNav.action_by_slot(bot, t.slot)
+        if (t.kind == "use" or t.kind == "fetch") and t.room == bot:room().id
+            and type(t.slot) == "number"
+            and (not action or (t.kind == "use" and action.kind ~= "flag_bank_set")) then
+            -- It lifts once the inventory changes (the gold emblem's pickup
+            -- arms the hollow).
+            -- Only on a slot with no mark: one already there holds the trip,
+            -- and its reason may carry the story retry (an approach mark
+            -- replaced so the tick before the gold emblem's pickup kept the
+            -- armed hollow marked for good).
+            -- Nor while the step just done is arming it (awaiting_use):
+            -- 116's rack turns AOT 5 into the probe some ticks after the
+            -- shotgun's lift, and the mark set on the lift held the swap.
+            local key = mark_key(t.kind, t.room, t.slot)
+            local arming = BotPlanner.awaiting_use(bot, p.last_done, USE_ARM_TICKS)
+            if not p.marks[key] and not (arming and arming.slot == t.slot) then
+                mark(bot, t.kind, t.room, t.slot, t.kind .. " not live on arrival")
+            end
+        end
     end
 end
 
@@ -793,6 +827,54 @@ function BotPlanner.desk_blocker(bot, desk)
         return nil
     end
     return string.format("drawer locked: no desk key 0x%02X or lockpick", C.DESK_KEY)
+end
+
+-- Whether a drawer met in any room waits locked for the desk key: a desk
+-- mark (set by the frontier pass) whose lock bit is still clear. The
+-- inventory then keeps a desk key and takes one out of the box, as it does
+-- a locked door's key: Chris boxed three desk keys while 401's and 111's
+-- drawers stayed shut on their shells for the whole run.
+function BotPlanner.drawer_waits(bot)
+    if has_lockpick(bot) then
+        return false
+    end
+    -- Only a drawer of this stage: a key carried for the mansion's
+    -- drawers took a slot in the caves, where 30C's knife needed it.
+    local stage = bot:room().id:sub(1, 1)
+    for _, m in pairs(plan().marks) do
+        if m.desk and not bot:flag(m.desk.lock_bank, m.desk.lock_bit)
+            and m.room and m.room:sub(1, 1) == stage then
+            return true
+        end
+    end
+    return false
+end
+
+-- Whether a locked drawer's item waits on a full inventory (an
+-- "inventory full" mark noted `drawer`, made with this inventory, the
+-- drawer still locked): the held desk key that opens it is then no soft
+-- deposit. A stale mark kept the key from a deposit for a floor pickup,
+-- and 118's box swapped the shells and the shotgun for 100k ticks. 102's drawer held shells, the box took the key
+-- in to make room for them, and the bot walked 100 -> 102 for the key and
+-- back for the room until the run's ticks ran out.
+function BotPlanner.drawer_full(bot)
+    -- A locked drawer seen with its item still on the frontier, in this
+    -- stage, that the held key's unlock covers (BotPlanner.unlock_covers).
+    local stage = bot:room().id:sub(1, 1)
+    for _, goal in ipairs(bot:world().frontier or {}) do
+        if goal.kind == "item" and goal.room:sub(1, 1) == stage
+            and BotPlanner.unlock_covers(bot, goal) then
+            return true
+        end
+    end
+    for _, m in pairs(plan().marks) do
+        if m.drawer and m.reason:find("inventory full", 1, true)
+            and m.sig == inventory_sig(bot)
+            and not bot:flag(m.drawer.lock_bank, m.drawer.lock_bit) then
+            return true
+        end
+    end
+    return false
 end
 
 -- The drawers of the action list, by the slot of the item each holds.
@@ -894,6 +976,46 @@ local function revisit_due(p, bot, fact)
     local retry = (p.revisit_retry or {})[key]
     return now - p.revisit_since[key] >= fact.after_seconds * C.SECOND
         and (retry == nil or now >= retry)
+end
+
+-- A <revisit> with `within_seconds` is a rescue window (206's hunter on
+-- Rebecca, 180 seconds from her upstairs call). While its first third is
+-- left and the room's urgent <fight> is not ready by the full rules (rounds
+-- for the kill, the box's gun), the revisit waits and a due box trip goes
+-- first: the call came with the shotgun at ten shells and the handgun and
+-- its clips in the box, hunters on the way took them, and the bot met
+-- Rebecca's hunter empty-handed. Past that third the revisit runs as it is.
+local function rescue_short(bot, fact)
+    if fact.within_seconds == nil then
+        return false
+    end
+    local p = plan()
+    local key = revisit_key(fact)
+    p.rescue_since = p.rescue_since or {}
+    p.rescue_since[key] = p.rescue_since[key] or bot:tick()
+    if bot:tick() - p.rescue_since[key] >= fact.within_seconds * C.SECOND / 3 then
+        return false
+    end
+    for _, fight in ipairs(bot:fight_facts()) do
+        if fight.room == fact.room and fight.urgent
+            and not (fight.bank and bot:flag(fight.bank, fight.bit)) then
+            local full = {}
+            for k, v in pairs(fight) do
+                full[k] = v
+            end
+            full.urgent = false
+            if not BotSurvival.fight_ready(bot, full) then
+                p.rescue_held = bot:tick()
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- Whether rescue_short held a revisit back on this tick's ranking.
+local function rescue_held(bot)
+    return plan().rescue_held == bot:tick()
 end
 
 -- Whether the bot's map has room `id` as visited.
@@ -1958,6 +2080,49 @@ local function context_uses(bot)
 end
 
 -- A pickup of `item` fits: a free slot, or a held stack it merges into.
+-- Whether unlocking the drawer `desk` frees the slot its item needs: it
+-- is locked, no lockpick is held and the one desk key held is used up by
+-- the turn (check_desk_state). Marked "inventory full" with the key held,
+-- 401's drawer sent the bot to 403's box, which took the key in for the
+-- room, and back for the key, until the run's ticks ran out.
+local function unlock_frees_slot(bot, desk)
+    if bot:flag(desk.lock_bank, desk.lock_bit) or has_lockpick(bot) then
+        return false
+    end
+    for _, row in ipairs(bot:menu().items or {}) do
+        if row.item == C.DESK_KEY then
+            return row.quantity <= 1
+        end
+    end
+    return false
+end
+
+-- Whether the frontier item `goal` lies in a drawer seen locked
+-- (plan().drawers_seen) whose unlock frees its slot (unlock_frees_slot):
+-- it needs no room made at the box, and the desk key stays out of the
+-- soft deposits for it (BotPlanner.drawer_full).
+function BotPlanner.unlock_covers(bot, goal)
+    local desk = (plan().drawers_seen or {})[mark_key("item", goal.room, goal.slot)]
+    return desk ~= nil and unlock_frees_slot(bot, desk)
+end
+
+-- Whether `item` (of `kind`) is the ammunition of a held firearm while
+-- no held firearm has a round: it takes a slot held for a puzzle step or a
+-- needed item too, as at the box (BotInventory.dry_ammo). 403's clip lay
+-- by an empty handgun, the free slot held for a key, and the run ended on
+-- an empty frontier with 20C's fight waiting on rounds.
+local function dry_rounds(bot, item, kind)
+    if kind ~= "ammo" or BotInventory.armed(bot) then
+        return false
+    end
+    for _, row in ipairs(bot:menu().items or {}) do
+        if row.kind == "weapon" and bot:ammo_for(row.item) == item then
+            return true
+        end
+    end
+    return false
+end
+
 local function pickup_fits(bot, item, full)
     local kind, merge = bot:item_kind(item)
     if not full then
@@ -1991,6 +2156,7 @@ local function pickup_fits(bot, item, full)
         end
         local free = (bot:menu().capacity or used) - used
         return free > held or context_uses(bot)[item] == true
+            or (free > 0 and dry_rounds(bot, item, kind))
     end
     -- A document goes to the FILE tab, not a slot.
     return kind == "file" or (merge and bot:has_item(item))
@@ -2459,11 +2625,25 @@ local function choose(bot)
         elseif action.kind == "desk" and action.desk_item
             and not blocked(bot, "item", room, action.item_slot) then
             local why = BotPlanner.desk_blocker(bot, action)
+            if not bot:flag(action.lock_bank, action.lock_bit) then
+                plan().drawers_seen = plan().drawers_seen or {}
+                plan().drawers_seen[mark_key("item", room, action.item_slot)] = {
+                    lock_bank = action.lock_bank, lock_bit = action.lock_bit,
+                }
+            end
             if why == "the drawer is empty" then
                 -- Nothing to take; check_desk refuses the press.
-            elseif not pickup_fits(bot, action.desk_item, full) then
+            elseif not pickup_fits(bot, action.desk_item, full)
+                and not unlock_frees_slot(bot, action) then
                 mark(bot, "item", room, action.item_slot,
                     "inventory full: " .. inventory_sig(bot))
+                -- A locked drawer waits on the slot: the desk key that
+                -- opens it stays out of the deposit (BotPlanner.drawer_full).
+                if not bot:flag(action.lock_bank, action.lock_bit) then
+                    plan().marks[mark_key("item", room, action.item_slot)].drawer = {
+                        lock_bank = action.lock_bank, lock_bit = action.lock_bit,
+                    }
+                end
             elseif why then
                 mark(bot, "item", room, action.item_slot, why)
                 plan().marks[mark_key("item", room, action.item_slot)].desk = {
@@ -3236,9 +3416,23 @@ local function choose(bot)
     -- A room to enter again now that a flag has changed (<revisit>): 50B,
     -- whose cell door to 512 shows only in the self-destruct.
     local seen = plan().revisit_seen or {}
+    -- No revisit while a rearm trip is due and no held firearm has a
+    -- round: the box comes first. Rebecca's upstairs call took the bot to
+    -- 206's hunter with an empty shotgun, the handgun and its clip in the
+    -- box, and she died.
+    local unarmed = box_why and box_why:find("rearm", 1, true) ~= nil
+        and not BotInventory.armed(bot)
+    local rescue_box
+    local since = plan().rescue_since or {}
     for _, fact in ipairs(bot:revisit_facts()) do
+        if bot:flag(fact.bank, fact.bit) ~= fact.set then
+            since[revisit_key(fact)] = nil
+        end
+    end
+    for _, fact in ipairs(unarmed and {} or bot:revisit_facts()) do
         if fact.room ~= room and (fact.after_seconds ~= nil or not seen[revisit_key(fact)])
-            and revisit_due(plan(), bot, fact) and visited_room(world, fact.room) then
+            and revisit_due(plan(), bot, fact) and visited_room(world, fact.room)
+            and not (box_why and rescue_short(bot, fact)) then
             local steps = route(bot, world, room, fact.room)
             local first = steps and steps[1] and BotNav.door_by_slot(bot, steps[1].slot)
             if first then
@@ -3296,6 +3490,7 @@ local function choose(bot)
     end
     -- A box visit is due and no box is here: go to the remembered box
     -- nearest by walking distance through the mental map.
+    rescue_box = box_why and rescue_held(bot)
     if box_why then
         local opts = map_opts(bot, door_len)
         opts.tree = map()
@@ -3304,14 +3499,31 @@ local function choose(bot)
         end
         local box = BotPlanner.pick_remote_box(world, room, opts)
         local first = box and BotNav.door_by_slot(bot, box.steps[1].slot)
+        if not first and plan().box_unreached ~= box_why then
+            -- Once per reason: 30C's full inventory had a deposit due and
+            -- no trip, and the run ended on an empty frontier.
+            plan().box_unreached = box_why
+            bot:log(string.format("box trip due (%s) but %s", box_why,
+                box and ("no door here for the route via " .. box.room) or "no remembered box is reachable"))
+        end
         if first then
             order = order + 1
             local label = string.format("the item box in %s (%s)", box.room, box_why)
             local heal = (hurt and box_why:find("no heal item held", 1, true) ~= nil)
                 or box_why:find(BotInventory.CURE, 1, true) ~= nil
-                or box_why:find(BotInventory.GEAR, 1, true) ~= nil or nil
+                or box_why:find(BotInventory.GEAR, 1, true) ~= nil
+                or rescue_box
+            local rounds = BotInventory.rounds_held(bot)
+            local ammo_trip = box_why:find("rearm", 1, true) ~= nil
+                or box_why:find("ammunition", 1, true) ~= nil
+            heal = heal or (rounds < DRY_ROUNDS and ammo_trip) or nil
+            -- With no round in any held firearm, the rounds come first of
+            -- all, as a cure does: Chris walked into 114's three zombies for
+            -- a heal with both guns empty and the shells boxed.
+            local bonus = (rounds == 0 and ammo_trip) and CURE_BONUS
+                or heal and HEAL_BONUS or BOX_BONUS
             consider({
-                cost = box.cost - (heal and HEAL_BONUS or BOX_BONUS) + route_monsters(box.steps),
+                cost = box.cost - bonus + route_monsters(box.steps),
                 order = order, door = first,
                 why = string.format("toward %s, %d door(s)", label, #box.steps),
                 target = { kind = "box", room = box.room, slot = box.slot,
@@ -4078,6 +4290,10 @@ function BotPlanner.step(bot)
             end
         end
         if not p.goal then
+            -- Why no box trip stood in (30C's web met a full inventory with
+            -- the knife boxed and no trip was made).
+            bot:log(string.format("frontier empty: box %s",
+                BotInventory.box_reason(bot, gave_up) or "not due"))
             local loops = {}
             for key, m in pairs(p.marks) do
                 if m.reason:find("looping", 1, true) and blocked(bot, m.kind, m.room, m.slot, true) then

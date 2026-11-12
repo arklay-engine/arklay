@@ -9,9 +9,15 @@
      walked into the web, where it stood stuck until the tiger's poison
      killed it. Without a launcher loading the tiger fight is passed
      (optional): the bot stood unarmed before it and was spat to death four
-     times. It dodges the spit instead while the knife cuts the web. -->
+     times. It dodges the spit instead while the knife cuts the web.
+     Chris's game: 30B's door back to 307 is shut from the 30B side, so
+     30B to 30E is a pocket, left only by 30D's door to 30F, and its one
+     box (30E) is behind the web. The web is a `carry` fight: the knife is
+     kept once stage 3 has been entered, and comes out of the box (403's,
+     the last before the pocket) (six runs met the web with every slot full, the knife
+     boxed and this room's knife out of reach). -->
 <bot format="2">
   <fight enemy="0x04" bank="3" bit="137" optional="yes" label="Black Tiger"/>
-  <fight enemy="0x13" bank="3" bit="138" label="cut the web with the knife"/>
+  <fight enemy="0x13" bank="3" bit="138" carry="yes" label="cut the web with the knife"/>
   <avoid slot="1" bank="3" bit="138" while="clear" reason="the web covers the door to 30D"/>
 </bot>

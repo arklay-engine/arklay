@@ -164,9 +164,14 @@ end
 -- A firearm fight also waits for a heal held while the remembered box
 -- holds one (its "no heal item held" withdrawal fetches it): healed on the
 -- way in is not enough for a boss that bites for 70 (20C's Yawn 2).
+-- An urgent fight (`<fight urgent="yes">`, a timed rescue) waits for none
+-- of the health, the box's heal, the box's gun or the rounds for the whole
+-- kill: only a firearm with a round. 206's hunter on Rebecca was held back
+-- at 96/140 for a heal, and she died.
 function BotSurvival.fight_ready(bot, fact)
+    local urgent = fact.urgent == true
     local ok, why = BotSurvival.health_ready(bot, "the fight")
-    if not ok then
+    if not ok and not urgent then
         return false, why
     end
     local k = bot:knowledge()
@@ -213,7 +218,7 @@ function BotSurvival.fight_ready(bot, fact)
             "not ready for the fight: no heal held and the box holds 0x%02X", boxed_heal)
     end
     if not entry or not entry.health or not entry.keep then
-        if boxed_heal then
+        if boxed_heal and not urgent then
             return heal_first()
         end
         return true
@@ -246,7 +251,10 @@ function BotSurvival.fight_ready(bot, fact)
             end
         end
     end
-    if known and damage < entry.health then
+    -- An urgent fight takes on short rounds too: it is live only while
+    -- its rescue runs, and walking out loses it for good (206's hunter on
+    -- Rebecca met rounds for 70 of its 111, the bot left, and she died).
+    if known and damage < entry.health and not urgent then
         return false, string.format("not ready for the fight: rounds for %d of %d health",
             damage, entry.health)
     end
@@ -260,6 +268,9 @@ function BotSurvival.fight_ready(bot, fact)
         local ammo = bot:ammo_for(id)
         return box[id] and not bot:has_item(id)
             and (ammo == nil or box[ammo] or bot:item_count(ammo) > 0)
+    end
+    if urgent then
+        return true
     end
     if entry.prefer and boxed_gun(entry.prefer) then
         return false, string.format("not ready for the fight: the box holds 0x%02X",

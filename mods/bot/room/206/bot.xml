@@ -9,13 +9,14 @@
      caves loses her too (307's init).
 
      rebecca=save: come back here once the call is due and fight the
-     hunter. rebecca=leave: 204 keeps out after the call; entered during
+     hunter; within_seconds lets a box trip for the rounds go first while
+     a third of the window is left. rebecca=leave: 204 keeps out after the call; entered during
      the attack anyway, walk out by door 0 to 204. -->
 <bot format="2">
-  <revisit bank="1" bit="0x36" while="set" character="chris" when="rebecca=save"
-           label="Rebecca's upstairs call: 206 within 180 seconds"/>
-  <fight enemy="0x06" bank="3" bit="0x6F" after_bank="1" after_bit="0x67" character="chris"
-         when="rebecca=save" label="the hunter attacking Rebecca"/>
+  <revisit bank="1" bit="0x36" while="set" within_seconds="180" character="chris"
+           when="rebecca=save" label="Rebecca's upstairs call: 206 within 180 seconds"/>
+  <fight enemy="0x06" bank="3" bit="0x6F" after_bank="1" after_bit="0x67" urgent="yes"
+         character="chris" when="rebecca=save" label="the hunter attacking Rebecca"/>
   <leave slot="0" bank="1" bit="0x67" until_bank="1" until_bit="0x6C" character="chris"
          when="rebecca=leave" label="out to 204 during the hunter attack: Rebecca dies"/>
 </bot>

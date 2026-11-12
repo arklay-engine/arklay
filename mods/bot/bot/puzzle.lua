@@ -43,12 +43,13 @@ function BotPuzzle.use_done(bot, fact)
     return bot:flag(fact.bank, fact.bit) ~= (fact.done_clear == true)
 end
 
--- A <use> fact is open: not done, its `after` flag (if any) set and its
--- `until` flag (if any) clear.
+-- A <use> fact is open: not done, its `after` flag (if any) set, its
+-- `until` flag (if any) clear and its `seen` flag (if any) seen set.
 function BotPuzzle.use_open(bot, fact)
     return not BotPuzzle.use_done(bot, fact)
         and (fact.after_bank == nil or bot:flag(fact.after_bank, fact.after_bit))
         and (fact.until_bank == nil or not bot:flag(fact.until_bank, fact.until_bit))
+        and (fact.seen_bank == nil or BotPuzzle.seen(bot, fact.seen_bank, fact.seen_bit))
 end
 
 -- The <use> facts that apply now, in document order: the item is held, the
@@ -164,6 +165,11 @@ function BotPuzzle.note_seen(bot)
     if facts == nil then
         facts = {}
         for _, fact in ipairs(bot:avoid_facts()) do
+            if fact.seen_bank then
+                facts[#facts + 1] = fact
+            end
+        end
+        for _, fact in ipairs(bot:use_facts()) do
             if fact.seen_bank then
                 facts[#facts + 1] = fact
             end
