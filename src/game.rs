@@ -8160,12 +8160,12 @@ impl GameState {
 
                         // Another object in the way vetoes the whole push.
                         let mut vetoed = false;
-                        for other_index in 0..slot_count {
-                            if other_index == index || !self.objects.records[other_index].active() {
+                        let others = self.objects.records.iter().take(slot_count);
+                        for (other_index, mover) in others.enumerate() {
+                            if other_index == index || !mover.active() {
                                 continue;
                             }
-                            let mover = self.objects.records[other_index];
-                            if objects::chk_obj_slide(&mover, &mut record) {
+                            if objects::chk_obj_slide(mover, &mut record) {
                                 record.push_counter = 10;
                                 vetoed = true;
                                 break;
@@ -8202,13 +8202,14 @@ impl GameState {
                 if i32::from(record.committed[0]) != record.pos[0]
                     || i32::from(record.committed[2]) != record.pos[2]
                 {
-                    for other_index in 0..slot_count {
-                        if other_index == index || !self.objects.records[other_index].active() {
+                    let others = self.objects.records.iter_mut().take(slot_count);
+                    for (other_index, other) in others.enumerate() {
+                        if other_index == index || !other.active() {
                             continue;
                         }
-                        let mut other = self.objects.records[other_index];
-                        if objects::chk_obj_slide(&record, &mut other) {
-                            self.objects.records[other_index] = other;
+                        let mut moved = *other;
+                        if objects::chk_obj_slide(&record, &mut moved) {
+                            *other = moved;
                         }
                     }
                     record.committed[0] = record.pos[0] as i16;

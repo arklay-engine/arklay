@@ -3882,8 +3882,8 @@ mod tests {
                 ],
             );
         }
-        for slot in 0..24 {
-            let roach = game.re2.characters.0[slot].as_ref().unwrap();
+        for (slot, character) in game.re2.characters.0[..24].iter().enumerate() {
+            let roach = character.as_ref().unwrap();
             assert_eq!(roach.id, crate::zombie2::ROACH_ID);
             assert!(roach.zombie.is_some(), "slot {slot}");
         }

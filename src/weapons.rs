@@ -717,8 +717,7 @@ pub fn fire_consume_ammo_stack(game: &mut GameState) {
     let capacity = game.inventory_capacity().min(game.inventory.len());
     let mut best = None;
     let mut best_quantity = 0u8;
-    for index in 0..capacity {
-        let stack = game.inventory[index];
+    for (index, stack) in game.inventory.iter().take(capacity).enumerate() {
         if stack.id == ammo && stack.quantity > best_quantity {
             best = Some(index);
             best_quantity = stack.quantity;
