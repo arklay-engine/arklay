@@ -107,12 +107,11 @@ cargo run -- convert-game /path/to/steam/4249100_Biohazard --out re1.akpak
 # items, the typewriter, saves and the scripts' scenes with their characters and
 # voice lines work. The title, the new-game choice, the inventory, the status
 # screen and the item box are drawn from the original's art. Leon A's route from
-# the new game through Marvin's room 202, the Blue Card Key, the darkroom (208)
-# and the S.T.A.R.S. office (115) to the Spade Key matches the original tick for
-# tick, zombies and lickers included, and so does Claire A's route to the Spade
-# Key. Leon A's way on through the Spade Key's doors
-# to the Diamond Key in 10B matches in warp runs, and its continuous run is still
-# to come, apart from the differences in docs/internals/deviations/re2.md. Zombies,
+# the new game through Marvin's room 202, the Blue Card Key, the darkroom (208),
+# the S.T.A.R.S. office (115), the Spade Key and its doors to the Diamond Key in
+# 10B matches the original tick for tick, zombies and lickers included, and so
+# does Claire A's route to the Spade Key, apart from the differences in
+# docs/internals/deviations/re2.md. Zombies,
 # lickers, dogs, crows, Mr. X, the plants, the spiders, the cockroaches (in part),
 # room 205's bodies and the alligator are ported; the G forms are part way (G1,
 # G2 and G3 are done, and the G embryo walks and jumps but does not yet latch on)
