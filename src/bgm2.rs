@@ -1256,6 +1256,32 @@ mod tests {
         assert_eq!(&music.trace_field()[..19], "1dff,00ff,0100,0100");
     }
 
+    /// The bank tables agree with the banks the install `ARKLAY_RE2_ROOT`
+    /// names has in `data/Common/Sound/BGM`, when it is set.
+    #[test]
+    fn the_bank_tables_match_the_installed_banks() {
+        let Some(root) = std::env::var_os("ARKLAY_RE2_ROOT").map(std::path::PathBuf::from) else {
+            return;
+        };
+        let names: Vec<String> = std::fs::read_dir(root.join("data/Common/Sound/BGM"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().to_uppercase())
+            .collect();
+        let has = |name: String| names.contains(&name);
+        for id in 0..64u8 {
+            assert_eq!(
+                main_bank(id),
+                has(format!("MAIN{id:02X}.BGM")),
+                "main {id:#04x}"
+            );
+            assert_eq!(
+                sub_bank(id),
+                has(format!("SUB_{id:02X}.BGM")),
+                "sub {id:#04x}"
+            );
+        }
+    }
+
     #[test]
     fn stages_index_their_slice_of_the_table() {
         assert_eq!(index(0, 0), Some(0));
