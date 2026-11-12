@@ -8249,7 +8249,10 @@ mod tests {
         assert_eq!(last("heals_may_go = true", 2), "");
         assert_eq!(last("swap = true", 3), "45,0B");
         // Only when nothing else goes in, one stack, for a key or <use> item.
-        assert_eq!(last("swap = true, swaps = 1, equipped_loaded = 6", 3), "45,0B");
+        assert_eq!(
+            last("swap = true, swaps = 1, equipped_loaded = 6", 3),
+            "45,0B"
+        );
         let only = |extra: &str| -> String {
             eval(
                 &vm,
@@ -8271,7 +8274,11 @@ mod tests {
         };
         assert_eq!(only("swaps = 1, equipped_loaded = 6"), "10");
         assert_eq!(only("swaps = 1, equipped_loaded = 0"), "");
-        assert_eq!(only("swaps = 0, equipped_loaded = 6"), "", "not for ammunition alone");
+        assert_eq!(
+            only("swaps = 0, equipped_loaded = 6"),
+            "",
+            "not for ammunition alone"
+        );
         // Two boxed knives the loadout wants: one comes out (the deposit
         // rule would box the second again).
         let knives = eval::<String>(
