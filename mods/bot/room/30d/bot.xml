@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 30D, the cave passage to 30E's save room and, by door 2, 30F (Chris's
+     game). Door 2 is DOOR_LOCKED on lock 0x2F, which is set only while a
+     flamethrower hangs on the hook: as 308's, the hook is a press, not a
+     menu USE. The init arms AOT 4 (data 9,0,3, hang_flamethrower) only when
+     the hook is empty and a flamethrower is held on entry; its event takes
+     the held one as the used item (B_SELECTED_ITEM with the menu's
+     key-depleted bit), and room main's testitem then sets item bit 0xAC
+     and the lock. So the flamethrower is a <deliver>: brought here (from
+     30B, or the box it went in) and pressed onto the hook. Every Chris run
+     that reached 30E stopped on this door with the flamethrower in the box
+     or in hand. With it hung, AOT 5 (reach_for_flamethrower) and then the
+     item AOT 3 take it back, and the pickup raises the hook and clears the
+     lock again: both are avoided while the lock is set. -->
+<bot format="2">
+  <deliver item="0x06" slot="4" bank="2" bit="0x2F" character="chris"
+           label="a flamethrower on the hook: door 2 to 30F"/>
+  <avoid slot="5" bank="2" bit="0x2F" while="set" character="chris"
+         reason="taking the flamethrower off the hook locks door 2 to 30F again"/>
+  <avoid slot="3" bank="2" bit="0x2F" while="set" character="chris"
+         reason="taking the flamethrower off the hook locks door 2 to 30F again"/>
+</bot>

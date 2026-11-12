@@ -22,8 +22,8 @@
   <revisit bank="1" bit="0x2B" while="set" character="chris"
            when="rebecca_meet=save_room rebecca_along=no rebecca=save"
            label="Rebecca's radio call: 101 within 180 seconds"/>
-  <fight enemy="0x06" bank="3" bit="0x0E" after_bank="1" after_bit="0x2F" character="chris"
-         when="rebecca=save" label="the hunter attacking Rebecca"/>
+  <fight enemy="0x06" bank="3" bit="0x0E" after_bank="1" after_bit="0x2F" urgent="yes"
+         character="chris" when="rebecca=save" label="the hunter attacking Rebecca"/>
   <avoid slot="0" bank="1" bit="0x2F" while="set" character="chris" when="rebecca=save"
          reason="leaving during the hunter attack kills Rebecca"/>
   <avoid slot="1" bank="1" bit="0x2F" while="set" character="chris" when="rebecca=save"

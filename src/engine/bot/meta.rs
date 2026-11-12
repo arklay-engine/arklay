@@ -123,7 +123,10 @@ pub struct Tap {
 /// `item` here by filling `bottle`s at the room's taps and mixing them in
 /// the menu, done once flag `bank`/`bit` is set or `item` is held. With an
 /// `after` flag the brew waits for it (set, or clear with
-/// `after_while="clear"`).
+/// `after_while="clear"`). With `until_bank`/`until_bit` it is dropped
+/// once that flag is set: Plant 42's death (scenario 0x00, the second
+/// mansion visit) disarms 40F's root, so a V-JOLT brewed after it is
+/// dead weight.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Brew {
     pub item: u8,
@@ -138,6 +141,7 @@ pub struct Brew {
     /// item box, unless 40C's first entry plays out without her. `None`
     /// keeps no slots ahead.
     pub ahead_unless: Option<Vec<(u8, u8)>>,
+    pub until: Option<(u8, u8)>,
     pub label: Option<String>,
 }
 
@@ -200,12 +204,15 @@ pub struct Ride {
 /// (`bot:revisit_facts()`). With `after_bank`/`after_bit` and
 /// `after_seconds`, it comes back only once that flag has been set for that
 /// many seconds, and again on each later return while the gate holds: a room
-/// whose init reads a timer (20D's, past which Richard dies).
+/// whose init reads a timer (20D's, past which Richard dies). With
+/// `within_seconds`, the gate opens a window: the room must be entered
+/// within that many seconds of it (206's hunter on Rebecca).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Revisit {
     pub gate: Gate,
     pub after: Option<(u8, u8)>,
     pub after_seconds: Option<u32>,
+    pub within_seconds: Option<u32>,
     pub label: Option<String>,
 }
 
@@ -360,10 +367,18 @@ pub enum Target {
     /// lab's escape lift: `stage="5"`). `optional` (`<fight optional="yes">`):
     /// the sequence passes the step while no held gun has a band for the
     /// enemy (30C's Black Tiger, dodged while the knife cuts the web).
+    /// `urgent` (`<fight urgent="yes">`): a timed rescue, fought with any
+    /// rounds that cover it, whatever the health or the box's heals (206's
+    /// hunter on Rebecca: held back for a heal, she died).
+    /// `carry` (`<fight carry="yes">`): its hand weapon is kept, and taken
+    /// out of the box, from the bot's first room in the fight's stage, met
+    /// or not: 30C's web lies in a pocket with no box on the way in.
     Fight {
         enemy: u8,
         stage: Option<u8>,
         optional: bool,
+        urgent: bool,
+        carry: bool,
     },
     /// Stand still in the room until the step's flag is set: a timed room
     /// event that must play out (20C's pit, where Barry comes back with the
@@ -433,6 +448,10 @@ pub struct Use {
     pub done_clear: bool,
     pub after: Option<(u8, u8)>,
     pub until: Option<(u8, u8)>,
+    /// With `seen_bank`/`seen_bit`, open only once the bot has seen that
+    /// flag set in this run, as `<avoid>`'s: 116's broken-shotgun swap
+    /// after Chris's ceiling trap, whose flag the put-back clears.
+    pub seen: Option<(u8, u8)>,
     pub label: Option<String>,
 }
 
@@ -556,6 +575,10 @@ pub struct FightFact {
     pub stage: Option<u8>,
     /// `<fight optional="yes">`: passed while no held gun can fight it.
     pub optional: bool,
+    /// `<fight urgent="yes">`: a timed rescue (see [`Target::Fight`]).
+    pub urgent: bool,
+    /// `<fight carry="yes">`: see [`Target::Fight`].
+    pub carry: bool,
     /// The `after` flag the fight waits on, with `after_while="clear"`
     /// when it waits for the flag to clear: 101's hunter is fought only
     /// while its attack on Rebecca plays (common 0x2F).
@@ -620,11 +643,15 @@ impl GameFacts {
                     enemy,
                     stage,
                     optional,
+                    urgent,
+                    carry,
                 } => Some(FightFact {
                     enemy,
                     flag: fact.flag,
                     stage,
                     optional,
+                    urgent,
+                    carry,
                     after: fact.after,
                     after_clear: fact.after_clear,
                 }),
@@ -1029,6 +1056,8 @@ fn parse_use(node: Node<'_, '_>) -> Result<Use> {
             "after_bit",
             "until_bank",
             "until_bit",
+            "seen_bank",
+            "seen_bit",
             "label",
             "character",
             "when",
@@ -1054,6 +1083,7 @@ fn parse_use(node: Node<'_, '_>) -> Result<Use> {
         done_clear: parse_done(node)?,
         after: after_flag(node)?,
         until,
+        seen: prefixed_flag(node, "seen")?,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -1177,6 +1207,7 @@ fn parse_revisit(node: Node<'_, '_>) -> Result<Revisit> {
             "after_bank",
             "after_bit",
             "after_seconds",
+            "within_seconds",
             "label",
             "character",
             "when",
@@ -1197,10 +1228,15 @@ fn parse_revisit(node: Node<'_, '_>) -> Result<Revisit> {
         Some(_) => Some(attr(node, "after_seconds")?),
         None => None,
     };
+    let within_seconds = match node.attribute("within_seconds") {
+        Some(_) => Some(attr(node, "within_seconds")?),
+        None => None,
+    };
     Ok(Revisit {
         gate,
         after,
         after_seconds,
+        within_seconds,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -1369,6 +1405,8 @@ fn parse_fight(node: Node<'_, '_>) -> Result<Interact> {
             "after_while",
             "stage",
             "optional",
+            "urgent",
+            "carry",
             "label",
             "character",
             "when",
@@ -1379,6 +1417,16 @@ fn parse_fight(node: Node<'_, '_>) -> Result<Interact> {
         None | Some("no") => false,
         Some("yes") => true,
         Some(text) => bail!("{}: `optional` must be yes or no, not `{text}`", at(node)),
+    };
+    let urgent = match node.attribute("urgent") {
+        None | Some("no") => false,
+        Some("yes") => true,
+        Some(text) => bail!("{}: `urgent` must be yes or no, not `{text}`", at(node)),
+    };
+    let carry = match node.attribute("carry") {
+        None | Some("no") => false,
+        Some("yes") => true,
+        Some(text) => bail!("{}: `carry` must be yes or no, not `{text}`", at(node)),
     };
     let stage = match node.attribute("stage") {
         None => None,
@@ -1395,6 +1443,8 @@ fn parse_fight(node: Node<'_, '_>) -> Result<Interact> {
             enemy: attr(node, "enemy")?,
             stage,
             optional,
+            urgent,
+            carry,
         },
         flag: Some((bank_attr(node)?, attr(node, "bit")?)),
         done_clear: false,
@@ -1628,6 +1678,8 @@ fn parse_brew(node: Node<'_, '_>) -> Result<Brew> {
             "after_bit",
             "after_while",
             "ahead_unless",
+            "until_bank",
+            "until_bit",
             "label",
             "character",
             "when",
@@ -1649,6 +1701,7 @@ fn parse_brew(node: Node<'_, '_>) -> Result<Brew> {
         after: after_flag(node)?,
         after_clear: parse_after_while(node)?,
         ahead_unless: parse_ahead_unless(node)?,
+        until: until_flag(node)?,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -2300,7 +2353,7 @@ mod tests {
             <tap slot="8" item="0x14" label="water"/>
             <brew item="0x1B" bottle="0x13" bank="0" bit="0x13"
                   after_bank="7" after_bit="0x4E" after_while="clear" label="V-JOLT"/>
-            <brew item="0x1A" bottle="0x13" bank="0" bit="0x13"/>
+            <brew item="0x1A" bottle="0x13" bank="0" bit="0x13" until_bank="0" until_bit="0x00"/>
             <brew item="0x1B" bottle="0x13" bank="0" bit="0x13" after_bank="1" after_bit="0x3D"
                   ahead_unless="1:0x37, 1:0x22 1:100"/>
         </bot>"#;
@@ -2323,6 +2376,7 @@ mod tests {
                     after: Some((7, 0x4E)),
                     after_clear: true,
                     ahead_unless: None,
+                    until: None,
                     label: Some("V-JOLT".to_string()),
                 },
                 Brew {
@@ -2332,6 +2386,7 @@ mod tests {
                     after: None,
                     after_clear: false,
                     ahead_unless: None,
+                    until: Some((0, 0x00)),
                     label: None,
                 },
                 Brew {
@@ -2341,6 +2396,7 @@ mod tests {
                     after: Some((1, 0x3D)),
                     after_clear: false,
                     ahead_unless: Some(vec![(1, 0x37), (1, 0x22), (1, 100)]),
+                    until: None,
                     label: None,
                 },
             ]
@@ -2493,6 +2549,8 @@ mod tests {
                 enemy: 0x08,
                 stage: None,
                 optional: false,
+                urgent: false,
+                carry: false,
             }
         );
         let optional =
@@ -2503,6 +2561,33 @@ mod tests {
                 enemy: 0x04,
                 stage: None,
                 optional: true,
+                urgent: false,
+                carry: false,
+            }
+        );
+        let urgent =
+            r#"<bot format="2"><fight enemy="0x06" bank="3" bit="0x6F" urgent="yes"/></bot>"#;
+        assert_eq!(
+            parse(urgent).unwrap().interacts[0].target,
+            Target::Fight {
+                enemy: 0x06,
+                stage: None,
+                optional: false,
+                urgent: true,
+                carry: false,
+            }
+        );
+        let bad = r#"<bot format="2"><fight enemy="0x06" bank="3" bit="1" urgent="soon"/></bot>"#;
+        assert!(parse(bad).is_err());
+        let carry = r#"<bot format="2"><fight enemy="0x13" bank="3" bit="138" carry="yes"/></bot>"#;
+        assert_eq!(
+            parse(carry).unwrap().interacts[0].target,
+            Target::Fight {
+                enemy: 0x13,
+                stage: None,
+                optional: false,
+                urgent: false,
+                carry: true,
             }
         );
         assert_eq!(meta.interacts[0].flag, Some((3, 96)));
@@ -2515,6 +2600,8 @@ mod tests {
                 enemy: 0x10,
                 stage: Some(b'5'),
                 optional: false,
+                urgent: false,
+                carry: false,
             }
         );
         let long = r#"<bot format="2"><fight enemy="0x10" bank="3" bit="1" stage="55"/></bot>"#;
@@ -2598,6 +2685,7 @@ mod tests {
         assert_eq!(meta.revisits[0].label.as_deref(), Some("the cell door"));
         assert_eq!(meta.revisits[0].after, None);
         assert_eq!(meta.revisits[0].after_seconds, None);
+        assert_eq!(meta.revisits[0].within_seconds, None);
         let gateless = r#"<bot format="2"><revisit label="x"/></bot>"#;
         let error = parse(gateless).unwrap_err().to_string();
         assert!(error.contains("needs `bank`"), "{error}");
@@ -2613,6 +2701,11 @@ mod tests {
         </bot>"#;
         let error = parse(unanchored).unwrap_err().to_string();
         assert!(error.contains("`after_seconds` needs"), "{error}");
+        let window = r#"<bot format="2">
+            <revisit bank="1" bit="0x36" while="set" within_seconds="180"/>
+        </bot>"#;
+        let meta = parse(window).unwrap();
+        assert_eq!(meta.revisits[0].within_seconds, Some(180));
     }
 
     #[test]
@@ -2811,6 +2904,7 @@ mod tests {
                     done_clear: false,
                     after: None,
                     until: None,
+                    seen: None,
                     label: Some("herbicide at the pump".to_string()),
                 },
                 Use {
@@ -2820,10 +2914,15 @@ mod tests {
                     done_clear: false,
                     after: None,
                     until: None,
+                    seen: None,
                     label: None,
                 },
             ]
         );
+        let seen = parse(
+            r#"<bot format="2"><use slot="5" item="0x1C" bank="7" bit="1" seen_bank="1" seen_bit="0x20"/></bot>"#,
+        );
+        assert_eq!(seen.unwrap().uses[0].seen, Some((1, 0x20)));
         let refill = r#"<bot format="2">
             <use slot="4" item="0x1D" bank="0" bit="0x2F" done="clear"
                  after_bank="3" after_bit="96" until_bank="0" until_bit="9"/>
@@ -3221,7 +3320,8 @@ mod tests {
         // Chris's game has the same serum errand, on his own flags: the
         // shelf's 0x2D and 0x2E in 100, Richard's scene closing (0x61) in
         // 20D, and the serum Rebecca runs with to 20D's door while Chris
-        // waits (0x5E).
+        // waits (0x5E). And 30D's hook, which opens door 2 to 30F while a
+        // flamethrower hangs on it (lock 0x2F).
         let chris = load_facts(&pack, Some(false), None).unwrap().errands;
         let flags: Vec<(&str, (u8, u8))> = chris
             .iter()
@@ -3233,7 +3333,8 @@ mod tests {
                 ("100", (1, 0x2D)),
                 ("100", (1, 0x2E)),
                 ("20D", (1, 0x61)),
-                ("20D", (1, 0x5E))
+                ("20D", (1, 0x5E)),
+                ("30D", (2, 0x2F))
             ]
         );
     }

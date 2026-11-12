@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 108, the east dog corridor. The handgun rounds (AOT 3, item flag bank
+     7 bit 0x13) lie under the cabinet (object 1), in the floor its shadow
+     cuts off: the reach point 600 ahead of the player falls short of the
+     zone from the corridor on every side, and no run had ever taken them.
+     The cabinet slides north (+z) from its north end; once it is off the
+     zone the rounds are in reach. It stands back on every entry, so the
+     push is done once the rounds are taken (flag clear). -->
+<bot format="2">
+  <push object="1" slot="3" direction="north" bank="7" bit="0x13" done="clear" reveals="3"
+        label="the cabinet off the handgun rounds under it"/>
+</bot>

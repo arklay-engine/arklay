@@ -148,10 +148,26 @@ function BotSave.wants(o)
         if o.risky_next and o.health < o.max_health * RISKY_HEALTH then
             return true, "a risky room is next: " .. tostring(o.risky_next)
         end
-        if o.milestone and not o.since_save then
+        -- Few ink ribbons left, held and boxed (o.ribbons_left): the
+        -- first milestone save waits half a gap into the run with two or
+        -- fewer, and the last ribbon waits twice the gap. Seed 2 saved at
+        -- 1733 ticks for the first milestone and twice more by 17765, had
+        -- no ribbon for the next 230k ticks, and a death in 302 replayed
+        -- the run from 118. (Four times the gap, and twice with two left,
+        -- skipped seed 1's saves and doubled its deaths.)
+        local gap = BotSave.milestone_gap(o.risk)
+        local left = o.ribbons_left
+        if left and left <= 1 then
+            gap = gap * 2
+        end
+        if o.milestone and not o.since_save
+            and (not left or left > 2 or (o.age or 0) >= BotSave.milestone_gap(o.risk) / 2) then
             return true, "the first milestone of the run (no save yet)"
         end
-        if o.milestone and o.since_save >= BotSave.milestone_gap(o.risk) then
+        if o.milestone and not o.since_save then
+            return false, "the first milestone, but ink ribbons are scarce"
+        end
+        if o.milestone and o.since_save and o.since_save >= gap then
             return true, "a milestone since the last save"
         end
         if o.milestone then
@@ -493,6 +509,73 @@ end
 -- here when BotSave.wants says so. Returns true when it owns the tick.
 -- What the save decision depends on that changes at a box or a heal:
 -- health and the inventory.
+-- What BotSave.wants reads from the live state, but the inventory work
+-- (inventory_due), which the caller adds.
+-- The ink ribbons held and boxed, when the character needs them; nil
+-- otherwise.
+local function ribbons_left(bot)
+    local saves = bot:saves()
+    if not saves.needs_ribbon then
+        return nil
+    end
+    local boxed = saves.ribbon_item and BotInventory.boxed_quantity(bot, saves.ribbon_item) or 0
+    return (saves.ribbons or 0) + boxed
+end
+
+local function save_inputs(bot, player, critical)
+    local s = state()
+    local latest = BotSave.latest(bot:memory())
+    local now = condition(bot, player)
+    local saved_milestones = latest and latest.milestones or s.start_milestones or 0
+    return {
+        risky_next = BotPlanner.risky_next(bot),
+        milestone = milestones(bot) > saved_milestones,
+        dead_end = BotSave.dead_end(now),
+        no_choice = BotSave.no_choice(latest, now),
+        risk = bot:risk() or 0.25,
+        can_save = BotSave.can_save(bot:saves()),
+        health = player.health,
+        max_health = player.max_health,
+        critical = critical,
+        risky = risky(bot),
+        progress = BotSave.progress(bot:world()),
+        saved_progress = latest and latest.progress or s.start_progress,
+        since_save = latest and latest.tick and bot:tick() - latest.tick,
+        age = bot:tick(),
+        ribbons_left = ribbons_left(bot),
+    }
+end
+
+-- Whether a save here waits only on an ink ribbon: one is needed and none
+-- is held, this room has a typewriter and an item box, and with a ribbon
+-- BotSave.wants would save. The box visit then swaps a soft keep out for a
+-- boxed ribbon (BotInventory.context's ribbon_swap). The ribbon is the
+-- first soft keep to go in for a pickup and, as a top-up, came out only
+-- with slots to spare, which Chris's six seldom have: runs saved last in
+-- 106, skipped 403's typewriter for "no ink ribbon" with two in its box,
+-- and every death in the guardhouse replayed the mansion to it, until the
+-- tick limit. Read once a tick.
+function BotSave.ribbon_due(bot)
+    local s = state()
+    local tick = bot:tick()
+    if s.ribbon_tick == tick then
+        return s.ribbon_due
+    end
+    s.ribbon_tick = tick
+    s.ribbon_due = false
+    local saves = bot:saves()
+    if not saves.needs_ribbon or (saves.ribbons or 0) > 0 or not typewriter_here(bot)
+        or #BotPlanner.boxes_here(bot) == 0 then
+        return false
+    end
+    local player = bot:player()
+    local inputs = save_inputs(bot, player,
+        player.health < player.max_health * BotSurvival.critical_fraction(bot:risk() or 0.25))
+    inputs.can_save = true
+    s.ribbon_due = (BotSave.wants(inputs))
+    return s.ribbon_due
+end
+
 local function decide_sig(bot, player)
     local parts = { tostring(player.health) }
     for _, row in ipairs(bot:menu().items or {}) do
@@ -573,26 +656,9 @@ function BotSave.step(bot, player, critical)
             return true
         end
     end
-    local saves = bot:saves()
-    local latest = BotSave.latest(bot:memory())
-    local now = condition(bot, player)
-    local saved_milestones = latest and latest.milestones or s.start_milestones or 0
-    local wants, why = BotSave.wants({
-        inventory_due = BotPlanner.inventory_due_here(bot),
-        risky_next = BotPlanner.risky_next(bot),
-        milestone = milestones(bot) > saved_milestones,
-        dead_end = BotSave.dead_end(now),
-        no_choice = BotSave.no_choice(latest, now),
-        risk = bot:risk() or 0.25,
-        can_save = BotSave.can_save(saves),
-        health = player.health,
-        max_health = player.max_health,
-        critical = critical,
-        risky = risky(bot),
-        progress = BotSave.progress(bot:world()),
-        saved_progress = latest and latest.progress or s.start_progress,
-        since_save = latest and latest.tick and tick - latest.tick,
-    })
+    local inputs = save_inputs(bot, player, critical)
+    inputs.inventory_due = BotPlanner.inventory_due_here(bot)
+    local wants, why = BotSave.wants(inputs)
     local note = string.format("%s:%d:%s:%s", bot:room().id, action.slot,
         tostring(wants), why)
     if note ~= s.note then

@@ -8,7 +8,9 @@
      only in this room (the menu's MOVE); a wrong pair turns both into
      empty bottles, and effect 4 fumes the room (scenario 0x16).
      V-JOLT (0x1B) is UMB No.13 and NP-003; the brew plans the tree from
-     the engine's recipes. It is done once 40F's root has it (0x13).
+     the engine's recipes. It is done once 40F's root has it (0x13), and
+     dropped once Plant 42 is dead without it (scenario 0x00, set by 40C):
+     40F's probe is then gone, and the bottles would be dead weight.
 
      Chris's game: the bottles are out and the taps flow only while
      Rebecca is the player (character model 3), which 40C's Plant 42 scene
@@ -21,12 +23,12 @@
   <tap slot="11" item="0x15" label="UMB No.2"/>
   <tap slot="12" item="0x16" label="UMB No.4"/>
   <brew item="0x1B" bottle="0x13" bank="0" bit="0x13" after_bank="7" after_bit="0x4E"
-        after_while="clear" when="vjolt=yes" character="jill" label="V-JOLT for Plant 42's root"/>
+        after_while="clear" until_bank="0" until_bit="0x00" when="vjolt=yes" character="jill" label="V-JOLT for Plant 42's root"/>
   <!-- ahead_unless: 40C's first entry (common 0x37) plays Rebecca's turn
        unless she waits in the save room (0x22), Richard died (0x64) or she
        is lost (0xC0). Until then Chris keeps the brew's bottle slots free
        in the guardhouse, since she takes over his inventory with no box. -->
   <brew item="0x1B" bottle="0x13" bank="0" bit="0x13" after_bank="1" after_bit="0x3D"
-        ahead_unless="1:0x37 1:0x22 1:0x64 1:0xC0"
+        until_bank="0" until_bit="0x00" ahead_unless="1:0x37 1:0x22 1:0x64 1:0xC0"
         character="chris" label="Rebecca's V-JOLT for Plant 42's root"/>
 </bot>

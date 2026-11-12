@@ -30,7 +30,7 @@ local run = bot_run({
     },
     seed = tonumber(arg[2]),
     stats = arg[3],
-    max_ticks = 400000,
+    max_ticks = 600000,
 })
 local missed = {}
 for _, check in ipairs({
