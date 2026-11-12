@@ -1516,13 +1516,21 @@ impl Em<'_, '_, '_> {
             self.z.damage_cnt -= 1;
         }
         self.work().lean = 0;
+        self.work().lean_yaw = 0;
         self.script();
         self.pull_arm();
         self.kicked_head();
         let held = self.kind() & TYPE_HELD != 0 || self.z.flags & FLAG_NECK_STILL != 0;
         let neck = &mut self.work().neck;
         neck.flags = (neck.flags & !2) | if held { 2 } else { 0 };
-        self.mover.rot_neck_em(self.world.player_neck);
+        let drawn = self
+            .z
+            .drawn
+            .get(player2::NECK_JOINT)
+            .copied()
+            .flatten()
+            .map(|neck| neck.t);
+        self.mover.rot_neck_em(self.world.player_neck, drawn);
         self.z.last_routine = self.work().routine;
         let seq = self.mover.now_seq();
         if seq & SEQ_SOUND != 0 {

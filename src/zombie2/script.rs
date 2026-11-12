@@ -840,8 +840,9 @@ impl UserData for Api {
             e.em().work().neck.flags = flags as _;
             Ok(())
         });
-        methods.add_method_mut("set_lean", |_, e, lean: i64| {
+        methods.add_method_mut("set_lean", |_, e, (lean, yaw): (i64, Option<i64>)| {
             e.em().work().lean = lean as i16;
+            e.em().work().lean_yaw = yaw.unwrap_or(0) as i16;
             Ok(())
         });
         methods.add_method_mut("set_sce_flg", |_, e, flags: i64| {
@@ -2676,6 +2677,84 @@ mod tests {
         .unwrap();
         let effects: Vec<Vec<i64>> = lua.globals().get("EFFECTS").unwrap();
         assert_eq!(effects, [vec![0, 0x13E8, 0, -450, -470, 7]]);
+    }
+
+    /// `FUN_00453e40`'s step 6, a zombie on the floor starting to rise with
+    /// `Timer3` at `timer3`: `(Be_flg & 0x200 after, the effects as (kind,
+    /// size, part, x, y, z))`.
+    fn rising_start(timer3: i64) -> (bool, Vec<Vec<i64>>) {
+        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        let library = include_str!("../../games/re2/lib/zombie.lua");
+        lua.globals().set("TIMER3", timer3).unwrap();
+        lua.load(format!(
+            "local w = {{ r = {{ [0] = 1, 5, 6, 0 }}, vars = {{ [1] = 5 }}, flags = 0x212,
+                 timers = {{ [3] = TIMER3 }} }}
+             EFFECTS = {{}}
+             local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+             function e:routine(i) return w.r[i] end
+             function e:set_routine(i, v) w.r[i] = v end
+             function e:var(i) return w.vars[i] or 0 end
+             function e:set_var(i, v) w.vars[i] = v end
+             function e:timer(i) return w.timers[i] or 0 end
+             function e:set_timer(i, v) w.timers[i] = v end
+             function e:flags() return w.flags end
+             function e:set_flags(v) w.flags = v end
+             function e:body_box() return 0, 0, 0, 0 end
+             function e:joint_bank() return false end
+             function e:effect(kind, row, size, dir, part, x, y, z)
+                 EFFECTS[#EFFECTS + 1] = {{ kind, size, part, x, y, z }}
+             end
+             local zombie = (function() {library} end)()
+             zombie.run(e, {{}})
+             STILL = w.flags & 0x200 ~= 0"
+        ))
+        .exec()
+        .unwrap();
+        (
+            lua.globals().get("STILL").unwrap(),
+            lua.globals().get("EFFECTS").unwrap(),
+        )
+    }
+
+    /// It clears `+0x21b`'s 0x02 (`FLAG_NECK_STILL`), so its head follows the
+    /// player again as it gets up, and with `Timer3` 1 it bleeds once more:
+    /// `Esp_call(8000, Cdir_y, part 0's Workm, 0)`.
+    #[test]
+    fn a_rising_zombies_head_follows_again_and_a_last_blood_starts() {
+        assert_eq!(rising_start(1), (false, vec![vec![0, 8000, 0, 0, 0, 0]]));
+        assert_eq!(rising_start(2), (false, vec![]));
+    }
+
+    /// `FUN_00457e60`, a hit while it gets up: the first tick falls from step
+    /// 0 into step 1 with the blood's `(0, 300, 0)` still in `local_48`, so
+    /// its lean turns 300 about y as well; on the next it is the lean alone,
+    /// `Timer3 * Timer1 * Timer0 * -8`.
+    #[test]
+    fn a_hit_while_rising_first_leans_by_the_bloods_vector() {
+        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        let library = include_str!("../../games/re2/lib/zombie.lua");
+        lua.load(format!(
+            "local w = {{ r = {{ [0] = 2, 2, 0, 0 }}, vars = {{}}, flags = 0x10, timers = {{}} }}
+             LEANS = {{}}
+             local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+             function e:routine(i) return w.r[i] end
+             function e:set_routine(i, v) w.r[i] = v end
+             function e:var(i) return w.vars[i] or 0 end
+             function e:set_var(i, v) w.vars[i] = v end
+             function e:timer(i) return w.timers[i] or 0 end
+             function e:set_timer(i, v) w.timers[i] = v end
+             function e:flags() return w.flags end
+             function e:set_flags(v) w.flags = v end
+             function e:joint_bank() return false end
+             function e:set_lean(lean, yaw) LEANS[#LEANS + 1] = {{ lean, yaw or 0 }} end
+             local zombie = (function() {library} end)()
+             zombie.run(e, {{}})
+             zombie.run(e, {{}})"
+        ))
+        .exec()
+        .unwrap();
+        let leans: Vec<Vec<i64>> = lua.globals().get("LEANS").unwrap();
+        assert_eq!(leans, [vec![0, 300], vec![-0x18 * 8, 0]]);
     }
 
     /// A handgun hit (`Routine_1` 2) on a standing zombie with life 100 and

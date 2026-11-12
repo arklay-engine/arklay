@@ -1341,8 +1341,6 @@ frames = [0, 9719]
 # longer than the game's two-frame hold (docs/internals/deviations/re2.md, "The frames of a cut"); arklay shows the new cut there.
 frame_max_mean = 0.8
 ignore = [
-    # zombie 1's angle on the first tick (docs/internals/deviations/re2.md, "Zombies")
-    [0, "zm1"],
     # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md)
     [356, "rng"],
     [356, "rseed"],

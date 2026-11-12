@@ -510,7 +510,8 @@ end
 
 -- `FUN_00457e60`: a hit while getting up, which only rocks it.
 local function dm_rising(e)
-    if e:routine(2) == 0 then
+    local first = e:routine(2) == 0
+    if first then
         e:set_routine(2, 1)
         e:set_timer(0, 0)
         e:set_timer(1, 1)
@@ -535,7 +536,9 @@ local function dm_rising(e)
     if routine == 1 then
         ended = e:joint_bank(WEAPON, 0x100)
         if not ended then
-            e:set_lean(lean_now(e) * -8)
+            -- The first tick falls into this step with the blood's vector still
+            -- in `local_48`, so its `RotMatrix` also turns 300 about y.
+            e:set_lean(lean_now(e) * -8, first and 300 or 0)
             local old = i16(e:timer(0))
             e:set_timer(0, old + 1)
             if old >= 3 then
@@ -2246,9 +2249,14 @@ local function mv_floor(e)
             e:set_var(RISE_SIDE, has_flag(e, FLAG_FACE_DOWN) and 0 or 1)
             e:clip(side == 0 and 8 or 9, 0, 0xF)
             e:set_routine(2, 7)
+            if e:timer(3) == 1 then
+                blood(e, 0, 8000, angle(e), 0, 0, 0, 0)
+            end
             if voice_free(e) and e:rnd() & 3 == 0 then
                 moan(e, 0xB)
             end
+            -- `+0x21b`'s 0x02: the head follows the player again as it rises.
+            drop_flag(e, FLAG_NECK_STILL)
             e:set_speed_x(0xB)
         end
         local ofs_y, at_w, at_h, w = e:body_box()
