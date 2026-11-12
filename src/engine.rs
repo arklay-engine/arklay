@@ -16066,6 +16066,12 @@ struct VoiceCache {
     pending: Option<game::VoiceRequest>,
     /// The mixer's voice channel is held by a line this cache started.
     active: bool,
+    /// Ticks the line in progress still runs, by its own length. With no
+    /// device to play it (a headless run, or a cutscene skip's parked mixer)
+    /// this is what holds the F7 wait, as the playing line would.
+    silent_ticks: u32,
+    /// The wait is held by `silent_ticks`, not by the mixer's channel.
+    silent: bool,
 }
 
 impl VoiceCache {
@@ -16163,14 +16169,25 @@ fn tick_re2_voice(sound: bool, cache: &mut VoiceCache, game: &mut game::GameStat
     }
 }
 
+/// How many ticks a voice line plays for at 30 ticks a second.
+fn voice_line_ticks(wav: &audio::Wav) -> u32 {
+    const TICKS_A_SECOND: usize = 30;
+    let ticks = wav.frame_count() * TICKS_A_SECOND / wav.sample_rate.max(1) as usize;
+    u32::try_from(ticks).unwrap_or(u32::MAX)
+}
+
 /// One tick's voice handshake: queue the script's request, clear the wait flag
 /// when the active line ends, and start a pending line when the channel frees
 /// up.
 ///
-/// With no audio device the flag is cleared every tick, so a headless run
-/// (`--capture`, the corpus audit) advances its scripts immediately instead of
-/// hanging on F7. A line whose entry is absent from the pack clears the flag
-/// the same way (the documented hardening).
+/// With no audio device (a headless run, or the parked mixer of a cutscene
+/// skip) the wait holds for the line's own length and then clears, so the
+/// scripts keep the timing they have with sound: a scene whose forked event
+/// drives an actor past a voiced line (10A's upstairs radio call) otherwise
+/// ends its main thread first, and the fork leaves the player in its
+/// scripted animation for good. A line whose entry is absent from the pack
+/// clears the flag at once (the documented hardening), and so does any wait
+/// with no line behind it.
 fn tick_voice(
     music: &mut Option<Mixer>,
     cache: &mut VoiceCache,
@@ -16178,12 +16195,39 @@ fn tick_voice(
     pack: &Pack,
 ) {
     tick_re2_voice(music.is_some(), cache, game, pack);
+    cache.silent_ticks = cache.silent_ticks.saturating_sub(1);
     let Some(mixer) = music.as_mut() else {
-        game.voice.request = None;
         cache.pending = None;
-        cache.active = false;
-        game.voice.stop_requested = false;
-        game.clear_voice_playing();
+        if cache.active {
+            // The mixer was parked mid-line: the rest of the line's length
+            // still holds the wait.
+            cache.active = false;
+            cache.silent = true;
+        }
+        if game.voice.stop_requested {
+            game.voice.stop_requested = false;
+            cache.silent_ticks = 0;
+        }
+        if let Some(request) = game.voice.request.take()
+            && !game.is_re2_room
+        {
+            // RE 2 holds its own voice bit for the line (tick_re2_voice).
+            match cache.load(pack, &request.path) {
+                Some(wav) => {
+                    cache.silent_ticks = voice_line_ticks(&wav);
+                    cache.silent = true;
+                    game.set_voice_playing();
+                }
+                None => {
+                    game.voice.misses += 1;
+                    cache.silent_ticks = 0;
+                }
+            }
+        }
+        if cache.silent_ticks == 0 {
+            cache.silent = false;
+            game.clear_voice_playing();
+        }
         return;
     };
 
@@ -16194,10 +16238,19 @@ fn tick_voice(
         mixer.stop_voice();
         cache.pending = None;
         cache.active = false;
+        cache.silent = false;
+        cache.silent_ticks = 0;
         game.clear_voice_playing();
     }
     if let Some(request) = game.voice.request.take() {
         cache.pending = Some(request);
+    }
+    if cache.silent && cache.silent_ticks == 0 {
+        // A line held by its length while the mixer was parked has run out.
+        cache.silent = false;
+        if cache.pending.is_none() {
+            game.clear_voice_playing();
+        }
     }
 
     if cache.active && !mixer.voice_playing() {
@@ -16213,6 +16266,8 @@ fn tick_voice(
             Some(wav) => {
                 let gain = sfx::volume_gain(request.volume);
                 let pan = sfx::pan_from_raw(request.pan);
+                cache.silent_ticks = voice_line_ticks(&wav);
+                cache.silent = false;
                 mixer.play_voice(wav, gain, pan);
                 cache.active = true;
                 game.set_voice_playing();
@@ -27332,6 +27387,61 @@ mod tests {
         out.extend_from_slice(b"WAVE");
         out.extend_from_slice(&body);
         out
+    }
+
+    #[test]
+    fn a_voice_line_holds_the_wait_for_its_length_without_a_device() {
+        let dir = TempDir::new();
+        let path = dir.0.join("voice.akpak");
+        let mut writer = PackWriter::new();
+        // A tenth of a second at 22050 Hz: three ticks.
+        writer
+            .add("voice/0c_21.wav", voice_wav_bytes(&[0; 2205]))
+            .unwrap();
+        writer.write(&path).unwrap();
+        let pack = Pack::open(&path).unwrap();
+        let mut music = None;
+        let mut cache = VoiceCache::default();
+        let id = RoomId::parse("10A0").unwrap();
+        let mut game = game::GameState::new(id, &RoomState::default());
+        let request = |path: &str| game::VoiceRequest {
+            path: path.to_string(),
+            volume: 0,
+            pan: 0,
+        };
+
+        // The line holds the F7 wait for its three ticks, as it would while
+        // it played: 10A's upstairs radio call waits on a line like this, and
+        // with the wait gone at once its fork outlived the main thread and
+        // left Chris in a scripted animation.
+        game.voice.request = Some(request("voice/0c_21.wav"));
+        game.set_voice_playing();
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        assert!(game.voice_playing(), "the line started without a device");
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        assert!(game.voice_playing(), "the wait holds for the line's length");
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        assert!(!game.voice_playing(), "and clears once it has run");
+        assert_eq!(game.voice.misses, 0);
+
+        // A stop ends the line at once.
+        game.voice.request = Some(request("voice/0c_21.wav"));
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        assert!(game.voice_playing());
+        game.voice.stop_requested = true;
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        assert!(!game.voice_playing(), "the stop released the wait");
+
+        // An absent entry and a wait with no line behind it clear at once.
+        game.voice.request = Some(request("voice/00_ff.wav"));
+        game.set_voice_playing();
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        assert_eq!(game.voice.misses, 1, "the absent entry was counted");
+        assert!(!game.voice_playing(), "the wait released on the miss");
+        game.set_voice_playing();
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        assert!(!game.voice_playing(), "a stray wait bit clears");
     }
 
     #[test]
