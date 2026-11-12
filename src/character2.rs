@@ -1791,7 +1791,7 @@ pub fn pose_joints(
         matrix.r = crate::anim::mul_matrix0(&surface, &matrix.r);
     }
     let mut local = crate::anim::joint_local_transforms(&model.skeleton, &keyframe);
-    character.work.lean_locals(&mut local);
+    character.work.pose_locals(&mut local);
     let joints = crate::anim::joint_matrices_from_locals(&model.skeleton, &local, &matrix, &[]);
     Some((joints, keyframe))
 }

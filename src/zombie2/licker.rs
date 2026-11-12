@@ -170,6 +170,18 @@ impl Licker {
     }
 }
 
+/// `Em_24`'s id: its init (`FUN_0046cfa0`) poses it through `Joint_move`.
+const EM24_ID: u8 = 0x24;
+
+/// Whether the licker plays through `J_seq2` (`Mot_play2`'s `Joint_move2`)
+/// before this tick's script. `Em22_Init` poses through `Joint_move2` too,
+/// but `Em_24`'s init (`FUN_0046cfa0`) poses through `Joint_move` and plain
+/// `J_seq`, which leaves each part's `M` a raw `RotMatrix`: its `J_seq2`
+/// starts from those, after the init.
+fn jseq2_from_the_start(id: u8, routine0: u8) -> bool {
+    id != EM24_ID || routine0 != 0
+}
+
 /// `Em_22`: the script runs the tick's behaviour, and the rest follows.
 pub(super) fn run(em: &mut Em<'_, '_, '_>, licker: &mut Licker) {
     Em22 { em, l: licker }.run();
@@ -183,8 +195,10 @@ struct Em22<'e, 'a, 'b, 'c> {
 impl Em22<'_, '_, '_, '_> {
     fn run(&mut self) {
         self.l.latch_drool(self.em.mover.player.pos);
-        // `Mot_play2` plays its clips through `Joint_move2` and `J_seq2`.
-        self.em.work().jseq2.get_or_insert_with(Vec::new);
+        let id = self.em.mover.tick.id;
+        if jseq2_from_the_start(id, self.em.work().routine[0]) {
+            self.em.work().jseq2.get_or_insert_with(Vec::new);
+        }
         self.em.root_ck();
         if self.em.world.stopped {
             return;
@@ -195,6 +209,10 @@ impl Em22<'_, '_, '_, '_> {
         self.l.super_add = [0; 3];
         self.em.z.vars[super::DOG_GROUND] = self.ground();
         self.script();
+        if self.em.work().jseq2.is_none() && self.em.work().routine[0] != 0 {
+            // `Em_24`'s init has posed it through `J_seq`.
+            self.em.mover.start_jseq2();
+        }
         if self.l.super_add != [0; 3] {
             let work = self.em.work();
             let (_, surface) = super::surface::turned(work.super_matrix, self.l.super_add);
@@ -369,6 +387,16 @@ mod tests {
         });
         licker.latch_drool([10, 20, 30]);
         assert_eq!(licker.drool, [-11827, -282, -15767]);
+    }
+
+    /// `Em22_Init` poses through `Joint_move2`, `Em_24`'s init through
+    /// `Joint_move`; both play through `J_seq2` after.
+    #[test]
+    fn only_em24s_init_poses_through_j_seq() {
+        assert!(jseq2_from_the_start(0x22, 0));
+        assert!(jseq2_from_the_start(0x22, 1));
+        assert!(!jseq2_from_the_start(EM24_ID, 0));
+        assert!(jseq2_from_the_start(EM24_ID, 1));
     }
 
     #[test]

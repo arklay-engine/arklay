@@ -321,7 +321,7 @@ pub enum Bank {
 /// `0xfff - late * Hokan` of the new, then `NormalMatrix_0`. Nothing for a
 /// body that plays its clips through `J_seq`.
 fn jseq2_step(work: &mut Work, target: Option<&crate::model::Keyframe>, late: u16) {
-    let kept = i32::from(late) * i32::from(work.hokan);
+    let kept = i32::from(late).wrapping_mul(i32::from(work.hokan));
     let blend = work.hokan != 0;
     let (Some(parts), Some(target)) = (work.jseq2.as_mut(), target) else {
         return;
@@ -347,11 +347,12 @@ pub(crate) fn jseq2_matrix(
     let Some(kept) = kept else {
         return normal_matrix(&new, 2);
     };
-    let weight = 0xfff - kept;
+    let weight = 0xfff_i32.wrapping_sub(kept);
     let mixed: [[i16; 3]; 3] = std::array::from_fn(|row| {
         std::array::from_fn(|column| {
-            let old = (i32::from(last[row][column]) * (0x1000 - weight)) >> 12;
-            let new = (i32::from(new[row][column]) * weight) >> 12;
+            // The original's `IMUL`s wrap.
+            let old = i32::from(last[row][column]).wrapping_mul(0x1000 - weight) >> 12;
+            let new = i32::from(new[row][column]).wrapping_mul(weight) >> 12;
             (old as i16).wrapping_add(new as i16)
         })
     });
@@ -709,6 +710,18 @@ impl Work {
     pub fn apply_to_pose(&self, pose: &mut Keyframe) {
         pose.offset[1] = self.scaled_height(pose.offset[1]);
         self.neck.apply(pose);
+    }
+
+    /// The draw's locals from the work: `J_seq2`'s matrices for a body that
+    /// plays through it (the first `len()` parts, with y flipped as the draw
+    /// has them), then the lean.
+    pub fn pose_locals(&self, local: &mut [crate::anim::Mat4x3]) {
+        if let Some(parts) = &self.jseq2 {
+            for (joint, m) in local.iter_mut().zip(parts) {
+                joint.r = flip_y(m.map(|row| row.map(i32::from)));
+            }
+        }
+        self.lean_locals(local);
     }
 
     /// `Em10Dm00`'s lean on the joints' matrices on their parents', as
@@ -4460,14 +4473,29 @@ impl Mover<'_, '_> {
     }
 
     /// A part's `M` before `Joint_trans2` turns it into a `Workm`: `J_seq2`'s
-    /// matrix, or `RotMatrix` of the pose's angles.
+    /// matrix, or `RotMatrix` of the pose's angles. A `J_seq2` body's
+    /// `rotation` is not read, so a turn added to the pose's angles (the
+    /// neck's, `Neck::apply`) would be lost: no `J_seq2` body (the lickers)
+    /// calls `Rot_neck_em`.
     fn part_rotation(&self, part: usize, rotation: [i16; 3]) -> [[i16; 3]; 3] {
+        debug_assert!(
+            self.work.jseq2.is_none() || self.work.neck.turn == [0; 2],
+            "a J_seq2 body's neck turn is not drawn"
+        );
         self.work
             .jseq2
             .as_ref()
             .and_then(|parts| parts.get(part))
             .copied()
             .unwrap_or_else(|| rot_matrix(rotation))
+    }
+
+    /// Play through `J_seq2` from the pose `J_seq` left: each part's `M` the
+    /// raw `RotMatrix` of its angles, as `Em_24`'s init (`FUN_0046cfa0`,
+    /// `Joint_move`) leaves them.
+    pub(crate) fn start_jseq2(&mut self) {
+        let parts = self.posed_rotations().into_iter().map(rot_matrix).collect();
+        self.work.jseq2 = Some(parts);
     }
 
     /// `Joint_move` with `Move_cnt` at or past its clip's end: `pSeq_ptr` reads
@@ -9211,6 +9239,97 @@ mod tests {
         assert_eq!(blood(part), [18386, -2519, 2637]);
         let upright = tree(0).compose(&[])[0].unwrap();
         assert_ne!(blood(upright), [18386, -2519, 2637]);
+    }
+
+    /// A `J_seq2` body is drawn from its eased matrices, not from the
+    /// pose's angles: its first parts' drawn `M` are those, y flipped, with
+    /// the lean after; a part past them keeps the pose's.
+    #[test]
+    fn a_jseq2_body_is_drawn_from_its_eased_matrices() {
+        let eased = [[3886, 0, 1293], [0, 4096, 0], [-1023, 0, 3073]];
+        let posed = crate::anim::rotation_matrix(0x100, 0x200, -0x80);
+        let mut local = vec![
+            crate::anim::Mat4x3 {
+                r: posed,
+                t: [0; 3]
+            };
+            2
+        ];
+        let mut work = Work {
+            jseq2: Some(vec![eased]),
+            ..Work::default()
+        };
+        work.pose_locals(&mut local);
+        assert_eq!(local[0].r, flip_y(eased.map(|row| row.map(i32::from))));
+        assert_eq!(local[1].r, posed);
+        work.lean = -0x40;
+        let mut leaning = vec![
+            crate::anim::Mat4x3 {
+                r: posed,
+                t: [0; 3]
+            };
+            2
+        ];
+        work.pose_locals(&mut leaning);
+        let turned = mul_matrix(&eased, &rot_matrix([0, 0, -0x40]));
+        assert_eq!(leaning[0].r, flip_y(turned.map(|row| row.map(i32::from))));
+    }
+
+    /// `Em_24`'s init poses through `J_seq`, so its `J_seq2` starts from
+    /// each part's raw `RotMatrix`, not one `NormalMatrix_2` made unit.
+    #[test]
+    fn em24s_jseq2_starts_from_the_raw_rot_matrix() {
+        let rotation = [0x100, 0x200, 0x80];
+        let raw = rot_matrix(rotation);
+        assert_ne!(raw, normal_matrix(&raw, 2), "the two differ here");
+        let mut setup = Setup::new(0);
+        setup.keyframes = vec![Keyframe {
+            offset: [0; 3],
+            vertex: [0; 3],
+            rotations: vec![rotation],
+        }];
+        setup.clips = vec![Clip {
+            frames: vec![ClipFrame {
+                keyframe: 0,
+                timing: 0,
+                flags: 0,
+            }],
+        }];
+        let bank = (setup.clips.as_slice(), setup.keyframes.as_slice());
+        let tick = Tick {
+            room: &setup.room,
+            skeleton: &setup.skeleton,
+            morphs: &[],
+            banks: Banks {
+                pld: bank,
+                weapon: bank,
+                room: bank,
+                held: bank,
+            },
+            input: Input::default(),
+            options: Options::default(),
+            id: 0x24,
+            life: 200,
+            poisoned: false,
+            stopped: false,
+            weapon: setup.weapon,
+            necks: [None; NECK_WORKS],
+            targets: &[],
+            neck_targets: &[],
+            enemies: 0,
+            pushing: false,
+            objects: &[],
+            key_trg: 0,
+        };
+        let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
+        mover.work.bank = Bank::Pld;
+        mover.work.move_no = 0;
+        mover.work.move_cnt = 0;
+        mover.work.hokan = 0;
+        mover.joint_move_late_reversed(0x1000, false);
+        assert_eq!(mover.work.jseq2, None, "the init's step is `J_seq`'s");
+        mover.start_jseq2();
+        assert_eq!(mover.work.jseq2, Some(vec![raw]));
     }
 
     /// The draw's joint matrices are the game's seen with Y flipped, so the
