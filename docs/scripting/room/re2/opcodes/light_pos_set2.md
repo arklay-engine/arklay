@@ -32,6 +32,7 @@ rather than the one on screen. The change is made after the tick's pass of
 the scripts and lasts until the room is loaded again, so a room's init can
 set up a camera that is not on screen yet. A camera or light the room does
 not have changes nothing.
+A room's load applies the changes its own passes made before anything moves, so a door's end and its last stopped tick see them, as the original's do.
 
 ## Example
 

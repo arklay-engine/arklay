@@ -33,6 +33,7 @@ of light `light` of the record of the camera on screen when the instruction
 runs (script variable 26). The change is made after the tick's pass of the
 scripts, and lasts until the room is loaded again. A light the record does
 not have changes nothing.
+A room's load applies the changes its own passes made before anything moves, so a door's end and its last stopped tick see them, as the original's do.
 
 To change another camera's light, use [`light_pos_set2`](light_pos_set2.md).
 

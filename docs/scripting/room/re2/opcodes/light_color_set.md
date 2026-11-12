@@ -33,6 +33,7 @@ screen when the instruction runs, converted as the room's own light colours
 are when the room loads. The change is made after the tick's pass of the
 scripts, and lasts until the room is loaded again. A light the record does
 not have changes nothing.
+A room's load applies the changes its own passes made before anything moves, so a door's end and its last stopped tick see them, as the original's do.
 
 To change another camera's light, use
 [`light_color_set2`](light_color_set2.md).
