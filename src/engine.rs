@@ -4190,7 +4190,10 @@ impl GameSession {
             || self.menu_close_freeze > 0
             || (self.game.is_re2_room
                 && (self.game.re2_back != game::save2::BackRoutine::None
-                    || self.re2_save.is_some()));
+                    || self.re2_save.is_some()
+                    // A drawer's close-up: `fg_status`'s `0x40` and
+                    // `fg_stop`'s `0x1000000`, until the window takes over.
+                    || self.game.re2_hikidashi.opening()));
         // The request does not stop the frame: `game_loop` clears the player's
         // bits for it, runs the rest of the tick, and only then leaves for the
         // menu.
@@ -15471,6 +15474,17 @@ fn re2_tongue(
     Some((mesh, vec![joint]))
 }
 
+/// RE2's `Game_loop` draws the player through `Joint_trans2`, as every
+/// work: out of the shown cut's view quad (`Hit_ck_point4` on `Pos`,
+/// `0x988630`), or with `Be_flg`'s not-drawn `0x80000`, only the parts with
+/// `Be_flg & 0x9000` draw, which no part of the player's has. A drawer's
+/// close-up, whose quad its open moved far away, shows no player. A cut with
+/// no zone draws it.
+fn re2_player_out_of_view(room: &RoomState, pos: [i32; 3], be_flg: u32) -> bool {
+    let [x, _, z] = pos;
+    be_flg & 0x80000 != 0 || !room.in_cut_view(x, z).unwrap_or(true)
+}
+
 fn re2_player_shadow<'a>(
     game: &game::GameState,
     room: &RoomState,
@@ -15484,6 +15498,10 @@ fn re2_player_shadow<'a>(
     // its ground at a single point.
     let work = &game.re2.player;
     let at = work.kage_pos().unwrap_or(player_state.pos);
+    // `Kage_work_sort` culls it against the cut's view quad, as the others.
+    if !debug_view::unculled() && !room.in_cut_view(at[0], at[2]).unwrap_or(true) {
+        return None;
+    }
     re2_shadow(
         room,
         &game.objects.records,
@@ -17391,6 +17409,15 @@ fn apply_re2_cut_edit(room: &mut RoomState, edit: crate::scd2::host::CutEdit) {
                 gate.flag = value;
             }
         }
+        CutEdit::ViewQuad { cut, corners } => {
+            if let Some(zone) = room
+                .zones
+                .iter_mut()
+                .find(|zone| zone.cam_from == i16::from(cut))
+            {
+                zone.corners = corners;
+            }
+        }
         // `Om_disp` with attribute 2: every packet of the model blends.
         CutEdit::BlendObject { slot } => {
             for asset in &mut room.object_models {
@@ -17775,6 +17802,10 @@ fn tick_room_timed(
         context.game.re2.shown_cut = context.room.current_cut as u8;
         context.game.tick_re2_key_lost();
         context.game.tick_re2_hikidashi();
+        // A drawer's open writes its close-up's view quad straight into the
+        // room's data, and the `fg_stop` it raises holds the scripts whose
+        // pass would apply the edit.
+        apply_re2_room_data(context.room, context.game);
     }
     context.game.check_desk_state();
     context.game.check_itembox_state();
@@ -17822,7 +17853,9 @@ fn tick_room_timed(
     // the scripts left rather than this tick's movement. That is what makes a
     // cut change land one tick after the crossing frame, not on it.
     context.game.sync_player(context.player);
-    if !context.game.re2.script_door {
+    // A drawer's hand-off raises `fg_status`'s `0x100` until its close,
+    // and `Game_loop` skips `Cut_check` under it.
+    if !context.game.re2.script_door && !context.game.re2_hikidashi.holds_cut() {
         apply_camera(context.room, context.game, Some(context.player.pos));
     }
     if context.room.current_cut != previous_cut {
@@ -20556,6 +20589,10 @@ fn render_frame_on(
             game.entities[0].joint_flags,
             joints,
         );
+        let out_of_view = game.is_re2_room
+            && !debug_view::unculled()
+            && re2_player_out_of_view(room, game.entities[0].pos, game.re2.player.be_flg);
+        let hidden = if out_of_view { u32::MAX } else { hidden };
         meshes.push(EntityMesh {
             mesh: &assets.emd.mesh,
             texture: &assets.emd.texture,
@@ -38782,6 +38819,110 @@ end
         let ids: Vec<_> = room.zones.iter().map(|z| (z.cam_from, z.cam_to)).collect();
         assert_eq!(ids, [(1, 4), (4, 3), (2, 0), (3, 2)]);
         assert!(room.zone_gates.iter().all(|g| g.flag == 2 && g.floor == 4));
+    }
+
+    /// A drawer's open overwrites the close-up's view quad, the first zone
+    /// `Ccut_searc` finds for the cut, and nothing after it: the player
+    /// (and the enemies) inside the quad before are outside it now, so the
+    /// close-up culls them for the rest of the stay.
+    #[test]
+    fn a_drawers_view_quad_edit_moves_the_cuts_first_zone_far_away() {
+        use crate::scd2::host::CutEdit;
+        let square = [[-1000, -1000], [-1000, 1000], [1000, 1000], [1000, -1000]];
+        let zone = |cam_from, cam_to| crate::state::Zone {
+            cam_from,
+            cam_to,
+            corners: square,
+        };
+        let mut room = RoomState {
+            zones: vec![zone(2, 2), zone(2, 6), zone(6, 6), zone(6, 2)],
+            current_cut: 6,
+            ..RoomState::default()
+        };
+        assert_eq!(room.in_cut_view(0, 0), Some(true));
+        let corners = crate::game::hikidashi2::FAR_VIEW_QUAD;
+        apply_re2_cut_edit(&mut room, CutEdit::ViewQuad { cut: 6, corners });
+        assert_eq!(room.zones[2].corners, corners);
+        for index in [0, 1, 3] {
+            assert_eq!(room.zones[index].corners, square, "zone {index}");
+        }
+        assert_eq!(room.in_cut_view(0, 0), Some(false));
+        assert_eq!(room.in_cut_view(-32650, -32650), Some(true));
+        room.current_cut = 2;
+        assert_eq!(
+            room.in_cut_view(0, 0),
+            Some(true),
+            "the cut before the open is whole"
+        );
+    }
+
+    /// A drawer's open queues its view-quad edit after the tick's scripts,
+    /// and the `fg_stop` it raises holds the next ticks' scripts pass, so
+    /// the edits apply at the tick's head too, after the hook, as the
+    /// original's direct write is in place for the next `Cut_check`.
+    #[test]
+    fn re2_room_edits_apply_at_the_ticks_head_while_fg_stop_holds_the_scripts() {
+        use crate::scd2::host::CutEdit;
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        let zone = |cam_to| crate::state::Zone {
+            cam_to,
+            cam_from: 1,
+            ..Default::default()
+        };
+        session.loaded.room.zones = vec![zone(1), zone(2)];
+        session.loaded.room.zone_gates = vec![
+            crate::state::ZoneGate {
+                flag: 0,
+                floor: 0xFF
+            };
+            2
+        ];
+        *session.game.re2.fg_stop_mut() |= 0x0200_0000;
+        session.game.re2.pending_cuts.push(CutEdit::SetGate {
+            cut: 1,
+            index: 1,
+            value: 1,
+        });
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        assert!(session.game.re2.pending_cuts.is_empty());
+        assert_eq!(session.loaded.room.zone_gates[1].flag, 1, "the gate is set");
+        assert_eq!(session.loaded.room.zone_gates[0].flag, 0);
+    }
+
+    /// `Joint_trans2`'s cull of the player: in the shown cut's view quad it
+    /// draws, out of it or with `Be_flg`'s `0x80000` it doesn't, and a cut
+    /// with no zone draws it.
+    #[test]
+    fn re2_the_player_is_culled_out_of_the_shown_cuts_view_quad() {
+        let quad = [[-1000, -1000], [-1000, 1000], [1000, 1000], [1000, -1000]];
+        let room = RoomState {
+            zones: vec![crate::state::Zone {
+                cam_from: 2,
+                cam_to: 2,
+                corners: quad,
+            }],
+            current_cut: 2,
+            ..RoomState::default()
+        };
+        assert!(!re2_player_out_of_view(&room, [0, 0, 0], 0), "inside");
+        assert!(re2_player_out_of_view(&room, [5000, 0, 0], 0), "outside");
+        assert!(
+            re2_player_out_of_view(&room, [0, 0, 0], 0x80000),
+            "not drawn"
+        );
+        let no_zone = RoomState {
+            current_cut: 3,
+            ..room.clone()
+        };
+        assert!(
+            !re2_player_out_of_view(&no_zone, [5000, 0, 0], 0),
+            "no zone"
+        );
     }
 
     #[test]

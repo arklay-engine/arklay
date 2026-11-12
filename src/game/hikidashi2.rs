@@ -6,15 +6,27 @@
 //! item, and the cut of its close-up. Room 201's desk, 10E's, 113's and
 //! 115's are the game's four.
 //!
-//! The lock is modelled: the press's checks, the messages "The desk is
-//! locked.", the question, "There's nothing more." and "You have used the
-//! item.", and the hook's cases 1 and 2, which ask and unlock. The open (the
-//! close-up's cut, its thirty-tick count, the view-quad clobber and the
-//! hand-off to the get-item window, cases 4 and 5) is not: a press on an
-//! unlocked drawer only notes that it isn't modelled.
+//! The lock: the press's checks, the messages "The desk is locked.", the
+//! question, "There's nothing more." and "You have used the item.", and the
+//! hook's cases 1 and 2, which ask and unlock.
+//!
+//! The open, on a press on an unlocked drawer with its item still there:
+//!
+//! | tick | what the original does |
+//! |---|---|
+//! | the press | sound `0x28`; the item's model `Be_flg \|= 0x11` (drawn, and past the zone cull); `Cut_change` to the close-up; `fg_stop` saved (`0x991FC4`) and `\|= 0xFF000000`; `fg_status \|= 0x40`; the close-up's view quad (`Ccut_searc`'s entry, `0x988634`) overwritten with a far square; the hook's state `0x23` |
+//! | the next 30 | the state counts down to 5 (the default case), the close-up on screen and the player and the enemies outside its quad |
+//! | case 5 | the hand-off: the item's area becomes the get-item window's (`0x9888D0`, the item in `0x98504F`); `fg_status` `&~0x40 \| 0x8000`, game mode 1 with `St` mode 2; `Cut_change` and `scd_var_cut` back to the cut before the open (`0x98EB1C`), with no load, so the close-up stays up until the window takes the cut; `fg_status \|= 0x100`, which holds `Cut_check`; then the state goes down to 4 |
+//! | case 4 | once the window has let `0x8000` go: `fg_status &= ~0x100`, the model's `Be_flg &= ~0x11`, the hook cleared |
+//!
+//! The window is `Sce_Item`'s (`GameState::open_re2_item_get`), with no
+//! difficulty's count. Its `Status` start (the sixth tick) zeroes `fg_stop`
+//! and its return puts the saved word back. The view quad stays far for the
+//! rest of the stay, until the room's next load reads its RDT again; the
+//! window's return loads the cut before the open, whose quad is whole.
 
-use super::{GameState, STATE_BYTE_SELECTED_ITEM};
-use crate::scd2::host::{DOOR_USED_KEY, door_message};
+use super::{GameState, RoomAction, STATE_BYTE_SELECTED_ITEM};
+use crate::scd2::host::{CutEdit, DOOR_USED_KEY, door_message};
 
 /// `Snd_se_on`'s ids from the room's bank: the drawer's open and the key's
 /// turn.
@@ -34,8 +46,32 @@ const SMALL_KEY: u8 = 0x1F;
 const LOCKPICK: u8 = 0x30;
 
 /// The hook's state for the open's close-up (`0x23`, counted down to 5).
-#[allow(dead_code)]
-const OPEN_COUNT: u8 = 0x23;
+pub const OPEN_COUNT: u8 = 0x23;
+/// The hook's state that hands the item to the get-item window.
+pub const HAND_OFF: u8 = 5;
+/// The hook's state that waits for the window, then closes the drawer.
+pub const CLOSE: u8 = 4;
+
+/// `fg_status`'s bits the drawer drives: the close-up's hold (`0x40`) and
+/// `Cut_check`'s (`0x100`). Case 5's `0x8000` is the get-item window's,
+/// which arklay models as the window itself (`GameState::re2_item_get`), as
+/// it does for `Sce_Item`'s.
+const STATUS_HOLD: u32 = 0x40;
+const STATUS_NO_CUT_CHECK: u32 = 0x100;
+
+/// The item model's `Be_flg` bits the open raises and the close drops:
+/// drawn (1), and drawn whatever the zones (`0x10`).
+pub const MODEL_SHOWN: u32 = 0x11;
+
+/// What the open writes over the close-up's view quad (`+4` to `+0x12`,
+/// `0x8044` and `0x80A8` as signed words): a square far off every map, so
+/// `Hit_ck_point4` finds nobody inside it.
+pub const FAR_VIEW_QUAD: [[i16; 2]; 4] = [
+    [-32700, -32700],
+    [-32700, -32600],
+    [-32600, -32600],
+    [-32600, -32700],
+];
 
 /// `Hikidashi_entrance`'s routine while it is the hook (`pG + 0x82B0`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -49,12 +85,36 @@ pub struct Hikidashi {
     pub area: [u8; 6],
     /// The small key's slot that the question found (`0x689CA4`).
     pub key_slot: Option<usize>,
+    /// The open's: the item's area (the get-item window's from case 5).
+    pub item: Option<RoomAction>,
+    /// The cut on screen before the open (`0x98EB1C`), which case 5 goes
+    /// back to.
+    pub old_cut: u8,
+    /// `fg_stop` before the open (`0x991FC4`).
+    pub saved_stop: u32,
 }
 
 impl Hikidashi {
     /// The drawer's `fg_key` bit.
     fn key(&self) -> u8 {
         self.area[0]
+    }
+
+    /// The close-up's cut (the area's third word).
+    fn close_up(&self) -> u8 {
+        self.area[4]
+    }
+
+    /// Whether an open is under way: the close-up's count, or the wait for
+    /// the window (the lock's states are 1 and 2).
+    pub fn opening(&self) -> bool {
+        self.active && self.state >= CLOSE
+    }
+
+    /// `fg_status & 0x100`, from case 5 to case 4: `Game_loop` skips
+    /// `Cut_check`.
+    pub fn holds_cut(&self) -> bool {
+        self.active && self.state == CLOSE
     }
 }
 
@@ -110,7 +170,7 @@ impl GameState {
             return;
         }
         if self.re2_key_set(area[0]) {
-            crate::scd2::host::log_unmodelled("Sce_Hikidashi open");
+            self.open_re2_drawer(area, item);
             return;
         }
         if self.re2_key_slot(SMALL_KEY).is_none() && self.re2.personal_item[0] != LOCKPICK {
@@ -121,8 +181,100 @@ impl GameState {
             active: true,
             state: 1,
             area,
-            key_slot: None,
+            ..Hikidashi::default()
         };
+    }
+
+    /// `Sce_Hikidashi`'s open: the press on an unlocked drawer whose item is
+    /// still there.
+    fn open_re2_drawer(&mut self, area: [u8; 6], item: RoomAction) {
+        self.push_re2_sound(SOUND_OPEN);
+        self.set_re2_model_shown(item, true);
+        let mut hook = Hikidashi {
+            active: true,
+            state: OPEN_COUNT,
+            area,
+            item: Some(item),
+            old_cut: self.camera.current_cut as u8,
+            ..Hikidashi::default()
+        };
+        // `Cut_change`: the live cut only; `Swap_Cbuff` loads it at the
+        // tick's end, as the cut differs from `scd_var_cut`.
+        self.set_camera_cut(usize::from(hook.close_up()));
+        let fg_stop = self.re2.fg_stop_mut();
+        hook.saved_stop = *fg_stop;
+        *fg_stop |= 0xFF00_0000;
+        *self.re2_fg_status() |= STATUS_HOLD;
+        self.re2.pending_cuts.push(CutEdit::ViewQuad {
+            cut: hook.close_up(),
+            corners: FAR_VIEW_QUAD,
+        });
+        self.re2_hikidashi = hook;
+    }
+
+    /// The item model's `Be_flg |= 0x11` (or `&= ~0x11`): the item's area's
+    /// model byte (`+0x12`).
+    fn set_re2_model_shown(&mut self, item: RoomAction, shown: bool) {
+        if let Some(record) = self.objects.record_mut(usize::from(item.params[3])) {
+            if shown {
+                record.be_flg |= MODEL_SHOWN;
+            } else {
+                record.be_flg &= !MODEL_SHOWN;
+            }
+            // The draw reads `Be_flg` bit 0, which arklay keeps as the
+            // record's active flag.
+            record.sync_active_from_be_flg();
+        }
+    }
+
+    /// Case 5: the item goes to the get-item window, and the cut back to the
+    /// one before the open, with no load.
+    fn hand_off_re2_drawer(&mut self, hook: &Hikidashi) {
+        if let Some(item) = hook.item {
+            self.open_re2_item_get(item);
+        }
+        let status = self.re2_fg_status();
+        *status = (*status & !STATUS_HOLD) | STATUS_NO_CUT_CHECK;
+        // The original reads `WORD_0098eb1c`, the `scd_var_cut` that the
+        // last `Bg_loadPC` replaced. The press's gate
+        // (`BYTE_00989eea == scd_var_cut`: no cut change waiting) makes that
+        // the cut on screen at the press, the one the open saved.
+        let cut = hook.old_cut;
+        self.set_camera_cut(usize::from(cut));
+        self.re2.var_cut = Some(cut);
+        self.re2.cut_no_load = true;
+    }
+
+    /// `fg_status`, the status bank's word.
+    fn re2_fg_status(&mut self) -> &mut u32 {
+        &mut self.re2.banks[usize::from(crate::scd2::host::STATUS_BANK)][0]
+    }
+
+    /// The get-item window's `Status` start (its sixth tick) zeroes
+    /// `fg_stop`, and its return puts back the word saved before the open.
+    /// The return's tick is a `Game_loop` frame (game modes 3 and 5) whose
+    /// hook sees `fg_status`'s `0x8000` gone, so case 4 closes the drawer on
+    /// it.
+    pub fn re2_drawer_window_stop(&mut self, start: bool) {
+        if !self.re2_hikidashi.holds_cut() {
+            return;
+        }
+        let saved = self.re2_hikidashi.saved_stop;
+        let fg_stop = self.re2.fg_stop_mut();
+        *fg_stop = if start { 0 } else { *fg_stop | saved };
+        if !start {
+            self.close_re2_drawer();
+        }
+    }
+
+    /// Case 4's close: `fg_status &= ~0x100`, the model's `Be_flg &=
+    /// ~0x11`, and the hook cleared.
+    fn close_re2_drawer(&mut self) {
+        *self.re2_fg_status() &= !STATUS_NO_CUT_CHECK;
+        if let Some(item) = self.re2_hikidashi.item {
+            self.set_re2_model_shown(item, false);
+        }
+        self.re2_hikidashi = Hikidashi::default();
     }
 
     /// One tick of `Hikidashi_entrance`, at the head of the play body:
@@ -166,7 +318,19 @@ impl GameState {
                 }
                 hook = Hikidashi::default();
             }
-            // Cases 4 and 5 are the open's.
+            CLOSE => {
+                // `fg_status & 0x8000`: the window is still up.
+                if self.re2_item_get.is_some() {
+                    return;
+                }
+                self.close_re2_drawer();
+                return;
+            }
+            HAND_OFF => {
+                self.hand_off_re2_drawer(&hook);
+                hook.state -= 1;
+            }
+            // The close-up's count.
             _ => hook.state -= 1,
         }
         self.re2_hikidashi = hook;
@@ -404,13 +568,148 @@ mod tests {
         assert_eq!(game.item_count(SMALL_KEY), 1);
     }
 
-    #[test]
-    fn an_unlocked_drawer_is_not_opened_yet() {
+    /// An unlocked drawer with its item still there, room 201's desk shown
+    /// from cut 2, the item's model 4 in the room.
+    fn unlocked() -> GameState {
         let mut game = game();
         game.re2.door_locks[0] = 0x4000_0000;
+        game.set_camera_cut(2);
+        game.re2.shown_cut = 2;
+        game.objects
+            .records
+            .resize(5, crate::objects::ObjectRecord::default());
+        game.objects.records[4].be_flg = 0x8000_0000;
+        game
+    }
+
+    fn fg_status(game: &GameState) -> u32 {
+        game.re2.banks[usize::from(crate::scd2::host::STATUS_BANK)][0]
+    }
+
+    /// `Sce_Hikidashi`'s open: sound 0x28, the item model's `Be_flg |=
+    /// 0x11`, the close-up's cut 6 (live only), `fg_stop |= 0xFF000000`
+    /// with the word saved, `fg_status |= 0x40`, the close-up's view quad
+    /// overwritten with `0x8044`/`0x80A8`, and the hook at `0x23`.
+    #[test]
+    fn an_unlocked_drawer_opens_on_its_close_up() {
+        let mut game = unlocked();
+        *game.re2.fg_stop_mut() = 0x10;
         press(&mut game);
+        let sounds: Vec<_> = game.re2.sounds.iter().map(|sound| sound.id).collect();
+        assert_eq!(
+            sounds,
+            vec![crate::se2::SoundId::decode(SOUND_OPEN).unwrap()]
+        );
+        assert_eq!(SOUND_OPEN, 0x0228_0000);
+        assert_eq!(game.objects.records[4].be_flg, 0x8000_0011);
+        assert!(game.objects.records[4].active(), "the item's model draws");
+        assert_eq!(game.camera.current_cut, 6);
+        assert_eq!(game.re2.var_cut, None, "`Cut_change` leaves `scd_var_cut`");
+        assert_eq!(*game.re2.fg_stop_mut(), 0xFF00_0010);
+        assert_eq!(fg_status(&game), 0x40);
+        assert_eq!(
+            game.re2.pending_cuts,
+            vec![CutEdit::ViewQuad {
+                cut: 6,
+                corners: FAR_VIEW_QUAD
+            }]
+        );
+        assert_eq!(
+            FAR_VIEW_QUAD.map(|corner| corner.map(|word| word as u16)),
+            [
+                [0x8044, 0x8044],
+                [0x8044, 0x80A8],
+                [0x80A8, 0x80A8],
+                [0x80A8, 0x8044]
+            ]
+        );
+        let hook = game.re2_hikidashi;
+        assert_eq!(
+            (hook.active, hook.state, hook.old_cut, hook.saved_stop),
+            (true, 0x23, 2, 0x10)
+        );
+        assert!(hook.opening() && hook.state > HAND_OFF && !hook.holds_cut());
+        assert!(game.re2_item_get.is_none());
+    }
+
+    /// The default case counts the close-up down from `0x23`: thirty ticks
+    /// to 5, the hand-off on the thirty-first. Case 5 gives the item's area
+    /// to the get-item window, puts the cut before the open back (live and
+    /// `scd_var_cut`, with no load), swaps `fg_status`'s `0x40` for
+    /// `0x8100` (the `0x8000` is the window here) and goes down to 4. Case
+    /// 4 waits for the window, then drops `0x100` and the model's `0x11`.
+    #[test]
+    fn the_close_up_counts_thirty_ticks_then_hands_the_item_to_the_window() {
+        let mut game = unlocked();
+        press(&mut game);
+        for _ in 0..30 {
+            game.tick_re2_hikidashi();
+        }
+        assert_eq!(game.re2_hikidashi.state, HAND_OFF);
+        assert!(game.re2_item_get.is_none());
+        assert_eq!(game.camera.current_cut, 6);
+        game.tick_re2_hikidashi();
+        let get = game.re2_item_get.expect("the window opens on case 5");
+        assert_eq!(get.action, game.room_actions[9].unwrap());
+        assert_eq!(game.re2_hikidashi.state, CLOSE);
+        assert_eq!(game.camera.current_cut, 2);
+        assert_eq!(game.re2.var_cut, Some(2));
+        assert!(game.re2.cut_no_load, "the close-up stays up");
+        // The original's `0x8100`: the window's `0x8000` is the window.
+        assert_eq!(fg_status(&game), 0x100);
+        let hook = game.re2_hikidashi;
+        assert!(hook.opening() && hook.state == CLOSE && hook.holds_cut());
+        // The window is up: case 4 waits.
+        game.tick_re2_hikidashi();
+        assert_eq!(game.re2_hikidashi.state, CLOSE);
+        assert_eq!(game.objects.records[4].be_flg & MODEL_SHOWN, MODEL_SHOWN);
+        game.re2_item_get = None;
+        game.tick_re2_hikidashi();
         assert!(!game.re2_hook_set());
-        assert_eq!(message(&game), None);
+        assert_eq!(fg_status(&game), 0);
+        assert_eq!(game.objects.records[4].be_flg, 0x8000_0000);
+        assert!(!game.objects.records[4].active());
+    }
+
+    /// The window's `Status` start zeroes `fg_stop`, and its return puts the
+    /// word saved before the open back and closes the drawer (the
+    /// `hikidashi_open_201` recording's 1111); neither touches it outside a
+    /// drawer's hand-off.
+    #[test]
+    fn the_window_zeroes_fg_stop_and_its_return_puts_the_saved_word_back() {
+        let mut game = unlocked();
+        *game.re2.fg_stop_mut() = 0x10;
+        press(&mut game);
+        game.re2_drawer_window_stop(true);
+        assert_eq!(
+            *game.re2.fg_stop_mut(),
+            0xFF00_0010,
+            "not before the hand-off"
+        );
+        for _ in 0..31 {
+            game.tick_re2_hikidashi();
+        }
+        game.re2_drawer_window_stop(true);
+        assert_eq!(*game.re2.fg_stop_mut(), 0);
+        game.re2_drawer_window_stop(false);
+        assert_eq!(*game.re2.fg_stop_mut(), 0x10);
+        // The return's frame is case 4's: the drawer closes on it.
+        assert!(!game.re2_hook_set());
+        assert_eq!(game.objects.records[4].be_flg, 0x8000_0000);
+    }
+
+    /// The press is refused while an open is under way (the hook is set),
+    /// and a drawer whose item is gone says "There's nothing more." instead.
+    #[test]
+    fn an_open_drawer_takes_no_second_press() {
+        let mut game = unlocked();
+        press(&mut game);
+        game.re2.sounds.clear();
+        game.re2.pending_cuts.clear();
+        press(&mut game);
+        assert!(game.re2.sounds.is_empty());
+        assert!(game.re2.pending_cuts.is_empty());
+        assert_eq!(game.re2_hikidashi.state, OPEN_COUNT);
     }
 
     #[test]

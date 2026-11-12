@@ -9029,6 +9029,9 @@ impl GameState {
             // `Status`'s start, on the window's sixth tick: `Pad_rep_set(0xF01C,
             // 0x60A)`, for every pick-up.
             self.pad_repeat.set(pad_repeat::STATUS_SETTING);
+            // Game mode's step 5 zeroes `fg_stop` there, which a drawer's
+            // open raised.
+            self.re2_drawer_window_stop(true);
         }
         let next = |phase| (phase, 0);
         let (phase, ticks) = match get.phase {
@@ -9121,6 +9124,8 @@ impl GameState {
                 // whose `Pl_init` hands the player back standing, from a
                 // crouch too (`0x4C000D`).
                 crate::player2::pl_init(&mut self.re2.player);
+                // The return puts back the `fg_stop` a drawer's open saved.
+                self.re2_drawer_window_stop(false);
                 // Mode 5 leaves `fg_stop` at `0xEF000000`, input bit
                 // included, for the next tick's `Pad_set`, as a door does: a
                 // direction held through the close moves the player a tick
