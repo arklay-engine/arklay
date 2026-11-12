@@ -292,6 +292,10 @@ pub enum CutEdit {
     /// `cut_replace`: swap two camera ids across every zone's `cam_from` and
     /// `cam_to`.
     Replace { a: u8, b: u8 },
+    /// `Sce_Hikidashi`'s open: the corners of camera `cut`'s view quad
+    /// (the first zone `Ccut_searc` finds for it), which the original writes
+    /// through `Cut_change`'s pointer (`0x988634`).
+    ViewQuad { cut: u8, corners: [[i16; 2]; 4] },
     /// `light_*_set`: light `index` of camera `cut`'s record.
     Light {
         cut: u8,

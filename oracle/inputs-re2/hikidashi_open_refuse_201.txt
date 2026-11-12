@@ -1,0 +1,22 @@
+# Room 201's drawer (oracle/re2.md, "The drawer"): unlock it with the small key as hikidashi_unlock_201 does, press again (the drawer opens), answer No to the get-item window's question, press again (it opens again), take the item and close "taken".
+0
+420 action
+423
+520 confirm
+523
+620 confirm
+623
+720 confirm
+723
+820 action
+823
+960 right
+963
+980 confirm
+983
+1100 action
+1103
+1240 confirm
+1243
+1380 confirm
+1383
