@@ -7811,8 +7811,10 @@ impl GameState {
         if !self.room_item_present(item_action.room_items_flag) {
             return false;
         }
-        // The original's masked character test turns id 3 (Rebecca) away.
-        if self.id.player_flag & 3 == 3 {
+        // The original's masked character test turns id 3 (Rebecca) away:
+        // the player's id, which the room load's model switch sets
+        // (`apply_model_switch`), as `try_door`'s 0x40 test reads it.
+        if self.entities[0].id & 3 == 3 {
             self.show_message(MESSAGE_DESK_CHARACTER, 0xFF);
             self.record_interaction(
                 slot,
@@ -15792,19 +15794,20 @@ mod tests {
     fn desk_turns_away_the_masked_character_id() {
         let mut state = desk_game();
         state.add_item(ITEM_DESK_KEY, 1);
-        state.id.player_flag = 3;
+        // Rebecca's turn: the player id is 3 whatever the RDT digit says.
+        state.entities[0].id = 3;
         assert!(state.check_desk(0));
         assert_eq!(state.message.id, Some(MESSAGE_DESK_CHARACTER));
         assert_eq!(state.desk.state, 0);
         state.cancel_message();
 
-        // The two PC characters are not turned away: with the key the prompt
-        // arms for both.
-        for player_flag in [0, 1] {
-            state.id.player_flag = player_flag;
+        // The two PC characters are not turned away, nor the wardrobe's
+        // outfit ids (8 and 9 mask to them): with the key the prompt arms.
+        for id in [0, 1, 8, 9] {
+            state.entities[0].id = id;
             state.message = MessageWindow::default();
-            assert!(state.check_desk(0), "player {player_flag}");
-            assert_eq!(state.desk.state, 1, "player {player_flag}");
+            assert!(state.check_desk(0), "player {id}");
+            assert_eq!(state.desk.state, 1, "player {id}");
             assert_eq!(state.desk.action, Some(0));
             state.desk = DeskFlow::default();
         }
