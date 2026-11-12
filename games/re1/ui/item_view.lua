@@ -15,8 +15,8 @@
 --             `M.begin_exit` once its prompt resolves and the screen exits
 --             when the closing animation has run. A pick-up reads no input.
 --   discard   with `pickup`, the depleted key's discard prompt (the
---             original's mode 6): the resting model keeps turning while the
---             prompt is up.
+--             original's mode 6) or a script's put-down prompt (mode 1): the
+--             resting model keeps turning while the prompt is up.
 --
 -- Without `pickup` the screen is the examine viewer. Each update publishes
 -- `event` (0 none, 1 show the item's description, 2 show global message
