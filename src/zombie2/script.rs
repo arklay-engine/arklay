@@ -3063,13 +3063,17 @@ mod tests {
     /// picks, from the table's second half when `Damage_no` isn't a multiple
     /// of 3; then the hit's own two at `HIT_PART`.
     #[test]
-    fn g3_bleeds_three_times_at_drawn_parts_from_the_beretta() {
-        let effects = |damage_no: u8| -> Vec<Vec<i64>> {
+    fn g3_sprays_blood_at_drawn_parts_by_weapon() {
+        // `(effects, draws)` of one hit by `weapon`, `+0x223` at `gate`
+        // before the tick counts it down.
+        let hit = |weapon: u8, damage_no: u8, gate: u8| -> (Vec<Vec<i64>>, i64) {
             let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
             let script = include_str!("../../games/re2/enemy/33/enemy.lua");
             lua.globals().set("DAMAGE_NO", damage_no).unwrap();
+            lua.globals().set("WEAPON", weapon).unwrap();
+            lua.globals().set("GATE", gate).unwrap();
             lua.load(format!(
-                "local w = {{ r = {{ [0] = 2, 0x13, 0, 0 }}, vars = {{}}, draws = {{ 1, 6, 3 }}, drawn = 0 }}
+                "local w = {{ r = {{ [0] = 2, WEAPON, 0, 0 }}, vars = {{ [3] = GATE }}, draws = {{ 1, 6, 3 }}, drawn = 0 }}
                  E = {{}}
                  local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
                  function e:routine(i) return w.r[i] end
@@ -3084,12 +3088,17 @@ mod tests {
                      E[#E + 1] = {{ kind, row, size, part, x }}
                  end
                  {script}
-                 update(e)"
+                 update(e)
+                 DRAWN = w.drawn"
             ))
             .exec()
             .unwrap();
-            lua.globals().get("E").unwrap()
+            (
+                lua.globals().get("E").unwrap(),
+                lua.globals().get("DRAWN").unwrap(),
+            )
         };
+        let effects = |damage_no: u8| hit(0x13, damage_no, 0).0;
         // Draws 1, 6 and 3 pick parts 25, 17 and 27; with the second half
         // (indices 5, 10 and 7, masked by 7), 4, 26 and 11.
         let parts = |calls: &[Vec<i64>]| -> Vec<i64> { calls[..3].iter().map(|c| c[3]).collect() };
@@ -3097,6 +3106,14 @@ mod tests {
         assert_eq!(parts(&first), [25, 17, 27]);
         assert_eq!(first[0], [5, 4, 0x1800, 25, 300]);
         assert_eq!(parts(&effects(1)), [4, 26, 11]);
+        // 0xa and 0x10 bleed six times; the hit's own two bloods follow.
+        assert_eq!(hit(0xA, 0, 0).1, 6);
+        assert_eq!(hit(0xA, 0, 0).0.len(), 6 + 2);
+        assert_eq!(hit(0x10, 0, 1).0.len(), 6 + 2);
+        // 0x10 with `+0x223` still counting (2, down to 1 this tick) bleeds
+        // nothing and draws nothing.
+        assert_eq!(hit(0x10, 0, 2).1, 0);
+        assert_eq!(hit(0x10, 0, 2).0.len(), 2);
     }
 
     #[test]
