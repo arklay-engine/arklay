@@ -23,3 +23,29 @@ ignore = [
   [493, 583, "hk"], [1019, 1109, "hk"], [1436, 1526, "hk"], [2418, 2510, "hk"],
 ]
 record = "--warp 10B:-19749:0:-25562:31:3 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 84 --give 0:2:6 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:2"
+
+# Rooms 200, 201, 204, 203, 204, 205 and 207: from the ladder's foot along the hall's upper floor and down the west stairs to door 1, through 201, 204's Spade door into 203 for its 15 rounds (the box pushed to the shelf), back to 204 and north to door 1, the corridor of bodies (4:48) out of reach, and 207's door 4 with the Diamond Key's first use, into 209.
+[[run]]
+name = "leon_a_200_209"
+room = "200"
+setup_script = "leon_a_200_209.lua"
+input = "leon_a_200_209.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 5150
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,om0,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 5149]
+# 1.04 measured: the doors' frames count only in the whole run's mean (205's door 2 shows black a frame apart, 31 on 4189)
+frame_max_mean = 1.15
+# each room on its own, from its hand back to its door's press: 200, 201, 204, 203 (the box and the rounds), 204 again, 205, 207 (the Diamond Key's message), and 209 from its hand back
+frame_windows = [[360, 574, 0.4], [943, 1050, 0.4], [1393, 1687, 0.4], [2030, 2871, 0.6], [3214, 3305, 0.3], [3648, 4187, 0.5], [4530, 4776, 0.25], [5114, 5149, 2.2]]
+expect = "match"
+ignore = [
+  # the warp's head on its first ticks, and the doors' own ticks: 200's door 1, 201's door 1, 204's door 2, 203's door 0, 204's door 1, 205's door 2 and 207's door 4
+  [344, 350, "pneck"], [575, "rng"], [575, "rseed"], [1051, "rng"], [1051, "rseed"], [1688, "rng"], [1688, "rseed"], [2872, "rng"], [2872, "rseed"], [3306, "rng"], [3306, "rseed"], [4188, "rng"], [4188, "rseed"], [4777, "rng"], [4777, "rseed"],
+  # the drawers' trace (`hk`) over each load
+  [610, 700, "hk"], [1086, 1176, "hk"], [1723, 1813, "hk"], [2907, 2997, "hk"], [3341, 3431, "hk"], [4223, 4313, "hk"], [4812, 4902, "hk"],
+  # the objects: `om0` is compared for 203's box, in 203 only, as `route_200_spade` compares 10C's: elsewhere the original's slot holds what an earlier room left in it
+  [344, 1813, "om0"], [2907, 5149, "om0"],
+]
+record = "--warp 200:-13956:-1800:6456:1024:5 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 84 --give 0:2:6 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:2"

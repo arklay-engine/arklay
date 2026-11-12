@@ -1,0 +1,231 @@
+# Leon A from the foot of 110's ladder in 200 through 201 and 204 to 203's rounds, and back through 204, 205 and 207 to 209, the Diamond Key at 207's door 4 (#644 Part 2) (oracle/re2.md, "Leon A to the Heart Key")
+# 200 from the ladder's foot: west along the upper floor, down the west stairs and on to door 1
+345 right
+367 up run
+410 up run left
+411 up run
+412 up run left
+432 up run
+444 up run right
+445 up run
+489 up run left
+490 up run
+527 up run left
+528 up run
+533 up run left
+534 up run right
+555
+556 left
+560 up
+572
+# door 1 into 201: 201 loads on 610
+575 action
+577
+# 201: west and south to door 1
+945 up run right
+951 up run
+955 up run right
+956 up run
+959 up run right
+960 up run
+961 up run left
+967 up run
+974 up run left
+975 up run
+1003 up run left
+1023 up run
+1031
+1032 right
+1036 up
+1048
+# door 1 into 204: 204 loads on 1086
+1051 action
+1053
+# 204: west along the corridor and up the branch to door 2 (the licker is dead), whose Spade Key lock is open (fg_key bit 5)
+1395 up run
+1409 up run left
+1410 up run
+1425 up run right
+1426 up run
+1462 up run right
+1463 up run
+1469 up run right
+1470 up run
+1471 up run left
+1472 up run
+1480 up run left
+1481 up run
+1489 up run right
+1548 up run
+1550 up run left
+1604 up run
+1609 up run right
+1610 up run
+1611 up run right
+1619 up run
+1620 up run right
+1622 up run
+1623 up run right
+1625 up run
+1626 up run right
+1627 up run
+1628 up run right
+1629 up run
+1647 up run left
+1648 up run
+1650 up run right
+1651 up run
+1652 up run right
+1653
+1654 right
+1673 up
+1685
+# door 2 into 203: 203 loads on 1723
+1688 action
+1690
+# 203: north round the shelf, into the box's +z face and push it south to the shelf, then round its west side to the 15 handgun rounds (a press every 12 ticks: the question's text, Yes, then the close)
+2032 up run left
+2057 up run
+2061 up run left
+2062 up run
+2064 up run right
+2094 up run
+2096 up run right
+2097 up run
+2102 up run right
+2112 right
+2118 up
+2378
+2380 up run right
+2416 up run
+2417 up run left
+2478 right
+2505 up
+2509
+2510 action
+2512
+2522 action
+2524
+2534 action
+2536
+2546 action
+2548
+2558 action
+2560
+2570 action
+2572
+2582 action
+2584
+2594 action
+2596
+2662 action
+2664
+2668 up run right
+2714 up run
+2716 up run left
+2717 up run right
+2723 up run
+2736 up run right
+2737 up run
+2747 up run right
+2748 up run left
+2776 up run
+2788 up run left
+2789 up run
+2792 up run left
+2804 up run
+2825 up run right
+2826 up run
+2828 up run right
+2829 up run
+2831 up run right
+2832 up run
+2833 up run right
+2834 up run
+2835 up run right
+2836 up run
+2838 up run right
+2839 up run
+2840 up run right
+2841 up run
+2843 up run right
+2844 up run
+2845 up run right
+2846 up run
+2847 up run right
+2848 up run
+2850 up run right
+2851 up run
+2853 up run right
+2854 up run
+2855
+2856 right
+2862 up
+2869
+# back to door 0 into 204: 204 loads on 2907
+2872 action
+2874
+# 204 from 203's door: north up the corridor to door 1
+3216 right
+3233 up run
+3234 up run right
+3235 up run
+3246 up run left
+3247 up run
+3254 up run right
+3255 up run
+3271 up run right
+3272 up run
+3273 up run right
+3276 up run
+3290
+3291 left
+3296 up
+3303
+# door 1 into 205: 205 loads on 3341
+3306 action
+3308
+# 205 with 4:48 set: north up the west corridor, east along the north one and south and east to door 2, out of the bodies' reach
+3650 up run
+3680 up run left
+3681 up run
+3697 up run right
+3698 up run
+3730 up run right
+3731 up run
+3741 up run right
+3803 up run left
+3847 up run
+3922 up run right
+3923 up run
+3985 up run right
+3986 up run
+4064 up run right
+4065 up run
+4082 up run right
+4095 up run
+4098 up run right
+4105 up run
+4133 up run left
+4160 up run right
+4170
+4171 left
+4173 up
+4185
+# door 2 into 207: 207 loads on 4223
+4188 action
+4190
+# 207: south along the west wall to door 4
+4532 up run right
+4589 up run left
+4623 up run
+4636 right
+# door 4: the Diamond Key's used-key message, the close (a use off), and the press that opens it: 209 loads on 4812
+4657 action
+4659
+4717 action
+4719
+4777 action
+4779
+4837 up
+5115
