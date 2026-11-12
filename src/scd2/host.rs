@@ -1521,7 +1521,35 @@ impl Re2State {
                 }
                 falling
             });
+            zombie.redraw(character.work.hidden_parts);
         }
+    }
+
+    /// The parts' `Workm` that this tick's `Joint_trans2` leaves, for the
+    /// effects on a part ([`crate::esp2::Effects::anchors`]): the player's as
+    /// its move and the pushes left them, an enemy's as its run and
+    /// `Parts_down` did. A part that has none keeps the last matrix its slots
+    /// took, as the original's pointer does.
+    fn anchor_matrices(&self) -> Vec<(crate::esp2::Anchor, crate::player2::Matrix)> {
+        use crate::esp2::Body;
+        self.effects
+            .anchors_in_use()
+            .into_iter()
+            .filter_map(|anchor| {
+                let part = usize::from(anchor.part);
+                let matrix = match anchor.body {
+                    Body::Player => self.player.parts.get(part).copied().flatten(),
+                    Body::Enemy(slot) => self
+                        .characters
+                        .0
+                        .get(usize::from(slot))
+                        .and_then(Option::as_deref)
+                        .and_then(|character| character.zombie.as_ref())
+                        .and_then(|zombie| zombie.drawn.get(part).copied().flatten()),
+                }?;
+                Some((anchor, matrix))
+            })
+            .collect()
     }
 
     /// `Esp_move`: the effects move, only the kinds that move while stopped
@@ -1543,6 +1571,7 @@ impl Re2State {
             ..Default::default()
         });
         self.effects.bodies = crate::character2::targets_of(self);
+        self.effects.anchors = self.anchor_matrices();
         if self.flag(STOP_BANK, STOP_EFFECTS) {
             self.effects.tick_stopped(&mut self.rnd, sca);
         } else {

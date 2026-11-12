@@ -472,10 +472,19 @@ pub fn shoot_camera(game: &mut GameState, cut: Option<&crate::state::Cut>) {
 /// A move's `Esp_call`s, in the order it made them.
 fn esp_calls(game: &mut GameState, calls: Vec<player2::EffectCall>) {
     for call in calls {
-        let index = game
-            .re2
-            .effects
-            .call(call.kind, call.row, call.size, call.dir, call.at, false);
+        let effects = &mut game.re2.effects;
+        let index = match call.on {
+            Some((part, matrix, point)) => {
+                let anchor = crate::esp2::Anchor {
+                    body: crate::esp2::Body::Player,
+                    part,
+                };
+                effects.call_on_part(
+                    call.kind, call.row, call.size, call.dir, anchor, matrix, point,
+                )
+            }
+            None => effects.call(call.kind, call.row, call.size, call.dir, call.at, false),
+        };
         if let (Some(index), Some(motion)) = (index, call.motion) {
             game.re2.effects.launch(index, motion);
         }

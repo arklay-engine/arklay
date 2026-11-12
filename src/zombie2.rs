@@ -585,9 +585,6 @@ pub struct Zombie {
     /// each slot with the body's position at the call, since `Snd_se_3D` pans
     /// it there and then, before `Oba_ck_em` and `Sca_ck_em` push the body.
     pub sounds: Vec<(u8, [i32; 3])>,
-    /// What a burnt zombie's `FUN_00456780` lit: the effect, the part it's on
-    /// and where on that part.
-    flames: Vec<(usize, u8, [i32; 3])>,
     burnt: bool,
     /// How far `Em10_Scenario` has taken a burnt body's colours down.
     charred: u8,
@@ -601,8 +598,11 @@ pub struct Zombie {
     /// The parts' own rotations on that pose (`+0x68`).
     pub rotations: Vec<[i16; 3]>,
     /// The parts' `Workm` as this tick's move left them for the draw, which
-    /// the player's bolts read on the next tick (kept while the bowgun is held).
+    /// the player's bolts read on the next tick, and the effects on a part
+    /// (`Esp_call`'s matrix) on this tick's `Esp_move` and the next tick's calls.
     pub(crate) drawn: Vec<Option<player2::Matrix>>,
+    /// The pose `drawn` is composed from, for the parts down that move after it.
+    pose_tree: player2::PoseTree,
     /// `pDamage_work`'s `+0x99`: the part the last bolt stuck in.
     pub bolt_part: u8,
     /// Its `+0x9a`: the way it flew.
@@ -615,6 +615,18 @@ impl Zombie {
         self.thrown
             .iter()
             .any(|thrown| thrown.part == part && thrown.takes_below())
+    }
+
+    /// [`Self::drawn`] again, from the run's pose and where the parts off the
+    /// skeleton are now: `Joint_trans2` draws the parts down after
+    /// `Parts_down` has moved them.
+    /// A part that isn't drawn (`hidden`) keeps the `Workm` it had.
+    pub(crate) fn redraw(&mut self, hidden: u32) {
+        let pulled = self.pulled.iter().map(|arm| (arm.part, arm.world));
+        let thrown = self.thrown.iter().map(|part| (part.part, part.matrix));
+        let head = self.head.iter().map(|head| (HEAD_PART, head.matrix));
+        let detached: Vec<_> = pulled.chain(thrown).chain(head).collect();
+        self.drawn = self.pose_tree.compose_drawn(&detached, hidden, &self.drawn);
     }
 
     /// The parts no longer on the skeleton, and where they are.
@@ -1031,9 +1043,17 @@ pub fn em_zombie(
     } else {
         em.run();
     }
-    if em.world.weapon == crate::bow2::BOW {
-        em.z.drawn = em.mover.posed_parts();
-    }
+    // As it's drawn: `Cdir_x` and `Cdir_z` are the tilt a crow turns.
+    let [pitch, roll] = em.z.tilt.map(|axis| axis as i16);
+    let turn = player2::rot_matrix([pitch, em.mover.player.angle as i16, roll]);
+    let turn = em
+        .mover
+        .work
+        .super_matrix
+        .map_or(turn, |surface| player2::mul_matrix(&surface, &turn));
+    em.z.pose_tree = em.mover.pose_tree(turn);
+    let hidden = em.mover.work.hidden_parts;
+    em.z.redraw(hidden);
 }
 
 impl Em<'_, '_, '_> {
@@ -1506,13 +1526,6 @@ impl Em<'_, '_, '_> {
         self.oba_ck_em();
         self.sca_ck_em();
         self.mover.place_neck();
-        for (effect, part, point) in self.z.flames.clone() {
-            if let Some(at) = self.mover.part_point(usize::from(part), point) {
-                self.world
-                    .effects
-                    .move_to(effect, at.map(|axis| axis as i16));
-            }
-        }
     }
 
     /// `update` of the id's script. A pack without one leaves the zombie
@@ -1532,15 +1545,23 @@ impl Em<'_, '_, '_> {
         self.work().kind
     }
 
-    /// `Esp_call` at a point on a part.
+    /// `Esp_call` on a part's `Workm`, which is where the last draw left it:
+    /// the slot keeps the part, and follows it if its blocks say so.
     fn effect(&mut self, kind: u8, row: u8, size: u16, dir: i16, part: usize, point: [i32; 3]) {
-        let at = self
-            .mover
-            .part_point(part, point)
-            .unwrap_or(self.mover.player.pos);
+        let drawn = self.z.drawn.get(part).copied().flatten();
+        let Some(matrix) = drawn.or_else(|| self.mover.part_matrix(part)) else {
+            let at = self.mover.player.pos.map(|axis| axis as i16);
+            self.world.effects.call(kind, row, size, dir, at, false);
+            return;
+        };
+        let anchor = crate::esp2::Anchor {
+            body: crate::esp2::Body::Enemy(self.world.slot as u8),
+            part: part as u8,
+        };
+        let point = point.map(|axis| axis as i16);
         self.world
             .effects
-            .call(kind, row, size, dir, at.map(|axis| axis as i16), false);
+            .call_on_part(kind, row, size, dir, anchor, matrix, point);
     }
 
     fn angle(&self) -> i16 {
@@ -1644,12 +1665,10 @@ impl Em<'_, '_, '_> {
         }
     }
 
-    /// `FUN_00456780`'s fire on a part: what the walk then carries with it.
+    /// `FUN_00456780`'s fire on a part's `Workm`, which it follows.
     fn light_flame(&mut self, size: u16, part: u8, point: [i32; 3]) {
         let dir = self.mover.player.angle as i16;
-        if let Some(effect) = self.world.effects.call(5, 3, size, dir, [0; 3], false) {
-            self.z.flames.push((effect, part, point));
-        }
+        self.effect(5, 3, size, dir, usize::from(part), point);
     }
 
     /// `FUN_00453510`'s arm coming off in the shove.

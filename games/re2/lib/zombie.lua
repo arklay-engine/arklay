@@ -198,8 +198,7 @@ local function effect(e, kind, row, size, dir, part, x, y, z)
     e:effect(kind, row, size, i16(dir), part, x, y, z)
 end
 
--- `Esp_call` of the blood's type. The original's follows the part's matrix; here
--- it stays where it starts.
+-- `Esp_call` of the blood's type, on the part's matrix, which it follows.
 local function blood(e, row, size, dir, part, x, y, z)
     e:effect(0, row, size, i16(dir), part, x, y, z)
 end
@@ -373,7 +372,9 @@ local function dm01(e)
             end
             local first = e:rnd()
             local second = e:rnd()
-            blood(e, 0, size, angle(e) + i16((first - second) * 0x10), 0, 0, 0, 0)
+            -- `Em10Dm01`'s vector on part 0 is the speed (`&Spd_x`).
+            local x, y, z = e:speed()
+            blood(e, 0, size, angle(e) + i16((first - second) * 0x10), 0, x, y, z)
         end
         e:set_timer(1, e:timer(1) - 1)
     end
