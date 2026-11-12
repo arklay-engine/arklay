@@ -7397,6 +7397,11 @@ impl GameSession {
     /// the effects moving, every kind of them.
     fn return_re2_room(&mut self, pack: &Pack) {
         self.re2_status_return = Some(1);
+        // Mode 5 leaves `fg_stop` at `0xEF000000`, input bit included, for
+        // the next tick's `Pad_set`, as the get-item window's close and a
+        // door do: a direction held through the close moves the player a
+        // tick later (room 108's status screen on Leon A's route).
+        self.game.re2.door_key_stop = true;
         crate::player2::pl_init(&mut self.game.re2.player);
         self.game.re2.player.init_pose = false;
         self.place_re2_neck(true);
@@ -24100,6 +24105,44 @@ mod tests {
         assert_eq!(held[at - 1].1, 0, "nothing held before");
         assert_eq!(held[at].1, 1, "the load's first held frame");
         assert_eq!(held[at + 1].1, 0);
+    }
+
+    /// Game mode 5 leaves `fg_stop` at `0xEF000000` for the tick after the
+    /// status screen hands the room back, so that tick's `Pad_set` masks a
+    /// direction held through the close and the player moves a tick later,
+    /// as the original does when START closes room 108's status screen on
+    /// Leon A's route (`route_200_diamond`).
+    #[test]
+    fn re2_a_direction_held_through_the_status_close_waits_a_tick() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.open_menu(&pack);
+        session.re2_status_close = Some(0);
+        let up = player::Input {
+            up: true,
+            ..player::Input::default()
+        };
+        let forward = crate::player2::key_word(&up) & !crate::player2::KEYS_IN_A_STOP;
+        assert_ne!(forward, 0);
+        let mut returned = None;
+        for tick in 0..u32::from(RE2_STATUS_CLOSE_TICKS) + 4 {
+            session.tick(&pack, UiInput::default(), up, false).unwrap();
+            if returned.is_none() && session.menu.is_none() {
+                returned = Some(tick);
+                continue;
+            }
+            if let Some(back) = returned {
+                let held = session.game.re2.key & forward != 0;
+                if tick == back + 1 {
+                    assert!(!held, "the first tick after the return masks the pad");
+                } else {
+                    assert!(held, "the next tick reads it");
+                }
+            }
+        }
+        assert!(returned.is_some(), "the close ended");
     }
 
     /// `Psx_main` (0x4C3C70) runs `Pad_set` on the status screen's frames
