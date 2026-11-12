@@ -1,9 +1,10 @@
 //! RE2's shots: `Em_ck`, `hit_scan_ck` and `Weapon_at_ck`.
 //!
 //! The player's routine finds its target here, from a view of the enemy slots
-//! taken before it ran, and leaves a [`Hit`] for `zombie2` to take. The other
-//! weapons aren't ported: `player2` fires only the handguns, magnums and
-//! shotguns.
+//! taken before it ran, and leaves a [`Hit`] for `zombie2` to take. The
+//! instant hits ported are the handguns', the magnums', the shotguns', the
+//! Colt S.A.A.'s and the Beretta's; the launchers' and the bowgun's are their
+//! effects'.
 
 use crate::player2::rotate;
 use crate::sca::square_root0;
@@ -12,6 +13,8 @@ use crate::zombie2::sca_ck_line;
 
 /// What `Sca_ck_line` is asked for in both.
 const LINE_MASK: u16 = 0x80;
+const COLT: u8 = crate::player2::COLT;
+const BERETTA: u8 = crate::player2::BERETTA;
 /// `Type`'s bits for out of reach, and for someone only aimed at if nobody else is.
 const TYPE_UNTARGETED: u16 = 0xC000;
 const TYPE_ON_FLOOR: u16 = 0x2000;
@@ -105,6 +108,7 @@ pub fn em_ck(
 const fn hit_scan_data(weapon: u8) -> (i32, i32, [i32; 2]) {
     match weapon {
         5 | 6 => (-200, 300, [-2427, 0]),
+        COLT => (-400, 30, [-1850, -1890]),
         7 => (-500, 150, [-1813, 0]),
         8 => (-500, 200, [-1813, 0]),
         _ => (-200, 300, [-2427, -2120]),
@@ -115,6 +119,8 @@ const fn hit_scan_data(weapon: u8) -> (i32, i32, [i32; 2]) {
 /// low, 1 level and 2 up. `y` is the hand's.
 pub fn hit_scan_ck(id: u8, weapon: u8, pos_y: i32, parts0_y: i32, y: i32) -> usize {
     let (low, high, shoulders) = hit_scan_data(weapon);
+    // Character 0xE's own shoulder with the Colt (`DAT_0053a3c4`) is -1850,
+    // its even row's.
     let shoulder = ((shoulders[usize::from(id & 1)] + pos_y) * parts0_y) >> 12;
     if y < low + shoulder {
         2
@@ -254,7 +260,8 @@ const CUSTOM_SHOTGUN: [Record; 3] = [
 /// What a weapon's shot is: its rectangles, and what it does to a zombie.
 fn shot_records(weapon: u8) -> Option<&'static [Record; 3]> {
     let records = match weapon {
-        2..=4 => &HANDGUN,
+        // The Colt's and the Beretta's entries point at the handguns' records.
+        2..=4 | COLT | BERETTA => &HANDGUN,
         5 | 6 => &MAGNUM,
         7 => &SHOTGUN,
         8 => &CUSTOM_SHOTGUN,
@@ -265,6 +272,14 @@ fn shot_records(weapon: u8) -> Option<&'static [Record; 3]> {
 
 /// `Wp_dmg_tbl`'s entry for the target.
 fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
+    // The Colt's and the Beretta's rows are the handgun's but for `Em_30`'s
+    // Colt (`0x5369d0`'s fourteenth). `Em_3B`'s Beretta row has the lower
+    // heights, but arklay has no `Em_3B`.
+    let weapon = match (id, weapon) {
+        (G1_ID, COLT) => return Some(&G1_COLT),
+        (_, COLT | BERETTA) => 2,
+        _ => weapon,
+    };
     let table = match id {
         LICKER_ID => &LICKER_DAMAGE,
         LICKER_24_ID => &LICKER_24_DAMAGE,
@@ -456,6 +471,13 @@ const G1_DAMAGE: [Damage; 7] = [
         heights: SHOTGUN_HEIGHTS,
     },
 ];
+
+/// `Em_30`'s Colt row, harder than its handgun's.
+const G1_COLT: Damage = Damage {
+    damage: 0x00F0_4011,
+    stun: 0x0285_0A14,
+    heights: HANDGUN_HEIGHTS,
+};
 
 const G2_ID: u8 = crate::zombie2::G2_ID;
 const G2_HANDGUN: [i32; 6] = [-5000, -2000, -6000, 2000, -500, 3000];
@@ -1498,6 +1520,43 @@ mod tests {
         );
     }
 
+    /// `Wp_dmg_tbl`: every body takes the handgun's row from the Colt and
+    /// the Beretta, but `Em_30`, whose Colt row does 17 where its handgun's
+    /// does 16.
+    #[test]
+    fn the_colt_and_the_beretta_take_the_handguns_rows() {
+        for id in [
+            0x10,
+            LICKER_ID,
+            LICKER_24_ID,
+            DOG_ID,
+            CROW_ID,
+            MRX_ID,
+            G2_ID,
+            SPIDER_ID,
+        ] {
+            let handgun = damage_table(id, 2).unwrap();
+            for weapon in [COLT, BERETTA] {
+                let row = damage_table(id, weapon).unwrap();
+                assert_eq!(
+                    (row.damage, row.stun, row.heights),
+                    (handgun.damage, handgun.stun, handgun.heights),
+                    "{id:#x} {weapon:#x}"
+                );
+            }
+        }
+        let colt = damage_table(G1_ID, COLT).unwrap();
+        assert_eq!((colt.damage, colt.stun), (0x00F0_4011, 0x0285_0A14));
+        assert_eq!(colt.damage & 0x3FF, 17);
+        assert_eq!(damage_table(G1_ID, BERETTA).unwrap().damage, 0x00E0_3C10);
+        for weapon in [COLT, BERETTA] {
+            let records = shot_records(weapon).unwrap();
+            for (record, handgun) in records.iter().zip(&HANDGUN) {
+                assert_eq!((record.reach, record.rects), (handgun.reach, handgun.rects));
+            }
+        }
+    }
+
     #[test]
     fn g1_has_rows_of_its_own() {
         let damage = |weapon| damage_table(G1_ID, weapon).unwrap().damage & 0x3FF;
@@ -1619,6 +1678,14 @@ mod tests {
         assert_eq!(hit_scan_ck(0, 2, 0, 0x1000, -2700), 2);
         assert_eq!(hit_scan_ck(0, 2, 0, 0x1000, -2000), 0);
         assert_eq!(hit_scan_ck(1, 2, 0, 0x1000, -2120), 1);
+        // The Colt's level is a lower and narrower band: 400 under Leon's
+        // shoulder of -1850 to 30 over it, and Claire's at -1890.
+        assert_eq!(hit_scan_ck(0, COLT, 0, 0x1000, -2250), 1);
+        assert_eq!(hit_scan_ck(0, COLT, 0, 0x1000, -2251), 2);
+        assert_eq!(hit_scan_ck(0, COLT, 0, 0x1000, -1820), 1);
+        assert_eq!(hit_scan_ck(0, COLT, 0, 0x1000, -1819), 0);
+        assert_eq!(hit_scan_ck(1, COLT, 0, 0x1000, -1859), 0);
+        assert_eq!(hit_scan_ck(0, BERETTA, 0, 0x1000, -2000), 0);
         // The shotguns aim from their own height.
         assert_eq!(hit_scan_ck(0, 7, 0, 0x1000, -1813), 1);
         assert_eq!(hit_scan_ck(0, 7, 0, 0x1000, -2400), 2);

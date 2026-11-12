@@ -1735,6 +1735,8 @@ local HURTS <const> = {
     [6] = flinch_hard_by_kind,
     [7] = flinch_hard_by_kind,
     [8] = flinch_hard_by_kind,
+    [0xD] = flinch_by_kind, -- `0x5286c8`: the Colt's, the handguns'.
+    [0x13] = flinch_by_kind, -- `0x5286e0`: the Beretta's, the table's last.
 }
 
 -- `FUN_00471110`: `Routine_0` 2.
@@ -2025,6 +2027,8 @@ local DIES <const> = {
     [6] = die_blown,
     [7] = die_blown,
     [8] = die_blown,
+    [0xD] = die_plain, -- `0x528758`: the Colt's, the handguns'.
+    [0x13] = die_plain, -- `0x528770`: the Beretta's, the table's last.
 }
 
 -- `BYTE_005287f8`: the body's bob in the water, by `Timer1 >> 3 & 7`.

@@ -624,6 +624,17 @@ impl Effects {
         Some(first)
     }
 
+    /// `Esp_call3D`'s turn (`+0x44`), on a slot `Esp_call` just made and the
+    /// slots that die with it.
+    pub fn turn(&mut self, first: usize, rotation: [i16; 3]) {
+        for (index, slot) in self.slots.iter_mut().enumerate() {
+            if index == first || slot.flags != 0 && first != 0 && usize::from(slot.parent) == first
+            {
+                slot.rotation = rotation;
+            }
+        }
+    }
+
     /// What `FUN_004d6150` writes over a grenade's first block once
     /// `Esp_call` made it: its `+8` and `+0xc` to `+0x10`.
     pub fn launch(&mut self, index: usize, launch: Launch) {
@@ -1121,6 +1132,26 @@ impl Effects {
                 self.slots[index].anim = 0x54;
                 self.slots[index].update = 0;
                 self.call(0x14, 0, slot.size, 0, slot.pos, true);
+            }
+            // `Esp_56`: the Colt's reload, six spent cases (kind 2, row 6 at
+            // its size) from where it was started, each turned a random step
+            // of 400: one on its count's first tick, two on the second and the
+            // fourth, and one on the seventh, when it goes.
+            0x56 => {
+                let calls = match slot.start {
+                    0 | 6 => 1,
+                    1 | 3 => 2,
+                    _ => 0,
+                };
+                for _ in 0..calls {
+                    let turn = (u32::from(self.rnd()) % 0x1E * 400) as i16;
+                    self.call_from(&slot, 2, 6, slot.size, turn.wrapping_add(slot.dir));
+                }
+                if slot.start == 6 {
+                    self.slots[index].kill();
+                }
+                let this = &mut self.slots[index];
+                this.start = this.start.wrapping_add(1);
             }
             // `Esp_54`: and is gone, leaving a second burst.
             0x54 => {
@@ -2551,6 +2582,36 @@ mod tests {
         let before = rnd;
         effects.tick(&mut rnd, None);
         assert_eq!(rnd, before);
+        assert!(!effects.slots[slot].live());
+    }
+
+    /// `Esp_56`, the Colt's reload: a draw for each of its six cases, one
+    /// on its first tick, two on the second and the fourth, one on the
+    /// seventh, and then it's gone.
+    #[test]
+    fn the_colts_reload_throws_six_cases_over_seven_ticks_and_goes() {
+        let mut block = [0u8; BLOCK_LEN];
+        block[0] = 0x56;
+        let mut effects = Effects::default();
+        // Its cases' row 6 isn't in this bank, so they draw and start nothing.
+        effects.enter_room(bank_of(2, &[block]));
+        let slot = effects.call(2, 0, 0x800, 0, [0; 3], false).unwrap();
+        let mut rnd = crate::zombie2::Rnd::default();
+        let mut draws = Vec::new();
+        for _ in 0..7 {
+            assert!(effects.slots[slot].live());
+            let before = rnd;
+            effects.tick(&mut rnd, None);
+            let mut count = 0;
+            let mut expected = before;
+            while expected != rnd {
+                expected.draw();
+                count += 1;
+                assert!(count < 10, "too many draws");
+            }
+            draws.push(count);
+        }
+        assert_eq!(draws, [1, 2, 0, 2, 0, 0, 1]);
         assert!(!effects.slots[slot].live());
     }
 

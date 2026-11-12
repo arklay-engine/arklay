@@ -488,6 +488,9 @@ fn esp_calls(game: &mut GameState, calls: Vec<player2::EffectCall>) {
         if let (Some(index), Some(motion)) = (index, call.motion) {
             game.re2.effects.launch(index, motion);
         }
+        if let (Some(index), Some(turn)) = (index, call.turn) {
+            game.re2.effects.turn(index, turn);
+        }
     }
 }
 

@@ -2764,11 +2764,18 @@ mod tests {
     /// `At_sce_no` 1, its moan still waiting: `(At_obj_no, At_sce_no,
     /// Routine_2, the clip, the draws)` after the hit's first tick.
     fn handgun_hit(kind: u16) -> (i64, i64, i64, i64, i64) {
+        weapon_hit(kind, 2, 1)
+    }
+
+    /// [`handgun_hit`] with another weapon (`Routine_1`) and `At_sce_no`.
+    fn weapon_hit(kind: u16, weapon: u8, at_sce_no: u8) -> (i64, i64, i64, i64, i64) {
         let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
         let library = include_str!("../../games/re2/lib/zombie.lua");
         lua.globals().set("KIND", kind).unwrap();
+        lua.globals().set("WEAPON", weapon).unwrap();
+        lua.globals().set("AT_SCE", at_sce_no).unwrap();
         lua.load(format!(
-            "local w = {{ r = {{ [0] = 2, 2, 0, 0 }}, vars = {{ [1] = 5, [3] = 0, [4] = 1 }},
+            "local w = {{ r = {{ [0] = 2, WEAPON, 0, 0 }}, vars = {{ [1] = 5, [3] = 0, [4] = AT_SCE }},
                  clip = -1, drawn = 0 }}
              local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
              function e:routine(i) return w.r[i] end
@@ -3035,6 +3042,19 @@ mod tests {
         };
         assert_eq!(walk(0), [1, 3]);
         assert_ne!(walk(0x80)[1], 3);
+    }
+
+    /// `Em10Dm00` takes the Colt's 20 from `At_sce_no` (`0x5271c7 + 0xD`),
+    /// where a handgun takes 15. The Beretta's rows in `Em10_Damage`'s table
+    /// are past its end: they are the crawler's `FUN_00457d10`, whose clip is
+    /// 6 and which leaves `At_sce_no` alone.
+    #[test]
+    fn the_colt_staggers_a_zombie_more_and_the_beretta_reads_the_crawlers_row() {
+        assert_eq!(weapon_hit(6, 2, 0x30).0, 0, "not staggered");
+        assert_eq!(weapon_hit(6, 2, 0x30).1, 0x30 - 15);
+        assert_eq!(weapon_hit(6, crate::player2::COLT, 0x30).1, 0x30 - 20);
+        let beretta = weapon_hit(6, crate::player2::BERETTA, 0x30);
+        assert_eq!((beretta.1, beretta.3), (0x30, 6));
     }
 
     #[test]

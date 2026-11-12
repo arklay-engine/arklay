@@ -1163,12 +1163,18 @@ local STUN_LOW <const> = { [0] = 10, 10, 10, 10, 10, 20, 10, 20, 40, 20, 40, 40,
 
 -- `DWORD_0052a77c`: what each weapon's hit adds. The magnums start the
 -- spurt; the others' (9 to 0xb, 0xe, 0x10 and 0x11) aren't ported, and
--- 4, 0xf and 0x12's blood draws its `Rnd` only.
+-- 4, 0xf and 0x12's blood draws its `Rnd` only, as does the Beretta's
+-- (`0x52a7c8`, `FUN_004995c0`: three of kind 2, which `blood` doesn't
+-- model). The Colt's (`0x52a7b0`) is `nullsub_1`.
 local function weapon_blood(e, weapon)
     if weapon == 5 or weapon == 6 then
         e:set_var(SPURT, 1)
     elseif weapon == 4 or weapon == 0xF or weapon == 0x12 then
         e:rnd()
+    elseif weapon == 0x13 then
+        for _ = 1, 3 do
+            e:rnd()
+        end
     end
 end
 
