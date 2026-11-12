@@ -1015,7 +1015,8 @@ end
 -- `FUN_00487bf0`: the death of weapons 0x11 and 0x13. `FUN_004878f0` blows
 -- its head or body apart as `die_blown` always does, with the second row of
 -- blood, then the vines get 0x46 and one side's parts (0x14 to 0x19 or 0xe to
--- 0x13) go too; the parts the model lacks aren't thrown.
+-- 0x13) go too. Both ivies' models (`EM02E`, `EM039`) have 26 parts, so every
+-- part named here, and the blood's at the side's first, is there.
 local function die_torn(e)
     if e:routine(2) ~= 0 then
         dying(e)

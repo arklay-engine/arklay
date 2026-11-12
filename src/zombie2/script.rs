@@ -3057,6 +3057,48 @@ mod tests {
         assert_eq!((beretta.1, beretta.3), (0x30, 6));
     }
 
+    /// G3's hit (`FUN_00499260`) with the Beretta: `DWORD_0052a77c`'s
+    /// `FUN_004995c0`, three bloods of kind 2 (kind 5, row 4, 0x1800, 300
+    /// along the part), each at the part of `BYTE_0052a5dc` its `Rnd`
+    /// picks, from the table's second half when `Damage_no` isn't a multiple
+    /// of 3; then the hit's own two at `HIT_PART`.
+    #[test]
+    fn g3_bleeds_three_times_at_drawn_parts_from_the_beretta() {
+        let effects = |damage_no: u8| -> Vec<Vec<i64>> {
+            let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+            let script = include_str!("../../games/re2/enemy/33/enemy.lua");
+            lua.globals().set("DAMAGE_NO", damage_no).unwrap();
+            lua.load(format!(
+                "local w = {{ r = {{ [0] = 2, 0x13, 0, 0 }}, vars = {{}}, draws = {{ 1, 6, 3 }}, drawn = 0 }}
+                 E = {{}}
+                 local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+                 function e:routine(i) return w.r[i] end
+                 function e:set_routine(i, v) w.r[i] = v end
+                 function e:routines(a, b, c, d) w.r = {{ [0] = a, b, c, d }} end
+                 function e:var(i) return w.vars[i] or 0 end
+                 function e:set_var(i, v) w.vars[i] = v end
+                 function e:rnd() w.drawn = w.drawn + 1 return w.draws[w.drawn] or 0 end
+                 function e:damage_no() return DAMAGE_NO end
+                 function e:easy() return false end
+                 function e:effect(kind, row, size, dir, part, x, y, z)
+                     E[#E + 1] = {{ kind, row, size, part, x }}
+                 end
+                 {script}
+                 update(e)"
+            ))
+            .exec()
+            .unwrap();
+            lua.globals().get("E").unwrap()
+        };
+        // Draws 1, 6 and 3 pick parts 25, 17 and 27; with the second half
+        // (indices 5, 10 and 7, masked by 7), 4, 26 and 11.
+        let parts = |calls: &[Vec<i64>]| -> Vec<i64> { calls[..3].iter().map(|c| c[3]).collect() };
+        let first = effects(0);
+        assert_eq!(parts(&first), [25, 17, 27]);
+        assert_eq!(first[0], [5, 4, 0x1800, 25, 300]);
+        assert_eq!(parts(&effects(1)), [4, 26, 11]);
+    }
+
     #[test]
     fn a_zombie_without_0x40_draws_its_stagger_counter_again() {
         // The walk's clip 0, its stagger, one draw: 7 & 0xF + 0x10.

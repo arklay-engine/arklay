@@ -1156,6 +1156,7 @@ end
 -- the blood of weapons 4, 0xf and 0x12, by `Damage_no` and a `Rnd`.
 local HIT_KIND <const> = { [0] = 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 0, 0 }
 local HIT_PART <const> = { [0] = 0x18, 1, 3 }
+local SPRAY_PARTS <const> = { [0] = 23, 25, 26, 27, 2, 4, 17, 11 }
 -- `BYTE_0052a7cb` and `BYTE_0052a7df`: what each weapon takes from
 -- `AT_EM_FLG`, which flinches it at 0, at 600 life or more and below.
 local STUN_HIGH <const> = { [0] = 0, 10, 10, 10, 10, 20, 10, 10, 10, 10, 40, 10, 10, 10, 20, 4, 4, 40, 4, 10 }
@@ -1163,17 +1164,19 @@ local STUN_LOW <const> = { [0] = 10, 10, 10, 10, 10, 20, 10, 20, 40, 20, 40, 40,
 
 -- `DWORD_0052a77c`: what each weapon's hit adds. The magnums start the
 -- spurt; the others' (9 to 0xb, 0xe, 0x10 and 0x11) aren't ported, and
--- 4, 0xf and 0x12's blood draws its `Rnd` only, as does the Beretta's
--- (`0x52a7c8`, `FUN_004995c0`: three of kind 2, which `blood` doesn't
--- model). The Colt's (`0x52a7b0`) is `nullsub_1`.
+-- 4, 0xf and 0x12's blood draws its `Rnd` only. The Beretta's
+-- (`0x52a7c8`, `FUN_004995c0`) is three bloods of kind 2, each at a part of
+-- `BYTE_0052a5dc` that a `Rnd` picks, from its second half when `Damage_no`
+-- isn't a multiple of 3. The Colt's (`0x52a7b0`) is `nullsub_1`.
 local function weapon_blood(e, weapon)
     if weapon == 5 or weapon == 6 then
         e:set_var(SPURT, 1)
     elseif weapon == 4 or weapon == 0xF or weapon == 0x12 then
         e:rnd()
     elseif weapon == 0x13 then
+        local half = e:damage_no() % 3 ~= 0 and 4 or 0
         for _ = 1, 3 do
-            e:rnd()
+            blood(e, SPRAY_PARTS[(e:rnd() + half) & 7], 2)
         end
     end
 end
