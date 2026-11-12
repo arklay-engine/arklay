@@ -620,10 +620,12 @@ function Re2EnemyApi:tilt() end
 function Re2EnemyApi:set_tilt(pitch, roll) end
 
 ---How far a hit has the body leaning: the extra roll `Em10Dm00` gives the
----first part and takes from the second. The engine clears it before a
----zombie's `update`.
+---first part and takes from the second, with `yaw` a turn about y in the
+---same `RotMatrix` (the second part takes its transpose). The engine clears
+---both before a zombie's `update`.
 ---@param lean integer Truncated to 16 bits.
-function Re2EnemyApi:set_lean(lean) end
+---@param yaw? integer Truncated to 16 bits; 0 if left out.
+function Re2EnemyApi:set_lean(lean, yaw) end
 
 -- # Geometry
 

@@ -212,10 +212,9 @@ frame_max_mean = 0.85
 frame_windows = [[14625, 15491, 0.6], [15858, 15982, 0.3], [16323, 17906, 0.55], [18247, 18684, 0.25], [19025, 20234, 1.25], [20575, 21299, 0.55]]
 expect = "match"
 record = "--start claire"
-# zombie 1's angle on the first tick, then the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md):
+# the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md):
 # route_claire_a_card's ten, then 200, 201, 204, 205 and 207's
 ignore = [
-    [0, "zm1"],
     [356, "rng"],
     [356, "rseed"],
     [2627, "rng"],

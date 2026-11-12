@@ -17,8 +17,6 @@ frame_max_mean = 0.8
 # measured 0.74 up to the computer, 0.01 for room 200's computer from its start to the hand back (#502, #552) and 0.18 for the hall after it
 frame_windows = [[0, 13952, 0.85], [13953, 14624, 0.1], [14625, 14799, 0.3]]
 ignore = [
-    # zombie 1's angle on the first tick (docs/internals/deviations/re2.md, "Zombies")
-    [0, "zm1"],
     # the doors' own ticks (oracle/re2.md)
     [356, "rng"],
     [356, "rseed"],

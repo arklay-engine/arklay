@@ -2618,6 +2618,7 @@ impl GameSession {
         }
         game.sync_entity_from_player(&player_state);
         let mut session = Self::from_loaded(pack, loaded, game, player_state, save_dir, options)?;
+        session.push_re2_start_out_of_walls();
         // A pack's own start room with no recorded start position: the player
         // enters like a `--room` boot.
         if start_pos.is_some() {
@@ -2626,6 +2627,32 @@ impl GameSession {
             session.place_room_entry(pack, id);
         }
         Ok(session)
+    }
+
+    /// RE 2's new game settles before its first tick: `Game_loop`'s passes
+    /// while the load holds the enemies still run `Player_move` and
+    /// `Sca_ck_em`, so the start position's collision push lands first, and
+    /// the zombies' first tick sees the pushed player (room 100's start is in
+    /// the wall, 332 units short of where the push leaves it).
+    fn push_re2_start_out_of_walls(&mut self) {
+        if !self.game.is_re2_room {
+            return;
+        }
+        let Some(sca) = self.loaded.room.sca.as_ref() else {
+            return;
+        };
+        let pos = self.player.pos;
+        let resolved = crate::sca::resolve_on_floor(
+            sca,
+            crate::sca::PLAYER_MASK,
+            pos,
+            pos,
+            self.player.radius,
+            self.game.re2.player.floor,
+        );
+        self.player.pos = resolved.pos;
+        self.player.collision_mirror = [resolved.pos[0], resolved.pos[2]];
+        self.game.sync_entity_from_player(&self.player);
     }
 
     /// A new game as `id.player_flag` that boots straight into `id` instead
@@ -23985,6 +24012,40 @@ mod tests {
             .unwrap();
         assert!(session.menu.is_none(), "the close ended");
         assert!(session.game.re2_items.is_none());
+    }
+
+    /// A new game's start in a wall is pushed out before the first tick, as
+    /// `Game_loop`'s held passes run `Sca_ck_em` (room 100's start, 332 units
+    /// in, is where the zombies first see the player at the pushed place), and
+    /// the entity follows. Not in RE 1's rooms.
+    #[test]
+    fn re2_start_is_pushed_out_of_a_wall_before_the_first_tick() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.loaded.room.sca = Some(crate::state::Sca {
+            records: vec![crate::state::ScaRect {
+                x: 1000,
+                z: 1000,
+                width: 1000,
+                depth: 1000,
+                id: crate::sca::PLAYER_MASK,
+                kind: 0xF,
+                floor: 1,
+            }],
+            ..Default::default()
+        });
+        let start = [1100, 0, 1500];
+        session.player.pos = start;
+        session.push_re2_start_out_of_walls();
+        assert_eq!(session.player.pos, start, "not an RE 2 room");
+        session.game.is_re2_room = true;
+        session.push_re2_start_out_of_walls();
+        let pushed = session.player.pos;
+        assert!(pushed[0] < 1000, "out of the box's -x face: {pushed:?}");
+        assert_eq!([pushed[1], pushed[2]], [0, 1500]);
+        assert_eq!(session.player.collision_mirror, [pushed[0], pushed[2]]);
+        assert_eq!(session.game.entities[0].pos, pushed);
     }
 
     /// `Sca_ck_em` takes no walls while the player stands on an object.

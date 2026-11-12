@@ -60,7 +60,8 @@ pub struct Licker {
     pub(super) part1: [i32; 3],
     /// `Workm.t` of the part `Kage_work_set` follows.
     part2: [i32; 3],
-    /// `Workm.t` of part 9, where `Em22_before` starts its drool.
+    /// `Workm.t` of part 9 as the last draw left it, where `Em22_before`
+    /// starts its drool.
     drool: [i16; 3],
     /// Every part's `Workm` from the last `Joint_trans2`, which a part the
     /// script hides keeps.
@@ -87,6 +88,19 @@ pub fn before(
 }
 
 impl Licker {
+    /// `Em22_before` runs after the move and before this tick's
+    /// `Joint_trans2`: its drool is on part 9 as the last draw left it, or
+    /// the body before it has been drawn.
+    fn latch_drool(&mut self, pos: [i32; 3]) {
+        self.drool = self
+            .parts
+            .get(9)
+            .copied()
+            .flatten()
+            .map_or(pos, |part| part.t)
+            .map(|axis| axis as i16);
+    }
+
     /// `tongue_move`'s states and shapes, and whether it has just gone in.
     fn step_tongue(&mut self) -> bool {
         let l = self;
@@ -168,6 +182,9 @@ struct Em22<'e, 'a, 'b, 'c> {
 
 impl Em22<'_, '_, '_, '_> {
     fn run(&mut self) {
+        self.l.latch_drool(self.em.mover.player.pos);
+        // `Mot_play2` plays its clips through `Joint_move2` and `J_seq2`.
+        self.em.work().jseq2.get_or_insert_with(Vec::new);
         self.em.root_ck();
         if self.em.world.stopped {
             return;
@@ -318,7 +335,6 @@ impl Em22<'_, '_, '_, '_> {
         self.l.part0 = t(0).unwrap_or(pos);
         self.l.part1 = t(1).unwrap_or(pos);
         self.l.part2 = t(2).unwrap_or(pos);
-        self.l.drool = t(9).unwrap_or(pos).map(|axis| axis as i16);
         self.em.work().neck.position = t(8);
     }
 }
@@ -336,6 +352,23 @@ mod tests {
         // Angle 0 faces +x.
         assert_eq!(licker.shadow_at(0), [1000 + 0xFA, -50, 2000]);
         assert_eq!(licker.shadow_at(0x800), [1000 - 0xFA, -50, 2000]);
+    }
+
+    /// The drool starts on part 9's `Workm.t` from the last draw: in
+    /// `esp_licker24_fight` the tick's own pose put it up to 70 units off
+    /// in a long blend.
+    #[test]
+    fn its_drool_is_on_the_last_draws_ninth_part() {
+        let mut licker = Licker::default();
+        licker.latch_drool([10, 20, 30]);
+        assert_eq!(licker.drool, [10, 20, 30], "not drawn yet: the body");
+        licker.parts = vec![None; 10];
+        licker.parts[9] = Some(player2::Matrix {
+            m: player2::rot_matrix([0; 3]),
+            t: [-11827, -282, -15767],
+        });
+        licker.latch_drool([10, 20, 30]);
+        assert_eq!(licker.drool, [-11827, -282, -15767]);
     }
 
     #[test]

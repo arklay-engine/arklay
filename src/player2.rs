@@ -315,6 +315,69 @@ pub enum Bank {
     Held,
 }
 
+/// `J_seq2`'s part matrices for a step to `target`, with `Hokan` as it is
+/// before the step: `RotMatrix` of the frame's angles, then with no blend left
+/// `NormalMatrix_2`, and in a blend `HMatrix` from the last matrices,
+/// `0xfff - late * Hokan` of the new, then `NormalMatrix_0`. Nothing for a
+/// body that plays its clips through `J_seq`.
+fn jseq2_step(work: &mut Work, target: Option<&crate::model::Keyframe>, late: u16) {
+    let kept = i32::from(late) * i32::from(work.hokan);
+    let blend = work.hokan != 0;
+    let (Some(parts), Some(target)) = (work.jseq2.as_mut(), target) else {
+        return;
+    };
+    let fresh = parts.is_empty();
+    parts.resize(target.rotations.len(), [[0; 3]; 3]);
+    for (part, rotation) in parts.iter_mut().zip(&target.rotations) {
+        // A body with no matrices yet eases from the frame itself.
+        let last = if fresh { rot_matrix(*rotation) } else { *part };
+        *part = jseq2_matrix(last, *rotation, blend.then_some(kept));
+    }
+}
+
+/// One part's `J_seq2` matrix from `last`: `RotMatrix(rotation)` made unit
+/// (`NormalMatrix_2`) with no blend, or with `kept` (`late * Hokan`) left
+/// of `last` (`HMatrix`, each term `>> 12` apart) made unit (`NormalMatrix_0`).
+pub(crate) fn jseq2_matrix(
+    last: [[i16; 3]; 3],
+    rotation: [i16; 3],
+    kept: Option<i32>,
+) -> [[i16; 3]; 3] {
+    let new = rot_matrix(rotation);
+    let Some(kept) = kept else {
+        return normal_matrix(&new, 2);
+    };
+    let weight = 0xfff - kept;
+    let mixed: [[i16; 3]; 3] = std::array::from_fn(|row| {
+        std::array::from_fn(|column| {
+            let old = (i32::from(last[row][column]) * (0x1000 - weight)) >> 12;
+            let new = (i32::from(new[row][column]) * weight) >> 12;
+            (old as i16).wrapping_add(new as i16)
+        })
+    });
+    normal_matrix(&mixed, 1)
+}
+
+/// `NormalMatrix_0` (`0x450BC0`, rows 0 and 1) and `NormalMatrix_2`
+/// (`0x450BF0`, rows 0 and 2): `NormalMatrix` (`0x450B00`) makes each row a
+/// unit vector on its own: scaled by 1/4096, `1 / sqrt` of its squares' sum
+/// (1e-9 for a zero length), times 4096 and that, truncated. The third row is
+/// left as it is.
+pub(crate) fn normal_matrix(m: &[[i16; 3]; 3], second: usize) -> [[i16; 3]; 3] {
+    let mut out = *m;
+    for index in [0, second] {
+        let row = &mut out[index];
+        let [x, y, z] = row.map(|v| f64::from(v) * (1.0 / 4096.0));
+        let mut length = (z * z + y * y + x * x).sqrt();
+        if length == 0.0 {
+            length = 1e-9;
+        }
+        let inverse = 1.0 / length;
+        *row = [x, y, z].map(|v| (v * 4096.0 * inverse) as i32 as i16);
+    }
+    out
+}
+
 /// The player's part of `PLAYER_WORK`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Work {
@@ -432,6 +495,14 @@ pub struct Work {
     /// How far a hit has the body leaning: the extra turn `Em10Dm00` gives the
     /// first part, and takes from the second.
     pub lean: i16,
+    /// The lean's turn about y: `FUN_00457e60`'s first tick leans by the
+    /// vector its `Esp_call` left (`vy` 300), as `RotMatrix` of both.
+    pub lean_yaw: i16,
+    /// `J_seq2`'s part matrices (the licker's `Joint_move2`), when the body
+    /// plays its clips that way: each part's `M` is the last one eased toward
+    /// the frame's `RotMatrix` and made unit again, not the matrix of eased
+    /// angles. `None` for a body that plays them through `J_seq`.
+    pub jseq2: Option<Vec<[[i16; 3]; 3]>>,
     /// `pEnemy_ptr`: the enemy slot the aim turns to.
     pub aim_target: Option<usize>,
     /// `Timer3` of the raise: it has been aimed again already.
@@ -655,7 +726,7 @@ impl Work {
                 })
             })
             .collect();
-        lean(&mut parts, self.lean);
+        lean(&mut parts, self.lean, self.lean_yaw);
         for (joint, part) in local.iter_mut().zip(parts.into_iter().flatten()) {
             joint.r = flip_y(part.m.map(|row| row.map(i32::from)));
         }
@@ -964,6 +1035,8 @@ impl Default for Work {
             joint_offsets: Vec::new(),
             parts0_y: 0x1000,
             lean: 0,
+            lean_yaw: 0,
+            jseq2: None,
             aim_target: None,
             aimed_again: false,
             key_trg: 0,
@@ -2630,16 +2703,19 @@ impl Mover<'_, '_> {
     /// `Rot_neck`: turn the head toward what `Plc_neck` asked for, or back to
     /// its pose.
     /// `Rot_neck_em`: the head turns toward `target`, within its limit, and only
-    /// that way.
-    pub(crate) fn rot_neck_em(&mut self, target: Option<[i32; 3]>) {
+    /// that way. `Neck_Dir_ZY` aims from the neck's `Workm.t` (`+0x5C`) as the
+    /// last draw left it (`drawn`), not from this tick's pose; with no draw yet,
+    /// from the pose.
+    pub(crate) fn rot_neck_em(&mut self, target: Option<[i32; 3]>, drawn: Option<[i32; 3]>) {
         if self.work.neck.flags & 1 != 0 {
             // The head still moves with the body, for another's aim at it.
             self.work.neck.position = self.chain_position(&[0, NECK_JOINT]);
             return;
         }
         let from = self.chain_position(&[0, NECK_JOINT]);
+        let aim_from = drawn.or(from);
         let old = self.work.neck.turn[0];
-        if let Some(turn) = self.rot_joint_em(NECK_JOINT, from, old, target) {
+        if let Some(turn) = self.rot_joint_em(NECK_JOINT, aim_from, old, target) {
             self.work.neck.position = from;
             self.work.neck.turn[0] = turn;
         }
@@ -3030,11 +3106,11 @@ impl Mover<'_, '_> {
                 self.relative(part)
             };
             *local = t.map(|t| Matrix {
-                m: rot_matrix(*rotation),
+                m: self.part_rotation(part, *rotation),
                 t: t.map(i32::from),
             });
         }
-        lean(&mut tree.local, self.work.lean);
+        lean(&mut tree.local, self.work.lean, self.work.lean_yaw);
         tree
     }
 
@@ -3053,7 +3129,7 @@ impl Mover<'_, '_> {
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
         let pose = self.player.anim.pose_keyframe(clips, keyframes)?;
         Some(Matrix {
-            m: rot_matrix(*pose.rotations.get(part)?),
+            m: self.part_rotation(part, *pose.rotations.get(part)?),
             t: self.relative(part)?.map(i32::from),
         })
     }
@@ -3113,7 +3189,7 @@ impl Mover<'_, '_> {
             };
             parts[part] = match (parent, t, pose.rotations.get(part)) {
                 (Some(parent), Some(t), Some(rotation)) => Some(parent.comp(&Matrix {
-                    m: rot_matrix(*rotation),
+                    m: self.part_rotation(part, *rotation),
                     t: t.map(i32::from),
                 })),
                 _ => None,
@@ -3136,7 +3212,7 @@ impl Mover<'_, '_> {
                 self.relative(part)?
             };
             world = world.comp(&Matrix {
-                m: rot_matrix(*pose.rotations.get(part)?),
+                m: self.part_rotation(part, *pose.rotations.get(part)?),
                 t: t.map(i32::from),
             });
         }
@@ -4360,6 +4436,11 @@ impl Mover<'_, '_> {
             Bank::Room => ClipSource::Room,
             Bank::Held => ClipSource::Damage,
         };
+        jseq2_step(
+            self.work,
+            keyframes.get(usize::from(clip.frames[index].keyframe)),
+            late,
+        );
         let anim = &mut self.player.anim;
         anim.clip = usize::from(self.work.move_no);
         anim.frame = count;
@@ -4378,12 +4459,28 @@ impl Mover<'_, '_> {
         ended
     }
 
+    /// A part's `M` before `Joint_trans2` turns it into a `Workm`: `J_seq2`'s
+    /// matrix, or `RotMatrix` of the pose's angles.
+    fn part_rotation(&self, part: usize, rotation: [i16; 3]) -> [[i16; 3]; 3] {
+        self.work
+            .jseq2
+            .as_ref()
+            .and_then(|parts| parts.get(part))
+            .copied()
+            .unwrap_or_else(|| rot_matrix(rotation))
+    }
+
     /// `Joint_move` with `Move_cnt` at or past its clip's end: `pSeq_ptr` reads
     /// on into the clips after it (`frame` of clip `next`), and `J_seq` ends
     /// the clip there, leaving `Move_cnt` 0.
     fn joint_move_past_end(&mut self, next: usize, frame: usize, late: u16) -> bool {
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
         self.work.now_seq = clips[next].frames[frame].flags;
+        jseq2_step(
+            self.work,
+            keyframes.get(usize::from(clips[next].frames[frame].keyframe)),
+            late,
+        );
         let anim = &mut self.player.anim;
         anim.clip = next;
         anim.frame = frame;
@@ -6045,18 +6142,23 @@ fn flip_y(m: [[i32; 3]; 3]) -> [[i32; 3]; 3] {
     })
 }
 
-/// `Em10Dm00`'s lean after `Joint_move`: the first part's `M` turned by
-/// `lean` about z on its own side (`MulMatrix`), the second's by `-lean` on
-/// its parent's (`MulMatrix2`).
-pub(crate) fn lean(local: &mut [Option<Matrix>], lean: i16) {
-    if lean == 0 {
+/// `Em10Dm00`'s and `FUN_00457e60`'s lean after `Joint_move`: `R`, the
+/// `RotMatrix` of `(0, yaw, lean)`, turns the first part's `M` on its own side
+/// (`MulMatrix`) and its transpose the second's on its parent's
+/// (`MulMatrix2`). `Em10Dm00` hands the second `RotMatrix` of `-lean`, which
+/// for a turn about z alone is the same transpose.
+pub(crate) fn lean(local: &mut [Option<Matrix>], lean: i16, yaw: i16) {
+    if lean == 0 && yaw == 0 {
         return;
     }
+    let turn = rot_matrix([0, yaw, lean]);
+    let back: [[i16; 3]; 3] =
+        std::array::from_fn(|row| std::array::from_fn(|column| turn[column][row]));
     if let Some(Some(first)) = local.get_mut(0) {
-        first.m = mul_matrix(&first.m, &rot_matrix([0, 0, lean]));
+        first.m = mul_matrix(&first.m, &turn);
     }
     if let Some(Some(second)) = local.get_mut(1) {
-        second.m = mul_matrix(&rot_matrix([0, 0, lean.wrapping_neg()]), &second.m);
+        second.m = mul_matrix(&back, &second.m);
     }
 }
 
@@ -6988,7 +7090,7 @@ mod tests {
             key_trg: 0,
         };
         let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
-        mover.rot_neck_em(None);
+        mover.rot_neck_em(None, None);
         let before = mover.work.neck.position.expect("a head on the pose");
         // `Oba_ck_em` and `Sca_ck_em` push the body after `Rot_neck_em`.
         mover.player.pos[0] += 18;
@@ -6998,6 +7100,57 @@ mod tests {
             mover.work.neck.position,
             Some([before[0] + 18, before[1], before[2] - 14])
         );
+    }
+
+    /// `Neck_Dir_ZY` aims from the neck's `Workm.t` (`+0x5C`) as the last
+    /// draw left it: a head drawn 600 units off its pose turns as a body
+    /// standing there would, not as the pose would. In `leon_a_106_108` this
+    /// is the crawler's -144 to -135 where the pose gave -158.
+    #[test]
+    fn the_neck_aims_from_where_it_was_last_drawn() {
+        fn turn(pos: [i32; 3], drawn: Option<[i32; 3]>) -> i16 {
+            let mut setup = Setup::new(0);
+            for keyframe in &mut setup.keyframes {
+                keyframe.rotations = vec![[0; 3]; NECK_JOINT + 1];
+            }
+            setup.skeleton.relative = vec![[0; 3]; NECK_JOINT + 1];
+            setup.skeleton.relative[NECK_JOINT] = [0, -700, 0];
+            setup.player.pos = pos;
+            setup.player.angle = 0;
+            let bank = (setup.clips.as_slice(), setup.keyframes.as_slice());
+            let tick = Tick {
+                room: &setup.room,
+                skeleton: &setup.skeleton,
+                morphs: &[],
+                banks: Banks {
+                    pld: bank,
+                    weapon: bank,
+                    room: bank,
+                    held: bank,
+                },
+                input: Input::default(),
+                options: Options::default(),
+                id: 0,
+                life: 200,
+                poisoned: false,
+                stopped: false,
+                weapon: setup.weapon,
+                necks: [None; NECK_WORKS],
+                targets: &[],
+                neck_targets: &[],
+                enemies: 0,
+                pushing: false,
+                objects: &[],
+                key_trg: 0,
+            };
+            let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
+            mover.rot_neck_em(Some([3000, -700, 2000]), drawn);
+            mover.work.neck.turn[0]
+        }
+        let posed = turn([1000, 0, 2000], None);
+        let drawn = turn([1000, 0, 2000], Some([1000, -700, 2600]));
+        assert_ne!(drawn, posed);
+        assert_eq!(drawn, turn([1000, 0, 2600], None));
     }
 
     /// `Pl_init` stands the player on the weapon bank's idle, not the body's:
@@ -8978,7 +9131,7 @@ mod tests {
                 t: [0; 3],
             }),
         ];
-        lean(&mut local, -0x40);
+        lean(&mut local, -0x40, 0);
         assert_eq!(
             local[0].unwrap().m,
             mul_matrix(&first, &rot_matrix([0, 0, -0x40]))
@@ -8991,6 +9144,30 @@ mod tests {
         assert_eq!(local[2].unwrap().m, second, "only the first two parts");
         assert_ne!(local[1].unwrap().m, rot_matrix([0x80, 0, 0]));
         assert_ne!(local[0].unwrap().m, rot_matrix([0x100, 0x200, -0x40]));
+    }
+
+    /// `FUN_00457e60`'s first tick leans by `RotMatrix(0, 300, lean)`, the
+    /// blood's vector left in `local_48`: the first part on its own side, and
+    /// the second by its transpose (`TransposeMatrix`, `MulMatrix2`), which
+    /// isn't `RotMatrix` of the opposite angles once it turns about y too.
+    #[test]
+    fn the_rising_lean_turns_about_y_and_takes_the_transpose_back() {
+        let first = rot_matrix([0x100, 0x200, 0]);
+        let second = rot_matrix([0x80, 0, 0x40]);
+        let part = |m| Some(Matrix { m, t: [0; 3] });
+        let mut local = vec![part(first), part(second)];
+        lean(&mut local, -0x40, 300);
+        let turn = rot_matrix([0, 300, -0x40]);
+        let back = std::array::from_fn(|row| std::array::from_fn(|column| turn[column][row]));
+        assert_eq!(local[0].unwrap().m, mul_matrix(&first, &turn));
+        assert_eq!(local[1].unwrap().m, mul_matrix(&back, &second));
+        assert_ne!(
+            local[1].unwrap().m,
+            mul_matrix(&rot_matrix([0, -300, 0x40]), &second)
+        );
+        let mut still = vec![part(first), part(second)];
+        lean(&mut still, 0, 300);
+        assert_ne!(still[0].unwrap().m, first, "a yaw alone still leans");
     }
 
     /// `Em10Dm00`'s lean in `street_shoot`: zombie slot 1's part 0 on tick
@@ -9006,7 +9183,7 @@ mod tests {
                 m: [[3852, -1352, 326], [1375, 3844, -319], [-202, 408, 4070]],
                 t: [0, -1998, 0],
             })];
-            lean(&mut local, lean_by);
+            lean(&mut local, lean_by, 0);
             PoseTree {
                 root: Matrix {
                     m: [[333, 0, 4082], [0, 4096, 0], [-4082, 0, 333]],
@@ -9064,7 +9241,7 @@ mod tests {
                     })
                 })
                 .collect();
-            lean(&mut game, lean_by);
+            lean(&mut game, lean_by, 0);
             for (drawn, game) in local.iter().zip(game) {
                 let game = flip_y(game.unwrap().m.map(|row| row.map(i32::from)));
                 for (a, b) in drawn.r.iter().flatten().zip(game.iter().flatten()) {
@@ -9474,6 +9651,109 @@ mod tests {
         assert!(!mover.joint_move_late_reversed(0x400, false));
         assert_eq!(mover.work.move_cnt, 1);
         assert_eq!(mover.work.now_seq, 0, "then the clip from its start");
+    }
+
+    /// `J_seq2` eases the matrices: from the identity toward a quarter turn
+    /// about y with `late * Hokan` 0xC00 kept, `HMatrix` gives row 0
+    /// `(3073, 0, 1023)`, which `NormalMatrix_0` makes `(3886, 0, 1293)`, and
+    /// row 2 stays `(-1023, 0, 3073)`. Eased angles would give a 0x100 turn,
+    /// `(3784, 0, 1567)`. With no blend left `NormalMatrix_2` keeps row 1.
+    #[test]
+    fn jseq2_eases_the_matrix_and_makes_rows_0_and_1_unit() {
+        let identity = rot_matrix([0; 3]);
+        let quarter = [0, 0x400, 0];
+        assert_eq!(
+            jseq2_matrix(identity, quarter, Some(0xC00)),
+            [[3886, 0, 1293], [0, 4096, 0], [-1023, 0, 3073]]
+        );
+        assert_eq!(
+            jseq2_matrix(identity, quarter, None),
+            [[0, 0, 4096], [0, 4096, 0], [-4096, 0, 0]]
+        );
+        let skewed = [[3000, 0, 1000], [10, 20, 30], [0, 3000, 1000]];
+        assert_eq!(
+            normal_matrix(&skewed, 2),
+            [[3885, 0, 1295], [10, 20, 30], [0, 3885, 1295]]
+        );
+    }
+
+    /// A body that plays through `J_seq2` keeps its eased matrices from one
+    /// step to the next, so its part's `M` is never `RotMatrix` of an angle:
+    /// the second step of a 4-step blend eases from the first's matrix.
+    #[test]
+    fn a_jseq2_body_poses_its_parts_from_the_eased_matrices() {
+        let mut setup = Setup::new(0);
+        let still = Keyframe {
+            offset: [0; 3],
+            vertex: [0; 3],
+            rotations: vec![[0; 3]],
+        };
+        let turned = Keyframe {
+            rotations: vec![[0, 0x400, 0]],
+            ..still.clone()
+        };
+        setup.keyframes = vec![still, turned.clone(), turned];
+        setup.clips = vec![Clip {
+            frames: (0..3)
+                .map(|keyframe| ClipFrame {
+                    keyframe,
+                    timing: 0,
+                    flags: 0,
+                })
+                .collect(),
+        }];
+        setup.work.jseq2 = Some(Vec::new());
+        let bank = (setup.clips.as_slice(), setup.keyframes.as_slice());
+        let tick = Tick {
+            room: &setup.room,
+            skeleton: &setup.skeleton,
+            morphs: &[],
+            banks: Banks {
+                pld: bank,
+                weapon: bank,
+                room: bank,
+                held: bank,
+            },
+            input: Input::default(),
+            options: Options::default(),
+            id: 0,
+            life: 200,
+            poisoned: false,
+            stopped: false,
+            weapon: setup.weapon,
+            necks: [None; NECK_WORKS],
+            targets: &[],
+            neck_targets: &[],
+            enemies: 0,
+            pushing: false,
+            objects: &[],
+            key_trg: 0,
+        };
+        let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
+        mover.work.bank = Bank::Pld;
+        mover.work.move_no = 0;
+        mover.work.move_cnt = 0;
+        mover.work.hokan = 0;
+        mover.joint_move_late_reversed(0x400, false);
+        assert_eq!(mover.part_rotation(0, [0; 3]), rot_matrix([0; 3]));
+        mover.work.hokan = 3;
+        mover.joint_move_late_reversed(0x400, false);
+        assert_eq!(
+            mover.part_rotation(0, [0; 3]),
+            [[3886, 0, 1293], [0, 4096, 0], [-1023, 0, 3073]]
+        );
+        mover.joint_move_late_reversed(0x400, false);
+        assert_eq!(
+            mover.part_rotation(0, [0; 3]),
+            [[2396, 0, 3321], [0, 4096, 0], [-2559, 0, 1537]],
+            "row 2 is never made unit again"
+        );
+        mover.work.jseq2 = None;
+        assert_eq!(
+            mover.part_rotation(0, [0, 0x200, 0]),
+            rot_matrix([0, 0x200, 0]),
+            "a `J_seq` body turns by its pose's angles"
+        );
     }
 
     #[test]

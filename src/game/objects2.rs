@@ -466,7 +466,7 @@ impl GameState {
 /// the x87 as the PC original has them.
 fn rot_add_matrix(matrix: &[[i16; 3]; 3], turn: [i16; 3]) -> ([[i16; 3]; 3], [i16; 3]) {
     let turned = crate::player2::mul_matrix(&crate::player2::rot_matrix(turn), matrix);
-    let m = normal_matrix(&turned);
+    let m = crate::player2::normal_matrix(&turned, 1);
     let column: [i32; 3] = [m[0][2], m[1][2], m[2][2]].map(i32::from);
     // The divisor is a plain `/ 4096` of a sum that can't be negative; the
     // original divides by zero where the guard gives 0.
@@ -503,24 +503,6 @@ fn ratan2(y: i32, x: i32) -> i32 {
 fn square_root12(value: i32) -> i32 {
     let root = (f64::from(value) * (1.0 / 4096.0)).sqrt() * 4096.0;
     if root.is_nan() { i32::MIN } else { root as i32 }
-}
-
-/// `NormalMatrix_0` (`0x450BC0`): `NormalMatrix` (`0x450B00`) on rows 0 and
-/// 1, each made a unit vector on its own: scaled by 1/4096, `1 / sqrt` of
-/// its squares' sum (1e-9 for a zero length), times 4096 and that,
-/// truncated. Row 2 is left as it is.
-fn normal_matrix(m: &[[i16; 3]; 3]) -> [[i16; 3]; 3] {
-    let mut out = *m;
-    for row in &mut out[..2] {
-        let [x, y, z] = row.map(|v| f64::from(v) * (1.0 / 4096.0));
-        let mut length = (z * z + y * y + x * x).sqrt();
-        if length == 0.0 {
-            length = 1e-9;
-        }
-        let inverse = 1.0 / length;
-        *row = [x, y, z].map(|v| (v * 4096.0 * inverse) as i32 as i16);
-    }
-    out
 }
 
 #[cfg(test)]
