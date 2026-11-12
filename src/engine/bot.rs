@@ -1666,9 +1666,10 @@ enum Turn {
 /// A planned path and the index of its face approach point, if it has one.
 type PlannedPath = (Vec<(i32, i32)>, Option<usize>);
 /// A path's first lattice node, and, if the body does not see it from
-/// where it stands, the free point it steps out to (the start itself
-/// unless it stands inside the planner's skin) and the point it bends at.
-type StartNode = Option<(usize, Option<((i32, i32), (i32, i32))>)>;
+/// where it stands, the waypoints it walks to first: the free point it
+/// steps out to (when it stands inside the planner's skin), then the bend
+/// or the lead-in out of a pocket ([`lead_in`]).
+type StartNode = Option<(usize, Vec<(i32, i32)>)>;
 
 /// The result of the read-only `bot:path` query.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -2455,26 +2456,55 @@ impl FineGrid {
         if starts.0 != start {
             *starts = (start, HashMap::new());
         }
+        let step_out = |from: (i32, i32)| (from != start).then_some(from);
         let mut start_for = |part: u32| -> StartNode {
-            *starts.1.entry(part).or_insert_with(|| {
-                let in_part = |index: usize| self.component[index] == part;
-                if let Some(index) = lattice.nearest_free(start.0, start.1, FINE_RINGS, in_part) {
-                    return Some((index, None));
-                }
-                for (from, bends) in start_points.iter().zip(start_bends.iter_mut()) {
-                    let found = bends
-                        .get_or_insert_with(|| bend_points(room, *from, y, radius, flags))
-                        .iter()
-                        .find_map(|&point| {
-                            sighted(point, &|p| p == part)
-                                .map(|index| (index, Some((*from, point))))
-                        });
-                    if found.is_some() {
-                        return found;
+            starts
+                .1
+                .entry(part)
+                .or_insert_with(|| {
+                    let in_part = |index: usize| self.component[index] == part;
+                    // A free start must see its node: the nearest one of the
+                    // part may be across the desk's round end (Chris at
+                    // 9632, 12393 in 401). One inside the skin sees none,
+                    // and the smoothing steps out to the nearest.
+                    let near = if start_points == [start] {
+                        sighted(start, &|p| p == part)
+                    } else {
+                        lattice.nearest_free(start.0, start.1, FINE_RINGS, in_part)
+                    };
+                    if let Some(index) = near {
+                        return Some((index, Vec::new()));
                     }
-                }
-                None
-            })
+                    for (from, bends) in start_points.iter().zip(start_bends.iter_mut()) {
+                        let found = bends
+                            .get_or_insert_with(|| bend_points(room, *from, y, radius, flags))
+                            .iter()
+                            .find_map(|&point| {
+                                sighted(point, &|p| p == part).map(|index| {
+                                    (index, step_out(*from).into_iter().chain([point]).collect())
+                                })
+                            });
+                        if found.is_some() {
+                            return found;
+                        }
+                    }
+                    // A pocket joined to the part by a strip no single bend
+                    // follows (401's desk front for Chris: the strip over the
+                    // desk's round end, off both axes of the start): flood
+                    // out to the nearest point a node of the part sees.
+                    start_points.iter().find_map(|&from| {
+                        let seen = |point: (i32, i32)| {
+                            lattice.nearest_free(point.0, point.1, 1, |index| {
+                                in_part(index)
+                                    && line_clear(room, lattice.xy(index), point, y, radius, flags)
+                            })
+                        };
+                        lead_in(room, from, y, radius, flags, seen).map(|(index, points)| {
+                            (index, step_out(from).into_iter().chain(points).collect())
+                        })
+                    })
+                })
+                .clone()
         };
         // A goal at the end of a corridor narrower than the step (406's
         // strip beside the crate) has no node in sight: walk out of it along
@@ -2505,14 +2535,9 @@ impl FineGrid {
                 break;
             }
         }
-        let ((start_index, start_bend), goal_index, goal_bend) = found?;
+        let ((start_index, lead), goal_index, goal_bend) = found?;
         let mut path = lattice.search(room, start_index, goal_index, y, radius, flags, zones)?;
-        if let Some((from, point)) = start_bend {
-            path.insert(0, point);
-            if from != start {
-                path.insert(0, from);
-            }
-        }
+        path.splice(0..0, lead);
         path.extend(goal_bend);
         Some(end_at_exact_goal(room, path, goal, y, radius, flags))
     }
@@ -2552,6 +2577,85 @@ fn bend_points(
         }
     }
     points
+}
+
+/// How far, and over how many 16-unit cells, [`lead_in`] floods out of a
+/// pocket. 401's desk front is some 900 units of strip from the floor's
+/// nodes and takes under 512 cells; a flood toward a part it never reaches
+/// fills them all, some 0.4 ms, once per start and part.
+const LEAD_IN_REACH: i32 = 1536;
+const LEAD_IN_CELLS: usize = 2048;
+
+/// The way out of a pocket the fine lattice's nodes do not see into: a
+/// flood over a 16-unit grid of free points from `from` (free itself),
+/// within [`LEAD_IN_REACH`], to the nearest point `seen` names a node for.
+/// Returns that node and the flood's way there, cut down to the points
+/// where it turns out of sight of the last one kept. Every point is free
+/// and every leg clear, so the lead-in never crosses collision: a strip
+/// narrower than the lattice step (16 units here) is followed along its
+/// bends, as no axis bend can.
+fn lead_in(
+    room: &RoomState,
+    from: (i32, i32),
+    y: i32,
+    radius: i32,
+    flags: u8,
+    seen: impl Fn((i32, i32)) -> Option<usize>,
+) -> Option<(usize, Vec<(i32, i32)>)> {
+    const STEP: i32 = 16;
+    const NEIGHBOURS: [(i32, i32); 8] = [
+        (1, 0),
+        (-1, 0),
+        (0, 1),
+        (0, -1),
+        (1, 1),
+        (1, -1),
+        (-1, 1),
+        (-1, -1),
+    ];
+    let mut parent: HashMap<(i32, i32), (i32, i32)> = HashMap::new();
+    parent.insert(from, from);
+    let mut queue = std::collections::VecDeque::from([from]);
+    let (index, end) = loop {
+        let point = queue.pop_front()?;
+        if point != from
+            && let Some(index) = seen(point)
+        {
+            break (index, point);
+        }
+        for (dx, dz) in NEIGHBOURS {
+            let next = (point.0 + dx * STEP, point.1 + dz * STEP);
+            if parent.len() >= LEAD_IN_CELLS
+                || parent.contains_key(&next)
+                || distance_xz(from, next) > LEAD_IN_REACH
+                || blocked(room, next.0, next.1, y, radius, flags)
+            {
+                continue;
+            }
+            parent.insert(next, point);
+            queue.push_back(next);
+        }
+    };
+    let mut chain = vec![end];
+    while let Some(&back) = parent.get(chain.last()?) {
+        if back == *chain.last()? {
+            break;
+        }
+        chain.push(back);
+    }
+    chain.reverse();
+    // `chain` runs from `from` to `end`: keep the last point in sight of
+    // the previous one kept, and the end.
+    let mut points = Vec::new();
+    let mut anchor = from;
+    for pair in chain.windows(2).skip(1) {
+        if !line_clear(room, anchor, pair[1], y, radius, flags) {
+            points.push(pair[0]);
+            anchor = pair[0];
+        }
+    }
+    points.push(end);
+    Some((index, points))
 }
 
 /// The free points nearest `from` within [`SKIN_ESCAPE`], on a 16-unit
@@ -5975,6 +6079,84 @@ mod tests {
         // A path bends only at its ends: a goal deep in the pocket, whose
         // way runs through the whole band between two parts, stays out of
         // reach (no room needs it yet).
+    }
+
+    /// 401's quadrant around the desk for Chris (radius 422, flags 0x10),
+    /// from the room's records: the desk's circle (kind 3) and the box
+    /// behind it, the bookcase wall to the north, the east wall.
+    fn room_401() -> RoomState {
+        let rect = |x_min, x_max, z_min, z_max, kind| CollisionRect {
+            x_max,
+            z_max,
+            x_min,
+            z_min,
+            kind,
+            flags: 512,
+        };
+        let mut room = RoomState::default();
+        room.collision.cell_x = 5022;
+        room.collision.cell_z = 5094;
+        room.collision.quadrants[0] = vec![
+            rect(10782, 12654, 882, 16038, 1),
+            rect(126, 12726, 15030, 18054, 1),
+            rect(198, 8460, 900, 9594, 1),
+            rect(9576, 12654, 10242, 11736, 1),
+            rect(6858, 12780, 12852, 16074, 1),
+            rect(9054, 10044, 10962, 11952, 3),
+        ];
+        room
+    }
+
+    #[test]
+    fn a_start_in_401s_desk_pocket_leads_out_along_the_strip() {
+        // Where the red book's pickup leaves Chris: free, in the pocket east
+        // of the desk's round end, which joins the floor to the west only by
+        // a strip some 20 units deep over the circle's top (z 12390..12410).
+        // No lattice node lies on the strip, and neither axis bend from the
+        // start (up onto the strip, or west along the pocket) is in sight of
+        // a floor node: the start floods out along the strip.
+        let room = room_401();
+        let (radius, flags) = (422, 0x10);
+        let floor = (8000, 12250);
+        let grids = Grids::default();
+        for start in [(9998, 12343), (9632, 12393), (10200, 12300)] {
+            assert!(!blocked(&room, start.0, start.1, 0, radius, flags));
+            let path = find_path(&room, &grids, start, floor, 0, radius, flags, &[])
+                .unwrap_or_else(|| panic!("{start:?} leads out of the pocket"));
+            assert_eq!(path.last().copied(), Some(floor));
+            let mut from = start;
+            for &point in &path {
+                assert!(
+                    line_clear(&room, from, point, 0, radius, flags),
+                    "{start:?}: leg {from:?} -> {point:?} crosses the collision: {path:?}"
+                );
+                from = point;
+            }
+        }
+        // Only a start floods: a goal deep in the pocket stays out of reach
+        // from the floor (the book's approach point is on the strip, and
+        // plans with a bend).
+        let approach = (9750, 12400);
+        let to_book = find_path(&room, &grids, floor, approach, 0, radius, flags, &[]);
+        assert_eq!(
+            to_book.and_then(|path| path.last().copied()),
+            Some(approach)
+        );
+        // The desk itself still blocks: a body that does not fit the strip
+        // (radius 440) finds no way out.
+        assert!(
+            find_path(
+                &room,
+                &Grids::default(),
+                (10100, 12300),
+                floor,
+                0,
+                440,
+                flags,
+                &[]
+            )
+            .is_none()
+        );
     }
 
     #[test]
