@@ -17,6 +17,7 @@ local BLAST <const> = 5 -- Which of `die_thrown` (1) and `die_head` (2) took ove
 local BLAST_GROUND <const> = 6 -- `Ground` when `Em10Dm02` started.
 local RISING_FROM <const> = 7 -- `+0x22c`, four of them: what a hit while rising goes back to.
 local RISE_SIDE <const> = 11 -- `+0x230`: which way up it's lying.
+local FLAME_HITS <const> = 12 -- `+0x23a`: the flamethrower's hits so far.
 
 -- The motion tables.
 local PLD <const> = 0
@@ -47,6 +48,7 @@ local FLAG_LOST_OTHER_ARM <const> = 0x40
 local FLAG_HEAD_LEFT <const> = 0x80 -- `FUN_00453510`: Claire's stomp kicks the head off, and `FUN_0045b870` (zombie2.rs) sends it flying.
 local FLAG_NECK_STILL <const> = 0x200
 local FLAG_GUIDED <const> = 0x400
+local FLAG_ALIGHT <const> = 0x800 -- Lit by a hit: it loses life as it walks.
 local FLAG_BURNING <const> = 0x1000
 -- The walk's extra step (`FUN_00452ba0`, `FUN_00453240`): id 0x11's, and
 -- `Em10_Init`'s under ARRANGE MODE's roll and under HARD.
@@ -89,12 +91,18 @@ local FLOOR_HOLDS <const> = {
     0x6E, 0x14, 0x23, 0x46, 0x1E, 0xB4, 0x1E, 0x3C,
 }
 
--- `Em10Dm00`'s `funcs_458795 + 0xb` (`0x5271c7`): what a hit takes from `At_sce_no`, by weapon.
+-- `Em10Dm00`'s `funcs_458795 + 0xb` (`0x5271c7`): what a hit takes from `At_sce_no`, by weapon. The
+-- other cells, the flamethrower's among them, are 0.
 local STAGGER <const> = { [0] = 0, 9, 15, 15, 35, [0xD] = 20 }
 
 -- The Beretta, whose rows in `Em10_Damage`'s and `Em10_Die`'s tables are past their ends: it reads the
 -- crawler's, `FUN_00457d10` and `FUN_00458bf0`, for every `Damage_no`.
 local BERETTA <const> = 0x13
+
+-- The sub-machine gun, whose row in `Em10_Damage`'s table is `Em10Dm08`'s, and the
+-- flamethrower, whose rows are the handguns' (`Em10Dm00`, `FUN_004587b0`).
+local SMG <const> = 0xF
+local FLAMETHROWER <const> = 0x10
 
 -- The clips of eating.
 local EAT_CLIPS <const> = { [0] = 0x12, 0x13, 0x14, 0x12, 0x13, 0x14, 0x12, 0x13 }
@@ -309,6 +317,42 @@ local function lose_arm(e)
     e:throw_part(part + 1, 10, -200, 0x32)
 end
 
+-- `FUN_00456780`: `Type`'s 0x80, fire on the body (and on parts 3, 6 and 8 while
+-- they're drawn) and, unless `Routine_1` is 0x10, darker parts.
+local function light_flames(e)
+    raise_kind(e, TYPE_BURNT)
+    local first_row = e:rnd() & 1 == 0
+    local function on(part, size, y)
+        if e:hidden_parts() & (1 << part) == 0 then
+            e:light_flame(size, part, 0, y, 0)
+        end
+    end
+    if first_row then
+        e:light_flame(10000, 0, 0, 0, 0)
+        on(3, 5000, 200)
+        on(6, 5096, -200)
+    else
+        e:light_flame(10000, 0, 0, 200, 0)
+        on(8, 5000, 0)
+        on(3, 5096, 200)
+    end
+    if e:routine(1) ~= FLAMETHROWER then
+        e:burn_parts()
+    end
+end
+
+-- A flamethrower's hit in `Em10Dm00`, `FUN_00457d10` and `FUN_00457e60`: it counts
+-- them at `+0x23a`, and once that's over 8 the next lights a body not yet burnt,
+-- which then burns as it walks (`FLAG_ALIGHT`).
+local function flame_hit(e)
+    local hits = e:var(FLAME_HITS)
+    if e:kind() & TYPE_BURNT == 0 and hits > 8 then
+        light_flames(e)
+        raise_flag(e, FLAG_ALIGHT)
+    end
+    e:set_var(FLAME_HITS, (hits + 1) & 0xFF)
+end
+
 -- `Em10Dm01`: knocked back.
 local function dm01(e)
     local routine = e:routine(2)
@@ -397,6 +441,10 @@ local function dm00(e)
             moan_either(e, 0xC, 0xB)
         end
         e:set_timer(3, 0x18)
+        if weapon == FLAMETHROWER then
+            flame_hit(e)
+            e:set_timer(3, 2)
+        end
         local count = e:move_cnt()
         e:set_move_cnt(0)
         e:spd_bank(PLD)
@@ -415,7 +463,10 @@ local function dm00(e)
             e:set_timer(1, 0xFFFF)
             turn = 0x800
         end
-        hit_blood(e, 0x17D0, i16(e:timer(1)) * -100, angle(e) - turn)
+        -- A flame draws no blood.
+        if weapon ~= FLAMETHROWER then
+            hit_blood(e, 0x17D0, i16(e:timer(1)) * -100, angle(e) - turn)
+        end
         e:goto_dest(0x10)
     end
     local routine = e:routine(2)
@@ -499,6 +550,10 @@ local function dm_crawling(e)
         if voice_free(e) then
             moan(e, 0xC)
         end
+        -- The flame rounds' (`Routine_1` 0xA) and the other weapons' calls aren't ported.
+        if e:routine(1) == FLAMETHROWER then
+            flame_hit(e)
+        end
     elseif routine == 2 then
         e:set_kind(1)
         e:routines(1, 0, 0, 0)
@@ -531,6 +586,15 @@ local function dm_rising(e)
             moan(e, 0xC)
         end
         e:set_timer(3, 0x18)
+        -- It leans less from the flamethrower, the sub-machine gun and 0x12. The flame
+        -- rounds' (0xA) and the other weapons' calls aren't ported.
+        local weapon = e:routine(1)
+        if weapon == FLAMETHROWER then
+            flame_hit(e)
+        end
+        if weapon == FLAMETHROWER or weapon == SMG or weapon == 0x12 then
+            e:set_timer(3, 2)
+        end
     end
     local routine = e:routine(2)
     local ended = false
@@ -933,6 +997,63 @@ local function dm04(e)
     end
 end
 
+-- `Em10Dm08`'s clips, by `Rnd() & 7`.
+local SMG_CLIPS <const> = { [0] = 0x1D, 0x1C, 0x1E, 0x1C, 0x1C, 0x1D, 0x1C, 0x1E }
+
+-- `Em10Dm08`: the sub-machine gun's hit. It bleeds from the body (`Damage_no` a
+-- multiple of 3) or the head, is pushed once away from the player, its facing jolted
+-- either way, and once the clip ends walks on or, facing the player near, may grab.
+local function dm08(e)
+    local routine = e:routine(2)
+    if routine == 0 then
+        local pick = e:rnd()
+        e:set_routine(2, 1)
+        e:clip(SMG_CLIPS[pick & 7], 0, 7)
+        -- `Timer0`, the way to the player, is taken twice with nothing moved between.
+        local dir = e:direction_to_player()
+        e:set_timer(0, dir)
+        if e:damage_no() % 3 == 0 then
+            local x = 0x7F - e:rnd()
+            local y = 0x39F - e:rnd()
+            local z = 0x7F - e:rnd()
+            local size = e:rnd() * 8 + 0x17D0
+            blood(e, e:rnd() & 1, size, dir, 1, x, y, z)
+        else
+            local x = 0x100 - e:rnd() * 2
+            local y = 0x138 - e:rnd() * 4
+            local z = 0x100 - e:rnd() * 2
+            local size = e:rnd() * 8 + 7000
+            blood(e, e:rnd() & 1, size, dir, 0, x, y, z)
+        end
+        if voice_free(e) then
+            moan(e, 0xC)
+        end
+        local x = (e:rnd() & 0x3F) + 0x14
+        local z = 0x40 - (e:rnd() & 0x7F)
+        local _, y = e:speed()
+        e:set_speed(x, y, z)
+        e:add_speed_xz_at(dir - e:angle() + 0x800)
+        e:set_angle(e:angle() + 0x40 - (e:rnd() & 0x7F))
+        e:goto_player(0x10)
+    elseif routine == 2 then
+        state(e, 1, 0)
+        if e:rnd() & 1 ~= 0 then
+            state(e, 2, 0)
+        end
+        if e:turn_to_player(0x200) == 0
+            and e:distance() < 5000
+            and player_free(e)
+            and e:rnd() & 7 == 0
+        then
+            state(e, 0xB, 0)
+        end
+        return
+    elseif routine ~= 1 then
+        return
+    end
+    joint_step(e, WEAPON, 0x200)
+end
+
 -- `Em10_Damage`, by `DWORD_00526ed4`. The other weapons' branches, which light and
 -- freeze it, aren't ported.
 local function em10_damage(e)
@@ -967,6 +1088,9 @@ local function em10_damage(e)
         e:set_var(AT_OBJ_NO, 1)
     end
     if has_flag(e, FLAG_DOWN) then
+        -- Its calls here for the flame rounds, the acid rounds, the spark shot and the
+        -- flamethrower (0xA, 0xB, 9, 0xE, 0x10) read `Routine_1` after this sets it to 5,
+        -- so none of them run.
         state(e, 5, 6)
         e:set_timer(3, 1)
         return
@@ -980,6 +1104,11 @@ local function em10_damage(e)
     local no = e:damage_no()
     if weapon == BERETTA then
         dm_crawling(e)
+        return
+    end
+    -- `0x5270f0`: the sub-machine gun's, `Em10Dm08` but for 2, 5 and 8, which have no call.
+    if weapon == SMG then
+        dm08(e)
         return
     end
     if weapon == BOW then
@@ -1029,10 +1158,12 @@ local function die_standing(e)
         hit_blood(e, 0x1FA0, 0, angle(e))
         death_cry(e)
         e:set_timer(3, 0)
-        -- The flame and acid rounds' branches, and the spark shot's and the
-        -- flamethrower's, aren't ported.
+        -- The flame and acid rounds' branches, and the spark shot's, aren't ported.
         if blasted(e) then
             blast_smoke(e)
+        end
+        if e:routine(WEAPON) == FLAMETHROWER and e:kind() & TYPE_BURNT == 0 then
+            light_flames(e)
         end
         e:set_speed_x(0xB)
     elseif routine == 2 then
@@ -1486,24 +1617,6 @@ local function em10_corpse(e)
     end
 end
 
--- `FUN_00456780`: fire on the body and, unless `Routine_1` is 0x10, darker
--- parts.
-local function light_flames(e)
-    local first_row = e:rnd() & 1 == 0
-    if e:routine(1) ~= 0x10 then
-        e:burn_parts()
-    end
-    if first_row then
-        e:light_flame(10000, 0, 0, 0, 0)
-        e:light_flame(5000, 3, 0, 200, 0)
-        e:light_flame(5096, 6, 0, -200, 0)
-    else
-        e:light_flame(10000, 0, 0, 200, 0)
-        e:light_flame(5000, 8, 0, 0, 0)
-        e:light_flame(5096, 3, 0, 200, 0)
-    end
-end
-
 local function lie_down(e, clip)
     e:clip(clip, 0, 0)
     state(e, 7, 0)
@@ -1526,6 +1639,7 @@ local function init(e, v)
     e:set_flags(0)
     e:set_var(AT_OBJ_NO, 0)
     e:set_var(AT_SCE_NO, (e:rnd() & 0xF) + 0x10)
+    e:set_var(FLAME_HITS, 0)
     if v.life then
         raise_flag(e, FLAG_QUICK_STEP)
         e:set_life(v.life)

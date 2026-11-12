@@ -1481,16 +1481,28 @@ local function hurt_steps(e)
     end
 end
 
+-- `switchD_0045ed5d::caseD_0` (0x45ED70): a blast throws it into the air,
+-- then `hurt_start`.
+local function blast_start(e)
+    if e:be_flg() & (BE_HIGH | BE_AIR) ~= 0 and e:var(AIR) == 0 then
+        e:set_var(AIR, 1)
+        set_spd(e, nil, -140)
+        e:set_speed_x(0xF0)
+    end
+    hurt_start(e)
+end
+
+-- `0x5276e0` has four cells: its `Routine_2` 4 reads the next table's first
+-- (`0x5276f0`), the blast's start.
+AGAIN[4] = blast_start
+
 -- `switchD_0045e447::caseD_4`: a blast throws it into the air.
 local function hurt_blast(e)
     if e:routine(2) == 0 then
-        if e:be_flg() & (BE_HIGH | BE_AIR) ~= 0 and e:var(AIR) == 0 then
-            e:set_var(AIR, 1)
-            set_spd(e, nil, -140)
-            e:set_speed_x(0xF0)
-        end
+        blast_start(e)
+    else
+        hurt_steps(e)
     end
-    hurt_steps(e)
 end
 
 local function hurt_bleeding(e, count)
@@ -1651,7 +1663,8 @@ local function die_burst(e)
     e:set_var(BLEED, 0x12)
 end
 
--- `FUN_0045f2a0`.
+-- `FUN_0045f2a0`. Its bleeding also takes the colours of parts 0 to 16 to
+-- 0x202020, which isn't ported.
 local function die_many_wounds(e)
     die_start(e)
     if e:damage_no() < 3 or e:routine(1) == 0x10 then

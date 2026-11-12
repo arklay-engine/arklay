@@ -478,6 +478,15 @@ pub struct Work {
     pub quiver: Option<crate::bow2::Quiver>,
     /// A round was spent this tick (`Tama_decrease_i`), for the inventory.
     pub fired: bool,
+    /// The rounds a burst's `Tama_decrease_i` took this tick, besides
+    /// [`Work::fired`]'s.
+    pub spent: u8,
+    /// `WORD_00691f8c`: the burst weapons' calls of `Tama_decrease_i` since
+    /// one last took rounds. Only the new game clears it.
+    pub tama_count: i16,
+    /// `Attw_seq_no` and `Attw_timer`: where a burst is in its
+    /// [`Weapon::burst_sequence`].
+    attw: (u8, u8),
     /// The magazine was filled this tick (`Tama_reload`), for the inventory.
     pub reloaded: bool,
     /// The head's `Rot_neck` state.
@@ -633,6 +642,29 @@ const GRENADES: u8 = 9;
 /// handguns.
 pub const COLT: u8 = 0xD;
 pub const BERETTA: u8 = 0x13;
+/// The sub-machine gun and the flamethrower, which `pl_mv05_w2` fires for as
+/// long as the trigger is held.
+pub const SMG: u8 = 0xF;
+pub const FLAMETHROWER: u8 = 0x10;
+/// `pl_mv05_w2_t1`'s hold, `pl_mv05_w2_t2`'s burst and the end of it, by tilt
+/// (down, level, up), and `pl_mv05_w2_t4`'s reload.
+const BURST_HOLD_CLIPS: [u8; 3] = [0x12, 0x0C, 0x0F];
+const BURST_CLIPS: [u8; 3] = [0x10, 0x0A, 0x0D];
+const BURST_END_CLIPS: [u8; 3] = [0x11, 0x0B, 0x0E];
+const BURST_RELOAD_CLIP: u8 = 0x13;
+/// `pl_mv05_w2_t2`'s turn a tick.
+const BURST_TURN: u16 = 0x20;
+/// `pl_w0f_t2_move`'s flash and smoke on every third frame, and its case on
+/// every sixth, along the body's facing turned by the second.
+const SMG_FLASH: [u32; 2] = [0x101_1000, 0x30C_1000];
+const SMG_CASE: (u32, i16, [i16; 3]) = (0x201_0900, 0x4B0, [0xAA, 0x118, 0x50]);
+/// `pl_w10_t2_move`'s flame on every third frame, along the body's facing.
+const FLAME: (u32, [i16; 3]) = (0x31D_1200, [0x96, 0x4B0, 0]);
+/// The flamethrower's sounds: the burst's first frame and its eleventh, and a
+/// change of tilt.
+const SOUND_FLAME_START: u16 = 0;
+const SOUND_FLAME_GO_ON: u16 = 0xB;
+const SOUND_FLAME_TILT: u16 = 0xD;
 /// `FUN_004d6560`'s last call, `Esp_call3D` 0x1073000 0x38E up the hand,
 /// turned a quarter about z.
 const COLT_SMOKE_3D: (u32, [i32; 3], [i16; 3]) = (0x107_3000, [0x82, 0x38E, 0], [0, 0, 0x400]);
@@ -649,6 +681,37 @@ struct WaterDraw {
     effect: usize,
     /// `Pl_water`'s ring, 0 to 3, or `None` for a hand's splash.
     ring: Option<u16>,
+}
+
+/// One tick of `Weapon_at_ck`'s walk of `sequence` from `Attw_seq_no` and
+/// `Attw_timer`: where it is after, and whether it looks for a body.
+fn attw_step(sequence: &[(u8, u8)], (mut index, mut timer): (u8, u8)) -> ((u8, u8), bool) {
+    let at = |index: u8| {
+        sequence
+            .get(usize::from(index))
+            .copied()
+            .unwrap_or((0xFF, 0xFF))
+    };
+    if timer == 0 {
+        index = index.wrapping_add(1);
+        timer = at(index).1;
+    }
+    let mut record = at(index).0;
+    if record == 0xFF {
+        return ((index, timer.wrapping_sub(1)), false);
+    }
+    if record == 0xFE {
+        index = 0;
+        timer = at(0).1;
+        record = at(0).0;
+        if record == 0xFF {
+            return ((index, timer), false);
+        }
+    }
+    if timer == 0xFF {
+        return ((index, timer), false);
+    }
+    ((index, timer - 1), true)
 }
 
 /// `pl_mv05_w1_t0`'s `Goto00` to who it's aiming at, and the Colt's quicker
@@ -1044,6 +1107,9 @@ impl Default for Work {
             // `Pl_init`, then the first tick of `pl_mv_00`.
             shot_level: 0,
             shot_ticks: 0,
+            attw: (0, 0),
+            spent: 0,
+            tama_count: 0,
             shot_line: None,
             super_matrix: None,
             tilt: [0, 0],
@@ -1137,6 +1203,7 @@ impl Work {
             d_life_u: self.d_life_u,
             kind: self.kind,
             posed: self.posed,
+            tama_count: self.tama_count,
             // The head's world position is the joints' last matrix, which a
             // room load leaves alone until the new room is drawn.
             neck: Neck {
@@ -1302,6 +1369,8 @@ pub struct Weapon {
     pub loaded: bool,
     /// `Tama_reload_ck`: the inventory has its ammunition.
     pub spare: bool,
+    /// The rounds in it, for the bursts' `Tama_decrease_i`.
+    pub rounds: u8,
 }
 
 impl Weapon {
@@ -1311,8 +1380,44 @@ impl Weapon {
     fn aims(&self) -> bool {
         matches!(
             self.id,
-            KNIFE | 2 | 3 | 5..=8 | GRENADES..=crate::bow2::BOW | COLT | BERETTA
+            KNIFE | 2 | 3 | 5..=8 | GRENADES..=crate::bow2::BOW | COLT | SMG | FLAMETHROWER | BERETTA
         )
+    }
+
+    /// `pl_mv05_w_tbl`'s `pl_mv05_w2`: the sub-machine gun and the
+    /// flamethrower share the handguns' raise, lowering and lock, but hold,
+    /// fire and reload on their own clips.
+    fn bursts(&self) -> bool {
+        matches!(self.id, SMG | FLAMETHROWER)
+    }
+
+    /// The hold's clips, by tilt.
+    fn hold_clips(&self) -> [u8; 3] {
+        if self.bursts() {
+            BURST_HOLD_CLIPS
+        } else {
+            AIM_HOLD_CLIPS
+        }
+    }
+
+    fn reload_clip(&self) -> u8 {
+        if self.bursts() {
+            BURST_RELOAD_CLIP
+        } else {
+            AIM_RELOAD_CLIP
+        }
+    }
+
+    /// `At_tbl_top`'s sequence for a burst: the record and the ticks it
+    /// lasts. A record of 0xFF waits, 0xFE starts again, and a count of 0xFF
+    /// ends it. The sub-machine gun looks on every third tick; the
+    /// flamethrower's never looks (its flames do).
+    fn burst_sequence(&self) -> &'static [(u8, u8)] {
+        if self.id == SMG {
+            &[(0, 1), (0xFF, 2), (0xFE, 0xFF)]
+        } else {
+            &[(0, 0xFF)]
+        }
     }
 
     /// `pl_mv05_w1_t2` looks for no body itself with the launchers and the
@@ -1340,6 +1445,7 @@ impl Weapon {
             GRENADES..=ACID_ROUNDS => [0x8A, 0x8C, 26],
             crate::bow2::BOW => [0x86, 0x87, 10],
             COLT => [0x85, 0x86, 5],
+            SMG | FLAMETHROWER => [0x87, 0x88, 0],
             // The handguns' and the Beretta's.
             _ => [0x85, 0x87, 8],
         }
@@ -2719,7 +2825,8 @@ impl Mover<'_, '_> {
         self.end_branch(key);
     }
 
-    /// `pl_mv05_w1`: the handguns' stance. `Status_flg`'s top bits hold the tilt.
+    /// `pl_mv05_w1`: the handguns' stance, and `pl_mv05_w2`, the bursts'.
+    /// `Status_flg`'s top bits hold the tilt.
     fn pl_mv_aim(&mut self, key: u16) {
         // `Foot_set_pl` reads last tick's world matrix from the parts.
         let chain = self.tick.weapon.foot_chain(self.tick.id);
@@ -2729,6 +2836,7 @@ impl Mover<'_, '_> {
             0 => self.aim_raise(key, &drawn),
             1 => self.aim_hold(key),
             2 if self.tick.weapon.is_knife() => self.aim_slash(key),
+            2 if self.tick.weapon.bursts() => self.aim_burst(key, &drawn),
             2 => self.aim_fire(key, &drawn),
             3 => self.aim_lower(key),
             4 => self.aim_reload(),
@@ -3393,16 +3501,20 @@ impl Mover<'_, '_> {
         self.work.hit = crate::weapon2::weapon_at_ck(&shooter, self.tick.targets, sca);
     }
 
-    /// `pl_mv05_w1_t1`.
+    /// The clip of `clips` for the tilt.
+    fn tilt_clip(&self, clips: [u8; 3]) -> u8 {
+        match self.work.status_flg >> 13 {
+            1 => clips[0],
+            2 => clips[1],
+            4 => clips[2],
+            _ => 0,
+        }
+    }
+
+    /// `pl_mv05_w1_t1`, and `pl_mv05_w2_t1` on its own clips.
     fn aim_hold(&mut self, key: u16) {
         if self.work.routine[3] == 0 {
-            let clip = match self.work.status_flg >> 13 {
-                1 => AIM_HOLD_CLIPS[0],
-                2 => AIM_HOLD_CLIPS[1],
-                4 => AIM_HOLD_CLIPS[2],
-                _ => 0,
-            };
-            self.aim_clip(clip);
+            self.aim_clip(self.tilt_clip(self.tick.weapon.hold_clips()));
             // The knife makes no noise aiming but the stance's own.
             self.work.noise |= if self.tick.weapon.is_knife() {
                 0x08
@@ -3540,6 +3652,193 @@ impl Mover<'_, '_> {
         }
         if kicks {
             self.add_speed_xz();
+        }
+    }
+
+    /// `pl_mv05_w2_t2`: the burst, for as long as the trigger is held and the
+    /// gun has rounds. `hit_scan_ck` looks at the hand on every tick, and
+    /// `Weapon_at_ck` follows the weapon's sequence; a change of tilt goes on
+    /// from the frame the burst had reached. Letting go of the trigger plays
+    /// the burst's end, from which a press fires again.
+    fn aim_burst(&mut self, key: u16, drawn: &DrawnParts) {
+        let hand = self
+            .part_point(HAND_PART, [0; 3])
+            .unwrap_or(self.player.pos);
+        self.work.shot_level = crate::weapon2::hit_scan_ck(
+            self.tick.id,
+            self.tick.weapon.id,
+            self.player.pos[1],
+            self.work.parts0_y,
+            hand[1],
+        );
+        let weapon = self.tick.weapon;
+        match self.work.routine[3] {
+            0..=2 => {
+                if self.work.routine[3] == 0 {
+                    self.aim_clip(self.tilt_clip(BURST_CLIPS));
+                }
+                if self.work.routine[3] == 1 {
+                    // A new tilt keeps the frame.
+                    self.work.move_no = self.tilt_clip(BURST_CLIPS);
+                    self.work.hokan = FULL_BLEND;
+                    self.init_weapon_at();
+                    self.work.routine[3] = 2;
+                }
+                let spends = weapon.id != SMG || self.work.move_cnt.is_multiple_of(3);
+                if spends && !self.tama_decrease() {
+                    self.work.routine[3] = 3;
+                    return;
+                }
+                self.work.noise |= 1;
+                if self.weapon_at_seq() {
+                    self.shoot();
+                }
+                let shot_hand = self.drawn_part(SHOT_PART);
+                self.joint_move();
+                self.burst_effects(shot_hand);
+                if key & KEY_AIM == 0 {
+                    self.aim_stage(3);
+                    return;
+                }
+                let tilt = if key & KEY_TILT_UP != 0 && self.work.status_flg & TILT_UP == 0 {
+                    Some(TILT_UP)
+                } else if key & KEY_TILT_DOWN != 0 && self.work.status_flg & TILT_DOWN == 0 {
+                    Some(TILT_DOWN)
+                } else if key & (KEY_TILT_UP | KEY_TILT_DOWN) == 0
+                    && self.work.status_flg & TILT_LEVEL == 0
+                {
+                    Some(TILT_LEVEL)
+                } else {
+                    None
+                };
+                if let Some(tilt) = tilt {
+                    self.work.routine[3] = 1;
+                    self.set_tilt(tilt);
+                    if weapon.id == FLAMETHROWER {
+                        self.player.queue_sound(SOUND_FLAME_TILT);
+                    }
+                    return;
+                }
+                if key & KEY_FIRE == 0 {
+                    self.work.routine[3] = 3;
+                    return;
+                }
+                let water = self.work.water;
+                if water != 0 && i32::from(water) < self.ground() && self.work.move_cnt & 3 == 0 {
+                    self.pl_water(drawn[0]);
+                }
+            }
+            3 | 4 => {
+                if self.work.routine[3] == 3 {
+                    self.aim_clip(self.tilt_clip(BURST_END_CLIPS));
+                    self.work.routine[3] = 4;
+                }
+                if self.joint_move() {
+                    self.work.routine[3] += 1;
+                }
+                if key & KEY_FIRE != 0 {
+                    if weapon.loaded {
+                        self.work.routine[2] = 2;
+                        self.work.routine[3] = 1;
+                        return;
+                    }
+                    if self.tick.input.fire_pressed {
+                        if weapon.spare {
+                            self.aim_stage(4);
+                        } else {
+                            self.player.queue_sound(SOUND_EMPTY);
+                        }
+                    }
+                }
+            }
+            5 => self.aim_stage(1),
+            _ => {}
+        }
+        self.aim_turn(key, BURST_TURN);
+    }
+
+    /// `init_Weapon_at`: the sequence from its start.
+    fn init_weapon_at(&mut self) {
+        let sequence = self.tick.weapon.burst_sequence();
+        self.work.attw = (0, sequence[0].1);
+    }
+
+    /// `Weapon_at_ck`'s walk of the sequence: whether this tick looks for a
+    /// body.
+    fn weapon_at_seq(&mut self) -> bool {
+        let (attw, looks) = attw_step(self.tick.weapon.burst_sequence(), self.work.attw);
+        self.work.attw = attw;
+        looks
+    }
+
+    /// `Tama_decrease_i` for the bursts: seven calls in eight take nothing
+    /// ([`Work::tama_count`]), and the eighth takes two rounds, or finds the
+    /// gun empty after one.
+    fn tama_decrease(&mut self) -> bool {
+        let count = self.work.tama_count.wrapping_add(1);
+        if count < 8 {
+            self.work.tama_count = count;
+            return true;
+        }
+        self.work.tama_count = 0;
+        let left = self.tick.weapon.rounds.saturating_sub(self.work.spent);
+        if left == 0 {
+            return false;
+        }
+        self.work.spent += 1;
+        if left == 1 {
+            return false;
+        }
+        self.work.spent += 1;
+        true
+    }
+
+    /// `pl_w0f_t2_move` and `pl_w10_t2_move`, on the frame `Joint_move`
+    /// reached, from the hand as the last draw left it.
+    fn burst_effects(&mut self, hand: Option<Matrix>) {
+        let frame = self.work.move_cnt;
+        let angle = self.player.angle as i16;
+        let mut calls: Vec<(u32, i16, [i16; 3])> = Vec::new();
+        if self.tick.weapon.id == SMG {
+            if frame % 3 == 1 {
+                let point = [0x46, 1000, if self.tick.id > 3 { -100 } else { -60 }];
+                calls.extend(SMG_FLASH.map(|word| (word, 0, point)));
+            }
+            if frame % 6 == 1 {
+                let (word, turn, point) = SMG_CASE;
+                calls.push((word, angle.wrapping_add(turn), point));
+            }
+        } else {
+            if frame % 3 == 1 {
+                let (word, point) = FLAME;
+                calls.push((word, angle, point));
+            }
+            // At `+0x790`: part 11's `Pos_x` to `Pos_z`, its place under its
+            // parent, which `Snd_se_on` takes as a point in the room.
+            let at = self
+                .relative(SHOT_PART)
+                .map_or(self.player.pos, |pos| pos.map(i32::from));
+            if frame == 1 {
+                self.player.queue_sound_at(SOUND_FLAME_START, at);
+            }
+            if frame == 0xB {
+                self.player.queue_sound_at(SOUND_FLAME_GO_ON, at);
+            }
+        }
+        let Some(hand) = hand else {
+            return;
+        };
+        for (word, dir, point) in calls {
+            self.work.effects.push(EffectCall {
+                kind: (word >> 24) as u8,
+                row: (word >> 16) as u8,
+                size: word as u16,
+                dir,
+                at: crate::esp2::apply_matrix(&hand, point),
+                motion: None,
+                on: Some((SHOT_PART as u8, hand, point)),
+                turn: None,
+            });
         }
     }
 
@@ -3844,10 +4143,11 @@ impl Mover<'_, '_> {
         }
     }
 
-    /// `pl_mv05_w1_t4`: the frame marked for it fills the magazine.
+    /// `pl_mv05_w1_t4`: the frame marked for it fills the magazine. The
+    /// bursts' `pl_mv05_w2_t4` is the same on its own clip.
     fn aim_reload(&mut self) {
         if self.work.routine[3] == 0 {
-            self.aim_clip(AIM_RELOAD_CLIP);
+            self.aim_clip(self.tick.weapon.reload_clip());
         }
         // `Workm` is the last `Joint_trans2`'s, from before this tick's frame.
         let hand = self.part_matrix(MAGAZINE_HAND);
@@ -6751,6 +7051,7 @@ mod weapon_tests {
             id,
             loaded: true,
             spare: true,
+            rounds: 100,
         }
     }
 
@@ -6828,6 +7129,58 @@ mod weapon_tests {
             assert!(!weapon(id).shoots_effects());
             assert_eq!(weapon(id).foot_chain(0), &AIM_FOOT_CHAIN);
         }
+    }
+
+    /// `pl_mv05_w_tbl` sends the sub-machine gun and the flamethrower to
+    /// `pl_mv05_w2`, with `DAT_0053a305`'s rows and their own clips.
+    #[test]
+    fn the_bursts_have_their_own_clips_and_rows() {
+        for id in [SMG, FLAMETHROWER] {
+            let weapon = weapon(id);
+            assert!(weapon.aims() && weapon.bursts());
+            assert_eq!(weapon.frames(), [0x87, 0x88, 0]);
+            assert_eq!(weapon.hold_clips(), [0x12, 0x0C, 0x0F]);
+            assert_eq!(weapon.reload_clip(), 0x13);
+            assert_eq!(weapon.enemy_turn(), 0xD8);
+        }
+        assert_eq!(weapon(2).hold_clips(), AIM_HOLD_CLIPS);
+        assert_eq!(weapon(2).reload_clip(), AIM_RELOAD_CLIP);
+        assert!(
+            ![2, COLT, 0x11, BERETTA]
+                .iter()
+                .any(|&id| weapon(id).bursts())
+        );
+    }
+
+    /// `Weapon_at_ck`'s walk: the sub-machine gun's sequence looks on the
+    /// first tick and every third after; the flamethrower's never does.
+    #[test]
+    fn the_smgs_sequence_looks_every_third_tick_and_the_flames_never() {
+        let walk = |id: u8| -> Vec<bool> {
+            let sequence = weapon(id).burst_sequence();
+            let mut attw = (0, sequence[0].1);
+            (0..10)
+                .map(|_| {
+                    let (next, looks) = attw_step(sequence, attw);
+                    attw = next;
+                    looks
+                })
+                .collect()
+        };
+        let every_third: Vec<bool> = (0..10).map(|tick| tick % 3 == 0).collect();
+        assert_eq!(walk(SMG), every_third);
+        assert_eq!(walk(FLAMETHROWER), [false; 10]);
+        // The handguns' one look, then none.
+        let handgun = [(0, 1), (0, 0xFF)];
+        let mut attw = (0, 1);
+        let looks: Vec<bool> = (0..3)
+            .map(|_| {
+                let (next, looks) = attw_step(&handgun, attw);
+                attw = next;
+                looks
+            })
+            .collect();
+        assert_eq!(looks, [true, false, false]);
     }
 
     /// `FUN_004d6560` makes its calls on the shot's second frame, at three
@@ -8457,6 +8810,7 @@ mod tests {
             id: 2,
             loaded,
             spare,
+            rounds: u8::from(loaded) * 18,
         };
         setup
     }
@@ -8737,8 +9091,9 @@ mod tests {
 
     #[test]
     fn only_a_handgun_raises_into_the_stance() {
+        // The spark shot (`pl_mv05_w3`) isn't ported.
         let mut setup = armed(true, false);
-        setup.weapon.id = 0x10;
+        setup.weapon.id = 0xE;
         setup.tick(aiming(false, false), 200);
         assert_eq!(setup.work.routine[1], MOVE_IDLE);
 
@@ -8928,6 +9283,199 @@ mod tests {
             }
             assert_eq!(setup.work.status_flg & STATUS_MAGAZINE, 0);
         }
+    }
+
+    /// [`armed_with_hands`] holding `id` with `rounds`, on clips long enough
+    /// for a burst, aimed level.
+    fn bursting(id: u8, rounds: u8) -> Setup {
+        let mut setup = armed_with_hands(rounds != 0, true);
+        (setup.clips, setup.keyframes) = bank(0x14, 40, 0);
+        for keyframe in &mut setup.keyframes {
+            keyframe.rotations = vec![[0; 3]; 15];
+        }
+        setup.weapon.id = id;
+        setup.weapon.rounds = rounds;
+        setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];
+        setup.work.status_flg = TILT_LEVEL;
+        setup.work.move_no = BURST_HOLD_CLIPS[1];
+        // A press from the hold starts the burst.
+        setup.tick(aiming(true, true), 200);
+        assert_eq!(setup.work.routine[2], 2);
+        setup
+    }
+
+    /// The words of this tick's effects, with their turn from the body's.
+    fn burst_calls(setup: &mut Setup) -> Vec<(u32, i16, [i16; 3])> {
+        let angle = setup.player.angle as i16;
+        std::mem::take(&mut setup.work.effects)
+            .iter()
+            .map(|call| {
+                (
+                    u32::from(call.kind) << 24 | u32::from(call.row) << 16 | u32::from(call.size),
+                    call.dir.wrapping_sub(angle),
+                    call.on.map_or([0; 3], |(_, _, point)| point),
+                )
+            })
+            .collect()
+    }
+
+    /// `pl_mv05_w2_t2` with the sub-machine gun: the burst on its level clip,
+    /// `Tama_decrease_i` on every third frame, the eighth of which takes two
+    /// rounds, and `pl_w0f_t2_move`'s flash and smoke on every third frame
+    /// and a case on every sixth.
+    #[test]
+    fn the_smg_bursts_and_spends_two_rounds_in_eight_calls() {
+        let mut setup = bursting(SMG, 50);
+        let mut spent_at = None;
+        for tick in 1..=24u8 {
+            setup.tick(aiming(true, false), 200);
+            assert_eq!(setup.work.routine[2..], [2, 2], "tick {tick}");
+            assert_eq!(setup.work.move_no, BURST_CLIPS[1]);
+            assert_eq!(setup.work.noise & 1, 1);
+            let frame = setup.work.move_cnt;
+            let mut expected = Vec::new();
+            // The flash and smoke go out at 0, not along the body.
+            let at_zero = (setup.player.angle as i16).wrapping_neg();
+            if frame % 3 == 1 {
+                for word in SMG_FLASH {
+                    expected.push((word, at_zero, [0x46, 1000, -60]));
+                }
+            }
+            if frame % 6 == 1 {
+                expected.push((0x201_0900, 0x4B0, [0xAA, 0x118, 0x50]));
+            }
+            assert_eq!(burst_calls(&mut setup), expected, "frame {frame}");
+            if spent_at.is_none() && setup.work.spent != 0 {
+                spent_at = Some(tick);
+            }
+        }
+        // Calls on ticks 1, 4, ... 22: the eighth takes two.
+        assert_eq!(spent_at, Some(22));
+        assert_eq!(setup.work.spent, 2);
+        assert_eq!(setup.work.tama_count, 0);
+    }
+
+    /// `pl_mv05_w2_t2` with the flamethrower: `Tama_decrease_i` on every
+    /// tick, `pl_w10_t2_move`'s flame along the body on every third frame,
+    /// and its sounds on the first and the eleventh.
+    #[test]
+    fn the_flamethrower_spends_every_tick_and_throws_a_flame_every_third() {
+        let mut setup = bursting(FLAMETHROWER, 50);
+        setup.player.take_sounds();
+        let mut sounds = Vec::new();
+        for tick in 1..=12u8 {
+            setup.tick(aiming(true, false), 200);
+            let frame = setup.work.move_cnt;
+            let expected: Vec<_> = if frame % 3 == 1 {
+                vec![(0x31D_1200, 0, [0x96, 0x4B0, 0])]
+            } else {
+                Vec::new()
+            };
+            assert_eq!(burst_calls(&mut setup), expected, "frame {frame}");
+            sounds.extend(
+                setup
+                    .player
+                    .take_sounds()
+                    .into_iter()
+                    .map(|sound| (frame, sound.id)),
+            );
+            if tick == 7 {
+                assert_eq!(setup.work.spent, 0);
+            }
+            if tick == 8 {
+                assert_eq!(setup.work.spent, 2);
+            }
+        }
+        assert_eq!(sounds, [(1, SOUND_FLAME_START), (0xB, SOUND_FLAME_GO_ON)]);
+    }
+
+    /// Letting go of the trigger plays the burst's end; a press there fires
+    /// again from `pl_mv05_w2_t2`'s second step, and a tilt mid-burst keeps
+    /// the frame, the flamethrower with a sound.
+    #[test]
+    fn a_burst_ends_on_its_own_clip_and_a_tilt_keeps_the_frame() {
+        let mut setup = bursting(FLAMETHROWER, 50);
+        for _ in 0..4 {
+            setup.tick(aiming(true, false), 200);
+        }
+        let frame = setup.work.move_cnt;
+        setup.player.take_sounds();
+        setup.tick(
+            Input {
+                up: true,
+                ..aiming(true, false)
+            },
+            200,
+        );
+        assert_eq!(setup.work.routine[3], 1);
+        assert_eq!(setup.work.status_flg & 0xE000, TILT_UP);
+        assert!(
+            setup
+                .player
+                .take_sounds()
+                .iter()
+                .any(|sound| sound.id == SOUND_FLAME_TILT)
+        );
+        setup.tick(
+            Input {
+                up: true,
+                ..aiming(true, false)
+            },
+            200,
+        );
+        assert_eq!(setup.work.move_no, BURST_CLIPS[2]);
+        assert_eq!(setup.work.move_cnt, frame + 2, "the frame goes on");
+        assert_eq!(setup.work.routine[3], 2);
+        // Let go of the trigger: the end, up.
+        setup.tick(
+            Input {
+                up: true,
+                ..aiming(false, false)
+            },
+            200,
+        );
+        assert_eq!(setup.work.routine[3], 3);
+        setup.tick(
+            Input {
+                up: true,
+                ..aiming(false, false)
+            },
+            200,
+        );
+        assert_eq!(setup.work.routine[3], 4);
+        assert_eq!(setup.work.move_no, BURST_END_CLIPS[2]);
+        // A press fires again.
+        setup.tick(
+            Input {
+                up: true,
+                ..aiming(true, true)
+            },
+            200,
+        );
+        assert_eq!(setup.work.routine[2..], [2, 1]);
+        // Letting go of the aim lowers the gun.
+        setup.tick(Input::default(), 200);
+        assert_eq!(setup.work.routine[2], 3);
+    }
+
+    /// `Tama_decrease_i` that finds one round left takes it and stops the
+    /// burst; the reload is the bursts' own clip.
+    #[test]
+    fn a_burst_stops_on_its_last_round_and_reloads_on_its_own_clip() {
+        let mut setup = bursting(SMG, 1);
+        setup.work.tama_count = 7;
+        setup.tick(aiming(true, false), 200);
+        assert_eq!(setup.work.spent, 1);
+        assert_eq!(setup.work.routine[2..], [2, 3]);
+        assert!(setup.work.effects.is_empty(), "no shot");
+        setup.weapon.loaded = false;
+        setup.weapon.rounds = 0;
+        setup.tick(aiming(false, false), 200);
+        assert_eq!(setup.work.move_no, BURST_END_CLIPS[1]);
+        setup.tick(aiming(true, true), 200);
+        assert_eq!(setup.work.routine[2], 4);
+        setup.tick(aiming(true, false), 200);
+        assert_eq!(setup.work.move_no, BURST_RELOAD_CLIP);
     }
 
     #[test]

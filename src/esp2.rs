@@ -53,7 +53,7 @@ const FLAGS_NEW: u16 = 0xa003;
 
 /// `Esp_tbl`'s entries with a port here.
 pub fn ported(id: u8) -> bool {
-    matches!(id, 0..=4 | 6 | 0x0b..=0x0d | 0x19 | 0x20 | 0x2B | 0x34 | 0x45 | 0x4E | 0x52)
+    matches!(id, 0..=4 | 6 | 0x0b..=0x0d | 0x19 | 0x20 | 0x2B | 0x34 | 0x45 | 0x46 | 0x4E | 0x52)
 }
 
 /// The `kind`s of texture a type's sprites sample.
@@ -955,6 +955,7 @@ impl Effects {
                 self.grenade_flight(index, sca);
             }
             0x0f => self.grenade_flight(index, sca),
+            0x46 => self.flame(index, sca),
             // `Esp_16`: a puff of smoke left behind each tick, half again its size.
             0x16 => {
                 let size = (u32::from(slot.size) * 0x96 / 100) as u16;
@@ -1544,6 +1545,68 @@ impl Effects {
             }
             _ => {}
         }
+    }
+
+    /// `Esp_46`: a flamethrower's flame. Each tick until it stops it looks for
+    /// the water (where it shrinks, with a puff of steam), a body, which it
+    /// burns, and the floor; on any of them, or inside a wall, it stops and
+    /// rises as it burns out, three ticks on leaving smoke. Where it last
+    /// burnt a body (`DWORD_00989e80`) isn't kept, and `Water_ck` is asked
+    /// for `x` twice, as the original does.
+    fn flame(&mut self, index: usize, sca: Option<&Sca>) {
+        let this = &mut self.slots[index];
+        this.start = this.start.wrapping_sub(1);
+        if this.start == 0 {
+            this.accel[1] = -10;
+        }
+        let slot = *this;
+        if slot.count != 0 {
+            if slot.start == 3 {
+                self.call(4, 0x0C, 0x2000, 0, slot.pos, true);
+            }
+            return;
+        }
+        let at = slot.pos.map(i32::from);
+        let mut stopped = false;
+        let level = crate::zombie2::water_ck(&self.water, at[0], at[0]);
+        if level != 0 && level < slot.pos[1] {
+            let size = &mut self.slots[index].size;
+            *size = (u32::from(*size) * 0x41 / 100) as u16;
+            self.call(3, 0x0F, 0x2000, 0, slot.pos, true);
+            stopped = true;
+        }
+        let blast = crate::weapon2::Blast {
+            at,
+            dir: slot.dir,
+            word: 0x2_0010,
+        };
+        let effects = crate::weapon2::blast_ck(&blast, &mut [-1400, 0, 400, 200], &mut self.bodies);
+        stopped |= effects
+            .iter()
+            .any(|effect| matches!(effect, crate::weapon2::BlastEffect::Hit(_)));
+        self.blasts.extend(effects);
+        let ground = Self::ground(sca, slot.pos);
+        stopped |= ground.height < at[1];
+        if ground.blocked || ground.under_record {
+            let size = &mut self.slots[index].size;
+            *size = (u32::from(*size) * 0x46 / 100) as u16;
+        } else if !stopped {
+            return;
+        }
+        let delay = self
+            .bank
+            .sprites
+            .get(&slot.kind)
+            .map_or(0, |sprite| sprite.frame(0x0C)[2]);
+        let this = &mut self.slots[index];
+        this.accel[0] = 0;
+        this.accel[1] = 0;
+        this.velocity[0] = 0;
+        this.velocity[1] = 0x14;
+        this.frame = 0x0C;
+        this.delay = delay;
+        this.start = 6;
+        this.count = 1;
     }
 
     /// `Esp_28`: a flame round's fire burns the first body in reach (the
@@ -2668,6 +2731,93 @@ mod tests {
         assert_eq!(effects.slots[first].rotation, turn);
         assert_eq!(effects.slots[child].rotation, turn);
         assert_eq!(effects.slots[other].rotation, [0; 3]);
+    }
+
+    /// A flame of `Esp_46` in slot 0 at `pos`, ten ticks to go.
+    fn flame_at(pos: [i16; 3]) -> Effects {
+        let mut effects = Effects::default();
+        effects.enter_room(bank_rows(4, &[(4, &[fire_block()])]));
+        effects.slots[0] = Slot {
+            flags: FLAG_LIVE | FLAG_ANIMATE | FLAG_INTEGRATE,
+            kind: 3,
+            row: 0x1D,
+            update: 0x46,
+            start: 10,
+            accel: [2, 0, 0],
+            velocity: [0x10, 0, 0],
+            size: 1000,
+            pos,
+            ..Slot::default()
+        };
+        effects
+    }
+
+    /// `Esp_46` in the air with nothing in reach goes on, its count down.
+    #[test]
+    fn a_flame_with_nothing_in_reach_goes_on() {
+        let mut effects = flame_at([0, -1000, 0]);
+        effects.behave(0, 0x46, None);
+        let slot = effects.slots[0];
+        assert_eq!((slot.start, slot.count, slot.size), (9, 0, 1000));
+        assert_eq!(slot.velocity[0], 0x10);
+        assert!(effects.blasts.is_empty());
+    }
+
+    /// `Esp_46` burns the first body in its box (`FUN_004d7e30` with
+    /// `0x20010`: the flamethrower's row, by height) and stops: it rises on
+    /// frame 0xc, and three ticks on leaves smoke (kind 4, row 0xc).
+    #[test]
+    fn a_flame_burns_the_body_in_reach_then_rises_and_smokes() {
+        let mut effects = flame_at([0, -1000, 0]);
+        effects.bodies = vec![crate::weapon2::Target {
+            slot: 1,
+            id: 0x1F,
+            be_flg: 1,
+            life: 50,
+            pos: [-700, 0, 0],
+            at: [-700, 0],
+            at_w1: 400,
+            ofs_y: -1000,
+            at_h: 1000,
+            ..Default::default()
+        }];
+        effects.behave(0, 0x46, None);
+        let hit = effects.blasts.iter().find_map(|effect| match effect {
+            crate::weapon2::BlastEffect::Hit(hit) => Some(*hit),
+            crate::weapon2::BlastEffect::Tested(_) => None,
+        });
+        let hit = hit.expect("the body burns");
+        assert_eq!(
+            (hit.slot, hit.weapon, hit.damage, hit.damage_no),
+            (1, 0x10, 15, 1)
+        );
+        let slot = effects.slots[0];
+        assert_eq!((slot.start, slot.count, slot.frame), (6, 1, 0x0C));
+        assert_eq!(slot.velocity[..2], [0, 0x14]);
+        assert_eq!(slot.accel[..2], [0, 0]);
+        assert_eq!(slot.size, 1000, "out of the walls it keeps its size");
+        let smoke = |effects: &Effects| {
+            effects.slots[1..]
+                .iter()
+                .any(|slot| slot.flags & FLAG_DEFERRED != 0 && slot.kind == 4 && slot.row == 0x0C)
+        };
+        for start in [5, 4] {
+            effects.behave(0, 0x46, None);
+            assert_eq!(effects.slots[0].start, start);
+            assert!(!smoke(&effects));
+        }
+        effects.behave(0, 0x46, None);
+        assert!(smoke(&effects));
+    }
+
+    /// Under the floor (`Sca_ck_hit`'s height above it, and `DWORD_00695e84`)
+    /// a flame stops, shrunk to 70 in 100.
+    #[test]
+    fn a_flame_stops_shrunk_under_the_floor() {
+        let mut effects = flame_at([0, 100, 0]);
+        effects.behave(0, 0x46, None);
+        let slot = effects.slots[0];
+        assert_eq!((slot.count, slot.size), (1, 700));
     }
 
     #[test]

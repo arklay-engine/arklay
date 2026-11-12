@@ -1153,10 +1153,11 @@ end
 
 -- `BYTE_0052a5c3`: the kind of a hit's blood by weapon; `BYTE_0052a5d8`:
 -- the parts it comes from, by `Damage_no`; `BYTE_0052a5dc`: the parts of
--- the blood of weapons 4, 0xf and 0x12, by `Damage_no` and a `Rnd`.
+-- the blood of weapons 4, 0xf and 0x12, four by `Damage_no`'s third and a
+-- `Rnd`, whose first eight `FUN_004995c0` sprays from.
 local HIT_KIND <const> = { [0] = 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 0, 0 }
 local HIT_PART <const> = { [0] = 0x18, 1, 3 }
-local SPRAY_PARTS <const> = { [0] = 23, 25, 26, 27, 2, 4, 17, 11 }
+local SPRAY_PARTS <const> = { [0] = 23, 25, 26, 27, 2, 4, 17, 11, 2, 3, 2, 3 }
 -- `BYTE_0052a7cb` and `BYTE_0052a7df`: what each weapon takes from
 -- `AT_EM_FLG`, which flinches it at 0, at 600 life or more and below.
 local STUN_HIGH <const> = { [0] = 0, 10, 10, 10, 10, 20, 10, 10, 10, 10, 40, 10, 10, 10, 20, 4, 4, 40, 4, 10 }
@@ -1181,8 +1182,16 @@ local function spray(e, weapon)
     end
 end
 
+-- `FUN_00499570`, the blood of weapons 4, 0xf and 0x12: one of the
+-- weapon's `HIT_KIND` (`FUN_0049add0` with `BYTE_006896e8` 1) at the part
+-- of `BYTE_0052a5dc` that `Damage_no` and a `Rnd` pick.
+local function spot(e, weapon)
+    local index = (e:damage_no() % 3) * 4 + (e:rnd() & 3)
+    blood(e, SPRAY_PARTS[index], HIT_KIND[weapon], 0)
+end
+
 -- `DWORD_0052a77c`: what each weapon's hit adds. The magnums start the
--- spurt; 4, 0xf and 0x12's blood draws its `Rnd` only; 9, 0xa, 0x10, 0x11
+-- spurt; 4, 0xf and 0x12 bleed at a spot (`FUN_00499570`); 9, 0xa, 0x10, 0x11
 -- and 0x13 spray (`FUN_004995c0`); 0xb's and 0xe's (`FUN_00499640`,
 -- `FUN_004996c0`) aren't ported. The others' (the Colt's among them) are
 -- `nullsub_1`.
@@ -1190,7 +1199,7 @@ local function weapon_blood(e, weapon)
     if weapon == 5 or weapon == 6 then
         e:set_var(SPURT, 1)
     elseif weapon == 4 or weapon == 0xF or weapon == 0x12 then
-        e:rnd()
+        spot(e, weapon)
     elseif weapon == 9 or weapon == 0xA or weapon == 0x10 or weapon == 0x11 or weapon == 0x13 then
         spray(e, weapon)
     end

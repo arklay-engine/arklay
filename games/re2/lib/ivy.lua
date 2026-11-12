@@ -15,12 +15,14 @@
 --
 -- State 5's spit is `Esp_call` kind 0x1D, whose `Esp_20` hits and poisons
 -- the player (`esp2.rs`). A hit (`Routine_0` 2) and the death (3, then 7)
--- are ported for the weapons arklay fires, 2 to 8, 0xD and 0x13, with `censorship_off` and
--- `hard_mode` clear, and so is the retreat at half its life (state 7). Only
+-- are ported for the weapons arklay fires, 2 to 8, 0xD, 0xF, 0x10 and 0x13,
+-- with `censorship_off` and `hard_mode` clear, and so is the retreat at half
+-- its life (state 7). Only
 -- the player as the target is ported (`FUN_004881c0` can pick the partner
 -- too), and neither are the other weapons' entries, the spit at close range
 -- (state 6), states 8, 9 and 11, the head's twist on parts 11 to 13
--- (`FUN_004883d0`), the parts' colours and the dead ivy's shadow.
+-- (`FUN_004883d0`), the parts' colours (the flame's death fades them,
+-- `FUN_00487b90`) and the dead ivy's shadow.
 
 local M = {}
 
@@ -920,11 +922,23 @@ local function flinch(e)
     e:set_be_flg(e:be_flg() & ~4)
 end
 
+-- `caseD_11` (`0x487580`), the flamethrower's: six of row 2's blood, at most
+-- once in 0x3c ticks (`+0x23f`), then as `caseD_2`.
+local function scorch(e)
+    if e:routine(2) == 0 and e:var(F23F) == 0 then
+        e:set_var(F23F, 0x3C)
+        spray(e, 2, 6)
+    end
+    resume(e)
+end
+
 -- `funcs_487037` (`0x529ec4`), by weapon, with `censorship_off` and
 -- `hard_mode` clear. Only the weapons arklay fires are ported.
 local HURTS <const> = {
     resume, resume, resume, bleed, flinch, flinch, flinch, flinch,
     [0xD] = resume, -- `0x529ef8`: the Colt's, the handguns'.
+    [0xF] = bleed, -- `0x529f00`: the SMG's, 4's.
+    [0x10] = scorch, -- `0x529f04`: the flamethrower's.
     [0x13] = flinch, -- `0x529f10`: the Beretta's, the table's last, 0x11's.
 }
 
@@ -1045,10 +1059,47 @@ local function die_torn(e)
     blood(e, first, 0)
 end
 
+-- `FUN_00487980`: the death of weapons 0xa and 0x10, burnt. Two sprays of
+-- row 3's blood and the fall, the vines' command 7 and `+0x238` 1; with
+-- `+0x23d` it burns 0x78 ticks where it stands, then `Routine_0` 7.
+-- `FUN_00487b90`, which fades the 26 parts' `Poly_rgb` a step each tick,
+-- isn't ported: the script can't set a part's colour.
+local function die_burnt(e)
+    local two = e:routine(2)
+    if e:var(F23D) == 0 then
+        if two ~= 0 then
+            dying(e)
+            return
+        end
+        spray(e, 3, 6)
+        spray(e, 3, 6)
+        e:set_be_flg(e:be_flg() & ~4)
+        die_start(e)
+        e:set_room_enemy(e:room_enemy() & ~ROOM_LASHING)
+    else
+        if two ~= 0 then
+            local left = (e:timer(0) - 1) & 0xFFFF
+            e:set_timer(0, left)
+            if left == 0 then
+                e:routines(7, 0, 0, 0)
+            end
+            return
+        end
+        e:set_routine(2, 1)
+        e:set_timer(0, 0x78)
+        spray(e, 3, 6)
+        spray(e, 3, 6)
+    end
+    command(e, 7, 3)
+    e:set_var(F238, 1)
+end
+
 -- `0x529f6c`, by weapon. Only the weapons arklay fires are ported.
 local DIES <const> = {
     die_plain, die_plain, die_plain, die_plain, die_blown, die_blown, die_blown, die_blown,
     [0xD] = die_plain, -- `0x529fa0`: the Colt's, the handguns'.
+    [0xF] = die_plain, -- `0x529fa8`: the SMG's, the handguns'.
+    [0x10] = die_burnt, -- `0x529fac`: the flamethrower's, 0xa's.
     [0x13] = die_torn, -- `0x529fb8`: the Beretta's, the table's last, 0x11's.
 }
 

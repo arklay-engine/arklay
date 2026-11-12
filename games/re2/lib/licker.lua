@@ -305,7 +305,9 @@ local function flames(e)
     e:set_var(COUNT, count + 1)
 end
 
--- `FUN_004671f0`: the blood of a hit.
+-- `FUN_004671f0`: the blood of a hit. Weapons 0xA, 0xE, 0x10, 0x11 and 0x13
+-- also take the colours of 0x16 parts to 0x484848, and 0xB to 0x585858 unless
+-- the first part's red is already 0x48 (`FUN_0046b840`), which isn't ported.
 local function hit_blood(e, behind)
     local weapon = e:var(WEAPON)
     local blood = V.blood[weapon] or BLOOD[weapon] or BLOOD[0]

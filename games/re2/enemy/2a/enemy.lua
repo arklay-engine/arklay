@@ -26,6 +26,9 @@ local BLEED_COUNT <const> = 10 -- `+0x228`.
 local REACTION <const> = 11 -- `+0x1d2`: how he took the last hit.
 local FLINCH_COUNT <const> = 12 -- `+0x230`.
 local FLINCH_BITS <const> = 13 -- `+0x234`.
+-- `DWORD_006895a0`, a global in the original: the reaction when the SMG's
+-- blood began, which its later drops are placed by.
+local SMG_REACTION <const> = 14
 
 local BE_NO_OBA <const> = 2
 local BE_SCENE <const> = 8
@@ -1157,9 +1160,47 @@ local function blood(e, count, kind, row, size, flags)
     end
 end
 
--- `FUN_0047fea0`: the blood each weapon draws. The grenades' and the others'
--- that keep bleeding over the ticks after (`0xa`, `0xe`, `0xf` and `0x12`)
--- aren't in the weapon table yet.
+-- `Key & 0x40`, the fire button held. The script can't read the player's
+-- keys, so this is always false: the SMG's burst goes on while fire is held,
+-- so its last hit's later drops mostly come after the button is let go.
+local function fire_held(_e)
+    return false
+end
+
+-- `FUN_00480130`, the SMG's (and 0x12's) blood, which `+0x220` keeps calling
+-- each tick after the hit: a drop at once, then one more on each of the
+-- `+0x228` counts 4, 7 and 10 while fire is held, placed by the reaction it
+-- began with. At 10 it stops calling itself; a hit by any weapon while it runs
+-- sets the count back to 0, so it draws its first drop again.
+local function bleed_smg(e)
+    local count = e:var(BLEED_COUNT)
+    if count == 0 then
+        e:set_var(SMG_REACTION, e:var(REACTION))
+        blood(e, 1, 0, 6, 0x1000, 3)
+        e:set_var(BLEEDING, 0xF)
+        e:set_var(BLEED_COUNT, 1)
+        return
+    end
+    if count == 4 or count == 7 or count == 10 then
+        local reaction = e:var(REACTION)
+        e:set_var(REACTION, e:var(SMG_REACTION))
+        if fire_held(e) then
+            blood(e, 1, 0, 6, 0x1000, 3)
+        end
+        e:set_var(REACTION, reaction)
+        if count == 10 then
+            e:set_var(BLEEDING, 0)
+        end
+    end
+    e:set_var(BLEED_COUNT, (count + 1) & 0xFF)
+end
+
+-- `+0x220`'s callbacks, by the weapon that set them. 0xa's (`FUN_00480220`)
+-- and 0xe's (`FUN_00480280`) aren't ported.
+local BLEEDS <const> = { [0xF] = bleed_smg }
+
+-- `FUN_0047fea0`: the blood each weapon draws. The grenades' and 0xe's,
+-- which keep bleeding over the ticks after, aren't in the weapon table yet.
 local function bleed(e)
     e:set_var(BLEED_COUNT, 0)
     local weapon = e:var(WEAPON)
@@ -1177,6 +1218,8 @@ local function bleed(e)
         blood(e, 5, 5, 4, 0x1000, 3)
     elseif weapon == 0xB then
         blood(e, 5, 4, 9, 0x1500, 3)
+    elseif weapon == 0xF or weapon == 0x12 then
+        bleed_smg(e)
     elseif weapon == 0x10 then
         blood(e, 5, 5, 4, 0x1600, 3)
     end
@@ -1379,6 +1422,10 @@ function update(e)
     count_down(e, CHARGED)
     count_down(e, SHOVED)
     count_down(e, PUNCHED)
+    local bleeding = BLEEDS[e:var(BLEEDING)]
+    if bleeding then
+        bleeding(e)
+    end
     if e:var(SOUNDS) & 0x80 == 0 then
         e:seq_sound()
     end

@@ -1100,6 +1100,9 @@ fn re2_ammo(weapon: u8) -> (u8, u8) {
         // `Item_data_tbl`: the Colt holds six, the Beretta fifteen.
         crate::player2::COLT => (RE2_HANDGUN_BULLETS, 6),
         crate::player2::BERETTA => (RE2_HANDGUN_BULLETS, 15),
+        // The machine gun bullets and the fuel, a hundred a load.
+        crate::player2::SMG => (0x1B, 100),
+        crate::player2::FLAMETHROWER => (0x17, 100),
         _ => (RE2_HANDGUN_BULLETS, 18),
     }
 }
@@ -9452,6 +9455,7 @@ impl GameState {
             id,
             loaded: self.item_count(id) != 0,
             spare: self.item_count(re2_ammo(id).0) != 0,
+            rounds: self.item_count(id).min(u32::from(u8::MAX)) as u8,
         }
     }
 
@@ -9464,6 +9468,12 @@ impl GameState {
             // `FUN_004d58c0`: the bowgun's shot takes three.
             let taken = if weapon == crate::bow2::BOW { 3 } else { 1 };
             slot.quantity = slot.quantity.saturating_sub(taken);
+        }
+        let spent = std::mem::take(&mut self.re2.player.spent);
+        if spent != 0
+            && let Some(slot) = self.inventory.iter_mut().find(|slot| slot.id == weapon)
+        {
+            slot.quantity = slot.quantity.saturating_sub(spent);
         }
         if std::mem::take(&mut self.re2.player.reloaded) {
             let (ammo, magazine) = re2_ammo(weapon);
@@ -11358,6 +11368,42 @@ mod tests {
             game.re2_settle_ammo();
             assert_eq!(game.item_count(weapon), load);
             assert_eq!(game.item_count(RE2_HANDGUN_BULLETS), 40 - load);
+        }
+    }
+
+    /// `Item_data_tbl` and `Mix_null`: the sub-machine gun loads a hundred
+    /// machine gun bullets and the flamethrower a hundred of fuel, and the
+    /// rounds a burst spent come off the gun.
+    #[test]
+    fn a_re2_burst_spends_its_rounds_and_reloads_a_hundred() {
+        for (weapon, ammo) in [
+            (crate::player2::SMG, 0x1B),
+            (crate::player2::FLAMETHROWER, 0x17),
+        ] {
+            assert_eq!(re2_ammo(weapon), (ammo, 100));
+            let mut game = GameState {
+                equipped_weapon_id: weapon,
+                inventory: vec![
+                    InventoryItem {
+                        id: weapon,
+                        quantity: 2,
+                    },
+                    InventoryItem {
+                        id: ammo,
+                        quantity: 250,
+                    },
+                ],
+                ..Default::default()
+            };
+            assert_eq!(game.re2_weapon().rounds, 2);
+            game.re2.player.spent = 2;
+            game.re2_settle_ammo();
+            assert_eq!(game.item_count(weapon), 0);
+            assert_eq!(game.re2.player.spent, 0);
+            game.re2.player.reloaded = true;
+            game.re2_settle_ammo();
+            assert_eq!(game.item_count(weapon), 100);
+            assert_eq!(game.item_count(ammo), 150);
         }
     }
 
