@@ -16522,7 +16522,7 @@ fn build_effect_pages(pack: &Pack, id: RoomId, room: &effects::RoomEffects) -> E
     let room_byte = usize::from(id.room);
     let mut pages = EffectPages::default();
 
-    for page in 0..4 {
+    for (page, base) in pages.base.iter_mut().enumerate() {
         let Some(sheet) = effects::pages::room_effect_sheet_index(stage, room_byte, page) else {
             continue;
         };
@@ -16531,7 +16531,7 @@ fn build_effect_pages(pack: &Pack, id: RoomId, room: &effects::RoomEffects) -> E
         // so a replacement keeps the shipped sheet's dimensions.
         match pack.read_asset(&stem, AssetClass::Image) {
             Ok(Some(asset)) => match assets::decode_page(&asset, assets::Geometry::Shipped) {
-                Ok(art) => pages.base[page] = Some(art.to_rgba()),
+                Ok(art) => *base = Some(art.to_rgba()),
                 Err(err) => {
                     crate::warning!("warning: invalid effect page {}: {err:#}", asset.path())
                 }
@@ -30890,9 +30890,9 @@ mod tests {
         mixer.play_bgm_channel(0, wav(), true);
         mixer.play_bgm_channel(1, wav(), true);
         session.music = Some(mixer);
-        for index in 0..2 {
-            session.game.bgm.channels[index].track = Some(0x999);
-            session.game.bgm.channels[index].pending_load = false;
+        for channel in &mut session.game.bgm.channels[..2] {
+            channel.track = Some(0x999);
+            channel.pending_load = false;
         }
         session.game.bgm.state |= 8 | 16;
         session.set_skips_enabled(true);
@@ -36578,9 +36578,9 @@ off_0010:
                 character
             );
             // `initial_state.lua` puts two Handgun Ammo stacks of 15 in the box.
-            for slot in 0..2 {
-                assert_eq!(session.game.item_box[slot].id, ITEM_HANDGUN_AMMO);
-                assert_eq!(session.game.item_box[slot].quantity, 15);
+            for stack in &session.game.item_box[..2] {
+                assert_eq!(stack.id, ITEM_HANDGUN_AMMO);
+                assert_eq!(stack.quantity, 15);
             }
             // SetInitialItems seeds the three carried room-pickup quantities.
             assert_eq!(
