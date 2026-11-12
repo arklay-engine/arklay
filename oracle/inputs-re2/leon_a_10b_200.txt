@@ -1,0 +1,118 @@
+# Leon A, the Diamond Key in 10B down 110's ladder into 200 (#644 Part 1) (oracle/re2.md, "Leon A to the Heart Key")
+# 10B from the shelf: north to door 1
+345 left
+370 up run
+383 up run right
+384 up run
+392 up run right
+393 up run
+406 up run right
+417 up run left
+423 up run
+431 up run left
+432 up run
+433 up run left
+434 up run
+435 up run left
+436 up run
+440
+441 left
+444 up
+454
+# door 1 into 10A
+457 action
+459
+495 up
+# 10A: west along the north corridor and south down the west one past its two zombies to door 1
+799 up run left
+823 up run
+844 up run left
+845 up run
+852 up run left
+862 up run
+863 up run left
+865 up run
+866 up run left
+867 up run
+872 up run left
+873 up run
+874 up run left
+880 up run
+919 up run right
+920 up run
+948
+949 right
+969 up
+981
+# door 1 into 10F
+984 action
+986
+1021 up
+# 10F: west to door 1
+1325 up run left
+1330 up run
+1344 up run left
+1345 up run
+1350 up run left
+1353 up run
+1365 up run left
+1366 up run
+1373 up run left
+1374 up run
+1376
+1377 right
+1386 up
+1398
+# door 1 into 110
+1401 action
+1403
+1438 up
+# 110: north up the east corridor, west along the north one to the ladder (area 1), and south onto it
+1754 up run right
+1760 up run
+1763 up run right
+1764 up run
+1767 up run right
+1772 up run
+1887 up run right
+1888 up run
+1924 up run right
+1925 up run
+1929 up run right
+1930 up run
+1931 up run left
+1946 up run
+1949 up run left
+1959 up run
+1988 up run left
+1989 up run
+2010 up run left
+2011 up run
+2012 left
+2031 up
+# the ladder's question (a press every 12 ticks: the text, Yes), and main_02's event lowers it (4:148)
+2061 action
+2063
+2073 action
+2075
+2085 action
+2087
+2097 action
+2099
+2109 action
+2111
+2121 action
+2123
+2133 action
+2135
+2145 action
+2147
+# the ladder again: its question and Yes, and aot_on(2), the ladder's door into 200
+2358 action
+2360
+2370 action
+2372
+2382 action
+2384
+2422 up
+2756

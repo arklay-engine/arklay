@@ -1,0 +1,25 @@
+# Leon A's route from the Diamond Key (10B) down 110's ladder and through 207's Diamond door and 209 to the Heart Key in Marvin's office (202), room by room from warps (oracle/re2.md, "Leon A to the Heart Key", #644), each warp starting Leon as the run before leaves him, the first as route_200_diamond leaves him: 84 life, 6 rounds in the handgun and none spare, the knife, the ink ribbons in slot 2, the Red Jewel in slot 3, the valve handle in slot 4, the Diamond Key (two uses) in slot 5, and every common (bank 4), item (bank 8) and fg_key (bank 31) flag and the enemies' dead flags (bank 6) the route has raised by its end.
+
+# Rooms 10B, 10A, 10F and 110: from 10B's shelf back to door 1, west and south round 10A past its two zombies, across 10F, and up 110's east corridor and along its north one to the ladder: its question and Yes, main_02's event that lowers it (4:148), the ladder's question again and its door down into 200.
+[[run]]
+name = "leon_a_10b_200"
+room = "10B"
+setup_script = "leon_a_10b_200.lua"
+input = "leon_a_10b_200.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 2800
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2"
+frames = [360, 2799]
+# 0.96 measured: the doors' frames count only in the whole run's mean (10F's door 1 into 110 is about 6 at worst)
+frame_max_mean = 1.1
+# each room on its own, from its hand back to its door's press: 10B, 10A, 10F, 110 (the ladder's event and question), and 200 from its hand back
+frame_windows = [[360, 456, 0.25], [798, 983, 0.7], [1324, 1400, 0.3], [1753, 2381, 0.25], [2755, 2799, 1.15]]
+expect = "match"
+ignore = [
+  # the warp's head on its first ticks (oracle/re2.md), and the doors' own ticks: 10B's door 1, 10A's door 1, 10F's door 1, and the tick after the last press of 110's ladder question, whose Yes opens the ladder's door (`aot_on(2)`)
+  [344, 350, "pneck"], [458, "rng"], [458, "rseed"], [984, "rng"], [984, "rseed"], [1401, "rng"], [1401, "rseed"], [2383, "rng"], [2383, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [493, 583, "hk"], [1019, 1109, "hk"], [1436, 1526, "hk"], [2418, 2510, "hk"],
+]
+record = "--warp 10B:-19749:0:-25562:31:3 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 84 --give 0:2:6 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:2"
