@@ -651,7 +651,8 @@ impl Zombie {
     }
 }
 
-/// `FUN_00456780`'s colours for a burning body (its `Id` not `0x10`): each
+/// `FUN_00456780`'s colours for a burning body (`Routine_1`, byte +5, not
+/// 0x10): each
 /// part's `Poly_rgb`, which scales what lights it. The parts it leaves keep
 /// theirs.
 pub const BURNT_PART_RGB: [(usize, u32); 11] = [

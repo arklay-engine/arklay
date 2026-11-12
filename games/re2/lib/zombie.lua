@@ -63,8 +63,6 @@ local MODE_HELD_DIE <const> = 6
 -- `At_em_no` when nothing's touching.
 local NO_BODY <const> = 0xFF
 
--- `Em10_Scenario` takes a burnt body's colours down this far.
-
 -- `Em10_Life` and `Em10_Life_easy`.
 local LIFE <const> = {
     [0] = 70, 84, 118, 65, 50, 85, 48, 65, 40, 73, 69, 56, 70, 55, 72, 55,
