@@ -20,7 +20,7 @@
 //!   cached the same way.
 //! * Per draw, only each object's view transform (the software's
 //!   `RefProjection`), the latched lights and the tint/blend travel as
-//!   uniforms; `mesh.vert` drops and culls whole packets like the software,
+//!   uniforms; `mesh.vert` drops (RE1), clips (RE2) and culls packets like the software,
 //!   lights each corner like `reference_vertex_shade` and projects with the
 //!   software's linear depth, so lavapipe rasterizes the same pixels.
 //!   `mesh.frag` looks up the CLUT row in the shader, with "blends under a
@@ -1019,6 +1019,7 @@ impl GpuRenderer {
         depth: Option<(SDL_GPUTextureFormat, bool)>,
         colour_format: Option<SDL_GPUTextureFormat>,
         samples: SDL_GPUSampleCount,
+        depth_clip: bool,
     ) -> Result<*mut SDL_GPUGraphicsPipeline> {
         let buffer = SDL_GPUVertexBufferDescription {
             slot: 0,
@@ -1092,7 +1093,7 @@ impl GpuRenderer {
                 // The software path keeps a packet whose screen-space area is
                 // positive in its Y-down frame: clockwise on screen.
                 front_face: SDL_GPU_FRONTFACE_CLOCKWISE,
-                enable_depth_clip: true,
+                enable_depth_clip: depth_clip,
                 ..Default::default()
             },
             multisample_state: SDL_GPUMultisampleState {
@@ -1166,6 +1167,7 @@ impl GpuRenderer {
                 Some((depth_format, write)),
                 Some(colour),
                 this.samples,
+                false,
             )
         };
         let sprite_as = |this: &Self, depth, colour, samples, blend| {
@@ -1179,6 +1181,7 @@ impl GpuRenderer {
                 Some(depth),
                 Some(colour),
                 samples,
+                true,
             )
         };
         let sprite = |this: &Self, depth, colour: Option<SDL_GPUTextureFormat>, samples| {
@@ -1196,6 +1199,7 @@ impl GpuRenderer {
                 Some(depth),
                 colour,
                 samples,
+                true,
             )
         };
         // Each pipeline is stored as soon as it exists, so a later failure
@@ -1239,6 +1243,7 @@ impl GpuRenderer {
                 Some((depth_format, write)),
                 Some(colour),
                 this.samples,
+                true,
             )
         };
         self.pipelines.model_opaque = model(self, Blend::None, true)?;
@@ -1265,6 +1270,7 @@ impl GpuRenderer {
             None,
             Some(colour),
             SDL_GPU_SAMPLECOUNT_1,
+            true,
         )?;
         Ok(())
     }
@@ -1285,6 +1291,7 @@ impl GpuRenderer {
             None,
             Some(format),
             SDL_GPU_SAMPLECOUNT_1,
+            true,
         )
     }
 
@@ -1301,6 +1308,7 @@ impl GpuRenderer {
             None,
             Some(format),
             SDL_GPU_SAMPLECOUNT_1,
+            true,
         )
     }
 

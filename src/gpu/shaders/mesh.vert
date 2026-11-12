@@ -26,13 +26,20 @@ layout(location = 2) flat out uint out_packed;
 // The triangle's painter's key: its corners' mean view Z, rounded.
 layout(location = 3) flat out float out_key;
 
+// RE2's near clip ([`DRAW_NEAR_CLIP`]): the device's `sz = 0`.
+out gl_PerVertex {
+    vec4 gl_Position;
+    float gl_ClipDistance[1];
+};
+
 layout(std140, set = 1, binding = 0) uniform Draw {
-    vec4 projection;    // fov, shake x, shake y, near limit
+    vec4 projection;    // fov, shake x, shake y, near limit (RE2: the clip plane)
     vec4 ambient;       // rgb in 0..255, w = the joint that never culls, or -1
     vec4 light_colour[3]; // rgb * 255 / 128
     vec4 tint;          // rgb in 0..255
     uvec4 flags;        // x = hidden joints (bit per joint), y = mode
-                        // (1 cull, 2 transparent record, 4 record blends),
+                        // (1 cull, 2 transparent record, 4 record blends,
+                        // 8 RE2's near clip),
                         // zw = texture page size
     vec4 joints[32 * 6]; // per joint: 3 view rows (xyz, w = t), then 3 light vectors
                          // (w = the joint's colour channel in 0..255, or < 0)
@@ -54,6 +61,7 @@ vec2 screen(vec3 v) {
 
 void drop_vertex() {
     gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
+    gl_ClipDistance[0] = 1.0;
     out_uv = vec2(0.0);
     out_shade = vec3(0.0);
     out_packed = in_packed;
@@ -78,9 +86,17 @@ void main() {
     precise vec3 v2 = view_point(base, in_corner2);
     precise vec3 v3 = view_point(base, in_corner3);
     float near = projection.w;
-    // The software drops the whole packet when any corner is inside the
-    // near limit (or not a number).
-    if (!(v0.z >= near && v1.z >= near && v2.z >= near && v3.z >= near)) {
+    bool re2 = (flags.y & 8u) != 0u;
+    if (re2) {
+        // RE2 drops nothing on the CPU: only a corner that is not a number.
+        bool numbers = !any(isnan(v0)) && !any(isnan(v1)) && !any(isnan(v2)) && !any(isnan(v3));
+        if (!numbers) {
+            drop_vertex();
+            return;
+        }
+    } else if (!(v0.z >= near && v1.z >= near && v2.z >= near && v3.z >= near)) {
+        // The software drops the whole packet when any corner is inside the
+        // near limit (or not a number).
         drop_vertex();
         return;
     }
@@ -89,6 +105,11 @@ void main() {
     precise vec2 s2 = screen(v2);
     if ((flags.y & 1u) != 0u && float(joint) != ambient.w) {
         precise float area = (s1.x - s0.x) * (s2.y - s0.y) - (s2.x - s0.x) * (s1.y - s0.y);
+        if (re2 && !(v0.z > 0.0 && v1.z > 0.0 && v2.z > 0.0)) {
+            // `packet_faces_camera`: a corner at or behind the eye has no
+            // screen place, so the facing in view space decides.
+            area = -dot(v0, cross(v1, v2));
+        }
         if (!(area > 0.0)) {
             drop_vertex();
             return;
@@ -101,11 +122,26 @@ void main() {
     // depth ramp `TmdDepthNdc` (view Z 1..131072 onto 0..1).
     float w = v.z;
     float depth = clamp((w - 1.0) * (1.0 / 131071.0), 0.0, 1.0);
-    gl_Position = vec4(
-        (s.x * (2.0 / 320.0) - 1.0) * w,
-        (1.0 - s.y * (2.0 / 240.0)) * w,
-        depth * w,
-        w);
+    if (re2 && !(w > 0.0)) {
+        // A corner at or behind the eye has no screen place: its clip
+        // position is the same projection with `w` multiplied through, which
+        // the near plane cuts away (the mesh pipelines clamp depth, not
+        // clip it, so the depth planes cut nothing).
+        gl_Position = vec4(
+            ((160.0 + projection.y) * (2.0 / 320.0) - 1.0) * w + v.x * projection.x * (2.0 / 320.0),
+            (1.0 - (120.0 + projection.z) * (2.0 / 240.0)) * w + v.y * projection.x * (2.0 / 240.0),
+            0.0,
+            w);
+    } else {
+        gl_Position = vec4(
+            (s.x * (2.0 / 320.0) - 1.0) * w,
+            (1.0 - s.y * (2.0 / 240.0)) * w,
+            depth * w,
+            w);
+    }
+    // `clip_triangle_near`: the device clips where view Z falls below the
+    // plane.
+    gl_ClipDistance[0] = re2 ? w - near : 1.0;
 
     // A transparent record blends every packet by its weight, or none.
     uint packed = in_packed;

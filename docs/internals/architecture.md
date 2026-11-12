@@ -549,9 +549,16 @@ presenting does the same mid-game.
   drawn up to its mark. The software 3D rasterizer is never reached from the
   GPU backend: a scene the GPU fails to record or present switches the whole
   run to the software backend.
+- **Near the eye** both backends follow the same rule. An RE1 packet with a
+  corner inside the reference's near limit (`2 * fov`) is dropped whole. An
+  RE2 mesh drops nothing there: like the original's Direct3D draw
+  (`Marni::TransObjectNgTin3_VinsNins`, which hands the device each vertex's
+  `sz = 1 - (H / 2) / z`), each triangle is clipped where its view Z falls
+  below `fov / 2`, in software by `render::clip_triangle_near` and on the GPU
+  by `mesh.vert`'s clip distance (`DRAW_NEAR_CLIP`), with the mesh pipelines
+  clamping depth instead of clipping it.
 - **Known differences** from the software frame: per-pixel depth instead of
-  per-packet sorting, hardware near-plane clipping instead of dropping a
-  crossing packet, and float shading instead of the GTE's truncation. `engine::tests::gpu_scene_matches_software_in_real_rooms` bounds the
+  per-packet sorting, and float shading instead of the GTE's truncation. `engine::tests::gpu_scene_matches_software_in_real_rooms` bounds the
   difference on real rooms.
 
 ## Engine invariants
