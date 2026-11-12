@@ -14,9 +14,16 @@
 //!   them through the reference's ortho matrix with `w = vz`.
 //! * Every vertex carries its packet's corners, so a packet with any corner
 //!   inside the near limit (`max(2 * fov, 1)`) is dropped whole and a packet
-//!   is culled on its first three corners, as in software.
+//!   is culled on its first three corners, as in software. An RE2 mesh
+//!   ([`DRAW_NEAR_CLIP`]: RE2-lit, or through an RE2 door's camera) drops
+//!   nothing near the eye: each triangle is clipped where its view Z falls
+//!   below `fov / 2`, as `render::clip_triangle_near` clips it.
 //! * Depth is the reference's linear ramp `TmdDepthNdc` written as `z / w`,
-//!   so it interpolates linearly in screen space like llvmpipe's. Sprites
+//!   so it interpolates linearly in screen space like llvmpipe's. An RE2
+//!   mesh writes `TmdDepthNdc` of its perspective-correct view Z instead
+//!   (`gl_FragDepth`, as `raster::draw_triangle_depth` does): `z / w` is
+//!   quadratic in `w`, so the corners the clipper makes would take the wrong
+//!   depth, where the view Z it interpolates is exact there. Sprites
 //!   without geometry (masks, effects) take the same mapping of their
 //!   painter's key, which is a view-Z in the same units.
 
@@ -351,7 +358,13 @@ pub fn draw_uniforms(
     space: LightSpace,
     mirror: Option<&MirrorPass>,
 ) -> DrawUniforms {
-    let projection = camera_terms(camera);
+    let mut projection = camera_terms(camera);
+    // The software's rule (`collect_triangles`): every RE2-lit mesh, and
+    // everything through an RE2 door's camera.
+    let near_clip = space == LightSpace::Part || camera.near_clip;
+    if near_clip {
+        projection[3] = render::re2_near_clip(camera.fov) as f32;
+    }
     let stored = stored_camera_matrix(camera.from, camera.look_at);
     let mut joints = [[0.0f32; 4]; MAX_JOINTS * 6];
     let mut hidden = 0u32;
@@ -408,7 +421,8 @@ pub fn draw_uniforms(
         ],
         flags: [
             hidden,
-            draw_mode(mesh.blend_weight, mirror.is_none()),
+            draw_mode(mesh.blend_weight, mirror.is_none())
+                | if near_clip { DRAW_NEAR_CLIP } else { 0 },
             mesh.texture.width,
             mesh.texture.height,
         ],
@@ -473,6 +487,10 @@ pub const DRAW_CULL: u32 = 1;
 pub const DRAW_RECORD: u32 = 2;
 /// `flags.y` bit: a record's packets all blend (a non-zero weight).
 pub const DRAW_RECORD_BLENDS: u32 = 4;
+/// `flags.y` bit: RE2's near clip (`render::clip_triangle_near`): no packet
+/// is dropped near the eye, each triangle is clipped where its view Z falls
+/// below `projection.w`, and each pixel's depth is its own view Z's.
+pub const DRAW_NEAR_CLIP: u32 = 8;
 
 /// `sprite.frag` modes.
 pub const SPRITE_TEXTURED: u32 = 0;
@@ -1195,6 +1213,11 @@ mod tests {
             .map(|row| row.map(|entry| f32::from(entry as i16) / 4096.0));
         for space in [LightSpace::Camera, LightSpace::RoomObject, LightSpace::Part] {
             let uniforms = draw_uniforms(&camera, &entity, &light, space, None);
+            // RE2's meshes clip at `H / 2` (`render::clip_triangle_near`);
+            // RE1's drop a packet inside `2 * H`.
+            let re2 = space == LightSpace::Part;
+            assert_eq!(uniforms.flags[1] & DRAW_NEAR_CLIP != 0, re2);
+            assert_eq!(uniforms.projection[3], if re2 { 300.0 } else { 1200.0 });
             for normal in [[0i16, -4096, 0], [2896, 0, 2896], [-1000, 3000, -2000]] {
                 let reference = match space {
                     LightSpace::Part => render::re2_vertex_shade(&joint.r, normal, &light),

@@ -325,6 +325,7 @@ impl GpuRenderer {
             None,
             Some(format),
             SDL_GPU_SAMPLECOUNT_1,
+            true,
         )
     }
 

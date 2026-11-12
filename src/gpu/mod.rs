@@ -20,7 +20,7 @@
 //!   cached the same way.
 //! * Per draw, only each object's view transform (the software's
 //!   `RefProjection`), the latched lights and the tint/blend travel as
-//!   uniforms; `mesh.vert` drops and culls whole packets like the software,
+//!   uniforms; `mesh.vert` drops (RE1), clips (RE2) and culls packets like the software,
 //!   lights each corner like `reference_vertex_shade` and projects with the
 //!   software's linear depth, so lavapipe rasterizes the same pixels.
 //!   `mesh.frag` looks up the CLUT row in the shader, with "blends under a
@@ -1019,6 +1019,7 @@ impl GpuRenderer {
         depth: Option<(SDL_GPUTextureFormat, bool)>,
         colour_format: Option<SDL_GPUTextureFormat>,
         samples: SDL_GPUSampleCount,
+        depth_clip: bool,
     ) -> Result<*mut SDL_GPUGraphicsPipeline> {
         let buffer = SDL_GPUVertexBufferDescription {
             slot: 0,
@@ -1092,7 +1093,7 @@ impl GpuRenderer {
                 // The software path keeps a packet whose screen-space area is
                 // positive in its Y-down frame: clockwise on screen.
                 front_face: SDL_GPU_FRONTFACE_CLOCKWISE,
-                enable_depth_clip: true,
+                enable_depth_clip: depth_clip,
                 ..Default::default()
             },
             multisample_state: SDL_GPUMultisampleState {
@@ -1166,6 +1167,7 @@ impl GpuRenderer {
                 Some((depth_format, write)),
                 Some(colour),
                 this.samples,
+                false,
             )
         };
         let sprite_as = |this: &Self, depth, colour, samples, blend| {
@@ -1179,6 +1181,7 @@ impl GpuRenderer {
                 Some(depth),
                 Some(colour),
                 samples,
+                true,
             )
         };
         let sprite = |this: &Self, depth, colour: Option<SDL_GPUTextureFormat>, samples| {
@@ -1196,6 +1199,7 @@ impl GpuRenderer {
                 Some(depth),
                 colour,
                 samples,
+                true,
             )
         };
         // Each pipeline is stored as soon as it exists, so a later failure
@@ -1239,6 +1243,7 @@ impl GpuRenderer {
                 Some((depth_format, write)),
                 Some(colour),
                 this.samples,
+                true,
             )
         };
         self.pipelines.model_opaque = model(self, Blend::None, true)?;
@@ -1265,6 +1270,7 @@ impl GpuRenderer {
             None,
             Some(colour),
             SDL_GPU_SAMPLECOUNT_1,
+            true,
         )?;
         Ok(())
     }
@@ -1285,6 +1291,7 @@ impl GpuRenderer {
             None,
             Some(format),
             SDL_GPU_SAMPLECOUNT_1,
+            true,
         )
     }
 
@@ -1301,6 +1308,7 @@ impl GpuRenderer {
             None,
             Some(format),
             SDL_GPU_SAMPLECOUNT_1,
+            true,
         )
     }
 
@@ -3784,6 +3792,179 @@ mod tests {
             stp: vec![false; crate::model::PALETTE_ROW_LEN],
         };
         (mesh, texture)
+    }
+
+    /// RE2's near plane through a straight camera of `fov` 260 (the plane at
+    /// view Z 130), lit as RE2's rooms: a triangle across the plane, one with
+    /// a corner behind the eye, and a wall at Z 180 the first one crosses
+    /// near its cut edge. The texture's cells 0 to 2 colour them red, green
+    /// and blue.
+    fn re2_near_plane_scene_mesh() -> Tmd {
+        let corners: [[[i16; 3]; 3]; 3] = [
+            [[0, 0, 50], [0, -150, 300], [150, 0, 300]],
+            [[-150, 80, -200], [-150, -70, 300], [0, 80, 300]],
+            [[-28, 125, 180], [-28, -138, 180], [235, 125, 180]],
+        ];
+        let mut vertices = Vec::new();
+        let mut prims = Vec::new();
+        for (cell, triangle) in corners.iter().enumerate() {
+            let first = vertices.len() as u16;
+            vertices.extend_from_slice(triangle);
+            let u = (cell * 8 + 4) as u8;
+            prims.push(TmdPrim {
+                vertices: [first, first + 1, first + 2],
+                normals: [0; 3],
+                uv: [[u, 4]; 3],
+                clut: 480 << 6,
+                tsb: 0,
+                textured: true,
+                blend: false,
+                additive: false,
+                raw_y: false,
+                uv_nudge: [0; 3],
+                flat_color: None,
+                quad: None,
+            });
+        }
+        Tmd {
+            objects: vec![TmdObject {
+                vertices,
+                normals: vec![[0, 0, -4096]],
+                prims,
+            }],
+        }
+    }
+
+    /// The GPU scene agrees with the software rasterizer at RE2's near
+    /// plane ([`re2_near_plane_scene_mesh`]): both clip there, cull the
+    /// corner behind the eye in view space, and give the corners the clip
+    /// makes their own view Z's depth, so the cut triangle stays in front of
+    /// the wall at Z 180 near its cut edge. The software half always runs;
+    /// the GPU half skips with no SDL video or no SPIR-V capable GPU.
+    #[test]
+    fn gpu_scene_matches_the_software_rasterizer_at_re2s_near_plane() {
+        let (_, texture) = cube();
+        let mesh = re2_near_plane_scene_mesh();
+        let joints = [Mat4x3 {
+            r: [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]],
+            t: [0, 0, 0],
+        }];
+        let meshes = [EntityMesh {
+            mesh: &mesh,
+            texture: &texture,
+            joints: &joints,
+            tint: [255; 3],
+            blend_weight: None,
+            hidden_joints: 0,
+            light_pos: None,
+            per_joint_light: false,
+            light_rotation: None,
+            fixed_light: None,
+            joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: None,
+            complex_object: None,
+            aliased_light: false,
+            view_z_shift: 0,
+        }];
+        let camera = Camera {
+            view: [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]],
+            trans: [0, 0, 0],
+            fov: 260,
+            roll: 0,
+            screen: [0, 0],
+            from: [0, 0, 0],
+            look_at: [0, 0, 100],
+            mirrored: false,
+            view_z_shift: 0,
+            near_clip: false,
+        };
+        let lighting = Lighting {
+            ambient: [4095; 3],
+            lights: [crate::state::Light {
+                re2_gain: Some(1),
+                ..crate::state::Light::default()
+            }; 3],
+        };
+        assert!(lighting.is_re2());
+        let scene = GameplayScene {
+            background: None,
+            origin: [0, 0],
+            colour: [0x80; 3],
+            meshes: &meshes,
+            shadows: &[],
+            ribbon: (&[], 0),
+            camera: &camera,
+            lighting: &lighting,
+            mask_layer: None,
+            effect_layer: None,
+            mirror_from: meshes.len(),
+            mirror: None,
+            debug: &[],
+        };
+        let mut software = Framebuffer::new();
+        scene.draw(&mut software);
+        // Which triangle each pixel shows: the strongest channel of a lit one.
+        let shown = |pixel: &[u8]| -> Option<usize> {
+            let top = (0..3).max_by_key(|&c| pixel[c])?;
+            (pixel[top] > 0 && pixel[..3].iter().filter(|&&c| c == pixel[top]).count() == 1)
+                .then_some(top)
+        };
+        let mut counts = [0usize; 3];
+        for pixel in software.rgba.chunks(4) {
+            if let Some(triangle) = shown(pixel) {
+                counts[triangle] += 1;
+            }
+        }
+        assert!(
+            counts.iter().all(|&count| count > 200),
+            "software shows {counts:?}"
+        );
+        // The cut runs on screen from (160, 24) (edge 0-1 at (0, -48, 130),
+        // the buffer's Y flipped) to (256, 120). At (210, 60), past it, the
+        // cut triangle's own view Z is about 169 (1/Z linear on screen), in
+        // front of the wall's 180, where the screen-linear depth from the
+        // cut corners would put it at about 200, and a clipper's corner at
+        // `z / w`'s depth further back still.
+        let at = |rgba: &[u8], x: usize, y: usize| shown(&rgba[(y * 320 + x) * 4..][..4]);
+        assert_eq!(
+            at(&software.rgba, 210, 60),
+            Some(0),
+            "the cut triangle near its edge"
+        );
+
+        let _lock = crate::audio::test_lock::sdl();
+        let Ok(_sdl) = crate::engine::SdlHandle::acquire() else {
+            eprintln!("skipping the GPU half: SDL video unavailable");
+            return;
+        };
+        let mut gpu = match GpuRenderer::offscreen(1) {
+            Ok(gpu) => gpu,
+            Err(err) => {
+                eprintln!("skipping the GPU half: {err:#}");
+                return;
+            }
+        };
+        gpu.record_scene(&scene, None).unwrap();
+        let hardware = gpu.read_scene().unwrap();
+        assert_eq!(hardware.len(), software.rgba.len());
+        assert_eq!(
+            at(&hardware, 210, 60),
+            Some(0),
+            "the GPU's cut triangle near its edge"
+        );
+        let (mut covered, mut different) = (0, 0);
+        for (sw, hw) in software.rgba.chunks(4).zip(hardware.chunks(4)) {
+            if shown(sw).is_some() || shown(hw).is_some() {
+                covered += 1;
+                if shown(sw) != shown(hw) {
+                    different += 1;
+                }
+            }
+        }
+        eprintln!("{different} of {covered} pixels show another triangle");
+        // Only the edges may disagree (different fill rules).
+        assert!(different * 20 < covered, "{different} of {covered} differ");
+        gpu.retire();
     }
 
     /// The GPU scene agrees with the software rasterizer on a lit, rotated
