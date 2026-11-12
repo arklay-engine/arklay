@@ -7795,7 +7795,7 @@ impl GameState {
             return false;
         }
         // The original's masked character test turns id 3 (Rebecca) away.
-        if self.id.player_flag & 3 == 3 {
+        if self.player_character_masked() == 3 {
             self.show_message(MESSAGE_DESK_CHARACTER, 0xFF);
             self.record_interaction(
                 slot,
@@ -7834,6 +7834,20 @@ impl GameState {
         self.desk.state = 35;
         self.record_interaction(slot, RoomActionKind::Desk, None);
         true
+    }
+
+    /// The player's character id masked with 3, the value the original's
+    /// door and desk character tests compare against 3 (Rebecca).
+    ///
+    /// This reads the character model byte (`B_CHARACTER_MODEL`), not
+    /// `RoomId::player_flag` (the RDT's Chris/Jill digit, only ever 0 or 1)
+    /// and not `entities[0].id` (`apply_player_choice` keeps it in step for
+    /// the debug character swap, but a script's `setb(B_CHARACTER_MODEL, 3)`
+    /// as in 40C's Plant 42 scene moves only the model byte). The mask keeps
+    /// the original's `& 3`: `RoomInit` folds the wardrobe's model ids 8 and 9
+    /// back to 0 and 1, and they mask to the same.
+    fn player_character_masked(&self) -> u8 {
+        self.state_bytes[usize::from(STATE_BYTE_CHARACTER_MODEL)] & 3
     }
 
     /// Per-frame `check_desk_state`: the locked key prompt, its yes/no answer,
@@ -8576,10 +8590,10 @@ impl GameState {
             }
             return self.try_re2_door(&door);
         }
-        // The character-restriction test is inert for the two PC characters:
-        // it compares the player id against 3, and ids 0/1 never match. Keep
-        // the original's exact test so a record with bit 0x40 behaves the same.
-        if door.lock & 0x40 != 0 && self.id.player_flag & 3 == 3 {
+        // The character-restriction test compares the player's character id,
+        // masked with 3, against 3: Chris and Jill always pass, Rebecca (the
+        // player during the Plant 42 scene) is turned away.
+        if door.lock & 0x40 != 0 && self.player_character_masked() == 3 {
             self.show_message(MESSAGE_WRONG_CHARACTER, 0xFF);
             return false;
         }
@@ -15736,7 +15750,7 @@ mod tests {
     fn desk_turns_away_the_masked_character_id() {
         let mut state = desk_game();
         state.add_item(ITEM_DESK_KEY, 1);
-        state.id.player_flag = 3;
+        state.state_bytes[usize::from(STATE_BYTE_CHARACTER_MODEL)] = 3;
         assert!(state.check_desk(0));
         assert_eq!(state.message.id, Some(MESSAGE_DESK_CHARACTER));
         assert_eq!(state.desk.state, 0);
@@ -15744,8 +15758,9 @@ mod tests {
 
         // The two PC characters are not turned away: with the key the prompt
         // arms for both.
-        for player_flag in [0, 1] {
-            state.id.player_flag = player_flag;
+        for player_flag in [0u8, 1, 8, 9] {
+            state.id.player_flag = player_flag & 1;
+            state.state_bytes[usize::from(STATE_BYTE_CHARACTER_MODEL)] = player_flag;
             state.message = MessageWindow::default();
             assert!(state.check_desk(0), "player {player_flag}");
             assert_eq!(state.desk.state, 1, "player {player_flag}");
@@ -16877,31 +16892,37 @@ mod tests {
     #[test]
     fn unlocked_door_with_a_character_restriction() {
         // Lock byte 0x40: bit 7 clear, so the door is not locked. The
-        // original's character test compares `id & 3` against 3, which is
-        // never true for the PC characters, so the restriction is inert.
+        // original's character test compares the character id masked with 3
+        // against 3: Chris and Jill pass, Rebecca (model byte 3) is refused.
         let mut state = game();
         let restricted = door(1, 0x40);
         state.room_actions[0] = Some(door_action(restricted));
         state.doors[0] = Some(restricted);
+        let model = usize::from(STATE_BYTE_CHARACTER_MODEL);
 
-        // Jill (player flag 1) walks through: 0x40 does not bar her.
-        state.interact([-550, 0, 50], 0, true);
-        assert!(state.transition.is_some());
-        assert_ne!(state.message.id, Some(0xD6));
+        // Chris (0), Jill (1) and the wardrobe's model ids (8, 9, which mask
+        // to 0 and 1) walk through: 0x40 does not bar them.
+        for (player_flag, byte) in [(1, 1), (0, 0), (0, 8), (1, 9)] {
+            state.id.player_flag = player_flag;
+            state.state_bytes[model] = byte;
+            state.transition = None;
+            state.message = MessageWindow::default();
+            state.interact([-550, 0, 50], 0, true);
+            assert!(state.transition.is_some(), "model {byte}");
+            assert_ne!(state.message.id, Some(0xD6), "model {byte}");
+        }
 
-        // Chris walks through too.
-        state.id.player_flag = 0;
-        state.transition = None;
-        state.interact([-550, 0, 50], 0, true);
-        assert!(state.transition.is_some());
-
-        // The original's literal test still refuses id 3, keeping the branch
-        // reachable for non-PC records.
-        state.id.player_flag = 3;
-        state.transition = None;
-        state.interact([-550, 0, 50], 0, true);
-        assert!(state.transition.is_none());
-        assert_eq!(state.message.id, Some(0xD6));
+        // Rebecca is the player while the model byte is 3 (40C's Plant 42
+        // scene). The RDT's Chris/Jill digit stays 0 or 1 and does not matter.
+        for player_flag in [0, 1] {
+            state.id.player_flag = player_flag;
+            state.state_bytes[model] = 3;
+            state.transition = None;
+            state.message = MessageWindow::default();
+            state.interact([-550, 0, 50], 0, true);
+            assert!(state.transition.is_none());
+            assert_eq!(state.message.id, Some(0xD6));
+        }
     }
 
     #[test]
