@@ -551,12 +551,16 @@ presenting does the same mid-game.
   run to the software backend.
 - **Near the eye** both backends follow the same rule. An RE1 packet with a
   corner inside the reference's near limit (`2 * fov`) is dropped whole. An
-  RE2 mesh drops nothing there: like the original's Direct3D draw
-  (`Marni::TransObjectNgTin3_VinsNins`, which hands the device each vertex's
-  `sz = 1 - (H / 2) / z`), each triangle is clipped where its view Z falls
-  below `fov / 2`, in software by `render::clip_triangle_near` and on the GPU
-  by `mesh.vert`'s clip distance (`DRAW_NEAR_CLIP`), with the mesh pipelines
-  clamping depth instead of clipping it.
+  RE2 mesh, lit or a door's (`Camera::near_clip`), drops nothing there: like
+  the original's Direct3D draw (`Marni::TransObjectNgTin3_VinsNins`, which
+  hands the device each vertex's `sz = 1 - (H / 2) / z`), each triangle is
+  clipped where its view Z falls below `fov / 2`, in software by
+  `render::clip_triangle_near` and on the GPU by `mesh.vert`'s clip distance
+  (`DRAW_NEAR_CLIP`), with the mesh pipelines clamping depth instead of
+  clipping it. Its pixels take the depth of their own perspective-correct view
+  Z (`raster::draw_triangle_depth`, `mesh.frag`'s `gl_FragDepth`), which is
+  right at the corners the clip makes; every other mesh's depth is linear in
+  screen space, as llvmpipe's.
 - **Known differences** from the software frame: per-pixel depth instead of
   per-packet sorting, and float shading instead of the GTE's truncation. `engine::tests::gpu_scene_matches_software_in_real_rooms` bounds the
   difference on real rooms.

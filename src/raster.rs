@@ -340,6 +340,21 @@ pub fn draw_triangle(
     vertices: &[GlVertex; 3],
     width: u32,
     height: u32,
+    fragment: impl FnMut(Fragment),
+) {
+    draw_triangle_depth(vertices, width, height, false, fragment);
+}
+
+/// [`draw_triangle`], with each pixel's depth from its own view Z when
+/// `view_depth` is set: `TmdDepthNdc` of the perspective-correct `w` in
+/// place of the vertex depths' plane. That is the depth a GPU writes from a
+/// perspective-interpolated view Z, which stays right at the corners a near
+/// clip makes; RE2's lit models draw this way (`clip_triangle_near`).
+pub fn draw_triangle_depth(
+    vertices: &[GlVertex; 3],
+    width: u32,
+    height: u32,
+    view_depth: bool,
     mut fragment: impl FnMut(Fragment),
 ) {
     let transformed = vertices
@@ -352,11 +367,12 @@ pub fn draw_triangle(
             transformed.map(|vertex| vertex.setup()),
             width,
             height,
+            view_depth,
             &mut fragment,
         );
     } else if masks[0] & masks[1] & masks[2] == 0 {
         clip_triangle(transformed, clipmask, width, height, |setup| {
-            rasterize(setup, width, height, &mut fragment);
+            rasterize(setup, width, height, view_depth, &mut fragment);
         });
     }
 }
@@ -366,6 +382,7 @@ fn rasterize(
     mut setup: [SetupVertex; 3],
     width: u32,
     height: u32,
+    view_depth: bool,
     fragment: &mut impl FnMut(Fragment),
 ) {
     if setup
@@ -429,9 +446,13 @@ fn rasterize(
                 continue;
             }
             let (fx, fy) = (x as f32, y as f32);
-            let depth = depth_plane.at(fx, fy).clamp(0.0, 1.0);
             let w = w_plane.at(fx, fy);
             let recip = 1.0 / w;
+            let depth = if view_depth {
+                crate::render::depth_ndc(recip)
+            } else {
+                depth_plane.at(fx, fy).clamp(0.0, 1.0)
+            };
             let value = |index: usize| attribute_planes[index].at(fx, fy) * recip;
             fragment(Fragment {
                 x: x as usize,
@@ -468,6 +489,38 @@ mod tests {
         });
         pixels.sort_unstable();
         pixels
+    }
+
+    /// With `view_depth` a pixel's depth is `TmdDepthNdc` of its
+    /// perspective-correct view Z, not the vertex depths' screen-linear
+    /// plane: halfway across on screen from Z 130 to Z 390, the surface is at
+    /// Z 195 (1/Z is linear on screen), where the plane gives 260's depth.
+    #[test]
+    fn view_depth_takes_each_pixels_depth_from_its_own_view_z() {
+        let corner = |x: f32, y: f32, w: f32| GlVertex {
+            depth: crate::render::depth_ndc(w),
+            w,
+            ..vertex(x, y)
+        };
+        let vertices = [
+            corner(0.0, 0.0, 130.0),
+            corner(200.0, 0.0, 390.0),
+            corner(0.0, 200.0, 130.0),
+        ];
+        let at = |view_depth: bool| {
+            let mut depth = None;
+            draw_triangle_depth(&vertices, 320, 240, view_depth, |fragment| {
+                if (fragment.x, fragment.y) == (100, 0) {
+                    depth = Some(fragment.depth);
+                }
+            });
+            depth.expect("pixel (100, 0) is covered")
+        };
+        let scaled = |z: f32| (crate::render::depth_ndc(z) * DEPTH_CLEAR as f32).round() as i64;
+        // Pixel centre 100.5 of 200: 1/Z = 1/130 + 0.5025 * (1/390 - 1/130).
+        let surface = 1.0 / (1.0 / 130.0 + 0.5025 * (1.0 / 390.0 - 1.0 / 130.0));
+        assert!((i64::from(at(true)) - scaled(surface)).abs() <= 2);
+        assert!((i64::from(at(false)) - scaled(130.0 + 0.5025 * 260.0)).abs() <= 2);
     }
 
     #[test]

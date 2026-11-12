@@ -12,6 +12,7 @@ layout(location = 0) out vec2 out_uv;
 layout(location = 1) out vec3 out_shade;
 layout(location = 2) flat out uint out_packed;
 layout(location = 3) flat out float out_key;    // no mask hides the item
+layout(location = 4) out float out_view_z;      // unread: bit 22 is clear
 
 void main() {
     gl_Position = in_clip;
@@ -19,4 +20,5 @@ void main() {
     out_shade = in_shade;
     out_packed = in_packed;
     out_key = -1.0;
+    out_view_z = in_clip.w;
 }

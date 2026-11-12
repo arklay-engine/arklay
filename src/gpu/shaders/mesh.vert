@@ -15,7 +15,8 @@ layout(location = 4) in vec3 in_normal;    // stored normal with Y negated
 layout(location = 5) in vec2 in_uv;        // texel coordinates with the page offset
 layout(location = 6) in vec3 in_colour;    // untextured packet colour / 1024, else 1
 // joint | row << 8 | triangle corners << 16 | blend << 24 | untextured << 25 |
-// nudge << 26 | corner << 29 | additive << 31
+// nudge << 26 | corner << 29 | additive << 31 (bit 22 is set here for RE2's
+// near clip: the fragment's depth is its own view Z's)
 layout(location = 7) in uint in_packed;
 
 // Normalised texture coordinates and the shade in 0..1, both interpolated
@@ -25,6 +26,9 @@ layout(location = 1) out vec3 out_shade;
 layout(location = 2) flat out uint out_packed;
 // The triangle's painter's key: its corners' mean view Z, rounded.
 layout(location = 3) flat out float out_key;
+// View Z, interpolated perspective-correct: exact at the corners the near
+// clip makes, where `z / w` (quadratic in `w`) is not.
+layout(location = 4) out float out_view_z;
 
 // RE2's near clip ([`DRAW_NEAR_CLIP`]): the device's `sz = 0`.
 out gl_PerVertex {
@@ -66,6 +70,7 @@ void drop_vertex() {
     out_shade = vec3(0.0);
     out_packed = in_packed;
     out_key = -1.0;
+    out_view_z = 1.0;
 }
 
 vec3 corner_of(uint slot, vec3 v0, vec3 v1, vec3 v2, vec3 v3) {
@@ -149,6 +154,9 @@ void main() {
     if (record) {
         packed = (packed & ~(1u << 24)) | (((flags.y >> 2) & 1u) << 24);
     }
+    if (re2) {
+        packed |= 1u << 22;
+    }
     bool blend = ((packed >> 24) & 1u) != 0u;
     bool additive = ((packed >> 31) & 1u) != 0u;
     vec3 shade;
@@ -185,6 +193,7 @@ void main() {
     out_uv = uv;
     out_shade = shade / 255.0;
     out_packed = packed;
+    out_view_z = w;
     // `triangle_depth_key`, the same for all three vertices.
     precise float mean = (corner_of(in_packed >> 16 & 3u, v0, v1, v2, v3).z
         + corner_of(in_packed >> 18 & 3u, v0, v1, v2, v3).z

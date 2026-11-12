@@ -15,11 +15,15 @@
 //! * Every vertex carries its packet's corners, so a packet with any corner
 //!   inside the near limit (`max(2 * fov, 1)`) is dropped whole and a packet
 //!   is culled on its first three corners, as in software. An RE2 mesh
-//!   ([`DRAW_NEAR_CLIP`]) drops nothing near the eye: each triangle is clipped
-//!   where its view Z falls below `fov / 2`, as `render::clip_triangle_near`
-//!   clips it.
+//!   ([`DRAW_NEAR_CLIP`]: RE2-lit, or through an RE2 door's camera) drops
+//!   nothing near the eye: each triangle is clipped where its view Z falls
+//!   below `fov / 2`, as `render::clip_triangle_near` clips it.
 //! * Depth is the reference's linear ramp `TmdDepthNdc` written as `z / w`,
-//!   so it interpolates linearly in screen space like llvmpipe's. Sprites
+//!   so it interpolates linearly in screen space like llvmpipe's. An RE2
+//!   mesh writes `TmdDepthNdc` of its perspective-correct view Z instead
+//!   (`gl_FragDepth`, as `raster::draw_triangle_depth` does): `z / w` is
+//!   quadratic in `w`, so the corners the clipper makes would take the wrong
+//!   depth, where the view Z it interpolates is exact there. Sprites
 //!   without geometry (masks, effects) take the same mapping of their
 //!   painter's key, which is a view-Z in the same units.
 
@@ -355,7 +359,9 @@ pub fn draw_uniforms(
     mirror: Option<&MirrorPass>,
 ) -> DrawUniforms {
     let mut projection = camera_terms(camera);
-    let near_clip = space == LightSpace::Part;
+    // The software's rule (`collect_triangles`): every RE2-lit mesh, and
+    // everything through an RE2 door's camera.
+    let near_clip = space == LightSpace::Part || camera.near_clip;
     if near_clip {
         projection[3] = render::re2_near_clip(camera.fov) as f32;
     }
@@ -482,8 +488,8 @@ pub const DRAW_RECORD: u32 = 2;
 /// `flags.y` bit: a record's packets all blend (a non-zero weight).
 pub const DRAW_RECORD_BLENDS: u32 = 4;
 /// `flags.y` bit: RE2's near clip (`render::clip_triangle_near`): no packet
-/// is dropped near the eye, and each triangle is clipped where its view Z
-/// falls below `projection.w`.
+/// is dropped near the eye, each triangle is clipped where its view Z falls
+/// below `projection.w`, and each pixel's depth is its own view Z's.
 pub const DRAW_NEAR_CLIP: u32 = 8;
 
 /// `sprite.frag` modes.

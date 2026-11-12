@@ -256,6 +256,7 @@ impl Vm {
                 from: CAMERA_FROM,
                 to: [0; 3],
                 focal: FOCAL_LENGTH,
+                near_clip: true,
             },
             fade: self.fade,
             orders,
@@ -1052,6 +1053,21 @@ mod tests {
             shading(0x00),
             [DoorShading::Lit, DoorShading::LitAdditive, DoorShading::Lit]
         );
+    }
+
+    /// Every RE2 door frame, its full-bright parts included, is drawn
+    /// through `TransObject` and clipped at the near plane as a body is.
+    #[test]
+    fn a_door_frame_clips_at_the_near_plane() {
+        let main = [model_set(0, 0x52, [0; 3]), vec![0x01, 0x00]].concat();
+        let mut vm = Vm::new(
+            &do2(&[&main]),
+            DoorParams {
+                kind: 0,
+                door: 0x2D,
+            },
+        );
+        assert!(vm.step().camera.near_clip);
     }
 
     #[test]

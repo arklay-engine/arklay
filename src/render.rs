@@ -1961,6 +1961,7 @@ impl Framebuffer {
                     blend_weight: None,
                     additive: false,
                     uv_nudge: [0; 3],
+                    view_depth: false,
                 })
             })
             .collect();
@@ -2096,72 +2097,79 @@ impl Framebuffer {
         let width = self.width as usize;
         let clip = self.clip;
         let rgba = &mut self.rgba;
-        crate::raster::draw_triangle(&vertices, self.width, self.height, |fragment| {
-            if let Some([x, y, w, h]) = clip {
-                let (fx, fy) = (fragment.x as i64, fragment.y as i64);
-                let (x, y) = (i64::from(x), i64::from(y));
-                if fx < x || fy < y || fx >= x + i64::from(w) || fy >= y + i64::from(h) {
-                    return;
-                }
-            }
-            let pixel = fragment.y * width + fragment.x;
-            let Some(stored) = depth.get_mut(pixel) else {
-                return;
-            };
-            if fragment.depth > *stored {
-                return;
-            }
-            // The blended pass and its knockout twin leave depth alone; an
-            // opaque triangle writes it even where its texel is transparent,
-            // since the shader never discards.
-            if !triangle.blend {
-                *stored = fragment.depth;
-            }
-            // An untextured packet samples the white texture; every other
-            // packet samples its page through the palette row. Palette entry
-            // zero is the PSX colour key (alpha 0), which leaves the pixel.
-            let (texel, blend) = match triangle.flat {
-                // A blended record's weight applies to its untextured packets
-                // too.
-                Some(_) => ([255, 255, 255], triangle.blend),
-                None => {
-                    let texel_u = clamp_texel(fragment.u, texture.width);
-                    let texel_v = clamp_texel(fragment.v, texture.height);
-                    let index = texel_v * texture.width as usize + texel_u;
-                    let Some(&palette_index) = texture.indices.get(index) else {
-                        return;
-                    };
-                    if palette_index == 0 {
+        let view_depth = triangle.view_depth;
+        crate::raster::draw_triangle_depth(
+            &vertices,
+            self.width,
+            self.height,
+            view_depth,
+            |fragment| {
+                if let Some([x, y, w, h]) = clip {
+                    let (fx, fy) = (fragment.x as i64, fragment.y as i64);
+                    let (x, y) = (i64::from(x), i64::from(y));
+                    if fx < x || fy < y || fx >= x + i64::from(w) || fy >= y + i64::from(h) {
                         return;
                     }
-                    let color = texture.palette(triangle.palette_row, palette_index);
-                    // A blending triangle blends every texel unless the
-                    // knock-out twin paints its non-STP texels back opaque.
-                    let blend = triangle.blend
-                        && (!twin || texture.palette_stp(triangle.palette_row, palette_index));
-                    ([color[0], color[1], color[2]], blend)
                 }
-            };
-            let offset = pixel * 4;
-            let Some(slot) = rgba.get_mut(offset..offset + 4) else {
-                return;
-            };
-            let source_alpha = if blend {
-                unorm8(fragment.color[3])
-            } else {
-                255
-            };
-            for (index, destination) in slot[..3].iter_mut().enumerate() {
-                let source =
-                    unorm8(f32::from(texel[index]) * (1.0 / 255.0) * fragment.color[index]);
-                *destination = if blend && triangle.additive {
-                    destination.saturating_add(source)
-                } else {
-                    blend_unorm8(source, *destination, source_alpha)
+                let pixel = fragment.y * width + fragment.x;
+                let Some(stored) = depth.get_mut(pixel) else {
+                    return;
                 };
-            }
-            slot[3] = 255;
-        });
+                if fragment.depth > *stored {
+                    return;
+                }
+                // The blended pass and its knockout twin leave depth alone; an
+                // opaque triangle writes it even where its texel is transparent,
+                // since the shader never discards.
+                if !triangle.blend {
+                    *stored = fragment.depth;
+                }
+                // An untextured packet samples the white texture; every other
+                // packet samples its page through the palette row. Palette entry
+                // zero is the PSX colour key (alpha 0), which leaves the pixel.
+                let (texel, blend) = match triangle.flat {
+                    // A blended record's weight applies to its untextured packets
+                    // too.
+                    Some(_) => ([255, 255, 255], triangle.blend),
+                    None => {
+                        let texel_u = clamp_texel(fragment.u, texture.width);
+                        let texel_v = clamp_texel(fragment.v, texture.height);
+                        let index = texel_v * texture.width as usize + texel_u;
+                        let Some(&palette_index) = texture.indices.get(index) else {
+                            return;
+                        };
+                        if palette_index == 0 {
+                            return;
+                        }
+                        let color = texture.palette(triangle.palette_row, palette_index);
+                        // A blending triangle blends every texel unless the
+                        // knock-out twin paints its non-STP texels back opaque.
+                        let blend = triangle.blend
+                            && (!twin || texture.palette_stp(triangle.palette_row, palette_index));
+                        ([color[0], color[1], color[2]], blend)
+                    }
+                };
+                let offset = pixel * 4;
+                let Some(slot) = rgba.get_mut(offset..offset + 4) else {
+                    return;
+                };
+                let source_alpha = if blend {
+                    unorm8(fragment.color[3])
+                } else {
+                    255
+                };
+                for (index, destination) in slot[..3].iter_mut().enumerate() {
+                    let source =
+                        unorm8(f32::from(texel[index]) * (1.0 / 255.0) * fragment.color[index]);
+                    *destination = if blend && triangle.additive {
+                        destination.saturating_add(source)
+                    } else {
+                        blend_unorm8(source, *destination, source_alpha)
+                    };
+                }
+                slot[3] = 255;
+            },
+        );
     }
 
     /// Paint a sorted scene list: each triangle selects its own texture page,
@@ -2500,7 +2508,11 @@ pub(crate) const FULL_BRIGHT_LIGHT: EntityLight = EntityLight {
 };
 
 fn door_camera(frame: &crate::door::vm::Frame<'_>) -> Camera {
-    Camera::from_points(frame.camera.from, frame.camera.to, frame.camera.focal)
+    let mut camera = Camera::from_points(frame.camera.from, frame.camera.to, frame.camera.focal);
+    // RE2's doors go through `MarniSortEmdGallery`'s prims (`Door_model_init`
+    // types them 0x158) and `TransObject`, as its bodies do.
+    camera.near_clip = frame.camera.near_clip;
+    camera
 }
 
 /// The orders of a door frame that submit a draw (bit `0x8000` plus a low
@@ -3508,6 +3520,10 @@ pub struct Camera {
     /// Added to the composed view Z of everything drawn through this camera
     /// ([`EntityMesh::view_z_shift`]).
     pub view_z_shift: i32,
+    /// Everything drawn through this camera is clipped at RE2's near plane
+    /// (`re2_near_clip`), lit or not: an RE2 door's camera. An RE2-lit
+    /// draw is clipped whatever its camera.
+    pub near_clip: bool,
 }
 
 /// `a * b` for two 4.12 rotation matrices, each product truncated toward zero
@@ -3602,6 +3618,7 @@ impl Camera {
             look_at: to,
             mirrored: false,
             view_z_shift: 0,
+            near_clip: false,
         }
     }
 
@@ -4009,6 +4026,9 @@ struct Triangle {
     /// Per corner, `PSXObject_Store`'s degenerate-UV nudge: bit 0 adds
     /// `0.003` to the normalised u, bit 1 to v.
     uv_nudge: [u8; 3],
+    /// Each pixel's depth is `TmdDepthNdc` of its own view Z
+    /// ([`crate::raster::draw_triangle_depth`]): RE2's near-clipped models.
+    view_depth: bool,
 }
 
 /// A ground shadow's projected commands, ready for rasterization.
@@ -4200,9 +4220,8 @@ fn collect_triangles(
     // RE2's models go to Direct3D as pretransformed vertices with nothing
     // culled on the CPU: the device clips each triangle at `sz = 0`
     // ([`re2_near_clip`]).
-    let re2_near = lighting
-        .filter(|lighting| lighting.is_re2())
-        .map(|_| re2_near_clip(camera.fov));
+    let re2_near = (camera.near_clip || lighting.is_some_and(Lighting::is_re2))
+        .then(|| re2_near_clip(camera.fov));
     let project_pool = |sign: f64| -> Vec<Option<ViewCorner>> {
         object
             .vertices
@@ -4384,6 +4403,7 @@ fn collect_triangles(
             blend_weight,
             additive: blend && prim.additive,
             uv_nudge: prim.uv_nudge,
+            view_depth: re2_near.is_some(),
         };
         match re2_near {
             Some(near) => clip_triangle_near(
@@ -4601,6 +4621,7 @@ fn collect_complex_pool(
             blend_weight: None,
             additive: false,
             uv_nudge: [0; 3],
+            view_depth: false,
         });
     }
 }
@@ -5126,6 +5147,7 @@ fn collect_ivm_triangles(
                 blend_weight: None,
                 additive: false,
                 uv_nudge: [0; 3],
+                view_depth: false,
             });
         }
     }
@@ -5542,6 +5564,7 @@ mod tests {
             look_at: [0, 0, 100],
             mirrored: false,
             view_z_shift: 0,
+            near_clip: false,
         }
     }
 
@@ -5648,7 +5671,7 @@ mod tests {
     /// A triangle across the plane is cut along it: one corner in front of
     /// `H / 2` (100) leaves a triangle, two leave a quad's two fan halves,
     /// each new corner at view Z 100 where its edge crosses, with the texture
-    /// taken there. One wholly in front of the plane goes.
+    /// taken there. One between the eye and the plane goes.
     #[test]
     fn an_re2_triangle_across_the_near_plane_is_cut_along_it() {
         // Corner 0 at Z 50, the others at 300: the cuts are a fifth of the
@@ -5672,8 +5695,62 @@ mod tests {
         let behind = triangle_object([[0, 0, 50], [0, -100, 80], [100, 0, 90]]);
         assert!(
             collected(&behind, true).is_empty(),
-            "wholly in front of the plane"
+            "between the eye and the plane"
         );
+        assert!(cut.iter().all(|triangle| triangle.view_depth));
+    }
+
+    /// The plane is inclusive (`sz = 0` is kept): a corner exactly on it
+    /// leaves the triangle whole.
+    #[test]
+    fn an_re2_corner_on_the_near_plane_keeps_the_triangle_whole() {
+        let object = triangle_object([[0, 0, 100], [0, -100, 300], [100, 0, 300]]);
+        let drawn = collected(&object, true);
+        assert_eq!(drawn.len(), 1);
+        assert_eq!(
+            drawn[0].raster.map(|corner| corner.w),
+            [100.0, 300.0, 300.0]
+        );
+    }
+
+    /// An RE2 door's camera clips what it draws, unlit: `Door_model_init`
+    /// types the door's prims 0x158 and `Marni_door_disp0` goes through
+    /// `TransObject`, as a body does. Without the flag (RE1's doors) an unlit
+    /// packet inside `2 * H` is still dropped whole.
+    #[test]
+    fn an_re2_door_camera_clips_unlit_models_at_the_near_plane() {
+        let object = triangle_object([[0, 0, 50], [0, -100, 300], [100, 0, 300]]);
+        let unlit = |near_clip: bool| {
+            let camera = Camera {
+                near_clip,
+                ..straight_camera()
+            };
+            let mut triangles = Vec::new();
+            collect_triangles(
+                &object,
+                &identity(),
+                &camera,
+                None,
+                None,
+                true,
+                0,
+                [255; 3],
+                None,
+                None,
+                false,
+                &mut triangles,
+            );
+            triangles
+        };
+        assert!(unlit(false).is_empty(), "RE1's door drops it");
+        let cut = unlit(true);
+        assert_eq!(cut.len(), 2);
+        assert!(
+            cut.iter()
+                .flat_map(|t| t.raster)
+                .all(|corner| corner.w >= 100.0)
+        );
+        assert!(!crate::door::vm::DoorCamera::default().near_clip);
     }
 
     /// A corner behind the eye has no screen place; the packet's facing in
@@ -6071,6 +6148,7 @@ mod tests {
             blend_weight: None,
             additive: false,
             uv_nudge: [0; 3],
+            view_depth: false,
         })
     }
 
@@ -7749,6 +7827,7 @@ mod tests {
             blend_weight: None,
             additive: false,
             uv_nudge: [0; 3],
+            view_depth: false,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));
@@ -7895,6 +7974,7 @@ mod tests {
             blend_weight,
             additive: false,
             uv_nudge: [0; 3],
+            view_depth: false,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));
@@ -7950,6 +8030,7 @@ mod tests {
             blend_weight: None,
             additive: true,
             uv_nudge: [0; 3],
+            view_depth: false,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));
