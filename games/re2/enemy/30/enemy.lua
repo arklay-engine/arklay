@@ -1034,6 +1034,7 @@ end
 -- `0x52a3b3`: what each weapon adds to `CNT_219`, which flinches it at 12.
 local FLINCH_ADD <const> = {
     [0] = 0, 1, 4, 4, 4, 10, 20, 6, 7, 10, 10, 20, 6, 4, 20, 1, 0, 20, 2,
+    0, -- 0x13 (`0x52a3c6`): the Beretta adds nothing.
 }
 
 -- Routine 0 2 (`FUN_0048dc70`): a hit. Below 200 life it raises `FLAGS`' 4

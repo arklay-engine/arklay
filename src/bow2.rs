@@ -336,6 +336,7 @@ fn effect(world: &mut World<'_>, word: u32, dir: i16, at: [i16; 3]) {
         at,
         motion: None,
         on: None,
+        turn: None,
     }));
 }
 

@@ -622,10 +622,23 @@ pub struct EffectCall {
     /// The part's `Workm` and the vector on it `Esp_call` was given, for an
     /// effect that follows the part ([`crate::esp2::Effects::call_on_part`]).
     pub(crate) on: Option<(u8, Matrix, [i16; 3])>,
+    /// `Esp_call3D`'s turn of what's drawn (`+0x44`), for the slot and those
+    /// that die with it.
+    pub turn: Option<[i16; 3]>,
 }
 
 /// `Type & 0xFFF` of the grenade launcher with each of its rounds.
 const GRENADES: u8 = 9;
+/// The Colt S.A.A. and the Beretta, which `pl_mv05_w1` fires as it does the
+/// handguns.
+pub const COLT: u8 = 0xD;
+pub const BERETTA: u8 = 0x13;
+/// `FUN_004d6560`'s last call, `Esp_call3D` 0x1073000 0x38E up the hand,
+/// turned a quarter about z.
+const COLT_SMOKE_3D: (u32, [i32; 3], [i16; 3]) = (0x107_3000, [0x82, 0x38E, 0], [0, 0, 0x400]);
+/// The reload's `Esp_call(0x2070800)` on the hand, which throws the Colt's
+/// cases out where the others let their magazine go.
+const COLT_CASES: (u32, [i16; 3]) = (0x207_0800, [0x64, 0xDC, 0]);
 const ACID_ROUNDS: u8 = 0xB;
 /// `FUN_004d6150`'s and `FUN_004d6460`'s point on the hand.
 const GRENADE_MUZZLE: [i32; 3] = [0x78, 0x4B0, 0];
@@ -638,8 +651,10 @@ struct WaterDraw {
     ring: Option<u16>,
 }
 
-/// `pl_mv05_w1_t0`'s `Goto00` to who it's aiming at.
+/// `pl_mv05_w1_t0`'s `Goto00` to who it's aiming at, and the Colt's quicker
+/// one.
 const AIM_ENEMY_TURN: i32 = 0xD8;
+const COLT_ENEMY_TURN: i32 = 0x120;
 /// The part `pl_mv05_w1_t2` gives `hit_scan_ck`: the gun's hand.
 const HAND_PART: usize = 14;
 /// The part `pl_w02_t2_move` works from.
@@ -1291,9 +1306,13 @@ pub struct Weapon {
 
 impl Weapon {
     /// Whether [`Mover::pl_mv_aim`] handles it: the knife, the starting
-    /// handguns, the magnums, the shotguns and the grenade launcher.
+    /// handguns, the magnums, the shotguns, the grenade launcher, the bowgun,
+    /// the Colt S.A.A. and the Beretta.
     fn aims(&self) -> bool {
-        matches!(self.id, KNIFE | 2 | 3 | 5..=8 | GRENADES..=crate::bow2::BOW)
+        matches!(
+            self.id,
+            KNIFE | 2 | 3 | 5..=8 | GRENADES..=crate::bow2::BOW | COLT | BERETTA
+        )
     }
 
     /// `pl_mv05_w1_t2` looks for no body itself with the launchers and the
@@ -1320,7 +1339,18 @@ impl Weapon {
             8 => [0x88, 0x8A, 35],
             GRENADES..=ACID_ROUNDS => [0x8A, 0x8C, 26],
             crate::bow2::BOW => [0x86, 0x87, 10],
+            COLT => [0x85, 0x86, 5],
+            // The handguns' and the Beretta's.
             _ => [0x85, 0x87, 8],
+        }
+    }
+
+    /// `pl_mv05_w1_t0`'s step of the turn to who it's aiming at.
+    fn enemy_turn(&self) -> i32 {
+        if self.id == COLT {
+            COLT_ENEMY_TURN
+        } else {
+            AIM_ENEMY_TURN
         }
     }
 
@@ -1376,11 +1406,32 @@ impl Weapon {
             calls: &[(0x308_0D00, None)],
         }];
         match (self.id, frame) {
-            (2 | 3, 1) => &[ShotEffect {
+            // `pl_w02_t2_move`, which the Beretta shares.
+            (2 | 3 | BERETTA, 1) => &[ShotEffect {
                 point: [0x8A, 0x267, 8],
                 calls: &[(0x30A_0E00, None), (0x100_0E00, None)],
             }],
-            (2, 3) => &[ShotEffect {
+            // `FUN_004d6560`: the flash, the smoke and their glow up the
+            // barrel, then [`COLT_SMOKE_3D`].
+            (COLT, 2) => &[
+                ShotEffect {
+                    point: [0x82, 0x2DA, 0],
+                    calls: &[(0x100_1000, None)],
+                },
+                ShotEffect {
+                    point: [0x82, 0x118, 0],
+                    calls: &[
+                        (0x104_1000, None),
+                        (0x106_1000, Some(0x800)),
+                        (0x30A_0C00, None),
+                    ],
+                },
+                ShotEffect {
+                    point: [0x82, 0x33E, 0],
+                    calls: &[(0x30C_1000, None)],
+                },
+            ],
+            (2 | BERETTA, 3) => &[ShotEffect {
                 point: [0x15E, 0x28, -15],
                 calls: &[
                     (0x308_0900, None),
@@ -3297,7 +3348,7 @@ impl Mover<'_, '_> {
                 target.at[0],
                 target.at[1],
             );
-            self.player.angle = goto(self.player.angle, to, AIM_ENEMY_TURN);
+            self.player.angle = goto(self.player.angle, to, self.tick.weapon.enemy_turn());
         }
         // A tilt down looks again, for the nearest within reach (`Key_trg`'s 0x20).
         if self.work.key_trg & KEY_TILT_DOWN != 0 && !self.work.aimed_again {
@@ -3635,6 +3686,7 @@ impl Mover<'_, '_> {
                 at,
                 motion: None,
                 on: None,
+                turn: None,
             });
         }
     }
@@ -3671,6 +3723,7 @@ impl Mover<'_, '_> {
                     at: at.map(|axis| axis as i16),
                     motion: None,
                     on: None,
+                    turn: None,
                 });
             }
         }
@@ -3702,8 +3755,26 @@ impl Mover<'_, '_> {
                     at,
                     motion: None,
                     on: Some((SHOT_PART as u8, hand, point)),
+                    turn: None,
                 });
             }
+        }
+        if self.tick.weapon.id == COLT
+            && frame == 2
+            && let Some(hand) = self.drawn_part(SHOT_PART)
+        {
+            let (word, point, turn) = COLT_SMOKE_3D;
+            let point = point.map(|axis| axis as i16);
+            self.work.effects.push(EffectCall {
+                kind: (word >> 24) as u8,
+                row: (word >> 16) as u8,
+                size: word as u16,
+                dir: 0,
+                at: crate::esp2::apply_matrix(&hand, point),
+                motion: None,
+                on: Some((SHOT_PART as u8, hand, point)),
+                turn: Some(turn),
+            });
         }
     }
 
@@ -3733,6 +3804,7 @@ impl Mover<'_, '_> {
             at,
             motion,
             on: None,
+            turn: None,
         };
         self.work.effects.push(EffectCall {
             on: Some((
@@ -3787,13 +3859,36 @@ impl Mover<'_, '_> {
                 .queue_sound(((self.work.now_seq & FRAME_SOUND_SLOT) >> 16) as u16);
         }
         if self.work.now_seq & FRAME_MAGAZINE != 0 && self.work.status_flg & STATUS_MAGAZINE != 0 {
-            self.mag_set(hand);
+            if self.tick.weapon.id == COLT {
+                self.colt_cases(hand);
+            } else {
+                self.mag_set(hand);
+            }
             self.work.status_flg &= !STATUS_MAGAZINE;
         }
         if self.work.now_seq & FRAME_RELOAD != 0 {
             self.work.reloaded = true;
             self.work.status_flg |= STATUS_MAGAZINE;
         }
+    }
+
+    /// `pl_mv05_w1_t4`'s call in place of `Mag_set` for the Colt: its spent
+    /// cases out of the hand, along the body's facing.
+    fn colt_cases(&mut self, hand: Option<Matrix>) {
+        let Some(hand) = hand else {
+            return;
+        };
+        let (word, point) = COLT_CASES;
+        self.work.effects.push(EffectCall {
+            kind: (word >> 24) as u8,
+            row: (word >> 16) as u8,
+            size: word as u16,
+            dir: self.player.angle as i16,
+            at: crate::esp2::apply_matrix(&hand, point),
+            motion: None,
+            on: Some((MAGAZINE_HAND as u8, hand, point)),
+            turn: None,
+        });
     }
 
     /// `Mag_set`: a gun with a magazine lets it go from the hand. The weapons
@@ -5253,6 +5348,7 @@ impl Mover<'_, '_> {
                 at: crate::esp2::apply_matrix(&matrix, point),
                 motion: None,
                 on: Some((part as u8, matrix, point)),
+                turn: None,
             },
             None => EffectCall {
                 kind,
@@ -5262,6 +5358,7 @@ impl Mover<'_, '_> {
                 at: self.player.pos.map(|axis| axis as i16),
                 motion: None,
                 on: None,
+                turn: None,
             },
         };
         self.work.effects.push(call);
@@ -6675,11 +6772,11 @@ mod weapon_tests {
     #[test]
     fn each_gun_has_its_own_timing_and_leg() {
         assert!(
-            [KNIFE, 2, 3, 5, 6, 7, 8, 9, 0xC]
+            [KNIFE, 2, 3, 5, 6, 7, 8, 9, 0xC, COLT, BERETTA]
                 .iter()
                 .all(|&id| weapon(id).aims())
         );
-        assert!(![0, 4, 13].iter().any(|&id| weapon(id).aims()));
+        assert!(![0, 4, 0xE, 0x12].iter().any(|&id| weapon(id).aims()));
         // The knife's row: a slash let go of past frame 0x32 stops at once.
         assert!(weapon(KNIFE).is_knife() && !weapon(2).is_knife());
         assert_eq!(weapon(KNIFE).fire_cancel_frame(), 0x32);
@@ -6713,6 +6810,58 @@ mod weapon_tests {
         assert_eq!(weapon(6).shot_ticks(), 0b111);
         assert_eq!(weapon(7).shot_ticks(), 0b1_0101);
         assert_eq!(weapon(8).shot_ticks(), 0b101_0101);
+    }
+
+    /// `DAT_0053a305`'s rows: the Colt tilts up past frame 6 and a shot let
+    /// go of stops past 5; the Beretta's are the handguns'. Both look for a
+    /// body on the shot's first tick alone, as the handguns do.
+    #[test]
+    fn the_colt_and_the_beretta_have_the_tables_rows() {
+        assert_eq!(weapon(COLT).frames(), [0x85, 0x86, 5]);
+        // The raise turns to its target 0x120 a tick with the Colt.
+        assert_eq!(weapon(COLT).enemy_turn(), 0x120);
+        assert_eq!(weapon(BERETTA).enemy_turn(), 0xD8);
+        assert_eq!(weapon(2).enemy_turn(), 0xD8);
+        assert_eq!(weapon(BERETTA).frames(), weapon(2).frames());
+        for id in [COLT, BERETTA] {
+            assert_eq!(weapon(id).shot_ticks(), 1);
+            assert!(!weapon(id).shoots_effects());
+            assert_eq!(weapon(id).foot_chain(0), &AIM_FOOT_CHAIN);
+        }
+    }
+
+    /// `FUN_004d6560` makes its calls on the shot's second frame, at three
+    /// points up the barrel; the Beretta's are `pl_w02_t2_move`'s.
+    #[test]
+    fn the_colt_flashes_on_its_second_frame_and_the_beretta_as_the_handgun() {
+        let words = |id: u8, frame: u8| -> Vec<([i32; 3], u32, Option<i16>)> {
+            weapon(id)
+                .shot_effects(frame)
+                .iter()
+                .flat_map(|effect| {
+                    effect
+                        .calls
+                        .iter()
+                        .map(|&(word, dir)| (effect.point, word, dir))
+                })
+                .collect()
+        };
+        assert!(words(COLT, 1).is_empty());
+        assert_eq!(
+            words(COLT, 2),
+            [
+                ([0x82, 0x2DA, 0], 0x100_1000, None),
+                ([0x82, 0x118, 0], 0x104_1000, None),
+                ([0x82, 0x118, 0], 0x106_1000, Some(0x800)),
+                ([0x82, 0x118, 0], 0x30A_0C00, None),
+                ([0x82, 0x33E, 0], 0x30C_1000, None),
+            ]
+        );
+        assert!(words(COLT, 3).is_empty(), "no case: the Colt keeps them");
+        for frame in 1..6 {
+            assert_eq!(words(BERETTA, frame), words(2, frame), "frame {frame}");
+        }
+        assert_eq!(words(BERETTA, 3).len(), 3);
     }
 
     #[test]
@@ -8151,6 +8300,7 @@ mod tests {
                             at: at.map(|axis| axis as i16),
                             motion: None,
                             on: None,
+                            turn: None,
                         }
                     })
                     .collect();
@@ -8671,6 +8821,113 @@ mod tests {
         assert!(!setup.work.reloaded);
         setup.tick(aiming(false, false), 200);
         assert!(setup.work.reloaded);
+    }
+
+    /// [`armed`] with a chain of 15 parts, so that the hand (11) has a
+    /// matrix.
+    fn armed_with_hands(loaded: bool, spare: bool) -> Setup {
+        let mut setup = armed(loaded, spare);
+        for keyframe in &mut setup.keyframes {
+            keyframe.rotations = vec![[0; 3]; 15];
+        }
+        setup.skeleton.relative = std::iter::once([0; 3])
+            .chain(std::iter::repeat_n([0, -100, 0], 14))
+            .collect();
+        setup.skeleton.children = (1..15u8).map(|child| vec![child]).collect();
+        setup.skeleton.children.push(Vec::new());
+        setup
+    }
+
+    /// The Colt's shot, from the hold: its five calls and `Esp_call3D`'s
+    /// turned smoke on the second frame, on the hand.
+    #[test]
+    fn the_colts_second_frame_makes_its_calls_and_the_turned_smoke() {
+        let mut setup = armed_with_hands(true, true);
+        setup.weapon.id = COLT;
+        setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];
+        setup.work.status_flg = TILT_LEVEL;
+        setup.tick(aiming(true, true), 200);
+        assert_eq!(setup.work.routine[2], 2);
+        setup.tick(aiming(true, false), 200);
+        assert!(setup.work.fired);
+        assert!(setup.work.effects.is_empty(), "nothing on the first frame");
+        setup.tick(aiming(true, false), 200);
+        let angle = setup.player.angle as i16;
+        let calls: Vec<_> = std::mem::take(&mut setup.work.effects)
+            .iter()
+            .map(|call| {
+                (
+                    u32::from(call.kind) << 24 | u32::from(call.row) << 16 | u32::from(call.size),
+                    call.dir,
+                    call.on.map(|(part, _, point)| (part, point)),
+                    call.turn,
+                )
+            })
+            .collect();
+        let on = |point: [i16; 3]| Some((SHOT_PART as u8, point));
+        assert_eq!(
+            calls,
+            [
+                (0x100_1000, 0, on([0x82, 0x2DA, 0]), None),
+                (0x104_1000, 0, on([0x82, 0x118, 0]), None),
+                (
+                    0x106_1000,
+                    angle.wrapping_add(0x800),
+                    on([0x82, 0x118, 0]),
+                    None
+                ),
+                (0x30A_0C00, 0, on([0x82, 0x118, 0]), None),
+                (0x30C_1000, 0, on([0x82, 0x33E, 0]), None),
+                (0x107_3000, 0, on([0x82, 0x38E, 0]), Some([0, 0, 0x400])),
+            ]
+        );
+    }
+
+    /// `pl_mv05_w1_t4` with the Colt: the frame the others let the
+    /// magazine go on throws the cases out of the hand instead.
+    #[test]
+    fn the_colts_reload_throws_out_its_cases_rather_than_a_magazine() {
+        for (id, cases) in [(COLT, true), (2, false)] {
+            let mut setup = armed_with_hands(false, true);
+            setup.weapon.id = id;
+            setup.work.routine = [MODE_MOVE, MOVE_AIM, 4, 0];
+            setup.work.status_flg = TILT_LEVEL | STATUS_MAGAZINE;
+            setup.clips[usize::from(AIM_RELOAD_CLIP)].frames[1].flags = FRAME_MAGAZINE;
+            setup.tick(aiming(false, false), 200);
+            setup.tick(aiming(false, false), 200);
+            let thrown: Vec<_> = setup
+                .work
+                .effects
+                .iter()
+                .map(|call| {
+                    (
+                        call.kind,
+                        call.row,
+                        call.size,
+                        call.dir,
+                        call.on.map(|on| (on.0, on.2)),
+                    )
+                })
+                .collect();
+            if cases {
+                let dir = setup.player.angle as i16;
+                assert_eq!(
+                    thrown,
+                    [(
+                        2,
+                        7,
+                        0x800,
+                        dir,
+                        Some((MAGAZINE_HAND as u8, [0x64, 0xDC, 0]))
+                    )]
+                );
+                assert!(setup.work.magazine.is_none());
+            } else {
+                assert!(thrown.is_empty());
+                assert!(setup.work.magazine.is_some(), "the handgun's magazine");
+            }
+            assert_eq!(setup.work.status_flg & STATUS_MAGAZINE, 0);
+        }
     }
 
     #[test]

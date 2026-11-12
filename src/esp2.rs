@@ -624,6 +624,17 @@ impl Effects {
         Some(first)
     }
 
+    /// `Esp_call3D`'s turn (`+0x44`), on a slot `Esp_call` just made and the
+    /// slots that die with it.
+    pub fn turn(&mut self, first: usize, rotation: [i16; 3]) {
+        for (index, slot) in self.slots.iter_mut().enumerate() {
+            if index == first || slot.flags != 0 && first != 0 && usize::from(slot.parent) == first
+            {
+                slot.rotation = rotation;
+            }
+        }
+    }
+
     /// What `FUN_004d6150` writes over a grenade's first block once
     /// `Esp_call` made it: its `+8` and `+0xc` to `+0x10`.
     pub fn launch(&mut self, index: usize, launch: Launch) {
@@ -1121,6 +1132,26 @@ impl Effects {
                 self.slots[index].anim = 0x54;
                 self.slots[index].update = 0;
                 self.call(0x14, 0, slot.size, 0, slot.pos, true);
+            }
+            // `Esp_56`: the Colt's reload, six spent cases (kind 2, row 6 at
+            // its size) from where it was started, each turned a random step
+            // of 400: one on its count's first tick, two on the second and the
+            // fourth, and one on the seventh, when it goes.
+            0x56 => {
+                let calls = match slot.start {
+                    0 | 6 => 1,
+                    1 | 3 => 2,
+                    _ => 0,
+                };
+                for _ in 0..calls {
+                    let turn = (u32::from(self.rnd()) % 0x1E * 400) as i16;
+                    self.call_from(&slot, 2, 6, slot.size, turn.wrapping_add(slot.dir));
+                }
+                if slot.start == 6 {
+                    self.slots[index].kill();
+                }
+                let this = &mut self.slots[index];
+                this.start = this.start.wrapping_add(1);
             }
             // `Esp_54`: and is gone, leaving a second burst.
             0x54 => {
@@ -2186,6 +2217,11 @@ mod tests {
     }
 
     pub(super) fn bank_of(kind: u8, blocks: &[[u8; BLOCK_LEN]]) -> Arc<Bank> {
+        bank_rows(kind, &[(0, blocks)])
+    }
+
+    /// [`bank_of`] with blocks for several rows, each a group of its own.
+    fn bank_rows(kind: u8, rows: &[(u8, &[[u8; BLOCK_LEN]])]) -> Arc<Bank> {
         let mut record = Vec::new();
         record.extend_from_slice(&3u16.to_le_bytes());
         record.extend_from_slice(&1u16.to_le_bytes());
@@ -2196,16 +2232,25 @@ mod tests {
         record.extend_from_slice(&[0, 1, 2, 16, 0, 0, 0, 0]);
         record.extend_from_slice(&[0, 0, 0xff, 0, 0, 0, 0, 0]);
         record.extend_from_slice(&[0, 0, 0xf8, 0xf8]);
-        // Row 0 at word 4 of the motion table.
-        for row in 0..8 {
-            record.extend_from_slice(&(if row == 0 { 4u16 } else { 0 }).to_le_bytes());
+        // The motion table, in words of four bytes from its start: each
+        // row's one group after the table, in turn.
+        let mut at = 4u16;
+        let mut table = [0u16; 8];
+        for (row, blocks) in rows {
+            table[usize::from(*row)] = at;
+            at += 2 + blocks.len() as u16 * (BLOCK_LEN / 4) as u16;
         }
-        record.extend_from_slice(&1u16.to_le_bytes());
-        record.extend_from_slice(&0u16.to_le_bytes());
-        record.extend_from_slice(&(blocks.len() as u16).to_le_bytes());
-        record.extend_from_slice(&0u16.to_le_bytes());
-        for block in blocks {
-            record.extend_from_slice(block);
+        for word in table {
+            record.extend_from_slice(&word.to_le_bytes());
+        }
+        for (_, blocks) in rows {
+            record.extend_from_slice(&1u16.to_le_bytes());
+            record.extend_from_slice(&0u16.to_le_bytes());
+            record.extend_from_slice(&(blocks.len() as u16).to_le_bytes());
+            record.extend_from_slice(&0u16.to_le_bytes());
+            for block in *blocks {
+                record.extend_from_slice(block);
+            }
         }
         let data = container(&[Part {
             id: kind,
@@ -2552,6 +2597,77 @@ mod tests {
         effects.tick(&mut rnd, None);
         assert_eq!(rnd, before);
         assert!(!effects.slots[slot].live());
+    }
+
+    /// `Esp_56`, the Colt's reload: six cases, one on its first tick, two
+    /// on the second and the fourth, one on the seventh, and then it's
+    /// gone. Each is `Esp_call3` of kind 2, row 6 at the slot's size, turned
+    /// from the slot's direction by a `Rnd` step of 400.
+    #[test]
+    fn the_colts_reload_throws_six_cases_over_seven_ticks_and_goes() {
+        let mut reload = [0u8; BLOCK_LEN];
+        reload[0] = 0x56;
+        let mut case = fire_block();
+        case[0] = 0;
+        let mut effects = Effects::default();
+        effects.enter_room(bank_rows(2, &[(0, &[reload]), (6, &[case])]));
+        let slot = effects
+            .call(2, 0, 0x900, 0x123, [10, 20, 30], false)
+            .unwrap();
+        let cases = |effects: &Effects| -> Vec<usize> {
+            (0..POOL_SIZE)
+                .filter(|&index| {
+                    let other = &effects.slots[index];
+                    other.flags != 0 && other.kind == 2 && other.row == 6
+                })
+                .collect()
+        };
+        let mut rnd = crate::zombie2::Rnd::default();
+        let mut made = Vec::new();
+        for _ in 0..7 {
+            assert!(effects.slots[slot].live());
+            let before = cases(&effects);
+            let mut draws = rnd;
+            effects.tick(&mut rnd, None);
+            // The pool is searched from the top: the first call takes the
+            // highest free slot.
+            let mut new: Vec<usize> = cases(&effects)
+                .into_iter()
+                .filter(|index| !before.contains(index))
+                .collect();
+            new.sort_unstable_by(|a, b| b.cmp(a));
+            for &index in &new {
+                let turn = (u32::from(draws.draw()) % 0x1E * 400) as i16;
+                let case = &effects.slots[index];
+                assert_eq!((case.size, case.dir), (0x900, turn.wrapping_add(0x123)));
+                assert_eq!(case.base, [10, 20, 30], "from where the reload was");
+            }
+            assert_eq!(draws, rnd, "a draw for each case and no other");
+            made.push(new.len());
+        }
+        assert_eq!(made, [1, 2, 0, 2, 0, 0, 1]);
+        assert!(!effects.slots[slot].live());
+    }
+
+    /// `Esp_call3D`'s turn (`+0x44` to `+0x48`): the slot it made and the
+    /// slots that die with it take it, and no other slot does.
+    #[test]
+    fn a_turn_reaches_the_slot_and_its_children_only() {
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[fire_block()]));
+        let first = effects.call(7, 0, 0x1000, 0, [0; 3], false).unwrap();
+        let other = effects.call(7, 0, 0x1000, 0, [0; 3], false).unwrap();
+        // A slot of `first`'s row's further group dies with it.
+        let child = other - 1;
+        effects.slots[child] = Slot {
+            parent: first as u8,
+            ..effects.slots[first]
+        };
+        let turn = [0, 0, 0x400];
+        effects.turn(first, turn);
+        assert_eq!(effects.slots[first].rotation, turn);
+        assert_eq!(effects.slots[child].rotation, turn);
+        assert_eq!(effects.slots[other].rotation, [0; 3]);
     }
 
     #[test]

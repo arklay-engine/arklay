@@ -2764,11 +2764,18 @@ mod tests {
     /// `At_sce_no` 1, its moan still waiting: `(At_obj_no, At_sce_no,
     /// Routine_2, the clip, the draws)` after the hit's first tick.
     fn handgun_hit(kind: u16) -> (i64, i64, i64, i64, i64) {
+        weapon_hit(kind, 2, 1)
+    }
+
+    /// [`handgun_hit`] with another weapon (`Routine_1`) and `At_sce_no`.
+    fn weapon_hit(kind: u16, weapon: u8, at_sce_no: u8) -> (i64, i64, i64, i64, i64) {
         let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
         let library = include_str!("../../games/re2/lib/zombie.lua");
         lua.globals().set("KIND", kind).unwrap();
+        lua.globals().set("WEAPON", weapon).unwrap();
+        lua.globals().set("AT_SCE", at_sce_no).unwrap();
         lua.load(format!(
-            "local w = {{ r = {{ [0] = 2, 2, 0, 0 }}, vars = {{ [1] = 5, [3] = 0, [4] = 1 }},
+            "local w = {{ r = {{ [0] = 2, WEAPON, 0, 0 }}, vars = {{ [1] = 5, [3] = 0, [4] = AT_SCE }},
                  clip = -1, drawn = 0 }}
              local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
              function e:routine(i) return w.r[i] end
@@ -3035,6 +3042,78 @@ mod tests {
         };
         assert_eq!(walk(0), [1, 3]);
         assert_ne!(walk(0x80)[1], 3);
+    }
+
+    /// `Em10Dm00` takes the Colt's 20 from `At_sce_no` (`0x5271c7 + 0xD`),
+    /// where a handgun takes 15. The Beretta's rows in `Em10_Damage`'s table
+    /// are past its end: they are the crawler's `FUN_00457d10`, whose clip is
+    /// 6 and which leaves `At_sce_no` alone.
+    #[test]
+    fn the_colt_staggers_a_zombie_more_and_the_beretta_reads_the_crawlers_row() {
+        assert_eq!(weapon_hit(6, 2, 0x30).0, 0, "not staggered");
+        assert_eq!(weapon_hit(6, 2, 0x30).1, 0x30 - 15);
+        assert_eq!(weapon_hit(6, crate::player2::COLT, 0x30).1, 0x30 - 20);
+        let beretta = weapon_hit(6, crate::player2::BERETTA, 0x30);
+        assert_eq!((beretta.1, beretta.3), (0x30, 6));
+    }
+
+    /// G3's hit (`FUN_00499260`) with the Beretta: `DWORD_0052a77c`'s
+    /// `FUN_004995c0`, three bloods of kind 2 (kind 5, row 4, 0x1800, 300
+    /// along the part), each at the part of `BYTE_0052a5dc` its `Rnd`
+    /// picks, from the table's second half when `Damage_no` isn't a multiple
+    /// of 3; then the hit's own two at `HIT_PART`.
+    #[test]
+    fn g3_sprays_blood_at_drawn_parts_by_weapon() {
+        // `(effects, draws)` of one hit by `weapon`, `+0x223` at `gate`
+        // before the tick counts it down.
+        let hit = |weapon: u8, damage_no: u8, gate: u8| -> (Vec<Vec<i64>>, i64) {
+            let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+            let script = include_str!("../../games/re2/enemy/33/enemy.lua");
+            lua.globals().set("DAMAGE_NO", damage_no).unwrap();
+            lua.globals().set("WEAPON", weapon).unwrap();
+            lua.globals().set("GATE", gate).unwrap();
+            lua.load(format!(
+                "local w = {{ r = {{ [0] = 2, WEAPON, 0, 0 }}, vars = {{ [3] = GATE }}, draws = {{ 1, 6, 3 }}, drawn = 0 }}
+                 E = {{}}
+                 local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+                 function e:routine(i) return w.r[i] end
+                 function e:set_routine(i, v) w.r[i] = v end
+                 function e:routines(a, b, c, d) w.r = {{ [0] = a, b, c, d }} end
+                 function e:var(i) return w.vars[i] or 0 end
+                 function e:set_var(i, v) w.vars[i] = v end
+                 function e:rnd() w.drawn = w.drawn + 1 return w.draws[w.drawn] or 0 end
+                 function e:damage_no() return DAMAGE_NO end
+                 function e:easy() return false end
+                 function e:effect(kind, row, size, dir, part, x, y, z)
+                     E[#E + 1] = {{ kind, row, size, part, x }}
+                 end
+                 {script}
+                 update(e)
+                 DRAWN = w.drawn"
+            ))
+            .exec()
+            .unwrap();
+            (
+                lua.globals().get("E").unwrap(),
+                lua.globals().get("DRAWN").unwrap(),
+            )
+        };
+        let effects = |damage_no: u8| hit(0x13, damage_no, 0).0;
+        // Draws 1, 6 and 3 pick parts 25, 17 and 27; with the second half
+        // (indices 5, 10 and 7, masked by 7), 4, 26 and 11.
+        let parts = |calls: &[Vec<i64>]| -> Vec<i64> { calls[..3].iter().map(|c| c[3]).collect() };
+        let first = effects(0);
+        assert_eq!(parts(&first), [25, 17, 27]);
+        assert_eq!(first[0], [5, 4, 0x1800, 25, 300]);
+        assert_eq!(parts(&effects(1)), [4, 26, 11]);
+        // 0xa and 0x10 bleed six times; the hit's own two bloods follow.
+        assert_eq!(hit(0xA, 0, 0).1, 6);
+        assert_eq!(hit(0xA, 0, 0).0.len(), 6 + 2);
+        assert_eq!(hit(0x10, 0, 1).0.len(), 6 + 2);
+        // 0x10 with `+0x223` still counting (2, down to 1 this tick) bleeds
+        // nothing and draws nothing.
+        assert_eq!(hit(0x10, 0, 2).1, 0);
+        assert_eq!(hit(0x10, 0, 2).0.len(), 2);
     }
 
     #[test]

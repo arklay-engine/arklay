@@ -15,7 +15,7 @@
 --
 -- State 5's spit is `Esp_call` kind 0x1D, whose `Esp_20` hits and poisons
 -- the player (`esp2.rs`). A hit (`Routine_0` 2) and the death (3, then 7)
--- are ported for the weapons arklay fires, 2 to 8, with `censorship_off` and
+-- are ported for the weapons arklay fires, 2 to 8, 0xD and 0x13, with `censorship_off` and
 -- `hard_mode` clear, and so is the retreat at half its life (state 7). Only
 -- the player as the target is ported (`FUN_004881c0` can pick the partner
 -- too), and neither are the other weapons' entries, the spit at close range
@@ -922,7 +922,11 @@ end
 
 -- `funcs_487037` (`0x529ec4`), by weapon, with `censorship_off` and
 -- `hard_mode` clear. Only the weapons arklay fires are ported.
-local HURTS <const> = { resume, resume, resume, bleed, flinch, flinch, flinch, flinch }
+local HURTS <const> = {
+    resume, resume, resume, bleed, flinch, flinch, flinch, flinch,
+    [0xD] = resume, -- `0x529ef8`: the Colt's, the handguns'.
+    [0x13] = flinch, -- `0x529f10`: the Beretta's, the table's last, 0x11's.
+}
 
 -- `FUN_00487010`: `Routine_0` 2.
 local function hurt(e)
@@ -1008,8 +1012,45 @@ local function die_blown(e)
     end
 end
 
+-- `FUN_00487bf0`: the death of weapons 0x11 and 0x13. `FUN_004878f0` blows
+-- its head or body apart as `die_blown` always does, with the second row of
+-- blood, then the vines get 0x46 and one side's parts (0x14 to 0x19 or 0xe to
+-- 0x13) go too. Both ivies' models (`EM02E`, `EM039`) have 26 parts, so every
+-- part named here, and the blood's at the side's first, is there.
+local function die_torn(e)
+    if e:routine(2) ~= 0 then
+        dying(e)
+        return
+    end
+    die_start(e)
+    e:set_neck_flags(e:neck_flags() | 1)
+    local first, last = 12, 14
+    if e:damage_no() % 3 == 0 and e:var(F23D) == 0 then
+        first, last = 6, 9
+    end
+    blood(e, first - 1, 0)
+    blood(e, first - 1, 3)
+    for part = first, last - 1 do
+        e:blow_part(part, e:angle(), 300, -150)
+    end
+    command(e, 0x46, 3)
+    if e:rnd() & 1 == 0 then
+        first, last = 0x14, 0x1A
+    else
+        first, last = 0xE, 0x14
+    end
+    for part = first, last - 1 do
+        e:blow_part(part, e:angle(), 300, -150)
+    end
+    blood(e, first, 0)
+end
+
 -- `0x529f6c`, by weapon. Only the weapons arklay fires are ported.
-local DIES <const> = { die_plain, die_plain, die_plain, die_plain, die_blown, die_blown, die_blown, die_blown }
+local DIES <const> = {
+    die_plain, die_plain, die_plain, die_plain, die_blown, die_blown, die_blown, die_blown,
+    [0xD] = die_plain, -- `0x529fa0`: the Colt's, the handguns'.
+    [0x13] = die_torn, -- `0x529fb8`: the Beretta's, the table's last, 0x11's.
+}
 
 -- `FUN_004875c0`: `Routine_0` 3.
 local function die(e)

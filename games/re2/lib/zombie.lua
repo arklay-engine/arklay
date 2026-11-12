@@ -89,8 +89,12 @@ local FLOOR_HOLDS <const> = {
     0x6E, 0x14, 0x23, 0x46, 0x1E, 0xB4, 0x1E, 0x3C,
 }
 
--- `Em10Dm00`'s `funcs_458795 + 0xb`: what a hit takes from `At_sce_no`, by weapon.
-local STAGGER <const> = { [0] = 0, 9, 15, 15, 35 }
+-- `Em10Dm00`'s `funcs_458795 + 0xb` (`0x5271c7`): what a hit takes from `At_sce_no`, by weapon.
+local STAGGER <const> = { [0] = 0, 9, 15, 15, 35, [0xD] = 20 }
+
+-- The Beretta, whose rows in `Em10_Damage`'s and `Em10_Die`'s tables are past their ends: it reads the
+-- crawler's, `FUN_00457d10` and `FUN_00458bf0`, for every `Damage_no`.
+local BERETTA <const> = 0x13
 
 -- The clips of eating.
 local EAT_CLIPS <const> = { [0] = 0x12, 0x13, 0x14, 0x12, 0x13, 0x14, 0x12, 0x13 }
@@ -974,6 +978,10 @@ local function em10_damage(e)
         lose_arm(e)
     end
     local no = e:damage_no()
+    if weapon == BERETTA then
+        dm_crawling(e)
+        return
+    end
     if weapon == BOW then
         -- Its row has no call for 2, 5 and 8.
         if no % 3 == 0 then
@@ -1256,7 +1264,7 @@ local DIES <const> = (function()
         [9] = { D5, T, T, S, S, S, S, S, S },
         [0xC] = { S, TH, S, S, TH, S, S, TH, S },
         [0x11] = { D5, T, S, D5, TH, S, D5, S, S },
-        [0x13] = { C, C, C, C, C, C, C, C, C },
+        [BERETTA] = { C, C, C, C, C, C, C, C, C },
     }
     return rows
 end)()

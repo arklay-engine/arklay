@@ -1097,6 +1097,9 @@ fn re2_ammo(weapon: u8) -> (u8, u8) {
         5 | 6 => (0x16, 8),
         7 => (0x15, 5),
         8 => (0x15, 7),
+        // `Item_data_tbl`: the Colt holds six, the Beretta fifteen.
+        crate::player2::COLT => (RE2_HANDGUN_BULLETS, 6),
+        crate::player2::BERETTA => (RE2_HANDGUN_BULLETS, 15),
         _ => (RE2_HANDGUN_BULLETS, 18),
     }
 }
@@ -11329,6 +11332,33 @@ mod tests {
         assert_eq!(game.item_count(3), 20);
         assert_eq!(game.inventory.len(), 1, "the empty stack is gone");
         assert!(!game.re2_weapon().spare);
+    }
+
+    /// `Tama_reload` with `Item_data_tbl`'s loads: six for the Colt and
+    /// fifteen for the Beretta, both of the handgun bullets.
+    #[test]
+    fn a_re2_colt_loads_six_and_a_beretta_fifteen_handgun_rounds() {
+        for (weapon, load) in [(crate::player2::COLT, 6), (crate::player2::BERETTA, 15)] {
+            let mut game = GameState {
+                equipped_weapon_id: weapon,
+                inventory: vec![
+                    InventoryItem {
+                        id: weapon,
+                        quantity: 0,
+                    },
+                    InventoryItem {
+                        id: RE2_HANDGUN_BULLETS,
+                        quantity: 40,
+                    },
+                ],
+                ..Default::default()
+            };
+            assert!(game.re2_weapon().spare);
+            game.re2.player.reloaded = true;
+            game.re2_settle_ammo();
+            assert_eq!(game.item_count(weapon), load);
+            assert_eq!(game.item_count(RE2_HANDGUN_BULLETS), 40 - load);
+        }
     }
 
     #[test]

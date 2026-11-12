@@ -1156,19 +1156,43 @@ end
 -- the blood of weapons 4, 0xf and 0x12, by `Damage_no` and a `Rnd`.
 local HIT_KIND <const> = { [0] = 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 0, 0 }
 local HIT_PART <const> = { [0] = 0x18, 1, 3 }
+local SPRAY_PARTS <const> = { [0] = 23, 25, 26, 27, 2, 4, 17, 11 }
 -- `BYTE_0052a7cb` and `BYTE_0052a7df`: what each weapon takes from
 -- `AT_EM_FLG`, which flinches it at 0, at 600 life or more and below.
 local STUN_HIGH <const> = { [0] = 0, 10, 10, 10, 10, 20, 10, 10, 10, 10, 40, 10, 10, 10, 20, 4, 4, 40, 4, 10 }
 local STUN_LOW <const> = { [0] = 10, 10, 10, 10, 10, 20, 10, 20, 40, 20, 40, 40, 10, 10, 40, 10, 20, 40, 4, 10 }
 
+-- `FUN_004995c0`, the blood of weapons 9, 0xa, 0x10, 0x11 and the
+-- Beretta's 0x13: bloods of kind 2, each at a part of `BYTE_0052a5dc` that
+-- a `Rnd` picks, from its second half when `Damage_no` isn't a multiple of
+-- 3; six for 0xa and 0x10, three for the others. 0x10 bleeds at most once
+-- in 0x1e ticks (`+0x223`).
+local function spray(e, weapon)
+    if weapon == 0x10 then
+        if e:var(CNT_223) ~= 0 then
+            return
+        end
+        e:set_var(CNT_223, 0x1E)
+    end
+    local half = e:damage_no() % 3 ~= 0 and 4 or 0
+    local count = (weapon == 0xA or weapon == 0x10) and 6 or 3
+    for _ = 1, count do
+        blood(e, SPRAY_PARTS[(e:rnd() + half) & 7], 2)
+    end
+end
+
 -- `DWORD_0052a77c`: what each weapon's hit adds. The magnums start the
--- spurt; the others' (9 to 0xb, 0xe, 0x10 and 0x11) aren't ported, and
--- 4, 0xf and 0x12's blood draws its `Rnd` only.
+-- spurt; 4, 0xf and 0x12's blood draws its `Rnd` only; 9, 0xa, 0x10, 0x11
+-- and 0x13 spray (`FUN_004995c0`); 0xb's and 0xe's (`FUN_00499640`,
+-- `FUN_004996c0`) aren't ported. The others' (the Colt's among them) are
+-- `nullsub_1`.
 local function weapon_blood(e, weapon)
     if weapon == 5 or weapon == 6 then
         e:set_var(SPURT, 1)
     elseif weapon == 4 or weapon == 0xF or weapon == 0x12 then
         e:rnd()
+    elseif weapon == 9 or weapon == 0xA or weapon == 0x10 or weapon == 0x11 or weapon == 0x13 then
+        spray(e, weapon)
     end
 end
 
