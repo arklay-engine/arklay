@@ -186,15 +186,30 @@ impl SaveFile {
             cut: state.state_bytes[usize::from(STATE_BYTE_CUT)],
             menu_choice: state.state_bytes[usize::from(STATE_BYTE_MENU_CHOICE)],
             selected_item: state.selected_item.unwrap_or(0),
-            total_held: state.inventory.len().min(PLAYER_SLOT_COUNT) as u8,
+            total_held: state
+                .partner_backup
+                .as_ref()
+                .map_or(&state.inventory, |backup| &backup.inventory)
+                .len()
+                .min(PLAYER_SLOT_COUNT) as u8,
             fwd_action: state.state_bytes[usize::from(STATE_BYTE_FWD_ACTION)],
             ent_action: state.state_bytes[usize::from(STATE_BYTE_ENT_ACTION)],
             used_item: state.last_used_item.unwrap_or(0),
             picked_item: state.last_picked_item.unwrap_or(0),
-            health: state.entities[0].health,
+            // On one of Rebecca's turns the block keeps Chris's health,
+            // equipped item and slots (the original's backup); the load's
+            // model switch makes her the player again.
+            health: state
+                .partner_backup
+                .as_ref()
+                .map_or(state.entities[0].health, |backup| backup.health),
             timer,
             saves: state.state_bytes[usize::from(STATE_BYTE_SAVES)],
-            equipped: state.equipped.unwrap_or(0),
+            equipped: state
+                .partner_backup
+                .as_ref()
+                .map_or(state.equipped, |backup| backup.equipped)
+                .unwrap_or(0),
             room_item_backup: state.state_bytes[0x2A],
             character: state.state_bytes[usize::from(STATE_BYTE_CHARACTER)],
             pos_x: state.entities[0].pos[0] as i16,
@@ -218,13 +233,16 @@ impl SaveFile {
         // The 12 slot bytes are one contiguous run: the player's slots first,
         // then Rebecca's. Rebecca's block goes down first so a Jill inventory
         // (up to eight slots) overwrites the two slots it shares with her.
-        for (slot, stack) in file.player_slots[6..]
-            .iter_mut()
-            .zip(state.rebecca_inventory.iter())
+        // On one of her turns the inventory is hers and the backup Chris's.
+        let (player, rebecca): (&[InventoryItem], Vec<InventoryItem>) = match &state.partner_backup
         {
+            Some(backup) => (&backup.inventory, state.inventory.clone()),
+            None => (&state.inventory, state.rebecca_inventory.to_vec()),
+        };
+        for (slot, stack) in file.player_slots[6..].iter_mut().zip(rebecca.iter()) {
             *slot = *stack;
         }
-        for (slot, stack) in file.player_slots.iter_mut().zip(state.inventory.iter()) {
+        for (slot, stack) in file.player_slots.iter_mut().zip(player.iter()) {
             *slot = *stack;
         }
         file.sync_state_image();
@@ -1121,6 +1139,40 @@ mod tests {
         file.apply_to(&mut restored);
         assert_eq!(restored.rebecca_inventory[0].id, 0x02);
         assert_eq!(restored.rebecca_inventory[0].quantity, 15);
+    }
+
+    #[test]
+    fn a_save_on_rebeccas_turn_keeps_chris_in_the_player_slots() {
+        let mut state = GameState::new(RoomId::parse("1000").unwrap(), &RoomState::default());
+        let stack = |id, quantity| InventoryItem { id, quantity };
+        state.inventory = vec![stack(0x02, 12), stack(0x34, 1)];
+        state.entities[0].health = 97;
+        state.rebecca_inventory[0] = stack(0x02, 15);
+        state.state_bytes[usize::from(crate::game::STATE_BYTE_CHARACTER_MODEL)] = 3;
+        state.apply_model_switch();
+        assert_eq!(state.inventory, vec![stack(0x02, 15)]);
+
+        let file = SaveFile::from_state(&state);
+        assert_eq!(file.player_slots[0], stack(0x02, 12));
+        assert_eq!(file.player_slots[1], stack(0x34, 1));
+        assert_eq!(file.player_slots[6], stack(0x02, 15));
+        assert_eq!(file.total_held, 2);
+        assert_eq!(file.health, 97);
+
+        // The load seeds Chris from the block; the continue path's switch
+        // makes her the player again.
+        let mut restored = GameState::default();
+        file.apply_to(&mut restored);
+        restored.apply_model_switch();
+        assert_eq!(restored.entities[0].id, 3);
+        assert_eq!(restored.inventory, vec![stack(0x02, 15)]);
+        assert_eq!(
+            restored
+                .partner_backup
+                .as_ref()
+                .map(|backup| backup.inventory.clone()),
+            Some(vec![stack(0x02, 12), stack(0x34, 1)])
+        );
     }
 
     #[test]
