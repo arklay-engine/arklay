@@ -1187,6 +1187,17 @@ impl ObjectRecord {
         self.flag & OBJECT_FLAG_ACTIVE != 0
     }
 
+    /// RE 2: sets the active flag from `Be_flg`, which the draw reads: bit 0
+    /// on and `Om_trans`' not-drawn bit 19 off. Every other flag bit goes,
+    /// as `Member_set` leaves it.
+    pub fn sync_active_from_be_flg(&mut self) {
+        self.flag = if self.be_flg & 1 != 0 && self.be_flg & 0x8_0000 == 0 {
+            OBJECT_FLAG_ACTIVE
+        } else {
+            0
+        };
+    }
+
     /// RE2's `Atd[0]` `Atw_x` and `Atw_z`: the box's offset, its x and z
     /// swapped when the object is turned a quarter (`Cdir_y & 0x400`).
     pub fn atw(&self) -> (i16, i16) {

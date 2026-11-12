@@ -3313,11 +3313,7 @@ fn set_object_member(object: &mut crate::objects::ObjectRecord, member: u8, valu
         0x0E..=0x10 => object.rotation[usize::from(member) - 0x0E] = value as i16,
         _ => return,
     }
-    object.flag = if object.be_flg & 1 != 0 && object.be_flg & 0x8_0000 == 0 {
-        crate::objects::OBJECT_FLAG_ACTIVE
-    } else {
-        0
-    };
+    object.sync_active_from_be_flg();
 }
 
 fn character_member(character: &Character, member: u8) -> Option<i32> {

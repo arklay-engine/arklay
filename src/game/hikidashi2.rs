@@ -111,12 +111,6 @@ impl Hikidashi {
         self.active && self.state >= CLOSE
     }
 
-    /// `fg_status & 0x40`: the close-up holds the game (START, the areas)
-    /// until case 5.
-    pub fn holds_game(&self) -> bool {
-        self.active && self.state > HAND_OFF
-    }
-
     /// `fg_status & 0x100`, from case 5 to case 4: `Game_loop` skips
     /// `Cut_check`.
     pub fn holds_cut(&self) -> bool {
@@ -227,13 +221,9 @@ impl GameState {
             } else {
                 record.be_flg &= !MODEL_SHOWN;
             }
-            // The draw reads `Be_flg` bit 0 (`Om_trans`), which arklay keeps
-            // as the record's active flag, as `Member_set` does.
-            record.flag = if record.be_flg & 1 != 0 && record.be_flg & 0x8_0000 == 0 {
-                crate::objects::OBJECT_FLAG_ACTIVE
-            } else {
-                0
-            };
+            // The draw reads `Be_flg` bit 0, which arklay keeps as the
+            // record's active flag.
+            record.sync_active_from_be_flg();
         }
     }
 
@@ -245,6 +235,10 @@ impl GameState {
         }
         let status = self.re2_fg_status();
         *status = (*status & !STATUS_HOLD) | STATUS_NO_CUT_CHECK;
+        // The original reads `WORD_0098eb1c`, the `scd_var_cut` that the
+        // last `Bg_loadPC` replaced. The press's gate
+        // (`BYTE_00989eea == scd_var_cut`: no cut change waiting) makes that
+        // the cut on screen at the press, the one the open saved.
         let cut = hook.old_cut;
         self.set_camera_cut(usize::from(cut));
         self.re2.var_cut = Some(cut);
@@ -634,7 +628,7 @@ mod tests {
             (hook.active, hook.state, hook.old_cut, hook.saved_stop),
             (true, 0x23, 2, 0x10)
         );
-        assert!(hook.opening() && hook.holds_game() && !hook.holds_cut());
+        assert!(hook.opening() && hook.state > HAND_OFF && !hook.holds_cut());
         assert!(game.re2_item_get.is_none());
     }
 
@@ -664,7 +658,7 @@ mod tests {
         // The original's `0x8100`: the window's `0x8000` is the window.
         assert_eq!(fg_status(&game), 0x100);
         let hook = game.re2_hikidashi;
-        assert!(hook.opening() && !hook.holds_game() && hook.holds_cut());
+        assert!(hook.opening() && hook.state == CLOSE && hook.holds_cut());
         // The window is up: case 4 waits.
         game.tick_re2_hikidashi();
         assert_eq!(game.re2_hikidashi.state, CLOSE);
