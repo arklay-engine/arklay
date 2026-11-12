@@ -101,7 +101,7 @@ function BotInventory.keep(row, ctx)
     if item == 0 then
         return "empty"
     end
-    if row.kind == "key" then
+    if row.kind == "key" and not (ctx.waiting and ctx.waiting[item]) then
         return "key"
     end
     if ctx.uses and ctx.uses[item] and not (ctx.far and ctx.far[item]) then
@@ -824,6 +824,10 @@ function BotInventory.regear()
 end
 
 -- The policy context from the live state.
+-- The fewest <use> items of one room that make a set to carry together
+-- (BotInventory.context: 11A's four crests).
+local SET_MIN = 3
+
 function BotInventory.context(bot)
     local ctx = { uses = {}, guns = {}, ammo = {}, keys = {}, cures = {}, heals = 0 }
     ctx.equipped = bot:player().equipped
@@ -900,6 +904,51 @@ function BotInventory.context(bot)
         if not near[item] then
             ctx.far = ctx.far or {}
             ctx.far[item] = true
+        end
+    end
+    -- So, and keys too, are the items of a room whose open uses wait on
+    -- an item the bot neither holds nor has boxed (ctx.waiting): 11A's
+    -- crests go in together, and three of four carried filled Chris's six
+    -- slots, so 116's shotgun was passed and the adders met with an empty
+    -- handgun. They come out once the last one is found.
+    -- Only uses on distinct slots make a set: two items for one probe are
+    -- alternatives (10D's blue and red jewels turn the tiger either way),
+    -- and the blue one waited boxed for a red one it never needed. And only
+    -- SET_MIN or more: two uses are steps in turn as often as a set (10F's
+    -- music score, then the wood emblem once the gold one is taken; Jill
+    -- boxed the wood emblem, took the gold one and was walled in).
+    local by_room, slots, shared = {}, {}, {}
+    for _, fact in ipairs(bot:use_facts()) do
+        if used[fact.item] and BotPuzzle.use_open(bot, fact) then
+            by_room[fact.room] = by_room[fact.room] or {}
+            by_room[fact.room][fact.item] = true
+            local key = fact.room .. ":" .. tostring(fact.slot)
+            if slots[key] and slots[key] ~= fact.item then
+                shared[fact.room] = true
+            end
+            slots[key] = fact.item
+        end
+    end
+    for room, items in pairs(by_room) do
+        local missing, count = false, 0
+        for _, _ in pairs(items) do
+            count = count + 1
+        end
+        if count < SET_MIN then
+            items = {}
+        end
+        for item, _ in pairs(shared[room] and {} or items) do
+            if bot:item_count(item) == 0 and BotInventory.boxed_count(bot, item) == 0 then
+                missing = true
+            end
+        end
+        if missing then
+            for item, _ in pairs(items) do
+                ctx.waiting = ctx.waiting or {}
+                ctx.waiting[item] = true
+                ctx.far = ctx.far or {}
+                ctx.far[item] = true
+            end
         end
     end
     ctx.hold_free = BotPlanner and BotPlanner.steps_needing_room

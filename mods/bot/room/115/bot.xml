@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 115, the ceiling-trap room between 109 and 116. Chris's game: with
+     116's rack left bare (both rack item bits 7:00 and 7:01 clear) and the
+     trap not yet sprung (common 0x20 clear), the entry from 116 plays
+     ceiling_trap_no_rescue. It locks the door to 109 (lock 0x00 clear),
+     sets 0x20, clears the trap lock (bank 2 bit 0x02) and gives control
+     back for 500 frames while the ceiling comes down; then the player
+     dies. The door back to 116 (lock 0x01, set for Chris on every entry)
+     stays open, so the way out is the way in. The next entry's init finds
+     0x20 set: no trap, both doors open and the trap lock set again, which
+     ends the leave. Until then the bot's map has the door to 109 locked
+     (lock 0x00 clear), and from 116 nothing leads back: the revisit brings
+     it into 115 again once 0x20 is set. -->
+<bot format="2">
+  <leave slot="1" bank="1" bit="0x20" until_bank="2" until_bit="0x02" character="chris"
+         escape="yes" label="back out to 116 from under the ceiling"/>
+  <revisit bank="1" bit="0x20" while="set" character="chris"
+           label="past the sprung ceiling: the door to 109 opens again"/>
+</bot>

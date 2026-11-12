@@ -2,10 +2,16 @@
 <!-- 200, the old lift between 21C (under the kitchen) and 213. Both doors
      are parked at the room origin: entered from 213 the lift rides down
      and its event turns on door 1 to 21C; entered from anywhere else it
-     rides up and turns on door 0 to 213 (on_enter / on_enter_2). Only the
-     rope=leave branch needs it, to reach 213 without 201's key panel, so
-     the facts hold only then and the default route stays as it was. -->
+     rides up and turns on door 0 to 213 (on_enter / on_enter_2).
+     Jill: only the rope=leave branch needs it, to reach 213 without 201's
+     key panel, so her facts hold only then and the default route stays as
+     it was. Chris: on the second visit 201's init deletes the door to 214
+     (and 214's side stays locked), so the lift is the only way into and
+     out of 213, 214, 216, 217 and 219 (219's battery): his facts always
+     hold. -->
 <bot format="2">
-  <ride slot="0" from="21C" when="rope=leave" label="up to 213"/>
-  <ride slot="1" from="213" when="rope=leave" label="down to 21C"/>
+  <ride slot="0" from="21C" character="jill" when="rope=leave" label="up to 213"/>
+  <ride slot="1" from="213" character="jill" when="rope=leave" label="down to 21C"/>
+  <ride slot="0" from="21C" character="chris" label="up to 213"/>
+  <ride slot="1" from="213" character="chris" label="down to 21C"/>
 </bot>

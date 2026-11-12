@@ -39,6 +39,9 @@
 //! flag reaches that state, if it last left the room before then: a door
 //! the room's init adds only later (50B's cell door to 512, live only in
 //! the self-destruct), which the bot's map cannot know about from outside.
+//! With `after_bank`/`after_bit` and `after_seconds`, it comes back once
+//! that flag has been set that long, and again on each return while the gate
+//! holds (20D's Richard, who dies on an entry past seven minutes).
 //! `<reach slot bank bit while [entry="same"]>` says when door AOT `slot`
 //! can be walked to at all: only while the flag is in that state (and with
 //! `entry="same"`, only on the entry it got there: 20C's door to 21A
@@ -184,12 +187,18 @@ pub struct Ride {
     pub label: Option<String>,
 }
 
-/// `<revisit bank bit while [label]>`: the bot comes back into the room
-/// once the flag is in the `while` state, unless it has been in the room
-/// with the flag in that state since (`bot:revisit_facts()`).
+/// `<revisit bank bit while [after_bank after_bit after_seconds] [label]>`:
+/// the bot comes back into the room once the flag is in the `while` state,
+/// unless it has been in the room with the flag in that state since
+/// (`bot:revisit_facts()`). With `after_bank`/`after_bit` and
+/// `after_seconds`, it comes back only once that flag has been set for that
+/// many seconds, and again on each later return while the gate holds: a room
+/// whose init reads a timer (20D's, past which Richard dies).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Revisit {
     pub gate: Gate,
+    pub after: Option<(u8, u8)>,
+    pub after_seconds: Option<u32>,
     pub label: Option<String>,
 }
 
@@ -228,7 +237,8 @@ pub struct DoorVia {
 /// `<deliver item cut bank bit [after_bank after_bit]>`: the room wants
 /// `item` carried into camera cut `cut` (a room script keyed on the camera
 /// takes it there) while flag `bank`/`bit` is clear and, if given, the
-/// `after` flag is set; the flag set means done. `<fetch item slot bank
+/// `after` flag is set; the flag set means done. `slot` in place of `cut`
+/// carries it to AOT `slot` and presses it there. `<fetch item slot bank
 /// bit>`: pressing AOT `slot` hands `item` over while flag `bank`/`bit` is
 /// set (the offer).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -245,6 +255,9 @@ pub struct Errand {
 pub enum ErrandKind {
     /// Carry the item into this camera cut.
     Deliver { cut: u8 },
+    /// Carry the item here and press this AOT slot, an event that takes it
+    /// (20D's door to 20E while Rebecca runs with Chris's serum).
+    DeliverAt { slot: u8 },
     /// Press this AOT slot to receive the item.
     Fetch { slot: u8 },
 }
@@ -1087,14 +1100,37 @@ fn parse_ride(node: Node<'_, '_>) -> Result<Ride> {
 fn parse_revisit(node: Node<'_, '_>) -> Result<Revisit> {
     check_attributes(
         node,
-        &["bank", "bit", "while", "label", "character", "when"],
+        &[
+            "bank",
+            "bit",
+            "while",
+            "after_bank",
+            "after_bit",
+            "after_seconds",
+            "label",
+            "character",
+            "when",
+        ],
     )?;
     check_leaf(node)?;
     let gate = parse_gate(node)?.ok_or_else(|| {
         anyhow::anyhow!("{}: <revisit> needs `bank`, `bit` and `while`", at(node))
     })?;
+    let after = after_flag(node)?;
+    let after_seconds = match node.attribute("after_seconds") {
+        Some(_) if after.is_none() => {
+            bail!(
+                "{}: `after_seconds` needs `after_bank`/`after_bit`",
+                at(node)
+            )
+        }
+        Some(_) => Some(attr(node, "after_seconds")?),
+        None => None,
+    };
     Ok(Revisit {
         gate,
+        after,
+        after_seconds,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -1178,6 +1214,7 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
             "axis",
             "bank",
             "bit",
+            "done",
             "after_bank",
             "after_bit",
             "reveals",
@@ -1237,7 +1274,7 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
             axis,
         },
         flag,
-        done_clear: false,
+        done_clear: parse_done(node)?,
         after: after_flag(node)?,
         after_clear: false,
         reveals: node
@@ -1325,7 +1362,20 @@ fn parse_wait(node: Node<'_, '_>) -> Result<Interact> {
 }
 
 fn parse_camera(node: Node<'_, '_>) -> Result<Interact> {
-    check_attributes(node, &["cut", "bank", "bit", "label", "character", "when"])?;
+    check_attributes(
+        node,
+        &[
+            "cut",
+            "bank",
+            "bit",
+            "after_bank",
+            "after_bit",
+            "after_while",
+            "label",
+            "character",
+            "when",
+        ],
+    )?;
     check_leaf(node)?;
     let flag = match (node.attribute("bank"), node.attribute("bit")) {
         (Some(_), Some(_)) => Some((bank_attr(node)?, attr(node, "bit")?)),
@@ -1339,8 +1389,8 @@ fn parse_camera(node: Node<'_, '_>) -> Result<Interact> {
         target: Target::Camera(attr(node, "cut")?),
         flag,
         done_clear: false,
-        after: None,
-        after_clear: false,
+        after: after_flag(node)?,
+        after_clear: parse_after_while(node)?,
         reveals: None,
         opens: None,
         label: node.attribute("label").map(str::to_string),
@@ -1575,10 +1625,9 @@ fn parse_leave(node: Node<'_, '_>) -> Result<Leave> {
 fn parse_errand(node: Node<'_, '_>) -> Result<Errand> {
     let name = node.tag_name().name();
     let deliver = name == "deliver";
-    let place = if deliver { "cut" } else { "slot" };
-    let mut allowed = vec![place, "item", "bank", "bit", "label", "character", "when"];
+    let mut allowed = vec!["slot", "item", "bank", "bit", "label", "character", "when"];
     if deliver {
-        allowed.extend(["after_bank", "after_bit"]);
+        allowed.extend(["cut", "after_bank", "after_bit"]);
     }
     check_attributes(node, &allowed)?;
     check_leaf(node)?;
@@ -1587,8 +1636,14 @@ fn parse_errand(node: Node<'_, '_>) -> Result<Errand> {
         bail!("{}: <{name}> `item` must not be 0 (no item)", at(node));
     }
     let kind = if deliver {
-        ErrandKind::Deliver {
-            cut: attr(node, "cut")?,
+        match (node.attribute("cut"), node.attribute("slot")) {
+            (Some(_), None) => ErrandKind::Deliver {
+                cut: attr(node, "cut")?,
+            },
+            (None, Some(_)) => ErrandKind::DeliverAt {
+                slot: attr(node, "slot")?,
+            },
+            _ => bail!("{}: <deliver> takes one of `cut` and `slot`", at(node)),
         }
     } else {
         ErrandKind::Fetch {
@@ -2377,9 +2432,23 @@ mod tests {
             }
         );
         assert_eq!(meta.revisits[0].label.as_deref(), Some("the cell door"));
+        assert_eq!(meta.revisits[0].after, None);
+        assert_eq!(meta.revisits[0].after_seconds, None);
         let gateless = r#"<bot format="2"><revisit label="x"/></bot>"#;
         let error = parse(gateless).unwrap_err().to_string();
         assert!(error.contains("needs `bank`"), "{error}");
+        let timed = r#"<bot format="2">
+            <revisit bank="1" bit="0x61" while="clear" after_bank="1" after_bit="0x62"
+                     after_seconds="430"/>
+        </bot>"#;
+        let meta = parse(timed).unwrap();
+        assert_eq!(meta.revisits[0].after, Some((1, 0x62)));
+        assert_eq!(meta.revisits[0].after_seconds, Some(430));
+        let unanchored = r#"<bot format="2">
+            <revisit bank="1" bit="0x61" while="clear" after_seconds="430"/>
+        </bot>"#;
+        let error = parse(unanchored).unwrap_err().to_string();
+        assert!(error.contains("`after_seconds` needs"), "{error}");
     }
 
     #[test]
@@ -2767,10 +2836,11 @@ mod tests {
         assert_eq!(chris_105, vec![(8, 0x20, (1, 0xA8))]);
         // Without a character both games' facts load: Chris's 105 use, his
         // 10C herbicide, his 10F score and wood emblem, and his two 501
-        // battery uses (the `jill` parameter's).
+        // battery uses (the `jill` parameter's), Rebecca's V-JOLT on 40F's
+        // root, and the flamethrower back on 308's hook.
         assert_eq!(
             load_facts(&pack, None, None).unwrap().uses.len(),
-            uses.len() + 6
+            uses.len() + 8
         );
     }
 
@@ -2949,6 +3019,13 @@ mod tests {
         let slot_on_deliver =
             r#"<bot format="2"><deliver item="1" slot="5" cut="1" bank="1" bit="1"/></bot>"#;
         assert!(error(slot_on_deliver).contains("slot"));
+        let neither = r#"<bot format="2"><deliver item="1" bank="1" bit="1"/></bot>"#;
+        assert!(error(neither).contains("slot"));
+        let at_slot = r#"<bot format="2"><deliver item="1" slot="5" bank="1" bit="1"/></bot>"#;
+        assert_eq!(
+            parse(at_slot).unwrap().errands[0].kind,
+            ErrandKind::DeliverAt { slot: 5 }
+        );
         let after_on_fetch = r#"<bot format="2"><fetch item="1" slot="5" bank="1" bit="1"
             after_bank="1" after_bit="2"/></bot>"#;
         assert!(error(after_on_fetch).contains("after_bank"));
@@ -2974,7 +3051,9 @@ mod tests {
             ]
         );
         // Chris's game has the same serum errand, on his own flags: the
-        // shelf's 0x2D and 0x2E in 100, Richard's 0x63 in 20D.
+        // shelf's 0x2D and 0x2E in 100, Richard's scene closing (0x61) in
+        // 20D, and the serum Rebecca runs with to 20D's door while Chris
+        // waits (0x5E).
         let chris = load_facts(&pack, Some(false), None).unwrap().errands;
         let flags: Vec<(&str, (u8, u8))> = chris
             .iter()
@@ -2982,7 +3061,12 @@ mod tests {
             .collect();
         assert_eq!(
             flags,
-            vec![("100", (1, 0x2D)), ("100", (1, 0x2E)), ("20D", (1, 0x63))]
+            vec![
+                ("100", (1, 0x2D)),
+                ("100", (1, 0x2E)),
+                ("20D", (1, 0x61)),
+                ("20D", (1, 0x5E))
+            ]
         );
     }
 

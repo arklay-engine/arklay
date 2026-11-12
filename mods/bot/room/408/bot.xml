@@ -8,10 +8,14 @@
      Until then the door is avoided: each retry walked the bot back through
      the room's wasps. The panel is only for the V-JOLT branch, once the
      V-JOLT report (40A, item bit 0x4E) is taken: before it, 409's taps give
-     only water. -->
+     only water. Chris's game: the panel is Rebecca's, once 40C's Plant 42
+     scene with her (common 0x3D) makes her the player to brew the V-JOLT
+     (409's notes). -->
 <bot format="2">
   <avoid slot="1" bank="0" bit="0x21" while="clear"
          reason="the door to 409 is message 143 until the number panel is solved"/>
   <interact slot="4" bank="0" bit="0x21" after_bank="7" after_bit="0x4E" after_while="clear"
-            when="vjolt=yes" label="the number panel beside the door to 409"/>
+            when="vjolt=yes" character="jill" label="the number panel beside the door to 409"/>
+  <interact slot="4" bank="0" bit="0x21" after_bank="1" after_bit="0x3D" character="chris"
+            label="Rebecca: the number panel beside the door to 409"/>
 </bot>

@@ -8,8 +8,9 @@
      after Yawn's bite (serious poison), and the bot fetches it as the cure
      it needs.
 
-     Chris's game: Richard's scene sets common 0x2D instead, and 20E's
-     poison collapse 0x2E when Chris must fetch his own serum. Leaving by
+     Chris's game: the shelf event is AOT 3 (AOT 5 is the item box, absent
+     while Rebecca is played). Richard's scene sets common 0x2D instead, and
+     20E's poison collapse 0x2E: the serum Rebecca runs for, or Chris's own. Leaving by
      door 0 after meeting Rebecca asks "Will you take Rebecca with you?"
      (message 16): rebecca_along picks the answer. -->
 <bot format="2">
@@ -17,9 +18,9 @@
          label="the serum from the shelf"/>
   <fetch slot="5" item="0x42" bank="1" bit="0x24" character="jill"
          label="the second serum from the shelf"/>
-  <fetch slot="5" item="0x42" bank="1" bit="0x2D" character="chris"
+  <fetch slot="3" item="0x42" bank="1" bit="0x2D" character="chris"
          label="the serum from the shelf"/>
-  <fetch slot="5" item="0x42" bank="1" bit="0x2E" character="chris"
+  <fetch slot="3" item="0x42" bank="1" bit="0x2E" character="chris"
          label="the second serum from the shelf"/>
   <answer message="16" choice="yes" character="chris" when="rebecca_along=yes"
           label="take Rebecca along"/>

@@ -364,8 +364,10 @@ end
 
 function BotPuzzle.push_done(bot, fact)
     -- A push whose zone event takes the object away (a statue that falls)
-    -- names the event's flag: set means done.
-    if fact.bank and bot:flag(fact.bank, fact.bit) then
+    -- names the event's flag: set means done (or clear, with done="clear":
+    -- the item flag of the pickup the push uncovers, as 10F's bookshelf
+    -- stands back over the music score's place on every entry).
+    if fact.bank and bot:flag(fact.bank, fact.bit) ~= (fact.done_clear == true) then
         return true
     end
     local dir = BotPuzzle.push_dir(fact)

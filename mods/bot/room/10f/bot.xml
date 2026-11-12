@@ -2,6 +2,8 @@
 <!-- 10F bar.
      - The bookshelf (object 1) stands over the music score's pickup (AOT 5).
        Push it east until it clears the pickup zone; the item is then in reach.
+       The shelf is back in place on every entry: the push is done once the
+       score's item flag (bank 7 bit 0x07) is clear, the score taken.
      - Played at the piano: the music score is a USE item at the piano's
        SCE_USEITEM probe AOT 13. The tune sets common 0xA5 and the bar counter
        slides aside to open the gold emblem's alcove.
@@ -16,9 +18,17 @@
      (message 11); Yes sets 0xA1, and she plays on the next entry (0xA2),
      which opens the alcove. Taking the gold emblem sets 0xA3 and closes
      the wall behind Chris until the wood emblem goes in the hollow (0xA4),
-     so the gold emblem is taken only while the wood emblem is held. -->
+     so the gold emblem is taken only while the wood emblem is held. The
+     uses stay open before the pickup, so the wood emblem stays needed (an
+     `after` gate on 0xA3 let the bot box it, and the avoid then kept it
+     off the gold emblem for good). Tries before the pickup can spend the
+     use's attempts; the pickup's flag lifts the mark (the planner's story
+     retry), and the bot, walled in, uses the emblem on that entry. So it
+     is in Jill's game: the counter closes the passage until the wood
+     emblem is in the hollow. -->
 <bot format="2">
-  <push object="1" slot="5" direction="east" label="bookshelf off the music score"/>
+  <push object="1" slot="5" direction="east" bank="7" bit="0x07" done="clear"
+        label="bookshelf off the music score"/>
   <use slot="13" item="0x23" bank="1" bit="0xA5" character="jill" label="music score at the piano"/>
   <use slot="6" item="0x1F" bank="1" bit="0xA7" character="jill" label="wood emblem in the hollow"/>
   <use slot="14" item="0x23" bank="1" bit="0xA0" character="chris" label="music score to Rebecca"/>
@@ -26,6 +36,6 @@
   <revisit bank="1" bit="0xA1" while="set" character="chris"
            label="Rebecca has practised: she plays on the next visit"/>
   <use slot="6" item="0x1F" bank="1" bit="0xA4" character="chris" label="wood emblem in the hollow"/>
-  <avoid slot="4" unless_held="0x1F" character="chris"
-         reason="the gold emblem's pickup closes the wall behind Chris: the wood emblem goes in its place"/>
+  <avoid slot="4" unless_held="0x1F"
+         reason="the gold emblem's pickup closes the wall behind the player: the wood emblem goes in its place"/>
 </bot>

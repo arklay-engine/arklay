@@ -167,6 +167,12 @@ function BotNav.side_offsets(span)
     return { 0 }
 end
 
+-- The fine scan of approach_points costs a few hundred path queries; a
+-- zone it found nothing for is not scanned again for SCAN_RETRY ticks (a
+-- goal out of reach is asked about again and again).
+local SCAN_RETRY = 30 * C.SECOND
+local SCAN_FAILED = {}
+
 -- Candidate standing points around `zone`, sorted: the ones the engine's
 -- path planner reaches first, by path length, then the rest by straight
 -- distance (the 512-unit planning grid can miss a point next to a wall that
@@ -182,7 +188,11 @@ function BotNav.approach_points(bot, zone)
     local planned, rest = {}, {}
     local candidates = {}
     if zone.inside then
-        offsets = {}
+        -- Just inside each edge too: the walkable floor may reach only a
+        -- skin into the zone (301's door over the drained pool, whose zone
+        -- runs into the pool wall: Jill, radius 372, stands 150 in; Chris,
+        -- 422, only about 100).
+        offsets = { -(C.APPROACH // 6), -(C.APPROACH // 2) }
         candidates = {
             { cx, cz },
             { zone.x + zone.width // 4, cz }, { zone.x + zone.width - zone.width // 4, cz },
@@ -257,6 +267,54 @@ function BotNav.approach_points(bot, zone)
             deep[#deep + 1] = { cx + a, zone.z + zone.depth + d }
         end
         plan(deep, true)
+    end
+    local scan_key = string.format("%s:%d:%d:%d:%d", bot:room().id, zone.x, zone.z,
+        zone.width, zone.depth)
+    local scan_failed = SCAN_FAILED[scan_key]
+    if #planned == 0 and not zone.inside
+        and not (scan_failed and bot:tick() - scan_failed < SCAN_RETRY) then
+        -- Still none: the floor in front of the zone may be a band
+        -- narrower than the offsets' spacing, between the furniture the
+        -- zone is on and something behind the body (401's red book on its
+        -- desk: Chris, radius 422, has 20 units of floor there, between the
+        -- desk and the stool behind him). Scan out from the zone's edge in
+        -- fine steps and take each line's nearest point that plans.
+        local step = C.APPROACH // 12
+        local function scan(points_at)
+            for _, a in ipairs({ 0, -1, 1 }) do
+                for d = C.APPROACH // 2, C.REACH - C.APPROACH // 6, step do
+                    local p = points_at(d, a)
+                    if bot:path(p[1], p[2]).status == "ok" then
+                        plan({ p }, true)
+                        break
+                    end
+                end
+            end
+        end
+        local qx, qz = zone.width // 4, zone.depth // 4
+        scan(function(d, a) return { zone.x - d, cz + a * qz } end)
+        scan(function(d, a) return { zone.x + zone.width + d, cz + a * qz } end)
+        scan(function(d, a) return { cx + a * qx, zone.z - d } end)
+        scan(function(d, a) return { cx + a * qx, zone.z + zone.depth + d } end)
+        SCAN_FAILED[scan_key] = #planned == 0 and bot:tick() or nil
+    end
+    if #planned == 0 and zone.inside then
+        -- None planned inside: the planner's grown geometry may cover the
+        -- skin of floor the body still reaches (301's pool door: Chris,
+        -- radius 422, has no planned point in its zone). Stand at an edge
+        -- and walk in from there (the job leans in while the body is out).
+        local edge = {}
+        for _, d in ipairs({ C.APPROACH // 2, C.APPROACH }) do
+            for _, a in ipairs(along(zone.depth)) do
+                edge[#edge + 1] = { zone.x - d, cz + a }
+                edge[#edge + 1] = { zone.x + zone.width + d, cz + a }
+            end
+            for _, a in ipairs(along(zone.width)) do
+                edge[#edge + 1] = { cx + a, zone.z - d }
+                edge[#edge + 1] = { cx + a, zone.z + zone.depth + d }
+            end
+        end
+        plan(edge, true)
     end
     local function order(a, b)
         if a[5] ~= b[5] then
@@ -405,7 +463,11 @@ function BotNav.press_zone(bot, job)
         local result = bot:walk_to(point[1], point[2], {
             run = bot:distance(point[1], point[2]) >= C.RUN_MIN_DISTANCE,
             tolerance = C.APPROACH // 2 - 30,
-            face = { point[3], point[4] },
+            -- Standing in a body-probe zone needs no facing, and the face
+            -- approach line behind a point inside it can lie in the wall
+            -- the zone runs into (301's pool door: every inside point was
+            -- `unreachable` though the planner reached it).
+            face = not job.zone.inside and { point[3], point[4] } or nil,
             avoid_enemies = BotTactics.avoiding(),
         })
         if result.status == "arrived" then
@@ -456,6 +518,20 @@ function BotNav.press_zone(bot, job)
     end
     local facing = job.pattern ~= "hold" and bot:face_to(point[3], point[4])
         or { status = "hold" }
+    -- A body-probe zone stood at from outside (none of its inside points
+    -- planned): walk on into it, facing its middle, before pressing.
+    if job.zone.inside and not BotNav.reach_in(job.zone, here.x, here.z)
+        and (job.lean or 0) < 3 * LEAN_TICKS then
+        local cx, cz = BotNav.centre(job.zone)
+        if job.lean == 0 then
+            bot:log(string.format("%s: walking in from (%d,%d)", job.label, here.x, here.z))
+        end
+        job.lean = (job.lean or 0) + 1
+        if bot:face_to(cx, cz).status == "facing" then
+            bot:set_input({ up = true })
+        end
+        return "busy"
+    end
     -- The probe falls short (the walk stopped a skin off the furniture in
     -- front of the zone): hold forward into it, as a player would, before
     -- pressing.
@@ -657,8 +733,11 @@ local PUSH_TRIES = 2
 -- How far behind the object's face to stand, nearest last: forward then
 -- walks the player into the face. A wall close behind the object leaves
 -- room only for the nearer points (the probe reaches 470 ahead; 406's
--- crate has a strip only 335 deep beside it).
-local PUSH_STANDS = { C.REACH, C.APPROACH * 3 // 2, C.APPROACH * 4 // 3, C.APPROACH }
+-- crate has a strip only 335 deep beside it). The nearest is for Chris:
+-- his radius (422 to Jill's 372) leaves that strip's nearest Jill point 15
+-- units inside the wall's grown box.
+local PUSH_STANDS = { C.REACH, C.APPROACH * 3 // 2, C.APPROACH * 4 // 3, C.APPROACH,
+    C.APPROACH * 2 // 3 }
 -- Where along the face to stand, in thirds of the object's half size across
 -- the push: the middle first, then either side (a wall band over one end).
 local PUSH_LATERALS = { 0, -1, 1 }
@@ -763,11 +842,94 @@ function BotNav.push_object(bot, job)
                 job.stand[axis] = 1
                 job.lateral[axis] = job.lateral[axis] + 1
                 job.walk_ticks = 0
+            elseif not (job.squeezed and job.squeezed[axis]) then
+                -- No stand point plans: the strip behind the object is
+                -- narrower than the player's grown box (406's east crate:
+                -- 725 between it and the wall, Chris's grown box 880). Walk
+                -- to the strip's open end and run straight in. A walk stops
+                -- on the object's face; a run's step crosses far enough into
+                -- it that the object's push-out (`ChkEntitySlide`, on the
+                -- shallower side of its diagonal) throws the body sideways,
+                -- into the strip, past the wall's own grown box.
+                job.squeezed = job.squeezed or {}
+                job.squeezed[axis] = true
+                job.stand[axis] = #PUSH_STANDS
+                job.phase = "squeeze"
+                job.walk_ticks = 0
+                job.squeeze_side = nil
             else
                 job.stand[axis] = 1
                 job.lateral[axis] = 1
                 stalled("stand point " .. result.status)
             end
+        end
+        return "busy"
+    end
+    if job.phase == "squeeze" then
+        job.walk_ticks = job.walk_ticks + 1
+        -- The open ends of the strip, one either side of the object across
+        -- the push.
+        local function entry(side)
+            -- Far enough out for the run to reach its speed.
+            local out = C.APPROACH * 4
+            if axis == "x" then
+                return sx, object.z + side * (object.half_z + out)
+            end
+            return object.x + side * (object.half_x + out), sz
+        end
+        if not job.squeeze_side then
+            for _, side in ipairs({ -1, 1 }) do
+                local ex2, ez2 = entry(side)
+                if bot:path(ex2, ez2).status == "ok" then
+                    job.squeeze_side = side
+                    bot:log(string.format("%s: squeezing in along %s from (%d,%d)",
+                        job.label, axis, ex2, ez2))
+                    break
+                end
+            end
+            if not job.squeeze_side then
+                job.phase = "approach"
+                job.stand[axis] = 1
+                job.lateral[axis] = 1
+                stalled("no open end to squeeze in from")
+                return "busy"
+            end
+            job.squeeze_entered = false
+        end
+        local ex2, ez2 = entry(job.squeeze_side)
+        if not job.squeeze_entered then
+            local result = bot:walk_to(ex2, ez2, {
+                run = bot:distance(ex2, ez2) >= C.RUN_MIN_DISTANCE,
+                tolerance = C.APPROACH // 3,
+                face = { sx, sz },
+                avoid_enemies = BotTactics.avoiding(),
+            })
+            if result.status == "arrived" then
+                job.squeeze_entered = true
+                job.walk_ticks = 0
+            elseif result.status ~= "moving" or job.walk_ticks > WALK_TICKS then
+                job.phase = "approach"
+                job.stand[axis] = 1
+                job.lateral[axis] = 1
+                stalled("squeeze entry " .. result.status)
+            end
+            return "busy"
+        end
+        local cross = axis == "x" and here.z - sz or here.x - sx
+        if BotNav.abs(cross) <= C.APPROACH // 3 then
+            job.phase = "push"
+            job.mark, job.mark_tick = along, bot:tick()
+            return "busy"
+        end
+        if job.walk_ticks > 3 * LEAN_TICKS then
+            job.phase = "approach"
+            job.stand[axis] = 1
+            job.lateral[axis] = 1
+            stalled("squeezing in stopped at " .. string.format("(%d,%d)", here.x, here.z))
+            return "busy"
+        end
+        if bot:face_to(sx, sz).status == "facing" then
+            bot:set_input({ up = true, run = true })
         end
         return "busy"
     end
