@@ -515,6 +515,7 @@ pub fn apply_live(
     advance_ramp(game);
     if game.is_re2_room {
         game.re2.music.tick();
+        measure_re2_tracks(game, cache, pack);
     }
 
     // Consume the fade-out edge even without a device so it cannot leak into a
@@ -583,18 +584,34 @@ pub fn apply_levels(mixer: &mut Mixer, game: &GameState) {
     }
 }
 
+/// Give each RE2 music channel a newly named track's length in ticks at 30
+/// a second, which [`crate::bgm2::Music`] ends a buffer played once by. It
+/// comes from the pack whether or not a mixer plays it, so the music's state
+/// is the same with and without an audio device.
+fn measure_re2_tracks(game: &mut GameState, cache: &mut BgmCache, pack: &Pack) {
+    for channel in &mut game.re2.music.channels {
+        if channel.measured == channel.track {
+            continue;
+        }
+        channel.measured = channel.track;
+        channel.ticks = channel
+            .track
+            .and_then(|track| cache.load(pack, track))
+            .and_then(|wav| {
+                let frames = wav.frame_count() as u64 * 30;
+                let rate = u64::from(wav.sample_rate.max(1));
+                u32::try_from(frames.div_ceil(rate)).ok()
+            });
+    }
+}
+
 /// Catch the mixer up with [`crate::bgm2::Music`]. The main is music, whatever
 /// its track's number, and the sub ambience.
 fn apply_re2_music(mixer: &mut Mixer, game: &mut GameState, cache: &mut BgmCache, pack: &Pack) {
     for (index, channel) in game.re2.music.channels.iter_mut().enumerate() {
         if std::mem::take(&mut channel.load) {
             mixer.stop_bgm_channel(index);
-            channel.ticks = None;
             if let Some(wav) = channel.track.and_then(|track| cache.load(pack, track)) {
-                // `Music` ends a sub played without its loop by this.
-                let frames = wav.frame_count() as u64 * 30;
-                let rate = u64::from(wav.sample_rate.max(1));
-                channel.ticks = u32::try_from(frames.div_ceil(rate)).ok();
                 mixer.load_bgm_channel(index, wav, true);
                 mixer.set_bgm_channel_kind(
                     index,
@@ -1025,6 +1042,24 @@ mod tests {
         out.extend_from_slice(&(data.len() as u32).to_le_bytes());
         out.extend_from_slice(&data);
         out
+    }
+
+    /// An RE2 channel's track length comes from the pack with no mixer, so
+    /// a sub played once ends on the same tick with or without an audio
+    /// device: two seconds at 22050 Hz is 60 ticks.
+    #[test]
+    fn an_re2_tracks_length_is_read_without_a_mixer() {
+        let (_path, pack) = pack_with_se(0x105, &wav_bytes(&vec![0; 44100]));
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.re2.music.channels[3].track = Some(0x105);
+        let mut cache = BgmCache::default();
+        apply_live(&mut None, &mut game, &mut cache, &pack);
+        assert_eq!(game.re2.music.channels[3].ticks, Some(60));
+        // No track, no length.
+        game.re2.music.channels[3].track = None;
+        apply_live(&mut None, &mut game, &mut cache, &pack);
+        assert_eq!(game.re2.music.channels[3].ticks, None);
     }
 
     #[test]

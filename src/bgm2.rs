@@ -209,9 +209,12 @@ pub struct Channel {
     pub volume: u8,
     /// `SsSetPan`'s argument.
     pub pan: u8,
-    /// The loaded track's length in ticks at 30 a second, once the mixer
-    /// has read it ([`crate::bgm`]); `None` without a mixer.
+    /// The loaded track's length in ticks at 30 a second, once
+    /// [`crate::bgm`] has read it from the pack, with or without a mixer;
+    /// `None` for a missing track.
     pub ticks: Option<u32>,
+    /// The track `ticks` was read for.
+    pub measured: Option<u16>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -229,9 +232,12 @@ struct Sequence {
     fade: u8,
     /// The volume a start gives it (`DWORD_00693804` and on).
     volume: u8,
-    /// The ticks since `SsPlay` started it without its loop, while it
-    /// isn't stopped: its buffer ends with its track.
-    once: Option<u32>,
+    /// The ticks since `SsPlay` started its buffer, while it isn't stopped:
+    /// the play position is this modulo the track's length.
+    since: Option<u32>,
+    /// `since` when `SsPlay` last turned the loop off, for a buffer that
+    /// plays once: it ends at the end of the pass it was in then.
+    once_from: Option<u32>,
 }
 
 /// Where `sce_bgm_control` runs, which some of its cases ask.
@@ -287,7 +293,8 @@ impl Default for Music {
                 loaded: false,
                 fade: 0,
                 volume: SEQUENCE_VOLUME,
-                once: None,
+                since: None,
+                once_from: None,
             }; SEQUENCES],
             door_fade: 0,
             door_wait: 0,
@@ -336,30 +343,51 @@ impl Music {
         }
     }
 
+    /// `SsPlay`: case 6 calls only the buffer's `Play`, with no `Stop` and
+    /// no `SetCurrentPosition(0)`, so a buffer that plays already goes on
+    /// from where it is and only its loop flag changes: turned off, it ends
+    /// at the end of the pass it is in.
     fn play(&mut self, sequence: usize, looping: bool) {
         for index in sequence_channels(sequence) {
             self.channels[index].play = Some(looping);
         }
-        self.sequences[sequence].once = (!looping).then_some(0);
+        let playing = self.sequences[sequence].since.is_some() && !self.ended(sequence);
+        let state = &mut self.sequences[sequence];
+        if !playing {
+            state.since = Some(0);
+            state.once_from = None;
+        }
+        if looping {
+            state.once_from = None;
+        } else if state.once_from.is_none() {
+            state.once_from = state.since;
+        }
+    }
+
+    /// Sequence `sequence`'s buffer, played once, has reached the end of
+    /// its track. The end is counted in ticks at 30 a second from the
+    /// track's length, as the voice lines' are, where the original's
+    /// DirectSound buffer ends by the clock.
+    fn ended(&self, sequence: usize) -> bool {
+        let state = &self.sequences[sequence];
+        let channel = sequence_channels(sequence).start;
+        match (state.since, state.once_from, self.channels[channel].ticks) {
+            (Some(since), Some(from), Some(length)) if length > 0 => {
+                since >= (from / length + 1) * length
+            }
+            _ => false,
+        }
     }
 
     /// Sub sequence `sequence`'s channel plays (`0x4347B0`'s status bit 0):
-    /// a track is loaded, and one started without its loop hasn't reached
-    /// its end. The end is counted in ticks at 30 a second from the
-    /// track's length, as the voice lines' are, where the original's
-    /// DirectSound buffer ends by the clock.
+    /// a track is loaded, and one played once hasn't reached its end.
     fn sub_playing(&self, sequence: usize) -> bool {
-        let state = &self.sequences[sequence];
-        let length = self.channels[2 + sequence].ticks;
-        state.loaded
-            && !state
-                .once
-                .zip(length)
-                .is_some_and(|(played, length)| played >= length)
+        self.sequences[sequence].loaded && !self.ended(sequence)
     }
 
     fn stop(&mut self, sequence: usize) {
-        self.sequences[sequence].once = None;
+        self.sequences[sequence].since = None;
+        self.sequences[sequence].once_from = None;
         for index in sequence_channels(sequence) {
             self.channels[index].stop = true;
             self.channels[index].play = None;
@@ -375,6 +403,7 @@ impl Music {
             volume,
             pan: 0,
             ticks: None,
+            measured: None,
         };
     }
 
@@ -395,7 +424,8 @@ impl Music {
         let sequence = &mut self.sequences[0];
         sequence.state = 0;
         sequence.loaded = tracks.iter().any(Option::is_some);
-        sequence.once = None;
+        sequence.since = None;
+        sequence.once_from = None;
         bank
     }
 
@@ -416,7 +446,8 @@ impl Music {
             let sequence = &mut self.sequences[1 + channel];
             sequence.state = 0;
             sequence.loaded = track.is_some();
-            sequence.once = None;
+            sequence.since = None;
+            sequence.once_from = None;
         }
         bank
     }
@@ -642,8 +673,8 @@ impl Music {
             return;
         }
         for sequence in 0..SEQUENCES {
-            if let Some(played) = self.sequences[sequence].once.as_mut() {
-                *played = played.saturating_add(1);
+            if let Some(since) = self.sequences[sequence].since.as_mut() {
+                *since = since.saturating_add(1);
             }
             if self.sequences[sequence].fade > 0 {
                 self.sequences[sequence].fade -= 1;
@@ -1117,6 +1148,40 @@ mod tests {
                 }
             );
         }
+    }
+
+    /// `SsPlay` on a sub that plays already only turns its loop off: it goes
+    /// on from where it is and ends at the end of the pass it is in, not a
+    /// whole track later.
+    #[test]
+    fn a_sub_played_once_while_it_plays_ends_with_its_pass() {
+        let room_107 = Place {
+            stage: 0,
+            room: 7,
+            ..Place::default()
+        };
+        let mut music = Music::default();
+        music.enter_room(RoomMusic::from_word(0x0500), room_107);
+        music.channels[3].ticks = Some(10);
+        // Into its second pass, then op 3.
+        for _ in 0..14 {
+            music.tick();
+        }
+        music.control([1, 3, 0, 0, 0], room_107);
+        for _ in 0..5 {
+            music.tick();
+        }
+        assert!(music.sub_playing(1), "19 ticks in, the second pass plays");
+        music.tick();
+        assert!(!music.sub_playing(1), "and ends at 20");
+        // Played again once it has ended, it starts over.
+        music.control([1, 3, 0, 0, 0], room_107);
+        for _ in 0..9 {
+            music.tick();
+        }
+        assert!(music.sub_playing(1));
+        music.tick();
+        assert!(!music.sub_playing(1));
     }
 
     #[test]
