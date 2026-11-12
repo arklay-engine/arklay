@@ -49,3 +49,29 @@ ignore = [
   [344, 1813, "om0"], [2907, 5149, "om0"],
 ]
 record = "--warp 200:-13956:-1800:6456:1024:5 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 84 --give 0:2:6 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:2"
+
+# Rooms 209 and 202: 209's six zombies fought from 207's Diamond door with the handgun until both stacks are spent, from just after the warp's head, west along the south aisle to door 7 (locked from 202's side: the presses unlock it and open it), 202 down its west side and into area 6, event 3 with Marvin, his turn, his grab and two bites, and the Heart Key from his desk.
+[[run]]
+name = "leon_a_209_heart"
+room = "209"
+setup_script = "leon_a_209_heart.lua"
+input = "leon_a_209_heart.txt"
+input_shift = 344
+input_drop_early = true
+# Marvin's scene has a voice line, which ends by the recording's clock: the run takes its length from the reference
+voice_from_ref = true
+ticks = 2450
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 2449]
+# 1.04 measured: door 7's frames count only in the whole run's mean (7.1 at worst, on 1267)
+frame_max_mean = 1.15
+# each room on its own: 209 from the warp's head to door 7's press (the fight), and 202 from its hand back (Marvin's scene and the Heart Key)
+frame_windows = [[360, 1230, 1.0], [1573, 2449, 1.05]]
+expect = "match"
+ignore = [
+  # the warp's head on its first ticks, and door 7's own tick
+  [344, 350, "pneck"], [1231, "rng"], [1231, "rseed"],
+  # the drawers' trace (`hk`) over the load
+  [1266, 1356, "hk"],
+]
+record = "--warp 209:-16934:0:-26037:2125:1 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:17 --flag 31:27 --life 84 --give 0:2:6 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x14:15"
