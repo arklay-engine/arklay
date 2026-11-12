@@ -172,14 +172,28 @@ pub fn joint_matrices_frozen(
     entity: &Mat4x3,
     frozen: &[(usize, Mat4x3)],
 ) -> Vec<Mat4x3> {
+    joint_matrices_from_locals(
+        skeleton,
+        &joint_local_transforms(skeleton, keyframe),
+        entity,
+        frozen,
+    )
+}
+
+/// [`joint_matrices_frozen`] from each joint's matrix on its parent's, for a
+/// pose a body's routine has turned after `Joint_move` (`Em10Dm00`'s lean).
+pub fn joint_matrices_from_locals(
+    skeleton: &model::Skeleton,
+    local: &[Mat4x3],
+    entity: &Mat4x3,
+    frozen: &[(usize, Mat4x3)],
+) -> Vec<Mat4x3> {
     let held = |index: usize| {
         frozen
             .iter()
             .find(|(joint, _)| *joint == index)
             .map(|(_, world)| *world)
     };
-    let local = joint_local_transforms(skeleton, keyframe);
-
     let count = local.len();
     let mut parent: Vec<Option<usize>> = vec![None; count];
     for (index, children) in skeleton.children.iter().enumerate().take(count) {

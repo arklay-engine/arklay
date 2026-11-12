@@ -307,9 +307,11 @@ impl ThrownPart {
         there
     }
 
-    /// `Parts_down`, and whether it's still there.
+    /// `Parts_down`, and whether it's still there. `slot` is the body's,
+    /// whose part the bounce's blood is on.
     pub fn fall(
         &mut self,
+        slot: u8,
         rnd: &mut Rnd,
         effects: &mut crate::esp2::Effects,
         sca: Option<&crate::state::Sca>,
@@ -333,8 +335,13 @@ impl ThrownPart {
             self.velocity[2] >>= 2;
             self.velocity[1] = (-self.velocity[1]) >> 2;
             let dir = u16::from(rnd.draw()) << 4;
-            let at = self.matrix.t.map(|axis| axis as i16);
-            effects.call(0, 0, 2000, dir as i16, at, false);
+            // On the part's `Workm` (`Esp_call` with no vector), which it
+            // follows as the part falls.
+            let anchor = crate::esp2::Anchor {
+                body: crate::esp2::Body::Enemy(slot),
+                part: self.part,
+            };
+            effects.call_on_part(0, 0, 2000, dir as i16, anchor, self.matrix, [0; 3]);
             if self.bounces == 1 {
                 return false;
             }
@@ -1549,19 +1556,16 @@ impl Em<'_, '_, '_> {
     /// the slot keeps the part, and follows it if its blocks say so.
     fn effect(&mut self, kind: u8, row: u8, size: u16, dir: i16, part: usize, point: [i32; 3]) {
         let drawn = self.z.drawn.get(part).copied().flatten();
-        let Some(matrix) = drawn.or_else(|| self.mover.part_matrix(part)) else {
-            let at = self.mover.player.pos.map(|axis| axis as i16);
-            self.world.effects.call(kind, row, size, dir, at, false);
-            return;
+        let matrix = drawn.or_else(|| self.mover.part_matrix(part));
+        let anchor = self.anchor(part);
+        let body = self.mover.player.pos;
+        let call = EffectCall {
+            kind,
+            row,
+            size,
+            dir,
         };
-        let anchor = crate::esp2::Anchor {
-            body: crate::esp2::Body::Enemy(self.world.slot as u8),
-            part: part as u8,
-        };
-        let point = point.map(|axis| axis as i16);
-        self.world
-            .effects
-            .call_on_part(kind, row, size, dir, anchor, matrix, point);
+        part_effect(self.world.effects, call, anchor, matrix, point, body);
     }
 
     fn angle(&self) -> i16 {
@@ -1985,10 +1989,21 @@ impl Em<'_, '_, '_> {
     }
 
     /// `FUN_0045b870`'s blood where the head is: `Esp_call(0x3E8)`.
+    /// It's on the head's matrix, which it follows as the head flies.
     fn head_blood(&mut self, head: &KickedHead) {
         let dir = (u16::from(self.rnd()) << 4) as i16;
-        let at = head.matrix.t.map(|axis| axis as i16);
-        self.world.effects.call(0, 0, 1000, dir, at, false);
+        let anchor = self.anchor(HEAD_PART.into());
+        self.world
+            .effects
+            .call_on_part(0, 0, 1000, dir, anchor, head.matrix, [0; 3]);
+    }
+
+    /// This body's part, as an effect on its matrix names it.
+    fn anchor(&self, part: usize) -> crate::esp2::Anchor {
+        crate::esp2::Anchor {
+            body: crate::esp2::Body::Enemy(self.world.slot as u8),
+            part: part as u8,
+        }
     }
 
     /// `FUN_0045b870`'s end: the head is turned off.
@@ -2064,8 +2079,11 @@ impl Em<'_, '_, '_> {
             let dir = self.angle();
             let row = self.rnd() & 1;
             let size = u16::from(self.rnd()) + 0xC18;
-            let at = arm.world.t.map(|axis| axis as i16);
-            self.world.effects.call(0, row, size, dir, at, false);
+            // On the arm's `Workm`, which it follows as the arm shakes.
+            let anchor = self.anchor(usize::from(arm.part));
+            self.world
+                .effects
+                .call_on_part(0, row, size, dir, anchor, arm.world, [0; 3]);
             let size = u16::from(self.rnd() & 1) + 0xC18;
             let side = (i32::from(arm.part) / 3 - 3) * 500 - 0xFA;
             self.effect(0, 0, size, dir, 0, [0, -500, side]);
@@ -2467,6 +2485,41 @@ fn crosses_height(
     !(first & second >= 0 && third & fourth >= 0)
 }
 
+/// An effect's type, row, size and direction.
+#[derive(Debug, Clone, Copy)]
+struct EffectCall {
+    kind: u8,
+    row: u8,
+    size: u16,
+    dir: i16,
+}
+
+/// `Esp_call` on a part's matrix (`matrix`, as its last draw left it) and a
+/// vector on it: the slot keeps the part, which it follows if its blocks say
+/// so. A body with no such part starts it at the body, on nothing.
+fn part_effect(
+    effects: &mut crate::esp2::Effects,
+    call: EffectCall,
+    anchor: crate::esp2::Anchor,
+    matrix: Option<player2::Matrix>,
+    point: [i32; 3],
+    body: [i32; 3],
+) {
+    let EffectCall {
+        kind,
+        row,
+        size,
+        dir,
+    } = call;
+    let Some(matrix) = matrix else {
+        let at = body.map(|axis| axis as i16);
+        effects.call(kind, row, size, dir, at, false);
+        return;
+    };
+    let point = point.map(|axis| axis as i16);
+    effects.call_on_part(kind, row, size, dir, anchor, matrix, point);
+}
+
 /// `Pl_life_down` (0x4DCA40): the life left, the near-death bit, and 1 for
 /// the bite that leaves the player on their last legs or 2 for the one that
 /// kills.
@@ -2532,7 +2585,7 @@ mod tests {
         let mut landings = 0;
         let mut alive = true;
         for _ in 0..200 {
-            alive = part.fall(&mut rnd, &mut effects, None);
+            alive = part.fall(0, &mut rnd, &mut effects, None);
             if !alive {
                 break;
             }
@@ -2552,6 +2605,42 @@ mod tests {
         assert_eq!(rnd, twice);
     }
 
+    /// An enemy's effect starts on its part's drawn matrix and keeps the
+    /// part (`Esp_call`'s `+0x6c`), at the vector on that matrix; one with
+    /// no such part starts at the body, on nothing.
+    #[test]
+    fn an_enemys_effect_is_on_its_parts_matrix() {
+        let mut effects = crate::esp2::Effects::default();
+        effects.enter_room(crate::esp2::test_following_bank());
+        let anchor = crate::esp2::Anchor {
+            body: crate::esp2::Body::Enemy(3),
+            part: 4,
+        };
+        let matrix = player2::Matrix {
+            m: player2::rot_matrix([0, 0x400, 0]),
+            t: [1000, -800, 2000],
+        };
+        let call = EffectCall {
+            kind: 7,
+            row: 0,
+            size: 0xe00,
+            dir: 0,
+        };
+        part_effect(
+            &mut effects,
+            call,
+            anchor,
+            Some(matrix),
+            [100, 0, 0],
+            [0; 3],
+        );
+        assert_eq!(effects.anchors_in_use(), [anchor]);
+        let mut loose = crate::esp2::Effects::default();
+        loose.enter_room(crate::esp2::test_following_bank());
+        part_effect(&mut loose, call, anchor, None, [100, 0, 0], [5, 6, 7]);
+        assert_eq!(loose.anchors_in_use(), []);
+    }
+
     /// `Parts_bomb` runs out by count, wherever the ground is, and draws nothing.
     #[test]
     fn a_blown_part_slows_falls_and_goes_without_rnd() {
@@ -2563,10 +2652,10 @@ mod tests {
         let mut effects = crate::esp2::Effects::default();
         let mut rnd = Rnd::default();
         let start = rnd;
-        assert!(part.fall(&mut rnd, &mut effects, None));
+        assert!(part.fall(0, &mut rnd, &mut effects, None));
         assert_eq!(part.matrix.t, [700, 1010, 0]);
         let mut ticks = 1;
-        while part.fall(&mut rnd, &mut effects, None) {
+        while part.fall(0, &mut rnd, &mut effects, None) {
             ticks += 1;
         }
         assert_eq!(ticks, 0x1D);
@@ -2602,9 +2691,9 @@ mod tests {
         let mut part = ThrownPart::blown(3, matrix, 0, 300, -150);
         let mut effects = crate::esp2::Effects::default();
         let mut rnd = Rnd::default();
-        assert!(part.fall(&mut rnd, &mut effects, None));
+        assert!(part.fall(0, &mut rnd, &mut effects, None));
         assert_eq!(part.matrix.t, [200, 860, 0]);
-        assert!(part.fall(&mut rnd, &mut effects, None));
+        assert!(part.fall(0, &mut rnd, &mut effects, None));
         assert_eq!(part.matrix.t, [300, 730, 0]);
     }
 
@@ -2615,7 +2704,7 @@ mod tests {
         let mut effects = crate::esp2::Effects::default();
         let mut rnd = Rnd::default();
         for _ in 0..16 {
-            assert!(part.fall(&mut rnd, &mut effects, None));
+            assert!(part.fall(0, &mut rnd, &mut effects, None));
         }
         let flat = |m: [[i16; 3]; 3]| m.into_iter().flatten().map(i32::from);
         for (got, want) in flat(part.matrix.m).zip(flat(rest)) {

@@ -745,6 +745,12 @@ impl Effects {
         }
     }
 
+    /// A slot's place, for other modules' tests.
+    #[cfg(test)]
+    pub(crate) fn test_pos(&self, slot: usize) -> [i16; 3] {
+        self.slots[slot].pos
+    }
+
     fn free_below(&self, top: usize) -> Option<usize> {
         (0..top).rev().find(|&index| self.slots[index].flags == 0)
     }
@@ -2157,6 +2163,16 @@ pub(crate) fn test_moving_bank() -> Arc<Bank> {
     let mut block = tests::fire_block();
     block[12..14].copy_from_slice(&10u16.to_le_bytes());
     tests::bank_of(7, &[block])
+}
+
+/// A one-type bank of kind 7 whose block follows its matrix (`0x0800`), for
+/// other modules' tests.
+#[cfg(test)]
+pub(crate) fn test_following_bank() -> Arc<Bank> {
+    let mut first = [0u8; BLOCK_LEN];
+    first[1] = 1;
+    first[18..20].copy_from_slice(&0xb803u16.to_le_bytes());
+    tests::bank_of(7, &[first, [0; BLOCK_LEN]])
 }
 
 #[cfg(test)]

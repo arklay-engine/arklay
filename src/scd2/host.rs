@@ -1499,7 +1499,10 @@ impl Re2State {
     /// `Joint_trans2`, which comes just before `Esp_move` in the draw pass,
     /// makes `Parts_down`'s calls: the zombies' thrown parts fall.
     pub fn tick_parts_down(&mut self, sca: Option<&crate::state::Sca>) {
-        for character in self.characters.0.iter_mut().flatten() {
+        for (slot, character) in self.characters.0.iter_mut().enumerate() {
+            let Some(character) = character.as_deref_mut() else {
+                continue;
+            };
             let Some(zombie) = character.zombie.as_mut() else {
                 continue;
             };
@@ -1509,7 +1512,7 @@ impl Re2State {
                 if off.contains(&thrown.part) {
                     return false;
                 }
-                let falling = thrown.fall(rnd, effects, sca);
+                let falling = thrown.fall(slot as u8, rnd, effects, sca);
                 if !falling {
                     crate::player2::set_part_flags(&mut character.work, thrown.part, 0);
                     if thrown.takes_below() {
@@ -1571,6 +1574,9 @@ impl Re2State {
             ..Default::default()
         });
         self.effects.bodies = crate::character2::targets_of(self);
+        if let Some((pos, _)) = &player {
+            crate::player2::move_parts(&mut self.player, *pos);
+        }
         self.effects.anchors = self.anchor_matrices();
         if self.flag(STOP_BANK, STOP_EFFECTS) {
             self.effects.tick_stopped(&mut self.rnd, sca);
@@ -3649,6 +3655,61 @@ mod tests {
         game.re2.bg_load = false;
         exec(&mut game, "cut_old", &[]);
         assert!(game.re2.bg_load, "`Cut_old_0` loads through `FUN_004e5020`");
+    }
+
+    /// `Esp_move` reads a following effect's matrix through its pointer each
+    /// tick: the player's part `Workm`, or an enemy's, as this tick's draw
+    /// left them.
+    /// A part with no drawn matrix keeps the one the slot last took.
+    #[test]
+    fn an_effect_on_a_part_follows_the_bodys_drawn_matrix() {
+        use crate::esp2::{Anchor, Body};
+        use crate::player2::Matrix;
+        let at = |t: [i32; 3]| Matrix {
+            m: [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]],
+            t,
+        };
+        let mut game = GameState::default();
+        game.id = crate::state::RoomId::parse("1020").unwrap();
+        let zombie = [
+            0, 2, 0x1F, 70, 128, 0, 7, 0, 54, 20000, 20000, 20000, 4056, 0, 0,
+        ];
+        exec(&mut game, "sce_em_set", &zombie);
+        let state = &mut game.re2;
+        state.effects.enter_room(crate::esp2::test_following_bank());
+        let player = Anchor {
+            body: Body::Player,
+            part: 11,
+        };
+        let enemy = Anchor {
+            body: Body::Enemy(2),
+            part: 0,
+        };
+        let start = at([100, -1000, 200]);
+        let hand = state
+            .effects
+            .call_on_part(7, 0, 0xe00, 0, player, start, [0; 3])
+            .unwrap();
+        let head = state
+            .effects
+            .call_on_part(7, 0, 0xe00, 0, enemy, start, [0; 3])
+            .unwrap();
+        let unmoved = state
+            .effects
+            .call_on_part(7, 0, 0xe00, 0, Anchor { part: 5, ..player }, start, [0; 3])
+            .unwrap();
+        // The tick after the call places them on the matrix the call took;
+        // from the next, each takes its part's again.
+        state.tick_esp_move(None, None);
+        state.player.parts = vec![None; 12];
+        state.player.parts[11] = Some(at([1100, -1000, 200]));
+        let character = state.characters.0[2].as_deref_mut().unwrap();
+        character.zombie.as_mut().unwrap().drawn = vec![Some(at([100, -1000, 2200]))];
+        state.tick_esp_move(None, None);
+        let pos = |slot: usize| state.effects.test_pos(slot);
+        let [x, y, z] = pos(unmoved);
+        assert_eq!(pos(hand), [x + 1000, y, z]);
+        assert_eq!(pos(head), [x, y, z + 2000]);
     }
 
     #[test]

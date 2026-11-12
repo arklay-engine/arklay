@@ -391,6 +391,9 @@ pub struct Work {
     /// Every part's `Workm`, as the last tick left it, at the same point as
     /// `root`: where a cockroach (`Em_29`) aims at an attach point.
     pub(crate) parts: Vec<Option<Matrix>>,
+    /// Where the body stood when `parts` were composed, so they can follow
+    /// what moves it before the draw ([`move_parts`]).
+    parts_at: Option<[i32; 3]>,
     /// `Kage_ofs`: how far along the body `Game_loop` probes the shadow's ground.
     kage_ofs: i16,
     /// The point `pl_mv_07` aims `pKage_work->pPos` at in place of part 0.
@@ -635,9 +638,24 @@ impl Work {
     pub fn apply_to_pose(&self, pose: &mut Keyframe) {
         pose.offset[1] = self.scaled_height(pose.offset[1]);
         self.neck.apply(pose);
-        if let [first, second, ..] = pose.rotations.as_mut_slice() {
-            first[2] = first[2].wrapping_add(self.lean);
-            second[2] = second[2].wrapping_sub(self.lean);
+    }
+
+    /// `Em10Dm00`'s lean on the joints' matrices on their parents', as
+    /// `lean` turns the pose's `Workm`: what the draw composes.
+    pub fn lean_locals(&self, local: &mut [crate::anim::Mat4x3]) {
+        let mut parts: Vec<Option<Matrix>> = local
+            .iter()
+            .take(2)
+            .map(|joint| {
+                Some(Matrix {
+                    m: joint.r.map(|row| row.map(|cell| cell as i16)),
+                    t: joint.t,
+                })
+            })
+            .collect();
+        lean(&mut parts, self.lean);
+        for (joint, part) in local.iter_mut().zip(parts.into_iter().flatten()) {
+            joint.r = part.m.map(|row| row.map(i32::from));
         }
     }
 
@@ -939,6 +957,7 @@ impl Default for Work {
             hokan: FULL_BLEND - 1,
             bank: Bank::Weapon,
             hidden_parts: 0,
+            parts_at: None,
             part_rgb: [DEFAULT_PART_RGB; 32],
             joint_offsets: Vec::new(),
             parts0_y: 0x1000,
@@ -1410,6 +1429,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         // moves the body either (a door's new position, for one).
         work.neck.body = None;
         work.latch_kage_probe(player.angle);
+        latch_stopped(work, player, tick);
         return None;
     }
     work.first_tick_assumed = false;
@@ -1457,13 +1477,42 @@ pub fn follow_pushes(work: &mut Work, pos: [i32; 3]) {
         return;
     };
     let by: [i32; 3] = std::array::from_fn(|axis| pos[axis] - body[axis]);
-    let heads = work.neck.position.iter_mut();
-    for at in heads.chain(work.parts.iter_mut().flatten().map(|part| &mut part.t)) {
-        for (axis, by) in at.iter_mut().zip(by) {
+    if let Some(head) = work.neck.position.as_mut() {
+        for (axis, by) in head.iter_mut().zip(by) {
             *axis += by;
         }
     }
     work.neck.body = Some(pos);
+    move_parts(work, pos);
+}
+
+/// `Joint_trans2` draws the player on a stopped tick too: the pose holds, and
+/// the parts' `Workm` are on where the body is.
+fn latch_stopped(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
+    Mover {
+        work,
+        player,
+        tick,
+        arrived: None,
+        stairs: None,
+    }
+    .latch_parts();
+}
+
+/// The parts' `Workm` move with the body to `pos`, as the draw after the
+/// pushes and the scripts composes them there: what an effect on a part
+/// follows (`Effects::anchors`).
+pub fn move_parts(work: &mut Work, pos: [i32; 3]) {
+    let Some(at) = work.parts_at else {
+        return;
+    };
+    let by: [i32; 3] = std::array::from_fn(|axis| pos[axis] - at[axis]);
+    for part in work.parts.iter_mut().flatten() {
+        for (axis, by) in part.t.iter_mut().zip(by) {
+            *axis += by;
+        }
+    }
+    work.parts_at = Some(pos);
 }
 
 /// `Pl_init` (`0x4D9940`), as game mode 3 runs it when the status screen
@@ -1534,6 +1583,7 @@ pub fn player_held(
     if tick.stopped {
         work.neck.body = None;
         work.latch_kage_probe(player.angle);
+        latch_stopped(work, player, tick);
         return;
     }
     if work.damage_cnt & !DAMAGE_LOCK != 0 {
@@ -2934,6 +2984,7 @@ impl Mover<'_, '_> {
     /// its neck's turn.
     fn latch_parts(&mut self) {
         self.work.parts = self.posed_parts();
+        self.work.parts_at = Some(self.player.pos);
     }
 
     /// Every part's `Workm` on the current pose, with the neck's turn on its
@@ -6019,10 +6070,11 @@ impl PoseTree {
         hidden: u32,
         previous: &[Option<Matrix>],
     ) -> Vec<Option<Matrix>> {
-        let mut parts = vec![None; self.local.len()];
+        // No pose (a body with no clip yet): the last draw's stay.
         if self.local.is_empty() {
-            return parts;
+            return previous.to_vec();
         }
+        let mut parts = vec![None; self.local.len()];
         let mut stack = vec![(0usize, self.root)];
         while let Some((part, parent)) = stack.pop() {
             let Some(Some(local)) = self.local.get(part) else {
@@ -8844,6 +8896,9 @@ mod tests {
         // `Key_trg` comes from the pad, which goes on being read.
         assert_eq!(setup.work.key_trg, KEY_FORWARD | KEY_TILT_UP);
         setup.work.key_trg = before.key_trg;
+        // `Joint_trans2` draws the held pose again, where the body is.
+        assert_eq!(setup.work.parts_at, Some(setup.player.pos));
+        setup.work.parts_at = before.parts_at;
         assert_eq!(setup.work, before);
     }
 
@@ -8870,6 +8925,7 @@ mod tests {
     fn the_parts_follow_the_bodys_push() {
         let mut work = Work::default();
         work.neck.body = Some([-14908, 0, -12022]);
+        work.parts_at = Some([-14908, 0, -12022]);
         let hand = Matrix {
             m: [[285, -2206, -3440], [-4060, -546, 15], [-470, 3406, -2227]],
             t: [-15188, -2490, -11302],
@@ -8920,6 +8976,49 @@ mod tests {
         assert_ne!(local[0].unwrap().m, rot_matrix([0x100, 0x200, -0x40]));
     }
 
+    /// `Em10Dm00`'s lean in `street_shoot`: zombie slot 1's part 0 on tick
+    /// 45, the root and posed `M` under a lean of -0x240, as arklay's draw
+    /// has them. With the lean as `MulMatrix(M, Rz(l))` the blood the hit
+    /// started on part 0 at (-140, -483, 0) (slot 62, three ticks old, its
+    /// offset (150, -180, 42) turned by 972) is where the original's is on
+    /// that tick, (18386, -2519, 2637); without it, it isn't.
+    #[test]
+    fn a_leaning_zombies_blood_is_where_the_originals_is() {
+        let tree = |lean_by: i16| {
+            let mut local = vec![Some(Matrix {
+                m: [[3852, -1352, 326], [1375, 3844, -319], [-202, 408, 4070]],
+                t: [0, -1998, 0],
+            })];
+            lean(&mut local, lean_by);
+            PoseTree {
+                root: Matrix {
+                    m: [[333, 0, 4082], [0, 4096, 0], [-4082, 0, 333]],
+                    t: [18360, 0, 2416],
+                },
+                local,
+                children: vec![vec![]],
+            }
+        };
+        let blood = |part: Matrix| {
+            let at = crate::esp2::apply_matrix(&part, [-140, -483, 0]);
+            let (sin, cos) = (rsin(972), rcos(972));
+            let (x, y, z) = (150, -180, 42);
+            [
+                at[0].wrapping_add(((cos * x + sin * z) >> 12) as i16),
+                at[1].wrapping_add(y as i16),
+                at[2].wrapping_add(((cos * z - sin * x) >> 12) as i16),
+            ]
+        };
+        let part = tree(-0x240).compose(&[])[0].unwrap();
+        assert_eq!(
+            part.m,
+            [[-159, 273, 4082], [-2100, 3500, -319], [-3513, -2104, 6]]
+        );
+        assert_eq!(blood(part), [18386, -2519, 2637]);
+        let upright = tree(0).compose(&[])[0].unwrap();
+        assert_ne!(blood(upright), [18386, -2519, 2637]);
+    }
+
     /// A part `Joint_trans2` doesn't draw (bit 0 of its `Be_flg` clear)
     /// keeps the `Workm` the last draw left it, and the parts under it are
     /// composed from that: a stomped crawler bleeds from its hidden head
@@ -8955,6 +9054,52 @@ mod tests {
         assert_eq!(kept[0].map(|part| part.t), Some([1000, -500, 0]));
         assert_eq!(kept[1], Some(old));
         assert_eq!(kept[2].map(|part| part.t), Some([900, -900, 50]));
+    }
+
+    /// A body with no pose yet (no clip: `local` empty) draws nothing, so its
+    /// parts keep the `Workm` the last draw left them.
+    #[test]
+    fn a_body_without_a_pose_keeps_its_last_workm() {
+        let old = Matrix {
+            m: rot_matrix([0; 3]),
+            t: [900, -800, 50],
+        };
+        let previous = vec![Some(old), None, Some(old)];
+        let tree = PoseTree::default();
+        assert_eq!(tree.compose_drawn(&[], 0, &previous), previous);
+        assert_eq!(tree.compose_drawn(&[], u32::MAX, &previous), previous);
+    }
+
+    /// `FUN_0045a880`'s `awStack_c`: the blood of a hold from the front is at
+    /// (0, 200, 100) on part 8, and from behind at (-100, 100, -200).
+    #[test]
+    fn a_standing_holds_blood_is_on_its_sides_point() {
+        for (back, point) in [(0, [0, 200, 100]), (1, [-100, 100, -200])] {
+            let mut setup = Setup::new(0);
+            (setup.clips, setup.keyframes) = bank(0x11, 24, 0);
+            for keyframe in &mut setup.keyframes {
+                keyframe.rotations = vec![[0; 3]; 9];
+            }
+            setup.skeleton = Skeleton {
+                relative: vec![[0, -100, 0]; 9],
+                children: (0..9u8)
+                    .map(|part| (part < 8).then_some(part + 1).into_iter().collect())
+                    .collect(),
+            };
+            setup.work.routine = [MODE_HELD, back, 0, 0];
+            let mut life = 190;
+            run_held(&mut setup, &mut life, |work| {
+                work.effects.iter().any(|call| call.size == 0x17D0)
+            });
+            let call = setup
+                .work
+                .effects
+                .iter()
+                .find(|call| call.size == 0x17D0)
+                .unwrap();
+            let (part, _, on) = call.on.expect("on part 8");
+            assert_eq!((part, on), (8, point), "back {back}");
+        }
     }
 
     #[test]
