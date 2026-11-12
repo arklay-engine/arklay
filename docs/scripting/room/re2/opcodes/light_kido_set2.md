@@ -32,6 +32,7 @@ Unlike the other `*2` light instructions, the camera is the second operand,
 after a padding byte. The change is made after the tick's pass of the
 scripts and lasts until the room is loaded again. A camera or light the room
 does not have changes nothing.
+A room's load applies the changes its own passes made before anything moves, so a door's end and its last stopped tick see them, as the original's do.
 
 ## Example
 

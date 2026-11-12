@@ -33,7 +33,9 @@ that wherever the room would have shown `a` it now shows `b`, and the other
 way round. Doing it twice undoes it.
 
 The change is made after the tick's pass of the scripts, and lasts until the
-room is loaded again. It does not switch the camera on screen.
+room is loaded again. A room's load applies what its own passes changed before anything moves, so a door's end and its last stopped tick see it, as the original's do (the original writes the room as the script runs).
+
+The original's `Cut_replace` (`0x4E5090`) ends by switching the camera: when the zone the player stands in is listed under camera `a`, it calls `Cut_change(b)`. arklay doesn't yet, so the camera on screen changes only when the player next crosses a zone (`docs/internals/deviations/re2.md`).
 
 ## Example
 

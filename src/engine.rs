@@ -2175,6 +2175,10 @@ struct GameSession {
     /// An RE2 door has handed back: the next tick's frame draws the player's
     /// head (see [`GameSession::place_re2_door_neck`]).
     re2_door_neck: bool,
+    /// The room's data as its RDT gave it, before the boot's load passes
+    /// edited it: an authored edit before the first tick reruns the init on
+    /// it ([`GameSession::finish_authoring`]).
+    re2_boot_room: Option<Re2RoomData>,
     /// Decoded pack text tables (messages, item names, descriptions).
     text: Text,
     /// Decoded glyph sheet for the message window; absent packs cannot draw
@@ -2878,6 +2882,7 @@ impl GameSession {
             music: None,
             sound_device: false,
             re2_door_neck: false,
+            re2_boot_room: None,
             text,
             font,
             menu: None,
@@ -3025,6 +3030,11 @@ impl GameSession {
                 false,
             );
         }
+        self.re2_boot_room = self
+            .game
+            .is_re2_room
+            .then(|| Re2RoomData::of(&self.loaded.room));
+        apply_re2_room_data(&mut self.loaded.room, &mut self.game);
         self.apply_screen_border();
         // The init script's starts and kills apply in program order before the
         // Lua room hook or the first tick can observe the slots.
@@ -6693,12 +6703,18 @@ impl GameSession {
                 // original's `Set_room` drops the tracer's `--flag`s there.
                 *self.game.re2.fg_stop_mut() = 0;
             }
+            // The rerun's passes edit the room as its data came, not as the
+            // first passes, under the flags before the edit, left it.
+            if let Some(data) = &self.re2_boot_room {
+                data.restore(&mut self.loaded.room);
+            }
             run_re2_init(
                 self.loaded.re2_vm.as_mut(),
                 &self.loaded.re2_effects,
                 &mut self.game,
                 true,
             );
+            apply_re2_room_data(&mut self.loaded.room, &mut self.game);
             self.game.re2.pending_player = placed;
         }
         if mirror {
@@ -16962,6 +16978,11 @@ fn run_room_init(loaded: &mut LoadedRoom, game: &mut game::GameState) {
     let mut host = game::ScdGameHost::new(game);
     command_vm.run_init(&mut host);
     run_re2_init(loaded.re2_vm.as_mut(), &loaded.re2_effects, game, false);
+    // The load's own passes wrote the zones and the collision and floor
+    // records before anything moves: a door holds the scheduler until play
+    // resumes, and the door's end tests the zones (`Cut_check(1)`) and its
+    // last stopped tick runs the player's collision.
+    apply_re2_room_data(&mut loaded.room, game);
     game.apply_room_edits(&mut loaded.room);
     apply_screen_border(game, &mut loaded.room);
 }
@@ -17178,6 +17199,84 @@ fn sce_work_clr_at(game: &mut game::GameState) {
     }
 }
 
+/// What [`apply_re2_room_data`] edits of a room: the zones and their gates,
+/// the collision and floor records, the cuts' lights and the object models'
+/// blend.
+#[derive(Debug, Clone)]
+struct Re2RoomData {
+    zones: Vec<crate::state::Zone>,
+    zone_gates: Vec<crate::state::ZoneGate>,
+    sca: Option<crate::state::Sca>,
+    footstep_zones: Vec<crate::state::FootstepZone>,
+    lights: Vec<Option<crate::state::CameraLight>>,
+    blends: Vec<Vec<Vec<bool>>>,
+}
+
+impl Re2RoomData {
+    fn of(room: &RoomState) -> Self {
+        Self {
+            zones: room.zones.clone(),
+            zone_gates: room.zone_gates.clone(),
+            sca: room.sca.clone(),
+            footstep_zones: room.footstep_zones.clone(),
+            lights: room.cuts.iter().map(|cut| cut.light).collect(),
+            blends: room
+                .object_models
+                .iter()
+                .map(|asset| {
+                    asset
+                        .model
+                        .objects
+                        .iter()
+                        .map(|object| object.prims.iter().map(|prim| prim.blend).collect())
+                        .collect()
+                })
+                .collect(),
+        }
+    }
+
+    fn restore(&self, room: &mut RoomState) {
+        room.zones.clone_from(&self.zones);
+        room.zone_gates.clone_from(&self.zone_gates);
+        room.sca.clone_from(&self.sca);
+        room.footstep_zones.clone_from(&self.footstep_zones);
+        for (cut, light) in room.cuts.iter_mut().zip(&self.lights) {
+            cut.light = *light;
+        }
+        for (asset, blends) in room.object_models.iter_mut().zip(&self.blends) {
+            for (object, blends) in asset.model.objects.iter_mut().zip(blends) {
+                for (prim, &blend) in object.prims.iter_mut().zip(blends) {
+                    prim.blend = blend;
+                }
+            }
+        }
+    }
+}
+
+/// The cut edits (`Cut_be_set`, `Cut_replace`, and the `light_*_set` changes
+/// and `obj_model_set`'s blend that ride with them), `Sca_id_set` and
+/// `Flr_set` write the room's zones and lights, its objects' models and its
+/// collision and floor records as the scripts run; arklay applies what a
+/// pass queued after it, and a load's own passes' edits before anything
+/// moves.
+fn apply_re2_room_data(room: &mut RoomState, game: &mut game::GameState) {
+    for edit in std::mem::take(&mut game.re2.pending_cuts) {
+        apply_re2_cut_edit(room, edit);
+    }
+    for (index, id) in std::mem::take(&mut game.re2.pending_sca) {
+        if let Some(record) = room
+            .sca
+            .as_mut()
+            .and_then(|sca| sca.records.get_mut(usize::from(index)))
+        {
+            record.set_id(id);
+        }
+    }
+    for (index, on) in std::mem::take(&mut game.re2.pending_flr) {
+        crate::se2::flr_set(&mut room.footstep_zones, index, on);
+    }
+}
+
 /// One tick of an RE2 room's scripts: the events the areas raised last tick
 /// start, every task runs, then what they asked of the room and the player
 /// applies.
@@ -17221,22 +17320,7 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
     sce_work_clr_at(context.game);
     context.game.re2.vm = Some(vm);
     crate::character2::run_esprs(context.game, context.room, context.pack, context.npc_models);
-    for edit in std::mem::take(&mut context.game.re2.pending_cuts) {
-        apply_re2_cut_edit(context.room, edit);
-    }
-    for (index, id) in std::mem::take(&mut context.game.re2.pending_sca) {
-        if let Some(record) = context
-            .room
-            .sca
-            .as_mut()
-            .and_then(|sca| sca.records.get_mut(usize::from(index)))
-        {
-            record.set_id(id);
-        }
-    }
-    for (index, on) in std::mem::take(&mut context.game.re2.pending_flr) {
-        crate::se2::flr_set(&mut context.room.footstep_zones, index, on);
-    }
+    apply_re2_room_data(context.room, context.game);
     let moved = std::mem::take(&mut context.game.re2.pending_player);
     if let Some(warp) = moved.warp {
         context.player.collision_mirror = [warp[0], warp[2]];
@@ -38743,6 +38827,98 @@ end
         run_re2_init(Some(&mut vm), &Default::default(), &mut game, false);
         assert!(!game.re2.script_door);
         assert!(!game.re2.character_stopped(0));
+    }
+
+    /// An authored flag before the first tick reruns the init on the room
+    /// as its data came. Room 119's `main_00` swaps cuts 2 and 4 under 4:152
+    /// clear (`cut_replace(2, 4)`): applying the boot's swap and the rerun's
+    /// on top would undo it, and the walk east from cut 1 would come to cut
+    /// 2 where the original comes to cut 4.
+    #[test]
+    fn an_authored_flag_reruns_the_load_edits_on_the_rooms_own_data() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1\n#game re2\nproc init_00 { evt_end(0); }\nproc main_00 { if (ck(4, 152, 0)) { cut_replace(2, 4); } evt_end(0); }",
+        )
+        .unwrap();
+        session.loaded.re2_vm = Some(crate::scd2::vm::Vm::new(&scripts));
+        let zone = |cam_to| crate::state::Zone {
+            cam_to,
+            cam_from: 1,
+            ..Default::default()
+        };
+        session.loaded.room.zones = vec![zone(1), zone(2)];
+        session.loaded.room.zone_gates = vec![
+            crate::state::ZoneGate {
+                flag: 1,
+                floor: 0xFF
+            };
+            2
+        ];
+        session.enter_room(&pack, None, true, RoomBgmHandoff::Now);
+        assert_eq!(session.loaded.room.zones[1].cam_to, 4, "the boot's swap");
+        // An unrelated flag: the scripts run again under it.
+        let baseline = session.author_baseline();
+        session.game.re2.set_flag(6, 200, 1);
+        session.finish_authoring(baseline, false);
+        assert_eq!(session.loaded.room.zones[1].cam_to, 4, "swapped once");
+        // A flag the edit is made under: the rerun leaves the data's zone.
+        let baseline = session.author_baseline();
+        session.game.re2.set_flag(4, 152, 1);
+        session.finish_authoring(baseline, false);
+        assert_eq!(session.loaded.room.zones[1].cam_to, 2, "not swapped");
+    }
+
+    /// `Sca_id_set` and `Cut_be_set` write the room as the scripts run. Room
+    /// 10A's `main_00`, in the load's pass with 4:0 set, turns the fire's
+    /// collision record off and cut 0's zone 2 on: a door holds the
+    /// scheduler until play resumes, but its end's `Cut_check(1)` and its
+    /// last stopped tick's collision already see both (`leon_a_108_10b`).
+    #[test]
+    fn a_rooms_load_writes_the_collision_and_zones_its_passes_set() {
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1\n#game re2\nproc init_00 { evt_end(0); }\nproc main_00 { sca_id_set(0, 0); cut_be_set(0, 2, 1); evt_end(0); }",
+        )
+        .unwrap();
+        let id = RoomId::parse("10A0").unwrap();
+        let zone = |cam_from| crate::state::Zone {
+            cam_to: 6,
+            cam_from,
+            ..Default::default()
+        };
+        let mut loaded = LoadedRoom {
+            id,
+            room: RoomState {
+                sca: Some(crate::state::Sca {
+                    records: vec![crate::state::ScaRect {
+                        id: 0xFC80,
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }),
+                zones: vec![zone(0), zone(0), zone(0)],
+                zone_gates: vec![
+                    crate::state::ZoneGate {
+                        flag: 0,
+                        floor: 0xFF
+                    };
+                    3
+                ],
+                ..RoomState::default()
+            },
+            scripts: Default::default(),
+            re2_vm: Some(crate::scd2::vm::Vm::new(&scripts)),
+            re2_effects: Default::default(),
+            script_source: ScriptSource::Rdt,
+            player_assets: None,
+        };
+        let mut game = game::GameState::new(id, &loaded.room);
+        run_room_init(&mut loaded, &mut game);
+        assert_eq!(loaded.room.sca.as_ref().unwrap().records[0].id, 0);
+        assert_eq!(loaded.room.zone_gates[2].flag, 1);
+        assert!(game.re2.pending_sca.is_empty() && game.re2.pending_cuts.is_empty());
     }
 
     #[test]

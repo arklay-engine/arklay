@@ -50,6 +50,8 @@ Writes object record `slot` from the operands, as the original's
 `Obj_model_set` does, keeping only what an item area has already put there.
 If the room has no record `slot`, nothing happens (but a blend asked for with
 `attr` bit 1 is still applied to the slot's model).
+The blend is applied after the tick's pass of the scripts, with the cut
+edits; a room's load applies its own passes' blends before anything moves.
 
 A second `obj_model_set` on a slot that is in use takes the object away: its
 `Be_flg` becomes 0, so it is out of play and not drawn, while the rest of the
