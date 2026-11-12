@@ -392,6 +392,24 @@ struct Slot {
     /// twinkles): the object's slot, which `Esp_kill` matches and
     /// [`FLAG_FOLLOW`] follows.
     object: Option<u8>,
+    /// `+0x6c` when it points at a body's part's `Workm`: whose, which
+    /// [`FLAG_FOLLOW`] copies into `hand` on each tick from [`Effects::anchors`].
+    anchor: Option<Anchor>,
+}
+
+/// A body's part whose `Workm` an effect was started on (`Esp_call`'s matrix).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Anchor {
+    pub body: Body,
+    pub part: u8,
+}
+
+/// Whose part an [`Anchor`] is on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Body {
+    Player,
+    /// An enemy slot of `Em_work`.
+    Enemy(u8),
 }
 
 /// What `FUN_004d6150` writes over a grenade's first block, and the hand's
@@ -460,6 +478,10 @@ pub struct Effects {
     /// Where each room object's twinkle sits on its matrix now, by slot: the
     /// caller sets them before a tick, for the slots that follow an object.
     pub objects: Vec<Option<[i16; 3]>>,
+    /// The parts' `Workm` as this tick's `Joint_trans2` left them, for the
+    /// slots on a part ([`Self::anchors_in_use`]): the caller sets them before
+    /// a tick. `Game_loop` draws every body before `Esp_move`.
+    pub(crate) anchors: Vec<(Anchor, crate::player2::Matrix)>,
 }
 
 /// The player as `FUN_004d8260` tests them against an effect, and what the
@@ -633,6 +655,87 @@ impl Effects {
         Some(first)
     }
 
+    /// `Esp_call` on a body's part: `matrix` is the part's `Workm` as the
+    /// call finds it and `point` the vector on it. The slot and those that die
+    /// with it keep the part, and with [`FLAG_FOLLOW`] take its `Workm` again
+    /// on every tick (`Esp_pos`).
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn call_on_part(
+        &mut self,
+        kind: u8,
+        row: u8,
+        size: u16,
+        dir: i16,
+        anchor: Anchor,
+        matrix: crate::player2::Matrix,
+        point: [i16; 3],
+    ) -> Option<usize> {
+        self.call_anchored(kind, row, size, dir, anchor, matrix, point, false)
+    }
+
+    /// [`Self::call_on_part`], or `Esp_call3`'s with `deferred`.
+    #[allow(clippy::too_many_arguments)]
+    fn call_anchored(
+        &mut self,
+        kind: u8,
+        row: u8,
+        size: u16,
+        dir: i16,
+        anchor: Anchor,
+        matrix: crate::player2::Matrix,
+        point: [i16; 3],
+        deferred: bool,
+    ) -> Option<usize> {
+        let at = apply_matrix(&matrix, point);
+        let first = self.call(kind, row, size, dir, at, deferred)?;
+        for (index, slot) in self.slots.iter_mut().enumerate() {
+            if index == first || slot.flags != 0 && first != 0 && usize::from(slot.parent) == first
+            {
+                slot.anchor = Some(anchor);
+                slot.hand = Some((matrix.m, matrix.t));
+                slot.local = point;
+            }
+        }
+        Some(first)
+    }
+
+    /// `Esp_call3` with a slot's own matrix (`+0x6c`) and point (`+0x2c`):
+    /// the new slot is on whatever `parent` was started on, a part's `Workm`
+    /// as it is now included.
+    fn call_from(
+        &mut self,
+        parent: &Slot,
+        kind: u8,
+        row: u8,
+        size: u16,
+        dir: i16,
+    ) -> Option<usize> {
+        let Some(anchor) = parent.anchor else {
+            return self.call(kind, row, size, dir, parent.base, true);
+        };
+        let matrix = self
+            .anchors
+            .iter()
+            .find(|(other, _)| *other == anchor)
+            .map(|(_, matrix)| *matrix)
+            .or_else(|| parent.hand.map(|(m, t)| crate::player2::Matrix { m, t }))?;
+        self.call_anchored(kind, row, size, dir, anchor, matrix, parent.local, true)
+    }
+
+    /// The parts the live slots were started on, each once: the `anchors` a
+    /// tick needs.
+    pub fn anchors_in_use(&self) -> Vec<Anchor> {
+        let mut anchors = Vec::new();
+        for slot in &self.slots {
+            if let (true, Some(anchor)) = (slot.flags != 0, slot.anchor)
+                && !anchors.contains(&anchor)
+            {
+                anchors.push(anchor);
+            }
+        }
+        anchors
+    }
+
     /// `Esp_kill` with an object's matrix: only the slots on that object.
     pub fn kill_on_object(&mut self, kind: u8, row: u8, object: u8) {
         for slot in &mut self.slots {
@@ -642,13 +745,10 @@ impl Effects {
         }
     }
 
-    /// A slot and those that die with it follow a matrix `Esp_call` was given.
-    pub fn move_to(&mut self, index: usize, at: [i16; 3]) {
-        for (other, slot) in self.slots.iter_mut().enumerate() {
-            if other == index || usize::from(slot.parent) == index && slot.parent != 0 {
-                slot.base = at;
-            }
-        }
+    /// A slot's place, for other modules' tests.
+    #[cfg(test)]
+    pub(crate) fn test_pos(&self, slot: usize) -> [i16; 3] {
+        self.slots[slot].pos
     }
 
     fn free_below(&self, top: usize) -> Option<usize> {
@@ -1032,7 +1132,7 @@ impl Effects {
                 for (step, size) in [(3, 0xC00u16), (4, 0xA00)] {
                     let dir = u16::from(self.rnd()) << 4;
                     let row = slot.start.wrapping_add(step);
-                    self.call(9, row, size, dir as i16, slot.base, true);
+                    self.call_from(&slot, 9, row, size, dir as i16);
                 }
                 self.slots[index].anim = 0;
             }
@@ -1041,7 +1141,7 @@ impl Effects {
                 for (step, size) in [0x800u16, 0x1000, 0xC00].into_iter().enumerate() {
                     let dir = u16::from(self.rnd()) << 4;
                     let row = slot.start.wrapping_add(step as u8);
-                    self.call(9, row, size, dir as i16, slot.base, true);
+                    self.call_from(&slot, 9, row, size, dir as i16);
                 }
                 self.slots[index].anim = 0x2A;
             }
@@ -1517,7 +1617,7 @@ impl Effects {
         let slot = self.slots[index];
         let at_frame = slot.frame == slot.start;
         let child = |this: &mut Self, size: u16| {
-            if let Some(child) = this.call(slot.kind, slot.row, size, slot.dir, slot.base, true) {
+            if let Some(child) = this.call_from(&slot, slot.kind, slot.row, size, slot.dir) {
                 this.slots[child].generation = this.slots[index].generation;
             }
         };
@@ -1561,6 +1661,23 @@ impl Effects {
             });
             return;
         }
+        if let (Some(_), Some((m, t))) = (slot.anchor, slot.hand)
+            && slot.flags & FLAG_NO_TURN == 0
+        {
+            let at = apply_matrix(&crate::player2::Matrix { m, t }, slot.local);
+            let (sin, cos) = (
+                crate::player2::rsin(i32::from(slot.dir)),
+                crate::player2::rcos(i32::from(slot.dir)),
+            );
+            let tx = (cos * x + sin * z) >> 12;
+            let tz = (cos * z - sin * x) >> 12;
+            slot.pos = [
+                at[0].wrapping_add(tx as i16),
+                at[1].wrapping_add(y as i16),
+                at[2].wrapping_add(tz as i16),
+            ];
+            return;
+        }
         if slot.flags & FLAG_NO_TURN != 0 {
             slot.pos = [
                 bx.wrapping_add(x as i16),
@@ -1591,6 +1708,12 @@ impl Effects {
                 .and_then(|object| self.objects.get(usize::from(object)))
         {
             slot.base = *at;
+        }
+        if slot.flags & FLAG_FOLLOW != 0
+            && let Some(anchor) = slot.anchor
+            && let Some((_, matrix)) = self.anchors.iter().find(|(other, _)| *other == anchor)
+        {
+            slot.hand = Some((matrix.m, matrix.t));
         }
         Self::place(&mut self.slots[index]);
         let update = self.slots[index].update;
@@ -1835,6 +1958,17 @@ impl Effects {
     }
 }
 
+/// `ApplyMatrix` on a short vector, then the matrix's place: where `point`
+/// on `matrix` is, in shorts as `Esp_pos` keeps it.
+pub(crate) fn apply_matrix(matrix: &crate::player2::Matrix, point: [i16; 3]) -> [i16; 3] {
+    std::array::from_fn(|axis| {
+        let turned: i32 = (0..3)
+            .map(|i| i32::from(matrix.m[axis][i]) * i32::from(point[i]))
+            .sum();
+        matrix.t[axis].wrapping_add(turned >> 12) as i16
+    })
+}
+
 /// A page's place in the frame's list.
 fn page_index(pages: &mut Vec<Page>, page: Page) -> usize {
     pages
@@ -2031,6 +2165,16 @@ pub(crate) fn test_moving_bank() -> Arc<Bank> {
     tests::bank_of(7, &[block])
 }
 
+/// A one-type bank of kind 7 whose block follows its matrix (`0x0800`), for
+/// other modules' tests.
+#[cfg(test)]
+pub(crate) fn test_following_bank() -> Arc<Bank> {
+    let mut first = [0u8; BLOCK_LEN];
+    first[1] = 1;
+    first[18..20].copy_from_slice(&0xb803u16.to_le_bytes());
+    tests::bank_of(7, &[first, [0; BLOCK_LEN]])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2199,6 +2343,99 @@ mod tests {
         effects.kill_on_object(7, 0, 1);
         assert!(!effects.slots[on_object].live());
         assert!(effects.slots[other].live());
+    }
+
+    /// `pl_w02_t2_move`'s flash (kind 1, row 0) in `spider_shots_302`: on
+    /// the hand's `Workm` (part 11) at `(0x8a, 0x267, 8)`. Its first block's
+    /// `Esp_07` takes it to `0xb803`, and from then `Esp_pos` copies the hand's
+    /// matrix again on each tick (`0x0800`): the original's places on ticks
+    /// 361 to 363.
+    #[test]
+    fn the_flash_follows_the_hand_on_each_tick() {
+        let mut first = [0u8; BLOCK_LEN];
+        first[1] = 1;
+        first[18..20].copy_from_slice(&0xb803u16.to_le_bytes());
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[first, [0; BLOCK_LEN]]));
+        let anchor = Anchor {
+            body: Body::Player,
+            part: 11,
+        };
+        let hand = |m: [[i16; 3]; 3], t: [i32; 3]| crate::player2::Matrix { m, t };
+        let at_call = hand(
+            [[-6, -2262, -3414], [-4098, -2, 5], [-5, 3412, -2263]],
+            [-15235, -2506, -11260],
+        );
+        let flash = effects
+            .call_on_part(7, 0, 0xe00, 0, anchor, at_call, [0x8a, 0x267, 8])
+            .unwrap();
+        assert_eq!(effects.anchors_in_use(), vec![anchor]);
+        effects.anchors = vec![(anchor, at_call)];
+        effects.tick(&mut Default::default(), None);
+        assert_eq!(effects.slots[flash].pos, [-15582, -2645, -10753]);
+        assert_eq!(effects.slots[flash].flags, 0xb803);
+        effects.anchors = vec![(
+            anchor,
+            hand(
+                [[285, -2206, -3440], [-4060, -546, 15], [-470, 3406, -2227]],
+                [-15203, -2490, -11302],
+            ),
+        )];
+        effects.tick(&mut Default::default(), None);
+        assert_eq!(effects.slots[flash].pos, [-15532, -2709, -10811]);
+        let last = hand(
+            [
+                [1068, -1883, -3475],
+                [-3443, -2214, 139],
+                [-1944, 2884, -2164],
+            ],
+            [-15128, -2526, -11419],
+        );
+        effects.anchors = vec![(anchor, last)];
+        effects.tick(&mut Default::default(), None);
+        assert_eq!(effects.slots[flash].pos, [-15382, -2975, -11056]);
+        // A part the tick doesn't give keeps the matrix the slot last took.
+        effects.anchors.clear();
+        effects.tick(&mut Default::default(), None);
+        assert_eq!(effects.slots[flash].pos, [-15382, -2975, -11056]);
+    }
+
+    /// `Esp_29`'s splats are `Esp_call3`s on the blood's own matrix pointer
+    /// (`+0x6c`) and point (`+0x2c`): on the part it was started on, where
+    /// that part is now.
+    #[test]
+    fn a_splat_starts_on_its_parents_part() {
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[[0; BLOCK_LEN]]));
+        let anchor = Anchor {
+            body: Body::Enemy(3),
+            part: 8,
+        };
+        let at_call = crate::player2::Matrix {
+            m: crate::player2::rot_matrix([0; 3]),
+            t: [2000, -1000, 500],
+        };
+        let blood = effects
+            .call_on_part(7, 0, 0x1000, 0, anchor, at_call, [0, 100, 0])
+            .unwrap();
+        let now = crate::player2::Matrix {
+            m: crate::player2::rot_matrix([0, 0x400, 0]),
+            t: [2100, -900, 400],
+        };
+        effects.anchors = vec![(anchor, now)];
+        let parent = effects.slots[blood];
+        let splat = effects.call_from(&parent, 7, 0, 0x800, 0).unwrap();
+        let splat = effects.slots[splat];
+        assert_eq!(splat.anchor, Some(anchor));
+        assert_eq!(splat.local, [0, 100, 0]);
+        assert_eq!(splat.base, [2100, -800, 400]);
+        assert_eq!(splat.flags, FLAG_DEFERRED);
+        // One started on the world's matrix starts at its parent's place.
+        let plain = effects.call(7, 0, 0x1000, 0, [5, 6, 7], false).unwrap();
+        let parent = effects.slots[plain];
+        let child = effects.call_from(&parent, 7, 0, 0x800, 0).unwrap();
+        assert_eq!(effects.slots[child].base, [5, 6, 7]);
+        assert_eq!(effects.slots[child].anchor, None);
     }
 
     #[test]

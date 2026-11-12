@@ -391,6 +391,9 @@ pub struct Work {
     /// Every part's `Workm`, as the last tick left it, at the same point as
     /// `root`: where a cockroach (`Em_29`) aims at an attach point.
     pub(crate) parts: Vec<Option<Matrix>>,
+    /// Where the body stood when `parts` were composed, so they can follow
+    /// what moves it before the draw ([`move_parts`]).
+    parts_at: Option<[i32; 3]>,
     /// `Kage_ofs`: how far along the body `Game_loop` probes the shadow's ground.
     kage_ofs: i16,
     /// The point `pl_mv_07` aims `pKage_work->pPos` at in place of part 0.
@@ -544,6 +547,9 @@ pub struct EffectCall {
     pub at: [i16; 3],
     /// What the caller writes over the slot's first block once it's made.
     pub motion: Option<crate::esp2::Launch>,
+    /// The part's `Workm` and the vector on it `Esp_call` was given, for an
+    /// effect that follows the part ([`crate::esp2::Effects::call_on_part`]).
+    pub(crate) on: Option<(u8, Matrix, [i16; 3])>,
 }
 
 /// `Type & 0xFFF` of the grenade launcher with each of its rounds.
@@ -632,9 +638,26 @@ impl Work {
     pub fn apply_to_pose(&self, pose: &mut Keyframe) {
         pose.offset[1] = self.scaled_height(pose.offset[1]);
         self.neck.apply(pose);
-        if let [first, second, ..] = pose.rotations.as_mut_slice() {
-            first[2] = first[2].wrapping_add(self.lean);
-            second[2] = second[2].wrapping_sub(self.lean);
+    }
+
+    /// `Em10Dm00`'s lean on the joints' matrices on their parents', as
+    /// `lean` turns the pose's `Workm`: what the draw composes. The draw's
+    /// matrices turn a flipped Y (`anim::rotation_matrix`), so each is
+    /// flipped to the game's turn for the lean and back.
+    pub fn lean_locals(&self, local: &mut [crate::anim::Mat4x3]) {
+        let mut parts: Vec<Option<Matrix>> = local
+            .iter()
+            .take(2)
+            .map(|joint| {
+                Some(Matrix {
+                    m: flip_y(joint.r).map(|row| row.map(|cell| cell as i16)),
+                    t: joint.t,
+                })
+            })
+            .collect();
+        lean(&mut parts, self.lean);
+        for (joint, part) in local.iter_mut().zip(parts.into_iter().flatten()) {
+            joint.r = flip_y(part.m.map(|row| row.map(i32::from)));
         }
     }
 
@@ -936,6 +959,7 @@ impl Default for Work {
             hokan: FULL_BLEND - 1,
             bank: Bank::Weapon,
             hidden_parts: 0,
+            parts_at: None,
             part_rgb: [DEFAULT_PART_RGB; 32],
             joint_offsets: Vec::new(),
             parts0_y: 0x1000,
@@ -1407,6 +1431,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         // moves the body either (a door's new position, for one).
         work.neck.body = None;
         work.latch_kage_probe(player.angle);
+        latch_stopped(work, player, tick);
         return None;
     }
     work.first_tick_assumed = false;
@@ -1447,17 +1472,49 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
 /// `Oba_ck_em` and `Sca_ck_em` push the player after `Rot_neck`, and the
 /// head's `+0x5C` is on the pushed body: move the head by what the pushes
 /// moved the body since it was placed, a slope's height (`Sca_hit_slope`)
-/// included.
+/// included. `Game_loop`'s `Joint_trans2` draws the parts after the pushes
+/// too, so the parts' `Workm` (`Work::parts`) moves with them.
 pub fn follow_pushes(work: &mut Work, pos: [i32; 3]) {
     let Some(body) = work.neck.body else {
         return;
     };
-    if let Some(head) = &mut work.neck.position {
-        head[0] += pos[0] - body[0];
-        head[1] += pos[1] - body[1];
-        head[2] += pos[2] - body[2];
+    let by: [i32; 3] = std::array::from_fn(|axis| pos[axis] - body[axis]);
+    if let Some(head) = work.neck.position.as_mut() {
+        for (axis, by) in head.iter_mut().zip(by) {
+            *axis += by;
+        }
     }
     work.neck.body = Some(pos);
+    move_parts(work, pos);
+}
+
+/// `Joint_trans2` draws the player on a stopped tick too: the pose holds, and
+/// the parts' `Workm` are on where the body is.
+fn latch_stopped(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
+    Mover {
+        work,
+        player,
+        tick,
+        arrived: None,
+        stairs: None,
+    }
+    .latch_parts();
+}
+
+/// The parts' `Workm` move with the body to `pos`, as the draw after the
+/// pushes and the scripts composes them there: what an effect on a part
+/// follows (`Effects::anchors`).
+pub fn move_parts(work: &mut Work, pos: [i32; 3]) {
+    let Some(at) = work.parts_at else {
+        return;
+    };
+    let by: [i32; 3] = std::array::from_fn(|axis| pos[axis] - at[axis]);
+    for part in work.parts.iter_mut().flatten() {
+        for (axis, by) in part.t.iter_mut().zip(by) {
+            *axis += by;
+        }
+    }
+    work.parts_at = Some(pos);
 }
 
 /// `Pl_init` (`0x4D9940`), as game mode 3 runs it when the status screen
@@ -1528,6 +1585,7 @@ pub fn player_held(
     if tick.stopped {
         work.neck.body = None;
         work.latch_kage_probe(player.angle);
+        latch_stopped(work, player, tick);
         return;
     }
     if work.damage_cnt & !DAMAGE_LOCK != 0 {
@@ -2928,6 +2986,7 @@ impl Mover<'_, '_> {
     /// its neck's turn.
     fn latch_parts(&mut self) {
         self.work.parts = self.posed_parts();
+        self.work.parts_at = Some(self.player.pos);
     }
 
     /// Every part's `Workm` on the current pose, with the neck's turn on its
@@ -2939,43 +2998,44 @@ impl Mover<'_, '_> {
 
     /// [`Self::posed_parts`] from a root turned by `turn`.
     pub(crate) fn posed_parts_turned(&self, turn: [[i16; 3]; 3]) -> Vec<Option<Matrix>> {
+        self.pose_tree(turn).compose(&[])
+    }
+
+    /// The current pose as each part's matrix on its parent's, from a root
+    /// turned by `turn`, for [`PoseTree::compose`].
+    pub(crate) fn pose_tree(&self, turn: [[i16; 3]; 3]) -> PoseTree {
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
         let skeleton = &self.tick.skeleton;
-        let mut parts = vec![None; skeleton.relative.len()];
+        let mut tree = PoseTree {
+            root: Matrix {
+                m: turn,
+                t: self.player.pos,
+            },
+            local: vec![None; skeleton.relative.len()],
+            children: skeleton.children.clone(),
+        };
         let Some(mut pose) = self.player.anim.pose_keyframe(clips, keyframes) else {
-            return parts;
+            tree.local.clear();
+            return tree;
         };
         self.work.neck.apply(&mut pose);
-        let root = Matrix {
-            m: turn,
-            t: self.player.pos,
-        };
-        let mut stack = vec![(0usize, root)];
-        while let Some((part, parent)) = stack.pop() {
+        for (part, local) in tree.local.iter_mut().enumerate() {
             let Some(rotation) = pose.rotations.get(part) else {
                 continue;
             };
             let t = if part == 0 {
                 let [x, y, z] = pose.offset;
-                [x, self.work.scaled_height(y), z]
+                Some([x, self.work.scaled_height(y), z])
             } else {
-                match self.relative(part) {
-                    Some(t) => t,
-                    None => continue,
-                }
+                self.relative(part)
             };
-            let world = parent.comp(&Matrix {
+            *local = t.map(|t| Matrix {
                 m: rot_matrix(*rotation),
                 t: t.map(i32::from),
             });
-            if let Some(slot) = parts.get_mut(part) {
-                *slot = Some(world);
-            }
-            for &child in skeleton.children.get(part).map_or(&[][..], Vec::as_slice) {
-                stack.push((usize::from(child), world));
-            }
         }
-        parts
+        lean(&mut tree.local, self.work.lean);
+        tree
     }
 
     /// The parts' own rotations on the current pose: `+0x68`, which
@@ -3429,6 +3489,18 @@ impl Mover<'_, '_> {
         }
     }
 
+    /// A part's `Workm` as the last draw left it, after the last tick's
+    /// pushes ([`Work::parts`]), or on the pose before this tick's move when
+    /// nothing was latched: the matrix an `Esp_call` on the part copies.
+    fn drawn_part(&self, part: usize) -> Option<Matrix> {
+        self.work
+            .parts
+            .get(part)
+            .copied()
+            .flatten()
+            .or_else(|| self.part_matrix(part))
+    }
+
     /// The parts' `Workm` as the last `Joint_trans2` left them: the pose,
     /// place and turn from before this tick's move.
     fn drawn_parts(&self) -> DrawnParts {
@@ -3473,6 +3545,7 @@ impl Mover<'_, '_> {
                 dir: dir.wrapping_add((ring * 0x400) as i16),
                 at,
                 motion: None,
+                on: None,
             });
         }
     }
@@ -3508,6 +3581,7 @@ impl Mover<'_, '_> {
                     dir,
                     at: at.map(|axis| axis as i16),
                     motion: None,
+                    on: None,
                 });
             }
         }
@@ -3525,17 +3599,20 @@ impl Mover<'_, '_> {
             return;
         }
         for effect in self.tick.weapon.shot_effects(frame) {
-            let Some(at) = self.part_point(SHOT_PART, effect.point) else {
+            let Some(hand) = self.drawn_part(SHOT_PART) else {
                 continue;
             };
+            let point = effect.point.map(|axis| axis as i16);
+            let at = crate::esp2::apply_matrix(&hand, point);
             for &(word, dir) in effect.calls {
                 self.work.effects.push(EffectCall {
                     kind: (word >> 24) as u8,
                     row: (word >> 16) as u8,
                     size: word as u16,
                     dir: dir.map_or(0, |dir| angle.wrapping_add(dir)),
-                    at: at.map(|axis| axis as i16),
+                    at,
                     motion: None,
+                    on: Some((SHOT_PART as u8, hand, point)),
                 });
             }
         }
@@ -3555,13 +3632,10 @@ impl Mover<'_, '_> {
             (-40, 250, 50, 2),
             (-40, 250, -50, 2),
         ];
-        let (Some(hand), Some(at)) = (
-            self.part_matrix(SHOT_PART),
-            self.part_point(SHOT_PART, GRENADE_MUZZLE),
-        ) else {
+        let Some(hand) = self.drawn_part(SHOT_PART) else {
             return;
         };
-        let at = at.map(|axis| axis as i16);
+        let at = crate::esp2::apply_matrix(&hand, GRENADE_MUZZLE.map(|axis| axis as i16));
         let call = |word: u32, dir: i16, motion| EffectCall {
             kind: (word >> 24) as u8,
             row: (word >> 16) as u8,
@@ -3569,8 +3643,16 @@ impl Mover<'_, '_> {
             dir,
             at,
             motion,
+            on: None,
         };
-        self.work.effects.push(call(0x100_2000, 0, None));
+        self.work.effects.push(EffectCall {
+            on: Some((
+                SHOT_PART as u8,
+                hand,
+                GRENADE_MUZZLE.map(|axis| axis as i16),
+            )),
+            ..call(0x100_2000, 0, None)
+        });
         let across = ACROSS[usize::from(self.work.status_flg & TILT_UP != 0)];
         let angle = self.player.angle as i16;
         for (accel, up, side, column) in SPREAD {
@@ -4592,18 +4674,8 @@ impl Mover<'_, '_> {
 
     /// `FUN_00488570(player, 0, 8)`: blood at the player's first part.
     fn em2e_blood(&mut self) {
-        let at = self
-            .part_matrix(0)
-            .map_or(self.player.pos, |matrix| matrix.t);
         let [x, _, z] = self.player.pos;
-        self.work.effects.push(EffectCall {
-            kind: 4,
-            row: 0x0F,
-            size: 0x1400,
-            dir: direction_ck(x, z, x, z) as i16,
-            at: at.map(|axis| axis as i16),
-            motion: None,
-        });
+        self.part_effect(4, 0x0F, 0x1400, direction_ck(x, z, x, z) as i16, 0, [0; 3]);
     }
 
     /// `FUN_004805e0`: Mr. X's table, on his `pSub1` clips. `Routine_1` 0 and
@@ -4692,17 +4764,8 @@ impl Mover<'_, '_> {
             return;
         };
         for (row, size, turned, index) in CALLS {
-            let at = self
-                .part_point(first + index, points[index])
-                .unwrap_or(self.player.pos);
-            self.work.effects.push(EffectCall {
-                kind: 0,
-                row,
-                size,
-                dir: if turned { dir.wrapping_add(0x400) } else { dir },
-                at: at.map(|axis| axis as i16),
-                motion: None,
-            });
+            let dir = if turned { dir.wrapping_add(0x400) } else { dir };
+            self.part_effect(0, row, size, dir, first + index, points[index]);
         }
     }
 
@@ -5040,15 +5103,43 @@ impl Mover<'_, '_> {
         let dir = (u16::from(rnd).wrapping_add(back * 0x400) * 2)
             .wrapping_sub(0x100)
             .wrapping_add(self.player.angle);
-        let at = self.part_point(part, point).unwrap_or(self.player.pos);
-        self.work.effects.push(EffectCall {
-            kind: 0,
-            row: 0,
-            size,
-            dir: dir as i16,
-            at: at.map(|axis| axis as i16),
-            motion: None,
-        });
+        self.part_effect(0, 0, size, dir as i16, part, point);
+    }
+
+    /// `Esp_call` on a part's `Workm` as the last draw left it
+    /// ([`Mover::drawn_part`]) and a vector on it: the effect keeps the part,
+    /// and follows it if its blocks say so.
+    fn part_effect(
+        &mut self,
+        kind: u8,
+        row: u8,
+        size: u16,
+        dir: i16,
+        part: usize,
+        point: [i32; 3],
+    ) {
+        let point = point.map(|axis| axis as i16);
+        let call = match self.drawn_part(part) {
+            Some(matrix) => EffectCall {
+                kind,
+                row,
+                size,
+                dir,
+                at: crate::esp2::apply_matrix(&matrix, point),
+                motion: None,
+                on: Some((part as u8, matrix, point)),
+            },
+            None => EffectCall {
+                kind,
+                row,
+                size,
+                dir,
+                at: self.player.pos.map(|axis| axis as i16),
+                motion: None,
+                on: None,
+            },
+        };
+        self.work.effects.push(call);
     }
 
     /// The held states' first tick: the clip, facing the enemy, and the turn
@@ -5311,7 +5402,8 @@ impl Mover<'_, '_> {
     /// `FUN_0045a880`: held from the front or the back, standing.
     fn held_standing(&mut self, held: &mut Held<'_>) {
         const CLIPS: [u8; 2] = [0, 3];
-        const POINTS: [[i32; 3]; 2] = [[0, 200, 100], [100, -100, -200]];
+        // `FUN_0045a880`'s `awStack_c`: from the front, then from behind.
+        const POINTS: [[i32; 3]; 2] = [[0, 200, 100], [-100, 100, -200]];
         let back = usize::from(self.work.routine[1] & 1);
         let clip = CLIPS[back];
         if self.work.routine[2] == 0 {
@@ -5483,15 +5575,7 @@ impl Mover<'_, '_> {
     }
 
     fn held_part_blood(&mut self, size: u16, dir: u16) {
-        let at = self.part_point(8, [0; 3]).unwrap_or(self.player.pos);
-        self.work.effects.push(EffectCall {
-            kind: 0,
-            row: 0,
-            size,
-            dir: dir as i16,
-            at: at.map(|axis| axis as i16),
-            motion: None,
-        });
+        self.part_effect(0, 0, size, dir as i16, 8, [0; 3]);
     }
 
     /// `Snd_se_walk` on a frame marked as a footfall, with the noise
@@ -5537,7 +5621,8 @@ impl Mover<'_, '_> {
             (1, true) => (0x1200, 0xE00, 300),
             _ => return,
         };
-        let Some(part) = self.part_matrix(1) else {
+        // `Workm` as the last draw left it, not this tick's pose.
+        let Some(part) = self.drawn_part(1) else {
             return;
         };
         let mut up = i32::from(self.work.water) - part.t[1];
@@ -5547,17 +5632,14 @@ impl Mover<'_, '_> {
         let side = if right { 0xA0 } else { -0xA0 };
         let dir = self.player.angle;
         for (size, ahead, turn) in [(first, ahead, 0), (other, 0, 0x400), (other, 0, 0xC00)] {
-            let Some(at) = self.part_point(1, [ahead, up, side]) else {
-                return;
-            };
-            self.work.effects.push(EffectCall {
-                kind: 0x1A,
-                row: 0,
+            self.part_effect(
+                0x1A,
+                0,
                 size,
-                dir: dir.wrapping_add(turn) as i16,
-                at: at.map(|axis| axis as i16),
-                motion: None,
-            });
+                dir.wrapping_add(turn) as i16,
+                1,
+                [ahead, up, side],
+            );
         }
     }
 
@@ -5948,8 +6030,93 @@ pub(crate) fn rot_matrix(angle: [i16; 3]) -> [[i16; 3]; 3] {
     mul_matrix(&x, &mul_matrix(&y, &z))
 }
 
+/// A turn seen with Y flipped (`F·M·F`, `F` = diag(1, -1, 1)): between the
+/// game's matrices and the draw's.
+fn flip_y(m: [[i32; 3]; 3]) -> [[i32; 3]; 3] {
+    std::array::from_fn(|row| {
+        std::array::from_fn(|column| {
+            let value = m[row][column];
+            if (row == 1) != (column == 1) {
+                -value
+            } else {
+                value
+            }
+        })
+    })
+}
+
+/// `Em10Dm00`'s lean after `Joint_move`: the first part's `M` turned by
+/// `lean` about z on its own side (`MulMatrix`), the second's by `-lean` on
+/// its parent's (`MulMatrix2`).
+pub(crate) fn lean(local: &mut [Option<Matrix>], lean: i16) {
+    if lean == 0 {
+        return;
+    }
+    if let Some(Some(first)) = local.get_mut(0) {
+        first.m = mul_matrix(&first.m, &rot_matrix([0, 0, lean]));
+    }
+    if let Some(Some(second)) = local.get_mut(1) {
+        second.m = mul_matrix(&rot_matrix([0, 0, lean.wrapping_neg()]), &second.m);
+    }
+}
+
+/// A pose as the skeleton holds it: each part's matrix on its parent's.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct PoseTree {
+    root: Matrix,
+    /// By part, `None` for a part the pose doesn't reach.
+    local: Vec<Option<Matrix>>,
+    children: Vec<Vec<u8>>,
+}
+
+impl PoseTree {
+    /// Every part's `Workm`, as `Joint_trans2` composes them from the root,
+    /// with some parts off the skeleton at their own (`ko_joint_trans2`'s
+    /// parts down, a pulled arm, a kicked head): those and the parts under
+    /// them are composed from it.
+    pub(crate) fn compose(&self, detached: &[(u8, Matrix)]) -> Vec<Option<Matrix>> {
+        self.compose_drawn(detached, 0, &[])
+    }
+
+    /// [`Self::compose`] for a draw: a part that isn't drawn (`hidden`, bit 0
+    /// of its `Be_flg` clear) keeps the `Workm` the last draw left it
+    /// (`previous`), and the parts under it are composed from that.
+    pub(crate) fn compose_drawn(
+        &self,
+        detached: &[(u8, Matrix)],
+        hidden: u32,
+        previous: &[Option<Matrix>],
+    ) -> Vec<Option<Matrix>> {
+        // No pose (a body with no clip yet): the last draw's stay.
+        if self.local.is_empty() {
+            return previous.to_vec();
+        }
+        let mut parts = vec![None; self.local.len()];
+        let mut stack = vec![(0usize, self.root)];
+        while let Some((part, parent)) = stack.pop() {
+            let Some(Some(local)) = self.local.get(part) else {
+                continue;
+            };
+            let kept = (hidden.checked_shr(part as u32).unwrap_or(0) & 1 != 0)
+                .then(|| previous.get(part).copied().flatten())
+                .flatten();
+            let world = kept.unwrap_or_else(|| {
+                detached
+                    .iter()
+                    .find(|(own, _)| usize::from(*own) == part)
+                    .map_or_else(|| parent.comp(local), |(_, own)| *own)
+            });
+            parts[part] = Some(world);
+            for &child in self.children.get(part).map_or(&[][..], Vec::as_slice) {
+                stack.push((usize::from(child), world));
+            }
+        }
+        parts
+    }
+}
+
 /// A `MATRIX`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct Matrix {
     pub(crate) m: [[i16; 3]; 3],
     pub(crate) t: [i32; 3],
@@ -7802,6 +7969,7 @@ mod tests {
                             dir,
                             at: at.map(|axis| axis as i16),
                             motion: None,
+                            on: None,
                         }
                     })
                     .collect();
@@ -8745,6 +8913,9 @@ mod tests {
         // `Key_trg` comes from the pad, which goes on being read.
         assert_eq!(setup.work.key_trg, KEY_FORWARD | KEY_TILT_UP);
         setup.work.key_trg = before.key_trg;
+        // `Joint_trans2` draws the held pose again, where the body is.
+        assert_eq!(setup.work.parts_at, Some(setup.player.pos));
+        setup.work.parts_at = before.parts_at;
         assert_eq!(setup.work, before);
     }
 
@@ -8761,6 +8932,233 @@ mod tests {
         // A second push moves it by what the body moved since the first.
         follow_pushes(&mut work, [35, -40, -50]);
         assert_eq!(work.neck.position, Some([135, -1740, 150]));
+    }
+
+    /// `Joint_trans2` draws the parts after the pushes, so the `Workm` an
+    /// `Esp_call` copies on the next tick is on the pushed body. In
+    /// `spider_shots_302` a wall's push of 15 in x on the shot's tick put the
+    /// original's flash at x -15532 where the unpushed hand gave -15517.
+    #[test]
+    fn the_parts_follow_the_bodys_push() {
+        let mut work = Work::default();
+        work.neck.body = Some([-14908, 0, -12022]);
+        work.parts_at = Some([-14908, 0, -12022]);
+        let hand = Matrix {
+            m: [[285, -2206, -3440], [-4060, -546, 15], [-470, 3406, -2227]],
+            t: [-15188, -2490, -11302],
+        };
+        work.parts = vec![None, Some(hand)];
+        follow_pushes(&mut work, [-14923, 0, -12022]);
+        assert_eq!(
+            work.parts[1].map(|part| part.t),
+            Some([-15203, -2490, -11302])
+        );
+        assert_eq!(work.parts[1].map(|part| part.m), Some(hand.m));
+    }
+
+    /// `Em10Dm00` turns the first part by the lean on its own side
+    /// (`MulMatrix(M, Rz)`) and the second by the opposite on its parent's
+    /// (`MulMatrix2(Rz', M)`), which for a part turned about more than z isn't
+    /// the lean added to its angle.
+    #[test]
+    fn the_lean_turns_the_first_two_parts_on_either_side() {
+        let first = rot_matrix([0x100, 0x200, 0]);
+        let second = rot_matrix([0x80, 0, 0x40]);
+        let mut local = vec![
+            Some(Matrix {
+                m: first,
+                t: [0; 3],
+            }),
+            Some(Matrix {
+                m: second,
+                t: [0, -400, 0],
+            }),
+            Some(Matrix {
+                m: second,
+                t: [0; 3],
+            }),
+        ];
+        lean(&mut local, -0x40);
+        assert_eq!(
+            local[0].unwrap().m,
+            mul_matrix(&first, &rot_matrix([0, 0, -0x40]))
+        );
+        assert_eq!(
+            local[1].unwrap().m,
+            mul_matrix(&rot_matrix([0, 0, 0x40]), &second)
+        );
+        assert_eq!(local[1].unwrap().t, [0, -400, 0]);
+        assert_eq!(local[2].unwrap().m, second, "only the first two parts");
+        assert_ne!(local[1].unwrap().m, rot_matrix([0x80, 0, 0]));
+        assert_ne!(local[0].unwrap().m, rot_matrix([0x100, 0x200, -0x40]));
+    }
+
+    /// `Em10Dm00`'s lean in `street_shoot`: zombie slot 1's part 0 on tick
+    /// 45, the root and posed `M` under a lean of -0x240, as arklay's draw
+    /// has them. With the lean as `MulMatrix(M, Rz(l))` the blood the hit
+    /// started on part 0 at (-140, -483, 0) (slot 62, three ticks old, its
+    /// offset (150, -180, 42) turned by 972) is where the original's is on
+    /// that tick, (18386, -2519, 2637); without it, it isn't.
+    #[test]
+    fn a_leaning_zombies_blood_is_where_the_originals_is() {
+        let tree = |lean_by: i16| {
+            let mut local = vec![Some(Matrix {
+                m: [[3852, -1352, 326], [1375, 3844, -319], [-202, 408, 4070]],
+                t: [0, -1998, 0],
+            })];
+            lean(&mut local, lean_by);
+            PoseTree {
+                root: Matrix {
+                    m: [[333, 0, 4082], [0, 4096, 0], [-4082, 0, 333]],
+                    t: [18360, 0, 2416],
+                },
+                local,
+                children: vec![vec![]],
+            }
+        };
+        let blood = |part: Matrix| {
+            let at = crate::esp2::apply_matrix(&part, [-140, -483, 0]);
+            let (sin, cos) = (rsin(972), rcos(972));
+            let (x, y, z) = (150, -180, 42);
+            [
+                at[0].wrapping_add(((cos * x + sin * z) >> 12) as i16),
+                at[1].wrapping_add(y as i16),
+                at[2].wrapping_add(((cos * z - sin * x) >> 12) as i16),
+            ]
+        };
+        let part = tree(-0x240).compose(&[])[0].unwrap();
+        assert_eq!(
+            part.m,
+            [[-159, 273, 4082], [-2100, 3500, -319], [-3513, -2104, 6]]
+        );
+        assert_eq!(blood(part), [18386, -2519, 2637]);
+        let upright = tree(0).compose(&[])[0].unwrap();
+        assert_ne!(blood(upright), [18386, -2519, 2637]);
+    }
+
+    /// The draw's joint matrices are the game's seen with Y flipped, so the
+    /// lean the draw composes is the `Workm`'s: the drawn part 0 and 1 under a
+    /// lean are the game's flipped, as without one.
+    #[test]
+    fn the_drawn_lean_is_the_workms_with_y_flipped() {
+        let rotations = [[0x100, 0x200, -0x80], [0x80, -0x300, 0x40]];
+        for lean_by in [0, -0x240, 0x180] {
+            let mut local: Vec<crate::anim::Mat4x3> = rotations
+                .iter()
+                .map(|[x, y, z]| crate::anim::Mat4x3 {
+                    r: crate::anim::rotation_matrix(i32::from(*x), i32::from(*y), i32::from(*z)),
+                    t: [0; 3],
+                })
+                .collect();
+            let work = Work {
+                lean: lean_by,
+                ..Work::default()
+            };
+            work.lean_locals(&mut local);
+            let mut game: Vec<Option<Matrix>> = rotations
+                .iter()
+                .map(|rotation| {
+                    Some(Matrix {
+                        m: rot_matrix(*rotation),
+                        t: [0; 3],
+                    })
+                })
+                .collect();
+            lean(&mut game, lean_by);
+            for (drawn, game) in local.iter().zip(game) {
+                let game = flip_y(game.unwrap().m.map(|row| row.map(i32::from)));
+                for (a, b) in drawn.r.iter().flatten().zip(game.iter().flatten()) {
+                    assert!(
+                        (a - b).abs() <= 4,
+                        "lean {lean_by}: {:?} against {game:?}",
+                        drawn.r
+                    );
+                }
+            }
+        }
+    }
+
+    /// A part `Joint_trans2` doesn't draw (bit 0 of its `Be_flg` clear)
+    /// keeps the `Workm` the last draw left it, and the parts under it are
+    /// composed from that: a stomped crawler bleeds from its hidden head
+    /// where the head last was.
+    #[test]
+    fn a_hidden_part_keeps_its_last_workm() {
+        let local = |t: [i32; 3]| {
+            Some(Matrix {
+                m: rot_matrix([0; 3]),
+                t,
+            })
+        };
+        let tree = PoseTree {
+            root: Matrix {
+                m: rot_matrix([0; 3]),
+                t: [1000, 0, 0],
+            },
+            local: vec![
+                local([0, -500, 0]),
+                local([0, -400, 0]),
+                local([0, -100, 0]),
+            ],
+            children: vec![vec![1], vec![2], vec![]],
+        };
+        let drawn = tree.compose(&[]);
+        assert_eq!(drawn[2].map(|part| part.t), Some([1000, -1000, 0]));
+        let old = Matrix {
+            m: rot_matrix([0; 3]),
+            t: [900, -800, 50],
+        };
+        let previous = vec![None, Some(old), None];
+        let kept = tree.compose_drawn(&[], 1 << 1, &previous);
+        assert_eq!(kept[0].map(|part| part.t), Some([1000, -500, 0]));
+        assert_eq!(kept[1], Some(old));
+        assert_eq!(kept[2].map(|part| part.t), Some([900, -900, 50]));
+    }
+
+    /// A body with no pose yet (no clip: `local` empty) draws nothing, so its
+    /// parts keep the `Workm` the last draw left them.
+    #[test]
+    fn a_body_without_a_pose_keeps_its_last_workm() {
+        let old = Matrix {
+            m: rot_matrix([0; 3]),
+            t: [900, -800, 50],
+        };
+        let previous = vec![Some(old), None, Some(old)];
+        let tree = PoseTree::default();
+        assert_eq!(tree.compose_drawn(&[], 0, &previous), previous);
+        assert_eq!(tree.compose_drawn(&[], u32::MAX, &previous), previous);
+    }
+
+    /// `FUN_0045a880`'s `awStack_c`: the blood of a hold from the front is at
+    /// (0, 200, 100) on part 8, and from behind at (-100, 100, -200).
+    #[test]
+    fn a_standing_holds_blood_is_on_its_sides_point() {
+        for (back, point) in [(0, [0, 200, 100]), (1, [-100, 100, -200])] {
+            let mut setup = Setup::new(0);
+            (setup.clips, setup.keyframes) = bank(0x11, 24, 0);
+            for keyframe in &mut setup.keyframes {
+                keyframe.rotations = vec![[0; 3]; 9];
+            }
+            setup.skeleton = Skeleton {
+                relative: vec![[0, -100, 0]; 9],
+                children: (0..9u8)
+                    .map(|part| (part < 8).then_some(part + 1).into_iter().collect())
+                    .collect(),
+            };
+            setup.work.routine = [MODE_HELD, back, 0, 0];
+            let mut life = 190;
+            run_held(&mut setup, &mut life, |work| {
+                work.effects.iter().any(|call| call.size == 0x17D0)
+            });
+            let call = setup
+                .work
+                .effects
+                .iter()
+                .find(|call| call.size == 0x17D0)
+                .unwrap();
+            let (part, _, on) = call.on.expect("on part 8");
+            assert_eq!((part, on), (8, point), "back {back}");
+        }
     }
 
     #[test]

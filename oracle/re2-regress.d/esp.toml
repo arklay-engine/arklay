@@ -28,7 +28,7 @@ ticks = 1998
 setup_script = "new_game.lua"
 input = "street_shoot.txt"
 fields = "esp"
-expect = { tick = 0, fields = ["esp90"], note = "a burning zombie's flame (kind 5, row 3), placed on the part's point a unit out in x; the blood a shot starts (kind 0) stays where it starts where the original's follows the part's matrix (docs/internals/deviations/re2.md, \"Attached effects\")" }
+expect = { tick = 0, fields = ["esp90"], note = "a burning zombie's flame (kind 5, row 3), placed on the part's point a unit out in x; later, the blood of a hit while getting up (`FUN_00457e60`) on a pose up to 57 units out (docs/internals/deviations/re2.md, \"Attached effects\")" }
 record = ""
 
 [[run]]
@@ -66,7 +66,7 @@ setup = { pos = [-13500, 0, -8500], angle = 2048, health = 200, rnd = 6114, flag
 input = "water_walk.txt"
 input_shift = 344
 fields = "esp"
-expect = { tick = 366, fields = ["esp93", "esp94", "esp95"], note = "the first footfall's three ripples (kind 0x1a, row 0), placed from part 1 on the tick's pose where the original uses the matrix its last draw left, up to 9 units out (docs/internals/deviations/re2.md, \"Footsteps\")" }
+expect = "match"
 record = "--warp 302:-13500:0:-8500:2048 --flag 1:6 --life 200"
 
 [[run]]
@@ -104,7 +104,7 @@ setup_script = "spider_shots_302.lua"
 input = "spider_shots.txt"
 input_shift = 344
 fields = "esp"
-expect = { tick = 362, fields = ["esp79"], note = "the first shot's flash (kind 1, row 0) at the gun, which follows the hand's matrix in the original (flag 0x0800) and stays where it starts here (docs/internals/deviations/re2.md, \"Attached effects\")" }
+expect = "match"
 record = "--warp 302:-13000:0:-12000:0 --flag 1:6 --life 200 --give 0:2:200 --give 1:0x14:60 --equip 2"
 
 [[run]]
@@ -157,3 +157,32 @@ input_shift = 344
 fields = "espn,espk"
 expect = { tick = 421, fields = ["espn", "espk"], note = "a drool lands a tick early, from its start a few units out (docs/internals/deviations/re2.md, \"Attached effects\")" }
 record = "--warp 605:-24500:0:-24000:0 --give 0:2:200 --give 1:0x14:60 --equip 2 --life 200"
+
+# Leon A's handgun fight in room 107 (`leon_a_106_108`, oracle/re2-regress.d/route_leon_a_diamond.toml, recorded
+# with `--sound`): five shots from 1749 to 2038, the flash on the hand, the blood on the zombies' parts and the
+# cases and smoke off the gun.
+[[run]]
+name = "esp_leon_a_106_108"
+ref = "leon_a_106_108"
+room = "106"
+setup_script = "leon_a_106_108.lua"
+input = "leon_a_106_108.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 3780
+fields = "esp"
+expect = { tick = 2446, fields = ["esp92", "esp93", "esp94"], note = "a stomped crawler's blood from its hidden head (part 8), whose last drawn matrix is 2 units out (docs/internals/deviations/re2.md, \"Attached effects\")" }
+record = "--warp 106:-17416:0:-559:1888:1 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 84 --give 0:2:16 --give 2:0x14:2 --give 3:0x1E:3 --give 4:0x33:1"
+
+[[run]]
+name = "esp_kinds_leon_a_106_108"
+ref = "leon_a_106_108"
+room = "106"
+setup_script = "leon_a_106_108.lua"
+input = "leon_a_106_108.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 3780
+fields = "espn,espk,fgstat"
+expect = "match"
+record = "--warp 106:-17416:0:-559:1888:1 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 84 --give 0:2:16 --give 2:0x14:2 --give 3:0x1E:3 --give 4:0x33:1"

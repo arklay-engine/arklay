@@ -2645,6 +2645,39 @@ mod tests {
         assert_ne!(chase([0, 0x8C00 - 0x10000])[1], 0xA);
     }
 
+    /// `Em10Dm01`'s blood on its even ticks: on part 0, with the zombie's
+    /// speed (`&Spd_x`) as its vector, after a staggered zombie's drop of 500.
+    #[test]
+    fn a_knocked_back_zombies_blood_is_on_its_speed() {
+        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        let library = include_str!("../../games/re2/lib/zombie.lua");
+        lua.load(format!(
+            "local w = {{ r = {{ [0] = 2, 2, 1, 0 }}, vars = {{ [1] = 5, [3] = 1, [4] = 1 }},
+                 timers = {{ [1] = 2, [2] = 1 }}, speed = {{ -450, 30, 7 }} }}
+             EFFECTS = {{}}
+             local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+             function e:routine(i) return w.r[i] end
+             function e:set_routine(i, v) w.r[i] = v end
+             function e:routines(a, b, c, d) w.r = {{ [0] = a, b, c, d }} end
+             function e:var(i) return w.vars[i] or 0 end
+             function e:set_var(i, v) w.vars[i] = v end
+             function e:timer(i) return w.timers[i] or 0 end
+             function e:set_timer(i, v) w.timers[i] = v end
+             function e:life() return 100 end
+             function e:speed() return w.speed[1], w.speed[2], w.speed[3] end
+             function e:set_speed(x, y, z) w.speed = {{ x, y, z }} end
+             function e:effect(kind, row, size, dir, part, x, y, z)
+                 EFFECTS[#EFFECTS + 1] = {{ kind, size, part, x, y, z }}
+             end
+             local zombie = (function() {library} end)()
+             zombie.run(e, {{}})"
+        ))
+        .exec()
+        .unwrap();
+        let effects: Vec<Vec<i64>> = lua.globals().get("EFFECTS").unwrap();
+        assert_eq!(effects, [vec![0, 0x13E8, 0, -450, -470, 7]]);
+    }
+
     /// A handgun hit (`Routine_1` 2) on a standing zombie with life 100 and
     /// `At_sce_no` 1, its moan still waiting: `(At_obj_no, At_sce_no,
     /// Routine_2, the clip, the draws)` after the hit's first tick.
