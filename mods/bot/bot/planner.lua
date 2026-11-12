@@ -875,8 +875,13 @@ local function revisit_due(p, bot, fact)
     if bot:flag(fact.bank, fact.bit) ~= fact.set then
         return false
     end
+    -- An untimed `after` flag is a second condition, set with the gate:
+    -- 115's trap lock is clear from the trap until the next entry, but
+    -- the bot was in 115 that way during the escape; only with the
+    -- shotgun back on 116's rack (item 0x00 set) is the door to 109 open
+    -- on the next entry.
     if fact.after_seconds == nil then
-        return true
+        return fact.after_bank == nil or bot:flag(fact.after_bank, fact.after_bit)
     end
     local key = revisit_key(fact)
     p.revisit_since = p.revisit_since or {}
@@ -914,7 +919,9 @@ local function avoid_holds(bot, room_id, slot)
     for _, fact in ipairs(avoid_cache.facts) do
         if fact.room == room_id and fact.slot == slot
             and BotPuzzle.gate_holds(bot, { bank = fact.bank, bit = fact.bit,
-                set = fact["while"] == "set", unless_held = fact.unless_held }) then
+                set = fact["while"] == "set", unless_held = fact.unless_held,
+                until_bank = fact.until_bank, until_bit = fact.until_bit,
+                seen_bank = fact.seen_bank, seen_bit = fact.seen_bit }) then
             return true
         end
     end
@@ -1709,6 +1716,17 @@ end
 -- Plant 42 after its heal trip to 403). A held-back fight won while the
 -- bot was away is due once as well (see below).
 local function fight_due(bot, fight)
+    -- A fight open only around a scene is not due while its `after` flag
+    -- says the scene is off: 101's hunter, fought while its attack on
+    -- Rebecca plays (common 0x2F). Once the attack was over, every empty
+    -- frontier sent the bot back to 101 for a fight that was not there,
+    -- the target dropped on arrival, until the loop rule ended the run.
+    -- (bot:fight_facts() leaves out a room-bank flag, which reads only in
+    -- its own room: 303's flare.)
+    if fight.after_bank ~= nil
+        and bot:flag(fight.after_bank, fight.after_bit) == (fight.after_clear == true) then
+        return false
+    end
     if fight.bank and bot:flag(fight.bank, fight.bit) then
         -- Won while the bot was away from a fight it was held back from:
         -- due once, for the steps the win opens. In Barry's chemical
@@ -1951,10 +1969,18 @@ local function pickup_fits(bot, item, full)
         -- it does not take: Rebecca, the player while Plant 42 holds
         -- Chris, has no item box (403's is off for her), and the rounds
         -- and herbs she took on the way left 409's bottles no slot.
+        -- And so do the bottles of one still ahead in this stage
+        -- (BotMix.slots_ahead): her inventory is the one Chris leaves her.
+        -- A key waits too while such a brew is short: Rebecca took 40C's
+        -- helmet key into the last slot of the three her V-JOLT needed at
+        -- once, and the turn ended there. Chris can take it later.
+        local brew_short = 0
         if not BotMix.needs(bot)[item] then
-            held = held + BotMix.slots_needed(bot, true)
+            brew_short = BotMix.slots_needed(bot, true)
+            held = held + brew_short + BotMix.slots_ahead(bot)
         end
-        if held == 0 or kind == "key" or kind == "file" or (merge and bot:has_item(item)) then
+        if held == 0 or (kind == "key" and brew_short == 0) or kind == "file"
+            or (merge and bot:has_item(item)) then
             return true
         end
         local used = 0
@@ -3395,8 +3421,8 @@ function BotPlanner.finish(bot, reason)
         end
     end
     local p = bot:player()
-    local text = string.format("%s (room %s health %d/%d) %s", reason, bot:room().id,
-        p.health, p.max_health, leftovers(bot))
+    local text = string.format("%s (room %s pos=(%d,%d) health %d/%d) %s", reason,
+        bot:room().id, p.x, p.z, p.health, p.max_health, leftovers(bot))
     bot:log("FINISH " .. text)
     bot:finish(text)
 end
@@ -3446,9 +3472,16 @@ local function forgive_fight(bot)
     local forgiven = false
     local remote_key, remote
     for key, m in pairs(p.marks) do
-        -- (Not one given up with no round left: forcing it again only
-        -- stands the bot in front of the boss.)
-        if m.reason:find("not ready for the fight", 1, true) and m.reason ~= BotNav.NO_ROUNDS then
+        -- (Not one given up with no round left while that still holds:
+        -- forcing it again only stands the bot in front of the boss. Once
+        -- rounds that hurt it are held it is forgiven like the rest: 40C's
+        -- Plant 42, met with two empty guns, stayed given up with sixty
+        -- handgun rounds found since, and the run ended on an empty
+        -- frontier in 402.)
+        local enemy = type(m.slot) == "string" and tonumber(m.slot:match("^fight(%d+)$"))
+        local armed = m.reason ~= BotNav.NO_ROUNDS
+            or (enemy ~= nil and BotTactics.any_round_for(bot, enemy))
+        if m.reason:find("not ready for the fight", 1, true) and armed then
             if m.room == room then
                 p.marks[key] = nil
                 marks_changed()
@@ -3626,7 +3659,7 @@ local function note_revisits(p, bot, room_id)
             if fact.room == room_id and revisit_due(p, bot, fact) then
                 p.revisit_retry[revisit_key(fact)] = bot:tick() + REVISIT_RETRY
             end
-        elseif fact.room == room_id and bot:flag(fact.bank, fact.bit) == fact.set then
+        elseif fact.room == room_id and revisit_due(p, bot, fact) then
             p.revisit_seen[revisit_key(fact)] = true
         end
     end

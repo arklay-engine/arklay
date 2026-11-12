@@ -31,9 +31,25 @@
      Door 1 to 21A stands on the pit floor: from 20B's side of the room it
      is out of reach, and the pit can be entered only once (the dark hole,
      after Yawn 2). The <reach> keeps the planner from walking back to it
-     on any other entry. -->
+     on any other entry.
+
+     Chris's game: the same pit is his way down to 21A (and on through
+     21B and 21C to the 200 lift, his only way into 213 to 219 on the
+     second visit, and 110). His AOT 3 is armed with no trigger until Yawn
+     2 is dead; then room main arms it for the action button, and
+     examine_pit's Yes drops him in at (23100,4100) with no flag set. The
+     passage check takes it once it is live (door 1 to 21A has no
+     approach from this side), and the switch below the hatch and the
+     ladder down then work as for Jill. So Yawn's entrance (AOT 2) and the
+     fight come first: without them the bot reached 20C with an empty
+     gun, found the hole dead and the ladder door out of reach, and went
+     back and forth through 20B until the frontier ran out. 21A holds the
+     ladder back up shut for him (21A's notes). -->
 <bot format="2">
   <interact slot="2" bank="0" bit="0x27" character="jill" label="wake Yawn by the west wall"/>
+  <interact slot="2" bank="0" bit="0x27" character="chris" label="wake Yawn by the west wall"/>
+  <fight enemy="0x12" bank="3" bit="0x3E" character="chris"
+         label="Yawn 2: its death arms the dark hole, Chris's way down to 21A"/>
   <fight enemy="0x12" bank="3" bit="0x3E" character="jill" label="Yawn 2"/>
   <interact slot="3" bank="1" bit="0x26" character="jill" label="the dark hole"/>
   <wait bank="1" bit="0x25" after_bank="1" after_bit="0x26" character="jill"

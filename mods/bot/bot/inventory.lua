@@ -96,6 +96,13 @@ end
 -- Why `row` ({item, kind, quantity}) stays in the inventory, or nil.
 -- ctx: {equipped, guns = {[id] = true}, ammo = {[id] = true},
 --       uses = {[id] = true}, cures = {[id] = true}}
+-- The keep and withdraw reason of the ink ribbon, while saving needs one
+-- (bot:saves().needs_ribbon: Chris, or Jill with the option on). The keep
+-- rule used to box ribbons as clutter and nothing took one back out: a run
+-- saved twice, skipped every typewriter after for "no ink ribbon" with six
+-- in the box, and ended on four deaths since its last save.
+local RIBBON = "ink ribbon for saving"
+
 function BotInventory.keep(row, ctx)
     local item = row.item
     if item == 0 then
@@ -144,6 +151,9 @@ function BotInventory.keep(row, ctx)
     if row.kind == "heal" and ctx.cures and ctx.cures[item] then
         return "cure"
     end
+    if ctx.ribbon and item == ctx.ribbon then
+        return RIBBON
+    end
     return nil
 end
 
@@ -184,8 +194,9 @@ BotInventory.SOFT_HEALS = 1
 -- When nothing the keep rule lets go is held, the inventory is full and a
 -- needed pickup (`needed`, a count: a key, an item a <use> fact needs, or
 -- the ammunition a held gun lacks) has no slot, the softer keeps that may
--- go in, at most `needed` of them: first heal stacks past SOFT_HEALS (the
--- last in slot order; only for a key or <use> item, ctx.swap, or the
+-- go in, at most `needed` of them: first the ink ribbon, then heal stacks
+-- past SOFT_HEALS (the last in slot order; only for a key or <use> item,
+-- ctx.swap, or the
 -- loadout, ctx.heals_may_go: ammunition alone is no reason to box a heal,
 -- the first aid spray went in for 118's acid rounds and the bot met Yawn 2
 -- with one herb), then a key no remembered locked door needs, then a
@@ -210,6 +221,16 @@ function BotInventory.soft_deposits(items, ctx, needed)
             return out
         end
         if row.item ~= 0 and ctx.empty_guns and ctx.empty_guns[row.item] then
+            out[#out + 1] = row
+        end
+    end
+    -- The ink ribbon before anything that fights or heals: a save can
+    -- wait for the next box visit, a needed pickup cannot.
+    for _, row in ipairs(items) do
+        if #out >= needed then
+            return out
+        end
+        if row.item ~= 0 and BotInventory.keep(row, ctx) == RIBBON then
             out[#out + 1] = row
         end
     end
@@ -427,6 +448,9 @@ end
 
 local function slots_to_leave(_, ctx)
     local brew = ctx and ctx.brew_slots or 0
+    if ctx and (ctx.ahead or 0) > brew then
+        brew = ctx.ahead
+    end
     local leave = brew > BotInventory.RESERVE and brew or BotInventory.RESERVE
     local room = ctx and ctx.room_for or 0
     return room > leave and room or leave
@@ -446,6 +470,11 @@ function BotInventory.wanted_back(row, ctx)
     end
     if ctx.settled and ctx.settled[item] then
         return nil
+    end
+    -- None held: one stack comes out at a box in this room (the save rooms
+    -- have both), not on a trip of its own.
+    if ctx.ribbon and item == ctx.ribbon and (ctx.ribbons or 0) == 0 and not ctx.reserve_only then
+        return RIBBON
     end
     if ctx.uses and ctx.uses[item] and not (ctx.far and ctx.far[item]) then
         return "a <use> fact needs it"
@@ -499,6 +528,7 @@ end
 local TOP_UPS = {
     ["ammunition top-up at the box"] = true,
     ["heal top-up at the box"] = true,
+    [RIBBON] = true,
 }
 
 -- The box rows to take back, at most `free` of them, box order.
@@ -512,6 +542,7 @@ function BotInventory.withdrawals(box_items, ctx, free)
         free = 0
     end
     local heal_taken = false
+    local ribbon_taken = false
     local gear_heals = 0
     -- One copy of a weapon comes out per visit: the deposit rule boxes a
     -- second (BotInventory.deposits), and with rope=leave 403's box held
@@ -575,7 +606,14 @@ function BotInventory.withdrawals(box_items, ctx, free)
                 gear_heals = gear_heals + 1
             end
         end
-        -- One heal stack is enough to stop the "none held" rule.
+        -- One ribbon stack is enough, as one heal stack is for the "none
+        -- held" rule.
+        if why == RIBBON then
+            if ribbon_taken then
+                why = nil
+            end
+            ribbon_taken = true
+        end
         if why and not (why == "no heal item held" and heal_taken) then
             if why == "no heal item held" then
                 heal_taken = true
@@ -592,6 +630,11 @@ end
 -- of known pickups needing a slot.
 function BotInventory.reserve_due(ctx, deposits, pickups)
     local free = ctx.capacity - ctx.used
+    -- A brew ahead (ctx.ahead, BotMix.slots_ahead) keeps its bottles'
+    -- slots free whatever the pickups.
+    if deposits > 0 and (ctx.ahead or 0) > free then
+        return true
+    end
     return deposits > 0 and free <= BotInventory.RESERVE and pickups > free
 end
 
@@ -831,6 +874,10 @@ local SET_MIN = 3
 function BotInventory.context(bot)
     local ctx = { uses = {}, guns = {}, ammo = {}, keys = {}, cures = {}, heals = 0 }
     ctx.equipped = bot:player().equipped
+    local saves = bot.saves and bot:saves() or {}
+    if saves.needs_ribbon and saves.ribbon_item then
+        ctx.ribbon, ctx.ribbons = saves.ribbon_item, saves.ribbons or 0
+    end
     ctx.settled = settled()
     local knowledge = bot:knowledge()
     -- Poisoned with no cure for it held: the cures for it come out of the
@@ -964,6 +1011,7 @@ function BotInventory.context(bot)
         ctx.uses[item] = true
     end
     ctx.brew_slots = BotMix.slots_needed(bot)
+    ctx.ahead = BotMix.slots_ahead(bot)
     -- An item a wanted <deliver> needs is kept like a <use> item.
     for item, _ in pairs(BotPuzzle.wanted_items(bot)) do
         ctx.uses[item] = true
@@ -1438,6 +1486,16 @@ function BotInventory.context(bot)
             end
         end
     end
+    -- A brew ahead (ctx.ahead) short of free slots takes a dead-weight
+    -- firearm's slot too: Chris reached 40C with an empty handgun, the
+    -- shotgun, its shells and a herb, and Rebecca's V-JOLT, three bottles
+    -- at once, had two slots and no item box.
+    if (ctx.ahead or 0) > ctx.capacity - ctx.used and ctx.empty_guns then
+        ctx.swap_out = ctx.swap_out or {}
+        for id, _ in pairs(ctx.empty_guns) do
+            ctx.swap_out[id] = true
+        end
+    end
     if ctx.loadout then
         ctx.pickups = BotInventory.pickups_needing_room(bot)
     end
@@ -1765,6 +1823,29 @@ function BotInventory.make_room(bot, ctx, items, skip)
         -- top-up does not refill them (slots_to_leave).
         ctx.room_for = #deposits
     end
+    -- A brew ahead short of free slots (ctx.ahead) takes the softer keeps
+    -- too, as a full inventory does for a needed pickup: Chris reached
+    -- 40C with the handgun, its clips, a mixed herb and the desk key, all
+    -- kept, and Rebecca's V-JOLT had two of the three slots it needs.
+    local short = (ctx.ahead or 0) - (ctx.capacity - ctx.used) - #deposits
+    if short > 0 then
+        local full = ctx.full
+        ctx.full = true
+        local taken = {}
+        for _, row in ipairs(deposits) do
+            taken[row.slot] = true
+        end
+        local more = {}
+        for _, row in ipairs(items) do
+            if not taken[row.slot] then
+                more[#more + 1] = row
+            end
+        end
+        for _, row in ipairs(BotInventory.soft_deposits(more, ctx, short)) do
+            deposits[#deposits + 1] = row
+        end
+        ctx.full = full
+    end
     return deposits
 end
 
@@ -1794,6 +1875,11 @@ function BotInventory.box_reason(bot, skip, here)
     end
     if here and BotInventory.reserve_due(ctx, #deposits, pickups) then
         return "deposit: keep a slot free for pickups"
+    end
+    -- A brew ahead is worth a trip to a remote box too: the slots must be
+    -- free before the switch, and the player after it may have no box.
+    if (ctx.ahead or 0) > ctx.capacity - ctx.used and #deposits > 0 then
+        return string.format("deposit: %d slot(s) free for a brew ahead", ctx.ahead)
     end
     if BotInventory.look_in_box(ctx, bot:memory().box_items, BotSurvival.sourcing_now(bot),
         here) then
@@ -1995,7 +2081,7 @@ local function plan_visit(bot, menu, view)
     -- The reserve is judged after this visit's withdrawals, so one visit
     -- both takes and makes room.
     local taking = #BotInventory.withdrawals(view.items, ctx, free)
-    local after = { capacity = ctx.capacity, used = ctx.used + taking }
+    local after = { capacity = ctx.capacity, used = ctx.used + taking, ahead = ctx.ahead }
     if (ctx.full and (pickups > 0 or ctx.heal_swap)) or ctx.swap_out
         or BotInventory.reserve_due(after, #deposits, pickups) then
         for _, row in ipairs(deposits) do

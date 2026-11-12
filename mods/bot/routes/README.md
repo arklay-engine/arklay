@@ -81,21 +81,28 @@ way and keep their defaults otherwise; none of them changes who escapes.
 | `re1_chris_ceiling_trap` | `sandwich=yes rebecca_meet=save_room rebecca_along=yes rebecca=save jill=save` | 6: Chris, Jill and Rebecca |
 
 The Chris routes are not played through yet: none completes on seeds 1
-and 2. Each one now plays past the mansion's story steps (Richard's serum
-or death, Rebecca's piano, the emblems, 115's ceiling trap) into the
-courtyard, the caves or the guardhouse. Where they stop:
+and 2. With the engine fixes below applied, each one gets past the mansion,
+the courtyard and the first cave visit, and most get as far as the
+guardhouse. Three of the blockers are engine and game-data bugs, each
+fixed in its own PR to main:
 
-- 20C/21A: the bot keeps rerunning 20C's ladder event (AOT 7, the way down
-  to 21A and on to the 200 lift) as a passage check, until the loop rule
-  ends the run (`alone`, `jill_ending`, `rebecca_save_room`).
-- 400: Rebecca, the player while Plant 42 holds Chris, gets no item box
-  (403's is off for her) and keeps pressing the gate to 304, a message
-  while she plays (`best_ending`, `rebecca_ending`).
-- 40C: after the skipped intro Chris can stand outside the room's walls,
-  pushed out the far side of a wall box. The cause is not pinned down.
-- 401: a fight at the desk can wedge Chris where no path plans out.
-- Early deaths: on unlucky seeds Chris runs out of rounds in the mansion
-  and saves rarely, so four deaths since the last save end the run.
+- #632: a script putting a held weapon back (116's shotgun rack, 308's
+  flamethrower hook) showed the key discard prompt, so the room never saw
+  the weapon go back. 116 stayed shut after Chris's ceiling trap.
+- #635: 308's hook ran one of Jill's events. Its AOT referred to the event
+  by number, and the merged Chris and Jill script numbers its events
+  differently.
+- #634: Plant 42's body pushed Chris through 40C's walls, out of the room
+  for good.
+
+What still stops a run:
+
+- 401: after the red book, Chris stands in a pocket of the desk that the
+  planner's skin cuts off, and no path plans out (being fixed).
+- Rounds: Chris spends his rounds on the mansion's zombies and reaches the
+  guardhouse or 308's hunters with too few. After four deaths on one save
+  the bot falls back once to the save before it; four more end the run.
+- 405: the herbs by the north wall plan unreachable.
 
 The routes play with the port's default options (quick turn and tactical
 reload on). A new route is a copy of one of these with other `params`,

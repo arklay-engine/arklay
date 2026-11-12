@@ -22,6 +22,11 @@
   <tap slot="12" item="0x16" label="UMB No.4"/>
   <brew item="0x1B" bottle="0x13" bank="0" bit="0x13" after_bank="7" after_bit="0x4E"
         after_while="clear" when="vjolt=yes" character="jill" label="V-JOLT for Plant 42's root"/>
+  <!-- ahead_unless: 40C's first entry (common 0x37) plays Rebecca's turn
+       unless she waits in the save room (0x22), Richard died (0x64) or she
+       is lost (0xC0). Until then Chris keeps the brew's bottle slots free
+       in the guardhouse, since she takes over his inventory with no box. -->
   <brew item="0x1B" bottle="0x13" bank="0" bit="0x13" after_bank="1" after_bit="0x3D"
+        ahead_unless="1:0x37 1:0x22 1:0x64 1:0xC0"
         character="chris" label="Rebecca's V-JOLT for Plant 42's root"/>
 </bot>

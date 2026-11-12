@@ -131,6 +131,13 @@ pub struct Brew {
     pub flag: (u8, u8),
     pub after: Option<(u8, u8)>,
     pub after_clear: bool,
+    /// `ahead_unless="bank:bit ..."`: while the `after` flag is not yet
+    /// open and none of these flags is set, the brew is still ahead and
+    /// its bottles' slots are kept free in its stage (BotMix.slots_ahead):
+    /// Rebecca brews the V-JOLT with the inventory Chris leaves her and no
+    /// item box, unless 40C's first entry plays out without her. `None`
+    /// keeps no slots ahead.
+    pub ahead_unless: Option<Vec<(u8, u8)>>,
     pub label: Option<String>,
 }
 
@@ -308,6 +315,11 @@ pub struct Interact {
     /// live door zone (513 in Barry's branch: the event after the Tyrant
     /// turns door 0 from a message back into a door, and sets no flag).
     pub opens: Option<u8>,
+    /// `<interact mark="no">`: the step's flag is no sequence mark, so a set
+    /// flag seen before the step was offered does not count it done; only
+    /// the flag as it is now does. A put-back reads a flag that is set until
+    /// the item is taken: 116's rack and 308's hook.
+    pub mark: bool,
     pub label: Option<String>,
 }
 
@@ -450,6 +462,16 @@ pub struct Avoid {
     pub reason: String,
     pub gate: Option<Gate>,
     pub unless_held: Option<u8>,
+    /// With `until_bank`/`until_bit`, only while that flag is clear (400's
+    /// gate to 304 for Rebecca: from 40C's scene with her until her V-JOLT
+    /// is poured in 40F).
+    pub until: Option<(u8, u8)>,
+    /// With `seen_bank`/`seen_bit`, only once the bot has seen that flag set
+    /// in this run (its memory keeps it, so a reload to an earlier save
+    /// forgets it with the rest). 116's rack after Chris's ceiling trap: the
+    /// put-back leaves the game state as it was before the trap, so only
+    /// the bot can know it has sprung.
+    pub seen: Option<(u8, u8)>,
 }
 
 /// The flag condition an `<avoid>` holds under: `bank`/`bit` and whether it
@@ -534,6 +556,11 @@ pub struct FightFact {
     pub stage: Option<u8>,
     /// `<fight optional="yes">`: passed while no held gun can fight it.
     pub optional: bool,
+    /// The `after` flag the fight waits on, with `after_while="clear"`
+    /// when it waits for the flag to clear: 101's hunter is fought only
+    /// while its attack on Rebecca plays (common 0x2F).
+    pub after: Option<(u8, u8)>,
+    pub after_clear: bool,
 }
 
 /// A `<brew>` fact with its room's `<tap>` facts.
@@ -598,6 +625,8 @@ impl GameFacts {
                     flag: fact.flag,
                     stage,
                     optional,
+                    after: fact.after,
+                    after_clear: fact.after_clear,
                 }),
                 _ => None,
             });
@@ -929,6 +958,7 @@ fn parse_climb(node: Node<'_, '_>) -> Result<Interact> {
         after_clear: false,
         reveals: None,
         opens: None,
+        mark: true,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -946,6 +976,7 @@ fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
             "after_while",
             "reveals",
             "opens",
+            "mark",
             "label",
             "character",
             "when",
@@ -953,6 +984,14 @@ fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
     )?;
     check_leaf(node)?;
     let done_clear = parse_done(node)?;
+    let mark = match node.attribute("mark") {
+        None | Some("yes") => true,
+        Some("no") => false,
+        Some(other) => bail!(
+            "{}: <interact> `mark` must be yes or no, not {other:?}",
+            at(node)
+        ),
+    };
     Ok(Interact {
         target: Target::Slot(attr(node, "slot")?),
         flag: Some((bank_attr(node)?, attr(node, "bit")?)),
@@ -967,9 +1006,15 @@ fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
             .attribute("opens")
             .map(|_| attr(node, "opens"))
             .transpose()?,
+        mark,
         label: node.attribute("label").map(str::to_string),
     })
 }
+
+/// The first item id the menu's USE can apply (a key, special, chemical,
+/// heal or book item; `GameState::use_item`): weapons and ammunition below it
+/// do nothing there and have no bank-9 use flag.
+const FIRST_USABLE_ITEM: u8 = 0x1B;
 
 fn parse_use(node: Node<'_, '_>) -> Result<Use> {
     check_attributes(
@@ -994,24 +1039,14 @@ fn parse_use(node: Node<'_, '_>) -> Result<Use> {
     if item == 0 {
         bail!("{}: <use> `item` must not be 0 (no item)", at(node));
     }
-    let until = match (node.attribute("until_bank"), node.attribute("until_bit")) {
-        (None, None) => None,
-        (Some(_), Some(_)) => {
-            let bank: u8 = attr(node, "until_bank")?;
-            if usize::from(bank) >= FLAG_BANK_COUNT {
-                bail!(
-                    "{}: until_bank {bank} is out of range 0..={}",
-                    at(node),
-                    FLAG_BANK_COUNT - 1
-                );
-            }
-            Some((bank, attr(node, "until_bit")?))
-        }
-        _ => bail!(
-            "{}: <use> needs both `until_bank` and `until_bit`, or neither",
+    if item < FIRST_USABLE_ITEM {
+        bail!(
+            "{}: <use> `item` {item:#04x} is a weapon or ammunition, which has no menu USE \
+             (a rack or hook takes it back by a press: use <interact>)",
             at(node)
-        ),
-    };
+        );
+    }
+    let until = until_flag(node)?;
     Ok(Use {
         slot: attr(node, "slot")?,
         item,
@@ -1021,6 +1056,41 @@ fn parse_use(node: Node<'_, '_>) -> Result<Use> {
         until,
         label: node.attribute("label").map(str::to_string),
     })
+}
+
+/// The optional `until_bank`/`until_bit` flag of a `<use>` or an `<avoid>`:
+/// both or neither. The fact holds only while that flag is clear.
+fn until_flag(node: Node<'_, '_>) -> Result<Option<(u8, u8)>> {
+    prefixed_flag(node, "until")
+}
+
+/// An optional `PREFIX_bank`/`PREFIX_bit` pair: both or neither, the bank
+/// in range.
+fn prefixed_flag(node: Node<'_, '_>, prefix: &str) -> Result<Option<(u8, u8)>> {
+    let bank_name = format!("{prefix}_bank");
+    let bit_name = format!("{prefix}_bit");
+    match (
+        node.attribute(bank_name.as_str()),
+        node.attribute(bit_name.as_str()),
+    ) {
+        (None, None) => Ok(None),
+        (Some(_), Some(_)) => {
+            let bank: u8 = attr(node, &bank_name)?;
+            if usize::from(bank) >= FLAG_BANK_COUNT {
+                bail!(
+                    "{}: {bank_name} {bank} is out of range 0..={}",
+                    at(node),
+                    FLAG_BANK_COUNT - 1
+                );
+            }
+            Ok(Some((bank, attr(node, &bit_name)?)))
+        }
+        _ => bail!(
+            "{}: <{}> needs both `{bank_name}` and `{bit_name}`, or neither",
+            at(node),
+            node.tag_name().name()
+        ),
+    }
 }
 
 /// The optional `bank`/`bit`/`while` gate of an `<avoid>` or a `<door>`:
@@ -1282,6 +1352,7 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
             .map(|_| attr(node, "reveals"))
             .transpose()?,
         opens: None,
+        mark: true,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -1331,6 +1402,7 @@ fn parse_fight(node: Node<'_, '_>) -> Result<Interact> {
         after_clear: parse_after_while(node)?,
         reveals: None,
         opens: None,
+        mark: true,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -1357,6 +1429,7 @@ fn parse_wait(node: Node<'_, '_>) -> Result<Interact> {
         after_clear: false,
         reveals: None,
         opens: None,
+        mark: true,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -1393,6 +1466,7 @@ fn parse_camera(node: Node<'_, '_>) -> Result<Interact> {
         after_clear: parse_after_while(node)?,
         reveals: None,
         opens: None,
+        mark: true,
         label: node.attribute("label").map(str::to_string),
     })
 }
@@ -1461,6 +1535,10 @@ fn parse_avoid(node: Node<'_, '_>) -> Result<Avoid> {
             "bit",
             "while",
             "unless_held",
+            "until_bank",
+            "until_bit",
+            "seen_bank",
+            "seen_bit",
             "character",
             "when",
         ],
@@ -1480,6 +1558,8 @@ fn parse_avoid(node: Node<'_, '_>) -> Result<Avoid> {
         reason,
         gate,
         unless_held,
+        until: until_flag(node)?,
+        seen: prefixed_flag(node, "seen")?,
     })
 }
 
@@ -1547,6 +1627,7 @@ fn parse_brew(node: Node<'_, '_>) -> Result<Brew> {
             "after_bank",
             "after_bit",
             "after_while",
+            "ahead_unless",
             "label",
             "character",
             "when",
@@ -1567,8 +1648,42 @@ fn parse_brew(node: Node<'_, '_>) -> Result<Brew> {
         flag: (bank_attr(node)?, attr(node, "bit")?),
         after: after_flag(node)?,
         after_clear: parse_after_while(node)?,
+        ahead_unless: parse_ahead_unless(node)?,
         label: node.attribute("label").map(str::to_string),
     })
+}
+
+/// A `<brew>`'s `ahead_unless`: flags as `bank:bit`, separated by spaces
+/// or commas; it needs an `after` flag (a brew open all along is never
+/// ahead).
+fn parse_ahead_unless(node: Node<'_, '_>) -> Result<Option<Vec<(u8, u8)>>> {
+    let Some(text) = node.attribute("ahead_unless") else {
+        return Ok(None);
+    };
+    if node.attribute("after_bank").is_none() {
+        bail!(
+            "{}: <brew> `ahead_unless` needs `after_bank`/`after_bit`",
+            at(node)
+        );
+    }
+    let mut flags = Vec::new();
+    for word in text.split(|c: char| c == ',' || c.is_whitespace()) {
+        if word.is_empty() {
+            continue;
+        }
+        let byte = |text: &str| integer(text).and_then(|value| u8::try_from(value).ok());
+        let parsed = word
+            .split_once(':')
+            .and_then(|(bank, bit)| Some((byte(bank)?, byte(bit)?)));
+        match parsed {
+            Some((bank, bit)) if usize::from(bank) < FLAG_BANK_COUNT => flags.push((bank, bit)),
+            _ => bail!(
+                "{}: <brew> `ahead_unless` entry `{word}` is not a `bank:bit` flag",
+                at(node)
+            ),
+        }
+    }
+    Ok(Some(flags))
 }
 
 fn parse_leave(node: Node<'_, '_>) -> Result<Leave> {
@@ -1906,6 +2021,7 @@ mod tests {
             after_clear: false,
             reveals: None,
             opens: None,
+            mark: true,
             label: Some(label.to_string()),
         };
         let expected = vec![
@@ -1985,6 +2101,7 @@ mod tests {
                     after_clear: false,
                     reveals: None,
                     opens: None,
+                    mark: true,
                     label: Some("push the statue".to_string()),
                 },
                 Interact {
@@ -1995,6 +2112,7 @@ mod tests {
                     after_clear: false,
                     reveals: None,
                     opens: None,
+                    mark: true,
                     label: None,
                 },
                 Interact {
@@ -2005,6 +2123,7 @@ mod tests {
                     after_clear: false,
                     reveals: None,
                     opens: None,
+                    mark: true,
                     label: Some("north hall".to_string()),
                 },
                 Interact {
@@ -2015,6 +2134,7 @@ mod tests {
                     after_clear: false,
                     reveals: None,
                     opens: None,
+                    mark: true,
                     label: None,
                 },
                 Interact {
@@ -2032,6 +2152,7 @@ mod tests {
                     after_clear: false,
                     reveals: None,
                     opens: None,
+                    mark: true,
                     label: Some("armor onto the vent".to_string()),
                 },
                 Interact {
@@ -2049,6 +2170,7 @@ mod tests {
                     after_clear: false,
                     reveals: None,
                     opens: None,
+                    mark: true,
                     label: Some("shelf off the score".to_string()),
                 },
             ]
@@ -2080,6 +2202,8 @@ mod tests {
                     reason: "the plant stuns the player".to_string(),
                     gate: None,
                     unless_held: None,
+                    until: None,
+                    seen: None,
                 },
                 Avoid {
                     slot: 8,
@@ -2089,12 +2213,16 @@ mod tests {
                         set: false,
                     }),
                     unless_held: None,
+                    until: None,
+                    seen: None,
                 },
                 Avoid {
                     slot: 1,
                     reason: "the rack springs the trap".to_string(),
                     gate: None,
                     unless_held: Some(0x1C),
+                    until: None,
+                    seen: None,
                 },
             ]
         );
@@ -2173,6 +2301,8 @@ mod tests {
             <brew item="0x1B" bottle="0x13" bank="0" bit="0x13"
                   after_bank="7" after_bit="0x4E" after_while="clear" label="V-JOLT"/>
             <brew item="0x1A" bottle="0x13" bank="0" bit="0x13"/>
+            <brew item="0x1B" bottle="0x13" bank="0" bit="0x13" after_bank="1" after_bit="0x3D"
+                  ahead_unless="1:0x37, 1:0x22 1:100"/>
         </bot>"#;
         let meta = parse(text).unwrap();
         assert_eq!(
@@ -2192,6 +2322,7 @@ mod tests {
                     flag: (0, 0x13),
                     after: Some((7, 0x4E)),
                     after_clear: true,
+                    ahead_unless: None,
                     label: Some("V-JOLT".to_string()),
                 },
                 Brew {
@@ -2200,6 +2331,16 @@ mod tests {
                     flag: (0, 0x13),
                     after: None,
                     after_clear: false,
+                    ahead_unless: None,
+                    label: None,
+                },
+                Brew {
+                    item: 0x1B,
+                    bottle: 0x13,
+                    flag: (0, 0x13),
+                    after: Some((1, 0x3D)),
+                    after_clear: false,
+                    ahead_unless: Some(vec![(1, 0x37), (1, 0x22), (1, 100)]),
                     label: None,
                 },
             ]
@@ -2211,6 +2352,11 @@ mod tests {
             r#"<bot format="2"><brew item="0x1B" bank="0" bit="1"/></bot>"#,
             r#"<bot format="2"><brew item="0x1B" bottle="0x13" bank="0" bit="1" after_bank="7"/></bot>"#,
             r#"<bot format="2"><brew item="0x1B" bottle="0x13" bank="0" bit="1" after_while="clear"/></bot>"#,
+            r#"<bot format="2"><brew item="0x1B" bottle="0x13" bank="0" bit="1" ahead_unless="1:2"/></bot>"#,
+            r#"<bot format="2"><brew item="0x1B" bottle="0x13" bank="0" bit="1" after_bank="1"
+                after_bit="2" ahead_unless="1-2"/></bot>"#,
+            r#"<bot format="2"><brew item="0x1B" bottle="0x13" bank="0" bit="1" after_bank="1"
+                after_bit="2" ahead_unless="12:2"/></bot>"#,
         ] {
             assert!(parse(bad).is_err(), "{bad}");
         }
@@ -2256,6 +2402,7 @@ mod tests {
                 after_clear: false,
                 reveals: None,
                 opens: None,
+                mark: true,
                 label: Some("the crank".to_string()),
             }]
         );
@@ -2290,6 +2437,7 @@ mod tests {
                 after_clear: false,
                 reveals: None,
                 opens: None,
+                mark: true,
                 label: Some("statue off the balcony".to_string()),
             }]
         );
@@ -2315,6 +2463,22 @@ mod tests {
         let camera = r#"<bot format="2"><camera cut="1" bank="1" bit="2" done="clear"/></bot>"#;
         let error = parse(camera).unwrap_err().to_string();
         assert!(error.contains("unknown attribute `done`"), "{error}");
+    }
+
+    #[test]
+    fn interact_mark_no_keeps_a_put_back_out_of_the_sequence_marks() {
+        let text = r#"<bot format="2">
+            <interact slot="6" bank="7" bit="0" after_bank="1" after_bit="0x20" mark="no"/>
+            <interact slot="5" bank="1" bit="2" mark="yes"/>
+            <interact slot="4" bank="1" bit="3"/>
+        </bot>"#;
+        let meta = parse(text).unwrap();
+        assert!(!meta.interacts[0].mark);
+        assert!(meta.interacts[1].mark);
+        assert!(meta.interacts[2].mark, "a step is a mark by default");
+        let bad = r#"<bot format="2"><interact slot="4" bank="1" bit="1" mark="maybe"/></bot>"#;
+        let error = parse(bad).unwrap_err().to_string();
+        assert!(error.contains("`mark` must be yes or no"), "{error}");
     }
 
     #[test]
@@ -2682,6 +2846,8 @@ mod tests {
         assert!(error(no_item).contains("<use> needs a `item` attribute"));
         let zero_item = r#"<bot format="2"><use slot="2" item="0" bank="1" bit="1"/></bot>"#;
         assert!(error(zero_item).contains("`item` must not be 0"));
+        let weapon = r#"<bot format="2"><use slot="4" item="0x06" bank="2" bit="0x28"/></bot>"#;
+        assert!(error(weapon).contains("has no menu USE"));
         let big_item = r#"<bot format="2"><use slot="2" item="0x100" bank="1" bit="1"/></bot>"#;
         assert!(error(big_item).contains("`item` value `0x100` is not a valid u8"));
         let no_flag = r#"<bot format="2"><use slot="2" item="0x26"/></bot>"#;
@@ -2837,10 +3003,12 @@ mod tests {
         // Without a character both games' facts load: Chris's 105 use, his
         // 10C herbicide, his 10F score and wood emblem, and his two 501
         // battery uses (the `jill` parameter's), Rebecca's V-JOLT on 40F's
-        // root, and the flamethrower back on 308's hook.
+        // root, his broken-shotgun swap at 116's rack after the ceiling
+        // trap and his hex crank at 307's AOT 3. (308's hook and 116's
+        // put-back take a weapon back by a press, an <interact>.)
         assert_eq!(
             load_facts(&pack, None, None).unwrap().uses.len(),
-            uses.len() + 8
+            uses.len() + 9
         );
     }
 
@@ -3147,6 +3315,23 @@ mod tests {
         assert!(error(bad_gate_bank).contains("bank 10 is out of range"));
         let bad_held = r#"<bot format="2"><avoid slot="1" unless_held="300" reason="x"/></bot>"#;
         assert!(error(bad_held).contains("`unless_held` value `300` is not a valid u8"));
+        let half_until = r#"<bot format="2"><avoid slot="1" until_bank="0" reason="x"/></bot>"#;
+        assert!(error(half_until).contains("<avoid> needs both `until_bank` and `until_bit`"));
+        let until = parse(
+            r#"<bot format="2"><avoid slot="0" bank="1" bit="0x3D" while="set"
+                until_bank="0" until_bit="0x13" reason="Rebecca stays"/></bot>"#,
+        )
+        .unwrap();
+        assert_eq!(until.avoids[0].until, Some((0, 0x13)));
+        assert_eq!(until.avoids[0].seen, None);
+        let seen = parse(
+            r#"<bot format="2"><avoid slot="1" unless_held="0x1C" seen_bank="1" seen_bit="0x20"
+                reason="the trap has sprung"/></bot>"#,
+        )
+        .unwrap();
+        assert_eq!(seen.avoids[0].seen, Some((1, 0x20)));
+        let half_seen = r#"<bot format="2"><avoid slot="1" seen_bit="2" reason="x"/></bot>"#;
+        assert!(error(half_seen).contains("<avoid> needs both `seen_bank` and `seen_bit`"));
         let bad_slot = r#"<bot format="2"><avoid slot="-1" reason="x"/></bot>"#;
         assert!(error(bad_slot).contains("`slot` value `-1` is not a valid u8"));
     }

@@ -103,6 +103,7 @@ function on_bot_tick(bot)
     local player = bot:player()
     -- First, so the memory the engine checkpoints with a save holds it.
     BotSave.observe(bot)
+    BotPuzzle.note_seen(bot)
     on_damage(bot, player)
     if bot:memory().trace then
         trace(bot, player)

@@ -9,6 +9,8 @@
 --                                   not while the flag is `while` ("set" or
 --                                   "clear"): a slot a scene blocks for now
 --   <avoid slot unless_held reason> not while item `unless_held` is held
+--   <avoid slot until_bank until_bit reason> only while that flag is clear
+--   <avoid slot seen_bank seen_bit reason> only once that flag was seen set
 --                                   (a swap: lift one item while holding
 --                                   the one that goes in its place); it
 --                                   combines with the flag gate
@@ -135,14 +137,56 @@ function BotPuzzle.is_fact_slot(bot, slot)
 end
 
 -- Whether a gated <avoid> still holds: the `unless_held` item is not held,
--- and its flag (if any) is in its `while` state. `gate` is {bank, bit, set,
--- unless_held}; flags and the inventory are global, so this is answerable
--- from any room.
+-- its `until` flag (if any) is clear, and its flag (if any) is in its
+-- `while` state, and its `seen` flag (if any) was seen set. `gate` is
+-- {bank, bit, set, unless_held, until_bank, until_bit, seen_bank,
+-- seen_bit}; flags, the inventory and the memory are global, so this is
+-- answerable from any room.
 function BotPuzzle.gate_holds(bot, gate)
     if gate.unless_held and bot:has_item(gate.unless_held) then
         return false
     end
+    if gate.until_bank and bot:flag(gate.until_bank, gate.until_bit) then
+        return false
+    end
+    if gate.seen_bank and not BotPuzzle.seen(bot, gate.seen_bank, gate.seen_bit) then
+        return false
+    end
     return gate.bank == nil or bot:flag(gate.bank, gate.bit) == gate.set
+end
+
+-- Each tick, before anything else: note every <avoid seen_bank> flag that
+-- is set now, in any room. 116's rack item is gone while 115's trap flag is
+-- up, so nothing would ask about its avoid in that window.
+function BotPuzzle.note_seen(bot)
+    BOT_STATE.seen_facts = BOT_STATE.seen_facts or {}
+    local facts = BOT_STATE.seen_facts.list
+    if facts == nil then
+        facts = {}
+        for _, fact in ipairs(bot:avoid_facts()) do
+            if fact.seen_bank then
+                facts[#facts + 1] = fact
+            end
+        end
+        BOT_STATE.seen_facts.list = facts
+    end
+    for _, fact in ipairs(facts) do
+        BotPuzzle.seen(bot, fact.seen_bank, fact.seen_bit)
+    end
+end
+
+-- Whether the bot has seen flag `bank`/`bit` set in this run: set now, which
+-- the memory then keeps, or remembered (an <avoid seen_bank>). The memory
+-- goes back with a reload, so a save from before the flag forgets it.
+function BotPuzzle.seen(bot, bank, bit)
+    local key = string.format("seen:%d:%d", bank, bit)
+    if bot:flag(bank, bit) then
+        if bot:memory()[key] == nil then
+            bot:remember(key, "1")
+        end
+        return true
+    end
+    return bot:memory()[key] ~= nil
 end
 
 -- The avoid reason for `slot` in this room, or nil; a gated avoid counts
@@ -151,11 +195,14 @@ end
 function BotPuzzle.avoided(bot, slot)
     for _, avoid in ipairs(meta(bot).avoids or {}) do
         if avoid.slot == slot then
-            if avoid.bank == nil and avoid.unless_held == nil then
+            if avoid.bank == nil and avoid.unless_held == nil and avoid.until_bank == nil
+                and avoid.seen_bank == nil then
                 return avoid.reason, nil
             end
             local gate = { bank = avoid.bank, bit = avoid.bit, set = avoid["while"] == "set",
-                unless_held = avoid.unless_held }
+                unless_held = avoid.unless_held, until_bank = avoid.until_bank,
+                until_bit = avoid.until_bit, seen_bank = avoid.seen_bank,
+                seen_bit = avoid.seen_bit }
             if BotPuzzle.gate_holds(bot, gate) then
                 return avoid.reason, gate
             end
@@ -265,7 +312,11 @@ function BotPuzzle.next_interact(bot)
     for index, fact in ipairs(interacts) do
         -- A reveal lasts only for the room entry (119's switch hides its
         -- book again on the next one), so only the flag marks the sequence.
+        -- Nor is a mark="no" step (a put-back): 116's rack flag is set
+        -- while the shotgun still hangs there, long before the trap arms
+        -- the step that hangs it back.
         if index > done and fact.bank and fact.kind ~= "push"
+            and fact.mark ~= false
             and bot:flag(fact.bank, fact.bit) ~= (fact.done_clear == true)
             and not (fact.kind == "climb" and on_top) then
             done = index
