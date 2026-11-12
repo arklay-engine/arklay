@@ -181,6 +181,52 @@ function BotMix.slots_needed(bot, gated)
     return need
 end
 
+-- The free slots a brew still ahead will need once its `after` flag opens
+-- it: the gated brews of the stage the bot is in (the first character of
+-- the room id), not done, whose flag is not yet in its open state, each at
+-- its bottle peak less what is already held. Chris's turn in the
+-- guardhouse before 40C's scene hands the game to Rebecca for the V-JOLT:
+-- she takes over his inventory with no item box (403's is off for her),
+-- and gun, two kinds of rounds and a herb left her two slots, one short of
+-- the brew's three bottles at once.
+-- Only a brew whose fact names `ahead_unless`, and while none of those
+-- flags is set: 40C's first entry plays without her when she waits in the
+-- save room or is lost, or Richard died (and once it has played, the brew
+-- is open or never will be).
+local function ahead_ruled_out(bot, fact)
+    if fact.ahead_unless == nil then
+        return true
+    end
+    for _, flag in ipairs(fact.ahead_unless) do
+        if bot:flag(flag.bank, flag.bit) then
+            return true
+        end
+    end
+    return false
+end
+
+function BotMix.slots_ahead(bot)
+    local stage = bot:room().id:sub(1, 1)
+    local need = 0
+    for _, fact in ipairs(bot:brew_facts()) do
+        if fact.after_bank ~= nil and fact.room:sub(1, 1) == stage
+            and not ahead_ruled_out(bot, fact)
+            and not bot:flag(fact.bank, fact.bit) and not bot:has_item(fact.item)
+            and bot:flag(fact.after_bank, fact.after_bit) == (fact.after_clear == true) then
+            local made = BotMix.recipes(bot, fact, fact.taps)
+            local held = BotMix.count(bot, fact.bottle)
+            for item, _ in pairs(made) do
+                held = held + BotMix.count(bot, item)
+            end
+            local short = peak_bottles(bot, fact, made) - held
+            if short > 0 then
+                need = need + short
+            end
+        end
+    end
+    return need
+end
+
 local function copy(t)
     local out = {}
     for k, v in pairs(t) do

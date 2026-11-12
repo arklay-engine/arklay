@@ -27,10 +27,16 @@
 
      Chris's game: door 0 to 307 is DOOR_LOCKED on lock 0x28. Taking the
      flamethrower (AOT 3) clears the lock, and only hanging it back on the
-     hook (USE it at AOT 4, data 9,0,4) sets it again (place_flamethrower).
-     309, 30A and this room are a pocket until then, so the hook use is a
-     <use> on the lock bit, after Enrico's scene in 30A (common 0x48): open
-     from the pickup on, it would hang the flamethrower straight back. -->
+     hook sets it again (place_flamethrower). A weapon has no menu USE: the
+     hook is a press, AOT 4 (an event once the flamethrower is taken, data
+     9,0,4), whose event takes the held flamethrower as the used item, and
+     room main's testitem then sets the lock. 309, 30A and this room are a
+     pocket until then, so the hook is an <interact> on the lock bit, after
+     Enrico's scene in 30A (common 0x48): open from the pickup on, it would
+     hang the flamethrower straight back. Once it hangs there after
+     Enrico's scene, the pickup stays off (an <avoid> on AOT 3 while 0x48
+     is set): taking it again shuts door 0 once more, and the bot took it
+     and hung it back for 200k ticks. -->
 <bot format="2">
   <answer message="23" choice="yes" when="cave_q1=yes" label="go with Barry"/>
   <answer message="23" choice="no" when="cave_q1=no" label="do not go with Barry"/>
@@ -44,6 +50,8 @@
          reason="follow: door 0 back to 307 while Barry is ahead would backtrack, and he dies in 307"/>
   <avoid slot="2" bank="1" bit="0x5C" while="set" character="jill" when="cave_exit=follow"
          reason="follow: 309's south door while Barry is ahead would backtrack, and he dies in 307"/>
-  <use slot="4" item="0x06" bank="2" bit="0x28" after_bank="1" after_bit="0x48"
-       character="chris" label="the flamethrower back on the hook: door 0 to 307"/>
+  <avoid slot="3" bank="1" bit="0x48" while="set" character="chris"
+         reason="past Enrico's scene the flamethrower stays on the hook: taking it shuts door 0"/>
+  <interact slot="4" bank="2" bit="0x28" after_bank="1" after_bit="0x48" mark="no"
+            character="chris" label="the flamethrower back on the hook: door 0 to 307"/>
 </bot>

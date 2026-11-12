@@ -54,7 +54,8 @@
 -- returns to the title, where on_bot_screen picks LOAD GAME, moves the load
 -- screen's cursor to the latest save's slot and confirms. Without a save the
 -- run finishes "dead, no save". More than MAX_DEATHS deaths on one save
--- finish the run too. No room literals; only pad/UI input.
+-- fall back to the save before it, while its slot holds it
+-- (bot:fall_back_save, at most MAX_FALLBACKS times), else finish the run. No room literals; only pad/UI input.
 
 BotSave = BotSave or {}
 
@@ -84,8 +85,11 @@ local HURT_HOLD = 2 * C.SECOND
 BotSave.HURT_HOLD = HURT_HOLD
 -- The longest the way out waits for a due heal (BotSurvival.heal's cooldown).
 local HEAL_HOLD = 3 * C.SECOND
--- Deaths on one save before the run gives up.
+-- Deaths on one save before the run falls back to the save before it, or
+-- gives up.
 local MAX_DEATHS = 3
+-- Fall-backs to an earlier save in one run.
+local MAX_FALLBACKS = 1
 -- One pad edge per this many ticks on the screens.
 local PRESS_GAP = 4
 -- The title's LOAD GAME entry.
@@ -291,9 +295,17 @@ end
 -- The latest-save tracking: given bot:memory() and bot:saves(), the memory
 -- entries to remember for a save not yet recorded, or nil. `now` (optional)
 -- is the save-safety condition when it was written: {health, rounds, heals}.
-function BotSave.track(memory, saves, progress, now)
+-- Whether bot:saves() reports a save the memory has not recorded. After a
+-- fall-back (bot:fall_back_save) the engine's count is past the restored
+-- memory's, but the latest save is the one memory recorded (same tick).
+function BotSave.is_new(memory, saves)
     local seen = tonumber(memory.save_count or "0") or 0
-    if (saves.count or 0) <= seen then
+    return (saves.count or 0) > seen
+        and not (saves.tick ~= nil and tostring(saves.tick) == memory.save_tick)
+end
+
+function BotSave.track(memory, saves, progress, now)
+    if not BotSave.is_new(memory, saves) then
         return nil
     end
     return {
@@ -353,7 +365,7 @@ function BotSave.observe(bot)
     end
     local saves = bot:saves()
     local memory = bot:memory()
-    if (saves.count or 0) <= (tonumber(memory.save_count or "0") or 0) then
+    if not BotSave.is_new(memory, saves) then
         return
     end
     local now = condition(bot, bot:player())
@@ -662,10 +674,24 @@ function BotSave.on_death(bot)
         return
     end
     if (saves.deaths_since_save or 0) > MAX_DEATHS then
-        BotPlanner.finish(bot, string.format(
-            "dead %d times since the last save (slot %d, room %s)",
-            saves.deaths_since_save, saves.slot, tostring(saves.room)))
-        return
+        -- The latest save leads into the same death: fall back once to the
+        -- save before it, which kept its slot. Seed 2 of the Chris routes
+        -- saved in 106 with 70 health, four rounds and no heal, then died
+        -- four times to 204's dogs, while slot 0 held a full-health save.
+        if (saves.fallbacks or 0) < MAX_FALLBACKS and bot:fall_back_save() then
+            bot:log(string.format(
+                "died %d times on the save in slot %d (room %s): falling back to slot %d (room %s, tick %s)",
+                saves.deaths_since_save, saves.slot, tostring(saves.room),
+                saves.previous_slot, tostring(saves.previous_room),
+                tostring(saves.previous_tick)))
+            saves = { slot = saves.previous_slot, room = saves.previous_room,
+                tick = saves.previous_tick }
+        else
+            BotPlanner.finish(bot, string.format(
+                "dead %d times since the last save (slot %d, room %s)",
+                saves.deaths_since_save, saves.slot, tostring(saves.room)))
+            return
+        end
     end
     local s = state()
     if not s.death_logged then

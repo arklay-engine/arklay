@@ -137,6 +137,10 @@ pub const DEFAULT_MAX_TICKS: u64 = 100_000;
 const STORY_BANKS: usize = 2;
 const STORY_BANK_NAMES: [&str; STORY_BANKS] = ["scenario", "common"];
 
+/// The current room's own flag bank (`FG_ROOM`): a fact's flag there reads
+/// only while the bot is in that room.
+const ROOM_FLAG_BANK: u8 = 4;
+
 /// The default `--bot-risk`: how much danger the planner may accept, 0..=1.
 pub const DEFAULT_RISK: f64 = 0.25;
 
@@ -643,6 +647,8 @@ struct SaveSnapshot {
     needs_ribbon: bool,
     /// Ink ribbons held.
     ribbons: u32,
+    /// The ink ribbon's item id, for the box rules to keep and fetch it.
+    ribbon_item: u8,
 }
 
 /// One camera switch zone: standing in it while the camera is `from` cuts
@@ -1498,6 +1504,7 @@ impl SessionSnapshot {
                 slot: session.last_saved_slot,
                 needs_ribbon: game.needs_ink_ribbons(),
                 ribbons: game.item_count(game.ink_ribbon_item()),
+                ribbon_item: game.ink_ribbon_item(),
             },
             item_defs: game.item_defs.clone(),
             drug_store: game.is_drug_store(),
@@ -3315,6 +3322,9 @@ struct BotShares {
     input: Rc<RefCell<BotInput>>,
     finished: Rc<Cell<bool>>,
     finish_reason: Rc<RefCell<Option<String>>>,
+    /// `bot:fall_back_save()` asked this tick for the save before the latest
+    /// one to be the save the next reload loads.
+    fall_back: Rc<Cell<bool>>,
 }
 
 impl BotShares {
@@ -3328,6 +3338,7 @@ impl BotShares {
             input: Rc::clone(&self.input),
             finished: Rc::clone(&self.finished),
             finish_reason: Rc::clone(&self.finish_reason),
+            fall_back: Rc::clone(&self.fall_back),
         }
     }
 }
@@ -3342,6 +3353,7 @@ impl Default for BotShares {
             input: Rc::new(RefCell::new(BotInput::default())),
             finished: Rc::new(Cell::new(false)),
             finish_reason: Rc::new(RefCell::new(None)),
+            fall_back: Rc::new(Cell::new(false)),
         }
     }
 }
@@ -3369,6 +3381,11 @@ struct SaveLog {
     deaths: u32,
     /// Deaths since the latest save was written.
     deaths_since_save: u32,
+    /// The save written before the latest one, while its slot still holds
+    /// it: what `bot:fall_back_save()` turns back to.
+    previous: Option<SaveRecord>,
+    /// Times the run fell back to an earlier save.
+    fallbacks: u32,
 }
 
 /// The `bot:saves()` table.
@@ -3383,9 +3400,16 @@ fn saves_table(lua: &Lua, log: &SaveLog, facts: Option<&SaveSnapshot>) -> mlua::
         table.set("room", last.room.room3())?;
         table.set("tick", last.tick)?;
     }
+    if let Some(previous) = &log.previous {
+        table.set("previous_slot", previous.slot)?;
+        table.set("previous_room", previous.room.room3())?;
+        table.set("previous_tick", previous.tick)?;
+    }
+    table.set("fallbacks", log.fallbacks)?;
     if let Some(facts) = facts {
         table.set("needs_ribbon", facts.needs_ribbon)?;
         table.set("ribbons", facts.ribbons)?;
+        table.set("ribbon_item", facts.ribbon_item)?;
     }
     Ok(table)
 }
@@ -3713,6 +3737,7 @@ impl UserData for BotCtx {
                 row.set("after_clear", fact.after_clear)?;
                 row.set("reveals", fact.reveals)?;
                 row.set("opens", fact.opens)?;
+                row.set("mark", fact.mark)?;
                 row.set("label", fact.label.as_deref())?;
                 interacts.push(row)?;
             }
@@ -3752,6 +3777,14 @@ impl UserData for BotCtx {
                     row.set("while", if gate.set { "set" } else { "clear" })?;
                 }
                 row.set("unless_held", fact.unless_held)?;
+                if let Some((bank, bit)) = fact.until {
+                    row.set("until_bank", bank)?;
+                    row.set("until_bit", bit)?;
+                }
+                if let Some((bank, bit)) = fact.seen {
+                    row.set("seen_bank", bank)?;
+                    row.set("seen_bit", bit)?;
+                }
                 avoids.push(row)?;
             }
             table.set("avoids", avoids)?;
@@ -3856,6 +3889,12 @@ impl UserData for BotCtx {
                     entry.fact.stage.map(|byte| char::from(byte).to_string()),
                 )?;
                 row.set("optional", entry.fact.optional)?;
+                // A room-bank `after` flag (303's flare) reads only in its
+                // own room, so the game-wide row leaves it out.
+                let after = entry.fact.after.filter(|&(bank, _)| bank != ROOM_FLAG_BANK);
+                row.set("after_bank", after.map(|(bank, _)| bank))?;
+                row.set("after_bit", after.map(|(_, bit)| bit))?;
+                row.set("after_clear", entry.fact.after_clear)?;
                 table.push(row)?;
             }
             Ok(table)
@@ -3944,6 +3983,10 @@ impl UserData for BotCtx {
                         .map(|gate| if gate.set { "set" } else { "clear" }),
                 )?;
                 row.set("unless_held", entry.fact.unless_held)?;
+                row.set("until_bank", entry.fact.until.map(|(bank, _)| bank))?;
+                row.set("until_bit", entry.fact.until.map(|(_, bit)| bit))?;
+                row.set("seen_bank", entry.fact.seen.map(|(bank, _)| bank))?;
+                row.set("seen_bit", entry.fact.seen.map(|(_, bit)| bit))?;
                 table.push(row)?;
             }
             Ok(table)
@@ -3965,6 +4008,16 @@ impl UserData for BotCtx {
                 row.set("after_bank", fact.after.map(|(bank, _)| bank))?;
                 row.set("after_bit", fact.after.map(|(_, bit)| bit))?;
                 row.set("after_clear", fact.after_clear)?;
+                if let Some(flags) = &fact.ahead_unless {
+                    let unless = lua.create_table()?;
+                    for &(bank, bit) in flags {
+                        let flag = lua.create_table()?;
+                        flag.set("bank", bank)?;
+                        flag.set("bit", bit)?;
+                        unless.push(flag)?;
+                    }
+                    row.set("ahead_unless", unless)?;
+                }
                 row.set("label", fact.label.as_deref())?;
                 let taps = lua.create_table()?;
                 for tap in &entry.fact.taps {
@@ -4470,6 +4523,17 @@ impl UserData for BotCtx {
             Ok(())
         });
 
+        // After a death, make the save before the latest one the one the
+        // next reload loads (the latest one leads into the same death).
+        // Returns false when no earlier save is left.
+        methods.add_method("fall_back_save", |_lua, bot, ()| {
+            let possible = bot.saves.previous.is_some();
+            if possible {
+                bot.shares.fall_back.set(true);
+            }
+            Ok(possible)
+        });
+
         methods.add_method("set_input", |_lua, bot, table: Table| {
             for pair in table.pairs::<String, bool>() {
                 let (name, value) = pair?;
@@ -4887,6 +4951,9 @@ pub struct BotRuntime {
     /// back when that save is loaded: what the bot saw after the save did
     /// not happen in the loaded game.
     checkpoint: Option<BotMemory>,
+    /// The checkpoint of the save before the latest one
+    /// ([`SaveLog::previous`]).
+    previous_checkpoint: Option<BotMemory>,
     /// The bot drove an app screen (the title or the load screen) since the
     /// last session started, so the next session is its reload.
     screen_driven: bool,
@@ -4916,6 +4983,7 @@ impl BotRuntime {
             seen_saves_written: 0,
             was_dead: false,
             checkpoint: None,
+            previous_checkpoint: None,
             screen_driven: false,
             errors_logged: false,
         })
@@ -5124,6 +5192,9 @@ impl BotRuntime {
             // (its slot, room and tick) is part of the checkpoint.
             self.checkpoint = Some(self.shares.memory.borrow().clone());
         }
+        if self.shares.fall_back.take() {
+            self.fall_back_save();
+        }
         self.stats.note_phase(3, started.elapsed());
         Ok(input)
     }
@@ -5143,6 +5214,15 @@ impl BotRuntime {
         self.seen_saves_written = snapshot.saves.written;
         self.save_log.count += 1;
         self.save_log.deaths_since_save = 0;
+        // The save before keeps its slot unless this one overwrote it.
+        let last = self.save_log.last.take();
+        if last.is_some_and(|last| last.slot != snapshot.saves.slot) {
+            self.save_log.previous = last;
+            self.previous_checkpoint = self.checkpoint.take();
+        } else {
+            self.save_log.previous = None;
+            self.previous_checkpoint = None;
+        }
         self.save_log.last = Some(SaveRecord {
             slot: snapshot.saves.slot,
             room: snapshot.room,
@@ -5150,6 +5230,20 @@ impl BotRuntime {
         });
         self.stats.note_save();
         true
+    }
+
+    /// `bot:fall_back_save()`: the save before the latest one becomes the
+    /// latest, with its checkpoint, so the load screen loads it and the
+    /// reload puts back what the bot knew then (the lessons stay). One level
+    /// only: the save before that is not tracked.
+    fn fall_back_save(&mut self) {
+        let Some(previous) = self.save_log.previous.take() else {
+            return;
+        };
+        self.save_log.last = Some(previous);
+        self.checkpoint = self.previous_checkpoint.take();
+        self.save_log.deaths_since_save = 0;
+        self.save_log.fallbacks += 1;
     }
 
     /// Run one `on_bot_screen` on an app screen (the title or its load
@@ -5252,6 +5346,7 @@ impl BotRuntime {
         self.seen_saves_written = 0;
         self.was_dead = false;
         self.checkpoint = None;
+        self.previous_checkpoint = None;
         self.screen_driven = false;
         self.reload_meta();
         self.vm = BotVm::load(pack)?;
@@ -5490,7 +5585,7 @@ mod tests {
             "recipe",
         ];
         // The bot's own memory and run bookkeeping, never the game.
-        const BOT_ONLY: &[&str] = &["remember", "log", "finish"];
+        const BOT_ONLY: &[&str] = &["remember", "log", "finish", "fall_back_save"];
         // Pad/UI input for this tick. `walk_to`/`face_to` only compute and
         // set the direction/run buttons.
         const INPUT: &[&str] = &[
@@ -6842,6 +6937,8 @@ mod tests {
                     flag: None,
                     stage: Some(b'5'),
                     optional: false,
+                    after: None,
+                    after_clear: false,
                 },
             }],
             ..meta::GameFacts::default()
@@ -7333,6 +7430,103 @@ mod tests {
         assert_eq!(step("26"), "wait: no empty bottle held");
         // The last step.
         assert_eq!(step("24, 26"), "mix 24+26");
+    }
+
+    #[test]
+    fn the_ink_ribbon_is_kept_and_one_stack_comes_back_out_at_a_box_here() {
+        let vm = route_vm();
+        let run = |ctx: &str, script: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local ctx = {{ {ctx} }}
+                    local out = {{}}
+                    {script}
+                    return table.concat(out, ",")"#
+                ),
+            )
+        };
+        let held = r#"local items = {
+                { slot = 0, item = 0x02, kind = "weapon", quantity = 15 },
+                { slot = 1, item = 0x2F, kind = "special", quantity = 2 },
+            }
+            for _, row in ipairs(BotInventory.deposits(items, ctx)) do
+                out[#out + 1] = string.format("%02X", row.item)
+            end"#;
+        // Kept while saving needs one; clutter for a character that saves
+        // free.
+        assert_eq!(run("equipped = 0x02, ribbon = 0x2F, ribbons = 2", held), "");
+        assert_eq!(run("equipped = 0x02", held), "2F");
+        let boxed = r#"local rows = {
+                { slot = 0, item = 0x2F, kind = "special" },
+                { slot = 1, item = 0x2F, kind = "special" },
+            }
+            for _, row in ipairs(BotInventory.withdrawals(rows, ctx, 4)) do
+                out[#out + 1] = string.format("%02X", row.item)
+            end"#;
+        // None held: one stack comes out at a box here, not for a trip.
+        assert_eq!(run("ribbon = 0x2F, ribbons = 0", boxed), "2F");
+        assert_eq!(
+            run("ribbon = 0x2F, ribbons = 0, reserve_only = true", boxed),
+            ""
+        );
+        assert_eq!(run("ribbon = 0x2F, ribbons = 1", boxed), "");
+    }
+
+    #[test]
+    fn a_brew_ahead_keeps_its_bottle_slots_in_its_stage_until_ruled_out() {
+        let vm = route_vm();
+        // The same chemistry as above; the brew is 409's V-JOLT for Chris,
+        // gated on common 0x3D (61), ruled out by 0x37 (55) or 0x22 (34).
+        let ahead = |room: &str, flags: &str, unless: bool| -> i64 {
+            eval(
+                &vm,
+                &format!(
+                    r#"local mixes = {{ ["20,21"] = 26, ["21,22"] = 25, ["20,25"] = 23,
+                        ["22,26"] = 23, ["23,25"] = 24, ["24,26"] = 27 }}
+                    local flags = {{ {flags} }}
+                    local bot = {{}}
+                    function bot:room() return {{ id = "{room}" }} end
+                    function bot:flag(bank, bit) return flags[bank .. ":" .. bit] == true end
+                    function bot:has_item() return false end
+                    function bot:inventory() return {{}} end
+                    function bot:recipe(a, b)
+                        local lo, hi = a, b
+                        if lo > hi then lo, hi = hi, lo end
+                        local made = mixes[lo .. "," .. hi]
+                        return made and {{ cursor = 19, target = made, effect = 0 }} or nil
+                    end
+                    function bot:brew_facts()
+                        return {{ {{ room = "409", item = 27, bottle = 19, bank = 0, bit = 19,
+                            after_bank = 1, after_bit = 61,
+                            ahead_unless = {unless},
+                            taps = {{ {{ slot = 8, item = 20 }}, {{ slot = 11, item = 21 }},
+                                {{ slot = 12, item = 22 }} }} }} }}
+                    end
+                    return BotMix.slots_ahead(bot)"#,
+                    unless = if unless {
+                        "{ { bank = 1, bit = 55 }, { bank = 1, bit = 34 } }"
+                    } else {
+                        "nil"
+                    }
+                ),
+            )
+        };
+        let peak = ahead("405", "", true);
+        assert!(
+            peak >= 2,
+            "the V-JOLT holds several bottles at once: {peak}"
+        );
+        // Only in its stage, and only for a fact that opts in.
+        assert_eq!(ahead("20C", "", true), 0);
+        assert_eq!(ahead("405", "", false), 0);
+        // Ruled out once 40C was entered, or with Rebecca in the save room.
+        assert_eq!(ahead("405", r#"["1:55"] = true"#, true), 0);
+        assert_eq!(ahead("405", r#"["1:34"] = true"#, true), 0);
+        // Open (Rebecca's turn): slots_needed's, not ahead.
+        assert_eq!(ahead("405", r#"["1:61"] = true"#, true), 0);
+        // Done.
+        assert_eq!(ahead("405", r#"["0:19"] = true"#, true), 0);
     }
 
     #[test]
@@ -8149,6 +8343,19 @@ mod tests {
             avoided(r#"{ slot = 1, reason = "x" }"#, "", "[0x1C] = true"),
             "x|false"
         );
+        // An `until` flag ends the window: 400's gate during Rebecca's turn,
+        // from common 0x3D until scenario 0x13.
+        let window = r#"{ slot = 1, bank = 1, bit = 0x3D, ["while"] = "set",
+            until_bank = 0, until_bit = 0x13, reason = "Rebecca" }"#;
+        assert_eq!(avoided(window, "", ""), "nil|false");
+        assert_eq!(avoided(window, r#"["1:61"] = true"#, ""), "Rebecca|true");
+        assert_eq!(
+            avoided(window, r#"["1:61"] = true, ["0:19"] = true"#, ""),
+            "nil|false"
+        );
+        let until_only = r#"{ slot = 1, until_bank = 0, until_bit = 0x13, reason = "y" }"#;
+        assert_eq!(avoided(until_only, "", ""), "y|true");
+        assert_eq!(avoided(until_only, r#"["0:19"] = true"#, ""), "nil|false");
         // gate_holds reads the item from any room.
         assert!(eval::<bool>(
             &vm,
@@ -8581,6 +8788,17 @@ mod tests {
             &vm,
             r#"return BotSave.track({ save_count = "1" }, { count = 2, slot = 1 }, 9).save_slot == 1"#
         ));
+        // After a fall-back the engine's count is ahead, but its latest save
+        // is the one memory recorded (the same tick): nothing new.
+        assert!(eval::<bool>(
+            &vm,
+            r#"return BotSave.track({ save_count = "1", save_tick = "50" },
+                { count = 2, slot = 0, tick = 50 }, 9) == nil
+                and not BotSave.is_new({ save_count = "1", save_tick = "50" },
+                    { count = 2, slot = 0, tick = 50 })
+                and BotSave.is_new({ save_count = "1", save_tick = "50" },
+                    { count = 3, slot = 2, tick = 90 })"#
+        ));
         let latest: String = eval(
             &vm,
             r#"local l = BotSave.latest({ save_count = "2", save_slot = "1", save_room = "R",
@@ -8672,5 +8890,52 @@ mod tests {
         runtime.start_session(&pack).unwrap();
         assert!(!runtime.has_save());
         assert_eq!(runtime.save_log, SaveLog::default());
+    }
+
+    #[test]
+    fn a_fall_back_turns_the_reload_to_the_save_before_while_its_slot_holds_it() {
+        let temp = TempDir::new("fall-back");
+        let bot = temp.path.join("bot");
+        fs::create_dir_all(&bot).unwrap();
+        fs::write(bot.join("init.lua"), b"function on_bot_tick(bot) end\n").unwrap();
+        let pack = Pack::open(&temp.path).unwrap();
+        let mut runtime = BotRuntime::load(&pack).unwrap();
+        let mut snapshot = world::tests::snapshot(0x100, 0, 0);
+        let mut save = |runtime: &mut BotRuntime, slot: usize, tick: u64, note: &str| {
+            runtime.tick = tick;
+            snapshot.saves.written += 1;
+            snapshot.saves.slot = Some(slot);
+            assert!(runtime.observe_saves(&snapshot));
+            runtime
+                .shares
+                .memory
+                .borrow_mut()
+                .remember("note".into(), Some(note.into()));
+            runtime.checkpoint = Some(runtime.shares.memory.borrow().clone());
+        };
+        save(&mut runtime, 0, 10, "first");
+        assert_eq!(runtime.save_log.previous, None, "nothing before the first");
+        save(&mut runtime, 1, 20, "second");
+        assert_eq!(
+            runtime.save_log.previous.map(|save| save.slot),
+            Some(Some(0))
+        );
+        runtime.save_log.deaths_since_save = 4;
+        runtime.fall_back_save();
+        assert_eq!(runtime.save_log.last.map(|save| save.tick), Some(10));
+        assert_eq!(runtime.save_log.previous, None, "one level only");
+        assert_eq!(runtime.save_log.deaths_since_save, 0);
+        assert_eq!(runtime.save_log.fallbacks, 1);
+        let checkpoint = runtime.checkpoint.as_ref().unwrap();
+        assert_eq!(
+            checkpoint.values.get("note").map(String::as_str),
+            Some("first")
+        );
+        // A second call has nothing left to turn back to.
+        runtime.fall_back_save();
+        assert_eq!(runtime.save_log.last.map(|save| save.tick), Some(10));
+        // A save over the latest one's slot leaves nothing before it.
+        save(&mut runtime, 0, 30, "third");
+        assert_eq!(runtime.save_log.previous, None);
     }
 }

@@ -10,10 +10,36 @@
      held, and the swap follows at once. With sandwich=yes the rack is
      lifted bare to spring the trap, and the bot never comes back (109
      holds the door to 115 shut once the trap has sprung), so the broken
-     shotgun is not wanted here. -->
+     shotgun is not wanted here.
+
+     Chris's way out after the trap: with common 0x20 set, init deletes
+     the door back to 115 (AOT 0) and its message, so 116 has no exit
+     until a shotgun goes back on the rack. A weapon has no menu USE, so
+     the real shotgun goes back by a press: with the rack bare, AOT 6 (in
+     AOT 5's zone) runs place_shotgun_on_rack, which takes the held
+     shotgun as the used item. Room main then sets the rack's item bit
+     0x00, clears 0x20 and gives the door back, and the next entry of 115
+     finds a shotgun on the rack and opens both its doors. With
+     sandwich=yes the bot holds only the real shotgun there. The rack
+     flag is set until the shotgun is lifted, so the put-back is no
+     sequence mark (mark="no").
+
+     Once the trap has sprung, lifting the shotgun bare again would bring
+     the ceiling down a second time, so from then on Chris lifts it only
+     for the broken-shotgun swap. The put-back and 115's next entry leave
+     every flag as it was before the trap, so the avoid holds once the bot
+     has seen common 0x20 set (seen_bank). -->
 <bot format="2">
   <use slot="5" item="0x1C" bank="7" bit="0x01" when="sandwich=no"
        label="broken shotgun on the rack"/>
   <avoid slot="1" unless_held="0x1C" when="sandwich=no"
          reason="the shotgun rack springs the 115 ceiling trap"/>
+  <avoid slot="1" seen_bank="1" seen_bit="0x20" unless_held="0x1C"
+         character="chris" when="sandwich=yes"
+         reason="the trap has sprung: a bare rack brings 115's ceiling down again"/>
+  <use slot="5" item="0x1C" bank="7" bit="0x01" character="chris" when="sandwich=yes"
+       label="broken shotgun on the rack, after the trap"/>
+  <interact slot="6" bank="7" bit="0x00" after_bank="1" after_bit="0x20" mark="no"
+            character="chris" when="sandwich=yes"
+            label="the shotgun back on the rack: the door to 115 comes back"/>
 </bot>
