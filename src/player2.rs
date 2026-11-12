@@ -641,21 +641,23 @@ impl Work {
     }
 
     /// `Em10Dm00`'s lean on the joints' matrices on their parents', as
-    /// `lean` turns the pose's `Workm`: what the draw composes.
+    /// `lean` turns the pose's `Workm`: what the draw composes. The draw's
+    /// matrices turn a flipped Y (`anim::rotation_matrix`), so each is
+    /// flipped to the game's turn for the lean and back.
     pub fn lean_locals(&self, local: &mut [crate::anim::Mat4x3]) {
         let mut parts: Vec<Option<Matrix>> = local
             .iter()
             .take(2)
             .map(|joint| {
                 Some(Matrix {
-                    m: joint.r.map(|row| row.map(|cell| cell as i16)),
+                    m: flip_y(joint.r).map(|row| row.map(|cell| cell as i16)),
                     t: joint.t,
                 })
             })
             .collect();
         lean(&mut parts, self.lean);
         for (joint, part) in local.iter_mut().zip(parts.into_iter().flatten()) {
-            joint.r = part.m.map(|row| row.map(i32::from));
+            joint.r = flip_y(part.m.map(|row| row.map(i32::from)));
         }
     }
 
@@ -6028,6 +6030,21 @@ pub(crate) fn rot_matrix(angle: [i16; 3]) -> [[i16; 3]; 3] {
     mul_matrix(&x, &mul_matrix(&y, &z))
 }
 
+/// A turn seen with Y flipped (`F·M·F`, `F` = diag(1, -1, 1)): between the
+/// game's matrices and the draw's.
+fn flip_y(m: [[i32; 3]; 3]) -> [[i32; 3]; 3] {
+    std::array::from_fn(|row| {
+        std::array::from_fn(|column| {
+            let value = m[row][column];
+            if (row == 1) != (column == 1) {
+                -value
+            } else {
+                value
+            }
+        })
+    })
+}
+
 /// `Em10Dm00`'s lean after `Joint_move`: the first part's `M` turned by
 /// `lean` about z on its own side (`MulMatrix`), the second's by `-lean` on
 /// its parent's (`MulMatrix2`).
@@ -9017,6 +9034,48 @@ mod tests {
         assert_eq!(blood(part), [18386, -2519, 2637]);
         let upright = tree(0).compose(&[])[0].unwrap();
         assert_ne!(blood(upright), [18386, -2519, 2637]);
+    }
+
+    /// The draw's joint matrices are the game's seen with Y flipped, so the
+    /// lean the draw composes is the `Workm`'s: the drawn part 0 and 1 under a
+    /// lean are the game's flipped, as without one.
+    #[test]
+    fn the_drawn_lean_is_the_workms_with_y_flipped() {
+        let rotations = [[0x100, 0x200, -0x80], [0x80, -0x300, 0x40]];
+        for lean_by in [0, -0x240, 0x180] {
+            let mut local: Vec<crate::anim::Mat4x3> = rotations
+                .iter()
+                .map(|[x, y, z]| crate::anim::Mat4x3 {
+                    r: crate::anim::rotation_matrix(i32::from(*x), i32::from(*y), i32::from(*z)),
+                    t: [0; 3],
+                })
+                .collect();
+            let work = Work {
+                lean: lean_by,
+                ..Work::default()
+            };
+            work.lean_locals(&mut local);
+            let mut game: Vec<Option<Matrix>> = rotations
+                .iter()
+                .map(|rotation| {
+                    Some(Matrix {
+                        m: rot_matrix(*rotation),
+                        t: [0; 3],
+                    })
+                })
+                .collect();
+            lean(&mut game, lean_by);
+            for (drawn, game) in local.iter().zip(game) {
+                let game = flip_y(game.unwrap().m.map(|row| row.map(i32::from)));
+                for (a, b) in drawn.r.iter().flatten().zip(game.iter().flatten()) {
+                    assert!(
+                        (a - b).abs() <= 4,
+                        "lean {lean_by}: {:?} against {game:?}",
+                        drawn.r
+                    );
+                }
+            }
+        }
     }
 
     /// A part `Joint_trans2` doesn't draw (bit 0 of its `Be_flg` clear)
