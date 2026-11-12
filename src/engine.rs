@@ -18046,6 +18046,7 @@ fn tick_room_timed(
         if let Some(pre) = recorded {
             context.game.entities[0].pos = pre.step;
         }
+        let unpushed = context.game.entities[0].pos;
         enemy::walk::separate_player_from_entities(context.game, pre_move);
         let prev = match recorded {
             Some(pre) => [
@@ -18077,9 +18078,10 @@ fn tick_room_timed(
                 work.sca_hit = resolved.hit;
                 player::CollisionResolution::from_sca(resolved)
             }
-            _ => player::resolve_room_collision(
+            _ => player::resolve_pushed_player(
                 context.room,
                 prev,
+                unpushed,
                 context.game.entities[0].pos,
                 context.player.radius,
                 context.player.collision_flags,
