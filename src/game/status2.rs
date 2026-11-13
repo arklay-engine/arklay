@@ -33,6 +33,7 @@ pub mod binders;
 pub mod file_get;
 pub mod files;
 pub mod map;
+pub mod script_map;
 
 use crate::scd2::host::NO_FILE;
 use files::{Blink, ST_MV};

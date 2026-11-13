@@ -2036,6 +2036,10 @@ fn menu_message_input(ui: UiInput, input: &player::Input, action: bool) -> Messa
     }
 }
 
+/// The fade over the script map's first frame (`St_init04`'s step 0), one
+/// step darker than the fade in's first on START's screen.
+const RE2_SCRIPT_MAP_FIRST_ALPHA: u8 = 208;
+
 /// The tick (counted from START's, 1) the item page starts reading the pad,
 /// under the screen's fade in.
 const RE2_STATUS_PAGE_TICK: u8 = 7;
@@ -3281,6 +3285,11 @@ impl GameSession {
         self.swap_cbuff();
         if start_box {
             self.game.start_re2_box();
+            if self.menu.is_some()
+                && let Some(outcome) = self.game.start_re2_script_map()
+            {
+                self.play_re2_script_map(pack, &outcome);
+            }
         }
         self.animate_re2_status(pack);
         result
@@ -3395,7 +3404,11 @@ impl GameSession {
             && self.movie.is_none()
             && self.death.is_idle()
         {
-            self.begin_menu_open(pack);
+            if self.game.re2_script_map.is_some() {
+                self.begin_re2_script_map_open(pack);
+            } else {
+                self.begin_menu_open(pack);
+            }
         }
         self.re2_status_open_areas(pack);
         self.tick_cut = Some((self.loaded.id, self.loaded.room.current_cut));
@@ -5355,6 +5368,81 @@ impl GameSession {
         self.game.re2.stopped_door = false;
     }
 
+    /// Open RE2's status screen on a floor's map (`Sce_84`): the status
+    /// task in its mode 4 (`St_init04`), over the same open as START's.
+    fn begin_re2_script_map_open(&mut self, pack: &Pack) {
+        if self.menu.is_some() {
+            self.game.re2_script_map = None;
+            return;
+        }
+        let opened = self.with_menu(pack, |menu, cx, game| {
+            let args = [("mode", ScreenArg::Str("map".to_owned()))];
+            let screen = LuaScreen::open_screen_with_game(
+                "main_menu",
+                &args,
+                ScreenAction::Resume,
+                cx,
+                game,
+            )?;
+            *menu = Some(Box::new(screen));
+            anyhow::Ok(())
+        });
+        if let Err(err) = opened {
+            crate::warning!("warning: the status screen's map unavailable: {err:#}");
+            self.game.re2_script_map = None;
+            return;
+        }
+        self.game.message_menu = true;
+        self.freeze_room_frame = true;
+        self.re2_status_open = Some(1);
+        self.game.re2.stopped_door = false;
+    }
+
+    /// One tick of the script map's screen (`St_init04`'s fade in, then
+    /// `St_main04`): cancel or START closes it.
+    fn tick_re2_script_map(&mut self, pack: &Pack, ui: UiInput) {
+        let input = self.status_input(ui);
+        let Some(outcome) = self.game.tick_re2_script_map(input.cancel || input.start) else {
+            return;
+        };
+        self.play_re2_script_map(pack, &outcome);
+        self.tick_menu_screen(pack);
+        if outcome.close {
+            self.re2_status_close = Some(0);
+        }
+    }
+
+    /// The script map's cues: the core bank's, and the room bank's for the
+    /// blink.
+    fn play_re2_script_map(
+        &mut self,
+        pack: &Pack,
+        outcome: &game::status2::script_map::ScriptMapOutcome,
+    ) {
+        for id in &outcome.room_sounds {
+            if let Some(id) = crate::se2::SoundId::decode(*id) {
+                self.game
+                    .re2
+                    .sounds
+                    .push(crate::scd2::host::SoundRequest::new(id, [0; 3]));
+            }
+        }
+        self.play_re2_status_sounds(pack, &outcome.sounds);
+        if outcome.sounds.is_empty() && !outcome.room_sounds.is_empty() {
+            let cut = self.sound_cut();
+            play_re2_sounds(
+                &mut self.music,
+                &mut self.sfx_cache,
+                &mut self.re2_sounds,
+                pack,
+                &self.loaded.room,
+                &mut self.game,
+                &mut self.player,
+                cut,
+            );
+        }
+    }
+
     /// One tick of RE2's status screen's own drawing state, its open and
     /// close included: the original's draw routines step the cursor's pulse
     /// and the condition panel's trace on every frame they run, whatever the
@@ -5597,6 +5685,11 @@ impl GameSession {
         }
         if let Some(close) = self.re2_status_close {
             return Some(re2_status_close_view(close));
+        }
+        // `St_init04` draws the map under its fade in from its step 0, the
+        // tick before START's screen shows.
+        if self.re2_status_open == Some(RE2_STATUS_INIT) && self.game.re2_script_map.is_some() {
+            return Some(Re2StatusView::Screen(Some(RE2_SCRIPT_MAP_FIRST_ALPHA)));
         }
         self.re2_status_open.map(re2_status_open_view)
     }
@@ -7022,6 +7115,10 @@ impl GameSession {
             return;
         }
         let message_input = menu_message_input(ui, &input, action);
+        if self.game.re2_script_map.is_some() {
+            self.tick_re2_script_map(pack, ui);
+            return;
+        }
         if self.game.re2_box.is_some() {
             self.tick_re2_box(pack, ui, message_input);
             return;
@@ -7434,6 +7531,9 @@ impl GameSession {
         // tick, the last before the screen's task reaches `St_exit`.
         if ticks <= RE2_BOX_CLOSE_DRAWN {
             self.game.tick_re2_box_close();
+            if let Some(outcome) = self.game.tick_re2_script_map_close() {
+                self.play_re2_script_map(pack, &outcome);
+            }
         }
         if ticks < RE2_STATUS_CLOSE_TICKS {
             return;
@@ -7442,6 +7542,7 @@ impl GameSession {
         self.re2_status_return = Some(1);
         self.menu = None;
         self.game.close_re2_items();
+        self.game.re2_script_map = None;
         if self.game.re2_box.is_some() {
             self.game.close_re2_box();
             // Game mode 5: the lid's routine runs its last count and shuts

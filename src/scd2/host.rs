@@ -3252,6 +3252,8 @@ impl Host for GameHost<'_> {
                 self.game.re2.set_partner_bit(true);
             }
             "heal_partner" => self.game.re2.heal_partner(),
+            // `Sce_84` (`0x4E8FE0`): the status screen opens on the map.
+            "sce_84" => self.game.request_re2_script_map(at(0) as u8),
             "plc_rot" if self.work_is_player(task) => {
                 let by = at(1) as i16;
                 match at(0) {

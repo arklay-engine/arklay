@@ -3351,6 +3351,9 @@ pub struct GameState {
     /// `fg_status`'s `0x8000`, so the status screen opens on the next tick
     /// as START's does.
     pub re2_status_request: bool,
+    /// The status screen in its script map mode (`Sce_84`), from the
+    /// request until the screen closes.
+    pub re2_script_map: Option<status2::script_map::ScriptMap>,
     /// The `pG + 0x82B0` hook while a key turn armed `Key_lost`. It is not
     /// saved: it is only armed while a door message holds the game.
     pub re2_key_lost: Option<door2::KeyLost>,
@@ -3872,6 +3875,7 @@ impl Default for GameState {
             re2_box_bytes: itembox2::BoxPage::default(),
             re2_box_open: false,
             re2_status_request: false,
+            re2_script_map: None,
             re2_key_lost: None,
             re2_no_enemies: None,
             re2_enemy_dest: Vec::new(),

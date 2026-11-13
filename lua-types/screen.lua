@@ -1041,6 +1041,11 @@ function ScreenApi:re2_box_slot(slot) end
 ---@return Re2Map? map `nil` without a game.
 function ScreenApi:re2_map() end
 
+---What RE 2's status screen draws when a script opens it on a floor's map
+---(`Sce_84`): the floor's rooms, the target's fill blinking, and no marker.
+---@return Re2Map? map `nil` while no script map is up, or on a tick that draws none.
+function ScreenApi:re2_script_map() end
+
 ---What room 200's computer draws this tick (`Computer200`).
 ---@return Re2Computer? view `nil` while no computer runs.
 function ScreenApi:re2_computer() end
