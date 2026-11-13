@@ -1820,7 +1820,9 @@ pub fn pose_joints(
     );
     let (clips, keyframes) = tick.banks.get(character.work.bank);
     let mut keyframe = character.body.anim.pose_keyframe(clips, keyframes)?;
-    character.work.apply_to_pose(&mut keyframe);
+    character
+        .work
+        .apply_to_pose(&character.body.anim, &mut keyframe);
     let [pitch, roll] = character
         .zombie
         .as_ref()

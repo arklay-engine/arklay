@@ -676,6 +676,31 @@ pub const FLAMETHROWER: u8 = 0x10;
 /// The rocket launcher, which `pl_mv05_w1` fires as it does the handguns but
 /// for its tilts, and whose rocket does the hurting (`pl_w11_t2_move`).
 pub const ROCKET: u8 = 0x11;
+/// The gatling gun, which `pl_mv05_w5` fires (`pl_mv05_w5_t2`) for as long
+/// as the trigger is held, on the bursts' hold, and never spends a round:
+/// `Stage_init_item` raises its flag in `DWORD_0098e9c4` on every new game,
+/// so `Tama_ck_i` always finds it loaded.
+pub const GATLING: u8 = 0x12;
+/// `pl_mv05_w5_t2`'s clips: the spin up, the firing, and the spin down.
+const GATLING_SPIN_UP_CLIP: u8 = 0xA;
+const GATLING_FIRE_CLIP: u8 = 0xB;
+const GATLING_SPIN_DOWN_CLIP: u8 = 0xD;
+/// Its sounds of the weapon bank: the spin up (`0x10b0001`) and the spin
+/// down (`0x10c0001`), which a lowering from the firing plays too.
+const SOUND_GATLING_SPIN_UP: u16 = 0xB;
+const SOUND_GATLING_SPIN_DOWN: u16 = 0xC;
+/// `pl_w12_t2_move` on part 11: on every third frame the flash and smoke at
+/// [`GATLING_FLASH_POINT`] and an `Esp_call3D` flash further up turned by
+/// [`GATLING_FLASH_TURN`]; on every sixth, smoke at [`GATLING_SMOKE`]'s
+/// point and a case at [`GATLING_CASE`]'s, thrown `(Rnd % 10 + 0x80) *
+/// 0x14` round from the body's facing.
+const GATLING_FLASH: [u32; 2] = [0x100_1000, 0x30C_0A00];
+const GATLING_FLASH_POINT: [i16; 3] = [-200, 0x4CE, 0];
+const GATLING_FLASH_3D: (u32, [i16; 3]) = (0x107_5000, [-150, 0x5D2, 0]);
+const GATLING_FLASH_TURN: [i16; 3] = [0, -200, 0x400];
+const GATLING_SMOKE: (u32, [i16; 3]) = (0x30C_1200, [-200, 400, 0]);
+const GATLING_CASE: (u32, [i16; 3]) = (0x201_0A00, [-200, 0x82, 0x14]);
+
 /// `fg_status`'s bits the rocket launcher raises: `pl_mv05_w1_t1`'s `0x40000`
 /// on each tick of the hold, and `Tama_ck_i`'s `0x800000` when its count is
 /// `0xFF`, which never runs out.
@@ -716,8 +741,18 @@ const GRENADE_MUZZLE: [i32; 3] = [0x78, 0x4B0, 0];
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct WaterDraw {
     effect: usize,
-    /// `Pl_water`'s ring, 0 to 3, or `None` for a hand's splash.
-    ring: Option<u16>,
+    kind: Draw,
+}
+
+/// What a [`WaterDraw`] draws for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Draw {
+    /// `Pl_water`'s ring, 0 to 3.
+    Ring(u16),
+    /// A hand's splash.
+    Hand,
+    /// `pl_w12_t2_move`'s case: its turn from the body's facing.
+    Case,
 }
 
 /// One tick of `Weapon_at_ck`'s walk of `sequence` from `Attw_seq_no` and
@@ -822,8 +857,8 @@ impl Work {
         self.parts0_y = scale;
     }
 
-    pub fn apply_to_pose(&self, pose: &mut Keyframe) {
-        pose.offset[1] = self.scaled_height(pose.offset[1]);
+    pub fn apply_to_pose(&self, anim: &crate::anim::AnimPlayer, pose: &mut Keyframe) {
+        pose.offset[1] = self.root_height(anim, pose.offset[1]);
         self.neck.apply(pose);
     }
 
@@ -863,10 +898,21 @@ impl Work {
     fn scaled_height(&self, height: i16) -> i16 {
         ((i32::from(height) * self.parts0_y) >> 12) as i16
     }
+
+    /// The root's height on `anim`'s pose: the scaled height `J_seq` kept
+    /// ([`crate::anim::AnimPlayer::scaled_root_y`]) when the body is scaled,
+    /// or `height` scaled.
+    pub(crate) fn root_height(&self, anim: &crate::anim::AnimPlayer, height: i16) -> i16 {
+        anim.scaled_root_y(self.parts0_y)
+            .unwrap_or_else(|| self.scaled_height(height))
+    }
 }
 
 impl Neck {
     /// Add the turn to `pose`, as `Rot_neck` does around its `RotMatrix`.
+    /// With `Neck_flg`'s bit 1 up, `Rot_neck` and `Rot_neck_em` do nothing,
+    /// so the head keeps the `RotMatrix` of its pose that `J_seq` gave it:
+    /// the turn (`+0x98`) is kept but not drawn.
     pub fn apply(&self, pose: &mut Keyframe) {
         if self.jaw != [0, 0] {
             for (joint, roll) in ALLIGATOR_JAWS.into_iter().zip(self.jaw) {
@@ -874,6 +920,9 @@ impl Neck {
                     rotation[2] = rotation[2].wrapping_add(roll);
                 }
             }
+        }
+        if self.flags & 1 != 0 {
+            return;
         }
         if let Some(turn_two) = self.turn_two {
             for (joint, turn) in DOG_NECK.into_iter().zip([self.turn[0], turn_two]) {
@@ -1068,14 +1117,18 @@ impl Work {
             let Some(effect) = self.effects.get_mut(draw.effect) else {
                 continue;
             };
-            match draw.ring {
-                Some(ring) => {
+            match draw.kind {
+                Draw::Ring(ring) => {
                     let turn = u16::from(rnd.draw()) * 4;
                     effect.dir = (effect.dir as u16).wrapping_sub(turn) as i16;
                     let base = if ring < 2 { 0x818 } else { 0xC00 };
                     effect.size = u16::from(rnd.draw()) * 4 + base;
                 }
-                None => effect.size = u16::from(rnd.draw()) * 4 + 0x60C,
+                Draw::Hand => effect.size = u16::from(rnd.draw()) * 4 + 0x60C,
+                Draw::Case => {
+                    let turn = (u16::from(rnd.draw()) % 10 + 0x80) * 0x14;
+                    effect.dir = effect.dir.wrapping_add(turn as i16);
+                }
             }
         }
     }
@@ -1437,8 +1490,21 @@ impl Weapon {
                 | SMG
                 | FLAMETHROWER
                 | ROCKET
+                | GATLING
                 | BERETTA
         )
+    }
+
+    /// `pl_mv05_w2_t1` doesn't tilt the gatling gun's hold either, though
+    /// `pl_mv05_w1_t0` would let its raise tilt past frame 90.
+    fn hold_tilts(&self) -> bool {
+        self.tilts() && self.id != GATLING
+    }
+
+    /// `Tama_ck_i`'s `fg_status |= 0x800000`: the rocket launcher at a count
+    /// of `0xFF`, and the gatling gun, whose flag is always up.
+    fn endless_flag(&self) -> bool {
+        (self.id == ROCKET && self.rounds == ENDLESS) || self.id == GATLING
     }
 
     /// `pl_mv05_w1_t0` and `pl_mv05_w1_t1` never tilt the spark shot or the
@@ -1470,7 +1536,7 @@ impl Weapon {
 
     /// The hold's clips, by tilt.
     fn hold_clips(&self) -> [u8; 3] {
-        if self.bursts() || self.sparks() {
+        if self.bursts() || self.sparks() || self.id == GATLING {
             BURST_HOLD_CLIPS
         } else {
             AIM_HOLD_CLIPS
@@ -1492,6 +1558,9 @@ impl Weapon {
     fn burst_sequence(&self) -> &'static [(u8, u8)] {
         if self.id == SMG {
             &[(0, 1), (0xFF, 2), (0xFE, 0xFF)]
+        } else if self.id == GATLING {
+            // `0x539DBC`: it looks on two ticks in three.
+            &[(0, 2), (0xFF, 1), (0xFE, 0xFF)]
         } else {
             &[(0, 0xFF)]
         }
@@ -1525,6 +1594,7 @@ impl Weapon {
             SMG | FLAMETHROWER => [0x87, 0x88, 0],
             SPARK => [0x9E, 0x9E, 0x1E],
             ROCKET => [0x9E, 0x9E, 0x5A],
+            GATLING => [0x5A, 0x5A, 0x5A],
             // The handguns' and the Beretta's.
             _ => [0x85, 0x87, 8],
         }
@@ -2934,6 +3004,7 @@ impl Mover<'_, '_> {
             2 if self.tick.weapon.is_knife() => self.aim_slash(key),
             2 if self.tick.weapon.bursts() => self.aim_burst(key, &drawn),
             2 if self.tick.weapon.sparks() => self.aim_spark(key, &drawn),
+            2 if self.tick.weapon.id == GATLING => self.aim_gatling(key, &drawn),
             2 => self.aim_fire(key, &drawn),
             3 => self.aim_lower(key),
             4 => self.aim_reload(),
@@ -3370,7 +3441,7 @@ impl Mover<'_, '_> {
             };
             let t = if part == 0 {
                 let [x, y, z] = pose.offset;
-                Some([x, self.work.scaled_height(y), z])
+                Some([x, self.work.root_height(&self.player.anim, y), z])
             } else {
                 self.relative(part)
             };
@@ -3452,7 +3523,7 @@ impl Mover<'_, '_> {
             };
             let t = if part == 0 {
                 let [x, y, z] = pose.offset;
-                Some([x, self.work.scaled_height(y), z])
+                Some([x, self.work.root_height(&self.player.anim, y), z])
             } else {
                 self.relative(part)
             };
@@ -3476,7 +3547,7 @@ impl Mover<'_, '_> {
         for &part in chain {
             let t = if part == 0 {
                 let [x, y, z] = pose.offset;
-                [x, self.work.scaled_height(y), z]
+                [x, self.work.root_height(&self.player.anim, y), z]
             } else {
                 self.relative(part)?
             };
@@ -3630,7 +3701,7 @@ impl Mover<'_, '_> {
         // `pl_mv05_w2_t1` leaves the spark shot's tilt as it is, and
         // `pl_mv05_w1_t1` the rocket launcher's, raising `fg_status`'s
         // `0x40000` instead.
-        let tilts = self.tick.weapon.tilts();
+        let tilts = self.tick.weapon.hold_tilts();
         if self.tick.weapon.id == ROCKET {
             self.work.status_raise |= STATUS_ROCKET_HELD;
         }
@@ -3656,7 +3727,7 @@ impl Mover<'_, '_> {
             self.aim_stage(5);
         }
         if key & KEY_FIRE != 0 {
-            if self.tick.weapon.id == ROCKET && self.tick.weapon.rounds == ENDLESS {
+            if self.tick.weapon.endless_flag() {
                 self.work.status_raise |= STATUS_ENDLESS;
             }
             if self.tick.weapon.loaded {
@@ -3871,6 +3942,114 @@ impl Mover<'_, '_> {
             _ => {}
         }
         self.aim_turn(key, BURST_TURN);
+    }
+
+    /// `pl_mv05_w5_t2` (`0x4d9140`): the gatling gun. It spins up (clip 0xA,
+    /// sound 0xB), then fires (clip 0xB) for as long as the trigger is held:
+    /// `Weapon_at_ck` at the level's record (`BYTE_0053a522`, with no
+    /// `hit_scan_ck`) on its sequence, then `pl_w12_t2_move`. Letting go of
+    /// the trigger spins it down (clip 0xD, sound 0xC), from which a press
+    /// fires again; letting go of the aim lowers it with the same sound. It
+    /// takes no rounds. `FUN_004d48d0`'s spin of the barrel isn't drawn.
+    fn aim_gatling(&mut self, key: u16, drawn: &DrawnParts) {
+        match self.work.routine[3] {
+            0 | 1 => {
+                if self.work.routine[3] == 0 {
+                    self.work.status_flg |= TILT_LEVEL;
+                    self.aim_clip(GATLING_SPIN_UP_CLIP);
+                    self.init_weapon_at();
+                    self.player.queue_sound(SOUND_GATLING_SPIN_UP);
+                }
+                if self.joint_move() {
+                    self.aim_clip(GATLING_FIRE_CLIP);
+                    self.work.routine[3] = 2;
+                }
+            }
+            2 => {
+                self.work.noise |= 1;
+                self.work.shot_level = 1;
+                if self.weapon_at_seq() {
+                    self.shoot();
+                }
+                let shot_hand = self.drawn_part(SHOT_PART);
+                self.joint_move();
+                self.gatling_effects(shot_hand);
+                if key & KEY_AIM == 0 {
+                    self.aim_stage(3);
+                    self.player.queue_sound(SOUND_GATLING_SPIN_DOWN);
+                    return;
+                }
+                if key & KEY_FIRE == 0 {
+                    self.work.routine[3] = 3;
+                    return;
+                }
+                let water = self.work.water;
+                if water != 0 && i32::from(water) < self.ground() && self.work.move_cnt & 3 == 0 {
+                    self.pl_water(drawn[0]);
+                }
+            }
+            3 | 4 => {
+                if self.work.routine[3] == 3 {
+                    self.aim_clip(GATLING_SPIN_DOWN_CLIP);
+                    self.work.routine[3] = 4;
+                    self.work.spd[0] = 0;
+                    self.player.queue_sound(SOUND_GATLING_SPIN_DOWN);
+                }
+                if self.joint_move() {
+                    self.work.routine[3] += 1;
+                }
+                if key & KEY_FIRE != 0 {
+                    // `Tama_ck_i`: its flag is up, so it is always loaded.
+                    self.work.status_raise |= STATUS_ENDLESS;
+                    self.work.routine[2] = 2;
+                    self.work.routine[3] = 1;
+                    return;
+                }
+            }
+            5 => self.aim_stage(1),
+            _ => {}
+        }
+        self.aim_turn(key, AIM_FIRE_TURN);
+    }
+
+    /// `pl_w12_t2_move`, on the frame `Joint_move` reached, from the hand as
+    /// the last draw left it. The case's turn waits for its `Rnd`
+    /// ([`Work::water_draws`]).
+    fn gatling_effects(&mut self, hand: Option<Matrix>) {
+        let frame = self.work.move_cnt;
+        let Some(hand) = hand else {
+            return;
+        };
+        let angle = self.player.angle as i16;
+        let push = |work: &mut Work, word: u32, dir: i16, point: [i16; 3], turn| {
+            work.effects.push(EffectCall {
+                kind: (word >> 24) as u8,
+                row: (word >> 16) as u8,
+                size: word as u16,
+                dir,
+                at: crate::esp2::apply_matrix(&hand, point),
+                motion: None,
+                on: Some((SHOT_PART as u8, hand, point)),
+                turn,
+            });
+        };
+        if frame % 3 == 1 {
+            for word in GATLING_FLASH {
+                push(self.work, word, 0, GATLING_FLASH_POINT, None);
+            }
+            let (word, point) = GATLING_FLASH_3D;
+            push(self.work, word, 0, point, Some(GATLING_FLASH_TURN));
+        }
+        if frame % 6 == 1 {
+            let (word, point) = GATLING_SMOKE;
+            push(self.work, word, 0, point, None);
+            let (word, point) = GATLING_CASE;
+            push(self.work, word, angle, point, None);
+            self.work.water_draws.push(WaterDraw {
+                effect: self.work.effects.len() - 1,
+                kind: Draw::Case,
+            });
+        }
     }
 
     /// `pl_mv05_w3_t2` (`0x4d8b40`): the spark shot. Its first tick looks
@@ -4203,7 +4382,7 @@ impl Mover<'_, '_> {
         for ring in 0..4u16 {
             self.work.water_draws.push(WaterDraw {
                 effect: self.work.effects.len(),
-                ring: Some(ring),
+                kind: Draw::Ring(ring),
             });
             self.work.effects.push(EffectCall {
                 kind: 0x1A,
@@ -4240,7 +4419,7 @@ impl Mover<'_, '_> {
                     .t;
                 self.work.water_draws.push(WaterDraw {
                     effect: self.work.effects.len(),
-                    ring: None,
+                    kind: Draw::Hand,
                 });
                 self.work.effects.push(EffectCall {
                     kind: 0x1A,
@@ -5083,6 +5262,7 @@ impl Mover<'_, '_> {
         anim.blend_counter = u16::from(self.work.hokan);
         anim.blend_step = late;
         anim.re2_blend = true;
+        anim.y_scale = self.work.parts0_y;
         anim.reverse = reverse;
         anim.timing = 0;
         let ended = anim.update(clips);
@@ -5138,6 +5318,7 @@ impl Mover<'_, '_> {
         anim.blend_counter = u16::from(self.work.hokan);
         anim.blend_step = late;
         anim.re2_blend = true;
+        anim.y_scale = self.work.parts0_y;
         anim.reverse = false;
         anim.timing = 0;
         anim.update(clips);
@@ -7325,12 +7506,12 @@ mod weapon_tests {
     fn each_gun_has_its_own_timing_and_leg() {
         assert!(
             [
-                KNIFE, 2, 3, 5, 6, 7, 8, 9, 0xC, COLT, SPARK, ROCKET, BERETTA
+                KNIFE, 2, 3, 5, 6, 7, 8, 9, 0xC, COLT, SPARK, ROCKET, GATLING, BERETTA
             ]
             .iter()
             .all(|&id| weapon(id).aims())
         );
-        assert!(![0, 4, 0x12].iter().any(|&id| weapon(id).aims()));
+        assert!(![0, 4, 0x14].iter().any(|&id| weapon(id).aims()));
         // The knife's row: a slash let go of past frame 0x32 stops at once.
         assert!(weapon(KNIFE).is_knife() && !weapon(2).is_knife());
         assert_eq!(weapon(KNIFE).fire_cancel_frame(), 0x32);
@@ -7838,6 +8019,34 @@ mod tests {
         assert_eq!(setup.work.neck.turn, [0, 0]);
     }
 
+    /// `FUN_00459b60` (a zombie shot dead while it gets up) raises
+    /// `Neck_flg`'s bit 1, and from then `Rot_neck_em` does nothing: the
+    /// head is drawn on its pose alone, its turn kept but not added. The
+    /// blood on its head in `esp_gatling_equip_118` moved with the turn
+    /// from tick 687 until this.
+    #[test]
+    fn a_neck_held_still_draws_its_head_without_the_turn() {
+        let neck = Neck {
+            turn: [-86, 12],
+            ..Neck::default()
+        };
+        let mut pose = Keyframe {
+            rotations: vec![[0x10, 0x20, 0x30]; NECK_JOINT + 1],
+            ..Keyframe::default()
+        };
+        neck.apply(&mut pose);
+        assert_eq!(pose.rotations[NECK_JOINT], [0x10, 0x20 - 86, 0x30 + 12]);
+
+        let held = Neck { flags: 1, ..neck };
+        let mut pose = Keyframe {
+            rotations: vec![[0x10, 0x20, 0x30]; NECK_JOINT + 1],
+            ..Keyframe::default()
+        };
+        held.apply(&mut pose);
+        assert_eq!(pose.rotations[NECK_JOINT], [0x10, 0x20, 0x30]);
+        assert_eq!(held.turn, [-86, 12], "the turn is kept");
+    }
+
     #[test]
     fn the_neck_is_placed_on_the_pushed_body() {
         let mut setup = Setup::new(0);
@@ -8270,7 +8479,7 @@ mod tests {
             ..Keyframe::default()
         };
         work.neck.turn = [0; 2];
-        work.apply_to_pose(&mut pose);
+        work.apply_to_pose(&crate::anim::AnimPlayer::new(0), &mut pose);
         assert_eq!(pose.offset, [7, -1782, 9]);
     }
 
@@ -9347,9 +9556,9 @@ mod tests {
 
     #[test]
     fn only_a_handgun_raises_into_the_stance() {
-        // The gatling gun (0x12, `pl_mv05_w5`) isn't ported.
+        // The custom handgun (4) isn't ported.
         let mut setup = armed(true, false);
-        setup.weapon.id = 0x12;
+        setup.weapon.id = 4;
         setup.tick(aiming(false, false), 200);
         assert_eq!(setup.work.routine[1], MOVE_IDLE);
 
@@ -10033,6 +10242,207 @@ mod tests {
                 .iter()
                 .any(|sound| sound.id == SOUND_EMPTY)
         );
+    }
+
+    /// [`armed_with_hands`] holding the gatling gun, in the bursts' hold,
+    /// level, with a zombie 3000 ahead.
+    fn gatling() -> Setup {
+        let mut setup = armed_with_hands(true, false);
+        (setup.clips, setup.keyframes) = bank(0x14, 24, 0);
+        for keyframe in &mut setup.keyframes {
+            keyframe.rotations = vec![[0; 3]; 15];
+        }
+        setup.weapon = Weapon {
+            id: GATLING,
+            loaded: true,
+            spare: false,
+            rounds: 100,
+        };
+        setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];
+        setup.work.status_flg = TILT_LEVEL;
+        setup.work.move_no = BURST_HOLD_CLIPS[1];
+        setup.player.angle = 0;
+        let [x, _, z] = setup.player.pos;
+        setup.targets = vec![crate::weapon2::Target {
+            slot: 3,
+            id: 0x1F,
+            be_flg: 1 | 0x400_0000 | 0x800_0000,
+            life: 5000,
+            pos: [x + 3000, 0, z],
+            at: [x + 3000, z],
+            at_w: 500,
+            neck_y: -1500,
+            ..Default::default()
+        }];
+        setup
+    }
+
+    fn sounds(setup: &mut Setup) -> Vec<u16> {
+        setup
+            .player
+            .take_sounds()
+            .iter()
+            .map(|sound| sound.id)
+            .collect()
+    }
+
+    /// `pl_mv05_w5_t2`: a press in the hold spins the gatling gun up (clip
+    /// 0xA, sound 0xB) and then fires it (clip 0xB), `Weapon_at_ck` looking
+    /// on two ticks in three; letting go of the trigger spins it down (clip
+    /// 0xD, sound 0xC) back into the hold. It never takes a round.
+    #[test]
+    fn the_gatling_gun_spins_up_fires_and_spins_down() {
+        let mut setup = gatling();
+        setup.tick(aiming(true, true), 200);
+        assert_eq!(setup.work.routine[2..], [2, 0]);
+        assert_eq!(setup.work.status_raise & STATUS_ENDLESS, STATUS_ENDLESS);
+        sounds(&mut setup);
+        setup.tick(aiming(true, false), 200);
+        assert_eq!(setup.work.move_no, GATLING_SPIN_UP_CLIP);
+        assert_eq!(sounds(&mut setup), [SOUND_GATLING_SPIN_UP]);
+        for _ in 0..40 {
+            if setup.work.routine[3] == 2 {
+                break;
+            }
+            setup.tick(aiming(true, false), 200);
+        }
+        assert_eq!(
+            (setup.work.routine[3], setup.work.move_no),
+            (2, GATLING_FIRE_CLIP)
+        );
+        let mut looks = Vec::new();
+        for _ in 0..6 {
+            setup.tick(aiming(true, false), 200);
+            looks.push(setup.work.hit.take().is_some());
+            assert_eq!(setup.work.noise & 1, 1);
+        }
+        assert_eq!(looks, [true, true, false, true, true, false]);
+        assert!(!setup.work.fired && setup.work.spent == 0);
+        setup.tick(aiming(false, false), 200);
+        assert_eq!(setup.work.routine[2..], [2, 3]);
+        setup.tick(aiming(false, false), 200);
+        assert_eq!(
+            (setup.work.routine[3], setup.work.move_no),
+            (4, GATLING_SPIN_DOWN_CLIP)
+        );
+        assert!(sounds(&mut setup).contains(&SOUND_GATLING_SPIN_DOWN));
+        for _ in 0..40 {
+            if setup.work.routine[2] != 2 {
+                break;
+            }
+            setup.tick(aiming(false, false), 200);
+        }
+        assert_eq!(setup.work.routine[2], 1);
+    }
+
+    /// A press in the spin down fires again from its second step (and
+    /// `Tama_ck_i` raises `0x800000`); letting go of the aim while it fires
+    /// lowers it, with the spin down's sound.
+    #[test]
+    fn the_gatling_gun_fires_again_from_its_spin_down_and_lowers_with_its_sound() {
+        let mut setup = gatling();
+        setup.work.routine = [MODE_MOVE, MOVE_AIM, 2, 3];
+        setup.tick(aiming(false, false), 200);
+        assert_eq!(setup.work.routine[2..], [2, 4]);
+        setup.work.status_raise = 0;
+        setup.tick(aiming(true, false), 200);
+        assert_eq!(setup.work.routine[2..], [2, 1]);
+        assert_eq!(setup.work.status_raise, STATUS_ENDLESS);
+
+        let mut setup = gatling();
+        setup.work.routine = [MODE_MOVE, MOVE_AIM, 2, 2];
+        setup.work.move_no = GATLING_FIRE_CLIP;
+        sounds(&mut setup);
+        setup.tick(
+            Input {
+                fire: true,
+                ..Input::default()
+            },
+            200,
+        );
+        assert_eq!(setup.work.routine[2..], [3, 0]);
+        assert_eq!(sounds(&mut setup), [SOUND_GATLING_SPIN_DOWN]);
+    }
+
+    /// `pl_w12_t2_move` on part 11: the flash, smoke and turned 3D flash on
+    /// frames 1, 4, 7, ..., and the smoke and a case on 1, 7, ..., the case
+    /// turned by `(Rnd % 10 + 0x80) * 0x14` once its draw is made.
+    #[test]
+    fn the_gatling_guns_flash_and_cases_come_every_third_and_sixth_frame() {
+        let mut setup = gatling();
+        setup.work.routine = [MODE_MOVE, MOVE_AIM, 2, 2];
+        setup.work.move_no = GATLING_FIRE_CLIP;
+        setup.work.move_cnt = 0;
+        let mut by_frame = Vec::new();
+        for _ in 0..7 {
+            setup.work.effects.clear();
+            setup.work.water_draws.clear();
+            setup.tick(aiming(true, false), 200);
+            let words: Vec<u32> = setup
+                .work
+                .effects
+                .iter()
+                .filter(|call| call.kind != 0x1A)
+                .map(|call| {
+                    u32::from(call.kind) << 24 | u32::from(call.row) << 16 | u32::from(call.size)
+                })
+                .collect();
+            by_frame.push((setup.work.move_cnt, words));
+        }
+        assert_eq!(by_frame.last().map(|(frame, _)| *frame), Some(7));
+        let flash = vec![0x100_1000, 0x30C_0A00, 0x107_5000];
+        let mut both = flash.clone();
+        both.extend([0x30C_1200, 0x201_0A00]);
+        for (frame, words) in &by_frame {
+            let want = match frame % 6 {
+                1 => both.clone(),
+                4 => flash.clone(),
+                _ => Vec::new(),
+            };
+            assert_eq!(words, &want, "frame {frame}");
+        }
+        let turn = setup
+            .work
+            .effects
+            .iter()
+            .find(|call| call.kind == 2)
+            .map(|call| call.turn);
+        assert_eq!(turn, Some(None));
+        let flash3d = setup.work.effects.iter().find(|call| call.size == 0x5000);
+        assert_eq!(flash3d.and_then(|call| call.turn), Some(GATLING_FLASH_TURN));
+        let angle = setup.player.angle as i16;
+        let mut rnd = crate::zombie2::Rnd::default();
+        let mut replay = rnd;
+        setup.work.water_draws(&mut rnd);
+        let case = setup
+            .work
+            .effects
+            .iter()
+            .find(|call| call.kind == 2)
+            .unwrap();
+        let want = (u16::from(replay.draw()) % 10 + 0x80) * 0x14;
+        assert_eq!(case.dir, angle.wrapping_add(want as i16));
+    }
+
+    /// The bursts' hold (`pl_mv05_w2_t1`) doesn't tilt the gatling gun, and
+    /// the trigger held there raises `Tama_ck_i`'s `0x800000`.
+    #[test]
+    fn the_gatling_guns_hold_never_tilts() {
+        let gun = Weapon {
+            id: GATLING,
+            ..Weapon::default()
+        };
+        assert!(gun.aims() && gun.tilts() && !gun.hold_tilts() && gun.endless_flag());
+        assert_eq!(gun.hold_clips(), BURST_HOLD_CLIPS);
+        assert_eq!(gun.frames(), [0x5A, 0x5A, 0x5A]);
+        let mut setup = gatling();
+        let aim = aiming(false, false);
+        for held in [Input { up: true, ..aim }, Input { down: true, ..aim }] {
+            setup.tick(held, 200);
+            assert_eq!(setup.work.status_flg & 0xE000, TILT_LEVEL);
+            assert_eq!(setup.work.routine[2..], [1, 1]);
+            assert_eq!(setup.work.status_raise & STATUS_ENDLESS, 0);
+        }
     }
 
     /// Letting go of the trigger plays the burst's end; a press there fires

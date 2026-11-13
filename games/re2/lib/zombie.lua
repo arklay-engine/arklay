@@ -99,8 +99,9 @@ local STAGGER <const> = { [0] = 0, 9, 15, 15, 35, [0xD] = 20 }
 -- crawler's, `FUN_00457d10` and `FUN_00458bf0`, for every `Damage_no`.
 local BERETTA <const> = 0x13
 
--- The sub-machine gun, whose row in `Em10_Damage`'s table is `Em10Dm08`'s, and the
--- flamethrower, whose rows are the handguns' (`Em10Dm00`, `FUN_004587b0`).
+-- The sub-machine gun, whose row in `Em10_Damage`'s table is `Em10Dm08`'s (so is the
+-- gatling gun's, 0x12), and the flamethrower, whose rows are the handguns' (`Em10Dm00`,
+-- `FUN_004587b0`).
 local SMG <const> = 0xF
 local FLAMETHROWER <const> = 0x10
 
@@ -1142,7 +1143,8 @@ local function em10_damage(e)
         return
     end
     -- `0x5270f0`: the sub-machine gun's, `Em10Dm08` but for 2, 5 and 8, which have no call.
-    if weapon == SMG then
+    -- `0x52715c`, the gatling gun's (0x12), is the same.
+    if weapon == SMG or weapon == 0x12 then
         dm08(e)
         return
     end

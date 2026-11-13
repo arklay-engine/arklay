@@ -16,6 +16,7 @@ const LINE_MASK: u16 = 0x80;
 const COLT: u8 = crate::player2::COLT;
 const BERETTA: u8 = crate::player2::BERETTA;
 const SMG: u8 = crate::player2::SMG;
+const GATLING: u8 = crate::player2::GATLING;
 const SPARK: u8 = crate::player2::SPARK;
 /// `Type`'s bits for out of reach, and for someone only aimed at if nobody else is.
 const TYPE_UNTARGETED: u16 = 0xC000;
@@ -272,10 +273,33 @@ const SPARK_RECORDS: [Record; 3] = [
     record([0x10, 0, 0], [[200, 0, 3500, 500], [0; 4], [0; 4]]),
 ];
 
+/// The gatling gun's (`0x539D68`). `pl_mv05_w5_t2` only ever looks with
+/// the level's, one long rectangle of 7500.
+const GATLING_RECORDS: [Record; 3] = [
+    record(
+        REACH[0],
+        [
+            [100, 0, 1000, 500],
+            [4100, 0, 1000, 625],
+            [8100, 0, 2500, 625],
+        ],
+    ),
+    record([0x8, 0x4, 0x10], [[200, 0, 7500, 500]; 3]),
+    record(
+        REACH[2],
+        [
+            [100, 0, 1000, 375],
+            [4100, 0, 1000, 500],
+            [8200, 0, 2500, 625],
+        ],
+    ),
+];
+
 /// What a weapon's shot is: its rectangles, and what it does to a zombie.
 fn shot_records(weapon: u8) -> Option<&'static [Record; 3]> {
     let records = match weapon {
         SPARK => &SPARK_RECORDS,
+        GATLING => &GATLING_RECORDS,
         // The Colt's, the sub-machine gun's and the Beretta's entries point at
         // the handguns' records.
         2..=4 | COLT | SMG | BERETTA => &HANDGUN,
@@ -295,6 +319,7 @@ fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
     let weapon = match (id, weapon) {
         (G1_ID, COLT) => return Some(&G1_COLT),
         (_, SMG) => return smg_damage(id),
+        (_, GATLING) => return gatling_damage(id),
         (_, SPARK) => return spark_damage(id),
         (_, COLT | BERETTA) => 2,
         _ => weapon,
@@ -560,6 +585,88 @@ fn smg_damage(id: u8) -> Option<&'static Damage> {
         ALLIGATOR_ID => &ALLIGATOR,
         IVY_ID | VINE_ID | POISON_IVY_ID => &PLANT,
         crate::zombie2::EMBRYO_ID => &EMBRYO,
+        crate::zombie2::ROACH_ID => &ROACH,
+        crate::zombie2::EM2D_ID => &EM2D,
+        // The zombies' two tables (`0x535350`, `0x5354D0`) share the row.
+        _ => &ZOMBIE,
+    })
+}
+
+/// `Wp_dmg_tbl`'s gatling gun rows (each table's eighteenth).
+fn gatling_damage(id: u8) -> Option<&'static Damage> {
+    const fn row(damage: u32, stun: u32, heights: [i32; 6]) -> Damage {
+        Damage {
+            damage,
+            stun,
+            heights,
+        }
+    }
+    const LICKER_HEIGHTS: [i32; 6] = [-5000, -2000, -3500, 500, -500, 2000];
+    const ZOMBIE: Damage = row(0x0080_2008, 0x0102_040A, SHOTGUN_HEIGHTS);
+    const LICKER: Damage = row(0x0140_5014, 0x0285_0A0A, LICKER_HEIGHTS);
+    const DOG: Damage = row(
+        0x0120_4812,
+        0x0183_060A,
+        [-5000, 50, -2000, 2000, -500, 3000],
+    );
+    const CROW: Damage = row(
+        0x01E0_781E,
+        0x078F_1E0A,
+        [-6000, -3000, -4000, -500, -500, 3000],
+    );
+    const MRX: Damage = row(
+        0x0180_6018,
+        0x0489_120A,
+        [-3200, 100, -1000, 1600, -1000, 2600],
+    );
+    const G1: Damage = row(0x0100_4010, 0x0285_0A0A, SHOTGUN_HEIGHTS);
+    const G2: Damage = row(
+        0x0120_4812,
+        0x0285_0A0A,
+        [-5000, 500, -6000, 2000, -500, 3000],
+    );
+    const G3: Damage = row(0x0140_5014, 0x0387_0E0A, SHOTGUN_HEIGHTS);
+    // The spider's row has -5000 where its sub-machine gun row has -7000.
+    const SPIDER: Damage = row(
+        0x0120_4812,
+        0x0285_0A0A,
+        [-5000, -2000, -4200, 500, -500, 2000],
+    );
+    const ALLIGATOR: Damage = row(0x0120_4812, 0x050A_140A, SHOTGUN_HEIGHTS);
+    const PLANT: Damage = row(
+        0x00A0_280A,
+        0x0306_0C0A,
+        [-3000, 500, -3000, 2000, -500, 3000],
+    );
+    const EMBRYO: Damage = row(
+        0x0110_4411,
+        0x0285_0A0A,
+        [-5000, -2000, -3000, 2000, -500, 3000],
+    );
+    const EM28: Damage = row(0x0110_4411, 0x0285_0A0A, SHOTGUN_HEIGHTS);
+    const ROACH: Damage = row(
+        0x0070_1C07,
+        0x0081_020A,
+        [-4000, -2800, -3100, -1200, -1200, 100],
+    );
+    const EM2D: Damage = row(
+        0x00E0_380E,
+        0x0081_020A,
+        [-3000, -2000, -3000, 2000, -500, 3000],
+    );
+    Some(match id {
+        LICKER_ID | LICKER_24_ID => &LICKER,
+        DOG_ID => &DOG,
+        CROW_ID => &CROW,
+        MRX_ID => &MRX,
+        G1_ID => &G1,
+        G2_ID => &G2,
+        G3_ID => &G3,
+        SPIDER_ID | YOUNG_ID => &SPIDER,
+        ALLIGATOR_ID => &ALLIGATOR,
+        IVY_ID | VINE_ID | POISON_IVY_ID => &PLANT,
+        crate::zombie2::EMBRYO_ID => &EMBRYO,
+        0x28 => &EM28,
         crate::zombie2::ROACH_ID => &ROACH,
         crate::zombie2::EM2D_ID => &EM2D,
         // The zombies' two tables (`0x535350`, `0x5354D0`) share the row.

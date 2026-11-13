@@ -16,7 +16,7 @@
 -- others; on a wall (kinds 2 and 3) the way down (1), the wait (2), the
 -- crawl (3), the climb (4), the way onto the ceiling (5), the lunge (6) and
 -- the spit (7). A hit (`Routine_0` 2), the death (3) and the body (7), for
--- weapons 2 to 8 and 0xD to 0x10 and 0x13, on each kind. Another spider in play is its partner
+-- weapons 2 to 8, 0xD to 0x10, 0x12 and 0x13, on each kind. Another spider in play is its partner
 -- (`Ck_em_id`, `+0x240`), and its hits and deaths send young spiders
 -- (`Em_26`, `send_young`). `FUN_004732a0`'s `fg_system` `0x1000000` draw,
 -- `FUN_004727e0`'s water, the player's partner
@@ -1797,6 +1797,7 @@ local HURTS <const> = {
     [0xE] = hurt_spark, -- `0x5286cc`: the spark shot's `FUN_00471ae0`.
     [0xF] = flinch_bleeding, -- `0x5286d0`: the SMG's, weapon 4's `FUN_00471840`.
     [0x10] = hurt_flame, -- `0x5286d4`: the flamethrower's `FUN_00471b10`.
+    [0x12] = flinch_bleeding, -- `0x5286dc`: the gatling gun's, weapon 4's `FUN_00471840`.
     [0x13] = flinch_by_kind, -- `0x5286e0`: the Beretta's, the table's last.
 }
 
@@ -2137,6 +2138,7 @@ local DIES <const> = {
     [0xE] = die_spark, -- `0x52875c`: the spark shot's `FUN_004726d0`.
     [0xF] = die_plain, -- `0x528760`: the SMG's, the handguns'.
     [0x10] = die_flame, -- `0x528764`: the flamethrower's, weapon 0xA's.
+    [0x12] = die_plain, -- `0x52876c`: the gatling gun's, the handguns'.
     [0x13] = die_plain, -- `0x528770`: the Beretta's, the table's last.
 }
 

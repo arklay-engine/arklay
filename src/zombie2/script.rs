@@ -6636,4 +6636,104 @@ mod tests {
             assert_eq!(drawn - plain_drawn, 2);
         }
     }
+
+    /// The gatling gun's (0x12) hits and deaths, against the original's tables.
+    mod gatling {
+        use super::smg_flame_small::spider;
+        use super::smg_flame_tyrant_ivy::{eval, ivy, run};
+        use super::smg_flame_zombie::{effects, tick};
+        use crate::player2::{GATLING, SMG};
+
+        /// `0x52715c`, the gatling gun's row of `Em10_Damage`'s table, is the
+        /// SMG's `Em10Dm08` (`0x458260`): the same clip, blood, push and turn
+        /// from the same draws, where the handguns' `Em10Dm00` staggers.
+        #[test]
+        fn the_gatling_gun_jerks_a_zombie_back_by_em10dm08() {
+            let draws = "w.rnds = { 5, 10, 20, 30, 40, 1, 0x50, 0x60, 0x70 }";
+            let gatling = format!("w.r[1] = {GATLING} {draws}");
+            let result = "w.clip[1], w.clip[2], w.clip[3], w.spd[1], w.spd[2], w.spd[3], \
+                          w.push, w.angle, w.toward, w.r[2], w.timers[0], w.vars[4], w.drawn";
+            let hit = tick(&gatling, result);
+            assert_eq!(hit, tick(draws, result));
+            assert_eq!(hit[0], 0x1D);
+            assert_eq!(effects(&gatling), effects(draws));
+        }
+
+        /// The ivy's hit (`Routine_0` 2) or death (3) by `weapon` on `Rnd`'s
+        /// `draws`: its effects and sounds, and the draws taken.
+        fn ivy_tick(zero: u8, weapon: u8, draws: &str) -> (Vec<String>, i64) {
+            let setup = format!(
+                "w.r = {{ [0] = {zero}, {weapon}, 0, 0 }} w.draws = {{ {draws} }}
+                 w.vars[26] = 1 w.vars[27] = 4"
+            );
+            let (lua, log) = run(&ivy(), &setup, 1, &["call_effect", "sound"]);
+            (log, eval(&lua, "return w.drawn"))
+        }
+
+        /// `funcs_487037`'s 0x12 cell (`0x529f0c`) is `caseD_5`, weapon 4's,
+        /// which for 0x12 alone adds a second drop of row 1 (0, 0x11, 0x1000)
+        /// at another of `0x529f64`'s parts, from a second `Rnd`.
+        #[test]
+        fn the_gatling_gun_bleeds_the_ivy_twice() {
+            let four = ivy_tick(2, 4, "3, 6");
+            assert_eq!(four.1, 1);
+            let gatling = ivy_tick(2, GATLING, "3, 6");
+            // `0x529f64`[3] is part 20, [6] part 5.
+            assert_eq!(
+                gatling,
+                (
+                    vec![
+                        "call_effect(0,17,6144,0,20,0,0)".to_string(),
+                        "call_effect(0,17,4096,0,5,0,0)".to_string(),
+                        "sound(2)".to_string(),
+                    ],
+                    2
+                )
+            );
+            assert_eq!(gatling.0[0], four.0[0]);
+        }
+
+        /// `0x529f6c`'s 0x12 cell (`0x529fb4`) is `FUN_00487600`, the
+        /// handguns' death: row 1's blood at part 10.
+        #[test]
+        fn the_ivy_dies_of_the_gatling_gun_as_of_the_handgun() {
+            let gatling = ivy_tick(3, GATLING, "");
+            assert_eq!(gatling, ivy_tick(3, 2, ""));
+            assert_eq!(gatling.0, ["call_effect(0,17,4096,0,10,0,0)"]);
+        }
+
+        /// The rocket launcher's entries (`0x529f08`, `0x529fb0`) are the
+        /// Beretta's: `FUN_00487160`'s flinch and `FUN_00487bf0`'s tearing.
+        #[test]
+        fn the_rocket_launcher_hurts_and_kills_the_ivy_as_the_beretta() {
+            for zero in [2, 3] {
+                let rocket = ivy_tick(zero, crate::player2::ROCKET, "");
+                assert_eq!(rocket, ivy_tick(zero, crate::player2::BERETTA, ""));
+                assert_ne!(rocket, ivy_tick(zero, 0x14, ""), "{zero}");
+            }
+        }
+
+        /// `DWORD_00528694[0x12]` is `FUN_00471840`, the SMG's and weapon
+        /// 4's bleeding flinch, and `DWORD_00528724[0x12]` the handguns'
+        /// `FUN_00471c10`, as the SMG's.
+        #[test]
+        fn the_gatling_gun_hurts_and_kills_a_spider_as_the_smg() {
+            let tick = |zero: u8, weapon: u8| {
+                let hit = spider(
+                    &format!("ROUTINES = {{ [0] = {zero}, {weapon}, 0, 0 }}"),
+                    &[1, 2],
+                );
+                (hit.effects, hit.drawn, hit.clips)
+            };
+            let hit = tick(2, GATLING);
+            assert_eq!(hit, tick(2, SMG));
+            let row_3 = vec![0, 9, 0x1000, -1];
+            assert_eq!(hit.0[..2], [row_3.clone(), row_3]);
+            assert_eq!(hit.2, [1]);
+            let death = tick(3, GATLING);
+            assert_eq!(death, tick(3, SMG));
+            assert_eq!(death.0, [[0, 0x19, 0x2000, -1]]);
+            assert_eq!(death.2, [0xC]);
+        }
+    }
 }

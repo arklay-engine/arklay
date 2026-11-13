@@ -501,6 +501,13 @@ pub struct AnimPlayer {
     /// yet, oldest first. A direct (counter 0) step replaces the list because
     /// it does not depend on the previous pose.
     pending_pose: RefCell<Vec<PoseStep>>,
+    /// The height scale (`+0x1de`) a body with one plays at, or 0x1000.
+    /// `J_seq` scales each frame's root height by it before it blends, and
+    /// keeps the scaled result (`+0x38`) as the next blend's source.
+    pub y_scale: i32,
+    /// That scaled root height, as `J_seq` left it, when `y_scale` isn't
+    /// 0x1000: [`Self::scaled_root_y`].
+    scaled_y: std::cell::Cell<Option<i16>>,
 }
 
 impl AnimPlayer {
@@ -519,6 +526,8 @@ impl AnimPlayer {
             blend_used: 0,
             applied: RefCell::new(None),
             pending_pose: RefCell::new(Vec::new()),
+            y_scale: 0x1000,
+            scaled_y: std::cell::Cell::new(None),
         }
     }
 
@@ -704,6 +713,7 @@ impl AnimPlayer {
             let Some(target) = keyframes.get(keyframe) else {
                 continue;
             };
+            self.fold_scaled_y(pose.as_ref(), target, blend, step);
             pose = match pose.take() {
                 Some(source) if blend != 0 && step != 0 => Some(if self.re2_blend {
                     blend_keyframes_re2(&source, target, blend, step)
@@ -731,7 +741,49 @@ impl AnimPlayer {
     /// so it is cleared with the store.
     pub(crate) fn set_applied_pose(&self, pose: Option<model::Keyframe>) {
         self.pending_pose.borrow_mut().clear();
+        self.scaled_y.set(None);
         *self.applied.borrow_mut() = pose;
+    }
+
+    /// The root's height as `J_seq` leaves it on a body scaled by `scale`:
+    /// each frame's height scaled (`* scale >> 12`), then blended with the
+    /// last scaled height. `None` when the pose isn't kept that way (no scale,
+    /// or another scale), and the height is the pose's, scaled.
+    pub fn scaled_root_y(&self, scale: i32) -> Option<i16> {
+        if scale == 0x1000 || scale != self.y_scale {
+            return None;
+        }
+        self.scaled_y.get()
+    }
+
+    /// One step of [`Self::scaled_root_y`]: `J_seq`'s `LoadAverage12` of the
+    /// scaled new height and the last, by the same weights as the angles.
+    fn fold_scaled_y(
+        &self,
+        source: Option<&model::Keyframe>,
+        target: &model::Keyframe,
+        blend: u16,
+        step: u16,
+    ) {
+        if self.y_scale == 0x1000 || !self.re2_blend {
+            self.scaled_y.set(None);
+            return;
+        }
+        let scale = |y: i16| ((i32::from(y) * self.y_scale) >> 12) as i16;
+        let new = scale(target.offset[1]);
+        let folded = match source {
+            Some(source) if blend != 0 && step != 0 => {
+                let last = self
+                    .scaled_y
+                    .get()
+                    .unwrap_or_else(|| scale(source.offset[1]));
+                let kept = i32::from(blend) * i32::from(step);
+                (mul_div_12(i32::from(last), kept) + mul_div_12(i32::from(new), 0x1000 - kept))
+                    as i16
+            }
+            _ => new,
+        };
+        self.scaled_y.set(Some(folded));
     }
 }
 
@@ -886,6 +938,34 @@ mod tests {
         assert_eq!(pose.offset, [700, 0, -700]);
         // 0xFF0 goes up through a whole turn to 0x1010, not down.
         assert_eq!(pose.rotations[0][0], 0xFF0 + 4);
+    }
+
+    /// `J_seq` scales a frame's root height by the body's `+0x1de` before it
+    /// blends (`LoadAverage12` with the last scaled height, `+0x38`), not
+    /// after: on a zombie of 0xE66 that's a unit higher than scaling the
+    /// blend, as zombie 3's head blood in `esp_gatling_equip_118` was.
+    #[test]
+    fn a_scaled_root_blends_its_scaled_heights() {
+        let keyframe = |y| Keyframe {
+            offset: [0, y, 0],
+            vertex: [0; 3],
+            rotations: vec![[0; 3]],
+        };
+        let mut anim = AnimPlayer::new(0);
+        anim.re2_blend = true;
+        anim.y_scale = 0xE66;
+        anim.fold_scaled_y(None, &keyframe(-1681), 0, 0);
+        assert_eq!(anim.scaled_root_y(0xE66), Some(-1513));
+        anim.fold_scaled_y(Some(&keyframe(-1681)), &keyframe(-1700), 31, 0x80);
+        assert_eq!(anim.scaled_root_y(0xE66), Some(-1514));
+        let unscaled = blend_keyframes_re2(&keyframe(-1681), &keyframe(-1700), 31, 0x80);
+        assert_eq!(
+            (i32::from(unscaled.offset[1]) * 0xE66) >> 12,
+            -1513,
+            "scaled after"
+        );
+        assert_eq!(anim.scaled_root_y(0x1000), None, "not scaled");
+        assert_eq!(anim.scaled_root_y(0xEB8), None, "another scale");
     }
 
     #[test]

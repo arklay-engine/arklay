@@ -9457,8 +9457,13 @@ impl GameState {
             id,
             // `Tama_ck_i` wants more than two in the spark shot, so a shot
             // that strikes has its three.
+            // `Stage_init_item` raises the gatling gun's flag in
+            // `DWORD_0098e9c4` on every new game, which `Tama_ck_i` reads
+            // before its count.
             loaded: if id == crate::player2::SPARK {
                 self.item_count(id) > 2
+            } else if id == crate::player2::GATLING {
+                true
             } else {
                 self.item_count(id) != 0
             },
