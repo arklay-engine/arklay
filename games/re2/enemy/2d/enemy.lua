@@ -10,9 +10,12 @@
 -- bodies (`Type & 1`): parts 1 to 7 and 8 to 14, and each kind hides the
 -- other's.
 --
+-- A hit (`Routine_0` 2) or the death (3) sends it back into the wall, the
+-- same for every weapon: neither reads `Routine_1`.
+--
 -- Not ported yet: the grab (`Routine_1` 4, `FUN_00484640`) and the player's
--- side of it (`em_damage_table_real[0x1d]`, `FUN_00484a80`), the hits and their
--- blood (`Routine_0` 2 and 3) and the shadow (`Kage_work_set`).
+-- side of it (`em_damage_table_real[0x1d]`, `FUN_00484a80`) and the shadow
+-- (`Kage_work_set`).
 
 local HOME_ANGLE <const> = 0 -- `+0x218`: `Cdir_y` at the init.
 local HOME_X <const> = 1 -- `+0x21c`: `Pos_x` at the init.
@@ -25,6 +28,8 @@ local TYPE_LEADER <const> = 0x10 -- it counts the room's globals down
 -- `0x529c24 + kind * 7`: the kind's own parts, as a mask of hidden parts.
 local OWN_PARTS <const> = { [0] = 0x00FE, 0x7F00 }
 local ALL_PARTS <const> = 0x7FFE
+-- `0x529c24 + kind * 7`'s first cell: the part the death bleeds at.
+local DEATH_PART <const> = { [0] = 1, 8 }
 -- `0x529c26 + kind * 7`: the part the reach and the grab measure from.
 local REACH_PART <const> = { [0] = 3, 10 }
 local BE_HIDDEN <const> = 0x2
@@ -275,6 +280,38 @@ local function move(e)
     end
 end
 
+-- `0x529cdc` and `0x529d00`, by `Damage_no`: one entry for every region, but
+-- 2, 5 and 8, whose cells are 0 (the original jumps to 0 there).
+local function hit_region(e)
+    return e:damage_no() % 3 ~= 2
+end
+
+-- Back into the wall, and a cry: `Rnd`'s low bit picks 3 or 2.
+local function back_off(e)
+    e:routines(1, 5, 0, 0)
+    e:set_damage_cnt(e:damage_cnt() | 0x80)
+    e:sound((e:rnd() & 1) == 0 and 3 or 2)
+end
+
+-- `FUN_004848b0` (`0x4848d0`): `Routine_0` 2.
+local function hurt(e)
+    if hit_region(e) then
+        back_off(e)
+    end
+end
+
+-- `FUN_00484910` (`0x484930`): `Routine_0` 3. Blood at its own first part
+-- (`Esp_call` 0x21000, `blood_censor` taken as off), its life back to 250,
+-- and back into the wall as a hit is.
+local function die(e)
+    if not hit_region(e) then
+        return
+    end
+    e:effect(0, 2, 0x1000, e:angle(), DEATH_PART[kind(e)], 0, 0, 0)
+    e:set_life(250)
+    back_off(e)
+end
+
 function update(e)
     if e:kind() & TYPE_LEADER ~= 0 then
         local room_enemy = e:room_enemy()
@@ -291,5 +328,9 @@ function update(e)
         init(e)
     elseif r0 == 1 then
         move(e)
+    elseif r0 == 2 then
+        hurt(e)
+    elseif r0 == 3 then
+        die(e)
     end
 end

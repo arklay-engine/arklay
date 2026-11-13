@@ -1973,7 +1973,7 @@ def main() -> int:
         )
         command.add_argument(
             "--equip-load", type=lambda text: int(text, 0), default=None, metavar="ID",
-            help="hold this weapon before --warp's door, so the room loads its files; give its slot with --give",
+            help="hold this weapon before --warp's door; give its slot with --give. The player keeps the handgun's clips (PLW02), so use the status screen's EQUIP for a weapon whose clips differ",
         )
         command.add_argument(
             "--life", type=int, default=None, metavar="N",

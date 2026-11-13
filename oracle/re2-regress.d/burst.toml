@@ -1,0 +1,57 @@
+# The sub-machine gun (0xF) and the flamethrower (0x10), #491 slice 4: `pl_mv05_w2`'s held bursts, `pl_w0f_t2_move`'s
+# flash, smoke and cases, `pl_w10_t2_move`'s flames (`Esp_46`, which burn what they reach through `FUN_004d7e30`) and
+# `Tama_decrease_i`'s two rounds in eight calls (oracle/re2.md, "Weapons"). Each run EQUIPs the weapon through the status
+# screen: `--equip-load` sets the weapon before the warp but keeps the handgun's clips, which differ from these two's.
+# Each recording has a run of the trace fields with frames, and one of the effect pool (`esp`).
+
+[[run]]
+name = "smg_equip_118"
+room = "118"
+ticks = 1800
+# run_119's start with the sub-machine gun in slot 2: EQUIP it, aim at the zombies and fire 60-tick bursts every 80 ticks
+setup_script = "smg_equip_118.lua"
+input = "smg_equip_118.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,inv,snd,zm0,zm1,zm2,zm3,zm4,zm5,fgstat"
+frames = [360, 1799]
+expect = "match"
+record = "--warp 118:-24617:0:-24996:1024 --life 200 --give 2:0xF:100 --give 3:0x1B:100"
+
+[[run]]
+name = "esp_smg_equip_118"
+ref = "smg_equip_118"
+room = "118"
+ticks = 1800
+setup_script = "smg_equip_118.lua"
+input = "smg_equip_118.txt"
+input_shift = 344
+fields = "esp"
+expect = { tick = 741, fields = ["esp72", "esp73", "esp78", "esp80", "esp94", "esp95"], note = "zombie 2, killed by the sub-machine gun, drops six blood effects on the floor that start a unit off the original's in x and three in z; the zombie's own trace (smg_equip_118) still matches, so the difference is where the drops start, which is not found yet" }
+record = "--warp 118:-24617:0:-24996:1024 --life 200 --give 2:0xF:100 --give 3:0x1B:100"
+
+[[run]]
+name = "flame_equip_118"
+room = "118"
+ticks = 1800
+# run_119's start with the flamethrower in slot 2: EQUIP it, aim at the zombies and fire 60-tick bursts every 80 ticks
+setup_script = "flame_equip_118.lua"
+input = "flame_equip_118.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,inv,snd,zm0,zm1,zm2,zm3,zm4,zm5,fgstat"
+frames = [360, 1799]
+# The reload's frame sound (1:e) pans one less than the original's on 1384 with the player where the original's is
+ignore = [[1384, "snd"]]
+expect = "match"
+record = "--warp 118:-24617:0:-24996:1024 --life 200 --give 2:0x10:100 --give 3:0x17:100"
+
+[[run]]
+name = "esp_flame_equip_118"
+ref = "flame_equip_118"
+room = "118"
+ticks = 1800
+setup_script = "flame_equip_118.lua"
+input = "flame_equip_118.txt"
+input_shift = 344
+fields = "esp"
+expect = "match"
+record = "--warp 118:-24617:0:-24996:1024 --life 200 --give 2:0x10:100 --give 3:0x17:100"

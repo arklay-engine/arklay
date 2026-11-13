@@ -16,7 +16,7 @@
 -- others; on a wall (kinds 2 and 3) the way down (1), the wait (2), the
 -- crawl (3), the climb (4), the way onto the ceiling (5), the lunge (6) and
 -- the spit (7). A hit (`Routine_0` 2), the death (3) and the body (7), for
--- weapons 2 to 8, on each kind. Another spider in play is its partner
+-- weapons 2 to 8, 0xD, 0xF, 0x10 and 0x13, on each kind. Another spider in play is its partner
 -- (`Ck_em_id`, `+0x240`), and its hits and deaths send young spiders
 -- (`Em_26`, `send_young`). `FUN_004732a0`'s `fg_system` `0x1000000` draw,
 -- `FUN_004727e0`'s water, `FUN_00473530`'s blood, the player's partner
@@ -1377,19 +1377,24 @@ local function move(e)
     end
 end
 
--- `DAT_00528800`'s rows that the floor's hits and deaths use: `Esp_call`'s
--- kind, row and size. None of them has the top bit, which would place it on
--- the part's matrix instead.
+-- `DAT_00528800`'s rows that the hits and deaths use: `Esp_call`'s kind, row
+-- and size, and whether the kind's byte has the top bit (4, 5 and 7: the
+-- flames' and the blasts'), which places it on the part's matrix instead.
 local BLOOD_ROWS <const> = {
     [0] = { 0, 0x19, 0x2000 },
     { 0, 0x19, 0x2800 },
     { 9, 0x0A, 0x0800 },
     { 0, 0x09, 0x1000 },
+    { 5, 0x03, 0x1400, true },
+    { 5, 0x04, 0x1000, true },
+    [7] = { 4, 0x0F, 0x1400, true },
 }
 
 -- `FUN_00472df0`: blood at a part, where `Joint_trans` left it. The way is
--- `Direction_ck` from the body to itself. On the floor nothing is added to
--- the part's place, on the ceiling 800 below it and on a wall 400 that way.
+-- `Direction_ck` from the body to itself. A row with the top bit is called
+-- on the part's `Workm`, 100 above it. Otherwise on the floor nothing is
+-- added to the part's place, on the ceiling 800 below it and on a wall 400
+-- that way.
 local function blood(e, part, row)
     local effect = BLOOD_ROWS[row]
     if effect == nil then
@@ -1397,6 +1402,10 @@ local function blood(e, part, row)
     end
     local x, _, z = e:pos()
     local dir = e:direction(x, z, x, z)
+    if effect[4] then
+        e:effect(effect[1], effect[2], effect[3], dir, part, 0, -100, 0)
+        return
+    end
     local px, py, pz = e:own_part(part)
     local kind = e:var(KIND)
     if kind == 1 then
@@ -1508,24 +1517,6 @@ local function flinch(e)
     e:set_routine(2, e:routine(2) + joint_step(e))
 end
 
--- `FUN_00471840`: weapon 4's hit bleeds from the body and a leg, and takes
--- a leg off once a region's `D_life` has run out.
-local LEG_ROWS <const> = { [0] = 0, 1, 2, 0x13 }
-local function flinch_bleeding(e)
-    if e:routine(2) == 0 then
-        blood(e, LEG_ROWS[e:rnd() & 3], 3)
-        local leg = e:rnd() & 7
-        if e:var(LOST_LEGS) & (1 << leg) == 0 then
-            blood(e, leg * 2 + 3, 3)
-        end
-        if e:d_life(0) >= 0x80 or e:d_life(1) >= 0x80 or e:d_life(2) >= 0x80 then
-            lose_leg(e)
-            e:set_d_life(6)
-        end
-    end
-    flinch_by_kind(e)
-end
-
 -- `FUN_00471340` on the floor (`0x471360`): the magnums' and shotguns' hits
 -- take a leg off, then it leaps aside.
 local function flinch_hard(e)
@@ -1580,6 +1571,25 @@ end
 local FLINCHES <const> = { [0] = flinch, ceiling_flinch, wall_flinch, wall_flinch }
 local function flinch_by_kind(e)
     FLINCHES[e:var(KIND)](e)
+end
+
+-- `FUN_00471840`: weapon 4's hit bleeds from the body and a leg, and takes
+-- a leg off once a region's `D_life` has run out. Its rows are the bytes of
+-- `DWORD_00528724`'s first cell, which the deaths' table never runs.
+local LEG_ROWS <const> = { [0] = 0, 1, 2, 0x13 }
+local function flinch_bleeding(e)
+    if e:routine(2) == 0 then
+        blood(e, LEG_ROWS[e:rnd() & 3], 3)
+        local leg = e:rnd() & 7
+        if e:var(LOST_LEGS) & (1 << leg) == 0 then
+            blood(e, leg * 2 + 3, 3)
+        end
+        if e:d_life(0) >= 0x80 or e:d_life(1) >= 0x80 or e:d_life(2) >= 0x80 then
+            lose_leg(e)
+            e:set_d_life(6)
+        end
+    end
+    flinch_by_kind(e)
 end
 
 -- `0x471450`: the fall from the ceiling begins, with a leg off.
@@ -1726,6 +1736,42 @@ local function flinch_hard_by_kind(e)
     HARD[e:var(KIND)](e)
 end
 
+-- Whether a leg's part (3 to 18) is still on the body for the flames'
+-- draws: its `Be_flg` has bit 0 and none of `0x4a`, which `FUN_004731a0`
+-- sets on a leg it takes off (and `Parts_bomb` clears to 0 once it's down).
+local function leg_part_on(e, part)
+    if e:hidden_parts() & (1 << part) ~= 0 then
+        return false
+    end
+    return e:var(LOST_LEGS) & (1 << ((part - 3) >> 1)) == 0
+end
+
+-- The flames' draws of `FUN_00471b10` and `FUN_00472580`: `count` legs'
+-- parts by `(Rnd & 0xF) + 3`, each still on the body bleeding `rows`.
+local function burn_legs(e, count, rows)
+    for _ = 1, count do
+        local part = (e:rnd() & 0xF) + 3
+        if leg_part_on(e, part) then
+            for _, row in ipairs(rows) do
+                blood(e, part, row)
+            end
+        end
+    end
+end
+
+-- `FUN_00471b10`: the flamethrower's hit doesn't stop it. Every 30 ticks
+-- (`+0x23d`, which `update` counts down) five of its legs' parts burn
+-- (row 5); then `Routine_0` goes back to 1 with `+0x233` to `+0x235`, and
+-- the move runs this tick.
+local function hurt_flame(e)
+    if e:var(T23D) == 0 then
+        burn_legs(e, 5, { 5 })
+        e:set_var(T23D, 0x1E)
+    end
+    e:routines(1, e:var(LAST), e:var(LAST + 1), e:var(LAST + 2))
+    move(e)
+end
+
 -- `DWORD_00528694`, by weapon: only the weapons arklay fires.
 local HURTS <const> = {
     [2] = flinch_by_kind,
@@ -1736,6 +1782,8 @@ local HURTS <const> = {
     [7] = flinch_hard_by_kind,
     [8] = flinch_hard_by_kind,
     [0xD] = flinch_by_kind, -- `0x5286c8`: the Colt's, the handguns'.
+    [0xF] = flinch_bleeding, -- `0x5286d0`: the SMG's, weapon 4's `FUN_00471840`.
+    [0x10] = hurt_flame, -- `0x5286d4`: the flamethrower's `FUN_00471b10`.
     [0x13] = flinch_by_kind, -- `0x5286e0`: the Beretta's, the table's last.
 }
 
@@ -1751,12 +1799,22 @@ local function hurt(e)
     end
 end
 
+-- A death by weapon 9, 10 or 0x10 (the flamethrower) that ends in water
+-- puts its flames out there (row 7, on part 0): `HIT_BY > 8` and below 0xB,
+-- or 0x10.
+local function flames_out(e)
+    local weapon = e:var(HIT_BY)
+    if weapon == 9 or weapon == 0xA or weapon == 0x10 then
+        blood(e, 0, 7)
+    end
+end
+
 -- The end of a fall into water: the body floats (`FUN_004728b0`'s 3).
 local function lands_in_water(e)
     if e:var(WATER) == 0 then
         return
     end
-    -- Weapons 9, 10 and 16 splash here (row 7); arklay doesn't fire them.
+    flames_out(e)
     e:set_var(FLOAT, 0xFF)
     if e:var(BOB) == 0 then
         e:set_var(BOB, 3)
@@ -1851,6 +1909,9 @@ local function ceiling_die(e)
             e:set_be_flg(e:be_flg() | 0x42)
             landing_sound(e)
             splash(e)
+            if e:var(FLOAT) >= 0x80 then
+                flames_out(e)
+            end
         end
         return
     end
@@ -1908,6 +1969,9 @@ local function wall_drop(e)
     e:set_var(T225, 0)
     landing_sound(e)
     splash(e)
+    if e:var(FLOAT) >= 0x80 then
+        flames_out(e)
+    end
 end
 
 -- `0x471f50`: the death on a wall.
@@ -2018,6 +2082,21 @@ local function die_blown(e)
     e:routines(7, 0, 0, 0)
 end
 
+-- `FUN_00472580`: weapon 0xA's and the flamethrower's death. On its first
+-- tick, unless its body is being shot again, it burns: row 4 (5 in water) on
+-- the body, part 0, then four draws of its legs' parts, each still on it
+-- taking that row and row 5. Then it dies as the handguns' do. Its
+-- `FUN_00473490(e, 0x202f2f)`, the 20 parts' `Poly_rgb` charred, isn't
+-- ported (the script has no way to set them).
+local function die_flame(e)
+    if e:routine(2) == 0 and e:var(REVIVED) == 0 then
+        local row = e:var(WATER) & 0xFFFF ~= 0 and 5 or 4
+        blood(e, 0, row)
+        burn_legs(e, 4, { row, 5 })
+    end
+    die_plain(e)
+end
+
 -- `DWORD_00528724`, by weapon: only the weapons arklay fires.
 local DIES <const> = {
     [2] = die_plain,
@@ -2028,6 +2107,8 @@ local DIES <const> = {
     [7] = die_blown,
     [8] = die_blown,
     [0xD] = die_plain, -- `0x528758`: the Colt's, the handguns'.
+    [0xF] = die_plain, -- `0x528760`: the SMG's, the handguns'.
+    [0x10] = die_flame, -- `0x528764`: the flamethrower's, weapon 0xA's.
     [0x13] = die_plain, -- `0x528770`: the Beretta's, the table's last.
 }
 

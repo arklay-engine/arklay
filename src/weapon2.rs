@@ -15,6 +15,7 @@ use crate::zombie2::sca_ck_line;
 const LINE_MASK: u16 = 0x80;
 const COLT: u8 = crate::player2::COLT;
 const BERETTA: u8 = crate::player2::BERETTA;
+const SMG: u8 = crate::player2::SMG;
 /// `Type`'s bits for out of reach, and for someone only aimed at if nobody else is.
 const TYPE_UNTARGETED: u16 = 0xC000;
 const TYPE_ON_FLOOR: u16 = 0x2000;
@@ -109,6 +110,9 @@ const fn hit_scan_data(weapon: u8) -> (i32, i32, [i32; 2]) {
     match weapon {
         5 | 6 => (-200, 300, [-2427, 0]),
         COLT => (-400, 30, [-1850, -1890]),
+        SMG => (-400, 200, [-1894, -1809]),
+        // The flamethrower's, and the launchers', have no shoulder.
+        crate::player2::FLAMETHROWER => (-200, 300, [0, 0]),
         7 => (-500, 150, [-1813, 0]),
         8 => (-500, 200, [-1813, 0]),
         _ => (-200, 300, [-2427, -2120]),
@@ -260,8 +264,9 @@ const CUSTOM_SHOTGUN: [Record; 3] = [
 /// What a weapon's shot is: its rectangles, and what it does to a zombie.
 fn shot_records(weapon: u8) -> Option<&'static [Record; 3]> {
     let records = match weapon {
-        // The Colt's and the Beretta's entries point at the handguns' records.
-        2..=4 | COLT | BERETTA => &HANDGUN,
+        // The Colt's, the sub-machine gun's and the Beretta's entries point at
+        // the handguns' records.
+        2..=4 | COLT | SMG | BERETTA => &HANDGUN,
         5 | 6 => &MAGNUM,
         7 => &SHOTGUN,
         8 => &CUSTOM_SHOTGUN,
@@ -277,6 +282,7 @@ fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
     // heights, but arklay has no `Em_3B`.
     let weapon = match (id, weapon) {
         (G1_ID, COLT) => return Some(&G1_COLT),
+        (_, SMG) => return smg_damage(id),
         (_, COLT | BERETTA) => 2,
         _ => weapon,
     };
@@ -471,6 +477,82 @@ const G1_DAMAGE: [Damage; 7] = [
         heights: SHOTGUN_HEIGHTS,
     },
 ];
+
+/// `Wp_dmg_tbl`'s sub-machine gun rows (each table's fifteenth).
+fn smg_damage(id: u8) -> Option<&'static Damage> {
+    const fn row(damage: u32, stun: u32, heights: [i32; 6]) -> Damage {
+        Damage {
+            damage,
+            stun,
+            heights,
+        }
+    }
+    const LICKER_HEIGHTS: [i32; 6] = [-5000, -2000, -3500, 500, -500, 2000];
+    const ZOMBIE: Damage = row(0x0040_1004, 0x0081_020A, SHOTGUN_HEIGHTS);
+    const LICKER: Damage = row(0x00B0_2C0B, 0x0285_0A0A, LICKER_HEIGHTS);
+    const DOG: Damage = row(
+        0x00A0_280A,
+        0x0183_060A,
+        [-5000, 50, -2000, 2000, -500, 3000],
+    );
+    const CROW: Damage = row(
+        0x00F0_3C0F,
+        0x078F_1E0A,
+        [-6000, -3000, -4000, -500, -500, 3000],
+    );
+    const MRX: Damage = row(
+        0x00D0_340D,
+        0x0489_120A,
+        [-3200, 100, -1000, 1600, -1000, 2600],
+    );
+    const G1: Damage = row(0x0080_2008, 0x0285_0A0A, SHOTGUN_HEIGHTS);
+    const G2: Damage = row(
+        0x00A0_280A,
+        0x0285_0A0A,
+        [-5000, 500, -6000, 2000, -500, 3000],
+    );
+    const G3: Damage = row(0x00C0_300C, 0x0408_100A, SHOTGUN_HEIGHTS);
+    const SPIDER: Damage = row(
+        0x00A0_280A,
+        0x0285_0A0A,
+        [-7000, -2000, -4200, 500, -500, 2000],
+    );
+    const ALLIGATOR: Damage = row(0x00A0_280A, 0x050A_140A, SHOTGUN_HEIGHTS);
+    const PLANT: Damage = row(
+        0x0050_1405,
+        0x0306_0C0A,
+        [-3000, 500, -3000, 2000, -500, 3000],
+    );
+    // `0x535F50`, `0x536250` and `0x5363D0`'s fifteenth rows.
+    const EMBRYO: Damage = row(0x00A0_280A, 0x0285_0A0A, HANDGUN_HEIGHTS);
+    const ROACH: Damage = row(
+        0x0070_1C07,
+        0x0081_020A,
+        [-4000, -2800, -3100, -1200, -1200, 100],
+    );
+    const EM2D: Damage = row(
+        0x0070_1C07,
+        0x0081_020A,
+        [-3000, -2000, -3000, 2000, -500, 3000],
+    );
+    Some(match id {
+        LICKER_ID | LICKER_24_ID => &LICKER,
+        DOG_ID => &DOG,
+        CROW_ID => &CROW,
+        MRX_ID => &MRX,
+        G1_ID => &G1,
+        G2_ID => &G2,
+        G3_ID => &G3,
+        SPIDER_ID | YOUNG_ID => &SPIDER,
+        ALLIGATOR_ID => &ALLIGATOR,
+        IVY_ID | VINE_ID | POISON_IVY_ID => &PLANT,
+        crate::zombie2::EMBRYO_ID => &EMBRYO,
+        crate::zombie2::ROACH_ID => &ROACH,
+        crate::zombie2::EM2D_ID => &EM2D,
+        // The zombies' two tables (`0x535350`, `0x5354D0`) share the row.
+        _ => &ZOMBIE,
+    })
+}
 
 /// `Em_30`'s Colt row, harder than its handgun's.
 const G1_COLT: Damage = Damage {
@@ -1557,6 +1639,63 @@ mod tests {
         }
     }
 
+    /// `Wp_dmg_tbl`'s fifteenth rows: the sub-machine gun's, its own for
+    /// each body, on the handguns' records.
+    #[test]
+    fn the_smg_takes_each_bodys_fifteenth_row() {
+        let row = |id| {
+            let row = damage_table(id, SMG).unwrap();
+            (row.damage, row.stun, row.heights)
+        };
+        assert_eq!(row(0x10), (0x0040_1004, 0x0081_020A, SHOTGUN_HEIGHTS));
+        assert_eq!(row(0x10).0 & 0x3FF, 4);
+        assert_eq!(row(LICKER_ID), row(LICKER_24_ID));
+        assert_eq!(row(LICKER_ID).0, 0x00B0_2C0B);
+        assert_eq!(row(DOG_ID).1, 0x0183_060A);
+        assert_eq!(row(CROW_ID).0, 0x00F0_3C0F);
+        assert_eq!(row(MRX_ID).2, [-3200, 100, -1000, 1600, -1000, 2600]);
+        assert_eq!(row(G1_ID).0, 0x0080_2008);
+        assert_eq!(row(G2_ID).2[2], -6000);
+        assert_eq!(row(G3_ID), (0x00C0_300C, 0x0408_100A, SHOTGUN_HEIGHTS));
+        assert_eq!(row(SPIDER_ID), row(YOUNG_ID));
+        assert_eq!(row(ALLIGATOR_ID).1, 0x050A_140A);
+        assert_eq!(row(IVY_ID).0, 0x0050_1405);
+        // The embryo's, the cockroach's and room 205's bodies' own rows,
+        // not the zombie's: their heights decide what `Set_MinMax` lets hit.
+        use crate::zombie2::{EM2D_ID, EMBRYO_ID, ROACH_ID};
+        assert_eq!(
+            row(EMBRYO_ID),
+            (
+                0x00A0_280A,
+                0x0285_0A0A,
+                [-5000, -2000, -3000, 2000, -500, 3000]
+            )
+        );
+        assert_eq!(
+            row(ROACH_ID),
+            (
+                0x0070_1C07,
+                0x0081_020A,
+                [-4000, -2800, -3100, -1200, -1200, 100]
+            )
+        );
+        assert_eq!(
+            row(EM2D_ID),
+            (
+                0x0070_1C07,
+                0x0081_020A,
+                [-3000, -2000, -3000, 2000, -500, 3000]
+            )
+        );
+        assert_eq!(row(0x15), row(0x10));
+        let records = shot_records(SMG).unwrap();
+        for (record, handgun) in records.iter().zip(&HANDGUN) {
+            assert_eq!((record.reach, record.rects), (handgun.reach, handgun.rects));
+        }
+        // The flamethrower's hits are its flames', not the shot's.
+        assert!(shot_records(crate::player2::FLAMETHROWER).is_none());
+    }
+
     #[test]
     fn g1_has_rows_of_its_own() {
         let damage = |weapon| damage_table(G1_ID, weapon).unwrap().damage & 0x3FF;
@@ -1686,6 +1825,13 @@ mod tests {
         assert_eq!(hit_scan_ck(0, COLT, 0, 0x1000, -1819), 0);
         assert_eq!(hit_scan_ck(1, COLT, 0, 0x1000, -1859), 0);
         assert_eq!(hit_scan_ck(0, BERETTA, 0, 0x1000, -2000), 0);
+        // The sub-machine gun's: 400 under Leon's shoulder of -1894 to 200
+        // over it, and Claire's at -1809.
+        assert_eq!(hit_scan_ck(0, SMG, 0, 0x1000, -2294), 1);
+        assert_eq!(hit_scan_ck(0, SMG, 0, 0x1000, -2295), 2);
+        assert_eq!(hit_scan_ck(0, SMG, 0, 0x1000, -1694), 1);
+        assert_eq!(hit_scan_ck(0, SMG, 0, 0x1000, -1693), 0);
+        assert_eq!(hit_scan_ck(1, SMG, 0, 0x1000, -1608), 0);
         // The shotguns aim from their own height.
         assert_eq!(hit_scan_ck(0, 7, 0, 0x1000, -1813), 1);
         assert_eq!(hit_scan_ck(0, 7, 0, 0x1000, -2400), 2);

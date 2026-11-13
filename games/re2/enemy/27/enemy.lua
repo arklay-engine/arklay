@@ -18,8 +18,8 @@
 -- `update`.
 --
 -- Not ported: `Type` 1 and 2 and states 3, 4 and 6 (they stand hidden), the
--- hits (`em_damage_table`'s 0x476c60, `em_die_table`'s 0x476ed0), the shot's
--- death (`Routine_0` 3's `Routine_2` 0) and `Routine_1` 0x13, and the parts'
+-- hits (`em_damage_table`'s 0x476c60, `em_die_table`'s 0x476ed0),
+-- `Routine_0` 3's `Routine_1` 0x13, and the parts'
 -- squash and colours as drawn (only their counts are kept, in vars).
 
 local HISTORY <const> = 0 -- 0 to 5: `+0x218, +0x21a, +0x21c, +0x21e, +0x224, +0x226`.
@@ -396,14 +396,48 @@ local function rgb_sub(e, step)
     e:set_var(RGB, (e:var(RGB) - step) & 0xFFFFFF)
 end
 
+-- `0x4767c0`'s `Routine_2` 0: a shot's death (`Routine_1` the weapon), with
+-- clip 9 at a frame `Rnd` picks, blood (effect 0, row 8) on part 0's
+-- `Workm` and its life at -1. Weapons 9, 10, 0x10 (the flamethrower) and
+-- 0x11 burn it (effect 5, row 4), 0xB and 0xE (effect 4, row 0xF), on its
+-- own matrix, and either keeps the squash from bleeding (`Timer3`); 0xC
+-- stops it. Then the slide, this tick.
+local function shot(e)
+    local draw = e:rnd()
+    e:clip(9, draw & 7, 0xF)
+    e:set_routine(2, 1)
+    e:set_timer(0, 0)
+    e:effect(0, 8, 0x17D0, 0, 0, 0, 0, 0)
+    e:set_life(-1)
+    e:set_timer(3, 0)
+    local weapon = e:routine(1)
+    local x, y, z = e:pos()
+    if weapon == 9 or weapon == 0xA or weapon == 0x10 or weapon == 0x11 then
+        local dir = i16(e:angle())
+        e:call_effect(5, 4, e:rnd() * 4 + 0xC18, dir, x, y, z)
+        e:set_timer(3, 1)
+    end
+    if weapon == 0xB or weapon == 0xE then
+        local dir = i16(e:angle())
+        e:call_effect(4, 0xF, e:rnd() * 4 + 0xC18, dir, x, y, z)
+        e:set_timer(3, 1)
+    end
+    if weapon == 0xC then
+        local _, sy = e:speed()
+        e:set_speed(0, sy, 0)
+    end
+    e:sound(3)
+end
+
 -- `0x4767c0` from `Routine_2` 1, where a tread starts it: the slide to a
 -- stop, the squash, then the fade.
 local function squash(e)
     local sub = e:routine(2)
     if sub == 0 then
-        -- A shot's death; hits aren't ported.
-        error("Em_27: the shot's death (Routine_2 0 of 0x4767c0) isn't ported")
-    elseif sub == 1 then
+        shot(e)
+        sub = 1
+    end
+    if sub == 1 then
         e:joint(0x100)
         e:add_speed_xz()
         local t = e:timer(0)

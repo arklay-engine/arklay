@@ -21,7 +21,7 @@ local CNT_219 <const> = 1 -- `+0x219`, how many times `+0x218` runs out before `
 local CNT_21A <const> = 2 -- `+0x21a`.
 local FLAGS <const> = 3 -- `+0x21c`: 0x40 keeps `Em_seq_sound` quiet.
 local WAVE <const> = 4 -- `+0x21e`: a count of ticks, mod 64, that the parts' swell reads.
-local CNT_22C <const> = 5 -- `+0x22c`.
+local CNT_22C <const> = 5 -- `+0x22c`: the ticks before a flame's hit bleeds again (`FUN_0048e060`).
 local TEXTURE <const> = 6 -- `+0x224` to `+0x226`: the eye's texture's frames (`FUN_0048fba0`), not drawn.
 -- `Root_ck`'s target while `FLAGS`' 8: the point of `ESCAPE`. `Em_30` reads
 -- it from its table; the engine reads these two fields (`src/zombie2.rs`).
@@ -849,8 +849,9 @@ end
 
 -- The blood of a hit (`FUN_0048dc70`'s and `FUN_0048f050`'s start): two
 -- drops beside part 1, turned toward the player, higher for a shot at the
--- head, and `Snd_se_enem` 8. The other weapons' blood (9 to 0x11) isn't
+-- head, and `Snd_se_enem` 8. The other weapons' blood (9 to 0xe, 0x11) isn't
 -- here: arklay's player doesn't fire them yet. A magnum's starts its spurt.
+-- The flamethrower's (0x10) draws the place's `Rnd`s but makes no drops.
 local function hit_blood(e, weapon)
     local dir = e:direction_to_player()
     local vy = i16(0x100 - e:rnd() * 2)
@@ -874,6 +875,17 @@ local function hit_blood(e, weapon)
     end
     if weapon == 5 or weapon == 6 then
         e:set_var(SPURT, 1)
+    end
+end
+
+-- `FUN_0048e060`, a flame's (and 0xa's) blood: four of kind 5, row 4 at
+-- parts 2, 0, 5 and 15 (`+0x1a0`, `+0x48`, `+0x3a4` and `+0xa5c` into the
+-- parts, which are 0xac long), each its own size from a `Rnd`, turned as
+-- G1 faces.
+local function flame_blood(e)
+    local dir = i16(e:angle())
+    for _, part in ipairs({ { 2, 0x17D0 }, { 0, 0x1FA0 }, { 5, 0x1000 }, { 15, 0x1000 } }) do
+        e:effect(5, 4, e:rnd() * 4 + part[2], dir, part[1], 0, 0, 0)
     end
 end
 
@@ -1051,6 +1063,11 @@ local function hurt(e)
     hit_blood(e, weapon)
     e:set_var(HURT, 1)
     e:set_var(HURT_221, 0)
+    -- A flame bleeds at most once in 0x2d ticks (`+0x22c`).
+    if weapon == 0x10 and e:var(CNT_22C) == 0 then
+        flame_blood(e)
+        e:set_var(CNT_22C, 0x2D)
+    end
     local flags = e:var(FLAGS)
     -- Hard mode's 350 isn't modelled.
     if flags & 4 == 0 and e:life() < 200 then
@@ -1188,6 +1205,10 @@ local function dying(e)
     if e:var(FLAGS) & 0x10 ~= 0 and e:routine(2) == 0 then
         local weapon = e:routine(1)
         hit_blood(e, weapon)
+        -- A flame's blood here isn't held back by `+0x22c`.
+        if weapon == 0x10 then
+            flame_blood(e)
+        end
         e:restore_routine()
         if e:routine(0) == 1 and e:routine(1) == 9 then
             escape(e)
