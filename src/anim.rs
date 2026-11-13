@@ -741,6 +741,11 @@ impl AnimPlayer {
     /// so it is cleared with the store.
     pub(crate) fn set_applied_pose(&self, pose: Option<model::Keyframe>) {
         self.pending_pose.borrow_mut().clear();
+        // The original keeps `+0x38` through a pose set from outside
+        // `J_seq`, so a blend after one would start from that; this
+        // falls back to the new pose's height, scaled. Only the custom clock
+        // (`enemy::custom_anim`) sets a pose, and no body it drives has a
+        // height scale, so the difference can't arise.
         self.scaled_y.set(None);
         *self.applied.borrow_mut() = pose;
     }

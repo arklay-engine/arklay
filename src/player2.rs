@@ -678,8 +678,9 @@ pub const FLAMETHROWER: u8 = 0x10;
 pub const ROCKET: u8 = 0x11;
 /// The gatling gun, which `pl_mv05_w5` fires (`pl_mv05_w5_t2`) for as long
 /// as the trigger is held, on the bursts' hold, and never spends a round:
-/// `Stage_init_item` raises its flag in `DWORD_0098e9c4` on every new game,
-/// so `Tama_ck_i` always finds it loaded.
+/// with its flag in `DWORD_0098e9c4` up (the gatling bonus unlocked, or the
+/// status screen's toggle) `Tama_ck_i` always finds it loaded, and arklay
+/// takes the flag as up for a player who holds it.
 pub const GATLING: u8 = 0x12;
 /// `pl_mv05_w5_t2`'s clips: the spin up, the firing, and the spin down.
 const GATLING_SPIN_UP_CLIP: u8 = 0xA;
@@ -1559,7 +1560,8 @@ impl Weapon {
         if self.id == SMG {
             &[(0, 1), (0xFF, 2), (0xFE, 0xFF)]
         } else if self.id == GATLING {
-            // `0x539DBC`: it looks on two ticks in three.
+            // `0x539DBC`'s bytes `00 02 ff 01 fe ff`: it looks on two
+            // ticks in three.
             &[(0, 2), (0xFF, 1), (0xFE, 0xFF)]
         } else {
             &[(0, 0xFF)]
@@ -3031,13 +3033,17 @@ impl Mover<'_, '_> {
         self.chain_position(&AIM_FOOT_CHAIN)
     }
 
-    /// `pSin_parts_ptr[0].Pos_y`: how far the pose has the root off the ground.
+    /// `pSin_parts_ptr[0].Pos_y`: how far the pose has the root off the
+    /// ground, as `J_seq` leaves it: scaled by the body's height and blended
+    /// ([`Work::root_height`]).
     pub(crate) fn root_y(&self) -> i32 {
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
         self.player
             .anim
             .pose_keyframe(clips, keyframes)
-            .map_or(0, |pose| i32::from(pose.offset[1]))
+            .map_or(0, |pose| {
+                i32::from(self.work.root_height(&self.player.anim, pose.offset[1]))
+            })
     }
 
     /// `Rot_neck`: turn the head toward what `Plc_neck` asked for, or back to
@@ -8468,6 +8474,55 @@ mod tests {
         assert_eq!(character_shadow(0x4F), (0x172, 0x1CC));
     }
 
+    /// `pSin_parts_ptr[0].Pos_y`, which `Em10Dm02`'s bounce reads, is the
+    /// root's height as `J_seq` leaves it: scaled by the body's `+0x1de`,
+    /// then blended with the last scaled height, not the pose's own.
+    #[test]
+    fn the_roots_height_a_script_reads_is_scaled_and_blended() {
+        let mut setup = Setup::new(0);
+        setup.keyframes[0].offset = [0, -1681, 0];
+        setup.keyframes[1].offset = [0, -1700, 0];
+        setup.work.parts0_y = 0xE66;
+        setup.work.bank = Bank::Pld;
+        let bank = (setup.clips.as_slice(), setup.keyframes.as_slice());
+        let tick = Tick {
+            room: &setup.room,
+            skeleton: &setup.skeleton,
+            morphs: &[],
+            banks: Banks {
+                pld: bank,
+                weapon: bank,
+                room: bank,
+                held: bank,
+            },
+            input: Input::default(),
+            options: Options::default(),
+            id: 0,
+            life: 200,
+            poisoned: false,
+            stopped: false,
+            weapon: setup.weapon,
+            necks: [None; NECK_WORKS],
+            targets: &[],
+            neck_targets: &[],
+            enemies: 0,
+            pushing: false,
+            objects: &[],
+            key_trg: 0,
+        };
+        let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
+        mover.work.move_no = 0;
+        mover.work.move_cnt = 0;
+        mover.work.hokan = 0;
+        mover.joint_move_late(0x80);
+        // -1681 * 0xE66 >> 12.
+        assert_eq!(mover.root_y(), -1513);
+        mover.work.hokan = 31;
+        mover.joint_move_late(0x80);
+        // -1700 scaled is -1530; 31 * 0x80 of -1513 and the rest of -1530.
+        assert_eq!(mover.root_y(), -1514);
+    }
+
     #[test]
     fn a_bodys_height_scales_its_first_part_rounding_down() {
         let mut work = Work {
@@ -10426,6 +10481,19 @@ mod tests {
 
     /// The bursts' hold (`pl_mv05_w2_t1`) doesn't tilt the gatling gun, and
     /// the trigger held there raises `Tama_ck_i`'s `0x800000`.
+    /// `At_tbl_top`'s gatling sequence (`0x539DBC`), as the executable has
+    /// it: `00 02 ff 01 fe ff`, pairs of a step and a count.
+    #[test]
+    fn the_gatling_guns_sequence_is_the_executables() {
+        let bytes = [0x00, 0x02, 0xff, 0x01, 0xfe, 0xff];
+        let pairs: Vec<(u8, u8)> = bytes.chunks(2).map(|pair| (pair[0], pair[1])).collect();
+        let gatling = Weapon {
+            id: GATLING,
+            ..Weapon::default()
+        };
+        assert_eq!(gatling.burst_sequence(), pairs.as_slice());
+    }
+
     #[test]
     fn the_gatling_guns_hold_never_tilts() {
         let gun = Weapon {

@@ -2184,4 +2184,79 @@ mod tests {
         // The rest aren't ported.
         assert!(!hits(9, 0));
     }
+
+    /// `Wp_dmg_tbl`'s row 0x12 (weapon 0x12 less one, at `+0x154` of each
+    /// body's table) as the executable has it: the damage word, the stun
+    /// word and six heights, little-endian. Each id arklay ports reads its own.
+    #[test]
+    fn the_gatling_guns_damage_is_the_executables_row() {
+        const ROWS: [(u8, &str); 23] = [
+            (0x10, "082080000a04020178ecf40148f4d0070cfeb80b"),
+            (0x15, "082080000a04020178ecf40148f4d0070cfeb80b"),
+            (0x1F, "082080000a04020178ecf40148f4d0070cfeb80b"),
+            (0x20, "124820010a06830178ec320030f8d0070cfeb80b"),
+            (0x21, "1e78e0010a1e8f0790e848f460f00cfe0cfeb80b"),
+            (0x22, "145040010a0a850278ec30f854f2f4010cfed007"),
+            (0x23, "124820010a140a0578ecf40148f4d0070cfeb80b"),
+            (0x24, "145040010a0a850278ec30f854f2f4010cfed007"),
+            (0x25, "124820010a0a850278ec30f898eff4010cfed007"),
+            (0x26, "124820010a0a850278ec30f898eff4010cfed007"),
+            (0x27, "114410010a0a850278ec30f848f4d0070cfeb80b"),
+            (0x28, "114410010a0a850278ecf40148f4d0070cfeb80b"),
+            (0x29, "071c70000a02810060f010f5e4f350fb50fb6400"),
+            (0x2A, "186080010a12890480f3640018fc400618fc280a"),
+            (0x2D, "0e38e0000a02810048f430f848f4d0070cfeb80b"),
+            (0x2E, "0a28a0000a0c060348f4f40148f4d0070cfeb80b"),
+            (0x2F, "0a28a0000a0c060348f4f40148f4d0070cfeb80b"),
+            (0x30, "104000010a0a850278ecf40148f4d0070cfeb80b"),
+            (0x31, "124820010a0a850278ecf40190e8d0070cfeb80b"),
+            (0x33, "145040010a0e870378ecf40148f4d0070cfeb80b"),
+            (0x39, "0a28a0000a0c060348f4f40148f4d0070cfeb80b"),
+            (0x17, "082080000a04020178ecf40148f4d0070cfeb80b"),
+            (0x1C, "082080000a04020178ecf40148f4d0070cfeb80b"),
+        ];
+        for (id, hex) in ROWS {
+            let bytes: Vec<u8> = (0..hex.len())
+                .step_by(2)
+                .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).unwrap())
+                .collect();
+            let word = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
+            let height =
+                |n: usize| i32::from(i16::from_le_bytes([bytes[8 + n * 2], bytes[9 + n * 2]]));
+            let row = gatling_damage(id).unwrap();
+            assert_eq!(row.damage, word(0), "id {id:#x}'s damage");
+            assert_eq!(row.stun, word(4), "id {id:#x}'s stun");
+            assert_eq!(
+                row.heights,
+                std::array::from_fn(height),
+                "id {id:#x}'s heights"
+            );
+            assert_eq!(damage_table(id, GATLING).unwrap().damage, word(0));
+        }
+    }
+
+    /// `At_tbl_top`'s gatling records (`0x539D68`) as the executable has them:
+    /// three levels of 28 bytes, a byte, the three reaches and three
+    /// rectangles of four shorts each.
+    #[test]
+    fn the_gatling_guns_records_are_the_executables() {
+        const BYTES: &str = concat!(
+            "0004020164000000e803f40104100000e8037102a41f0000c4097102",
+            "00080410c80000004c1df401c80000004c1df401c80000004c1df401",
+            "0010204064000000e803770104100000e803f40108200000c4097102",
+        );
+        let bytes: Vec<u8> = (0..BYTES.len())
+            .step_by(2)
+            .map(|at| u8::from_str_radix(&BYTES[at..at + 2], 16).unwrap())
+            .collect();
+        let records = shot_records(GATLING).unwrap();
+        for (level, record) in records.iter().enumerate() {
+            let at = &bytes[level * 28..level * 28 + 28];
+            assert_eq!(record.reach, [at[1], at[2], at[3]], "level {level}'s reach");
+            let short = |n: usize| i16::from_le_bytes([at[4 + n * 2], at[5 + n * 2]]);
+            let rects: [[i16; 4]; 3] =
+                std::array::from_fn(|rect| std::array::from_fn(|n| short(rect * 4 + n)));
+            assert_eq!(record.rects, rects, "level {level}'s rectangles");
+        }
+    }
 }
