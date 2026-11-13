@@ -1113,6 +1113,17 @@ impl Work {
     /// each of `Pl_water`'s rings (its turn, then its size) and one for each
     /// hand's splash (its size). Nothing else in the move draws, so drawing
     /// after it keeps the order.
+    /// The move's `Rnd` draws the tick's owner makes after it, in
+    /// `pl_mv05_w1_t2`'s order: `Weapon_at_ck`'s for a Beretta hit
+    /// ([`crate::weapon2::beretta_hit`]), then the splashes'
+    /// ([`Self::water_draws`]).
+    pub(crate) fn shot_draws(&mut self, rnd: &mut crate::zombie2::Rnd) {
+        if let Some(hit) = self.hit.as_mut() {
+            crate::weapon2::beretta_hit(hit, rnd);
+        }
+        self.water_draws(rnd);
+    }
+
     pub(crate) fn water_draws(&mut self, rnd: &mut crate::zombie2::Rnd) {
         for draw in std::mem::take(&mut self.water_draws) {
             let Some(effect) = self.effects.get_mut(draw.effect) else {
@@ -8521,6 +8532,50 @@ mod tests {
         mover.joint_move_late(0x80);
         // -1700 scaled is -1530; 31 * 0x80 of -1513 and the rest of -1530.
         assert_eq!(mover.root_y(), -1514);
+    }
+
+    /// `pl_mv05_w1_t2` runs `Weapon_at_ck` before `Pl_water`, so a Beretta
+    /// hit's two `Rnd`s come before the splash's. From 0x1234 they are 88
+    /// and 160 (the magnum's row, as weapon 6) and the splash's is 49.
+    #[test]
+    fn a_beretta_hits_draws_come_before_the_splashes() {
+        let mut work = Work {
+            hit: Some(crate::weapon2::Hit {
+                slot: 1,
+                id: 0x10,
+                weapon: BERETTA,
+                high: false,
+                band: 1,
+                region: 2,
+                damage: 15,
+                stun: 2,
+                count: 5,
+                flags: 0x12,
+            }),
+            effects: vec![EffectCall {
+                kind: 0x1A,
+                row: 0,
+                size: 0,
+                dir: 0,
+                at: [0; 3],
+                motion: None,
+                on: None,
+                turn: None,
+            }],
+            water_draws: vec![WaterDraw {
+                effect: 0,
+                kind: Draw::Hand,
+            }],
+            ..Work::default()
+        };
+        let mut rnd = crate::zombie2::Rnd(0x1234);
+        work.shot_draws(&mut rnd);
+        let hit = work.hit.unwrap();
+        assert_eq!(
+            (hit.weapon, hit.damage, hit.stun, hit.count),
+            (6, 900, 1, 15)
+        );
+        assert_eq!(work.effects[0].size, 49 * 4 + 0x60C);
     }
 
     #[test]

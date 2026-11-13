@@ -2321,6 +2321,22 @@ mod tests {
             let shift = replay.draw() & 3;
             (replay.draw() >> shift) & 0xF == 0
         };
+        // Literal draws: from 0x1234, 88 then 160 (0xA0 >> 0 & 0xF is 0), the
+        // magnum's row as weapon 6; from 0x2679, 197 then 94 (0x5E >> 1 & 0xF
+        // is 15), the handgun's as weapon 3. A zombie at band 1.
+        for (seed, weapon, damage, stun, count, after) in [
+            (0x1234, 6, 900, 1, 15, 0x48A0),
+            (0x2679, 3, 15, 2, 5, 0x995E),
+        ] {
+            let mut rnd = Rnd(seed);
+            let mut hit = beretta(0x10);
+            beretta_hit(&mut hit, &mut rnd);
+            assert_eq!(
+                (hit.weapon, hit.damage, hit.stun, hit.count, rnd.0),
+                (weapon, damage, stun, count, after),
+                "from {seed:#x}"
+            );
+        }
         let magnum_seed = (0..=u16::MAX).find(|&seed| outcome(seed)).unwrap();
         let handgun_seed = (0..=u16::MAX).find(|&seed| !outcome(seed)).unwrap();
         for id in [0x10, LICKER_ID, G3_ID] {
