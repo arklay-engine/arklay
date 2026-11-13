@@ -765,6 +765,11 @@ impl Zombie {
     pub fn sight_turn(&self) -> u8 {
         self.sight_turn
     }
+
+    /// `+0x150`, `Root_ck`'s turn, for the trace's `rc`.
+    pub fn root_turn(&self) -> u8 {
+        self.sight_turn
+    }
 }
 
 /// The slot's first state: what `Sce_em_set` leaves.
@@ -1680,11 +1685,26 @@ impl Em<'_, '_, '_> {
     /// `FUN_00461f40` sends it at 800 and level, `Em_2E`'s `FUN_00487800`
     /// at 300 and up at 150.
     /// `Em_25`'s `FUN_00472450` lets its body fall at `0xF`.
-    fn blow_part(&mut self, part: usize, dir: u16, speed: i16, up: i16, gravity: i16) {
+    /// `rgb`, when given, is the part's `Poly_rgb` from then on: `FUN_00461f40`
+    /// and the crawler's stomp make it `0x101040`.
+    fn blow_part(
+        &mut self,
+        part: usize,
+        dir: u16,
+        speed: i16,
+        up: i16,
+        gravity: i16,
+        rgb: Option<u32>,
+    ) {
         if let Some(matrix) = self.mover.part_matrix(part) {
             let mut thrown = ThrownPart::blown(part as u8, matrix, dir, speed, up);
             thrown.gravity = gravity;
             self.push_thrown(thrown);
+            if let Some(rgb) = rgb
+                && let Some(slot) = self.work().part_rgb.get_mut(part)
+            {
+                *slot = rgb;
+            }
         }
     }
 

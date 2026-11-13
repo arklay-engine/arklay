@@ -27,6 +27,8 @@ pub fn tick(
     for slot in run_order() {
         if slot == SPLAYER_SLOT {
             partner_root_ck_sys(game, room, false);
+        } else {
+            enemy_spl_root_ck_sys(game, room, slot, false);
         }
         // `Game_loop` still calls a stopped enemy, which does its `Root_ck` first.
         let stopped = game.re2.character_stopped(slot);
@@ -1246,6 +1248,7 @@ fn clear_kind(character: &mut Character, bits: u16) {
 fn spl_in4a(character: &mut Character) {
     if marvin_kind(character) & 0x300 != 0 {
         character.arms.swapped = true;
+        hide_spare_arms(character);
         clear_kind(character, 0x300);
     } else {
         character.arms.fade = 0;
@@ -1267,8 +1270,22 @@ fn spl_mv4a(character: &mut Character) {
             fade: 0,
             faded: true,
         };
+        hide_spare_arms(character);
         clear_kind(character, 0x200);
     }
+}
+
+/// Once the arms swap, the spare parts are off (`Be_flg` bit 0 clear) and
+/// black, and so is the gun hand's: as a zombie his parts are 15 to 23 hidden
+/// and seven black (the original's `zp`, `ff8000,808080,8888880`). The joints
+/// draw the spares' meshes, so this only changes the parts' state, not the
+/// draw (`joint_meshes` reads it by joint).
+fn hide_spare_arms(character: &mut Character) {
+    for (_, spare) in MARVIN_ARMS {
+        character.work.hidden_parts |= 1 << spare;
+        character.work.part_rgb[spare] = 0;
+    }
+    character.work.hidden_parts |= 1 << MARVIN_GUN_HAND;
 }
 
 /// Which mesh each joint draws, where that isn't its own. Marvin's init gives
@@ -1335,6 +1352,8 @@ fn run_load_stop_with(
             // A position a door or a script gave is still pending in the
             // load's last pass.
             partner_root_ck_sys(game, room, true);
+        } else {
+            enemy_spl_root_ck_sys(game, room, slot, true);
         }
         let Some(mut character) = game.re2.characters.0.get_mut(slot).and_then(Option::take) else {
             continue;
@@ -1563,10 +1582,32 @@ fn partner_root_ck_sys(game: &mut GameState, room: &RoomState, loading: bool) {
     game.re2.characters.0[SPLAYER_SLOT] = Some(character);
 }
 
+/// `Root_ck`'s count of its turn: 7 again after 0.
+pub(crate) fn count_root_turn(turn: &mut u8) {
+    if *turn & 0x7F == 0 {
+        *turn |= 7;
+    }
+    *turn = turn.wrapping_sub(1);
+}
+
+/// `_Spl`'s `Spl_Root_ck_sys` for a scene character in an enemy slot, which
+/// runs before the stop test as the partner's does.
+fn enemy_spl_root_ck_sys(game: &mut GameState, room: &RoomState, slot: usize, loading: bool) {
+    let Some(mut character) = game.re2.characters.0.get_mut(slot).and_then(Option::take) else {
+        return;
+    };
+    if moves(&character) && character.zombie.is_none() {
+        root_ck_sys(game, room, &mut character, loading);
+    }
+    game.re2.characters.0[slot] = Some(character);
+}
+
 /// `loading`: the room's load, where the player is where the door or a
 /// script's `pos_set` put them, which the port applies only at the next tick.
 fn root_ck_sys(game: &GameState, room: &RoomState, character: &mut Character, loading: bool) {
     let Some(partner) = character.partner.as_deref_mut() else {
+        // Anyone else's `Type` has `0x1000`, so only its turn counts.
+        count_root_turn(&mut character.work.root_turn);
         return;
     };
     let sca = room
@@ -1676,8 +1717,12 @@ fn em_init_move(
 ) -> Option<u8> {
     character.with_room = false;
     // `_Spl`'s `Spl_Root_ck_sys` runs before `Spl_Init`, on what the work's
-    // memory held: the follow point's kind is taken as 0.
-    root_ck_sys(game, room, character, true);
+    // memory held: the follow point's kind is taken as 0. A scene character
+    // in an enemy slot doesn't count its turn here: after a door, room 202's
+    // Marvin holds the 0 `Sce_em_set` gave him until the load's last tick.
+    if character.partner.is_some() {
+        root_ck_sys(game, room, character, true);
+    }
     let arrived = spl(game, character, tick);
     spl_sca_ck_em(room, character);
     let (start, flags) = character.start;
@@ -2328,6 +2373,31 @@ mod tests {
         assert!(joint_meshes(&character, 15, 24).is_none());
     }
 
+    /// `Spl_Root_ck_sys` counts a scene character's turn (`+0x150`) every
+    /// tick from the slot `Sce_em_set` seeded it with, and room 202's script
+    /// making Marvin's work a zombie's hands it on to `Root_ck` (the
+    /// original's `rc` over his scene: 6, 5, ... 0, 6, and on as id 30).
+    #[test]
+    fn a_scene_characters_root_turn_counts_and_goes_on_as_a_zombie() {
+        let mut character = sherry(0x1000);
+        character.partner = None;
+        character.id = MARVIN;
+        character.model = MARVIN;
+        character.work.root_turn = 0;
+        let game = GameState::default();
+        let room = RoomState::default();
+        let turns: Vec<u8> = (0..9)
+            .map(|_| {
+                root_ck_sys(&game, &room, &mut character, false);
+                character.work.root_turn
+            })
+            .collect();
+        assert_eq!(turns, [6, 5, 4, 3, 2, 1, 0, 6, 5]);
+        character.id = 0x1E;
+        crate::scd2::host::become_zombie(&mut character, 0);
+        assert_eq!(character.zombie.as_ref().unwrap().root_turn(), 5);
+    }
+
     #[test]
     fn marvins_arms_fade_for_127_ticks_then_clear_the_bit() {
         let mut character = Character {
@@ -2360,8 +2430,19 @@ mod tests {
         }
         assert!(!character.arms.swapped);
         assert_eq!(character.work.kind, 0x200);
+        assert_eq!(
+            character.work.hidden_parts, 0,
+            "nothing hidden before the swap"
+        );
         spl_mv4a(&mut character);
         assert!(character.arms.swapped);
+        // The spares (15, 17 to 22) and the gun hand (23) go off, the spares
+        // black: with `Em10_Init`'s 16 that's the original's `zp` for him.
+        assert_eq!(character.work.hidden_parts, 0xFE8000);
+        let black: Vec<usize> = (0..24)
+            .filter(|&part| character.work.part_rgb[part] == 0)
+            .collect();
+        assert_eq!(black, [15, 17, 18, 19, 20, 21, 22]);
         assert_eq!(character.work.kind, 0);
         // A second fade never ends.
         character.work.kind = 0x200;

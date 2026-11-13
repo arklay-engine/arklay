@@ -499,6 +499,12 @@ pub struct Work {
     pub neck: Neck,
     /// The parts whose `Be_flg` `parts_set` cleared, by bit: they aren't drawn.
     pub hidden_parts: u32,
+    /// `+0x150`, `Root_ck`'s turn, for a scene character in an enemy slot:
+    /// `Sce_em_set` seeds it with the slot, and `Spl_Root_ck_sys` counts it
+    /// down every tick, 7 again after 0. A script that makes the work a
+    /// zombie's (room 202's Marvin) hands it on. The partner's is
+    /// [`crate::partner2::Partner::root_cnt`]; a zombie's its own.
+    pub root_turn: u8,
     /// Each part's `Poly_rgb`, `0x00BBGGRR`: the colour its polygons are
     /// lit by, `0x80` a channel at full light. `PartsWork_link` (0x4C12B0)
     /// starts every part at `0x808080`; `parts_set` cases 0 and 1 write it.
@@ -1144,6 +1150,7 @@ impl Default for Work {
             hokan: FULL_BLEND - 1,
             bank: Bank::Weapon,
             hidden_parts: 0,
+            root_turn: 0,
             parts_at: None,
             part_rgb: [DEFAULT_PART_RGB; 32],
             joint_offsets: Vec::new(),

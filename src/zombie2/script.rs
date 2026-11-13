@@ -1010,12 +1010,13 @@ impl UserData for Api {
             "blow_part",
             |_,
              e,
-             (part, dir, speed, up, gravity): (
+             (part, dir, speed, up, gravity, rgb): (
                 usize,
                 i32,
                 Option<i16>,
                 Option<i16>,
                 Option<i16>,
+                Option<u32>,
             )| {
                 e.em().blow_part(
                     part,
@@ -1023,6 +1024,7 @@ impl UserData for Api {
                     speed.unwrap_or(800),
                     up.unwrap_or(0),
                     gravity.unwrap_or(10),
+                    rgb,
                 );
                 Ok(())
             },

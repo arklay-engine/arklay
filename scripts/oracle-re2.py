@@ -808,6 +808,16 @@ def zombie_dest_trace(game: Game) -> str:
     return "zd=" + (";".join(rows) or "-")
 
 
+def root_turn_trace(game: Game) -> str:
+    """Each live enemy work's `Root_ck` turn (`+0x150`), any id: slot, id and turn. A scene character's work keeps its own, which a script that makes it a zombie (room 202's Marvin) hands on."""
+    rows = []
+    for slot, pointer in enumerate(enemy_slots(game)):
+        if pointer == 0 or game.u32(pointer) & 1 == 0:
+            continue
+        rows.append(f"{slot}:{game.u8(pointer + ENTITY_ID)},{game.u8(pointer + 0x150)}")
+    return "rc=" + (";".join(rows) or "-")
+
+
 def zombie_parts_trace(game: Game) -> str:
     """The parts of each enemy `zombie_trace` lists, when any is hidden or coloured: slot, the mask of parts `0..Parts_num` whose `Be_flg` bit 0 is clear, part 0's `Poly_rgb` and the wrapping sum of every part's."""
     rows = []
@@ -1135,6 +1145,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     fields.append(zombie_trace(game))
     fields.append(zombie_parts_trace(game))
     fields.append(zombie_dest_trace(game))
+    fields.append(root_turn_trace(game))
     fields.append(esp_trace(game))
     spd = struct.unpack("<3h", game.read(PL + ENTITY_SPD, 6))
     motion = game.read(PL + ENTITY_MOTION, 4)
