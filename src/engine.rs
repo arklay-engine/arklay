@@ -17639,7 +17639,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     let re2 = &mut context.game.re2;
     let raised = std::mem::take(&mut re2.player.status_raise);
     re2.banks[usize::from(crate::scd2::host::STATUS_BANK)][0] |= raised;
-    re2.player.water_draws(&mut re2.rnd);
+    re2.player.shot_draws(&mut re2.rnd);
     if !tick.stopped {
         crate::character2::pl_bow(context.game, context.room.sca.as_ref());
         crate::character2::mag_down(context.game, context.player);

@@ -3113,6 +3113,7 @@ mod tests {
         let hit = crate::weapon2::Hit {
             high: false,
             slot: 0,
+            id: 0x10,
             weapon: 2,
             band: 1,
             region: 2,
