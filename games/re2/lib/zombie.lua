@@ -1332,7 +1332,10 @@ local function die_torn(e)
         e:add_speed_xz()
         e:set_neck_flags(1)
         hold_damage(e)
-        e:hide_part(8)
+        -- The head flies off behind it, darker (`Poly_rgb` 0x101030) and
+        -- slowing by 50 a tick, and the blood goes with it. Its
+        -- `Esp_kill(5, 3)` on the head isn't ported.
+        e:blow_part(8, angle(e) + 0x800, 400, -100, 10, 0x101030, 50)
         blood(e, 0, 3000, rnd_dir(e), 8, 0, 0, 0)
         if not has_flag(e, FLAG_LOST_ARM) then
             e:throw_kept_arm(9, 100, 0, 0x1E)

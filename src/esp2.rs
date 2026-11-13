@@ -985,6 +985,11 @@ impl Effects {
                 self.grenade_flight(index, sca);
             }
             0x0f => self.grenade_flight(index, sca),
+            // `Esp_17`: a rocket leaves smoke behind it.
+            0x17 => {
+                self.call(3, 0x0A, 0x1800, 0, slot.pos, true);
+            }
+            0x18 => self.rocket_flight(index, sca),
             0x46 => self.flame(index, sca),
             0x0e => self.spark_strike(index),
             0x3e => self.spark_miss(index),
@@ -1535,6 +1540,62 @@ impl Effects {
         }
         Self::place(this);
         self.behave(index, then(slot.count), sca);
+    }
+
+    /// `Esp_18`: a rocket flies on until it hurts what it meets, at it or on
+    /// the floor below it, when it takes the behaviour `+2` names (its
+    /// burst); against a wall it steps back and takes the one `+3` names.
+    /// Past 0x7D00 either way it goes, though it still looks this tick.
+    /// Where it burst (`DWORD_00989e80`) isn't kept.
+    fn rocket_flight(&mut self, index: usize, sca: Option<&Sca>) {
+        const EDGE: i16 = 0x7D00;
+        let slot = self.slots[index];
+        let [x, y, z] = slot.pos.map(i32::from);
+        if slot.pos[0] > EDGE || slot.pos[2] > EDGE || slot.pos[0] < -EDGE || slot.pos[2] < -EDGE {
+            let this = &mut self.slots[index];
+            this.anim = 0;
+            this.flags = 0;
+        }
+        let mut rect = [-800, 0, 400, 200];
+        let mut blast = |this: &mut Self, y: i32, word: u32| {
+            let blast = crate::weapon2::Blast {
+                at: [x, y, z],
+                dir: slot.dir,
+                word,
+            };
+            let effects = crate::weapon2::blast_ck(&blast, &mut rect, &mut this.bodies);
+            let hit = effects
+                .iter()
+                .any(|effect| matches!(effect, crate::weapon2::BlastEffect::Hit(_)));
+            this.blasts.extend(effects);
+            hit
+        };
+        if blast(self, y, 0x3_0011) {
+            self.behave(index, slot.start, sca);
+            return;
+        }
+        let ground = Self::ground(sca, slot.pos);
+        let under = ground.height.wrapping_sub(10) as u32;
+        let this = &mut self.slots[index];
+        this.ground = under as i32;
+        this.next_tpage = under as u16;
+        this.range = (under >> 16) as u16;
+        if blast(self, ground.height, 0x2_0011) {
+            self.behave(index, slot.start, sca);
+            return;
+        }
+        if !ground.blocked && !ground.under_record {
+            return;
+        }
+        let this = &mut self.slots[index];
+        for axis in 0..3 {
+            this.velocity[axis] = this.velocity[axis].wrapping_sub(i16::from(this.accel[axis]));
+            this.offset[axis] = this.offset[axis].wrapping_sub(this.velocity[axis]);
+            this.velocity[axis] = this.velocity[axis].wrapping_sub(i16::from(this.accel[axis]));
+            this.offset[axis] = this.offset[axis].wrapping_add(this.velocity[axis] / -3);
+        }
+        Self::place(this);
+        self.behave(index, slot.count, sca);
     }
 
     /// `Esp_13`: smoke that hangs (`+0x1b` 3) for its count, shrinks for 30
@@ -3041,6 +3102,114 @@ mod tests {
             assert_eq!(spark.rotation[1..], [y, z], "spark {n}");
         }
         assert_eq!(effects.random, replay);
+    }
+
+    /// A rocket (kind 2 row 0xD's second block) at `pos`, flying on
+    /// `Esp_18`, bursting on `Esp_2F` and steps back from a wall to `Esp_0D`.
+    fn rocket_at(pos: [i16; 3]) -> Effects {
+        let mut effects = Effects::default();
+        effects.enter_room(bank_rows(3, &[(2, &[fire_block()])]));
+        effects.slots[0] = Slot {
+            flags: 0xB403,
+            kind: 2,
+            row: 0x0D,
+            anim: 0x17,
+            update: 0x18,
+            start: 0x2F,
+            count: 0x0D,
+            pos,
+            ..Slot::default()
+        };
+        effects
+    }
+
+    fn hits(effects: &Effects) -> Vec<crate::weapon2::BlastHit> {
+        effects
+            .blasts
+            .iter()
+            .filter_map(|effect| match effect {
+                crate::weapon2::BlastEffect::Hit(hit) => Some(*hit),
+                crate::weapon2::BlastEffect::Tested(_) => None,
+            })
+            .collect()
+    }
+
+    /// `Esp_18` hurts every body in its box at the rocket (row 0x11 of
+    /// `Wp_dmg_tbl`, a zombie's 900) and bursts: `Esp_2F`, row 0xD's sound.
+    #[test]
+    fn a_rocket_hurts_every_body_it_meets_and_bursts() {
+        let mut effects = rocket_at([0, -1000, 0]);
+        let mut other = spark_body([300, 0, -300]);
+        other.slot = 5;
+        effects.bodies = vec![spark_body([0, 0, 0]), other];
+        effects.behave(0, 0x18, None);
+        let hits = hits(&effects);
+        assert_eq!(
+            hits.iter()
+                .map(|hit| (hit.slot, hit.weapon, hit.damage))
+                .collect::<Vec<_>>(),
+            [(2, 0x11, 900), (5, 0x11, 900)]
+        );
+        assert_eq!(effects.slots[0].update, 0x2F, "it bursts");
+        assert_eq!(effects.sounds, [(0x114_0001, [0, -1000, 0])]);
+    }
+
+    /// Out of reach of the bodies at its height, `Esp_18` looks again on the
+    /// floor below (`Sca_ck_hit`), for the first body there only; with
+    /// nothing there it flies on, the floor kept at `+0x14`.
+    #[test]
+    fn a_rocket_hurts_the_first_body_on_the_floor_below_it() {
+        let mut effects = rocket_at([0, -3000, 0]);
+        let mut other = spark_body([300, 0, -300]);
+        other.slot = 5;
+        effects.bodies = vec![spark_body([0, 0, 0]), other];
+        effects.behave(0, 0x18, None);
+        let hits = hits(&effects);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!((hits[0].slot, hits[0].weapon), (2, 0x11));
+        assert_eq!(effects.slots[0].update, 0x2F);
+
+        let mut effects = rocket_at([0, -3000, 0]);
+        effects.behave(0, 0x18, None);
+        assert!(effects.blasts.is_empty());
+        let slot = effects.slots[0];
+        assert_eq!((slot.update, slot.ground), (0x18, -10));
+        assert!(effects.sounds.is_empty());
+    }
+
+    /// In a wall (`Sca_ck_hit` blocked) `Esp_18` steps the rocket back by
+    /// its speed and a third more and takes `+3`'s behaviour; past 0x7D00 it
+    /// goes.
+    #[test]
+    fn a_rocket_steps_back_from_a_wall_and_goes_past_the_edge() {
+        let mut effects = rocket_at([0, 100, 0]);
+        effects.slots[0].velocity = [30, 0, 0];
+        effects.behave(0, 0x18, None);
+        let slot = effects.slots[0];
+        assert_eq!(slot.offset[0], -40);
+        assert_eq!(slot.pos[0], -40);
+        assert_eq!((slot.flags, slot.anim), (FLAGS_NEW, 0), "`Esp_0D`");
+
+        for pos in [[0x7D01, -1000, 0], [0, -1000, -0x7D01]] {
+            let mut effects = rocket_at(pos);
+            effects.behave(0, 0x18, None);
+            let slot = effects.slots[0];
+            assert_eq!((slot.flags, slot.anim, slot.update), (0, 0, 0x18));
+        }
+    }
+
+    /// `Esp_17`: a rocket leaves smoke where it is, on the next tick.
+    #[test]
+    fn a_rocket_leaves_smoke_behind_it() {
+        let mut effects = rocket_at([100, -1000, 200]);
+        effects.behave(0, 0x17, None);
+        let smoke = effects.slots[1..]
+            .iter()
+            .find(|slot| slot.flags != 0)
+            .expect("a smoke");
+        assert_eq!((smoke.kind, smoke.row, smoke.size), (3, 0x0A, 0x1800));
+        assert_eq!(smoke.base, [100, -1000, 200]);
+        assert!(smoke.flags & FLAG_DEFERRED != 0);
     }
 
     /// `Esp_46` in the air with nothing in reach goes on, its count down.

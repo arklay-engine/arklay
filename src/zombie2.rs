@@ -192,6 +192,8 @@ struct BlownPart {
     dir: u16,
     /// `+0x9c`, which `+0xa4` takes down to nothing.
     speed: i16,
+    /// `+0xa4`'s fall in the speed a tick.
+    slowing: i16,
     /// `+0xa0`.
     count: u16,
 }
@@ -279,6 +281,7 @@ impl ThrownPart {
             blown: Some(BlownPart {
                 dir,
                 speed,
+                slowing: 100,
                 count: 0,
             }),
             below: Vec::new(),
@@ -299,7 +302,7 @@ impl ThrownPart {
         }
         self.velocity[1] = self.velocity[1].wrapping_add(self.gravity);
         self.matrix.t[1] += i32::from(self.velocity[1]);
-        blown.speed = (blown.speed - 100).max(0);
+        blown.speed = blown.speed.wrapping_sub(blown.slowing).max(0);
         let (x, z) = player2::rotate(blown.dir, i32::from(blown.speed), 0);
         self.matrix.t[0] += x;
         self.matrix.t[2] += z;
@@ -315,6 +318,7 @@ impl ThrownPart {
         rnd: &mut Rnd,
         effects: &mut crate::esp2::Effects,
         sca: Option<&crate::state::Sca>,
+        body: [i32; 2],
     ) -> bool {
         if let Some(blown) = self.blown {
             return self.blow(blown);
@@ -342,16 +346,18 @@ impl ThrownPart {
                 part: self.part,
             };
             effects.call_on_part(0, 0, 2000, dir as i16, anchor, self.matrix, [0; 3]);
-            if self.bounces == 1 {
-                return false;
-            }
         }
+        // The last landing still checks the walls and turns the part on to
+        // its rest this tick.
+        let landed = self.bounces == 1;
+        // `Sca_ck_info` pushes nothing: it says whether a wall's record is
+        // within 100 of the part (a box, or shapes 9 to 12), or for the
+        // triangles, the diamond and the circle, whether `body` (the zombie's
+        // `Atd[0]`) is, and the part comes back off it.
         if let Some(sca) = sca {
             let floor = (-self.matrix.t[1] / 1800).clamp(0, 31) as u8;
-            let resolved =
-                crate::sca::resolve_on_floor(sca, PARTS_MASK, before, self.matrix.t, 100, floor);
-            self.matrix.t = resolved.pos;
-            if resolved.hit {
+            let [x, _, z] = self.matrix.t;
+            if crate::sca::info_flags_for(sca, PARTS_MASK, [x, z], body, 100, floor) != 0 {
                 self.velocity[0] = -(self.velocity[0] >> 2);
                 self.velocity[2] = -(self.velocity[2] >> 2);
             }
@@ -361,7 +367,7 @@ impl ThrownPart {
             self.matrix.m = player2::blend_matrix(&self.matrix.m, &self.rest, weight);
             self.turning -= 1;
         }
-        true
+        !landed
     }
 }
 
@@ -614,6 +620,44 @@ pub struct Zombie {
 }
 
 impl Zombie {
+    /// `Parts_down` on each thrown part, then the redraw. A part that
+    /// lands for the last time this tick is drawn there once more: the
+    /// original leaves its `Workm` where it landed, for the blood that
+    /// follows it, as `Be_flg` hides it.
+    pub fn parts_down(
+        &mut self,
+        work: &mut player2::Work,
+        slot: u8,
+        rnd: &mut Rnd,
+        effects: &mut crate::esp2::Effects,
+        sca: Option<&crate::state::Sca>,
+    ) {
+        let hidden = work.hidden_parts;
+        let body = [self.atd.at[0], self.atd.at[2]];
+        let mut off = Vec::new();
+        let mut kept = Vec::with_capacity(self.thrown.len());
+        for thrown in &mut self.thrown {
+            if off.contains(&thrown.part) {
+                kept.push(false);
+                continue;
+            }
+            let falling = thrown.fall(slot, rnd, effects, sca, body);
+            if !falling {
+                player2::set_part_flags(work, thrown.part, 0);
+                if thrown.takes_below() {
+                    for &part in &thrown.below {
+                        player2::set_part_flags(work, part, 0);
+                        off.push(part);
+                    }
+                }
+            }
+            kept.push(falling);
+        }
+        self.redraw(hidden);
+        let mut kept = kept.into_iter();
+        self.thrown.retain(|_| kept.next().unwrap_or(true));
+    }
+
     /// Whether `Parts_down` has this part.
     pub fn flung(&self, part: u8) -> bool {
         self.thrown
@@ -1695,23 +1739,28 @@ impl Em<'_, '_, '_> {
     }
 
     /// `FUN_00461f40` sends it at 800 and level, `Em_2E`'s `FUN_00487800`
-    /// at 300 and up at 150.
+    /// at 300 and up at 150, both slowing by 100 a tick; `FUN_00458d40`
+    /// sends a zombie's head at 400 and up at 100, slowing by 50.
     /// `Em_25`'s `FUN_00472450` lets its body fall at `0xF`.
     /// `rgb`, when given, is the part's `Poly_rgb` from then on: `FUN_00461f40`
-    /// and the crawler's stomp make it `0x101040`.
+    /// and the crawler's stomp make it `0x101040`, `FUN_00458d40` the head's
+    /// `0x101030`.
     fn blow_part(
         &mut self,
         part: usize,
         dir: u16,
         speed: i16,
-        up: i16,
-        gravity: i16,
+        (up, gravity): (i16, i16),
         rgb: Option<u32>,
+        slowing: i16,
     ) {
         let pose = self.mover.part_matrix(part);
         if let Some(matrix) = self.z.bomb_start(part, pose) {
             let mut thrown = ThrownPart::blown(part as u8, matrix, dir, speed, up);
             thrown.gravity = gravity;
+            if let Some(blown) = &mut thrown.blown {
+                blown.slowing = slowing;
+            }
             self.push_thrown(thrown);
         }
         if let Some(rgb) = rgb
@@ -2681,7 +2730,7 @@ mod tests {
         let mut landings = 0;
         let mut alive = true;
         for _ in 0..200 {
-            alive = part.fall(0, &mut rnd, &mut effects, None);
+            alive = part.fall(0, &mut rnd, &mut effects, None, [0; 2]);
             if !alive {
                 break;
             }
@@ -2748,10 +2797,10 @@ mod tests {
         let mut effects = crate::esp2::Effects::default();
         let mut rnd = Rnd::default();
         let start = rnd;
-        assert!(part.fall(0, &mut rnd, &mut effects, None));
+        assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
         assert_eq!(part.matrix.t, [700, 1010, 0]);
         let mut ticks = 1;
-        while part.fall(0, &mut rnd, &mut effects, None) {
+        while part.fall(0, &mut rnd, &mut effects, None, [0; 2]) {
             ticks += 1;
         }
         assert_eq!(ticks, 0x1D);
@@ -2777,6 +2826,130 @@ mod tests {
         }
     }
 
+    /// `Parts_down`'s `Sca_ck_info` pushes nothing: a part come within 100
+    /// of a wall stays where it got to, and comes back off it at a quarter
+    /// of its speed.
+    #[test]
+    fn a_thrown_part_comes_back_off_a_wall_where_it_reached_it() {
+        let sca = crate::state::Sca {
+            cell_x: 0,
+            cell_z: 0,
+            ceiling: 0,
+            tail: 0,
+            records: vec![crate::state::ScaRect {
+                x: 1000,
+                z: -500,
+                width: 100,
+                depth: 1000,
+                id: 0x2000,
+                kind: 0xF,
+                floor: 1,
+            }],
+        };
+        let mut part = thrown(-1000, 0);
+        part.matrix.t = [850, -1000, 0];
+        part.velocity = [100, 0, 40];
+        let mut effects = crate::esp2::Effects::default();
+        let mut rnd = Rnd::default();
+        assert!(part.fall(0, &mut rnd, &mut effects, Some(&sca), [0; 2]));
+        assert_eq!([part.matrix.t[0], part.matrix.t[2]], [950, 40]);
+        assert_eq!([part.velocity[0], part.velocity[2]], [-25, -10]);
+        assert!(part.fall(0, &mut rnd, &mut effects, Some(&sca), [0; 2]));
+        assert_eq!(part.matrix.t[0], 925);
+    }
+
+    /// For a circle (and the triangles and the diamond) `Sca_ck_info` finds
+    /// the record by the part but tests the shape at the zombie's `Atd[0]`:
+    /// the part turns back only when the body is inside.
+    #[test]
+    fn a_round_wall_turns_a_thrown_part_back_by_where_the_body_is() {
+        let sca = crate::state::Sca {
+            cell_x: 0,
+            cell_z: 0,
+            ceiling: 0,
+            tail: 0,
+            records: vec![crate::state::ScaRect {
+                x: 1000,
+                z: -500,
+                width: 1000,
+                depth: 1000,
+                id: 0x2006,
+                kind: 0xF,
+                floor: 1,
+            }],
+        };
+        for (body, back) in [([5000, 5000], false), ([1500, 0], true)] {
+            let mut part = thrown(-1000, 0);
+            part.matrix.t = [1400, -1000, 0];
+            part.velocity = [100, 0, 0];
+            let mut effects = crate::esp2::Effects::default();
+            let mut rnd = Rnd::default();
+            assert!(part.fall(0, &mut rnd, &mut effects, Some(&sca), body));
+            assert_eq!(part.matrix.t[0], 1500, "{body:?}");
+            assert_eq!(part.velocity[0], if back { -25 } else { 100 }, "{body:?}");
+        }
+    }
+
+    /// `Parts_down` doesn't stop at the last landing: it still turns the
+    /// part on toward its rest that tick.
+    #[test]
+    fn a_parts_last_landing_still_turns_it() {
+        let mut part = thrown(-10, 50);
+        part.bounces = 2;
+        let turning = part.turning;
+        let mut effects = crate::esp2::Effects::default();
+        let mut rnd = Rnd::default();
+        assert!(!part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
+        assert_eq!(part.matrix.t[1], 0);
+        assert_eq!(part.turning, turning - 1);
+    }
+
+    /// A part's last landing leaves its `Workm` on the ground, where the
+    /// blood that follows it stays, and then it isn't drawn.
+    #[test]
+    fn a_part_that_lands_for_the_last_time_is_left_where_it_landed() {
+        let mut zombie = Zombie {
+            pose_tree: player2::PoseTree::chain(12),
+            ..Zombie::default()
+        };
+        let mut part = thrown(-10, 50);
+        part.bounces = 2;
+        zombie.thrown.push(part);
+        let mut work = player2::Work::default();
+        let mut effects = crate::esp2::Effects::default();
+        let mut rnd = Rnd::default();
+        zombie.parts_down(&mut work, 0, &mut rnd, &mut effects, None);
+        assert!(zombie.thrown.is_empty());
+        assert_ne!(work.hidden_parts & 1 << 10, 0);
+        let drawn = zombie.drawn[10].expect("drawn");
+        assert_eq!(drawn.t, [1000, 0, 2000]);
+        // Hidden, it keeps that `Workm`.
+        zombie.redraw(work.hidden_parts);
+        assert_eq!(
+            zombie.drawn[10].map(|matrix| matrix.t),
+            Some([1000, 0, 2000])
+        );
+    }
+
+    /// `FUN_00458d40`'s head slows by 50 a tick (`+0xa4`), not 100.
+    #[test]
+    fn a_zombies_blown_head_slows_by_its_own_step() {
+        let matrix = player2::Matrix {
+            m: player2::rot_matrix([0, 0, 0]),
+            t: [0, 1000, 0],
+        };
+        let mut part = ThrownPart::blown(8, matrix, 0, 400, -100);
+        if let Some(blown) = &mut part.blown {
+            blown.slowing = 50;
+        }
+        let mut effects = crate::esp2::Effects::default();
+        let mut rnd = Rnd::default();
+        assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
+        assert_eq!(part.matrix.t, [350, 910, 0]);
+        assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
+        assert_eq!(part.matrix.t, [650, 830, 0]);
+    }
+
     /// `FUN_00487800`: the ivy's parts go slower than `FUN_00461f40`'s, and up.
     #[test]
     fn an_ivys_blown_part_starts_slow_and_rises() {
@@ -2787,9 +2960,9 @@ mod tests {
         let mut part = ThrownPart::blown(3, matrix, 0, 300, -150);
         let mut effects = crate::esp2::Effects::default();
         let mut rnd = Rnd::default();
-        assert!(part.fall(0, &mut rnd, &mut effects, None));
+        assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
         assert_eq!(part.matrix.t, [200, 860, 0]);
-        assert!(part.fall(0, &mut rnd, &mut effects, None));
+        assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
         assert_eq!(part.matrix.t, [300, 730, 0]);
     }
 
@@ -2800,7 +2973,7 @@ mod tests {
         let mut effects = crate::esp2::Effects::default();
         let mut rnd = Rnd::default();
         for _ in 0..16 {
-            assert!(part.fall(0, &mut rnd, &mut effects, None));
+            assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
         }
         let flat = |m: [[i16; 3]; 3]| m.into_iter().flatten().map(i32::from);
         for (got, want) in flat(part.matrix.m).zip(flat(rest)) {

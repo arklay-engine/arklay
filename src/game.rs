@@ -9462,7 +9462,8 @@ impl GameState {
             } else {
                 self.item_count(id) != 0
             },
-            spare: self.item_count(re2_ammo(id).0) != 0,
+            // `Tama_reload_ck` never reloads the rocket launcher.
+            spare: id != crate::player2::ROCKET && self.item_count(re2_ammo(id).0) != 0,
             rounds: self.item_count(id).min(u32::from(u8::MAX)) as u8,
         }
     }
@@ -11440,6 +11441,34 @@ mod tests {
             });
             assert!(game.re2_weapon().spare);
         }
+    }
+
+    /// `Tama_reload_ck` never reloads the rocket launcher, whatever the
+    /// inventory has; its shot takes one, from four to none.
+    #[test]
+    fn a_re2_rocket_launcher_never_reloads_and_fires_one_a_shot() {
+        let rocket = crate::player2::ROCKET;
+        let mut game = GameState {
+            equipped_weapon_id: rocket,
+            inventory: vec![
+                InventoryItem {
+                    id: rocket,
+                    quantity: 1,
+                },
+                InventoryItem {
+                    id: RE2_HANDGUN_BULLETS,
+                    quantity: 30,
+                },
+            ],
+            ..Default::default()
+        };
+        let weapon = game.re2_weapon();
+        assert!(weapon.loaded && !weapon.spare);
+        game.re2.player.fired = true;
+        game.re2_settle_ammo();
+        assert_eq!(game.item_count(rocket), 0);
+        let weapon = game.re2_weapon();
+        assert!(!weapon.loaded && !weapon.spare);
     }
 
     #[test]

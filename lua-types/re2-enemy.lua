@@ -1595,8 +1595,9 @@ function Re2EnemyApi:throw_part(part, along, up, gravity) end
 ---@param speed? integer Defaults to 800.
 ---@param up? integer Defaults to 0.
 ---@param gravity? integer Defaults to 10.
----@param rgb? integer The part's `Poly_rgb` from then on (`FUN_00461f40` and the crawler's stomp make it `0x101040`); left as it is when omitted.
-function Re2EnemyApi:blow_part(part, dir, speed, up, gravity, rgb) end
+---@param rgb? integer The part's `Poly_rgb` from then on (`FUN_00461f40` and the crawler's stomp make it `0x101040`, `FUN_00458d40`'s head `0x101030`); left as it is when omitted.
+---@param slowing? integer What the speed loses each tick. Defaults to 100.
+function Re2EnemyApi:blow_part(part, dir, speed, up, gravity, rgb, slowing) end
 
 ---`FUN_00461f90`: fling a part off the other way from `dir`, coming to rest
 ---turned `rest`.

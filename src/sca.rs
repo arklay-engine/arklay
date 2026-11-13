@@ -855,6 +855,21 @@ pub fn list_at(sca: &Sca, mask: u16, x: i32, z: i32, radius: i32, floor: u8) -> 
 /// circle that holds the point once grown by `radius`, 3 for a climb, 4 for a
 /// drop, and 8 and 0x10 for shapes 11 and 12, all or-ed together.
 pub fn info_flags(sca: &Sca, mask: u16, x: i32, z: i32, radius: i32, floor: u8) -> u16 {
+    info_flags_for(sca, mask, [x, z], [x, z], radius, floor)
+}
+
+/// [`info_flags`] as `Parts_down` gets it: the records are found by the
+/// point, but the triangles, the diamond and the circle (`Sca_ck_naname_*`,
+/// `Sca_ck_hishi`, `Sca_ck_circle`) test `body`, the `Atd[0]` of the work
+/// being processed (`DWORD_00988628 + 0x84`), not the point.
+pub fn info_flags_for(
+    sca: &Sca,
+    mask: u16,
+    [x, z]: [i32; 2],
+    body: [i32; 2],
+    radius: i32,
+    floor: u8,
+) -> u16 {
     list_at(sca, mask, x, z, radius, floor)
         .into_iter()
         .fold(0, |flags, record| {
@@ -862,7 +877,7 @@ pub fn info_flags(sca: &Sca, mask: u16, x: i32, z: i32, radius: i32, floor: u8) 
             flags
                 | match record.shape() {
                     0 | 7 | 8 => 1,
-                    1..=6 => u16::from(inside_shape(record, x, z, radius)),
+                    1..=6 => u16::from(inside_shape(record, body[0], body[1], radius)),
                     9 => 3,
                     10 => INFO_DOWN,
                     11 => 8,

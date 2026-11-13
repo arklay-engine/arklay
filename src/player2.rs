@@ -481,6 +481,9 @@ pub struct Work {
     /// The rounds a burst's `Tama_decrease_i` took this tick, besides
     /// [`Work::fired`]'s.
     pub spent: u8,
+    /// The bits of `fg_status` the routines raised this tick, which the
+    /// caller ORs into the status bank.
+    pub status_raise: u32,
     /// `WORD_00691f8c`: the burst weapons' calls of `Tama_decrease_i` since
     /// one last took rounds. Only the new game clears it.
     pub tama_count: i16,
@@ -670,6 +673,16 @@ const SPARK_POINT: [i16; 3] = [0x82, 0x6B8, 0];
 /// long as the trigger is held.
 pub const SMG: u8 = 0xF;
 pub const FLAMETHROWER: u8 = 0x10;
+/// The rocket launcher, which `pl_mv05_w1` fires as it does the handguns but
+/// for its tilts, and whose rocket does the hurting (`pl_w11_t2_move`).
+pub const ROCKET: u8 = 0x11;
+/// `fg_status`'s bits the rocket launcher raises: `pl_mv05_w1_t1`'s `0x40000`
+/// on each tick of the hold, and `Tama_ck_i`'s `0x800000` when its count is
+/// `0xFF`, which never runs out.
+const STATUS_ROCKET_HELD: u32 = 0x4_0000;
+const STATUS_ENDLESS: u32 = 0x80_0000;
+/// The count of a weapon that never runs out (`Tama_ck_i`, `Tama_decrease_i`).
+pub const ENDLESS: u8 = 0xFF;
 /// `pl_mv05_w2_t1`'s hold, `pl_mv05_w2_t2`'s burst and the end of it, by tilt
 /// (down, level, up), and `pl_mv05_w2_t4`'s reload.
 const BURST_HOLD_CLIPS: [u8; 3] = [0x12, 0x0C, 0x0F];
@@ -1133,6 +1146,7 @@ impl Default for Work {
             shot_ticks: 0,
             attw: (0, 0),
             spent: 0,
+            status_raise: 0,
             tama_count: 0,
             spark_target: None,
             view_released: false,
@@ -1422,8 +1436,22 @@ impl Weapon {
                 | SPARK
                 | SMG
                 | FLAMETHROWER
+                | ROCKET
                 | BERETTA
         )
+    }
+
+    /// `pl_mv05_w1_t0` and `pl_mv05_w1_t1` never tilt the spark shot or the
+    /// rocket launcher.
+    fn tilts(&self) -> bool {
+        !matches!(self.id, SPARK | ROCKET)
+    }
+
+    /// `pl_mv05_w1_t2` looks for a body itself (`Weapon_at_ck`): not with the
+    /// launchers and the bowgun, whose shot is what they fire, nor with the
+    /// rocket launcher, whose sequence (`0x53984c`) only waits.
+    fn looks(&self) -> bool {
+        !self.shoots_effects() && self.id != ROCKET
     }
 
     /// `pl_mv05_w_tbl`'s `pl_mv05_w3`: the spark shot shares the handguns'
@@ -1496,6 +1524,7 @@ impl Weapon {
             COLT => [0x85, 0x86, 5],
             SMG | FLAMETHROWER => [0x87, 0x88, 0],
             SPARK => [0x9E, 0x9E, 0x1E],
+            ROCKET => [0x9E, 0x9E, 0x5A],
             // The handguns' and the Beretta's.
             _ => [0x85, 0x87, 8],
         }
@@ -1640,6 +1669,22 @@ impl Weapon {
                     (0x308_1200, None),
                 ],
             }],
+            // `pl_w11_t2_move`: the flash, the rocket along the body's
+            // facing and the smoke at the muzzle, and smoke out of the back.
+            (ROCKET, 1) => &[
+                ShotEffect {
+                    point: [0, 0x44C, 0],
+                    calls: &[
+                        (0x100_2000, None),
+                        (0x20D_1000, Some(0)),
+                        (0x30A_1A00, None),
+                    ],
+                },
+                ShotEffect {
+                    point: [300, -900, 0],
+                    calls: &[(0x30A_1500, None)],
+                },
+            ],
             (7, 0x1A) | (8, 5) => SHOTGUN_CASE,
             (7, 0x1B) | (8, 6) => SHOTGUN_SMOKE,
             (8, 1) => &[
@@ -3519,8 +3564,8 @@ impl Mover<'_, '_> {
         if self.joint_move() {
             self.work.routine[3] += 1;
         }
-        // The spark shot (and the rocket launcher) raise level, whatever is held.
-        if self.tick.weapon.sparks() {
+        // The spark shot and the rocket launcher raise level, whatever is held.
+        if !self.tick.weapon.tilts() {
             return;
         }
         if self.work.move_cnt > self.tick.weapon.tilt_down_frame() && key & KEY_TILT_DOWN != 0 {
@@ -3582,8 +3627,13 @@ impl Mover<'_, '_> {
             self.aim_stage(3);
             return;
         }
-        // `pl_mv05_w2_t1` leaves the spark shot's tilt as it is.
-        let tilts = !self.tick.weapon.sparks();
+        // `pl_mv05_w2_t1` leaves the spark shot's tilt as it is, and
+        // `pl_mv05_w1_t1` the rocket launcher's, raising `fg_status`'s
+        // `0x40000` instead.
+        let tilts = self.tick.weapon.tilts();
+        if self.tick.weapon.id == ROCKET {
+            self.work.status_raise |= STATUS_ROCKET_HELD;
+        }
         if tilts && key & KEY_TILT_UP != 0 && self.work.status_flg & TILT_UP == 0 {
             self.work.routine[3] = 0;
             self.set_tilt(TILT_UP);
@@ -3606,6 +3656,9 @@ impl Mover<'_, '_> {
             self.aim_stage(5);
         }
         if key & KEY_FIRE != 0 {
+            if self.tick.weapon.id == ROCKET && self.tick.weapon.rounds == ENDLESS {
+                self.work.status_raise |= STATUS_ENDLESS;
+            }
             if self.tick.weapon.loaded {
                 self.aim_stage(2);
                 return;
@@ -3665,10 +3718,12 @@ impl Mover<'_, '_> {
                 hand[1],
             );
             self.work.shot_ticks = self.tick.weapon.shot_ticks();
-            self.work.fired = true;
+            // `pl_mv05_t2_init`'s `Tama_decrease_i`, which leaves a count of
+            // `0xFF` as it is.
+            self.work.fired = self.tick.weapon.rounds != ENDLESS;
             self.work.spd = [0; 3];
         }
-        if self.work.shot_ticks & 1 != 0 && !self.tick.weapon.shoots_effects() {
+        if self.work.shot_ticks & 1 != 0 && self.tick.weapon.looks() {
             self.shoot();
         }
         self.work.shot_ticks >>= 1;
@@ -6770,6 +6825,29 @@ pub(crate) struct PoseTree {
 }
 
 impl PoseTree {
+    /// A tree of `parts` parts, each the child of the one before, unturned
+    /// and in place, for other modules' tests.
+    #[cfg(test)]
+    pub(crate) fn chain(parts: usize) -> Self {
+        let still = Matrix {
+            m: rot_matrix([0; 3]),
+            t: [0; 3],
+        };
+        Self {
+            root: still,
+            local: vec![Some(still); parts],
+            children: (0..parts)
+                .map(|part| {
+                    if part + 1 < parts {
+                        vec![(part + 1) as u8]
+                    } else {
+                        Vec::new()
+                    }
+                })
+                .collect(),
+        }
+    }
+
     /// Every part's `Workm`, as `Joint_trans2` composes them from the root,
     /// with some parts off the skeleton at their own (`ko_joint_trans2`'s
     /// parts down, a pulled arm, a kicked head): those and the parts under
@@ -7246,11 +7324,13 @@ mod weapon_tests {
     #[test]
     fn each_gun_has_its_own_timing_and_leg() {
         assert!(
-            [KNIFE, 2, 3, 5, 6, 7, 8, 9, 0xC, COLT, SPARK, BERETTA]
-                .iter()
-                .all(|&id| weapon(id).aims())
+            [
+                KNIFE, 2, 3, 5, 6, 7, 8, 9, 0xC, COLT, SPARK, ROCKET, BERETTA
+            ]
+            .iter()
+            .all(|&id| weapon(id).aims())
         );
-        assert!(![0, 4, 0x11, 0x12].iter().any(|&id| weapon(id).aims()));
+        assert!(![0, 4, 0x12].iter().any(|&id| weapon(id).aims()));
         // The knife's row: a slash let go of past frame 0x32 stops at once.
         assert!(weapon(KNIFE).is_knife() && !weapon(2).is_knife());
         assert_eq!(weapon(KNIFE).fire_cancel_frame(), 0x32);
@@ -9267,9 +9347,9 @@ mod tests {
 
     #[test]
     fn only_a_handgun_raises_into_the_stance() {
-        // The rocket launcher (0x11) isn't ported.
+        // The gatling gun (0x12, `pl_mv05_w5`) isn't ported.
         let mut setup = armed(true, false);
-        setup.weapon.id = 0x11;
+        setup.weapon.id = 0x12;
         setup.tick(aiming(false, false), 200);
         assert_eq!(setup.work.routine[1], MOVE_IDLE);
 
@@ -9813,6 +9893,146 @@ mod tests {
             assert_eq!(setup.work.status_flg & 0xE000, TILT_LEVEL);
         }
         assert_eq!(setup.work.status_flg & 0xE000, TILT_LEVEL);
+    }
+
+    /// [`armed_with_hands`] holding the rocket launcher with `rounds`, in the
+    /// hold, level, on clips long enough for its shot, with a zombie 1500
+    /// ahead.
+    fn rocket(rounds: u8) -> Setup {
+        let mut setup = armed_with_hands(rounds != 0, false);
+        (setup.clips, setup.keyframes) = bank(0x14, 0x60, 0);
+        for keyframe in &mut setup.keyframes {
+            keyframe.rotations = vec![[0; 3]; 15];
+        }
+        setup.weapon = Weapon {
+            id: ROCKET,
+            loaded: rounds != 0,
+            spare: false,
+            rounds,
+        };
+        setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];
+        setup.work.status_flg = TILT_LEVEL;
+        setup.work.move_no = AIM_HOLD_CLIPS[1];
+        setup.player.angle = 0;
+        let [x, _, z] = setup.player.pos;
+        setup.targets = vec![crate::weapon2::Target {
+            slot: 3,
+            id: 0x1F,
+            be_flg: 1 | 0x400_0000 | 0x800_0000,
+            life: 50,
+            pos: [x + 1500, 0, z],
+            at: [x + 1500, z],
+            at_w: 500,
+            neck_y: -1500,
+            ..Default::default()
+        }];
+        setup
+    }
+
+    /// `pl_mv05_w1_t2` with the rocket launcher: a round, and on the first
+    /// frame `pl_w11_t2_move`'s flash, the rocket along the body's facing and
+    /// the smoke at the muzzle, and smoke out of the back. `Weapon_at_ck`'s
+    /// sequence for it only waits, so the shot hurts nothing itself, however
+    /// near the body.
+    #[test]
+    fn the_rocket_launcher_fires_its_rocket_and_never_looks() {
+        let mut setup = rocket(4);
+        setup.tick(aiming(true, true), 200);
+        assert_eq!(setup.work.routine[2..], [2, 0]);
+        setup.tick(aiming(true, false), 200);
+        assert_eq!(setup.work.routine[2..], [2, 1]);
+        assert!(setup.work.fired);
+        let dir = setup.player.angle as i16;
+        let muzzle = [0, 0x44C, 0];
+        assert_eq!(
+            spark_calls(&mut setup),
+            [
+                (0x100_2000, 0, muzzle),
+                (0x20D_1000, dir, muzzle),
+                (0x30A_1A00, 0, muzzle),
+                (0x30A_1500, 0, [300, -900, 0]),
+            ]
+        );
+        for _ in 0..0x60 {
+            if setup.work.routine[2] != 2 {
+                break;
+            }
+            setup.work.fired = false;
+            setup.tick(aiming(true, false), 200);
+            assert!(setup.work.hit.is_none());
+            assert!(!setup.work.fired);
+            assert!(spark_calls(&mut setup).is_empty());
+        }
+        assert_eq!(setup.work.routine[2], 1, "the shot ran its clip");
+    }
+
+    /// `pl_mv05_w1_t1` and `pl_mv05_w1_t0` never tilt the rocket launcher,
+    /// and each tick of the hold raises `fg_status`'s `0x40000`; letting go
+    /// of the aim doesn't.
+    #[test]
+    fn the_rocket_launcher_never_tilts_and_its_hold_raises_its_status() {
+        let gun = |id| Weapon {
+            id,
+            ..Weapon::default()
+        };
+        let launcher = gun(ROCKET);
+        assert!(launcher.aims() && !launcher.tilts() && !launcher.sparks());
+        assert!(!launcher.looks() && !launcher.shoots_effects());
+        assert_eq!(launcher.hold_clips(), AIM_HOLD_CLIPS);
+        assert_eq!(launcher.frames(), [0x9E, 0x9E, 0x5A]);
+        assert!(gun(2).tilts() && gun(2).looks());
+        let mut setup = rocket(4);
+        let aim = aiming(false, false);
+        for held in [Input { up: true, ..aim }, Input { down: true, ..aim }] {
+            setup.work.status_raise = 0;
+            setup.tick(held, 200);
+            assert_eq!(setup.work.status_flg & 0xE000, TILT_LEVEL);
+            assert_eq!(setup.work.routine[2..], [1, 1]);
+            assert_eq!(setup.work.status_raise, STATUS_ROCKET_HELD);
+        }
+        setup.work.status_raise = 0;
+        setup.tick(Input::default(), 200);
+        assert_eq!(setup.work.routine[2], 3);
+        assert_eq!(setup.work.status_raise, 0);
+        setup.work.routine = [MODE_MOVE, MOVE_AIM, 0, 0];
+        for _ in 0..40 {
+            setup.tick(Input { down: true, ..aim }, 200);
+            if setup.work.routine[2] != 0 {
+                break;
+            }
+            assert_eq!(setup.work.status_flg & 0xE000, TILT_LEVEL);
+        }
+        assert_eq!(setup.work.status_flg & 0xE000, TILT_LEVEL);
+    }
+
+    /// A rocket launcher at `0xFF` never runs out: `Tama_ck_i` raises
+    /// `fg_status`'s `0x800000` as the trigger is held, and the shot's
+    /// `Tama_decrease_i` takes nothing. Empty, it can't reload and clicks.
+    #[test]
+    fn an_endless_rocket_launcher_keeps_its_count_and_an_empty_one_clicks() {
+        let mut setup = rocket(ENDLESS);
+        setup.tick(aiming(true, true), 200);
+        assert_eq!(setup.work.routine[2..], [2, 0]);
+        assert_eq!(setup.work.status_raise, STATUS_ROCKET_HELD | STATUS_ENDLESS);
+        setup.tick(aiming(true, false), 200);
+        assert_eq!(setup.work.routine[2..], [2, 1]);
+        assert!(!setup.work.fired);
+
+        let mut setup = rocket(4);
+        setup.tick(aiming(true, true), 200);
+        assert_eq!(setup.work.status_raise, STATUS_ROCKET_HELD);
+
+        let mut setup = rocket(0);
+        setup.player.take_sounds();
+        setup.tick(aiming(true, true), 200);
+        assert_eq!(setup.work.routine[2..], [1, 1]);
+        assert!(
+            setup
+                .player
+                .take_sounds()
+                .iter()
+                .any(|sound| sound.id == SOUND_EMPTY)
+        );
     }
 
     /// Letting go of the trigger plays the burst's end; a press there fires
