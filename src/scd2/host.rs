@@ -2319,8 +2319,8 @@ impl GameHost<'_> {
         if !zombie {
             // `nFloor` (`+0x106`), which the partner's climb and jump keep.
             work.floor = at(5) as u8;
-            // `Root_ck`'s turn starts at the slot's index.
-            work.root_turn = slot as u8;
+            // `Root_ck`'s turn starts at the work's number plus 2, in 0 to 7.
+            work.root_turn = ((at(1) + 2) & 7) as u8;
         }
         let kind = (at(3) as u16) | (at(4) as u16) << 8;
         if zombie {

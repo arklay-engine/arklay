@@ -1700,11 +1700,11 @@ impl Em<'_, '_, '_> {
             let mut thrown = ThrownPart::blown(part as u8, matrix, dir, speed, up);
             thrown.gravity = gravity;
             self.push_thrown(thrown);
-            if let Some(rgb) = rgb
-                && let Some(slot) = self.work().part_rgb.get_mut(part)
-            {
-                *slot = rgb;
-            }
+        }
+        if let Some(rgb) = rgb
+            && let Some(slot) = self.work().part_rgb.get_mut(part)
+        {
+            *slot = rgb;
         }
     }
 
