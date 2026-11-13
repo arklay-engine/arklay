@@ -295,6 +295,14 @@ pub struct Partner {
     /// `Timer0` (`+0x158`), `Timer1` (`+0x15A`), `Timer2` (`+0x16A`) and
     /// `Timer3` (`+0x16B`). `Spl_in45` leaves the last two as the work's
     /// memory held them.
+    ///
+    /// The original has one `+0x158` and `+0x15A`; the port has three copies
+    /// of them, which can't diverge in what anything reads today:
+    /// `Character::start` is `sce_em_set`'s words, read only at the room's
+    /// load (`Em_init_move`) before anything writes them; the work's own
+    /// `timer0` is `Player_move`'s, which only `Spl_Scenario`'s states use;
+    /// and every `Spl_Auto` state that reads these writes them first. Only
+    /// the trace (`spl`) shows these before then.
     pub timer0: i16,
     pub timer1: i16,
     pub timer2: i8,
@@ -1118,8 +1126,9 @@ impl Auto<'_, '_, '_, '_> {
     }
 
     /// `Ada_mv01_br` (`0x4f3110`): the walk's decision. She stops under 300
-    /// from the point, runs over 5000, and turns out of a running player's
-    /// way within 2000.
+    /// from the point, runs over 5000, and while the point is under 2000 away
+    /// (`+0x21e`, her distance from it, not from the player) turns out of the
+    /// way of a running player who doesn't face away from her.
     fn ada_mv01_br(&mut self) {
         if self.ada_wall_turn(ADA_WALK_WALL_TURN_TICKS, 0x28) {
             return;
@@ -2011,8 +2020,99 @@ mod tests {
     }
 
     #[test]
-    fn the_ada_follow_point_table_is_the_executables() {
-        assert_eq!(ADA_ST_POS, [0, 0, 0, 2, 2, 0, 0, 2, 2, 2, 2, 15]);
+    fn ada_move_takes_the_follow_points_kind_from_ada_st_pos() {
+        // One enemy far off, which the player faces: `Spl_em_pos_ck` answers
+        // 2, where Sherry's table gives the point behind and Ada's beside.
+        let kind_for = |ada: bool| {
+            let mut rig = Rig::new();
+            rig.ada = ada;
+            rig.timer = 0;
+            rig.nearest = [Some([-5000, 0, 0]), None, None];
+            rig.enemy_dist = 5000;
+            rig.partner.dist = 0;
+            rig.tick();
+            (rig.kind & 0xF, rig.partner.state & STATE_KIND)
+        };
+        assert_eq!(kind_for(false), (2, u16::from(SHERRY_ST_POS[2])));
+        assert_eq!(kind_for(true), (2, u16::from(ADA_ST_POS[2])));
+        assert_ne!(SHERRY_ST_POS[2], ADA_ST_POS[2]);
+    }
+
+    #[test]
+    fn adas_stand_with_answer_10_walks_off_past_500() {
+        let decide = |dist: u16| {
+            let mut rig = Rig::new();
+            rig.ada = true;
+            rig.kind = 0x40A;
+            rig.partner.soba = [1000, 0];
+            rig.body.angle = 0;
+            rig.partner.dist = dist;
+            rig.work.routine = [1, 0, 1, 0];
+            rig.with_auto(|auto| auto.ada_mv00_br());
+            rig.routine()
+        };
+        assert_eq!(decide(501), [1, MV_WALK, 0, 0]);
+        assert_eq!(decide(500), [1, 0, 1, 0]);
+    }
+
+    #[test]
+    fn adas_walk_turns_out_of_a_running_players_way_near_the_point() {
+        let decide = |dist: u16, routine: u8, faces_her: bool| {
+            let mut rig = Rig::new();
+            rig.ada = true;
+            rig.work.routine = [1, MV_WALK, 1, 0];
+            rig.partner.dist = dist;
+            rig.player = [1000, 0, 0];
+            rig.player_routine = routine;
+            // The player is along +x: 0x800 faces her, 0 faces away.
+            rig.player_angle = if faces_her { 0x800 } else { 0 };
+            rig.with_auto(|auto| auto.ada_mv01_br());
+            rig.routine()
+        };
+        assert_eq!(decide(1999, 2, true), [1, MV_DODGE, 0, 0]);
+        assert_eq!(decide(2000, 2, true), [1, MV_WALK, 1, 0]);
+        assert_eq!(decide(1999, 1, true), [1, MV_WALK, 1, 0], "walking");
+        assert_eq!(decide(1999, 2, false), [1, MV_WALK, 1, 0], "facing away");
+    }
+
+    #[test]
+    fn adas_run_turns_from_a_wall_for_15_ticks_at_0x50() {
+        let mut rig = Rig::new();
+        rig.ada = true;
+        rig.work.routine = [1, MV_RUN, 1, 0];
+        rig.partner.dist = 4000;
+        rig.partner.sca_hit = true;
+        rig.partner.stuck = WALL_TICKS;
+        rig.body.angle = 0;
+        rig.with_auto(|auto| auto.ada_mv02_br());
+        assert_eq!(rig.routine(), [1, MV_RUN, 1, 0]);
+        assert_eq!(rig.partner.stuck, WALL_TURN_TICKS);
+        // 0x780 or 0x880: far enough that a tick's turn is the whole rate.
+        let turn = rig.partner.turn;
+        assert!(turn == 0x780 || turn == 0x880, "{turn:#x}");
+        rig.with_auto(|auto| auto.ada_mv02_br());
+        assert_eq!(rig.partner.stuck, WALL_TURN_TICKS - 1);
+        let angle = rig.body.angle;
+        assert!(angle == 0x50 || angle == 0x1000 - 0x50, "{angle:#x}");
+    }
+
+    #[test]
+    fn adas_turn_round_faces_the_point_late_or_far_or_at_its_end() {
+        let decide = |dist: u16, timer0: i16| {
+            let mut rig = Rig::new();
+            rig.ada = true;
+            rig.work.routine = [1, MV_TURN_ROUND, 1, 0];
+            rig.partner.dist = dist;
+            rig.partner.timer0 = timer0;
+            rig.with_auto(|auto| auto.ada_mv0c_br());
+            rig.routine()
+        };
+        // Under 0x1E left and over 1000 away.
+        assert_eq!(decide(1001, 0x1E), [1, MV_FACE_POINT, 0, 0]);
+        assert_eq!(decide(1000, 0x1E), [1, MV_TURN_ROUND, 1, 0]);
+        assert_eq!(decide(1001, 0x1F), [1, MV_TURN_ROUND, 1, 0]);
+        // The count's end.
+        assert_eq!(decide(500, 1), [1, MV_FACE_POINT, 0, 0]);
     }
 
     #[test]

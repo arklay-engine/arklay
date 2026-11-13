@@ -1219,15 +1219,34 @@ const ADA_IDS: [u8; 2] = [0x41, 0x43];
 const ADA_HAND: usize = 11;
 const ADA_SPARE_HAND: usize = 15;
 
+/// Ada's part 16, which `Spl_in41` puts on only with scenario flag 80
+/// (`fg_scenario`'s `0x50`), hung from part 0 at (0x42, -0x28e, 0).
+const ADA_PART_16: usize = 16;
+const ADA_PART_16_FLAG: u8 = 0x50;
+
 /// `Spl_in41` (`0x4efc70`), after `Spl_Init`'s bits: the partner (`Type`'s
 /// `0x400`) takes `0x800`, and `0x800` swaps the hand's meshes with the spare
-/// part's and goes. The spare part is always off, and `0x80` marks the work
-/// as set up. Its partner's words are `Spl_in45`'s.
-fn spl_in41(character: &mut Character) {
+/// part's and goes. The spare part is always off, part 16 is off but for
+/// scenario flag 80 (`flag_80`), and `0x80` marks the work as set up. Its
+/// partner's words are `Spl_in45`'s, and its partner gets `Spl_Auto`'s
+/// routine whatever `Type`'s `0x4000` chose.
+///
+/// Not ported: part 16's hanging from part 0 (the port's parts keep the
+/// model's tree, so with flag 80 its mesh isn't drawn), part 0's `Be_flg`
+/// `0x4000`, and `Aida_Jh_init` with its `Aida_before`, `Aida_Jh_move`
+/// (`0x4b4680`), which every tick moves the vertices at five joints (parts
+/// 1, 2, 5, 9 and 12, the tables at `0x52c5ec` to `0x52c868`) to close the
+/// skin's seams.
+fn spl_in41(character: &mut Character, flag_80: bool) {
     if character.kind & 0x400 != 0 {
         character.kind |= 0x800;
     }
     character.work.hidden_parts |= 1 << ADA_SPARE_HAND;
+    if flag_80 {
+        character.work.hidden_parts &= !(1 << ADA_PART_16);
+    } else {
+        character.work.hidden_parts |= 1 << ADA_PART_16;
+    }
     if character.kind & 0x800 != 0 {
         character.kind &= !0x800;
         character.arms.swapped = !character.arms.swapped;
@@ -1446,7 +1465,7 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
             }
         }
         if ada {
-            spl_in41(character);
+            spl_in41(character, game.re2.flag(3, ADA_PART_16_FLAG));
         }
         let partner = partner && (sherry || ada) && character.partner.is_some();
         player2::spl_init(
@@ -1458,7 +1477,7 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
         );
         // `Spl_in41` and `Spl_in45` (from `Spl_Init`'s table) send the
         // partner to `Spl_Auto` whatever 0x4000 chose.
-        if matches!(character.id, 0x41 | 0x45 | 0x4F) && game.re2.partner_bit() {
+        if (ada || sherry) && game.re2.partner_bit() {
             character.work.routine = [1, 0, 0, 0];
         }
         if character.id == MARVIN {
@@ -2357,9 +2376,49 @@ mod tests {
         let partner = character.partner.as_deref().unwrap();
         assert_eq!((partner.life, partner.max_life), (150, 200));
         assert_eq!(character.work.neck.target, Some(0));
-        // `Spl_Auto` runs for her from the next tick: the stand.
+        // The partner's 0x400 takes 0x800, so the gun hand swaps here too.
+        assert!(character.arms.swapped);
+        assert_ne!(character.work.hidden_parts & 1 << ADA_SPARE_HAND, 0);
+        // `Spl_Auto` runs `Ada_move` from the next tick: 2000 from the point,
+        // Sherry's stand would leave (past 1500) and Ada's stays.
+        character.partner.as_deref_mut().unwrap().dist = 2000;
         spl(&mut game, &mut character, &tick);
-        assert_eq!(character.work.routine[2], 1);
+        assert_eq!(character.work.routine, [1, 0, 1, 0]);
+        let mut sherry = sherry(0x400);
+        spl(&mut game, &mut sherry, &tick);
+        sherry.partner.as_deref_mut().unwrap().dist = 2000;
+        spl(&mut game, &mut sherry, &tick);
+        assert_ne!(sherry.work.routine[1], 0, "Sherry leaves the stand");
+    }
+
+    #[test]
+    fn ada_0x43_as_the_partner_follows_whatever_0x4000_chose() {
+        let mut game = GameState::default();
+        let mut character = Character {
+            id: 0x43,
+            model: 0x43,
+            ..ada(0x4400)
+        };
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        spl(&mut game, &mut character, &tick);
+        assert!(game.re2.partner_bit());
+        assert_eq!(character.work.routine, [1, 0, 0, 0]);
+    }
+
+    #[test]
+    fn adas_part_16_is_on_only_with_scenario_flag_80() {
+        let hidden = |flag: bool| {
+            let mut game = GameState::default();
+            if flag {
+                game.re2.set_flag(3, ADA_PART_16_FLAG, 1);
+            }
+            let mut character = ada(0x0800);
+            let tick = spl_tick(&RoomState::default(), &Default::default());
+            spl(&mut game, &mut character, &tick);
+            character.work.hidden_parts & 1 << ADA_PART_16 != 0
+        };
+        assert!(hidden(false));
+        assert!(!hidden(true));
     }
 
     #[test]
