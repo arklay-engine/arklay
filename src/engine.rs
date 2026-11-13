@@ -2180,6 +2180,11 @@ struct GameSession {
     /// edited it: an authored edit before the first tick reruns the init on
     /// it ([`GameSession::finish_authoring`]).
     re2_boot_room: Option<Re2RoomData>,
+    /// The RE 2 flags (banks, then `fg_key`) as the room's boot found them,
+    /// before its scripts' first pass wrote theirs: an authored edit reruns
+    /// that pass from these, with the edit's changes on top
+    /// ([`GameSession::finish_authoring`]).
+    re2_boot_flags: Option<crate::scd2::host::FlagWords>,
     /// Decoded pack text tables (messages, item names, descriptions).
     text: Text,
     /// Decoded glyph sheet for the message window; absent packs cannot draw
@@ -2557,6 +2562,21 @@ struct AuthorBaseline {
     rnd: crate::zombie2::Rnd,
 }
 
+/// `boot`'s flags with each bit an edit changed (from `before` to `after`)
+/// taken from `after`.
+fn authored_over<const N: usize, const W: usize>(
+    boot: [[u32; W]; N],
+    before: [[u32; W]; N],
+    after: [[u32; W]; N],
+) -> [[u32; W]; N] {
+    std::array::from_fn(|bank| {
+        std::array::from_fn(|word| {
+            let changed = before[bank][word] ^ after[bank][word];
+            boot[bank][word] & !changed | after[bank][word] & changed
+        })
+    })
+}
+
 fn door_skip_pressed(ui: &UiInput, input: &player::Input, attract: bool) -> bool {
     !attract && (input.action_pressed || input.run_pressed || ui.cancel)
 }
@@ -2919,6 +2939,7 @@ impl GameSession {
             sound_device: false,
             re2_door_neck: false,
             re2_boot_room: None,
+            re2_boot_flags: None,
             text,
             font,
             menu: None,
@@ -3059,13 +3080,18 @@ impl GameSession {
         {
             let mut host = game::ScdGameHost::new(&mut self.game);
             self.command_vm.run_init(&mut host);
-            run_re2_init(
-                self.loaded.re2_vm.as_mut(),
-                &self.loaded.re2_effects,
-                &mut self.game,
-                false,
-            );
         }
+        self.re2_boot_flags = self
+            .loaded
+            .re2_vm
+            .is_some()
+            .then_some((self.game.re2.banks, self.game.re2.door_locks));
+        run_re2_init(
+            self.loaded.re2_vm.as_mut(),
+            &self.loaded.re2_effects,
+            &mut self.game,
+            false,
+        );
         self.re2_boot_room = self
             .game
             .is_re2_room
@@ -6711,7 +6737,8 @@ impl GameSession {
 
     /// What [`GameSession::finish_authoring`] compares an edit against: the
     /// RE 2 flags and random stream as the boot left them.
-    fn author_baseline(&self) -> AuthorBaseline {
+    fn author_baseline(&mut self) -> AuthorBaseline {
+        self.game.re2.authored_flags = Some(Box::default());
         AuthorBaseline {
             banks: self.game.re2.banks,
             door_locks: self.game.re2.door_locks,
@@ -6730,8 +6757,28 @@ impl GameSession {
             rnd,
         } = baseline;
         let flags = (banks, door_locks);
+        let authored = self.game.re2.authored_flags.take();
+        // The flags the original's `--warp` loads the room under: the ones
+        // the boot found, then the edit's, both the bits it changed and the
+        // ones it wrote, which may be what the first pass wrote too (room
+        // 204's `main_00` sets 4:85 as it starts the licker's entrance,
+        // which `--flag 4:85` skips).
+        let boot = self.re2_boot_flags;
+        let edited = boot.map(|(boot_banks, boot_locks)| {
+            let current = (self.game.re2.banks, self.game.re2.door_locks);
+            let changed = (
+                authored_over(boot_banks, banks, current.0),
+                authored_over([boot_locks], [door_locks], [current.1])[0],
+            );
+            authored
+                .as_deref()
+                .map_or(changed, |log| log.apply(changed))
+        });
         // A room's scripts read the flags and the stream as they start.
-        if (self.game.re2.banks, self.game.re2.door_locks) != flags || self.game.re2.rnd != rnd {
+        if (self.game.re2.banks, self.game.re2.door_locks) != flags
+            || self.game.re2.rnd != rnd
+            || edited != boot
+        {
             let placed = std::mem::take(&mut self.game.re2.pending_player);
             // The first pass's areas were armed by the flags as they stood.
             if self.loaded.re2_vm.is_some() {
@@ -6752,6 +6799,16 @@ impl GameSession {
             // first passes, under the flags before the edit, left it.
             if let Some(data) = &self.re2_boot_room {
                 data.restore(&mut self.loaded.room);
+            }
+            // Nor under the flags the first pass wrote: the original's
+            // `--warp` raises the edit's flags before the room loads, so its
+            // one pass sees what the boot found plus the edit. Room 219's
+            // `main_00` places Ada and starts her scene under `ck(3, 67, 0)`
+            // and then sets 3:67; rerun under the first pass's 3:67, it does
+            // neither (`leon_a_219_301`).
+            if let Some((edited_banks, edited_locks)) = edited {
+                self.game.re2.banks = edited_banks;
+                self.game.re2.door_locks = edited_locks;
             }
             run_re2_init(
                 self.loaded.re2_vm.as_mut(),
@@ -39135,6 +39192,91 @@ end
         session.game.re2.set_flag(4, 152, 1);
         session.finish_authoring(baseline, false);
         assert_eq!(session.loaded.room.zones[1].cam_to, 2, "not swapped");
+    }
+
+    /// The rerun starts from the flags the boot found, not the ones its first
+    /// pass wrote: room 219's `main_00` starts Ada's scene under
+    /// `ck(3, 67, 0)` and sets 3:67, so a rerun from the first pass's flags
+    /// would skip the scene the original's `--warp` plays. The edit's own
+    /// flags still apply, set or cleared.
+    #[test]
+    fn an_authored_flag_reruns_the_load_from_the_flags_the_boot_found() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1\n#game re2\nproc init_00 { evt_end(0); }\nproc main_00 { if (ck(3, 67, 0)) { cut_replace(2, 4); set(3, 67, 1); } evt_end(0); }",
+        )
+        .unwrap();
+        session.loaded.re2_vm = Some(crate::scd2::vm::Vm::new(&scripts));
+        let zone = |cam_to| crate::state::Zone {
+            cam_to,
+            cam_from: 1,
+            ..Default::default()
+        };
+        session.loaded.room.zones = vec![zone(1), zone(2)];
+        session.loaded.room.zone_gates = vec![
+            crate::state::ZoneGate {
+                flag: 1,
+                floor: 0xFF
+            };
+            2
+        ];
+        session.game.re2.set_flag(6, 201, 1);
+        session.enter_room(&pack, None, true, RoomBgmHandoff::Now);
+        assert!(session.game.re2.flag(3, 67), "the first pass's flag");
+        let baseline = session.author_baseline();
+        session.game.re2.set_flag(6, 200, 1);
+        session.game.re2.set_flag(6, 201, 0);
+        session.finish_authoring(baseline, false);
+        assert_eq!(session.loaded.room.zones[1].cam_to, 4, "the pass ran again");
+        assert!(session.game.re2.flag(3, 67), "and set its flag again");
+        assert!(session.game.re2.flag(6, 200), "the edit's set flag");
+        assert!(!session.game.re2.flag(6, 201), "the edit's cleared flag");
+    }
+
+    /// A flag the setup writes counts even where the first pass wrote it
+    /// too: room 204's `main_00` sets 4:85 as it starts the licker's
+    /// entrance, which the original under `--flag 4:85` never plays, so the
+    /// rerun starts with it set (`colt_licker_204`).
+    #[test]
+    fn a_flag_the_setup_writes_as_the_first_pass_did_still_reruns_the_load() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1\n#game re2\nproc init_00 { evt_end(0); }\nproc main_00 { if (ck(4, 85, 0)) { cut_replace(2, 4); set(4, 85, 1); } evt_end(0); }",
+        )
+        .unwrap();
+        session.loaded.re2_vm = Some(crate::scd2::vm::Vm::new(&scripts));
+        let zone = |cam_to| crate::state::Zone {
+            cam_to,
+            cam_from: 1,
+            ..Default::default()
+        };
+        session.loaded.room.zones = vec![zone(1), zone(2)];
+        session.loaded.room.zone_gates = vec![
+            crate::state::ZoneGate {
+                flag: 1,
+                floor: 0xFF
+            };
+            2
+        ];
+        session.enter_room(&pack, None, true, RoomBgmHandoff::Now);
+        assert_eq!(session.loaded.room.zones[1].cam_to, 4, "the boot's pass");
+        let baseline = session.author_baseline();
+        session.game.re2.set_flag(4, 85, 1);
+        session.finish_authoring(baseline, false);
+        assert_eq!(
+            session.loaded.room.zones[1].cam_to, 2,
+            "rerun with 4:85 set"
+        );
+        assert!(session.game.re2.flag(4, 85));
+        assert!(session.game.re2.authored_flags.is_none(), "the log closes");
+        // With nothing written, nothing reruns.
+        let baseline = session.author_baseline();
+        session.finish_authoring(baseline, false);
+        assert_eq!(session.loaded.room.zones[1].cam_to, 2);
     }
 
     /// `Sca_id_set` and `Cut_be_set` write the room as the scripts run. Room

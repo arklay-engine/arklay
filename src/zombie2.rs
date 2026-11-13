@@ -40,7 +40,7 @@ pub const TYPE_HELD: u16 = 0x4000;
 /// `Be_flg`'s bits: it's hit low, it's hit high.
 pub const BE_LOW: u32 = 0x400_0000;
 pub const BE_HIGH: u32 = 0x800_0000;
-const BE_NO_SCA: u32 = 8;
+pub const BE_NO_SCA: u32 = 8;
 /// `Sca_ck_em` pushed the body along z.
 const BE_PUSHED_Z: u32 = 0x4000;
 /// `Be_flg`'s bit on both bodies of a grab.

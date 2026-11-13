@@ -47,3 +47,26 @@ ignore = [
   [770, 860, "hk"], [3388, 3478, "hk"],
 ]
 record = "--warp 211:301:0:5863:2088:0 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:27 --life 164 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"
+
+# Rooms 219 and 301: from 216's door 1 through Ada's scene, west along the cells, door 3 to Ben's cell and the talk with Ben and Ada. The recording goes on to the map the talk opens (`sce_84`, not ported, #670) and the Manhole Opener; the run stops the tick before the map
+[[run]]
+name = "leon_a_219_301"
+room = "219"
+setup_script = "leon_a_219_301.lua"
+input = "leon_a_219_301.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 4552
+# the talk's lines end by the recording's clock
+voice_from_ref = true
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 4551]
+frame_max_mean = 1.7
+expect = "match"
+ignore = [
+  [344, 352, "pneck"],
+  [939, "rng"],
+  [939, "rseed"],
+  [974, 1066, "hk"],
+]
+record = "--warp 219:4809:0:-21018:2133:0 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:27 --flag 3:33 --life 110 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"

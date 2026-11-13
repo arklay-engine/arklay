@@ -1,0 +1,57 @@
+# Leon A from 216's door 1 arrival in 219 through Ada's scene and door 3 to Ben's cell (301), the talk with Ben and Ada, and the Manhole Opener (#656 Part 3) (oracle/re2.md, "Leon A to the Manhole Opener")
+# 219: once Ada's scene (main_03) is over, west along the cells' corridor, north at its end and west to door 3, and its presses
+700 up run left
+702 up run
+740 up run left
+741 up run
+748 up run left
+749 up run
+750 right
+761 up run right
+765 up run
+773 up run right
+774 up run
+794 up run right
+795 up run
+796 up run right
+797 up run
+798 left
+810 up run left
+814 up run
+909 left
+923 up
+938
+939 action
+941
+# the presses at door 3
+961 action
+963
+984 up
+# 301: up until Leon moves, then south-west into the talk's area
+1282 up run
+1336
+# well after the talk, to the Manhole Opener and its pick-up
+4860 left
+4877 up run left
+4882 up run
+4883 up run left
+4884 up run
+4889 left
+4897 action
+4899
+4909 action
+4911
+4921 action
+4923
+4933 action
+4935
+4945 action
+4947
+4957 action
+4959
+4969 action
+4971
+4981 action
+4983
+5053 action
+5055

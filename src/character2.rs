@@ -1746,12 +1746,25 @@ fn partner_oba_ck_em(game: &GameState, character: &mut Character, old: [i32; 3])
     }
 }
 
-/// `_Spl`'s `Sca_ck_em`, after its routine.
+/// `_Spl`'s `Sca_ck_em` (`0x4CC730`), after its routine. A `Be_flg` with 8
+/// skips the walls, as a zombie's does: room 301's `main_00` sets it on
+/// Ben, placed in his bunk, who stays there (`leon_a_219_301`). The mirror
+/// takes the place either way.
 fn spl_sca_ck_em(room: &RoomState, character: &mut Character) {
-    let Some(sca) = &room.sca else {
+    if let Some(partner) = character.partner.as_deref_mut() {
+        partner.sca_hit = false;
+    }
+    let body = &mut character.body;
+    let sca = room
+        .sca
+        .as_ref()
+        .filter(|_| character.be_flg & crate::zombie2::BE_NO_SCA == 0);
+    let Some(sca) = sca else {
+        if room.sca.is_some() {
+            body.collision_mirror = [body.pos[0], body.pos[2]];
+        }
         return;
     };
-    let body = &mut character.body;
     let [old_x, old_z] = body.collision_mirror;
     let prev = [old_x, body.pos[1], old_z];
     let mask = sca_mask(character.id);
@@ -2346,6 +2359,42 @@ mod tests {
             model: 0x41,
             ..sherry(kind)
         }
+    }
+
+    /// `Sca_ck_em` leaves a character with `Be_flg`'s 8 where it stands:
+    /// room 301's Ben, whom `main_00` sets it on, lies in his bunk's box
+    /// rather than being pushed 634 units out of it while the room loads.
+    #[test]
+    fn a_scene_character_with_be_flg_8_is_not_pushed_out_of_the_walls() {
+        let bunk = crate::state::ScaRect {
+            x: -19000,
+            z: -25000,
+            width: 2000,
+            depth: 2000,
+            id: crate::sca::CHARACTER_MASK,
+            kind: 0xF,
+            floor: 1,
+        };
+        let room = RoomState {
+            sca: Some(crate::state::Sca {
+                records: vec![bunk],
+                ..Default::default()
+            }),
+            ..RoomState::default()
+        };
+        let placed = |be_flg| {
+            let mut character = ada(0);
+            character.be_flg = be_flg;
+            character.body.pos = [-17950, 0, -24000];
+            character.body.collision_mirror = [-17950, -24000];
+            spl_sca_ck_em(&room, &mut character);
+            (character.body.pos, character.body.collision_mirror)
+        };
+        let (pushed, _) = placed(1);
+        assert_ne!(pushed, [-17950, 0, -24000], "pushed out of the box");
+        let (kept, mirror) = placed(1 | crate::zombie2::BE_NO_SCA);
+        assert_eq!(kept, [-17950, 0, -24000]);
+        assert_eq!(mirror, [-17950, -24000]);
     }
 
     #[test]
