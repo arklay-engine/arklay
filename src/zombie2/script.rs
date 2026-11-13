@@ -3157,6 +3157,47 @@ mod tests {
         assert_eq!(handgun_hit(0x46), (1, 1, 1, 4, 0));
     }
 
+    /// `FUN_00455170` (`Routine_1` 0xD, which room 114's `main_05` sets on
+    /// Claire A as it lets its zombie go) begins the zombie again as
+    /// `Em10_Init` does: its third draw is `At_sce_no` (0x455235), and it
+    /// forgets a stagger (`At_obj_no`, 0x455210), `+0x230` and `D_life`.
+    /// There the original's draw left the zombie a stagger for its third
+    /// Browning hit where `Em10_Init`'s, kept, knocked it back.
+    #[test]
+    fn rising_again_forgets_a_stagger_and_draws_its_counter_again() {
+        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        let library = include_str!("../../games/re2/lib/zombie.lua");
+        lua.load(format!(
+            "local DRAWS = {{ 3, 1, 0x2B }}
+             local w = {{ r = {{ [0] = 1, 0xD, 0, 0 }}, vars = {{ [3] = 1, [4] = -14, [11] = 2 }},
+                 d_life = 0, drawn = 0 }}
+             local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+             function e:routine(i) return w.r[i] end
+             function e:set_routine(i, v) w.r[i] = v end
+             function e:routines(a, b, c, d) w.r = {{ [0] = a, b, c, d }} end
+             function e:var(i) return w.vars[i] or 0 end
+             function e:set_var(i, v) w.vars[i] = v end
+             function e:set_d_life(v) w.d_life = v end
+             function e:kind() return 6 end
+             function e:rnd() w.drawn = w.drawn + 1 return DRAWS[w.drawn] or 0 end
+             local zombie = (function() {library} end)()
+             zombie.run(e, {{}})
+             R = {{ w.vars[3], w.vars[4], w.vars[11], w.d_life, w.vars[0], w.drawn }}"
+        ))
+        .exec()
+        .unwrap();
+        let r: Vec<i64> = lua.globals().get("R").unwrap();
+        // 0x2B & 0xF + 0x10; the walk is clip 2 by the second draw's odd.
+        assert_eq!(r, [0, 0x1B, 0, 0xD, 2, 3]);
+        // What the counter decides two Browning hits (15 each) later: with 1
+        // left, the third staggers (`Em10Dm00`, its walk's clip 0); with 0 or
+        // under, it knocks back (`Em10Dm01`, clip 4).
+        assert_eq!(weapon_hit(6, 3, 1).0, 0);
+        assert_eq!(weapon_hit(6, 3, 1).3, 0);
+        assert_eq!(weapon_hit(6, 3, 0).0, 1);
+        assert_eq!(weapon_hit(6, 3, 0).3, 4);
+    }
+
     /// `Em10_Init` under the new game's choice: what it leaves as
     /// `(life, flags, At_sce_no, draws)`. `Rnd` gives `draws` in turn and 0
     /// after; the room has one enemy, so the life gets its 15.
