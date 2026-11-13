@@ -523,6 +523,18 @@ fn smg_damage(id: u8) -> Option<&'static Damage> {
         0x0306_0C0A,
         [-3000, 500, -3000, 2000, -500, 3000],
     );
+    // `0x535F50`, `0x536250` and `0x5363D0`'s fifteenth rows.
+    const EMBRYO: Damage = row(0x00A0_280A, 0x0285_0A0A, HANDGUN_HEIGHTS);
+    const ROACH: Damage = row(
+        0x0070_1C07,
+        0x0081_020A,
+        [-4000, -2800, -3100, -1200, -1200, 100],
+    );
+    const EM2D: Damage = row(
+        0x0070_1C07,
+        0x0081_020A,
+        [-3000, -2000, -3000, 2000, -500, 3000],
+    );
     Some(match id {
         LICKER_ID | LICKER_24_ID => &LICKER,
         DOG_ID => &DOG,
@@ -534,6 +546,10 @@ fn smg_damage(id: u8) -> Option<&'static Damage> {
         SPIDER_ID | YOUNG_ID => &SPIDER,
         ALLIGATOR_ID => &ALLIGATOR,
         IVY_ID | VINE_ID | POISON_IVY_ID => &PLANT,
+        crate::zombie2::EMBRYO_ID => &EMBRYO,
+        crate::zombie2::ROACH_ID => &ROACH,
+        crate::zombie2::EM2D_ID => &EM2D,
+        // The zombies' two tables (`0x535350`, `0x5354D0`) share the row.
         _ => &ZOMBIE,
     })
 }
@@ -1644,6 +1660,34 @@ mod tests {
         assert_eq!(row(SPIDER_ID), row(YOUNG_ID));
         assert_eq!(row(ALLIGATOR_ID).1, 0x050A_140A);
         assert_eq!(row(IVY_ID).0, 0x0050_1405);
+        // The embryo's, the cockroach's and room 205's bodies' own rows,
+        // not the zombie's: their heights decide what `Set_MinMax` lets hit.
+        use crate::zombie2::{EM2D_ID, EMBRYO_ID, ROACH_ID};
+        assert_eq!(
+            row(EMBRYO_ID),
+            (
+                0x00A0_280A,
+                0x0285_0A0A,
+                [-5000, -2000, -3000, 2000, -500, 3000]
+            )
+        );
+        assert_eq!(
+            row(ROACH_ID),
+            (
+                0x0070_1C07,
+                0x0081_020A,
+                [-4000, -2800, -3100, -1200, -1200, 100]
+            )
+        );
+        assert_eq!(
+            row(EM2D_ID),
+            (
+                0x0070_1C07,
+                0x0081_020A,
+                [-3000, -2000, -3000, 2000, -500, 3000]
+            )
+        );
+        assert_eq!(row(0x15), row(0x10));
         let records = shot_records(SMG).unwrap();
         for (record, handgun) in records.iter().zip(&HANDGUN) {
             assert_eq!((record.reach, record.rects), (handgun.reach, handgun.rects));

@@ -7273,6 +7273,8 @@ mod tests {
         clips: Vec<Clip>,
         keyframes: Vec<Keyframe>,
         neck_targets: Vec<NeckTarget>,
+        /// What the shots see of the enemy slots.
+        targets: Vec<crate::weapon2::Target>,
         /// `BYTE_00989eeb`, else as many as `neck_targets`.
         enemies: Option<u8>,
         /// `fg_status`'s `0x2000`.
@@ -8123,6 +8125,7 @@ mod tests {
                 clips,
                 keyframes,
                 neck_targets: Vec::new(),
+                targets: Vec::new(),
                 enemies: None,
                 pushing: false,
                 last_key: 0,
@@ -8159,7 +8162,7 @@ mod tests {
                 stopped: false,
                 weapon: self.weapon,
                 necks: [None; NECK_WORKS],
-                targets: &[],
+                targets: &self.targets,
                 neck_targets: &self.neck_targets,
                 enemies: self.enemies.unwrap_or(self.neck_targets.len() as u8),
                 pushing: self.pushing,
@@ -9387,6 +9390,61 @@ mod tests {
             }
         }
         assert_eq!(sounds, [(1, SOUND_FLAME_START), (0xB, SOUND_FLAME_GO_ON)]);
+    }
+
+    /// `pl_mv05_w2_t2`'s `Weapon_at_ck` with a body in front: the
+    /// sub-machine gun's shot looks for it, and hits it, on the burst's first
+    /// tick and every third after; the flamethrower's never looks (nor has
+    /// it records to look with), as its flames burn what they reach instead.
+    #[test]
+    fn the_smgs_burst_hits_on_every_third_tick_and_the_flames_never() {
+        for id in [SMG, FLAMETHROWER] {
+            let mut setup = bursting(id, 50);
+            let [x, _, z] = setup.player.pos;
+            // Straight ahead of the body at angle 0, in reach.
+            let (dx, dz) = (1500, 0);
+            setup.targets = vec![crate::weapon2::Target {
+                slot: 3,
+                id: 0x1F,
+                be_flg: 1 | 0x400_0000 | 0x800_0000,
+                life: 50,
+                pos: [x + dx, 0, z + dz],
+                at: [x + dx, z + dz],
+                at_w: 500,
+                neck_y: -1500,
+                ..Default::default()
+            }];
+            setup.player.angle = 0;
+            setup.work.hit = None;
+            let mut hits = Vec::new();
+            let mut looks = Vec::new();
+            for tick in 1..=12u8 {
+                // The step this tick's `Weapon_at_ck` takes, after the
+                // first tick's `init_Weapon_at` (`Routine_3` 0's clip
+                // moves it on to 1, which starts the sequence).
+                let sequence = setup.weapon.burst_sequence();
+                let attw = if setup.work.routine[3] <= 1 {
+                    (0, sequence[0].1)
+                } else {
+                    setup.work.attw
+                };
+                if attw_step(sequence, attw).1 {
+                    looks.push(tick);
+                }
+                setup.tick(aiming(true, false), 200);
+                assert_eq!(setup.work.routine[2..], [2, 2], "tick {tick}");
+                if let Some(hit) = setup.work.hit.take() {
+                    assert_eq!((hit.slot, hit.weapon), (3, id));
+                    hits.push(tick);
+                }
+            }
+            if id == SMG {
+                assert_eq!(hits, [1, 4, 7, 10]);
+                assert_eq!(looks, hits);
+            } else {
+                assert!(looks.is_empty() && hits.is_empty(), "{looks:?} {hits:?}");
+            }
+        }
     }
 
     /// Letting go of the trigger plays the burst's end; a press there fires
