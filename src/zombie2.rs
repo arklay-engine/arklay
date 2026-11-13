@@ -318,6 +318,7 @@ impl ThrownPart {
         rnd: &mut Rnd,
         effects: &mut crate::esp2::Effects,
         sca: Option<&crate::state::Sca>,
+        body: [i32; 2],
     ) -> bool {
         if let Some(blown) = self.blown {
             return self.blow(blown);
@@ -345,16 +346,18 @@ impl ThrownPart {
                 part: self.part,
             };
             effects.call_on_part(0, 0, 2000, dir as i16, anchor, self.matrix, [0; 3]);
-            if self.bounces == 1 {
-                return false;
-            }
         }
-        // `Sca_ck_info` only says whether a wall is within 100 of where it
-        // is now; it pushes nothing, and the part comes back off it.
+        // The last landing still checks the walls and turns the part on to
+        // its rest this tick.
+        let landed = self.bounces == 1;
+        // `Sca_ck_info` pushes nothing: it says whether a wall's record is
+        // within 100 of the part (a box, or shapes 9 to 12), or for the
+        // triangles, the diamond and the circle, whether `body` (the zombie's
+        // `Atd[0]`) is, and the part comes back off it.
         if let Some(sca) = sca {
             let floor = (-self.matrix.t[1] / 1800).clamp(0, 31) as u8;
             let [x, _, z] = self.matrix.t;
-            if crate::sca::info_flags(sca, PARTS_MASK, x, z, 100, floor) != 0 {
+            if crate::sca::info_flags_for(sca, PARTS_MASK, [x, z], body, 100, floor) != 0 {
                 self.velocity[0] = -(self.velocity[0] >> 2);
                 self.velocity[2] = -(self.velocity[2] >> 2);
             }
@@ -364,7 +367,7 @@ impl ThrownPart {
             self.matrix.m = player2::blend_matrix(&self.matrix.m, &self.rest, weight);
             self.turning -= 1;
         }
-        true
+        !landed
     }
 }
 
@@ -630,6 +633,7 @@ impl Zombie {
         sca: Option<&crate::state::Sca>,
     ) {
         let hidden = work.hidden_parts;
+        let body = [self.atd.at[0], self.atd.at[2]];
         let mut off = Vec::new();
         let mut kept = Vec::with_capacity(self.thrown.len());
         for thrown in &mut self.thrown {
@@ -637,7 +641,7 @@ impl Zombie {
                 kept.push(false);
                 continue;
             }
-            let falling = thrown.fall(slot, rnd, effects, sca);
+            let falling = thrown.fall(slot, rnd, effects, sca, body);
             if !falling {
                 player2::set_part_flags(work, thrown.part, 0);
                 if thrown.takes_below() {
@@ -2726,7 +2730,7 @@ mod tests {
         let mut landings = 0;
         let mut alive = true;
         for _ in 0..200 {
-            alive = part.fall(0, &mut rnd, &mut effects, None);
+            alive = part.fall(0, &mut rnd, &mut effects, None, [0; 2]);
             if !alive {
                 break;
             }
@@ -2793,10 +2797,10 @@ mod tests {
         let mut effects = crate::esp2::Effects::default();
         let mut rnd = Rnd::default();
         let start = rnd;
-        assert!(part.fall(0, &mut rnd, &mut effects, None));
+        assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
         assert_eq!(part.matrix.t, [700, 1010, 0]);
         let mut ticks = 1;
-        while part.fall(0, &mut rnd, &mut effects, None) {
+        while part.fall(0, &mut rnd, &mut effects, None, [0; 2]) {
             ticks += 1;
         }
         assert_eq!(ticks, 0x1D);
@@ -2847,11 +2851,57 @@ mod tests {
         part.velocity = [100, 0, 40];
         let mut effects = crate::esp2::Effects::default();
         let mut rnd = Rnd::default();
-        assert!(part.fall(0, &mut rnd, &mut effects, Some(&sca)));
+        assert!(part.fall(0, &mut rnd, &mut effects, Some(&sca), [0; 2]));
         assert_eq!([part.matrix.t[0], part.matrix.t[2]], [950, 40]);
         assert_eq!([part.velocity[0], part.velocity[2]], [-25, -10]);
-        assert!(part.fall(0, &mut rnd, &mut effects, Some(&sca)));
+        assert!(part.fall(0, &mut rnd, &mut effects, Some(&sca), [0; 2]));
         assert_eq!(part.matrix.t[0], 925);
+    }
+
+    /// For a circle (and the triangles and the diamond) `Sca_ck_info` finds
+    /// the record by the part but tests the shape at the zombie's `Atd[0]`:
+    /// the part turns back only when the body is inside.
+    #[test]
+    fn a_round_wall_turns_a_thrown_part_back_by_where_the_body_is() {
+        let sca = crate::state::Sca {
+            cell_x: 0,
+            cell_z: 0,
+            ceiling: 0,
+            tail: 0,
+            records: vec![crate::state::ScaRect {
+                x: 1000,
+                z: -500,
+                width: 1000,
+                depth: 1000,
+                id: 0x2006,
+                kind: 0xF,
+                floor: 1,
+            }],
+        };
+        for (body, back) in [([5000, 5000], false), ([1500, 0], true)] {
+            let mut part = thrown(-1000, 0);
+            part.matrix.t = [1400, -1000, 0];
+            part.velocity = [100, 0, 0];
+            let mut effects = crate::esp2::Effects::default();
+            let mut rnd = Rnd::default();
+            assert!(part.fall(0, &mut rnd, &mut effects, Some(&sca), body));
+            assert_eq!(part.matrix.t[0], 1500, "{body:?}");
+            assert_eq!(part.velocity[0], if back { -25 } else { 100 }, "{body:?}");
+        }
+    }
+
+    /// `Parts_down` doesn't stop at the last landing: it still turns the
+    /// part on toward its rest that tick.
+    #[test]
+    fn a_parts_last_landing_still_turns_it() {
+        let mut part = thrown(-10, 50);
+        part.bounces = 2;
+        let turning = part.turning;
+        let mut effects = crate::esp2::Effects::default();
+        let mut rnd = Rnd::default();
+        assert!(!part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
+        assert_eq!(part.matrix.t[1], 0);
+        assert_eq!(part.turning, turning - 1);
     }
 
     /// A part's last landing leaves its `Workm` on the ground, where the
@@ -2894,9 +2944,9 @@ mod tests {
         }
         let mut effects = crate::esp2::Effects::default();
         let mut rnd = Rnd::default();
-        assert!(part.fall(0, &mut rnd, &mut effects, None));
+        assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
         assert_eq!(part.matrix.t, [350, 910, 0]);
-        assert!(part.fall(0, &mut rnd, &mut effects, None));
+        assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
         assert_eq!(part.matrix.t, [650, 830, 0]);
     }
 
@@ -2910,9 +2960,9 @@ mod tests {
         let mut part = ThrownPart::blown(3, matrix, 0, 300, -150);
         let mut effects = crate::esp2::Effects::default();
         let mut rnd = Rnd::default();
-        assert!(part.fall(0, &mut rnd, &mut effects, None));
+        assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
         assert_eq!(part.matrix.t, [200, 860, 0]);
-        assert!(part.fall(0, &mut rnd, &mut effects, None));
+        assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
         assert_eq!(part.matrix.t, [300, 730, 0]);
     }
 
@@ -2923,7 +2973,7 @@ mod tests {
         let mut effects = crate::esp2::Effects::default();
         let mut rnd = Rnd::default();
         for _ in 0..16 {
-            assert!(part.fall(0, &mut rnd, &mut effects, None));
+            assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
         }
         let flat = |m: [[i16; 3]; 3]| m.into_iter().flatten().map(i32::from);
         for (got, want) in flat(part.matrix.m).zip(flat(rest)) {

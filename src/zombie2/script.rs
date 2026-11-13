@@ -64,6 +64,18 @@ impl Api {
 }
 
 /// The numbers scripts have for the original's motion tables.
+/// `e:blow_part`'s arguments: the part, the direction, then the speed, the
+/// rise, the gravity, the colour and the slowing, each optional.
+type BlowPartArgs = (
+    usize,
+    i32,
+    Option<i16>,
+    Option<i16>,
+    Option<i16>,
+    Option<u32>,
+    Option<i16>,
+);
+
 fn bank(index: i64) -> mlua::Result<Bank> {
     match index {
         0 => Ok(Bank::Pld),
@@ -1008,17 +1020,7 @@ impl UserData for Api {
         );
         methods.add_method_mut(
             "blow_part",
-            |_,
-             e,
-             (part, dir, speed, up, gravity, rgb, slowing): (
-                usize,
-                i32,
-                Option<i16>,
-                Option<i16>,
-                Option<i16>,
-                Option<u32>,
-                Option<i16>,
-            )| {
+            |_, e, (part, dir, speed, up, gravity, rgb, slowing): BlowPartArgs| {
                 e.em().blow_part(
                     part,
                     dir as u16,
