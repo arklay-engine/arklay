@@ -1,0 +1,73 @@
+# Claire A's route from the main hall's statue (200) and the Spade Key through the key's two doors (204's door 2 to 203, 114's door 0 to 113) to the Diamond Key (10B), room by room from warps (oracle/re2.md, "Claire A to the Diamond Key", #665), recorded with --start claire and compared with player = 1 and character = 1, each warp starting Claire as route_claire_a_spade leaves her: 119 life, 6 rounds in the handgun and 35 spare, the ink ribbons in slot 3, the Red Jewel in slot 4, the Spade Key (two uses) in slot 5, the exit scene's 3:100, every common (bank 4) and item (bank 8) flag and both of fg_key's bits (31:17, 31:27) the route has raised by its end, and the dead flags of room 204's window licker (6:61) and room 207's four zombies.
+
+# Rooms 200, 201, 204 and 203: from the statue to door 1, 201 to door 1, 204 with no licker (6:61), the Spade Key at door 2, and 203's door 0 back into 204.
+[[run]]
+name = "claire_a_200_203"
+room = "200"
+player = 1
+character = 1
+setup_script = "claire_a_200_203.lua"
+input = "claire_a_200_203.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 2331
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 2330]
+expect = "match"
+ignore = [
+  # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 200's door 1, 201's door 1, 204's door 2 and 203's door 0
+  [457, "rng"], [457, "rseed"], [949, "rng"], [949, "rseed"], [1571, "rng"], [1571, "rseed"], [1939, "rng"], [1939, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [492, 582, "hk"], [984, 1074, "hk"], [1606, 1696, "hk"], [1974, 2064, "hk"],
+]
+record = "--start claire --warp 200:-13846:0:-10035:3080:8 --flag 3:100 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:17 --flag 31:27 --life 119 --give 0:3:6 --give 2:0x14:35 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x59:2"
+
+# Rooms 204, 205, 207 and 10C: from 203's door 0's arrival north to door 1, the corridor of bodies with 4:48 set (both groups come out of the walls, out of reach), 207 past its dead zombies to the stairs door, into 10C.
+[[run]]
+name = "claire_a_204_10c"
+room = "204"
+player = 1
+character = 1
+setup_script = "claire_a_204_10c.lua"
+input = "claire_a_204_10c.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1750
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 1749]
+expect = "match"
+ignore = [
+  # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 204's door 1, 205's door 2 and 207's stairs door
+  [420, "rng"], [420, "rseed"], [1060, "rng"], [1060, "rseed"], [1490, "rng"], [1490, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [455, 545, "hk"], [1095, 1185, "hk"], [1525, 1617, "hk"],
+]
+record = "--start claire --warp 204:-14423:0:-7289:2024:4 --flag 3:100 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:17 --flag 31:27 --life 119 --give 0:3:6 --give 2:0x14:35 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x59:1"
+
+# Rooms 10C, 114 and 113: up the stairs and along the upper floor to door 2, room 114's scene with Sherry (event 2 on the load), its zombie shot from the corridor's north end, down the corridor to door 0 and the Spade Key's last use (the used-key message, the close and the discard question, Yes, and the press that opens it), into 113.
+[[run]]
+name = "claire_a_10c_113"
+room = "10C"
+player = 1
+character = 1
+setup_script = "claire_a_10c_113.lua"
+input = "claire_a_10c_113.txt"
+# Sherry's lines in 114 hold for as many ticks as the recording's pace gave them
+voice_from_ref = true
+input_shift = 344
+input_drop_early = true
+ticks = 2130
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 2129]
+expect = "match"
+ignore = [
+  # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 10C's door 2 and 114's door 0
+  [749, "rng"], [749, "rseed"], [2053, "rng"], [2053, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [784, 874, "hk"], [2088, 2129, "hk"],
+  # the head through 10C's door 2 while 114's load runs Sherry's scene behind the door: the original places it on the rest pose at the load, arklay on the door's last frame (docs/internals/deviations/re2.md, "The head through a door")
+  [875, 1088, "pneck"],
+  # the zombie's speeds until its first move: the original's slot holds what its memory held (docs/internals/deviations/re2.md, "What a zombie's slot held before")
+  [875, 1089, "zm0"],
+]
+record = "--start claire --warp 10C:7390:0:944:960:0 --flag 3:100 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:17 --flag 31:27 --life 119 --give 0:3:6 --give 2:0x14:35 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x59:1"

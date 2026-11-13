@@ -1,0 +1,53 @@
+# Claire A from the main hall's statue (200), as route_claire_a_spade leaves her with the Spade Key, to room 203 and back: door 1 into 201, door 1 into 204 (no licker: Claire killed it, 6:61), the Spade Key at door 2 (the used-key message, the close, the press that opens it), and room 203's door 0 back into 204 (oracle/re2.md, "Claire A to the Diamond Key"); leon_a_200_203's presses, without the licker's fight
+0
+# 200: turn from the statue toward door 1 (1800) and run west along the hall, onto the door's wall
+350 left
+367
+369 up run
+455
+# door 1: room 201 loads on 492, play comes back on 825
+457 action
+459
+# 201: leon_a_201's walk (past the bar's north end, then south) to door 1, 481 ticks later
+831 right
+833
+835 up run
+867
+869 left
+871
+873 up run
+905
+907 left
+920
+922 up run
+942
+944 right
+947
+949 action
+953
+# 204 (on 984, play back on 1291): with 4:86 set and 6:61 clear, main_02 hangs the licker from the ceiling, and it drops as play starts. Run west along the corridor, turn toward the branch north and fire aimed down every 12 ticks until it dies
+# 204 (on 984, play back on 1291): with 6:61 set no licker hangs from the ceiling. Run west along the corridor, turn north and run up the branch to door 2's frame
+1291 up run
+1384
+1386 right
+1399
+1401 up run
+1433
+# turn to face east, onto door 2
+1435 right
+1448
+# door 2: the Spade Key's used-key message (fg_key bit 5)
+1451 action
+1453
+# the close: one use off the key (59:2 to 59:1)
+1511 action
+1513
+# a press that opens it: room 203 loads on 1606, play comes back on 1908
+1571 action
+1573
+# 203: turn about and press door 0: 204 loads on 1974, play comes back on 2281
+1911 left
+1937
+1939 action
+1941
+2331
