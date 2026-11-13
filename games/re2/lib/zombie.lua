@@ -2637,7 +2637,9 @@ local function mv_thrown(e)
     end
     if e:timer(1) == 1 and shifted(e) & 7 ~= 0 then
         e:routines(1, 5, 1, 0)
-        e:rnd()
+        -- On the floor, it is no longer staggered (0x454aac, 0x454b22).
+        e:set_var(AT_SCE_NO, (e:rnd() & 0xF) + 0x10)
+        e:set_var(AT_OBJ_NO, 0)
         drop_flag(e, FLAG_THROWN | FLAG_FACE_DOWN)
         local back = e:timer(3)
         e:set_timer(2, back)
@@ -2721,13 +2723,15 @@ local function mv_fall(e)
         lying_be_flg(e)
         e:set_timer(0, 0)
         hold_damage(e)
+        -- Falling, it is no longer staggered (0x454e14).
+        e:set_var(AT_OBJ_NO, 0)
         e:set_timer(3, 0)
         if voice_free(e) then
             moan_either(e, 0xB, 10)
         end
     elseif routine == 2 then
         e:routines(1, 5, 2, 0)
-        e:rnd()
+        e:set_var(AT_SCE_NO, (e:rnd() & 0xF) + 0x10)
         e:set_timer(2, 0)
         return
     elseif routine ~= 1 then
@@ -2807,15 +2811,21 @@ local function mv_lunge(e)
     end
 end
 
--- `FUN_00455170`: begun again, as a script's `Type` asks.
+-- `FUN_00455170`: begun again, as a script's `Type` asks. Like `Em10_Init`, it
+-- forgets a stagger (`At_obj_no`, 0x455210) and draws `At_sce_no` afresh
+-- (0x455235): room 114's zombie on Claire A, which `main_05` sends here as it
+-- lets it go, staggers on its third handgun hit only by this draw.
 local function mv_rise_again(e, v)
     e:routines(1, 0, 0, 0)
     e:set_damage_cnt(0)
     e:set_sce_flg(0)
     e:set_life(LIFE[e:rnd() & 0xF])
+    e:set_d_life(0xD)
     e:set_var(WALK, e:rnd() & 1 == 0 and 0 or 2)
     e:set_flags(0)
-    e:rnd()
+    e:set_var(AT_OBJ_NO, 0)
+    e:set_var(AT_SCE_NO, (e:rnd() & 0xF) + 0x10)
+    e:set_var(RISE_SIDE, 0)
     body_box_standing(e)
     e:set_be_flg(BE_LOW | BE_HIGH | 1)
     e:clip(1, 0, 0)
