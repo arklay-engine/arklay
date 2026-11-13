@@ -3752,6 +3752,7 @@ mod tests {
         lua.load(format!(
             "{SPIDER_STUB}
              {EMBRYO_STUB}
+             {LATCH_STUB}
              {script}
              for _ = 1, {ticks} do refill(); update(e) end
              return {{ r0 = w.r[0], r1 = w.r[1], r2 = w.r[2], r3 = w.r[3], life = w.life,
@@ -3775,6 +3776,38 @@ mod tests {
             Spider(fields, Vec::new())
         })
         .unwrap()
+    }
+
+    /// What the latch (`FUN_00475280`) needs of the player on top of
+    /// `EMBRYO_STUB`, where the stubs before it don't have it already: their
+    /// routines, facing and parts, and the presses.
+    const LATCH_STUB: &str = "
+        e.pl_routine = e.pl_routine or function(_, i) return w.pl[i] end
+        e.pl_set_routine = e.pl_set_routine or function(_, a, b, c, d) w.pl = { [0] = a, b, c, d } end
+        e.pl_set_routine_at = e.pl_set_routine_at or function(_, i, v) w.pl[i] = v end
+        e.pl_hold = e.pl_hold or function(_) w.held = 1 end
+        e.pl_set_sub1 = e.pl_set_sub1 or function() end
+        e.player_angle = e.player_angle or function(_) return 0 end
+        e.player_part_point = e.player_part_point or function(_, part) return 0, PART_Y or -1000, 0 end
+        e.direction_from_player = e.direction_from_player or function(_) return 0 end
+        e.gacha = e.gacha or function(_) return PRESS or false end
+        e.noise = e.noise or function(_) return 0 end
+        e.set_pos = e.set_pos or function(_, x, y, z) w.pos = { x, y, z } end
+        e.set_pos_y = e.set_pos_y or function(_, y) w.pos[2] = y end
+        e.damage_cnt = e.damage_cnt or function(_) return 0 end
+        e.sound = e.sound or function() end
+        e.player_life = e.player_life or function(_) return 200 end
+    ";
+
+    /// `FUN_00475280`'s `Routine_2` 5: the player is caught when `Timer0`
+    /// runs out, and four ticks after the latch climbs on (6).
+    #[test]
+    fn the_latch_climbs_four_ticks_after_the_catch() {
+        let setup = "ROUTINES = { [0] = 1, 4, 5, 0 } TIMERS = { [0] = 0, 0, 0, 0 }";
+        let embryo = run_embryo(0x2003, &[0; 16], 4, setup);
+        assert_eq!(routines(&embryo), (1, 4, 6, 0));
+        let embryo = run_embryo(0x2003, &[0; 16], 3, setup);
+        assert_eq!(routines(&embryo), (1, 4, 5, 0));
     }
 
     fn routines(embryo: &Spider) -> (i64, i64, i64, i64) {

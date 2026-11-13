@@ -5407,6 +5407,10 @@ impl Mover<'_, '_> {
             self.em23_held(held);
             return;
         }
+        if held.holder_id == crate::zombie2::EMBRYO_ID {
+            self.em27_held(held);
+            return;
+        }
         if held.holder_id == crate::zombie2::G1_ID {
             self.em30_killed(held);
             return;
@@ -5633,6 +5637,76 @@ impl Mover<'_, '_> {
             0 => self.em2a_thrown(),
             2 => self.em2a_killed(held),
             _ => self.em2a_turned(),
+        }
+    }
+
+    /// `FUN_00476c60`, `em_damage_table[0x27]`: a G embryo on the player, on
+    /// its `pSub1` clips. The embryo's latch (`FUN_00475280`) sets
+    /// `Routine_2`: 0 when it takes hold (clip 0), 2 when it lets go (clip 4,
+    /// then free), 4 when its bite kills (clip 1), 6 when it goes in (clip 2)
+    /// and 8 at the end (clip 3, with blood at part 8, then the dead body).
+    /// The parts' `Free` and `Be_flg` `0x80` that 4 and 6 set on parts 0 and 8
+    /// (their swell as drawn) aren't ported.
+    fn em27_held(&mut self, held: &mut Held<'_>) {
+        self.work.bank = Bank::Held;
+        match self.work.routine[2] {
+            0 | 1 => {
+                if self.work.routine[2] == 0 {
+                    self.held_clip(0, 7);
+                    self.work.routine[2] = 1;
+                    self.work.sounds.push(0x400_0001);
+                }
+                self.joint_move_late(0x200);
+            }
+            2 | 3 => {
+                if self.work.routine[2] == 2 {
+                    self.held_clip(4, 7);
+                    self.work.routine[2] = 3;
+                    self.work.damage_cnt &= 0x7F;
+                }
+                if self.joint_move_late(0x100) {
+                    self.work.routine = [MODE_MOVE, 0, 0, 0];
+                    self.work.bank = Bank::Weapon;
+                }
+            }
+            4 | 5 => {
+                if self.work.routine[2] == 4 {
+                    self.held_clip(1, 0xF);
+                    self.work.routine[2] = 5;
+                    self.work.neck.flags = 1;
+                }
+                self.joint_move_late(0x100);
+            }
+            6 | 7 => {
+                if self.work.routine[2] == 6 {
+                    self.held_clip(2, 0xF);
+                    self.work.routine[2] = 7;
+                }
+                self.joint_move_late(0x100);
+            }
+            8 | 9 => {
+                let dir = self.player.angle as i16;
+                if self.work.routine[2] == 8 {
+                    self.held_clip(3, 0xF);
+                    self.work.routine[2] = 9;
+                    self.part_effect(0, 2, 0x13E8, dir, 8, [0; 3]);
+                    self.part_effect(0, 2, 0x1000, dir.wrapping_add(0x800), 8, [0; 3]);
+                }
+                let count = self.work.move_cnt;
+                if count < 0xF && count & 1 == 0 {
+                    let size = u16::from(held.rnd.draw()) * 8 + 0x400;
+                    self.part_effect(0, 0, size, dir, 8, [0; 3]);
+                }
+                if matches!(count, 0x2D | 0x30 | 5) {
+                    self.part_effect(0, 2, 0x1000, dir, 8, [0; 3]);
+                }
+                self.spd_get_reversed(false);
+                let ended = self.joint_move_late(0x100);
+                self.work.routine[2] += u8::from(ended);
+                self.add_speed_xz();
+            }
+            10 => self.work.routine = [MODE_DEAD_BODY, 0, 0, 0],
+            _ => {}
         }
     }
 
