@@ -111,7 +111,13 @@ cargo run -- convert-game /path/to/steam/4249100_Biohazard --out re1.akpak
 # the S.T.A.R.S. office (115), the Spade Key and its doors to the Diamond Key in
 # 10B matches the original tick for tick, zombies and lickers included, and so
 # does Claire A's route to the Spade Key, apart from the differences in
-# docs/internals/deviations/re2.md. Zombies,
+# docs/internals/deviations/re2.md. Leon A's warp runs carry on from there down
+# 110's ladder, through 203's rounds and 207's Diamond door and 209's zombies to
+# Marvin's second scene and the Heart Key in 202 (the continuous run is #644's
+# last part). Both characters fire the knife and weapons 2 to 8 and the grenade
+# launcher, bowgun, Colt S.A.A., Beretta, sub-machine gun and flamethrower
+# (weapons 9 to 0x10 and 0x13); the spark shot, rocket launcher and gatling gun
+# are still to come (issue #491). Zombies,
 # lickers, dogs, crows, Mr. X, the plants, the spiders, the cockroaches (in part),
 # room 205's bodies and the alligator are ported; the G forms are part way (G1,
 # G2 and G3 are done, and the G embryo walks and jumps but does not yet latch on)
