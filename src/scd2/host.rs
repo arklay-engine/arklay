@@ -30,6 +30,10 @@ pub struct Re2State {
     pub gates: [ActionGate; ROOM_ACTION_SLOTS],
     /// `door_locks`: the unlocked doors' bits.
     pub door_locks: [u32; 2],
+    /// While an authored setup runs (`--setup-script`, or a driver's `game`
+    /// calls before its first tick): the flag bits it wrote and their
+    /// values, which the room's rerun applies to the flags the boot found.
+    pub authored_flags: Option<Box<AuthoredFlags>>,
     /// `sce_rnd`'s state.
     pub random: u32,
     /// `Xa_control`'s voice line.
@@ -777,6 +781,7 @@ impl Default for Re2State {
             vars: [0; 256],
             gates: [ActionGate::default(); ROOM_ACTION_SLOTS],
             door_locks: [0; 2],
+            authored_flags: None,
             random: 0x1382_01C3,
             cut_old: 0,
             shown_cut: 0,
@@ -1779,6 +1784,19 @@ impl Re2State {
             7 => *word ^= bit,
             _ => {}
         }
+        let on = *word & bit != 0;
+        if let Some(log) = self.authored_flags.as_deref_mut() {
+            let (written, values) = if bank == KEY_BANK {
+                let at = key_word(index);
+                (&mut log.written.1[at], &mut log.values.1[at])
+            } else {
+                let at = usize::from(index >> 5) & 7;
+                let bank = usize::from(bank);
+                (&mut log.written.0[bank][at], &mut log.values.0[bank][at])
+            };
+            *written |= bit;
+            *values = if on { *values | bit } else { *values & !bit };
+        }
     }
 
     /// `Set_room`'s `fg_status &= 0xFFF04000`, on every room load. Only word
@@ -1791,6 +1809,45 @@ impl Re2State {
 /// `Flg_addr[31]` is `fg_key` (`0x98ED2C`): the doors' lock bits, the
 /// words [`Re2State::door_locks`] holds, so a script's `ck 31:n` and `set
 /// 31:n` read and raise the bits a door's lock byte names.
+/// The flag banks, then `fg_key` (bank 31).
+pub type FlagWords = ([[u32; 8]; BANKS], [u32; 2]);
+
+/// The flag bits an authored setup wrote ([`Re2State::authored_flags`]) and
+/// the value each was left at.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthoredFlags {
+    pub written: FlagWords,
+    pub values: FlagWords,
+}
+
+impl Default for AuthoredFlags {
+    fn default() -> Self {
+        Self {
+            written: ([[0; 8]; BANKS], [0; 2]),
+            values: ([[0; 8]; BANKS], [0; 2]),
+        }
+    }
+}
+
+impl AuthoredFlags {
+    /// `flags` with each written bit at the value the setup left it at.
+    pub fn apply(&self, flags: FlagWords) -> FlagWords {
+        let over = |flag: u32, written: u32, value: u32| flag & !written | value & written;
+        (
+            std::array::from_fn(|bank| {
+                std::array::from_fn(|at| {
+                    over(
+                        flags.0[bank][at],
+                        self.written.0[bank][at],
+                        self.values.0[bank][at],
+                    )
+                })
+            }),
+            std::array::from_fn(|at| over(flags.1[at], self.written.1[at], self.values.1[at])),
+        )
+    }
+}
+
 pub const KEY_BANK: u8 = 31;
 
 /// The `door_locks` word of `fg_key` bit `index`. The original's two words
