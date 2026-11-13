@@ -17827,6 +17827,10 @@ fn tick_room_timed(
         return None;
     }
     let door_pending = context.game.transition_door.is_some();
+    // The original's `Cut_check` runs before `Sce_scheduler`, so a lock the
+    // scripts' `cut_auto` releases this tick still held the cut for this
+    // tick's check (room 303's plug panel: `cut_chg(3)`, `cut_auto(1)`).
+    let cut_locked_before = context.game.is_re2_room && context.game.camera.locked;
     tick_re2_scripts(&mut context);
     context.game.re2.script_door =
         context.game.is_re2_room && !door_pending && context.game.transition_door.is_some();
@@ -17869,7 +17873,12 @@ fn tick_room_timed(
     // A drawer's hand-off raises `fg_status`'s `0x100` until its close,
     // and `Game_loop` skips `Cut_check` under it.
     if !context.game.re2.script_door && !context.game.re2_hikidashi.holds_cut() {
-        apply_camera(context.room, context.game, Some(context.player.pos));
+        apply_re2_tick_camera(
+            context.room,
+            context.game,
+            context.player.pos,
+            cut_locked_before,
+        );
     }
     if context.room.current_cut != previous_cut {
         // The effects projected above under the pre-switch camera; recompute
@@ -18433,6 +18442,27 @@ fn apply_camera(room: &mut RoomState, game: &mut game::GameState, pos: Option<[i
         return;
     }
     room.current_cut = selected;
+}
+
+/// The play tick's camera test for [`tick_room`]: an RE2 room's `Cut_check`
+/// runs before `Sce_scheduler`, so a lock that held when the tick began
+/// holds this tick's test even when the scripts' `cut_auto` let it go; the
+/// cut the scripts chose stays on screen, and the zones are tested from the
+/// next tick.
+fn apply_re2_tick_camera(
+    room: &mut RoomState,
+    game: &mut game::GameState,
+    pos: [i32; 3],
+    locked_before: bool,
+) {
+    let released = locked_before && !game.camera.locked;
+    if released {
+        game.camera.locked = true;
+    }
+    apply_camera(room, game, Some(pos));
+    if released {
+        game.camera.locked = false;
+    }
 }
 
 /// The latched input words carry one bit per logical action
@@ -25487,6 +25517,57 @@ mod tests {
         // Once the aim ends, the next pass brings the live cut on screen.
         game.re2.view_held = false;
         apply_camera(&mut room, &mut game, Some([50, 0, 50]));
+        assert_eq!(room.current_cut, 1);
+    }
+
+    #[test]
+    fn an_re2_cut_auto_lets_the_zones_in_from_the_next_tick() {
+        use crate::state::{Cut, Zone, ZoneGate};
+
+        let mut room = RoomState {
+            cuts: vec![Cut::default(); 3],
+            sca: Some(Default::default()),
+            ..RoomState::default()
+        };
+        // Cut 2's group holds a zone to cut 1 where the player stands.
+        room.zones = vec![
+            Zone {
+                cam_to: 2,
+                cam_from: 2,
+                corners: [[0; 2]; 4],
+            },
+            Zone {
+                cam_to: 1,
+                cam_from: 2,
+                corners: [[0, 0], [0, 100], [100, 100], [100, 0]],
+            },
+        ];
+        room.zone_gates = vec![
+            ZoneGate {
+                flag: 1,
+                floor: 0xFF
+            };
+            2
+        ];
+        let id = RoomId::parse("3030").unwrap();
+        let mut game = game::GameState::new(id, &room);
+        game.is_re2_room = true;
+
+        // Room 303's plug panel: the close-up's lock held when the tick
+        // began, and the scripts' `cut_chg(2)` and `cut_auto(1)` ran in it.
+        game.set_camera_cut(2);
+        game.camera.locked = false;
+        apply_re2_tick_camera(&mut room, &mut game, [50, 0, 50], true);
+        assert_eq!(
+            game.camera.current_cut, 2,
+            "the scripts' cut shows this tick"
+        );
+        assert_eq!(room.current_cut, 2);
+        assert!(!game.camera.locked, "the lock stays released");
+
+        // The next tick's test starts unlocked and follows the zone.
+        apply_re2_tick_camera(&mut room, &mut game, [50, 0, 50], false);
+        assert_eq!(game.camera.current_cut, 1);
         assert_eq!(room.current_cut, 1);
     }
 

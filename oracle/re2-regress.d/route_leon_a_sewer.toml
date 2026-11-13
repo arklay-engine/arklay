@@ -1,0 +1,25 @@
+# Leon A's route through the sewer from below the kennel's manhole (302) to the Club Key and on to the cable car, room by room from warps (oracle/re2.md, "Leon A through the sewer")
+
+# Rooms 302, 30B and 303: from 21A's manhole round 302's two spiders to door 1, across 30B to door 0, and round 303 to its plug panel (a message: the four plugs aren't in) and back to door 1, whose event (`main_03`, `save(32, 14)`) makes Ada the player for 30B; the run ends on the tick before 30B loads
+[[run]]
+name = "leon_a_302_30b"
+room = "302"
+setup_script = "leon_a_302_30b.lua"
+input = "leon_a_302_30b.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1798
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 1797]
+# 1.54 measured, the doors' frames included: the stairs door from 302 is 4.59 (docs/internals/deviations/re2.md, "The stairs door's frames") and 30B's door 1.46
+frame_max_mean = 1.65
+# each room on its own, from its hand back to its door's press: 302 (#668: Leon, the spiders and the water draw differently), 30B, and 303 with the plug panel's message
+frame_windows = [[360, 645, 2.5], [857, 935, 0.4], [1264, 1760, 0.25]]
+expect = "match"
+ignore = [
+  # the doors' own ticks: 302's door 1, 30B's door 0 and 303's door 1 (whose event makes Ada the player)
+  [646, "rng"], [646, "rseed"], [936, "rng"], [936, "rseed"], [1761, "rng"], [1761, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do, and from 30B's load on the run's last two ticks
+  [681, 771, "hk"], [971, 1061, "hk"], [1796, 1797, "hk"],
+]
+record = "--warp 302:-10280:0:-17211:2097:0 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:8 --flag 31:9 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 110 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"

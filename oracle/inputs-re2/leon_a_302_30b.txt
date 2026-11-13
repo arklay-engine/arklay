@@ -1,0 +1,101 @@
+# leon_a_302_30b: Leon A from below 21A's manhole (302) round 302's spiders to door 1, across 30B to door 0, round 303 to its plug panel (the press opens its message, the press on 1566 closes it) and back to door 1, whose event (main_03, save(32, 14)) makes Ada the player for 30B
+# 302: west, north up the west side and east to door 1
+349 up run
+375 up run right
+392 up run
+457 up run right
+458 up run
+479 up run right
+480 up run
+481 up run right
+498 up run
+509 up run right
+510 up run
+527 up run right
+528 up run
+529 up run left
+582 up run right
+617
+619 right
+646 action
+648
+683 up
+# 30B: north to door 0
+857 up run
+906 up run left
+907 up run
+909 up run right
+911 up run
+912 up run right
+913 up run
+927 up run right
+929
+931 left
+936 action
+938
+973 up
+# 303: east, north, west to the plug panel
+1264 up run right
+1267 up run
+1281 up run right
+1282 up run
+1298 up run right
+1299 up run left
+1321 up run
+1338 up run left
+1339 up run
+1360 up run left
+1378 up run
+1381 up run left
+1382 up run
+1391 up run left
+1392 up run
+1397
+1398 right
+1422 action
+1424
+1434 action
+1436
+1446 action
+1448
+1458 action
+1460
+1470 action
+1472
+1482 action
+1484
+1494 action
+1496
+1506 action
+1508
+1518 action
+1520
+1530 action
+1532
+1542 action
+1544
+1554 action
+1556
+1566 action
+1568
+1598 up run right
+1625 up run
+1632 up run right
+1633 up run
+# back round to door 1
+1636 up run right
+1652 up run
+1653 up run right
+1654 up run
+1689 up run right
+1690 up run
+1693 up run right
+1711 up run
+1712 up run right
+1713 up run
+1732 up run right
+1733 up run
+1735
+1737 left
+1760 action
+1762
