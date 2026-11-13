@@ -633,6 +633,18 @@ impl Zombie {
         self.drawn = self.pose_tree.compose_drawn(&detached, hidden, &self.drawn);
     }
 
+    /// Where `Parts_bomb` starts a part from. Neither `FUN_00461f40` nor the
+    /// crawler's stomp moves it: it stays at the `Workm` `Joint_trans2` last
+    /// drew it at, not at this tick's `pose` (the stomp's blood comes from
+    /// there). A part never drawn takes the pose.
+    pub(crate) fn bomb_start(
+        &self,
+        part: usize,
+        pose: Option<player2::Matrix>,
+    ) -> Option<player2::Matrix> {
+        self.drawn.get(part).copied().flatten().or(pose)
+    }
+
     /// The parts no longer on the skeleton, and where they are.
     pub fn detached(&self) -> impl Iterator<Item = (u8, crate::anim::Mat4x3)> + '_ {
         let pulled = self
@@ -1696,7 +1708,8 @@ impl Em<'_, '_, '_> {
         gravity: i16,
         rgb: Option<u32>,
     ) {
-        if let Some(matrix) = self.mover.part_matrix(part) {
+        let pose = self.mover.part_matrix(part);
+        if let Some(matrix) = self.z.bomb_start(part, pose) {
             let mut thrown = ThrownPart::blown(part as u8, matrix, dir, speed, up);
             thrown.gravity = gravity;
             self.push_thrown(thrown);
@@ -2627,6 +2640,36 @@ mod tests {
             t: [1000, y, 2000],
         };
         ThrownPart::new(10, matrix, 0, (0, up), 0x32, [0, 0x400, 0])
+    }
+
+    /// The crawler's stomp (`FUN_00453510` at 0x16): the head goes to
+    /// `Parts_bomb` from where it was last drawn, not from this tick's pose,
+    /// and with no speed, rise or fall it stays there for its 0x1D ticks, so
+    /// the bloods from part 8 start there (`esp_leon_a_106_108`, 2446).
+    #[test]
+    fn a_stomped_head_stays_where_it_was_last_drawn() {
+        let at = |t| player2::Matrix {
+            m: player2::rot_matrix([0, 0, 0]),
+            t,
+        };
+        let drawn = at([2623, -12, -10818]);
+        let pose = at([2648, -97, -10830]);
+        let mut zombie = Zombie {
+            drawn: vec![None; 9],
+            ..Zombie::default()
+        };
+        assert_eq!(zombie.bomb_start(8, Some(pose)), Some(pose), "never drawn");
+        zombie.drawn[8] = Some(drawn);
+        let start = zombie.bomb_start(8, Some(pose)).unwrap();
+        assert_eq!(start, drawn);
+        let mut head = ThrownPart::blown(8, start, 0x400, 0, 0);
+        head.gravity = 0;
+        for tick in 0..0x1D {
+            let blown = head.blown.unwrap();
+            assert!(head.blow(blown), "there on tick {tick}");
+            assert_eq!(head.matrix.t, drawn.t);
+        }
+        assert!(!head.blow(head.blown.unwrap()), "gone after 0x1D ticks");
     }
 
     #[test]
