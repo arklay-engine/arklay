@@ -2355,8 +2355,12 @@ impl GameHost<'_> {
             kage: None,
             l_spl: 0,
             dir_spl: 0,
-            partner: (slot == SPLAYER_SLOT && !zombie)
-                .then(|| Box::new(crate::partner2::Partner::placed())),
+            partner: (slot == SPLAYER_SLOT && !zombie).then(|| {
+                Box::new(crate::partner2::Partner::placed(
+                    at(13) as i16,
+                    at(14) as i16,
+                ))
+            }),
             zombie: zombie.then(|| {
                 let mut zombie = crate::zombie2::spawned(slot as u8, at(5) as u8, at(7) as u8);
                 zombie.dead_flag = dead;
@@ -5958,6 +5962,21 @@ mod tests {
 
     fn splayer(game: &GameState) -> &Character {
         game.re2.characters.0[SPLAYER_SLOT].as_deref().unwrap()
+    }
+
+    #[test]
+    fn sce_em_set_leaves_its_start_words_in_the_partners_timers() {
+        // Room 216's Ada: `Timer0` and `Timer1` hold 777 and 72 in the original.
+        let mut game = GameState::default();
+        exec(
+            &mut game,
+            "sce_em_set",
+            &[
+                0, 255, 65, 0, 8, 0, 31, 0, 255, 20000, 20000, 20000, 3072, 777, 72,
+            ],
+        );
+        let partner = splayer(&game).partner.as_deref().unwrap();
+        assert_eq!((partner.timer0, partner.timer1), (777, 72));
     }
 
     #[test]

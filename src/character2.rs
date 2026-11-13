@@ -1211,6 +1211,49 @@ pub fn init_for_draw(
 /// Marvin's id: his init (`0x4f00e0`) gives his arms two sets of meshes.
 const MARVIN: u8 = 0x4A;
 
+/// Ada's ids, which `Spl_Init`'s table (`0x53cbc8`) gives `Spl_in41`.
+const ADA_IDS: [u8; 2] = [0x41, 0x43];
+
+/// Ada's right hand and the part that holds its other mesh, which
+/// `Spl_in41` swaps (`Type`'s `0x800`).
+const ADA_HAND: usize = 11;
+const ADA_SPARE_HAND: usize = 15;
+
+/// Ada's part 16, which `Spl_in41` puts on only with scenario flag 80
+/// (`fg_scenario`'s `0x50`), hung from part 0 at (0x42, -0x28e, 0).
+const ADA_PART_16: usize = 16;
+const ADA_PART_16_FLAG: u8 = 0x50;
+
+/// `Spl_in41` (`0x4efc70`), after `Spl_Init`'s bits: the partner (`Type`'s
+/// `0x400`) takes `0x800`, and `0x800` swaps the hand's meshes with the spare
+/// part's and goes. The spare part is always off, part 16 is off but for
+/// scenario flag 80 (`flag_80`), and `0x80` marks the work as set up. Its
+/// partner's words are `Spl_in45`'s, and its partner gets `Spl_Auto`'s
+/// routine whatever `Type`'s `0x4000` chose.
+///
+/// Not ported: part 16's hanging from part 0 (the port's parts keep the
+/// model's tree, so with flag 80 its mesh isn't drawn), part 0's `Be_flg`
+/// `0x4000`, and `Aida_Jh_init` with its `Aida_before`, `Aida_Jh_move`
+/// (`0x4b4680`), which every tick moves the vertices at five joints (parts
+/// 1, 2, 5, 9 and 12, the tables at `0x52c5ec` to `0x52c868`) to close the
+/// skin's seams.
+fn spl_in41(character: &mut Character, flag_80: bool) {
+    if character.kind & 0x400 != 0 {
+        character.kind |= 0x800;
+    }
+    character.work.hidden_parts |= 1 << ADA_SPARE_HAND;
+    if flag_80 {
+        character.work.hidden_parts &= !(1 << ADA_PART_16);
+    } else {
+        character.work.hidden_parts |= 1 << ADA_PART_16;
+    }
+    if character.kind & 0x800 != 0 {
+        character.kind &= !0x800;
+        character.arms.swapped = !character.arms.swapped;
+    }
+    character.kind |= 0x80;
+}
+
 /// The part pairs Marvin's init swaps (`0x53cb20`): each arm joint and the
 /// spare part that holds its other mesh.
 const MARVIN_ARMS: [(usize, usize); 7] = [
@@ -1298,6 +1341,14 @@ fn hide_spare_arms(character: &mut Character, black: bool) {
 /// that only the spare shows. Once they swap, the joint takes the other mesh.
 /// The model decides, not `Id`: as a zombie he keeps his arms.
 pub fn joint_meshes(character: &Character, joints: usize, meshes: usize) -> Option<Vec<usize>> {
+    if ADA_IDS.contains(&character.model) {
+        if !character.arms.swapped || joints <= ADA_HAND || meshes <= ADA_SPARE_HAND {
+            return None;
+        }
+        let mut joint_meshes: Vec<usize> = (0..joints).collect();
+        joint_meshes[ADA_HAND] = ADA_SPARE_HAND;
+        return Some(joint_meshes);
+    }
     if character.model != MARVIN || joints <= 14 || meshes <= MARVIN_GUN_HAND {
         return None;
     }
@@ -1391,10 +1442,11 @@ fn run_order() -> impl Iterator<Item = usize> {
 }
 
 /// `_Spl`'s routine: `Spl_Init` for one no script has given a routine,
-/// `Spl_Auto` for Sherry as the partner (`partner2`), and `Spl_Scenario`.
-/// Anyone else's `Spl_Auto` isn't ported: they stand still.
+/// `Spl_Auto` for Sherry or Ada as the partner (`partner2`), and
+/// `Spl_Scenario`. Anyone else's `Spl_Auto` isn't ported: they stand still.
 fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Option<u8> {
     let sherry = matches!(character.id, 0x45 | 0x4F);
+    let ada = ADA_IDS.contains(&character.id);
     let arrived = if player2::uninitialised(&character.work) {
         // `Spl_Init`: `Type`'s `0x400` makes the partner, and the scene's
         // Ada or Sherry stops being one.
@@ -1412,7 +1464,10 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
                 game.re2.set_partner_bit(false);
             }
         }
-        let partner = partner && sherry && character.partner.is_some();
+        if ada {
+            spl_in41(character, game.re2.flag(3, ADA_PART_16_FLAG));
+        }
+        let partner = partner && (sherry || ada) && character.partner.is_some();
         player2::spl_init(
             &mut character.work,
             &mut character.body,
@@ -1422,20 +1477,23 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
         );
         // `Spl_in41` and `Spl_in45` (from `Spl_Init`'s table) send the
         // partner to `Spl_Auto` whatever 0x4000 chose.
-        if matches!(character.id, 0x41 | 0x45 | 0x4F) && game.re2.partner_bit() {
+        if (ada || sherry) && game.re2.partner_bit() {
             character.work.routine = [1, 0, 0, 0];
         }
         if character.id == MARVIN {
             spl_in4a(character);
         }
-        if sherry && let Some(words) = character.partner.as_deref_mut() {
+        // `Spl_in41` ends as `Spl_in45` does.
+        if (sherry || ada)
+            && let Some(words) = character.partner.as_deref_mut()
+        {
             words.spl_in45(game.re2.partner_bit(), game.re2.partner_life);
         }
         None
     } else if player2::in_scenario(&character.work) {
         player2::player_move(&mut character.work, &mut character.body, tick)
     } else if player2::in_auto(&character.work)
-        && sherry
+        && (sherry || ada)
         && let Some(words) = character.partner.as_deref_mut()
     {
         let (player, player_angle) = game
@@ -1456,11 +1514,13 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
             ground: partner_ground(tick.room, character.body.pos),
             be_flg: character.be_flg,
             noise: 0,
+            player_noise: game.re2.player.noise,
+            player_spd_x: game.re2.player.spd[0],
             poisoned: game.re2.partner_poisoned,
         };
         let kind = &mut character.kind;
         player2::spl_auto(&mut character.work, &mut character.body, tick, |mover| {
-            crate::partner2::spl_auto(mover, words, kind, &mut world);
+            crate::partner2::spl_auto(mover, words, kind, &mut world, ada);
         });
         character.be_flg = world.be_flg;
         game.re2.player.noise |= world.noise;
@@ -2220,7 +2280,7 @@ mod tests {
             area: crate::scd2::host::NO_AREA,
             with_room: false,
             held_bank: None,
-            partner: Some(Box::new(crate::partner2::Partner::placed())),
+            partner: Some(Box::new(crate::partner2::Partner::placed(0, 0))),
             zombie: None,
         }
     }
@@ -2276,6 +2336,89 @@ mod tests {
             Some(0),
             "she looks at the player"
         );
+    }
+
+    fn ada(kind: u16) -> Character {
+        Character {
+            id: 0x41,
+            model: 0x41,
+            ..sherry(kind)
+        }
+    }
+
+    #[test]
+    fn a_scene_adas_gun_hand_swaps_once_and_marks_her_set_up() {
+        // Room 216's `sce_em_set` gives her `Type` 0x0800: the original's
+        // work then holds 0x5080.
+        let mut game = GameState::default();
+        let mut character = ada(0x0800);
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        spl(&mut game, &mut character, &tick);
+        assert_eq!(character.kind, 0x5080);
+        assert!(character.arms.swapped);
+        assert_ne!(character.work.hidden_parts & 1 << ADA_SPARE_HAND, 0);
+        let meshes = joint_meshes(&character, 16, 16).unwrap();
+        assert_eq!(meshes[ADA_HAND], ADA_SPARE_HAND);
+        assert!(!game.re2.partner_bit());
+        assert_eq!(character.work.routine[0], player2::MODE_SCENARIO);
+    }
+
+    #[test]
+    fn a_partner_ada_raises_the_partner_bit_and_follows() {
+        let mut game = GameState::default();
+        game.re2.partner_life = 150;
+        let mut character = ada(0x400);
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        spl(&mut game, &mut character, &tick);
+        assert!(game.re2.partner_bit());
+        assert_eq!(character.kind, 0x480);
+        assert_eq!(character.work.routine, [1, 0, 0, 0]);
+        let partner = character.partner.as_deref().unwrap();
+        assert_eq!((partner.life, partner.max_life), (150, 200));
+        assert_eq!(character.work.neck.target, Some(0));
+        // The partner's 0x400 takes 0x800, so the gun hand swaps here too.
+        assert!(character.arms.swapped);
+        assert_ne!(character.work.hidden_parts & 1 << ADA_SPARE_HAND, 0);
+        // `Spl_Auto` runs `Ada_move` from the next tick: 2000 from the point,
+        // Sherry's stand would leave (past 1500) and Ada's stays.
+        character.partner.as_deref_mut().unwrap().dist = 2000;
+        spl(&mut game, &mut character, &tick);
+        assert_eq!(character.work.routine, [1, 0, 1, 0]);
+        let mut sherry = sherry(0x400);
+        spl(&mut game, &mut sherry, &tick);
+        sherry.partner.as_deref_mut().unwrap().dist = 2000;
+        spl(&mut game, &mut sherry, &tick);
+        assert_ne!(sherry.work.routine[1], 0, "Sherry leaves the stand");
+    }
+
+    #[test]
+    fn ada_0x43_as_the_partner_follows_whatever_0x4000_chose() {
+        let mut game = GameState::default();
+        let mut character = Character {
+            id: 0x43,
+            model: 0x43,
+            ..ada(0x4400)
+        };
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        spl(&mut game, &mut character, &tick);
+        assert!(game.re2.partner_bit());
+        assert_eq!(character.work.routine, [1, 0, 0, 0]);
+    }
+
+    #[test]
+    fn adas_part_16_is_on_only_with_scenario_flag_80() {
+        let hidden = |flag: bool| {
+            let mut game = GameState::default();
+            if flag {
+                game.re2.set_flag(3, ADA_PART_16_FLAG, 1);
+            }
+            let mut character = ada(0x0800);
+            let tick = spl_tick(&RoomState::default(), &Default::default());
+            spl(&mut game, &mut character, &tick);
+            character.work.hidden_parts & 1 << ADA_PART_16 != 0
+        };
+        assert!(hidden(false));
+        assert!(!hidden(true));
     }
 
     #[test]

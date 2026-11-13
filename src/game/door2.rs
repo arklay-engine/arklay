@@ -309,7 +309,7 @@ mod tests {
             u8::from(claire),
         );
         game.re2.set_partner_bit(true);
-        let mut partner = crate::partner2::Partner::placed();
+        let mut partner = crate::partner2::Partner::placed(0, 0);
         if lost {
             partner.state = crate::partner2::STATE_LOST;
         }
