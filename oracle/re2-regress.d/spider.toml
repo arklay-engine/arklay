@@ -1,0 +1,55 @@
+# The giant spider (`Em_25`) on walls and ceilings, #666 (oracle/re2.md, "The spiders on walls and ceilings").
+# Room 302 without flag 1:6 is the one Leon A meets: a wall spider (`Type` 9) and a floor spider.
+
+[[run]]
+name = "spider_302_wall"
+room = "302"
+ticks = 1400
+# shots with weapon 2 at the wall spider: its spit, hits, climbs, the ceiling's lunge and the spit that lands at 820
+setup_script = "spider_302_wall.lua"
+input = "spider_shots.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,zm0,zm1,fgstat"
+# room 302's water surface and its light on the spiders draw differently (#668): held at the measured mean
+frames = [360, 1399]
+frame_max_mean = 3.3
+expect = "match"
+record = "--warp 302:-12500:0:-13000:2048 --life 200 --give 0:2:200 --give 1:0x14:60 --equip 2"
+
+[[run]]
+name = "spider_407"
+room = "407"
+ticks = 2400
+# two ceiling spiders with the player standing: rests, walks, lunges with spits, the way down a wall and back, and bites
+setup = { pos = [-2700, 0, -19832], angle = 2028, health = 200, rnd = 6114, camera = 0 }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,zm0,zm1,fgstat"
+# room 407's steam (kind 0x28, Esp_4B and Esp_57) isn't drawn (#671): held at the measured mean
+frames = [360, 2399]
+frame_max_mean = 12.8
+expect = "match"
+record = "--warp 407:-2700:0:-19832:2028 --life 200"
+
+[[run]]
+name = "esp_spider_302_wall"
+ref = "spider_302_wall"
+room = "302"
+ticks = 1400
+setup_script = "spider_302_wall.lua"
+input = "spider_shots.txt"
+input_shift = 344
+fields = "esp"
+expect = "match"
+record = "--warp 302:-12500:0:-13000:2048 --life 200 --give 0:2:200 --give 1:0x14:60 --equip 2"
+
+[[run]]
+name = "esp_kinds_spider_302_wall"
+ref = "spider_302_wall"
+room = "302"
+ticks = 1400
+setup_script = "spider_302_wall.lua"
+input = "spider_shots.txt"
+input_shift = 344
+fields = "espn,espk,fgstat"
+expect = "match"
+record = "--warp 302:-12500:0:-13000:2048 --life 200 --give 0:2:200 --give 1:0x14:60 --equip 2"

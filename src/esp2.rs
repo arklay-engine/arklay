@@ -55,7 +55,20 @@ const FLAGS_NEW: u16 = 0xa003;
 pub fn ported(id: u8) -> bool {
     matches!(
         id,
-        0..=4 | 6 | 0x0b..=0x0e | 0x19 | 0x20 | 0x2B | 0x34 | 0x3E | 0x3F | 0x45 | 0x46 | 0x4E | 0x52
+        0..=4
+            | 6
+            | 0x0b..=0x0e
+            | 0x19
+            | 0x20
+            | 0x2B
+            | 0x34
+            | 0x36..=0x39
+            | 0x3E
+            | 0x3F
+            | 0x45
+            | 0x46
+            | 0x4E
+            | 0x52
     )
 }
 
@@ -1054,17 +1067,7 @@ impl Effects {
             // `Esp_20`: what's thrown hits the player in reach, and takes the
             // behaviour `+2` names; or swells as it goes.
             0x20 => {
-                let hit = self
-                    .target
-                    .as_mut()
-                    .is_some_and(|target| target.hit(slot.pos, 800, 20));
-                if hit {
-                    if slot.row & 8 != 0
-                        && let Some(target) = self.target.as_mut()
-                    {
-                        target.poisoned = true;
-                        target.damage_cnt |= 0x80;
-                    }
+                if self.thrown_hit(&slot, 800) {
                     self.behave(index, slot.start, sca);
                     return;
                 }
@@ -1076,6 +1079,101 @@ impl Effects {
                 }
                 let grow = (u32::from(this.scale[1]) * 5 / 1000) as u16;
                 this.scale[1] = this.scale[1].wrapping_add(grow);
+            }
+            // `Esp_36`: `Esp_10`'s start of a fall, then `Esp_38` falls it.
+            0x36 => {
+                self.behave(index, 0x10, sca);
+                let this = &mut self.slots[index];
+                this.update = 0x38;
+                this.rotation[1] = this.next_flags as i16;
+            }
+            // `Esp_38`: what's spat down hits the player in reach and takes
+            // the behaviour `+2` names; in water, or near the ground 700
+            // below it, it splashes (kind 3 row 0xF, `Esp_call3`) and does the
+            // same; against a record `Esp_05`'s way picks `+2` or `+3`.
+            0x38 => {
+                if self.thrown_hit(&slot, 600) {
+                    self.behave(index, slot.start, sca);
+                    return;
+                }
+                let [x, y, z] = slot.pos.map(i32::from);
+                let level = crate::zombie2::water_ck(&self.water, x, z);
+                let splash = if level != 0 && i32::from(level) < y {
+                    true
+                } else {
+                    let probe = [x, y + 700, z];
+                    let ground = sca.map_or_else(
+                        || crate::sca::Ground {
+                            blocked: probe[1] > 0,
+                            ..Default::default()
+                        },
+                        |sca| crate::sca::ground_at(sca, probe, 2, 0x2000),
+                    );
+                    if ground.height < probe[1] {
+                        true
+                    } else {
+                        if ground.blocked || ground.under_record {
+                            let id = if ground.height == slot.ground {
+                                slot.count
+                            } else {
+                                slot.start
+                            };
+                            self.behave(index, id, sca);
+                        }
+                        self.slots[index].ground = ground.height;
+                        false
+                    }
+                };
+                if splash {
+                    self.call(3, 0x0F, 0x2800, 0, slot.pos, true);
+                    self.behave(index, slot.start, sca);
+                }
+            }
+            // `Esp_37`: a spat blob narrows and lengthens as it falls, fast
+            // for its first 20 ticks (counted in `+0x1b`) and slowly after.
+            0x37 => {
+                let this = &mut self.slots[index];
+                let [wide, tall] = this.scale.map(u32::from);
+                let (narrow, lengthen) = if this.generation < 0x14 {
+                    this.generation += 1;
+                    (50, 90)
+                } else {
+                    (5, 10)
+                };
+                this.scale[0] = (wide - wide * narrow / 1000) as u16;
+                this.scale[1] = (tall + tall * lengthen / 1000) as u16;
+            }
+            // `Esp_39`: a blob that came down rests on the water or the
+            // ground and squashes, then splashes as `Esp_34`, 30% bigger.
+            0x39 => {
+                let [x, _, z] = slot.pos.map(i32::from);
+                let level = crate::zombie2::water_ck(&self.water, x, z);
+                if level != 0 && i32::from(level) < i32::from(slot.pos[1]) {
+                    let this = &mut self.slots[index];
+                    this.accel[1] = 0;
+                    this.velocity[1] = 0;
+                    this.pos[1] = level;
+                }
+                let this = self.slots[index];
+                let y = i32::from(this.pos[1]);
+                let ground = Self::ground(sca, this.pos).height;
+                let this = &mut self.slots[index];
+                if ground < y {
+                    this.accel[1] = 0;
+                    this.velocity[1] = 0;
+                }
+                let [wide, tall] = this.scale.map(u32::from);
+                if this.scale[1] > 0x1000 {
+                    this.anim = 0;
+                    this.update = 0x39;
+                    this.scale[0] = (wide + wide * 100 / 1000) as u16;
+                    this.scale[1] = (tall - tall * 300 / 1000) as u16;
+                    return;
+                }
+                this.scale = [0x1100, 0xA00];
+                let size = u32::from(this.size);
+                this.size = (size + size * 30 / 100) as u16;
+                self.behave(index, 0x34, sca);
             }
             // `Esp_34`: a splash where it hit, with its sound, and it stops
             // to play out from frame 0xD.
@@ -1464,6 +1562,25 @@ impl Effects {
         this.velocity = [across * sway, down, along * sway];
         this.sway_limit = down * -3 / 10;
         this.sway = -this.sway;
+    }
+
+    /// `FUN_004d8260(pos, reach, 20)` for what's thrown or spat (`Esp_20`,
+    /// `Esp_38`): the hit on the player, and a row with bit 8 poisons
+    /// (`poison_status` 0x1518, `poison_timer` 0x1E, `Damage_cnt`'s `0x80`).
+    ///
+    /// The search's enemies (its `0x98ee7b` case) aren't targets here.
+    fn thrown_hit(&mut self, slot: &Slot, reach: u32) -> bool {
+        let Some(target) = self.target.as_mut() else {
+            return false;
+        };
+        if !target.hit(slot.pos, reach, 20) {
+            return false;
+        }
+        if slot.row & 8 != 0 {
+            target.poisoned = true;
+            target.damage_cnt |= 0x80;
+        }
+        true
     }
 
     /// `Sca_ck_hit`, at what's being tested for a landing.
@@ -3443,6 +3560,119 @@ mod tests {
         let this = effects.slots[slot];
         assert_eq!(this.scale, [0x1000 + 0x9B, 0x1000 + 0x14]);
         assert_eq!((this.anim, this.generation), (0x20, 1));
+    }
+
+    /// A ceiling spider's spit (kind 0x1D, row 0x0A) on `Esp_38`, `y` up,
+    /// with `+2`'s behaviour 0x23, which ends it; the bank holds kind 3,
+    /// the splash.
+    fn ceiling_spit(effects: &mut Effects, target: Target, y: i16) -> usize {
+        effects.enter_room(bank_rows(3, &[(7, &[fire_block(), [0; BLOCK_LEN]])]));
+        effects.target = Some(target);
+        let slot = 0x40;
+        effects.slots[slot] = Slot {
+            kind: 0x1D,
+            row: 0x0A,
+            update: 0x38,
+            start: 0x23,
+            pos: [0, y, 0],
+            base: [0, y, 0],
+            flags: FLAG_LIVE,
+            ..Slot::default()
+        };
+        slot
+    }
+
+    #[test]
+    fn a_ceiling_spit_hurts_and_poisons_the_player_within_600() {
+        let mut effects = Effects::default();
+        let slot = ceiling_spit(&mut effects, player_at(550), -1000);
+        effects.tick(&mut Default::default(), None);
+        let target = effects.target.unwrap();
+        // 20, as `Pl_life_down` takes it on normal.
+        assert_eq!(target.life, 170);
+        assert!(target.poisoned);
+        assert_eq!(target.damage_cnt, 0x80);
+        assert_eq!(effects.slots[slot].flags, 0);
+    }
+
+    #[test]
+    fn a_ceiling_spit_out_of_reach_falls_on() {
+        let mut effects = Effects::default();
+        let slot = ceiling_spit(&mut effects, player_at(650), -1000);
+        effects.tick(&mut Default::default(), None);
+        assert_eq!(effects.target.unwrap().life, 200);
+        assert_eq!(effects.slots[slot].update, 0x38);
+        assert!(effects.slots.iter().all(|s| s.kind != 3));
+    }
+
+    #[test]
+    fn a_ceiling_spit_splashes_within_700_of_the_ground() {
+        let mut effects = Effects::default();
+        let slot = ceiling_spit(&mut effects, player_at(5000), -699);
+        effects.tick(&mut Default::default(), None);
+        assert_eq!(effects.slots[slot].flags, 0);
+        let splash = effects.slots.iter().find(|s| s.kind == 3).unwrap();
+        assert_eq!(
+            (splash.row, splash.size, splash.base),
+            (0x0F, 0x2800, [0, -699, 0])
+        );
+    }
+
+    #[test]
+    fn a_ceiling_spit_starts_its_fall_on_the_ground_below() {
+        let mut effects = Effects::default();
+        let slot = ceiling_spit(&mut effects, player_at(5000), -1000);
+        let this = &mut effects.slots[slot];
+        this.update = 0;
+        this.step = 0x2C;
+        this.next_flags = 0x1234;
+        effects.behave(slot, 0x36, None);
+        let this = effects.slots[slot];
+        assert_eq!((this.anim, this.update, this.ground), (0x2C, 0x38, 0));
+        assert_eq!(this.rotation[1], 0x1234);
+    }
+
+    #[test]
+    fn a_falling_blob_narrows_and_lengthens_fast_then_slowly() {
+        let mut effects = Effects::default();
+        let slot = ceiling_spit(&mut effects, player_at(5000), -1000);
+        effects.slots[slot].scale = [0x1000, 0x1000];
+        effects.behave(slot, 0x37, None);
+        let this = effects.slots[slot];
+        assert_eq!(
+            (this.scale, this.generation),
+            ([0x1000 - 0xCC, 0x1000 + 0x170], 1)
+        );
+        effects.slots[slot].scale = [0x1000, 0x1000];
+        effects.slots[slot].generation = 0x14;
+        effects.behave(slot, 0x37, None);
+        let this = effects.slots[slot];
+        assert_eq!(
+            (this.scale, this.generation),
+            ([0x1000 - 0x14, 0x1000 + 0x28], 0x14)
+        );
+    }
+
+    #[test]
+    fn a_landed_blob_squashes_then_splashes_bigger() {
+        let mut effects = Effects::default();
+        let slot = ceiling_spit(&mut effects, player_at(5000), 50);
+        let this = &mut effects.slots[slot];
+        this.scale = [0x1000, 0x1400];
+        this.size = 0x1000;
+        this.velocity[1] = 30;
+        this.accel[1] = 2;
+        effects.behave(slot, 0x39, None);
+        let this = effects.slots[slot];
+        assert_eq!((this.anim, this.update), (0, 0x39));
+        assert_eq!((this.velocity[1], this.accel[1]), (0, 0));
+        assert_eq!(this.scale, [0x1000 + 0x199, 0x1400 - 0x600]);
+        effects.behave(slot, 0x39, None);
+        let this = effects.slots[slot];
+        // `Esp_34`'s splash from frame 0xD, with its sound.
+        assert_eq!((this.size, this.frame, this.flags), (0x14CC, 0x0D, 0xB001));
+        assert_eq!(this.scale, [0x1100, 0x0A00]);
+        assert!(effects.sounds.iter().any(|&(id, _)| id == 0x304_0001));
     }
 
     #[test]
