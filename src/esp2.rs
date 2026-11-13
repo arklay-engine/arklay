@@ -53,7 +53,10 @@ const FLAGS_NEW: u16 = 0xa003;
 
 /// `Esp_tbl`'s entries with a port here.
 pub fn ported(id: u8) -> bool {
-    matches!(id, 0..=4 | 6 | 0x0b..=0x0d | 0x19 | 0x20 | 0x2B | 0x34 | 0x45 | 0x46 | 0x4E | 0x52)
+    matches!(
+        id,
+        0..=4 | 6 | 0x0b..=0x0e | 0x19 | 0x20 | 0x2B | 0x34 | 0x3E | 0x3F | 0x45 | 0x46 | 0x4E | 0x52
+    )
 }
 
 /// The `kind`s of texture a type's sprites sample.
@@ -475,6 +478,13 @@ pub struct Effects {
     pub blasts: Vec<crate::weapon2::BlastEffect>,
     /// The player's `Type & 0xFFF`, which `Esp_11` reads.
     pub weapon: u8,
+    /// The body the spark shot's last shot found (the player's `Sce_free2`
+    /// and `Sce_free3`), by slot, which `Esp_0E` strikes: the caller sets it
+    /// before a tick.
+    pub spark_target: Option<usize>,
+    /// What `Esp_0E` left fade 0 at this tick (`Fade_set(0x100, 0)` and
+    /// `Fade_adjust`): its level, or `-1` for `Fade_off`. The caller takes it.
+    pub fade: Option<i16>,
     /// Where each room object's twinkle sits on its matrix now, by slot: the
     /// caller sets them before a tick, for the slots that follow an object.
     pub objects: Vec<Option<[i16; 3]>>,
@@ -733,6 +743,26 @@ impl Effects {
         self.call_anchored(kind, row, size, dir, anchor, matrix, parent.local, true)
     }
 
+    /// `Esp_call3` on the copy of the matrix the slot was started on
+    /// (`+0x4c`), at `point` on it.
+    fn call_on_slot_matrix(
+        &mut self,
+        parent: &Slot,
+        kind: u8,
+        row: u8,
+        size: u16,
+        dir: i16,
+        point: [i16; 3],
+    ) -> Option<usize> {
+        match (parent.anchor, parent.hand) {
+            (Some(anchor), Some((m, t))) => {
+                let matrix = crate::player2::Matrix { m, t };
+                self.call_anchored(kind, row, size, dir, anchor, matrix, point, true)
+            }
+            _ => self.call(kind, row, size, dir, parent.base, true),
+        }
+    }
+
     /// The parts the live slots were started on, each once: the `anchors` a
     /// tick needs.
     pub fn anchors_in_use(&self) -> Vec<Anchor> {
@@ -956,6 +986,15 @@ impl Effects {
             }
             0x0f => self.grenade_flight(index, sca),
             0x46 => self.flame(index, sca),
+            0x0e => self.spark_strike(index),
+            0x3e => self.spark_miss(index),
+            // `Esp_3F`: a spark that meets a wall is hidden.
+            0x3f => {
+                let ground = Self::ground_masked(sca, slot.pos, 0x80);
+                if ground.blocked || ground.under_record {
+                    self.slots[index].flags &= !FLAG_VISIBLE;
+                }
+            }
             // `Esp_16`: a puff of smoke left behind each tick, half again its size.
             0x16 => {
                 let size = (u32::from(slot.size) * 0x96 / 100) as u16;
@@ -1424,13 +1463,18 @@ impl Effects {
 
     /// `Sca_ck_hit`, at what's being tested for a landing.
     fn ground(sca: Option<&Sca>, pos: [i16; 3]) -> crate::sca::Ground {
+        Self::ground_masked(sca, pos, 0x2000)
+    }
+
+    /// [`Self::ground`] with `Sca_ck_hit`'s mask.
+    fn ground_masked(sca: Option<&Sca>, pos: [i16; 3], mask: u16) -> crate::sca::Ground {
         let pos = pos.map(i32::from);
         sca.map_or_else(
             || crate::sca::Ground {
                 blocked: pos[1] > 0,
                 ..Default::default()
             },
-            |sca| crate::sca::ground_at(sca, pos, 2, 0x2000),
+            |sca| crate::sca::ground_at(sca, pos, 2, mask),
         )
     }
 
@@ -1607,6 +1651,102 @@ impl Effects {
         this.delay = delay;
         this.start = 6;
         this.count = 1;
+    }
+
+    /// `Esp_0E`: the spark shot's strike on the body its shot found. On its
+    /// first tick it sounds, hurts every body in a little box at that body's
+    /// `Atd[0]` (`FUN_004d7e30`, row 0xD, the band by the height), and
+    /// strings sparks from the gun to it; then it flashes the screen twice,
+    /// over six ticks.
+    fn spark_strike(&mut self, index: usize) {
+        /// `Fade_adjust`'s levels for fade 0, by tick, and `Fade_off`'s -1.
+        const FLASH: [i16; 7] = [0x2000, 0x1800, 0x1600, -1, 0x1400, 0x1200, -1];
+        let slot = self.slots[index];
+        if slot.start == 0 {
+            self.slots[index].flags = slot.next_flags;
+            self.sounds.push((0x110_0001, slot.pos));
+            // `0x98a0c8`, the player's `Sce_free2` and `Sce_free3`: the body,
+            // at its `Atd[0]` (`+0x84`).
+            let body = self
+                .spark_target
+                .and_then(|target| self.bodies.iter().find(|body| body.slot == target))
+                .map(|body| [body.at[0], body.at_y, body.at[1]]);
+            if let Some(to) = body {
+                let blast = crate::weapon2::Blast {
+                    at: to,
+                    dir: slot.dir,
+                    word: 0x3_000E,
+                };
+                let effects =
+                    crate::weapon2::blast_ck(&blast, &mut [-200, 0, 100, 0x32], &mut self.bodies);
+                self.blasts.extend(effects);
+                self.spark_trail(&slot, to);
+            }
+        }
+        if let Some(&level) = FLASH.get(usize::from(slot.start)) {
+            self.fade = Some(level);
+        }
+        if slot.start == 6 {
+            self.slots[index].kill();
+        }
+        let this = &mut self.slots[index];
+        this.start = this.start.wrapping_add(1);
+    }
+
+    /// `Esp_0E`'s sparks: one each `0x1b0` of the way to the body, up the
+    /// gun's matrix from the slot's point and leaning over by the height, each
+    /// turned at random.
+    fn spark_trail(&mut self, slot: &Slot, to: [i32; 3]) {
+        let from = slot.pos.map(i32::from);
+        let lift = (from[1].abs_diff(to[1]) * 0x14 / 100) as i16;
+        let [dx, dy, dz] = [0, 1, 2].map(|axis| from[axis].abs_diff(to[axis]) as i32);
+        let root = crate::sca::square_root0;
+        let across = root(dz.wrapping_mul(dz).wrapping_add(dx.wrapping_mul(dx)));
+        let distance = root(
+            across
+                .wrapping_mul(across)
+                .wrapping_add(dy.wrapping_mul(dy)),
+        );
+        let count = ((distance as u32) / 0x1B0).max(1);
+        let lean = (to[1].wrapping_sub(from[1]) as u32 / count) as i16;
+        let dir =
+            (crate::se2::se_dir_ck(from[0], from[2], to[0], to[2]) as i16).wrapping_sub(slot.dir);
+        let mut point = slot.local;
+        for _ in 0..count {
+            let Some(spark) = self.call_on_slot_matrix(slot, 6, 1, 0x2600, dir, point) else {
+                break;
+            };
+            let x = (i16::from(self.rnd()) % 0x1E - 0xF) * 10;
+            let y = (i16::from(self.rnd()) % 0x32 - 0x19) * 0x28;
+            let along = i16::from(self.rnd());
+            let side = i16::from(self.rnd());
+            let z = lift
+                .wrapping_add((side & 2) * 0x400)
+                .wrapping_add(0x338)
+                .wrapping_add(along % 0x14 * 0x1E);
+            self.slots[spark].rotation = [x, y, z];
+            point[1] = point[1].wrapping_add(0x1B0);
+            point[0] = point[0].wrapping_sub(lean);
+        }
+    }
+
+    /// `Esp_3E`: the spark shot's miss, nineteen sparks up the gun's matrix
+    /// `0x1b0` apart, each turned at random, and it's gone.
+    fn spark_miss(&mut self, index: usize) {
+        let slot = self.slots[index];
+        let mut point = slot.local;
+        for _ in 0..0x13 {
+            let Some(spark) = self.call_on_slot_matrix(&slot, 6, 4, 0x2000, slot.dir, point) else {
+                break;
+            };
+            let y = (i16::from(self.rnd()) % 0x32 - 0x19) * 0x28;
+            let z = ((!self.rnd() & 2 | 1) as i16) << 10;
+            let rotation = &mut self.slots[spark].rotation;
+            rotation[1] = y;
+            rotation[2] = z;
+            point[1] = point[1].wrapping_add(0x1B0);
+        }
+        self.slots[index].kill();
     }
 
     /// `Esp_28`: a flame round's fire burns the first body in reach (the
@@ -2750,6 +2890,157 @@ mod tests {
             ..Slot::default()
         };
         effects
+    }
+
+    /// A spark shot's effect of `row` in slot 0, `update` its behaviour, on
+    /// an unturned matrix at `(0, -1000, 0)` (part 11's) at the point
+    /// `pl_mv05_w3_t2` gives it.
+    fn spark_at(row: u8, update: u8) -> Effects {
+        let mut effects = Effects::default();
+        effects.enter_room(bank_rows(6, &[(1, &[fire_block()]), (4, &[fire_block()])]));
+        let unturned = [[0x1000, 0, 0], [0, 0x1000, 0], [0, 0, 0x1000]];
+        effects.slots[0] = Slot {
+            flags: FLAGS_NEW,
+            kind: 6,
+            row,
+            update,
+            next_flags: 0xB803,
+            dir: 0x400,
+            pos: [0, -1000, 0],
+            base: [0, -1000, 0],
+            anchor: Some(Anchor {
+                body: Body::Player,
+                part: 11,
+            }),
+            hand: Some((unturned, [0, -1000, 0])),
+            local: [0x82, 0x6B8, 0],
+            ..Slot::default()
+        };
+        effects
+    }
+
+    /// A zombie in slot 2 standing at `pos`.
+    fn spark_body(pos: [i32; 3]) -> crate::weapon2::Target {
+        crate::weapon2::Target {
+            slot: 2,
+            id: 0x1F,
+            be_flg: 1,
+            life: 100,
+            pos,
+            at: [pos[0], pos[2]],
+            at_y: pos[1],
+            at_w1: 400,
+            ofs_y: -1000,
+            at_h: 1000,
+            ..Default::default()
+        }
+    }
+
+    /// `Esp_0E`'s first tick: its sound, every body in the little box at the
+    /// body the shot found hurt by the spark shot's row (60 in its first
+    /// band), and a spark each `0x1b0` of the way there, up the gun and
+    /// leaning over by the height, with four `Rnd`s each.
+    #[test]
+    fn the_sparks_strike_strikes_the_body_the_shot_found() {
+        let mut effects = spark_at(2, 0x0E);
+        effects.bodies = vec![spark_body([0, 0, 2000])];
+        effects.spark_target = Some(2);
+        effects.random = crate::zombie2::Rnd::default();
+        effects.behave(0, 0x0E, None);
+        assert_eq!(effects.sounds, [(0x110_0001, [0, -1000, 0])]);
+        assert_eq!(effects.slots[0].flags, 0xB803, "its block's flags");
+        let hit = effects.blasts.iter().find_map(|effect| match effect {
+            crate::weapon2::BlastEffect::Hit(hit) => Some(*hit),
+            crate::weapon2::BlastEffect::Tested(_) => None,
+        });
+        let hit = hit.expect("the body is struck");
+        assert_eq!((hit.slot, hit.weapon, hit.damage), (2, 0x0E, 60));
+        // 2236 away: five sparks, the 1000 up shared out as 200 a spark, and
+        // a lift of a fifth of it. The first takes the highest free slot.
+        let sparks: Vec<Slot> = effects.slots[1..]
+            .iter()
+            .rev()
+            .filter(|slot| slot.flags & FLAG_DEFERRED != 0)
+            .copied()
+            .collect();
+        assert_eq!(sparks.len(), 5);
+        let to = crate::se2::se_dir_ck(0, 0, 0, 2000) as i16;
+        let mut replay = crate::zombie2::Rnd::default();
+        for (n, spark) in sparks.iter().enumerate() {
+            let n = n as i16;
+            assert_eq!((spark.kind, spark.row, spark.size), (6, 1, 0x2600));
+            assert_eq!(spark.dir, to.wrapping_sub(0x400));
+            assert_eq!(spark.local, [0x82 - 200 * n, 0x6B8 + 0x1B0 * n, 0]);
+            let x = (i16::from(replay.draw()) % 0x1E - 0xF) * 10;
+            let y = (i16::from(replay.draw()) % 0x32 - 0x19) * 0x28;
+            let along = i16::from(replay.draw());
+            let side = i16::from(replay.draw());
+            let z = 200 + (side & 2) * 0x400 + 0x338 + along % 0x14 * 0x1E;
+            assert_eq!(spark.rotation, [x, y, z], "spark {n}");
+        }
+        assert_eq!(effects.random, replay, "four draws a spark");
+    }
+
+    /// `Esp_0E` then flashes the screen on fade 0 and is gone on its seventh
+    /// tick: `Fade_adjust` to 0x2000, 0x1800 and 0x1600, `Fade_off`, then
+    /// 0x1400 and 0x1200, and `Fade_off`.
+    #[test]
+    fn the_sparks_strike_flashes_twice_and_goes() {
+        let mut effects = spark_at(2, 0x0E);
+        let mut levels = Vec::new();
+        for _ in 0..7 {
+            assert!(effects.slots[0].live());
+            effects.behave(0, 0x0E, None);
+            levels.push(effects.fade.take());
+        }
+        assert_eq!(
+            levels,
+            [0x2000, 0x1800, 0x1600, -1, 0x1400, 0x1200, -1].map(Some)
+        );
+        assert!(!effects.slots[0].live());
+        // With no body found, nothing is struck and no sparks go out.
+        assert!(effects.blasts.is_empty());
+        assert!(effects.slots[1..].iter().all(|slot| slot.flags == 0));
+    }
+
+    /// `Esp_3F`: a spark that meets a wall (`Sca_ck_hit`, here the floor) is
+    /// hidden, and one in the open is left alone.
+    #[test]
+    fn a_spark_that_meets_a_wall_is_hidden() {
+        for (y, shown) in [(-1000, true), (100, false)] {
+            let mut effects = spark_at(1, 0x3F);
+            effects.slots[0].flags = FLAGS_NEW | FLAG_VISIBLE;
+            effects.slots[0].pos = [0, y, 0];
+            effects.behave(0, 0x3F, None);
+            assert_eq!(effects.slots[0].flags & FLAG_VISIBLE != 0, shown, "at {y}");
+        }
+    }
+
+    /// `Esp_3E`, the miss: nineteen sparks `0x1b0` apart up the gun, each
+    /// turned with two `Rnd`s, and it's gone.
+    #[test]
+    fn the_sparks_miss_throws_nineteen_sparks() {
+        let mut effects = spark_at(3, 0x3E);
+        effects.random = crate::zombie2::Rnd::default();
+        effects.behave(0, 0x3E, None);
+        assert!(!effects.slots[0].live());
+        let sparks: Vec<Slot> = effects.slots[1..]
+            .iter()
+            .rev()
+            .filter(|slot| slot.flags & FLAG_DEFERRED != 0)
+            .copied()
+            .collect();
+        assert_eq!(sparks.len(), 19);
+        let mut replay = crate::zombie2::Rnd::default();
+        for (n, spark) in sparks.iter().enumerate() {
+            assert_eq!((spark.kind, spark.row, spark.size), (6, 4, 0x2000));
+            assert_eq!(spark.dir, 0x400);
+            assert_eq!(spark.local, [0x82, 0x6B8 + 0x1B0 * n as i16, 0]);
+            let y = (i16::from(replay.draw()) % 0x32 - 0x19) * 0x28;
+            let z = ((!replay.draw() & 2 | 1) as i16) << 10;
+            assert_eq!(spark.rotation[1..], [y, z], "spark {n}");
+        }
+        assert_eq!(effects.random, replay);
     }
 
     /// `Esp_46` in the air with nothing in reach goes on, its count down.

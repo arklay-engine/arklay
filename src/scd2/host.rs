@@ -1578,6 +1578,7 @@ impl Re2State {
             ..Default::default()
         });
         self.effects.bodies = crate::character2::targets_of(self);
+        self.effects.spark_target = self.player.spark_target;
         if let Some((pos, _)) = &player {
             crate::player2::move_parts(&mut self.player, *pos);
         }

@@ -104,6 +104,9 @@ local BERETTA <const> = 0x13
 local SMG <const> = 0xF
 local FLAMETHROWER <const> = 0x10
 
+-- The spark shot, whose rows are the handguns' (`Em10Dm00`, `FUN_004587b0`).
+local SPARK <const> = 0xE
+
 -- The clips of eating.
 local EAT_CLIPS <const> = { [0] = 0x12, 0x13, 0x14, 0x12, 0x13, 0x14, 0x12, 0x13 }
 
@@ -317,6 +320,23 @@ local function lose_arm(e)
     e:throw_part(part + 1, 10, -200, 0x32)
 end
 
+-- `FUN_00456b00`: the spark shot's (`Routine_1` 0xE) sparks, kind 6, four on the
+-- body (part 0) each at `0x80 - Rnd` on x, y and z, then kind 4 row 0xC on the body
+-- with no offset, then one on part 9 and one on part 3 at the fourth's offset, each
+-- sized `Rnd * 8` over its base and facing as the body does.
+local function spark_hit(e)
+    local x, y, z = 0, 0, 0
+    for _, base in ipairs({ 0x13E8, 0x1000, 0x1000, 0xC18 }) do
+        x = 0x80 - e:rnd()
+        y = 0x80 - e:rnd()
+        z = 0x80 - e:rnd()
+        effect(e, 6, 0, e:rnd() * 8 + base, angle(e), 0, x, y, z)
+    end
+    effect(e, 4, 0xC, e:rnd() * 8 + 0x1000, angle(e), 0, 0, 0, 0)
+    effect(e, 6, 0, e:rnd() * 8 + 0xC18, angle(e), 9, x, y, z)
+    effect(e, 6, 0, e:rnd() * 8 + 0xC18, angle(e), 3, x, y, z)
+end
+
 -- `FUN_00456780`: `Type`'s 0x80, fire on the body (and on parts 3, 6 and 8 while
 -- they're drawn) and, unless `Routine_1` is 0x10, darker parts.
 local function light_flames(e)
@@ -468,6 +488,9 @@ local function dm00(e)
             hit_blood(e, 0x17D0, i16(e:timer(1)) * -100, angle(e) - turn)
         end
         e:goto_dest(0x10)
+        if weapon == SPARK then
+            spark_hit(e)
+        end
     end
     local routine = e:routine(2)
     if routine == 1 then
@@ -482,6 +505,9 @@ local function dm00(e)
         if old > 2 then
             e:set_routine(2, 2)
             e:set_timer(0, 0x10)
+            if weapon == SPARK then
+                spark_hit(e)
+            end
         end
     elseif routine == 2 then
         e:goto_dest(0x10)
@@ -506,6 +532,9 @@ local function dm00(e)
             end
         end
     elseif routine == 3 then
+        if weapon == SPARK then
+            spark_hit(e)
+        end
         if e:turn_to_player(0x200) == 0
             and e:distance() < 4000
             and player_free(e)
@@ -550,7 +579,10 @@ local function dm_crawling(e)
         if voice_free(e) then
             moan(e, 0xC)
         end
-        -- The flame rounds' (`Routine_1` 0xA) and the other weapons' calls aren't ported.
+        -- The flame rounds' (`Routine_1` 0xA) and the acid rounds' (0xB) calls aren't ported.
+        if e:routine(1) == SPARK then
+            spark_hit(e)
+        end
         if e:routine(1) == FLAMETHROWER then
             flame_hit(e)
         end
@@ -587,13 +619,16 @@ local function dm_rising(e)
         end
         e:set_timer(3, 0x18)
         -- It leans less from the flamethrower, the sub-machine gun and 0x12. The flame
-        -- rounds' (0xA) and the other weapons' calls aren't ported.
+        -- rounds' (0xA) and the acid rounds' (0xB) calls aren't ported.
         local weapon = e:routine(1)
         if weapon == FLAMETHROWER then
             flame_hit(e)
         end
         if weapon == FLAMETHROWER or weapon == SMG or weapon == 0x12 then
             e:set_timer(3, 2)
+        end
+        if weapon == SPARK then
+            spark_hit(e)
         end
     end
     local routine = e:routine(2)
@@ -1158,9 +1193,12 @@ local function die_standing(e)
         hit_blood(e, 0x1FA0, 0, angle(e))
         death_cry(e)
         e:set_timer(3, 0)
-        -- The flame and acid rounds' branches, and the spark shot's, aren't ported.
+        -- The flame and acid rounds' branches aren't ported.
         if blasted(e) then
             blast_smoke(e)
+        end
+        if e:routine(WEAPON) == SPARK then
+            spark_hit(e)
         end
         if e:routine(WEAPON) == FLAMETHROWER and e:kind() & TYPE_BURNT == 0 then
             light_flames(e)
@@ -1210,6 +1248,10 @@ local function die_crawling(e)
         e:set_neck_flags(e:neck_flags() | 1)
         blood(e, 0, 0x1FA0, angle(e), 0, 0, 300, 0)
         death_cry(e)
+        -- The flame, acid and grenade rounds' calls aren't ported.
+        if e:routine(WEAPON) == SPARK then
+            spark_hit(e)
+        end
     elseif routine == 2 then
         e:routines(7, 0, 0, 0)
         return
@@ -1364,6 +1406,10 @@ local function die_rising(e)
         local x, y, z = head_point(e, 0, 300)
         blood(e, 0, 0x1FA0, angle(e), 0, x, y, z)
         death_cry(e)
+        -- The flame, acid and grenade rounds' calls aren't ported.
+        if e:routine(WEAPON) == SPARK then
+            spark_hit(e)
+        end
         e:set_speed_x(0xB)
     elseif routine == 2 then
         e:joint_bank(WEAPON, 0x80)
@@ -1415,9 +1461,12 @@ local function em10_die(e)
     else
         blood(e, 0, 8000, 0, 0, 0, 0, 0)
         sound_either(e, 0xB, 0xD)
-        -- The other weapons' calls here aren't ported.
+        -- The flame and acid rounds' calls here aren't ported.
         if blasted(e) then
             blast_smoke(e)
+        end
+        if e:routine(WEAPON) == SPARK then
+            spark_hit(e)
         end
         e:routines(7, 9, 0, 0)
     end

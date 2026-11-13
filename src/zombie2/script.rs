@@ -5012,7 +5012,7 @@ mod tests {
         /// by the sub-machine gun on the head (`Routine_1` 0xF, `Damage_no`
         /// 1), faces 0x100 with the player at 0x300 and 1000 away, and its
         /// moan is still waiting.
-        const STUB: &str = "
+        pub(super) const STUB: &str = "
             local w = { r = { [0] = 2, 0xF, 0, 0 }, vars = { [1] = 5, [4] = 0x20 }, timers = {},
                 kind = 0, flags = 0, no = 1, hidden = 0, angle = 0x100, dir = 0x300,
                 dist = 1000, turn = 0, rnds = {}, drawn = 0, burns = 0, push = -1, toward = -1,
@@ -5061,7 +5061,7 @@ mod tests {
 
         /// One tick of the script on [`STUB`] after `setup`, then `result`'s
         /// values.
-        fn tick(setup: &str, result: &str) -> Vec<i64> {
+        pub(super) fn tick(setup: &str, result: &str) -> Vec<i64> {
             let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
             let library = include_str!("../../games/re2/lib/zombie.lua");
             lua.load(format!(
@@ -5075,7 +5075,7 @@ mod tests {
         }
 
         /// The effects of [`tick`]: `EFFECTS` and `FLAMES`.
-        fn effects(setup: &str) -> (Vec<Vec<i64>>, Vec<Vec<i64>>) {
+        pub(super) fn effects(setup: &str) -> (Vec<Vec<i64>>, Vec<Vec<i64>>) {
             let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
             let library = include_str!("../../games/re2/lib/zombie.lua");
             lua.load(format!(
@@ -5230,6 +5230,125 @@ mod tests {
                 "w.kind, w.flags & 0x800, w.burns",
             );
             assert_eq!(r, [0x80, 0, 0]);
+        }
+    }
+
+    /// The spark shot's (0xE) hits on the zombies, lib/zombie.lua.
+    mod spark_zombie {
+        use super::smg_flame_zombie::{effects, tick};
+
+        /// `FUN_00456b00` on all-zero draws, facing 0x100: kind 6 at `(0x80,
+        /// 0x80, 0x80)` on part 0 four times, kind 4 row 0xC on part 0, kind 6
+        /// on parts 9 and 3.
+        fn sparks() -> Vec<Vec<i64>> {
+            let at = |kind, row, size, part, offset| {
+                vec![kind, row, size, 0x100, part, offset, offset, offset]
+            };
+            vec![
+                at(6, 0, 0x13E8, 0, 0x80),
+                at(6, 0, 0x1000, 0, 0x80),
+                at(6, 0, 0x1000, 0, 0x80),
+                at(6, 0, 0xC18, 0, 0x80),
+                at(4, 0xC, 0x1000, 0, 0),
+                at(6, 0, 0xC18, 9, 0x80),
+                at(6, 0, 0xC18, 3, 0x80),
+            ]
+        }
+
+        /// `0x5270cc`, the spark shot's row of `Em10_Damage`'s table, is
+        /// `Em10Dm00`, whose first tick calls `FUN_00456b00` after its blood
+        /// and `Goto00`: for each of four sparks `0x80 - Rnd` on x, y and z,
+        /// then `Rnd * 8` over 0x13e8, 0x1000, 0x1000 and 0xc18 (`| 0x6000000`)
+        /// on part 0; `Rnd * 8 + 0x1000 | 0x40c0000` on part 0 with no vector;
+        /// and `Rnd * 8 + 0xc18 | 0x6000000` on parts 9 and 3 at the last
+        /// vector. No stagger (`0x5271c7 + 0xe` is 0).
+        #[test]
+        fn a_spark_hit_sparks_on_a_zombie_by_em10dm00() {
+            let setup = "w.r[1] = 0xE; w.rnds = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, \
+                         15, 16, 17, 18, 19 }";
+            assert_eq!(
+                tick(setup, "w.r[2], w.vars[4], w.timers[3], w.drawn"),
+                [1, 0x20, 0x18, 19]
+            );
+            let (fx, flames) = effects(setup);
+            assert!(flames.is_empty());
+            assert_eq!(
+                fx,
+                [
+                    vec![0, 0, 0x17D0, 0x100, 0, -100, 300, 0],
+                    vec![6, 0, 0x13E8 + 32, 0x100, 0, 127, 126, 125],
+                    vec![6, 0, 0x1000 + 64, 0x100, 0, 123, 122, 121],
+                    vec![6, 0, 0x1000 + 96, 0x100, 0, 119, 118, 117],
+                    vec![6, 0, 0xC18 + 128, 0x100, 0, 115, 114, 113],
+                    vec![4, 0xC, 0x1000 + 136, 0x100, 0, 0, 0, 0],
+                    vec![6, 0, 0xC18 + 144, 0x100, 9, 115, 114, 113],
+                    vec![6, 0, 0xC18 + 152, 0x100, 3, 115, 114, 113],
+                ]
+            );
+        }
+
+        /// `Em10Dm00` sparks again as its step 1 ends (step 2, `Timer0`
+        /// 0x10), and at the top of step 3, before its choices' draws.
+        #[test]
+        fn em10dm00_sparks_again_at_steps_2_and_3() {
+            let step1 = "w.r = { [0] = 2, 0xE, 1, 0 }; w.timers[0] = 3";
+            assert_eq!(tick(step1, "w.r[2], w.timers[0], w.drawn"), [2, 0x10, 19]);
+            assert_eq!(effects(step1).0, sparks());
+            let early = "w.r = { [0] = 2, 0xE, 1, 0 }; w.timers[0] = 2";
+            assert_eq!(tick(early, "w.r[2], w.drawn"), [1, 0]);
+            // Then `Rnd & 0xf` (1: no grab) and `Rnd & 1` (1: wander).
+            let mut draws = vec!["0"; 19];
+            draws.extend(["1", "1"]);
+            let step3 = format!(
+                "w.r = {{ [0] = 2, 0xE, 3, 0 }}; w.rnds = {{ {} }}",
+                draws.join(", ")
+            );
+            assert_eq!(
+                tick(&step3, "w.r[0], w.r[1], w.r[2], w.drawn"),
+                [1, 2, 0, 21]
+            );
+            assert_eq!(effects(&step3).0, sparks());
+        }
+
+        /// `FUN_00457d10` (crawling) and `FUN_00457e60` (getting up) call
+        /// `FUN_00456b00` at the end of their first tick, after the blood.
+        #[test]
+        fn a_crawling_or_rising_zombie_sparks_too() {
+            for (setup, drawn) in [("w.kind = 1", 20), ("w.flags = 0x10", 19)] {
+                let setup = format!("w.r[1] = 0xE; {setup}");
+                assert_eq!(tick(&setup, "w.drawn"), [drawn], "{setup}");
+                let (fx, _) = effects(&setup);
+                assert_eq!(fx.len(), 8, "{setup}");
+                assert_eq!(fx[0][0], 0, "{setup}");
+                assert_eq!(fx[1..], sparks(), "{setup}");
+            }
+        }
+
+        /// `funcs_458795`'s row for 0xE is `FUN_004587b0`, which sparks after
+        /// its blood and last moan; so do `FUN_00458bf0` (crawling),
+        /// `FUN_00459b60` (getting up) and `Em10_Die`'s lying body, which then
+        /// goes to `7,9`.
+        #[test]
+        fn a_spark_kill_sparks_on_every_death() {
+            for (setup, drawn) in [
+                ("", 21),
+                ("w.kind = 1", 20),
+                ("w.flags = 0x10", 20),
+                ("w.flags = 2", 20),
+            ] {
+                let setup = format!("w.r = {{ [0] = 3, 0xE, 0, 0 }}; {setup}");
+                assert_eq!(tick(&setup, "w.drawn"), [drawn], "{setup}");
+                let (fx, _) = effects(&setup);
+                assert_eq!(fx.len(), 8, "{setup}");
+                assert_eq!(fx[1..], sparks(), "{setup}");
+            }
+            assert_eq!(
+                tick(
+                    "w.r = { [0] = 3, 0xE, 0, 0 }; w.flags = 2",
+                    "w.r[0], w.r[1]"
+                ),
+                [7, 9]
+            );
         }
     }
 
@@ -5401,11 +5520,11 @@ mod tests {
         /// What one tick left: each `Esp_call` as `{ kind, row, size, part }`
         /// (part -1 for `call_effect`'s, at a point), the draws, the routines
         /// and the clips.
-        struct Tick {
-            effects: Vec<Vec<i64>>,
-            drawn: i64,
-            routines: Vec<i64>,
-            clips: Vec<i64>,
+        pub(super) struct Tick {
+            pub(super) effects: Vec<Vec<i64>>,
+            pub(super) drawn: i64,
+            pub(super) routines: Vec<i64>,
+            pub(super) clips: Vec<i64>,
         }
 
         /// Records the effects and the clips over whatever stub ran before.
@@ -5436,7 +5555,7 @@ mod tests {
         /// One `update` of `script` on `stub` (which defines `e`, and the
         /// local `drawn` when `counted`), with `setup`'s globals and `DRAWS`
         /// (zeros after).
-        fn tick(script: &str, stub: &str, setup: &str, draws: &[u8]) -> Tick {
+        pub(super) fn tick(script: &str, stub: &str, setup: &str, draws: &[u8]) -> Tick {
             let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
             lua.load(setup).exec().unwrap();
             let mut draws = draws.to_vec();
@@ -5471,7 +5590,7 @@ mod tests {
 
         /// A work whose every other method returns zeros, for the crow and
         /// the alligator: `ROUTINES`, `VARS`, and `Rnd` from `DRAWS`.
-        const ZEROS: &str = "
+        pub(super) const ZEROS: &str = "
             local w = { r = ROUTINES, vars = VARS or {} }
             local drawn = 0
             local e = setmetatable({}, { __index = function()
@@ -5505,7 +5624,7 @@ mod tests {
             assert_ne!(crow_hit(9).0.first(), Some(&9), "weapon 9 bursts it");
         }
 
-        const ALLIGATOR: &str = include_str!("../../games/re2/enemy/23/enemy.lua");
+        pub(super) const ALLIGATOR: &str = include_str!("../../games/re2/enemy/23/enemy.lua");
 
         /// `FUN_0046af30`'s jump table (`0x46b02c`): 0xF one blood of row 6
         /// (`FUN_0046b080`, two draws); 0x10 the blasts' four of effect 5,
@@ -5532,7 +5651,7 @@ mod tests {
 
         /// The giant spider on the floor, `ROUTINES` and `VARS` from `setup`,
         /// the legs' parts shown unless `HIDDEN` has their bits.
-        fn spider(setup: &str, draws: &[u8]) -> Tick {
+        pub(super) fn spider(setup: &str, draws: &[u8]) -> Tick {
             let stub = format!(
                 "{SPIDER_STUB}
                  function e:hidden_parts() return HIDDEN or 0 end"
@@ -5693,7 +5812,7 @@ mod tests {
         /// `Timer3`, `Damage_no`, `Be_flg`, the room's enemy flags and `Rnd`'s
         /// draws (`w.draws`, then 0). Every other method returns 0 and logs
         /// its call in `LOG` as `name(args)`; a part's place is its number.
-        const STUB: &str = "
+        pub(super) const STUB: &str = "
             LOG = {}
             w = { r = { [0] = 0, 0, 0, 0 }, vars = {}, timers = { [0] = 0, 0, 0, 0 },
                 draws = {}, drawn = 0, damage_no = 1, be = 0, room_enemy = 0xFF, life = 100 }
@@ -5726,7 +5845,7 @@ mod tests {
         /// `script` (which defines `update`) on [`STUB`] after `setup`, for
         /// `ticks` ticks: the state, to read with `eval`, and the calls whose
         /// names start with one of `names`.
-        fn run(
+        pub(super) fn run(
             script: &str,
             setup: &str,
             ticks: usize,
@@ -5748,12 +5867,12 @@ mod tests {
             (lua, log)
         }
 
-        fn eval<T: mlua::FromLuaMulti>(lua: &mlua::Lua, code: &str) -> T {
+        pub(super) fn eval<T: mlua::FromLuaMulti>(lua: &mlua::Lua, code: &str) -> T {
             lua.load(code).eval().unwrap()
         }
 
         /// The ivy (`lib/ivy.lua`) as `update`, for [`run`].
-        fn ivy() -> String {
+        pub(super) fn ivy() -> String {
             format!(
                 "IVY = (function() {} end)()
                  function update(e) IVY.update(e) end",
@@ -5988,7 +6107,7 @@ mod tests {
         /// `weapon`, `Damage_no` 1 and the vars `vars` (a Lua table's
         /// fields): `(e:effect calls as kind, row, size, part, x;
         /// e:call_effect calls as kind, row, size, x; Rnd draws)`.
-        fn birkin_tick(
+        pub(super) fn birkin_tick(
             script: &str,
             zero: u8,
             weapon: u8,
@@ -6122,6 +6241,316 @@ mod tests {
                 assert_eq!(drops[0], [0, 1, 0x2000, part * 10]);
                 assert_eq!(drawn, 1);
             }
+        }
+    }
+
+    /// The spark shot's (0xE) hits on the alligator, the giant spider, Mr. X,
+    /// the ivy and G1 to G3.
+    mod spark_others {
+        use super::smg_flame_birkin::birkin_tick;
+        use super::smg_flame_small::{ALLIGATOR, ZEROS, spider, tick};
+        use super::smg_flame_tyrant_ivy::{eval, ivy, run};
+
+        /// `FUN_0046af30`'s 0xE case calls `FUN_0046b750`, whose first call
+        /// only sets `+0x234` (var 22, 4) and `+0x231` (var 17, 1); `Em_23`
+        /// then runs it the same tick: `DAT_00527fc0`'s first record, a
+        /// spark of kind 6 sized `Rnd * 2 + 0x1800`.
+        #[test]
+        fn a_spark_hit_sets_the_alligator_sparking() {
+            let hit = tick(
+                ALLIGATOR,
+                ZEROS,
+                "ROUTINES = { [0] = 2, 0xE, 0, 0 }; VARS = { [12] = 9 }",
+                &[3],
+            );
+            assert_eq!(hit.effects, [[6, 0, 0x1800 + 6, -1]]);
+            assert_eq!(hit.drawn, 1);
+        }
+
+        /// The alligator's sparks over the ticks after: a record a tick,
+        /// those with `+10`'s bit 2 skipped without a draw, the records
+        /// again after the 21st, and the last at `+0x231` 0x18, which then
+        /// stops (0x19, `+0x234` 0).
+        #[test]
+        fn the_alligators_sparks_follow_dat_00527fc0() {
+            let sparks = |count: u8| {
+                let setup = format!(
+                    "w.r = {{ [0] = 3, 0, 0, 0 }} w.vars[0] = 2 w.vars[22] = 4 w.vars[17] = {count}
+                     function e:drawn_part_point(_, x, y, z) return x, y, z end"
+                );
+                let script = include_str!("../../games/re2/enemy/23/enemy.lua");
+                let (lua, log) = run(script, &setup, 1, &["call_effect"]);
+                let state: (i64, i64, i64) =
+                    eval(&lua, "return w.vars[22] or 0, w.vars[17] or 0, w.drawn");
+                (log, state)
+            };
+            assert_eq!(
+                sparks(1),
+                (
+                    vec!["call_effect(6,0,6144,0,3100,-800,0)".to_string()],
+                    (4, 2, 1)
+                )
+            );
+            assert_eq!(sparks(2), (vec![], (4, 3, 0)));
+            assert_eq!(sparks(10).0, ["call_effect(6,0,6144,0,900,600,800)"]);
+            // 22 is the first record again.
+            assert_eq!(sparks(22).0, ["call_effect(6,0,6144,0,3100,-800,0)"]);
+            assert_eq!(
+                sparks(0x18),
+                (
+                    vec!["call_effect(6,0,6144,0,2500,-100,-200)".to_string()],
+                    (0, 0x19, 1)
+                )
+            );
+        }
+
+        /// `DWORD_00528694[0xE]`, `FUN_00471ae0`: `+0x23b` (var 31) at 0x14,
+        /// `FUN_00472df0`'s row 10 (kind 4, row 0xC on part 0's matrix), and
+        /// the hard flinch as `Routine_1` 7. Then `Em_25`'s `FUN_00473530`
+        /// counts it down, sparking (row 9) on every odd count left.
+        #[test]
+        fn a_spark_hit_flinches_the_spider_hard_and_sets_it_sparking() {
+            let hit = spider("ROUTINES = { [0] = 2, 0xE, 0, 0 }", &[]);
+            assert_eq!(hit.effects[0], [4, 0xC, 0x1000, 0]);
+            let row_9: Vec<_> = hit
+                .effects
+                .iter()
+                .filter(|call| call[..3] == [6, 0, 0x1000])
+                .collect();
+            // 0x13 left: three draws of `BYTE_00528848`, all 0: part 0.
+            assert_eq!(row_9, [&vec![6, 0, 0x1000, 0]; 3]);
+            let hard = spider("ROUTINES = { [0] = 2, 7, 0, 0 }", &[]);
+            assert_eq!(hit.clips, hard.clips);
+        }
+
+        /// `FUN_00473530` alone: on an odd count left, three of
+        /// `BYTE_00528848`'s parts by `Rnd & 7`, each still drawn and, for a
+        /// leg's, not lost.
+        #[test]
+        fn the_spiders_sparks_skip_parts_that_are_off() {
+            let sparks = |setup: &str, draws: &[u8]| {
+                let hit = spider(
+                    &format!("ROUTINES = {{ [0] = 4, 0, 0, 0 }}; {setup}"),
+                    draws,
+                );
+                let parts: Vec<i64> = hit.effects.iter().map(|call| call[3]).collect();
+                (parts, hit.drawn)
+            };
+            assert_eq!(
+                sparks("VARS = { [31] = 2 }", &[1, 7, 5]),
+                (vec![3, 0x13, 0], 3)
+            );
+            assert_eq!(sparks("VARS = { [31] = 3 }", &[1, 7, 5]), (vec![], 0));
+            assert_eq!(sparks("VARS = { [31] = 0 }", &[1, 7, 5]), (vec![], 0));
+            // Part 19 hidden, leg 0 (parts 3 and 4) lost.
+            let off = "VARS = { [31] = 2, [12] = 1 }; HIDDEN = 1 << 0x13";
+            assert_eq!(sparks(off, &[1, 7, 5]), (vec![0], 3));
+        }
+
+        /// `DWORD_00528724[0xE]`, `FUN_004726d0`: row 10 on parts 19 and 0,
+        /// `+0x23b` at 0x1e, then the handguns' death (`Routine_1` 2) with its
+        /// blood; and the first of `FUN_00473530`'s sparks.
+        #[test]
+        fn a_spark_kills_the_spider_sparking() {
+            let death = spider("ROUTINES = { [0] = 3, 0xE, 0, 0 }", &[]);
+            assert_eq!(
+                death.effects[..3],
+                [
+                    vec![4, 0xC, 0x1000, 0x13],
+                    vec![4, 0xC, 0x1000, 0],
+                    vec![0, 0x19, 0x2000, -1]
+                ]
+            );
+            assert_eq!(death.effects[3..], vec![vec![6, 0, 0x1000, 0]; 3]);
+            assert_eq!(death.routines[1], 2);
+            // A body that died once takes no sparks.
+            let again = spider(
+                "ROUTINES = { [0] = 3, 0xE, 0, 0 }; VARS = { [16] = 1 }",
+                &[],
+            );
+            assert!(
+                again
+                    .effects
+                    .iter()
+                    .all(|call| call[0] != 4 && call[0] != 6)
+            );
+        }
+
+        /// Mr. X's `FUN_0047fea0` 0xE case, `FUN_00480280`: its first call
+        /// sets `+0x220` (var 9) and `+0x228` (var 10) going, and `Em_2A` runs
+        /// it the same tick; then `DAT_00529478`'s records, a spark of kind 6
+        /// (`Rnd * 2 + 0x1000`) each tick but for the skipped, until the 24th.
+        #[test]
+        fn a_spark_hit_keeps_mr_x_sparking_for_24_ticks() {
+            let mr_x = |ticks: usize| {
+                let script = include_str!("../../games/re2/enemy/2a/enemy.lua");
+                let (lua, log) = run(script, "w.r = { [0] = 2, 0xE, 0, 0 }", ticks, &["effect("]);
+                let state: (i64, i64) = eval(&lua, "return w.vars[9] or 0, w.vars[10] or 0");
+                (log, state)
+            };
+            assert_eq!(mr_x(1), (vec![], (0xE, 2)));
+            assert_eq!(mr_x(3).0, ["effect(6,0,4096,0,0,-500,0,0)"]);
+            let (log, state) = mr_x(23);
+            assert_eq!(log.len(), 8);
+            assert_eq!(log[7], "effect(6,0,4096,0,4,350,500,100)");
+            assert_eq!(state, (0xE, 0x18));
+            assert_eq!(mr_x(24).1, (0, 0x19));
+        }
+
+        /// The ivy's `funcs_487037[0xE]`, `caseD_f`: two of row 10 (kind 4,
+        /// row 0xC, 0x1800) at `0x529e08`'s parts, `+0x23c` (var 20) at 0xF,
+        /// then `caseD_2`'s blood and sound; and `Em_2E`'s first of row 9's.
+        #[test]
+        fn a_spark_hit_sets_the_ivy_sparking() {
+            let setup = "w.r = { [0] = 2, 0xE, 0, 0 } w.draws = { 3, 5, 7 }";
+            let (lua, log) = run(&ivy(), setup, 1, &["call_effect", "sound"]);
+            assert_eq!(
+                log,
+                [
+                    "call_effect(4,12,6144,0,14,0,0)",
+                    "call_effect(4,12,6144,0,10,0,0)",
+                    "call_effect(0,17,4096,0,10,0,0)",
+                    "sound(2)",
+                    "call_effect(6,0,4096,0,17,0,0)",
+                ]
+            );
+            assert_eq!(eval::<i64>(&lua, "return w.vars[20]"), 0xE);
+        }
+
+        /// `0x529f6c[0xE]`, `FUN_00487ac0`: the fall, three of row 10, `+0x23c`
+        /// at 0x2d, the vines' command 7 and `+0x238`; `Rot_neck_em` turns
+        /// `Neck_no` 0.
+        #[test]
+        fn a_spark_kills_the_ivy_sparking() {
+            let setup = "w.r = { [0] = 3, 0xE, 0, 0 } w.draws = { 1, 2, 4 }";
+            let (lua, log) = run(&ivy(), setup, 1, &["call_effect", "rot_neck_joint"]);
+            assert_eq!(
+                log[..3],
+                [
+                    "call_effect(4,12,6144,0,1,0,0)",
+                    "call_effect(4,12,6144,0,9,0,0)",
+                    "call_effect(4,12,6144,0,5,0,0)",
+                ]
+            );
+            assert!(log[3].starts_with("rot_neck_joint(0,"), "{log:?}");
+            assert_eq!(log[4..], ["call_effect(6,0,4096,0,0,0,0)"]);
+            let state: (i64, i64, i64, i64) =
+                eval(&lua, "return w.vars[20], w.vars[8], w.vars[16], w.r[2]");
+            assert_eq!(state, (0x2C, 7, 1, 1));
+            let (_, plain) = run(&ivy(), "w.r = { [0] = 3, 2, 0, 0 }", 1, &["rot_neck_joint"]);
+            assert!(plain[0].starts_with("rot_neck_joint(9,"), "{plain:?}");
+        }
+
+        /// The kind 6 sparks of G1's `FUN_0048e5e0` and G2's `FUN_00494f70`
+        /// (`Rnd` 1: sizes 8 over their bases, x 0x7f), then their three of
+        /// kind 4, row 0xF (4 over 0x1000) with no offset.
+        fn sparks(parts: &[(i64, i64)], tails: [i64; 3]) -> Vec<Vec<i64>> {
+            let mut calls: Vec<Vec<i64>> = parts
+                .iter()
+                .map(|&(part, base)| vec![6, 0, base + 8, part, 0x7F])
+                .collect();
+            calls.extend(tails.iter().map(|&part| vec![4, 0xF, 0x1004, part, 0]));
+            calls
+        }
+
+        /// G1's hit (`FUN_0048dc70`), its death (`FUN_0048f2b0`) and a dead
+        /// G1 shot again (`FUN_0048f050`) call `FUN_0048e5e0` for 0xE.
+        #[test]
+        fn g1_sparks_from_the_spark_shot() {
+            let script = include_str!("../../games/re2/enemy/30/enemy.lua");
+            let expected = sparks(
+                &[
+                    (2, 0x17D0),
+                    (2, 0x17D0),
+                    (0, 0x1BB8),
+                    (1, 0x1BB8),
+                    (13, 0x13E8),
+                    (7, 0x13E8),
+                    (4, 0x13E8),
+                ],
+                [1, 10, 4],
+            );
+            let (effects, drops, drawn) = birkin_tick(script, 2, 0xE, 1, "[3] = 0x80");
+            assert_eq!(effects, expected);
+            assert_eq!(drops.len(), 2);
+            let (smg, _, smg_drawn) = birkin_tick(script, 2, crate::player2::SMG, 1, "[3] = 0x80");
+            assert!(smg.is_empty());
+            assert_eq!(drawn - smg_drawn, 31);
+            let (death, _, _) = birkin_tick(script, 3, 0xE, 1, "");
+            assert_eq!(death, expected);
+            let (again, again_drops, _) = birkin_tick(script, 3, 0xE, 1, "[3] = 0x10");
+            assert_eq!(again[..10], expected[..]);
+            assert_eq!(again_drops.len(), 2);
+        }
+
+        /// G2's hit (`FUN_00494440`) and death (`FUN_00495bc0`) call
+        /// `FUN_00494f70` for 0xE, and so does its flinch (`FUN_00495ad0`) at
+        /// frame 15 while `Routine_1` is still 0xE.
+        #[test]
+        fn g2_sparks_from_the_spark_shot() {
+            let script = include_str!("../../games/re2/enemy/31/enemy.lua");
+            let expected = sparks(
+                &[
+                    (2, 0x17D0),
+                    (2, 0x17D0),
+                    (0, 0x1BB8),
+                    (1, 0x1BB8),
+                    (12, 0x13E8),
+                    (13, 0x13E8),
+                    (10, 0x13E8),
+                    (4, 0x13E8),
+                    (16, 0x13E8),
+                ],
+                [1, 12, 4],
+            );
+            let (effects, drops, _) = birkin_tick(script, 2, 0xE, 1, "[4] = 0x200");
+            assert_eq!(effects, expected);
+            assert_eq!(drops.len(), 4);
+            let (death, _, _) = birkin_tick(script, 3, 0xE, 1, "");
+            assert_eq!(death, expected);
+            let flinch = |weapon: u8| {
+                let setup = format!(
+                    "w.r = {{ [0] = 2, {weapon}, 1, 0 }}
+                     function e:joint() return false end
+                     function e:move_cnt() return 0xF end"
+                );
+                let (lua, log) = run(script, &setup, 1, &["effect("]);
+                (log.len(), eval::<i64>(&lua, "return w.r[1]"))
+            };
+            assert_eq!(flinch(0xE), (12, 1));
+            assert_eq!(flinch(2), (0, 1));
+        }
+
+        /// G3's `DWORD_0052a77c[0xE]`, `FUN_004996c0`: in a hit, `+0x219`
+        /// (var 0) at 0xF and two of kind 4 at `BYTE_0052a5e4`'s parts; in
+        /// the death 0x2d, two of kind 4 and one of kind 8. `Em_33` then
+        /// counts `+0x219` down with two of kind 7 at `BYTE_0052a5de`'s.
+        #[test]
+        fn g3_sparks_from_the_spark_shot() {
+            let script = include_str!("../../games/re2/enemy/33/enemy.lua");
+            // `Rnd` 1: `BYTE_0052a5e4[1]` is part 3, `BYTE_0052a5de[1]` 27;
+            // the matrix's kinds sit 300 along x.
+            let four = vec![4, 0xF, 0x1000, 3, 300];
+            let seven = vec![6, 0, 0x1000, 27, 300];
+            let (hit, drops, _) = birkin_tick(script, 2, 0xE, 1, "");
+            assert_eq!(
+                hit,
+                [four.clone(), four.clone(), seven.clone(), seven.clone()]
+            );
+            assert_eq!(drops.len(), 2);
+            let (death, _, _) = birkin_tick(script, 3, 0xE, 1, "");
+            let sparks: Vec<_> = death
+                .iter()
+                .filter(|call| call[0] == 4 || call[..2] == [6, 0])
+                .collect();
+            assert_eq!(
+                sparks,
+                [&four, &four, &vec![4, 0xC, 0x1800, 3, 300], &seven, &seven]
+            );
+            let (after, _, drawn) = birkin_tick(script, 2, 2, 1, "[0] = 2");
+            assert_eq!(after.iter().filter(|call| **call == seven).count(), 2);
+            let (_, _, plain_drawn) = birkin_tick(script, 2, 2, 1, "");
+            assert_eq!(drawn - plain_drawn, 2);
         }
     }
 }

@@ -484,6 +484,12 @@ pub struct Work {
     /// `WORD_00691f8c`: the burst weapons' calls of `Tama_decrease_i` since
     /// one last took rounds. Only the new game clears it.
     pub tama_count: i16,
+    /// `Sce_free2` and `Sce_free3`: the body the spark shot's last shot
+    /// found, by slot, which its strike (`Esp_0E`, `0x98a0c8`) hits.
+    pub spark_target: Option<usize>,
+    /// The spark shot's strike dropped `fg_status`'s `0x80` this tick, after
+    /// `pl_mv_05` raised it, so the cut is free to change.
+    pub view_released: bool,
     /// `Attw_seq_no` and `Attw_timer`: where a burst is in its
     /// [`Weapon::burst_sequence`].
     attw: (u8, u8),
@@ -644,6 +650,18 @@ pub const COLT: u8 = 0xD;
 pub const BERETTA: u8 = 0x13;
 /// The sub-machine gun and the flamethrower, which `pl_mv05_w2` fires for as
 /// long as the trigger is held.
+/// The spark shot, Claire's (`pl_mv05_w3`).
+pub const SPARK: u8 = 0xE;
+/// `pl_mv05_w3_t2`'s clips: the shot, and the hold on the body it found.
+const SPARK_CLIP: u8 = 0xA;
+const SPARK_HOLD_CLIP: u8 = 0xB;
+/// Its `Esp_call`s on part 11: the flash, at [`SPARK_FLASH_POINT`]; the miss's
+/// sparks (`Esp_3E`) and the strike (`Esp_0E`), at [`SPARK_POINT`].
+const SPARK_FLASH: u32 = 0x128_1800;
+const SPARK_MISS: u32 = 0x603_1000;
+const SPARK_STRIKE: u32 = 0x602_1000;
+const SPARK_FLASH_POINT: [i16; 3] = [0x82, 0x514, 0];
+const SPARK_POINT: [i16; 3] = [0x82, 0x6B8, 0];
 pub const SMG: u8 = 0xF;
 pub const FLAMETHROWER: u8 = 0x10;
 /// `pl_mv05_w2_t1`'s hold, `pl_mv05_w2_t2`'s burst and the end of it, by tilt
@@ -1110,6 +1128,8 @@ impl Default for Work {
             attw: (0, 0),
             spent: 0,
             tama_count: 0,
+            spark_target: None,
+            view_released: false,
             shot_line: None,
             super_matrix: None,
             tilt: [0, 0],
@@ -1227,13 +1247,18 @@ impl Work {
     /// Whether the player is aiming (`pl_mv_05`), which raises `fg_status`'s
     /// `0x80` and so holds the cut on screen (`Re2State::view_held`).
     pub fn holds_view(&self) -> bool {
+        self.aiming() && !self.view_released
+    }
+
+    /// `pl_mv_05` runs.
+    fn aiming(&self) -> bool {
         self.routine[0] == MODE_MOVE && self.routine[1] == MOVE_AIM
     }
 
     /// The routines that raise `fg_status`'s `0x40` and leave it up for the
     /// next routine to drop ([`Work::holds_game`]).
     fn holds_game_now(&self) -> bool {
-        self.holds_view()
+        self.aiming()
             || matches!(
                 self.routine[0],
                 MODE_DAMAGE | MODE_DEAD | MODE_HELD | MODE_HELD_DIE
@@ -1376,12 +1401,29 @@ pub struct Weapon {
 impl Weapon {
     /// Whether [`Mover::pl_mv_aim`] handles it: the knife, the starting
     /// handguns, the magnums, the shotguns, the grenade launcher, the bowgun,
-    /// the Colt S.A.A. and the Beretta.
+    /// the Colt S.A.A., the spark shot, the sub-machine gun, the flamethrower
+    /// and the Beretta.
     fn aims(&self) -> bool {
         matches!(
             self.id,
-            KNIFE | 2 | 3 | 5..=8 | GRENADES..=crate::bow2::BOW | COLT | SMG | FLAMETHROWER | BERETTA
+            KNIFE
+                | 2
+                | 3
+                | 5..=8
+                | GRENADES..=crate::bow2::BOW
+                | COLT
+                | SPARK
+                | SMG
+                | FLAMETHROWER
+                | BERETTA
         )
+    }
+
+    /// `pl_mv05_w_tbl`'s `pl_mv05_w3`: the spark shot shares the handguns'
+    /// raise, lowering, reload and lock and the bursts' hold, but fires its
+    /// own way (`pl_mv05_w3_t2`), and never tilts.
+    fn sparks(&self) -> bool {
+        self.id == SPARK
     }
 
     /// `pl_mv05_w_tbl`'s `pl_mv05_w2`: the sub-machine gun and the
@@ -1393,7 +1435,7 @@ impl Weapon {
 
     /// The hold's clips, by tilt.
     fn hold_clips(&self) -> [u8; 3] {
-        if self.bursts() {
+        if self.bursts() || self.sparks() {
             BURST_HOLD_CLIPS
         } else {
             AIM_HOLD_CLIPS
@@ -1446,6 +1488,7 @@ impl Weapon {
             crate::bow2::BOW => [0x86, 0x87, 10],
             COLT => [0x85, 0x86, 5],
             SMG | FLAMETHROWER => [0x87, 0x88, 0],
+            SPARK => [0x9E, 0x9E, 0x1E],
             // The handguns' and the Beretta's.
             _ => [0x85, 0x87, 8],
         }
@@ -2832,11 +2875,13 @@ impl Mover<'_, '_> {
         let chain = self.tick.weapon.foot_chain(self.tick.id);
         let planted = self.chain_position(chain);
         let drawn = self.drawn_parts();
+        self.work.view_released = false;
         match self.work.routine[2] {
             0 => self.aim_raise(key, &drawn),
             1 => self.aim_hold(key),
             2 if self.tick.weapon.is_knife() => self.aim_slash(key),
             2 if self.tick.weapon.bursts() => self.aim_burst(key, &drawn),
+            2 if self.tick.weapon.sparks() => self.aim_spark(key, &drawn),
             2 => self.aim_fire(key, &drawn),
             3 => self.aim_lower(key),
             4 => self.aim_reload(),
@@ -3467,6 +3512,10 @@ impl Mover<'_, '_> {
         if self.joint_move() {
             self.work.routine[3] += 1;
         }
+        // The spark shot (and the rocket launcher) raise level, whatever is held.
+        if self.tick.weapon.sparks() {
+            return;
+        }
         if self.work.move_cnt > self.tick.weapon.tilt_down_frame() && key & KEY_TILT_DOWN != 0 {
             self.aim_stage(1);
             self.set_tilt(TILT_DOWN);
@@ -3526,17 +3575,22 @@ impl Mover<'_, '_> {
             self.aim_stage(3);
             return;
         }
-        if key & KEY_TILT_UP != 0 && self.work.status_flg & TILT_UP == 0 {
+        // `pl_mv05_w2_t1` leaves the spark shot's tilt as it is.
+        let tilts = !self.tick.weapon.sparks();
+        if tilts && key & KEY_TILT_UP != 0 && self.work.status_flg & TILT_UP == 0 {
             self.work.routine[3] = 0;
             self.set_tilt(TILT_UP);
             return;
         }
-        if key & KEY_TILT_DOWN != 0 && self.work.status_flg & TILT_DOWN == 0 {
+        if tilts && key & KEY_TILT_DOWN != 0 && self.work.status_flg & TILT_DOWN == 0 {
             self.work.routine[3] = 0;
             self.set_tilt(TILT_DOWN);
             return;
         }
-        if key & (KEY_TILT_UP | KEY_TILT_DOWN) == 0 && self.work.status_flg & TILT_LEVEL == 0 {
+        if tilts
+            && key & (KEY_TILT_UP | KEY_TILT_DOWN) == 0
+            && self.work.status_flg & TILT_LEVEL == 0
+        {
             self.work.routine[3] = 0;
             self.set_tilt(TILT_LEVEL);
             return;
@@ -3755,6 +3809,118 @@ impl Mover<'_, '_> {
             _ => {}
         }
         self.aim_turn(key, BURST_TURN);
+    }
+
+    /// `pl_mv05_w3_t2` (`0x4d8b40`): the spark shot. Its first tick looks
+    /// for a body, at the level and then low (`Weapon_at_ck` with `0x8000`,
+    /// which hurts nothing), keeps the one found and takes a round. The shot
+    /// then plays (clip 0xA): a flash on its first frame, and the miss's
+    /// sparks (`Esp_3E`) if it found none. With a body, the fourth frame
+    /// holds on it (clip 0xB), takes two more rounds and lets the root
+    /// motion move the player, and its first frame strikes (`Esp_0E`), with
+    /// the cut free to change.
+    fn aim_spark(&mut self, key: u16, drawn: &DrawnParts) {
+        let rounds = self.tick.weapon.rounds;
+        // `Tama_decrease_i`'s 0xE: a gun at `0xFF` (none to take) keeps it.
+        let spend = |work: &mut Work, taken: u8| {
+            if rounds != 0xFF {
+                work.spent = work.spent.wrapping_add(taken);
+            }
+        };
+        match self.work.routine[3] {
+            0 | 1 => {
+                if self.work.routine[3] == 0 {
+                    self.aim_clip(SPARK_CLIP);
+                    self.work.noise |= 1;
+                    self.work.spark_target = [1, 0].into_iter().find_map(|level| self.look(level));
+                    spend(self.work, 1);
+                }
+                if self.joint_move() {
+                    self.aim_stage(1);
+                }
+                if self.work.move_cnt == 4 && self.work.spark_target.is_some() {
+                    self.work.routine[3] = 2;
+                    self.work.move_no = SPARK_HOLD_CLIP;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = 0;
+                    spend(self.work, 2);
+                }
+                if self.work.move_cnt == 1 {
+                    self.spark_effect(SPARK_FLASH, 0, SPARK_FLASH_POINT);
+                    if self.work.spark_target.is_none() {
+                        self.spark_effect(SPARK_MISS, self.player.angle as i16, SPARK_POINT);
+                    }
+                }
+                self.spark_rings(drawn);
+            }
+            2 => {
+                self.spd_get();
+                if self.joint_move() {
+                    self.aim_stage(1);
+                    self.work.spd = [0; 3];
+                }
+                self.add_speed_xz();
+                if self.work.move_cnt > 0x14 && key & KEY_AIM == 0 {
+                    self.work.spd = [0; 3];
+                    self.aim_stage(1);
+                    return;
+                }
+                self.spark_rings(drawn);
+                if self.work.move_cnt == 1 {
+                    self.spark_effect(SPARK_STRIKE, self.player.angle as i16, SPARK_POINT);
+                }
+                self.work.view_released = true;
+            }
+            _ => {}
+        }
+        self.aim_turn(key, AIM_FIRE_TURN);
+        if key & KEY_AIM == 0 && self.work.move_cnt > self.tick.weapon.fire_cancel_frame() {
+            self.aim_stage(1);
+        }
+    }
+
+    /// `Weapon_at_ck` with `0x8000` at record `level`: the body the shot
+    /// would hit, which keeps its life.
+    fn look(&self, level: usize) -> Option<usize> {
+        let shooter = crate::weapon2::Shooter {
+            pos: self.player.pos,
+            neck: self.work.neck.position.unwrap_or(self.player.pos),
+            angle: self.player.angle,
+            weapon: self.tick.weapon.id,
+            level,
+        };
+        let sca = sca_records(self.tick);
+        crate::weapon2::weapon_at_ck(&shooter, self.tick.targets, sca).map(|hit| hit.slot)
+    }
+
+    /// The spark shot's `Pl_water`: the rings on frames 1, 3 and 5 while the
+    /// water is above `Ground`.
+    fn spark_rings(&mut self, drawn: &DrawnParts) {
+        let water = self.work.water;
+        if water != 0
+            && i32::from(water) < self.ground()
+            && self.work.move_cnt < 6
+            && self.work.move_cnt & 1 != 0
+        {
+            self.pl_water(drawn[0]);
+        }
+    }
+
+    /// An `Esp_call` of `word` on part 11's `Workm`, at `point` on it.
+    fn spark_effect(&mut self, word: u32, dir: i16, point: [i16; 3]) {
+        let Some(hand) = self.drawn_part(SHOT_PART) else {
+            return;
+        };
+        self.work.effects.push(EffectCall {
+            kind: (word >> 24) as u8,
+            row: (word >> 16) as u8,
+            size: word as u16,
+            dir,
+            at: crate::esp2::apply_matrix(&hand, point),
+            motion: None,
+            on: Some((SHOT_PART as u8, hand, point)),
+            turn: None,
+        });
     }
 
     /// `init_Weapon_at`: the sequence from its start.
@@ -7073,11 +7239,11 @@ mod weapon_tests {
     #[test]
     fn each_gun_has_its_own_timing_and_leg() {
         assert!(
-            [KNIFE, 2, 3, 5, 6, 7, 8, 9, 0xC, COLT, BERETTA]
+            [KNIFE, 2, 3, 5, 6, 7, 8, 9, 0xC, COLT, SPARK, BERETTA]
                 .iter()
                 .all(|&id| weapon(id).aims())
         );
-        assert!(![0, 4, 0xE, 0x12].iter().any(|&id| weapon(id).aims()));
+        assert!(![0, 4, 0x11, 0x12].iter().any(|&id| weapon(id).aims()));
         // The knife's row: a slash let go of past frame 0x32 stops at once.
         assert!(weapon(KNIFE).is_knife() && !weapon(2).is_knife());
         assert_eq!(weapon(KNIFE).fire_cancel_frame(), 0x32);
@@ -9094,9 +9260,9 @@ mod tests {
 
     #[test]
     fn only_a_handgun_raises_into_the_stance() {
-        // The spark shot (`pl_mv05_w3`) isn't ported.
+        // The rocket launcher (0x11) isn't ported.
         let mut setup = armed(true, false);
-        setup.weapon.id = 0xE;
+        setup.weapon.id = 0x11;
         setup.tick(aiming(false, false), 200);
         assert_eq!(setup.work.routine[1], MOVE_IDLE);
 
@@ -9445,6 +9611,171 @@ mod tests {
                 assert!(looks.is_empty() && hits.is_empty(), "{looks:?} {hits:?}");
             }
         }
+    }
+
+    /// [`armed_with_hands`] holding the spark shot with `rounds`, in the
+    /// hold, level, on clips long enough for its shot, with a zombie 1500
+    /// ahead if `body`.
+    fn sparking(rounds: u8, body: bool) -> Setup {
+        let mut setup = armed_with_hands(true, false);
+        (setup.clips, setup.keyframes) = bank(0x14, 40, 0);
+        for keyframe in &mut setup.keyframes {
+            keyframe.rotations = vec![[0; 3]; 15];
+        }
+        setup.weapon.id = SPARK;
+        setup.weapon.rounds = rounds;
+        setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];
+        setup.work.status_flg = TILT_LEVEL;
+        setup.work.move_no = BURST_HOLD_CLIPS[1];
+        setup.player.angle = 0;
+        if body {
+            let [x, _, z] = setup.player.pos;
+            setup.targets = vec![crate::weapon2::Target {
+                slot: 3,
+                id: 0x1F,
+                be_flg: 1 | 0x400_0000 | 0x800_0000,
+                life: 50,
+                pos: [x + 1500, 0, z],
+                at: [x + 1500, z],
+                at_w: 500,
+                neck_y: -1500,
+                ..Default::default()
+            }];
+        }
+        // A press from the hold starts the shot.
+        setup.tick(aiming(true, true), 200);
+        assert_eq!(setup.work.routine[2..], [2, 0]);
+        setup
+    }
+
+    /// The words of this tick's effects, with their turn and their point on
+    /// part 11.
+    fn spark_calls(setup: &mut Setup) -> Vec<(u32, i16, [i16; 3])> {
+        std::mem::take(&mut setup.work.effects)
+            .iter()
+            .filter(|call| call.kind != 0x1A)
+            .map(|call| {
+                (
+                    u32::from(call.kind) << 24 | u32::from(call.row) << 16 | u32::from(call.size),
+                    call.dir,
+                    call.on.map_or([0; 3], |(_, _, point)| point),
+                )
+            })
+            .collect()
+    }
+
+    /// `pl_mv05_w3_t2` with a body in reach: its first tick finds it
+    /// (`Weapon_at_ck` with `0x8000`, which hurts nothing) and takes a round;
+    /// the flash goes out on the first frame of clip 0xA, and the fourth holds
+    /// on the body (clip 0xB, no blend) and takes two more, whose first frame
+    /// strikes (`Esp_0E`) and frees the cut.
+    #[test]
+    fn a_spark_shot_holds_on_the_body_it_finds_and_takes_three_rounds() {
+        let mut setup = sparking(50, true);
+        setup.tick(aiming(true, false), 200);
+        assert_eq!(setup.work.routine[2..], [2, 1]);
+        assert_eq!((setup.work.move_no, setup.work.move_cnt), (SPARK_CLIP, 1));
+        assert_eq!(setup.work.spark_target, Some(3));
+        assert!(setup.work.hit.is_none(), "the look hurts nothing");
+        assert_eq!(setup.work.spent, 1);
+        assert_eq!(setup.work.noise & 1, 1);
+        assert_eq!(
+            spark_calls(&mut setup),
+            [(SPARK_FLASH, 0, SPARK_FLASH_POINT)]
+        );
+        for frame in 2..4 {
+            setup.tick(aiming(true, false), 200);
+            assert_eq!(setup.work.move_cnt, frame);
+            assert!(spark_calls(&mut setup).is_empty());
+        }
+        setup.tick(aiming(true, false), 200);
+        assert_eq!(setup.work.routine[2..], [2, 2]);
+        assert_eq!(
+            (setup.work.move_no, setup.work.move_cnt),
+            (SPARK_HOLD_CLIP, 0)
+        );
+        assert_eq!(setup.work.hokan, 0);
+        assert_eq!(setup.work.spent, 3);
+        assert!(setup.work.holds_view());
+        setup.tick(aiming(true, false), 200);
+        assert_eq!(setup.work.move_cnt, 1);
+        assert_eq!(spark_calls(&mut setup), [(SPARK_STRIKE, 0, SPARK_POINT)]);
+        assert!(!setup.work.holds_view(), "the strike frees the cut");
+        assert!(setup.work.holds_game);
+        // Letting go of the aim past frame 0x14 ends it.
+        for _ in 0..0x14 {
+            setup.tick(aiming(true, false), 200);
+        }
+        assert_eq!(setup.work.routine[2..], [2, 2]);
+        setup.tick(Input::default(), 200);
+        assert_eq!(setup.work.routine[2..], [1, 0]);
+        assert_eq!(setup.work.spd, [0; 3]);
+    }
+
+    /// With nothing in reach the shot throws the miss's sparks (`Esp_3E`)
+    /// with its flash, takes its one round and goes back to the hold at the
+    /// end of its clip.
+    #[test]
+    fn a_spark_shot_with_nothing_in_reach_throws_its_sparks() {
+        let mut setup = sparking(50, false);
+        setup.tick(aiming(true, false), 200);
+        assert_eq!(setup.work.spark_target, None);
+        assert_eq!(
+            spark_calls(&mut setup),
+            [
+                (SPARK_FLASH, 0, SPARK_FLASH_POINT),
+                (SPARK_MISS, 0, SPARK_POINT)
+            ]
+        );
+        for _ in 0..60 {
+            if setup.work.routine[2] != 2 {
+                break;
+            }
+            assert_ne!(setup.work.routine[3], 2);
+            setup.tick(aiming(true, false), 200);
+        }
+        assert_eq!(setup.work.routine[2..], [1, 0]);
+        assert_eq!(setup.work.spent, 1);
+        // A gun at 0xFF has none to take.
+        let mut endless = sparking(0xFF, true);
+        for _ in 0..6 {
+            endless.tick(aiming(true, false), 200);
+        }
+        assert_eq!(endless.work.routine[3], 2);
+        assert_eq!(endless.work.spent, 0);
+    }
+
+    /// The spark shot holds on the bursts' clips, and neither its hold
+    /// (`pl_mv05_w2_t1`) nor its raise (`pl_mv05_w1_t0`) takes a tilt.
+    #[test]
+    fn the_spark_shot_never_tilts() {
+        let spark = Weapon {
+            id: SPARK,
+            ..Weapon::default()
+        };
+        assert!(spark.aims() && spark.sparks() && !spark.bursts());
+        assert_eq!(spark.hold_clips(), BURST_HOLD_CLIPS);
+        assert_eq!(spark.frames(), [0x9E, 0x9E, 0x1E]);
+        let mut setup = sparking(50, false);
+        setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];
+        let aim = Input {
+            aim: true,
+            ..Input::default()
+        };
+        for held in [Input { up: true, ..aim }, Input { down: true, ..aim }] {
+            setup.tick(held, 200);
+            assert_eq!(setup.work.status_flg & 0xE000, TILT_LEVEL);
+            assert_eq!(setup.work.routine[2..], [1, 1]);
+        }
+        setup.work.routine = [MODE_MOVE, MOVE_AIM, 0, 0];
+        for _ in 0..40 {
+            setup.tick(Input { down: true, ..aim }, 200);
+            if setup.work.routine[2] != 0 {
+                break;
+            }
+            assert_eq!(setup.work.status_flg & 0xE000, TILT_LEVEL);
+        }
+        assert_eq!(setup.work.status_flg & 0xE000, TILT_LEVEL);
     }
 
     /// Letting go of the trigger plays the burst's end; a press there fires

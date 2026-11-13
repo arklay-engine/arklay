@@ -38,7 +38,7 @@ local NECK_X <const> = 18 -- `Neck_point_x` to `_z` (`+0x170`), which `Rot_neck`
 local NECK_Y <const> = 19
 local NECK_Z <const> = 20
 local TIMER0 <const> = 21 -- `Timer0` (`+0x158`): the snap's count.
-local BLOOD <const> = 22 -- `+0x234`: what runs each tick: 1 `FUN_0046b1c0`, 2 `FUN_0046b670`, 3 `FUN_0046b2b0`.
+local BLOOD <const> = 22 -- `+0x234`: what runs each tick: 1 `FUN_0046b1c0`, 2 `FUN_0046b670`, 3 `FUN_0046b2b0`, 4 `FUN_0046b750`.
 local TANK_T <const> = 23 -- `+0x15a`: the count of `FUN_004697f0`'s steps.
 -- The gas tank's place on part 6, once the jaws hold it: the original's
 -- object work 1 `Pos_x` to `_z` with its parent matrix on that part.
@@ -797,9 +797,46 @@ local function head_burst(e, kind, row)
     end
 end
 
--- `FUN_0046af30`: a hit's blood, by the weapon. The blasts' rows also take
--- the colours of 0x17 parts down to 0x60 (`FUN_0046b840`), which isn't
--- ported, and the spark shot's (0xE, `FUN_0046b750`) isn't either.
+-- `DAT_00527fc0`: where the spark shot's sparks go, a tick each, by
+-- `DWORD_00689510`'s place in its 21 records: the point on the part and the
+-- part. The records missing here have `+10`'s bit 2, which skips them; none
+-- has bit 1, which would go on to the next in the same tick.
+local SPARK_POINTS <const> = {
+    [0] = { 3100, -800, 0, 0 },
+    [2] = { 2500, -100, -200, 7 },
+    [4] = { 2000, -100, -1400, 0 },
+    [9] = { 900, 600, 800, 5 },
+    [11] = { -300, 600, 200, 8 },
+    [13] = { 400, 0, 0, 3 },
+    [15] = { 1000, -1000, 1000, 0 },
+    [20] = { 1700, -900, 600, 0 },
+}
+
+-- `FUN_0046b750`: the spark shot's sparks (kind 6, size `Rnd * 2 + 0x1800`)
+-- on the parts' `Workm`, one record a tick until `+0x231` reaches 0x18. The
+-- first tick only sets it going; the records start again after the 21st.
+local function sparks(e)
+    local count = e:var(C231)
+    if count ~= 0 then
+        local point = SPARK_POINTS[(count - 1) % 21]
+        if point then
+            local wx, wy, wz = e:drawn_part_point(point[4], point[1], point[2], point[3])
+            e:call_effect(6, 0, e:rnd() * 2 + 0x1800, 0, i16(wx), i16(wy), i16(wz))
+        end
+        if count == 0x18 then
+            e:set_var(BLOOD, 0)
+            e:set_var(C231, 0x19)
+            return
+        end
+    else
+        e:set_var(BLOOD, 4)
+    end
+    e:set_var(C231, count + 1)
+end
+
+-- `FUN_0046af30`: a hit's blood, by the weapon. The blasts' rows and the
+-- spark shot's also take the colours of 0x17 parts down to 0x60
+-- (`FUN_0046b840`), which isn't ported.
 local function hit_blood(e)
     e:set_var(C231, 0)
     local weapon = e:var(HIT_BY)
@@ -815,6 +852,8 @@ local function hit_blood(e)
         head_burst(e, 5, 4)
     elseif weapon == 0xB then
         head_burst(e, 4, 9)
+    elseif weapon == 0xE then
+        sparks(e)
     elseif weapon == 0x12 then
         bleed(e, 4, 0x2800, false)
     end
@@ -1223,6 +1262,8 @@ function update(e)
         bleed_shotgun(e, e:var(BLOOD_END))
     elseif callback == 3 then
         blast_blood(e)
+    elseif callback == 4 then
+        sparks(e)
     end
     count_down(e, C233)
     count_down(e, HIT_WAIT)

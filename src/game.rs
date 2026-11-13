@@ -1100,7 +1100,9 @@ fn re2_ammo(weapon: u8) -> (u8, u8) {
         // `Item_data_tbl`: the Colt holds six, the Beretta fifteen.
         crate::player2::COLT => (RE2_HANDGUN_BULLETS, 6),
         crate::player2::BERETTA => (RE2_HANDGUN_BULLETS, 15),
-        // The machine gun bullets and the fuel, a hundred a load.
+        // The spark shot's 0x1C, the machine gun bullets and the fuel, a
+        // hundred a load.
+        crate::player2::SPARK => (0x1C, 100),
         crate::player2::SMG => (0x1B, 100),
         crate::player2::FLAMETHROWER => (0x17, 100),
         _ => (RE2_HANDGUN_BULLETS, 18),
@@ -9473,7 +9475,13 @@ impl GameState {
         if spent != 0
             && let Some(slot) = self.inventory.iter_mut().find(|slot| slot.id == weapon)
         {
-            slot.quantity = slot.quantity.saturating_sub(spent);
+            // `Set_iwork_num` stores the spark shot's count as a byte: a
+            // strike's two rounds from one or two left wrap it.
+            slot.quantity = if weapon == crate::player2::SPARK {
+                slot.quantity.wrapping_sub(spent)
+            } else {
+                slot.quantity.saturating_sub(spent)
+            };
         }
         if std::mem::take(&mut self.re2.player.reloaded) {
             let (ammo, magazine) = re2_ammo(weapon);
@@ -11405,6 +11413,27 @@ mod tests {
             assert_eq!(game.item_count(weapon), 100);
             assert_eq!(game.item_count(ammo), 150);
         }
+    }
+
+    /// `Mix_null` gives the spark shot item 0x1C to load, a hundred at a time
+    /// (`Item_data_tbl`), and `Set_iwork_num` keeps its count as a byte: a
+    /// strike's three rounds from two left wrap it to 0xFF.
+    #[test]
+    fn a_re2_spark_shot_loads_its_own_and_its_count_wraps() {
+        let spark = crate::player2::SPARK;
+        assert_eq!(re2_ammo(spark), (0x1C, 100));
+        let mut game = GameState {
+            equipped_weapon_id: spark,
+            inventory: vec![InventoryItem {
+                id: spark,
+                quantity: 2,
+            }],
+            ..Default::default()
+        };
+        assert!(!game.re2_weapon().spare, "no 0x1C, nothing to load");
+        game.re2.player.spent = 3;
+        game.re2_settle_ammo();
+        assert_eq!(game.item_count(spark), 0xFF);
     }
 
     #[test]

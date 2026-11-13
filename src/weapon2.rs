@@ -16,6 +16,7 @@ const LINE_MASK: u16 = 0x80;
 const COLT: u8 = crate::player2::COLT;
 const BERETTA: u8 = crate::player2::BERETTA;
 const SMG: u8 = crate::player2::SMG;
+const SPARK: u8 = crate::player2::SPARK;
 /// `Type`'s bits for out of reach, and for someone only aimed at if nobody else is.
 const TYPE_UNTARGETED: u16 = 0xC000;
 const TYPE_ON_FLOOR: u16 = 0x2000;
@@ -32,6 +33,8 @@ pub struct Target {
     pub pos: [i32; 3],
     /// `Atd[0]`'s `X` and `Z`, and its `At_w`.
     pub at: [i32; 2],
+    /// `Atd[0]`'s `Y`, where the spark shot's strike (`Esp_0E`) ends.
+    pub at_y: i32,
     pub at_w: u16,
     /// `Atd[1]`'s `At_w`.
     pub at_w1: u16,
@@ -261,9 +264,18 @@ const CUSTOM_SHOTGUN: [Record; 3] = [
     ),
 ];
 
+/// The spark shot's (`0x539CB0`): a rectangle at each level, which only
+/// finds the body its effect strikes.
+const SPARK_RECORDS: [Record; 3] = [
+    record([0x4, 0, 0], [[200, 0, 3500, 500], [0; 4], [0; 4]]),
+    record([0x8, 0, 0], [[200, 0, 3500, 500], [0; 4], [0; 4]]),
+    record([0x10, 0, 0], [[200, 0, 3500, 500], [0; 4], [0; 4]]),
+];
+
 /// What a weapon's shot is: its rectangles, and what it does to a zombie.
 fn shot_records(weapon: u8) -> Option<&'static [Record; 3]> {
     let records = match weapon {
+        SPARK => &SPARK_RECORDS,
         // The Colt's, the sub-machine gun's and the Beretta's entries point at
         // the handguns' records.
         2..=4 | COLT | SMG | BERETTA => &HANDGUN,
@@ -283,6 +295,7 @@ fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
     let weapon = match (id, weapon) {
         (G1_ID, COLT) => return Some(&G1_COLT),
         (_, SMG) => return smg_damage(id),
+        (_, SPARK) => return spark_damage(id),
         (_, COLT | BERETTA) => 2,
         _ => weapon,
     };
@@ -550,6 +563,39 @@ fn smg_damage(id: u8) -> Option<&'static Damage> {
         crate::zombie2::ROACH_ID => &ROACH,
         crate::zombie2::EM2D_ID => &EM2D,
         // The zombies' two tables (`0x535350`, `0x5354D0`) share the row.
+        _ => &ZOMBIE,
+    })
+}
+
+/// The heights of `Wp_dmg_tbl`'s fourteenth rows, the spark shot's: its look
+/// for a body (`Weapon_at_ck` with `0x8000`) reads only them, and hurts
+/// nothing, so the damage and stun are left out. Its effect's strike reads
+/// the rows' damage through [`heavy_rows`].
+fn spark_damage(id: u8) -> Option<&'static Damage> {
+    const fn row(heights: [i32; 6]) -> Damage {
+        Damage {
+            damage: 0,
+            stun: 0,
+            heights,
+        }
+    }
+    const SPARK_HEIGHTS: [i32; 6] = [-4000, -2000, -3000, 2000, -500, 3000];
+    const ZOMBIE: Damage = row(SPARK_HEIGHTS);
+    const DOG: Damage = row([-3000, -2000, -2000, -1000, -1000, 3000]);
+    const CROW: Damage = row([-6000, -3000, -4000, -500, -500, 3000]);
+    const LICKER: Damage = row([-5000, -2000, -3500, 500, -500, 2000]);
+    const SPIDER: Damage = row([-7000, -2000, -6000, 6000, -500, 500]);
+    const MRX: Damage = row([-3200, 100, -2000, 1600, -1000, 2600]);
+    const G2: Damage = row([-4000, -2000, -6000, 2000, -500, 3000]);
+    Some(match id {
+        DOG_ID | crate::zombie2::ROACH_ID => &DOG,
+        CROW_ID => &CROW,
+        LICKER_ID | LICKER_24_ID => &LICKER,
+        SPIDER_ID | YOUNG_ID => &SPIDER,
+        MRX_ID => &MRX,
+        G2_ID => &G2,
+        // The zombies', the alligator's, the embryo's, room 205's bodies',
+        // the plants', G1's and G3's.
         _ => &ZOMBIE,
     })
 }
@@ -1636,6 +1682,45 @@ mod tests {
             for (record, handgun) in records.iter().zip(&HANDGUN) {
                 assert_eq!((record.reach, record.rects), (handgun.reach, handgun.rects));
             }
+        }
+    }
+
+    /// The spark shot's records (`0x539CB0`) have one rectangle a level, and
+    /// its look reads each body's own fourteenth row's heights; the strike's
+    /// damage comes through `heavy_rows`' row for 0xE.
+    #[test]
+    fn the_spark_shot_looks_with_its_own_records_and_heights() {
+        let records = shot_records(SPARK).unwrap();
+        for (record, reach) in records.iter().zip([4, 8, 0x10]) {
+            assert_eq!(record.reach, [reach, 0, 0]);
+            assert_eq!(record.rects, [[200, 0, 3500, 500], [0; 4], [0; 4]]);
+        }
+        let heights = |id| damage_table(id, SPARK).unwrap().heights;
+        assert_eq!(heights(0x10), [-4000, -2000, -3000, 2000, -500, 3000]);
+        assert_eq!(heights(0x10), heights(crate::zombie2::EMBRYO_ID));
+        assert_eq!(heights(DOG_ID), heights(crate::zombie2::ROACH_ID));
+        assert_eq!(heights(LICKER_ID), [-5000, -2000, -3500, 500, -500, 2000]);
+        assert_eq!(heights(SPIDER_ID), heights(YOUNG_ID));
+        assert_eq!(heights(MRX_ID)[1], 100);
+        assert_eq!(heights(G2_ID)[2], -6000);
+        assert_eq!(heights(CROW_ID)[0], -6000);
+        assert_eq!(
+            heavy_rows(0x1F).unwrap()[usize::from(SPARK) - 9],
+            [0x03C0_F03C, 0x078F_1E0A]
+        );
+        // A zombie straight ahead in reach is found; one past it isn't.
+        for (x, found) in [(3000, true), (16000, false)] {
+            let shooter = Shooter {
+                pos: [0, 0, 0],
+                neck: [0, -1500, 0],
+                angle: 0,
+                weapon: SPARK,
+                level: 1,
+            };
+            let mut body = zombie(4, x, 0);
+            body.at_w = 500;
+            let hit = weapon_at_ck(&shooter, &[body], &[]);
+            assert_eq!(hit.map(|hit| hit.slot), found.then_some(4), "at {x}");
         }
     }
 
