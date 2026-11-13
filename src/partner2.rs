@@ -24,6 +24,8 @@ pub const SPL_R_POS: [i16; 12] = [
 /// `Sherry_St_pos` (`0x53d148`): the follow point's kind for each answer of
 /// `Spl_em_pos_ck`, 0 beside and 2 behind.
 pub const SHERRY_ST_POS: [u8; 12] = [0, 2, 2, 0, 0, 2, 2, 0, 0, 2, 2, 0];
+/// `Ada_St_pos` (`0x53cde4`): the same for Ada.
+pub const ADA_ST_POS: [u8; 12] = [0, 0, 0, 2, 2, 0, 0, 2, 2, 2, 2, 15];
 /// `Spl_em_pos_ck`'s reach: the enemies nearer than this count as close.
 const EM_POS_NEAR: u16 = 3000;
 /// `L_spl`'s top two bits: which of the nearest three an enemy is (1, 2, 3).
@@ -202,6 +204,20 @@ const TURN_ROUND_ARRIVED: u16 = 100;
 const WALL_TICKS: i16 = 60;
 const WALL_TURN_TICKS: i16 = 15;
 const WALL_TURN_ENEMY_TICKS: i16 = 30;
+/// Ada's distances (`Ada_mv00_br`, `Ada_mv01_br`, `Ada_mv0c_br`): from the
+/// point, the walk's stop, its run and the turn round's stop, and the stand's
+/// walk off with `Spl_em_pos_ck`'s answer 10; from the player (`L_pl`), a
+/// running and a walking player she turns out of the way of; and the turn
+/// round's turn to the point when the player runs off.
+const ADA_ARRIVED: u16 = 300;
+const ADA_RUN: u16 = 5000;
+const ADA_TURN_ROUND_ARRIVED: u16 = 200;
+const ADA_KIND_10_WALK: u16 = 500;
+const ADA_DODGE_RUNNING: u32 = 4000;
+const ADA_DODGE_WALKING: u32 = 1000;
+const ADA_TURN_ROUND_PLAYER_RUNS: u16 = 700;
+/// Ada's walk turns from a wall for 30 ticks, her run for Sherry's 15.
+const ADA_WALK_WALL_TURN_TICKS: i16 = 30;
 /// `Aida_mv01`'s count to a stop near Claire, or near the point at a wall.
 const WALK_STOP_TICKS: i16 = 60;
 /// The ticks `Aida_mv03` turns before it may stop, and at most.
@@ -298,12 +314,16 @@ pub struct Partner {
 }
 
 impl Partner {
-    /// The words `Sce_em_set` leaves on `splayer_work`.
-    pub fn placed() -> Self {
+    /// The words `Sce_em_set` leaves on `splayer_work`: its last two words,
+    /// the start a room's load gives a character, also land in `Timer0` and
+    /// `Timer1` (room 216's Ada has 777 and 72 there).
+    pub fn placed(start: i16, start_flags: i16) -> Self {
         Self {
             root_cnt: 1,
             life: -1,
             max_life: -1,
+            timer0: start,
+            timer1: start_flags,
             ..Self::default()
         }
     }
@@ -350,6 +370,10 @@ pub struct PartnerWorld<'a> {
     pub be_flg: u32,
     /// The bits she raises in the player's noise (`WORD_00989eee`).
     pub noise: u8,
+    /// The player's noise as the tick found it, and the player's `Spd_x`
+    /// (`+0x144`), which Ada's states read.
+    pub player_noise: u8,
+    pub player_spd_x: i16,
     /// `BYTE_0098ee7b`'s bit 0: the partner is poisoned.
     pub poisoned: bool,
 }
@@ -453,14 +477,16 @@ pub fn root_ck_sys(
         crate::sca::square_root0(dz.wrapping_mul(dz).wrapping_add(dx.wrapping_mul(dx))) as u16;
 }
 
-/// `Spl_Auto` (`0x4f23b0`) for Sherry: the touch and wait counts, then
-/// `Sherry_move` (`0x4f4aa0`). `kind` is her live `Type`, whose low nibble
-/// holds `Spl_em_pos_ck`'s answer.
+/// `Spl_Auto` (`0x4f23b0`): the touch and wait counts, then `Sherry_move`
+/// (`0x4f4aa0`) for Sherry's ids or `Ada_move` (`0x4f2420`) for anyone else
+/// (`ada`). `kind` is the live `Type`, whose low nibble holds
+/// `Spl_em_pos_ck`'s answer.
 pub(crate) fn spl_auto(
     mover: &mut Mover<'_, '_>,
     partner: &mut Partner,
     kind: &mut u16,
     world: &mut PartnerWorld<'_>,
+    ada: bool,
 ) {
     // `At_em_flg`'s `0x8000`: `Sce_em_set` leaves it as the work's memory
     // held it, and only `Oba_ck_em2`, the player's, writes it.
@@ -471,6 +497,7 @@ pub(crate) fn spl_auto(
         p: partner,
         kind,
         w: world,
+        ada,
     };
     auto.sherry_move();
 }
@@ -480,11 +507,15 @@ struct Auto<'r, 'a, 'b, 'w> {
     p: &'r mut Partner,
     kind: &'r mut u16,
     w: &'r mut PartnerWorld<'w>,
+    /// `Ada_move`: the same as `Sherry_move` but for its two tables.
+    ada: bool,
 }
 
 impl Auto<'_, '_, '_, '_> {
-    /// `Sherry_move`: the enemy check every sixteenth tick, then the
-    /// decision of `Routine_1` and the state it leaves, both this tick.
+    /// `Sherry_move`, and `Ada_move`, which differs only in its tables
+    /// (`Ada_St_pos`, `0x53cde4`, and `0x53cdb8`): the enemy check every
+    /// sixteenth tick, then the decision of `Routine_1` and the state it
+    /// leaves, both this tick.
     fn sherry_move(&mut self) {
         // `Spl_enemy_ck` has listed the enemies: the caller runs it, as it
         // reads the other works.
@@ -494,7 +525,12 @@ impl Auto<'_, '_, '_, '_> {
             *self.kind |= u16::from(self.spl_em_pos_ck());
             self.p.state &= !STATE_CHANGED;
             if was & 0xF != *self.kind & 0xF {
-                let kind = SHERRY_ST_POS[usize::from(*self.kind & 0xF)];
+                let st_pos = if self.ada {
+                    &ADA_ST_POS
+                } else {
+                    &SHERRY_ST_POS
+                };
+                let kind = st_pos[usize::from(*self.kind & 0xF)];
                 self.p.state = (self.p.state & !STATE_KIND) | u16::from(kind) | STATE_CHANGED;
             }
             *self.w.pos_ck_timer = SPL_POS_CK_START;
@@ -528,6 +564,10 @@ impl Auto<'_, '_, '_, '_> {
 
     /// `Sherry_Move_type`'s body, the same for every answer.
     fn move_type(&mut self) {
+        if self.ada {
+            self.ada_move_type();
+            return;
+        }
         match self.routine1() {
             MV_STAND => self.sherry_mv00_br(),
             MV_WALK => self.sherry_mv01_br(),
@@ -949,6 +989,200 @@ impl Auto<'_, '_, '_, '_> {
         }
     }
 
+    /// `Ada_Move_type` (`0x4f24e0` for `Spl_em_pos_ck`'s answer 0): the
+    /// decision from the answer's table (`0x53cdf0`), then the state from
+    /// `0x53ce28`, which is Sherry's but for the stand. The other answers'
+    /// tables (`0x53ce60` to `0x53cf78`, with enemies about) have their own
+    /// stand, walk, run and turns and aren't ported: they take answer 0's.
+    fn ada_move_type(&mut self) {
+        if *self.kind & 0xF != 0 {
+            log_ada_kind_once(*self.kind & 0xF);
+        }
+        match self.routine1() {
+            MV_STAND => self.ada_mv00_br(),
+            MV_WALK => self.ada_mv01_br(),
+            MV_RUN => self.ada_mv02_br(),
+            MV_DODGE => self.aida_mv03_br(),
+            MV_FACE => self.aida_mv04_br(),
+            MV_FACE_AHEAD => self.aida_mv0b_br(),
+            MV_TURN_ROUND => self.ada_mv0c_br(),
+            MV_FACE_POINT => self.aida_mv0d_br(),
+            _ => {}
+        }
+        match self.routine1() {
+            MV_STAND => self.ada_mv00(),
+            MV_WALK => self.aida_mv01(),
+            MV_RUN => self.aida_mv02(),
+            MV_DODGE | MV_TURN_ROUND => self.aida_mv03(),
+            MV_FACE | MV_FACE_AHEAD | MV_FACE_POINT => self.aida_mv04(),
+            MV_CLIMB => self.aida_mv08(),
+            MV_JUMP_DOWN => self.aida_mv09(),
+            routine => log_once(routine),
+        }
+    }
+
+    /// `Ada_mv00_br` (`0x4f2ab0`): from the stand, walk (or turn round) to
+    /// the point when `Spl_em_pos_ck`'s answer changed or it is over 3000
+    /// away, and turn out of the player's way when the player comes at her
+    /// (running within 4000, walking within 1000) and she faces the player.
+    /// She is never lost and never sidesteps. With an enemy listed and the
+    /// player's noise up she turns to it (`0x53d0c0` by its `Id`), which
+    /// isn't ported.
+    fn ada_mv00_br(&mut self) {
+        if self.routine2() == 0 {
+            let fraction = life_fraction(self.p.life, self.p.max_life);
+            let mut d_life_u = u8::from(self.w.poisoned);
+            if fraction < 2000 {
+                d_life_u = 1;
+            }
+            if fraction < 800 {
+                d_life_u = 2;
+            }
+            self.m.work.d_life_u = d_life_u;
+        }
+        if self.enemy().is_some() && self.w.player_noise & 1 != 0 {
+            log_ada_kind_once(0x10);
+        }
+        let [x, z] = self.p.soba;
+        let ahead = self.ahead(i32::from(x), i32::from(z), 0x400);
+        let to_point = |auto: &mut Self| auto.set(if ahead { MV_WALK } else { MV_TURN_ROUND }, 0);
+        if self.p.state & STATE_CHANGED != 0 {
+            to_point(self);
+            return;
+        }
+        if *self.kind & 0xF == 10 && self.p.dist > ADA_KIND_10_WALK {
+            to_point(self);
+            return;
+        }
+        if self.p.dist > FOUND {
+            to_point(self);
+            return;
+        }
+        let (px, pz) = self.player_xz();
+        let coming = |within: u32, routine: u8, auto: &Self| {
+            auto.w.distance < within
+                && auto.w.player_routine == routine
+                && !auto.cdir_ck2()
+                && auto.ahead(px, pz, 0x200)
+        };
+        if coming(ADA_DODGE_RUNNING, 2, self) || coming(ADA_DODGE_WALKING, 1, self) {
+            self.set(MV_DODGE, 0);
+        }
+    }
+
+    /// `Ada_mv00` (`0x4f2d60`): the stand, Sherry's without the call.
+    fn ada_mv00(&mut self) {
+        if self.routine2() == 0 {
+            self.m.work.routine[2] = 1;
+            let clip = STAND_CLIPS[self.life_column()];
+            self.clip(Bank::Weapon, clip);
+        }
+        if self.routine2() == 1 {
+            self.joint(Bank::Weapon);
+        }
+    }
+
+    /// The wall check at the top of Ada's walk and run decisions: 60 ticks
+    /// pushed out of a wall start a wall turn of `ticks`, in the state she is
+    /// in, turning by `rate`. True when the tick's decision is over.
+    fn ada_wall_turn(&mut self, ticks: i16, rate: i32) -> bool {
+        if self.sca_hit() && self.p.state & STATE_WALL_TURN == 0 {
+            self.p.stuck = self.p.stuck.wrapping_add(1);
+            if self.p.stuck > WALL_TICKS {
+                self.p.state |= STATE_WALL_TURN;
+                let a = self.w.rnd.draw();
+                let b = self.w.rnd.draw();
+                self.p.stuck = ticks;
+                let bit = u16::from((b >> (a & 3)) & 1);
+                self.p.turn = self
+                    .m
+                    .player
+                    .angle
+                    .wrapping_sub(bit * 0x100)
+                    .wrapping_add(0x880);
+                return true;
+            }
+        }
+        if !self.sca_hit() && self.p.state & STATE_WALL_TURN == 0 {
+            self.p.stuck = 0;
+        }
+        if self.p.state & STATE_WALL_TURN != 0 && self.p.stuck != 0 {
+            self.goto01(self.p.turn, rate);
+            self.p.stuck -= 1;
+            if self.p.stuck == 0 {
+                self.p.state &= !STATE_WALL_TURN;
+            }
+            return true;
+        }
+        false
+    }
+
+    /// `Ada_mv01_br` (`0x4f3110`): the walk's decision. She stops under 300
+    /// from the point, runs over 5000, and turns out of a running player's
+    /// way within 2000.
+    fn ada_mv01_br(&mut self) {
+        if self.ada_wall_turn(ADA_WALK_WALL_TURN_TICKS, 0x28) {
+            return;
+        }
+        let dist = self.p.dist;
+        if dist < ADA_ARRIVED {
+            self.set(MV_FACE_AHEAD, 0);
+            return;
+        }
+        if dist > ADA_RUN {
+            self.set(MV_RUN, 0);
+            return;
+        }
+        if dist < RUN && self.w.player_routine == 2 && !self.cdir_ck2() {
+            self.set(MV_DODGE, 0);
+            return;
+        }
+        self.goto_dest(0x28);
+        self.updown_ck();
+    }
+
+    /// `Ada_mv02_br` (`0x4f3510`): the run's decision. She walks under 3000
+    /// from the point.
+    fn ada_mv02_br(&mut self) {
+        if self.ada_wall_turn(WALL_TURN_TICKS, 0x50) {
+            return;
+        }
+        if self.p.dist < FOUND {
+            self.set(MV_WALK, 0);
+            return;
+        }
+        self.goto_dest(0x38);
+        self.updown_ck();
+    }
+
+    /// `Ada_mv0c_br` (`0x4f49b0`): the turn round, Sherry's with other
+    /// numbers, and a turn to the point once the player runs off (`Spd_x`
+    /// over 100) more than 700 away.
+    fn ada_mv0c_br(&mut self) {
+        if self.routine2() == 0 {
+            self.p.timer0 = 0x3C;
+        }
+        if self.p.timer0 != 0 {
+            self.p.timer0 -= 1;
+        }
+        let dist = self.p.dist;
+        if dist < ADA_TURN_ROUND_ARRIVED {
+            self.set(MV_FACE_AHEAD, 0);
+            return;
+        }
+        if self.p.timer0 < 0x1E && dist > STOP_RUN {
+            self.set(MV_FACE_POINT, 0);
+            return;
+        }
+        if dist > ADA_TURN_ROUND_PLAYER_RUNS && self.w.player_spd_x > 100 {
+            self.set(MV_FACE_POINT, 0);
+        }
+        if self.p.timer0 == 0 {
+            self.set(MV_FACE_POINT, 0);
+        }
+        self.goto_dest(-0x30);
+    }
+
     /// `Aida_mv03_br` (`0x4f3710`): turn out of a running Claire's way, until
     /// she faces as Claire does.
     fn aida_mv03_br(&mut self) {
@@ -1330,6 +1564,18 @@ fn log_once(routine: u8) {
     });
 }
 
+/// Ada's states with enemies about: the tables for `Spl_em_pos_ck`'s other
+/// answers (`what` 1 to 10), and her turn to a listed enemy when the player
+/// makes a noise (`what` 0x10).
+fn log_ada_kind_once(what: u16) {
+    static LOGGED: std::sync::Once = std::sync::Once::new();
+    LOGGED.call_once(|| {
+        crate::logging::write(&format!(
+            "RE2 partner: Ada's states with enemies about ({what:#x}) are not ported"
+        ))
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1381,6 +1627,9 @@ mod tests {
         ground: i16,
         be_flg: u32,
         noise: u8,
+        /// `Ada_move` rather than `Sherry_move`.
+        ada: bool,
+        player_spd_x: i16,
     }
 
     impl Rig {
@@ -1390,7 +1639,7 @@ mod tests {
             let mut body = crate::player::spawn(RoomId::parse("21B1").unwrap(), &room);
             body.pos = [0; 3];
             body.angle = 0;
-            let mut partner = Partner::placed();
+            let mut partner = Partner::placed(0, 0);
             partner.spl_in45(true, 200);
             let mut work = Work::default();
             work.routine = [1, 0, 0, 0];
@@ -1415,6 +1664,8 @@ mod tests {
                 ground: 0,
                 be_flg: 1,
                 noise: 0,
+                ada: false,
+                player_spd_x: 0,
             }
         }
 
@@ -1472,6 +1723,8 @@ mod tests {
                 ground: self.ground,
                 be_flg: self.be_flg,
                 noise: 0,
+                player_noise: 0,
+                player_spd_x: self.player_spd_x,
                 poisoned: self.poisoned,
             };
             let mut mover = Mover::new(&mut self.work, &mut self.body, &tick);
@@ -1480,6 +1733,7 @@ mod tests {
                 p: &mut self.partner,
                 kind: &mut self.kind,
                 w: &mut world,
+                ada: self.ada,
             };
             let answer = f(&mut auto);
             self.be_flg = world.be_flg;
@@ -1528,7 +1782,7 @@ mod tests {
             z1: 100,
             links: 0,
         }];
-        let mut partner = Partner::placed();
+        let mut partner = Partner::placed(0, 0);
         let mut work = Work::default();
         let world = RootSys {
             guides: &guides,
@@ -1548,7 +1802,7 @@ mod tests {
 
     #[test]
     fn the_root_turn_counts_down_for_a_scene_character_too() {
-        let mut partner = Partner::placed();
+        let mut partner = Partner::placed(0, 0);
         let mut work = Work::default();
         let world = RootSys {
             guides: &[],
@@ -1757,6 +2011,125 @@ mod tests {
     }
 
     #[test]
+    fn the_ada_follow_point_table_is_the_executables() {
+        assert_eq!(ADA_ST_POS, [0, 0, 0, 2, 2, 0, 0, 2, 2, 2, 2, 15]);
+    }
+
+    #[test]
+    fn adas_stand_waits_until_3000_and_never_sidesteps_or_gets_lost() {
+        let decide = |dist: u16, ahead: bool, state: u16| {
+            let mut rig = Rig::new();
+            rig.ada = true;
+            rig.partner.soba = [1000, 0];
+            rig.body.angle = if ahead { 0 } else { 0x800 };
+            rig.partner.dist = dist;
+            rig.partner.state = state;
+            rig.work.routine = [1, 0, 1, 0];
+            rig.with_auto(|auto| auto.ada_mv00_br());
+            (rig.routine(), rig.partner.state)
+        };
+        // Sherry walks past 1500, sidesteps under 200 and is lost past 8000.
+        assert_eq!(decide(3000, true, 0).0, [1, 0, 1, 0]);
+        assert_eq!(decide(150, true, 0).0, [1, 0, 1, 0]);
+        assert_eq!(decide(3001, true, 0).0, [1, MV_WALK, 0, 0]);
+        assert_eq!(decide(3001, false, 0).0, [1, MV_TURN_ROUND, 0, 0]);
+        let (routine, state) = decide(9000, true, 0);
+        assert_eq!((routine, state & STATE_LOST), ([1, MV_WALK, 0, 0], 0));
+        // A new answer from `Spl_em_pos_ck` sends her to the point, however near.
+        assert_eq!(decide(10, true, STATE_CHANGED).0, [1, MV_WALK, 0, 0]);
+    }
+
+    #[test]
+    fn adas_stand_turns_out_of_the_way_of_a_player_coming_at_her() {
+        let decide = |distance: u32, routine: u8, at_her: bool| {
+            let mut rig = Rig::new();
+            rig.ada = true;
+            rig.partner.soba = [0, 0];
+            rig.partner.dist = 0;
+            rig.work.routine = [1, 0, 1, 0];
+            // The player is along +x, and she faces the player.
+            rig.player = [1000, 0, 0];
+            rig.body.angle = 0;
+            rig.distance = distance;
+            rig.player_routine = routine;
+            rig.player_angle = if at_her { 0x800 } else { 0 };
+            rig.with_auto(|auto| auto.ada_mv00_br());
+            rig.routine()
+        };
+        assert_eq!(decide(3999, 2, true), [1, MV_DODGE, 0, 0]);
+        assert_eq!(decide(4000, 2, true), [1, 0, 1, 0]);
+        assert_eq!(decide(999, 1, true), [1, MV_DODGE, 0, 0]);
+        assert_eq!(decide(1000, 1, true), [1, 0, 1, 0]);
+        assert_eq!(decide(999, 1, false), [1, 0, 1, 0], "facing away");
+    }
+
+    #[test]
+    fn adas_stand_plays_its_clip_without_the_call() {
+        let mut rig = Rig::new();
+        rig.ada = true;
+        rig.partner.dist = 0;
+        rig.work.neck.flags = 0x12;
+        rig.with_auto(|auto| auto.ada_mv00());
+        assert_eq!(rig.routine()[2], 1);
+        assert_eq!((rig.work.bank, rig.work.move_no), (Bank::Weapon, 2));
+        assert_eq!(rig.work.neck.flags, 0x12, "Sherry's stand clears 0x12");
+    }
+
+    #[test]
+    fn adas_walk_and_run_decide_by_her_own_distances() {
+        let decide = |routine1: u8, dist: u16| {
+            let mut rig = Rig::new();
+            rig.ada = true;
+            rig.work.routine = [1, routine1, 1, 0];
+            rig.partner.dist = dist;
+            rig.with_auto(|auto| match routine1 {
+                MV_WALK => auto.ada_mv01_br(),
+                _ => auto.ada_mv02_br(),
+            });
+            rig.routine()
+        };
+        assert_eq!(decide(MV_WALK, 299), [1, MV_FACE_AHEAD, 0, 0]);
+        assert_eq!(decide(MV_WALK, 300), [1, MV_WALK, 1, 0]);
+        assert_eq!(decide(MV_WALK, 5001), [1, MV_RUN, 0, 0]);
+        assert_eq!(decide(MV_WALK, 5000), [1, MV_WALK, 1, 0]);
+        assert_eq!(decide(MV_RUN, 2999), [1, MV_WALK, 0, 0]);
+        assert_eq!(decide(MV_RUN, 3000), [1, MV_RUN, 1, 0]);
+    }
+
+    #[test]
+    fn adas_walk_turns_from_a_wall_for_30_ticks_and_keeps_walking() {
+        let mut rig = Rig::new();
+        rig.ada = true;
+        rig.work.routine = [1, MV_WALK, 1, 0];
+        rig.partner.dist = 1000;
+        rig.partner.sca_hit = true;
+        rig.partner.stuck = WALL_TICKS;
+        rig.with_auto(|auto| auto.ada_mv01_br());
+        assert_eq!(rig.routine(), [1, MV_WALK, 1, 0], "Sherry's runs");
+        assert_eq!(rig.partner.stuck, ADA_WALK_WALL_TURN_TICKS);
+        assert_ne!(rig.partner.state & STATE_WALL_TURN, 0);
+        rig.with_auto(|auto| auto.ada_mv01_br());
+        assert_eq!(rig.partner.stuck, ADA_WALK_WALL_TURN_TICKS - 1);
+    }
+
+    #[test]
+    fn adas_turn_round_waits_60_ticks_and_turns_once_the_player_runs_off() {
+        let decide = |dist: u16, player_spd_x: i16| {
+            let mut rig = Rig::new();
+            rig.ada = true;
+            rig.work.routine = [1, MV_TURN_ROUND, 0, 0];
+            rig.partner.dist = dist;
+            rig.player_spd_x = player_spd_x;
+            rig.with_auto(|auto| auto.ada_mv0c_br());
+            (rig.routine(), rig.partner.timer0)
+        };
+        assert_eq!(decide(500, 0), ([1, MV_TURN_ROUND, 0, 0], 59));
+        assert_eq!(decide(199, 0).0, [1, MV_FACE_AHEAD, 0, 0]);
+        assert_eq!(decide(701, 101).0, [1, MV_FACE_POINT, 0, 0]);
+        assert_eq!(decide(701, 100).0, [1, MV_TURN_ROUND, 0, 0]);
+    }
+
+    #[test]
     fn the_stands_clip_follows_life() {
         let clip = |life: i16, max_life: i16, poisoned: bool| {
             let mut rig = Rig::new();
@@ -1958,7 +2331,7 @@ mod tests {
 
     #[test]
     fn spl_in45_gives_the_partner_her_saved_life() {
-        let mut partner = Partner::placed();
+        let mut partner = Partner::placed(0, 0);
         partner.timer2 = 35;
         partner.spl_in45(false, 150);
         assert_eq!((partner.life, partner.max_life), (-1, -1));

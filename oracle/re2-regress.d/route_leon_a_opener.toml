@@ -23,3 +23,27 @@ ignore = [
   [719, 811, "hk"], [1946, 2036, "hk"], [2425, 2515, "hk"], [2890, 2980, "hk"], [3485, 3575, "hk"], [5997, 6089, "hk"], [6530, 6620, "hk"], [7089, 7179, "hk"],
 ]
 record = "--warp 200:-22894:-1800:-3071:200:4 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:17 --flag 31:27 --life 14 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x5B:1"
+
+# Rooms 211 and 216: from 20F's door 1 past 211's two dogs to door 6, 216's scene with Ada (aot 2), the van pushed from the north side of its area (from the east, Ada's body closes it off at x -14983, as in the original), Ada following Leon as the partner, and door 1 into 219
+[[run]]
+name = "leon_a_211_216_219"
+room = "211"
+setup_script = "leon_a_211_216_219.lua"
+input = "leon_a_211_216_219.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 3800
+# Ada's lines end by the recording's clock
+voice_from_ref = true
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 3799]
+# 1.55 measured: 216's scene draws the van a few levels darker and Ada's close-ups a little off (oracle/re2.md, "Leon A to the Manhole Opener")
+frame_max_mean = 1.7
+# 211 to door 6's press, 216 from its hand back to door 1's press (the scene, Ada's lines and the van), and 219 after its load
+frame_windows = [[360, 734, 0.5], [1077, 3352, 2.0], [3560, 3799, 1.0]]
+expect = "match"
+ignore = [
+  [344, 352, "pneck"], [735, "rng"], [735, "rseed"], [3353, "rng"], [3353, "rseed"],
+  [770, 860, "hk"], [3388, 3478, "hk"],
+]
+record = "--warp 211:301:0:5863:2088:0 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:27 --life 164 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"
