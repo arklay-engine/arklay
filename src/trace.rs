@@ -90,6 +90,8 @@ pub struct TraceTick<'a> {
     /// Where each of them is heading (`Dest`), as the oracle's `zd` field
     /// writes it.
     pub re2_zombie_dests: Option<String>,
+    /// `rc`: each enemy slot's `Root_ck` turn (`+0x150`), any id.
+    pub re2_root_turns: Option<String>,
     /// RE2's `Esp_` pool, the oracle's `esp` field
     /// ([`crate::esp2::Effects::trace_field`]).
     pub re2_effects: Option<String>,
@@ -327,6 +329,9 @@ impl TraceWriter {
         if let Some(dests) = &tick.re2_zombie_dests {
             write!(self.out, " zd={dests}")?;
         }
+        if let Some(turns) = &tick.re2_root_turns {
+            write!(self.out, " rc={turns}")?;
+        }
         if let Some(effects) = &tick.re2_effects {
             write!(self.out, " esp={effects}")?;
         }
@@ -521,6 +526,7 @@ mod tests {
             re2_zombies: None,
             re2_zombie_parts: None,
             re2_zombie_dests: None,
+            re2_root_turns: None,
             re2_effects: None,
             re2_music: None,
             re2_die: None,
@@ -594,6 +600,7 @@ mod tests {
                 re2_zombies: None,
                 re2_zombie_parts: None,
                 re2_zombie_dests: None,
+                re2_root_turns: None,
                 re2_effects: None,
                 re2_music: None,
                 re2_die: None,
@@ -663,6 +670,7 @@ mod tests {
                 re2_zombies: None,
                 re2_zombie_parts: None,
                 re2_zombie_dests: None,
+                re2_root_turns: None,
                 re2_effects: effects,
                 re2_music: None,
                 re2_die: None,
@@ -730,6 +738,7 @@ mod tests {
                 re2_zombies: None,
                 re2_zombie_parts: None,
                 re2_zombie_dests: None,
+                re2_root_turns: None,
                 re2_effects: None,
                 re2_music: None,
                 re2_die: None,
@@ -797,6 +806,7 @@ mod tests {
             re2_zombies: None,
             re2_zombie_parts: None,
             re2_zombie_dests: None,
+            re2_root_turns: None,
             re2_effects: None,
             re2_music: None,
             re2_die: None,
@@ -875,6 +885,7 @@ mod tests {
             re2_zombies: None,
             re2_zombie_parts: None,
             re2_zombie_dests: None,
+            re2_root_turns: None,
             re2_effects: None,
             re2_music: None,
             re2_die: None,
@@ -963,6 +974,7 @@ mod tests {
             re2_zombies: None,
             re2_zombie_parts: None,
             re2_zombie_dests: None,
+            re2_root_turns: None,
             re2_effects: None,
             re2_music: None,
             re2_die: None,
@@ -1031,6 +1043,7 @@ mod tests {
             re2_zombies: Some("-".to_string()),
             re2_zombie_parts: None,
             re2_zombie_dests: None,
+            re2_root_turns: None,
             re2_effects: None,
             re2_music: None,
             re2_die: None,

@@ -2145,7 +2145,9 @@ local function stomped(e)
     local id = e:player_id()
     if (id & 1 == 0 and id < 0xC) or id == 0xC or id == 0xD then
         if count == 0x16 then
-            e:hide_part(8)
+            -- The head goes to `Parts_bomb` where it is (`Be_flg`'s `0x4A`,
+            -- no speed, rise or fall), dark red, and is gone 0x1D ticks later.
+            e:blow_part(8, angle(e), 0, 0, 0, 0x101040)
             effect(e, 8, 0, 0x1000, angle(e), 0, 0, -600, 0)
             e:sound(2)
         end

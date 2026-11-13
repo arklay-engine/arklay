@@ -1191,6 +1191,35 @@ impl Re2State {
         }
     }
 
+    /// Each live work in an enemy slot and its `Root_ck` turn (`+0x150`):
+    /// the oracle's `rc` field, `slot:id,turn`. A zombie's is its own, a
+    /// scene character's its work's.
+    pub fn root_turn_trace(&self) -> String {
+        let rows: Vec<String> = self
+            .characters
+            .0
+            .iter()
+            .enumerate()
+            .take(SPLAYER_SLOT)
+            .filter_map(|(slot, character)| {
+                let character = character.as_deref()?;
+                if character.be_flg & 1 == 0 {
+                    return None;
+                }
+                let turn = character
+                    .zombie
+                    .as_ref()
+                    .map_or(character.work.root_turn, crate::zombie2::Zombie::root_turn);
+                Some(format!("{slot}:{},{turn}", character.id))
+            })
+            .collect();
+        if rows.is_empty() {
+            "-".to_string()
+        } else {
+            rows.join(";")
+        }
+    }
+
     pub fn character_trace(&self, slot: usize) -> Option<[i32; 16]> {
         let character = self.characters.0.get(slot)?.as_deref()?;
         if character.zombie.is_some() {
@@ -2290,6 +2319,8 @@ impl GameHost<'_> {
         if !zombie {
             // `nFloor` (`+0x106`), which the partner's climb and jump keep.
             work.floor = at(5) as u8;
+            // `Root_ck`'s turn starts at the work's number plus 2, in 0 to 7.
+            work.root_turn = ((at(1) + 2) & 7) as u8;
         }
         let kind = (at(3) as u16) | (at(4) as u16) << 8;
         if zombie {
@@ -3343,7 +3374,7 @@ fn character_member(character: &Character, member: u8) -> Option<i32> {
 /// A character whose `Id` a script has made a zombie's. `Em_move` now gives it
 /// to `Em_Zombie`, whose init runs in the body and with the animations it has:
 /// the room loaded nothing new for it. Room 202 turns Marvin so.
-fn become_zombie(character: &mut Character, slot: u8) {
+pub(crate) fn become_zombie(character: &mut Character, slot: u8) {
     let id = character.id;
     if !(0x10..=0x21).contains(&id) || character.zombie.is_some() {
         return;
@@ -3351,6 +3382,8 @@ fn become_zombie(character: &mut Character, slot: u8) {
     let (floor, model_type, dead) = character.em_set;
     let mut zombie = crate::zombie2::spawned(slot, floor, model_type);
     zombie.dead_flag = dead;
+    // The work is the scene character's, so `Root_ck` goes on from its turn.
+    zombie.set_sight_turn(character.work.root_turn);
     character.zombie = Some(zombie);
     character.body.radius = 0x1C2;
 }
