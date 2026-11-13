@@ -9455,7 +9455,13 @@ impl GameState {
         let id = self.equipped_weapon_id;
         crate::player2::Weapon {
             id,
-            loaded: self.item_count(id) != 0,
+            // `Tama_ck_i` wants more than two in the spark shot, so a shot
+            // that strikes has its three.
+            loaded: if id == crate::player2::SPARK {
+                self.item_count(id) > 2
+            } else {
+                self.item_count(id) != 0
+            },
             spare: self.item_count(re2_ammo(id).0) != 0,
             rounds: self.item_count(id).min(u32::from(u8::MAX)) as u8,
         }
@@ -9475,13 +9481,7 @@ impl GameState {
         if spent != 0
             && let Some(slot) = self.inventory.iter_mut().find(|slot| slot.id == weapon)
         {
-            // `Set_iwork_num` stores the spark shot's count as a byte: a
-            // strike's two rounds from one or two left wrap it.
-            slot.quantity = if weapon == crate::player2::SPARK {
-                slot.quantity.wrapping_sub(spent)
-            } else {
-                slot.quantity.saturating_sub(spent)
-            };
+            slot.quantity = slot.quantity.saturating_sub(spent);
         }
         if std::mem::take(&mut self.re2.player.reloaded) {
             let (ammo, magazine) = re2_ammo(weapon);
@@ -11416,24 +11416,30 @@ mod tests {
     }
 
     /// `Mix_null` gives the spark shot item 0x1C to load, a hundred at a time
-    /// (`Item_data_tbl`), and `Set_iwork_num` keeps its count as a byte: a
-    /// strike's three rounds from two left wrap it to 0xFF.
+    /// (`Item_data_tbl`), and `Tama_ck_i` wants more than two rounds in it:
+    /// with one or two the hold reloads, or clicks with none to load.
     #[test]
-    fn a_re2_spark_shot_loads_its_own_and_its_count_wraps() {
+    fn a_re2_spark_shot_fires_on_three_and_loads_its_own() {
         let spark = crate::player2::SPARK;
         assert_eq!(re2_ammo(spark), (0x1C, 100));
-        let mut game = GameState {
-            equipped_weapon_id: spark,
-            inventory: vec![InventoryItem {
-                id: spark,
-                quantity: 2,
-            }],
-            ..Default::default()
-        };
-        assert!(!game.re2_weapon().spare, "no 0x1C, nothing to load");
-        game.re2.player.spent = 3;
-        game.re2_settle_ammo();
-        assert_eq!(game.item_count(spark), 0xFF);
+        for (rounds, loaded) in [(1, false), (2, false), (3, true), (0xFF, true)] {
+            let mut game = GameState {
+                equipped_weapon_id: spark,
+                inventory: vec![InventoryItem {
+                    id: spark,
+                    quantity: rounds,
+                }],
+                ..Default::default()
+            };
+            let weapon = game.re2_weapon();
+            assert_eq!(weapon.loaded, loaded, "{rounds} rounds");
+            assert!(!weapon.spare, "no 0x1C, nothing to load");
+            game.inventory.push(InventoryItem {
+                id: 0x1C,
+                quantity: 150,
+            });
+            assert!(game.re2_weapon().spare);
+        }
     }
 
     #[test]

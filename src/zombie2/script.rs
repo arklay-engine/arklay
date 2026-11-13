@@ -5358,8 +5358,8 @@ mod tests {
 
         /// The first tick of `Em22_Damage` (or `Em_24`'s `FUN_0046dd40`) on
         /// a licker on the floor, hit by `weapon`: `(Damage_no, the draws,
-        /// the effects' kind, row and size)`.
-        fn licker_hit(script: &str, weapon: u8) -> (i64, i64, Vec<Vec<i64>>) {
+        /// the effects' kind, row and size, +0x233 and +0x23c's callback)`.
+        fn licker_hit(script: &str, weapon: u8) -> (i64, i64, Vec<Vec<i64>>, i64, i64) {
             let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
             let licker: mlua::Table = lua
                 .load(include_str!("../../games/re2/lib/licker.lua"))
@@ -5394,12 +5394,12 @@ mod tests {
                  local function require() return LICKER end
                  {script}
                  update(e)
-                 R = {{ w.damage_no, w.drawn }}"
+                 R = {{ w.damage_no, w.drawn, w.vars[6] or 0, w.vars[7] or 0 }}"
             ))
             .exec()
             .unwrap();
             let r: Vec<i64> = lua.globals().get("R").unwrap();
-            (r[0], r[1], lua.globals().get("E").unwrap())
+            (r[0], r[1], lua.globals().get("E").unwrap(), r[2], r[3])
         }
 
         /// `FUN_00467040` (and `Em_24`'s `FUN_0046ddc0`) by the bytes of its
@@ -5414,12 +5414,36 @@ mod tests {
                 include_str!("../../games/re2/enemy/22/enemy.lua"),
                 include_str!("../../games/re2/enemy/24/enemy.lua"),
             ] {
-                let (damage_no, drawn, effects) = licker_hit(script, crate::player2::SMG);
+                let (damage_no, drawn, effects, ..) = licker_hit(script, crate::player2::SMG);
                 assert_eq!((damage_no, drawn), (1, 1));
                 assert_eq!(effects, [vec![0, 6, 0x2000]]);
-                let (damage_no, drawn, effects) = licker_hit(script, crate::player2::FLAMETHROWER);
+                let (damage_no, drawn, effects, ..) =
+                    licker_hit(script, crate::player2::FLAMETHROWER);
                 assert_eq!((damage_no, drawn), (0, 6));
                 assert_eq!(effects, vec![vec![5, 4, 0x1800]; 6]);
+            }
+        }
+
+        /// The spark shot's hit (`FUN_004671f0`'s 0xE) calls `FUN_00467370`
+        /// itself, which sets `+0x233` going and itself as `+0x23c`'s
+        /// callback, and `Em_22` (and `Em_24`) runs that after the routine
+        /// the same tick: `DAT_00527ba8`'s record 0, which draws nothing, is
+        /// the hit tick's, so `+0x233` is 2.
+        #[test]
+        fn a_spark_hit_sets_a_lickers_sparks_going_at_once() {
+            for script in [
+                include_str!("../../games/re2/enemy/22/enemy.lua"),
+                include_str!("../../games/re2/enemy/24/enemy.lua"),
+            ] {
+                let (_, drawn, effects, count, after) = licker_hit(script, 0xE);
+                assert_eq!((count, after), (2, 2));
+                let sparks = effects.iter().filter(|effect| effect[0] == 6).count();
+                assert_eq!(sparks, 0, "record 0 has none");
+                assert_eq!(
+                    drawn,
+                    effects.len() as i64,
+                    "a draw a blood, none for record 0"
+                );
             }
         }
 

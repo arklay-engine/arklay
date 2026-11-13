@@ -648,8 +648,6 @@ const GRENADES: u8 = 9;
 /// handguns.
 pub const COLT: u8 = 0xD;
 pub const BERETTA: u8 = 0x13;
-/// The sub-machine gun and the flamethrower, which `pl_mv05_w2` fires for as
-/// long as the trigger is held.
 /// The spark shot, Claire's (`pl_mv05_w3`).
 pub const SPARK: u8 = 0xE;
 /// `pl_mv05_w3_t2`'s clips: the shot, and the hold on the body it found.
@@ -662,6 +660,8 @@ const SPARK_MISS: u32 = 0x603_1000;
 const SPARK_STRIKE: u32 = 0x602_1000;
 const SPARK_FLASH_POINT: [i16; 3] = [0x82, 0x514, 0];
 const SPARK_POINT: [i16; 3] = [0x82, 0x6B8, 0];
+/// The sub-machine gun and the flamethrower, which `pl_mv05_w2` fires for as
+/// long as the trigger is held.
 pub const SMG: u8 = 0xF;
 pub const FLAMETHROWER: u8 = 0x10;
 /// `pl_mv05_w2_t1`'s hold, `pl_mv05_w2_t2`'s burst and the end of it, by tilt
@@ -9743,6 +9743,36 @@ mod tests {
         }
         assert_eq!(endless.work.routine[3], 2);
         assert_eq!(endless.work.spent, 0);
+    }
+
+    /// With two rounds or fewer (`Tama_ck_i`'s for 0xE, [`Weapon::loaded`])
+    /// a press in the spark shot's hold reloads, or clicks with nothing to
+    /// load (`Tama_reload_ck`).
+    #[test]
+    fn a_spark_shot_short_of_three_reloads_or_clicks() {
+        for spare in [true, false] {
+            let mut setup = armed_with_hands(false, spare);
+            (setup.clips, setup.keyframes) = bank(0x14, 40, 0);
+            setup.weapon.id = SPARK;
+            setup.weapon.rounds = 2;
+            setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];
+            setup.work.status_flg = TILT_LEVEL;
+            setup.player.take_sounds();
+            setup.tick(aiming(true, true), 200);
+            let clicked = setup
+                .player
+                .take_sounds()
+                .iter()
+                .any(|sound| sound.id == SOUND_EMPTY);
+            if spare {
+                assert_eq!(setup.work.routine[2..], [4, 0]);
+                assert!(!clicked);
+            } else {
+                assert_eq!(setup.work.routine[2..], [1, 1]);
+                assert!(clicked);
+            }
+            assert_eq!(setup.work.spent, 0);
+        }
     }
 
     /// The spark shot holds on the bursts' clips, and neither its hold
