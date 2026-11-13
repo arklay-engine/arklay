@@ -58,6 +58,8 @@ impl Target {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Hit {
     pub slot: usize,
+    /// The body's id, whose `Wp_dmg_tbl` entry the damage came from.
+    pub id: u8,
     /// `Routine_1`: the player's `Type`.
     pub weapon: u8,
     /// The player's `Be_flg` sign: the shot was aimed up.
@@ -1608,27 +1610,62 @@ pub fn weapon_at_ck(shooter: &Shooter, targets: &[Target], sca: &[ScaRect]) -> O
                 square_root0(dz.wrapping_mul(dz).wrapping_add(dx.wrapping_mul(dx))) as u32;
             if distance < nearest {
                 nearest = distance;
-                found = Some((target.slot, table, result, region));
+                found = Some((target.slot, target.id, table, result, region));
             }
         }
     }
-    let (slot, table, result, region) = found?;
+    let (slot, id, table, result, region) = found?;
     let band = if result & 4 != 0 {
         2
     } else {
         u8::from(result & 2 != 0)
     };
-    Some(Hit {
+    let mut hit = Hit {
         slot,
+        id,
         weapon: shooter.weapon,
         high: shooter.level == 2,
         band,
         region,
-        damage: (table.damage >> (u32::from(band) * 10) & 0x3FF) as i16,
-        stun: (table.stun >> (u32::from(band) * 3) & 7) as u8,
-        count: (table.stun >> (u32::from(band) * 7 + 9) & 0x7F) as u8,
+        damage: 0,
+        stun: 0,
+        count: 0,
         flags: u16::from(result),
-    })
+    };
+    hit.take_row(table);
+    Some(hit)
+}
+
+impl Hit {
+    /// The damage, the region's loss and the count from `table`'s word for
+    /// the band.
+    fn take_row(&mut self, table: &Damage) {
+        let band = u32::from(self.band);
+        self.damage = (table.damage >> (band * 10) & 0x3FF) as i16;
+        self.stun = (table.stun >> (band * 3) & 7) as u8;
+        self.count = (table.stun >> (band * 7 + 9) & 0x7F) as u8;
+    }
+}
+
+/// The end of `Weapon_at_ck` for a Beretta hit (`W_no` 0x120000), after the
+/// body is found: two `Rnd`s, `r1` then `r2`. One time in sixteen or so
+/// (`(r2 >> (r1 & 3)) & 0xF == 0`) the damage row steps back 14 rows, to the
+/// magnum's (weapon 5), and the hit lands as weapon 6; otherwise 17, to the
+/// handgun's (weapon 2), and it lands as weapon 3. So no body sees 0x13.
+pub fn beretta_hit(hit: &mut Hit, rnd: &mut crate::zombie2::Rnd) {
+    if hit.weapon != BERETTA {
+        return;
+    }
+    let shift = rnd.draw() & 3;
+    let (row, weapon) = if (rnd.draw() >> shift) & 0xF == 0 {
+        (5, 6)
+    } else {
+        (2, 3)
+    };
+    hit.weapon = weapon;
+    if let Some(table) = damage_table(hit.id, row) {
+        hit.take_row(table);
+    }
 }
 
 /// `Shoot_camera` does nothing with this many enemies in the room.
@@ -2258,5 +2295,58 @@ mod tests {
                 std::array::from_fn(|rect| std::array::from_fn(|n| short(rect * 4 + n)));
             assert_eq!(record.rects, rects, "level {level}'s rectangles");
         }
+    }
+
+    /// `Weapon_at_ck`'s end for a Beretta hit (#651): two `Rnd`s choose the
+    /// magnum's row as weapon 6, when `(r2 >> (r1 & 3)) & 0xF` is 0, or else
+    /// the handgun's as weapon 3, each read at the hit's band. Any other
+    /// weapon's hit draws nothing and stays as it is.
+    #[test]
+    fn a_beretta_hit_lands_as_a_magnums_or_a_handguns() {
+        use crate::zombie2::Rnd;
+        let beretta = |id| Hit {
+            slot: 1,
+            id,
+            weapon: BERETTA,
+            high: false,
+            band: 1,
+            region: 2,
+            damage: 0,
+            stun: 0,
+            count: 0,
+            flags: 0x12,
+        };
+        let outcome = |seed: u16| {
+            let mut replay = Rnd(seed);
+            let shift = replay.draw() & 3;
+            (replay.draw() >> shift) & 0xF == 0
+        };
+        let magnum_seed = (0..=u16::MAX).find(|&seed| outcome(seed)).unwrap();
+        let handgun_seed = (0..=u16::MAX).find(|&seed| !outcome(seed)).unwrap();
+        for id in [0x10, LICKER_ID, G3_ID] {
+            for (seed, row, weapon) in [(magnum_seed, 5, 6), (handgun_seed, 2, 3)] {
+                let mut rnd = Rnd(seed);
+                let mut hit = beretta(id);
+                beretta_hit(&mut hit, &mut rnd);
+                let mut want = Hit {
+                    weapon,
+                    ..beretta(id)
+                };
+                want.take_row(damage_table(id, row).unwrap());
+                assert_eq!(hit, want, "id {id:#x}, row {row}");
+                assert_ne!(hit.damage, 0);
+                let mut two = Rnd(seed);
+                two.draw();
+                two.draw();
+                assert_eq!(rnd.0, two.0, "two draws");
+            }
+        }
+        let mut rnd = Rnd(magnum_seed);
+        let mut hit = Hit {
+            weapon: 2,
+            ..beretta(0x10)
+        };
+        beretta_hit(&mut hit, &mut rnd);
+        assert_eq!((hit.weapon, hit.damage, rnd.0), (2, 0, magnum_seed));
     }
 }

@@ -17639,6 +17639,10 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     let re2 = &mut context.game.re2;
     let raised = std::mem::take(&mut re2.player.status_raise);
     re2.banks[usize::from(crate::scd2::host::STATUS_BANK)][0] |= raised;
+    // `Weapon_at_ck` draws a Beretta hit's `Rnd`s before `Pl_water`'s.
+    if let Some(hit) = re2.player.hit.as_mut() {
+        crate::weapon2::beretta_hit(hit, &mut re2.rnd);
+    }
     re2.player.water_draws(&mut re2.rnd);
     if !tick.stopped {
         crate::character2::pl_bow(context.game, context.room.sca.as_ref());
