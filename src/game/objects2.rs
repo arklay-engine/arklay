@@ -7,7 +7,7 @@
 
 use super::GameState;
 use crate::anim::Mat4x3;
-use crate::character2::{PLAYER_HEIGHT, player_width};
+use crate::character2::{player_height, player_width};
 use crate::objects::{
     CharBox, ObjectRecord, Oma, SCA_HIT_HOLE, SCA_HIT_WALL, SuperParent, floor_of_height,
     om_set_fall_dir, oma_ck_front, oma_ck_oba, oma_ck_om, oma_pull, sca_ck_hit_om,
@@ -81,8 +81,8 @@ impl GameState {
         self.re2.set_pushing(false);
         let keeps_count = matches!(self.re2.player.routine[1], ROUTINE_WALK | ROUTINE_PUSH);
         let width = player_width(self.id.player_flag);
-        let ofs_y = -(PLAYER_HEIGHT as i16);
-        let mut pl = CharBox::standing(player.pos, player.pos, ofs_y, width, PLAYER_HEIGHT);
+        let height = player_height(self.id.player_flag);
+        let mut pl = CharBox::standing(player.pos, player.pos, -(height as i16), width, height);
         if let Some(old) = self.re2.player.old_box {
             pl.old2 = old.map(|v| v as i16);
         }
@@ -793,7 +793,7 @@ mod tests {
         assert_eq!(kept(1), None, "out of play");
         assert_eq!(
             game.re2.player.old_box,
-            Some([100, -i32::from(PLAYER_HEIGHT), 200])
+            Some([100, -i32::from(crate::character2::PLAYER_HEIGHT), 200])
         );
     }
 

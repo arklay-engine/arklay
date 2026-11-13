@@ -107,13 +107,14 @@ pub fn tick(
 /// The player's `Atd[0]` at `pos`, as `Oba_set_ofs` leaves it.
 fn player_atd(game: &GameState, pos: [i32; 3]) -> crate::zombie2::Atd {
     let width = player_width(game.id.player_flag);
+    let height = player_height(game.id.player_flag);
     crate::zombie2::Atd {
         ofs_x: 0,
-        ofs_y: -(PLAYER_HEIGHT as i16),
+        ofs_y: -(height as i16),
         at_w: width,
-        at_h: PLAYER_HEIGHT,
+        at_h: height,
         w: width,
-        at: [pos[0], pos[1] - i32::from(PLAYER_HEIGHT), pos[2]],
+        at: [pos[0], pos[1] - i32::from(height), pos[2]],
     }
 }
 
@@ -1086,8 +1087,20 @@ fn set_enemy_work(
 pub fn player_width(player_flag: u8) -> u16 {
     crate::sca::player_radius(player_flag) as u16
 }
-/// The player's `At_h`, and how far its box's `Ofs_y` lifts it.
+/// The player's `At_h`, and how far its box's `Ofs_y` lifts it, as
+/// `Player_set` (0x4D93A0) leaves them.
 pub const PLAYER_HEIGHT: u16 = 0x5FA;
+/// `Pl_init` (0x4D9940) lowers the box of Claire's bodies and Sherry (ids 1, 3,
+/// 5, 7, 9 and 0xE) to an `At_h` and `Ofs_y` of 0x546, and id 0xF's to 0x32A.
+/// `Oba_ck_hit` (0x4CC150) reads it: a crow flying low over Claire (room 109)
+/// clears her head where it would touch Leon's.
+pub fn player_height(player_flag: u8) -> u16 {
+    match player_flag {
+        1 | 3 | 5 | 7 | 9 | 0xE => 0x546,
+        0xF => 0x32A,
+        _ => PLAYER_HEIGHT,
+    }
+}
 /// `fg_system`'s `0x20`, easy mode's bit.
 const FG_SYSTEM_EASY: u8 = 26;
 /// `fg_common`'s `0xa4`, which `Em22_Init` reads.
@@ -2238,6 +2251,75 @@ mod tests {
             oba_ck_em2(&mut game, &mut player, [-850, 0, 0]);
             assert_eq!(player.pos, [x, 0, 0], "player {player_flag}");
             assert_eq!(game.re2.player.at_em_flg, u32::from(player_flag == 0));
+        }
+    }
+
+    #[test]
+    fn a_crow_flying_low_clears_claires_head_but_not_leons() {
+        // Room 109's crow (`claire_a_108_10b`, tick 934): its box (`Ofs_y`
+        // -350, `At_w` 350, `At_h` 530) at -3310 high, 697 from the player on
+        // the floor. Leon's box (`At_h` 1530) reaches it; Claire's
+        // (`Pl_init`'s 1350) doesn't, so she isn't pushed.
+        let room = RoomId::parse("1090").unwrap();
+        let mut body = crate::player::spawn(room, &RoomState::default());
+        body.pos = [-2477, -2960, -12521];
+        let mut zombie = crate::zombie2::Zombie::default();
+        zombie.atd = crate::zombie2::Atd {
+            ofs_x: 0,
+            ofs_y: -350,
+            at_w: 350,
+            at_h: 530,
+            w: 350,
+            at: [-2477, -3310, -12521],
+        };
+        let crow = Character {
+            id: 0x21,
+            model: 0x21,
+            em_set: (0, 0, NO_ENEMY_FLAG),
+            arms: Arms::default(),
+            be_flg: 1,
+            work: player2::Work::default(),
+            body,
+            kind: 0,
+            kage: None,
+            l_spl: 0,
+            dir_spl: 0,
+            start: (0, 0),
+            sound_type: 0,
+            distance: 0,
+            area: crate::scd2::host::NO_AREA,
+            with_room: false,
+            held_bank: None,
+            partner: None,
+            zombie: Some(zombie),
+        };
+        // Each 110 inside its reach (`At_w` 450 or 350, and the crow's 350).
+        for (player_flag, pushed) in [(0, true), (1, false)] {
+            let mut game = GameState::default();
+            game.id = room;
+            game.id.player_flag = player_flag;
+            game.re2.characters.0 = vec![Some(Box::new(crow.clone()))];
+            let mut player = crate::player::spawn(room, &RoomState::default());
+            let at = [
+                -2477 + 690 - 450 + i32::from(player_width(player_flag)),
+                0,
+                -12521,
+            ];
+            player.pos = at;
+            oba_ck_em2(&mut game, &mut player, at);
+            assert_eq!(player.pos != at, pushed, "player {player_flag}");
+            assert_eq!(game.re2.player.at_em_flg, u32::from(pushed));
+            assert_eq!(
+                game.re2
+                    .player
+                    .atd
+                    .map(|atd| (atd.ofs_y, atd.at_h, atd.at[1])),
+                Some(if pushed {
+                    (-0x5FA, 0x5FA, -0x5FA)
+                } else {
+                    (-0x546, 0x546, -0x546)
+                })
+            );
         }
     }
 

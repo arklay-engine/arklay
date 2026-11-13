@@ -2338,7 +2338,7 @@ impl Mover<'_, '_> {
         else {
             return;
         };
-        let height = crate::character2::PLAYER_HEIGHT;
+        let height = crate::character2::player_height(self.tick.id);
         let pos = self.player.pos;
         let mut chr = crate::objects::CharBox::standing(
             pos,
