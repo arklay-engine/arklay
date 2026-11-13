@@ -484,6 +484,8 @@ const TASK_SLOTS: usize = super::vm::TASKS;
 const STOP_BANK: u8 = 2;
 /// `fg_stop`'s `0x10000000`, which holds `Esp_move`.
 const STOP_EFFECTS: u8 = 3;
+/// `fg_common`.
+const COMMON_BANK: u8 = 4;
 /// `Pri_be_flg`: a bank per camera, 13 onwards, with a bit per mask group.
 const MASK_BANK: usize = 13;
 /// How many cameras `Pri_be_flg` has a bank for.
@@ -1615,6 +1617,7 @@ impl Re2State {
             .into_iter()
             .chain(crate::character2::re2_slot_bodies(self))
             .collect();
+        self.effects.steam_off = self.flag(COMMON_BANK, 0x76);
         self.effects.spark_target = self.player.spark_target;
         if let Some((pos, _)) = &player {
             crate::player2::move_parts(&mut self.player, *pos);

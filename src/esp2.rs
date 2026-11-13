@@ -69,9 +69,11 @@ pub fn ported(id: u8) -> bool {
             | 0x45
             | 0x46
             | 0x47
+            | 0x4B
             | 0x4E
             | 0x52
             | 0x55
+            | 0x57
     )
 }
 
@@ -511,6 +513,9 @@ pub struct Effects {
     /// The bodies' boxes in `player_work`'s order, the player's first, for
     /// `Oba_ck_esp`: the caller sets them before a tick.
     pub oba: Vec<crate::zombie2::Oba>,
+    /// `fg_common`'s 0x76, which turns room 407's steam off (`Esp_4B`): the
+    /// caller sets it before a tick.
+    pub steam_off: bool,
 }
 
 /// The player as `FUN_004d8260` tests them against an effect, and what the
@@ -1181,6 +1186,22 @@ impl Effects {
                 this.size = (size + size * 30 / 100) as u16;
                 self.behave(index, 0x34, sca);
             }
+            0x4b => self.steam(index),
+            // `Esp_57`: a puff of steam settles on the water or the ground.
+            0x57 => {
+                let [x, y, z] = slot.pos.map(i32::from);
+                let level = i32::from(crate::zombie2::water_ck(&self.water, x, z));
+                let rest = if level != 0 && level < y {
+                    Some(level)
+                } else {
+                    let ground = Self::ground(sca, slot.pos).height;
+                    (ground < y).then_some(ground)
+                };
+                if let Some(at) = rest {
+                    self.land_drop(index, 8);
+                    self.slots[index].pos[1] = at as i16;
+                }
+            }
             0x47 => self.stream_fill(index, sca),
             // `Esp_55`: the stream makes a drop (kind 0x1C row 2,
             // `Esp_call3`) every fourth tick, counting in `+0x12`.
@@ -1639,6 +1660,48 @@ impl Effects {
             })
     }
 
+    /// `Esp_4B`: a steam vent (room 407's) puffs a row 1 slot on its own
+    /// matrix every fifth tick, counting in `+0x12`. Once `fg_common`'s 0x76
+    /// is up it narrows each puff by a fifth and goes out after 0x5A ticks
+    /// (counted in `+0x14`).
+    fn steam(&mut self, index: usize) {
+        if self.steam_off {
+            let this = &mut self.slots[index];
+            this.next_tpage = this.next_tpage.wrapping_add(1);
+            if this.next_tpage > 0x5A {
+                this.update = 0;
+                this.anim = 0;
+                this.flags = 0;
+                this.next_flags = this.next_flags.wrapping_add(1);
+                return;
+            }
+            if this.next_flags % 5 == 0 {
+                this.scale[0] = (u32::from(this.scale[0]) * 80 / 100) as u16;
+                self.puff(index);
+            }
+        } else {
+            self.slots[index].flags = 0x8000;
+            if self.slots[index].next_flags % 5 == 0 {
+                self.puff(index);
+            }
+        }
+        let this = &mut self.slots[index];
+        this.next_flags = this.next_flags.wrapping_add(1);
+    }
+
+    /// A puff of [`Self::steam`], started at once (`0xB803`) at the vent's
+    /// width.
+    fn puff(&mut self, index: usize) {
+        let vent = self.slots[index];
+        if let Some(puff) = self.call_from(&vent, vent.kind, 1, vent.size, vent.dir) {
+            let this = &mut self.slots[puff];
+            this.flags = 0xB803;
+            if self.steam_off {
+                this.scale[0] = vent.scale[0];
+            }
+        }
+    }
+
     /// `Esp_47`, once: a stream (room 405's) fills in at once. A drop is made
     /// every fourth count and run on for as many ticks as the count, until
     /// one has reached the water or the ground (the pipe's full length) or
@@ -1707,7 +1770,9 @@ impl Effects {
             for turn in [0, 0xD90] {
                 let spread = i32::from(self.rnd() % 10);
                 let spread = if turn == 0 { 0x34 - spread } else { spread };
-                let dir = ((spread * 12) as i16).wrapping_add(slot.dir).wrapping_add(turn);
+                let dir = ((spread * 12) as i16)
+                    .wrapping_add(slot.dir)
+                    .wrapping_add(turn);
                 let size = (u32::from(self.rnd() & 7) << 7) + u32::from(slot.size);
                 let row = (size >> 16) as u8;
                 self.call(0x1A, row, size as u16, dir, slot.pos, true);
@@ -3805,8 +3870,11 @@ mod tests {
         drop[6..8].copy_from_slice(&0x1000u16.to_le_bytes());
         drop[18..20].copy_from_slice(&0xb003u16.to_le_bytes());
         let mut bank = Arc::try_unwrap(bank_rows(0x1C, &[(2, &[drop])])).unwrap();
-        bank.sprites
-            .extend(Arc::try_unwrap(bank_of(0x1A, &[fire_block()])).unwrap().sprites);
+        bank.sprites.extend(
+            Arc::try_unwrap(bank_of(0x1A, &[fire_block()]))
+                .unwrap()
+                .sprites,
+        );
         let mut effects = Effects::default();
         effects.enter_room(Arc::new(bank));
         effects
@@ -3874,7 +3942,13 @@ mod tests {
         }
         assert_eq!(drops(&effects), 2);
         assert_eq!(effects.slots[stream].next_flags, 0xB003 + 8);
-        assert!(effects.slots.iter().filter(|s| s.row == 2).all(|s| s.flags == FLAG_DEFERRED));
+        assert!(
+            effects
+                .slots
+                .iter()
+                .filter(|s| s.row == 2)
+                .all(|s| s.flags == FLAG_DEFERRED)
+        );
     }
 
     fn drop_at(effects: &mut Effects, y: i16) -> usize {
@@ -3930,7 +4004,10 @@ mod tests {
         };
         effects.oba = vec![body(3)];
         effects.behave(drop, 0x44, None);
-        assert_eq!(effects.slots[drop].frame, 6, "a body out of play is no target");
+        assert_eq!(
+            effects.slots[drop].frame, 6,
+            "a body out of play is no target"
+        );
         effects.oba = vec![body(1)];
         effects.behave(drop, 0x44, None);
         let this = effects.slots[drop];
@@ -3979,6 +4056,90 @@ mod tests {
         assert_eq!((this.size, this.frame, this.flags), (0x14CC, 0x0D, 0xB001));
         assert_eq!(this.scale, [0x1100, 0x0A00]);
         assert!(effects.sounds.iter().any(|&(id, _)| id == 0x304_0001));
+    }
+
+    /// Room 407's steam vent (kind 0x28, `Esp_4B`) and its puffs (row 1).
+    fn steam_vent(effects: &mut Effects, off: bool) -> usize {
+        effects.enter_room(bank_rows(0x28, &[(1, &[fire_block()])]));
+        effects.steam_off = off;
+        let slot = 0x10;
+        effects.slots[slot] = Slot {
+            kind: 0x28,
+            size: 0x1000,
+            scale: [0x1000, 0x1000],
+            base: [0, -7000, 0],
+            flags: 0xA003,
+            anim: 0x4B,
+            ..Slot::default()
+        };
+        slot
+    }
+
+    fn puffs(effects: &Effects) -> Vec<Slot> {
+        effects
+            .slots
+            .iter()
+            .filter(|s| s.flags != 0 && s.kind == 0x28 && s.row == 1)
+            .copied()
+            .collect()
+    }
+
+    #[test]
+    fn a_steam_vent_puffs_every_fifth_tick() {
+        let mut effects = Effects::default();
+        let vent = steam_vent(&mut effects, false);
+        for _ in 0..6 {
+            effects.behave(vent, 0x4B, None);
+        }
+        let puffs = puffs(&effects);
+        assert_eq!(puffs.len(), 2);
+        assert!(
+            puffs
+                .iter()
+                .all(|p| p.flags == 0xB803 && p.base == [0, -7000, 0])
+        );
+        let this = effects.slots[vent];
+        assert_eq!((this.flags, this.next_flags), (0x8000, 6));
+    }
+
+    #[test]
+    fn a_steam_vent_turned_off_narrows_and_goes_out() {
+        let mut effects = Effects::default();
+        let vent = steam_vent(&mut effects, true);
+        effects.behave(vent, 0x4B, None);
+        assert_eq!(effects.slots[vent].scale[0], 0xCCC);
+        assert_eq!(puffs(&effects)[0].scale[0], 0xCCC);
+        for _ in 1..0x5A {
+            effects.behave(vent, 0x4B, None);
+        }
+        assert_eq!(effects.slots[vent].flags, 0xA003);
+        effects.behave(vent, 0x4B, None);
+        assert_eq!(effects.slots[vent].flags, 0);
+        assert_eq!(effects.slots[vent].next_tpage, 0x5B);
+    }
+
+    #[test]
+    fn a_puff_settles_on_the_ground() {
+        let mut effects = Effects::default();
+        let vent = steam_vent(&mut effects, false);
+        effects.slots[vent] = Slot {
+            kind: 0x28,
+            row: 1,
+            update: 0x57,
+            pos: [0, -100, 0],
+            velocity: [0, 30, 0],
+            flags: 0xB803,
+            ..Slot::default()
+        };
+        effects.behave(vent, 0x57, None);
+        assert_eq!(effects.slots[vent].update, 0x57);
+        effects.slots[vent].pos[1] = 40;
+        effects.behave(vent, 0x57, None);
+        let this = effects.slots[vent];
+        assert_eq!(
+            (this.update, this.frame, this.pos[1], this.velocity[1]),
+            (0, 8, 0, 0)
+        );
     }
 
     #[test]
