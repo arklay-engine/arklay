@@ -1206,7 +1206,7 @@ impl Effects {
             // `Esp_55`: the stream makes a drop (kind 0x1C row 2,
             // `Esp_call3`) every fourth tick, counting in `+0x12`.
             0x55 => {
-                if slot.next_flags % 4 == 0 {
+                if slot.next_flags.is_multiple_of(4) {
                     self.call(0x1C, 2, slot.size, slot.dir, slot.base, true);
                 }
                 let this = &mut self.slots[index];
@@ -1651,7 +1651,7 @@ impl Effects {
                 }
                 let distance =
                     crate::sca::square_root0(dz.wrapping_mul(dz).wrapping_add(dx.wrapping_mul(dx)));
-                if wide.wrapping_sub(distance as i32) <= 0 {
+                if wide.wrapping_sub(distance) <= 0 {
                     return false;
                 }
                 let tall = i32::from(atd.at_h) + height;
@@ -1675,13 +1675,13 @@ impl Effects {
                 this.next_flags = this.next_flags.wrapping_add(1);
                 return;
             }
-            if this.next_flags % 5 == 0 {
+            if this.next_flags.is_multiple_of(5) {
                 this.scale[0] = (u32::from(this.scale[0]) * 80 / 100) as u16;
                 self.puff(index);
             }
         } else {
             self.slots[index].flags = 0x8000;
-            if self.slots[index].next_flags % 5 == 0 {
+            if self.slots[index].next_flags.is_multiple_of(5) {
                 self.puff(index);
             }
         }
@@ -1714,7 +1714,7 @@ impl Effects {
             if count == 0 {
                 break;
             }
-            if count % 4 != 0 {
+            if !count.is_multiple_of(4) {
                 continue;
             }
             let stream = self.slots[index];

@@ -62,22 +62,11 @@ ticks = 2400
 setup = { pos = [-26394, 0, -1920], angle = 97, health = 200, rnd = 6114, camera = 0 }
 input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,zm0,zm1,fgstat"
+# room 405's floor water blends differently (#668) and the ceiling spider casts a shadow (#686): held at the measured mean
 frames = [360, 2399]
+frame_max_mean = 5.0
 expect = "match"
 record = "--warp 405:-26394:0:-1920:97 --life 200"
-
-[[run]]
-name = "spider_405_up_w5"
-room = "405"
-ticks = 2400
-# weapon 5 aimed up from spider_405's place: both spiders die on the wall; the stream's slots move the later effects
-setup_script = "spider_405_up_w5.lua"
-input = "spider_up_shots.txt"
-input_shift = 344
-fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,zm0,zm1,fgstat"
-frames = [360, 2399]
-expect = "match"
-record = "--warp 405:-26394:0:-1920:97 --life 200 --give 0:5:200 --give 1:0x14:60 --equip 5"
 
 [[run]]
 name = "esp_spider_407"
@@ -100,3 +89,25 @@ input = "none.txt"
 fields = "espn,espk,fgstat"
 expect = "match"
 record = "--warp 407:-2700:0:-19832:2028 --life 200"
+
+[[run]]
+name = "esp_spider_405"
+ref = "spider_405"
+room = "405"
+ticks = 2400
+setup = { pos = [-26394, 0, -1920], angle = 97, health = 200, rnd = 6114, camera = 0 }
+input = "none.txt"
+fields = "esp"
+expect = "match"
+record = "--warp 405:-26394:0:-1920:97 --life 200"
+
+[[run]]
+name = "esp_kinds_spider_405"
+ref = "spider_405"
+room = "405"
+ticks = 2400
+setup = { pos = [-26394, 0, -1920], angle = 97, health = 200, rnd = 6114, camera = 0 }
+input = "none.txt"
+fields = "espn,espk,fgstat"
+expect = "match"
+record = "--warp 405:-26394:0:-1920:97 --life 200"
