@@ -1,0 +1,25 @@
+# room 118: EQUIP the rocket launcher from slot 2 as play begins (so that Pl_weapon_ch loads its own clips), wait out the zombie's hold, aim at the zombies and fire every 100 ticks; its four rounds spent, the last two presses find it empty (#491)
+346 start
+350
+382 down
+386
+402 confirm
+406
+422 confirm
+426
+462 start
+466
+620 aim
+640 aim fire
+644 aim
+740 aim fire
+744 aim
+840 aim fire
+844 aim
+940 aim fire
+944 aim
+1040 aim fire
+1044 aim
+1140 aim fire
+1144 aim
+1300

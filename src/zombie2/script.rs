@@ -1010,21 +1010,22 @@ impl UserData for Api {
             "blow_part",
             |_,
              e,
-             (part, dir, speed, up, gravity, rgb): (
+             (part, dir, speed, up, gravity, rgb, slowing): (
                 usize,
                 i32,
                 Option<i16>,
                 Option<i16>,
                 Option<i16>,
                 Option<u32>,
+                Option<i16>,
             )| {
                 e.em().blow_part(
                     part,
                     dir as u16,
                     speed.unwrap_or(800),
-                    up.unwrap_or(0),
-                    gravity.unwrap_or(10),
+                    (up.unwrap_or(0), gravity.unwrap_or(10)),
                     rgb,
+                    slowing.unwrap_or(100),
                 );
                 Ok(())
             },
@@ -5287,6 +5288,31 @@ mod tests {
                     vec![6, 0, 0xC18 + 152, 0x100, 3, 115, 114, 113],
                 ]
             );
+        }
+
+        /// `Em10_Die`'s row for the rocket launcher (0x11) on `Damage_no` 1
+        /// is `FUN_00458d40`, which blows the head off behind the body
+        /// (`Be_flg |= 0x4a`: at 400 and up at 100, `Parts_bomb` slowing it
+        /// by 50 a tick) rather than hiding it, before the blood on it.
+        #[test]
+        fn a_torn_zombies_head_flies_off_behind_it() {
+            let setup = "w.r = { [0] = 3, 0x11, 0, 0 }; w.no = 1; BLOWN = {}; \
+                         function e:blow_part(...) BLOWN = { ... } end; \
+                         function e:hide_part(part) HIDDEN = part end";
+            assert_eq!(
+                tick(
+                    setup,
+                    "BLOWN[1], BLOWN[2], BLOWN[3], BLOWN[4], BLOWN[5], BLOWN[6], BLOWN[7], \
+                     HIDDEN or -1"
+                ),
+                [8, 0x900, 400, -100, 10, 0x101030, 50, -1]
+            );
+            let (fx, _) = effects(setup);
+            let blood = fx
+                .iter()
+                .find(|call| call[..3] == [0, 0, 3000])
+                .expect("the blood");
+            assert_eq!(blood[4..], [8, 0, 0, 0], "on the head");
         }
 
         /// `Em10Dm00` sparks again as its step 1 ends (step 2, `Timer0`

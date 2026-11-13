@@ -26,7 +26,7 @@ setup_script = "smg_equip_118.lua"
 input = "smg_equip_118.txt"
 input_shift = 344
 fields = "esp"
-expect = { tick = 741, fields = ["esp72", "esp73", "esp78", "esp80", "esp94", "esp95"], note = "zombie 2, killed by the sub-machine gun, drops six blood effects on the floor that start a unit off the original's in x and three in z; the zombie's own trace (smg_equip_118) still matches, so the difference is where the drops start, which is not found yet" }
+expect = "match"
 record = "--warp 118:-24617:0:-24996:1024 --life 200 --give 2:0xF:100 --give 3:0x1B:100"
 
 [[run]]

@@ -1539,25 +1539,13 @@ impl Re2State {
             let Some(zombie) = character.zombie.as_mut() else {
                 continue;
             };
-            let (rnd, effects) = (&mut self.rnd, &mut self.effects);
-            let mut off = Vec::new();
-            zombie.thrown.retain_mut(|thrown| {
-                if off.contains(&thrown.part) {
-                    return false;
-                }
-                let falling = thrown.fall(slot as u8, rnd, effects, sca);
-                if !falling {
-                    crate::player2::set_part_flags(&mut character.work, thrown.part, 0);
-                    if thrown.takes_below() {
-                        for &part in &thrown.below {
-                            crate::player2::set_part_flags(&mut character.work, part, 0);
-                            off.push(part);
-                        }
-                    }
-                }
-                falling
-            });
-            zombie.redraw(character.work.hidden_parts);
+            zombie.parts_down(
+                &mut character.work,
+                slot as u8,
+                &mut self.rnd,
+                &mut self.effects,
+                sca,
+            );
         }
     }
 
