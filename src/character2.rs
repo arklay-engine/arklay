@@ -150,7 +150,12 @@ pub fn keep_old_boxes(game: &mut GameState, player_pos: [i32; 3]) {
 
 /// What the slots in play show `Oba_ck_hit`, in `player_work`'s order.
 fn slot_bodies(game: &GameState) -> Vec<crate::zombie2::Oba> {
-    let in_play = game.re2.characters.0.iter().enumerate();
+    re2_slot_bodies(&game.re2)
+}
+
+/// [`slot_bodies`] of the RE 2 state alone.
+pub(crate) fn re2_slot_bodies(re2: &crate::scd2::host::Re2State) -> Vec<crate::zombie2::Oba> {
+    let in_play = re2.characters.0.iter().enumerate();
     in_play
         .filter_map(|(slot, other)| Some((slot, other.as_deref()?)))
         .filter(|(_, other)| other.be_flg & 1 != 0)

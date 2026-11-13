@@ -65,10 +65,13 @@ pub fn ported(id: u8) -> bool {
             | 0x36..=0x39
             | 0x3E
             | 0x3F
+            | 0x44
             | 0x45
             | 0x46
+            | 0x47
             | 0x4E
             | 0x52
+            | 0x55
     )
 }
 
@@ -505,6 +508,9 @@ pub struct Effects {
     /// slots on a part ([`Self::anchors_in_use`]): the caller sets them before
     /// a tick. `Game_loop` draws every body before `Esp_move`.
     pub(crate) anchors: Vec<(Anchor, crate::player2::Matrix)>,
+    /// The bodies' boxes in `player_work`'s order, the player's first, for
+    /// `Oba_ck_esp`: the caller sets them before a tick.
+    pub oba: Vec<crate::zombie2::Oba>,
 }
 
 /// The player as `FUN_004d8260` tests them against an effect, and what the
@@ -1175,6 +1181,17 @@ impl Effects {
                 this.size = (size + size * 30 / 100) as u16;
                 self.behave(index, 0x34, sca);
             }
+            0x47 => self.stream_fill(index, sca),
+            // `Esp_55`: the stream makes a drop (kind 0x1C row 2,
+            // `Esp_call3`) every fourth tick, counting in `+0x12`.
+            0x55 => {
+                if slot.next_flags % 4 == 0 {
+                    self.call(0x1C, 2, slot.size, slot.dir, slot.base, true);
+                }
+                let this = &mut self.slots[index];
+                this.next_flags = this.next_flags.wrapping_add(1);
+            }
+            0x44 => self.stream_drop(index, sca),
             // `Esp_34`: a splash where it hit, with its sound, and it stops
             // to play out from frame 0xD.
             0x34 => {
@@ -1562,6 +1579,154 @@ impl Effects {
         this.velocity = [across * sway, down, along * sway];
         this.sway_limit = down * -3 / 10;
         this.sway = -this.sway;
+    }
+
+    /// A slot's frame, with that frame's delay.
+    fn show_frame(&mut self, index: usize, frame: u8) {
+        let delay = self
+            .bank
+            .sprites
+            .get(&self.slots[index].kind)
+            .map_or(0, |s| s.frame(frame)[2]);
+        let this = &mut self.slots[index];
+        this.frame = frame;
+        this.delay = delay;
+    }
+
+    /// A drop of the stream lands: it shows `frame`, stops falling and runs
+    /// no more behaviours.
+    fn land_drop(&mut self, index: usize, frame: u8) {
+        self.show_frame(index, frame);
+        let this = &mut self.slots[index];
+        this.update = 0;
+        this.anim = 0;
+        this.accel[1] = 0;
+        this.velocity[1] = 0;
+    }
+
+    /// `FUN_004b9590(1)`: one whole tick of one slot.
+    fn step(&mut self, index: usize, sca: Option<&Sca>) {
+        let anim = self.slots[index].anim;
+        self.behave(index, anim, sca);
+        self.advance(index, sca);
+    }
+
+    /// `Oba_ck_esp(pos, reach, height)`: a box of a body in play (`Be_flg`'s
+    /// 1 without its 2) holds `pos`, `reach` wider and `height` taller.
+    fn oba_ck_esp(&self, pos: [i16; 3], reach: i32, height: i32) -> bool {
+        let [x, y, z] = pos.map(i32::from);
+        self.oba
+            .iter()
+            .filter(|body| body.be_flg & 3 == 1)
+            .any(|body| {
+                let atd = &body.atd;
+                let wide = i32::from(atd.at_w) + reach;
+                let dx = atd.at[0].wrapping_sub(x);
+                let dz = atd.at[2].wrapping_sub(z);
+                if dx.wrapping_add(wide) as u32 > (wide * 2) as u32
+                    || dz.wrapping_add(wide) as u32 > (wide * 2) as u32
+                {
+                    return false;
+                }
+                let distance =
+                    crate::sca::square_root0(dz.wrapping_mul(dz).wrapping_add(dx.wrapping_mul(dx)));
+                if wide.wrapping_sub(distance as i32) <= 0 {
+                    return false;
+                }
+                let tall = i32::from(atd.at_h) + height;
+                let dy = atd.at[1].wrapping_sub(y);
+                -tall < dy && dy < tall
+            })
+    }
+
+    /// `Esp_47`, once: a stream (room 405's) fills in at once. A drop is made
+    /// every fourth count and run on for as many ticks as the count, until
+    /// one has reached the water or the ground (the pipe's full length) or
+    /// the pool is full; then the stream goes on to `Esp_55`.
+    fn stream_fill(&mut self, index: usize, sca: Option<&Sca>) {
+        self.next_block(index, false);
+        let mut count: u32 = 1;
+        loop {
+            count = count.wrapping_add(1);
+            if count == 0 {
+                break;
+            }
+            if count % 4 != 0 {
+                continue;
+            }
+            let stream = self.slots[index];
+            let Some(drop) = self.call(0x1C, 2, stream.size, stream.dir, stream.base, true) else {
+                break;
+            };
+            for _ in 0..count {
+                self.step(drop, sca);
+                self.slots[drop].next_flags = 0;
+            }
+            let this = &mut self.slots[drop];
+            this.flags = 0xB003;
+            this.next_flags = 6;
+            this.anim = 0;
+            this.update = 0x44;
+            let [x, y, z] = this.pos.map(i32::from);
+            let level = crate::zombie2::water_ck(&self.water, x, z);
+            let ground = Self::ground(sca, this.pos).height;
+            let landed = if level != 0 {
+                i32::from(level) < y
+            } else {
+                ground < y
+            };
+            if landed {
+                let this = &mut self.slots[drop];
+                this.frame = 0x0A;
+                this.scale[1] = 0x1000;
+                this.update = 0;
+                this.anim = 0;
+                this.accel[1] = 0;
+                this.velocity[1] = 0;
+                break;
+            }
+        }
+        let this = &mut self.slots[index];
+        this.flags = 0x8000;
+        this.anim = 0x55;
+        this.update = 0;
+    }
+
+    /// `Esp_44`: a drop of the stream falls, lengthening, until it meets a
+    /// body (two splashes, kind 0x1A, `Esp_call3`), the water or the ground.
+    fn stream_drop(&mut self, index: usize, sca: Option<&Sca>) {
+        if self.slots[index].frame == 0x0A {
+            self.show_frame(index, 6);
+        }
+        let slot = self.slots[index];
+        let y = i32::from(slot.pos[1]);
+        let height = 1i32.wrapping_shl((y / -1800) as u32);
+        if self.oba_ck_esp(slot.pos, 0x96, height) {
+            self.land_drop(index, 0x0B);
+            self.slots[index].scale[1] = 0x1000;
+            for turn in [0, 0xD90] {
+                let spread = i32::from(self.rnd() % 10);
+                let spread = if turn == 0 { 0x34 - spread } else { spread };
+                let dir = ((spread * 12) as i16).wrapping_add(slot.dir).wrapping_add(turn);
+                let size = (u32::from(self.rnd() & 7) << 7) + u32::from(slot.size);
+                let row = (size >> 16) as u8;
+                self.call(0x1A, row, size as u16, dir, slot.pos, true);
+            }
+            return;
+        }
+        let this = &mut self.slots[index];
+        this.scale[1] = this.scale[1].wrapping_add(0x78);
+        let [x, _, z] = slot.pos.map(i32::from);
+        let level = crate::zombie2::water_ck(&self.water, x, z);
+        if level != 0 && i32::from(level) < y {
+            self.land_drop(index, 0x0B);
+            self.slots[index].scale[1] = 0x1000;
+        }
+        let ground = Self::ground(sca, slot.pos).height;
+        if ground < y {
+            self.land_drop(index, 8);
+            self.slots[index].pos[1] = ground as i16;
+        }
     }
 
     /// `FUN_004d8260(pos, reach, 20)` for what's thrown or spat (`Esp_20`,
@@ -3630,6 +3795,147 @@ mod tests {
         let this = effects.slots[slot];
         assert_eq!((this.anim, this.update, this.ground), (0x2C, 0x38, 0));
         assert_eq!(this.rotation[1], 0x1234);
+    }
+
+    /// Room 405's stream (kind 0x1C): its drops (row 2) and their splashes
+    /// (kind 0x1A).
+    fn stream_effects() -> Effects {
+        let mut drop = [0u8; BLOCK_LEN];
+        drop[4..6].copy_from_slice(&0x1000u16.to_le_bytes());
+        drop[6..8].copy_from_slice(&0x1000u16.to_le_bytes());
+        drop[18..20].copy_from_slice(&0xb003u16.to_le_bytes());
+        let mut bank = Arc::try_unwrap(bank_rows(0x1C, &[(2, &[drop])])).unwrap();
+        bank.sprites
+            .extend(Arc::try_unwrap(bank_of(0x1A, &[fire_block()])).unwrap().sprites);
+        let mut effects = Effects::default();
+        effects.enter_room(Arc::new(bank));
+        effects
+    }
+
+    fn stream_at(effects: &mut Effects, y: i16) -> usize {
+        let slot = 0x10;
+        effects.slots[slot] = Slot {
+            kind: 0x1C,
+            row: 1,
+            size: 0x1000,
+            base: [0, y, 0],
+            pos: [0, y, 0],
+            flags: 0xB003,
+            next_flags: 0xB003,
+            anim: 0x47,
+            ..Slot::default()
+        };
+        slot
+    }
+
+    fn drops(effects: &Effects) -> usize {
+        effects
+            .slots
+            .iter()
+            .filter(|s| s.flags != 0 && s.kind == 0x1C && s.row == 2)
+            .count()
+    }
+
+    #[test]
+    fn a_stream_fills_in_until_a_drop_reaches_the_ground() {
+        let mut effects = stream_effects();
+        let stream = stream_at(&mut effects, 100);
+        effects.behave(stream, 0x47, None);
+        assert_eq!(drops(&effects), 1);
+        let drop = effects.slots[POOL_SIZE - 1];
+        assert_eq!((drop.frame, drop.update, drop.flags), (0x0A, 0, 0xB003));
+        let this = effects.slots[stream];
+        assert_eq!((this.anim, this.update, this.flags), (0x55, 0, 0x8000));
+    }
+
+    #[test]
+    fn a_stream_that_never_lands_fills_the_pool() {
+        let mut effects = stream_effects();
+        let stream = stream_at(&mut effects, -100);
+        effects.behave(stream, 0x47, None);
+        assert_eq!(drops(&effects), POOL_SIZE - 1);
+        assert!(effects.slots.iter().all(|s| s.flags != 0));
+        assert!(
+            effects
+                .slots
+                .iter()
+                .filter(|s| s.row == 2)
+                .all(|s| s.update == 0x44 && s.next_flags == 6)
+        );
+        assert_eq!(effects.slots[stream].anim, 0x55);
+    }
+
+    #[test]
+    fn a_running_stream_makes_a_drop_every_fourth_tick() {
+        let mut effects = stream_effects();
+        let stream = stream_at(&mut effects, -100);
+        for _ in 0..8 {
+            effects.behave(stream, 0x55, None);
+        }
+        assert_eq!(drops(&effects), 2);
+        assert_eq!(effects.slots[stream].next_flags, 0xB003 + 8);
+        assert!(effects.slots.iter().filter(|s| s.row == 2).all(|s| s.flags == FLAG_DEFERRED));
+    }
+
+    fn drop_at(effects: &mut Effects, y: i16) -> usize {
+        let slot = 0x20;
+        effects.slots[slot] = Slot {
+            kind: 0x1C,
+            row: 2,
+            size: 0x800,
+            pos: [0, y, 0],
+            flags: 0xB003,
+            update: 0x44,
+            frame: 0x0A,
+            velocity: [0, 40, 0],
+            accel: [0, 4, 0],
+            scale: [0x1000, 0x1000],
+            ..Slot::default()
+        };
+        slot
+    }
+
+    #[test]
+    fn a_drop_lengthens_as_it_falls() {
+        let mut effects = stream_effects();
+        let drop = drop_at(&mut effects, -1000);
+        effects.behave(drop, 0x44, None);
+        let this = effects.slots[drop];
+        assert_eq!((this.frame, this.scale[1], this.update), (6, 0x1078, 0x44));
+    }
+
+    #[test]
+    fn a_drop_lands_on_the_ground() {
+        let mut effects = stream_effects();
+        let drop = drop_at(&mut effects, 50);
+        effects.behave(drop, 0x44, None);
+        let this = effects.slots[drop];
+        assert_eq!((this.frame, this.update, this.pos[1]), (8, 0, 0));
+        assert_eq!((this.velocity[1], this.accel[1]), (0, 0));
+    }
+
+    #[test]
+    fn a_drop_on_a_body_splashes_twice() {
+        let mut effects = stream_effects();
+        let drop = drop_at(&mut effects, -500);
+        let body = |be_flg| crate::zombie2::Oba {
+            be_flg,
+            atd: crate::zombie2::Atd {
+                at_w: 100,
+                at_h: 100,
+                at: [200, -400, 0],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        effects.oba = vec![body(3)];
+        effects.behave(drop, 0x44, None);
+        assert_eq!(effects.slots[drop].frame, 6, "a body out of play is no target");
+        effects.oba = vec![body(1)];
+        effects.behave(drop, 0x44, None);
+        let this = effects.slots[drop];
+        assert_eq!((this.frame, this.update, this.scale[1]), (0x0B, 0, 0x1000));
+        assert_eq!(effects.slots.iter().filter(|s| s.kind == 0x1A).count(), 2);
     }
 
     #[test]

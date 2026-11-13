@@ -1600,6 +1600,21 @@ impl Re2State {
             ..Default::default()
         });
         self.effects.bodies = crate::character2::targets_of(self);
+        // `Oba_ck_esp`'s bodies: the player's box (once the player's routine
+        // has set it), then the slots in play.
+        self.effects.oba = self
+            .player
+            .atd
+            .zip(player.as_ref())
+            .map(|(atd, (pos, _))| crate::zombie2::Oba {
+                slot: crate::zombie2::PLAYER_BODY,
+                be_flg: self.player.be_flg,
+                atd,
+                pos: *pos,
+            })
+            .into_iter()
+            .chain(crate::character2::re2_slot_bodies(self))
+            .collect();
         self.effects.spark_target = self.player.spark_target;
         if let Some((pos, _)) = &player {
             crate::player2::move_parts(&mut self.player, *pos);
@@ -1611,6 +1626,7 @@ impl Re2State {
             self.effects.tick(&mut self.rnd, sca);
         }
         self.effects.bodies.clear();
+        self.effects.oba.clear();
         for blast in std::mem::take(&mut self.effects.blasts) {
             let slot = match blast {
                 crate::weapon2::BlastEffect::Tested(slot) => slot,
