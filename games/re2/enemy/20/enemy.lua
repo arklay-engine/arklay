@@ -1685,7 +1685,8 @@ local function die_burning(e)
     end
 end
 
--- `FUN_0045f3f0`.
+-- `FUN_0045f3f0`, the spark shot's death (`FUN_0045f390`'s first step). The
+-- colour 0x3F203F it gives every part isn't ported.
 local function die_acid(e)
     die_start(e)
     e:set_var(BLEED, 0x14)

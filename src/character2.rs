@@ -417,6 +417,7 @@ pub fn targets_of(re2: &crate::scd2::host::Re2State) -> Vec<crate::weapon2::Targ
                 damage_cnt: zombie.damage_cnt,
                 pos,
                 at: [zombie.atd.at[0], zombie.atd.at[2]],
+                at_y: zombie.atd.at[1],
                 at_w: zombie.atd.at_w,
                 at_w1: if character.id == crate::zombie2::DOG_ID {
                     600

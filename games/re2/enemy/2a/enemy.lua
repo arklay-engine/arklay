@@ -1195,12 +1195,50 @@ local function bleed_smg(e)
     e:set_var(BLEED_COUNT, (count + 1) & 0xFF)
 end
 
--- `+0x220`'s callbacks, by the weapon that set them. 0xa's (`FUN_00480220`)
--- and 0xe's (`FUN_00480280`) aren't ported.
-local BLEEDS <const> = { [0xF] = bleed_smg }
+-- `DAT_00529478`: where the spark shot's sparks go, a tick each, by
+-- `DWORD_006895a4`'s place in its 24 records: the point on the part and the
+-- part. The records missing here have `+10`'s bit 2, which skips them; none
+-- has bit 1, which would go on to the next in the same tick.
+local SPARK_POINTS <const> = {
+    [2] = { -500, 0, 0, 0 },
+    [4] = { 300, 0, 0, 0 },
+    [6] = { -500, 100, 0, 5 },
+    [8] = { -400, -500, 100, 7 },
+    [11] = { 350, -400, 100, 8 },
+    [14] = { 0, 0, -100, 10 },
+    [20] = { 300, -200, 0, 3 },
+    [22] = { 350, 500, 100, 4 },
+}
 
--- `FUN_0047fea0`: the blood each weapon draws. The grenades' and 0xe's,
--- which keep bleeding over the ticks after, aren't in the weapon table yet.
+-- `FUN_00480280`, the spark shot's sparks (kind 6, size `Rnd * 2 + 0x1000`)
+-- on the parts' `Workm`, which `+0x220` keeps calling each tick after the
+-- hit: the first tick only sets it going, then one record a tick until
+-- `+0x228` reaches 0x18.
+local function sparks(e)
+    local count = e:var(BLEED_COUNT)
+    if count == 0 then
+        e:set_var(BLEEDING, 0xE)
+        e:set_var(BLEED_COUNT, 1)
+        return
+    end
+    local point = SPARK_POINTS[(count - 1) % 24]
+    if point then
+        e:effect(6, 0, e:rnd() * 2 + 0x1000, 0, point[4], point[1], point[2], point[3])
+    end
+    if count == 0x18 then
+        e:set_var(BLEEDING, 0)
+        e:set_var(BLEED_COUNT, 0x19)
+        return
+    end
+    e:set_var(BLEED_COUNT, (count + 1) & 0xFF)
+end
+
+-- `+0x220`'s callbacks, by the weapon that set them. 0xa's (`FUN_00480220`)
+-- isn't ported.
+local BLEEDS <const> = { [0xE] = sparks, [0xF] = bleed_smg }
+
+-- `FUN_0047fea0`: the blood each weapon draws. The flame rounds' (0xA,
+-- `FUN_00480220`), which keep bleeding over the ticks after, isn't ported.
 local function bleed(e)
     e:set_var(BLEED_COUNT, 0)
     local weapon = e:var(WEAPON)
@@ -1218,6 +1256,8 @@ local function bleed(e)
         blood(e, 5, 5, 4, 0x1000, 3)
     elseif weapon == 0xB then
         blood(e, 5, 4, 9, 0x1500, 3)
+    elseif weapon == 0xE then
+        sparks(e)
     elseif weapon == 0xF or weapon == 0x12 then
         bleed_smg(e)
     elseif weapon == 0x10 then

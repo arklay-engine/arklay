@@ -635,7 +635,7 @@ pub fn place(from: [i32; 3], to: [i32; 3], sound: [i32; 3]) -> (u8, i32) {
 }
 
 /// `Snd_se_dir_ck`: the 12-bit yaw from one point to another.
-fn se_dir_ck(from_x: i32, from_z: i32, to_x: i32, to_z: i32) -> i32 {
+pub(crate) fn se_dir_ck(from_x: i32, from_z: i32, to_x: i32, to_z: i32) -> i32 {
     let dx = to_x - from_x;
     let dz = to_z - from_z;
     if dx == 0 {

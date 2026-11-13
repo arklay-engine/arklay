@@ -4435,6 +4435,12 @@ impl GameSession {
             } else {
                 re2.tick_effects(self.loaded.room.sca.as_ref(), player);
             }
+            // `Esp_0E`'s flash: `Fade_set(0x100, 0)` and `Fade_adjust` on fade
+            // 0, as the game over's white, or `Fade_off`.
+            if let Some(level) = self.game.re2.effects.fade.take() {
+                self.room_fade.set(1, 0, level);
+                self.room_fade_draw = self.room_fade.overlay();
+            }
             // `played` was cleared at the tick's start. A yes/no's cue, which
             // the message window played above, comes after the room's sounds
             // in the trace's `snd`: `Mess_disp` runs after the scheduler.

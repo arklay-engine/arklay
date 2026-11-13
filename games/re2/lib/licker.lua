@@ -288,10 +288,13 @@ local function bite_blood(e)
     end
 end
 
--- `FUN_00467370`: the first tick only sets it going.
+-- `FUN_00467370`: the first call only sets it going, as `+0x23c`'s callback,
+-- which runs after the routine.
 local function flames(e)
     local count = e:var(COUNT)
-    if count ~= 0 then
+    if count == 0 then
+        e:set_var(AFTER, AFTER_FLAMES)
+    else
         local flame = FLAMES[(count - 1) % 16]
         if flame then
             e:effect(6, 0, e:rnd() * 2 + 0x1000, 0, flame[4], flame[1], flame[2], flame[3])
@@ -318,8 +321,9 @@ local function hit_blood(e, behind)
         e:effect(blood[5], blood[6], blood[7], 0, point[4], point[1], point[2], point[3])
     end
     e:set_var(COUNT, 0)
+    -- The spark shot's sets them going at once, so the first runs this tick.
     if weapon == 0xE then
-        e:set_var(AFTER, AFTER_FLAMES)
+        flames(e)
     end
 end
 

@@ -849,7 +849,7 @@ end
 
 -- The blood of a hit (`FUN_0048dc70`'s and `FUN_0048f050`'s start): two
 -- drops beside part 1, turned toward the player, higher for a shot at the
--- head, and `Snd_se_enem` 8. The other weapons' blood (9 to 0xe, 0x11) isn't
+-- head, and `Snd_se_enem` 8. The other weapons' blood (9 to 0xb, 0x11) isn't
 -- here: arklay's player doesn't fire them yet. A magnum's starts its spurt.
 -- The flamethrower's (0x10) draws the place's `Rnd`s but makes no drops.
 local function hit_blood(e, weapon)
@@ -886,6 +886,30 @@ local function flame_blood(e)
     local dir = i16(e:angle())
     for _, part in ipairs({ { 2, 0x17D0 }, { 0, 0x1FA0 }, { 5, 0x1000 }, { 15, 0x1000 } }) do
         e:effect(5, 4, e:rnd() * 4 + part[2], dir, part[1], 0, 0, 0)
+    end
+end
+
+-- `FUN_0048e5e0`, the spark shot's (0xE) sparks, turned as G1 faces: seven
+-- of kind 6 on parts 2, 2, 0, 1, 13, 7 and 4 (`+0x1a0`, `+0x48`, `+0xf4`,
+-- `+0x904`, `+0x4fc` and `+0x2f8` into the parts), each at `0x80 - Rnd` on x,
+-- y and z (the first's y `-Rnd - 0x1d8`) and sized `Rnd * 8` over its base;
+-- then three of kind 4, row 0xF on parts 1, 10 and 4 with no offset, sized
+-- `Rnd * 4 + 0x1000`.
+local SPARK_PARTS <const> = {
+    { 2, 0x17D0 }, { 2, 0x17D0 }, { 0, 0x1BB8 }, { 1, 0x1BB8 },
+    { 13, 0x13E8 }, { 7, 0x13E8 }, { 4, 0x13E8 },
+}
+
+local function sparks(e)
+    local dir = i16(e:angle())
+    for index, part in ipairs(SPARK_PARTS) do
+        local x = 0x80 - e:rnd()
+        local y = index == 1 and -e:rnd() - 0x1D8 or 0x80 - e:rnd()
+        local z = 0x80 - e:rnd()
+        e:effect(6, 0, e:rnd() * 8 + part[2], dir, part[1], x, y, z)
+    end
+    for _, part in ipairs({ 1, 10, 4 }) do
+        e:effect(4, 0xF, e:rnd() * 4 + 0x1000, dir, part, 0, 0, 0)
     end
 end
 
@@ -1068,6 +1092,9 @@ local function hurt(e)
         flame_blood(e)
         e:set_var(CNT_22C, 0x2D)
     end
+    if weapon == 0xE then
+        sparks(e)
+    end
     local flags = e:var(FLAGS)
     -- Hard mode's 350 isn't modelled.
     if flags & 4 == 0 and e:life() < 200 then
@@ -1152,6 +1179,9 @@ local function death(e)
         e:set_var(HURT_221, 0)
         e:set_died()
         local weapon = e:routine(1)
+        if weapon == 0xE then
+            sparks(e)
+        end
         if weapon == 5 or weapon == 6 then
             e:set_var(SPURT, 1)
         end
@@ -1205,6 +1235,9 @@ local function dying(e)
     if e:var(FLAGS) & 0x10 ~= 0 and e:routine(2) == 0 then
         local weapon = e:routine(1)
         hit_blood(e, weapon)
+        if weapon == 0xE then
+            sparks(e)
+        end
         -- A flame's blood here isn't held back by `+0x22c`.
         if weapon == 0x10 then
             flame_blood(e)

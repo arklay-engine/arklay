@@ -16,10 +16,10 @@
 -- others; on a wall (kinds 2 and 3) the way down (1), the wait (2), the
 -- crawl (3), the climb (4), the way onto the ceiling (5), the lunge (6) and
 -- the spit (7). A hit (`Routine_0` 2), the death (3) and the body (7), for
--- weapons 2 to 8, 0xD, 0xF, 0x10 and 0x13, on each kind. Another spider in play is its partner
+-- weapons 2 to 8 and 0xD to 0x10 and 0x13, on each kind. Another spider in play is its partner
 -- (`Ck_em_id`, `+0x240`), and its hits and deaths send young spiders
 -- (`Em_26`, `send_young`). `FUN_004732a0`'s `fg_system` `0x1000000` draw,
--- `FUN_004727e0`'s water, `FUN_00473530`'s blood, the player's partner
+-- `FUN_004727e0`'s water, the player's partner
 -- (`splayer_work`) as a target and the spit's `Routine_2` 3
 -- (`FUN_0046fbb0`) aren't ported.
 
@@ -52,6 +52,7 @@ local NEXT <const> = 27 -- `+0x231`: the state after the way down, and a hit's c
 local BETWEEN <const> = 28 -- `+0x236`: between a wall and the ceiling, with `fg_room_enemy`'s 0x20.
 local RISE <const> = 29 -- `+0x244`: how far a body has sunk into water.
 local GROUND <const> = 30 -- `Ground`, which the engine finds under it before the tick.
+local SPARKS <const> = 31 -- `+0x23b`: the spark shot's ticks of sparks left (`FUN_00473530`).
 local FOOT <const> = 32 -- x and z of part 12 (leg 1's foot) as the last tick ended.
 
 -- `PTR_DAT_005284ac` and, with `fg_system`'s `0x20`, `PTR_DAT_005284cc`.
@@ -1388,6 +1389,8 @@ local BLOOD_ROWS <const> = {
     { 5, 0x03, 0x1400, true },
     { 5, 0x04, 0x1000, true },
     [7] = { 4, 0x0F, 0x1400, true },
+    [9] = { 6, 0x00, 0x1000, true },
+    [10] = { 4, 0x0C, 0x1000, true },
 }
 
 -- `FUN_00472df0`: blood at a part, where `Joint_trans` left it. The way is
@@ -1772,6 +1775,15 @@ local function hurt_flame(e)
     move(e)
 end
 
+-- `FUN_00471ae0`: the spark shot's hit. Sparks on the body (row 10), twenty
+-- ticks of `FUN_00473530`'s, and the hard flinch, as `Routine_1` 7.
+local function hurt_spark(e)
+    e:set_var(SPARKS, 0x14)
+    blood(e, 0, 10)
+    e:set_routine(1, 7)
+    flinch_hard_by_kind(e)
+end
+
 -- `DWORD_00528694`, by weapon: only the weapons arklay fires.
 local HURTS <const> = {
     [2] = flinch_by_kind,
@@ -1782,6 +1794,7 @@ local HURTS <const> = {
     [7] = flinch_hard_by_kind,
     [8] = flinch_hard_by_kind,
     [0xD] = flinch_by_kind, -- `0x5286c8`: the Colt's, the handguns'.
+    [0xE] = hurt_spark, -- `0x5286cc`: the spark shot's `FUN_00471ae0`.
     [0xF] = flinch_bleeding, -- `0x5286d0`: the SMG's, weapon 4's `FUN_00471840`.
     [0x10] = hurt_flame, -- `0x5286d4`: the flamethrower's `FUN_00471b10`.
     [0x13] = flinch_by_kind, -- `0x5286e0`: the Beretta's, the table's last.
@@ -2097,6 +2110,20 @@ local function die_flame(e)
     die_plain(e)
 end
 
+-- `FUN_004726d0`: the spark shot's death. Unless the body has died once,
+-- sparks on the body and on part 19 (row 10) and thirty ticks of
+-- `FUN_00473530`'s; then the handguns' death, as `Routine_1` 2. The colour
+-- 0x3F3F3F it gives every part (`FUN_00473490`) isn't ported.
+local function die_spark(e)
+    if e:var(REVIVED) == 0 then
+        e:set_var(SPARKS, 0x1E)
+        blood(e, 0x13, 10)
+        blood(e, 0, 10)
+    end
+    e:set_routine(1, 2)
+    die_plain(e)
+end
+
 -- `DWORD_00528724`, by weapon: only the weapons arklay fires.
 local DIES <const> = {
     [2] = die_plain,
@@ -2107,6 +2134,7 @@ local DIES <const> = {
     [7] = die_blown,
     [8] = die_blown,
     [0xD] = die_plain, -- `0x528758`: the Colt's, the handguns'.
+    [0xE] = die_spark, -- `0x52875c`: the spark shot's `FUN_004726d0`.
     [0xF] = die_plain, -- `0x528760`: the SMG's, the handguns'.
     [0x10] = die_flame, -- `0x528764`: the flamethrower's, weapon 0xA's.
     [0x13] = die_plain, -- `0x528770`: the Beretta's, the table's last.
@@ -2212,6 +2240,35 @@ local function dead(e)
     end
 end
 
+-- `BYTE_00528848`: the parts `FUN_00473530` sparks on, by `Rnd & 7`.
+local SPARK_PARTS <const> = { [0] = 0, 3, 6, 9, 0xB, 0, 0x10, 0x13 }
+
+-- `FUN_00473530`, after the routine: while `+0x23b` counts down, on every
+-- other tick three draws of `SPARK_PARTS`, each part still on sparking (row 9).
+-- The original runs it after `Oba_ck_em` and `Sca_ck_em`, which the engine
+-- runs after `update`; neither draws `Rnd`.
+local function spark_on(e)
+    local left = e:var(SPARKS)
+    if left == 0 then
+        return
+    end
+    left = left - 1
+    e:set_var(SPARKS, left)
+    if left & 1 == 0 then
+        return
+    end
+    for _ = 1, 3 do
+        local part = SPARK_PARTS[e:rnd() & 7]
+        local on = e:hidden_parts() & (1 << part) == 0
+        if part >= 3 and part <= 0x12 then
+            on = leg_part_on(e, part)
+        end
+        if on then
+            blood(e, part, 9)
+        end
+    end
+end
+
 function update(e)
     if e:var(T23D) ~= 0 then
         e:set_var(T23D, e:var(T23D) - 1)
@@ -2229,4 +2286,5 @@ function update(e)
         dead(e)
     end
     -- 4 is `nullsub_1`; 5 and 6 are empty.
+    spark_on(e)
 end

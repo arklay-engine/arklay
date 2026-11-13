@@ -15,7 +15,7 @@
 --
 -- State 5's spit is `Esp_call` kind 0x1D, whose `Esp_20` hits and poisons
 -- the player (`esp2.rs`). A hit (`Routine_0` 2) and the death (3, then 7)
--- are ported for the weapons arklay fires, 2 to 8, 0xD, 0xF, 0x10 and 0x13,
+-- are ported for the weapons arklay fires, 2 to 8, 0xD to 0x10 and 0x13,
 -- with `censorship_off` and `hard_mode` clear, and so is the retreat at half
 -- its life (state 7). Only
 -- the player as the target is ported (`FUN_004881c0` can pick the partner
@@ -932,11 +932,22 @@ local function scorch(e)
     resume(e)
 end
 
+-- `caseD_f` (`0x487520`), the spark shot's: two of row 10's sparks at parts
+-- of `BLOOD_PARTS`, fifteen ticks of row 9's after (`+0x23c`), then as
+-- `caseD_2`.
+local function spark(e)
+    blood(e, BLOOD_PARTS[e:rnd() & 0xF], 10)
+    blood(e, BLOOD_PARTS[e:rnd() & 0xF], 10)
+    e:set_var(BLOOD, 0xF)
+    resume(e)
+end
+
 -- `funcs_487037` (`0x529ec4`), by weapon, with `censorship_off` and
 -- `hard_mode` clear. Only the weapons arklay fires are ported.
 local HURTS <const> = {
     resume, resume, resume, bleed, flinch, flinch, flinch, flinch,
     [0xD] = resume, -- `0x529ef8`: the Colt's, the handguns'.
+    [0xE] = spark, -- `0x529efc`: the spark shot's.
     [0xF] = bleed, -- `0x529f00`: the SMG's, 4's.
     [0x10] = scorch, -- `0x529f04`: the flamethrower's.
     [0x13] = flinch, -- `0x529f10`: the Beretta's, the table's last, 0x11's.
@@ -1094,22 +1105,44 @@ local function die_burnt(e)
     e:set_var(F238, 1)
 end
 
+-- `FUN_00487ac0`: the spark shot's death. The fall, three of row 10's
+-- sparks at parts of `BLOOD_PARTS`, forty-five ticks of row 9's after
+-- (`+0x23c`), the vines' command 7, `Neck_no` 0 (which `die` turns) and
+-- `+0x238` 1. The colour 0x3F3F3F it gives the 26 parts isn't ported.
+local function die_sparks(e)
+    if e:routine(2) ~= 0 then
+        dying(e)
+        e:set_var(F238, 1)
+        return
+    end
+    die_start(e)
+    for _ = 1, 3 do
+        blood(e, BLOOD_PARTS[e:rnd() & 0xF], 10)
+    end
+    e:set_var(BLOOD, 0x2D)
+    command(e, 7, 3)
+    e:set_var(F238, 1)
+end
+
 -- `0x529f6c`, by weapon. Only the weapons arklay fires are ported.
 local DIES <const> = {
     die_plain, die_plain, die_plain, die_plain, die_blown, die_blown, die_blown, die_blown,
     [0xD] = die_plain, -- `0x529fa0`: the Colt's, the handguns'.
+    [0xE] = die_sparks, -- `0x529fa4`: the spark shot's.
     [0xF] = die_plain, -- `0x529fa8`: the SMG's, the handguns'.
     [0x10] = die_burnt, -- `0x529fac`: the flamethrower's, 0xa's.
     [0x13] = die_torn, -- `0x529fb8`: the Beretta's, the table's last, 0x11's.
 }
 
--- `FUN_004875c0`: `Routine_0` 3.
+-- `FUN_004875c0`: `Routine_0` 3. `Rot_neck_em` turns `Neck_no`'s joint: 9, or
+-- 0 once the spark shot's death (which keeps `Routine_1` 0xE) has set it.
 local function die(e)
+    local neck = e:routine(1) == 0xE and 0 or 9
     local entry = DIES[e:routine(1)]
     if entry then
         entry(e)
     end
-    e:rot_neck_joint(9, (e:angle() + side(e) * 0x800) & 0xFFFF, 0xC, 0x200)
+    e:rot_neck_joint(neck, (e:angle() + side(e) * 0x800) & 0xFFFF, 0xC, 0x200)
     e:set_died()
 end
 

@@ -1345,8 +1345,33 @@ local function flame_blood(e)
     end
 end
 
+-- `FUN_00494f70`, the spark shot's (0xE) sparks, turned as G2 faces: nine
+-- of kind 6 on parts 2, 2, 0, 1, 12, 13, 10, 4 and 16 (`+0x1a0`, `+0x48`,
+-- `+0xf4`, `+0x858`, `+0x904`, `+0x700`, `+0x2f8` and `+0xb08` into the
+-- parts), each at `0x80 - Rnd` on x, y and z (the first's y `-Rnd - 0x1d8`)
+-- and sized `Rnd * 8` over its base; then three of kind 4, row 0xF on parts
+-- 1, 12 and 4 with no offset, sized `Rnd * 4 + 0x1000`.
+local SPARK_PARTS <const> = {
+    { 2, 0x17D0 }, { 2, 0x17D0 }, { 0, 0x1BB8 }, { 1, 0x1BB8 }, { 12, 0x13E8 },
+    { 13, 0x13E8 }, { 10, 0x13E8 }, { 4, 0x13E8 }, { 16, 0x13E8 },
+}
+
+local function sparks(e)
+    local dir = i16(e:angle())
+    for index, part in ipairs(SPARK_PARTS) do
+        local x = 0x80 - e:rnd()
+        local y = index == 1 and -e:rnd() - 0x1D8 or 0x80 - e:rnd()
+        local z = 0x80 - e:rnd()
+        e:effect(6, 0, e:rnd() * 8 + part[2], dir, part[1], x, y, z)
+    end
+    for _, part in ipairs({ 1, 12, 4 }) do
+        e:effect(4, 0xF, e:rnd() * 4 + 0x1000, dir, part, 0, 0, 0)
+    end
+end
+
 -- `FUN_00495ad0`: the flinch, backwards or forwards by whether it faces the
--- way the player does (clip 3 or 4), to its frame 15; then it walks.
+-- way the player does (clip 3 or 4), to its frame 15; then it walks. At frame
+-- 15 the spark shot's (`Routine_1` still 0xE) sparks again.
 local function flinch(e)
     local sub = e:routine(2)
     if sub == 0 then
@@ -1365,6 +1390,9 @@ local function flinch(e)
     end
     e:add_speed_xz()
     if e:move_cnt() == 0xF then
+        if e:routine(1) == 0xE then
+            sparks(e)
+        end
         e:routines(1, 1, 0, 0)
         e:set_var(FLAGS, e:var(FLAGS) & 0xFDFF)
         e:set_damage_cnt(e:damage_cnt() & 0x7F)
@@ -1383,7 +1411,7 @@ local FLINCH_ADD <const> = {
 -- it flinches, and otherwise it goes on with what it was doing on this tick,
 -- as it does during an attack (`FLAGS`' 0x80). A hit during a flinch goes on
 -- with it. A flame (0x10) bleeds at most once in 0x2d ticks (`+0x22e`).
--- The other weapons' effects (9, 0xa, 0xb, 0xe and 0x11) aren't ported.
+-- The other weapons' effects (9, 0xa, 0xb and 0x11) aren't ported.
 local function hurt(e)
     if e:routine(2) ~= 0 then
         flinch(e)
@@ -1395,6 +1423,9 @@ local function hurt(e)
     e:set_var(HURT_221, 0)
     if weapon == 5 or weapon == 6 then
         e:set_var(SPURT, 1)
+    end
+    if weapon == 0xE then
+        sparks(e)
     end
     if weapon == 0x10 and e:var(CNT_22E) == 0 then
         flame_blood(e)
@@ -1460,6 +1491,9 @@ local function death(e)
         end
         if weapon == 5 or weapon == 6 then
             e:set_var(SPURT, 1)
+        end
+        if weapon == 0xE then
+            sparks(e)
         end
         -- A flame's blood here isn't held back by `+0x22e`.
         if weapon == 0x10 then

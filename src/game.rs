@@ -1100,7 +1100,9 @@ fn re2_ammo(weapon: u8) -> (u8, u8) {
         // `Item_data_tbl`: the Colt holds six, the Beretta fifteen.
         crate::player2::COLT => (RE2_HANDGUN_BULLETS, 6),
         crate::player2::BERETTA => (RE2_HANDGUN_BULLETS, 15),
-        // The machine gun bullets and the fuel, a hundred a load.
+        // The spark shot's 0x1C, the machine gun bullets and the fuel, a
+        // hundred a load.
+        crate::player2::SPARK => (0x1C, 100),
         crate::player2::SMG => (0x1B, 100),
         crate::player2::FLAMETHROWER => (0x17, 100),
         _ => (RE2_HANDGUN_BULLETS, 18),
@@ -9453,7 +9455,13 @@ impl GameState {
         let id = self.equipped_weapon_id;
         crate::player2::Weapon {
             id,
-            loaded: self.item_count(id) != 0,
+            // `Tama_ck_i` wants more than two in the spark shot, so a shot
+            // that strikes has its three.
+            loaded: if id == crate::player2::SPARK {
+                self.item_count(id) > 2
+            } else {
+                self.item_count(id) != 0
+            },
             spare: self.item_count(re2_ammo(id).0) != 0,
             rounds: self.item_count(id).min(u32::from(u8::MAX)) as u8,
         }
@@ -11404,6 +11412,33 @@ mod tests {
             game.re2_settle_ammo();
             assert_eq!(game.item_count(weapon), 100);
             assert_eq!(game.item_count(ammo), 150);
+        }
+    }
+
+    /// `Mix_null` gives the spark shot item 0x1C to load, a hundred at a time
+    /// (`Item_data_tbl`), and `Tama_ck_i` wants more than two rounds in it:
+    /// with one or two the hold reloads, or clicks with none to load.
+    #[test]
+    fn a_re2_spark_shot_fires_on_three_and_loads_its_own() {
+        let spark = crate::player2::SPARK;
+        assert_eq!(re2_ammo(spark), (0x1C, 100));
+        for (rounds, loaded) in [(1, false), (2, false), (3, true), (0xFF, true)] {
+            let mut game = GameState {
+                equipped_weapon_id: spark,
+                inventory: vec![InventoryItem {
+                    id: spark,
+                    quantity: rounds,
+                }],
+                ..Default::default()
+            };
+            let weapon = game.re2_weapon();
+            assert_eq!(weapon.loaded, loaded, "{rounds} rounds");
+            assert!(!weapon.spare, "no 0x1C, nothing to load");
+            game.inventory.push(InventoryItem {
+                id: 0x1C,
+                quantity: 150,
+            });
+            assert!(game.re2_weapon().spare);
         }
     }
 
