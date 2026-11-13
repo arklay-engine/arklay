@@ -16,6 +16,7 @@ const LINE_MASK: u16 = 0x80;
 const COLT: u8 = crate::player2::COLT;
 const BERETTA: u8 = crate::player2::BERETTA;
 const SMG: u8 = crate::player2::SMG;
+const GATLING: u8 = crate::player2::GATLING;
 const SPARK: u8 = crate::player2::SPARK;
 /// `Type`'s bits for out of reach, and for someone only aimed at if nobody else is.
 const TYPE_UNTARGETED: u16 = 0xC000;
@@ -272,10 +273,33 @@ const SPARK_RECORDS: [Record; 3] = [
     record([0x10, 0, 0], [[200, 0, 3500, 500], [0; 4], [0; 4]]),
 ];
 
+/// The gatling gun's (`0x539D68`). `pl_mv05_w5_t2` only ever looks with
+/// the level's, one long rectangle of 7500.
+const GATLING_RECORDS: [Record; 3] = [
+    record(
+        REACH[0],
+        [
+            [100, 0, 1000, 500],
+            [4100, 0, 1000, 625],
+            [8100, 0, 2500, 625],
+        ],
+    ),
+    record([0x8, 0x4, 0x10], [[200, 0, 7500, 500]; 3]),
+    record(
+        REACH[2],
+        [
+            [100, 0, 1000, 375],
+            [4100, 0, 1000, 500],
+            [8200, 0, 2500, 625],
+        ],
+    ),
+];
+
 /// What a weapon's shot is: its rectangles, and what it does to a zombie.
 fn shot_records(weapon: u8) -> Option<&'static [Record; 3]> {
     let records = match weapon {
         SPARK => &SPARK_RECORDS,
+        GATLING => &GATLING_RECORDS,
         // The Colt's, the sub-machine gun's and the Beretta's entries point at
         // the handguns' records.
         2..=4 | COLT | SMG | BERETTA => &HANDGUN,
@@ -295,6 +319,7 @@ fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
     let weapon = match (id, weapon) {
         (G1_ID, COLT) => return Some(&G1_COLT),
         (_, SMG) => return smg_damage(id),
+        (_, GATLING) => return gatling_damage(id),
         (_, SPARK) => return spark_damage(id),
         (_, COLT | BERETTA) => 2,
         _ => weapon,
@@ -560,6 +585,88 @@ fn smg_damage(id: u8) -> Option<&'static Damage> {
         ALLIGATOR_ID => &ALLIGATOR,
         IVY_ID | VINE_ID | POISON_IVY_ID => &PLANT,
         crate::zombie2::EMBRYO_ID => &EMBRYO,
+        crate::zombie2::ROACH_ID => &ROACH,
+        crate::zombie2::EM2D_ID => &EM2D,
+        // The zombies' two tables (`0x535350`, `0x5354D0`) share the row.
+        _ => &ZOMBIE,
+    })
+}
+
+/// `Wp_dmg_tbl`'s gatling gun rows (each table's eighteenth).
+fn gatling_damage(id: u8) -> Option<&'static Damage> {
+    const fn row(damage: u32, stun: u32, heights: [i32; 6]) -> Damage {
+        Damage {
+            damage,
+            stun,
+            heights,
+        }
+    }
+    const LICKER_HEIGHTS: [i32; 6] = [-5000, -2000, -3500, 500, -500, 2000];
+    const ZOMBIE: Damage = row(0x0080_2008, 0x0102_040A, SHOTGUN_HEIGHTS);
+    const LICKER: Damage = row(0x0140_5014, 0x0285_0A0A, LICKER_HEIGHTS);
+    const DOG: Damage = row(
+        0x0120_4812,
+        0x0183_060A,
+        [-5000, 50, -2000, 2000, -500, 3000],
+    );
+    const CROW: Damage = row(
+        0x01E0_781E,
+        0x078F_1E0A,
+        [-6000, -3000, -4000, -500, -500, 3000],
+    );
+    const MRX: Damage = row(
+        0x0180_6018,
+        0x0489_120A,
+        [-3200, 100, -1000, 1600, -1000, 2600],
+    );
+    const G1: Damage = row(0x0100_4010, 0x0285_0A0A, SHOTGUN_HEIGHTS);
+    const G2: Damage = row(
+        0x0120_4812,
+        0x0285_0A0A,
+        [-5000, 500, -6000, 2000, -500, 3000],
+    );
+    const G3: Damage = row(0x0140_5014, 0x0387_0E0A, SHOTGUN_HEIGHTS);
+    // The spider's row has -5000 where its sub-machine gun row has -7000.
+    const SPIDER: Damage = row(
+        0x0120_4812,
+        0x0285_0A0A,
+        [-5000, -2000, -4200, 500, -500, 2000],
+    );
+    const ALLIGATOR: Damage = row(0x0120_4812, 0x050A_140A, SHOTGUN_HEIGHTS);
+    const PLANT: Damage = row(
+        0x00A0_280A,
+        0x0306_0C0A,
+        [-3000, 500, -3000, 2000, -500, 3000],
+    );
+    const EMBRYO: Damage = row(
+        0x0110_4411,
+        0x0285_0A0A,
+        [-5000, -2000, -3000, 2000, -500, 3000],
+    );
+    const EM28: Damage = row(0x0110_4411, 0x0285_0A0A, SHOTGUN_HEIGHTS);
+    const ROACH: Damage = row(
+        0x0070_1C07,
+        0x0081_020A,
+        [-4000, -2800, -3100, -1200, -1200, 100],
+    );
+    const EM2D: Damage = row(
+        0x00E0_380E,
+        0x0081_020A,
+        [-3000, -2000, -3000, 2000, -500, 3000],
+    );
+    Some(match id {
+        LICKER_ID | LICKER_24_ID => &LICKER,
+        DOG_ID => &DOG,
+        CROW_ID => &CROW,
+        MRX_ID => &MRX,
+        G1_ID => &G1,
+        G2_ID => &G2,
+        G3_ID => &G3,
+        SPIDER_ID | YOUNG_ID => &SPIDER,
+        ALLIGATOR_ID => &ALLIGATOR,
+        IVY_ID | VINE_ID | POISON_IVY_ID => &PLANT,
+        crate::zombie2::EMBRYO_ID => &EMBRYO,
+        0x28 => &EM28,
         crate::zombie2::ROACH_ID => &ROACH,
         crate::zombie2::EM2D_ID => &EM2D,
         // The zombies' two tables (`0x535350`, `0x5354D0`) share the row.
@@ -2076,5 +2183,80 @@ mod tests {
         assert!(hits(7, 1500));
         // The rest aren't ported.
         assert!(!hits(9, 0));
+    }
+
+    /// `Wp_dmg_tbl`'s row 0x12 (weapon 0x12 less one, at `+0x154` of each
+    /// body's table) as the executable has it: the damage word, the stun
+    /// word and six heights, little-endian. Each id arklay ports reads its own.
+    #[test]
+    fn the_gatling_guns_damage_is_the_executables_row() {
+        const ROWS: [(u8, &str); 23] = [
+            (0x10, "082080000a04020178ecf40148f4d0070cfeb80b"),
+            (0x15, "082080000a04020178ecf40148f4d0070cfeb80b"),
+            (0x1F, "082080000a04020178ecf40148f4d0070cfeb80b"),
+            (0x20, "124820010a06830178ec320030f8d0070cfeb80b"),
+            (0x21, "1e78e0010a1e8f0790e848f460f00cfe0cfeb80b"),
+            (0x22, "145040010a0a850278ec30f854f2f4010cfed007"),
+            (0x23, "124820010a140a0578ecf40148f4d0070cfeb80b"),
+            (0x24, "145040010a0a850278ec30f854f2f4010cfed007"),
+            (0x25, "124820010a0a850278ec30f898eff4010cfed007"),
+            (0x26, "124820010a0a850278ec30f898eff4010cfed007"),
+            (0x27, "114410010a0a850278ec30f848f4d0070cfeb80b"),
+            (0x28, "114410010a0a850278ecf40148f4d0070cfeb80b"),
+            (0x29, "071c70000a02810060f010f5e4f350fb50fb6400"),
+            (0x2A, "186080010a12890480f3640018fc400618fc280a"),
+            (0x2D, "0e38e0000a02810048f430f848f4d0070cfeb80b"),
+            (0x2E, "0a28a0000a0c060348f4f40148f4d0070cfeb80b"),
+            (0x2F, "0a28a0000a0c060348f4f40148f4d0070cfeb80b"),
+            (0x30, "104000010a0a850278ecf40148f4d0070cfeb80b"),
+            (0x31, "124820010a0a850278ecf40190e8d0070cfeb80b"),
+            (0x33, "145040010a0e870378ecf40148f4d0070cfeb80b"),
+            (0x39, "0a28a0000a0c060348f4f40148f4d0070cfeb80b"),
+            (0x17, "082080000a04020178ecf40148f4d0070cfeb80b"),
+            (0x1C, "082080000a04020178ecf40148f4d0070cfeb80b"),
+        ];
+        for (id, hex) in ROWS {
+            let bytes: Vec<u8> = (0..hex.len())
+                .step_by(2)
+                .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).unwrap())
+                .collect();
+            let word = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
+            let height =
+                |n: usize| i32::from(i16::from_le_bytes([bytes[8 + n * 2], bytes[9 + n * 2]]));
+            let row = gatling_damage(id).unwrap();
+            assert_eq!(row.damage, word(0), "id {id:#x}'s damage");
+            assert_eq!(row.stun, word(4), "id {id:#x}'s stun");
+            assert_eq!(
+                row.heights,
+                std::array::from_fn(height),
+                "id {id:#x}'s heights"
+            );
+            assert_eq!(damage_table(id, GATLING).unwrap().damage, word(0));
+        }
+    }
+
+    /// `At_tbl_top`'s gatling records (`0x539D68`) as the executable has them:
+    /// three levels of 28 bytes, a byte, the three reaches and three
+    /// rectangles of four shorts each.
+    #[test]
+    fn the_gatling_guns_records_are_the_executables() {
+        const BYTES: &str = concat!(
+            "0004020164000000e803f40104100000e8037102a41f0000c4097102",
+            "00080410c80000004c1df401c80000004c1df401c80000004c1df401",
+            "0010204064000000e803770104100000e803f40108200000c4097102",
+        );
+        let bytes: Vec<u8> = (0..BYTES.len())
+            .step_by(2)
+            .map(|at| u8::from_str_radix(&BYTES[at..at + 2], 16).unwrap())
+            .collect();
+        let records = shot_records(GATLING).unwrap();
+        for (level, record) in records.iter().enumerate() {
+            let at = &bytes[level * 28..level * 28 + 28];
+            assert_eq!(record.reach, [at[1], at[2], at[3]], "level {level}'s reach");
+            let short = |n: usize| i16::from_le_bytes([at[4 + n * 2], at[5 + n * 2]]);
+            let rects: [[i16; 4]; 3] =
+                std::array::from_fn(|rect| std::array::from_fn(|n| short(rect * 4 + n)));
+            assert_eq!(record.rects, rects, "level {level}'s rectangles");
+        }
     }
 }

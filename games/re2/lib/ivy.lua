@@ -15,7 +15,7 @@
 --
 -- State 5's spit is `Esp_call` kind 0x1D, whose `Esp_20` hits and poisons
 -- the player (`esp2.rs`). A hit (`Routine_0` 2) and the death (3, then 7)
--- are ported for the weapons arklay fires, 2 to 8, 0xD to 0x10 and 0x13,
+-- are ported for the weapons arklay fires, 2 to 8 and 0xD to 0x13,
 -- with `censorship_off` and `hard_mode` clear, and so is the retreat at half
 -- its life (state 7). Only
 -- the player as the target is ported (`FUN_004881c0` can pick the partner
@@ -950,6 +950,8 @@ local HURTS <const> = {
     [0xE] = spark, -- `0x529efc`: the spark shot's.
     [0xF] = bleed, -- `0x529f00`: the SMG's, 4's.
     [0x10] = scorch, -- `0x529f04`: the flamethrower's.
+    [0x11] = flinch, -- `0x529f08`: the rocket launcher's, the Beretta's.
+    [0x12] = bleed, -- `0x529f0c`: the gatling gun's, 4's (`caseD_5` adds its row 1).
     [0x13] = flinch, -- `0x529f10`: the Beretta's, the table's last, 0x11's.
 }
 
@@ -1131,6 +1133,8 @@ local DIES <const> = {
     [0xE] = die_sparks, -- `0x529fa4`: the spark shot's.
     [0xF] = die_plain, -- `0x529fa8`: the SMG's, the handguns'.
     [0x10] = die_burnt, -- `0x529fac`: the flamethrower's, 0xa's.
+    [0x11] = die_torn, -- `0x529fb0`: the rocket launcher's, the Beretta's.
+    [0x12] = die_plain, -- `0x529fb4`: the gatling gun's, the handguns'.
     [0x13] = die_torn, -- `0x529fb8`: the Beretta's, the table's last, 0x11's.
 }
 

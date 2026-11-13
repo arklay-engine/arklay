@@ -115,8 +115,8 @@ cargo run -- convert-game /path/to/steam/4249100_Biohazard --out re1.akpak
 # route to the Spade Key, apart from the differences in
 # docs/internals/deviations/re2.md. Both characters fire the knife and weapons 2
 # to 8 and the grenade launcher, bowgun, Colt S.A.A., spark shot, Beretta,
-# sub-machine gun, flamethrower and rocket launcher (weapons 9 to 0x11 and
-# 0x13); the gatling gun is still to come (issue #491). Zombies,
+# sub-machine gun, flamethrower, rocket launcher and gatling gun (weapons 9 to
+# 0x13). Zombies,
 # lickers, dogs, crows, Mr. X, the plants, the spiders, the cockroaches (in part),
 # room 205's bodies and the alligator are ported; the G forms are part way (G1,
 # G2 and G3 are done, and the G embryo walks and jumps but does not yet latch on)

@@ -1,0 +1,28 @@
+# The gatling gun (0x12), #491 slice 7: `pl_mv05_w5`'s shot (`pl_mv05_w5_t2`), which spins up, fires for as long as the
+# trigger is held (`Weapon_at_ck` on two ticks in three, `pl_w12_t2_move`'s flash, smoke and cases) and spins down, and
+# never spends a round (oracle/re2.md, "Weapons"). As Leon, from bowgun_118's start, EQUIPping it through the status screen.
+
+[[run]]
+name = "gatling_equip_118"
+room = "118"
+ticks = 1400
+# run_119's start with the gatling gun in slot 2: EQUIP it, aim at the zombies and fire bursts, turning in one, and lower while firing
+setup_script = "gatling_equip_118.lua"
+input = "gatling_equip_118.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,inv,snd,zm0,zm1,zm2,zm3,zm4,zm5,fgstat"
+frames = [360, 1399]
+expect = "match"
+record = "--warp 118:-24617:0:-24996:1024 --life 200 --give 2:0x12:100"
+
+[[run]]
+name = "esp_gatling_equip_118"
+ref = "gatling_equip_118"
+room = "118"
+ticks = 1400
+setup_script = "gatling_equip_118.lua"
+input = "gatling_equip_118.txt"
+input_shift = 344
+fields = "esp"
+expect = "match"
+record = "--warp 118:-24617:0:-24996:1024 --life 200 --give 2:0x12:100"
