@@ -537,7 +537,7 @@ pub fn map_view(
 /// in the B scenario floor 6's record 8 takes Leon's rectangle and the B
 /// column's bits of floor 6's records 0, 1, 2 and 9 and floor 5's 1, 9 and
 /// 10 are cleared. The extra modes' changes aren't ported.
-fn patched(floor: u8, index: usize, record: &MapRoom, context: &MapContext) -> MapRoom {
+pub(super) fn patched(floor: u8, index: usize, record: &MapRoom, context: &MapContext) -> MapRoom {
     let mut record = *record;
     let scenario_b = context.status & 0x4000_0000 != 0;
     let claire = context.status & 0x8000_0000 != 0;
