@@ -17,8 +17,12 @@
 -- and `Sca_ck_em` with `0x400`, and finds `Ground` under the body before
 -- `update`.
 --
--- Not ported: `Type` 1 and 2 and states 3, 4 and 6 (they stand hidden), the
--- hits (`em_damage_table`'s 0x476c60, `em_die_table`'s 0x476ed0),
+-- The player's side of the latch is `em_damage_table[0x27]` (0x476c60,
+-- `player2::em27_held`), which the init points at; `em_die_table`'s 0x476ed0
+-- isn't reached.
+--
+-- Not ported: `Type` 1 and 2 and states 3 and 6 (they stand hidden), the
+-- shot's hits,
 -- `Routine_0` 3's `Routine_1` 0x13, and the parts'
 -- squash and colours as drawn (only their counts are kept, in vars).
 
@@ -26,6 +30,13 @@ local HISTORY <const> = 0 -- 0 to 5: `+0x218, +0x21a, +0x21c, +0x21e, +0x224, +0
 local RGB <const> = 6 -- The parts' `Poly_rgb` (all ten alike).
 local SIZE_Y <const> = 7 -- The parts' `Size_y` (all ten alike), from the squash on.
 local GROUND <const> = 30 -- `Ground`, which the engine finds under it before the tick.
+local AROUND <const> = 8 -- `+0x228`: the latch's turn about the player, from their facing.
+local STRUGGLE <const> = 9 -- `+0x22a`: what the player's presses have left to shake it off.
+local DIE_AFTER <const> = 10 -- `+0x22c`'s bit 0: its life ran out on the bite, so it dies once off.
+local SIZE <const> = 11 -- `Size`, from the way in on.
+
+-- `abStack_c`: the latch's sounds, by `Rnd & 3`.
+local CHEW_SOUNDS <const> = { [0] = 0, 8, 10, 11 }
 
 -- The parts' `Poly_rgb` as the model loads.
 local RGB_LOADED <const> = 0x808080
@@ -255,6 +266,346 @@ local function jump(e)
     end
 end
 
+-- `FUN_00476720`: on the circle of `radius` about `x, z`, at `angle`.
+local function place_about(e, x, z, radius, angle)
+    local dx, _, dz = e:rot_apply(0, i16(angle), 0, radius, 0, 0)
+    local _, y = e:pos()
+    e:set_pos(x + dx, y, z + dz)
+end
+
+-- `FUN_00476720` about the player, at its turn from their facing.
+local function place_round_player(e, radius)
+    local px, _, pz = e:player_pos()
+    place_about(e, px, pz, radius, e:var(AROUND) + e:player_angle())
+end
+
+-- `FUN_00476720` about the player's part 8 (the head), as `+0x5bc` and
+-- `+0x5c4` hold it.
+local function place_round_head(e, radius)
+    local hx, _, hz = e:player_part_point(8, 0, 0, 0)
+    if hx == nil then
+        hx, _, hz = e:player_pos()
+    end
+    place_about(e, hx, hz, radius, e:var(AROUND) + e:player_angle())
+end
+
+-- The `Workm.t.y` of the player's part `part`, as the last tick left it.
+local function player_part_y(e, part)
+    local _, y = e:player_part_point(part, 0, 0, 0)
+    if y == nil then
+        _, y = e:player_pos()
+    end
+    return y
+end
+
+-- `|value|` as the latch compares it: an `int`'s, as a `ushort`.
+local function abs16(value)
+    if value < 0 then
+        value = -value
+    end
+    return value & 0xFFFF
+end
+
+-- Blood (`Esp_call` row `row`) at its part 3, `(100, 200, 0)` on: a `Rnd`
+-- for the way, one for the size.
+local function blood(e, row, base)
+    local dir = i16(e:angle() - e:rnd() * 4 + 0xA00)
+    local size = e:rnd() * 2 + base
+    e:effect(0, row, size, dir, 3, 100, 200, 0)
+end
+
+-- The end of states 3, 5 and 6 (`LAB_0047568d`): the player's presses
+-- (`FUN_00475d70`: 1 for a press, 3 more for `0x989eee`'s 2) shake it off.
+local function struggle(e)
+    local presses = (e:gacha() and 1 or 0) + ((e:noise() & 2) ~= 0 and 3 or 0)
+    local left = i16(e:var(STRUGGLE) - presses * 0x10)
+    e:set_var(STRUGGLE, left & 0xFFFF)
+    if left < 0 then
+        e:set_angle((e:angle() + 0x800) & 0xFFFF)
+        e:set_routine(2, 9)
+    end
+end
+
+-- The player's `Routine_0` to 3 as `[5, 0, sub]` with `Routine_3` kept, and
+-- this one's hold and `pSub1` clips on them.
+local function take_hold(e, sub)
+    e:pl_set_routine(5, 0, sub, e:pl_routine(3))
+    e:pl_hold()
+    e:pl_set_sub1()
+end
+
+-- `FUN_00475280`: the latch onto the player. It climbs to the hips (1),
+-- winds round them (3), holds on (5, where the player is caught), climbs to
+-- the head (6) and bites (7 and 8), then jumps off (9) and falls to the
+-- crawl (10); presses shake it off from 3 to 6. A bite that kills goes in
+-- (11 to 13). `fg_system`'s `0x100` (set by that bite) and `Size` and the
+-- parts it hides are drawing only.
+local function latch(e)
+    if e:routine(2) < 9 then
+        if e:room_enemy() & 1 ~= 0 or e:pl_damage_cnt() & 0x80 ~= 0 then
+            e:set_routine(2, 9)
+        end
+    end
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:clip(7, 0, 3)
+        e:set_routine(2, 1)
+        e:set_var(AROUND, (e:direction_from_player() - e:player_angle()) & 0xFFF)
+        e:set_timer(0, ((e:rnd() & 1) * -0x80 + 0x40) & 0xFFFF)
+        local draw = e:rnd()
+        e:set_var(DIE_AFTER, 0)
+        e:set_var(STRUGGLE, (draw & 0x3F) + 0x186)
+        e:set_damage_cnt(e:damage_cnt() | 0x80)
+        sub = 1
+    end
+    if sub == 1 then
+        e:joint(0x200)
+        place_round_player(e, 300)
+        e:set_var(AROUND, (e:var(AROUND) + e:timer(0)) & 0xFFFF)
+        goto_player(e, 0x400)
+        local _, y = e:pos()
+        y = y - 0x96
+        e:set_pos_y(y)
+        if abs16(player_part_y(e, 0) - y + 300) < 300 then
+            e:set_routine(2, 2)
+        end
+        return
+    end
+    if sub == 2 then
+        e:set_routine(2, 3)
+        local draw = e:rnd()
+        e:set_timer(1, 4)
+        e:set_timer(2, 7)
+        e:set_timer(0, (draw & 0x1F) + 0x3C)
+        e:set_timer(3, 8)
+        sub = 3
+    end
+    if sub == 3 then
+        e:joint(0x200)
+        place_round_player(e, 300)
+        goto_player(e, 0x400)
+        local t = e:timer(0)
+        e:set_timer(0, (t - 1) & 0xFFFF)
+        if t == 0 then
+            e:set_routine(2, 4)
+        end
+        local step = e:timer(3)
+        local _, y = e:pos()
+        e:set_pos_y(y - 3)
+        local turn = e:timer(1)
+        e:set_var(AROUND, (e:var(AROUND) + turn) & 0xFFFF)
+        local left = e:timer(2)
+        e:set_timer(1, (i8(step) + turn) & 0xFFFF)
+        e:set_timer(2, (left - 1) & 0xFF)
+        if left == 0 then
+            e:set_timer(2, 0xF)
+            e:set_timer(3, (-step) & 0xFF)
+        end
+        struggle(e)
+        return
+    end
+    if sub == 4 then
+        local draw = e:rnd()
+        e:set_routine(2, 5)
+        e:set_timer(0, (draw & 0xF) + 0xF)
+        if e:rnd() & 1 ~= 0 then
+            e:sound(1)
+        end
+        e:set_timer(3, 0)
+        sub = 5
+    end
+    if sub == 5 then
+        e:joint(0x200)
+        local t = e:timer(0)
+        e:set_timer(0, (t - 1) & 0xFFFF)
+        if t == 0 then
+            if e:pl_routine(0) ~= 5 then
+                e:pl_set_routine(5, 0, 0, e:pl_routine(3))
+            end
+            e:pl_hold()
+            e:pl_set_sub1()
+            e:set_timer(3, 0x84)
+        end
+        local hold = e:timer(3) & 0xFF
+        if hold >= 0x80 then
+            hold = (hold - 1) & 0xFF
+            e:set_timer(3, hold)
+            if hold & 0x7F == 0 then
+                e:set_routine(2, 6)
+            end
+        end
+        place_round_player(e, 300)
+        goto_player(e, 0x400)
+        struggle(e)
+        return
+    end
+    if sub == 6 then
+        e:set_timer(1, 0x140)
+        local from = (0x340 - e:var(AROUND)) & 0xFFF
+        if from < 0x280 then
+            e:set_timer(1, 0)
+            e:set_var(AROUND, 0x200)
+        end
+        local turn = e:timer(1)
+        local around = e:var(AROUND) - turn
+        if from < 0x801 then
+            around = around + turn * 2
+        end
+        e:set_var(AROUND, around & 0xFFFF)
+        local _, y = e:pos()
+        y = y - 200
+        e:set_pos_y(y)
+        if abs16(player_part_y(e, 8) - y) < 200 then
+            e:set_routine(2, 7)
+        end
+        place_round_player(e, 300)
+        goto_player(e, 0x400)
+        struggle(e)
+        return
+    end
+    if sub == 7 then
+        e:clip(8, 0, 7)
+        e:set_routine(2, 8)
+        local draw = e:rnd()
+        e:set_life(e:life() - 1)
+        e:set_timer(0, (draw & 0xF) + 0x2D)
+        if e:life() < 0 then
+            e:set_var(DIE_AFTER, 1)
+        end
+        if e:pl_life_down(10, false) == 2 then
+            e:set_routine(2, 0xB)
+            e:pl_set_damage_cnt(e:pl_damage_cnt() | 0x80)
+            return
+        end
+        sub = 8
+    end
+    if sub == 8 then
+        e:joint(0x200)
+        place_round_head(e, 0x15E)
+        goto_player(e, 0x400)
+        local t = e:timer(0)
+        local left = (t - 1) & 0xFFFF
+        e:set_timer(0, left)
+        if t == 0 then
+            e:set_angle((e:angle() + 0x800) & 0xFFFF)
+            e:set_routine(2, 9)
+        end
+        if left & 3 == 0 and i16(left) > 10 then
+            blood(e, 1, 0x5F4)
+        end
+        if left & 7 == 0 then
+            e:sound(CHEW_SOUNDS[e:rnd() & 3])
+        end
+        return
+    end
+    if sub == 9 then
+        e:set_speed(0x78, 100, 0)
+        e:set_timer(0, 0)
+        e:set_routine(2, 10)
+        e:clip(3, 0, 0)
+        local draw = e:rnd()
+        e:set_angle((e:angle() - draw * 2 + 0x900) & 0xFFFF)
+        if e:var(DIE_AFTER) & 1 ~= 0 then
+            draw = e:rnd()
+            e:set_speed(200, 300, 0)
+            e:set_angle((e:player_angle() - draw * 2 - 0x100) & 0xFFFF)
+        end
+        if e:pl_damage_cnt() & 0x80 == 0 then
+            if e:pl_routine(0) == 5 then
+                e:pl_set_routine_at(2, 2)
+            else
+                take_hold(e, 2)
+            end
+        end
+        e:set_room_enemy(e:room_enemy() | 1)
+        e:set_damage_cnt(e:damage_cnt() & 0x7F)
+        sub = 10
+    end
+    if sub == 10 then
+        if e:move_cnt() == 1 then
+            e:set_room_enemy(e:room_enemy() & 0xFE)
+        end
+        e:joint(0x200)
+        e:add_speed_xyz()
+        local t = e:timer(0)
+        local sx, sy, sz = e:speed()
+        e:set_speed(sx, i16(sy + t * 0xF), sz)
+        e:set_timer(0, (t + 1) & 0xFFFF)
+        local ground = i16(e:var(GROUND))
+        local _, y = e:pos()
+        if ground < y then
+            e:set_pos_y(ground)
+            e:routines(1, 1, 0, 0)
+            if e:var(DIE_AFTER) & 1 ~= 0 then
+                e:routines(3, 1, 0, 0)
+                e:set_damage_no(0)
+            end
+        end
+        return
+    end
+    if sub == 0xB then
+        e:clip(0xF, 0, 0xF)
+        e:set_routine(2, 0xC)
+        e:set_timer(0, 0x78)
+        e:set_timer(1, 0xFA)
+        e:set_player_life(-1)
+        e:pl_set_damage_cnt(e:pl_damage_cnt() | 0x80)
+        e:pl_set_routine_at(2, 4)
+        local _, y = e:pos()
+        e:set_pos_y(y - 100)
+        e:hide_part(2)
+        e:hide_part(3)
+        e:set_var(SIZE, 0x1000)
+        e:set_be_flg(e:be_flg() | 0x800)
+        sub = 0xC
+    end
+    if sub == 0xC then
+        e:set_var(SIZE, (e:var(SIZE) - 0xF) & 0xFFFF)
+        e:joint(0x100)
+        place_round_head(e, i16(e:timer(1)))
+        goto_player(e, 0x400)
+        local t = e:timer(0)
+        local left = (t - 1) & 0xFFFF
+        e:set_timer(0, left)
+        if t == 0 then
+            e:set_routine(2, 0xD)
+        end
+        if left & 3 == 0 then
+            blood(e, 1, 0xDC4)
+            blood(e, 1, 0x5F4)
+            blood(e, 1, 0x5F4)
+            if i16(left) < 0x1E then
+                blood(e, 3, 0x9DC)
+            end
+        end
+        if left & 7 == 0 then
+            e:sound(CHEW_SOUNDS[e:rnd() & 3])
+        end
+        if left == 0x3C then
+            e:pl_set_routine_at(2, 6)
+            e:hide_part(1)
+            e:sound(4)
+        end
+        if i16(left) < 0x3C then
+            e:set_timer(1, (e:timer(1) - 2) & 0xFFFF)
+            local _, y = e:pos()
+            e:set_pos_y(y + 5)
+        end
+        if left == 5 then
+            e:effect(0, 1, 0x1F40, i16(e:angle() + 0x800), 3, 100, 200, 0)
+            for part = 0, 9 do
+                e:hide_part(part)
+            end
+            e:sound(4)
+        end
+        return
+    end
+    if sub == 0xD then
+        e:set_routine(2, 0xE)
+        e:pl_set_routine(5, 0, 8, 0)
+    end
+end
+
 -- `FUN_00475da0`: the slide to a stop, a look at the player, then a turn
 -- away and back to the crawl.
 local function slide(e)
@@ -376,8 +727,8 @@ local function rest(e)
     end
 end
 
--- `funcs_528938`, by `Routine_1` (3, 4 and 6 aren't ported).
-local STATES <const> = { [1] = crawl, [2] = jump, [5] = slide, [7] = rest }
+-- `funcs_528938`, by `Routine_1` (3 and 6 aren't ported).
+local STATES <const> = { [1] = crawl, [2] = jump, [4] = latch, [5] = slide, [7] = rest }
 
 -- `FUN_00474660`: the pre, then the state of `Routine_1` as the pre left it.
 local function move(e)
