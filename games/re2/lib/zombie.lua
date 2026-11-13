@@ -2328,11 +2328,13 @@ local function look_flat(e)
     end
 end
 
--- `FUN_00454650`.
+-- `FUN_00454650`. It writes `Move_no` as a word, which clears `Move_cnt`
+-- and `Hokan` too (room 20B's slot 3, lying since its load, on the player's
+-- first tick there).
 local function mv_flat(e)
     if e:routine(2) == 0 then
         e:set_routine(2, 1)
-        e:set_move_no(0x17)
+        e:clip(0x17, 0, 0)
     end
 end
 

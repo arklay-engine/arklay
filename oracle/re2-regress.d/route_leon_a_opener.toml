@@ -1,0 +1,25 @@
+# Leon A's route from the Heart Key (202) through the Heart Key door to the basement and Ben's cell (301), where the Manhole Opener lies, room by room from warps (oracle/re2.md, "Leon A to the Manhole Opener", #656), each warp starting Leon as the run before leaves him, the first as route_200_heart leaves him
+
+# Rooms 200, 110, 10F, 10A, 109, 116, 20B and 20F: from 202's door 0 on the hall's upper floor up the ladder to 110 (the hall's south walkway, with door 3 to 20A, is reached only from 103 and 20A), east and south round 110 to door 0, across 10F and 10A, 109's door 2 unlocked from this side, 116's fire escape (two flights taken with the action key, and its three green herbs, each taken and used at once from the inventory, 14 to 164 life), 20B up its east side to the Heart Key door, and 20F round to door 1, into 211
+[[run]]
+name = "leon_a_200_211"
+room = "200"
+setup_script = "leon_a_200_211.lua"
+input = "leon_a_200_211.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 7400
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 7399]
+# 1.13 measured: the doors' frames count only in the whole run's mean (211's load is about 21 at worst, on 7103)
+frame_max_mean = 1.2
+# each room on its own, from its hand back to its door's press: 200 (the ladder's question), 110, 10F, 10A, 109, 116 (the fire escape and the herbs' inventory screens), 20B (the Heart Key's message), 20F, and 211 from its hand back
+frame_windows = [[360, 683, 0.7], [1057, 1910, 0.25], [2264, 2389, 0.3], [2733, 2854, 0.8], [3198, 3449, 0.25], [3793, 5961, 0.65], [6290, 6494, 0.3], [6836, 7053, 0.3], [7261, 7399, 0.25]]
+expect = "match"
+ignore = [
+  # the warp's head on its first ticks (oracle/re2.md), and the doors' own ticks: the tick after the last press of 200's ladder question, whose Yes opens the ladder's door (`aot_on(17)`), 110's door 0, 10F's door 0, 10A's door 0, 109's door 2, 116's door 0, 20B's Heart Key door and 20F's door 1
+  [344, 352, "pneck"], [684, "rng"], [684, "rseed"], [1911, "rng"], [1911, "rseed"], [2390, "rng"], [2390, "rseed"], [2855, "rng"], [2855, "rseed"], [3450, "rng"], [3450, "rseed"], [5962, "rng"], [5962, "rseed"], [6495, "rng"], [6495, "rseed"], [7054, "rng"], [7054, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [719, 811, "hk"], [1946, 2036, "hk"], [2425, 2515, "hk"], [2890, 2980, "hk"], [3485, 3575, "hk"], [5997, 6089, "hk"], [6530, 6620, "hk"], [7089, 7179, "hk"],
+]
+record = "--warp 200:-22894:-1800:-3071:200:4 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:17 --flag 31:27 --life 14 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x5B:1"

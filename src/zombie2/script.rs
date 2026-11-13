@@ -2651,6 +2651,35 @@ mod tests {
         assert_ne!(chase([0, 0x8C00 - 0x10000])[1], 0xA);
     }
 
+    /// `FUN_00454650`, a crawling zombie lying flat (routine 1, 2): its first
+    /// tick writes `Move_no` 0x17 as a word, so `Move_cnt` and `Hokan` go to
+    /// 0 with it (`leon_a_200_211`, room 20B's slot 3 on 6288).
+    #[test]
+    fn a_flat_crawlers_first_tick_starts_its_clip_from_0() {
+        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        let library = include_str!("../../games/re2/lib/zombie.lua");
+        lua.load(format!(
+            "local w = {{ r = {{ [0] = 1, 2, 0, 0 }}, clip = {{ 0x17, 1, 3 }} }}
+             local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+             function e:routine(i) return w.r[i] end
+             function e:set_routine(i, v) w.r[i] = v end
+             function e:routines(a, b, c, d) w.r = {{ [0] = a, b, c, d }} end
+             function e:kind() return 0x2001 end
+             function e:in_sight() return false end
+             function e:clip(no, count, hokan) w.clip = {{ no, count, hokan }} end
+             function e:set_move_no(no) w.clip[1] = no end
+             local zombie = (function() {library} end)()
+             zombie.run(e, {{}})
+             CLIP = w.clip
+             STEP = w.r[2]"
+        ))
+        .exec()
+        .unwrap();
+        let clip: Vec<i64> = lua.globals().get("CLIP").unwrap();
+        let step: i64 = lua.globals().get("STEP").unwrap();
+        assert_eq!((clip, step), (vec![0x17, 0, 0], 1));
+    }
+
     /// `Em10Dm01`'s blood on its even ticks: on part 0, with the zombie's
     /// speed (`&Spd_x`) as its vector, after a staggered zombie's drop of 500.
     #[test]
