@@ -10113,6 +10113,13 @@ impl TweenFields {
 }
 
 /// Build the generic action parameter block: handler, flags and three words.
+/// Whether a room action entry's +2 word (bytes 2..4 of its params) is
+/// nonzero: the gate `set_key_flag`/`set_room_event_flag` test to route the
+/// press through the 0x0c reach animation.
+fn params_reach_gate(params: &[u8; 8]) -> bool {
+    params[2] != 0 || params[3] != 0
+}
+
 fn action_params(handler: u8, flags: u8, operands: &[Operand], word_start: usize) -> [u8; 8] {
     let mut params = [0u8; 8];
     params[0] = handler;
@@ -10423,7 +10430,8 @@ impl ScdHost for ScdGameHost<'_> {
                     params,
                     item_data: None,
                     room_items_flag: 0xFF,
-                    reach_animation: false,
+                    // The first data word is the entry's +2 gating word.
+                    reach_animation: params_reach_gate(&params),
                 };
                 self.store_action(action);
                 StepResult::Continue
@@ -10452,6 +10460,10 @@ impl ScdHost for ScdGameHost<'_> {
                     action.flags = flags;
                     action.kind = RoomActionKind::from_sce(handler);
                     action.params = action_params(handler, flags, operands, 3);
+                    // The rewrite includes the +2 gating word, so a reset
+                    // can drop (or add) an item's reach animation: room
+                    // 10D's statue items reset it to 0 once the statue turns.
+                    action.reach_animation = params_reach_gate(&action.params);
                 }
                 StepResult::Continue
             }
@@ -15327,6 +15339,37 @@ mod tests {
             );
         }
         assert!(!state.room_actions[1].unwrap().reach_animation);
+    }
+
+    #[test]
+    fn aot_reset_rewrites_the_reach_gate() {
+        // Room 10D: the statue's items are set with the reach gate, then
+        // reset to an item with a zero +2 word once the statue turns, so the
+        // original opens the viewer without the reach animation.
+        let room = RoomState {
+            item_count: 1,
+            ..RoomState::default()
+        };
+        let mut state = GameState::new(RoomId::parse("1000").unwrap(), &room);
+        state.apply_flag(7, 22, 0);
+        {
+            let mut host = ScdGameHost::new(&mut state);
+            host.on_item(
+                op(0x18),
+                &operands(&[
+                    1, 4140, 7730, 1800, 1800, 0x2F, 3, 0, 255, 5040, -910, 8630, 0, 22, 0x81, 1,
+                ]),
+            );
+            assert!(host.state().room_actions[1].unwrap().reach_animation);
+            host.on_room_action(op(0x12), &operands(&[1, 4, 0x81, 0, 1, 0]));
+            assert!(!host.state().room_actions[1].unwrap().reach_animation);
+            // A nonzero first word arms it again.
+            host.on_room_action(op(0x12), &operands(&[1, 4, 0x81, 1, 0, 0]));
+            assert!(host.state().room_actions[1].unwrap().reach_animation);
+            // `aot_set` writes the same word.
+            host.on_room_action(op(0x0D), &operands(&[2, 0, 0, 100, 100, 4, 0x81, 1, 0, 0]));
+            assert!(host.state().room_actions[2].unwrap().reach_animation);
+        }
     }
 
     #[test]
