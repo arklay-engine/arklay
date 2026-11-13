@@ -1,0 +1,100 @@
+# Claire A, 10A to 106 (#665 Part 3), as claire_a_114_10a leaves her at 10F's door's arrival, with 10A on fire: leon_a_10a_106b's presses, through 109 and 108 into 107 and on to 106, where the valve handle is (oracle/re2.md, "Claire A to the Diamond Key")
+# 10A from 10F's door: south to door 0, pressed facing east
+345 up run right
+370 up run
+378 up run right
+379 up run
+380 up run right
+381 up run left
+411
+413 right
+# door 0 into 109 (loads 453, back 758)
+418 action
+420
+# 109: east along the south side, north past the crows, west to door 0
+760 up run
+814 up run right
+815 up run
+817 up run right
+818 up run
+819 up run left
+840 up run
+885 up run left
+886 up run
+887 up run left
+888 up run right
+909 up run
+932 up run right
+933 up run
+958 up run right
+959 up run
+963 up run left
+983 up run
+1027 up run left
+1028 up run
+1031 up run left
+1057 up run right
+1071
+1073 left
+# door 0 into 108 (loads 1113, back 1420)
+1078 action
+1080
+1420 up run right
+# 108: north up the west corridor and east to area 11
+1433 up run
+1437 up run right
+1438 up run
+1442 up run left
+1444 up run
+1462 up run left
+1463 up run
+1486 up run left
+1487 up run
+1488 up run right
+1508 up run
+1531 up run right
+1532 up run
+1533 up run right
+1549
+1551 right
+# area 11: event 13 opens door 0 (aot_on) down the stairs into 107 (loads 1589); the run is held from 1791 so Claire moves on the first tick play answers
+1553 action
+1555
+# 107: one turn round east of the arrival, then up the east corridor and west along the north side past slots 1 and 0 (no hold), to door 0
+1791 up run left
+1798 up run
+1806 up run left
+1835 up run
+1873 up run right
+1878 up run
+1888 up run right
+1889 up run
+1902 up run left
+1904 up run
+1921 up run left
+1922 up run
+1938 up run left
+1939 up run
+1940 up run left
+1962 up run
+1974 up run left
+1975 up run
+1988 up run left
+1992 up run
+2007 up run left
+2008 up run
+2030 up run left
+2031 up run
+2034 up run right
+2041 up run
+2044 up run right
+2045 up run
+2058 up run right
+2060 up run
+2074
+2076 right
+2078
+# door 0 into 106 (loads 2120, back 2427)
+2085 action
+2087
+2445

@@ -94,3 +94,49 @@ ignore = [
   [385, 475, "hk"], [1810, 1900, "hk"], [2247, 2337, "hk"], [3055, 3145, "hk"], [3473, 3563, "hk"],
 ]
 record = "--start claire --warp 114:-14296:0:-26349:4086:0 --flag 3:100 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 4:255 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 119 --give 0:3:9 --give 2:0x14:22 --give 3:0x1E:3 --give 4:0x33:1"
+
+# Rooms 10A, 109, 108, 107 and 106: with 10A on fire (4:0 clear), the way round to the valve handle, past 109's crows, down 108's stairs (area 11's event) into 107 and round its zombies, into 106.
+[[run]]
+name = "claire_a_10a_106"
+room = "10A"
+player = 1
+character = 1
+setup_script = "claire_a_10a_106.lua"
+input = "claire_a_10a_106.txt"
+input_shift = 344
+input_drop_early = true
+voice_from_ref = true
+ticks = 2445
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 2444]
+expect = "match"
+ignore = [
+  # the doors' own ticks: 10A's door 0, 109's door 0, 108's stairs (area 11's event opens door 0) and 107's door 0
+  [418, "rng"], [418, "rseed"], [1078, "rng"], [1078, "rseed"], [1554, "rng"], [1554, "rseed"], [2085, "rng"], [2085, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [453, 543, "hk"], [1113, 1203, "hk"], [1589, 1679, "hk"], [2120, 2210, "hk"],
+]
+record = "--start claire --warp 10A:-25854:0:-19443:4016:1 --flag 3:100 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 4:255 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 119 --give 0:3:9 --give 2:0x14:22 --give 3:0x1E:3 --give 4:0x33:1"
+
+# Rooms 106, 107 and 108: the valve handle, back through 107 shooting slots 1, 2 and 3, and USE at 108's water tank, whose scene raises 4:0 and puts the fire out.
+[[run]]
+name = "claire_a_106_108"
+room = "106"
+player = 1
+character = 1
+setup_script = "claire_a_106_108.lua"
+input = "claire_a_106_108.txt"
+input_shift = 344
+input_drop_early = true
+voice_from_ref = true
+ticks = 3019
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 3018]
+expect = "match"
+ignore = [
+  # the doors' own ticks: 106's door 1 and 107's door 1
+  [740, "rng"], [740, "rseed"], [1785, "rng"], [1785, "rseed"],
+  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+  [775, 865, "hk"], [1820, 1910, "hk"],
+]
+record = "--start claire --warp 106:-17416:0:-559:1888:1 --flag 3:100 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 4:255 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 119 --give 0:3:9 --give 2:0x14:22 --give 3:0x1E:3 --give 4:0x33:1"
