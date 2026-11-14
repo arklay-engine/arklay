@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 115, the ceiling-trap room between 109 and 116. Chris's game: with
+     116's rack left bare (both rack item bits 7:00 and 7:01 clear) and the
+     trap not yet sprung (common 0x20 clear), the entry from 116 plays
+     ceiling_trap_no_rescue. It locks the door to 109 (lock 0x00 clear),
+     sets 0x20, clears the trap lock (bank 2 bit 0x02) and gives control
+     back for 500 frames while the ceiling comes down; then the player
+     dies. The door back to 116 (lock 0x01, set for Chris on every entry)
+     stays open, so the way out is the way in. From there 116 holds the
+     door back to 115 shut while 0x20 is set: its <interact> hangs the
+     shotgun back on the rack, which clears 0x20 and gives that door back,
+     and the next entry here finds a shotgun on the rack, no trap, sets the
+     trap lock again and unlocks the door to 109. The story flags are then
+     as they were on the first entry, so only the revisit brings the bot
+     back in: the trap lock is clear from the trap to that entry, and the
+     rack's item bit 0x00 is set again only by the put-back (the bot was
+     in here with the lock clear while it escaped). -->
+<bot format="2">
+  <leave slot="1" bank="1" bit="0x20" until_bank="2" until_bit="0x02" character="chris"
+         escape="yes" label="back out to 116 from under the ceiling"/>
+  <revisit bank="2" bit="0x02" while="clear" after_bank="7" after_bit="0x00"
+           character="chris" when="sandwich=yes"
+           label="past the sprung ceiling: the door to 109 opens again"/>
+</bot>

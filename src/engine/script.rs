@@ -9,11 +9,20 @@
 //! this API rather than into more command-line flags.
 //!
 //! A tick is one app update, the unit `--ticks` counts: a fixed 30 Hz tick in
-//! a room. The run is deterministic: the user's `arklay.toml` and mods are
-//! ignored, the run options are the oracle runs' unless the script passes
-//! them, no audio device opens and no film plays. With a window (the default)
-//! every tick is presented at the game's own pace; the window's keyboard and
-//! pads are ignored, so the frames are the ones a `--headless` run draws.
+//! a room. The run is deterministic: the user's game options are ignored
+//! (and, headless, their installed mods), the run options are the oracle
+//! runs' unless the script passes them, no audio device opens and no film
+//! plays. With a window (the default)
+//! the ticks run at the game's own pace in a window opened as a normal launch
+//! opens it: the renderer and window options of `arklay.toml` (the frame keeps
+//! the 4:3 shape a trace compares against), the host keys (F2/F3 speed, F4,
+//! F6, F8, F12, Alt+Enter) and the native in-game menu on Escape, its options
+//! included, plus the F1 debug menu and the F9 prompt. While one of those
+//! overlays is up the script's tick waits, a running bot is suspended and the
+//! player drives the overlay. The window's game keys are otherwise ignored,
+//! so a run nobody presses a host key in plays the ticks a `--headless` run
+//! plays. Closing the window (or the menu's Quit) ends the run as `exit(0)`
+//! does.
 //!
 //! Errors are strict. A Lua error, a failed boot or (unless the script calls
 //! `strict(false)`) an engine warning raised while the script drives the game
@@ -154,6 +163,16 @@ impl Stop {
             .get()
             .then(|| mlua::Error::RuntimeError(self.timeout_message()))
     }
+
+    /// The player closed the window or quit from the game's menu: the run
+    /// ends as `exit(0)` ends it, with no error, unless it is already
+    /// stopping with a status of its own.
+    fn player_quit(&self) -> mlua::Error {
+        if self.exit.get().is_none() {
+            self.exit.set(Some(0));
+        }
+        mlua::Error::RuntimeError("exit".into())
+    }
 }
 
 /// Make every instruction from now on fail with the stop's error.
@@ -169,7 +188,7 @@ fn halt(lua: &Lua, stop: &Rc<Stop>) {
 }
 
 /// The script's Lua state: base, `string`, `table`, `math` and `utf8`, the
-/// loaders removed, the allocation ceiling and the timeout hook installed.
+/// loaders removed, the allocation ceiling and the stop hook installed.
 fn new_state(stop: &Rc<Stop>) -> Result<Lua> {
     let lua = Lua::new_with(
         StdLib::STRING | StdLib::TABLE | StdLib::MATH | StdLib::UTF8,
@@ -184,21 +203,20 @@ fn new_state(stop: &Rc<Stop>) -> Result<Lua> {
     }
     lua.set_memory_limit(MEMORY_LIMIT)
         .map_err(|err| anyhow::anyhow!("failed to set the Lua memory limit: {err}"))?;
-    if stop.deadline.is_some() {
-        let check = Rc::clone(stop);
-        lua.set_hook(
-            HookTriggers::new().every_nth_instruction(HOOK_INTERVAL),
-            move |lua, _debug| match check.error() {
-                Some(err) => {
-                    // From the deadline on, fail every instruction: a
-                    // `pcall` around the loop cannot outlast it.
-                    halt(lua, &check);
-                    Err(err)
-                }
-                None => Ok(VmState::Continue),
-            },
-        );
-    }
+    // The deadline, or the player closing the window, stops the run.
+    let check = Rc::clone(stop);
+    lua.set_hook(
+        HookTriggers::new().every_nth_instruction(HOOK_INTERVAL),
+        move |lua, _debug| match check.error() {
+            Some(err) => {
+                // From then on, fail every instruction: a `pcall` around
+                // the loop cannot outlast it.
+                halt(lua, &check);
+                Err(err)
+            }
+            None => Ok(VmState::Continue),
+        },
+    );
     Ok(lua)
 }
 
@@ -255,10 +273,19 @@ struct ScriptTrace {
 struct Window {
     display: Display,
     event: SDL_Event,
-    /// The window's own input latch: drained every frame and ignored.
+    /// The player's keyboard and pads, with the `arklay.toml` bindings: only
+    /// the host keys and the overlays they open reach the game.
     input: InputState,
-    /// When the next frame is due.
+    /// The F2/F3 speed (and the options' frame rate).
+    clock: LoopClock,
+    hud: debug_hud::DebugHud,
+    /// F12 was pressed: save the next presented frame.
+    screenshot: bool,
+    /// When the next tick is due.
     next: Instant,
+    /// When the next frame may be presented: a sped-up run presents no
+    /// faster than the display's frame rate.
+    present_at: Instant,
 }
 
 /// The engine state a script drives.
@@ -291,6 +318,12 @@ struct Driver {
     drawn: bool,
     trace: Option<ScriptTrace>,
     window: Option<Window>,
+    /// The window's player pressed a host key: an overlay up now is theirs
+    /// to drive, and the script's tick waits for it to close. (A script's
+    /// own `f9` opens a prompt the script drives.)
+    player_overlay: bool,
+    /// When `bot_start` attached the bot, for the report's elapsed time.
+    bot_started: Option<Instant>,
 }
 
 impl Driver {
@@ -311,6 +344,8 @@ impl Driver {
             drawn: false,
             trace: None,
             window: None,
+            player_overlay: false,
+            bot_started: None,
         }
     }
 
@@ -355,9 +390,43 @@ impl Driver {
         Ok(())
     }
 
-    /// Drain the window's events between ticks, so it stays responsive;
-    /// closing it fails the run.
+    /// Count the warnings raised since the last check as seen without
+    /// failing the run: the window's and the in-game menu's (a renderer
+    /// falling back to software, an option not saved) and the game's while
+    /// the player drives a menu are the host's, not the script's. They are
+    /// still printed on stderr.
+    fn absorb_host_warnings(&mut self) {
+        self.warnings = crate::logging::warnings_since(self.warnings).0;
+    }
+
+    /// The game quit (its menu's Quit): with a window that is the player
+    /// ending the run, as closing the window is; a headless game that quits
+    /// fails the run.
+    fn stop_on_quit(&self) -> mlua::Error {
+        if self.window.is_some() {
+            self.stop.player_quit()
+        } else {
+            mlua::Error::RuntimeError("the game quit".into())
+        }
+    }
+
+    /// Drain the window's events between ticks, so it stays responsive, and
+    /// carry out the host keys and the in-game menu's input as the
+    /// interactive loop does; closing the window ends the run.
     fn pump(&mut self) -> mlua::Result<()> {
+        if self.window.is_none() {
+            return Ok(());
+        }
+        // The game's warnings so far count; the window's and the menu's
+        // below do not.
+        self.check_warnings()?;
+        let result = self.pump_window();
+        self.absorb_host_warnings();
+        result
+    }
+
+    /// [`Self::pump`]'s window work.
+    fn pump_window(&mut self) -> mlua::Result<()> {
         let Some(window) = self.window.as_mut() else {
             return Ok(());
         };
@@ -368,9 +437,90 @@ impl Driver {
             &mut keys,
             Some(&mut window.display),
         ) {
-            return Err(mlua::Error::RuntimeError("the window was closed".into()));
+            return Err(self.stop.player_quit());
         }
-        Ok(())
+        window.screenshot |= keys.screenshot;
+        let Some(app) = self.app.as_mut() else {
+            // Nothing to show yet: the presses have nothing to act on.
+            window.input.discard_presses();
+            let _ = window.input.take_gui_events();
+            return Ok(());
+        };
+        apply_port_keys(app, &keys, &mut window.clock, &mut window.hud);
+        drive_system_menu(
+            app,
+            &mut window.display,
+            &mut window.input,
+            &mut window.clock,
+        )
+        .map_err(engine_error)
+    }
+
+    /// Wait out a host overlay the player opened (the in-game menu and its
+    /// screens, the F1 debug menu, the F9 prompt): the frozen game updates
+    /// with the player's input and is presented at its own pace until the
+    /// overlay closes. The script's tick is not taken meanwhile, and a running
+    /// bot is not ticked.
+    fn hold_for_host(&mut self) -> mlua::Result<()> {
+        loop {
+            self.check_running()?;
+            self.pump()?;
+            let (Some(app), Some(window)) = (self.app.as_mut(), self.window.as_mut()) else {
+                return Ok(());
+            };
+            if !(self.player_overlay && app.host_overlay()) {
+                self.player_overlay = false;
+                return Ok(());
+            }
+            let tick = window.input.tick();
+            if let AppFlow::Quit = app
+                .update(tick.ui, tick.player, tick.action)
+                .map_err(engine_error)?
+            {
+                return Err(self.stop.player_quit());
+            }
+            self.absorb_host_warnings();
+            self.present()?;
+        }
+    }
+
+    /// Present the app in the window, paced to the game's tick and no faster
+    /// than the display's frame rate; returns whether the software
+    /// framebuffer was drawn for it.
+    fn present(&mut self) -> mlua::Result<bool> {
+        self.check_warnings()?;
+        let (Some(app), Some(window)) = (self.app.as_mut(), self.window.as_mut()) else {
+            return Ok(false);
+        };
+        let now = Instant::now();
+        let mut drawn = false;
+        if now >= window.present_at {
+            drawn = present_app_frame(
+                app,
+                &mut window.display,
+                &mut window.hud,
+                &mut window.clock,
+                &window.input,
+                std::mem::take(&mut window.screenshot),
+            )
+            .map_err(engine_error)?;
+            let frame =
+                Duration::from_secs_f64(1.0 / f64::from(window.display.frame_rate().max(1)));
+            window.present_at = now.max(window.present_at) + frame;
+            self.warnings = crate::logging::warnings_since(self.warnings).0;
+        }
+        let tick_ms = window
+            .clock
+            .scaled_tick_interval(app.tick_interval(), app.speed_applies());
+        window.next += Duration::from_secs_f64(tick_ms / 1000.0);
+        let now = Instant::now();
+        if window.next > now {
+            std::thread::sleep(window.next - now);
+        } else {
+            window.next = now;
+        }
+        app.post_present();
+        Ok(drawn)
     }
 
     /// Rerun what the script's `game` edits since the boot invalidate, once,
@@ -394,22 +544,31 @@ impl Driver {
         if self.headless || self.window.is_some() {
             return Ok(());
         }
-        // The default window, not the user's: a script ignores the config.
-        // The software backend presents exactly the frame a headless run
-        // draws (and the trace hashes).
+        // The user's window, as a normal launch opens it: the renderer,
+        // scale, frame rate and window options of `arklay.toml`. The frame
+        // keeps the 4:3 shape the run's traces and captures compare against
+        // (the options can still change it). The window's geometry is not
+        // written back, but the options the player changes are.
+        let (config, _) = crate::config::Config::load_default();
         let graphics = Graphics {
-            renderer: video::RendererKind::Software,
-            ..Graphics::default()
+            aspect: video::Aspect::STANDARD,
+            ..config.graphics
         };
         let mut display = Display::new(title, false, graphics).map_err(|err| {
             anyhow::anyhow!("cannot open a window ({err:#}); pass --headless to run without one")
         })?;
         display.persist = false;
+        let input = InputState::interactive();
+        let now = Instant::now();
         self.window = Some(Window {
+            clock: LoopClock::new(display.frame_rate(), false),
+            hud: debug_hud::DebugHud::new(config.game.ui_font),
             display,
             event: SDL_Event::default(),
-            input: InputState::default(),
-            next: Instant::now(),
+            input,
+            screenshot: false,
+            next: now,
+            present_at: now,
         });
         Ok(())
     }
@@ -437,6 +596,7 @@ impl Driver {
             ));
         }
         self.settle_authoring()?;
+        self.hold_for_host()?;
         let word = self.held | self.pressed;
         self.pressed = 0;
         let arm = std::mem::take(&mut self.arm);
@@ -451,12 +611,17 @@ impl Driver {
             matches!(&app.mode, Mode::Play(session) if session.transition.is_some());
         let screen_before =
             matches!(&app.mode, Mode::Play(session) if session.death_screen.is_some());
-        let tick = self.input.tick_scripted(word);
+        let mut tick = self.input.tick_scripted(word);
+        if let Some(window) = self.window.as_mut() {
+            // The player's host keys reach the game; their other game keys
+            // do not.
+            self.player_overlay |= add_host_keys(&mut tick.ui, &window.input.tick().ui);
+        }
         if let AppFlow::Quit = app
             .update(tick.ui, tick.player, tick.action)
             .map_err(engine_error)?
         {
-            return Err(mlua::Error::RuntimeError("the game quit".into()));
+            return Err(self.stop_on_quit());
         }
         // Films never play: the frames stay deterministic and audio-free, as
         // on the `--trace` path.
@@ -464,8 +629,14 @@ impl Driver {
             session.movie = None;
         }
         app.pending_movie = None;
-        app.draw();
-        self.drawn = true;
+        // A headless bot run draws nothing: no frame is shown, traced or
+        // (until `capture` draws its own) written, and a game is long. A
+        // window draws the frames it presents itself, on its renderer.
+        self.drawn = self.trace.is_some()
+            || !(self.window.is_some() || (self.headless && app.bot.is_some()));
+        if self.drawn {
+            app.draw();
+        }
         if let Some(trace) = self.trace.as_mut()
             && let Mode::Play(session) = &app.mode
             && was_play
@@ -476,23 +647,109 @@ impl Driver {
                 .write_tick(&session.trace_tick(&app.framebuffer))
                 .map_err(engine_error)?;
         }
-        if let Some(window) = self.window.as_mut() {
-            window
-                .display
-                .present_frame(app.frame(), None, None)
-                .map_err(engine_error)?;
-            window.display.show().map_err(engine_error)?;
-            window.next += Duration::from_secs_f64(app.tick_interval() / 1000.0);
-            let now = Instant::now();
-            if window.next > now {
-                std::thread::sleep(window.next - now);
-            } else {
-                window.next = now;
-            }
+        if self.window.is_some() {
+            self.drawn |= self.present()?;
+        } else {
+            app.post_present();
         }
-        app.post_present();
         self.pump()?;
         self.check_warnings()
+    }
+
+    /// Attach the open pack's bot to the running session (`bot_start`).
+    fn bot_start(&mut self, start: &BotStart) -> mlua::Result<()> {
+        let app = self.app()?;
+        if !matches!(app.mode, Mode::Play(_)) {
+            return Err(mlua::Error::RuntimeError(
+                "bot_start: no game session is running: call new_game, load_room or load_save \
+                 first"
+                    .into(),
+            ));
+        }
+        bot::set_log(start.log);
+        // The bot skips scenes with the buttons a player would, and a scene
+        // it skips runs to its end in one update, so where control returns
+        // never depends on the machine's load.
+        app.enable_skips();
+        app.attach_bot(
+            start.risk,
+            start.goal_room.as_deref(),
+            start.seed,
+            &start.params,
+            start.invincible,
+        )
+        .map_err(engine_error)?;
+        if let Some(path) = &start.memory {
+            let json = std::fs::read_to_string(path)
+                .with_context(|| format!("reading the bot memory {path}"))
+                .and_then(|text| {
+                    serde_json::from_str(&text)
+                        .with_context(|| format!("parsing the bot memory {path}"))
+                })
+                .map_err(engine_error)?;
+            if let Some(runtime) = app.bot.take() {
+                app.bot = Some(runtime.with_memory(json).map_err(engine_error)?);
+            }
+        }
+        if let Some(runtime) = app.bot.as_ref() {
+            for (key, value) in &start.remember {
+                runtime.remember(key, value);
+            }
+        }
+        app.unbounded_cutscene_skip = true;
+        if let Mode::Play(session) = &mut app.mode {
+            session.cutscene_skip_burst = None;
+        }
+        self.bot_started = Some(Instant::now());
+        Ok(())
+    }
+
+    /// The attached bot.
+    fn bot(&mut self) -> mlua::Result<&bot::BotRuntime> {
+        self.app()?.bot.as_ref().ok_or_else(|| {
+            mlua::Error::RuntimeError("no bot is attached: call bot_start or bot_run first".into())
+        })
+    }
+
+    /// The attached bot's report (`bot_stats`), as `--bot-stats` writes it.
+    fn bot_report(&mut self, outcome: &str) -> mlua::Result<serde_json::Value> {
+        let elapsed = self
+            .bot_started
+            .map_or(0.0, |started| started.elapsed().as_secs_f64());
+        let facts = self.app()?.bot_run_facts();
+        Ok(self.bot()?.stats_json(outcome, elapsed, facts))
+    }
+
+    /// How the attached bot's run stands: `running`, `finished` (the bot
+    /// ended it, with its reason) or `death` (the player died with no save
+    /// to load).
+    fn bot_outcome(&mut self) -> mlua::Result<&'static str> {
+        if self.bot()?.finished() {
+            return Ok("finished");
+        }
+        let app = self.app()?;
+        let stranded = app.bot_player_dead() && !app.bot.as_ref().is_some_and(|bot| bot.has_save());
+        Ok(if stranded { "death" } else { "running" })
+    }
+
+    /// Tick until the attached bot's run ends or `max_ticks` more ticks have
+    /// run (`bot_run`): the outcome, `max_ticks` when the budget ran out.
+    fn bot_play(&mut self, max_ticks: u64) -> mlua::Result<&'static str> {
+        // A bot without a save gets a moment to see its death and finish
+        // with its own reason.
+        let mut dead_ticks = 0u32;
+        for _ in 0..max_ticks {
+            match self.bot_outcome()? {
+                "running" => dead_ticks = 0,
+                "death" if dead_ticks < 2 => dead_ticks += 1,
+                outcome => return Ok(outcome),
+            }
+            self.tick()?;
+        }
+        Ok(match self.bot_outcome()? {
+            "running" => "max_ticks",
+            outcome => outcome,
+        })
     }
 
     /// Flush the trace and close the window at the end of the run.
@@ -505,6 +762,21 @@ impl Driver {
         self.saves = None;
         Ok(())
     }
+}
+
+/// Add the player's host keys (Escape's in-game menu, F1, F9) to the
+/// scripted tick's `ui`, returning whether they pressed one; the player's
+/// other keys stay out of the game.
+fn add_host_keys(ui: &mut UiInput, player: &UiInput) -> bool {
+    ui.system_menu |= player.system_menu;
+    ui.debug_menu |= player.debug_menu;
+    ui.return_title |= player.return_title;
+    if player.system_menu || player.debug_menu || player.return_title {
+        // The press is the player's, a keyboard key's.
+        ui.any = true;
+        return true;
+    }
+    false
 }
 
 /// The driver behind a callback.
@@ -575,9 +847,134 @@ impl<'a> Options<'a> {
     }
 }
 
-/// Open `path` with only the `mods` layers the script names: no mod
+/// What `bot_start` and `bot_run` take to attach the bot.
+struct BotStart {
+    risk: f64,
+    goal_room: Option<String>,
+    seed: Option<u32>,
+    params: Vec<(String, String)>,
+    invincible: bool,
+    log: bool,
+    /// A memory file an earlier run wrote with `bot_memory`, to start from.
+    memory: Option<String>,
+    /// Notes to put in the bot's memory before its first tick.
+    remember: Vec<(String, String)>,
+}
+
+impl BotStart {
+    /// Read the attach options of `function`'s table; the caller reads its
+    /// own options and then calls [`Options::finish`].
+    fn read(options: &mut Options<'_>) -> mlua::Result<Self> {
+        let function = options.function;
+        let risk: Option<f64> = options.get("risk")?;
+        let goal_room: Option<String> = options.get("goal_room")?;
+        let seed: Option<u32> = options.get("seed")?;
+        let params: Option<Table> = options.get("params")?;
+        let invincible: Option<bool> = options.get("invincible")?;
+        let log: Option<bool> = options.get("log")?;
+        let memory: Option<String> = options.get("memory")?;
+        let remember: Option<Table> = options.get("remember")?;
+        let risk = risk.unwrap_or(bot::DEFAULT_RISK);
+        if !(0.0..=1.0).contains(&risk) {
+            return Err(mlua::Error::RuntimeError(format!(
+                "{function}: risk {risk} is not within 0..=1"
+            )));
+        }
+        // Sorted by name, so the run does not depend on the table's order;
+        // the pack's parameter file checks the names and values.
+        let strings = |option: &str, table: Option<Table>| -> mlua::Result<Vec<(String, String)>> {
+            let mut pairs = Vec::new();
+            let Some(table) = table else {
+                return Ok(pairs);
+            };
+            for pair in table.pairs::<String, Value>() {
+                let (name, value) = pair.map_err(|err| {
+                    mlua::Error::RuntimeError(format!("{function}: option `{option}`: {err}"))
+                })?;
+                let value = match value {
+                    Value::String(text) => text.to_string_lossy(),
+                    Value::Boolean(on) => if on { "yes" } else { "no" }.to_string(),
+                    Value::Integer(number) => number.to_string(),
+                    other => {
+                        return Err(mlua::Error::RuntimeError(format!(
+                            "{function}: `{name}` of `{option}` is a {}, not a string",
+                            other.type_name()
+                        )));
+                    }
+                };
+                pairs.push((name, value));
+            }
+            pairs.sort();
+            Ok(pairs)
+        };
+        Ok(Self {
+            risk,
+            goal_room,
+            seed,
+            params: strings("params", params)?,
+            invincible: invincible.unwrap_or(false),
+            log: log.unwrap_or(true),
+            memory,
+            remember: strings("remember", remember)?,
+        })
+    }
+}
+
+/// A JSON value as the Lua value [`to_json`] would encode back to it: an
+/// array as a sequence, an object as a table, `null` as nil.
+fn from_json(lua: &Lua, value: &serde_json::Value) -> mlua::Result<Value> {
+    Ok(match value {
+        serde_json::Value::Null => Value::Nil,
+        serde_json::Value::Bool(on) => Value::Boolean(*on),
+        serde_json::Value::Number(number) => match number.as_i64() {
+            Some(integer) => Value::Integer(integer),
+            None => Value::Number(number.as_f64().unwrap_or(f64::NAN)),
+        },
+        serde_json::Value::String(text) => Value::String(lua.create_string(text)?),
+        serde_json::Value::Array(items) => {
+            let table = lua.create_table_with_capacity(items.len(), 0)?;
+            for (index, item) in items.iter().enumerate() {
+                table.raw_set(index + 1, from_json(lua, item)?)?;
+            }
+            Value::Table(table)
+        }
+        serde_json::Value::Object(fields) => {
+            let table = lua.create_table_with_capacity(0, fields.len())?;
+            for (key, item) in fields {
+                table.raw_set(key.as_str(), from_json(lua, item)?)?;
+            }
+            Value::Table(table)
+        }
+    })
+}
+
+/// Open `path` with the `mods` layers the script names. With `user_mods` the
+/// user's installed mods are layered under them too, discovered and selected
+/// by `arklay.toml` as a normal launch layers them; without it there is no
 /// discovery and no config selection.
-fn open_pack(path: &Path, mods: &[PathBuf], language: Option<&str>) -> Result<Pack> {
+fn open_pack(
+    path: &Path,
+    mods: &[PathBuf],
+    user_mods: bool,
+    language: Option<&str>,
+) -> Result<Pack> {
+    // `re1` names the installed RE1 pack, found as the launcher finds it.
+    let path = &crate::pack::resolve_game_pack(path)?;
+    if user_mods {
+        let (config, _) = crate::config::Config::load_default();
+        let options = ModOptions {
+            explicit: mods.to_vec(),
+            no_mods: false,
+            layers: crate::pack::LayerOptions {
+                enabled: config.mods.enabled,
+                disabled: config.mods.disabled,
+                order: config.mods.order,
+            },
+            global_dirs: crate::config::Config::mod_dirs(),
+            watch: false,
+        };
+        return open_game_pack(path, &options, language);
+    }
     let mut pack = if mods.is_empty() {
         Pack::open(path)?
     } else {
@@ -873,6 +1270,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
             with(&shared, |driver| {
                 let mut options = Options::new("load_game_pack", table);
                 let mods: Vec<String> = options.get("mods")?.unwrap_or_default();
+                let user_mods: Option<bool> = options.get("user_mods")?;
                 let language: Option<String> = options.get("language")?;
                 let save_dir: Option<String> = options.get("save_dir")?;
                 let quick_turn: Option<bool> = options.get("quick_turn")?;
@@ -894,7 +1292,10 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                     }
                 };
                 let mods: Vec<PathBuf> = mods.into_iter().map(PathBuf::from).collect();
-                let pack = open_pack(Path::new(&path), &mods, language.as_deref())
+                // A window shows the user's game: their HD and audio packs
+                // too. A headless run stays isolated from what is installed.
+                let user_mods = user_mods.unwrap_or(!driver.headless);
+                let pack = open_pack(Path::new(&path), &mods, user_mods, language.as_deref())
                     .map_err(engine_error)?;
                 let (saves, save_dir) = match save_dir {
                     Some(dir) => (None, PathBuf::from(dir)),
@@ -904,9 +1305,11 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                         (Some(saves), dir)
                     }
                 };
+                driver.check_warnings()?;
                 driver
                     .open_window(&window_title(pack.manifest()))
                     .map_err(engine_error)?;
+                driver.absorb_host_warnings();
                 let mut app = App::new(pack, save_dir, false);
                 app.player_options = player::Options {
                     quick_turn: quick_turn.unwrap_or(false),
@@ -923,6 +1326,13 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                     },
                     ..player::Options::default()
                 };
+                if let Some(window) = driver.window.as_mut() {
+                    // The in-game menu's controls page shows the player's
+                    // bindings, as a normal launch's does.
+                    window.input.no_combo = !app.debug_menu;
+                    app.set_bindings(window.input.bindings().clone());
+                    warm_gui_fonts(app.pack.language());
+                }
                 driver.app = Some(app);
                 driver.saves = saves;
                 driver.baseline = None;
@@ -1183,6 +1593,95 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
         })?,
     )?;
 
+    let shared = Rc::clone(driver);
+    globals.set(
+        "bot_start",
+        lua.create_function(move |_lua, table: Option<Table>| {
+            with(&shared, |driver| {
+                let mut options = Options::new("bot_start", table);
+                let start = BotStart::read(&mut options)?;
+                options.finish()?;
+                driver.bot_start(&start)
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "bot_finished",
+        lua.create_function(move |_lua, ()| {
+            with(&shared, |driver| {
+                let outcome = driver.bot_outcome()?;
+                let reason = match outcome {
+                    "running" => None,
+                    "death" => Some("dead, no save".to_string()),
+                    _ => driver.bot()?.finish_reason(),
+                };
+                Ok((outcome != "running", reason))
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "bot_stats",
+        lua.create_function(move |lua, ()| {
+            let report = with(&shared, |driver| {
+                let outcome = driver.bot_outcome()?;
+                driver.bot_report(outcome)
+            })?;
+            from_json(lua, &report)
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "bot_memory",
+        lua.create_function(move |_lua, path: String| {
+            with(&shared, |driver| {
+                let json = driver.bot()?.memory_json().map_err(engine_error)?;
+                let text = serde_json::to_string(&json).map_err(mlua::Error::external)?;
+                std::fs::write(&path, text).map_err(|err| {
+                    mlua::Error::RuntimeError(format!("bot_memory: writing {path}: {err}"))
+                })
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "bot_story",
+        lua.create_function(move |_lua, (bank, bit): (usize, u8)| {
+            with(&shared, |driver| Ok(driver.bot()?.story_seen(bank, bit)))
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "bot_run",
+        lua.create_function(move |lua, table: Option<Table>| {
+            let report = with(&shared, |driver| {
+                let mut options = Options::new("bot_run", table);
+                let start = BotStart::read(&mut options)?;
+                let max_ticks: Option<u64> = options.get("max_ticks")?;
+                let stats: Option<String> = options.get("stats")?;
+                options.finish()?;
+                driver.bot_start(&start)?;
+                let outcome = driver.bot_play(max_ticks.unwrap_or(bot::DEFAULT_MAX_TICKS))?;
+                let report = driver.bot_report(outcome)?;
+                if let Some(path) = stats {
+                    let text =
+                        serde_json::to_string_pretty(&report).map_err(mlua::Error::external)?;
+                    std::fs::write(&path, text).map_err(|err| {
+                        mlua::Error::RuntimeError(format!("bot_run: writing {path}: {err}"))
+                    })?;
+                }
+                Ok(report)
+            })?;
+            from_json(lua, &report)
+        })?,
+    )?;
+
     globals.set("game", lua.create_userdata(GameProxy)?)?;
     Ok(())
 }
@@ -1226,6 +1725,36 @@ mod tests {
         let lua = Lua::new();
         let value: Value = lua.load("local t = {} t.t = t return t").eval().unwrap();
         assert!(to_json(&value).is_err());
+    }
+
+    #[test]
+    fn only_the_players_host_keys_reach_a_scripted_tick() {
+        let mut ui = UiInput {
+            confirm: true,
+            ..UiInput::default()
+        };
+        let player = UiInput {
+            system_menu: true,
+            debug_menu: true,
+            return_title: true,
+            cancel: true,
+            up: true,
+            start: true,
+            ..UiInput::default()
+        };
+        assert!(add_host_keys(&mut ui, &player));
+        assert_eq!(
+            ui,
+            UiInput {
+                confirm: true,
+                system_menu: true,
+                debug_menu: true,
+                return_title: true,
+                any: true,
+                ..UiInput::default()
+            }
+        );
+        assert!(!add_host_keys(&mut ui, &UiInput::default()));
     }
 
     #[test]

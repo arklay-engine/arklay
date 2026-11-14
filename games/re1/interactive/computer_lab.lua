@@ -2226,6 +2226,68 @@ local function finish(s, api)
     end
 end
 
+-- # The published view ---------------------------------------------------------
+--
+-- `s.view` is what the terminal shows a player, for observers such as the
+-- player bot (see "The published view" in `lua-types/interactive.lua`). It is
+-- the screen's whole contract with them: nothing outside this file reads any
+-- other field of `s`, so the state machine above may change freely as long as
+-- this keeps meaning the same.
+
+-- How many characters field record `rec` holds: its text up to the first
+-- zero byte.
+local function typed_length(s, rec)
+    local record = s.text and s.text[rec]
+    local text = record and record.text
+    if text == nil then
+        return 0
+    end
+    local length = 0
+    while length < 9 and text[length] ~= nil and text[length] ~= 0 do
+        length = length + 1
+    end
+    return length
+end
+
+-- Whether window `index` is still animating (opening, closing, scrolling).
+local function window_busy(s, index)
+    local window = s.win and s.win[index]
+    return window ~= nil and (window.anim_cmd or 0) ~= 0
+end
+
+-- The view of the `func`/`sub`/`sub2`/`sub3` block: `sub` 1 is the login
+-- (its steps 1 and 3 type the user and the password), 2 the door menu (step
+-- 1 picks a row, step 3 asks whether to leave), 3 the command prompt and 4
+-- the unlocked screen, which a press dismisses.
+local function view(s)
+    local func, sub, sub2, sub3 = s.func or 0, s.sub or 0, s.sub2 or 0, s.sub3 or 0
+    local input = (s.input_enabled or 0) ~= 0
+    local stage, field, typed = "busy", "", 0
+    if func == 1 then
+        if sub == 1 and sub2 == 1 and sub3 == 1 then
+            stage, field, typed = "login", "user", typed_length(s, 0)
+        elseif sub == 1 and sub2 == 1 and sub3 == 3 then
+            stage, field, typed = "login", "secret", typed_length(s, 1)
+        elseif sub == 2 and sub2 >= 1 and sub3 == 1 and input then
+            stage = "menu"
+        elseif sub == 2 and sub2 >= 1 and sub3 == 3 then
+            stage = "exit"
+        elseif sub == 3 and sub2 == 1 and sub3 == 0
+            and not window_busy(s, 2) and not window_busy(s, 3) then
+            stage, field, typed = "command", "user", typed_length(s, 0)
+        elseif sub >= 4 and sub2 >= 2 then
+            stage = "unlocked"
+        end
+    end
+    return {
+        stage = stage,
+        field = field,
+        typed = typed,
+        cell = (s.row or 0) * 8 + (s.col or 0),
+        menu_row = s.caret_pos or 0,
+    }
+end
+
 -- `display_computer_lab` (0x00412390): one frame of the terminal.
 function display(api, s)
     if s.desc == nil then
@@ -2246,4 +2308,5 @@ function display(api, s)
     draw_status(s, api)
     draw_leds(s, api)
     camera_step(s, api)
+    s.view = view(s)
 end

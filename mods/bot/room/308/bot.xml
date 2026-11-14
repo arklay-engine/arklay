@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 308, the cave where Barry finds the hole (Jill). Entered with common
+     0x25 set (Barry came back with the rope in 20C) and 0x5D clear, the init
+     spawns Barry and runs on_enter, which sets 0x5D and plays his "let's go
+     together". The scene asks two yes/no prompts with no press and no flag
+     between them, so the answers key on the message id:
+
+       23 "Will you go with him?" (event_01), then
+       24 "Do you want him to go first?" after Yes (event_02), or
+       25 "Will you stay here?" after No (event_05).
+
+       Yes, Yes and No, No: event_03 / event_07 set common 0x5C (Barry goes
+         ahead) and arm AOT 3. Walking through AOT 3 and leaving by door 1
+         on the same visit runs on_aot_01_door_2: 0x5A and 0x5B set, 0x5C
+         cleared (Follow: Barry's branch). Any other exit keeps 0x5C
+         (Backtrack): the next 307 entry plays "Tell my family" (cave) and
+         sets 0xC0 (Barry gone).
+       Yes, No: event_04 sets 0x58, 0x59 and 0x5B (Barry goes with Jill).
+       No, Yes: event_06 sets 0x52; 502 then plays "Tell my family" (lab).
+
+     Story parameters cave_q1, cave_q2 and cave_exit (params/re1.xml) pick
+     the branch. Without them: Yes, Yes, Follow. While 0x5C is set, the
+     exit decides Barry's fate, so each value holds the other exits shut:
+     follow keeps off door 0 (to 307) and door 2 (309's south door), so the
+     only way out is door 1, through AOT 3's gunshot (the bot's own route
+     took it, but nothing made it); backtrack keeps off door 1.
+
+     Chris's game: door 0 to 307 is DOOR_LOCKED on lock 0x28. Taking the
+     flamethrower (AOT 3) clears the lock, and only hanging it back on the
+     hook sets it again (place_flamethrower). A weapon has no menu USE: the
+     hook is a press, AOT 4 (an event once the flamethrower is taken, data
+     9,0,4), whose event takes the held flamethrower as the used item, and
+     room main's testitem then sets the lock. 309, 30A and this room are a
+     pocket until then, so the hook is an <interact> on the lock bit, after
+     Enrico's scene in 30A (common 0x48): open from the pickup on, it would
+     hang the flamethrower straight back. Once it hangs there after
+     Enrico's scene, the pickup stays off (an <avoid> on AOT 3 while 0x48
+     is set): taking it again shuts door 0 once more, and the bot took it
+     and hung it back for 200k ticks. -->
+<bot format="2">
+  <answer message="23" choice="yes" when="cave_q1=yes" label="go with Barry"/>
+  <answer message="23" choice="no" when="cave_q1=no" label="do not go with Barry"/>
+  <answer message="24" choice="yes" when="cave_q2=yes" label="let Barry go first"/>
+  <answer message="24" choice="no" when="cave_q2=no" label="go first, Barry behind"/>
+  <answer message="25" choice="yes" when="cave_q2=yes" label="stay here"/>
+  <answer message="25" choice="no" when="cave_q2=no" label="take another way"/>
+  <avoid slot="1" bank="1" bit="0x5C" while="set" character="jill" when="cave_exit=backtrack"
+         reason="backtrack: door 1 behind Barry would follow him"/>
+  <avoid slot="0" bank="1" bit="0x5C" while="set" character="jill" when="cave_exit=follow"
+         reason="follow: door 0 back to 307 while Barry is ahead would backtrack, and he dies in 307"/>
+  <avoid slot="2" bank="1" bit="0x5C" while="set" character="jill" when="cave_exit=follow"
+         reason="follow: 309's south door while Barry is ahead would backtrack, and he dies in 307"/>
+  <avoid slot="3" bank="1" bit="0x48" while="set" character="chris"
+         reason="past Enrico's scene the flamethrower stays on the hook: taking it shuts door 0"/>
+  <interact slot="4" bank="2" bit="0x28" after_bank="1" after_bit="0x48" mark="no"
+            character="chris" label="the flamethrower back on the hook: door 0 to 307"/>
+</bot>

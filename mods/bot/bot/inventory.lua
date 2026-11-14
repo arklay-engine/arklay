@@ -1,0 +1,2493 @@
+-- Inventory management for the player bot: the item box and the combine.
+--
+-- Both go through the game's own screens with pad input. The item box is a
+-- room action of kind "item_box" (the engine's room-action handler 0x08):
+-- the planner walks into its zone and presses action, the lid opens and the
+-- box screen comes up over the inventory panel (bot:menu().box). There the
+-- bot moves the inventory cursor with the d-pad, confirms the slot (the
+-- screen arms it), pages the box cursor up or down to the box slot and
+-- confirms again: the engine swaps the two. Cancel closes the box and the
+-- pause menu. The combine is the menu's MOVE (BotMenu.combine).
+--
+-- The policy (BotInventory.keep, .deposits, .withdrawals, .combine_pick)
+-- works on plain tables so the unit tests can drive it:
+--   keep:     the equipped item, a firearm the knowledge file fights with
+--             and its ammunition (the ammo reserve), the loadout (below),
+--             every key, every item
+--             an open <use> fact needs (bot:use_facts(), done flag clear;
+--             not one whose uses all lie in stages not entered yet),
+--             every heal item that restores health (the row's `heals`)
+--             and one <cure> stack. Anything else may go in the box (a
+--             red herb alone).
+--   deposit:  when the inventory is at its limit and a known pickup
+--             (a frontier item that merges into no held stack) needs room,
+--             or, at a box in this room, when no more than RESERVE slots
+--             are free and more pickups than that need one (the slot
+--             reserve); then every item the keep rule does not hold goes in.
+--   look:     before any box was opened, at a box in this room with a slot
+--             free (or from anywhere while sourcing ammunition,
+--             BotSurvival.sourcing): one visit to read what the shared
+--             box holds;
+--   withdraw: an item in the box that an open <use> fact needs, a key a
+--             remembered locked door needs, the equipped gun's ammunition
+--             below the reserve floor, or a heal item when none is held;
+--             only into free slots. At a box in this room, also every
+--             stack of that ammunition while the rounds are under TOP_UP
+--             times the floor, and every heal stack (the heal top-up: a
+--             boss such as 513's Tyrant is a race of heals), as long as
+--             RESERVE slots stay free. First of all, from any box (a
+--             trip is made for it), the weapon and ammunition a <fight>
+--             ahead in this stage prefers (the loadout, the knowledge
+--             file's `prefer`), into any free slot; so is the rearm: a
+--             firearm in the box (not a `reserve` one) whose ammunition
+--             is held, or in the box while sourcing ammunition, with that
+--             ammunition (held, it stays).
+--   combine:  only when the inventory is at its limit and a pickup needs
+--             room: a pair whose MOVE (bot:combine_result) empties a slot,
+--             of heal, ammo or weapon items only, never a key or an item
+--             a <use> fact needs; heal pairs first, so herbs mix into
+--             stronger heals that stay in the inventory.
+-- What the box holds is remembered (bot:remember "box_items") each time its
+-- screen is up, so the memory checkpoint a save keeps agrees with the
+-- box the save holds. No room literals; only pad/UI input.
+
+BotInventory = BotInventory or {}
+
+local C = BotConst
+
+local FIRST_SLOT_CURSOR = 8
+-- One button pulse per this many ticks on the box screen, so each press is
+-- a fresh edge and the screen's state is read back between presses.
+local PRESS_GAP = 3
+-- The box screen takes no input for its first few ticks (the menu reveal).
+local OPEN_SETTLE = C.SECOND // 2
+-- One deposit or withdrawal gives up after this long; the whole box visit
+-- after the next.
+local OP_TIMEOUT = 15 * C.SECOND
+local SESSION_TIMEOUT = 60 * C.SECOND
+-- After the box press, the lid animates before the screen comes up.
+local LID_WAIT = 5 * C.SECOND
+-- The close fade and the room's post-menu freeze.
+local SETTLE_TIMEOUT = 4 * C.SECOND
+-- Controllable ticks in a row that end a visit.
+local CLEAR_TICKS = C.SECOND
+-- Slots kept free for pickups at a box in this room (the slot reserve).
+BotInventory.RESERVE = 1
+-- At a box here, the equipped gun's ammunition is topped up under this many
+-- times the reserve floor.
+local TOP_UP = 2
+-- The rounds of a weapon's own loading that leave its other loadings'
+-- rounds (the launcher's acid and flame) out of the loadout.
+local OWN_ROUNDS = 6
+-- Kinds the combine may mix.
+local MIX_KINDS = { heal = 1, ammo = 2, weapon = 2 }
+
+local function state()
+    BOT_STATE.inventory = BOT_STATE.inventory or {}
+    return BOT_STATE.inventory
+end
+
+local function log(bot, text)
+    bot:log("inventory: " .. text)
+end
+
+-- ---- policy (plain values) ---------------------------------------------
+
+-- Why `row` ({item, kind, quantity}) stays in the inventory, or nil.
+-- ctx: {equipped, guns = {[id] = true}, ammo = {[id] = true},
+--       uses = {[id] = true}, cures = {[id] = true}}
+-- The keep and withdraw reason of the ink ribbon, while saving needs one
+-- (bot:saves().needs_ribbon: Chris, or Jill with the option on). The keep
+-- rule used to box ribbons as clutter and nothing took one back out: a run
+-- saved twice, skipped every typewriter after for "no ink ribbon" with six
+-- in the box, and ended on four deaths since its last save.
+local RIBBON = "ink ribbon for saving"
+
+function BotInventory.keep(row, ctx)
+    local item = row.item
+    if item == 0 then
+        return "empty"
+    end
+    if row.kind == "key" and not (ctx.waiting and ctx.waiting[item]) then
+        return "key"
+    end
+    if ctx.uses and ctx.uses[item] and not (ctx.far and ctx.far[item]) then
+        return "a <use> fact needs it"
+    end
+    if item == ctx.equipped then
+        return "equipped"
+    end
+    -- Dead weight going in for the reserve gun's kit (ctx.swap_out).
+    if ctx.swap_out and ctx.swap_out[item] then
+        return nil
+    end
+    if row.kind == "weapon" and ctx.guns and ctx.guns[item] then
+        return "firearm"
+    end
+    if row.kind == "ammo" and ctx.ammo and ctx.ammo[item] then
+        return "ammo reserve"
+    end
+    if ctx.ammo_alt and ctx.ammo_alt[item] then
+        return "rounds for the gun's other loading"
+    end
+    if ctx.loadout and ctx.loadout[item] then
+        return "a fight ahead prefers it"
+    end
+    if ctx.rearm and ctx.rearm[item] then
+        return "its gun comes back out of the box"
+    end
+    if ctx.rearm_reserve and ctx.rearm_reserve[item] then
+        return "its gun comes back out of the box"
+    end
+    if ctx.keep_reserve and ctx.keep_reserve[item] then
+        return "a reserve gun being rearmed"
+    end
+    if ctx.gear and ctx.gear[item] then
+        return "gear for a room the bot died in"
+    end
+    if row.kind == "heal" and row.heals ~= false then
+        return "heal"
+    end
+    if row.kind == "heal" and ctx.cures and ctx.cures[item] then
+        return "cure"
+    end
+    if ctx.ribbon and item == ctx.ribbon then
+        return RIBBON
+    end
+    return nil
+end
+
+-- Whether a held firearm (not a hand weapon) has a round: loaded, or with
+-- its ammunition held.
+function BotInventory.armed(bot)
+    local weapons = (bot:knowledge() or {}).weapons or {}
+    for _, row in ipairs(bot:menu().items or {}) do
+        local gun = row.kind == "weapon" and weapons[row.item]
+        if gun and not gun.melee then
+            local ammo = bot:ammo_for(row.item)
+            if row.quantity > 0 or (ammo ~= nil and bot:item_count(ammo) > 0) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- The rounds every held firearm has, loaded and in its held ammunition.
+function BotInventory.rounds_held(bot)
+    local weapons = (bot:knowledge() or {}).weapons or {}
+    local total = 0
+    for _, row in ipairs(bot:menu().items or {}) do
+        local gun = row.kind == "weapon" and weapons[row.item]
+        if gun and not gun.melee then
+            local ammo = bot:ammo_for(row.item)
+            total = total + row.quantity + (ammo ~= nil and bot:item_count(ammo) or 0)
+        end
+    end
+    return total
+end
+
+-- The menu rows (bot:menu().items) the box should take, in slot order.
+-- One <cure> stack is kept; a second one goes in.
+function BotInventory.deposits(items, ctx)
+    local out = {}
+    local cure_kept = false
+    local weapons = {}
+    for _, row in ipairs(items) do
+        local why = row.item ~= 0 and BotInventory.keep(row, ctx)
+        if why == "cure" then
+            if cure_kept then
+                why = nil
+            end
+            cure_kept = true
+        end
+        -- A second copy of a held weapon goes in: two knives, both kept for
+        -- 30C's web, left no slot for the flame rounds its tiger needed.
+        -- So does a second desk key: one opens the drawer at hand, and the
+        -- box gives the next one back (Chris met 206's hunter carrying two).
+        if why and (row.kind == "weapon" or row.item == C.DESK_KEY) then
+            if weapons[row.item] then
+                why = nil
+            end
+            weapons[row.item] = true
+        end
+        if row.item ~= 0 and not why then
+            out[#out + 1] = row
+        end
+    end
+    return out
+end
+
+-- Heal stacks a full inventory keeps when it must make room for a needed
+-- pickup; the rest may go in the box (the "none held" withdrawal brings one
+-- back).
+BotInventory.SOFT_HEALS = 1
+
+-- When nothing the keep rule lets go is held, the inventory is full and a
+-- needed pickup (`needed`, a count: a key, an item a <use> fact needs, or
+-- the ammunition a held gun lacks) has no slot, the softer keeps that may
+-- go in, at most `needed` of them: first the ink ribbon, then heal stacks
+-- past SOFT_HEALS (the last in slot order; only for a key or <use> item,
+-- ctx.swap, or the
+-- loadout, ctx.heals_may_go: ammunition alone is no reason to box a heal,
+-- the first aid spray went in for 118's acid rounds and the bot met Yawn 2
+-- with one herb), then a key no remembered locked door needs, then a
+-- spare hand weapon (ctx.spare: held, not equipped, and no <fight> in this stage
+-- prefers it), then, only to make room for a key or <use> item, boxed or
+-- on the frontier (ctx.swap), a held firearm other than the equipped one
+-- and the loadout, fewest rounds first (ctx.spare_guns: {[id] = rounds}),
+-- the staple (the handgun, ctx.staple_guns) last; then, for a key or <use>
+-- item or a heal, rounds kept only for a gun's other loading.
+function BotInventory.soft_deposits(items, ctx, needed)
+    local out = {}
+    if not ctx.full or (needed or 0) == 0 then
+        return out
+    end
+    -- For the gear-up after a death (ctx.gear), first a firearm that is
+    -- dead weight (ctx.empty_guns): not equipped, no round loaded, and
+    -- none for any of its loadings held or in the box. 509 killed the bot
+    -- four times on one save: it carried an empty launcher, an empty
+    -- shotgun and the knife, with the handgun and a clip in the box.
+    -- So for the ribbon a save here waits on (ctx.ribbon_swap).
+    for _, row in ipairs((ctx.gear or ctx.ribbon_swap) and items or {}) do
+        if #out >= needed then
+            return out
+        end
+        if row.item ~= 0 and ctx.empty_guns and ctx.empty_guns[row.item] then
+            out[#out + 1] = row
+        end
+    end
+    -- The ink ribbon before anything that fights or heals: a save can
+    -- wait for the next box visit, a needed pickup cannot.
+    for _, row in ipairs(items) do
+        if #out >= needed then
+            return out
+        end
+        if row.item ~= 0 and BotInventory.keep(row, ctx) == RIBBON then
+            out[#out + 1] = row
+        end
+    end
+    -- Spare heals first: a key whose door is not seen yet costs a trip back.
+    local heals = {}
+    for _, row in ipairs(items) do
+        if row.item ~= 0 and BotInventory.keep(row, ctx) == "heal" then
+            heals[#heals + 1] = row
+        end
+    end
+    for i = #heals, BotInventory.SOFT_HEALS + 1, -1 do
+        if not (ctx.swap or ctx.heals_may_go) then
+            break
+        end
+        if #out >= needed then
+            return out
+        end
+        out[#out + 1] = heals[i]
+    end
+    for _, row in ipairs(items) do
+        if #out >= needed then
+            return out
+        end
+        if row.item ~= 0 and BotInventory.keep(row, ctx) == "key"
+            and not (ctx.keys and ctx.keys[row.item])
+            and not (ctx.keep_desk and row.item == C.DESK_KEY) then
+            out[#out + 1] = row
+        end
+    end
+    for _, row in ipairs(items) do
+        if #out >= needed then
+            return out
+        end
+        if row.item ~= 0 and ctx.spare and ctx.spare[row.item] then
+            out[#out + 1] = row
+        end
+    end
+    local guns = {}
+    for _, row in ipairs(ctx.swap and items or {}) do
+        local rounds = row.item ~= 0 and ctx.spare_guns and ctx.spare_guns[row.item]
+        if rounds and not (ctx.gear and ctx.empty_guns and ctx.empty_guns[row.item])
+            and not (ctx.gear and ctx.gear[row.item])
+            and not (ctx.loadout and ctx.loadout[row.item])
+            and not (ctx.uses and ctx.uses[row.item]) then
+            guns[#guns + 1] = { row = row, rounds = rounds,
+                staple = ctx.staple_guns and ctx.staple_guns[row.item] or false }
+        end
+    end
+    table.sort(guns, function(a, b)
+        if a.staple ~= b.staple then
+            return b.staple
+        end
+        if a.rounds ~= b.rounds then
+            return a.rounds < b.rounds
+        end
+        return a.row.slot < b.row.slot
+    end)
+    -- A gun goes in only for a key or <use> item (ctx.swaps), never for
+    -- the ammunition counted in `needed`: 217's MO disk and a box of
+    -- shells boxed both the acid launcher and the loaded handgun, and the
+    -- bot met 308's hunters with five shells.
+    local gun_room = #out + (ctx.swaps or needed)
+    if gun_room > needed then
+        gun_room = needed
+    end
+    for _, gun in ipairs(guns) do
+        if #out >= gun_room then
+            return out
+        end
+        out[#out + 1] = gun.row
+    end
+    -- For a heal (ctx.heal_swap), last: rounds kept only for a gun's other
+    -- loading (no held gun's own ammunition): the flame rounds held for
+    -- the launcher, which still had its own (30C, every slot used and the
+    -- spray in the box). For a key or <use> item (ctx.swap), the rounds
+    -- for the other loading only, not the ones a fight ahead prefers: 504
+    -- found the slots full of the equipped launcher with its own rounds,
+    -- the handgun it keeps behind it, the clips, one heal, two MO disks
+    -- and the acid rounds, so the key to 50C never fit, and the computers
+    -- behind it were never read.
+    for _, row in ipairs((ctx.heal_swap or ctx.swap) and items or {}) do
+        if #out >= needed then
+            return out
+        end
+        local why = row.item ~= 0 and row.kind == "ammo" and BotInventory.keep(row, ctx)
+        if (why == "rounds for the gun's other loading"
+                or (ctx.heal_swap and why == "a fight ahead prefers it"))
+            and not (ctx.ammo and ctx.ammo[row.item]) then
+            out[#out + 1] = row
+        end
+    end
+    -- Last of all, for a key or <use> item with nothing softer held: the
+    -- cure stack while no poison runs, then the rounds of a gun other
+    -- than the equipped one. The box gives either back for a trip; a key
+    -- left behind ends the run (504's key to 50C met the launcher and its
+    -- grenades, the handgun and its clips, two MO disks, the spray and a
+    -- blue herb, and the lab's last door never opened).
+    local listed = {}
+    for _, row in ipairs(out) do
+        listed[row] = true
+    end
+    -- And last, the equipped gun's own spare rounds while the gun is
+    -- loaded (ctx.equipped_loaded), one stack and only when nothing else
+    -- went in for a key or <use> item (ctx.swaps): its clip gets the bot
+    -- back to the box. Taken with the ribbon, the desk key and the knife
+    -- for four pickups, 118's box got the clip it had just handed out, and
+    -- the bot met 207's zombies with one round, dying ten times.
+    -- 10F's music score met the handgun, its clips, the wood emblem, the
+    -- blue jewel, a key and one herb, every one kept, and the bot walked
+    -- 10F and 207 for 370k ticks without Rebecca's tune.
+    local equipped_ammo = ctx.own_ammo and ctx.equipped and ctx.own_ammo[ctx.equipped]
+    local softer = #out
+    for pass = 1, 3 do
+        for _, row in ipairs(ctx.swap and items or {}) do
+            if #out >= needed then
+                return out
+            end
+            local why = row.item ~= 0 and not listed[row] and BotInventory.keep(row, ctx)
+            local go = false
+            if pass == 1 then
+                go = why == "cure" and not ctx.cure_now
+            elseif pass == 2 then
+                go = why ~= nil and why ~= false and row.kind == "ammo"
+                    and row.item ~= equipped_ammo
+                    and not (ctx.gear and ctx.gear[row.item])
+            else
+                go = why ~= nil and why ~= false and row.kind == "ammo"
+                    and row.item == equipped_ammo and (ctx.equipped_loaded or 0) > 0
+                    and #out == 0 and softer == 0 and (ctx.swaps or 0) > 0
+                    and not (ctx.gear and ctx.gear[row.item])
+            end
+            if go then
+                listed[row] = true
+                out[#out + 1] = row
+            end
+        end
+    end
+    -- The desk key kept for a drawer (ctx.keep_desk) goes when nothing
+    -- else can: kept with two empty guns, a <use> item and one heal, it
+    -- left nothing to deposit for the handgun's boxed clips, and the run
+    -- ended on an empty frontier in 102.
+    for _, row in ipairs(ctx.keep_desk and items or {}) do
+        if #out > 0 or #out >= needed then
+            return out
+        end
+        if row.item == C.DESK_KEY and BotInventory.keep(row, ctx) == "key" then
+            out[#out + 1] = row
+        end
+    end
+    return out
+end
+
+-- The loadout withdrawal's reason: taken first, into any free slot, and
+-- worth a trip to a remote box (a full inventory makes room for it the way
+-- it does for a needed pickup).
+local LOADOUT = "loadout: a fight ahead prefers it"
+-- The withdrawal of the equipped gun's ammunition under its floor.
+local LOW_AMMO = "ammunition under the reserve floor"
+-- The withdrawal of the ammunition a held gun has none of.
+local GUN_AMMO = "ammunition for a held gun"
+-- The rearm withdrawal's reason, handled like the loadout's: a firearm in
+-- the box whose ammunition is held, or in the box while sourcing
+-- ammunition (BotSurvival.sourcing_now), comes out with it.
+local REARM = "rearm: a boxed gun's ammunition is at hand"
+-- The cure withdrawal's reason (ctx.cure_now).
+local CURE = "a cure for the poison"
+BotInventory.CURE = CURE
+-- The reasons that take any free slot and are worth a remote trip.
+-- A boxed reserve gun (the grenade launcher) taken out at a box the bot is
+-- at anyway while no held firearm has a round: in 88 of 124 room visits
+-- that ran past monsters with "no firearm with rounds", the launcher lay
+-- in the box and the handgun was empty.
+local REARM_HERE = "rearm: no held firearm has a round"
+-- A boxed reserve gun's rounds (and the gun) taken out at a box the bot is
+-- at anyway while sourcing ammunition (ctx.rearm_reserve).
+local REARM_RESERVE = "rearm: the box holds a reserve gun's rounds"
+-- The gear-up after a death: while a room the bot died in is still to be
+-- walked out of alive (BotNav.died_in), the box's heals (up to GEAR_HEALS
+-- stacks held) and the rounds and gun BotInventory.context picks
+-- (ctx.gear) come out, and stay out. The reload plays the same room with
+-- the same kit the same way: 308's two hunters killed the bot eight times
+-- on two saves, the launcher held empty all the while with its acid and
+-- flame rounds and two first aid sprays in the box.
+local GEAR = "gear up: the bot died in a room ahead"
+BotInventory.GEAR = GEAR
+BotInventory.GEAR_HEALS = 2
+-- The rounds (loaded and held) under which a held firearm is not armed
+-- for the gear-up: 509 was entered four times with one shell in the
+-- shotgun and the launcher and its rounds in the box, and the shell
+-- counted as a gun in hand.
+BotInventory.GEAR_ROUNDS = 4
+local FIRST = { [LOADOUT] = true, [REARM] = true, [REARM_HERE] = true,
+    [REARM_RESERVE] = true, [CURE] = true, [GEAR] = true }
+
+-- The free slots a top-up withdrawal must leave.
+-- A top-up leaves the reserve free, or the slots an open <brew> still
+-- needs for its bottles (ctx.brew_slots), whichever is more.
+-- And the slots this visit's soft deposits freed for pickups
+-- (ctx.room_for): 100's swap boxed two guns for two pickups, and the heal
+-- top-up took one of the slots back.
+-- Holds `n` slots for pickups past this box open, the inventory then at
+-- `used` slots (BotInventory.context): until pickups fill them or the bot
+-- leaves the room (BotInventory.enter_room).
+function BotInventory.note_room_for(n, used)
+    state().room_for = { n = n, used = used }
+end
+
+function BotInventory.enter_room()
+    state().room_for = nil
+    state().box_moves = nil
+end
+
+-- The box moves of one item, in or out, within one stay in a room, after
+-- which it stays where it is until the bot leaves (ctx.settled, {[item] =
+-- true}): two rules that each undo the other's visit end there. No run of
+-- 192 moved an item more than three times in a stay but the ones that
+-- never stopped: 403's box took the flame rounds in as "the gun's other
+-- loading" for a pickup and gave them back as "a fight ahead prefers it",
+-- 1469 times, to the run's last tick.
+BotInventory.BOX_MOVES = 3
+
+local function note_box_move(bot, item)
+    local moves = state().box_moves or {}
+    state().box_moves = moves
+    moves[item] = (moves[item] or 0) + 1
+    if moves[item] == BotInventory.BOX_MOVES then
+        log(bot, string.format("0x%02X moved %d times at this box: it stays until the bot leaves",
+            item, moves[item]))
+    end
+end
+
+-- The items settled for this stay (note_box_move), or nil.
+local function settled()
+    local out = nil
+    for item, n in pairs(state().box_moves or {}) do
+        if n >= BotInventory.BOX_MOVES then
+            out = out or {}
+            out[item] = true
+        end
+    end
+    return out
+end
+
+local function slots_to_leave(_, ctx)
+    local brew = ctx and ctx.brew_slots or 0
+    if ctx and (ctx.ahead or 0) > brew then
+        brew = ctx.ahead
+    end
+    local leave = brew > BotInventory.RESERVE and brew or BotInventory.RESERVE
+    local room = ctx and ctx.room_for or 0
+    return room > leave and room or leave
+end
+
+-- Why the box item `row` ({item, kind}) should come out, or nil.
+-- ctx adds: keys = {[id] = true} (keys remembered locked doors need),
+--           ammo_low = the equipped gun's ammunition below the floor,
+--           heals = heal stacks held.
+function BotInventory.wanted_back(row, ctx)
+    local item = row.item
+    if item == 0 then
+        return nil
+    end
+    if ctx.cure_now and ctx.cure_now[item] then
+        return CURE
+    end
+    if ctx.settled and ctx.settled[item] then
+        return nil
+    end
+    -- None held: one stack comes out at a box in this room (the save rooms
+    -- have both), not on a trip of its own.
+    if ctx.ribbon and item == ctx.ribbon and (ctx.ribbons or 0) == 0 and not ctx.reserve_only then
+        return RIBBON
+    end
+    if ctx.uses and ctx.uses[item] and not (ctx.far and ctx.far[item]) then
+        return "a <use> fact needs it"
+    end
+    if ctx.keys and ctx.keys[item] then
+        return "a lock needs it"
+    end
+    if ctx.ammo_low and (ctx.ammo_low == item or (ctx.ammo_alt and ctx.ammo_alt[item])) then
+        return LOW_AMMO
+    end
+    if ctx.gun_ammo and ctx.gun_ammo[item] then
+        return GUN_AMMO
+    end
+    -- A loadout weapon already held needs no second one: 30C's knife,
+    -- picked up there, sent the bot six doors to 403's box for the boxed
+    -- one, poisoned, and that took the slot the box's blue herb needed.
+    if ctx.loadout and ctx.loadout[item]
+        and not (row.kind == "weapon" and ctx.held_weapons and ctx.held_weapons[item]) then
+        return LOADOUT
+    end
+    if ctx.rearm and ctx.rearm[item] then
+        return REARM
+    end
+    -- Only at a box here, never a trip of its own (ctx.reserve_only).
+    if ctx.rearm_here and ctx.rearm_here[item] and not ctx.reserve_only then
+        return REARM_HERE
+    end
+    if ctx.rearm_reserve and ctx.rearm_reserve[item] and not ctx.reserve_only then
+        return REARM_RESERVE
+    end
+    -- One trip for it after each reload (state().geared, set by the box
+    -- visit; the reload rebuilds the state): later only at a box here.
+    if ctx.gear and not (ctx.reserve_only and state().geared)
+        and (ctx.gear[item] or (row.kind == "heal" and row.heals ~= false
+            and (ctx.heals or 0) < BotInventory.GEAR_HEALS)) then
+        return GEAR
+    end
+    if ctx.top_up and ctx.top_up == item and not ctx.reserve_only then
+        return "ammunition top-up at the box"
+    end
+    if row.kind == "heal" and row.heals ~= false and (ctx.heals or 0) == 0 then
+        return "no heal item held"
+    end
+    if row.kind == "heal" and row.heals ~= false and ctx.heal_top_up and not ctx.reserve_only then
+        return "heal top-up at the box"
+    end
+    return nil
+end
+
+-- The top-ups at a box here take stacks only while RESERVE slots stay free.
+local TOP_UPS = {
+    ["ammunition top-up at the box"] = true,
+    ["heal top-up at the box"] = true,
+    [RIBBON] = true,
+}
+
+-- The box rows to take back, at most `free` of them, box order.
+-- Whether box row `row` (wanted back for `why`) is a held gun's own rounds
+-- while no held firearm has a round (ctx.unarmed, ctx.ammo): they come out
+-- ahead of the gear-up's heals, into a slot held for pickups or the
+-- reserve, at a box here or for a remote trip.
+function BotInventory.dry_ammo(ctx, row, why)
+    return ctx.unarmed == true and why ~= nil and row.kind == "ammo"
+        and ctx.ammo ~= nil and ctx.ammo[row.item] == true
+end
+
+function BotInventory.withdrawals(box_items, ctx, free)
+    local out = {}
+    -- A puzzle step held for a free slot keeps it (ctx.hold_free): 30E's
+    -- box gave the slot it had just freed for 306's Doom Book to the
+    -- launcher 30C's tiger fight prefers, visit after visit. A dry held
+    -- gun's rounds (dry_ammo, below) may take it.
+    local raw_free = free
+    free = free - (ctx.hold_free or 0)
+    if free < 0 then
+        free = 0
+    end
+    local heal_taken = false
+    local ribbon_taken = false
+    local gear_heals = 0
+    -- One copy of a weapon comes out per visit: the deposit rule boxes a
+    -- second (BotInventory.deposits), and with rope=leave 403's box held
+    -- two knives the loadout wanted, both came out, one went back for the
+    -- full inventory, and the two box goals alternated for 220k ticks.
+    local weapon_taken = {}
+    -- The cure first, then the loadout and the rearm, so the heal top-up
+    -- does not fill their slots.
+    local rows = {}
+    -- A heal swapped in for (ctx.heal_swap) goes with the cure.
+    local function first(why)
+        return why == CURE or (ctx.heal_swap and why == "no heal item held")
+            or (ctx.ribbon_swap and why == RIBBON)
+    end
+    -- With no held firearm a round (ctx.unarmed), a held gun's rounds
+    -- come next, ahead of the gear-up's heals, and take a slot held for
+    -- pickups too: back from 509's zombies with the shotgun empty and the
+    -- knife equipped, 502's box handed over a third heal, the shells stayed
+    -- in, and 509 sent the bot back to the box until the run timed out.
+    local function dry_ammo(row, why)
+        return BotInventory.dry_ammo(ctx, row, why)
+    end
+    -- Of the loadout and the rearm, the weapons before their rounds: with
+    -- one slot to fill, the box (rounds before the launcher) handed over
+    -- the grenades, the launcher stayed in, and with every slot then used
+    -- and nothing to deposit Yawn's fight waited on it for good.
+    for pass = 1, 5 do
+        for _, row in ipairs(box_items) do
+            local why = BotInventory.wanted_back(row, ctx)
+            local weapon = row.kind == "weapon"
+            local later = not first(why) and not dry_ammo(row, why)
+            if (pass == 1 and first(why))
+                or (pass == 2 and not first(why) and FIRST[why] and weapon)
+                or (pass == 3 and not first(why) and dry_ammo(row, why))
+                or (pass == 4 and later and FIRST[why] and not weapon)
+                or (pass == 5 and later and not FIRST[why]) then
+                rows[#rows + 1] = row
+            end
+        end
+    end
+    for _, row in ipairs(rows) do
+        local why = BotInventory.wanted_back(row, ctx)
+        if #out >= raw_free then
+            break
+        end
+        -- Past the free slots only a dry gun's rounds come out; the rows
+        -- ahead of them are skipped, not the end (the ribbon came first
+        -- and left the shells in).
+        if #out >= free and not dry_ammo(row, why) then
+            why = nil
+        end
+        -- A top-up takes the stacks only while the reserve stays free.
+        if TOP_UPS[why] and free - #out <= slots_to_leave(why, ctx)
+            and not (ctx.ribbon_swap and why == RIBBON) and not dry_ammo(row, why) then
+            why = nil
+        end
+        -- Nor does ammunition under the floor take the slots a deposit
+        -- just freed for needed pickups (ctx.room_for): 403's box took
+        -- the flame rounds in for a pickup and handed them back out for
+        -- the floor, 250k ticks long.
+        -- Nor does the ammunition of a gun other than the equipped one,
+        -- which the last soft deposit may have just put in for a key: the
+        -- clip went in and out of 502's box for 240000 ticks.
+        if (why == LOW_AMMO or why == GEAR or why == GUN_AMMO)
+            and free - #out <= (ctx.room_for or 0) and not dry_ammo(row, why) then
+            why = nil
+        end
+        if why and row.kind == "weapon" then
+            if weapon_taken[row.item] then
+                why = nil
+            end
+            weapon_taken[row.item] = true
+        end
+        -- The gear-up takes heals up to its count.
+        if why == GEAR and row.kind == "heal" then
+            if (ctx.heals or 0) + gear_heals >= BotInventory.GEAR_HEALS then
+                why = nil
+            else
+                gear_heals = gear_heals + 1
+            end
+        end
+        -- One ribbon stack is enough, as one heal stack is for the "none
+        -- held" rule.
+        if why == RIBBON then
+            if ribbon_taken then
+                why = nil
+            end
+            ribbon_taken = true
+        end
+        if why and not (why == "no heal item held" and heal_taken) then
+            if why == "no heal item held" then
+                heal_taken = true
+            end
+            out[#out + 1] = row
+        end
+    end
+    return out
+end
+
+-- The slot reserve at a box here: deposit when no more than RESERVE slots
+-- are free and more known pickups than that need one. ctx: {capacity,
+-- used}; `deposits` the count the keep rule lets go; `pickups` the count
+-- of known pickups needing a slot.
+function BotInventory.reserve_due(ctx, deposits, pickups)
+    local free = ctx.capacity - ctx.used
+    -- A brew ahead (ctx.ahead, BotMix.slots_ahead) keeps its bottles'
+    -- slots free whatever the pickups.
+    if deposits > 0 and (ctx.ahead or 0) > free then
+        return true
+    end
+    return deposits > 0 and free <= BotInventory.RESERVE and pickups > free
+end
+
+-- The best MOVE that empties a slot: `{slot, target}` (0-based menu slots)
+-- or nil. `result(slot, target)` is bot:combine_result.
+-- Whether combining rows `a` and `b` loads a weapon with ammunition other
+-- than its own (ctx.own_ammo: {[weapon] = ammo}): that turns it into
+-- another item (the grenade launcher 0x07 with acid rounds is 0x08), which
+-- the knowledge, the loadout and the rearm do not know as the weapon. The
+-- empty launcher took 118's acid rounds to free a slot, and the bot then
+-- boxed it and met 30C's Black Tiger without it.
+local function loads_other(a, b, ctx)
+    local own = ctx.own_ammo
+    if not own then
+        return false
+    end
+    local gun, ammo = a, b
+    if b.kind == "weapon" then
+        gun, ammo = b, a
+    end
+    return gun.kind == "weapon" and ammo.kind == "ammo" and own[gun.item] ~= ammo.item
+end
+
+function BotInventory.combine_pick(items, ctx, result)
+    local best, best_rank = nil, nil
+    for i, a in ipairs(items) do
+        for j, b in ipairs(items) do
+            if i ~= j and a.item ~= 0 and b.item ~= 0
+                and MIX_KINDS[a.kind] and MIX_KINDS[b.kind]
+                and not loads_other(a, b, ctx)
+                and not (ctx.uses and (ctx.uses[a.item] or ctx.uses[b.item])) then
+                local r = result(a.slot, b.slot)
+                if r.frees and (r.result == "applied" or r.result == "herb") then
+                    local rank = MIX_KINDS[a.kind] + MIX_KINDS[b.kind]
+                    if not best_rank or rank < best_rank then
+                        best, best_rank = { slot = a.slot, target = b.slot, item = a.item,
+                            other = b.item }, rank
+                    end
+                end
+            end
+        end
+    end
+    return best
+end
+
+-- The box slot nearest `cursor` (forward or back, wrapping over `count`
+-- slots) that satisfies `want(row)`, and the direction to page: +1 down
+-- (next), -1 up (previous), 0 already there. nil when none does.
+function BotInventory.box_target(rows, cursor, want)
+    local count = #rows
+    local best, best_dist, best_dir = nil, nil, 0
+    for _, row in ipairs(rows) do
+        if want(row) then
+            local fwd = (row.slot - cursor) % count
+            local back = (cursor - row.slot) % count
+            local dist, dir = fwd, 1
+            if back < fwd then
+                dist, dir = back, -1
+            end
+            if dist == 0 then
+                dir = 0
+            end
+            if not best_dist or dist < best_dist then
+                best, best_dist, best_dir = row, dist, dir
+            end
+        end
+    end
+    return best, best_dir
+end
+
+-- ---- reads ---------------------------------------------------------------
+
+local function used_slots(items)
+    local n = 0
+    for _, row in ipairs(items) do
+        if row.item ~= 0 then
+            n = n + 1
+        end
+    end
+    return n
+end
+
+-- The gear the box hands out after a death or a retreat (GEAR). For each
+-- held firearm, its own rounds from the box; for one with no round of its
+-- own loaded, held or boxed, one other loading's kind while none is held
+-- (the planner loads it, BotInventory.load_now). With no held firearm but
+-- the staple one armed that way (the handgun alone is what the room beat:
+-- thirty rounds "covered" 509's three zombies, and four replays of that
+-- walk took 34 hits and a death), one boxed firearm with rounds boxed or
+-- held, any loading's, comes out with them: an ordinary one before a
+-- reserve one, the staple one last. No more than that: every kind of
+-- grenade round and three heals filled the slots 503's MO disk needed, and
+-- the lab's last door never opened. {[item] = true}.
+-- The items lying as known pickups in the rooms the bot died in and has
+-- not left alive since ({[item] = true}), read once a tick: bot:world()
+-- builds the whole world table.
+local lying_cache = { tick = nil, items = {} }
+local function lying_where_died(bot)
+    if lying_cache.tick ~= bot:tick() then
+        local items = {}
+        for _, goal in ipairs(bot:world().frontier or {}) do
+            if goal.kind == "item" and goal.item and BotNav.died_in(bot, goal.room) > 0 then
+                items[goal.item] = true
+            end
+        end
+        lying_cache = { tick = bot:tick(), items = items }
+    end
+    return lying_cache.items
+end
+
+local function gear_set(bot, knowledge)
+    local box = BotInventory.remembered(bot)
+    local lying = lying_where_died(bot)
+    local gear = {}
+    local armed = false
+    local ids = {}
+    for id, row in pairs(knowledge.weapons) do
+        if not row.melee and bot:ammo_for(id) then
+            ids[#ids + 1] = id
+        end
+    end
+    table.sort(ids)
+    -- The other loadings' rounds of `id` (sorted), and whether one is held.
+    local function other_rounds(id)
+        local row = knowledge.weapons[id]
+        local own = bot:ammo_for(id)
+        local base = row.variant_of or id
+        local others, held = {}, false
+        for _, other_id in ipairs(ids) do
+            local other = knowledge.weapons[other_id]
+            local ammo = bot:ammo_for(other_id)
+            if other_id ~= id and ammo ~= own
+                and (other_id == base or other.variant_of == base) then
+                others[#others + 1] = ammo
+                held = held or bot:item_count(ammo) > 0
+            end
+        end
+        table.sort(others)
+        return others, held
+    end
+    for _, id in ipairs(ids) do
+        local row = knowledge.weapons[id]
+        local own = bot:ammo_for(id)
+        if bot:has_item(id) then
+            local count = bot:item_count(id) + bot:item_count(own)
+            local has = count > 0
+            -- Boxed rounds have no count in the memory: taken as enough.
+            local enough = count >= BotInventory.GEAR_ROUNDS
+            if box[own] then
+                gear[own] = true
+                -- And the gun stays held for them (soft_deposits): 502's
+                -- box handed the launcher out as gear and, its rounds
+                -- still boxed, took it back in for an MO disk 500 ticks
+                -- later; 509 killed the bot again with five handgun rounds.
+                gear[id] = true
+                has = true
+                enough = true
+            elseif not enough then
+                -- (Under GEAR_ROUNDS counts as none here: three flame
+                -- rounds met 509's four zombies with the explosive ones
+                -- boxed.)
+                local others, held = other_rounds(id)
+                local found = false
+                for _, ammo in ipairs(held and {} or others) do
+                    if box[ammo] then
+                        gear[ammo] = true
+                        gear[id] = true
+                        found = true
+                        break
+                    end
+                end
+                has = has or found or held
+                enough = found or held
+            end
+            armed = armed or (enough and not row.staple)
+        end
+    end
+    if not armed then
+        local pick, pick_rank, pick_ammo
+        for _, id in ipairs(ids) do
+            local row = knowledge.weapons[id]
+            local own = bot:ammo_for(id)
+            local base = row.variant_of or id
+            local family_held = false
+            for _, other_id in ipairs(ids) do
+                local other = knowledge.weapons[other_id]
+                if (other_id == base or other.variant_of == base) and bot:has_item(other_id) then
+                    family_held = true
+                end
+            end
+            -- Its rounds may also lie in the room the bot died in: 513
+            -- holds a clip, the Tyrant falls to it (a kiting bot fetches
+            -- rounds for a held gun), and every one of 15 deaths there
+            -- in two sets of 96 runs had the handgun in the box and no
+            -- other round anywhere.
+            local ammo = (box[own] or bot:item_count(own) > 0 or lying[own]) and own or nil
+            if not ammo then
+                local others = other_rounds(id)
+                for _, kind in ipairs(others) do
+                    if not ammo and (box[kind] or bot:item_count(kind) > 0) then
+                        ammo = kind
+                    end
+                end
+            end
+            local rank = row.staple and 2 or (row.reserve and 1 or 0)
+            if box[id] and not family_held and ammo and (not pick or rank < pick_rank) then
+                pick, pick_rank, pick_ammo = id, rank, ammo
+            end
+        end
+        if pick then
+            gear[pick] = true
+            if box[pick_ammo] then
+                gear[pick_ammo] = true
+            end
+        end
+    end
+    return gear
+end
+
+-- Whether the remembered box holds such gear now (BotPlanner.retreat).
+function BotInventory.gear_boxed(bot)
+    local knowledge = bot:knowledge()
+    return knowledge ~= nil and next(gear_set(bot, knowledge)) ~= nil
+end
+
+-- A new lesson (a retreat) is worth its own trip to the box: see
+-- state().geared.
+function BotInventory.regear()
+    state().geared = nil
+end
+
+-- The policy context from the live state.
+-- The fewest <use> items of one room that make a set to carry together
+-- (BotInventory.context: 11A's four crests).
+local SET_MIN = 3
+
+function BotInventory.context(bot)
+    local ctx = { uses = {}, guns = {}, ammo = {}, keys = {}, cures = {}, heals = 0 }
+    ctx.equipped = bot:player().equipped
+    ctx.equipped_loaded = ctx.equipped and ctx.equipped ~= 0 and bot:item_count(ctx.equipped) or 0
+    local saves = bot.saves and bot:saves() or {}
+    if saves.needs_ribbon and saves.ribbon_item then
+        ctx.ribbon, ctx.ribbons = saves.ribbon_item, saves.ribbons or 0
+        -- A save here waits only on the ribbon in the box (BotSave.ribbon_due):
+        -- it comes out ahead of the top-ups, a soft keep going in for it.
+        if ctx.ribbons == 0 and BotInventory.remembered(bot)[ctx.ribbon]
+            and BotSave and BotSave.ribbon_due and BotSave.ribbon_due(bot) then
+            ctx.ribbon_swap = true
+        end
+    end
+    ctx.settled = settled()
+    local knowledge = bot:knowledge()
+    -- Poisoned with no cure for it held: the cures for it come out of the
+    -- box first (ctx.cure_now; 408's wasps poisoned the bot and it walked
+    -- 17k ticks poisoned with a blue herb boxed).
+    local player = bot:player()
+    local cure_for, cure_held = {}, false
+    for _, cure in ipairs(knowledge and knowledge.cures or {}) do
+        ctx.cures[cure.item] = true
+        if (cure.poison == "poison" and player.poisoned)
+            or (cure.poison == "serious" and player.seriously_poisoned) then
+            cure_for[cure.item] = true
+            cure_held = cure_held or bot:item_count(cure.item) > 0
+        end
+    end
+    if next(cure_for) and not cure_held then
+        ctx.cure_now = cure_for
+    end
+    ctx.own_ammo = {}
+    for id, _ in pairs(knowledge and knowledge.weapons or {}) do
+        ctx.guns[id] = true
+        ctx.own_ammo[id] = bot:ammo_for(id)
+        if bot:has_item(id) then
+            ctx.held_weapons = ctx.held_weapons or {}
+            ctx.held_weapons[id] = true
+        end
+        -- The reserve is kept only for a gun the bot holds: shells carried
+        -- before the shotgun fill a slot a pickup needs, and the box gives
+        -- them back once the gun is equipped (the reserve-floor withdrawal).
+        local ammo = bot:ammo_for(id)
+        if ammo and bot:has_item(id) then
+            ctx.ammo[ammo] = true
+            if bot:item_count(ammo) == 0 then
+                ctx.gun_ammo = ctx.gun_ammo or {}
+                ctx.gun_ammo[ammo] = true
+            end
+        end
+    end
+    if ctx.equipped and bot:ammo_for(ctx.equipped) then
+        ctx.ammo[bot:ammo_for(ctx.equipped)] = true
+    end
+    -- A <use> item whose open uses all lie in stages not entered yet (the
+    -- lab's MO disk computers, from the caves) is needed but not kept: the
+    -- boxes share one store, so it may wait in one and come out at a box of
+    -- that stage (ctx.far). Carried, two disks and the crank filled the
+    -- slots 306's Doom Book needed.
+    local stages = { [string.sub(bot:room().id, 1, 1)] = true }
+    for _, room in ipairs(bot:world().rooms) do
+        if room.visited then
+            stages[string.sub(room.id, 1, 1)] = true
+        end
+    end
+    local near, used = {}, {}
+    for _, fact in ipairs(bot:use_facts()) do
+        -- So is one whose use waits only on an `after` flag that a learned
+        -- door ride sets (BotPlanner.after_door): the ride is a trip once
+        -- the item is held. Riding 302's elevator down closed 301's refill,
+        -- and the crank stayed in the box for good.
+        if BotPuzzle.use_open(bot, fact)
+            or (BotPlanner and BotPlanner.after_door and BotPlanner.after_door(bot, fact)) then
+            ctx.uses[fact.item] = true
+            used[fact.item] = true
+            if stages[string.sub(fact.room, 1, 1)] then
+                near[fact.item] = true
+            end
+        end
+    end
+    -- (Only <use> items: a <deliver> item or a doom book has no use fact
+    -- to place it, and a brew's chemicals are wanted here.)
+    for item, _ in pairs(used) do
+        if not near[item] then
+            ctx.far = ctx.far or {}
+            ctx.far[item] = true
+        end
+    end
+    -- So, and keys too, are the items of a room whose open uses wait on
+    -- an item the bot neither holds nor has boxed (ctx.waiting): 11A's
+    -- crests go in together, and three of four carried filled Chris's six
+    -- slots, so 116's shotgun was passed and the adders met with an empty
+    -- handgun. They come out once the last one is found.
+    -- Only uses on distinct slots make a set: two items for one probe are
+    -- alternatives (10D's blue and red jewels turn the tiger either way),
+    -- and the blue one waited boxed for a red one it never needed. And only
+    -- SET_MIN or more: two uses are steps in turn as often as a set (10F's
+    -- music score, then the wood emblem once the gold one is taken; Jill
+    -- boxed the wood emblem, took the gold one and was walled in).
+    local by_room, slots, shared = {}, {}, {}
+    for _, fact in ipairs(bot:use_facts()) do
+        if used[fact.item] and BotPuzzle.use_open(bot, fact) then
+            by_room[fact.room] = by_room[fact.room] or {}
+            by_room[fact.room][fact.item] = true
+            local key = fact.room .. ":" .. tostring(fact.slot)
+            if slots[key] and slots[key] ~= fact.item then
+                shared[fact.room] = true
+            end
+            slots[key] = fact.item
+        end
+    end
+    for room, items in pairs(by_room) do
+        local missing, count = false, 0
+        for _, _ in pairs(items) do
+            count = count + 1
+        end
+        if count < SET_MIN then
+            items = {}
+        end
+        for item, _ in pairs(shared[room] and {} or items) do
+            if bot:item_count(item) == 0 and BotInventory.boxed_count(bot, item) == 0 then
+                missing = true
+            end
+        end
+        if missing then
+            for item, _ in pairs(items) do
+                ctx.waiting = ctx.waiting or {}
+                ctx.waiting[item] = true
+                ctx.far = ctx.far or {}
+                ctx.far[item] = true
+            end
+        end
+    end
+    ctx.hold_free = BotPlanner and BotPlanner.steps_needing_room
+        and BotPlanner.steps_needing_room(bot, true) or 0
+    -- So does a needed item left behind on a full inventory (217's disk).
+    if BotPlanner and BotPlanner.needed_items_left then
+        ctx.hold_free = ctx.hold_free + BotPlanner.needed_items_left(bot)
+    end
+    -- So are a <brew>'s bottles and chemicals while it is open here: the
+    -- room's bottles then count as needed pickups, so the box makes room
+    -- for them all in one trip.
+    for item, _ in pairs(BotMix.needs(bot)) do
+        ctx.uses[item] = true
+    end
+    ctx.brew_slots = BotMix.slots_needed(bot)
+    ctx.ahead = BotMix.slots_ahead(bot)
+    ctx.unarmed = not BotInventory.armed(bot)
+    -- An item a wanted <deliver> needs is kept like a <use> item.
+    for item, _ in pairs(BotPuzzle.wanted_items(bot)) do
+        ctx.uses[item] = true
+    end
+    -- So is a doom book whose medal a <use> wants (305's fountain): the
+    -- book becomes the medal once opened.
+    for book = C.DOOM_BOOK_2, C.DOOM_BOOK_2 + 1 do
+        if ctx.uses[book - C.DOOM_BOOK_2 + C.WOLF_MEDAL] then
+            ctx.uses[book] = true
+        end
+    end
+    for _, room in ipairs(bot:world().rooms) do
+        for _, door in ipairs(room.doors) do
+            if door.present and door.locked and not door.unlocked and not door.traversed then
+                ctx.keys[door.key] = true
+            end
+        end
+    end
+    -- So does a locked drawer met in this stage (BotPlanner.drawer_waits)
+    -- want the desk key.
+    -- One is enough, and the box holds several: while one is held the rest
+    -- stay in (a desk key wanted back at every visit filled three slots, and
+    -- Chris met 206's hunter with an empty handgun).
+    if BotPlanner and BotPlanner.drawer_waits and BotPlanner.drawer_waits(bot) then
+        if not bot:has_item(C.DESK_KEY) then
+            ctx.keys[C.DESK_KEY] = true
+        end
+    end
+    -- Held, it stays out of the soft deposits while a locked drawer's item
+    -- waits on a full inventory (BotPlanner.drawer_full): only then, since
+    -- a key kept for every drawer met filled a slot for the whole stage.
+    if bot:has_item(C.DESK_KEY) and BotPlanner and BotPlanner.drawer_full
+        and BotPlanner.drawer_full(bot) then
+        ctx.keep_desk = true
+    end
+    -- The loadout: the weapon (and its ammunition) a met <fight> still to
+    -- be won prefers (BotNav.fight_met: the bot entered its room), so the
+    -- bot comes back to it from the box with that weapon (513's Tyrant and
+    -- the grenade launcher). A boss not met yet asks nothing: the run does
+    -- not know it, and holding its kit kept the shotgun's shells (the gun
+    -- boxed) and the launcher in a full inventory that 408's key then never
+    -- fitted (five of eight seeds ended there).
+    local box = BotInventory.remembered(bot)
+    local stages_seen = { [bot:room().id:sub(1, 1)] = true }
+    for _, room in ipairs(bot:world().rooms) do
+        if room.visited then
+            stages_seen[room.id:sub(1, 1)] = true
+        end
+    end
+    for _, fight in ipairs(bot:fight_facts()) do
+        local entry = knowledge and knowledge.enemies[fight.enemy]
+        local prefer = entry and entry.prefer
+        -- A preferred weapon neither held nor boxed (Brad's rocket
+        -- launcher, dropped mid-fight) gives way to the enemy's opening
+        -- one (`open`: the grenade launcher for 303's Tyrant).
+        if prefer and entry.open and not bot:has_item(prefer) and not box[prefer] then
+            prefer = entry.open
+        end
+        local row = prefer and knowledge.weapons[prefer]
+        -- A preferred firearm with no round for any loading of it, held or
+        -- boxed (BotInventory.dry_gun), fights nothing: it is dead weight
+        -- until its rounds turn up, and a stand-in serves. Kept for 101's
+        -- hunter, the empty shotgun (no shells left anywhere) held the slot
+        -- 408's key to 406 needed, and the run ended on an empty frontier.
+        local dry = row and BotInventory.dry_gun(bot, prefer, box)
+        local pending = row and not (fight.bank and bot:flag(fight.bank, fight.bit))
+        -- A `carry` fight readies once the bot has been in its stage, met
+        -- or not: 30C's web lies in a pocket (30B's door back to 307 is shut
+        -- for Chris) whose only box is behind the web, and six runs met it
+        -- with every slot full and the knife boxed, its own knife out of
+        -- reach on the floor. Not only while in the stage: the last box on
+        -- the way in is 403's, in the guardhouse, and 308 to 30A is a
+        -- pocket with none (ten runs met the web so).
+        local carried = fight.carry and fight.room
+            and stages_seen[fight.room:sub(1, 1)]
+        if pending and (BotNav.fight_met(bot, fight) or carried) then
+            ctx.loadout = ctx.loadout or {}
+            if not dry then
+                ctx.loadout[prefer] = true
+            end
+            -- A hand weapon is the only way through its fight (the step
+            -- holds until it is held): a needed pickup, worth a spare
+            -- gun's slot like a key (ctx.required). 30C's web met a full
+            -- inventory of guns, rounds, the crank and the medal with
+            -- both knives out of reach, one boxed and one on its floor,
+            -- and the run ended on an empty frontier. Held, a second one
+            -- is no more use.
+            if row.melee and not bot:has_item(prefer) then
+                ctx.required = ctx.required or {}
+                ctx.required[prefer] = true
+            end
+            local ammo = bot:ammo_for(prefer)
+            if ammo then
+                ctx.loadout[ammo] = true
+            end
+            -- With the preferred gun neither held nor boxed, a held or
+            -- boxed gun with a band for the enemy stands in
+            -- (BotSurvival.fight_ready). Held ones too: kept only while
+            -- boxed, the handgun went in as a spare and came out as the
+            -- stand-in at 50E's box until the run's ticks ran out.
+            if dry or (not bot:has_item(prefer) and not box[prefer]) then
+                for id, band in pairs(entry.keep or {}) do
+                    local gun = knowledge.weapons[id]
+                    if gun and not gun.melee and (box[id] or bot:has_item(id))
+                        and (band.damage or 0) > 0 and not BotInventory.dry_gun(bot, id, box) then
+                        ctx.loadout[id] = true
+                        local rounds = bot:ammo_for(id)
+                        if rounds then
+                            ctx.loadout[rounds] = true
+                        end
+                    end
+                end
+            end
+            -- The same weapon loaded with other rounds (variant_of: the
+            -- launcher with flame rounds is 0x09), held or boxed, is that
+            -- weapon (the acid one went into 100's box as a spare gun and
+            -- the bot met 309's hunters without it), and so are the other
+            -- rounds held for it.
+            -- The other rounds only while its own run short (OWN_ROUNDS):
+            -- three kinds of grenade rounds held as loadout left no slot to
+            -- deposit for 30A's hex crank, and the run ended there; but one
+            -- explosive round left counted as held, the acid and flame
+            -- rounds went into 30E's box, and the bot met the lab with one.
+            -- A loading that hits the enemy harder than the preferred one
+            -- keeps its rounds whatever the own ones hold: six explosive
+            -- rounds dropped the flame ones (205 a hit on 30C's Black Tiger
+            -- to their 60) into 100's box, and the tiger fight never came.
+            local own = ammo and bot:item_count(ammo) >= OWN_ROUNDS
+            local function damage_of(id)
+                local band = entry.keep and entry.keep[id]
+                return band and band.damage or 0
+            end
+            for id, gun in pairs(knowledge.weapons) do
+                if gun.variant_of == prefer then
+                    local other = bot:ammo_for(id)
+                    if (bot:has_item(id) or box[id]) and not BotInventory.dry_gun(bot, id, box) then
+                        ctx.loadout[id] = true
+                    end
+                    local better = damage_of(id) > damage_of(prefer)
+                    if other and (not own or better)
+                        and (bot:item_count(other) > 0 or box[other]) then
+                        ctx.loadout[other] = true
+                    end
+                end
+            end
+        end
+    end
+    -- A hand weapon no <fight> in this stage prefers is spare: the last
+    -- soft keep to go in (the knife, until the stage of 30C's web).
+    for id, row in pairs(knowledge and knowledge.weapons or {}) do
+        if row.melee and id ~= ctx.equipped and bot:has_item(id) then
+            ctx.spare = ctx.spare or {}
+            ctx.spare[id] = true
+        end
+    end
+    -- Held firearms other than the equipped one and the staple (the
+    -- handgun, whose ammunition is the most common), by rounds (the clip
+    -- plus the ammunition held): the very last soft keeps, fewest rounds
+    -- first. The staple, not equipped, goes after every other spare gun
+    -- (ctx.staple_guns): 408's guardhouse key found the slots full of the
+    -- equipped shotgun's kit, the loadout's grenade launcher and the
+    -- handgun. The rearm takes it back once its ammunition is held.
+    for id, row in pairs(knowledge and knowledge.weapons or {}) do
+        if not row.melee and id ~= ctx.equipped and bot:has_item(id) then
+            local ammo = bot:ammo_for(id)
+            ctx.spare_guns = ctx.spare_guns or {}
+            ctx.spare_guns[id] = bot:item_count(id) + (ammo and bot:item_count(ammo) or 0)
+            if row.staple then
+                ctx.staple_guns = ctx.staple_guns or {}
+                ctx.staple_guns[id] = true
+            end
+        end
+    end
+    -- The only held firearm with a round is no spare gun (the staple goes
+    -- last, so the loaded launcher went in before the empty handgun, and
+    -- the box rearm took it out again: REARM_HERE).
+    local loaded_guns = {}
+    for id, row in pairs(knowledge and knowledge.weapons or {}) do
+        local ammo = bot:ammo_for(id)
+        if not row.melee and bot:has_item(id)
+            and bot:item_count(id) + (ammo and bot:item_count(ammo) or 0) > 0 then
+            loaded_guns[#loaded_guns + 1] = id
+        end
+    end
+    if #loaded_guns == 1 and ctx.spare_guns then
+        ctx.spare_guns[loaded_guns[1]] = nil
+    end
+    -- With a reserve gun (the launcher) or nothing equipped, one ordinary
+    -- firearm is not spare: the swap boxed the shotgun and then the
+    -- handgun behind the launcher, and the lab's zombies met an empty
+    -- flame launcher and the knife. A loaded one that is not the staple
+    -- (the shotgun) first, then the most rounds: kept for its rounds, the
+    -- handgun met 308's two hunters with the shotgun boxed.
+    local equipped = knowledge and ctx.equipped and knowledge.weapons[ctx.equipped]
+    if not equipped or equipped.reserve or equipped.melee then
+        local best, best_rank
+        for id, rounds in pairs(ctx.spare_guns or {}) do
+            local row = knowledge.weapons[id]
+            local rank = (rounds > 0 and not row.staple) and 1 or 0
+            if not row.reserve and (not best or rank > best_rank
+                or (rank == best_rank and (rounds > ctx.spare_guns[best]
+                    or (rounds == ctx.spare_guns[best] and id > best)))) then
+                best, best_rank = id, rank
+            end
+        end
+        if best then
+            ctx.spare_guns[best] = nil
+        end
+    end
+    -- A held firearm that is dead weight (soft_deposits' gear tier).
+    do
+        local box = BotInventory.remembered(bot)
+        for id, row in pairs(knowledge and knowledge.weapons or {}) do
+            if not row.melee and id ~= ctx.equipped and bot:has_item(id)
+                and bot:item_count(id) == 0 and not (ctx.loadout and ctx.loadout[id]) then
+                local base = row.variant_of or id
+                local at_hand = false
+                for other_id, other in pairs(knowledge.weapons) do
+                    local ammo = (other_id == base or other.variant_of == base)
+                        and bot:ammo_for(other_id)
+                    if ammo and (bot:item_count(ammo) > 0 or box[ammo]) then
+                        at_hand = true
+                    end
+                end
+                if not at_hand then
+                    ctx.empty_guns = ctx.empty_guns or {}
+                    ctx.empty_guns[id] = true
+                end
+            end
+        end
+    end
+    -- The loadout keeps a hand weapon a fight in this stage prefers; one
+    -- whose fight is in a later stage is spare until then (the knife,
+    -- held for 30C's web from the first room, took a slot the shells
+    -- needed), and the loadout takes it back out of the box there.
+    for id, _ in pairs(ctx.loadout or {}) do
+        if ctx.spare then
+            ctx.spare[id] = nil
+        end
+    end
+    ctx.ammo_low = BotSurvival.ammo_need(bot)
+    ctx.new_guns = BotInventory.new_guns(bot)
+    -- Under the floor, the gun's other loadings' rounds come out too (the
+    -- launcher's acid and flame rounds load into it, BotInventory.load_now):
+    -- the bot met 509's zombies with an empty launcher and both in 50E's box.
+    if ctx.ammo_low and knowledge then
+        local held = knowledge.weapons[bot:weapon().weapon]
+        local base = held and (held.variant_of or bot:weapon().weapon)
+        for id, row in pairs(base and knowledge.weapons or {}) do
+            local other = (row.variant_of or id) == base and bot:ammo_for(id)
+            if other and other ~= ctx.ammo_low then
+                ctx.ammo_alt = ctx.ammo_alt or {}
+                ctx.ammo_alt[other] = true
+            end
+        end
+    end
+    -- The gear-up after a death or a retreat (gear_set).
+    if knowledge and BotNav.died_anywhere(bot) then
+        ctx.gear = gear_set(bot, knowledge)
+    end
+    -- The rearm: a firearm (not a reserve one) the remembered box holds,
+    -- with its ammunition held (useless without it: the shells picked up
+    -- after the shotgun went in for a key), or in the box while sourcing
+    -- ammunition, or while the equipped gun is under its floor (the boxed
+    -- handgun and its bullets stayed in 50E's box while the bot met 509's
+    -- zombies with an empty launcher). The held ammunition stays
+    -- (BotInventory.keep).
+    if knowledge then
+        local box = BotInventory.remembered(bot)
+        local sourcing = BotSurvival.sourcing_now(bot)
+        for id, row in pairs(knowledge.weapons) do
+            local ammo = bot:ammo_for(id)
+            local held = ammo and bot:item_count(ammo) > 0
+            if not row.melee and not row.reserve and box[id] and not bot:has_item(id)
+                and ammo and (held or ((sourcing or ctx.ammo_low) and box[ammo])) then
+                ctx.rearm = ctx.rearm or {}
+                ctx.rearm[id] = true
+                ctx.rearm[ammo] = true
+            end
+        end
+    end
+    -- The rearm at a box here (REARM_HERE): a reserve gun, while no held
+    -- firearm has a round.
+    if knowledge then
+        local loaded = BotInventory.armed(bot)
+        local box = BotInventory.remembered(bot)
+        for id, row in pairs(loaded and {} or knowledge.weapons) do
+            if row.reserve and not row.melee and box[id] and not bot:has_item(id) then
+                ctx.rearm_here = ctx.rearm_here or {}
+                ctx.rearm_here[id] = true
+            end
+        end
+        -- Sourcing ammunition (the equipped gun under its floor, none
+        -- known), a reserve gun, held or boxed, comes out with one kind of
+        -- rounds the box holds for any of its loadings, while it holds none
+        -- of them: 502's swap boxed the empty launcher for the MO disks,
+        -- the acid and flame rounds stayed beside it, and the bot met 509's
+        -- four zombies with four handgun rounds, four deaths. With
+        -- barry_early=chemical the launcher and both kinds of rounds sat in
+        -- 100's box while the bot walked the mansion on one shell.
+        -- Not only while sourcing: whenever it fits (the guard below), or
+        -- a held gun that is dead weight can go in for it (ctx.swap_out).
+        -- Of 2676 replays of rooms with a hunter, the 692 with the
+        -- launcher and its rounds boxed took 383 of the 669 hits, 0.55 a
+        -- replay to 0.09 with five rounds for it held; in over half of
+        -- them the bot carried an empty shotgun with no shell anywhere.
+        do
+            local sourcing_reserve = BotSurvival.sourcing_now(bot)
+            local bases = {}
+            for id, row in pairs(knowledge.weapons) do
+                if row.reserve and not row.melee and bot:ammo_for(id) then
+                    local base = row.variant_of or id
+                    local b = bases[base] or { guns = {}, rounds = {} }
+                    bases[base] = b
+                    b.guns[#b.guns + 1] = id
+                    b.rounds[#b.rounds + 1] = bot:ammo_for(id)
+                end
+            end
+            for _, b in pairs(bases) do
+                local held_gun, boxed_gun, held_rounds, boxed_rounds = false, nil, false, nil
+                table.sort(b.guns)
+                table.sort(b.rounds)
+                local clip = 0
+                for _, id in ipairs(b.guns) do
+                    held_gun = held_gun or bot:has_item(id)
+                    boxed_gun = boxed_gun or (box[id] and id) or nil
+                    if bot:has_item(id) then
+                        clip = clip + bot:item_count(id)
+                    end
+                end
+                for _, ammo in ipairs(b.rounds) do
+                    held_rounds = held_rounds or bot:item_count(ammo) > 0
+                    boxed_rounds = boxed_rounds or (box[ammo] and ammo) or nil
+                end
+                if boxed_gun and not held_gun and (held_rounds or boxed_rounds) then
+                    -- The boxed gun, to rounds held for it too: 403's box
+                    -- kept the launcher while the bot carried six flame
+                    -- rounds out past it, and met seven hunters with the
+                    -- handgun.
+                    ctx.rearm_reserve = ctx.rearm_reserve or {}
+                    ctx.rearm_reserve[boxed_gun] = true
+                    if not held_rounds then
+                        ctx.rearm_reserve[boxed_rounds] = true
+                    end
+                elseif held_gun and boxed_rounds and not held_rounds and clip == 0 then
+                    ctx.rearm_reserve = ctx.rearm_reserve or {}
+                    ctx.rearm_reserve[boxed_rounds] = true
+                end
+                -- What the rearm has taken out stays out until the gun is
+                -- loaded: once held, the gun and its rounds no longer
+                -- count as "to withdraw", and the next deposit for a
+                -- pickup or the slot reserve put them straight back. Two
+                -- runs swapped 0x07 in and out of 118's and 403's box
+                -- until max_ticks. Only with the gun held: the rearm takes
+                -- the gun and its rounds out together, so rounds held
+                -- beside a boxed gun, or with no gun at all, are floor
+                -- pickups, not its work, and (held rounds stopping the
+                -- rearm) kept for good they shut the box on themselves:
+                -- with vjolt=yes 0x10 and 0x12 rode beside the boxed
+                -- launcher, and 409's V-JOLT brew found no slot for its
+                -- last bottle; with sandwich=yes 100's first deposit kept
+                -- the acid rounds and boxed the next item.
+                -- A round still in the gun changes nothing for the rounds
+                -- held beside it: 50E's rearm took the launcher out with
+                -- one explosive round loaded, and the acid rounds it came
+                -- with went back in for the slot reserve; 513's Tyrant met
+                -- four shells and that one round.
+                if held_gun and (held_rounds or (clip == 0 and boxed_rounds)) then
+                    ctx.keep_reserve = ctx.keep_reserve or {}
+                    local own = nil
+                    for _, id in ipairs(b.guns) do
+                        if bot:has_item(id) then
+                            ctx.keep_reserve[id] = true
+                            own = own or bot:ammo_for(id)
+                        end
+                    end
+                    -- One stack of rounds with it, its own loading's first
+                    -- (every stack, while sourcing): the launcher with two
+                    -- kinds of rounds held three slots for good, 403's box
+                    -- took the knife in for a heal, and 30C's web was
+                    -- never cut.
+                    local kept = false
+                    if own and bot:item_count(own) > 0 then
+                        ctx.keep_reserve[own] = true
+                        kept = true
+                    end
+                    for _, ammo in ipairs(b.rounds) do
+                        if bot:item_count(ammo) > 0 and (sourcing_reserve or not kept) then
+                            ctx.keep_reserve[ammo] = true
+                            kept = true
+                        end
+                    end
+                end
+            end
+        end
+    end
+    local weapon = bot:weapon()
+    if weapon.ammo then
+        local rounds, shots = BotSurvival.rounds(bot)
+        local floor = BotSurvival.ammo_floor(shots, bot:risk() or 0.25)
+        if floor > 0 and rounds < TOP_UP * floor then
+            ctx.top_up = weapon.ammo
+        end
+    end
+    local menu = bot:menu()
+    for _, row in ipairs(menu.items or {}) do
+        if row.kind == "heal" and row.heals ~= false and row.quantity > 0 then
+            ctx.heals = ctx.heals + 1
+        end
+    end
+    ctx.capacity = menu.capacity or #(menu.items or {})
+    ctx.used = used_slots(menu.items or {})
+    ctx.full = ctx.used >= ctx.capacity
+    ctx.heal_top_up = true
+    -- The slots an earlier box open of this stay in the room freed with
+    -- soft deposits (BotInventory.note_room_for) stay the pickups' until
+    -- they are filled or the bot leaves: with rope=leave 403's swap boxed
+    -- the handgun and three heals for 401's red book, and the next open
+    -- took the handgun (the rearm) and two heals (the top-up) straight
+    -- back; the two visits repeated on every trip, the box kept the heals
+    -- and the bot met 201's hunters with none.
+    local held = state().room_for
+    if held and not ctx.room_for then
+        local filled = ctx.used - held.used
+        local left = held.n - (filled > 0 and filled or 0)
+        if left > 0 then
+            ctx.room_for = left
+        else
+            state().room_for = nil
+        end
+    end
+    -- The rearm takes slots (the gun, and its ammunition when boxed): it
+    -- waits while a key or <use> pickup needs the free ones (else the swap
+    -- boxes the gun again: 100's shotgun went in and out for 250k ticks),
+    -- or while the soft deposits' slots are held (ctx.room_for).
+    -- Not while no held firearm has a round, though: the bot is unarmed,
+    -- and a key can wait for the next trip. 403's box kept the handgun and
+    -- its bullets for the frontier's keys while Chris carried an empty
+    -- shotgun with no shells anywhere; he met 206's hunter with nothing to
+    -- fire, and Rebecca died.
+    if ctx.rearm and BotInventory.armed(bot) then
+        local box = BotInventory.remembered(bot)
+        local slots = 0
+        for item, _ in pairs(ctx.rearm) do
+            if box[item] then
+                slots = slots + 1
+            end
+        end
+        local after = ctx.capacity - ctx.used - slots
+        local _, progress = BotInventory.needed_pickups(bot, ctx, BotPlanner and BotPlanner.gave_up)
+        local need = progress
+        if (ctx.room_for or 0) > need then
+            need = ctx.room_for
+        end
+        if need > 0 and after < need then
+            ctx.rearm = nil
+        end
+    end
+    -- The rearm at a box here leaves those slots too: with every gun empty
+    -- and three MO disks to carry, 502's deposit boxed the empty launcher
+    -- for a pickup, "no held firearm has a round" took it straight back
+    -- out, and the two visits repeated for 265k ticks, to the run's limit.
+    if ctx.rearm_here then
+        local _, progress = BotInventory.needed_pickups(bot, ctx, BotPlanner and BotPlanner.gave_up)
+        local hold = progress or 0
+        if (ctx.room_for or 0) > hold then
+            hold = ctx.room_for
+        end
+        if hold > 0 and ctx.capacity - ctx.used - (ctx.hold_free or 0) <= hold then
+            ctx.rearm_here = nil
+        end
+    end
+    -- The reserve rearm takes every slot it needs at once, or none: the
+    -- acid rounds alone came out into the one free slot beside the boxed
+    -- launcher, went back in for the next pickup, and the two visits
+    -- repeated until the run's ticks ran out.
+    if ctx.rearm_reserve then
+        local box = BotInventory.remembered(bot)
+        local slots = 0
+        for item, _ in pairs(ctx.rearm_reserve) do
+            if box[item] then
+                slots = slots + 1
+            end
+        end
+        -- And it leaves the slots a key or a <use> item waits for: 502's
+        -- deposit freed one for 504's lab key, the rearm took it back for
+        -- the launcher's rounds, and Barry's branch stalled in the lab.
+        -- Not one the planner has given up on (BotPlanner.gave_up): 215's
+        -- red jewel, a scripted handover no fact reaches, held a slot from
+        -- the first floor to the lab, and 513's Tyrant met eight shells
+        -- with the launcher and four stacks of its rounds in the box.
+        local _, progress = BotInventory.needed_pickups(bot, ctx, BotPlanner and BotPlanner.gave_up)
+        local hold = progress or 0
+        if (ctx.room_for or 0) > hold then
+            hold = ctx.room_for
+        end
+        slots = slots + hold
+        local free = ctx.capacity - ctx.used - (ctx.hold_free or 0)
+        if free < slots then
+            -- A held firearm that is dead weight (ctx.empty_guns) gives
+            -- its slot: it goes in on the same visit (BotInventory.keep).
+            local give = 0
+            for _ in pairs(ctx.empty_guns or {}) do
+                give = give + 1
+            end
+            if give > 0 and free + give >= slots then
+                ctx.swap_out = ctx.empty_guns
+            else
+                ctx.rearm_reserve = nil
+            end
+        end
+    end
+    -- A brew ahead (ctx.ahead) short of free slots takes a dead-weight
+    -- firearm's slot too: Chris reached 40C with an empty handgun, the
+    -- shotgun, its shells and a herb, and Rebecca's V-JOLT, three bottles
+    -- at once, had two slots and no item box.
+    if (ctx.ahead or 0) > ctx.capacity - ctx.used and ctx.empty_guns then
+        ctx.swap_out = ctx.swap_out or {}
+        for id, _ in pairs(ctx.empty_guns) do
+            ctx.swap_out[id] = true
+        end
+    end
+    if ctx.loadout then
+        ctx.pickups = BotInventory.pickups_needing_room(bot)
+    end
+    return ctx
+end
+
+-- The firearms the bot has none of, neither held nor boxed, counting any
+-- loading of a gun as that gun (variant_of): {[item] = true}. While the
+-- equipped gun is under its floor one is a needed pickup (it comes with
+-- its clip): with barry_early=chemical, 212's grenade launcher met a full
+-- inventory of keys, herbs and the knife, stayed on the floor for 100k
+-- ticks, and the handgun's last round went in the mansion.
+function BotInventory.new_guns(bot)
+    local weapons = (bot:knowledge() or {}).weapons or {}
+    local box = BotInventory.remembered(bot)
+    local have = {}
+    for id, row in pairs(weapons) do
+        if bot:has_item(id) or box[id] then
+            have[row.variant_of or id] = true
+        end
+    end
+    local out = {}
+    for id, row in pairs(weapons) do
+        if not row.melee and not have[row.variant_of or id] then
+            out[id] = true
+        end
+    end
+    return out
+end
+
+-- Why a pickup of `item` is not worth its slot and its seconds, or nil:
+-- a document (it unlocks nothing), rounds no gun the bot has found fires
+-- (held, boxed or seen on the frontier, any loading of it; or no weapon of
+-- the knowledge file at all), a cure while one is held or boxed and no
+-- poison runs, or a heal while HEAL_STACKS are held. It is left where it
+-- lies and stays on the frontier: the gun's pickup, a poison or a heal
+-- used makes it wanted. A run took eight blue herbs
+-- and used two, and carried three stacks of magnum rounds to the box for
+-- a gun it never held; each cost its seconds in the viewer and a slot of
+-- an inventory that was full 110 times a run.
+BotInventory.HEAL_STACKS = 3
+
+function BotInventory.unwanted(bot, item, remote)
+    local kind, merge, heals = bot:item_kind(item)
+    if kind == "file" then
+        return "a document"
+    end
+    local box = BotInventory.remembered(bot)
+    if kind == "ammo" then
+        local weapons = (bot:knowledge() or {}).weapons or {}
+        local have = {}
+        for id, row in pairs(weapons) do
+            if bot:has_item(id) or box[id] then
+                have[row.variant_of or id] = true
+            end
+        end
+        for _, goal in ipairs(bot:world().frontier) do
+            local row = goal.kind == "item" and weapons[goal.item]
+            if row then
+                have[row.variant_of or goal.item] = true
+            end
+        end
+        for id, row in pairs(weapons) do
+            if bot:ammo_for(id) == item and have[row.variant_of or id] then
+                return nil
+            end
+        end
+        return "rounds for a gun not found"
+    end
+    if kind == "heal" and heals == false then
+        local player = bot:player()
+        if (bot:has_item(item) or box[item])
+            and not (player.poisoned or player.seriously_poisoned) then
+            return "a cure is held already"
+        end
+    end
+    -- A heal while HEAL_STACKS are held (one that merges into a held stack
+    -- takes no slot). The bot held four sprays and a blue herb beside an
+    -- empty shotgun and left 401's shells for a full inventory; over 48
+    -- runs each left nine shells and six launcher rounds lying that way.
+    -- In another room (`remote`) one stack fewer is enough, merging or
+    -- not: no walk back for a heal while two stacks are held. Left to the
+    -- cap alone, each heal passed with three held drew the bot back once
+    -- one was used: 15 heal trips a run where there had been 11.
+    if kind == "heal" and heals ~= false then
+        local stacks = 0
+        for _, row in ipairs(bot:menu().items or {}) do
+            if row.kind == "heal" and row.heals ~= false and row.quantity > 0 then
+                stacks = stacks + 1
+            end
+        end
+        if remote then
+            if stacks >= BotInventory.HEAL_STACKS - 1 then
+                return "enough heals held for a trip"
+            end
+        elseif stacks >= BotInventory.HEAL_STACKS and not (merge and bot:has_item(item)) then
+            return "enough heals held"
+        end
+    end
+    return nil
+end
+
+-- What the bot remembers the box holds: {[item] = true}.
+function BotInventory.remembered(bot)
+    local out = {}
+    local text = bot:memory().box_items or ""
+    for hex in string.gmatch(text, "%x+") do
+        out[tonumber(hex, 16)] = true
+    end
+    return out
+end
+
+-- How many rows of the remembered box hold `item` (a disk boxed at 30E).
+-- The most a boxed stack of `item` holds (a weapon: its loaded rounds), or
+-- nil while unknown (not boxed, or boxed before the counts were kept).
+function BotInventory.boxed_quantity(bot, item)
+    local best
+    for hex, n in string.gmatch(bot:memory().box_counts or "", "(%x+)x(%d+)") do
+        if tonumber(hex, 16) == item and (not best or tonumber(n) > best) then
+            best = tonumber(n)
+        end
+    end
+    return best
+end
+
+-- Whether the firearm `id` has no round for any loading of it, held or
+-- boxed: none loaded (held, or boxed with a known count) and no
+-- ammunition for it or another loading of it (knowledge variant_of) held
+-- or boxed.
+function BotInventory.dry_gun(bot, id, box)
+    local weapons = (bot:knowledge() or {}).weapons or {}
+    local row = weapons[id]
+    if not row or row.melee then
+        return false
+    end
+    if bot:has_item(id) then
+        if bot:item_count(id) > 0 then
+            return false
+        end
+    elseif (BotInventory.boxed_quantity(bot, id) or 1) > 0 then
+        return false
+    end
+    local base = row.variant_of or id
+    for other_id, other in pairs(weapons) do
+        local ammo = (other_id == base or other.variant_of == base) and bot:ammo_for(other_id)
+        if ammo and (bot:item_count(ammo) > 0 or box[ammo]) then
+            return false
+        end
+    end
+    return true
+end
+
+function BotInventory.boxed_count(bot, item)
+    local n = 0
+    for hex in string.gmatch(bot:memory().box_items or "", "%x+") do
+        if tonumber(hex, 16) == item then
+            n = n + 1
+        end
+    end
+    return n
+end
+
+-- The <holds> items an open <use> fact needs that are off the frontier:
+-- not held, not in the box and not a frontier pickup. They lie where only
+-- a room-local step (a <climb>, say) reaches them, so from another room the
+-- frontier misses them (11B's crank on its shelf).
+local function held_elsewhere(bot)
+    local open = {}
+    for _, fact in ipairs(bot:use_facts()) do
+        if BotPuzzle.use_open(bot, fact) then
+            open[fact.item] = true
+        end
+    end
+    local seen = {}
+    for _, goal in ipairs(bot:world().frontier) do
+        if goal.kind == "item" then
+            seen[goal.item] = true
+        end
+    end
+    local box = BotInventory.remembered(bot)
+    local n = 0
+    for _, fact in ipairs(bot:item_facts()) do
+        if open[fact.item] and not seen[fact.item] and not box[fact.item]
+            and not bot:has_item(fact.item) then
+            seen[fact.item] = true
+            n = n + 1
+        end
+    end
+    return n
+end
+
+-- Known pickups that need a free slot: frontier items that merge into no
+-- held stack, and the off-frontier <holds> items (held_elsewhere).
+-- `skip(goal)` drops one the planner has given up on.
+function BotInventory.pickups_needing_room(bot, skip)
+    -- A due <fetch> hands over an item that needs a slot too.
+    local n = #BotPuzzle.fetches_due(bot) + held_elsewhere(bot)
+        + (BotPlanner and BotPlanner.steps_needing_room and BotPlanner.steps_needing_room(bot) or 0)
+    local here = bot:room().id
+    for _, goal in ipairs(bot:world().frontier) do
+        if goal.kind == "item" and not (skip and skip(goal))
+            and not BotInventory.unwanted(bot, goal.item, goal.room ~= here)
+            and not (BotPlanner and BotPlanner.unlock_covers and BotPlanner.unlock_covers(bot, goal)) then
+            local _, merge = bot:item_kind(goal.item)
+            if not (merge and bot:has_item(goal.item)) then
+                n = n + 1
+            end
+        end
+    end
+    return n
+end
+
+-- The pickups a held <use> item's room hands over before the use: an
+-- <avoid> on an item there that holding the use's item lifts (the rack
+-- gives its shotgun up for the broken one). {[room .. ":" .. slot] = true}.
+function BotInventory.handed_over(bot)
+    local out = {}
+    for _, fact in ipairs(bot:avoid_facts()) do
+        if fact.unless_held and bot:has_item(fact.unless_held) then
+            out[fact.room .. ":" .. fact.slot] = true
+        end
+    end
+    return out
+end
+
+-- Known pickups that need a free slot and that the run needs: a key, an
+-- item a <use> fact needs, the ammunition a held gun lacks, a firearm the
+-- bot has none of, or what a held <use> item's room hands over first
+-- (BotInventory.handed_over). The second result counts the keys, <use>
+-- items, handovers and fetches among them: progress items worth a spare
+-- gun's slot. The third counts the new firearms: worth a spare heal's.
+-- A full inventory of keys, a spray and three herb mixes carried the
+-- broken shotgun ten doors to the rack, could not take the shotgun down,
+-- left, and came back for it twice more, in every run.
+function BotInventory.needed_pickups(bot, ctx, skip)
+    local n = #BotPuzzle.fetches_due(bot) + held_elsewhere(bot)
+        + (BotPlanner and BotPlanner.steps_needing_room and BotPlanner.steps_needing_room(bot) or 0)
+    local progress = n
+    local guns = 0
+    local handed = BotInventory.handed_over(bot)
+    -- One heal, while none is held and the bot is hurt or a fight waits on
+    -- one (BotInventory.heal_wanted): a swap like the boxed heal's
+    -- (make_room). With guns, rounds and a key in every slot, no heal held
+    -- or boxed and 20C's Yawn held back at 50/96, thirty pickups stood
+    -- marked `inventory full`, the herbs among them, and the run ended on
+    -- an empty frontier.
+    local heal_due = BotInventory.heal_wanted(bot)
+    for _, goal in ipairs(bot:world().frontier) do
+        if goal.kind == "item" and not (skip and skip(goal))
+            and not (BotPlanner and BotPlanner.unlock_covers and BotPlanner.unlock_covers(bot, goal)) then
+            local kind, merge, heals = bot:item_kind(goal.item)
+            if heal_due and kind == "heal" and heals ~= false then
+                heal_due = false
+                n = n + 1
+                progress = progress + 1
+                ctx.heal_swap = true
+            end
+            -- A required hand weapon (ctx.required) counts here only while
+            -- none is boxed: the box's loadout withdrawal counts that one,
+            -- and one slot takes either.
+            local required = ctx.required and ctx.required[goal.item]
+                and not BotInventory.remembered(bot)[goal.item]
+            local gun = ctx.new_guns and ctx.new_guns[goal.item]
+            local hand = handed[goal.room .. ":" .. goal.slot]
+            local needed = kind == "key" or ctx.uses[goal.item] or required
+                or (ctx.gun_ammo and ctx.gun_ammo[goal.item])
+                or ctx.ammo_low == goal.item
+                or gun or hand
+            if needed and not (merge and bot:has_item(goal.item)) then
+                n = n + 1
+                if kind == "key" or ctx.uses[goal.item] or required or hand then
+                    progress = progress + 1
+                elseif gun then
+                    guns = guns + 1
+                end
+            end
+        end
+    end
+    return n, progress, guns
+end
+
+-- Whether a heal lying on the frontier is worth a slot swap: none is held,
+-- and the bot is hurt under half (BotSurvival.needs_heal), under a fight's
+-- health (BotSurvival.health_ready), or a met boss is still to be won.
+function BotInventory.heal_wanted(bot)
+    return BotSurvival.heal_count(bot) == 0
+        and (BotSurvival.needs_heal(bot) or not BotSurvival.health_ready(bot, "a fight")
+            or BotInventory.met_fight_pending(bot))
+end
+
+-- Whether a <fight> the bot has met (BotNav.fight_met) is still to be won.
+function BotInventory.met_fight_pending(bot)
+    for _, fight in ipairs(bot:fight_facts()) do
+        if not (fight.bank and bot:flag(fight.bank, fight.bit)) and BotNav.fight_met(bot, fight) then
+            return true
+        end
+    end
+    return false
+end
+
+-- What a deposit puts in the box: the keep rule's leftovers, else the soft
+-- keeps (BotInventory.soft_deposits) when a needed pickup has no slot.
+function BotInventory.make_room(bot, ctx, items, skip)
+    -- An item settled for this stay (ctx.settled) does not go back in.
+    if ctx.settled then
+        local rest = {}
+        for _, row in ipairs(items) do
+            if not ctx.settled[row.item] then
+                rest[#rest + 1] = row
+            end
+        end
+        items = rest
+    end
+    local deposits = BotInventory.deposits(items, ctx)
+    if #deposits == 0 and ctx.full then
+        local needed, progress, guns = BotInventory.needed_pickups(bot, ctx, skip)
+        if guns > 0 then
+            ctx.heals_may_go = true
+        end
+        -- A key or <use> item on the frontier is worth a spare gun's slot,
+        -- one gun for each of them (ctx.swaps).
+        local swaps = progress
+        if progress > 0 then
+            ctx.swap = true
+        end
+        -- A box item the bot needs back (a key a locked door needs, an
+        -- item a <use> fact needs) is a needed pickup too: a swap.
+        for item, _ in pairs(BotInventory.remembered(bot)) do
+            local kind, _, heals = bot:item_kind(item)
+            local why = BotInventory.wanted_back({ item = item, kind = kind, heals = heals }, ctx)
+            -- So is a heal while the bot needs one (or a fight's readiness
+            -- does) and holds none: 30C's Black Tiger left it at 48/96 with every slot used, its fight
+            -- held back for the boxed spray, and the run ended there.
+            -- And for a met boss still to be won (BotNav.fight_met), whose
+            -- readiness asks for the boxed heal (BotSurvival.fight_ready):
+            -- 30C's tiger waited on the spray at 88/96 with no trip for it.
+            local heal = why == "no heal item held"
+                and (BotSurvival.needs_heal(bot) or not BotSurvival.health_ready(bot, "a fight")
+                    or BotInventory.met_fight_pending(bot))
+            if heal then
+                ctx.heal_swap = true
+            end
+            if why == "a <use> fact needs it" or why == "a lock needs it"
+                or why == GUN_AMMO or FIRST[why] or heal then
+                needed = needed + 1
+                if why ~= GUN_AMMO and not FIRST[why] then
+                    ctx.swap = true
+                    swaps = swaps + 1
+                end
+                if why == LOADOUT then
+                    ctx.heals_may_go = true
+                    -- A required hand weapon swaps out a spare gun, and so
+                    -- does the gun a fight ahead prefers: the launcher lay
+                    -- in the box with its grenades held, beside a handgun
+                    -- and a shotgun neither of which could go in for it.
+                    if (ctx.required and ctx.required[item]) or kind == "weapon" then
+                        ctx.swap = true
+                        swaps = swaps + 1
+                    end
+                end
+            end
+        end
+        ctx.swaps = swaps
+        -- The ribbon a save here waits on (ctx.ribbon_swap) is worth a soft
+        -- keep's slot.
+        if ctx.ribbon_swap then
+            needed = needed + 1
+        end
+        deposits = BotInventory.soft_deposits(items, ctx, needed)
+        -- The slots these deposits free are the pickups': the heal
+        -- top-up does not refill them (slots_to_leave).
+        ctx.room_for = #deposits
+    end
+    -- A brew ahead short of free slots (ctx.ahead) takes the softer keeps
+    -- too, as a full inventory does for a needed pickup: Chris reached
+    -- 40C with the handgun, its clips, a mixed herb and the desk key, all
+    -- kept, and Rebecca's V-JOLT had two of the three slots it needs.
+    local short = (ctx.ahead or 0) - (ctx.capacity - ctx.used) - #deposits
+    if short > 0 then
+        local full = ctx.full
+        ctx.full = true
+        local taken = {}
+        for _, row in ipairs(deposits) do
+            taken[row.slot] = true
+        end
+        local more = {}
+        for _, row in ipairs(items) do
+            if not taken[row.slot] then
+                more[#more + 1] = row
+            end
+        end
+        for _, row in ipairs(BotInventory.soft_deposits(more, ctx, short)) do
+            deposits[#deposits + 1] = row
+        end
+        ctx.full = full
+    end
+    return deposits
+end
+
+-- Whether to open an item box only to see what it holds: no box has ever
+-- been opened (`box_items`, the remembered contents, is nil), a slot is
+-- free for what it may hold, and the box is in this room (`here`, a look on
+-- the way) or the bot is sourcing ammunition (BotSurvival.sourcing, worth
+-- a trip). Every box shares one store, so one look covers them all.
+function BotInventory.look_in_box(ctx, box_items, sourcing, here)
+    return (sourcing == true or here == true) and box_items == nil
+        and ctx.used < ctx.capacity
+end
+
+-- Why the bot should visit an item box now, or nil: a deposit (full, a
+-- pickup needs room and something may go in) or a withdrawal (the box
+-- holds an item the bot needs and a slot is, or can be made, free).
+-- `here` asks for a box in this room, which also takes the slot reserve,
+-- a first look and the ammunition top-up (see the header); a trip to a
+-- remote box is worth only the rest.
+function BotInventory.box_reason(bot, skip, here)
+    local ctx = BotInventory.context(bot)
+    local items = bot:menu().items or {}
+    local deposits = BotInventory.make_room(bot, ctx, items, skip)
+    local pickups = BotInventory.pickups_needing_room(bot, skip)
+    if ctx.full and #deposits > 0 and pickups > 0 then
+        return "deposit: the inventory is full and a pickup needs room"
+    end
+    if here and BotInventory.reserve_due(ctx, #deposits, pickups) then
+        return "deposit: keep a slot free for pickups"
+    end
+    -- A brew ahead is worth a trip to a remote box too: the slots must be
+    -- free before the switch, and the player after it may have no box.
+    if (ctx.ahead or 0) > ctx.capacity - ctx.used and #deposits > 0 then
+        return string.format("deposit: %d slot(s) free for a brew ahead", ctx.ahead)
+    end
+    if BotInventory.look_in_box(ctx, bot:memory().box_items, BotSurvival.sourcing_now(bot),
+        here) then
+        return here and "look in the box on the way: never opened"
+            or "look in the box: sourcing ammunition and the box was never opened"
+    end
+    if not here then
+        ctx.reserve_only = true
+    end
+    local free = ctx.capacity - ctx.used - ctx.hold_free
+    -- With no held firearm a round, a held gun's own rounds take a slot
+    -- held for a pickup too (BotInventory.withdrawals): Rebecca's upstairs
+    -- call met the shotgun empty, its shells in 118's box and the one free
+    -- slot held for 119's Doom Book, and the bot went to 206's hunter
+    -- with no round.
+    local raw_free = ctx.capacity - ctx.used
+    if free > 0 or #deposits > 0 or (ctx.unarmed and raw_free > 0) then
+        for item, _ in pairs(BotInventory.remembered(bot)) do
+            local kind, _, heals = bot:item_kind(item)
+            local why = BotInventory.wanted_back({ item = item, kind = kind, heals = heals }, ctx)
+            local dry = BotInventory.dry_ammo(ctx, { item = item, kind = kind }, why)
+            if free <= 0 and #deposits == 0 and not dry then
+                why = nil
+            end
+            if TOP_UPS[why] and free <= slots_to_leave(why, ctx)
+                and not (ctx.ribbon_swap and why == RIBBON) and not dry then
+                why = nil
+            end
+            if (why == LOW_AMMO or why == GEAR or why == GUN_AMMO)
+                and free <= (ctx.room_for or 0) and not dry then
+                why = nil
+            end
+            if why then
+                return string.format("withdraw 0x%02X: %s", item, why)
+            end
+        end
+    end
+    return nil
+end
+
+-- Health a heal used to free a slot must have to restore: at least this
+-- much missing, so the herb is not wasted.
+BotInventory.MAKE_ROOM_HURT = 24
+
+-- The heal item to use now to free a slot for a needed pickup in this room,
+-- or nil: every slot used, a frontier pickup here (one the planner has not
+-- given up on, `skip`) that merges into no held stack and that the run
+-- needs (a key, a <use> item, or the ammunition of a gun held or in the
+-- box, any loading of it), at least two heal stacks held (a cure is none;
+-- one will do for a doom book a push on this entry made reachable), and
+-- MAKE_ROOM_HURT health missing (any, with HEAL_STACKS held).
+-- 219 left 12 grenade rounds for a full inventory at 56/96 health with
+-- four heal stacks held.
+function BotInventory.heal_for_room(bot, skip)
+    local ctx = BotInventory.context(bot)
+    local player = bot:player()
+    local hurt = player.max_health - player.health
+    if not ctx.full or hurt <= 0 then
+        return nil
+    end
+    local heals = {}
+    for _, row in ipairs(bot:menu().items or {}) do
+        if row.kind == "heal" and row.heals ~= false and row.quantity > 0
+            and not (ctx.cures and ctx.cures[row.item]) then
+            heals[#heals + 1] = row
+        end
+    end
+    if #heals == 0 then
+        return nil
+    end
+    -- Every loading's rounds of a gun held or in the box (knowledge
+    -- variant_of): the launcher held with acid rounds loads the grenade
+    -- and flame rounds once it is empty (BotInventory.load_now). Seed 33
+    -- left 309's grenade rounds and 30B's flame rounds for a full
+    -- inventory, three heals held, and met 30C's Black Tiger with three
+    -- acid rounds: the run ended there.
+    local box = BotInventory.remembered(bot)
+    local weapons = (bot:knowledge() or {}).weapons or {}
+    local have = {}
+    for id, _ in pairs(ctx.guns) do
+        if bot:has_item(id) or box[id] then
+            have[weapons[id] and weapons[id].variant_of or id] = true
+        end
+    end
+    local guns_ammo = {}
+    for id, _ in pairs(ctx.guns) do
+        local ammo = bot:ammo_for(id)
+        if ammo and have[weapons[id] and weapons[id].variant_of or id] then
+            guns_ammo[ammo] = true
+        end
+    end
+    local here = bot:room().id
+    local wanted, needed, lone = false, false, false
+    for _, goal in ipairs(bot:world().frontier) do
+        if goal.kind == "item" and goal.room == here and not (skip and skip(goal)) then
+            local kind, merge = bot:item_kind(goal.item)
+            local book = goal.item == C.DOOM_BOOK_2 or goal.item == C.DOOM_BOOK_2 + 1
+            if not (merge and bot:has_item(goal.item))
+                and (kind == "key" or ctx.uses[goal.item] or book or guns_ammo[goal.item]) then
+                wanted = true
+                needed = needed or kind == "key" or ctx.uses[goal.item] or book
+                lone = lone or (book and BotPuzzle.pushed_here())
+            end
+        end
+    end
+    -- A key, a <use> item or a doom book takes a heal at any hurt: 306's
+    -- book lies in its zone only while the pushed box stands in the probe,
+    -- and the room puts the box back once the bot leaves.
+    -- With HEAL_STACKS held one is spare: it goes for ammunition at any
+    -- health short of full.
+    if not wanted or (not needed and hurt < BotInventory.MAKE_ROOM_HURT
+            and #heals < BotInventory.HEAL_STACKS) then
+        return nil
+    end
+    -- The last heal goes only for a doom book a push on this entry made
+    -- reachable: the bot left 306's book for a full inventory holding
+    -- one spray, and back from the box the slab held the reset box short
+    -- of the probe, so the Wolf Medal never came (119's book, behind no
+    -- push, took the last herb and the bot died in 207).
+    if #heals < 2 and not lone then
+        return nil
+    end
+    -- The largest stack first, as BotSurvival.heal does.
+    table.sort(heals, function(a, b)
+        if a.quantity ~= b.quantity then
+            return a.quantity > b.quantity
+        end
+        return a.slot < b.slot
+    end)
+    return heals[1].item
+end
+
+-- Why a combine is worth doing now, and the pick, or nil.
+function BotInventory.combine_now(bot, skip)
+    local ctx = BotInventory.context(bot)
+    if not ctx.full or BotInventory.pickups_needing_room(bot, skip) == 0 then
+        return nil
+    end
+    return BotInventory.combine_pick(bot:menu().items or {}, ctx, function(a, b)
+        return bot:combine_result(a, b)
+    end)
+end
+
+-- An empty weapon whose own ammunition is not held, loaded with the
+-- rounds of another loading of it (knowledge variant_of: the grenade
+-- launcher's acid and flame rounds), the most held first. Loading other
+-- rounds turns it into that loading's item and loses the rounds it held,
+-- so only an empty one is loaded: the flame rounds rode along unused while
+-- hunters hit the bot with an empty launcher. Returns the combine pick
+-- ({slot, target, item, other}, 0-based menu slots) or nil.
+function BotInventory.load_now(bot)
+    local k = bot:knowledge()
+    local items = bot:menu().items or {}
+    for _, gun in ipairs(k and items or {}) do
+        local row = gun.kind == "weapon" and k.weapons[gun.item]
+        local own = row and not row.melee and bot:ammo_for(gun.item)
+        if own and gun.quantity == 0 and bot:item_count(own) == 0 then
+            local base = row.variant_of or gun.item
+            local best, best_count
+            for id, other in pairs(k.weapons) do
+                local ammo = id ~= gun.item and (id == base or other.variant_of == base)
+                    and bot:ammo_for(id)
+                local count = ammo and bot:item_count(ammo) or 0
+                if count > 0 and (not best_count or count > best_count
+                        or (count == best_count and ammo < best)) then
+                    best, best_count = ammo, count
+                end
+            end
+            for _, row_ammo in ipairs(best and items or {}) do
+                if row_ammo.item == best then
+                    for _, pair in ipairs({ { gun, row_ammo }, { row_ammo, gun } }) do
+                        local r = bot:combine_result(pair[1].slot, pair[2].slot)
+                        local loaded = r and (pair[1] == gun and r.cursor_quantity
+                            or r.target_quantity) or 0
+                        if r and r.result == "applied" and loaded > 0 then
+                            return { slot = pair[1].slot, target = pair[2].slot,
+                                item = pair[1].item, other = pair[2].item }
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- ---- the box screen --------------------------------------------------------
+
+local function remember_box(bot, view)
+    local ids, counts = {}, {}
+    for _, row in ipairs(view.items) do
+        if row.item ~= 0 then
+            ids[#ids + 1] = string.format("%02X", row.item)
+            counts[#counts + 1] = string.format("%02Xx%d", row.item, row.quantity or 0)
+        end
+    end
+    local text = table.concat(ids, ",")
+    if bot:memory().box_items ~= text then
+        bot:remember("box_items", text)
+    end
+    text = table.concat(counts, ",")
+    if bot:memory().box_counts ~= text then
+        bot:remember("box_counts", text)
+    end
+end
+
+-- The plan for one box visit: deposits first (they free the slots the
+-- withdrawals need), then withdrawals.
+local function plan_visit(bot, menu, view)
+    local ctx = BotInventory.context(bot)
+    local ops = {}
+    local free = ctx.capacity - ctx.used
+    local deposits = BotInventory.make_room(bot, ctx, menu.items)
+    local pickups = BotInventory.pickups_needing_room(bot)
+    -- The reserve is judged after this visit's withdrawals, so one visit
+    -- both takes and makes room.
+    local taking = #BotInventory.withdrawals(view.items, ctx, free)
+    local after = { capacity = ctx.capacity, used = ctx.used + taking, ahead = ctx.ahead }
+    if (ctx.full and (pickups > 0 or ctx.heal_swap or ctx.ribbon_swap)) or ctx.swap_out
+        or BotInventory.reserve_due(after, #deposits, pickups) then
+        for _, row in ipairs(deposits) do
+            ops[#ops + 1] = { kind = "deposit", item = row.item }
+            free = free + 1
+        end
+    end
+    local queued = #ops
+    for _, row in ipairs(BotInventory.withdrawals(view.items, ctx, free)) do
+        ops[#ops + 1] = { kind = "withdraw", item = row.item }
+    end
+    if queued > 0 and (ctx.room_for or 0) > 0 then
+        BotInventory.note_room_for(ctx.room_for, ctx.used - queued + (#ops - queued))
+    end
+    local parts = {}
+    for _, op in ipairs(ops) do
+        parts[#parts + 1] = string.format("%s 0x%02X", op.kind, op.item)
+    end
+    log(bot, string.format("box open: %d op(s) [%s], inventory %d/%d, box %s", #ops,
+        table.concat(parts, ", "), ctx.used, ctx.capacity, bot:memory().box_items or "?"))
+    return ops
+end
+
+local function inventory_slot(menu, want)
+    for _, row in ipairs(menu.items) do
+        if want(row) then
+            return row
+        end
+    end
+    return nil
+end
+
+-- The d-pad key that moves the box screen's inventory cursor toward
+-- `target`: off the EXIT tab row first, then the column, then the row.
+local function cursor_key(cursor, target)
+    if cursor < FIRST_SLOT_CURSOR then
+        return "down"
+    end
+    if (cursor & 2) ~= (target & 2) then
+        return "right"
+    end
+    if target > cursor then
+        return "down"
+    end
+    return "up"
+end
+
+local function pulse(bot, s, key)
+    local tick = bot:tick()
+    if tick - (s.last_press or -C.SECOND) < PRESS_GAP then
+        return
+    end
+    s.last_press = tick
+    bot:set_input({ [key] = true })
+end
+
+-- One tick of the current op on the box screen. Returns true when the op
+-- is over (done or given up).
+local function drive_op(bot, s, menu, view, op)
+    op.ticks = (op.ticks or 0) + 1
+    if op.ticks > OP_TIMEOUT then
+        log(bot, string.format("%s 0x%02X gave up (mode %s, box %d, cursor %d)",
+            op.kind, op.item, view.mode, view.box_cursor, view.cursor))
+        return true
+    end
+    if not op.before then
+        op.before = bot:item_count(op.item)
+        op.held = bot:has_item(op.item)
+    end
+    -- The swap shows in the engine's inventory.
+    if op.kind == "deposit" and (bot:item_count(op.item) < op.before
+        or not bot:has_item(op.item)) then
+        s.deposits = (s.deposits or 0) + 1
+        log(bot, string.format("deposited 0x%02X", op.item))
+        note_box_move(bot, op.item)
+        return true
+    end
+    if op.kind == "withdraw" and (bot:item_count(op.item) > op.before
+        or (bot:has_item(op.item) and not op.held)) then
+        s.withdrawals = (s.withdrawals or 0) + 1
+        log(bot, string.format("withdrew 0x%02X", op.item))
+        note_box_move(bot, op.item)
+        return true
+    end
+    if view.sliding then
+        return false
+    end
+    local row
+    if op.kind == "deposit" then
+        row = inventory_slot(menu, function(r) return r.item == op.item end)
+    else
+        row = inventory_slot(menu, function(r) return r.item == 0 end)
+    end
+    if not row then
+        log(bot, string.format("%s 0x%02X: no inventory slot for it", op.kind, op.item))
+        return true
+    end
+    local target_cursor = FIRST_SLOT_CURSOR + 2 * row.slot
+    if view.mode == "browse" then
+        if view.cursor ~= target_cursor then
+            pulse(bot, s, cursor_key(view.cursor, target_cursor))
+        else
+            pulse(bot, s, "confirm")
+        end
+        return false
+    end
+    -- Armed: the inventory slot is fixed; a wrong one backs out first.
+    if view.cursor ~= target_cursor then
+        pulse(bot, s, "cancel")
+        return false
+    end
+    local box_row, dir = BotInventory.box_target(view.items, view.box_cursor, function(r)
+        if op.kind == "deposit" then
+            return r.item == 0
+        end
+        return r.item == op.item
+    end)
+    if not box_row then
+        log(bot, string.format("%s 0x%02X: no box slot for it", op.kind, op.item))
+        pulse(bot, s, "cancel")
+        return true
+    end
+    if dir == 0 then
+        pulse(bot, s, "confirm")
+    else
+        pulse(bot, s, dir > 0 and "down" or "up")
+    end
+    return false
+end
+
+-- Record a box visit's end for the planner's box goal.
+local function end_visit(bot, s)
+    s.visit = nil
+    s.done_tick = bot:tick()
+    if BotNav.died_anywhere(bot) then
+        s.geared = true
+    end
+end
+
+-- One tick before the scene handler: the item box screen, the lid before
+-- it and the close after it own the pad. Returns true when it consumed the
+-- tick.
+function BotInventory.screen_step(bot)
+    local s = state()
+    local menu = bot:menu()
+    local view = menu.box
+    local tick = bot:tick()
+    if view and menu.screen == "item_box" then
+        remember_box(bot, view)
+        if not s.visit then
+            s.visit = { start = tick, ops = nil, index = 1 }
+            s.expect = nil
+        end
+        local visit = s.visit
+        if tick - visit.start < OPEN_SETTLE then
+            return true
+        end
+        if not visit.ops then
+            visit.ops = plan_visit(bot, menu, view)
+        end
+        local op = visit.ops[visit.index]
+        if op and tick - visit.start < SESSION_TIMEOUT then
+            if drive_op(bot, s, menu, view, op) then
+                visit.index = visit.index + 1
+            end
+            return true
+        end
+        -- Done: cancel out (an armed slot first goes back to browse).
+        visit.closing = true
+        pulse(bot, s, "cancel")
+        return true
+    end
+    if s.visit then
+        -- The box is gone: wait out the close fade and the freeze.
+        local visit = s.visit
+        visit.settle = (visit.settle or 0) + 1
+        local scene = bot:scene()
+        -- The lid closes after the screen does, under a freeze: wait until
+        -- the player has been controllable for a moment, or a press meant
+        -- for the next goal reopens the box.
+        if scene.controllable and not (menu.open or menu.requested) then
+            visit.free = (visit.free or 0) + 1
+        else
+            visit.free = 0
+        end
+        if visit.free > CLEAR_TICKS or visit.settle > SETTLE_TIMEOUT then
+            end_visit(bot, s)
+            return false
+        end
+        return true
+    end
+    -- Between the box press and the screen: the lid animates.
+    if s.expect and tick - s.expect < LID_WAIT then
+        if menu.open or bot:scene().frozen or not bot:scene().controllable then
+            return true
+        end
+    end
+    return false
+end
+
+-- The planner pressed an item box zone: hold off the scene handler until
+-- the screen shows (or LID_WAIT passes).
+function BotInventory.expect_box(bot)
+    state().expect = bot:tick()
+end
+
+-- Whether a box visit ended at or after `tick`.
+function BotInventory.visited_since(tick)
+    local done = state().done_tick
+    return done ~= nil and done >= tick
+end

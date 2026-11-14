@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 411 aqua ring control room (behind 40E's door 3, key 0x3B). While the
+     ring is flooded, AOT 1 is the drain switch: Yes runs event_02, which
+     drains the water and sets scenario 0x23 (40E, 40F and 411 then load dry,
+     the sharks gone). Once drained, AOT 2 is the lock switch: Yes sets lock
+     bit 36, which turns 40E's door 2 (to 410) from "locked from the other
+     side" into a door. -->
+<bot format="2">
+  <interact slot="1" bank="0" bit="0x23" label="drain the aqua ring"/>
+  <answer choice="yes" slot="1" label="drain the water"/>
+  <interact slot="2" bank="2" bit="36" label="unlock 40E's door to 410"/>
+  <answer choice="yes" slot="2" label="open the lock"/>
+</bot>

@@ -199,6 +199,19 @@ function ScreenModule.update(api, input) end
 ---@param api ScreenApi
 function ScreenModule.draw(api) end
 
+---The published view: what the screen shows a player, as a table of
+---integers, numbers, strings, booleans and nested tables of them, for
+---observers such as the player bot. It is the screen's contract with them:
+---they read nothing else of the screen's state, so the script may keep that
+---state however it likes. The engine calls it between ticks with no
+---arguments; it must only read. A screen without one publishes nothing.
+---
+---RE 1's title publishes `stage` (`"press"`, `"menu"`, `"fade_out"` or
+---`"attract_fade"`), `selection` (1 NEW GAME, 2 LOAD GAME) and `any_saves`
+---(whether LOAD GAME can be chosen); the bot drives the title from those.
+---@return table view
+function ScreenModule.view() end
+
 ---Signal to `main_menu`: one frame of the menu's own animation (a use
 ---confirmed on the previous frame, the CHECK slide, the submenu box, the
 ---health monitor), apart from its input handling in `update`. The game

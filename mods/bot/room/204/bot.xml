@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 204, the C passage. Chris's game. Door 4 leads to 20D, where Richard
+     lies poisoned: under rebecca_meet=save_room it is held shut until
+     Rebecca is met in 100 (common 0x24), so Richard is found dead. Door 2
+     leads to 206: under rebecca=leave it is held shut after Rebecca's
+     upstairs call (common 0x36), so 206's hunter attack is never answered
+     and she dies (307's init sets common 0xC0). -->
+<bot format="2">
+  <avoid slot="4" bank="1" bit="0x24" while="clear" character="chris"
+         when="rebecca_meet=save_room"
+         reason="rebecca_meet=save_room: meet Rebecca in 100 before Richard"/>
+  <avoid slot="2" bank="1" bit="0x36" while="set" character="chris" when="rebecca=leave"
+         reason="rebecca=leave: Rebecca's upstairs call goes unanswered"/>
+</bot>

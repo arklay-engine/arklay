@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 50C. The elevator door (door 4, to 515) is an event message (129,
+     no power) until scenario 1 is set. The switch at AOT 5 asks to be
+     pushed; Yes sets scenario 1 once 511's circuit (45) and 50F's supply
+     (46) are both on. 511's step waits for 46, so this one waits for 45.
+     The switch rides straight down to 514 and the Tyrant, whose death
+     starts the self-destruct, and the countdown leaves no time to read the
+     three MO disks for 508's pass-code lamps; 512's cell (Chris) opens
+     only after that, through 508's door to 50B, which the lamps open. So
+     under chris=save the switch is off limits until all three lamps are
+     lit (scenario 0x50). The bot comes back for it on its own: 50C door
+     4's unpowered-elevator message is retried on an empty frontier.
+     In Chris's game the `jill` parameter holds the switch the same way. -->
+<bot format="2">
+  <interact slot="5" bank="0" bit="1" after_bank="0" after_bit="45" label="the elevator switch: call it down"/>
+  <answer choice="yes" slot="5" label="push the elevator switch"/>
+  <avoid slot="5" bank="0" bit="0x50" while="clear" character="jill" when="chris=save"
+         reason="the elevator to the Tyrant: light 508's three lamps first"/>
+  <avoid slot="5" bank="0" bit="0x50" while="clear" character="chris" when="jill=save"
+         reason="the elevator to the Tyrant: light 508's three lamps first"/>
+</bot>

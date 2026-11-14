@@ -20,6 +20,8 @@
   - [Rooms](packs/rooms.md)
   - [Voice](packs/voice.md)
 - [Mods](mods.md)
+- [Player bot scoreboard](bot-scoreboard.md)
+  - [Idle and retry report](bot-idle-report.md)
 - [Scripting reference](scripting/index.md)
   - [Lua API](scripting/lua/index.md)
     - [Lua hooks](scripting/lua/hooks.md)

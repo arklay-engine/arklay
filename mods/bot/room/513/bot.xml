@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 513, the Tyrant room. The entry scene breaks the pod and the Tyrant
+     (id 0x0C) wakes; the <fight> holds the room until it is dead (enemy
+     bit 112). The init takes one of two branches on common bit 5B:
+
+     Clear (Wesker's branch): the Tyrant kills Wesker; the master key (AOT 2,
+     item bit 0x5F) is an item zone from the start, but its model shows, and
+     the room's main lets it be taken, only once the Tyrant is dead. The
+     death also sets room bit 3 and scenario 0x37, turns door 0 (to 514)
+     into message 159 and AOT 1 into the room's control device: Yes unlocks
+     the door (SCE_DOOR again) and sets room bit 6. Room bit 3 is set only
+     on the entry the Tyrant dies in; on a later one scenario 0x37 leaves
+     door 0 a door and AOT 1 a plain message.
+
+     Set (Barry's branch): door 0 is message 131 and AOT 1 message 160
+     for the whole entry. The death turns AOT 3 at (4166, 6696) into
+     event_17 (Barry's scene), whose end makes door 0 a door again and sets
+     no flag. So its step is done while common 5B is clear (the other
+     branch) or once door 0 is a live door (`opens`), and the control
+     device's step is done once door 0 is a door too (the death sets room
+     bit 3 in this branch as well). -->
+<bot format="2">
+  <fight enemy="0x0C" bank="3" bit="112" label="the Tyrant"/>
+  <interact slot="3" bank="1" bit="0x5B" done="clear" opens="0"
+            label="Barry's event: door 0 opens"/>
+  <interact slot="1" bank="4" bit="6" after_bank="4" after_bit="3" opens="0"
+            label="the control device: unlock door 0"/>
+  <answer choice="yes" slot="1"/>
+  <!-- The kiting ring: the room's floor is a circuit of corridors around
+       the central block (x 6822 to 14760, z 11322 to 24210), so the
+       corners of its middle line, in order, each with the half width of
+       the corridor that starts there (off it, in a pocket such as the
+       handgun rounds' at (6000, 30000), the run takes the walk's way
+       back): west (x 2808 to 6822), north (z 24210 up to 26334 by the
+       north-west wall, 30942 past it), east (x 14760 to 19026) and south
+       (z 5800 to 11322). The tyrant follows the shortest way round. -->
+  <kite enemy="0x0C" x="4800" z="8500" radius="2000"/>
+  <kite enemy="0x0C" x="4800" z="25300" radius="3000"/>
+  <kite enemy="0x0C" x="16900" z="26500" radius="2100"/>
+  <kite enemy="0x0C" x="16900" z="8500" radius="2700"/>
+  <!-- The south leg bows north here: on the straight line at z 8500,
+       Wesker's branch stalled the run against something the bot does not
+       see (an NPC, not in its enemy list) near (11000, 8400). -->
+  <kite enemy="0x0C" x="10800" z="9900" radius="2700"/>
+</bot>

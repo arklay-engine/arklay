@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 400, the guardhouse courtyard. Chris's game: while Rebecca is the
+     player (B_CHARACTER_MODEL 3), room main turns door 0, the gate back to
+     304, into message 128, "I can't leave Chris alone!". Her turn runs
+     from 40C's Plant 42 scene with her (common 0x3D) until 40F's pour of
+     her V-JOLT on the root (scenario 0x13), which hands the game back to
+     Chris. In between the gate is held shut: with it open, a full
+     inventory sent her off toward the item box in 118 (403's box is off
+     for her), the gate answered with the message, and the empty-frontier
+     retry stepped out to re-enter 400 through it fifty times until the
+     stall rule ended the run. -->
+<bot format="2">
+  <avoid slot="0" bank="1" bit="0x3D" while="set" until_bank="0" until_bit="0x13"
+         character="chris"
+         reason="Rebecca's turn: the gate to 304 is &quot;I can't leave Chris alone!&quot;"/>
+</bot>

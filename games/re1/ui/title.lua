@@ -105,6 +105,23 @@ end
 
 M.press_scale = press_scale
 
+--- The published view: what the screen shows a player, for observers such as
+--- the player bot. It is the screen's contract with them; nothing outside
+--- this file reads `s`. `stage` is "press" (PRESS ANY BUTTON), "menu" (NEW
+--- GAME / LOAD GAME), "fade_out" (a choice confirmed) or "attract_fade";
+--- `selection` 1 NEW GAME, 2 LOAD GAME; `any_saves` whether LOAD GAME can be
+--- chosen.
+function M.view()
+    if s == nil then
+        return {}
+    end
+    return {
+        stage = s.stage,
+        selection = s.selection,
+        any_saves = s.any_saves,
+    }
+end
+
 --- Latch the next leg of the confirm flash chain (7, 8, 9 then 4; leg 6 is
 --- the white flash set on confirm). Returns true once the black-out is done.
 local function advance_fade_phase()

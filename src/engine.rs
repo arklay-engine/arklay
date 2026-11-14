@@ -34,11 +34,15 @@
 //!   only rendering, the camera-switch cull and effect attach compose the SCA
 //!   parent chain.
 
+mod bot;
 mod debug_hud;
 mod debug_view;
 mod script;
+mod watch;
 
 pub use script::{ScriptOptions, run_script};
+
+pub use bot::{BotOptions, DEFAULT_MAX_TICKS, DEFAULT_RISK, parse_bot_param, seeded_rand_state};
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::{CStr, CString, c_void};
@@ -746,6 +750,7 @@ pub fn run_with_options(
     // confirmed F9 return and the debug tools' load/clear game requests all
     // need the mode machine to own the next screen.
     let mut app = App::new(pack, save_dir, true);
+    app.configure_watch(mods.watch);
     app.player_options = player_options;
     app.start_session(session);
     run_app_loop(&mut app, &mut display, stats)
@@ -863,6 +868,9 @@ pub struct ModOptions {
     /// Extra mod directories to scan in addition to the pack's sibling
     /// `mods/` directory, in precedence order.
     pub global_dirs: Vec<PathBuf>,
+    /// Watch the applied source directories and reload `lua/**.lua` hooks and
+    /// the `bot/**.lua` route while the interactive game runs.
+    pub watch: bool,
 }
 
 /// Open a game pack together with its runtime mod layers.
@@ -2398,8 +2406,10 @@ struct GameSession {
     /// clears at once. It goes back to [`Self::music`] when the skip ends.
     cutscene_skip_music: Option<Mixer>,
     /// Wall time one fast-forward burst may take ([`CUTSCENE_SKIP_BURST`]);
-    /// a test sets it to zero for one scene tick per call.
-    cutscene_skip_burst: std::time::Duration,
+    /// a test sets it to zero for one scene tick per call. `None` (a headless
+    /// bot run) has no wall-time bound: the scene runs to its end in one
+    /// update, so the tick it returns control on does not hang on the clock.
+    cutscene_skip_burst: Option<std::time::Duration>,
     /// The room-entry fade the original arms on every gameplay (re)entry after
     /// a room load: type 2, accumulator `0x7FFF` and a negative counter that
     /// steps the alpha down once per fixed tick.
@@ -2474,6 +2484,10 @@ struct GameSession {
     /// The slot the last typewriter save wrote, taken once by the app as
     /// the in-game menu's restart point.
     saved_slot: Option<usize>,
+    /// Saves this session's save screens wrote, and the slot of the last
+    /// one: the player bot's read-only view of a completed save.
+    saves_written: u32,
+    last_saved_slot: Option<usize>,
     /// A door loaded a room and its autosave has not been taken yet: the app
     /// takes it once the player has control ([`GameSession::take_autosave`]).
     autosave_pending: bool,
@@ -2980,7 +2994,7 @@ impl GameSession {
             native_subtitle: false,
             cutscene_skip: None,
             cutscene_skip_music: None,
-            cutscene_skip_burst: CUTSCENE_SKIP_BURST,
+            cutscene_skip_burst: Some(CUTSCENE_SKIP_BURST),
             re2_die: None,
             re2_die_sheet: None,
             room_fade: transition::Fade::inactive(),
@@ -3033,6 +3047,8 @@ impl GameSession {
             system_menu_requested: false,
             load_from_system_menu: false,
             saved_slot: None,
+            saves_written: 0,
+            last_saved_slot: None,
             autosave_pending: false,
             autosave_settle: 0,
             autosave_events: 0,
@@ -3636,7 +3652,11 @@ impl GameSession {
                 self.end_cutscene_skip(true);
                 break;
             }
-            if ran && start.elapsed() >= self.cutscene_skip_burst {
+            if ran
+                && self
+                    .cutscene_skip_burst
+                    .is_some_and(|burst| start.elapsed() >= burst)
+            {
                 break;
             }
             ran = true;
@@ -5010,6 +5030,18 @@ impl GameSession {
             || self.debug_menu.is_some()
             || self.return_title.is_some()
             || self.system_menu_open
+    }
+
+    /// Whether a host overlay the player opened owns the session: the native
+    /// in-game menu (open or asked for), its LOAD GAME screen, the F1 debug
+    /// menu or the F9 return-to-title prompt. A running bot is suspended
+    /// under it and the player drives it.
+    fn host_overlay(&self) -> bool {
+        self.system_menu_open
+            || self.system_menu_requested
+            || (self.load_from_system_menu && self.save_screen.is_some())
+            || self.debug_menu.is_some()
+            || self.return_title.is_some()
     }
 
     /// One frozen tick of the active film: advance it against the wall clock
@@ -7003,6 +7035,24 @@ impl GameSession {
         self.player.anim.set_applied_pose(shown);
     }
 
+    /// Reload the pack's `lua/**.lua` hooks into a fresh VM.
+    ///
+    /// The session, room and game state stay live: the room's init script is
+    /// not re-run, but the new VM's `on_init` and `on_room_load` run over the
+    /// current state so a hook sees the room it is already in. Hook globals are
+    /// fresh, exactly as when the session opened. A load failure returns the
+    /// error and leaves the previous VM in place, so `--watch` can log it and
+    /// keep playing.
+    fn reload_lua(&mut self, pack: &Pack) -> Result<()> {
+        let lua = lua::LuaVm::load(pack)?;
+        if let Some(vm) = lua.as_ref() {
+            vm.call_init(&mut self.game);
+            vm.call_room_load(&mut self.game, self.loaded.id);
+        }
+        self.lua = lua;
+        Ok(())
+    }
+
     /// Write the session's current state to `path` as a save block.
     ///
     /// The `--save-out` authoring seam: the same capture the typewriter save
@@ -7023,6 +7073,31 @@ impl GameSession {
             ticks: self.game.frame,
             cues: std::cell::RefCell::new(Vec::new()),
             game: Some(&self.game),
+        }
+    }
+
+    /// The player has died: the death sequence runs, the dead flag is up or
+    /// the health is gone.
+    pub(crate) fn player_dead(&self) -> bool {
+        !self.death.is_idle()
+            || self.game.flags[5].bit(game::MSF_PLAYER_DEAD)
+            || self.game.entities[0].health < 0
+    }
+
+    /// The escape scene has completed the game (its scripted death variant,
+    /// outside the attract demo).
+    pub(crate) fn game_completed(&self) -> bool {
+        self.game.flags[5].bit(game::MSF2_DEATH_VARIANT)
+            && !self.game.flags[5].bit(game::MSF2_ATTRACT_DEMO)
+    }
+
+    /// A save screen wrote a save: the app's restart point and the player
+    /// bot's read-only count of completed saves.
+    fn note_save_written(&mut self, slot: Option<usize>) {
+        self.saves_written = self.saves_written.saturating_add(1);
+        if slot.is_some() {
+            self.saved_slot = slot;
+            self.last_saved_slot = slot;
         }
     }
 
@@ -7074,9 +7149,7 @@ impl GameSession {
                 .and_then(|screen| screen.take_outcome())
             {
                 self.game.re2_typewriter_write(outcome.ink_ribbon);
-                if outcome.slot.is_some() {
-                    self.saved_slot = outcome.slot;
-                }
+                self.note_save_written(outcome.slot);
             }
         } else {
             self.play_ui_cue_names(pack, cues);
@@ -7116,9 +7189,7 @@ impl GameSession {
                 }
                 self.game.increment_saves();
             }
-            if outcome.slot.is_some() {
-                self.saved_slot = outcome.slot;
-            }
+            self.note_save_written(outcome.slot);
         }
         self.save_screen = None;
         // Leaving the save screen runs `cut_set`, which rebuilds the room's
@@ -10389,6 +10460,9 @@ struct App {
     /// interactive window, off for traces and captures, which follow the
     /// oracle's `MovieEnable = 0`.
     room_films: bool,
+    /// A headless bot run: sessions fast-forward a skipped cutscene without
+    /// a wall-time bound (see [`GameSession::cutscene_skip_burst`]).
+    unbounded_cutscene_skip: bool,
     /// The Subtitles option: on draws voiced lines' subtitles, off hides
     /// them. Sessions inherit it (see [`GameSession::subtitles_off`]).
     subtitles: bool,
@@ -10451,6 +10525,17 @@ struct App {
     /// Where the in-game menu's RESTART goes: the save last loaded or
     /// written, else the new game this run started.
     restart_point: Option<RestartPoint>,
+    /// `--bot-seed`, and how many sessions it has already seeded.
+    bot_seed: Option<u32>,
+    bot_seed_sessions: u32,
+    /// `--bot-invincible`: every session the bot runs has the INVINCIBLE
+    /// cheat on.
+    bot_invincible: bool,
+    /// The optional Lua-driven player bot. While it is active its input
+    /// replaces the human one; once it finishes, the normal input returns.
+    bot: Option<bot::BotRuntime>,
+    /// The `--watch` source-directory poller; `None` outside interactive runs.
+    watch: Option<watch::Watch>,
 }
 
 /// Ticks (one second) the player must keep control, with no event starting
@@ -10510,6 +10595,7 @@ impl App {
             pending_movie: None,
             skips_enabled: false,
             room_films: false,
+            unbounded_cutscene_skip: false,
             subtitles: true,
             subtitle_style: gui::SubtitleStyle::default(),
             autosave: false,
@@ -10531,6 +10617,11 @@ impl App {
             ending: None,
             system_menu: None,
             restart_point: None,
+            bot_seed: None,
+            bot_seed_sessions: 0,
+            bot_invincible: false,
+            bot: None,
+            watch: None,
         }
     }
 
@@ -10643,6 +10734,15 @@ impl App {
             high: scale(rumble.high),
             ..rumble
         })
+    }
+
+    /// Whether the running bot, rather than the human, is feeding the pad.
+    ///
+    /// The interactive loop must not poll film skips with the human word while
+    /// this is true: the poll makes the film session the external sampler, so
+    /// the fixed tick would then ignore the bot's `ui.confirm` edge.
+    fn bot_owns_input(&self) -> bool {
+        self.bot.as_ref().is_some_and(|bot| !bot.finished())
     }
 
     /// Poll the active film's skip input between ticks; see
@@ -11006,6 +11106,123 @@ impl App {
         self.autosave = true;
     }
 
+    /// Attach the pack's Lua bot to the running game session.
+    fn attach_bot(
+        &mut self,
+        risk: f64,
+        goal_room: Option<&str>,
+        seed: Option<u32>,
+        params: &[(String, String)],
+        invincible: bool,
+    ) -> Result<()> {
+        if !matches!(self.mode, Mode::Play(_)) {
+            bail!("--bot requires a game session (use `--ui game`)");
+        }
+        let runtime = bot::BotRuntime::load(&self.pack)?
+            .with_risk(risk)
+            .with_goal_room(goal_room)
+            .with_params(&self.pack, params)?;
+        let summary = runtime.params_summary();
+        if !summary.is_empty() {
+            eprintln!("[bot] params: {summary}");
+        }
+        self.bot = Some(runtime);
+        self.bot_seed = seed;
+        self.bot_invincible = invincible;
+        if invincible {
+            eprintln!("[bot] invincible: the INVINCIBLE cheat is on for the run");
+        }
+        // The boot already started the first session; it has not ticked yet.
+        if let Mode::Play(session) = &mut self.mode {
+            apply_bot_seed(self.bot_seed, &mut self.bot_seed_sessions, session);
+            session.game.debug.invincible |= self.bot_invincible;
+        }
+        Ok(())
+    }
+
+    /// Start watching the pack's source directories (`--watch`).
+    ///
+    /// A pack that is only `.akpak` files has nothing to watch; the watcher
+    /// logs that and stays off.
+    fn configure_watch(&mut self, enabled: bool) {
+        self.watch = watch::Watch::new(enabled, &self.pack, &[]);
+    }
+
+    /// Poll for changed script/metadata files and reload the live session's
+    /// hooks, bot route and room metadata.
+    ///
+    /// Called between presented frames, never inside a game tick. With no
+    /// game session the change is logged and the next session picks it up from
+    /// the pack; a reload error is logged and the old hooks keep running.
+    fn watch_tick(&mut self) {
+        let changed = match self.watch.as_mut() {
+            Some(watch) => watch.poll(),
+            None => return,
+        };
+        if changed.is_empty() {
+            return;
+        }
+        let count = changed.len();
+        let Some(watch) = self.watch.as_ref() else {
+            return;
+        };
+        let kinds: Vec<watch::Changed> = changed.iter().map(|path| watch.classify(path)).collect();
+        let Mode::Play(session) = &mut self.mode else {
+            eprintln!(
+                "[watch] {count} script/metadata file(s) changed; waiting for a game session"
+            );
+            return;
+        };
+        // Each change reloads only what it belongs to: a bot file never
+        // re-runs the pack's hooks, which write the live game.
+        if kinds.contains(&watch::Changed::Hooks) {
+            match session.reload_lua(&self.pack) {
+                Ok(()) => {
+                    // The app caches the save/load screen entry from
+                    // `App::new`'s throwaway VM. A changed `on_init`
+                    // registration must replace it along with the session's
+                    // hooks.
+                    self.save_screen = crate::lua::registered_save_screen(&self.pack);
+                    eprintln!("[watch] reloaded the Lua hooks");
+                }
+                Err(err) => eprintln!("[watch] Lua hook reload failed: {err:#}"),
+            }
+        }
+        if let Some(bot) = self.bot.as_mut() {
+            if kinds.contains(&watch::Changed::BotRoute) {
+                match bot.reload(&self.pack) {
+                    Ok(()) => eprintln!("[watch] reloaded the bot route"),
+                    Err(err) => eprintln!("[watch] bot route reload failed: {err:#}"),
+                }
+            } else if kinds.contains(&watch::Changed::BotMeta) {
+                bot.reload_meta();
+                eprintln!("[watch] invalidated the bot room metadata");
+            }
+        }
+        eprintln!("[watch] {count} script/metadata file(s) changed");
+    }
+
+    /// Whether the running bot's player has died.
+    fn bot_player_dead(&self) -> bool {
+        matches!(&self.mode, Mode::Play(session) if session.player_dead())
+    }
+
+    /// What the bot's report reads from the session when it is written: the
+    /// ending the game's own rule picks, once the escape scene has completed
+    /// the game (the scripted death variant), and the play timer.
+    fn bot_run_facts(&self) -> bot::RunFacts {
+        let Mode::Play(session) = &self.mode else {
+            return bot::RunFacts::default();
+        };
+        let game = &session.game;
+        bot::RunFacts {
+            ending: session
+                .game_completed()
+                .then(|| ui::debug_menu::default_ending(game)),
+            game_time_ticks: Some(game.play_timer()),
+        }
+    }
+
     /// Follow the subtitle options of `[game]`.
     fn set_subtitle_options(&mut self, game: &crate::config::Game) {
         self.subtitles = game.subtitles;
@@ -11034,9 +11251,28 @@ impl App {
 
     /// Enter a gameplay session, opening audio on the interactive path.
     fn start_session(&mut self, mut session: Box<GameSession>) {
+        // A session the bot reached through the load screen is its reload
+        // and carries the run on; any other is a fresh run.
+        if let Some(bot) = self.bot.as_mut()
+            && let Err(err) = bot.start_session(&self.pack)
+        {
+            // Ending the run (rather than dropping the bot) keeps the old
+            // route state from running on and lets a headless run report it.
+            eprintln!("[bot] could not reset the bot route: {err:#}");
+            bot.fail(format!("could not reset the route: {err:#}"));
+        }
+        // `--bot-seed`: every session the bot runs gets its own stream, the
+        // reload after a death included (a save does not carry the RNG state).
+        if self.bot.is_some() {
+            apply_bot_seed(self.bot_seed, &mut self.bot_seed_sessions, &mut session);
+            session.game.debug.invincible |= self.bot_invincible;
+        }
         session.set_debug_menu(self.debug_menu);
         session.set_skips_enabled(self.skips_enabled);
         session.films = self.room_films;
+        if self.unbounded_cutscene_skip {
+            session.cutscene_skip_burst = None;
+        }
         session.subtitles_off = !self.subtitles;
         session.game.player_options = self.player_options;
         if self.audio {
@@ -11392,6 +11628,13 @@ impl App {
         screen.native()
     }
 
+    /// Whether a host overlay the player opened is up: the native in-game
+    /// menu or one of the session's ([`GameSession::host_overlay`]).
+    fn host_overlay(&self) -> bool {
+        self.system_menu.is_some()
+            || matches!(&self.mode, Mode::Play(session) if session.host_overlay())
+    }
+
     /// Whether the session asked for the in-game menu; taken once.
     fn take_system_menu_request(&mut self) -> bool {
         match &mut self.mode {
@@ -11534,11 +11777,139 @@ impl App {
         if matches!(self.mode, Mode::Movie(_)) {
             return self.tick_movie(ui, input);
         }
+        // A running bot owns the pad on the title and its load screen too,
+        // where it loads its latest save after a death.
+        let ui = match self.bot_screen_input()? {
+            Some(bot) => {
+                self.feed_bot_native_screen(&bot.ui);
+                bot.ui
+            }
+            None => ui,
+        };
         let result = self.screen_update(ui);
         if let ScreenResult::Done(action) = result {
             return self.apply(action);
         }
+        if let Some(flow) = self.bot_host_update(ui, input, action)? {
+            return Ok(flow);
+        }
+        // A running bot owns the pad: its tick runs once, before the game
+        // tick, and its input replaces the human one. Once it finishes the
+        // normal input returns.
+        let bot_input = if let Mode::Play(session) = &mut self.mode {
+            if let Some(runtime) = self.bot.as_mut()
+                && !runtime.finished()
+            {
+                // The bot's only output is pad/UI input: equip, heal, item
+                // use and room actions go through the menu and the action
+                // button exactly as a player's input does.
+                match runtime.tick(session, &self.pack) {
+                    Ok(input) => Some(input),
+                    // The tick has already ended the run; the pad is the
+                    // player's again.
+                    Err(err) if runtime.errors_logged() => {
+                        eprintln!("[bot] {err:#}; the pad is yours");
+                        None
+                    }
+                    Err(err) => return Err(err),
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let (ui, input, action) = match bot_input {
+            Some(bot) => {
+                self.feed_bot_native_screen(&bot.ui);
+                (bot.ui, bot.input, bot.action)
+            }
+            None => (ui, input, action),
+        };
         self.play_update(ui, input, action)
+    }
+
+    /// The player's host keys while a bot plays: the bot owns the pad, but
+    /// not Escape, F1 or F9. Escape asks for the native in-game menu and
+    /// freezes the update; F1 and F9 reach the session alone. While an
+    /// overlay they opened is up ([`GameSession::host_overlay`]) the bot is
+    /// not ticked and the player's input drives the overlay; it resumes when
+    /// the overlay closes. `None` when the bot plays this update as usual,
+    /// which is every update of a run nobody presses those keys in, so the
+    /// bot's ticks for a seed are unchanged.
+    fn bot_host_update(
+        &mut self,
+        ui: UiInput,
+        input: player::Input,
+        action: bool,
+    ) -> Result<Option<AppFlow>> {
+        if !self.bot.as_ref().is_some_and(|bot| !bot.finished()) {
+            return Ok(None);
+        }
+        let Mode::Play(session) = &mut self.mode else {
+            return Ok(None);
+        };
+        // The in-game menu freezes the room wherever it is: nothing ticks
+        // under it, not even a door's animation.
+        if session.system_menu_open || session.system_menu_requested {
+            return Ok(Some(AppFlow::Continue));
+        }
+        if ui.system_menu && session.attract.is_none() {
+            session.system_menu_requested = true;
+            return Ok(Some(AppFlow::Continue));
+        }
+        if session.host_overlay() {
+            return self.play_update(ui, input, action).map(Some);
+        }
+        if ui.debug_menu || ui.return_title {
+            let host = UiInput {
+                debug_menu: ui.debug_menu,
+                return_title: ui.return_title,
+                any: ui.any,
+                ..UiInput::default()
+            };
+            return self
+                .play_update(host, player::Input::default(), false)
+                .map(Some);
+        }
+        Ok(None)
+    }
+
+    /// Hand the running bot's pad presses to the open native save/load
+    /// screen, which reads key events rather than the tick's input: the
+    /// same keys a player's presses give it.
+    fn feed_bot_native_screen(&mut self, ui: &UiInput) {
+        let events = ui::save_load::pad_events(ui);
+        if events.is_empty() {
+            return;
+        }
+        let Some(screen) = self.native_screen() else {
+            return;
+        };
+        let sounds = screen.handle(&events);
+        self.play_ui_cues(gui_cues(sounds));
+    }
+
+    /// The running bot's input on the title or the title's load screen, read
+    /// from what the screen shows; `None` on any other screen or without a
+    /// running bot.
+    fn bot_screen_input(&mut self) -> Result<Option<bot::BotInput>> {
+        let Some(runtime) = self.bot.as_mut().filter(|runtime| !runtime.finished()) else {
+            return Ok(None);
+        };
+        let screen = match &self.mode {
+            Mode::Title(screen) => bot::BotScreen::title(screen.view().as_ref()),
+            Mode::Load(screen) => bot::BotScreen::Load(screen.bot_view()),
+            _ => return Ok(None),
+        };
+        match runtime.tick_screen(screen) {
+            Ok(input) => Ok(Some(input)),
+            Err(err) if runtime.errors_logged() => {
+                eprintln!("[bot] {err:#}; the pad is yours");
+                Ok(None)
+            }
+            Err(err) => Err(err),
+        }
     }
 
     /// Advance the title/select/load screen; Play reports `Continue` here.
@@ -11973,6 +12344,7 @@ pub fn run_ui_with_options(
         player::Options::default(),
         trace::TraceOptions::default(),
         Authoring::default(),
+        BotOptions::default(),
     )
 }
 
@@ -11983,7 +12355,8 @@ pub fn run_ui_with_options(
 /// trace line per tick and the `capture_every` BMP cadence. `authoring` adds
 /// the CLI's oracle seams: a `--load` continue boot, the `--setup-script`
 /// chunk and the `--save-out` dump. `player_options` are the run options the
-/// booted sessions run with.
+/// booted sessions run with. `bot` enables the pack's restricted Lua player
+/// bot and, when `headless`, runs it without a display.
 #[allow(clippy::too_many_arguments)] // the CLI boot options are all needed
 pub fn run_ui_with_mods(
     pack: &Path,
@@ -11999,6 +12372,7 @@ pub fn run_ui_with_mods(
     player_options: player::Options,
     trace: trace::TraceOptions<'_>,
     authoring: Authoring<'_>,
+    bot: BotOptions,
 ) -> Result<()> {
     if authoring.load.is_some() && screen != "game" {
         bail!("--load is only supported with `--ui game`");
@@ -12051,6 +12425,7 @@ pub fn run_ui_with_mods(
         player_options,
         trace,
         authoring,
+        bot,
         None,
     )
 }
@@ -12083,6 +12458,7 @@ pub fn run_root(
             renderer,
             ..Authoring::default()
         },
+        BotOptions::default(),
         None,
     )
 }
@@ -12116,6 +12492,7 @@ pub(crate) fn run_root_with_display(
             renderer,
             ..Authoring::default()
         },
+        BotOptions::default(),
         Some(display),
     )
 }
@@ -12171,8 +12548,40 @@ fn run_ui_impl(
     player_options: player::Options,
     trace: trace::TraceOptions<'_>,
     authoring: Authoring<'_>,
+    bot: BotOptions,
     shared: Option<&mut Display>,
 ) -> Result<()> {
+    if bot.headless {
+        if capture.is_some() || trace.path.is_some() || trace.input.is_some() {
+            bail!("--bot-headless does not take --capture, --trace or --input");
+        }
+        let pack = open_game_pack(pack, mods, language)?;
+        let mut app = App::new(pack, save_dir.to_path_buf(), false);
+        app.player_options = player_options;
+        app.boot(boot)?;
+        app.enable_skips();
+        app.attach_bot(
+            bot.risk,
+            bot.goal_room.as_deref(),
+            bot.seed,
+            &bot.params,
+            bot.invincible,
+        )?;
+        // A headless run has no frame to stay responsive for: let one update
+        // fast-forward the whole scene instead of a 12 ms burst, so where
+        // control returns does not depend on the machine's load. Every later
+        // session (a reload) inherits it.
+        app.unbounded_cutscene_skip = true;
+        if let Mode::Play(session) = &mut app.mode {
+            session.cutscene_skip_burst = None;
+        }
+        let max_ticks = if bot.max_ticks == 0 {
+            bot::DEFAULT_MAX_TICKS
+        } else {
+            bot.max_ticks
+        };
+        return run_bot_headless(&mut app, max_ticks, bot.stats_path.as_deref());
+    }
     if capture.is_some()
         || trace.path.is_some()
         || trace.capture_dir.is_some()
@@ -12362,12 +12771,26 @@ fn run_ui_impl(
 
     let pack = open_game_pack(pack, mods, language)?;
     let mut app = App::new(pack, save_dir.to_path_buf(), true);
+    app.configure_watch(mods.watch);
     app.player_options = player_options;
     app.boot(boot)?;
     if let Mode::Play(session) = &mut app.mode {
         session.run_setup_script(authoring.setup_script)?;
     } else if authoring.setup_script.is_some() {
         bail!("--setup-script requires a boot that opens a game session");
+    }
+    if bot.enabled {
+        app.enable_skips();
+        app.attach_bot(
+            bot.risk,
+            bot.goal_room.as_deref(),
+            bot.seed,
+            &bot.params,
+            bot.invincible,
+        )?;
+        if let Some(runtime) = app.bot.as_mut() {
+            runtime.log_errors();
+        }
     }
     let mut owned = None;
     let display = match shared {
@@ -12720,6 +13143,105 @@ fn write_trace_capture(app: &App, options: &trace::TraceOptions<'_>, index: u32)
     )
 }
 
+/// Run the attached bot with no display or audio until it finishes, dies or
+/// spends `max_ticks` app updates. Prints a concise `[bot]` report.
+fn run_bot_headless(app: &mut App, max_ticks: u64, stats_path: Option<&Path>) -> Result<()> {
+    let started = Instant::now();
+    let mut outcome = "max_ticks";
+    // A bot with a save loads it after a death; one without gets a moment
+    // to see the death and finish with its own reason.
+    let mut dead_ticks = 0u32;
+    for _ in 0..max_ticks {
+        if app.bot.as_ref().is_some_and(bot::BotRuntime::finished) {
+            outcome = "finished";
+            break;
+        }
+        if app.bot_player_dead() {
+            dead_ticks += 1;
+            let reloading = app.bot.as_ref().is_some_and(bot::BotRuntime::has_save);
+            if !reloading && dead_ticks > 2 {
+                outcome = "death";
+                break;
+            }
+        } else {
+            dead_ticks = 0;
+        }
+        match app.update(UiInput::default(), player::Input::default(), false) {
+            Ok(AppFlow::Quit) => {
+                outcome = "quit";
+                break;
+            }
+            Ok(AppFlow::Continue) => {}
+            Err(err) => {
+                print_bot_report(app, "error", started.elapsed());
+                write_bot_stats(app, "error", started.elapsed(), stats_path)?;
+                return Err(err);
+            }
+        }
+        app.post_present();
+    }
+    if app.bot.as_ref().is_some_and(bot::BotRuntime::finished) {
+        outcome = "finished";
+    } else if outcome == "max_ticks" && app.bot_player_dead() {
+        outcome = "death";
+    }
+    print_bot_report(app, outcome, started.elapsed());
+    write_bot_stats(app, outcome, started.elapsed(), stats_path)
+}
+
+/// Write the `--bot-stats` JSON report, whatever the outcome.
+fn write_bot_stats(
+    app: &App,
+    outcome: &str,
+    elapsed: std::time::Duration,
+    path: Option<&Path>,
+) -> Result<()> {
+    let (Some(path), Some(runtime)) = (path, app.bot.as_ref()) else {
+        return Ok(());
+    };
+    let json = runtime.stats_json(outcome, elapsed.as_secs_f64(), app.bot_run_facts());
+    if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+        std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    }
+    std::fs::write(path, serde_json::to_string_pretty(&json)?)
+        .with_context(|| format!("writing bot stats to {}", path.display()))?;
+    println!("[bot] stats: {}", path.display());
+    Ok(())
+}
+
+/// Print the headless run's tick count, room path and finish reason.
+fn print_bot_report(app: &App, outcome: &str, elapsed: std::time::Duration) {
+    let Some(runtime) = app.bot.as_ref() else {
+        println!("[bot] no bot attached");
+        return;
+    };
+    println!(
+        "[bot] outcome={outcome} ticks={} elapsed={:.2}s",
+        runtime.ticks(),
+        elapsed.as_secs_f64()
+    );
+    if let Some(reason) = runtime.finish_reason() {
+        println!("[bot] finish: {reason}");
+    }
+    let path = runtime.room_path();
+    if path.is_empty() {
+        println!("[bot] rooms: (none)");
+    } else {
+        println!("[bot] rooms: {}", path.join(" -> "));
+    }
+}
+
+/// Feed the between-tick film poll for one presented frame.
+///
+/// A running bot owns the pad: polling with the human word would make the
+/// film session the external sampler, and the fixed tick would then ignore
+/// the bot's `ui.confirm` edge. Skipping the poll lets the bot skip the film.
+fn poll_movie_skip_for_frame(app: &mut App, human_buttons: u16) {
+    if !app.bot_owns_input() {
+        app.poll_movie_skip(human_buttons);
+    }
+}
+
 /// The interactive app loop shared by `--room`, `--ui` and the standalone
 /// `--fmv` playback: fixed ticks from the latched input, frames presented at
 /// the display's `frame_rate` (tweened between the last two ticks above the
@@ -12747,27 +13269,16 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
         if poll_events(&mut event, &mut input, &mut keys, Some(display)) {
             return clock.report();
         }
+        // Hot reload happens between frames, never in the middle of a tick.
+        app.watch_tick();
         screenshot |= keys.screenshot;
-        if keys.cut_delta != 0 {
-            app.step_camera_cut(keys.cut_delta);
-        }
-        if keys.speed_delta != 0 {
-            let speed = clock.step_speed(keys.speed_delta);
-            hud.notify("speed", format!("Game speed {speed:.1}x"));
-        }
-        for _ in 0..keys.debug_overlay {
-            hud.cycle();
-        }
-        for _ in 0..keys.render_mode {
-            let mode = debug_view::cycle();
-            hud.notify("render", format!("Render mode: {}", mode.label()));
-        }
+        apply_port_keys(app, &keys, &mut clock, &mut hud);
         drive_system_menu(app, display, &mut input, &mut clock)?;
 
         clock.advance();
         // The film skip state advances on every loop pass, not the fixed
         // tick, exactly like the original's platform-driven film update.
-        app.poll_movie_skip(movie_buttons_held(input.held_word()));
+        poll_movie_skip_for_frame(app, movie_buttons_held(input.held_word()));
         let tick_ms = clock.scaled_tick_interval(app.tick_interval(), app.speed_applies());
         while clock.accumulator >= tick_ms {
             let tick = input.tick();
@@ -12788,70 +13299,119 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
             }
         };
         app.set_tween_alpha(alpha);
-        let draw = Instant::now();
-        let (width, height) = display.drawable_size();
-        if let Some(menu) = app.system_menu.as_mut() {
-            menu.set_recording(display.gpu_active());
-            menu.draw(width, height);
-        } else if !app.draw_debug_menu(width, height, display.gpu_active())
-            && let Some(screen) = app.native_screen()
-        {
-            screen.draw(width, height, display.gpu_active());
-        }
-        // A voiced line's subtitle is drawn by the GUI when its faces can
-        // spell it; the in-game menu, debug menu or save screen covers it.
-        let subtitle = app.subtitle().filter(|subtitle| hud.can_draw(subtitle));
-        app.set_native_subtitle(subtitle.is_some());
-        let covered = app.native_layer().is_some();
-        hud.set_subtitle(
-            subtitle
-                .filter(|_| !covered)
-                .map(|subtitle| (subtitle, app.subtitle_style)),
-        );
-        hud.draw(app, display, &clock, &input);
-        // A frame the GPU fails to draw switches the whole run to the
-        // software backend, which then draws it; no frame mixes the two.
-        let gpu_drawn = match display.gpu().map(|gpu| app.draw_layers(gpu)) {
-            Some(Ok(())) => true,
-            Some(Err(err)) => {
-                display.fall_back_to_software(&err)?;
-                false
-            }
-            None => false,
-        };
-        if gpu_drawn {
-            clock.frame_drawn(draw);
-            let native = hud.layer().or(app.native_layer());
-            if let Some(film) = app.hd_frame() {
-                display.present_film(app.frame(), film)?;
-            } else {
-                display.present_frame(app.frame(), None, native)?;
-            }
-        } else {
-            app.draw();
-            clock.frame_drawn(draw);
-            let native = hud.layer().or(app.native_layer());
-            display.present_frame(app.frame(), None, native)?;
-        }
-        if std::mem::take(&mut screenshot) {
-            let film = app
-                .hd_frame()
-                .map(|film| (&film.rgba[..], (film.width, film.height)));
-            match display.screenshot(app.frame(), film) {
-                Ok(image) => {
-                    let name = crate::screenshot::save_in_background(image);
-                    hud.notify("screenshot", format!("Screenshot saved: {name}"));
-                }
-                Err(err) => {
-                    crate::warning!("warning: screenshot failed: {err:#}");
-                    hud.notify("screenshot", "Screenshot failed");
-                }
-            }
-        }
-        display.show()?;
-        hud.frame_presented();
+        present_app_frame(
+            app,
+            display,
+            &mut hud,
+            &mut clock,
+            &input,
+            std::mem::take(&mut screenshot),
+        )?;
         app.post_present();
     }
+}
+
+/// Carry out this frame's port-only keys: the camera-cut step, the F2/F3
+/// game speed, the F6 debug overlay and the F4 render mode. F12's
+/// screenshot is the caller's, taken from the next presented frame.
+fn apply_port_keys(
+    app: &mut App,
+    keys: &PortKeys,
+    clock: &mut LoopClock,
+    hud: &mut debug_hud::DebugHud,
+) {
+    if keys.cut_delta != 0 {
+        app.step_camera_cut(keys.cut_delta);
+    }
+    if keys.speed_delta != 0 {
+        let speed = clock.step_speed(keys.speed_delta);
+        hud.notify("speed", format!("Game speed {speed:.1}x"));
+    }
+    for _ in 0..keys.debug_overlay {
+        hud.cycle();
+    }
+    for _ in 0..keys.render_mode {
+        let mode = debug_view::cycle();
+        hud.notify("render", format!("Render mode: {}", mode.label()));
+    }
+}
+
+/// Draw and present one frame of the app as the interactive window shows
+/// it: the in-game menu, debug menu or native screen over the game, the
+/// debug HUD, the GPU scene (or the software frame when there is no GPU or
+/// it fails), the F12 screenshot when `screenshot`. Returns whether the
+/// software framebuffer was drawn.
+fn present_app_frame(
+    app: &mut App,
+    display: &mut Display,
+    hud: &mut debug_hud::DebugHud,
+    clock: &mut LoopClock,
+    input: &InputState,
+    screenshot: bool,
+) -> Result<bool> {
+    let draw = Instant::now();
+    let (width, height) = display.drawable_size();
+    if let Some(menu) = app.system_menu.as_mut() {
+        menu.set_recording(display.gpu_active());
+        menu.draw(width, height);
+    } else if !app.draw_debug_menu(width, height, display.gpu_active())
+        && let Some(screen) = app.native_screen()
+    {
+        screen.draw(width, height, display.gpu_active());
+    }
+    // A voiced line's subtitle is drawn by the GUI when its faces can
+    // spell it; the in-game menu, debug menu or save screen covers it.
+    let subtitle = app.subtitle().filter(|subtitle| hud.can_draw(subtitle));
+    app.set_native_subtitle(subtitle.is_some());
+    let covered = app.native_layer().is_some();
+    hud.set_subtitle(
+        subtitle
+            .filter(|_| !covered)
+            .map(|subtitle| (subtitle, app.subtitle_style)),
+    );
+    hud.draw(app, display, clock, input);
+    // A frame the GPU fails to draw switches the whole run to the
+    // software backend, which then draws it; no frame mixes the two.
+    let gpu_drawn = match display.gpu().map(|gpu| app.draw_layers(gpu)) {
+        Some(Ok(())) => true,
+        Some(Err(err)) => {
+            display.fall_back_to_software(&err)?;
+            false
+        }
+        None => false,
+    };
+    if gpu_drawn {
+        clock.frame_drawn(draw);
+        let native = hud.layer().or(app.native_layer());
+        if let Some(film) = app.hd_frame() {
+            display.present_film(app.frame(), film)?;
+        } else {
+            display.present_frame(app.frame(), None, native)?;
+        }
+    } else {
+        app.draw();
+        clock.frame_drawn(draw);
+        let native = hud.layer().or(app.native_layer());
+        display.present_frame(app.frame(), None, native)?;
+    }
+    if screenshot {
+        let film = app
+            .hd_frame()
+            .map(|film| (&film.rgba[..], (film.width, film.height)));
+        match display.screenshot(app.frame(), film) {
+            Ok(image) => {
+                let name = crate::screenshot::save_in_background(image);
+                hud.notify("screenshot", format!("Screenshot saved: {name}"));
+            }
+            Err(err) => {
+                crate::warning!("warning: screenshot failed: {err:#}");
+                hud.notify("screenshot", "Screenshot failed");
+            }
+        }
+    }
+    display.show()?;
+    hud.frame_presented();
+    Ok(!gpu_drawn)
 }
 
 /// One presented frame of the native in-game menu: open it when the session
@@ -13030,16 +13590,19 @@ fn drive_native_screen(
     scale_pointer(display, &mut events);
     let sounds = screen.handle(&events);
     input.discard_presses();
-    app.play_ui_cues(
-        sounds
-            .into_iter()
-            .map(|sound| match sound {
-                gui::Sound::Cursor => ui::UiCue::Cursor,
-                gui::Sound::Decide => ui::UiCue::Decide,
-                gui::Sound::Cancel => ui::UiCue::Cancel,
-            })
-            .collect(),
-    );
+    app.play_ui_cues(gui_cues(sounds));
+}
+
+/// A native screen's sounds as the UI cues that play them.
+fn gui_cues(sounds: Vec<gui::Sound>) -> Vec<ui::UiCue> {
+    sounds
+        .into_iter()
+        .map(|sound| match sound {
+            gui::Sound::Cursor => ui::UiCue::Cursor,
+            gui::Sound::Decide => ui::UiCue::Decide,
+            gui::Sound::Cancel => ui::UiCue::Cancel,
+        })
+        .collect()
 }
 
 /// Load the system faces the in-game menu needs for `language`'s strings
@@ -13384,6 +13947,7 @@ pub fn run_fmv(
     let pack = open_game_pack(pack, mods, None)?;
     let session = MovieSession::open_reference(&pack, film, character)?;
     let mut app = App::new(pack, save_dir, true);
+    app.configure_watch(mods.watch);
     app.queue_movie(session, None);
     let mut display = Display::new("Arklay", false, renderer)?;
     run_app_loop(&mut app, &mut display, false)
@@ -13431,6 +13995,9 @@ pub fn run_ending(
     let save_dir = save::default_save_dir();
     let pack = open_game_pack(pack, mods, None)?;
     let mut app = App::new(pack, save_dir, capture.is_none());
+    if capture.is_none() {
+        app.configure_watch(mods.watch);
+    }
     app.player_options = player_options;
     // Keep the missing-film diagnostic the pre-sequence entry had: a pack
     // without the films would otherwise warn per film and run the RESULT
@@ -16383,6 +16950,12 @@ struct VoiceCache {
     pending: Option<game::VoiceRequest>,
     /// The mixer's voice channel is held by a line this cache started.
     active: bool,
+    /// Ticks the line in progress still runs, by its own length. With no
+    /// device to play it (a headless run, or a cutscene skip's parked mixer)
+    /// this is what holds the F7 wait, as the playing line would.
+    silent_ticks: u32,
+    /// The wait is held by `silent_ticks`, not by the mixer's channel.
+    silent: bool,
 }
 
 impl VoiceCache {
@@ -16480,14 +17053,25 @@ fn tick_re2_voice(sound: bool, cache: &mut VoiceCache, game: &mut game::GameStat
     }
 }
 
+/// How many ticks a voice line plays for at 30 ticks a second.
+fn voice_line_ticks(wav: &audio::Wav) -> u32 {
+    const TICKS_A_SECOND: usize = 30;
+    let ticks = wav.frame_count() * TICKS_A_SECOND / wav.sample_rate.max(1) as usize;
+    u32::try_from(ticks).unwrap_or(u32::MAX)
+}
+
 /// One tick's voice handshake: queue the script's request, clear the wait flag
 /// when the active line ends, and start a pending line when the channel frees
 /// up.
 ///
-/// With no audio device the flag is cleared every tick, so a headless run
-/// (`--capture`, the corpus audit) advances its scripts immediately instead of
-/// hanging on F7. A line whose entry is absent from the pack clears the flag
-/// the same way (the documented hardening).
+/// With no audio device (a headless run, or the parked mixer of a cutscene
+/// skip) the wait holds for the line's own length and then clears, so the
+/// scripts keep the timing they have with sound: a scene whose forked event
+/// drives an actor past a voiced line (10A's upstairs radio call) otherwise
+/// ends its main thread first, and the fork leaves the player in its
+/// scripted animation for good. A line whose entry is absent from the pack
+/// clears the flag at once (the documented hardening), and so does any wait
+/// with no line behind it.
 fn tick_voice(
     music: &mut Option<Mixer>,
     cache: &mut VoiceCache,
@@ -16495,12 +17079,39 @@ fn tick_voice(
     pack: &Pack,
 ) {
     tick_re2_voice(music.is_some(), cache, game, pack);
+    cache.silent_ticks = cache.silent_ticks.saturating_sub(1);
     let Some(mixer) = music.as_mut() else {
-        game.voice.request = None;
         cache.pending = None;
-        cache.active = false;
-        game.voice.stop_requested = false;
-        game.clear_voice_playing();
+        if cache.active {
+            // The mixer was parked mid-line: the rest of the line's length
+            // still holds the wait.
+            cache.active = false;
+            cache.silent = true;
+        }
+        if game.voice.stop_requested {
+            game.voice.stop_requested = false;
+            cache.silent_ticks = 0;
+        }
+        if let Some(request) = game.voice.request.take()
+            && !game.is_re2_room
+        {
+            // RE 2 holds its own voice bit for the line (tick_re2_voice).
+            match cache.load(pack, &request.path) {
+                Some(wav) => {
+                    cache.silent_ticks = voice_line_ticks(&wav);
+                    cache.silent = true;
+                    game.set_voice_playing();
+                }
+                None => {
+                    game.voice.misses += 1;
+                    cache.silent_ticks = 0;
+                }
+            }
+        }
+        if cache.silent_ticks == 0 {
+            cache.silent = false;
+            game.clear_voice_playing();
+        }
         return;
     };
 
@@ -16511,10 +17122,19 @@ fn tick_voice(
         mixer.stop_voice();
         cache.pending = None;
         cache.active = false;
+        cache.silent = false;
+        cache.silent_ticks = 0;
         game.clear_voice_playing();
     }
     if let Some(request) = game.voice.request.take() {
         cache.pending = Some(request);
+    }
+    if cache.silent && cache.silent_ticks == 0 {
+        // A line held by its length while the mixer was parked has run out.
+        cache.silent = false;
+        if cache.pending.is_none() {
+            game.clear_voice_playing();
+        }
     }
 
     if cache.active && !mixer.voice_playing() {
@@ -16530,6 +17150,8 @@ fn tick_voice(
             Some(wav) => {
                 let gain = sfx::volume_gain(request.volume);
                 let pan = sfx::pan_from_raw(request.pan);
+                cache.silent_ticks = voice_line_ticks(&wav);
+                cache.silent = false;
                 mixer.play_voice(wav, gain, pan);
                 cache.active = true;
                 game.set_voice_playing();
@@ -17210,6 +17832,15 @@ fn pack_region(pack: &Pack) -> scd::akscr::Region {
     pack.manifest()
         .and_then(|manifest| manifest.region)
         .unwrap_or(scd::akscr::Region::Usa)
+}
+
+/// Seed `session`'s game RNG from `--bot-seed` (a no-op without it) and count
+/// the session.
+fn apply_bot_seed(seed: Option<u32>, sessions: &mut u32, session: &mut GameSession) {
+    if let Some(seed) = seed {
+        session.game.rand_state = seeded_rand_state(seed, *sessions);
+        *sessions += 1;
+    }
 }
 
 /// Build a fresh game state for `id`/`room` with the pack's static music
@@ -27931,6 +28562,61 @@ mod tests {
     }
 
     #[test]
+    fn a_voice_line_holds_the_wait_for_its_length_without_a_device() {
+        let dir = TempDir::new();
+        let path = dir.0.join("voice.akpak");
+        let mut writer = PackWriter::new();
+        // A tenth of a second at 22050 Hz: three ticks.
+        writer
+            .add("voice/0c_21.wav", voice_wav_bytes(&[0; 2205]))
+            .unwrap();
+        writer.write(&path).unwrap();
+        let pack = Pack::open(&path).unwrap();
+        let mut music = None;
+        let mut cache = VoiceCache::default();
+        let id = RoomId::parse("10A0").unwrap();
+        let mut game = game::GameState::new(id, &RoomState::default());
+        let request = |path: &str| game::VoiceRequest {
+            path: path.to_string(),
+            volume: 0,
+            pan: 0,
+        };
+
+        // The line holds the F7 wait for its three ticks, as it would while
+        // it played: 10A's upstairs radio call waits on a line like this, and
+        // with the wait gone at once its fork outlived the main thread and
+        // left Chris in a scripted animation.
+        game.voice.request = Some(request("voice/0c_21.wav"));
+        game.set_voice_playing();
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        assert!(game.voice_playing(), "the line started without a device");
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        assert!(game.voice_playing(), "the wait holds for the line's length");
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        assert!(!game.voice_playing(), "and clears once it has run");
+        assert_eq!(game.voice.misses, 0);
+
+        // A stop ends the line at once.
+        game.voice.request = Some(request("voice/0c_21.wav"));
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        assert!(game.voice_playing());
+        game.voice.stop_requested = true;
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        assert!(!game.voice_playing(), "the stop released the wait");
+
+        // An absent entry and a wait with no line behind it clear at once.
+        game.voice.request = Some(request("voice/00_ff.wav"));
+        game.set_voice_playing();
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        assert_eq!(game.voice.misses, 1, "the absent entry was counted");
+        assert!(!game.voice_playing(), "the wait released on the miss");
+        game.set_voice_playing();
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        assert!(!game.voice_playing(), "a stray wait bit clears");
+    }
+
+    #[test]
     fn voice_tick_handshakes_pending_requests() {
         let _sdl = crate::audio::test_lock::sdl();
         let dir = TempDir::new();
@@ -29155,6 +29841,41 @@ mod tests {
     }
 
     #[test]
+    fn headless_bot_attaches_and_finishes_on_a_pack_mod() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack_with(
+            &dir,
+            &[(
+                "bot/init.lua",
+                b"function on_bot_tick(bot)\n  bot:finish('test done')\nend\n",
+            )],
+        );
+        let saves = dir.0.join("saves");
+        run_ui_with_mods(
+            &pack_path,
+            "game",
+            None,
+            &saves,
+            1,
+            None,
+            0,
+            &ModOptions::default(),
+            false,
+            None,
+            player::Options::default(),
+            trace::TraceOptions::default(),
+            Authoring::default(),
+            BotOptions {
+                enabled: true,
+                headless: true,
+                max_ticks: 20,
+                ..BotOptions::default()
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
     fn app_debug_clear_game_plays_the_ending_chain() {
         let dir = TempDir::new();
         let pack_path = new_game_pack(&dir);
@@ -29272,6 +29993,7 @@ mod tests {
                 save_out: Some(&saved),
                 ..Authoring::default()
             },
+            BotOptions::default(),
         )
         .unwrap();
 
@@ -29307,6 +30029,7 @@ mod tests {
                 load: Some(&saved),
                 ..Authoring::default()
             },
+            BotOptions::default(),
         )
         .unwrap();
 
@@ -29577,6 +30300,7 @@ mod tests {
                 player::Options::default(),
                 trace::TraceOptions::default(),
                 Authoring::default(),
+                BotOptions::default(),
             )
             .unwrap();
         }
@@ -29782,6 +30506,7 @@ mod tests {
                 player::Options::default(),
                 trace::TraceOptions::default(),
                 Authoring::default(),
+                BotOptions::default(),
             )
             .unwrap();
         }
@@ -31060,7 +31785,7 @@ mod tests {
         session.set_skips_enabled(true);
         // One scene tick per call: the burst's wall-clock budget is machine
         // dependent, and a fast machine would run the whole scene at once.
-        session.cutscene_skip_burst = std::time::Duration::ZERO;
+        session.cutscene_skip_burst = Some(std::time::Duration::ZERO);
         session.game.apply_flag(5, game::MSF_SCREEN_INTENSITY, 0);
         session
             .tick(&pack, UiInput::default(), action_press(), true)
@@ -31173,7 +31898,7 @@ mod tests {
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
         session.set_skips_enabled(true);
-        session.cutscene_skip_burst = std::time::Duration::ZERO;
+        session.cutscene_skip_burst = Some(std::time::Duration::ZERO);
         session.game.apply_flag(5, game::MSF_SCREEN_INTENSITY, 0);
         // A glyph, then the `0x01` terminator with a 64-frame dismissal.
         assert!(session.game.message.start(0, 0, &[0x0C, 0x01, 0x40], false));
@@ -31216,7 +31941,7 @@ mod tests {
         let (pack, a, _b) = two_room_door_pack(&dir);
         let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
         session.set_skips_enabled(true);
-        session.cutscene_skip_burst = std::time::Duration::ZERO;
+        session.cutscene_skip_burst = Some(std::time::Duration::ZERO);
         session.game.apply_flag(5, game::MSF_SCREEN_INTENSITY, 0);
         session
             .tick(&pack, UiInput::default(), action_press(), true)
@@ -31344,7 +32069,7 @@ mod tests {
             trigger_test_door(&pack, &mut session);
             let door = session.transition.take();
             session.set_skips_enabled(true);
-            session.cutscene_skip_burst = std::time::Duration::ZERO;
+            session.cutscene_skip_burst = Some(std::time::Duration::ZERO);
             session.swallow_action = false;
             session.game.apply_flag(5, game::MSF_SCREEN_INTENSITY, 0);
             session
@@ -34654,6 +35379,237 @@ off_0010:
         assert!(matches!(tick(&mut app, 0), AppFlow::Quit));
     }
 
+    #[test]
+    fn a_running_bot_skips_an_in_session_film_through_the_fixed_tick() {
+        let dir = TempDir::new();
+        let movie_path = crate::movie::pack_path(0);
+        let film = crate::movie::test_avi(400);
+        let pack_path = new_game_pack_with(
+            &dir,
+            &[
+                (movie_path.as_str(), film.as_slice()),
+                (
+                    "bot/init.lua",
+                    b"function on_bot_tick(bot)\n  if bot:scene().film and bot:tick() % 2 == 0 then bot:pulse_confirm() end\nend\n",
+                ),
+            ],
+        );
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut app = App::new(pack, dir.0.join("saves"), false);
+        let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+        app.start_session(session);
+        app.attach_bot(bot::DEFAULT_RISK, None, None, &[], false)
+            .unwrap();
+        app.enable_skips();
+        let movie = MovieSession::open(&app.pack, 0, 0).unwrap();
+        let Mode::Play(session) = &mut app.mode else {
+            panic!("expected a play mode");
+        };
+        session.movie = Some(movie);
+        assert!(app.bot_owns_input());
+
+        // The human word is zero here, but polling it would still make the
+        // session the external sampler and starve the bot's confirm edge.
+        for _ in 0..2 {
+            poll_movie_skip_for_frame(&mut app, movie_buttons_held(0));
+            app.update(UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        }
+        let Mode::Play(session) = &app.mode else {
+            panic!("expected a play mode");
+        };
+        assert!(
+            session.movie.is_none(),
+            "the bot confirm must reach the film through the fixed tick"
+        );
+    }
+
+    /// An app playing a new game with a bot that does nothing but count its
+    /// ticks.
+    fn idle_bot_app(dir: &TempDir) -> App {
+        let pack_path =
+            new_game_pack_with(dir, &[("bot/init.lua", b"function on_bot_tick(bot) end\n")]);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut app = App::new(pack, dir.0.join("saves"), false);
+        let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+        app.start_session(session);
+        app.attach_bot(bot::DEFAULT_RISK, None, None, &[], false)
+            .unwrap();
+        app
+    }
+
+    fn update_with(app: &mut App, ui: UiInput) {
+        app.update(ui, player::Input::default(), false).unwrap();
+    }
+
+    fn bot_ticks(app: &App) -> u64 {
+        app.bot.as_ref().unwrap().ticks()
+    }
+
+    fn play_frame(app: &App) -> u64 {
+        let Mode::Play(session) = &app.mode else {
+            panic!("expected a play mode");
+        };
+        session.game.frame
+    }
+
+    #[test]
+    fn escape_suspends_a_running_bot_until_the_in_game_menu_closes() {
+        let dir = TempDir::new();
+        let mut app = idle_bot_app(&dir);
+        for _ in 0..3 {
+            update_with(&mut app, UiInput::default());
+        }
+        assert_eq!(bot_ticks(&app), 3);
+        assert!(!app.host_overlay());
+
+        // The player's Escape reaches the session past the bot's pad.
+        let frame = play_frame(&app);
+        update_with(
+            &mut app,
+            UiInput {
+                system_menu: true,
+                cancel: true,
+                ..UiInput::default()
+            },
+        );
+        assert!(app.host_overlay(), "Escape asks for the in-game menu");
+        // Until the host opens it nothing ticks, the bot included.
+        update_with(&mut app, UiInput::default());
+        assert!(app.take_system_menu_request());
+        let Mode::Play(session) = &mut app.mode else {
+            panic!("expected a play mode");
+        };
+        session.open_system_menu();
+        for _ in 0..5 {
+            update_with(&mut app, UiInput::default());
+        }
+        assert!(app.host_overlay());
+        assert_eq!(bot_ticks(&app), 3, "the bot is not ticked under the menu");
+        assert_eq!(play_frame(&app), frame, "the room is frozen under it");
+
+        app.close_system_menu();
+        assert!(!app.host_overlay());
+        update_with(&mut app, UiInput::default());
+        assert_eq!(bot_ticks(&app), 4, "the bot resumes when the menu closes");
+    }
+
+    #[test]
+    fn a_running_bot_leaves_the_f9_prompt_to_the_player() {
+        let dir = TempDir::new();
+        let mut app = idle_bot_app(&dir);
+        // Into free play, where F9 opens its prompt.
+        for _ in 0..60 {
+            update_with(&mut app, UiInput::default());
+        }
+        let before = bot_ticks(&app);
+        let f9 = UiInput {
+            return_title: true,
+            any: true,
+            ..UiInput::default()
+        };
+        update_with(&mut app, f9);
+        assert!(app.host_overlay(), "F9 reaches the session past the bot");
+        assert_eq!(bot_ticks(&app), before, "the press is the player's");
+        for _ in 0..3 {
+            update_with(&mut app, UiInput::default());
+        }
+        // Any other key cancels the prompt; here, a cancel press.
+        update_with(
+            &mut app,
+            UiInput {
+                cancel: true,
+                any: true,
+                ..UiInput::default()
+            },
+        );
+        let mut resumed = false;
+        for _ in 0..30 {
+            update_with(&mut app, UiInput::default());
+            if !app.host_overlay() && bot_ticks(&app) > before {
+                resumed = true;
+                break;
+            }
+        }
+        assert!(resumed, "the bot resumes once the prompt closes");
+    }
+
+    #[test]
+    fn a_running_bot_plays_the_same_ticks_with_no_host_key_pressed() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack_with(
+            &dir,
+            &[(
+                "bot/init.lua",
+                b"function on_bot_tick(bot)\n  if bot:tick() % 3 == 0 then bot:pulse_confirm() end\nend\n",
+            )],
+        );
+        let run = |ui: UiInput| {
+            let pack = Pack::open(&pack_path).unwrap();
+            let mut app = App::new(pack, dir.0.join("saves"), false);
+            let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+            app.start_session(session);
+            app.attach_bot(bot::DEFAULT_RISK, None, Some(7), &[], false)
+                .unwrap();
+            let mut frames = Vec::new();
+            for _ in 0..90 {
+                update_with(&mut app, ui);
+                let Mode::Play(session) = &app.mode else {
+                    panic!("expected a play mode");
+                };
+                frames.push((session.game.frame, session.game.rand_state));
+            }
+            (bot_ticks(&app), frames)
+        };
+        let (ticks, frames) = run(UiInput::default());
+        assert_eq!(ticks, 90, "the bot ticks on every update");
+        assert_eq!(run(UiInput::default()), (ticks, frames.clone()));
+        // The player's game keys never reach the session while the bot plays.
+        let keys = UiInput {
+            confirm: true,
+            cancel: true,
+            up: true,
+            start: true,
+            ..UiInput::default()
+        };
+        assert_eq!(run(keys), (ticks, frames));
+    }
+
+    #[test]
+    fn bot_seed_perturbs_the_game_rng_and_every_reload() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack_with(
+            &dir,
+            &[("bot/init.lua", b"function on_bot_tick(bot) end\n")],
+        );
+        let state_after = |seed: Option<u32>, sessions: usize| -> Vec<u32> {
+            let pack = Pack::open(&pack_path).unwrap();
+            let mut app = App::new(pack, dir.0.join("saves"), false);
+            let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+            app.start_session(session);
+            app.attach_bot(bot::DEFAULT_RISK, None, seed, &[], false)
+                .unwrap();
+            let mut states = Vec::new();
+            for _ in 0..sessions {
+                let Mode::Play(session) = &app.mode else {
+                    panic!("expected a play mode");
+                };
+                states.push(session.game.rand_state);
+                let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+                app.start_session(session);
+            }
+            states
+        };
+        let unseeded = state_after(None, 2);
+        assert_eq!(unseeded, [1, 1], "no seed leaves the stream alone");
+        let a = state_after(Some(7), 3);
+        assert_eq!(a, state_after(Some(7), 3), "the same seed replays");
+        assert_ne!(a[0], 1);
+        assert_ne!(a[0], a[1], "a reload is a fresh stream");
+        assert_ne!(a[1], a[2]);
+        assert_ne!(a, state_after(Some(8), 3), "another seed differs");
+    }
+
     /// Run the app until `predicate` holds, returning the film ids seen in
     /// order. Panics after 4000 ticks.
     fn run_app_until(app: &mut App, mut predicate: impl FnMut(&App) -> bool) -> Vec<u8> {
@@ -37795,6 +38751,85 @@ off_0010:
         assert!(skipped.game.play_timer() < watched.game.play_timer());
         assert_scene_states_match(&skipped, &watched);
         assert!(skipped.music.is_none() && skipped.cutscene_skip_music.is_none());
+        assert!(player_walks(&mut skipped, &pack), "control is back");
+    }
+
+    /// Skipping Barry's scene in Jill's 105 (back from 104, he shoots the
+    /// zombie) lands on the state watching it does, with Barry standing at
+    /// the same spot in the same clip. The bot once watched this scene
+    /// because a skip left Barry's legs in the floor; this keeps that fixed.
+    #[test]
+    #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
+    fn real_barry_shoots_the_zombie_skip_matches_watching_it() {
+        let Ok(path) = std::env::var("ARKLAY_RE1_PACK") else {
+            return;
+        };
+        let pack = Pack::open(Path::new(&path)).unwrap();
+        let start = || {
+            let mut session =
+                GameSession::from_room(&pack, RoomId::parse("1041").unwrap(), Path::new("saves"))
+                    .unwrap();
+            // 104 seen (common 0xAC), Barry gone from the fireplace (0x02),
+            // the zombie scene not yet played (0xAD clear).
+            session.game.apply_flag(1, 0xAC, 0);
+            session.game.apply_flag(1, 0x02, 0);
+            session
+                .debug_jump(&pack, RoomId::parse("1051").unwrap())
+                .unwrap();
+            session.set_skips_enabled(true);
+            for _ in 0..600 {
+                if session.cutscene_skippable() {
+                    break;
+                }
+                app_step(&mut session, &pack, player::Input::default());
+            }
+            assert!(session.cutscene_skippable(), "the scene never started");
+            session
+        };
+
+        let mut watched = start();
+        watch_scene(&mut watched, &pack);
+        let mut skipped = start();
+        let (skips, _, _) = skip_scene(&mut skipped, &pack);
+        assert!(skips >= 1);
+        assert!(skipped.game.flags[1].bit(0xAD), "the scene's done flag");
+        assert_scene_states_match(&skipped, &watched);
+        // Barry (entity 1) and the zombie (2) end where the watched run puts
+        // them. Barry's clip and pose root agree; only the clip's phase may
+        // differ by the ticks the two runs took.
+        for slot in 1..3 {
+            let (w, s) = (&watched.game.entities[slot], &skipped.game.entities[slot]);
+            assert_eq!(
+                (w.id, w.pos, w.angle),
+                (s.id, s.pos, s.angle),
+                "entity {slot}"
+            );
+            assert_eq!(w.animation_id, s.animation_id, "entity {slot} clip");
+        }
+        assert_eq!(skipped.game.entities[1].id, 34, "Barry");
+        for _ in 0..90 {
+            app_step(&mut watched, &pack, player::Input::default());
+            app_step(&mut skipped, &pack, player::Input::default());
+        }
+        // Barry poses a frame of the clip he plays: a pose left behind by the
+        // skip (the legs in the floor) is no keyframe of it.
+        let posed_from_clip = |session: &mut GameSession| {
+            let model = session
+                .npc_models
+                .get(&pack, session.game.entities[1].id, 1)
+                .expect("Barry's model");
+            let entity = &session.game.entities[1];
+            assert_eq!(entity.blend_counter, 0, "the clip switch has eased out");
+            let pose = session.game.entity_anims[1]
+                .pose_keyframe(entity, &model.clips, &model.keyframes)
+                .expect("Barry's pose");
+            model.clips[usize::from(entity.animation_id)]
+                .frames
+                .iter()
+                .any(|frame| model.keyframes[usize::from(frame.keyframe)].offset == pose.offset)
+        };
+        assert!(posed_from_clip(&mut watched));
+        assert!(posed_from_clip(&mut skipped), "Barry's skipped pose");
         assert!(player_walks(&mut skipped, &pack), "control is back");
     }
 

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 20A, the study. The shells (Chris) or explosive rounds (Jill), AOT 7,
+     item flag bank 7 bit 0x0F, lie behind the shelf (object 2), and AOT 4's
+     "something at the back of the shelf" message, earlier in the action
+     table, covers their zone until the shelf stands on its floor mark
+     (object probe AOT 5, room flag 0x20). Pushed east, the shelf stops
+     against the aquarium (object 0) after 735 units, short of the mark.
+     The aquarium is too heavy until the switch on the west wall (AOT 2,
+     "Will you push it?", yes) drains it (scenario 0x12); then it slides
+     south (-z) from its south face about 1800 units, and the shelf goes
+     on east to x≈6563, onto the mark. Both stand back in place on every
+     entry, so the pushes are done once the rounds are taken (flag clear).
+     No run had taken them before. -->
+<bot format="2">
+  <interact slot="2" bank="0" bit="0x12" label="the switch: drain the aquarium"/>
+  <answer slot="2" choice="yes" label="push the switch"/>
+  <push object="0" slot="5" direction="south" until="stop" bank="7" bit="0x0F" done="clear"
+        label="the drained aquarium out of the shelf's way"/>
+  <push object="2" slot="5" direction="east" until="stop" bank="7" bit="0x0F" done="clear"
+        reveals="7" label="the shelf onto its mark, off the rounds behind it"/>
+</bot>

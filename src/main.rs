@@ -17,7 +17,9 @@ use arklay::progress::{Progress, format_duration};
     about = "A from-scratch engine for the classic Resident Evil games"
 )]
 struct Cli {
-    /// Game pack to launch
+    /// Game pack to launch: a path, or the id of an installed pack (`re1`,
+    /// `re2`), found under the data roots' `games/` folders as the launcher
+    /// finds it
     #[arg(value_name = "PACK")]
     pack: Option<PathBuf>,
 
@@ -162,6 +164,86 @@ struct Cli {
     /// Ignore the `--mod` layers and the sibling `mods/` directory
     #[arg(long, requires = "pack")]
     no_mods: bool,
+
+    /// Watch the applied mod source directories while the interactive game
+    /// runs: a change to a `lua/**.lua` hook or a `bot/**.lua` route reloads it
+    /// in place, keeping the current room, session and bot memory. Room XML,
+    /// room scripts, assets and `.akpak` changes still need a room reload or a
+    /// restart. Not available with `--capture`, `--trace`, `--input`,
+    /// `--bot-headless` or `--save-out`
+    #[arg(long, requires = "pack")]
+    watch: bool,
+
+    /// Drive the game with the pack's restricted `bot/**.lua` mod instead of
+    /// the keyboard: normal player input only, no state authoring. Without
+    /// `--ui` it implies `--ui game --character 1` (Jill); use
+    /// `--ui game --character 0` for Chris. Example:
+    /// `arklay re1.akpak --mod mods/bot --bot`
+    #[arg(long, requires = "pack")]
+    bot: bool,
+
+    /// Run `--bot` without a window or audio, as fast as the simulation
+    /// allows, and exit when the bot finishes, dies or `--bot-max-ticks` is
+    /// reached. Example: `arklay re1.akpak --mod mods/bot --bot --bot-headless`
+    #[arg(
+        long,
+        requires = "bot",
+        conflicts_with_all = ["capture", "trace", "input", "stats"]
+    )]
+    bot_headless: bool,
+
+    /// Maximum app updates a `--bot-headless` run may take (default 100000)
+    #[arg(
+        long,
+        value_name = "N",
+        default_value_t = arklay::engine::DEFAULT_MAX_TICKS,
+        requires = "bot_headless"
+    )]
+    bot_max_ticks: u64,
+
+    /// Write a JSON statistics report (outcome, ticks, room entries, health,
+    /// damage, fire presses, turn-in-place ticks, scene ticks, door-unlock
+    /// timing) to this path when a `--bot-headless` run ends
+    #[arg(long, value_name = "PATH", requires = "bot_headless")]
+    bot_stats: Option<PathBuf>,
+
+    /// How much danger the bot's planner may accept, from 0.0 (none) to 1.0
+    /// (any); the route reads it as `bot:risk()`. Example: `--bot-risk 0.5`
+    #[arg(
+        long,
+        value_name = "0.0..1.0",
+        default_value_t = arklay::engine::DEFAULT_RISK,
+        value_parser = parse_bot_risk,
+        requires = "bot"
+    )]
+    bot_risk: f64,
+
+    /// Seed the game's random number generator for this bot run, so each
+    /// seed plays a different game (hunter health, enemy choices, poison);
+    /// the same seed, code and `--bot-risk` replay identically. Without it
+    /// the game's own stream is untouched. Example: `--bot-seed 7`
+    #[arg(long, value_name = "N", requires = "bot")]
+    bot_seed: Option<u32>,
+
+    /// Set one of the bot's story parameters for this run, steering a
+    /// decision the game leaves to the player (repeatable). The pack's
+    /// `params/<game>.xml` declares the names, values and defaults; room
+    /// facts with a matching `when` apply, and Lua reads `bot:param(name)`.
+    /// Example: `--bot-param richard=leave`
+    #[arg(long, value_name = "NAME=VALUE", value_parser = parse_bot_param, requires = "bot")]
+    bot_param: Vec<(String, String)>,
+
+    /// Turn on the debug INVINCIBLE cheat for every session of this bot
+    /// run: health stays full and the player never dies. The bot plays as
+    /// it would otherwise; use it to time a route without deaths.
+    #[arg(long, requires = "bot")]
+    bot_invincible: bool,
+
+    /// End the bot run when the player enters this room: a three-digit room
+    /// id such as `20D` (stage, then room, in hex). Lua reads it as
+    /// `bot:goal_room()`. Example: `--bot-goal-room 20D`
+    #[arg(long, value_name = "ROOM", value_parser = parse_bot_goal_room, requires = "bot")]
+    bot_goal_room: Option<String>,
 
     /// Enable Classic REbirth's quick turn for this run: while walking
     /// backward, RUN turns the player 180 degrees in place over eight ticks.
@@ -821,6 +903,56 @@ fn parse_hex_byte(text: &str) -> Result<u8, String> {
         .map_err(|err| format!("`{text}` is not a hex byte: {err}"))
 }
 
+/// A bot run's own empty save directory, `arklay-bot-saves-<pid>` under the
+/// system temp directory, removed again when the run ends.
+struct BotSaveDir(PathBuf);
+
+impl BotSaveDir {
+    fn create() -> Result<Self> {
+        let dir = std::env::temp_dir().join(format!("arklay-bot-saves-{}", std::process::id()));
+        if dir.exists() {
+            fs::remove_dir_all(&dir).with_context(|| format!("clearing {}", dir.display()))?;
+        }
+        fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+        Ok(Self(dir))
+    }
+}
+
+impl Drop for BotSaveDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+/// `--bot-param`: `NAME=VALUE`, checked against the pack's declarations
+/// when the bot attaches.
+fn parse_bot_param(text: &str) -> Result<(String, String), String> {
+    arklay::engine::parse_bot_param(text)
+}
+
+/// `--bot-risk`: a number in `0.0..=1.0`.
+fn parse_bot_risk(text: &str) -> Result<f64, String> {
+    let risk: f64 = text
+        .trim()
+        .parse()
+        .map_err(|err| format!("`{text}` is not a number: {err}"))?;
+    if !(0.0..=1.0).contains(&risk) {
+        return Err(format!("`{text}` is outside 0.0..1.0"));
+    }
+    Ok(risk)
+}
+
+/// `--bot-goal-room`: three hex digits such as `20D`, returned uppercased.
+fn parse_bot_goal_room(text: &str) -> Result<String, String> {
+    let room = text.trim();
+    if room.len() != 3 || !room.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!(
+            "`{text}` is not a room id; use three hex digits such as 20D"
+        ));
+    }
+    Ok(room.to_ascii_uppercase())
+}
+
 fn parse_position(text: &str) -> Result<[i32; 3], String> {
     let parts: Vec<i32> = text
         .split(',')
@@ -1442,6 +1574,9 @@ fn main() -> Result<()> {
             let Some(pack) = cli.pack else {
                 return arklay::launcher::run();
             };
+            // A pack id (`re1`) names the installed pack, as the launcher
+            // finds it.
+            let pack = arklay::pack::resolve_game_pack(&pack)?;
             let tracing = cli.trace.is_some();
             let (config, warnings) = arklay::config::Config::load_default();
             for warning in warnings {
@@ -1566,6 +1701,65 @@ fn main() -> Result<()> {
             {
                 bail!("--setup-script/--save-out require --room, --load or a --ui boot");
             }
+            let bot_enabled = cli.bot || cli.bot_headless;
+            if bot_enabled {
+                if let Some(screen) = cli.ui.as_deref()
+                    && screen != "game"
+                {
+                    bail!(
+                        "--bot/--bot-headless are only supported with `--ui game`, not `{screen}`"
+                    );
+                }
+                if cli.capture.is_some() {
+                    bail!("--bot does not take --capture; let the bot finish and report instead");
+                }
+                if cli.stats {
+                    bail!("--bot does not take --stats");
+                }
+                if tracing {
+                    bail!("--bot does not take --trace/--input");
+                }
+            }
+            if cli.watch {
+                if cli.capture.is_some() {
+                    bail!("--watch needs the interactive window; it does not take --capture");
+                }
+                if tracing || cli.input.is_some() {
+                    bail!("--watch needs the interactive window; it does not take --trace/--input");
+                }
+                if cli.bot_headless {
+                    bail!("--watch needs the interactive window; it does not take --bot-headless");
+                }
+                if cli.save_out.is_some() {
+                    bail!("--watch needs the interactive window; it does not take --save-out");
+                }
+                if cli.stats && cli.ticks > 0 {
+                    bail!(
+                        "--watch needs the interactive window; it does not take --stats with --ticks"
+                    );
+                }
+                if cli.ui.as_deref() == Some("font") {
+                    bail!("--watch needs the interactive window; `--ui font` has none");
+                }
+            }
+            // A bare `--bot` implies the new Jill game the opening route starts
+            // from; an explicit `--ui game --character N` keeps N.
+            let (ui_screen, character) = if bot_enabled && cli.ui.is_none() {
+                (Some("game".to_string()), 1)
+            } else {
+                (cli.ui.clone(), cli.character)
+            };
+            let bot_options = arklay::engine::BotOptions {
+                enabled: bot_enabled,
+                headless: cli.bot_headless,
+                max_ticks: cli.bot_max_ticks,
+                stats_path: cli.bot_stats.clone(),
+                risk: cli.bot_risk,
+                goal_room: cli.bot_goal_room.clone(),
+                seed: cli.bot_seed,
+                params: cli.bot_param.clone(),
+                invincible: cli.bot_invincible,
+            };
             let input_script = match cli.input.as_deref() {
                 Some(path) => Some(arklay::engine::InputScript::from_file(path)?),
                 None => None,
@@ -1580,6 +1774,7 @@ fn main() -> Result<()> {
                     order: config.mods.order.clone(),
                 },
                 global_dirs: arklay::config::Config::mod_dirs(),
+                watch: cli.watch,
             };
             let trace_options = arklay::trace::TraceOptions {
                 path: cli.trace.as_deref(),
@@ -1604,11 +1799,21 @@ fn main() -> Result<()> {
                     pos: cli.model_pos,
                 }),
             };
-            let save_dir = cli
-                .save_dir
-                .clone()
-                .or_else(|| config.save_dir.clone())
-                .unwrap_or_else(arklay::config::Config::default_save_dir);
+            // A bot run saves at typewriters through the game's save screen;
+            // without an explicit --save-dir it writes to a fresh directory of
+            // its own, never over the player's saves.
+            let bot_saves = match &cli.save_dir {
+                None if bot_enabled => Some(BotSaveDir::create()?),
+                _ => None,
+            };
+            let save_dir = match (&cli.save_dir, &bot_saves) {
+                (Some(dir), _) => dir.clone(),
+                (None, Some(saves)) => saves.0.clone(),
+                (None, None) => config
+                    .save_dir
+                    .clone()
+                    .unwrap_or_else(arklay::config::Config::default_save_dir),
+            };
             if let Some(id) = cli.ending {
                 return arklay::engine::run_ending(
                     &pack,
@@ -1642,7 +1847,7 @@ fn main() -> Result<()> {
                     renderer,
                 );
             }
-            if let Some(screen) = cli.ui {
+            if let Some(screen) = ui_screen {
                 // `--ui game --room <id>` boots the new game straight into the
                 // room through the session flow, the anchor the reference's
                 // test-only room boot mirrors.
@@ -1659,7 +1864,7 @@ fn main() -> Result<()> {
                     &screen,
                     cli.capture.as_deref(),
                     &save_dir,
-                    cli.character,
+                    character,
                     room,
                     cli.demo,
                     &mods,
@@ -1668,6 +1873,7 @@ fn main() -> Result<()> {
                     player_options,
                     trace_options,
                     authoring,
+                    bot_options.clone(),
                 );
             }
             // `--load` without `--ui` is the interactive continue: the same
@@ -1678,7 +1884,7 @@ fn main() -> Result<()> {
                     "game",
                     cli.capture.as_deref(),
                     &save_dir,
-                    cli.character,
+                    character,
                     None,
                     cli.demo,
                     &mods,
@@ -1687,6 +1893,7 @@ fn main() -> Result<()> {
                     player_options,
                     trace_options,
                     authoring,
+                    bot_options,
                 );
             }
             if let Some(room) = cli.room {
@@ -1801,6 +2008,110 @@ mod tests {
             new_game_choice(cli.difficulty, cli.arrange),
             arklay::ui::NewGameChoice::default()
         );
+    }
+
+    #[test]
+    fn the_bot_risk_is_validated_and_needs_bot() {
+        let parse = |args: &[&str]| Cli::try_parse_from(args.iter().copied());
+        let cli = parse(&["arklay", "game.akpak", "--bot"]).unwrap();
+        assert_eq!(cli.bot_risk, arklay::engine::DEFAULT_RISK);
+        let cli = parse(&["arklay", "game.akpak", "--bot", "--bot-risk", "0.8"]).unwrap();
+        assert_eq!(cli.bot_risk, 0.8);
+        let cli = parse(&["arklay", "game.akpak", "--bot", "--bot-risk", "1"]).unwrap();
+        assert_eq!(cli.bot_risk, 1.0);
+        for bad in ["1.5", "-0.1", "NaN", "high"] {
+            let flag = format!("--bot-risk={bad}");
+            let error = parse(&["arklay", "game.akpak", "--bot", &flag])
+                .err()
+                .unwrap_or_else(|| panic!("--bot-risk {bad} was accepted"));
+            assert!(error.to_string().contains(bad), "{error}");
+        }
+        assert!(parse(&["arklay", "game.akpak", "--bot-risk", "0.5"]).is_err());
+    }
+
+    #[test]
+    fn the_bot_seed_parses_and_needs_bot() {
+        let parse = |args: &[&str]| Cli::try_parse_from(args.iter().copied());
+        assert_eq!(
+            parse(&["arklay", "game.akpak", "--bot"]).unwrap().bot_seed,
+            None
+        );
+        let cli = parse(&["arklay", "game.akpak", "--bot", "--bot-seed", "42"]).unwrap();
+        assert_eq!(cli.bot_seed, Some(42));
+        assert!(parse(&["arklay", "game.akpak", "--bot", "--bot-seed", "x"]).is_err());
+        assert!(parse(&["arklay", "game.akpak", "--bot", "--bot-seed", "-1"]).is_err());
+        assert!(parse(&["arklay", "game.akpak", "--bot-seed", "3"]).is_err());
+    }
+
+    #[test]
+    fn the_bot_invincible_flag_needs_bot() {
+        let parse = |args: &[&str]| Cli::try_parse_from(args.iter().copied());
+        assert!(
+            !parse(&["arklay", "game.akpak", "--bot"])
+                .unwrap()
+                .bot_invincible
+        );
+        assert!(
+            parse(&["arklay", "game.akpak", "--bot", "--bot-invincible"])
+                .unwrap()
+                .bot_invincible
+        );
+        assert!(parse(&["arklay", "game.akpak", "--bot-invincible"]).is_err());
+    }
+
+    #[test]
+    fn bot_params_repeat_and_need_bot() {
+        let parse = |args: &[&str]| Cli::try_parse_from(args.iter().copied());
+        assert!(
+            parse(&["arklay", "game.akpak", "--bot"])
+                .unwrap()
+                .bot_param
+                .is_empty()
+        );
+        let cli = parse(&[
+            "arklay",
+            "game.akpak",
+            "--bot",
+            "--bot-param",
+            "richard=leave",
+            "--bot-param=go_first=no",
+        ])
+        .unwrap();
+        assert_eq!(
+            cli.bot_param,
+            vec![
+                ("richard".to_string(), "leave".to_string()),
+                ("go_first".to_string(), "no".to_string())
+            ]
+        );
+        for bad in ["richard", "richard=", "Richard=leave"] {
+            assert!(
+                parse(&["arklay", "game.akpak", "--bot", "--bot-param", bad]).is_err(),
+                "{bad}"
+            );
+        }
+        assert!(parse(&["arklay", "game.akpak", "--bot-param", "richard=leave"]).is_err());
+    }
+
+    #[test]
+    fn the_bot_goal_room_is_validated_and_needs_bot() {
+        let parse = |args: &[&str]| Cli::try_parse_from(args.iter().copied());
+        assert_eq!(
+            parse(&["arklay", "game.akpak", "--bot"])
+                .unwrap()
+                .bot_goal_room,
+            None
+        );
+        let cli = parse(&["arklay", "game.akpak", "--bot", "--bot-goal-room", "20d"]).unwrap();
+        assert_eq!(cli.bot_goal_room.as_deref(), Some("20D"));
+        for bad in ["20", "20DD", "2G0", ""] {
+            let flag = format!("--bot-goal-room={bad}");
+            assert!(
+                parse(&["arklay", "game.akpak", "--bot", &flag]).is_err(),
+                "--bot-goal-room {bad:?} was accepted"
+            );
+        }
+        assert!(parse(&["arklay", "game.akpak", "--bot-goal-room", "20D"]).is_err());
     }
 
     #[test]

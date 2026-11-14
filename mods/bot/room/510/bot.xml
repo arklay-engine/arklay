@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 510. The MO disk read at the computer's use probe (AOT 3, live while
+     item bit 90 is set) prints pass code 03: the main turns on the
+     document AOT 2, which hands it over at once and clears bit 90. -->
+<bot format="2">
+  <use slot="3" item="0x28" bank="7" bit="90" done="clear" label="the MO disk into the computer: pass code 03"/>
+</bot>

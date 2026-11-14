@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 301 courtyard pool. The square crank (0x1D) used in AOT 4's zone at the
+     pool's edge runs the drain event: the crank turns, a film, and scenario
+     0x2F set, which opens the walk over the empty pool to the door to 302.
+     The scene is watched, not skipped. The same use with scenario 0x2F set
+     runs event_02 instead, which fills the pool again and clears the bit:
+     that turns 302's waterfall off, so its ladder down to the caves (307)
+     is reached. The drain is the step until Plant 42 dies (enemy bit 96).
+     The refill waits for the north elevator to stand at 300 (scenario
+     0x31, after 302's battery): with the pool full, 301's own elevator
+     platform is cut off, and that elevator is the only way back down.
+     The elevator from 302 lands on AOT 7, the call back down (event_08,
+     while scenario 0x30 is clear): its ride turns door 1 on at the
+     platform. With the pool drained the way to 302 is the door over the
+     pool floor, and the elevator is avoided; with the pool full it is the
+     only way down. -->
+<bot format="2">
+  <use slot="4" item="0x1D" bank="0" bit="0x2F" until_bank="3" until_bit="96"
+       label="square crank at the pool"/>
+  <use slot="4" item="0x1D" bank="0" bit="0x2F" done="clear" after_bank="0" after_bit="0x31"
+       label="square crank again: fill the pool"/>
+  <watch bank="0" bit="0x2F" label="the crank turns"/>
+  <avoid slot="7" bank="0" bit="0x2F" while="set" reason="the elevator back down to 302"/>
+  <door slot="1" via="7" bank="0" bit="0x2F" while="clear" label="the elevator down to 302"/>
+</bot>

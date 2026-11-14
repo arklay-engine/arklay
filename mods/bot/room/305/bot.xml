@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 305, the fountain room. The medals go into the two use-item probes by
+     the fountain: AOT 5 takes the Eagle Medal (0x25, scenario 27) and
+     AOT 6 the Wolf Medal (0x24, scenario 28); the main deletes both on
+     camera 5. With both in, the main sets scenario 29 and event_0B drains
+     the fountain. Door 2 to 30F is parked at the origin: event_05 from the
+     AOT 14 zone at the west end runs the passage and fires it. Once
+     drained, the stairs zone AOT 9 (a touch event, live while room 26 is
+     set) runs event_00 down to the fountain floor, which sets room 29;
+     door 1 to 310 is down there. -->
+<bot format="2">
+  <use slot="6" item="0x24" bank="0" bit="28" label="the Wolf Medal into the fountain"/>
+  <use slot="5" item="0x25" bank="0" bit="27" label="the Eagle Medal into the fountain"/>
+  <door slot="2" via="14" label="the passage to 30F"/>
+  <door slot="1" via="9" bank="4" bit="29" while="clear" label="down the drained fountain to 310"/>
+  <avoid slot="12" bank="4" bit="28" while="clear"
+         reason="the bottom of the fountain stairs: AOT 0C is reached only down the stairwell (room 0x1C)"/>
+</bot>

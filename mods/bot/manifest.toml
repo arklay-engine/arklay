@@ -1,0 +1,9 @@
+[pack]
+format = 1
+id = "bot"
+name = "Player bot"
+version = "0.1.0"
+description = "A restricted Lua route that drives a normal new Jill game through the 106/105/104/105/106 opening, collects Barry's lockpick, and enters the east-wing gallery (107)."
+kind = "mod"
+base = "re1"
+load_order = 90

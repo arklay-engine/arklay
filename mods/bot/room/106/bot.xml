@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 106 main hall. After Barry's lockpick scene (on returning with common
+     flag 0x02 set), the rest of the hall scene plays on two camera cuts: the
+     north hall, then the middle hall. The second sets common flag 0x05 and
+     turns the east-wing door back into a door. Jill only.
+
+     Chris: once the first zombie has been seen (common 0x02), Jill's
+     dropped handgun lies at AOT 6 (item bit bank 7 0x1A), first as an
+     event: Chris's speech about it, which turns the spot into the pickup.
+     The item frontier sees only the pickup, so the step presses it until
+     the item bit clears. -->
+<bot format="2">
+  <camera cut="4" character="jill" label="north hall"/>
+  <camera cut="2" bank="1" bit="0x05" character="jill" label="middle hall; hall scene done"/>
+  <interact slot="6" bank="7" bit="0x1A" done="clear" after_bank="1" after_bit="0x02" character="chris"
+            label="Jill's dropped handgun"/>
+</bot>
