@@ -1385,6 +1385,8 @@ impl Em<'_, '_, '_> {
         self.work().neck.joint = Some(ADULT_NECK as u8);
         self.work().neck.thirds = true;
         self.script();
+        // What a hit while it hurts goes back to: the routines as a hit finds them.
+        self.z.last_routine = self.work().routine;
         if *self.be_flg != 0 {
             self.oba_set_ofs();
             // `Atd[1]` and `Atd[2]`, on parts 3 and 0x12 as the last draw left

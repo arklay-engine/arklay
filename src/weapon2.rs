@@ -335,6 +335,7 @@ fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
         G1_ID => &G1_DAMAGE,
         G2_ID => &G2_DAMAGE,
         G3_ID => &G3_DAMAGE,
+        crate::zombie2::EMBRYO_ID | crate::zombie2::ADULT_ID => &ADULT_DAMAGE,
         // `Em_26` points at `Em_25`'s rows.
         SPIDER_ID | YOUNG_ID => &SPIDER_DAMAGE,
         ALLIGATOR_ID => &ALLIGATOR_DAMAGE,
@@ -755,6 +756,46 @@ const G2_DAMAGE: [Damage; 7] = [
         damage: 0x0501_545A,
         stun: 0x078F_1E0A,
         heights: G2_SHOTGUN,
+    },
+];
+
+/// The G embryos' and the G adult's rows, `Em_27`'s (`0x535f50`) and `Em_28`'s (`0x5360d0`), the same: every weapon's
+/// heights are the handgun's.
+const ADULT_DAMAGE: [Damage; 7] = [
+    Damage {
+        damage: 0x0120_4C14,
+        stun: 0x0285_0A14,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0120_4C14,
+        stun: 0x0285_0A14,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0120_4C14,
+        stun: 0x0285_0A14,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x05F1_9069,
+        stun: 0x078F_1E0A,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0781_E078,
+        stun: 0x078F_1E0A,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0370_F041,
+        stun: 0x078F_1E0A,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0461_2C50,
+        stun: 0x078F_1E0A,
+        heights: HANDGUN_HEIGHTS,
     },
 ];
 
@@ -1870,6 +1911,20 @@ mod tests {
 
     /// `Wp_dmg_tbl`'s fifteenth rows: the sub-machine gun's, its own for
     /// each body, on the handguns' records.
+    /// `Em_27`'s and `Em_28`'s rows (`0x535f50`, `0x5360d0`) are the same, with the
+    /// handgun's heights for every weapon.
+    #[test]
+    fn the_g_embryo_and_the_adult_take_their_own_rows() {
+        for id in [crate::zombie2::EMBRYO_ID, crate::zombie2::ADULT_ID] {
+            let handgun = damage_table(id, 2).unwrap();
+            assert_eq!((handgun.damage, handgun.stun), (0x0120_4C14, 0x0285_0A14));
+            let magnum = damage_table(id, 5).unwrap();
+            assert_eq!(magnum.damage, 0x05F1_9069);
+            let shotgun = damage_table(id, 7).unwrap();
+            assert_eq!((shotgun.damage, shotgun.heights), (0x0370_F041, HANDGUN_HEIGHTS));
+        }
+    }
+
     #[test]
     fn the_smg_takes_each_bodys_fifteenth_row() {
         let row = |id| {

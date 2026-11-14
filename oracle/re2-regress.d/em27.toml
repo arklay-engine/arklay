@@ -106,3 +106,17 @@ input = "g_adult_shotgun_303.txt"
 input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,fgscn,fgstat"
 record = "--warp 303:-24972:-5400:-13739:552:3 --flag 4:55 --flag 4:57 --life 200 --equip 7 --give 0:7:200 --give 1:0x15:60"
+
+[[run]]
+name = "g_adult_magnum_303"
+setup_script = "g_adult_magnum_303.lua"
+room = "303"
+character = 0
+sound = false
+ticks = 1500
+# g_adult_wait_303's start with the magnum equipped: the player aims and fires at the adult every 20 ticks, through its death
+input = "g_adult_magnum_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,fgscn,fgstat"
+expect = { tick = 1326, fields = ["rng", "zm0"], note = "the adult's death after its first two steps (Routine_0 3, FUN_0047b5b0 case 2 on: the swell of part 1's morph weight and the hit boxes' shrink aren't ported); the handgun and shotgun runs match through the hit and the reel" }
+record = "--warp 303:-24972:-5400:-13739:552:3 --flag 4:55 --flag 4:57 --life 200 --equip 5 --give 0:5:200 --give 1:0x16:60"

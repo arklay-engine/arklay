@@ -63,6 +63,8 @@ pub fn ported(id: u8) -> bool {
             | 0x2B
             | 0x34
             | 0x36..=0x39
+            | 0x3C
+            | 0x3D
             | 0x3E
             | 0x3F
             | 0x44
@@ -1511,6 +1513,25 @@ impl Effects {
                 self.feather_swing(index);
                 let this = &mut self.slots[index];
                 this.pos = this.last_pos;
+            }
+            // `Esp_3C`: the G adult's blood spreads, its size up by 0x87 a tick.
+            0x3C => {
+                let this = &mut self.slots[index];
+                this.size = this.size.wrapping_add(0x87);
+            }
+            // `Esp_3D`: from its sixth frame the blood burns a player within 500
+            // (`FUN_004d8260(pos, 500, 5)`), and a hit splashes (kind 3 row
+            // 0xF, `Esp_call3`).
+            0x3D => {
+                if slot.frame > 5 {
+                    let hit = self
+                        .target
+                        .as_mut()
+                        .is_some_and(|target| target.hit(slot.pos, 500, 5));
+                    if hit {
+                        self.call(3, 0x0F, 0x2000, slot.dir, slot.pos, true);
+                    }
+                }
             }
             _ => {
                 if id < 128 && self.unported & 1 << id == 0 {
