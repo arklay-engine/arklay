@@ -1,0 +1,254 @@
+# leon_a_116_112: Leon A from 116's ground floor (20B's door 2) round to the first flight's foot (the action key climbs it), the second flight's, across the top landing to door 1 (109), along 109's south wall to door 1 (10A), through 10A and 10F, and 110's long way round (its zombie bites once) to door 4 (112)
+345 left
+367 up run left
+368 left
+371 up run left
+372 left
+376 up run left
+377 left
+382 up run left
+383 up run right
+388 right
+391 up run right
+392 right
+394 up run right
+395 right
+397 up run right
+398 right
+401 up run right
+402 right
+405 up run right
+406 right
+410 up run right
+411 right
+415 up run right
+416 right
+421 up run right
+426 right
+430 up run right
+431 right
+436 up run right
+437 up run left
+447 up run
+450 up run left
+451 up run
+457 up run right
+458 up run
+466 up run left
+467 up run
+468
+469 left
+492 up
+504
+505 action
+508
+539 up run left
+540 left
+542 up run left
+543 left
+545 up run left
+546 left
+549 up run left
+550 left
+553 up run left
+554 left
+558 up run left
+559 left
+561 up run left
+562 left
+566 up run left
+567 left
+571 up run left
+572
+573 right
+576 up
+577
+578 action
+581
+656 left
+665 up run left
+683 up run
+685 up run left
+686 up run
+691 up run left
+692 up run
+693 up run left
+694 up run right
+697 right
+699 up run right
+700 right
+704 up run right
+705 right
+715 up run right
+725 right
+727 up run right
+728 right
+731 up run right
+732 right
+734 up run right
+735 right
+738 up run right
+739 right
+743 up run right
+744 right
+748 up run right
+749 right
+753 up run right
+754 right
+760 up run right
+761 left
+774 up run left
+778 left
+780 up run left
+783 left
+785 up run left
+786 left
+788 up run left
+790 left
+792 up run left
+793 left
+795 up run left
+796 left
+798 up run left
+799 left
+801 up run left
+802 left
+805 up run left
+806 left
+809 up run left
+810 left
+813 up run left
+814 left
+819 up run left
+820 left
+824 up run left
+825
+827 right
+852 action
+854
+889 up run left
+909 up run
+927 up run left
+928 up run
+967 up run left
+968 up run
+972 up run left
+973 up run
+974 up run left
+975 up run
+976
+978 right
+982 action
+984
+1019 up run right
+1040 up run
+1041 up run right
+1042 up run
+1053 up run right
+1054 up run
+1056 up run right
+1057 up run
+1058
+1060 left
+1065 action
+1067
+1102 up run left
+1125 up run
+1145 up run left
+1146 up run
+1166 up run left
+1167 up run
+1172
+1174 left
+1180 action
+1182
+1217 up run left
+1237 up run
+1243 up run left
+1244 up run
+1247 up run right
+1260 up run
+1325 up run right
+1326 up run
+1426 left
+1434 up run left
+1448 up run
+1511 up run right
+1512 up run
+1519 up run left
+1521 up run
+1524 up run left
+1525 up run
+1576 up run left
+1577 up run
+1594 up run left
+1595 up run
+1596 left
+1599 up run left
+1614 up run
+1684 up run left
+1685 up run
+1692 up run right
+1703 right
+1705 up run right
+1706 right
+1709 up run right
+1710 right
+1713 up run right
+1714 right
+1718 up run right
+1719 right
+1724 up run right
+1725 right
+1730 up run right
+1731 right
+1738 up run right
+1739 right
+1748 up run right
+1749 right
+1758 up run right
+1759 right
+1771 up run right
+1772 right
+1786 up run right
+1787 right
+1801 up run right
+1802 right
+1818 up run right
+1819 right
+1834 up run right
+1835 right
+1851 up run right
+1852 right
+1868 up run right
+1869 right
+1885 up run right
+1886 right
+1902 up run right
+1903 right
+1919 up run right
+1920 right
+1936 up run right
+1937 right
+1953 up run right
+1954 right
+1970 up run right
+1971 right
+1987 up run right
+1988 right
+2004 up run right
+2005 right
+2021 up run right
+2022 right
+2037 up run right
+2038 right
+2054 up run right
+2055 right
+2071 up run right
+2072 right
+2088 up run right
+2089 right
+2092
+2094 left
+2106 action
+2108
