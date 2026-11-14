@@ -372,6 +372,32 @@ function HookApi:set_room_music_state(stage, room, state, options) end
 ---@param value? boolean Defaults to `true`.
 function HookApi:set_re2_flag(bank, index, value) end
 
+---RE 2's script variable `n` (`scd_variables[n]`), as `save` writes it.
+---@param n integer 0 to 255.
+---@return integer
+function HookApi:re2_var(n) end
+
+---Write RE 2's script variable `n`, as a script's `save(n, value)` does.
+---Variable 32 (`scd_var_next_pld`) is the character the next room's load
+---makes the player; see `re2_change_player`.
+---@param n integer 0 to 255.
+---@param value integer
+function HookApi:set_re2_var(n, value) end
+
+---RE 2's player character (`pPl.Id`): 0 Leon, 1 Claire, 0xE Ada, 0xF
+---Sherry. A new game and a load set it from the scenario or the save.
+---@return integer
+function HookApi:re2_player() end
+
+---Make the player character `id` at once, as `Set_room` does on the load
+---after a `save(32, id)`: Ada or Sherry take their fixed items and full life
+---and the scenario's character's items, life and poison are stashed; back,
+---they are restored. Then `Pl_init` runs, and the model and clips follow on
+---the next tick. For a setup script that starts as Ada.
+---@param id integer
+---@return boolean changed Whether the player changed.
+function HookApi:re2_change_player(id) end
+
 ---Set where RE 2's `Rnd` stream stands. Only a new game seeds it and a door
 ---does not, so this is for a room reached any other way than the original
 ---was.

@@ -80,8 +80,8 @@ impl GameState {
         }
         self.re2.set_pushing(false);
         let keeps_count = matches!(self.re2.player.routine[1], ROUTINE_WALK | ROUTINE_PUSH);
-        let width = player_width(self.id.player_flag);
-        let height = player_height(self.id.player_flag);
+        let width = player_width(self.re2.pl_id);
+        let height = player_height(self.re2.pl_id);
         let mut pl = CharBox::standing(player.pos, player.pos, -(height as i16), width, height);
         if let Some(old) = self.re2.player.old_box {
             pl.old2 = old.map(|v| v as i16);

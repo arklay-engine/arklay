@@ -368,15 +368,13 @@ pub struct MapView {
 
 impl GameState {
     /// What the floor and room tests read from the game: `fg_status`, the
-    /// player's `Floor` and the `pld`'s bit 0. arklay's players are Leon
-    /// and Claire, so the `pld`'s bit is Claire's (`player_flag & 1`, which
-    /// the room load also puts in `fg_status`'s bit 31); Sherry's and Ada's
-    /// `pld`s aren't modelled.
+    /// player's `Floor` and the `pld`'s bit 0, `pPl.Id & 1`: Claire's ids are
+    /// odd, Leon's, Ada's (0xE) and Sherry's (0xF, odd) as their ids are.
     pub fn re2_map_context(&self) -> MapContext {
         MapContext {
             player: self.re2.player.floor,
             status: self.re2.banks[usize::from(crate::scd2::host::STATUS_BANK)][0],
-            pld_odd: self.id.player_flag & 1 != 0,
+            pld_odd: self.re2.pl_id & 1 != 0,
             word: 0,
             byte: 0,
         }
@@ -807,6 +805,7 @@ mod tests {
         game.re2.banks[1][0] = 0x8000_0000;
         game.re2.player.floor = 3;
         game.id.player_flag = 1;
+        game.re2.pl_id = 1;
         let context = game.re2_map_context();
         assert_eq!(context.status, 0x8000_0000);
         assert_eq!(context.player, 3);

@@ -1476,6 +1476,7 @@ pub mod item_get2;
 pub mod itembox2;
 pub mod objects2;
 pub mod pad_repeat;
+pub mod pl_change2;
 pub mod save2;
 pub mod status2;
 pub use entity::{Entity, JointBlood, JointTrail, JointsBeforeHit, LookTargetRecord};
@@ -4046,6 +4047,8 @@ impl GameState {
         state.set_camera_cut(0);
         state.state_bytes[STATE_BYTE_CHARACTER as usize] = id.player_flag & 1;
         state.sync_variant_flags();
+        // RE2's `pPl.Id` and `scd_var_next_pld`: the scenario's character.
+        state.set_re2_player_id(id.player_flag & 1);
         // `GameInit` parks the special-room-light state at -1 so no overlay
         // draws until a script arms one.
         state.state_words[1] = 0xFFFF;
@@ -5637,7 +5640,8 @@ impl GameState {
     /// The number of inventory slots the current character has of its own.
     pub fn character_inventory_capacity(&self) -> usize {
         if self.is_re2_room {
-            return INVENTORY_SLOTS_JILL;
+            // `inventory_size`, which `St_chenge_pl` swaps.
+            return usize::from(self.re2.inventory_size);
         }
         let character = usize::from(self.id.player_flag & 1);
         if let Some(slots) = self.pack_inventory_slots[character] {

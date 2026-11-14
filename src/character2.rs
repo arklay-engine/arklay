@@ -106,8 +106,8 @@ pub fn tick(
 
 /// The player's `Atd[0]` at `pos`, as `Oba_set_ofs` leaves it.
 fn player_atd(game: &GameState, pos: [i32; 3]) -> crate::zombie2::Atd {
-    let width = player_width(game.id.player_flag);
-    let height = player_height(game.id.player_flag);
+    let width = player_width(game.re2.pl_id);
+    let height = player_height(game.re2.pl_id);
     crate::zombie2::Atd {
         ofs_x: 0,
         ofs_y: -(height as i16),
@@ -715,7 +715,7 @@ fn run_zombie(
     let stage = game.id.stage;
     let room_code = u16::from(stage) << 8 | u16::from(game.id.room);
     let player_angle = game.entities[0].angle;
-    let player_id = game.id.player_flag;
+    let player_id = game.re2.pl_id;
     let weapon = game.re2_weapon().id;
     let common_a4 = game.re2.flag(FG_COMMON, FG_COMMON_LICKER);
     let claire = game.re2.flag(
@@ -1086,11 +1086,11 @@ fn set_enemy_work(
     characters[spawn.slot] = Some(Box::new(character));
 }
 
-/// The player's `Atd[0]` width, `At_w` and `W`: `Player_set`'s 450, which
-/// `Pl_init` makes 350 for Claire's bodies and Sherry, as it does the radius
-/// the room's collision pushes with.
-pub fn player_width(player_flag: u8) -> u16 {
-    crate::sca::player_radius(player_flag) as u16
+/// The player's `Atd[0]` width, `At_w` and `W`, by `pPl.Id`: `Player_set`'s
+/// 450, which `Pl_init` makes 350 for Claire's bodies and Ada and 250 for
+/// Sherry, as it does the radius the room's collision pushes with.
+pub fn player_width(id: u8) -> u16 {
+    crate::sca::player_radius(id) as u16
 }
 /// The player's `At_h`, and how far its box's `Ofs_y` lifts it, as
 /// `Player_set` (0x4D93A0) leaves them.
@@ -1099,8 +1099,8 @@ pub const PLAYER_HEIGHT: u16 = 0x5FA;
 /// 5, 7, 9 and 0xE) to an `At_h` and `Ofs_y` of 0x546, and id 0xF's to 0x32A.
 /// `Oba_ck_hit` (0x4CC150) reads it: a crow flying low over Claire (room 109)
 /// clears her head where it would touch Leon's.
-pub fn player_height(player_flag: u8) -> u16 {
-    match player_flag {
+pub fn player_height(id: u8) -> u16 {
+    match id {
         1 | 3 | 5 | 7 | 9 | 0xE => 0x546,
         0xF => 0x32A,
         _ => PLAYER_HEIGHT,
@@ -2263,6 +2263,7 @@ mod tests {
             let mut game = GameState::default();
             game.id = room;
             game.id.player_flag = player_flag;
+            game.re2.pl_id = player_flag;
             game.re2.characters.0 = vec![Some(Box::new(kendo.clone()))];
             let mut player = crate::player::spawn(room, &RoomState::default());
             player.pos = [-850, 0, 0];
@@ -2316,6 +2317,7 @@ mod tests {
             let mut game = GameState::default();
             game.id = room;
             game.id.player_flag = player_flag;
+            game.re2.pl_id = player_flag;
             game.re2.characters.0 = vec![Some(Box::new(crow.clone()))];
             let mut player = crate::player::spawn(room, &RoomState::default());
             let at = [
@@ -2349,6 +2351,7 @@ mod tests {
         let mut game = GameState::default();
         game.id = room;
         game.id.player_flag = 1;
+        game.re2.pl_id = 1;
         game.re2.characters.0 = vec![None; SPLAYER_SLOT + 1];
         game.re2.characters.0[SPLAYER_SLOT] = Some(Box::new(partner));
         let mut player = crate::player::spawn(room, &RoomState::default());
@@ -2773,5 +2776,29 @@ mod tests {
             spl_mv4a(&mut character);
         }
         assert_eq!(character.work.kind, 0x200);
+    }
+
+    #[test]
+    fn pl_init_box_by_id() {
+        // `Pl_init`: Claire's and Ada's 350 by 1350, Sherry's 250 by 810,
+        // Leon's `Player_set` 450 by 0x5FA.
+        for (id, width, height) in [
+            (0, 450, 0x5FA),
+            (1, 350, 1350),
+            (0xE, 350, 1350),
+            (0xF, 250, 810),
+        ] {
+            let mut game = GameState::default();
+            game.re2.pl_id = id;
+            let atd = player_atd(&game, [100, 0, 200]);
+            assert_eq!(
+                (atd.at_w, atd.w, atd.at_h),
+                (width, width, height),
+                "id {id:#x}"
+            );
+            assert_eq!(atd.ofs_y, -(height as i16));
+            assert_eq!(atd.at, [100, -i32::from(height), 200]);
+            assert_eq!(crate::sca::player_radius(id), i32::from(width));
+        }
     }
 }

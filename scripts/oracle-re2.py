@@ -727,6 +727,12 @@ PL_WEAPON = 0x10E
 DOOR_RECORD = 0x9886F8 + 0x54 * 4  # `em_die_table[0x54]`: `Sce_Door`'s record
 GAME_STATE = 0x991F80
 ITEM_SLOTS = 0x98E9A4  # how many of `ITEM_WORK`'s first ten slots the player has
+PL_ID = 0x8  # the player's `Id`: 0 Leon, 1 Claire, 0xE Ada, 0xF Sherry
+PL_MAX_LIFE = 0x162
+PL_STASH = 0x9888DA  # `St_chenge_pl`'s stash of Leon's or Claire's equipped slot (and, next, the slot count) while another player plays
+LIFE_STASH = 0x98E9B6  # `Set_room`'s stash of their life
+POISON_STATUS = 0x98A108
+POISON_TIMER = 0x98A10A
 STATUS_WORK = 0x68A204  # the status screen's work: its routines at +8 and +9
 ITEM_GET_ROUTINE = 0x691F61  # the get-item window's routine and sub-routine
 FG_KEY = 0x98ED2C  # `fg_key`: the doors' lock bits, two words (`Flg_ck`, MSB first)
@@ -1185,12 +1191,24 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     fields.append(on_object_trace(game))
     fields.append(f"fguse={game.read(FG_USE, 16).hex()}")
     fields.append("scv=" + ",".join(f"{game.u16(SCD_VARIABLES + 2 * n):04x}" for n in range(4)))
+    fields.append(player_trace(game))
     fields.append(f"atsce={game.u8(PL_AT_SCE):02x}")
     fields.append("snd=" + ("/".join(game.sounds) or "-"))
     game.sounds.clear()
     if game.u32(FG_SYSTEM) & 0x100000:
         fields.append(die_trace(game))
     return " ".join(fields)
+
+
+def player_trace(game: Game) -> str:
+    """The `pl` field: who plays and what a switch keeps (`Set_room` and `St_chenge_pl` on `save(32, N)`): the player's `Id`,
+    `scd_var_next_pld` (variable 32), `Max_life`, the equipped slot and weapon (`St+8`, `St+0xA`), the stashed slot and
+    slot count, the stashed life, then the poison's status and timer."""
+    return "pl=" + ",".join(str(value) for value in (
+        game.u8(PL + PL_ID), game.u16(SCD_VARIABLES + 2 * 32), struct.unpack("<h", game.read(PL + PL_MAX_LIFE, 2))[0],
+        game.u8(EQUIPPED), game.u8(EQUIPPED + 2), game.u8(PL_STASH), game.u8(PL_STASH + 1),
+        struct.unpack("<h", game.read(LIFE_STASH, 2))[0], game.u16(POISON_STATUS), game.u8(POISON_TIMER),
+    ))
 
 
 def die_trace(game: Game) -> str:
@@ -1596,6 +1614,10 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                             music_log.write(f"bgm_tbl {game.read(BGM_TBL, 284).hex()}\n")
                         for flag in args.flag:
                             set_flag(game, flag)
+                        for var in args.var:
+                            # Before the warp's door: `save(32, N)` this way makes its `Set_room` change the player.
+                            index, value = (int(part, 0) for part in var.split(":"))
+                            game.write(SCD_VARIABLES + 2 * index, struct.pack("<H", value))
                         if args.equip_load is not None:
                             # Held before the warp's door, so the room's load
                             # brings in its weapon files.
@@ -1658,6 +1680,11 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                     while cursor < len(entries) and entries[cursor][0] <= tick:
                         pad = entries[cursor][1]
                         cursor += 1
+                    for item in getattr(args, "give_at", []):
+                        # After the warp's load: a `--var 32:N` change of player puts its own items in.
+                        at, slot, item_id, count = (int(part, 0) for part in item.split(":"))
+                        if at == tick:
+                            game.write(ITEM_WORK + slot * 4, bytes((item_id, count, 0)))
                     tick += 1
                 regs.rax = pad
                 if tick_delay:
@@ -1963,12 +1990,20 @@ def main() -> int:
         )
         command.add_argument("--flag", action="append", default=[], metavar="BANK:INDEX")
         command.add_argument(
+            "--var", action="append", default=[], metavar="INDEX:VALUE",
+            help="when play begins, before --warp, set a script variable (`save`'s numbering): --var 32:14 makes the warp's door load Ada as the player",
+        )
+        command.add_argument(
             "--warp", default=None, metavar="ROOM:X:Y:Z:ANGLE[:CUT]",
             help="when play begins, go through a door to a room (three hex digits), a position and a cut",
         )
         command.add_argument(
             "--give", action="append", default=[], metavar="SLOT:ID:COUNT",
             help="put an item in the inventory when play begins",
+        )
+        command.add_argument(
+            "--give-at", action="append", default=[], metavar="TICK:SLOT:ID:COUNT",
+            help="put an item in the inventory on this trace tick, after the warp's load (the items of a player --var 32:N makes)",
         )
         command.add_argument(
             "--box", action="append", default=[], metavar="SLOT:ID:COUNT[:MARK]",
