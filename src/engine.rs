@@ -7958,6 +7958,15 @@ impl GameSession {
         if frame.clear {
             // The source room's characters are gone the tick before `Set_room`.
             self.game.re2.characters = Default::default();
+            // `Set_room`'s case 10 clears the objects' `Be_flg` with a loop
+            // that stores to slot 0 each time (`pOm = 0`, 32 times), so only
+            // that slot's flag goes now; the load's `Sce_model_init` does the
+            // rest. The trace's `hk` and `om` show it for this tick.
+            if self.game.is_re2_room
+                && let Some(record) = self.game.objects.records.first_mut()
+            {
+                record.be_flg = 0;
+            }
             // `Set_room`'s case 10 changes the player on this tick, after its
             // clear and a tick before the room's load: the swap, `Player_set`
             // and the routines set to 0 for the next `Pl_init`.
@@ -8815,8 +8824,18 @@ impl GameSession {
             .transition
             .as_ref()
             .and_then(|session| session.door_yield.as_ref());
+        // The view holds RE 1's generator; an RE 2 room's `Rnd` and `Sce_rnd`
+        // state is read live (the original's trace shows both as the tick
+        // leaves them, the door's tick included).
         let (rng, rseed, entities) = match door_yield {
-            Some(view) => (view.rand_state, view.rand_seed, &view.entities[..]),
+            Some(view) if !self.game.is_re2_room => {
+                (view.rand_state, view.rand_seed, &view.entities[..])
+            }
+            Some(view) => (
+                u32::from(self.game.re2.rnd.0),
+                self.game.re2.random as u16,
+                &view.entities[..],
+            ),
             None => (
                 if self.game.is_re2_room {
                     u32::from(self.game.re2.rnd.0)
@@ -8955,11 +8974,11 @@ impl GameSession {
             }),
             re2_hikidashi: self.game.is_re2_room.then(|| {
                 self.game
-                    .re2_hikidashi_trace(self.loaded.room.re2_object_count.into())
+                    .re2_hikidashi_trace(self.game.objects.rdt_count.into())
             }),
             re2_objects: self.game.is_re2_room.then(|| {
                 self.game
-                    .re2_objects_trace(self.loaded.room.re2_object_count.into())
+                    .re2_objects_trace(self.game.objects.rdt_count.into())
             }),
             re2_on_object: self
                 .game

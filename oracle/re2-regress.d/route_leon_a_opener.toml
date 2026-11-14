@@ -17,10 +17,8 @@ frame_max_mean = 1.2
 frame_windows = [[360, 683, 0.7], [1057, 1910, 0.25], [2264, 2389, 0.3], [2733, 2854, 0.8], [3198, 3449, 0.25], [3793, 5961, 0.65], [6290, 6494, 0.3], [6836, 7053, 0.3], [7261, 7399, 0.25]]
 expect = "match"
 ignore = [
-  # the warp's head on its first ticks (oracle/re2.md), and the doors' own ticks: the tick after the last press of 200's ladder question, whose Yes opens the ladder's door (`aot_on(17)`), 110's door 0, 10F's door 0, 10A's door 0, 109's door 2, 116's door 0, 20B's Heart Key door and 20F's door 1
-  [344, 352, "pneck"], [684, "rng"], [684, "rseed"], [1911, "rng"], [1911, "rseed"], [2390, "rng"], [2390, "rseed"], [2855, "rng"], [2855, "rseed"], [3450, "rng"], [3450, "rseed"], [5962, "rng"], [5962, "rseed"], [6495, "rng"], [6495, "rseed"], [7054, "rng"], [7054, "rseed"],
-  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
-  [719, 811, "hk"], [1946, 2036, "hk"], [2425, 2515, "hk"], [2890, 2980, "hk"], [3485, 3575, "hk"], [5997, 6089, "hk"], [6530, 6620, "hk"], [7089, 7179, "hk"],
+  # the warp's head on its first ticks (oracle/re2.md)
+  [344, 352, "pneck"],
 ]
 record = "--warp 200:-22894:-1800:-3071:200:4 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:17 --flag 31:27 --life 14 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x5B:1"
 
@@ -43,8 +41,7 @@ frame_max_mean = 1.7
 frame_windows = [[360, 734, 0.5], [1077, 3352, 2.0], [3560, 3799, 1.0]]
 expect = "match"
 ignore = [
-  [344, 352, "pneck"], [735, "rng"], [735, "rseed"], [3353, "rng"], [3353, "rseed"],
-  [770, 860, "hk"], [3388, 3478, "hk"],
+  [344, 352, "pneck"],
 ]
 record = "--warp 211:301:0:5863:2088:0 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:27 --life 164 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"
 
@@ -68,9 +65,6 @@ frame_windows = [[4554, 4890, 0.5]]
 expect = "match"
 ignore = [
   [344, 352, "pneck"],
-  [939, "rng"],
-  [939, "rseed"],
-  [974, 1066, "hk"],
 ]
 record = "--warp 219:4809:0:-21018:2133:0 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:27 --flag 3:33 --life 110 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"
 
@@ -94,9 +88,6 @@ frame_windows = [[4554, 4590, 0.35], [4591, 4811, 1.1], [4812, 4999, 2.3]]
 expect = "match"
 ignore = [
   [344, 352, "pneck"],
-  [939, "rng"],
-  [939, "rseed"],
-  [974, 1066, "hk"],
 ]
 record = "--warp 219:4809:0:-21018:2133:0 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:27 --flag 3:33 --life 110 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"
 
