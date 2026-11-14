@@ -3537,6 +3537,11 @@ pub struct GameState {
     pub last_used_item: Option<u8>,
     /// The item currently equipped.
     pub equipped: Option<u8>,
+    /// The inventory slot the equipped item came from (the original's
+    /// `DWORD_00691f68` low byte). EQUIP sets it to the cursor's slot, so a
+    /// second copy of the weapon in hand fires from its own rounds; every
+    /// other way of equipping takes the first stack holding the item.
+    pub equipped_slot: Option<usize>,
     /// The reference's `g_playerEntity.equippedWeaponId`: the *weapon* the aim
     /// and fire machine uses. `SetupCharacterData` derives it from the
     /// equipped item (`g_itemboxSlots[item + 47].Id`), so it normally tracks
@@ -3927,6 +3932,7 @@ impl Default for GameState {
             last_picked_item: None,
             last_used_item: None,
             equipped: None,
+            equipped_slot: None,
             // The shipped bio card equips the Beretta (`g_EquippedItemId` 2),
             // so `SetupCharacterData` leaves weapon id 2 in place.
             equipped_weapon_id: 2,
@@ -5734,6 +5740,7 @@ impl GameState {
     /// Equip (or clear) an item.
     pub fn set_equipped(&mut self, item: Option<u8>) {
         self.equipped = item;
+        self.equipped_slot = item.and_then(|item| self.inventory.iter().position(|s| s.id == item));
         // `SetupCharacterData`'s derivation: the weapon id is the equipped
         // item's own id (the item-slot table maps every weapon to itself).
         self.equipped_weapon_id = item.unwrap_or(0);
@@ -5743,6 +5750,18 @@ impl GameState {
         if self.debug.infinite_ammo == InfiniteAmmo::Infinite {
             crate::weapons::refill_clip(self);
         }
+    }
+
+    /// The inventory index of the stack holding the equipped `weapon`: the
+    /// equipped slot when it holds that weapon, else the first stack that does.
+    pub fn weapon_slot(&self, weapon: u8) -> Option<usize> {
+        self.equipped_slot
+            .filter(|&slot| {
+                self.inventory
+                    .get(slot)
+                    .is_some_and(|stack| stack.id == weapon)
+            })
+            .or_else(|| self.inventory.iter().position(|stack| stack.id == weapon))
     }
 
     /// Whether at least one `item` is held.
@@ -9457,6 +9476,10 @@ impl GameState {
     /// The player's weapon for [`crate::player2::player_move`].
     pub fn re2_weapon(&self) -> crate::player2::Weapon {
         let id = self.equipped_weapon_id;
+        // The rounds in the equipped slot (`0x4F8620` equips by slot).
+        let rounds = self
+            .weapon_slot(id)
+            .map_or(0, |slot| u32::from(self.inventory[slot].quantity));
         crate::player2::Weapon {
             id,
             // `Tama_ck_i` wants more than two in the spark shot, so a shot
@@ -9469,23 +9492,24 @@ impl GameState {
             // but `FUN_004b73c0` then clears it (`DWORD_0099c8a8 & 1`). A
             // player who holds the gun has it, so it's taken as up.
             loaded: if id == crate::player2::SPARK {
-                self.item_count(id) > 2
+                rounds > 2
             } else if id == crate::player2::GATLING {
                 true
             } else {
-                self.item_count(id) != 0
+                rounds != 0
             },
             // `Tama_reload_ck` never reloads the rocket launcher.
             spare: id != crate::player2::ROCKET && self.item_count(re2_ammo(id).0) != 0,
-            rounds: self.item_count(id).min(u32::from(u8::MAX)) as u8,
+            rounds: rounds.min(u32::from(u8::MAX)) as u8,
         }
     }
 
     /// `Tama_decrease_i` and `Tama_reload`, for what the player's tick did.
     pub fn re2_settle_ammo(&mut self) {
         let weapon = self.equipped_weapon_id;
+        let held = self.weapon_slot(weapon);
         if std::mem::take(&mut self.re2.player.fired)
-            && let Some(slot) = self.inventory.iter_mut().find(|slot| slot.id == weapon)
+            && let Some(slot) = held.and_then(|index| self.inventory.get_mut(index))
         {
             // `FUN_004d58c0`: the bowgun's shot takes three.
             let taken = if weapon == crate::bow2::BOW { 3 } else { 1 };
@@ -9493,7 +9517,7 @@ impl GameState {
         }
         let spent = std::mem::take(&mut self.re2.player.spent);
         if spent != 0
-            && let Some(slot) = self.inventory.iter_mut().find(|slot| slot.id == weapon)
+            && let Some(slot) = held.and_then(|index| self.inventory.get_mut(index))
         {
             slot.quantity = slot.quantity.saturating_sub(spent);
         }
@@ -9508,7 +9532,10 @@ impl GameState {
             if spare.quantity == 0 {
                 self.inventory.remove(index);
             }
-            if let Some(slot) = self.inventory.iter_mut().find(|slot| slot.id == weapon) {
+            if let Some(slot) = self
+                .weapon_slot(weapon)
+                .and_then(|index| self.inventory.get_mut(index))
+            {
                 slot.quantity = slot.quantity.saturating_add(taken);
             }
         }

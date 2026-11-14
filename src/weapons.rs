@@ -614,7 +614,7 @@ fn equipped_weapon(game: &GameState) -> Option<u8> {
 
 /// The inventory index of the equipped weapon's stack.
 fn equipped_index(game: &GameState, weapon: u8) -> Option<usize> {
-    game.inventory.iter().position(|stack| stack.id == weapon)
+    game.weapon_slot(weapon)
 }
 
 /// `weapon_autoaim_check`: the rounds left in the equipped weapon's clip,
