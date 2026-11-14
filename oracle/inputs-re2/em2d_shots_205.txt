@@ -1,0 +1,19 @@
+# em2d_watch_205's walk into event 4's area, then a turn toward the east wall, out of the arms' reach, and four handgun shots 30 ticks apart while the bodies are out (Routine_0 2 and 3; oracle/re2.md, "Em_2D")
+344 up
+366
+374 right
+387
+394 up
+444
+448 left
+462
+466 aim
+474 aim fire
+479 aim
+504 aim fire
+509 aim
+534 aim fire
+539 aim
+564 aim fire
+569 aim
+590
