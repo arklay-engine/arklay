@@ -636,6 +636,11 @@ impl UserData for Api {
         methods.add_method_mut("player_life", |_, e, ()| Ok(*e.em().world.player_life));
         methods.add_method_mut("set_player_life", |_, e, life: i16| {
             *e.em().world.player_life = life;
+            // The enemies that write the life as -1 do it with `fg_system`'s
+            // `0x4000000`.
+            if life < 0 {
+                e.em().world.pl.die_start = true;
+            }
             Ok(())
         });
         methods.add_method_mut("player_angle", |_, e, ()| Ok(e.em().world.player_angle));

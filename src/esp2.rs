@@ -533,6 +533,8 @@ pub struct Target {
     /// The routine the last hit set: `[2, 0, 0, 0]`, or `[3, 0, 0, 0]` when
     /// `Pl_life_down` said it killed.
     pub routine: Option<u8>,
+    /// `Pl_life_down` said it killed: `fg_system`'s `0x4000000`.
+    pub died: bool,
     /// `+0x1d3`, `Damage_cnt`: a hit waits until it's 0 again. A killing
     /// hit, and a poisoning one, set its `0x80`.
     pub damage_cnt: u8,
@@ -569,6 +571,7 @@ impl Target {
         if result == 2 {
             self.damage_cnt |= 0x80;
             self.routine = Some(3);
+            self.died = true;
         }
         true
     }

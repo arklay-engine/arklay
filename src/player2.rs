@@ -555,6 +555,11 @@ pub struct Work {
     /// A dog's bite took the last life, but `fg_system`'s `0x4000000`, which
     /// starts `Die`, waits until the dog has the player down.
     pub die_held_back: bool,
+    /// `fg_system`'s `0x4000000`: a `Pl_life_down` that killed, or an enemy's
+    /// write of the life as -1, asks for `Die`, which `Game_loop` starts and
+    /// clears. A life that fell below zero any other way (a held death's
+    /// `Routine_1` writing -1 over a life that was above zero) doesn't.
+    pub die_start: bool,
     /// The angle an enemy turned the player to this tick.
     pub turn_to: Option<u16>,
     /// Where an enemy's `Approach` moved the player this tick, `x` and `z`.
@@ -1271,6 +1276,7 @@ impl Default for Work {
             held_by: None,
             held_kill: false,
             die_held_back: false,
+            die_start: false,
             turn_to: None,
             move_to: None,
             base: [0; 3],
@@ -2085,6 +2091,8 @@ pub struct Held<'a> {
     pub life: &'a mut i16,
     /// `Be_flg`'s bits to clear from the holder: the hold has ended.
     pub released: bool,
+    /// The hold wrote `fg_system`'s `0x4000000` with the life: `Die` is due.
+    pub die: bool,
     /// The slots a shove threw back.
     pub knocks: u32,
 }
@@ -6499,6 +6507,7 @@ impl Mover<'_, '_> {
                 self.work.routine[1] = 1;
                 self.work.neck.flags |= 1;
                 *held.life = -1;
+                held.die = true;
                 self.work.bank = Bank::Held;
                 let (cnt, carry) = held.holder_move_cnt.overflowing_add(0xFF);
                 self.work.move_no = 6;
@@ -9151,6 +9160,7 @@ mod tests {
                 rnd: &mut rnd,
                 life,
                 released: false,
+                die: false,
                 knocks: 0,
             };
             player_held(&mut setup.work, &mut setup.player, &tick, &mut held);
@@ -9289,6 +9299,7 @@ mod tests {
             rnd: &mut rnd,
             life: &mut life,
             released: false,
+            die: false,
             knocks: 0,
         };
         player_held(&mut work, &mut player, &tick, &mut held);

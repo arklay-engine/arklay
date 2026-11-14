@@ -2099,6 +2099,7 @@ impl Em<'_, '_, '_> {
         self.world.pl.near_death = near_death;
         if result == 2 {
             self.world.pl.damage_cnt |= 0x80;
+            self.world.pl.die_start = true;
         }
         result
     }

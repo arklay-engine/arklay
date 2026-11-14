@@ -288,10 +288,12 @@ pub fn player_held(
         rnd: &mut re2.rnd,
         life: &mut game.entities[0].health,
         released: false,
+        die: false,
         knocks: 0,
     };
     player2::player_held(&mut re2.player, player, tick, &mut held);
-    let (released, knocks) = (held.released, held.knocks);
+    let (released, knocks, die) = (held.released, held.knocks, held.die);
+    game.re2.player.die_start |= die;
     if released && let Some(Some(character)) = game.re2.characters.0.get_mut(slot) {
         character.be_flg &= !0x1004;
     }
