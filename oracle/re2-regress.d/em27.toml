@@ -80,3 +80,29 @@ ticks = 2400
 input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,fgscn,fgstat"
 record = "--warp 303:-24972:-5400:-13739:552:3 --flag 4:55 --flag 4:57 --life 200"
+
+[[run]]
+name = "g_adult_handgun_303"
+setup_script = "g_adult_handgun_303.lua"
+room = "303"
+character = 0
+sound = false
+ticks = 1700
+# g_adult_wait_303's start with the handgun equipped: the player aims and fires at the adult every 15 ticks
+input = "g_adult_handgun_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,fgscn,fgstat"
+record = "--warp 303:-24972:-5400:-13739:552:3 --flag 4:55 --flag 4:57 --life 200 --equip 2 --give 0:2:200 --give 1:0x14:60"
+
+[[run]]
+name = "g_adult_shotgun_303"
+setup_script = "g_adult_shotgun_303.lua"
+room = "303"
+character = 0
+sound = false
+ticks = 1700
+# g_adult_wait_303's start with the shotgun equipped: the player aims and fires at the adult every 30 ticks
+input = "g_adult_shotgun_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,fgscn,fgstat"
+record = "--warp 303:-24972:-5400:-13739:552:3 --flag 4:55 --flag 4:57 --life 200 --equip 7 --give 0:7:200 --give 1:0x15:60"
