@@ -1826,6 +1826,10 @@ enum PickupKind {
     /// A door key used down to an empty stack: global 0xC7's discard prompt
     /// (the yes branch drops the stack), then the pause menu stays open.
     DiscardKey,
+    /// A script's put-back of a selected non-key item (116's shotgun rack,
+    /// 308's flamethrower hook): global 0xC4's put-down prompt (the yes
+    /// branch uses the item), then the menu closes back to the game.
+    PutDown,
 }
 
 /// Where a [`PickupView`] is in its message round trip.
@@ -2525,6 +2529,9 @@ const ITEM_KNIFE: u8 = 0x01;
 /// Item id of the Beretta (Jill's starting handgun).
 #[cfg(test)]
 const ITEM_BERETTA: u8 = 0x02;
+/// Item id of the shotgun (116's rack puts it back).
+#[cfg(test)]
+const ITEM_SHOTGUN: u8 = 0x03;
 /// Item id of the first-aid spray.
 const ITEM_FIRST_AID_SPRAY: u8 = 0x41;
 /// Item id of the green herb, added by the deterministic menu capture.
@@ -6442,8 +6449,12 @@ impl GameSession {
         if self.pickup_view.is_some() {
             return;
         }
-        let item = if request.kind == game::ItemViewKind::DiscardKey {
-            // Mode 6 views the selected key itself; there is no room action.
+        let item = if matches!(
+            request.kind,
+            game::ItemViewKind::DiscardKey | game::ItemViewKind::PutDown
+        ) {
+            // Modes 1 and 6 view the selected item itself; there is no room
+            // action.
             self.game
                 .selected_item
                 .filter(|&item| self.game.has_item(item))
@@ -6471,13 +6482,17 @@ impl GameSession {
             game::ItemViewKind::GotItem => PickupKind::GotItem,
             game::ItemViewKind::Document => PickupKind::Document,
             game::ItemViewKind::DiscardKey => PickupKind::DiscardKey,
+            game::ItemViewKind::PutDown => PickupKind::PutDown,
         };
         self.open_menu(pack);
         // The original sets `g_selectedItemId` to the item being taken as the
         // mode opens, so the prompt's `\i` substitution names it.
         self.game.select_item(Some(item));
         let (screen, reader, phase) = match kind {
-            PickupKind::Take | PickupKind::GotItem | PickupKind::DiscardKey => {
+            PickupKind::Take
+            | PickupKind::GotItem
+            | PickupKind::DiscardKey
+            | PickupKind::PutDown => {
                 let screen = {
                     let mut cx = self.ui_context(pack);
                     ui::lua_screen::LuaScreen::open_screen(
@@ -6485,7 +6500,13 @@ impl GameSession {
                         &[
                             ("item", ScreenArg::Int(i64::from(item))),
                             ("pickup", ScreenArg::Bool(true)),
-                            ("discard", ScreenArg::Bool(kind == PickupKind::DiscardKey)),
+                            (
+                                "discard",
+                                ScreenArg::Bool(matches!(
+                                    kind,
+                                    PickupKind::DiscardKey | PickupKind::PutDown
+                                )),
+                            ),
                         ],
                         ScreenAction::Resume,
                         &mut cx,
@@ -6688,11 +6709,11 @@ impl GameSession {
                     .as_ref()
                     .is_some_and(|pickup| pickup.answered_yes_no);
                 match kind {
-                    Some(PickupKind::Take | PickupKind::DiscardKey) => {
+                    Some(PickupKind::Take | PickupKind::DiscardKey | PickupKind::PutDown) => {
                         // The original plays the character bank's confirm cue
                         // on Yes and cancel cue on No as the prompt resolves.
-                        // A confirmed discard already dropped the key through
-                        // the message post-action.
+                        // A confirmed discard or put-down already dropped the
+                        // item through the message post-action.
                         if was_yes_no {
                             let (name, slot) = if self.game.message.menu_choice_id() & 1 == 0 {
                                 (sfx::UI_DECIDE, 6)
@@ -6776,6 +6797,7 @@ impl GameSession {
             PickupKind::GotItem => game::MESSAGE_GOT_ITEM,
             PickupKind::Document => game::MESSAGE_FILE_FILED,
             PickupKind::DiscardKey => game::MESSAGE_DISCARD_KEY,
+            PickupKind::PutDown => game::MESSAGE_PUT_DOWN,
         };
         self.game.show_message(message, 0);
         if let Some(pickup) = self.pickup_view.as_mut() {
@@ -6793,7 +6815,9 @@ impl GameSession {
     ///
     /// The discard prompt is the exception: the original's mode 6 drops into
     /// the status screen when its viewer closes, so the pause menu stays open
-    /// on the (possibly rewritten) inventory.
+    /// on the (possibly rewritten) inventory. Mode 1's put-down prompt closes
+    /// back to the game like the pick-ups, so the room script waiting on the
+    /// used item runs on.
     fn close_pickup_view(&mut self, pack: &Pack) {
         let kind = self.pickup_view.take().map(|pickup| pickup.kind);
         self.game.clear_item_view_flags();
@@ -31564,6 +31588,8 @@ end
         // confirm. The branch record is `[no-offset 2][tag 10][arg 0]`: Yes
         // runs the take action, No lands on the `0x01` terminator and does
         // nothing.
+        // Index 4 is global 0xC4, the put-down prompt, whose Yes runs the
+        // use action.
         // Index 7 is global 0xC7, the depleted key's discard prompt, whose
         // Yes runs the discard action.
         // Index 63 is the same yes/no stream used by the direct post-action
@@ -31572,6 +31598,7 @@ end
         for index in 0..64 {
             let value = match index {
                 0x00 | 0x3F => "0{branch 2 10 0}",
+                0x04 => "0{branch 2 10 1}",
                 0x07 => "0{branch 2 10 2}",
                 _ => "0",
             };
@@ -35437,6 +35464,90 @@ off_0010:
             });
             settle_menu_fade(&mut session, &pack);
             assert!(session.menu.is_some(), "the status screen stays open");
+            assert!(!session.game.menu_pending());
+            assert_eq!(session.game.item_view_request(), None);
+        }
+    }
+
+    /// A room script that puts a held weapon back (116's shotgun rack, 308's
+    /// flamethrower hook) selects it and raises `MSF_MENU_KEY_DEPLETED`. For
+    /// a non-key item that is the original's mode 1: global 0xC4's put-down
+    /// prompt, whose Yes uses the item (gone, unequipped, recorded for the
+    /// script's `testitem`) and No keeps it. Either way the menu closes back
+    /// to the game.
+    #[test]
+    fn a_scripted_put_down_opens_the_put_down_prompt() {
+        for put_down in [true, false] {
+            let dir = TempDir::new();
+            let pack_path = message_pack(&dir);
+            let pack = Pack::open(&pack_path).unwrap();
+            let mut session =
+                GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
+                    .unwrap();
+            place_player(&mut session);
+            settle_control(&mut session, &pack);
+            session.game.add_item(ITEM_SHOTGUN, 7);
+            session.game.set_equipped(Some(ITEM_SHOTGUN));
+            session.game.select_item(Some(ITEM_SHOTGUN));
+            session.game.apply_flag(5, 18, 0);
+            assert!(session.game.menu_pending(), "the mode-1 bit is up");
+
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            assert!(session.pickup_view.is_some(), "the bit opened the viewer");
+            assert_eq!(
+                session
+                    .pickup_view
+                    .as_ref()
+                    .and_then(|pickup| pickup.screen.as_ref())
+                    .map(|screen| screen.value("item") as u8),
+                Some(ITEM_SHOTGUN),
+                "the viewer loaded the shotgun's model"
+            );
+            tick_until(&mut session, &pack, 300, "the put-down prompt", |session| {
+                session.game.message.id == Some(game::MESSAGE_PUT_DOWN)
+            });
+            tick_until(&mut session, &pack, 300, "the yes/no phase", |session| {
+                session.game.message.phase() == crate::message::MessagePhase::YesNo
+            });
+            if !put_down {
+                session
+                    .tick(
+                        &pack,
+                        UiInput::default(),
+                        player::Input {
+                            right: true,
+                            ..Default::default()
+                        },
+                        false,
+                    )
+                    .unwrap();
+            }
+            session
+                .tick(&pack, UiInput::default(), pressed(), true)
+                .unwrap();
+            assert_eq!(
+                session.game.has_item(ITEM_SHOTGUN),
+                !put_down,
+                "Yes puts the shotgun down, No keeps it"
+            );
+            assert_eq!(
+                session.game.state_bytes[usize::from(game::STATE_BYTE_USED_ITEM)] == ITEM_SHOTGUN,
+                put_down,
+                "only Yes records the used item"
+            );
+            assert_eq!(
+                session.game.equipped.is_none(),
+                put_down,
+                "only Yes unequips it"
+            );
+
+            tick_until(&mut session, &pack, 300, "the viewer close", |session| {
+                session.pickup_view.is_none()
+            });
+            settle_menu_fade(&mut session, &pack);
+            assert!(session.menu.is_none(), "the menu closes back to the game");
             assert!(!session.game.menu_pending());
             assert_eq!(session.game.item_view_request(), None);
         }
