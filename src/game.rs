@@ -949,6 +949,20 @@ const ITEM_GET_UNCUT_TICK: u8 = 8;
 /// many ticks after the window's sixth.
 const ITEM_GET_FILE_FADE_TICKS: u8 = 5;
 
+/// What `room_set` (0x00477904) backs up when the model byte makes the
+/// player Rebecca in Chris's game, and puts back when it makes him Chris
+/// again: his health, its maximum, the equipped item and the inventory.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PartnerTurnBackup {
+    pub inventory: Vec<InventoryItem>,
+    pub health: i16,
+    pub max_health: i16,
+    pub equipped: Option<u8>,
+}
+
+/// Rebecca's health on each of her turns.
+pub const REBECCA_TURN_HEALTH: i16 = 88;
+
 /// One inventory stack.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InventoryItem {
@@ -3266,9 +3280,12 @@ pub struct GameState {
     /// Rebecca's six inventory slots (`g_RebeccaItemSlots`), parallel to the
     /// player's. `SetInitialItems` gives her a Beretta with 15 rounds in
     /// Chris's game and the original swaps `g_ItemSlotsPointer` to these while
-    /// the player model is Rebecca; the port records them so the save block
-    /// round-trips.
+    /// the player model is Rebecca. On her turns the port moves them into
+    /// `inventory` (`apply_model_switch`) and these stay empty.
     pub rebecca_inventory: [InventoryItem; INVENTORY_SLOTS_CHRIS],
+    /// Chris's state while Rebecca is played (`apply_model_switch`): her
+    /// own slots are `inventory` then, and these are his.
+    pub partner_backup: Option<PartnerTurnBackup>,
     /// Chris's and Jill's inventory slot counts from a generated pack's
     /// manifest (`chris_slots`, `jill_slots`), in place of their own six and
     /// eight in an RE 1 room. Not saved: every path into a session sets them
@@ -3852,6 +3869,7 @@ impl Default for GameState {
             fmv: FmvState::default(),
             inventory: Vec::new(),
             rebecca_inventory: [InventoryItem::default(); INVENTORY_SLOTS_CHRIS],
+            partner_backup: None,
             pack_inventory_slots: [None; 2],
             room_actions: [None; ROOM_ACTION_SLOTS],
             doors: [None; ROOM_ACTION_SLOTS],
@@ -5358,14 +5376,7 @@ impl GameState {
         self.mark_room_visited(id);
         self.apply_pending_player(id);
         self.sync_variant_flags();
-        // `RoomInit`'s model switch (0x00477904): the wardrobe stores model id
-        // `8`, which raises the alternate-outfit bit and folds back to the
-        // character id; the player's model then loads from the costume byte.
-        let model = usize::from(STATE_BYTE_CHARACTER_MODEL);
-        if self.state_bytes[model] & 8 != 0 && self.entities[0].id != self.state_bytes[model] {
-            self.apply_flag(5, MSF2_COSTUME_VARIANT, 0);
-            self.state_bytes[model] &= 7;
-        }
+        self.apply_model_switch();
         self.state_bytes[0] = id.stage;
         self.state_bytes[1] = id.room;
         self.set_camera_cut(0);
@@ -5589,6 +5600,86 @@ impl GameState {
         if self.inventory.len() > capacity {
             self.inventory.truncate(capacity);
         }
+        self.clear_dangling_items();
+        self.rebuild_slots();
+    }
+
+    /// `RoomInit`'s model switch (0x00477904), run by every room load and
+    /// by the continue path (the original's `room_set` runs after
+    /// `InitializeGame` seeds the player id from the block).
+    pub fn apply_model_switch(&mut self) {
+        // The wardrobe stores model id `8`, which raises the alternate-outfit
+        // bit and folds back to the character id; the player's model then
+        // loads from the costume byte.
+        let model = usize::from(STATE_BYTE_CHARACTER_MODEL);
+        if self.state_bytes[model] & 8 != 0 && self.entities[0].id != self.state_bytes[model] {
+            self.apply_flag(5, MSF2_COSTUME_VARIANT, 0);
+            self.state_bytes[model] &= 7;
+        }
+        // The same switch's playable branch: a model id below 4 (Chris, Jill,
+        // Barry, Rebecca) becomes the player entity's id. Chris's game plays
+        // Rebecca this way: a script stores model 3 (`setb 9, 3`) and the next
+        // room load makes the player id 3, which the doors with lock bit 0x40
+        // refuse (`try_door`); storing 0 makes him Chris again. The switch
+        // to Rebecca backs up Chris's health, equipped item and inventory and
+        // gives her 88 health and her own six slots; the switch back puts
+        // his back (`begin_partner_turn`, `end_partner_turn`).
+        let model_id = self.state_bytes[model];
+        if model_id < 4 && self.entities[0].id < 4 {
+            let was = self.entities[0].id;
+            self.entities[0].id = model_id;
+            if was != 3 && model_id == 3 {
+                self.begin_partner_turn();
+            } else if was == 3 && model_id != 3 {
+                self.end_partner_turn();
+            }
+        }
+    }
+
+    /// The switch to Rebecca: Chris's health, equipped item and inventory go
+    /// into the backup, and her own slots (`rebecca_inventory`) become the
+    /// inventory with 88 health. The equipped item stays only when she holds
+    /// it too.
+    fn begin_partner_turn(&mut self) {
+        if self.partner_backup.is_some() {
+            return;
+        }
+        let health = self.entities[0].health;
+        self.partner_backup = Some(PartnerTurnBackup {
+            inventory: std::mem::take(&mut self.inventory),
+            health,
+            max_health: self.max_health,
+            equipped: self.equipped,
+        });
+        self.inventory = self
+            .rebecca_inventory
+            .iter()
+            .copied()
+            .filter(|stack| stack.id != 0)
+            .collect();
+        self.rebecca_inventory = [InventoryItem::default(); INVENTORY_SLOTS_CHRIS];
+        self.max_health = REBECCA_TURN_HEALTH;
+        self.entities[0].health = REBECCA_TURN_HEALTH;
+        self.set_health_copy(REBECCA_TURN_HEALTH);
+        self.clear_dangling_items();
+        self.rebuild_slots();
+    }
+
+    /// The switch back to Chris: Rebecca's slots go back into
+    /// `rebecca_inventory` for her next turn, and the backup is restored.
+    fn end_partner_turn(&mut self) {
+        let Some(backup) = self.partner_backup.take() else {
+            return;
+        };
+        self.rebecca_inventory = [InventoryItem::default(); INVENTORY_SLOTS_CHRIS];
+        for (slot, stack) in self.rebecca_inventory.iter_mut().zip(self.inventory.iter()) {
+            *slot = *stack;
+        }
+        self.inventory = backup.inventory;
+        self.max_health = backup.max_health;
+        self.entities[0].health = backup.health;
+        self.set_health_copy(backup.health);
+        self.set_equipped(backup.equipped);
         self.clear_dangling_items();
         self.rebuild_slots();
     }
@@ -7829,8 +7920,10 @@ impl GameState {
         if !self.room_item_present(item_action.room_items_flag) {
             return false;
         }
-        // The original's masked character test turns id 3 (Rebecca) away.
-        if self.id.player_flag & 3 == 3 {
+        // The original's masked character test turns id 3 (Rebecca) away:
+        // the player's id, which the room load's model switch sets
+        // (`apply_model_switch`), as `try_door`'s 0x40 test reads it.
+        if self.entities[0].id & 3 == 3 {
             self.show_message(MESSAGE_DESK_CHARACTER, 0xFF);
             self.record_interaction(
                 slot,
@@ -8612,10 +8705,12 @@ impl GameState {
             }
             return self.try_re2_door(&door);
         }
-        // The character-restriction test is inert for the two PC characters:
-        // it compares the player id against 3, and ids 0/1 never match. Keep
-        // the original's exact test so a record with bit 0x40 behaves the same.
-        if door.lock & 0x40 != 0 && self.id.player_flag & 3 == 3 {
+        // `door_try_enter` (0x0041b41a): lock bit 0x40 bars the door to the
+        // player entity id 3, Rebecca during one of her turns in Chris's game
+        // (`enter_room` switches the id to the model byte). The scripts rely
+        // on it: 408's door back into 40C carries the bit, so Rebecca cannot
+        // walk back into the Plant 42 fight while Chris is held there.
+        if door.lock & 0x40 != 0 && self.entities[0].id & 3 == 3 {
             self.show_message(MESSAGE_WRONG_CHARACTER, 0xFF);
             return false;
         }
@@ -12681,6 +12776,93 @@ mod tests {
         assert!(!state.flag_test(5, MSF2_COSTUME_VARIANT, false));
     }
 
+    /// Chris's game plays Rebecca by storing model 3 (40C's Plant 42 scene)
+    /// and Chris again by storing 0 (40F's V-JOLT pour). The room load makes
+    /// the model the player id, as `room_set` does; the doors with lock bit
+    /// 0x40 then bar Rebecca. 408's door back into 40C is one: walking it
+    /// during her turn ran 40C's init for Chris early, which withered Plant
+    /// 42 there and cleared the hold that later lifts Chris off the room's
+    /// edge, where 40F's door drops him, so he was stranded outside the walls.
+    #[test]
+    fn the_model_byte_switches_the_player_id_on_room_entry() {
+        let mut state = game();
+        let model = usize::from(STATE_BYTE_CHARACTER_MODEL);
+        state.entities[0].id = 0;
+        state.state_bytes[model] = 3;
+        // The store alone does not switch: the next room load does.
+        assert_eq!(state.entities[0].id, 0);
+        state.enter_room(RoomId::parse("4080").unwrap(), &RoomState::default());
+        assert_eq!(state.entities[0].id, 3, "Rebecca's turn");
+        assert_eq!(state.state_bytes[model], 3);
+
+        let restricted = door(1, 0x40);
+        state.room_actions[0] = Some(door_action(restricted));
+        state.doors[0] = Some(restricted);
+        state.interact([-550, 0, 50], 0, true);
+        assert!(state.transition.is_none(), "408 -> 40C is barred to her");
+        assert_eq!(state.message.id, Some(0xD6));
+
+        state.state_bytes[model] = 0;
+        state.enter_room(RoomId::parse("40C0").unwrap(), &RoomState::default());
+        assert_eq!(state.entities[0].id, 0, "Chris again");
+
+        // The continue path seeds the id from the block's character, then
+        // runs the same switch.
+        state.state_bytes[model] = 3;
+        state.apply_model_switch();
+        assert_eq!(state.entities[0].id, 3);
+    }
+
+    /// Her turn is hers in kit too: `room_set` backs up Chris's health,
+    /// equipped item and slots and gives her 88 health and her own six.
+    /// Played on his, the serum run (20D to 100 after Yawn's bite) found his
+    /// six slots full and could not take the serum.
+    #[test]
+    fn rebeccas_turn_swaps_in_her_own_health_and_slots() {
+        let mut state = game();
+        let model = usize::from(STATE_BYTE_CHARACTER_MODEL);
+        let stack = |id, quantity| InventoryItem { id, quantity };
+        state.entities[0].id = 0;
+        state.max_health = 140;
+        state.entities[0].health = 97;
+        state.inventory = vec![stack(0x02, 12), stack(0x0B, 15), stack(0x34, 1)];
+        state.rebuild_slots();
+        state.set_equipped(Some(0x02));
+        state.rebecca_inventory[0] = stack(0x02, 15);
+
+        state.state_bytes[model] = 3;
+        state.enter_room(RoomId::parse("20D0").unwrap(), &RoomState::default());
+        assert_eq!(state.entities[0].id, 3);
+        assert_eq!(state.inventory, vec![stack(0x02, 15)], "her own slots");
+        assert_eq!(state.entities[0].health, REBECCA_TURN_HEALTH);
+        assert_eq!(state.max_health, REBECCA_TURN_HEALTH);
+        assert!(!state.has_item(0x34));
+        // A room load during her turn keeps it.
+        state.inventory.push(stack(0x42, 1));
+        state.entities[0].health = 60;
+        state.enter_room(RoomId::parse("1000").unwrap(), &RoomState::default());
+        assert!(state.has_item(0x42));
+        assert_eq!(state.entities[0].health, 60);
+
+        state.state_bytes[model] = 0;
+        state.enter_room(RoomId::parse("20D0").unwrap(), &RoomState::default());
+        assert_eq!(state.entities[0].id, 0);
+        assert_eq!(
+            state.inventory,
+            vec![stack(0x02, 12), stack(0x0B, 15), stack(0x34, 1)]
+        );
+        assert_eq!(state.entities[0].health, 97);
+        assert_eq!(state.max_health, 140);
+        assert_eq!(state.equipped, Some(0x02));
+        assert_eq!(state.rebecca_inventory[0], stack(0x02, 15));
+        assert_eq!(
+            state.rebecca_inventory[1],
+            stack(0x42, 1),
+            "kept for her next turn"
+        );
+        assert!(state.partner_backup.is_none());
+    }
+
     #[test]
     fn costume_set_stores_the_low_bit_and_costume_ck_tests_it() {
         let mut state = game();
@@ -15972,19 +16154,20 @@ mod tests {
     fn desk_turns_away_the_masked_character_id() {
         let mut state = desk_game();
         state.add_item(ITEM_DESK_KEY, 1);
-        state.id.player_flag = 3;
+        // Rebecca's turn: the player id is 3 whatever the RDT digit says.
+        state.entities[0].id = 3;
         assert!(state.check_desk(0));
         assert_eq!(state.message.id, Some(MESSAGE_DESK_CHARACTER));
         assert_eq!(state.desk.state, 0);
         state.cancel_message();
 
-        // The two PC characters are not turned away: with the key the prompt
-        // arms for both.
-        for player_flag in [0, 1] {
-            state.id.player_flag = player_flag;
+        // The two PC characters are not turned away, nor the wardrobe's
+        // outfit ids (8 and 9 mask to them): with the key the prompt arms.
+        for id in [0, 1, 8, 9] {
+            state.entities[0].id = id;
             state.message = MessageWindow::default();
-            assert!(state.check_desk(0), "player {player_flag}");
-            assert_eq!(state.desk.state, 1, "player {player_flag}");
+            assert!(state.check_desk(0), "player {id}");
+            assert_eq!(state.desk.state, 1, "player {id}");
             assert_eq!(state.desk.action, Some(0));
             state.desk = DeskFlow::default();
         }
@@ -17113,27 +17296,27 @@ mod tests {
     #[test]
     fn unlocked_door_with_a_character_restriction() {
         // Lock byte 0x40: bit 7 clear, so the door is not locked. The
-        // original's character test compares `id & 3` against 3, which is
-        // never true for the PC characters, so the restriction is inert.
+        // original's character test (`door_try_enter`) bars only the player
+        // entity id 3, Rebecca during one of her turns.
         let mut state = game();
         let restricted = door(1, 0x40);
         state.room_actions[0] = Some(door_action(restricted));
         state.doors[0] = Some(restricted);
 
-        // Jill (player flag 1) walks through: 0x40 does not bar her.
+        // Jill (id 1) walks through: 0x40 does not bar her.
+        state.entities[0].id = 1;
         state.interact([-550, 0, 50], 0, true);
         assert!(state.transition.is_some());
         assert_ne!(state.message.id, Some(0xD6));
 
         // Chris walks through too.
-        state.id.player_flag = 0;
+        state.entities[0].id = 0;
         state.transition = None;
         state.interact([-550, 0, 50], 0, true);
         assert!(state.transition.is_some());
 
-        // The original's literal test still refuses id 3, keeping the branch
-        // reachable for non-PC records.
-        state.id.player_flag = 3;
+        // Rebecca is refused, whatever the room variant.
+        state.entities[0].id = 3;
         state.transition = None;
         state.interact([-550, 0, 50], 0, true);
         assert!(state.transition.is_none());
