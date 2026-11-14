@@ -40,3 +40,43 @@ input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm1,zm2,zm3"
 expect = "match"
 record = "--start claire --warp 309:-17273:-5400:1678:488:3 --flag 4:57 --life 200 --no-enemies --keep-enemy 1 --keep-enemy 2 --keep-enemy 3"
+
+[[run]]
+name = "embryo_struggle_303"
+setup_script = "embryo_wait_303.lua"
+room = "303"
+character = 0
+sound = false
+ticks = 1400
+# embryo_wait_303's start, with confirm pressed every fourth tick from 740: the presses shake the latching embryo off
+input = "embryo_struggle_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm1,zm2,zm3,fgscn,fgstat"
+expect = "match"
+record = "--warp 303:-24972:-5400:-13739:552:3 --flag 4:55 --flag 4:57 --life 200 --no-enemies --keep-enemy 1 --keep-enemy 2 --keep-enemy 3"
+
+[[run]]
+name = "embryo_kill_303"
+setup_script = "embryo_kill_303.lua"
+room = "303"
+character = 0
+sound = false
+ticks = 1400
+# embryo_wait_303's start with 10 life: embryo 3's first bite kills, and it goes in (Routine_2 11 to 13; the player's em_damage_table[0x27] 4 to 10)
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm1,zm2,zm3,fgscn,fgstat"
+expect = { tick = 1225, fields = ["mot", "p.x", "zm2"], note = "the original freezes the world a tick before arklay does once the embryo is in (the Die machine's start after the killing bite; the player's routine 5, 0, 8 and what ends it are unported), #690" }
+record = "--warp 303:-24972:-5400:-13739:552:3 --flag 4:55 --flag 4:57 --life 10 --no-enemies --keep-enemy 1 --keep-enemy 2 --keep-enemy 3"
+
+[[run]]
+name = "g_adult_wait_303"
+setup_script = "g_adult_wait_303.lua"
+room = "303"
+character = 0
+sound = false
+ticks = 2400
+# Leon A, in from room 304's door with the G adult (Em_28, slot 0) kept: the player stands while it and the embryos come
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,fgscn,fgstat"
+expect = { tick = 344, fields = ["rng", "zm2", "zm3"], note = "Em_28, the G adult in slot 0, is not ported: its init draws a different Rnd and the embryos it releases differ, #690" }
+record = "--warp 303:-24972:-5400:-13739:552:3 --flag 4:55 --flag 4:57 --life 200"
