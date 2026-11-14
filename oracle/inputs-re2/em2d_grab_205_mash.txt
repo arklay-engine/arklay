@@ -1,0 +1,61 @@
+# em2d_grab_205's walk, with confirm pressed every fourth tick from 484 to 580 while slot 7 holds the player, so the grab ends early (Gacha_ch; oracle/re2.md, "Em_2D")
+344 up
+366
+374 right
+387
+394 up
+444
+448 left
+464
+468 up
+484
+484 confirm
+486
+488 confirm
+490
+492 confirm
+494
+496 confirm
+498
+500 confirm
+502
+504 confirm
+506
+508 confirm
+510
+512 confirm
+514
+516 confirm
+518
+520 confirm
+522
+524 confirm
+526
+528 confirm
+530
+532 confirm
+534
+536 confirm
+538
+540 confirm
+542
+544 confirm
+546
+548 confirm
+550
+552 confirm
+554
+556 confirm
+558
+560 confirm
+562
+564 confirm
+566
+568 confirm
+570
+572 confirm
+574
+576 confirm
+578
+580 confirm
+582

@@ -40,3 +40,44 @@ input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,fgstat"
 expect = "match"
 record = "--start claire --warp 205:-16798:0:-10671:3136:4 --flag 4:48 --life 200"
+
+[[run]]
+name = "em2d_grab_205"
+room = "205"
+frames = true
+ticks = 1400
+# em2d_watch_205's walk into event 4's area, then at the east wall: slot 7's arm takes the player for the grab's 150 ticks while the other four hold, then all go back in; the grab's camera (main_0D)
+setup = { pos = [-16798, 0, -10671], angle = 3136, health = 200, rnd = 6114, camera = 4, flags = [[4, 48]] }
+input = "em2d_grab_205.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,fgstat"
+expect = "match"
+record = "--warp 205:-16798:0:-10671:3136:4 --flag 4:48 --life 200"
+
+[[run]]
+name = "em2d_grab_205_claire"
+room = "205"
+frames = true
+player = 1
+character = 1
+ticks = 1400
+# em2d_grab_205's walk as Claire, mashing confirm while held, so the grab ends early
+setup = { pos = [-16798, 0, -10671], angle = 3136, health = 200, rnd = 6114, camera = 4, flags = [[4, 48]] }
+input = "em2d_grab_205_mash.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,fgstat"
+expect = "match"
+record = "--start claire --warp 205:-16798:0:-10671:3136:4 --flag 4:48 --life 200"
+
+[[run]]
+name = "em2d_shots_205"
+room = "205"
+frames = true
+ticks = 1400
+# em2d_watch_205's walk into event 4's area, then four handgun shots at the east wall's bodies while they are out
+setup_script = "em2d_shots_205.lua"
+input = "em2d_shots_205.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,fgstat"
+expect = "match"
+record = "--warp 205:-16798:0:-10671:3136:4 --flag 4:48 --life 200 --give 0:2:200 --give 1:0x14:60 --equip 2"

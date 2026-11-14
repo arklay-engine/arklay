@@ -5458,6 +5458,10 @@ impl Mover<'_, '_> {
             }
             return;
         }
+        if held.holder_id == crate::zombie2::EM2D_ID {
+            self.em2d_held(held);
+            return;
+        }
         if matches!(
             held.holder_id,
             crate::zombie2::IVY_ID | crate::zombie2::POISON_IVY_ID
@@ -5477,6 +5481,57 @@ impl Mover<'_, '_> {
             0 | 1 => self.held_standing(held),
             2 | 3 => self.held_low(held),
             _ => self.held_dying(held),
+        }
+    }
+
+    /// `FUN_00484a80`, `em_damage_table_real[0x1d]`: in the grip of a body in
+    /// room 205's walls, on its clips. `Routine_2` 0 and 1 face the body (or
+    /// turn the back to it, when the player faced its way) and play clip 0
+    /// until the body sets 2 at the end of its grab; 2 and 3 play clip 1, and
+    /// 4 lets go. The player takes no damage.
+    fn em2d_held(&mut self, held: &mut Held<'_>) {
+        const LATE: u16 = 0x100;
+        self.work.bank = Bank::Held;
+        match self.work.routine[2] {
+            0 | 1 => {
+                if self.work.routine[2] == 0 {
+                    self.held_clip(0, 0xF);
+                    self.work.routine[2] = 1;
+                    let side = u32::from(held.rnd.draw() & 1) + 1;
+                    self.work.sounds.push(side << 16 | 0x400_0001);
+                    // `Cdir_ck(player, body)`, then `Goto00` at 0x800, which
+                    // always lands on the way to the body; the half turn after
+                    // it is left unmasked.
+                    let behind = held
+                        .holder_angle
+                        .wrapping_sub(self.player.angle)
+                        .wrapping_add(0x400)
+                        & 0xFFF
+                        < 0x800;
+                    let [x, _, z] = held.holder;
+                    let angle = direction_ck(self.player.pos[0], self.player.pos[2], x, z);
+                    self.player.angle = if behind {
+                        angle.wrapping_add(0x800)
+                    } else {
+                        angle
+                    };
+                }
+                self.joint_move_late(LATE);
+            }
+            2 | 3 => {
+                if self.work.routine[2] == 2 {
+                    self.held_clip(1, 7);
+                    self.work.routine[2] = 3;
+                }
+                let ended = self.joint_move_late(LATE);
+                self.work.routine[2] += u8::from(ended);
+            }
+            4 => {
+                self.work.routine = [MODE_MOVE, 0, 0, 0];
+                self.work.damage_cnt &= 0x7F;
+                self.work.bank = Bank::Weapon;
+            }
+            _ => {}
         }
     }
 

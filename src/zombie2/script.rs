@@ -4400,7 +4400,8 @@ mod tests {
             be = 1, kind = KIND, angle = ANGLE or 0, spd = { 0, 0, 0 }, pos = POS or { 0, 0, 0 },
             clips = {}, move_no = -1, frame = FRAME or 0, hokan = -1, hidden = -1, dc = 0,
             life = 0, sounds = {}, groan = GROAN or 0, room_enemy = ROOM_ENEMY or 0,
-            pl_dc = PL_DC or 0, box = 0, joints = 0 }
+            pl_dc = PL_DC or 0, box = 0, joints = 0, pl_xz = { 0, 0 },
+            pl_r = PL_R or { [0] = 1, 0, 0, 0 }, held = 0, sub1 = 0 }
         e = {}
         function e:routine(i) return w.r[i] end
         function e:set_routine(i, v) w.r[i] = v end
@@ -4440,7 +4441,13 @@ mod tests {
             if error < rate * 2 then return 0 end
             return error > 0x800 and -rate or rate
         end
-        function e:goto_player() end
+        function e:angle_to_player() return ((TARGET or 0) - w.angle) & 0xFFF end
+        function e:set_player_xz(x, z) w.pl_xz = { x, z } end
+        function e:pl_set_routine(a, b, c, d) w.pl_r = { [0] = a, b, c, d } end
+        function e:pl_set_routine_at(i, v) w.pl_r[i] = v end
+        function e:pl_hold() w.held = 1 end
+        function e:pl_set_sub1() w.sub1 = 1 end
+        function e:gacha() return GACHA ~= nil and GACHA[w.timer] == true end
         function e:own_part(p)
             local at = parts[p] or { 0, 0 }
             return at[1], -2000, at[2]
@@ -4504,7 +4511,8 @@ mod tests {
                  pl_dc = w.pl_dc, drawn = drawn, box = w.box, joints = w.joints,
                  home_angle = w.vars[0] or 0, home_x = w.vars[1] or 0,
                  home_z = w.vars[2] or 0, seen = w.vars[3] or 0, clips = w.clips,
-                 sounds = w.sounds }}"
+                 sounds = w.sounds, pl_x = w.pl_xz[1], pl_z = w.pl_xz[2], pl_r0 = w.pl_r[0],
+                 pl_r2 = w.pl_r[2], held = w.held, sub1 = w.sub1 }}"
         ))
         .eval::<mlua::Table>()
         .map(|table| {
@@ -4517,7 +4525,8 @@ mod tests {
                     .collect()
             };
             let fields = "r0 r1 r2 r3 life be angle x z timer hidden groan room_enemy move_no \
-                frame hokan dc pl_dc drawn box joints home_angle home_x home_z seen"
+                frame hokan dc pl_dc drawn box joints home_angle home_x home_z seen pl_x pl_z pl_r0 \
+                pl_r2 held sub1"
                 .split_whitespace()
                 .map(|name| (name.to_string(), table.get::<i64>(name).unwrap()))
                 .collect();
@@ -4761,6 +4770,66 @@ mod tests {
         assert_eq!((em.get("r2"), em.get("joints")), (2, 1));
         let em = run_em2d(0, &[], 2, setup);
         assert_eq!((em.get("r1"), em.get("r2")), (1, 0));
+    }
+
+    /// `FUN_00484640`: the grab puts the player at its arm in routine 5, on
+    /// its clips, with `Timer1` 150, and plays clip 5 from the next tick,
+    /// with a cry on its first frame.
+    #[test]
+    fn an_em2d_grab_takes_the_player_to_its_arm() {
+        let setup = "ROUTINES = { [0] = 1, 4, 0, 0 }; PARTS = { [3] = { -12300, -8100 } }";
+        let em = run_em2d(0, &[], 1, setup);
+        assert_eq!(
+            (em.get("r2"), em.get("move_no"), em.get("joints")),
+            (1, 5, 0)
+        );
+        assert_eq!((em.get("pl_x"), em.get("pl_z")), (-12300, -8100));
+        assert_eq!((em.get("pl_r0"), em.get("held"), em.get("sub1")), (5, 1, 1));
+        assert_eq!(em.get("timer"), 0x96);
+        let em = run_em2d(0, &[1], 2, setup);
+        assert_eq!(
+            (em.get("joints"), em.get("timer"), em.get("drawn")),
+            (1, 0x95, 1)
+        );
+        assert_eq!(em.2, vec![5]);
+        let em = run_em2d(0, &[2], 2, setup);
+        assert_eq!(em.2, vec![7]);
+    }
+
+    /// `FUN_00484640`'s step 1: `Timer1` counts down by one, and two more for
+    /// a press; below 0 it sets the player's `Routine_2` to 2, and the next
+    /// tick starts `fg_room_enemy`'s 120 and the retreat.
+    #[test]
+    fn an_em2d_grab_lets_go_when_its_timer_runs_out() {
+        let setup =
+            "ROUTINES = { [0] = 1, 4, 1, 0 }; FRAME = 1; TIMER = 1; PL_R = { [0] = 5, 0, 1, 0 }";
+        let em = run_em2d(0, &[], 1, setup);
+        assert_eq!((em.get("r2"), em.get("timer"), em.get("pl_r2")), (1, 0, 1));
+        let em = run_em2d(0, &[], 2, setup);
+        assert_eq!(
+            (em.get("r2"), em.get("timer"), em.get("pl_r2")),
+            (2, 0xFFFF, 2)
+        );
+        let em = run_em2d(0, &[], 3, setup);
+        assert_eq!(
+            (em.get("r1"), em.get("r2"), em.get("room_enemy")),
+            (5, 0, 0x78)
+        );
+        // A press at `Timer1` 3 takes it to 0.
+        let setup = format!("{setup}; TIMER = 3; GACHA = {{ [3] = true }}");
+        let em = run_em2d(0, &[], 1, &setup);
+        assert_eq!((em.get("r2"), em.get("timer")), (1, 0));
+    }
+
+    /// `FUN_004845d0`'s `Goto00` steps the facing without masking it to 12
+    /// bits.
+    #[test]
+    fn an_em2d_reach_turn_is_left_unmasked() {
+        let setup = "ROUTINES = { [0] = 1, 3, 1, 0 }; ANGLE = 0x10; TARGET = 0xF00";
+        let em = run_em2d(0, &[], 1, setup);
+        assert_eq!(em.get("angle"), 0xFFE0);
+        let setup = "ROUTINES = { [0] = 1, 3, 1, 0 }; ANGLE = 0xFFE0; TARGET = 0xFF0";
+        assert_eq!(run_em2d(0, &[], 1, setup).get("angle"), 0xFF0);
     }
 
     /// A cockroach for `enemy/29/enemy.lua`: `DRAWS` feeds `Rnd`, a clip

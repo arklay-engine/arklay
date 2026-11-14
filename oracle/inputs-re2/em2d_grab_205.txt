@@ -1,0 +1,11 @@
+# room 205 in scenario A, from the door from room 206 with 4:48 set: em2d_watch_205's walk into event 4's area, then a turn to the east wall and a walk at it, so that slot 7's arm takes the player (Routine_1 4) while the other four hold (6); no presses, so the grab runs its 150 ticks (oracle/re2.md, "Em_2D")
+344 up
+366
+374 right
+387
+394 up
+444
+448 left
+464
+468 up
+484
