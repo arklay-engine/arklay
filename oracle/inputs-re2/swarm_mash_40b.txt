@@ -1,0 +1,481 @@
+# room 40B from room 405's door: stand, then from tick 440 (the first roach is on the player from 438) a press every 4 ticks
+440 action
+442
+444 action
+446
+448 action
+450
+452 action
+454
+456 action
+458
+460 action
+462
+464 action
+466
+468 action
+470
+472 action
+474
+476 action
+478
+480 action
+482
+484 action
+486
+488 action
+490
+492 action
+494
+496 action
+498
+500 action
+502
+504 action
+506
+508 action
+510
+512 action
+514
+516 action
+518
+520 action
+522
+524 action
+526
+528 action
+530
+532 action
+534
+536 action
+538
+540 action
+542
+544 action
+546
+548 action
+550
+552 action
+554
+556 action
+558
+560 action
+562
+564 action
+566
+568 action
+570
+572 action
+574
+576 action
+578
+580 action
+582
+584 action
+586
+588 action
+590
+592 action
+594
+596 action
+598
+600 action
+602
+604 action
+606
+608 action
+610
+612 action
+614
+616 action
+618
+620 action
+622
+624 action
+626
+628 action
+630
+632 action
+634
+636 action
+638
+640 action
+642
+644 action
+646
+648 action
+650
+652 action
+654
+656 action
+658
+660 action
+662
+664 action
+666
+668 action
+670
+672 action
+674
+676 action
+678
+680 action
+682
+684 action
+686
+688 action
+690
+692 action
+694
+696 action
+698
+700 action
+702
+704 action
+706
+708 action
+710
+712 action
+714
+716 action
+718
+720 action
+722
+724 action
+726
+728 action
+730
+732 action
+734
+736 action
+738
+740 action
+742
+744 action
+746
+748 action
+750
+752 action
+754
+756 action
+758
+760 action
+762
+764 action
+766
+768 action
+770
+772 action
+774
+776 action
+778
+780 action
+782
+784 action
+786
+788 action
+790
+792 action
+794
+796 action
+798
+800 action
+802
+804 action
+806
+808 action
+810
+812 action
+814
+816 action
+818
+820 action
+822
+824 action
+826
+828 action
+830
+832 action
+834
+836 action
+838
+840 action
+842
+844 action
+846
+848 action
+850
+852 action
+854
+856 action
+858
+860 action
+862
+864 action
+866
+868 action
+870
+872 action
+874
+876 action
+878
+880 action
+882
+884 action
+886
+888 action
+890
+892 action
+894
+896 action
+898
+900 action
+902
+904 action
+906
+908 action
+910
+912 action
+914
+916 action
+918
+920 action
+922
+924 action
+926
+928 action
+930
+932 action
+934
+936 action
+938
+940 action
+942
+944 action
+946
+948 action
+950
+952 action
+954
+956 action
+958
+960 action
+962
+964 action
+966
+968 action
+970
+972 action
+974
+976 action
+978
+980 action
+982
+984 action
+986
+988 action
+990
+992 action
+994
+996 action
+998
+1000 action
+1002
+1004 action
+1006
+1008 action
+1010
+1012 action
+1014
+1016 action
+1018
+1020 action
+1022
+1024 action
+1026
+1028 action
+1030
+1032 action
+1034
+1036 action
+1038
+1040 action
+1042
+1044 action
+1046
+1048 action
+1050
+1052 action
+1054
+1056 action
+1058
+1060 action
+1062
+1064 action
+1066
+1068 action
+1070
+1072 action
+1074
+1076 action
+1078
+1080 action
+1082
+1084 action
+1086
+1088 action
+1090
+1092 action
+1094
+1096 action
+1098
+1100 action
+1102
+1104 action
+1106
+1108 action
+1110
+1112 action
+1114
+1116 action
+1118
+1120 action
+1122
+1124 action
+1126
+1128 action
+1130
+1132 action
+1134
+1136 action
+1138
+1140 action
+1142
+1144 action
+1146
+1148 action
+1150
+1152 action
+1154
+1156 action
+1158
+1160 action
+1162
+1164 action
+1166
+1168 action
+1170
+1172 action
+1174
+1176 action
+1178
+1180 action
+1182
+1184 action
+1186
+1188 action
+1190
+1192 action
+1194
+1196 action
+1198
+1200 action
+1202
+1204 action
+1206
+1208 action
+1210
+1212 action
+1214
+1216 action
+1218
+1220 action
+1222
+1224 action
+1226
+1228 action
+1230
+1232 action
+1234
+1236 action
+1238
+1240 action
+1242
+1244 action
+1246
+1248 action
+1250
+1252 action
+1254
+1256 action
+1258
+1260 action
+1262
+1264 action
+1266
+1268 action
+1270
+1272 action
+1274
+1276 action
+1278
+1280 action
+1282
+1284 action
+1286
+1288 action
+1290
+1292 action
+1294
+1296 action
+1298
+1300 action
+1302
+1304 action
+1306
+1308 action
+1310
+1312 action
+1314
+1316 action
+1318
+1320 action
+1322
+1324 action
+1326
+1328 action
+1330
+1332 action
+1334
+1336 action
+1338
+1340 action
+1342
+1344 action
+1346
+1348 action
+1350
+1352 action
+1354
+1356 action
+1358
+1360 action
+1362
+1364 action
+1366
+1368 action
+1370
+1372 action
+1374
+1376 action
+1378
+1380 action
+1382
+1384 action
+1386
+1388 action
+1390
+1392 action
+1394
+1396 action
+1398
