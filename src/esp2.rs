@@ -810,6 +810,21 @@ impl Effects {
         }
     }
 
+    /// A room's bank holding one empty effect of `kind`, row 0, for other
+    /// modules' tests of what calls and kills an effect.
+    #[cfg(test)]
+    pub(crate) fn test_enter_room_with(&mut self, kind: u8, row: u8) {
+        let mut block = [0u8; BLOCK_LEN];
+        block[18..20].copy_from_slice(&0x8001u16.to_le_bytes());
+        self.enter_room(tests::bank_rows(kind, &[(row, &[block])]));
+    }
+
+    /// Whether a slot is live, for other modules' tests.
+    #[cfg(test)]
+    pub(crate) fn test_live(&self, slot: usize) -> bool {
+        self.slots[slot].live()
+    }
+
     /// A slot's place, for other modules' tests.
     #[cfg(test)]
     pub(crate) fn test_pos(&self, slot: usize) -> [i16; 3] {
@@ -2832,7 +2847,7 @@ mod tests {
     }
 
     /// [`bank_of`] with blocks for several rows, each a group of its own.
-    fn bank_rows(kind: u8, rows: &[(u8, &[[u8; BLOCK_LEN]])]) -> Arc<Bank> {
+    pub(super) fn bank_rows(kind: u8, rows: &[(u8, &[[u8; BLOCK_LEN]])]) -> Arc<Bank> {
         let mut record = Vec::new();
         record.extend_from_slice(&3u16.to_le_bytes());
         record.extend_from_slice(&1u16.to_le_bytes());

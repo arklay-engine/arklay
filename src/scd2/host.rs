@@ -576,6 +576,20 @@ const SPLAYER_OPERAND: i64 = 255;
 const MESSAGE_BANK: u8 = 11;
 /// The item-collected flag bank (`FlagGroup::Item`).
 pub const ITEM_BANK: u8 = 8;
+/// `fg_item_2` (`0x98EBD4`), the item flags of the stages from `scd_var_stage`
+/// 4 up.
+pub const ITEM_BANK_2: u8 = 34;
+
+/// The bank `Item_aot_set`, `St_get_item` and `St_get_file` keep an item's
+/// taken flag in: `fg_item` below `scd_var_stage` 4 (the room's 1-based
+/// stage below 5), `fg_item_2` from there on.
+pub fn item_bank(stage: u8) -> u8 {
+    if stage.saturating_sub(1) < 4 {
+        ITEM_BANK
+    } else {
+        ITEM_BANK_2
+    }
+}
 /// `fg_use` (`0x989ED8`): the key items the areas under the player want. A
 /// USE area (`Sce_Flg_chg`) raises the item's bit while the player's probe is
 /// in it, and `Sce_work_clr` clears the bank's first four words each pass.
@@ -2176,14 +2190,15 @@ impl GameHost<'_> {
             at(rest + 3) as u8,
             at(rest + 4) as u8,
         );
-        let sce = if self.game.re2.flag(ITEM_BANK, flag) {
+        let bank = item_bank(self.game.id.stage);
+        let sce = if self.game.re2.flag(bank, flag) {
             SCE_AUTO
         } else {
             at(1) as u8
         };
         // `Item_aot_set`: the object of an item that's been taken stays away,
         // whatever `Obj_model_set` asks of it.
-        let taken = self.game.re2.flag(ITEM_BANK, flag);
+        let taken = self.game.re2.flag(bank, flag);
         if model < 0x20
             && let Some(record) = self.game.objects.record_mut(usize::from(model))
         {
@@ -5787,11 +5802,18 @@ mod tests {
     /// A hand-built room with one standing item area in slot 8: `item` with
     /// `flag` and object `model`, the press fired and the window open.
     fn press_item_area(item: u8, flag: u8, model: u8) -> GameState {
+        press_item_area_in(item, flag, model, 0, 1)
+    }
+
+    /// [`press_item_area`] with the area's action byte, in 1-based `stage`.
+    fn press_item_area_in(item: u8, flag: u8, model: u8, action: u8, stage: u8) -> GameState {
         let mut game = GameState::default();
         game.is_re2_room = true;
+        game.id.stage = stage;
         let (item, flag, model) = (i64::from(item), i64::from(flag), i64::from(model));
+        let action = i64::from(action);
         let ops = [
-            8, 2, 49, 0, 0, -100, -100, 200, 200, item, 1, flag, model, 0,
+            8, 2, 49, 0, 0, -100, -100, 200, 200, item, 1, flag, model, action,
         ];
         let mut host = GameHost { game: &mut game };
         host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
@@ -5913,6 +5935,43 @@ mod tests {
         assert!(game.re2.flag(crate::scd2::host::ITEM_BANK, 25));
         assert_eq!(cleared_objects(&game), Vec::<usize>::new());
         assert_eq!(game.room_actions[8].unwrap().sce, SCE_AUTO);
+    }
+
+    #[test]
+    fn a_file_in_stage_5_raises_its_flag_in_fg_item_2() {
+        // `St_get_file`: `scd_var_stage < 4` picks `fg_item`, else `fg_item_2`.
+        let mut game = press_item_area_in(0x73, 125, 0xFF, 0, 5);
+        file_it(&mut game);
+        assert!(game.re2.flag(crate::scd2::host::ITEM_BANK_2, 125));
+        assert!(!game.re2.flag(crate::scd2::host::ITEM_BANK, 125));
+        // The area is gone, and a script's `Item_aot_set` of it finds it taken.
+        assert_eq!(game.room_actions[8].unwrap().sce, SCE_AUTO);
+        assert_eq!(super::item_bank(4), crate::scd2::host::ITEM_BANK);
+        assert_eq!(super::item_bank(5), crate::scd2::host::ITEM_BANK_2);
+    }
+
+    #[test]
+    fn a_file_kills_its_twinkle_even_with_object_0xff() {
+        // `Esp_kill(5, ((action >> 5) & 3) * 8 + 7, object)`: outside the
+        // object test, and no `.max(1)`: action 0x80 is row 7.
+        let mut game = press_item_area_in(0x71, 25, 3, 0x80, 1);
+        game.re2.effects.test_enter_room_with(5, 7);
+        let on_3 = game
+            .re2
+            .effects
+            .call_on_object(5, 7, 0, 3, [0, 0, 0])
+            .unwrap();
+        let on_4 = game
+            .re2
+            .effects
+            .call_on_object(5, 7, 0, 4, [0, 0, 0])
+            .unwrap();
+        file_it(&mut game);
+        assert!(
+            !game.re2.effects.test_live(on_3),
+            "its object's twinkle goes"
+        );
+        assert!(game.re2.effects.test_live(on_4), "another object's stays");
     }
 
     #[test]
