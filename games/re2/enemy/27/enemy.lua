@@ -483,7 +483,7 @@ local function latch(e)
             e:set_var(DIE_AFTER, 1)
         end
         if e:pl_life_down(10, false) == 2 then
-            e:pl_hold_back_die()
+            e:pl_held_kill()
             e:set_routine(2, 0xB)
             e:pl_set_damage_cnt(e:pl_damage_cnt() | 0x80)
             return
