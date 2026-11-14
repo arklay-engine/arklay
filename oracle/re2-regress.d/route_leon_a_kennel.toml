@@ -1,0 +1,17 @@
+# Leon A's way from Ben's cell to the sewer (#714, under #656 and #667): the kennel (21A) from 219's door 2, round the sleeping dogs along the south wall to the manhole, the Manhole Opener used on it from the status screen (the opener's event, 4:59), and down into 302
+
+# Room 21A: from 219's door 2 south to the wall, east along it to the manhole's area, the Manhole Opener used (START, slot 6, USE), the scene that opens it, and what follows. A probe, recorded without sound (the room has no voices), to see what the original does after the scene; its moves then end at the manhole's door
+[[run]]
+name = "leon_a_21a_302"
+room = "21A"
+setup_script = "leon_a_21a_302.lua"
+input = "leon_a_21a_302.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 800
+sound = false
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 799]
+frame_max_mean = 3.0
+expect = "match"
+record = "--warp 21A:-15300:0:-9700:3072:0 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:8 --flag 31:9 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 128 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x4B:1"
