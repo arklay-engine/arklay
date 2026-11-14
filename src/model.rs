@@ -197,6 +197,23 @@ pub struct PartMorph {
     /// Where each target puts those children, from the table the high half
     /// of its weight's word names, in the order of [`PartMorph::joints`].
     pub joint_targets: Vec<Vec<[i16; 3]>>,
+    /// `FUN_004e0070`'s version of [`PartMorph::joints`] and
+    /// [`PartMorph::joint_targets`]: every part but the root, not the
+    /// children of this part alone.
+    pub all_joints: Vec<(u8, [i16; 3])>,
+    pub all_targets: Vec<Vec<[i16; 3]>>,
+    /// Each target's weight as the model's data holds it (the low half of
+    /// the word `Sa_parts_allmv` reads), which a body that doesn't move it
+    /// is drawn with.
+    pub weights: Vec<i16>,
+}
+
+/// Win32 `MulDiv(value, factor, 0x1000)`: rounded to the nearest, halves away
+/// from zero.
+fn mul_div_4096(value: i32, factor: i32) -> i32 {
+    let product = i64::from(value) * i64::from(factor);
+    let half = if product < 0 { -2048 } else { 2048 };
+    ((product + half) / 4096) as i32
 }
 
 impl PartMorph {
@@ -222,19 +239,34 @@ impl PartMorph {
     /// through each target's place by its weight (`LoadAverage12`, where the
     /// rest keeps 0xfff).
     pub fn joint_offsets(&self, weights: &[i16]) -> Vec<(u8, [i16; 3])> {
-        let mut joints: Vec<(u8, [i32; 3])> = self
-            .joints
+        Self::blend(&self.joints, &self.joint_targets, weights)
+    }
+
+    /// `FUN_004e0070`: every part's place blended the same way.
+    pub fn all_joint_offsets(&self, weights: &[i16]) -> Vec<(u8, [i16; 3])> {
+        Self::blend(&self.all_joints, &self.all_targets, weights)
+    }
+
+    fn blend(
+        rest: &[(u8, [i16; 3])],
+        targets: &[Vec<[i16; 3]>],
+        weights: &[i16],
+    ) -> Vec<(u8, [i16; 3])> {
+        let mut joints: Vec<(u8, [i32; 3])> = rest
             .iter()
             .map(|&(child, at)| (child, at.map(i32::from)))
             .collect();
-        for (target, &weight) in self.joint_targets.iter().zip(weights) {
+        for (target, &weight) in targets.iter().zip(weights) {
             if weight == 0 {
                 continue;
             }
             let weight = i32::from(weight);
             for ((_, at), to) in joints.iter_mut().zip(target) {
+                // `LoadAverage12`: `MulDiv` of each term by 0x1000, which rounds
+                // to the nearest.
                 *at = std::array::from_fn(|axis| {
-                    (at[axis] * (0xFFF - weight) + i32::from(to[axis]) * weight) >> 12
+                    mul_div_4096(at[axis], 0xFFF - weight)
+                        + mul_div_4096(i32::from(to[axis]), weight)
                 });
             }
         }

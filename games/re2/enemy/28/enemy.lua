@@ -20,9 +20,10 @@
 -- a `Type` 0 `Type`'s `0x4000` and the birth (state 8).
 --
 -- Not ported: the other `Type`s of `FUN_00477870`, the hit and the death
--- (`Routine_0` 2 to 4), the birth (state 8), the wobble, the spark trail, the
--- neck's turn, and the effects, whose `Rnd` draws are kept where the move
--- draws them but not the effects themselves.
+-- (`Routine_0` 2 to 4), the birth (state 8), the spark trail, and the effects, whose `Rnd` draws are kept where the move
+-- draws them but not the effects themselves. The neck's turn is a third of
+-- `Rot_neck_em_n`'s on each of parts 2 to 4 (`Neck::apply`); the wobble
+-- places every part (`FUN_004e0070`) as well as part 1's children.
 
 local COOL <const> = 0 -- `+0x218`: the wait before it spits again.
 local COUNT <const> = 1 -- `+0x21a`: the ticks it has been turned away from the player.
@@ -533,8 +534,15 @@ function update(e)
     -- where it was, and the body is posed on it.
     if e:var(B21F) & 1 ~= 0 then
         local phase = e:var(PHASE)
-        e:morph(1, e:var(SWAY) - 5 * WOBBLE[phase])
+        local weights = { e:morph_weights(1) }
+        weights[1] = i16((weights[1] or 0) - 5 * WOBBLE[phase])
+        e:morph_all(1, table.unpack(weights))
         e:set_var(PHASE, (phase + 1) & 0x3F)
+    end
+    -- `Rot_neck_em_n` on `Neck_no` 4 (rate 0x20, limit 0x32c, from `Init`):
+    -- the posing turns parts 2 to 4 a third of it each.
+    if e:var(B21F) & 0x40 == 0 then
+        e:rot_neck_part(4, 0x20, 0x32C)
     end
     e:seq_sound()
 end
