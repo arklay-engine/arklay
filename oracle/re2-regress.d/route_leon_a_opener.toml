@@ -99,3 +99,170 @@ ignore = [
   [974, 1066, "hk"],
 ]
 record = "--warp 219:4809:0:-21018:2133:0 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:27 --flag 3:33 --life 110 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"
+
+# The whole route in one run, with no warp: route_200_heart carried on through route_leon_a_opener's rooms (the ladder up, 110, 10F, 10A, 109, 116, 20B, 20F, 211, 216, 219 and 301) to the Manhole Opener in Ben's cell
+[[run]]
+name = "route_200_opener"
+room = "new"
+offset = 0
+ticks = 73300
+setup_script = "route_200_spade.lua"
+input = "route_200_opener.txt"
+voice_from_ref = true
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,scene,om0,om1,om2,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,zp,zd,fgstat,fgitem,fgroom,fgcom,fgkey,movie,fguse,scv,atsce"
+frames = [0, 73299]
+# 1.03 measured
+frame_max_mean = 1.1
+# each room on its own, from its hand back to its door's press (past the hall's hand back at 58298: the ladder's question, 110, 10F, 10A, 109, 116, 20B, 20F, 211, 216 (#663, #664), 219 and 301 from the talk to the end (#683)): route_200_spade's windows, then 200 from the statue, 201, 204, 203, 204, 205, 207, 10C, 114, 113, 112, 110, 10F, 10A, 109, 108, 107, 106, 107, 108 (the water tank, the scene and the status screen), 109, 10A and 10B to the end, then route_leon_a_heart's rooms: 10B, 10A, 10F, 110, 200, 201, 204, 203, 204, 205, 207, 209, 202, and the hall (200) to the end
+frame_windows = [[14475, 15335, 0.6], [15702, 15826, 0.3], [16167, 17654, 0.55], [17995, 18435, 0.25], [18776, 19722, 1.05], [20063, 20724, 0.5], [21065, 21215, 0.25], [21426, 23999, 0.6], [24342, 24434, 0.45], [24777, 25340, 0.35], [25341, 27081, 1.1], [27082, 27159, 0.45], [27501, 27601, 0.5], [27943, 28335, 0.35], [28541, 28632, 0.6], [28974, 29282, 0.45], [29624, 29818, 0.45], [30160, 30285, 0.4], [30653, 30741, 0.25], [30742, 30870, 0.85], [30871, 30976, 0.4], [30977, 31315, 0.7], [31316, 31428, 0.2], [31796, 31920, 0.7], [32262, 32880, 0.35], [33217, 33248, 0.2], [33590, 33665, 0.65], [34007, 34305, 0.35], [34647, 34735, 0.7], [34945, 35349, 0.3], [35691, 37549, 0.65], [37891, 38049, 0.95], [38391, 38486, 0.55], [38854, 39294, 0.2], [39646, 39712, 0.35], [40054, 40128, 0.45], [40470, 40796, 0.5], [41138, 41272, 0.8], [41478, 41963, 0.4], [42300, 43213, 0.55], [43555, 44449, 0.4], [44659, 45769, 1.15], [46111, 46468, 0.25], [46810, 47266, 0.9], [47608, 47945, 0.5], [47946, 48059, 0.25], [48400, 48585, 0.75], [48926, 49002, 0.3], [49355, 49983, 0.25], [50357, 50586, 0.5], [50955, 51062, 0.4], [51405, 51699, 0.45], [52042, 52883, 0.6], [53226, 53317, 0.35], [53660, 54199, 0.5], [54542, 54788, 0.3], [55126, 56052, 0.95], [56395, 57955, 0.75], [58298, 58399, 0.3], [58324, 58647, 0.65], [59021, 59874, 0.2], [60228, 60353, 0.3], [60697, 60818, 0.8], [61162, 61413, 0.2], [61757, 63925, 0.6], [64254, 64458, 0.3], [64800, 65017, 0.25], [65400, 65593, 0.4], [65960, 68233, 1.95], [68600, 69169, 0.2], [69530, 73299, 1.9]]
+expect = "match"
+record = ""
+# route_200_spade's ignores up to the statue (route_leon_a_spade.toml), then the doors' own ticks past it (oracle/re2.md, docs/internals/deviations/re2.md), each load's `hk` and the objects outside 10C
+ignore = [
+    [356, "rng"],
+    [356, "rseed"],
+    [2627, "rng"],
+    [2627, "rseed"],
+    [5455, "rng"],
+    [5455, "rseed"],
+    [6548, "rng"],
+    [6548, "rseed"],
+    [6900, "rng"],
+    [6900, "rseed"],
+    [7954, "rng"],
+    [7954, "rseed"],
+    [8271, "rng"],
+    [8271, "rseed"],
+    [8784, "rng"],
+    [8784, "rseed"],
+    [10012, "rng"],
+    [10012, "rseed"],
+    [12783, "rng"],
+    [12783, "rseed"],
+    [15336, "rng"],
+    [15336, "rseed"],
+    [15827, "rng"],
+    [15827, "rseed"],
+    [17655, "rng"],
+    [17655, "rseed"],
+    [18436, "rng"],
+    [18436, "rseed"],
+    [19723, "rng"],
+    [19723, "rseed"],
+    [20725, "rng"],
+    [20725, "rseed"],
+    [21216, "rng"],
+    [21216, "rseed"],
+    [24000, "rng"],
+    [24000, "rseed"],
+    [24435, "rng"],
+    [24435, "rseed"],
+    # this segment's doors: 115's door 0, 114's door 2, 10C's stairs door, 207's door 1, 205's door 0, 204's door 0 and 201's door 0
+    [27160, "rng"],
+    [27160, "rseed"],
+    [27602, "rng"],
+    [27602, "rseed"],
+    [28336, "rng"],
+    [28336, "rseed"],
+    [28633, "rng"],
+    [28633, "rseed"],
+    [29283, "rng"],
+    [29283, "rseed"],
+    [29819, "rng"],
+    [29819, "rseed"],
+    [30286, "rng"],
+    [30286, "rseed"],
+    [31429, "rng"],
+    [31429, "rseed"],
+    [31921, "rng"],
+    [31921, "rseed"],
+    [32881, "rng"],
+    [32881, "rseed"],
+    [33249, "rng"],
+    [33249, "rseed"],
+    [33666, "rng"],
+    [33666, "rseed"],
+    [34306, "rng"],
+    [34306, "rseed"],
+    [34736, "rng"],
+    [34736, "rseed"],
+    [35350, "rng"],
+    [35350, "rseed"],
+    [37550, "rng"],
+    [37550, "rseed"],
+    [38050, "rng"],
+    [38050, "rseed"],
+    [38487, "rng"],
+    [38487, "rseed"],
+    [39295, "rng"],
+    [39295, "rseed"],
+    [39713, "rng"],
+    [39713, "rseed"],
+    [40129, "rng"],
+    [40129, "rseed"],
+    [40797, "rng"],
+    [40797, "rseed"],
+    [41273, "rng"],
+    [41273, "rseed"],
+    [41964, "rng"],
+    [41964, "rseed"],
+    [43214, "rng"],
+    [43214, "rseed"],
+    [44450, "rng"],
+    [44450, "rseed"],
+    [45770, "rng"],
+    [45770, "rseed"],
+    [46469, "rng"],
+    [46469, "rseed"],
+    [47267, "rng"],
+    [47267, "rseed"],
+    # past the Diamond Key: the doors' own ticks (110's ladder on the tick after its Yes) and the loads' `hk`, route_leon_a_heart's moved onto the route, then 209's door 7 and 202's door 0
+    [48060, "rng"],
+    [48060, "rseed"],
+    [48586, "rng"],
+    [48586, "rseed"],
+    [49003, "rng"],
+    [49003, "rseed"],
+    [49985, "rng"],
+    [49985, "rseed"],
+    [50587, "rng"],
+    [50587, "rseed"],
+    [51063, "rng"],
+    [51063, "rseed"],
+    [51700, "rng"],
+    [51700, "rseed"],
+    [52884, "rng"],
+    [52884, "rseed"],
+    [53318, "rng"],
+    [53318, "rseed"],
+    [54200, "rng"],
+    [54200, "rseed"],
+    [54789, "rng"],
+    [54789, "rseed"],
+    [56053, "rng"],
+    [56053, "rseed"],
+    [57956, "rng"],
+    [57956, "rseed"],
+    [48095, 48185, "hk"], [48621, 48711, "hk"], [49038, 49128, "hk"], [50020, 50112, "hk"], [50622, 50712, "hk"], [51098, 51188, "hk"], [51735, 51825, "hk"], [52919, 53009, "hk"], [53353, 53443, "hk"], [54235, 54325, "hk"], [54824, 54914, "hk"], [56088, 56178, "hk"], [57991, 58081, "hk"],
+    # the objects are compared in 10C and 203 only, from the end of its load (as leon_a_208_114's), on both visits: elsewhere the slots out of play keep what the last room's objects left in them in the original, where arklay's are zero (docs/internals/deviations/re2.md, "What an object's slot held before")
+    [0, 21424, "om0"], [0, 21424, "om1"], [0, 21424, "om2"],
+    [24035, 34863, "om0"], [24035, 34863, "om1"], [24035, 34863, "om2"],
+    [35385, 51825, "om0"], [52919, 73299, "om0"], [35385, 73299, "om1"], [35385, 73299, "om2"],
+    # the head through 114's door 1 with the head turned toward a zombie (docs/internals/deviations/re2.md, "The head through a door")
+    [24561, 24774, "pneck"],
+    # the view's load on the new game's first tick (`movie` 1 in the original, 0 in arklay), which no other run from room 100 compares
+    [0, "movie"],
+    # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do: route_200_spade's, then the route's past the statue
+    [391, 481, "hk"], [2662, 2752, "hk"], [5490, 5580, "hk"], [6935, 7025, "hk"], [7989, 8079, "hk"], [8819, 8911, "hk"], [10047, 10137, "hk"], [12818, 12908, "hk"], [15371, 15461, "hk"], [15952, "hk"], [17690, 17780, "hk"], [18471, 18561, "hk"], [19758, 19848, "hk"], [20760, 20850, "hk"], [21251, 21343, "hk"], [24035, 24125, "hk"], [24470, 24560, "hk"],
+    [27195, 27285, "hk"], [27637, 27727, "hk"], [28371, 28463, "hk"], [28668, 28758, "hk"], [29318, 29408, "hk"], [30321, 30411, "hk"],
+    [31464, 31554, "hk"], [32046, "hk"], [33374, "hk"], [33701, 33791, "hk"], [34341, 34431, "hk"], [34771, 34863, "hk"], [35385, 35475, "hk"], [37585, 37675, "hk"], [38085, 38175, "hk"], [38522, 38612, "hk"], [39330, 39420, "hk"], [39748, 39838, "hk"], [40164, 40254, "hk"], [40832, 40922, "hk"], [41308, 41398, "hk"], [41999, 42089, "hk"], [43249, 43339, "hk"], [44485, 44575, "hk"], [45805, 45895, "hk"], [46504, 46594, "hk"], [47302, 47392, "hk"],
+    # this segment's doors (the ladder's, 110's, 10F's, 10A's, 109's, 116's, 20B's, 20F's, 211's, 216's and 219's), whose `Rnd` and `rseed` differ on the tick of their press, and each load's `hk`
+    [58648, "rng"], [58648, "rseed"], [59875, "rng"], [59875, "rseed"], [60354, "rng"], [60354, "rseed"], [60819, "rng"], [60819, "rseed"], [61414, "rng"], [61414, "rseed"], [63926, "rng"], [63926, "rseed"], [64459, "rng"], [64459, "rseed"], [65018, "rng"], [65018, "rseed"], [65594, "rng"], [65594, "rseed"], [68234, "rng"], [68234, "rseed"], [69170, "rng"], [69170, "rseed"],
+    [58683, 58775, "hk"], [59910, 60000, "hk"], [60389, 60479, "hk"], [60854, 60944, "hk"], [61449, 61539, "hk"], [63961, 64053, "hk"], [64494, 64584, "hk"], [65053, 65143, "hk"], [65629, 65719, "hk"], [68269, 68359, "hk"], [69205, 69297, "hk"],
+    # 301's Ben (0x46, a scene character in slot 0): the last four words of `em` (his work's `Dest` and the words after it) hold what the memory held before, as the zombies' `zd` does (docs/internals/deviations/re2.md, "What a zombie's slot held before")
+    [69298, 73299, "em"],
+    # `zd` (docs/internals/deviations/re2.md, "What a zombie's slot held before"): the load's tick in room 100, room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load
+    [0, "zd"], [482, 2751, "zd"], [8397, 8909, "zd"],
+    # and 209's slot 5 from its load to its first `Root_ck` (55128): the original's work sits on memory arklay's model doesn't follow, -12016, -1 (docs/internals/deviations/re2.md, "What a zombie's slot held before")
+    [54915, 55128, "zd"],
+]
