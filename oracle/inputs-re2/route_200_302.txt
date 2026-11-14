@@ -4,6 +4,47 @@
 # Leon A's route from the new game to the Unicorn Medal in the S.T.A.R.S. office (115): route_200_208.txt to the ink ribbons in the darkroom (208), then the room runs past it (leon_a_208_114, leon_a_114_115) joined on from each hand back (oracle/re2.md, "Leon A to the S.T.A.R.S. office")
 # route_200_208.txt: Leon A's route from the new game to the darkroom (208): route_200_computer.txt to the Blue Card Key's use at room 200's computer, then the room runs past the card (leon_a_200_out, leon_a_204, leon_a_205, leon_a_207, leon_a_208) joined on from each door's hand back, room 207's fight made again for the route's zombies (oracle/re2.md, "Leon A past the card")
 # route_200_computer.txt's input: the new game to room 200's computer, where Leon agrees to use the Blue Card Key on 13800
+# the card's use: a press every 30 ticks until the last prompt, as computer_200_card.txt (its 400 is the route's 13800); play comes back on 14475
+# room 200 after the card, leon_a_200_out.txt 14132 ticks later: the counter's 30 rounds, the east ramp and door 1 (pressed on 15336)
+# rooms 201 and 204, leon_a_204.txt 15359 ticks later: door 1's hand back is on 15702, 366 ticks after its press (other doors take 340); the bar, the window licker's start, door 1 into 204, the body's 15 rounds, the window licker's fight (Leon is left at 156 life) and door 1 into 205 (pressed on 17655)
+# room 205, 17652 ticks later: one shot into the corridor first (its four Rnd draws give room 207's zombies 55, 56, 50 and 48 life), then leon_a_205.txt's walk with the turns of a player in Fine (80 a tick, 48 in Caution) and door 2 (pressed on 18436)
+# room 207, 18433 ticks later: the reload from the status screen, then slot 3 from the north (four hits), slot 0 from a step back south (four), slot 2 down the corridor (four), slot 1 from the corridor's west end (four), with no grab, and the run east to door 2 (pressed on 19723)
+# room 208, 19720 ticks later: the walk to the ink ribbons' table as leon_a_208.txt, with Fine's turns and pace, their take into slot 3 and the message's close
+# leon_a_208_114.txt's input from the ribbons' table, 20276 ticks later (its tick 343 on 20619, the last of route_200_208's reference)
+# leon_a_114_115.txt's input from 10C's door 2's hand back in 114 (24342), 23999 ticks later
+# leon_a_115_207.txt's presses, 26738 ticks later: its tick 344 on 27082, where the scene with Claire hands back (115's door 0 on 27160, 114's door 2 on 27602, 10C's stairs door on 28336)
+# leon_a_207_201_licker.txt's presses, 28197 ticks later: its tick 343 on 28540, the last stopped tick before 207 (207's door 1 on 28633, 205's door 0 on 29283, 204's door 0 on 29819)
+# leon_a_201_spade.txt's presses, 29816 ticks later: its tick 343 on 30159, the last stopped tick before 201 (201's door 0 on 30286, START in 200 on 30742, the Spade Key into slot 5 on 31136)
+# leon_a_200_203's presses from its tick 344 on, 30972 ticks later (its 344 on 31316): 200's door 1, 201's door 1, then in 204 a wait of 40 ticks and the fight made again for the route's licker (101 life, Em22_Life[Rnd & 0xF]: eight hits, one scratch), the run up the branch and the Spade Key at door 2 69 ticks later than in the warp, and 203's door 0
+# leon_a_204_10c's presses from its tick 344 on, 33246 ticks later (its 344 on 33590, 204's hand back): 204's door 1, 205's door 2, 207's stairs door
+# leon_a_10c_113's presses from its tick 344 on, 34601 ticks later (its 344 on 34945, 10C's hand back), to 114's hand back on 35691
+# 114 made again for the route's three zombies (70, 84 and 65 life): from 114's hand back (35691), face south and fire every 6 ticks at the nearest standing zombie within 6000 with more than 1 life (slot 1 is left with 1 life), down the east wall to door 0, the Spade Key's last use and the press that opens it
+# leon_a_113_10a's presses one tick later than in the warp (from 113's hand back on 37891): 113 past its waking zombies, 112, 110, 10F
+# leon_a_10a_106b's presses from 10A's hand back on 40054, with a wait of 8 ticks at 109's hand back (its crows) and 10 at 107's (its 0x13 holds Leon once, 134 to 84)
+# 106 to 10B from 106's hand back on 42300: leon_a_106_108's presses through 106 (the valve handle and the 15 rounds); 107 made again for the route's zombies (fire every 12 ticks at the nearest standing zombie within 6000: slot 1 at the corner, slots 2 and 3 down the east corridor; slots 0 and 3 left), its door 1; 108's water tank and the valve handle (event 6, 4:0); event 7's status screen opens by itself and START closes it; then north and east to 108's door 1 by waypoints, leon_a_108_10b's presses from there (109 with its crows, 10A with a wait of 6 ticks at its hand back, slot 0 shot as it comes), 10B and the Diamond Key
+# leon_a_10b_200's presses from route_200_diamond's end (47946, the warp's 344): back across 10B to door 1, 10A past its two zombies, 10F, and 110 to its ladder, lowered and taken down to the hall (200); its last hold of up, which found the hand back, left out
+# leon_a_200_209's presses from the ladder's foot (50356): 200's west stairs, 201, 204, 203's 15 rounds from behind the box, 204, 205 and 207's Diamond door into 209; its last hold of up left out
+# 209 and 202 made again for the route's Rnd, which gives 209's zombies other life and choices than leon_a_209_heart's warp (55125): from 10 ticks after the hand back a shot every 3 ticks at the nearest standing zombie within 5000 until both stacks are spent (54 life left), door 7, 202, Marvin's scene, his grab and two bites (54 to 14 life), the Heart Key, then a turn on the spot and east and north away from Marvin to door 0, which unlocks from 202's side, and the hall's upper floor (200 on 57991, back on 58308)
+# leon_a_200_211.txt's presses, 57964 ticks later: its 344 on 58308, the hall's hand back after 202's door 0 (the ladder up, 110, 10F, 10A, 109, 116's herbs, 20B's Heart Key door, 20F), to 211's hand back on 65225
+# 110: east along the north corridor and south down the east one to door 0
+# 10F: east across the room to door 0
+# 10A: south to door 0, facing south-east
+# 109: east along the south wall to door 2: the first press unlocks it from this side, the third opens it
+# 116: the landing's green herb, taken and used from the inventory (slot 7: start, down 3, right, Use); east, and action takes the fire escape's first flight, then south and action the second; the ground's two green herbs, each taken and used; door 0
+# 20B: north up the east side to the Heart Key door: the first press uses the key, the fourth opens it
+# 20F: north, east, north and west to door 1
+# leon_a_211_216_219.txt's presses, 64881 ticks later: its 344 on 65225 (211's dogs, 216's scene with Ada and the van), to 219's hand back on 68575. The route's dogs hit Leon less often than the warp's (128 life in 219, not 110), and 216 loads 22 ticks earlier, but the input waits out Ada's scene, so 219 loads on the warp's tick
+# 216: in from the east; on to Ada's area (aot 2); her scene hands back about 2600, and the input waits until 2700 so that it does not depend on the voice lines' lengths
+# 216: north round Ada (from the east her body closes the van's area off at x -14983) and south into the van's area
+# 216: after the van, west to door 1 and its presses
+# leon_a_219_301_opener.txt's presses, 68231 ticks later: its 344 on 68575 (219's scene, 301's talk, the B1 map closed, the Manhole Opener into slot 6 on 72955)
+# the presses at door 3
+# 301: up until Leon moves, then south-west into the talk's area
+# the talk's sce_84(2) opens the B1 map (4552); once it waits for a key (4563), cancel closes it
+# Leon moves again on 4590: left to face south-west, then run into the Manhole Opener's area (item aot 5) until the bars stop him
+# a press every 12 ticks until the get-item window takes the Opener into slot 6, then a close
+# Leon turns once he moves again
+# From route_200_opener's end (the Manhole Opener taken in 301) on: Leon out through 301's door 0 to 219 (a press of the action button on the wall, the door's key), east along 219's wall to door 2 and into the kennel (21A), round the sleeping dogs to the manhole, the Opener used from the status screen, the scene (4:59), the status screen closed, down the manhole (Yes) and into 302, then through the sewer as leon_a_302_30b does, with the moves made again for this route's Rnd and gait (generated by steering from arklay's own state and checked in arklay, not copied): 302 west and north up its west side and east to door 1 (pressed on 74569), 30B north to door 0, and 303 round to the plug panel (two ticks of the press every 12 until its message closes on the 13th) and back to door 1, whose press (75708) makes Ada the player; the run ends on the tick before 30B loads (#714)
 0 up run
 2 up run right
 7 up run
@@ -343,7 +384,6 @@
 13667
 13800 confirm
 13802
-# the card's use: a press every 30 ticks until the last prompt, as computer_200_card.txt (its 400 is the route's 13800); play comes back on 14475
 13804
 13830 action
 13834
@@ -389,7 +429,6 @@
 14434
 14460 action
 14464
-# room 200 after the card, leon_a_200_out.txt 14132 ticks later: the counter's 30 rounds, the east ramp and door 1 (pressed on 15336)
 14482 left
 14508
 14512 up run
@@ -430,7 +469,6 @@
 15332
 15336 action
 15340
-# rooms 201 and 204, leon_a_204.txt 15359 ticks later: door 1's hand back is on 15702, 366 ticks after its press (other doors take 340); the bar, the window licker's start, door 1 into 204, the body's 15 rounds, the window licker's fight (Leon is left at 156 life) and door 1 into 205 (pressed on 17655)
 15709 right
 15711
 15713 up run
@@ -531,7 +569,6 @@
 17645
 17655 action
 17659
-# room 205, 17652 ticks later: one shot into the corridor first (its four Rnd draws give room 207's zombies 55, 56, 50 and 48 life), then leon_a_205.txt's walk with the turns of a player in Fine (80 a tick, 48 in Caution) and door 2 (pressed on 18436)
 17997 aim
 18005 aim fire
 18008 aim
@@ -548,7 +585,6 @@
 18430
 18436 action
 18440
-# room 207, 18433 ticks later: the reload from the status screen, then slot 3 from the north (four hits), slot 0 from a step back south (four), slot 2 down the corridor (four), slot 1 from the corridor's west end (four), with no grab, and the run east to door 2 (pressed on 19723)
 18785 start
 18789
 18821 down
@@ -664,7 +700,6 @@
 19719
 19723 action
 19727
-# room 208, 19720 ticks later: the walk to the ink ribbons' table as leon_a_208.txt, with Fine's turns and pace, their take into slot 3 and the message's close
 20070 up
 20089
 20094 right
@@ -681,7 +716,6 @@
 20364
 20442 action
 20444
-# leon_a_208_114.txt's input from the ribbons' table, 20276 ticks later (its tick 343 on 20619, the last of route_200_208's reference)
 20626 left
 20640
 20642 up
@@ -804,7 +838,6 @@
 23998
 24000 action
 24002
-# leon_a_114_115.txt's input from 10C's door 2's hand back in 114 (24342), 23999 ticks later
 24349 left
 24363
 24365 up run
@@ -841,7 +874,6 @@
 25616
 25814 action
 25816
-# leon_a_115_207.txt's presses, 26738 ticks later: its tick 344 on 27082, where the scene with Claire hands back (115's door 0 on 27160, 114's door 2 on 27602, 10C's stairs door on 28336)
 27088 right
 27096
 27098 up run
@@ -878,7 +910,6 @@
 28334
 28336 action
 28338
-# leon_a_207_201_licker.txt's presses, 28197 ticks later: its tick 343 on 28540, the last stopped tick before 207 (207's door 1 on 28633, 205's door 0 on 29283, 204's door 0 on 29819)
 28547 up run
 28559
 28561 left
@@ -917,7 +948,6 @@
 29817
 29819 action
 29821
-# leon_a_201_spade.txt's presses, 29816 ticks later: its tick 343 on 30159, the last stopped tick before 201 (201's door 0 on 30286, START in 200 on 30742, the Spade Key into slot 5 on 31136)
 30166 left
 30180
 30182 up run
@@ -953,7 +983,6 @@
 31196 action
 31198
 31315
-# leon_a_200_203's presses from its tick 344 on, 30972 ticks later (its 344 on 31316): 200's door 1, 201's door 1, then in 204 a wait of 40 ticks and the fight made again for the route's licker (101 life, Em22_Life[Rnd & 0xF]: eight hits, one scratch), the run up the branch and the Spade Key at door 2 69 ticks later than in the warp, and 203's door 0
 31316
 31322 left
 31339
@@ -1041,7 +1070,6 @@
 33247
 33249 action
 33251
-# leon_a_204_10c's presses from its tick 344 on, 33246 ticks later (its 344 on 33590, 204's hand back): 204's door 1, 205's door 2, 207's stairs door
 33590
 33596 right
 33607
@@ -1075,7 +1103,6 @@
 34734
 34736 action
 34738
-# leon_a_10c_113's presses from its tick 344 on, 34601 ticks later (its 344 on 34945, 10C's hand back), to 114's hand back on 35691
 34945
 34951 right
 34952
@@ -1095,7 +1122,6 @@
 35348
 35350 action
 35352
-# 114 made again for the route's three zombies (70, 84 and 65 life): from 114's hand back (35691), face south and fire every 6 ticks at the nearest standing zombie within 6000 with more than 1 life (slot 1 is left with 1 life), down the east wall to door 0, the Spade Key's last use and the press that opens it
 35692
 35692 left
 35705
@@ -1248,7 +1274,6 @@
 37492
 37550 action
 37552
-# leon_a_113_10a's presses one tick later than in the warp (from 113's hand back on 37891): 113 past its waking zombies, 112, 110, 10F
 37891
 37893 up run left
 37924 up run right
@@ -1331,7 +1356,6 @@
 39711 right
 39713 action
 39715
-# leon_a_10a_106b's presses from 10A's hand back on 40054, with a wait of 8 ticks at 109's hand back (its crows) and 10 at 107's (its 0x13 holds Leon once, 134 to 84)
 40054
 40056 up run right
 40081 up run
@@ -1421,7 +1445,6 @@
 41962 left
 41964 action
 41966
-# 106 to 10B from 106's hand back on 42300: leon_a_106_108's presses through 106 (the valve handle and the 15 rounds); 107 made again for the route's zombies (fire every 12 ticks at the nearest standing zombie within 6000: slot 1 at the corner, slots 2 and 3 down the east corridor; slots 0 and 3 left), its door 1; 108's water tank and the valve handle (event 6, 4:0); event 7's status screen opens by itself and START closes it; then north and east to 108's door 1 by waypoints, leon_a_108_10b's presses from there (109 with its crows, 10A with a wait of 6 ticks at its hand back, slot 0 shot as it comes), 10B and the Diamond Key
 42300
 42300 up run right
 42304 up run
@@ -1831,7 +1854,6 @@
 47851 action
 47853
 47945
-# leon_a_10b_200's presses from route_200_diamond's end (47946, the warp's 344): back across 10B to door 1, 10A past its two zombies, 10F, and 110 to its ladder, lowered and taken down to the hall (200); its last hold of up, which found the hand back, left out
 47947 left
 47972 up run
 47985 up run right
@@ -1938,7 +1960,6 @@
 49974
 49984 action
 49986
-# leon_a_200_209's presses from the ladder's foot (50356): 200's west stairs, 201, 204, 203's 15 rounds from behind the box, 204, 205 and 207's Diamond door into 209; its last hold of up left out
 50357 right
 50379 up run
 50422 up run left
@@ -2153,7 +2174,6 @@
 54731
 54789 action
 54791
-# 209 and 202 made again for the route's Rnd, which gives 209's zombies other life and choices than leon_a_209_heart's warp (55125): from 10 ticks after the hand back a shot every 3 ticks at the nearest standing zombie within 5000 until both stacks are spent (54 life left), door 7, 202, Marvin's scene, his grab and two bites (54 to 14 life), the Heart Key, then a turn on the spot and east and north away from Marvin to door 0, which unlocks from 202's side, and the hall's upper floor (200 on 57991, back on 58308)
 55135 aim fire
 55137 aim
 55138 aim fire
@@ -2772,7 +2792,6 @@
 57990
 58020 up
 58308
-# leon_a_200_211.txt's presses, 57964 ticks later: its 344 on 58308, the hall's hand back after 202's door 0 (the ladder up, 110, 10F, 10A, 109, 116's herbs, 20B's Heart Key door, 20F), to 211's hand back on 65225
 58310 left
 58348 up run
 58458 up run right
@@ -2790,7 +2809,6 @@
 58677 action
 58679
 58707 up
-# 110: east along the north corridor and south down the east one to door 0
 59021 up run left
 59027 up run
 59036 up run left
@@ -2919,7 +2937,6 @@
 59875 action
 59877
 59912 up
-# 10F: east across the room to door 0
 60228 left
 60232 up run left
 60244 up run
@@ -2954,7 +2971,6 @@
 60354 action
 60356
 60391 up
-# 10A: south to door 0, facing south-east
 60697 right
 60714 up run right
 60727 up run
@@ -2979,7 +2995,6 @@
 60819 action
 60821
 60856 up
-# 109: east along the south wall to door 2: the first press unlocks it from this side, the third opens it
 61162 up run
 61215 up run right
 61216 up run
@@ -3000,7 +3015,6 @@
 61414 action
 61416
 61456 up
-# 116: the landing's green herb, taken and used from the inventory (slot 7: start, down 3, right, Use); east, and action takes the fire escape's first flight, then south and action the second; the ground's two green herbs, each taken and used; door 0
 61757 up  right
 61760 up 
 61784 up  right
@@ -3185,7 +3199,6 @@
 63926 action
 63928
 63965 up
-# 20B: north up the east side to the Heart Key door: the first press uses the key, the fourth opens it
 64254 right
 64261 up run
 64321
@@ -3200,7 +3213,6 @@
 64459 action
 64461
 64501 up
-# 20F: north, east, north and west to door 1
 64800 up run left
 64803 up run
 64807 up run left
@@ -3235,7 +3247,6 @@
 65020
 65055 up
 65225
-# leon_a_211_216_219.txt's presses, 64881 ticks later: its 344 on 65225 (211's dogs, 216's scene with Ada and the van), to 219's hand back on 68575. The route's dogs hit Leon less often than the warp's (128 life in 219, not 110), and 216 loads 22 ticks earlier, but the input waits out Ada's scene, so 219 loads on the warp's tick
 65227 up run left
 65233 up run
 65240 up run left
@@ -3272,14 +3283,12 @@
 65638 action
 65640
 65660 up
-# 216: in from the east; on to Ada's area (aot 2); her scene hands back about 2600, and the input waits until 2700 so that it does not depend on the voice lines' lengths
 65959 up run
 66035 up run right
 66036 up run
 66064 up run right
 66065 right
 66353
-# 216: north round Ada (from the east her body closes the van's area off at x -14983) and south into the van's area
 67581 right
 67590 up run right
 67595 up run
@@ -3302,7 +3311,6 @@
 67678 up 
 67734 up  left
 67781
-# 216: after the van, west to door 1 and its presses
 68136 right
 68175 up run right
 68179 up run
@@ -3317,7 +3325,6 @@
 68256 action
 68258
 68575
-# leon_a_219_301_opener.txt's presses, 68231 ticks later: its 344 on 68575 (219's scene, 301's talk, the B1 map closed, the Manhole Opener into slot 6 on 72955)
 68931 up run left
 68933 up run
 68971 up run left
@@ -3341,21 +3348,16 @@
 69169
 69170 action
 69172
-# the presses at door 3
 69192 action
 69194
 69215 up
-# 301: up until Leon moves, then south-west into the talk's area
 69513 up run
 69567
-# the talk's sce_84(2) opens the B1 map (4552); once it waits for a key (4563), cancel closes it
 72801 run
 72803
-# Leon moves again on 4590: left to face south-west, then run into the Manhole Opener's area (item aot 5) until the bars stop him
 72821 left
 72842 up run
 72859
-# a press every 12 ticks until the get-item window takes the Opener into slot 6, then a close
 72863 action
 72865
 72875 action
@@ -3376,10 +3378,8 @@
 72961
 73031 action
 73033
-# Leon turns once he moves again
 73081 right
 73101
-# From route_200_opener's end (the Manhole Opener taken in 301) on: Leon out through 301's door 0 to 219 (a press of the action button on the wall, the door's key), east along 219's wall to door 2 and into the kennel (21A), round the sleeping dogs to the manhole, the Opener used from the status screen, the scene (4:59), the status screen closed, down the manhole (Yes) and into 302, then the first steps of 302 (#714)
 73115 up run
 73235
 73237 action
@@ -3423,5 +3423,157 @@
 74205 action
 74207
 74337 up run
-74363 up run right
-74380 up run
+74342 up run
+74351 up run left
+74352 up run
+74353 up right
+74355 up run right
+74356 up run
+74365 up run right
+74366 up run
+74372 up run right
+74373 up run
+74374 up left
+74376 right
+74385 up run right
+74388 up run
+74403 up run right
+74404 up run
+74405 up left
+74408 up run right
+74409 up run
+74444 up
+74445 up run
+74465 up run right
+74466 up run
+74480 up run right
+74481 up run
+74485 right
+74490 up run right
+74494 up run
+74503 up run right
+74504 up run
+74506 up
+74507 up right
+74510 right
+74512 up run right
+74514 up run
+74515 up run right
+74516 up run
+74531 up
+74534 up run left
+74537 up run
+74540 up run left
+74541 up run
+74544 up
+74547 up right
+74548 up
+74549 up right
+74554 up
+74557 left
+74569 action
+74571
+74780 up run
+74824 up run left
+74825 up run
+74826 up
+74829 up run right
+74832 up run
+74844 up run right
+74845 up
+74848 up right
+74849 left
+74852 action
+74853
+75180 up run right
+75184 up run
+75202 up run left
+75203 up run
+75207 up left
+75209 left
+75212 up run left
+75215 up run
+75229 up run right
+75230 up
+75232 left
+75238 up run left
+75241 up run
+75259 up
+75260 up run left
+75263 up run
+75275 up run right
+75276 up run
+75280 up left
+75282 left
+75290 up run left
+75293 up run
+75299 up run left
+75300 up run
+75304 up run right
+75305 up run
+75310 up
+75311 up left
+75314 up
+75317 up left
+75318 up
+75323 right
+75338 action
+75340
+75350 action
+75352
+75362 action
+75364
+75374 action
+75376
+75386 action
+75388
+75398 action
+75400
+75410 action
+75412
+75422 action
+75424
+75434 action
+75436
+75446 action
+75448
+75458 action
+75460
+75470 action
+75472
+75482 action
+75484
+75524 right
+75533 up run right
+75535 up right
+75537 right
+75539 up run right
+75543 up run
+75558 up
+75560 right
+75565 up run right
+75569 up run
+75579 up run right
+75580 up run
+75584 up
+75585 right
+75588 up run right
+75591 up run
+75613 up run left
+75614 up run
+75619 up right
+75621 right
+75627 up run right
+75630 up run
+75642 up run right
+75643 up run
+75646 up
+75648 right
+75650 up right
+75654 up
+75658 up right
+75659 up
+75693 up right
+75694 left
+75708 action
+75709

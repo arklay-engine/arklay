@@ -16,17 +16,17 @@ frame_max_mean = 3.0
 expect = "match"
 record = "--warp 21A:-15300:0:-9700:3072:0 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:8 --flag 31:9 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 128 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x4B:1"
 
-# route_200_opener carried on to the sewer: out of Ben's cell through 301's door 0 and 219's door 2 into the kennel, the Opener used on the manhole from the status screen and down it into 302 (#714), the whole route in one run with no warp
+# route_200_opener carried on through the sewer: out of Ben's cell through 301's door 0 and 219's door 2 into the kennel, the Opener used on the manhole from the status screen, down it into 302, round 302's spiders to door 1, across 30B to door 0 and round 303 to its plug panel and back to door 1, whose press makes Ada the player (#714); the whole route in one run with no warp
 [[run]]
 name = "route_200_302"
 room = "new"
 offset = 0
-ticks = 74392
+ticks = 75743
 setup_script = "route_200_spade.lua"
 input = "route_200_302.txt"
 voice_from_ref = true
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,scene,om0,om1,om2,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,zp,zd,fgstat,fgitem,fgroom,fgcom,fgkey,movie,fguse,scv,atsce"
-frames = [0, 74391]
+frames = [0, 75742]
 # 1.03 measured
 frame_max_mean = 1.1
 # each room on its own, from its hand back to its door's press (past the hall's hand back at 58298: the ladder's question, 110, 10F, 10A, 109, 116, 20B, 20F, 211, 216 (#663, #664), 219 and 301 from the talk to the end (#683)): route_200_spade's windows, then 200 from the statue, 201, 204, 203, 204, 205, 207, 10C, 114, 113, 112, 110, 10F, 10A, 109, 108, 107, 106, 107, 108 (the water tank, the scene and the status screen), 109, 10A and 10B to the end, then route_leon_a_heart's rooms: 10B, 10A, 10F, 110, 200, 201, 204, 203, 204, 205, 207, 209, 202, and the hall (200) to the end
