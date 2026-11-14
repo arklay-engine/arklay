@@ -65,6 +65,7 @@ ticks = 1400
 # embryo_wait_303's start with 10 life: embryo 3's first bite kills, and it goes in (Routine_2 11 to 13; the player's em_damage_table[0x27] 4 to 10)
 input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm1,zm2,zm3,fgscn,fgstat"
+expect = "match"
 record = "--warp 303:-24972:-5400:-13739:552:3 --flag 4:55 --flag 4:57 --life 10 --no-enemies --keep-enemy 1 --keep-enemy 2 --keep-enemy 3"
 
 [[run]]
