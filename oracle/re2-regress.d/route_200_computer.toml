@@ -11,7 +11,7 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,s
 frames = [0, 13899]
 frame_max_mean = 0.8
 expect = "match"
-# the doors' own ticks (oracle/re2.md, docs/re2-deviations.md)
+# the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md)
 ignore = [
     [356, "rng"],
     [356, "rseed"],

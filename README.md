@@ -113,13 +113,18 @@ cargo run -- convert-game /path/to/steam/4249100_Biohazard --out re1.akpak
 # 209's zombies to Marvin's second scene and the Heart Key in 202, matches the
 # original tick for tick, zombies and lickers included, and so does Claire A's
 # route to the Spade Key, apart from the differences in
-# docs/internals/deviations/re2.md. Both characters fire the knife and weapons 2
+# docs/internals/deviations/re2.md. Both routes go on in matched segments
+# (not yet one continuous run): Leon A through the basement, Ada's partner
+# scenes and the Manhole Opener in 301, then the sewer, with Ada as the
+# player, to the Club Key; Claire A through the Spade Key's doors, the water
+# tank and 108's stairs to the Diamond Key. Both characters fire the knife and weapons 2
 # to 8 and the grenade launcher, bowgun, Colt S.A.A., spark shot, Beretta,
 # sub-machine gun, flamethrower, rocket launcher and gatling gun (weapons 9 to
 # 0x13). Zombies,
 # lickers, dogs, crows, Mr. X, the plants, the spiders, the cockroaches (in part),
 # room 205's bodies and the alligator are ported; the G forms are part way (G1,
-# G2 and G3 are done, and the G embryo walks and jumps but does not yet latch on)
+# G2 and G3 are done, and the G embryo walks, jumps and latches on, but its
+# struggle, its hits and the embryos that ride the G adult are to come)
 # and the G adult is to come. The engine also poses any RE2 EMD, PLD or PLW with --model, plays RE2 doors with --door,
 # and plays its sounds and films (see issue #244 and docs/internals/deviations/re2.md);
 # --game re2 skips detection
