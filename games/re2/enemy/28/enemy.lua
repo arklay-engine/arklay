@@ -319,6 +319,7 @@ local function state_3(e)
                 else
                     local behind = ((e:direction_from_player() - e:player_angle()) & 0xFFF) < 0x800
                     e:pl_set_routine(5, behind and 1 or 0, 0, 0)
+                    e:pl_hold()
                 end
                 e:pl_set_damage_cnt(e:pl_damage_cnt() | 0x80)
                 e:pl_set_sub1()

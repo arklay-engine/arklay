@@ -5456,6 +5456,10 @@ impl Mover<'_, '_> {
             self.em27_held(held);
             return;
         }
+        if held.holder_id == crate::zombie2::ADULT_ID {
+            self.em28_held();
+            return;
+        }
         if held.holder_id == crate::zombie2::G1_ID {
             self.em30_killed(held);
             return;
@@ -5742,6 +5746,41 @@ impl Mover<'_, '_> {
             2 => self.em2a_killed(held),
             _ => self.em2a_turned(),
         }
+    }
+
+    /// `FUN_0047bca0`, `em_damage_table[0x28]`: the G adult's bite on the
+    /// player. The first tick starts the player's `pSub1` clip `Routine_1`
+    /// (blend 3), locks `Damage_cnt` and sets `Neck_flg`; every tick takes
+    /// the clip's own speed (`Spd_get`, `Add_speedXZ`) through a `Joint_move`
+    /// that ends the hold, with the `Routine`s back to 1, 0, 0, 0, and the
+    /// neck and the lock cleared. The script's `pl_hold` names the adult as
+    /// the holder.
+    fn em28_held(&mut self) {
+        self.work.bank = Bank::Held;
+        match self.work.routine[2] {
+            0 => {
+                self.work.routine[2] = 1;
+                self.held_clip(self.work.routine[1], DAMAGE_BLEND);
+                self.work.neck.flags = 1;
+                self.work.damage_cnt |= DAMAGE_LOCK;
+                let sound = if self.work.routine[1] == 0 {
+                    0x400_0001
+                } else {
+                    0x401_0001
+                };
+                self.work.sounds.push(sound);
+            }
+            1 => {}
+            _ => return,
+        }
+        self.spd_get_reversed(false);
+        if self.joint_move_late(0x400) {
+            self.work.routine = [MODE_MOVE, 0, 0, 0];
+            self.work.neck.flags = 0;
+            self.work.damage_cnt &= 0x7F;
+            self.work.bank = Bank::Weapon;
+        }
+        self.add_speed_xz();
     }
 
     /// `FUN_00476c60`, `em_damage_table[0x27]`: a G embryo on the player, on
