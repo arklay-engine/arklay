@@ -1247,6 +1247,7 @@ room = "303"
 character = 2
 frames = true
 ticks = 1380
+sound = false
 # the second encounter (4:57 set: the room places Type 1 at -17643, -5400, -24593): no scene, G1 walks up, slashes, charges and kills the player, to the game over
 setup = { pos = [-16852, -5400, -19090], angle = 552, health = 2000, rnd = 6114, camera = 3, flags = [[1, 1], [4, 55], [4, 57]] }
 input = "none.txt"
@@ -1260,6 +1261,7 @@ room = "303"
 character = 2
 frames = true
 ticks = 1400
+sound = false
 # the second encounter with the magnum every 20 ticks as G1 walks up: its hits, death, rise, limp and fall
 setup_script = "g1_second_magnum_303.lua"
 input = "g1_second_magnum_303.txt"
