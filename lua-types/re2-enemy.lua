@@ -1909,3 +1909,16 @@ function Re2EnemyApi:effect(kind, row, size, dir, part, x, y, z) end
 ---@param y integer
 ---@param z integer
 function Re2EnemyApi:call_effect(kind, row, size, dir, x, y, z) end
+
+---`Esp_call` on the player's part `part` as the last draw left it, at the
+---point (x, y, z) on it. The effect keeps the part, as the original's keeps
+---a pointer to its `Workm`. Nothing happens without a pose of the part.
+---@param kind integer
+---@param row integer
+---@param size integer
+---@param dir integer
+---@param part integer
+---@param x integer
+---@param y integer
+---@param z integer
+function Re2EnemyApi:player_part_effect(kind, row, size, dir, part, x, y, z) end

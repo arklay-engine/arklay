@@ -277,10 +277,9 @@ local function bite_blood(e)
         local point = BITE_POINTS[count >> 1]
         local turn = e:var(BITE_BEHIND) ~= 0 and 0x800 or 0
         local x, z = e:rotate(turn, 0x15E, point[2])
-        local at_x, at_y, at_z = e:player_root_point(x, point[1], z)
-        if at_x then
-            e:call_effect(0, 2, 0x2400, 0, at_x, at_y, at_z)
-        end
+        -- On the player's part 0 as the last draw left it, after the
+        -- pushes, and kept on it (`FUN_00468710`).
+        e:player_part_effect(0, 2, 0x2400, 0, 0, x, point[1], z)
     end
     e:set_var(COUNT, count + 1)
     if count + 1 == 7 then
@@ -752,10 +751,10 @@ local function slash(e)
         and e:distance() <= 0xAEF
         and e:player_life() >= 0
     then
-        local x, y, z = e:part_point(13, 0, 200, 0)
-        if x then
-            e:call_effect(0, 0, 0x2400, 0, x, y, z)
-        end
+        -- Part 13's `Workm.t` as the last draw left it, 200 lower, not
+        -- turned by the part.
+        local x, y, z = e:own_part(13)
+        e:call_effect(0, 0, 0x2400, 0, x, y + 200, z)
         hurt_player(e, 0xF)
     end
 end
