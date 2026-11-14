@@ -112,6 +112,11 @@ pub struct TraceTick<'a> {
     /// RE2's `Item_work`, the oracle's `inv`: the ten slots and the personal
     /// item as `id:count`, then the slot count.
     pub re2_inventory: Option<String>,
+    /// RE2's player character and its stash, the oracle's `pl`: `pPl.Id`,
+    /// `scd_var_next_pld`, `Max_life`, the equipped slot and weapon, the
+    /// stash's slot and size, the stashed life, `poison_status` and
+    /// `poison_timer` ([`crate::game::GameState::re2_player_trace`]).
+    pub re2_pl: Option<String>,
     /// RE2's map banks, the oracle's `mapfg`: bank 9's first five words
     /// (`fg_map`), then the first words of banks 32, 33 and 35, in hex.
     pub re2_map_flags: Option<String>,
@@ -356,6 +361,9 @@ impl TraceWriter {
         if let Some(inventory) = &tick.re2_inventory {
             write!(self.out, " inv={inventory}")?;
         }
+        if let Some(player) = &tick.re2_pl {
+            write!(self.out, " pl={player}")?;
+        }
         if let Some(flags) = &tick.re2_map_flags {
             write!(self.out, " mapfg={flags}")?;
         }
@@ -535,6 +543,7 @@ mod tests {
             re2_xa_volume: None,
             re2_movie: None,
             re2_inventory: None,
+            re2_pl: None,
             re2_map_flags: None,
             re2_item_page: None,
             re2_file: None,
@@ -609,6 +618,7 @@ mod tests {
                 re2_xa_volume: None,
                 re2_movie: None,
                 re2_inventory: None,
+                re2_pl: None,
                 re2_map_flags: None,
                 re2_item_page: None,
                 re2_file: None,
@@ -679,6 +689,7 @@ mod tests {
                 re2_xa_volume: None,
                 re2_movie: None,
                 re2_inventory: None,
+                re2_pl: None,
                 re2_map_flags: None,
                 re2_item_page: None,
                 re2_item_box: None,
@@ -747,6 +758,7 @@ mod tests {
                 re2_xa_volume: None,
                 re2_movie: None,
                 re2_inventory: None,
+                re2_pl: None,
                 re2_map_flags: None,
                 re2_item_page: None,
                 re2_item_box: None,
@@ -815,6 +827,7 @@ mod tests {
             re2_xa_volume: None,
             re2_movie: None,
             re2_inventory: None,
+            re2_pl: None,
             re2_map_flags: None,
             re2_item_page: None,
             re2_file: None,
@@ -894,6 +907,7 @@ mod tests {
             re2_xa_volume: None,
             re2_movie: None,
             re2_inventory: None,
+            re2_pl: None,
             re2_map_flags: None,
             re2_item_page: None,
             re2_file: None,
@@ -983,6 +997,7 @@ mod tests {
             re2_xa_volume: None,
             re2_movie: None,
             re2_inventory: None,
+            re2_pl: None,
             re2_map_flags: None,
             re2_item_page: None,
             re2_file: None,
@@ -1052,6 +1067,7 @@ mod tests {
             re2_xa_volume: None,
             re2_movie: None,
             re2_inventory: None,
+            re2_pl: None,
             re2_map_flags: None,
             re2_item_page: None,
             re2_file: None,

@@ -19,19 +19,22 @@ pub const CHARACTER_MASK_LOW: u16 = 0x0800;
 const NO_PUSH: u16 = 0x0100;
 /// The player's collision radius (`Player_set`).
 pub const PLAYER_RADIUS: i32 = 0x1C2;
-/// The collision radius of Claire's costumes and Sherry (`Pl_init`).
+/// The collision radius of Claire's costumes and Ada (`Pl_init`).
 const SMALL_PLAYER_RADIUS: i32 = 0x15E;
 /// How far ahead of the player the reach point stands (`Sce_at`).
 pub const REACH_DISTANCE: i32 = 0x26C;
 /// The height of one floor of a room.
 pub const FLOOR_HEIGHT: i32 = 0x708;
 
+/// Sherry's collision radius (`Pl_init`, id 0xF).
+const SHERRY_RADIUS: i32 = 0xFA;
+
 /// The collision radius of the player character `id`.
 pub fn player_radius(id: u8) -> i32 {
-    if matches!(id, 1 | 3 | 5 | 7 | 9 | 0xE) {
-        SMALL_PLAYER_RADIUS
-    } else {
-        PLAYER_RADIUS
+    match id {
+        1 | 3 | 5 | 7 | 9 | 0xE => SMALL_PLAYER_RADIUS,
+        0xF => SHERRY_RADIUS,
+        _ => PLAYER_RADIUS,
     }
 }
 

@@ -655,6 +655,7 @@ pub fn run_with_options(
                         re2_xa_volume: None,
                         re2_movie: None,
                         re2_inventory: None,
+                        re2_pl: None,
                         re2_map_flags: None,
                         re2_item_page: None,
                         re2_file: None,
@@ -3096,6 +3097,7 @@ impl GameSession {
             &mut self.game,
             false,
         );
+        self.sync_re2_player(pack);
         self.re2_boot_room = self
             .game
             .is_re2_room
@@ -3110,6 +3112,12 @@ impl GameSession {
         // script and room edits applied) and before the first tick's movement.
         call_lua_room_load(self.lua.as_ref(), &mut self.game, self.loaded.id);
         self.game.sync_player(&mut self.player);
+        // `Pos_set` and `Dir_set` write the player's work: one in the load's
+        // own pass (room 30B's `main_04` placing Ada) shows from the load,
+        // not from the first pass after the door's fade.
+        if self.game.is_re2_room {
+            apply_re2_pending_player(&mut self.game, &mut self.player);
+        }
         // An RE2 room's first script pass has run, and may have picked a cut.
         if !self.game.is_re2_room {
             reset_room_camera_id(&mut self.game);
@@ -4371,6 +4379,11 @@ impl GameSession {
         // tick's state and `on_message` may rewrite a message the tick raised
         // before the window resolves its bytes.
         run_lua_tick_hooks(self.lua.as_ref(), &mut self.game, message_before);
+        // `Esp_move` ends `Game_loop`, before the message task: a message's
+        // dismissal puts `fg_stop` back after the effects have moved under it
+        // (room 306's console light starts again on the tick after the water
+        // switch's message closes).
+        let effects_stopped_before = self.game.re2.effects_stopped();
         // The message window advances after the script/entity task pass,
         // exactly like the original's `main_loop`: a request a script raised
         // this tick and the state it changed are visible to the same frame's
@@ -4394,6 +4407,11 @@ impl GameSession {
         if dismissed && action {
             self.swallow_action = true;
         }
+        let effects_stopped = esp_move_stopped(
+            dismissed,
+            effects_stopped_before,
+            self.game.re2.effects_stopped(),
+        );
         // The typewriter prompt was answered: a confirmed save fades the room
         // out (counter 0x1000, armed and stepped on this frame) and the save
         // screen opens when it completes; the rest of the room's tick is
@@ -4474,7 +4492,7 @@ impl GameSession {
                 // on under a stop move.
                 re2.tick_effects_as(true, self.loaded.room.sca.as_ref(), player);
             } else {
-                re2.tick_effects(self.loaded.room.sca.as_ref(), player);
+                re2.tick_effects_as(effects_stopped, self.loaded.room.sca.as_ref(), player);
             }
             // `Esp_0E`'s flash: `Fade_set(0x100, 0)` and `Fade_adjust` on fade
             // 0, as the game over's white, or `Fade_off`.
@@ -4699,9 +4717,13 @@ impl GameSession {
     /// `Pl_weapon_ch`: the player's hand and clips follow what's equipped, from
     /// the inventory or the script's `weapon_chg`. A character with no such
     /// weapon's clips, whose files are stubs, keeps what it has.
+    ///
+    /// The character is `pPl.Id`, which `Set_room` changes
+    /// ([`Self::sync_re2_player`]).
     fn tick_re2_weapon(&mut self, pack: &Pack) {
+        self.sync_re2_player(pack);
         let weapon = self.game.equipped_weapon_id;
-        let character = self.loaded.id.player_flag & 3;
+        let character = self.game.re2.pl_id;
         let Some(assets) = self.loaded.player_assets.as_mut() else {
             return;
         };
@@ -4711,6 +4733,36 @@ impl GameSession {
         assets.re2_weapon = Some(weapon);
         if let Some(changed) = load_re2_player_with(pack, character, weapon) {
             *assets = changed;
+        }
+    }
+
+    /// `Player_set` after `Set_room` changed `pPl.Id`
+    /// ([`crate::game::pl_change2::set_room_change`]): the new character's
+    /// `pld` and the PLW of what it holds, and `Pl_init`'s radius for the
+    /// room's collision. A pack without the character's files keeps the
+    /// model it has.
+    fn sync_re2_player(&mut self, pack: &Pack) {
+        if !self.game.is_re2_room {
+            return;
+        }
+        let character = self.game.re2.pl_id;
+        if self.loaded.room.sca.is_some() {
+            self.player.radius = crate::sca::player_radius(character);
+        }
+        let weapon = self.game.equipped_weapon_id;
+        let Some(assets) = self.loaded.player_assets.as_mut() else {
+            return;
+        };
+        if assets.re2_weapon.is_none() || assets.re2_character == character {
+            return;
+        }
+        assets.re2_character = character;
+        assets.re2_weapon = Some(weapon);
+        match load_re2_player_with(pack, character, weapon) {
+            Some(changed) => *assets = changed,
+            None => {
+                crate::warning!("warning: no RE2 player {character:#x} holding weapon {weapon:#x}")
+            }
         }
     }
 
@@ -4792,7 +4844,7 @@ impl GameSession {
             }
         }
         if out.load_sounds {
-            let player = u8::from(self.game.re2.flag(1, crate::scd2::host::STATUS_PLAYER));
+            let player = self.game.re2.pl_id;
             self.re2_sounds
                 .banks
                 .load_core(pack, crate::die2::sound_bank(player));
@@ -7906,6 +7958,13 @@ impl GameSession {
         if frame.clear {
             // The source room's characters are gone the tick before `Set_room`.
             self.game.re2.characters = Default::default();
+            // `Set_room`'s case 10 changes the player on this tick, after its
+            // clear and a tick before the room's load: the swap, `Player_set`
+            // and the routines set to 0 for the next `Pl_init`.
+            if self.game.is_re2_room && crate::game::pl_change2::set_room_change(&mut self.game) {
+                self.game.re2.player.routine = [0; 4];
+                self.sync_re2_player(pack);
+            }
             // A held `Set_room` gets through `Snd_bgm_set` on the frame the
             // music's banks are free, a tick before the room's load shows.
             if let Some(door) = session
@@ -8053,7 +8112,7 @@ impl GameSession {
             },
             input: player::Input::default(),
             options: self.game.player_options,
-            id: self.game.id.player_flag,
+            id: self.game.re2.pl_id,
             life: i32::from(self.game.entities[0].health),
             poisoned: self.game.re2.player.poisoned,
             stopped: true,
@@ -8855,6 +8914,7 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.game.re2_inventory_trace()),
+            re2_pl: self.game.is_re2_room.then(|| self.game.re2_player_trace()),
             re2_map_flags: self
                 .game
                 .is_re2_room
@@ -15396,8 +15456,9 @@ fn play_footsteps(
 /// `Snd_load_arms`), loaded when play in the room first asks for a sound.
 #[derive(Default)]
 struct Re2Sounds {
-    /// The room, player, weapon and enemy bank they were loaded for.
-    loaded: Option<(RoomId, u8, u8, Option<u8>)>,
+    /// The room, scenario, player (`pPl.Id`), weapon and enemy bank they
+    /// were loaded for.
+    loaded: Option<(RoomId, u8, u8, u8, Option<u8>)>,
     banks: crate::se2::Banks,
     /// The room's PlayStation VAB, for a room without a PC bank.
     vab: Option<door2::vab::Vab>,
@@ -15406,13 +15467,24 @@ struct Re2Sounds {
 }
 
 impl Re2Sounds {
-    fn load(&mut self, pack: &Pack, id: RoomId, player: u8, weapon: u8, enemy: Option<u8>) {
+    /// `scenario` picks the room's folder; `player`, `pPl.Id`, the core
+    /// bank (`Snd_load_core`).
+    fn load(
+        &mut self,
+        pack: &Pack,
+        id: RoomId,
+        scenario: u8,
+        player: u8,
+        weapon: u8,
+        enemy: Option<u8>,
+    ) {
         use crate::se2;
-        if self.loaded == Some((id, player, weapon, enemy)) {
+        let key = (id, scenario, player, weapon, enemy);
+        if self.loaded == Some(key) {
             return;
         }
-        self.loaded = Some((id, player, weapon, enemy));
-        let folder = format!("room/{}{:02x}{}", id.stage, id.room, player);
+        self.loaded = Some(key);
+        let folder = format!("room/{}{:02x}{}", id.stage, id.room, scenario);
         let edh = pack
             .read(&format!("{folder}/{}", se2::ROOM_EDH_NAME))
             .ok()
@@ -15484,6 +15556,7 @@ fn play_re2_sounds(
         pack,
         game.id,
         character,
+        game.re2.pl_id,
         game.re2_weapon().id,
         game.re2.enemy_bank,
     );
@@ -17322,6 +17395,9 @@ fn run_re2_init(
     game.re2.pending_flr.clear();
     game.re2.scroll = 0;
     game.re2.pending_player = Default::default();
+    // `Set_room`'s case 10: a `save(32, N)` makes the player another
+    // character before `Pl_init` and the room's scripts.
+    crate::game::pl_change2::set_room_change(game);
     // `Pl_init`, which runs before a room's first tick of play.
     game.re2.player = game.re2.player.entering_room();
     game.re2.player.floor = crate::sca::floor_of(game.entities[0].pos[1]);
@@ -17505,6 +17581,13 @@ fn apply_re2_room_data(room: &mut RoomState, game: &mut game::GameState) {
     }
 }
 
+/// Whether this tick's `Esp_move` runs under `fg_stop`'s effects bit:
+/// `Game_loop` ends in it, before the message task, so a message dismissed
+/// this tick (which puts `fg_stop` back) still held the effects.
+fn esp_move_stopped(dismissed: bool, before_message: bool, now: bool) -> bool {
+    if dismissed { before_message } else { now }
+}
+
 /// One tick of an RE2 room's scripts: the events the areas raised last tick
 /// start, every task runs, then what they asked of the room and the player
 /// applies.
@@ -17549,18 +17632,24 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
     context.game.re2.vm = Some(vm);
     crate::character2::run_esprs(context.game, context.room, context.pack, context.npc_models);
     apply_re2_room_data(context.room, context.game);
-    let moved = std::mem::take(&mut context.game.re2.pending_player);
+    apply_re2_pending_player(context.game, context.player);
+}
+
+/// A script's `pos_set` and `dir_set` on the player (and a driver's warp)
+/// move the player once the pass that queued them ends.
+fn apply_re2_pending_player(game: &mut game::GameState, player: &mut player::PlayerState) {
+    let moved = std::mem::take(&mut game.re2.pending_player);
     if let Some(warp) = moved.warp {
-        context.player.collision_mirror = [warp[0], warp[2]];
+        player.collision_mirror = [warp[0], warp[2]];
     }
     if let Some(pos) = moved.pos {
-        context.player.pos = pos;
+        player.pos = pos;
     }
     if let Some(angle) = moved.angle {
-        context.player.angle = angle;
+        player.angle = angle;
     }
     if moved.pos.is_some() || moved.angle.is_some() {
-        context.game.sync_entity_from_player(context.player);
+        game.sync_entity_from_player(player);
     }
 }
 
@@ -17771,7 +17860,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         },
         input: pad,
         options: context.game.player_options,
-        id: context.game.id.player_flag,
+        id: context.game.re2.pl_id,
         life: i32::from(context.game.entities[0].health),
         poisoned: context.game.re2.player.poisoned,
         stopped: context.game.re2.player_stopped() || context.game.re2.script_door,
@@ -19438,6 +19527,8 @@ struct PlayerAssets {
     weapons: std::collections::HashMap<u8, crate::model::Emw>,
     /// RE2: the weapon `emd` and `emw` hold (`Pl_weapon_ch`).
     re2_weapon: Option<u8>,
+    /// RE2: the character (`pPl.Id`) `emd` and `emw` are (`Player_set`).
+    re2_character: u8,
 }
 
 impl PlayerAssets {
@@ -21620,6 +21711,7 @@ fn load_re2_player_with(pack: &Pack, character: u8, weapon: u8) -> Option<Player
             emw,
             weapons: std::collections::HashMap::new(),
             re2_weapon: Some(weapon),
+            re2_character: character,
         }),
         Err(err) => {
             crate::warning!("warning: invalid RE2 player {character}: {err:#}");
@@ -21691,6 +21783,7 @@ fn load_character_assets(pack: &Pack, character: u8) -> Option<PlayerAssets> {
         emw,
         weapons,
         re2_weapon: None,
+        re2_character: character,
     })
 }
 
@@ -26973,6 +27066,23 @@ mod tests {
         assert!(cache.get(&pack, 0xFF, 0).is_none());
     }
 
+    /// Ada as the player (`Player_set` for id 0xE): `player/0e/model_*.pld`
+    /// and her handgun's `weapon/03_*.plw` give the player's banks.
+    #[test]
+    #[ignore = "requires a converted RE2 pack via ARKLAY_RE2_PACK"]
+    fn ada_assets_parse() {
+        let Ok(path) = std::env::var("ARKLAY_RE2_PACK") else {
+            return;
+        };
+        let pack = Pack::open(Path::new(&path)).unwrap();
+        let assets = load_re2_player_with(&pack, 0xE, 3).expect("Ada's pld and plw");
+        assert_eq!(assets.re2_character, 0xE);
+        assert_eq!(assets.re2_weapon, Some(3));
+        assert!(!assets.emd.clips.is_empty(), "the pld's own bank");
+        assert!(!assets.emw.clips.is_empty(), "the plw's clips");
+        assert!(!assets.emd.mesh.objects.is_empty());
+    }
+
     #[test]
     #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
     fn real_pack_npc_models_load_through_the_cache() {
@@ -31720,6 +31830,7 @@ return M
             },
             weapons: std::collections::HashMap::new(),
             re2_weapon: None,
+            re2_character: 0,
         }
     }
 
@@ -39333,6 +39444,45 @@ end
         run_re2_init(Some(&mut vm), &Default::default(), &mut game, false);
         assert!(!game.re2.script_door);
         assert!(!game.re2.character_stopped(0));
+    }
+
+    #[test]
+    fn a_message_dismissed_this_tick_still_holds_the_effects() {
+        // Room 306's water switch: the message's close on 2617 puts
+        // `fg_stop` back, and the console light moves again from 2618.
+        assert!(esp_move_stopped(true, true, false));
+        assert!(
+            !esp_move_stopped(false, true, false),
+            "no dismissal: as now"
+        );
+        assert!(esp_move_stopped(false, false, true));
+    }
+
+    #[test]
+    fn a_load_pass_pos_set_on_the_player_moves_it_at_once() {
+        // Room 30B's `main_04` places Ada (`work_set(1, 0)`, `pos_set`,
+        // `dir_set`) in the load's own pass; the original's trace shows her
+        // there from the load, through the door's fade.
+        let mut game = game::GameState::default();
+        let mut player = player::spawn(RoomId::default(), &RoomState::default());
+        player.pos = [-16053, 0, -4487];
+        player.angle = 1008;
+        player.collision_mirror = [-16053, -4487];
+        game.sync_entity_from_player(&player);
+        game.re2.pending_player.pos = Some([-14251, 0, -5700]);
+        game.re2.pending_player.angle = Some(4080);
+        apply_re2_pending_player(&mut game, &mut player);
+        assert_eq!((player.pos, player.angle), ([-14251, 0, -5700], 4080));
+        assert_eq!(
+            (game.entities[0].pos, game.entities[0].angle),
+            ([-14251, 0, -5700], 4080)
+        );
+        assert_eq!(
+            player.collision_mirror,
+            [-16053, -4487],
+            "pos_set keeps Old_x"
+        );
+        assert_eq!(game.re2.pending_player, Default::default());
     }
 
     /// An authored flag before the first tick reruns the init on the room

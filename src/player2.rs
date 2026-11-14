@@ -1318,6 +1318,10 @@ impl Work {
             kind: self.kind,
             posed: self.posed,
             tama_count: self.tama_count,
+            // `poison_status` and `poison_timer` are globals `Pl_init`
+            // leaves alone.
+            poisoned: self.poisoned,
+            poison_timer: self.poison_timer,
             // The head's world position is the joints' last matrix, which a
             // room load leaves alone until the new room is drawn.
             neck: Neck {
@@ -7856,6 +7860,21 @@ mod tests {
                 .collect(),
         };
         (vec![clip; clips], keyframes)
+    }
+
+    #[test]
+    fn plc_dest_turn_by_id() {
+        // Routine 9's turn: Leon's 96, Ada's 88, Sherry's 80; the walks'
+        // are everyone's.
+        for (id, rotate) in [(0, 96), (1, 96), (0xE, 88), (0xF, 80)] {
+            let mut work = Work::default();
+            plc_dest(&mut work, id, 9, 0, 100, 200);
+            assert_eq!(work.sce_free[0], rotate, "id {id:#x}");
+            plc_dest(&mut work, id, 4, 0, 100, 200);
+            assert_eq!(work.sce_free[0], 48);
+            plc_dest(&mut work, id, 5, 0, 100, 200);
+            assert_eq!(work.sce_free[0], 72);
+        }
     }
 
     struct Setup {

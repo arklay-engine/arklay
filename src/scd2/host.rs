@@ -239,6 +239,48 @@ pub struct Re2State {
     pub partner_life: i16,
     /// `BYTE_0098ee7b`'s bit 0: the partner is poisoned.
     pub partner_poisoned: bool,
+    /// `pPl.Id` (`0x989EF8`): the character the player is, Leon 0, Claire 1,
+    /// Ada 0xE, Sherry 0xF. [`crate::state::RoomId::player_flag`] stays the
+    /// scenario's, which picks the RDT and the room's sound folder.
+    pub pl_id: u8,
+    /// What `St_chenge_pl` and `Set_room` keep of the scenario's character
+    /// while Ada or Sherry plays ([`crate::game::pl_change2`]).
+    pub pl_stash: PlStash,
+    /// `inventory_size` (`0x98E9A4`): the inventory's slots.
+    pub inventory_size: u8,
+}
+
+/// `St_chenge_pl`'s and `Set_room`'s stash of the scenario's character: the
+/// slots at `0x9888DC`, `DWORD_009888d8`'s bytes 2 and 3, and the save
+/// block's life and poison words (`0x98E9B6`, `0x98E9AB`, `0x98E9AC`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlStash {
+    /// `Item_work`'s eleven entries, `[id, count, mark]`.
+    pub slots: [[u8; 3]; 11],
+    /// The equipped slot (`St+8`'s low byte), 0x80 for none.
+    pub equip_slot: u8,
+    /// `inventory_size`.
+    pub size: u8,
+    /// `WORD_0098e9b6`: the stashed life, which `Save_push` also writes.
+    pub life: i16,
+    /// `BYTE_0098e9ab`: `poison_timer`.
+    pub poison_timer: u8,
+    /// `WORD_0098e9ac`: `poison_status`.
+    pub poison_status: u16,
+}
+
+impl Default for PlStash {
+    /// `Title_game_init`'s new game: the life word at 200.
+    fn default() -> Self {
+        Self {
+            slots: [[0; 3]; 11],
+            equip_slot: 0,
+            size: 0,
+            life: 200,
+            poison_timer: 0,
+            poison_status: 0,
+        }
+    }
 }
 
 /// What a script did to a fade.
@@ -444,7 +486,9 @@ pub const FILE_SLOTS: usize = 24;
 pub const NO_FILE: u8 = 0xFF;
 
 /// The bytes of [`Re2State::to_save_bytes`].
-const SAVE_LEN: usize = SAVE_LEN_NO_PARTNER + 3;
+const SAVE_LEN: usize = SAVE_LEN_NO_PLAYER + 2;
+/// A save from before the player's id and slot count.
+const SAVE_LEN_NO_PLAYER: usize = SAVE_LEN_NO_PARTNER + 3;
 /// A save from before the partner's life and poison.
 const SAVE_LEN_NO_PARTNER: usize = SAVE_LEN_NO_FILES + FILE_SLOTS;
 /// A save from before the files held.
@@ -870,6 +914,9 @@ impl Default for Re2State {
             nearest_slots: [None; 3],
             partner_life: PARTNER_LIFE,
             partner_poisoned: false,
+            pl_id: 0,
+            pl_stash: PlStash::default(),
+            inventory_size: crate::game::INVENTORY_SLOTS_JILL as u8,
         }
     }
 }
@@ -904,6 +951,9 @@ impl Re2State {
         out.extend_from_slice(&self.files);
         out.extend_from_slice(&self.partner_life.to_le_bytes());
         out.push(u8::from(self.partner_poisoned));
+        // `Save_push`'s `player_index` and `inventory_size`.
+        out.push(self.pl_id);
+        out.push(self.inventory_size);
         out
     }
 
@@ -945,6 +995,7 @@ impl Re2State {
     /// Restore [`Self::to_save_bytes`]; `None` for bytes of another length.
     pub fn load_save_bytes(&mut self, bytes: &[u8]) -> Option<()> {
         if bytes.len() != SAVE_LEN
+            && bytes.len() != SAVE_LEN_NO_PLAYER
             && bytes.len() != SAVE_LEN_NO_PARTNER
             && bytes.len() != SAVE_LEN_NO_FILES
             && bytes.len() != SAVE_LEN_NO_MAP
@@ -1024,6 +1075,12 @@ impl Re2State {
             _ => PARTNER_LIFE,
         };
         self.partner_poisoned = partner.get(2).is_some_and(|&byte| byte & 1 != 0);
+        // A save from before them keeps the id the caller set (the
+        // scenario's character) and eight slots.
+        if let [id, size, ..] = bytes.get(SAVE_LEN_NO_PLAYER..).unwrap_or(&[]) {
+            self.pl_id = *id;
+            self.inventory_size = *size;
+        }
         Some(())
     }
 
@@ -1412,6 +1469,12 @@ impl Re2State {
         self.flag(STOP_BANK, 0)
     }
 
+    /// `fg_stop`'s `0x10000000`, which `Esp_move` tests: only the kinds that
+    /// move under a stop move.
+    pub fn effects_stopped(&self) -> bool {
+        self.flag(STOP_BANK, STOP_EFFECTS)
+    }
+
     /// `fg_stop`, for `Die`.
     pub(crate) fn fg_stop_mut(&mut self) -> &mut u32 {
         &mut self.banks[usize::from(STOP_BANK)][0]
@@ -1607,8 +1670,11 @@ impl Re2State {
         let atd = self.player.atd;
         self.effects.target = player.as_ref().map(|(pos, life)| crate::esp2::Target {
             pos: *pos,
-            ofs_y: atd.map_or(-(crate::character2::PLAYER_HEIGHT as i16), |atd| atd.ofs_y),
-            at_h: atd.map_or(crate::character2::PLAYER_HEIGHT, |atd| atd.at_h),
+            ofs_y: atd.map_or(
+                -(crate::character2::player_height(self.pl_id) as i16),
+                |atd| atd.ofs_y,
+            ),
+            at_h: atd.map_or(crate::character2::player_height(self.pl_id), |atd| atd.at_h),
             life: **life,
             near_death: self.player.near_death,
             damage_cnt: self.player.damage_cnt,
@@ -2859,6 +2925,10 @@ impl Host for GameHost<'_> {
         self.game.re2.random as u16
     }
 
+    fn take_events(&mut self) -> Vec<(u8, u8)> {
+        std::mem::take(&mut self.game.re2.pending_events)
+    }
+
     fn exec(&mut self, task: usize, op: &'static Op, operands: &[i64]) -> Step {
         let at = |index: usize| operands.get(index).copied().unwrap_or(0);
         match op.mnemonic {
@@ -3179,7 +3249,7 @@ impl Host for GameHost<'_> {
                 );
             }
             "plc_dest" if self.work_is_player(task) => {
-                let id = self.game.id.player_flag;
+                let id = self.game.re2.pl_id;
                 crate::player2::plc_dest(
                     &mut self.game.re2.player,
                     id,
@@ -6114,6 +6184,28 @@ mod tests {
         );
         let partner = splayer(&game).partner.as_deref().unwrap();
         assert_eq!((partner.timer0, partner.timer1), (777, 72));
+    }
+
+    /// Room 30B's `main_00` with Ada playing: Leon as a scene character, em
+    /// 0x50 in slot 255 (`EM050`). He isn't the partner (`_Spl` runs
+    /// `Spl_Auto` only for Sherry and Ada) and has nothing of his own to run
+    /// (`Spl_in` 0x50 is `nullsub_1`).
+    #[test]
+    fn sce_em_set_places_leon_as_em_0x50() {
+        let mut game = GameState::default();
+        game.re2.pl_id = crate::game::pl_change2::ADA;
+        exec(
+            &mut game,
+            "sce_em_set",
+            &[
+                0, 255, 80, 0, 64, 0, 0, 0, 255, -13864, 0, -5649, 1000, 770, 4,
+            ],
+        );
+        let leon = splayer(&game);
+        assert_eq!((leon.id, leon.model), (0x50, 0x50));
+        assert!(leon.zombie.is_none());
+        assert_eq!(leon.body.pos, [-13864, 0, -5649]);
+        assert!(!game.re2.partner_bit());
     }
 
     #[test]
