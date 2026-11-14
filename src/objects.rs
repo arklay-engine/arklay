@@ -1315,21 +1315,35 @@ impl ObjectTable {
     /// table to the new room's declared slot count. Each slot keeps what the
     /// original's object work keeps across the load (`Carried`).
     pub fn reset(&mut self, slot_count: usize) {
-        if self.carried.len() < self.records.len() {
-            self.carried.resize(self.records.len(), Carried::default());
-        }
-        for (carried, record) in self.carried.iter_mut().zip(&self.records) {
-            *carried = Carried {
-                old: record.old,
-                old2: record.old2,
-                pos: record.pos,
-                rotation: record.rotation,
-                floor: record.floor,
-                push_cnt: record.push_cnt,
-                at_sce_no: record.at_sce_no,
-                at_obj_no: record.at_obj_no,
-                sca_old: record.sca_old,
-            };
+        self.reset_from(slot_count, true);
+    }
+
+    /// A rerun of the room's load (an authored edit before the first tick):
+    /// the slots go back to what the last load found, not what its first pass
+    /// left, as the original's one pass finds them.
+    pub fn reset_for_rerun(&mut self, slot_count: usize) {
+        self.reset_from(slot_count, false);
+    }
+
+    fn reset_from(&mut self, slot_count: usize, snapshot: bool) {
+        if snapshot {
+            self.carried.resize(
+                self.carried.len().max(self.records.len()),
+                Carried::default(),
+            );
+            for (carried, record) in self.carried.iter_mut().zip(&self.records) {
+                *carried = Carried {
+                    old: record.old,
+                    old2: record.old2,
+                    pos: record.pos,
+                    rotation: record.rotation,
+                    floor: record.floor,
+                    push_cnt: record.push_cnt,
+                    at_sce_no: record.at_sce_no,
+                    at_obj_no: record.at_obj_no,
+                    sca_old: record.sca_old,
+                };
+            }
         }
         self.records.clear();
         self.records.resize(slot_count, ObjectRecord::default());
