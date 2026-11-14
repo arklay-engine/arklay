@@ -1246,7 +1246,7 @@ name = "g1_second_303"
 room = "303"
 character = 2
 frames = true
-ticks = 1800
+ticks = 1380
 # the second encounter (4:57 set: the room places Type 1 at -17643, -5400, -24593): no scene, G1 walks up, slashes, charges and kills the player, to the game over
 setup = { pos = [-16852, -5400, -19090], angle = 552, health = 2000, rnd = 6114, camera = 3, flags = [[1, 1], [4, 55], [4, 57]] }
 input = "none.txt"
