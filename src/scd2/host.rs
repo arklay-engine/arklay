@@ -108,6 +108,9 @@ pub struct Re2State {
     /// The tick after: `fg_stop` (`0xEF000000`) comes down only after
     /// `Pad_set` has masked the pad with it.
     pub door_key_stop: bool,
+    /// A door's hand-back tick (`door_settling`) still has `fg_stop`'s
+    /// `0xEF000000` up for `Om_move` (`0x08000000`), which it skips.
+    pub objects_key_stop: bool,
     /// The scripts opened a door this tick (`aot_on` on a door's area). The
     /// original's scripts run after `Player_move` and its cut check, and
     /// `Sce_Door` stops both from the next tick; the port runs the scripts
@@ -863,6 +866,7 @@ impl Default for Re2State {
             door_settling: false,
             door_stop: false,
             door_key_stop: false,
+            objects_key_stop: false,
             script_door: false,
             work: [Work::Player; TASK_SLOTS],
             speeds: [[0; 12]; TASK_SLOTS],
@@ -1853,7 +1857,7 @@ impl Re2State {
 
     /// `fg_stop`'s `0x8000000`, which stops `Om_move`.
     pub fn objects_stopped(&self) -> bool {
-        self.flag(STOP_BANK, OBJECTS_STOP_BIT)
+        self.objects_key_stop || self.flag(STOP_BANK, OBJECTS_STOP_BIT)
     }
 
     pub fn flag(&self, bank: u8, index: u8) -> bool {
