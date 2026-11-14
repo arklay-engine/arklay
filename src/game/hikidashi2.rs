@@ -165,7 +165,10 @@ impl GameState {
         let Some(Some(item)) = self.room_actions.get(item_slot).copied() else {
             return;
         };
-        if self.re2.flag(crate::scd2::host::ITEM_BANK, item.params[2]) {
+        if self
+            .re2
+            .flag(crate::scd2::host::item_bank(self.id.stage), item.params[2])
+        {
             self.show_re2_door_message(door_message(DESK_EMPTY));
             return;
         }

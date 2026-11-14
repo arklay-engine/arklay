@@ -9371,7 +9371,7 @@ impl GameState {
         mut action: RoomAction,
         slot: Option<crate::scd2::host::ItemGetSlot>,
     ) {
-        use crate::scd2::host::{ITEM_BANK, ItemGetSlot, MESSAGE_TAKEN};
+        use crate::scd2::host::{ItemGetSlot, MESSAGE_TAKEN};
         action.params[1] = crate::scd2::host::st_get_item_count(
             action.params[0],
             action.params[1],
@@ -9395,7 +9395,8 @@ impl GameState {
         // `WORD_0098eaea`: the area's first data word, which the next
         // pass's `Sce_work_clr` sets back to 0xFFFF.
         self.re2.vars[crate::scd2::host::VAR_TAKEN_ITEM] = u16::from(item);
-        self.re2.set_flag(ITEM_BANK, flag, 1);
+        self.re2
+            .set_flag(crate::scd2::host::item_bank(self.id.stage), flag, 1);
         // `St_get_item`: its object goes, and the twinkle with it.
         let model = usize::from(action.params[3]);
         if model < 0x20
@@ -9416,24 +9417,26 @@ impl GameState {
     }
 
     /// `St_get_file`'s sub 6 once message 10 is down: a file has no stack
-    /// and no count, only the area's flag (bank 8, the same gap as an
-    /// item's), its object (any index but 0xFF) and the area itself. The
-    /// area's twinkle (an action byte with bit 7, `Esp_kill`) isn't
-    /// modelled. Its case 6 writes the area's first data word to
+    /// and no count, only the area's flag (`fg_item`, or `fg_item_2` from
+    /// stage 4), its object (any index but 0xFF), its twinkle and the area
+    /// itself. Its case 6 writes the area's first data word to
     /// `WORD_0098eaea` (variable 3), as the item path does.
     fn take_re2_file(&mut self, action: RoomAction) {
-        use crate::scd2::host::ITEM_BANK;
         let [_, _, flag, model, flags, ..] = action.params;
-        if flags & 0x80 != 0 {
-            crate::warning!("warning: the file area's twinkle (Esp_kill) isn't killed");
-        }
         self.re2.vars[crate::scd2::host::VAR_TAKEN_ITEM] = u16::from(action.params[0]);
-        self.re2.set_flag(ITEM_BANK, flag, 1);
+        self.re2
+            .set_flag(crate::scd2::host::item_bank(self.id.stage), flag, 1);
         if model != 0xFF
             && let Some(record) = self.objects.record_mut(usize::from(model))
         {
             record.be_flg = 0;
             record.flag = 0;
+        }
+        // `Esp_kill(5, size * 8 + 7, object)`: outside the object test, and
+        // with no `.max(1)` on the size, unlike `St_get_item`'s.
+        if flags & 0x80 != 0 {
+            let row = ((flags >> 5) & 3) * 8 + 7;
+            self.re2.effects.kill_on_object(5, row, model);
         }
         if let Some(entry) = self.room_actions[usize::from(action.slot)].as_mut() {
             entry.sce = crate::scd2::host::SCE_AUTO;
