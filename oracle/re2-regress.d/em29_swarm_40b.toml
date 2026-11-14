@@ -10,3 +10,15 @@ fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm*"
 expect = "match"
 record = "--warp 40B:-7824:0:-25140:2000:0 --life 200"
 
+[[run]]
+name = "swarm_mash_40b"
+room = "40B"
+ticks = 1400
+sound = false
+# swarm_stand_40b's start, mashing from tick 440: each new press takes 8 rather than 1 off the time a roach on the player has left, so they fall off sooner
+setup_script = "swarm_stand_40b.lua"
+input = "swarm_mash_40b_arklay.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm*"
+frames = [360, 1399]
+expect = "match"
+record = "--warp 40B:-7824:0:-25140:2000:0 --life 200"
