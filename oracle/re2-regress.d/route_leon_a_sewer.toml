@@ -45,3 +45,22 @@ ignore = [
   [344, 350, "pneck"], [1775, "rng"], [1775, "rseed"], [1810, 1900, "hk"],
 ]
 record = "--warp 30B:-11150:0:-5200:4031:5 --flag 3:128 --flag 3:129 --flag 4:146 --flag 4:147 --flag 6:103 --flag 6:104 --flag 3:130 --flag 8:119 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:8 --flag 31:9 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 90 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"
+
+[[run]]
+name = "leon_a_302_21a_b"
+room = "302"
+setup_script = "leon_a_302_21a.lua"
+input = "leon_a_302_21a.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 989
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,pl,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 988]
+frame_max_mean = 99
+frame_windows = [[360, 848, 99]]
+expect = "match"
+ignore = [
+  # the warp's head on its first tick, the ladder's own tick, and `hk` over 21A's load
+  [344, "pneck"], [850, "rng"], [850, "rseed"], [885, 975, "hk"],
+]
+record = "--warp 302:-8194:0:4890:893:4 --flag 3:128 --flag 3:129 --flag 4:146 --flag 4:147 --flag 6:103 --flag 6:104 --flag 3:130 --flag 3:131 --flag 8:119 --flag 8:124 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:8 --flag 31:9 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 90 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x5C:3"
