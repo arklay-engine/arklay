@@ -1848,9 +1848,12 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
     work.key_trg = tick.key_trg;
     work.check = false;
     if tick.stopped {
-        // The head isn't placed on a stopped tick, so it doesn't follow what
-        // moves the body either (a door's new position, for one).
-        work.neck.body = None;
+        // The head isn't placed on a stopped tick, but it is on the body the
+        // tick's pushes move (`Die`'s slow motion, which stops two ticks in
+        // three while an enemy's boxes still push the dead player). What
+        // moved the body before the tick (a door's new position, for one)
+        // it doesn't follow.
+        work.neck.body = Some(player.pos);
         work.latch_kage_probe(player.angle);
         latch_stopped(work, player, tick);
         return None;
@@ -11155,6 +11158,9 @@ mod tests {
         // `Joint_trans2` draws the held pose again, where the body is.
         assert_eq!(setup.work.parts_at, Some(setup.player.pos));
         setup.work.parts_at = before.parts_at;
+        // The head is on the body where it stands, for the tick's pushes.
+        assert_eq!(setup.work.neck.body, Some(setup.player.pos));
+        setup.work.neck.body = before.neck.body;
         assert_eq!(setup.work, before);
     }
 
@@ -11524,11 +11530,14 @@ mod tests {
         assert_eq!(work.neck.body, None);
     }
 
+    /// A stopped tick doesn't follow what moved the body before it (a
+    /// door's new position), but its pushes it does (`Die`'s slow motion).
     #[test]
-    fn a_stopped_tick_forgets_the_body() {
+    fn a_stopped_tick_follows_only_its_own_pushes() {
         let mut setup = Setup::new(50);
         setup.work.neck.position = Some([100, -1700, 200]);
         setup.work.neck.body = Some(setup.player.pos);
+        setup.player.pos = [5000, 0, 5000];
         let bank = (setup.clips.as_slice(), setup.keyframes.as_slice());
         let tick = Tick {
             room: &setup.room,
@@ -11556,9 +11565,11 @@ mod tests {
             key_trg: 0,
         };
         player_move(&mut setup.work, &mut setup.player, &tick);
-        assert_eq!(setup.work.neck.body, None);
+        assert_eq!(setup.work.neck.body, Some([5000, 0, 5000]));
         follow_pushes(&mut setup.work, [5000, 0, 5000]);
         assert_eq!(setup.work.neck.position, Some([100, -1700, 200]));
+        follow_pushes(&mut setup.work, [5000, 0, 4997]);
+        assert_eq!(setup.work.neck.position, Some([100, -1700, 197]));
     }
 
     /// The one frame of each clip marked a footfall in the noise tests.

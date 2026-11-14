@@ -855,7 +855,7 @@ ticks = 1594
 setup = { pos = [2000, -1800, -23000], angle = 1128, health = 200, rnd = 6114, camera = 10 }
 input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
-expect = { tick = 1219, fields = ["p.z"], note = "the dead player's body is pushed a unit off: the alligator's neck aims at the dying player's head, which arklay places differently (docs/internals/deviations/re2.md)" }
+expect = "match"
 record = "--warp 40A:2000:-1800:-23000:1128:10 --life 200"
 
 [[run]]
