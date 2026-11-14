@@ -65,3 +65,25 @@ ignore = [
   [344, "pneck"], [567, "rng"], [567, "rseed"], [602, 692, "hk"],
 ]
 record = "--var 32:14 --warp 305:-7483:-5400:-9953:1100:2 --flag 3:128 --flag 3:129 --flag 4:146 --flag 4:147 --flag 6:103 --flag 6:104 --flag 8:119 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:8 --flag 31:9 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 90 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give-at 343:3:0x5C:1"
+
+# Rooms 303 and 30B: Leon presses 303's door 1; 30B loads with Ada as the player (her inventory, 200 life, the reseeded Rnd), Annette shoots, and Ada walks east to door 1 (to 305)
+[[run]]
+name = "leon_a_303_ada_30b"
+room = "303"
+setup_script = "leon_a_303_ada_30b.lua"
+input = "leon_a_303_ada_30b.txt"
+input_shift = 344
+input_drop_early = true
+voice_from_ref = true
+ticks = 2400
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,pl,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 2399]
+# 0.54 measured, with 6.7 worst at 30B's load
+frame_max_mean = 0.6
+expect = "match"
+ignore = [
+  # the warp's head over its first ticks, door 1's own tick (303 to 30B, where Ada becomes the player) and the next door (30B to 305), and `hk` over each room's load
+  [344, 350, "pneck"], [392, "rng"], [392, "rseed"], [2247, "rng"], [2247, "rseed"], [427, 517, "hk"], [2282, 2372, "hk"],
+]
+record = "--warp 303:-24700:-5400:-25832:3808:0 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:8 --flag 31:9 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 90 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"
+

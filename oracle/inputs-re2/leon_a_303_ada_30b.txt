@@ -1,0 +1,122 @@
+# leon_a_303_ada_30b: Leon A at 303's door 1 after the plug panel; the press runs main_03's save(32, 14), and 30B loads with Ada as the player (Set_room's case 10): Annette's shot, then Ada walks east to door 1 (to 305)
+363 right
+391 action
+393
+1945 up run right
+1947 up run
+1961 up run right
+1962 up run
+1970 up run left
+1972 up run
+1976 up run right
+1977 up run
+1984 up run left
+1986 up run
+1988 up run right
+1989 up run
+1991 up run left
+1992 up run
+1993 up run right
+1994 up run
+1995 up run right
+1996 up run
+2004 up run left
+2005 up run
+2008 up run left
+2009 up run
+2012 up run right
+2013 up run
+2015 up run right
+2016 up run
+2024 up run left
+2025 up run
+2028 up run left
+2029 up run
+2032 up run right
+2033 up run
+2035 up run right
+2036 up run
+2044 up run left
+2045 up run
+2048 up run left
+2049 up run
+2052 up run right
+2053 up run
+2055 up run right
+2056 up run
+2064 up run left
+2065 up run
+2068 up run left
+2069 up run
+2072 up run right
+2073 up run
+2075 up run right
+2076 up run
+2084 up run left
+2085 up run
+2088 up run left
+2089 up run
+2092 up run right
+2093 up run
+2095 up run right
+2096 up run
+2104 up run left
+2105 up run
+2108 up run left
+2109 up run
+2112 up run right
+2113 up run
+2115 up run right
+2116 up run
+2124 up run left
+2125 up run
+2128 up run left
+2129 up run
+2132 up run right
+2133 up run
+2135 up run right
+2136 up run
+2144 up run left
+2145 up run
+2148 up run left
+2149 up run
+2152 up run right
+2153 up run
+2155 up run right
+2156 up run
+2164 up run left
+2165 up run
+2168 up run left
+2169 up run
+2172 up run right
+2173 up run
+2175 up run right
+2176 up run
+2184 up run left
+2185 up run
+2188 up run left
+2189 up run
+2192 up run right
+2193 up run
+2195 up run right
+2196 up run
+2204 up run left
+2205 up run
+2208 up run left
+2209 up run
+2212 up run right
+2213 up run
+2215 up run right
+2216 up run
+2224 up run left
+2225 up run
+2228 up run left
+2229 up run
+2232 up run right
+2233 up run
+2235 up run right
+2236 up run
+2244 up run left
+2245
+2247 action
+2249
