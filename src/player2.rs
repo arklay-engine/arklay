@@ -853,6 +853,9 @@ pub struct Neck {
     pub wait: u8,
     /// `Neck_no` when it isn't [`NECK_JOINT`]: the joint the yaw turns.
     pub joint: Option<u8>,
+    /// `Em_28`'s turn: a third of the yaw on each of parts 2 to 4, not all of
+    /// it on `joint`.
+    pub thirds: bool,
     /// Where the player's body was when `position` was last placed, so the
     /// head can follow the tick's pushes ([`follow_pushes`]).
     pub body: Option<[i32; 3]>,
@@ -929,6 +932,21 @@ impl Neck {
             }
         }
         if self.flags & 1 != 0 {
+            return;
+        }
+        if self.thirds {
+            // `Em_28`: `(turn & 0xfff) / 3`, less 0xfff above 0x800, added to
+            // `Cdir_y` of parts 2 to 4 for their `RotMatrix`.
+            let mut turn = i32::from(self.turn[0]) & 0xFFF;
+            if turn > 0x800 {
+                turn -= 0xFFF;
+            }
+            let third = (turn / 3) as i16;
+            for joint in 2..=4 {
+                if let Some(rotation) = pose.rotations.get_mut(joint) {
+                    rotation[1] = rotation[1].wrapping_add(third);
+                }
+            }
             return;
         }
         if let Some(turn_two) = self.turn_two {

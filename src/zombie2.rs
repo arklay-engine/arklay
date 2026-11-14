@@ -1383,6 +1383,7 @@ impl Em<'_, '_, '_> {
         });
         self.z.parts = self.mover.posed_parts();
         self.work().neck.joint = Some(ADULT_NECK as u8);
+        self.work().neck.thirds = true;
         self.script();
         if *self.be_flg != 0 {
             self.oba_set_ofs();

@@ -271,7 +271,25 @@ fn parse_morphs(chunk: &[u8], mesh: &Tmd, skeleton: &Skeleton) -> Vec<PartMorph>
                     .collect()
             })
             .collect();
+        let all_joints = (1..skeleton.relative.len())
+            .filter_map(|child| Some((child as u8, joint_at(0, child as u8)?)))
+            .collect::<Vec<_>>();
+        let all_targets = (0..targets)
+            .map(|target| {
+                let table = word(at + 12 + target * 4).unwrap_or(0) >> 16;
+                all_joints
+                    .iter()
+                    .map(|&(child, rest)| joint_at(table, child).unwrap_or(rest))
+                    .collect()
+            })
+            .collect();
+        let weights = (0..targets)
+            .map(|target| word(at + 12 + target * 4).unwrap_or(0) as u16 as i16)
+            .collect();
         morphs.push(PartMorph {
+            weights,
+            all_joints,
+            all_targets,
             part: part as u8,
             targets: shapes,
             joints,

@@ -438,6 +438,17 @@ function Re2EnemyApi:part_rot(part) end
 ---@param ... integer The weight of each shape.
 function Re2EnemyApi:morph(part, ...) end
 
+---`FUN_004e0070`: every part's place blended by the weights of `part`'s morph.
+---@param part integer The morphing part.
+---@param ... integer The weight of each shape.
+function Re2EnemyApi:morph_all(part, ...) end
+
+---A part's morph weights as the model's data holds them (the low half of
+---each weight's word); none for a part with no morph.
+---@param part integer The morphing part.
+---@return integer ... The weight of each shape.
+function Re2EnemyApi:morph_weights(part) end
+
 ---The alligator's jaws: the roll of parts 6 and 7 on top of their pose.
 ---@param six integer Part 6's roll.
 ---@param seven integer Part 7's roll.

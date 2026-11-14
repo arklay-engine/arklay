@@ -927,6 +927,35 @@ impl UserData for Api {
                 Ok(())
             },
         );
+        // `FUN_004e0070`: every part's place blended by the weights of the
+        // morph of `part`, as `morph` does for its children.
+        methods.add_method_mut(
+            "morph_all",
+            |_, e, (part, weights): (u8, mlua::Variadic<i16>)| {
+                let em = e.em();
+                let Some(morph) = em.mover.tick.morphs.iter().find(|morph| morph.part == part)
+                else {
+                    return Ok(());
+                };
+                let joints = morph.all_joint_offsets(&weights);
+                let offsets = &mut em.work().joint_offsets;
+                offsets.retain(|(index, _)| joints.iter().all(|(child, _)| child != index));
+                offsets.extend(joints);
+                Ok(())
+            },
+        );
+        // A part's morph weights as the model's data has them.
+        methods.add_method_mut("morph_weights", |_, e, part: u8| {
+            let em = e.em();
+            let weights = em
+                .mover
+                .tick
+                .morphs
+                .iter()
+                .find(|morph| morph.part == part)
+                .map_or_else(Vec::new, |morph| morph.weights.clone());
+            Ok(mlua::Variadic::from_iter(weights))
+        });
         // Where `pSin_parts_ptr[part]` hangs from its parent.
         methods.add_method_mut("part_offset", |_, e, part: usize| {
             let [x, y, z] = e
