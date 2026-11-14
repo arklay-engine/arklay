@@ -44,7 +44,6 @@ record = "--start claire --warp 205:-16798:0:-10671:3136:4 --flag 4:48 --life 20
 [[run]]
 name = "em2d_grab_205"
 room = "205"
-frames = true
 ticks = 1400
 sound = false
 # em2d_watch_205's walk into event 4's area, then at the east wall: slot 7's arm takes the player for the grab's 150 ticks while the other four hold, then all go back in; the grab's camera (main_0D)
@@ -58,7 +57,6 @@ record = "--warp 205:-16798:0:-10671:3136:4 --flag 4:48 --life 200"
 [[run]]
 name = "em2d_grab_205_claire"
 room = "205"
-frames = true
 player = 1
 character = 1
 ticks = 1400
@@ -74,7 +72,6 @@ record = "--start claire --warp 205:-16798:0:-10671:3136:4 --flag 4:48 --life 20
 [[run]]
 name = "em2d_shots_205"
 room = "205"
-frames = true
 ticks = 1400
 # em2d_watch_205's walk into event 4's area, then four handgun shots at the east wall's bodies while they are out
 setup_script = "em2d_shots_205.lua"
