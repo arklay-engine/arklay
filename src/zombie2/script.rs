@@ -368,6 +368,12 @@ impl UserData for Api {
             e.em().work().super_matrix = None;
             Ok(())
         });
+        // `pSuper` set to the player's part `part`'s `Workm` (nil: back to
+        // the body's own `Super_matrix`).
+        methods.add_method_mut("set_super_part", |_, e, part: Option<u8>| {
+            e.em().work().super_part = part;
+            Ok(())
+        });
         methods.add_method_mut(
             "super_rotate",
             |_, e, (angle, x, y, z): (i64, i32, i32, i32)| {
@@ -540,6 +546,19 @@ impl UserData for Api {
                 (over, ground.below.max(ground.above))
             }))
         });
+        // `Sca_ck_hit` of a point grown by `radius` without the room's
+        // objects: its return and `DWORD_00695e74`, the lowest top that rises
+        // past the point (0 when none does).
+        methods.add_method_mut(
+            "sca_ck_hit",
+            |_, e, (x, y, z, radius, mask): (i32, i32, i32, i32, i64)| {
+                let room = e.em().mover.tick.room;
+                Ok(room.sca.as_ref().map_or((0, 0), |sca| {
+                    let ground = crate::sca::ground_at(sca, [x, y, z], radius, mask as u16);
+                    (ground.height, ground.ceiling)
+                }))
+            },
+        );
         // `Sca_ck_hit` of a point grown by `radius` without the room's
         // objects: whether `DWORD_00695e84` is raised, by a record that
         // holds the point or one that starts above it.
@@ -1067,6 +1086,7 @@ impl UserData for Api {
         });
         methods.add_method_mut("player_id", |_, e, ()| Ok(e.em().world.player_id));
         methods.add_method_mut("gacha", |_, e, ()| Ok(e.em().world.gacha));
+        methods.add_method_mut("key_trg", |_, e, ()| Ok(e.em().world.key_trg));
         methods.add_method_mut("pl_set_damage_cnt", |_, e, value: i64| {
             e.em().world.pl.damage_cnt = value as u8;
             Ok(())
@@ -4695,9 +4715,12 @@ mod tests {
     }
 
     /// A cockroach for `enemy/29/enemy.lua`: `DRAWS` feeds `Rnd`, a clip
-    /// ends on its `CLIP_LEN`th frame, the player stands at `PLAYER` and an
-    /// attach point is at `PART_AT` (or nowhere). The turns, the
-    /// trigonometry and `SquareRoot0` are the engine's own.
+    /// ends on its `CLIP_LEN`th frame, the player stands at `PLAYER` with
+    /// `Damage_cnt` `PL_DC` and the keys `KEYS` new this tick, an attach
+    /// point is at `PART_AT` (or nowhere), and `Sca_ck_hit` finds `GROUND`
+    /// under a ceiling at `CEILING`. The player's routines, hold and life
+    /// go to `w.pl`. The turns, the trigonometry and `SquareRoot0` are the
+    /// engine's own.
     const ROACH_STUB: &str = "
         local draws, drawn = DRAWS or {}, 0
         local clip_len = CLIP_LEN or 1000
@@ -4707,7 +4730,20 @@ mod tests {
             clip = -1, frame = 0, hidden = 0, sounds = {}, faced = {},
             swarm = SWARM or { [0] = 0, 0, 0, 0 } }
         local player = PLAYER or { -7824, 0, -25140 }
+        w.pl = { r = { [0] = 1, 0, 1, 0 }, dc = PL_DC or 0, life = 200 }
         local e = {}
+        function e:pl_damage_cnt() return w.pl.dc end
+        function e:pl_set_damage_cnt(v) w.pl.dc = v end
+        function e:pl_set_routine(a, b, c, d) w.pl.r = { [0] = a, b, c, d } end
+        function e:pl_hold() w.pl.held = true end
+        function e:pl_set_sub1() w.pl.sub1 = true end
+        function e:set_player_life(v) w.pl.life = v end
+        function e:key_trg() return KEYS or 0 end
+        function e:set_super_part(part) w.super_part = part end
+        function e:sca_ck_hit(x, y, z, radius, mask)
+            w.probe = { x, y, z, radius, mask }
+            return GROUND or 0, CEILING or 0
+        end
         function e:routine(i) return w.r[i] end
         function e:set_routine(i, v) w.r[i] = v end
         function e:routines(a, b, c, d) w.r = { [0] = a, b, c, d } end
@@ -5098,16 +5134,174 @@ mod tests {
         assert_eq!((hidden, taken, flags & 3, z), (0xC, 0x20, 0, -27000));
     }
 
-    /// Within 200 of the point it lands: attached, counted, and on the
-    /// player's routines (part 2 ports the rest).
+    const PLAYER_ROUTINES: &str = "return { w.pl.r[0], w.pl.r[1], w.pl.r[2], w.pl.r[3] }";
+
+    /// Within 200 of the point it lands: attached, counted, and the
+    /// player's struggle started from its beginning, held by this roach on
+    /// its model's second bank.
     #[test]
     fn a_roach_lands_on_its_attach_point() {
-        let roach =
-            roach_flying("POS = { -10000, -1000, -25200 }; PART_AT = { -10050, -900, -25150 }");
+        let landing = "POS = { -10000, -1000, -25200 }; PART_AT = { -10050, -900, -25150 }";
+        let roach = roach_flying(landing);
         roach.run("w.be = 0x2001; tick()");
         assert_eq!(roach.eval::<[u8; 4]>(ROUTINES), [1, 3, 0, 0]);
         let (flags, on, be): (i64, i64, i64) = roach.eval("return w.vars[3], w.swarm[1], w.be");
         assert_eq!((flags, on, be), (3, 1, 1));
+        assert_eq!(roach.eval::<[u8; 4]>(PLAYER_ROUTINES), [5, 0, 0, 0]);
+        assert_eq!(
+            roach.eval::<(bool, bool, i64)>("return w.pl.held, w.pl.sub1, w.pl.life"),
+            (true, true, 200)
+        );
+        // A player whose `Damage_cnt` is up only gets the count.
+        let roach = roach_flying(&format!("{landing}; PL_DC = 0x10"));
+        roach.run("tick()");
+        assert_eq!(roach.eval::<[u8; 4]>(ROUTINES), [1, 3, 0, 0]);
+        assert_eq!(roach.eval::<[u8; 4]>(PLAYER_ROUTINES), [1, 0, 1, 0]);
+        assert_eq!(roach.eval::<i64>("return w.swarm[1]"), 1);
+        assert!(roach.eval::<Option<bool>>("return w.pl.held").is_none());
+    }
+
+    /// A landing once three or more have been on the player for more than
+    /// 0xE1 ticks kills: routines 3, 0, 0, 0, life -1, `Damage_cnt` 0x80
+    /// and the swarm's kill, which sends every roach without a point jumping.
+    #[test]
+    fn the_swarm_kills_the_player() {
+        let roach = roach_flying(
+            "POS = { -10000, -1000, -25200 }; PART_AT = { -10050, -900, -25150 };
+             SWARM = { [0] = 0xE2, 3, 0x30, 0 }",
+        );
+        roach.run("tick()");
+        assert_eq!(roach.eval::<[u8; 4]>(PLAYER_ROUTINES), [3, 0, 0, 0]);
+        let (life, dc, killed): (i64, i64, i64) =
+            roach.eval("return w.pl.life, w.pl.dc, w.swarm[3]");
+        assert_eq!((life, dc, killed), (-1, 0x80, 1));
+        // This one holds a point, so it stays on the player.
+        assert_eq!(roach.eval::<[u8; 4]>(ROUTINES), [1, 3, 0, 0]);
+        // One that holds none jumps.
+        let free = spawn_roach(
+            &[],
+            "ROUTINES = { [0] = 1, 0, 0, 0 }; SWARM = { [0] = 0, 0, 0, 1 }",
+        );
+        free.run("tick()");
+        assert_eq!(free.eval::<[u8; 4]>(ROUTINES), [1, 2, 0, 0]);
+    }
+
+    /// A roach on attach point 5 (part 1), routines 1, 3, 0, with `Timer0`
+    /// drawn from `draw`.
+    fn roach_on(draw: u8, setup: &str) -> Roach {
+        spawn_roach(
+            &[draw],
+            &format!(
+                "ROUTINES = {{ [0] = 1, 3, 0, 0 }}; VARS = {{ [3] = 3, [7] = 5 }};
+                 SWARM = {{ [0] = 0, 1, 0x20, 0 }}; {setup}"
+            ),
+        )
+    }
+
+    /// `0x47c9b0`: the point's turn and part, `Timer0` from `(Rnd >> 4) +
+    /// 0x5A`, and in the same tick the point's offset as `Pos`, clip 2 and
+    /// the first step of `Timer0`.
+    #[test]
+    fn a_roach_on_the_player_takes_its_points_place() {
+        let roach = roach_on(0x47, "");
+        roach.run("w.be = 1; tick()");
+        assert_eq!(roach.eval::<[u8; 4]>(ROUTINES), [1, 3, 1, 0]);
+        let (be, part, timer): (i64, i64, i64) =
+            roach.eval("return w.be, w.super_part, w.timers[0]");
+        assert_eq!((be, part, timer), (0x300_0001, 1, (0x47 >> 4) + 0x5A - 1));
+        let (cdir, angle, pos): (Vec<i64>, i64, Vec<i64>) =
+            roach.eval("return w.cdir, w.angle, w.pos");
+        assert_eq!(
+            (cdir, angle, pos),
+            (vec![3546, 2846], 2160, vec![134, -168, -194])
+        );
+        assert_eq!(
+            roach.eval::<(i64, Vec<i64>)>("return w.clip, w.sounds"),
+            (2, vec![3])
+        );
+        // It stays, back on its offset each tick.
+        roach.run("w.pos = { 0, 0, 0 }; tick()");
+        assert_eq!(roach.eval::<Vec<i64>>("return w.pos"), [134, -168, -194]);
+        assert_eq!(
+            roach.eval::<i64>("return w.timers[0]"),
+            (0x47 >> 4) + 0x5A - 2
+        );
+        assert_eq!(roach.eval::<usize>("return drawn_count()"), 1);
+    }
+
+    /// A new key press takes 8 off `Timer0`, not 1. When it runs out the
+    /// roach falls; the last one off frees the player.
+    #[test]
+    fn mashing_shakes_the_roaches_off() {
+        let roach = roach_on(0, "KEYS = 0x80");
+        roach.run("tick()");
+        assert_eq!(roach.eval::<i64>("return w.timers[0]"), 0x5A - 8);
+        roach.run("tick(10)");
+        assert_eq!(roach.eval::<i64>("return w.timers[0]"), 0x5A - 8 * 11);
+        assert_eq!(roach.eval::<[u8; 4]>(ROUTINES), [1, 3, 1, 0]);
+        roach.run("tick()");
+        assert_eq!(roach.eval::<[u8; 4]>(ROUTINES), [1, 4, 0, 0]);
+        assert_eq!(roach.eval::<i64>("return w.swarm[1]"), 0);
+        assert_eq!(roach.eval::<[u8; 4]>(PLAYER_ROUTINES), [1, 0, 0, 0]);
+        // With another still on, the player stays held.
+        let roach = roach_on(0, "KEYS = 0x80; SWARM = { [0] = 0, 2, 0x20, 0 }");
+        roach.run("tick(12)");
+        assert_eq!(roach.eval::<[u8; 4]>(ROUTINES), [1, 4, 0, 0]);
+        assert_eq!(roach.eval::<i64>("return w.swarm[1]"), 1);
+        assert_eq!(roach.eval::<[u8; 4]>(PLAYER_ROUTINES), [1, 0, 1, 0]);
+        // After the swarm's kill none falls.
+        let roach = roach_on(0, "KEYS = 0x80; SWARM = { [0] = 0, 1, 0x20, 1 }");
+        roach.run("tick(20)");
+        assert_eq!(roach.eval::<[u8; 4]>(ROUTINES), [1, 3, 1, 0]);
+    }
+
+    /// `0x689590` counts the ticks with more than two on the player; with
+    /// fewer it goes back to 0.
+    #[test]
+    fn the_swarm_counts_the_ticks_three_are_on() {
+        let roach = roach_on(0x80, "SWARM = { [0] = 7, 3, 0x20, 0 }");
+        roach.run("tick(3)");
+        assert_eq!(roach.eval::<i64>("return w.swarm[0]"), 10);
+        roach.run("w.swarm[1] = 2; tick()");
+        assert_eq!(roach.eval::<i64>("return w.swarm[0]"), 0);
+    }
+
+    /// `0x47caf0`: off the point's place, away from the player and up, then
+    /// falling faster each tick with its surface turning away from 0xC00,
+    /// down to the ground and back onto the pipe, its point freed.
+    #[test]
+    fn a_roach_falls_off_the_player() {
+        let roach = spawn_roach(
+            &[],
+            "ROUTINES = { [0] = 1, 4, 0, 0 }; VARS = { [3] = 3, [7] = 5 };
+             SWARM = { [0] = 0, 0, 0x20, 0 }; PART_AT = { -7900, -1900, -25140 }; GROUND = 0",
+        );
+        roach.run("w.be = 0x3000001; w.super_part = 1; w.hidden = 0; tick()");
+        assert_eq!(roach.eval::<[u8; 4]>(ROUTINES), [1, 4, 1, 0]);
+        let (be, part, angle): (i64, Option<i64>, i64) =
+            roach.eval("return w.be, w.super_part, w.angle");
+        assert_eq!((be, part, angle), (0x200_0001, None, 0));
+        // 0x32 away from the player at (-7824, -25140), straight along -x.
+        let away = player2::rotate(direction_ck(-7824, -25140, -7900, -25140), 0x32, 0);
+        let (x, y, z): (i32, i32, i32) = roach.eval("return w.pos[1], w.pos[2], w.pos[3]");
+        assert_eq!((x, z), (-7900 + away.0, -25140 + away.1));
+        assert_eq!(y, -1900 + 0x14 + 2);
+        assert_eq!(
+            roach.eval::<(i64, Vec<i64>)>("return w.timers[0], w.super"),
+            (2, vec![0, 0, -0x10])
+        );
+        roach.run("tick()");
+        assert_eq!(roach.eval::<i32>("return w.pos[2]"), -1900 + 0x16 + 0x1A);
+        assert_eq!(roach.eval::<Vec<i64>>("return w.super"), [0, 0, -0x20]);
+        roach.run("tick(40)");
+        assert_eq!(roach.eval::<[u8; 4]>(ROUTINES), [1, 0, 0, 0]);
+        let (hidden, taken, flags, sounds): (i64, i64, i64, Vec<i64>) =
+            roach.eval("return w.hidden, w.swarm[2], w.vars[3], w.sounds");
+        assert_eq!((hidden, taken, flags & 1, sounds), (0xC, 0, 0, vec![1]));
+        assert_eq!(
+            roach.eval::<(i64, i64)>("return w.probe[4], w.probe[5]"),
+            (1, 0x400)
+        );
     }
 
     /// The sub-machine gun's (0xF) and the flamethrower's (0x10) hits on the zombies, lib/zombie.lua.

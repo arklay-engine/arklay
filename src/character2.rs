@@ -747,7 +747,8 @@ fn run_zombie(
     } else {
         Vec::new()
     };
-    let gacha = re2.key_trg & 0x34F != 0;
+    let key_trg = re2.key_trg;
+    let gacha = key_trg & 0x34F != 0;
     let same_id = re2
         .characters
         .0
@@ -798,6 +799,7 @@ fn run_zombie(
         player_angle,
         player_life,
         gacha,
+        key_trg,
         player_id,
         knocks: Vec::new(),
         player,
@@ -1918,6 +1920,29 @@ pub fn pose_joints(
         .zombie
         .as_ref()
         .map_or([0; 2], |zombie| zombie.tilt);
+    let on_part = character
+        .work
+        .super_part
+        .and_then(|part| game.joint_worlds[0].get(usize::from(part)));
+    if let Some(part) = on_part {
+        // `pSuper` is a part of the player's: `Cdir` turns on it, and `Pos`
+        // is already the place in the world ([`on_player_parts`]).
+        let [x, z] = character.work.tilt;
+        let local = crate::anim::Mat4x3 {
+            r: crate::anim::rotation_matrix(
+                i32::from(x),
+                i32::from(character.body.angle),
+                i32::from(z),
+            ),
+            t: [0; 3],
+        };
+        let mut matrix = crate::anim::compose(part, &local);
+        matrix.t = character.body.pos;
+        let mut local = crate::anim::joint_local_transforms(&model.skeleton, &keyframe);
+        character.work.pose_locals(&mut local);
+        let joints = crate::anim::joint_matrices_from_locals(&model.skeleton, &local, &matrix, &[]);
+        return Some((joints, keyframe));
+    }
     let mut matrix = crate::anim::entity_matrix_rotated_scaled(
         character.body.pos,
         pitch,
@@ -1961,6 +1986,53 @@ pub fn keep_joints(
     });
 }
 
+/// `Joint_trans2`'s `CompM(pSuper, ...)` for a body hung on a part of the
+/// player's (`Be_flg`'s `0x3000000`): `M.t` is `Pos`, so the body's place
+/// becomes the one in the world, on the player's pose this tick. The local
+/// one is kept for `Em_29` to put back.
+fn on_player_parts(game: &mut GameState) {
+    let parts = &game.re2.player.parts;
+    for character in game.re2.characters.0.iter_mut().flatten() {
+        if character.be_flg & 1 == 0 || character.be_flg & 0x300_0000 != 0x300_0000 {
+            continue;
+        }
+        let Some(part) = character.work.super_part else {
+            continue;
+        };
+        let Some(Some(matrix)) = parts.get(usize::from(part)) else {
+            continue;
+        };
+        let on_part = |local: [i32; 3]| -> [i32; 3] {
+            std::array::from_fn(|axis| {
+                let turned: i32 = (0..3)
+                    .map(|index| i32::from(matrix.m[axis][index]) * local[index])
+                    .sum();
+                matrix.t[axis] + (turned >> 12)
+            })
+        };
+        let local = character.body.pos;
+        character.work.super_local = Some(local);
+        let pos = on_part(local);
+        character.body.pos = pos;
+        // Its part 0 on that `M`, where the player's head turns to on the
+        // next tick.
+        let turn = player2::mul_matrix(
+            &matrix.m,
+            &character.work.body_rotation(character.body.angle),
+        );
+        if let Some(zombie) = character.zombie.as_mut() {
+            zombie.roach_head = zombie.roach_head.map(|offset| {
+                std::array::from_fn(|axis| {
+                    let turned: i32 = (0..3)
+                        .map(|index| i32::from(turn[axis][index]) * offset[index])
+                        .sum();
+                    pos[axis] + (turned >> 12)
+                })
+            });
+        }
+    }
+}
+
 /// [`keep_joints`] with each character's model from `model`: the slots of
 /// the characters the draw poses (in play, and not a zombie waiting for the
 /// room's scripts), the others empty.
@@ -1969,6 +2041,7 @@ fn keep_joints_with(
     room: &RoomState,
     mut model: impl FnMut(&Character) -> Option<std::sync::Arc<Emd>>,
 ) {
+    on_player_parts(game);
     let characters = &game.re2.characters.0;
     let mut kept = vec![Vec::new(); characters.len()];
     for (slot, character) in characters.iter().enumerate() {

@@ -544,8 +544,10 @@ pub struct Zombie {
     pulled: Option<PulledArm>,
     head: Option<KickedHead>,
     /// A cockroach's part 0 as its last move left it, which the player's
-    /// head turns to from the move after (`run_roach`).
-    roach_head: Option<[i32; 3]>,
+    /// head turns to from the move after (`run_roach`). On the player it is
+    /// local to the player's part until the draw's `Joint_trans2` places it
+    /// (`character2::on_player_parts`).
+    pub(crate) roach_head: Option<[i32; 3]>,
     pub life: i16,
     /// The last shot was aimed up, which `Em10Dm02` and `FUN_00458d40` read
     /// off the player.
@@ -948,6 +950,8 @@ pub struct World<'a> {
     pub player_life: &'a mut i16,
     /// `Gacha_ch`: a button mashed this tick.
     pub gacha: bool,
+    /// `Key_trg` (`0x9885FE`): the keys that rose this tick.
+    pub key_trg: u16,
     /// `Id`, which picks how a crawler's end looks.
     pub player_id: u8,
     /// The slots this zombie's stumble ran into.
@@ -1293,6 +1297,14 @@ impl Em<'_, '_, '_> {
     /// the body (`Oba_set_ofs`). It runs neither `Oba_ck_em` nor `Sca_ck_em`,
     /// and its `Be_flg`'s `0x2` keeps the others' checks off it.
     fn run_roach(&mut self) {
+        // On the player (`Routine_0..2` 1, 3, 1), `Pos` goes back to the
+        // attach point's offset before the stop check: the last draw's
+        // `Joint_trans2` turned it into the place in the world.
+        if self.work().routine[..3] == [1, 3, 1]
+            && let Some(local) = self.work().super_local
+        {
+            self.mover.player.pos = local;
+        }
         if self.world.stopped {
             return;
         }
@@ -1305,7 +1317,14 @@ impl Em<'_, '_, '_> {
         // `Neck_no` 0: part 0's `+0x5C`, where `Rot_neck` turns the player's
         // head. The original's player moves after the enemies, so its head
         // follows the place a roach had a move before the one arklay last ran.
-        let head = self.mover.part_point(0, [0, 0, 0]);
+        // On the player, `pSuper` is one of the player's parts: this is part
+        // 0's offset under the body, which the draw composes on the player's
+        // pose of this tick (`character2::on_player_parts`).
+        let head = if self.work().super_part.is_some() {
+            self.mover.root_offset()
+        } else {
+            self.mover.part_point(0, [0, 0, 0])
+        };
         let last = std::mem::replace(&mut self.z.roach_head, head);
         self.work().neck.position = last.or(head);
     }
