@@ -1,0 +1,24 @@
+# leon_a_30b_throw: Leon A in 30B as the scene hands him back (Ada has thrown the Club Key across the water, main_0B to main_0F), west to the key, which he takes (the press opens its message, the next two confirm and close it), and down the west side to door 2 (to 302)
+1227 up run left
+1328 up run
+1339 up run right
+1341
+1353 action
+1355
+1455 action
+1457
+1560 action
+1562
+1572 up run left
+1716 up run right
+1723 up run
+1726 up run right
+1727 up run
+1764 up run right
+1765 up run
+1768 up run right
+1770 up run left
+1771
+1773 left
+1775 action
+1777
