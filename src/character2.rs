@@ -410,10 +410,6 @@ pub fn targets_of(re2: &crate::scd2::host::Re2State) -> Vec<crate::weapon2::Targ
         .filter(|(slot, _)| *slot != SPLAYER_SLOT)
         .filter_map(|(slot, character)| {
             let character = character.as_deref()?;
-            // `Em_2D`'s hits (`Routine_0` 2 and 3) aren't ported yet.
-            if character.id == crate::zombie2::EM2D_ID {
-                return None;
-            }
             let zombie = character.zombie.as_ref()?;
             let pos = character.body.pos;
             Some(crate::weapon2::Target {

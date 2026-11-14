@@ -3961,13 +3961,13 @@ mod tests {
         exec(&mut game, "member_set2", &[7, 16]);
         let character = game.re2.characters.0[0].as_ref().unwrap();
         assert_eq!(character.work.kind, 0x0010);
-        // No shot reaches it until its hits are ported; a zombie beside it is
-        // still a target.
-        assert!(crate::character2::targets(&game).is_empty());
+        // Its hits are ported, so a shot reaches it, and a zombie beside it too.
+        let targets = crate::character2::targets(&game);
+        assert_eq!(targets.iter().map(|t| t.slot).collect::<Vec<_>>(), [0]);
         let zombie = [0, 1, 0x10, 0, 0, 0, 7, 0, 255, 0, 0, 0, 0, 0, 0];
         exec(&mut game, "sce_em_set", &zombie);
         let targets = crate::character2::targets(&game);
-        assert_eq!(targets.iter().map(|t| t.slot).collect::<Vec<_>>(), [1]);
+        assert_eq!(targets.iter().map(|t| t.slot).collect::<Vec<_>>(), [0, 1]);
     }
 
     /// Room 207's `init_00` (scenario A): its four zombies, as the RDT's
