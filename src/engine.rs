@@ -6932,7 +6932,7 @@ impl GameSession {
                 self.game.doors = [None; game::ROOM_ACTION_SLOTS];
                 // `Obj_model_set` on a slot in use would take it away.
                 let objects = self.game.objects.records.len();
-                self.game.objects.reset(objects);
+                self.game.objects.reset_for_rerun(objects);
                 // Nor does a scene the first pass started run on: what it put
                 // up in `fg_stop` (room 200's entry holding the input) goes,
                 // and `run_re2_init` clears its `fg_status` bit (the bars) as
@@ -17623,6 +17623,9 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
     // and it's still up for the next tick's `Pad_set`.
     if std::mem::take(&mut context.game.re2.door_settling) {
         context.game.re2.door_key_stop = true;
+        // The hand-back tick itself still has `fg_stop`'s `0xEF000000` when
+        // `Om_move` runs, and it is down by the next tick's.
+        context.game.re2.objects_key_stop = true;
         return;
     }
     // And doesn't run at all once the player's death has stopped the routines.
@@ -18042,6 +18045,7 @@ fn tick_room_timed(
         input
     };
     context.game.re2.door_key_stop = false;
+    context.game.re2.objects_key_stop = false;
     // The queue the ribbon submits to lasts one frame.
     context.game.tyrant.trail.quads.clear();
     // The original's `main_loop` rolls the screen-shake offset at the very top
