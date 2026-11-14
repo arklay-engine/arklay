@@ -46,6 +46,7 @@ name = "em2d_grab_205"
 room = "205"
 frames = true
 ticks = 1400
+sound = false
 # em2d_watch_205's walk into event 4's area, then at the east wall: slot 7's arm takes the player for the grab's 150 ticks while the other four hold, then all go back in; the grab's camera (main_0D)
 setup = { pos = [-16798, 0, -10671], angle = 3136, health = 200, rnd = 6114, camera = 4, flags = [[4, 48]] }
 input = "em2d_grab_205.txt"
@@ -61,6 +62,7 @@ frames = true
 player = 1
 character = 1
 ticks = 1400
+sound = false
 # em2d_grab_205's walk as Claire, mashing confirm while held, so the grab ends early
 setup = { pos = [-16798, 0, -10671], angle = 3136, health = 200, rnd = 6114, camera = 4, flags = [[4, 48]] }
 input = "em2d_grab_205_mash.txt"
