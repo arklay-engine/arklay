@@ -1245,9 +1245,9 @@ record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200
 name = "g1_second_303"
 room = "303"
 character = 2
-ticks = 875
+ticks = 1380
 sound = false
-# the second encounter (4:57 set: the room places Type 1 at -17643, -5400, -24593): no scene, G1 walks up, slashes, charges and kills the player (tick 728); the run ends at 875, where arklay's `Die` pause freezes the world a few ticks before the original's silent record does (the original goes on, which isn't checked yet)
+# the second encounter (4:57 set: the room places Type 1 at -17643, -5400, -24593): no scene, G1 walks up, slashes, charges and kills the player (tick 728), and the original never starts `Die`: G1's `Pl_life_down(500, 0)` leaves the life above zero and its death routine writes the -1 itself, with no `fg_system` 0x4000000, so the world runs on to the end of the recording (#712)
 setup = { pos = [-16852, -5400, -19090], angle = 552, health = 2000, rnd = 6114, camera = 3, flags = [[1, 1], [4, 55], [4, 57]] }
 input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,fgscn,fgroom"

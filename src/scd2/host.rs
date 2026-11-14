@@ -1727,6 +1727,7 @@ impl Re2State {
             *life = target.life;
             self.player.near_death = target.near_death;
             self.player.damage_cnt = target.damage_cnt;
+            self.player.die_start |= target.died;
             if let Some(routine) = target.routine {
                 self.player.routine = [routine, 0, 0, 0];
             }

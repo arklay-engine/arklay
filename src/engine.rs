@@ -4789,7 +4789,7 @@ impl GameSession {
     /// on the tick the player's life falls below zero.
     fn tick_re2_die(&mut self, pack: &Pack) {
         if self.re2_die.is_none()
-            && self.game.entities[0].health < 0
+            && self.game.re2.player.die_start
             && !self.game.re2.player.die_held_back
             && !self.game.debug.invincible
         {
@@ -4803,6 +4803,11 @@ impl GameSession {
                     .map_or(0x10, |character| character.id)
             });
             self.re2_die = Some(crate::die2::Die::new(killer));
+        }
+        if self.re2_die.is_some() {
+            // `Game_loop` clears `0x4000000` as it starts `Die`; an enemy's
+            // later write of it while `Die` runs is spent.
+            self.game.re2.player.die_start = false;
         }
         let Some(die) = self.re2_die.as_mut() else {
             return;
