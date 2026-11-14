@@ -54,10 +54,12 @@
 //!   fire frame run through [`GameState::apply_weapon_damage_with`] here (the
 //!   GL explosive round among them, measured from the player). Every grenade
 //!   round's real reach is its bullet effect (behaviour 43), which flies from
-//!   the muzzle and runs the same pipeline from its own position; the
-//!   flamethrower's damage rides its projectile effect behaviour, which stays
-//!   in the effect pool's placeholder set. The rocket flies the same way, as
-//!   effect behaviour 45.
+//!   the muzzle and runs the same pipeline from its own position. The
+//!   flamethrower never damages from the player either: its hold-fire loop
+//!   spends one fuel unit a tick and sprays a type-0x0C flame from the weapon
+//!   hand every fourth frame, and each flame (effect behaviour 37) runs
+//!   weapon 6 through the pipeline from its own x/z. The rocket flies the
+//!   same way, as effect behaviour 45.
 //! - **The player character sounds.** The original's `PlayEntitySnd` aim/cloth
 //!   cues are a no-op, like the engine's other player-side cue sites.
 
@@ -4460,6 +4462,104 @@ mod tests {
         assert_eq!(game.entities[1].health, 55 - 9, "the handgun zombie record");
         assert_eq!(game.inventory[0].quantity, 14, "one round left the clip");
         assert_eq!(game.entities[1].state(), 2, "the surviving hit reaction");
+    }
+
+    #[test]
+    fn the_flamethrower_spends_one_fuel_unit_per_hold_fire_tick() {
+        // `player_behavior_14_autoaim_holdfire`: below the special ids the
+        // loop decrements the quantity byte every tick it runs, and sprays a
+        // flame every fourth frame; nothing is spent before the hold-fire.
+        let (mut game, mut player) = armed(ITEM_FLAMETHROWER, 240);
+        let mut ticks = 0;
+        while !(player.weapon.behavior == 0x14 && player.weapon.state == 6) {
+            drive(&mut game, &mut player, aiming(true), 1);
+            ticks += 1;
+            assert!(ticks < 64, "the trigger reached the hold-fire loop");
+        }
+        let start = game.inventory[0].quantity;
+        assert!(start < 240, "the entry tick ran the loop once");
+        for tick in 1..=30u8 {
+            drive(&mut game, &mut player, aiming(true), 1);
+            assert_eq!((player.weapon.behavior, player.weapon.state), (0x14, 6));
+            assert_eq!(game.inventory[0].quantity, start - tick, "tick {tick}");
+        }
+
+        // Releasing the trigger drops back to the hold and stops the spend.
+        drive(&mut game, &mut player, aiming(false), 1);
+        let held = game.inventory[0].quantity;
+        drive(&mut game, &mut player, aiming(false), 10);
+        assert_eq!(player.weapon.behavior, 0x13);
+        assert_eq!(game.inventory[0].quantity, held, "no fuel spent on hold");
+    }
+
+    #[test]
+    fn the_flamethrower_runs_dry_and_drops_to_the_hold() {
+        let (mut game, mut player) = armed(ITEM_FLAMETHROWER, 3);
+        drive(&mut game, &mut player, aiming(true), 64);
+        assert_eq!(game.inventory[0].quantity, 0, "every unit was burnt");
+        assert_eq!(
+            player.weapon.behavior, 0x13,
+            "an empty tank stops the spray"
+        );
+    }
+
+    #[test]
+    fn the_flamethrower_spray_burns_a_zombie_in_front_and_not_behind() {
+        // The type-0x0C flame carries behaviour 37 with the level aim byte
+        // latched; the spray spawns it at the weapon hand every fourth frame
+        // and the effect pass runs its damage from the flame's position.
+        let burn = |zombie_x: i32| {
+            let (mut game, mut player) = armed(ITEM_FLAMETHROWER, 240);
+            let mut flame = crate::effects::fixtures::block(37, 0, 0);
+            flame[4] = 0x09; // the on-hit billboard: type 9, depth 0
+            flame[6] = 0x40; // header[2]: the latched level aim
+            let sprite = game
+                .weapon_effects
+                .sprites
+                .iter_mut()
+                .find(|sprite| sprite.index == 0x0C)
+                .unwrap();
+            *sprite =
+                crate::effects::fixtures::sprite(0x0C, std::array::from_fn(|_| vec![vec![flame]]));
+            place_enemy(&mut game, 1, 0x01, [zombie_x, 0, 0]);
+            game.entities[1].health = 100;
+            player.pos = [0, 0, 0];
+            player.angle = 0;
+            let room = RoomState {
+                cuts: vec![crate::state::Cut {
+                    look_at: [0, 0, 1000],
+                    fov: 200,
+                    ..crate::state::Cut::default()
+                }],
+                ..RoomState::default()
+            };
+            for _ in 0..40 {
+                drive(&mut game, &mut player, aiming(true), 1);
+                game.entities[0].pos = player.pos;
+                game.entities[0].angle = player.angle;
+                crate::effects::behaviour::update(&mut game, &room);
+                // The hit gate reopens the way the enemy's damage state does.
+                game.entities[1].hit_state = 0;
+            }
+            game.entities[1].health
+        };
+        let hand = game_hand_x();
+        assert!(burn(hand + 300) < 100, "the zombie in front burns");
+        assert_eq!(burn(-1500), 100, "the zombie behind is untouched");
+        assert_eq!(burn(hand + 2000), 100, "the zombie far ahead is untouched");
+    }
+
+    /// The flame's spawn x in front of a player at the origin facing +x.
+    fn game_hand_x() -> i32 {
+        let (mut game, mut player) = armed(ITEM_FLAMETHROWER, 240);
+        player.pos = [0, 0, 0];
+        player.angle = 0;
+        drive(&mut game, &mut player, aiming(true), 40);
+        game.effects
+            .active()
+            .find(|(_, effect)| effect.effect_type == 0x0C)
+            .map(|(_, effect)| i32::from(effect.pos[0]))
+            .expect("the spray spawned a flame")
     }
 
     #[test]
