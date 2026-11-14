@@ -18,26 +18,16 @@ frame_max_mean = 0.8
 frame_windows = [[0, 13952, 0.85], [13953, 14624, 0.1], [14625, 14799, 0.3]]
 ignore = [
     # the doors' own ticks (oracle/re2.md)
-    [356, "rng"],
-    [356, "rseed"],
-    [2627, "rng"],
-    [2627, "rseed"],
-    [5527, "rng"],
-    [5527, "rseed"],
-    [6656, "rng"],
-    [6656, "rseed"],
-    [7008, "rng"],
-    [7008, "rseed"],
-    [8062, "rng"],
-    [8062, "rseed"],
-    [8379, "rng"],
-    [8379, "rseed"],
-    [8892, "rng"],
-    [8892, "rseed"],
-    [10086, "rng"],
-    [10086, "rseed"],
-    [12936, "rng"],
-    [12936, "rseed"],
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 ]
 expect = "match"
 record = "--start claire"

@@ -20,7 +20,7 @@ frame_windows = [[360, 363, 0.35], [705, 805, 0.25], [1147, 1539, 0.35], [1745, 
 expect = "match"
 ignore = [
   # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 115's door 0, 114's door 2 and 10C's door 0
-  [364, "rng"], [364, "rseed"], [806, "rng"], [806, "rseed"], [1540, "rng"], [1540, "rseed"],
+  
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [399, 489, "hk"], [841, 931, "hk"], [1575, 1667, "hk"],
 ]
@@ -46,7 +46,7 @@ frame_windows = [[360, 435, 0.25], [777, 1085, 0.45], [1427, 1621, 0.35], [1963,
 expect = "match"
 ignore = [
   # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 207's door 1, 205's door 0 and 204's door 0
-  [436, "rng"], [436, "rseed"], [1086, "rng"], [1086, "rseed"], [1622, "rng"], [1622, "rseed"],
+  
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [471, 561, "hk"], [1121, 1211, "hk"], [1657, 1747, "hk"],
 ]
@@ -72,7 +72,7 @@ frame_windows = [[360, 469, 0.4], [837, 925, 0.25], [926, 1054, 0.85], [1055, 11
 expect = "match"
 ignore = [
   # the door's own tick (oracle/re2.md, docs/internals/deviations/re2.md): 201's door 0
-  [470, "rng"], [470, "rseed"],
+  
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [505, 595, "hk"],
 ]
@@ -103,19 +103,19 @@ record = "--start claire"
 # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md):
 # route_claire_a_208's fifteen, then 208's door 0, 207's stairs door, 10C's door 2 and 114's door 1, and this segment's seven
 ignore = [
-    [356, "rng"], [356, "rseed"], [2627, "rng"], [2627, "rseed"], [5527, "rng"], [5527, "rseed"],
-    [6656, "rng"], [6656, "rseed"], [7008, "rng"], [7008, "rseed"], [8062, "rng"], [8062, "rseed"],
-    [8379, "rng"], [8379, "rseed"], [8892, "rng"], [8892, "rseed"], [10086, "rng"], [10086, "rseed"],
+    
+    
+    
     # route_claire_a_card's 12936: this recording's original drew the door's number 3 ticks sooner (route_claire_a_115's 4)
-    [12933, "rng"], [12933, "rseed"],
-    [15492, "rng"], [15492, "rseed"], [15983, "rng"], [15983, "rseed"], [17907, "rng"], [17907, "rseed"],
-    [18685, "rng"], [18685, "rseed"], [20235, "rng"], [20235, "rseed"],
-    [21426, "rng"], [21426, "rseed"], [21917, "rng"], [21917, "rseed"], [24769, "rng"], [24769, "rseed"],
-    [25204, "rng"], [25204, "rseed"],
+    
+    
+    
+    
+    
     # this segment's doors: 115's door 0, 114's door 2, 10C's stairs door, 207's door 1, 205's door 0, 204's door 0 and 201's door 0
-    [27517, "rng"], [27517, "rseed"], [27959, "rng"], [27959, "rseed"], [28693, "rng"], [28693, "rseed"],
-    [28990, "rng"], [28990, "rseed"], [29640, "rng"], [29640, "rseed"], [30176, "rng"], [30176, "rseed"],
-    [30643, "rng"], [30643, "rseed"],
+    
+    
+    
     # the objects are compared in 10C from the end of its load to door 2's load (as route_200_115's), and in 115 from
     # the end of its load on: elsewhere the slots out of play keep what the last room's objects left in them in the
     # original, where arklay's are zero (docs/internals/deviations/re2.md, "What an object's slot held before")

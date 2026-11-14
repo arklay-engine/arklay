@@ -41,7 +41,7 @@ frame_windows = [[360, 534, 0.25], [875, 1025, 0.25], [1236, 3877, 0.6], [4220, 
 expect = "match"
 ignore = [
   # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 208's door 0, 207's door 3 and 10C's door 2
-  [535, "rng"], [535, "rseed"], [1026, "rng"], [1026, "rseed"], [3878, "rng"], [3878, "rseed"],
+  
   # the warp's flags, as in leon_a_208_114: the original raises 8:141 before 208's init, so the taken ribbons' object
   # (slot 2) is out of play when the load's pass clears the objects' areas; arklay's setup script raises it after
   [344, 569, "om2"],
@@ -79,7 +79,7 @@ frame_windows = [[360, 435, 0.25], [777, 1341, 0.3], [1342, 2424, 0.75], [2425, 
 expect = "match"
 ignore = [
   # 114's door 1
-  [436, "rng"], [436, "rseed"],
+  
   # the load, as in claire_a_208_114: the original lists 114's objects (none) until 115's are set up, 90 ticks in
   [471, 561, "om3"], [471, 561, "om7"], [471, 561, "om8"], [471, 561, "om9"],
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
@@ -112,15 +112,15 @@ record = "--start claire"
 # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md):
 # route_claire_a_208's fifteen, then 208's door 0, 207's stairs door, 10C's door 2 and 114's door 1
 ignore = [
-    [356, "rng"], [356, "rseed"], [2627, "rng"], [2627, "rseed"], [5527, "rng"], [5527, "rseed"],
-    [6656, "rng"], [6656, "rseed"], [7008, "rng"], [7008, "rseed"], [8062, "rng"], [8062, "rseed"],
-    [8379, "rng"], [8379, "rseed"], [8892, "rng"], [8892, "rseed"], [10086, "rng"], [10086, "rseed"],
+    
+    
+    
     # route_claire_a_card's 12936: this recording's original drew the door's number 4 ticks sooner, as route_claire_a_208's
-    [12932, "rng"], [12932, "rseed"],
-    [15492, "rng"], [15492, "rseed"], [15983, "rng"], [15983, "rseed"], [17907, "rng"], [17907, "rseed"],
-    [18685, "rng"], [18685, "rseed"], [20235, "rng"], [20235, "rseed"],
-    [21426, "rng"], [21426, "rseed"], [21917, "rng"], [21917, "rseed"], [24769, "rng"], [24769, "rseed"],
-    [25204, "rng"], [25204, "rseed"],
+    
+    
+    
+    
+    
     # the objects are compared in 10C from the end of its load to door 2's load (as route_200_115's), and in 115 from
     # the end of its load on: elsewhere the slots out of play keep what the last room's objects left in them in the
     # original, where arklay's are zero (docs/internals/deviations/re2.md, "What an object's slot held before")

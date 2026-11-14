@@ -16,7 +16,7 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,s
 frames = [970, 1209]
 frame_max_mean = 0.2
 expect = "match"
-ignore = [[1210, "rng"], [1210, "rseed"]]
+ignore = []
 record = "--start claire --no-enemies --warp 200:-14847:-1800:1892:2136:6 --flag 4:6 --flag 4:7 --flag 4:102 --flag 4:70 --life 200 --give 0:3:7 --give 2:0x14:6"
 
 # Room 201 from 200's door, with the licker behind the window: cut 4 starts its scene as Claire walks to door 1.
@@ -37,7 +37,7 @@ frames = [380, 502]
 frame_max_mean = 0.3
 expect = "match"
 # the door's own tick (oracle/re2.md, docs/internals/deviations/re2.md)
-ignore = [[468, "rng"], [468, "rseed"]]
+ignore = []
 record = "--start claire --warp 201:-15773:0:-21630:2040:0 --life 200 --give 0:3:7 --give 2:0x14:36"
 
 # The same recording on through room 204: door 1's arrival and `main_06`'s move, the body's two checks and its 15
@@ -58,7 +58,7 @@ frames = [380, 1699]
 frame_max_mean = 0.9
 boxes = [[0, 170, 320, 222]]
 expect = "match"
-ignore = [[468, "rng"], [468, "rseed"]]
+ignore = []
 record = "--start claire --warp 201:-15773:0:-21630:2040:0 --life 200 --give 0:3:7 --give 2:0x14:36"
 
 # And on: area 7's window scene (main_09, Claire's film 10 with the oracle's films off), the fight with the licker
@@ -78,7 +78,7 @@ frames = [1700, 2499]
 frame_max_mean = 0.45
 expect = "match"
 # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md)
-ignore = [[468, "rng"], [468, "rseed"], [2380, "rng"], [2380, "rseed"]]
+ignore = []
 record = "--start claire --warp 201:-15773:0:-21630:2040:0 --life 200 --give 0:3:7 --give 2:0x14:36"
 
 # Room 205 from room 204's door 1, past the frozen bodies in the walls (4:48 clear) to door 2 and room 207's load.
@@ -96,7 +96,7 @@ frames = [360, 899]
 # 0.33 measured
 frame_max_mean = 0.45
 expect = "match"
-ignore = [[781, "rng"], [781, "rseed"]]
+ignore = []
 record = "--start claire --warp 205:-25670:0:-25775:3072:0 --life 119 --give 0:3:9 --give 2:0x14:38"
 
 # Room 207 from room 205's door 2, with its four zombies: slot 3 shot from the north, slot 0, a crawler after its
@@ -151,7 +151,7 @@ frames = [650, 1909]
 # 1.12 measured: the bodies close to cut 1's camera
 frame_windows = [[650, 1784, 1.2]]
 expect = "match"
-ignore = [[1785, "rng"], [1785, "rseed"]]
+ignore = []
 record = "--start claire --warp 207:-25640:0:-16590:0:1 --life 119 --give 0:3:8 --give 2:0x14:38"
 
 # Room 207's door 2 into the darkroom (208) with the enemies off, the walk to the ink ribbons and their take, and the
@@ -171,7 +171,7 @@ frames = [720, 1449]
 # 0.46 measured
 frame_max_mean = 0.6
 expect = "match"
-ignore = [[367, "rng"], [367, "rseed"]]
+ignore = []
 record = "--start claire --no-enemies --warp 207:-15162:0:-13112:49:4 --life 119 --give 0:3:6 --give 2:0x14:20"
 
 # The same walk, take and typewriter from a warp to door 2's arrival in 208.
@@ -215,37 +215,22 @@ record = "--start claire"
 # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md):
 # route_claire_a_card's ten, then 200, 201, 204, 205 and 207's
 ignore = [
-    [356, "rng"],
-    [356, "rseed"],
-    [2627, "rng"],
-    [2627, "rseed"],
-    [5527, "rng"],
-    [5527, "rseed"],
-    [6656, "rng"],
-    [6656, "rseed"],
-    [7008, "rng"],
-    [7008, "rseed"],
-    [8062, "rng"],
-    [8062, "rseed"],
-    [8379, "rng"],
-    [8379, "rseed"],
-    [8892, "rng"],
-    [8892, "rseed"],
-    [10086, "rng"],
-    [10086, "rseed"],
+    
+    
+    
+    
+    
+    
+    
+    
+    
     # route_claire_a_card's 12936: this recording's original drew the door's number 4 ticks sooner
-    [12932, "rng"],
-    [12932, "rseed"],
-    [15492, "rng"],
-    [15492, "rseed"],
-    [15983, "rng"],
-    [15983, "rseed"],
-    [17907, "rng"],
-    [17907, "rseed"],
-    [18685, "rng"],
-    [18685, "rseed"],
-    [20235, "rng"],
-    [20235, "rseed"],
+    
+    
+    
+    
+    
+    
     # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
     [391, 481, "hk"], [2662, 2752, "hk"], [5562, 5652, "hk"], [7043, 7133, "hk"], [8097, 8187, "hk"], [8927, 9019, "hk"], [10121, 10211, "hk"], [12967, 13057, "hk"], [15527, 15617, "hk"], [16018, 16108, "hk"], [17942, 18032, "hk"], [18720, 18810, "hk"], [20270, 20360, "hk"],
     # `zd` (docs/internals/deviations/re2.md, "What a zombie's slot held before"): the load's tick in room 100, room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load

@@ -16,7 +16,7 @@ frames = [360, 2330]
 expect = "match"
 ignore = [
   # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 200's door 1, 201's door 1, 204's door 2 and 203's door 0
-  [457, "rng"], [457, "rseed"], [949, "rng"], [949, "rseed"], [1571, "rng"], [1571, "rseed"], [1939, "rng"], [1939, "rseed"],
+  
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [492, 582, "hk"], [984, 1074, "hk"], [1606, 1696, "hk"], [1974, 2064, "hk"],
 ]
@@ -38,7 +38,7 @@ frames = [360, 1749]
 expect = "match"
 ignore = [
   # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 204's door 1, 205's door 2 and 207's stairs door
-  [420, "rng"], [420, "rseed"], [1060, "rng"], [1060, "rseed"], [1490, "rng"], [1490, "rseed"],
+  
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [455, 545, "hk"], [1095, 1185, "hk"], [1525, 1617, "hk"],
 ]
@@ -62,7 +62,7 @@ frames = [360, 2129]
 expect = "match"
 ignore = [
   # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 10C's door 2 and 114's door 0
-  [749, "rng"], [749, "rseed"], [2053, "rng"], [2053, "rseed"],
+  
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [784, 874, "hk"], [2088, 2129, "hk"],
   # the head through 10C's door 2 while 114's load runs Sherry's scene behind the door: the original places it on the rest pose at the load, arklay on the door's last frame (docs/internals/deviations/re2.md, "The head through a door")
@@ -89,7 +89,7 @@ frames = [360, 3792]
 expect = "match"
 ignore = [
   # the doors' own ticks: 114's door 0, 113's door 1, 112's door 0, 110's door 0 and 10F's door 0
-  [350, "rng"], [350, "rseed"], [1775, "rng"], [1775, "rseed"], [2212, "rng"], [2212, "rseed"], [3020, "rng"], [3020, "rseed"], [3438, "rng"], [3438, "rseed"],
+  
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [385, 475, "hk"], [1810, 1900, "hk"], [2247, 2337, "hk"], [3055, 3145, "hk"], [3473, 3563, "hk"],
 ]
@@ -112,7 +112,7 @@ frames = [360, 2444]
 expect = "match"
 ignore = [
   # the doors' own ticks: 10A's door 0, 109's door 0, 108's stairs (area 11's event opens door 0) and 107's door 0
-  [418, "rng"], [418, "rseed"], [1078, "rng"], [1078, "rseed"], [1554, "rng"], [1554, "rseed"], [2085, "rng"], [2085, "rseed"],
+  
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [453, 543, "hk"], [1113, 1203, "hk"], [1589, 1679, "hk"], [2120, 2210, "hk"],
 ]
@@ -135,7 +135,7 @@ frames = [360, 3018]
 expect = "match"
 ignore = [
   # the doors' own ticks: 106's door 1 and 107's door 1
-  [740, "rng"], [740, "rseed"], [1785, "rng"], [1785, "rseed"],
+  
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [775, 865, "hk"], [1820, 1910, "hk"],
 ]
@@ -158,7 +158,7 @@ frames = [360, 2419]
 expect = "match"
 ignore = [
   # the doors' own ticks: 108's door 1, 109's door 0 and 10A's door 2
-  [480, "rng"], [480, "rseed"], [1179, "rng"], [1179, "rseed"], [1784, "rng"], [1784, "rseed"],
+  
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [515, 605, "hk"], [1214, 1304, "hk"], [1819, 1909, "hk"],
 ]
@@ -184,19 +184,7 @@ expect = "match"
 record = "--start claire"
 # route_claire_a_spade's known differences to its end (its input is this run's to 31565), then each warp's mapped on
 ignore = [
-    [356, "rng"], [356, "rseed"], [2627, "rng"], [2627, "rseed"], [5527, "rng"], [5527, "rseed"],
-    [6656, "rng"], [6656, "rseed"], [7008, "rng"], [7008, "rseed"], [8062, "rng"], [8062, "rseed"],
-    [8379, "rng"], [8379, "rseed"], [8892, "rng"], [8892, "rseed"], [10086, "rng"], [10086, "rseed"],
-    # route_claire_a_card's 12936: this recording's original drew the door's number 3 ticks sooner (route_claire_a_115's 4)
-    [12933, "rng"], [12933, "rseed"],
-    [15492, "rng"], [15492, "rseed"], [15983, "rng"], [15983, "rseed"], [17907, "rng"], [17907, "rseed"],
-    [18685, "rng"], [18685, "rseed"], [20235, "rng"], [20235, "rseed"],
-    [21426, "rng"], [21426, "rseed"], [21917, "rng"], [21917, "rseed"], [24769, "rng"], [24769, "rseed"],
-    [25204, "rng"], [25204, "rseed"],
     # this segment's doors: 115's door 0, 114's door 2, 10C's stairs door, 207's door 1, 205's door 0, 204's door 0 and 201's door 0
-    [27517, "rng"], [27517, "rseed"], [27959, "rng"], [27959, "rseed"], [28693, "rng"], [28693, "rseed"],
-    [28990, "rng"], [28990, "rseed"], [29640, "rng"], [29640, "rseed"], [30176, "rng"], [30176, "rseed"],
-    [30643, "rng"], [30643, "rseed"],
     # the objects are compared in 10C from the end of its load to door 2's load (as route_200_115's), and in 115 from
     # the end of its load on: elsewhere the slots out of play keep what the last room's objects left in them in the
     # original, where arklay's are zero (docs/internals/deviations/re2.md, "What an object's slot held before")
@@ -208,24 +196,24 @@ ignore = [
     [27552, 31672, "om3"], [27552, 31672, "om7"], [27552, 31672, "om8"], [27552, 31672, "om9"],
     # the view's load on the new game's first tick (`movie` 1 in the original, 0 in arklay), as route_200_spade's
     [0, "movie"],
-    # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do (the card's door's to 13058: this recording's original runs it a tick later than route_claire_a_115's)
-    [391, 481, "hk"], [2662, 2752, "hk"], [5562, 5652, "hk"], [7043, 7133, "hk"], [8097, 8187, "hk"], [8927, 9019, "hk"], [10121, 10211, "hk"], [12967, 13058, "hk"], [15527, 15617, "hk"], [16018, 16108, "hk"], [17942, 18032, "hk"], [18720, 18810, "hk"], [20270, 20360, "hk"], [21461, 21551, "hk"], [21952, 22044, "hk"], [24804, 24894, "hk"], [25239, 25329, "hk"], [27552, 27642, "hk"], [27994, 28084, "hk"], [28728, 28820, "hk"], [29025, 29115, "hk"], [29675, 29765, "hk"], [30211, 30301, "hk"], [30678, 30768, "hk"],
+    # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
+    [391, 481, "hk"], [2662, 2752, "hk"], [5562, 5652, "hk"], [7043, 7133, "hk"], [8097, 8187, "hk"], [8927, 9019, "hk"], [10121, 10211, "hk"], [12965, 13055, "hk"], [15527, 15617, "hk"], [16018, 16108, "hk"], [17942, 18032, "hk"], [18720, 18810, "hk"], [20270, 20360, "hk"], [21461, 21551, "hk"], [21952, 22044, "hk"], [24804, 24894, "hk"], [25239, 25329, "hk"], [27552, 27642, "hk"], [27994, 28084, "hk"], [28728, 28820, "hk"], [29025, 29115, "hk"], [29675, 29765, "hk"], [30211, 30301, "hk"], [30678, 30768, "hk"],
     # `zd` (docs/internals/deviations/re2.md, "What a zombie's slot held before"): the load's tick in room 100, room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load
     [0, "zd"], [482, 2751, "zd"], [8505, 9017, "zd"],
     # claire_a_200_203's (warp ticks 344 on): the doors' own ticks, `hk` over each load
-    [31678, "rng"], [31678, "rseed"], [32170, "rng"], [32170, "rseed"], [32792, "rng"], [32792, "rseed"], [33160, "rng"], [33160, "rseed"], [31713, 31803, "hk"], [32205, 32295, "hk"], [32827, 32917, "hk"], [33195, 33285, "hk"],
+    [31713, 31803, "hk"], [32205, 32295, "hk"], [32827, 32917, "hk"], [33195, 33285, "hk"],
     # claire_a_204_10c's (warp ticks 344 on): the doors' own ticks, `hk` over each load
-    [33577, "rng"], [33577, "rseed"], [34217, "rng"], [34217, "rseed"], [34647, "rng"], [34647, "rseed"], [33612, 33702, "hk"], [34252, 34342, "hk"], [34682, 34774, "hk"],
+    [33612, 33702, "hk"], [34252, 34342, "hk"], [34682, 34774, "hk"],
     # claire_a_10c_113's (warp ticks 344 on): the doors' own ticks, `hk` over each load and its other known differences
-    [35261, "rng"], [35261, "rseed"], [35296, 35386, "hk"], [35387, 35600, "pneck"], [35387, 35601, "zm0"],
+    [35296, 35386, "hk"], [35387, 35600, "pneck"], [35387, 35601, "zm0"],
     # claire_a_114_10a's (warp ticks 344 on): the doors' own ticks, `hk` over each load
-    [36572, "rng"], [36572, "rseed"], [37997, "rng"], [37997, "rseed"], [38434, "rng"], [38434, "rseed"], [39242, "rng"], [39242, "rseed"], [39660, "rng"], [39660, "rseed"], [36607, 36697, "hk"], [38032, 38122, "hk"], [38469, 38559, "hk"], [39277, 39367, "hk"], [39695, 39785, "hk"],
+    [36607, 36697, "hk"], [38032, 38122, "hk"], [38469, 38559, "hk"], [39277, 39367, "hk"], [39695, 39785, "hk"],
     # claire_a_10a_106's (warp ticks 344 on): the doors' own ticks, `hk` over each load
-    [40075, "rng"], [40075, "rseed"], [40773, "rng"], [40773, "rseed"], [41249, "rng"], [41249, "rseed"], [41780, "rng"], [41780, "rseed"], [40110, 40200, "hk"], [40808, 40898, "hk"], [41284, 41374, "hk"], [41815, 41905, "hk"],
+    [40110, 40200, "hk"], [40808, 40898, "hk"], [41284, 41374, "hk"], [41815, 41905, "hk"],
     # claire_a_106_108's (warp ticks 344 on): the doors' own ticks, `hk` over each load
-    [42512, "rng"], [42512, "rseed"], [42547, 42637, "hk"],
+    [42547, 42637, "hk"],
     # claire_a_106_108's (warp ticks 1785 on): the doors' own ticks, `hk` over each load
-    [44112, "rng"], [44112, "rseed"], [44147, 44237, "hk"],
+    [44147, 44237, "hk"],
     # claire_a_108_10b's (warp ticks 344 on): the doors' own ticks, `hk` over each load
-    [45458, "rng"], [45458, "rseed"], [46157, "rng"], [46157, "rseed"], [46762, "rng"], [46762, "rseed"], [45493, 45583, "hk"], [46192, 46282, "hk"], [46797, 46887, "hk"],
+    [45493, 45583, "hk"], [46192, 46282, "hk"], [46797, 46887, "hk"],
 ]

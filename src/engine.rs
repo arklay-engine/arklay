@@ -8815,21 +8815,25 @@ impl GameSession {
             .transition
             .as_ref()
             .and_then(|session| session.door_yield.as_ref());
+        // RE 2 keeps `Rnd` and its seed in `re2`, not in the view, which holds
+        // the legacy pair: the original has drawn the tick's numbers by the
+        // yield, so the live values are the ones it shows.
+        let live_rng = if self.game.is_re2_room {
+            u32::from(self.game.re2.rnd.0)
+        } else {
+            self.game.rand_state
+        };
+        let live_rseed = if self.game.is_re2_room {
+            self.game.re2.random as u16
+        } else {
+            self.game.rand_seed
+        };
         let (rng, rseed, entities) = match door_yield {
-            Some(view) => (view.rand_state, view.rand_seed, &view.entities[..]),
-            None => (
-                if self.game.is_re2_room {
-                    u32::from(self.game.re2.rnd.0)
-                } else {
-                    self.game.rand_state
-                },
-                if self.game.is_re2_room {
-                    self.game.re2.random as u16
-                } else {
-                    self.game.rand_seed
-                },
-                &self.game.entities[..],
-            ),
+            Some(view) if !self.game.is_re2_room => {
+                (view.rand_state, view.rand_seed, &view.entities[..])
+            }
+            Some(view) => (live_rng, live_rseed, &view.entities[..]),
+            None => (live_rng, live_rseed, &self.game.entities[..]),
         };
         trace::TraceTick {
             room: self.game.drawn_room(self.loaded.id),
