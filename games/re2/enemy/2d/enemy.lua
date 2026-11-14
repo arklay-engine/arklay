@@ -13,8 +13,9 @@
 -- A hit (`Routine_0` 2) or the death (3) sends it back into the wall, the
 -- same for every weapon: neither reads `Routine_1`.
 --
--- Not ported yet: the grab (`Routine_1` 4, `FUN_00484640`) and the player's
--- side of it (`em_damage_table_real[0x1d]`, `FUN_00484a80`) and the shadow
+-- The grab (`Routine_1` 4, `FUN_00484640`) puts the player in routine 5 on
+-- this body's second bank; the player's side is `em_damage_table_real[0x1d]`
+-- (`FUN_00484a80`, `Mover::em2d_held`). Not ported yet: the shadow
 -- (`Kage_work_set`).
 
 local HOME_ANGLE <const> = 0 -- `+0x218`: `Cdir_y` at the init.
@@ -209,6 +210,22 @@ local function grab_check(e)
     end
 end
 
+-- `Goto00` toward the player: the facing it leaves isn't masked to 12 bits
+-- when it steps, which the head turn's signed clamp can see after a hold.
+local function goto_player(e, rate)
+    local angle = e:angle()
+    local error = (e:angle_to_player() + rate) & 0xFFF
+    if error < rate * 2 then
+        e:set_angle((angle + e:angle_to_player()) & 0xFFF)
+        return
+    end
+    local stepped = angle - rate
+    if error <= 0x800 then
+        stepped = stepped + rate * 2
+    end
+    e:set_angle(stepped & 0xFFFF)
+end
+
 -- `FUN_004845d0`: the reach, turning after the player.
 local function reach(e)
     local step = e:routine(2)
@@ -221,8 +238,41 @@ local function reach(e)
     elseif step ~= 1 then
         return
     end
-    e:goto_player(0x30)
+    goto_player(e, 0x30)
     e:step(e:joint(0x100))
+end
+
+-- `FUN_00484640`: the grab. The player stands at its arm, held on this
+-- body's clips, for 150 ticks less two for each press, then is let go, and
+-- `fg_room_enemy` keeps the other bodies from grabbing for 120 ticks.
+local function grab(e)
+    local step = e:routine(2)
+    if step == 0 then
+        e:clip(5, 0, 0xF)
+        e:set_routine(2, 1)
+        local x, _, z = e:own_part(REACH_PART[kind(e)])
+        if x ~= nil then
+            e:set_player_xz(x, z)
+        end
+        e:pl_set_routine(5, 0, 0, 0)
+        e:pl_hold()
+        e:pl_set_sub1()
+        e:set_timer(1, 0x96)
+    elseif step == 1 then
+        if e:move_cnt() == 0 then
+            e:sound((e:rnd() & 1) == 0 and 7 or 5)
+        end
+        e:joint(0x100)
+        local timer = i16(e:timer(1) - (e:gacha() and 2 or 0) - 1)
+        e:set_timer(1, timer & 0xFFFF)
+        if timer < 0 then
+            e:set_routine(2, 2)
+            e:pl_set_routine_at(2, 2)
+        end
+    elseif step == 2 then
+        e:set_room_enemy(0x78)
+        e:routines(1, 5, 0, 0)
+    end
 end
 
 -- `FUN_00484780`: back into the wall, and the end.
@@ -264,9 +314,10 @@ local function hold(e)
     end
 end
 
--- 4, the grab (`FUN_00484640`), isn't ported yet.
 local CHECK <const> = { [0] = wake_check, [1] = reach_check, [3] = grab_check }
-local ACTION <const> = { [0] = wait, [1] = turn, [3] = reach, [5] = retreat, [6] = hold }
+local ACTION <const> = {
+    [0] = wait, [1] = turn, [3] = reach, [4] = grab, [5] = retreat, [6] = hold,
+}
 
 -- `FUN_00484140`.
 local function move(e)
