@@ -49,5 +49,5 @@ setup_script = "colt_licker_204.lua"
 input = "licker_204_fight.txt"
 input_shift = 344
 fields = "esp"
-expect = { tick = 573, fields = ["esp91", "esp92", "esp94"], note = "the three kind-5 effects the licker's first hit on the player makes start about 100 off the original's; the handgun's fight (licker_204_fight's reference, compared on esp) parts the same way at its first hit, tick 503, so it isn't the Colt's" }
+expect = "match"
 record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip-load 0xD --give 0:0xD:6 --give 1:0x14:200"

@@ -1767,6 +1767,30 @@ impl UserData for Api {
                 Ok(())
             },
         );
+        // `Esp_call` on the player's part `part` as the last draw left it
+        // (`Work::parts`) at the point (x, y, z) on it: the effect keeps the
+        // part, as the original's keeps a pointer to its `Workm`. Nothing
+        // without a pose of the part.
+        methods.add_method_mut(
+            "player_part_effect",
+            |_,
+             e,
+             (kind, row, size, dir, part, x, y, z): (u8, u8, u16, i16, usize, i32, i32, i32)| {
+                let world = &mut *e.em().world;
+                let Some(matrix) = world.pl.parts.get(part).copied().flatten() else {
+                    return Ok(());
+                };
+                let anchor = crate::esp2::Anchor {
+                    body: crate::esp2::Body::Player,
+                    part: part as u8,
+                };
+                let point = [x as i16, y as i16, z as i16];
+                world
+                    .effects
+                    .call_on_part(kind, row, size, dir, anchor, matrix, point);
+                Ok(())
+            },
+        );
         methods.add_method_mut(
             "call_effect",
             |_, e, (kind, row, size, dir, x, y, z): (u8, u8, u16, i16, i64, i64, i64)| {
@@ -1927,7 +1951,7 @@ mod tests {
             pos = { 32000, -5700, 32000 }, spd = { 0, 0, 0 }, angle = 1024,
             move_no = -1, move_cnt = 0, frame = 0, flags = 0, sce = 0, life = 0,
             supers = {}, init_supers = 0, spxz = 0, clips = {}, atd = 0 }
-        local e = setmetatable({}, { __index = function() return function() end end })
+        e = setmetatable({}, { __index = function() return function() end end })
         function e:routine(i) return w.r[i] end
         function e:set_routine(i, v) w.r[i] = v end
         function e:routines(a, b, c, d) w.r = { [0] = a, b, c, d } end
@@ -2001,6 +2025,31 @@ mod tests {
         .unwrap();
         budget.begin();
         lua.load(body).exec().unwrap();
+    }
+
+    /// The slash's hit (`switchD_004651fd::caseD_9`, 0x463db0): its blood
+    /// is part 13's `Workm.t` as the last draw left it, 200 lower, with no
+    /// turn of the part's (#648).
+    #[test]
+    fn the_slash_bleeds_200_below_part_13() {
+        run_licker(
+            "",
+            "tick()
+             w.r = { [0] = 1, 9, 2, 1 }
+             function e:own_part(p) if p == 13 then return -16387, -134, -8989 end end
+             function e:part_point() return 0, 0, 0 end
+             function e:call_effect(...) w.fx = { ... } end
+             function e:pl_damage_cnt() return 0 end
+             function e:turn_to_player() return 0 end
+             function e:distance() return 0x800 end
+             function e:pl_life_down() return 0 end
+             tick()
+             assert(w.fx, 'no blood')
+             local fx = w.fx
+             assert(fx[1] == 0 and fx[2] == 0 and fx[3] == 0x2400 and fx[4] == 0)
+             assert(fx[5] == -16387 and fx[6] == 66 and fx[7] == -8989,
+                 fx[5] .. ' ' .. fx[6] .. ' ' .. fx[7])",
+        );
     }
 
     /// `Em22_Init` (0x464B50): a scripted `Type` takes `BYTE_00527c80`, so
