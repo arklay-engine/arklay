@@ -21,7 +21,8 @@
 -- `player2::em27_held`), which the init points at; `em_die_table`'s 0x476ed0
 -- isn't reached.
 --
--- Not ported: `Type` 1 and 2 and states 3 and 6 (they stand hidden), the
+-- `Type` 2, the embryos the G adult (`Em_28`) spits, take state 6 (`FUN_00476060`).
+-- Not ported: `Type` 1 and state 3 (it stands hidden), the
 -- shot's hits,
 -- `Routine_0` 3's `Routine_1` 0x13, and the parts'
 -- squash and colours as drawn (only their counts are kept, in vars).
@@ -103,6 +104,15 @@ local function init(e)
         e:set_be_flg(e:be_flg() & ~0x4000000)
         e:set_hidden_parts(0x3FF)
         e:set_shadow(0)
+        if low == 2 then
+            -- On the G adult's part 4, a point 0x32 above it.
+            local ax, ay, az = e:parent_apply(4, 0, 0x32, 0)
+            local px, py, pz = e:parent_part(4)
+            e:set_pos(ax + px, ay + py, az + pz)
+            e:set_var(SIZE, 0x800)
+            e:set_damage_cnt(0x80)
+            e:set_be_flg(e:be_flg() | 0x800)
+        end
     elseif low == 3 then
         e:set_routine(1, 1)
         e:set_life((e:rnd() & 1) + 2)
@@ -728,8 +738,115 @@ local function rest(e)
     end
 end
 
--- `funcs_528938`, by `Routine_1` (3 and 6 aren't ported).
-local STATES <const> = { [1] = crawl, [2] = jump, [4] = latch, [5] = slide, [7] = rest }
+-- Every part's `Poly_rgb` less `step`. Only its colour, the low three bytes,
+-- is kept: the code byte above them doesn't change what the fade reads.
+local function rgb_sub(e, step)
+    e:set_var(RGB, (e:var(RGB) - step) & 0xFFFFFF)
+end
+
+-- `FUN_00476060`: the way out of the G adult (`Type` 2): it rides a point
+-- before part 4 of the adult's (`enemy_work[0]`'s) mouth, falls to the
+-- ground and takes to the crawl. The parts' colours and their hiding aren't
+-- kept, only their count in `RGB`.
+local function mouth(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:clip(0xC, 0, 0)
+        e:set_routine(2, 1)
+        e:set_timer(0, 0x1E)
+        e:set_timer(2, 0x5A)
+        e:set_var(RGB, 0xC0C0C0)
+        e:sound(7)
+        sub = 1
+    end
+    if sub == 1 then
+        local t0 = i16(e:timer(0))
+        local vx, vy = t0, t0 // 5 + 0x3C
+        if t0 < 0 and t0 % 5 ~= 0 then
+            vy = vy + 1
+        end
+        local vz = 0x40 - (e:rnd() & 0x7F)
+        local ax, ay, az = e:parent_apply(4, vx, vy, vz)
+        local px, py, pz = e:parent_part(4)
+        e:set_pos(ax + px, ay + py, az + pz)
+        e:joint(0x100)
+        e:set_timer(0, (t0 + 5) & 0xFFFF)
+        local left = e:timer(2)
+        e:set_timer(2, (left - 1) & 0xFF)
+        if left == 0 then
+            e:set_routine(2, 2)
+        end
+        return
+    elseif sub == 2 then
+        e:set_timer(0, 0)
+        e:set_routine(2, 3)
+        e:sound(7)
+        sub = 3
+    end
+    if sub == 3 then
+        e:joint(0x100)
+        local t0 = i16(e:timer(0))
+        local _, y = e:pos()
+        y = y + t0
+        e:set_timer(0, (t0 + 0x1E) & 0xFFFF)
+        e:set_pos_y(y)
+        local ground = i16(e:var(GROUND))
+        if ground < y then
+            e:set_pos_y(ground)
+            e:set_routine(2, 4)
+            e:set_damage_cnt(e:damage_cnt() & 0x7F)
+        end
+        return
+    end
+    if sub == 4 then
+        e:clip(0xB, 0, 3)
+        e:set_timer(0, (e:rnd() & 0x1F) + 0x78)
+        e:set_routine(2, 5)
+        e:set_be_flg(e:be_flg() | 0x4000000)
+        e:set_timer(1, 1)
+        e:sound(5)
+        sub = 5
+    end
+    if sub == 5 then
+        local t1 = i16(e:timer(1))
+        e:set_timer(1, (-t1) & 0xFFFF)
+        local size = i16(e:var(SIZE) + t1 * 0x1E + 0x12)
+        if size > 0x1000 then
+            size = 0x1000
+        end
+        e:set_var(SIZE, size)
+        local t0 = e:timer(0)
+        if t0 == 0x3C then
+            e:clip(9, 0, 3)
+        end
+        if t0 & 0x3F ~= 0 and e:rnd() & 0x1F == 0 then
+            e:sound(5)
+        end
+        local dx = 0x10 - (e:rnd() & 0x1F)
+        local dz
+        set_speed_x(e, dx)
+        e:add_pos(dx, 0, 0)
+        dz = 0x10 - (e:rnd() & 0x1F)
+        local sx, sy = e:speed()
+        e:set_speed(sx, sy, dz)
+        e:add_pos(0, 0, dz)
+        e:set_angle((e:angle() + 0x80 - e:rnd()) & 0xFFFF)
+        if i16(t0) < 0x5A then
+            rgb_sub(e, 0x10101)
+        end
+        e:joint(0x400)
+        e:set_timer(0, (t0 - 1) & 0xFFFF)
+        if t0 == 0 then
+            e:routines(1, 1, 0, 0)
+            set_speed_x(e, 0x50)
+            e:set_be_flg(e:be_flg() & ~0x800)
+        end
+        tread_check(e)
+    end
+end
+
+-- `funcs_528938`, by `Routine_1` (3 isn't ported).
+local STATES <const> = { [1] = crawl, [2] = jump, [4] = latch, [5] = slide, [6] = mouth, [7] = rest }
 
 -- `FUN_00474660`: the pre, then the state of `Routine_1` as the pre left it.
 local function move(e)
@@ -742,11 +859,6 @@ local function move(e)
     end
 end
 
--- Every part's `Poly_rgb` less `step`. Only its colour, the low three bytes,
--- is kept: the code byte above them doesn't change what the fade reads.
-local function rgb_sub(e, step)
-    e:set_var(RGB, (e:var(RGB) - step) & 0xFFFFFF)
-end
 
 -- `0x4767c0`'s `Routine_2` 0: a shot's death (`Routine_1` the weapon), with
 -- clip 9 at a frame `Rnd` picks, blood (effect 0, row 8) on part 0's

@@ -2442,6 +2442,7 @@ impl GameHost<'_> {
             || id == crate::zombie2::EM2D_ID
             || id == crate::zombie2::ROACH_ID
             || id == crate::zombie2::EMBRYO_ID
+            || id == crate::zombie2::ADULT_ID
             || crate::zombie2::is_plant(id);
         // Any other enemy takes the slot, and isn't modelled yet.
         if !zombie && !(0x40..0x5C).contains(&id) {

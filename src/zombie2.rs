@@ -447,6 +447,14 @@ pub(crate) const YOUNG_GROUND: usize = 30;
 pub const ROACH_ID: u8 = 0x29;
 /// The G embryos, `Em_27`, whose script is `enemy/27/enemy.lua`.
 pub const EMBRYO_ID: u8 = 0x27;
+/// The G adult, `Em_28`, whose script is `enemy/28/enemy.lua`.
+pub const ADULT_ID: u8 = 0x28;
+/// `Em_28`'s `Neck_no`, which its init sets.
+const ADULT_NECK: usize = 4;
+/// The parts `Atd[1]` and `Atd[2]` follow.
+const ADULT_BOXES: [usize; 2] = [3, 0x12];
+/// `Sca_ck_em`'s mask for `Em_28`.
+const ADULT_MASK: u16 = 0x400;
 /// `Em_27`'s `Sca_ck_em` mask.
 const EMBRYO_MASK: u16 = 0x400;
 /// `Ground`, which `Game_loop`'s pass after the moves finds under it.
@@ -1008,6 +1016,9 @@ pub struct World<'a> {
     pub works: Vec<(usize, Option<u8>, bool)>,
     /// What `Set_enemy_work` gave out this tick.
     pub spawns: Vec<Spawn>,
+    /// The slots whose `Be_flg` this tick's script cleared outright
+    /// (`*(undefined4 *)enemy_work[n] = 0`), taking them out of play.
+    pub freed: Vec<usize>,
     /// The script took its own work out of play (`Kill_enemy_work`).
     pub killed: bool,
     /// The room's water areas, for `Water_ck`. Only a spider's world has them.
@@ -1354,6 +1365,52 @@ impl Em<'_, '_, '_> {
         }
     }
 
+    /// `Em_28`: `Root_ck` toward the player before the stop test, then the
+    /// script (the counters, the move and the sound), `Oba_set_ofs`, the boxes
+    /// of parts 3 and 0x12, `Oba_ck_hit` of every body against it and
+    /// `Sca_ck_em` with `0x400`.
+    fn run_adult(&mut self) {
+        self.root_ck();
+        if self.world.stopped {
+            return;
+        }
+        if self.z.damage_cnt & 0x7F != 0 {
+            self.z.damage_cnt -= 1;
+        }
+        self.old_pos = self.mover.player.pos;
+        self.z.vars[DOG_GROUND] = self.mover.tick.room.sca.as_ref().map_or(0, |sca| {
+            crate::sca::ground_at(sca, self.old_pos, 0, MASK).height
+        });
+        self.z.parts = self.mover.posed_parts();
+        self.work().neck.joint = Some(ADULT_NECK as u8);
+        self.script();
+        if *self.be_flg != 0 {
+            self.oba_set_ofs();
+            // `Atd[1]` and `Atd[2]`, on parts 3 and 0x12 as the last draw left
+            // them; the rest of their boxes is the init's.
+            self.z.more_atd = ADULT_BOXES
+                .map(|part| {
+                    let t = self
+                        .z
+                        .parts
+                        .get(part)
+                        .copied()
+                        .flatten()
+                        .map_or([0; 3], |matrix| matrix.t);
+                    Atd {
+                        ofs_x: 0,
+                        ofs_y: -1500,
+                        at_w: 800,
+                        at_h: 1500,
+                        w: 800,
+                        at: [t[0], 0, t[2]],
+                    }
+                })
+                .to_vec();
+            self.sca_ck_masked(ADULT_MASK);
+        }
+    }
+
     /// `Em_23`, which leaves the rest to its script. It doesn't run
     /// `Sca_ck_em` or `Oba_ck_em`: its boxes push the others instead
     /// (`Oba_ck_hit` of each work against it), which isn't ported yet.
@@ -1594,6 +1651,10 @@ impl Em<'_, '_, '_> {
         }
         if self.mover.tick.id == EMBRYO_ID {
             self.run_embryo();
+            return;
+        }
+        if self.mover.tick.id == ADULT_ID {
+            self.run_adult();
             return;
         }
         // The scripts run first, and `Workm` stops following the skeleton from

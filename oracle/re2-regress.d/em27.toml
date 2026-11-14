@@ -70,6 +70,7 @@ record = "--warp 303:-24972:-5400:-13739:552:3 --flag 4:55 --flag 4:57 --life 10
 
 [[run]]
 name = "g_adult_wait_303"
+ref = "g_adult_wait_303_zm0"
 setup_script = "g_adult_wait_303.lua"
 room = "303"
 character = 0
@@ -77,6 +78,6 @@ sound = false
 ticks = 2400
 # Leon A, in from room 304's door with the G adult (Em_28, slot 0) kept: the player stands while it and the embryos come
 input = "none.txt"
-fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,fgscn,fgstat"
-expect = { tick = 344, fields = ["rng", "zm2", "zm3"], note = "Em_28, the G adult in slot 0, is not ported: its init draws a different Rnd and the embryos it releases differ, #690" }
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,fgscn,fgstat"
+expect = { tick = 353, fields = ["zm1"], note = "the embryo that rides out of the G adult starts a few units from the original's: Em_28 turns parts 2 to 4 toward the player (Rot_neck_em_n) and its head isn't placed by it, #690" }
 record = "--warp 303:-24972:-5400:-13739:552:3 --flag 4:55 --flag 4:57 --life 200"
