@@ -10,10 +10,13 @@
 -- runs the stop check, `Damage_cnt` and `Oba_set_ofs` around it, and neither
 -- `Oba_ck_em` nor `Sca_ck_em`.
 --
--- Not ported yet: on the player and the fall off it (`Routine_1` 3 and 4),
--- with the player's side of an attach and the placement before the stop
--- check; the tread, the hits and the deaths (`Routine_0` 2 and 3); and the
--- flame count (`+0x228`).
+-- `Em_29` also sets `Pos` to the attach point's offset before its stop check
+-- while `Routine_0..2` read 1, 3, 1. Routine 3's sub 1 writes the same offset
+-- on every tick it runs and nothing else moves the body, so that write
+-- changes nothing and isn't ported.
+--
+-- Not ported yet: the tread, the hits and the deaths (`Routine_0` 2 and 3);
+-- and the flame count (`+0x228`).
 
 local ANGLE <const> = 0 -- `+0x218`: the angle round the pipe's axis.
 local STEP <const> = 1 -- `+0x21a`: the last crawl's step round it.
@@ -55,6 +58,8 @@ local FLY_MAX <const> = 200
 local CLIMB <const> = 100
 local FLY_TICKS <const> = 0x5A
 local REACH <const> = 200
+-- `0x689590` past this when a roach lands: the player dies.
+local KILL_TICKS <const> = 0xE1
 -- Parts 2 and 3: the wings.
 local WINGS <const> = (1 << 2) | (1 << 3)
 
@@ -384,8 +389,21 @@ local function jump(e)
     if e:hypot(x - tx, z - tz) < REACH and abs(y - ty) < REACH then
         set_flags(e, 2, 8)
         e:set_swarm(ON_PLAYER, e:swarm(ON_PLAYER) + 1)
-        -- The player's side (`Routine_0` 5, the hold and the kill) isn't
-        -- ported yet.
+        if e:pl_damage_cnt() == 0 then
+            -- `Pl_Em_damage` (`FUN_0047cf90`) from its start, with this
+            -- body's second bank as the player's `pSub1`: each landing
+            -- starts the struggle again.
+            e:pl_set_routine(5, 0, 0, 0)
+            e:pl_hold()
+            e:pl_set_sub1()
+            if e:swarm(ON_TICKS) > KILL_TICKS then
+                -- The dword write: routines 3, 0, 0, 0, and `Die`.
+                e:pl_set_routine(3, 0, 0, 0)
+                e:set_player_life(-1)
+                e:pl_set_damage_cnt(0x80)
+                e:set_swarm(KILLED, 1)
+            end
+        end
         e:routines(1, 3, 0, 0)
         e:set_be_flg(e:be_flg() & ~0x2000)
         return
@@ -411,8 +429,102 @@ local function jump(e)
     e:add_speed_xz()
 end
 
--- `funcs_47C2B2`, by `Routine_1`. 3 and 4 aren't ported yet.
-local MOVES <const> = { [0] = wait, crawl, jump }
+-- `Routine_1` 3 (`0x47c9b0`): on the player, on its point's part, until
+-- `Timer0` runs out; each new key press takes 8 off it rather than 1.
+local function on_player(e)
+    local point = POINTS[e:var(SLOT)] or POINTS[0]
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:sound(3)
+        e:set_be_flg(e:be_flg() | 0x3000000)
+        e:set_cdir(point[5], point[7])
+        e:set_angle(point[6] & 0xFFFF)
+        e:set_super_part(point[1])
+        e:set_timer(0, (e:rnd() >> 4) + 0x5A)
+        e:set_routine(2, 1)
+        sub = 1
+    end
+    if sub == 1 then
+        e:set_pos(point[2], point[3], point[4])
+        mot_play(e, 2, 0)
+        local timer = i16(e:timer(0) - (e:key_trg() ~= 0 and 8 or 1))
+        e:set_timer(0, timer & 0xFFFF)
+        if timer < 0 and e:swarm(KILLED) == 0 then
+            e:routines(1, 4, 0, 0)
+            local on = e:swarm(ON_PLAYER) - 1
+            e:set_swarm(ON_PLAYER, on)
+            if on == 0 then
+                -- The byte `Routine_0` and `Routine_1`, and the word after.
+                e:pl_set_routine(1, 0, 0, 0)
+                return
+            end
+        end
+    end
+    if e:swarm(ON_PLAYER) > 2 then
+        e:set_swarm(ON_TICKS, e:swarm(ON_TICKS) + 1)
+    end
+end
+
+-- `Routine_1` 4 (`0x47caf0`): the fall off the player, away from it, down
+-- to the floor and back onto the pipe. Its turn on the way down steps away
+-- from 0xC00, as the original's does.
+local function fall_off(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        local point = POINTS[e:var(SLOT)] or POINTS[0]
+        e:set_be_flg(e:be_flg() & ~0x1000000)
+        local x, y, z = e:player_part_point(point[1], point[2], point[3], point[4])
+        if x == nil then
+            x, y, z = e:player_pos()
+        end
+        e:set_super_part(nil)
+        e:set_pos(x, y, z)
+        local px, _, pz = e:player_pos()
+        local sx, sz = e:rotate(e:direction(px, pz, i16(x), i16(z)), 0x32, 0)
+        e:set_cdir(0, 0)
+        e:set_angle(0)
+        init_super(e)
+        e:set_timer(0, 0)
+        e:set_speed(sx, 0x14, sz)
+        e:set_routine(2, 1)
+        sub = 1
+    end
+    if sub ~= 1 then
+        return
+    end
+    e:add_speed_xz()
+    local timer = i16(e:timer(0) + 2)
+    e:set_timer(0, timer & 0xFFFF)
+    local sx, sy, sz = e:speed()
+    sy = i16(sy + timer)
+    e:set_speed(sx, sy, sz)
+    local x, y, z = e:pos()
+    y = y + sy
+    e:set_pos(x, y, z)
+    local vz = i16(e:var(SVZ))
+    if abs(vz - 0xC00) > 0x10 then
+        vz = vz < 0xC00 and vz - 0x10 or vz + 0x10
+        e:set_var(SVZ, i16(vz))
+        rot_super(e)
+    end
+    local ground, ceiling = e:sca_ck_hit(x, y, z, 1, 0x400)
+    ground = i16(ground)
+    if ceiling < ground then
+        ground = ceiling
+    end
+    if ground <= y then
+        e:sound(1)
+        e:set_pos(x, ground, z)
+        on_pipe(e)
+        show_wings(e, false)
+        set_flags(e, 0, 1)
+        e:set_swarm(TAKEN, e:swarm(TAKEN) & ~(1 << (e:var(SLOT) & 0x1F)) & 0xFFFFFFFF)
+        e:routines(1, 0, 0, 0)
+    end
+end
+
+-- `funcs_47C2B2`, by `Routine_1`.
+local MOVES <const> = { [0] = wait, crawl, jump, on_player, fall_off }
 
 function update(e)
     local routine = e:routine(0)

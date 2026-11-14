@@ -3,10 +3,10 @@ name = "swarm_stand_40b"
 room = "40B"
 sound = false
 ticks = 1400
-# from room 405's door: the 24 roaches wait, crawl over the pipe and jump at the standing player, who turns their head to them; slot 1 lands on the player on tick 438
+# from room 405's door: the 24 roaches wait, crawl over the pipe and jump at the standing player, who turns their head to them; from tick 438 they land on the player, who struggles, and each falls off when its time runs out
 setup_script = "swarm_stand_40b.lua"
 input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm*"
-expect = { tick = 438, fields = ["p.beh"], note = "the first roach lands on the player (Routine_1 3) and the original starts the player's struggle (Routine_0 5), which is part 2 of #498" }
+expect = "match"
 record = "--warp 40B:-7824:0:-25140:2000:0 --life 200"
 

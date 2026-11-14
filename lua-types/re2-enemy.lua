@@ -1133,6 +1133,18 @@ function Re2EnemyApi:sca_onto_edge(record, x, y, z) end
 ---@return integer under The higher of the floors a record starts from below and above it.
 function Re2EnemyApi:sca_hit(x, y, z, mask) end
 
+---`Sca_ck_hit` of a point grown by `radius`, without the room's objects: its
+---return, and `DWORD_00695E74`, the lowest top rising past the point (0
+---when none does).
+---@param x integer
+---@param y integer
+---@param z integer
+---@param radius integer
+---@param mask integer
+---@return integer ground The highest top at or under the point (0 for none).
+---@return integer ceiling
+function Re2EnemyApi:sca_ck_hit(x, y, z, radius, mask) end
+
 ---`Sca_ck_hit` of a point grown by `radius`, without the room's objects:
 ---whether a record holds it or starts above it.
 ---@param x integer
@@ -1199,6 +1211,13 @@ function Re2EnemyApi:init_super() end
 ---@param y integer
 ---@param z integer
 function Re2EnemyApi:set_super(x, y, z) end
+
+---Hang the body on a part of the player's (`pSuper` set to that part's
+---`Workm`, as a cockroach on the player does): its position and `Cdir` are
+---then local to the part, and it draws and turns the player's head from
+---there. `nil` puts it back on its own surface.
+---@param part integer|nil
+function Re2EnemyApi:set_super_part(part) end
 
 ---`Rot_vector_super`: a vector turned by an angle on the surface the body is
 ---on.
@@ -1457,6 +1476,11 @@ function Re2EnemyApi:pl_speed() end
 ---`Gacha_ch`: whether a button was mashed this tick, to break a hold.
 ---@return boolean mashed
 function Re2EnemyApi:gacha() end
+
+---`Key_trg` (`0x9885FE`): every key that went down this tick, as `Pad_set`
+---maps them.
+---@return integer keys
+function Re2EnemyApi:key_trg() end
 
 -- # Acting on the player
 

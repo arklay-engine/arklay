@@ -413,6 +413,12 @@ pub struct Work {
     pub at_sce: u8,
     /// `Super_matrix`, the surface a body walks on when it isn't the floor.
     pub super_matrix: Option<[[i16; 3]; 3]>,
+    /// `pSuper` on a part of the player's (`Workm`, `Em_29` on the player):
+    /// the body's `Pos` and `Cdir` are then local to that part. With
+    /// `Be_flg`'s `0x3000000`, the draw's `Joint_trans2` writes the place in
+    /// the world into `Pos` (`M.t` is `Pos`), and keeps the local one here.
+    pub super_part: Option<u8>,
+    pub super_local: Option<[i32; 3]>,
     /// `Cdir_x` and `Cdir_z`, which only the giant spider on a wall or the
     /// ceiling turns its body by.
     pub(crate) tilt: [i16; 2],
@@ -1217,6 +1223,8 @@ impl Default for Work {
             view_released: false,
             shot_line: None,
             super_matrix: None,
+            super_part: None,
+            super_local: None,
             tilt: [0, 0],
             floor: 0,
             posed: false,
@@ -3258,7 +3266,11 @@ impl Mover<'_, '_> {
         ) else {
             return;
         };
-        let from = self.chain_position(&[0, NECK_JOINT]);
+        // `Neck_Dir_ZY` aims from the head's `+0x5C`, where the last draw's
+        // `Joint_trans2` left it; the head's place on this pose is the next
+        // tick's.
+        let head = self.chain_position(&[0, NECK_JOINT]);
+        let from = self.work.neck.position.or(head);
         let cdir = i32::from(self.player.angle as i16);
         let root = i32::from(root[1]);
         let facing = cdir + root;
@@ -3266,7 +3278,7 @@ impl Mover<'_, '_> {
         let neck = &mut self.work.neck;
         let flags = neck.flags;
         let mut aim = [0; 2];
-        neck.position = from;
+        neck.position = head;
         let looked_at = neck.target.and_then(|index| *self.tick.necks.get(index)?);
         if let (Some(from), Some(to)) = (from, looked_at) {
             aim = neck_direction(from, to);
@@ -3430,6 +3442,14 @@ impl Mover<'_, '_> {
     /// leaves for the ivy's vines.
     pub(crate) fn posed_parts(&self) -> Vec<Option<Matrix>> {
         self.posed_parts_turned(self.work.body_rotation(self.player.angle))
+    }
+
+    /// Part 0's place under the body (`M`'s, before `Joint_trans2` turns
+    /// it): the pose's offset at the work's height.
+    pub(crate) fn root_offset(&self) -> Option<[i32; 3]> {
+        const IDENTITY: [[i16; 3]; 3] = [[0x1000, 0, 0], [0, 0x1000, 0], [0, 0, 0x1000]];
+        let tree = self.pose_tree(IDENTITY);
+        tree.local.first().copied().flatten().map(|local| local.t)
     }
 
     /// [`Self::posed_parts`] from a root turned by `turn`.
@@ -5441,6 +5461,10 @@ impl Mover<'_, '_> {
             self.em2e_held(held);
             return;
         }
+        if held.holder_id == crate::zombie2::ROACH_ID {
+            self.em29_held();
+            return;
+        }
         if self.work.routine[0] == MODE_HELD_DIE {
             self.held_dying(held);
             return;
@@ -6243,6 +6267,48 @@ impl Mover<'_, '_> {
         if self.joint_move_late(LATE) {
             self.work.be_flg |= 2;
             self.work.routine[2] = 2;
+        }
+    }
+
+    /// `FUN_0047cf90`, `em_damage_table[0x29]`: cockroaches on the player.
+    /// `Pl_Em_damage` hands it the player's `pSub1` bank, which a roach's
+    /// landing set to its own model's second bank; a player whose `Id` is
+    /// 0xF plays clip 0xF of the room's bank instead. Each first tick goes on
+    /// into the next one's `Joint_move`; the roaches end it themselves.
+    fn em29_held(&mut self) {
+        const LATE: u16 = 0x400;
+        const ROOM_CLIP: u8 = 0xF;
+        if self.tick.id == ROOM_CLIP {
+            match self.work.routine[2] {
+                0 => {
+                    self.work.bank = Bank::Room;
+                    self.held_clip(ROOM_CLIP, 0);
+                    self.work.sounds.push(0x400_0001);
+                    self.work.routine[2] = 1;
+                }
+                1 => {}
+                _ => return,
+            }
+            self.joint_move_late(LATE);
+            return;
+        }
+        self.work.bank = Bank::Held;
+        match self.work.routine[2] {
+            0 | 1 => {
+                if self.work.routine[2] == 0 {
+                    self.held_clip(0, 0);
+                    self.work.sounds.push(0x400_0001);
+                    self.work.routine[2] = 1;
+                }
+                if self.joint_move_late(LATE) {
+                    self.held_clip(1, 0);
+                    self.work.routine[2] += 1;
+                }
+            }
+            2 => {
+                self.joint_move_late(LATE);
+            }
+            _ => {}
         }
     }
 
@@ -8949,6 +9015,11 @@ mod tests {
 
     /// Runs a dead player's hold until `done`, or panics.
     fn run_held(setup: &mut Setup, life: &mut i16, done: impl Fn(&Work) -> bool) {
+        run_held_by(setup, life, 0x10, done);
+    }
+
+    /// Runs a hold by an enemy of id `holder_id` until `done`, or panics.
+    fn run_held_by(setup: &mut Setup, life: &mut i16, holder_id: u8, done: impl Fn(&Work) -> bool) {
         let bank = (setup.clips.as_slice(), setup.keyframes.as_slice());
         let tick = Tick {
             room: &setup.room,
@@ -8981,7 +9052,7 @@ mod tests {
                 holder: [0; 3],
                 holder_angle: 0,
                 holder_aim: 0,
-                holder_id: 0x10,
+                holder_id,
                 holder_move_cnt: 0,
                 holder_grip: None,
                 draw_buffer: 0,
@@ -9019,6 +9090,33 @@ mod tests {
         setup.work.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
         setup.tick(Input::default(), 190);
         assert!(!setup.work.holds_game);
+    }
+
+    /// `FUN_0047cf90`: a cockroach's landing starts clip 0 of the hold's bank
+    /// (`pSub1`) with sound `0x4000001`, going on into its `Joint_move` in
+    /// the same tick, then clip 1, which loops until the roaches end it.
+    #[test]
+    fn cockroaches_on_the_player_play_clip_0_then_loop_clip_1() {
+        let mut setup = Setup::new(0);
+        (setup.clips, setup.keyframes) = bank(2, 4, 0);
+        setup.work.routine = [MODE_HELD, 0, 0, 0];
+        setup.work.sounds.clear();
+        let mut life = 200;
+        let roach = crate::zombie2::ROACH_ID;
+        run_held_by(&mut setup, &mut life, roach, |_| true);
+        let work = &setup.work;
+        assert_eq!(work.routine, [MODE_HELD, 0, 1, 0]);
+        assert_eq!((work.bank, work.move_no, work.move_cnt), (Bank::Held, 0, 1));
+        assert_eq!(work.sounds, [0x400_0001]);
+        run_held_by(&mut setup, &mut life, roach, |work| work.routine[2] == 2);
+        assert_eq!((setup.work.move_no, setup.work.move_cnt), (1, 0));
+        for _ in 0..10 {
+            run_held_by(&mut setup, &mut life, roach, |_| true);
+            assert_eq!(setup.work.routine, [MODE_HELD, 0, 2, 0]);
+            assert_eq!(setup.work.move_no, 1);
+        }
+        assert_eq!(setup.work.sounds, [0x400_0001]);
+        assert_eq!(life, 200);
     }
 
     #[test]
