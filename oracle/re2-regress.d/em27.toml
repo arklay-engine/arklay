@@ -79,5 +79,4 @@ ticks = 2400
 # Leon A, in from room 304's door with the G adult (Em_28, slot 0) kept: the player stands while it and the embryos come
 input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,fgscn,fgstat"
-expect = { tick = 1727, fields = ["p.x", "p.z"], note = "the player is pushed 2 units in x and 1 in z at tick 1727, with an embryo (Em_27, slot 3, state 4) about 300 units from them and the adult's bite at 1533 and its knockback matched: the embryo's push on the player isn't ported (or differs by a unit), #717" }
 record = "--warp 303:-24972:-5400:-13739:552:3 --flag 4:55 --flag 4:57 --life 200"
