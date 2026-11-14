@@ -11,6 +11,9 @@ pub const DOWN: u16 = 0x4000;
 pub const LEFT: u16 = 0x8000;
 /// The aim key.
 pub const AIM: u16 = 0x0008;
+/// The lock-drop bit (`Input::lock_drop`), in `STATUS_SETTING`'s mask: a
+/// press reloads the counter and raises the flag like a direction's.
+pub const LOCK: u16 = 0x0004;
 
 /// The setting the title leaves for play (`Title`, `0x5035B0`): the up and
 /// down keys only, a first delay of 10 and a period of 2.
@@ -158,6 +161,17 @@ mod tests {
         assert_eq!(flags(STATUS_SETTING, 20, |_| AIM), [0, 11, 18]);
         // The title's mask has no aim bit.
         assert_eq!(flags(TITLE_SETTING, 20, |_| AIM), Vec::<u32>::new());
+    }
+
+    #[test]
+    fn a_pressed_lock_bit_reloads_the_counter_and_raises_the_flag() {
+        assert_eq!(flags(STATUS_SETTING, 20, |_| LOCK), [0, 11, 18]);
+        assert_eq!(flags(TITLE_SETTING, 20, |_| LOCK), Vec::<u32>::new());
+        let mut pad = PadRepeat::default();
+        pad.set(STATUS_SETTING);
+        pad.step(LOCK);
+        assert!(pad.flag && pad.gated(LOCK));
+        assert!(!pad.gated(UP));
     }
 
     #[test]

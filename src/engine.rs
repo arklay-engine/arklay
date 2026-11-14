@@ -3329,7 +3329,8 @@ impl GameSession {
                 | held(input.right, pad::RIGHT)
                 | held(input.down, pad::DOWN)
                 | held(input.left, pad::LEFT)
-                | held(input.aim, pad::AIM),
+                | held(input.aim, pad::AIM)
+                | held(input.lock_drop, pad::LOCK),
         );
     }
 
