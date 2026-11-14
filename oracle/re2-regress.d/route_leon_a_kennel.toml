@@ -1,6 +1,6 @@
 # Leon A's way from Ben's cell to the sewer (#714, under #656 and #667): the kennel (21A) from 219's door 2, round the sleeping dogs along the south wall to the manhole, the Manhole Opener used on it from the status screen (the opener's event, 4:59), and down into 302
 
-# Room 21A: from 219's door 2 south to the wall, east along it to the manhole's area, the Manhole Opener used (START, slot 6, USE), the scene that opens it, and what follows. A probe, recorded without sound (the room has no voices), to see what the original does after the scene; its moves then end at the manhole's door
+# Room 21A: from 219's door 2 south to the wall, east along it to the manhole's area, the Manhole Opener used (START, slot 6, USE), the scene that opens it, and what follows. A probe, recorded without sound (the room has no voices). After the scene the original takes the Opener out of the pouch and opens the status screen again (`fg_status` 0x8000), as arklay does, so the run matches on every tick to its end
 [[run]]
 name = "leon_a_21a_302"
 room = "21A"
