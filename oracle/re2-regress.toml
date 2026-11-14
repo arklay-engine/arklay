@@ -1241,6 +1241,33 @@ fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,fgscn,fgroom"
 expect = "match"
 record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --life 200 --equip 2 --give 0:2:200 --give 1:5:6 --give 2:7:5 --give 3:0x14:30"
 
+[[run]]
+name = "g1_second_303"
+room = "303"
+character = 2
+frames = true
+ticks = 1800
+# the second encounter (4:57 set: the room places Type 1 at -17643, -5400, -24593): no scene, G1 walks up, slashes, charges and kills the player, to the game over
+setup = { pos = [-16852, -5400, -19090], angle = 552, health = 2000, rnd = 6114, camera = 3, flags = [[1, 1], [4, 55], [4, 57]] }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,fgscn,fgroom"
+expect = "match"
+record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --flag 4:57 --life 2000"
+
+[[run]]
+name = "g1_second_magnum_303"
+room = "303"
+character = 2
+frames = true
+ticks = 1400
+# the second encounter with the magnum every 20 ticks as G1 walks up: its hits, death, rise, limp and fall
+setup_script = "g1_second_magnum_303.lua"
+input = "g1_second_magnum_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,fgscn,fgroom"
+expect = "match"
+record = "--warp 303:-16852:-5400:-19090:552:3 --flag 1:1 --flag 4:55 --flag 4:57 --life 2000 --equip 5 --give 0:5:200 --give 1:2:15 --give 2:7:5 --give 3:0x16:30"
+
 # G2 (Em_31) in room 509, scenario A: off the lift from room 505, the player stands; G2 waits off stage
 # for the room's scene (oracle/re2.md, "G2")
 [[run]]
