@@ -829,6 +829,7 @@ fn run_zombie(
         parent,
         works,
         spawns: Vec::new(),
+        freed: Vec::new(),
         killed: false,
         water,
         banks,
@@ -845,6 +846,7 @@ fn run_zombie(
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
     let spawns = std::mem::take(&mut world.spawns);
+    let freed = std::mem::take(&mut world.freed);
     let killed = world.killed;
     let moved = world.player_moved.then_some(world.player);
     let status_or = world.status_or;
@@ -904,6 +906,14 @@ fn run_zombie(
     }
     if killed {
         re2.enemies = re2.enemies.wrapping_sub(1);
+    }
+    // A work the script took out of play outright: it counts out of the room
+    // (`Set_enemy_work` counts a taken one back in).
+    for freed in freed {
+        if let Some(other) = re2.characters.0.get_mut(freed).and_then(Option::as_mut) {
+            other.be_flg = 0;
+            re2.enemies = re2.enemies.wrapping_sub(1);
+        }
     }
     let mut run_now = Vec::new();
     for spawn in spawns {

@@ -1588,7 +1588,7 @@ impl UserData for Api {
         // routine then runs on it at once, as `FUN_004732a0` runs `Em_26`.
         methods.add_method_mut(
             "place_spawn",
-            |_, e, (x, y, z, angle, vars): (i32, i32, i32, i64, mlua::Table)| {
+            |_, e, (x, y, z, angle, vars, run): (i32, i32, i32, i64, mlua::Table, Option<bool>)| {
                 let world = &mut *e.em().world;
                 let Some(spawn) = world.spawns.last_mut() else {
                     return Err(mlua::Error::RuntimeError("no spawn to place".into()));
@@ -1603,8 +1603,33 @@ impl UserData for Api {
                 }
                 spawn.vars.sort_unstable();
                 spawn.place = Some(([x, y, z], angle as u16));
-                spawn.run_now = true;
+                spawn.run_now = run.unwrap_or(true);
                 Ok(())
+            },
+        );
+        // `*(undefined4 *)enemy_work[slot] = 0`: take a work out of play, so
+        // `Set_enemy_work` finds it dead and gives it back.
+        methods.add_method_mut("free_work", |_, e, slot: usize| {
+            let world = &mut *e.em().world;
+            if let Some(entry) = world.works.iter_mut().find(|entry| entry.0 == slot)
+                && entry.2
+            {
+                entry.2 = false;
+                world.freed.push(slot);
+            }
+            Ok(())
+        });
+        // `ApplyMatrixSV` of a point on the parent's part `part`, as drawn.
+        methods.add_method_mut(
+            "parent_apply",
+            |_, e, (part, x, y, z): (usize, i16, i16, i16)| {
+                let matrix = parent(e)?.parts.get(part).copied().flatten();
+                let Some(mut matrix) = matrix else {
+                    return Ok((0, 0, 0));
+                };
+                matrix.t = [0; 3];
+                let [x, y, z] = crate::esp2::apply_matrix(&matrix, [x, y, z]);
+                Ok((x, y, z))
             },
         );
         // `Ck_em_id(work, 0, id, 0)`: how many others in play have `id`.
@@ -1899,13 +1924,14 @@ mod tests {
         assert_eq!(repeated_names(&names), ["pos"]);
     }
 
-    const SCRIPTS: [&str; 13] = [
+    const SCRIPTS: [&str; 14] = [
         include_str!("../../games/re2/enemy/20/enemy.lua"),
         include_str!("../../games/re2/enemy/21/enemy.lua"),
         include_str!("../../games/re2/enemy/23/enemy.lua"),
         include_str!("../../games/re2/enemy/25/enemy.lua"),
         include_str!("../../games/re2/enemy/26/enemy.lua"),
         include_str!("../../games/re2/enemy/27/enemy.lua"),
+        include_str!("../../games/re2/enemy/28/enemy.lua"),
         include_str!("../../games/re2/enemy/29/enemy.lua"),
         include_str!("../../games/re2/enemy/2a/enemy.lua"),
         include_str!("../../games/re2/enemy/2d/enemy.lua"),

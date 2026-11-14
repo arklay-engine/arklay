@@ -43,6 +43,7 @@
 ---    23/enemy.lua                    the alligator (Em_23)
 ---    25/enemy.lua                    the giant spider (Em_25)
 ---    26/enemy.lua                    the young spiders (Em_26)
+---    27/enemy.lua, 28/enemy.lua      the G embryos and the G adult (Em_27, Em_28)
 ---    2a/enemy.lua                    Mr. X (Em_2A)
 ---    2d/enemy.lua                    room 205's bodies in the walls (Em_2D)
 ---    2e/enemy.lua, 39/enemy.lua      the ivy and the poison ivy: ivy.update(e)
@@ -55,7 +56,7 @@
 ---```
 ---
 ---The engine only hands a body to a script for these ids: `0x10` to `0x21`,
----`0x22` and `0x24` (lickers), `0x23`, `0x25`, `0x26`, `0x2A`, `0x2D`, `0x2E`, `0x2F`,
+---`0x22` and `0x24` (lickers), `0x23`, `0x25` to `0x28`, `0x2A`, `0x2D`, `0x2E`, `0x2F`,
 ---`0x39`, `0x30` and `0x31`. Any other enemy id a room places isn't modelled
 ---yet and takes no slot. An id the pack carries no script for leaves its
 ---bodies standing: the engine still runs its own part of the tick, but nothing
@@ -1682,7 +1683,26 @@ function Re2EnemyApi:spawn(id, kind, vars) end
 ---@param z integer
 ---@param angle integer Its facing.
 ---@param vars table<integer, integer> More spare fields, `{ [index] = value }`.
-function Re2EnemyApi:place_spawn(x, y, z, angle, vars) end
+---@param run? boolean Whether it runs at once. Defaults to `true`; `false` leaves it to the slot's turn in the tick.
+function Re2EnemyApi:place_spawn(x, y, z, angle, vars, run) end
+
+---`*(undefined4 *)enemy_work[slot] = 0`: take the work in a slot out of play
+---at once, so that `e:spawn` of its id finds it dead and gives it back
+---(the G adult's first spit takes the room's template this way). It counts
+---out of the room's enemies; `e:spawn` counts it back in.
+---@param slot integer
+function Re2EnemyApi:free_work(slot) end
+
+---`ApplyMatrixSV` of a point on the parent's part, on the matrix the last
+---draw left it (without the part's place, which `e:parent_part` gives).
+---@param part integer
+---@param x integer
+---@param y integer
+---@param z integer
+---@return integer x Each 16-bit.
+---@return integer y
+---@return integer z
+function Re2EnemyApi:parent_apply(part, x, y, z) end
 
 ---Whether this body has a parent (a vine's ivy, or the body `e:set_parent`
 ---named), as the parent stood after its own run this tick.
