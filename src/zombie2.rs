@@ -1388,7 +1388,9 @@ impl Em<'_, '_, '_> {
         if *self.be_flg != 0 {
             self.oba_set_ofs();
             // `Atd[1]` and `Atd[2]`, on parts 3 and 0x12 as the last draw left
-            // them; the rest of their boxes is the init's.
+            // them; the rest of their boxes is the init's. `Oba_set_ofs` put
+            // their `Y` at `Pos_y + Ofs_y`.
+            let y = self.mover.player.pos[1] - 1500;
             self.z.more_atd = ADULT_BOXES
                 .map(|part| {
                     let t = self
@@ -1404,7 +1406,7 @@ impl Em<'_, '_, '_> {
                         at_w: 800,
                         at_h: 1500,
                         w: 800,
-                        at: [t[0], 0, t[2]],
+                        at: [t[0], y, t[2]],
                     }
                 })
                 .to_vec();
