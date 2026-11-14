@@ -53,7 +53,7 @@ setup_script = "licker_204_fight.lua"
 input = "licker_204_fight.txt"
 input_shift = 344
 fields = "esp"
-expect = { tick = 958, fields = ["esp89"], note = "a handgun shot's kind 2 effect takes slot 89, which the original still holds (#700); the licker's slash and bite blood match before it" }
+expect = "match"
 record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip 2 --give 0:2:200"
 
 [[run]]
