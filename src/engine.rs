@@ -2818,6 +2818,7 @@ impl GameSession {
         game.equipped = (equipped_item != 0).then_some(equipped_item);
         game.selected_item = game.equipped;
         game.equipped_weapon_id = equipped_item;
+        game.weapon_bank = equipped_item;
         game.entities[0].health = reel.health;
         game.set_health_copy(reel.health);
         game.set_attract_room_camera_id(reel.camera_id);
@@ -4593,7 +4594,7 @@ impl GameSession {
             pack,
             &self.loaded.room,
             &mut self.player,
-            self.game.id.player_flag,
+            self.game.player_banks(),
             slow,
         );
         // Queued non-positional room SEs (`play_sfx(2, id)`) resolve through
@@ -16042,7 +16043,7 @@ fn play_snd3d_requests(
     if requests.is_empty() {
         return;
     }
-    let character = game.id.player_flag;
+    let banks = game.player_banks();
     for request in requests {
         // A room without a camera cannot place the sound; drop it without
         // recording a bank no-op.
@@ -16057,7 +16058,7 @@ fn play_snd3d_requests(
         };
         let play = sfx::play_sfx_3d(
             room,
-            character,
+            banks,
             request.bank,
             request.id,
             cut.pos,
@@ -16519,7 +16520,7 @@ fn play_player_sounds(
     pack: &Pack,
     room: &RoomState,
     player_state: &mut player::PlayerState,
-    character: u8,
+    banks: sfx::PlayerBanks,
     slow: bool,
 ) {
     let sounds = player_state.take_sounds();
@@ -16547,7 +16548,7 @@ fn play_player_sounds(
         }
         let (bank, id) = player_sound_bank(sound.id);
         // Bank 3 follows the player's character table.
-        let play = sfx::play_sfx_3d(room, character, bank, id, cut.pos, cut.look_at, sound.pos);
+        let play = sfx::play_sfx_3d(room, banks, bank, id, cut.pos, cut.look_at, sound.pos);
         let Some(name) = play.name else {
             continue;
         };
@@ -28771,7 +28772,15 @@ mod tests {
             room: 0,
             ..RoomState::default()
         };
-        let play = sfx::play_sfx_3d(&room, 0, 2, 0x2D, [0; 3], [1000, 0, 0], [1000, 0, 0]);
+        let play = sfx::play_sfx_3d(
+            &room,
+            sfx::PlayerBanks::default(),
+            2,
+            0x2D,
+            [0; 3],
+            [1000, 0, 0],
+            [1000, 0, 0],
+        );
         assert_eq!(play.name, Some("ft_wdA"));
     }
 
@@ -28805,10 +28814,18 @@ mod tests {
             volume: 0,
             pos: point(1000, 0),
         });
-        // The unloaded weapon bank and an absent room column are audited.
+        // The loaded handgun bank's silent slot and an absent room column are
+        // audited; its Gun01 slot resolves.
+        game.weapon_bank = 2;
         game.snd3d_requests.push(game::Snd3dRequest {
             bank: 1,
             id: 7,
+            volume: 0,
+            pos: point(0, 0),
+        });
+        game.snd3d_requests.push(game::Snd3dRequest {
+            bank: 1,
+            id: 8,
             volume: 0,
             pos: point(0, 0),
         });
@@ -28829,7 +28846,8 @@ mod tests {
 
         play_snd3d_requests(&mut None, &mut SfxCache::default(), &pack, &room, &mut game);
         assert!(game.snd3d_requests.is_empty(), "the queue always drains");
-        assert_eq!(game.snd3d_noops.get(&(1, 7)), Some(&1));
+        assert_eq!(game.snd3d_noops.get(&(1, 7)), None, "Gun01 resolves");
+        assert_eq!(game.snd3d_noops.get(&(1, 8)), Some(&1));
         assert_eq!(game.snd3d_noops.get(&(2, 3)), Some(&1));
         assert_eq!(game.snd3d_noops.get(&(2, 24)), None, "panel02 resolves");
         assert!(game.bgm.channels[0].restart, "bank 4 restarted channel 0");
@@ -28883,7 +28901,16 @@ mod tests {
         finish_transition(&mut session, &mut game, &mut player_state, &mut loaded);
         assert_eq!(loaded.room.room_sfx, 1, "the record's sfx byte is live");
         assert_eq!(
-            sfx::play_sfx_3d(&loaded.room, 0, 0, 0, [0; 3], [1000, 0, 0], [1000, 0, 0]).name,
+            sfx::play_sfx_3d(
+                &loaded.room,
+                sfx::PlayerBanks::default(),
+                0,
+                0,
+                [0; 3],
+                [1000, 0, 0],
+                [1000, 0, 0]
+            )
+            .name,
             Some("Dr_mtl01"),
             "bank 0 now resolves through the new pair"
         );
@@ -28927,7 +28954,16 @@ mod tests {
         assert_eq!(loaded.id, target);
         assert_eq!(loaded.room.room_sfx, 2, "the destination latches its pair");
         assert_eq!(
-            sfx::play_sfx_3d(&loaded.room, 0, 0, 1, [0; 3], [1000, 0, 0], [1000, 0, 0]).name,
+            sfx::play_sfx_3d(
+                &loaded.room,
+                sfx::PlayerBanks::default(),
+                0,
+                1,
+                [0; 3],
+                [1000, 0, 0],
+                [1000, 0, 0]
+            )
+            .name,
             Some("Dr_brk01"),
             "the loaded pair 2 names the trap-door sound"
         );

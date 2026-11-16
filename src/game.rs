@@ -3914,6 +3914,12 @@ pub struct GameState {
     /// a demo keeps whatever weapon the boot left (the shipped card's
     /// Beretta) even though its inventory shows the knife.
     pub equipped_weapon_id: u8,
+    /// The item id the weapon bank (`Play3DSnd` bank 1) was last loaded by.
+    /// `LoadSoundBank(equippedWeaponId)` runs when the game starts or
+    /// continues, on the attract boot and when the inventory equips a
+    /// different weapon; unequipping never reloads it, so the last weapon's
+    /// sounds stay loaded.
+    pub weapon_bank: u8,
     /// The player's `PlayerEntity` flags byte (offset 0x00): the aim
     /// direction (`0x20` up, `0x40` neutral, `0x80` down) and the animation
     /// state bits. Combat does not raise the aim bits yet, so this stays `0`;
@@ -4303,6 +4309,7 @@ impl Default for GameState {
             // The shipped bio card equips the Beretta (`g_EquippedItemId` 2),
             // so `SetupCharacterData` leaves weapon id 2 in place.
             equipped_weapon_id: 2,
+            weapon_bank: 2,
             player_flags: 0,
             cerberus_barked: false,
             scratch_vec: [0; 3],
@@ -6210,6 +6217,9 @@ impl GameState {
         // `SetupCharacterData`'s derivation: the weapon id is the equipped
         // item's own id (the item-slot table maps every weapon to itself).
         self.equipped_weapon_id = item.unwrap_or(0);
+        if let Some(item) = item.filter(|item| *item != 0) {
+            self.weapon_bank = item;
+        }
         self.state_bytes[usize::from(STATE_BYTE_EQUIPPED)] = item.unwrap_or(0);
         // The INFINITE AMMO cheat keeps every equipped weapon full, including
         // one picked up or selected after the cheat was turned on.
@@ -9212,6 +9222,15 @@ impl GameState {
     /// [`RoomOrigins::of`]: crate::state::RoomOrigins::of
     pub fn origin(&self) -> RoomId {
         self.origins.of(self.id)
+    }
+
+    /// The player-keyed sound banks a `Play3DSnd` cue resolves through: the
+    /// character table and the loaded weapon bank.
+    pub fn player_banks(&self) -> crate::sfx::PlayerBanks {
+        crate::sfx::PlayerBanks {
+            character: self.id.player_flag,
+            weapon: self.weapon_bank,
+        }
     }
 
     /// Arm the transition described by `door`, decoding the destination's
@@ -18528,6 +18547,21 @@ mod tests {
         assert_eq!(state.item_count(0x0B), 1);
         assert!(state.remove_item(0x0B));
         assert!(!state.has_item(0x0B));
+    }
+
+    #[test]
+    fn unequipping_keeps_the_last_weapon_bank_loaded() {
+        let mut state = game();
+        assert_eq!(state.player_banks().weapon, 2, "the boot loads the Beretta");
+        state.set_equipped(Some(10));
+        assert_eq!(state.player_banks().weapon, 10);
+        // `menu_update_equipped_weapon` clears the weapon id without
+        // `LoadSoundBank`, so the launcher's sounds stay loaded.
+        state.set_equipped(None);
+        assert_eq!(state.equipped_weapon_id, 0);
+        assert_eq!(state.player_banks().weapon, 10);
+        state.set_equipped(Some(2));
+        assert_eq!(state.player_banks().weapon, 2);
     }
 
     #[test]

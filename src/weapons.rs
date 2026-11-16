@@ -738,9 +738,9 @@ pub fn fire_consume_ammo_stack(game: &mut GameState) {
     }
 }
 
-/// Queue one weapon sample through the weapon bank: the original restarts the
-/// equipped weapon's own bank (`SetSndSlot(handle, 0)`), so the bank key is
-/// `(1, weapon)` and the sample restarts on every shot.
+/// Queue one weapon sample through the weapon bank (`Play3DSnd(1, id)`): each
+/// bank slot is its own handle the original restarts (`SetSndSlot(handle,
+/// 0)`), so the bank key is `(1, id)`, shared with scripted bank-1 cues.
 fn play_weapon_sound(game: &mut GameState, weapon: u8, id: u8) {
     let Some(name) = crate::sfx::weapon_sound(weapon, id) else {
         return;
@@ -748,7 +748,7 @@ fn play_weapon_sound(game: &mut GameState, weapon: u8, id: u8) {
     game.entity_sounds.push(EntitySound {
         name: name.into(),
         bank: 1,
-        column: weapon,
+        column: id,
         pos: game.entities[0].pos,
     });
 }
@@ -2228,7 +2228,7 @@ pub fn update_detached_clip(game: &mut GameState, player: &mut PlayerState, room
                 clip.world.t[1] = i32::from(clip.floor_y);
                 let pos = clip.world.t;
                 if let Some((name, bank, column)) =
-                    crate::sfx::play_3d_cue(room, game.id.player_flag, 2, 0x15)
+                    crate::sfx::play_3d_cue(room, game.player_banks(), 2, 0x15)
                 {
                     game.entity_sounds.push(EntitySound {
                         name: name.into(),
@@ -4762,6 +4762,17 @@ mod tests {
     }
 
     #[test]
+    fn weapon_fire_shares_the_scripted_cue_bank_key() {
+        // The launcher's report and the ending's scripted `Play3DSnd(1, 7)` are
+        // one bank handle, so the cue restarts the report's voice.
+        let (mut game, _) = armed(10, 1);
+        play_weapon_sound(&mut game, 10, 7);
+        let fire = &game.entity_sounds[0];
+        let cue = crate::sfx::play_3d_cue(&RoomState::default(), game.player_banks(), 1, 7);
+        assert_eq!(cue, Some(("Rocket01", fire.bank, fire.column)));
+    }
+
+    #[test]
     fn the_knife_swing_whistles_on_a_timed_frame_seven() {
         let (mut game, mut player) = armed(1, 0);
         drive(&mut game, &mut player, aiming(false), 40);
@@ -4777,7 +4788,9 @@ mod tests {
             8,
         );
         assert_eq!(game.entity_sounds.len(), 1, "one whistle");
-        assert_eq!(game.entity_sounds[0].column, ITEM_KNIFE);
+        // The knife bank's slot 0 (Knife01) keys its own handle.
+        assert_eq!(game.entity_sounds[0].bank, 1);
+        assert_eq!(game.entity_sounds[0].column, 0);
     }
 
     #[test]

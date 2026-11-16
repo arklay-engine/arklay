@@ -384,6 +384,7 @@ impl SaveFile {
         state.last_picked_item = (self.picked_item != 0).then_some(self.picked_item);
         state.equipped = (self.equipped != 0).then_some(self.equipped);
         state.equipped_weapon_id = self.equipped;
+        state.weapon_bank = self.equipped;
         state.inventory = self
             .player_slots
             .iter()

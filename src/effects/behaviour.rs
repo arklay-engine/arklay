@@ -503,12 +503,12 @@ fn rocket(game: &mut GameState, room: &RoomState, index: usize) {
 
 /// The rocket's explosion cue, the weapon bank's row 0x0f.
 fn rocket_sounds(game: &mut GameState, pos: [i32; 3]) {
-    let equipped = game.equipped_weapon_id;
-    if let Some(name) = crate::sfx::weapon_sound(equipped, 0x0f) {
+    let weapon = game.weapon_bank;
+    if let Some(name) = crate::sfx::weapon_sound(weapon, 0x0f) {
         game.entity_sounds.push(crate::game::EntitySound {
             name: name.into(),
             bank: 1,
-            column: equipped,
+            column: 0x0f,
             pos,
         });
     }
@@ -539,12 +539,11 @@ fn shot_impact(game: &mut GameState, index: usize, landed: bool) {
             return;
         }
     };
-    let equipped = game.equipped_weapon_id;
-    if let Some(name) = crate::sfx::weapon_sound(equipped, cue) {
+    if let Some(name) = crate::sfx::weapon_sound(game.weapon_bank, cue) {
         game.entity_sounds.push(crate::game::EntitySound {
             name: name.into(),
             bank: 1,
-            column: equipped,
+            column: cue,
             pos: [x, y, z],
         });
     }
@@ -972,7 +971,7 @@ fn projectile(game: &mut GameState, index: usize) {
         game.entity_sounds.push(crate::game::EntitySound {
             name: name.into(),
             bank: 1,
-            column: weapon,
+            column: 10,
             pos,
         });
     }

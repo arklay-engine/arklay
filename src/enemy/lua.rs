@@ -3214,18 +3214,17 @@ mod imp {
             });
 
             // `Play3DSnd(bank, id)`: queue the named cue at the entity
-            // position. Banks 0/2/3 resolve through the room and character
-            // tables; the unloaded weapon bank (1) and the BGM pan channel
-            // (4) queue nothing.
+            // position. Banks 0-3 resolve through the room, weapon and
+            // character tables; the BGM pan channel (4) queues nothing.
             methods.add_method_mut("play_3d_sound", |_lua, api, (bank, id): (i64, i64)| {
                 let room = api.room;
                 let slot = api.slot;
-                let character = api.game_ref().id.player_flag;
+                let banks = api.game_ref().player_banks();
                 // SAFETY: the room pointer borrows the caller's room for
                 // the whole call (see the type-level comment).
                 let room = unsafe { &*room };
                 if let Some((name, bank, column)) =
-                    crate::sfx::play_3d_cue(room, character, bank as u8, id as u8)
+                    crate::sfx::play_3d_cue(room, banks, bank as u8, id as u8)
                 {
                     let game = api.game();
                     let pos = game.entities[slot].pos;
@@ -3240,17 +3239,16 @@ mod imp {
             });
 
             // `play_sfx(bank, id)`: the raw one-shot cue, identical to
-            // `Play3DSnd` for the banks it names (the weapon bank ships
-            // unloaded, so bank 1 queues nothing).
+            // `Play3DSnd` for the banks it names.
             methods.add_method_mut("play_sfx", |_lua, api, (bank, id): (i64, i64)| {
                 let room = api.room;
                 let slot = api.slot;
-                let character = api.game_ref().id.player_flag;
+                let banks = api.game_ref().player_banks();
                 // SAFETY: the room pointer borrows the caller's room for
                 // the whole call (see the type-level comment).
                 let room = unsafe { &*room };
                 if let Some((name, bank, column)) =
-                    crate::sfx::play_3d_cue(room, character, bank as u8, id as u8)
+                    crate::sfx::play_3d_cue(room, banks, bank as u8, id as u8)
                 {
                     let game = api.game();
                     let pos = game.entities[slot].pos;
@@ -4208,12 +4206,12 @@ mod imp {
                 "play_3d_sound_at",
                 |_lua, api, (bank, id, x, y, z): (i64, i64, i64, i64, i64)| {
                     let room = api.room;
-                    let character = api.game_ref().id.player_flag;
+                    let banks = api.game_ref().player_banks();
                     // SAFETY: the room pointer borrows the caller's room for
                     // the whole call (see the type-level comment).
                     let room = unsafe { &*room };
                     if let Some((name, bank, column)) =
-                        crate::sfx::play_3d_cue(room, character, bank as u8, id as u8)
+                        crate::sfx::play_3d_cue(room, banks, bank as u8, id as u8)
                     {
                         api.game().entity_sounds.push(EntitySound {
                             name: name.into(),

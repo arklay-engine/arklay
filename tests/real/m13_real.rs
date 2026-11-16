@@ -564,6 +564,12 @@ fn every_shipped_se_play_3d_resolves_or_is_an_audited_noop() {
         "the shipped corpus has 793 se_play_3d sites"
     );
 
+    // The only weapon-bank sites are the Tyrant ending's rocket hits, scripted
+    // for the rocket launcher (item 10) the player fired.
+    let player = sfx::PlayerBanks {
+        character: 0,
+        weapon: 10,
+    };
     let mut banks = std::collections::BTreeMap::new();
     let mut resolved = 0usize;
     let mut bgm = 0usize;
@@ -578,7 +584,7 @@ fn every_shipped_se_play_3d_resolves_or_is_an_audited_noop() {
         *banks.entry(site.bank).or_insert(0u64) += 1;
         let play = sfx::play_sfx_3d(
             &room,
-            0,
+            player,
             site.bank,
             site.id,
             [0; 3],
@@ -604,7 +610,7 @@ fn every_shipped_se_play_3d_resolves_or_is_an_audited_noop() {
         sites.len(),
         "every site resolves, pans the BGM or is an audited no-op"
     );
-    // Every bank-0/2/3 site whose original table entry is non-null must
+    // Every bank-0..=3 site whose original table entry is non-null must
     // resolve; a site that lands on a genuinely empty table slot (or past the
     // original's per-bank bound) plays nothing, exactly like the original's
     // null bank handle.
@@ -612,6 +618,7 @@ fn every_shipped_se_play_3d_resolves_or_is_an_audited_noop() {
     for site in &sites {
         let original = match site.bank {
             0 => sfx::room_sfx(0, usize::from(site.id)),
+            1 => sfx::weapon_sound(player.weapon, site.id),
             2 => sfx::room_sound(site.row, usize::from(site.id)),
             3 => sfx::character_sfx(0, site.id),
             _ => None,
@@ -623,7 +630,7 @@ fn every_shipped_se_play_3d_resolves_or_is_an_audited_noop() {
         };
         let play = sfx::play_sfx_3d(
             &room,
-            0,
+            player,
             site.bank,
             site.id,
             [0; 3],
@@ -658,10 +665,13 @@ fn every_shipped_se_play_3d_resolves_or_is_an_audited_noop() {
     );
     assert_eq!(banks.get(&0), Some(&73));
     assert_eq!(banks.get(&4), Some(&4));
+    // The twelve weapon-bank sites pair the launcher's Rocket01 slot (7) with
+    // its empty slot 8.
+    assert_eq!(banks.get(&1), Some(&12));
     assert_eq!(
         noops.iter().filter(|(bank, _, _)| *bank == 1).count(),
-        12,
-        "the twelve weapon-bank sites are the audited bank-1 deviation"
+        6,
+        "only the weapon bank's empty slot 8 plays nothing"
     );
     // The previously dropped item/prop names now resolve through the table.
     let reached: std::collections::BTreeSet<&str> = sites
@@ -723,7 +733,7 @@ fn room_105s_3d_se_sites_resolve_through_the_room_and_character_banks() {
         };
         let play = sfx::play_sfx_3d(
             &room,
-            0,
+            sfx::PlayerBanks::default(),
             request.bank,
             request.id,
             [0, 0, 0],
@@ -751,16 +761,44 @@ fn room_105s_3d_se_sites_resolve_through_the_room_and_character_banks() {
         (27, "mv_clk"),
     ] {
         assert_eq!(
-            sfx::play_sfx_3d(&room, 0, 2, id, [0, 0, 0], [1000, 0, 0], [1000, 0, 0]).name,
+            sfx::play_sfx_3d(
+                &room,
+                sfx::PlayerBanks::default(),
+                2,
+                id,
+                [0, 0, 0],
+                [1000, 0, 0],
+                [1000, 0, 0]
+            )
+            .name,
             Some(name),
             "room 105's bank-2 id {id}"
         );
     }
 
     // The character bank selects the player's table with the same 3D pan.
-    let chris = sfx::play_sfx_3d(&room, 0, 3, 2, [0, 0, 0], [1000, 0, 0], [1000, 0, 0]);
+    let chris = sfx::play_sfx_3d(
+        &room,
+        sfx::PlayerBanks::default(),
+        3,
+        2,
+        [0, 0, 0],
+        [1000, 0, 0],
+        [1000, 0, 0],
+    );
     assert_eq!(chris.name, Some("player/00/sound/02"));
-    let jill = sfx::play_sfx_3d(&room, 1, 3, 2, [0, 0, 0], [1000, 0, 0], [1000, 0, 0]);
+    let jill = sfx::play_sfx_3d(
+        &room,
+        sfx::PlayerBanks {
+            character: 1,
+            weapon: 0,
+        },
+        3,
+        2,
+        [0, 0, 0],
+        [1000, 0, 0],
+        [1000, 0, 0],
+    );
     assert_eq!(jill.name, Some("player/01/sound/02"));
     assert!(chris.pan.is_finite() && (-1.0..=1.0).contains(&chris.pan));
 }

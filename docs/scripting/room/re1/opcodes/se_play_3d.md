@@ -20,7 +20,7 @@ se_play_3d(bank, sound, volume, where, enemy);   // where > SND_NO_POS
 
 | Parameter | Width | Description |
 | --- | --- | --- |
-| `bank` | `u8` | The sound bank: `SND_BANK_DOOR` (0, the room's door sound pair), `SND_BANK_WEAPON` (1), `SND_BANK_ROOM` (2, the room's own table), `SND_BANK_PLAYER` (3, the character's) or `SND_BANK_BGM` (4). |
+| `bank` | `u8` | The sound bank: `SND_BANK_DOOR` (0, the room's door sound pair), `SND_BANK_WEAPON` (1, the equipped weapon's sounds), `SND_BANK_ROOM` (2, the room's own table), `SND_BANK_PLAYER` (3, the character's) or `SND_BANK_BGM` (4). |
 | `sound` | `u8` | The sound within the bank (`SE_xx`, a room define). |
 | `volume` | `i8` | Carried, but neither the original's 3D dispatch nor the port reads it. Written as 0 to 255 (the compiler takes no negative number here). |
 | `where` | `u8` | Where the sound plays: `SND_AT_POINT` (0), `SND_AT_PLAYER` (1), `SND_AT_ENEMY` (2) or `SND_NO_POS` (3). |

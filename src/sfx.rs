@@ -2540,18 +2540,27 @@ impl Sfx3dPlay {
     }
 }
 
+/// The player-keyed sound banks a 3D cue resolves through.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PlayerBanks {
+    /// The character index selecting the bank-3 table ([`character_sfx`]).
+    pub character: u8,
+    /// The item id the weapon bank (bank 1) was loaded by ([`weapon_sound`],
+    /// [`GameState::weapon_bank`](crate::game::GameState::weapon_bank)).
+    pub weapon: u8,
+}
+
 /// Resolve one 3D sound request through the five sound banks and compute its
 /// mixer gain and pan (`Play3DSnd` + `Calc3DSndPan` + `CalcPanVolume`).
 ///
 /// `room` names the bank-2 row and carries the live bank-0 SFX pair
 /// ([`RoomState::room_sfx`], 0 at boot and reloaded from every door record),
-/// `character` selects the bank-3 table and `from`/`to`/`sound` are the camera
-/// and source positions. Bank 4 (`bgm`) asks the caller to pan and restart BGM
-/// channel 0. Bank 1 is the weapon/menu bank, which no weapon ever loads in
-/// this milestone, so it is always a typed no-op.
+/// `banks` selects the bank-3 table and the loaded weapon bank, and
+/// `from`/`to`/`sound` are the camera and source positions. Bank 4 (`bgm`)
+/// asks the caller to pan and restart BGM channel 0.
 pub fn play_sfx_3d(
     room: &RoomState,
-    character: u8,
+    banks: PlayerBanks,
     bank: u8,
     id: u8,
     from: [i32; 3],
@@ -2568,10 +2577,10 @@ pub fn play_sfx_3d(
                 None => Sfx3dPlay::noop(),
             }
         }
-        // The weapon/menu bank: 12 shipped sites name it, but with no weapons
-        // the bank is unloaded and only gains sounds once a weapon loads a
-        // different progression (out of scope), so every request is a no-op.
-        1 => Sfx3dPlay::noop(),
+        1 => match weapon_sound(banks.weapon, id) {
+            Some(name) => with_gain_pan(name, from, to, sound),
+            None => Sfx3dPlay::noop(),
+        },
         2 => {
             if id > 0x2F {
                 return Sfx3dPlay::noop();
@@ -2588,7 +2597,7 @@ pub fn play_sfx_3d(
             if id > 0x0F {
                 return Sfx3dPlay::noop();
             }
-            match character_sfx(character & 7, id) {
+            match character_sfx(banks.character & 7, id) {
                 Some(name) => with_gain_pan(name, from, to, sound),
                 None => Sfx3dPlay::noop(),
             }
@@ -2899,12 +2908,12 @@ pub fn weapon_sound(weapon: u8, id: u8) -> Option<&'static str> {
 /// bank, bank slot)`.
 ///
 /// Bank 0 names the room's door SFX pair, bank 2 the per-room table (the
-/// enemy bank), bank 3 the character table. Bank 1 is the weapon/menu bank
-/// ([`weapon_sound`]), and bank 4 is the BGM channel's pan/restart path, which
-/// is not a one-shot; both queue nothing.
+/// enemy bank), bank 1 the loaded weapon bank ([`weapon_sound`]) and bank 3
+/// the character table. Bank 4 is the BGM channel's pan/restart path, which is
+/// not a one-shot, so it queues nothing.
 pub fn play_3d_cue(
     room: &RoomState,
-    character: u8,
+    banks: PlayerBanks,
     bank: u8,
     id: u8,
 ) -> Option<(&'static str, u8, u8)> {
@@ -2915,6 +2924,7 @@ pub fn play_3d_cue(
             }
             room_sfx(usize::from(room.room_sfx), usize::from(id)).map(|name| (name, 0, id))
         }
+        1 => weapon_sound(banks.weapon, id).map(|name| (name, 1, id)),
         2 => {
             if id > 0x2F {
                 return None;
@@ -2929,7 +2939,7 @@ pub fn play_3d_cue(
             if id > 0x0F {
                 return None;
             }
-            character_sfx(character & 7, id).map(|name| (name, 3, id))
+            character_sfx(banks.character & 7, id).map(|name| (name, 3, id))
         }
         _ => None,
     }
@@ -3086,6 +3096,13 @@ pub fn sound_gain_pan(from: [i32; 3], to: [i32; 3], sound: [i32; 3]) -> (f32, f3
 mod tests {
     use super::*;
     use crate::state::FootstepZone;
+
+    fn character_banks(character: u8) -> PlayerBanks {
+        PlayerBanks {
+            character,
+            weapon: 0,
+        }
+    }
 
     fn room_1001() -> RoomState {
         RoomState {
@@ -3575,21 +3592,46 @@ mod tests {
             room: 0x0F,
             ..RoomState::default()
         };
-        assert_eq!(play_3d_cue(&room, 0, 2, 0x19), Some(("pakiB", 2, 0x19)));
-        assert_eq!(play_3d_cue(&room, 0, 2, 0x30), None, "past the enemy bank");
-        // The unloaded weapon bank and the BGM pan channel are not one-shots.
-        assert_eq!(play_3d_cue(&room, 0, 1, 0), None);
-        assert_eq!(play_3d_cue(&room, 0, 4, 0), None);
-        assert_eq!(play_3d_cue(&room, 0, 5, 0), None);
+        assert_eq!(
+            play_3d_cue(&room, PlayerBanks::default(), 2, 0x19),
+            Some(("pakiB", 2, 0x19))
+        );
+        assert_eq!(
+            play_3d_cue(&room, PlayerBanks::default(), 2, 0x30),
+            None,
+            "past the enemy bank"
+        );
+        // Bank 1 is the weapon bank the equipped item id loaded: the rocket
+        // launcher's (10) slot 7 is Rocket01, keyed by its own slot, and slot 8
+        // is silent.
+        let rocket = PlayerBanks {
+            character: 0,
+            weapon: 10,
+        };
+        assert_eq!(play_3d_cue(&room, rocket, 1, 7), Some(("Rocket01", 1, 7)));
+        assert_eq!(play_3d_cue(&room, rocket, 1, 8), None);
+        assert_eq!(play_3d_cue(&room, rocket, 1, 0x10), None, "past the bank");
+        // With nothing equipped the bank holds the knife row.
+        assert_eq!(
+            play_3d_cue(&room, PlayerBanks::default(), 1, 0),
+            Some(("Knife01", 1, 0))
+        );
+        assert_eq!(play_3d_cue(&room, PlayerBanks::default(), 1, 7), None);
+        // The BGM pan channel is not a one-shot.
+        assert_eq!(play_3d_cue(&room, PlayerBanks::default(), 4, 0), None);
+        assert_eq!(play_3d_cue(&room, PlayerBanks::default(), 5, 0), None);
         // Bank 0 names the room's door SFX pair (the default row).
-        assert_eq!(play_3d_cue(&room, 0, 0, 0), Some(("Dr_wd01", 0, 0)));
-        assert_eq!(play_3d_cue(&room, 0, 0, 2), None);
+        assert_eq!(
+            play_3d_cue(&room, PlayerBanks::default(), 0, 0),
+            Some(("Dr_wd01", 0, 0))
+        );
+        assert_eq!(play_3d_cue(&room, PlayerBanks::default(), 0, 2), None);
         // Bank 3 follows the character table, keyed by the character index.
         assert_eq!(
-            play_3d_cue(&room, 2, 3, 1),
+            play_3d_cue(&room, character_banks(2), 3, 1),
             character_sfx(2, 1).map(|name| (name, 3, 1))
         );
-        assert_eq!(play_3d_cue(&room, 0, 3, 0x10), None);
+        assert_eq!(play_3d_cue(&room, PlayerBanks::default(), 3, 0x10), None);
     }
 
     #[test]
@@ -3604,49 +3646,65 @@ mod tests {
         let sound = [1000, 0, 0];
 
         // Bank 0: the room SFX pair, slots 0/1 only.
-        let play = play_sfx_3d(&room, 0, 0, 0, camera, target, sound);
+        let play = play_sfx_3d(&room, PlayerBanks::default(), 0, 0, camera, target, sound);
         assert_eq!(play.name, Some("Dr_wd01"));
         assert_eq!(play.pan, 0.0, "straight ahead is centred");
         assert_eq!(play.gain, volume_gain(pan_volume(125, 125)));
         assert_eq!(
-            play_sfx_3d(&room, 0, 0, 1, camera, target, sound).name,
+            play_sfx_3d(&room, PlayerBanks::default(), 0, 1, camera, target, sound).name,
             Some("Dr_wd02")
         );
         assert_eq!(
-            play_sfx_3d(&room, 0, 0, 2, camera, target, sound).name,
+            play_sfx_3d(&room, PlayerBanks::default(), 0, 2, camera, target, sound).name,
             None
         );
 
-        // Bank 1 is the unloaded weapon bank: typed no-op.
+        // Bank 1: the equipped weapon's bank, panned like the others.
+        let handgun = PlayerBanks {
+            character: 0,
+            weapon: 2,
+        };
+        let play = play_sfx_3d(&room, handgun, 1, 7, camera, target, sound);
+        assert_eq!(play.name, Some("Gun01"));
+        assert_eq!(play.gain, volume_gain(pan_volume(125, 125)));
         assert_eq!(
-            play_sfx_3d(&room, 0, 1, 7, camera, target, sound).name,
+            play_sfx_3d(&room, handgun, 1, 8, camera, target, sound).name,
             None
         );
 
         // Bank 2: the room table; row 5's item columns resolve.
         assert_eq!(
-            play_sfx_3d(&room, 0, 2, 23, camera, target, sound).name,
+            play_sfx_3d(&room, PlayerBanks::default(), 2, 23, camera, target, sound).name,
             Some("emblemA")
         );
         assert_eq!(
-            play_sfx_3d(&room, 0, 2, 24, camera, target, sound).name,
+            play_sfx_3d(&room, PlayerBanks::default(), 2, 24, camera, target, sound).name,
             Some("magnum01")
         );
         assert_eq!(
-            play_sfx_3d(&room, 0, 2, 26, camera, target, sound).name,
+            play_sfx_3d(&room, PlayerBanks::default(), 2, 26, camera, target, sound).name,
             Some("ClkDX4LR")
         );
         assert_eq!(
-            play_sfx_3d(&room, 0, 2, 27, camera, target, sound).name,
+            play_sfx_3d(&room, PlayerBanks::default(), 2, 27, camera, target, sound).name,
             Some("mv_clk")
         );
         // An absent column and an out-of-range id stay typed no-ops.
         assert_eq!(
-            play_sfx_3d(&room, 0, 2, 25, camera, target, sound).name,
+            play_sfx_3d(&room, PlayerBanks::default(), 2, 25, camera, target, sound).name,
             None
         );
         assert_eq!(
-            play_sfx_3d(&room, 0, 2, 0x30, camera, target, sound).name,
+            play_sfx_3d(
+                &room,
+                PlayerBanks::default(),
+                2,
+                0x30,
+                camera,
+                target,
+                sound
+            )
+            .name,
             None
         );
         let room_panel = RoomState {
@@ -3655,29 +3713,49 @@ mod tests {
             ..RoomState::default()
         };
         assert_eq!(
-            play_sfx_3d(&room_panel, 0, 2, 24, camera, target, sound).name,
+            play_sfx_3d(
+                &room_panel,
+                PlayerBanks::default(),
+                2,
+                24,
+                camera,
+                target,
+                sound
+            )
+            .name,
             Some("panel02")
         );
 
         // Bank 3: the selected character table.
-        let chris = play_sfx_3d(&room, 0, 3, 2, camera, target, sound);
+        let chris = play_sfx_3d(&room, PlayerBanks::default(), 3, 2, camera, target, sound);
         assert_eq!(chris.name, Some("player/00/sound/02"));
-        let jill = play_sfx_3d(&room, 1, 3, 2, camera, target, sound);
+        let jill = play_sfx_3d(&room, character_banks(1), 3, 2, camera, target, sound);
         assert_eq!(jill.name, Some("player/01/sound/02"));
         assert_eq!(
-            play_sfx_3d(&room, 0, 3, 16, camera, target, sound).name,
+            play_sfx_3d(&room, PlayerBanks::default(), 3, 16, camera, target, sound).name,
             None
         );
 
         // Bank 4: BGM pan, no one-shot.
-        let play = play_sfx_3d(&room, 0, 4, 23, camera, target, sound);
+        let play = play_sfx_3d(&room, PlayerBanks::default(), 4, 23, camera, target, sound);
         assert!(play.bgm && play.name.is_none());
         assert_eq!(play.raw_pan, 0);
-        assert!(!play_sfx_3d(&room, 0, 4, 0x30, camera, target, sound).bgm);
+        assert!(
+            !play_sfx_3d(
+                &room,
+                PlayerBanks::default(),
+                4,
+                0x30,
+                camera,
+                target,
+                sound
+            )
+            .bgm
+        );
 
         // Unknown banks are typed no-ops.
         assert_eq!(
-            play_sfx_3d(&room, 0, 9, 0, camera, target, sound).name,
+            play_sfx_3d(&room, PlayerBanks::default(), 9, 0, camera, target, sound).name,
             None
         );
     }
@@ -3695,24 +3773,24 @@ mod tests {
         // At boot the pair index is 0: the wooden-door pair.
         assert_eq!(room.room_sfx, 0);
         assert_eq!(
-            play_sfx_3d(&room, 0, 0, 0, camera, target, sound).name,
+            play_sfx_3d(&room, PlayerBanks::default(), 0, 0, camera, target, sound).name,
             Some("Dr_wd01")
         );
         // A door record with sfx 1 loads the metal-door pair.
         room.room_sfx = 1;
         assert_eq!(
-            play_sfx_3d(&room, 0, 0, 0, camera, target, sound).name,
+            play_sfx_3d(&room, PlayerBanks::default(), 0, 0, camera, target, sound).name,
             Some("Dr_mtl01")
         );
         assert_eq!(
-            play_sfx_3d(&room, 0, 0, 1, camera, target, sound).name,
+            play_sfx_3d(&room, PlayerBanks::default(), 0, 1, camera, target, sound).name,
             Some("Dr_mtl02")
         );
         // An out-of-range pair index (the original's unchecked table read)
         // resolves to a typed no-op instead.
         room.room_sfx = 15;
         assert_eq!(
-            play_sfx_3d(&room, 0, 0, 0, camera, target, sound).name,
+            play_sfx_3d(&room, PlayerBanks::default(), 0, 0, camera, target, sound).name,
             None
         );
     }
@@ -3721,7 +3799,15 @@ mod tests {
     fn play_sfx_3d_follows_the_3d_pan_curves() {
         let room = RoomState::default();
         let (gain, pan) = sound_gain_pan([0, 0, 0], [1000, 0, 0], [0, 0, 2000]);
-        let play = play_sfx_3d(&room, 0, 0, 0, [0, 0, 0], [1000, 0, 0], [0, 0, 2000]);
+        let play = play_sfx_3d(
+            &room,
+            PlayerBanks::default(),
+            0,
+            0,
+            [0, 0, 0],
+            [1000, 0, 0],
+            [0, 0, 2000],
+        );
         assert_eq!(play.name, Some("Dr_wd01"));
         assert!((play.gain - gain).abs() < 1e-6);
         assert!((play.pan - pan).abs() < 1e-6);

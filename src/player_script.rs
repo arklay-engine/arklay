@@ -2318,8 +2318,8 @@ fn spawn_player_joint_blood(game: &mut GameState, depth: u8, joint: u8, offset: 
 
 /// Queue a `Play3DSnd` cue at the player's position.
 fn play_player_sound(game: &mut GameState, room: &RoomState, bank: u8, id: u8) {
-    let character = game.id.player_flag;
-    if let Some((name, bank, column)) = crate::sfx::play_3d_cue(room, character, bank, id) {
+    let banks = game.player_banks();
+    if let Some((name, bank, column)) = crate::sfx::play_3d_cue(room, banks, bank, id) {
         let pos = game.entities[0].pos;
         game.entity_sounds.push(EntitySound {
             name: name.into(),

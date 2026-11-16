@@ -202,8 +202,8 @@ fn play_companion_sound(game: &mut GameState, companion: &Companion, id: u8) {
 
 /// Queue a 3D cue at the companion's position.
 fn play_companion_3d(game: &mut GameState, room: &RoomState, companion: &Companion, id: u8) {
-    let character = game.id.player_flag;
-    if let Some((name, bank, column)) = crate::sfx::play_3d_cue(room, character, 2, id) {
+    let banks = game.player_banks();
+    if let Some((name, bank, column)) = crate::sfx::play_3d_cue(room, banks, 2, id) {
         game.entity_sounds.push(EntitySound {
             name: name.into(),
             bank,
