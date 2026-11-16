@@ -28,7 +28,7 @@
 //! Staging runs this stage only when `enemies/random` is on
 //! (`ClassicRandomizer.cs:736`), and so does [`randomize`].
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{BTreeSet, HashSet, VecDeque};
 
 use indexmap::IndexMap;
 
@@ -46,6 +46,12 @@ pub struct EnemyPlan {
     /// The rooms that change, by logical room key, in the order they were
     /// chosen.
     pub rooms: IndexMap<String, RoomEnemies>,
+    /// The directory, in lowercase, of every room of the game that has enemy
+    /// rules, changed or not. Staging clears the removable enemies of each
+    /// before it places any (`Re1CrModBuilder.cs:548-572`), so one the plan
+    /// gives no enemies is empty: `enemies/rooms` is the share of rooms with
+    /// enemies, and the rest have none.
+    pub ruled: BTreeSet<String>,
     /// Creates that could not be made: the directory had no spot left for
     /// them, the room had no free slot, or the game had no kill flag left.
     pub dropped: usize,
@@ -100,10 +106,17 @@ pub fn randomize(
         player,
     };
     let mut kinds = enemy_kinds(map, config);
+    let ruled = room_list(map, config, &game, &kinds)
+        .iter()
+        .map(|candidate| candidate.room.room_id().to_ascii_lowercase())
+        .collect();
     let chosen = select(map, config, &game, &mut kinds, rng);
     let mut kill_flags = game.kill_flags(map, rng);
 
-    let mut plan = EnemyPlan::default();
+    let mut plan = EnemyPlan {
+        ruled,
+        ..EnemyPlan::default()
+    };
     for (candidate, index) in chosen {
         let kind = &kinds[index];
         // :39 the room's enemy type, one of the kind's ids.
@@ -272,7 +285,12 @@ fn room_list<'a>(
         let supported: Vec<usize> = if banned(room) {
             Vec::new()
         } else {
+            // A kind with no weight is never placed. Staging hands a room
+            // none of whose kinds has rooms left to its lowest-weight kind,
+            // a weightless one included (:246-248), so a zombies-only
+            // configuration still met spiders, wasps and Black Tigers.
             (0..kinds.len())
+                .filter(|&index| kinds[index].weight > 0.0)
                 .filter(|&index| supports(&rules, kinds[index].entry))
                 .collect()
         };
@@ -596,6 +614,24 @@ mod tests {
     }
 
     #[test]
+    fn every_room_with_rules_is_ruled_whether_it_gets_enemies_or_not() {
+        let map = map(
+            vec![
+                room("10C", vec![clear()]),
+                room("10D", vec![clear()]),
+                room("10E", Vec::new()),
+            ],
+            &[],
+        );
+        let mut config = config();
+        config.set("enemies/rooms", 0.0);
+        let plan = run(&map, &config, &["10C", "10D", "10E"], 1);
+        assert!(plan.rooms.is_empty());
+        let ruled: Vec<&str> = plan.ruled.iter().map(String::as_str).collect();
+        assert_eq!(ruled, ["10c", "10d"], "10E has no rules");
+    }
+
+    #[test]
     fn a_directory_without_spots_gets_no_new_enemies() {
         let map = map(vec![room("10C", vec![clear()])], &[]);
         let mut config = config();
@@ -787,12 +823,21 @@ mod tests {
     }
 
     #[test]
-    fn with_no_weight_the_first_kind_takes_every_room() {
-        let map = map(vec![room("10C", vec![retype(1)])], &[]);
+    fn a_kind_with_no_weight_is_never_placed() {
+        // The zombies have no weight, and no other kind has one.
+        let any_kind = map(vec![room("10C", vec![retype(1)])], &[]);
         let mut config = config();
         config.set("enemies/distribution/zombie", 0.0);
-        let plan = run(&map, &config, &["10C"], 1);
-        assert_eq!(plan.rooms["10C"].kind, "zombie");
+        assert!(run(&any_kind, &config, &["10C"], 1).rooms.is_empty());
+        // Nor is it the fallback of a room that takes no weighted kind: this
+        // one takes anything but zombies, and only zombies have a weight.
+        let no_zombies = Enemies {
+            exclude: vec![0, 1, 17],
+            ..retype(1)
+        };
+        let map = map(vec![room("10C", vec![no_zombies])], &[]);
+        config.set("enemies/distribution/zombie", 1.0);
+        assert!(run(&map, &config, &["10C"], 1).rooms.is_empty());
     }
 
     #[test]

@@ -13,10 +13,15 @@
 //!   `enemy` per placement. The marker, four bytes, is rewritten in place to
 //!   an `evt_exec` of that script, so nothing else of the room moves. The
 //!   scripts are appended to the event table.
-//! - A room the plan leaves alone has the sense of every `ENEMY_RANDOMIZER`
-//!   test flipped, so it runs as if the flag were clear: its original enemies
-//!   stay and the conditions staging adds for randomized rooms do not apply.
-//!   The same goes for a room whose plan creates nothing.
+//! - A room with enemy rules that the plan gives no enemies is left as it
+//!   is: the flag skips its originals and its markers stay no-ops, so it is
+//!   empty. Staging clears every such room before it places anything
+//!   (`Re1CrModBuilder.cs:548-572`); `enemies/rooms` is the share of rooms
+//!   with enemies.
+//! - A room with no enemy rules, which staging never touches, has the sense
+//!   of every `ENEMY_RANDOMIZER` test flipped, so it runs as if the flag were
+//!   clear: its original enemies stay and the conditions staging adds for
+//!   randomized rooms do not apply.
 
 use std::collections::BTreeSet;
 
@@ -204,6 +209,20 @@ pub(super) fn retyped_state(new: u8, state: u8) -> u8 {
     }
 }
 
+/// The first character type (`EM_20_NPC_CHRIS`); every type from it on is a
+/// person of the story.
+const NPC_TYPES: u8 = 0x20;
+
+/// Whether an `enemy` of this type is a character of the story, which a
+/// retype leaves alone. A room script here holds both characters' games,
+/// and a slot one game gives an enemy the other may give a person: 30A's
+/// slot 1 is a hunter for Chris and Barry for Jill. Staging patches each
+/// character's room file by itself and never meets the other's; retyped by
+/// slot alone, Barry became a zombie and Enrico's scene never ended.
+fn is_npc(enemy_type: u8) -> bool {
+    enemy_type >= NPC_TYPES
+}
+
 /// The event script that creates `enemies`: an `evt_single` of each `enemy`,
 /// and `evt_finish`.
 fn event_bytes(enemies: &[&Created]) -> Vec<u8> {
@@ -218,12 +237,13 @@ fn event_bytes(enemies: &[&Created]) -> Vec<u8> {
 }
 
 /// `scd` with the enemies of `room` written in; `None` is a room the plan
-/// does not touch. See the module docs.
-pub(super) fn patch_room(scd: &[u8], room: Option<&RoomEnemies>) -> Result<Vec<u8>> {
+/// does not change. `ruled` is whether the room has enemy rules: one that
+/// has none keeps its original enemies. See the module docs.
+pub(super) fn patch_room(scd: &[u8], room: Option<&RoomEnemies>, ruled: bool) -> Result<Vec<u8>> {
     let scripts = reader::parse(scd)?;
     let mut out = scd.to_vec();
     let made = room.map(|room| created(&scripts, room)).unwrap_or_default();
-    if made.is_empty() {
+    if !ruled && room.is_none() {
         for insn in randomizer_tests(&scripts) {
             out[insn.offset + CK_VALUE] ^= 1;
         }
@@ -235,7 +255,9 @@ pub(super) fn patch_room(scd: &[u8], room: Option<&RoomEnemies>) -> Result<Vec<u
         let Placement::Retype { slot, enemy } = placement else {
             continue;
         };
-        for insn in enemy_insns(&scripts).filter(|insn| insn.bytes[ENEMY_SLOT] & 0x0F == *slot) {
+        for insn in enemy_insns(&scripts).filter(|insn| {
+            insn.bytes[ENEMY_SLOT] & 0x0F == *slot && !is_npc(insn.bytes[ENEMY_TYPE])
+        }) {
             let old = insn.bytes[ENEMY_TYPE];
             if old != *enemy {
                 out[insn.offset + ENEMY_TYPE] = *enemy;
@@ -307,7 +329,7 @@ pub(super) fn patch_for_game(scd: &[u8], dir: &str, game: &Game) -> Result<Vec<u
         .rooms
         .values()
         .find(|room| room.directory == dir);
-    patch_room(scd, room)
+    patch_room(scd, room, game.enemies.ruled.contains(dir))
 }
 
 /// Checks room `dir`'s patched `scripts` against the plan: every retyped
@@ -341,7 +363,9 @@ pub(super) fn check_room(
             continue;
         };
         let insns: Vec<&Insn> = enemy_insns(scripts)
-            .filter(|insn| insn.bytes[ENEMY_SLOT] & 0x0F == *slot)
+            .filter(|insn| {
+                insn.bytes[ENEMY_SLOT] & 0x0F == *slot && !is_npc(insn.bytes[ENEMY_TYPE])
+            })
             .collect();
         if insns.is_empty() {
             problems.push(format!(
@@ -449,7 +473,7 @@ mod tests {
             create(4, Some("side"), 2000),
             create(5, None, 3000),
         ]);
-        let out = patch_room(&scd, Some(&plan)).unwrap();
+        let out = patch_room(&scd, Some(&plan), true).unwrap();
         let after = reader::parse(&out).unwrap();
         assert!(markers(&after).is_empty());
         assert_eq!(after.events.len(), before.events.len() + 2);
@@ -483,7 +507,7 @@ mod tests {
             slot: 1,
             enemy: 0x0A,
         }]);
-        let out = patch_room(&scd, Some(&plan)).unwrap();
+        let out = patch_room(&scd, Some(&plan), true).unwrap();
         let scripts = reader::parse(&out).unwrap();
         let retyped: Vec<_> = enemy_insns(&scripts)
             .filter(|insn| insn.bytes[ENEMY_SLOT] & 0x0F == 1)
@@ -491,21 +515,53 @@ mod tests {
         assert_eq!(retyped.len(), 1);
         assert_eq!(retyped[0].bytes[ENEMY_TYPE], 0x0A);
         assert_eq!(retyped[0].bytes[ENEMY_STATE], 0);
-        // No creates: the markers stay and the randomizer test is flipped.
+        // No creates: the markers stay, and so does the randomizer test.
         assert_eq!(markers(&scripts).len(), 2);
+        assert_eq!(
+            randomize_values(&scripts),
+            randomize_values(&reader::parse(&scd).unwrap())
+        );
         assert_eq!(retyped_state(0x06, 0x92), 0x80);
     }
 
     #[test]
-    fn an_untouched_room_runs_as_if_the_flag_were_clear() {
+    fn a_retype_leaves_a_person_in_the_slot_alone() {
+        // Slot 1 holds an enemy in one branch and a person (type 0x22) in
+        // the other.
+        let text = "#version 1\nproc init\n{\n\
+            enemy(6, 0x80, 2, 1, 2, 0, 0, 0, 300, 0, 400, 1, 0, 0, 0);\n\
+            enemy(0x22, 4, 0xFF, 1, 2, 0, 0, 0, 500, 0, 600, 1, 0, 0, 0);\n\
+            }\n";
+        let scd = akscr::compile(text).unwrap().to_container().unwrap();
+        let plan = plan(vec![Placement::Retype {
+            slot: 1,
+            enemy: 0x01,
+        }]);
+        let out = patch_room(&scd, Some(&plan), true).unwrap();
+        let scripts = reader::parse(&out).unwrap();
+        let types: Vec<u8> = enemy_insns(&scripts)
+            .map(|insn| insn.bytes[ENEMY_TYPE])
+            .collect();
+        assert_eq!(types, [0x01, 0x22]);
+    }
+
+    #[test]
+    fn a_room_without_rules_runs_as_if_the_flag_were_clear() {
         let scd = room();
         let before = reader::parse(&scd).unwrap();
-        let out = patch_room(&scd, None).unwrap();
+        let out = patch_room(&scd, None, false).unwrap();
         let after = reader::parse(&out).unwrap();
         let tests = randomize_values(&before);
         let flipped = randomize_values(&after);
         assert!(!tests.is_empty());
         assert!(tests.iter().zip(&flipped).all(|(a, b)| a ^ 1 == *b));
+    }
+
+    #[test]
+    fn a_room_with_rules_the_plan_gives_no_enemies_is_left_empty() {
+        // The flag skips the original enemies and the markers stay no-ops.
+        let scd = room();
+        assert_eq!(patch_room(&scd, None, true).unwrap(), scd);
     }
 
     fn randomize_values(scripts: &Scripts) -> Vec<u8> {
@@ -518,7 +574,7 @@ mod tests {
     #[test]
     fn a_create_without_its_marker_is_an_error() {
         let plan = plan(vec![create(3, Some("nowhere"), 1)]);
-        let err = patch_room(&room(), Some(&plan)).unwrap_err();
+        let err = patch_room(&room(), Some(&plan), true).unwrap_err();
         assert!(format!("{err:#}").contains("marker"), "{err:#}");
     }
 }

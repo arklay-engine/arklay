@@ -471,8 +471,9 @@ The pull request's description holds the live checklist. In order:
    ambushes and the crash guards. *Test milestone 2.* **Done:** `random_enemies()`
    is in the original-layout rooms; the emitter (`src/biorand/enemies.rs`)
    rewrites each marker to an `evt_exec` of an appended event script, retypes
-   the fixed enemies, and flips the `ENEMY_RANDOMIZER` tests of rooms the plan
-   does not change; the verifier checks every planned enemy. Created enemies
+   the fixed enemies, and flips the `ENEMY_RANDOMIZER` tests of rooms that
+   have no enemy rules (a room with rules that gets no enemies is empty); the
+   verifier checks every planned enemy. Created enemies
    do not add their effect sheets to the room (`esp`), so some effects are
    skipped with a warning; see [`modding.md`](../modding.md#enemies-random_enemies).
 8. **Room ids.** Any stage and room number; room origins; the map screen off.

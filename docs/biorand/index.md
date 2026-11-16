@@ -169,12 +169,22 @@ if (ck(FG_SCENARIO, F_SCENARIO_05, FALSE))
   does not use stays a no-op. Enemies the plan retypes in place (the fixed
   ones `random.xml` lists with an id) get their new type and the state staging
   gives them. A created enemy keeps its planned slot unless a fixed enemy that
-  stays (a prop or a boss) holds it, and then takes the lowest free one.
+  stays (a prop or a boss) holds it, and then takes the lowest free one. A
+  retype never touches a person (an `enemy` of type 0x20 or above): a slot
+  can be an enemy for one character and a person for the other (30A's slot 1
+  is Chris's hunter and Jill's Barry), and a retyped Barry left Enrico's
+  scene waiting for good.
+- A kind with weight 0 in the configuration is never placed. Staging falls
+  back to the lowest-weight kind when a room supports no kind with a weight;
+  here such a room gets no enemies, so a configuration of zombies only has
+  zombies only.
 - A game that randomizes enemies raises `ENEMY_RANDOMIZER`, so the original
-  `enemy(...)` commands under the guard are skipped. In a room the plan does
-  not change, or creates nothing in, the generator flips the sense of every
-  `ENEMY_RANDOMIZER` test, so the room runs as if the flag were clear and its
-  original enemies stay.
+  `enemy(...)` commands under the guard are skipped. A room with enemy rules
+  in `random.xml` that the plan gives no enemies is therefore empty, as in
+  staging, which clears every such room before it places anything:
+  `enemies/rooms` is the share of rooms with enemies. In a room with no
+  enemy rules the generator flips the sense of every `ENEMY_RANDOMIZER` test,
+  so the room runs as if the flag were clear and its original enemies stay.
 - Effect sheets: a created enemy's effect sprites are not added to rooms that
   do not declare them. The engine skips such an effect with a warning
   (`effect sprite N is not declared by this room`) and the enemy plays
