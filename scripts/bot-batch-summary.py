@@ -139,7 +139,7 @@ def summary(batch):
 
 
 def row(batch, commit, change, verdict):
-    """One docs/bot-scoreboard.md table row for a batch."""
+    """One markdown scoreboard table row for a batch."""
     a = aggregate(load(batch))
     default = {None: "-", True: "yes", False: "NO"}[a["default_completed"]]
     print(f"| {os.path.basename(os.path.normpath(batch))} | {commit} | {change} | "

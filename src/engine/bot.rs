@@ -5295,7 +5295,7 @@ impl BotRuntime {
         let mut input = *self.shares.input.borrow();
         // `BOT_BOOT_IDLE=N` (benchmark noise measurement only): no input for
         // the run's first N ticks, a behaviour-neutral shift of every later
-        // tick (docs/bot-scoreboard.md, "noise floor").
+        // tick.
         if self.tick < boot_idle_ticks() {
             input = BotInput::default();
         }
