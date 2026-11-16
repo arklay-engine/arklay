@@ -6,7 +6,7 @@
 //! The walk ([`World`]) is independent of the routing graph. It plays the
 //! map itself from the start room: doors with their kinds, locks and
 //! requirements, graph flags raised by room events, pickups, consumable keys,
-//! one-way and no-return doors. [`World::search`] tries every order of
+//! one-way and no-return doors. `World::search` tries every order of
 //! spending consumable keys; [`World::first_come`] spends each on the first
 //! lock found, which is the "greedy spend" a careless player makes (common
 //! 1.6.1 does not rule it out; see `docs/biorand/plan.md`, Known issues).

@@ -73,7 +73,9 @@ kick() {
         nice cargo test --profile test-release --lib --no-run &&
             nice cargo test --profile test-release --bins \
                 --test cli --test memory --test torture --no-run &&
-            CARGO_TARGET_DIR="$target/clippy" nice cargo clippy --all-targets \
+            nice cargo test --profile test-release \
+                -p arklay-routing -p arklay-biorand --no-run &&
+            CARGO_TARGET_DIR="$target/clippy" nice cargo clippy --workspace --all-targets \
                 --all-features -- -D warnings
         echo "prebuild: done ($(date +%T))"
     ' prebuild "$target" </dev/null >>"$log" 2>&1 &

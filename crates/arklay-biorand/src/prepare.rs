@@ -18,10 +18,10 @@
 //!   (`:225-228`), but the option's own description says it applies only with
 //!   the guardhouse, and `Random` can pick that pair; here mansion 2 is
 //!   simply off.
-//! - Under door randomization ([`prepare_for_doors`]) the areas, the second
+//! - Under door randomization (`prepare_for_doors`) the areas, the second
 //!   mansion visit and the segmented caves and lab are left to the door
 //!   stage's segments, as staging leaves them.
-//! - Lock randomization ([`prepare_locks`], `:290-445`) allocates the second
+//! - Lock randomization (`prepare_locks`, `:290-445`) allocates the second
 //!   mansion visit's new lock ids from 64 up, as [`crate::locks`] does, so
 //!   that they never meet a lock flag an original room script raises.
 //! - The entrances from `doors.csv` (`:162-182`) are already in the room

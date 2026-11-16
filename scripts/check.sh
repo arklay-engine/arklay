@@ -5,8 +5,9 @@
 # PR, so a session does not need to.
 #
 #   ./scripts/check.sh          session: fmt, clippy, the docs checks,
-#                               the unit and fast integration tests and the
-#                               rustdoc build, in one profile
+#                               the unit and fast integration tests, the
+#                               library packages' tests and the rustdoc build,
+#                               in one profile
 #   ./scripts/check.sh --ci     everything the Linux CI job runs: the session
 #                               tier plus the second test profile, the real
 #                               test binaries' non-ignored tests,
@@ -129,6 +130,10 @@ for path in tests/*.rs tests/*/main.rs; do
     [[ " ${slow_tests[*]} " == *" $name "* ]] && continue
     session_tests+=(--test "$name")
 done
+# The workspace's library packages. A bare `cargo test` means the engine
+# crate alone, so their tests run as a step of their own. They are small and
+# never build the engine crate.
+package_tests=(-p arklay-routing -p arklay-biorand)
 # Slow unit tests the session tier skips; --ci runs them. The GHOST cheat
 # sweep replays every enemy script through 33 spawn behaviours and is about a
 # third of the unit tests' CPU time (#266).
@@ -142,7 +147,7 @@ done
 # builds. It runs in the background, in its own target directory so cargo's
 # build lock does not serialise it behind them, while the tests build: on a
 # cold worktree the two together take about as long as the test build alone.
-clippy=(cargo clippy --all-targets --all-features -- -D warnings)
+clippy=(cargo clippy --workspace --all-targets --all-features -- -D warnings)
 clippy_dir="${CARGO_TARGET_DIR:-target}/clippy"
 clippy_log="$clippy_dir.log"
 clippy_pid=
@@ -191,15 +196,17 @@ clippy_pid=$!
 
 if [[ "$tier" == "session" ]]; then
     step cargo test --profile test-release "${session_tests[@]}" -- "${session_skips[@]}"
+    step cargo test --profile test-release "${package_tests[@]}"
     # CI's `cargo doc` fails on rustdoc's lints, such as a public item's docs
     # linking a private one. With test-release warm this takes seconds.
-    step cargo doc --profile test-release --no-deps
+    step cargo doc --profile test-release --no-deps --workspace
 else
     step cargo check --no-default-features
     step cargo check --manifest-path fuzz/Cargo.toml
     step cargo test
     step cargo test --profile test-release
-    step cargo doc --no-deps
+    step cargo test --profile test-release "${package_tests[@]}"
+    step cargo doc --no-deps --workspace
 fi
 wait_clippy
 
