@@ -1,7 +1,7 @@
 //! Real-asset player-shadow capture test.
 //!
 //! Run with:
-//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=assets/re1 ARKLAY_RE1_PACK=../re1.akpak cargo test --profile test-release --test real shadow_real:: -- --ignored --nocapture`
+//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=assets/re1 ARKLAY_RE1_PACK=../re1.akpak cargo test --profile fast-release --test real shadow_real:: -- --ignored --nocapture`
 //!
 //! The pack must have been built after the shadow converter landed
 //! (`shadow/kage.tim`); a pack that predates it falls back to the install's

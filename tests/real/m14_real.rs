@@ -3,7 +3,7 @@
 //!
 //! Run with:
 //! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=... ARKLAY_RE1_PACK=... \
-//!  ARKLAY_MOVIE_GOLDEN=... cargo test --profile test-release --test real m14_real:: -- --ignored --nocapture`
+//!  ARKLAY_MOVIE_GOLDEN=... cargo test --profile fast-release --test real m14_real:: -- --ignored --nocapture`
 //!
 //! The playback tests read the films from `ARKLAY_RE1_PACK`, which must have
 //! been converted from the install. The integer-pixel comparison needs

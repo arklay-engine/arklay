@@ -702,17 +702,17 @@ regression/cross-check, not an independent oracle.
 - The local check has tiers (`AGENTS.md` has the full policy):
   `./scripts/check.sh` is the session tier, which runs fmt, clippy
   `--all-targets --all-features -D warnings`, the unit and fast integration
-  tests and the doc build, in the `test-release` profile (release code
+  tests and the doc build, in the `fast-release` profile (release code
   without LTO). It is budgeted at five minutes cold and is what to run before
   pushing. `./scripts/check.sh --ci` runs everything the Linux CI job does:
   also the debug tests, the `--no-default-features` check and the fuzz
   compile check. `./scripts/check.sh --full` adds every ignored test (the
   real-asset suite and the asset-gated unit tests) when `ARKLAY_RE1_ROOT` and
   `ARKLAY_RE1_PACK` are set, and is a release-cycle check.
-- Use `--profile test-release` for every local test, build and run
-  (`cargo run --profile test-release -- ...`), so one build serves them all.
+- Use `--profile fast-release` for every local test, build and run
+  (`cargo run --profile fast-release -- ...`), so one build serves them all.
 - The real-asset tests are one binary, `tests/real/main.rs`; a module name
-  stays a filter, so `cargo test --profile test-release --test real
+  stays a filter, so `cargo test --profile fast-release --test real
   stairs_real:: -- --ignored` runs one module's tests and `... --test real --
   --ignored` runs them all.
 - CI gates those commands on Linux and Windows plus a 1.88 MSRV check, and
@@ -726,7 +726,7 @@ regression/cross-check, not an independent oracle.
   transitions and save round-trips under memory and wall-clock ceilings. It
   takes half an hour or more, so it is release-only and opt-in and no routine
   pass runs it:
-  `ARKLAY_SOAK=1 cargo test --profile test-release --test soak_real --
+  `ARKLAY_SOAK=1 cargo test --profile fast-release --test soak_real --
   --ignored --nocapture`, or `./scripts/check.sh --soak` for every tier.
 
 ## License

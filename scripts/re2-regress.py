@@ -42,7 +42,7 @@ ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "oracle" / "re2-regress.toml"
 INPUTS = ROOT / "oracle" / "inputs-re2"
 DEFAULT_REFS = "~/.local/share/arklay/re2-refs"
-DEFAULT_ARKLAY = ROOT / "target" / "test-release" / ("arklay.exe" if sys.platform == "win32" else "arklay")
+DEFAULT_ARKLAY = ROOT / "target" / "fast-release" / ("arklay.exe" if sys.platform == "win32" else "arklay")
 
 
 def load_oracle():
@@ -1060,7 +1060,7 @@ def main() -> int:
 
     args.arklay = Path(args.arklay).expanduser()
     if not args.arklay.exists():
-        raise SystemExit(f"re2-regress: {args.arklay} does not exist (cargo build --profile test-release)")
+        raise SystemExit(f"re2-regress: {args.arklay} does not exist (cargo build --profile fast-release)")
     for signum in (signal.SIGTERM, getattr(signal, "SIGHUP", None)):
         if signum is not None:
             signal.signal(signum, on_signal)

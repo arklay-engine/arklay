@@ -2,7 +2,7 @@
 //! cut selection and the first gameplay frame after teardown.
 //!
 //! Run with:
-//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_PACK=/path/to/re1.akpak cargo test --profile test-release --test real transition_real:: -- --ignored`
+//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_PACK=/path/to/re1.akpak cargo test --profile fast-release --test real transition_real:: -- --ignored`
 //!
 //! The transitions are driven through `engine::simulate_door`, the same
 //! headless seam the engine's gameplay uses: the `.dor` timeline runs to

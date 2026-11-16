@@ -1,7 +1,7 @@
 //! Real-asset item box tests.
 //!
 //! Run with:
-//! `ARKLAY_RE1_ROOT=assets/re1 ARKLAY_RE1_PACK=re1.akpak cargo test --profile test-release --test real item_box_real:: -- --ignored --nocapture`
+//! `ARKLAY_RE1_ROOT=assets/re1 ARKLAY_RE1_PACK=re1.akpak cargo test --profile fast-release --test real item_box_real:: -- --ignored --nocapture`
 //!
 //! Both `ARKLAY_RE1_ROOT` and `ARKLAY_RE1_PACK` must be set together; with
 //! neither the tests skip, and with only one they fail. The pack must carry

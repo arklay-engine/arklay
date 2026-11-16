@@ -39,7 +39,7 @@ Common options:
   -p, --pack PACK  the RE1 game pack: an installed pack's id or a path
                    (default $BOT_PACK, else `re1`, the installed RE1 pack)
   -j, --jobs N     runs at once (default: the CPU count)
-      --no-build   skip `cargo build --profile test-release`
+      --no-build   skip `cargo build --profile fast-release`
 
 $BOT_TREE names a directory whose mods/ the runs load instead of this
 checkout's: a copy with a change to try, against the same recordings.
@@ -55,7 +55,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "target", "bot-rooms")
-BIN = os.path.join(ROOT, "target", "test-release", "arklay")
+BIN = os.path.join(ROOT, "target", "fast-release", "arklay")
 # The directory whose mods/ the runs load: this checkout, or $BOT_TREE (a
 # copy with a change to try, compared against the same recordings).
 TREE = os.environ.get("BOT_TREE", ROOT)
@@ -76,7 +76,7 @@ def seeds(text):
 def build(args):
     if args.no_build:
         return True
-    done = subprocess.run(["cargo", "build", "--profile", "test-release"], cwd=ROOT,
+    done = subprocess.run(["cargo", "build", "--profile", "fast-release"], cwd=ROOT,
                           stderr=subprocess.PIPE, text=True)
     for line in done.stderr.splitlines():
         if line.startswith(("error", "warning")) or "Finished" in line:

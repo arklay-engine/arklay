@@ -10,7 +10,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     # CI builds cold and caches no incremental artifacts, so the local loop's
-    # incremental test-release builds are off here.
+    # incremental fast-release builds are off here.
     env:
       CARGO_INCREMENTAL: 0
     steps:
@@ -28,11 +28,11 @@ jobs:
           LD_LIBRARY_PATH: ${{ github.workspace }}/target/debug
           SDL_VIDEODRIVER: dummy
           SDL_AUDIODRIVER: dummy
-      - run: cargo test --profile test-release --features sdl3-sys/build-from-source,sdl3-sys/sdl-unix-console-build
+      - run: cargo test --profile fast-release --features sdl3-sys/build-from-source,sdl3-sys/sdl-unix-console-build
         env:
-          LD_LIBRARY_PATH: ${{ github.workspace }}/target/test-release
+          LD_LIBRARY_PATH: ${{ github.workspace }}/target/fast-release
       # A bare `cargo test` means the engine crate alone.
-      - run: cargo test --profile test-release -p arklay-routing -p arklay-biorand
+      - run: cargo test --profile fast-release -p arklay-routing -p arklay-biorand
       - run: cargo doc --no-deps --workspace
       - run: cargo build --release --features sdl3-sys/build-from-source,sdl3-sys/sdl-unix-console-build
       - name: Package the Linux artifact

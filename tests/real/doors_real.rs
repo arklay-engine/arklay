@@ -1,7 +1,7 @@
 //! Real-asset door regression tests.
 //!
 //! Run with:
-//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=/path/to/re1 cargo test --profile test-release --test real doors_real:: -- --ignored`
+//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=/path/to/re1 cargo test --profile fast-release --test real doors_real:: -- --ignored`
 //!
 //! Every test loads a shipped RDT, runs its init script through the game state
 //! and drives the door interaction the way the engine does: the original tests

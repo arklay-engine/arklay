@@ -4,7 +4,7 @@
 //! Run with:
 //! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=/path/to/re1 \
 //!  ARKLAY_RE1_PACK=<a pack converted by this tree> \
-//!  cargo test --profile test-release --test real m16_ui_real:: -- --ignored --nocapture`
+//!  cargo test --profile fast-release --test real m16_ui_real:: -- --ignored --nocapture`
 //!
 //! The map checks need a pack carrying `map/`; a pack converted before M16
 //! fails loudly instead of skipping.

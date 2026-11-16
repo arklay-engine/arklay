@@ -13,7 +13,7 @@
   -n, --name NAME  the output directory's name (default: a timestamp)
   -o, --out DIR    the output root (default target/bot-routes)
   -t, --timeout S  per-run timeout in seconds (default 1800)
-      --no-build   skip `cargo build --profile test-release`
+      --no-build   skip `cargo build --profile fast-release`
 
 Each run is `arklay script --headless ROUTE.lua PACK SEED STATS`: its result
 line goes to <out>/<name>/<route>-s<seed>.out, the bot's log to .log and the
@@ -40,7 +40,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROUTES = os.path.join(ROOT, "mods", "bot", "routes")
-BIN = os.path.join(ROOT, "target", "test-release", "arklay")
+BIN = os.path.join(ROOT, "target", "fast-release", "arklay")
 
 
 def seeds(text):
@@ -183,7 +183,7 @@ def main():
         print(f"pack not found: {args.pack} (see -p)", file=sys.stderr)
         return 2
     if not args.no_build:
-        build = subprocess.run(["cargo", "build", "--profile", "test-release"], cwd=ROOT,
+        build = subprocess.run(["cargo", "build", "--profile", "fast-release"], cwd=ROOT,
                                stderr=subprocess.PIPE, text=True)
         for line in build.stderr.splitlines():
             if line.startswith(("error", "warning")) or "Finished" in line:

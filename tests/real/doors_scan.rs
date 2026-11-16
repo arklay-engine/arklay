@@ -1,7 +1,7 @@
 //! Diagnostic scan of `door_aot_set` records across the real RDT corpus.
 //!
 //! Run with:
-//! `ARKLAY_RE1_ROOT=/path/to/re1 cargo test --profile test-release --test real doors_scan:: -- --ignored --nocapture`
+//! `ARKLAY_RE1_ROOT=/path/to/re1 cargo test --profile fast-release --test real doors_scan:: -- --ignored --nocapture`
 
 use crate::common;
 

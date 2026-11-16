@@ -6,7 +6,7 @@
 set -u
 cd "$(dirname "$0")/.."
 rev=${1:-HEAD}; shift || true
-bin=target/test-release/arklay
+bin=target/fast-release/arklay
 old=target/retail-check/old
 rm -rf "$old"; mkdir -p "$old" target/retail-check
 git archive "$rev" games/re1/room games/re1/inc | tar -x -C "$old"

@@ -22,7 +22,7 @@
 #                        a story decision (mods/bot/params/re1.xml declares them)
 #       --invincible     --bot-invincible: the INVINCIBLE cheat for every run
 #                        (BATCH_INVINCIBLE=1), to time a route without deaths
-#       --no-build       skip `cargo build --profile test-release`
+#       --no-build       skip `cargo build --profile fast-release`
 #       --keep-saves     keep seed-<s>.saves/ after each run (KEEP_SAVES=1), to
 #                        --load a save of the run later
 #
@@ -89,9 +89,9 @@ if [[ ! "$PACK" =~ ^[A-Za-z0-9_-]+$ ]] || [ -e "$PACK" ]; then
   [ -f "$PACK" ] || { echo "pack not found: $PACK" >&2; exit 2; }
 fi
 if [ "$BUILD" = 1 ]; then
-  cargo build --profile test-release 2>&1 | grep -E "^(error|warning)|Finished" || true
+  cargo build --profile fast-release 2>&1 | grep -E "^(error|warning)|Finished" || true
 fi
-BIN="$here/target/test-release/arklay"
+BIN="$here/target/fast-release/arklay"
 [ -x "$BIN" ] || { echo "FAIL: $BIN is missing" >&2; exit 1; }
 
 DIR="$OUT/$NAME"

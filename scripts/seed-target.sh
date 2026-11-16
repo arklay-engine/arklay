@@ -9,7 +9,7 @@
 #
 # With scripts/rustc-wrapper.sh as RUSTC_WRAPPER the arklay crate is reused too.
 #
-# It copies `target/test-release` and `target/clippy` (the session check's two
+# It copies `target/fast-release` and `target/clippy` (the session check's two
 # build directories) with copy-on-write reflinks, which are instant and take
 # no extra space on btrfs, XFS and APFS-like filesystems. Where reflinks are
 # not supported it copies nothing and says so; a plain copy of several GB is
@@ -20,8 +20,8 @@ cd "$(dirname "$0")/.."
 here=$(pwd -P)
 target=${CARGO_TARGET_DIR:-target}
 
-if [[ -d "$target/test-release" ]]; then
-    echo "seed-target: $target/test-release already exists; nothing to do"
+if [[ -d "$target/fast-release" ]]; then
+    echo "seed-target: $target/fast-release already exists; nothing to do"
     exit 0
 fi
 
@@ -39,8 +39,8 @@ if [[ -z "$src" ]]; then
         [[ "$line" == worktree\ * ]] || continue
         tree=${line#worktree }
         [[ "$(cd "$tree" 2>/dev/null && pwd -P)" == "$here" ]] && continue
-        [[ -d "$tree/target/test-release/deps" ]] || continue
-        stamp=$(find "$tree/target/test-release/deps" -maxdepth 1 \
+        [[ -d "$tree/target/fast-release/deps" ]] || continue
+        stamp=$(find "$tree/target/fast-release/deps" -maxdepth 1 \
             \( -name 'arklay-*' -o -name 'libarklay-*' \) -printf '%T@\n' 2>/dev/null |
             sort -n | tail -n 1)
         [[ -n "$stamp" ]] || continue
@@ -61,13 +61,13 @@ if [[ -z "$src" ]]; then
         fi
     done < <(git worktree list --porcelain)
 fi
-if [[ -z "$src" || ! -d "$src/target/test-release" ]]; then
-    echo "seed-target: no other checkout has a target/test-release build to seed from"
+if [[ -z "$src" || ! -d "$src/target/fast-release" ]]; then
+    echo "seed-target: no other checkout has a target/fast-release build to seed from"
     exit 0
 fi
 
 mkdir -p "$target"
-for dir in test-release clippy; do
+for dir in fast-release clippy; do
     [[ -d "$src/target/$dir" && ! -e "$target/$dir" ]] || continue
     if ! cp -a --reflink=always "$src/target/$dir" "$target/$dir" 2>/dev/null; then
         rm -rf "$target/$dir"

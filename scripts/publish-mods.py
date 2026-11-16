@@ -179,7 +179,7 @@ def main() -> None:
     parser.add_argument("ids", nargs="*", help="mods to rebuild (default: all); the index always lists every mod")
     parser.add_argument("--build", type=Path, default=DEFAULT_BUILD, help=f"mod source directories (default {DEFAULT_BUILD})")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help=f"hosted tree (default {DEFAULT_OUT})")
-    parser.add_argument("--arklay", type=Path, default=REPO / "target/test-release" / ("arklay.exe" if os.name == "nt" else "arklay"))
+    parser.add_argument("--arklay", type=Path, default=REPO / "target/fast-release" / ("arklay.exe" if os.name == "nt" else "arklay"))
     parser.add_argument("--re1-base", type=Path, help="RE1 base pack checking override paths")
     parser.add_argument("--re2-base", type=Path, help="RE2 base pack checking override paths")
     parser.add_argument("--force", action="store_true", help="replace a published version's pack")

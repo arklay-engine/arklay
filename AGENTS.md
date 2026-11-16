@@ -9,17 +9,17 @@ The `arklay` crate is large (about 250k lines), so every cargo command that
 recompiles it costs tens of seconds. Most of a session's wall-clock time used
 to go to the compiler (#266). Follow these rules:
 
-- **Use one profile for everything: `--profile test-release`.** Tests, builds
-  and runs all use it: `cargo test --profile test-release ...`,
-  `cargo build --profile test-release`,
-  `cargo run --profile test-release -- <args>`. The binary is
-  `target/test-release/arklay`. Each other profile (plain `cargo test`,
+- **Use one profile for everything: `--profile fast-release`.** Tests, builds
+  and runs all use it: `cargo test --profile fast-release ...`,
+  `cargo build --profile fast-release`,
+  `cargo run --profile fast-release -- <args>`. The binary is
+  `target/fast-release/arklay`. Each other profile (plain `cargo test`,
   `cargo build`, `--release`) compiles the whole crate again from scratch in
   its own directory. Do not use `--release` unless the task is about the
   shipped binary; it adds a slow LTO link.
 - **Build only the target you need.** Most tests are unit tests in the
   library, so iterate with
-  `cargo test --profile test-release --lib <filter>`. A bare
+  `cargo test --profile fast-release --lib <filter>`. A bare
   `cargo test <filter>` also builds and links the binary and every
   integration test binary. For integration tests, name the binary:
   `--test cli`, `--test real`, and so on.
@@ -90,7 +90,7 @@ to go to the compiler (#266). Follow these rules:
   parks inert).
 - **Real-asset tests** are ignored tests in one binary, `tests/real/main.rs`:
   `ARKLAY_RE1_ROOT=/path/to/re1 ARKLAY_RE1_PACK=/path/to/re1.akpak cargo test
-  --profile test-release --test real <module>:: -- --ignored`. The RE 2
+  --profile fast-release --test real <module>:: -- --ignored`. The RE 2
   tests (`re2_real`) read `ARKLAY_RE2_ROOT` instead. Run the module your
   change touches, not the whole suite.
 
@@ -104,7 +104,7 @@ game state; the API is `lua-types/script.lua`
 (`docs/scripting/lua/script.md`).
 
 ```sh
-target/test-release/arklay script --headless - <<'LUA'
+target/fast-release/arklay script --headless - <<'LUA'
 load_game_pack("re1.akpak")
 load_room("10A")
 hold("forward")
@@ -138,7 +138,7 @@ not run it after every edit.
 - The session tier is fmt, clippy, the unit and fast integration tests, the
   tests of the library packages (`crates/arklay-routing`,
   `crates/arklay-biorand`), and the docs build (`cargo doc`, whose lints CI
-  enforces), all in `test-release`. It prints each step's time and what it
+  enforces), all in `fast-release`. It prints each step's time and what it
   skipped.
 - **Run it unfiltered:** `./scripts/check.sh`, with no `grep` or `tail`. It
   prints one line per step and the end of a failing step's log. Its last line

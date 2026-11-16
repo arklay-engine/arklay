@@ -17,7 +17,7 @@ cd "$(dirname "$0")/.."
 MAX_TICKS="${BOT_BENCH_MAX_TICKS:-40000}"
 CACHE="${HOME}/.cache/arklay-biorand"
 OUT=target/bot-bench
-BIN=target/test-release/arklay
+BIN=target/fast-release/arklay
 declare -A PACKS=(
   [re1]="${BOT_PACK:-re1}"
   [re1-full]="${BOT_PACK:-re1}"
@@ -54,7 +54,7 @@ if [ -n "$only" ]; then
   LABELS=("$only")
 fi
 
-cargo build --profile test-release 2>&1 | grep -E "^(error|warning)|Finished" || true
+cargo build --profile fast-release 2>&1 | grep -E "^(error|warning)|Finished" || true
 [ -x "$BIN" ] || { echo "FAIL: $BIN is missing after the build" >&2; exit 1; }
 mkdir -p "$OUT"
 stamp="$(date +%Y%m%d-%H%M%S)"

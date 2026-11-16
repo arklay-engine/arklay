@@ -3,7 +3,7 @@
 //! `0x8000` builds.
 //!
 //! Run with:
-//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=/path/to/re1 ARKLAY_RE1_PACK=/path/to/re1.akpak cargo test --profile test-release --test real m12_sparkles_real:: -- --ignored`
+//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=/path/to/re1 ARKLAY_RE1_PACK=/path/to/re1.akpak cargo test --profile fast-release --test real m12_sparkles_real:: -- --ignored`
 
 use crate::common;
 

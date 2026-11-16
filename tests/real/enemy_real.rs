@@ -2,7 +2,7 @@
 //! run through the pack's Lua scripts.
 //!
 //! Run with:
-//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=/path/to/re1 ARKLAY_RE1_PACK=/path/to/re1.akpak cargo test --profile test-release --test real enemy_real:: -- --ignored`
+//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=/path/to/re1 ARKLAY_RE1_PACK=/path/to/re1.akpak cargo test --profile fast-release --test real enemy_real:: -- --ignored`
 
 use crate::common;
 

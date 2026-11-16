@@ -2,7 +2,7 @@
 //! chandelier spawn.
 //!
 //! Run with:
-//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=/path/to/re1 ARKLAY_RE1_PACK=/path/to/re1.akpak cargo test --profile test-release --test real effects_real:: -- --ignored`
+//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=/path/to/re1 ARKLAY_RE1_PACK=/path/to/re1.akpak cargo test --profile fast-release --test real effects_real:: -- --ignored`
 
 use crate::common;
 
@@ -120,7 +120,7 @@ fn real_weapon_install_packs_each_room_once() {
 // M10 slices 3-4: the corpus lifecycle audit and the effect captures.
 //
 // Run with:
-// `ARKLAY_RE1_ROOT=/path/to/re1 ARKLAY_RE1_PACK=/path/to/re1.akpak cargo test --profile test-release --test real effects_real:: -- --ignored`
+// `ARKLAY_RE1_ROOT=/path/to/re1 ARKLAY_RE1_PACK=/path/to/re1.akpak cargo test --profile fast-release --test real effects_real:: -- --ignored`
 // ============================================================================
 
 use std::rc::Rc;

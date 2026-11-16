@@ -2,7 +2,7 @@
 //! `set_stairs_zone` ladder entry and the stairwell doors that run the climb.
 //!
 //! Run with:
-//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_PACK=/path/to/re1.akpak cargo test --profile test-release --test real stairs_real:: -- --ignored`
+//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_PACK=/path/to/re1.akpak cargo test --profile fast-release --test real stairs_real:: -- --ignored`
 //!
 //! Only an unset `ARKLAY_RE1_PACK` skips. The tick helper mirrors the engine's
 //! gameplay order: movement first, then the room action probe and the stair

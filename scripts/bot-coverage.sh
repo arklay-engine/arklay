@@ -58,7 +58,7 @@ while [ $# -gt 0 ]; do
 done
 
 if [ ${#BUILD[@]} = 0 ]; then
-  cargo build --profile test-release 2>&1 | grep -E "^(error|warning)|Finished" || true
+  cargo build --profile fast-release 2>&1 | grep -E "^(error|warning)|Finished" || true
 fi
 dirs=()
 for combo in "${COMBOS[@]}"; do

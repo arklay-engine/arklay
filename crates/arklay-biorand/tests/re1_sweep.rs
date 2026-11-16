@@ -9,7 +9,7 @@
 //!
 //! ```sh
 //! SWEEP_CASES=1000 SWEEP_OUT=target/scratch/sweep.txt \
-//!   cargo test --profile test-release -p arklay-biorand --test re1_sweep \
+//!   cargo test --profile fast-release -p arklay-biorand --test re1_sweep \
 //!   -- --ignored --nocapture
 //! ```
 //!

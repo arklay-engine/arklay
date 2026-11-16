@@ -11,7 +11,7 @@
 #   session-start.sh cargo      PreToolUse on Bash: before a cargo command,
 #                               stop a background build that is out of date.
 #
-# The background build is what the session check builds: the test-release
+# The background build is what the session check builds: the fast-release
 # unit tests, then the binary and fast integration tests, then clippy with
 # the check's arguments. A cargo command run while an up-to-date one is still
 # going waits on cargo's lock ("Blocking waiting for file lock") and then has
@@ -70,10 +70,10 @@ kick() {
     setsid bash -c '
         target=$1
         echo "prebuild: building ($(date +%T))"
-        nice cargo test --profile test-release --lib --no-run &&
-            nice cargo test --profile test-release --bins \
+        nice cargo test --profile fast-release --lib --no-run &&
+            nice cargo test --profile fast-release --bins \
                 --test cli --test memory --test torture --no-run &&
-            nice cargo test --profile test-release \
+            nice cargo test --profile fast-release \
                 -p arklay-routing -p arklay-biorand --no-run &&
             CARGO_TARGET_DIR="$target/clippy" nice cargo clippy --workspace --all-targets \
                 --all-features -- -D warnings

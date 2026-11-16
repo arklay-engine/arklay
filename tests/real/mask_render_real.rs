@@ -1,7 +1,7 @@
 //! Real-asset room-mask render interleave test.
 //!
 //! Run with:
-//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_PACK=target/tmp-test/game.akpak cargo test --profile test-release --test real mask_render_real:: -- --ignored --nocapture`
+//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_PACK=target/tmp-test/game.akpak cargo test --profile fast-release --test real mask_render_real:: -- --ignored --nocapture`
 //!
 //! The pack must have been built after the room-mask converter landed
 //! (`cargo run --release -- convert-game <install> --out target/tmp-test/game.akpak`);

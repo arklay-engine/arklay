@@ -23,7 +23,7 @@
 #
 # --full and --soak are release-cycle checks. Never run them by default.
 #
-# The session tier builds the tests in the `test-release` profile only
+# The session tier builds the tests in the `fast-release` profile only
 # (release code without LTO, incremental), the same profile as the documented
 # single-test loop, so the check reuses the loop's build and the loop reuses
 # the check's. `--ci` adds the debug test build, as CI does. Clippy runs in the
@@ -195,17 +195,17 @@ mkdir -p "$clippy_dir"
 clippy_pid=$!
 
 if [[ "$tier" == "session" ]]; then
-    step cargo test --profile test-release "${session_tests[@]}" -- "${session_skips[@]}"
-    step cargo test --profile test-release "${package_tests[@]}"
+    step cargo test --profile fast-release "${session_tests[@]}" -- "${session_skips[@]}"
+    step cargo test --profile fast-release "${package_tests[@]}"
     # CI's `cargo doc` fails on rustdoc's lints, such as a public item's docs
-    # linking a private one. With test-release warm this takes seconds.
-    step cargo doc --profile test-release --no-deps --workspace
+    # linking a private one. With fast-release warm this takes seconds.
+    step cargo doc --profile fast-release --no-deps --workspace
 else
     step cargo check --no-default-features
     step cargo check --manifest-path fuzz/Cargo.toml
     step cargo test
-    step cargo test --profile test-release
-    step cargo test --profile test-release "${package_tests[@]}"
+    step cargo test --profile fast-release
+    step cargo test --profile fast-release "${package_tests[@]}"
     step cargo doc --no-deps --workspace
 fi
 wait_clippy
@@ -213,13 +213,13 @@ wait_clippy
 if [[ "$tier" == "full" || "$tier" == "soak" ]]; then
     if [[ -n "${ARKLAY_RE1_ROOT:-}" && -n "${ARKLAY_RE1_PACK:-}" ]]; then
         if [[ "$tier" == "soak" ]]; then
-            ARKLAY_SOAK=1 step cargo test --profile test-release -- --ignored
+            ARKLAY_SOAK=1 step cargo test --profile fast-release -- --ignored
         else
-            step cargo test --profile test-release -- --ignored
+            step cargo test --profile fast-release -- --ignored
             echo "    (the full-game soak skipped itself; pass --soak to include it)"
         fi
     elif [[ -n "${ARKLAY_RE2_ROOT:-}" ]]; then
-        step cargo test --profile test-release --test real re2_real:: -- --ignored
+        step cargo test --profile fast-release --test real re2_real:: -- --ignored
         echo "    (the RE1 suite was skipped: set ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK)"
     else
         echo "==> skipped the ignored suite: set ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK (and ARKLAY_RE2_ROOT for RE2)"

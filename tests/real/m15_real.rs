@@ -2,7 +2,7 @@
 //!
 //! Run with:
 //! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=... ARKLAY_RE1_PACK=... \
-//!  cargo test --profile test-release --test real m15_real:: -- --ignored --nocapture`
+//!  cargo test --profile fast-release --test real m15_real:: -- --ignored --nocapture`
 //!
 //! Only an unset environment skips; a partial configuration fails loudly. The
 //! conversion test writes a full pack and takes minutes.

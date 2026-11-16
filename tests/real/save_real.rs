@@ -1,7 +1,7 @@
 //! Real-asset save/load tests (slice 3).
 //!
 //! Run with:
-//! `ARKLAY_RE1_PACK=re1.akpak cargo test --profile test-release --test real save_real:: -- --ignored --nocapture`
+//! `ARKLAY_RE1_PACK=re1.akpak cargo test --profile fast-release --test real save_real:: -- --ignored --nocapture`
 //!
 //! Only an unset `ARKLAY_RE1_PACK` skips. The first test drives the room 100
 //! typewriter end to end (prompt, ribbon consumption, save screen, reload) for

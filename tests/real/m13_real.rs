@@ -1,7 +1,7 @@
 //! M13 real-asset tests: voice lines, the F7 wait and the three-channel BGM.
 //!
 //! Run with:
-//! `ARKLAY_RE1_ROOT=... ARKLAY_RE1_PACK=... cargo test --profile test-release --test real m13_real:: -- --ignored --nocapture`
+//! `ARKLAY_RE1_ROOT=... ARKLAY_RE1_PACK=... cargo test --profile fast-release --test real m13_real:: -- --ignored --nocapture`
 //!
 //! Only an unset environment skips; a partial configuration fails loudly. The
 //! conversion test additionally writes a full pack and takes minutes.

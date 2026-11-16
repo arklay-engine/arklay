@@ -5,7 +5,7 @@
 //! skips with a printed note unless `ARKLAY_SOAK=1` is set. Run with:
 //! `ARKLAY_SOAK=1 TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=/path/to/re1 \
 //!  ARKLAY_RE1_PACK=/path/to/re1.akpak \
-//!  cargo test --profile test-release --test soak_real -- --ignored --nocapture`
+//!  cargo test --profile fast-release --test soak_real -- --ignored --nocapture`
 //!
 //! `scripts/check.sh --soak` sets the opt-in for a release check. The soak
 //! keeps its own binary (it is not a module of `tests/real/main.rs`): the

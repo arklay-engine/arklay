@@ -1,7 +1,7 @@
 //! Real-asset item viewer (examine screen) tests.
 //!
 //! Run with:
-//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=assets/re1 ARKLAY_RE1_PACK=target/tmp-test/game.akpak cargo test --profile test-release --test real item_view_real:: -- --ignored --nocapture`
+//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=assets/re1 ARKLAY_RE1_PACK=target/tmp-test/game.akpak cargo test --profile fast-release --test real item_view_real:: -- --ignored --nocapture`
 //!
 //! Both `ARKLAY_RE1_ROOT` and `ARKLAY_RE1_PACK` must be set together; with
 //! neither the tests skip, and with only one they fail. The pack must carry

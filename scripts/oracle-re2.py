@@ -2053,7 +2053,7 @@ def main() -> int:
     common(command)
     command.add_argument("--ticks", type=int, required=True)
     command.add_argument("--out", required=True)
-    command.add_argument("--arklay", default="target/test-release/arklay")
+    command.add_argument("--arklay", default="target/fast-release/arklay")
     command.add_argument("--pack", default="re2.akpak")
     command.add_argument("--fields", default=RE2_FIELDS)
     command.set_defaults(func=scenario_command)
@@ -2067,7 +2067,7 @@ def main() -> int:
     command.add_argument("--max-error", type=float, default=20.0)
     command.add_argument("--show", type=int, default=8)
     command.add_argument("--reuse-ref", action="store_true", help="keep the recorded reference frames")
-    command.add_argument("--arklay", default="target/test-release/arklay")
+    command.add_argument("--arklay", default="target/fast-release/arklay")
     command.add_argument("--pack", default="re2.akpak")
     command.add_argument(
         "--arklay-input", default=None,

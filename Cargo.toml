@@ -113,7 +113,7 @@ opt-level = 3
 # Incremental compilation keeps the single-test edit loop at seconds (CI sets
 # CARGO_INCREMENTAL=0; it builds cold anyway). Shipped binaries keep
 # `[profile.release]`.
-[profile.test-release]
+[profile.fast-release]
 inherits = "release"
 lto = "off"
 codegen-units = 256

@@ -15,7 +15,7 @@
 # cases, random draws from a factorial of option levels, and configurations
 # with every option drawn at random, in rotation. Both summaries and a repro
 # line per failure (seed, player, configuration) are written to --out.
-# Uses the test-release profile only.
+# Uses the fast-release profile only.
 set -u
 
 cd "$(dirname "$0")/.."
@@ -41,7 +41,7 @@ done
 mkdir -p "$out"
 out="$(cd "$out" && pwd)"
 status=0
-profile=(--profile test-release)
+profile=(--profile fast-release)
 
 if [ "$run_plan" = 1 ]; then
     echo "== plan level: $plan_cases cases x 2 players"
@@ -61,7 +61,7 @@ if [ "$run_packs" = 1 ] && [ "$packs" -gt 0 ]; then
     fi
     echo "== pack level: $packs packs"
     cargo build "${profile[@]}" 2>&1 | grep -E "^(error|warning)|Finished"
-    exe=target/test-release/arklay
+    exe=target/fast-release/arklay
     rm -rf "$out/cases" "$out/packs"
     SWEEP_DUMP="$out/cases" SWEEP_CASES="$packs" SWEEP_FIRST="$first" \
         cargo test "${profile[@]}" -p arklay-biorand --test re1_sweep re1_sweep_dump \

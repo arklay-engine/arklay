@@ -342,7 +342,7 @@ def main() -> None:
     parser.add_argument("--raw", type=Path, default=DEFAULT_RAW, help=f"original archives (default {DEFAULT_RAW})")
     parser.add_argument("--build", type=Path, default=DEFAULT_BUILD, help=f"mod source directories (default {DEFAULT_BUILD})")
     parser.add_argument("--work", type=Path, default=DEFAULT_WORK, help=f"scratch space (default {DEFAULT_WORK})")
-    parser.add_argument("--arklay", type=Path, default=REPO / "target/test-release" / ("arklay.exe" if os.name == "nt" else "arklay"))
+    parser.add_argument("--arklay", type=Path, default=REPO / "target/fast-release" / ("arklay.exe" if os.name == "nt" else "arklay"))
     parser.add_argument("--re1-base", type=Path, help="RE1 base pack (default: the launcher's games/re1.akpak)")
     parser.add_argument("--re2-base", type=Path, help="RE2 base pack (default: the launcher's games/re2.akpak)")
     parser.add_argument("--list", action="store_true", help="list the recipes and exit")

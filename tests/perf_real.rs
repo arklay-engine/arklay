@@ -1,9 +1,9 @@
-//! Performance budgets on the real corpus (ignored, `test-release` profile).
+//! Performance budgets on the real corpus (ignored, `fast-release` profile).
 //!
 //! Run with:
 //! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=/path/to/re1 \
 //!  ARKLAY_RE1_PACK=/path/to/re1.akpak \
-//!  cargo test --profile test-release --test perf_real -- --ignored --nocapture`
+//!  cargo test --profile fast-release --test perf_real -- --ignored --nocapture`
 //!
 //! The budgets are policy numbers owned by this project, not claims about the
 //! original: release-profile wall clock of the headless fixed-tick path (no

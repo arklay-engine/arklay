@@ -1,7 +1,7 @@
 //! Real-asset `.dor` door animation tests.
 //!
 //! Run with:
-//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=/path/to/re1 cargo test --profile test-release --test real door_anim_real:: -- --ignored --nocapture`
+//! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=/path/to/re1 cargo test --profile fast-release --test real door_anim_real:: -- --ignored --nocapture`
 //!
 //! The tests parse the shipped door corpus, drive `DOOR00.DOR`'s main script
 //! through the VM and render a mid-animation frame to a BMP.

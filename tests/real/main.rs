@@ -9,13 +9,13 @@
 //! ```sh
 //! TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=/path/to/re1 \
 //!   ARKLAY_RE1_PACK=/path/to/re1.akpak \
-//!   cargo test --profile test-release --test real -- --ignored
+//!   cargo test --profile fast-release --test real -- --ignored
 //! ```
 //!
 //! The RE2 tests (`re2_real`) read `ARKLAY_RE2_ROOT` instead and skip
 //! without it.
 //!
-//! `--profile test-release` is the release profile without thin LTO: the
+//! `--profile fast-release` is the release profile without thin LTO: the
 //! tests run at release speed, but the link skips an optimisation pass only a
 //! shipped binary needs. `scripts/check.sh --full` runs it as part of its
 //! ignored pass.
@@ -24,8 +24,8 @@
 //! `cargo test --test <file>` used to before the files were merged:
 //!
 //! ```sh
-//! cargo test --profile test-release --test real stairs_real:: -- --ignored
-//! cargo test --profile test-release --test real \
+//! cargo test --profile fast-release --test real stairs_real:: -- --ignored
+//! cargo test --profile fast-release --test real \
 //!   stairs_real::lab_ladder_zone_latches_flags_and_base -- --ignored
 //! ```
 //!
