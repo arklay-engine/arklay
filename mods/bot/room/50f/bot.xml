@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 50F. The power panel at AOT 2 asks to power the blacked-out areas;
+     Yes sets scenario 46 (0x2E), the supply half of 50C's elevator power. -->
+<bot format="2">
+  <interact slot="2" bank="0" bit="46" label="the power panel: power the blacked-out areas"/>
+  <answer choice="yes" slot="2" label="activate the blacked-out areas"/>
+</bot>

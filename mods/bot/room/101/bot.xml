@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 101, the 1F left stairs. Chris's game, Rebecca left in the save room
+     (common 0x22, rebecca_along=no): 10A's hunter film (common 0x2B) arms
+     her radio call, which plays in the next room and starts timer W_04.
+     The first 101 entry after it sets 0x32 at 180 seconds or less (she is
+     safe in 100), or 0x33 past it, and the attack plays: common 0x2F while
+     hunter 0 (enemy bit 0x0E) lives. Entering 100, 102, 103 or 201 while
+     0x2F is set kills her (common 0x30 and 0xC0); killing the hunter
+     clears 0x2F and she lives. Never entering 101 before the caves loses
+     her too (307's init).
+
+     rebecca=save: come back here once the film has played, and fight the
+     hunter with every door held shut while the attack lasts.
+     rebecca=leave: walk out by door 1 (102) during the attack.
+
+     Door 0 to 100 is held shut under rebecca_meet=richard until Richard
+     is found in 20D (common 0x62). -->
+<bot format="2">
+  <avoid slot="0" bank="1" bit="0x62" while="clear" character="chris"
+         when="rebecca_meet=richard"
+         reason="rebecca_meet=richard: find Richard in 20D before the save room"/>
+  <revisit bank="1" bit="0x2B" while="set" character="chris"
+           when="rebecca_meet=save_room rebecca_along=no rebecca=save"
+           label="Rebecca's radio call: 101 within 180 seconds"/>
+  <fight enemy="0x06" bank="3" bit="0x0E" after_bank="1" after_bit="0x2F" urgent="yes"
+         character="chris" when="rebecca=save" label="the hunter attacking Rebecca"/>
+  <avoid slot="0" bank="1" bit="0x2F" while="set" character="chris" when="rebecca=save"
+         reason="leaving during the hunter attack kills Rebecca"/>
+  <avoid slot="1" bank="1" bit="0x2F" while="set" character="chris" when="rebecca=save"
+         reason="leaving during the hunter attack kills Rebecca"/>
+  <avoid slot="2" bank="1" bit="0x2F" while="set" character="chris" when="rebecca=save"
+         reason="leaving during the hunter attack kills Rebecca"/>
+  <avoid slot="3" bank="1" bit="0x2F" while="set" character="chris" when="rebecca=save"
+         reason="leaving during the hunter attack kills Rebecca"/>
+  <leave slot="1" bank="1" bit="0x2F" character="chris" when="rebecca=leave"
+         label="out to 102 during the hunter attack: Rebecca dies"/>
+</bot>

@@ -288,6 +288,25 @@ local function update_room_sprites(s, api)
     end
 end
 
+-- # The published view ---------------------------------------------------------
+--
+-- `s.view` is what the pad shows a player, for observers such as the player
+-- bot (see "The published view" in `lua-types/interactive.lua`). Nothing
+-- outside this file reads any other field of `s`.
+
+local function view(s)
+    local lamps = {}
+    for i = 1, 9 do
+        lamps[i] = s.lamps ~= nil and s.lamps[i] ~= 0
+    end
+    return {
+        active = s.active == true,
+        x = s.cursor_x or 0,
+        y = s.cursor_y or 0,
+        lamps = lamps,
+    }
+end
+
 -- # The screen function -------------------------------------------------------
 
 function display(api, s)
@@ -307,4 +326,5 @@ function display(api, s)
         draw(s, api)
         update_room_sprites(s, api)
     end
+    s.view = view(s)
 end

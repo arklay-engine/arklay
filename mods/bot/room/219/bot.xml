@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 219 battery room (stage 2 east wing). The battery (item AOT 3, item flag
+     0x39) has its pickup zone at the room origin, so it cannot be walked
+     into. While item flag 0x39 is set, room init arms AOT 4, an SCE_EVENT
+     at the shelf: pressing action there shows "A battery..." and the event's
+     aot_on(AOT 3) hands the battery over. Bank 7 bits are set while the item
+     is still in the room, and taking it clears 0x39, so the step is done
+     once the flag is clear (and room main deletes AOT 4). The base game
+     arms this only on the second mansion visit; a generated pack may arm it
+     on any visit. -->
+<bot format="2">
+  <interact slot="4" bank="7" bit="0x39" done="clear" label="take the battery from the shelf"/>
+</bot>

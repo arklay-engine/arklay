@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 20B the room with the stove, east of the stairs. A blank paper hangs
+     over the 2F map above the stove. The lighter is a USE item at the
+     stove's SCE_USEITEM probe AOT 2: it lights the wood (scenario bit 0x08),
+     the paper burns away, and the map behind it can be taken (the same AOT
+     as an event; a randomized game puts item AOT 4 there instead). -->
+<bot format="2">
+  <use slot="2" item="0x30" bank="0" bit="0x08" label="the lighter at the stove" when="items=random"/>
+</bot>

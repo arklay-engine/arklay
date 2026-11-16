@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 205 armor room. The two vents' SCE_USEITEM object probes (AOT 1 and 2)
+     raise room bits 0x20 and 0x21 while a pushed armor stands on them. The
+     switch (AOT 3) asks "There's a switch. Will you push it?": with both
+     vents covered, Yes sets scenario 0x3A and opens the sun crest; with
+     either one open, Yes releases the poison gas. So the armors go first. -->
+<bot format="2">
+  <push object="1" slot="1" label="west armor onto the west vent"/>
+  <push object="2" slot="2" label="east armor onto the east vent"/>
+  <interact slot="3" bank="0" bit="0x3A" label="the switch"/>
+  <answer choice="yes" slot="3" label="push the switch"/>
+</bot>

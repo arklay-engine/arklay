@@ -21,6 +21,13 @@
 //! of every screen's table, `func`, `sub`, `sub2` and `sub3`, are the
 //! original's shared state block, which the dispatcher clears when the gate
 //! rises (and `func` on a room load).
+//!
+//! # The published view
+//!
+//! A screen's `s.view` table is what it shows a player, for observers such as
+//! the player bot ([`InteractiveState::view`]). It is the screen's whole
+//! contract with them: nothing outside a screen's script reads any other field
+//! of its state.
 
 use std::collections::BTreeMap;
 
@@ -35,10 +42,28 @@ use crate::state::{Image, RoomState};
 /// The screens by the system flag that selects them, in the dispatcher's
 /// test order. A pack without a screen's script shows nothing for it.
 pub const SCREENS: [(u8, &str); 3] = [
-    (0x1d, "interactive/passcode_panel.lua"),
-    (0x1e, "interactive/computer_lab.lua"),
+    (0x1d, PASSCODE_PANEL),
+    (0x1e, COMPUTER_LAB),
     (0x1f, "interactive/slides.lua"),
 ];
+
+/// The guardhouse number panel's script (room 408).
+pub const PASSCODE_PANEL: &str = "interactive/passcode_panel.lua";
+
+/// The lab computer terminal's script (room 5060).
+pub const COMPUTER_LAB: &str = "interactive/computer_lab.lua";
+
+/// The script of the screen up now: the first of [`SCREENS`] whose system
+/// flag is set, while scenario flag 0x20 is up; `None` with the gate down.
+pub fn selected_screen(game: &GameState) -> Option<&'static str> {
+    if !game.flag_test(game::BANK_SCENARIO, SCENARIO_INTERACTIVE, false) {
+        return None;
+    }
+    SCREENS
+        .iter()
+        .find(|(flag, _)| game.flag_test(game::BANK_SYSTEM, *flag, false))
+        .map(|&(_, entry)| entry)
+}
 
 /// The 8x8 font page `PrintText8x8` draws from.
 pub const FONT_PAGE: &str = "ui/font.tim";
@@ -106,6 +131,22 @@ impl ScriptValue {
             .map(|index| &entries[index].1)
     }
 
+    /// The string field `key` of a table, as bytes.
+    pub fn bytes(&self, key: &str) -> Option<&[u8]> {
+        match self.field(key)? {
+            ScriptValue::Str(bytes) => Some(bytes),
+            _ => None,
+        }
+    }
+
+    /// The boolean field `key` of a table.
+    pub fn bool(&self, key: &str) -> Option<bool> {
+        match self.field(key)? {
+            ScriptValue::Bool(value) => Some(*value),
+            _ => None,
+        }
+    }
+
     /// The integer field `key` of a table.
     pub fn int(&self, key: &str) -> Option<i64> {
         match self.field(key)? {
@@ -123,6 +164,17 @@ impl ScriptValue {
         match entries.binary_search_by(|(k, _)| k.cmp(&key)) {
             Ok(index) => entries[index].1 = ScriptValue::Int(value),
             Err(index) => entries.insert(index, (key, ScriptValue::Int(value))),
+        }
+    }
+
+    /// Drop the field `key` of a table, when present.
+    fn remove(&mut self, key: &str) {
+        let ScriptValue::Table(entries) = self else {
+            return;
+        };
+        let key = ScriptKey::Str(key.as_bytes().to_vec());
+        if let Ok(index) = entries.binary_search_by(|(k, _)| k.cmp(&key)) {
+            entries.remove(index);
         }
     }
 }
@@ -464,6 +516,9 @@ impl InteractiveState {
     pub fn room_reset(&mut self) {
         for state in self.states.values_mut() {
             state.set_int("func", 0);
+            // The view described the state just reset; the script publishes
+            // a fresh one on its next `display`.
+            state.remove("view");
         }
         self.was_up = false;
         self.entered = None;
@@ -489,8 +544,18 @@ impl InteractiveState {
     }
 
     /// A screen's state table, for tests.
+    #[cfg(test)]
     pub fn state(&self, entry: &str) -> Option<&ScriptValue> {
         self.states.get(entry)
+    }
+
+    /// The view the screen script `entry` published (its `s.view`) at the
+    /// end of its last call that finished; `None` before it published one,
+    /// and again after the dispatcher resets the screen (the gate rising, a
+    /// room load) until its next `display`.
+    /// See "The published view" in the module documentation.
+    pub fn view(&self, entry: &str) -> Option<&ScriptValue> {
+        self.states.get(entry)?.field("view")
     }
 
     fn page_index(&mut self, entry: &str) -> usize {
@@ -700,13 +765,11 @@ pub fn tick(host: &mut Host<'_>, lua: &mut crate::enemy::LuaEnemyHost, cancel_he
                 for field in BLOCK {
                     state.set_int(field, 0);
                 }
+                state.remove("view");
             }
             game.interactive.entered = Some(Entered::take(game, host.room, host.player));
         }
-        let selected = SCREENS
-            .iter()
-            .find(|(flag, _)| game.flag_test(game::BANK_SYSTEM, *flag, false));
-        if let Some(&(_, entry)) = selected
+        if let Some(entry) = selected_screen(game)
             && !display(host, lua, entry, pad)
         {
             abort(host);
@@ -1332,6 +1395,24 @@ mod tests {
             (Some(1), Some(1)),
             "{state:?}"
         );
+        // The published view, the terminal's contract with the player bot:
+        // the login waits for the user name, nothing typed yet, the cursor
+        // where the keyboard has it.
+        let view = game
+            .interactive
+            .view(COMPUTER_LAB)
+            .expect("the lab computer publishes s.view");
+        assert_eq!(view.bytes("stage"), Some(&b"login"[..]), "{view:?}");
+        assert_eq!(view.bytes("field"), Some(&b"user"[..]));
+        assert_eq!(
+            (view.int("typed"), view.int("cell"), view.int("menu_row")),
+            (
+                Some(0),
+                Some(state.int("row").unwrap() * 8 + state.int("col").unwrap()),
+                state.int("caret_pos")
+            )
+        );
+        assert_eq!(selected_screen(game), Some(COMPUTER_LAB));
         // The login's keyboard is up on the keyboard camera.
         assert_eq!(room.current_cut, 5);
         assert!(!game.interactive.sprites().is_empty());
@@ -1552,7 +1633,7 @@ mod tests {
 
     // ---- room 408's numeric panel ------------------------------------------
 
-    const PANEL: &str = "interactive/passcode_panel.lua";
+    const PANEL: &str = PASSCODE_PANEL;
 
     /// Room 408 with the panel up: the shipped script, six cameras, the
     /// gate raised and system flag 0x1D selecting the panel.
@@ -1710,6 +1791,23 @@ mod tests {
         let texts = scene.0.interactive.texts();
         assert_eq!(label(texts, b'5'), Some((0x9B, 0xA8, 1)));
         assert_eq!(label(texts, b'1').map(|l| l.2), Some(3));
+        // The published view, the panel's contract with the player bot.
+        let view = scene
+            .0
+            .interactive
+            .view(PANEL)
+            .expect("the panel publishes s.view");
+        assert_eq!(view.bool("active"), Some(true), "{view:?}");
+        assert_eq!((view.int("x"), view.int("y")), (Some(1), Some(1)));
+        let shown: Vec<bool> = (1..=9)
+            .map(|i| {
+                matches!(
+                    view.field("lamps").and_then(|l| l.index(i)),
+                    Some(ScriptValue::Bool(true))
+                )
+            })
+            .collect();
+        assert_eq!(shown, lamps(&scene.0));
     }
 
     /// The key set that lights every lamp from `lamps`.

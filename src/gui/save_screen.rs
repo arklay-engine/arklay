@@ -69,6 +69,19 @@ pub enum SaveRequest {
     Sound(Sound),
 }
 
+/// Where the screen's cursor rests, as a player sees it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SaveFocus {
+    /// The new save row (save mode's first row).
+    Create,
+    /// Row `index` of [`SaveLoadScreen::rows`].
+    Row(usize),
+    /// The yes/no question is up; `yes` when YES is highlighted.
+    Dialog { yes: bool },
+    /// Nothing is focused (an empty list, or the screen has closed).
+    None,
+}
+
 pub struct SaveLoadScreen {
     ui: Ui,
     settings: Settings,
@@ -131,6 +144,29 @@ impl SaveLoadScreen {
 
     pub fn rows(&self) -> &[SaveRow] {
         &self.rows
+    }
+
+    /// Where the cursor rests now, read from the focused node's action.
+    pub fn focus(&mut self) -> SaveFocus {
+        // Settles the top screen's layout and focus first.
+        self.ui.focus_index();
+        let action = match self.ui.focus_prop("action") {
+            Value::Str(action) => action,
+            _ => return SaveFocus::None,
+        };
+        let (name, arg) = match action.split_once(':') {
+            Some((name, arg)) => (name.trim(), Some(arg.trim())),
+            None => (action.trim(), None),
+        };
+        let index = arg.and_then(|arg| arg.parse::<usize>().ok());
+        match (name, arg, index) {
+            ("create", _, _) => SaveFocus::Create,
+            ("overwrite" | "load", _, Some(index)) => SaveFocus::Row(index),
+            ("dialog", Some(answer), _) => SaveFocus::Dialog {
+                yes: answer == "yes",
+            },
+            _ => SaveFocus::None,
+        }
     }
 
     fn shown_device(&self) -> Device {

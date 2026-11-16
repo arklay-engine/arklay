@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 401 guardhouse room 001. The cup on the shelf (event AOT 5, live while
+     item bit 100 is set) is looked into with a press: the event hands over
+     what lies in it (item AOT 3, deleted until then). Chris's game has the
+     desk key there; a randomized game gives Jill the cup too, with any
+     item. In Jill's retail game the AOT is not live and the step is not
+     offered. -->
+<bot format="2">
+  <interact slot="5" bank="7" bit="100" done="clear" label="look in the cup: what lies in it" when="items=random"/>
+</bot>

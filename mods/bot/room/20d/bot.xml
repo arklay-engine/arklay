@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 20D east corridor (2F), Jill. Common 0x61..0x64 are Richard's.
+
+     The first entry plays Richard's scene (event_01): it sets common 0x62
+     (he waits, poisoned), sets common 0x23 (the serum in 100 is on offer
+     again) and zeroes state word 4, the seconds counter. While 0x62 is set
+     and 0x61 clear, room main turns the door to 20E (AOT 1) into a message,
+     so the way on waits on Richard.
+
+     On a later entry with the serum held and word 4 at most 420 (seven
+     minutes), init sets 0x63 and clears 0x64; walking into camera 3 (state
+     byte 2 == 3, Richard's cut) then runs event_02, which takes the serum
+     and sets 0x61, in both games. 0x63 alone is no hand-over: the bot
+     that took it for one left 20D, and the next entry found Richard dead.
+     Past 420 seconds the entry sets 0x64 instead (Richard dies).
+
+     Chris's game, after Yawn's bite in 210: Chris collapses in 20E and play
+     switches to Rebecca in 20D (common 0x5F, the serum run, timer W_04).
+     Door 1 to 20E is a message until she holds the serum from 100; then it
+     is her event that takes it to Chris. Back under 300 seconds he is cured
+     (common 0x5E); past it the run is a game over.
+
+     Richard dead (common 0x64, set by an entry past 420 seconds), in both
+     games: his scene closes (0x61) only when the camera next cuts to him
+     (cut 3) on that entry or a later one. Until then the door to 20E stays
+     a message, and in Chris's game 10F's piano says there is no time to
+     play. Nothing outside 20D shows the timer running out, so the bot
+     comes back once Richard has waited past it (the revisit, timed from
+     0x62 with a margin for the doors and menus the counter skips). -->
+<bot format="2">
+  <deliver item="0x42" cut="3" bank="1" bit="0x61" after_bank="1" after_bit="0x62"
+           when="richard=save" label="the serum to Richard"/>
+  <deliver item="0x42" slot="1" bank="1" bit="0x5E" after_bank="1" after_bit="0x5F"
+           character="chris" label="Rebecca brings Chris the serum"/>
+  <camera cut="3" bank="1" bit="0x61" after_bank="1" after_bit="0x64"
+          label="Richard's body: his scene closes"/>
+  <revisit bank="1" bit="0x61" while="clear" after_bank="1" after_bit="0x62"
+           after_seconds="430" label="Richard's seven minutes are up"/>
+</bot>

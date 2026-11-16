@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 402 guardhouse bathroom. The key 0x3B (to 411) lies in the full bath:
+     AOT 1 is no item until the plug is pulled. Pressing the bath (AOT 3)
+     drains it (scenario 0x43), a zombie rises out of the water, and AOT 1
+     becomes the key. -->
+<bot format="2">
+  <interact slot="3" bank="0" bit="0x43" label="pull the bath plug"/>
+</bot>

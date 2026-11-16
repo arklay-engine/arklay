@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 104, the tea room where the first zombie eats Kenneth. Chris: the
+     first zombie film plays when the camera cuts to Kenneth's body (cut 4,
+     proc kenneth_zombie_checks) and sets common 0x02, which opens 105's
+     east door back to the hall (shut while 0x01 is set and 0x02 clear).
+     Jill sees the zombie at 105's door instead, when Barry shoots it. -->
+<bot format="2">
+  <camera cut="4" bank="1" bit="0x02" character="chris" label="Kenneth: the first zombie film"/>
+</bot>

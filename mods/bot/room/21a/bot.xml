@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 21A under passage 1, Jill on the second mansion visit. Door 0 is the
+     ladder up into 20C, parked off (no flags) until AOT 2 in the same
+     zone asks "There's a ladder. Will you climb it?". It comes out in
+     20C's pit, whose only other way out is Barry's rope (common 0x25). With
+     rope=leave the rope never comes, so the ladder is held shut: the
+     remembered doors make 21A, 20C and 20B look like a way back to the
+     2F corridor, and a hurt bot climbed up and down it until the loop rule
+     ended the run. The way out is 21B, 21C and 110 (or the 200 lift).
+
+     Chris has no rope at all: the pit is where his own drop through
+     20C's dark hole lands him (jump_into_pit, at (23100,4100)), and the
+     ladder up comes out there too, at (20300,3500), walled off from the
+     rest of 20C. The ladder is held shut for him on every visit: with it
+     open, every trip from 21A toward the 2F corridor climbed it, found
+     the door to 20B out of reach, took the ladder (20C's AOT 7) straight
+     back down, and the loop rule ended the run. -->
+<bot format="2">
+  <avoid slot="0" bank="1" bit="0x25" while="clear" character="jill" when="rope=leave"
+         reason="the ladder comes out in 20C's pit, a dead end without Barry's rope"/>
+  <avoid slot="2" bank="1" bit="0x25" while="clear" character="jill" when="rope=leave"
+         reason="the ladder comes out in 20C's pit, a dead end without Barry's rope"/>
+  <avoid slot="0" character="chris"
+         reason="the ladder comes out in 20C's pit, walled off from the rest of the room"/>
+  <avoid slot="2" character="chris"
+         reason="the ladder comes out in 20C's pit, walled off from the rest of the room"/>
+</bot>

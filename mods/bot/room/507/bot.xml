@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 507, the gas room. The west half (door 0 to 505, the computer) is cut
+     off from the east door by the wall at x 14616..16506; the air shaft
+     through it (AOT 9) is reached from the top of the box (object 2): the
+     main arms AOT 9 only while room bit 3 is set and main-state bit 24
+     (0x18, the climb latch) reads set, the player on top of an object. The
+     box climbs only facing west (its yaw), so from its east face.
+     Room bit 3 is set by event_00 once the plate AOT 8 (a probe for the
+     player or an object) has seen something (room bit 36) while the player
+     is not on top; the vents then start the gas. So the box goes onto the
+     plate last, and the bot climbs at once; until then its walks keep off
+     the plate (the way to the box's north face runs past it). The box
+     starts boxed in: crates (objects 0 and 1) take its east side, so it
+     goes south against the pillar first, west against the wall, then north
+     onto the plate, which lies against the shaft's wall.
+     The shaft's Yes (event_05, event_06) crawls the player through to the
+     west half and sets room bit 7. By then the gas has set the fast health
+     drain (health status 0x40), which lasts until the room changes: the
+     bot leaves through door 0 at once (opening it from this side opens
+     505's door 2 too, lock 0x2D) and comes back from 505. The MO disk read
+     at the computer's use probe (AOT 12, live while item bit 98 is set)
+     prints pass code 02: the main turns on the document AOT 14, which
+     hands it over at once and clears bit 98. -->
+<bot format="2">
+  <leave slot="0" bank="4" bit="7" label="out to 505: the gas drains health until the room changes"/>
+  <keep_out slot="8" bank="4" bit="3" while="clear" reason="the plate starts the gas: only the box goes onto it"/>
+  <push object="2" slot="8" direction="south" until="stop" label="the box south, clear of the crates"/>
+  <push object="2" slot="8" direction="west" until="stop" label="the box west against the shaft's wall"/>
+  <push object="2" slot="8" axis="z" bank="4" bit="36" label="the box north onto the plate: the gas starts"/>
+  <climb object="2" slot="9" bank="4" bit="7" label="from the box into the air shaft"/>
+  <answer choice="yes" slot="9" label="into the air shaft"/>
+  <use slot="12" item="0x28" bank="7" bit="98" done="clear" label="the MO disk into the computer: pass code 02"/>
+</bot>

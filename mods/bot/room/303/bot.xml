@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 303, the heliport (reached from the lab by 50D's escape lift). The
+     flare lies at AOT 2. Used from the menu inside one of the deck's
+     item-use zones (AOTs 4 to 7, SAT_UNDER), it is lit (main's testitem,
+     from_main_2), which sets room bit 0 and calls the helicopter
+     (from_main_3). The scene then ends on scenario bit 0x2B, set by the
+     partner's self-destruct scenes in 505 and 514:
+       * clear: the helicopter takes the player away (from_main_3_sub6),
+         the scripted death variant that ends the game;
+       * set: the Tyrant (0x10) comes up through the deck. Brad drops the
+         rocket launcher (AOT 1, a hidden item until then) once the
+         Tyrant is under 201 health or 1800 ticks after its entrance
+         (room bit 8 or 0x1F); a rocket kills it (enemy bit 0x59), and its
+         death starts the ending (from_main_6). The knowledge file's
+         `prefer` has the bot take the launcher first once it shows.
+     The lab's self-destruct countdown runs throughout, so nothing else
+     here is worth the time. The fight is met from the lab (50D's escape
+     lift), so `stage="5"` has the box loadout ready its weapon there: the
+     knowledge's opening weapon, the grenade launcher. -->
+<bot format="2">
+  <use slot="6" item="0x2A" bank="4" bit="0" label="light the flare"/>
+  <fight enemy="0x10" bank="3" bit="0x59" after_bank="4" after_bit="0" stage="5"
+         label="the Tyrant on the heliport"/>
+  <!-- The kiting loop: the middle of the deck's open floor (x 9800 to
+       29500, z 4700 to 24000, the Tyrant's walk zone). -->
+  <kite enemy="0x10" x="19650" z="14000" radius="8000"/>
+</bot>

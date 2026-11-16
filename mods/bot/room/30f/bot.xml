@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 30F, the cave of turning passages. The hex crank (0x1E) used at AOT 6
+     runs event_0A, which steps scenario bits 74/75 round four positions,
+     (clear, clear) -> (74) -> (75) -> (both) -> (clear, clear), and the
+     main rebuilds the passage collision for each. Only with both set does
+     the way from the 30D door reach door 1 to 306 (measured: the bot reaches
+     306 from authored saves only in that position). The first fact cranks
+     until 75 is set (twice from the start: a use that leaves its done flag
+     clear is retried at once), the second once more until 74 is set too.
+     Door 0 to 305 is parked at the origin: event_0F from the AOT 3 zone at
+     the east end runs the passage. -->
+<bot format="2">
+  <use slot="6" item="0x1E" bank="0" bit="75" label="the hex crank: turn the passages"/>
+  <use slot="6" item="0x1E" bank="0" bit="74" after_bank="0" after_bit="75" label="the hex crank: open the way to 306"/>
+  <door slot="0" via="3" label="the passage to 305"/>
+  <interact slot="11" bank="0" bit="0x4C" reveals="8" after_bank="0" after_bit="0x4A" label="walk to the corridor's west end"/>
+  <interact slot="8" bank="0" bit="0x4C" label="set the boulder rolling"/>
+  <leave slot="2" bank="4" bit="0x13" escape="yes" label="the boulder rolls: out to 30D"/>
+</bot>

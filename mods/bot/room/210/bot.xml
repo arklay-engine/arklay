@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 210 attic. The moon crest (item AOT 1, item flag 0x81) has no player
+     bit, so it cannot be picked up directly. While item flag 0x81 is set,
+     room init arms AOT 4, an SCE_EVENT on the same zone (the snake's nest
+     at the north end): pressing action there runs on_aot_04, whose
+     aot_on(AOT 1) hands the crest over. Bank 7 bits are set while the item
+     is still in the room and taking it clears 0x81, so the step is done
+     once the flag is clear (AOT 4 then becomes a plain message). -->
+<bot format="2">
+  <interact slot="4" bank="7" bit="0x81" done="clear" label="take the moon crest from the nest"/>
+</bot>

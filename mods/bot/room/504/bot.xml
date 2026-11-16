@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 504, the visual data room. The lab key (AOT 1, item bit 137) sits
+     behind a panel and is no item until scenario 102 is set. The switch at
+     AOT 7 (live while 102 is clear) asks twice: the first Yes (room bit 0
+     clear) runs event_02 and sets room bit 0, the second runs event_04,
+     which sets 102 and turns AOT 1 into the key. Room bit 0 does not last
+     past the entry; a later step done counts every earlier one done. -->
+<bot format="2">
+  <interact slot="7" bank="4" bit="0" label="the switch: the first panel"/>
+  <interact slot="7" bank="0" bit="102" reveals="1" label="the switch: the key's panel"/>
+  <answer choice="yes" slot="7" label="press the switch"/>
+</bot>

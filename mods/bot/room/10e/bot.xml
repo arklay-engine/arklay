@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 10E the keeper's bedroom. The closet's pickup (item AOT 2) is not there
+     until the diary on the desk (AOT 3, an event until then) is read: the
+     closet opens, its zombie walks out (common 0x60) and the pickup is live.
+     A second press at the desk then hands over the diary itself (item bit
+     4; a randomized game puts any item in its place).
+     The retail closet holds only shells and the desk a file, which are not
+     worth the zombie; a randomized game may put a key in either. -->
+<bot format="2">
+  <interact slot="3" bank="1" bit="0x60" when="items=random"
+            label="the diary on the desk: the closet opens"/>
+  <interact slot="3" bank="7" bit="4" done="clear" when="items=random"
+            label="the desk again: what lies in the diary's place"/>
+</bot>

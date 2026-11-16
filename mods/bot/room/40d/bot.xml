@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 40D aqua ring water channel. The door to 40E lies past the water; three
+     crates pushed into it at AOT 2's edge zone make the bridge, in order:
+     object 3 (scenario 0x39 set, 0x38 clear), object 1 (0x38 set, 0x39
+     clear), object 2 (both set). Objects 3 and 1 stand in the east corridor
+     and go straight south. Object 2 stands against the north wall of the
+     room west of it, where nothing stands behind it to push it south: it
+     goes west under the ladder corridor (AOT 10's x band), south from the
+     corridor until it stops, east along the room until it stops over the
+     east corridor, then south into the water. Bit 0x39 is set only after the
+     third crate among its steps. -->
+<bot format="2">
+  <push object="3" slot="2" direction="south" bank="0" bit="0x39" label="first crate into the water"/>
+  <push object="1" slot="2" direction="south" bank="0" bit="0x38" label="second crate into the water"/>
+  <push object="2" slot="10" axis="x" bank="0" bit="0x39" label="third crate under the ladder corridor"/>
+  <push object="2" slot="2" direction="south" until="stop" bank="0" bit="0x39" label="third crate off the north wall"/>
+  <push object="2" slot="2" direction="east" until="stop" bank="0" bit="0x39" label="third crate to the east corridor"/>
+  <push object="2" slot="2" direction="south" bank="0" bit="0x39" label="third crate into the water"/>
+</bot>

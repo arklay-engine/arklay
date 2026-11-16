@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 307, the cave bridge below 302's ladder. The hex crank (0x1E) used at
+     the crank hole turns the bridge, sets common 0x47 and opens door 2 to
+     30B. Jill's hole is AOT 4 (her AOT 3 is a handover item at the room
+     origin); Chris's init sets it as AOT 3, with AOT 4 its message, so a
+     Chris run waited at AOT 4 for a use probe that never armed. -->
+<bot format="2">
+  <use slot="4" item="0x1E" bank="1" bit="0x47" character="jill"
+       label="the hex crank: turn the bridge"/>
+  <use slot="3" item="0x1E" bank="1" bit="0x47" character="chris"
+       label="the hex crank: turn the bridge"/>
+  <reach slot="2" bank="1" bit="0x47" while="set"
+         label="the door to 30B, across the chasm until the hex crank turns the bridge"/>
+</bot>
