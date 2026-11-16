@@ -121,7 +121,7 @@ cargo run -- convert-game /path/to/steam/4249100_Biohazard --out re1.akpak
 # 209's zombies to Marvin's second scene and the Heart Key in 202, matches the
 # original tick for tick, zombies and lickers included, and so does Claire A's
 # route to the Spade Key, apart from the differences in
-# docs/internals/deviations/re2.md. Both routes go on in matched segments:
+# oracle/re2-deviations.md. Both routes go on in matched segments:
 # Leon A is one continuous run from the new game to the Manhole Opener in 301,
 # and goes on in warp runs through the kennel's manhole and the sewer, with Ada
 # as the player, to the Club Key, then back up to the police station for the
@@ -136,7 +136,7 @@ cargo run -- convert-game /path/to/steam/4249100_Biohazard --out re1.akpak
 # G2 and G3 are done, the G embryo walks, jumps, latches on and struggles, and
 # the G adult walks, bites and spits, but the G adult's hits and death, its
 # birth and the embryos that ride its back are to come). The engine also poses any RE2 EMD, PLD or PLW with --model, plays RE2 doors with --door,
-# and plays its sounds and films (see issue #244 and docs/internals/deviations/re2.md);
+# and plays its sounds and films (see issue #244 and oracle/re2-deviations.md);
 # --game re2 skips detection
 cargo run -- convert-game /path/to/re2
 
@@ -244,7 +244,7 @@ cargo run -- re1.akpak --ending 1
 
 # Frame-time report for a 600-tick room run: per-tick min/avg/p95/max, the
 # load/update/effect/render phase totals and the entity/effect high-water
-# marks. Needs no --capture; the budgets live in docs/internals/performance.md. Adding
+# marks. Needs no --capture; the budgets live in tests/perf_real.rs. Adding
 # --frame-rate 120 also times the frames a 120 fps display would draw between
 # the ticks against the per-frame budget
 cargo run -- re1.akpak --room 100 --ticks 600 --stats
@@ -349,11 +349,9 @@ rest), with each folder's file formats and naming; `docs/mods.md` documents
 mod layering, the replacement formats, HD texture packs, `mod build` and
 `convert-mod`; `docs/scripting/` is the Lua API and the `.akscr` room script
 language (`docs/scripting/room/re1/` and `docs/scripting/room/re2/`, with a
-page per opcode); `docs/internals/` holds the architecture, status,
-performance budgets and the recorded deviations, such as
-`docs/internals/deviations/m15.md`'s limits on mods (whole-room script
-replacement, sandbox, error/budget policy). A run without any layer stays
-byte-identical to a pre-M15 run, Lua or not.
+page per opcode). Where RE 2 play still differs from the original is listed
+in `oracle/re2-deviations.md`; RE 1's open differences are GitHub issues. A run
+without any layer stays byte-identical to a pre-M15 run, Lua or not.
 
 `convert-game` and `extract` report progress on stderr as a single bar for the
 whole command. `convert-game` runs its asset categories (rooms, camera cuts,
@@ -676,18 +674,15 @@ cargo run -- re1.akpak --mod crloadsave.akpak
 The ignored `tests/real/m16_ui_real.rs` golden harness compares sampled
 room/message/NPC/UI frames against a locally generated set when
 `ARKLAY_RE1_GOLDEN` points at it; the set is never committed and is a
-regression/cross-check, not an independent oracle. `docs/internals/deviations/m16.md`
-lists every approximation M16 leaves.
+regression/cross-check, not an independent oracle.
 
 ## Hardening and release
 
-- `docs/internals/architecture.md` maps every module, the fixed 30 Hz frame flow, the
-  trust boundaries, the per-format budget caps and the engine invariants.
-- `docs/internals/status.md` is the milestone/format/verification matrix;
-  `docs/internals/deviations/m17.md` records what the hardening tooling does not prove.
-- `docs/internals/performance.md` records the frame-time budgets and the reference
-  machine; `ARKLAY_PERF_BUDGET_MS` overrides the per-tick p95 budget in the
-  ignored performance test.
+- `AGENTS.md` has the engine's working rules: determinism, untrusted pack
+  input and the decode caps in `src/budget.rs`, and the real-asset tests.
+- `tests/perf_real.rs` holds the frame-time budgets and their last
+  measurements; `ARKLAY_PERF_BUDGET_MS` overrides the per-tick p95 budget in
+  the ignored performance test.
 - The local check has tiers (`AGENTS.md` has the full policy):
   `./scripts/check.sh` is the session tier, which runs fmt, clippy
   `--all-targets --all-features -D warnings`, the unit and fast integration

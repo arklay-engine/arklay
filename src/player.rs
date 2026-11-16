@@ -2782,7 +2782,7 @@ fn last_point_outside_walls(
 /// rollback anchor: [`resolve_room_collision`] of `pushed`, as the original
 /// does.
 ///
-/// Port guard (`docs/internals/deviations/m16.md`): an entity's push has no
+/// Port guard (#736): an entity's push has no
 /// cap, and the room resolve pushes a point past a wall box's middle out of
 /// the box's far face, so a push deep into a wall (Plant 42's head volume,
 /// radius 2000, sweeping over a player who stands at 40C's wall) set the

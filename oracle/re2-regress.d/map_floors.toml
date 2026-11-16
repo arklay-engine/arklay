@@ -9,5 +9,5 @@ fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,mapfg,sn
 frames = [360, 515]
 frame_max_mean = 0.7
 boxes = [[0, 165, 232, 240]]
-expect = { tick = 520, fields = ["ip", "snd"], note = "up on MAP changes to floor 3 in the original (sub 4, cue 4:4); arklay doesn't port the floor change yet (docs/internals/deviations/re2.md, MAP and FILE)" }
+expect = { tick = 520, fields = ["ip", "snd"], note = "up on MAP changes to floor 3 in the original (sub 4, cue 4:4); arklay doesn't port the floor change yet (oracle/re2-deviations.md, MAP and FILE)" }
 record = "--no-enemies --warp 201:-14471:0:-24100:1024 --life 200 --flag 33:2 --flag 33:3 --flag 33:4 --flag 35:3 --flag 35:4"

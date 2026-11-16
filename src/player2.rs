@@ -7,7 +7,7 @@
 //! them from the root motion of the frame about to play, which is why a walk
 //! changes speed through its stride.
 //!
-//! What isn't ported is in `docs/internals/deviations/re2.md`.
+//! What isn't ported is in `oracle/re2-deviations.md`.
 
 use crate::model::{Clip, ClipFrame, Keyframe, Skeleton};
 use crate::player::{self, ClipSource, Input, Options, PlayerState};
@@ -4958,7 +4958,7 @@ impl Mover<'_, '_> {
     /// `Pl_damage`: the hit reactions a `Sce_Damage` or an enemy starts.
     /// `Routine_1` 4 and 5, the falls on `pSub1`'s clips, play as the plain
     /// hit when no enemy has handed the player its clips
-    /// (`docs/internals/deviations/re2.md`).
+    /// (`oracle/re2-deviations.md`).
     fn pl_damage(&mut self) {
         let has_sub1 = !self.tick.banks.held.0.is_empty();
         match self.work.routine[1] {

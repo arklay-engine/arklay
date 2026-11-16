@@ -11,7 +11,7 @@ input_drop_early = true
 ticks = 1798
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 1797]
-# 1.54 measured, the doors' frames included: the stairs door from 302 is 4.59 (docs/internals/deviations/re2.md, "The stairs door's frames") and 30B's door 1.46
+# 1.54 measured, the doors' frames included: the stairs door from 302 is 4.59 (oracle/re2-deviations.md, "The stairs door's frames") and 30B's door 1.46
 frame_max_mean = 1.65
 # each room on its own, from its hand back to its door's press: 302 (#668: Leon, the spiders and the water draw differently), 30B, and 303 with the plug panel's message
 frame_windows = [[360, 645, 2.5], [857, 935, 0.4], [1264, 1760, 0.25]]

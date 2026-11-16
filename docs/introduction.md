@@ -20,9 +20,6 @@ This book is for people who build packs and mods:
 - **[Scripting reference](scripting/index.md)**: the Lua API the engine
   gives scripts, and the `.akscr` room script language, with a page per
   instruction for RE 1 and RE 2.
-- **[Internals](internals/index.md)**: the engine's architecture,
-  performance budgets, status, and the recorded deviations from the
-  original games.
 
 ## A first look at a pack
 

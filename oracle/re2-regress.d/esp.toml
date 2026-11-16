@@ -1,7 +1,7 @@
 # The effect pool (`esp`, oracle/re2.md, "The trace"). Each recording has three runs on one reference: the plain
 # one compares the fields its recipe in oracle/re2.md documents as matching, the `esp_` one compares the whole
 # pool, and the `esp_kinds_` one only the live count and which kinds and rows are out (`espn`, `espk`), which
-# still compares when the slots' places part. Their first divergences are in docs/internals/deviations/re2.md, "Effects".
+# still compares when the slots' places part. Their first divergences are in oracle/re2-deviations.md, "Effects".
 
 [[run]]
 name = "street_shoot"

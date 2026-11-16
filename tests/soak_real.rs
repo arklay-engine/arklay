@@ -54,8 +54,8 @@ const MAX_PASS_EXTRA_BYTES: usize = 512 << 20;
 const MAX_PASS_SECONDS: u64 = 1800;
 
 /// The only placeholder arm the shipped corpus dispatches, recorded in the M16
-/// audit and `docs/internals/deviations/m17.md`: opcode `0x05` with an out-of-range flag
-/// bank. Any other opcode reaching a placeholder arm fails the soak.
+/// audit: opcode `0x05` with an out-of-range flag bank, whose indexed write is
+/// undefined in the original. Any other opcode reaching a placeholder arm fails the soak.
 const KNOWN_PLACEHOLDERS: [u8; 1] = [0x05];
 
 /// Typewriter rooms the headless seam samples: the two mansion save rooms

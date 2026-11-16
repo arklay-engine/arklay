@@ -4,7 +4,7 @@
 //! text are the original's. With `censorship_off` clear, `Die_vcut_set` culls
 //! everything the room would draw, so `Die_move_set_cut`'s spiralling camera and
 //! the room's lights have nothing to show and aren't ported: see
-//! `docs/internals/deviations/re2.md`.
+//! `oracle/re2-deviations.md`.
 
 use crate::player2::{rcos, rsin};
 use crate::scd2::host::Re2State;

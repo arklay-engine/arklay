@@ -477,8 +477,7 @@ from camera 0 with no input at all (state and pixels match for 200 ticks).
   backdrop page and the browser's own composite dimmed underneath). No
   scenario reaches it - `map_open` only opens the browser, whose second
   confirm would be needed - and the port's single-swap `display_image`
-  compositor stays the documented M16 simplification
-  (`docs/internals/deviations/m16.md` item 4).
+  compositor stays a simplification.
 - **Portrait and health strip residual.** Every settled menu frame of every
   scenario keeps ~330 differing pixels on the character portrait
   (`ui/statface.tim`, the 30x30 window at x 22-51, y 146-175: the blue plate's

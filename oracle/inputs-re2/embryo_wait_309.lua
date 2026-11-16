@@ -3,7 +3,7 @@
 -- --no-enemies (here set_re2_no_enemies) switches the slot off after it. The embryos' speeds are
 -- what their new works' memory held, and so is the history of Cdir_y their first
 -- five crawl ticks move along (vars 1 to 5 here, before the init's shift), read back
--- from the recording's steps (docs/internals/deviations/re2.md, "The G embryo").
+-- from the recording's steps (oracle/re2-deviations.md, "The G embryo").
 local api = ...
 api:set_player_pos(-17273, -5400, 1678)
 api:set_player_angle(488)

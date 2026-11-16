@@ -14,13 +14,13 @@ input_drop_early = true
 ticks = 4150
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgcom,om0,om1,om2,zm0,zm1,zm2,zm3"
 frames = [360, 4149]
-# the doors' frames count only in the whole run's mean: 10C's stairs door (type 4) draws its steps wider and brighter than the original's (docs/internals/deviations/re2.md, "The stairs door's frames"), a mean of 5.5 over its 210 ticks
+# the doors' frames count only in the whole run's mean: 10C's stairs door (type 4) draws its steps wider and brighter than the original's (oracle/re2-deviations.md, "The stairs door's frames"), a mean of 5.5 over its 210 ticks
 frame_max_mean = 0.95
 # each room on its own, from its hand back to its door's press: 208, 207, 10C, 114
 frame_windows = [[360, 448, 0.2], [789, 939, 0.25], [1150, 3723, 0.6], [4066, 4149, 0.2]]
 expect = "match"
 ignore = [
-  # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 208's door 0, 207's door 3 and 10C's door 2
+  # the doors' own ticks (oracle/re2.md, oracle/re2-deviations.md): 208's door 0, 207's door 3 and 10C's door 2
   [449, "rng"], [449, "rseed"], [940, "rng"], [940, "rseed"], [3724, "rng"], [3724, "rseed"],
   # the warp's flags: the original raises 8:141 before 208's init, so the taken ribbons' object (slot 2) is out of play
   # when the load's pass clears the objects' areas; arklay's setup script raises it after
@@ -31,7 +31,7 @@ ignore = [
   [975, 1148, "om0"], [975, 1148, "om1"], [975, 1148, "om2"],
   [3759, 3849, "om0"], [3759, 3849, "om1"], [3759, 3849, "om2"],
   # room 114's slot 0, which stands: its `Spd` is what the slot held before (the slots' leftovers,
-  # docs/internals/deviations/re2.md, "What a zombie's slot held before")
+  # oracle/re2-deviations.md, "What a zombie's slot held before")
   [3850, 4149, "zm0"],
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [484, 574, "hk"], [975, 1067, "hk"], [3759, 3849, "hk"],
@@ -54,14 +54,14 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,s
 frames = [360, 3249]
 # 0.97 measured; the scene's Leon and Claire, close to the camera, are most of it (oracle/re2.md, "Room 115's scene")
 frame_max_mean = 1.05
-# 114 from the warp to the door's press, then 115 from the hand back to the medal's question and from there to the end, past the scene (its frames 1342 to 1345 keep the desk's close-up, as the original's do: docs/internals/deviations/re2.md, "The frames of a cut")
+# 114 from the warp to the door's press, then 115 from the hand back to the medal's question and from there to the end, past the scene (its frames 1342 to 1345 keep the desk's close-up, as the original's do: oracle/re2-deviations.md, "The frames of a cut")
 frame_windows = [[360, 435, 0.45], [778, 1341, 0.3], [1342, 3249, 1.05]]
 expect = "match"
 ignore = [
   # 114's door 1
   [436, "rng"], [436, "rseed"],
   # the head through the door while it was turned toward a zombie: the original places it at 115's setup, arklay keeps
-  # 114's until the door's last frame (docs/internals/deviations/re2.md, "The head through a door")
+  # 114's until the door's last frame (oracle/re2-deviations.md, "The head through a door")
   [562, 775, "pneck"],
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [471, 561, "hk"],
@@ -80,11 +80,11 @@ voice_from_ref = true
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,scene,om0,om1,om2,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,zp,zd,fgstat,fgitem,fgroom"
 frames = [0, 27249]
 frame_max_mean = 0.85
-# each room past the card on its own, from its hand back to its door's press (the doors' frames, 10C's stairs door's among them, count in the whole run's mean): 200 from the card's, 201, 204, 205, 207, 208, 207 again, 10C, 114, and 115 to the medal's close-up and from there on (its frames 25341 to 25344 keep the close-up, as the original's do, docs/internals/deviations/re2.md, "The frames of a cut"); 0.78 measured, 115's last window 0.97 (Leon and Claire close to the scene's camera)
+# each room past the card on its own, from its hand back to its door's press (the doors' frames, 10C's stairs door's among them, count in the whole run's mean): 200 from the card's, 201, 204, 205, 207, 208, 207 again, 10C, 114, and 115 to the medal's close-up and from there on (its frames 25341 to 25344 keep the close-up, as the original's do, oracle/re2-deviations.md, "The frames of a cut"); 0.78 measured, 115's last window 0.97 (Leon and Claire close to the scene's camera)
 frame_windows = [[14475, 15335, 0.6], [15702, 15826, 0.3], [16167, 17654, 0.55], [17995, 18435, 0.25], [18776, 19722, 1.05], [20063, 20724, 0.5], [21065, 21215, 0.25], [21426, 23999, 0.6], [24342, 24434, 0.45], [24777, 25340, 0.3], [25341, 27249, 1.05]]
 expect = "match"
 record = ""
-# the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): route_200_computer's ten, then 200, 201, 204, 205, 207 and 208's, 207's stairs door, 10C's and 114's
+# the doors' own ticks (oracle/re2.md, oracle/re2-deviations.md): route_200_computer's ten, then 200, 201, 204, 205, 207 and 208's, 207's stairs door, 10C's and 114's
 ignore = [
     [356, "rng"],
     [356, "rseed"],
@@ -124,13 +124,13 @@ ignore = [
     [24000, "rseed"],
     [24435, "rng"],
     [24435, "rseed"],
-    # the objects are compared in 10C only, from the end of its load (as leon_a_208_114's): elsewhere the slots out of play keep what the last room's objects left in them in the original, where arklay's are zero (docs/internals/deviations/re2.md, "What an object's slot held before")
+    # the objects are compared in 10C only, from the end of its load (as leon_a_208_114's): elsewhere the slots out of play keep what the last room's objects left in them in the original, where arklay's are zero (oracle/re2-deviations.md, "What an object's slot held before")
     [0, 21424, "om0"], [0, 21424, "om1"], [0, 21424, "om2"],
     [24035, 27249, "om0"], [24035, 27249, "om1"], [24035, 27249, "om2"],
-    # the head through 114's door 1 with the head turned toward a zombie (docs/internals/deviations/re2.md, "The head through a door")
+    # the head through 114's door 1 with the head turned toward a zombie (oracle/re2-deviations.md, "The head through a door")
     [24561, 24774, "pneck"],
     # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
     [391, 481, "hk"], [2662, 2752, "hk"], [5490, 5580, "hk"], [6935, 7025, "hk"], [7989, 8079, "hk"], [8819, 8911, "hk"], [10047, 10137, "hk"], [12818, 12908, "hk"], [15371, 15461, "hk"], [15952, "hk"], [17690, 17780, "hk"], [18471, 18561, "hk"], [19758, 19848, "hk"], [20760, 20850, "hk"], [21251, 21343, "hk"], [24035, 24125, "hk"], [24470, 24560, "hk"],
-    # `zd` (docs/internals/deviations/re2.md, "What a zombie's slot held before"): the load's tick in room 100, room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load
+    # `zd` (oracle/re2-deviations.md, "What a zombie's slot held before"): the load's tick in room 100, room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load
     [0, "zd"], [482, 2751, "zd"], [8397, 8909, "zd"],
 ]

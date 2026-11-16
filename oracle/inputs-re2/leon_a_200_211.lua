@@ -70,7 +70,7 @@ api:set_item_slot(3, 0x33, 1)
 api:set_item_slot(4, 0x32, 1)
 api:set_item_slot(5, 0x5A, 1)
 api:set_item_slot(6, 0x5B, 1)
--- the speeds the original's zombies start with, from what their works' memory held after the warp (docs/internals/deviations/re2.md, "What a zombie's slot held before"): 110's three, 10A's two and 20B's six
+-- the speeds the original's zombies start with, from what their works' memory held after the warp (oracle/re2-deviations.md, "What a zombie's slot held before"): 110's three, 10A's two and 20B's six
 api:set_re2_enemy_speed("110:0", -11264, -3598, 1)
 api:set_re2_enemy_speed("110:1", 838, 30720, 3429)
 api:set_re2_enemy_speed("110:2", -37, -46, 41)

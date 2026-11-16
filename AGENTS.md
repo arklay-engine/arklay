@@ -62,6 +62,38 @@ to go to the compiler (#266). Follow these rules:
   edit that keeps the line count. That is no reason to avoid the edit, but
   batch related edits before rebuilding instead of rebuilding after each one.
 
+## Engine rules
+
+- **Match the original.** The aim is to play exactly as the original games
+  do. When the port knowingly differs, file a GitHub issue and name it in a
+  comment at the site (`(#123)`); do not write deviation pages. RE 2's
+  differences still being ported are listed in `oracle/re2-deviations.md`,
+  which the regression runner's notes cite: keep it current when an RE 2
+  change closes or adds one.
+- **Ticks are deterministic.** Gameplay runs at a fixed 30 Hz. Nothing inside
+  a tick may read the wall clock or other outside state: a pack, room, input
+  and tick count give byte-identical frames, states and saves on every run
+  and platform.
+- **Pack and mod data is untrusted.** Every parser returns `Err` on arbitrary
+  bytes: never a panic, abort, unbounded allocation or unbounded loop. New
+  formats get a torture-matrix row (`tests/torture.rs`) and a fuzz target
+  (`fuzz/`). Allocation caps live in `src/budget.rs`; when a legitimate
+  input trips one, raise that format's cap to at least twice the observed
+  value, never a global cap.
+- **Lua is sandboxed and enemy scripts are stateless.** No `os`, `io`,
+  `package` or `debug`, and a fixed memory ceiling. Enemy scripts
+  (`enemy/{id}/enemy.lua`, `lib/**.lua`) keep all mutable state on the Rust
+  entity, so resetting their VM between two updates changes nothing.
+- **Fixed layouts stay fixed.** The save block is the original's 0x800 bytes,
+  field for field. Entity slots are never compacted: slot 0 is the player,
+  and every id the original dispatches allocates (a missing script or model
+  parks inert).
+- **Real-asset tests** are ignored tests in one binary, `tests/real/main.rs`:
+  `ARKLAY_RE1_ROOT=/path/to/re1 ARKLAY_RE1_PACK=/path/to/re1.akpak cargo test
+  --profile test-release --test real <module>:: -- --ignored`. The RE 2
+  tests (`re2_real`) read `ARKLAY_RE2_ROOT` instead. Run the module your
+  change touches, not the whole suite.
+
 ## Automating arklay: driver scripts
 
 To run the engine for a task (check a room, reproduce a bug, measure

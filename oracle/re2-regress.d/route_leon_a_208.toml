@@ -28,6 +28,6 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,s
 frames = [380, 502]
 frame_max_mean = 0.35
 expect = "match"
-# the door's own tick (oracle/re2.md, docs/internals/deviations/re2.md)
+# the door's own tick (oracle/re2.md, oracle/re2-deviations.md)
 ignore = [[468, "rng"], [468, "rseed"]]
 record = "--warp 201:-15773:0:-21630:2040:0 --life 200 --give 0:2:13 --give 2:0x14:39"

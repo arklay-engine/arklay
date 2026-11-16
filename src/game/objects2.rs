@@ -168,7 +168,7 @@ impl GameState {
     /// toward it to a quarter turn; for 12 ticks it sinks a third of the
     /// slide, then drops 0, 160, 320, ... a tick. On the thirteenth tick it
     /// finds its ground (`Sca_ck_hit` at its own box, which it finds itself
-    /// in: see `docs/internals/deviations/re2.md`), lands on it once below,
+    /// in: see `oracle/re2-deviations.md`), lands on it once below,
     /// and bounces 30 up and down. `Rot_add_matrix` turns it each tick.
     pub fn om_move_box(&mut self, room: &RoomState, index: usize) {
         let mut fall = self.objects.box_fall;

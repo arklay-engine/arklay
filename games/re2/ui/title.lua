@@ -23,7 +23,7 @@
 -- `tofulogo.tim` as texture 0x15) whose START isn't ported past its fade
 -- (the title starts again) and whose EXIT goes back to `Title_init`, and
 -- EX.BATTLE's and GALLERY's confirms do nothing; OPTION fades out and, arklay having no option
--- screen, the title starts again (`docs/internals/deviations/re2.md`, "The title"). An
+-- screen, the title starts again (`oracle/re2-deviations.md`, "The title"). An
 -- idle title fades into the attract demo after 0x708 ticks.
 --
 -- args.folder_saves: a registered save screen lists the whole save folder.
@@ -1138,7 +1138,7 @@ local function title_main(api)
     elseif s.disp == 3 and s.fg_system & 8 ~= 0 then
         -- The 4th Survivor's or To-fu's new game (`Title_game_init`'s
         -- extras branch) isn't ported: the title starts again from
-        -- `Title_init`, as after OPTION (docs/internals/deviations/re2.md,
+        -- `Title_init`, as after OPTION (oracle/re2-deviations.md,
         -- "The title").
         s.fg_system = s.fg_system & ~(9 | FG_NEW_GAME)
         init_global()

@@ -126,7 +126,7 @@ draw:
 - **Clock digits.** Same glyphs and places; the shades differ with the font page
   (see the font entry above).
 - **After RESULT.** The hand-over back to the title runs 5 to 10 ticks apart.
-- **Effect zone dust.** See item 3 of `docs/internals/deviations/m13.md`.
+- **Effect zone dust.** Not drawn by the port (#737).
 - **The corpse's edges.** About 150 isolated edge pixels of the corpse differ on the
   DIED screen; the pose, colours and lights match.
 - **Before the title.** The reference waits in `die_state` on `g_SndFadeType`, which

@@ -65,7 +65,7 @@ work memory, as they are: each room's RDT (`heap/<id>.rdt`), each enemy's TIM
 (`heap/em<s><id>.tim`) and the music banks (`heap/main<nn>.bgm`,
 `heap/sub_<nn>.bgm`). The engine reads them only to know what a new enemy's
 memory holds before its init sets it (see "What a zombie's slot held before"
-in `docs/internals/deviations/re2.md`); a pack without them plays the same,
+in `oracle/re2-deviations.md`); a pack without them plays the same,
 except that those leftover values start at 0.
 
 ## The room definition

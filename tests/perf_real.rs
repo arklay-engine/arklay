@@ -5,7 +5,22 @@
 //!  ARKLAY_RE1_PACK=/path/to/re1.akpak \
 //!  cargo test --profile test-release --test perf_real -- --ignored --nocapture`
 //!
-//! The budgets and their measurement are recorded in `docs/internals/performance.md`.
+//! The budgets are policy numbers owned by this project, not claims about the
+//! original: release-profile wall clock of the headless fixed-tick path (no
+//! input, no display, audio stubbed), rounded up from the last measurements
+//! with headroom. When a budget changes, update its measurement here too.
+//!
+//! | Budget | Last measured | Budget |
+//! |---|---|---|
+//! | Gameplay tick p95 | <= 0.004 ms (2026-10-06) | 5 ms |
+//! | Room load (RDT, cuts, scripts, player assets) | 3.0-5.8 ms | 60 ms |
+//! | One capture render | 2.9-3.7 ms | 30 ms |
+//! | Script/entity/player update, 600 ticks | 8.7-13.6 ms (2026-10-16, worst room 106) | 25 ms |
+//! | 600-tick room run, process start included | 318-524 ms | 5 s |
+//!
+//! Measured on a 4-vCPU Haswell (Linux, rustc 1.98) and re-checked on an
+//! i7-4702HQ; the p95 is the upper edge of a power-of-two microsecond bucket
+//! (`src/stats.rs`). The soak's ceilings are in `tests/soak_real.rs`.
 //! `ARKLAY_PERF_BUDGET_MS` overrides the per-tick p95 budget so a deliberately
 //! lower value fails the test, exactly as the milestone acceptance requires.
 //! The test lives in its own binary, not in `tests/real`, so the other
@@ -30,7 +45,7 @@ const LOAD_BUDGET_MS: f64 = 60.0;
 const RENDER_BUDGET_MS: f64 = 30.0;
 /// Sum of the script/entity/player update phases over 600 ticks. Raised by
 /// the enemy milestone: the pack's Lua scripts run on every scripted entity
-/// tick and load on the room's first tick (see `docs/internals/performance.md`).
+/// tick and load on the room's first tick.
 const UPDATE_BUDGET_MS: f64 = 25.0;
 /// Wall clock for the whole 600-tick run, process start included.
 const ROOM_600_BUDGET_MS: u64 = 5_000;

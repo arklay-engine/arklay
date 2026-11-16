@@ -11,13 +11,13 @@ input_drop_early = true
 ticks = 1960
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,em,zm0,zm1,zm2,zd"
 frames = [360, 1959]
-# the doors' frames count only in the whole run's mean: 10C's door 0 is the stairs door (type 4), which draws its steps wider and brighter than the original's (docs/internals/deviations/re2.md, "The stairs door's frames"), a mean of 4.1 over its 205 ticks
+# the doors' frames count only in the whole run's mean: 10C's door 0 is the stairs door (type 4), which draws its steps wider and brighter than the original's (oracle/re2-deviations.md, "The stairs door's frames"), a mean of 4.1 over its 205 ticks
 frame_max_mean = 1.4
 # each room on its own, from its hand back to its door's press: 115, 114, 10C, and 207 from its hand back
 frame_windows = [[360, 421, 0.45], [763, 863, 0.5], [1205, 1597, 0.35], [1803, 1959, 0.3]]
 expect = "match"
 ignore = [
-  # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 115's door 0, 114's door 2 and 10C's door 0
+  # the doors' own ticks (oracle/re2.md, oracle/re2-deviations.md): 115's door 0, 114's door 2 and 10C's door 0
   [422, "rng"], [422, "rseed"], [864, "rng"], [864, "rseed"], [1598, "rng"], [1598, "rseed"],
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [457, 547, "hk"], [899, 989, "hk"], [1633, 1725, "hk"],
@@ -40,7 +40,7 @@ frame_max_mean = 0.9
 frame_windows = [[360, 435, 0.25], [777, 1085, 0.45], [1427, 1621, 0.45], [1963, 1999, 0.4]]
 expect = "match"
 ignore = [
-  # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 207's door 1, 205's door 0 and 204's door 0
+  # the doors' own ticks (oracle/re2.md, oracle/re2-deviations.md): 207's door 1, 205's door 0 and 204's door 0
   [436, "rng"], [436, "rseed"], [1086, "rng"], [1086, "rseed"], [1622, "rng"], [1622, "rseed"],
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [471, 561, "hk"], [1121, 1211, "hk"],
@@ -58,13 +58,13 @@ input_drop_early = true
 ticks = 1500
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,movie,fguse,scv,atsce"
 frames = [360, 1499]
-# the door's frames count only in the whole run's mean: room 201's door 0 into the main hall draws its doors smoother and brighter than the original (docs/internals/deviations/re2.md, "The main hall's door's frames"), a mean of 3.3 over its 367 ticks
+# the door's frames count only in the whole run's mean: room 201's door 0 into the main hall draws its doors smoother and brighter than the original (oracle/re2-deviations.md, "The main hall's door's frames"), a mean of 3.3 over its 367 ticks
 frame_max_mean = 1.6
 # 201 from the warp to its door's press, then 200 from the hand back to START, the status screen to USE's close, event 8 (film 5 off), and event 7 with the key's window
 frame_windows = [[360, 469, 0.4], [837, 925, 0.25], [926, 1054, 0.85], [1055, 1160, 0.4], [1161, 1499, 0.7]]
 expect = "match"
 ignore = [
-  # the door's own tick (oracle/re2.md, docs/internals/deviations/re2.md): 201's door 0
+  # the door's own tick (oracle/re2.md, oracle/re2-deviations.md): 201's door 0
   [470, "rng"], [470, "rseed"],
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [505, 595, "hk"],
@@ -87,7 +87,7 @@ frame_max_mean = 0.85
 frame_windows = [[14475, 15335, 0.6], [15702, 15826, 0.3], [16167, 17654, 0.55], [17995, 18435, 0.25], [18776, 19722, 1.05], [20063, 20724, 0.5], [21065, 21215, 0.25], [21426, 23999, 0.6], [24342, 24434, 0.45], [24777, 25340, 0.3], [25341, 27081, 1.1], [27082, 27159, 0.45], [27501, 27601, 0.5], [27943, 28335, 0.35], [28541, 28632, 0.3], [28974, 29282, 0.45], [29624, 29818, 0.45], [30160, 30285, 0.4], [30653, 30741, 0.25], [30742, 30870, 0.85], [30871, 30976, 0.4], [30977, 31315, 0.7]]
 expect = "match"
 record = ""
-# the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): route_200_115's, then this segment's seven
+# the doors' own ticks (oracle/re2.md, oracle/re2-deviations.md): route_200_115's, then this segment's seven
 ignore = [
     [356, "rng"],
     [356, "rseed"],
@@ -142,16 +142,16 @@ ignore = [
     [29819, "rseed"],
     [30286, "rng"],
     [30286, "rseed"],
-    # the objects are compared in 10C only, from the end of its load (as leon_a_208_114's): elsewhere the slots out of play keep what the last room's objects left in them in the original, where arklay's are zero (docs/internals/deviations/re2.md, "What an object's slot held before")
+    # the objects are compared in 10C only, from the end of its load (as leon_a_208_114's): elsewhere the slots out of play keep what the last room's objects left in them in the original, where arklay's are zero (oracle/re2-deviations.md, "What an object's slot held before")
     [0, 21424, "om0"], [0, 21424, "om1"], [0, 21424, "om2"],
     [24035, 31315, "om0"], [24035, 31315, "om1"], [24035, 31315, "om2"],
-    # the head through 114's door 1 with the head turned toward a zombie (docs/internals/deviations/re2.md, "The head through a door")
+    # the head through 114's door 1 with the head turned toward a zombie (oracle/re2-deviations.md, "The head through a door")
     [24561, 24774, "pneck"],
     # the view's load on the new game's first tick (`movie` 1 in the original, 0 in arklay), which no other run from room 100 compares
     [0, "movie"],
     # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do: route_200_115's, then this segment's
     [391, 481, "hk"], [2662, 2752, "hk"], [5490, 5580, "hk"], [6935, 7025, "hk"], [7989, 8079, "hk"], [8819, 8911, "hk"], [10047, 10137, "hk"], [12818, 12908, "hk"], [15371, 15461, "hk"], [15952, "hk"], [17690, 17780, "hk"], [18471, 18561, "hk"], [19758, 19848, "hk"], [20760, 20850, "hk"], [21251, 21343, "hk"], [24035, 24125, "hk"], [24470, 24560, "hk"],
     [27195, 27285, "hk"], [27637, 27727, "hk"], [28371, 28463, "hk"], [28668, 28758, "hk"], [29318, 29408, "hk"], [30321, 30411, "hk"],
-    # `zd` (docs/internals/deviations/re2.md, "What a zombie's slot held before"): the load's tick in room 100, room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load
+    # `zd` (oracle/re2-deviations.md, "What a zombie's slot held before"): the load's tick in room 100, room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load
     [0, "zd"], [482, 2751, "zd"], [8397, 8909, "zd"],
 ]

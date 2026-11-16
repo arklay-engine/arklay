@@ -1137,29 +1137,3 @@ fn real_captures_stay_deterministic_and_audio_free() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
-
-#[test]
-fn integration_deviations_are_documented() {
-    let deviations = include_str!("../../docs/internals/deviations/m13.md");
-    for topic in [
-        "Weapon banks",
-        "Enemy position type 2",
-        "Room action effect zones",
-        "Scripted fade scope",
-        "Unreferenced voice files",
-        "movie_on",
-        "Costume model swap",
-    ] {
-        assert!(
-            deviations.contains(topic),
-            "the deviations list is missing `{topic}`"
-        );
-    }
-    // M18 closed these two deviations; the list must not carry them again.
-    for closed in ["One-shot vs restart", "Pan law"] {
-        assert!(
-            !deviations.contains(closed),
-            "the deviations list still carries the closed `{closed}`"
-        );
-    }
-}

@@ -15,7 +15,7 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,s
 frames = [360, 2330]
 expect = "match"
 ignore = [
-  # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 200's door 1, 201's door 1, 204's door 2 and 203's door 0
+  # the doors' own ticks (oracle/re2.md, oracle/re2-deviations.md): 200's door 1, 201's door 1, 204's door 2 and 203's door 0
   [457, "rng"], [457, "rseed"], [949, "rng"], [949, "rseed"], [1571, "rng"], [1571, "rseed"], [1939, "rng"], [1939, "rseed"],
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [492, 582, "hk"], [984, 1074, "hk"], [1606, 1696, "hk"], [1974, 2064, "hk"],
@@ -37,7 +37,7 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,s
 frames = [360, 1749]
 expect = "match"
 ignore = [
-  # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 204's door 1, 205's door 2 and 207's stairs door
+  # the doors' own ticks (oracle/re2.md, oracle/re2-deviations.md): 204's door 1, 205's door 2 and 207's stairs door
   [420, "rng"], [420, "rseed"], [1060, "rng"], [1060, "rseed"], [1490, "rng"], [1490, "rseed"],
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [455, 545, "hk"], [1095, 1185, "hk"], [1525, 1617, "hk"],
@@ -61,13 +61,13 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,s
 frames = [360, 2129]
 expect = "match"
 ignore = [
-  # the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md): 10C's door 2 and 114's door 0
+  # the doors' own ticks (oracle/re2.md, oracle/re2-deviations.md): 10C's door 2 and 114's door 0
   [749, "rng"], [749, "rseed"], [2053, "rng"], [2053, "rseed"],
   # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
   [784, 874, "hk"], [2088, 2129, "hk"],
-  # the head through 10C's door 2 while 114's load runs Sherry's scene behind the door: the original places it on the rest pose at the load, arklay on the door's last frame (docs/internals/deviations/re2.md, "The head through a door")
+  # the head through 10C's door 2 while 114's load runs Sherry's scene behind the door: the original places it on the rest pose at the load, arklay on the door's last frame (oracle/re2-deviations.md, "The head through a door")
   [875, 1088, "pneck"],
-  # the zombie's speeds until its first move: the original's slot holds what its memory held (docs/internals/deviations/re2.md, "What a zombie's slot held before")
+  # the zombie's speeds until its first move: the original's slot holds what its memory held (oracle/re2-deviations.md, "What a zombie's slot held before")
   [875, 1089, "zm0"],
 ]
 record = "--start claire --warp 10C:7390:0:944:960:0 --flag 3:100 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:17 --flag 31:27 --life 119 --give 0:3:6 --give 2:0x14:35 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x59:1"

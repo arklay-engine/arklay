@@ -36,7 +36,7 @@ frames = [380, 502]
 # 0.19 measured
 frame_max_mean = 0.3
 expect = "match"
-# the door's own tick (oracle/re2.md, docs/internals/deviations/re2.md)
+# the door's own tick (oracle/re2.md, oracle/re2-deviations.md)
 ignore = [[468, "rng"], [468, "rseed"]]
 record = "--start claire --warp 201:-15773:0:-21630:2040:0 --life 200 --give 0:3:7 --give 2:0x14:36"
 
@@ -77,7 +77,7 @@ frames = [1700, 2499]
 # 0.34 measured
 frame_max_mean = 0.45
 expect = "match"
-# the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md)
+# the doors' own ticks (oracle/re2.md, oracle/re2-deviations.md)
 ignore = [[468, "rng"], [468, "rseed"], [2380, "rng"], [2380, "rseed"]]
 record = "--start claire --warp 201:-15773:0:-21630:2040:0 --life 200 --give 0:3:7 --give 2:0x14:36"
 
@@ -212,7 +212,7 @@ frame_max_mean = 0.85
 frame_windows = [[14625, 15491, 0.6], [15858, 15982, 0.3], [16323, 17906, 0.55], [18247, 18684, 0.25], [19025, 20234, 1.25], [20575, 21299, 0.55]]
 expect = "match"
 record = "--start claire"
-# the doors' own ticks (oracle/re2.md, docs/internals/deviations/re2.md):
+# the doors' own ticks (oracle/re2.md, oracle/re2-deviations.md):
 # route_claire_a_card's ten, then 200, 201, 204, 205 and 207's
 ignore = [
     [356, "rng"],
@@ -248,6 +248,6 @@ ignore = [
     [20235, "rseed"],
     # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
     [391, 481, "hk"], [2662, 2752, "hk"], [5562, 5652, "hk"], [7043, 7133, "hk"], [8097, 8187, "hk"], [8927, 9019, "hk"], [10121, 10211, "hk"], [12967, 13057, "hk"], [15527, 15617, "hk"], [16018, 16108, "hk"], [17942, 18032, "hk"], [18720, 18810, "hk"], [20270, 20360, "hk"],
-    # `zd` (docs/internals/deviations/re2.md, "What a zombie's slot held before"): the load's tick in room 100, room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load
+    # `zd` (oracle/re2-deviations.md, "What a zombie's slot held before"): the load's tick in room 100, room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load
     [0, "zd"], [482, 2751, "zd"], [8505, 9017, "zd"],
 ]

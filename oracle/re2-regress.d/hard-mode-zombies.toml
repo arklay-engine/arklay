@@ -52,5 +52,5 @@ ticks = 1400
 setup = { pos = [8000, 0, -19500], angle = 0, health = 200, rnd = 52295, camera = 0 }
 input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,zm2,zm3,zm4,zm5"
-expect = { tick = 894, fields = ["p.x", "p.z", "zm0", "zm1", "zm2", "zm3", "zm4", "zm5"], note = "the player dies on tick 893 and ARRANGE MODE's Die (censorship_off) holds the world from 894, where arklay's censored game over still runs it; Die's uncensored game over is not ported (docs/internals/deviations/re2.md)" }
+expect = { tick = 894, fields = ["p.x", "p.z", "zm0", "zm1", "zm2", "zm3", "zm4", "zm5"], note = "the player dies on tick 893 and ARRANGE MODE's Die (censorship_off) holds the world from 894, where arklay's censored game over still runs it; Die's uncensored game over is not ported (oracle/re2-deviations.md)" }
 record = "--warp 11B:8000:0:-19500:0 --life 200"
