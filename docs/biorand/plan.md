@@ -35,7 +35,7 @@ configuration so a saved configuration from staging loads unchanged.
 | Question | Decision |
 |---|---|
 | Same game as staging for a seed? | No. A faithful port of the algorithms with its own random stream; `GENERATOR_VERSION` pins arklay's output. |
-| Where does the code live? | A new workspace package, `crates/arklay-biorand`, with no dependency on the engine crate. The engine crate depends on it. |
+| Where does the code live? | Two workspace packages with no dependency on the engine crate: `crates/arklay-biorand`, the randomizer, and `crates/arklay-routing`, common's routing, which it depends on. The engine crate depends on `arklay-biorand`. |
 | Which algorithms? | Staging's `ClassicRandomizer` pipeline and the routing of `biorand/common` at its latest release (1.6.1, which fixes two routing bugs in the 1.3.1 staging pins). Not the old `Re1Randomiser` pipeline. |
 | Configuration | The same option ids, labels, descriptions, kinds and defaults as staging, built from a definition the package exports, so the launcher draws it. |
 | Room data | Each room's `random.xml` is generated once from staging's `rdt.json`, then owned and edited by hand in arklay. |
@@ -56,6 +56,8 @@ launcher / CLI ──► config + seed
                      ▼
    arklay-biorand ──► Map (from the pack's random.xml and biorand/*.xml)
                      │   inventory → doors → locks → keys → items → enemies
+                     │                                 │
+                     │                    arklay-routing (key placement)
                      ▼
                  Plan (rooms, doors, locks, pickups, spawns, start
                      │      inventory, option flags, room renumbering)
@@ -79,10 +81,19 @@ tests run in a second.
 | `rng` | `Rng`, `EndlessBag` | Named forks per stage, as staging has. |
 | `config` | `RandomizerConfigurationDefinition`, `RandomizerConfiguration`, both controllers' option lists | Exports the definition the launcher draws; reads values leniently, as staging does. |
 | `map` | `Map.cs`, `MapTags`, `DoorKinds`, `DoorLock`, `ScdCondition` | Rooms keep insertion order (`IndexMap`). |
-| `routing` | common's `Graph`, `GraphBuilder`, `RouteFinder`, `RouteSolver`, `Route`, `Edge`, `Requirement`, `DeadEndInfo` | The largest single piece. |
 | `prepare` | `Re1ClassicRandomizerController.GetMap` | Applies the progression options to the map: the areas left out, the slot groups, the segmented caves and lab. |
 | `inventory`, `doors`, `locks`, `keys`, `items`, `enemies` | the staging randomizers of the same names | Doors last, as it is the riskiest. |
 | `plan` | `ClassicRandomizer.Randomize`, `ClassicMod` | Runs the stages in order; the plan is the contract with the engine crate. |
+
+### The `arklay-routing` package
+
+Common's routing, on its own as in the C#, where it is part of BioRand.Common
+rather than the randomizer: `Graph`, `GraphBuilder`, `RouteFinder`,
+`RouteSolver`, `Route`, `Edge`, `Requirement` and `DeadEndInfo`, with
+common's routing tests. It knows nothing of any game. `keys` builds its graph
+from the map, and the finder draws from the generator's `Rng` through the
+crate's `RouteRng` trait, as common's takes a .NET `Random`. Its only
+dependency is `indexmap`.
 
 The engine crate keeps `src/biorand/` for what touches packs: reading the map
 from `random.xml`, emitting scripts, renumbering rooms, the manifest, verifying

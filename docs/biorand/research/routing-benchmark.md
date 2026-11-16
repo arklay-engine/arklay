@@ -3,6 +3,7 @@
 Measured 2026-11-03 on an AMD Ryzen 9 7950X VM (8 vCPUs), pinned to one CPU.
 The C# build is BioRand.Common 1.6.1, built in Release with .NET 10.0.403.
 The Rust build is `arklay-biorand` (`--release`, thin LTO) with rustc 1.99.1.
+The routing has since moved to its own package, `arklay-routing`, unchanged.
 
 Both sides generate routes for common's RE2 Leon A example graph (330 nodes,
 333 edges, 47 keys) over 1000 seeds, after 100 warm-up seeds. Graph loading

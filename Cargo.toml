@@ -25,7 +25,7 @@ hd = [
 [workspace]
 # The engine crate is the root package; `cargo test` and `cargo build` with no
 # `-p` still mean it alone.
-members = ["crates/arklay-biorand"]
+members = ["crates/arklay-biorand", "crates/arklay-routing"]
 
 [dependencies]
 arklay-biorand = { path = "crates/arklay-biorand" }

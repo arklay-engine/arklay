@@ -1,19 +1,21 @@
 //! Common's `TestRoutingExamples`: Leon A of RE2 as a routing graph, with
 //! how many copies of each key it should get.
 //!
-//! `data/re2-routing.json` is common's `test/.../data/re2.json` (MIT, Ted
+//! `data/re2.json` is common's `test/.../data/re2.json` (MIT, Ted
 //! John) with its commented-out second test case removed, as JSON has no
 //! comments.
 
+mod common;
+
 use std::collections::HashMap;
 
-use arklay_biorand::rng::Rng;
-use arklay_biorand::routing::{
+use arklay_routing::{
     EdgeKind, Graph, GraphBuilder, KeyId, KeyKind, NodeId, Requirement, SolveResult,
 };
+use common::Seeded;
 use serde_json::Value;
 
-const DATA: &str = include_str!("data/re2-routing.json");
+const DATA: &str = include_str!("data/re2.json");
 
 /// A filter field that is absent or matches.
 fn matches(entry: &Value, field: &str, value: i64) -> bool {
@@ -166,7 +168,7 @@ fn example_re2_leon_a() {
     let seeds = 100;
     let mut greedy_short = 0;
     for seed in 0..seeds {
-        let route = graph.generate_route(&mut Rng::new(seed));
+        let route = graph.generate_route(&mut Seeded::new(seed));
         assert!(route.all_nodes_visited(), "seed {seed}");
         for key in graph.key_ids() {
             let count = route.items_with_key(key).len();

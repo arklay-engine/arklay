@@ -104,8 +104,17 @@ name = "arklay-biorand"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arklay-routing",
  "indexmap",
  "roxmltree",
+ "serde_json",
+]
+
+[[package]]
+name = "arklay-routing"
+version = "0.1.0"
+dependencies = [
+ "indexmap",
  "serde_json",
 ]
 

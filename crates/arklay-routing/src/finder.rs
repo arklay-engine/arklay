@@ -20,8 +20,8 @@ use indexmap::IndexMap;
 
 use super::bits::BitSet;
 use super::graph::{EdgeId, EdgeKind, Graph, KeyId, KeyKind, NodeId, Requirement};
+use super::rng::{self, RouteRng};
 use super::solver::{self, SolveResult};
-use crate::rng::Rng;
 
 /// How many slot choices the finder tries for each locked edge before it
 /// moves on to the next edge.
@@ -123,7 +123,7 @@ impl<'g> Route<'g> {
 /// Finds a key placement for `graph`.
 pub fn find<'g>(
     graph: &'g Graph,
-    rng: &mut Rng,
+    rng: &mut dyn RouteRng,
     options: RouteFinderOptions<'_>,
 ) -> Result<Route<'g>, RouteError> {
     let mut finder = Finder {
@@ -145,7 +145,7 @@ pub fn find<'g>(
 
 impl Graph {
     /// A key placement drawn from `rng`, with no limits on the search.
-    pub fn generate_route(&self, rng: &mut Rng) -> Route<'_> {
+    pub fn generate_route(&self, rng: &mut dyn RouteRng) -> Route<'_> {
         find(self, rng, RouteFinderOptions::default()).expect("a search with no limits finishes")
     }
 }
@@ -434,7 +434,7 @@ impl State {
 
 struct Finder<'g, 'r, 'o> {
     graph: &'g Graph,
-    rng: &'r mut Rng,
+    rng: &'r mut dyn RouteRng,
     options: RouteFinderOptions<'o>,
     dead_ends: usize,
 }
@@ -634,7 +634,7 @@ impl Finder<'_, '_, '_> {
             .map(|e| self.required_keys(state, EdgeId::from_index(e)))
             .filter(|keys| !keys.is_empty())
             .collect();
-        self.rng.shuffle(&mut lists);
+        rng::shuffle(self.rng, &mut lists);
         let graph = self.graph;
         lists.sort_by_key(|keys| {
             keys.iter()
@@ -653,7 +653,7 @@ impl Finder<'_, '_, '_> {
             return None;
         }
         let mut available: Vec<NodeId> = state.spare_items.iter().map(NodeId::from_index).collect();
-        self.rng.shuffle(&mut available);
+        rng::shuffle(self.rng, &mut available);
         let mut slots = Vec::with_capacity(keys.len());
         for &key in keys {
             let group = self.graph.key(key).group;
@@ -678,7 +678,7 @@ impl Finder<'_, '_, '_> {
             .map(EdgeId::from_index)
             .filter(|&e| graph.edge(e).kind == EdgeKind::OneWay)
             .collect();
-        self.rng.shuffle(&mut exits);
+        rng::shuffle(self.rng, &mut exits);
         if let Some(&exit) = exits.first() {
             state.one_way.remove(exit.index());
             state = self.do_subgraph(state, graph.edge(exit).destination, true, depth)?;
@@ -704,7 +704,7 @@ impl Finder<'_, '_, '_> {
             .map(EdgeId::from_index)
             .filter(|&e| graph.edge(e).kind == EdgeKind::NoReturn)
             .collect();
-        self.rng.shuffle(&mut exits);
+        rng::shuffle(self.rng, &mut exits);
         for exit in exits {
             state.one_way.remove(exit.index());
             state = self.do_subgraph(state, graph.edge(exit).destination, false, depth)?;

@@ -688,7 +688,8 @@ validation, but the Rust port should use applicable edges consistently. It is
 fixed upstream later (`efa189e`).
 
 **Rust:** `routing/{node.rs, graph.rs, builder.rs, finder.rs, solver.rs,
-multiset.rs}`. Use persistent data structures (`im` or `rpds`) or `Rc` plus
+multiset.rs}`. (As built, the routing is its own package,
+`crates/arklay-routing`.) Use persistent data structures (`im` or `rpds`) or `Rc` plus
 cheap clones for `State`. C# allocates a new state per operation; a naive Rust
 `clone()` of `HashSet`s per step would be much slower.
 

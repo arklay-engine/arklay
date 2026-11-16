@@ -10,6 +10,7 @@ license = "MIT"
 # never recompiles the engine crate's 250k lines (see AGENTS.md).
 [dependencies]
 anyhow = "1"
+arklay-routing = { path = "../arklay-routing" }
 indexmap = "2"
 # "positions" gives the byte ranges that the parser's error lines come from.
 roxmltree = { version = "0.21", default-features = false, features = ["std", "positions"] }

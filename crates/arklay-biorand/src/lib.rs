@@ -1,5 +1,6 @@
 //! BioRand's RE1 randomizer, ported from the `staging` branch of
-//! `biorand/classic` and the routing of `biorand/common`.
+//! `biorand/classic`. The routing of `biorand/common` it places keys with is
+//! its own crate, `arklay_routing`, as common is in the C#.
 //!
 //! The package is a pure library. Its input is the map (each room's
 //! `random.xml` and the map-wide `biorand/map.xml`, read from a pack by the
@@ -20,6 +21,5 @@ pub mod map;
 pub mod plan;
 pub mod prepare;
 pub mod rng;
-pub mod routing;
 
 pub use plan::{Plan, Players, generate};

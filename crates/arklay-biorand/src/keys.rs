@@ -14,12 +14,14 @@
 use anyhow::{Context, Result, anyhow, bail};
 use indexmap::IndexMap;
 
+use arklay_routing::{
+    self as routing, EdgeKind, Graph, GraphBuilder, KeyId, KeyKind, NodeId, Requirement,
+    RouteFinderOptions,
+};
+
 use crate::config::Config;
 use crate::map::{Door, DoorKind, Map, Player, Requirement as MapRequirement, Room};
 use crate::rng::Rng;
-use crate::routing::{
-    self, EdgeKind, Graph, GraphBuilder, KeyId, KeyKind, NodeId, Requirement, RouteFinderOptions,
-};
 
 /// Staging gives up after this many dead ends (`KeyRandomizer.cs:136-147`).
 const MAX_DEAD_ENDS: usize = 1000;

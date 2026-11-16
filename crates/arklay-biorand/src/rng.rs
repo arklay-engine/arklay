@@ -121,6 +121,14 @@ impl Rng {
     }
 }
 
+/// The key finder draws from the generator's stream. Its shuffles match
+/// [`Rng::shuffle`], so routes are the same as if it called that.
+impl arklay_routing::RouteRng for Rng {
+    fn index(&mut self, len: usize) -> usize {
+        Rng::index(self, len)
+    }
+}
+
 /// A weighted choice (staging's `Rng.Table`). Entries with no weight are
 /// left out.
 #[derive(Clone, Debug, Default)]

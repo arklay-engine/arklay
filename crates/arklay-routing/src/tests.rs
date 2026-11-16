@@ -1,17 +1,17 @@
 //! Common's routing tests (`TestRouting.cs` and `TestGraphBuilder.cs`).
 //!
 //! Common runs most of them over seeds 0 to 99 of .NET's `Random`; these run
-//! over seeds 0 to 99 of [`Rng`]. The few common runs once with an unseeded
-//! `Random` run over the same seeds here too, as they assert what every seed
-//! must give.
+//! over seeds 0 to 99 of the tests' seeded stream (`tests/common`). The few
+//! common runs once with an unseeded `Random` run over the same seeds here
+//! too, as they assert what every seed must give.
 
 use super::*;
-use crate::rng::Rng;
+use crate::seeded::Seeded;
 
 const SEEDS: u64 = 100;
 
 fn route(graph: &Graph, seed: u64) -> Route<'_> {
-    graph.generate_route(&mut Rng::new(seed))
+    graph.generate_route(&mut Seeded::new(seed))
 }
 
 fn k(key: KeyId) -> Requirement {
@@ -867,7 +867,7 @@ fn dead_ends_are_reported_and_limited() {
         on_dead_end: Some(&mut record),
         ..RouteFinderOptions::default()
     };
-    let route = find(&graph, &mut Rng::new(1), options).unwrap();
+    let route = find(&graph, &mut Seeded::new(1), options).unwrap();
     assert!(!route.all_nodes_visited());
     assert_eq!(reports.len(), route.dead_ends());
     // Key 0 goes in the only slot, and room 1 is stuck without key 1, ten
@@ -884,14 +884,14 @@ fn dead_ends_are_reported_and_limited() {
         max_dead_ends: Some(1),
         ..RouteFinderOptions::default()
     };
-    let error = find(&graph, &mut Rng::new(1), options).unwrap_err();
+    let error = find(&graph, &mut Seeded::new(1), options).unwrap_err();
     assert!(matches!(error, RouteError::TooManyDeadEnds(_)));
 
     let options = RouteFinderOptions {
         depth_limit: Some(0),
         ..RouteFinderOptions::default()
     };
-    let error = find(&graph, &mut Rng::new(1), options).unwrap_err();
+    let error = find(&graph, &mut Seeded::new(1), options).unwrap_err();
     assert!(matches!(error, RouteError::DepthLimit));
 }
 
