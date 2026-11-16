@@ -210,7 +210,7 @@ proc main
     }
     if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
-        if (testpickup(IT_06_WEAPON_FLAMETHROWER))
+        if (picked(AOT_03_ITEM_WEAPON_FLAMETHROWER_1))
         {
             evt_exec(0, TASK_09, flamethrower_taken);
             set(FG_LOCK, F_LOCK_307_30B, FALSE);

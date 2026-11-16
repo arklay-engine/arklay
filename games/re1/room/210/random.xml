@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="210" name="2F EAST ATTIC" tags="mansion mansion2able">
+    <door id="0" target="20E:2" lock="7">
+      <entrance x="6100" y="0" z="3600" d="0"/>
+    </door>
+    <item id="1" flag="129" type="44" amount="1" group="1" name="CREST"/>
+    <item id="2" flag="130" type="12" amount="7" group="1" name="SHELLS"/>
+    <enemies id="0" flag="24" include="4 11 12 13"/>
+  </room>
+</random>

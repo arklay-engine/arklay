@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="106" name="1F MAIN HALL" tags="mansion save begin">
+    <door id="2" target="105:1" randomize="false" tags="prologue">
+      <entrance x="3400" y="0" z="17000" d="0"/>
+    </door>
+    <door id="0" target="107:0">
+      <entrance x="30700" y="0" z="12400" d="2048"/>
+    </door>
+    <door id="1" target="111:0" lock="5" key="52" requires="item(52)">
+      <entrance x="31300" y="0" z="19200" d="2048"/>
+    </door>
+    <door id="4" target="203:0" allowed-locks="" no-unlock="true" randomize="false">
+      <entrance x="17000" y="0" z="14300" d="1024"/>
+    </door>
+    <door id="3" target="106:3" door-rando="true">
+      <entrance x="17200" y="0" z="3000" d="-1024" cut="0"/>
+    </door>
+    <item id="5" flag="52" type="47" amount="3" group="1" name="TYPEWRITER INK" player="chris"/>
+    <item id="5" flag="52" type="47" amount="3" group="1" name="TYPEWRITER INK" optional="true" player="jill"/>
+    <!-- staging typeOffsets: 0x2FDDD -->
+    <item id="6" flag="26" type="2" amount="15" group="1" name="GUN ON FLOOR" player="chris"/>
+    <item id="6" flag="14" type="17" amount="6" group="1" name="BARRY'S GIFT" optional="true" player="jill"/>
+    <!-- staging condition: !1:0 && !1:2 && !1:3 -->
+    <enemies player="chris"/>
+    <!-- staging condition: !1:5 && !7:13 -->
+    <enemies player="jill"/>
+  </room>
+  <spot x="11226" y="0" z="21429" d="982"/>
+  <spot x="11376" y="0" z="24505" d="1134"/>
+  <spot x="12914" y="0" z="9053" d="4030"/>
+  <spot x="15847" y="0" z="9433" d="4086"/>
+  <spot x="17279" y="0" z="8606" d="3030"/>
+  <spot x="17390" y="0" z="12087" d="1014"/>
+  <spot x="20745" y="0" z="7124" d="3206"/>
+  <spot x="21706" y="0" z="9349" d="2206"/>
+  <spot x="23426" y="0" z="24448" d="862"/>
+  <spot x="23466" y="0" z="11843" d="4062"/>
+  <spot x="24610" y="0" z="20833" d="118"/>
+  <spot x="26262" y="0" z="5094" d="2814"/>
+  <spot x="29294" y="0" z="24813" d="1078"/>
+  <spot x="5511" y="0" z="23776" d="1182"/>
+  <spot x="6979" y="0" z="4383" d="3894"/>
+  <spot x="8798" y="0" z="8115" d="3086"/>
+</random>

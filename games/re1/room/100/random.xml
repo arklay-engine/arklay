@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="100" name="1F WEST SAVE" tags="mansion box safe save">
+    <door id="0" target="101:0">
+      <entrance x="3500" y="0" z="2600" d="3072"/>
+    </door>
+    <item id="4" flag="22" type="51" amount="1" group="1" name="SWORD KEY ON BED" player="chris"/>
+    <item id="1" flag="22" type="47" amount="3" group="1" name="INK ON BED" player="jill"/>
+    <!-- staging condition: 1:34 -->
+    <enemies exclude="4" max-difficulty="0" restricted="true" player="jill"/>
+  </room>
+  <spot x="3908" y="0" z="5395" d="3024"/>
+  <spot x="5666" y="0" z="6742" d="2000"/>
+</random>

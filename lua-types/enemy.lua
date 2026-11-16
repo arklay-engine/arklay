@@ -857,6 +857,11 @@ function EnemyApi:hurt_player(damage, flags) end
 ---Raise the poison status bit (`0x02`) and restart the 150-frame poison timer.
 function EnemyApi:poison_player() end
 
+---Whether Yawn's bite poisons with the original's status; `false` means
+---ordinary poison, under the `BR_YAWN_POISON` system flag.
+---@return boolean
+function EnemyApi:yawn_poison_original() end
+
 ---The wasp's grab pose: both the player's and this entity's animation offsets
 ---latch to the player's X/Z, the attacked flag is set and the player enters
 ---the grabbed animation (state 5, frame id 7, the crawl pin).
@@ -1792,9 +1797,9 @@ local EnemyScratch = {}
 
 ---Room, session and engine-wide state, shared by every entity.
 ---@class EnemyWorld
----@field stage integer Read-only. The room's stage.
----@field room integer Read-only. The room number within the stage.
----@field mansion2 boolean Read-only. The room is on its second mansion visit.
+---@field stage integer Read-only. The room's stage (its origin's, `<room origin>`, so a generated game's copy of a room poses its enemies as the original does).
+---@field room integer Read-only. The room number within the stage (its origin's).
+---@field mansion2 boolean Read-only. The room is on its second mansion visit (its origin's).
 ---@field player_character integer Read-only. `0` Chris, `1` Jill.
 ---@field second_playthrough boolean Read-only. The scenario's second-playthrough flag (`0x7B`), which selects the harder damage rows.
 ---@field monster_paused boolean Read-only. The displayed message pauses the monsters; a monster's `update` should do nothing while it is true.

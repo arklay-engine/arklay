@@ -43,17 +43,55 @@
 
 proc init
 {
+    if (ENEMY_RANDOMIZER)
+    {
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
+        {
+            random_enemies();
+        }
+        else
+        {
+            if (ck(FG_COMMON, F_COMMON_J_BARRY_002_TALK, FALSE) && ck(FG_COMMON, F_COMMON_J_OVERHEARD_BARRY_WESKER, TRUE) && ck(FG_COMMON, F_COMMON_J_BARRY_002_MISSED_400, FALSE) && ck(FG_COMMON, F_COMMON_J_BARRY_002_MISSED_408, FALSE))
+            {
+            }
+            else
+            {
+                random_enemies();
+            }
+        }
+    }
     door_aot_set(AOT_00_DOOR_405, 300, 2000, 2100, 1800, 0, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, 0, ROOM_405_CENTER_PASSAGE, 24700, 0, 21100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR_407, 2500, 3700, 1600, 1800, 1, DOOR_SND_00_DR_WD, DOOR_21_DOOR15, 1, 0, ROOM_407_ROOM_002_BATHROOM, 3100, 0, 6400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_02_DOOR_40D, 0, 0, 1, 1, 1, DOOR_SND_0B_LADDER, DOOR_1A_LAD00, 64, 0, ROOM_40D_UNDER_PASSAGE, 3500, 0, 29000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_03_HIKIDASHI_DRAWER, 10500, 1600, 1100, 1600, SCE_HIKIDASHI, SAT_MANUAL | SAT_PLAYER, 34, 0, 6, 0, 6, 0);
-    aot_set(AOT_04_EVENT_DORMITORY_SKETCH, 9000, 5000, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_dormitory_sketch, 0, 0, 0);
+    // A randomized slot (AOT 8) is an ordinary item AOT where the event AOT
+    // that hands over the map stood; AOT 4 is not set then.
+    if (!ITEM_RANDOMIZER)
+    {
+        aot_set(AOT_04_EVENT_DORMITORY_SKETCH, 9000, 5000, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_dormitory_sketch, 0, 0, 0);
+    }
     aot_set(AOT_05_EVENT_LADDER, 12100, 8400, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_ladder, 0, 0, 0);
     item_aot_set(AOT_06_ITEM_AMMO_SHOTGUN_0, 0, 0, 1, 1, IT_0C_AMMO_SHOTGUN, 7, IMDL_00_AMMO_SHOTGUN, SCA_NONE, 11030, -140, 1960, 0, F_ITEM_406_AMMO_SHOTGUN_0, 0, 0);
     eml_rot(IMDL_00_AMMO_SHOTGUN, 0, -1024);
     setbyte(0, 0, 0);
     item_aot_set(AOT_07_ITEM_FILE_PLANT_42_REPORT_1, 12400, 3800, 1000, 1400, IT_64_FILE_PLANT_42_REPORT, 1, IMDL_01_FILE_PLANT_42_REPORT, SCA_NONE, 13400, -710, 4940, 0, F_ITEM_406_FILE_PLANT_42_REPORT_1, SAT_MANUAL | SAT_PLAYER, 0);
-    item_aot_set(AOT_08_ITEM_MAP_DORMITORY, 0, 0, 1, 10, IT_52_MAP_DORMITORY, 1, IMDL_02_MAP_DORMITORY, SCA_NONE, 9280, -2320, 5420, 0, F_ITEM_406_MAP_DORMITORY_2, SAT_MANUAL | SAT_PLAYER, 0);
+    if (ITEM_RANDOMIZER)
+    {
+        item_aot_set(AOT_08_ITEM_MAP_DORMITORY, 9000, 5000, 1000, 1000, IT_52_MAP_DORMITORY, 1, IMDL_02_MAP_DORMITORY, SCA_NONE, 9280, -2320, 5420, 0, F_ITEM_406_MAP_DORMITORY_2, SAT_MANUAL | SAT_PLAYER, 0);
+    }
+    else
+    {
+        item_aot_set(AOT_08_ITEM_MAP_DORMITORY, 0, 0, 1, 10, IT_52_MAP_DORMITORY, 1, IMDL_02_MAP_DORMITORY, SCA_NONE, 9280, -2320, 5420, 0, F_ITEM_406_MAP_DORMITORY_2, SAT_MANUAL | SAT_PLAYER, 0);
+    }
+    if (DOOR_RANDOMIZER)
+    {
+        // The bookcase starts moved. Only 40D records it as moved, and with
+        // door rando this room's door 406:2 may lead elsewhere, so coming
+        // back through it would put the player behind the bookcase
+        // (staging's FixBookcase406, which sets the flag in the room
+        // the door leads to).
+        set(FG_SCENARIO, F_SCENARIO_UNDER_PASSAGE_ENTERED, TRUE);
+    }
     if (ck(FG_SCENARIO, F_SCENARIO_UNDER_PASSAGE_ENTERED, TRUE))
     {
         obj(OBJ_00_CABINET_OVER_LADDER, OF_10 | OF_ACTIVE, SCA_NONE, 10180, 0, 8970, 1024, 0, 350, 0, -350, 200, 1100, 1200, 600);
@@ -71,6 +109,11 @@ proc init
             aot_reset(AOT_03_HIKIDASHI_DRAWER, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 255, 0);
             aot_reset(AOT_04_EVENT_DORMITORY_SKETCH, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 255, 0);
             aot_reset(AOT_07_ITEM_FILE_PLANT_42_REPORT_1, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 255, 0);
+            // Rebecca can't take the randomized slot either.
+            if (ITEM_RANDOMIZER)
+            {
+                aot_reset(AOT_08_ITEM_MAP_DORMITORY, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 255, 0);
+            }
         }
     }
     else

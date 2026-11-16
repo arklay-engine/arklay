@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="105" name="1F DINING ROOM" tags="mansion">
+    <door id="0" target="104:3" randomize="false" tags="prologue">
+      <entrance x="6300" y="0" z="14100" d="1024"/>
+    </door>
+    <door id="1" target="106:2" randomize="false" tags="prologue">
+      <entrance x="30900" y="0" z="8300" d="2048"/>
+    </door>
+    <item id="3" flag="33" type="53" amount="1" group="1" name="BEHIND CLOCK" requires="item(32)" player="chris"/>
+    <!-- staging typeOffsets: 0x2831F -->
+    <item id="4" flag="42" type="31" amount="1" group="1" name="WOOD EMBLEM" player="chris"/>
+    <item id="18" flag="44" type="33" amount="1" group="1" name="BROKEN STATUE" requires="room(202)" player="chris"/>
+    <item id="6" flag="33" type="53" amount="1" group="1" name="BEHIND CLOCK" requires="item(32)" player="jill"/>
+    <!-- staging typeOffsets: 0x2848B -->
+    <item id="7" flag="42" type="31" amount="1" group="1" name="WOOD EMBLEM" player="jill"/>
+    <item id="23" flag="44" type="33" amount="1" group="1" name="BROKEN STATUE" requires="room(202)" player="jill"/>
+    <enemies exclude="4" player="chris"/>
+  </room>
+  <spot x="10901" y="0" z="12610" d="4056"/>
+  <spot x="13048" y="0" z="3972" d="2048"/>
+  <spot x="16023" y="0" z="12902" d="4056"/>
+  <spot x="18796" y="0" z="3967" d="2048"/>
+  <spot x="21530" y="0" z="12283" d="2080"/>
+  <spot x="25410" y="0" z="4160" d="8"/>
+  <spot x="26156" y="0" z="12369" d="1944"/>
+  <spot x="28059" y="0" z="8382" d="3200"/>
+  <spot x="5200" y="0" z="7427" d="768"/>
+  <spot x="6114" y="0" z="10074" d="3288"/>
+  <spot x="7184" y="0" z="3352" d="2704"/>
+</random>

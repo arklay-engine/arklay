@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="30A" name="CAVES ENRICO" tags="caves">
+    <door id="0" target="309:2">
+      <entrance x="4100" y="0" z="20000" d="1024"/>
+    </door>
+    <item id="1" flag="252" type="11" amount="15" group="16" name="CLIP ON ENRICO"/>
+    <item id="137" flag="46" type="30" amount="0" group="16" name="CRANK AFTER ENRICO DEATH"/>
+    <enemies id="0" kind="npc"/>
+    <enemies id="1" flag="80" exclude="3 9"/>
+    <enemies id="2" flag="81" exclude="3 9"/>
+  </room>
+</random>

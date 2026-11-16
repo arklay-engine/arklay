@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="212" name="2F EAST BALCONY" tags="mansion mansion2able">
+    <door id="0" target="211:1">
+      <entrance x="19600" y="0" z="27000" d="0"/>
+    </door>
+    <item id="1" flag="6" type="11" amount="15" group="1" name="FORREST'S WEAPON" player="chris"/>
+    <item id="1" flag="6" type="7" amount="6" group="1" name="FORREST'S WEAPON" player="jill"/>
+  </room>
+</random>

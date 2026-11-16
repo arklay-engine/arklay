@@ -2576,7 +2576,10 @@ pub fn play_sfx_3d(
             if id > 0x2F {
                 return Sfx3dPlay::noop();
             }
-            match room_sound(room_row(room.table_row(), room.room), usize::from(id)) {
+            match room_sound(
+                room_row(room.table_row(), room.origin().room),
+                usize::from(id),
+            ) {
                 Some(name) => with_gain_pan(name, from, to, sound),
                 None => Sfx3dPlay::noop(),
             }
@@ -2627,7 +2630,13 @@ pub fn room_sfx(index: usize, slot: usize) -> Option<&'static str> {
 
 /// The room sound table row of a room: its row of the original's per-room
 /// tables ([`crate::state::RoomId::table_row`]) and room number.
+///
+/// A room past 0x1F (a generated game's own rooms) has no row: the result
+/// is past the table rather than another stage's row.
 pub fn room_row(table_row: usize, room: u8) -> usize {
+    if room > crate::state::RoomId::MAX_ROOM {
+        return usize::MAX;
+    }
     table_row * ROOMS_PER_STAGE + usize::from(room)
 }
 
@@ -2910,8 +2919,11 @@ pub fn play_3d_cue(
             if id > 0x2F {
                 return None;
             }
-            room_sound(room_row(room.table_row(), room.room), usize::from(id))
-                .map(|name| (name, 2, id))
+            room_sound(
+                room_row(room.table_row(), room.origin().room),
+                usize::from(id),
+            )
+            .map(|name| (name, 2, id))
         }
         3 => {
             if id > 0x0F {
@@ -2933,7 +2945,10 @@ pub fn footstep_sound(
 ) -> Option<&'static str> {
     let zone = room.footstep_zone(pos[0], pos[2])?;
     let index = entity_sound_index(zone as u8, sound_type, slow);
-    room_sound(room_row(room.table_row(), room.room), usize::from(index))
+    room_sound(
+        room_row(room.table_row(), room.origin().room),
+        usize::from(index),
+    )
 }
 
 /// 12-bit XZ angle from `(from_x, from_z)` to `(to_x, to_z)`.

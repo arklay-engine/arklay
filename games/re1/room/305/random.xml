@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="305" name="FOUNTAIN" tags="caves">
+    <door id="0" name="DOOR TO HELIPORT" target="303:8" kind="locked" lock="2">
+      <entrance x="3130" y="0" z="16900" d="0" cut="0"/>
+    </door>
+    <door id="1" name="FOUNTAIN STAIRS" target="310:0" kind="unblock" allowed-locks="" randomize="false" requires="item(63) item(64)">
+      <entrance x="24100" y="4320" z="13100" d="0"/>
+    </door>
+    <door id="2" target="30F:0" allowed-locks="" no-unlock="true">
+      <entrance x="5950" y="0" z="13800" d="3072"/>
+    </door>
+    <item id="15" flag="203" type="68" amount="1" group="16" name="GREEN HERB/1"/>
+    <item id="16" flag="204" type="68" amount="1" group="16" name="GREEN HERB/2"/>
+    <item id="17" flag="205" type="69" amount="1" group="16" name="BLUE HERB/1"/>
+    <item id="18" flag="206" type="69" amount="1" group="16" name="BLUE HERB/2"/>
+  </room>
+  <spot x="11630" y="0" z="21904" d="1128"/>
+  <spot x="12284" y="0" z="16718" d="3872"/>
+  <spot x="12895" y="0" z="20284" d="2952"/>
+  <spot x="13384" y="0" z="18610" d="2376"/>
+  <spot x="14446" y="0" z="17751" d="1872"/>
+  <spot x="14534" y="0" z="12383" d="2992"/>
+  <spot x="14936" y="0" z="21247" d="1176"/>
+  <spot x="15098" y="0" z="7695" d="2992"/>
+  <spot x="15654" y="0" z="15607" d="3520"/>
+  <spot x="16188" y="0" z="21100" d="1344"/>
+  <spot x="16797" y="0" z="17620" d="2240"/>
+  <spot x="17222" y="0" z="4733" d="2552"/>
+  <spot x="17707" y="0" z="18108" d="2112"/>
+  <spot x="19500" y="0" z="18290" d="4016"/>
+  <spot x="21922" y="0" z="3510" d="1976"/>
+  <spot x="24124" y="0" z="18270" d="64"/>
+  <spot x="24831" y="0" z="4468" d="2312"/>
+  <spot x="27346" y="0" z="17655" d="792"/>
+  <spot x="27431" y="0" z="2711" d="2880"/>
+  <spot x="27765" y="0" z="14410" d="2712"/>
+  <spot x="28965" y="0" z="11472" d="1104"/>
+  <spot x="29270" y="0" z="7054" d="1568"/>
+  <spot x="4500" y="0" z="22183" d="4072"/>
+  <spot x="4520" y="0" z="18032" d="3088"/>
+  <spot x="7674" y="0" z="19868" d="3032"/>
+</random>

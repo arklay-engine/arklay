@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="501" name="LABORATORY B1 ESCAPE" tags="lab end">
+    <door id="0" target="500:0" lock="28">
+      <entrance x="30000" y="0" z="3500" d="2048"/>
+    </door>
+    <door id="1" target="50D:0" allowed-locks="" randomize="false" requires="item(39)">
+      <entrance x="3500" y="0" z="28000" d="0"/>
+    </door>
+    <item id="2" flag="69" type="39" amount="1" group="32" name="BATTERY ON FLOOR"/>
+  </room>
+</random>

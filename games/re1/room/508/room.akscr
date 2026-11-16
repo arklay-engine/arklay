@@ -37,20 +37,54 @@
 #define SE_DOOR_01 0x01
 #define VO_A00_04_5A 0x5A
 #define VO_A00_05_5B 0x5B
+// BioRand: under ITEM_RANDOMIZER a reader is done when its scenario flag is
+// set (507, 509 and 510 set it on using the MO disc), not when its pass code
+// (FG_ITEM 98, 82, 90) is taken.
+#define F_SCENARIO_70_MO_DISC_509 0x70
+#define F_SCENARIO_71_MO_DISC_510 0x71
+#define F_SCENARIO_72_MO_DISC_507 0x72
 
 proc init
 {
+    if (ENEMY_RANDOMIZER)
+    {
+        if (ck(FG_COMMON, F_COMMON_C_JILL_WENT_AHEAD, FALSE) && ck(FG_COMMON, F_COMMON_CELL_RESCUED, TRUE))
+        {
+        }
+        else
+        {
+            random_enemies();
+        }
+    }
     door_aot_set(AOT_00_DOOR_505, 19500, 2400, 2100, 2500, 6, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_505_O_PASSAGE, 2900, 0, 17500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR_509, 10700, 4800, 2300, 1600, 0, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_509_PRIVATE_ROOM_A, 3600, 0, 2700, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_02_DOOR_50A, 17700, 800, 1400, 1600, 0, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_50A_PRIVATE_ROOM_B, 10800, 0, 10200, 1576, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_03_DOOR_50B, 200, 2500, 2100, 2200, 11, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_50B_FRONT_OF_CELL, 5300, 0, 4000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    if (ck(FG_ITEM, F_ITEM_509_FILE_PASS_CODE_01_0, TRUE))
+    if (ITEM_RANDOMIZER)
     {
-        if (ck(FG_ITEM, F_ITEM_507_FILE_PASS_CODE_02_2, TRUE))
+        if (ck(FG_SCENARIO, F_SCENARIO_70_MO_DISC_509, FALSE) && ck(FG_SCENARIO, F_SCENARIO_72_MO_DISC_507, FALSE) && ck(FG_SCENARIO, F_SCENARIO_71_MO_DISC_510, FALSE))
         {
-            if (ck(FG_ITEM, F_ITEM_510_FILE_PASS_CODE_03_0, TRUE))
+            aot_set(AOT_04_EVENT_PASS_CODE_PANEL, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, pass_code_panel_no_codes, 0, 0, 0);
+        }
+        else
+        {
+            aot_set(AOT_04_EVENT_PASS_CODE_PANEL, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, pass_code_panel, 0, 0, 0);
+        }
+    }
+    else
+    {
+        if (ck(FG_ITEM, F_ITEM_509_FILE_PASS_CODE_01_0, TRUE))
+        {
+            if (ck(FG_ITEM, F_ITEM_507_FILE_PASS_CODE_02_2, TRUE))
             {
-                aot_set(AOT_04_EVENT_PASS_CODE_PANEL, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, pass_code_panel_no_codes, 0, 0, 0);
+                if (ck(FG_ITEM, F_ITEM_510_FILE_PASS_CODE_03_0, TRUE))
+                {
+                    aot_set(AOT_04_EVENT_PASS_CODE_PANEL, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, pass_code_panel_no_codes, 0, 0, 0);
+                }
+                else
+                {
+                    aot_set(AOT_04_EVENT_PASS_CODE_PANEL, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, pass_code_panel, 0, 0, 0);
+                }
             }
             else
             {
@@ -61,10 +95,6 @@ proc init
         {
             aot_set(AOT_04_EVENT_PASS_CODE_PANEL, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, pass_code_panel, 0, 0, 0);
         }
-    }
-    else
-    {
-        aot_set(AOT_04_EVENT_PASS_CODE_PANEL, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, pass_code_panel, 0, 0, 0);
     }
     if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_1_ENTERED, FALSE))
     {
@@ -365,7 +395,16 @@ event pass_code_panel
     {
         if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_1_ENTERED, FALSE))
         {
-            if (ck(FG_ITEM, F_ITEM_509_FILE_PASS_CODE_01_0, FALSE))
+            if (ITEM_RANDOMIZER)
+            {
+                if (ck(FG_SCENARIO, F_SCENARIO_70_MO_DISC_509, TRUE))
+                {
+                    message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | MSG_FAST, 0); // "You've entered the pass code."
+                    set(FG_SCENARIO, F_SCENARIO_PASS_CODE_1_ENTERED, TRUE);
+                    se_play_3d(SND_BANK_ROOM, SE_17_DLBEEP, 0, SND_AT_POINT, 0, 2300, 4850);
+                }
+            }
+            else if (ck(FG_ITEM, F_ITEM_509_FILE_PASS_CODE_01_0, FALSE))
             {
                 message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | MSG_FAST, 0); // "You've entered the pass code."
                 set(FG_SCENARIO, F_SCENARIO_PASS_CODE_1_ENTERED, TRUE);
@@ -382,7 +421,16 @@ event pass_code_panel
     {
         if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_2_ENTERED, FALSE))
         {
-            if (ck(FG_ITEM, F_ITEM_507_FILE_PASS_CODE_02_2, FALSE))
+            if (ITEM_RANDOMIZER)
+            {
+                if (ck(FG_SCENARIO, F_SCENARIO_72_MO_DISC_507, TRUE))
+                {
+                    message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | MSG_FAST, 0); // "You've entered the pass code."
+                    set(FG_SCENARIO, F_SCENARIO_PASS_CODE_2_ENTERED, TRUE);
+                    se_play_3d(SND_BANK_ROOM, SE_17_DLBEEP, 0, SND_AT_POINT, 0, 2300, 4850);
+                }
+            }
+            else if (ck(FG_ITEM, F_ITEM_507_FILE_PASS_CODE_02_2, FALSE))
             {
                 message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | MSG_FAST, 0); // "You've entered the pass code."
                 set(FG_SCENARIO, F_SCENARIO_PASS_CODE_2_ENTERED, TRUE);
@@ -399,7 +447,16 @@ event pass_code_panel
     {
         if (ck(FG_SCENARIO, F_SCENARIO_PASS_CODE_3_ENTERED, FALSE))
         {
-            if (ck(FG_ITEM, F_ITEM_510_FILE_PASS_CODE_03_0, FALSE))
+            if (ITEM_RANDOMIZER)
+            {
+                if (ck(FG_SCENARIO, F_SCENARIO_71_MO_DISC_510, TRUE))
+                {
+                    message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | MSG_FAST, 0); // "You've entered the pass code."
+                    set(FG_SCENARIO, F_SCENARIO_PASS_CODE_3_ENTERED, TRUE);
+                    se_play_3d(SND_BANK_ROOM, SE_17_DLBEEP, 0, SND_AT_POINT, 0, 2300, 4850);
+                }
+            }
+            else if (ck(FG_ITEM, F_ITEM_510_FILE_PASS_CODE_03_0, FALSE))
             {
                 message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | MSG_FAST, 0); // "You've entered the pass code."
                 set(FG_SCENARIO, F_SCENARIO_PASS_CODE_3_ENTERED, TRUE);

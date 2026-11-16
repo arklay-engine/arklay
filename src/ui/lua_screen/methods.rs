@@ -48,12 +48,13 @@ impl UserData for Api<'_> {
         });
 
         // `room()`: the paused session's stage, room, camera cut and player
-        // digit (0 Chris, 1 Jill); nil outside a session.
+        // digit (0 Chris, 1 Jill); nil outside a session. The stage and room
+        // are the room's origin's, the original room the floor plans draw.
         methods.add_method("room", |_lua, api, ()| {
             Ok(match api.game() {
                 Some(game) => (
-                    Some(game.id.stage),
-                    Some(game.id.room),
+                    Some(game.origin().stage),
+                    Some(game.origin().room),
                     Some(game.camera.current_cut as i64),
                     Some(game.id.player_flag),
                 ),

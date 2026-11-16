@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="309" name="CAVES POWER GENERATOR" tags="caves">
+    <door id="0" target="308:1" allowed-locks="">
+      <entrance x="4100" y="0" z="26800" d="0"/>
+    </door>
+    <door id="1" target="308:2" allowed-locks="">
+      <entrance x="2800" y="0" z="4400" d="0"/>
+    </door>
+    <door id="2" target="30A:0">
+      <entrance x="15300" y="0" z="2800" d="3072"/>
+    </door>
+    <item id="132" flag="202" type="12" amount="7" group="16" name="SHELLS" player="chris"/>
+    <item id="133" flag="248" type="65" amount="1" group="16" name="FIRST AID SPRAY" player="chris"/>
+    <item id="131" flag="45" type="16" amount="6" group="16" name="EXPLOSIVE ROUNDS" player="jill"/>
+    <item id="132" flag="248" type="65" amount="1" group="16" name="FIRST AID SPRAY" player="jill"/>
+    <enemies exclude="4" player="chris"/>
+    <enemies id="1" kind="npc"/>
+    <!-- staging condition: !1:72 -->
+    <enemies exclude="4" player="jill"/>
+  </room>
+  <spot x="10787" y="0" z="27984" d="520"/>
+  <spot x="12269" y="0" z="18078" d="1960"/>
+  <spot x="12993" y="0" z="3873" d="40"/>
+  <spot x="13106" y="0" z="25850" d="2456"/>
+  <spot x="13699" y="0" z="7828" d="3144"/>
+  <spot x="13943" y="0" z="12946" d="2904"/>
+  <spot x="15035" y="0" z="19369" d="3136"/>
+  <spot x="15315" y="0" z="10584" d="1232"/>
+  <spot x="21442" y="0" z="19882" d="2480"/>
+  <spot x="23239" y="0" z="22834" d="2064"/>
+  <spot x="24351" y="0" z="18971" d="2448"/>
+  <spot x="5098" y="0" z="18833" d="608"/>
+  <spot x="5308" y="0" z="19867" d="3368"/>
+  <spot x="5564" y="0" z="22773" d="2936"/>
+  <spot x="5710" y="0" z="17227" d="328"/>
+  <spot x="6366" y="0" z="3693" d="3992"/>
+  <spot x="6502" y="0" z="26336" d="3856"/>
+  <spot x="8433" y="0" z="17562" d="1960"/>
+  <spot x="9462" y="0" z="5798" d="144"/>
+</random>

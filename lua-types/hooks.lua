@@ -110,9 +110,14 @@ local HookApi = {}
 
 -- # Reading state
 
----The three-digit room id.
+---The room id (`"106"`, or a generated room's `"09-40"`).
 ---@return string room
 function HookApi:room() end
+
+---The id of the original room the room plays as (its `<room origin>`), its
+---own id when it has none.
+---@return string room
+function HookApi:origin() end
 
 ---Whether the run was started with `--authentic` (the original's item rules).
 ---@return boolean

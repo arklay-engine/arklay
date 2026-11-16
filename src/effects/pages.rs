@@ -194,6 +194,11 @@ pub fn sheet_stem(id: u8) -> String {
 /// The effect-sheet name index for `(stage, room, page)`, which also selects
 /// the blend record slot for a sprite packed on that page.
 pub fn room_effect_sheet_index(stage: usize, room: usize, page: usize) -> Option<u8> {
+    // A generated game's rooms past 0x1F have no row (rather than another
+    // stage's).
+    if room >= 32 {
+        return None;
+    }
     let row = ROOM_EFFECT_SHEETS.get(stage.checked_mul(32)?.checked_add(room)?)?;
     let name = row.get(page)?;
     if *name == 0xFF {
@@ -255,6 +260,9 @@ pub fn blend_record(depth_slot: usize, band_v: u8) -> Option<(u8, u8, u8, u8)> {
 
 /// The camera light record used to shade effects in `(stage, room, camera)`.
 pub fn camera_light_record(stage: usize, room: usize, camera: usize) -> [i16; 3] {
+    if room >= 32 || camera >= 8 {
+        return [0, 0, 0];
+    }
     let index = (stage * 32 + room) * 8 + camera;
     EFFECT_CAMERA_LIGHT_INDEX
         .get(index)

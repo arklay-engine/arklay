@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="201" name="2F WEST STAIRS" tags="mansion">
+    <door id="0" target="202:0">
+      <entrance x="18100" y="0" z="2700" d="2560"/>
+    </door>
+    <door id="1" target="214:1" kind="locked" lock="17" player="chris">
+      <entrance x="15500" y="0" z="25400" d="1024"/>
+    </door>
+    <door id="1" target="214:5" kind="locked" lock="17" player="jill">
+      <entrance x="15500" y="0" z="25400" d="1024"/>
+    </door>
+    <door id="2" target="215:0" lock="12" key="54" requires="item(54)">
+      <entrance x="15000" y="0" z="17500" d="0"/>
+    </door>
+    <door id="3" target="101:3" allowed-locks="" no-unlock="true">
+      <entrance x="14100" y="0" z="11500" d="0"/>
+    </door>
+    <enemies exclude="4" max-difficulty="1"/>
+  </room>
+  <spot x="11432" y="0" z="14117" d="2075"/>
+  <spot x="12109" y="0" z="8540" d="4035"/>
+  <spot x="15295" y="0" z="5277" d="3003"/>
+  <spot x="15416" y="0" z="20350" d="2899"/>
+  <spot x="15443" y="0" z="14319" d="2155"/>
+  <spot x="15445" y="0" z="8129" d="1843"/>
+  <spot x="15540" y="0" z="22874" d="1099"/>
+  <spot x="20381" y="0" z="3771" d="2163"/>
+  <spot x="3755" y="0" z="9199" d="3187"/>
+  <spot x="4298" y="0" z="12336" d="3187"/>
+  <spot x="4509" y="0" z="14303" d="1091"/>
+  <spot x="6356" y="0" z="8318" d="4035"/>
+  <spot x="8664" y="0" z="14259" d="4075"/>
+  <spot x="9050" y="0" z="8492" d="4035"/>
+</random>

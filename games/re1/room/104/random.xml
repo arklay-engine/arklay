@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="104" name="1F WEST TEA CORRIDOR" tags="mansion">
+    <door id="0" target="103:1" kind="locked" lock="18">
+      <entrance x="15800" y="0" z="3700" d="1024"/>
+    </door>
+    <door id="1" target="10F:0" lock="6" key="51" requires="item(51)">
+      <entrance x="30700" y="0" z="3900" d="1024"/>
+    </door>
+    <door id="2" target="110:0" kind="locked" lock="19">
+      <entrance x="31800" y="0" z="3300" d="2048"/>
+    </door>
+    <door id="3" target="105:0" randomize="false" tags="prologue">
+      <entrance x="11500" y="0" z="2800" d="3072"/>
+    </door>
+    <item id="5" flag="41" type="11" amount="15" group="1" name="KENNETH/1" player="chris"/>
+    <item id="9" flag="47" type="11" amount="15" group="1" name="KENNETH/2" player="chris"/>
+    <item id="8" flag="41" type="11" amount="15" group="1" name="KENNETH/1" optional="true" player="jill"/>
+    <item id="9" flag="47" type="11" amount="15" group="1" name="KENNETH/2" optional="true" player="jill"/>
+    <enemies id="0" flag="28" exclude="3 4 6 9 10"/>
+  </room>
+  <spot x="14922" y="0" z="3190" d="4091"/>
+  <spot x="20520" y="0" z="2725" d="187"/>
+  <spot x="25059" y="0" z="3705" d="1995"/>
+  <spot x="3364" y="0" z="2879" d="91"/>
+  <spot x="4438" y="0" z="6027" d="947"/>
+  <spot x="7859" y="0" z="2983" d="2027"/>
+</random>

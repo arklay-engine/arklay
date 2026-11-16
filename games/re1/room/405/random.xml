@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="405" name="GUARDHOUSE WESKER CORRIDOR" tags="guardhouse">
+    <door id="0" target="400:4">
+      <entrance x="3800" y="0" z="4500" d="1024"/>
+    </door>
+    <door id="1" target="406:0" lock="41" key="57" requires="item(57)">
+      <entrance x="24700" y="0" z="21100" d="2048"/>
+    </door>
+    <door id="2" target="408:0">
+      <entrance x="23200" y="0" z="8800" d="2048"/>
+    </door>
+    <item id="3" flag="106" type="68" amount="1" group="8" name="GREEN HERB/1"/>
+    <item id="4" flag="107" type="68" amount="1" group="8" name="GREEN HERB/2"/>
+    <item id="5" flag="108" type="68" amount="1" group="8" name="GREEN HERB/3"/>
+    <enemies id="0" kind="npc"/>
+    <enemies id="1" kind="npc"/>
+    <enemies id="2" kind="npc"/>
+    <enemies id="3" kind="npc"/>
+    <!-- staging condition: !(1:171 && !0:0) -->
+    <enemies exclude="4" player="chris"/>
+    <!-- staging condition: !(1:175 && !0:0) -->
+    <enemies exclude="4" player="jill"/>
+  </room>
+  <spot x="11705" y="0" z="4106" d="88"/>
+  <spot x="16428" y="0" z="2923" d="2088"/>
+  <spot x="19106" y="0" z="3588" d="4048"/>
+  <spot x="21467" y="0" z="5928" d="1104"/>
+  <spot x="21620" y="0" z="11340" d="3024"/>
+  <spot x="21800" y="0" z="18091" d="3000"/>
+  <spot x="22786" y="0" z="15776" d="944"/>
+  <spot x="8135" y="0" z="3088" d="4056"/>
+</random>

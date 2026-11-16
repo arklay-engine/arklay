@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- BIORAND CONFIGURATION: the options of the BioRand package's definition,
+     laid out as the options are: a tab per page (Ctrl+Up/Down or LB/RB turn
+     it), a group per titled group of options, and the focused option's
+     description beside them. The host generates the pages from that
+     definition and publishes them at `biorand_config.pages`. A page's
+     `entries` are a titled group (`group`, its `label` and `rows`), the
+     warning of an untitled one, or one option, whose `toggle`, `choice` or
+     `slider` is set to match its kind and whose others are nil, which hides
+     them. A group's `rows` are shaped the same way (its warning first). -->
+<screen use="standard-screen" title="BIORAND OPTIONS">
+  <text slot="header" variant="caption" text="{launcher.version}" wrap="none"/>
+  <command key="aux" cap="R" label="Reset" action="biorand_reset" confirm="Reset every BioRand option to its default?"/>
+  <split>
+    <tabs scrollbar="always" items="{biorand_config.pages}">
+      <template>
+        <tab label="{item.label}">
+          <list items="{item.entries}">
+            <template>
+              <group label="{item.label}" visible="{item.group}" items="{item.rows}">
+                <template>
+                  <text variant="warn" text="{item.warning}" visible="{item.warning}"/>
+                  <toggle def="{item.toggle}"/>
+                  <choice def="{item.choice}"/>
+                  <slider def="{item.slider}"/>
+                </template>
+              </group>
+              <text variant="warn" text="{item.warning}" visible="{item.warning}"/>
+              <toggle def="{item.toggle}"/>
+              <choice def="{item.choice}"/>
+              <slider def="{item.slider}"/>
+            </template>
+          </list>
+        </tab>
+      </template>
+    </tabs>
+    <option-detail/>
+  </split>
+</screen>

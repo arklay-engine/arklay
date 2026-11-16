@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="510" name="LABORATORY B3 POWER MO DISC" tags="lab">
+    <door id="0" target="50F:1">
+      <entrance x="22000" y="0" z="16500" d="1024"/>
+    </door>
+    <door id="1" target="511:0">
+      <entrance x="12200" y="0" z="2500" d="3072"/>
+    </door>
+    <flag name="MO_DISC_510" requires="item(40)"/>
+    <item id="2" flag="90" type="109" amount="1" group="32" name="MO DISC PASS CODE" requires="flag(MO_DISC_510)" document="true"/>
+    <enemies exclude="4"/>
+  </room>
+  <spot x="11219" y="0" z="9973" d="2000"/>
+  <spot x="14716" y="0" z="10121" d="24"/>
+  <spot x="18133" y="0" z="10021" d="2200"/>
+  <spot x="21581" y="0" z="11796" d="848"/>
+  <spot x="21815" y="0" z="3228" d="3104"/>
+  <spot x="21991" y="0" z="6536" d="1040"/>
+  <spot x="5941" y="0" z="10192" d="848"/>
+  <spot x="6294" y="0" z="3090" d="3192"/>
+  <spot x="6529" y="0" z="6031" d="3176"/>
+  <spot x="9730" y="0" z="3090" d="0"/>
+</random>

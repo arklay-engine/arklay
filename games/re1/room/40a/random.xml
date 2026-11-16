@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="40A" name="GUARDHOUSE ROOM 003" tags="guardhouse">
+    <door id="0" target="408:2" lock="42">
+      <entrance x="2900" y="0" z="2800" d="0"/>
+    </door>
+    <door id="1" target="40B:0">
+      <entrance x="3400" y="0" z="3500" d="1024"/>
+    </door>
+    <door id="2" target="40C" kind="unblock" allowed-locks="" requires="item(62)">
+      <entrance x="14300" y="0" z="5200" d="2048"/>
+    </door>
+    <!-- staging typeOffsets: 0x39383 -->
+    <item id="3" flag="78" type="105" amount="1" group="8" name="V-JOLT BOOK IN BOOKCASE" document="true"/>
+    <item id="8" flag="120" type="47" amount="3" group="8" name="LOCKED DRAWER" requires="item(61)" lock="35"/>
+    <enemies exclude="4" max-difficulty="0"/>
+  </room>
+  <spot x="12389" y="0" z="8688" d="1048"/>
+  <spot x="12694" y="0" z="4617" d="3032"/>
+  <spot x="7011" y="0" z="2792" d="2016"/>
+</random>

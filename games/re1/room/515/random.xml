@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="515" name="LABORATORY B4 ELEVATOR (CUTSCENE)" tags="lab">
+    <door id="0" target="50C:4" allowed-locks="" no-unlock="true" randomize="false">
+      <entrance x="4600" y="0" z="4600" d="2048"/>
+    </door>
+    <door id="1" target="514:1" allowed-locks="" no-unlock="true" randomize="false">
+      <entrance x="4600" y="0" z="4600" d="2048"/>
+    </door>
+  </room>
+</random>

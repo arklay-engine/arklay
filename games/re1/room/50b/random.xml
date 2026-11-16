@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="50B" name="LABORATORY B3 CELL CORRIDOR" tags="lab">
+    <door id="0" target="508:3">
+      <entrance x="5300" y="0" z="4000" d="2048"/>
+    </door>
+    <door id="1" target="512:0" kind="unblock" allowed-locks="" requires="room(513)">
+      <entrance x="9800" y="0" z="15800" d="3072"/>
+    </door>
+  </room>
+  <spot x="12052" y="0" z="18231" d="2192"/>
+  <spot x="2746" y="0" z="14984" d="3048"/>
+  <spot x="2950" y="0" z="4931" d="3104"/>
+  <spot x="4234" y="0" z="17630" d="4008"/>
+  <spot x="4576" y="0" z="7205" d="1040"/>
+  <spot x="4753" y="0" z="13034" d="1856"/>
+  <spot x="8693" y="0" z="18230" d="2216"/>
+</random>

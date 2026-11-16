@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="10A" name="1F EAST END CORRIDOR" tags="mansion">
+    <door id="0" target="109:4">
+      <entrance x="15200" y="0" z="3900" d="2048"/>
+    </door>
+    <door id="3" target="10B:0" kind="unlock" lock="20">
+      <entrance x="11300" y="0" z="4800" d="1024"/>
+    </door>
+    <door id="1" target="117:0">
+      <entrance x="3000" y="0" z="2500" d="3072"/>
+    </door>
+    <door id="2" target="119:0" lock="24" key="54" requires="item(54)">
+      <entrance x="8400" y="0" z="5000" d="1024"/>
+    </door>
+    <door id="4" target="11A:0">
+      <entrance x="2400" y="0" z="11900" d="0"/>
+    </door>
+    <enemies exclude="4" max-difficulty="1"/>
+  </room>
+  <spot x="15010" y="0" z="3101" d="2037"/>
+  <spot x="2676" y="0" z="9288" d="1077"/>
+  <spot x="2994" y="0" z="5985" d="2941"/>
+  <spot x="4993" y="0" z="4302" d="973"/>
+  <spot x="9328" y="0" z="3041" d="2037"/>
+</random>

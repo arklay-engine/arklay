@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="40B" name="GUARDHOUSE ROOM 003 BATHROOM" tags="guardhouse">
+    <door id="0" target="40A:1">
+      <entrance x="3400" y="0" z="6400" d="3072"/>
+    </door>
+    <item id="1" flag="168" type="11" amount="15" group="8" name="CLIP ON FLOOR"/>
+    <enemies exclude="4" max-difficulty="0"/>
+  </room>
+  <spot x="6529" y="0" z="6414" d="2160"/>
+  <spot x="6707" y="0" z="8343" d="2072"/>
+</random>

@@ -185,6 +185,25 @@ impl PackWriter {
         self.add_shared(path, Arc::new(data))
     }
 
+    /// Add one entry as another pack stores it ([`Pack::read_stored`]): a
+    /// zstd frame (`zstd`) is kept as it is, so copying a pack's entries never
+    /// compresses them again, and [`Self::compress_entries`] skips it. Its
+    /// plain size is the frame's declared content size, else its stored size.
+    pub fn add_stored(&mut self, path: &str, data: Vec<u8>, zstd: bool) -> Result<()> {
+        if !zstd {
+            return self.add(path, data);
+        }
+        let plain_len = match zstd::zstd_safe::get_frame_content_size(&data) {
+            Ok(Some(size)) => usize::try_from(size).unwrap_or(data.len()),
+            _ => data.len(),
+        };
+        self.add(path, data)?;
+        let entry = self.entries.last_mut().expect("the entry just added");
+        entry.compression = Compression::Zstd;
+        entry.plain_len = plain_len;
+        Ok(())
+    }
+
     /// Add one entry whose bytes may be shared with other entries: every
     /// entry added with a clone of the same `Arc` holds one copy in memory and
     /// is compressed once. The written pack is the same as adding each copy
@@ -1289,6 +1308,9 @@ pub struct Pack {
     /// `hires/` replacements across the pack and its layers, indexed on
     /// first use.
     hires: std::sync::OnceLock<crate::hires::HdTable>,
+    /// Each room's origin across the pack and its layers, scanned on first
+    /// use ([`Pack::room_origins`]).
+    room_origins: std::sync::OnceLock<crate::state::RoomOrigins>,
 }
 
 impl Pack {
@@ -1406,6 +1428,7 @@ impl Pack {
             warnings: Vec::new(),
             language: None,
             hires: std::sync::OnceLock::new(),
+            room_origins: std::sync::OnceLock::new(),
         };
         pack.manifest = pack.read_manifest()?;
         Ok(pack)
@@ -1556,6 +1579,7 @@ impl Pack {
         });
         pack.overlays = applied.into_iter().map(|(_, layer)| layer).collect();
         pack.hires = std::sync::OnceLock::new();
+        pack.room_origins = std::sync::OnceLock::new();
         pack.warnings = warnings;
         Ok(pack)
     }
@@ -1671,6 +1695,7 @@ impl Pack {
             warnings: Vec::new(),
             language: None,
             hires: std::sync::OnceLock::new(),
+            room_origins: std::sync::OnceLock::new(),
         })
     }
 
@@ -1711,6 +1736,32 @@ impl Pack {
             return Ok(Cow::Owned(data));
         }
         entry_bytes(&self.data, entry)
+    }
+
+    /// This pack's own entry `path` as stored, and whether the bytes are a
+    /// zstd frame, for copying it into another pack with
+    /// [`PackWriter::add_stored`] without decompressing it. Mod layers are not
+    /// consulted; a directory pack's entries read raw.
+    pub fn read_stored(&self, path: &str) -> Result<(Cow<'_, [u8]>, bool)> {
+        let index = self
+            .lookup
+            .get(&path.to_ascii_lowercase())
+            .copied()
+            .ok_or_else(|| anyhow!("pack entry not found: {path}"))?;
+        let entry = &self.entries[index];
+        if entry.file.is_some() {
+            return Ok((self.entry_bytes(entry)?, false));
+        }
+        if let Some(image) = &self.image {
+            let stored = read_at(image, entry.offset as u64, entry.length)
+                .with_context(|| format!("failed to read pack entry {}", entry.path))?;
+            return Ok((Cow::Owned(stored), entry.compression == Compression::Zstd));
+        }
+        let stored = &self.data[entry.offset..entry.offset + entry.length];
+        Ok((
+            Cow::Borrowed(stored),
+            entry.compression == Compression::Zstd,
+        ))
     }
 
     /// The parsed `manifest.toml`, when the pack carries one.
@@ -1946,6 +1997,13 @@ impl Pack {
     /// table of contents where [`Pack::paths`] is the merged view.
     pub fn own_paths(&self) -> impl Iterator<Item = &str> {
         self.entries.iter().map(|entry| entry.path.as_str())
+    }
+
+    /// Where each room of the pack and its layers was made from
+    /// ([`crate::room::scan_origins`]).
+    pub fn room_origins(&self) -> &crate::state::RoomOrigins {
+        self.room_origins
+            .get_or_init(|| crate::room::scan_origins(self))
     }
 
     /// The `hires/` replacements this pack and its layers carry.
@@ -2864,6 +2922,9 @@ mod tests {
                 *memory.read(path).unwrap(),
                 "{path}"
             );
+            let (stored, zstd) = streamed.read_stored(path).unwrap();
+            let (memory_stored, memory_zstd) = memory.read_stored(path).unwrap();
+            assert_eq!((&*stored, zstd), (&*memory_stored, memory_zstd), "{path}");
         }
         assert_eq!(
             *streamed.read("movie/00.mp4").unwrap(),

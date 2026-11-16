@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="500" name="LABORATORY B1 ENTRANCE" tags="lab">
+    <door id="0" target="501:0" lock="28" key="55" requires="item(55)">
+      <entrance x="2500" y="0" z="9500" d="0"/>
+    </door>
+    <door id="1" target="310:1" allowed-locks="">
+      <entrance x="9800" y="0" z="3400" d="3072"/>
+    </door>
+    <door id="2" target="502:0" allowed-locks="" no-unlock="true">
+      <entrance x="4400" y="0" z="7600" d="3072"/>
+    </door>
+    <!-- staging condition: !(!0:55 && !1:75) -->
+    <enemies exclude="4" player="chris"/>
+    <!-- staging condition: 0:55 -->
+    <enemies exclude="4" player="jill"/>
+  </room>
+  <spot x="10010" y="0" z="7987" d="1072"/>
+  <spot x="4335" y="0" z="12373" d="3992"/>
+  <spot x="7365" y="0" z="9517" d="2296"/>
+  <spot x="7454" y="0" z="11068" d="1880"/>
+  <spot x="8626" y="0" z="12682" d="1096"/>
+</random>

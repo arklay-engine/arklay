@@ -156,12 +156,25 @@ proc init
         {
             if (ck(FG_ENEMY, F_ENEMY_20C_YAWN_2_0, FALSE))
             {
-                aot_set(AOT_03_EVENT_PIT, 1400, 3400, 3200, 2700, SCE_EVENT, 0, 9, 0, examine_pit, 0, 0, 0);
+                if (CUTSCENES_DISABLED)
+                {
+                    // Jill's trigger runs the event for the room after Barry's
+                    // scene (staging patches the event index to 0x2C).
+                    aot_set(AOT_03_EVENT_PIT, 1400, 3400, 3200, 2700, SCE_EVENT, 0, 9, 0, examine_rope_above, 0, 0, 0);
+                }
+                else
+                {
+                    aot_set(AOT_03_EVENT_PIT, 1400, 3400, 3200, 2700, SCE_EVENT, 0, 9, 0, examine_pit, 0, 0, 0);
+                }
             }
             else
             {
                 set(FG_ROOM, F_ROOM_J_YAWN_DEATH_HANDLED, TRUE);
-                if (ck(FG_COMMON, F_COMMON_J_PIT_SCENE_STARTED, TRUE))
+                if (CUTSCENES_DISABLED)
+                {
+                    aot_set(AOT_03_EVENT_PIT, 1400, 3400, 3200, 2700, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_rope_above, 0, 0, 0);
+                }
+                else if (ck(FG_COMMON, F_COMMON_J_PIT_SCENE_STARTED, TRUE))
                 {
                     if (ck(FG_COMMON, F_COMMON_J_BARRY_RESCUED_FROM_PIT, TRUE))
                     {

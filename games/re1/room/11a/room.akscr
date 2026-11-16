@@ -110,13 +110,21 @@ proc init
         {
             objtbl_b_set(TBL_OBJ, OBJ_03_CREST_WIND, 0);
         }
-        enemy(EM_02_CERBERUS, EB_03, F_ENEMY_11A_CERBERUS_0, SPAWN_FORCE, 2, 0, 1536, 0, 6500, 0, 24860, ENEMY_00_CERBERUS, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_02_CERBERUS, EB_03, F_ENEMY_11A_CERBERUS_0, SPAWN_FORCE, 2, 0, 1536, 0, 6500, 0, 24860, ENEMY_00_CERBERUS, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
     }
     else if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_SCENARIO, F_SCENARIO_LIBRARY_ENTERED, TRUE))
         {
-            enemy(EM_06_HUNTER, EB_02, F_ENEMY_11A_HUNTER_0, SPAWN_FORCE, 2, 0, 848, 0, 3826, 0, 22788, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_06_HUNTER, EB_02, F_ENEMY_11A_HUNTER_0, SPAWN_FORCE, 2, 0, 848, 0, 3826, 0, 22788, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            }
+            random_enemies();
         }
         if (ck(FG_COMMON, F_COMMON_C_REBECCA_RADIO_CALL_DUE, TRUE))
         {
@@ -139,7 +147,11 @@ proc init
     {
         if (ck(FG_SCENARIO, F_SCENARIO_LIBRARY_ENTERED, TRUE))
         {
-            enemy(EM_06_HUNTER, EB_02, F_ENEMY_11A_HUNTER_0, SPAWN_FORCE, 2, 0, 848, 0, 3826, 0, 22788, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_06_HUNTER, EB_02, F_ENEMY_11A_HUNTER_0, SPAWN_FORCE, 2, 0, 848, 0, 3826, 0, 22788, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+            }
+            random_enemies();
         }
     }
 }

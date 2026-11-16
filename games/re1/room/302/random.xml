@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="302" name="COURTYARD WATERFALL" tags="courtyard">
+    <door id="0" target="300:1" kind="unblock" allowed-locks="" no-unlock="true" requires="flag(COURTYARD_LIFT_POWER)">
+      <entrance x="20300" y="0" z="4700" d="1024"/>
+    </door>
+    <door id="1" target="301/END:1" allowed-locks="" no-unlock="true">
+      <entrance x="22800" y="0" z="26700" d="1024"/>
+    </door>
+    <door id="2" name="GATE TO GUARDHOUSE" target="304:0">
+      <entrance x="3500" y="0" z="23300" d="0"/>
+    </door>
+    <door id="3" name="LADDER TO CAVES" target="307:0" allowed-locks="" no-unlock="true" requires="flag(COURTYARD_LIFT_POWER)" door-rando="false">
+      <entrance x="14600" y="0" z="26000" d="1024"/>
+    </door>
+    <door id="3" name="LADDER TO CAVES" target="307:0" allowed-locks="" no-unlock="true" door-rando="true">
+      <entrance x="14600" y="0" z="26000" d="1024"/>
+    </door>
+    <flag name="COURTYARD_LIFT_POWER" requires="item(39)"/>
+    <enemies/>
+  </room>
+  <spot x="10217" y="0" z="3935" d="3469"/>
+  <spot x="10625" y="0" z="7821" d="3325"/>
+  <spot x="10802" y="0" z="13512" d="1013"/>
+  <spot x="11374" y="0" z="10211" d="245"/>
+  <spot x="12433" y="0" z="18537" d="413"/>
+  <spot x="12760" y="0" z="4585" d="2197"/>
+  <spot x="13426" y="0" z="13818" d="2621"/>
+  <spot x="14375" y="0" z="22277" d="1029"/>
+  <spot x="14536" y="0" z="11473" d="589"/>
+  <spot x="15071" y="0" z="4705" d="1437"/>
+  <spot x="15227" y="0" z="7673" d="2021"/>
+  <spot x="16248" y="0" z="15198" d="2189"/>
+  <spot x="16682" y="0" z="18574" d="2189"/>
+  <spot x="17753" y="0" z="12865" d="413"/>
+  <spot x="18645" y="0" z="9180" d="1589"/>
+  <spot x="20547" y="0" z="19530" d="1797"/>
+  <spot x="22255" y="0" z="16828" d="3997"/>
+  <spot x="23212" y="0" z="23918" d="749"/>
+  <spot x="24828" y="0" z="18650" d="3157"/>
+  <spot x="24850" y="0" z="22275" d="1605"/>
+  <spot x="3464" y="0" z="16382" d="45"/>
+  <spot x="4479" y="0" z="18081" d="3909"/>
+  <spot x="6057" y="0" z="22448" d="1045"/>
+  <spot x="6158" y="0" z="26123" d="1045"/>
+  <spot x="6753" y="0" z="19199" d="3045"/>
+  <spot x="7328" y="0" z="16552" d="2333"/>
+</random>

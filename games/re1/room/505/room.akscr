@@ -48,52 +48,92 @@ proc init
     }
     if (ck(FG_SCENARIO, F_SCENARIO_TYRANT_1_DEAD, FALSE))
     {
-        enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_0, SPAWN_FORCE, 2, 0, 15, 0, 4174, 0, 12125, ENEMY_00_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_0, SPAWN_FORCE, 2, 0, 15, 0, 4174, 0, 12125, ENEMY_00_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
         if (ck(FG_ENEMY, F_ENEMY_505_ZOMBIE_NAKED_0, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_0_2, SPAWN_FORCE, 2, 0, 2048, 0, 12430, 0, 18600, ENEMY_00_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_0_2, SPAWN_FORCE, 2, 0, 2048, 0, 12430, 0, 18600, ENEMY_00_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+            }
         }
         if (ck(FG_ENEMY, F_ENEMY_505_ZOMBIE_NAKED_0_2, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_0_3, SPAWN_FORCE, 2, 0, 2048, 0, 12430, 0, 18600, ENEMY_00_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_0_3, SPAWN_FORCE, 2, 0, 2048, 0, 12430, 0, 18600, ENEMY_00_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+            }
         }
     }
     if (ck(FG_SCENARIO, F_SCENARIO_TYRANT_1_DEAD, FALSE))
     {
-        enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_1, SPAWN_FORCE, 2, 0, 495, 0, 11847, 0, 3599, ENEMY_01_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_1, SPAWN_FORCE, 2, 0, 495, 0, 11847, 0, 3599, ENEMY_01_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
         if (ck(FG_ENEMY, F_ENEMY_505_ZOMBIE_NAKED_1, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_1_2, SPAWN_FORCE, 2, 0, 512, 0, 10316, 0, 6022, ENEMY_01_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_1_2, SPAWN_FORCE, 2, 0, 512, 0, 10316, 0, 6022, ENEMY_01_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+            }
         }
         if (ck(FG_ENEMY, F_ENEMY_505_ZOMBIE_NAKED_1_2, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_1_3, SPAWN_FORCE, 2, 0, 512, 0, 10316, 0, 6022, ENEMY_01_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_1_3, SPAWN_FORCE, 2, 0, 512, 0, 10316, 0, 6022, ENEMY_01_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+            }
         }
     }
     if (ck(FG_SCENARIO, F_SCENARIO_TYRANT_1_DEAD, FALSE))
     {
-        enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_2, SPAWN_FORCE, 2, 0, 2871, 0, 11775, 0, 1457, ENEMY_02_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_2, SPAWN_FORCE, 2, 0, 2871, 0, 11775, 0, 1457, ENEMY_02_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+        }
+        random_enemies();
         if (ck(FG_ENEMY, F_ENEMY_505_ZOMBIE_NAKED_2, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_2_2, SPAWN_FORCE, 2, 0, 1536, 0, 13096, 0, 4926, ENEMY_02_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_2_2, SPAWN_FORCE, 2, 0, 1536, 0, 13096, 0, 4926, ENEMY_02_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+            }
         }
         if (ck(FG_ENEMY, F_ENEMY_505_ZOMBIE_NAKED_2_2, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_2_3, SPAWN_FORCE, 2, 0, 1536, 0, 13096, 0, 4926, ENEMY_02_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_2_3, SPAWN_FORCE, 2, 0, 1536, 0, 13096, 0, 4926, ENEMY_02_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+            }
         }
     }
     if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
         if (ck(FG_SCENARIO, F_SCENARIO_TYRANT_1_DEAD, FALSE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_3, SPAWN_FORCE, 2, 0, 3103, 0, 21765, 0, 10142, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_3, SPAWN_FORCE, 2, 0, 3103, 0, 21765, 0, 10142, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+            }
+            random_enemies();
             if (ck(FG_ENEMY, F_ENEMY_505_ZOMBIE_NAKED_3, TRUE))
             {
-                enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_3_2, SPAWN_FORCE, 2, 0, 896, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_3_2, SPAWN_FORCE, 2, 0, 896, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+                }
             }
             if (ck(FG_ENEMY, F_ENEMY_505_ZOMBIE_NAKED_3_2, TRUE))
             {
-                enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_3_3, SPAWN_FORCE, 2, 0, 896, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_3_3, SPAWN_FORCE, 2, 0, 896, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+                }
             }
         }
         if (ck(FG_COMMON, F_COMMON_C_SELF_DESTRUCT_ALARM_SEEN, FALSE) && ck(FG_SCENARIO, F_SCENARIO_TYRANT_1_DEAD, TRUE) && ck(FG_COMMON, F_COMMON_PARTNER_LOST, FALSE))
@@ -129,21 +169,35 @@ proc init
     {
         if (ck(FG_SCENARIO, F_SCENARIO_TYRANT_1_DEAD, FALSE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_3, SPAWN_FORCE, 2, 0, 3103, 0, 21765, 0, 10142, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_3, SPAWN_FORCE, 2, 0, 3103, 0, 21765, 0, 10142, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+            }
+            random_enemies();
             if (ck(FG_ENEMY, F_ENEMY_505_ZOMBIE_NAKED_3, TRUE))
             {
-                enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_3_2, SPAWN_FORCE, 2, 0, 896, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_3_2, SPAWN_FORCE, 2, 0, 896, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+                }
             }
             if (ck(FG_ENEMY, F_ENEMY_505_ZOMBIE_NAKED_3_2, TRUE))
             {
-                enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_3_3, SPAWN_FORCE, 2, 0, 896, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+                if (!ENEMY_RANDOMIZER)
+                {
+                    enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_505_ZOMBIE_NAKED_3_3, SPAWN_FORCE, 2, 0, 896, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
+                }
             }
         }
     }
     if (ck(FG_SCENARIO, F_SCENARIO_TYRANT_1_DEAD, TRUE))
     {
-        enemy(EM_09_CHIMERA, EB_03, F_ENEMY_505_CHIMERA_0, SPAWN_FORCE, 2, 0, 0, 0, 13100, 0, 3070, ENEMY_00_CHIMERA, ANIM_00, 0, EVAR_01);
-        enemy(EM_09_CHIMERA, EB_03, F_ENEMY_505_CHIMERA_1, SPAWN_FORCE, 2, 0, 2072, 0, 10250, 0, 18760, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_01);
+        if (!ENEMY_RANDOMIZER)
+        {
+            enemy(EM_09_CHIMERA, EB_03, F_ENEMY_505_CHIMERA_0, SPAWN_FORCE, 2, 0, 0, 0, 13100, 0, 3070, ENEMY_00_CHIMERA, ANIM_00, 0, EVAR_01);
+            enemy(EM_09_CHIMERA, EB_03, F_ENEMY_505_CHIMERA_1, SPAWN_FORCE, 2, 0, 2072, 0, 10250, 0, 18760, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_01);
+        }
+        random_enemies();
     }
 }
 

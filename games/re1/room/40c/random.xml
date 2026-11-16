@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="40C" name="GUARDHOUSE PLANT 42" tags="guardhouse">
+    <door id="0" target="408:3" kind="unblock" allowed-locks="" door-rando="false">
+      <entrance x="3000" y="0" z="10200" d="0"/>
+    </door>
+    <door id="0" target="408:3" tags="segment-end" door-rando="true">
+      <entrance x="3000" y="0" z="10200" d="0"/>
+    </door>
+    <door id="1" target="40A:2">
+      <entrance x="2800" y="0" z="13600" d="0"/>
+    </door>
+    <flag name="PLANT_42_WEAK" requires="flag(VJOLT_ROOTS)"/>
+    <item id="3" flag="88" type="54" amount="3" group="64" name="KEY IN FIREPLACE"/>
+    <enemies id="0" flag="96" kind="npc"/>
+    <enemies id="1" kind="npc"/>
+    <enemies id="2" kind="npc"/>
+    <enemies id="3" kind="npc"/>
+    <enemies id="4" kind="npc"/>
+    <enemies id="5" kind="npc"/>
+  </room>
+</random>

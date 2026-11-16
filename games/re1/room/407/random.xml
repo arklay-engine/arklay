@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="407" name="GUARDHOUSE ROOM 002 BATHROOM" tags="guardhouse">
+    <door id="0" target="406:1">
+      <entrance x="3100" y="0" z="6400" d="3072"/>
+    </door>
+    <item id="1" flag="109" type="11" amount="15" group="8" name="CLIP IN SINK"/>
+    <enemies exclude="4" max-difficulty="0"/>
+  </room>
+  <spot x="6158" y="0" z="9581" d="1064"/>
+  <spot x="6187" y="0" z="7047" d="2136"/>
+</random>

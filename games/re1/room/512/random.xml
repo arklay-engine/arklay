@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="512" name="LABORATORY B3 CELL" tags="lab">
+    <door id="0" target="50B:1">
+      <!-- doors.csv lists 512:0 twice with the same entrance -->
+      <entrance x="5600" y="0" z="10000" d="1024"/>
+    </door>
+  </room>
+</random>

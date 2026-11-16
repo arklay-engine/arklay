@@ -922,6 +922,7 @@ mod tests {
             path: PathBuf::from("/packs/re1.akpak"),
             stale: false,
             error: None,
+            seed: None,
             thumbnail: None,
             official: false,
         }];

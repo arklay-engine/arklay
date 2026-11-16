@@ -27,6 +27,23 @@
 
 proc init
 {
+    if (ENEMY_RANDOMIZER)
+    {
+        if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
+        {
+            if (ck(FG_COMMON, F_COMMON_C_REBECCA_50C_SCENE, TRUE) && ck(FG_SCENARIO, F_SCENARIO_SELF_DESTRUCT_ON, FALSE))
+            {
+            }
+            else
+            {
+                random_enemies();
+            }
+        }
+        else
+        {
+            random_enemies();
+        }
+    }
     door_aot_set(AOT_00_DOOR_510, 11300, 15800, 3000, 2900, 12, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_510_MAZE_B, 12200, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_01_MESSAGE_ELEVATOR_POWER_SWITCH, 17700, 8300, 2100, 1600, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 0, 0, 0, 0);
     aot_set(AOT_02_MESSAGE_ACTIVATOR, 5800, 4400, 2100, 1700, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 0, 0, 0, 0);
@@ -45,7 +62,10 @@ proc init
         {
             aot_set(AOT_03_MESSAGE_WESKER_BODY, 8500, 3226, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 71, 0, 0, 0);
             enemy(EM_24_NPC_WESKER, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 2000, 0, 9000, 0, 3726, ENEMY_00_WESKER, ANIM_00, 0, EVAR_00);
-            enemy(EM_09_CHIMERA, EB_03, F_ENEMY_511_CHIMERA_1, SPAWN_FORCE, 2, 0, 2048, 0, 10600, 0, 4000, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);
+            if (!ENEMY_RANDOMIZER)
+            {
+                enemy(EM_09_CHIMERA, EB_03, F_ENEMY_511_CHIMERA_1, SPAWN_FORCE, 2, 0, 2048, 0, 10600, 0, 4000, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);
+            }
         }
     }
     evt_exec(0, TASK_09, steam_jet_1);

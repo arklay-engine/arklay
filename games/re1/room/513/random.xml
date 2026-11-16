@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="513" name="LABORATORY B2 TYRANT" tags="lab">
+    <door id="0" target="514:0" allowed-locks="" no-unlock="true" randomize="false">
+      <entrance x="4700" y="0" z="25500" d="1024"/>
+    </door>
+    <item id="2" flag="95" type="55" amount="2" group="32" name="MASTER KEY" optional="true"/>
+    <item id="4" flag="207" type="11" amount="15" group="512" name="CLIP NEAR DOOR"/>
+    <enemies id="1" flag="112" kind="npc"/>
+  </room>
+</random>

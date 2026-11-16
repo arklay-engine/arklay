@@ -337,9 +337,11 @@ const TIGER_ROOM: u8 = 0x0c;
 /// the player damages room 30C's web when it lands within `range + 500` of
 /// it. Returns true when the web was in range, hit or not.
 fn web_hit_check(game: &mut GameState, range: i32, x: i16, z: i16) -> bool {
+    // A generated game's copy of 30C is the Black Tiger room too.
+    let origin = game.origin();
     if game.entities[WEB_SLOT].id != WEB_ENTITY
-        || game.id.stage != TIGER_ROOM_STAGE
-        || game.id.room != TIGER_ROOM
+        || origin.stage != TIGER_ROOM_STAGE
+        || origin.room != TIGER_ROOM
     {
         return false;
     }

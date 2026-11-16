@@ -103,9 +103,11 @@ not run it after every edit.
 | CI | `./scripts/check.sh --ci` | runs on every PR in GitHub Actions; run locally only when debugging a CI-only failure | |
 | Release | `./scripts/check.sh --full` / `--soak`, `--test perf_real` | release cycle only, or when the task explicitly asks | 30+ min |
 
-- The session tier is fmt, clippy, the unit and fast integration tests, and
-  the docs build (`cargo doc`, whose lints CI enforces), all in
-  `test-release`. It prints each step's time and what it skipped.
+- The session tier is fmt, clippy, the unit and fast integration tests, the
+  tests of the library packages (`crates/arklay-routing`,
+  `crates/arklay-biorand`), and the docs build (`cargo doc`, whose lints CI
+  enforces), all in `test-release`. It prints each step's time and what it
+  skipped.
 - **Run it unfiltered:** `./scripts/check.sh`, with no `grep` or `tail`. It
   prints one line per step and the end of a failing step's log. Its last line
   is the verdict (`all green` or `FAILED at: ...`), and its exit status is

@@ -109,6 +109,7 @@
 #define F_SCENARIO_FADE_MENU_LATCH 0x7D                     // Picks the fade-in at gameplay entry; cleared when the menu closes (engine).
 #define F_SCENARIO_ROCKET_UNLOCK 0x7E                       // The rocket launcher is unlocked for the next run (engine).
 #define F_SCENARIO_HAS_RADIO 0x7F                           // The radio was picked up (engine).
+#define F_SCENARIO_C0 0xC0                                  // Raised by BioRand's DisableCutscenes for Chris; no original script reads it.
 
 #define F_COMMON_INTRO_SEEN 0x00                            // The opening main hall scene has played (106).
 #define F_COMMON_HALL_EARLY_RETURN 0x01                     // Came back to the hall before seeing Kenneth's zombie: Wesker's reminder played (106), and the dining room only says there is more to investigate (105).
@@ -263,7 +264,9 @@
 #define F_LOCK_201_215 0x0C
 #define F_LOCK_204_20D 0x0D
 #define F_LOCK_204_205 0x0E
+#define F_LOCK_0F 0x0F                                      // Unused by the original rooms; a randomized lock may take it.
 #define F_LOCK_207_208 0x10
+#define F_LOCK_11 0x11                                      // Unused by the original rooms; a randomized lock may take it.
 #define F_LOCK_103_104 0x12                                 // Unlocked from the 103 side.
 #define F_LOCK_104_110 0x13                                 // Unlocked from the 110 side.
 #define F_LOCK_10A_10B 0x14

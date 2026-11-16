@@ -11,6 +11,11 @@ is a digit `1` to `7` or a letter `a` to `g`. An id may carry a fourth
 character after the room, for packs that keep a room per scenario
 (`room/1000/`).
 
+A room past the original games' stages and rooms (a generated game's) has
+the long id instead, two hex digits each for the stage and the room:
+`room/09-40/`, and `09-40-1` for one player's RDT. An id with a
+three-character form has only that one.
+
 One folder holds every **variant** of the room: each player's game and each
 visit. What differs between variants is said in `room.xml` (see
 [Variants](#variants)), not by more folders.
@@ -151,6 +156,31 @@ player 1's game; `MANSION1` and `MANSION2` the first and second visit.
 The room is read for the variant being entered, and an element whose
 `when` fails is not there. A list (lights, walk zones, camera switches,
 footsteps) is the elements that hold, in order.
+
+### Origins and door targets
+
+A room copied from another names it in `<room origin="106">`, and then
+plays as that room wherever the engine keys behaviour to an original room:
+its quirks, music and sound rows, effect and light tables, masks, the
+second mansion visit, and the stage and room bytes its scripts read. Its
+files, its door targets and saves use its own id, and its text keys fall
+back to the origin's. A room without an origin is its own.
+
+A door's script target byte names only an original room, so a door leading
+to any other names it in `<doors>`:
+
+```xml
+<doors>
+  <door aot="3" target="09-40"/>
+  <door aot="4" next="0x45" target="09-41"/>
+</doors>
+```
+
+`aot` is the AOT slot the script arms the door in. `next` limits an entry to
+the door whose target byte is that value, and wins over an entry without
+one. The door keeps its own animation, the player and the visit are the
+player's and the scenario's, and a door with no entry goes where its byte
+says.
 
 ### Slots
 

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<random>
+  <room key="30B" name="CAVES FIRST BOULDER" tags="caves">
+    <door id="0" name="Flamethrower Door" target="307/BACK:2" lock="39" allowed-locks="" no-unlock="true" door-rando="false" player="chris">
+      <entrance x="23100" y="0" z="18700" d="1024"/>
+    </door>
+    <door id="0" name="Flamethrower Door" target="307/BACK:2" lock="39" allowed-locks="" no-unlock="true" door-rando="true" player="chris">
+      <entrance x="23100" y="0" z="18700" d="1024"/>
+    </door>
+    <door id="0" target="307/BACK:2" player="jill">
+      <entrance x="23100" y="0" z="18700" d="1024"/>
+    </door>
+    <door id="1" target="30C:0" kind="unblock">
+      <entrance x="27700" y="0" z="3300" d="3072"/>
+    </door>
+    <item id="2" flag="125" type="14" amount="6" group="16" name="MAGNUM ROUNDS BEHIND BOULDER" player="chris"/>
+    <item id="2" flag="126" type="18" amount="6" group="16" name="FLAME ROUNDS BEHIND BOULDER" player="jill"/>
+    <enemies id="0" flag="122" exclude="2 3 10"/>
+    <enemies id="1" flag="123" exclude="2 3 10"/>
+  </room>
+</random>
