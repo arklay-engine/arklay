@@ -522,8 +522,9 @@ struct SessionSnapshot {
     saves: SaveSnapshot,
     /// The item catalog, for each item's kind and a weapon's ammunition.
     item_defs: std::sync::Arc<crate::item_catalog::ItemCatalog>,
-    /// The player stands in the guardhouse drug store, where chemicals mix.
-    drug_store: bool,
+    /// What a combine runs under here: the guardhouse drug store, where
+    /// chemicals mix, BioRand's herb mixes and the authentic ammo count.
+    combine_rules: game::CombineRules,
     /// The lab computer terminal, while it is up.
     computer: Option<ComputerSnapshot>,
     /// Room 408's numeric panel, while it runs.
@@ -1142,7 +1143,7 @@ fn combine_result_table(
         &snapshot.inventory,
         slot,
         target,
-        snapshot.drug_store,
+        snapshot.combine_rules,
     ) {
         Ok(outcome) => {
             table.set("result", if outcome.herb { "herb" } else { "applied" })?;
@@ -1509,7 +1510,7 @@ impl SessionSnapshot {
                 ribbon_item: game.ink_ribbon_item(),
             },
             item_defs: game.item_defs.clone(),
-            drug_store: game.is_drug_store(),
+            combine_rules: game.combine_rules(),
             computer: computer_snapshot(game),
             panel: panel_snapshot(game),
         }
