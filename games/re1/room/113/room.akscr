@@ -41,8 +41,8 @@ proc init
         }
         obj(OBJ_00_WATER, OF_ACTIVE, SCA_NONE, 21000, 0, 21000, 1024, 0, 0, 0, 0, 0, 0, 0, 0);
         obj(OBJ_01_WATER_LOWER, OF_ACTIVE, SCA_NONE, 20000, 0, 20000, 1024, 0, 0, 0, 0, 0, 0, 0, 0);
-        aot_set(AOT_03_EVENT_BATHTUB, 4500, 6300, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 1, 0, 0, 0);
-        aot_set(AOT_04_EVENT_BATHTUB_KEY, 4500, 6300, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 4, 0, 0, 0);
+        aot_set(AOT_03_EVENT_BATHTUB, 4500, 6300, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_bathtub, 0, 0, 0);
+        aot_set(AOT_04_EVENT_BATHTUB_KEY, 4500, 6300, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, examine_drained_bathtub, 0, 0, 0);
     }
     else if (ck(FG_STATUS, F_STATUS_PLAYER_JILL, FALSE))
     {
