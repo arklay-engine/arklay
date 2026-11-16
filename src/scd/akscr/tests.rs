@@ -1215,6 +1215,132 @@ fn decompile_names_aots_events_and_messages() {
     assert_eq!(compiled, original, "{text}");
 }
 
+/// An `SCE_NONE` AOT that an `aot_delete` later makes `SCE_EVENT` starts the
+/// event its data names, so that number decompiles as an event name, which
+/// the merge renames per variant. One that never becomes an event keeps its
+/// number.
+#[test]
+fn decompile_names_the_event_of_an_aot_that_becomes_one() {
+    let source = ".version 1
+
+.init
+.block
+    aot_set                 4, 0, 0, 0, 0, SCE_NONE, 0, 9, 0, 1, 0, 0, 0
+    aot_set                 5, 0, 0, 0, 0, SCE_NONE, 0, 9, 0, 1, 0, 0, 0
+    aot_reset               6, SCE_NONE, 0, 9, 0, 0
+    end                     0
+
+.main
+.block
+    aot_delete              4, SCE_EVENT, 0
+    aot_delete              6, SCE_EVENT, 0
+    end                     0
+
+.event event_00
+    evt_finish
+
+.event event_01
+    evt_finish
+";
+    let text = decompiles_exactly(source);
+    for expected in [
+        "aot_set(AOT_04_NONE, 0, 0, 0, 0, SCE_NONE, 0, 9, 0, on_aot_04_none, 0, 0, 0);",
+        "aot_set(AOT_05_NONE, 0, 0, 0, 0, SCE_NONE, 0, 9, 0, 1, 0, 0, 0);",
+        "aot_reset(AOT_06_NONE, SCE_NONE, 0, 9, on_aot_06_none, 0);",
+        "event on_aot_06_none",
+        "event on_aot_04_none",
+    ] {
+        assert!(text.contains(expected), "{expected}\n{text}");
+    }
+}
+
+/// The checked-in room scripts name every event an AOT starts. A number is
+/// an index into the merged script's events, which is not the index the
+/// original RDT of a player-only branch used (room 308's flamethrower hook
+/// had Chris's event 4, Jill's `go_on_together` in the merged script).
+#[test]
+fn checked_in_room_scripts_name_aot_events() {
+    use std::collections::{HashMap, HashSet};
+    /// The arguments of the first whole-word call to `name` on `line`.
+    fn call_args<'a>(line: &'a str, name: &str) -> Option<Vec<&'a str>> {
+        let at = line.match_indices(&format!("{name}(")).find(|&(at, _)| {
+            !line[..at]
+                .chars()
+                .next_back()
+                .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+        })?;
+        let rest = &line[at.0 + name.len() + 1..];
+        let body = &rest[..rest.find(')')?];
+        Some(body.split(',').map(str::trim).collect())
+    }
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("games/re1/room");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return;
+    };
+    let mut checked = 0;
+    let mut numbered = Vec::new();
+    for entry in entries {
+        let path = entry.unwrap().path().join(super::ROOM_SCRIPT_FILE);
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let defines: HashMap<&str, i64> = text
+            .lines()
+            .filter_map(|line| {
+                let mut words = line.strip_prefix("#define ")?.split_whitespace();
+                let name = words.next()?;
+                Some((name, preprocess::parse_number(words.next()?)?))
+            })
+            .collect();
+        let aot = |name: &str| {
+            defines
+                .get(name)
+                .copied()
+                .or_else(|| preprocess::parse_number(name))
+        };
+        // The AOTs an `aot_delete` makes events: they keep their data.
+        let retyped: HashSet<i64> = text
+            .lines()
+            .filter_map(|line| call_args(line, "aot_delete"))
+            .filter(|args| args.get(1) == Some(&"SCE_EVENT"))
+            .filter_map(|args| aot(args[0]))
+            .collect();
+        for (number, line) in text.lines().enumerate() {
+            // The type and the event field of `aot_set` and `aot_reset`.
+            let (args, sce, event) = if let Some(args) = call_args(line, "aot_set") {
+                (args, 5, 9)
+            } else if let Some(args) = call_args(line, "aot_reset") {
+                (args, 1, 4)
+            } else {
+                continue;
+            };
+            let starts_event = match args.get(sce) {
+                Some(&"SCE_EVENT") => true,
+                Some(&"SCE_NONE") => aot(args[0]).is_some_and(|aot| retyped.contains(&aot)),
+                _ => false,
+            };
+            let Some(field) = args.get(event).filter(|_| starts_event) else {
+                continue;
+            };
+            checked += 1;
+            if preprocess::parse_number(field).is_some() {
+                numbered.push(format!(
+                    "{}:{}: {}",
+                    path.display(),
+                    number + 1,
+                    line.trim()
+                ));
+            }
+        }
+    }
+    assert!(checked > 0, "no AOT events under {}", dir.display());
+    assert!(
+        numbered.is_empty(),
+        "AOT events named by number:\n{}",
+        numbered.join("\n")
+    );
+}
+
 /// Engine values decompile to the compiler's names, and a room's enemy
 /// slots and voice lines to defines of their own.
 #[test]

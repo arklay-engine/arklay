@@ -1,0 +1,47 @@
+# room 118 as Claire: EQUIP the spark shot from slot 2 as play begins (so that Pl_weapon_ch loads its own clips), wait out the zombie's hold, aim at the zombies and fire every 60 ticks (#491)
+346 start
+350
+382 down
+386
+402 confirm
+406
+422 confirm
+426
+462 start
+466
+620 aim
+640 aim fire
+644 aim
+700 aim fire
+704 aim
+760 aim fire
+764 aim
+820 aim fire
+824 aim
+880 aim fire
+884 aim
+940 aim fire
+944 aim
+1000 aim fire
+1004 aim
+1060 aim fire
+1064 aim
+1120 aim fire
+1124 aim
+1180 aim fire
+1184 aim
+1240 aim fire
+1244 aim
+1300 aim fire
+1304 aim
+1360 aim fire
+1364 aim
+1420 aim fire
+1424 aim
+1480 aim fire
+1484 aim
+1540 aim fire
+1544 aim
+1600 aim fire
+1604 aim
+1760

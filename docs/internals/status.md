@@ -487,7 +487,9 @@ the locomotion machine as the fall-through. Documented deviations: the
 joint-anchored body correction
 (`EntityUpdateWeaponJoint`, subsumed by the port's per-frame pose composition)
 and the projectile effect behaviours' own damage (the flamethrower, acid,
-flame and rocket rounds) remain as before. The beretta's detached magazine
+flame and rocket rounds) remained as before; the rounds and the rocket landed
+later as effect behaviours 43 and 45, and the flamethrower's flame as
+behaviour 37 (`effect_behavior_flamethrower`). The beretta's detached magazine
 (the accessory joint 15) landed later with issue #124: the reload's frame-0xa
 volley gate arms the player EMD's own 16th mesh object and
 `weapons::update_detached_clip` runs the original's fall/bounce physics with
@@ -863,10 +865,12 @@ Still open, by design:
 
 - The DC-only Forest zombie (`0x16`) and the DC branches the port does not
   model.
-- The documented render contracts: joint-object gore chunks/trails, the ribbon rasterisation, the Plant 42 DIED-screen
-  joint-hide pose, and the flamethrower/acid/rocket per-frame projectile
-  damage. Each is catalogued in the module docs and
-  `docs/internals/deviations/m18.md`.
+- The documented render contracts: joint-object gore chunks/trails, the ribbon rasterisation and the Plant 42 DIED-screen
+  joint-hide pose. Each is catalogued in the module docs and
+  `docs/internals/deviations/m18.md`. (The projectile effects' own damage is
+  no longer open: the grenade rounds (behaviour 43), the rocket (45) and the
+  flamethrower's flame (37) all run the damage pipeline from their own
+  position.)
 
 RE2 work is tracked by the milestone issue #244 and its sub-issues. R0
 (#15) adds conversion only: `convert-game` detects an RE2 PC install (or takes

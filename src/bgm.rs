@@ -310,16 +310,17 @@ pub fn update_room_bgm(game: &mut GameState, id: RoomId, from: Option<RoomId>) -
                 start_secondary = true;
             } else {
                 let changed = u16::from(effective) ^ previous;
-                for index in 0..BGM_CHANNELS {
+                let channels = game.bgm.channels.iter_mut().take(BGM_CHANNELS);
+                for (index, channel) in channels.enumerate() {
                     let bit = 8u16 << index;
                     if changed & bit == 0 {
                         continue;
                     }
-                    if game.bgm.channels[index].track.is_none() {
+                    if channel.track.is_none() {
                         continue;
                     }
                     if u16::from(effective) & bit != 0 {
-                        game.bgm.channels[index].restart = true;
+                        channel.restart = true;
                     }
                     // A cleared bit is stopped by `apply_live`; only `bgm_stop`
                     // resets the channel's volume.

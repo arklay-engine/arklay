@@ -1,0 +1,95 @@
+# leon_a_21a_116: Leon A from the manhole's ladder in the kennel (21A) west to door 1 (the dogs sleep), 219 to door 0, 216 east to its door 0, 211 from the west corner across to door 7 (its dog bites twice), 20F south to door 0 and 20B from its east end to door 2 (116)
+345 up run
+356 up run left
+357 up run
+384 up run left
+409 up run
+414 up run left
+415 up run
+421
+423 right
+441 action
+443
+478 up run left
+612 up run
+637 up run left
+638 up run
+649 up run left
+666 up run
+690 up run left
+691 up run
+698 up run left
+699 up run
+702
+704 right
+718 action
+720
+755 up run
+954 up run right
+955 up run
+958
+960 right
+963 action
+965
+1000 up run left
+1028 up run
+1041 up run left
+1042 up run
+1069 up run left
+1070 up run
+1074 up run right
+1093 up run
+1178 up run left
+1179 up run
+1184 up run right
+1185 up run
+1202 up run right
+1203 up run
+1215 up run left
+1236 up run
+1318 up run left
+1319 up run
+1325 up run right
+1376 up run left
+1390
+1392 left
+1432 action
+1434
+1469 up run right
+1546 up run left
+1583 up run
+1638 up run right
+1639 up run
+1691 up run right
+1692 up run
+1778 up run right
+1779 up run
+1802 up run right
+1803 up run
+1809 up run right
+1824 up run
+1838 up run right
+1839 up run
+1852 up run right
+1853 up run
+1856
+1858 left
+1877 action
+1879
+1914 up run left
+1934 up run
+1947 up run left
+1948 up run
+1991 up run left
+1992 up run
+1994 up run left
+1996 up run
+2001 up run right
+2043 up run left
+2045 up run right
+2094 up run
+2100 up run right
+2102
+2104 left
+2119 action
+2121

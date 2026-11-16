@@ -1,0 +1,63 @@
+# Leon A from 216's door 1 arrival in 219 through Ada's scene and door 3 to Ben's cell (301), the talk with Ben and Ada, the B1 map closed as soon as it can be, and the Manhole Opener taken (#656 Part 3) (oracle/re2.md, "Leon A to the Manhole Opener")
+# 219: once Ada's scene (main_03) is over, west along the cells' corridor, north at its end and west to door 3, and its presses
+700 up run left
+702 up run
+740 up run left
+741 up run
+748 up run left
+749 up run
+750 right
+761 up run right
+765 up run
+773 up run right
+774 up run
+794 up run right
+795 up run
+796 up run right
+797 up run
+798 left
+810 up run left
+814 up run
+909 left
+923 up
+938
+939 action
+941
+# the presses at door 3
+961 action
+963
+984 up
+# 301: up until Leon moves, then south-west into the talk's area
+1282 up run
+1336
+# the talk's sce_84(2) opens the B1 map (4552); once it waits for a key (4563), cancel closes it
+4570 run
+4572
+# Leon moves again on 4590: left to face south-west, then run into the Manhole Opener's area (item aot 5) until the bars stop him
+4590 left
+4611 up run
+4628
+# a press every 12 ticks until the get-item window takes the Opener into slot 6, then a close
+4632 action
+4634
+4644 action
+4646
+4656 action
+4658
+4668 action
+4670
+4680 action
+4682
+4692 action
+4694
+4704 action
+4706
+4716 action
+4718
+4728 action
+4730
+4800 action
+4802
+# Leon turns once he moves again
+4850 right
+4870

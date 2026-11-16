@@ -218,8 +218,8 @@ pub fn pl_bow(quiver: &mut Quiver, world: &mut World<'_>) {
     // is let go this tick none after it moves.
     let mut reach = REACH;
     let mut moving = true;
-    for index in 0..BOLTS {
-        if !tick_bolt(&mut quiver.bolts[index], world, &mut reach, &mut moving) {
+    for bolt in &mut quiver.bolts {
+        if !tick_bolt(bolt, world, &mut reach, &mut moving) {
             return;
         }
     }
@@ -336,6 +336,7 @@ fn effect(world: &mut World<'_>, word: u32, dir: i16, at: [i16; 3]) {
         at,
         motion: None,
         on: None,
+        turn: None,
     }));
 }
 

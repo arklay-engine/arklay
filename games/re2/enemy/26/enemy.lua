@@ -37,7 +37,8 @@ local EFFECTS <const> = {
 }
 
 -- `0x528893`'s bytes by the weapon that killed it: the death's effect row.
-local DEATH_EFFECTS <const> = { [10] = 3, [11] = 4 }
+-- The flamethrower's (0x10) is weapon 0xA's; the rest are 0.
+local DEATH_EFFECTS <const> = { [10] = 3, [11] = 4, [0x10] = 3 }
 
 local function i16(value)
     value = value & 0xFFFF

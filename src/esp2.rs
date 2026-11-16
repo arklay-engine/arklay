@@ -53,7 +53,28 @@ const FLAGS_NEW: u16 = 0xa003;
 
 /// `Esp_tbl`'s entries with a port here.
 pub fn ported(id: u8) -> bool {
-    matches!(id, 0..=4 | 6 | 0x0b..=0x0d | 0x19 | 0x20 | 0x2B | 0x34 | 0x45 | 0x4E | 0x52)
+    matches!(
+        id,
+        0..=4
+            | 6
+            | 0x0b..=0x0e
+            | 0x19
+            | 0x20
+            | 0x2B
+            | 0x34
+            | 0x36..=0x39
+            | 0x3E
+            | 0x3F
+            | 0x44
+            | 0x45
+            | 0x46
+            | 0x47
+            | 0x4B
+            | 0x4E
+            | 0x52
+            | 0x55
+            | 0x57
+    )
 }
 
 /// The `kind`s of texture a type's sprites sample.
@@ -475,6 +496,13 @@ pub struct Effects {
     pub blasts: Vec<crate::weapon2::BlastEffect>,
     /// The player's `Type & 0xFFF`, which `Esp_11` reads.
     pub weapon: u8,
+    /// The body the spark shot's last shot found (the player's `Sce_free2`
+    /// and `Sce_free3`), by slot, which `Esp_0E` strikes: the caller sets it
+    /// before a tick.
+    pub spark_target: Option<usize>,
+    /// What `Esp_0E` left fade 0 at this tick (`Fade_set(0x100, 0)` and
+    /// `Fade_adjust`): its level, or `-1` for `Fade_off`. The caller takes it.
+    pub fade: Option<i16>,
     /// Where each room object's twinkle sits on its matrix now, by slot: the
     /// caller sets them before a tick, for the slots that follow an object.
     pub objects: Vec<Option<[i16; 3]>>,
@@ -482,6 +510,12 @@ pub struct Effects {
     /// slots on a part ([`Self::anchors_in_use`]): the caller sets them before
     /// a tick. `Game_loop` draws every body before `Esp_move`.
     pub(crate) anchors: Vec<(Anchor, crate::player2::Matrix)>,
+    /// The bodies' boxes in `player_work`'s order, the player's first, for
+    /// `Oba_ck_esp`: the caller sets them before a tick.
+    pub oba: Vec<crate::zombie2::Oba>,
+    /// `fg_common`'s 0x76, which turns room 407's steam off (`Esp_4B`): the
+    /// caller sets it before a tick.
+    pub steam_off: bool,
 }
 
 /// The player as `FUN_004d8260` tests them against an effect, and what the
@@ -499,6 +533,8 @@ pub struct Target {
     /// The routine the last hit set: `[2, 0, 0, 0]`, or `[3, 0, 0, 0]` when
     /// `Pl_life_down` said it killed.
     pub routine: Option<u8>,
+    /// `Pl_life_down` said it killed: `fg_system`'s `0x4000000`.
+    pub died: bool,
     /// `+0x1d3`, `Damage_cnt`: a hit waits until it's 0 again. A killing
     /// hit, and a poisoning one, set its `0x80`.
     pub damage_cnt: u8,
@@ -535,6 +571,7 @@ impl Target {
         if result == 2 {
             self.damage_cnt |= 0x80;
             self.routine = Some(3);
+            self.died = true;
         }
         true
     }
@@ -622,6 +659,17 @@ impl Effects {
             }
         }
         Some(first)
+    }
+
+    /// `Esp_call3D`'s turn (`+0x44`), on a slot `Esp_call` just made and the
+    /// slots that die with it.
+    pub fn turn(&mut self, first: usize, rotation: [i16; 3]) {
+        for (index, slot) in self.slots.iter_mut().enumerate() {
+            if index == first || slot.flags != 0 && first != 0 && usize::from(slot.parent) == first
+            {
+                slot.rotation = rotation;
+            }
+        }
     }
 
     /// What `FUN_004d6150` writes over a grenade's first block once
@@ -722,6 +770,26 @@ impl Effects {
         self.call_anchored(kind, row, size, dir, anchor, matrix, parent.local, true)
     }
 
+    /// `Esp_call3` on the copy of the matrix the slot was started on
+    /// (`+0x4c`), at `point` on it.
+    fn call_on_slot_matrix(
+        &mut self,
+        parent: &Slot,
+        kind: u8,
+        row: u8,
+        size: u16,
+        dir: i16,
+        point: [i16; 3],
+    ) -> Option<usize> {
+        match (parent.anchor, parent.hand) {
+            (Some(anchor), Some((m, t))) => {
+                let matrix = crate::player2::Matrix { m, t };
+                self.call_anchored(kind, row, size, dir, anchor, matrix, point, true)
+            }
+            _ => self.call(kind, row, size, dir, parent.base, true),
+        }
+    }
+
     /// The parts the live slots were started on, each once: the `anchors` a
     /// tick needs.
     pub fn anchors_in_use(&self) -> Vec<Anchor> {
@@ -743,6 +811,21 @@ impl Effects {
                 slot.kill();
             }
         }
+    }
+
+    /// A room's bank holding one empty effect of `kind`, row 0, for other
+    /// modules' tests of what calls and kills an effect.
+    #[cfg(test)]
+    pub(crate) fn test_enter_room_with(&mut self, kind: u8, row: u8) {
+        let mut block = [0u8; BLOCK_LEN];
+        block[18..20].copy_from_slice(&0x8001u16.to_le_bytes());
+        self.enter_room(tests::bank_rows(kind, &[(row, &[block])]));
+    }
+
+    /// Whether a slot is live, for other modules' tests.
+    #[cfg(test)]
+    pub(crate) fn test_live(&self, slot: usize) -> bool {
+        self.slots[slot].live()
     }
 
     /// A slot's place, for other modules' tests.
@@ -944,6 +1027,21 @@ impl Effects {
                 self.grenade_flight(index, sca);
             }
             0x0f => self.grenade_flight(index, sca),
+            // `Esp_17`: a rocket leaves smoke behind it.
+            0x17 => {
+                self.call(3, 0x0A, 0x1800, 0, slot.pos, true);
+            }
+            0x18 => self.rocket_flight(index, sca),
+            0x46 => self.flame(index, sca),
+            0x0e => self.spark_strike(index),
+            0x3e => self.spark_miss(index),
+            // `Esp_3F`: a spark that meets a wall is hidden.
+            0x3f => {
+                let ground = Self::ground_masked(sca, slot.pos, 0x80);
+                if ground.blocked || ground.under_record {
+                    self.slots[index].flags &= !FLAG_VISIBLE;
+                }
+            }
             // `Esp_16`: a puff of smoke left behind each tick, half again its size.
             0x16 => {
                 let size = (u32::from(slot.size) * 0x96 / 100) as u16;
@@ -998,17 +1096,7 @@ impl Effects {
             // `Esp_20`: what's thrown hits the player in reach, and takes the
             // behaviour `+2` names; or swells as it goes.
             0x20 => {
-                let hit = self
-                    .target
-                    .as_mut()
-                    .is_some_and(|target| target.hit(slot.pos, 800, 20));
-                if hit {
-                    if slot.row & 8 != 0
-                        && let Some(target) = self.target.as_mut()
-                    {
-                        target.poisoned = true;
-                        target.damage_cnt |= 0x80;
-                    }
+                if self.thrown_hit(&slot, 800) {
                     self.behave(index, slot.start, sca);
                     return;
                 }
@@ -1021,6 +1109,128 @@ impl Effects {
                 let grow = (u32::from(this.scale[1]) * 5 / 1000) as u16;
                 this.scale[1] = this.scale[1].wrapping_add(grow);
             }
+            // `Esp_36`: `Esp_10`'s start of a fall, then `Esp_38` falls it.
+            0x36 => {
+                self.behave(index, 0x10, sca);
+                let this = &mut self.slots[index];
+                this.update = 0x38;
+                this.rotation[1] = this.next_flags as i16;
+            }
+            // `Esp_38`: what's spat down hits the player in reach and takes
+            // the behaviour `+2` names; in water, or near the ground 700
+            // below it, it splashes (kind 3 row 0xF, `Esp_call3`) and does the
+            // same; against a record `Esp_05`'s way picks `+2` or `+3`.
+            0x38 => {
+                if self.thrown_hit(&slot, 600) {
+                    self.behave(index, slot.start, sca);
+                    return;
+                }
+                let [x, y, z] = slot.pos.map(i32::from);
+                let level = crate::zombie2::water_ck(&self.water, x, z);
+                let splash = if level != 0 && i32::from(level) < y {
+                    true
+                } else {
+                    let probe = [x, y + 700, z];
+                    let ground = sca.map_or_else(
+                        || crate::sca::Ground {
+                            blocked: probe[1] > 0,
+                            ..Default::default()
+                        },
+                        |sca| crate::sca::ground_at(sca, probe, 2, 0x2000),
+                    );
+                    if ground.height < probe[1] {
+                        true
+                    } else {
+                        if ground.blocked || ground.under_record {
+                            let id = if ground.height == slot.ground {
+                                slot.count
+                            } else {
+                                slot.start
+                            };
+                            self.behave(index, id, sca);
+                        }
+                        self.slots[index].ground = ground.height;
+                        false
+                    }
+                };
+                if splash {
+                    self.call(3, 0x0F, 0x2800, 0, slot.pos, true);
+                    self.behave(index, slot.start, sca);
+                }
+            }
+            // `Esp_37`: a spat blob narrows and lengthens as it falls, fast
+            // for its first 20 ticks (counted in `+0x1b`) and slowly after.
+            0x37 => {
+                let this = &mut self.slots[index];
+                let [wide, tall] = this.scale.map(u32::from);
+                let (narrow, lengthen) = if this.generation < 0x14 {
+                    this.generation += 1;
+                    (50, 90)
+                } else {
+                    (5, 10)
+                };
+                this.scale[0] = (wide - wide * narrow / 1000) as u16;
+                this.scale[1] = (tall + tall * lengthen / 1000) as u16;
+            }
+            // `Esp_39`: a blob that came down rests on the water or the
+            // ground and squashes, then splashes as `Esp_34`, 30% bigger.
+            0x39 => {
+                let [x, _, z] = slot.pos.map(i32::from);
+                let level = crate::zombie2::water_ck(&self.water, x, z);
+                if level != 0 && i32::from(level) < i32::from(slot.pos[1]) {
+                    let this = &mut self.slots[index];
+                    this.accel[1] = 0;
+                    this.velocity[1] = 0;
+                    this.pos[1] = level;
+                }
+                let this = self.slots[index];
+                let y = i32::from(this.pos[1]);
+                let ground = Self::ground(sca, this.pos).height;
+                let this = &mut self.slots[index];
+                if ground < y {
+                    this.accel[1] = 0;
+                    this.velocity[1] = 0;
+                }
+                let [wide, tall] = this.scale.map(u32::from);
+                if this.scale[1] > 0x1000 {
+                    this.anim = 0;
+                    this.update = 0x39;
+                    this.scale[0] = (wide + wide * 100 / 1000) as u16;
+                    this.scale[1] = (tall - tall * 300 / 1000) as u16;
+                    return;
+                }
+                this.scale = [0x1100, 0xA00];
+                let size = u32::from(this.size);
+                this.size = (size + size * 30 / 100) as u16;
+                self.behave(index, 0x34, sca);
+            }
+            0x4b => self.steam(index),
+            // `Esp_57`: a puff of steam settles on the water or the ground.
+            0x57 => {
+                let [x, y, z] = slot.pos.map(i32::from);
+                let level = i32::from(crate::zombie2::water_ck(&self.water, x, z));
+                let rest = if level != 0 && level < y {
+                    Some(level)
+                } else {
+                    let ground = Self::ground(sca, slot.pos).height;
+                    (ground < y).then_some(ground)
+                };
+                if let Some(at) = rest {
+                    self.land_drop(index, 8);
+                    self.slots[index].pos[1] = at as i16;
+                }
+            }
+            0x47 => self.stream_fill(index, sca),
+            // `Esp_55`: the stream makes a drop (kind 0x1C row 2,
+            // `Esp_call3`) every fourth tick, counting in `+0x12`.
+            0x55 => {
+                if slot.next_flags.is_multiple_of(4) {
+                    self.call(0x1C, 2, slot.size, slot.dir, slot.base, true);
+                }
+                let this = &mut self.slots[index];
+                this.next_flags = this.next_flags.wrapping_add(1);
+            }
+            0x44 => self.stream_drop(index, sca),
             // `Esp_34`: a splash where it hit, with its sound, and it stops
             // to play out from frame 0xD.
             0x34 => {
@@ -1121,6 +1331,26 @@ impl Effects {
                 self.slots[index].anim = 0x54;
                 self.slots[index].update = 0;
                 self.call(0x14, 0, slot.size, 0, slot.pos, true);
+            }
+            // `Esp_56`: the Colt's reload, six spent cases (kind 2, row 6 at
+            // its size) from where it was started, each turned a random step
+            // of 400: one on its count's first tick, two on the second and the
+            // fourth, and one on the seventh, when it goes.
+            0x56 => {
+                let calls = match slot.start {
+                    0 | 6 => 1,
+                    1 | 3 => 2,
+                    _ => 0,
+                };
+                for _ in 0..calls {
+                    let turn = (u32::from(self.rnd()) % 0x1E * 400) as i16;
+                    self.call_from(&slot, 2, 6, slot.size, turn.wrapping_add(slot.dir));
+                }
+                if slot.start == 6 {
+                    self.slots[index].kill();
+                }
+                let this = &mut self.slots[index];
+                this.start = this.start.wrapping_add(1);
             }
             // `Esp_54`: and is gone, leaving a second burst.
             0x54 => {
@@ -1390,15 +1620,231 @@ impl Effects {
         this.sway = -this.sway;
     }
 
+    /// A slot's frame, with that frame's delay.
+    fn show_frame(&mut self, index: usize, frame: u8) {
+        let delay = self
+            .bank
+            .sprites
+            .get(&self.slots[index].kind)
+            .map_or(0, |s| s.frame(frame)[2]);
+        let this = &mut self.slots[index];
+        this.frame = frame;
+        this.delay = delay;
+    }
+
+    /// A drop of the stream lands: it shows `frame`, stops falling and runs
+    /// no more behaviours.
+    fn land_drop(&mut self, index: usize, frame: u8) {
+        self.show_frame(index, frame);
+        let this = &mut self.slots[index];
+        this.update = 0;
+        this.anim = 0;
+        this.accel[1] = 0;
+        this.velocity[1] = 0;
+    }
+
+    /// `FUN_004b9590(1)`: one whole tick of one slot.
+    fn step(&mut self, index: usize, sca: Option<&Sca>) {
+        let anim = self.slots[index].anim;
+        self.behave(index, anim, sca);
+        self.advance(index, sca);
+    }
+
+    /// `Oba_ck_esp(pos, reach, height)`: a box of a body in play (`Be_flg`'s
+    /// 1 without its 2) holds `pos`, `reach` wider and `height` taller.
+    fn oba_ck_esp(&self, pos: [i16; 3], reach: i32, height: i32) -> bool {
+        let [x, y, z] = pos.map(i32::from);
+        self.oba
+            .iter()
+            .filter(|body| body.be_flg & 3 == 1)
+            .any(|body| {
+                let atd = &body.atd;
+                let wide = i32::from(atd.at_w) + reach;
+                let dx = atd.at[0].wrapping_sub(x);
+                let dz = atd.at[2].wrapping_sub(z);
+                if dx.wrapping_add(wide) as u32 > (wide * 2) as u32
+                    || dz.wrapping_add(wide) as u32 > (wide * 2) as u32
+                {
+                    return false;
+                }
+                let distance =
+                    crate::sca::square_root0(dz.wrapping_mul(dz).wrapping_add(dx.wrapping_mul(dx)));
+                if wide.wrapping_sub(distance) <= 0 {
+                    return false;
+                }
+                let tall = i32::from(atd.at_h) + height;
+                let dy = atd.at[1].wrapping_sub(y);
+                -tall < dy && dy < tall
+            })
+    }
+
+    /// `Esp_4B`: a steam vent (room 407's) puffs a row 1 slot on its own
+    /// matrix every fifth tick, counting in `+0x12`. Once `fg_common`'s 0x76
+    /// is up it narrows each puff by a fifth and goes out after 0x5A ticks
+    /// (counted in `+0x14`).
+    fn steam(&mut self, index: usize) {
+        if self.steam_off {
+            let this = &mut self.slots[index];
+            this.next_tpage = this.next_tpage.wrapping_add(1);
+            if this.next_tpage > 0x5A {
+                this.update = 0;
+                this.anim = 0;
+                this.flags = 0;
+                this.next_flags = this.next_flags.wrapping_add(1);
+                return;
+            }
+            if this.next_flags.is_multiple_of(5) {
+                this.scale[0] = (u32::from(this.scale[0]) * 80 / 100) as u16;
+                self.puff(index);
+            }
+        } else {
+            self.slots[index].flags = 0x8000;
+            if self.slots[index].next_flags.is_multiple_of(5) {
+                self.puff(index);
+            }
+        }
+        let this = &mut self.slots[index];
+        this.next_flags = this.next_flags.wrapping_add(1);
+    }
+
+    /// A puff of [`Self::steam`], started at once (`0xB803`) at the vent's
+    /// width.
+    fn puff(&mut self, index: usize) {
+        let vent = self.slots[index];
+        if let Some(puff) = self.call_from(&vent, vent.kind, 1, vent.size, vent.dir) {
+            let this = &mut self.slots[puff];
+            this.flags = 0xB803;
+            if self.steam_off {
+                this.scale[0] = vent.scale[0];
+            }
+        }
+    }
+
+    /// `Esp_47`, once: a stream (room 405's) fills in at once. A drop is made
+    /// every fourth count and run on for as many ticks as the count, until
+    /// one has reached the water or the ground (the pipe's full length) or
+    /// the pool is full; then the stream goes on to `Esp_55`.
+    fn stream_fill(&mut self, index: usize, sca: Option<&Sca>) {
+        self.next_block(index, false);
+        let mut count: u32 = 1;
+        loop {
+            count = count.wrapping_add(1);
+            if count == 0 {
+                break;
+            }
+            if !count.is_multiple_of(4) {
+                continue;
+            }
+            let stream = self.slots[index];
+            let Some(drop) = self.call(0x1C, 2, stream.size, stream.dir, stream.base, true) else {
+                break;
+            };
+            for _ in 0..count {
+                self.step(drop, sca);
+                self.slots[drop].next_flags = 0;
+            }
+            let this = &mut self.slots[drop];
+            this.flags = 0xB003;
+            this.next_flags = 6;
+            this.anim = 0;
+            this.update = 0x44;
+            let [x, y, z] = this.pos.map(i32::from);
+            let level = crate::zombie2::water_ck(&self.water, x, z);
+            let ground = Self::ground(sca, this.pos).height;
+            let landed = if level != 0 {
+                i32::from(level) < y
+            } else {
+                ground < y
+            };
+            if landed {
+                let this = &mut self.slots[drop];
+                this.frame = 0x0A;
+                this.scale[1] = 0x1000;
+                this.update = 0;
+                this.anim = 0;
+                this.accel[1] = 0;
+                this.velocity[1] = 0;
+                break;
+            }
+        }
+        let this = &mut self.slots[index];
+        this.flags = 0x8000;
+        this.anim = 0x55;
+        this.update = 0;
+    }
+
+    /// `Esp_44`: a drop of the stream falls, lengthening, until it meets a
+    /// body (two splashes, kind 0x1A, `Esp_call3`), the water or the ground.
+    fn stream_drop(&mut self, index: usize, sca: Option<&Sca>) {
+        if self.slots[index].frame == 0x0A {
+            self.show_frame(index, 6);
+        }
+        let slot = self.slots[index];
+        let y = i32::from(slot.pos[1]);
+        let height = 1i32.wrapping_shl((y / -1800) as u32);
+        if self.oba_ck_esp(slot.pos, 0x96, height) {
+            self.land_drop(index, 0x0B);
+            self.slots[index].scale[1] = 0x1000;
+            for turn in [0, 0xD90] {
+                let spread = i32::from(self.rnd() % 10);
+                let spread = if turn == 0 { 0x34 - spread } else { spread };
+                let dir = ((spread * 12) as i16)
+                    .wrapping_add(slot.dir)
+                    .wrapping_add(turn);
+                let size = (u32::from(self.rnd() & 7) << 7) + u32::from(slot.size);
+                let row = (size >> 16) as u8;
+                self.call(0x1A, row, size as u16, dir, slot.pos, true);
+            }
+            return;
+        }
+        let this = &mut self.slots[index];
+        this.scale[1] = this.scale[1].wrapping_add(0x78);
+        let [x, _, z] = slot.pos.map(i32::from);
+        let level = crate::zombie2::water_ck(&self.water, x, z);
+        if level != 0 && i32::from(level) < y {
+            self.land_drop(index, 0x0B);
+            self.slots[index].scale[1] = 0x1000;
+        }
+        let ground = Self::ground(sca, slot.pos).height;
+        if ground < y {
+            self.land_drop(index, 8);
+            self.slots[index].pos[1] = ground as i16;
+        }
+    }
+
+    /// `FUN_004d8260(pos, reach, 20)` for what's thrown or spat (`Esp_20`,
+    /// `Esp_38`): the hit on the player, and a row with bit 8 poisons
+    /// (`poison_status` 0x1518, `poison_timer` 0x1E, `Damage_cnt`'s `0x80`).
+    ///
+    /// The search's enemies (its `0x98ee7b` case) aren't targets here.
+    fn thrown_hit(&mut self, slot: &Slot, reach: u32) -> bool {
+        let Some(target) = self.target.as_mut() else {
+            return false;
+        };
+        if !target.hit(slot.pos, reach, 20) {
+            return false;
+        }
+        if slot.row & 8 != 0 {
+            target.poisoned = true;
+            target.damage_cnt |= 0x80;
+        }
+        true
+    }
+
     /// `Sca_ck_hit`, at what's being tested for a landing.
     fn ground(sca: Option<&Sca>, pos: [i16; 3]) -> crate::sca::Ground {
+        Self::ground_masked(sca, pos, 0x2000)
+    }
+
+    /// [`Self::ground`] with `Sca_ck_hit`'s mask.
+    fn ground_masked(sca: Option<&Sca>, pos: [i16; 3], mask: u16) -> crate::sca::Ground {
         let pos = pos.map(i32::from);
         sca.map_or_else(
             || crate::sca::Ground {
                 blocked: pos[1] > 0,
                 ..Default::default()
             },
-            |sca| crate::sca::ground_at(sca, pos, 2, 0x2000),
+            |sca| crate::sca::ground_at(sca, pos, 2, mask),
         )
     }
 
@@ -1461,6 +1907,62 @@ impl Effects {
         self.behave(index, then(slot.count), sca);
     }
 
+    /// `Esp_18`: a rocket flies on until it hurts what it meets, at it or on
+    /// the floor below it, when it takes the behaviour `+2` names (its
+    /// burst); against a wall it steps back and takes the one `+3` names.
+    /// Past 0x7D00 either way it goes, though it still looks this tick.
+    /// Where it burst (`DWORD_00989e80`) isn't kept.
+    fn rocket_flight(&mut self, index: usize, sca: Option<&Sca>) {
+        const EDGE: i16 = 0x7D00;
+        let slot = self.slots[index];
+        let [x, y, z] = slot.pos.map(i32::from);
+        if slot.pos[0] > EDGE || slot.pos[2] > EDGE || slot.pos[0] < -EDGE || slot.pos[2] < -EDGE {
+            let this = &mut self.slots[index];
+            this.anim = 0;
+            this.flags = 0;
+        }
+        let mut rect = [-800, 0, 400, 200];
+        let mut blast = |this: &mut Self, y: i32, word: u32| {
+            let blast = crate::weapon2::Blast {
+                at: [x, y, z],
+                dir: slot.dir,
+                word,
+            };
+            let effects = crate::weapon2::blast_ck(&blast, &mut rect, &mut this.bodies);
+            let hit = effects
+                .iter()
+                .any(|effect| matches!(effect, crate::weapon2::BlastEffect::Hit(_)));
+            this.blasts.extend(effects);
+            hit
+        };
+        if blast(self, y, 0x3_0011) {
+            self.behave(index, slot.start, sca);
+            return;
+        }
+        let ground = Self::ground(sca, slot.pos);
+        let under = ground.height.wrapping_sub(10) as u32;
+        let this = &mut self.slots[index];
+        this.ground = under as i32;
+        this.next_tpage = under as u16;
+        this.range = (under >> 16) as u16;
+        if blast(self, ground.height, 0x2_0011) {
+            self.behave(index, slot.start, sca);
+            return;
+        }
+        if !ground.blocked && !ground.under_record {
+            return;
+        }
+        let this = &mut self.slots[index];
+        for axis in 0..3 {
+            this.velocity[axis] = this.velocity[axis].wrapping_sub(i16::from(this.accel[axis]));
+            this.offset[axis] = this.offset[axis].wrapping_sub(this.velocity[axis]);
+            this.velocity[axis] = this.velocity[axis].wrapping_sub(i16::from(this.accel[axis]));
+            this.offset[axis] = this.offset[axis].wrapping_add(this.velocity[axis] / -3);
+        }
+        Self::place(this);
+        self.behave(index, slot.count, sca);
+    }
+
     /// `Esp_13`: smoke that hangs (`+0x1b` 3) for its count, shrinks for 30
     /// to 37 ticks (2), then for 90 to 100 more a little faster (1), and goes
     /// (0). With `+0x4a` set it also burns a body in reach (`Esp_28`) once
@@ -1513,6 +2015,164 @@ impl Effects {
             }
             _ => {}
         }
+    }
+
+    /// `Esp_46`: a flamethrower's flame. Each tick until it stops it looks for
+    /// the water (where it shrinks, with a puff of steam), a body, which it
+    /// burns, and the floor; on any of them, or inside a wall, it stops and
+    /// rises as it burns out, three ticks on leaving smoke. Where it last
+    /// burnt a body (`DWORD_00989e80`) isn't kept, and `Water_ck` is asked
+    /// for `x` twice, as the original does.
+    fn flame(&mut self, index: usize, sca: Option<&Sca>) {
+        let this = &mut self.slots[index];
+        this.start = this.start.wrapping_sub(1);
+        if this.start == 0 {
+            this.accel[1] = -10;
+        }
+        let slot = *this;
+        if slot.count != 0 {
+            if slot.start == 3 {
+                self.call(4, 0x0C, 0x2000, 0, slot.pos, true);
+            }
+            return;
+        }
+        let at = slot.pos.map(i32::from);
+        let mut stopped = false;
+        let level = crate::zombie2::water_ck(&self.water, at[0], at[0]);
+        if level != 0 && level < slot.pos[1] {
+            let size = &mut self.slots[index].size;
+            *size = (u32::from(*size) * 0x41 / 100) as u16;
+            self.call(3, 0x0F, 0x2000, 0, slot.pos, true);
+            stopped = true;
+        }
+        let blast = crate::weapon2::Blast {
+            at,
+            dir: slot.dir,
+            word: 0x2_0010,
+        };
+        let effects = crate::weapon2::blast_ck(&blast, &mut [-1400, 0, 400, 200], &mut self.bodies);
+        stopped |= effects
+            .iter()
+            .any(|effect| matches!(effect, crate::weapon2::BlastEffect::Hit(_)));
+        self.blasts.extend(effects);
+        let ground = Self::ground(sca, slot.pos);
+        stopped |= ground.height < at[1];
+        if ground.blocked || ground.under_record {
+            let size = &mut self.slots[index].size;
+            *size = (u32::from(*size) * 0x46 / 100) as u16;
+        } else if !stopped {
+            return;
+        }
+        let delay = self
+            .bank
+            .sprites
+            .get(&slot.kind)
+            .map_or(0, |sprite| sprite.frame(0x0C)[2]);
+        let this = &mut self.slots[index];
+        this.accel[0] = 0;
+        this.accel[1] = 0;
+        this.velocity[0] = 0;
+        this.velocity[1] = 0x14;
+        this.frame = 0x0C;
+        this.delay = delay;
+        this.start = 6;
+        this.count = 1;
+    }
+
+    /// `Esp_0E`: the spark shot's strike on the body its shot found. On its
+    /// first tick it sounds, hurts every body in a little box at that body's
+    /// `Atd[0]` (`FUN_004d7e30`, row 0xD, the band by the height), and
+    /// strings sparks from the gun to it; then it flashes the screen twice,
+    /// over six ticks.
+    fn spark_strike(&mut self, index: usize) {
+        /// `Fade_adjust`'s levels for fade 0, by tick, and `Fade_off`'s -1.
+        const FLASH: [i16; 7] = [0x2000, 0x1800, 0x1600, -1, 0x1400, 0x1200, -1];
+        let slot = self.slots[index];
+        if slot.start == 0 {
+            self.slots[index].flags = slot.next_flags;
+            self.sounds.push((0x110_0001, slot.pos));
+            // `0x98a0c8`, the player's `Sce_free2` and `Sce_free3`: the body,
+            // at its `Atd[0]` (`+0x84`).
+            let body = self
+                .spark_target
+                .and_then(|target| self.bodies.iter().find(|body| body.slot == target))
+                .map(|body| [body.at[0], body.at_y, body.at[1]]);
+            if let Some(to) = body {
+                let blast = crate::weapon2::Blast {
+                    at: to,
+                    dir: slot.dir,
+                    word: 0x3_000E,
+                };
+                let effects =
+                    crate::weapon2::blast_ck(&blast, &mut [-200, 0, 100, 0x32], &mut self.bodies);
+                self.blasts.extend(effects);
+                self.spark_trail(&slot, to);
+            }
+        }
+        if let Some(&level) = FLASH.get(usize::from(slot.start)) {
+            self.fade = Some(level);
+        }
+        if slot.start == 6 {
+            self.slots[index].kill();
+        }
+        let this = &mut self.slots[index];
+        this.start = this.start.wrapping_add(1);
+    }
+
+    /// `Esp_0E`'s sparks: one each `0x1b0` of the way to the body, up the
+    /// gun's matrix from the slot's point and leaning over by the height, each
+    /// turned at random.
+    fn spark_trail(&mut self, slot: &Slot, to: [i32; 3]) {
+        let from = slot.pos.map(i32::from);
+        let lift = (from[1].abs_diff(to[1]) * 0x14 / 100) as i16;
+        let [dx, dy, dz] = [0, 1, 2].map(|axis| from[axis].abs_diff(to[axis]) as i32);
+        let root = crate::sca::square_root0;
+        let across = root(dz.wrapping_mul(dz).wrapping_add(dx.wrapping_mul(dx)));
+        let distance = root(
+            across
+                .wrapping_mul(across)
+                .wrapping_add(dy.wrapping_mul(dy)),
+        );
+        let count = ((distance as u32) / 0x1B0).max(1);
+        let lean = (to[1].wrapping_sub(from[1]) as u32 / count) as i16;
+        let dir =
+            (crate::se2::se_dir_ck(from[0], from[2], to[0], to[2]) as i16).wrapping_sub(slot.dir);
+        let mut point = slot.local;
+        for _ in 0..count {
+            let Some(spark) = self.call_on_slot_matrix(slot, 6, 1, 0x2600, dir, point) else {
+                break;
+            };
+            let x = (i16::from(self.rnd()) % 0x1E - 0xF) * 10;
+            let y = (i16::from(self.rnd()) % 0x32 - 0x19) * 0x28;
+            let along = i16::from(self.rnd());
+            let side = i16::from(self.rnd());
+            let z = lift
+                .wrapping_add((side & 2) * 0x400)
+                .wrapping_add(0x338)
+                .wrapping_add(along % 0x14 * 0x1E);
+            self.slots[spark].rotation = [x, y, z];
+            point[1] = point[1].wrapping_add(0x1B0);
+            point[0] = point[0].wrapping_sub(lean);
+        }
+    }
+
+    /// `Esp_3E`: the spark shot's miss, nineteen sparks up the gun's matrix
+    /// `0x1b0` apart, each turned at random, and it's gone.
+    fn spark_miss(&mut self, index: usize) {
+        let slot = self.slots[index];
+        let mut point = slot.local;
+        for _ in 0..0x13 {
+            let Some(spark) = self.call_on_slot_matrix(&slot, 6, 4, 0x2000, slot.dir, point) else {
+                break;
+            };
+            let y = (i16::from(self.rnd()) % 0x32 - 0x19) * 0x28;
+            let z = ((!self.rnd() & 2 | 1) as i16) << 10;
+            let rotation = &mut self.slots[spark].rotation;
+            rotation[1] = y;
+            rotation[2] = z;
+            point[1] = point[1].wrapping_add(0x1B0);
+        }
+        self.slots[index].kill();
     }
 
     /// `Esp_28`: a flame round's fire burns the first body in reach (the
@@ -2186,6 +2846,11 @@ mod tests {
     }
 
     pub(super) fn bank_of(kind: u8, blocks: &[[u8; BLOCK_LEN]]) -> Arc<Bank> {
+        bank_rows(kind, &[(0, blocks)])
+    }
+
+    /// [`bank_of`] with blocks for several rows, each a group of its own.
+    pub(super) fn bank_rows(kind: u8, rows: &[(u8, &[[u8; BLOCK_LEN]])]) -> Arc<Bank> {
         let mut record = Vec::new();
         record.extend_from_slice(&3u16.to_le_bytes());
         record.extend_from_slice(&1u16.to_le_bytes());
@@ -2196,16 +2861,25 @@ mod tests {
         record.extend_from_slice(&[0, 1, 2, 16, 0, 0, 0, 0]);
         record.extend_from_slice(&[0, 0, 0xff, 0, 0, 0, 0, 0]);
         record.extend_from_slice(&[0, 0, 0xf8, 0xf8]);
-        // Row 0 at word 4 of the motion table.
-        for row in 0..8 {
-            record.extend_from_slice(&(if row == 0 { 4u16 } else { 0 }).to_le_bytes());
+        // The motion table, in words of four bytes from its start: each
+        // row's one group after the table, in turn.
+        let mut at = 4u16;
+        let mut table = [0u16; 8];
+        for (row, blocks) in rows {
+            table[usize::from(*row)] = at;
+            at += 2 + blocks.len() as u16 * (BLOCK_LEN / 4) as u16;
         }
-        record.extend_from_slice(&1u16.to_le_bytes());
-        record.extend_from_slice(&0u16.to_le_bytes());
-        record.extend_from_slice(&(blocks.len() as u16).to_le_bytes());
-        record.extend_from_slice(&0u16.to_le_bytes());
-        for block in blocks {
-            record.extend_from_slice(block);
+        for word in table {
+            record.extend_from_slice(&word.to_le_bytes());
+        }
+        for (_, blocks) in rows {
+            record.extend_from_slice(&1u16.to_le_bytes());
+            record.extend_from_slice(&0u16.to_le_bytes());
+            record.extend_from_slice(&(blocks.len() as u16).to_le_bytes());
+            record.extend_from_slice(&0u16.to_le_bytes());
+            for block in *blocks {
+                record.extend_from_slice(block);
+            }
         }
         let data = container(&[Part {
             id: kind,
@@ -2554,6 +3228,423 @@ mod tests {
         assert!(!effects.slots[slot].live());
     }
 
+    /// `Esp_56`, the Colt's reload: six cases, one on its first tick, two
+    /// on the second and the fourth, one on the seventh, and then it's
+    /// gone. Each is `Esp_call3` of kind 2, row 6 at the slot's size, turned
+    /// from the slot's direction by a `Rnd` step of 400.
+    #[test]
+    fn the_colts_reload_throws_six_cases_over_seven_ticks_and_goes() {
+        let mut reload = [0u8; BLOCK_LEN];
+        reload[0] = 0x56;
+        let mut case = fire_block();
+        case[0] = 0;
+        let mut effects = Effects::default();
+        effects.enter_room(bank_rows(2, &[(0, &[reload]), (6, &[case])]));
+        let slot = effects
+            .call(2, 0, 0x900, 0x123, [10, 20, 30], false)
+            .unwrap();
+        let cases = |effects: &Effects| -> Vec<usize> {
+            (0..POOL_SIZE)
+                .filter(|&index| {
+                    let other = &effects.slots[index];
+                    other.flags != 0 && other.kind == 2 && other.row == 6
+                })
+                .collect()
+        };
+        let mut rnd = crate::zombie2::Rnd::default();
+        let mut made = Vec::new();
+        for _ in 0..7 {
+            assert!(effects.slots[slot].live());
+            let before = cases(&effects);
+            let mut draws = rnd;
+            effects.tick(&mut rnd, None);
+            // The pool is searched from the top: the first call takes the
+            // highest free slot.
+            let mut new: Vec<usize> = cases(&effects)
+                .into_iter()
+                .filter(|index| !before.contains(index))
+                .collect();
+            new.sort_unstable_by(|a, b| b.cmp(a));
+            for &index in &new {
+                let turn = (u32::from(draws.draw()) % 0x1E * 400) as i16;
+                let case = &effects.slots[index];
+                assert_eq!((case.size, case.dir), (0x900, turn.wrapping_add(0x123)));
+                assert_eq!(case.base, [10, 20, 30], "from where the reload was");
+            }
+            assert_eq!(draws, rnd, "a draw for each case and no other");
+            made.push(new.len());
+        }
+        assert_eq!(made, [1, 2, 0, 2, 0, 0, 1]);
+        assert!(!effects.slots[slot].live());
+    }
+
+    /// `Esp_call3D`'s turn (`+0x44` to `+0x48`): the slot it made and the
+    /// slots that die with it take it, and no other slot does.
+    #[test]
+    fn a_turn_reaches_the_slot_and_its_children_only() {
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[fire_block()]));
+        let first = effects.call(7, 0, 0x1000, 0, [0; 3], false).unwrap();
+        let other = effects.call(7, 0, 0x1000, 0, [0; 3], false).unwrap();
+        // A slot of `first`'s row's further group dies with it.
+        let child = other - 1;
+        effects.slots[child] = Slot {
+            parent: first as u8,
+            ..effects.slots[first]
+        };
+        let turn = [0, 0, 0x400];
+        effects.turn(first, turn);
+        assert_eq!(effects.slots[first].rotation, turn);
+        assert_eq!(effects.slots[child].rotation, turn);
+        assert_eq!(effects.slots[other].rotation, [0; 3]);
+    }
+
+    /// A flame of `Esp_46` in slot 0 at `pos`, ten ticks to go.
+    fn flame_at(pos: [i16; 3]) -> Effects {
+        let mut effects = Effects::default();
+        effects.enter_room(bank_rows(4, &[(4, &[fire_block()])]));
+        effects.slots[0] = Slot {
+            flags: FLAG_LIVE | FLAG_ANIMATE | FLAG_INTEGRATE,
+            kind: 3,
+            row: 0x1D,
+            update: 0x46,
+            start: 10,
+            accel: [2, 0, 0],
+            velocity: [0x10, 0, 0],
+            size: 1000,
+            pos,
+            ..Slot::default()
+        };
+        effects
+    }
+
+    /// A spark shot's effect of `row` in slot 0, `update` its behaviour, on
+    /// an unturned matrix at `(0, -1000, 0)` (part 11's) at the point
+    /// `pl_mv05_w3_t2` gives it.
+    fn spark_at(row: u8, update: u8) -> Effects {
+        let mut effects = Effects::default();
+        effects.enter_room(bank_rows(6, &[(1, &[fire_block()]), (4, &[fire_block()])]));
+        let unturned = [[0x1000, 0, 0], [0, 0x1000, 0], [0, 0, 0x1000]];
+        effects.slots[0] = Slot {
+            flags: FLAGS_NEW,
+            kind: 6,
+            row,
+            update,
+            next_flags: 0xB803,
+            dir: 0x400,
+            pos: [0, -1000, 0],
+            base: [0, -1000, 0],
+            anchor: Some(Anchor {
+                body: Body::Player,
+                part: 11,
+            }),
+            hand: Some((unturned, [0, -1000, 0])),
+            local: [0x82, 0x6B8, 0],
+            ..Slot::default()
+        };
+        effects
+    }
+
+    /// A zombie in slot 2 standing at `pos`.
+    fn spark_body(pos: [i32; 3]) -> crate::weapon2::Target {
+        crate::weapon2::Target {
+            slot: 2,
+            id: 0x1F,
+            be_flg: 1,
+            life: 100,
+            pos,
+            at: [pos[0], pos[2]],
+            at_y: pos[1],
+            at_w1: 400,
+            ofs_y: -1000,
+            at_h: 1000,
+            ..Default::default()
+        }
+    }
+
+    /// `Esp_0E`'s first tick: its sound, every body in the little box at the
+    /// body the shot found hurt by the spark shot's row (60 in its first
+    /// band), and a spark each `0x1b0` of the way there, up the gun and
+    /// leaning over by the height, with four `Rnd`s each.
+    #[test]
+    fn the_sparks_strike_strikes_the_body_the_shot_found() {
+        let mut effects = spark_at(2, 0x0E);
+        effects.bodies = vec![spark_body([0, 0, 2000])];
+        effects.spark_target = Some(2);
+        effects.random = crate::zombie2::Rnd::default();
+        effects.behave(0, 0x0E, None);
+        assert_eq!(effects.sounds, [(0x110_0001, [0, -1000, 0])]);
+        assert_eq!(effects.slots[0].flags, 0xB803, "its block's flags");
+        let hit = effects.blasts.iter().find_map(|effect| match effect {
+            crate::weapon2::BlastEffect::Hit(hit) => Some(*hit),
+            crate::weapon2::BlastEffect::Tested(_) => None,
+        });
+        let hit = hit.expect("the body is struck");
+        assert_eq!((hit.slot, hit.weapon, hit.damage), (2, 0x0E, 60));
+        // 2236 away: five sparks, the 1000 up shared out as 200 a spark, and
+        // a lift of a fifth of it. The first takes the highest free slot.
+        let sparks: Vec<Slot> = effects.slots[1..]
+            .iter()
+            .rev()
+            .filter(|slot| slot.flags & FLAG_DEFERRED != 0)
+            .copied()
+            .collect();
+        assert_eq!(sparks.len(), 5);
+        let to = crate::se2::se_dir_ck(0, 0, 0, 2000) as i16;
+        let mut replay = crate::zombie2::Rnd::default();
+        for (n, spark) in sparks.iter().enumerate() {
+            let n = n as i16;
+            assert_eq!((spark.kind, spark.row, spark.size), (6, 1, 0x2600));
+            assert_eq!(spark.dir, to.wrapping_sub(0x400));
+            assert_eq!(spark.local, [0x82 - 200 * n, 0x6B8 + 0x1B0 * n, 0]);
+            let x = (i16::from(replay.draw()) % 0x1E - 0xF) * 10;
+            let y = (i16::from(replay.draw()) % 0x32 - 0x19) * 0x28;
+            let along = i16::from(replay.draw());
+            let side = i16::from(replay.draw());
+            let z = 200 + (side & 2) * 0x400 + 0x338 + along % 0x14 * 0x1E;
+            assert_eq!(spark.rotation, [x, y, z], "spark {n}");
+        }
+        assert_eq!(effects.random, replay, "four draws a spark");
+    }
+
+    /// `Esp_0E` then flashes the screen on fade 0 and is gone on its seventh
+    /// tick: `Fade_adjust` to 0x2000, 0x1800 and 0x1600, `Fade_off`, then
+    /// 0x1400 and 0x1200, and `Fade_off`.
+    #[test]
+    fn the_sparks_strike_flashes_twice_and_goes() {
+        let mut effects = spark_at(2, 0x0E);
+        let mut levels = Vec::new();
+        for _ in 0..7 {
+            assert!(effects.slots[0].live());
+            effects.behave(0, 0x0E, None);
+            levels.push(effects.fade.take());
+        }
+        assert_eq!(
+            levels,
+            [0x2000, 0x1800, 0x1600, -1, 0x1400, 0x1200, -1].map(Some)
+        );
+        assert!(!effects.slots[0].live());
+        // With no body found, nothing is struck and no sparks go out.
+        assert!(effects.blasts.is_empty());
+        assert!(effects.slots[1..].iter().all(|slot| slot.flags == 0));
+    }
+
+    /// `Esp_3F`: a spark that meets a wall (`Sca_ck_hit`, here the floor) is
+    /// hidden, and one in the open is left alone.
+    #[test]
+    fn a_spark_that_meets_a_wall_is_hidden() {
+        for (y, shown) in [(-1000, true), (100, false)] {
+            let mut effects = spark_at(1, 0x3F);
+            effects.slots[0].flags = FLAGS_NEW | FLAG_VISIBLE;
+            effects.slots[0].pos = [0, y, 0];
+            effects.behave(0, 0x3F, None);
+            assert_eq!(effects.slots[0].flags & FLAG_VISIBLE != 0, shown, "at {y}");
+        }
+    }
+
+    /// `Esp_3E`, the miss: nineteen sparks `0x1b0` apart up the gun, each
+    /// turned with two `Rnd`s, and it's gone.
+    #[test]
+    fn the_sparks_miss_throws_nineteen_sparks() {
+        let mut effects = spark_at(3, 0x3E);
+        effects.random = crate::zombie2::Rnd::default();
+        effects.behave(0, 0x3E, None);
+        assert!(!effects.slots[0].live());
+        let sparks: Vec<Slot> = effects.slots[1..]
+            .iter()
+            .rev()
+            .filter(|slot| slot.flags & FLAG_DEFERRED != 0)
+            .copied()
+            .collect();
+        assert_eq!(sparks.len(), 19);
+        let mut replay = crate::zombie2::Rnd::default();
+        for (n, spark) in sparks.iter().enumerate() {
+            assert_eq!((spark.kind, spark.row, spark.size), (6, 4, 0x2000));
+            assert_eq!(spark.dir, 0x400);
+            assert_eq!(spark.local, [0x82, 0x6B8 + 0x1B0 * n as i16, 0]);
+            let y = (i16::from(replay.draw()) % 0x32 - 0x19) * 0x28;
+            let z = ((!replay.draw() & 2 | 1) as i16) << 10;
+            assert_eq!(spark.rotation[1..], [y, z], "spark {n}");
+        }
+        assert_eq!(effects.random, replay);
+    }
+
+    /// A rocket (kind 2 row 0xD's second block) at `pos`, flying on
+    /// `Esp_18`, bursting on `Esp_2F` and steps back from a wall to `Esp_0D`.
+    fn rocket_at(pos: [i16; 3]) -> Effects {
+        let mut effects = Effects::default();
+        effects.enter_room(bank_rows(3, &[(2, &[fire_block()])]));
+        effects.slots[0] = Slot {
+            flags: 0xB403,
+            kind: 2,
+            row: 0x0D,
+            anim: 0x17,
+            update: 0x18,
+            start: 0x2F,
+            count: 0x0D,
+            pos,
+            ..Slot::default()
+        };
+        effects
+    }
+
+    fn hits(effects: &Effects) -> Vec<crate::weapon2::BlastHit> {
+        effects
+            .blasts
+            .iter()
+            .filter_map(|effect| match effect {
+                crate::weapon2::BlastEffect::Hit(hit) => Some(*hit),
+                crate::weapon2::BlastEffect::Tested(_) => None,
+            })
+            .collect()
+    }
+
+    /// `Esp_18` hurts every body in its box at the rocket (row 0x11 of
+    /// `Wp_dmg_tbl`, a zombie's 900) and bursts: `Esp_2F`, row 0xD's sound.
+    #[test]
+    fn a_rocket_hurts_every_body_it_meets_and_bursts() {
+        let mut effects = rocket_at([0, -1000, 0]);
+        let mut other = spark_body([300, 0, -300]);
+        other.slot = 5;
+        effects.bodies = vec![spark_body([0, 0, 0]), other];
+        effects.behave(0, 0x18, None);
+        let hits = hits(&effects);
+        assert_eq!(
+            hits.iter()
+                .map(|hit| (hit.slot, hit.weapon, hit.damage))
+                .collect::<Vec<_>>(),
+            [(2, 0x11, 900), (5, 0x11, 900)]
+        );
+        assert_eq!(effects.slots[0].update, 0x2F, "it bursts");
+        assert_eq!(effects.sounds, [(0x114_0001, [0, -1000, 0])]);
+    }
+
+    /// Out of reach of the bodies at its height, `Esp_18` looks again on the
+    /// floor below (`Sca_ck_hit`), for the first body there only; with
+    /// nothing there it flies on, the floor kept at `+0x14`.
+    #[test]
+    fn a_rocket_hurts_the_first_body_on_the_floor_below_it() {
+        let mut effects = rocket_at([0, -3000, 0]);
+        let mut other = spark_body([300, 0, -300]);
+        other.slot = 5;
+        effects.bodies = vec![spark_body([0, 0, 0]), other];
+        effects.behave(0, 0x18, None);
+        let hits = hits(&effects);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!((hits[0].slot, hits[0].weapon), (2, 0x11));
+        assert_eq!(effects.slots[0].update, 0x2F);
+
+        let mut effects = rocket_at([0, -3000, 0]);
+        effects.behave(0, 0x18, None);
+        assert!(effects.blasts.is_empty());
+        let slot = effects.slots[0];
+        assert_eq!((slot.update, slot.ground), (0x18, -10));
+        assert!(effects.sounds.is_empty());
+    }
+
+    /// In a wall (`Sca_ck_hit` blocked) `Esp_18` steps the rocket back by
+    /// its speed and a third more and takes `+3`'s behaviour; past 0x7D00 it
+    /// goes.
+    #[test]
+    fn a_rocket_steps_back_from_a_wall_and_goes_past_the_edge() {
+        let mut effects = rocket_at([0, 100, 0]);
+        effects.slots[0].velocity = [30, 0, 0];
+        effects.behave(0, 0x18, None);
+        let slot = effects.slots[0];
+        assert_eq!(slot.offset[0], -40);
+        assert_eq!(slot.pos[0], -40);
+        assert_eq!((slot.flags, slot.anim), (FLAGS_NEW, 0), "`Esp_0D`");
+
+        for pos in [[0x7D01, -1000, 0], [0, -1000, -0x7D01]] {
+            let mut effects = rocket_at(pos);
+            effects.behave(0, 0x18, None);
+            let slot = effects.slots[0];
+            assert_eq!((slot.flags, slot.anim, slot.update), (0, 0, 0x18));
+        }
+    }
+
+    /// `Esp_17`: a rocket leaves smoke where it is, on the next tick.
+    #[test]
+    fn a_rocket_leaves_smoke_behind_it() {
+        let mut effects = rocket_at([100, -1000, 200]);
+        effects.behave(0, 0x17, None);
+        let smoke = effects.slots[1..]
+            .iter()
+            .find(|slot| slot.flags != 0)
+            .expect("a smoke");
+        assert_eq!((smoke.kind, smoke.row, smoke.size), (3, 0x0A, 0x1800));
+        assert_eq!(smoke.base, [100, -1000, 200]);
+        assert!(smoke.flags & FLAG_DEFERRED != 0);
+    }
+
+    /// `Esp_46` in the air with nothing in reach goes on, its count down.
+    #[test]
+    fn a_flame_with_nothing_in_reach_goes_on() {
+        let mut effects = flame_at([0, -1000, 0]);
+        effects.behave(0, 0x46, None);
+        let slot = effects.slots[0];
+        assert_eq!((slot.start, slot.count, slot.size), (9, 0, 1000));
+        assert_eq!(slot.velocity[0], 0x10);
+        assert!(effects.blasts.is_empty());
+    }
+
+    /// `Esp_46` burns the first body in its box (`FUN_004d7e30` with
+    /// `0x20010`: the flamethrower's row, by height) and stops: it rises on
+    /// frame 0xc, and three ticks on leaves smoke (kind 4, row 0xc).
+    #[test]
+    fn a_flame_burns_the_body_in_reach_then_rises_and_smokes() {
+        let mut effects = flame_at([0, -1000, 0]);
+        effects.bodies = vec![crate::weapon2::Target {
+            slot: 1,
+            id: 0x1F,
+            be_flg: 1,
+            life: 50,
+            pos: [-700, 0, 0],
+            at: [-700, 0],
+            at_w1: 400,
+            ofs_y: -1000,
+            at_h: 1000,
+            ..Default::default()
+        }];
+        effects.behave(0, 0x46, None);
+        let hit = effects.blasts.iter().find_map(|effect| match effect {
+            crate::weapon2::BlastEffect::Hit(hit) => Some(*hit),
+            crate::weapon2::BlastEffect::Tested(_) => None,
+        });
+        let hit = hit.expect("the body burns");
+        assert_eq!(
+            (hit.slot, hit.weapon, hit.damage, hit.damage_no),
+            (1, 0x10, 15, 1)
+        );
+        let slot = effects.slots[0];
+        assert_eq!((slot.start, slot.count, slot.frame), (6, 1, 0x0C));
+        assert_eq!(slot.velocity[..2], [0, 0x14]);
+        assert_eq!(slot.accel[..2], [0, 0]);
+        assert_eq!(slot.size, 1000, "out of the walls it keeps its size");
+        let smoke = |effects: &Effects| {
+            effects.slots[1..]
+                .iter()
+                .any(|slot| slot.flags & FLAG_DEFERRED != 0 && slot.kind == 4 && slot.row == 0x0C)
+        };
+        for start in [5, 4] {
+            effects.behave(0, 0x46, None);
+            assert_eq!(effects.slots[0].start, start);
+            assert!(!smoke(&effects));
+        }
+        effects.behave(0, 0x46, None);
+        assert!(smoke(&effects));
+    }
+
+    /// Under the floor (`Sca_ck_hit`'s height above it, and `DWORD_00695e84`)
+    /// a flame stops, shrunk to 70 in 100.
+    #[test]
+    fn a_flame_stops_shrunk_under_the_floor() {
+        let mut effects = flame_at([0, 100, 0]);
+        effects.behave(0, 0x46, None);
+        let slot = effects.slots[0];
+        assert_eq!((slot.count, slot.size), (1, 700));
+    }
+
     #[test]
     fn a_falling_case_bounces_off_the_ground_with_a_sound_then_goes() {
         let mut block = [0u8; BLOCK_LEN];
@@ -2717,6 +3808,356 @@ mod tests {
         let this = effects.slots[slot];
         assert_eq!(this.scale, [0x1000 + 0x9B, 0x1000 + 0x14]);
         assert_eq!((this.anim, this.generation), (0x20, 1));
+    }
+
+    /// A ceiling spider's spit (kind 0x1D, row 0x0A) on `Esp_38`, `y` up,
+    /// with `+2`'s behaviour 0x23, which ends it; the bank holds kind 3,
+    /// the splash.
+    fn ceiling_spit(effects: &mut Effects, target: Target, y: i16) -> usize {
+        effects.enter_room(bank_rows(3, &[(7, &[fire_block(), [0; BLOCK_LEN]])]));
+        effects.target = Some(target);
+        let slot = 0x40;
+        effects.slots[slot] = Slot {
+            kind: 0x1D,
+            row: 0x0A,
+            update: 0x38,
+            start: 0x23,
+            pos: [0, y, 0],
+            base: [0, y, 0],
+            flags: FLAG_LIVE,
+            ..Slot::default()
+        };
+        slot
+    }
+
+    #[test]
+    fn a_ceiling_spit_hurts_and_poisons_the_player_within_600() {
+        let mut effects = Effects::default();
+        let slot = ceiling_spit(&mut effects, player_at(550), -1000);
+        effects.tick(&mut Default::default(), None);
+        let target = effects.target.unwrap();
+        // 20, as `Pl_life_down` takes it on normal.
+        assert_eq!(target.life, 170);
+        assert!(target.poisoned);
+        assert_eq!(target.damage_cnt, 0x80);
+        assert_eq!(effects.slots[slot].flags, 0);
+    }
+
+    #[test]
+    fn a_ceiling_spit_out_of_reach_falls_on() {
+        let mut effects = Effects::default();
+        let slot = ceiling_spit(&mut effects, player_at(650), -1000);
+        effects.tick(&mut Default::default(), None);
+        assert_eq!(effects.target.unwrap().life, 200);
+        assert_eq!(effects.slots[slot].update, 0x38);
+        assert!(effects.slots.iter().all(|s| s.kind != 3));
+    }
+
+    #[test]
+    fn a_ceiling_spit_splashes_within_700_of_the_ground() {
+        let mut effects = Effects::default();
+        let slot = ceiling_spit(&mut effects, player_at(5000), -699);
+        effects.tick(&mut Default::default(), None);
+        assert_eq!(effects.slots[slot].flags, 0);
+        let splash = effects.slots.iter().find(|s| s.kind == 3).unwrap();
+        assert_eq!(
+            (splash.row, splash.size, splash.base),
+            (0x0F, 0x2800, [0, -699, 0])
+        );
+    }
+
+    #[test]
+    fn a_ceiling_spit_starts_its_fall_on_the_ground_below() {
+        let mut effects = Effects::default();
+        let slot = ceiling_spit(&mut effects, player_at(5000), -1000);
+        let this = &mut effects.slots[slot];
+        this.update = 0;
+        this.step = 0x2C;
+        this.next_flags = 0x1234;
+        effects.behave(slot, 0x36, None);
+        let this = effects.slots[slot];
+        assert_eq!((this.anim, this.update, this.ground), (0x2C, 0x38, 0));
+        assert_eq!(this.rotation[1], 0x1234);
+    }
+
+    /// Room 405's stream (kind 0x1C): its drops (row 2) and their splashes
+    /// (kind 0x1A).
+    fn stream_effects() -> Effects {
+        let mut drop = [0u8; BLOCK_LEN];
+        drop[4..6].copy_from_slice(&0x1000u16.to_le_bytes());
+        drop[6..8].copy_from_slice(&0x1000u16.to_le_bytes());
+        drop[18..20].copy_from_slice(&0xb003u16.to_le_bytes());
+        let mut bank = Arc::try_unwrap(bank_rows(0x1C, &[(2, &[drop])])).unwrap();
+        bank.sprites.extend(
+            Arc::try_unwrap(bank_of(0x1A, &[fire_block()]))
+                .unwrap()
+                .sprites,
+        );
+        let mut effects = Effects::default();
+        effects.enter_room(Arc::new(bank));
+        effects
+    }
+
+    fn stream_at(effects: &mut Effects, y: i16) -> usize {
+        let slot = 0x10;
+        effects.slots[slot] = Slot {
+            kind: 0x1C,
+            row: 1,
+            size: 0x1000,
+            base: [0, y, 0],
+            pos: [0, y, 0],
+            flags: 0xB003,
+            next_flags: 0xB003,
+            anim: 0x47,
+            ..Slot::default()
+        };
+        slot
+    }
+
+    fn drops(effects: &Effects) -> usize {
+        effects
+            .slots
+            .iter()
+            .filter(|s| s.flags != 0 && s.kind == 0x1C && s.row == 2)
+            .count()
+    }
+
+    #[test]
+    fn a_stream_fills_in_until_a_drop_reaches_the_ground() {
+        let mut effects = stream_effects();
+        let stream = stream_at(&mut effects, 100);
+        effects.behave(stream, 0x47, None);
+        assert_eq!(drops(&effects), 1);
+        let drop = effects.slots[POOL_SIZE - 1];
+        assert_eq!((drop.frame, drop.update, drop.flags), (0x0A, 0, 0xB003));
+        let this = effects.slots[stream];
+        assert_eq!((this.anim, this.update, this.flags), (0x55, 0, 0x8000));
+    }
+
+    #[test]
+    fn a_stream_that_never_lands_fills_the_pool() {
+        let mut effects = stream_effects();
+        let stream = stream_at(&mut effects, -100);
+        effects.behave(stream, 0x47, None);
+        assert_eq!(drops(&effects), POOL_SIZE - 1);
+        assert!(effects.slots.iter().all(|s| s.flags != 0));
+        assert!(
+            effects
+                .slots
+                .iter()
+                .filter(|s| s.row == 2)
+                .all(|s| s.update == 0x44 && s.next_flags == 6)
+        );
+        assert_eq!(effects.slots[stream].anim, 0x55);
+    }
+
+    #[test]
+    fn a_running_stream_makes_a_drop_every_fourth_tick() {
+        let mut effects = stream_effects();
+        let stream = stream_at(&mut effects, -100);
+        for _ in 0..8 {
+            effects.behave(stream, 0x55, None);
+        }
+        assert_eq!(drops(&effects), 2);
+        assert_eq!(effects.slots[stream].next_flags, 0xB003 + 8);
+        assert!(
+            effects
+                .slots
+                .iter()
+                .filter(|s| s.row == 2)
+                .all(|s| s.flags == FLAG_DEFERRED)
+        );
+    }
+
+    fn drop_at(effects: &mut Effects, y: i16) -> usize {
+        let slot = 0x20;
+        effects.slots[slot] = Slot {
+            kind: 0x1C,
+            row: 2,
+            size: 0x800,
+            pos: [0, y, 0],
+            flags: 0xB003,
+            update: 0x44,
+            frame: 0x0A,
+            velocity: [0, 40, 0],
+            accel: [0, 4, 0],
+            scale: [0x1000, 0x1000],
+            ..Slot::default()
+        };
+        slot
+    }
+
+    #[test]
+    fn a_drop_lengthens_as_it_falls() {
+        let mut effects = stream_effects();
+        let drop = drop_at(&mut effects, -1000);
+        effects.behave(drop, 0x44, None);
+        let this = effects.slots[drop];
+        assert_eq!((this.frame, this.scale[1], this.update), (6, 0x1078, 0x44));
+    }
+
+    #[test]
+    fn a_drop_lands_on_the_ground() {
+        let mut effects = stream_effects();
+        let drop = drop_at(&mut effects, 50);
+        effects.behave(drop, 0x44, None);
+        let this = effects.slots[drop];
+        assert_eq!((this.frame, this.update, this.pos[1]), (8, 0, 0));
+        assert_eq!((this.velocity[1], this.accel[1]), (0, 0));
+    }
+
+    #[test]
+    fn a_drop_on_a_body_splashes_twice() {
+        let mut effects = stream_effects();
+        let drop = drop_at(&mut effects, -500);
+        let body = |be_flg| crate::zombie2::Oba {
+            be_flg,
+            atd: crate::zombie2::Atd {
+                at_w: 100,
+                at_h: 100,
+                at: [200, -400, 0],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        effects.oba = vec![body(3)];
+        effects.behave(drop, 0x44, None);
+        assert_eq!(
+            effects.slots[drop].frame, 6,
+            "a body out of play is no target"
+        );
+        effects.oba = vec![body(1)];
+        effects.behave(drop, 0x44, None);
+        let this = effects.slots[drop];
+        assert_eq!((this.frame, this.update, this.scale[1]), (0x0B, 0, 0x1000));
+        assert_eq!(effects.slots.iter().filter(|s| s.kind == 0x1A).count(), 2);
+    }
+
+    #[test]
+    fn a_falling_blob_narrows_and_lengthens_fast_then_slowly() {
+        let mut effects = Effects::default();
+        let slot = ceiling_spit(&mut effects, player_at(5000), -1000);
+        effects.slots[slot].scale = [0x1000, 0x1000];
+        effects.behave(slot, 0x37, None);
+        let this = effects.slots[slot];
+        assert_eq!(
+            (this.scale, this.generation),
+            ([0x1000 - 0xCC, 0x1000 + 0x170], 1)
+        );
+        effects.slots[slot].scale = [0x1000, 0x1000];
+        effects.slots[slot].generation = 0x14;
+        effects.behave(slot, 0x37, None);
+        let this = effects.slots[slot];
+        assert_eq!(
+            (this.scale, this.generation),
+            ([0x1000 - 0x14, 0x1000 + 0x28], 0x14)
+        );
+    }
+
+    #[test]
+    fn a_landed_blob_squashes_then_splashes_bigger() {
+        let mut effects = Effects::default();
+        let slot = ceiling_spit(&mut effects, player_at(5000), 50);
+        let this = &mut effects.slots[slot];
+        this.scale = [0x1000, 0x1400];
+        this.size = 0x1000;
+        this.velocity[1] = 30;
+        this.accel[1] = 2;
+        effects.behave(slot, 0x39, None);
+        let this = effects.slots[slot];
+        assert_eq!((this.anim, this.update), (0, 0x39));
+        assert_eq!((this.velocity[1], this.accel[1]), (0, 0));
+        assert_eq!(this.scale, [0x1000 + 0x199, 0x1400 - 0x600]);
+        effects.behave(slot, 0x39, None);
+        let this = effects.slots[slot];
+        // `Esp_34`'s splash from frame 0xD, with its sound.
+        assert_eq!((this.size, this.frame, this.flags), (0x14CC, 0x0D, 0xB001));
+        assert_eq!(this.scale, [0x1100, 0x0A00]);
+        assert!(effects.sounds.iter().any(|&(id, _)| id == 0x304_0001));
+    }
+
+    /// Room 407's steam vent (kind 0x28, `Esp_4B`) and its puffs (row 1).
+    fn steam_vent(effects: &mut Effects, off: bool) -> usize {
+        effects.enter_room(bank_rows(0x28, &[(1, &[fire_block()])]));
+        effects.steam_off = off;
+        let slot = 0x10;
+        effects.slots[slot] = Slot {
+            kind: 0x28,
+            size: 0x1000,
+            scale: [0x1000, 0x1000],
+            base: [0, -7000, 0],
+            flags: 0xA003,
+            anim: 0x4B,
+            ..Slot::default()
+        };
+        slot
+    }
+
+    fn puffs(effects: &Effects) -> Vec<Slot> {
+        effects
+            .slots
+            .iter()
+            .filter(|s| s.flags != 0 && s.kind == 0x28 && s.row == 1)
+            .copied()
+            .collect()
+    }
+
+    #[test]
+    fn a_steam_vent_puffs_every_fifth_tick() {
+        let mut effects = Effects::default();
+        let vent = steam_vent(&mut effects, false);
+        for _ in 0..6 {
+            effects.behave(vent, 0x4B, None);
+        }
+        let puffs = puffs(&effects);
+        assert_eq!(puffs.len(), 2);
+        assert!(
+            puffs
+                .iter()
+                .all(|p| p.flags == 0xB803 && p.base == [0, -7000, 0])
+        );
+        let this = effects.slots[vent];
+        assert_eq!((this.flags, this.next_flags), (0x8000, 6));
+    }
+
+    #[test]
+    fn a_steam_vent_turned_off_narrows_and_goes_out() {
+        let mut effects = Effects::default();
+        let vent = steam_vent(&mut effects, true);
+        effects.behave(vent, 0x4B, None);
+        assert_eq!(effects.slots[vent].scale[0], 0xCCC);
+        assert_eq!(puffs(&effects)[0].scale[0], 0xCCC);
+        for _ in 1..0x5A {
+            effects.behave(vent, 0x4B, None);
+        }
+        assert_eq!(effects.slots[vent].flags, 0xA003);
+        effects.behave(vent, 0x4B, None);
+        assert_eq!(effects.slots[vent].flags, 0);
+        assert_eq!(effects.slots[vent].next_tpage, 0x5B);
+    }
+
+    #[test]
+    fn a_puff_settles_on_the_ground() {
+        let mut effects = Effects::default();
+        let vent = steam_vent(&mut effects, false);
+        effects.slots[vent] = Slot {
+            kind: 0x28,
+            row: 1,
+            update: 0x57,
+            pos: [0, -100, 0],
+            velocity: [0, 30, 0],
+            flags: 0xB803,
+            ..Slot::default()
+        };
+        effects.behave(vent, 0x57, None);
+        assert_eq!(effects.slots[vent].update, 0x57);
+        effects.slots[vent].pos[1] = 40;
+        effects.behave(vent, 0x57, None);
+        let this = effects.slots[vent];
+        assert_eq!(
+            (this.update, this.frame, this.pos[1], this.velocity[1]),
+            (0, 8, 0, 0)
+        );
     }
 
     #[test]

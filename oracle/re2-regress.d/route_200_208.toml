@@ -46,8 +46,6 @@ ignore = [
     [18436, "rseed"],
     [19723, "rng"],
     [19723, "rseed"],
-    # room 100's opening (not this route's change; no other run compares it): slots 0 and 1 drawn at 0x404040 by the original until 183
-    [0, 183, "zp"],
     # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
     [391, 481, "hk"], [2662, 2752, "hk"], [5490, 5580, "hk"], [6935, 7025, "hk"], [7989, 8079, "hk"], [8819, 8911, "hk"], [10047, 10137, "hk"], [12818, 12908, "hk"], [15371, 15461, "hk"], [15952, "hk"], [17690, 17780, "hk"], [18471, 18561, "hk"], [19758, 19848, "hk"],
     # `zd` (docs/internals/deviations/re2.md, "What a zombie's slot held before"): the load's tick in room 100, room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load

@@ -1,0 +1,33 @@
+# The spark shot (0xE), #491 slice 5: `pl_mv05_w3`'s shot (`pl_mv05_w3_t2`), which looks for a body before it fires and,
+# with one in reach, holds on it (clip 0xB) and takes two more rounds while `Esp_0E` strikes it; without one, `Esp_3E`
+# throws its sparks (oracle/re2.md, "Weapons"). As Claire, whose weapon it is, from bowgun_118's start, EQUIPping it
+# through the status screen (`--equip-load` keeps the handgun's clips).
+
+[[run]]
+name = "spark_equip_118"
+room = "118"
+character = 1
+player = 1
+ticks = 1800
+# run_119's start as Claire with the spark shot in slot 2: EQUIP it, aim at the zombies and fire every 60 ticks
+setup_script = "spark_equip_118.lua"
+input = "spark_equip_118.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,inv,snd,zm0,zm1,zm2,zm3,zm4,zm5,fgstat"
+frames = [360, 1799]
+expect = "match"
+record = "--start claire --warp 118:-24617:0:-24996:1024 --life 200 --give 2:0xE:100"
+
+[[run]]
+name = "esp_spark_equip_118"
+ref = "spark_equip_118"
+room = "118"
+character = 1
+player = 1
+ticks = 1800
+setup_script = "spark_equip_118.lua"
+input = "spark_equip_118.txt"
+input_shift = 344
+fields = "esp"
+expect = "match"
+record = "--start claire --warp 118:-24617:0:-24996:1024 --life 200 --give 2:0xE:100"

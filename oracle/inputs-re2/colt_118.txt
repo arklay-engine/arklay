@@ -1,0 +1,73 @@
+# room 118: stand at run_119's start, aim the Colt S.A.A. at the zombies and fire every 40 ticks; an empty Colt reloads on the next press (#491)
+360 aim
+380 aim fire
+385 aim
+420 aim fire
+425 aim
+460 aim fire
+465 aim
+500 aim fire
+505 aim
+540 aim fire
+545 aim
+580 aim fire
+585 aim
+620 aim fire
+625 aim
+660 aim fire
+665 aim
+700 aim fire
+705 aim
+740 aim fire
+745 aim
+780 aim fire
+785 aim
+820 aim fire
+825 aim
+860 aim fire
+865 aim
+900 aim fire
+905 aim
+940 aim fire
+945 aim
+980 aim fire
+985 aim
+1020 aim fire
+1025 aim
+1060 aim fire
+1065 aim
+1100 aim fire
+1105 aim
+1140 aim fire
+1145 aim
+1180 aim fire
+1185 aim
+1220 aim fire
+1225 aim
+1260 aim fire
+1265 aim
+1300 aim fire
+1305 aim
+1340 aim fire
+1345 aim
+1380 aim fire
+1385 aim
+1420 aim fire
+1425 aim
+1460 aim fire
+1465 aim
+1500 aim fire
+1505 aim
+1540 aim fire
+1545 aim
+1580 aim fire
+1585 aim
+1620 aim fire
+1625 aim
+1660 aim fire
+1665 aim
+1700 aim fire
+1705 aim
+1740 aim fire
+1745 aim
+1760

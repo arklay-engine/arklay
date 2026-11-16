@@ -1,0 +1,165 @@
+# leon_a_ada_305: Ada from 30B's door 1 into 305, where she shoots its two dogs, runs west, north and east round the walkway to door 4 (to 306)
+361 aim fire
+362 aim
+366 aim fire
+368 aim
+372 aim fire
+374 aim
+378 aim fire
+380 aim
+384 aim fire
+386 aim
+390 aim fire
+392 aim
+396 aim fire
+398 aim
+402 aim fire
+404 aim
+408 aim fire
+410 aim
+414 aim fire
+416 aim
+420 aim fire
+422 aim
+426 aim fire
+428 aim
+432 aim fire
+434 aim
+438 aim fire
+440 aim
+444 aim fire
+446 aim
+450 aim fire
+452 aim
+456 aim fire
+458 aim
+462 aim fire
+464 aim
+468 aim fire
+470 aim
+474 aim fire
+476 aim
+480 aim fire
+482 aim
+486 aim fire
+488 aim
+492 aim fire
+494 aim
+498 aim fire
+500 aim
+504 aim fire
+506 aim
+510 aim fire
+512 aim
+516 aim fire
+518 aim
+522 aim fire
+524 aim
+528 aim fire
+530 aim
+534 aim fire
+536 aim
+540 aim fire
+542 aim
+546 aim fire
+548 aim
+565 aim fire
+566 aim
+570 aim fire
+572 aim
+576 aim fire
+578 aim
+582 aim fire
+584 aim
+588 aim fire
+590 aim
+654 aim fire
+656 aim
+660 aim fire
+662 aim
+666 aim fire
+668 aim
+672 aim fire
+674 aim
+678 aim fire
+680 aim
+684 aim fire
+686 aim
+690 aim fire
+692 aim
+696 aim fire
+698 aim
+702 aim fire
+704 aim
+708 aim fire
+710 aim
+714 aim fire
+716 aim
+720 aim fire
+722 aim
+726 aim fire
+728 aim
+732 aim fire
+734 aim
+738 aim fire
+740 aim
+744 aim fire
+746 aim
+774 aim fire
+776 aim
+780 aim fire
+782 aim
+786 aim fire
+788 aim
+792 aim fire
+794 aim
+798 aim fire
+800 aim
+804 aim fire
+806 aim
+810 aim fire
+812 aim
+816 aim fire
+818 aim
+822 aim fire
+824 aim
+828 aim fire
+830 aim
+834 aim fire
+836 aim
+840 aim fire
+842 aim
+846 aim fire
+848 aim
+852 aim fire
+854 aim
+858 aim fire
+860 aim
+864 aim fire
+866 aim
+870 aim fire
+872 aim
+876 aim fire
+878 aim
+978 aim fire
+980 aim
+984 aim fire
+986 aim
+1092 aim fire
+1094 up run left
+1105 up run
+1149 up run left
+1150 up run
+1153 up run right
+1172 up run
+1188 up run right
+1189 up run
+1225 up run left
+1226 up run
+1256 up run left
+1274 up run
+1297 up run left
+1299
+1301 right
+1303 action
+1305

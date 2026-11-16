@@ -1056,3 +1056,23 @@ fn the_status_start_closes_the_first_gap() {
         "compact"
     );
 }
+
+/// `St_com_use_equip` (`0x4F8620`) compares slots: with the handgun in hand
+/// from slot 0, EQUIP on a second handgun in slot 2 equips that slot, and
+/// the weapon fires from its rounds (#515).
+#[test]
+fn equip_compares_slots_not_ids() {
+    let mut start = game(&[(0x03, 13), (0x01, 1), (0x03, 15)]);
+    start.set_equipped(Some(0x03));
+    assert_eq!(start.equipped_slot, Some(0));
+    let mut run = Run::new(start, 399);
+    run.until(560, &[(400, DOWN), (420, CONFIRM), (500, CONFIRM)]);
+    assert_eq!(run.game.equipped, Some(0x03), "the second copy is equipped");
+    assert_eq!(run.game.equipped_slot, Some(2));
+    assert_eq!(run.game.equipped_weapon_id, 0x03);
+    assert_eq!(
+        run.game.re2_weapon().rounds,
+        15,
+        "the equipped slot's rounds"
+    );
+}

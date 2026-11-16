@@ -27,6 +27,8 @@ pub fn tick(
     for slot in run_order() {
         if slot == SPLAYER_SLOT {
             partner_root_ck_sys(game, room, false);
+        } else {
+            enemy_spl_root_ck_sys(game, room, slot, false);
         }
         // `Game_loop` still calls a stopped enemy, which does its `Root_ck` first.
         let stopped = game.re2.character_stopped(slot);
@@ -104,14 +106,15 @@ pub fn tick(
 
 /// The player's `Atd[0]` at `pos`, as `Oba_set_ofs` leaves it.
 fn player_atd(game: &GameState, pos: [i32; 3]) -> crate::zombie2::Atd {
-    let width = player_width(game.id.player_flag);
+    let width = player_width(game.re2.pl_id);
+    let height = player_height(game.re2.pl_id);
     crate::zombie2::Atd {
         ofs_x: 0,
-        ofs_y: -(PLAYER_HEIGHT as i16),
+        ofs_y: -(height as i16),
         at_w: width,
-        at_h: PLAYER_HEIGHT,
+        at_h: height,
         w: width,
-        at: [pos[0], pos[1] - i32::from(PLAYER_HEIGHT), pos[2]],
+        at: [pos[0], pos[1] - i32::from(height), pos[2]],
     }
 }
 
@@ -147,7 +150,12 @@ pub fn keep_old_boxes(game: &mut GameState, player_pos: [i32; 3]) {
 
 /// What the slots in play show `Oba_ck_hit`, in `player_work`'s order.
 fn slot_bodies(game: &GameState) -> Vec<crate::zombie2::Oba> {
-    let in_play = game.re2.characters.0.iter().enumerate();
+    re2_slot_bodies(&game.re2)
+}
+
+/// [`slot_bodies`] of the RE 2 state alone.
+pub(crate) fn re2_slot_bodies(re2: &crate::scd2::host::Re2State) -> Vec<crate::zombie2::Oba> {
+    let in_play = re2.characters.0.iter().enumerate();
     in_play
         .filter_map(|(slot, other)| Some((slot, other.as_deref()?)))
         .filter(|(_, other)| other.be_flg & 1 != 0)
@@ -280,10 +288,12 @@ pub fn player_held(
         rnd: &mut re2.rnd,
         life: &mut game.entities[0].health,
         released: false,
+        die: false,
         knocks: 0,
     };
     player2::player_held(&mut re2.player, player, tick, &mut held);
-    let (released, knocks) = (held.released, held.knocks);
+    let (released, knocks, die) = (held.released, held.knocks, held.die);
+    game.re2.player.die_start |= die;
     if released && let Some(Some(character)) = game.re2.characters.0.get_mut(slot) {
         character.be_flg &= !0x1004;
     }
@@ -402,10 +412,6 @@ pub fn targets_of(re2: &crate::scd2::host::Re2State) -> Vec<crate::weapon2::Targ
         .filter(|(slot, _)| *slot != SPLAYER_SLOT)
         .filter_map(|(slot, character)| {
             let character = character.as_deref()?;
-            // `Em_2D`'s hits (`Routine_0` 2 and 3) aren't ported yet.
-            if character.id == crate::zombie2::EM2D_ID {
-                return None;
-            }
             let zombie = character.zombie.as_ref()?;
             let pos = character.body.pos;
             Some(crate::weapon2::Target {
@@ -417,6 +423,7 @@ pub fn targets_of(re2: &crate::scd2::host::Re2State) -> Vec<crate::weapon2::Targ
                 damage_cnt: zombie.damage_cnt,
                 pos,
                 at: [zombie.atd.at[0], zombie.atd.at[2]],
+                at_y: zombie.atd.at[1],
                 at_w: zombie.atd.at_w,
                 at_w1: if character.id == crate::zombie2::DOG_ID {
                     600
@@ -487,6 +494,9 @@ fn esp_calls(game: &mut GameState, calls: Vec<player2::EffectCall>) {
         };
         if let (Some(index), Some(motion)) = (index, call.motion) {
             game.re2.effects.launch(index, motion);
+        }
+        if let (Some(index), Some(turn)) = (index, call.turn) {
+            game.re2.effects.turn(index, turn);
         }
     }
 }
@@ -703,7 +713,7 @@ fn run_zombie(
     let stage = game.id.stage;
     let room_code = u16::from(stage) << 8 | u16::from(game.id.room);
     let player_angle = game.entities[0].angle;
-    let player_id = game.id.player_flag;
+    let player_id = game.re2.pl_id;
     let weapon = game.re2_weapon().id;
     let common_a4 = game.re2.flag(FG_COMMON, FG_COMMON_LICKER);
     let claire = game.re2.flag(
@@ -735,7 +745,8 @@ fn run_zombie(
     } else {
         Vec::new()
     };
-    let gacha = re2.key_trg & 0x34F != 0;
+    let key_trg = re2.key_trg;
+    let gacha = key_trg & 0x34F != 0;
     let same_id = re2
         .characters
         .0
@@ -786,6 +797,7 @@ fn run_zombie(
         player_angle,
         player_life,
         gacha,
+        key_trg,
         player_id,
         knocks: Vec::new(),
         player,
@@ -819,6 +831,7 @@ fn run_zombie(
         parent,
         works,
         spawns: Vec::new(),
+        freed: Vec::new(),
         killed: false,
         water,
         banks,
@@ -835,6 +848,7 @@ fn run_zombie(
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
     let spawns = std::mem::take(&mut world.spawns);
+    let freed = std::mem::take(&mut world.freed);
     let killed = world.killed;
     let moved = world.player_moved.then_some(world.player);
     let status_or = world.status_or;
@@ -894,6 +908,14 @@ fn run_zombie(
     }
     if killed {
         re2.enemies = re2.enemies.wrapping_sub(1);
+    }
+    // A work the script took out of play outright: it counts out of the room
+    // (`Set_enemy_work` counts a taken one back in).
+    for freed in freed {
+        if let Some(other) = re2.characters.0.get_mut(freed).and_then(Option::as_mut) {
+            other.be_flg = 0;
+            re2.enemies = re2.enemies.wrapping_sub(1);
+        }
     }
     let mut run_now = Vec::new();
     for spawn in spawns {
@@ -1074,14 +1096,26 @@ fn set_enemy_work(
     characters[spawn.slot] = Some(Box::new(character));
 }
 
-/// The player's `Atd[0]` width, `At_w` and `W`: `Player_set`'s 450, which
-/// `Pl_init` makes 350 for Claire's bodies and Sherry, as it does the radius
-/// the room's collision pushes with.
-pub fn player_width(player_flag: u8) -> u16 {
-    crate::sca::player_radius(player_flag) as u16
+/// The player's `Atd[0]` width, `At_w` and `W`, by `pPl.Id`: `Player_set`'s
+/// 450, which `Pl_init` makes 350 for Claire's bodies and Ada and 250 for
+/// Sherry, as it does the radius the room's collision pushes with.
+pub fn player_width(id: u8) -> u16 {
+    crate::sca::player_radius(id) as u16
 }
-/// The player's `At_h`, and how far its box's `Ofs_y` lifts it.
+/// The player's `At_h`, and how far its box's `Ofs_y` lifts it, as
+/// `Player_set` (0x4D93A0) leaves them.
 pub const PLAYER_HEIGHT: u16 = 0x5FA;
+/// `Pl_init` (0x4D9940) lowers the box of Claire's bodies and Sherry (ids 1, 3,
+/// 5, 7, 9 and 0xE) to an `At_h` and `Ofs_y` of 0x546, and id 0xF's to 0x32A.
+/// `Oba_ck_hit` (0x4CC150) reads it: a crow flying low over Claire (room 109)
+/// clears her head where it would touch Leon's.
+pub fn player_height(id: u8) -> u16 {
+    match id {
+        1 | 3 | 5 | 7 | 9 | 0xE => 0x546,
+        0xF => 0x32A,
+        _ => PLAYER_HEIGHT,
+    }
+}
 /// `fg_system`'s `0x20`, easy mode's bit.
 const FG_SYSTEM_EASY: u8 = 26;
 /// `fg_common`'s `0xa4`, which `Em22_Init` reads.
@@ -1205,6 +1239,49 @@ pub fn init_for_draw(
 /// Marvin's id: his init (`0x4f00e0`) gives his arms two sets of meshes.
 const MARVIN: u8 = 0x4A;
 
+/// Ada's ids, which `Spl_Init`'s table (`0x53cbc8`) gives `Spl_in41`.
+const ADA_IDS: [u8; 2] = [0x41, 0x43];
+
+/// Ada's right hand and the part that holds its other mesh, which
+/// `Spl_in41` swaps (`Type`'s `0x800`).
+const ADA_HAND: usize = 11;
+const ADA_SPARE_HAND: usize = 15;
+
+/// Ada's part 16, which `Spl_in41` puts on only with scenario flag 80
+/// (`fg_scenario`'s `0x50`), hung from part 0 at (0x42, -0x28e, 0).
+const ADA_PART_16: usize = 16;
+const ADA_PART_16_FLAG: u8 = 0x50;
+
+/// `Spl_in41` (`0x4efc70`), after `Spl_Init`'s bits: the partner (`Type`'s
+/// `0x400`) takes `0x800`, and `0x800` swaps the hand's meshes with the spare
+/// part's and goes. The spare part is always off, part 16 is off but for
+/// scenario flag 80 (`flag_80`), and `0x80` marks the work as set up. Its
+/// partner's words are `Spl_in45`'s, and its partner gets `Spl_Auto`'s
+/// routine whatever `Type`'s `0x4000` chose.
+///
+/// Not ported: part 16's hanging from part 0 (the port's parts keep the
+/// model's tree, so with flag 80 its mesh isn't drawn), part 0's `Be_flg`
+/// `0x4000`, and `Aida_Jh_init` with its `Aida_before`, `Aida_Jh_move`
+/// (`0x4b4680`), which every tick moves the vertices at five joints (parts
+/// 1, 2, 5, 9 and 12, the tables at `0x52c5ec` to `0x52c868`) to close the
+/// skin's seams.
+fn spl_in41(character: &mut Character, flag_80: bool) {
+    if character.kind & 0x400 != 0 {
+        character.kind |= 0x800;
+    }
+    character.work.hidden_parts |= 1 << ADA_SPARE_HAND;
+    if flag_80 {
+        character.work.hidden_parts &= !(1 << ADA_PART_16);
+    } else {
+        character.work.hidden_parts |= 1 << ADA_PART_16;
+    }
+    if character.kind & 0x800 != 0 {
+        character.kind &= !0x800;
+        character.arms.swapped = !character.arms.swapped;
+    }
+    character.kind |= 0x80;
+}
+
 /// The part pairs Marvin's init swaps (`0x53cb20`): each arm joint and the
 /// spare part that holds its other mesh.
 const MARVIN_ARMS: [(usize, usize); 7] = [
@@ -1240,8 +1317,10 @@ fn clear_kind(character: &mut Character, bits: u16) {
 /// other set of arms at once and the bits go. Otherwise the arms wait for
 /// `Spl_chenge00`.
 fn spl_in4a(character: &mut Character) {
+    character.work.hidden_parts |= 1 << MARVIN_GUN_HAND;
     if marvin_kind(character) & 0x300 != 0 {
         character.arms.swapped = true;
+        hide_spare_arms(character, false);
         clear_kind(character, 0x300);
     } else {
         character.arms.fade = 0;
@@ -1263,7 +1342,23 @@ fn spl_mv4a(character: &mut Character) {
             fade: 0,
             faded: true,
         };
+        hide_spare_arms(character, true);
         clear_kind(character, 0x200);
+    }
+}
+
+/// Once the arms swap, the spare parts are off (`Be_flg` bit 0 clear), as the
+/// gun hand has been since `Spl_in4a`: as a zombie his parts are 15 to 23
+/// hidden. `black`: the fade's end also leaves the spares black (the
+/// original's `zp`, `ff8000,808080,8888880`); `Type`'s `0x300` at init leaves
+/// them at their 0x808080. The joints draw the spares' meshes, so this only
+/// changes the parts' state, not the draw (`joint_meshes` reads it by joint).
+fn hide_spare_arms(character: &mut Character, black: bool) {
+    for (_, spare) in MARVIN_ARMS {
+        character.work.hidden_parts |= 1 << spare;
+        if black {
+            character.work.part_rgb[spare] = 0;
+        }
     }
 }
 
@@ -1274,6 +1369,14 @@ fn spl_mv4a(character: &mut Character) {
 /// that only the spare shows. Once they swap, the joint takes the other mesh.
 /// The model decides, not `Id`: as a zombie he keeps his arms.
 pub fn joint_meshes(character: &Character, joints: usize, meshes: usize) -> Option<Vec<usize>> {
+    if ADA_IDS.contains(&character.model) {
+        if !character.arms.swapped || joints <= ADA_HAND || meshes <= ADA_SPARE_HAND {
+            return None;
+        }
+        let mut joint_meshes: Vec<usize> = (0..joints).collect();
+        joint_meshes[ADA_HAND] = ADA_SPARE_HAND;
+        return Some(joint_meshes);
+    }
     if character.model != MARVIN || joints <= 14 || meshes <= MARVIN_GUN_HAND {
         return None;
     }
@@ -1331,6 +1434,8 @@ fn run_load_stop_with(
             // A position a door or a script gave is still pending in the
             // load's last pass.
             partner_root_ck_sys(game, room, true);
+        } else {
+            enemy_spl_root_ck_sys(game, room, slot, true);
         }
         let Some(mut character) = game.re2.characters.0.get_mut(slot).and_then(Option::take) else {
             continue;
@@ -1365,10 +1470,11 @@ fn run_order() -> impl Iterator<Item = usize> {
 }
 
 /// `_Spl`'s routine: `Spl_Init` for one no script has given a routine,
-/// `Spl_Auto` for Sherry as the partner (`partner2`), and `Spl_Scenario`.
-/// Anyone else's `Spl_Auto` isn't ported: they stand still.
+/// `Spl_Auto` for Sherry or Ada as the partner (`partner2`), and
+/// `Spl_Scenario`. Anyone else's `Spl_Auto` isn't ported: they stand still.
 fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Option<u8> {
     let sherry = matches!(character.id, 0x45 | 0x4F);
+    let ada = ADA_IDS.contains(&character.id);
     let arrived = if player2::uninitialised(&character.work) {
         // `Spl_Init`: `Type`'s `0x400` makes the partner, and the scene's
         // Ada or Sherry stops being one.
@@ -1386,7 +1492,10 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
                 game.re2.set_partner_bit(false);
             }
         }
-        let partner = partner && sherry && character.partner.is_some();
+        if ada {
+            spl_in41(character, game.re2.flag(3, ADA_PART_16_FLAG));
+        }
+        let partner = partner && (sherry || ada) && character.partner.is_some();
         player2::spl_init(
             &mut character.work,
             &mut character.body,
@@ -1396,20 +1505,23 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
         );
         // `Spl_in41` and `Spl_in45` (from `Spl_Init`'s table) send the
         // partner to `Spl_Auto` whatever 0x4000 chose.
-        if matches!(character.id, 0x41 | 0x45 | 0x4F) && game.re2.partner_bit() {
+        if (ada || sherry) && game.re2.partner_bit() {
             character.work.routine = [1, 0, 0, 0];
         }
         if character.id == MARVIN {
             spl_in4a(character);
         }
-        if sherry && let Some(words) = character.partner.as_deref_mut() {
+        // `Spl_in41` ends as `Spl_in45` does.
+        if (sherry || ada)
+            && let Some(words) = character.partner.as_deref_mut()
+        {
             words.spl_in45(game.re2.partner_bit(), game.re2.partner_life);
         }
         None
     } else if player2::in_scenario(&character.work) {
         player2::player_move(&mut character.work, &mut character.body, tick)
     } else if player2::in_auto(&character.work)
-        && sherry
+        && (sherry || ada)
         && let Some(words) = character.partner.as_deref_mut()
     {
         let (player, player_angle) = game
@@ -1430,11 +1542,13 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
             ground: partner_ground(tick.room, character.body.pos),
             be_flg: character.be_flg,
             noise: 0,
+            player_noise: game.re2.player.noise,
+            player_spd_x: game.re2.player.spd[0],
             poisoned: game.re2.partner_poisoned,
         };
         let kind = &mut character.kind;
         player2::spl_auto(&mut character.work, &mut character.body, tick, |mover| {
-            crate::partner2::spl_auto(mover, words, kind, &mut world);
+            crate::partner2::spl_auto(mover, words, kind, &mut world, ada);
         });
         character.be_flg = world.be_flg;
         game.re2.player.noise |= world.noise;
@@ -1559,10 +1673,32 @@ fn partner_root_ck_sys(game: &mut GameState, room: &RoomState, loading: bool) {
     game.re2.characters.0[SPLAYER_SLOT] = Some(character);
 }
 
+/// `Root_ck`'s count of its turn: 7 again after 0.
+pub(crate) fn count_root_turn(turn: &mut u8) {
+    if *turn & 0x7F == 0 {
+        *turn |= 7;
+    }
+    *turn = turn.wrapping_sub(1);
+}
+
+/// `_Spl`'s `Spl_Root_ck_sys` for a scene character in an enemy slot, which
+/// runs before the stop test as the partner's does.
+fn enemy_spl_root_ck_sys(game: &mut GameState, room: &RoomState, slot: usize, loading: bool) {
+    let Some(mut character) = game.re2.characters.0.get_mut(slot).and_then(Option::take) else {
+        return;
+    };
+    if moves(&character) && character.zombie.is_none() {
+        root_ck_sys(game, room, &mut character, loading);
+    }
+    game.re2.characters.0[slot] = Some(character);
+}
+
 /// `loading`: the room's load, where the player is where the door or a
 /// script's `pos_set` put them, which the port applies only at the next tick.
 fn root_ck_sys(game: &GameState, room: &RoomState, character: &mut Character, loading: bool) {
     let Some(partner) = character.partner.as_deref_mut() else {
+        // Anyone else's `Type` has `0x1000`, so only its turn counts.
+        count_root_turn(&mut character.work.root_turn);
         return;
     };
     let sca = room
@@ -1638,12 +1774,25 @@ fn partner_oba_ck_em(game: &GameState, character: &mut Character, old: [i32; 3])
     }
 }
 
-/// `_Spl`'s `Sca_ck_em`, after its routine.
+/// `_Spl`'s `Sca_ck_em` (`0x4CC730`), after its routine. A `Be_flg` with 8
+/// skips the walls, as a zombie's does: room 301's `main_00` sets it on
+/// Ben, placed in his bunk, who stays there (`leon_a_219_301`). The mirror
+/// takes the place either way.
 fn spl_sca_ck_em(room: &RoomState, character: &mut Character) {
-    let Some(sca) = &room.sca else {
+    if let Some(partner) = character.partner.as_deref_mut() {
+        partner.sca_hit = false;
+    }
+    let body = &mut character.body;
+    let sca = room
+        .sca
+        .as_ref()
+        .filter(|_| character.be_flg & crate::zombie2::BE_NO_SCA == 0);
+    let Some(sca) = sca else {
+        if room.sca.is_some() {
+            body.collision_mirror = [body.pos[0], body.pos[2]];
+        }
         return;
     };
-    let body = &mut character.body;
     let [old_x, old_z] = body.collision_mirror;
     let prev = [old_x, body.pos[1], old_z];
     let mask = sca_mask(character.id);
@@ -1672,7 +1821,9 @@ fn em_init_move(
 ) -> Option<u8> {
     character.with_room = false;
     // `_Spl`'s `Spl_Root_ck_sys` runs before `Spl_Init`, on what the work's
-    // memory held: the follow point's kind is taken as 0.
+    // memory held: the follow point's kind is taken as 0. Anyone else counts
+    // only the turn, in each of the two calls: room 202's Marvin, whom
+    // `Sce_em_set` starts at 2 in slot 0, ends the load at 0.
     root_ck_sys(game, room, character, true);
     let arrived = spl(game, character, tick);
     spl_sca_ck_em(room, character);
@@ -1681,6 +1832,9 @@ fn em_init_move(
         return arrived;
     }
     player2::spl_start(&mut character.work, start, flags);
+    if character.partner.is_none() {
+        count_root_turn(&mut character.work.root_turn);
+    }
     let arrived = spl(game, character, tick).or(arrived);
     spl_sca_ck_em(room, character);
     arrived
@@ -1767,11 +1921,36 @@ pub fn pose_joints(
     );
     let (clips, keyframes) = tick.banks.get(character.work.bank);
     let mut keyframe = character.body.anim.pose_keyframe(clips, keyframes)?;
-    character.work.apply_to_pose(&mut keyframe);
+    character
+        .work
+        .apply_to_pose(&character.body.anim, &mut keyframe);
     let [pitch, roll] = character
         .zombie
         .as_ref()
         .map_or([0; 2], |zombie| zombie.tilt);
+    let on_part = character
+        .work
+        .super_part
+        .and_then(|part| game.joint_worlds[0].get(usize::from(part)));
+    if let Some(part) = on_part {
+        // `pSuper` is a part of the player's: `Cdir` turns on it, and `Pos`
+        // is already the place in the world ([`on_player_parts`]).
+        let [x, z] = character.work.tilt;
+        let local = crate::anim::Mat4x3 {
+            r: crate::anim::rotation_matrix(
+                i32::from(x),
+                i32::from(character.body.angle),
+                i32::from(z),
+            ),
+            t: [0; 3],
+        };
+        let mut matrix = crate::anim::compose(part, &local);
+        matrix.t = character.body.pos;
+        let mut local = crate::anim::joint_local_transforms(&model.skeleton, &keyframe);
+        character.work.pose_locals(&mut local);
+        let joints = crate::anim::joint_matrices_from_locals(&model.skeleton, &local, &matrix, &[]);
+        return Some((joints, keyframe));
+    }
     let mut matrix = crate::anim::entity_matrix_rotated_scaled(
         character.body.pos,
         pitch,
@@ -1815,6 +1994,53 @@ pub fn keep_joints(
     });
 }
 
+/// `Joint_trans2`'s `CompM(pSuper, ...)` for a body hung on a part of the
+/// player's (`Be_flg`'s `0x3000000`): `M.t` is `Pos`, so the body's place
+/// becomes the one in the world, on the player's pose this tick. The local
+/// one is kept for `Em_29` to put back.
+fn on_player_parts(game: &mut GameState) {
+    let parts = &game.re2.player.parts;
+    for character in game.re2.characters.0.iter_mut().flatten() {
+        if character.be_flg & 1 == 0 || character.be_flg & 0x300_0000 != 0x300_0000 {
+            continue;
+        }
+        let Some(part) = character.work.super_part else {
+            continue;
+        };
+        let Some(Some(matrix)) = parts.get(usize::from(part)) else {
+            continue;
+        };
+        let on_part = |local: [i32; 3]| -> [i32; 3] {
+            std::array::from_fn(|axis| {
+                let turned: i32 = (0..3)
+                    .map(|index| i32::from(matrix.m[axis][index]) * local[index])
+                    .sum();
+                matrix.t[axis] + (turned >> 12)
+            })
+        };
+        let local = character.body.pos;
+        character.work.super_local = Some(local);
+        let pos = on_part(local);
+        character.body.pos = pos;
+        // Its part 0 on that `M`, where the player's head turns to on the
+        // next tick.
+        let turn = player2::mul_matrix(
+            &matrix.m,
+            &character.work.body_rotation(character.body.angle),
+        );
+        if let Some(zombie) = character.zombie.as_mut() {
+            zombie.roach_head = zombie.roach_head.map(|offset| {
+                std::array::from_fn(|axis| {
+                    let turned: i32 = (0..3)
+                        .map(|index| i32::from(turn[axis][index]) * offset[index])
+                        .sum();
+                    pos[axis] + (turned >> 12)
+                })
+            });
+        }
+    }
+}
+
 /// [`keep_joints`] with each character's model from `model`: the slots of
 /// the characters the draw poses (in play, and not a zombie waiting for the
 /// room's scripts), the others empty.
@@ -1823,6 +2049,7 @@ fn keep_joints_with(
     room: &RoomState,
     mut model: impl FnMut(&Character) -> Option<std::sync::Arc<Emd>>,
 ) {
+    on_player_parts(game);
     let characters = &game.re2.characters.0;
     let mut kept = vec![Vec::new(); characters.len()];
     for (slot, character) in characters.iter().enumerate() {
@@ -2117,12 +2344,83 @@ mod tests {
             let mut game = GameState::default();
             game.id = room;
             game.id.player_flag = player_flag;
+            game.re2.pl_id = player_flag;
             game.re2.characters.0 = vec![Some(Box::new(kendo.clone()))];
             let mut player = crate::player::spawn(room, &RoomState::default());
             player.pos = [-850, 0, 0];
             oba_ck_em2(&mut game, &mut player, [-850, 0, 0]);
             assert_eq!(player.pos, [x, 0, 0], "player {player_flag}");
             assert_eq!(game.re2.player.at_em_flg, u32::from(player_flag == 0));
+        }
+    }
+
+    #[test]
+    fn a_crow_flying_low_clears_claires_head_but_not_leons() {
+        // Room 109's crow (`claire_a_108_10b`, tick 934): its box (`Ofs_y`
+        // -350, `At_w` 350, `At_h` 530) at -3310 high, 697 from the player on
+        // the floor. Leon's box (`At_h` 1530) reaches it; Claire's
+        // (`Pl_init`'s 1350) doesn't, so she isn't pushed.
+        let room = RoomId::parse("1090").unwrap();
+        let mut body = crate::player::spawn(room, &RoomState::default());
+        body.pos = [-2477, -2960, -12521];
+        let mut zombie = crate::zombie2::Zombie::default();
+        zombie.atd = crate::zombie2::Atd {
+            ofs_x: 0,
+            ofs_y: -350,
+            at_w: 350,
+            at_h: 530,
+            w: 350,
+            at: [-2477, -3310, -12521],
+        };
+        let crow = Character {
+            id: 0x21,
+            model: 0x21,
+            em_set: (0, 0, NO_ENEMY_FLAG),
+            arms: Arms::default(),
+            be_flg: 1,
+            work: player2::Work::default(),
+            body,
+            kind: 0,
+            kage: None,
+            l_spl: 0,
+            dir_spl: 0,
+            start: (0, 0),
+            sound_type: 0,
+            distance: 0,
+            area: crate::scd2::host::NO_AREA,
+            with_room: false,
+            held_bank: None,
+            partner: None,
+            zombie: Some(zombie),
+        };
+        // Each 110 inside its reach (`At_w` 450 or 350, and the crow's 350).
+        for (player_flag, pushed) in [(0, true), (1, false)] {
+            let mut game = GameState::default();
+            game.id = room;
+            game.id.player_flag = player_flag;
+            game.re2.pl_id = player_flag;
+            game.re2.characters.0 = vec![Some(Box::new(crow.clone()))];
+            let mut player = crate::player::spawn(room, &RoomState::default());
+            let at = [
+                -2477 + 690 - 450 + i32::from(player_width(player_flag)),
+                0,
+                -12521,
+            ];
+            player.pos = at;
+            oba_ck_em2(&mut game, &mut player, at);
+            assert_eq!(player.pos != at, pushed, "player {player_flag}");
+            assert_eq!(game.re2.player.at_em_flg, u32::from(pushed));
+            assert_eq!(
+                game.re2
+                    .player
+                    .atd
+                    .map(|atd| (atd.ofs_y, atd.at_h, atd.at[1])),
+                Some(if pushed {
+                    (-0x5FA, 0x5FA, -0x5FA)
+                } else {
+                    (-0x546, 0x546, -0x546)
+                })
+            );
         }
     }
 
@@ -2134,6 +2432,7 @@ mod tests {
         let mut game = GameState::default();
         game.id = room;
         game.id.player_flag = 1;
+        game.re2.pl_id = 1;
         game.re2.characters.0 = vec![None; SPLAYER_SLOT + 1];
         game.re2.characters.0[SPLAYER_SLOT] = Some(Box::new(partner));
         let mut player = crate::player::spawn(room, &RoomState::default());
@@ -2167,7 +2466,7 @@ mod tests {
             area: crate::scd2::host::NO_AREA,
             with_room: false,
             held_bank: None,
-            partner: Some(Box::new(crate::partner2::Partner::placed())),
+            partner: Some(Box::new(crate::partner2::Partner::placed(0, 0))),
             zombie: None,
         }
     }
@@ -2223,6 +2522,125 @@ mod tests {
             Some(0),
             "she looks at the player"
         );
+    }
+
+    fn ada(kind: u16) -> Character {
+        Character {
+            id: 0x41,
+            model: 0x41,
+            ..sherry(kind)
+        }
+    }
+
+    /// `Sca_ck_em` leaves a character with `Be_flg`'s 8 where it stands:
+    /// room 301's Ben, whom `main_00` sets it on, lies in his bunk's box
+    /// rather than being pushed 634 units out of it while the room loads.
+    #[test]
+    fn a_scene_character_with_be_flg_8_is_not_pushed_out_of_the_walls() {
+        let bunk = crate::state::ScaRect {
+            x: -19000,
+            z: -25000,
+            width: 2000,
+            depth: 2000,
+            id: crate::sca::CHARACTER_MASK,
+            kind: 0xF,
+            floor: 1,
+        };
+        let room = RoomState {
+            sca: Some(crate::state::Sca {
+                records: vec![bunk],
+                ..Default::default()
+            }),
+            ..RoomState::default()
+        };
+        let placed = |be_flg| {
+            let mut character = ada(0);
+            character.be_flg = be_flg;
+            character.body.pos = [-17950, 0, -24000];
+            character.body.collision_mirror = [-17950, -24000];
+            spl_sca_ck_em(&room, &mut character);
+            (character.body.pos, character.body.collision_mirror)
+        };
+        let (pushed, _) = placed(1);
+        assert_ne!(pushed, [-17950, 0, -24000], "pushed out of the box");
+        let (kept, mirror) = placed(1 | crate::zombie2::BE_NO_SCA);
+        assert_eq!(kept, [-17950, 0, -24000]);
+        assert_eq!(mirror, [-17950, -24000]);
+    }
+
+    #[test]
+    fn a_scene_adas_gun_hand_swaps_once_and_marks_her_set_up() {
+        // Room 216's `sce_em_set` gives her `Type` 0x0800: the original's
+        // work then holds 0x5080.
+        let mut game = GameState::default();
+        let mut character = ada(0x0800);
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        spl(&mut game, &mut character, &tick);
+        assert_eq!(character.kind, 0x5080);
+        assert!(character.arms.swapped);
+        assert_ne!(character.work.hidden_parts & 1 << ADA_SPARE_HAND, 0);
+        let meshes = joint_meshes(&character, 16, 16).unwrap();
+        assert_eq!(meshes[ADA_HAND], ADA_SPARE_HAND);
+        assert!(!game.re2.partner_bit());
+        assert_eq!(character.work.routine[0], player2::MODE_SCENARIO);
+    }
+
+    #[test]
+    fn a_partner_ada_raises_the_partner_bit_and_follows() {
+        let mut game = GameState::default();
+        game.re2.partner_life = 150;
+        let mut character = ada(0x400);
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        spl(&mut game, &mut character, &tick);
+        assert!(game.re2.partner_bit());
+        assert_eq!(character.kind, 0x480);
+        assert_eq!(character.work.routine, [1, 0, 0, 0]);
+        let partner = character.partner.as_deref().unwrap();
+        assert_eq!((partner.life, partner.max_life), (150, 200));
+        assert_eq!(character.work.neck.target, Some(0));
+        // The partner's 0x400 takes 0x800, so the gun hand swaps here too.
+        assert!(character.arms.swapped);
+        assert_ne!(character.work.hidden_parts & 1 << ADA_SPARE_HAND, 0);
+        // `Spl_Auto` runs `Ada_move` from the next tick: 2000 from the point,
+        // Sherry's stand would leave (past 1500) and Ada's stays.
+        character.partner.as_deref_mut().unwrap().dist = 2000;
+        spl(&mut game, &mut character, &tick);
+        assert_eq!(character.work.routine, [1, 0, 1, 0]);
+        let mut sherry = sherry(0x400);
+        spl(&mut game, &mut sherry, &tick);
+        sherry.partner.as_deref_mut().unwrap().dist = 2000;
+        spl(&mut game, &mut sherry, &tick);
+        assert_ne!(sherry.work.routine[1], 0, "Sherry leaves the stand");
+    }
+
+    #[test]
+    fn ada_0x43_as_the_partner_follows_whatever_0x4000_chose() {
+        let mut game = GameState::default();
+        let mut character = Character {
+            id: 0x43,
+            model: 0x43,
+            ..ada(0x4400)
+        };
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        spl(&mut game, &mut character, &tick);
+        assert!(game.re2.partner_bit());
+        assert_eq!(character.work.routine, [1, 0, 0, 0]);
+    }
+
+    #[test]
+    fn adas_part_16_is_on_only_with_scenario_flag_80() {
+        let hidden = |flag: bool| {
+            let mut game = GameState::default();
+            if flag {
+                game.re2.set_flag(3, ADA_PART_16_FLAG, 1);
+            }
+            let mut character = ada(0x0800);
+            let tick = spl_tick(&RoomState::default(), &Default::default());
+            spl(&mut game, &mut character, &tick);
+            character.work.hidden_parts & 1 << ADA_PART_16 != 0
+        };
+        assert!(hidden(false));
+        assert!(!hidden(true));
     }
 
     #[test]
@@ -2315,6 +2733,10 @@ mod tests {
         character.kind = 0x5900;
         spl_in4a(&mut character);
         assert_eq!(character.kind, 0x5800);
+        // The spares and the gun hand go off, but not black: only the fade's
+        // end blackens them.
+        assert_eq!(character.work.hidden_parts, 0xFE8000);
+        assert!((0..24).all(|part| character.work.part_rgb[part] == player2::DEFAULT_PART_RGB));
         let meshes = joint_meshes(&character, 15, 24).unwrap();
         assert_eq!(&meshes[8..15], &[17, 20, 21, 22, 18, 15, 19]);
         // As a zombie he keeps them: the model decides.
@@ -2322,6 +2744,64 @@ mod tests {
         assert!(joint_meshes(&character, 15, 24).is_some());
         character.model = 0x45;
         assert!(joint_meshes(&character, 15, 24).is_none());
+    }
+
+    /// `Spl_Root_ck_sys` counts a scene character's turn (`+0x150`) every
+    /// tick from the slot `Sce_em_set` seeded it with, and room 202's script
+    /// making Marvin's work a zombie's hands it on to `Root_ck` (the
+    /// original's `rc` over his scene: 6, 5, ... 0, 6, and on as id 30).
+    #[test]
+    fn a_scene_characters_root_turn_counts_and_goes_on_as_a_zombie() {
+        let mut character = sherry(0x1000);
+        character.partner = None;
+        character.id = MARVIN;
+        character.model = MARVIN;
+        character.work.root_turn = 0;
+        let game = GameState::default();
+        let room = RoomState::default();
+        let turns: Vec<u8> = (0..9)
+            .map(|_| {
+                root_ck_sys(&game, &room, &mut character, false);
+                character.work.root_turn
+            })
+            .collect();
+        assert_eq!(turns, [6, 5, 4, 3, 2, 1, 0, 6, 5]);
+        character.id = 0x1E;
+        crate::scd2::host::become_zombie(&mut character, 0);
+        assert_eq!(character.zombie.as_ref().unwrap().root_turn(), 5);
+    }
+
+    /// `Sce_em_set` seeds the turn with the work's number plus 2 (in 0 to
+    /// 7), and each of `Em_init_move`'s `_Spl` calls counts it, the second
+    /// only with a start: room 202's Marvin (slot 0, start 261) loads at 0.
+    #[test]
+    fn sce_em_set_seeds_the_root_turn_and_em_init_move_counts_it_per_spl() {
+        use crate::scd2::vm::Host;
+        let cases = [
+            (0, 261, 2, 0),
+            (0, 0, 2, 1),
+            (6, 261, 0, 5),
+            (6, 0, 0, 6),
+            (7, 0, 1, 0),
+        ];
+        for (slot, start, seed, loaded) in cases {
+            let mut game = GameState::default();
+            let operands = [
+                0, slot, 74, 0, 8, 0, 0, 0, 28, -6100, 0, -16100, 2048, start, 20,
+            ];
+            let op = crate::scd2::opcode::by_mnemonic("sce_em_set").unwrap();
+            crate::scd2::host::GameHost { game: &mut game }.exec(0, op, &operands);
+            let mut character = game.re2.characters.0[slot as usize].take().unwrap();
+            assert_eq!(character.id, MARVIN);
+            assert_eq!(character.work.root_turn, seed, "slot {slot}'s seed");
+            let room = RoomState::default();
+            let tick = spl_tick(&room, &Default::default());
+            em_init_move(&mut game, &room, &mut character, &tick);
+            assert_eq!(
+                character.work.root_turn, loaded,
+                "slot {slot}, start {start}"
+            );
+        }
     }
 
     #[test]
@@ -2356,8 +2836,20 @@ mod tests {
         }
         assert!(!character.arms.swapped);
         assert_eq!(character.work.kind, 0x200);
+        assert_eq!(
+            character.work.hidden_parts,
+            1 << MARVIN_GUN_HAND,
+            "only the gun hand, from init, is hidden before the swap"
+        );
         spl_mv4a(&mut character);
         assert!(character.arms.swapped);
+        // The spares (15, 17 to 22) and the gun hand (23) go off, the spares
+        // black: with `Em10_Init`'s 16 that's the original's `zp` for him.
+        assert_eq!(character.work.hidden_parts, 0xFE8000);
+        let black: Vec<usize> = (0..24)
+            .filter(|&part| character.work.part_rgb[part] == 0)
+            .collect();
+        assert_eq!(black, [15, 17, 18, 19, 20, 21, 22]);
         assert_eq!(character.work.kind, 0);
         // A second fade never ends.
         character.work.kind = 0x200;
@@ -2365,5 +2857,29 @@ mod tests {
             spl_mv4a(&mut character);
         }
         assert_eq!(character.work.kind, 0x200);
+    }
+
+    #[test]
+    fn pl_init_box_by_id() {
+        // `Pl_init`: Claire's and Ada's 350 by 1350, Sherry's 250 by 810,
+        // Leon's `Player_set` 450 by 0x5FA.
+        for (id, width, height) in [
+            (0, 450, 0x5FA),
+            (1, 350, 1350),
+            (0xE, 350, 1350),
+            (0xF, 250, 810),
+        ] {
+            let mut game = GameState::default();
+            game.re2.pl_id = id;
+            let atd = player_atd(&game, [100, 0, 200]);
+            assert_eq!(
+                (atd.at_w, atd.w, atd.at_h),
+                (width, width, height),
+                "id {id:#x}"
+            );
+            assert_eq!(atd.ofs_y, -(height as i16));
+            assert_eq!(atd.at, [100, -i32::from(height), 200]);
+            assert_eq!(crate::sca::player_radius(id), i32::from(width));
+        }
     }
 }

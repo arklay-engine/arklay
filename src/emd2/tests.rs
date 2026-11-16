@@ -500,6 +500,7 @@ fn a_morph_moves_the_parts_children_by_their_tables() {
     );
     // No weight leaves the child at rest; `LoadAverage12` keeps 0xfff of it.
     assert_eq!(morphs[0].joint_offsets(&[0, 0]), [(2, [0, 558, 0])]);
-    assert_eq!(morphs[0].joint_offsets(&[0, 0xC00]), [(2, [0, 458, 0])]);
-    assert_eq!(morphs[0].joint_offsets(&[0, 0x1000]), [(2, [0, 425, 0])]);
+    // Each term is `MulDiv`'d by 0x1000, which rounds to the nearest.
+    assert_eq!(morphs[0].joint_offsets(&[0, 0xC00]), [(2, [0, 459, 0])]);
+    assert_eq!(morphs[0].joint_offsets(&[0, 0x1000]), [(2, [0, 426, 0])]);
 }

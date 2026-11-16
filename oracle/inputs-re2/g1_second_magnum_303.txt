@@ -1,0 +1,45 @@
+# room 303 in scenario B with 4:57 set (the second encounter, G1's Type 1): aim from 354 and fire the magnum every 20 ticks from 374 to 774, as G1 walks up; it dies, rises, limps off and falls (oracle/re2.md)
+354 aim
+374 aim fire
+379 aim
+394 aim fire
+399 aim
+414 aim fire
+419 aim
+434 aim fire
+439 aim
+454 aim fire
+459 aim
+474 aim fire
+479 aim
+494 aim fire
+499 aim
+514 aim fire
+519 aim
+534 aim fire
+539 aim
+554 aim fire
+559 aim
+574 aim fire
+579 aim
+594 aim fire
+599 aim
+614 aim fire
+619 aim
+634 aim fire
+639 aim
+654 aim fire
+659 aim
+674 aim fire
+679 aim
+694 aim fire
+699 aim
+714 aim fire
+719 aim
+734 aim fire
+739 aim
+754 aim fire
+759 aim
+774 aim fire
+779 aim
+780

@@ -1739,8 +1739,9 @@ impl Framebuffer {
     /// Draw a TMD mesh with the given joint matrices and view.
     ///
     /// Objects beyond `joints` are skipped. Triangles whose vertices cross the
-    /// near plane or that face away from the camera are dropped, the rest are
-    /// painted back-to-front by mean view-space Z.
+    /// near plane (RE2's are clipped at it instead, `clip_triangle_near`) or
+    /// that face away from the camera are dropped, the rest are painted
+    /// back-to-front by mean view-space Z.
     pub fn draw_model(
         &mut self,
         mesh: &Tmd,
@@ -1960,6 +1961,7 @@ impl Framebuffer {
                     blend_weight: None,
                     additive: false,
                     uv_nudge: [0; 3],
+                    view_depth: false,
                 })
             })
             .collect();
@@ -2095,72 +2097,79 @@ impl Framebuffer {
         let width = self.width as usize;
         let clip = self.clip;
         let rgba = &mut self.rgba;
-        crate::raster::draw_triangle(&vertices, self.width, self.height, |fragment| {
-            if let Some([x, y, w, h]) = clip {
-                let (fx, fy) = (fragment.x as i64, fragment.y as i64);
-                let (x, y) = (i64::from(x), i64::from(y));
-                if fx < x || fy < y || fx >= x + i64::from(w) || fy >= y + i64::from(h) {
-                    return;
-                }
-            }
-            let pixel = fragment.y * width + fragment.x;
-            let Some(stored) = depth.get_mut(pixel) else {
-                return;
-            };
-            if fragment.depth > *stored {
-                return;
-            }
-            // The blended pass and its knockout twin leave depth alone; an
-            // opaque triangle writes it even where its texel is transparent,
-            // since the shader never discards.
-            if !triangle.blend {
-                *stored = fragment.depth;
-            }
-            // An untextured packet samples the white texture; every other
-            // packet samples its page through the palette row. Palette entry
-            // zero is the PSX colour key (alpha 0), which leaves the pixel.
-            let (texel, blend) = match triangle.flat {
-                // A blended record's weight applies to its untextured packets
-                // too.
-                Some(_) => ([255, 255, 255], triangle.blend),
-                None => {
-                    let texel_u = clamp_texel(fragment.u, texture.width);
-                    let texel_v = clamp_texel(fragment.v, texture.height);
-                    let index = texel_v * texture.width as usize + texel_u;
-                    let Some(&palette_index) = texture.indices.get(index) else {
-                        return;
-                    };
-                    if palette_index == 0 {
+        let view_depth = triangle.view_depth;
+        crate::raster::draw_triangle_depth(
+            &vertices,
+            self.width,
+            self.height,
+            view_depth,
+            |fragment| {
+                if let Some([x, y, w, h]) = clip {
+                    let (fx, fy) = (fragment.x as i64, fragment.y as i64);
+                    let (x, y) = (i64::from(x), i64::from(y));
+                    if fx < x || fy < y || fx >= x + i64::from(w) || fy >= y + i64::from(h) {
                         return;
                     }
-                    let color = texture.palette(triangle.palette_row, palette_index);
-                    // A blending triangle blends every texel unless the
-                    // knock-out twin paints its non-STP texels back opaque.
-                    let blend = triangle.blend
-                        && (!twin || texture.palette_stp(triangle.palette_row, palette_index));
-                    ([color[0], color[1], color[2]], blend)
                 }
-            };
-            let offset = pixel * 4;
-            let Some(slot) = rgba.get_mut(offset..offset + 4) else {
-                return;
-            };
-            let source_alpha = if blend {
-                unorm8(fragment.color[3])
-            } else {
-                255
-            };
-            for (index, destination) in slot[..3].iter_mut().enumerate() {
-                let source =
-                    unorm8(f32::from(texel[index]) * (1.0 / 255.0) * fragment.color[index]);
-                *destination = if blend && triangle.additive {
-                    destination.saturating_add(source)
-                } else {
-                    blend_unorm8(source, *destination, source_alpha)
+                let pixel = fragment.y * width + fragment.x;
+                let Some(stored) = depth.get_mut(pixel) else {
+                    return;
                 };
-            }
-            slot[3] = 255;
-        });
+                if fragment.depth > *stored {
+                    return;
+                }
+                // The blended pass and its knockout twin leave depth alone; an
+                // opaque triangle writes it even where its texel is transparent,
+                // since the shader never discards.
+                if !triangle.blend {
+                    *stored = fragment.depth;
+                }
+                // An untextured packet samples the white texture; every other
+                // packet samples its page through the palette row. Palette entry
+                // zero is the PSX colour key (alpha 0), which leaves the pixel.
+                let (texel, blend) = match triangle.flat {
+                    // A blended record's weight applies to its untextured packets
+                    // too.
+                    Some(_) => ([255, 255, 255], triangle.blend),
+                    None => {
+                        let texel_u = clamp_texel(fragment.u, texture.width);
+                        let texel_v = clamp_texel(fragment.v, texture.height);
+                        let index = texel_v * texture.width as usize + texel_u;
+                        let Some(&palette_index) = texture.indices.get(index) else {
+                            return;
+                        };
+                        if palette_index == 0 {
+                            return;
+                        }
+                        let color = texture.palette(triangle.palette_row, palette_index);
+                        // A blending triangle blends every texel unless the
+                        // knock-out twin paints its non-STP texels back opaque.
+                        let blend = triangle.blend
+                            && (!twin || texture.palette_stp(triangle.palette_row, palette_index));
+                        ([color[0], color[1], color[2]], blend)
+                    }
+                };
+                let offset = pixel * 4;
+                let Some(slot) = rgba.get_mut(offset..offset + 4) else {
+                    return;
+                };
+                let source_alpha = if blend {
+                    unorm8(fragment.color[3])
+                } else {
+                    255
+                };
+                for (index, destination) in slot[..3].iter_mut().enumerate() {
+                    let source =
+                        unorm8(f32::from(texel[index]) * (1.0 / 255.0) * fragment.color[index]);
+                    *destination = if blend && triangle.additive {
+                        destination.saturating_add(source)
+                    } else {
+                        blend_unorm8(source, *destination, source_alpha)
+                    };
+                }
+                slot[3] = 255;
+            },
+        );
     }
 
     /// Paint a sorted scene list: each triangle selects its own texture page,
@@ -2499,7 +2508,11 @@ pub(crate) const FULL_BRIGHT_LIGHT: EntityLight = EntityLight {
 };
 
 fn door_camera(frame: &crate::door::vm::Frame<'_>) -> Camera {
-    Camera::from_points(frame.camera.from, frame.camera.to, frame.camera.focal)
+    let mut camera = Camera::from_points(frame.camera.from, frame.camera.to, frame.camera.focal);
+    // RE2's doors go through `MarniSortEmdGallery`'s prims (`Door_model_init`
+    // types them 0x158) and `TransObject`, as its bodies do.
+    camera.near_clip = frame.camera.near_clip;
+    camera
 }
 
 /// The orders of a door frame that submit a draw (bit `0x8000` plus a low
@@ -3507,6 +3520,10 @@ pub struct Camera {
     /// Added to the composed view Z of everything drawn through this camera
     /// ([`EntityMesh::view_z_shift`]).
     pub view_z_shift: i32,
+    /// Everything drawn through this camera is clipped at RE2's near plane
+    /// (`re2_near_clip`), lit or not: an RE2 door's camera. An RE2-lit
+    /// draw is clipped whatever its camera.
+    pub near_clip: bool,
 }
 
 /// `a * b` for two 4.12 rotation matrices, each product truncated toward zero
@@ -3601,6 +3618,7 @@ impl Camera {
             look_at: to,
             mirrored: false,
             view_z_shift: 0,
+            near_clip: false,
         }
     }
 
@@ -3953,6 +3971,7 @@ fn integer_sqrt(value: i64) -> i64 {
 
 /// One projected vertex ready for rasterization, in the reference's GL
 /// vertex terms ([`crate::raster::GlVertex`]).
+#[derive(Debug, Clone, Copy)]
 struct RasterVertex {
     /// Screen position (game pixels, Y down).
     position: [f32; 2],
@@ -3984,6 +4003,7 @@ impl KnockoutTwins {
 }
 
 /// One triangle ready for rasterization.
+#[derive(Debug, Clone, Copy)]
 struct Triangle {
     raster: [RasterVertex; 3],
     depth: f64,
@@ -4006,6 +4026,9 @@ struct Triangle {
     /// Per corner, `PSXObject_Store`'s degenerate-UV nudge: bit 0 adds
     /// `0.003` to the normalised u, bit 1 to v.
     uv_nudge: [u8; 3],
+    /// Each pixel's depth is `TmdDepthNdc` of its own view Z
+    /// ([`crate::raster::draw_triangle_depth`]): RE2's near-clipped models.
+    view_depth: bool,
 }
 
 /// A ground shadow's projected commands, ready for rasterization.
@@ -4167,6 +4190,9 @@ fn triangle_depth_key(depth: f64) -> u32 {
 /// The original decides the near-plane and backface tests once per *packet*,
 /// so a quad never loses only one of its halves; the parser carries the quad's
 /// four vertex indices in [`TmdPrim::quad`] so this can test all of them.
+/// RE2's lighting draws as RE2's Direct3D path does instead: no packet is
+/// dropped near the eye, and each triangle is clipped where its view Z falls
+/// below `fov / 2` ([`clip_triangle_near`]).
 #[allow(clippy::too_many_arguments)]
 fn collect_triangles(
     object: &TmdObject,
@@ -4191,21 +4217,36 @@ fn collect_triangles(
     // holds `(x, -y, z)`; the raw-Y form skips the negation, and its pool is
     // built lazily so the common path pays nothing.
     let projection = RefProjection::new(camera, joint);
-    let project_pool = |sign: f64| -> Vec<Option<([f32; 2], f32)>> {
+    // RE2's models go to Direct3D as pretransformed vertices with nothing
+    // culled on the CPU: the device clips each triangle at `sz = 0`
+    // ([`re2_near_clip`]).
+    let re2_near = (camera.near_clip || lighting.is_some_and(Lighting::is_re2))
+        .then(|| re2_near_clip(camera.fov));
+    let project_pool = |sign: f64| -> Vec<Option<ViewCorner>> {
         object
             .vertices
             .iter()
             .map(|vertex| {
-                projection.project([
+                let vertex = [
                     f64::from(vertex[0]),
                     sign * f64::from(vertex[1]),
                     f64::from(vertex[2]),
-                ])
+                ];
+                match re2_near {
+                    Some(_) => projection.view_corner(vertex),
+                    None => projection
+                        .project(vertex)
+                        .map(|(position, depth)| ViewCorner {
+                            view: [0.0; 3],
+                            position,
+                            depth,
+                        }),
+                }
             })
             .collect()
     };
     let vertices = project_pool(-1.0);
-    let mut raw_vertices: Option<Vec<Option<Projected>>> = None;
+    let mut raw_vertices: Option<Vec<Option<ViewCorner>>> = None;
     // The reference lights the normal through the object's draw matrix and
     // the light rows through `g_RoomCameraData`.
     let light_camera = ref_camera(camera).0;
@@ -4235,19 +4276,19 @@ fn collect_triangles(
         else {
             continue;
         };
-        let [x0, y0] = first.0.map(f64::from);
-        let [x1, y1] = second.0.map(f64::from);
-        let [x2, y2] = third.0.map(f64::from);
-        if cull && !faces_camera((x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)) {
+        if cull && !packet_faces_camera([first, second, third], re2_near.is_some()) {
             continue;
         }
-        let (Some((position0, depth0)), Some((position1, depth1)), Some((position2, depth2))) = (
+        let (Some(corner0), Some(corner1), Some(corner2)) = (
             corner(prim.vertices[0]),
             corner(prim.vertices[1]),
             corner(prim.vertices[2]),
         ) else {
             continue;
         };
+        let (position0, depth0) = (corner0.position, corner0.depth);
+        let (position1, depth1) = (corner1.position, corner1.depth);
+        let (position2, depth2) = (corner2.position, corner2.depth);
 
         // The packet's CLUT word carries the ABE bit; a packet with it blends
         // and is drawn full-bright, so the room lights do not apply. The TIM
@@ -4349,7 +4390,7 @@ fn collect_triangles(
             ((f64::from(depth0) + f64::from(depth1) + f64::from(depth2)) * f64::from(1.0f32 / 3.0))
                 as f32,
         );
-        triangles.push(Triangle {
+        let triangle = Triangle {
             raster,
             depth,
             key: triangle_depth_key(depth),
@@ -4362,6 +4403,108 @@ fn collect_triangles(
             blend_weight,
             additive: blend && prim.additive,
             uv_nudge: prim.uv_nudge,
+            view_depth: re2_near.is_some(),
+        };
+        match re2_near {
+            Some(near) => clip_triangle_near(
+                triangle,
+                [corner0.view, corner1.view, corner2.view],
+                near,
+                &projection,
+                triangles,
+            ),
+            None => triangles.push(triangle),
+        }
+    }
+}
+
+/// A packet corner through [`RefProjection`]: the view-space point (kept for
+/// RE2's near clip, zero otherwise), the screen position and the view Z.
+#[derive(Debug, Clone, Copy)]
+struct ViewCorner {
+    view: [f64; 3],
+    position: [f32; 2],
+    depth: f32,
+}
+
+/// RE2's near plane: `Marni::TransObjectNgTin3_VinsNins` hands Direct3D each
+/// vertex's `sz = 1 - (H / 2) / z` (`H / 2` an integer halving), so the
+/// device clips a triangle where its view Z falls below `H / 2`.
+pub(crate) fn re2_near_clip(fov: i32) -> f64 {
+    f64::from(fov / 2)
+}
+
+/// Whether a packet's first three corners face the camera. The screen
+/// winding decides, as before, while all three are in front of the eye; a
+/// corner at or behind it (only RE2's near clip keeps those) has no screen
+/// position, so the triangle's facing in view space decides, which is the
+/// same test where the winding is defined.
+fn packet_faces_camera(corners: [ViewCorner; 3], re2: bool) -> bool {
+    if !re2 || corners.iter().all(|corner| corner.view[2] > 0.0) {
+        let [[x0, y0], [x1, y1], [x2, y2]] = corners.map(|corner| corner.position.map(f64::from));
+        return faces_camera((x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0));
+    }
+    let [a, b, c] = corners.map(|corner| corner.view);
+    // The screen flips view Y, so a front face's view-space triple product
+    // is negative.
+    let cross = [
+        b[1] * c[2] - b[2] * c[1],
+        b[2] * c[0] - b[0] * c[2],
+        b[0] * c[1] - b[1] * c[0],
+    ];
+    faces_camera(-(a[0] * cross[0] + a[1] * cross[1] + a[2] * cross[2]))
+}
+
+/// The device's clip of one RE2 triangle at view Z `near` (`sz = 0`): a
+/// triangle wholly in front is kept as it is and one wholly behind goes; one
+/// across the plane is cut along it, each new corner's place, texture and
+/// shade taken where the cut crosses its edge in view space (the clip is in
+/// homogeneous space, so the attributes stay perspective-correct), and the
+/// polygon left drawn as a fan.
+fn clip_triangle_near(
+    triangle: Triangle,
+    view: [[f64; 3]; 3],
+    near: f64,
+    projection: &RefProjection,
+    triangles: &mut Vec<Triangle>,
+) {
+    let inside = view.map(|point| point[2] >= near);
+    if inside.iter().all(|&inside| inside) {
+        triangles.push(triangle);
+        return;
+    }
+    let mut polygon: Vec<(RasterVertex, u8)> = Vec::with_capacity(4);
+    for edge in 0..3 {
+        let next = (edge + 1) % 3;
+        if inside[edge] {
+            polygon.push((triangle.raster[edge], triangle.uv_nudge[edge]));
+        }
+        if inside[edge] != inside[next] {
+            let (a, b) = (view[edge], view[next]);
+            let t = (near - a[2]) / (b[2] - a[2]);
+            let point: [f64; 3] = std::array::from_fn(|axis| a[axis] + (b[axis] - a[axis]) * t);
+            let (from, to) = (triangle.raster[edge], triangle.raster[next]);
+            let lerp = |a: f32, b: f32| (f64::from(a) + (f64::from(b) - f64::from(a)) * t) as f32;
+            polygon.push((
+                RasterVertex {
+                    position: projection.screen([point[0], point[1], near]),
+                    w: near as f32,
+                    u: lerp(from.u, to.u),
+                    v: lerp(from.v, to.v),
+                    shade: std::array::from_fn(|channel| {
+                        lerp(from.shade[channel], to.shade[channel])
+                    }),
+                },
+                0,
+            ));
+        }
+    }
+    for fan in 1..polygon.len().saturating_sub(1) {
+        let corners = [polygon[0], polygon[fan], polygon[fan + 1]];
+        triangles.push(Triangle {
+            raster: corners.map(|(vertex, _)| vertex),
+            uv_nudge: corners.map(|(_, nudge)| nudge),
+            ..triangle
         });
     }
 }
@@ -4478,6 +4621,7 @@ fn collect_complex_pool(
             blend_weight: None,
             additive: false,
             uv_nudge: [0; 3],
+            view_depth: false,
         });
     }
 }
@@ -4604,21 +4748,48 @@ impl RefProjection {
     /// Project one vertex-buffer position (`x, -y, z`, or the raw Y form):
     /// the screen position and view Z, or `None` inside the near plane.
     fn project(&self, vertex: [f64; 3]) -> Option<([f32; 2], f32)> {
-        let [vx, vy, vz] = std::array::from_fn(|row| {
-            let m = self.rotation[row];
-            m[0] * vertex[0] + m[1] * vertex[1] + m[2] * vertex[2] + self.translation[row]
-        });
-        if vz.is_nan() || vz < self.near {
+        let view = self.view(vertex);
+        if view[2].is_nan() || view[2] < self.near {
             return None;
         }
-        let iz = self.focal / vz;
-        Some((
-            [
-                (self.center[0] + vx * iz) as f32,
-                (self.center[1] - vy * iz) as f32,
-            ],
-            vz as f32,
-        ))
+        Some((self.screen(view), view[2] as f32))
+    }
+
+    /// The view-space point of a vertex-buffer position.
+    fn view(&self, vertex: [f64; 3]) -> [f64; 3] {
+        std::array::from_fn(|row| {
+            let m = self.rotation[row];
+            m[0] * vertex[0] + m[1] * vertex[1] + m[2] * vertex[2] + self.translation[row]
+        })
+    }
+
+    /// The screen position of a view-space point in front of the eye.
+    fn screen(&self, view: [f64; 3]) -> [f32; 2] {
+        let iz = self.focal / view[2];
+        [
+            (self.center[0] + view[0] * iz) as f32,
+            (self.center[1] - view[1] * iz) as f32,
+        ]
+    }
+
+    /// RE2's corner: nothing is dropped on the CPU, so the point is kept
+    /// wherever it is (its screen position only means something in front of
+    /// the eye), and only a non-number goes.
+    fn view_corner(&self, vertex: [f64; 3]) -> Option<ViewCorner> {
+        let view = self.view(vertex);
+        if view.iter().any(|axis| axis.is_nan()) {
+            return None;
+        }
+        let position = if view[2] > 0.0 {
+            self.screen(view)
+        } else {
+            [0.0; 2]
+        };
+        Some(ViewCorner {
+            view,
+            position,
+            depth: view[2] as f32,
+        })
     }
 }
 
@@ -4976,6 +5147,7 @@ fn collect_ivm_triangles(
                 blend_weight: None,
                 additive: false,
                 uv_nudge: [0; 3],
+                view_depth: false,
             });
         }
     }
@@ -5392,6 +5564,7 @@ mod tests {
             look_at: [0, 0, 100],
             mirrored: false,
             view_z_shift: 0,
+            near_clip: false,
         }
     }
 
@@ -5436,6 +5609,173 @@ mod tests {
 
     fn mesh(reversed: bool) -> Tmd {
         mesh_at(1000, reversed)
+    }
+
+    /// One textured triangle with its three corners where `corners` says.
+    fn triangle_object(corners: [[i16; 3]; 3]) -> TmdObject {
+        let mut object = mesh_at(0, false).objects.remove(0);
+        object.vertices = corners.to_vec();
+        object.prims[0].uv = [[0, 0], [0, 200], [200, 0]];
+        object
+    }
+
+    /// `collect_triangles` of one object through [`straight_camera`] (`fov`
+    /// 200), lit as RE2's rooms (`re2_gain`) or RE1's.
+    fn collected(object: &TmdObject, re2: bool) -> Vec<Triangle> {
+        let lighting = Lighting {
+            ambient: [4095; 3],
+            lights: [Light {
+                re2_gain: re2.then_some(1),
+                ..Light::default()
+            }; 3],
+        };
+        let mut triangles = Vec::new();
+        collect_triangles(
+            object,
+            &identity(),
+            &straight_camera(),
+            Some(&lighting),
+            Some(dark_entity_light()),
+            true,
+            0,
+            [255; 3],
+            None,
+            None,
+            false,
+            &mut triangles,
+        );
+        triangles
+    }
+
+    /// `Marni::TransObjectNgTin3_VinsNins` writes `sz = 1 - (H / 2) / z`
+    /// with `H / 2` an integer halving: `Marni::Init`'s `H` of 0x104 clips at
+    /// 130, and an odd `H` rounds down.
+    #[test]
+    fn re2s_near_plane_is_half_the_projection_distance() {
+        assert_eq!(re2_near_clip(0x104), 130.0);
+        assert_eq!(re2_near_clip(0x105), 130.0);
+        assert_eq!(re2_near_clip(200), 100.0);
+    }
+
+    /// Between `H / 2` and the reference's `2 * H` an RE2 triangle is drawn
+    /// whole, where RE1's packet is dropped.
+    #[test]
+    fn an_re2_triangle_nearer_than_twice_the_focus_is_drawn_whole() {
+        let object = triangle_object([[0, 0, 300], [0, -100, 300], [100, 0, 300]]);
+        assert!(collected(&object, false).is_empty(), "RE1 drops it");
+        let drawn = collected(&object, true);
+        assert_eq!(drawn.len(), 1);
+        assert_eq!(drawn[0].raster.map(|corner| corner.w), [300.0; 3]);
+    }
+
+    /// A triangle across the plane is cut along it: one corner in front of
+    /// `H / 2` (100) leaves a triangle, two leave a quad's two fan halves,
+    /// each new corner at view Z 100 where its edge crosses, with the texture
+    /// taken there. One between the eye and the plane goes.
+    #[test]
+    fn an_re2_triangle_across_the_near_plane_is_cut_along_it() {
+        // Corner 0 at Z 50, the others at 300: the cuts are a fifth of the
+        // way along edges 0-1 and 2-0.
+        let object = triangle_object([[0, 0, 50], [0, -100, 300], [100, 0, 300]]);
+        let cut = collected(&object, true);
+        assert_eq!(cut.len(), 2, "a quad's two fan halves");
+        let corners: Vec<RasterVertex> = cut.iter().flat_map(|t| t.raster).collect();
+        assert!(corners.iter().all(|corner| corner.w >= 100.0));
+        let on_plane: Vec<&RasterVertex> = corners.iter().filter(|c| c.w == 100.0).collect();
+        assert!(!on_plane.is_empty());
+        // The cut on edge 0-1 is at (0, -20, 100) in the stored vertex's
+        // space, which the buffer's Y flip puts 40 pixels above the centre
+        // (`fov / z` = 2), with v a fifth of the way to 200.
+        let edge = on_plane
+            .iter()
+            .find(|c| c.u == 0.0)
+            .expect("the cut on edge 0-1");
+        assert_eq!(edge.position, [160.0, 120.0 - 40.0]);
+        assert_eq!(edge.v, 40.0);
+        let behind = triangle_object([[0, 0, 50], [0, -100, 80], [100, 0, 90]]);
+        assert!(
+            collected(&behind, true).is_empty(),
+            "between the eye and the plane"
+        );
+        assert!(cut.iter().all(|triangle| triangle.view_depth));
+    }
+
+    /// The plane is inclusive (`sz = 0` is kept): a corner exactly on it
+    /// leaves the triangle whole.
+    #[test]
+    fn an_re2_corner_on_the_near_plane_keeps_the_triangle_whole() {
+        let object = triangle_object([[0, 0, 100], [0, -100, 300], [100, 0, 300]]);
+        let drawn = collected(&object, true);
+        assert_eq!(drawn.len(), 1);
+        assert_eq!(
+            drawn[0].raster.map(|corner| corner.w),
+            [100.0, 300.0, 300.0]
+        );
+    }
+
+    /// An RE2 door's camera clips what it draws, unlit: `Door_model_init`
+    /// types the door's prims 0x158 and `Marni_door_disp0` goes through
+    /// `TransObject`, as a body does. Without the flag (RE1's doors) an unlit
+    /// packet inside `2 * H` is still dropped whole.
+    #[test]
+    fn an_re2_door_camera_clips_unlit_models_at_the_near_plane() {
+        let object = triangle_object([[0, 0, 50], [0, -100, 300], [100, 0, 300]]);
+        let unlit = |near_clip: bool| {
+            let camera = Camera {
+                near_clip,
+                ..straight_camera()
+            };
+            let mut triangles = Vec::new();
+            collect_triangles(
+                &object,
+                &identity(),
+                &camera,
+                None,
+                None,
+                true,
+                0,
+                [255; 3],
+                None,
+                None,
+                false,
+                &mut triangles,
+            );
+            triangles
+        };
+        assert!(unlit(false).is_empty(), "RE1's door drops it");
+        let cut = unlit(true);
+        assert_eq!(cut.len(), 2);
+        assert!(
+            cut.iter()
+                .flat_map(|t| t.raster)
+                .all(|corner| corner.w >= 100.0)
+        );
+        assert!(!crate::door::vm::DoorCamera::default().near_clip);
+    }
+
+    /// A corner behind the eye has no screen place; the packet's facing in
+    /// view space decides whether it is culled, and the clip keeps what is
+    /// past the plane. Taking a corner behind the eye moves the eye to the
+    /// plane's other side, so the winding that faced the camera with all
+    /// three in front now faces away.
+    #[test]
+    fn an_re2_triangle_with_a_corner_behind_the_eye_is_culled_and_cut_in_view_space() {
+        let facing = [[0, 0, 300], [0, -100, 300], [100, 0, 300]];
+        assert_eq!(collected(&triangle_object(facing), true).len(), 1);
+        let away = triangle_object([[0, 0, -200], [0, -100, 300], [100, 0, 300]]);
+        assert!(
+            collected(&away, true).is_empty(),
+            "the eye is behind its plane"
+        );
+        let toward = triangle_object([[0, 0, -200], [100, 0, 300], [0, -100, 300]]);
+        let drawn = collected(&toward, true);
+        assert_eq!(drawn.len(), 2);
+        assert!(
+            drawn
+                .iter()
+                .flat_map(|t| t.raster)
+                .all(|corner| corner.w >= 100.0)
+        );
     }
 
     fn render_triangle(reversed: bool) -> Framebuffer {
@@ -5808,6 +6148,7 @@ mod tests {
             blend_weight: None,
             additive: false,
             uv_nudge: [0; 3],
+            view_depth: false,
         })
     }
 
@@ -7486,6 +7827,7 @@ mod tests {
             blend_weight: None,
             additive: false,
             uv_nudge: [0; 3],
+            view_depth: false,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));
@@ -7632,6 +7974,7 @@ mod tests {
             blend_weight,
             additive: false,
             uv_nudge: [0; 3],
+            view_depth: false,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));
@@ -7687,6 +8030,7 @@ mod tests {
             blend_weight: None,
             additive: true,
             uv_nudge: [0; 3],
+            view_depth: false,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));

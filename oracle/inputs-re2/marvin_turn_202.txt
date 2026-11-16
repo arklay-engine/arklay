@@ -1,0 +1,48 @@
+# Room 202 from 209's door 7 arrival: Marvin's scene (event 3), his turn into a zombie (id 30), his grab and two bites, and the Heart Key; it checks the Root_ck turn (+0x150, rc) Marvin counts as a scene character and goes on with as a zombie (oracle/re2.md, "Marvin's turn"); the presses are leon_a_209_heart's from 202's hand back (1573 there, 344 here)
+345 right
+348 up run
+352 up run right
+365 up run left
+380 up run
+385 up run left
+386 up run
+391 up run left
+392 up run
+393 up run left
+415 up run
+416 up run left
+417 up run
+424 up run right
+470 up run
+476 up run left
+500 up run
+508 up run right
+509 up run
+513 up run right
+514 up run
+519 up run right
+520 up run
+531 up run right
+532 up run
+623 up run right
+776
+843 right
+883 up run right
+978 up run left
+1007 left
+1012 action
+1014
+1024 action
+1026
+1036 action
+1038
+1048 action
+1050
+1060 action
+1062
+1072 action
+1074
+1084 action
+1086
+1152 action
+1154

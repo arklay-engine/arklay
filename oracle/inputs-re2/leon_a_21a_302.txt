@@ -1,0 +1,30 @@
+# leon_a_21a_302: Leon A from 219's door 2 into the kennel (21A), south from the door to the wall, east along it to the manhole's area, the Manhole Opener used from the status screen (START, down three times to slot 6, USE) and the scene that opens it; the end is a probe of what follows
+# 21A: south to the wall, then east along it
+345 up run
+375
+377 right
+389
+391 up run
+443
+445 left
+458
+460 up run
+468
+# the Opener: START, down to slot 6, the command menu, USE
+484 start
+488
+504 down
+508
+524 down
+528
+544 down
+548
+564 confirm
+568
+584 confirm
+588
+# after the scene: a probe, forward and an action press, turn and forward and action again
+760 up run
+780
+782 action
+784

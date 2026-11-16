@@ -1,6 +1,6 @@
 -- arklay's start for embryo_wait_309 (oracle/re2-regress.d/em27.toml; oracle/re2.md, "The G embryos").
--- Rnd is 6114 one draw on: the original's load runs the G adult's init (slot 0,
--- one Rnd) before --no-enemies switches the slot off. The embryos' speeds are
+-- The G adult (slot 0) is in the room: its init draws one Rnd in the load, and
+-- --no-enemies (here set_re2_no_enemies) switches the slot off after it. The embryos' speeds are
 -- what their new works' memory held, and so is the history of Cdir_y their first
 -- five crawl ticks move along (vars 1 to 5 here, before the init's shift), read back
 -- from the recording's steps (docs/internals/deviations/re2.md, "The G embryo").
@@ -8,7 +8,8 @@ local api = ...
 api:set_player_pos(-17273, -5400, 1678)
 api:set_player_angle(488)
 api:set_health(200)
-api:set_re2_rnd(12049)
+api:set_re2_rnd(6114)
+api:set_re2_no_enemies({"309:1", "309:2", "309:3"})
 api:set_room_camera(3)
 api:set_re2_flag(4, 57)
 api:set_re2_enemy_speed("309:1", 0, 0, 14156)

@@ -1,0 +1,331 @@
+# room 303 from room 304's door, as embryo_wait_303: confirm pressed every fourth tick from 740, as embryo 3 takes the latch (737), so the presses shake it off (FUN_00475d70; oracle/re2.md, "The G embryos")
+740 confirm
+742
+744 confirm
+746
+748 confirm
+750
+752 confirm
+754
+756 confirm
+758
+760 confirm
+762
+764 confirm
+766
+768 confirm
+770
+772 confirm
+774
+776 confirm
+778
+780 confirm
+782
+784 confirm
+786
+788 confirm
+790
+792 confirm
+794
+796 confirm
+798
+800 confirm
+802
+804 confirm
+806
+808 confirm
+810
+812 confirm
+814
+816 confirm
+818
+820 confirm
+822
+824 confirm
+826
+828 confirm
+830
+832 confirm
+834
+836 confirm
+838
+840 confirm
+842
+844 confirm
+846
+848 confirm
+850
+852 confirm
+854
+856 confirm
+858
+860 confirm
+862
+864 confirm
+866
+868 confirm
+870
+872 confirm
+874
+876 confirm
+878
+880 confirm
+882
+884 confirm
+886
+888 confirm
+890
+892 confirm
+894
+896 confirm
+898
+900 confirm
+902
+904 confirm
+906
+908 confirm
+910
+912 confirm
+914
+916 confirm
+918
+920 confirm
+922
+924 confirm
+926
+928 confirm
+930
+932 confirm
+934
+936 confirm
+938
+940 confirm
+942
+944 confirm
+946
+948 confirm
+950
+952 confirm
+954
+956 confirm
+958
+960 confirm
+962
+964 confirm
+966
+968 confirm
+970
+972 confirm
+974
+976 confirm
+978
+980 confirm
+982
+984 confirm
+986
+988 confirm
+990
+992 confirm
+994
+996 confirm
+998
+1000 confirm
+1002
+1004 confirm
+1006
+1008 confirm
+1010
+1012 confirm
+1014
+1016 confirm
+1018
+1020 confirm
+1022
+1024 confirm
+1026
+1028 confirm
+1030
+1032 confirm
+1034
+1036 confirm
+1038
+1040 confirm
+1042
+1044 confirm
+1046
+1048 confirm
+1050
+1052 confirm
+1054
+1056 confirm
+1058
+1060 confirm
+1062
+1064 confirm
+1066
+1068 confirm
+1070
+1072 confirm
+1074
+1076 confirm
+1078
+1080 confirm
+1082
+1084 confirm
+1086
+1088 confirm
+1090
+1092 confirm
+1094
+1096 confirm
+1098
+1100 confirm
+1102
+1104 confirm
+1106
+1108 confirm
+1110
+1112 confirm
+1114
+1116 confirm
+1118
+1120 confirm
+1122
+1124 confirm
+1126
+1128 confirm
+1130
+1132 confirm
+1134
+1136 confirm
+1138
+1140 confirm
+1142
+1144 confirm
+1146
+1148 confirm
+1150
+1152 confirm
+1154
+1156 confirm
+1158
+1160 confirm
+1162
+1164 confirm
+1166
+1168 confirm
+1170
+1172 confirm
+1174
+1176 confirm
+1178
+1180 confirm
+1182
+1184 confirm
+1186
+1188 confirm
+1190
+1192 confirm
+1194
+1196 confirm
+1198
+1200 confirm
+1202
+1204 confirm
+1206
+1208 confirm
+1210
+1212 confirm
+1214
+1216 confirm
+1218
+1220 confirm
+1222
+1224 confirm
+1226
+1228 confirm
+1230
+1232 confirm
+1234
+1236 confirm
+1238
+1240 confirm
+1242
+1244 confirm
+1246
+1248 confirm
+1250
+1252 confirm
+1254
+1256 confirm
+1258
+1260 confirm
+1262
+1264 confirm
+1266
+1268 confirm
+1270
+1272 confirm
+1274
+1276 confirm
+1278
+1280 confirm
+1282
+1284 confirm
+1286
+1288 confirm
+1290
+1292 confirm
+1294
+1296 confirm
+1298
+1300 confirm
+1302
+1304 confirm
+1306
+1308 confirm
+1310
+1312 confirm
+1314
+1316 confirm
+1318
+1320 confirm
+1322
+1324 confirm
+1326
+1328 confirm
+1330
+1332 confirm
+1334
+1336 confirm
+1338
+1340 confirm
+1342
+1344 confirm
+1346
+1348 confirm
+1350
+1352 confirm
+1354
+1356 confirm
+1358
+1360 confirm
+1362
+1364 confirm
+1366
+1368 confirm
+1370
+1372 confirm
+1374
+1376 confirm
+1378
+1380 confirm
+1382
+1384 confirm
+1386
+1388 confirm
+1390
+1392 confirm
+1394
+1396 confirm
+1398

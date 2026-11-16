@@ -10,9 +10,13 @@
 -- bodies (`Type & 1`): parts 1 to 7 and 8 to 14, and each kind hides the
 -- other's.
 --
--- Not ported yet: the grab (`Routine_1` 4, `FUN_00484640`) and the player's
--- side of it (`em_damage_table_real[0x1d]`, `FUN_00484a80`), the hits and their
--- blood (`Routine_0` 2 and 3) and the shadow (`Kage_work_set`).
+-- A hit (`Routine_0` 2) or the death (3) sends it back into the wall, the
+-- same for every weapon: neither reads `Routine_1`.
+--
+-- The grab (`Routine_1` 4, `FUN_00484640`) puts the player in routine 5 on
+-- this body's second bank; the player's side is `em_damage_table_real[0x1d]`
+-- (`FUN_00484a80`, `Mover::em2d_held`). Not ported yet: the shadow
+-- (`Kage_work_set`).
 
 local HOME_ANGLE <const> = 0 -- `+0x218`: `Cdir_y` at the init.
 local HOME_X <const> = 1 -- `+0x21c`: `Pos_x` at the init.
@@ -25,6 +29,8 @@ local TYPE_LEADER <const> = 0x10 -- it counts the room's globals down
 -- `0x529c24 + kind * 7`: the kind's own parts, as a mask of hidden parts.
 local OWN_PARTS <const> = { [0] = 0x00FE, 0x7F00 }
 local ALL_PARTS <const> = 0x7FFE
+-- `0x529c24 + kind * 7`'s first cell: the part the death bleeds at.
+local DEATH_PART <const> = { [0] = 1, 8 }
 -- `0x529c26 + kind * 7`: the part the reach and the grab measure from.
 local REACH_PART <const> = { [0] = 3, 10 }
 local BE_HIDDEN <const> = 0x2
@@ -204,6 +210,22 @@ local function grab_check(e)
     end
 end
 
+-- `Goto00` toward the player: the facing it leaves isn't masked to 12 bits
+-- when it steps, which the head turn's signed clamp can see after a hold.
+local function goto_player(e, rate)
+    local angle = e:angle()
+    local error = (e:angle_to_player() + rate) & 0xFFF
+    if error < rate * 2 then
+        e:set_angle((angle + e:angle_to_player()) & 0xFFF)
+        return
+    end
+    local stepped = angle - rate
+    if error <= 0x800 then
+        stepped = stepped + rate * 2
+    end
+    e:set_angle(stepped & 0xFFFF)
+end
+
 -- `FUN_004845d0`: the reach, turning after the player.
 local function reach(e)
     local step = e:routine(2)
@@ -216,8 +238,41 @@ local function reach(e)
     elseif step ~= 1 then
         return
     end
-    e:goto_player(0x30)
+    goto_player(e, 0x30)
     e:step(e:joint(0x100))
+end
+
+-- `FUN_00484640`: the grab. The player stands at its arm, held on this
+-- body's clips, for 150 ticks less two for each press, then is let go, and
+-- `fg_room_enemy` keeps the other bodies from grabbing for 120 ticks.
+local function grab(e)
+    local step = e:routine(2)
+    if step == 0 then
+        e:clip(5, 0, 0xF)
+        e:set_routine(2, 1)
+        local x, _, z = e:own_part(REACH_PART[kind(e)])
+        if x ~= nil then
+            e:set_player_xz(x, z)
+        end
+        e:pl_set_routine(5, 0, 0, 0)
+        e:pl_hold()
+        e:pl_set_sub1()
+        e:set_timer(1, 0x96)
+    elseif step == 1 then
+        if e:move_cnt() == 0 then
+            e:sound((e:rnd() & 1) == 0 and 7 or 5)
+        end
+        e:joint(0x100)
+        local timer = i16(e:timer(1) - (e:gacha() and 2 or 0) - 1)
+        e:set_timer(1, timer & 0xFFFF)
+        if timer < 0 then
+            e:set_routine(2, 2)
+            e:pl_set_routine_at(2, 2)
+        end
+    elseif step == 2 then
+        e:set_room_enemy(0x78)
+        e:routines(1, 5, 0, 0)
+    end
 end
 
 -- `FUN_00484780`: back into the wall, and the end.
@@ -259,9 +314,10 @@ local function hold(e)
     end
 end
 
--- 4, the grab (`FUN_00484640`), isn't ported yet.
 local CHECK <const> = { [0] = wake_check, [1] = reach_check, [3] = grab_check }
-local ACTION <const> = { [0] = wait, [1] = turn, [3] = reach, [5] = retreat, [6] = hold }
+local ACTION <const> = {
+    [0] = wait, [1] = turn, [3] = reach, [4] = grab, [5] = retreat, [6] = hold,
+}
 
 -- `FUN_00484140`.
 local function move(e)
@@ -273,6 +329,38 @@ local function move(e)
     if action then
         action(e)
     end
+end
+
+-- `0x529cdc` and `0x529d00`, by `Damage_no`: one entry for every region, but
+-- 2, 5 and 8, whose cells are 0 (the original jumps to 0 there).
+local function hit_region(e)
+    return e:damage_no() % 3 ~= 2
+end
+
+-- Back into the wall, and a cry: `Rnd`'s low bit picks 3 or 2.
+local function back_off(e)
+    e:routines(1, 5, 0, 0)
+    e:set_damage_cnt(e:damage_cnt() | 0x80)
+    e:sound((e:rnd() & 1) == 0 and 3 or 2)
+end
+
+-- `FUN_004848b0` (`0x4848d0`): `Routine_0` 2.
+local function hurt(e)
+    if hit_region(e) then
+        back_off(e)
+    end
+end
+
+-- `FUN_00484910` (`0x484930`): `Routine_0` 3. Blood at its own first part
+-- (`Esp_call` 0x21000, `blood_censor` taken as off), its life back to 250,
+-- and back into the wall as a hit is.
+local function die(e)
+    if not hit_region(e) then
+        return
+    end
+    e:effect(0, 2, 0x1000, e:angle(), DEATH_PART[kind(e)], 0, 0, 0)
+    e:set_life(250)
+    back_off(e)
 end
 
 function update(e)
@@ -291,5 +379,9 @@ function update(e)
         init(e)
     elseif r0 == 1 then
         move(e)
+    elseif r0 == 2 then
+        hurt(e)
+    elseif r0 == 3 then
+        die(e)
     end
 end

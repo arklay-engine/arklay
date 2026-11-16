@@ -1,0 +1,87 @@
+# Claire A from room 114, by door 0 as claire_a_10c_113 leaves her (the door open, fg_key bit 9), to room 10A: door 0 into 113 and its first-entry scene (4:15, event 2), past it to door 1, then leon_a_113_10a's presses through the library's ground floor (112), along 110's corridors past its three zombies and through 10F (oracle/re2.md, "Claire A to the Diamond Key")
+0
+# 114: door 0: room 113 loads on 385 and its scene starts (event 2), play comes back on 1667
+350 action
+352
+# 113: north, then east along the north strip to door 1
+1680 left
+1684
+1686 up run
+1700 up run right
+1712 up run
+1760
+# turn to face north, onto door 1
+1762 left
+1772
+# door 1: room 112 loads on 1810, play comes back on 2115
+1775 action
+1777
+# 112: east of the floor that gives way (area 3), to door 0
+2115 up run
+2131 up run right
+2132 up run
+2135 up run right
+2147 up run
+2150 up run right
+2151 up run
+2175 up run right
+2176 up run
+2180 up run right
+2181 up run
+2186 up run right
+2187 up run
+2190 up run right
+2191 up run
+2199 up run left
+2200 up run
+2210
+# door 0: room 110 loads on 2247, play comes back on 2580
+2212 action
+2214
+# 110: north up the west corridor, east along the north corridor and south down the east corridor past its three zombies, to door 0
+2580 up run left
+2606 up run
+2609 up run right
+2612 up run
+2615 up run right
+2616 up run
+2675 up run right
+2676 up run
+2682 up run right
+2699 up run
+2715 up run right
+2716 up run
+2801 up run right
+2802 up run
+2806 up run left
+2807 up run right
+2824 up run
+2912 up run right
+2913 up run
+2975 up run right
+2976 up run
+2980 up run left
+3010
+3012 right
+# door 0: room 10F loads on 3055, play comes back on 3372
+3020 action
+3022
+# 10F: east to door 0
+3372 up run left
+3380 up run
+3394 up run right
+3400 up run
+3406 up run right
+3407 up run
+3419 up run left
+3420 up run
+3422 up run right
+3424 up run
+3430 up run left
+3432 up run
+3434
+3436 right
+# door 0: room 10A loads on 3473, play comes back on 3780
+3438 action
+3440
+3793

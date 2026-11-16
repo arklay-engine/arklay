@@ -11,6 +11,8 @@ layout(location = 0) in vec2 in_uv;
 layout(location = 1) in vec3 in_shade;
 layout(location = 2) flat in uint in_packed;
 layout(location = 3) flat in float in_key;
+// View Z, perspective-correct (`mesh.vert`).
+layout(location = 4) in float in_view_z;
 
 layout(location = 0) out vec4 out_colour;
 
@@ -33,6 +35,14 @@ layout(std140, set = 3, binding = 0) uniform Material {
 };
 
 void main() {
+    // RE2's near-clipped meshes (bit 22): `TmdDepthNdc` of the pixel's own
+    // view Z, as `raster::draw_triangle_depth` gives it. Every other mesh
+    // keeps the rasterizer's depth, linear in screen space.
+    if (((in_packed >> 22) & 1u) != 0u) {
+        gl_FragDepth = clamp((in_view_z - 1.0) * (1.0 / 131071.0), 0.0, 1.0);
+    } else {
+        gl_FragDepth = gl_FragCoord.z;
+    }
     // The painter's sort: a mask at or in front of the triangle's key paints
     // over all of it.
     ivec2 keys = textureSize(mask_keys, 0);

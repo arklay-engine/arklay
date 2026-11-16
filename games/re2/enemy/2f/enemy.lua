@@ -10,7 +10,12 @@
 -- When its ivy dies the vine falls with it (`Routine_0` 2). The vines alone
 -- (`Routine_1` 9 and `Routine_0` 3), their lash (`Routine_1` 3, and
 -- `FUN_004898f0` once the ivy is dead) and the acid's and the grenades'
--- ends aren't ported: no run reaches them yet.
+-- ends aren't ported: no run reaches them yet. Neither is a lone vine's death
+-- by weapon (`DWORD_0052a0d4`: `FUN_00489d40` for most, the SMG's too, and
+-- `FUN_00489da0`'s burning shrink for 0xa and the flamethrower), nor
+-- `Em_2F`'s `FUN_0048a1c0`, which fades parts 0 to 2's `Poly_rgb` while the
+-- vine has been shaken (`+0x22a`) and its ivy's `+0x238` is set, as a burnt
+-- ivy's is: the script can't set a part's colour.
 
 local INDEX <const> = 0 -- `+0x218`: which of its ivy's vines, from 0.
 local BITS <const> = 1 -- `+0x219`: the commands `+0x227` that are for it.

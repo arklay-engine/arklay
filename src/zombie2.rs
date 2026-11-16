@@ -40,7 +40,7 @@ pub const TYPE_HELD: u16 = 0x4000;
 /// `Be_flg`'s bits: it's hit low, it's hit high.
 pub const BE_LOW: u32 = 0x400_0000;
 pub const BE_HIGH: u32 = 0x800_0000;
-const BE_NO_SCA: u32 = 8;
+pub const BE_NO_SCA: u32 = 8;
 /// `Sca_ck_em` pushed the body along z.
 const BE_PUSHED_Z: u32 = 0x4000;
 /// `Be_flg`'s bit on both bodies of a grab.
@@ -192,6 +192,8 @@ struct BlownPart {
     dir: u16,
     /// `+0x9c`, which `+0xa4` takes down to nothing.
     speed: i16,
+    /// `+0xa4`'s fall in the speed a tick.
+    slowing: i16,
     /// `+0xa0`.
     count: u16,
 }
@@ -279,6 +281,7 @@ impl ThrownPart {
             blown: Some(BlownPart {
                 dir,
                 speed,
+                slowing: 100,
                 count: 0,
             }),
             below: Vec::new(),
@@ -299,7 +302,7 @@ impl ThrownPart {
         }
         self.velocity[1] = self.velocity[1].wrapping_add(self.gravity);
         self.matrix.t[1] += i32::from(self.velocity[1]);
-        blown.speed = (blown.speed - 100).max(0);
+        blown.speed = blown.speed.wrapping_sub(blown.slowing).max(0);
         let (x, z) = player2::rotate(blown.dir, i32::from(blown.speed), 0);
         self.matrix.t[0] += x;
         self.matrix.t[2] += z;
@@ -315,6 +318,7 @@ impl ThrownPart {
         rnd: &mut Rnd,
         effects: &mut crate::esp2::Effects,
         sca: Option<&crate::state::Sca>,
+        body: [i32; 2],
     ) -> bool {
         if let Some(blown) = self.blown {
             return self.blow(blown);
@@ -342,16 +346,18 @@ impl ThrownPart {
                 part: self.part,
             };
             effects.call_on_part(0, 0, 2000, dir as i16, anchor, self.matrix, [0; 3]);
-            if self.bounces == 1 {
-                return false;
-            }
         }
+        // The last landing still checks the walls and turns the part on to
+        // its rest this tick.
+        let landed = self.bounces == 1;
+        // `Sca_ck_info` pushes nothing: it says whether a wall's record is
+        // within 100 of the part (a box, or shapes 9 to 12), or for the
+        // triangles, the diamond and the circle, whether `body` (the zombie's
+        // `Atd[0]`) is, and the part comes back off it.
         if let Some(sca) = sca {
             let floor = (-self.matrix.t[1] / 1800).clamp(0, 31) as u8;
-            let resolved =
-                crate::sca::resolve_on_floor(sca, PARTS_MASK, before, self.matrix.t, 100, floor);
-            self.matrix.t = resolved.pos;
-            if resolved.hit {
+            let [x, _, z] = self.matrix.t;
+            if crate::sca::info_flags_for(sca, PARTS_MASK, [x, z], body, 100, floor) != 0 {
                 self.velocity[0] = -(self.velocity[0] >> 2);
                 self.velocity[2] = -(self.velocity[2] >> 2);
             }
@@ -361,7 +367,7 @@ impl ThrownPart {
             self.matrix.m = player2::blend_matrix(&self.matrix.m, &self.rest, weight);
             self.turning -= 1;
         }
-        true
+        !landed
     }
 }
 
@@ -441,6 +447,14 @@ pub(crate) const YOUNG_GROUND: usize = 30;
 pub const ROACH_ID: u8 = 0x29;
 /// The G embryos, `Em_27`, whose script is `enemy/27/enemy.lua`.
 pub const EMBRYO_ID: u8 = 0x27;
+/// The G adult, `Em_28`, whose script is `enemy/28/enemy.lua`.
+pub const ADULT_ID: u8 = 0x28;
+/// `Em_28`'s `Neck_no`, which its init sets.
+const ADULT_NECK: usize = 4;
+/// The parts `Atd[1]` and `Atd[2]` follow.
+const ADULT_BOXES: [usize; 2] = [3, 0x12];
+/// `Sca_ck_em`'s mask for `Em_28`.
+const ADULT_MASK: u16 = 0x400;
 /// `Em_27`'s `Sca_ck_em` mask.
 const EMBRYO_MASK: u16 = 0x400;
 /// `Ground`, which `Game_loop`'s pass after the moves finds under it.
@@ -538,8 +552,10 @@ pub struct Zombie {
     pulled: Option<PulledArm>,
     head: Option<KickedHead>,
     /// A cockroach's part 0 as its last move left it, which the player's
-    /// head turns to from the move after (`run_roach`).
-    roach_head: Option<[i32; 3]>,
+    /// head turns to from the move after (`run_roach`). On the player it is
+    /// local to the player's part until the draw's `Joint_trans2` places it
+    /// (`character2::on_player_parts`).
+    pub(crate) roach_head: Option<[i32; 3]>,
     pub life: i16,
     /// The last shot was aimed up, which `Em10Dm02` and `FUN_00458d40` read
     /// off the player.
@@ -592,9 +608,6 @@ pub struct Zombie {
     /// each slot with the body's position at the call, since `Snd_se_3D` pans
     /// it there and then, before `Oba_ck_em` and `Sca_ck_em` push the body.
     pub sounds: Vec<(u8, [i32; 3])>,
-    burnt: bool,
-    /// How far `Em10_Scenario` has taken a burnt body's colours down.
-    charred: u8,
     /// `pEnemy_ptr`: the slot of the ivy a vine grew from.
     pub parent: Option<u8>,
     /// Where G3's frame grips a knocked-back player (`0x49a890`): the part
@@ -617,6 +630,44 @@ pub struct Zombie {
 }
 
 impl Zombie {
+    /// `Parts_down` on each thrown part, then the redraw. A part that
+    /// lands for the last time this tick is drawn there once more: the
+    /// original leaves its `Workm` where it landed, for the blood that
+    /// follows it, as `Be_flg` hides it.
+    pub fn parts_down(
+        &mut self,
+        work: &mut player2::Work,
+        slot: u8,
+        rnd: &mut Rnd,
+        effects: &mut crate::esp2::Effects,
+        sca: Option<&crate::state::Sca>,
+    ) {
+        let hidden = work.hidden_parts;
+        let body = [self.atd.at[0], self.atd.at[2]];
+        let mut off = Vec::new();
+        let mut kept = Vec::with_capacity(self.thrown.len());
+        for thrown in &mut self.thrown {
+            if off.contains(&thrown.part) {
+                kept.push(false);
+                continue;
+            }
+            let falling = thrown.fall(slot, rnd, effects, sca, body);
+            if !falling {
+                player2::set_part_flags(work, thrown.part, 0);
+                if thrown.takes_below() {
+                    for &part in &thrown.below {
+                        player2::set_part_flags(work, part, 0);
+                        off.push(part);
+                    }
+                }
+            }
+            kept.push(falling);
+        }
+        self.redraw(hidden);
+        let mut kept = kept.into_iter();
+        self.thrown.retain(|_| kept.next().unwrap_or(true));
+    }
+
     /// Whether `Parts_down` has this part.
     pub fn flung(&self, part: u8) -> bool {
         self.thrown
@@ -636,6 +687,18 @@ impl Zombie {
         self.drawn = self.pose_tree.compose_drawn(&detached, hidden, &self.drawn);
     }
 
+    /// Where `Parts_bomb` starts a part from. Neither `FUN_00461f40` nor the
+    /// crawler's stomp moves it: it stays at the `Workm` `Joint_trans2` last
+    /// drew it at, not at this tick's `pose` (the stomp's blood comes from
+    /// there). A part never drawn takes the pose.
+    pub(crate) fn bomb_start(
+        &self,
+        part: usize,
+        pose: Option<player2::Matrix>,
+    ) -> Option<player2::Matrix> {
+        self.drawn.get(part).copied().flatten().or(pose)
+    }
+
     /// The parts no longer on the skeleton, and where they are.
     pub fn detached(&self) -> impl Iterator<Item = (u8, crate::anim::Mat4x3)> + '_ {
         let pulled = self
@@ -652,14 +715,42 @@ impl Zombie {
             .map(|head| (HEAD_PART, joint_matrix(&head.matrix)));
         pulled.chain(thrown).chain(head)
     }
+}
 
-    /// `FUN_00456780`'s colours scale what lights the parts, around a half for
-    /// most, and `Em10_Scenario` takes them all down together until the first
-    /// part's reach `0x10`. They're a tint of the whole model here.
-    pub fn tint(&self) -> [u8; 3] {
-        const PARTS_MEAN: u32 = 0x4E;
-        let burnt = 0xA0 * (PARTS_MEAN - u32::from(self.charred)) / PARTS_MEAN;
-        [if self.burnt { burnt as u8 } else { 0xFF }; 3]
+/// `FUN_00456780`'s colours for a burning body (`Routine_1`, byte +5, not
+/// 0x10): each
+/// part's `Poly_rgb`, which scales what lights it. The parts it leaves keep
+/// theirs.
+pub const BURNT_PART_RGB: [(usize, u32); 11] = [
+    (0, 0x40_4040),
+    (1, 0x48_4848),
+    (2, 0x70_7070),
+    (5, 0x70_7070),
+    (8, 0x50_5050),
+    (9, 0x50_5050),
+    (10, 0x48_4848),
+    (11, 0x40_4040),
+    (12, 0x50_5050),
+    (13, 0x40_4040),
+    (14, 0x40_4040),
+];
+
+/// `FUN_00456780`'s writes to the parts' `Poly_rgb`.
+pub fn burn_parts(part_rgb: &mut [u32; 32]) {
+    for (part, rgb) in BURNT_PART_RGB {
+        part_rgb[part] = rgb;
+    }
+}
+
+/// `Em10_Scenario`'s charring, every fourth tick of a burnt body's: the
+/// first 15 parts' `Poly_rgb` each down by `0x10101`, until the first part's
+/// red is `0x10`.
+pub fn char_parts(part_rgb: &mut [u32; 32]) {
+    if part_rgb[0] & 0xFF == 0x10 {
+        return;
+    }
+    for rgb in &mut part_rgb[..15] {
+        *rgb = rgb.wrapping_sub(0x1_0101);
     }
 }
 
@@ -738,6 +829,11 @@ impl Zombie {
     /// `+0x150`, `Root_ck`'s turn.
     #[cfg(test)]
     pub fn sight_turn(&self) -> u8 {
+        self.sight_turn
+    }
+
+    /// `+0x150`, `Root_ck`'s turn, for the trace's `rc`.
+    pub fn root_turn(&self) -> u8 {
         self.sight_turn
     }
 }
@@ -862,6 +958,8 @@ pub struct World<'a> {
     pub player_life: &'a mut i16,
     /// `Gacha_ch`: a button mashed this tick.
     pub gacha: bool,
+    /// `Key_trg` (`0x9885FE`): the keys that rose this tick.
+    pub key_trg: u16,
     /// `Id`, which picks how a crawler's end looks.
     pub player_id: u8,
     /// The slots this zombie's stumble ran into.
@@ -918,6 +1016,9 @@ pub struct World<'a> {
     pub works: Vec<(usize, Option<u8>, bool)>,
     /// What `Set_enemy_work` gave out this tick.
     pub spawns: Vec<Spawn>,
+    /// The slots whose `Be_flg` this tick's script cleared outright
+    /// (`*(undefined4 *)enemy_work[n] = 0`), taking them out of play.
+    pub freed: Vec<usize>,
     /// The script took its own work out of play (`Kill_enemy_work`).
     pub killed: bool,
     /// The room's water areas, for `Water_ck`. Only a spider's world has them.
@@ -1207,6 +1308,14 @@ impl Em<'_, '_, '_> {
     /// the body (`Oba_set_ofs`). It runs neither `Oba_ck_em` nor `Sca_ck_em`,
     /// and its `Be_flg`'s `0x2` keeps the others' checks off it.
     fn run_roach(&mut self) {
+        // On the player (`Routine_0..2` 1, 3, 1), `Pos` goes back to the
+        // attach point's offset before the stop check: the last draw's
+        // `Joint_trans2` turned it into the place in the world.
+        if self.work().routine[..3] == [1, 3, 1]
+            && let Some(local) = self.work().super_local
+        {
+            self.mover.player.pos = local;
+        }
         if self.world.stopped {
             return;
         }
@@ -1219,7 +1328,14 @@ impl Em<'_, '_, '_> {
         // `Neck_no` 0: part 0's `+0x5C`, where `Rot_neck` turns the player's
         // head. The original's player moves after the enemies, so its head
         // follows the place a roach had a move before the one arklay last ran.
-        let head = self.mover.part_point(0, [0, 0, 0]);
+        // On the player, `pSuper` is one of the player's parts: this is part
+        // 0's offset under the body, which the draw composes on the player's
+        // pose of this tick (`character2::on_player_parts`).
+        let head = if self.work().super_part.is_some() {
+            self.mover.root_offset()
+        } else {
+            self.mover.part_point(0, [0, 0, 0])
+        };
         let last = std::mem::replace(&mut self.z.roach_head, head);
         self.work().neck.position = last.or(head);
     }
@@ -1246,6 +1362,55 @@ impl Em<'_, '_, '_> {
         if *self.be_flg != 0 {
             self.oba_set_ofs();
             self.sca_ck_masked(EMBRYO_MASK);
+        }
+    }
+
+    /// `Em_28`: `Root_ck` toward the player before the stop test, then the
+    /// script (the counters, the move and the sound), `Oba_set_ofs`, the boxes
+    /// of parts 3 and 0x12, `Oba_ck_hit` of every body against it and
+    /// `Sca_ck_em` with `0x400`.
+    fn run_adult(&mut self) {
+        self.root_ck();
+        if self.world.stopped {
+            return;
+        }
+        if self.z.damage_cnt & 0x7F != 0 {
+            self.z.damage_cnt -= 1;
+        }
+        self.old_pos = self.mover.player.pos;
+        self.z.vars[DOG_GROUND] = self.mover.tick.room.sca.as_ref().map_or(0, |sca| {
+            crate::sca::ground_at(sca, self.old_pos, 0, MASK).height
+        });
+        self.z.parts = self.mover.posed_parts();
+        self.work().neck.joint = Some(ADULT_NECK as u8);
+        self.work().neck.thirds = true;
+        self.script();
+        if *self.be_flg != 0 {
+            self.oba_set_ofs();
+            // `Atd[1]` and `Atd[2]`, on parts 3 and 0x12 as the last draw left
+            // them; the rest of their boxes is the init's. `Oba_set_ofs` put
+            // their `Y` at `Pos_y + Ofs_y`.
+            let y = self.mover.player.pos[1] - 1500;
+            self.z.more_atd = ADULT_BOXES
+                .map(|part| {
+                    let t = self
+                        .z
+                        .parts
+                        .get(part)
+                        .copied()
+                        .flatten()
+                        .map_or([0; 3], |matrix| matrix.t);
+                    Atd {
+                        ofs_x: 0,
+                        ofs_y: -1500,
+                        at_w: 800,
+                        at_h: 1500,
+                        w: 800,
+                        at: [t[0], y, t[2]],
+                    }
+                })
+                .to_vec();
+            self.sca_ck_masked(ADULT_MASK);
         }
     }
 
@@ -1491,6 +1656,10 @@ impl Em<'_, '_, '_> {
             self.run_embryo();
             return;
         }
+        if self.mover.tick.id == ADULT_ID {
+            self.run_adult();
+            return;
+        }
         // The scripts run first, and `Workm` stops following the skeleton from
         // what the last tick left there.
         for drop in std::mem::take(&mut self.z.script_drops) {
@@ -1653,13 +1822,34 @@ impl Em<'_, '_, '_> {
     }
 
     /// `FUN_00461f40` sends it at 800 and level, `Em_2E`'s `FUN_00487800`
-    /// at 300 and up at 150.
+    /// at 300 and up at 150, both slowing by 100 a tick; `FUN_00458d40`
+    /// sends a zombie's head at 400 and up at 100, slowing by 50.
     /// `Em_25`'s `FUN_00472450` lets its body fall at `0xF`.
-    fn blow_part(&mut self, part: usize, dir: u16, speed: i16, up: i16, gravity: i16) {
-        if let Some(matrix) = self.mover.part_matrix(part) {
+    /// `rgb`, when given, is the part's `Poly_rgb` from then on: `FUN_00461f40`
+    /// and the crawler's stomp make it `0x101040`, `FUN_00458d40` the head's
+    /// `0x101030`.
+    fn blow_part(
+        &mut self,
+        part: usize,
+        dir: u16,
+        speed: i16,
+        (up, gravity): (i16, i16),
+        rgb: Option<u32>,
+        slowing: i16,
+    ) {
+        let pose = self.mover.part_matrix(part);
+        if let Some(matrix) = self.z.bomb_start(part, pose) {
             let mut thrown = ThrownPart::blown(part as u8, matrix, dir, speed, up);
             thrown.gravity = gravity;
+            if let Some(blown) = &mut thrown.blown {
+                blown.slowing = slowing;
+            }
             self.push_thrown(thrown);
+        }
+        if let Some(rgb) = rgb
+            && let Some(slot) = self.work().part_rgb.get_mut(part)
+        {
+            *slot = rgb;
         }
     }
 
@@ -1911,6 +2101,7 @@ impl Em<'_, '_, '_> {
         self.world.pl.near_death = near_death;
         if result == 2 {
             self.world.pl.damage_cnt |= 0x80;
+            self.world.pl.die_start = true;
         }
         result
     }
@@ -2584,6 +2775,36 @@ mod tests {
         ThrownPart::new(10, matrix, 0, (0, up), 0x32, [0, 0x400, 0])
     }
 
+    /// The crawler's stomp (`FUN_00453510` at 0x16): the head goes to
+    /// `Parts_bomb` from where it was last drawn, not from this tick's pose,
+    /// and with no speed, rise or fall it stays there for its 0x1D ticks, so
+    /// the bloods from part 8 start there (`esp_leon_a_106_108`, 2446).
+    #[test]
+    fn a_stomped_head_stays_where_it_was_last_drawn() {
+        let at = |t| player2::Matrix {
+            m: player2::rot_matrix([0, 0, 0]),
+            t,
+        };
+        let drawn = at([2623, -12, -10818]);
+        let pose = at([2648, -97, -10830]);
+        let mut zombie = Zombie {
+            drawn: vec![None; 9],
+            ..Zombie::default()
+        };
+        assert_eq!(zombie.bomb_start(8, Some(pose)), Some(pose), "never drawn");
+        zombie.drawn[8] = Some(drawn);
+        let start = zombie.bomb_start(8, Some(pose)).unwrap();
+        assert_eq!(start, drawn);
+        let mut head = ThrownPart::blown(8, start, 0x400, 0, 0);
+        head.gravity = 0;
+        for tick in 0..0x1D {
+            let blown = head.blown.unwrap();
+            assert!(head.blow(blown), "there on tick {tick}");
+            assert_eq!(head.matrix.t, drawn.t);
+        }
+        assert!(!head.blow(head.blown.unwrap()), "gone after 0x1D ticks");
+    }
+
     #[test]
     fn a_thrown_part_goes_at_its_second_landing_and_each_draws_rnd() {
         let mut part = thrown(-100, 0);
@@ -2593,7 +2814,7 @@ mod tests {
         let mut landings = 0;
         let mut alive = true;
         for _ in 0..200 {
-            alive = part.fall(0, &mut rnd, &mut effects, None);
+            alive = part.fall(0, &mut rnd, &mut effects, None, [0; 2]);
             if !alive {
                 break;
             }
@@ -2660,10 +2881,10 @@ mod tests {
         let mut effects = crate::esp2::Effects::default();
         let mut rnd = Rnd::default();
         let start = rnd;
-        assert!(part.fall(0, &mut rnd, &mut effects, None));
+        assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
         assert_eq!(part.matrix.t, [700, 1010, 0]);
         let mut ticks = 1;
-        while part.fall(0, &mut rnd, &mut effects, None) {
+        while part.fall(0, &mut rnd, &mut effects, None, [0; 2]) {
             ticks += 1;
         }
         assert_eq!(ticks, 0x1D);
@@ -2689,6 +2910,130 @@ mod tests {
         }
     }
 
+    /// `Parts_down`'s `Sca_ck_info` pushes nothing: a part come within 100
+    /// of a wall stays where it got to, and comes back off it at a quarter
+    /// of its speed.
+    #[test]
+    fn a_thrown_part_comes_back_off_a_wall_where_it_reached_it() {
+        let sca = crate::state::Sca {
+            cell_x: 0,
+            cell_z: 0,
+            ceiling: 0,
+            tail: 0,
+            records: vec![crate::state::ScaRect {
+                x: 1000,
+                z: -500,
+                width: 100,
+                depth: 1000,
+                id: 0x2000,
+                kind: 0xF,
+                floor: 1,
+            }],
+        };
+        let mut part = thrown(-1000, 0);
+        part.matrix.t = [850, -1000, 0];
+        part.velocity = [100, 0, 40];
+        let mut effects = crate::esp2::Effects::default();
+        let mut rnd = Rnd::default();
+        assert!(part.fall(0, &mut rnd, &mut effects, Some(&sca), [0; 2]));
+        assert_eq!([part.matrix.t[0], part.matrix.t[2]], [950, 40]);
+        assert_eq!([part.velocity[0], part.velocity[2]], [-25, -10]);
+        assert!(part.fall(0, &mut rnd, &mut effects, Some(&sca), [0; 2]));
+        assert_eq!(part.matrix.t[0], 925);
+    }
+
+    /// For a circle (and the triangles and the diamond) `Sca_ck_info` finds
+    /// the record by the part but tests the shape at the zombie's `Atd[0]`:
+    /// the part turns back only when the body is inside.
+    #[test]
+    fn a_round_wall_turns_a_thrown_part_back_by_where_the_body_is() {
+        let sca = crate::state::Sca {
+            cell_x: 0,
+            cell_z: 0,
+            ceiling: 0,
+            tail: 0,
+            records: vec![crate::state::ScaRect {
+                x: 1000,
+                z: -500,
+                width: 1000,
+                depth: 1000,
+                id: 0x2006,
+                kind: 0xF,
+                floor: 1,
+            }],
+        };
+        for (body, back) in [([5000, 5000], false), ([1500, 0], true)] {
+            let mut part = thrown(-1000, 0);
+            part.matrix.t = [1400, -1000, 0];
+            part.velocity = [100, 0, 0];
+            let mut effects = crate::esp2::Effects::default();
+            let mut rnd = Rnd::default();
+            assert!(part.fall(0, &mut rnd, &mut effects, Some(&sca), body));
+            assert_eq!(part.matrix.t[0], 1500, "{body:?}");
+            assert_eq!(part.velocity[0], if back { -25 } else { 100 }, "{body:?}");
+        }
+    }
+
+    /// `Parts_down` doesn't stop at the last landing: it still turns the
+    /// part on toward its rest that tick.
+    #[test]
+    fn a_parts_last_landing_still_turns_it() {
+        let mut part = thrown(-10, 50);
+        part.bounces = 2;
+        let turning = part.turning;
+        let mut effects = crate::esp2::Effects::default();
+        let mut rnd = Rnd::default();
+        assert!(!part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
+        assert_eq!(part.matrix.t[1], 0);
+        assert_eq!(part.turning, turning - 1);
+    }
+
+    /// A part's last landing leaves its `Workm` on the ground, where the
+    /// blood that follows it stays, and then it isn't drawn.
+    #[test]
+    fn a_part_that_lands_for_the_last_time_is_left_where_it_landed() {
+        let mut zombie = Zombie {
+            pose_tree: player2::PoseTree::chain(12),
+            ..Zombie::default()
+        };
+        let mut part = thrown(-10, 50);
+        part.bounces = 2;
+        zombie.thrown.push(part);
+        let mut work = player2::Work::default();
+        let mut effects = crate::esp2::Effects::default();
+        let mut rnd = Rnd::default();
+        zombie.parts_down(&mut work, 0, &mut rnd, &mut effects, None);
+        assert!(zombie.thrown.is_empty());
+        assert_ne!(work.hidden_parts & 1 << 10, 0);
+        let drawn = zombie.drawn[10].expect("drawn");
+        assert_eq!(drawn.t, [1000, 0, 2000]);
+        // Hidden, it keeps that `Workm`.
+        zombie.redraw(work.hidden_parts);
+        assert_eq!(
+            zombie.drawn[10].map(|matrix| matrix.t),
+            Some([1000, 0, 2000])
+        );
+    }
+
+    /// `FUN_00458d40`'s head slows by 50 a tick (`+0xa4`), not 100.
+    #[test]
+    fn a_zombies_blown_head_slows_by_its_own_step() {
+        let matrix = player2::Matrix {
+            m: player2::rot_matrix([0, 0, 0]),
+            t: [0, 1000, 0],
+        };
+        let mut part = ThrownPart::blown(8, matrix, 0, 400, -100);
+        if let Some(blown) = &mut part.blown {
+            blown.slowing = 50;
+        }
+        let mut effects = crate::esp2::Effects::default();
+        let mut rnd = Rnd::default();
+        assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
+        assert_eq!(part.matrix.t, [350, 910, 0]);
+        assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
+        assert_eq!(part.matrix.t, [650, 830, 0]);
+    }
+
     /// `FUN_00487800`: the ivy's parts go slower than `FUN_00461f40`'s, and up.
     #[test]
     fn an_ivys_blown_part_starts_slow_and_rises() {
@@ -2699,9 +3044,9 @@ mod tests {
         let mut part = ThrownPart::blown(3, matrix, 0, 300, -150);
         let mut effects = crate::esp2::Effects::default();
         let mut rnd = Rnd::default();
-        assert!(part.fall(0, &mut rnd, &mut effects, None));
+        assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
         assert_eq!(part.matrix.t, [200, 860, 0]);
-        assert!(part.fall(0, &mut rnd, &mut effects, None));
+        assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
         assert_eq!(part.matrix.t, [300, 730, 0]);
     }
 
@@ -2712,7 +3057,7 @@ mod tests {
         let mut effects = crate::esp2::Effects::default();
         let mut rnd = Rnd::default();
         for _ in 0..16 {
-            assert!(part.fall(0, &mut rnd, &mut effects, None));
+            assert!(part.fall(0, &mut rnd, &mut effects, None, [0; 2]));
         }
         let flat = |m: [[i16; 3]; 3]| m.into_iter().flatten().map(i32::from);
         for (got, want) in flat(part.matrix.m).zip(flat(rest)) {
@@ -2852,6 +3197,7 @@ mod tests {
         let hit = crate::weapon2::Hit {
             high: false,
             slot: 0,
+            id: 0x10,
             weapon: 2,
             band: 1,
             region: 2,
@@ -2876,16 +3222,25 @@ mod tests {
     }
 
     #[test]
-    fn a_burnt_body_chars_and_an_unburnt_one_doesnt() {
-        let mut zombie = Zombie {
-            burnt: true,
-            ..Zombie::default()
-        };
-        assert_eq!(zombie.tint(), [0xA0; 3]);
-        zombie.charred = 0x30;
-        assert_eq!(zombie.tint(), [0x3D; 3]);
-        zombie.burnt = false;
-        assert_eq!(zombie.tint(), [0xFF; 3]);
+    fn a_burning_body_takes_fun_00456780s_part_colours_and_chars_to_0x10() {
+        let mut rgb = [crate::player2::DEFAULT_PART_RGB; 32];
+        burn_parts(&mut rgb);
+        // What the original's `zp` reads in room 100's opening for slots 0
+        // and 1: part 0 and the sum over the zombie's 17 parts.
+        assert_eq!(rgb[0], 0x40_4040);
+        let sum = rgb[..17].iter().fold(0u32, |sum, &c| sum.wrapping_add(c));
+        assert_eq!(sum, 0x666_6660);
+        assert_eq!(rgb[3], crate::player2::DEFAULT_PART_RGB);
+        assert_eq!(rgb[15], crate::player2::DEFAULT_PART_RGB);
+        char_parts(&mut rgb);
+        assert_eq!(rgb[0], 0x3F_3F3F);
+        assert_eq!(rgb[14], 0x3F_3F3F);
+        assert_eq!(rgb[15], crate::player2::DEFAULT_PART_RGB);
+        for _ in 0..0x40 {
+            char_parts(&mut rgb);
+        }
+        assert_eq!(rgb[0], 0x10_1010);
+        assert_eq!(rgb[2], 0x40_4040);
     }
 
     #[test]

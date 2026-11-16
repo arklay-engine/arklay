@@ -208,6 +208,9 @@ impl Em22<'_, '_, '_, '_> {
         }
         self.l.super_add = [0; 3];
         self.em.z.vars[super::DOG_GROUND] = self.ground();
+        // The parts' `Workm` as the last `Joint_trans2` left them, which the
+        // slash's blood starts from (`own_part`).
+        self.em.z.parts.clone_from(&self.l.parts);
         self.script();
         if self.em.work().jseq2.is_none() && self.em.work().routine[0] != 0 {
             // `Em_24`'s init has posed it through `J_seq`.
