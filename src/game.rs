@@ -183,6 +183,14 @@ const ITEM_CLIP: u8 = 0x0B;
 const ITEM_OIL: u8 = 0x32;
 /// Last door-key item id for the depletion rule.
 const ITEM_DESK_KEY: u8 = 0x3D;
+
+/// A door key: the ids between the oil and the desk key, the range
+/// `use_room_action_item` keeps as an empty stack at zero and main-menu mode 1
+/// turns into mode 6's discard prompt for.
+const fn is_door_key(item: u8) -> bool {
+    item > ITEM_OIL && item < ITEM_DESK_KEY
+}
+
 /// The radio is not an inventory item; taking it raises a scenario flag.
 const ITEM_COMM_RADIO: u8 = 0x4D;
 /// First map item id; ids through [`ITEM_MAP_LAST`] use the map pick-up.
@@ -213,6 +221,9 @@ pub const MESSAGE_TAKE_PROMPT: u8 = 0xC0;
 pub const MESSAGE_INVENTORY_FULL: u8 = 0xC2;
 /// Global 0xC6: the document pick-up "has been filed" line.
 pub const MESSAGE_FILE_FILED: u8 = 0xC6;
+/// Global 0xC4: "Will you put down the {item}?". The yes branch carries the
+/// use action (post-action 1, `use_room_action_item`).
+pub const MESSAGE_PUT_DOWN: u8 = 0xC4;
 /// Global 0xC7: "This key is useless now. Discard?". The yes branch carries
 /// the discard action (post-action 2).
 pub const MESSAGE_DISCARD_KEY: u8 = 0xC7;
@@ -1427,6 +1438,13 @@ pub enum ItemViewKind {
     /// 0xC7's discard prompt. The original's mode 1 becomes mode 6 for every
     /// key and drops into the status screen once the viewer closes.
     DiscardKey,
+    /// The same flag raised by a room script over a selected item that is not
+    /// a door key (116's shotgun rack, 308's flamethrower hook, 30B and 30D):
+    /// mode 1 stays mode 1, the selected item's model intro, then global
+    /// 0xC4's put-down prompt, whose Yes runs post-action 1
+    /// ([`GameState::use_selected_item`]) and records the used item for the
+    /// script's `testitem`. The menu closes back to the game afterwards.
+    PutDown,
 }
 
 /// A pending item-viewer request read from the main-state flags.
@@ -7466,7 +7484,8 @@ impl GameState {
     ///
     /// The original tests `MSF_PICKUP_SCREEN` before the mode scan, then
     /// priority-encodes modes 4 (got item), 3 (item view) and, last, 1 (the
-    /// depleted key). `None` when no viewer is pending.
+    /// put-down prompt, which becomes mode 6's discard prompt for a door key
+    /// or when no item is selected). `None` when no viewer is pending.
     pub fn item_view_request(&self) -> Option<ItemViewRequest> {
         let request = if self.flags[5].bit(MSF_PICKUP_SCREEN) {
             ItemViewRequest {
@@ -7484,9 +7503,14 @@ impl GameState {
                 kind: ItemViewKind::Take,
             }
         } else if self.flags[5].bit(MSF_MENU_KEY_DEPLETED) {
+            let put_down = self.selected_item.is_some_and(|item| !is_door_key(item));
             return Some(ItemViewRequest {
                 slot: 0,
-                kind: ItemViewKind::DiscardKey,
+                kind: if put_down {
+                    ItemViewKind::PutDown
+                } else {
+                    ItemViewKind::DiscardKey
+                },
             });
         } else {
             return None;
@@ -9873,7 +9897,7 @@ impl GameState {
         }
         self.inventory[index].quantity = quantity - 1;
         if quantity - 1 == 0 {
-            if item > ITEM_OIL && item < ITEM_DESK_KEY {
+            if is_door_key(item) {
                 self.apply_flag(5, MSF_MENU_KEY_DEPLETED, 0);
                 return;
             }
@@ -16517,6 +16541,51 @@ mod tests {
         // A missing action clears the request instead of latching the flag.
         state.room_actions[1] = None;
         assert_eq!(state.item_view_request(), None);
+    }
+
+    /// `MSF_MENU_KEY_DEPLETED` is the original's main-menu mode 1: over a
+    /// selected door key (or no selection) it becomes mode 6's discard prompt,
+    /// over anything else it stays the put-down prompt. 116's rack and 308's
+    /// hook raise it over the shotgun and the flamethrower.
+    #[test]
+    fn menu_mode_one_puts_down_a_weapon_and_discards_a_key() {
+        let depleted = |selected: Option<u8>| {
+            let mut state = item_game("1000", 1);
+            state.select_item(selected);
+            state.apply_flag(5, MSF_MENU_KEY_DEPLETED, 0);
+            state.item_view_request().map(|request| request.kind)
+        };
+        // The shotgun (0x03) and the flamethrower (0x06).
+        assert_eq!(depleted(Some(0x03)), Some(ItemViewKind::PutDown));
+        assert_eq!(depleted(Some(0x06)), Some(ItemViewKind::PutDown));
+        assert_eq!(
+            depleted(Some(ITEM_SWORD_KEY)),
+            Some(ItemViewKind::DiscardKey)
+        );
+        assert_eq!(
+            depleted(Some(ITEM_DESK_KEY - 1)),
+            Some(ItemViewKind::DiscardKey)
+        );
+        assert_eq!(depleted(Some(ITEM_DESK_KEY)), Some(ItemViewKind::PutDown));
+        assert_eq!(depleted(None), Some(ItemViewKind::DiscardKey));
+    }
+
+    /// The put-down prompt's Yes (global 0xC4, post-action 1) takes a held
+    /// weapon out of the inventory, unequips it and records it as the used
+    /// item, which the room script's `testitem` reads.
+    #[test]
+    fn the_put_down_post_action_uses_the_selected_weapon() {
+        let mut state = game();
+        let room = room_with_messages(&[&[0x0C, 0x08, 0x00, 0x0A, 0x01]]);
+        state.add_item(0x03, 7);
+        state.set_equipped(Some(0x03));
+        state.select_item(Some(0x03));
+        state.apply_flag(5, MSF_MENU_KEY_DEPLETED, 0);
+        state.show_message(0, 0);
+        confirm_yes_no(&mut state, &room);
+        assert!(!state.has_item(0x03), "the shotgun is on the rack");
+        assert_eq!(state.equipped, None);
+        assert_eq!(state.state_bytes[usize::from(STATE_BYTE_USED_ITEM)], 0x03);
     }
 
     #[test]
