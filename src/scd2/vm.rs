@@ -52,6 +52,12 @@ pub trait Host {
     /// Run a non control flow instruction with its decoded operands, for the
     /// task `task`.
     fn exec(&mut self, task: usize, op: &'static Op, operands: &[i64]) -> Step;
+    /// The events (task, main procedure) the last instruction raised through
+    /// an area (`aot_on` on a `Sce_Event` area), which `Event_exec` starts at
+    /// once: a slot after the running task's runs in this same pass.
+    fn take_events(&mut self) -> Vec<(u8, u8)> {
+        Vec::new()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -594,7 +600,13 @@ impl Vm {
             }
             _ => {
                 frame.pc = next;
-                return host.exec(index, op, &values);
+                let step = host.exec(index, op, &values);
+                if self.active == Active::Main {
+                    for (task, event) in host.take_events() {
+                        self.exec_event(usize::from(task), usize::from(event));
+                    }
+                }
+                return step;
             }
         }
         Step::Next
@@ -646,6 +658,10 @@ mod tests {
         vars: std::collections::HashMap<u8, u16>,
         executed: Vec<(&'static str, Vec<i64>)>,
         waiting: bool,
+        /// `cut_chg` with this cut raises event (255, 1), as an `aot_on` on
+        /// a `Sce_Event` area does.
+        raise_on: Option<i64>,
+        raised: Vec<(u8, u8)>,
     }
 
     impl Host for TestHost {
@@ -680,8 +696,14 @@ mod tests {
             7
         }
         fn exec(&mut self, _: usize, op: &'static Op, operands: &[i64]) -> Step {
+            if self.raise_on.is_some() && operands.first().copied() == self.raise_on {
+                self.raised.push((255, 1));
+            }
             self.executed.push((op.mnemonic, operands.to_vec()));
             Step::Next
+        }
+        fn take_events(&mut self) -> Vec<(u8, u8)> {
+            std::mem::take(&mut self.raised)
         }
     }
 
@@ -812,6 +834,23 @@ mod tests {
         vm.start_main();
         vm.tick(&mut host);
         assert_eq!(marks(&host), [1]);
+    }
+
+    #[test]
+    fn an_event_an_instruction_raises_starts_in_the_same_tick() {
+        // Room 305's `main_02` ends in `aot_on(3)`, a `Sce_Event` area whose
+        // `main_06` opens door 6: `Event_exec` starts it at once, and its
+        // slot, after the running task's, runs in the same pass.
+        let main = concat(&[&MARK_2, &END]);
+        let other = concat(&[&MARK_1, &END]);
+        let mut host = TestHost {
+            raise_on: Some(2),
+            ..TestHost::default()
+        };
+        let mut vm = vm(vec![main, other]);
+        vm.start_main();
+        vm.tick(&mut host);
+        assert_eq!(marks(&host), [2, 1]);
     }
 
     #[test]

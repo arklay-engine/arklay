@@ -71,6 +71,9 @@ pub struct DoorCamera {
     pub to: [i32; 3],
     /// Focal length in pixels.
     pub focal: i32,
+    /// The door is RE2's, drawn through `TransObject` and clipped at its
+    /// near plane as its bodies are ([`crate::render::Camera::near_clip`]).
+    pub near_clip: bool,
 }
 
 impl Default for DoorCamera {
@@ -79,6 +82,7 @@ impl Default for DoorCamera {
             from: [0; 3],
             to: [0; 3],
             focal: FOCAL_LENGTH,
+            near_clip: false,
         }
     }
 }

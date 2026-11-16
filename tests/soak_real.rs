@@ -355,8 +355,8 @@ fn soak_room(
     // slot through the real `.dor` transition path. Locked and keyed doors
     // return an error and are skipped; a camera-only door stays in the room.
     let mut destination = None;
-    for slot in 0..sim.game.doors.len() {
-        if sim.game.doors[slot].is_none() {
+    for (slot, registered) in sim.game.doors.iter().enumerate() {
+        if registered.is_none() {
             continue;
         }
         let Ok(door) = engine::simulate_door(pack, id, slot as u8, None) else {

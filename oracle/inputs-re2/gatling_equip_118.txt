@@ -1,0 +1,23 @@
+# room 118: EQUIP the gatling gun from slot 2 as play begins (so that Pl_weapon_ch loads its own clips), wait out the zombie's hold, aim at the zombies and fire: a burst, a press again during the spin down, a burst turning left then right, and a last burst let go of the aim while firing (#491)
+346 start
+350
+382 down
+386
+402 confirm
+406
+422 confirm
+426
+462 start
+466
+620 aim
+640 aim fire
+720 aim
+730 aim fire
+800 aim
+840 aim fire left
+900 aim fire right
+960 aim
+1000 aim fire
+1080 fire
+1100
+1300

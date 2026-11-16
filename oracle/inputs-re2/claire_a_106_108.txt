@@ -1,0 +1,272 @@
+# Claire A, 106 to 108's water tank (#665 Part 3), as claire_a_10a_106 leaves her at 107's door 0's arrival: the valve handle (the bowgun on the next shelf is left), back through 107 shooting slots 1, 2 and 3 (slot 0 is left behind), and USE at the tank, which puts out 10A's and 108's fire (oracle/re2.md, "Claire A to the Diamond Key")
+0
+# 106 from 107's door 0: west along the south side, then north up the aisle to the valve handle's shelf
+344 up run
+377
+379 right
+394
+396 up run
+427
+429 right
+430
+# the valve handle (item 50): a press every 12 ticks finishes the question's text, Yes, finishes and closes "taken"
+433 action
+435
+445 action
+447
+457 action
+459
+469 action
+471
+481 action
+483
+493 action
+495
+505 action
+507
+517 action
+519
+529 action
+531
+541 action
+543
+609 action
+611
+# turn about and run back south down the aisle, then east to door 1
+622 left
+648
+650 up run
+680
+682 left
+695
+697 up run
+735
+# door 1 into 107
+740 action
+742
+# 107 (loads 775, play back 1082): east along the north side
+1083 up run
+1150
+# slot 1 at the corner: aimed shots until it goes down
+1154 aim
+1155 aim fire
+1156 aim
+1161 aim fire
+1162 aim
+1167 aim fire
+1168 aim
+1173 aim fire
+1174 aim
+1179 aim fire
+1180 aim
+1185 aim fire
+1186 aim
+1191 aim fire
+1192 aim
+1197 aim fire
+1198 aim
+1203 aim fire
+1204 aim
+1209 aim fire
+1210 aim
+1215 aim fire
+1216 aim
+1221 aim fire
+1222 aim
+1227 aim fire
+1228 aim
+1233 aim fire
+1234 aim
+1239 aim fire
+1240 aim
+1242 aim down
+1243 aim down fire
+1244 aim down
+1249 aim down fire
+1250 aim down
+1255 aim down fire
+1256 aim down
+1261 aim down fire
+1262 aim down
+1267 aim down fire
+1268 aim down
+1273 aim down fire
+1274 aim down
+1279 aim down fire
+1280 aim down
+1285 aim down fire
+1286 aim down
+1291 aim down fire
+1292 aim down
+1297 aim down fire
+1298 aim down
+1299
+# slot 1 is dead: on east to the corner
+1302 up run
+1339
+1341 right
+1351
+# turn south and run down the east corridor toward slot 2
+1353 up run
+1372
+1374 aim
+1375 aim fire
+1376 aim
+1381 aim fire
+1382 aim
+1387 aim fire
+1388 aim
+1393 aim fire
+1394 aim
+1399 aim fire
+1400 aim
+1405 aim fire
+1406 aim
+1411 aim fire
+1412 aim
+1417 aim fire
+1418 aim
+1423 aim fire
+1424 aim
+1429 aim fire
+1430 aim
+1435 aim fire
+1436 aim
+1441 aim fire
+1442 aim
+1447 aim fire
+1448 aim
+1453 aim fire
+1454 aim
+1459 aim fire
+1460 aim
+1465 aim fire
+1466 aim
+1471 aim fire
+1472 aim
+1477 aim fire
+1478 aim
+1483 aim fire
+1484 aim
+1489 aim fire
+1490 aim
+1495 aim fire
+1496 aim
+1501 aim fire
+1502 aim
+1507 aim fire
+1508 aim
+1513 aim fire
+1514 aim
+1519 aim fire
+1520 aim
+1521
+# slot 2 is dead: on south down the corridor toward slot 3
+1523 up run
+1566
+1568 aim
+1569 aim fire
+1570 aim
+1575 aim fire
+1576 aim
+1581 aim fire
+1582 aim
+1587 aim fire
+1588 aim
+1593 aim fire
+1594 aim
+1599 aim fire
+1600 aim
+1605 aim fire
+1606 aim
+1611 aim fire
+1612 aim
+1617 aim fire
+1618 aim
+1623 aim fire
+1624 aim
+1629 aim fire
+1630 aim
+1635 aim fire
+1636 aim
+1641 aim fire
+1642 aim
+1647 aim fire
+1648 aim
+1653 aim fire
+1654 aim
+1655
+# slot 3 is down: run at it
+1657 up run
+1685
+1686 left
+1689
+# turn south and run down the corridor, within reach of it
+1690 up run
+1702
+1705 aim down
+1706 aim down fire
+1707 aim down
+1712 aim down fire
+1713 aim down
+1714
+# slot 3 is dead: west to door 1
+1728 right
+1733
+1734 up run
+1756
+# turn to face north and step up to door 1
+1758 right
+1774
+1776 up
+1781
+# door 1 into 108 (loads 1820), the stairs: up held through the load, as leon_a_106_108's
+1785 action
+1787
+1822 up
+# 108: west and south to the water tank's area 3
+1996 up run right
+1997 up run
+2009 up run right
+2010 up run
+2027 up run right
+2028 up run
+2030 up run right
+2031 up run
+2032 up run right
+2035 up run left
+2064 up run
+2079 up run left
+2080 up run
+2136 up run left
+2137 up run
+2145 up run right
+2146 up run
+2149 up run right
+2150 up run
+2162 up run right
+2186 up run
+2202 up run right
+2203 up run
+2210 up run right
+2211 up run
+2213 up run right
+2215
+2217 left
+2221
+2224 up
+2228
+# START, down twice and right to the valve handle in slot 5, its menu, USE: event 6 runs the extinguish scene, 4:0 on 2535 in arklay
+2233 start
+2237
+2273 down
+2277
+2293 down
+2297
+2313 right
+2317
+2333 confirm
+2337
+2353 confirm
+2357
+3019

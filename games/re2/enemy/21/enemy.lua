@@ -1396,6 +1396,12 @@ local function scene_perched(e)
     end
 end
 
+-- The Beretta's row: `DAT_00527978` has 0x13 (to `Routine_1` 0x12), so 0x13
+-- reads the next table's first, `funcs_462454[0]` (`0x5279c4`). A crow it
+-- hits or kills perches where it is, its `Routine_0` still 2 or 3, until the
+-- scene's `Sce_free0` bit 0 sends it flying (1, 1). The Colt's (0xD) falls.
+HURT[0x13] = scene_perched
+
 -- The way it's told to go in `FUN_00462500`: a point, then the next step.
 local function scene_leg(e, x, z)
     e:goto_point(x, z, 0x60)

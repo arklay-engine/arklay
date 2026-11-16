@@ -30,14 +30,11 @@ const IDENTITY_MATRIX: [i16; 9] = [4096, 0, 0, 0, 4096, 0, 0, 0, 4096];
 /// The set covers the script-spawned ids (`1,2,3,12,13,18,26,30,33,41,47,51,
 /// 57,58`), their update partners (`0,12,15,19,26,38`), and the ids every
 /// shipped sprite's animation data adds, including the falling projectile
-/// (`10`, the ejected shell casing), and the grenade round's bullet (`43`).
-/// The combat-only flame entry (`37`) stays a counted placeholder by design
-/// until its combat exists.
+/// (`10`, the ejected shell casing), the grenade round's bullet (`43`) and
+/// the flamethrower's flame (`37`). Every id of the 64-entry table now has an
+/// implementation; the placeholder counter stays for out-of-range ids.
 pub const fn implemented(id: u8) -> bool {
-    matches!(
-        id,
-        0..=36 | 38..=63
-    )
+    id < 64
 }
 
 /// One tick of every live effect slot.
@@ -420,6 +417,40 @@ fn bullet(game: &mut GameState, room: &RoomState, index: usize) {
         if count > 8 {
             slot.frame_entry = 0;
         }
+    }
+}
+
+/// `effect_behavior_flamethrower` (behaviour 37, 0x0040ed30): one flame
+/// billboard of the flamethrower's spray.
+///
+/// The player's hold-fire loop spawns a type-0x0C flame at the weapon hand
+/// every fourth frame. While it lives, each tick stages the player's aim byte
+/// from `header[2]` (the flags the flame's animation data latched), parks the
+/// flame's x/z as the projectile origin and runs the flamethrower (weapon 6)
+/// through the shared damage pipeline. The projectile detector measures from
+/// that origin against weapon slot 5's 400-unit range plus the target's
+/// radius, and the flamethrower's hit records give each enemy's damage. A hit
+/// spawns the header's billboard at the flame and frees the slot; a miss
+/// leaves the flame to its animation. The original restores the player's
+/// flags afterwards; the port passes the staged byte to the pipeline instead
+/// and never writes the player's.
+fn flamethrower(game: &mut GameState, room: &RoomState, index: usize) {
+    let Some(effect) = game.effects.slot(index).copied() else {
+        return;
+    };
+    // The original sets only the scratch x/z; the detector reads no y.
+    let pos = [
+        i32::from(effect.pos[0]),
+        i32::from(effect.pos[1]),
+        i32::from(effect.pos[2]),
+    ];
+    let flags = effect.header[2];
+    let hit = crate::joint_trail::damage_after_compose(game, |game| {
+        game.apply_weapon_damage_with(room, crate::weapons::ITEM_FLAMETHROWER, pos, flags)
+    });
+    if hit != 0 {
+        spawn_from_header(game, index);
+        kill(game, index);
     }
 }
 
@@ -1763,6 +1794,7 @@ fn run_behavior(game: &mut GameState, room: &RoomState, index: usize, id: u8) {
                 _ => {}
             }
         }
+        37 => flamethrower(game, room, index),
         43 => bullet(game, room, index),
         45 => rocket(game, room, index),
         // Fire burst: spawn a ladder of type-1 billboards, then kill.
@@ -2733,12 +2765,14 @@ mod tests {
     }
 
     #[test]
-    fn unimplemented_ids_are_counted_placeholders() {
-        let mut game = game_with_row(&[raw_block(37, 0)]);
+    fn out_of_table_ids_are_inert() {
+        // Every id of the 64-entry table is implemented; an id past it does
+        // nothing and leaves the slot alone.
+        let mut game = game_with_row(&[raw_block(64, 0)]);
         let slot = spawn(&mut game, 0, [0, 0, 0], 0, 0);
         run(&mut game, &room());
-        assert_eq!(game.effect_placeholder_hits[37], 1);
-        assert_eq!(game.effects.slot(usize::from(slot)).unwrap().anim_id, 37);
+        assert_eq!(game.effect_placeholder_hits.iter().sum::<u32>(), 0);
+        assert_eq!(game.effects.slot(usize::from(slot)).unwrap().anim_id, 64);
     }
 
     #[test]
@@ -2763,15 +2797,11 @@ mod tests {
 
     #[test]
     fn the_implemented_set_matches_the_dispatch_table() {
-        // The combat-only entries stay counted placeholders by design.
-        let placeholders = [37u8];
+        // The flamethrower's flame (37) was the last placeholder.
         for id in 0..=63u8 {
-            assert_eq!(
-                implemented(id),
-                !placeholders.contains(&id),
-                "behaviour {id} tier mismatch"
-            );
+            assert!(implemented(id), "behaviour {id} tier mismatch");
         }
+        assert!(!implemented(64));
     }
     #[test]
     fn projectile_waits_above_the_floor_then_adopts_the_next_block() {
@@ -2963,6 +2993,91 @@ mod tests {
             "the hit frees the round"
         );
         assert_eq!(game.player_flags, 0x40, "the staged aim is not kept");
+    }
+
+    /// A flamethrower flame (behaviour 37) at `pos` with the aim byte the
+    /// flame's animation data latched into `header[2]`, and the header's
+    /// on-hit billboard (type 9, depth 0).
+    fn flame(game: &mut GameState, pos: [i16; 3], flags: u8) -> usize {
+        let slot = usize::from(spawn(game, 0, [0, 0, 0], 0, 0));
+        let flame = game.effects.slot_mut(slot).unwrap();
+        flame.header[0] = 9;
+        flame.header[1] = 0;
+        flame.header[2] = flags;
+        flame.pos = pos;
+        slot
+    }
+
+    /// Chris at the origin facing +x, with a zombie at `zombie_x` and the
+    /// level aim. The flame sprays from the weapon hand ahead of him.
+    fn flame_game(zombie_x: i32) -> GameState {
+        let mut game = game_with_row(&[raw_block(37, 0)]);
+        game.id.player_flag = 0;
+        game.player_flags = 0x40;
+        game.entities[0].pos = [0, 0, 0];
+        game.entities[0].angle = 0;
+        place_zombie(&mut game, [zombie_x, 0, 0]);
+        game
+    }
+
+    #[test]
+    fn a_flame_damages_a_zombie_in_front_of_chris() {
+        // The flame at the hand (540 ahead) reaches a zombie 300 units past
+        // it: within the flamethrower's 400-unit projectile range.
+        let mut game = flame_game(840);
+        let slot = flame(&mut game, [540, -1260, 0], 0x40);
+        run(&mut game, &room());
+        assert_eq!(
+            game.entities[1].health,
+            100 - 20,
+            "the zombie's flamethrower record"
+        );
+        assert_eq!(game.entities[1].hit_state & 0xf8, 6 * 8, "weapon 6's bits");
+        assert_eq!(game.entities[1].state(), 2, "the surviving hit reaction");
+        assert_ne!(
+            game.effects.slot(slot).map_or(0, |e| e.anim_id),
+            37,
+            "the hit frees the flame"
+        );
+        assert!(
+            game.last_effect_spawn.is_some(),
+            "the hit spawns the header billboard"
+        );
+        assert_eq!(game.player_flags, 0x40, "the player's flags are untouched");
+    }
+
+    #[test]
+    fn a_flame_misses_a_zombie_behind_chris_or_far_away() {
+        for zombie_x in [-700, 3000] {
+            let mut game = flame_game(zombie_x);
+            let slot = flame(&mut game, [540, -1260, 0], 0x40);
+            run(&mut game, &room());
+            assert_eq!(game.entities[1].health, 100, "zombie at x={zombie_x}");
+            assert_eq!(game.entities[1].hit_state, 0);
+            assert_eq!(
+                game.effects.slot(slot).unwrap().anim_id,
+                37,
+                "a miss keeps the flame burning"
+            );
+        }
+    }
+
+    #[test]
+    fn a_flame_hits_with_the_aim_byte_it_latched() {
+        // The flame stages its own `header[2]`, not the player's live flags:
+        // a downward-latched flame misses a target the level aim would hit.
+        let mut game = flame_game(840);
+        game.player_flags = 0x40;
+        flame(&mut game, [540, -1260, 0], 0x80);
+        run(&mut game, &room());
+        assert_eq!(game.entities[1].health, 100);
+
+        let mut game = flame_game(840);
+        game.player_flags = 0x80;
+        flame(&mut game, [540, -1260, 0], 0x40);
+        run(&mut game, &room());
+        assert_eq!(game.entities[1].health, 80);
+        assert_eq!(game.player_flags, 0x80);
     }
 
     #[test]

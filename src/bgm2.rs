@@ -893,8 +893,8 @@ mod tests {
     fn a_room_starts_its_main_silent_and_a_script_raises_it() {
         let mut music = Music::default();
         music.enter_room(word(0, 0xff), street());
-        for index in 0..3 {
-            assert_eq!(music.channels[index].play, Some(true));
+        for channel in &music.channels[..3] {
+            assert_eq!(channel.play, Some(true));
         }
         assert!(
             music.channels[..3]

@@ -311,6 +311,15 @@ function M.open(api, args)
         emit(api)
         return
     end
+    -- A script's map (`Sce_84`, the status task's mode 4): the engine runs
+    -- its page (`src/game/status2/script_map.rs`).
+    if args ~= nil and args.mode == "map" then
+        s.script_map = true
+        api:set("canvas", 1)
+        s.open, s.close = 0, nil
+        emit(api)
+        return
+    end
     -- The get-item window draws with this script's art but runs no page.
     if args ~= nil and args.mode == "get" then
         s.get = true
@@ -331,14 +340,14 @@ end
 
 function M.tick(api)
     emit(api)
-    if not s.box then
+    if not s.box and not s.script_map then
         refresh(api)
     end
 end
 
 function M.update(api, _input)
     emit(api)
-    if not s.box then
+    if not s.box and not s.script_map then
         refresh(api)
     end
 end
@@ -403,6 +412,9 @@ function M.animate(api, open, close)
     s.open, s.close = open, close
     if s.box then
         animate_box(api)
+        return
+    end
+    if s.script_map then
         return
     end
     s.last = s.page
@@ -985,8 +997,8 @@ end
 
 -- The floor's map (`0x4FA990`): the rooms' fills, the signs, the rooms'
 -- outlines and the player's marker, in the original's order.
-local function draw_map(api, d)
-    local view = api:re2_map()
+local function draw_map(api, d, view)
+    view = view or api:re2_map()
     if view == nil then
         return
     end
@@ -1345,9 +1357,34 @@ function B.draw_box(api)
     end
 end
 
+-- A script's map (`0x4FB800` and `St_disp_wall`): the background, the
+-- backdrop's tiles and the floor's rooms, the target's fill blinking, with no frame, tab or
+-- marker.
+local function draw_script_map(api)
+    api:fill_rect(0, 0, api:width(), api:height(), 8, 8, 32)
+    -- The tick that finds the fade in done draws nothing over the
+    -- background.
+    local view = api:re2_script_map()
+    if view == nil then
+        return
+    end
+    local d = art(api)
+    d.ox, d.oy = api:width() // 2 - 160, api:height() // 2 - 120
+    for row = 0, TILE_ROWS - 1 do
+        for column = 0, TILE_COLUMNS - 1 do
+            sprite(api, d, ST + 1, TILE * column, TILE * row, TILE, TILE, TILE_U, TILE_V)
+        end
+    end
+    draw_map(api, d, view)
+end
+
 function M.draw(api)
     if s.box then
         B.draw_box(api)
+        return
+    end
+    if s.script_map then
+        draw_script_map(api)
         return
     end
     if s.get then

@@ -1,0 +1,3381 @@
+# Leon A's route from the new game to the Manhole Opener in Ben's cell (301): route_200_heart.txt to the Heart Key and back out to the hall (200), then route_leon_a_opener's warps' presses joined on from each room's hand back (oracle/re2.md, "Leon A to the Manhole Opener", #656)
+# Leon A's route from the new game to the Heart Key in Marvin's office (202) and back out to the main hall: route_200_diamond.txt to the Diamond Key in 10B, then route_leon_a_heart's warps' presses joined on from each room's hand back, with 209 and 202 made again where the route's Rnd gives the enemies other life and choices than the warps' (oracle/re2.md, "Leon A to the Heart Key")
+# Leon A's route from the new game to the Diamond Key in 10B: route_200_spade.txt to the Spade Key at the main hall's statue, then route_leon_a_diamond's warps' presses joined on from each room's hand back, with the fights and dashes made again where the route's Rnd gives its enemies other life and choices than the warps' (oracle/re2.md, "Leon A to the Diamond Key")
+# Leon A's route from the new game to the Unicorn Medal in the S.T.A.R.S. office (115): route_200_208.txt to the ink ribbons in the darkroom (208), then the room runs past it (leon_a_208_114, leon_a_114_115) joined on from each hand back (oracle/re2.md, "Leon A to the S.T.A.R.S. office")
+# route_200_208.txt: Leon A's route from the new game to the darkroom (208): route_200_computer.txt to the Blue Card Key's use at room 200's computer, then the room runs past the card (leon_a_200_out, leon_a_204, leon_a_205, leon_a_207, leon_a_208) joined on from each door's hand back, room 207's fight made again for the route's zombies (oracle/re2.md, "Leon A past the card")
+# route_200_computer.txt's input: the new game to room 200's computer, where Leon agrees to use the Blue Card Key on 13800
+0 up run
+2 up run right
+7 up run
+50 up run left
+55 up run
+98 up run left
+108 up run
+128 up run right
+138 up run
+181 up run left
+199 up run
+214 aim
+218 aim fire
+257
+258 right
+260 up run
+323
+326 right
+337 up run
+352
+356 confirm
+358
+875 up
+905
+2055 down
+2057
+2065 left
+2115 up
+2255
+2260 right
+2265 up
+2470
+2475 left
+2479 up
+2555
+2560 right
+2566 up
+2611
+2613 left
+2624
+2627 action
+2629
+2971 up run
+3019
+3113 up run
+3155
+3159 up run
+3195
+3199 left
+3201
+3203 up
+3210
+3214 right
+3223
+3225 up
+3232
+3236 right
+3243
+3245 up run
+3264
+3268 left
+3270
+3272 up
+3276 up run
+3370
+3396 up
+3408
+3411 confirm
+3413
+3480 confirm
+3482
+3530 confirm
+3532
+3650 confirm
+3652
+3990 aim
+3995 aim fire
+4366 aim
+4390 aim fire
+4394 aim
+4426
+4428 up run
+4474
+4477 aim down
+4484 aim down fire
+4488 aim down
+4520
+4600 aim
+4605 aim fire
+4663 aim
+4900 aim fire
+5005
+5008 up run
+5057
+5060 aim
+5065 aim fire
+5131 aim
+5312 aim fire
+5316 aim
+5345 aim fire
+5349 aim
+5352
+5354 right
+5363 up run
+5377 left
+5386 up run
+5450
+5455 action
+5457
+5563 left
+5568
+5570 up run
+5605
+5609 left
+5615
+5617 up run
+5634
+5638 right
+5643
+5645 up
+5651
+5655 left
+5660
+5662 up
+5674
+5678 right
+5680
+5683 confirm
+5685
+5797 up run
+5813
+5817 right
+5823
+5825 up
+5829
+5833 right
+5840
+5842 up
+5849
+5853 right
+5856
+5858 up run
+5905
+5909 left
+5912
+5914 up
+5922
+5926 right
+5937
+5939 up
+5944
+5948 right
+5954
+5957 up
+5965
+5969 confirm
+5971
+6082 left
+6084
+6086 up run
+6095
+6099 right
+6102
+6104 up
+6107
+6111 left
+6126
+6129 confirm
+6131
+6255 up
+6280
+6324 confirm
+6326
+6412 left
+6424
+6426 up run
+6488 up run left
+6495 up run
+6528
+6531 right
+6535 up
+6545
+6548 action
+6550
+6661 left
+6665
+6667 up run
+6685
+6689 left
+6695
+6697 up run
+6710
+6714 right
+6717
+6719 up
+6724
+6728 left
+6738
+6740 up run
+6825
+6829 left
+6834
+6836 up run
+6842
+6846 left
+6851
+6853 up
+6856
+6860 right
+6865
+6867 up
+6870
+6874 right
+6876
+6880 up
+6894
+6900 action
+6904
+6990 confirm
+6992
+7028 left
+7048 up
+7068
+7071 confirm
+7073
+7190 confirm
+7192
+7310 confirm
+7312
+7323 right
+7350
+7440 aim down
+7470 aim down fire
+7522 aim down
+7535
+7700 aim
+7730 aim fire
+7736 aim
+7756 aim fire
+7820
+7823 right
+7824 up run
+7916
+7918 right
+7932 up
+7952
+7954 action
+7956
+8082 confirm
+8084
+8100 left
+8111 up run
+8133 up run left
+8137 up run
+8185 up run left
+8201 up run
+8226 up run right
+8242 up run
+8251 up run left
+8269
+8271 action
+8273
+8379 right
+8390
+8392 up run
+8401
+8405 right
+8417
+8419 up run
+8428
+8432 left
+8437
+8439 up
+8443
+8447 right
+8454
+8456 up run
+8488
+8490 aim
+8495 aim fire
+8552 aim
+8559 up run left
+8562 up run
+8700
+8702 left
+8712 up run
+8733 up run left
+8735 up run
+8771 up run left
+8775 up run
+8782
+8784 action
+8786
+9600 up
+9690
+9700 confirm
+9702
+9780 left
+9793
+9796 up run
+9858
+9862 right
+9874
+9876 up run
+9955
+9958 left
+9970
+9972 up
+10010
+10012 confirm
+10014
+13200 left
+13207
+13210 up run
+13269
+13272 left
+13286
+13289 up run
+13383
+13386 left
+13400
+13403 up run
+13470
+13473 left
+13488
+13491 up run
+13531
+13534 right
+13549
+13552 up
+13590
+13593 left
+13608
+13611 up
+13658
+13665 confirm
+13667
+13800 confirm
+13802
+# the card's use: a press every 30 ticks until the last prompt, as computer_200_card.txt (its 400 is the route's 13800); play comes back on 14475
+13804
+13830 action
+13834
+13860 action
+13864
+13890 action
+13894
+13920 action
+13924
+13950 action
+13954
+13980 action
+13984
+14010 action
+14014
+14040 action
+14044
+14070 action
+14074
+14100 action
+14104
+14130 action
+14134
+14160 action
+14164
+14190 action
+14194
+14220 action
+14224
+14250 action
+14254
+14280 action
+14284
+14310 action
+14314
+14340 action
+14344
+14370 action
+14374
+14400 action
+14404
+14430 action
+14434
+14460 action
+14464
+# room 200 after the card, leon_a_200_out.txt 14132 ticks later: the counter's 30 rounds, the east ramp and door 1 (pressed on 15336)
+14482 left
+14508
+14512 up run
+14527
+14530 right
+14544
+14546 up run
+14558
+14560 left
+14573
+14576 up run
+14592
+14594 left
+14608
+14610 up
+14619
+14622 action
+14626
+14858 action
+14862
+15058 action
+15062
+15072 right
+15084
+15087 up run
+15111
+15114 right
+15129
+15130 up run
+15196
+15199 right
+15212
+15215 up run
+15308
+15312 left
+15316
+15318 up run
+15332
+15336 action
+15340
+# rooms 201 and 204, leon_a_204.txt 15359 ticks later: door 1's hand back is on 15702, 366 ticks after its press (other doors take 340); the bar, the window licker's start, door 1 into 204, the body's 15 rounds, the window licker's fight (Leon is left at 156 life) and door 1 into 205 (pressed on 17655)
+15709 right
+15711
+15713 up run
+15745
+15747 left
+15749
+15751 up run
+15783
+15785 left
+15798
+15800 up run
+15820
+15822 right
+15825
+15827 action
+15831
+16171 up run
+16272
+16275 right
+16287
+16289 up
+16300
+16303 action
+16307
+16364 action
+16368
+16389 action
+16393
+16419 action
+16423
+16681 action
+16685
+16881 action
+16885
+16919 up run
+16954
+17059 up
+17119
+17149 right
+17165
+17165 up run
+17181
+17181 left
+17196
+17197 aim down
+17205 aim down fire
+17209 aim down
+17217 aim down fire
+17221 aim down
+17229 aim down fire
+17233 aim down
+17241 aim down fire
+17245 aim down
+17253 aim down fire
+17257 aim down
+17265 aim down fire
+17269 aim down
+17277 aim down fire
+17281 aim down
+17289 aim down fire
+17293 aim down
+17301 aim down fire
+17305 aim down
+17313 aim down fire
+17317 aim down
+17325 aim down fire
+17329 aim down
+17337 aim down fire
+17341 aim down
+17349 aim down fire
+17353 aim down
+17361 aim down fire
+17365 aim down
+17373 aim down fire
+17377 aim down
+17385 aim down fire
+17389 aim down
+17397 aim down fire
+17401 aim down
+17409 aim down fire
+17413 aim down
+17421 aim down fire
+17425 aim down
+17433 aim down fire
+17437 aim down
+17445 aim down fire
+17449 aim down
+17457 aim down fire
+17461 aim down
+17469 aim down fire
+17473 aim down
+17481 aim down fire
+17485 aim down
+17499
+17509 right
+17511
+17511 up run
+17645
+17655 action
+17659
+# room 205, 17652 ticks later: one shot into the corridor first (its four Rnd draws give room 207's zombies 55, 56, 50 and 48 life), then leon_a_205.txt's walk with the turns of a player in Fine (80 a tick, 48 in Caution) and door 2 (pressed on 18436)
+17997 aim
+18005 aim fire
+18008 aim
+18029 aim fire
+18032 aim
+18052
+18056 up run
+18156
+18158 right
+18168 up run
+18296
+18296 right
+18309 up run
+18430
+18436 action
+18440
+# room 207, 18433 ticks later: the reload from the status screen, then slot 3 from the north (four hits), slot 0 from a step back south (four), slot 2 down the corridor (four), slot 1 from the corridor's west end (four), with no grab, and the run east to door 2 (pressed on 19723)
+18785 start
+18789
+18821 down
+18825
+18841 confirm
+18845
+18861 down
+18865
+18881 down
+18885
+18901 confirm
+18905
+18921 up
+18925
+18941 confirm
+18945
+19021 confirm
+19025
+19033 cancel
+19037
+19049 cancel
+19053
+19069 start
+19073
+19085 left
+19098 up
+19113
+19116 aim
+19124 aim fire
+19127 aim
+19136 aim fire
+19139 aim
+19148 aim fire
+19151 aim
+19160 aim fire
+19163 aim
+19172 aim fire
+19175 aim
+19184 aim fire
+19187 aim
+19196 aim fire
+19199 aim
+19208 aim fire
+19211 aim
+19212
+19213 down
+19225
+19227 aim
+19235 aim fire
+19238 aim
+19247 aim fire
+19250 aim
+19259 aim fire
+19262 aim
+19271 aim fire
+19274 aim
+19283 aim fire
+19286 aim
+19295 aim fire
+19298 aim
+19307 aim fire
+19310 aim
+19319 aim fire
+19322 aim
+19322
+19323 left
+19335
+19336 aim
+19344 aim fire
+19347 aim
+19356 aim fire
+19359 aim
+19368 aim fire
+19371 aim
+19380 aim fire
+19383 aim
+19392 aim fire
+19395 aim
+19404 aim fire
+19407 aim
+19416 aim fire
+19419 aim
+19428 aim fire
+19431 aim
+19432
+19495 left
+19500 up
+19526
+19528 aim
+19536 aim fire
+19539 aim
+19548 aim fire
+19551 aim
+19560 aim fire
+19563 aim
+19572 aim fire
+19575 aim
+19584 aim fire
+19587 aim
+19596 aim fire
+19599 aim
+19608 aim fire
+19611 aim
+19620 aim fire
+19623 aim
+19624
+19633 right
+19635 up run
+19691
+19697 right
+19711
+19713 up
+19719
+19723 action
+19727
+# room 208, 19720 ticks later: the walk to the ink ribbons' table as leon_a_208.txt, with Fine's turns and pace, their take into slot 3 and the message's close
+20070 up
+20089
+20094 right
+20107
+20117 up
+20161
+20169 left
+20182
+20192 up
+20202
+20206 action
+20208
+20362 action
+20364
+20442 action
+20444
+# leon_a_208_114.txt's input from the ribbons' table, 20276 ticks later (its tick 343 on 20619, the last of route_200_208's reference)
+20626 left
+20640
+20642 up
+20686
+20688 left
+20701
+20703 up
+20723
+20725 action
+20727
+21068 left
+21073
+21075 up run
+21160
+21162 right
+21185
+21187 up
+21214
+21216 action
+21218
+21426 right
+21427
+21428 up action
+21569
+21571 right
+21581 up run right
+21586 up run
+21734
+21744 left
+21758
+21761 up
+21779
+21808 up
+21888
+21964 down
+21968
+21972 right
+21985
+21988 up
+22001
+22006 left
+22019
+22022 up
+22038
+22042 left
+22055
+22060 up
+22314
+22318 right
+22331
+22334 up
+22342
+22346 left
+22359
+22362 up
+22373
+22377 left
+22390
+22394 up
+22494
+22498 down
+22503
+22508 left
+22522
+22525 up run
+22542
+22546 right
+22560
+22563 up
+22641
+22713 down
+22717
+22721 right
+22734
+22737 up
+22750
+22754 left
+22767
+22770 up
+22785
+22789 left
+22802
+22805 up
+23043
+23051 right
+23064
+23065 up
+23101
+23105 left
+23127
+23129 up
+23209
+23313 down
+23318
+23323 left
+23337
+23340 up run
+23363
+23367 right
+23380
+23383 up
+23395
+23399 action
+23403
+23673 action
+23677
+23873 action
+23877
+23886 right
+23901
+23903 up run
+23920
+23922 left
+23936
+23938 up run
+23966
+23968 right
+23982
+23984 up
+23998
+24000 action
+24002
+# leon_a_114_115.txt's input from 10C's door 2's hand back in 114 (24342), 23999 ticks later
+24349 left
+24363
+24365 up run
+24417
+24419 left
+24433
+24435 action
+24437
+24784 up
+24867
+24869 left
+24883
+24885 up
+24892
+24894 action
+24896
+24988 right
+24990
+25018 right
+25020
+25048 right
+25050
+25078 right
+25080
+25108 right
+25110
+25138 right
+25140
+25188 action
+25190
+25288 action
+25290
+25614 action
+25616
+25814 action
+25816
+# leon_a_115_207.txt's presses, 26738 ticks later: its tick 344 on 27082, where the scene with Claire hands back (115's door 0 on 27160, 114's door 2 on 27602, 10C's stairs door on 28336)
+27088 right
+27096
+27098 up run
+27112
+27114 left
+27123
+27126 up run
+27158
+27160 action
+27162
+27502 right
+27518
+27519 up run
+27584
+27586 right
+27599
+27602 action
+27604
+27944 left
+27957
+27959 up run
+27990
+27992 right
+28004
+28006 up run
+28168
+28170 left
+28182
+28184 up action
+28300
+28302 left
+28315
+28317 up
+28334
+28336 action
+28338
+# leon_a_207_201_licker.txt's presses, 28197 ticks later: its tick 343 on 28540, the last stopped tick before 207 (207's door 1 on 28633, 205's door 0 on 29283, 204's door 0 on 29819)
+28547 up run
+28559
+28561 left
+28574
+28576 up run
+28617
+28619 right
+28631
+28633 action
+28635
+28975 right
+28983
+28985 up run
+29065
+29067 left
+29076
+29078 up run
+29101 up run right
+29103 up run
+29158
+29160 left
+29176
+29178 up run
+29261
+29263 right
+29266
+29268 up run
+29281
+29283 action
+29285
+29625 left
+29628
+29630 up run
+29715 up run left
+29730 up run
+29817
+29819 action
+29821
+# leon_a_201_spade.txt's presses, 29816 ticks later: its tick 343 on 30159, the last stopped tick before 201 (201's door 0 on 30286, START in 200 on 30742, the Spade Key into slot 5 on 31136)
+30166 left
+30180
+30182 up run
+30210
+30212 right
+30226
+30228 up run
+30284
+30286 action
+30288
+30654 left
+30659
+30661 up run
+30726
+30728 left
+30737
+30742 start
+30746
+30778 down
+30782
+30798 down
+30802
+30818 right
+30822
+30838 confirm
+30842
+30858 confirm
+30862
+30976 action
+30978
+31116 action
+31118
+31196 action
+31198
+31315
+# leon_a_200_203's presses from its tick 344 on, 30972 ticks later (its 344 on 31316): 200's door 1, 201's door 1, then in 204 a wait of 40 ticks and the fight made again for the route's licker (101 life, Em22_Life[Rnd & 0xF]: eight hits, one scratch), the run up the branch and the Spade Key at door 2 69 ticks later than in the warp, and 203's door 0
+31316
+31322 left
+31339
+31341 up run
+31427
+31429 action
+31431
+31803 right
+31805
+31807 up run
+31839
+31841 left
+31843
+31845 up run
+31877
+31879 left
+31892
+31894 up run
+31914
+31916 right
+31919
+31921 action
+31925
+32303 up run
+32390
+32392 right
+32404
+32406 aim down
+32414 aim down fire
+32418 aim down
+32426 aim down fire
+32430 aim down
+32438 aim down fire
+32442 aim down
+32450 aim down fire
+32454 aim down
+32462 aim down fire
+32466 aim down
+32474 aim down fire
+32478 aim down
+32486 aim down fire
+32490 aim down
+32498 aim down fire
+32502 aim down
+32510 aim down fire
+32514 aim down
+32522 aim down fire
+32526 aim down
+32534 aim down fire
+32538 aim down
+32546 aim down fire
+32550 aim down
+32558 aim down fire
+32562 aim down
+32570 aim down fire
+32574 aim down
+32582 aim down fire
+32586 aim down
+32594 aim down fire
+32598 aim down
+32606 aim down fire
+32610 aim down
+32618 aim down fire
+32622 aim down
+32630 aim down fire
+32634 aim down
+32642 aim down fire
+32646 aim down
+32647
+32672 right
+32679
+32681 up run
+32711 up run right
+32713 up run
+32741
+32745 right
+32758
+32761 action
+32763
+32821 action
+32823
+32881 action
+32883
+33221 left
+33247
+33249 action
+33251
+# leon_a_204_10c's presses from its tick 344 on, 33246 ticks later (its 344 on 33590, 204's hand back): 204's door 1, 205's door 2, 207's stairs door
+33590
+33596 right
+33607
+33609 up run
+33664
+33666 action
+33668
+34009 up run
+34095
+34097 right
+34111
+34113 up run
+34199
+34201 right
+34214
+34216 up run
+34256
+34258 left
+34270
+34272 up run
+34304
+34306 action
+34308
+34649 left
+34662
+34664 up run
+34706
+34708 right
+34722
+34724 up run
+34734
+34736 action
+34738
+# leon_a_10c_113's presses from its tick 344 on, 34601 ticks later (its 344 on 34945, 10C's hand back), to 114's hand back on 35691
+34945
+34951 right
+34952
+34953 up action
+35094
+35096 right
+35110
+35112 up run
+35270
+35272 left
+35285
+35287 up run
+35317
+35319 right
+35332
+35334 up
+35348
+35350 action
+35352
+# 114 made again for the route's three zombies (70, 84 and 65 life): from 114's hand back (35691), face south and fire every 6 ticks at the nearest standing zombie within 6000 with more than 1 life (slot 1 is left with 1 life), down the east wall to door 0, the Spade Key's last use and the press that opens it
+35692
+35692 left
+35705
+35706 aim
+36347 aim fire
+36349 aim
+36353 aim fire
+36355 aim
+36359 aim fire
+36361 aim
+36365 aim fire
+36367 aim
+36371 aim fire
+36373 aim
+36377 aim fire
+36379 aim
+36383 aim fire
+36385 aim
+36389 aim fire
+36391 aim
+36395 aim fire
+36397 aim
+36467 aim fire
+36469 aim
+36473 aim fire
+36475 aim
+36479 aim fire
+36481 aim
+36485 aim fire
+36487 aim
+36491 aim fire
+36493 aim
+36575 aim fire
+36577 aim
+36599 aim fire
+36601 aim
+36605 aim fire
+36607 aim
+36611 aim fire
+36613 aim
+36617 aim fire
+36619 aim
+36623 aim fire
+36625 aim
+36629 aim fire
+36631 aim
+36635 aim fire
+36637 aim
+36641 aim fire
+36643 aim
+36647 aim fire
+36649 aim
+36737 aim fire
+36739 aim
+36743 aim fire
+36745 aim
+36749 aim fire
+36751 aim
+36755 aim fire
+36757 aim
+36761 aim fire
+36763 aim
+36989 aim fire
+36991 aim
+36995 aim fire
+36997 aim
+37001 aim fire
+37003 aim
+37007 aim fire
+37009 aim
+37013 aim fire
+37015 aim
+37019 aim fire
+37021 aim
+37025 aim fire
+37027 aim
+37031 aim fire
+37033 aim
+37037 aim fire
+37039 aim
+37043 aim fire
+37045 aim
+37049 aim fire
+37051 aim
+37055 aim fire
+37057 aim
+37061 aim fire
+37063 aim
+37067 aim fire
+37069 aim
+37073 aim fire
+37075 aim
+37163 aim fire
+37165 aim
+37169 aim fire
+37171 aim
+37175 aim fire
+37177 aim
+37181 aim fire
+37183 aim
+37187 aim fire
+37189
+37192 up run left
+37201 up run
+37202 up run left
+37203 up run
+37212 up run left
+37213 up run
+37216 up run left
+37217 up run right
+37220 up run
+37226 up run right
+37227 up run
+37252 up run left
+37253 up run
+37282 up run right
+37283 up run
+37292 up run left
+37293 up run
+37294 up run left
+37295 up run right
+37296 up run
+37301 up run right
+37302 up run
+37307 up run left
+37318 up run
+37319 up run left
+37323 up run
+37326 up run left
+37327 up run
+37330 up run left
+37332 up run
+37333 up run left
+37334 up run
+37349 up run left
+37350 up run
+37353 up run left
+37354 up run right
+37355 up run
+37362 up run right
+37363 up run
+37365 up run right
+37366
+37368 left
+37370 action
+37372
+37430 action
+37432
+37490 action
+37492
+37550 action
+37552
+# leon_a_113_10a's presses one tick later than in the warp (from 113's hand back on 37891): 113 past its waking zombies, 112, 110, 10F
+37891
+37893 up run left
+37924 up run right
+37942 up run
+37946 up run left
+37947 up run
+37948 up run left
+37949 up run
+37950 up run left
+37953 up run
+37956 up run left
+37957 up run right
+37975 up run
+38005 up run right
+38006 up run
+38030 up run left
+38042
+38044 left
+38050 action
+38052
+38390 up run
+38406 up run right
+38407 up run
+38410 up run right
+38422 up run
+38425 up run right
+38426 up run
+38450 up run right
+38451 up run
+38455 up run right
+38456 up run
+38461 up run right
+38462 up run
+38465 up run right
+38466 up run
+38474 up run left
+38475 up run
+38485
+38487 action
+38489
+38855 up run left
+38881 up run
+38884 up run right
+38887 up run
+38890 up run right
+38891 up run
+38950 up run right
+38951 up run
+38957 up run right
+38974 up run
+38990 up run right
+38991 up run
+39076 up run right
+39077 up run
+39081 up run left
+39082 up run right
+39099 up run
+39187 up run right
+39188 up run
+39250 up run right
+39251 up run
+39255 up run left
+39285
+39287 right
+39295 action
+39297
+39647 up run left
+39655 up run
+39669 up run right
+39675 up run
+39681 up run right
+39682 up run
+39694 up run left
+39695 up run
+39697 up run right
+39699 up run
+39705 up run left
+39707 up run
+39709
+39711 right
+39713 action
+39715
+# leon_a_10a_106b's presses from 10A's hand back on 40054, with a wait of 8 ticks at 109's hand back (its crows) and 10 at 107's (its 0x13 holds Leon once, 134 to 84)
+40054
+40056 up run right
+40081 up run
+40089 up run right
+40090 up run
+40091 up run right
+40092 up run left
+40122
+40124 right
+40129 action
+40131
+40479 up run
+40533 up run right
+40534 up run
+40536 up run right
+40537 up run
+40538 up run left
+40559 up run
+40604 up run left
+40605 up run
+40606 up run left
+40607 up run right
+40628 up run
+40651 up run right
+40652 up run
+40677 up run right
+40678 up run
+40682 up run left
+40702 up run
+40746 up run left
+40747 up run
+40750 up run left
+40776 up run right
+40790
+40792 left
+40797 action
+40799
+41139 up run right
+41152 up run
+41156 up run right
+41157 up run
+41161 up run left
+41163 up run
+41181 up run left
+41182 up run
+41205 up run left
+41206 up run
+41207 up run right
+41227 up run
+41250 up run right
+41251 up run
+41252 up run right
+41268
+41270 right
+41272 action
+41274
+41520 up run left
+41527 up run
+41535 up run left
+41735 up run
+41773 up run right
+41778 up run
+41788 up run right
+41789 up run
+41802 up run left
+41804 up run
+41821 up run left
+41822 up run
+41838 up run left
+41839 up run
+41840 up run left
+41862 up run
+41874 up run left
+41875 up run
+41888 up run left
+41892 up run
+41907 up run left
+41908 up run
+41930 up run left
+41931 up run
+41934 up run right
+41941 up run
+41944 up run right
+41945 up run
+41958 up run right
+41960
+41962 left
+41964 action
+41966
+# 106 to 10B from 106's hand back on 42300: leon_a_106_108's presses through 106 (the valve handle and the 15 rounds); 107 made again for the route's zombies (fire every 12 ticks at the nearest standing zombie within 6000: slot 1 at the corner, slots 2 and 3 down the east corridor; slots 0 and 3 left), its door 1; 108's water tank and the valve handle (event 6, 4:0); event 7's status screen opens by itself and START closes it; then north and east to 108's door 1 by waypoints, leon_a_108_10b's presses from there (109 with its crows, 10A with a wait of 6 ticks at its hand back, slot 0 shot as it comes), 10B and the Diamond Key
+42300
+42300 up run right
+42304 up run
+42309 up run right
+42310 up run
+42316 up run right
+42317 up run
+42329 up run left
+42330 up run
+42337 up run right
+42390 up run left
+42510 up run
+42514 up run right
+42515
+42517 right
+42520 action
+42522
+42532 action
+42534
+42544 action
+42546
+42556 action
+42558
+42568 action
+42570
+42580 action
+42582
+42592 action
+42594
+42604 action
+42606
+42616 action
+42618
+42628 action
+42630
+42696 action
+42698
+42702 up  left
+42762 up
+42765 up  right
+42802 left
+42814 action
+42816
+42826 action
+42828
+42838 action
+42840
+42850 action
+42852
+42862 action
+42864
+42874 action
+42876
+42886 action
+42888
+42898 action
+42900
+42966 action
+42968
+42972 up run left
+43054 up run
+43058 up run right
+43059 up run
+43061 up run right
+43062 up run
+43064 up run right
+43065 up run
+43067 up run right
+43068 up run
+43070 up run right
+43071 up run
+43073 up run right
+43074 up run
+43077 up run right
+43078 up run
+43083 up run right
+43084 up run
+43094 up run right
+43095 up run
+43098 up run right
+43142 up run
+43148 up run right
+43149 up run
+43154 up run right
+43155 up run
+43157 up run left
+43182 up run
+43196 up run left
+43197 up run
+43201 up run left
+43202 up run
+43204 up run left
+43205
+43207 right
+43212
+43214 action
+43216
+43556 up run
+43577 up run right
+43578 up run
+43609 up run right
+43610 up run
+43613 up run right
+43614 up run left
+43630 up run
+43634 up run left
+43635 up run
+43645 up run left
+43646 up run
+43650 up run right
+43683
+43685 right
+43689 aim
+43696 aim fire
+43698 aim
+43708 aim fire
+43710 aim
+43720 aim fire
+43722 aim
+43732 aim fire
+43734 aim
+43744 aim fire
+43746 aim
+43756 aim fire
+43758 aim
+43768 aim fire
+43770 aim
+43780 aim fire
+43782 up run left
+43795 up run
+43830 up run left
+43831 up run
+43854 up run left
+43855 aim
+43864 aim fire
+43866 aim
+43876 aim fire
+43878 aim
+43888 aim fire
+43890 aim
+43900 aim fire
+43902 aim
+43912 aim fire
+43914 aim
+43924 aim fire
+43926 aim
+43936 aim fire
+43938 aim
+43948 aim fire
+43950 aim
+43960 aim fire
+43962 aim
+43972 aim fire
+43974 aim
+43984 aim fire
+43986 aim
+43996 aim fire
+43998 aim
+44008 aim fire
+44010 aim
+44015 up run right
+44027 up run
+44050 up run right
+44051 up run
+44054 aim
+44056 aim fire
+44058 aim
+44068 aim fire
+44070 aim
+44080 aim fire
+44082 aim
+44092 aim fire
+44094 aim
+44104 aim fire
+44106 aim
+44116 aim fire
+44118 aim
+44128 aim fire
+44130 aim
+44140 aim fire
+44142 aim
+44152 aim fire
+44154 aim
+44164 aim fire
+44166 aim
+44176 aim fire
+44178 aim
+44188 aim fire
+44190 aim
+44200 aim fire
+44202 aim
+44354 up run right
+44356 up run
+44385 up run right
+44386 up run
+44393 up run left
+44395 up run
+44396 up run right
+44441 up run
+44448
+44450 action
+44452
+44487 up
+44661 up run right
+44662 up run
+44674 up run right
+44675 up run
+44692 up run right
+44693 up run
+44695 up run right
+44696 up run
+44697 up run right
+44700 up run left
+44729 up run
+44744 up run left
+44745 up run
+44801 up run left
+44802 up run
+44810 up run right
+44811 up run
+44814 up run right
+44815 up run
+44827 up run right
+44851 up run
+44867 up run right
+44868 up run
+44875 up run right
+44876 up run
+44878 up run right
+44880
+44882 left
+44888
+44898 start
+44902
+44938 down
+44942
+44958 down
+44962
+44978 confirm
+44982
+44998 confirm
+45002
+45628 start
+45639 up run right
+45685 up run
+45699 up run right
+45700 up run
+45704 up run right
+45705 up run
+45708 up run left
+45709 up run
+45714 up run left
+45737 up run
+45744 up run left
+45745
+45747 right
+45770 action
+45772
+45807 up
+46111 up run left
+46140 up run right
+46176 up run
+46222 up run right
+46223 up run
+46228 up run right
+46229 up run
+46230 up run right
+46250 up run
+46310 up run right
+46311 up run left
+46333 up run
+46350 up run left
+46351 up run
+46377 up run left
+46378 up run
+46387 up run right
+46410 up run
+46411 up run right
+46412 up run
+46448 up run right
+46449 up run
+46460 up run right
+46461
+46463 left
+46467
+46469 action
+46471
+46506 up
+46810
+46818 up run right
+46828 up run
+46853 up run right
+46854 up run
+46866 up run right
+46867 left
+46869 aim
+46876 aim fire
+46878 aim
+46884 aim fire
+46886 aim
+46892 aim fire
+46894 aim
+46900 aim fire
+46902 aim
+46908 aim fire
+46910 aim
+46916 aim fire
+46918 aim
+46924 aim fire
+46926 aim
+46932 aim fire
+46934 aim
+46940 aim fire
+46942 aim
+46948 aim fire
+46950 aim
+46956 aim fire
+46958 aim
+46964 aim fire
+46966 aim
+46972 aim fire
+46974 aim
+46980 aim fire
+46982 aim
+46988 aim fire
+46990 aim
+46996 aim fire
+46998 aim
+47004 aim fire
+47006 aim
+47012 aim fire
+47014 aim
+47020 aim fire
+47022 aim
+47028 aim fire
+47030 aim
+47036 aim fire
+47038 aim
+47044 aim fire
+47046 aim
+47052 aim fire
+47054 aim
+47060 aim fire
+47062 aim
+47068 aim fire
+47070 aim
+47076 aim fire
+47078 aim
+47084 aim fire
+47086 aim
+47092 aim fire
+47094 aim
+47100 aim fire
+47102 up run left
+47114 up run
+47132 up run left
+47133 up run
+47136 up run left
+47137 up run
+47152 up run left
+47153 up run
+47165 up run right
+47191 up run
+47202 up run right
+47203 up run
+47207 up run left
+47209 up run
+47223 up run left
+47224 up run
+47229 up run left
+47230 up run
+47234 up run right
+47235 up run
+47237 up run right
+47239
+47241 right
+47265
+47267 action
+47269
+47304 up
+47610 up run
+47617 up run right
+47618 up run
+47644 up run left
+47645 up run
+47649 up run left
+47650 up run
+47673 up run left
+47674 up run
+47689 up run left
+47690
+47692 left
+47711 action
+47713
+47723 action
+47725
+47735 action
+47737
+47747 action
+47749
+47759 action
+47761
+47771 action
+47773
+47783 action
+47785
+47851 action
+47853
+47945
+# leon_a_10b_200's presses from route_200_diamond's end (47946, the warp's 344): back across 10B to door 1, 10A past its two zombies, 10F, and 110 to its ladder, lowered and taken down to the hall (200); its last hold of up, which found the hand back, left out
+47947 left
+47972 up run
+47985 up run right
+47986 up run
+47994 up run right
+47995 up run
+48008 up run right
+48019 up run left
+48025 up run
+48033 up run left
+48034 up run
+48035 up run left
+48036 up run
+48037 up run left
+48038 up run
+48042
+48043 left
+48046 up
+48056
+48059 action
+48061
+48097 up
+48401 up run left
+48425 up run
+48446 up run left
+48447 up run
+48454 up run left
+48464 up run
+48465 up run left
+48467 up run
+48468 up run left
+48469 up run
+48474 up run left
+48475 up run
+48476 up run left
+48482 up run
+48521 up run right
+48522 up run
+48550
+48551 right
+48571 up
+48583
+48586 action
+48588
+48623 up
+48927 up run left
+48932 up run
+48946 up run left
+48947 up run
+48952 up run left
+48955 up run
+48967 up run left
+48968 up run
+48975 up run left
+48976 up run
+48978
+48979 right
+48988 up
+49000
+49003 action
+49005
+49040 up
+49356 up run right
+49362 up run
+49365 up run right
+49366 up run
+49369 up run right
+49374 up run
+49489 up run right
+49490 up run
+49526 up run right
+49527 up run
+49531 up run right
+49532 up run
+49533 up run left
+49548 up run
+49551 up run left
+49561 up run
+49590 up run left
+49591 up run
+49612 up run left
+49613 up run
+49614 left
+49633 up
+49663 action
+49665
+49675 action
+49677
+49687 action
+49689
+49699 action
+49701
+49711 action
+49713
+49723 action
+49725
+49735 action
+49737
+49747 action
+49749
+49960 action
+49962
+49972 action
+49974
+49984 action
+49986
+# leon_a_200_209's presses from the ladder's foot (50356): 200's west stairs, 201, 204, 203's 15 rounds from behind the box, 204, 205 and 207's Diamond door into 209; its last hold of up left out
+50357 right
+50379 up run
+50422 up run left
+50423 up run
+50424 up run left
+50444 up run
+50456 up run right
+50457 up run
+50501 up run left
+50502 up run
+50539 up run left
+50540 up run
+50545 up run left
+50546 up run right
+50567
+50568 left
+50572 up
+50584
+50587 action
+50589
+50957 up run right
+50963 up run
+50967 up run right
+50968 up run
+50971 up run right
+50972 up run
+50973 up run left
+50979 up run
+50986 up run left
+50987 up run
+51015 up run left
+51035 up run
+51043
+51044 right
+51048 up
+51060
+51063 action
+51065
+51407 up run
+51421 up run left
+51422 up run
+51437 up run right
+51438 up run
+51474 up run right
+51475 up run
+51481 up run right
+51482 up run
+51483 up run left
+51484 up run
+51492 up run left
+51493 up run
+51501 up run right
+51560 up run
+51562 up run left
+51616 up run
+51621 up run right
+51622 up run
+51623 up run right
+51631 up run
+51632 up run right
+51634 up run
+51635 up run right
+51637 up run
+51638 up run right
+51639 up run
+51640 up run right
+51641 up run
+51659 up run left
+51660 up run
+51662 up run right
+51663 up run
+51664 up run right
+51665
+51666 right
+51685 up
+51697
+51700 action
+51702
+52044 up run left
+52069 up run
+52073 up run left
+52074 up run
+52076 up run right
+52106 up run
+52108 up run right
+52109 up run
+52114 up run right
+52124 right
+52130 up
+52390
+52392 up run right
+52428 up run
+52429 up run left
+52490 right
+52517 up
+52521
+52522 action
+52524
+52534 action
+52536
+52546 action
+52548
+52558 action
+52560
+52570 action
+52572
+52582 action
+52584
+52594 action
+52596
+52606 action
+52608
+52674 action
+52676
+52680 up run right
+52726 up run
+52728 up run left
+52729 up run right
+52735 up run
+52748 up run right
+52749 up run
+52759 up run right
+52760 up run left
+52788 up run
+52800 up run left
+52801 up run
+52804 up run left
+52816 up run
+52837 up run right
+52838 up run
+52840 up run right
+52841 up run
+52843 up run right
+52844 up run
+52845 up run right
+52846 up run
+52847 up run right
+52848 up run
+52850 up run right
+52851 up run
+52852 up run right
+52853 up run
+52855 up run right
+52856 up run
+52857 up run right
+52858 up run
+52859 up run right
+52860 up run
+52862 up run right
+52863 up run
+52865 up run right
+52866 up run
+52867
+52868 right
+52874 up
+52881
+52884 action
+52886
+53228 right
+53245 up run
+53246 up run right
+53247 up run
+53258 up run left
+53259 up run
+53266 up run right
+53267 up run
+53283 up run right
+53284 up run
+53285 up run right
+53288 up run
+53302
+53303 left
+53308 up
+53315
+53318 action
+53320
+53662 up run
+53692 up run left
+53693 up run
+53709 up run right
+53710 up run
+53742 up run right
+53743 up run
+53753 up run right
+53815 up run left
+53859 up run
+53934 up run right
+53935 up run
+53997 up run right
+53998 up run
+54076 up run right
+54077 up run
+54094 up run right
+54107 up run
+54110 up run right
+54117 up run
+54145 up run left
+54172 up run right
+54182
+54183 left
+54185 up
+54197
+54200 action
+54202
+54544 up run right
+54601 up run left
+54635 up run
+54648 right
+54669 action
+54671
+54729 action
+54731
+54789 action
+54791
+# 209 and 202 made again for the route's Rnd, which gives 209's zombies other life and choices than leon_a_209_heart's warp (55125): from 10 ticks after the hand back a shot every 3 ticks at the nearest standing zombie within 5000 until both stacks are spent (54 life left), door 7, 202, Marvin's scene, his grab and two bites (54 to 14 life), the Heart Key, then a turn on the spot and east and north away from Marvin to door 0, which unlocks from 202's side, and the hall's upper floor (200 on 57991, back on 58308)
+55135 aim fire
+55137 aim
+55138 aim fire
+55140 aim
+55141 aim fire
+55143 aim
+55144 aim fire
+55146 aim
+55147 aim fire
+55149 aim
+55150 aim fire
+55152 aim
+55153 aim fire
+55155 aim
+55156 aim fire
+55158 aim
+55159 aim fire
+55161 aim
+55162 aim fire
+55164 aim
+55165 aim fire
+55167 aim
+55168 aim fire
+55170 aim
+55171 aim fire
+55173 aim
+55174 aim fire
+55176 aim
+55177 aim fire
+55179 aim
+55180 aim fire
+55182 aim
+55183 aim fire
+55185 aim
+55186 aim fire
+55188 aim
+55189 aim fire
+55191 aim
+55192 aim fire
+55194 aim
+55195 aim fire
+55197 aim
+55198 aim fire
+55200 aim
+55201 aim fire
+55203 aim
+55204 aim fire
+55206 aim
+55207 aim fire
+55209 aim
+55210 aim fire
+55212 aim
+55213 aim fire
+55215 aim
+55216 aim fire
+55218 aim
+55219 aim fire
+55221 aim
+55222 aim fire
+55224 aim
+55225 aim fire
+55227 aim
+55228 aim fire
+55230 aim
+55231 aim fire
+55233 aim
+55234 aim fire
+55236 aim
+55237 aim fire
+55239 aim
+55240 aim fire
+55242 aim
+55243 aim fire
+55245 aim
+55246 aim fire
+55248 aim
+55249 aim fire
+55251 aim
+55252 aim fire
+55254 aim
+55255 aim fire
+55257 aim
+55258 aim fire
+55260 aim
+55261 aim fire
+55263 aim
+55264 aim fire
+55266 aim
+55267 aim fire
+55269 aim
+55270 aim fire
+55272 aim
+55273 aim fire
+55275 aim
+55276 aim fire
+55278 aim
+55279 aim fire
+55281 aim
+55282 aim fire
+55284 aim
+55285 aim fire
+55287 aim
+55288 aim fire
+55290 aim
+55291 aim fire
+55293 aim
+55294 aim fire
+55296 aim
+55297 aim fire
+55299 aim
+55300 aim fire
+55302 aim
+55303 aim fire
+55305 aim
+55306 aim fire
+55308 aim
+55309 aim fire
+55311 aim
+55312 aim fire
+55314 aim
+55315 aim fire
+55317 aim
+55318 aim fire
+55320 aim
+55321 aim fire
+55323 aim
+55324 aim fire
+55326 aim
+55327 aim fire
+55329 aim
+55330 aim fire
+55332 aim
+55333 aim fire
+55335 aim
+55336 aim fire
+55338 aim
+55339 aim fire
+55341 aim
+55342 aim fire
+55344 aim
+55345 aim fire
+55347 aim
+55348 aim fire
+55350 aim
+55351 aim fire
+55353 aim
+55354 aim fire
+55356 aim
+55357 aim fire
+55359 aim
+55360 aim fire
+55362 aim
+55363 aim fire
+55365 aim
+55366 aim fire
+55368 aim
+55369 aim fire
+55371 aim
+55372 aim fire
+55374 aim
+55375 aim fire
+55377 aim
+55378 aim fire
+55380 aim
+55381 aim fire
+55383 aim
+55384 aim fire
+55386 aim
+55387 aim fire
+55389 aim
+55390 aim fire
+55392 aim
+55393 aim fire
+55395 aim
+55396 aim fire
+55398 aim
+55399 aim fire
+55401 aim
+55402 aim fire
+55404 aim
+55405 aim fire
+55407 aim
+55408 aim fire
+55410 aim
+55411 aim fire
+55413 aim
+55414 aim fire
+55416 aim
+55417 aim fire
+55419 aim
+55420 aim fire
+55422 aim
+55423 aim fire
+55425 aim
+55426 aim fire
+55428 aim
+55429 aim fire
+55431 aim
+55432 aim fire
+55434 aim
+55435 aim fire
+55437 aim
+55438 aim fire
+55440 aim
+55441 aim fire
+55443 aim
+55444 aim fire
+55446 aim
+55447 aim fire
+55449 aim
+55450 aim fire
+55452 aim
+55453 aim fire
+55455 aim
+55456 aim fire
+55458 aim
+55459 aim fire
+55461 aim
+55462 aim fire
+55464 aim
+55465 aim fire
+55467 aim
+55468 aim fire
+55470 aim
+55471 aim fire
+55473 aim
+55474 aim fire
+55476 aim
+55477 aim fire
+55479 aim
+55480 aim fire
+55482 aim
+55483 aim fire
+55485 aim
+55486 aim fire
+55488 aim
+55489 aim fire
+55491 aim
+55492 aim fire
+55494 aim
+55495 aim fire
+55497 aim
+55498 aim fire
+55500 aim
+55501 aim fire
+55503 aim
+55504 aim fire
+55506 aim
+55507 aim fire
+55509 aim
+55510 aim fire
+55512 aim
+55513 aim fire
+55515 aim
+55516 aim fire
+55518 aim
+55519 aim fire
+55521 aim
+55522 aim fire
+55524 aim
+55525 aim fire
+55527 aim
+55528 aim fire
+55530 aim
+55531 aim fire
+55533 aim
+55534 aim fire
+55536 aim
+55537 aim fire
+55539 aim
+55540 aim fire
+55542 aim
+55543 aim fire
+55545 aim
+55546 aim fire
+55548 aim
+55549 aim fire
+55551 aim
+55552 aim fire
+55554 aim
+55555 aim fire
+55557 aim
+55558 aim fire
+55560 aim
+55561 aim fire
+55563 aim
+55564 aim fire
+55566 aim
+55567 aim fire
+55569 aim
+55570 aim fire
+55572 aim
+55573 aim fire
+55575 aim
+55576 aim fire
+55578 aim
+55579 aim fire
+55581 aim
+55582 aim fire
+55584 aim
+55585 aim fire
+55587 aim
+55588 aim fire
+55590 aim
+55591 aim fire
+55593 aim
+55594 aim fire
+55596 aim
+55597 aim fire
+55599 aim
+55600 aim fire
+55602 aim
+55603 aim fire
+55605 aim
+55606 aim fire
+55608 aim
+55609 aim fire
+55611 aim
+55612 aim fire
+55614 aim
+55615 aim fire
+55617 aim
+55618 aim fire
+55620 aim
+55621 aim fire
+55623 aim
+55624 aim fire
+55626 aim
+55627 aim fire
+55629 aim
+55630 aim fire
+55632 aim
+55633 aim fire
+55635 aim
+55636 aim fire
+55638 aim
+55639 aim fire
+55641 aim
+55642 aim fire
+55644 aim
+55645 aim fire
+55647 aim
+55648 aim fire
+55650 aim
+55651 aim fire
+55653 aim
+55654 aim fire
+55656 aim
+55657 aim fire
+55659 aim
+55660 aim fire
+55662 aim
+55663 aim fire
+55665 aim
+55666 aim fire
+55668 aim
+55669 aim fire
+55671 aim
+55672 aim fire
+55674 aim
+55675 aim fire
+55677 aim
+55678 aim fire
+55680 aim
+55681 aim fire
+55683 aim
+55684 aim fire
+55686 aim
+55687 aim fire
+55689 aim
+55690 aim fire
+55692 aim
+55693 aim fire
+55695 aim
+55696 aim fire
+55698 aim
+55699 aim fire
+55701 aim
+55702 aim fire
+55704 aim
+55705 aim fire
+55707 aim
+55708 aim fire
+55710 aim
+55711 aim fire
+55713 aim
+55714 aim fire
+55716 aim
+55717 aim fire
+55719 aim
+55720 aim fire
+55722 aim
+55723 aim fire
+55725 aim
+55726 aim fire
+55728 aim
+55729 aim fire
+55731 aim
+55732 aim fire
+55734 aim
+55735 aim fire
+55737 aim
+55738 aim fire
+55740 aim
+55741 aim fire
+55743 aim
+55744 aim fire
+55746 aim
+55747 aim fire
+55749 aim
+55750 aim fire
+55752 aim
+55753 aim fire
+55755 aim
+55756 aim fire
+55758 aim
+55759 aim fire
+55761 aim
+55762 aim fire
+55764 aim
+55765 aim fire
+55767 aim
+55768 aim fire
+55770 aim
+55771 aim fire
+55773 aim
+55774 aim fire
+55776 aim
+55777 aim fire
+55779 aim
+55780 aim fire
+55782 aim
+55783 aim fire
+55785 aim
+55786 aim fire
+55788 aim
+55789 aim fire
+55791 aim
+55792 aim fire
+55794 aim
+55795 aim fire
+55797 aim
+55798 aim fire
+55800 aim
+55801 aim fire
+55803 aim
+55804 aim fire
+55806 aim
+55807 aim fire
+55809 aim
+55810 aim fire
+55812 aim
+55813 aim fire
+55815 aim
+55816 aim fire
+55818 aim
+55819 aim fire
+55821 aim
+55822 aim fire
+55824 aim
+55825 aim fire
+55827 aim
+55828 aim fire
+55830 aim
+55831 aim fire
+55833 aim
+55834 aim fire
+55836 aim
+55837 aim fire
+55839 aim
+55840 aim fire
+55842 aim
+55843 aim fire
+55845 aim
+55846 aim fire
+55848 aim
+55849 aim fire
+55851 aim
+55852 aim fire
+55854 aim
+55855 aim fire
+55857 aim
+55858 aim fire
+55860 aim
+55861 aim fire
+55863 aim
+55864 aim fire
+55866 aim
+55867 aim fire
+55869 aim
+55870 aim fire
+55872
+55874 up run right
+55883 up run
+55893 up run left
+55896 up run
+55922 up run left
+55923 up run
+55929 up run left
+55969 right
+55989 action
+55991
+56021 action
+56023
+56053 action
+56055
+56085 action
+56087
+56117 up
+56396 right
+56399 up run
+56403 up run right
+56416 up run left
+56431 up run
+56436 up run left
+56437 up run
+56442 up run left
+56443 up run
+56444 up run left
+56466 up run
+56467 up run left
+56468 up run
+56475 up run right
+56521 up run
+56527 up run left
+56551 up run
+56559 up run right
+56560 up run
+56564 up run right
+56565 up run
+56570 up run right
+56571 up run
+56582 up run right
+56583 up run
+56674 up run right
+56827
+56894 right
+56934 up run right
+57076 up run left
+57130 left
+57138 action
+57140
+57150 action
+57152
+57162 action
+57164
+57174 action
+57176
+57186 action
+57188
+57198 action
+57200
+57210 action
+57212
+57278 action
+57280
+57330 right
+57370 up run right
+57403 up run
+57408 up run left
+57452 up run
+57477 up run left
+57478 up run right
+57521 up run
+57574 up run right
+57575 up run
+57597 up run right
+57598 up run
+57617 up run right
+57619 up run
+57620 up run right
+57621 up run
+57622 up run right
+57623 up run
+57629 up run left
+57679 up run
+57755 up run right
+57756 up run
+57763 up run right
+57764 up run
+57766 up run right
+57767 up run
+57770 up run right
+57771 up run
+57773 up run right
+57774 up run
+57776 up run right
+57777 up run
+57781 up run right
+57782 up run
+57784 up run right
+57785 up run
+57786 up run right
+57787 up run
+57788 up run right
+57789 up run
+57792 up run right
+57793 up run
+57796 up run right
+57797 up run
+57815 up run right
+57816 up run
+57817 up run right
+57819 up run
+57828
+57829 right
+57850 up
+57891
+57892 action
+57894
+57924 action
+57926
+57956 action
+57958
+57988 action
+57990
+58020 up
+58308
+# leon_a_200_211.txt's presses, 57964 ticks later: its 344 on 58308, the hall's hand back after 202's door 0 (the ladder up, 110, 10F, 10A, 109, 116's herbs, 20B's Heart Key door, 20F), to 211's hand back on 65225
+58310 left
+58348 up run
+58458 up run right
+58506 up run
+58528 up run right
+58529 up run
+58565 up run left
+58570 left
+58604 up
+58616
+58617 action
+58619
+58647 action
+58649
+58677 action
+58679
+58707 up
+# 110: east along the north corridor and south down the east one to door 0
+59021 up run left
+59027 up run
+59036 up run left
+59037 up run
+59038 right
+59059 up run right
+59070 up run
+59090 up run right
+59091 up run
+59129 up run right
+59130 up run
+59133 up run right
+59134 up run
+59151 up run right
+59164 up run
+59173 up run right
+59174 up run
+59178 up run right
+59179 up run
+59197 up run right
+59198 up run
+59199 up run right
+59200 up run
+59201 up run right
+59202 up run
+59208 right
+59219 up run right
+59230 up run
+59269 up run right
+59270 up run
+59293 up run right
+59294 up run
+59312 up run right
+59313 up run
+59315 up run right
+59316 up run
+59346 up run left
+59347 up run
+59394 up run left
+59395 up run
+59437 up run left
+59438 up run
+59458 up run left
+59459 up run
+59476 up run left
+59477 up run
+59480 up run left
+59481 up run
+59482 up run left
+59484 up run
+59490 up run right
+59491 up run
+59492 up run right
+59493 up run
+59546 up run left
+59547 up run
+59549 up run left
+59551 up run
+59553 up run left
+59555 up run
+59556 up run left
+59557 up run
+59558 up run left
+59559 up run
+59560 up run left
+59569 left
+59572 up run left
+59573 left
+59576 up run left
+59577 left
+59581 up run left
+59582 left
+59585 up run left
+59586 left
+59589 up run left
+59590 left
+59593 up run left
+59594 left
+59596 up run left
+59597 left
+59599 up run left
+59601 left
+59603 up run left
+59609 up run
+59611 up run right
+59614 up run
+59621 up run left
+59624 up run
+59629 up run right
+59637 up run
+59640 up run left
+59649 up run
+59651 up run right
+59660 up run
+59662 up run left
+59671 up run
+59674 up run right
+59683 up run
+59685 up run left
+59694 up run
+59696 up run right
+59704 up run
+59707 up run left
+59715 up run
+59718 up run right
+59727 up run
+59729 up run left
+59738 up run
+59740 up run right
+59748 up run
+59750 up run left
+59757 up run
+59761 up run right
+59770 up run
+59772 up run left
+59783 up run
+59785 up run right
+59790 right
+59814 up run right
+59825 up run
+59837 up run left
+59838
+59839 left
+59860 up
+59872
+59875 action
+59877
+59912 up
+# 10F: east across the room to door 0
+60228 left
+60232 up run left
+60244 up run
+60245 up run left
+60246 up run
+60248 up run left
+60249 up run
+60251 up run left
+60254 up run right
+60261 up run
+60262 up run right
+60263 up run
+60281 up run right
+60287 up run
+60303 up run right
+60304 up run
+60305 up run right
+60306 up run
+60308 up run right
+60309 up run
+60321 up run right
+60322 up run
+60325 up run right
+60327 up run
+60328 up run right
+60329 up run
+60330 up run right
+60331 up run
+60338
+60339 up
+60351
+60354 action
+60356
+60391 up
+# 10A: south to door 0, facing south-east
+60697 right
+60714 up run right
+60727 up run
+60741 up run right
+60742 up run
+60743 up run right
+60745 up run
+60746 up run right
+60747 up run
+60754 up run right
+60759 up run
+60762 up run right
+60763 up run
+60764 up run right
+60765 up run
+60766 up run right
+60767 up run
+60778
+60779 left
+60796 up
+60816
+60819 action
+60821
+60856 up
+# 109: east along the south wall to door 2: the first press unlocks it from this side, the third opens it
+61162 up run
+61215 up run right
+61216 up run
+61233 up run right
+61234 up run
+61268 up run left
+61269 up run
+61272 up run left
+61273 up run
+61290 up run left
+61295 right
+61299 up
+61329
+61330 action
+61332
+61372 action
+61374
+61414 action
+61416
+61456 up
+# 116: the landing's green herb, taken and used from the inventory (slot 7: start, down 3, right, Use); east, and action takes the fire escape's first flight, then south and action the second; the ground's two green herbs, each taken and used; door 0
+61757 up  right
+61760 up 
+61784 up  right
+61785 up 
+61822 up  right
+61823 up 
+61827 up  right
+61828 up 
+61833 up  right
+61834 up 
+61841 up  right
+61842 up 
+61855 up  left
+61859 up 
+61863 right
+61893
+61894 action
+61896
+61906 action
+61908
+61918 action
+61920
+61930 action
+61932
+61942 action
+61944
+61954 action
+61956
+61966 action
+61968
+61978 action
+61980
+61990 action
+61992
+62062 action
+62064
+62094 start
+62096
+62124 down
+62126
+62154 down
+62156
+62184 down
+62186
+62214 right
+62216
+62244 action
+62246
+62274 action
+62276
+62304 cancel
+62306
+62334 cancel
+62336
+62364 cancel
+62366
+62394 left
+62431 up run left
+62436 up run
+62444 up run left
+62445 up run
+62457 up run left
+62458 up run
+62459 up run left
+62460 up run
+62461 right
+62485 up
+62515
+62516 action
+62518
+62578 right
+62616 up
+62656
+62657 action
+62659
+62729 right
+62748 up run right
+62754 up run
+62771 up run right
+62772 up run
+62779 up run right
+62780 up 
+62788 up  left
+62789 left
+62815
+62816 action
+62818
+62828 action
+62830
+62840 action
+62842
+62852 action
+62854
+62864 action
+62866
+62876 action
+62878
+62888 action
+62890
+62900 action
+62902
+62912 action
+62914
+62984 action
+62986
+63016 start
+63018
+63046 down
+63048
+63076 down
+63078
+63106 down
+63108
+63136 right
+63138
+63166 action
+63168
+63196 action
+63198
+63226 cancel
+63228
+63256 cancel
+63258
+63286 cancel
+63288
+63316 right
+63338 up  right
+63346 up 
+63347 up  right
+63349 left
+63351
+63352 action
+63354
+63364 action
+63366
+63376 action
+63378
+63388 action
+63390
+63400 action
+63402
+63412 action
+63414
+63424 action
+63426
+63436 action
+63438
+63448 action
+63450
+63520 action
+63522
+63552 start
+63554
+63582 down
+63584
+63612 down
+63614
+63642 down
+63644
+63672 right
+63674
+63702 action
+63704
+63732 action
+63734
+63762 cancel
+63764
+63792 cancel
+63794
+63822 cancel
+63824
+63852 left
+63874 up  left
+63878 up 
+63887 up  left
+63888 up 
+63905 up  right
+63908
+63909 right
+63920 up
+63923
+63926 action
+63928
+63965 up
+# 20B: north up the east side to the Heart Key door: the first press uses the key, the fourth opens it
+64254 right
+64261 up run
+64321
+64322 up
+64332
+64333 action
+64335
+64375 action
+64377
+64417 action
+64419
+64459 action
+64461
+64501 up
+# 20F: north, east, north and west to door 1
+64800 up run left
+64803 up run
+64807 up run left
+64808 up run
+64816 up run right
+64818 right
+64828 up run right
+64831 up run
+64839 up run right
+64840 up run
+64863 up run right
+64864 up run
+64865 up run right
+64866 left
+64878 up run left
+64882 up run
+64948 up run left
+64949 up run
+64973 up run right
+64974 up run
+64975 left
+64985 up run left
+64989 up run
+64990 up run left
+64991 up run
+64992 up run left
+64993 up run
+64994
+64995 up
+65015
+65018 action
+65020
+65055 up
+65225
+# leon_a_211_216_219.txt's presses, 64881 ticks later: its 344 on 65225 (211's dogs, 216's scene with Ada and the van), to 219's hand back on 68575. The route's dogs hit Leon less often than the warp's (128 life in 219, not 110), and 216 loads 22 ticks earlier, but the input waits out Ada's scene, so 219 loads on the warp's tick
+65227 up run left
+65233 up run
+65240 up run left
+65241 up run
+65242 up run left
+65252 up run
+65267 up run left
+65268 up run
+65272 up run left
+65274 up run
+65333 right
+65337 up run right
+65345 up run
+65346 up run right
+65351 up run
+65425 up run right
+65426 up run
+65466 up run right
+65467 up run
+65472 left
+65483 up run left
+65512 up run
+65551 up run left
+65552 up run
+65560 up run left
+65561 up run
+65563 right
+65578 up
+65593
+65594 action
+65596
+65616 action
+65618
+65638 action
+65640
+65660 up
+# 216: in from the east; on to Ada's area (aot 2); her scene hands back about 2600, and the input waits until 2700 so that it does not depend on the voice lines' lengths
+65959 up run
+66035 up run right
+66036 up run
+66064 up run right
+66065 right
+66353
+# 216: north round Ada (from the east her body closes the van's area off at x -14983) and south into the van's area
+67581 right
+67590 up run right
+67595 up run
+67606 up run right
+67607 up run
+67614 left
+67623 up run left
+67628 up run
+67630 up run left
+67631 up run
+67635 up run right
+67636 left
+67646 up  left
+67651 up 
+67652 up  left
+67653 up 
+67664 up  left
+67665 up 
+67671 up  left
+67678 up 
+67734 up  left
+67781
+# 216: after the van, west to door 1 and its presses
+68136 right
+68175 up run right
+68179 up run
+68198 up run left
+68199 up run
+68200 up run left
+68202 up
+68212 action
+68214
+68234 action
+68236
+68256 action
+68258
+68575
+# leon_a_219_301_opener.txt's presses, 68231 ticks later: its 344 on 68575 (219's scene, 301's talk, the B1 map closed, the Manhole Opener into slot 6 on 72955)
+68931 up run left
+68933 up run
+68971 up run left
+68972 up run
+68979 up run left
+68980 up run
+68981 right
+68992 up run right
+68996 up run
+69004 up run right
+69005 up run
+69025 up run right
+69026 up run
+69027 up run right
+69028 up run
+69029 left
+69041 up run left
+69045 up run
+69140 left
+69154 up
+69169
+69170 action
+69172
+# the presses at door 3
+69192 action
+69194
+69215 up
+# 301: up until Leon moves, then south-west into the talk's area
+69513 up run
+69567
+# the talk's sce_84(2) opens the B1 map (4552); once it waits for a key (4563), cancel closes it
+72801 run
+72803
+# Leon moves again on 4590: left to face south-west, then run into the Manhole Opener's area (item aot 5) until the bars stop him
+72821 left
+72842 up run
+72859
+# a press every 12 ticks until the get-item window takes the Opener into slot 6, then a close
+72863 action
+72865
+72875 action
+72877
+72887 action
+72889
+72899 action
+72901
+72911 action
+72913
+72923 action
+72925
+72935 action
+72937
+72947 action
+72949
+72959 action
+72961
+73031 action
+73033
+# Leon turns once he moves again
+73081 right
+73101

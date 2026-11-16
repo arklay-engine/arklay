@@ -1,0 +1,244 @@
+# Leon A through 209's six zombies and door 7 into Marvin's office (202), his scene and the Heart Key (#644 Part 3) (oracle/re2.md, "Leon A to the Heart Key")
+# 209 from 207's Diamond door: stand through the warp's head (the original's joint matrices are stale until 351, and aiming beside the wall pushes Leon back by his hand's place), then aim, and fire every 6 ticks at the nearest standing zombie within 4500 until both stacks are spent (the handgun reloads itself)
+364 aim
+366 aim fire
+368 aim
+372 aim fire
+374 aim
+378 aim fire
+380 aim
+396 aim fire
+398 aim
+402 aim fire
+404 aim
+408 aim fire
+410 aim
+414 aim fire
+416 aim
+420 aim fire
+422 aim
+426 aim fire
+428 aim
+432 aim fire
+434 aim
+438 aim fire
+440 aim
+444 aim fire
+446 aim
+450 aim fire
+452 aim
+456 aim fire
+458 aim
+462 aim fire
+464 aim
+468 aim fire
+470 aim
+474 aim fire
+476 aim
+480 aim fire
+482 aim
+486 aim fire
+488 aim
+492 aim fire
+494 aim
+498 aim fire
+500 aim
+504 aim fire
+506 aim
+510 aim fire
+512 aim
+516 aim fire
+518 aim
+522 aim fire
+524 aim
+528 aim fire
+530 aim
+534 aim fire
+536 aim
+540 aim fire
+542 aim
+546 aim fire
+548 aim
+552 aim fire
+554 aim
+558 aim fire
+560 aim
+564 aim fire
+566 aim
+570 aim fire
+572 aim
+576 aim fire
+578 aim
+582 aim fire
+584 aim
+588 aim fire
+590 aim
+594 aim fire
+596 aim
+600 aim fire
+602 aim
+606 aim fire
+608 aim
+612 aim fire
+614 aim
+618 aim fire
+620 aim
+624 aim fire
+626 aim
+630 aim fire
+632 aim
+636 aim fire
+638 aim
+642 aim fire
+644 aim
+648 aim fire
+650 aim
+654 aim fire
+656 aim
+660 aim fire
+662 aim
+666 aim fire
+668 aim
+672 aim fire
+674 aim
+678 aim fire
+680 aim
+684 aim fire
+686 aim
+690 aim fire
+692 aim
+696 aim fire
+698 aim
+702 aim fire
+704 aim
+708 aim fire
+710 aim
+714 aim fire
+716 aim
+720 aim fire
+722 aim
+726 aim fire
+728 aim
+750 aim fire
+752 aim
+774 aim fire
+776 aim
+816 aim fire
+818 aim
+840 aim fire
+842 aim
+864 aim fire
+866 aim
+930 aim fire
+932 aim
+936 aim fire
+938 aim
+942 aim fire
+944 aim
+948 aim fire
+950 aim
+954 aim fire
+956 aim
+960 aim fire
+962 aim
+966 aim fire
+968 aim
+972 aim fire
+974 aim
+978 aim fire
+980 aim
+984 aim fire
+986 aim
+990 aim fire
+992 aim
+996 aim fire
+998 aim
+1002 aim fire
+1004 aim
+1008 aim fire
+1010 aim
+1014 aim fire
+1016 aim
+1020 aim fire
+1022 aim
+1026 aim fire
+1028 aim
+1032 aim fire
+1034 aim
+1038 aim fire
+1040 aim
+1044 aim fire
+1046 aim
+1050 aim fire
+1052
+1054 up run
+# west along the south aisle and south at its west end to door 7
+1068 up run left
+1069 up run
+1070 up run left
+1071 up run
+1072 up run right
+1073 up run
+1082 up run right
+1083 up run
+1106 up run left
+1147 right
+# door 7, locked from 202's side: a press every 32 ticks until it opens (fg_key bit 3 unlocks it): 202 loads on 1266
+1167 action
+1169
+1199 action
+1201
+1231 action
+1233
+1263 action
+1265
+1295 up
+# 202 from 209's door: south down the west side, east along the middle and south into area 6, which starts event 3 with Marvin (2005)
+1574 right
+1577 up run
+1581 up run right
+1594 up run left
+1609 up run
+1614 up run left
+1615 up run
+1620 up run left
+1621 up run
+1622 up run left
+1644 up run
+1645 up run left
+1646 up run
+1653 up run right
+1699 up run
+1705 up run left
+1729 up run
+1737 up run right
+1738 up run
+1742 up run right
+1743 up run
+1748 up run right
+1749 up run
+1760 up run right
+1761 up run
+1852 up run right
+2005
+# after the scene and Marvin's turn and grab (two bites, 64 to 24 life): west to the Heart Key's desk and the key (a press every 12 ticks: the question's text, Yes, then the close)
+2072 right
+2112 up run right
+2207 up run left
+2236 left
+2241 action
+2243
+2253 action
+2255
+2265 action
+2267
+2277 action
+2279
+2289 action
+2291
+2301 action
+2303
+2313 action
+2315
+2381 action
+2383

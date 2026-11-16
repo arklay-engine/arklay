@@ -11,7 +11,7 @@
 -- `e:set_var` are the fields of the original's work that the engine doesn't
 -- read, and the eye's globals at `0x6896e4`.
 
-local CNT_219 <const> = 0 -- `+0x219`: the ticks of blood left (`FUN_0049add0`), which nothing sets yet.
+local CNT_219 <const> = 0 -- `+0x219`: the ticks of the spark shot's sparks left (`FUN_004996c0`).
 local CNT_21C <const> = 1 -- `+0x21c`.
 local CNT_21D <const> = 2 -- `+0x21d`.
 local CNT_223 <const> = 3 -- `+0x223`.
@@ -427,6 +427,7 @@ local BLOOD <const> = {
     { 4, 15, 0x1800, true },
     { 1, 6, 0x2000 },
     { 6, 0, 0x1000, true },
+    { 4, 12, 0x1800, true },
 }
 
 local function player_xz(e)
@@ -1153,22 +1154,75 @@ end
 
 -- `BYTE_0052a5c3`: the kind of a hit's blood by weapon; `BYTE_0052a5d8`:
 -- the parts it comes from, by `Damage_no`; `BYTE_0052a5dc`: the parts of
--- the blood of weapons 4, 0xf and 0x12, by `Damage_no` and a `Rnd`.
+-- the blood of weapons 4, 0xf and 0x12, four by `Damage_no`'s third and a
+-- `Rnd`, whose first eight `FUN_004995c0` sprays from.
 local HIT_KIND <const> = { [0] = 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 0, 0 }
 local HIT_PART <const> = { [0] = 0x18, 1, 3 }
+local SPRAY_PARTS <const> = { [0] = 23, 25, 26, 27, 2, 4, 17, 11, 2, 3, 2, 3 }
 -- `BYTE_0052a7cb` and `BYTE_0052a7df`: what each weapon takes from
 -- `AT_EM_FLG`, which flinches it at 0, at 600 life or more and below.
 local STUN_HIGH <const> = { [0] = 0, 10, 10, 10, 10, 20, 10, 10, 10, 10, 40, 10, 10, 10, 20, 4, 4, 40, 4, 10 }
 local STUN_LOW <const> = { [0] = 10, 10, 10, 10, 10, 20, 10, 20, 40, 20, 40, 40, 10, 10, 40, 10, 20, 40, 4, 10 }
 
+-- `FUN_004995c0`, the blood of weapons 9, 0xa, 0x10, 0x11 and the
+-- Beretta's 0x13: bloods of kind 2, each at a part of `BYTE_0052a5dc` that
+-- a `Rnd` picks, from its second half when `Damage_no` isn't a multiple of
+-- 3; six for 0xa and 0x10, three for the others. 0x10 bleeds at most once
+-- in 0x1e ticks (`+0x223`).
+local function spray(e, weapon)
+    if weapon == 0x10 then
+        if e:var(CNT_223) ~= 0 then
+            return
+        end
+        e:set_var(CNT_223, 0x1E)
+    end
+    local half = e:damage_no() % 3 ~= 0 and 4 or 0
+    local count = (weapon == 0xA or weapon == 0x10) and 6 or 3
+    for _ = 1, count do
+        blood(e, SPRAY_PARTS[(e:rnd() + half) & 7], 2)
+    end
+end
+
+-- `FUN_00499570`, the blood of weapons 4, 0xf and 0x12: one of the
+-- weapon's `HIT_KIND` (`FUN_0049add0` with `BYTE_006896e8` 1) at the part
+-- of `BYTE_0052a5dc` that `Damage_no` and a `Rnd` pick.
+local function spot(e, weapon)
+    local index = (e:damage_no() % 3) * 4 + (e:rnd() & 3)
+    blood(e, SPRAY_PARTS[index], HIT_KIND[weapon], 0)
+end
+
+-- `FUN_004996c0`, the spark shot's: sparks of kind 4 at a part of
+-- `BYTE_0052a5e4` (`SPRAY_PARTS` from 8) that a `Rnd` picks, two for a hit
+-- (`Routine_0` 2) and fifteen ticks of `update`'s after (`+0x219`); for the
+-- death two, then one of kind 8, and forty-five ticks after.
+local function sparks(e)
+    local last = 4
+    if e:routine(0) == 2 then
+        e:set_var(CNT_219, 0xF)
+        blood(e, SPRAY_PARTS[8 + (e:rnd() & 3)], 4)
+    else
+        e:set_var(CNT_219, 0x2D)
+        blood(e, SPRAY_PARTS[8 + (e:rnd() & 3)], 4)
+        blood(e, SPRAY_PARTS[8 + (e:rnd() & 3)], 4)
+        last = 8
+    end
+    blood(e, SPRAY_PARTS[8 + (e:rnd() & 3)], last)
+end
+
 -- `DWORD_0052a77c`: what each weapon's hit adds. The magnums start the
--- spurt; the others' (9 to 0xb, 0xe, 0x10 and 0x11) aren't ported, and
--- 4, 0xf and 0x12's blood draws its `Rnd` only.
+-- spurt; 4, 0xf and 0x12 bleed at a spot (`FUN_00499570`); 9, 0xa, 0x10, 0x11
+-- and 0x13 spray (`FUN_004995c0`); 0xe sparks (`FUN_004996c0`); 0xb's
+-- (`FUN_00499640`) isn't ported. The others' (the Colt's among them) are
+-- `nullsub_1`.
 local function weapon_blood(e, weapon)
     if weapon == 5 or weapon == 6 then
         e:set_var(SPURT, 1)
     elseif weapon == 4 or weapon == 0xF or weapon == 0x12 then
-        e:rnd()
+        spot(e, weapon)
+    elseif weapon == 9 or weapon == 0xA or weapon == 0x10 or weapon == 0x11 or weapon == 0x13 then
+        spray(e, weapon)
+    elseif weapon == 0xE then
+        sparks(e)
     end
 end
 
@@ -1558,6 +1612,14 @@ function update(e)
         hurt(e)
     elseif zero == 3 then
         death(e)
+    end
+    -- `Em_33` after `Rot_neck_em`: while `+0x219` counts down, two of the
+    -- spark shot's sparks (kind 7) a tick at parts of `BYTE_0052a5de`
+    -- (`SPRAY_PARTS` from 2).
+    if e:var(CNT_219) ~= 0 then
+        e:set_var(CNT_219, e:var(CNT_219) - 1)
+        blood(e, SPRAY_PARTS[2 + (e:rnd() & 7)], 7)
+        blood(e, SPRAY_PARTS[2 + (e:rnd() & 7)], 7)
     end
     local mode = e:var(LOOK)
     if mode == 0 then

@@ -1,0 +1,82 @@
+# Leon A from 20F's door 1 arrival in 211 past its two dogs to door 6, through 216 (Ada's scene, then the van pushed from the north side of its area) and door 1 into 219 (#656 Part 2) (oracle/re2.md, "Leon A to the Manhole Opener")
+# 211: east and north round the dogs' room to door 6, and its presses
+346 up run left
+352 up run
+359 up run left
+360 up run
+361 up run left
+371 up run
+386 up run left
+387 up run
+391 up run left
+393 up run
+452 right
+456 up run right
+464 up run
+465 up run right
+470 up run
+544 up run right
+545 up run
+585 up run right
+586 up run
+591 left
+602 up run left
+631 up run
+670 up run left
+671 up run
+679 up run left
+680 up run
+682 right
+697 up
+712
+713 action
+715
+735 action
+737
+757 action
+759
+779 up
+# 216: in from the east; on to Ada's area (aot 2); her scene hands back about 2600, and the input waits until 2700 so that it does not depend on the voice lines' lengths
+1078 up run
+1154 up run right
+1155 up run
+1183 up run right
+1184 right
+1472
+# 216: north round Ada (from the east her body closes the van's area off at x -14983) and south into the van's area
+2700 right
+2709 up run right
+2714 up run
+2725 up run right
+2726 up run
+2733 left
+2742 up run left
+2747 up run
+2749 up run left
+2750 up run
+2754 up run right
+2755 left
+2765 up  left
+2770 up 
+2771 up  left
+2772 up 
+2783 up  left
+2784 up 
+2790 up  left
+2797 up 
+2853 up  left
+2900
+# 216: after the van, west to door 1 and its presses
+3255 right
+3294 up run right
+3298 up run
+3317 up run left
+3318 up run
+3319 up run left
+3321 up
+3331 action
+3333
+3353 action
+3355
+3375 action
+3377

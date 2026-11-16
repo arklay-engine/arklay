@@ -379,8 +379,12 @@ impl Driver {
         let Some(baseline) = self.baseline.take() else {
             return Ok(());
         };
-        if std::mem::take(&mut self.edited) {
-            self.session()?.finish_authoring(baseline, true);
+        let edited = std::mem::take(&mut self.edited);
+        let session = self.session()?;
+        if edited {
+            session.finish_authoring(baseline, true);
+        } else {
+            session.game.re2.authored_flags = None;
         }
         Ok(())
     }
@@ -411,7 +415,7 @@ impl Driver {
     }
 
     /// Start a booted session: drop what the last one left behind.
-    fn start(&mut self, session: Box<GameSession>, arm: bool) -> mlua::Result<()> {
+    fn start(&mut self, mut session: Box<GameSession>, arm: bool) -> mlua::Result<()> {
         let baseline = session.author_baseline();
         let app = self.app()?;
         app.start_session(session);

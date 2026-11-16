@@ -33,6 +33,7 @@ pub mod binders;
 pub mod file_get;
 pub mod files;
 pub mod map;
+pub mod script_map;
 
 use crate::scd2::host::NO_FILE;
 use files::{Blink, ST_MV};
@@ -1153,10 +1154,15 @@ impl GameState {
         let [item, _] = self.re2_slot(page.cursor);
         match page.step {
             0 if item < FIRST_AMMO => {
-                // EQUIP: the weapon under the cursor, or none if it is the one
-                // equipped.
-                let equipped = self.equipped == Some(item);
-                self.set_equipped((!equipped).then_some(item));
+                // EQUIP: the weapon under the cursor, or none if its slot is
+                // the one equipped (`0x4F8620` compares slots, not ids, so a
+                // second copy of the weapon in hand is equipped instead).
+                if self.equipped.is_some() && self.equipped_slot == Some(usize::from(page.cursor)) {
+                    self.set_equipped(None);
+                } else {
+                    self.set_equipped(Some(item));
+                    self.equipped_slot = Some(usize::from(page.cursor));
+                }
                 page.close_menu();
             }
             0 if item <= LAST_AMMO => {

@@ -125,9 +125,7 @@ ignore = [
     [22125, "om0"],
     [0, 25329, "om3"], [0, 25329, "om7"], [0, 25329, "om8"], [0, 25329, "om9"],
     [27552, 31672, "om3"], [27552, 31672, "om7"], [27552, 31672, "om8"], [27552, 31672, "om9"],
-    # room 100's opening, as route_claire_a_208: slots 0 and 1 drawn at 0x404040 by the original until 183
-    [0, 183, "zp"],
-    # and the view's load on the new game's first tick (`movie` 1 in the original, 0 in arklay), as route_200_spade's
+    # the view's load on the new game's first tick (`movie` 1 in the original, 0 in arklay), as route_200_spade's
     [0, "movie"],
     # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do (the card's door's to 13058: this recording's original runs it a tick later than route_claire_a_115's)
     [391, 481, "hk"], [2662, 2752, "hk"], [5562, 5652, "hk"], [7043, 7133, "hk"], [8097, 8187, "hk"], [8927, 9019, "hk"], [10121, 10211, "hk"], [12967, 13058, "hk"], [15527, 15617, "hk"], [16018, 16108, "hk"], [17942, 18032, "hk"], [18720, 18810, "hk"], [20270, 20360, "hk"], [21461, 21551, "hk"], [21952, 22044, "hk"], [24804, 24894, "hk"], [25239, 25329, "hk"], [27552, 27642, "hk"], [27994, 28084, "hk"], [28728, 28820, "hk"], [29025, 29115, "hk"], [29675, 29765, "hk"], [30211, 30301, "hk"], [30678, 30768, "hk"],

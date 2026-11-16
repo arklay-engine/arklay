@@ -46,7 +46,8 @@ held. When the player sets it off (or a script runs it with
 
 1. A lock with `DOOR_LOCK_40` refuses a character the door is not for and
    shows the wrong-character message. The two playable characters always
-   pass this test.
+   pass this test. Rebecca, the player while `B_CHARACTER_MODEL` is 3 (the
+   Plant 42 scene), is refused.
 2. With no `DOOR_LOCKED` bit, or with its `FG_LOCK` bit already set, the
    door opens: the door animation plays and the player arrives in `room` at
    the given position and angle. A room of the first mansion stages leads

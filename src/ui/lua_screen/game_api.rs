@@ -247,40 +247,17 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         let Some(view) = api.game().map(|game| game.re2_map_view()) else {
             return Ok(mlua::Value::Nil);
         };
-        let sprite = |sprite: crate::game::status2::map::MapSprite| -> mlua::Result<mlua::Table> {
-            let table = lua.create_table()?;
-            table.set("texture", sprite.texture)?;
-            table.set("u", sprite.u)?;
-            table.set("v", sprite.v)?;
-            table.set("clut", sprite.clut)?;
-            Ok(table)
+        map_view_table(lua, &view)
+    });
+
+    // `re2_script_map()`: what the status screen's script map (`Sce_84`)
+    // draws, in `re2_map()`'s shape with no `marker`, or nil while none is
+    // up.
+    methods.add_method("re2_script_map", |lua, api, ()| {
+        let Some(view) = api.game().and_then(|game| game.re2_script_map_view()) else {
+            return Ok(mlua::Value::Nil);
         };
-        let table = lua.create_table()?;
-        table.set("floor", view.floor)?;
-        table.set("map", view.map)?;
-        let rooms = lua.create_table()?;
-        for (index, room) in view.rooms.iter().enumerate() {
-            let entry = lua.create_table()?;
-            entry.set("x", room.x)?;
-            entry.set("y", room.y)?;
-            entry.set("w", room.w)?;
-            entry.set("h", room.h)?;
-            entry.set("outline", sprite(room.outline)?)?;
-            if let Some(fill) = room.fill {
-                entry.set("fill", sprite(fill)?)?;
-            }
-            rooms.set(index + 1, entry)?;
-        }
-        table.set("rooms", rooms)?;
-        if let Some(marker) = view.marker {
-            let entry = lua.create_table()?;
-            entry.set("x", marker.x)?;
-            entry.set("y", marker.y)?;
-            entry.set("u", marker.u)?;
-            entry.set("v", marker.v)?;
-            table.set("marker", entry)?;
-        }
-        Ok(mlua::Value::Table(table))
+        map_view_table(lua, &view)
     });
 
     // `re2_computer()`: what room 200's computer draws this tick: the
@@ -448,6 +425,47 @@ fn consume_slot(game: &mut GameState, slot: usize) {
     if game.equipped.is_some_and(|item| !game.has_item(item)) {
         game.set_equipped(None);
     }
+}
+
+/// A map view as `re2_map()` hands it to Lua.
+fn map_view_table(
+    lua: &mlua::Lua,
+    view: &crate::game::status2::map::MapView,
+) -> mlua::Result<mlua::Value> {
+    let sprite = |sprite: crate::game::status2::map::MapSprite| -> mlua::Result<mlua::Table> {
+        let table = lua.create_table()?;
+        table.set("texture", sprite.texture)?;
+        table.set("u", sprite.u)?;
+        table.set("v", sprite.v)?;
+        table.set("clut", sprite.clut)?;
+        Ok(table)
+    };
+    let table = lua.create_table()?;
+    table.set("floor", view.floor)?;
+    table.set("map", view.map)?;
+    let rooms = lua.create_table()?;
+    for (index, room) in view.rooms.iter().enumerate() {
+        let entry = lua.create_table()?;
+        entry.set("x", room.x)?;
+        entry.set("y", room.y)?;
+        entry.set("w", room.w)?;
+        entry.set("h", room.h)?;
+        entry.set("outline", sprite(room.outline)?)?;
+        if let Some(fill) = room.fill {
+            entry.set("fill", sprite(fill)?)?;
+        }
+        rooms.set(index + 1, entry)?;
+    }
+    table.set("rooms", rooms)?;
+    if let Some(marker) = view.marker {
+        let entry = lua.create_table()?;
+        entry.set("x", marker.x)?;
+        entry.set("y", marker.y)?;
+        entry.set("u", marker.u)?;
+        entry.set("v", marker.v)?;
+        table.set("marker", entry)?;
+    }
+    Ok(mlua::Value::Table(table))
 }
 
 #[cfg(test)]

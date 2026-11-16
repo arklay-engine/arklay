@@ -30,6 +30,10 @@ pub struct Re2State {
     pub gates: [ActionGate; ROOM_ACTION_SLOTS],
     /// `door_locks`: the unlocked doors' bits.
     pub door_locks: [u32; 2],
+    /// While an authored setup runs (`--setup-script`, or a driver's `game`
+    /// calls before its first tick): the flag bits it wrote and their
+    /// values, which the room's rerun applies to the flags the boot found.
+    pub authored_flags: Option<Box<AuthoredFlags>>,
     /// `sce_rnd`'s state.
     pub random: u32,
     /// `Xa_control`'s voice line.
@@ -104,6 +108,9 @@ pub struct Re2State {
     /// The tick after: `fg_stop` (`0xEF000000`) comes down only after
     /// `Pad_set` has masked the pad with it.
     pub door_key_stop: bool,
+    /// A door's hand-back tick (`door_settling`) still has `fg_stop`'s
+    /// `0xEF000000` up for `Om_move` (`0x08000000`), which it skips.
+    pub objects_key_stop: bool,
     /// The scripts opened a door this tick (`aot_on` on a door's area). The
     /// original's scripts run after `Player_move` and its cut check, and
     /// `Sce_Door` stops both from the next tick; the port runs the scripts
@@ -235,6 +242,48 @@ pub struct Re2State {
     pub partner_life: i16,
     /// `BYTE_0098ee7b`'s bit 0: the partner is poisoned.
     pub partner_poisoned: bool,
+    /// `pPl.Id` (`0x989EF8`): the character the player is, Leon 0, Claire 1,
+    /// Ada 0xE, Sherry 0xF. [`crate::state::RoomId::player_flag`] stays the
+    /// scenario's, which picks the RDT and the room's sound folder.
+    pub pl_id: u8,
+    /// What `St_chenge_pl` and `Set_room` keep of the scenario's character
+    /// while Ada or Sherry plays ([`crate::game::pl_change2`]).
+    pub pl_stash: PlStash,
+    /// `inventory_size` (`0x98E9A4`): the inventory's slots.
+    pub inventory_size: u8,
+}
+
+/// `St_chenge_pl`'s and `Set_room`'s stash of the scenario's character: the
+/// slots at `0x9888DC`, `DWORD_009888d8`'s bytes 2 and 3, and the save
+/// block's life and poison words (`0x98E9B6`, `0x98E9AB`, `0x98E9AC`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlStash {
+    /// `Item_work`'s eleven entries, `[id, count, mark]`.
+    pub slots: [[u8; 3]; 11],
+    /// The equipped slot (`St+8`'s low byte), 0x80 for none.
+    pub equip_slot: u8,
+    /// `inventory_size`.
+    pub size: u8,
+    /// `WORD_0098e9b6`: the stashed life, which `Save_push` also writes.
+    pub life: i16,
+    /// `BYTE_0098e9ab`: `poison_timer`.
+    pub poison_timer: u8,
+    /// `WORD_0098e9ac`: `poison_status`.
+    pub poison_status: u16,
+}
+
+impl Default for PlStash {
+    /// `Title_game_init`'s new game: the life word at 200.
+    fn default() -> Self {
+        Self {
+            slots: [[0; 3]; 11],
+            equip_slot: 0,
+            size: 0,
+            life: 200,
+            poison_timer: 0,
+            poison_status: 0,
+        }
+    }
 }
 
 /// What a script did to a fade.
@@ -292,6 +341,10 @@ pub enum CutEdit {
     /// `cut_replace`: swap two camera ids across every zone's `cam_from` and
     /// `cam_to`.
     Replace { a: u8, b: u8 },
+    /// `Sce_Hikidashi`'s open: the corners of camera `cut`'s view quad
+    /// (the first zone `Ccut_searc` finds for it), which the original writes
+    /// through `Cut_change`'s pointer (`0x988634`).
+    ViewQuad { cut: u8, corners: [[i16; 2]; 4] },
     /// `light_*_set`: light `index` of camera `cut`'s record.
     Light {
         cut: u8,
@@ -436,7 +489,9 @@ pub const FILE_SLOTS: usize = 24;
 pub const NO_FILE: u8 = 0xFF;
 
 /// The bytes of [`Re2State::to_save_bytes`].
-const SAVE_LEN: usize = SAVE_LEN_NO_PARTNER + 3;
+const SAVE_LEN: usize = SAVE_LEN_NO_PLAYER + 2;
+/// A save from before the player's id and slot count.
+const SAVE_LEN_NO_PLAYER: usize = SAVE_LEN_NO_PARTNER + 3;
 /// A save from before the partner's life and poison.
 const SAVE_LEN_NO_PARTNER: usize = SAVE_LEN_NO_FILES + FILE_SLOTS;
 /// A save from before the files held.
@@ -476,6 +531,8 @@ const TASK_SLOTS: usize = super::vm::TASKS;
 const STOP_BANK: u8 = 2;
 /// `fg_stop`'s `0x10000000`, which holds `Esp_move`.
 const STOP_EFFECTS: u8 = 3;
+/// `fg_common`.
+const COMMON_BANK: u8 = 4;
 /// `Pri_be_flg`: a bank per camera, 13 onwards, with a bit per mask group.
 const MASK_BANK: usize = 13;
 /// How many cameras `Pri_be_flg` has a bank for.
@@ -566,6 +623,20 @@ const SPLAYER_OPERAND: i64 = 255;
 const MESSAGE_BANK: u8 = 11;
 /// The item-collected flag bank (`FlagGroup::Item`).
 pub const ITEM_BANK: u8 = 8;
+/// `fg_item_2` (`0x98EBD4`), the item flags of the stages from `scd_var_stage`
+/// 4 up.
+pub const ITEM_BANK_2: u8 = 34;
+
+/// The bank `Item_aot_set`, `St_get_item` and `St_get_file` keep an item's
+/// taken flag in: `fg_item` below `scd_var_stage` 4 (the room's 1-based
+/// stage below 5), `fg_item_2` from there on.
+pub fn item_bank(stage: u8) -> u8 {
+    if stage.saturating_sub(1) < 4 {
+        ITEM_BANK
+    } else {
+        ITEM_BANK_2
+    }
+}
 /// `fg_use` (`0x989ED8`): the key items the areas under the player want. A
 /// USE area (`Sce_Flg_chg`) raises the item's bit while the player's probe is
 /// in it, and `Sce_work_clr` clears the bank's first four words each pass.
@@ -773,6 +844,7 @@ impl Default for Re2State {
             vars: [0; 256],
             gates: [ActionGate::default(); ROOM_ACTION_SLOTS],
             door_locks: [0; 2],
+            authored_flags: None,
             random: 0x1382_01C3,
             cut_old: 0,
             shown_cut: 0,
@@ -794,6 +866,7 @@ impl Default for Re2State {
             door_settling: false,
             door_stop: false,
             door_key_stop: false,
+            objects_key_stop: false,
             script_door: false,
             work: [Work::Player; TASK_SLOTS],
             speeds: [[0; 12]; TASK_SLOTS],
@@ -845,6 +918,9 @@ impl Default for Re2State {
             nearest_slots: [None; 3],
             partner_life: PARTNER_LIFE,
             partner_poisoned: false,
+            pl_id: 0,
+            pl_stash: PlStash::default(),
+            inventory_size: crate::game::INVENTORY_SLOTS_JILL as u8,
         }
     }
 }
@@ -879,6 +955,9 @@ impl Re2State {
         out.extend_from_slice(&self.files);
         out.extend_from_slice(&self.partner_life.to_le_bytes());
         out.push(u8::from(self.partner_poisoned));
+        // `Save_push`'s `player_index` and `inventory_size`.
+        out.push(self.pl_id);
+        out.push(self.inventory_size);
         out
     }
 
@@ -920,6 +999,7 @@ impl Re2State {
     /// Restore [`Self::to_save_bytes`]; `None` for bytes of another length.
     pub fn load_save_bytes(&mut self, bytes: &[u8]) -> Option<()> {
         if bytes.len() != SAVE_LEN
+            && bytes.len() != SAVE_LEN_NO_PLAYER
             && bytes.len() != SAVE_LEN_NO_PARTNER
             && bytes.len() != SAVE_LEN_NO_FILES
             && bytes.len() != SAVE_LEN_NO_MAP
@@ -999,6 +1079,12 @@ impl Re2State {
             _ => PARTNER_LIFE,
         };
         self.partner_poisoned = partner.get(2).is_some_and(|&byte| byte & 1 != 0);
+        // A save from before them keeps the id the caller set (the
+        // scenario's character) and eight slots.
+        if let [id, size, ..] = bytes.get(SAVE_LEN_NO_PLAYER..).unwrap_or(&[]) {
+            self.pl_id = *id;
+            self.inventory_size = *size;
+        }
         Some(())
     }
 
@@ -1187,6 +1273,35 @@ impl Re2State {
         }
     }
 
+    /// Each live work in an enemy slot and its `Root_ck` turn (`+0x150`):
+    /// the oracle's `rc` field, `slot:id,turn`. A zombie's is its own, a
+    /// scene character's its work's.
+    pub fn root_turn_trace(&self) -> String {
+        let rows: Vec<String> = self
+            .characters
+            .0
+            .iter()
+            .enumerate()
+            .take(SPLAYER_SLOT)
+            .filter_map(|(slot, character)| {
+                let character = character.as_deref()?;
+                if character.be_flg & 1 == 0 {
+                    return None;
+                }
+                let turn = character
+                    .zombie
+                    .as_ref()
+                    .map_or(character.work.root_turn, crate::zombie2::Zombie::root_turn);
+                Some(format!("{slot}:{},{turn}", character.id))
+            })
+            .collect();
+        if rows.is_empty() {
+            "-".to_string()
+        } else {
+            rows.join(";")
+        }
+    }
+
     pub fn character_trace(&self, slot: usize) -> Option<[i32; 16]> {
         let character = self.characters.0.get(slot)?.as_deref()?;
         if character.zombie.is_some() {
@@ -1358,6 +1473,12 @@ impl Re2State {
         self.flag(STOP_BANK, 0)
     }
 
+    /// `fg_stop`'s `0x10000000`, which `Esp_move` tests: only the kinds that
+    /// move under a stop move.
+    pub fn effects_stopped(&self) -> bool {
+        self.flag(STOP_BANK, STOP_EFFECTS)
+    }
+
     /// `fg_stop`, for `Die`.
     pub(crate) fn fg_stop_mut(&mut self) -> &mut u32 {
         &mut self.banks[usize::from(STOP_BANK)][0]
@@ -1506,25 +1627,13 @@ impl Re2State {
             let Some(zombie) = character.zombie.as_mut() else {
                 continue;
             };
-            let (rnd, effects) = (&mut self.rnd, &mut self.effects);
-            let mut off = Vec::new();
-            zombie.thrown.retain_mut(|thrown| {
-                if off.contains(&thrown.part) {
-                    return false;
-                }
-                let falling = thrown.fall(slot as u8, rnd, effects, sca);
-                if !falling {
-                    crate::player2::set_part_flags(&mut character.work, thrown.part, 0);
-                    if thrown.takes_below() {
-                        for &part in &thrown.below {
-                            crate::player2::set_part_flags(&mut character.work, part, 0);
-                            off.push(part);
-                        }
-                    }
-                }
-                falling
-            });
-            zombie.redraw(character.work.hidden_parts);
+            zombie.parts_down(
+                &mut character.work,
+                slot as u8,
+                &mut self.rnd,
+                &mut self.effects,
+                sca,
+            );
         }
     }
 
@@ -1565,8 +1674,11 @@ impl Re2State {
         let atd = self.player.atd;
         self.effects.target = player.as_ref().map(|(pos, life)| crate::esp2::Target {
             pos: *pos,
-            ofs_y: atd.map_or(-(crate::character2::PLAYER_HEIGHT as i16), |atd| atd.ofs_y),
-            at_h: atd.map_or(crate::character2::PLAYER_HEIGHT, |atd| atd.at_h),
+            ofs_y: atd.map_or(
+                -(crate::character2::player_height(self.pl_id) as i16),
+                |atd| atd.ofs_y,
+            ),
+            at_h: atd.map_or(crate::character2::player_height(self.pl_id), |atd| atd.at_h),
             life: **life,
             near_death: self.player.near_death,
             damage_cnt: self.player.damage_cnt,
@@ -1574,6 +1686,23 @@ impl Re2State {
             ..Default::default()
         });
         self.effects.bodies = crate::character2::targets_of(self);
+        // `Oba_ck_esp`'s bodies: the player's box (once the player's routine
+        // has set it), then the slots in play.
+        self.effects.oba = self
+            .player
+            .atd
+            .zip(player.as_ref())
+            .map(|(atd, (pos, _))| crate::zombie2::Oba {
+                slot: crate::zombie2::PLAYER_BODY,
+                be_flg: self.player.be_flg,
+                atd,
+                pos: *pos,
+            })
+            .into_iter()
+            .chain(crate::character2::re2_slot_bodies(self))
+            .collect();
+        self.effects.steam_off = self.flag(COMMON_BANK, 0x76);
+        self.effects.spark_target = self.player.spark_target;
         if let Some((pos, _)) = &player {
             crate::player2::move_parts(&mut self.player, *pos);
         }
@@ -1584,6 +1713,7 @@ impl Re2State {
             self.effects.tick(&mut self.rnd, sca);
         }
         self.effects.bodies.clear();
+        self.effects.oba.clear();
         for blast in std::mem::take(&mut self.effects.blasts) {
             let slot = match blast {
                 crate::weapon2::BlastEffect::Tested(slot) => slot,
@@ -1601,6 +1731,7 @@ impl Re2State {
             *life = target.life;
             self.player.near_death = target.near_death;
             self.player.damage_cnt = target.damage_cnt;
+            self.player.die_start |= target.died;
             if let Some(routine) = target.routine {
                 self.player.routine = [routine, 0, 0, 0];
             }
@@ -1727,7 +1858,7 @@ impl Re2State {
 
     /// `fg_stop`'s `0x8000000`, which stops `Om_move`.
     pub fn objects_stopped(&self) -> bool {
-        self.flag(STOP_BANK, OBJECTS_STOP_BIT)
+        self.objects_key_stop || self.flag(STOP_BANK, OBJECTS_STOP_BIT)
     }
 
     pub fn flag(&self, bank: u8, index: u8) -> bool {
@@ -1757,6 +1888,19 @@ impl Re2State {
             7 => *word ^= bit,
             _ => {}
         }
+        let on = *word & bit != 0;
+        if let Some(log) = self.authored_flags.as_deref_mut() {
+            let (written, values) = if bank == KEY_BANK {
+                let at = key_word(index);
+                (&mut log.written.1[at], &mut log.values.1[at])
+            } else {
+                let at = usize::from(index >> 5) & 7;
+                let bank = usize::from(bank);
+                (&mut log.written.0[bank][at], &mut log.values.0[bank][at])
+            };
+            *written |= bit;
+            *values = if on { *values | bit } else { *values & !bit };
+        }
     }
 
     /// `Set_room`'s `fg_status &= 0xFFF04000`, on every room load. Only word
@@ -1769,6 +1913,45 @@ impl Re2State {
 /// `Flg_addr[31]` is `fg_key` (`0x98ED2C`): the doors' lock bits, the
 /// words [`Re2State::door_locks`] holds, so a script's `ck 31:n` and `set
 /// 31:n` read and raise the bits a door's lock byte names.
+/// The flag banks, then `fg_key` (bank 31).
+pub type FlagWords = ([[u32; 8]; BANKS], [u32; 2]);
+
+/// The flag bits an authored setup wrote ([`Re2State::authored_flags`]) and
+/// the value each was left at.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthoredFlags {
+    pub written: FlagWords,
+    pub values: FlagWords,
+}
+
+impl Default for AuthoredFlags {
+    fn default() -> Self {
+        Self {
+            written: ([[0; 8]; BANKS], [0; 2]),
+            values: ([[0; 8]; BANKS], [0; 2]),
+        }
+    }
+}
+
+impl AuthoredFlags {
+    /// `flags` with each written bit at the value the setup left it at.
+    pub fn apply(&self, flags: FlagWords) -> FlagWords {
+        let over = |flag: u32, written: u32, value: u32| flag & !written | value & written;
+        (
+            std::array::from_fn(|bank| {
+                std::array::from_fn(|at| {
+                    over(
+                        flags.0[bank][at],
+                        self.written.0[bank][at],
+                        self.values.0[bank][at],
+                    )
+                })
+            }),
+            std::array::from_fn(|at| over(flags.1[at], self.written.1[at], self.values.1[at])),
+        )
+    }
+}
+
 pub const KEY_BANK: u8 = 31;
 
 /// The `door_locks` word of `fg_key` bit `index`. The original's two words
@@ -2078,14 +2261,15 @@ impl GameHost<'_> {
             at(rest + 3) as u8,
             at(rest + 4) as u8,
         );
-        let sce = if self.game.re2.flag(ITEM_BANK, flag) {
+        let bank = item_bank(self.game.id.stage);
+        let sce = if self.game.re2.flag(bank, flag) {
             SCE_AUTO
         } else {
             at(1) as u8
         };
         // `Item_aot_set`: the object of an item that's been taken stays away,
         // whatever `Obj_model_set` asks of it.
-        let taken = self.game.re2.flag(ITEM_BANK, flag);
+        let taken = self.game.re2.flag(bank, flag);
         if model < 0x20
             && let Some(record) = self.game.objects.record_mut(usize::from(model))
         {
@@ -2263,6 +2447,7 @@ impl GameHost<'_> {
             || id == crate::zombie2::EM2D_ID
             || id == crate::zombie2::ROACH_ID
             || id == crate::zombie2::EMBRYO_ID
+            || id == crate::zombie2::ADULT_ID
             || crate::zombie2::is_plant(id);
         // Any other enemy takes the slot, and isn't modelled yet.
         if !zombie && !(0x40..0x5C).contains(&id) {
@@ -2285,6 +2470,8 @@ impl GameHost<'_> {
         if !zombie {
             // `nFloor` (`+0x106`), which the partner's climb and jump keep.
             work.floor = at(5) as u8;
+            // `Root_ck`'s turn starts at the work's number plus 2, in 0 to 7.
+            work.root_turn = ((at(1) + 2) & 7) as u8;
         }
         let kind = (at(3) as u16) | (at(4) as u16) << 8;
         if zombie {
@@ -2331,8 +2518,12 @@ impl GameHost<'_> {
             kage: None,
             l_spl: 0,
             dir_spl: 0,
-            partner: (slot == SPLAYER_SLOT && !zombie)
-                .then(|| Box::new(crate::partner2::Partner::placed())),
+            partner: (slot == SPLAYER_SLOT && !zombie).then(|| {
+                Box::new(crate::partner2::Partner::placed(
+                    at(13) as i16,
+                    at(14) as i16,
+                ))
+            }),
             zombie: zombie.then(|| {
                 let mut zombie = crate::zombie2::spawned(slot as u8, at(5) as u8, at(7) as u8);
                 zombie.dead_flag = dead;
@@ -2740,6 +2931,10 @@ impl Host for GameHost<'_> {
         self.game.re2.random as u16
     }
 
+    fn take_events(&mut self) -> Vec<(u8, u8)> {
+        std::mem::take(&mut self.game.re2.pending_events)
+    }
+
     fn exec(&mut self, task: usize, op: &'static Op, operands: &[i64]) -> Step {
         let at = |index: usize| operands.get(index).copied().unwrap_or(0);
         match op.mnemonic {
@@ -3060,7 +3255,7 @@ impl Host for GameHost<'_> {
                 );
             }
             "plc_dest" if self.work_is_player(task) => {
-                let id = self.game.id.player_flag;
+                let id = self.game.re2.pl_id;
                 crate::player2::plc_dest(
                     &mut self.game.re2.player,
                     id,
@@ -3167,6 +3362,8 @@ impl Host for GameHost<'_> {
                 self.game.re2.set_partner_bit(true);
             }
             "heal_partner" => self.game.re2.heal_partner(),
+            // `Sce_84` (`0x4E8FE0`): the status screen opens on the map.
+            "sce_84" => self.game.request_re2_script_map(at(0) as u8),
             "plc_rot" if self.work_is_player(task) => {
                 let by = at(1) as i16;
                 match at(0) {
@@ -3309,11 +3506,7 @@ fn set_object_member(object: &mut crate::objects::ObjectRecord, member: u8, valu
         0x0E..=0x10 => object.rotation[usize::from(member) - 0x0E] = value as i16,
         _ => return,
     }
-    object.flag = if object.be_flg & 1 != 0 && object.be_flg & 0x8_0000 == 0 {
-        crate::objects::OBJECT_FLAG_ACTIVE
-    } else {
-        0
-    };
+    object.sync_active_from_be_flg();
 }
 
 fn character_member(character: &Character, member: u8) -> Option<i32> {
@@ -3342,7 +3535,7 @@ fn character_member(character: &Character, member: u8) -> Option<i32> {
 /// A character whose `Id` a script has made a zombie's. `Em_move` now gives it
 /// to `Em_Zombie`, whose init runs in the body and with the animations it has:
 /// the room loaded nothing new for it. Room 202 turns Marvin so.
-fn become_zombie(character: &mut Character, slot: u8) {
+pub(crate) fn become_zombie(character: &mut Character, slot: u8) {
     let id = character.id;
     if !(0x10..=0x21).contains(&id) || character.zombie.is_some() {
         return;
@@ -3350,6 +3543,8 @@ fn become_zombie(character: &mut Character, slot: u8) {
     let (floor, model_type, dead) = character.em_set;
     let mut zombie = crate::zombie2::spawned(slot, floor, model_type);
     zombie.dead_flag = dead;
+    // The work is the scene character's, so `Root_ck` goes on from its turn.
+    zombie.set_sight_turn(character.work.root_turn);
     character.zombie = Some(zombie);
     character.body.radius = 0x1C2;
 }
@@ -3772,13 +3967,13 @@ mod tests {
         exec(&mut game, "member_set2", &[7, 16]);
         let character = game.re2.characters.0[0].as_ref().unwrap();
         assert_eq!(character.work.kind, 0x0010);
-        // No shot reaches it until its hits are ported; a zombie beside it is
-        // still a target.
-        assert!(crate::character2::targets(&game).is_empty());
+        // Its hits are ported, so a shot reaches it, and a zombie beside it too.
+        let targets = crate::character2::targets(&game);
+        assert_eq!(targets.iter().map(|t| t.slot).collect::<Vec<_>>(), [0]);
         let zombie = [0, 1, 0x10, 0, 0, 0, 7, 0, 255, 0, 0, 0, 0, 0, 0];
         exec(&mut game, "sce_em_set", &zombie);
         let targets = crate::character2::targets(&game);
-        assert_eq!(targets.iter().map(|t| t.slot).collect::<Vec<_>>(), [1]);
+        assert_eq!(targets.iter().map(|t| t.slot).collect::<Vec<_>>(), [0, 1]);
     }
 
     /// Room 207's `init_00` (scenario A): its four zombies, as the RDT's
@@ -3882,8 +4077,8 @@ mod tests {
                 ],
             );
         }
-        for slot in 0..24 {
-            let roach = game.re2.characters.0[slot].as_ref().unwrap();
+        for (slot, character) in game.re2.characters.0[..24].iter().enumerate() {
+            let roach = character.as_ref().unwrap();
             assert_eq!(roach.id, crate::zombie2::ROACH_ID);
             assert!(roach.zombie.is_some(), "slot {slot}");
         }
@@ -5683,11 +5878,18 @@ mod tests {
     /// A hand-built room with one standing item area in slot 8: `item` with
     /// `flag` and object `model`, the press fired and the window open.
     fn press_item_area(item: u8, flag: u8, model: u8) -> GameState {
+        press_item_area_in(item, flag, model, 0, 1)
+    }
+
+    /// [`press_item_area`] with the area's action byte, in 1-based `stage`.
+    fn press_item_area_in(item: u8, flag: u8, model: u8, action: u8, stage: u8) -> GameState {
         let mut game = GameState::default();
         game.is_re2_room = true;
+        game.id.stage = stage;
         let (item, flag, model) = (i64::from(item), i64::from(flag), i64::from(model));
+        let action = i64::from(action);
         let ops = [
-            8, 2, 49, 0, 0, -100, -100, 200, 200, item, 1, flag, model, 0,
+            8, 2, 49, 0, 0, -100, -100, 200, 200, item, 1, flag, model, action,
         ];
         let mut host = GameHost { game: &mut game };
         host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
@@ -5809,6 +6011,43 @@ mod tests {
         assert!(game.re2.flag(crate::scd2::host::ITEM_BANK, 25));
         assert_eq!(cleared_objects(&game), Vec::<usize>::new());
         assert_eq!(game.room_actions[8].unwrap().sce, SCE_AUTO);
+    }
+
+    #[test]
+    fn a_file_in_stage_5_raises_its_flag_in_fg_item_2() {
+        // `St_get_file`: `scd_var_stage < 4` picks `fg_item`, else `fg_item_2`.
+        let mut game = press_item_area_in(0x73, 125, 0xFF, 0, 5);
+        file_it(&mut game);
+        assert!(game.re2.flag(crate::scd2::host::ITEM_BANK_2, 125));
+        assert!(!game.re2.flag(crate::scd2::host::ITEM_BANK, 125));
+        // The area is gone, and a script's `Item_aot_set` of it finds it taken.
+        assert_eq!(game.room_actions[8].unwrap().sce, SCE_AUTO);
+        assert_eq!(super::item_bank(4), crate::scd2::host::ITEM_BANK);
+        assert_eq!(super::item_bank(5), crate::scd2::host::ITEM_BANK_2);
+    }
+
+    #[test]
+    fn a_file_kills_its_twinkle_even_with_object_0xff() {
+        // `Esp_kill(5, ((action >> 5) & 3) * 8 + 7, object)`: outside the
+        // object test, and no `.max(1)`: action 0x80 is row 7.
+        let mut game = press_item_area_in(0x71, 25, 3, 0x80, 1);
+        game.re2.effects.test_enter_room_with(5, 7);
+        let on_3 = game
+            .re2
+            .effects
+            .call_on_object(5, 7, 0, 3, [0, 0, 0])
+            .unwrap();
+        let on_4 = game
+            .re2
+            .effects
+            .call_on_object(5, 7, 0, 4, [0, 0, 0])
+            .unwrap();
+        file_it(&mut game);
+        assert!(
+            !game.re2.effects.test_live(on_3),
+            "its object's twinkle goes"
+        );
+        assert!(game.re2.effects.test_live(on_4), "another object's stays");
     }
 
     #[test]
@@ -5936,6 +6175,43 @@ mod tests {
 
     fn splayer(game: &GameState) -> &Character {
         game.re2.characters.0[SPLAYER_SLOT].as_deref().unwrap()
+    }
+
+    #[test]
+    fn sce_em_set_leaves_its_start_words_in_the_partners_timers() {
+        // Room 216's Ada: `Timer0` and `Timer1` hold 777 and 72 in the original.
+        let mut game = GameState::default();
+        exec(
+            &mut game,
+            "sce_em_set",
+            &[
+                0, 255, 65, 0, 8, 0, 31, 0, 255, 20000, 20000, 20000, 3072, 777, 72,
+            ],
+        );
+        let partner = splayer(&game).partner.as_deref().unwrap();
+        assert_eq!((partner.timer0, partner.timer1), (777, 72));
+    }
+
+    /// Room 30B's `main_00` with Ada playing: Leon as a scene character, em
+    /// 0x50 in slot 255 (`EM050`). He isn't the partner (`_Spl` runs
+    /// `Spl_Auto` only for Sherry and Ada) and has nothing of his own to run
+    /// (`Spl_in` 0x50 is `nullsub_1`).
+    #[test]
+    fn sce_em_set_places_leon_as_em_0x50() {
+        let mut game = GameState::default();
+        game.re2.pl_id = crate::game::pl_change2::ADA;
+        exec(
+            &mut game,
+            "sce_em_set",
+            &[
+                0, 255, 80, 0, 64, 0, 0, 0, 255, -13864, 0, -5649, 1000, 770, 4,
+            ],
+        );
+        let leon = splayer(&game);
+        assert_eq!((leon.id, leon.model), (0x50, 0x50));
+        assert!(leon.zombie.is_none());
+        assert_eq!(leon.body.pos, [-13864, 0, -5649]);
+        assert!(!game.re2.partner_bit());
     }
 
     #[test]

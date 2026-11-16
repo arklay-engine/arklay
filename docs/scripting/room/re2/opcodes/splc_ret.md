@@ -25,7 +25,7 @@ None.
 As the original's `Spcl_ret` (`0x4e8c70`), on the task's character (chosen with
 [`work_set`](work_set.md)`(2, 0)`):
 
-- its routine becomes `Spl_Auto`'s (`1, 0, 0, 0`): Sherry follows the player;
+- its routine becomes `Spl_Auto`'s (`1, 0, 0, 0`): Sherry or Ada follows the player, as Ada does after room 216's van;
 - its head looks at the player (`Neck_flg` 0);
 - its `Type` loses `0x4000` and `0x1000` and takes the partner's `0x400`;
 - its life is the partner's saved life and its maximum life 200;

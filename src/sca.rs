@@ -19,19 +19,22 @@ pub const CHARACTER_MASK_LOW: u16 = 0x0800;
 const NO_PUSH: u16 = 0x0100;
 /// The player's collision radius (`Player_set`).
 pub const PLAYER_RADIUS: i32 = 0x1C2;
-/// The collision radius of Claire's costumes and Sherry (`Pl_init`).
+/// The collision radius of Claire's costumes and Ada (`Pl_init`).
 const SMALL_PLAYER_RADIUS: i32 = 0x15E;
 /// How far ahead of the player the reach point stands (`Sce_at`).
 pub const REACH_DISTANCE: i32 = 0x26C;
 /// The height of one floor of a room.
 pub const FLOOR_HEIGHT: i32 = 0x708;
 
+/// Sherry's collision radius (`Pl_init`, id 0xF).
+const SHERRY_RADIUS: i32 = 0xFA;
+
 /// The collision radius of the player character `id`.
 pub fn player_radius(id: u8) -> i32 {
-    if matches!(id, 1 | 3 | 5 | 7 | 9 | 0xE) {
-        SMALL_PLAYER_RADIUS
-    } else {
-        PLAYER_RADIUS
+    match id {
+        1 | 3 | 5 | 7 | 9 | 0xE => SMALL_PLAYER_RADIUS,
+        0xF => SHERRY_RADIUS,
+        _ => PLAYER_RADIUS,
     }
 }
 
@@ -855,6 +858,21 @@ pub fn list_at(sca: &Sca, mask: u16, x: i32, z: i32, radius: i32, floor: u8) -> 
 /// circle that holds the point once grown by `radius`, 3 for a climb, 4 for a
 /// drop, and 8 and 0x10 for shapes 11 and 12, all or-ed together.
 pub fn info_flags(sca: &Sca, mask: u16, x: i32, z: i32, radius: i32, floor: u8) -> u16 {
+    info_flags_for(sca, mask, [x, z], [x, z], radius, floor)
+}
+
+/// [`info_flags`] as `Parts_down` gets it: the records are found by the
+/// point, but the triangles, the diamond and the circle (`Sca_ck_naname_*`,
+/// `Sca_ck_hishi`, `Sca_ck_circle`) test `body`, the `Atd[0]` of the work
+/// being processed (`DWORD_00988628 + 0x84`), not the point.
+pub fn info_flags_for(
+    sca: &Sca,
+    mask: u16,
+    [x, z]: [i32; 2],
+    body: [i32; 2],
+    radius: i32,
+    floor: u8,
+) -> u16 {
     list_at(sca, mask, x, z, radius, floor)
         .into_iter()
         .fold(0, |flags, record| {
@@ -862,7 +880,7 @@ pub fn info_flags(sca: &Sca, mask: u16, x: i32, z: i32, radius: i32, floor: u8) 
             flags
                 | match record.shape() {
                     0 | 7 | 8 => 1,
-                    1..=6 => u16::from(inside_shape(record, x, z, radius)),
+                    1..=6 => u16::from(inside_shape(record, body[0], body[1], radius)),
                     9 => 3,
                     10 => INFO_DOWN,
                     11 => 8,

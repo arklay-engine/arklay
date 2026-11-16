@@ -226,11 +226,11 @@ impl Huffman {
 /// Read a 16-entry table whose lengths are delta-coded against the previous.
 fn read_small_table(reader: &mut BitReader, table: &mut Huffman) -> Result<()> {
     let mut previous = 0u32;
-    for index in 0..table.len() {
+    for length in &mut table.lengths {
         if reader.bit()? != 0 {
             previous ^= reader.code()? as u32;
         }
-        table.lengths[index] = previous;
+        *length = previous;
     }
     table.build()
 }

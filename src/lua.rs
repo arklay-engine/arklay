@@ -693,6 +693,8 @@ mod imp {
                 game.state_bytes[usize::from(crate::game::STATE_BYTE_CHARACTER_MODEL)] = id;
                 game.entities[0].id = id;
                 game.sync_variant_flags();
+                // RE2's `pPl.Id` and `scd_var_next_pld` follow.
+                game.set_re2_player_id(id);
                 Ok(())
             });
 
@@ -756,6 +758,32 @@ mod imp {
                     Ok(())
                 },
             );
+
+            // `re2_var(n)`: RE2's script variable `n` (`scd_variables`).
+            methods.add_method("re2_var", |_lua, game, index: u8| {
+                Ok(game.re2.vars[usize::from(index)])
+            });
+
+            // `set_re2_var(n, value)`: write RE2's script variable `n`, as a
+            // script's `save` does. Variable 32 picks the player the next
+            // room's load makes.
+            methods.add_method_mut("set_re2_var", |_lua, game, (index, value): (u8, u16)| {
+                game.re2.vars[usize::from(index)] = value;
+                Ok(())
+            });
+
+            // `re2_player()`: RE2's player character, `pPl.Id`.
+            methods.add_method("re2_player", |_lua, game, ()| Ok(game.re2.pl_id));
+
+            // `re2_change_player(id)`: `Set_room`'s change of player at once,
+            // then `Pl_init`.
+            methods.add_method_mut("re2_change_player", |_lua, game, id: u8| {
+                let changed = crate::game::pl_change2::change_player(game, id);
+                if changed {
+                    crate::player2::pl_init(&mut game.re2.player);
+                }
+                Ok(changed)
+            });
 
             // `set_re2_rnd(value)`: where RE2's `Rnd` stream stands, which only
             // a new game seeds and a door doesn't: for a room reached any other

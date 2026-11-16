@@ -1187,6 +1187,17 @@ impl ObjectRecord {
         self.flag & OBJECT_FLAG_ACTIVE != 0
     }
 
+    /// RE 2: sets the active flag from `Be_flg`, which the draw reads: bit 0
+    /// on and `Om_trans`' not-drawn bit 19 off. Every other flag bit goes,
+    /// as `Member_set` leaves it.
+    pub fn sync_active_from_be_flg(&mut self) {
+        self.flag = if self.be_flg & 1 != 0 && self.be_flg & 0x8_0000 == 0 {
+            OBJECT_FLAG_ACTIVE
+        } else {
+            0
+        };
+    }
+
     /// RE2's `Atd[0]` `Atw_x` and `Atw_z`: the box's offset, its x and z
     /// swapped when the object is turned a quarter (`Cdir_y & 0x400`).
     pub fn atw(&self) -> (i16, i16) {
@@ -1262,6 +1273,11 @@ pub struct ObjectTable {
     /// each room's entry ([`ObjectTable::set_no_model`]); a reset keeps it,
     /// so the init's second pass after a setup script sees it too.
     pub no_model: u32,
+    /// RE2: the object count (`rdt + 2`) of the room whose entry last ran
+    /// [`ObjectTable::set_no_model`]. The original's traced object count is
+    /// its RDT pointer's, which a door's `Set_room` swaps in only on the load,
+    /// 90 ticks after the placement, so the hold still shows the room before.
+    pub rdt_count: u8,
 }
 
 /// An object slot's fields that outlast a room load.
@@ -1269,6 +1285,11 @@ pub struct ObjectTable {
 struct Carried {
     old: [i16; 3],
     old2: [i16; 3],
+    /// `Pos`, `Cdir` and `nFloor`: `Obj_model_set` writes them for a slot the
+    /// room builds, and the slots it doesn't build keep the last room's.
+    pos: [i32; 3],
+    rotation: [i16; 3],
+    floor: u8,
     push_cnt: u8,
     at_sce_no: u8,
     at_obj_no: u8,
@@ -1286,6 +1307,7 @@ impl ObjectTable {
             box_fall: BoxFall::default(),
             carried: Vec::new(),
             no_model: 0,
+            rdt_count: 0,
         }
     }
 
@@ -1293,24 +1315,44 @@ impl ObjectTable {
     /// table to the new room's declared slot count. Each slot keeps what the
     /// original's object work keeps across the load (`Carried`).
     pub fn reset(&mut self, slot_count: usize) {
-        if self.carried.len() < self.records.len() {
-            self.carried.resize(self.records.len(), Carried::default());
-        }
-        for (carried, record) in self.carried.iter_mut().zip(&self.records) {
-            *carried = Carried {
-                old: record.old,
-                old2: record.old2,
-                push_cnt: record.push_cnt,
-                at_sce_no: record.at_sce_no,
-                at_obj_no: record.at_obj_no,
-                sca_old: record.sca_old,
-            };
+        self.reset_from(slot_count, true);
+    }
+
+    /// A rerun of the room's load (an authored edit before the first tick):
+    /// the slots go back to what the last load found, not what its first pass
+    /// left, as the original's one pass finds them.
+    pub fn reset_for_rerun(&mut self, slot_count: usize) {
+        self.reset_from(slot_count, false);
+    }
+
+    fn reset_from(&mut self, slot_count: usize, snapshot: bool) {
+        if snapshot {
+            self.carried.resize(
+                self.carried.len().max(self.records.len()),
+                Carried::default(),
+            );
+            for (carried, record) in self.carried.iter_mut().zip(&self.records) {
+                *carried = Carried {
+                    old: record.old,
+                    old2: record.old2,
+                    pos: record.pos,
+                    rotation: record.rotation,
+                    floor: record.floor,
+                    push_cnt: record.push_cnt,
+                    at_sce_no: record.at_sce_no,
+                    at_obj_no: record.at_obj_no,
+                    sca_old: record.sca_old,
+                };
+            }
         }
         self.records.clear();
         self.records.resize(slot_count, ObjectRecord::default());
         for (record, carried) in self.records.iter_mut().zip(&self.carried) {
             record.old = carried.old;
             record.old2 = carried.old2;
+            record.pos = carried.pos;
+            record.rotation = carried.rotation;
+            record.floor = carried.floor;
             record.push_cnt = carried.push_cnt;
             record.at_sce_no = carried.at_sce_no;
             record.at_obj_no = carried.at_obj_no;
@@ -1323,6 +1365,7 @@ impl ObjectTable {
     /// RE2: note which of the room's object slots have no model, those below
     /// its object count (`rdt + 2`) with no MD1 in the model table.
     pub fn set_no_model(&mut self, room: &crate::state::RoomState) {
+        self.rdt_count = room.re2_object_count;
         self.no_model = (0..u32::from(room.re2_object_count.min(32)))
             .filter(|slot| {
                 !room
@@ -3023,11 +3066,12 @@ mod tests {
         objects.reset(5);
         assert_eq!(objects.records.len(), 5);
         assert_eq!(objects.built, 0);
+        // What the room built is gone; only the slots' leftovers stay.
         assert!(
             objects
                 .records
                 .iter()
-                .all(|record| *record == ObjectRecord::default())
+                .all(|record| record.flag == 0 && record.be_flg == 0 && record.model == 0)
         );
     }
 
@@ -3042,6 +3086,8 @@ mod tests {
         record.push_cnt = 7;
         record.at_sce_no = 2;
         record.sca_old = [8, 9];
+        record.rotation = [0, 1024, 0];
+        record.floor = 2;
         // Through a room with one slot, into one with three.
         objects.reset(1);
         objects.reset(3);
@@ -3051,8 +3097,12 @@ mod tests {
         assert_eq!(record.push_cnt, 7);
         assert_eq!(record.at_sce_no, 2);
         assert_eq!(record.sca_old, [8, 9]);
-        assert_eq!(record.pos, [0, 0, 0], "the rest starts again");
-        assert_eq!(record.be_flg, 0);
+        // `Obj_model_set` writes the place of a slot the room builds, and
+        // the original's trace shows the last room's in one it doesn't.
+        assert_eq!(record.pos, [5, 6, 7]);
+        assert_eq!(record.rotation, [0, 1024, 0]);
+        assert_eq!(record.floor, 2);
+        assert_eq!(record.be_flg, 0, "the rest starts again");
         assert_eq!(objects.records[0], ObjectRecord::default());
         assert_eq!(table(3).records[1], ObjectRecord::default(), "a new game");
     }

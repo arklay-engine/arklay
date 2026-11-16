@@ -1,0 +1,39 @@
+# room 118: EQUIP the flamethrower from slot 2 as play begins (so that Pl_weapon_ch loads its own clips), wait out the zombie's hold, aim at the zombies and fire bursts of 60 ticks with 20 between; an empty gun reloads on the next press (#491)
+346 start
+350
+382 down
+386
+402 confirm
+406
+422 confirm
+426
+462 start
+466
+620 aim
+640 aim fire
+700 aim
+720 aim fire
+780 aim
+800 aim fire
+860 aim
+880 aim fire
+940 aim
+960 aim fire
+1020 aim
+1040 aim fire
+1100 aim
+1120 aim fire
+1180 aim
+1200 aim fire
+1260 aim
+1280 aim fire
+1340 aim
+1360 aim fire
+1420 aim
+1440 aim fire
+1500 aim
+1520 aim fire
+1580 aim
+1600 aim fire
+1660 aim
+1760

@@ -1,0 +1,104 @@
+# Claire A, 108's water tank to the Diamond Key in 10B (#665 Part 4), as claire_a_106_108 leaves her: back through 109 to 10A, its fire out, Claire's look (area 6, event 2), and door 2 into 10B (oracle/re2.md, "Claire A to the Diamond Key")
+# 108 from the water tank: north and east to door 1
+345 up run right
+389 up run
+399 up run right
+400 up run
+417 up run right
+418 up run
+419 up run left
+443 up run
+445 up run left
+446 up run
+449 up run left
+453
+455 right
+471
+# door 1 into 109
+480 action
+482
+517 up
+# 109: north round the east side, west past the crows and south to door 0
+821 up run left
+850 up run right
+886 up run
+932 up run right
+933 up run
+938 up run right
+939 up run
+940 up run right
+960 up run
+1020 up run right
+1021 up run left
+1043 up run
+1060 up run left
+1061 up run
+1087 up run left
+1088 up run
+1097 up run right
+1120 up run
+1121 up run right
+1122 up run
+1158 up run right
+1159 up run
+1170 up run right
+1171
+1173 left
+1177
+# door 0 into 10A, whose fire is out
+1179 action
+1181
+1216 up
+# 10A, its fire out and no zombies for Claire (main_00's ck(1, 0, 0)): north up the west side
+1522 up run right
+1532 up run
+1557 up run right
+1558 up run
+1570 up run
+# turn east along the corridor into area 6
+1605 up run right
+1621 up run
+1660
+# area 6 (event 2): 3:32, the voice line and main_03, which hands back on 1724: turn east-south-east and run to door 2's front
+1730 right
+1745
+1747 up run
+1767
+# turn to face south, onto door 2
+1769 right
+1781
+# door 2 into 10B
+1784 action
+1786
+1821 up
+# 10B: south-west to the Diamond Key's shelf
+2127 up run
+2134 up run right
+2135 up run
+2161 up run left
+2162 up run
+2166 up run left
+2167 up run
+2190 up run left
+2191 up run
+2206 up run left
+2207
+2209 left
+# the Diamond Key (item 90): a press every 12 ticks finishes the question's text, Yes, finishes and closes "taken" (2368)
+2228 action
+2230
+2240 action
+2242
+2252 action
+2254
+2264 action
+2266
+2276 action
+2278
+2288 action
+2290
+2300 action
+2302
+2368 action
+2370
+2420

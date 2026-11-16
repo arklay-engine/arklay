@@ -547,8 +547,9 @@ def capture_root(out: Path, keep: bool, jobs: int) -> Path:
 
 
 def compare_workers(jobs: int) -> int:
-    """The frame comparers' processes, shared by every job: about half the cores, at most four."""
-    return max(1, min(4, (os.cpu_count() or 2) // 2))
+    """The frame comparers' processes, shared by every job: one per job, at most half the cores and at most four,
+    so that `--jobs 1` keeps the whole runner to about two cores."""
+    return max(1, min(jobs, 4, (os.cpu_count() or 2) // 2))
 
 
 def frame_summary(errors) -> dict:

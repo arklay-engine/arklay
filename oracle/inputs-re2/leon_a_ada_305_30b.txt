@@ -1,0 +1,22 @@
+# leon_a_ada_305_30b: Ada, back from 306 with the Club Key, runs round 305's walkway to door 6; its area (main_02) raises 3:130 and save(32, 0), so 30B loads with Leon the player again (his stashed items and life), where main_0B places him for Ada's throw
+361 up run left
+364 up run
+389 up run left
+390 up run
+396 up run right
+397 up run
+398 up run right
+417 up run
+430 up run right
+431 up run
+493 up run right
+494 up run
+499 up run right
+500 up run
+503 up run left
+524 up run
+549 up run left
+550
+552 right
+566 action
+568

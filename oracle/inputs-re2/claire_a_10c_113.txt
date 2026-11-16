@@ -1,0 +1,116 @@
+# Claire A from the statue hall (10C), as claire_a_204_10c leaves her at the stairs door's arrival, to room 113: up the stairs and west along the upper floor past the statues on their plates to door 2, room 114's Sherry scene on the load (8:93 set, 4:40 clear: Sherry runs from the zombie and leaves by door 0), the zombie shot from the corridor's north end as it comes (no damage), down the corridor to door 0, and the Spade Key's last use there: the used-key message, the close (the key's last use comes off, and the discard question), Yes (the slot goes), and a press that opens it (oracle/re2.md, "Claire A to the Diamond Key")
+0
+# 10C: turn a little toward the stairs and go up them with action held
+350 right
+351
+352 up action
+493
+# turn to face west and run along the upper floor to the corridor's turn south
+495 right
+509
+511 up run
+669
+671 left
+684
+686 up run
+716
+718 right
+731
+733 up
+747
+# door 2: room 114 loads on 784 and its scene starts behind the door on 875; play comes back on 1089
+749 action
+751
+# 114: Sherry's scene runs on the load (event 2); from the hand back raise the handgun and fire every 6 ticks at the zombie as it comes up the corridor
+1330 aim
+1400 aim fire
+1402 aim
+1408 aim fire
+1410 aim
+1416 aim fire
+1418 aim
+1424 aim fire
+1426 aim
+1432 aim fire
+1434 aim
+1440 aim fire
+1442 aim
+1448 aim fire
+1450 aim
+1456 aim fire
+1458 aim
+1464 aim fire
+1466 aim
+1472 aim fire
+1474 aim
+1480 aim fire
+1482 aim
+1488 aim fire
+1490 aim
+1496 aim fire
+1498 aim
+1504 aim fire
+1506 aim
+1512 aim fire
+1514 aim
+1520 aim fire
+1522 aim
+1528 aim fire
+1530 aim
+1536 aim fire
+1538 aim
+1544 aim fire
+1546 aim
+1552 aim fire
+1554 aim
+1560 aim fire
+1562 aim
+1568 aim fire
+1570 aim
+1576 aim fire
+1578 aim
+1584 aim fire
+1586 aim
+1592 aim fire
+1594 aim
+1600 aim fire
+1602 aim
+1608 aim fire
+1610 aim
+1616 aim fire
+1618 aim
+1624 aim fire
+1626 aim
+1632 aim fire
+1634 aim
+1640 aim fire
+1642 aim
+1648 aim fire
+1650 aim
+1656 aim fire
+1658 aim
+1664 aim fire
+1666 aim
+1690
+# the zombie is dead: run south down the corridor to its turn east
+1696 up run left
+1699 up run
+1803 up run left
+1815 up run
+1864
+# turn to face east, onto door 0
+1866 left
+1870
+# door 0: the Spade Key's used-key message
+1873 action
+1875
+# the close: the key's last use comes off, and the discard question
+1933 action
+1935
+# Yes: the slot goes
+1993 action
+1995
+# a press that opens it: room 113 loads on 2088, and its first-entry scene starts (claire_a_114_10a starts by door 0, before it)
+2053 action
+2055
+2130

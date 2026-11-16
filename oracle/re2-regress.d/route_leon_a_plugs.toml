@@ -1,0 +1,47 @@
+# Leon A through the police station for the four chess plugs (#667, Part 4), room by room from warps (oracle/re2.md, "Leon A through the sewer"). Each run starts Leon as the run before leaves him
+
+# From the kennel's manhole ladder (21A) back through 219, 216, 211, 20F and 20B to 20B's door into 116, no sound
+[[run]]
+name = "leon_a_21a_116"
+room = "21A"
+setup_script = "leon_a_21a_116.lua"
+input = "leon_a_21a_116.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 2158
+sound = false
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 2157]
+# 0.28 measured, the doors' frames included (the worst, 21 and 17, are the 211 and 20F loads)
+frame_max_mean = 0.35
+ignore = [
+  [344, 351, "pneck"],
+  # the doors' own ticks (each press), and `hk` on each load's first tick and over the last three
+  [441, "rng"], [441, "rseed"], [718, "rng"], [718, "rseed"], [963, "rng"], [963, "rseed"], [1432, "rng"], [1432, "rseed"], [1877, "rng"], [1877, "rseed"], [2119, "rng"], [2119, "rseed"],
+  [476, "hk"], [753, "hk"], [998, "hk"], [1467, "hk"], [1912, "hk"], [2154, 2156, "hk"],
+]
+expect = "match"
+record = "--warp 21A:-6611:0:-3724:2016:3 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 90 --give 0:0x02:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x5C:3"
+
+# From 116's ground floor up its two flights (the action key at each foot) to the door into 109, 109's south wall to door 1, 10A, 10F and 110's long way round to door 4 (112), no sound
+[[run]]
+name = "leon_a_116_112"
+room = "116"
+setup_script = "leon_a_116_112.lua"
+input = "leon_a_116_112.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 2143
+sound = false
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 1263]
+# 0.14 measured over the ticks before the licker differs
+frame_max_mean = 0.2
+ignore = [
+  [344, 350, "pneck"],
+  # the doors' own ticks (each press), and `hk` on each load's first tick
+  [852, "rng"], [852, "rseed"], [982, "rng"], [982, "rseed"], [1065, "rng"], [1065, "rseed"], [1180, "rng"], [1180, "rseed"],
+  [887, "hk"], [1017, "hk"], [1100, "hk"], [1215, "hk"],
+]
+expect = { tick = 1264, fields = ["zm0"], note = "110's licker (Em_22, slot 0) walks the same way for 900 ticks, then on tick 1264 arklay has it 25 units off in x and 62 in z (-14359, 9877 for the original's -14384, 9939) with the state, speed and angle the same: its step along the wall by the upper walkway differs; the player and the rest match until it has gone on (#727)" }
+record = "--warp 116:-20772:0:-25169:104:0 --flag 3:33 --flag 3:67 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 60 --give 0:0x02:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x5C:3"

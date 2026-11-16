@@ -322,8 +322,8 @@ fn lerp_matrix(a: &Mat4x3, b: &Mat4x3, alpha: f32) -> Mat4x3 {
         let len = (mixed[0] * mixed[0] + mixed[1] * mixed[1] + mixed[2] * mixed[2]).sqrt();
         let target = la + (lb - la) * alpha;
         let scale = if len > 0.0 { target / len } else { 1.0 };
-        for (row, value) in mixed.iter().enumerate() {
-            out.r[row][column] = (value * scale).round() as i32;
+        for (out_row, value) in out.r.iter_mut().zip(mixed) {
+            out_row[column] = (value * scale).round() as i32;
         }
     }
     out

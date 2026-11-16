@@ -1,0 +1,28 @@
+# The rocket launcher (0x11), #491 slice 6: `pl_mv05_w1`'s shot with `pl_w11_t2_move`, whose rocket (`Esp_call`
+# kind 2 row 0xD) flies on `Esp_18` until it meets a body, the floor or a wall and bursts (`Esp_2F`), hurting every
+# body in reach (oracle/re2.md, "Weapons"). As Leon, from bowgun_118's start, EQUIPping it through the status screen.
+
+[[run]]
+name = "rocket_equip_118"
+room = "118"
+ticks = 1400
+# run_119's start with the rocket launcher in slot 2: EQUIP it, aim at the zombies and fire every 100 ticks, the last two empty
+setup_script = "rocket_equip_118.lua"
+input = "rocket_equip_118.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,inv,snd,zm0,zm1,zm2,zm3,zm4,zm5,fgstat"
+frames = [360, 1399]
+expect = "match"
+record = "--warp 118:-24617:0:-24996:1024 --life 200 --give 2:0x11:4"
+
+[[run]]
+name = "esp_rocket_equip_118"
+ref = "rocket_equip_118"
+room = "118"
+ticks = 1400
+setup_script = "rocket_equip_118.lua"
+input = "rocket_equip_118.txt"
+input_shift = 344
+fields = "esp"
+expect = "match"
+record = "--warp 118:-24617:0:-24996:1024 --life 200 --give 2:0x11:4"

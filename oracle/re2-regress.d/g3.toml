@@ -63,7 +63,7 @@ setup_script = "g3_shotgun_509.lua"
 input = "g3_shotgun_509.txt"
 input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
-expect = { tick = 1244, fields = ["p.z"], note = "G3's first grip holds the player a unit off the original's in z, which the wall keeps; G3's routines and life still follow through its death (docs/internals/deviations/re2.md, G3)" }
+expect = "match"
 record = "--warp 509:-3670:0:-14172:2048:0 --flag 1:1 --flag 4:99 --life 2000 --equip 7 --give 0:7:200 --give 1:2:15 --give 2:5:6 --give 3:0x15:30"
 
 [[run]]
@@ -77,5 +77,5 @@ setup_script = "g3_magnum_509.lua"
 input = "g3_magnum_509.txt"
 input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0"
-expect = { tick = 1060, fields = ["p.x"], note = "G3's first grip holds the player a unit off the original's in x, which the wall keeps; G3's routines and life still follow through its death (docs/internals/deviations/re2.md, G3)" }
+expect = "match"
 record = "--warp 509:-3670:0:-14172:2048:0 --flag 1:1 --flag 4:99 --life 2000 --equip 5 --give 0:5:200 --give 1:2:15 --give 2:7:5 --give 3:0x16:30"

@@ -28,7 +28,7 @@ local B227 <const> = 8 -- `+0x227`.
 -- init.
 local REGEN <const> = 9
 local CNT_228 <const> = 10 -- `+0x228`: the attacks routine 1 turns into routine 3 (`FUN_00491330`) in a row.
-local CNT_22E <const> = 11 -- `+0x22e`.
+local CNT_22E <const> = 11 -- `+0x22e`: the ticks before a flame's hit bleeds again (`FUN_00494940`).
 -- The weights of the morphs (`pSa_dat_head`'s words from 0xc): part 1's
 -- one, part 2's two and part 4's one.
 local W1 <const> = 12
@@ -1324,8 +1324,54 @@ local function hit_blood(e, weapon)
     end
 end
 
+-- `FUN_00494940`, a flame's (and 0xa's) blood at parts 2, 0, 5, 15, 13,
+-- 10 and 3 (`+0x1a0` to `+0x24c` into the parts, which are 0xac long): six
+-- of kind 5, row 4 and one of kind 4, row 0xf, each its own size from a
+-- `Rnd`, turned as G2 faces.
+local FLAME_BLOOD <const> = {
+    { 2, 5, 4, 0x3AF8 },
+    { 0, 5, 4, 0x2770 },
+    { 5, 5, 4, 0x1000 },
+    { 15, 5, 4, 0x1FA0 },
+    { 13, 5, 4, 0x17D0 },
+    { 10, 5, 4, 0x1000 },
+    { 3, 4, 0xF, 0x17D0 },
+}
+
+local function flame_blood(e)
+    local dir = i16(e:angle())
+    for _, at in ipairs(FLAME_BLOOD) do
+        e:effect(at[2], at[3], e:rnd() * 4 + at[4], dir, at[1], 0, 0, 0)
+    end
+end
+
+-- `FUN_00494f70`, the spark shot's (0xE) sparks, turned as G2 faces: nine
+-- of kind 6 on parts 2, 2, 0, 1, 12, 13, 10, 4 and 16 (`+0x1a0`, `+0x48`,
+-- `+0xf4`, `+0x858`, `+0x904`, `+0x700`, `+0x2f8` and `+0xb08` into the
+-- parts), each at `0x80 - Rnd` on x, y and z (the first's y `-Rnd - 0x1d8`)
+-- and sized `Rnd * 8` over its base; then three of kind 4, row 0xF on parts
+-- 1, 12 and 4 with no offset, sized `Rnd * 4 + 0x1000`.
+local SPARK_PARTS <const> = {
+    { 2, 0x17D0 }, { 2, 0x17D0 }, { 0, 0x1BB8 }, { 1, 0x1BB8 }, { 12, 0x13E8 },
+    { 13, 0x13E8 }, { 10, 0x13E8 }, { 4, 0x13E8 }, { 16, 0x13E8 },
+}
+
+local function sparks(e)
+    local dir = i16(e:angle())
+    for index, part in ipairs(SPARK_PARTS) do
+        local x = 0x80 - e:rnd()
+        local y = index == 1 and -e:rnd() - 0x1D8 or 0x80 - e:rnd()
+        local z = 0x80 - e:rnd()
+        e:effect(6, 0, e:rnd() * 8 + part[2], dir, part[1], x, y, z)
+    end
+    for _, part in ipairs({ 1, 12, 4 }) do
+        e:effect(4, 0xF, e:rnd() * 4 + 0x1000, dir, part, 0, 0, 0)
+    end
+end
+
 -- `FUN_00495ad0`: the flinch, backwards or forwards by whether it faces the
--- way the player does (clip 3 or 4), to its frame 15; then it walks.
+-- way the player does (clip 3 or 4), to its frame 15; then it walks. At frame
+-- 15 the spark shot's (`Routine_1` still 0xE) sparks again.
 local function flinch(e)
     local sub = e:routine(2)
     if sub == 0 then
@@ -1344,6 +1390,9 @@ local function flinch(e)
     end
     e:add_speed_xz()
     if e:move_cnt() == 0xF then
+        if e:routine(1) == 0xE then
+            sparks(e)
+        end
         e:routines(1, 1, 0, 0)
         e:set_var(FLAGS, e:var(FLAGS) & 0xFDFF)
         e:set_damage_cnt(e:damage_cnt() & 0x7F)
@@ -1353,6 +1402,7 @@ end
 -- `0x52a537`: what each weapon adds to `CNT_219`, which flinches it at 12.
 local FLINCH_ADD <const> = {
     [0] = 3, 1, 4, 4, 3, 10, 20, 6, 10, 8, 20, 8, 3, 2, 20, 1, 0, 20, 2,
+    0, -- 0x13 (`0x52a54a`): the Beretta adds nothing.
 }
 
 -- Routine 0 2 (`FUN_00494440`): a hit. Below 200 life it raises `FLAGS`' 4
@@ -1360,8 +1410,8 @@ local FLINCH_ADD <const> = {
 -- `CNT_219`, which `CNT_218` takes down by one every 15 ticks; at 12 or more
 -- it flinches, and otherwise it goes on with what it was doing on this tick,
 -- as it does during an attack (`FLAGS`' 0x80). A hit during a flinch goes on
--- with it. The other weapons' effects (9, 0xa, 0xb, 0xe, 0x10 and 0x11)
--- aren't ported.
+-- with it. A flame (0x10) bleeds at most once in 0x2d ticks (`+0x22e`).
+-- The other weapons' effects (9, 0xa, 0xb and 0x11) aren't ported.
 local function hurt(e)
     if e:routine(2) ~= 0 then
         flinch(e)
@@ -1373,6 +1423,13 @@ local function hurt(e)
     e:set_var(HURT_221, 0)
     if weapon == 5 or weapon == 6 then
         e:set_var(SPURT, 1)
+    end
+    if weapon == 0xE then
+        sparks(e)
+    end
+    if weapon == 0x10 and e:var(CNT_22E) == 0 then
+        flame_blood(e)
+        e:set_var(CNT_22E, 0x2D)
     end
     local flags = e:var(FLAGS)
     if flags & 4 == 0 and e:life() < 200 then
@@ -1434,6 +1491,13 @@ local function death(e)
         end
         if weapon == 5 or weapon == 6 then
             e:set_var(SPURT, 1)
+        end
+        if weapon == 0xE then
+            sparks(e)
+        end
+        -- A flame's blood here isn't held back by `+0x22e`.
+        if weapon == 0x10 then
+            flame_blood(e)
         end
         if e:var(FLAGS) & 0x100 == 0 then
             e:set_life(10)

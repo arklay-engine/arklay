@@ -107,16 +107,27 @@ cargo run -- convert-game /path/to/steam/4249100_Biohazard --out re1.akpak
 # items, the typewriter, saves and the scripts' scenes with their characters and
 # voice lines work. The title, the new-game choice, the inventory, the status
 # screen and the item box are drawn from the original's art. Leon A's route from
-# the new game through Marvin's room 202, the Blue Card Key, the darkroom (208)
-# and the S.T.A.R.S. office (115) to the Spade Key matches the original tick for
-# tick, zombies and lickers included, and so does Claire A's route to the Spade
-# Key. Leon A's way on through the Spade Key's doors
-# to the Diamond Key in 10B matches in warp runs, and its continuous run is still
-# to come, apart from the differences in docs/internals/deviations/re2.md. Zombies,
+# the new game through Marvin's room 202, the Blue Card Key, the darkroom (208),
+# the S.T.A.R.S. office (115), the Spade Key and its doors, the Diamond Key in
+# 10B, and back down 110's ladder, through 203's rounds, 207's Diamond door and
+# 209's zombies to Marvin's second scene and the Heart Key in 202, matches the
+# original tick for tick, zombies and lickers included, and so does Claire A's
+# route to the Spade Key, apart from the differences in
+# docs/internals/deviations/re2.md. Both routes go on in matched segments:
+# Leon A is one continuous run from the new game to the Manhole Opener in 301,
+# and goes on in warp runs through the kennel's manhole and the sewer, with Ada
+# as the player, to the Club Key, then back up to the police station for the
+# chess plugs (matched as far as 112); Claire A goes on from the Spade Key
+# through its doors, the water tank and 108's stairs to the Diamond Key (the
+# continuous run of that stretch is still to come). Both characters fire the knife and weapons 2
+# to 8 and the grenade launcher, bowgun, Colt S.A.A., spark shot, Beretta,
+# sub-machine gun, flamethrower, rocket launcher and gatling gun (weapons 9 to
+# 0x13). Zombies,
 # lickers, dogs, crows, Mr. X, the plants, the spiders, the cockroaches (in part),
 # room 205's bodies and the alligator are ported; the G forms are part way (G1,
-# G2 and G3 are done, and the G embryo walks and jumps but does not yet latch on)
-# and the G adult is to come. The engine also poses any RE2 EMD, PLD or PLW with --model, plays RE2 doors with --door,
+# G2 and G3 are done, the G embryo walks, jumps, latches on and struggles, and
+# the G adult walks, bites and spits, but the G adult's hits and death, its
+# birth and the embryos that ride its back are to come). The engine also poses any RE2 EMD, PLD or PLW with --model, plays RE2 doors with --door,
 # and plays its sounds and films (see issue #244 and docs/internals/deviations/re2.md);
 # --game re2 skips detection
 cargo run -- convert-game /path/to/re2

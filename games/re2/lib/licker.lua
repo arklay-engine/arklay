@@ -277,10 +277,9 @@ local function bite_blood(e)
         local point = BITE_POINTS[count >> 1]
         local turn = e:var(BITE_BEHIND) ~= 0 and 0x800 or 0
         local x, z = e:rotate(turn, 0x15E, point[2])
-        local at_x, at_y, at_z = e:player_root_point(x, point[1], z)
-        if at_x then
-            e:call_effect(0, 2, 0x2400, 0, at_x, at_y, at_z)
-        end
+        -- On the player's part 0 as the last draw left it, after the
+        -- pushes, and kept on it (`FUN_00468710`).
+        e:player_part_effect(0, 2, 0x2400, 0, 0, x, point[1], z)
     end
     e:set_var(COUNT, count + 1)
     if count + 1 == 7 then
@@ -288,10 +287,13 @@ local function bite_blood(e)
     end
 end
 
--- `FUN_00467370`: the first tick only sets it going.
+-- `FUN_00467370`: the first call only sets it going, as `+0x23c`'s callback,
+-- which runs after the routine.
 local function flames(e)
     local count = e:var(COUNT)
-    if count ~= 0 then
+    if count == 0 then
+        e:set_var(AFTER, AFTER_FLAMES)
+    else
         local flame = FLAMES[(count - 1) % 16]
         if flame then
             e:effect(6, 0, e:rnd() * 2 + 0x1000, 0, flame[4], flame[1], flame[2], flame[3])
@@ -305,7 +307,9 @@ local function flames(e)
     e:set_var(COUNT, count + 1)
 end
 
--- `FUN_004671f0`: the blood of a hit.
+-- `FUN_004671f0`: the blood of a hit. Weapons 0xA, 0xE, 0x10, 0x11 and 0x13
+-- also take the colours of 0x16 parts to 0x484848, and 0xB to 0x585858 unless
+-- the first part's red is already 0x48 (`FUN_0046b840`), which isn't ported.
 local function hit_blood(e, behind)
     local weapon = e:var(WEAPON)
     local blood = V.blood[weapon] or BLOOD[weapon] or BLOOD[0]
@@ -316,8 +320,9 @@ local function hit_blood(e, behind)
         e:effect(blood[5], blood[6], blood[7], 0, point[4], point[1], point[2], point[3])
     end
     e:set_var(COUNT, 0)
+    -- The spark shot's sets them going at once, so the first runs this tick.
     if weapon == 0xE then
-        e:set_var(AFTER, AFTER_FLAMES)
+        flames(e)
     end
 end
 
@@ -746,10 +751,10 @@ local function slash(e)
         and e:distance() <= 0xAEF
         and e:player_life() >= 0
     then
-        local x, y, z = e:part_point(13, 0, 200, 0)
-        if x then
-            e:call_effect(0, 0, 0x2400, 0, x, y, z)
-        end
+        -- Part 13's `Workm.t` as the last draw left it, 200 lower, not
+        -- turned by the part.
+        local x, y, z = e:own_part(13)
+        e:call_effect(0, 0, 0x2400, 0, x, y + 200, z)
         hurt_player(e, 0xF)
     end
 end

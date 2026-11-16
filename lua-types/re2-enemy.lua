@@ -22,7 +22,6 @@
 ----- enemy/10/enemy.lua: zombie 0x10, a variant of the shared machine
 ---local zombie = require("/lib/zombie")
 ---
----local VARIANT <const> = { burns_unmarked = true }
 ---
 ---function update(e)
 ---    zombie.run(e, VARIANT)
@@ -44,6 +43,7 @@
 ---    23/enemy.lua                    the alligator (Em_23)
 ---    25/enemy.lua                    the giant spider (Em_25)
 ---    26/enemy.lua                    the young spiders (Em_26)
+---    27/enemy.lua, 28/enemy.lua      the G embryos and the G adult (Em_27, Em_28)
 ---    2a/enemy.lua                    Mr. X (Em_2A)
 ---    2d/enemy.lua                    room 205's bodies in the walls (Em_2D)
 ---    2e/enemy.lua, 39/enemy.lua      the ivy and the poison ivy: ivy.update(e)
@@ -56,7 +56,7 @@
 ---```
 ---
 ---The engine only hands a body to a script for these ids: `0x10` to `0x21`,
----`0x22` and `0x24` (lickers), `0x23`, `0x25`, `0x26`, `0x2A`, `0x2D`, `0x2E`, `0x2F`,
+---`0x22` and `0x24` (lickers), `0x23`, `0x25` to `0x28`, `0x2A`, `0x2D`, `0x2E`, `0x2F`,
 ---`0x39`, `0x30` and `0x31`. Any other enemy id a room places isn't modelled
 ---yet and takes no slot. An id the pack carries no script for leaves its
 ---bodies standing: the engine still runs its own part of the tick, but nothing
@@ -76,7 +76,6 @@
 ---
 ---| Key | Effect |
 ---| --- | --- |
----| `burns_unmarked` | The body burns without the charred mark (`e:set_burnt(false)`). |
 ---| `life` | The starting life, in place of the room's. |
 ---| `tough` | The bite does more damage (10 crawling, `0x1E` standing). |
 ---| `init_draws` | How many `e:rnd()` draws the init makes first, as the original's do. |
@@ -438,6 +437,17 @@ function Re2EnemyApi:part_rot(part) end
 ---@param part integer The morphing part.
 ---@param ... integer The weight of each shape.
 function Re2EnemyApi:morph(part, ...) end
+
+---`FUN_004e0070`: every part's place blended by the weights of `part`'s morph.
+---@param part integer The morphing part.
+---@param ... integer The weight of each shape.
+function Re2EnemyApi:morph_all(part, ...) end
+
+---A part's morph weights as the model's data holds them (the low half of
+---each weight's word); none for a part with no morph.
+---@param part integer The morphing part.
+---@return integer ... The weight of each shape.
+function Re2EnemyApi:morph_weights(part) end
 
 ---The alligator's jaws: the roll of parts 6 and 7 on top of their pose.
 ---@param six integer Part 6's roll.
@@ -1020,17 +1030,16 @@ function Re2EnemyApi:pool() end
 ---@param pool integer Truncated to 16 bits.
 function Re2EnemyApi:set_pool(pool) end
 
----How far a burnt body's colours have gone down.
----@return integer charred
-function Re2EnemyApi:charred() end
+---`FUN_00456780`: a burning body's darker parts, each part's `Poly_rgb`
+---(`0x404040` for the first, `0x808080` lighting it as it is).
+function Re2EnemyApi:burn_parts() end
 
----Set how far a burnt body's colours have gone down.
----@param charred integer Truncated to a byte.
-function Re2EnemyApi:set_charred(charred) end
+---`Em10_Scenario`'s charring: the first 15 parts' `Poly_rgb` each down by
+---`0x10101`, until the first part's red is `0x10`.
+function Re2EnemyApi:char_parts() end
 
----Mark the body burnt, for its draw.
----@param burnt boolean
-function Re2EnemyApi:set_burnt(burnt) end
+---`FUN_004c1620`'s reset of every part's `Poly_rgb` to `0x808080`.
+function Re2EnemyApi:reset_part_colours() end
 
 ---`FUN_00456780`: light a flame on a part, which the engine then carries with
 ---the part.
@@ -1136,6 +1145,18 @@ function Re2EnemyApi:sca_onto_edge(record, x, y, z) end
 ---@return integer under The higher of the floors a record starts from below and above it.
 function Re2EnemyApi:sca_hit(x, y, z, mask) end
 
+---`Sca_ck_hit` of a point grown by `radius`, without the room's objects: its
+---return, and `DWORD_00695E74`, the lowest top rising past the point (0
+---when none does).
+---@param x integer
+---@param y integer
+---@param z integer
+---@param radius integer
+---@param mask integer
+---@return integer ground The highest top at or under the point (0 for none).
+---@return integer ceiling
+function Re2EnemyApi:sca_ck_hit(x, y, z, radius, mask) end
+
 ---`Sca_ck_hit` of a point grown by `radius`, without the room's objects:
 ---whether a record holds it or starts above it.
 ---@param x integer
@@ -1202,6 +1223,13 @@ function Re2EnemyApi:init_super() end
 ---@param y integer
 ---@param z integer
 function Re2EnemyApi:set_super(x, y, z) end
+
+---Hang the body on a part of the player's (`pSuper` set to that part's
+---`Workm`, as a cockroach on the player does): its position and `Cdir` are
+---then local to the part, and it draws and turns the player's head from
+---there. `nil` puts it back on its own surface.
+---@param part integer|nil
+function Re2EnemyApi:set_super_part(part) end
 
 ---`Rot_vector_super`: a vector turned by an angle on the surface the body is
 ---on.
@@ -1461,6 +1489,11 @@ function Re2EnemyApi:pl_speed() end
 ---@return boolean mashed
 function Re2EnemyApi:gacha() end
 
+---`Key_trg` (`0x9885FE`): every key that went down this tick, as `Pad_set`
+---maps them.
+---@return integer keys
+function Re2EnemyApi:key_trg() end
+
 -- # Acting on the player
 
 ---Set the player's life.
@@ -1598,7 +1631,9 @@ function Re2EnemyApi:throw_part(part, along, up, gravity) end
 ---@param speed? integer Defaults to 800.
 ---@param up? integer Defaults to 0.
 ---@param gravity? integer Defaults to 10.
-function Re2EnemyApi:blow_part(part, dir, speed, up, gravity) end
+---@param rgb? integer The part's `Poly_rgb` from then on (`FUN_00461f40` and the crawler's stomp make it `0x101040`, `FUN_00458d40`'s head `0x101030`); left as it is when omitted.
+---@param slowing? integer What the speed loses each tick. Defaults to 100.
+function Re2EnemyApi:blow_part(part, dir, speed, up, gravity, rgb, slowing) end
 
 ---`FUN_00461f90`: fling a part off the other way from `dir`, coming to rest
 ---turned `rest`.
@@ -1659,7 +1694,26 @@ function Re2EnemyApi:spawn(id, kind, vars) end
 ---@param z integer
 ---@param angle integer Its facing.
 ---@param vars table<integer, integer> More spare fields, `{ [index] = value }`.
-function Re2EnemyApi:place_spawn(x, y, z, angle, vars) end
+---@param run? boolean Whether it runs at once. Defaults to `true`; `false` leaves it to the slot's turn in the tick.
+function Re2EnemyApi:place_spawn(x, y, z, angle, vars, run) end
+
+---`*(undefined4 *)enemy_work[slot] = 0`: take the work in a slot out of play
+---at once, so that `e:spawn` of its id finds it dead and gives it back
+---(the G adult's first spit takes the room's template this way). It counts
+---out of the room's enemies; `e:spawn` counts it back in.
+---@param slot integer
+function Re2EnemyApi:free_work(slot) end
+
+---`ApplyMatrixSV` of a point on the parent's part, on the matrix the last
+---draw left it (without the part's place, which `e:parent_part` gives).
+---@param part integer
+---@param x integer
+---@param y integer
+---@param z integer
+---@return integer x Each 16-bit.
+---@return integer y
+---@return integer z
+function Re2EnemyApi:parent_apply(part, x, y, z) end
 
 ---Whether this body has a parent (a vine's ivy, or the body `e:set_parent`
 ---named), as the parent stood after its own run this tick.
@@ -1886,3 +1940,16 @@ function Re2EnemyApi:effect(kind, row, size, dir, part, x, y, z) end
 ---@param y integer
 ---@param z integer
 function Re2EnemyApi:call_effect(kind, row, size, dir, x, y, z) end
+
+---`Esp_call` on the player's part `part` as the last draw left it, at the
+---point (x, y, z) on it. The effect keeps the part, as the original's keeps
+---a pointer to its `Workm`. Nothing happens without a pose of the part.
+---@param kind integer
+---@param row integer
+---@param size integer
+---@param dir integer
+---@param part integer
+---@param x integer
+---@param y integer
+---@param z integer
+function Re2EnemyApi:player_part_effect(kind, row, size, dir, part, x, y, z) end

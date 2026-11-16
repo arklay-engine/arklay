@@ -183,6 +183,14 @@ const ITEM_CLIP: u8 = 0x0B;
 const ITEM_OIL: u8 = 0x32;
 /// Last door-key item id for the depletion rule.
 const ITEM_DESK_KEY: u8 = 0x3D;
+
+/// A door key: the ids between the oil and the desk key, the range
+/// `use_room_action_item` keeps as an empty stack at zero and main-menu mode 1
+/// turns into mode 6's discard prompt for.
+const fn is_door_key(item: u8) -> bool {
+    item > ITEM_OIL && item < ITEM_DESK_KEY
+}
+
 /// The radio is not an inventory item; taking it raises a scenario flag.
 const ITEM_COMM_RADIO: u8 = 0x4D;
 /// First map item id; ids through [`ITEM_MAP_LAST`] use the map pick-up.
@@ -213,6 +221,9 @@ pub const MESSAGE_TAKE_PROMPT: u8 = 0xC0;
 pub const MESSAGE_INVENTORY_FULL: u8 = 0xC2;
 /// Global 0xC6: the document pick-up "has been filed" line.
 pub const MESSAGE_FILE_FILED: u8 = 0xC6;
+/// Global 0xC4: "Will you put down the {item}?". The yes branch carries the
+/// use action (post-action 1, `use_room_action_item`).
+pub const MESSAGE_PUT_DOWN: u8 = 0xC4;
 /// Global 0xC7: "This key is useless now. Discard?". The yes branch carries
 /// the discard action (post-action 2).
 pub const MESSAGE_DISCARD_KEY: u8 = 0xC7;
@@ -1097,6 +1108,14 @@ fn re2_ammo(weapon: u8) -> (u8, u8) {
         5 | 6 => (0x16, 8),
         7 => (0x15, 5),
         8 => (0x15, 7),
+        // `Item_data_tbl`: the Colt holds six, the Beretta fifteen.
+        crate::player2::COLT => (RE2_HANDGUN_BULLETS, 6),
+        crate::player2::BERETTA => (RE2_HANDGUN_BULLETS, 15),
+        // The spark shot's 0x1C, the machine gun bullets and the fuel, a
+        // hundred a load.
+        crate::player2::SPARK => (0x1C, 100),
+        crate::player2::SMG => (0x1B, 100),
+        crate::player2::FLAMETHROWER => (0x17, 100),
         _ => (RE2_HANDGUN_BULLETS, 18),
     }
 }
@@ -1419,6 +1438,13 @@ pub enum ItemViewKind {
     /// 0xC7's discard prompt. The original's mode 1 becomes mode 6 for every
     /// key and drops into the status screen once the viewer closes.
     DiscardKey,
+    /// The same flag raised by a room script over a selected item that is not
+    /// a door key (116's shotgun rack, 308's flamethrower hook, 30B and 30D):
+    /// mode 1 stays mode 1, the selected item's model intro, then global
+    /// 0xC4's put-down prompt, whose Yes runs post-action 1
+    /// ([`GameState::use_selected_item`]) and records the used item for the
+    /// script's `testitem`. The menu closes back to the game afterwards.
+    PutDown,
 }
 
 /// A pending item-viewer request read from the main-state flags.
@@ -1468,6 +1494,7 @@ pub mod item_get2;
 pub mod itembox2;
 pub mod objects2;
 pub mod pad_repeat;
+pub mod pl_change2;
 pub mod save2;
 pub mod status2;
 pub use entity::{Entity, JointBlood, JointTrail, JointsBeforeHit, LookTargetRecord};
@@ -3343,6 +3370,9 @@ pub struct GameState {
     /// `fg_status`'s `0x8000`, so the status screen opens on the next tick
     /// as START's does.
     pub re2_status_request: bool,
+    /// The status screen in its script map mode (`Sce_84`), from the
+    /// request until the screen closes.
+    pub re2_script_map: Option<status2::script_map::ScriptMap>,
     /// The `pG + 0x82B0` hook while a key turn armed `Key_lost`. It is not
     /// saved: it is only armed while a door message holds the game.
     pub re2_key_lost: Option<door2::KeyLost>,
@@ -3526,6 +3556,11 @@ pub struct GameState {
     pub last_used_item: Option<u8>,
     /// The item currently equipped.
     pub equipped: Option<u8>,
+    /// The inventory slot the equipped item came from (the original's
+    /// `DWORD_00691f68` low byte). EQUIP sets it to the cursor's slot, so a
+    /// second copy of the weapon in hand fires from its own rounds; every
+    /// other way of equipping takes the first stack holding the item.
+    pub equipped_slot: Option<usize>,
     /// The reference's `g_playerEntity.equippedWeaponId`: the *weapon* the aim
     /// and fire machine uses. `SetupCharacterData` derives it from the
     /// equipped item (`g_itemboxSlots[item + 47].Id`), so it normally tracks
@@ -3864,6 +3899,7 @@ impl Default for GameState {
             re2_box_bytes: itembox2::BoxPage::default(),
             re2_box_open: false,
             re2_status_request: false,
+            re2_script_map: None,
             re2_key_lost: None,
             re2_no_enemies: None,
             re2_enemy_dest: Vec::new(),
@@ -3915,6 +3951,7 @@ impl Default for GameState {
             last_picked_item: None,
             last_used_item: None,
             equipped: None,
+            equipped_slot: None,
             // The shipped bio card equips the Beretta (`g_EquippedItemId` 2),
             // so `SetupCharacterData` leaves weapon id 2 in place.
             equipped_weapon_id: 2,
@@ -4028,6 +4065,8 @@ impl GameState {
         state.set_camera_cut(0);
         state.state_bytes[STATE_BYTE_CHARACTER as usize] = id.player_flag & 1;
         state.sync_variant_flags();
+        // RE2's `pPl.Id` and `scd_var_next_pld`: the scenario's character.
+        state.set_re2_player_id(id.player_flag & 1);
         // `GameInit` parks the special-room-light state at -1 so no overlay
         // draws until a script arms one.
         state.state_words[1] = 0xFFFF;
@@ -5619,7 +5658,8 @@ impl GameState {
     /// The number of inventory slots the current character has of its own.
     pub fn character_inventory_capacity(&self) -> usize {
         if self.is_re2_room {
-            return INVENTORY_SLOTS_JILL;
+            // `inventory_size`, which `St_chenge_pl` swaps.
+            return usize::from(self.re2.inventory_size);
         }
         let character = usize::from(self.id.player_flag & 1);
         if let Some(slots) = self.pack_inventory_slots[character] {
@@ -5722,6 +5762,7 @@ impl GameState {
     /// Equip (or clear) an item.
     pub fn set_equipped(&mut self, item: Option<u8>) {
         self.equipped = item;
+        self.equipped_slot = item.and_then(|item| self.inventory.iter().position(|s| s.id == item));
         // `SetupCharacterData`'s derivation: the weapon id is the equipped
         // item's own id (the item-slot table maps every weapon to itself).
         self.equipped_weapon_id = item.unwrap_or(0);
@@ -5731,6 +5772,18 @@ impl GameState {
         if self.debug.infinite_ammo == InfiniteAmmo::Infinite {
             crate::weapons::refill_clip(self);
         }
+    }
+
+    /// The inventory index of the stack holding the equipped `weapon`: the
+    /// equipped slot when it holds that weapon, else the first stack that does.
+    pub fn weapon_slot(&self, weapon: u8) -> Option<usize> {
+        self.equipped_slot
+            .filter(|&slot| {
+                self.inventory
+                    .get(slot)
+                    .is_some_and(|stack| stack.id == weapon)
+            })
+            .or_else(|| self.inventory.iter().position(|stack| stack.id == weapon))
     }
 
     /// Whether at least one `item` is held.
@@ -7431,7 +7484,8 @@ impl GameState {
     ///
     /// The original tests `MSF_PICKUP_SCREEN` before the mode scan, then
     /// priority-encodes modes 4 (got item), 3 (item view) and, last, 1 (the
-    /// depleted key). `None` when no viewer is pending.
+    /// put-down prompt, which becomes mode 6's discard prompt for a door key
+    /// or when no item is selected). `None` when no viewer is pending.
     pub fn item_view_request(&self) -> Option<ItemViewRequest> {
         let request = if self.flags[5].bit(MSF_PICKUP_SCREEN) {
             ItemViewRequest {
@@ -7449,9 +7503,14 @@ impl GameState {
                 kind: ItemViewKind::Take,
             }
         } else if self.flags[5].bit(MSF_MENU_KEY_DEPLETED) {
+            let put_down = self.selected_item.is_some_and(|item| !is_door_key(item));
             return Some(ItemViewRequest {
                 slot: 0,
-                kind: ItemViewKind::DiscardKey,
+                kind: if put_down {
+                    ItemViewKind::PutDown
+                } else {
+                    ItemViewKind::DiscardKey
+                },
             });
         } else {
             return None;
@@ -7795,7 +7854,7 @@ impl GameState {
             return false;
         }
         // The original's masked character test turns id 3 (Rebecca) away.
-        if self.id.player_flag & 3 == 3 {
+        if self.player_character_masked() == 3 {
             self.show_message(MESSAGE_DESK_CHARACTER, 0xFF);
             self.record_interaction(
                 slot,
@@ -7834,6 +7893,20 @@ impl GameState {
         self.desk.state = 35;
         self.record_interaction(slot, RoomActionKind::Desk, None);
         true
+    }
+
+    /// The player's character id masked with 3, the value the original's
+    /// door and desk character tests compare against 3 (Rebecca).
+    ///
+    /// This reads the character model byte (`B_CHARACTER_MODEL`), not
+    /// `RoomId::player_flag` (the RDT's Chris/Jill digit, only ever 0 or 1)
+    /// and not `entities[0].id` (`apply_player_choice` keeps it in step for
+    /// the debug character swap, but a script's `setb(B_CHARACTER_MODEL, 3)`
+    /// as in 40C's Plant 42 scene moves only the model byte). The mask keeps
+    /// the original's `& 3`: `RoomInit` folds the wardrobe's model ids 8 and 9
+    /// back to 0 and 1, and they mask to the same.
+    fn player_character_masked(&self) -> u8 {
+        self.state_bytes[usize::from(STATE_BYTE_CHARACTER_MODEL)] & 3
     }
 
     /// Per-frame `check_desk_state`: the locked key prompt, its yes/no answer,
@@ -8160,12 +8233,12 @@ impl GameState {
 
                         // Another object in the way vetoes the whole push.
                         let mut vetoed = false;
-                        for other_index in 0..slot_count {
-                            if other_index == index || !self.objects.records[other_index].active() {
+                        let others = self.objects.records.iter().take(slot_count);
+                        for (other_index, mover) in others.enumerate() {
+                            if other_index == index || !mover.active() {
                                 continue;
                             }
-                            let mover = self.objects.records[other_index];
-                            if objects::chk_obj_slide(&mover, &mut record) {
+                            if objects::chk_obj_slide(mover, &mut record) {
                                 record.push_counter = 10;
                                 vetoed = true;
                                 break;
@@ -8202,13 +8275,14 @@ impl GameState {
                 if i32::from(record.committed[0]) != record.pos[0]
                     || i32::from(record.committed[2]) != record.pos[2]
                 {
-                    for other_index in 0..slot_count {
-                        if other_index == index || !self.objects.records[other_index].active() {
+                    let others = self.objects.records.iter_mut().take(slot_count);
+                    for (other_index, other) in others.enumerate() {
+                        if other_index == index || !other.active() {
                             continue;
                         }
-                        let mut other = self.objects.records[other_index];
-                        if objects::chk_obj_slide(&record, &mut other) {
-                            self.objects.records[other_index] = other;
+                        let mut moved = *other;
+                        if objects::chk_obj_slide(&record, &mut moved) {
+                            *other = moved;
                         }
                     }
                     record.committed[0] = record.pos[0] as i16;
@@ -8576,10 +8650,10 @@ impl GameState {
             }
             return self.try_re2_door(&door);
         }
-        // The character-restriction test is inert for the two PC characters:
-        // it compares the player id against 3, and ids 0/1 never match. Keep
-        // the original's exact test so a record with bit 0x40 behaves the same.
-        if door.lock & 0x40 != 0 && self.id.player_flag & 3 == 3 {
+        // The character-restriction test compares the player's character id,
+        // masked with 3, against 3: Chris and Jill always pass, Rebecca (the
+        // player during the Plant 42 scene) is turned away.
+        if door.lock & 0x40 != 0 && self.player_character_masked() == 3 {
             self.show_message(MESSAGE_WRONG_CHARACTER, 0xFF);
             return false;
         }
@@ -9029,6 +9103,9 @@ impl GameState {
             // `Status`'s start, on the window's sixth tick: `Pad_rep_set(0xF01C,
             // 0x60A)`, for every pick-up.
             self.pad_repeat.set(pad_repeat::STATUS_SETTING);
+            // Game mode's step 5 zeroes `fg_stop` there, which a drawer's
+            // open raised.
+            self.re2_drawer_window_stop(true);
         }
         let next = |phase| (phase, 0);
         let (phase, ticks) = match get.phase {
@@ -9121,6 +9198,8 @@ impl GameState {
                 // whose `Pl_init` hands the player back standing, from a
                 // crouch too (`0x4C000D`).
                 crate::player2::pl_init(&mut self.re2.player);
+                // The return puts back the `fg_stop` a drawer's open saved.
+                self.re2_drawer_window_stop(false);
                 // Mode 5 leaves `fg_stop` at `0xEF000000`, input bit
                 // included, for the next tick's `Pad_set`, as a door does: a
                 // direction held through the close moves the player a tick
@@ -9334,7 +9413,7 @@ impl GameState {
         mut action: RoomAction,
         slot: Option<crate::scd2::host::ItemGetSlot>,
     ) {
-        use crate::scd2::host::{ITEM_BANK, ItemGetSlot, MESSAGE_TAKEN};
+        use crate::scd2::host::{ItemGetSlot, MESSAGE_TAKEN};
         action.params[1] = crate::scd2::host::st_get_item_count(
             action.params[0],
             action.params[1],
@@ -9358,7 +9437,8 @@ impl GameState {
         // `WORD_0098eaea`: the area's first data word, which the next
         // pass's `Sce_work_clr` sets back to 0xFFFF.
         self.re2.vars[crate::scd2::host::VAR_TAKEN_ITEM] = u16::from(item);
-        self.re2.set_flag(ITEM_BANK, flag, 1);
+        self.re2
+            .set_flag(crate::scd2::host::item_bank(self.id.stage), flag, 1);
         // `St_get_item`: its object goes, and the twinkle with it.
         let model = usize::from(action.params[3]);
         if model < 0x20
@@ -9379,24 +9459,26 @@ impl GameState {
     }
 
     /// `St_get_file`'s sub 6 once message 10 is down: a file has no stack
-    /// and no count, only the area's flag (bank 8, the same gap as an
-    /// item's), its object (any index but 0xFF) and the area itself. The
-    /// area's twinkle (an action byte with bit 7, `Esp_kill`) isn't
-    /// modelled. Its case 6 writes the area's first data word to
+    /// and no count, only the area's flag (`fg_item`, or `fg_item_2` from
+    /// stage 4), its object (any index but 0xFF), its twinkle and the area
+    /// itself. Its case 6 writes the area's first data word to
     /// `WORD_0098eaea` (variable 3), as the item path does.
     fn take_re2_file(&mut self, action: RoomAction) {
-        use crate::scd2::host::ITEM_BANK;
         let [_, _, flag, model, flags, ..] = action.params;
-        if flags & 0x80 != 0 {
-            crate::warning!("warning: the file area's twinkle (Esp_kill) isn't killed");
-        }
         self.re2.vars[crate::scd2::host::VAR_TAKEN_ITEM] = u16::from(action.params[0]);
-        self.re2.set_flag(ITEM_BANK, flag, 1);
+        self.re2
+            .set_flag(crate::scd2::host::item_bank(self.id.stage), flag, 1);
         if model != 0xFF
             && let Some(record) = self.objects.record_mut(usize::from(model))
         {
             record.be_flg = 0;
             record.flag = 0;
+        }
+        // `Esp_kill(5, size * 8 + 7, object)`: outside the object test, and
+        // with no `.max(1)` on the size, unlike `St_get_item`'s.
+        if flags & 0x80 != 0 {
+            let row = ((flags >> 5) & 3) * 8 + 7;
+            self.re2.effects.kill_on_object(5, row, model);
         }
         if let Some(entry) = self.room_actions[usize::from(action.slot)].as_mut() {
             entry.sce = crate::scd2::host::SCE_AUTO;
@@ -9439,22 +9521,50 @@ impl GameState {
     /// The player's weapon for [`crate::player2::player_move`].
     pub fn re2_weapon(&self) -> crate::player2::Weapon {
         let id = self.equipped_weapon_id;
+        // The rounds in the equipped slot (`0x4F8620` equips by slot).
+        let rounds = self
+            .weapon_slot(id)
+            .map_or(0, |slot| u32::from(self.inventory[slot].quantity));
         crate::player2::Weapon {
             id,
-            loaded: self.item_count(id) != 0,
-            spare: self.item_count(re2_ammo(id).0) != 0,
+            // `Tama_ck_i` wants more than two in the spark shot, so a shot
+            // that strikes has its three.
+            // The gatling gun's flag in `DWORD_0098e9c4`, which `Tama_ck_i`
+            // reads before its count, is up once the gatling bonus is
+            // unlocked (`DWORD_00995b48 & 0x40`, the branch of
+            // `FUN_004b73c0` that also puts the gun in the box) or the
+            // status screen's toggle raises it; `Stage_init_item` raises it
+            // but `FUN_004b73c0` then clears it (`DWORD_0099c8a8 & 1`). A
+            // player who holds the gun has it, so it's taken as up.
+            loaded: if id == crate::player2::SPARK {
+                rounds > 2
+            } else if id == crate::player2::GATLING {
+                true
+            } else {
+                rounds != 0
+            },
+            // `Tama_reload_ck` never reloads the rocket launcher.
+            spare: id != crate::player2::ROCKET && self.item_count(re2_ammo(id).0) != 0,
+            rounds: rounds.min(u32::from(u8::MAX)) as u8,
         }
     }
 
     /// `Tama_decrease_i` and `Tama_reload`, for what the player's tick did.
     pub fn re2_settle_ammo(&mut self) {
         let weapon = self.equipped_weapon_id;
+        let held = self.weapon_slot(weapon);
         if std::mem::take(&mut self.re2.player.fired)
-            && let Some(slot) = self.inventory.iter_mut().find(|slot| slot.id == weapon)
+            && let Some(slot) = held.and_then(|index| self.inventory.get_mut(index))
         {
             // `FUN_004d58c0`: the bowgun's shot takes three.
             let taken = if weapon == crate::bow2::BOW { 3 } else { 1 };
             slot.quantity = slot.quantity.saturating_sub(taken);
+        }
+        let spent = std::mem::take(&mut self.re2.player.spent);
+        if spent != 0
+            && let Some(slot) = held.and_then(|index| self.inventory.get_mut(index))
+        {
+            slot.quantity = slot.quantity.saturating_sub(spent);
         }
         if std::mem::take(&mut self.re2.player.reloaded) {
             let (ammo, magazine) = re2_ammo(weapon);
@@ -9467,7 +9577,10 @@ impl GameState {
             if spare.quantity == 0 {
                 self.inventory.remove(index);
             }
-            if let Some(slot) = self.inventory.iter_mut().find(|slot| slot.id == weapon) {
+            if let Some(slot) = self
+                .weapon_slot(weapon)
+                .and_then(|index| self.inventory.get_mut(index))
+            {
                 slot.quantity = slot.quantity.saturating_add(taken);
             }
         }
@@ -9798,7 +9911,7 @@ impl GameState {
         }
         self.inventory[index].quantity = quantity - 1;
         if quantity - 1 == 0 {
-            if item > ITEM_OIL && item < ITEM_DESK_KEY {
+            if is_door_key(item) {
                 self.apply_flag(5, MSF_MENU_KEY_DEPLETED, 0);
                 return;
             }
@@ -10085,6 +10198,13 @@ impl TweenFields {
 }
 
 /// Build the generic action parameter block: handler, flags and three words.
+/// Whether a room action entry's +2 word (bytes 2..4 of its params) is
+/// nonzero: the gate `set_key_flag`/`set_room_event_flag` test to route the
+/// press through the 0x0c reach animation.
+fn params_reach_gate(params: &[u8; 8]) -> bool {
+    params[2] != 0 || params[3] != 0
+}
+
 fn action_params(handler: u8, flags: u8, operands: &[Operand], word_start: usize) -> [u8; 8] {
     let mut params = [0u8; 8];
     params[0] = handler;
@@ -10395,7 +10515,8 @@ impl ScdHost for ScdGameHost<'_> {
                     params,
                     item_data: None,
                     room_items_flag: 0xFF,
-                    reach_animation: false,
+                    // The first data word is the entry's +2 gating word.
+                    reach_animation: params_reach_gate(&params),
                 };
                 self.store_action(action);
                 StepResult::Continue
@@ -10424,6 +10545,10 @@ impl ScdHost for ScdGameHost<'_> {
                     action.flags = flags;
                     action.kind = RoomActionKind::from_sce(handler);
                     action.params = action_params(handler, flags, operands, 3);
+                    // The rewrite includes the +2 gating word, so a reset
+                    // can drop (or add) an item's reach animation: room
+                    // 10D's statue items reset it to 0 once the statue turns.
+                    action.reach_animation = params_reach_gate(&action.params);
                 }
                 StepResult::Continue
             }
@@ -11323,6 +11448,124 @@ mod tests {
         assert_eq!(game.item_count(3), 20);
         assert_eq!(game.inventory.len(), 1, "the empty stack is gone");
         assert!(!game.re2_weapon().spare);
+    }
+
+    /// `Tama_reload` with `Item_data_tbl`'s loads: six for the Colt and
+    /// fifteen for the Beretta, both of the handgun bullets.
+    #[test]
+    fn a_re2_colt_loads_six_and_a_beretta_fifteen_handgun_rounds() {
+        for (weapon, load) in [(crate::player2::COLT, 6), (crate::player2::BERETTA, 15)] {
+            let mut game = GameState {
+                equipped_weapon_id: weapon,
+                inventory: vec![
+                    InventoryItem {
+                        id: weapon,
+                        quantity: 0,
+                    },
+                    InventoryItem {
+                        id: RE2_HANDGUN_BULLETS,
+                        quantity: 40,
+                    },
+                ],
+                ..Default::default()
+            };
+            assert!(game.re2_weapon().spare);
+            game.re2.player.reloaded = true;
+            game.re2_settle_ammo();
+            assert_eq!(game.item_count(weapon), load);
+            assert_eq!(game.item_count(RE2_HANDGUN_BULLETS), 40 - load);
+        }
+    }
+
+    /// `Item_data_tbl` and `Mix_null`: the sub-machine gun loads a hundred
+    /// machine gun bullets and the flamethrower a hundred of fuel, and the
+    /// rounds a burst spent come off the gun.
+    #[test]
+    fn a_re2_burst_spends_its_rounds_and_reloads_a_hundred() {
+        for (weapon, ammo) in [
+            (crate::player2::SMG, 0x1B),
+            (crate::player2::FLAMETHROWER, 0x17),
+        ] {
+            assert_eq!(re2_ammo(weapon), (ammo, 100));
+            let mut game = GameState {
+                equipped_weapon_id: weapon,
+                inventory: vec![
+                    InventoryItem {
+                        id: weapon,
+                        quantity: 2,
+                    },
+                    InventoryItem {
+                        id: ammo,
+                        quantity: 250,
+                    },
+                ],
+                ..Default::default()
+            };
+            assert_eq!(game.re2_weapon().rounds, 2);
+            game.re2.player.spent = 2;
+            game.re2_settle_ammo();
+            assert_eq!(game.item_count(weapon), 0);
+            assert_eq!(game.re2.player.spent, 0);
+            game.re2.player.reloaded = true;
+            game.re2_settle_ammo();
+            assert_eq!(game.item_count(weapon), 100);
+            assert_eq!(game.item_count(ammo), 150);
+        }
+    }
+
+    /// `Mix_null` gives the spark shot item 0x1C to load, a hundred at a time
+    /// (`Item_data_tbl`), and `Tama_ck_i` wants more than two rounds in it:
+    /// with one or two the hold reloads, or clicks with none to load.
+    #[test]
+    fn a_re2_spark_shot_fires_on_three_and_loads_its_own() {
+        let spark = crate::player2::SPARK;
+        assert_eq!(re2_ammo(spark), (0x1C, 100));
+        for (rounds, loaded) in [(1, false), (2, false), (3, true), (0xFF, true)] {
+            let mut game = GameState {
+                equipped_weapon_id: spark,
+                inventory: vec![InventoryItem {
+                    id: spark,
+                    quantity: rounds,
+                }],
+                ..Default::default()
+            };
+            let weapon = game.re2_weapon();
+            assert_eq!(weapon.loaded, loaded, "{rounds} rounds");
+            assert!(!weapon.spare, "no 0x1C, nothing to load");
+            game.inventory.push(InventoryItem {
+                id: 0x1C,
+                quantity: 150,
+            });
+            assert!(game.re2_weapon().spare);
+        }
+    }
+
+    /// `Tama_reload_ck` never reloads the rocket launcher, whatever the
+    /// inventory has; its shot takes one, from four to none.
+    #[test]
+    fn a_re2_rocket_launcher_never_reloads_and_fires_one_a_shot() {
+        let rocket = crate::player2::ROCKET;
+        let mut game = GameState {
+            equipped_weapon_id: rocket,
+            inventory: vec![
+                InventoryItem {
+                    id: rocket,
+                    quantity: 1,
+                },
+                InventoryItem {
+                    id: RE2_HANDGUN_BULLETS,
+                    quantity: 30,
+                },
+            ],
+            ..Default::default()
+        };
+        let weapon = game.re2_weapon();
+        assert!(weapon.loaded && !weapon.spare);
+        game.re2.player.fired = true;
+        game.re2_settle_ammo();
+        assert_eq!(game.item_count(rocket), 0);
+        let weapon = game.re2_weapon();
+        assert!(!weapon.loaded && !weapon.spare);
     }
 
     #[test]
@@ -15184,6 +15427,37 @@ mod tests {
     }
 
     #[test]
+    fn aot_reset_rewrites_the_reach_gate() {
+        // Room 10D: the statue's items are set with the reach gate, then
+        // reset to an item with a zero +2 word once the statue turns, so the
+        // original opens the viewer without the reach animation.
+        let room = RoomState {
+            item_count: 1,
+            ..RoomState::default()
+        };
+        let mut state = GameState::new(RoomId::parse("1000").unwrap(), &room);
+        state.apply_flag(7, 22, 0);
+        {
+            let mut host = ScdGameHost::new(&mut state);
+            host.on_item(
+                op(0x18),
+                &operands(&[
+                    1, 4140, 7730, 1800, 1800, 0x2F, 3, 0, 255, 5040, -910, 8630, 0, 22, 0x81, 1,
+                ]),
+            );
+            assert!(host.state().room_actions[1].unwrap().reach_animation);
+            host.on_room_action(op(0x12), &operands(&[1, 4, 0x81, 0, 1, 0]));
+            assert!(!host.state().room_actions[1].unwrap().reach_animation);
+            // A nonzero first word arms it again.
+            host.on_room_action(op(0x12), &operands(&[1, 4, 0x81, 1, 0, 0]));
+            assert!(host.state().room_actions[1].unwrap().reach_animation);
+            // `aot_set` writes the same word.
+            host.on_room_action(op(0x0D), &operands(&[2, 0, 0, 100, 100, 4, 0x81, 1, 0, 0]));
+            assert!(host.state().room_actions[2].unwrap().reach_animation);
+        }
+    }
+
+    #[test]
     fn a_gated_item_action_queues_the_reach_instead_of_the_viewer() {
         let mut state = item_game("1000", 1);
         let mut action = item_action(3, 0x33, 1, [0, 0, 10, 10]);
@@ -15736,7 +16010,7 @@ mod tests {
     fn desk_turns_away_the_masked_character_id() {
         let mut state = desk_game();
         state.add_item(ITEM_DESK_KEY, 1);
-        state.id.player_flag = 3;
+        state.state_bytes[usize::from(STATE_BYTE_CHARACTER_MODEL)] = 3;
         assert!(state.check_desk(0));
         assert_eq!(state.message.id, Some(MESSAGE_DESK_CHARACTER));
         assert_eq!(state.desk.state, 0);
@@ -15744,8 +16018,9 @@ mod tests {
 
         // The two PC characters are not turned away: with the key the prompt
         // arms for both.
-        for player_flag in [0, 1] {
-            state.id.player_flag = player_flag;
+        for player_flag in [0u8, 1, 8, 9] {
+            state.id.player_flag = player_flag & 1;
+            state.state_bytes[usize::from(STATE_BYTE_CHARACTER_MODEL)] = player_flag;
             state.message = MessageWindow::default();
             assert!(state.check_desk(0), "player {player_flag}");
             assert_eq!(state.desk.state, 1, "player {player_flag}");
@@ -16281,6 +16556,51 @@ mod tests {
         // A missing action clears the request instead of latching the flag.
         state.room_actions[1] = None;
         assert_eq!(state.item_view_request(), None);
+    }
+
+    /// `MSF_MENU_KEY_DEPLETED` is the original's main-menu mode 1: over a
+    /// selected door key (or no selection) it becomes mode 6's discard prompt,
+    /// over anything else it stays the put-down prompt. 116's rack and 308's
+    /// hook raise it over the shotgun and the flamethrower.
+    #[test]
+    fn menu_mode_one_puts_down_a_weapon_and_discards_a_key() {
+        let depleted = |selected: Option<u8>| {
+            let mut state = item_game("1000", 1);
+            state.select_item(selected);
+            state.apply_flag(5, MSF_MENU_KEY_DEPLETED, 0);
+            state.item_view_request().map(|request| request.kind)
+        };
+        // The shotgun (0x03) and the flamethrower (0x06).
+        assert_eq!(depleted(Some(0x03)), Some(ItemViewKind::PutDown));
+        assert_eq!(depleted(Some(0x06)), Some(ItemViewKind::PutDown));
+        assert_eq!(
+            depleted(Some(ITEM_SWORD_KEY)),
+            Some(ItemViewKind::DiscardKey)
+        );
+        assert_eq!(
+            depleted(Some(ITEM_DESK_KEY - 1)),
+            Some(ItemViewKind::DiscardKey)
+        );
+        assert_eq!(depleted(Some(ITEM_DESK_KEY)), Some(ItemViewKind::PutDown));
+        assert_eq!(depleted(None), Some(ItemViewKind::DiscardKey));
+    }
+
+    /// The put-down prompt's Yes (global 0xC4, post-action 1) takes a held
+    /// weapon out of the inventory, unequips it and records it as the used
+    /// item, which the room script's `testitem` reads.
+    #[test]
+    fn the_put_down_post_action_uses_the_selected_weapon() {
+        let mut state = game();
+        let room = room_with_messages(&[&[0x0C, 0x08, 0x00, 0x0A, 0x01]]);
+        state.add_item(0x03, 7);
+        state.set_equipped(Some(0x03));
+        state.select_item(Some(0x03));
+        state.apply_flag(5, MSF_MENU_KEY_DEPLETED, 0);
+        state.show_message(0, 0);
+        confirm_yes_no(&mut state, &room);
+        assert!(!state.has_item(0x03), "the shotgun is on the rack");
+        assert_eq!(state.equipped, None);
+        assert_eq!(state.state_bytes[usize::from(STATE_BYTE_USED_ITEM)], 0x03);
     }
 
     #[test]
@@ -16877,31 +17197,37 @@ mod tests {
     #[test]
     fn unlocked_door_with_a_character_restriction() {
         // Lock byte 0x40: bit 7 clear, so the door is not locked. The
-        // original's character test compares `id & 3` against 3, which is
-        // never true for the PC characters, so the restriction is inert.
+        // original's character test compares the character id masked with 3
+        // against 3: Chris and Jill pass, Rebecca (model byte 3) is refused.
         let mut state = game();
         let restricted = door(1, 0x40);
         state.room_actions[0] = Some(door_action(restricted));
         state.doors[0] = Some(restricted);
+        let model = usize::from(STATE_BYTE_CHARACTER_MODEL);
 
-        // Jill (player flag 1) walks through: 0x40 does not bar her.
-        state.interact([-550, 0, 50], 0, true);
-        assert!(state.transition.is_some());
-        assert_ne!(state.message.id, Some(0xD6));
+        // Chris (0), Jill (1) and the wardrobe's model ids (8, 9, which mask
+        // to 0 and 1) walk through: 0x40 does not bar them.
+        for (player_flag, byte) in [(1, 1), (0, 0), (0, 8), (1, 9)] {
+            state.id.player_flag = player_flag;
+            state.state_bytes[model] = byte;
+            state.transition = None;
+            state.message = MessageWindow::default();
+            state.interact([-550, 0, 50], 0, true);
+            assert!(state.transition.is_some(), "model {byte}");
+            assert_ne!(state.message.id, Some(0xD6), "model {byte}");
+        }
 
-        // Chris walks through too.
-        state.id.player_flag = 0;
-        state.transition = None;
-        state.interact([-550, 0, 50], 0, true);
-        assert!(state.transition.is_some());
-
-        // The original's literal test still refuses id 3, keeping the branch
-        // reachable for non-PC records.
-        state.id.player_flag = 3;
-        state.transition = None;
-        state.interact([-550, 0, 50], 0, true);
-        assert!(state.transition.is_none());
-        assert_eq!(state.message.id, Some(0xD6));
+        // Rebecca is the player while the model byte is 3 (40C's Plant 42
+        // scene). The RDT's Chris/Jill digit stays 0 or 1 and does not matter.
+        for player_flag in [0, 1] {
+            state.id.player_flag = player_flag;
+            state.state_bytes[model] = 3;
+            state.transition = None;
+            state.message = MessageWindow::default();
+            state.interact([-550, 0, 50], 0, true);
+            assert!(state.transition.is_none());
+            assert_eq!(state.message.id, Some(0xD6));
+        }
     }
 
     #[test]

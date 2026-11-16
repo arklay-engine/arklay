@@ -641,8 +641,8 @@ pub fn yawn_advance(
     // Joint 2's world translation moves into `<<9` space; the rest of the
     // chain accumulates there and converts back at the very end.
     let joint2 = pose.world[2].t;
-    for axis in 0..3 {
-        pose.world[2].t[axis] = pose.world[2].t[axis].wrapping_shl(9);
+    for value in &mut pose.world[2].t {
+        *value = value.wrapping_shl(9);
     }
 
     // ---- joints 3..14 ----

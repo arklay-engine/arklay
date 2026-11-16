@@ -41,6 +41,7 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
         defines.insert(name.to_string(), i64::from(id));
     }
     let aots = aot_names(scripts);
+    let event_aots = event_aots(scripts);
     for (&index, name) in &aots {
         defines.insert(name.clone(), i64::from(index));
     }
@@ -72,6 +73,8 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
         names,
         room,
         aots,
+        event_aots,
+        events: scripts.events.len(),
         enemies,
         voices,
         voice_messages,
@@ -247,6 +250,21 @@ fn aot_names(scripts: &Scripts) -> BTreeMap<u8, String> {
         .map(|(index, kind)| (index, format!("AOT_{index:02X}_{kind}")))
         .collect()
 }
+
+/// The AOTs an `aot_delete` makes `SCE_EVENT`. `aot_delete` changes only
+/// the type and trigger flags, so the event it starts is the one the AOT's
+/// `aot_set` or `aot_reset` names while it is still `SCE_NONE`.
+fn event_aots(scripts: &Scripts) -> BTreeSet<u8> {
+    room_insns(scripts)
+        .filter(|insn| matches!(insn.decoded, Decoded::Command(op) if op.op == 0x13))
+        .filter(|insn| insn.bytes.get(2) == Some(&SCE_EVENT))
+        .filter_map(|insn| insn.bytes.get(1).copied())
+        .collect()
+}
+
+/// The `SCE_NONE` and `SCE_EVENT` room action types.
+const SCE_NONE: u8 = 0;
+const SCE_EVENT: u8 = 9;
 
 /// Every instruction of the room, in stream order.
 fn room_insns(scripts: &Scripts) -> impl Iterator<Item = &Insn> {
@@ -556,6 +574,10 @@ struct Ctx<'n> {
     names: &'n Names,
     /// The room's AOT index names, defined at the top of the script.
     aots: BTreeMap<u8, String>,
+    /// The AOTs an `aot_delete` turns into events ([`event_aots`]).
+    event_aots: BTreeSet<u8>,
+    /// The number of event scripts.
+    events: usize,
     /// The room's enemy slot names, defined at the top of the script.
     enemies: BTreeMap<u8, String>,
     /// The names of the voice lines the room plays, by id.
@@ -1306,6 +1328,15 @@ fn name_command_args(ctx: &Ctx, insn: &Insn, op: u8, args: &mut [String]) {
             (0x06, 2, _) | (0x08, 1, _) => state_value(ctx, at(0), value),
             // `cmpw` / `setw`: the state word.
             (0x07, 1, _) => engine::WORD.name(byte_value),
+            // The event an `SCE_NONE` AOT starts once an `aot_delete` makes
+            // it `SCE_EVENT` (an `SCE_EVENT` one's is named when rendered).
+            (0x0D, 9, _) | (0x12, 4, _)
+                if byte(if op == 0x0D { 10 } else { 2 }) == SCE_NONE
+                    && ctx.event_aots.contains(&byte(1))
+                    && usize::from(value) < ctx.events =>
+            {
+                Some(constants::event(value))
+            }
             // The AOT trigger flags.
             (0x0C, 16, _) | (0x0D, 6, _) | (0x12 | 0x13, 2, _) => engine::SAT.bits(byte_value),
             // The camera to cut to.

@@ -317,9 +317,18 @@ impl SaveFile {
         if let Some(re2) = &self.re2 {
             state.is_re2_room = true;
             state.max_health = crate::game::RE2_MAX_HEALTH;
+            // A save from before `player_index` was kept plays the
+            // scenario's character.
+            state.re2.pl_id = self.character & 1;
             if state.re2.load_save_bytes(re2).is_none() {
                 crate::warning!("warning: the save's RE2 state has the wrong size; ignoring it");
             }
+            // `Title_game_init`'s load: `pPl.Id` is `player_index`, the life
+            // comes from the stashed word (`Save_push` wrote it), and
+            // `Player_set` writes the id to `scd_var_next_pld`.
+            let id = state.re2.pl_id;
+            state.set_re2_player_id(id);
+            state.re2.pl_stash.life = self.health;
             // `Game_loop`'s step 1 starts a loaded game with `fg_stop` and
             // `0x6897C8` at 0 whatever the save holds, so a save taken under
             // a hold never loads frozen.
@@ -1092,6 +1101,44 @@ mod tests {
         file.apply_to(&mut restored);
         assert!(restored.is_re2_room);
         assert_eq!(*restored.re2.fg_stop_mut(), 0);
+    }
+
+    #[test]
+    fn new_game_and_load_set_var32_to_the_player() {
+        // A new game: Leon's scenario is id 0, Claire's id 1.
+        for (room, id) in [("1000", 0), ("1001", 1)] {
+            let state = GameState::new(RoomId::parse(room).unwrap(), &RoomState::default());
+            assert_eq!(state.re2.pl_id, id);
+            assert_eq!(
+                state.re2.vars[crate::game::pl_change2::VAR_NEXT_PLD],
+                u16::from(id)
+            );
+        }
+        // A save made as Ada: the load plays Ada, var 32 follows, and the
+        // life the save holds is the stashed life.
+        let mut state = GameState::new(RoomId::parse("30B0").unwrap(), &RoomState::default());
+        state.is_re2_room = true;
+        state.re2.pl_id = crate::game::pl_change2::ADA;
+        state.re2.vars[crate::game::pl_change2::VAR_NEXT_PLD] = 0;
+        state.entities[0].health = 120;
+        let file = SaveFile::from_state(&state);
+        let mut restored = GameState::default();
+        file.apply_to(&mut restored);
+        assert_eq!(restored.re2.pl_id, 0xE);
+        assert_eq!(
+            restored.re2.vars[crate::game::pl_change2::VAR_NEXT_PLD],
+            0xE
+        );
+        assert_eq!(restored.re2.pl_stash.life, 120);
+        // A save from before the id was kept: Claire's scenario is Claire.
+        let mut old = SaveFile::from_state(&state);
+        let bytes = old.re2.as_mut().unwrap();
+        bytes.truncate(bytes.len() - 2);
+        old.character = 1;
+        let mut restored = GameState::default();
+        old.apply_to(&mut restored);
+        assert_eq!(restored.re2.pl_id, 1);
+        assert_eq!(restored.re2.vars[crate::game::pl_change2::VAR_NEXT_PLD], 1);
     }
 
     #[test]

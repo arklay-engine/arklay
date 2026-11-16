@@ -202,9 +202,9 @@ fn drag_chain(pose: &mut YawnPose, joint: usize, pushed: [i32; 3], head: &Entity
         // Joint 3 carries the head: shift joints 0-2 and joint 4 with it,
         // then follow from joint 3 through joint 13 (the original's loop
         // stops one link short of the tail in this branch).
-        for back in 0..=2 {
-            pose.world[back].t[0] = pose.world[back].t[0].wrapping_sub(delta[0]);
-            pose.world[back].t[2] = pose.world[back].t[2].wrapping_sub(delta[2]);
+        for link in &mut pose.world[..=2] {
+            link.t[0] = link.t[0].wrapping_sub(delta[0]);
+            link.t[2] = link.t[2].wrapping_sub(delta[2]);
         }
         pose.world[4].t[0] = pose.world[4].t[0].wrapping_sub(delta[0]);
         pose.world[4].t[2] = pose.world[4].t[2].wrapping_sub(delta[2]);

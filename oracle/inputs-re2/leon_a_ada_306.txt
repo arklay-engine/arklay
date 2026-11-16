@@ -1,0 +1,152 @@
+# leon_a_ada_306: Ada from 305's door 4 into 306: down the ledges to the drained pit, box 1 pushed west and boxes 0 and 2 south into the row at z -26081, back up to the water switch (main_02, main_03: the water up, 4:146, and main_0A's row, 4:147), west across the floated boxes and north to the Club Key (8:119), and back to door 0 (to 305)
+361 up run right
+366 up run
+368 up run right
+369 up run
+377 up run right
+378 up run
+382 up run right
+387 up run
+427
+428 left
+435 action
+438
+488 up run left
+498 up run
+500
+501 left
+508
+513 action
+516
+586 up run right
+590 up run
+594 up run right
+595 up run
+597 up run left
+598 up run
+599 up
+614
+615 left
+618
+623 action
+626
+706 up run left
+743
+744 right
+757
+760 action
+763
+833 up
+903 action
+906
+987 right
+1001 up
+1044
+1054 up run right
+1081
+1082 left
+1088
+1091 action
+1094
+1164 up
+1224 action
+1227
+1308 left
+1335 up
+1475
+1483 up run right
+1611 up run left
+1647 up run
+1648 up run left
+1649 up run
+1650 up run left
+1651 up run
+1652 up run left
+1653
+1654 left
+1665 up
+1965
+1978 up run left
+2017 up run
+2033 up run right
+2046
+2047 right
+2053 up
+2063
+2064 action
+2067
+2157 up run
+2168
+2169 up
+2184 action
+2187
+2277 up run right
+2296 up run
+2297
+2298 up
+2308 action
+2311
+2401 up run right
+2518 up run
+2528 up run left
+2529 up run
+2530 up run left
+2535 up run
+2539 up run right
+2540
+2541 right
+2554 up
+2566
+2569 action
+2571
+2581 action
+2583
+2593 action
+2595
+2605 action
+2607
+2617 action
+2619
+2891 up run right
+2914 up run
+2916 up run right
+2917 up run
+2925 up run right
+2927
+2928 right
+2937 up run
+3057
+3058 right
+3072 up run
+3292
+3295 action
+3297
+3307 action
+3309
+3319 action
+3321
+3331 action
+3333
+3343 action
+3345
+3355 action
+3357
+3367 action
+3369
+3379 action
+3381
+3391 action
+3393
+3403 action
+3405
+3415 action
+3417
+3429 right
+3455 up run
+3615
+3616 left
+3629 up run
+3670
+3672 right
+3685 action
+3687
