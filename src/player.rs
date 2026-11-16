@@ -2749,6 +2749,66 @@ pub fn position_blocked(room: &RoomState, pos: [i32; 3], radius: i32, collision_
         })
 }
 
+/// The last point on the line from `from` toward `to` whose centre is
+/// outside every wall rectangle (the collision boxes themselves, not grown by
+/// a body's radius), sampled every 64 units, far finer than any shipped wall
+/// is thick: `to` when the whole line is clear. A `from` inside a wall proves
+/// nothing about the line, so `to` is kept.
+fn last_point_outside_walls(
+    room: &RoomState,
+    from: [i32; 3],
+    to: [i32; 3],
+    collision_flags: u8,
+) -> [i32; 3] {
+    const STEP: i32 = 64;
+    if position_blocked(room, from, 0, collision_flags) {
+        return to;
+    }
+    let (dx, dz) = (to[0] - from[0], to[2] - from[2]);
+    let steps = (dx.abs().max(dz.abs()) / STEP).max(1);
+    let mut clear = [from[0], to[1], from[2]];
+    for i in 1..=steps {
+        let point = [from[0] + dx * i / steps, to[1], from[2] + dz * i / steps];
+        if position_blocked(room, point, 0, collision_flags) {
+            return clear;
+        }
+        clear = point;
+    }
+    to
+}
+
+/// The room resolve of the player after `HandleEnemyPlayerCollisions`
+/// pushed them from `unpushed` to `pushed`, with `prev` the frame-start
+/// rollback anchor: [`resolve_room_collision`] of `pushed`, as the original
+/// does.
+///
+/// Port guard (`docs/internals/deviations/m16.md`): an entity's push has no
+/// cap, and the room resolve pushes a point past a wall box's middle out of
+/// the box's far face, so a push deep into a wall (Plant 42's head volume,
+/// radius 2000, sweeping over a player who stands at 40C's wall) set the
+/// player down outside the room with no way back. When the resolved point
+/// lies across a wall from `prev`, the push stops where its line meets the
+/// wall instead, and the resolve sets the player down at the near face. An
+/// RE 2 room's SCA collision resolves as before.
+pub(crate) fn resolve_pushed_player(
+    room: &RoomState,
+    prev: [i32; 3],
+    unpushed: [i32; 3],
+    pushed: [i32; 3],
+    radius: i32,
+    collision_flags: u8,
+) -> CollisionResolution {
+    let resolution = resolve_room_collision(room, prev, pushed, radius, collision_flags);
+    if pushed == unpushed
+        || room.sca.is_some()
+        || last_point_outside_walls(room, prev, resolution.pos, collision_flags) == resolution.pos
+    {
+        return resolution;
+    }
+    let stopped = last_point_outside_walls(room, prev, pushed, collision_flags);
+    resolve_room_collision(room, prev, stopped, radius, collision_flags)
+}
+
 /// Pick the camera cut for the player position: find the zone group whose
 /// header `cam_from` equals `current`, then the first following zone with the
 /// same `cam_from` whose quad contains the player; return its `cam_to` when it
@@ -3719,6 +3779,62 @@ mod tests {
         let mut room = RoomState::default();
         room.collision.quadrants[0].push(rect_record);
         room
+    }
+
+    /// Room 40C's west wall (x 0..1998), in every quadrant.
+    fn west_walled_room() -> RoomState {
+        let mut room = RoomState::default();
+        for quadrant in &mut room.collision.quadrants {
+            quadrant.push(rect(1998, 20898, 0, 0, 1));
+        }
+        room
+    }
+
+    #[test]
+    fn an_entity_push_through_a_wall_stops_at_its_near_face() {
+        let room = west_walled_room();
+        // A bot run's tick in 40C: the player stands at the west wall and
+        // Plant 42's head volume pushes them to x 715, past the wall's
+        // middle (999).
+        let prev = [2438, 0, 14298];
+        let unpushed = [2445, 0, 14295];
+        let pushed = [715, 0, 14081];
+        let plain = resolve_room_collision(&room, prev, pushed, CHRIS_RADIUS, 0);
+        assert!(
+            plain.pos[0] < 0,
+            "the plain resolve lands behind the wall: {:?}",
+            plain.pos
+        );
+        let guarded = resolve_pushed_player(&room, prev, unpushed, pushed, CHRIS_RADIUS, 0);
+        assert!(
+            (1998 + CHRIS_RADIUS..=prev[0]).contains(&guarded.pos[0]),
+            "landed at {:?}",
+            guarded.pos
+        );
+        assert!(
+            (pushed[2]..=prev[2]).contains(&guarded.pos[2]),
+            "landed at {:?}",
+            guarded.pos
+        );
+    }
+
+    #[test]
+    fn an_entity_push_that_stays_in_the_room_resolves_as_the_original() {
+        let room = west_walled_room();
+        let prev = [2600, 0, 10000];
+        // Into the wall's near half, in the open, and a walk into the wall
+        // with no push: each resolves exactly as the original's resolve.
+        for (unpushed, pushed) in [
+            ([2600, 0, 10000], [1500, 0, 10200]),
+            ([2600, 0, 10000], [4000, 0, 9000]),
+            ([1500, 0, 10000], [1500, 0, 10000]),
+            ([600, 0, 10000], [600, 0, 10000]),
+        ] {
+            let plain = resolve_room_collision(&room, prev, pushed, CHRIS_RADIUS, 0);
+            let guarded = resolve_pushed_player(&room, prev, unpushed, pushed, CHRIS_RADIUS, 0);
+            assert_eq!(guarded.pos, plain.pos, "{unpushed:?} -> {pushed:?}");
+            assert_eq!(guarded.code, plain.code, "{unpushed:?} -> {pushed:?}");
+        }
     }
 
     fn quad(x1: i16, z1: i16, x2: i16, z2: i16) -> [[i16; 2]; 4] {

@@ -17371,7 +17371,6 @@ mod tests {
         let restricted = door(1, 0x40);
         state.room_actions[0] = Some(door_action(restricted));
         state.doors[0] = Some(restricted);
-        let model = usize::from(STATE_BYTE_CHARACTER_MODEL);
 
         // Jill (id 1) walks through: 0x40 does not bar her.
         state.entities[0].id = 1;
