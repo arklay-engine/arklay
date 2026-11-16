@@ -8,8 +8,11 @@
     <item id="4" name="Colt Python (dumdum)" kind="weapon/colt/dumdum" max="6" ammo="13"/>
     <item id="5" name="Colt Python (magnum)" kind="weapon/colt/magnum" max="6" ammo="14"/>
     <item id="6" name="Flamethrower" kind="weapon/flamethrower" max="240" ammo="15"/>
-    <item id="7" name="Bazooka (acid)" kind="weapon/grenadelauncher/acid" max="6" ammo="16 17 18"/>
-    <item id="8" name="Bazooka (explosive)" kind="weapon/grenadelauncher/explosive" max="6" ammo="16 17 18"/>
+    <!-- Staging names 7 the acid launcher and 8 the explosive one; the
+         engine's launcher is its rounds' item less 9 (explosive 16, acid
+         17, flame 18), so 7 is explosive and 8 acid. -->
+    <item id="7" name="Bazooka (explosive)" kind="weapon/grenadelauncher/explosive" max="6" ammo="16 17 18"/>
+    <item id="8" name="Bazooka (acid)" kind="weapon/grenadelauncher/acid" max="6" ammo="16 17 18"/>
     <item id="9" name="Bazooka (flame)" kind="weapon/grenadelauncher/flame" max="6" ammo="16 17 18"/>
     <item id="10" name="Rocket Launcher" kind="weapon/rocketlauncher" max="5"/>
     <item id="11" name="Handgun Ammo" kind="ammo/handgun" max="100"/>
