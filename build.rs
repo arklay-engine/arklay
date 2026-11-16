@@ -89,6 +89,7 @@ fn main() {
     emit_room_scripts();
     emit_room_files();
     emit_biorand_files();
+    emit_core_pack();
 }
 
 /// Generate the pack-entry table for the checked-in map-wide BioRand files
@@ -503,4 +504,82 @@ fn emit_room_files() {
     let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").expect("cargo sets OUT_DIR"));
     std::fs::write(out_dir.join("room_files.rs"), out)
         .expect("failed to write the generated room definition table");
+}
+
+/// Pack every file under `games/core/` (the GUI's screens and fonts) into
+/// `$OUT_DIR/core.akpak`, which `src/core_pack.rs` embeds and always loads.
+///
+/// The build script cannot call the crate's `PackWriter`, so this writes the
+/// same uncompressed APAK v1 image itself: entries sorted by ASCII-lowercased
+/// path, identical blobs stored once. A unit test checks the bytes match
+/// `PackWriter`'s.
+fn emit_core_pack() {
+    fn collect(dir: &Path, prefix: &str, out: &mut Vec<(String, Vec<u8>)>) {
+        let read = std::fs::read_dir(dir)
+            .unwrap_or_else(|err| panic!("cannot read {}: {err}", dir.display()));
+        for entry in read.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') {
+                continue;
+            }
+            let path = entry.path();
+            let entry_path = format!("{prefix}{name}");
+            if path.is_dir() {
+                collect(&path, &format!("{entry_path}/"), out);
+            } else if path.is_file() {
+                println!("cargo:rerun-if-changed={}", path.display());
+                let data = std::fs::read(&path)
+                    .unwrap_or_else(|err| panic!("cannot read {}: {err}", path.display()));
+                out.push((entry_path, data));
+            }
+        }
+    }
+
+    let root = manifest_dir().join("games/core");
+    println!("cargo:rerun-if-changed=games/core");
+    let mut entries = Vec::new();
+    collect(&root, "", &mut entries);
+    assert!(
+        !entries.is_empty(),
+        "no files found under {}; the build would embed an empty core pack",
+        root.display()
+    );
+    entries.sort_by_cached_key(|(path, _)| path.to_ascii_lowercase());
+
+    const HEADER_LEN: usize = 10;
+    const ENTRY_LEN: usize = 32;
+    let paths_start = HEADER_LEN + entries.len() * ENTRY_LEN;
+    let data_start = paths_start
+        + entries
+            .iter()
+            .map(|(path, _)| path.len() + 1)
+            .sum::<usize>();
+    let mut toc = Vec::with_capacity(entries.len() * ENTRY_LEN);
+    let mut paths = Vec::new();
+    let mut data = Vec::new();
+    let mut placed: std::collections::HashMap<&[u8], usize> = std::collections::HashMap::new();
+    for (path, bytes) in &entries {
+        let path_offset = paths_start + paths.len();
+        paths.extend_from_slice(path.as_bytes());
+        paths.push(0);
+        let data_offset = *placed.entry(bytes.as_slice()).or_insert_with(|| {
+            let offset = data_start + data.len();
+            data.extend_from_slice(bytes);
+            offset
+        });
+        for value in [path_offset, data_offset, bytes.len()] {
+            toc.extend_from_slice(&(value as u64).to_le_bytes());
+        }
+        toc.extend_from_slice(&[0; 8]);
+    }
+    let mut image = Vec::with_capacity(data_start + data.len());
+    image.extend_from_slice(b"APAK");
+    image.extend_from_slice(&1u16.to_le_bytes());
+    image.extend_from_slice(&(entries.len() as u32).to_le_bytes());
+    image.extend_from_slice(&toc);
+    image.extend_from_slice(&paths);
+    image.extend_from_slice(&data);
+
+    let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").expect("cargo sets OUT_DIR"));
+    std::fs::write(out_dir.join("core.akpak"), image).expect("failed to write core.akpak");
 }

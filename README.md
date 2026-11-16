@@ -84,9 +84,8 @@ Data resolves by precedence:
 - `ARKLAY_CONFIG_DIR` relocates configuration and saves
 
 The menus' retro face is [Departure Mono](https://github.com/rektdeckard/departure-mono),
-MIT licensed; the notice is in `assets/DepartureMono-LICENSE`. Their modern
-face is [Barlow](https://github.com/jpt/barlow), under the SIL
-Open Font License; the notice is in `assets/Barlow-LICENSE`.
+MIT licensed. Their modern face is [Barlow](https://github.com/jpt/barlow),
+under the SIL Open Font License. Both are in the core pack, `games/core/`.
 
 ## Usage
 

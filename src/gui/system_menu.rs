@@ -3,7 +3,7 @@
 //! and the key configuration screen it opens.
 //!
 //! The menu and the options are the `menu` and `options` screens of a
-//! [`Ui`] (`assets/ui/*.xml`); this owner publishes the settings as
+//! [`Ui`] (`games/core/ui/*.xml`); this owner publishes the settings as
 //! `options.<id>` definitions and turns what the screens report back into
 //! [`MenuRequest`]s. It never touches the game. The key configuration (and
 //! the controller configuration, its gamepad mode) is still its own screen,
@@ -893,7 +893,7 @@ mod tests {
 
     #[test]
     fn every_setting_has_one_row() {
-        let source = include_str!("../../assets/ui/options.xml");
+        let source = crate::core_pack::text("ui/options.xml");
         for def in settings::defs(&Settings::default(), &Locale::default()) {
             let binding = format!("{{options.{}}}", def.id);
             assert_eq!(

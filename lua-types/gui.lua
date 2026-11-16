@@ -13,9 +13,8 @@
 ---The engine's modern menus (the system menu, options, the modern save and
 ---load screens, the debug menu, the launcher) are not
 ---[screen scripts](screen.md): they are retained screens written in XML
----markup (`assets/ui/*.xml`), built into a node tree that the engine lays
----out, paints and drives. See `assets/ui/README.md`
----for the elements, bindings and actions.
+---markup (`games/core/ui/*.xml`, in the always-loaded core pack), built
+---into a node tree that the engine lays out, paints and drives.
 ---
 ---A screen whose root names a script, `<screen script="name.lua">`, runs it
 ---in a fresh sandboxed Lua state each time it opens, so nothing carries over

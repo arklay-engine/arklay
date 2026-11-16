@@ -270,7 +270,7 @@ fn percent_slider() -> OptionKind {
 }
 
 /// One option: its strings come from `{id}.label` and `{id}.description`
-/// (where it shows is up to `assets/ui/options.xml`).
+/// (where it shows is up to `games/core/ui/options.xml`).
 fn def(text: &Locale, id: &str, kind: OptionKind, default: i32) -> OptionDef {
     OptionDef {
         id: id.to_string(),

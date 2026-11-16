@@ -13,7 +13,7 @@
 //! * [`options`]: the data model of the options screen, a flat list any
 //!   owner can contribute to;
 //! * [`dom`]: the retained UI the modern screens are built in: screens
-//!   written in markup (`assets/ui/*.xml`), a node tree with layout,
+//!   written in markup (`games/core/ui/*.xml`), a node tree with layout,
 //!   focus, input routing, hints and Lua scripting;
 //! * the screens' owners: [`dialog`], [`save_screen`] and [`system_menu`];
 //! * [`overlay`]: the F6 debug HUD and the corner notices, drawn over

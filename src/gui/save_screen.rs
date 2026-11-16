@@ -5,7 +5,7 @@
 //! In save mode the first row always creates a new save; writing over an
 //! existing one asks first. The screen owns no files: it reports what the
 //! player chose as a [`SaveRequest`] and its owner reads and writes the
-//! saves. The screens themselves are `assets/ui/load.xml` and
+//! saves. The screens themselves are `games/core/ui/load.xml` and
 //! `save.xml`, built from the shared `save-row` component.
 
 use std::sync::Arc;

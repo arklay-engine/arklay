@@ -1,7 +1,7 @@
 //! The startup launcher shown when no game pack is named on the command line.
 //!
 //! The launcher is not a game screen: it opens before any pack exists. Its
-//! screens are the `launcher_*` documents in `assets/ui/`, run by the same
+//! screens are the `launcher_*` documents in `games/core/ui/`, run by the same
 //! retained UI as the in-game menus ([`crate::gui::dom`]); this module
 //! publishes the launcher's state into the UI's store, turns the actions the
 //! screens report into installs, updates and settings, and presents the
@@ -226,7 +226,7 @@ impl Screen {
         Self::Message,
     ];
 
-    /// The screen's document in `assets/ui/`.
+    /// The screen's document in the core pack's `ui/`.
     fn name(self) -> &'static str {
         match self {
             Self::Main => "launcher_main",
@@ -260,66 +260,10 @@ impl Screen {
 
 mod biorand_config;
 
-/// The launcher's screens and components.
-const DOCUMENTS: [(&str, &str); 13] = [
-    (
-        "launcher_components",
-        include_str!("../../assets/ui/launcher_components.xml"),
-    ),
-    (
-        "launcher_main",
-        include_str!("../../assets/ui/launcher_main.xml"),
-    ),
-    (
-        "launcher_play",
-        include_str!("../../assets/ui/launcher_play.xml"),
-    ),
-    (
-        "launcher_biorand",
-        include_str!("../../assets/ui/launcher_biorand.xml"),
-    ),
-    (
-        "launcher_biorand_config",
-        include_str!("../../assets/ui/launcher_biorand_config.xml"),
-    ),
-    (
-        "launcher_spoiler",
-        include_str!("../../assets/ui/launcher_spoiler.xml"),
-    ),
-    (
-        "launcher_games",
-        include_str!("../../assets/ui/launcher_games.xml"),
-    ),
-    (
-        "launcher_install",
-        include_str!("../../assets/ui/launcher_install.xml"),
-    ),
-    (
-        "launcher_update",
-        include_str!("../../assets/ui/launcher_update.xml"),
-    ),
-    (
-        "launcher_mods",
-        include_str!("../../assets/ui/launcher_mods.xml"),
-    ),
-    (
-        "launcher_mod",
-        include_str!("../../assets/ui/launcher_mod.xml"),
-    ),
-    (
-        "launcher_progress",
-        include_str!("../../assets/ui/launcher_progress.xml"),
-    ),
-    (
-        "launcher_message",
-        include_str!("../../assets/ui/launcher_message.xml"),
-    ),
-];
-
 /// The engine's built-in screens with the launcher's added.
 fn library() -> Result<Library> {
     let mut library = Library::builtin();
-    for (name, source) in DOCUMENTS {
+    for (name, source) in crate::core_pack::documents(|name| name.starts_with("launcher_")) {
         library.add(name, source)?;
     }
     Ok(library)

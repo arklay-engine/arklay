@@ -24,6 +24,7 @@ pub mod controls;
 pub mod convert;
 pub mod convert_mod;
 pub mod convert_re2;
+pub mod core_pack;
 pub mod demo;
 pub mod die2;
 pub mod door;

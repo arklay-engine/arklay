@@ -208,7 +208,7 @@ pub struct DebugMenu {
     locale: Locale,
     device: Device,
     /// The main list and the PLAYER, FLAGS, CHEATS and CLEAR GAME tools
-    /// (`assets/ui/debug*.xml`).
+    /// (`games/core/ui/debug*.xml`).
     ui: Option<Ui>,
     /// The pack's strings, kept from the first draw for the labels the
     /// screens show.

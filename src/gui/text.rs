@@ -1,6 +1,6 @@
 //! TrueType text for the GUI, rasterised at the exact pixel size drawn.
 //!
-//! Faces are embedded so the GUI works before (and without) any pack. Glyphs
+//! Faces come from the embedded core pack, so the GUI works before (and without) any pack. Glyphs
 //! rasterise lazily the first time a `(face, size, char)` is drawn and stay
 //! cached, so a resize only costs the glyphs the next frame actually uses and
 //! a CJK string never rasterises a whole atlas. Sizes are whole pixels: the
@@ -20,11 +20,11 @@ use fontdue::{Font, FontSettings};
 
 use super::canvas::{Canvas, Color};
 
-/// Barlow, the modern face; see `assets/Barlow-LICENSE`.
-const BARLOW_REGULAR: &[u8] = include_bytes!("../../assets/Barlow-Regular.ttf");
-const BARLOW_BOLD: &[u8] = include_bytes!("../../assets/Barlow-Bold.ttf");
-/// Departure Mono, the retro face; see `assets/DepartureMono-LICENSE`.
-const DEPARTURE_MONO: &[u8] = include_bytes!("../../assets/DepartureMono-Regular.otf");
+/// Barlow, the modern face, in the core pack.
+const BARLOW_REGULAR: &str = "fonts/barlow_regular.ttf";
+const BARLOW_BOLD: &str = "fonts/barlow_bold.ttf";
+/// Departure Mono, the retro face, in the core pack.
+const DEPARTURE_MONO: &str = "fonts/departuremono_regular.ttf";
 
 /// System faces tried, in order, for a character the embedded regular and
 /// mono faces lack.
@@ -195,8 +195,8 @@ pub struct Fonts {
 
 impl Fonts {
     pub fn new() -> Result<Self> {
-        let load = |bytes: &[u8], name: &str| {
-            Font::from_bytes(bytes, FontSettings::default())
+        let load = |path: &str, name: &str| {
+            Font::from_bytes(crate::core_pack::bytes(path), FontSettings::default())
                 .map_err(|err| anyhow!("embedded {name} font: {err}"))
         };
         let mut gamma = [0u8; 256];

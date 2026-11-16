@@ -1,5 +1,5 @@
 //! The options model: one definition per setting, which the options screen
-//! (`assets/ui/options.xml`) places by id.
+//! (`games/core/ui/options.xml`) places by id.
 //!
 //! The engine contributes its settings as [`OptionDef`]s
 //! ([`crate::gui::settings`]). A value is an `i32`: a choice's index or a

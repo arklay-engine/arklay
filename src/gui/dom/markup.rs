@@ -170,41 +170,12 @@ pub struct Library {
     pub(super) scripts: HashMap<String, Arc<str>>,
 }
 
-/// The engine's own screens and components.
-const BUILTIN: [(&str, &str); 11] = [
-    (
-        "components",
-        include_str!("../../../assets/ui/components.xml"),
-    ),
-    ("options", include_str!("../../../assets/ui/options.xml")),
-    ("menu", include_str!("../../../assets/ui/menu.xml")),
-    ("load", include_str!("../../../assets/ui/load.xml")),
-    ("save", include_str!("../../../assets/ui/save.xml")),
-    ("dialog", include_str!("../../../assets/ui/dialog.xml")),
-    ("debug", include_str!("../../../assets/ui/debug.xml")),
-    (
-        "debug_player",
-        include_str!("../../../assets/ui/debug_player.xml"),
-    ),
-    (
-        "debug_cheats",
-        include_str!("../../../assets/ui/debug_cheats.xml"),
-    ),
-    (
-        "debug_clear",
-        include_str!("../../../assets/ui/debug_clear.xml"),
-    ),
-    (
-        "debug_flags",
-        include_str!("../../../assets/ui/debug_flags.xml"),
-    ),
-];
-
 impl Library {
-    /// The engine's built-in screens.
+    /// The engine's built-in screens: the core pack's `ui/*.xml`, less the
+    /// launcher's (`launcher_*`), which only the launcher adds.
     pub fn builtin() -> Self {
         let mut library = Self::default();
-        for (name, source) in BUILTIN {
+        for (name, source) in crate::core_pack::documents(|name| !name.starts_with("launcher_")) {
             library
                 .add(name, source)
                 .unwrap_or_else(|err| panic!("built-in screen {name}: {err:#}"));
