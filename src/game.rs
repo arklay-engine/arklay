@@ -5006,6 +5006,9 @@ impl GameState {
             entity.sca_world = [0; 3];
             entity.sca_world2 = [0; 3];
             entity.sca_hit_delta = [0; 3];
+            // The new character's model brings fresh joint structs: no joint
+            // stays held at the world a previous occupant's script wrote.
+            self.entity_anims[slot].held.clear();
             if !occupied {
                 self.enemy_count = self.enemy_count.saturating_add(1);
             }
@@ -5232,6 +5235,14 @@ impl GameState {
         if player.angle != angle {
             player.angle = angle;
         }
+    }
+
+    /// The player's whole `PlayerEntity` +0x00 flags byte. The port splits it
+    /// between entity 0's `status_flags` and [`GameState::player_flags`] (the
+    /// grab and aim bits the enemy scripts and the weapon machine write), so
+    /// a reader of the original byte must see both halves.
+    pub fn player_status_flags(&self) -> u8 {
+        self.entities[0].status_flags | self.player_flags
     }
 
     /// Mirror the visible player back onto entity 0 after physics moved it, so
@@ -14225,6 +14236,18 @@ mod tests {
         assert_eq!(entity.id, 0x27);
         assert_eq!(entity.behavior_flags, 0x02);
         assert_eq!(host.state().enemy_count, 1, "re-init does not double count");
+    }
+
+    #[test]
+    fn an_enemy_spawned_over_a_slot_drops_its_held_joints() {
+        let mut state = game();
+        let mut host = ScdGameHost::new(&mut state);
+        host.on_enemy(op(0x1B), &enemy_record(0x08, 0x06, 0xFF, 1, 0));
+        host.state_mut().entity_anims[1]
+            .held
+            .push((12, crate::anim::Mat4x3::default()));
+        host.on_enemy(op(0x1B), &enemy_record(0x27, 0x02, 0xFF, 0, 0));
+        assert!(host.state().entity_anims[1].held.is_empty());
     }
 
     #[test]

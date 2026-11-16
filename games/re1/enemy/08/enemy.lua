@@ -990,8 +990,10 @@ kill = function(e)
 
     if st == 0 or st == 1 then
         e:plant42_hold_player(grab_joint)
-        -- The original twists joint 12 in place; the port derives the pose
-        -- from the clip and has no per-joint rotation write.
+        -- Twist joint 12 in place, composed off joint 11 by hand.
+        e:set_joint_flag(12, e:joint_flag(12) & 0xFD)
+        e:rotate_joint(12, 2, 0, 0)
+        e:hold_joint(12, 11)
         e.roll = e.roll - 1
         local t = e.p42_ticks
         e.p42_ticks = t - 1
@@ -1009,6 +1011,7 @@ kill = function(e)
         e.angle = e.angle + as_s16(idiv(e.p42_step, divisor))
         e.roll = e.roll - 1
         e:plant42_hold_player(grab_joint)
+        e:hold_joint(12, 11)
         e.p42_step = -e.p42_step
         local t = e.p42_ticks
         e.p42_ticks = t - 1
@@ -1027,6 +1030,8 @@ kill = function(e)
         end
     elseif st == 3 then
         e:plant42_hold_player(grab_joint)
+        e:rotate_joint(12, 0x10, 0, 0)
+        e:hold_joint(12, 11)
         local t = e.p42_ticks
         e.p42_ticks = t - 1
         if t == 0 then
@@ -1035,6 +1040,7 @@ kill = function(e)
     elseif st == 4 then
         e.state_word = 1
         e:set_joint_flag(12, e:joint_flag(12) | 2)
+        e:release_joint(12)
         e.player_state = 7
         e.player_anim_frame_id = 8
         e.player_action_behavior = 0

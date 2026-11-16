@@ -885,7 +885,7 @@ pub fn yawn_post_move(
     if behavior != 5 && behavior != 6 && behavior != 7 {
         let player_pos = game.entities[0].pos;
         let player_angle = game.entities[0].angle;
-        let player_status = game.entities[0].status_flags;
+        let player_status = game.player_status_flags();
         let player_radius = crate::enemy::walk::player_radius(game.id.player_flag);
         let prev_pos = game.entities[slot]
             .saved_pos
