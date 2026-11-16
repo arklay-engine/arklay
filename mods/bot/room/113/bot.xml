@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 113 the east bathroom. The bathtub (event AOT 3) asks "Will you unplug
+     it?"; Yes drains it (scenario bit 0x02) and uncovers the desk key's
+     place. The drained tub is event AOT 4: a press there hands over what
+     lies in it (item AOT 1, item bit 3, whose own zone is out of the room at
+     20000,20000 and can never be walked to). Chris's game has the scene; a
+     randomized game gives it to Jill too, and may put any item in the tub.
+     In Jill's retail game neither AOT is live and the steps are not offered. -->
+<bot format="2">
+  <interact slot="3" bank="0" bit="0x02" label="unplug the bathtub" when="items=random"/>
+  <answer slot="3" choice="yes" label="unplug it" when="items=random"/>
+  <interact slot="4" bank="7" bit="3" done="clear" label="take what lies in the drained tub" when="items=random"/>
+</bot>

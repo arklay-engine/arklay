@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 20F the dark dining room by the attic stairs.
+     - The nook's item (AOT 4, item bit 12) is a "too dark" message until the
+       candle burns. The lighter is a USE item at the candle's SCE_USEITEM
+       probe AOT 2, by the table: it lights the candle (scenario bit 0x0A)
+       and the message becomes the pickup.
+     - The cupboard (object 0) stands across the mouth of the passage to the
+       nook, flat against the south wall. It slides along the wall: west
+       until the corner stops it leaves the mouth open. It is back in place
+       on every entry, and is pushed only once the candle burns. -->
+<bot format="2">
+  <use slot="2" item="0x30" bank="0" bit="0x0A" label="the lighter at the candle" when="items=random"/>
+  <push object="0" slot="4" uncovers="4" direction="west" until="stop" bank="7" bit="12" done="clear"
+        after_bank="0" after_bit="0x0A" label="the cupboard west, off the passage to the nook" when="items=random"/>
+</bot>

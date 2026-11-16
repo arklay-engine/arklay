@@ -91,16 +91,16 @@
        position with aim 0x40; the cone values are Jill's DEFAULT_RANGES
        slot 9 (1100). A hit takes 900 (DEFAULT_FIRST_RUN). Its four
        rockets are the clip; no ammunition item refills it. -->
-  <weapon id="0x0A" name="rocket launcher" near="0" side="1100" cadence="unknown"
+  <weapon id="0x0A" name="rocket launcher" like="0x07" near="0" side="1100" cadence="unknown"
           headshot="none" weak="none" status_bit="yes" reserve="yes"/>
   <!-- The Colt Python with dumdum rounds (item 0x04) and with magnum rounds
        (0x05), and the flamethrower (0x06). A normal Jill game meets none of
        them early, but a randomized one (BioRand) can start her with any.
        near is the handgun's forward strip; side is Jill's DEFAULT_RANGES
        slot (3, 4: 800; 5: 400). Cadence and landing are not measured. -->
-  <weapon id="0x04" name="colt python (dumdum)" near="650" side="800" cadence="unknown"
+  <weapon id="0x04" name="colt python (dumdum)" like="0x02" near="650" side="800" cadence="unknown"
           headshot="none" weak="none" status_bit="yes"/>
-  <weapon id="0x05" name="colt python (magnum)" near="650" side="800" cadence="unknown"
+  <weapon id="0x05" name="colt python (magnum)" like="0x02" near="650" side="800" cadence="unknown"
           headshot="none" weak="none" status_bit="yes" reserve="yes"/>
   <weapon id="0x06" name="flamethrower" near="0" side="400" cadence="unknown"
           headshot="none" weak="none" status_bit="yes"/>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 405 the guardhouse corridor. A statue (object 0) fills the dead-end
+     passage north of the door to 406; three pickups lie behind it (item
+     AOTs 3, 4 and 5, item bits 106 to 108). Pushed north until the end wall
+     stops it, it leaves the alcove on the west open. The statue is back in
+     place on every entry, so there is one push per pickup still lying
+     there: the first moves it, the others find it against the wall. -->
+<bot format="2">
+  <push object="0" slot="3" uncovers="3" direction="north" until="stop" bank="7" bit="106" done="clear"
+        label="the statue north, off the first pickup's alcove" when="items=random"/>
+  <push object="0" slot="4" uncovers="4" direction="north" until="stop" bank="7" bit="107" done="clear"
+        label="the statue north, off the second pickup's alcove" when="items=random"/>
+  <push object="0" slot="5" uncovers="5" direction="north" until="stop" bank="7" bit="108" done="clear"
+        label="the statue north, off the third pickup's alcove" when="items=random"/>
+</bot>

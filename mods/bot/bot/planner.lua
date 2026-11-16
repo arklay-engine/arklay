@@ -363,6 +363,12 @@ local function mark(bot, kind, room, slot, reason, permanent)
     m.permanent = permanent or false
     m.entry = (p.entries or {})[room]
     m.kind, m.room, m.slot = kind, room, slot
+    -- A hold belongs to the mark that set it (mark_loop, a use's retry). A
+    -- crank marked looping from another room kept that hold once it had
+    -- run out: its next mark, an approach that failed in its own room,
+    -- held for no tick at all, and the bot planned the same six
+    -- unreachable approaches 1281 times until the run was called stuck.
+    m.hold = nil
     -- A use whose done flag stayed clear, or whose zone could not be
     -- reached, is tried again once the story flags change (blocked()): a
     -- room event can arm or open it. 10F's hollow, tried while the gold
@@ -572,6 +578,21 @@ local function blocked(bot, kind, room, slot, remote)
         -- A door a room event made a message: off limits on the entry it
         -- failed on; from another room until the empty-frontier retry
         -- forgives it (forgive_events).
+        -- Still on the entry it failed on, but the story flags have changed
+        -- since: a scene played here, and its end may have made the zone a
+        -- door again. The mark goes, for routes through the door too. 105's
+        -- hall door was message 142 until Barry shot the zombie at the tea
+        -- room door; the scene's end made it a door again and the tea room
+        -- door message 143, and the bot pressed that one until the run was
+        -- called stuck.
+        if room == bot:room().id and (plan().entries or {})[room] == m.event.entry
+            and m.event.story and m.event.story ~= story_sig(bot) then
+            plan().marks[mark_key(kind, room, slot)] = nil
+            marks_changed()
+            bot:log(string.format("mark %s lifted: the story flags changed on this entry",
+                mark_key(kind, room, slot)))
+            return false
+        end
         if remote then
             return not m.event.forgiven
         end
@@ -1345,6 +1366,7 @@ local function interact_goal(bot, fact, index, count)
             kind = "interact", slot = "fight" .. fact.enemy, label = label,
             job = {
                 fight = true, enemy = fact.enemy, label = label,
+                optional = fact.optional == true,
                 timeout = FIGHT_TIMEOUT,
                 done = function(b) return BotPuzzle.flag_done(b, fact) end,
             },
@@ -1865,6 +1887,12 @@ local function fight_due(bot, fight)
     if fight.optional and not BotPuzzle.armed_for(bot, fight.enemy) then
         return false
     end
+    -- Nor one found with nobody to fight (BotNav.hold_fight): a randomized
+    -- game's 30C, where every empty frontier sent the bot back for a
+    -- Black Tiger that was not there until the loop rule ended the run.
+    if BotNav.fight_absent(bot, fight.room, fight) then
+        return false
+    end
     -- Forced from an empty frontier (forgive_fight): due, ready or not.
     local forced = plan().forced_fight
     if forced and forced.room == fight.room
@@ -2123,9 +2151,15 @@ local function dry_rounds(bot, item, kind)
     return false
 end
 
-local function pickup_fits(bot, item, full)
+local function pickup_fits(bot, item, full, where)
     local kind, merge = bot:item_kind(item)
     if not full then
+        -- A pickup a held <use> item's room hands over first
+        -- (BotInventory.handed_over, `where` its room and slot) takes any
+        -- free slot: the use waits on it.
+        if where and BotInventory.handed_over(bot)[where] then
+            return true
+        end
         -- A puzzle step held for a free slot keeps it: an item that no key,
         -- <use> or step needs leaves it (30E's herbs took the slot a box
         -- visit freed for 306's Doom Book, again and again).
@@ -2371,6 +2405,31 @@ local function holds_slot(fact)
             and fact.reveals == nil)
 end
 
+-- A step that only uncovers a pickup (a <push uncovers>, or a <climb> to a
+-- bank 7 item) is passed over while the bot would not take that pickup:
+-- nothing wants it, or a push's has no slot (the pickup's own mark then
+-- says so, and a climb's is marked by the step). 405's statue was pushed
+-- to the end wall on every pass through the corridor, three pushes a
+-- pass, for pickups the full inventory left lying.
+local function uncover_idle(bot, fact)
+    local slot
+    if fact.kind == "push" then
+        slot = fact.uncovers
+    elseif fact.kind == "climb" and fact.bank == C.ITEM_BANK then
+        slot = fact.slot
+    end
+    local action = slot and BotNav.action_by_slot(bot, slot)
+    if not action or not action.item or action.item == 0 or BotNav.on_top(bot) then
+        return false
+    end
+    local where = bot:room().id .. ":" .. slot
+    if BotInventory.unwanted(bot, action.item) and not BotInventory.handed_over(bot)[where] then
+        return true
+    end
+    return fact.kind == "push"
+        and not pickup_fits(bot, action.item, inventory_full(bot), where)
+end
+
 -- Pick the next goal, or nil plus the reason nothing is left.
 local function choose(bot)
     local room = bot:room().id
@@ -2416,7 +2475,9 @@ local function choose(bot)
     end
 
     -- 1. The room puzzle.
-    local fact, index, count = BotPuzzle.next_interact(bot)
+    local fact, index, count = BotPuzzle.next_interact(bot, function(step)
+        return uncover_idle(bot, step)
+    end)
     local held_full = false
     if fact then
         if fact.slot and BotPuzzle.avoided(bot, fact.slot) then
@@ -2428,6 +2489,13 @@ local function choose(bot)
             -- to an event zone (507's duct) needs no slot.
             if not blocked(bot, "interact", room, fact.slot) then
                 mark(bot, "interact", room, fact.slot, "inventory full: " .. inventory_sig(bot))
+                -- Never given up when it is a key (a randomized game put
+                -- the armor key in 107's statue).
+                local up = BotNav.action_by_slot(bot, fact.slot)
+                if up and up.item and bot:item_kind(up.item) == "key" then
+                    plan().marks[mark_key("interact", room, fact.slot)].needed = true
+                    marks_changed()
+                end
             end
         elseif holds_slot(fact) and inventory_full(bot) then
             -- So does a push puzzle that reveals an item: 306's box went
@@ -2618,6 +2686,25 @@ local function choose(bot)
     elseif plan().hurt[room] then
         plan().hurt[room] = nil
     end
+    -- Pickups stacked on one spot (114's herb patch: four item zones, one
+    -- rectangle): a press takes the lowest slot, so a higher one cannot be
+    -- taken until those below it are gone. The key under 114's three herbs
+    -- was pressed for until the goal timed out, three times. Not the
+    -- zones parked at the room origin, which no press reaches (a script
+    -- hands those items over, and each is marked so below): 409's shelf
+    -- items all sit there, the covered ones were never marked, and the
+    -- bot walked between 409 and a herb elsewhere until the ticks ran out.
+    local covered = {}
+    for _, action in ipairs(actions) do
+        if action.kind == "item" and not BotNav.is_origin_zone(action) then
+            for _, other in ipairs(actions) do
+                if other.kind == "item" and other.slot < action.slot
+                    and BotNav.same_zone(other, action) then
+                    covered[action.slot] = true
+                end
+            end
+        end
+    end
     for _, action in ipairs(actions) do
         local desk = drawers[action.slot]
         if desk and (action.kind == "item" or action.kind == "item_dormant") then
@@ -2637,6 +2724,17 @@ local function choose(bot)
                 and not unlock_frees_slot(bot, action) then
                 mark(bot, "item", room, action.item_slot,
                     "inventory full: " .. inventory_sig(bot))
+                -- A key or an item a <use> needs is never given up for a
+                -- full inventory, in a drawer as on the floor: 102's drawer
+                -- held a crest in a randomized game, was passed three times
+                -- with every slot used and stayed shut for good.
+                local m = plan().marks[mark_key("item", room, action.item_slot)]
+                m.item = action.desk_item
+                if bot:item_kind(action.desk_item) == "key"
+                    or BotInventory.context(bot).uses[action.desk_item] then
+                    m.needed = true
+                    marks_changed()
+                end
                 -- A locked drawer waits on the slot: the desk key that
                 -- opens it stays out of the deposit (BotPlanner.drawer_full).
                 if not bot:flag(action.lock_bank, action.lock_bit) then
@@ -2660,7 +2758,11 @@ local function choose(bot)
                     best, best_len, best_key, best_desk = action, len, key, action
                 end
             end
-        elseif action.kind == "item" and BotInventory.unwanted(bot, action.item) then
+        elseif action.kind == "item" and covered[action.slot] then
+            -- Under another pickup of the same spot: that one comes off
+            -- first (BotInventory.handed_over keeps it wanted).
+        elseif action.kind == "item" and BotInventory.unwanted(bot, action.item)
+            and not BotInventory.handed_over(bot)[room .. ":" .. action.slot] then
             -- Left where it lies, unmarked: it stays on the frontier
             -- until something makes it wanted.
         elseif action.kind == "item" and not blocked(bot, "item", room, action.slot) then
@@ -2672,10 +2774,18 @@ local function choose(bot)
                 -- any inventory change and would send the bot back.
                 mark(bot, "item", room, action.slot, "avoid: " .. avoid, gate == nil)
                 plan().marks[mark_key("item", room, action.slot)].gate = gate
-            elseif not pickup_fits(bot, action.item, full) then
+            elseif not pickup_fits(bot, action.item, full, room .. ":" .. action.slot) then
                 -- No slot for it and no stack to merge into: retried once
                 -- the inventory changes.
+                local fresh = plan().marks[mark_key("item", room, action.slot)] == nil
                 mark(bot, "item", room, action.slot, "inventory full: " .. inventory_sig(bot))
+                if fresh and not full then
+                    bot:log(string.format(
+                        "item 0x%02X slot %d left with a slot free: held for %d step(s), %d needed pickup(s), %d bottle(s)",
+                        action.item, action.slot, BotPlanner.steps_needing_room(bot, true),
+                        BotPlanner.needed_items_left(bot),
+                        BotMix.slots_needed(bot, true) + BotMix.slots_ahead(bot)))
+                end
                 -- A key or an item a <use> fact needs is never given up for
                 -- a full inventory (401's red book, passed three times).
                 local ctx = BotInventory.context(bot)
@@ -2689,7 +2799,8 @@ local function choose(bot)
                     and bot:item_count(action.item) == 0
                     and BotInventory.boxed_count(bot, action.item) == 0
                 if bot:item_kind(action.item) == "key" or ctx.uses[action.item]
-                    or (ctx.required and ctx.required[action.item]) or new_gun then
+                    or (ctx.required and ctx.required[action.item]) or new_gun
+                    or BotInventory.handed_over(bot)[room .. ":" .. action.slot] then
                     m.needed = true
                     marks_changed()
                 end
@@ -3054,7 +3165,7 @@ local function choose(bot)
         local t = p.target
         local goal = target_goal(bot, world, t)
         if goal and goal.kind == "item" and goal.room ~= room and not t.unfit
-            and not pickup_fits(bot, goal.item, full) then
+            and not pickup_fits(bot, goal.item, full, goal.room .. ":" .. goal.slot) then
             -- The inventory filled on the way: no slot for it there. (Not
             -- for a trip chosen full, the only way on: dropping it on the
             -- first entry walked 302 and 304 back and forth between two
@@ -3208,7 +3319,7 @@ local function choose(bot)
             -- A remote item that would not fit is no trip: arriving full only
             -- marks it again. The box (box_why) or a combine makes room first.
             local fits = allow_unfit or goal.kind ~= "item"
-                or pickup_fits(bot, goal.item, full)
+                or pickup_fits(bot, goal.item, full, goal.room .. ":" .. goal.slot)
             -- A room whose pickups wait on the hurt rule (step 2) is no
             -- item trip until the inventory changes: 109 and 114 walked
             -- back and forth for 114's herbs until the loop rule ended it.
@@ -3859,6 +3970,104 @@ function BotPlanner.revisit_room(bot)
     return true
 end
 
+-- Before the run finishes on an empty frontier: an action-key event zone
+-- that no fact names and the bot has never pressed is examined, in this
+-- room first (nearest first), then in the nearest visited room that has
+-- one. Such a zone can be what a pickup waits behind. In the original game
+-- those pickups are supplies the run does without, so no fact names them;
+-- a randomized game puts keys there: 10E's diary opens the closet (the
+-- armor key lay in it), 401's cup holds a key. One press per zone and one
+-- trip per room in a run; an <avoid> keeps the bot off a zone that harms.
+-- Returns a goal here, true when a trip was set as the target, or nil.
+function BotPlanner.examine(bot)
+    local p = plan()
+    local room = bot:room().id
+    local world = bot:world()
+    p.examined = p.examined or {}
+    p.examine_trips = p.examine_trips or {}
+    local function unpressed(r, slot)
+        for _, action in ipairs(r and r.actions or {}) do
+            if action.slot == slot then
+                return action.kind == "event" and action.presses == 0
+            end
+        end
+        return false
+    end
+    local here = nil
+    for _, r in ipairs(world.rooms or {}) do
+        if r.id == room then
+            here = r
+        end
+    end
+    local exits = {}
+    for _, door in ipairs(bot:doors()) do
+        if door.target and door.target ~= room then
+            exits[door.slot] = true
+        end
+    end
+    local best, best_len = nil, nil
+    for _, action in ipairs(bot:actions()) do
+        if action.kind == "event" and action.flags >= C.ACTION_KEY
+            and (action.flags // C.PROBE_BODY) % 2 == 0
+            and unpressed(here, action.slot) and not exits[action.slot]
+            and not p.examined[room .. ":" .. action.slot]
+            and not BotNav.is_origin_zone(action)
+            and not BotPuzzle.is_fact_slot(bot, action.slot)
+            and not BotPuzzle.avoided(bot, action.slot)
+            and not blocked(bot, "stair", room, action.slot) then
+            local len = BotNav.reach_length(bot, action)
+            if len and (not best_len or len < best_len) then
+                best, best_len = action, len
+            end
+        end
+    end
+    if best then
+        p.examined[room .. ":" .. best.slot] = true
+        local label = string.format("examine slot %d", best.slot)
+        bot:log(string.format("frontier empty; examining event zone slot %d, never pressed", best.slot))
+        return {
+            kind = "stair", slot = best.slot, label = label,
+            job = {
+                zone = zone_of(best), label = label, pattern = "edge",
+                presses = 2, gap = 40, side = 10 * C.SECOND, timeout = PASSAGE_TIMEOUT,
+                -- Done once the press is a second old and control is back:
+                -- the scene handler plays or answers what the press began.
+                done = function(b, job)
+                    return job.pressed and job.press_tick ~= nil
+                        and b:tick() - job.press_tick >= C.SECOND and b:scene().controllable
+                end,
+            },
+        }
+    end
+    p.examine_trips[room] = true
+    local target, target_steps = nil, nil
+    for _, r in ipairs(world.rooms or {}) do
+        if r.visited and r.id ~= room and not p.examine_trips[r.id] then
+            local any = false
+            for _, action in ipairs(r.actions or {}) do
+                if action.kind == "event" and action.presses == 0
+                    and not p.examined[r.id .. ":" .. action.slot] then
+                    any = true
+                end
+            end
+            local steps = any and route(bot, world, room, r.id) or nil
+            if steps and steps[1] and (not target or #steps < #target_steps
+                or (#steps == #target_steps and r.id < target)) then
+                target, target_steps = r.id, steps
+            end
+        end
+    end
+    if not target then
+        return nil
+    end
+    p.examine_trips[target] = true
+    local label = string.format("room %s again (an event zone there was never examined)", target)
+    p.target = { kind = "revisit", room = target, slot = "revisit", label = label,
+        best = #target_steps, stalls = 0 }
+    bot:log("frontier empty; entering " .. label)
+    return true
+end
+
 -- Called on every room change: each <revisit> fact of this room whose
 -- flag is in its state now is done (its init has read the flag).
 -- A timed one is never done: an entry that left its gate holding waits
@@ -4246,6 +4455,16 @@ function BotPlanner.step(bot)
                 while not p.goal and BotPlanner.revisit_room(bot) do
                     p.goal = choose(bot)
                 end
+                -- So is an event zone never examined (BotPlanner.examine):
+                -- a door only the ending opens (305's to the heliport) was
+                -- waited on for good, with Enrico's body unsearched.
+                while not p.goal do
+                    local found = BotPlanner.examine(bot)
+                    if not found then
+                        break
+                    end
+                    p.goal = found == true and choose(bot) or found
+                end
                 if not p.goal then
                     return
                 end
@@ -4285,6 +4504,18 @@ function BotPlanner.step(bot)
         -- Each call takes one room off the list, so this ends.
         while not p.goal and BotPlanner.revisit_room(bot) do
             p.goal = choose(bot)
+            if p.goal then
+                p.empty_since = nil
+            end
+        end
+        -- Each call presses one zone or takes one room off the list, so
+        -- this ends.
+        while not p.goal do
+            local found = BotPlanner.examine(bot)
+            if not found then
+                break
+            end
+            p.goal = found == true and choose(bot) or found
             if p.goal then
                 p.empty_since = nil
             end
@@ -4430,7 +4661,8 @@ function BotPlanner.step(bot)
         end
         if goal.event then
             local m = p.marks[mark_key(kind, where, goal.slot)]
-            m.event = { entry = p.entries[room], tick = bot:tick(), forgiven = false }
+            m.event = { entry = p.entries[room], tick = bot:tick(), forgiven = false,
+                story = story_sig(bot) }
         end
         if goal.job.reenter then
             p.reenter = room

@@ -322,6 +322,11 @@ pub struct Interact {
     /// live door zone (513 in Barry's branch: the event after the Tyrant
     /// turns door 0 from a message back into a door, and sets no flag).
     pub opens: Option<u8>,
+    /// `<push uncovers>`: the item AOT slot the push uncovers. The step is
+    /// offered only while the bot would take that pickup now (it is wanted
+    /// and a slot is free for it): 405's statue was pushed north on every
+    /// pass through the corridor for herbs the bot had no room for.
+    pub uncovers: Option<u8>,
     /// `<interact mark="no">`: the step's flag is no sequence mark, so a set
     /// flag seen before the step was offered does not count it done; only
     /// the flag as it is now does. A put-back reads a flag that is set until
@@ -985,6 +990,7 @@ fn parse_climb(node: Node<'_, '_>) -> Result<Interact> {
         after_clear: false,
         reveals: None,
         opens: None,
+        uncovers: None,
         mark: true,
         label: node.attribute("label").map(str::to_string),
     })
@@ -1033,6 +1039,7 @@ fn parse_interact(node: Node<'_, '_>) -> Result<Interact> {
             .attribute("opens")
             .map(|_| attr(node, "opens"))
             .transpose()?,
+        uncovers: None,
         mark,
         label: node.attribute("label").map(str::to_string),
     })
@@ -1324,6 +1331,7 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
             "after_bank",
             "after_bit",
             "reveals",
+            "uncovers",
             "label",
             "character",
             "when",
@@ -1388,6 +1396,10 @@ fn parse_push(node: Node<'_, '_>) -> Result<Interact> {
             .map(|_| attr(node, "reveals"))
             .transpose()?,
         opens: None,
+        uncovers: node
+            .attribute("uncovers")
+            .map(|_| attr(node, "uncovers"))
+            .transpose()?,
         mark: true,
         label: node.attribute("label").map(str::to_string),
     })
@@ -1452,6 +1464,7 @@ fn parse_fight(node: Node<'_, '_>) -> Result<Interact> {
         after_clear: parse_after_while(node)?,
         reveals: None,
         opens: None,
+        uncovers: None,
         mark: true,
         label: node.attribute("label").map(str::to_string),
     })
@@ -1479,6 +1492,7 @@ fn parse_wait(node: Node<'_, '_>) -> Result<Interact> {
         after_clear: false,
         reveals: None,
         opens: None,
+        uncovers: None,
         mark: true,
         label: node.attribute("label").map(str::to_string),
     })
@@ -1516,6 +1530,7 @@ fn parse_camera(node: Node<'_, '_>) -> Result<Interact> {
         after_clear: parse_after_while(node)?,
         reveals: None,
         opens: None,
+        uncovers: None,
         mark: true,
         label: node.attribute("label").map(str::to_string),
     })
@@ -2074,6 +2089,7 @@ mod tests {
             after_clear: false,
             reveals: None,
             opens: None,
+            uncovers: None,
             mark: true,
             label: Some(label.to_string()),
         };
@@ -2154,6 +2170,7 @@ mod tests {
                     after_clear: false,
                     reveals: None,
                     opens: None,
+                    uncovers: None,
                     mark: true,
                     label: Some("push the statue".to_string()),
                 },
@@ -2165,6 +2182,7 @@ mod tests {
                     after_clear: false,
                     reveals: None,
                     opens: None,
+                    uncovers: None,
                     mark: true,
                     label: None,
                 },
@@ -2176,6 +2194,7 @@ mod tests {
                     after_clear: false,
                     reveals: None,
                     opens: None,
+                    uncovers: None,
                     mark: true,
                     label: Some("north hall".to_string()),
                 },
@@ -2187,6 +2206,7 @@ mod tests {
                     after_clear: false,
                     reveals: None,
                     opens: None,
+                    uncovers: None,
                     mark: true,
                     label: None,
                 },
@@ -2205,6 +2225,7 @@ mod tests {
                     after_clear: false,
                     reveals: None,
                     opens: None,
+                    uncovers: None,
                     mark: true,
                     label: Some("armor onto the vent".to_string()),
                 },
@@ -2223,6 +2244,7 @@ mod tests {
                     after_clear: false,
                     reveals: None,
                     opens: None,
+                    uncovers: None,
                     mark: true,
                     label: Some("shelf off the score".to_string()),
                 },
@@ -2458,6 +2480,7 @@ mod tests {
                 after_clear: false,
                 reveals: None,
                 opens: None,
+                uncovers: None,
                 mark: true,
                 label: Some("the crank".to_string()),
             }]
@@ -2493,6 +2516,7 @@ mod tests {
                 after_clear: false,
                 reveals: None,
                 opens: None,
+                uncovers: None,
                 mark: true,
                 label: Some("statue off the balcony".to_string()),
             }]
@@ -3068,6 +3092,8 @@ mod tests {
                 ("11A", 3, 0x2E),
                 ("11A", 4, 0x2C),
                 ("11A", 6, 0x29),
+                ("20B", 2, 0x30),
+                ("20F", 2, 0x30),
                 ("301", 4, 0x1D),
                 ("301", 4, 0x1D),
                 ("302", 4, 0x27),

@@ -239,12 +239,23 @@ impl World {
             let record = room.actions.entry(action.slot).or_default();
             record.kind = action.kind;
             (record.x, record.z) = centre(action.x, action.z, action.width, action.depth);
-            let (Some(item), Some(quantity)) = (action.item, action.quantity) else {
-                continue;
+            // A full drawer's item is a pickup at the drawer, under the
+            // slot of the item it holds: that row is dormant with no zone
+            // (102's drawer), so without this the world never knew the item
+            // and nothing came back for it or made room for it. A
+            // randomized game put a crest there.
+            let drawer = action
+                .desk
+                .filter(|desk| desk.full)
+                .and_then(|desk| Some((desk.item_slot, desk.item?, desk.quantity?)));
+            let (slot, item, quantity) = match (action.item, action.quantity, drawer) {
+                (Some(item), Some(quantity), _) => (action.slot, item, quantity),
+                (_, _, Some(drawer)) => drawer,
+                _ => continue,
             };
-            present.insert(action.slot);
+            present.insert(slot);
             let (x, z) = centre(action.x, action.z, action.width, action.depth);
-            let record = room.items.entry(action.slot).or_insert(ItemRecord {
+            let record = room.items.entry(slot).or_insert(ItemRecord {
                 item,
                 quantity,
                 present: true,
@@ -987,6 +998,53 @@ pub(super) mod tests {
         assert_eq!(row(&items, 4).get::<u64>("taken_tick").unwrap(), 30);
         assert!(!taken(6));
         assert!(!present(4) && !present(5) && !present(6));
+        let frontier: Table = table.get("frontier").unwrap();
+        assert_eq!(frontier.raw_len(), 0);
+    }
+
+    #[test]
+    fn a_full_drawers_item_is_a_pickup_under_the_item_slot() {
+        let mut world = World::default();
+        let mut a = snapshot(0x102, 5000, 5000);
+        // The drawer (slot 4) holds the item of slot 2, a dormant row with
+        // no zone and no item of its own.
+        let mut drawer = action(4, "desk", 3000, 2500);
+        drawer.desk = Some(super::super::DeskSnapshot {
+            lock_bit: 5,
+            item_slot: 2,
+            item: Some(0x29),
+            quantity: Some(1),
+            full: true,
+        });
+        a.actions.push(drawer);
+        a.actions.push(ActionSnapshot {
+            x: 0,
+            z: 0,
+            width: 0,
+            depth: 0,
+            flags: 0,
+            ..action(2, "item_dormant", 0, 0)
+        });
+        world.observe(1, &a);
+
+        let (_lua, table) = world_table(&world, &a);
+        let items: Table = room_row(&table, "102").get("items").unwrap();
+        assert_eq!(row(&items, 2).get::<u8>("item").unwrap(), 0x29);
+        assert!(row(&items, 2).get::<bool>("present").unwrap());
+        assert_eq!(row(&items, 2).get::<i32>("x").unwrap(), 3000);
+        let frontier: Table = table.get("frontier").unwrap();
+        assert_eq!(frontier.raw_len(), 1);
+
+        // Emptied as the item enters the inventory: taken, off the frontier.
+        a.actions[0].desk.as_mut().unwrap().full = false;
+        a.inventory.push(InventoryItem {
+            id: 0x29,
+            quantity: 1,
+        });
+        world.observe(2, &a);
+        let (_lua, table) = world_table(&world, &a);
+        let items: Table = room_row(&table, "102").get("items").unwrap();
+        assert!(row(&items, 2).get::<bool>("taken").unwrap());
         let frontier: Table = table.get("frontier").unwrap();
         assert_eq!(frontier.raw_len(), 0);
     }

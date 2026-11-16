@@ -10,6 +10,13 @@
      all hold); Lua reads the value as `bot:param(NAME)`. An undeclared name
      or value is an error, on the command line and in a `when`. -->
 <params format="1">
+  <!-- Where the pack's items lie. `retail` is the game as shipped. `random`
+       is a pack whose item spots were shuffled (a randomizer): rooms then
+       build some spots differently (107's statue holds a plain pickup
+       instead of the map's event), and a spot the retail game makes
+       optional may hold a key. -->
+  <param name="items" values="retail|random" default="retail"
+         label="the item spots are the retail game's, or a randomizer's"/>
   <!-- 20D: Richard, poisoned by Yawn, waits for the serum from 100. `save`
        brings it within his seven minutes; `leave` never does, so he dies
        and the door to 20E opens once the timer runs out. In Chris's game

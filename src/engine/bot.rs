@@ -3847,6 +3847,7 @@ impl UserData for BotCtx {
                 row.set("after_clear", fact.after_clear)?;
                 row.set("reveals", fact.reveals)?;
                 row.set("opens", fact.opens)?;
+                row.set("uncovers", fact.uncovers)?;
                 row.set("mark", fact.mark)?;
                 row.set("label", fact.label.as_deref())?;
                 interacts.push(row)?;

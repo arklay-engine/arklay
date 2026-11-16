@@ -308,7 +308,7 @@ function BotPuzzle.armed_for(bot, id)
     return BotTactics.armed_for(bot, id)
 end
 
-function BotPuzzle.next_interact(bot)
+function BotPuzzle.next_interact(bot, passes)
     local interacts = meta(bot).interacts or {}
     BOT_STATE.puzzle = BOT_STATE.puzzle or {}
     local room = bot:room().id
@@ -341,7 +341,10 @@ function BotPuzzle.next_interact(bot)
         elseif fact.kind == "climb" then
             finished = BotPuzzle.flag_done(bot, fact) and not on_top
         elseif fact.bank then
+            -- (A fight found with nobody to fight is passed:
+            -- BotNav.hold_fight.)
             finished = BotPuzzle.flag_done(bot, fact)
+                or (fact.kind == "fight" and BotNav.fight_absent(bot, room, fact))
         else
             finished = visits[index] == true
         end
@@ -349,6 +352,11 @@ function BotPuzzle.next_interact(bot)
         -- Black Tiger is dodged while the knife cuts the web.
         if not finished and fact.kind == "fight" and fact.optional
             and not BotPuzzle.armed_for(bot, fact.enemy) then
+            finished = true
+        end
+        -- A step the caller passes over for now (`passes(fact)`: a push
+        -- that only uncovers a pickup the bot would not take).
+        if not finished and passes and passes(fact) then
             finished = true
         end
         if not finished then
@@ -382,7 +390,8 @@ function BotPuzzle.fight_ahead(bot, index)
     local interacts = meta(bot).interacts or {}
     for i = index or 1, #interacts do
         local fact = interacts[i]
-        if fact.kind == "fight" and not BotPuzzle.flag_done(bot, fact) then
+        if fact.kind == "fight" and not BotPuzzle.flag_done(bot, fact)
+            and not BotNav.fight_absent(bot, bot:room().id, fact) then
             return fact
         end
     end

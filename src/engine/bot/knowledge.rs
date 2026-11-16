@@ -268,6 +268,12 @@ pub struct Weapon {
     /// with acid or flame rounds is item 0x08 or 0x09, the explosive one
     /// 0x07): a fight that prefers either takes the other.
     pub variant_of: Option<u8>,
+    /// The weapon whose distance band this one takes against an enemy that
+    /// has no `<keep>` for it (optional attribute; a `variant_of` weapon
+    /// takes its base's without it): the Colts stand where the handgun
+    /// does, the rocket launcher where the grenade launcher does. See
+    /// [`Knowledge::derive_keeps`].
+    pub like: Option<u8>,
 }
 
 /// The poison a `<cure>` item clears: the engine's health-status bits.
@@ -343,6 +349,16 @@ pub fn load(pack: &Pack) -> Result<Option<Knowledge>> {
             std::str::from_utf8(&bytes).with_context(|| format!("{path} is not valid UTF-8"))?;
         let mut knowledge = parse(text).with_context(|| path.clone())?;
         knowledge.source = path;
+        // The engine indexes its hit records `weapon - 1 + type * 10`.
+        let tables = crate::combat::CombatTables::load(pack);
+        knowledge.derive_keeps(|enemy, weapon| {
+            let row = usize::from(enemy) * 10 + usize::from(weapon).wrapping_sub(1);
+            tables
+                .first_run
+                .get(row)
+                .filter(|_| (1..=10).contains(&weapon))
+                .map_or(0, |record| i32::from(record.damage))
+        });
         return Ok(Some(knowledge));
     }
     Ok(None)
@@ -803,6 +819,7 @@ fn parse_weapon(node: Node<'_, '_>) -> Result<Weapon> {
             "staple",
             "reserve",
             "variant_of",
+            "like",
         ],
     )?;
     check_leaf(node)?;
@@ -835,10 +852,53 @@ fn parse_weapon(node: Node<'_, '_>) -> Result<Weapon> {
             Some(_) => Some(attr(node, "variant_of")?),
             None => None,
         },
+        like: match node.attribute("like") {
+            Some(_) => Some(attr(node, "like")?),
+            None => None,
+        },
     })
 }
 
 impl Knowledge {
+    /// Adds the `<keep>` rows the file leaves out, from the game's own hit
+    /// table. The file's rows were measured on the retail route, where a
+    /// boss is met with the handgun, the shotgun or the grenade launcher; a
+    /// randomized game hands out the Colts and the rocket launcher early,
+    /// and a boss with no row for the only loaded gun was never fought.
+    ///
+    /// An enemy with no row for a weapon that names a band to take (`like`,
+    /// or its `variant_of` base) and a row for that one gets a row with the
+    /// same band and the hit table's damage (`damage(enemy, weapon)`, the
+    /// engine's first-run record). A weapon the table gives no damage
+    /// against it gets none. Only the file's own rows lend their band.
+    pub fn derive_keeps(&mut self, damage: impl Fn(u8, u8) -> i32) {
+        let weapons = &self.weapons;
+        for enemy in &mut self.enemies {
+            let written = enemy.keeps.clone();
+            for weapon in weapons {
+                let Some(source) = weapon.like.or(weapon.variant_of) else {
+                    continue;
+                };
+                if weapon.melee || written.iter().any(|keep| keep.weapon == weapon.id) {
+                    continue;
+                }
+                let Some(band) = written.iter().find(|keep| keep.weapon == source) else {
+                    continue;
+                };
+                let hit = damage(enemy.id, weapon.id);
+                if hit > 0 {
+                    enemy.keeps.push(Keep {
+                        weapon: weapon.id,
+                        min: band.min,
+                        max: band.max,
+                        damage: Some(hit),
+                        spare: None,
+                    });
+                }
+            }
+        }
+    }
+
     /// The `bot:knowledge()` table: `{source, enemies = {[id] = row},
     /// weapons = {[id] = row}}`. Unknown values are absent (nil).
     pub fn to_lua(&self, lua: &mlua::Lua) -> mlua::Result<mlua::Table> {
@@ -942,6 +1002,7 @@ impl Knowledge {
             row.set("staple", weapon.staple)?;
             row.set("reserve", weapon.reserve)?;
             row.set("variant_of", weapon.variant_of)?;
+            row.set("like", weapon.like)?;
             weapons.set(weapon.id, row)?;
         }
         table.set("weapons", weapons)?;
@@ -981,6 +1042,60 @@ mod tests {
 
     /// Each `<cure>` names an item whose engine definition clears that
     /// poison, and every engine cure item of the game is listed.
+    #[test]
+    fn a_weapon_without_a_row_takes_its_like_weapons_band_and_the_tables_damage() {
+        let text = r#"<knowledge format="1">
+            <weapon id="2" name="handgun" near="0" side="100" cadence="20" headshot="none" weak="none" status_bit="yes"/>
+            <weapon id="5" name="magnum" near="0" side="100" cadence="20" headshot="none" weak="none" status_bit="yes" like="2"/>
+            <weapon id="7" name="launcher" near="0" side="100" cadence="20" headshot="none" weak="none" status_bit="yes"/>
+            <weapon id="8" name="acid" near="0" side="100" cadence="20" headshot="none" weak="none" status_bit="yes" variant_of="7"/>
+            <weapon id="10" name="rocket" near="0" side="100" cadence="20" headshot="none" weak="none" status_bit="yes" like="7"/>
+            <weapon id="1" name="knife" near="0" side="100" cadence="20" headshot="none" weak="none" status_bit="yes" melee="yes" like="2"/>
+            <enemy id="8" name="plant" policy="fight" stand="torso" downed="none" up="yes"
+                   reach="6500" grabs="yes" outrun="no" speed="0" health="340">
+                <keep weapon="2" min="6800" max="7600" damage="15"/>
+            </enemy>
+            <enemy id="12" name="tyrant" policy="fight" stand="torso" downed="none" up="no"
+                   reach="2700" grabs="no" outrun="no" speed="100" health="220">
+                <keep weapon="2" min="3500" max="8000" damage="20"/>
+                <keep weapon="5" min="3000" max="4000" damage="unknown"/>
+                <keep weapon="7" min="3200" max="6000" damage="100"/>
+            </enemy>
+        </knowledge>"#;
+        let mut k = parse(text).unwrap();
+        // The engine's table: nothing for the acid rounds on the tyrant.
+        k.derive_keeps(|enemy, weapon| match (enemy, weapon) {
+            (8, 5) => 74,
+            (12, 8) => 0,
+            (12, 10) => 900,
+            _ => 33,
+        });
+        let rows = |enemy: usize| -> Vec<(u8, i32, i32, Option<i32>)> {
+            k.enemies[enemy]
+                .keeps
+                .iter()
+                .map(|keep| (keep.weapon, keep.min, keep.max, keep.damage))
+                .collect()
+        };
+        // The plant has no launcher row, so nothing lends the launcher's
+        // loadings or the rocket a band; the knife is a hand weapon.
+        assert_eq!(
+            rows(0),
+            [(2, 6800, 7600, Some(15)), (5, 6800, 7600, Some(74))]
+        );
+        // The tyrant's own magnum row stays; the rocket takes the
+        // launcher's band, and the acid rounds no row.
+        assert_eq!(
+            rows(1),
+            [
+                (2, 3500, 8000, Some(20)),
+                (5, 3000, 4000, None),
+                (7, 3200, 6000, Some(100)),
+                (10, 3200, 6000, Some(900)),
+            ]
+        );
+    }
+
     #[test]
     fn the_re1_cures_match_the_item_catalog() {
         use crate::item_catalog::StatusCure;

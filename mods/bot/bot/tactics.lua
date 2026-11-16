@@ -451,9 +451,13 @@ function BotTactics.pick_gun(guns, entry, health, margin, crowd, trap)
     end
     -- The knowledge's preferred weapon, held with the rounds for the kill.
     -- A row's `base` (knowledge variant_of: the launcher loaded with other
-    -- rounds) counts as that weapon for `prefer` and `open`.
+    -- rounds) counts as that weapon for `prefer` and `open`, and so does
+    -- its `like` (the weapon it is fought like: the rocket launcher for the
+    -- grenade launcher). A randomized game met 20C's Yawn 2 with a rocket
+    -- launcher held and the grenade launcher nowhere: the pick was the
+    -- Colt's last four rounds, two missed, and the run ended there.
     local function is(row, id)
-        return id ~= nil and (row.item == id or row.base == id)
+        return id ~= nil and (row.item == id or row.base == id or row.like == id)
     end
     local prefer = entry and entry.prefer
     local prefer_held = false
@@ -608,6 +612,18 @@ end
 -- nothing beyond the general reserve: the bot does not know them.
 function BotTactics.saved_rounds(bot, k, base, enemy_id, swamped)
     local saved = 0
+    -- In a met <fight>'s own room its enemy spends every gun's rounds, the
+    -- fight's preferred weapon or not: nothing is kept from the boss in
+    -- front of the bot for one it has not met. A randomized game met 20C's
+    -- Yawn 2 with four rockets held, all of them the general reserve, and
+    -- the bot fought it with the Colt's last rounds until the run ended.
+    local room = bot:room().id
+    for _, fight in ipairs(bot:fight_facts()) do
+        if fight.enemy == enemy_id and fight.room == room and BotNav.fight_met(bot, fight)
+            and not (fight.bank and bot:flag(fight.bank, fight.bit)) then
+            return 0
+        end
+    end
     for _, fight in ipairs(bot:fight_facts()) do
         local rounds = fight_rounds(bot, k, fight, base)
         if rounds then
@@ -674,7 +690,8 @@ local function firearm(bot, k, enemy, crowd, trap)
             guns[1] = { item = weapon.equipped,
                 rounds = family(weapon.equipped, weapon.clip + weapon.reserve),
                 equipped = true, reserve = k.weapons[weapon.equipped].reserve == true,
-                base = k.weapons[weapon.equipped].variant_of }
+                base = k.weapons[weapon.equipped].variant_of,
+                like = k.weapons[weapon.equipped].like }
         end
     end
     for _, row in ipairs(bot:menu().items or {}) do
@@ -686,7 +703,8 @@ local function firearm(bot, k, enemy, crowd, trap)
             if rounds > 0 then
                 guns[#guns + 1] = { item = row.item, rounds = rounds, equipped = false,
                     reserve = k.weapons[row.item].reserve == true,
-                    base = k.weapons[row.item].variant_of }
+                    base = k.weapons[row.item].variant_of,
+                    like = k.weapons[row.item].like }
             end
         end
     end

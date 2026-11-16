@@ -602,6 +602,19 @@ function BotInventory.dry_ammo(ctx, row, why)
         and ctx.ammo ~= nil and ctx.ammo[row.item] == true
 end
 
+-- Whether box row wanted back for `why` is what the run waits on now: a
+-- key a remembered lock needs, an item an open <use> takes, or the one heal
+-- a fight's readiness asks for (ctx.heal_due). Like a dry gun's rounds it
+-- takes a slot held for a needed pickup (ctx.hold_free), which is no more
+-- needed than it is. A randomized game's shield key went into 100's box
+-- before its door was seen; the trip back for it found the one free slot
+-- held for a pickup, took the ink ribbon and left the key in for the rest
+-- of the run. Yawn 2 waited the same way on a herb in the box.
+function BotInventory.needed_now(ctx, why)
+    return why == "a lock needs it" or why == "a <use> fact needs it"
+        or (why == "no heal item held" and (ctx.heal_due or ctx.heal_swap) == true)
+end
+
 function BotInventory.withdrawals(box_items, ctx, free)
     local out = {}
     -- A puzzle step held for a free slot keeps it (ctx.hold_free): 30E's
@@ -663,7 +676,8 @@ function BotInventory.withdrawals(box_items, ctx, free)
         -- Past the free slots only a dry gun's rounds come out; the rows
         -- ahead of them are skipped, not the end (the ribbon came first
         -- and left the shells in).
-        if #out >= free and not dry_ammo(row, why) then
+        if #out >= free and not dry_ammo(row, why)
+            and not BotInventory.needed_now(ctx, why) then
             why = nil
         end
         -- A top-up takes the stacks only while the reserve stays free.
@@ -1524,6 +1538,9 @@ function BotInventory.context(bot)
     ctx.used = used_slots(menu.items or {})
     ctx.full = ctx.used >= ctx.capacity
     ctx.heal_top_up = true
+    -- None held while the bot is hurt or a fight waits on one
+    -- (BotInventory.needed_now).
+    ctx.heal_due = ctx.heals == 0 and BotInventory.heal_wanted(bot) or nil
     -- The slots an earlier box open of this stay in the room freed with
     -- soft deposits (BotInventory.note_room_for) stay the pickups' until
     -- they are filled or the bot leaves: with rope=leave 403's swap boxed
@@ -1846,14 +1863,88 @@ end
 
 -- The pickups a held <use> item's room hands over before the use: an
 -- <avoid> on an item there that holding the use's item lifts (the rack
--- gives its shotgun up for the broken one). {[room .. ":" .. slot] = true}.
+-- gives its shotgun up for the broken one), or a pickup that stands in the
+-- use's own zone, which must be off before the use goes in: 105's
+-- fireplace arms the gold emblem only once the pickup on it is taken. The
+-- original's is the wood emblem, a key; in a randomized game it was a
+-- herb, left on a full inventory, and the fireplace never took the emblem.
+-- {[room .. ":" .. slot] = true}. Read once per tick.
+-- In the use's zone: within the player's reach (C.REACH) of its centre on
+-- each axis, where a press takes the pickup before the use.
+local handed_cache = { tick = nil, out = nil }
 function BotInventory.handed_over(bot)
+    if handed_cache.tick == bot:tick() then
+        return handed_cache.out
+    end
     local out = {}
     for _, fact in ipairs(bot:avoid_facts()) do
         if fact.unless_held and bot:has_item(fact.unless_held) then
             out[fact.room .. ":" .. fact.slot] = true
         end
     end
+    local rooms = nil
+    for _, fact in ipairs(bot:use_facts()) do
+        if bot:has_item(fact.item) and BotPuzzle.use_open(bot, fact) then
+            if not rooms then
+                rooms = {}
+                for _, r in ipairs(bot:world().rooms) do
+                    rooms[r.id] = r
+                end
+            end
+            local r = rooms[fact.room]
+            local zone = nil
+            for _, action in ipairs(r and r.actions or {}) do
+                if action.slot == fact.slot then
+                    zone = action
+                end
+            end
+            for _, item in ipairs(zone and r.items or {}) do
+                if item.present and not item.taken
+                    and BotNav.abs(item.x - zone.x) <= C.REACH
+                    and BotNav.abs(item.z - zone.z) <= C.REACH then
+                    out[fact.room .. ":" .. item.slot] = true
+                end
+            end
+        end
+    end
+    -- Pickups stacked on one spot: a press takes the lowest slot first, so
+    -- what lies on a key, or on an item a <use> or a <deliver> still needs,
+    -- must come off before it, whatever it is.
+    local wanted = nil
+    local function needed(item)
+        local kind = bot:item_kind(item)
+        if kind == "key" or kind == "book" then
+            return true
+        end
+        if not wanted then
+            wanted = {}
+            for _, fact in ipairs(bot:use_facts()) do
+                if not BotPuzzle.use_done(bot, fact) then
+                    wanted[fact.item] = true
+                end
+            end
+            for id, _ in pairs(BotPuzzle.wanted_items(bot)) do
+                wanted[id] = true
+            end
+        end
+        return wanted[item] == true
+    end
+    for _, r in ipairs(bot:world().rooms) do
+        for _, item in ipairs(r.items or {}) do
+            -- (Not the items parked at the room origin: no press takes
+            -- those.)
+            if item.present and not item.taken and not (item.x == 0 and item.z == 0)
+                and needed(item.item) then
+                for _, other in ipairs(r.items) do
+                    if other.slot < item.slot and other.present and not other.taken
+                        and other.x == item.x and other.z == item.z then
+                        out[r.id .. ":" .. other.slot] = true
+                    end
+                end
+            end
+        end
+    end
+    handed_cache.tick, handed_cache.out = bot:tick(), out
     return out
 end
 
@@ -2078,12 +2169,13 @@ function BotInventory.box_reason(bot, skip, here)
     -- slot held for 119's Doom Book, and the bot went to 206's hunter
     -- with no round.
     local raw_free = ctx.capacity - ctx.used
-    if free > 0 or #deposits > 0 or (ctx.unarmed and raw_free > 0) then
+    if raw_free > 0 or #deposits > 0 then
         for item, _ in pairs(BotInventory.remembered(bot)) do
             local kind, _, heals = bot:item_kind(item)
             local why = BotInventory.wanted_back({ item = item, kind = kind, heals = heals }, ctx)
             local dry = BotInventory.dry_ammo(ctx, { item = item, kind = kind }, why)
-            if free <= 0 and #deposits == 0 and not dry then
+            if free <= 0 and #deposits == 0 and not dry
+                and not BotInventory.needed_now(ctx, why) then
                 why = nil
             end
             if TOP_UPS[why] and free <= slots_to_leave(why, ctx)

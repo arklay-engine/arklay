@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 107 the gallery east of the main hall.
+     - The statue holds the 1F map out of reach. The step (object 0, yaw 0,
+       so it is climbed from its east face, looking west) goes north until it
+       is level with the statue, then west until the statue stops it; from on
+       top the pickup over the statue (item AOT 2) is live. In the retail
+       game AOT 2 has no zone (an event hands the map over) and the map opens
+       nothing, so the two steps hold only for a randomized game, which may
+       put a key there.
+     - The cabinet (object 1) stands in the mouth of the passage round the
+       corner to the shelf (item AOT 3, item bit 39). Pushed east it wedges
+       in the mouth; pushed north it stops with too little room to pass. It
+       goes south, from its north side, until it is level with the painting
+       on the east wall (message AOT 16), which leaves the mouth open and the
+       door to 108 clear. It is back in place on every entry. -->
+<bot format="2">
+  <push object="0" slot="2" uncovers="2" axis="z" bank="7" bit="145" done="clear" when="items=random"
+        label="the step north, level with the statue"/>
+  <climb object="0" slot="2" bank="7" bit="145" done="clear" when="items=random"
+         label="what the statue holds"/>
+  <push object="1" slot="16" uncovers="3" axis="z" bank="7" bit="39" done="clear" when="items=random"
+        label="the cabinet south, off the passage round the corner"/>
+</bot>

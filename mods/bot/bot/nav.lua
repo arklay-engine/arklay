@@ -34,6 +34,17 @@ function BotNav.fight_met_key(room, enemy)
     return string.format("fight_met:%s:%02X", room, enemy)
 end
 
+-- The memory key (bot:remember) of an optional <fight> whose enemy was not
+-- in `room`, nor another in its place (BotNav.hold_fight).
+function BotNav.fight_absent_key(room, enemy)
+    return string.format("fight_absent:%s:%02X", room, enemy)
+end
+
+-- Whether <fight> `fight` of `room` was found with nobody to fight.
+function BotNav.fight_absent(bot, room, fight)
+    return bot:memory()[BotNav.fight_absent_key(room, fight.enemy)] ~= nil
+end
+
 -- Whether the bot has come across <fight> `fight`: it entered the fight's
 -- room and fought or held back (remembered past a reload). Only a met
 -- boss shapes what the bot carries and saves: the run does not know the
@@ -667,6 +678,11 @@ end
 -- trailing face has passed the far quarter of the zone on that axis (a
 -- shelf moved off the item it hides), or with `dir.full` its far edge.
 
+-- Whether two action zones are one rectangle: pickups stacked on one spot.
+function BotNav.same_zone(a, b)
+    return a.x == b.x and a.z == b.z and a.width == b.width and a.depth == b.depth
+end
+
 function BotNav.object_by_slot(bot, slot)
     for _, object in ipairs(bot:objects()) do
         if object.slot == slot then
@@ -739,8 +755,10 @@ local PUSH_TRIES = 2
 local PUSH_STANDS = { C.REACH, C.APPROACH * 3 // 2, C.APPROACH * 4 // 3, C.APPROACH,
     C.APPROACH * 2 // 3 }
 -- Where along the face to stand, in thirds of the object's half size across
--- the push: the middle first, then either side (a wall band over one end).
-local PUSH_LATERALS = { 0, -1, 1 }
+-- the push: the middle first, then either side (a wall band over one end),
+-- then two thirds out (20F's cupboard stands in a wall niche: the floor
+-- behind its end face reaches only the outer third).
+local PUSH_LATERALS = { 0, -1, 1, -2, 2 }
 
 -- One tick of a push job. `job` fields set by the caller: object (slot),
 -- zone, label, done(bot, job), timeout, and optionally dir. Returns "done", "busy" or "failed"
@@ -1128,8 +1146,42 @@ function BotNav.hold_fight(bot, job)
         end
     end
     if not target then
+        -- Nothing of the fight's kind is here, but another enemy is: a
+        -- randomized game put it in the boss's place, with the boss's kill
+        -- flag. It is fought instead (after a moment, for a boss a scene
+        -- brings in). 30C's Black Tiger was a zombie, shot once and left
+        -- lying; the step waited on a spider that was not there until the
+        -- run was called stuck.
+        local stand_in
+        for _, e in ipairs(bot:enemies()) do
+            local known = k and k.enemies[e.id]
+            if e.id ~= job.enemy and e.health >= 0 and known and not BotNav.harmless(known)
+                and (not stand_in or e.health > stand_in.health) then
+                stand_in = e
+            end
+        end
+        job.absent = stand_in and (job.absent or 0) + 1 or nil
+        if stand_in and job.absent > 2 * C.SECOND then
+            bot:log(string.format("%s: no enemy 0x%02X here; fighting 0x%02X in its place",
+                job.label, job.enemy, stand_in.id))
+            job.enemy, job.slot, job.absent = stand_in.id, nil, nil
+        end
+        -- Nor anything in its place: an optional fight is passed for good
+        -- (BotNav.fight_absent: the sequence steps over it and no trip
+        -- comes back for it). A randomized game left 30C without its
+        -- Black Tiger, and three runs waited there for it until they were
+        -- called stuck. A boss is waited for: a scene brings it in.
+        job.nobody = not stand_in and (job.nobody or 0) + 1 or nil
+        if job.optional and job.nobody and job.nobody > 3 * C.SECOND then
+            bot:log(string.format("%s: no enemy 0x%02X here; the fight is passed",
+                job.label, job.enemy))
+            bot:remember(BotNav.fight_absent_key(bot:room().id, job.enemy), "1")
+            return "done"
+        end
         return "busy"
     end
+    job.nobody = nil
+    job.absent = nil
     if target.slot ~= job.slot then
         if not job.slot then
             -- The boss is met: a fight left undone (the bot ran out of
