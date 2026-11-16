@@ -1309,10 +1309,12 @@ fn hunter_pounce_bite(
 /// per-joint velocity state, so `death_timer` carries the original's joint-0
 /// `velX` (bit 0x80 airborne, low three bits the bounce counter) and
 /// `move_speed[1]` its `velY`; the vertical drop, the kill, the bounce and
-/// the 30-unit slide are ported against the entity position. The case-0/1
-/// per-joint velocities, the joint-0 rotation curl and the joint-2 limb bounce
-/// are not modeled: the port's pose is clip-driven, so the case-1 joint-2
-/// billboard that fires when its rotation crosses 0x100 is skipped with them.
+/// the 30-unit slide are ported against the entity position. The entry,
+/// drop and bounce sheets attach to the player's joint worlds like the
+/// original's. The case-0/1 per-joint velocities, the joint-0 rotation curl
+/// and the joint-2 limb bounce are not modeled: the port's pose is
+/// clip-driven, so the case-1 joint-2 billboard that fires when its rotation
+/// crosses 0x100 is skipped with them.
 /// `g_deathAnimationFlag` (the Plant 42 corpse pose on the DIED screen) has
 /// no port field; the death screen renders the ordinary corpse.
 fn plant42_eat(
@@ -1342,11 +1344,9 @@ fn plant42_eat(
                 // Bank 4 is the original's special/BGM pan update; the port
                 // has no `g_SndBank[0]` pan contract, so the call is inert.
                 play_player_sound(game, room, 4, 0);
-                // The original's three entry sheets attach to joints 0/1/2;
-                // the port's player skeleton is not the held pose, so one
-                // body sheet at the player transform is the approximation the
-                // Tyrant's joint sprays already document.
-                spawn_player_blood(game, [0, 0, 0]);
+                for joint in [0, 2, 1] {
+                    spawn_plant_eat_sheet(game, joint, [0, 0, 0]);
+                }
             }
             if game.entities[0].action_ticks_counter != 0 {
                 game.entities[0].action_ticks_counter =
@@ -1368,7 +1368,8 @@ fn plant42_eat(
                     // flag plus the bounce counter's start value 2.
                     entity.death_timer = 0x82;
                 }
-                spawn_player_blood(game, [0, 0, 0]);
+                spawn_plant_eat_sheet(game, 2, [0, 0, 0]);
+                spawn_plant_eat_sheet(game, 0, PLANT_EAT_JOINT0_SHEET);
             }
             // Case 2 falls through into case 3's body playback.
             let clip = game.entities[0].attack_anim;
@@ -1433,7 +1434,7 @@ fn plant_eat_physics(game: &mut GameState, player: &mut PlayerState) {
         }
     };
     if bounced {
-        spawn_player_blood(game, [0, 0, 0]);
+        spawn_plant_eat_sheet(game, 0, PLANT_EAT_JOINT0_SHEET);
     }
     let entity = &mut game.entities[0];
     if entity.death_timer & 7 != 2 {
@@ -1442,6 +1443,27 @@ fn plant_eat_physics(game: &mut GameState, player: &mut PlayerState) {
         walk::advance_xz(entity, 0x800, speed);
     }
     player.pos = entity.pos;
+}
+
+/// The joint-0 sheet's local offset in the Plant 42 drop and bounce: the
+/// original overrides the scratch vector's Y with 500.
+const PLANT_EAT_JOINT0_SHEET: [i32; 3] = [0, 500, 0];
+
+/// One Plant 42 eat sheet, the original's `Effect_CreateBillboard(0, 3, 0,
+/// &joints[joint].world, offset, 0)`: a type 0, depth 3 sheet attached to one
+/// of the player's joint worlds.
+fn spawn_plant_eat_sheet(game: &mut GameState, joint: u8, offset: [i32; 3]) {
+    let room_effects = std::rc::Rc::clone(&game.room_effects);
+    crate::effects::create_attached(
+        game,
+        &room_effects,
+        0,
+        3,
+        crate::effects::Attach::Joint(0, joint),
+        offset,
+        0,
+        0,
+    );
 }
 
 /// The Neptune's devour (the original's `player_anim_death_billboard`, the
@@ -4589,6 +4611,65 @@ mod tests {
             "the bounce re-arms case 4"
         );
         assert_ne!(game.entities[0].move_speed_current, 0);
+    }
+
+    /// The Plant 42 eat's sheets are the original's type 0, depth 3
+    /// billboards on the player's joint worlds: case 0's three on joints
+    /// 0/2/1, case 2's on joint 2 and 500 below joint 0, and the ground
+    /// bounce's 500 below joint 0.
+    #[test]
+    fn the_plant42_eat_sheets_attach_to_the_joint_worlds() {
+        use crate::effects::Attach;
+        use crate::effects::fixtures::{block, sprite};
+
+        let emd = vec![clip(0x40, 1); 4];
+        let mut game = test_game(7, 0, 0);
+        game.player_damage = Some(Arc::new(damage_bank(4, 3)));
+        game.entities[0].set_ignore(8);
+        game.entities[0].health = 100;
+        // Only depth row 3 has a frame, so a sheet at another depth spawns
+        // nothing.
+        let mut rows: [Vec<Vec<[u8; 24]>>; 8] = Default::default();
+        rows[3] = vec![vec![block(1, 0, 0)]];
+        game.weapon_effects.sprites.push(sprite(0, rows));
+        let mut player = test_player();
+        // The pool seats from slot 63 down, so slot 63 is the first sheet.
+        let sheet = |game: &GameState, index: usize| {
+            let effect = game.effects.slot(index).unwrap();
+            (effect.attach, effect.local_offset, effect.depth_group)
+        };
+
+        run(&mut game, &mut player, &emd, &[], &[]);
+        assert_eq!(game.effects.active_count(), 3, "the three entry sheets");
+        for (index, joint) in [(63, 0), (62, 2), (61, 1)] {
+            assert_eq!(sheet(&game, index), (Attach::Joint(0, joint), [0, 0, 0], 3));
+        }
+
+        // The grip spawns nothing more.
+        for _ in 0..4 {
+            run(&mut game, &mut player, &emd, &[], &[]);
+        }
+        assert_eq!(game.effects.active_count(), 3);
+
+        // Case 2 drops the body from ground level: joint 2's sheet, then
+        // joint 0's 500 below it.
+        game.entities[0].action_state = 2;
+        game.entities[0].pos = [0, 0, 0];
+        run(&mut game, &mut player, &emd, &[], &[]);
+        assert_eq!(game.effects.active_count(), 5, "the two drop sheets");
+        assert_eq!(sheet(&game, 60), (Attach::Joint(0, 2), [0, 0, 0], 3));
+        assert_eq!(sheet(&game, 59), (Attach::Joint(0, 0), [0, 500, 0], 3));
+
+        // The ground bounce adds joint 0's sheet, 500 below it.
+        for _ in 0..200 {
+            if game.entities[0].pos[1] == 0x28A {
+                break;
+            }
+            run(&mut game, &mut player, &emd, &[], &[]);
+        }
+        assert_eq!(game.entities[0].action_state, 4, "the bounce landed");
+        assert_eq!(game.effects.active_count(), 6, "the bounce sheet");
+        assert_eq!(sheet(&game, 58), (Attach::Joint(0, 0), [0, 500, 0], 3));
     }
 
     /// The Neptune devour (state 7, animFrameId 0x0B): clip 3 plays and its
