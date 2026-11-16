@@ -60,9 +60,8 @@ pub mod system_flags {
     pub const BR_INK_FLAG: &str = "BR_INK_FLAG";
     pub const BR_NO_TITLE_DEMO: &str = "BR_NO_TITLE_DEMO";
 
-    /// The executable patches staging's mod applies to every game
-    /// (`docs/biorand/patches.md` section A). Staging also always writes the
-    /// whole lock byte; here [`BR_LOCK_FULL_BYTE`] comes with
+    /// The executable patches staging's mod applies to every game. Staging
+    /// also always writes the whole lock byte; here [`BR_LOCK_FULL_BYTE`] comes with
     /// `locks/random`, the only stage that writes lock bytes, and a game on
     /// the original locks reads them the original's way.
     pub const ALWAYS: [&str; 5] = [

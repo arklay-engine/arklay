@@ -10,7 +10,7 @@ A one-off converter. It reads `rdt.json`, `doors.csv` and `enemy.csv` from
   logical rooms in that directory, then the directory's enemy spots.
 
 The schema is documented in `crates/arklay-biorand/src/map.rs`. The files
-are edited by hand after this runs once (`docs/biorand/plan.md`), so this
+are edited by hand after this runs once, so this
 script only checks and explains the conversion. Run it from the repository
 root:
 

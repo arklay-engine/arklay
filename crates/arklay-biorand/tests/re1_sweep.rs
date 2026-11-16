@@ -3,8 +3,9 @@
 //! each, then summarizes the failures. No pack is written, so a game costs a
 //! fraction of a second.
 //!
-//! The full sweep is ignored by default (`docs/biorand/plan.md`, "The seed
-//! sweep"):
+//! The full sweep is ignored by default. `scripts/biorand-sweep.sh` runs this
+//! plan level and a pack level (it generates a sample of the cases' packs and
+//! runs `arklay biorand verify --base` on each); by hand:
 //!
 //! ```sh
 //! SWEEP_CASES=1000 SWEEP_OUT=target/scratch/sweep.txt \

@@ -54,7 +54,7 @@ pub struct Report {
     pub audited: bool,
     /// Findings that do not fail the pack. The only one now is the
     /// consumable-key softlock: a player who spends a key on the wrong lock
-    /// first can be stranded (plan.md, Known issues).
+    /// first can be stranded (#738).
     pub warnings: Vec<String>,
     /// Entries compared with the base pack's, when it was.
     pub entries: usize,

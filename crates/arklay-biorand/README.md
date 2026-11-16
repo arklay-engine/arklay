@@ -1,7 +1,7 @@
 # BioRand
 
-BioRand is ported to the new randomizer (`crates/arklay-biorand`) in
-milestones; the plan is in [`plan.md`](plan.md). Today a
+BioRand is ported to the new randomizer (this crate) in
+milestones. Today a
 generated game randomizes the items, the start inventory, the doors
 (`doors/random`, on by default; it needs `items/random`), the locks
 (`locks/random`) and the enemies (`enemies/random`).
@@ -55,7 +55,7 @@ With random doors the rooms are renumbered: segment *n* of the route is
 stage *n*, numbered in the order the route reaches its rooms. Each room the
 game uses is its base folder copied to `room/<new id>/`, with
 `<room origin="...">` and a `<doors>` entry for each door whose target byte
-would not reach its planned room (see [Room definitions](#room-definitions)). Each planned
+would not reach its planned room (see "Origins and door targets" in `docs/packs/rooms.md`). Each planned
 door's `door_aot_set` holds the arrival at its far door (position, facing
 and camera cut) and keeps its animation and sound; a door leading out of
 the game is sealed (lock and key 255). Room 311 keeps its folder and id.

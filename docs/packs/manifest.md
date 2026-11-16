@@ -97,7 +97,7 @@ none, which is every ordinary pack, leaves bank 5 alone.
 | `BR_NO_TITLE_DEMO` | `0xCD` | No attract demo from the title screen. |
 
 A room script tests a system flag by name, as in `if (ITEM_RANDOMIZER)`
-(see [BioRand](../biorand/index.md#script-guards)): the guards in RE 1's rooms
+(BioRand's script guards): the guards in RE 1's rooms
 make the changes a randomized game needs, and fold away in a retail build. The
 engine reads the `BR_` flags for the behaviour each describes, and
 `DOOR_RANDOMIZER` turns the map off.

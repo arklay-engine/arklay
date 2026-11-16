@@ -48,8 +48,7 @@
 //! ```
 //!
 //! Attribute meanings follow staging's `rdt.json` field for field
-//! (`docs/biorand/research/staging-data.md` §1 and
-//! `docs/biorand/research/port-map.md` §3). The differences:
+//! (`BR/Map.cs` in `biorand/classic`'s staging branch). The differences:
 //!
 //! - A room's RDTs are its directory: arklay's rooms hold both mansion visits.
 //! - `player` is `chris` or `jill` instead of 0 or 1.
@@ -57,7 +56,7 @@
 //! - An item's `flag` is staging's `globalId`, the pickup flag in `FG_ITEM`.
 //!   `typeOffsets` is gone: scripts use `picked()` instead.
 //! - An enemy rule has no `condition`: the room's script says where added
-//!   enemies go with `random_enemies()` (`docs/biorand/plan.md`).
+//!   enemies go with `random_enemies()` (`README.md`).
 //! - A `<spot>` is a candidate enemy position (staging's `enemy.csv`). Staging
 //!   gives each spot to one logical room; arklay gives it to the room's
 //!   directory, so [`Map::spots`] is keyed by the directory's name in lowercase

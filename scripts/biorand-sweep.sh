@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The BioRand seed sweep (docs/biorand/plan.md, "The seed sweep").
+# The BioRand seed sweep (crates/arklay-biorand/tests/re1_sweep.rs).
 #
 #   scripts/biorand-sweep.sh [--base re1.akpak] [--plan-cases N] [--packs N]
 #                            [--first SEED] [--out DIR] [--no-plan] [--no-packs]

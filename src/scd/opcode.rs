@@ -365,16 +365,16 @@ pub mod system {
     pub const ITEM_RANDOMIZER: u8 = 0xC3;
     /// Locks are randomized (`locks/random`).
     pub const LOCK_RANDOMIZER: u8 = 0xC4;
-    /// Cutscenes are disabled (`cutscenes/disable`); patches.md section E
-    /// lists the guards on this flag.
+    /// Cutscenes are disabled (`cutscenes/disable`); RE 1's room scripts
+    /// guard the scenes it skips on this flag.
     pub const CUTSCENES_DISABLED: u8 = 0xC5;
     /// `progression/tyrant2` is Always, so the rooftop Tyrant is forced
-    /// (patches.md section B, `ForceHelipadTyrant`).
+    /// (staging's `ForceHelipadTyrant`).
     pub const FORCE_TYRANT2: u8 = 0xC6;
     /// The generated game reaches the laboratory.
     pub const LAB: u8 = 0xC7;
     /// BioRand patches 16 to 21: the whole lock byte is the lock flag index,
-    /// for 256 lock flags (patches.md section A).
+    /// for 256 lock flags.
     pub const BR_LOCK_FULL_BYTE: u8 = 0xC8;
     /// BioRand patches 5 and 6: Neptune can die (Cerberus's death routine) and
     /// takes weapon damage.
@@ -383,7 +383,7 @@ pub mod system {
     /// poison, which a blue herb cures, with no trip to room 100.
     pub const BR_YAWN_POISON: u8 = 0xCA;
     /// BioRand patches 8 and 9: the extra blue herb mixes, two of which are
-    /// BioRand's own (patches.md section A).
+    /// BioRand's own.
     pub const BR_HERB_MIXES: u8 = 0xCB;
     /// BioRand patches 11 to 13: ink reads scenario flag 122 for both
     /// characters.

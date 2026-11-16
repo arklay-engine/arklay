@@ -7,7 +7,8 @@
 //! engine crate), a configuration and a seed; its output is the plan of a
 //! generated game. Applying that plan to a pack is the engine crate's job.
 //!
-//! See `docs/biorand/plan.md` in the repository.
+//! `README.md` documents the commands, the generated pack and the room
+//! script guards.
 
 pub mod audit;
 pub mod config;

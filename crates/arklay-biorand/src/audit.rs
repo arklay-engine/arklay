@@ -9,7 +9,7 @@
 //! one-way and no-return doors. `World::search` tries every order of
 //! spending consumable keys; [`World::first_come`] spends each on the first
 //! lock found, which is the "greedy spend" a careless player makes (common
-//! 1.6.1 does not rule it out; see `docs/biorand/plan.md`, Known issues).
+//! 1.6.1 does not rule it out, #738).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -958,7 +958,7 @@ pub fn check_all(map: &Map, game: &Game) -> Vec<String> {
 
 /// Whether a player who spends each consumable key on the first lock found
 /// (the "greedy spend") still finishes the game. The route finder does not
-/// rule a stranded player out (plan.md, Known issues), so a failure here is a
+/// rule a stranded player out (#738), so a failure here is a
 /// measurement, not a bug in the plan. `Ok` also when the game has no keys.
 pub fn greedy_spend(map: &Map, game: &Game) -> Result<(), String> {
     let Some(keys) = &game.keys else {

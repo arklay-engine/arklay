@@ -99,7 +99,7 @@
 //! [`lift`]s it into tests ([`merge_rooms`], [`merge_regions`]).
 //!
 //! `random_enemies();` and `random_enemies(name);` mark where a BioRand game
-//! may add enemies (`docs/biorand/plan.md`). A variant's (retail) build has
+//! may add enemies (`crates/arklay-biorand/README.md`). A variant's (retail) build has
 //! nothing there; the runtime build has [`ENEMY_MARKER_OP`], a no-op the
 //! generator finds and replaces.
 //!
