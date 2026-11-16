@@ -308,6 +308,28 @@ function EnemyApi:joint_flag(joint) end
 ---@param value integer
 function EnemyApi:set_joint_flag(joint, value) end
 
+---Add to one posed joint's rotation. The turn stays in the pose on screen,
+---so a second call builds on it and the next animation blends out of it.
+---@param joint integer
+---@param x integer
+---@param y integer
+---@param z integer
+function EnemyApi:rotate_joint(joint, x, y, z) end
+
+---Compose a joint's world matrix from `parent`'s world as the previous frame
+---left it and the joint's posed transform, and hold it there: the skeleton
+---no longer composes that joint, and its children follow the held matrix,
+---until [`e:release_joint`](#EnemyApi.release_joint). Call it again each
+---tick to recompose. Plant 42's kill twists its vine this way.
+---@param joint integer
+---@param parent integer
+function EnemyApi:hold_joint(joint, parent) end
+
+---Let the skeleton compose a joint held by
+---[`e:hold_joint`](#EnemyApi.hold_joint) again.
+---@param joint integer
+function EnemyApi:release_joint(joint) end
+
 ---The original's `joint_setup_attack_effect`: arm one joint's attack effect.
 ---The joint is hidden and marked armed (its active flag cleared, which
 ---[`e:leg_reach`](#EnemyApi.leg_reach) and the zombie death paths read) and
