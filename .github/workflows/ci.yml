@@ -20,7 +20,7 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
-      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - run: cargo check --no-default-features
       - run: cargo check --manifest-path fuzz/Cargo.toml
       - run: cargo test --features sdl3-sys/build-from-source,sdl3-sys/sdl-unix-console-build
@@ -31,7 +31,9 @@ jobs:
       - run: cargo test --profile test-release --features sdl3-sys/build-from-source,sdl3-sys/sdl-unix-console-build
         env:
           LD_LIBRARY_PATH: ${{ github.workspace }}/target/test-release
-      - run: cargo doc --no-deps
+      # A bare `cargo test` means the engine crate alone.
+      - run: cargo test --profile test-release -p arklay-routing -p arklay-biorand
+      - run: cargo doc --no-deps --workspace
       - run: cargo build --release --features sdl3-sys/build-from-source,sdl3-sys/sdl-unix-console-build
       - name: Package the Linux artifact
         run: |
