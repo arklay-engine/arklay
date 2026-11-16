@@ -2879,7 +2879,7 @@ const WEAPON_SFX_ROWS: [&[&str]; 16] = [
     &["", "", "", "Flame01", "Flame02", "", "", "", "", "Flame03"],
     &["", "", "", "", "", "Grbomb01", "", "Grbomb02", "", "Grbomb04", "", "", "Grbomb03"],
     &["", "", "", "", "", "Gracid01", "", "Gracid02", "", "Gracid04", "", "", "", "Gracid03"],
-    &["", "", "", "", "", "Grfire01", "", "Grfire02", "", "Grfire04", "", "", "Grfire03"],
+    &["", "", "", "", "", "Grfire01", "", "Grfire02", "", "Grfire04", "", "", "", "", "Grfire03"],
     &["", "", "", "", "", "", "", "Rocket01", "", "Rocket02", "", "", "", "", "", "Rocket03"],
     &["Bio01", "", "", "", "", "", "", "", "", "", "", "", "", "cancel", "type01", "type02"],
     &["Evil01", "", "", "", "", "", "", "", "", "", "", "", "", "cancel", "type01", "type02"],
@@ -3470,6 +3470,12 @@ mod tests {
         assert_eq!(named, 55, "the weapon bank's named slots");
         assert_eq!(weapon_sound(2, 7), Some("Gun01"));
         assert_eq!(weapon_sound(2, 8), None, "the handgun's id 8 is silent");
+        // Each grenade round's impact cue (`effect_shot_impact`: 7 -> 0x0c,
+        // 8 -> 0x0d, 9 -> 0x0e) names its own bank's impact sample.
+        assert_eq!(weapon_sound(7, 0x0c), Some("Grbomb03"));
+        assert_eq!(weapon_sound(8, 0x0d), Some("Gracid03"));
+        assert_eq!(weapon_sound(9, 0x0e), Some("Grfire03"));
+        assert_eq!(weapon_sound(9, 0x0c), None);
         // Ids above the shipped table clamp to the machine-gun bank, and an
         // in-range-but-unshipped bank loads nothing.
         assert_eq!(weapon_sound(200, 7), Some("Win95_mg"));
