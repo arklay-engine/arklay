@@ -241,6 +241,10 @@ mod tests {
                 std::env::temp_dir().join(format!("arklay-watch-{}-{label}", std::process::id()));
             let _ = fs::remove_dir_all(&path);
             fs::create_dir_all(&path).unwrap();
+            // The watcher canonicalizes its sources, and the paths it reports
+            // are under them: on Windows that is the `\\?\` form with long
+            // names, not the temp dir's `RUNNER~1`.
+            let path = fs::canonicalize(&path).unwrap();
             Self { path }
         }
     }
