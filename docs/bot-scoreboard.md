@@ -80,3 +80,5 @@ two batches of one commit match seed for seed.
 | b42-E4-T | 329eae4+E4+T | re-test: T (reserve 6) on top of E4's heals | 14/17 | 23 | 71 | 112 | 197963.0 | 2 | NO | reject (14/17 but deaths 23, default dies) |
 | b43-reachsearch | 329eae4+R | R: reach search (16 directions x 4 distances, probe toward the zone centre) when no edge approach plans | 9/17 | 30 | 65 | 95 | 200836 | 5 | NO | reject (9/17, deaths 30; 20A's rounds need 20A's stair passage, and the failing items did not change) |
 | b44-E4-S2 | 329eae4+E4+S2 | re-test: S2 (narrowed slot budget) on top of E4's heals | 12/17 | 24 | 69 | 122 | 207792.0 | 3 | yes | reject (12/17, deaths 24) |
+| b45-base | 5c854cf | re-base at the bot PR's head (5c854cf), for W | 17/17 | 4 | 31 | 49 | 172301 | 0 | yes | base |
+| b46-weapons | 5c854cf+W | W: weapon entries for the Colts (0x04, 0x05) and the flamethrower (0x06), and bands for them and the rocket (0x0A) against the zombies, Cerberus and Hunter: a randomized game can start Jill with any of them | 17/17 | 4 | 31 | 49 | 172301 | 0 | yes | accept (seed for seed the same as b45-base; a BioRand seed's bot now fights with them) |

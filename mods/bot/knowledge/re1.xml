@@ -93,6 +93,17 @@
        rockets are the clip; no ammunition item refills it. -->
   <weapon id="0x0A" name="rocket launcher" near="0" side="1100" cadence="unknown"
           headshot="none" weak="none" status_bit="yes" reserve="yes"/>
+  <!-- The Colt Python with dumdum rounds (item 0x04) and with magnum rounds
+       (0x05), and the flamethrower (0x06). A normal Jill game meets none of
+       them early, but a randomized one (BioRand) can start her with any.
+       near is the handgun's forward strip; side is Jill's DEFAULT_RANGES
+       slot (3, 4: 800; 5: 400). Cadence and landing are not measured. -->
+  <weapon id="0x04" name="colt python (dumdum)" near="650" side="800" cadence="unknown"
+          headshot="none" weak="none" status_bit="yes"/>
+  <weapon id="0x05" name="colt python (magnum)" near="650" side="800" cadence="unknown"
+          headshot="none" weak="none" status_bit="yes" reserve="yes"/>
+  <weapon id="0x06" name="flamethrower" near="0" side="400" cadence="unknown"
+          headshot="none" weak="none" status_bit="yes"/>
   <!-- Knife. detect_knife: a radial reach of the range (Jill's
        DEFAULT_RANGES slot 0 = 500) plus the enemy radius, measured from a
        point 380 ahead of Jill. melee: no rounds; it is held only for an enemy
@@ -122,6 +133,13 @@
     <keep weapon="0x07" min="2500" max="5000" damage="201" spare="6"/>
     <keep weapon="0x08" min="2500" max="5000" damage="95"/>
     <keep weapon="0x09" min="2500" max="5000" damage="95"/>
+    <!-- DEFAULT_FIRST_RUN rows 3, 4, 5, 9 (+10 per zombie type). The Colts
+         keep the handgun's band and the rocket the launcher's; the
+         flamethrower's short stream band is a guess, not measured. -->
+    <keep weapon="0x04" min="2000" max="4000" damage="50"/>
+    <keep weapon="0x05" min="2000" max="4000" damage="130"/>
+    <keep weapon="0x06" min="900" max="1800" damage="20"/>
+    <keep weapon="0x0A" min="2500" max="5000" damage="900"/>
   </enemy>
   <!-- Naked zombie: the same driver as 0x00, collision radius 322. -->
   <enemy id="0x01" name="naked zombie" policy="fight" stand="torso" downed="down"
@@ -132,6 +150,13 @@
     <keep weapon="0x07" min="2500" max="5000" damage="201" spare="6"/>
     <keep weapon="0x08" min="2500" max="5000" damage="95"/>
     <keep weapon="0x09" min="2500" max="5000" damage="95"/>
+    <!-- DEFAULT_FIRST_RUN rows 3, 4, 5, 9 (+10 per zombie type). The Colts
+         keep the handgun's band and the rocket the launcher's; the
+         flamethrower's short stream band is a guess, not measured. -->
+    <keep weapon="0x04" min="2000" max="4000" damage="50"/>
+    <keep weapon="0x05" min="2000" max="4000" damage="130"/>
+    <keep weapon="0x06" min="900" max="1800" damage="20"/>
+    <keep weapon="0x0A" min="2500" max="5000" damage="900"/>
   </enemy>
   <!-- Green zombie: the same driver as 0x00. -->
   <enemy id="0x11" name="green zombie" policy="fight" stand="torso" downed="down"
@@ -142,6 +167,13 @@
     <keep weapon="0x07" min="2500" max="5000" damage="201" spare="6"/>
     <keep weapon="0x08" min="2500" max="5000" damage="95"/>
     <keep weapon="0x09" min="2500" max="5000" damage="95"/>
+    <!-- DEFAULT_FIRST_RUN rows 3, 4, 5, 9 (+10 per zombie type). The Colts
+         keep the handgun's band and the rocket the launcher's; the
+         flamethrower's short stream band is a guess, not measured. -->
+    <keep weapon="0x04" min="2000" max="4000" damage="50"/>
+    <keep weapon="0x05" min="2000" max="4000" damage="130"/>
+    <keep weapon="0x06" min="900" max="1800" damage="20"/>
+    <keep weapon="0x0A" min="2500" max="5000" damage="900"/>
   </enemy>
 
   <!-- Cerberus. enemy/02 behavior_run: 0x40 always, 0x20 inside 5000 until
@@ -159,6 +191,12 @@
     <keep weapon="0x07" min="1500" max="5000" damage="200"/>
     <keep weapon="0x08" min="1500" max="5000" damage="100"/>
     <keep weapon="0x09" min="1500" max="5000" damage="100"/>
+    <!-- DEFAULT_FIRST_RUN rows 23, 24, 25, 29; bands as the handgun's and
+         the launcher's (the flamethrower's a guess). -->
+    <keep weapon="0x04" min="1500" max="5000" damage="60"/>
+    <keep weapon="0x05" min="1500" max="5000" damage="130"/>
+    <keep weapon="0x06" min="900" max="1800" damage="20"/>
+    <keep weapon="0x0A" min="1500" max="5000" damage="900"/>
   </enemy>
 
   <!-- Web spinner. enemy/03 run: 0x40 always, 0x20 inside 4000, never 0x80;
@@ -217,6 +255,12 @@
     <keep weapon="0x07" min="3200" max="6000" damage="100"/>
     <keep weapon="0x08" min="3200" max="6000" damage="200"/>
     <keep weapon="0x09" min="3200" max="6000" damage="100"/>
+    <!-- DEFAULT_FIRST_RUN rows 63, 64, 65, 69; bands as the handgun's and
+         the launcher's (the flamethrower's a guess). -->
+    <keep weapon="0x04" min="3200" max="6000" damage="40"/>
+    <keep weapon="0x05" min="3200" max="6000" damage="130"/>
+    <keep weapon="0x06" min="900" max="1800" damage="20"/>
+    <keep weapon="0x0A" min="3200" max="6000" damage="900"/>
   </enemy>
 
   <!-- Yawn's first fight (entity 0x0D, the 210 attic; the enemy/0d machine,
