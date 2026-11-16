@@ -1216,7 +1216,11 @@ either reproduces them or consumes `ClassicMod` directly.
 
 ### 6.1 Package layout
 
-The repository is a single package today (no `[workspace]` in `Cargo.toml`).
+This is the layout proposed before the port, kept as written. As built, the
+randomizer is `crates/arklay-biorand` and the routing is its own package,
+`crates/arklay-routing` (see "Architecture" in `../plan.md`).
+
+The repository was a single package then (no `[workspace]` in `Cargo.toml`).
 To keep the main crate's compile cost unchanged (AGENTS.md), add a workspace
 with a new member, for example `biorand/` (package `arklay-biorand`, lib
 `arklay_biorand`). Its dependencies would be only `serde`, `serde_json`,
