@@ -21,6 +21,8 @@ local FADE_STEP = 16
 local SPIN_STEP = 0x20
 -- The item whose viewer model is the epilogue's rocket launcher.
 local ENDING_ITEM = 0x38
+-- The ending's sound bank (`LoadSoundBank(0xE)`).
+local ENDING_BANK = 0x0E
 
 -- The model's light record (ending_epilogue_build, EndingScreen.cpp:742-750):
 -- setBackColor(0xFFF, 0xFFF, 0xFFF) plus one white light at (100, 100, 100),
@@ -57,7 +59,9 @@ function M.open(api)
     if not model then
         api:log("warning: no epilogue model: " .. err)
     end
-    s = { captions = {}, spin = 0, step = 0, timer = 0, fade = 0, done = false }
+    -- The screen opens black: the fade is armed before its first frame.
+    s = { captions = {}, spin = 0, shown_spin = 0, step = 0, timer = 0, fade = 255, done = false }
+    api:fade(s.fade)
     -- The captions are credit entries 6 and 7, fully faded in from the start.
     for index, entry in ipairs({ 6, 7 }) do
         local slot = E.slot(E.CREDIT_ENTRIES[entry])
@@ -69,10 +73,18 @@ function M.open(api)
 end
 
 function M.update(api)
+    -- The frame shows the fade and the model as the previous tick left them:
+    -- the original presents its queues one frame behind the screen's task.
+    api:fade(s.fade)
+    s.shown_spin = s.spin
     if s.step == 0 then
         s.fade = 255
         s.step = 1
         s.timer = 0
+        -- play_sfx(1, 2) and (1, 3) from the ending's bank 14: `Ending06`
+        -- and an empty slot.
+        api:bank_sound(ENDING_BANK, 2)
+        api:bank_sound(ENDING_BANK, 3)
     elseif s.step == 1 then
         -- Fade in from black while the hold counts.
         if s.fade > 0 then
@@ -94,7 +106,6 @@ function M.update(api)
     end
     -- Spin the model about Z one step per frame.
     s.spin = i16(s.spin + SPIN_STEP)
-    api:fade(s.fade)
     if s.done then
         api:exit("ending_save")
     end
@@ -115,7 +126,7 @@ function M.draw(api)
         api:draw_ivm(model, {
             joints = {
                 { rx = 0x0F95C & 0x0FFF, ty = 500 },
-                { rz = s.spin },
+                { rz = s.shown_spin },
                 { rx = 0x0AA },
             },
             camera = CAMERA,

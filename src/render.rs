@@ -37,7 +37,7 @@ use crate::anim;
 use crate::assets::Artwork;
 use crate::draw2d::DrawList;
 use crate::mask;
-use crate::model::{Texture8, Tmd, TmdObject};
+use crate::model::{Texture8, Tmd, TmdObject, TmdPrim};
 use crate::state::{Cut, Image, Light, RoomId, RoomState};
 
 /// Default framebuffer width in pixels.
@@ -945,6 +945,7 @@ impl Framebuffer {
     /// [`Framebuffer::draw_page_sprite`] with a direct `0..=255` colour
     /// multiplier, the fade path [`Framebuffer::draw_indexed_sprite_scaled`]
     /// serves for indexed pages.
+    #[allow(clippy::too_many_arguments)] // one sprite's whole draw state
     pub fn draw_page_sprite_scaled(
         &mut self,
         art: &Artwork,
@@ -953,20 +954,15 @@ impl Framebuffer {
         clut_row: usize,
         scale: u8,
         tint: Tint,
+        blend: SpriteBlend,
     ) {
         match art {
-            Artwork::Indexed(texture) => {
-                self.draw_indexed_sprite_scaled(texture, src, dst, clut_row, scale, tint);
-            }
-            Artwork::Rgba(image) => self.draw_rgba_sprite_full(
-                image,
-                src,
-                dst,
-                scale,
-                tint,
-                SpriteBlend::Opaque,
-                [false; 2],
+            Artwork::Indexed(texture) => self.draw_indexed_sprite_full(
+                texture, src, dst, clut_row, scale, tint, blend, [false; 2],
             ),
+            Artwork::Rgba(image) => {
+                self.draw_rgba_sprite_full(image, src, dst, scale, tint, blend, [false; 2]);
+            }
         }
     }
 
@@ -1625,6 +1621,38 @@ impl Framebuffer {
     /// `mirror` flips the sampled source rectangle around its own origin, and
     /// `blend` mixes the sampled pixel with the framebuffer before it is
     /// written.
+    /// Queue a sprite on the GPU list: `visible` is the clipped framebuffer
+    /// box, `flags` the extra [`crate::draw2d::Map::flags`], and the list
+    /// multiplies each sampled texel by `colour` (alpha included) before it
+    /// blends.
+    #[allow(clippy::too_many_arguments)]
+    fn list_sprite(
+        &mut self,
+        src: [i32; 4],
+        dst: [i32; 4],
+        mirror: [bool; 2],
+        visible: [i32; 4],
+        flags: u32,
+        colour: [f32; 4],
+        mut sample: impl FnMut(i32, i32) -> Option<[u8; 4]>,
+    ) {
+        let Some(list) = self.list.as_deref_mut() else {
+            return;
+        };
+        let [x, y] = list.offset;
+        let [start_x, start_y, end_x, end_y] = visible;
+        let map = crate::draw2d::Map {
+            dst: [dst[0] + x, dst[1] + y, dst[2], dst[3]],
+            src: [src[2], src[3]],
+            atlas: [0, 0],
+            flags: (u32::from(mirror[0]) * crate::draw2d::MIRROR_X)
+                | (u32::from(mirror[1]) * crate::draw2d::MIRROR_Y)
+                | flags,
+        };
+        let visible = [start_x + x, start_y + y, end_x + x, end_y + y];
+        list.sprite(map, visible, colour, |u, v| sample(src[0] + u, src[1] + v));
+    }
+
     fn draw_sprite(
         &mut self,
         src: [i32; 4],
@@ -1651,16 +1679,7 @@ impl Framebuffer {
         if start_x >= end_x || start_y >= end_y {
             return;
         }
-        if let Some(list) = self.list.as_deref_mut() {
-            let [x, y] = list.offset;
-            let map = crate::draw2d::Map {
-                dst: [dst_x + x, dst_y + y, dst_w, dst_h],
-                src: [src_w, src_h],
-                atlas: [0, 0],
-                flags: (u32::from(mirror[0]) * crate::draw2d::MIRROR_X)
-                    | (u32::from(mirror[1]) * crate::draw2d::MIRROR_Y),
-            };
-            let visible = [start_x + x, start_y + y, end_x + x, end_y + y];
+        if self.list.is_some() {
             let colour = match blend {
                 SpriteBlend::Opaque => [1.0; 4],
                 SpriteBlend::Half => [1.0, 1.0, 1.0, 0.5],
@@ -1668,11 +1687,9 @@ impl Framebuffer {
                 SpriteBlend::BlackAlpha(alpha) => [0.0, 0.0, 0.0, f32::from(alpha) / 255.0],
                 SpriteBlend::Add => [1.0; 4],
             };
-            let map = crate::draw2d::Map {
-                flags: map.flags | (u32::from(blend == SpriteBlend::Add) * crate::draw2d::ADDITIVE),
-                ..map
-            };
-            list.sprite(map, visible, colour, |u, v| sample(src_x + u, src_y + v));
+            let visible = [start_x, start_y, end_x, end_y];
+            let flags = u32::from(blend == SpriteBlend::Add) * crate::draw2d::ADDITIVE;
+            self.list_sprite(src, dst, mirror, visible, flags, colour, sample);
             return;
         }
         let width = self.width as usize;
@@ -2300,6 +2317,67 @@ impl Framebuffer {
         }
     }
 
+    /// Draw effect billboards on their own, far to near, with no scene
+    /// around them: a 2D screen's effect pool. The software renderer
+    /// rasterizes them exactly like the scene pass; a GPU frame list takes
+    /// each as a 2D sprite of its page region.
+    pub(crate) fn draw_effect_quads(&mut self, pages: &[Option<&Image>], quads: &[EffectQuad]) {
+        let mut quads = quads.to_vec();
+        mask::order_far_to_near(&mut quads, |quad| quad.key);
+        for quad in &quads {
+            let Some(page) = pages.get(quad.page).copied().flatten() else {
+                continue;
+            };
+            if self.list.is_none() {
+                self.rasterize_effect(page, quad);
+                continue;
+            }
+            let src = [
+                i32::from(quad.uv[0]),
+                i32::from(quad.uv[1]),
+                i32::from(quad.source[0]),
+                i32::from(quad.source[1]),
+            ];
+            let dst = [quad.pos[0], quad.pos[1], quad.size[0], quad.size[1]];
+            if dst[2] <= 0 || dst[3] <= 0 || src[2] <= 0 || src[3] <= 0 {
+                continue;
+            }
+            let mut visible = [
+                dst[0].max(0),
+                dst[1].max(0),
+                dst[0].saturating_add(dst[2]).min(self.width as i32),
+                dst[1].saturating_add(dst[3]).min(self.height as i32),
+            ];
+            if let Some([x, y, w, h]) = self.clip {
+                visible = [
+                    visible[0].max(x),
+                    visible[1].max(y),
+                    visible[2].min(x.saturating_add(w)),
+                    visible[3].min(y.saturating_add(h)),
+                ];
+            }
+            if visible[0] >= visible[2] || visible[1] >= visible[3] {
+                continue;
+            }
+            // The GPU effect layer's vertex colour: the tint record and the
+            // blend level, over each texel's own alpha, as `rasterize_effect`
+            // mixes them.
+            let (tint, alpha) = quad.colour();
+            let colour = [tint[0], tint[1], tint[2], alpha];
+            let (width, height) = (page.width as i32, page.height as i32);
+            let flags = crate::draw2d::TEXEL_ALPHA
+                | (u32::from(quad.op == EffectBlend::Add) * crate::draw2d::ADDITIVE);
+            self.list_sprite(src, dst, quad.mirror, visible, flags, colour, |u, v| {
+                if u < 0 || v < 0 || u >= width || v >= height {
+                    return None;
+                }
+                let offset = (v as usize * width as usize + u as usize) * 4;
+                let texel = page.rgba.get(offset..offset + 4)?;
+                (texel[3] != 0).then(|| [texel[0], texel[1], texel[2], texel[3]])
+            });
+        }
+    }
+
     /// Rasterize one effect billboard: nearest-sampled, clipped to the
     /// framebuffer, with texture-entry-zero transparent (the page's zero
     /// alpha), an RGB multiply from the spawn's tint record and a half blend
@@ -2610,6 +2688,7 @@ impl DoorScene {
             joints: &self.joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints,
             light_pos: None,
             per_joint_light: false,
@@ -2683,6 +2762,12 @@ pub struct EntityMesh<'a> {
     /// blended texel as `source * (256 - weight) + background * weight`, so
     /// `Some(0)` draws opaque and `Some(0x30)` keeps 18.75% background.
     pub blend_weight: Option<u8>,
+    /// Resolve the blend weight per mesh object instead: an RE1 entity's
+    /// joints are separate TMD records, so `CreateTmdObjectInternal` weighs
+    /// each one by its own first semi-transparent primitive
+    /// (`object_blend_weight`). The GPU renderer draws such a mesh once per
+    /// distinct weight (`gpu::scene::blend_groups`).
+    pub joint_blend: bool,
     /// Joint draw gate: bit `i` set means joint `i` is hidden and never draws
     /// (not even in the mirror copy), the port's stand-in for the joint flag
     /// byte's bit 0.
@@ -2736,21 +2821,44 @@ pub const NO_JOINT_COLOURS: [[u8; 3]; 32] = [NO_JOINT_COLOUR; 32];
 /// override, which becomes the `0x33` (0.2) background weight. One primitive
 /// marks every record of the TMD.
 pub(crate) fn record_blend_weight(model: &Tmd, blend_override: Option<u8>) -> Option<u8> {
-    const ABR_MODE: [u8; 4] = [0x80, 0x00, 0x80, 0xD0];
     let prim = model
         .objects
         .iter()
         .flat_map(|object| &object.prims)
         .find(|prim| prim.blend)?;
-    let mode = blend_override.unwrap_or(ABR_MODE[usize::from((prim.tsb >> 5) & 3)]);
-    Some(match mode {
+    Some(remap_blend_mode(prim, blend_override))
+}
+
+/// [`record_blend_weight`] for one TMD object: the weight an entity joint's
+/// own record gets. `cmd_omodel_set`'s override is reset before any entity
+/// record is built, so none applies.
+pub(crate) fn object_blend_weight(object: &TmdObject) -> Option<u8> {
+    let prim = object.prims.iter().find(|prim| prim.blend)?;
+    Some(remap_blend_mode(prim, None))
+}
+
+/// `GetTmdBlendMode`'s ABR table value (or the override), remapped by
+/// `CreateTmdObjectInternal` to the record's background weight.
+fn remap_blend_mode(prim: &TmdPrim, blend_override: Option<u8>) -> u8 {
+    const ABR_MODE: [u8; 4] = [0x80, 0x00, 0x80, 0xD0];
+    match blend_override.unwrap_or(ABR_MODE[usize::from((prim.tsb >> 5) & 3)]) {
         0 => 0x00,
         0x30 => 0x33,
         _ => 0x80,
-    })
+    }
 }
 
 impl EntityMesh<'_> {
+    /// The blend weight `object` draws with: its own record's under
+    /// [`joint_blend`](Self::joint_blend), the mesh's otherwise.
+    pub(crate) fn object_blend_weight(&self, object: &TmdObject) -> Option<u8> {
+        if self.joint_blend {
+            object_blend_weight(object)
+        } else {
+            self.blend_weight
+        }
+    }
+
     /// `camera` with this mesh's [`view_z_shift`](Self::view_z_shift) folded
     /// into its view translation.
     pub(crate) fn view_camera(&self, camera: &Camera) -> Camera {
@@ -3052,7 +3160,7 @@ fn draw_gameplay_scene_with_ribbon<'a>(
                 texture,
                 mesh.tint,
                 mesh.joint_colours.get(index).copied(),
-                mesh.blend_weight,
+                mesh.object_blend_weight(object),
                 room_object,
                 &mut triangles,
             );
@@ -3089,7 +3197,7 @@ fn draw_gameplay_scene_with_ribbon<'a>(
                     texture,
                     mesh.tint,
                     mesh.joint_colours.get(index).copied(),
-                    mesh.blend_weight,
+                    mesh.object_blend_weight(object),
                     false,
                     &mut triangles,
                 );
@@ -6139,6 +6247,7 @@ mod tests {
             joints: &joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: None,
             per_joint_light: false,
@@ -6195,6 +6304,7 @@ mod tests {
                 joints: &joints,
                 tint: [255; 3],
                 blend_weight: None,
+                joint_blend: false,
                 hidden_joints: 0,
                 light_pos: None,
                 per_joint_light: false,
@@ -6211,6 +6321,7 @@ mod tests {
                 joints: &joints,
                 tint: [255; 3],
                 blend_weight: None,
+                joint_blend: false,
                 hidden_joints: 0,
                 light_pos: None,
                 per_joint_light: false,
@@ -6290,6 +6401,7 @@ mod tests {
                 joints,
                 tint: [255; 3],
                 blend_weight: None,
+                joint_blend: false,
                 hidden_joints: 0,
                 light_pos: None,
                 per_joint_light: false,
@@ -6510,6 +6622,7 @@ mod tests {
             joints: &joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: None,
             per_joint_light: false,
@@ -7363,6 +7476,7 @@ mod tests {
             joints: &joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: None,
             per_joint_light: false,
@@ -7478,6 +7592,7 @@ mod tests {
             joints: &joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0b1,
             light_pos: None,
             per_joint_light: false,
@@ -7515,6 +7630,7 @@ mod tests {
             joints: &joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: None,
             per_joint_light: false,
@@ -7581,6 +7697,7 @@ mod tests {
             joints: &joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: None,
             per_joint_light: false,
@@ -7634,6 +7751,7 @@ mod tests {
             joints: &joints,
             tint: [128, 128, 128],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: None,
             per_joint_light: false,
@@ -7678,6 +7796,7 @@ mod tests {
             joints: &joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: None,
             per_joint_light: false,
@@ -7936,6 +8055,67 @@ mod tests {
         assert_eq!(
             record_blend_weight(&with_prim(true, 3 << 5), Some(0x30)),
             Some(0x33)
+        );
+    }
+
+    #[test]
+    fn an_entity_weighs_each_joint_record_on_its_own() {
+        let object = |blend: bool, tsb: u16| TmdObject {
+            vertices: vec![[0; 3]; 3],
+            normals: vec![[0, 0, 4096]],
+            prims: vec![TmdPrim {
+                vertices: [0, 1, 2],
+                normals: [0, 0, 0],
+                uv: [[0, 0]; 3],
+                clut: 0,
+                tsb,
+                textured: true,
+                blend,
+                additive: false,
+                raw_y: false,
+                flat_color: None,
+                quad: None,
+                uv_nudge: [0; 3],
+            }],
+        };
+        let model = Tmd {
+            objects: vec![object(false, 0), object(true, 0), object(true, 1 << 5)],
+        };
+        let texture = solid_texture([255, 255, 255, 255]);
+        let joints = [anim::Mat4x3::default(); 3];
+        let mut mesh = EntityMesh {
+            mesh: &model,
+            texture: &texture,
+            joints: &joints,
+            tint: [255; 3],
+            blend_weight: None,
+            joint_blend: true,
+            hidden_joints: 0,
+            light_pos: None,
+            per_joint_light: false,
+            complex_object: None,
+            view_z_shift: 0,
+            light_rotation: None,
+            fixed_light: None,
+            joint_colours: NO_JOINT_COLOURS,
+            hd_name: None,
+        };
+        // An opaque joint stays on the per-packet path; each blending joint
+        // takes its own ABR's weight, not the model's first.
+        let weights: Vec<_> = model
+            .objects
+            .iter()
+            .map(|object| mesh.object_blend_weight(object))
+            .collect();
+        assert_eq!(weights, [None, Some(0x80), Some(0x00)]);
+        // A room record keeps the one weight it was given.
+        mesh.joint_blend = false;
+        mesh.blend_weight = Some(0x33);
+        assert!(
+            model
+                .objects
+                .iter()
+                .all(|object| mesh.object_blend_weight(object) == Some(0x33))
         );
     }
 

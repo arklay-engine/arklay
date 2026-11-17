@@ -13,6 +13,10 @@
 //! and identity the screens read; the plate layout lives with the screen
 //! scripts (`ui/lib/ending.lua`).
 
+use std::path::{Path, PathBuf};
+
+use anyhow::{Context, Result};
+
 use crate::game::{self, GameState};
 
 /// The pre-ending film every row shares.
@@ -302,9 +306,98 @@ pub fn chain(
     films
 }
 
+/// The file beside the configuration that counts each game's cleared runs.
+pub const CLEARS_FILE: &str = "clears.txt";
+
+/// Where the cleared-run counts are kept: [`CLEARS_FILE`] in the
+/// configuration directory, beside the settings, as the PC port keeps its
+/// `Clear Number` with its settings rather than in a save.
+pub fn clears_path() -> PathBuf {
+    crate::paths::config_dir().join(CLEARS_FILE)
+}
+
+/// The `id = count` lines of a clears file; a line that is not one is
+/// skipped.
+fn parse_clears(text: &str) -> Vec<(String, u32)> {
+    text.lines()
+        .filter_map(|line| {
+            let (id, count) = line.split_once('=')?;
+            Some((id.trim().to_string(), count.trim().parse().ok()?))
+        })
+        .filter(|(id, _)| !id.is_empty())
+        .collect()
+}
+
+/// How many runs of the game pack `id` the file at `path` counts as cleared.
+pub fn clear_count(path: &Path, id: &str) -> u32 {
+    let text = std::fs::read_to_string(path).unwrap_or_default();
+    parse_clears(&text)
+        .into_iter()
+        .find_map(|(entry, count)| (entry == id).then_some(count))
+        .unwrap_or(0)
+}
+
+/// Count one more cleared run of the game pack `id` in the file at `path`
+/// (`g_dwClearCount++` as the ending hands back to the title), keeping the
+/// other games' counts. Returns the new count.
+pub fn record_clear(path: &Path, id: &str) -> Result<u32> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(err) => return Err(err).with_context(|| format!("failed to read {}", path.display())),
+    };
+    let mut counts = parse_clears(&text);
+    let count = match counts.iter_mut().find(|(entry, _)| entry == id) {
+        Some((_, count)) => {
+            *count = count.saturating_add(1);
+            *count
+        }
+        None => {
+            counts.push((id.to_string(), 1));
+            1
+        }
+    };
+    let mut out = String::new();
+    for (entry, value) in &counts {
+        out.push_str(&format!("{entry} = {value}\n"));
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("failed to create {}", dir.display()))?;
+    }
+    crate::atomic::write(path, out.as_bytes())?;
+    Ok(count)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_clear_counts_per_game_and_keeps_the_other_games() {
+        let dir = std::env::temp_dir().join(format!("arklay-clears-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join(CLEARS_FILE);
+        assert_eq!(clear_count(&path, "re1"), 0);
+        assert_eq!(record_clear(&path, "re1").unwrap(), 1);
+        assert_eq!(record_clear(&path, "re2").unwrap(), 1);
+        assert_eq!(record_clear(&path, "re1").unwrap(), 2);
+        assert_eq!(clear_count(&path, "re1"), 2);
+        assert_eq!(clear_count(&path, "re2"), 1);
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "re1 = 2\nre2 = 1\n"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_malformed_clears_line_is_skipped() {
+        assert_eq!(
+            parse_clears("re1 = 3\ngarbage\n = 4\nre2 = x\nmod-a=7"),
+            [("re1".to_string(), 3), ("mod-a".to_string(), 7)]
+        );
+    }
 
     #[test]
     fn select_id_covers_the_seven_rows() {

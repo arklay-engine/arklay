@@ -99,8 +99,9 @@ function E.slot(entry, dx)
         height = entry.height,
         fade_level = 0,
         fade_vel = 0,
-        -- The ending-6 fifth plate's additive glow (drawn opaque).
-        additive = false,
+        -- The descriptor's semi-transparency bit (`tex.flags` 0x40000000):
+        -- the PC draws the plate at half alpha over the frame.
+        translucent = false,
     }, Slot)
 end
 
@@ -124,21 +125,33 @@ function Slot:shade()
     return E.fade_shade(self.fade_level)
 end
 
+--- Keep what the slot shows now for `draw`: the RESULT screen presents its
+--- plates one frame behind the step machine, so it latches them before the
+--- tick changes them. A slot never latched draws its live state.
+function Slot:latch()
+    self.shown = {
+        active = self.active,
+        fade_level = self.fade_level,
+        translucent = self.translucent,
+    }
+end
+
 --- Draw a sprite slot from the `plate` page, or a text slot's `text`.
 function Slot:draw(api, plate, text)
-    if not self.active or self.fade_level == 0 then
+    local state = self.shown or self
+    if not state.active or state.fade_level == 0 then
         return
     end
     local ox, oy = E.origin(api)
     local x, y = self.x + ox, E.fit_row(api, self.y + oy, self.height)
-    local scale = E.shade_scale(self:shade())
+    local scale = E.shade_scale(E.fade_shade(state.fade_level))
     if self.kind == "sprite" then
         if plate then
             api:page_sprite_scaled(
                 plate,
                 0, self.tex_v, E.PLATE_WIDTH, self.height,
                 x, y, E.PLATE_WIDTH, self.height,
-                0, scale
+                0, scale, nil, state.translucent and "variant" or "opaque"
             )
         end
     elseif text then

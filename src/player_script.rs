@@ -52,6 +52,7 @@
 
 use std::sync::Arc;
 
+use crate::effects::Attach;
 use crate::enemy::anim::EntityAnim;
 use crate::enemy::walk;
 use crate::game::{
@@ -66,6 +67,12 @@ use crate::state::RoomState;
 /// state owns the player, so the return to state 1 re-enters the correct
 /// locomotion clip instead of keeping the scripted pose.
 const SCRIPTED_BEHAVIOR: u8 = 0xFF;
+
+/// Whether a scripted state owns the player this tick, so the entity's own
+/// speed and pose words are the live ones rather than the pad machine's.
+pub fn is_scripted(player: &PlayerState) -> bool {
+    player.behavior == SCRIPTED_BEHAVIOR
+}
 
 /// The original's animation remap for incoming clip ids below 0x10:
 /// `(action state base, clip)` pairs. A higher id plays from the third action
@@ -1229,12 +1236,8 @@ fn simple_recovery(
 /// death fade at `death_timer == 0xA0` and parks in the blocked state 4 at
 /// 0x20.
 ///
-/// Deviations: the original's `unk_bc` byte maps to `death_timer`; the two
-/// entry sheets attached to joint 1
-/// collapse to the player transform's ground sheets; the case-2 rotated
-/// -900 billboard shift has no port analogue because the ground quad carries
-/// no local offset, so only its recolour and shrink are kept; and case 1's
-/// trailing `EntityUpdateWeaponJoint(0)` stays with the held-weapon deferral.
+/// The original's `unk_bc` byte maps to `death_timer`, and case 1's trailing
+/// `EntityUpdateWeaponJoint(0)` stays with the held-weapon deferral.
 fn hunter_pounce_bite(
     game: &mut GameState,
     player: &mut PlayerState,
@@ -1255,11 +1258,12 @@ fn hunter_pounce_bite(
                 entity.set_joint_flag(1, flag);
                 entity.health = -1;
                 game.message_flags &= !0x40;
-                // The original's two entry sheets attach to joint 1 and the
-                // shared identity transform; both collapse to the player
-                // transform here.
-                spawn_player_blood(game, [0, 0, 0]);
-                spawn_player_blood(game, [0, 0, 0]);
+                // The two entry sheets: one rides joint 1's world matrix, the
+                // other stands on the identity transform at joint 1's world
+                // position, both from the last composed pose.
+                spawn_player_blood_at(game, 3, Attach::Joint(0, 1), [0, 0, 0]);
+                let joint = game.joint_worlds[0].get(1).map_or([0; 3], |world| world.t);
+                spawn_player_blood_at(game, 3, Attach::Identity, joint);
             }
             if game.entities[0].animation_frame_id < 10 {
                 spawn_player_blood(game, [0, -0x898, 0]);
@@ -1276,8 +1280,11 @@ fn hunter_pounce_bite(
             }
         }
         2 => {
-            // The original also shifts the billboard by the yaw-rotated
-            // (-900, 0, 0) vector; the port's ground quad has no local offset.
+            // The pool slides 900 units behind the body: the yaw-rotated
+            // (-900, 0, 0) added to `pushVelocity`.
+            let (x, z) = crate::player::rotate_xz(player.angle, -900, 0);
+            player.shadow_offset[0] = i32::from((player.shadow_offset[0] + x) as i16);
+            player.shadow_offset[1] = i32::from((player.shadow_offset[1] + z) as i16);
             player.shadow_tint = 0x00FF_FF50;
             player.shadow_half_x = player.shadow_half_x.wrapping_sub(200);
             player.shadow_half_z = player.shadow_half_z.wrapping_sub(200);
@@ -2060,12 +2067,14 @@ fn grabbed(game: &mut GameState, player: &mut PlayerState, emd_clips: &[Clip]) {
             return;
         }
         6 => {
-            // The head gore state and its sprays: the joint flag write is
-            // kept, the per-joint billboards stay with the joint-effect
-            // deferral.
+            // The head gore state: a sheet on the head joint and one on the
+            // identity transform at the hips' world position.
             let entity = &mut game.entities[0];
             entity.set_joint_flag(2, entity.joint_flag(2) | 0x0C);
             entity.action_state = 7;
+            spawn_player_blood_at(game, 3, Attach::Joint(0, 2), [0, 0, 0]);
+            let hips = game.joint_worlds[0].first().map_or([0; 3], |world| world.t);
+            spawn_player_blood_at(game, 0, Attach::Identity, hips);
             wound_player(game, &[2]);
         }
         _ => return,
@@ -2506,17 +2515,13 @@ fn spawn_claw_blood(game: &mut GameState, attacker: Option<usize>, offset: [i32;
 
 /// A blood sheet at the player's own transform with a local offset.
 fn spawn_player_blood(game: &mut GameState, offset: [i32; 3]) {
+    spawn_player_blood_at(game, 0, Attach::Player, offset);
+}
+
+/// A type 0 blood sheet in depth group `depth` on `attach`.
+fn spawn_player_blood_at(game: &mut GameState, depth: u8, attach: Attach, offset: [i32; 3]) {
     let room_effects = std::rc::Rc::clone(&game.room_effects);
-    crate::effects::create_attached(
-        game,
-        &room_effects,
-        0,
-        0,
-        crate::effects::Attach::Player,
-        offset,
-        0,
-        0,
-    );
+    crate::effects::create_attached(game, &room_effects, 0, depth, attach, offset, 0, 0);
 }
 
 /// A type 9 blood sheet attached to one of the player's joints.
@@ -4651,11 +4656,37 @@ mod tests {
         game.entities[0].set_ignore(6);
         game.entities[0].is_being_attacked = 1;
         game.message_flags = 0x40;
+        game.weapon_effects
+            .sprites
+            .push(crate::effects::fixtures::sprite(
+                0,
+                std::array::from_fn(|_| vec![vec![crate::effects::fixtures::block(2, 0, 0)]]),
+            ));
+        let mut joints = vec![crate::anim::Mat4x3::default(); 2];
+        joints[1].t = [10, -900, 20];
+        game.joint_worlds[0] = joints;
         let mut player = test_player();
 
         // Case 0 falls into case 1: the pose, the kill and the first advance.
         run(&mut game, &mut player, &[], &[], &[]);
         assert_eq!(game.entities[0].action_state, 1);
+        // The entry sheets ride joint 1 and stand at its world position; the
+        // frame's ground sheet sits on the player transform.
+        let sheets: Vec<_> = (61..64)
+            .rev()
+            .map(|slot| {
+                let sheet = game.effects.slot(slot).unwrap();
+                (sheet.depth_group, sheet.attach, sheet.spawn_pos)
+            })
+            .collect();
+        assert_eq!(
+            sheets,
+            [
+                (3, Attach::Joint(0, 1), [0, 0, 0]),
+                (3, Attach::Identity, [10, -900, 20]),
+                (0, Attach::Player, [0, -0x898, 0]),
+            ]
+        );
         assert_eq!(game.entities[0].animation_frame_id, 1, "the entry advances");
         assert_eq!(
             game.entities[0].attack_anim, 0,
@@ -4677,10 +4708,14 @@ mod tests {
         run(&mut game, &mut player, &[], &[], &[]);
         assert_eq!(game.entities[0].action_state, 2);
 
-        // Case 2 recolours and shrinks the death billboard and falls into 3.
+        // Case 2 slides the death billboard 900 behind the body, recolours
+        // and shrinks it, and falls into 3.
         let (half_x, half_z) = (player.shadow_half_x, player.shadow_half_z);
+        player.angle = 0;
         run(&mut game, &mut player, &[], &[], &[]);
         assert_eq!(game.entities[0].action_state, 3);
+        // `RotMatrixY(0)`'s 4.12 cosine is 0xFFF, so the slide truncates to 899.
+        assert_eq!(player.shadow_offset, [-899, 0]);
         assert_eq!(game.entities[0].is_being_attacked, 0x80);
         assert_eq!(player.shadow_tint, 0x00FF_FF50);
         assert_eq!(player.shadow_half_x, half_x - 200);

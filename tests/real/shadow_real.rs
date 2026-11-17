@@ -105,6 +105,7 @@ fn player_shadow_capture_is_deterministic_and_present_at_spawn() {
         joints: &joints,
         tint: [255; 3],
         blend_weight: None,
+        joint_blend: false,
         hidden_joints: 0,
         light_pos: None,
         per_joint_light: false,

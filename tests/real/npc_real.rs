@@ -497,6 +497,7 @@ fn a_real_actor_room_draws_player_and_npc_shadows_in_one_frame() {
             joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: None,
             per_joint_light: false,

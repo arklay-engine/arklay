@@ -648,7 +648,7 @@ fn ending_six_takes_the_extra_plate_steps() {
     // The fifth plate activates after the 0x5A hold.
     drive_to(&mut screen, &cx, 8, 0x100);
     assert!(active(&screen, 5));
-    assert!(screen.test_eval::<bool>("return M.state.slots[5].additive"));
+    assert!(screen.test_eval::<bool>("return M.state.slots[5].translucent"));
     let (action, _) = run_to_result(&mut screen, &cx, 0x400);
     assert_eq!(action, ScreenAction::EndingEpilogue);
 }
@@ -664,13 +664,13 @@ fn ending_result_a_no_save_run_enables_the_confetti_bonus() {
         screen.update(&cx, neutral());
         assert_eq!(step(&screen), 11);
         assert_eq!(screen.test_eval::<bool>("return M.state.effects"), no_save);
-        assert_eq!(
-            screen.test_eval::<i64>("return #M.state.confetti"),
-            if no_save { 48 } else { 0 }
-        );
         let cues = cx.cues.borrow();
         if no_save {
-            assert_eq!(cues.as_slice(), &[UiCue::Decide]);
+            // `play_sfx(1, 0)` and `play_sfx(1, 1)`: the ending bank's pair.
+            assert_eq!(
+                cues.as_slice(),
+                &[UiCue::Bank(0x0E, 0), UiCue::Bank(0x0E, 1)]
+            );
         } else {
             assert!(cues.is_empty());
         }

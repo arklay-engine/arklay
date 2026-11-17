@@ -2279,7 +2279,23 @@ impl GpuRenderer {
                     .collect::<Vec<_>>()
                 })
         });
-        let draws: Vec<_> = primary.chain(mirrored).collect();
+        // A mesh whose joints carry their own record weights draws once per
+        // weight, each draw hiding the joints of the others.
+        let draws: Vec<_> = primary
+            .chain(mirrored)
+            .flat_map(|(index, mesh, uniforms)| {
+                scene::blend_groups(mesh)
+                    .into_iter()
+                    .map(move |(weight, hidden)| {
+                        (
+                            index,
+                            mesh,
+                            scene::with_record_weight(uniforms, weight, hidden),
+                            weight,
+                        )
+                    })
+            })
+            .collect();
         for mesh_pass in [
             scene::MeshPass::Opaque,
             scene::MeshPass::Blend,
@@ -2291,7 +2307,7 @@ impl GpuRenderer {
             if mesh_pass != scene::MeshPass::Opaque {
                 ordered.sort_by(|a, b| b.2.joints[2][3].total_cmp(&a.2.joints[2][3]));
             }
-            for &&(index, mesh, ref uniforms) in &ordered {
+            for &&(index, _, ref uniforms, blend_weight) in &ordered {
                 let Some((buffer, page)) = meshes[index] else {
                     continue;
                 };
@@ -2299,7 +2315,7 @@ impl GpuRenderer {
                     continue;
                 }
                 let (first, count) = scene::pass_range(
-                    mesh.blend_weight,
+                    blend_weight,
                     mesh_pass,
                     buffer.blend_start,
                     buffer.vertex_count,
@@ -2312,7 +2328,7 @@ impl GpuRenderer {
                     scene::MeshPass::Blend => self.pipelines.mesh_blend,
                     scene::MeshPass::Additive => self.pipelines.mesh_add,
                 };
-                let mut material = scene::material(mesh.blend_weight, mesh_pass);
+                let mut material = scene::material(blend_weight, mesh_pass);
                 let hd = if page.hd.is_null() {
                     [self.no_hd, self.no_hd_rows]
                 } else {
@@ -3855,6 +3871,7 @@ mod tests {
             joints: &joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: None,
             per_joint_light: false,
@@ -3994,6 +4011,7 @@ mod tests {
             joints: &joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: None,
             per_joint_light: false,
@@ -4196,6 +4214,7 @@ mod tests {
             joints: &joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: None,
             per_joint_light: false,

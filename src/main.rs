@@ -124,12 +124,13 @@ struct Cli {
     /// Play ending row `ID` (1-7): its film chain, the RESULT screen, the
     /// rocket-launcher epilogue (endings 6/7) and the next-cycle save, then the
     /// title. With `--capture` the frame after `--ticks` fixed ticks is
-    /// written headlessly.
+    /// written headlessly. With `--ui result` it only picks the RESULT
+    /// screen's row (default 1).
     #[arg(
         long,
         value_name = "ID",
         requires = "pack",
-        conflicts_with_all = ["room", "ui"],
+        conflicts_with_all = ["room"],
         value_parser = clap::value_parser!(u8).range(1..=7)
     )]
     ending: Option<u8>,
@@ -1952,6 +1953,7 @@ fn main() -> Result<()> {
                     clip: cli.clip,
                     pos: cli.model_pos,
                 }),
+                ending: cli.ending,
             };
             // A bot run saves at typewriters through the game's save screen;
             // without an explicit --save-dir it writes to a fresh directory of
@@ -1968,7 +1970,7 @@ fn main() -> Result<()> {
                     .clone()
                     .unwrap_or_else(arklay::config::Config::default_save_dir),
             };
-            if let Some(id) = cli.ending {
+            if let (Some(id), None) = (cli.ending, &cli.ui) {
                 return arklay::engine::run_ending(
                     &pack,
                     id,
