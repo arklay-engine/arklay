@@ -817,6 +817,23 @@ impl VolumeRamp {
     }
 }
 
+/// The joint motion of the Plant 42 eat (`player_anim_dispatch_4ba360`): the
+/// original's per-joint velocity fields, and the legs' angles, which their
+/// fall rebuilds the frozen world from while their own matrix keeps the swing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PlantEatJoints {
+    /// Joint 0's `velX` while case 1 curls it: 8 more every step.
+    pub curl_speed: i16,
+    /// Joint 0's `velZ` while the fall curls it: 1 more every step.
+    pub fall_curl_speed: i16,
+    /// Joint 2's `velX`, `velY` and `velZ`: the swing's step, then bit 15 for
+    /// falling and the low bits the bounce counter; the fall speed; the
+    /// fall's curl step.
+    pub legs_speed: [i16; 3],
+    /// Joint 2's angles.
+    pub legs_rotation: [i16; 3],
+}
+
 /// The scripted sound fade (`snd_fade_set`, 0x27; the original's `g_SndFade*`).
 ///
 /// `build_snd_fade_tbl` computes how many `dist_steps`-sized millibel steps
@@ -838,6 +855,12 @@ impl SoundFade {
     /// Whether a fade is running.
     pub fn active(&self) -> bool {
         self.kind != 0
+    }
+
+    /// Whether the fade has finished once the next tick's step has run: it is
+    /// idle, or that step ends its countdown.
+    pub fn over_after_next_tick(&self) -> bool {
+        self.kind == 0 || self.kind == -2
     }
 }
 
@@ -3805,6 +3828,18 @@ pub struct GameState {
     /// transform built from a grabbing joint, whose `t[0]` also doubles as the
     /// knock-back facing the thrown player reads.
     pub plant42_capture: crate::anim::Mat4x3,
+    /// `g_deathAnimationFlag`: the last state of the Plant 42 eat raises it
+    /// every tick and only the plant's init clears it (the original's global
+    /// sits outside the game-init wipe). With a Plant 42 (id 8) at the head of
+    /// the enemy list the DIED screen draws the torn-apart corpse.
+    pub death_animation_flag: bool,
+    /// The joint motion of the Plant 42 eat.
+    pub plant_eat: PlantEatJoints,
+    /// Player joints frozen at a world matrix, with their children composed
+    /// from it: the compose that sees joint flag bit 3 keeps the world it
+    /// builds and raises bit 0x40 (`rotate_entity`). The Plant 42 eat leaves
+    /// the legs (joint 2) hanging in the vine this way. Cleared on room load.
+    pub player_frozen_joints: Vec<(usize, crate::anim::Mat4x3)>,
     /// The shared Yawn capture matrix: the swallow-attack transform built from
     /// the head joint, recomposed by the swallowed player's own state machine
     /// every frame.
@@ -4287,6 +4322,9 @@ impl Default for GameState {
                 .expect("the companion arena is a fixed-size block"),
             plant42_shared_body: None,
             plant42_capture: crate::anim::Mat4x3::default(),
+            death_animation_flag: false,
+            plant_eat: PlantEatJoints::default(),
+            player_frozen_joints: Vec::new(),
             yawn_capture: crate::anim::Mat4x3::default(),
             neptune_capture: crate::anim::Mat4x3::default(),
             tyrant: crate::enemy::tyrant::TyrantState::default(),
@@ -5797,6 +5835,7 @@ impl GameState {
         // ribbon/ghost/limb scratch resets with it.
         self.companions.fill(None);
         self.plant42_shared_body = None;
+        self.player_frozen_joints.clear();
         self.tyrant = crate::enemy::tyrant::TyrantState::default();
         self.player_attacker = None;
         self.player_damage_owner = None;
@@ -11563,7 +11602,11 @@ impl ScdHost for ScdGameHost<'_> {
             }
             // `snd_fade_set`: arm the channel fade table.
             0x27 => {
-                crate::bgm::build_snd_fade_tbl(self.state, operand_i8(operands, 0));
+                crate::bgm::build_snd_fade_tbl(
+                    self.state,
+                    operand_i8(operands, 0),
+                    crate::bgm::SCRIPT_FADE,
+                );
                 StepResult::Continue
             }
             // `snd_pan_vol_set`: cache the raw pan/volume pair and set the

@@ -1464,8 +1464,7 @@ end
 -- State 0: one-time setup.
 local function init(e)
     e.state_word = 1
-    -- The original clears a death-screen latch here; the port has no death
-    -- screen consumer.
+    e.death_animation_flag = false
     e.has_enter_switch_zone = 1
     e.hit_state = 0
     e:reset_joints()

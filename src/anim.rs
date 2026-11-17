@@ -455,6 +455,9 @@ enum PoseStep {
         keyframe: usize,
         blend: u16,
         step: u16,
+        /// [`AnimPlayer::held`] when the tick ran: these joints keep the
+        /// rotation the pose had.
+        held: u32,
     },
     /// A behaviour adding to joint rotations on top of the posed joints
     /// (the hound's neck turn), as `(joint, delta)` pairs.
@@ -492,6 +495,10 @@ pub struct AnimPlayer {
     /// The blend counter the latest consuming tick applied (before the
     /// decrement), or 0 when that tick snapped.
     pub blend_used: u16,
+    /// Joints `Joint_move` leaves alone (joint flag bit 0x10), one bit each:
+    /// a consuming tick keeps their rotation instead of blending it toward
+    /// the frame.
+    pub held: u32,
     /// The pose actually shown after the last materialized consuming tick. A
     /// clip switch leaves it alone, so the next consuming tick eases from the
     /// pose on screen instead of from the new clip's frame table. The original
@@ -524,6 +531,7 @@ impl AnimPlayer {
             re2_blend: false,
             previous_keyframe: 0,
             blend_used: 0,
+            held: 0,
             applied: RefCell::new(None),
             pending_pose: RefCell::new(Vec::new()),
             y_scale: 0x1000,
@@ -647,13 +655,15 @@ impl AnimPlayer {
         // blend steps.
         let keyframe = usize::from(data.keyframe);
         let mut pending = self.pending_pose.borrow_mut();
-        if self.blend_used == 0 {
+        // A direct step replaces every joint, unless some keep what they had.
+        if self.blend_used == 0 && self.held == 0 {
             pending.clear();
         }
         pending.push(PoseStep::Keyframe {
             keyframe,
             blend: self.blend_used,
             step: self.blend_step,
+            held: self.held,
         });
         drop(pending);
         self.timing = data.timing;
@@ -692,12 +702,13 @@ impl AnimPlayer {
         }
         let mut pose = self.applied.borrow().clone();
         for step in steps {
-            let (keyframe, blend, step) = match step {
+            let (keyframe, blend, step, held) = match step {
                 PoseStep::Keyframe {
                     keyframe,
                     blend,
                     step,
-                } => (keyframe, blend, step),
+                    held,
+                } => (keyframe, blend, step, held),
                 PoseStep::Rotate(deltas) => {
                     let posed = pose.get_or_insert_with(|| current.clone());
                     for (joint, delta) in deltas {
@@ -714,17 +725,30 @@ impl AnimPlayer {
                 continue;
             };
             self.fold_scaled_y(pose.as_ref(), target, blend, step);
-            pose = match pose.take() {
-                Some(source) if blend != 0 && step != 0 => Some(if self.re2_blend {
-                    blend_keyframes_re2(&source, target, blend, step)
-                } else {
-                    blend_keyframes(&source, target, blend, step)
-                }),
+            let source = pose.take();
+            let mut next = match &source {
+                Some(source) if blend != 0 && step != 0 => {
+                    if self.re2_blend {
+                        blend_keyframes_re2(source, target, blend, step)
+                    } else {
+                        blend_keyframes(source, target, blend, step)
+                    }
+                }
                 // A direct step needs no source; a blend with no pose on
                 // screen (a fresh spawn) starts from the target instead of
                 // truncating it against itself.
-                _ => Some(target.clone()),
+                _ => target.clone(),
             };
+            if let Some(source) = &source {
+                for (joint, rotation) in next.rotations.iter_mut().enumerate().take(32) {
+                    if held & (1 << joint) != 0
+                        && let Some(kept) = source.rotations.get(joint)
+                    {
+                        *rotation = *kept;
+                    }
+                }
+            }
+            pose = Some(next);
         }
         *self.applied.borrow_mut() = pose.clone();
         Some(pose.unwrap_or_else(|| current.clone()))
@@ -1428,6 +1452,56 @@ mod tests {
         player.forget_pending_keyframes();
         let held = player.pose_keyframe(&clips, &keyframes).unwrap();
         assert_eq!(held.rotations[0], [0x400, 0, 0]);
+    }
+
+    /// `Joint_move` skips a joint flagged 0x10: a blended and a direct tick
+    /// both leave its rotation as it was while the others follow the clip,
+    /// and the root keeps its translation from the frame.
+    #[test]
+    fn held_joints_keep_their_rotation_through_blends_and_snaps() {
+        let clips = vec![Clip {
+            frames: vec![
+                ClipFrame {
+                    keyframe: 0,
+                    timing: 1,
+                    flags: 0,
+                };
+                4
+            ],
+        }];
+        let keyframes = vec![Keyframe {
+            vertex: [0; 3],
+            offset: [0, -900, 0],
+            rotations: vec![[0x400, 0, 0], [0x400, 0, 0]],
+        }];
+        let mut player = AnimPlayer::new(0);
+        player.set_applied_pose(Some(Keyframe {
+            vertex: [0; 3],
+            offset: [0, 0, 0],
+            rotations: vec![[0, 0, -0x200], [0, 0, 0]],
+        }));
+        player.held = 1;
+
+        player.blend_counter = 3;
+        player.update(&clips);
+        let pose = player.pose_keyframe(&clips, &keyframes).unwrap();
+        assert_eq!(pose.rotations[0], [0, 0, -0x200], "the held joint");
+        assert_eq!(pose.rotations[1], [0x100, 0, 0], "a quarter of the way");
+        assert_eq!(pose.offset[1], -225, "the root still blends");
+
+        // A direct tick keeps the held joint too, so it can't drop the pose
+        // it would fold onto.
+        player.blend_counter = 0;
+        player.update(&clips);
+        let pose = player.pose_keyframe(&clips, &keyframes).unwrap();
+        assert_eq!(pose.rotations[0], [0, 0, -0x200]);
+        assert_eq!(pose.rotations[1], [0x400, 0, 0]);
+        assert_eq!(pose.offset[1], -900);
+
+        player.held = 0;
+        player.update(&clips);
+        let pose = player.pose_keyframe(&clips, &keyframes).unwrap();
+        assert_eq!(pose.rotations[0], [0x400, 0, 0], "released");
     }
 
     #[test]

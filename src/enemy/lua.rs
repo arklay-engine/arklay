@@ -2357,6 +2357,15 @@ mod imp {
             fields.add_field_method_get("plant42_capture_t0", |_lua, api| {
                 Ok(api.game_ref().plant42_capture.t[0] as i16)
             });
+            // `g_deathAnimationFlag`: the eat's last state raises it and the
+            // plant's init clears it; the DIED screen reads it.
+            fields.add_field_method_get("death_animation_flag", |_lua, api| {
+                Ok(api.game_ref().death_animation_flag)
+            });
+            fields.add_field_method_set("death_animation_flag", |_lua, api, value: bool| {
+                api.game().death_animation_flag = value;
+                Ok(())
+            });
 
             // The companion's position and body fields the plant's SCD/effect
             // paths read (the flower body's height gates the ambient spray).
@@ -16219,12 +16228,14 @@ mod computer_arms_tests {
             let pack = pack();
             let mut game = plant(1);
             game.rand_state = 3;
+            game.death_animation_flag = true;
             let mut expected = 3u32;
             draws(&mut expected, 2); // discard + life only
             let mut host = LuaEnemyHost::new();
             head_low(&mut game);
             assert!(step(&mut host, &mut game, &pack));
             assert_eq!(game.rand_state, expected);
+            assert!(!game.death_animation_flag, "every init clears the flag");
             let entity = game.entities[1];
             assert_eq!(entity.health, 0x28, "the split vine keeps 40");
             assert_eq!(entity.sca_radius, 200);

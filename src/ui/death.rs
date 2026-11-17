@@ -79,7 +79,7 @@ pub enum DeathTick {
 #[derive(Debug, Clone)]
 pub struct DeathSequence {
     /// 0 idle, 1 delay, 2 arm the fade, 3 fading, 4 screen, 5 done, 6-7 the
-    /// explosion's wait.
+    /// explosion's wait, 8 `die_state`'s wait for the sound fade.
     state: u8,
     /// The delay countdown.
     delay: u8,
@@ -91,6 +91,8 @@ pub struct DeathSequence {
     pub finished: bool,
     /// The explosion's standalone screen: nothing of the room shows.
     blank: bool,
+    /// The DIED screen's ticks so far: its loop iterations.
+    screen_ticks: u32,
 }
 
 impl Default for DeathSequence {
@@ -109,6 +111,7 @@ impl DeathSequence {
             fade: Fade::inactive(),
             finished: false,
             blank: false,
+            screen_ticks: 0,
         }
     }
 
@@ -165,6 +168,29 @@ impl DeathSequence {
     pub fn end_screen(&mut self, counter: i32, state: i16) {
         self.fade.set(2, counter, state);
         self.blank = true;
+    }
+
+    /// Count one DIED screen tick and return how many ran before it.
+    pub fn count_screen_tick(&mut self) -> u32 {
+        let ran = self.screen_ticks;
+        self.screen_ticks = ran.saturating_add(1);
+        ran
+    }
+
+    /// The DIED screen's ticks so far.
+    pub fn screen_ticks(&self) -> u32 {
+        self.screen_ticks
+    }
+
+    /// `die_state` holds the black frame after the screen until the sound
+    /// fade the screen started has finished.
+    pub fn wait_for_sound_fade(&mut self) {
+        self.state = 8;
+    }
+
+    /// Whether `die_state` is waiting for the sound fade.
+    pub fn is_waiting_for_sound_fade(&self) -> bool {
+        self.state == 8
     }
 
     /// Whether the death machine has armed the single accumulator; until then
@@ -315,6 +341,24 @@ mod tests {
         assert_eq!(death.fade_state(), -1);
         assert_eq!(death.tick(), DeathTick::OpenScreen);
         assert_eq!(death.drawn_overlay(), None);
+    }
+
+    /// The screen counts its ticks, and `die_state`'s wait for the sound fade
+    /// keeps the black frame and the death machine's ownership of the fade.
+    #[test]
+    fn the_wait_for_the_sound_fade_keeps_the_black_frame() {
+        let mut death = DeathSequence::idle();
+        death.start(true, false, false);
+        assert_eq!(death.count_screen_tick(), 0);
+        assert_eq!(death.count_screen_tick(), 1);
+        assert_eq!(death.screen_ticks(), 2);
+        death.end_screen(0x800, -1);
+        death.wait_for_sound_fade();
+        assert!(death.is_waiting_for_sound_fade());
+        assert!(death.owns_fade());
+        assert!(!death.is_explosion());
+        let black = death.drawn_overlay().expect("still black");
+        assert_eq!((black.alpha, black.color), (255, FadeColor::from_id(2)));
     }
 
     #[test]

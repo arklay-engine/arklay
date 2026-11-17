@@ -55,7 +55,8 @@ use std::sync::Arc;
 use crate::enemy::anim::EntityAnim;
 use crate::enemy::walk;
 use crate::game::{
-    BANK_SYSTEM, Entity, EntitySound, FlagBank, GameState, MSF2_EFFECT_ZONE, PlayerDamageBank,
+    BANK_SYSTEM, Entity, EntitySound, FlagBank, GameState, MSF2_EFFECT_ZONE, PlantEatJoints,
+    PlayerDamageBank,
 };
 use crate::model::{Clip, Keyframe, Skeleton};
 use crate::player::{ClipSource, PlayerState};
@@ -236,7 +237,7 @@ pub fn update_banks(
         // animFrameId 0x0D, the dog's maul frame 2, the hunter's pounce bite
         // frame 6, Plant 42's eat frame 8, the Neptune's devour frame 0x0B
         // and the Tyrant's impale frame 0x0C.
-        7 => anim_window2(game, player, room, banks.emd_clips),
+        7 => anim_window2(game, player, room, banks.emd_clips, banks.emd_keyframes),
         // States 2/3 (hit reaction, death) hold the player still: only state 1
         // reads the pad.
         _ => {}
@@ -1066,14 +1067,20 @@ const TYRANT_IMPALE_INDEX: u8 = 0x0C + WINDOW2_BASE;
 /// table: the dog maul, the hunter pounce bite, Plant 42's eat, the Neptune
 /// devour, the Tyrant impale and Yawn's swallow. An unwired entry holds the
 /// pose.
-fn anim_window2(game: &mut GameState, player: &mut PlayerState, room: &RoomState, clips: &[Clip]) {
+fn anim_window2(
+    game: &mut GameState,
+    player: &mut PlayerState,
+    room: &RoomState,
+    clips: &[Clip],
+    keyframes: &[Keyframe],
+) {
     let index = game.entities[0].ignore().wrapping_add(WINDOW2_BASE);
     if index == DOG_MAUL_INDEX {
         simple_recovery(game, player, room, clips);
     } else if index == HUNTER_POUNCE_INDEX {
         hunter_pounce_bite(game, player, room, clips);
     } else if index == PLANT42_EAT_INDEX {
-        plant42_eat(game, player, room, clips);
+        plant42_eat(game, player, room, clips, keyframes);
     } else if index == NEPTUNE_DEVOUR_INDEX {
         neptune_devour(game, player, clips);
     } else if index == TYRANT_IMPALE_INDEX {
@@ -1302,26 +1309,31 @@ fn hunter_pounce_bite(
 /// case 1 runs the 0xF-frame grip countdown and advances damage clip 2; case 2
 /// arms the drop with the body clip and case 3 plays it at step 0x100; cases
 /// 4/5 run the damage clip out into case 6, whose body playback is the
-/// terminal pose.
+/// terminal pose and raises `g_deathAnimationFlag` for the DIED screen.
 ///
-/// The original's post-switch physics bounces the body's joint 0 off the
-/// ground and kills the player when it drops below 700. The port has no
-/// per-joint velocity state, so `death_timer` carries the original's joint-0
-/// `velX` (bit 0x80 airborne, low three bits the bounce counter) and
-/// `move_speed[1]` its `velY`; the vertical drop, the kill, the bounce and
-/// the 30-unit slide are ported against the entity position. The entry,
-/// drop and bounce sheets attach to the player's joint worlds like the
-/// original's. The case-0/1 per-joint velocities, the joint-0 rotation curl
-/// and the joint-2 limb bounce are not modeled: the port's pose is
-/// clip-driven, so the case-1 joint-2 billboard that fires when its rotation
-/// crosses 0x100 is skipped with them.
-/// `g_deathAnimationFlag` (the Plant 42 corpse pose on the DIED screen) has
-/// no port field; the death screen renders the ordinary corpse.
+/// The kill that hands the player over flags joint 0 0x10 and joint 2 8, and
+/// the eat starts in the same tick: case 1's first `Joint_move` still poses
+/// joint 2, the compose after it freezes joint 2's world (the legs stay in the
+/// vine), and from then on `Joint_move` leaves both rotations alone. Case 1
+/// curls joint 0 back by a growing step until it passes -0x400 (the body lies
+/// flat) and swings joint 2 by 0x20 a tick about Y until it reaches 0x100,
+/// turning its frozen world with it.
+///
+/// The post-switch physics drops the body: it kills the player and bounces
+/// joint 0 off the ground below 700, curling it on while it falls, and the
+/// body faces angle 0 once it lies flat. The swung legs fall out of the vine
+/// to the floor, turning flat as they go. The port keeps no velocities on its
+/// joints: `death_timer` carries joint 0's `velX` (bit 0x80 airborne, the low
+/// three bits the bounce counter), `move_speed[1]` its `velY`, and
+/// [`PlantEatJoints`] the rest. The sheets attach to the player's joint
+/// worlds like the original's: three on entry, two on the drop, one per body
+/// bounce, and one on the legs when the swing ends and each time they land.
 fn plant42_eat(
     game: &mut GameState,
     player: &mut PlayerState,
     room: &RoomState,
     emd_clips: &[Clip],
+    emd_keyframes: &[Keyframe],
 ) {
     let state = game.entities[0].action_state;
     match state {
@@ -1339,6 +1351,12 @@ fn plant42_eat(
                     entity.move_speed[1] = 0;
                 }
                 game.player_flags |= 4;
+                game.plant_eat = PlantEatJoints::default();
+                edit_player_pose(game, player, emd_clips, emd_keyframes, |_, pose| {
+                    if let Some(legs) = pose.rotations.get_mut(EATEN_LEGS) {
+                        *legs = [0; 3];
+                    }
+                });
                 wound_player(game, &[0, 2, 1]);
                 play_player_sound(game, room, 3, 3);
                 // Bank 4 is the original's special/BGM pan update; the port
@@ -1354,6 +1372,7 @@ fn plant42_eat(
                 let bank = game.player_damage.clone();
                 advance_mirrored_clip(game, player, bank.as_deref(), emd_clips);
             }
+            edit_player_pose(game, player, emd_clips, emd_keyframes, curl_and_swing);
         }
         2 | 3 => {
             if state == 2 {
@@ -1395,22 +1414,127 @@ fn plant42_eat(
         6 => {
             let clip = game.entities[0].attack_anim;
             advance_player_body_clip(game, player, emd_clips, clip, false, 0x400);
-            // The original raises `g_deathAnimationFlag` here; the port's
-            // DIED screen has no Plant 42 corpse pose (documented above).
+            game.death_animation_flag = true;
         }
         _ => {}
     }
-    plant_eat_physics(game, player);
+    plant_eat_physics(game, player, emd_clips, emd_keyframes);
 }
 
-/// The Plant 42 eat's post-switch drop: one frame of the original's joint-0
-/// bounce against the entity position. `death_timer` stands in for the joint's
-/// `velX` (0x80 airborne, low bits the bounce counter) and `move_speed[1]` for
-/// its `velY`.
-fn plant_eat_physics(game: &mut GameState, player: &mut PlayerState) {
-    if game.entities[0].death_timer & 0x80 == 0 || game.entities[0].pos[1] >= 700 {
+/// The eaten body's trunk: Plant 42's eat curls it flat.
+const EATEN_BODY: usize = 0;
+/// The eaten body's legs: Plant 42's eat leaves them in the vine.
+const EATEN_LEGS: usize = 2;
+
+/// Change the player's pose as the original's joint structs hold it: the
+/// clock's pose is materialized from the bank its last advance played (a
+/// damage bank keeps its keyframes on the clock, the body EMD does not),
+/// handed to `edit` and stored back as the pose on screen.
+fn edit_player_pose(
+    game: &mut GameState,
+    player: &mut PlayerState,
+    emd_clips: &[Clip],
+    emd_keyframes: &[Keyframe],
+    edit: impl FnOnce(&mut GameState, &mut Keyframe),
+) {
+    let pose = {
+        let clock = &game.entity_anims[0];
+        match clock.keyframes.as_deref() {
+            Some(keyframes) => {
+                let (_, clips, _) = reaction_bank(game.player_damage.as_deref(), emd_clips);
+                clock.player.pose_keyframe(clips, keyframes)
+            }
+            None => clock.player.pose_keyframe(emd_clips, emd_keyframes),
+        }
+    };
+    let Some(mut pose) = pose else {
+        return;
+    };
+    edit(game, &mut pose);
+    game.entity_anims[0].player.set_applied_pose(Some(pose));
+    publish_player(game, player);
+}
+
+/// A posed joint's angles; a seeded joint's [`crate::anim::IDENTITY_ROTATION`]
+/// is the zero rotation the original's joint holds.
+fn joint_angles(rotation: [i16; 3]) -> [i16; 3] {
+    if rotation == crate::anim::IDENTITY_ROTATION {
+        [0; 3]
+    } else {
+        rotation
+    }
+}
+
+/// The eat's case 1 on joints 0 and 2: joint 0 curls back by its growing
+/// `velX` while it is above -0x400, and joint 2 swings 0x20 a tick about Y
+/// (and back about X by its own `velX`) until it passes 0xFF, which raises
+/// the legs' falling flag. `MulMatrixInPlace(transform, world)` turns the
+/// frozen world by the swing.
+fn curl_and_swing(game: &mut GameState, pose: &mut Keyframe) {
+    let eat = &mut game.plant_eat;
+    if let Some(body) = pose.rotations.get_mut(EATEN_BODY) {
+        let mut angles = joint_angles(*body);
+        if -0x400 < angles[2] {
+            angles[2] = angles[2].wrapping_sub(eat.curl_speed);
+            eat.curl_speed = eat.curl_speed.wrapping_add(8);
+            *body = angles;
+        }
+    }
+    let Some(legs) = pose.rotations.get_mut(EATEN_LEGS) else {
+        return;
+    };
+    let mut angles = joint_angles(*legs);
+    if angles[1] >= 0x100 || eat.legs_speed[0] < 0 {
         return;
     }
+    angles[1] = angles[1].wrapping_add(0x20);
+    angles[0] = angles[0].wrapping_sub(eat.legs_speed[0]);
+    eat.legs_speed[0] = eat.legs_speed[0].wrapping_add(2);
+    *legs = angles;
+    eat.legs_rotation = angles;
+    let swing = crate::anim::rotation_matrix(
+        i32::from(angles[0]),
+        i32::from(angles[1]),
+        i32::from(angles[2]),
+    );
+    if let Some((_, world)) = game
+        .player_frozen_joints
+        .iter_mut()
+        .find(|(joint, _)| *joint == EATEN_LEGS)
+    {
+        world.r = crate::anim::mul_matrix0(&swing, &world.r);
+    }
+    if angles[1] > 0xFF {
+        eat.legs_speed[0] = 0x8002u16 as i16;
+        spawn_plant_eat_sheet(game, EATEN_LEGS as u8, [0, 0, 0]);
+    }
+}
+
+/// The Plant 42 eat's post-switch physics: one frame of the body's drop and
+/// bounce against the entity position, and of the legs' fall out of the vine.
+/// `death_timer` stands in for joint 0's `velX` (0x80 airborne, low bits the
+/// bounce counter) and `move_speed[1]` for its `velY`.
+fn plant_eat_physics(
+    game: &mut GameState,
+    player: &mut PlayerState,
+    emd_clips: &[Clip],
+    emd_keyframes: &[Keyframe],
+) {
+    if game.entities[0].death_timer & 0x80 != 0 && game.entities[0].pos[1] < 700 {
+        drop_eaten_body(game, player, emd_clips, emd_keyframes);
+    }
+    drop_eaten_legs(game);
+}
+
+/// The body's fall: the kill, the drop, the bounce off the floor, the 30-unit
+/// slide and the curl on to flat. A flat body's rotation is parked at -0x400
+/// without rebuilding its matrix, so the pose keeps the curl it reached.
+fn drop_eaten_body(
+    game: &mut GameState,
+    player: &mut PlayerState,
+    emd_clips: &[Clip],
+    emd_keyframes: &[Keyframe],
+) {
     let bounced = {
         let entity = &mut game.entities[0];
         entity.health = -1;
@@ -1443,6 +1567,78 @@ fn plant_eat_physics(game: &mut GameState, player: &mut PlayerState) {
         walk::advance_xz(entity, 0x800, speed);
     }
     player.pos = entity.pos;
+    edit_player_pose(game, player, emd_clips, emd_keyframes, |game, pose| {
+        let Some(body) = pose.rotations.get_mut(EATEN_BODY) else {
+            return;
+        };
+        let mut angles = joint_angles(*body);
+        if angles[2] < -0x3FF {
+            // Flat: the facing is cleared with the joint's angles.
+            game.entities[0].angle = 0;
+        } else {
+            angles[2] = angles[2].wrapping_sub(game.plant_eat.fall_curl_speed);
+            game.plant_eat.fall_curl_speed = game.plant_eat.fall_curl_speed.wrapping_add(1);
+            *body = angles;
+        }
+    });
+    player.angle = game.entities[0].angle;
+}
+
+/// The legs' fall once the swing has raised their flag: their frozen world
+/// drops to the floor below -400, bounces at -450 with a sheet and lies flat, its rotation
+/// rebuilt from the angles the fall curls (the joint's own matrix keeps the
+/// swing).
+fn drop_eaten_legs(game: &mut GameState) {
+    let GameState {
+        plant_eat: eat,
+        player_frozen_joints,
+        ..
+    } = game;
+    if eat.legs_speed[0] >= 0 {
+        return;
+    }
+    let Some((_, world)) = player_frozen_joints
+        .iter_mut()
+        .find(|(joint, _)| *joint == EATEN_LEGS)
+    else {
+        return;
+    };
+    if world.t[1] >= -400 {
+        return;
+    }
+    let [speed_x, speed_y, speed_z] = &mut eat.legs_speed;
+    let angles = &mut eat.legs_rotation;
+    world.t[1] = world.t[1].wrapping_add(i32::from(*speed_y));
+    let vy = *speed_y;
+    *speed_y = vy.wrapping_add(2);
+    if *speed_y > 0x20 {
+        *speed_y = vy.wrapping_add(8);
+        angles[0] = 0;
+        angles[1] = 0;
+    }
+    let landed = -400 < world.t[1] && *speed_x & 7 != 0;
+    if landed {
+        world.t[1] = -0x1C2;
+        let neg = speed_y.wrapping_neg();
+        *speed_y = ((i32::from(neg) + (i32::from(neg) >> 31 & 7)) >> 3) as i16;
+        *speed_x = speed_x.wrapping_sub(1);
+    }
+    if -0x400 < angles[2] {
+        angles[0] = 0;
+        angles[1] = 0;
+        angles[2] = angles[2].wrapping_sub(*speed_z);
+        *speed_z = speed_z.wrapping_add(1);
+        world.r = crate::anim::rotation_matrix(
+            i32::from(angles[0]),
+            i32::from(angles[1]),
+            i32::from(angles[2]),
+        );
+    } else {
+        angles[2] = -0x400;
+    }
+    if landed {
+        spawn_plant_eat_sheet(game, EATEN_LEGS as u8, [0, 0, 0]);
+    }
 }
 
 /// The joint-0 sheet's local offset in the Plant 42 drop and bounce: the
@@ -2380,6 +2576,10 @@ fn advance_player_clock(
     step: u16,
 ) -> bool {
     sync_player_bytes_to_clock(entity);
+    // `Joint_move` skips the joints flagged 0x10.
+    clock.player.held = (0..32)
+        .filter(|&joint| entity.joint_flag(joint) & 0x10 != 0)
+        .fold(0, |mask, joint| mask | 1 << joint);
     let completed = clock.advance(entity, clips, reverse, step);
     sync_player_bytes_from_clock(entity);
     completed
@@ -4670,6 +4870,139 @@ mod tests {
         assert_eq!(game.entities[0].action_state, 4, "the bounce landed");
         assert_eq!(game.effects.active_count(), 6, "the bounce sheet");
         assert_eq!(sheet(&game, 58), (Attach::Joint(0, 0), [0, 500, 0], 3));
+    }
+
+    /// The Plant 42 eat's joints: the kill holds joint 0 (0x10) and flags
+    /// joint 2 for the compose (8), so the first tick still blends the legs
+    /// toward the damage frame before swinging them; joint 0 curls flat, the
+    /// frozen legs swing to 0x100 and fall, the flat body faces angle 0 on the
+    /// drop and the terminal state raises the DIED screen's flag.
+    #[test]
+    fn the_plant42_eat_curls_the_body_and_tears_off_the_legs() {
+        const BODY: usize = 0;
+        const LEGS: usize = 2;
+        let emd_clips = vec![clip(0x40, 1); 4];
+        let emd_keyframes = vec![Keyframe::default()];
+        let banks = AnimationBanks {
+            emd_clips: &emd_clips,
+            emw_clips: &[],
+            room_clips: &[],
+            emd_keyframes: &emd_keyframes,
+            emw_keyframes: &[],
+            room_keyframes: &[],
+            emd_skeleton: None,
+            room_skeleton: None,
+        };
+        let mut game = test_game(7, 0, 0);
+        game.player_damage = Some(Arc::new(PlayerDamageBank {
+            keyframes: Arc::new(vec![Keyframe {
+                rotations: vec![[0; 3], [0; 3], [100, 50, 0]],
+                ..Keyframe::default()
+            }]),
+            clips: Arc::new(vec![clip(8, 1); 4]),
+        }));
+        game.entities[0].set_ignore(8);
+        game.entities[0].health = 100;
+        game.entities[0].angle = 0x300;
+        // The kill's flags and the pose on screen when it lands.
+        let flag = game.entities[0].joint_flag(BODY);
+        game.entities[0].set_joint_flag(BODY, flag | 0x10);
+        let flag = game.entities[0].joint_flag(LEGS);
+        game.entities[0].set_joint_flag(LEGS, flag | 8);
+        game.entity_anims[0].player.set_applied_pose(Some(Keyframe {
+            rotations: vec![[0, 62, 100], [0; 3], [5, 5, 5]],
+            ..Keyframe::default()
+        }));
+        let mut rows: [Vec<Vec<[u8; 24]>>; 8] = Default::default();
+        rows[3] = vec![vec![crate::effects::fixtures::block(1, 0, 0)]];
+        game.weapon_effects
+            .sprites
+            .push(crate::effects::fixtures::sprite(0, rows));
+        let mut player = test_player();
+        let room = RoomState::default();
+        let pose = |game: &GameState| game.entity_anims[0].player.applied_pose().unwrap();
+        let legs_sheet =
+            |game: &GameState, index: usize| game.effects.slot(index).map(|effect| effect.attach);
+
+        // The legs start from zero and blend a quarter of the way to the
+        // frame (blend 3 of 4) before the swing; the body is held.
+        update_banks(&mut game, &mut player, &room, &banks);
+        assert_eq!(pose(&game).rotations[LEGS], [25, 12 + 0x20, 0]);
+        assert_eq!(pose(&game).rotations[BODY], [0, 62, 100], "no curl yet");
+        assert_eq!(player.anim.applied_pose(), Some(pose(&game)), "published");
+
+        // The compose after it freezes the legs in the vine.
+        let flag = game.entities[0].joint_flag(LEGS);
+        game.entities[0].set_joint_flag(LEGS, (flag & 0xF5) | 0x50);
+        let vine = crate::anim::Mat4x3 {
+            r: crate::anim::IDENTITY_MATRIX,
+            t: [0, -2000, 0],
+        };
+        game.player_frozen_joints.push((LEGS, vine));
+
+        // Seven more swings reach 0x100, each turning the frozen world, and
+        // raise the legs' falling flag.
+        for _ in 0..7 {
+            update_banks(&mut game, &mut player, &room, &banks);
+        }
+        let swung = [25 - (2 + 4 + 6 + 8 + 10 + 12 + 14), 12 + 8 * 0x20, 0];
+        assert_eq!(pose(&game).rotations[LEGS], swung, "held through the clip");
+        assert!(game.plant_eat.legs_speed[0] < 0, "the legs fall");
+        let legs = game.player_frozen_joints[0].1;
+        assert_ne!(legs.r, crate::anim::IDENTITY_MATRIX, "the swing turns them");
+        assert_eq!(legs.t[1], -2000, "the fall starts from rest");
+        assert_eq!(game.effects.active_count(), 4, "the swing's end sheet");
+        let joint2 = Some(crate::effects::Attach::Joint(0, LEGS as u8));
+        assert_eq!(legs_sheet(&game, 60), joint2);
+
+        // The body curls by 8 more each tick until it passes -0x400.
+        for _ in 0..30 {
+            update_banks(&mut game, &mut player, &room, &banks);
+        }
+        assert_eq!(pose(&game).rotations[BODY], [0, 62, 100 - 4 * 18 * 17]);
+        assert_eq!(
+            pose(&game).rotations[LEGS],
+            swung,
+            "the matrix keeps the swing"
+        );
+        let legs = game.player_frozen_joints[0].1;
+        let fallen = game.plant_eat.legs_rotation;
+        assert_eq!(fallen[..2], [0, 0]);
+        assert_eq!(
+            legs.r,
+            crate::anim::rotation_matrix(0, 0, i32::from(fallen[2])),
+            "the fall rebuilds the world's rotation"
+        );
+
+        // The legs land on the floor at -450 with a sheet, bounce, and land
+        // once more with another.
+        for sheets in [5, 6] {
+            for _ in 0..40 {
+                if game.effects.active_count() == sheets {
+                    break;
+                }
+                update_banks(&mut game, &mut player, &room, &banks);
+            }
+            assert_eq!(game.effects.active_count(), sheets, "a sheet per landing");
+            assert_eq!(legs_sheet(&game, 64 - sheets), joint2);
+            assert_eq!(game.player_frozen_joints[0].1.t[1], -0x1C2, "on the floor");
+        }
+        for _ in 0..60 {
+            update_banks(&mut game, &mut player, &room, &banks);
+        }
+        assert_eq!(game.effects.active_count(), 6, "the third fall rests");
+
+        // The drop: the flat body faces angle 0.
+        game.entities[0].action_state = 2;
+        game.entities[0].pos[1] = -1000;
+        update_banks(&mut game, &mut player, &room, &banks);
+        assert_eq!(game.entities[0].health, -1);
+        assert_eq!((game.entities[0].angle, player.angle), (0, 0));
+        assert!(!game.death_animation_flag);
+
+        game.entities[0].action_state = 6;
+        update_banks(&mut game, &mut player, &room, &banks);
+        assert!(game.death_animation_flag, "the terminal pose");
     }
 
     /// The Neptune devour (state 7, animFrameId 0x0B): clip 3 plays and its
