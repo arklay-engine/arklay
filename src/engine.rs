@@ -2119,6 +2119,19 @@ fn re2_status_return_alpha(ticks: u8) -> Option<u8> {
     }
 }
 
+/// The colour of an RE 2 character's ground shadow: the one its own code has
+/// given it (`own`: a dead spider's pool, `FUN_004727e0`), else the pool of
+/// blood `Em10_Scenario` turns a body's shadow into (`body`), else its kage
+/// work's (`kage`), else the player's.
+fn re2_shadow_color(own: Option<u32>, body: bool, kage: Option<u32>) -> u32 {
+    match (own, body, kage) {
+        (Some(color), _, _) => color,
+        (None, true, _) => crate::zombie2::POOL_COLOR,
+        (None, false, Some(color)) => color,
+        (None, false, None) => shadow::PLAYER_COLOR,
+    }
+}
+
 /// What RE2's get-item window draws, by the ticks since its first (1 on
 /// it) and, while it closes, its ticks in the close: it opens and closes
 /// as the status screen does (its routines 0 and 1 run the same fades), the
@@ -20850,6 +20863,12 @@ fn render_frame_on(
                 .as_ref()
                 .filter(|_| character.work.routine[0] == 7)
                 .map(|zombie| i32::from(zombie.pool));
+            // `MulKage` (called from `Game_loop` for every enemy) clears the
+            // shadow's draw bit when `Be_flg` has 0x400: a body in water, or
+            // a spider on a wall or the ceiling (`FUN_004727e0`).
+            if character.be_flg & crate::zombie2::BE_NO_SHADOW != 0 {
+                continue;
+            }
             let kage = character.kage;
             let own = character.zombie.as_ref().and_then(|z| z.shadow_half);
             if own == Some(0) {
@@ -20882,11 +20901,8 @@ fn render_frame_on(
             if !debug_view::unculled() && !room.in_cut_view(at[0], at[2]).unwrap_or(true) {
                 continue;
             }
-            let color = match (pool, kage) {
-                (Some(_), _) => crate::zombie2::POOL_COLOR,
-                (None, Some(kage)) => kage.color,
-                (None, None) => shadow::PLAYER_COLOR,
-            };
+            let own_color = character.zombie.as_ref().and_then(|z| z.shadow_color);
+            let color = re2_shadow_color(own_color, pool.is_some(), kage.map(|kage| kage.color));
             // The characters' grounds don't see the room objects yet.
             let shadow = re2_shadow(
                 room,
@@ -41833,6 +41849,23 @@ end
             !re2_player_out_of_view(&no_zone, [5000, 0, 0], 0),
             "no zone"
         );
+    }
+
+    /// A dead spider's pool keeps the colour `FUN_004727e0` gave it: a body
+    /// (`Routine_0` 7) takes `Em10_Scenario`'s only when nothing gave it its
+    /// own.
+    #[test]
+    fn re2_shadow_takes_its_own_colour_before_a_bodys_pool() {
+        use crate::zombie2::{POOL_COLOR, SPIDER_POOL_COLOR};
+        let own = Some(SPIDER_POOL_COLOR);
+        assert_eq!(re2_shadow_color(own, true, None), SPIDER_POOL_COLOR);
+        assert_eq!(
+            re2_shadow_color(own, false, Some(0x40_4040)),
+            SPIDER_POOL_COLOR
+        );
+        assert_eq!(re2_shadow_color(None, true, Some(0x40_4040)), POOL_COLOR);
+        assert_eq!(re2_shadow_color(None, false, Some(0x40_4040)), 0x40_4040);
+        assert_eq!(re2_shadow_color(None, false, None), shadow::PLAYER_COLOR);
     }
 
     #[test]

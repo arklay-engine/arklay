@@ -18,8 +18,9 @@
 -- the spit (7). A hit (`Routine_0` 2), the death (3) and the body (7), for
 -- weapons 2 to 8, 0xD to 0x10, 0x12 and 0x13, on each kind. Another spider in play is its partner
 -- (`Ck_em_id`, `+0x240`), and its hits and deaths send young spiders
--- (`Em_26`, `send_young`). `FUN_004732a0`'s `fg_system` `0x1000000` draw,
--- `FUN_004727e0`'s water, the player's partner
+-- (`Em_26`, `send_young`). The engine runs `FUN_004727e0` (the shadow, by
+-- `+0x225`) after the tick's collision checks, as `Em_25` does.
+-- `FUN_004732a0`'s `fg_system` `0x1000000` draw, the player's partner
 -- (`splayer_work`) as a target and the spit's `Routine_2` 3
 -- (`FUN_0046fbb0`) aren't ported.
 
@@ -41,7 +42,7 @@ local REVIVED <const> = 16 -- `+0x224`: it has died once, and its body takes a l
 local FLOAT <const> = 17 -- `+0x23a`: below 0 once its body lies in water.
 local BOB <const> = 18 -- `+0x23e`: how the body in water moves (`FUN_004728b0`).
 local F23F <const> = 19 -- `+0x23f`.
-local T225 <const> = 20 -- `+0x225`: `FUN_004727e0`'s state.
+local T225 <const> = 20 -- `+0x225`: `FUN_004727e0`'s state, which the engine reads (`SPIDER_SHADOW`).
 local T239 <const> = 21 -- `+0x239`: no body to shoot again; nothing on the floor sets it.
 local SCE <const> = 22 -- `+0x223`: a fall from a wall or the ceiling is under way.
 local WALL_DIR <const> = 23 -- `+0x226`: the side of the wall's record it's on, then its turn there.

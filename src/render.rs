@@ -650,7 +650,7 @@ impl Framebuffer {
     /// positive X origin moves the image right by sampling one pixel further
     /// left, and the edge row/column repeats. `colour` is the global colour
     /// multiplier (`255` per channel is identity), applied as the reference's
-    /// modulated quad rounds it ([`modulate`]). The destination is always
+    /// modulated quad rounds it (`modulate`). The destination is always
     /// opaque.
     ///
     /// The image stretches over the logical 320x240 quad centred in the

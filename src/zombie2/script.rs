@@ -2397,7 +2397,9 @@ mod tests {
 
     /// `run_spider` with `setup`'s globals set before the stub.
     fn run_spider_with(kind: u16, draws: &[u8], ticks: usize, setup: &str) -> Spider {
-        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        let (lua, budget) = crate::lua::new_sandboxed_state().unwrap();
+        // A budget never begun is empty: the run would stop at 10,000 instructions.
+        budget.begin();
         lua.load(setup).exec().unwrap();
         let script = include_str!("../../games/re2/enemy/25/enemy.lua");
         lua.globals().set("DRAWS", draws.to_vec()).unwrap();

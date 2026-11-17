@@ -1444,7 +1444,7 @@ impl Mixer {
     }
 
     /// One step of the scripted fade's sweep over the voice and one-shot
-    /// banks ([`MixState::fade_sound_banks`]).
+    /// banks (`MixState::fade_sound_banks`).
     pub fn fade_sound_banks(&mut self, delta: i32) {
         self.state.fade_sound_banks(delta);
     }

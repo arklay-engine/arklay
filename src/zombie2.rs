@@ -433,6 +433,13 @@ const G1_ROOT_Z: usize = 8;
 pub(crate) const SPIDER_FOOT: usize = 32;
 /// `Ground`, which `Game_loop` finds under the spider between ticks.
 pub(crate) const SPIDER_GROUND: usize = 30;
+/// `+0x225`, `FUN_004727e0`'s state, which the spider's script (its `T225`)
+/// sets: 0 on the floor, 1 on a wall or the ceiling, 2 once dead.
+pub(crate) const SPIDER_SHADOW: usize = 20;
+/// The colour `FUN_004727e0` gives a dead spider's shadow, its pool of blood.
+pub const SPIDER_POOL_COLOR: u32 = 0x00BF_10BF;
+/// `Be_flg`'s bit that `MulKage` leaves a work's shadow undrawn for.
+pub const BE_NO_SHADOW: u32 = 0x400;
 /// `Em_25`'s `Sca_ck_em` mask.
 const SPIDER_MASK: u16 = 0x600;
 /// The young spiders, `Em_26`, whose script is `enemy/26/enemy.lua`.
@@ -606,6 +613,9 @@ pub struct Zombie {
     /// `pKage_work`'s `Half_x` and `Half_z` for a body that sizes its own
     /// shadow, 0 being `Be_flg`'s off.
     pub shadow_half: Option<i32>,
+    /// The shadow's colour, once something has changed it: a dead spider's
+    /// pool ([`SPIDER_POOL_COLOR`]).
+    pub shadow_color: Option<u32>,
     /// `Floor` at `sce_em_set`.
     pub floor: u8,
     pub atd: Atd,
@@ -1087,6 +1097,42 @@ pub struct WaterArea {
     pub level: i16,
 }
 
+/// `FUN_004727e0`, which `Em_25` runs after its collision checks: the
+/// spider's shadow, by its state (`+0x225`). `wet` is whether `Water_ck`
+/// finds water at its `x` and `z`. On the floor (0) `Be_flg`'s 0x400, which
+/// hides the shadow (`MulKage`), is up over water and down otherwise; on a
+/// wall or the ceiling (1) it is up. A dead spider (2) keeps what it had
+/// while it is over water; out of it the shadow shows again as its pool of
+/// blood (3), `Timer3` (`+0x16b`) counting 0x5A ticks in which each half
+/// grows by 8, and then it is done (4).
+fn spider_shadow(z: &mut Zombie, be_flg: &mut u32, wet: bool) {
+    match z.vars[SPIDER_SHADOW] {
+        0 if !wet => *be_flg &= !BE_NO_SHADOW,
+        0 | 1 => *be_flg |= BE_NO_SHADOW,
+        2 if !wet => {
+            z.vars[SPIDER_SHADOW] = 3;
+            z.shadow_color = Some(SPIDER_POOL_COLOR);
+            z.timers.3 = 0x5A;
+            *be_flg &= !BE_NO_SHADOW;
+            spider_pool_grow(z);
+        }
+        3 => spider_pool_grow(z),
+        _ => {}
+    }
+}
+
+/// `FUN_004727e0`'s state 3: the pool's halves grow by 8, and `Timer3`
+/// counts down to the state's end.
+fn spider_pool_grow(z: &mut Zombie) {
+    if let Some(half) = &mut z.shadow_half {
+        *half += 8;
+    }
+    z.timers.3 = z.timers.3.wrapping_sub(1);
+    if z.timers.3 == 0 {
+        z.vars[SPIDER_SHADOW] = 4;
+    }
+}
+
 /// `Water_ck`: the level of the first water area over `(x, z)`, or 0. A box
 /// is `Hit_ck_box`'s unsigned test, a four-point area `Hit_ck_point4`'s.
 pub fn water_ck(areas: &[WaterArea], x: i32, z: i32) -> i16 {
@@ -1309,6 +1355,10 @@ impl Em<'_, '_, '_> {
         self.z.floor = spider_floor(self.mover.player.pos[1]);
         self.oba_ck_em();
         self.sca_ck_masked(SPIDER_MASK);
+        // `FUN_004727e0` tests the water where the checks left the body.
+        let [x, _, z] = self.mover.player.pos;
+        let wet = water_ck(&self.world.water, x, z) != 0;
+        spider_shadow(self.z, self.be_flg, wet);
     }
 
     /// `Em_26`, which leaves the rest to its script, then finds `nFloor` from
@@ -2934,6 +2984,60 @@ mod tests {
         assert_eq!(part.matrix.t[0], 700 + 600 + 500 + 400 + 300 + 200 + 100);
         assert_eq!(rnd, start);
         assert!(!part.takes_below());
+    }
+
+    /// `FUN_004727e0`: `Be_flg`'s 0x400 hides a spider's shadow on a wall or
+    /// the ceiling's start (state 1) and, on the floor (0), over water.
+    #[test]
+    fn a_spider_on_a_wall_or_over_water_casts_no_shadow() {
+        let run = |state: i32, be_flg: u32, wet: bool| {
+            let mut z = Zombie::default();
+            z.vars[SPIDER_SHADOW] = state;
+            let mut be_flg = be_flg;
+            spider_shadow(&mut z, &mut be_flg, wet);
+            (be_flg, z.vars[SPIDER_SHADOW])
+        };
+        assert_eq!(run(0, 0x401, false), (1, 0), "on dry floor");
+        assert_eq!(run(0, 1, true), (0x401, 0), "over water");
+        assert_eq!(run(1, 1, false), (0x401, 1), "on a wall");
+        assert_eq!(run(1, 1, true), (0x401, 1));
+        // States past the pool leave the flag as it is.
+        assert_eq!(run(4, 0x401, false), (0x401, 4));
+        assert_eq!(run(4, 1, true), (1, 4));
+    }
+
+    /// `FUN_004727e0`'s states 2 and 3: a dead spider keeps its shadow as it
+    /// was while it is over water. Out of it the shadow shows again, as a
+    /// pool that grows by 8 a tick for 0x5A ticks.
+    #[test]
+    fn a_dead_spiders_shadow_comes_back_out_of_the_water_as_a_growing_pool() {
+        let mut z = Zombie {
+            shadow_half: Some(0x320),
+            ..Zombie::default()
+        };
+        z.vars[SPIDER_SHADOW] = 2;
+        // It died on a wall, or over water: hidden, and it stays so in water.
+        let mut be_flg = 0x401;
+        spider_shadow(&mut z, &mut be_flg, true);
+        assert_eq!((be_flg, z.vars[SPIDER_SHADOW]), (0x401, 2));
+        assert_eq!((z.shadow_half, z.shadow_color), (Some(0x320), None));
+        // On dry ground the flag comes down, and the pool starts on that tick.
+        spider_shadow(&mut z, &mut be_flg, false);
+        assert_eq!((be_flg, z.vars[SPIDER_SHADOW]), (1, 3));
+        assert_eq!(z.shadow_half, Some(0x328));
+        assert_eq!(z.shadow_color, Some(SPIDER_POOL_COLOR));
+        assert_eq!(z.timers.3, 0x59);
+        // The pool grows whether or not water is under it, and nothing hides it again.
+        for _ in 0..0x58 {
+            spider_shadow(&mut z, &mut be_flg, true);
+        }
+        assert_eq!((z.vars[SPIDER_SHADOW], z.timers.3), (3, 1));
+        spider_shadow(&mut z, &mut be_flg, false);
+        assert_eq!((z.vars[SPIDER_SHADOW], z.timers.3), (4, 0));
+        assert_eq!(z.shadow_half, Some(0x320 + 8 * 0x5A));
+        spider_shadow(&mut z, &mut be_flg, true);
+        assert_eq!(z.shadow_half, Some(0x320 + 8 * 0x5A));
+        assert_eq!(be_flg, 1);
     }
 
     /// `Em_25`'s `nFloor`: a floor for each 1800 units up, from where it
