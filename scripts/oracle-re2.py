@@ -35,6 +35,7 @@ import signal
 import struct
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -1369,6 +1370,94 @@ def screenshot(display: str, path: Path) -> None:
     )
 
 
+def display_grabber():
+    """Pillow's in-process picture of an X display, or None without Pillow's XCB support."""
+    try:
+        from PIL import ImageGrab, features
+    except ImportError:
+        return None
+    if not features.check_feature("xcb"):
+        return None
+    return ImageGrab.grab
+
+
+class FrameWriter:
+    """Takes the Wine display's pictures in process and writes their PNGs on worker threads.
+
+    A record takes a picture of every tick while the game is held at its break, so the
+    picture's cost sets the record's pace. ImageMagick's `import`, started once per frame,
+    takes about 0.28 s; a picture over XCB takes about 0.01 s once the display has settled
+    (`settled`), and its PNG (0.15 s to encode) is written by a worker while the game plays
+    on. The pixels are the same either way. Without Pillow's XCB support, and for a picture
+    XCB can't take, `import` takes it as before."""
+
+    WORKERS = 4
+    # See `settled`.
+    SETTLE = 0.04
+    STILL = 0.02
+    STILL_TRIES = 10
+    # Pictures waiting for a worker: 2.3 MB each, so a writer that falls behind holds the record.
+    BACKLOG = 32
+
+    def __init__(self, display: str) -> None:
+        self.display = display
+        self.grab = display_grabber()
+        self.pool = None
+        self.room = threading.BoundedSemaphore(self.BACKLOG)
+        self.errors: list[str] = []
+        if self.grab is not None:
+            from concurrent.futures import ThreadPoolExecutor
+
+            self.pool = ThreadPoolExecutor(max_workers=self.WORKERS, thread_name_prefix="frame")
+
+    def take(self, path: Path) -> None:
+        """The display as it is now, written to `path` by the time `close` returns."""
+        if self.pool is not None:
+            try:
+                picture = self.settled()
+            except OSError:
+                picture = None
+            if picture is not None:
+                self.room.acquire()
+                self.pool.submit(self.write, picture, path)
+                return
+        screenshot(self.display, path)
+
+    def settled(self):
+        """The display once the tick's picture is on it.
+
+        The game's thread reaches its break before the X server has drawn the picture the
+        tick presented: a picture taken at once is the tick before's on about half the ticks,
+        and one taken 10 ms later was the tick's own on every tick measured. So the first
+        picture waits `SETTLE` seconds, and the display must then hold still for `STILL`
+        more: two pictures in a row the same."""
+        time.sleep(self.SETTLE)
+        picture = self.grab(xdisplay=self.display)
+        for _ in range(self.STILL_TRIES):
+            time.sleep(self.STILL)
+            again = self.grab(xdisplay=self.display)
+            if again.tobytes() == picture.tobytes():
+                break
+            picture = again
+        return picture
+
+    def write(self, picture, path: Path) -> None:
+        try:
+            picture.save(path)
+        except OSError as error:
+            self.errors.append(f"{path.name}: {error}")
+        finally:
+            self.room.release()
+
+    def close(self) -> None:
+        """Wait for every picture taken so far to be on the disk."""
+        if self.pool is not None:
+            self.pool.shutdown(wait=True)
+            self.pool = None
+        for error in self.errors:
+            print(f"frame not written: {error}", file=sys.stderr)
+
+
 class WineSession:
     """The game running under Wine on its own virtual display, traced."""
 
@@ -1385,6 +1474,7 @@ class WineSession:
         self.sink_module = None
         self.sound_capture = None
         self.capture_started = 0.0
+        self.frames: FrameWriter | None = None
         # The callers' `finally: session.close()` starts only once this returns,
         # so a start that fails stops what it has started itself.
         try:
@@ -1428,7 +1518,9 @@ class WineSession:
             time.sleep(0.01)
 
     def screenshot(self, path: Path) -> None:
-        screenshot(self.display, path)
+        if self.frames is None:
+            self.frames = FrameWriter(self.display)
+        self.frames.take(path)
 
     def idle(self, seconds: float) -> None:
         """Let the game run untraced for a while."""
@@ -1439,6 +1531,8 @@ class WineSession:
 
         A second Ctrl-C, SIGTERM or SIGHUP waits until it is done."""
         with signals_held():
+            if self.frames is not None:
+                self.frames.close()
             self.stop_all()
 
     def stop_all(self) -> None:
