@@ -204,6 +204,7 @@ fn play_companion_sound(game: &mut GameState, companion: &Companion, id: u8) {
         game.entity_sounds.push(EntitySound {
             name,
             bank: 2,
+            pan_only: true,
             column,
             pos: companion.entity.pos,
         });
@@ -217,6 +218,7 @@ fn play_companion_3d(game: &mut GameState, room: &RoomState, companion: &Compani
         game.entity_sounds.push(EntitySound {
             name: name.into(),
             bank,
+            pan_only: false,
             column,
             pos: companion.entity.pos,
         });

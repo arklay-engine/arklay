@@ -509,6 +509,7 @@ fn rocket_sounds(game: &mut GameState, pos: [i32; 3]) {
         game.entity_sounds.push(crate::game::EntitySound {
             name: name.into(),
             bank: 1,
+            pan_only: false,
             column: 0x0f,
             pos,
         });
@@ -544,6 +545,7 @@ fn shot_impact(game: &mut GameState, index: usize, landed: bool) {
         game.entity_sounds.push(crate::game::EntitySound {
             name: name.into(),
             bank: 1,
+            pan_only: false,
             column: cue,
             pos: [x, y, z],
         });
@@ -982,6 +984,7 @@ fn projectile(game: &mut GameState, index: usize) {
         game.entity_sounds.push(crate::game::EntitySound {
             name: name.into(),
             bank: 1,
+            pan_only: false,
             column: 10,
             pos,
         });

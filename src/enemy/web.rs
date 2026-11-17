@@ -74,6 +74,7 @@ fn play_clone_sound(game: &mut GameState, clone: &Entity, id: u8) {
         game.entity_sounds.push(EntitySound {
             name,
             bank: 2,
+            pan_only: true,
             column,
             pos: clone.pos,
         });

@@ -1765,6 +1765,9 @@ pub struct EntitySound {
     pub bank: u8,
     /// The entity bank slot (room sound column) the cue plays through.
     pub column: u8,
+    /// `Snd_em` (0x0047fca0): only the pan is set, so the cue plays at its
+    /// bank's held volume. `PlayEntitySnd`/`Play3DSnd` set the volume too.
+    pub pan_only: bool,
     /// World position the sound plays at.
     pub pos: [i32; 3],
 }
@@ -6104,7 +6107,10 @@ impl GameState {
         // bit and folds back to the character id; the player's model then
         // loads from the costume byte.
         let model = usize::from(STATE_BYTE_CHARACTER_MODEL);
-        if self.state_bytes[model] & 8 != 0 && self.entities[0].id != self.state_bytes[model] {
+        let was_id = self.entities[0].id;
+        let switching = was_id != self.state_bytes[model];
+        let costume = self.state_bytes[model] & 8 != 0 && switching;
+        if costume {
             self.apply_flag(5, MSF2_COSTUME_VARIANT, 0);
             self.state_bytes[model] &= 7;
         }
@@ -6128,6 +6134,15 @@ impl GameState {
             // 0x00477982: any other model id becomes the player id too, so the
             // ladder models 4 and 5 (rooms 302, 310) are stored.
             self.entities[0].id = model_id;
+        }
+        if switching {
+            // 0x00477950: `SetupCharacterData` and `LoadSoundBank` for a model
+            // below 4 from a player id at most 3, then `load_character_sfx`
+            // (0x00477982) on every switch.
+            if model_id < 4 && was_id <= 3 {
+                self.reload_sfx_bank(1);
+            }
+            self.reload_sfx_bank(3);
         }
     }
 
@@ -6345,9 +6360,13 @@ impl GameState {
         self.equipped_slot = item.and_then(|item| self.inventory.iter().position(|s| s.id == item));
         // `SetupCharacterData`'s derivation: the weapon id is the equipped
         // item's own id (the item-slot table maps every weapon to itself).
+        // `menu_update_equipped_weapon` (0x00463ec0) reloads the weapon bank
+        // when the raw item differs from the weapon id before the store; an
+        // unequip zeroes the id without a reload.
+        let previous = self.equipped_weapon_id;
         self.equipped_weapon_id = item.unwrap_or(0);
         if let Some(item) = item.filter(|item| *item != 0) {
-            if item != self.weapon_bank {
+            if item != previous {
                 self.reload_sfx_bank(1);
             }
             self.weapon_bank = item;
@@ -13467,6 +13486,48 @@ mod tests {
         state.state_bytes[model] = 3;
         state.apply_model_switch();
         assert_eq!(state.entities[0].id, 3);
+    }
+
+    /// `room_set`'s model switch reloads the weapon bank (`LoadSoundBank`)
+    /// for a model below 4 from a player id at most 3 and the character
+    /// banks (`load_character_sfx`) on every switch; a room load without a
+    /// switch reloads neither.
+    #[test]
+    fn a_model_switch_reloads_the_weapon_and_character_banks() {
+        let mut state = game();
+        let model = usize::from(STATE_BYTE_CHARACTER_MODEL);
+        state.state_bytes[model] = state.entities[0].id;
+        let loads = state.sfx_bank_loads;
+        state.apply_model_switch();
+        assert_eq!(state.sfx_bank_loads, loads, "no switch, no reload");
+
+        state.state_bytes[model] = 3;
+        state.apply_model_switch();
+        assert_eq!(state.sfx_bank_loads[1], loads[1].wrapping_add(1));
+        assert_eq!(state.sfx_bank_loads[3], loads[3].wrapping_add(1));
+
+        // A ladder model only reloads the character banks.
+        let loads = state.sfx_bank_loads;
+        state.state_bytes[model] = 4;
+        state.apply_model_switch();
+        assert_eq!(state.sfx_bank_loads[1], loads[1]);
+        assert_eq!(state.sfx_bank_loads[3], loads[3].wrapping_add(1));
+    }
+
+    /// `menu_update_equipped_weapon` compares the raw item with the weapon
+    /// id, which an unequip zeroes: re-equipping the same weapon reloads
+    /// its bank, and equipping the one already held does not.
+    #[test]
+    fn re_equipping_a_weapon_reloads_its_bank() {
+        let mut state = game();
+        state.set_equipped(Some(2));
+        let loads = state.sfx_bank_loads[1];
+        state.set_equipped(Some(2));
+        assert_eq!(state.sfx_bank_loads[1], loads, "already held");
+        state.set_equipped(None);
+        assert_eq!(state.sfx_bank_loads[1], loads, "an unequip loads nothing");
+        state.set_equipped(Some(2));
+        assert_eq!(state.sfx_bank_loads[1], loads.wrapping_add(1));
     }
 
     /// The ladder models 4 and 5 (rooms 302 and 310) become the player id

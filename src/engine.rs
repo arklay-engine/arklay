@@ -513,6 +513,8 @@ pub fn run_with_options(
             let mut bgm_sleep: u8 = 0;
             for _ in 0..ticks {
                 let tick_start = Instant::now();
+                // `main_loop`'s sound fade, ahead of the tick's tasks.
+                bgm::step_fade(&mut no_mixer, &mut game);
                 // A door transition owns the tick and follows into its
                 // destination room, exactly like the interactive session (but
                 // audio-free): the tick-limited capture ends in the room the last
@@ -569,6 +571,7 @@ pub fn run_with_options(
                     if let Some(request) = requested {
                         let record = game.transition_door.take().unwrap_or_default();
                         game.door_yield = None;
+                        game.reload_sfx_bank(0);
                         door_transition = Some(start_transition(
                             &pack,
                             &record,
@@ -3819,6 +3822,9 @@ impl GameSession {
         if self.system_menu_open {
             return Ok(());
         }
+        // `main_loop` steps the sound fade ahead of every task, whichever owns
+        // the frame.
+        bgm::step_fade(&mut self.music, &mut self.game);
         // RE2's pad has one button for the confirm and the shot (raw 0x80,
         // which `Pad_set` gives both): held fire is a held confirm for the
         // windows and the messages too, and a new press of it confirms in
@@ -3934,7 +3940,8 @@ impl GameSession {
         // frozen and the screen's state machine, fade and spinning corpse
         // advance on their own, exactly like the original's display loop.
         if self.death_screen.is_some() {
-            // `main_loop` steps the sound fade before the screen's task.
+            // The sound fade stepped at the top of the tick, before the
+            // screen's task.
             bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
             self.tick_death_screen(pack, ui, input);
             return Ok(());
@@ -4642,6 +4649,13 @@ impl GameSession {
             if self.transition.is_none() {
                 let mut mode =
                     start_transition(pack, &record, &transition, self.loaded.id, &self.room_fade)?;
+                // `room_transition_load` runs `load_room_sfx` (DoorSystem.cpp,
+                // before `door_system_load_data`) ahead of the animation's
+                // first cue, on either kind of record.
+                self.game.reload_sfx_bank(0);
+                if let Some(mixer) = self.music.as_mut() {
+                    mixer.sync_sfx_bank_loads(self.game.sfx_bank_loads);
+                }
                 if record.re2.is_some() {
                     // `Snd_bgm_ck` holds the door only with a sound device and
                     // the music on (`fg_system`'s `0x2000` off).
@@ -8090,6 +8104,8 @@ impl GameSession {
     /// the timeline after the frame was presented.
     fn tick_transition(&mut self, pack: &Pack, skip: bool) {
         self.tween.advance();
+        // `main_loop` keeps stepping the sound fade under the door's task.
+        bgm::step_fade(&mut self.music, &mut self.game);
         // `Snd_se_call` goes on through a door, so the music fades.
         if self.game.is_re2_room {
             bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
@@ -14840,8 +14856,6 @@ fn finish_transition(
     // The original's `room_transition_load` latches the record's sfx byte and
     // reloads `g_RoomSfxBanks` before the destination's init runs; camera-only
     // records reload the pair too, even though the room stays.
-    // `load_room_sfx` reloads the pair on either kind of record.
-    game.reload_sfx_bank(0);
     if session.camera_only {
         loaded.room.room_sfx = session.door.sfx;
         game.reset_message_flags_after_door();
@@ -15162,6 +15176,7 @@ pub fn simulate_door(
         .with_context(|| format!("door {slot} did not request a transition"))?;
     let record = game.transition_door.take().unwrap_or(door);
     game.door_yield = None;
+    game.reload_sfx_bank(0);
 
     let mut session = start_transition(
         pack,
@@ -15668,6 +15683,8 @@ fn simulate_loaded_with(
             }
             continue;
         }
+        // `main_loop`'s sound fade, ahead of the tick's tasks.
+        bgm::step_fade(&mut no_mixer, &mut game);
         if bgm_sleep > 0 {
             bgm_sleep -= 1;
             continue;
@@ -15722,6 +15739,7 @@ fn simulate_loaded_with(
         if let Some(request) = requested {
             let record = game.transition_door.take().unwrap_or_default();
             game.door_yield = None;
+            game.reload_sfx_bank(0);
             door_transition = Some(start_transition(
                 pack,
                 &record,
@@ -16687,7 +16705,12 @@ fn play_entity_sounds(
             continue;
         };
         let (gain, pan) = sfx::sound_gain_pan(cut.pos, cut.look_at, sound.pos);
-        mixer.play_sfx_on_bank(sfx_bank_key(sound.bank, sound.column), wav, gain, pan);
+        let key = sfx_bank_key(sound.bank, sound.column);
+        if sound.pan_only {
+            mixer.play_sfx_on_bank_held(key, wav, pan);
+        } else {
+            mixer.play_sfx_on_bank(key, wav, gain, pan);
+        }
     }
 }
 
@@ -29042,6 +29065,7 @@ mod tests {
         let mut sounds = vec![game::EntitySound {
             name: "ft_wdA".into(),
             bank: 2,
+            pan_only: false,
             column: 45,
             pos: [0, 0, 0],
         }];
@@ -29101,6 +29125,7 @@ mod tests {
             let mut sounds = vec![game::EntitySound {
                 name: "ft_wdA".into(),
                 bank: 2,
+                pan_only: false,
                 column,
                 pos: [1000, 0, 0],
             }];
@@ -31721,6 +31746,11 @@ mod tests {
     /// A two-room pack whose first room carries the test door into the second,
     /// both rooms carrying the colourful test background.
     fn two_room_door_pack(dir: &TempDir) -> (Pack, RoomId, RoomId) {
+        two_room_door_pack_with(dir, &[])
+    }
+
+    /// [`two_room_door_pack`] with `extra` entries.
+    fn two_room_door_pack_with(dir: &TempDir, extra: &[(&str, Vec<u8>)]) -> (Pack, RoomId, RoomId) {
         let pack_path = dir.0.join("game.akpak");
         let bmp_bytes = bmp::encode_to_vec(&test_image()).unwrap();
         let a = RoomId {
@@ -31744,8 +31774,158 @@ mod tests {
             .unwrap();
         writer.add(&a.cut_entry(0), bmp_bytes.clone()).unwrap();
         writer.add(&b.cut_entry(0), bmp_bytes).unwrap();
+        for (name, bytes) in extra {
+            writer.add(name, bytes.clone()).unwrap();
+        }
         writer.write(&pack_path).unwrap();
         (Pack::open(&pack_path).unwrap(), a, b)
+    }
+
+    /// A session in the door pack's first room with a capture mixer and a
+    /// scripted fade armed over a full channel (42 steps of -234).
+    fn fading_door_session(pack: &Pack, a: RoomId) -> Box<GameSession> {
+        let mut session = GameSession::from_room(pack, a, Path::new("saves")).unwrap();
+        session.music = Some(Mixer::capture());
+        session
+    }
+
+    fn arm_test_fade(game: &mut game::GameState) {
+        game.bgm.channels[0].track = Some(0x013);
+        game.bgm.channels[0].volume = -1;
+        bgm::build_snd_fade_tbl(game, -3, bgm::SCRIPT_FADE);
+    }
+
+    fn bank_volume(session: &GameSession, bank: u8, slot: u8) -> Option<i32> {
+        let mixer = session.music.as_ref().unwrap();
+        mixer.state().sfx_bank_volume(sfx_bank_key(bank, slot))
+    }
+
+    /// `main_loop` runs `UpdateSoundFadeState` under the door's task too:
+    /// the sweep steps once per door tick.
+    #[test]
+    fn the_sound_fade_steps_through_a_door() {
+        let dir = TempDir::new();
+        let (pack, a, _) = two_room_door_pack(&dir);
+        let mut session = fading_door_session(&pack, a);
+        trigger_test_door(&pack, &mut session);
+        arm_test_fade(&mut session.game);
+        for tick in 1..=3 {
+            session.tick_transition(&pack, false);
+            assert!(session.transition.is_some());
+            assert_eq!(bank_volume(&session, 1, 0), Some(-1 - 234 * tick));
+            assert_eq!(session.game.bgm.fade.steps[0], 42 - tick);
+        }
+    }
+
+    /// `room_transition_load` reloads the room SFX pair (`load_room_sfx`)
+    /// before the door animation starts, so the door's first cue plays from
+    /// a fresh bank, not one a fade left silent.
+    #[test]
+    fn a_door_reloads_the_room_sfx_pair_before_its_first_cue() {
+        let dir = TempDir::new();
+        let (pack, a, _) = two_room_door_pack(&dir);
+        let mut session = fading_door_session(&pack, a);
+        let loads = session.game.sfx_bank_loads;
+        let mixer = session.music.as_mut().unwrap();
+        mixer.sync_sfx_bank_loads(loads);
+        mixer.fade_sound_banks(-5000);
+        trigger_test_door(&pack, &mut session);
+        assert_eq!(bank_volume(&session, 0, 1), None, "the pair reloaded");
+        assert_eq!(
+            bank_volume(&session, 1, 0),
+            Some(-5001),
+            "the weapon's held"
+        );
+    }
+
+    /// The fade steps at the top of the tick, before its tasks: a cue a
+    /// script plays on the tick keeps the volume its `Play3DSnd` set.
+    #[test]
+    fn the_sound_fade_steps_before_the_ticks_cues() {
+        let dir = TempDir::new();
+        let wav = voice_wav_bytes(&[1000; 6000]);
+        let (pack, a, _) = two_room_door_pack_with(&dir, &[("se/ft_wda.wav", wav)]);
+        let mut session = fading_door_session(&pack, a);
+        arm_test_fade(&mut session.game);
+        let pos = [1000, 0, 0];
+        session.game.snd3d_requests.push(game::Snd3dRequest {
+            bank: 2,
+            id: 45,
+            volume: 0,
+            pos: game::Snd3dPos::Point(pos),
+        });
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        let cut = &session.loaded.room.cuts[session.loaded.room.current_cut];
+        let (gain, _) = sfx::sound_gain_pan(cut.pos, cut.look_at, pos);
+        let set = audio::gain_millibels(gain).clamp(-9999, -1);
+        assert_eq!(
+            bank_volume(&session, 2, 45),
+            Some(set),
+            "the cue's own volume"
+        );
+        assert_eq!(
+            bank_volume(&session, 2, 0),
+            Some(-1 - 234),
+            "the tick swept"
+        );
+    }
+
+    /// A `Snd_em` cue sets only its bank's pan: it plays at the volume the
+    /// bank holds, where a `PlayEntitySnd` cue sets its own.
+    #[test]
+    fn an_enemy_cue_plays_at_its_banks_held_volume() {
+        let dir = TempDir::new();
+        let wav = voice_wav_bytes(&[1000; 6000]);
+        let (pack, _, _) = two_room_door_pack_with(&dir, &[("se/ft_wda.wav", wav)]);
+        let room = RoomState {
+            cuts: vec![crate::state::Cut {
+                index: 0,
+                pos: [0, 0, 0],
+                look_at: [1000, 0, 0],
+                fov: 200,
+                ..crate::state::Cut::default()
+            }],
+            ..RoomState::default()
+        };
+        let mut music = Some(Mixer::capture());
+        let key = sfx_bank_key(2, 45);
+        let held = audio::Wav::from_s16(&[1000; 64], 1, audio::SAMPLE_RATE);
+        music
+            .as_mut()
+            .unwrap()
+            .play_sfx_on_bank(key, held, sfx::volume_gain(-3000), 0.0);
+        let pos = [1000, 0, 700];
+        let cue = |music: &mut Option<Mixer>, pan_only| {
+            let mut sounds = vec![game::EntitySound {
+                name: "ft_wdA".into(),
+                bank: 2,
+                pan_only,
+                column: 45,
+                pos,
+            }];
+            play_entity_sounds(
+                music,
+                &mut SfxCache::default(),
+                &pack,
+                &room,
+                &mut enemy::LuaEnemyHost::new(),
+                &mut sounds,
+            );
+        };
+        let (gain, pan) = sfx::sound_gain_pan(room.cuts[0].pos, room.cuts[0].look_at, pos);
+        assert_ne!(gain, sfx::volume_gain(-3000));
+        cue(&mut music, true);
+        let state = music.as_ref().unwrap().state();
+        assert_eq!(state.sfx_bank_gain(key), Some(sfx::volume_gain(-3000)));
+        assert_eq!(state.sfx_bank_pan(key), Some(pan));
+        assert_eq!(state.sfx_bank_volume(key), Some(-3000));
+        cue(&mut music, false);
+        assert_eq!(
+            music.as_ref().unwrap().state().sfx_bank_gain(key),
+            Some(gain)
+        );
     }
 
     /// Trigger the test door in `session` without ticking its timeline.

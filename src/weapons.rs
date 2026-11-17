@@ -748,6 +748,7 @@ fn play_weapon_sound(game: &mut GameState, weapon: u8, id: u8) {
     game.entity_sounds.push(EntitySound {
         name: name.into(),
         bank: 1,
+        pan_only: false,
         column: id,
         pos: game.entities[0].pos,
     });
@@ -2233,6 +2234,7 @@ pub fn update_detached_clip(game: &mut GameState, player: &mut PlayerState, room
                     game.entity_sounds.push(EntitySound {
                         name: name.into(),
                         bank,
+                        pan_only: false,
                         column,
                         pos,
                     });

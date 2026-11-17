@@ -428,6 +428,7 @@ fn play_entity_thud(game: &mut GameState, room: &RoomState) {
     game.entity_sounds.push(EntitySound {
         name: name.into(),
         bank: 2,
+        pan_only: false,
         column,
         pos,
     });
@@ -2548,6 +2549,7 @@ fn play_player_sound(game: &mut GameState, room: &RoomState, bank: u8, id: u8) {
         game.entity_sounds.push(EntitySound {
             name: name.into(),
             bank,
+            pan_only: false,
             column,
             pos,
         });
