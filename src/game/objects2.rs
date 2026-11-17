@@ -433,6 +433,27 @@ impl GameState {
         }
     }
 
+    /// `Die_move_wait`, as the white-out ends: none of the room's `rdt + 2`
+    /// objects is drawn from then on (`Be_flg`'s `0x80000`), whether in play or
+    /// not, except slot 1 when the killer is id `0x23` and the slot hangs on a
+    /// matrix (`pSuper` isn't `GsIdMatrix`).
+    pub fn re2_die_hide_objects(&mut self, killer: Option<u8>) {
+        const KILLER_KEEPS_SLOT_1: u8 = 0x23;
+        let count = usize::from(self.objects.rdt_count);
+        for record in self.objects.records.iter_mut().take(count) {
+            record.be_flg |= BE_HIDDEN;
+        }
+        if killer == Some(KILLER_KEEPS_SLOT_1)
+            && let Some(record) = self.objects.records.get_mut(1)
+            && record.super_parent != SuperParent::World
+        {
+            record.be_flg &= !BE_HIDDEN;
+        }
+        for record in self.objects.records.iter_mut().take(count) {
+            record.sync_active_from_be_flg();
+        }
+    }
+
     /// The trace's `om` field: for each of the room's `count` objects,
     /// `n:Be_flg,x,y,z,Cdir_y,Push_cnt,At_sce_no,nFloor`, joined with `;`.
     pub fn re2_objects_trace(&self, count: usize) -> String {
@@ -710,6 +731,39 @@ mod tests {
             "om=0:0,0,0,0,0,0,0,0;1:85,-22900,-3600,-13000,0,7,0,2;2:0,0,0,0,0,0,0,0"
         );
         assert_eq!(game.re2_objects_trace(0), "om=-");
+    }
+
+    #[test]
+    fn death_hides_each_room_object() {
+        let mut game = GameState {
+            objects: ObjectTable::new(4),
+            ..GameState::default()
+        };
+        game.objects.rdt_count = 3;
+        game.objects.records[0] = statue(-13000);
+        game.objects.records[0].be_flg = 0xB;
+        game.objects.records[1].set_super_parent(SuperParent::Player);
+        game.re2_die_hide_objects(Some(0x22));
+        let flags: Vec<u32> = game.objects.records.iter().map(|r| r.be_flg).collect();
+        assert_eq!(flags, [0x8000B, 0x80000, 0x80000, 0]);
+        assert!(!game.objects.records[0].active());
+        assert_eq!(
+            game.re2_objects_trace(3),
+            "om=0:8000b,-22900,-3600,-13000,0,0,0,0;1:80000,0,0,0,0,0,0,0;2:80000,0,0,0,0,0,0,0"
+        );
+
+        // Killer `0x23` keeps slot 1 when it hangs on a matrix, and only then.
+        for (parent, kept) in [(SuperParent::Player, true), (SuperParent::World, false)] {
+            game.objects.records[1].be_flg = 1;
+            game.objects.records[1].set_super_parent(parent);
+            game.re2_die_hide_objects(Some(0x23));
+            assert_eq!(
+                game.objects.records[1].be_flg,
+                if kept { 1 } else { 0x80001 }
+            );
+            assert_eq!(game.objects.records[1].active(), kept);
+            assert_eq!(game.objects.records[2].be_flg, 0x80000);
+        }
     }
 
     /// A body in slot 0 whose `Atd[0]` box sits `box_ofs` from its position,

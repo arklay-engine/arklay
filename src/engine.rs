@@ -4900,6 +4900,15 @@ impl GameSession {
         if out.set_enemies {
             // `Die_vcut_set`, in `Die_move_wait` with `Die_enemy_set`.
             self.loaded.room.die_view = true;
+            let killer_id = self
+                .game
+                .re2
+                .player
+                .held_by
+                .and_then(|slot| self.game.re2.characters.0.get(slot))
+                .and_then(|character| character.as_deref())
+                .map(|character| character.id);
+            self.game.re2_die_hide_objects(killer_id);
             let player = self.game.entities[0].pos;
             crate::die2::enemy_set(
                 self.game
