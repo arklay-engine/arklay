@@ -67,9 +67,6 @@ const BREATHE_CLIP: usize = 1;
 const WALK_CLIP: usize = 2;
 /// EMW clip 3: the forward run.
 const RUN_CLIP: usize = 3;
-// TODO(parity): (gameplay) the original falls back to EMD clip 2 for the
-// backward walk while an enemy is in view; this engine has no enemy-visibility
-// test, so the fallback is never selected.
 /// EMD clip 3: the backward run. The original plays it from the body model,
 /// not the no-weapon EMW.
 const BACK_CLIP: usize = 3;
@@ -728,8 +725,8 @@ pub struct PlayerState {
     /// Slow-motion animation cadence counter (the original's `attackDirection`
     /// reuse): 0 applies the frame and re-arms to 1, 1 skips the frame.
     pub slow_counter: i16,
-    /// The positions the backward walk's enemy scan tests this tick: every
-    /// active enemy that is alive and not hidden. Written by the engine.
+    /// The enemy positions the backward walk's scan tests this tick, from
+    /// [`crate::game::GameState::back_walk_view_points`]. Written by the engine.
     pub enemy_view_points: Vec<[i32; 3]>,
     /// Remaining ticks of the run's four-tick decelerating stop; 0 outside a
     /// stop. The first stop tick switches the animation to the body idle clip
