@@ -1688,23 +1688,44 @@ impl Hit {
     }
 }
 
-/// The end of `Weapon_at_ck` for a Beretta hit (`W_no` 0x120000), after the
-/// body is found: two `Rnd`s, `r1` then `r2`. One time in sixteen or so
-/// (`(r2 >> (r1 & 3)) & 0xF == 0`) the damage row steps back 14 rows, to the
-/// magnum's (weapon 5), and the hit lands as weapon 6; otherwise 17, to the
-/// handgun's (weapon 2), and it lands as weapon 3. So no body sees 0x13.
-pub fn beretta_hit(hit: &mut Hit, rnd: &mut crate::zombie2::Rnd) {
-    if hit.weapon != BERETTA {
-        return;
-    }
-    let shift = rnd.draw() & 3;
-    let (row, weapon) = if (rnd.draw() >> shift) & 0xF == 0 {
-        (5, 6)
-    } else {
-        (2, 3)
+/// Room 103 (`scd_var_stage` 0, `scd_var_room` 3), where `hard_mode`'s roll is
+/// drawn like anywhere else and then changes nothing.
+const HARD_HIT_SPARED_ROOM: u16 = 0x103;
+
+/// The end of `Weapon_at_ck`, after the body is found: the `Rnd` it draws
+/// and what they make of the hit. `hit.weapon` is `(W_no >> 16) + 1`
+/// throughout, the player's `Type` on the way in and the body's `Routine_1`
+/// on the way out. Each roll is two draws, `r1` then `r2`, and comes up one
+/// time in sixteen or so (`(r2 >> (r1 & 3)) & 0xF == 0`).
+///
+/// A Beretta hit (`W_no` 0x120000) rolls first. If it comes up the damage row
+/// steps back 14 rows, to the magnum's (weapon 5), and the hit lands as
+/// weapon 6; otherwise 17, to the handgun's (weapon 2), and it lands as
+/// weapon 3. So no body sees 0x13.
+///
+/// Under `hard_mode` (`hard`) a hit that is by then weapon 2, 3, 4 or the
+/// Colt's rolls, a Beretta's that became weapon 3 included. If it comes up,
+/// anywhere but in room 103 (`room_code`), the row steps on by 5 less
+/// `W_no >> 16` and the hit lands as weapon 6: the custom magnum's row for
+/// the handguns and the Colt, whose row is their weapon's, and the magnum's
+/// for the Beretta, whose row is one short of the weapon it became.
+pub fn hit_rolls(hit: &mut Hit, rnd: &mut crate::zombie2::Rnd, hard: bool, room_code: u16) {
+    let mut roll = || {
+        let shift = rnd.draw() & 3;
+        (rnd.draw() >> shift) & 0xF == 0
     };
-    hit.weapon = weapon;
-    if let Some(table) = damage_table(hit.id, row) {
+    let fired = hit.weapon;
+    let mut row = fired;
+    if fired == BERETTA {
+        (row, hit.weapon) = if roll() { (5, 6) } else { (2, 3) };
+    }
+    if hard && matches!(hit.weapon, 2..=4 | COLT) && roll() && room_code != HARD_HIT_SPARED_ROOM {
+        row = row + 6 - hit.weapon;
+        hit.weapon = 6;
+    }
+    if row != fired
+        && let Some(table) = damage_table(hit.id, row)
+    {
         hit.take_row(table);
     }
 }
@@ -2357,8 +2378,8 @@ mod tests {
 
     /// `Weapon_at_ck`'s end for a Beretta hit (#651): two `Rnd`s choose the
     /// magnum's row as weapon 6, when `(r2 >> (r1 & 3)) & 0xF` is 0, or else
-    /// the handgun's as weapon 3, each read at the hit's band. Any other
-    /// weapon's hit draws nothing and stays as it is.
+    /// the handgun's as weapon 3, each read at the hit's band. Without
+    /// `hard_mode` any other weapon's hit draws nothing and stays as it is.
     #[test]
     fn a_beretta_hit_lands_as_a_magnums_or_a_handguns() {
         use crate::zombie2::Rnd;
@@ -2388,7 +2409,7 @@ mod tests {
         ] {
             let mut rnd = Rnd(seed);
             let mut hit = beretta(0x10);
-            beretta_hit(&mut hit, &mut rnd);
+            hit_rolls(&mut hit, &mut rnd, false, 0x118);
             assert_eq!(
                 (hit.weapon, hit.damage, hit.stun, hit.count, rnd.0),
                 (weapon, damage, stun, count, after),
@@ -2401,7 +2422,7 @@ mod tests {
             for (seed, row, weapon) in [(magnum_seed, 5, 6), (handgun_seed, 2, 3)] {
                 let mut rnd = Rnd(seed);
                 let mut hit = beretta(id);
-                beretta_hit(&mut hit, &mut rnd);
+                hit_rolls(&mut hit, &mut rnd, false, 0x118);
                 let mut want = Hit {
                     weapon,
                     ..beretta(id)
@@ -2420,7 +2441,197 @@ mod tests {
             weapon: 2,
             ..beretta(0x10)
         };
-        beretta_hit(&mut hit, &mut rnd);
+        hit_rolls(&mut hit, &mut rnd, false, 0x118);
         assert_eq!((hit.weapon, hit.damage, rnd.0), (2, 0, magnum_seed));
+    }
+
+    fn shot(id: u8, weapon: u8) -> Hit {
+        let mut hit = Hit {
+            slot: 1,
+            id,
+            weapon,
+            high: false,
+            band: 1,
+            region: 2,
+            damage: 0,
+            stun: 0,
+            count: 0,
+            flags: 0x12,
+        };
+        hit.take_row(damage_table(id, weapon).unwrap());
+        hit
+    }
+
+    /// Whether a roll from `seed` comes up, and `Rnd` after its two draws.
+    fn roll(seed: u16) -> (bool, u16) {
+        let mut rnd = crate::zombie2::Rnd(seed);
+        let shift = rnd.draw() & 3;
+        ((rnd.draw() >> shift) & 0xF == 0, rnd.0)
+    }
+
+    /// `Weapon_at_ck`'s end under `hard_mode` (#500): a hit by Leon's or
+    /// Claire's handgun, the custom handgun or the Colt (`W_no >> 16` of 1,
+    /// 2, 3 or 0xC) draws two `Rnd`s, and when `(r2 >> (r1 & 3)) & 0xF` is 0
+    /// it takes the body's custom magnum row at its band and lands as weapon
+    /// 6. A roll that doesn't come up still draws its two.
+    #[test]
+    fn a_handguns_hard_mode_hit_is_one_time_in_sixteen_the_custom_magnums() {
+        use crate::zombie2::Rnd;
+        // Literal draws, as the Beretta's above: from 0x1234 the roll comes
+        // up, from 0x2679 it doesn't. A zombie at band 1 takes 15 from a
+        // handgun and 900 from the custom magnum.
+        let mut rnd = Rnd(0x1234);
+        let mut hit = shot(0x10, 2);
+        assert_eq!((hit.damage, hit.stun, hit.count), (15, 2, 5));
+        hit_rolls(&mut hit, &mut rnd, true, 0x118);
+        assert_eq!(
+            (hit.weapon, hit.damage, hit.stun, hit.count, rnd.0),
+            (6, 900, 1, 15, 0x48A0)
+        );
+        let mut rnd = Rnd(0x2679);
+        let mut hit = shot(0x10, 2);
+        hit_rolls(&mut hit, &mut rnd, true, 0x118);
+        assert_eq!((hit, rnd.0), (shot(0x10, 2), 0x995E));
+
+        let up = (0..=u16::MAX).find(|&seed| roll(seed).0).unwrap();
+        let down = (0..=u16::MAX).find(|&seed| !roll(seed).0).unwrap();
+        // `Em_30` has a Colt row of its own, which the roll leaves like any
+        // other for the custom magnum's.
+        for id in [0x10, LICKER_ID, DOG_ID, CROW_ID, SPIDER_ID, G1_ID] {
+            for weapon in [2, 3, 4, COLT] {
+                let mut rnd = Rnd(up);
+                let mut hit = shot(id, weapon);
+                hit_rolls(&mut hit, &mut rnd, true, 0x118);
+                let want = Hit {
+                    weapon: 6,
+                    ..shot(id, 6)
+                };
+                assert_eq!((hit, rnd.0), (want, roll(up).1), "{id:#x} by {weapon}");
+
+                let mut rnd = Rnd(down);
+                let mut hit = shot(id, weapon);
+                hit_rolls(&mut hit, &mut rnd, true, 0x118);
+                assert_eq!(
+                    (hit, rnd.0),
+                    (shot(id, weapon), roll(down).1),
+                    "{id:#x} by {weapon}, no luck"
+                );
+            }
+        }
+        // A dog's and a crow's custom magnum rows aren't their magnum rows.
+        assert_ne!(shot(DOG_ID, 6).damage, shot(DOG_ID, 5).damage);
+        assert_ne!(shot(CROW_ID, 6).damage, shot(CROW_ID, 5).damage);
+    }
+
+    /// Without `hard_mode` those hits draw nothing, and under it no other
+    /// weapon's does: the magnums', the shotguns', the bursts' and the spark
+    /// shot's stay as they are.
+    #[test]
+    fn only_a_handguns_hit_rolls_and_only_in_hard_mode() {
+        use crate::zombie2::Rnd;
+        let up = (0..=u16::MAX).find(|&seed| roll(seed).0).unwrap();
+        for weapon in [2, 3, 4, COLT] {
+            let mut rnd = Rnd(up);
+            let mut hit = shot(0x10, weapon);
+            hit_rolls(&mut hit, &mut rnd, false, 0x118);
+            assert_eq!((hit, rnd.0), (shot(0x10, weapon), up), "weapon {weapon}");
+        }
+        for weapon in [5, 6, 7, 8, SMG, GATLING, SPARK] {
+            let mut rnd = Rnd(up);
+            let mut hit = shot(0x10, weapon);
+            hit_rolls(&mut hit, &mut rnd, true, 0x118);
+            assert_eq!((hit, rnd.0), (shot(0x10, weapon), up), "weapon {weapon}");
+        }
+    }
+
+    /// In room 103 (`scd_var_stage` 0, `scd_var_room` 3) the roll is drawn
+    /// and, when it comes up, changes nothing; room 203 and room 104 are like
+    /// anywhere else.
+    #[test]
+    fn room_103_draws_the_hard_mode_roll_and_keeps_the_handguns_hit() {
+        use crate::zombie2::Rnd;
+        let up = (0..=u16::MAX).find(|&seed| roll(seed).0).unwrap();
+        for weapon in [2, 3, 4, COLT] {
+            let mut rnd = Rnd(up);
+            let mut hit = shot(0x10, weapon);
+            hit_rolls(&mut hit, &mut rnd, true, 0x103);
+            assert_eq!(
+                (hit, rnd.0),
+                (shot(0x10, weapon), roll(up).1),
+                "weapon {weapon}"
+            );
+            for room in [0x203, 0x104, 0x100] {
+                let mut hit = shot(0x10, weapon);
+                hit_rolls(&mut hit, &mut Rnd(up), true, room);
+                assert_eq!(hit.weapon, 6, "weapon {weapon} in room {room:#x}");
+            }
+        }
+    }
+
+    /// A Beretta's hit under `hard_mode`: its own roll first, and a hit that
+    /// became the handgun's (weapon 3, on weapon 2's row) rolls again. That
+    /// one coming up steps the row on by three, to the magnum's (weapon 5),
+    /// not the custom magnum's, and lands as weapon 6. A Beretta hit that
+    /// became the magnum's draws no more.
+    #[test]
+    fn a_berettas_hit_rolls_twice_in_hard_mode() {
+        use crate::zombie2::Rnd;
+        let seeds = |first: bool, second: bool| {
+            (0..=u16::MAX)
+                .find(|&seed| {
+                    let (up, after) = roll(seed);
+                    up == first && roll(after).0 == second
+                })
+                .unwrap()
+        };
+        let beretta = |id| Hit {
+            weapon: BERETTA,
+            ..shot(id, BERETTA)
+        };
+        for id in [0x10, DOG_ID, CROW_ID] {
+            // The handgun's, then `hard_mode`'s roll comes up.
+            let seed = seeds(false, true);
+            let mut rnd = Rnd(seed);
+            let mut hit = beretta(id);
+            hit_rolls(&mut hit, &mut rnd, true, 0x118);
+            let want = Hit {
+                weapon: 6,
+                ..shot(id, 5)
+            };
+            assert_eq!((hit, rnd.0), (want, roll(roll(seed).1).1), "id {id:#x}");
+
+            // The handgun's, and no luck: four draws all the same.
+            let seed = seeds(false, false);
+            let mut rnd = Rnd(seed);
+            let mut hit = beretta(id);
+            hit_rolls(&mut hit, &mut rnd, true, 0x118);
+            let want = Hit {
+                weapon: 3,
+                ..shot(id, 2)
+            };
+            assert_eq!((hit, rnd.0), (want, roll(roll(seed).1).1), "id {id:#x}");
+
+            // The magnum's: two draws, though the next two would come up.
+            let seed = seeds(true, true);
+            let mut rnd = Rnd(seed);
+            let mut hit = beretta(id);
+            hit_rolls(&mut hit, &mut rnd, true, 0x118);
+            let want = Hit {
+                weapon: 6,
+                ..shot(id, 5)
+            };
+            assert_eq!((hit, rnd.0), (want, roll(seed).1), "id {id:#x}");
+
+            // In room 103 the second roll is drawn and the handgun's row stays.
+            let seed = seeds(false, true);
+            let mut rnd = Rnd(seed);
+            let mut hit = beretta(id);
+            hit_rolls(&mut hit, &mut rnd, true, 0x103);
+            let want = Hit {
+                weapon: 3,
+                ..shot(id, 2)
+            };
+            assert_eq!((hit, rnd.0), (want, roll(roll(seed).1).1), "id {id:#x}");
+        }
     }
 }

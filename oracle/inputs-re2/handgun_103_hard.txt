@@ -1,0 +1,277 @@
+# room 103 on HARD, beside Brad with Leon's handgun: five presses in a cycle of 84 ticks; every cycle raise the aim, which turns to the nearest zombie, press fire and lower; an empty gun reloads on the next press (#500)
+360 aim
+370 aim fire
+373 aim
+382 aim fire
+385 aim
+394 aim fire
+397 aim
+406 aim fire
+409 aim
+418 aim fire
+421 aim
+430
+444 aim
+454 aim fire
+457 aim
+466 aim fire
+469 aim
+478 aim fire
+481 aim
+490 aim fire
+493 aim
+502 aim fire
+505 aim
+514
+528 aim
+538 aim fire
+541 aim
+550 aim fire
+553 aim
+562 aim fire
+565 aim
+574 aim fire
+577 aim
+586 aim fire
+589 aim
+598
+612 aim
+622 aim fire
+625 aim
+634 aim fire
+637 aim
+646 aim fire
+649 aim
+658 aim fire
+661 aim
+670 aim fire
+673 aim
+682
+696 aim
+706 aim fire
+709 aim
+718 aim fire
+721 aim
+730 aim fire
+733 aim
+742 aim fire
+745 aim
+754 aim fire
+757 aim
+766
+780 aim
+790 aim fire
+793 aim
+802 aim fire
+805 aim
+814 aim fire
+817 aim
+826 aim fire
+829 aim
+838 aim fire
+841 aim
+850
+864 aim
+874 aim fire
+877 aim
+886 aim fire
+889 aim
+898 aim fire
+901 aim
+910 aim fire
+913 aim
+922 aim fire
+925 aim
+934
+948 aim
+958 aim fire
+961 aim
+970 aim fire
+973 aim
+982 aim fire
+985 aim
+994 aim fire
+997 aim
+1006 aim fire
+1009 aim
+1018
+1032 aim
+1042 aim fire
+1045 aim
+1054 aim fire
+1057 aim
+1066 aim fire
+1069 aim
+1078 aim fire
+1081 aim
+1090 aim fire
+1093 aim
+1102
+1116 aim
+1126 aim fire
+1129 aim
+1138 aim fire
+1141 aim
+1150 aim fire
+1153 aim
+1162 aim fire
+1165 aim
+1174 aim fire
+1177 aim
+1186
+1200 aim
+1210 aim fire
+1213 aim
+1222 aim fire
+1225 aim
+1234 aim fire
+1237 aim
+1246 aim fire
+1249 aim
+1258 aim fire
+1261 aim
+1270
+1284 aim
+1294 aim fire
+1297 aim
+1306 aim fire
+1309 aim
+1318 aim fire
+1321 aim
+1330 aim fire
+1333 aim
+1342 aim fire
+1345 aim
+1354
+1368 aim
+1378 aim fire
+1381 aim
+1390 aim fire
+1393 aim
+1402 aim fire
+1405 aim
+1414 aim fire
+1417 aim
+1426 aim fire
+1429 aim
+1438
+1452 aim
+1462 aim fire
+1465 aim
+1474 aim fire
+1477 aim
+1486 aim fire
+1489 aim
+1498 aim fire
+1501 aim
+1510 aim fire
+1513 aim
+1522
+1536 aim
+1546 aim fire
+1549 aim
+1558 aim fire
+1561 aim
+1570 aim fire
+1573 aim
+1582 aim fire
+1585 aim
+1594 aim fire
+1597 aim
+1606
+1620 aim
+1630 aim fire
+1633 aim
+1642 aim fire
+1645 aim
+1654 aim fire
+1657 aim
+1666 aim fire
+1669 aim
+1678 aim fire
+1681 aim
+1690
+1704 aim
+1714 aim fire
+1717 aim
+1726 aim fire
+1729 aim
+1738 aim fire
+1741 aim
+1750 aim fire
+1753 aim
+1762 aim fire
+1765 aim
+1774
+1788 aim
+1798 aim fire
+1801 aim
+1810 aim fire
+1813 aim
+1822 aim fire
+1825 aim
+1834 aim fire
+1837 aim
+1846 aim fire
+1849 aim
+1858
+1872 aim
+1882 aim fire
+1885 aim
+1894 aim fire
+1897 aim
+1906 aim fire
+1909 aim
+1918 aim fire
+1921 aim
+1930 aim fire
+1933 aim
+1942
+1956 aim
+1966 aim fire
+1969 aim
+1978 aim fire
+1981 aim
+1990 aim fire
+1993 aim
+2002 aim fire
+2005 aim
+2014 aim fire
+2017 aim
+2026
+2040 aim
+2050 aim fire
+2053 aim
+2062 aim fire
+2065 aim
+2074 aim fire
+2077 aim
+2086 aim fire
+2089 aim
+2098 aim fire
+2101 aim
+2110
+2124 aim
+2134 aim fire
+2137 aim
+2146 aim fire
+2149 aim
+2158 aim fire
+2161 aim
+2170 aim fire
+2173 aim
+2182 aim fire
+2185 aim
+2194
+2208 aim
+2218 aim fire
+2221 aim
+2230 aim fire
+2233 aim
+2242 aim fire
+2245 aim
+2254 aim fire
+2257 aim
+2266 aim fire
+2269 aim
+2278

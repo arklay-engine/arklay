@@ -458,9 +458,22 @@ pub fn targets_of(re2: &crate::scd2::host::Re2State) -> Vec<crate::weapon2::Targ
         .collect()
 }
 
+/// The `Rnd` the player's move drew, in `pl_mv05_w1_t2`'s order:
+/// `Shoot_camera`'s on the shot's first tick, `Weapon_at_ck`'s for the body it
+/// found (the Beretta's roll and `hard_mode`'s), then the splashes'. The
+/// move's own `Esp_call`s follow `Shoot_camera`'s ([`take_hit`]).
+pub fn shot_draws(game: &mut GameState, cut: Option<&crate::state::Cut>) {
+    shoot_camera(game, cut);
+    let origin = game.origin();
+    let room_code = u16::from(origin.stage) << 8 | u16::from(origin.room);
+    let re2 = &mut game.re2;
+    let hard = re2.difficulty().hard;
+    re2.player.shot_draws(&mut re2.rnd, hard, room_code);
+}
+
 /// `pl_mv05_w1_t2`'s call of `Shoot_camera`: with few enemies about, a gun
 /// fired along the camera's view throws sparks at the lens.
-pub fn shoot_camera(game: &mut GameState, cut: Option<&crate::state::Cut>) {
+fn shoot_camera(game: &mut GameState, cut: Option<&crate::state::Cut>) {
     let Some(line) = game.re2.player.shot_line.take() else {
         return;
     };
@@ -2091,6 +2104,73 @@ fn keep_joints_with(
 mod tests {
     use super::*;
     use crate::state::RoomId;
+
+    /// `pl_mv05_w1_t2` calls `Shoot_camera` on the shot's first tick, before
+    /// `Weapon_at_ck`: a handgun fired past the camera draws the spark's
+    /// three `Rnd`s, and `hard_mode`'s roll for the body it hit takes the two
+    /// after them (#500). The roll reads `hard_mode` and the room, and in
+    /// room 103 it is drawn and changes nothing.
+    #[test]
+    fn a_shots_draws_are_the_cameras_and_then_the_hard_mode_hits() {
+        use crate::zombie2::Rnd;
+        // `weapon2`'s own test of `Shoot_camera`: Leon's hand along -X, and a
+        // camera on its line.
+        let line = crate::weapon2::ShotLine {
+            from: [18162, -2505, -2675],
+            matrix: [[1, -4094, 11], [-4097, -4, 8], [-10, -10, -4094]],
+        };
+        let cut = crate::state::Cut {
+            pos: [15164, -2388, -2682],
+            look_at: [22356, -2466, 522],
+            ..Default::default()
+        };
+        let hit = crate::weapon2::Hit {
+            slot: 1,
+            id: 0x10,
+            weapon: 2,
+            high: false,
+            band: 1,
+            region: 2,
+            damage: 15,
+            stun: 2,
+            count: 5,
+            flags: 0x12,
+        };
+        let after = |seed: u16, draws: usize| {
+            let mut rnd = Rnd(seed);
+            for _ in 0..draws {
+                rnd.draw();
+            }
+            rnd.0
+        };
+        let roll = |seed: u16| {
+            let mut rnd = Rnd(seed);
+            let shift = rnd.draw() & 3;
+            (rnd.draw() >> shift) & 0xF == 0
+        };
+        // A roll that comes up after the camera's three draws, and wouldn't
+        // have before them.
+        let seed = (0..=u16::MAX)
+            .find(|&seed| !roll(seed) && roll(after(seed, 3)))
+            .unwrap();
+        let shoot = |room: &str, hard: bool, camera: bool| {
+            let mut game = GameState::default();
+            game.id = RoomId::parse(room).unwrap();
+            game.re2.hard_mode = hard;
+            game.equipped_weapon_id = 2;
+            game.re2.rnd = Rnd(seed);
+            game.re2.player.shot_line = camera.then_some(line);
+            game.re2.player.hit = Some(hit);
+            shot_draws(&mut game, Some(&cut));
+            let hit = game.re2.player.hit.unwrap();
+            (hit.weapon, hit.damage, game.re2.rnd.0)
+        };
+        assert_eq!(shoot("1180", true, true), (6, 900, after(seed, 5)));
+        assert_eq!(shoot("1180", true, false), (2, 15, after(seed, 2)));
+        assert_eq!(shoot("1180", false, true), (2, 15, after(seed, 3)));
+        assert_eq!(shoot("1030", true, true), (2, 15, after(seed, 5)));
+        assert_eq!(shoot("2030", true, true), (6, 900, after(seed, 5)));
+    }
 
     #[test]
     fn parts_num_counts_the_meshs_parts_not_the_skeletons_joints() {

@@ -1138,21 +1138,22 @@ impl Work {
         self.on_object = None;
     }
 
-    /// The aim's splashes' `Rnd`, in the order the original draws it: two for
-    /// each of `Pl_water`'s rings (its turn, then its size) and one for each
-    /// hand's splash (its size). Nothing else in the move draws, so drawing
-    /// after it keeps the order.
     /// The move's `Rnd` draws the tick's owner makes after it, in
-    /// `pl_mv05_w1_t2`'s order: `Weapon_at_ck`'s for a Beretta hit
-    /// ([`crate::weapon2::beretta_hit`]), then the splashes'
+    /// `pl_mv05_w1_t2`'s order: `Weapon_at_ck`'s for the hit it found
+    /// ([`crate::weapon2::hit_rolls`], the Beretta's and `hard_mode`'s, which
+    /// `hard` and the room's code are for), then the splashes'
     /// ([`Self::water_draws`]).
-    pub(crate) fn shot_draws(&mut self, rnd: &mut crate::zombie2::Rnd) {
+    pub(crate) fn shot_draws(&mut self, rnd: &mut crate::zombie2::Rnd, hard: bool, room_code: u16) {
         if let Some(hit) = self.hit.as_mut() {
-            crate::weapon2::beretta_hit(hit, rnd);
+            crate::weapon2::hit_rolls(hit, rnd, hard, room_code);
         }
         self.water_draws(rnd);
     }
 
+    /// The aim's splashes' `Rnd`, in the order the original draws it: two for
+    /// each of `Pl_water`'s rings (its turn, then its size) and one for each
+    /// hand's splash (its size). Nothing else in the move draws, so drawing
+    /// after it keeps the order.
     pub(crate) fn water_draws(&mut self, rnd: &mut crate::zombie2::Rnd) {
         for draw in std::mem::take(&mut self.water_draws) {
             let Some(effect) = self.effects.get_mut(draw.effect) else {
@@ -8852,7 +8853,7 @@ mod tests {
             ..Work::default()
         };
         let mut rnd = crate::zombie2::Rnd(0x1234);
-        work.shot_draws(&mut rnd);
+        work.shot_draws(&mut rnd, false, 0x118);
         let hit = work.hit.unwrap();
         assert_eq!(
             (hit.weapon, hit.damage, hit.stun, hit.count),

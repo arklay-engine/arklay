@@ -1,0 +1,120 @@
+# The handguns' hits under HARD (`Weapon_at_ck`'s `hard_mode` branch, #500 part 3; oracle/re2.md, "The new-game
+# choice"): a hit by weapon 2, 3, 4 or the Colt S.A.A. draws two more `Rnd`s, and one time in sixteen it takes the
+# body's custom magnum row and lands as weapon 6, except in room 103, where the two are drawn and the hit stays the
+# handgun's. HARD's title route leaves `Rnd` at 58231, which each setup sets. Each recording has a run of the trace
+# fields and one of the effect pool (`esp`).
+
+# Leon's handgun at room 11B's six zombies, three presses in each 60 ticks.
+[[run]]
+name = "handgun_11b_hard"
+difficulty = "hard"
+room = "11B"
+ticks = 3344
+setup_script = "handgun_11b_hard.lua"
+input = "handgun_11b_hard.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,inv,snd,zm0,zm1,zm2,zm3,zm4,zm5,fgstat"
+expect = "match"
+record = "--warp 11B:8000:0:-19500:0 --life 2000 --give 0:2:18 --give 2:0x14:250"
+
+[[run]]
+name = "esp_handgun_11b_hard"
+ref = "handgun_11b_hard"
+difficulty = "hard"
+room = "11B"
+ticks = 3344
+setup_script = "handgun_11b_hard.lua"
+input = "handgun_11b_hard.txt"
+input_shift = 344
+fields = "esp"
+expect = "match"
+record = "--warp 11B:8000:0:-19500:0 --life 2000 --give 0:2:18 --give 2:0x14:250"
+
+# Claire's handgun at room 118's three, the same presses. The effect pool parts for 67 ticks from 977, at the end of a
+# zombie's bite, which isn't the hit's doing (#792).
+[[run]]
+name = "clairegun_118_hard"
+difficulty = "hard"
+room = "118"
+character = 1
+player = 1
+ticks = 3344
+setup_script = "clairegun_118_hard.lua"
+input = "clairegun_118_hard.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,inv,snd,zm0,zm1,zm2,zm3,zm4,zm5,fgstat"
+expect = "match"
+record = "--start claire --warp 118:-24617:0:-24996:1024 --life 2000 --give 2:0x14:250"
+
+[[run]]
+name = "esp_clairegun_118_hard"
+ref = "clairegun_118_hard"
+difficulty = "hard"
+room = "118"
+character = 1
+player = 1
+ticks = 3344
+setup_script = "clairegun_118_hard.lua"
+input = "clairegun_118_hard.txt"
+input_shift = 344
+fields = "esp"
+expect = { tick = 977, fields = ["esp93", "esp94", "esp95"], note = "at the end of a zombie's bite the three free blood effects (kind 0, row 1) are about 20 off, for 67 ticks; the pool matches before and after, the two weapon 6 hits on 2292 and 2412 included (#792)" }
+record = "--start claire --warp 118:-24617:0:-24996:1024 --life 2000 --give 2:0x14:250"
+
+# Claire's Colt S.A.A. at the same three, EQUIPped from slot 2 through the status screen (`--equip-load` keeps the
+# handgun's clips, and Leon's hand is outside the Colt's level: colt_118's shots hit nobody), two presses in each 60 ticks.
+[[run]]
+name = "colt_118_hard"
+difficulty = "hard"
+room = "118"
+character = 1
+player = 1
+ticks = 3344
+setup_script = "colt_118_hard.lua"
+input = "colt_118_hard.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,inv,snd,zm0,zm1,zm2,zm3,zm4,zm5,fgstat"
+expect = "match"
+record = "--start claire --warp 118:-24617:0:-24996:1024 --life 2000 --give 2:0xD:6 --give 3:0x14:200"
+
+[[run]]
+name = "esp_colt_118_hard"
+ref = "colt_118_hard"
+difficulty = "hard"
+room = "118"
+character = 1
+player = 1
+ticks = 3344
+setup_script = "colt_118_hard.lua"
+input = "colt_118_hard.txt"
+input_shift = 344
+fields = "esp"
+expect = "match"
+record = "--start claire --warp 118:-24617:0:-24996:1024 --life 2000 --give 2:0xD:6 --give 3:0x14:200"
+
+# Room 103, beside Brad (1250 life on HARD), five presses in each 84 ticks: the roll is drawn for every hit, and the
+# ones that come up land as the handgun's all the same.
+[[run]]
+name = "handgun_103_hard"
+difficulty = "hard"
+room = "103"
+ticks = 2344
+setup_script = "handgun_103_hard.lua"
+input = "handgun_103_hard.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,inv,snd,zm0,zm1,zm2,zm3,zm4,zm5,fgstat"
+expect = "match"
+record = "--warp 103:2000:0:-14478:2048:3 --life 2000 --give 0:2:18 --give 2:0x14:250"
+
+[[run]]
+name = "esp_handgun_103_hard"
+ref = "handgun_103_hard"
+difficulty = "hard"
+room = "103"
+ticks = 2344
+setup_script = "handgun_103_hard.lua"
+input = "handgun_103_hard.txt"
+input_shift = 344
+fields = "esp"
+expect = "match"
+record = "--warp 103:2000:0:-14478:2048:3 --life 2000 --give 0:2:18 --give 2:0x14:250"
