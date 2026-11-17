@@ -122,7 +122,7 @@ end
 function M.draw(api)
     E.black(api)
     if backdrop then
-        local shade = E.shade_scale(E.fade_shade(BACKDROP_FADE))
+        local shade = E.backdrop_scale(E.fade_shade(BACKDROP_FADE))
         api:draw_background(backdrop, 0, 0, shade, shade, shade)
     end
     for _, slot in ipairs(s.captions) do

@@ -649,8 +649,9 @@ impl Framebuffer {
     /// display origin (screen panning and shake) with a clamp sampler, so a
     /// positive X origin moves the image right by sampling one pixel further
     /// left, and the edge row/column repeats. `colour` is the global colour
-    /// multiplier (`255` per channel is identity), applied with a truncating
-    /// integer scale. The destination is always opaque.
+    /// multiplier (`255` per channel is identity), applied as the reference's
+    /// modulated quad rounds it ([`modulate`]). The destination is always
+    /// opaque.
     ///
     /// The image stretches over the logical 320x240 quad centred in the
     /// frame, so a wider aspect's shorter band crops the picture rather than
@@ -682,9 +683,7 @@ impl Framebuffer {
             list.sprite(map, visible, [1.0; 4], |u, v| {
                 let offset = (v as usize * image.width as usize + u as usize) * 4;
                 let texel = image.rgba.get(offset..offset + 4)?;
-                let mix = |channel: usize| {
-                    (u32::from(texel[channel]) * u32::from(colour[channel]) / 255) as u8
-                };
+                let mix = |channel: usize| modulate(texel[channel], colour[channel]);
                 Some([mix(0), mix(1), mix(2), 255])
             });
             return;
@@ -710,8 +709,7 @@ impl Framebuffer {
                     continue;
                 };
                 for channel in 0..3 {
-                    slot[channel] =
-                        (u32::from(texel[channel]) * u32::from(colour[channel]) / 255) as u8;
+                    slot[channel] = modulate(texel[channel], colour[channel]);
                 }
                 slot[3] = 255;
             }
@@ -2972,6 +2970,13 @@ pub struct GameplayScene<'a> {
     /// ([`DebugVertex`]); empty outside the F4 debug views. The GPU renderer
     /// draws them; the software path leaves them to its caller.
     pub debug: &'a [DebugVertex],
+}
+
+/// A texel times a vertex colour channel, as the reference's GL modulate
+/// stores it: `round(texel * colour / 255)`. The RE1 epilogue's 0x60 backdrop
+/// (colour 191) shows texel 41 as 31, where truncation gives 30.
+fn modulate(texel: u8, colour: u8) -> u8 {
+    ((u32::from(texel) * u32::from(colour) + 127) / 255) as u8
 }
 
 /// One corner of a debug triangle: a logical 320x240 screen position, the
@@ -8925,6 +8930,34 @@ mod tests {
             framebuffer_pixel(&framebuffer, 4, 3),
             [(4u32 * 128 / 255) as u8, 3, 0, 255]
         );
+    }
+
+    #[test]
+    fn background_colour_rounds_like_the_reference() {
+        // Texels of the RE1 epilogue backdrop and what the reference shows
+        // them as under its 0x60 shade (colour 191): truncating shows 8 and 41
+        // a level dark, and a doubled shade (192) shows 74 and 82 a level
+        // bright.
+        let texels = [8u8, 41, 74, 82, 115, 131];
+        let shown = [6u8, 31, 55, 61, 86, 98];
+        let mut image = Image {
+            width: 320,
+            height: 240,
+            rgba: vec![0; 320 * 240 * 4],
+        };
+        for (x, texel) in texels.iter().enumerate() {
+            image.rgba[x * 4..x * 4 + 4].copy_from_slice(&[*texel, *texel, *texel, 255]);
+        }
+        let mut framebuffer = Framebuffer::new();
+        framebuffer.draw_background(&image, [0, 0], [191; 3]);
+        for (x, value) in shown.iter().enumerate() {
+            assert_eq!(
+                framebuffer_pixel(&framebuffer, x, 0),
+                [*value, *value, *value, 255],
+                "texel {}",
+                texels[x]
+            );
+        }
     }
 
     #[test]
