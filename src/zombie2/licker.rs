@@ -53,6 +53,9 @@ pub struct Licker {
     pub(super) timer1: i16,
     /// `Sca_old_x`, `Sca_old_z`.
     sca_old: [i32; 2],
+    /// `Atd[0]`'s `Atw_x` and `Atw_z`: its `Ofs` turned with the body, as the
+    /// last `Oba_set_ofs` left them for `Sca_ck_em`.
+    atw: [i32; 2],
     shadow_scale: Option<i32>,
     /// `Workm.t` of parts 0 and 1, which `Oba_set_ofs` reads from the last
     /// `Joint_trans2`.
@@ -310,14 +313,10 @@ impl Em22<'_, '_, '_, '_> {
     fn oba_set_ofs(&mut self, at: [i32; 3]) {
         let angle = self.em.mover.player.angle;
         let m = self.em.work().body_rotation(angle);
-        let place = |atd: &mut Atd| {
-            let ofs = super::surface::apply(&m, [i32::from(atd.ofs_x), i32::from(atd.ofs_y), 0]);
-            atd.at = std::array::from_fn(|axis| at[axis] + ofs[axis]);
-        };
-        place(&mut self.em.z.atd);
-        place(&mut self.l.head);
+        self.l.atw = place(&m, at, &mut self.em.z.atd);
+        place(&m, at, &mut self.l.head);
         if let Some(back) = &mut self.l.back {
-            place(back);
+            place(&m, at, back);
         }
     }
 
@@ -334,9 +333,7 @@ impl Em22<'_, '_, '_, '_> {
         let at = self.em.z.atd.at;
         let [old_x, old_z] = self.l.sca_old;
         let prev = [old_x, self.em.mover.player.pos[1], old_z];
-        let radius = i32::from(self.em.z.atd.w);
-        let floor = self.em.z.floor;
-        let resolved = crate::sca::resolve_on_floor(sca, super::MASK, prev, at, radius, floor);
+        let resolved = sca_resolve(sca, prev, &self.em.z.atd, self.l.atw, self.em.z.floor);
         let (dx, dz) = (resolved.pos[0] - at[0], resolved.pos[2] - at[2]);
         let body = &mut *self.em.mover.player;
         body.pos[0] += dx;
@@ -358,6 +355,28 @@ impl Em22<'_, '_, '_, '_> {
         self.l.part2 = t(2).unwrap_or(pos);
         self.em.work().neck.position = t(8);
     }
+}
+
+/// `Oba_set_ofs` for one box: `Ofs` turned by `m` and added to `at`. It
+/// gives back `Atw_x` and `Atw_z`, the turned offset as words.
+fn place(m: &super::surface::Rotation, at: [i32; 3], atd: &mut Atd) -> [i32; 2] {
+    let ofs = super::surface::apply(m, [i32::from(atd.ofs_x), i32::from(atd.ofs_y), 0]);
+    atd.at = std::array::from_fn(|axis| at[axis] + ofs[axis]);
+    [i32::from(ofs[0] as i16), i32::from(ofs[2] as i16)]
+}
+
+/// `Sca_ck_info` on `Atd[0]`, with the room's records for the enemies.
+/// `Sca_hit_hishi` reads the box's `Atw_x` and `Atw_z` as well, so a diamond
+/// is tested `Ofs` further on (`0x2A0` ahead of a licker on the floor).
+fn sca_resolve(
+    sca: &crate::state::Sca,
+    prev: [i32; 3],
+    atd: &Atd,
+    atw: [i32; 2],
+    floor: u8,
+) -> crate::sca::Resolved {
+    let radius = i32::from(atd.w);
+    crate::sca::resolve_with_offset(sca, super::MASK, prev, atd.at, radius, floor, atw)
 }
 
 #[cfg(test)]
@@ -438,6 +457,62 @@ mod tests {
         assert_eq!(seen[6][2], 0x1000);
         assert_eq!(seen[12], [0, 0, 0, 0, 0, 0, 0, 0, 0x1000]);
         assert_eq!(licker.tongue_weights(), None);
+    }
+
+    /// `Sca_hit_hishi` tests a diamond at `Atd[0]` plus its `Atw`, so the
+    /// licker's floor box (`Ofs_x` 0x2A0) meets one 672 units ahead of where
+    /// it stands: room 110's licker in `leon_a_116_112` slid along the
+    /// walkway's diamonds from tick 1264.
+    #[test]
+    fn a_diamond_is_met_at_the_box_and_its_turned_offset() {
+        let sca = crate::state::Sca {
+            cell_x: -30000,
+            cell_z: -30000,
+            records: vec![crate::state::ScaRect {
+                x: 0,
+                z: 0,
+                width: 4000,
+                depth: 4000,
+                id: 0xDC05,
+                kind: 1,
+                floor: 1 << 4,
+            }],
+            ..crate::state::Sca::default()
+        };
+        let mut atd = Atd {
+            ofs_x: 0x2A0,
+            w: 1000,
+            ..Atd::default()
+        };
+        // Facing -x, towards the diamond's right-hand corner.
+        let m = player2::rot_matrix([0, 0x800, 0]);
+        let atw = place(&m, [3828, 0, 3000], &mut atd);
+        assert_eq!(atw, [-672, 0]);
+        assert_eq!(atd.at, [3156, 0, 3000]);
+        let prev = [3256, 0, 3100];
+        let clear = sca_resolve(
+            &sca,
+            prev,
+            &Atd {
+                at: [4500, 0, 3000],
+                ..atd
+            },
+            [0, 0],
+            4,
+        );
+        assert!(!clear.hit, "1060 from the edge, outside the box's reach");
+        let met = sca_resolve(
+            &sca,
+            prev,
+            &Atd {
+                at: [4500, 0, 3000],
+                ..atd
+            },
+            atw,
+            4,
+        );
+        assert!(met.hit, "585 from the edge once Atw is added");
+        assert_ne!(met.pos, [4500, 0, 3000]);
     }
 
     #[test]
