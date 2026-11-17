@@ -1,0 +1,147 @@
+# leon_a_20c_20e: Leon A from 20D's door 0 north up 20C's west arm to door 2, the Precinct (Diamond) Key used in it and discarded (its last door, which frees the slot for the plug), into 20E's north half, the Rook plug (item 0x3C) taken from its shelf, east across area 2 (whose event sends the licker through the window) to door 0 and 20C's hand back
+345 up run right
+357 up run
+362 right
+363 up run
+382 up run left
+387 up run right
+390 up run left
+391 up run
+395 up run right
+396 up run
+398 up run right
+399 up run
+412 up run right
+413 up run
+419 up run left
+422 up run
+423 up run right
+425 up run
+430 up run left
+431 up run
+432 up run left
+434 up run
+435 up run right
+438 up run
+444 up  left
+447 left
+449 up  left
+452 left
+454 up  left
+456 left
+458 up  left
+460 left
+462 up  left
+464 left
+467 up  left
+468 left
+470 up  left
+472 left
+476 up  left
+478 left
+483 up  left
+484 left
+486 up  left
+487 left
+490 up  left
+491 left
+494 up  left
+495 left
+498 up  left
+499 left
+503 up  left
+504 left
+508 up  left
+509 right
+536 action
+540
+580 action
+584
+624 action
+628
+670 action
+672
+707 up
+1013 up run left
+1024 left
+1025 up run left
+1034 up run
+1035 up run right
+1036 right
+1037 up run right
+1042 right
+1043 up run right
+1046 right
+1048 up run right
+1055 up run
+1056 up run right
+1057 up run
+1058 up run right
+1059 up run
+1061 up run right
+1062 up run
+1066 right
+1067 up run
+1070 up run left
+1073 up run
+1074 up run left
+1075 up run
+1078 right
+1079 up run right
+1080 up run
+1082 up  right
+1086 action
+1088
+1098 action
+1100
+1110 action
+1112
+1122 action
+1124
+1134 action
+1136
+1146 action
+1148
+1158 action
+1160
+1170 action
+1172
+1238 action
+1240
+1244 right
+1271 up run right
+1272 right
+1274 up run right
+1279 right
+1282 up run right
+1283 right
+1285 up run right
+1301 up run
+1302 up run left
+1303 left
+1304 up run left
+1305 up run
+1309 up run left
+1310 up run
+1321 left
+1322 up run
+1324 up run left
+1332 left
+1334 up run left
+1335 up run
+1339 left
+1340 up run left
+1342 up run
+1344 up run left
+1345 up run
+1346 up run left
+1349 up run
+1351 left
+1352 up run
+1353 up  right
+1362
+1364 right
+1376 action
+1378
+1413 up
+1719

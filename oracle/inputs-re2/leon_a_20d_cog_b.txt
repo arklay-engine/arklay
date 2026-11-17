@@ -1,0 +1,421 @@
+# leon_a_20d_cog_b: Leon A in 20D from 20C's door 1: the bullets loaded into the handgun from the status screen (COMBINE, which empties slot 7 for the cog), the Lighter used at the fireplace, the three lamps lit in the order the script wants (x -21600, -17950, -25200; three presses each: the number, its close, yes), the cog (item 0x4A) taken where it falls, and door 0 back to 20C's hand back (every input 20 ticks after the warp, which arklay starts in its fade-in: leon_a_20d_cog's START on the warp's first tick opened the status screen there with the camera two ticks earlier than the original)
+365 start
+369
+399 confirm
+403
+419 up
+423
+439 confirm
+443
+459 down
+463
+479 down
+483
+499 down
+503
+519 right
+523
+539 confirm
+543
+579 cancel
+583
+603 cancel
+607
+637 up run left
+641 right
+643 up run left
+646 up run
+647 left
+649 up run right
+650 up run
+653 left
+655 up run right
+657 up run
+659 left
+661 up run right
+662 up run
+665 left
+667 up run right
+668 up run
+672 left
+673 up run
+675 up run left
+677 left
+679 up run left
+683 left
+685 up run left
+688 up run
+689 up run left
+690 left
+691 up run
+694 up run right
+695 up run
+696 left
+697 up run
+702 left
+703 up run
+708 left
+709 up run
+714 left
+715 up run
+719 left
+721 up run right
+722 up run left
+726 left
+727 up run
+728 up run left
+729 up run
+730 up run left
+731 left
+733 up run
+734 up run left
+735 up run
+736 up run right
+737 left
+739 up run right
+743 right
+745 up run right
+746 up run
+747 up run left
+749 left
+751 up run right
+753 up run left
+754 up run
+755 left
+757 up run right
+760 up run left
+761 left
+763 up run
+765 up run right
+766 up run
+767 up  left
+769 left
+771 up  left
+773 left
+775 up  left
+777 left
+779 up  left
+781 left
+783 up  left
+784 left
+786 up  left
+788 left
+791 up  left
+793 left
+797 up  left
+798 left
+800 up  left
+801 left
+803 up  left
+804 left
+806 up  left
+807 left
+809 up  left
+810 left
+813 up  left
+814 left
+817 up  left
+818 left
+822 up  left
+823 right
+845 start
+849
+879 up
+883
+899 confirm
+903
+919 confirm
+923
+1073 right
+1102 up run right
+1119 up run
+1120 up run right
+1121 up run
+1129 left
+1154 action
+1158
+1198 action
+1202
+1242 action
+1246
+1286 right
+1294 up run right
+1312 up run
+1317 up run left
+1322 up run
+1325 up run right
+1327 up run
+1332 up run left
+1333 up run
+1334 up run left
+1335 up run
+1338 up run right
+1339 up run
+1346 up run right
+1347 up run
+1352 up run left
+1353 up run
+1354 up run left
+1355 up run
+1358 up run right
+1359 up run
+1366 up run right
+1367 up run
+1372 up run left
+1373 up run
+1374 up run left
+1375 up run
+1378 up run right
+1379 up run
+1386 up run right
+1387 up run
+1392 up run left
+1393 up run
+1397 up run left
+1398 up run
+1402 up run right
+1403 up run
+1404 up run right
+1405 up run
+1411 up run left
+1412 up run
+1417 up run left
+1418 up run
+1422 up run right
+1423 up run
+1424 up run right
+1425 up run
+1432 up run left
+1434 up run
+1437 up run right
+1438 up run
+1446 up run right
+1447 up run
+1452 up run left
+1453 up run
+1454 up run left
+1455 up run
+1458 up run right
+1459 up run
+1466 up run right
+1467 up run
+1472 up run left
+1473 up run
+1474 up run left
+1475 up run
+1478 up run right
+1479 up run
+1486 up run right
+1487 up run
+1492 up run left
+1493 up run
+1497 up run left
+1498 up run
+1502 up run right
+1503 up run
+1504 up run right
+1505 up run
+1511 up run left
+1512 up run
+1517 up run left
+1518 up run
+1522 up run right
+1523 up run
+1524 up run right
+1525 up run
+1532 up run left
+1534 up run
+1537 up run right
+1538 up run
+1546 up run right
+1547 up run
+1552 up run left
+1553 up run
+1554 up run left
+1555 up run
+1558 up run right
+1559 up run
+1566 up run right
+1567 up run
+1572 up run left
+1573 up run
+1574 up run left
+1575 up run
+1578 up run right
+1579 up run
+1586 up  left
+1590 up 
+1593 up  right
+1594 up 
+1595 up  right
+1596 up 
+1598 up  right
+1599 up 
+1646 left
+1663 action
+1667
+1707 action
+1711
+1751 action
+1755
+1795 left
+1809 up run left
+1823 up run
+1836 up run left
+1837 up run
+1850 right
+1873 action
+1877
+1917 action
+1921
+1961 action
+1965
+2130 up run right
+2134 right
+2136 up run right
+2137 up run
+2139 up run left
+2140 left
+2142 up run right
+2146 right
+2148 up run
+2150 up run right
+2151 up run
+2152 right
+2154 up run
+2158 left
+2160 up run left
+2165 left
+2166 up run
+2167 up run left
+2170 left
+2172 up run right
+2174 up run
+2175 up run right
+2176 right
+2178 up run right
+2183 right
+2184 up run left
+2186 up run
+2188 left
+2190 up run left
+2194 left
+2196 up run right
+2197 up run
+2199 up run right
+2200 right
+2202 up run
+2203 up run left
+2205 up run right
+2207 right
+2208 up run left
+2209 up run
+2210 up run right
+2212 right
+2214 up run right
+2217 up run
+2218 right
+2220 up run
+2224 left
+2226 up run right
+2227 up run
+2230 left
+2232 up run right
+2233 up run
+2235 up run right
+2236 right
+2238 up run
+2240 up run left
+2241 up run
+2243 left
+2244 up run
+2245 up run left
+2249 left
+2250 up run left
+2252 up run
+2253 up run right
+2254 right
+2256 up run left
+2258 up run
+2260 left
+2262 up run left
+2263 up run
+2264 up run left
+2266 left
+2268 up run left
+2272 left
+2274 up run left
+2278 left
+2280 up run left
+2281 up run
+2284 up  right
+2286 right
+2290 up  right
+2291 right
+2296 up  right
+2297 right
+2310 action
+2312
+2322 action
+2324
+2334 action
+2336
+2346 action
+2348
+2358 action
+2360
+2370 action
+2372
+2382 action
+2384
+2394 action
+2396
+2406 action
+2408
+2474 action
+2476
+2480 right
+2495 up run right
+2496 right
+2498 up run right
+2499 right
+2501 up run right
+2502 right
+2504 up run right
+2508 left
+2510 up run right
+2514 right
+2516 up run right
+2517 up run
+2520 right
+2522 up run
+2524 up run left
+2525 up run
+2526 right
+2528 up run left
+2529 up run
+2531 up run left
+2532 up run
+2533 left
+2534 up run
+2535 up run right
+2539 right
+2540 up run
+2542 up run right
+2544 right
+2546 up run left
+2550 left
+2552 up run
+2554 up run left
+2555 up run
+2556 right
+2558 up run left
+2559 up run right
+2561 up run
+2563 up  left
+2570
+2572 right
+2574 action
+2576
+2611 up
+2915
