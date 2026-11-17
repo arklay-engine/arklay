@@ -3170,6 +3170,20 @@ pub(crate) fn resolve_room_collision(
 }
 
 impl CollisionResolution {
+    /// A pass that never looked: the position stands and, like a rollback
+    /// (code 2), the anchor is left alone.
+    pub(crate) fn unresolved(pos: [i32; 3]) -> Self {
+        Self {
+            pos,
+            code: 2,
+            floor_step: 0,
+            scratch: pos,
+            push_z: None,
+            entity_bkp: None,
+            soft_zone: false,
+        }
+    }
+
     /// An RE2 room's pass, which has no floor steps, backups or soft zones.
     pub(crate) fn from_sca(resolved: crate::sca::Resolved) -> Self {
         Self {

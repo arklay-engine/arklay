@@ -1448,7 +1448,8 @@ function EnemyApi:spawn_companion_effect(handle, type, depth, x, y, z, yaw) end
 function EnemyApi:plant42_capture_setup(joint) end
 
 ---Re-apply the capture through a joint to the player: the player's position
----follows the joint, and the grabbed zone bit `0x80` is raised.
+---and orientation follow the joint, and the grabbed zone bit `0x80` is raised
+---(while it is up, the player is drawn with the hold's rotation, not its facing).
 ---@param joint integer
 function EnemyApi:plant42_hold_player(joint) end
 
@@ -1588,7 +1589,8 @@ function EnemyApi:yawn_capture_t_step(x, y, z) end
 function EnemyApi:set_yawn_capture_t(x, y, z) end
 
 ---Re-apply the capture through the head joint 0 to the player: the swallowed
----hold writes the player's position and raises the grabbed zone bit `0x80`.
+---hold writes the player's position and orientation and raises the grabbed
+---zone bit `0x80`.
 function EnemyApi:yawn_hold_player() end
 
 -- # Neptune

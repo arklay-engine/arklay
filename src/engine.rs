@@ -8764,7 +8764,7 @@ impl GameSession {
             else {
                 return false;
             };
-            let entity = crate::anim::entity_matrix(player.pos, player.angle);
+            let entity = game.player_matrix(player.pos, player.angle);
             let mut locals = crate::anim::joint_local_transforms(&assets.emd.skeleton, &keyframe);
             if torn_legs {
                 tear_plant_corpse(&mut locals);
@@ -19321,6 +19321,12 @@ fn tick_room_timed(
                 work.sca_hit = resolved.hit;
                 player::CollisionResolution::from_sca(resolved)
             }
+            // `check_room_collision` returns before it looks for a body whose
+            // status bit 2 is up (the seized, carried or impaled player), so
+            // the position a hold wrote stands and the rollback anchor keeps.
+            _ if (context.game.entities[0].status_flags | context.game.player_flags) & 4 != 0 => {
+                player::CollisionResolution::unresolved(context.game.entities[0].pos)
+            }
             _ => player::resolve_pushed_player(
                 context.room,
                 prev,
@@ -20587,7 +20593,7 @@ fn store_player_joint_worlds(
         .player
         .set_applied_pose(Some(keyframe.clone()));
     player.anim.set_applied_pose(Some(keyframe.clone()));
-    let entity = crate::anim::entity_matrix(player.pos, player.angle);
+    let entity = game.player_matrix(player.pos, player.angle);
     let worlds = crate::anim::joint_matrices_frozen(
         skeleton,
         &keyframe,
@@ -21225,7 +21231,7 @@ fn render_frame_on(
         if game.is_re2_room {
             game.re2.player.neck.apply(&mut keyframe);
         }
-        let entity = anim::entity_matrix(player_state.pos, player_state.angle);
+        let entity = game.player_matrix(player_state.pos, player_state.angle);
         let mut joints =
             anim::joint_matrices_frozen(skeleton, &keyframe, &entity, &game.player_frozen_joints);
         apply_look_at(&mut joints, &game.entities[0], &game.entity_anims[0]);
@@ -33734,6 +33740,48 @@ return M
             player_state,
             synthetic_player_assets(),
         )
+    }
+
+    /// `check_room_collision` returns before it looks for a body whose
+    /// status bit 2 is up, so a seized or carried player stays where the
+    /// hold put it: the Neptune devour carries the player through the tank's
+    /// wall rectangle.
+    #[test]
+    fn a_player_with_status_bit_two_skips_the_room_resolve() {
+        let rect = crate::state::CollisionRect {
+            x_max: 1500,
+            z_max: 2000,
+            x_min: 500,
+            z_min: 900,
+            kind: 1,
+            flags: 0x300,
+        };
+        let settle = |flags: u8| {
+            let (pack, _id, mut room, mut game, mut player_state, assets) = scripted_room_fixture();
+            for quadrant in &mut room.collision.quadrants {
+                quadrant.push(rect);
+            }
+            player_state.pos = [1000, 0, 1000];
+            game.sync_entity_from_player(&player_state);
+            player_state.collision_mirror = [1000, 1000];
+            game.player_flags |= flags;
+            let scripts = scd::ir::Scripts::default();
+            let mut command_vm = scd::vm::CommandVm::new(&scripts);
+            let mut event_vm = scd::vm::EventVm::new(&scripts);
+            tick_scripted_room(
+                &pack,
+                &mut room,
+                &mut game,
+                &mut player_state,
+                &assets,
+                &mut command_vm,
+                &mut event_vm,
+                player::Input::default(),
+            );
+            game.entities[0].pos
+        };
+        assert_ne!(settle(0), [1000, 0, 1000], "the wall pushes a free player");
+        assert_eq!(settle(4), [1000, 0, 1000], "a held player stays put");
     }
 
     #[test]

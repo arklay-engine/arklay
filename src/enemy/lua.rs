@@ -4464,7 +4464,7 @@ mod imp {
             });
 
             // Apply the capture transform through a joint to the player: the
-            // grabbed pose's position follows the joint.
+            // grabbed player's whole matrix follows the joint.
             methods.add_method_mut("plant42_hold_player", |_lua, api, joint: i64| {
                 let slot = api.slot;
                 let game = api.game();
@@ -4474,8 +4474,7 @@ mod imp {
                 };
                 let capture = game.plant42_capture;
                 let held = crate::enemy::custom_anim::hold_player(&joint_matrix, &capture);
-                game.entities[0].pos = held.t;
-                game.entities[0].zone_flags |= 0x80;
+                game.hold_player_matrix(&held);
                 Ok(())
             });
 
@@ -4934,8 +4933,7 @@ mod imp {
                 };
                 let capture = game.yawn_capture;
                 let held = crate::enemy::custom_anim::hold_player(&joint_matrix, &capture);
-                game.entities[0].pos = held.t;
-                game.entities[0].zone_flags |= 0x80;
+                game.hold_player_matrix(&held);
                 Ok(())
             });
 

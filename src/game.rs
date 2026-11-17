@@ -3848,6 +3848,11 @@ pub struct GameState {
     /// devour transform built from the shark's mouth joint, dragged by the
     /// swallow's own step.
     pub neptune_capture: crate::anim::Mat4x3,
+    /// The rotation a hold last wrote into the player's local matrix (the
+    /// Plant 42 and Yawn holds and the Neptune devour write the whole
+    /// matrix). It stands in place of the facing while the captured bit
+    /// (`zone_flags & 0x80`) is up; see [`GameState::player_matrix`].
+    pub player_held_rotation: [[i32; 3]; 3],
     /// The Tyrant's render-only scratch: the slash ribbon, the two claw
     /// ghosts and the five rocket-death limbs. One Tyrant is alive at a time,
     /// and the block resets with the room.
@@ -4221,6 +4226,28 @@ impl Rumble {
 }
 
 impl GameState {
+    /// The player's local matrix at `pos`. The original's joint compose
+    /// skips `RotMatrix` of the player's facing while the captured bit
+    /// (`zone_flags & 0x80`) is up, so the rotation a hold wrote stands.
+    pub fn player_matrix(&self, pos: [i32; 3], angle: u16) -> crate::anim::Mat4x3 {
+        if self.entities[0].zone_flags & 0x80 != 0 {
+            crate::anim::Mat4x3 {
+                r: self.player_held_rotation,
+                t: pos,
+            }
+        } else {
+            crate::anim::entity_matrix(pos, angle)
+        }
+    }
+
+    /// Write a hold's composed matrix into the player's: the translation
+    /// moves both position mirrors, the rotation stands while captured.
+    pub fn hold_player_matrix(&mut self, held: &crate::anim::Mat4x3) {
+        self.entities[0].pos = held.t;
+        self.entities[0].zone_flags |= 0x80;
+        self.player_held_rotation = held.r;
+    }
+
     /// Ask for `rumble`, merged with any already asked for this tick.
     pub fn rumble(&mut self, rumble: Rumble) {
         self.rumble = Some(self.rumble.map_or(rumble, |pending| pending.max(rumble)));
@@ -4336,6 +4363,7 @@ impl Default for GameState {
             player_frozen_joints: Vec::new(),
             yawn_capture: crate::anim::Mat4x3::default(),
             neptune_capture: crate::anim::Mat4x3::default(),
+            player_held_rotation: crate::anim::Mat4x3::default().r,
             tyrant: crate::enemy::tyrant::TyrantState::default(),
             player_attacker: None,
             player_damage: None,
@@ -11912,6 +11940,26 @@ mod tests {
 
     fn op(code: u8) -> &'static Op {
         command_op(code).unwrap()
+    }
+
+    #[test]
+    fn a_captured_player_keeps_the_rotation_its_hold_wrote() {
+        let mut state = GameState::new(RoomId::parse("2000").unwrap(), &RoomState::default());
+        let held = crate::anim::Mat4x3 {
+            r: crate::anim::rotation_matrix(0x200, 0x100, 0x40),
+            t: [100, -200, 300],
+        };
+        state.hold_player_matrix(&held);
+        assert_eq!(state.entities[0].pos, held.t);
+        assert_eq!(state.player_matrix([1, 2, 3], 0x400).r, held.r);
+        assert_eq!(state.player_matrix([1, 2, 3], 0x400).t, [1, 2, 3]);
+
+        // Released, the facing builds the rotation again.
+        state.entities[0].zone_flags &= !0x80;
+        assert_eq!(
+            state.player_matrix([1, 2, 3], 0x400),
+            crate::anim::entity_matrix([1, 2, 3], 0x400)
+        );
     }
 
     fn game() -> GameState {

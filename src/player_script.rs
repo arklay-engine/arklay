@@ -1159,11 +1159,7 @@ fn swallow_hold(game: &mut GameState, player: &mut PlayerState, emd_clips: &[Cli
         };
         let capture = game.yawn_capture;
         let held = crate::enemy::custom_anim::hold_player(&joint, &capture);
-        // The original writes the player's whole local matrix; the port's
-        // visible player poses from position and yaw only, so the composed
-        // translation carries the hold and the captured orientation is a
-        // documented approximation.
-        game.entities[0].pos = held.t;
+        game.hold_player_matrix(&held);
         player.pos = held.t;
     }
 }
@@ -1677,10 +1673,9 @@ fn spawn_plant_eat_sheet(game: &mut GameState, joint: u8, offset: [i32; 3]) {
 /// recomposes the player matrix from the shark's capture transform every
 /// frame.
 ///
-/// The enemy script now fills `neptune_capture`, but case 2's recomposition
-/// (the original composes the first enemy's local matrix and its joint 0 with
-/// the capture transform) still needs the shark's posed joint, so it remains
-/// the documented deferral; the grabbed zone flag is kept.
+/// Case 2 composes the first enemy's local matrix and its joint 0 transform
+/// (this tick's joint 0 world, which the shark's update just stored) with the
+/// capture transform.
 fn neptune_devour(game: &mut GameState, player: &mut PlayerState, clips: &[Clip]) {
     match game.entities[0].action_state {
         0 => {
@@ -1701,6 +1696,12 @@ fn neptune_devour(game: &mut GameState, player: &mut PlayerState, clips: &[Clip]
         }
         2 => {
             game.entities[0].zone_flags |= 0x80;
+            let Some(joint) = game.joint_worlds[1].first().copied() else {
+                return;
+            };
+            let held = crate::anim::compose(&joint, &game.neptune_capture);
+            game.hold_player_matrix(&held);
+            player.pos = held.t;
         }
         _ => {}
     }
@@ -5068,10 +5069,28 @@ mod tests {
         assert_eq!(player.clip_source, ClipSource::Damage);
         assert_eq!(player.anim.clip, 3);
 
-        // Case 2 raises the grabbed zone flag.
+        // Case 2 raises the grabbed zone flag and recomposes the player's
+        // whole matrix from the shark's joint 0 world and the capture.
         game.entities[0].action_state = 2;
+        let joint = crate::anim::Mat4x3 {
+            r: crate::anim::rotation_matrix(0x100, 0x350, 0),
+            t: [5831, -300, 6584],
+        };
+        game.joint_worlds[1] = vec![joint];
+        game.neptune_capture = crate::anim::Mat4x3 {
+            r: crate::anim::rotation_matrix(0, 0x80, 0x40),
+            t: [-400, 120, 650],
+        };
+        let held = crate::anim::compose(&joint, &game.neptune_capture);
         run(&mut game, &mut player, &[], &[], &[]);
         assert_eq!(game.entities[0].zone_flags & 0x80, 0x80);
+        assert_eq!(game.entities[0].pos, held.t, "the carried position");
+        assert_eq!(player.pos, held.t, "both position mirrors move");
+        assert_eq!(
+            game.player_matrix(player.pos, player.angle),
+            held,
+            "the captured orientation stands in for the facing"
+        );
     }
 
     /// The Tyrant impale (state 7, animFrameId 0x0C): the entry pins the pose

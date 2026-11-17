@@ -725,6 +725,11 @@ fn attach_matrix(game: &GameState, attach: Attach) -> [i16; 9] {
             };
             return std::array::from_fn(|slot| world.r[slot / 3][slot % 3] as i16);
         }
+        // A captured player's local matrix is the one its hold wrote, which
+        // the original copies like any other parent matrix.
+        Attach::Player | Attach::Entity(0) if game.entities[0].zone_flags & 0x80 != 0 => {
+            return attach_rotation(&game.player_held_rotation);
+        }
         Attach::Player => &game.entities[0],
         Attach::Entity(slot) => match game.entities.get(usize::from(slot)) {
             Some(entity) => entity,
@@ -757,7 +762,12 @@ fn attach_matrix(game: &GameState, attach: Attach) -> [i16; 9] {
         entity.roll,
         entity.joint_scale,
     );
-    std::array::from_fn(|index| matrix.r[index / 3][index % 3] as i16)
+    attach_rotation(&matrix.r)
+}
+
+/// A parent rotation in the slot's row-major 16-bit layout.
+fn attach_rotation(rotation: &[[i32; 3]; 3]) -> [i16; 9] {
+    std::array::from_fn(|index| rotation[index / 3][index % 3] as i16)
 }
 
 /// The translation of the slot's attach target.
@@ -2435,6 +2445,31 @@ mod tests {
 
     fn spawn(game: &mut GameState, depth: u8, pos: [i32; 3], yaw: i16, light: u8) -> u8 {
         create(game, &RoomEffects::default(), 9, depth, 0, pos, yaw, light).unwrap()
+    }
+
+    #[test]
+    fn a_captured_players_attachments_ride_the_held_rotation() {
+        let mut game = GameState::default();
+        game.entities[0].angle = 0x400;
+        let facing = attach_matrix(&game, Attach::Player);
+        assert_eq!(
+            facing,
+            attach_rotation(&anim::entity_matrix([0; 3], 0x400).r),
+            "a free player's facing"
+        );
+
+        let held = anim::Mat4x3 {
+            r: anim::rotation_matrix(0x200, 0x100, 0x40),
+            t: [0; 3],
+        };
+        game.hold_player_matrix(&held);
+        let tilted = attach_rotation(&held.r);
+        assert_eq!(attach_matrix(&game, Attach::Player), tilted);
+        assert_eq!(attach_matrix(&game, Attach::Entity(0)), tilted);
+
+        // Released, the facing builds the rotation again.
+        game.entities[0].zone_flags &= !0x80;
+        assert_eq!(attach_matrix(&game, Attach::Player), facing);
     }
 
     fn run(game: &mut GameState, room: &RoomState) {
