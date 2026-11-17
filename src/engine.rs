@@ -4796,6 +4796,7 @@ impl GameSession {
         self.sync_re2_player(pack);
         let weapon = self.game.equipped_weapon_id;
         let character = self.game.re2.pl_id;
+        let disc = re2_player_disc(&self.game);
         let Some(assets) = self.loaded.player_assets.as_mut() else {
             return;
         };
@@ -4803,7 +4804,7 @@ impl GameSession {
             return;
         }
         assets.re2_weapon = Some(weapon);
-        if let Some(changed) = load_re2_player_with(pack, character, weapon) {
+        if let Some(changed) = load_re2_player_with(pack, character, weapon, disc) {
             *assets = changed;
         }
     }
@@ -4822,6 +4823,7 @@ impl GameSession {
             self.player.radius = crate::sca::player_radius(character);
         }
         let weapon = self.game.equipped_weapon_id;
+        let disc = re2_player_disc(&self.game);
         let Some(assets) = self.loaded.player_assets.as_mut() else {
             return;
         };
@@ -4830,7 +4832,7 @@ impl GameSession {
         }
         assets.re2_character = character;
         assets.re2_weapon = Some(weapon);
-        match load_re2_player_with(pack, character, weapon) {
+        match load_re2_player_with(pack, character, weapon, disc) {
             Some(changed) => *assets = changed,
             None => {
                 crate::warning!("warning: no RE2 player {character:#x} holding weapon {weapon:#x}")
@@ -22704,24 +22706,43 @@ fn load_player_assets(pack: &Pack, id: RoomId) -> Option<PlayerAssets> {
 /// Claire's 03).
 const RE2_DEFAULT_WEAPONS: [u8; 2] = [0x02, 0x03];
 
-/// RE2's character `character` holding the default weapon, from either disc's
-/// files. `None` when the pack has no RE2 player, as an RE1 pack doesn't.
+/// RE2's character `character` holding the default weapon, from its own
+/// disc's files (Leon's and Claire's are the same on both). `None` when the
+/// pack has no RE2 player, as an RE1 pack doesn't.
 fn load_re2_player_assets(pack: &Pack, character: u8) -> Option<PlayerAssets> {
     let weapon = RE2_DEFAULT_WEAPONS[usize::from(character & 1)];
-    load_re2_player_with(pack, character, weapon)
+    load_re2_player_with(pack, character, weapon, character & 1)
 }
 
-/// RE2's character `character` holding `weapon`: `Pl_weapon_ch`'s PLW.
-fn load_re2_player_with(pack: &Pack, character: u8, weapon: u8) -> Option<PlayerAssets> {
-    let pld_bytes = (0..2).find_map(|disc| {
-        pack.read(&format!("player/{character:02x}/model_{disc}.pld"))
-            .ok()
+/// The disc whose `pl0\` or `pl1\` player files `Player_set` and
+/// `Pl_weapon_ch` read: `fg_status` bit 31 (flag 1:0), up in Claire's
+/// scenarios.
+fn re2_player_disc(game: &crate::game::GameState) -> u8 {
+    u8::from(game.re2.flag(crate::scd2::host::STATUS_BANK, 0))
+}
+
+/// A player file from disc `disc`'s folder, else from the other disc's (a pack
+/// may hold only one). The two discs' `PL0D.PLD`, `PL0F.PLD` and
+/// `PL0FW00.PLW` differ: Sherry's weapon file from Leon's disc has no run in
+/// clip 1, so Claire's Sherry reads hers from disc 1.
+fn read_re2_player_file<'a>(
+    pack: &'a Pack,
+    disc: u8,
+    path: impl Fn(u8) -> String,
+) -> Option<std::borrow::Cow<'a, [u8]>> {
+    [disc & 1, !disc & 1]
+        .into_iter()
+        .find_map(|disc| pack.read(&path(disc)).ok())
+}
+
+/// RE2's character `character` holding `weapon`, `Player_set`'s PLD and
+/// `Pl_weapon_ch`'s PLW from disc `disc`.
+fn load_re2_player_with(pack: &Pack, character: u8, weapon: u8, disc: u8) -> Option<PlayerAssets> {
+    let pld_bytes = read_re2_player_file(pack, disc, |disc| {
+        format!("player/{character:02x}/model_{disc}.pld")
     })?;
-    let plw_bytes = (0..2).find_map(|disc| {
-        pack.read(&format!(
-            "player/{character:02x}/weapon/{weapon:02x}_{disc}.plw"
-        ))
-        .ok()
+    let plw_bytes = read_re2_player_file(pack, disc, |disc| {
+        format!("player/{character:02x}/weapon/{weapon:02x}_{disc}.plw")
     })?;
     let banks = crate::emd2::parse_pld(&pld_bytes).and_then(|pld| {
         let plw = crate::emd2::parse_plw(&plw_bytes)?;
@@ -28382,6 +28403,39 @@ mod tests {
         assert!(cache.get(&pack, 0xFF, 0).is_none());
     }
 
+    /// `Player_set` and `Pl_weapon_ch` read `pl1\` with flag 1:0 up: in
+    /// Claire's scenario Sherry's PLW is disc 1's, whose clip 1 is her run.
+    /// The other disc's file stands in when the pack has only that one.
+    #[test]
+    fn re2_player_files_come_from_the_scenarios_disc() {
+        let mut writer = crate::pack::PackWriter::new();
+        writer
+            .add("player/0f/weapon/00_0.plw", b"leon's disc".to_vec())
+            .unwrap();
+        writer
+            .add("player/0f/weapon/00_1.plw", b"claire's disc".to_vec())
+            .unwrap();
+        writer
+            .add("player/0e/weapon/03_0.plw", b"ada".to_vec())
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let plw = |id: u8, weapon: u8, disc: u8| {
+            read_re2_player_file(&pack, disc, |disc| {
+                format!("player/{id:02x}/weapon/{weapon:02x}_{disc}.plw")
+            })
+            .map(|bytes| bytes.into_owned())
+        };
+        assert_eq!(plw(0xF, 0, 1).as_deref(), Some(&b"claire's disc"[..]));
+        assert_eq!(plw(0xF, 0, 0).as_deref(), Some(&b"leon's disc"[..]));
+        assert_eq!(plw(0xE, 3, 1).as_deref(), Some(&b"ada"[..]));
+        assert_eq!(plw(0xE, 4, 1), None);
+
+        let mut game = game::GameState::default();
+        assert_eq!(re2_player_disc(&game), 0);
+        game.re2.set_flag(crate::scd2::host::STATUS_BANK, 0, 1);
+        assert_eq!(re2_player_disc(&game), 1);
+    }
+
     /// Ada as the player (`Player_set` for id 0xE): `player/0e/model_*.pld`
     /// and her handgun's `weapon/03_*.plw` give the player's banks.
     #[test]
@@ -28391,7 +28445,7 @@ mod tests {
             return;
         };
         let pack = Pack::open(Path::new(&path)).unwrap();
-        let assets = load_re2_player_with(&pack, 0xE, 3).expect("Ada's pld and plw");
+        let assets = load_re2_player_with(&pack, 0xE, 3, 0).expect("Ada's pld and plw");
         assert_eq!(assets.re2_character, 0xE);
         assert_eq!(assets.re2_weapon, Some(3));
         assert!(!assets.emd.clips.is_empty(), "the pld's own bank");
