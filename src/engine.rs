@@ -4967,7 +4967,13 @@ impl GameSession {
         if self.plant_eaten_corpse() {
             // The Plant 42 corpse: joints 0 and 2 drawn and composed from
             // their parents again (flags 0x83), the torn legs off the vine.
+            // The captured bit drops and the body's pitch and roll are zeroed,
+            // so the corpse is composed from its facing again, not the hold's
+            // tilt.
             let entity = &mut self.game.entities[0];
+            entity.zone_flags &= 0x7F;
+            entity.pitch = 0;
+            entity.roll = 0;
             entity.set_joint_flag(0, 0x83);
             entity.set_joint_flag(2, 0x83);
             self.game.player_frozen_joints.clear();
@@ -41241,6 +41247,10 @@ end
         let entity = &mut session.game.entities[0];
         entity.set_joint_flag(0, 0x13);
         entity.set_joint_flag(2, 0x51);
+        // Still held by the vine: the captured bit and a tilted body.
+        entity.zone_flags |= 0x80;
+        entity.pitch = 0x123;
+        entity.roll = 0x456;
         let world = anim::Mat4x3 {
             r: anim::IDENTITY_MATRIX,
             t: [0, -3000, 0],
@@ -41259,6 +41269,10 @@ end
         assert_eq!(session.game.entities[0].joint_flag(0), 0x83);
         assert_eq!(session.game.entities[0].joint_flag(2), 0x83);
         assert!(session.game.player_frozen_joints.is_empty());
+        // The corpse is composed from its facing again.
+        assert_eq!(session.game.entities[0].zone_flags & 0x80, 0);
+        assert_eq!(session.game.entities[0].pitch, 0);
+        assert_eq!(session.game.entities[0].roll, 0);
     }
 
     /// `display_die_screen`'s Plant 42 legs: turned by `(1500, 0, 500)` and

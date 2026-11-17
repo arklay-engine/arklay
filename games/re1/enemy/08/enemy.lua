@@ -22,10 +22,12 @@
 -- All state lives on the Rust entity and its companions; this file keeps
 -- none, so the scripting VM may be reset between any two updates.
 
-local SCA_SPLIT_RADIUS = 200
-local SCA_SPLIT_HALF_HEIGHT = 250
-local SCA_BOSS_RADIUS = 2000
-local SCA_BOSS_HALF_HEIGHT = 7000
+-- The SCA records (0x004c29c0): every plant starts on the single head box;
+-- the main plant's record chains the body column after it.
+local SCA_HEAD_RADIUS = 200
+local SCA_HEAD_HALF_HEIGHT = 250
+local SCA_BODY_RADIUS = 2000
+local SCA_BODY_HALF_HEIGHT = 7000
 
 -- The idle sway pool, indexed `rand() % 10` (the eleventh entry is
 -- unreachable, exactly like the original's table).
@@ -439,14 +441,14 @@ spit = function(e)
         e.p42_step = (e:random() & 1) * -0x20 + 0x10
         e.blend_counter = 0x3F
         e.roll = e.roll + 0x10
-        if e.roll > -400 then
+        if as_s16(e.roll) > -400 then
             e.action_state = 5
         end
         e.angle = e.angle + e.p42_step
         e:plant42_advance(false, 0x40)
     elseif st == 4 then
         e.roll = e.roll + 0x10
-        if e.roll > -400 then
+        if as_s16(e.roll) > -400 then
             e.action_state = 5
         end
         e.angle = e.angle + e.p42_step
@@ -1220,7 +1222,7 @@ recoil = function(e)
         if e.player_weapon > 0x6E and (e.animation_frame_id % 5) == 0 then
             e.hit_state = 0
         end
-        if e.roll < -0x17C then
+        if as_s16(e.roll) < -0x17C then
             e.roll = e.roll + 0x10
         end
         e.angle = e.angle - e.p42_step
@@ -1243,7 +1245,7 @@ recoil = function(e)
         e:plant42_advance(false, 0x200)
         local px, _, pz = e:player_pos()
         e:rotate_toward_target(px, pz, 0x40)
-        if e.roll > -0x254 then
+        if as_s16(e.roll) > -0x254 then
             e.roll = e.roll - 0x40
         end
         if e.blend_counter == 0 then
@@ -1481,11 +1483,7 @@ local function init(e)
     e.timing_control = 0
     e.animation_id = 2
     e:advance_anim(0x40)
-    if (e.behavior_flags & 1) == 0 then
-        e:set_sca(SCA_BOSS_RADIUS, SCA_BOSS_HALF_HEIGHT, 0, 0, 0)
-    else
-        e:set_sca(SCA_SPLIT_RADIUS, SCA_SPLIT_HALF_HEIGHT, 0, 0, 0)
-    end
+    e:set_sca(SCA_HEAD_RADIUS, SCA_HEAD_HALF_HEIGHT, 0, 0, 0)
     e.p42_step = 0
     e.p42_fx_timer_a = 0
     e.p42_fx_timer_b = 0
@@ -1493,7 +1491,11 @@ local function init(e)
 
     if (e.behavior_flags & 1) == 0 then
         e.hit_state = 1
-        e:set_sca(SCA_BOSS_RADIUS, SCA_BOSS_HALF_HEIGHT, 0, 0, 0)
+        -- The main plant's record chains a second volume: the head box the
+        -- hit point keeps on joint 14, then the body's tall column, whose hit
+        -- data is zeroed here and never moves off the plant.
+        e:set_sca(SCA_HEAD_RADIUS, SCA_HEAD_HALF_HEIGHT, 0, 0, 0)
+        e:set_sca2(SCA_BODY_RADIUS, SCA_BODY_HALF_HEIGHT, 0, 0, 0)
         e:set_sca_hit_point(0, 0, 0)
         e:plant42_spawn()
         if (e.behavior_flags & 0xF) == 8 then

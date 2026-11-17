@@ -16204,8 +16204,19 @@ mod computer_arms_tests {
             let entity = game.entities[1];
             assert_eq!(entity.state(), 1);
             assert_eq!(entity.health, 140, "the boss pool is 0x28 + 100");
-            assert_eq!(entity.sca_radius, 2000);
-            assert_eq!(entity.sca_half_height, 7000);
+            // The main plant's record chains the head box and the body
+            // column (0x004c29d8): the column stays on the plant, so a player
+            // under the swinging head is not pushed by it.
+            assert_eq!(entity.sca_radius, 200);
+            assert_eq!(entity.sca_half_height, 250);
+            assert_eq!(
+                entity.sca2,
+                Some(crate::game::ScaVolume {
+                    radius: 2000,
+                    half_height: 7000,
+                    offset: [0; 3],
+                })
+            );
             assert_eq!(entity.hit_state, 1);
             assert_eq!(entity.p42_step(), 0);
             assert_eq!(entity.p42_life(), life as i16 + 0x32);
@@ -16449,6 +16460,28 @@ mod computer_arms_tests {
             assert_eq!(player.action_state, 0);
             assert_eq!(player.health, 92, "8 damage on the first playthrough");
             assert_eq!(player.is_being_attacked, 1);
+        }
+
+        /// The spit's settle reads the head roll (`angle_z`) as a signed
+        /// short: a head still tipped back past -400 keeps settling.
+        #[test]
+        fn plant42_spit_settles_on_the_signed_head_roll() {
+            let pack = pack();
+            let settle = |roll: i16| {
+                let mut game = plant(0);
+                let mut host = LuaEnemyHost::new();
+                head_low(&mut game);
+                assert!(step(&mut host, &mut game, &pack));
+                game.entities[1].state_field = 1;
+                game.entities[1].set_ignore(1);
+                game.entities[1].action_behavior = 2;
+                game.entities[1].action_state = 4;
+                game.entities[1].roll = roll as u16;
+                assert!(step(&mut host, &mut game, &pack));
+                (game.entities[1].action_state, game.entities[1].roll as i16)
+            };
+            assert_eq!(settle(-600), (4, -584), "still tipped back");
+            assert_eq!(settle(-410), (5, -394), "past -400: settled");
         }
 
         #[test]
