@@ -453,8 +453,17 @@ pub const ADULT_ID: u8 = 0x28;
 const ADULT_NECK: usize = 4;
 /// The parts `Atd[1]` and `Atd[2]` follow.
 const ADULT_BOXES: [usize; 2] = [3, 0x12];
+/// The var where the adult's death counts the ticks its boxes have shrunk:
+/// `Atd[1]` and `Atd[2]` lose 3 of their width a tick.
+const ADULT_SHRINK: usize = 27;
 /// `Sca_ck_em`'s mask for `Em_28`.
 const ADULT_MASK: u16 = 0x400;
+
+/// `Atd[1]`'s and `Atd[2]`'s width (800 from the init) after `shrunk` ticks
+/// of the death's shrink.
+fn adult_box_width(shrunk: i32) -> u16 {
+    (800 - 3 * shrunk.clamp(0, 0xFF)) as u16
+}
 /// `Em_27`'s `Sca_ck_em` mask.
 const EMBRYO_MASK: u16 = 0x400;
 /// `Ground`, which `Game_loop`'s pass after the moves finds under it.
@@ -1385,12 +1394,15 @@ impl Em<'_, '_, '_> {
         self.work().neck.joint = Some(ADULT_NECK as u8);
         self.work().neck.thirds = true;
         self.script();
+        // What a hit while it hurts goes back to: the routines as a hit finds them.
+        self.z.last_routine = self.work().routine;
         if *self.be_flg != 0 {
             self.oba_set_ofs();
             // `Atd[1]` and `Atd[2]`, on parts 3 and 0x12 as the last draw left
             // them; the rest of their boxes is the init's. `Oba_set_ofs` put
             // their `Y` at `Pos_y + Ofs_y`.
             let y = self.mover.player.pos[1] - 1500;
+            let w = adult_box_width(self.z.vars[ADULT_SHRINK]);
             self.z.more_atd = ADULT_BOXES
                 .map(|part| {
                     let t = self
@@ -1403,9 +1415,9 @@ impl Em<'_, '_, '_> {
                     Atd {
                         ofs_x: 0,
                         ofs_y: -1500,
-                        at_w: 800,
+                        at_w: w,
                         at_h: 1500,
-                        w: 800,
+                        w,
                         at: [t[0], y, t[2]],
                     }
                 })
@@ -2766,6 +2778,15 @@ pub(crate) fn life_down(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The adult's death shrinks `Atd[1]` and `Atd[2]` by 3 a tick from the
+    /// init's 800, while `Atd[0]` (6 a tick from 0x514) is over 300.
+    #[test]
+    fn the_dead_adults_side_boxes_shrink_by_3() {
+        assert_eq!(adult_box_width(0), 800);
+        assert_eq!(adult_box_width(1), 797);
+        assert_eq!(adult_box_width(167), 800 - 501);
+    }
 
     fn thrown(y: i32, up: i16) -> ThrownPart {
         let matrix = player2::Matrix {

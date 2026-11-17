@@ -7182,4 +7182,154 @@ mod tests {
             assert_eq!(death.2, [0xC]);
         }
     }
+
+    /// The G adult's (`Em_28`) death, `FUN_0047b5b0`, on the stub `e`.
+    mod adult_death {
+        use super::smg_flame_tyrant_ivy::{eval, run};
+
+        /// `Em_28` as `update`, with `joint` ending its clip when `w.ended`,
+        /// and its place at (1, 2, 3).
+        fn adult() -> String {
+            format!(
+                "function e:joint() return w.ended end
+                 function e:pos() return 1, 2, 3 end
+                 {}",
+                include_str!("../../games/re2/enemy/28/enemy.lua")
+            )
+        }
+
+        /// A death while the arm is off (`+0x21e` bit 1, the break-up's
+        /// state 1) clears that bit, so the break-up draws nothing that same
+        /// tick; `Timer3` keeps the arm's parts out of the fall's resize.
+        #[test]
+        fn a_death_stops_the_arms_break_up_at_once() {
+            let setup = "w.r = { [0] = 3, 2, 0, 0 } w.vars[4] = 2 w.vars[11] = 1 w.vars[12] = 5";
+            let (lua, _) = run(&adult(), setup, 1, &[]);
+            let (b21e, count, timer3, drawn): (i64, i64, i64, i64) =
+                eval(&lua, "return w.vars[4], w.vars[12], w.timers[3], w.drawn");
+            // Only the eye's two draws (`Move_cnt & 0xf` is 0).
+            assert_eq!((b21e, count, timer3, drawn), (0, 5, 1, 2));
+            let (sub, flags): (i64, i64) = eval(&lua, "return w.r[2], w.vars[5]");
+            assert_eq!((sub, flags & 0x40), (1, 0x40));
+        }
+
+        /// Sub 2: the boxes shrink by 6, part 1's second weight swells by 10,
+        /// and past 0x1000 it is held there and the young come next (sub 3).
+        #[test]
+        fn the_swell_past_0x1000_ends_the_fall() {
+            let setup = "w.r = { [0] = 3, 2, 2, 0 } w.timers = { [0] = 1, 0, 5, -1 }
+                         w.vars[26] = 1 w.vars[25] = 0xFF8";
+            let (lua, log) = run(&adult(), setup, 1, &["set_atd", "effect"]);
+            let (sub, swell, shrink, timer0): (i64, i64, i64, i64) =
+                eval(&lua, "return w.r[2], w.vars[25], w.vars[27], w.timers[0]");
+            assert_eq!((sub, swell, shrink, timer0), (3, 0x1000, 1, 2));
+            assert_eq!(log, ["set_atd(0,0,-1500,1294,1500,1294)"]);
+        }
+
+        /// Sub 2 every third `Timer0`: four draws for the blood from part 1;
+        /// a throb's step takes twice its `THROB` from the weight.
+        #[test]
+        fn the_fall_bleeds_every_third_tick_and_throbs() {
+            let setup = "w.r = { [0] = 3, 2, 2, 0 } w.timers = { [0] = 3, 0, 0, 0 }
+                         w.vars[26] = 1 w.vars[25] = 0x800 w.draws = { 4, 1, 2, 3, 5 }";
+            let (lua, log) = run(&adult(), setup, 1, &["effect"]);
+            let (swell, timer2, timer3): (i64, i64, i64) =
+                eval(&lua, "return w.vars[25], w.timers[2], w.timers[3]");
+            // `Timer2` 0: a new throb, `(4 & 0x1f) + 0xc` to the next.
+            assert_eq!((swell, timer2, timer3), (0x800 + 10 - 2 * 0x1F, 0x10, 1));
+            assert_eq!(log, ["effect(0,9,2136,48,1,1016,-200,1008)"]);
+        }
+
+        /// Sub 3 lays `4 - enemies` young (`Em_27` `Type` 3) where it lies,
+        /// each turned by a draw, then throbs for 500 ticks (sub 4).
+        #[test]
+        fn the_dead_adult_lays_the_young() {
+            let setup = "w.r = { [0] = 3, 2, 3, 0 } w.vars[26] = 1 w.vars[25] = 0x1000
+                         w.draws = { 1, 2, 3, 4 }
+                         function e:enemies() return 1 end";
+            let (lua, log) = run(&adult(), setup, 1, &["spawn", "place_spawn"]);
+            // The stub logs a table as its address: compare up to it.
+            let calls: Vec<&str> = log
+                .iter()
+                .map(|call| &call[..call.find("table").unwrap()])
+                .collect();
+            assert_eq!(
+                calls,
+                [
+                    "spawn(39,3,",
+                    "place_spawn(1,2,3,16,",
+                    "spawn(39,3,",
+                    "place_spawn(1,2,3,32,",
+                    "spawn(39,3,",
+                    "place_spawn(1,2,3,48,",
+                ]
+            );
+            let (sub, timer0, timer1, swell): (i64, i64, i64, i64) =
+                eval(&lua, "return w.r[2], w.timers[0], w.timers[1], w.vars[25]");
+            assert_eq!(
+                (sub, timer0, timer1, swell),
+                (4, 499, 0x1000, 0x1000 + 3 * 0x1F)
+            );
+        }
+
+        /// Sub 4's end: the wobble stops and the body lies still (sub 5).
+        #[test]
+        fn the_throb_ends_after_500_ticks() {
+            let setup = "w.r = { [0] = 3, 2, 4, 0 } w.timers = { [0] = 0, 0x1000, 3, -1 }
+                         w.vars[5] = 1";
+            let (lua, _) = run(&adult(), setup, 1, &[]);
+            let (sub, flags, drawn): (i64, i64, i64) =
+                eval(&lua, "return w.r[2], w.vars[5], w.drawn");
+            assert_eq!((sub, flags & 1, drawn), (5, 0, 0));
+        }
+    }
+
+    /// The G adult's (`Em_28`) hit, `FUN_00479b00`, on the stub `e`.
+    mod adult_hit {
+        use super::smg_flame_tyrant_ivy::{eval, run};
+
+        fn adult() -> String {
+            format!(
+                "function e:rot_apply() return 0, 0, 0 end
+                 function e:part_rot() return 0, 0, 0 end
+                 function e:drawn_part_point() return 10, 20, 30 end
+                 function e:part_offset(p) return 100, 200, 300 end
+                 {}",
+                include_str!("../../games/re2/enemy/28/enemy.lua")
+            )
+        }
+
+        /// `BYTE_00528d16` has rows up to 0x12: the rocket launcher's (0x14,
+        /// 0) sprays twice and the gatling gun's (2, 0) once, and neither
+        /// takes from the hurt marker. (A Beretta's hit lands as weapon 3 or
+        /// 6, in `Weapon_at_ck`, so no body sees 0x13.)
+        #[test]
+        fn the_rocket_launcher_and_the_gatling_gun_hit_a_hurt_adult() {
+            for (weapon, rows) in [(0x11, &[9, 8][..]), (0x12, &[9])] {
+                // Every draw 1, so the sparks' `Rnd & 3` check fails.
+                let setup = format!(
+                    "w.r = {{ [0] = 2, {weapon}, 0, 0 }} w.vars[6] = 3
+                     w.draws = {{ 1, 1, 1, 1, 1, 1, 1 }}"
+                );
+                let (lua, log) = run(&adult(), &setup, 1, &["call_effect"]);
+                let called: Vec<i64> = log
+                    .iter()
+                    .map(|call| call.split(',').nth(1).unwrap().parse().unwrap())
+                    .collect();
+                assert_eq!(called, rows, "{weapon:#x}: {log:?}");
+                let mark: i64 = eval(&lua, "return w.vars[6]");
+                assert_eq!(mark, 3, "{weapon:#x}");
+            }
+        }
+
+        /// The reel's blood every fourth `Timer0` (`FUN_0047a790` sub 2) is
+        /// on part 1's `Workm`, at part 9's offset moved by the three draws.
+        #[test]
+        fn the_reels_blood_is_on_part_9() {
+            let setup = "w.r = { [0] = 2, 2, 2, 0 } w.timers = { [0] = 5, 0, 0, 1 }
+                         w.draws = { 1, 2, 3, 4 }";
+            let (_, log) = run(&adult(), setup, 1, &["effect", "call_effect"]);
+            assert_eq!(log, ["effect(0,9,4128,-1024,1,163,262,361)"]);
+        }
+    }
 }
