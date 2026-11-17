@@ -256,7 +256,7 @@ function M.draw(api)
     E.black(api)
     if backdrop then
         -- A full-frame still is stretched, so a replacement may be any size.
-        local shade = E.shade_scale(s.backdrop_shade)
+        local shade = E.backdrop_scale(s.backdrop_shade)
         api:draw_background(backdrop, 0, 0, shade, shade, shade)
     end
     for _, slot in ipairs(s.slots) do

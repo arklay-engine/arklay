@@ -5,7 +5,10 @@
 -- one text string, with its own fade ramp: the reference's signed 0x800
 -- ramps, whose high byte is the 0..0x80 shade. Text slots draw through the
 -- reference's own font grid addressing (`api:grid_text`), not the encoded
--- text path.
+-- text path. The Japanese glyphs are the PC release's PBFONT pages (see
+-- `JAPANESE_PC_PAGES` in convert.rs): the reference's `FONT.TIM` load is its
+-- own addition (ref 9ffe0bd; the decompiled `load_global_assets` loaded
+-- fontus.tim), so the digits' outline pixels differ from it by design.
 
 local E = {}
 
@@ -60,6 +63,15 @@ end
 --- doubles and saturates at 255.
 function E.shade_scale(shade)
     local scale = shade * 2
+    return scale < 255 and scale or 255
+end
+
+--- The 0..255 colour a backdrop (type-1 slot) shade gives the display image:
+--- `setSomeColor` stores `shade / 128` as a float and the backdrop's quad
+--- colour is that times 255, truncated, so 0x60 is 191, not the sprite
+--- path's doubled 192.
+function E.backdrop_scale(shade)
+    local scale = shade * 255 // 128
     return scale < 255 and scale or 255
 end
 

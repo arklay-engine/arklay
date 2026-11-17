@@ -692,9 +692,13 @@ fn ending_fade_shade_and_scale_ramp_to_full() {
     assert_eq!(eval("E.shade_scale(0x40)"), 0x80);
     // A fading plate at 0x7800: 240, not 239.
     assert_eq!(eval("E.shade_scale(0x78)"), 240);
-    // The epilogue's fixed backdrop shade (`s_bgSlot->fadeLevel` 0x6000).
+    // The epilogue's fixed backdrop shade (`s_bgSlot->fadeLevel` 0x6000):
+    // `setSomeColor`'s `shade / 128` times 255, truncated, not doubled.
     assert_eq!(eval("E.fade_shade(0x6000)"), 0x60);
-    assert_eq!(eval("E.shade_scale(E.fade_shade(0x6000))"), 192);
+    assert_eq!(eval("E.backdrop_scale(E.fade_shade(0x6000))"), 191);
+    assert_eq!(eval("E.backdrop_scale(0x40)"), 127);
+    assert_eq!(eval("E.backdrop_scale(0x80)"), 255);
+    assert_eq!(eval("E.backdrop_scale(0)"), 0);
 }
 
 #[test]
