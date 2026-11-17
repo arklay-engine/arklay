@@ -541,9 +541,9 @@ fn convert_observed_as(
     // The phase count is only known once the plan is built; `build_plan` fills
     // it in before the first phase begins.
     let mut progress = match observer {
-        Some(observer) => Progress::observed("convert-game", 0, observer, cancel),
+        Some(observer) => Progress::observed("pack convert game", 0, observer, cancel),
         None => {
-            let mut progress = Progress::new("convert-game", 0);
+            let mut progress = Progress::new("pack convert game", 0);
             if let Some(cancel) = cancel {
                 progress.set_cancel(cancel);
             }
@@ -3308,7 +3308,7 @@ struct Plan {
 /// Discover, enumerate, and validate every conversion input.
 #[cfg(test)]
 fn build_plan(root: &Path) -> Result<Plan> {
-    build_plan_with_progress(root, &mut Progress::new("convert-game", 0))
+    build_plan_with_progress(root, &mut Progress::new("pack convert game", 0))
 }
 
 /// The number of phases [`convert_game_with_options`] will report, matching its

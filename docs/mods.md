@@ -173,8 +173,8 @@ pack, whatever its `base` says. (The folder was called `htexture/` in
 single-pack path, so a run without `--mod` (and with no discovered mods) is
 byte-identical to earlier releases.
 
-`arklay list`, `arklay extract` and `arklay pack info` accept `--mod` too;
-`pack info` prints the manifest, the applied layers and the merged entry table.
+`arklay pack list`, `pack extract`, `pack verify` and `pack info` accept `--mod`
+too; `pack info` prints the manifest, the applied layers and the merged entry table.
 Their `--mod` paths accept directories, but they do not auto-discover the
 sibling or per-user directories.
 
@@ -247,7 +247,7 @@ The film formats and codecs are listed in [Movies](packs/movies.md).
 | film | `movie/00`, `movie/17`, `movie/0f` (the film id); RE2 `movie/opn1stl`, `movie/staff` (the film name) | mp4, avi, mpg | any size up to 4096x4096, any frame rate |
 
 The stems are the shipped entries' paths without their extensions, as
-`arklay list` prints them. Each folder's page in [Game packs](packs/index.md)
+`arklay pack list` prints them. Each folder's page in [Game packs](packs/index.md)
 gives its naming, and [Names](packs/index.md#names) the numbering they share.
 
 ### When a replacement does not fit

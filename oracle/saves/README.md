@@ -26,7 +26,7 @@ diff so the data stays honest.
 
 All saves were generated from the Japanese MediaKite assets at
 `/usr/share/games/re1` (the install the reference's `config.ini` points at,
-`[Assets] Version=JPN`) packed by `arklay convert-game`. They are:
+`[Assets] Version=JPN`) packed by `arklay pack convert game`. They are:
 
 | Save | Boot | Authored state |
 | --- | --- | --- |

@@ -1,4 +1,4 @@
-//! `arklay verify`: parse every known entry of a game pack and report a
+//! `arklay pack verify`: parse every known entry of a game pack and report a
 //! per-format table.
 //!
 //! The classifier is path-driven: a pack path prefix or extension selects the

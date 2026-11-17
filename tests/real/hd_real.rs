@@ -192,7 +192,7 @@ fn hd_pack_swaps_a_background_a_ui_page_and_a_bgm_track() {
     let vanilla_wav = vanilla_cache.load(&base, 0x013).expect("the WAV loads");
     assert_ne!(vanilla_wav.data, wav.data, "the OGG replaced the WAV");
 
-    // `arklay verify` on the layered view classifies the replacements by their
+    // `arklay pack verify` on the layered view classifies the replacements by their
     // own formats and validates them with their own decoders. (The pack's 28
     // documented four-byte stub rooms still fail as they always have, so the
     // assertion is scoped to the replacement entries.)

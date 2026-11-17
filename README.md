@@ -6,7 +6,7 @@ lives in the pack. Mods layer on top with any asset overridable.
 
 The engine reads the player's own game installation: `pack convert game` migrates a
 supported install into an `.akpak` pack, and the engine runs the pack. A pack
-may also be a directory of unpacked entries (the layout `arklay extract`
+may also be a directory of unpacked entries (the layout `arklay pack extract`
 writes); directory entries are read on demand, not loaded wholesale.
 
 ## Build

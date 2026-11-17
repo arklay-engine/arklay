@@ -314,6 +314,65 @@ fn engine_trace_with(
 }
 
 #[test]
+fn a_sound_capture_matches_the_engines() {
+    let dir = pack_dir("sound-wav");
+    let path = dir.join("engine.trace");
+    let wav = dir.join("engine.wav");
+    arklay::engine::run_ui_with_mods(
+        &dir.join("game.akpak"),
+        "game",
+        None,
+        &dir.join("engine-saves"),
+        0,
+        Some(RoomId::from_room_and_player("100", 0).unwrap()),
+        0,
+        &arklay::engine::ModOptions {
+            no_mods: true,
+            ..arklay::engine::ModOptions::default()
+        },
+        false,
+        None,
+        arklay::player::Options {
+            no_autosave: true,
+            ..arklay::player::Options::default()
+        },
+        arklay::trace::TraceOptions {
+            path: Some(&path),
+            ticks: 30,
+            sound: true,
+            sound_wav: Some(&wav),
+            ..arklay::trace::TraceOptions::default()
+        },
+        arklay::engine::Authoring::default(),
+        arklay::engine::BotOptions::default(),
+    )
+    .unwrap();
+    success(&script(
+        &dir,
+        &lenient(
+            r#"
+        load_game_pack("game.akpak")
+        new_game{ room = "100" }
+        trace_start("script.trace", { sound = true, sound_wav = "script.wav" })
+        tick(30)
+        "#,
+        ),
+        &[],
+    ));
+    let read = |name: &str| std::fs::read(dir.join(name)).unwrap();
+    let ticks = read("engine.ticks");
+    assert_eq!(String::from_utf8_lossy(&ticks).lines().count(), 30);
+    // 30 ticks of 33 ms at 22050 Hz, four bytes a stereo frame.
+    assert!(read("engine.wav").len() > 44 + 22050 * 4 * 99 / 100);
+    assert!(
+        read("engine.trace") == read("script.trace"),
+        "the traces differ"
+    );
+    assert!(read("engine.wav") == read("script.wav"), "the WAVs differ");
+    assert!(ticks == read("script.ticks"), "the tick logs differ");
+}
+
+#[test]
 fn a_script_trace_matches_the_engine_trace() {
     let dir = pack_dir("trace");
     let engine = engine_trace(&dir, 30, None, "engine.trace");
@@ -957,5 +1016,38 @@ fn an_interactive_new_game_places_the_player_at_once() {
     assert_eq!(
         lines[0], lines[2],
         "both boots place the player at one spot"
+    );
+}
+
+#[test]
+fn a_stats_run_with_a_frame_rate_times_the_presented_frames() {
+    let dir = pack_dir("present-stats");
+    let mut report = Vec::new();
+    arklay::engine::run_with_options(
+        &dir.join("game.akpak"),
+        RoomId::from_room_and_player("100", 0).unwrap(),
+        None,
+        30,
+        &dir.join("saves"),
+        &arklay::engine::ModOptions {
+            no_mods: true,
+            ..arklay::engine::ModOptions::default()
+        },
+        Some(&mut report),
+        false,
+        None,
+        arklay::player::Options::default(),
+        arklay::trace::TraceOptions::default(),
+        arklay::engine::Authoring {
+            stats_frame_rate: Some(60),
+            ..arklay::engine::Authoring::default()
+        },
+    )
+    .unwrap();
+    let report = String::from_utf8(report).unwrap();
+    // Two frames presented a tick at 60 Hz over 30 ticks.
+    assert!(
+        report.contains("stats render frame_rate 60 frames 60 "),
+        "{report}"
     );
 }
