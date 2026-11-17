@@ -55,3 +55,25 @@ frames = [360, 3418]
 frame_max_mean = 1.1
 expect = "match"
 record = "--start claire --warp 209:-16934:0:-26037:2125:1 --flag 3:32 --flag 3:100 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:148 --flag 4:152 --flag 4:255 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:17 --flag 31:27 --life 109 --give 0:3:2 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"
+
+# Rooms 200, 110, 10F and 10A: from 202's door 0's arrival up the ladder (door 17) into 110, round its zombies to door 0, 10F east to door 0, and 10A's area 5: USE of 0x42, event 4's blast (4:87, sca_id_set(12, 0)).
+[[run]]
+name = "claire_a_200_10a"
+room = "200"
+player = 1
+character = 1
+setup_script = "claire_a_200_10a.lua"
+input = "claire_a_200_10a.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1835
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 1834]
+# 0.66 measured; the worst, 8.21 on 1814, is in 10A's blast
+frame_max_mean = 0.75
+expect = "match"
+ignore = [
+  # the warp's head on its first ticks (as leon_a_208's)
+  [344, 355, "pneck"],
+]
+record = "--start claire --warp 200:-22963:-1800:-3039:200:4 --flag 3:32 --flag 3:33 --flag 3:100 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:148 --flag 4:152 --flag 4:255 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:17 --flag 31:27 --life 69 --give 0:3:2 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x42:1 --give 7:0x14:15"

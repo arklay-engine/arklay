@@ -1,0 +1,174 @@
+# Claire A from 202's door 0 in 200 up the ladder, through 110's three zombies, 10F and 10A to area 5: USE of the 0x42 and the blast (#685 Part 4) (oracle/re2.md, "Claire A to the Heart Key")
+# made in arklay: east along 200's upper floor to the ladder's door (door 17: its text, close, open, three presses), up into 110, round its corridor (east, south and east again) to door 0 past the three 0x10 zombies without a hit, door 0 into 10F (one press), east to door 0 into 10A (one press); each of the three loads holds the room for about 75 ticks (--sound), and the walk waits for it; 10A: north-east to the corridor's wall facing +z, START, down x3 to the 0x42 in slot 6, confirm, confirm (USE: event 4, 4:87, the blast, Claire walks back); the scene ends on 1830 and the input ends on 1834
+344
+350 up run left
+367 up run
+381 up run right
+382 up run
+387 up run right
+388 up run
+393 up run right
+394 up run
+399 up run right
+400 up run
+404 up run right
+405 up run
+409 up run right
+410 up run
+425 up run right
+426 up run
+435 up run left
+436 up run
+438 up run left
+465 up run right
+476 up run
+482 up run right
+483 up run
+489 up run left
+490 up run
+495 up run left
+496 up run
+500 up run right
+501 up run
+506 up run right
+507 up run
+509 up run left
+510 up run
+518
+519 action
+521
+531 action
+533
+543 action
+545
+683 up run
+695 up run left
+696 up run right
+726 up run left
+740 up run
+752 up run left
+753 up run
+760 up run right
+788 up run
+796 up run left
+799 up run
+815 up run left
+816 up run
+825 up run right
+826 up run
+828 up run right
+830 up run
+838 up run right
+839 up run
+861 up run left
+862 up run
+888 up run left
+889 up run
+893 up run left
+895 up run
+923 up run right
+924 up run
+927 up run left
+930 up run
+948 up run left
+949 up run
+959 up run left
+960 up run
+961 up run left
+965 left
+977
+978 action
+980
+1101 up run left
+1112 up run
+1114 up run left
+1115 up run
+1148 up run right
+1149 up run
+1155 up run left
+1156 up run
+1158 up run right
+1159 up run
+1160 right
+1165
+1166 action
+1168
+1289 up run left
+1315 up run
+1330 up run right
+1336 up run
+1340 up run right
+1341 up run
+1345 up run right
+1346 up run
+1349 up run right
+1350 up run
+1352 up run right
+1353 up run
+1355 up run right
+1356 up run
+1358 up run right
+1359 up run
+1362 up run right
+1363 up run
+1365 up run right
+1366 up run
+1368 up run right
+1369 up run
+1371 up run right
+1372 up run
+1375 up run right
+1376 up run
+1380 up run right
+1381 up run
+1387 up run right
+1388 up run
+1395 up run right
+1396 up run
+1424 up run right
+1425 up run
+1432 up run right
+1433 up run left
+1449 up run
+1459 up run right
+1472 up run
+1473 up run left
+1474 up run
+1475 up run left
+1476 up run
+1491 up run right
+1492 up run
+1494 up run left
+1495 up run
+1511 up run right
+1512 up run
+1514 up run left
+1515 up run
+1522 up run left
+1523 up run
+1524 up run right
+1525 up run
+1529 up run right
+1530 up run
+1534 up run left
+1535 up run
+1542 up run left
+1543 up run
+1544 up run right
+1545 up run
+1548 up run right
+1549 up run
+1553 left
+1572
+1593 start
+1595
+1635 down
+1637
+1647 down
+1649
+1659 down
+1661
+1671 confirm
+1673
+1703 confirm
+1705
