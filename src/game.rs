@@ -1794,15 +1794,17 @@ pub enum ItemViewKind {
     Document,
     /// A door key used down to an empty stack (`use_room_action_item`'s
     /// `MSF_MENU_KEY_DEPLETED`): the selected key's model intro, then global
-    /// 0xC7's discard prompt. The original's mode 1 becomes mode 6 for every
-    /// key and drops into the status screen once the viewer closes.
+    /// 0xC7's discard prompt. The original's mode 1 becomes mode 6 for any
+    /// selected id above `ITEM_OIL` (MainMenu.cpp:366) and drops into the
+    /// status screen once the viewer closes (MainMenu.cpp:558).
     DiscardKey,
-    /// The same flag raised by a room script over a selected item that is not
-    /// a door key (116's shotgun rack, 308's flamethrower hook, 30B and 30D):
-    /// mode 1 stays mode 1, the selected item's model intro, then global
-    /// 0xC4's put-down prompt, whose Yes runs post-action 1
-    /// ([`GameState::use_selected_item`]) and records the used item for the
-    /// script's `testitem`. The menu closes back to the game afterwards.
+    /// The same flag raised by a room script over a selected weapon or other
+    /// id up to `ITEM_OIL`, or with nothing selected (116's shotgun rack,
+    /// 308's flamethrower hook, 30B and 30D): mode 1 stays mode 1, global
+    /// 0xC4's put-down prompt with no model viewer (MainMenu.cpp:464), whose
+    /// Yes runs post-action 1 ([`GameState::use_selected_item`]) and records
+    /// the used item for the script's `testitem`. The menu closes back to the
+    /// game once the prompt clears (MainMenu.cpp:523).
     PutDown,
 }
 
@@ -8029,8 +8031,8 @@ impl GameState {
     ///
     /// The original tests `MSF_PICKUP_SCREEN` before the mode scan, then
     /// priority-encodes modes 4 (got item), 3 (item view) and, last, 1 (the
-    /// put-down prompt, which becomes mode 6's discard prompt for a door key
-    /// or when no item is selected). `None` when no viewer is pending.
+    /// put-down prompt, which becomes mode 6's discard prompt when the
+    /// selected id is above `ITEM_OIL`). `None` when no viewer is pending.
     pub fn item_view_request(&self) -> Option<ItemViewRequest> {
         let request = if self.flags[5].bit(MSF_PICKUP_SCREEN) {
             ItemViewRequest {
@@ -8048,13 +8050,16 @@ impl GameState {
                 kind: ItemViewKind::Take,
             }
         } else if self.flags[5].bit(MSF_MENU_KEY_DEPLETED) {
-            let put_down = self.selected_item.is_some_and(|item| !is_door_key(item));
+            // `main_menu` (MainMenu.cpp:366) turns mode 1 into mode 6 for any
+            // `g_selectedItemId > ITEM_OIL`, not only a door key; an empty
+            // selection (id 0) keeps mode 1.
+            let discard = self.selected_item.unwrap_or(0) > ITEM_OIL;
             return Some(ItemViewRequest {
                 slot: 0,
-                kind: if put_down {
-                    ItemViewKind::PutDown
-                } else {
+                kind: if discard {
                     ItemViewKind::DiscardKey
+                } else {
+                    ItemViewKind::PutDown
                 },
             });
         } else {
@@ -17617,9 +17622,10 @@ mod tests {
     }
 
     /// `MSF_MENU_KEY_DEPLETED` is the original's main-menu mode 1: over a
-    /// selected door key (or no selection) it becomes mode 6's discard prompt,
-    /// over anything else it stays the put-down prompt. 116's rack and 308's
-    /// hook raise it over the shotgun and the flamethrower.
+    /// selected id above `ITEM_OIL` it becomes mode 6's discard prompt, over
+    /// anything else (or no selection, id 0) it stays the put-down prompt
+    /// (MainMenu.cpp:366). 116's rack and 308's hook raise it over the
+    /// shotgun and the flamethrower.
     #[test]
     fn menu_mode_one_puts_down_a_weapon_and_discards_a_key() {
         let depleted = |selected: Option<u8>| {
@@ -17639,8 +17645,14 @@ mod tests {
             depleted(Some(ITEM_DESK_KEY - 1)),
             Some(ItemViewKind::DiscardKey)
         );
-        assert_eq!(depleted(Some(ITEM_DESK_KEY)), Some(ItemViewKind::PutDown));
-        assert_eq!(depleted(None), Some(ItemViewKind::DiscardKey));
+        assert_eq!(depleted(Some(ITEM_OIL)), Some(ItemViewKind::PutDown));
+        // Past the door keys the test is still `> ITEM_OIL`.
+        assert_eq!(
+            depleted(Some(ITEM_DESK_KEY)),
+            Some(ItemViewKind::DiscardKey)
+        );
+        assert_eq!(depleted(Some(0x4C)), Some(ItemViewKind::DiscardKey));
+        assert_eq!(depleted(None), Some(ItemViewKind::PutDown));
     }
 
     /// The put-down prompt's Yes (global 0xC4, post-action 1) takes a held
