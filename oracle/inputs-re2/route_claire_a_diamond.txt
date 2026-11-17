@@ -1,0 +1,2029 @@
+# Claire A from the new game to the Unicorn Medal and the exit scene in the S.T.A.R.S. office (115) in one run (oracle/re2.md, "Claire A to the S.T.A.R.S. office"): route_claire_a_208.txt to the typewriter's No in the darkroom (208), then claire_a_208_114.txt's and claire_a_114_115.txt's presses joined on from each hand back
+# route_claire_a_card.txt's input: the new game to room 200's computer and the card's use; play comes back on 14625
+0 up run
+2 up run right
+7 up run
+50 up run left
+55 up run
+98 up run left
+108 up run
+128 up run right
+138 up run
+181 up run left
+199 up run
+214 aim
+218 aim fire
+257
+258 right
+260 up run
+323
+326 right
+337 up run
+352
+356 confirm
+358
+875 up
+905
+2055 down
+2057
+2065 left
+2115 up
+2255
+2260 right
+2265 up
+2470
+2475 left
+2479 up
+2555
+2560 right
+2566 up
+2611
+2613 left
+2624
+2627 action
+2629
+2971 up run
+3019
+3113 up run
+3155
+3159 up run
+3195
+3199 left
+3201
+3203 up
+3210
+3214 right
+3223
+3225 up
+3232
+3236 right
+3243
+3245 up run
+3264
+3268 left
+3270
+3272 up
+3276 up run
+3370
+3376 up run
+3398 up
+3404
+3408 action
+3410
+3477 confirm
+3479
+3527 confirm
+3529
+3647 confirm
+3649
+3800 aim
+3806 aim fire
+4100 aim
+4104 aim fire
+4108 aim
+4180 aim fire
+4500 aim
+4504 aim fire
+4508 aim
+4850 aim fire
+4876 aim
+4880
+4884 up run
+4984
+4986 aim
+4992 aim fire
+5058 aim
+5345 aim fire
+5385
+5389 up run
+5418
+5432 aim down
+5440 aim down fire
+5446 aim down
+5452
+5456 up run
+5514
+5518 right
+5521
+5527 action
+5529
+5635 left
+5640
+5642 up run
+5677
+5681 left
+5687
+5689 up run
+5706
+5710 right
+5715
+5717 up
+5723
+5727 left
+5732
+5734 up
+5746
+5750 right
+5752
+5755 confirm
+5757
+5869 up run
+5885
+5889 right
+5895
+5897 up
+5901
+5905 right
+5912
+5914 up
+5921
+5925 right
+5928
+5930 up run
+5977
+5981 left
+5984
+5986 up
+5994
+5998 right
+6009
+6011 up
+6016
+6020 right
+6026
+6029 up
+6037
+6041 confirm
+6043
+6154 left
+6156
+6158 up run
+6167
+6171 right
+6174
+6176 up
+6179
+6183 left
+6198
+6201 confirm
+6203
+6327 up
+6352
+6356 aim
+6362 aim fire
+6384 aim
+6400 aim down
+6406 aim down fire
+6412
+6432 confirm
+6434
+6520 left
+6532
+6534 up run
+6596 up run left
+6603 up run
+6636
+6639 right
+6643 up
+6653
+6656 action
+6658
+6769 left
+6773
+6775 up run
+6793
+6797 left
+6803
+6805 up run
+6818
+6822 right
+6825
+6827 up
+6832
+6836 left
+6846
+6848 up run
+6933
+6937 left
+6942
+6944 up run
+6950
+6954 left
+6959
+6961 up
+6964
+6968 right
+6973
+6975 up
+6978
+6982 right
+6984
+6988 up
+7002
+7008 action
+7012
+7098 confirm
+7100
+7136 left
+7156 up
+7176
+7179 confirm
+7181
+7298 confirm
+7300
+7418 confirm
+7420
+7431 right
+7458
+7548 aim down
+7578 aim down fire
+7630 aim down
+7643
+7808 aim
+7838 aim fire
+7844 aim
+7864 aim fire
+7928
+7931 right
+7932 up run
+8024
+8026 right
+8040 up
+8060
+8062 action
+8064
+8190 confirm
+8192
+8208 left
+8219 up run
+8241 up run left
+8245 up run
+8293 up run left
+8309 up run
+8334 up run right
+8350 up run
+8359 up run left
+8377
+8379 action
+8381
+8487 right
+8498
+8500 up run
+8509
+8513 right
+8525
+8527 up run
+8536
+8540 left
+8545
+8547 up
+8551
+8555 right
+8562
+8564 up run
+8596
+8598 aim
+8603 aim fire
+8660 aim
+8667 up run left
+8670 up run
+8808
+8810 left
+8820 up run
+8841 up run left
+8843 up run
+8879 up run left
+8883 up run
+8890
+8892 action
+8894
+9688
+9720 up
+9810
+9820 confirm
+9822
+9880 left
+9893
+9895 up run
+9940
+9944 right
+9956
+9958 up run
+10037
+10040 left
+10052
+10054 up
+10082
+10086 action
+10088
+13600 left
+13620
+13622 up run
+13642
+13646 left
+13659
+13661 up run
+13692
+13696 right
+13708
+13710 up run
+13760
+13762 right
+13775
+13777 up run
+13805
+13808 right
+13822
+13824 up run
+13846
+13849 right
+13862
+13864 up run
+13876
+13879 left
+13890
+13892 up run
+13910
+13915 action
+13917
+13951 action
+13955
+13981 action
+13985
+14011 action
+14015
+14041 action
+14045
+14071 action
+14075
+14101 action
+14105
+14131 action
+14135
+14161 action
+14165
+14191 action
+14195
+14221 action
+14225
+14251 action
+14255
+14281 action
+14285
+14311 action
+14315
+14341 action
+14345
+14371 action
+14375
+14401 action
+14405
+14431 action
+14435
+14461 action
+14465
+14491 action
+14495
+14521 action
+14525
+14551 action
+14555
+14581 action
+14585
+14611 action
+14615
+# room 200 after the card, claire_a_200_out.txt 14282 ticks later: the counter's 30 rounds, the east ramp and door 1 (pressed on 15492)
+14632 left
+14658
+14662 up run
+14680
+14682 right
+14696
+14698 up run
+14712
+14714 left
+14728
+14730 up run
+14745
+14747 left
+14761
+14763 up
+14776
+14779 action
+14783
+15014 action
+15018
+15214 action
+15218
+15228 right
+15240
+15243 up run
+15267
+15270 right
+15285
+15286 up run
+15352
+15355 right
+15367
+15371 up run
+15464
+15468 left
+15472
+15474 up run
+15488
+15492 action
+15496
+# rooms 201 and 204, claire_a_204.txt 15515 ticks later (door 1's hand back is on 15858, 366 ticks after its press), but for the window licker's fight, started 12 ticks later: the licker this route brings (110 life) leaves Claire at 119 that way; door 1 into 205 is pressed on 17907
+15865 right
+15867
+15869 up run
+15901
+15903 left
+15905
+15907 up run
+15939
+15941 left
+15954
+15956 up run
+15976
+15978 right
+15981
+15983 action
+15987
+16327 up run
+16428
+16431 right
+16443
+16445 up
+16456
+16459 action
+16463
+16520 action
+16524
+16545 action
+16549
+16575 action
+16579
+16837 action
+16841
+17037 action
+17041
+17075 up run
+17110
+17215 up
+17275
+17317 right
+17333 up run
+17349 left
+17364
+17365 aim down
+17373 aim down fire
+17377 aim down
+17385 aim down fire
+17389 aim down
+17397 aim down fire
+17401 aim down
+17409 aim down fire
+17413 aim down
+17421 aim down fire
+17425 aim down
+17433 aim down fire
+17437 aim down
+17445 aim down fire
+17449 aim down
+17457 aim down fire
+17461 aim down
+17469 aim down fire
+17473 aim down
+17481 aim down fire
+17485 aim down
+17493 aim down fire
+17497 aim down
+17505 aim down fire
+17509 aim down
+17517 aim down fire
+17521 aim down
+17529 aim down fire
+17533 aim down
+17541 aim down fire
+17545 aim down
+17553 aim down fire
+17557 aim down
+17565 aim down fire
+17569 aim down
+17577 aim down fire
+17581 aim down
+17589 aim down fire
+17593 aim down
+17601 aim down fire
+17605 aim down
+17613 aim down fire
+17617 aim down
+17625 aim down fire
+17629 aim down
+17637 aim down fire
+17641 aim down
+17649 aim down fire
+17653 aim down
+17661 aim down fire
+17665 aim down
+17673 aim down fire
+17677 aim down
+17685 aim down fire
+17689 aim down
+17697 aim down fire
+17701 aim down
+17709 aim down fire
+17713 aim down
+17721 aim down fire
+17725 aim down
+17733 aim down fire
+17737 aim down
+17751
+17761 right
+17763 up run
+17897
+17907 action
+17911
+# room 205, claire_a_205.txt 17904 ticks later: one round into the corridor (room 207's zombies load with 50, 69, 65 and 40 life), the walk and door 2 (pressed on 18685)
+18249 aim
+18257 aim fire
+18260 aim
+18281 aim fire
+18284 aim
+18301
+18305 up run
+18405
+18407 right
+18417 up run
+18545 right
+18558 up run
+18679
+18685 action
+18689
+# room 207, 18682 ticks later: the reload from the status screen, slot 3 from the north, slot 0 from a step back, slot 2 after a turn to the corridor and slot 1 as it comes, with no grab, then the run north and east to door 2 (pressed on 20235)
+19034 start
+19038
+19070 down
+19074
+19090 confirm
+19094
+19110 down
+19114
+19130 down
+19134
+19150 confirm
+19154
+19170 up
+19174
+19190 confirm
+19194
+19270 confirm
+19274
+19282 cancel
+19286
+19298 cancel
+19302
+19318 start
+19322
+19334 left
+19342
+19343 up
+19358
+19359 aim
+19367 aim fire
+19370 aim
+19379 aim fire
+19382 aim
+19391 aim fire
+19394 aim
+19403 aim fire
+19406 aim
+19415 aim fire
+19418 aim
+19427 aim fire
+19430 aim
+19439
+19440 down
+19452
+19453 aim
+19461 aim fire
+19464 aim
+19473 aim fire
+19476 aim
+19485 aim fire
+19488 aim
+19497 aim fire
+19500 aim
+19509 aim fire
+19512 aim
+19521 aim fire
+19524 aim
+19533 aim fire
+19536 aim
+19545 aim fire
+19548 aim
+19557 aim fire
+19560 aim
+19569 aim fire
+19572 aim
+19581
+19582 left
+19594
+19595 aim
+19603 aim fire
+19606 aim
+19615 aim fire
+19618 aim
+19627 aim fire
+19630 aim
+19639 aim fire
+19642 aim
+19651 aim fire
+19654 aim
+19663 aim fire
+19666 aim
+19675 aim fire
+19678 aim
+19687 aim fire
+19690 aim
+19699 aim fire
+19702 aim
+19711 aim fire
+19714 aim
+19723 aim fire
+19726 aim
+19735 aim fire
+19738 aim
+19747 aim fire
+19750 aim
+19759 aim fire
+19762 aim
+19771 aim fire
+19774 aim
+19783 aim fire
+19786 aim
+19795 aim fire
+19798 aim
+19807 aim fire
+19810 aim
+19819 aim fire
+19822 aim
+19831 aim fire
+19834 aim
+19843 aim fire
+19846 aim
+19855 aim fire
+19858 aim
+19867 aim fire
+19870 aim
+19879 aim fire
+19882 aim
+19891
+20072 aim
+20080 aim fire
+20083 aim
+20092 aim fire
+20095 aim
+20104 aim fire
+20107 aim
+20116 aim fire
+20119 aim
+20128
+20129 left
+20132
+20133 up run
+20154
+20155 right
+20168
+20169 up run
+20217
+20218 right
+20230
+20231 up
+20234
+20235 action
+20239
+# room 208, claire_a_208.txt 20232 ticks later: the ink ribbons into slot 3, the typewriter and its prompt answered No (on 21233)
+20582 up
+20601
+20606 right
+20619
+20629 up
+20673
+20681 left
+20694
+20704 up
+20714
+20718 action
+20720
+20874 action
+20876
+20954 action
+20956
+20962 right
+20975
+20976 up
+20994
+20995 left
+21008
+21009 up
+21046
+21047 left
+21054
+21057 action
+21061
+21103 action
+21107
+21153 action
+21157
+21203 right
+21207
+21233 action
+21237
+# claire_a_208_114.txt's input from the typewriter's hand back, 20891 ticks later (its tick 343 on 21234, where route_claire_a_208's reference closes the typewriter)
+21241 left
+21256
+21258 up
+21316
+21318 right
+21330
+21332 up
+21409
+21411 left
+21423
+21426 action
+21428
+21769 left
+21774
+21776 up run
+21861
+21863 right
+21886
+21888 up
+21915
+21917 action
+21919
+22127 right
+22128
+22129 up action
+22270
+22272 right
+22282 up run right
+22287 up run
+22435
+22445 left
+22459
+22462 up
+22480
+22509 up
+22593
+22669 down
+22673
+22677 right
+22690
+22693 up
+22706
+22711 left
+22724
+22727 up
+22740
+22747 left
+22760
+22765 up
+23039
+23043 right
+23056
+23059 up
+23067
+23071 left
+23084
+23087 up
+23098
+23102 left
+23115
+23119 up
+23219
+23223 down
+23228
+23233 left
+23247
+23250 up run
+23267
+23271 right
+23285
+23288 up
+23371
+23443 down
+23447
+23451 right
+23464
+23467 up
+23480
+23484 left
+23497
+23500 up
+23515
+23519 left
+23532
+23535 up
+23797
+23805 right
+23814
+23816 up
+23855
+23859 left
+23881
+23883 up
+23978
+24082 down
+24087
+24092 left
+24106
+24109 up run
+24132
+24136 right
+24149
+24152 up
+24164
+24168 action
+24172
+24442 action
+24446
+24642 action
+24646
+24655 right
+24670
+24672 up run
+24689
+24691 left
+24705
+24707 up run
+24735
+24737 right
+24751
+24753 up
+24767
+24769 action
+24771
+# claire_a_114_115.txt's input from 10C's door 2's hand back in 114 (25111), 24768 ticks later
+25118 left
+25132
+25134 up run
+25186
+25188 left
+25202
+25204 action
+25206
+25553 up
+25636
+25638 left
+25652
+25654 up
+25661
+25663 action
+25665
+25757 right
+25759
+25787 right
+25789
+25817 right
+25819
+25847 right
+25849
+25877 right
+25879
+25907 right
+25909
+25957 action
+25959
+26057 action
+26059
+26383 action
+26385
+26583 action
+26585
+26598 left
+26611
+26613 up
+26643
+26645 right
+26658
+26660 up
+26717
+26719 right
+26732
+26734 up
+26765
+26767 right
+26781
+26784 action
+26786
+26868 action
+26870
+26968 action
+26970
+26983 right
+26997
+26999 up
+27029
+27031 left
+27044
+27046 up
+27110
+27112 right
+27125
+27127 up
+27188
+27193 action
+27195
+# claire_a_115_207.txt's presses, 27153 ticks later: its tick 344 on 27497, where the exit scene hands back (115's door 0 on 27517, 114's door 2 on 27959, 10C's stairs door on 28693)
+27503 left
+27514
+27517 action
+27519
+27859 right
+27875
+27876 up run
+27941
+27943 right
+27956
+27959 action
+27961
+28301 left
+28314
+28316 up run
+28347
+28349 right
+28361
+28363 up run
+28525
+28527 left
+28539
+28541 up action
+28657
+28659 left
+28672
+28674 up
+28691
+28693 action
+28695
+# claire_a_207_201.txt's presses, 28554 ticks later: its tick 343 on 28897, the last stopped tick before 207 (207's door 1 on 28990, 205's door 0 on 29640, 204's door 0 on 30176)
+28904 up run
+28916
+28918 left
+28931
+28933 up run
+28974
+28976 right
+28988
+28990 action
+28992
+29332 right
+29340
+29342 up run
+29422
+29424 left
+29433
+29435 up run
+29458 up run right
+29460 up run
+29515
+29517 left
+29533
+29535 up run
+29618
+29620 right
+29623
+29625 up run
+29638
+29640 action
+29642
+29982 left
+29985
+29987 up run
+30072 up run left
+30087 up run
+30174
+30176 action
+30178
+# claire_a_201_spade.txt's presses, 30173 ticks later: its tick 343 on 30516, the last stopped tick before 201 (201's door 0 on 30643, START in 200 on 31099, the Spade Key into slot 5 on 31493)
+30523 left
+30537
+30539 up run
+30567
+30569 right
+30583
+30585 up run
+30641
+30643 action
+30645
+31011 left
+31016
+31018 up run
+31083
+31085 left
+31094
+31099 start
+31103
+31135 down
+31139
+31155 down
+31159
+31175 right
+31179
+31195 confirm
+31199
+31215 confirm
+31219
+31333 action
+31335
+31473 action
+31475
+31553 action
+31555
+# claire_a_200_203's presses from its tick 344 on, 31221 ticks later
+# 200: turn from the statue toward door 1 (1800) and run west along the hall, onto the door's wall
+31571 left
+31588
+31590 up run
+31676
+# door 1: room 201 loads on 492, play comes back on 825
+31678 action
+31680
+# 201: leon_a_201's walk (past the bar's north end, then south) to door 1, 481 ticks later
+32052 right
+32054
+32056 up run
+32088
+32090 left
+32092
+32094 up run
+32126
+32128 left
+32141
+32143 up run
+32163
+32165 right
+32168
+32170 action
+32174
+# 204 (on 984, play back on 1291): with 4:86 set and 6:61 clear, main_02 hangs the licker from the ceiling, and it drops as play starts. Run west along the corridor, turn toward the branch north and fire aimed down every 12 ticks until it dies
+# 204 (on 984, play back on 1291): with 6:61 set no licker hangs from the ceiling. Run west along the corridor, turn north and run up the branch to door 2's frame
+32512 up run
+32605
+32607 right
+32620
+32622 up run
+32654
+# turn to face east, onto door 2
+32656 right
+32669
+# door 2: the Spade Key's used-key message (fg_key bit 5)
+32672 action
+32674
+# the close: one use off the key (59:2 to 59:1)
+32732 action
+32734
+# a press that opens it: room 203 loads on 1606, play comes back on 1908
+32792 action
+32794
+# 203: turn about and press door 0: 204 loads on 1974, play comes back on 2281
+33132 left
+33158
+33160 action
+33162
+33501
+# claire_a_204_10c's presses from its tick 344 on, 33157 ticks later
+# 204 (203's door 0's arrival): turn toward the north-west and run up the corridor to its north wall, by door 1
+33507 right
+33518
+33520 up run
+33575
+# door 1: room 205 loads on 455, play comes back on 762
+33577 action
+33579
+# 205, with 4:48 set (both groups of bodies come out of the walls): north up the west corridor along its east wall, past the west group
+33920 up run
+34006
+# turn to face east and run along the north corridor, about 1900 from the east group's wall
+34008 right
+34022
+34024 up run
+34110
+# turn to face south at its east end and run down the corridor
+34112 right
+34125
+34127 up run
+34167
+# turn to face east and run to door 2
+34169 left
+34181
+34183 up run
+34215
+# door 2: room 207 loads on 1095, play comes back on 1402
+34217 action
+34219
+# 207: turn to face north and run up the corridor past the four dead zombies
+34560 left
+34573
+34575 up run
+34617
+# turn to face east and run to the stairs door
+34619 right
+34633
+34635 up run
+34645
+# door 3, the stairs door: room 10C loads on 1525, play comes back on 1700
+34647 action
+34649
+34856
+# claire_a_10c_113's presses from its tick 344 on, 34512 ticks later
+# 10C: turn a little toward the stairs and go up them with action held
+34862 right
+34863
+34864 up action
+35005
+# turn to face west and run along the upper floor to the corridor's turn south
+35007 right
+35021
+35023 up run
+35181
+35183 left
+35196
+35198 up run
+35228
+35230 right
+35243
+35245 up
+35259
+# door 2: room 114 loads on 784 and its scene starts behind the door on 875; play comes back on 1089
+35261 action
+35263
+# 114: Sherry's scene runs on the load (event 2); from the hand back raise the handgun and fire every 6 ticks at the zombie as it comes up the corridor
+35842 aim
+35912 aim fire
+35914 aim
+35920 aim fire
+35922 aim
+35928 aim fire
+35930 aim
+35936 aim fire
+35938 aim
+35944 aim fire
+35946 aim
+35952 aim fire
+35954 aim
+35960 aim fire
+35962 aim
+35968 aim fire
+35970 aim
+35976 aim fire
+35978 aim
+35984 aim fire
+35986 aim
+35992 aim fire
+35994 aim
+36000 aim fire
+36002 aim
+36008 aim fire
+36010 aim
+36016 aim fire
+36018 aim
+36024 aim fire
+36026 aim
+36032 aim fire
+36034 aim
+36040 aim fire
+36042 aim
+36048 aim fire
+36050 aim
+36056 aim fire
+36058 aim
+36064 aim fire
+36066 aim
+36072 aim fire
+36074 aim
+36080 aim fire
+36082 aim
+36088 aim fire
+36090 aim
+36096 aim fire
+36098 aim
+36104 aim fire
+36106 aim
+36112 aim fire
+36114 aim
+36120 aim fire
+36122 aim
+36128 aim fire
+36130 aim
+36136 aim fire
+36138 aim
+36144 aim fire
+36146 aim
+36152 aim fire
+36154 aim
+36160 aim fire
+36162 aim
+36168 aim fire
+36170 aim
+36176 aim fire
+36178 aim
+36202
+# the zombie is dead: run south down the corridor to its turn east
+36208 up run left
+36211 up run
+36315 up run left
+36327 up run
+36376
+# turn to face east, onto door 0
+36378 left
+36382
+# door 0: the Spade Key's used-key message
+36385 action
+36387
+# the close: the key's last use comes off, and the discard question
+36445 action
+36447
+# Yes: the slot goes
+36505 action
+36507
+36566
+# claire_a_114_10a's presses from its tick 344 on, 36222 ticks later
+# 114: door 0: room 113 loads on 385 and its scene starts (event 2), play comes back on 1667
+36572 action
+36574
+# 113: north, then east along the north strip to door 1
+37902 left
+37906
+37908 up run
+37922 up run right
+37934 up run
+37982
+# turn to face north, onto door 1
+37984 left
+37994
+# door 1: room 112 loads on 1810, play comes back on 2115
+37997 action
+37999
+# 112: east of the floor that gives way (area 3), to door 0
+38337 up run
+38353 up run right
+38354 up run
+38357 up run right
+38369 up run
+38372 up run right
+38373 up run
+38397 up run right
+38398 up run
+38402 up run right
+38403 up run
+38408 up run right
+38409 up run
+38412 up run right
+38413 up run
+38421 up run left
+38422 up run
+38432
+# door 0: room 110 loads on 2247, play comes back on 2580
+38434 action
+38436
+# 110: north up the west corridor, east along the north corridor and south down the east corridor past its three zombies, to door 0
+38802 up run left
+38828 up run
+38831 up run right
+38834 up run
+38837 up run right
+38838 up run
+38897 up run right
+38898 up run
+38904 up run right
+38921 up run
+38937 up run right
+38938 up run
+39023 up run right
+39024 up run
+39028 up run left
+39029 up run right
+39046 up run
+39134 up run right
+39135 up run
+39197 up run right
+39198 up run
+39202 up run left
+39232
+39234 right
+# door 0: room 10F loads on 3055, play comes back on 3372
+39242 action
+39244
+# 10F: east to door 0
+39594 up run left
+39602 up run
+39616 up run right
+39622 up run
+39628 up run right
+39629 up run
+39641 up run left
+39642 up run
+39644 up run right
+39646 up run
+39652 up run left
+39654 up run
+39656
+39658 right
+# door 0: room 10A loads on 3473, play comes back on 3780
+39660 action
+39662
+40001
+# claire_a_10a_106's presses from its tick 344 on, 39657 ticks later (waits [[760, 38]])
+# Claire A, 10A to 106 (#665 Part 3), as claire_a_114_10a leaves her at 10F's door's arrival, with 10A on fire: leon_a_10a_106b's presses, through 109 and 108 into 107 and on to 106, where the valve handle is (oracle/re2.md, "Claire A to the Diamond Key")
+# 10A from 10F's door: south to door 0, pressed facing east
+40002 up run right
+40027 up run
+40035 up run right
+40036 up run
+40037 up run right
+40038 up run left
+40068
+40070 right
+# door 0 into 109 (loads 453, back 758)
+40075 action
+40077
+# 109: east along the south side, north past the crows, west to door 0
+40455 up run
+40509 up run right
+40510 up run
+40512 up run right
+40513 up run
+40514 up run left
+40535 up run
+40580 up run left
+40581 up run
+40582 up run left
+40583 up run right
+40604 up run
+40627 up run right
+40628 up run
+40653 up run right
+40654 up run
+40658 up run left
+40678 up run
+40722 up run left
+40723 up run
+40726 up run left
+40752 up run right
+40766
+40768 left
+# door 0 into 108 (loads 1113, back 1420)
+40773 action
+40775
+41115 up run right
+# 108: north up the west corridor and east to area 11
+41128 up run
+41132 up run right
+41133 up run
+41137 up run left
+41139 up run
+41157 up run left
+41158 up run
+41181 up run left
+41182 up run
+41183 up run right
+41203 up run
+41226 up run right
+41227 up run
+41228 up run right
+41244
+41246 right
+# area 11: event 13 opens door 0 (aot_on) down the stairs into 107 (loads 1589); the run is held from 1791 so Claire moves on the first tick play answers
+41248 action
+41250
+# 107: one turn round east of the arrival, then up the east corridor and west along the north side past slots 1 and 0 (no hold), to door 0
+41486 up run left
+41493 up run
+41501 up run left
+41530 up run
+41568 up run right
+41573 up run
+41583 up run right
+41584 up run
+41597 up run left
+41599 up run
+41616 up run left
+41617 up run
+41633 up run left
+41634 up run
+41635 up run left
+41657 up run
+41669 up run left
+41670 up run
+41683 up run left
+41687 up run
+41702 up run left
+41703 up run
+41725 up run left
+41726 up run
+41729 up run right
+41736 up run
+41739 up run right
+41740 up run
+41753 up run right
+41755 up run
+41769
+41771 right
+41773
+# door 0 into 106 (loads 2120, back 2427)
+41780 action
+41782
+# claire_a_106_108's presses from its tick 344 on, 41772 ticks later
+# 106 from 107's door 0: west along the south side, then north up the aisle to the valve handle's shelf
+42116 up run
+42149
+42151 right
+42166
+42168 up run
+42199
+42201 right
+42202
+# the valve handle (item 50): a press every 12 ticks finishes the question's text, Yes, finishes and closes "taken"
+42205 action
+42207
+42217 action
+42219
+42229 action
+42231
+42241 action
+42243
+42253 action
+42255
+42265 action
+42267
+42277 action
+42279
+42289 action
+42291
+42301 action
+42303
+42313 action
+42315
+42381 action
+42383
+# turn about and run back south down the aisle, then east to door 1
+42394 left
+42420
+42422 up run
+42452
+42454 left
+42467
+42469 up run
+42507
+# door 1 into 107
+42512 action
+42514
+# 107 made again for the route's zombies (fight.lua): slot 0 first from the north side, then slots 1, 2 and 3 as they come, and door 1 into 108 (106_108's own press follows)
+42853 up run
+42881 aim
+42887 aim fire
+42888 aim
+42893 aim fire
+42894 aim
+42899 aim fire
+42900 aim
+42905 aim fire
+42906 aim
+42911 aim fire
+42912 aim
+42917 aim fire
+42918 aim
+42923 aim fire
+42924 aim
+42929 aim fire
+42930 aim
+42935 aim fire
+42936 aim
+42941 aim fire
+42942 aim
+42947 aim fire
+42948 aim
+42953 aim fire
+42954 aim
+42959 aim fire
+42960 aim
+42965 aim fire
+42966 aim
+42967
+42969 right
+42982 up run right
+42988 up run
+42993 up run right
+42994 up run
+43007 up run right
+43008 up run
+43019 up run right
+43020 up run
+43025 up run right
+43026 up run
+43032 up run right
+43033 aim
+43036
+43038 up run left
+43047 up run
+43053 aim
+43059 aim fire
+43060 aim
+43065 aim fire
+43066 aim
+43071 aim fire
+43072 aim
+43077 aim fire
+43078 aim
+43083 aim fire
+43084 aim
+43089 aim fire
+43090 aim
+43095 aim fire
+43096 aim
+43101 aim fire
+43102 aim
+43107 aim fire
+43108 aim
+43113 aim fire
+43114 aim
+43118
+43120 up run left
+43131 aim
+43137
+43139 left
+43144 up run left
+43155 up run
+43156 aim
+43162 aim fire
+43163 aim
+43168 aim fire
+43169 aim
+43174 aim fire
+43175 aim
+43180 aim fire
+43181 aim
+43186 aim fire
+43187 aim
+43192 aim fire
+43193 aim
+43194
+43196 left
+43197 up run left
+43199 left
+43206 up run left
+43210 left
+43212 up run right
+43213 up run
+43215 up run right
+43216 up run
+43220 up run right
+43221 up run
+43222 up run right
+43232 up run
+43234 up run right
+43235 up run
+43239 up run right
+43240 up run
+43242 up run right
+43244 up run left
+43246 up run
+43249 aim
+43255 aim fire
+43256 aim
+43261 aim fire
+43262 aim
+43267 aim fire
+43268 aim
+43273 aim fire
+43274 aim
+43279 aim fire
+43280 aim
+43285 aim fire
+43286 aim
+43291 aim fire
+43292 aim
+43297 aim fire
+43298 aim
+43303 aim fire
+43304 aim
+43309 aim fire
+43310 aim
+43315 aim fire
+43316 aim
+43321 aim fire
+43322 aim
+43327 aim fire
+43328 aim
+43333 aim fire
+43334 aim
+43339 aim fire
+43340 aim
+43345 aim fire
+43346 aim
+43351 aim fire
+43352 aim
+43357 aim fire
+43358 aim
+43363 aim fire
+43364 aim
+43369 aim fire
+43370 aim
+43375 aim fire
+43376 aim
+43381 aim fire
+43382 aim
+43387 aim fire
+43388 aim
+43393 aim fire
+43394 aim
+43399 aim fire
+43400 aim
+43405 aim fire
+43406 aim
+43411 aim fire
+43412 aim
+43417 aim fire
+43418 aim
+43420 aim down
+43423 aim down fire
+43424 aim down
+43429 aim down fire
+43430 aim down
+43435 aim down fire
+43436 aim down
+43441 aim down fire
+43442 aim down
+43447 aim down fire
+43448 aim down
+43453 aim down fire
+43454 aim down
+43459 aim down fire
+43460
+43462 up run
+43466 aim down
+43472 aim down fire
+43473 aim down
+43478 aim down fire
+43479 aim down
+43483
+43485 up run left
+43491 up run
+43493 aim down
+43499 aim down fire
+43500 aim down
+43505 aim down fire
+43506 aim down
+43510
+43512 up run left
+43518 aim down
+43524 aim down fire
+43525 aim down
+43530 aim down fire
+43531 aim down
+43536 aim down fire
+43537 aim down
+43542
+43544 up run left
+43545 aim down
+43551 aim down fire
+43552 aim down
+43557 aim down fire
+43558 aim down
+43563 aim down fire
+43564 aim down
+43568
+43570 up run left
+43571 aim down
+43577 aim down fire
+43578 aim down
+43583 aim down fire
+43584 aim down
+43589 aim down fire
+43590 aim down
+43594
+43596 up run left
+43597 aim
+43603 aim fire
+43604 aim
+43609 aim fire
+43610 aim
+43615 aim fire
+43616 aim
+43621 aim fire
+43622 aim
+43627 aim fire
+43628 aim
+43633 aim fire
+43634 aim
+43639 aim fire
+43640 aim
+43645 aim fire
+43646 aim
+43651 aim fire
+43652 aim
+43657 aim fire
+43658 aim
+43663 aim fire
+43664 aim
+43669 aim fire
+43670 aim
+43675 aim fire
+43676 aim
+43681 aim fire
+43682 aim
+43687 aim fire
+43688 aim
+43693 aim fire
+43694 aim
+43699 aim fire
+43700 aim
+43701
+43703 up run left
+43707 up run
+43714 up run left
+43715 up run
+43727 up run left
+43728 up run
+43733 up run left
+43734 up run
+43740 up run right
+43742 aim down
+43743
+43745 up run right
+43746 aim down
+43752 aim down fire
+43753 aim down
+43756
+43758 up run
+43759 aim down
+43765 aim down fire
+43766 aim down
+43771 aim down fire
+43772 aim down
+43777 aim down fire
+43778 aim down
+43783 aim down fire
+43784 aim down
+43789 aim down fire
+43790 aim down
+43795 aim down fire
+43796 aim down
+43801 aim down fire
+43802 aim down
+43807 aim down fire
+43808 aim down
+43813 aim down fire
+43814 aim down
+43819 aim down fire
+43820 aim down
+43825 aim down fire
+43826 aim down
+43831 aim down fire
+43832 aim down
+43837 aim down fire
+43838 aim down
+43843 aim down fire
+43844 aim down
+43849 aim down fire
+43850 aim down
+43855 aim down fire
+43856 aim down
+43861 aim down fire
+43862 aim down
+43867 aim down fire
+43868 aim down
+43873 aim down fire
+43874 aim down
+43879 aim down fire
+43880 aim down
+43885 aim down fire
+43886 aim down
+43891 aim down fire
+43892 aim down
+43897 aim down fire
+43898 aim down
+43903 aim down fire
+43904 aim down
+43909 aim down fire
+43910 aim down
+43915 aim down fire
+43916 aim down
+43921 aim down fire
+43922 aim down
+43927 aim down fire
+43928 aim down
+43933 aim down fire
+43934 aim down
+43939 aim down fire
+43940 aim down
+43945 aim down fire
+43946 aim down
+43951 aim down fire
+43952 aim down
+43957 aim down fire
+43958 aim down
+43963 aim down fire
+43964 aim down
+43969 aim down fire
+43970 aim down
+43975 aim down fire
+43976 aim down
+43981 aim down fire
+43982 aim down
+43987 aim down fire
+43988 aim down
+43993 aim down fire
+43994 aim down
+43999 aim down fire
+44000 aim down
+44005 aim down fire
+44006 aim down
+44011 aim down fire
+44012 aim down
+44017 aim down fire
+44018
+44020 up run
+44032 up run left
+44035 up run right
+44041 up run
+44045 up run right
+44046 up run
+44052 up run right
+44053 up run
+44055 up run right
+44065 up run
+44068 up run right
+44069 up run
+44074 up run right
+44075 up run
+44077 up run right
+44080 right
+44093
+44094 up run left
+44097 left
+44102 up run left
+44103 right
+44111
+# claire_a_106_108's presses from its tick 1785 on, 42327 ticks later
+# door 1 into 108 (loads 1820), the stairs: up held through the load, as leon_a_106_108's
+44112 action
+44114
+44149 up
+# 108: west and south to the water tank's area 3
+44323 up run right
+44324 up run
+44336 up run right
+44337 up run
+44354 up run right
+44355 up run
+44357 up run right
+44358 up run
+44359 up run right
+44362 up run left
+44391 up run
+44406 up run left
+44407 up run
+44463 up run left
+44464 up run
+44472 up run right
+44473 up run
+44476 up run right
+44477 up run
+44489 up run right
+44513 up run
+44529 up run right
+44530 up run
+44537 up run right
+44538 up run
+44540 up run right
+44542
+44544 left
+44548
+44551 up
+44555
+# START, down twice and right to the valve handle in slot 5, its menu, USE: event 6 runs the extinguish scene, 4:0 on 2535 in arklay
+44560 start
+44564
+44600 down
+44604
+44620 down
+44624
+44644
+44660 confirm
+44664
+44680 confirm
+44684
+45274
+# event 7's status screen opens by itself after the water tank's scene: START closes it (as route_200_diamond's), and play comes back 12 ticks later
+45310 start
+45314
+45322
+# claire_a_108_10b's presses from its tick 344 on, 44978 ticks later
+# Claire A, 108's water tank to the Diamond Key in 10B (#665 Part 4), as claire_a_106_108 leaves her: back through 109 to 10A, its fire out, Claire's look (area 6, event 2), and door 2 into 10B (oracle/re2.md, "Claire A to the Diamond Key")
+# 108 from the water tank: north and east to door 1
+45323 up run right
+45367 up run
+45377 up run right
+45378 up run
+45395 up run right
+45396 up run
+45397 up run left
+45421 up run
+45423 up run left
+45424 up run
+45427 up run left
+45431
+45433 right
+45449
+# door 1 into 109
+45458 action
+45460
+45495 up
+# 109: north round the east side, west past the crows and south to door 0
+45799 up run left
+45828 up run right
+45864 up run
+45910 up run right
+45911 up run
+45916 up run right
+45917 up run
+45918 up run right
+45938 up run
+45998 up run right
+45999 up run left
+46021 up run
+46038 up run left
+46039 up run
+46065 up run left
+46066 up run
+46075 up run right
+46098 up run
+46099 up run right
+46100 up run
+46136 up run right
+46137 up run
+46148 up run right
+46149
+46151 left
+46155
+# door 0 into 10A, whose fire is out
+46157 action
+46159
+46194 up
+# 10A, its fire out and no zombies for Claire (main_00's ck(1, 0, 0)): north up the west side
+46500 up run right
+46510 up run
+46535 up run right
+46536 up run
+46548 up run
+# turn east along the corridor into area 6
+46583 up run right
+46599 up run
+46638
+# area 6 (event 2): 3:32, the voice line and main_03, which hands back on 1724: turn east-south-east and run to door 2's front
+46708 right
+46723
+46725 up run
+46745
+# turn to face south, onto door 2
+46747 right
+46759
+# door 2 into 10B
+46762 action
+46764
+46799 up
+# 10B: south-west to the Diamond Key's shelf
+47105 up run
+47112 up run right
+47113 up run
+47139 up run left
+47140 up run
+47144 up run left
+47145 up run
+47168 up run left
+47169 up run
+47184 up run left
+47185
+47187 left
+# the Diamond Key (item 90): a press every 12 ticks finishes the question's text, Yes, finishes and closes "taken" (2368)
+47206 action
+47208
+47218 action
+47220
+47230 action
+47232
+47242 action
+47244
+47254 action
+47256
+47266 action
+47268
+47278 action
+47280
+47346 action
+47348
+47398
