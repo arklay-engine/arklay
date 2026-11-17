@@ -3642,6 +3642,46 @@ fn item_box_confirm_arms_and_a_paged_confirm_swaps() {
     assert_eq!(item_box.game.inventory[0].quantity, 12);
 }
 
+/// The item box publishes its view, `M.view()`: the player bot's contract
+/// with it, and all the bot reads. On every frame it agrees with the
+/// screen's own state.
+#[test]
+fn item_box_publishes_its_view() {
+    let mut game = box_game();
+    game.add_item(0x41, 1);
+    let mut item_box = ItemBoxScreen::new("box-view", game, 8);
+    let check = |item_box: &ItemBoxScreen, mode: &str| {
+        let view = item_box.screen.view().expect("the box publishes M.view()");
+        assert_eq!(view.bytes("mode"), Some(mode.as_bytes()));
+        assert_eq!(view.int("box_cursor"), Some(item_box.box_cursor()));
+        assert_eq!(
+            view.int("cursor"),
+            Some(item_box.int("M.state.player_cursor"))
+        );
+        assert_eq!(
+            view.bool("sliding"),
+            Some(item_box.int("M.state.slide_dir") != 0)
+        );
+        view.bool("sliding").unwrap()
+    };
+    assert!(!check(&item_box, "browse"));
+    item_box.step(press(|input| input.down = true));
+    check(&item_box, "browse");
+    item_box.step(press(|input| input.up = true));
+    item_box.step(confirm());
+    assert!(!check(&item_box, "armed"));
+    item_box.step(press(|input| input.down = true));
+    assert!(check(&item_box, "armed"), "the page slide runs");
+    for _ in 0..0x20 {
+        if !check(&item_box, "armed") {
+            break;
+        }
+        item_box.step(neutral());
+    }
+    assert!(!check(&item_box, "armed"));
+    assert_eq!(item_box.box_cursor(), 1);
+}
+
 #[test]
 fn item_box_drops_a_confirm_during_the_slide() {
     let mut game = box_game();
@@ -4349,6 +4389,82 @@ impl Menu {
 const MODE_NAVIGATION: i64 = 0;
 const MODE_ACTIONS: i64 = 1;
 const MODE_MOVE: i64 = 2;
+
+/// A published view's list of strings `key`, in order.
+fn view_list(view: &crate::interactive::ScriptValue, key: &str) -> Vec<String> {
+    let list = view.field(key).expect("the view has the list");
+    (1..)
+        .map_while(|index| match list.index(index)? {
+            crate::interactive::ScriptValue::Str(text) => {
+                Some(String::from_utf8_lossy(text).into_owned())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// The pause menu publishes its view, `M.view()`: the player bot's contract
+/// with it, and all the bot reads. On every frame it agrees with what the
+/// script hands the engine and with its own state.
+#[test]
+fn main_menu_publishes_its_view() {
+    let mut game = menu_game();
+    game.add_item(0x02, 15);
+    game.add_item(0x44, 1);
+    let mut menu = Menu::open(game);
+    let check = |menu: &Menu, mode: &str, options: &[&str]| {
+        let view = menu.screen.view().expect("the menu publishes M.view()");
+        for key in ["cursor", "slot", "selected_item"] {
+            assert_eq!(view.int(key), Some(menu.value(key)), "{key}");
+        }
+        for key in ["ready", "closing", "viewing"] {
+            assert_eq!(
+                view.bool(key).map(i64::from),
+                Some(menu.value(key)),
+                "{key}"
+            );
+        }
+        assert_eq!(view.bytes("mode"), Some(mode.as_bytes()));
+        assert_eq!(
+            view.int("option"),
+            Some(menu.eval::<i64>("return M.state.action"))
+        );
+        assert_eq!(
+            view.int("move_cursor"),
+            Some(menu.eval::<i64>("return M.state.move_cursor"))
+        );
+        assert_eq!(view_list(&view, "options"), options);
+    };
+    let weapon = ["EQUIP", "CHECK", "MOVE"];
+    check(&menu, "navigation", &weapon);
+    menu.confirm();
+    check(&menu, "actions", &weapon);
+    while menu.value("ready") == 0 {
+        menu.tick();
+        check(&menu, "actions", &weapon);
+    }
+    menu.down();
+    check(&menu, "actions", &weapon);
+    menu.down();
+    menu.confirm();
+    assert_eq!(menu.mode(), MODE_MOVE);
+    check(&menu, "move", &weapon);
+    menu.right();
+    check(&menu, "move", &weapon);
+    // Cancel steps back to the submenu, then shrinks it away.
+    menu.cancel();
+    check(&menu, "actions", &weapon);
+    menu.cancel();
+    assert_eq!(menu.value("closing"), 1);
+    check(&menu, "actions", &weapon);
+    menu.finish_close();
+    check(&menu, "navigation", &weapon);
+    menu.right();
+    check(&menu, "navigation", &["USE", "CHECK", "MOVE"]);
+    menu.up();
+    assert_eq!(menu.value("slot"), -1);
+    check(&menu, "navigation", &[]);
+}
 
 #[test]
 fn main_menu_cursor_navigation_uses_the_layout_rules() {

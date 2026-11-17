@@ -909,10 +909,9 @@ struct MenuItem {
 }
 
 /// The pause/inventory menu, read from the engine's real UI state: the
-/// session's menu slot, fade phase and sub-screens, the values the menu
-/// script publishes (`cursor`, `slot`, `selected_item`, ...) and the
-/// submenu fields of its `M.state` table. Nothing here is derived from what
-/// the bot pressed.
+/// session's menu slot, fade phase and sub-screens, and the view the menu
+/// script publishes (`M.view()` of `ui/main_menu.lua`). Nothing here is
+/// derived from what the bot pressed.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct MenuSnapshot {
     /// The menu screen exists (open, fading in, or fading out to close).
@@ -938,7 +937,7 @@ struct MenuSnapshot {
     /// The highlighted submenu option, zero-based.
     option: Option<i64>,
     /// The submenu's options for the selected item, top to bottom.
-    options: Vec<&'static str>,
+    options: Vec<String>,
     /// The item under the cursor (`0` for none).
     selected_item: u8,
     /// The submenu's open animation has finished.
@@ -980,9 +979,8 @@ impl ExamineView {
     }
 }
 
-/// The item box screen as a player sees it, read from the shipped script's
-/// `M.state` (`ui/item_box.lua`) and the box's slots, without running any of
-/// its code.
+/// The item box screen as a player sees it: the view its script publishes
+/// (`M.view()` of `ui/item_box.lua`) and the box's slots.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct ItemBoxView {
     /// `"browse"` (the inventory cursor moves) or `"armed"` (a confirmed
@@ -1000,12 +998,12 @@ struct ItemBoxView {
 
 impl ItemBoxView {
     fn build(session: &GameSession) -> Option<Self> {
-        let screen = session.item_box.as_deref()?;
+        let view = session.item_box.as_deref()?.view()?;
         Some(Self {
-            mode: screen.state_str("mode")?,
-            box_cursor: screen.state_int("box_cursor")?,
-            cursor: screen.state_int("player_cursor")?,
-            sliding: screen.state_int("slide_dir")? != 0,
+            mode: String::from_utf8_lossy(view.bytes("mode")?).into_owned(),
+            box_cursor: view.int("box_cursor")?,
+            cursor: view.int("cursor")?,
+            sliding: view.bool("sliding")?,
             slots: session
                 .game
                 .item_box
@@ -1030,10 +1028,20 @@ fn set_use_gates(row: &Table, fact: &meta::Use) -> mlua::Result<()> {
     Ok(())
 }
 
-/// The submenu labels the RE1 menu script draws (`draw_submenu`): the first
-/// option is EQUIP for a weapon and USE otherwise; MOVE is the combine.
-fn menu_options(equippable: bool) -> Vec<&'static str> {
-    vec![if equippable { "EQUIP" } else { "USE" }, "CHECK", "MOVE"]
+/// The strings of a published view's list field `key`, in order; empty
+/// when the field is absent.
+fn view_strings(view: &crate::interactive::ScriptValue, key: &str) -> Vec<String> {
+    let Some(list) = view.field(key) else {
+        return Vec::new();
+    };
+    (1..)
+        .map_while(|index| match list.index(index)? {
+            crate::interactive::ScriptValue::Str(text) => {
+                Some(String::from_utf8_lossy(text).into_owned())
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 impl MenuSnapshot {
@@ -1078,7 +1086,10 @@ impl MenuSnapshot {
                 ..Self::default()
             };
         };
-        let viewing = menu.value("viewing") != 0;
+        // A menu script that publishes no view reads as a menu with nothing
+        // selected and no submenu.
+        let view = menu.view().unwrap_or_default();
+        let viewing = view.bool("viewing").unwrap_or(false);
         let phase = match session.menu_fade_phase {
             super::MenuFadePhase::Out => "fade_out",
             super::MenuFadePhase::In => "fade_in",
@@ -1088,36 +1099,32 @@ impl MenuSnapshot {
             super::MenuFadePhase::None if game.message.active => "message",
             super::MenuFadePhase::None => "input",
         };
-        let mode = menu.state_int("mode").map(|mode| match mode {
-            0 => "navigation",
-            1 => "actions",
-            _ => "move",
-        });
-        let selected_item = menu.value("selected_item") as u8;
-        let options = match menu.state_int("equippable") {
-            Some(equippable) if selected_item != 0 => menu_options(equippable != 0),
-            _ => Vec::new(),
+        let mode = match view.bytes("mode") {
+            Some(b"navigation") => Some("navigation"),
+            Some(b"actions") => Some("actions"),
+            Some(b"move") => Some("move"),
+            _ => None,
         };
-        let slot = menu.value("slot");
+        let slot = view.int("slot").unwrap_or(-1);
         Self {
             open: true,
             requested,
             phase,
             accepts_input: phase == "input",
             screen,
-            cursor: Some(menu.value("cursor")),
+            cursor: Some(view.int("cursor").unwrap_or(0)),
             slot: (slot >= 0).then_some(slot),
             mode,
-            option: menu.state_int("action"),
-            options,
-            selected_item,
-            ready: menu.value("ready") != 0,
-            closing: menu.value("closing") != 0,
+            option: view.int("option"),
+            options: view_strings(&view, "options"),
+            selected_item: view.int("selected_item").unwrap_or(0) as u8,
+            ready: view.bool("ready").unwrap_or(false),
+            closing: view.bool("closing").unwrap_or(false),
             viewing,
             capacity,
             items,
             move_cursor: (mode == Some("move"))
-                .then(|| menu.state_int("move_cursor"))
+                .then(|| view.int("move_cursor"))
                 .flatten(),
             item_box,
             examine,
@@ -4514,7 +4521,7 @@ impl UserData for BotCtx {
             table.set("option", menu.option)?;
             table.set(
                 "options",
-                lua.create_sequence_from(menu.options.iter().copied())?,
+                lua.create_sequence_from(menu.options.iter().map(String::as_str))?,
             )?;
             table.set("selected_item", menu.selected_item)?;
             table.set("ready", menu.ready)?;
@@ -5839,9 +5846,16 @@ mod tests {
     }
 
     #[test]
-    fn menu_options_follow_the_menu_scripts_labels() {
-        assert_eq!(menu_options(true), vec!["EQUIP", "CHECK", "MOVE"]);
-        assert_eq!(menu_options(false), vec!["USE", "CHECK", "MOVE"]);
+    fn view_strings_reads_a_published_list_in_order() {
+        use crate::interactive::{ScriptKey, ScriptValue};
+        let list = ScriptValue::Table(vec![
+            (ScriptKey::Int(1), ScriptValue::Str(b"USE".to_vec())),
+            (ScriptKey::Int(2), ScriptValue::Str(b"CHECK".to_vec())),
+            (ScriptKey::Int(3), ScriptValue::Str(b"MOVE".to_vec())),
+        ]);
+        let view = ScriptValue::Table(vec![(ScriptKey::Str(b"options".to_vec()), list)]);
+        assert_eq!(view_strings(&view, "options"), vec!["USE", "CHECK", "MOVE"]);
+        assert!(view_strings(&view, "missing").is_empty());
     }
 
     #[test]
