@@ -1398,7 +1398,7 @@ class FrameWriter:
     SETTLE = 0.04
     STILL = 0.02
     STILL_TRIES = 10
-    UNCHANGED = 0.25
+    UNCHANGED = 0.3
 
     def __init__(self, display: str) -> None:
         self.display = display
@@ -1432,6 +1432,9 @@ class FrameWriter:
                     self.room.release()
                     raise
                 return
+        # `import`'s picture isn't seen here, so the next tick has no last picture to tell
+        # a late one by.
+        self.last = None
         screenshot(self.display, path)
 
     def settled(self, name: str):
@@ -1446,8 +1449,14 @@ class FrameWriter:
         - the first picture waits `SETTLE` seconds;
         - the display must then hold still for `STILL` more (two pictures in a row the same);
         - a picture that is still the last tick's own is what a late one looks like, so it is
-          taken again until it changes or `UNCHANGED` seconds have passed since the break,
-          about what `import` took. A tick that draws what the last one drew costs that long.
+          taken again until it changes or `UNCHANGED` seconds have passed since the break, a
+          little longer than `import` took. A tick that draws what the last one drew costs
+          that long, and so does a tick with no last picture to compare (the first, and the
+          one after a picture `import` took).
+
+        What this cannot tell from the tick's own picture: one later than `UNCHANGED`, which
+        `import` missed as well, and a display that changes, holds still for `STILL` and then
+        changes again within the tick, where `import` showed whichever it found.
 
         A display that never holds still (a movie, or drawing on another of the game's
         threads) gives whatever it showed last, as `import` gave whatever it showed when it
@@ -1465,7 +1474,7 @@ class FrameWriter:
                 if moved >= self.STILL_TRIES:
                     self.unsettled.append(name)
                     break
-            elif picture != self.last or time.monotonic() - start >= self.UNCHANGED:
+            elif (self.last is not None and picture != self.last) or time.monotonic() - start >= self.UNCHANGED:
                 break
         self.last = picture
         return again
