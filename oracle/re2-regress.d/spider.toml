@@ -62,7 +62,7 @@ ticks = 2400
 setup = { pos = [-26394, 0, -1920], angle = 97, health = 200, rnd = 6114, camera = 0 }
 input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,zm0,zm1,fgstat"
-# room 405's floor water blends differently (#668): held at the measured mean (the original's darker water, not the spiders' shadows, which it hides on the ceiling and walls, #686)
+# room 405's floor water blends differently (#668): held at the measured mean (the original's water is darker; it draws no shadow for a spider over water, #686)
 frames = [360, 2399]
 frame_max_mean = 4.95
 expect = "match"

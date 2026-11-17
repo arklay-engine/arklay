@@ -20853,7 +20853,7 @@ fn render_frame_on(
             // `MulKage` (called from `Game_loop` for every enemy) clears the
             // shadow's draw bit when `Be_flg` has 0x400: a body in water, or
             // a spider on a wall or the ceiling (`FUN_004727e0`).
-            if character.be_flg >> 9 & 2 != 0 {
+            if character.be_flg & crate::zombie2::BE_NO_SHADOW != 0 {
                 continue;
             }
             let kage = character.kage;
@@ -20888,10 +20888,12 @@ fn render_frame_on(
             if !debug_view::unculled() && !room.in_cut_view(at[0], at[2]).unwrap_or(true) {
                 continue;
             }
-            let color = match (pool, kage) {
-                (Some(_), _) => crate::zombie2::POOL_COLOR,
-                (None, Some(kage)) => kage.color,
-                (None, None) => shadow::PLAYER_COLOR,
+            let own_color = character.zombie.as_ref().and_then(|z| z.shadow_color);
+            let color = match (pool, own_color, kage) {
+                (Some(_), _, _) => crate::zombie2::POOL_COLOR,
+                (None, Some(color), _) => color,
+                (None, None, Some(kage)) => kage.color,
+                (None, None, None) => shadow::PLAYER_COLOR,
             };
             // The characters' grounds don't see the room objects yet.
             let shadow = re2_shadow(
