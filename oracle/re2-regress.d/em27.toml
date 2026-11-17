@@ -132,3 +132,16 @@ input = "g_adult_magnum_303.txt"
 input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,fgscn,fgstat"
 record = "--warp 303:-24972:-5400:-13739:552:3 --flag 4:55 --flag 4:57 --life 200 --equip 5 --give 0:5:200 --give 1:0x16:60"
+
+[[run]]
+name = "g_adult_birth_303"
+room = "303"
+character = 0
+sound = false
+ticks = 2400
+# Leon A on the room's first visit (4:57 clear): the player walks into cut 2, the room's scene runs, and the G adult (Em_28 Type 0) is born from the body (state 8), then comes for the player
+setup = { pos = [-16852, -5400, -19090], angle = 552, health = 200, rnd = 6114, camera = 3, flags = [[4, 55]] }
+input = "g1_scene_303.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,fgscn,fgstat"
+record = "--warp 303:-16852:-5400:-19090:552:3 --flag 4:55 --life 200"

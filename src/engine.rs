@@ -4896,6 +4896,8 @@ impl GameSession {
             self.room_fade.tick();
         }
         if out.set_enemies {
+            // `Die_vcut_set`, in `Die_move_wait` with `Die_enemy_set`.
+            self.loaded.room.die_view = true;
             let player = self.game.entities[0].pos;
             crate::die2::enemy_set(
                 self.game

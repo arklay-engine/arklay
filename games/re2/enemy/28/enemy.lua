@@ -19,9 +19,10 @@
 -- state 1 and `Type` 0 (the room's other adult, with `Routine_3`'s 1 set), and
 -- a `Type` 0 `Type`'s `0x4000` and the birth (state 8).
 --
--- Not ported: the other `Type`s of `FUN_00477870`, `Routine_0` 4, the birth
--- (state 8), the heavy flinch (`0x47b360`) and the blood of the weapons from 9
--- on, and the part sizes and colours, which only draw. The move's effects
+-- Not ported: the other `Type`s of `FUN_00477870`, `Routine_0` 4, the heavy
+-- flinch (`0x47b360`) and the blood of the weapons from 9 on, and the part
+-- colours, which only draw. The part sizes are kept only where they decide
+-- the birth's draws. The move's effects
 -- keep their `Rnd` draws but are not made. The neck's turn is a third of
 -- `Rot_neck_em_n`'s on each of parts 2 to 4 (`Neck::apply`); the wobble
 -- places every part (`FUN_004e0070`) as well as part 1's children.
@@ -51,6 +52,19 @@ local BRK_Y <const> = 19 -- Part 9's `Workm.t` y (`+0x60`), as the break-up leav
 local SWELL <const> = 25 -- Part 1's second morph weight, once the death moves it.
 local SWOLLEN <const> = 26 -- 1 once `SWELL` holds the weight.
 local SHRINK <const> = 27 -- The ticks the death's boxes have shrunk.
+local WEIGHTED <const> = 28 -- 1 once `SWAY` holds part 1's first morph weight.
+-- The part sizes the birth grows, which decide its draws: part 4's `Size_x`,
+-- part 2's (and 3's) `Size_x`, part 9's (to 12's) `Size_y`, part 0xd's (to
+-- 0xf's) `Size_y`, part 0x10's (and 0x11's) `Size_y` and `Size_x`, and part
+-- 0x12's (to 0x16's) `Size_y` and `Size_x`.
+local SIZE_4X <const> = 29
+local SIZE_2X <const> = 30
+local SIZE_9Y <const> = 31
+local SIZE_DY <const> = 32
+local SIZE_10Y <const> = 33
+local SIZE_10X <const> = 34
+local SIZE_12Y <const> = 35
+local SIZE_12X <const> = 36
 
 -- `BYTE_005289f8`: the wobble's sine, as signed bytes.
 local WOBBLE <const> = {
@@ -84,6 +98,35 @@ end
 local function turn_to_player(e, rate)
     local px, _, pz = e:player_pos()
     e:goto_point(px, pz, rate)
+end
+
+-- Part 1's first morph weight: the model's until the birth sets it.
+local function weight(e)
+    if e:var(WEIGHTED) ~= 0 then
+        return e:var(SWAY)
+    end
+    local first = e:morph_weights(1)
+    return first or 0
+end
+
+local function set_weight(e, value)
+    e:set_var(WEIGHTED, 1)
+    e:set_var(SWAY, i16(value))
+end
+
+-- Part 1's second morph weight (`pSa_dat_head[4]`), which the death swells:
+-- the model's until the birth or the death first sets it.
+local function swell(e)
+    if e:var(SWOLLEN) ~= 0 then
+        return e:var(SWELL)
+    end
+    local _, weight = e:morph_weights(1)
+    return weight or 0
+end
+
+local function set_swell(e, weight)
+    e:set_var(SWOLLEN, 1)
+    e:set_var(SWELL, i16(weight))
 end
 
 -- `FUN_004771d0`.
@@ -128,8 +171,26 @@ local function init(e)
         e:set_kind(0)
         return
     end
+    -- The body the adult is born from: part 1's first weight full, the
+    -- curled clip 0xc's first frame, and the parts it grows out at their
+    -- first sizes.
     e:set_kind(e:kind() | 0x4000)
+    set_weight(e, 0x1000)
+    set_swell(e, 0)
+    e:morph(1, 0x1000, 0)
+    e:morph_all(1, 0x1000, 0)
+    e:clip(0xC, 0, 0)
+    e:joint(0x100, true)
     e:set_routine(1, 8)
+    e:set_var(SIZE_4X, 0)
+    e:set_var(SIZE_2X, 0)
+    e:set_var(SIZE_9Y, 0)
+    e:set_var(SIZE_DY, 0)
+    e:set_var(SIZE_10Y, 0xC00)
+    e:set_var(SIZE_10X, 0x400)
+    e:set_var(SIZE_12Y, 0xC00)
+    e:set_var(SIZE_12X, 0x800)
+    e:set_neck_flags(e:neck_flags() | 2)
 end
 
 -- `FUN_004778f0`, the pre of state 0.
@@ -492,6 +553,250 @@ local function state_9(e)
     end
 end
 
+-- 0x478460's `asStack_40`: how much the birth's parts grow (times 3), and
+-- part 1's first weight shrinks, a tick along its swell.
+local GROW <const> = {
+    [0] = 5, 14, 26, 37, 44, 48, 50, 48, 45, 40, 33, 26, 19, 14, 7, 0,
+    -5, -10, -15, -19, -23, -26, -28, -30, -29, -27, -23, -19, -16, -11, -6, -1,
+}
+
+-- A draw for a spray's way, `0x40 - (Rnd & 0x7f)`.
+local function jitter(e)
+    return 0x40 - (e:rnd() & 0x7F)
+end
+
+-- Three draws for a spray's vector the birth throws away.
+local function jitter3(e)
+    jitter(e)
+    jitter(e)
+    jitter(e)
+end
+
+-- A row the birth picks with a draw: 8 or 0x10.
+local function row_8_or_16(e)
+    return ((e:rnd() & 1) + 1) * 8
+end
+
+-- The vector `0x3f4 - 4 Rnd, -200, 0x200 - 4 Rnd` of part 1's sprays.
+local function part1_vector(e)
+    local vx = 0x3F4 - e:rnd() * 4
+    local vz = 0x200 - e:rnd() * 4
+    return vx, -200, vz
+end
+
+local function dir_draw(e)
+    return i16(e:rnd() << 4)
+end
+
+-- The growth after every step of the birth (`Timer0` is how far it is,
+-- `Timer2` where part 1's swell is in `GROW`): the sprays from parts 1, 2, 9
+-- and 0x10, and the parts growing to full size, each stopping there.
+local function grow(e)
+    local t0 = i16(e:timer(0))
+    local odd = t0 & 1
+    local every8 = t0 & 7 == 0
+    if t0 > 1 and t0 < 0xF then
+        local vx, vy, vz = part1_vector(e)
+        local dir = dir_draw(e)
+        e:effect(0, 8, e:rnd() * 8 + 0x17D0, dir, 1, vx, vy, vz)
+        vx, vy, vz = part1_vector(e)
+        dir = dir_draw(e)
+        e:effect(0, 0x10, e:rnd() * 8 + 0x17D0, dir, 1, vx, vy, vz)
+    end
+    if t0 > 1 and e:var(B21E) & 8 == 0 then
+        local t2 = e:timer(2)
+        local w = i16(weight(e) - GROW[t2] * 3)
+        t2 = (t2 + 1) & 0x1F
+        e:set_timer(2, t2)
+        if w < 0 then
+            w = 0
+            e:set_var(B21E, e:var(B21E) | 8)
+            e:set_var(B21F, e:var(B21F) | 1)
+        end
+        set_weight(e, w)
+        e:morph(1, w, swell(e))
+        e:morph_all(1, w, swell(e))
+        if t2 & 1 == 0 then
+            local vx, vy, vz = part1_vector(e)
+            local dir = dir_draw(e)
+            local row = row_8_or_16(e)
+            e:effect(0, row, e:rnd() * 8 + 0xC18, dir, 1, vx, vy, vz)
+        end
+    end
+    local t2 = e:timer(2)
+    if t0 > 0xE6 then
+        local size = e:var(SIZE_4X)
+        if size < 0x1000 then
+            e:set_var(SIZE_4X, i16(size - 10 + odd * 100))
+            if t2 < 5 then
+                jitter3(e)
+            end
+        end
+    end
+    if t0 > 0xA0 then
+        local size = e:var(SIZE_2X)
+        local vx, vy, vz
+        local spray = true
+        if size < 0x1000 then
+            e:set_var(SIZE_2X, i16(size + 10 + odd * 0x46))
+            vx = jitter(e)
+            vz = jitter(e)
+            local dir = dir_draw(e)
+            e:effect(0, 8, e:rnd() * 4 + 0x1000, dir, 2, vx, 0x40, vz)
+            vy = -0x40
+        elseif every8 then
+            vx = jitter(e)
+            vy = jitter(e)
+            vz = jitter(e)
+        else
+            spray = false
+        end
+        if spray then
+            local dir = dir_draw(e)
+            local row = row_8_or_16(e)
+            e:effect(0, row, e:rnd() * 4 + 0xC18, dir, 2, vx, vy, vz)
+        end
+    end
+    if t0 > 100 then
+        local size = e:var(SIZE_9Y)
+        if size < 0x1000 then
+            e:set_var(SIZE_9Y, i16(size + GROW[t2] * 3))
+        end
+        if t2 < 0xF or every8 then
+            local vx = jitter(e)
+            local vy = jitter(e)
+            local vz = jitter(e)
+            local dir = dir_draw(e)
+            e:effect(0, 8, e:rnd() * 8 + 0x830, dir, 9, vx, vy, vz)
+        end
+    end
+    if t0 > 0x3C then
+        local size = e:var(SIZE_DY)
+        if size < 0x1000 then
+            e:set_var(SIZE_DY, i16(size + odd * 0x50 + 0x14))
+            if odd ~= 0 then
+                jitter3(e)
+            end
+        end
+        if t2 < 0xF then
+            jitter3(e)
+        end
+    end
+    if t0 > 1 then
+        local flags = e:var(B21E)
+        local size = e:var(SIZE_10Y)
+        if size < 0x1000 and flags & 0x10 == 0 then
+            e:set_var(SIZE_10Y, i16(size + GROW[t2] * 3))
+            local vx = jitter(e)
+            local vy = jitter(e)
+            local vz = jitter(e)
+            local dir = dir_draw(e)
+            local row = row_8_or_16(e)
+            e:effect(0, row, e:rnd() * 8 + 0xC18, dir, 0x10, vx, vy, vz)
+        else
+            e:set_var(SIZE_10Y, 0x1000)
+            flags = flags | 0x10
+        end
+        if t2 < 0xF or every8 then
+            jitter3(e)
+        end
+        size = e:var(SIZE_10X)
+        if size < 0x1000 and flags & 0x20 == 0 then
+            e:set_var(SIZE_10X, i16(size + GROW[t2] * 3))
+        else
+            e:set_var(SIZE_10X, 0x1000)
+            flags = flags | 0x20
+        end
+        size = e:var(SIZE_12Y)
+        if size < 0x1000 and flags & 0x40 == 0 then
+            e:set_var(SIZE_12Y, i16(size + GROW[t2] * 3))
+            jitter3(e)
+        else
+            e:set_var(SIZE_12Y, 0x1000)
+            flags = flags | 0x40
+        end
+        if t2 < 0xF or every8 then
+            jitter3(e)
+        end
+        size = e:var(SIZE_12X)
+        if size < 0x1000 and flags & 0x80 == 0 then
+            e:set_var(SIZE_12X, i16(size + 10 + odd * 0x14))
+        else
+            e:set_var(SIZE_12X, 0x1000)
+            flags = flags | 0x80
+        end
+        e:set_var(B21E, flags)
+    end
+end
+
+-- 0x478460: the birth (`Type` 0). The body waits, one draw a tick, until the
+-- room's scene sets `Sce_free0`; it throbs six times (clip 0xc, sounds 8 and
+-- 9), then the adult grows out of it (clip 0xc, then 0xd) and walks (state
+-- 1). Each tick ends with the growth.
+local function state_8(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:clip(0xC, 0, 7)
+        e:set_timer(0, 0)
+        e:set_timer(1, 1)
+        e:set_var(SIZE_4X, 0x200)
+        local draw = e:rnd()
+        e:set_timer(2, 5)
+        e:set_timer(3, (draw & 7) + 7)
+        if e:sce_free(0) & 1 ~= 0 then
+            e:set_routine(2, 1)
+        end
+    elseif sub == 1 then
+        local left = e:timer(3)
+        e:set_timer(3, left - 1)
+        if left == 0 then
+            e:set_routine(2, 2)
+            e:sound(8)
+            e:rnd()
+            e:rnd()
+        end
+    elseif sub == 2 then
+        if e:joint(0x200) then
+            e:set_routine(2, 1)
+            local draw = e:rnd()
+            e:set_timer(3, (draw & 7) + 7)
+            local pulses = e:timer(2)
+            e:set_timer(2, pulses - 1)
+            if pulses == 0 then
+                e:set_routine(2, 3)
+                e:set_timer(3, 0x78)
+                e:set_timer(2, 0)
+                e:sound(9)
+            end
+        end
+    elseif sub == 3 then
+        e:set_timer(0, e:timer(0) + 1)
+        e:set_hokan(0x30)
+        e:joint(0x40)
+        local left = e:timer(3)
+        e:set_timer(3, left - 1)
+        if left == 0 then
+            e:set_routine(2, 4)
+            e:clip(0xD, 0, 0x3F)
+        end
+    elseif sub == 4 then
+        e:set_timer(0, e:timer(0) + 1)
+        if e:joint(0x40) then
+            e:set_routine(2, 5)
+        end
+        if e:timer(0) & 0x10 ~= 0 then
+            e:rnd()
+            e:rnd()
+        end
+    elseif sub == 5 then
+        set_weight(e, 0)
+        e:set_kind(e:kind() & ~0x4000)
+        e:routines(1, 1, 0, 0)
+    end
+    e:set_timer(1, -i16(e:timer(1)))
+    grow(e)
+end
+
 local PRE = { [0] = pre_0 }
 local STATES = {
     [0] = state_0,
@@ -502,7 +807,7 @@ local STATES = {
     state_5,
     state_6,
     state_7,
-    nil,
+    state_8,
     state_9,
 }
 
@@ -664,21 +969,6 @@ end
 
 -- `FUN_0047b5b0`'s `asStack_10`: the throb of part 1's second morph weight.
 local THROB <const> = { [0] = 0x1F, 0x28, 0x16, -0x14, -0x1E, 10, 0x16, 0 }
-
--- Part 1's second morph weight (`pSa_dat_head[4]`), which the death swells:
--- the model's until the death first moves it.
-local function swell(e)
-    if e:var(SWOLLEN) ~= 0 then
-        return e:var(SWELL)
-    end
-    local _, weight = e:morph_weights(1)
-    return weight or 0
-end
-
-local function set_swell(e, weight)
-    e:set_var(SWOLLEN, 1)
-    e:set_var(SWELL, i16(weight))
-end
 
 -- `Timer2` counts down to the next throb, which `Timer3` (`0xff` between
 -- them) steps through `THROB`; at 0 it starts one and waits `reload` more.
@@ -1079,7 +1369,7 @@ function update(e)
     if e:var(B21F) & 1 ~= 0 then
         local phase = e:var(PHASE)
         local weights = { e:morph_weights(1) }
-        weights[1] = i16((weights[1] or 0) - 5 * WOBBLE[phase])
+        weights[1] = i16(weight(e) - 5 * WOBBLE[phase])
         if e:var(SWOLLEN) ~= 0 then
             weights[2] = e:var(SWELL)
         end

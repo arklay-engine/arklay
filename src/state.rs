@@ -879,6 +879,9 @@ pub struct RoomState {
     pub item_count: u8,
     pub cuts: Vec<Cut>,
     pub current_cut: usize,
+    /// `Die_vcut_set` has put the game over's view quad in place of the
+    /// cut's, which holds no point.
+    pub die_view: bool,
     /// The cut whose mask groups were last rebuilt for the screen. `None`
     /// until the room's first camera goes up.
     pub mask_table_cut: Option<usize>,
@@ -940,6 +943,15 @@ impl RoomState {
     /// `Hit_ck_point4` on the view quad `Ccut_searc` finds for the current cut.
     /// `None` if the cut has none.
     pub fn in_cut_view(&self, x: i32, z: i32) -> Option<bool> {
+        if self.die_view {
+            // `DAT_0099cf20` with `censorship_off` clear.
+            let quad = Zone {
+                cam_from: 0,
+                cam_to: 0,
+                corners: [[-1, 1], [-1, -1], [1, 1], [1, -1]],
+            };
+            return Some(quad.contains_signed(x, z));
+        }
         let zone = self
             .zones
             .iter()
@@ -1026,6 +1038,24 @@ mod tests {
             ..room
         };
         assert_eq!(room.in_cut_view(50, 50), None);
+    }
+
+    /// `Die_vcut_set`'s quad, with `censorship_off` clear, is turned inside
+    /// out for `Hit_ck_point4`: no point is in view, whatever the cut.
+    #[test]
+    fn the_game_over_leaves_nothing_in_view() {
+        let room = RoomState {
+            zones: vec![Zone {
+                cam_to: 0,
+                cam_from: 0,
+                corners: [[-1000, -1000], [-1000, 1000], [1000, 1000], [1000, -1000]],
+            }],
+            die_view: true,
+            ..Default::default()
+        };
+        assert_eq!(room.in_cut_view(50, 50), Some(false));
+        assert_eq!(room.in_cut_view(0, 0), Some(false));
+        assert_eq!(room.in_cut_view(-1, 1), Some(false));
     }
 
     #[test]

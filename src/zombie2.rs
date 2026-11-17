@@ -382,7 +382,7 @@ fn joint_matrix(matrix: &player2::Matrix) -> crate::anim::Mat4x3 {
 const PARTS_MASK: u16 = 0x2000;
 
 /// How many of the work's fields the script keeps for itself.
-const VARS: usize = 34;
+const VARS: usize = 40;
 /// The dog, whose script is `enemy/20/enemy.lua`.
 pub const DOG_ID: u8 = 0x20;
 /// The crow, whose script is `enemy/21/enemy.lua`.
@@ -630,6 +630,10 @@ pub struct Zombie {
     /// the player's bolts read on the next tick, and the effects on a part
     /// (`Esp_call`'s matrix) on this tick's `Esp_move` and the next tick's calls.
     pub(crate) drawn: Vec<Option<player2::Matrix>>,
+    /// Part 0's place in `drawn` a tick ago: where `Game_loop`'s draw pass
+    /// finds an embryo's `Ground` (`Sca_ck_hit` on `kage->pPos`, part 0's
+    /// `Workm.t`) before it draws the body again.
+    pub(crate) kage_pos: Option<[i32; 3]>,
     /// The pose `drawn` is composed from, for the parts down that move after it.
     pose_tree: player2::PoseTree,
     /// `pDamage_work`'s `+0x99`: the part the last bolt stuck in.
@@ -694,6 +698,20 @@ impl Zombie {
         let head = self.head.iter().map(|head| (HEAD_PART, head.matrix));
         let detached: Vec<_> = pulled.chain(thrown).chain(head).collect();
         self.drawn = self.pose_tree.compose_drawn(&detached, hidden, &self.drawn);
+    }
+
+    /// Where an embryo's `Ground` is read this tick, and part 0 as `redraw`
+    /// last left it for the next tick's. `Game_loop`'s draw pass reads
+    /// `Sca_ck_hit` on `kage->pPos` (part 0's `Workm.t`) before
+    /// `Joint_trans2` writes it again, so the move reads part 0 from the draw
+    /// before last. `Joint_trans2` writes every shown part's `Workm` whether
+    /// the body is in the view quad and `Be_flg & 0x80000` or not
+    /// (`ko_joint_trans3` composes it without the draw), and the pass runs on
+    /// stopped ticks too, so only a hidden part 0 keeps its place. With no
+    /// part 0 drawn yet, the body's position.
+    pub(crate) fn kage_step(&mut self, body: [i32; 3]) -> [i32; 3] {
+        let part0 = self.drawn.first().copied().flatten().map(|part| part.t);
+        std::mem::replace(&mut self.kage_pos, part0).unwrap_or(body)
     }
 
     /// Where `Parts_bomb` starts a part from. Neither `FUN_00461f40` nor the
@@ -1116,6 +1134,11 @@ impl World<'_> {
     }
 }
 
+/// An embryo's `Ground`: `Sca_ck_hit` at `at` with `0x400`, radius 0.
+fn embryo_ground(sca: Option<&crate::state::Sca>, at: [i32; 3]) -> i32 {
+    sca.map_or(0, |sca| crate::sca::ground_at(sca, at, 0, MASK).height)
+}
+
 /// One tick's zombie: the state the original keeps in the work and globals.
 struct Em<'a, 'b, 'c> {
     mover: Mover<'a, 'b>,
@@ -1356,6 +1379,7 @@ impl Em<'_, '_, '_> {
     /// `Sce_em_set` left it.
     fn run_embryo(&mut self) {
         self.root_ck();
+        let kage = self.z.kage_step(self.mover.player.pos);
         if self.world.stopped {
             return;
         }
@@ -1363,9 +1387,7 @@ impl Em<'_, '_, '_> {
             self.z.damage_cnt -= 1;
         }
         self.old_pos = self.mover.player.pos;
-        self.z.vars[EMBRYO_GROUND] = self.mover.tick.room.sca.as_ref().map_or(0, |sca| {
-            crate::sca::ground_at(sca, self.old_pos, 0, MASK).height
-        });
+        self.z.vars[EMBRYO_GROUND] = embryo_ground(self.mover.tick.room.sca.as_ref(), kage);
         self.z.parts = self.mover.posed_parts();
         self.script();
         if *self.be_flg != 0 {
@@ -3034,6 +3056,76 @@ mod tests {
             zombie.drawn[10].map(|matrix| matrix.t),
             Some([1000, 0, 2000])
         );
+    }
+
+    /// A room with a box one floor high from x 1000 to 2000, z 1000 to
+    /// 2000, and the street around it.
+    fn embryo_room() -> crate::state::Sca {
+        crate::state::Sca {
+            records: vec![crate::state::ScaRect {
+                x: 1000,
+                z: 1000,
+                width: 1000,
+                depth: 1000,
+                id: 0xFC09,
+                kind: 0x900F,
+                floor: 1,
+            }],
+            ..crate::state::Sca::default()
+        }
+    }
+
+    /// An embryo's `Ground` is under part 0 as the draw before last left
+    /// it, not under the body: the body is on the street, the part was drawn
+    /// on the box two draws ago and has left it since.
+    #[test]
+    fn an_embryos_ground_is_under_part_0_from_the_draw_before_last() {
+        let sca = embryo_room();
+        let high = -crate::sca::FLOOR_HEIGHT;
+        let body = [500, high, 500];
+        let mut zombie = Zombie {
+            pose_tree: player2::PoseTree::chain(1),
+            ..Zombie::default()
+        };
+        let draw = |zombie: &mut Zombie, t: [i32; 3]| {
+            zombie.drawn = vec![Some(player2::Matrix {
+                m: player2::rot_matrix([0; 3]),
+                t,
+            })];
+        };
+        // Nothing drawn yet: under the body.
+        assert_eq!(embryo_ground(Some(&sca), zombie.kage_step(body)), 0);
+        draw(&mut zombie, [1500, high, 1500]);
+        assert_eq!(embryo_ground(Some(&sca), zombie.kage_step(body)), 0);
+        draw(&mut zombie, [500, high, 500]);
+        assert_eq!(embryo_ground(Some(&sca), zombie.kage_step(body)), high);
+        draw(&mut zombie, [500, high, 500]);
+        assert_eq!(embryo_ground(Some(&sca), zombie.kage_step(body)), 0);
+    }
+
+    /// `Joint_trans2` leaves a hidden part's `Workm` as it was, so a hidden
+    /// part 0 keeps the embryo's `Ground` where it was last drawn; shown, it
+    /// moves on even with the body out of view (nothing but the part's own
+    /// bit decides).
+    #[test]
+    fn a_hidden_part_0_keeps_an_embryos_ground_where_it_was_drawn() {
+        let sca = embryo_room();
+        let high = -crate::sca::FLOOR_HEIGHT;
+        let mut zombie = Zombie {
+            pose_tree: player2::PoseTree::chain(1),
+            ..Zombie::default()
+        };
+        zombie.drawn = vec![Some(player2::Matrix {
+            m: player2::rot_matrix([0; 3]),
+            t: [1500, high, 1500],
+        })];
+        zombie.redraw(1);
+        zombie.kage_step([0; 3]);
+        zombie.redraw(1);
+        assert_eq!(embryo_ground(Some(&sca), zombie.kage_step([0; 3])), high);
+        zombie.redraw(0);
+        zombie.kage_step([0; 3]);
+        assert_eq!(embryo_ground(Some(&sca), zombie.kage_step([0; 3])), 0);
     }
 
     /// `FUN_00458d40`'s head slows by 50 a tick (`+0xa4`), not 100.

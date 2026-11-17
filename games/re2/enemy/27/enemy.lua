@@ -91,8 +91,8 @@ local function init(e)
     e:set_var(RGB, RGB_LOADED)
     local low = e:kind() & 0xFFF
     if low == 0 or low == 1 or low == 2 then
-        -- The template, and the two that ride on the G adult (not ported:
-        -- they stand hidden).
+        -- The template, the ones on the G adult's back during its birth
+        -- (`Type` 1, not ported: they stand hidden), and the ones it spits.
         if low == 1 then
             e:set_routine(1, 3)
         elseif low == 2 then
@@ -102,8 +102,14 @@ local function init(e)
             e:set_kind(e:kind() | 0x4000)
         end
         e:set_be_flg(e:be_flg() & ~0x4000000)
-        e:set_hidden_parts(0x3FF)
         e:set_shadow(0)
+        if low ~= 2 then
+            e:set_hidden_parts(0x3FF)
+        else
+            -- Parts 1 and 4 to 9 (part 0, the one whose place the shadow and
+            -- `Ground` follow, is drawn).
+            e:set_hidden_parts(0x3F2)
+        end
         if low == 2 then
             -- On the G adult's part 4, a point 0x32 above it.
             local ax, ay, az = e:parent_apply(4, 0, 0x32, 0)
@@ -760,6 +766,9 @@ local function mouth(e)
         sub = 1
     end
     if sub == 1 then
+        if e:timer(2) == 0x3C then
+            e:set_hidden_parts(e:hidden_parts() & ~0x2)
+        end
         local t0 = i16(e:timer(0))
         local vx, vy = t0, t0 // 5 + 0x3C
         if t0 < 0 and t0 % 5 ~= 0 then
@@ -780,6 +789,7 @@ local function mouth(e)
     elseif sub == 2 then
         e:set_timer(0, 0)
         e:set_routine(2, 3)
+        e:set_hidden_parts(e:hidden_parts() & ~0x3F0)
         e:sound(7)
         sub = 3
     end
