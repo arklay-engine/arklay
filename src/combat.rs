@@ -924,6 +924,7 @@ fn queue_enemy_cue(game: &mut GameState, slot: usize, id: u8) {
         game.entity_sounds.push(crate::game::EntitySound {
             name,
             bank: 2,
+            pan_only: true,
             column,
             pos,
         });

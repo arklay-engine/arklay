@@ -1040,6 +1040,7 @@ pub fn footstep(
         sounds.push(EntitySound {
             name: name.into(),
             bank: 2,
+            pan_only: false,
             column,
             pos: entity.pos,
         });
@@ -3120,6 +3121,7 @@ fn queue_enemy_cue(game: &mut GameState, slot: usize, id: u8) {
         game.entity_sounds.push(EntitySound {
             name,
             bank: 2,
+            pan_only: true,
             column,
             pos,
         });

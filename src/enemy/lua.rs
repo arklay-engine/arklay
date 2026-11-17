@@ -3215,6 +3215,7 @@ mod imp {
                     game.entity_sounds.push(EntitySound {
                         name,
                         bank: 2,
+                        pan_only: true,
                         column,
                         pos,
                     });
@@ -3240,6 +3241,7 @@ mod imp {
                     game.entity_sounds.push(EntitySound {
                         name: name.into(),
                         bank,
+                        pan_only: false,
                         column,
                         pos,
                     });
@@ -3264,6 +3266,7 @@ mod imp {
                     game.entity_sounds.push(EntitySound {
                         name: name.into(),
                         bank,
+                        pan_only: false,
                         column,
                         pos,
                     });
@@ -4268,6 +4271,7 @@ mod imp {
                         api.game().entity_sounds.push(EntitySound {
                             name: name.into(),
                             bank,
+                            pan_only: false,
                             column,
                             pos: [x as i32, y as i32, z as i32],
                         });

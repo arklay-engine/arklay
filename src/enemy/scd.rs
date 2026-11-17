@@ -840,6 +840,7 @@ fn fire_flame_step(game: &mut GameState, slot: usize, room: &RoomState, clips: &
                 game.entity_sounds.push(EntitySound {
                     name: name.into(),
                     bank,
+                    pan_only: false,
                     column,
                     pos,
                 });

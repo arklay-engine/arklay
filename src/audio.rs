@@ -18,6 +18,7 @@
 //! rail, matching the hardware sum the original mixer relies on. A missing
 //! device or a failed SDL call leaves the engine silent, never fatal.
 
+use std::collections::HashMap;
 use std::ffi::{CStr, c_int};
 use std::ptr;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -436,12 +437,50 @@ fn pan_gains(pan: f32) -> (f32, f32) {
     if pan > 0.0 { (far, 1.0) } else { (1.0, far) }
 }
 
+/// The original's one-buffer-per-bank key: the bank table in the high byte
+/// (`play_sfx`'s 0 room SFX pair, 1 weapon, 2 room/enemy, 3 character) and
+/// its slot in the low byte.
+pub(crate) fn sfx_bank_key(bank: u8, slot: u8) -> u64 {
+    (u64::from(bank) << 8) | u64::from(slot)
+}
+
+/// The one-shot records `UpdateSoundFade` sweeps, as `(bank table, records)`
+/// in its order (0x004802f5-0x00480423): 16 weapon, 2 room SFX, the first 9
+/// character and 48 room/enemy records.
+const FADED_SFX_BANKS: [(u8, u8); 4] = [(1, 16), (0, 2), (3, 9), (2, 48)];
+
+/// A bank's volume when it loads (`g_SfxVolume` and its siblings idle at -1).
+const BANK_LOAD_VOLUME: i32 = -1;
+
+/// `set_volume`'s clamp of a DirectSound volume to `-9999..=-1` millibels.
+fn clamp_bank_volume(millibels: i32) -> i32 {
+    millibels.clamp(-9999, -1)
+}
+
+/// The millibels a linear gain stands for (`10^(mB / 2000)` inverted).
+pub(crate) fn gain_millibels(gain: f32) -> i32 {
+    if gain <= 0.0 {
+        return -10000;
+    }
+    (2000.0 * gain.log10()).round() as i32
+}
+
+/// `apply_vol_delta` (SoundApi): step a bank volume by `delta` millibels,
+/// reading the 2000 sentinel as silence and clamping like `set_volume`.
+fn step_bank_volume(volume: i32, delta: i32) -> i32 {
+    let volume = if volume == 2000 { -9999 } else { volume };
+    clamp_bank_volume(volume + delta)
+}
+
 /// One playing buffer with its mix parameters.
 #[derive(Clone, Debug)]
 struct Voice {
     pcm: Vec<i16>,
     pos: usize,
     gain: f32,
+    /// The voice channel's DirectSound volume in millibels, which the
+    /// scripted fade steps (a one-shot's lives on its bank instead).
+    volume: i32,
     pan: f32,
     looping: bool,
     /// Start order among one-shot voices; smaller values are older.
@@ -460,6 +499,7 @@ impl Voice {
             pcm,
             pos: 0,
             gain,
+            volume: clamp_bank_volume(gain_millibels(gain)),
             pan,
             looping,
             seq,
@@ -474,6 +514,7 @@ impl Voice {
         self.pcm = pcm;
         self.pos = 0;
         self.gain = gain.max(0.0);
+        self.volume = clamp_bank_volume(gain_millibels(gain));
         self.pan = pan;
         self.looping = false;
         self.seq = seq;
@@ -587,6 +628,15 @@ pub(crate) struct MixState {
     /// The player's levels; [`Mixer::update`] refreshes them before each
     /// render.
     volumes: Volumes,
+    /// The DirectSound volume of each one-shot bank, in millibels, from its
+    /// first `set_volume` or fade step. The original's volume belongs to the
+    /// bank, not the sound: it outlives the sound, a `Play3DSnd` overwrites
+    /// it, a fade steps it and holds it until the bank reloads, and a
+    /// `play_sfx` or `Snd_em` plays at it. A bank without an entry is at its
+    /// load volume.
+    bank_volumes: HashMap<u64, i32>,
+    /// The game's [`crate::game::GameState::sfx_bank_loads`] last seen.
+    bank_loads: [u32; 4],
 }
 
 impl MixState {
@@ -602,7 +652,88 @@ impl MixState {
             paused_bgm: [false; 3],
             paused_voice: false,
             volumes: Volumes::default(),
+            bank_volumes: HashMap::new(),
+            bank_loads: [0; 4],
         }
+    }
+
+    /// One step of `UpdateSoundFade`'s bank sweeps (SoundApi.cpp, 0x004802f5-
+    /// 0x00480423): the voice bank, then every faded one-shot record, each
+    /// stepped by `delta` millibels through `apply_vol_delta`. A sounding
+    /// voice takes its bank's new volume at once; its pan is untouched. The
+    /// volumes hold once the fade is over: nothing stops the one-shots.
+    pub(crate) fn fade_sound_banks(&mut self, delta: i32) {
+        if let Some(voice) = &mut self.voice {
+            voice.volume = step_bank_volume(voice.volume, delta);
+            voice.gain = crate::sfx::volume_gain(voice.volume);
+        }
+        for (bank, records) in FADED_SFX_BANKS {
+            for slot in 0..records {
+                let key = sfx_bank_key(bank, slot);
+                let volume = self.bank_volumes.entry(key).or_insert(BANK_LOAD_VOLUME);
+                *volume = step_bank_volume(*volume, delta);
+                let gain = crate::sfx::volume_gain(*volume);
+                if let Some(voice) = self.sfx.iter_mut().find(|voice| voice.bank == Some(key)) {
+                    voice.gain = gain;
+                }
+            }
+        }
+    }
+
+    /// Reset the held volumes of every bank table whose load count changed
+    /// since the last call: a reload sets each bank's volume afresh.
+    pub(crate) fn sync_sfx_bank_loads(&mut self, loads: [u32; 4]) {
+        for (table, (seen, now)) in self.bank_loads.iter_mut().zip(loads).enumerate() {
+            if *seen != now {
+                *seen = now;
+                self.bank_volumes
+                    .retain(|key, _| (key >> 8) as usize != table);
+            }
+        }
+    }
+
+    /// Drop every held bank volume (an RE2 room keeps none).
+    pub(crate) fn forget_sfx_bank_volumes(&mut self) {
+        self.bank_volumes.clear();
+    }
+
+    /// `bank`'s held volume, if a fade has stepped it.
+    #[cfg(test)]
+    pub(crate) fn sfx_bank_volume(&self, bank: u64) -> Option<i32> {
+        self.bank_volumes.get(&bank).copied()
+    }
+
+    /// The gain of `bank`'s sounding one-shot.
+    #[cfg(test)]
+    pub(crate) fn sfx_bank_gain(&self, bank: u64) -> Option<f32> {
+        self.sfx
+            .iter()
+            .find(|voice| voice.bank == Some(bank))
+            .map(|voice| voice.gain)
+    }
+
+    /// The pan of `bank`'s sounding one-shot.
+    #[cfg(test)]
+    pub(crate) fn sfx_bank_pan(&self, bank: u64) -> Option<f32> {
+        self.sfx
+            .iter()
+            .find(|voice| voice.bank == Some(bank))
+            .map(|voice| voice.pan)
+    }
+
+    /// BGM channel `index`'s gain.
+    #[cfg(test)]
+    pub(crate) fn bgm_channel_gain(&self, index: usize) -> Option<f32> {
+        self.bgm_channels
+            .get(index)
+            .and_then(Option::as_ref)
+            .map(|channel| channel.gain)
+    }
+
+    /// The voice channel's gain.
+    #[cfg(test)]
+    pub(crate) fn voice_gain(&self) -> Option<f32> {
+        self.voice.as_ref().map(|voice| voice.gain)
     }
 
     /// Number of BGM channel slots: RE1's three (`g_SndBank`), and RE2's sub
@@ -749,6 +880,15 @@ impl MixState {
         if pcm.is_empty() {
             return;
         }
+        // `Play3DSnd`/`PlayEntitySnd` `set_volume` the bank before playing,
+        // and the bank keeps it after the sound ends.
+        self.bank_volumes
+            .insert(bank, clamp_bank_volume(gain_millibels(gain)));
+        self.start_sfx_on_bank(bank, pcm, gain, pan);
+    }
+
+    /// Start or restart `bank`'s one-shot at `gain`.
+    fn start_sfx_on_bank(&mut self, bank: u64, pcm: Vec<i16>, gain: f32, pan: f32) {
         let seq = self.next_sfx_seq;
         if let Some(voice) = self.sfx.iter_mut().find(|voice| voice.bank == Some(bank)) {
             self.next_sfx_seq += 1;
@@ -768,6 +908,21 @@ impl MixState {
         let mut voice = Voice::new(pcm, gain.max(0.0), pan, false, seq);
         voice.bank = Some(bank);
         self.sfx.push(voice);
+    }
+
+    /// Start a one-shot on `bank` at the bank's own volume, the original's
+    /// `play_sfx` (0x0047fb10) and `Snd_em` (0x0047fca0), which do not
+    /// `set_volume`: the sound plays at the volume the bank's last sound or a
+    /// fade left. A bank at its load volume plays at full gain.
+    pub(crate) fn play_sfx_on_bank_held(&mut self, bank: u64, pcm: Vec<i16>, pan: f32) {
+        if pcm.is_empty() {
+            return;
+        }
+        let gain = self
+            .bank_volumes
+            .get(&bank)
+            .map_or(1.0, |v| crate::sfx::volume_gain(*v));
+        self.start_sfx_on_bank(bank, pcm, gain, pan);
     }
 
     /// Start an unkeyed one-shot voice, always appending.
@@ -1275,6 +1430,40 @@ impl Mixer {
         self.state.play_sfx_on_bank(bank, mono, gain, pan);
         self.resume();
         self.update();
+    }
+
+    /// [`Mixer::play_sfx_on_bank`] at the bank's own volume (`play_sfx`,
+    /// which does not `set_volume` first).
+    pub fn play_sfx_on_bank_held(&mut self, bank: u64, wav: Wav, pan: f32) {
+        let Some(mono) = mono_or_warn(&wav) else {
+            return;
+        };
+        self.state.play_sfx_on_bank_held(bank, mono, pan);
+        self.resume();
+        self.update();
+    }
+
+    /// One step of the scripted fade's sweep over the voice and one-shot
+    /// banks ([`MixState::fade_sound_banks`]).
+    pub fn fade_sound_banks(&mut self, delta: i32) {
+        self.state.fade_sound_banks(delta);
+    }
+
+    /// Reset the held volumes of the bank tables the game reloaded
+    /// ([`crate::game::GameState::sfx_bank_loads`]).
+    pub fn sync_sfx_bank_loads(&mut self, loads: [u32; 4]) {
+        self.state.sync_sfx_bank_loads(loads);
+    }
+
+    /// Drop every held bank volume.
+    pub fn forget_sfx_bank_volumes(&mut self) {
+        self.state.forget_sfx_bank_volumes();
+    }
+
+    /// The mixer state, for tests.
+    #[cfg(test)]
+    pub(crate) fn state(&self) -> &MixState {
+        &self.state
     }
 
     /// Append one film-audio chunk (interleaved stereo s16 at
@@ -1853,6 +2042,91 @@ mod tests {
         state.stop_movie_audio();
         assert!(!state.movie_active());
         assert_eq!(state.movie_samples_consumed(), 0);
+    }
+
+    /// `UpdateSoundFade`'s sweep steps a sounding one-shot's bank volume
+    /// through `apply_vol_delta`'s clamp, keeps its pan, and leaves unkeyed
+    /// and menu cues alone; a table's reload drops only its own banks.
+    #[test]
+    fn fade_sweep_steps_the_bank_volumes_and_a_reload_resets_them() {
+        let mut state = MixState::new();
+        let weapon = sfx_bank_key(1, 15);
+        let room = sfx_bank_key(0, 1);
+        state.play_sfx_on_bank(weapon, vec![1000; 64], crate::sfx::volume_gain(-500), -1.0);
+        state.play_sfx(vec![1000; 64], 0.5, 0.0);
+        state.play_menu_sfx(vec![1000; 64]);
+        state.fade_sound_banks(-0x4E * 200);
+        assert_eq!(state.sfx_bank_volume(weapon), Some(-9999));
+        assert_eq!(state.sfx_bank_volume(room), Some(-9999));
+        assert_eq!(state.sfx_bank_volume(sfx_bank_key(1, 16)), None);
+        assert_eq!(state.sfx_bank_volume(sfx_bank_key(2, 47)), Some(-9999));
+        assert_eq!(state.sfx_bank_volume(sfx_bank_key(2, 48)), None);
+        let voice = state.sfx.iter().find(|v| v.bank == Some(weapon)).unwrap();
+        assert_eq!(voice.gain, crate::sfx::volume_gain(-9999));
+        assert_eq!(voice.pan, -1.0);
+        let unkeyed: Vec<f32> = state
+            .sfx
+            .iter()
+            .filter(|v| v.bank.is_none())
+            .map(|v| v.gain)
+            .collect();
+        assert_eq!(unkeyed, [0.5, 1.0]);
+
+        // An upward step clamps at -1.
+        state.fade_sound_banks(20000);
+        assert_eq!(state.sfx_bank_volume(weapon), Some(-1));
+
+        state.sync_sfx_bank_loads([0, 1, 0, 0]);
+        assert_eq!(state.sfx_bank_volume(weapon), None);
+        assert_eq!(state.sfx_bank_volume(room), Some(-1));
+        state.sync_sfx_bank_loads([0, 1, 0, 0]);
+        assert_eq!(state.sfx_bank_volume(room), Some(-1), "no new reload");
+    }
+
+    /// `apply_vol_delta` reads `GetVol`'s 2000 sentinel as -9999 before the
+    /// step, then clamps like `set_volume`.
+    #[test]
+    fn bank_volume_steps_read_the_sentinel_as_silence() {
+        assert_eq!(step_bank_volume(2000, 500), -9499);
+        assert_eq!(step_bank_volume(2000, -234), -9999);
+        assert_eq!(step_bank_volume(-1000, -234), -1234);
+        assert_eq!(step_bank_volume(-100, 234), -1);
+    }
+
+    /// The first fade step attenuates from the volume a `Play3DSnd` set
+    /// before the fade, not from the load volume.
+    #[test]
+    fn the_first_fade_step_starts_from_the_set_volume() {
+        let mut state = MixState::new();
+        let key = sfx_bank_key(2, 5);
+        state.play_sfx_on_bank(key, vec![1000; 64], crate::sfx::volume_gain(-1000), 0.0);
+        assert_eq!(state.sfx_bank_volume(key), Some(-1000));
+        state.fade_sound_banks(-234);
+        assert_eq!(state.sfx_bank_volume(key), Some(-1234));
+        assert_eq!(
+            state.sfx_bank_gain(key),
+            Some(crate::sfx::volume_gain(-1234))
+        );
+    }
+
+    /// A bank keeps its volume once its sound has ended: the fade steps it
+    /// while idle, and the next `play_sfx` plays at it.
+    #[test]
+    fn an_idle_bank_keeps_its_volume() {
+        let mut state = MixState::new();
+        let key = sfx_bank_key(2, 5);
+        state.play_sfx_on_bank(key, vec![1000; 4], crate::sfx::volume_gain(-1000), 0.0);
+        let mut out = Vec::new();
+        state.render(8, &mut out);
+        assert_eq!(state.active_sfx(), 0, "the sound ended");
+        state.fade_sound_banks(-234);
+        assert_eq!(state.sfx_bank_volume(key), Some(-1234));
+        state.play_sfx_on_bank_held(key, vec![1000; 4], 0.25);
+        assert_eq!(
+            state.sfx_bank_gain(key),
+            Some(crate::sfx::volume_gain(-1234))
+        );
+        assert_eq!(state.sfx_bank_pan(key), Some(0.25));
     }
 
     #[test]
