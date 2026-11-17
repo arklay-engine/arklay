@@ -83,8 +83,8 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,s
 frames = [360, 4999]
 # 1.56 measured: the talk as in leon_a_219_301 (1.58 to 4552), and a tail at the bars, whose camera arklay draws a little darker (2.0 a frame, #683)
 frame_max_mean = 1.65
-# the map from its second tick through its close (0.19 measured), the walk and the get-item window (0.90; its close fades a tick early, 7.0 on 4803, #682), and Leon at the bars after it (2.05)
-frame_windows = [[4554, 4590, 0.35], [4591, 4811, 1.1], [4812, 4999, 2.3]]
+# the map from its second tick through its close (0.19 measured), the walk and the get-item window (0.91; the recording repeats frame 4802 on 4803, where the same close fades in route_200_opener, so that tick is left out, #682), and Leon at the bars after it (2.05)
+frame_windows = [[4554, 4590, 0.25], [4591, 4802, 1.0], [4804, 4811, 0.3], [4812, 4999, 2.3]]
 expect = "match"
 ignore = [
   [344, 352, "pneck"],
