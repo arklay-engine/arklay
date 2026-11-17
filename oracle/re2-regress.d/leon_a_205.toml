@@ -14,7 +14,5 @@ frames = [360, 899]
 frame_max_mean = 0.55
 expect = "match"
 # the warp's first ticks: the original's neck starts where the warp's load left the last pose, arklay's from the arrival's, and they meet by 355
-ignore = [[344, "pneck"], [345, "pneck"], [346, "pneck"], [347, "pneck"], [348, "pneck"], [349, "pneck"], [350, "pneck"], [351, "pneck"], [352, "pneck"], [353, "pneck"], [354, "pneck"],
-  # the door's own tick (oracle/re2.md, oracle/re2-deviations.md)
-  [730, "rng"], [730, "rseed"]]
+ignore = [[344, "pneck"], [345, "pneck"], [346, "pneck"], [347, "pneck"], [348, "pneck"], [349, "pneck"], [350, "pneck"], [351, "pneck"], [352, "pneck"], [353, "pneck"], [354, "pneck"]]
 record = "--warp 205:-25670:0:-25775:3072:0 --life 60 --give 0:2:3 --give 2:0x14:54"

@@ -20,21 +20,9 @@ frame_max_mean = 0.95
 frame_windows = [[360, 448, 0.2], [789, 939, 0.25], [1150, 3723, 0.6], [4066, 4149, 0.2]]
 expect = "match"
 ignore = [
-  # the doors' own ticks (oracle/re2.md, oracle/re2-deviations.md): 208's door 0, 207's door 3 and 10C's door 2
-  [449, "rng"], [449, "rseed"], [940, "rng"], [940, "rseed"], [3724, "rng"], [3724, "rseed"],
-  # the warp's flags: the original raises 8:141 before 208's init, so the taken ribbons' object (slot 2) is out of play
-  # when the load's pass clears the objects' areas; arklay's setup script raises it after
-  [344, 483, "om2"],
-  # the three loads: the original lists the old room's objects until the new room's are set up, about 90 ticks into
-  # the load, where arklay lists the new room's from the load; nothing reads them then
-  [484, 574, "om0"], [484, 574, "om1"], [484, 574, "om2"],
-  [975, 1148, "om0"], [975, 1148, "om1"], [975, 1148, "om2"],
-  [3759, 3849, "om0"], [3759, 3849, "om1"], [3759, 3849, "om2"],
   # room 114's slot 0, which stands: its `Spd` is what the slot held before (the slots' leftovers,
   # oracle/re2-deviations.md, "What a zombie's slot held before")
   [3850, 4149, "zm0"],
-  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
-  [484, 574, "hk"], [975, 1067, "hk"], [3759, 3849, "hk"],
 ]
 record = "--warp 208:-19005:0:-16920:1029:0 --flag 8:141 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --life 156 --give 0:2:2 --give 2:0x14:38 --give 3:0x1E:3"
 
@@ -50,7 +38,7 @@ input_shift = 344
 input_drop_early = true
 ticks = 3250
 voice_from_ref = true
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,scene,fl,fgstat,fgitem,fgcom,zm0,zm1,zm2"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,om0,om1,om2,scene,fl,fgstat,fgitem,fgcom,zm0,zm1,zm2"
 frames = [360, 3249]
 # 0.97 measured; the scene's Leon and Claire, close to the camera, are most of it (oracle/re2.md, "Room 115's scene")
 frame_max_mean = 1.05
@@ -58,13 +46,9 @@ frame_max_mean = 1.05
 frame_windows = [[360, 435, 0.45], [778, 1341, 0.3], [1342, 3249, 1.05]]
 expect = "match"
 ignore = [
-  # 114's door 1
-  [436, "rng"], [436, "rseed"],
   # the head through the door while it was turned toward a zombie: the original places it at 115's setup, arklay keeps
   # 114's until the door's last frame (oracle/re2-deviations.md, "The head through a door")
   [562, 775, "pneck"],
-  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
-  [471, 561, "hk"],
 ]
 record = "--warp 114:-25260:0:-3420:2048:5 --life 156 --give 0:2:2 --give 2:0x14:38 --give 3:0x1E:3 --give 4:0x33:1"
 

@@ -11,15 +11,9 @@ input = "claire_a_200_203.txt"
 input_shift = 344
 input_drop_early = true
 ticks = 2331
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,om0,om1,om2,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 2330]
 expect = "match"
-ignore = [
-  # the doors' own ticks (oracle/re2.md, oracle/re2-deviations.md): 200's door 1, 201's door 1, 204's door 2 and 203's door 0
-  [457, "rng"], [457, "rseed"], [949, "rng"], [949, "rseed"], [1571, "rng"], [1571, "rseed"], [1939, "rng"], [1939, "rseed"],
-  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
-  [492, 582, "hk"], [984, 1074, "hk"], [1606, 1696, "hk"], [1974, 2064, "hk"],
-]
 record = "--start claire --warp 200:-13846:0:-10035:3080:8 --flag 3:100 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:17 --flag 31:27 --life 119 --give 0:3:6 --give 2:0x14:35 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x59:2"
 
 # Rooms 204, 205, 207 and 10C: from 203's door 0's arrival north to door 1, the corridor of bodies with 4:48 set (both groups come out of the walls, out of reach), 207 past its dead zombies to the stairs door, into 10C.
@@ -33,15 +27,9 @@ input = "claire_a_204_10c.txt"
 input_shift = 344
 input_drop_early = true
 ticks = 1750
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,om0,om1,om2,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 1749]
 expect = "match"
-ignore = [
-  # the doors' own ticks (oracle/re2.md, oracle/re2-deviations.md): 204's door 1, 205's door 2 and 207's stairs door
-  [420, "rng"], [420, "rseed"], [1060, "rng"], [1060, "rseed"], [1490, "rng"], [1490, "rseed"],
-  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
-  [455, 545, "hk"], [1095, 1185, "hk"], [1525, 1617, "hk"],
-]
 record = "--start claire --warp 204:-14423:0:-7289:2024:4 --flag 3:100 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:17 --flag 31:27 --life 119 --give 0:3:6 --give 2:0x14:35 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x59:1"
 
 # Rooms 10C, 114 and 113: up the stairs and along the upper floor to door 2, room 114's scene with Sherry (event 2 on the load), its zombie shot from the corridor's north end, down the corridor to door 0 and the Spade Key's last use (the used-key message, the close and the discard question, Yes, and the press that opens it), into 113.
@@ -57,14 +45,10 @@ voice_from_ref = true
 input_shift = 344
 input_drop_early = true
 ticks = 2130
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,om0,om1,om2,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 2129]
 expect = "match"
 ignore = [
-  # the doors' own ticks (oracle/re2.md, oracle/re2-deviations.md): 10C's door 2 and 114's door 0
-  [749, "rng"], [749, "rseed"], [2053, "rng"], [2053, "rseed"],
-  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
-  [784, 874, "hk"], [2088, 2129, "hk"],
   # the head through 10C's door 2 while 114's load runs Sherry's scene behind the door: the original places it on the rest pose at the load, arklay on the door's last frame (oracle/re2-deviations.md, "The head through a door")
   [875, 1088, "pneck"],
   # the zombie's speeds until its first move: the original's slot holds what its memory held (oracle/re2-deviations.md, "What a zombie's slot held before")
@@ -84,15 +68,9 @@ input_shift = 344
 input_drop_early = true
 voice_from_ref = true
 ticks = 3793
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,om0,om1,om2,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 3792]
 expect = "match"
-ignore = [
-  # the doors' own ticks: 114's door 0, 113's door 1, 112's door 0, 110's door 0 and 10F's door 0
-  [350, "rng"], [350, "rseed"], [1775, "rng"], [1775, "rseed"], [2212, "rng"], [2212, "rseed"], [3020, "rng"], [3020, "rseed"], [3438, "rng"], [3438, "rseed"],
-  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
-  [385, 475, "hk"], [1810, 1900, "hk"], [2247, 2337, "hk"], [3055, 3145, "hk"], [3473, 3563, "hk"],
-]
 record = "--start claire --warp 114:-14296:0:-26349:4086:0 --flag 3:100 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 4:255 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 119 --give 0:3:9 --give 2:0x14:22 --give 3:0x1E:3 --give 4:0x33:1"
 
 # Rooms 10A, 109, 108, 107 and 106: with 10A on fire (4:0 clear), the way round to the valve handle, past 109's crows, down 108's stairs (area 11's event) into 107 and round its zombies, into 106.
@@ -107,15 +85,9 @@ input_shift = 344
 input_drop_early = true
 voice_from_ref = true
 ticks = 2445
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,om0,om1,om2,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 2444]
 expect = "match"
-ignore = [
-  # the doors' own ticks: 10A's door 0, 109's door 0, 108's stairs (area 11's event opens door 0) and 107's door 0
-  [418, "rng"], [418, "rseed"], [1078, "rng"], [1078, "rseed"], [1554, "rng"], [1554, "rseed"], [2085, "rng"], [2085, "rseed"],
-  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
-  [453, 543, "hk"], [1113, 1203, "hk"], [1589, 1679, "hk"], [2120, 2210, "hk"],
-]
 record = "--start claire --warp 10A:-25854:0:-19443:4016:1 --flag 3:100 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 4:255 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 119 --give 0:3:9 --give 2:0x14:22 --give 3:0x1E:3 --give 4:0x33:1"
 
 # Rooms 106, 107 and 108: the valve handle, back through 107 shooting slots 1, 2 and 3, and USE at 108's water tank, whose scene raises 4:0 and puts the fire out.
@@ -130,15 +102,9 @@ input_shift = 344
 input_drop_early = true
 voice_from_ref = true
 ticks = 3019
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,om0,om1,om2,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 3018]
 expect = "match"
-ignore = [
-  # the doors' own ticks: 106's door 1 and 107's door 1
-  [740, "rng"], [740, "rseed"], [1785, "rng"], [1785, "rseed"],
-  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
-  [775, 865, "hk"], [1820, 1910, "hk"],
-]
 record = "--start claire --warp 106:-17416:0:-559:1888:1 --flag 3:100 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 4:255 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 119 --give 0:3:9 --give 2:0x14:22 --give 3:0x1E:3 --give 4:0x33:1"
 
 # Rooms 108, 109, 10A and 10B: from the water tank back through 109 past its crows to 10A, its fire out and no zombies for Claire, Claire's look at area 6 (event 2, 3:32), door 2 into 10B and the Diamond Key.
@@ -153,15 +119,9 @@ input_shift = 344
 input_drop_early = true
 voice_from_ref = true
 ticks = 2420
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,om0,om1,om2,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 2419]
 expect = "match"
-ignore = [
-  # the doors' own ticks: 108's door 1, 109's door 0 and 10A's door 2
-  [480, "rng"], [480, "rseed"], [1179, "rng"], [1179, "rseed"], [1784, "rng"], [1784, "rseed"],
-  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
-  [515, 605, "hk"], [1214, 1304, "hk"], [1819, 1909, "hk"],
-]
 record = "--start claire --warp 108:-19920:0:-21250:2048:0 --flag 3:100 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 4:255 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 119 --give 0:3:6 --give 2:0x14:9 --give 3:0x1E:3 --give 4:0x33:1 --give 5:0x32:1"
 
 # Part 5: Claire A's route from the new game to the Diamond Key in one run (oracle/re2.md, "Claire A to the Diamond Key"):
