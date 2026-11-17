@@ -762,7 +762,8 @@ mod tests {
         packet
     }
 
-    /// A Vorbis bitpacking writer, least significant bit first.
+    /// A Vorbis bitpacking writer, least significant bit first. A field
+    /// wider than 32 bits is zero above `value`.
     #[derive(Default)]
     struct BitWriter {
         bytes: Vec<u8>,
@@ -776,7 +777,8 @@ mod tests {
                     self.bytes.push(0);
                 }
                 let last = self.bytes.last_mut().unwrap();
-                *last |= (((value >> shift) & 1) as u8) << (self.bit % 8);
+                let bit = value.checked_shr(shift).unwrap_or(0) & 1;
+                *last |= (bit as u8) << (self.bit % 8);
                 self.bit += 1;
             }
             self
