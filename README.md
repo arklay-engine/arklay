@@ -24,7 +24,7 @@ cargo build --no-default-features
 
 Lua 5.4 is vendored and compiled from source on every build.
 The `hd` feature (also default) pulls the pure-Rust `png`, `image-webp` and
-`lewton` crates that decode a mod's replacement art and audio; without it the
+Symphonia crates that decode a mod's replacement art and audio; without it the
 engine still resolves replacements by stem but refuses to decode those formats.
 
 ## Launcher

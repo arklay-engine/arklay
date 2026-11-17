@@ -38,6 +38,8 @@
 //! | [`MAX_MASK_SPRITES`] | 65,536 | 53 | camera mask sprites |
 //! | [`MAX_WAV_DATA`] | 64 MiB | ~8 MiB | WAV `data` chunk |
 //! | [`MAX_WAV_SAMPLES`] | 134,217,728 | ~3.6M per SE | converted mono samples (WAV and OGG alike) |
+//! | [`MAX_OGG_STREAMS`] | 1,024 | 1 | OGG beginning-of-stream pages |
+//! | [`MAX_VORBIS_SETUP_BYTES`] | 256 MiB | 36 MiB (libvorbis 5.1, q8) | OGG Vorbis setup codebooks, estimated |
 //! | [`MAX_SCD_BLOCKS`] | 65,536 | a handful | SCD container blocks |
 //! | [`MAX_SCD_EVENTS`] | 256 | 59 | SCD event table |
 //! | [`MAX_SCD_INSTRUCTIONS`] | 1,048,576 | a few thousand | one SCD container/table |
@@ -150,6 +152,12 @@ pub const MAX_SCREEN_IMAGE_BYTES: usize = 64 << 20;
 pub const MAX_COMBAT_TABLE_BYTES: usize = 1 << 16;
 /// Largest language-file entry count.
 pub const MAX_LANGUAGE_ENTRIES: usize = 1 << 16;
+/// Largest number of beginning-of-stream pages (logical streams, chained or
+/// not) one OGG stream may carry; the demuxer holds state for each.
+pub const MAX_OGG_STREAMS: usize = 1 << 10;
+/// Largest estimated memory one OGG Vorbis setup header's codebooks may cost
+/// the decoder: their lookup tables, VQ vectors and per-entry records.
+pub const MAX_VORBIS_SETUP_BYTES: usize = 256 << 20;
 /// Largest cinepak canvas, in pixels.
 pub const MAX_CINEPAK_PIXELS: usize = MAX_PIXELS;
 

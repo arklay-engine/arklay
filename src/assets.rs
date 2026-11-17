@@ -20,7 +20,7 @@
 //!
 //! BMP, TIM and WAV stay the port's own hand-written decoders with their
 //! budgets. PNG, WebP and OGG Vorbis come from the pure-Rust `png`,
-//! `image-webp` and `lewton` crates behind the default-on `hd` feature, so a
+//! `image-webp` and Symphonia crates behind the default-on `hd` feature, so a
 //! `--no-default-features` build keeps its dependency list to `zstd` and
 //! `mlua`. A build without `hd` still resolves replacements by stem,
 //! but fails to decode a PNG/WebP/OGG entry with a message naming the feature.
@@ -28,7 +28,8 @@
 //! Every decoder is bound by the same [`crate::budget`] caps as the shipped
 //! formats: an image is refused over [`budget::MAX_PIXELS`] and an audio
 //! stream over [`budget::MAX_WAV_SAMPLES`] samples, before the allocation that
-//! would hold it.
+//! would hold it. An OGG Vorbis stream's pages and codebook sizes are
+//! checked the same way before Symphonia reads them.
 //!
 //! # Geometry
 //!
@@ -116,6 +117,8 @@ impl Artwork {
 
 mod geometry;
 pub use geometry::Geometry;
+#[cfg(feature = "hd")]
+mod vorbis;
 
 /// The stem of an entry path: its final component without its extension.
 ///
@@ -686,34 +689,75 @@ fn decode_webp(_data: &[u8]) -> Result<Image> {
 /// Decode an OGG Vorbis stream to interleaved 16-bit PCM.
 ///
 /// The stream's own sample rate and channel count are kept, exactly like a
-/// WAV's, so the mixer's conversion and resampling apply unchanged. The
-/// decoded sample count is capped by [`budget::MAX_WAV_SAMPLES`].
+/// WAV's, so the mixer's conversion and resampling apply unchanged. Only the
+/// first link of a chained stream is decoded. The decoded sample count is
+/// capped by [`budget::MAX_WAV_SAMPLES`], and [`vorbis::check_stream`] first
+/// refuses the streams Symphonia's demuxer cannot parse safely.
 #[cfg(feature = "hd")]
 fn decode_ogg(data: &[u8]) -> Result<Wav> {
-    let mut reader = lewton::inside_ogg::OggStreamReader::new(Cursor::new(data))
+    use symphonia_codec_vorbis::VorbisDecoder;
+    use symphonia_core::codecs::CodecParameters;
+    use symphonia_core::codecs::audio::{AudioDecoder, AudioDecoderOptions};
+    use symphonia_core::errors::Error;
+    use symphonia_core::formats::{FormatOptions, FormatReader, TrackType};
+    use symphonia_core::io::{MediaSourceStream, ReadOnlySource};
+    use symphonia_format_ogg::OggReader;
+
+    vorbis::check_stream(data)?;
+    // Read front to back without seeking: on a seekable source the reader
+    // also probes the stream's end, whose bisection can underflow on a
+    // chained stream (`physical::scan_stream_end`), and decoding never needs
+    // the duration it finds.
+    let source = ReadOnlySource::new(Cursor::new(data));
+    let source = MediaSourceStream::new(Box::new(source), Default::default());
+    let mut reader = OggReader::try_new(source, FormatOptions::default())
         .map_err(|err| anyhow!("invalid OGG Vorbis: {err}"))?;
-    let channels = reader.ident_hdr.audio_channels;
-    let sample_rate = reader.ident_hdr.audio_sample_rate;
+    let track = reader
+        .default_track(TrackType::Audio)
+        .context("OGG stream has no Vorbis track")?;
+    let track_id = track.id;
+    let Some(CodecParameters::Audio(params)) = &track.codec_params else {
+        bail!("OGG stream has no Vorbis track");
+    };
+    let channels = params
+        .channels
+        .as_ref()
+        .map_or(0, |channels| channels.count());
+    let sample_rate = params.sample_rate.unwrap_or(0);
     if channels == 0 || sample_rate == 0 {
         bail!("OGG Vorbis stream has zero channels or sample rate");
     }
+    let channels = u16::try_from(channels).context("OGG Vorbis stream has too many channels")?;
+    let mut decoder = VorbisDecoder::try_new(params, &AudioDecoderOptions::default())
+        .map_err(|err| anyhow!("invalid OGG Vorbis: {err}"))?;
     let mut samples: Vec<i16> = Vec::new();
-    while let Some(packet) = reader
-        .read_dec_packet_itl()
-        .map_err(|err| anyhow!("failed to decode OGG Vorbis: {err}"))?
-    {
-        if samples.len() + packet.len() > budget::MAX_WAV_SAMPLES {
+    let mut packet_samples: Vec<i16> = Vec::new();
+    loop {
+        let packet = match reader.next_packet() {
+            Ok(Some(packet)) => packet,
+            // The end of the stream, or the start of a chained one.
+            Ok(None) | Err(Error::ResetRequired) => break,
+            Err(err) => bail!("failed to decode OGG Vorbis: {err}"),
+        };
+        if packet.track_id != track_id {
+            continue;
+        }
+        let decoded = decoder
+            .decode(&packet)
+            .map_err(|err| anyhow!("failed to decode OGG Vorbis: {err}"))?;
+        decoded.copy_to_vec_interleaved(&mut packet_samples);
+        if samples.len() + packet_samples.len() > budget::MAX_WAV_SAMPLES {
             bail!(
                 "OGG Vorbis decodes beyond the {} sample limit",
                 budget::MAX_WAV_SAMPLES
             );
         }
         samples
-            .try_reserve(packet.len())
+            .try_reserve(packet_samples.len())
             .map_err(|_| anyhow!("failed to reserve OGG Vorbis sample space"))?;
-        samples.extend_from_slice(&packet);
+        samples.extend_from_slice(&packet_samples);
     }
-    Ok(Wav::from_s16(&samples, u16::from(channels), sample_rate))
+    Ok(Wav::from_s16(&samples, channels, sample_rate))
 }
 
 /// Decode an OGG Vorbis stream when the build has no `hd` feature.

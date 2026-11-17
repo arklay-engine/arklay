@@ -16,10 +16,11 @@ default = ["hd"]
 # replacements by stem, but cannot decode the formats it does not carry.
 hd = [
     "dep:image-webp",
-    "dep:lewton",
     "dep:openh264",
     "dep:symphonia-codec-aac",
+    "dep:symphonia-codec-vorbis",
     "dep:symphonia-core",
+    "dep:symphonia-format-ogg",
 ]
 
 [workspace]
@@ -33,7 +34,6 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 fontdue = "0.9"
 image-webp = { version = "0.2", optional = true }
-lewton = { version = "0.10", optional = true }
 # Classic REbirth's English status-screen art: a 7z archive of LZMA streams
 # in its `ddraw.dll` (`src/sevenz.rs`).
 lzma-rs = "0.3"
@@ -53,7 +53,9 @@ serde_json = "1"
 sha2 = "0.10"
 sdl3-sys = { version = "0.7", default-features = false }
 symphonia-codec-aac = { version = "0.6", optional = true }
+symphonia-codec-vorbis = { version = "0.6", optional = true }
 symphonia-core = { version = "0.6", default-features = false, optional = true }
+symphonia-format-ogg = { version = "0.6", optional = true }
 ureq = { version = "2.12", default-features = false, features = ["tls"] }
 zstd = "0.13"
 zip = { version = "9.1.0", default-features = false, features = ["deflate"] }
