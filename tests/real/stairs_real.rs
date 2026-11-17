@@ -881,7 +881,6 @@ fn capture_player_partway_up_the_lab_stairway() {
         light_pos: None,
         per_joint_light: false,
         complex_object: None,
-        aliased_light: false,
         light_rotation: None,
         fixed_light: None,
         joint_colours: arklay::render::NO_JOINT_COLOURS,

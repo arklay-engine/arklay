@@ -1117,7 +1117,6 @@ mod tests {
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
         };
         let light = Lighting {
@@ -1205,7 +1204,6 @@ mod tests {
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
         };
         let stored = stored_camera_matrix(camera.from, camera.look_at);
@@ -1287,7 +1285,6 @@ mod tests {
             joint_colours,
             hd_name: None,
             complex_object: Some(2),
-            aliased_light: false,
             view_z_shift: 0,
         };
         let camera = Camera::from_points([0, 0, -5000], [0, 0, 0], 500);
@@ -1333,7 +1330,6 @@ mod tests {
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
         };
         let camera = Camera::from_points([0, 0, -5000], [0, 0, 0], 500);

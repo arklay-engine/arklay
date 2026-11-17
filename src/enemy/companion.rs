@@ -134,6 +134,10 @@ pub struct Companion {
     /// before the machine runs: the original's `RotMatrix` builds the local
     /// matrix ahead of the machine's sway. `None` until the first tick.
     pub latched_rotation: Option<[u16; 3]>,
+    /// Where the room lights latch, taken each tick before the machine runs:
+    /// the original's `update_entity_lighting(&local.t)` comes ahead of the
+    /// body's sway and fall. `None` until the first tick.
+    pub latched_light_pos: Option<[i32; 3]>,
     /// The heart's light-matrix operand: the anchor joint's world rotation
     /// its draw composed under (`MulMatrix0(g_lightMatrix, anchor)`).
     pub anchor_rotation: Option<[[i32; 3]; 3]>,
@@ -172,6 +176,12 @@ impl Companion {
     pub fn render_rotation(&self) -> [u16; 3] {
         self.latched_rotation
             .unwrap_or([self.entity.pitch, self.entity.angle, self.entity.roll])
+    }
+
+    /// Where the room lights latch for the draw: the position latched before
+    /// the machine ran, or the entity's own before the first tick.
+    pub fn light_pos(&self) -> [i32; 3] {
+        self.latched_light_pos.unwrap_or(self.entity.pos)
     }
 
     /// The root ball's pulse scale from its current timer and scale word.
@@ -263,6 +273,7 @@ pub fn plant42_spawn(game: &mut GameState, slot: usize, flags: u8) -> Option<(u1
         local_t: [0; 3],
         latched_scale: None,
         latched_rotation: None,
+        latched_light_pos: None,
         anchor_rotation: None,
     };
     // The clone fans by `remaining * 0x100`, but the field setup that
@@ -323,6 +334,7 @@ pub fn plant42_spawn(game: &mut GameState, slot: usize, flags: u8) -> Option<(u1
         local_t: [0; 3],
         latched_scale: None,
         latched_rotation: None,
+        latched_light_pos: None,
         anchor_rotation: None,
     };
     roots.entity.angle = 0;
@@ -609,6 +621,7 @@ pub fn plant42_tick(game: &mut GameState, room: &RoomState, slot: usize) {
             companion.entity.angle,
             companion.entity.roll,
         ]);
+        companion.latched_light_pos = Some(companion.entity.pos);
         if companion.kind == CompanionKind::Roots {
             companion.latched_scale = Some(companion.pulse_scale());
         }
@@ -870,6 +883,7 @@ pub fn spawn_heart(game: &mut GameState, slot: usize) -> Option<u16> {
         local_t: [0x138, -760, -287],
         latched_scale: None,
         latched_rotation: None,
+        latched_light_pos: None,
         anchor_rotation: None,
     };
     heart.entity.pitch = 0;
@@ -1193,6 +1207,36 @@ mod tests {
         assert!(companion.entity.pos[1] > 0);
         assert_eq!(companion.scale[1], 0x1000 - 0x914);
         assert_eq!(companion.scale[0], 0x1000 + 0x9DC);
+    }
+
+    /// `update_entity_lighting(&local.t)` runs before the body's machine, so
+    /// a falling body is lit from where it was before this tick's drop.
+    #[test]
+    fn body_lights_latch_before_the_fall_moves_it() {
+        let mut game = plant_game(0);
+        let (body, _) = plant42_spawn(&mut game, 1, 0).unwrap();
+        let room = room();
+        {
+            let companion = game.companions[usize::from(body)].as_mut().unwrap();
+            companion.state = 2;
+            companion.action_state = 0;
+            companion.entity.pos[1] = -3000;
+            assert_eq!(companion.light_pos(), companion.entity.pos, "no tick yet");
+        }
+        // The first tick starts the fall and the second steps it by 0.
+        plant42_tick(&mut game, &room, 1);
+        plant42_tick(&mut game, &room, 1);
+        for _ in 0..3 {
+            let before = game.companions[usize::from(body)]
+                .as_ref()
+                .unwrap()
+                .entity
+                .pos;
+            plant42_tick(&mut game, &room, 1);
+            let companion = game.companions[usize::from(body)].as_ref().unwrap();
+            assert_ne!(companion.entity.pos, before, "the fall moved it");
+            assert_eq!(companion.light_pos(), before);
+        }
     }
 
     #[test]

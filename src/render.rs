@@ -2614,7 +2614,6 @@ impl DoorScene {
             light_pos: None,
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: Some(light),
@@ -2700,10 +2699,6 @@ pub struct EntityMesh<'a> {
     /// (`ComplexTmdObjectSetup` / `FUN_00486df0`) instead of the TMD path:
     /// Plant 42's root ball. See `collect_complex_pool`.
     pub complex_object: Option<usize>,
-    /// The Plant 42 body's light matrix: `MulMatrix0(g_lightMatrix, &m, &m)`
-    /// with `m` the identity, run in place. See
-    /// [`EntityLight::aliased_identity_product`].
-    pub aliased_light: bool,
     /// Added to the view-space Z of every joint, after the camera is composed
     /// (`RoomObjectRender` bumps `localMatrix.t[2]` for the heliport's rotors).
     pub view_z_shift: i32,
@@ -2766,16 +2761,10 @@ impl EntityMesh<'_> {
     }
 
     /// The light the primary pass draws this mesh under, from the room's
-    /// latched `light`: its [`fixed_light`](Self::fixed_light),
-    /// [`aliased_light`](Self::aliased_light) and
+    /// latched `light`: its [`fixed_light`](Self::fixed_light) and
     /// [`light_rotation`](Self::light_rotation).
     pub(crate) fn primary_light(&self, light: EntityLight) -> EntityLight {
         let light = self.fixed_light.unwrap_or(light);
-        let light = if self.aliased_light {
-            light.aliased_identity_product()
-        } else {
-            light
-        };
         match &self.light_rotation {
             Some(rotation) => light.rotated(rotation),
             None => light,
@@ -3889,34 +3878,6 @@ pub struct EntityLight {
 }
 
 impl EntityLight {
-    /// The light rows after the Plant 42 body's
-    /// `MulMatrix0(g_lightMatrix, &m, &m)` over an identity `m`. The product
-    /// is written element by element into its own right operand, so every
-    /// row after the first reads columns the earlier rows already
-    /// overwrote; only the first light keeps its direction.
-    pub fn aliased_identity_product(mut self) -> Self {
-        let rows = self.sources.map(|source| source.dir);
-        let mut product = [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]];
-        for (i, row) in rows.iter().enumerate() {
-            // Indexed on purpose: each store must be visible to the next read.
-            #[allow(clippy::needless_range_loop)]
-            for j in 0..3 {
-                let sum: i64 = (0..3)
-                    .map(|k| {
-                        let value = i64::from(row[k]) * i64::from(product[k][j]);
-                        (value + ((value >> 63) & 0xFFF)) >> FIXED_BITS
-                    })
-                    .sum();
-                // `MulMatrix0` stores shorts.
-                product[i][j] = i32::from(sum as i16);
-            }
-        }
-        for (source, row) in self.sources.iter_mut().zip(product) {
-            source.dir = row;
-        }
-        self
-    }
-
     /// The light rows after `MulMatrix0(g_lightMatrix, rotation, &out)` into
     /// a separate output: each light row times `rotation`, the same product
     /// the room-object pass applies per vertex.
@@ -6164,6 +6125,46 @@ mod tests {
         framebuffer.rgba[offset..offset + 4].try_into().unwrap()
     }
 
+    /// The Plant 42 flower body's `MulMatrix0(g_lightMatrix, identity)` reads
+    /// both operands before it writes, so the body draws under all three
+    /// latched lights as they are; a light rotation turns each row.
+    #[test]
+    fn a_mesh_without_a_light_rotation_keeps_every_latched_light() {
+        let texture = solid_texture([255; 4]);
+        let mesh = mesh_at(1024, false);
+        let joints = [identity()];
+        let mut body = EntityMesh {
+            mesh: &mesh,
+            texture: &texture,
+            joints: &joints,
+            tint: [255; 3],
+            blend_weight: None,
+            hidden_joints: 0,
+            light_pos: None,
+            per_joint_light: false,
+            complex_object: None,
+            view_z_shift: 0,
+            light_rotation: None,
+            fixed_light: None,
+            joint_colours: NO_JOINT_COLOURS,
+            hd_name: None,
+        };
+        let dirs = [[1000, -2000, 3000], [-3000, 500, 1500], [200, 4000, -800]];
+        let mut latched = dark_entity_light();
+        for (source, dir) in latched.sources.iter_mut().zip(dirs) {
+            source.dir = dir;
+            source.color = [0x80; 3];
+        }
+        assert_eq!(body.primary_light(latched), latched);
+
+        // A quarter turn about Y: each row's (x, y, z) becomes (-z, y, x).
+        body.light_rotation = Some([[0, 0, 4096], [0, 4096, 0], [-4096, 0, 0]]);
+        let turned = body.primary_light(latched);
+        for (source, [x, y, z]) in turned.sources.iter().zip(dirs) {
+            assert_eq!(source.dir, [-z, y, x]);
+        }
+    }
+
     #[test]
     fn triangle_keys_use_the_mask_ordering_table_scale() {
         assert_eq!(triangle_depth_key(-5.0), 0);
@@ -6198,7 +6199,6 @@ mod tests {
                 light_pos: None,
                 per_joint_light: false,
                 complex_object: None,
-                aliased_light: false,
                 view_z_shift: 0,
                 light_rotation: None,
                 fixed_light: None,
@@ -6215,7 +6215,6 @@ mod tests {
                 light_pos: None,
                 per_joint_light: false,
                 complex_object: None,
-                aliased_light: false,
                 view_z_shift: 0,
                 light_rotation: None,
                 fixed_light: None,
@@ -6295,7 +6294,6 @@ mod tests {
                 light_pos: None,
                 per_joint_light: false,
                 complex_object: None,
-                aliased_light: false,
                 view_z_shift: 0,
                 light_rotation: None,
                 fixed_light: None,
@@ -6516,7 +6514,6 @@ mod tests {
             light_pos: None,
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
@@ -7370,7 +7367,6 @@ mod tests {
             light_pos: None,
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
@@ -7486,7 +7482,6 @@ mod tests {
             light_pos: None,
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
@@ -7524,7 +7519,6 @@ mod tests {
             light_pos: None,
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
@@ -7591,7 +7585,6 @@ mod tests {
             light_pos: None,
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
@@ -7645,7 +7638,6 @@ mod tests {
             light_pos: None,
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
@@ -7690,7 +7682,6 @@ mod tests {
             light_pos: None,
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
