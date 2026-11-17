@@ -56,7 +56,8 @@ input_drop_early = true
 ticks = 1150
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 1149]
-frame_max_mean = 99
+# 1.04 measured; the worst, 380 (29), comes two ticks after the cut change on 378 (#668)
+frame_max_mean = 1.1
 ignore = [
   # the warp's head on its first ticks, as leon_a_208's
   [344, 354, "pneck"],
@@ -76,7 +77,8 @@ ticks = 2000
 sound = false
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 1999]
-frame_max_mean = 99
+# 0.51 measured, the 20D door's frames included (#668)
+frame_max_mean = 0.6
 ignore = [
   [344, 351, "pneck"],
 ]
@@ -95,7 +97,8 @@ ticks = 2920
 sound = false
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 2919]
-frame_max_mean = 99
+# 0.63 measured; the worst are 2610 (5.5) and 921 (3.4) (#668)
+frame_max_mean = 0.7
 ignore = [
   [344, 351, "pneck"],
 ]
@@ -114,7 +117,8 @@ ticks = 1730
 sound = false
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 1729]
-frame_max_mean = 99
+# 0.84 measured to the end, past the divergence (#668)
+frame_max_mean = 0.9
 ignore = [
   [344, 351, "pneck"],
 ]
