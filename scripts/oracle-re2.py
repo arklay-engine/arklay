@@ -1392,19 +1392,24 @@ class FrameWriter:
     XCB can't take, `import` takes it as before."""
 
     WORKERS = 4
+    # Pictures waiting for a worker: 2.3 MB each, so a writer that falls behind holds the record.
+    BACKLOG = 32
     # See `settled`.
     SETTLE = 0.04
     STILL = 0.02
     STILL_TRIES = 10
-    # Pictures waiting for a worker: 2.3 MB each, so a writer that falls behind holds the record.
-    BACKLOG = 32
+    UNCHANGED = 0.25
 
     def __init__(self, display: str) -> None:
         self.display = display
         self.grab = display_grabber()
         self.pool = None
         self.room = threading.BoundedSemaphore(self.BACKLOG)
+        # What went wrong writing a picture; a record with any has failed.
         self.errors: list[str] = []
+        # The frames whose display never held still.
+        self.unsettled: list[str] = []
+        self.last: bytes | None = None
         if self.grab is not None:
             from concurrent.futures import ThreadPoolExecutor
 
@@ -1414,37 +1419,61 @@ class FrameWriter:
         """The display as it is now, written to `path` by the time `close` returns."""
         if self.pool is not None:
             try:
-                picture = self.settled()
+                # A boot frame is compared with nothing, so it doesn't wait for the display.
+                boot = path.stem.startswith("boot")
+                picture = self.grab(xdisplay=self.display) if boot else self.settled(path.stem)
             except OSError:
                 picture = None
             if picture is not None:
                 self.room.acquire()
-                self.pool.submit(self.write, picture, path)
+                try:
+                    self.pool.submit(self.write, picture, path)
+                except BaseException:
+                    self.room.release()
+                    raise
                 return
         screenshot(self.display, path)
 
-    def settled(self):
+    def settled(self, name: str):
         """The display once the tick's picture is on it.
 
         The game's thread reaches its break before the X server has drawn the picture the
         tick presented: a picture taken at once is the tick before's on about half the ticks,
-        and one taken 10 ms later was the tick's own on every tick measured. So the first
-        picture waits `SETTLE` seconds, and the display must then hold still for `STILL`
-        more: two pictures in a row the same."""
+        and one taken 10 ms later was the tick's own on every tick measured. Nothing tells
+        the recorder that the picture has arrived, so it waits as `import` did, but only for
+        as long as the display gives it reason to:
+
+        - the first picture waits `SETTLE` seconds;
+        - the display must then hold still for `STILL` more (two pictures in a row the same);
+        - a picture that is still the last tick's own is what a late one looks like, so it is
+          taken again until it changes or `UNCHANGED` seconds have passed since the break,
+          about what `import` took. A tick that draws what the last one drew costs that long.
+
+        A display that never holds still (a movie, or drawing on another of the game's
+        threads) gives whatever it showed last, as `import` gave whatever it showed when it
+        ran; `close` names those frames."""
+        start = time.monotonic()
         time.sleep(self.SETTLE)
-        picture = self.grab(xdisplay=self.display)
-        for _ in range(self.STILL_TRIES):
+        picture = self.grab(xdisplay=self.display).tobytes()
+        moved = 0
+        while True:
             time.sleep(self.STILL)
             again = self.grab(xdisplay=self.display)
-            if again.tobytes() == picture.tobytes():
+            if again.tobytes() != picture:
+                picture = again.tobytes()
+                moved += 1
+                if moved >= self.STILL_TRIES:
+                    self.unsettled.append(name)
+                    break
+            elif picture != self.last or time.monotonic() - start >= self.UNCHANGED:
                 break
-            picture = again
-        return picture
+        self.last = picture
+        return again
 
     def write(self, picture, path: Path) -> None:
         try:
             picture.save(path)
-        except OSError as error:
+        except Exception as error:  # whatever it is, the frame is missing
             self.errors.append(f"{path.name}: {error}")
         finally:
             self.room.release()
@@ -1454,8 +1483,15 @@ class FrameWriter:
         if self.pool is not None:
             self.pool.shutdown(wait=True)
             self.pool = None
-        for error in self.errors:
-            print(f"frame not written: {error}", file=sys.stderr)
+        if self.unsettled:
+            shown = ", ".join(self.unsettled[:8]) + (", ..." if len(self.unsettled) > 8 else "")
+            print(f"{len(self.unsettled)} frames whose display never held still: {shown}", file=sys.stderr)
+
+    def check(self) -> None:
+        """Fail the record if a picture wasn't written."""
+        if self.errors:
+            shown = "; ".join(self.errors[:4]) + ("; ..." if len(self.errors) > 4 else "")
+            raise SystemExit(f"{len(self.errors)} frames were not written: {shown}")
 
 
 class WineSession:
@@ -1534,6 +1570,11 @@ class WineSession:
             if self.frames is not None:
                 self.frames.close()
             self.stop_all()
+
+    def frames_written(self) -> None:
+        """Fail the record, once it is closed, if one of its pictures wasn't written."""
+        if self.frames is not None:
+            self.frames.check()
 
     def stop_all(self) -> None:
         if self.env is not None:
@@ -1737,6 +1778,9 @@ class WindowsSession:
             if event is not None and self.game.handle(event):
                 raise SystemExit("Pad_set's breakpoint is armed outside a trace")
 
+    def frames_written(self) -> None:
+        """Each picture is written as it is taken, so a failed one has already stopped the record."""
+
     def close(self) -> None:
         if self.capture:
             self.capture.close()
@@ -1896,6 +1940,7 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
             print(f"{boot_tick + args.ticks} ticks in {elapsed:.1f}s")
     finally:
         session.close()
+    session.frames_written()
     # `scenario`, `pixels` and `determinism` record through here too, without the option.
     if getattr(args, "keep_saves", None):
         keep_saves(work / "game", Path(args.keep_saves))
@@ -2104,6 +2149,7 @@ def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
             print(f"{args.ticks} ticks from boot in {time.monotonic() - started:.1f}s")
     finally:
         session.close()
+    session.frames_written()
 
 
 def game_root(args: argparse.Namespace) -> Path:
