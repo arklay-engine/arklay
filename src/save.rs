@@ -31,11 +31,12 @@ use anyhow::{Context, Result, bail};
 use crate::budget;
 use crate::game::{
     BgmState, CameraState, FLAG_BANK_COUNT, FlagBank, GameState, INVENTORY_SLOTS_CHRIS,
-    ITEM_BOX_SLOTS, InventoryItem, MSF_CHAR_VARIANT, STATE_BYTE_CHARACTER, STATE_BYTE_CUT,
-    STATE_BYTE_ENT_ACTION, STATE_BYTE_EQUIPPED, STATE_BYTE_FWD_ACTION, STATE_BYTE_HEALTH_STATUS,
-    STATE_BYTE_MENU_CHOICE, STATE_BYTE_PICKED_ITEM, STATE_BYTE_ROOM_CAMERA, STATE_BYTE_SAVES,
-    STATE_BYTE_SELECTED_ITEM, STATE_BYTE_TOTAL_HELD, STATE_BYTE_USED_ITEM, STATE_BYTES,
-    STATE_WORD_COUNTDOWN, VoiceState, character_max_health,
+    ITEM_BOX_SLOTS, InventoryItem, MSF_CHAR_VARIANT, PartnerTurnBackup, REBECCA_TURN_HEALTH,
+    STATE_BYTE_CHARACTER, STATE_BYTE_CUT, STATE_BYTE_ENT_ACTION, STATE_BYTE_EQUIPPED,
+    STATE_BYTE_FWD_ACTION, STATE_BYTE_HEALTH_STATUS, STATE_BYTE_MENU_CHOICE,
+    STATE_BYTE_PICKED_ITEM, STATE_BYTE_ROOM_CAMERA, STATE_BYTE_SAVES, STATE_BYTE_SELECTED_ITEM,
+    STATE_BYTE_TOTAL_HELD, STATE_BYTE_USED_ITEM, STATE_BYTES, STATE_WORD_COUNTDOWN, VoiceState,
+    character_max_health,
 };
 use crate::state::RoomId;
 
@@ -82,6 +83,16 @@ pub const LOCKS_TRAILER_LEN: usize = 28;
 pub const PARTNER_TRAILER: [u8; 4] = *b"AKY\x04";
 /// Bytes of the partner trailer: the magic and six two-byte slots.
 pub const PARTNER_TRAILER_LEN: usize = 16;
+/// Port-only: the magic of the partner-backup trailer, after the partner
+/// slots: Chris's health while Rebecca plays. The original keeps it in the
+/// `HEALTH_BKP` global (RoomInit.cpp 0x004778c6), which no block field holds,
+/// so a save on her turn stores her live health in the block's health field,
+/// as the original does, and this trailer carries his. It is written only on
+/// her turn ([`PARTNER_BACKUP_TRAILER_LEN`] bytes in all).
+pub const PARTNER_BACKUP_TRAILER: [u8; 4] = *b"AKY\x06";
+/// Bytes of the partner-backup trailer: the magic, the `i16` health and two
+/// reserved bytes.
+pub const PARTNER_BACKUP_TRAILER_LEN: usize = 8;
 /// Port-only: the magic of the room trailer, last after the partner
 /// trailer: the room's 1-based stage, its room, a flags byte (bit 0 the
 /// second mansion visit) and a reserved zero ([`ROOM_TRAILER_LEN`] bytes in
@@ -246,21 +257,16 @@ impl SaveFile {
             ent_action: state.state_bytes[usize::from(STATE_BYTE_ENT_ACTION)],
             used_item: state.last_used_item.unwrap_or(0),
             picked_item: state.last_picked_item.unwrap_or(0),
-            // On one of Rebecca's turns the block keeps Chris's health,
-            // equipped item and slots (the original's backup); the load's
-            // model switch makes her the player again.
-            health: state
-                .partner_backup
-                .as_ref()
-                .map_or(state.entities[0].health, |backup| backup.health),
+            // On one of Rebecca's turns the health and equipped item are hers,
+            // as the original's player fields are; Chris's equipped item is
+            // the room-item backup (`g_RoomItemBackup`, byte 0x2A), his health
+            // the partner-backup trailer and his slots the player's.
+            health: state.entities[0].health,
             timer,
             saves: state.state_bytes[usize::from(STATE_BYTE_SAVES)],
-            equipped: state
-                .partner_backup
-                .as_ref()
-                .map_or(state.equipped, |backup| backup.equipped)
-                .unwrap_or(0),
+            equipped: state.equipped.unwrap_or(0),
             room_item_backup: state.state_bytes[0x2A],
+            partner_backup_health: state.partner_backup.as_ref().map(|backup| backup.health),
             character: state.state_bytes[usize::from(STATE_BYTE_CHARACTER)],
             pos_x: state.entities[0].pos[0] as i16,
             pos_z: state.entities[0].pos[2] as i16,
@@ -465,6 +471,31 @@ impl SaveFile {
         state.state_bytes[usize::from(STATE_BYTE_HEALTH_STATUS)] = self.health_status;
         // The release bits live in the cleared status bank.
         state.sync_variant_flags();
+
+        // A save taken on Rebecca's turn (`from_state`) comes back as her
+        // turn: her health and equipped item are the block's, his kit is the
+        // backup, and the switch that follows finds her the player already, so
+        // it keeps her health (`room_set` 0x00477904 skips the swap then).
+        state.partner_backup = None;
+        if let Some(chris_health) = self.partner_backup_health {
+            let hers: Vec<InventoryItem> = state
+                .rebecca_inventory
+                .iter()
+                .copied()
+                .filter(|stack| stack.id != 0)
+                .collect();
+            state.partner_backup = Some(PartnerTurnBackup {
+                inventory: std::mem::replace(&mut state.inventory, hers),
+                health: chris_health,
+                max_health: state.max_health,
+                equipped: (self.room_item_backup != 0).then_some(self.room_item_backup),
+            });
+            state.rebecca_inventory = [InventoryItem::default(); INVENTORY_SLOTS_CHRIS];
+            state.entities[0].id = 3;
+            state.max_health = REBECCA_TURN_HEALTH;
+            state.clear_dangling_items();
+            state.rebuild_slots();
+        }
     }
 
     /// The bytes a save file holds: the block, then the height trailer when
@@ -490,6 +521,11 @@ impl SaveFile {
             for stack in partner {
                 bytes.extend_from_slice(&[stack.id, stack.quantity]);
             }
+        }
+        if let Some(health) = self.partner_backup_health {
+            bytes.extend_from_slice(&PARTNER_BACKUP_TRAILER);
+            bytes.extend_from_slice(&health.to_le_bytes());
+            bytes.extend_from_slice(&[0, 0]);
         }
         if let Some(room) = self.room_ext {
             bytes.extend_from_slice(&ROOM_TRAILER);
@@ -587,6 +623,7 @@ impl SaveFile {
             re2: trailers.re2.map(<[u8]>::to_vec),
             locks_high: trailers.locks_high.unwrap_or_default(),
             partner_slots: trailers.partner,
+            partner_backup_health: trailers.partner_backup_health,
             room_ext: trailers.room,
             angle: get_i16(bytes, 0x230),
             health_status: bytes[0x232],
@@ -627,6 +664,8 @@ struct Trailers<'a> {
     locks_high: Option<[u8; 24]>,
     /// Rebecca's slots ([`PARTNER_TRAILER`]).
     partner: Option<[InventoryItem; INVENTORY_SLOTS_CHRIS]>,
+    /// Chris's health while Rebecca plays ([`PARTNER_BACKUP_TRAILER`]).
+    partner_backup_health: Option<i16>,
     /// The room the block cannot name ([`ROOM_TRAILER`]), player 0.
     room: Option<RoomId>,
 }
@@ -650,16 +689,24 @@ fn partner_overlap(held: usize) -> std::ops::Range<usize> {
 }
 
 /// Read the trailers a file carries, in their fixed order: height, RE2 state,
-/// lock bank, partner slots, room. Each is optional, and a file whose tail is
-/// anything else (an original 0xA82-byte file, say) has none.
+/// lock bank, partner slots, partner backup health, room. Each is optional,
+/// and a file whose tail is anything else (an original 0xA82-byte file, say)
+/// has none.
 fn trailers(bytes: &[u8]) -> Trailers<'_> {
     let mut found = Trailers::default();
     let Some(mut rest) = bytes.get(SAVE_BLOCK_SIZE..) else {
         return found;
     };
-    let after_partner = |tail: &[u8]| {
+    let room_or_end = |tail: &[u8]| {
         tail.is_empty() || (tail.len() == ROOM_TRAILER_LEN && tail.starts_with(&ROOM_TRAILER))
     };
+    let backup_then_room_or_end = |tail: &[u8]| {
+        tail.starts_with(&PARTNER_BACKUP_TRAILER)
+            && tail
+                .get(PARTNER_BACKUP_TRAILER_LEN..)
+                .is_some_and(room_or_end)
+    };
+    let after_partner = |tail: &[u8]| room_or_end(tail) || backup_then_room_or_end(tail);
     let partner_at = |tail: &[u8]| {
         tail.starts_with(&PARTNER_TRAILER)
             && tail.get(PARTNER_TRAILER_LEN..).is_some_and(after_partner)
@@ -697,6 +744,13 @@ fn trailers(bytes: &[u8]) -> Trailers<'_> {
         }
         found.partner = Some(partner);
         rest = &rest[PARTNER_TRAILER_LEN..];
+    }
+    if rest.starts_with(&PARTNER_BACKUP_TRAILER)
+        && let Some(tail) = rest.get(PARTNER_BACKUP_TRAILER_LEN..)
+        && room_or_end(tail)
+    {
+        found.partner_backup_health = Some(i16::from_le_bytes([rest[4], rest[5]]));
+        rest = tail;
     }
     if rest.len() == ROOM_TRAILER_LEN
         && let Some(&[stage, room, flags, _]) = rest.strip_prefix(&ROOM_TRAILER)
@@ -1454,10 +1508,11 @@ mod tests {
         assert_eq!(file.player_slots[1], stack(0x34, 1));
         assert_eq!(file.player_slots[6], stack(0x02, 15));
         assert_eq!(file.total_held, 2);
-        assert_eq!(file.health, 97);
+        assert_eq!(file.health, 88, "her health, on her turn");
+        assert_eq!(file.partner_backup_health, Some(97));
 
-        // The load seeds Chris from the block; the continue path's switch
-        // makes her the player again.
+        // The load gives her turn back; the continue path's switch then finds
+        // her the player already.
         let mut restored = GameState::default();
         file.apply_to(&mut restored);
         restored.apply_model_switch();
@@ -1470,6 +1525,32 @@ mod tests {
                 .map(|backup| backup.inventory.clone()),
             Some(vec![stack(0x02, 12), stack(0x34, 1)])
         );
+    }
+
+    #[test]
+    fn a_save_on_rebeccas_turn_keeps_her_health() {
+        // Rebecca is hurt on her turn, saved to a file and loaded: she keeps
+        // the health she had, and Chris gets his own back when her turn ends.
+        let mut state = GameState::new(RoomId::parse("1000").unwrap(), &RoomState::default());
+        let model = usize::from(crate::game::STATE_BYTE_CHARACTER_MODEL);
+        state.entities[0].health = 97;
+        state.state_bytes[model] = 3;
+        state.apply_model_switch();
+        state.entities[0].health = 60;
+
+        let file = SaveFile::from_state(&state).to_file_bytes();
+        let parsed = SaveFile::from_bytes(&file).unwrap();
+        let mut restored = GameState::default();
+        parsed.apply_to(&mut restored);
+        restored.apply_model_switch();
+        assert_eq!(restored.entities[0].id, 3);
+        assert_eq!(restored.entities[0].health, 60);
+
+        restored.state_bytes[model] = 0;
+        restored.apply_model_switch();
+        assert_eq!(restored.entities[0].id, 0);
+        assert_eq!(restored.entities[0].health, 97);
+        assert_eq!(restored.max_health, 140);
     }
 
     #[test]
