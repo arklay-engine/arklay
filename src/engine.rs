@@ -20850,6 +20850,12 @@ fn render_frame_on(
                 .as_ref()
                 .filter(|_| character.work.routine[0] == 7)
                 .map(|zombie| i32::from(zombie.pool));
+            // `MulKage` (called from `Game_loop` for every enemy) clears the
+            // shadow's draw bit when `Be_flg` has 0x400: a body in water, or
+            // a spider on a wall or the ceiling (`FUN_004727e0`).
+            if character.be_flg >> 9 & 2 != 0 {
+                continue;
+            }
             let kage = character.kage;
             let own = character.zombie.as_ref().and_then(|z| z.shadow_half);
             if own == Some(0) {

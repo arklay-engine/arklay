@@ -19,7 +19,7 @@
 -- weapons 2 to 8, 0xD to 0x10, 0x12 and 0x13, on each kind. Another spider in play is its partner
 -- (`Ck_em_id`, `+0x240`), and its hits and deaths send young spiders
 -- (`Em_26`, `send_young`). `FUN_004732a0`'s `fg_system` `0x1000000` draw,
--- `FUN_004727e0`'s water, the player's partner
+-- `FUN_004727e0`'s sinking body (its states 2 and 3), the player's partner
 -- (`splayer_work`) as a target and the spit's `Routine_2` 3
 -- (`FUN_0046fbb0`) aren't ported.
 
@@ -2271,6 +2271,23 @@ local function spark_on(e)
     end
 end
 
+-- `FUN_004727e0`'s states 0 and 1: `Be_flg`'s 0x400 hides the shadow
+-- (`MulKage`). A spider on the ceiling or a wall (1) never shows one, and
+-- on the floor (0) it doesn't over water.
+local function shadow_hidden(e)
+    local state = e:var(T225)
+    if state == 0 then
+        local x, _, z = e:pos()
+        if e:water_ck(x, z) == 0 then
+            e:set_be_flg(e:be_flg() & ~0x400)
+            return
+        end
+    elseif state ~= 1 then
+        return
+    end
+    e:set_be_flg(e:be_flg() | 0x400)
+end
+
 function update(e)
     if e:var(T23D) ~= 0 then
         e:set_var(T23D, e:var(T23D) - 1)
@@ -2288,5 +2305,6 @@ function update(e)
         dead(e)
     end
     -- 4 is `nullsub_1`; 5 and 6 are empty.
+    shadow_hidden(e)
     spark_on(e)
 end

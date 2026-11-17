@@ -2397,7 +2397,9 @@ mod tests {
 
     /// `run_spider` with `setup`'s globals set before the stub.
     fn run_spider_with(kind: u16, draws: &[u8], ticks: usize, setup: &str) -> Spider {
-        let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+        let (lua, budget) = crate::lua::new_sandboxed_state().unwrap();
+        // A budget never begun is empty: the run would stop at 10,000 instructions.
+        budget.begin();
         lua.load(setup).exec().unwrap();
         let script = include_str!("../../games/re2/enemy/25/enemy.lua");
         lua.globals().set("DRAWS", draws.to_vec()).unwrap();
@@ -2640,6 +2642,19 @@ mod tests {
         let end = "SCA_FLAGS = 1 SCA_LIST = { 4 } EDGES = { [0] = 1000, -10000, 0, 2000 }";
         let spider = run_spider_with(0x43, &draws, 13, end);
         assert_eq!(spider.get("r1"), 1);
+    }
+
+    /// `FUN_004727e0` sets `Be_flg`'s 0x400, which `MulKage` reads to hide
+    /// the shadow: always for a spider on a wall (state 1), and on the floor
+    /// (0) and the ceiling only over water.
+    #[test]
+    fn a_spider_off_the_floor_or_over_water_casts_no_shadow() {
+        let draws = [0; 32];
+        let hidden = |spider: &Spider| spider.get("be") & 0x400 != 0;
+        assert!(hidden(&run_spider(9, &draws, 1)), "a wall spider");
+        assert!(!hidden(&run_spider(0x43, &draws, 1)), "on dry floor");
+        let wet = run_spider_with(0x43, &draws, 1, "WATER_LEVEL = -180");
+        assert!(hidden(&wet), "over water");
     }
 
     /// `FUN_0046f0c0` on a wall (`Type` 4 to 11): kind 3, the way it faces
