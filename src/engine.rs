@@ -34,6 +34,7 @@
 //!   only rendering, the camera-switch cull and effect attach compose the SCA
 //!   parent chain.
 
+#[cfg(feature = "bot")]
 mod bot;
 mod debug_hud;
 mod debug_view;
@@ -42,7 +43,8 @@ mod watch;
 
 pub use script::{ScriptOptions, run_script};
 
-pub use bot::{BotOptions, DEFAULT_MAX_TICKS, DEFAULT_RISK, parse_bot_param, seeded_rand_state};
+#[cfg(feature = "bot")]
+pub use bot::{DEFAULT_MAX_TICKS, DEFAULT_RISK, parse_bot_param, seeded_rand_state};
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::{CStr, CString, c_void};
@@ -7236,6 +7238,7 @@ impl GameSession {
 
     /// The player has died: the death sequence runs, the dead flag is up or
     /// the health is gone.
+    #[cfg_attr(not(feature = "bot"), allow(dead_code))]
     pub(crate) fn player_dead(&self) -> bool {
         !self.death.is_idle()
             || self.game.flags[5].bit(game::MSF_PLAYER_DEAD)
@@ -7244,6 +7247,7 @@ impl GameSession {
 
     /// The escape scene has completed the game (its scripted death variant,
     /// outside the attract demo).
+    #[cfg_attr(not(feature = "bot"), allow(dead_code))]
     pub(crate) fn game_completed(&self) -> bool {
         self.game.flags[5].bit(game::MSF2_DEATH_VARIANT)
             && !self.game.flags[5].bit(game::MSF2_ATTRACT_DEMO)
@@ -10732,15 +10736,10 @@ struct App {
     /// Where the in-game menu's RESTART goes: the save last loaded or
     /// written, else the new game this run started.
     restart_point: Option<RestartPoint>,
-    /// The bot's seed, and how many sessions it has already seeded.
-    bot_seed: Option<u32>,
-    bot_seed_sessions: u32,
-    /// Every session the bot runs has the INVINCIBLE
-    /// cheat on.
-    bot_invincible: bool,
     /// The optional Lua-driven player bot. While it is active its input
     /// replaces the human one; once it finishes, the normal input returns.
-    bot: Option<bot::BotRuntime>,
+    #[cfg(feature = "bot")]
+    bot: Option<bot::AttachedBot>,
     /// The `--watch` source-directory poller; `None` outside interactive runs.
     watch: Option<watch::Watch>,
 }
@@ -10824,9 +10823,7 @@ impl App {
             ending: None,
             system_menu: None,
             restart_point: None,
-            bot_seed: None,
-            bot_seed_sessions: 0,
-            bot_invincible: false,
+            #[cfg(feature = "bot")]
             bot: None,
             watch: None,
         }
@@ -10943,13 +10940,16 @@ impl App {
         })
     }
 
-    /// Whether the running bot, rather than the human, is feeding the pad.
-    ///
-    /// The interactive loop must not poll film skips with the human word while
-    /// this is true: the poll makes the film session the external sampler, so
-    /// the fixed tick would then ignore the bot's `ui.confirm` edge.
+    /// A build without the bot: the human always feeds the pad.
+    #[cfg(not(feature = "bot"))]
     fn bot_owns_input(&self) -> bool {
-        self.bot.as_ref().is_some_and(|bot| !bot.finished())
+        false
+    }
+
+    /// A build without the bot: no bot is ever attached.
+    #[cfg(not(feature = "bot"))]
+    fn bot_attached(&self) -> bool {
+        false
     }
 
     /// Poll the active film's skip input between ticks; see
@@ -11313,40 +11313,6 @@ impl App {
         self.autosave = true;
     }
 
-    /// Attach the pack's Lua bot to the running game session.
-    fn attach_bot(
-        &mut self,
-        risk: f64,
-        goal_room: Option<&str>,
-        seed: Option<u32>,
-        params: &[(String, String)],
-        invincible: bool,
-    ) -> Result<()> {
-        if !matches!(self.mode, Mode::Play(_)) {
-            bail!("the bot requires a game session");
-        }
-        let runtime = bot::BotRuntime::load(&self.pack)?
-            .with_risk(risk)
-            .with_goal_room(goal_room)
-            .with_params(&self.pack, params)?;
-        let summary = runtime.params_summary();
-        if !summary.is_empty() {
-            eprintln!("[bot] params: {summary}");
-        }
-        self.bot = Some(runtime);
-        self.bot_seed = seed;
-        self.bot_invincible = invincible;
-        if invincible {
-            eprintln!("[bot] invincible: the INVINCIBLE cheat is on for the run");
-        }
-        // The boot already started the first session; it has not ticked yet.
-        if let Mode::Play(session) = &mut self.mode {
-            apply_bot_seed(self.bot_seed, &mut self.bot_seed_sessions, session);
-            session.game.debug.invincible |= self.bot_invincible;
-        }
-        Ok(())
-    }
-
     /// Start watching the pack's source directories (`--watch`).
     ///
     /// A pack that is only `.akpak` files has nothing to watch; the watcher
@@ -11395,39 +11361,9 @@ impl App {
                 Err(err) => eprintln!("[watch] Lua hook reload failed: {err:#}"),
             }
         }
-        if let Some(bot) = self.bot.as_mut() {
-            if kinds.contains(&watch::Changed::BotRoute) {
-                match bot.reload(&self.pack) {
-                    Ok(()) => eprintln!("[watch] reloaded the bot route"),
-                    Err(err) => eprintln!("[watch] bot route reload failed: {err:#}"),
-                }
-            } else if kinds.contains(&watch::Changed::BotMeta) {
-                bot.reload_meta();
-                eprintln!("[watch] invalidated the bot room metadata");
-            }
-        }
+        #[cfg(feature = "bot")]
+        self.watch_bot(&kinds);
         eprintln!("[watch] {count} script/metadata file(s) changed");
-    }
-
-    /// Whether the running bot's player has died.
-    fn bot_player_dead(&self) -> bool {
-        matches!(&self.mode, Mode::Play(session) if session.player_dead())
-    }
-
-    /// What the bot's report reads from the session when it is written: the
-    /// ending the game's own rule picks, once the escape scene has completed
-    /// the game (the scripted death variant), and the play timer.
-    fn bot_run_facts(&self) -> bot::RunFacts {
-        let Mode::Play(session) = &self.mode else {
-            return bot::RunFacts::default();
-        };
-        let game = &session.game;
-        bot::RunFacts {
-            ending: session
-                .game_completed()
-                .then(|| ui::debug_menu::default_ending(game)),
-            game_time_ticks: Some(game.play_timer()),
-        }
     }
 
     /// Follow the subtitle options of `[game]`.
@@ -11458,22 +11394,8 @@ impl App {
 
     /// Enter a gameplay session, opening audio on the interactive path.
     fn start_session(&mut self, mut session: Box<GameSession>) {
-        // A session the bot reached through the load screen is its reload
-        // and carries the run on; any other is a fresh run.
-        if let Some(bot) = self.bot.as_mut()
-            && let Err(err) = bot.start_session(&self.pack)
-        {
-            // Ending the run (rather than dropping the bot) keeps the old
-            // route state from running on and lets a headless run report it.
-            eprintln!("[bot] could not reset the bot route: {err:#}");
-            bot.fail(format!("could not reset the route: {err:#}"));
-        }
-        // The bot seed: every session the bot runs gets its own stream, the
-        // reload after a death included (a save does not carry the RNG state).
-        if self.bot.is_some() {
-            apply_bot_seed(self.bot_seed, &mut self.bot_seed_sessions, &mut session);
-            session.game.debug.invincible |= self.bot_invincible;
-        }
+        #[cfg(feature = "bot")]
+        self.start_bot_session(&mut session);
         session.set_debug_menu(self.debug_menu);
         session.set_skips_enabled(self.skips_enabled);
         session.films = self.room_films;
@@ -12008,137 +11930,20 @@ impl App {
         }
         // A running bot owns the pad on the title and its load screen too,
         // where it loads its latest save after a death.
-        let ui = match self.bot_screen_input()? {
-            Some(bot) => {
-                self.feed_bot_native_screen(&bot.ui);
-                bot.ui
-            }
-            None => ui,
-        };
+        #[cfg(feature = "bot")]
+        let ui = self.bot_screen_ui(ui)?;
         let result = self.screen_update(ui);
         if let ScreenResult::Done(action) = result {
             return self.apply(action);
         }
+        #[cfg(feature = "bot")]
         if let Some(flow) = self.bot_host_update(ui, input, action)? {
             return Ok(flow);
         }
-        // A running bot owns the pad: its tick runs once, before the game
-        // tick, and its input replaces the human one. Once it finishes the
-        // normal input returns.
-        let bot_input = if let Mode::Play(session) = &mut self.mode {
-            if let Some(runtime) = self.bot.as_mut()
-                && !runtime.finished()
-            {
-                // The bot's only output is pad/UI input: equip, heal, item
-                // use and room actions go through the menu and the action
-                // button exactly as a player's input does.
-                match runtime.tick(session, &self.pack) {
-                    Ok(input) => Some(input),
-                    // The tick has already ended the run; the pad is the
-                    // player's again.
-                    Err(err) if runtime.errors_logged() => {
-                        eprintln!("[bot] {err:#}; the pad is yours");
-                        None
-                    }
-                    Err(err) => return Err(err),
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-        let (ui, input, action) = match bot_input {
-            Some(bot) => {
-                self.feed_bot_native_screen(&bot.ui);
-                (bot.ui, bot.input, bot.action)
-            }
-            None => (ui, input, action),
-        };
+        // A running bot owns the pad: its input replaces the human one.
+        #[cfg(feature = "bot")]
+        let (ui, input, action) = self.bot_pad(ui, input, action)?;
         self.play_update(ui, input, action)
-    }
-
-    /// The player's host keys while a bot plays: the bot owns the pad, but
-    /// not Escape, F1 or F9. Escape asks for the native in-game menu and
-    /// freezes the update; F1 and F9 reach the session alone. While an
-    /// overlay they opened is up ([`GameSession::host_overlay`]) the bot is
-    /// not ticked and the player's input drives the overlay; it resumes when
-    /// the overlay closes. `None` when the bot plays this update as usual,
-    /// which is every update of a run nobody presses those keys in, so the
-    /// bot's ticks for a seed are unchanged.
-    fn bot_host_update(
-        &mut self,
-        ui: UiInput,
-        input: player::Input,
-        action: bool,
-    ) -> Result<Option<AppFlow>> {
-        if !self.bot.as_ref().is_some_and(|bot| !bot.finished()) {
-            return Ok(None);
-        }
-        let Mode::Play(session) = &mut self.mode else {
-            return Ok(None);
-        };
-        // The in-game menu freezes the room wherever it is: nothing ticks
-        // under it, not even a door's animation.
-        if session.system_menu_open || session.system_menu_requested {
-            return Ok(Some(AppFlow::Continue));
-        }
-        if ui.system_menu && session.attract.is_none() {
-            session.system_menu_requested = true;
-            return Ok(Some(AppFlow::Continue));
-        }
-        if session.host_overlay() {
-            return self.play_update(ui, input, action).map(Some);
-        }
-        if ui.debug_menu || ui.return_title {
-            let host = UiInput {
-                debug_menu: ui.debug_menu,
-                return_title: ui.return_title,
-                any: ui.any,
-                ..UiInput::default()
-            };
-            return self
-                .play_update(host, player::Input::default(), false)
-                .map(Some);
-        }
-        Ok(None)
-    }
-
-    /// Hand the running bot's pad presses to the open native save/load
-    /// screen, which reads key events rather than the tick's input: the
-    /// same keys a player's presses give it.
-    fn feed_bot_native_screen(&mut self, ui: &UiInput) {
-        let events = ui::save_load::pad_events(ui);
-        if events.is_empty() {
-            return;
-        }
-        let Some(screen) = self.native_screen() else {
-            return;
-        };
-        let sounds = screen.handle(&events);
-        self.play_ui_cues(gui_cues(sounds));
-    }
-
-    /// The running bot's input on the title or the title's load screen, read
-    /// from what the screen shows; `None` on any other screen or without a
-    /// running bot.
-    fn bot_screen_input(&mut self) -> Result<Option<bot::BotInput>> {
-        let Some(runtime) = self.bot.as_mut().filter(|runtime| !runtime.finished()) else {
-            return Ok(None);
-        };
-        let screen = match &self.mode {
-            Mode::Title(screen) => bot::BotScreen::title(screen.view().as_ref()),
-            Mode::Load(screen) => bot::BotScreen::Load(screen.bot_view()),
-            _ => return Ok(None),
-        };
-        match runtime.tick_screen(screen) {
-            Ok(input) => Ok(Some(input)),
-            Err(err) if runtime.errors_logged() => {
-                eprintln!("[bot] {err:#}; the pad is yours");
-                Ok(None)
-            }
-            Err(err) => Err(err),
-        }
     }
 
     /// Advance the title/select/load screen; Play reports `Continue` here.
@@ -12573,7 +12378,6 @@ pub fn run_ui_with_options(
         player::Options::default(),
         trace::TraceOptions::default(),
         Authoring::default(),
-        BotOptions::default(),
     )
 }
 
@@ -12584,8 +12388,7 @@ pub fn run_ui_with_options(
 /// trace line per tick and the `capture_every` BMP cadence. `authoring` adds
 /// the oracle seams: a `--load` continue boot, the setup-script
 /// chunk and the save-out dump. `player_options` are the run options the
-/// booted sessions run with. `bot` enables the pack's restricted Lua player
-/// bot and, when `headless`, runs it without a display.
+/// booted sessions run with.
 #[allow(clippy::too_many_arguments)] // the CLI boot options are all needed
 pub fn run_ui_with_mods(
     pack: &Path,
@@ -12601,7 +12404,6 @@ pub fn run_ui_with_mods(
     player_options: player::Options,
     trace: trace::TraceOptions<'_>,
     authoring: Authoring<'_>,
-    bot: BotOptions,
 ) -> Result<()> {
     if authoring.load.is_some() && screen != "game" {
         bail!("--load is only supported with `--ui game`");
@@ -12654,7 +12456,6 @@ pub fn run_ui_with_mods(
         player_options,
         trace,
         authoring,
-        bot,
         None,
     )
 }
@@ -12687,7 +12488,6 @@ pub fn run_root(
             renderer,
             ..Authoring::default()
         },
-        BotOptions::default(),
         None,
     )
 }
@@ -12721,7 +12521,6 @@ pub(crate) fn run_root_with_display(
             renderer,
             ..Authoring::default()
         },
-        BotOptions::default(),
         Some(display),
     )
 }
@@ -12791,41 +12590,9 @@ fn run_ui_impl(
     player_options: player::Options,
     trace: trace::TraceOptions<'_>,
     authoring: Authoring<'_>,
-    bot: BotOptions,
     shared: Option<&mut Display>,
 ) -> Result<()> {
     let save_dir = &pack_save_dir(pack, save_dir);
-    if bot.headless {
-        if capture.is_some() || trace.path.is_some() || trace.input.is_some() {
-            bail!("a headless bot run does not take a capture, a trace or an input script");
-        }
-        let pack = open_game_pack(pack, mods, language)?;
-        let mut app = App::new(pack, save_dir.to_path_buf(), false);
-        app.player_options = player_options;
-        app.boot(boot)?;
-        app.enable_skips();
-        app.attach_bot(
-            bot.risk,
-            bot.goal_room.as_deref(),
-            bot.seed,
-            &bot.params,
-            bot.invincible,
-        )?;
-        // A headless run has no frame to stay responsive for: let one update
-        // fast-forward the whole scene instead of a 12 ms burst, so where
-        // control returns does not depend on the machine's load. Every later
-        // session (a reload) inherits it.
-        app.unbounded_cutscene_skip = true;
-        if let Mode::Play(session) = &mut app.mode {
-            session.cutscene_skip_burst = None;
-        }
-        let max_ticks = if bot.max_ticks == 0 {
-            bot::DEFAULT_MAX_TICKS
-        } else {
-            bot.max_ticks
-        };
-        return run_bot_headless(&mut app, max_ticks, bot.stats_path.as_deref());
-    }
     if capture.is_some()
         || trace.path.is_some()
         || trace.capture_dir.is_some()
@@ -13022,19 +12789,6 @@ fn run_ui_impl(
         session.run_setup_script(authoring.setup_script)?;
     } else if authoring.setup_script.is_some() {
         bail!("a setup script requires a boot that opens a game session");
-    }
-    if bot.enabled {
-        app.enable_skips();
-        app.attach_bot(
-            bot.risk,
-            bot.goal_room.as_deref(),
-            bot.seed,
-            &bot.params,
-            bot.invincible,
-        )?;
-        if let Some(runtime) = app.bot.as_mut() {
-            runtime.log_errors();
-        }
     }
     let mut owned = None;
     let display = match shared {
@@ -13381,94 +13135,6 @@ fn write_trace_capture(app: &App, options: &trace::TraceOptions<'_>, index: u32)
         &presented_image(app.frame()),
         &dir.join(format!("f{index:05}.bmp")),
     )
-}
-
-/// Run the attached bot with no display or audio until it finishes, dies or
-/// spends `max_ticks` app updates. Prints a concise `[bot]` report.
-fn run_bot_headless(app: &mut App, max_ticks: u64, stats_path: Option<&Path>) -> Result<()> {
-    let started = Instant::now();
-    let mut outcome = "max_ticks";
-    // A bot with a save loads it after a death; one without gets a moment
-    // to see the death and finish with its own reason.
-    let mut dead_ticks = 0u32;
-    for _ in 0..max_ticks {
-        if app.bot.as_ref().is_some_and(bot::BotRuntime::finished) {
-            outcome = "finished";
-            break;
-        }
-        if app.bot_player_dead() {
-            dead_ticks += 1;
-            let reloading = app.bot.as_ref().is_some_and(bot::BotRuntime::has_save);
-            if !reloading && dead_ticks > 2 {
-                outcome = "death";
-                break;
-            }
-        } else {
-            dead_ticks = 0;
-        }
-        match app.update(UiInput::default(), player::Input::default(), false) {
-            Ok(AppFlow::Quit) => {
-                outcome = "quit";
-                break;
-            }
-            Ok(AppFlow::Continue) => {}
-            Err(err) => {
-                print_bot_report(app, "error", started.elapsed());
-                write_bot_stats(app, "error", started.elapsed(), stats_path)?;
-                return Err(err);
-            }
-        }
-        app.post_present();
-    }
-    if app.bot.as_ref().is_some_and(bot::BotRuntime::finished) {
-        outcome = "finished";
-    } else if outcome == "max_ticks" && app.bot_player_dead() {
-        outcome = "death";
-    }
-    print_bot_report(app, outcome, started.elapsed());
-    write_bot_stats(app, outcome, started.elapsed(), stats_path)
-}
-
-/// Write the bot's JSON stats report, whatever the outcome.
-fn write_bot_stats(
-    app: &App,
-    outcome: &str,
-    elapsed: std::time::Duration,
-    path: Option<&Path>,
-) -> Result<()> {
-    let (Some(path), Some(runtime)) = (path, app.bot.as_ref()) else {
-        return Ok(());
-    };
-    let json = runtime.stats_json(outcome, elapsed.as_secs_f64(), app.bot_run_facts());
-    if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
-        std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
-    }
-    std::fs::write(path, serde_json::to_string_pretty(&json)?)
-        .with_context(|| format!("writing bot stats to {}", path.display()))?;
-    println!("[bot] stats: {}", path.display());
-    Ok(())
-}
-
-/// Print the headless run's tick count, room path and finish reason.
-fn print_bot_report(app: &App, outcome: &str, elapsed: std::time::Duration) {
-    let Some(runtime) = app.bot.as_ref() else {
-        println!("[bot] no bot attached");
-        return;
-    };
-    println!(
-        "[bot] outcome={outcome} ticks={} elapsed={:.2}s",
-        runtime.ticks(),
-        elapsed.as_secs_f64()
-    );
-    if let Some(reason) = runtime.finish_reason() {
-        println!("[bot] finish: {reason}");
-    }
-    let path = runtime.room_path();
-    if path.is_empty() {
-        println!("[bot] rooms: (none)");
-    } else {
-        println!("[bot] rooms: {}", path.join(" -> "));
-    }
 }
 
 /// Feed the between-tick film poll for one presented frame.
@@ -18229,15 +17895,6 @@ fn pack_region(pack: &Pack) -> scd::akscr::Region {
     pack.manifest()
         .and_then(|manifest| manifest.region)
         .unwrap_or(scd::akscr::Region::Usa)
-}
-
-/// Seed `session`'s game RNG from the bot seed (a no-op without it) and count
-/// the session.
-fn apply_bot_seed(seed: Option<u32>, sessions: &mut u32, session: &mut GameSession) {
-    if let Some(seed) = seed {
-        session.game.rand_state = seeded_rand_state(seed, *sessions);
-        *sessions += 1;
-    }
 }
 
 /// Build a fresh game state for `id`/`room` with the pack's static music
@@ -30796,41 +30453,6 @@ mod tests {
     }
 
     #[test]
-    fn headless_bot_attaches_and_finishes_on_a_pack_mod() {
-        let dir = TempDir::new();
-        let pack_path = new_game_pack_with(
-            &dir,
-            &[(
-                "bot/init.lua",
-                b"function on_bot_tick(bot)\n  bot:finish('test done')\nend\n",
-            )],
-        );
-        let saves = dir.0.join("saves");
-        run_ui_with_mods(
-            &pack_path,
-            "game",
-            None,
-            &saves,
-            1,
-            None,
-            0,
-            &ModOptions::default(),
-            false,
-            None,
-            player::Options::default(),
-            trace::TraceOptions::default(),
-            Authoring::default(),
-            BotOptions {
-                enabled: true,
-                headless: true,
-                max_ticks: 20,
-                ..BotOptions::default()
-            },
-        )
-        .unwrap();
-    }
-
-    #[test]
     fn app_debug_clear_game_plays_the_ending_chain() {
         let dir = TempDir::new();
         let pack_path = new_game_pack(&dir);
@@ -30948,7 +30570,6 @@ mod tests {
                 save_out: Some(&saved),
                 ..Authoring::default()
             },
-            BotOptions::default(),
         )
         .unwrap();
 
@@ -30984,7 +30605,6 @@ mod tests {
                 load: Some(&saved),
                 ..Authoring::default()
             },
-            BotOptions::default(),
         )
         .unwrap();
 
@@ -31255,7 +30875,6 @@ mod tests {
                 player::Options::default(),
                 trace::TraceOptions::default(),
                 Authoring::default(),
-                BotOptions::default(),
             )
             .unwrap();
         }
@@ -31461,7 +31080,6 @@ mod tests {
                 player::Options::default(),
                 trace::TraceOptions::default(),
                 Authoring::default(),
-                BotOptions::default(),
             )
             .unwrap();
         }
@@ -36725,6 +36343,7 @@ off_0010:
         assert!(matches!(tick(&mut app, 0), AppFlow::Quit));
     }
 
+    #[cfg(feature = "bot")]
     #[test]
     fn a_running_bot_skips_an_in_session_film_through_the_fixed_tick() {
         let dir = TempDir::new();
@@ -36744,7 +36363,7 @@ off_0010:
         let mut app = App::new(pack, dir.0.join("saves"), false);
         let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
         app.start_session(session);
-        app.attach_bot(bot::DEFAULT_RISK, None, None, &[], false)
+        app.attach_bot(DEFAULT_RISK, None, None, &[], false)
             .unwrap();
         app.enable_skips();
         let movie = MovieSession::open(&app.pack, 0, 0).unwrap();
@@ -36770,6 +36389,7 @@ off_0010:
         );
     }
 
+    #[cfg(feature = "bot")]
     /// An app playing a new game with a bot that does nothing but count its
     /// ticks.
     fn idle_bot_app(dir: &TempDir) -> App {
@@ -36779,19 +36399,22 @@ off_0010:
         let mut app = App::new(pack, dir.0.join("saves"), false);
         let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
         app.start_session(session);
-        app.attach_bot(bot::DEFAULT_RISK, None, None, &[], false)
+        app.attach_bot(DEFAULT_RISK, None, None, &[], false)
             .unwrap();
         app
     }
 
+    #[cfg(feature = "bot")]
     fn update_with(app: &mut App, ui: UiInput) {
         app.update(ui, player::Input::default(), false).unwrap();
     }
 
+    #[cfg(feature = "bot")]
     fn bot_ticks(app: &App) -> u64 {
-        app.bot.as_ref().unwrap().ticks()
+        app.bot().unwrap().ticks()
     }
 
+    #[cfg(feature = "bot")]
     fn play_frame(app: &App) -> u64 {
         let Mode::Play(session) = &app.mode else {
             panic!("expected a play mode");
@@ -36799,6 +36422,7 @@ off_0010:
         session.game.frame
     }
 
+    #[cfg(feature = "bot")]
     #[test]
     fn escape_suspends_a_running_bot_until_the_in_game_menu_closes() {
         let dir = TempDir::new();
@@ -36840,6 +36464,7 @@ off_0010:
         assert_eq!(bot_ticks(&app), 4, "the bot resumes when the menu closes");
     }
 
+    #[cfg(feature = "bot")]
     #[test]
     fn a_running_bot_leaves_the_f9_prompt_to_the_player() {
         let dir = TempDir::new();
@@ -36880,6 +36505,7 @@ off_0010:
         assert!(resumed, "the bot resumes once the prompt closes");
     }
 
+    #[cfg(feature = "bot")]
     #[test]
     fn a_running_bot_plays_the_same_ticks_with_no_host_key_pressed() {
         let dir = TempDir::new();
@@ -36895,7 +36521,7 @@ off_0010:
             let mut app = App::new(pack, dir.0.join("saves"), false);
             let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
             app.start_session(session);
-            app.attach_bot(bot::DEFAULT_RISK, None, Some(7), &[], false)
+            app.attach_bot(DEFAULT_RISK, None, Some(7), &[], false)
                 .unwrap();
             let mut frames = Vec::new();
             for _ in 0..90 {
@@ -36921,6 +36547,38 @@ off_0010:
         assert_eq!(run(keys), (ticks, frames));
     }
 
+    /// A bot attached again in the same app (a second `bot_start`) seeds the
+    /// next stream, as the app's session count goes on, not the first one's.
+    #[cfg(feature = "bot")]
+    #[test]
+    fn a_bot_attached_again_plays_on_the_next_seed_stream() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack_with(
+            &dir,
+            &[("bot/init.lua", b"function on_bot_tick(bot) end\n")],
+        );
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut app = App::new(pack, dir.0.join("saves"), false);
+        let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+        app.start_session(session);
+        let rand_state = |app: &App| {
+            let Mode::Play(session) = &app.mode else {
+                panic!("expected a play mode");
+            };
+            session.game.rand_state
+        };
+        app.attach_bot(DEFAULT_RISK, None, Some(7), &[], false)
+            .unwrap();
+        assert_eq!(rand_state(&app), seeded_rand_state(7, 0));
+        app.attach_bot(DEFAULT_RISK, None, Some(7), &[], false)
+            .unwrap();
+        assert_eq!(rand_state(&app), seeded_rand_state(7, 1));
+        let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+        app.start_session(session);
+        assert_eq!(rand_state(&app), seeded_rand_state(7, 2));
+    }
+
+    #[cfg(feature = "bot")]
     #[test]
     fn bot_seed_perturbs_the_game_rng_and_every_reload() {
         let dir = TempDir::new();
@@ -36933,7 +36591,7 @@ off_0010:
             let mut app = App::new(pack, dir.0.join("saves"), false);
             let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
             app.start_session(session);
-            app.attach_bot(bot::DEFAULT_RISK, None, seed, &[], false)
+            app.attach_bot(DEFAULT_RISK, None, seed, &[], false)
                 .unwrap();
             let mut states = Vec::new();
             for _ in 0..sessions {

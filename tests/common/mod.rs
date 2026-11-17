@@ -163,7 +163,6 @@ pub fn ui_capture(pack: &Path, mods: &[&Path], screen: &str, character: u8, out:
         arklay::player::Options::default(),
         arklay::trace::TraceOptions::default(),
         arklay::engine::Authoring::default(),
-        arklay::engine::BotOptions::default(),
     )
     .unwrap_or_else(|error| panic!("the {screen} capture failed: {error:#}"));
     std::fs::read(out).expect("read the UI capture")

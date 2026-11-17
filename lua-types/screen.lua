@@ -209,6 +209,11 @@ function ScreenModule.draw(api) end
 ---RE 1's title publishes `stage` (`"press"`, `"menu"`, `"fade_out"` or
 ---`"attract_fade"`), `selection` (1 NEW GAME, 2 LOAD GAME) and `any_saves`
 ---(whether LOAD GAME can be chosen); the bot drives the title from those.
+---RE 1's `main_menu` publishes its cursor, the slot and item under it, the
+---submenu's mode, option and labels, its open and close animations and the
+---MOVE cursor; its `item_box` publishes the box's mode, box cursor,
+---inventory cursor and whether a page slides. The bot drives both from
+---those.
 ---@return table view
 function ScreenModule.view() end
 

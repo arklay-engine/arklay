@@ -217,6 +217,8 @@ function mode() end
 ---end in one tick, so the run is the same with a window and without. A
 ---headless run draws no frames while the bot is attached (`capture` still
 ---draws the one it writes). The bot's log (`[bot] tick ...`) goes to stderr.
+---The bot is the default-on `bot` build feature: in a build without it,
+---every `bot_*` call fails.
 
 ---Attach the pack's bot to the running session. It plays from the next
 ---`tick` on, until it ends its run (see [`bot_finished`](#bot_finished)).

@@ -16,6 +16,7 @@
 //! `bot:room_meta()`. The observed world model is in [`world`] and reaches
 //! Lua as `bot:world()`.
 
+mod host;
 mod knowledge;
 #[cfg(test)]
 mod lua_lint;
@@ -27,6 +28,8 @@ mod stats;
 pub(crate) use stats::RunFacts;
 mod steer;
 mod world;
+
+pub(super) use host::AttachedBot;
 
 use std::cell::{Cell, RefCell};
 use std::cmp::Reverse;
@@ -131,6 +134,79 @@ fn route_state_value(lua: &Lua, json: &serde_json::Value) -> mlua::Result<Value>
 /// The default headless tick budget (about 55 minutes at 30 Hz).
 pub const DEFAULT_MAX_TICKS: u64 = 100_000;
 
+/// The default risk: how much danger the planner may accept, 0..=1.
+pub const DEFAULT_RISK: f64 = 0.25;
+
+/// How a bot run stands between two ticks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum RunState {
+    /// The run goes on: the player is alive, or dead with a save to load.
+    Running,
+    /// The bot ended the run.
+    Finished,
+    /// The player died with no save to load.
+    Stranded,
+}
+
+/// How a headless bot run ended ([`play`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum RunOutcome {
+    /// The bot ended the run with its reason.
+    Finished,
+    /// The player died with no save to load.
+    Death,
+    /// The tick budget ran out.
+    MaxTicks,
+    /// The game quit.
+    Quit,
+}
+
+impl RunOutcome {
+    /// The outcome's name in the run reports.
+    pub(super) fn name(self) -> &'static str {
+        match self {
+            RunOutcome::Finished => "finished",
+            RunOutcome::Death => "death",
+            RunOutcome::MaxTicks => "max_ticks",
+            RunOutcome::Quit => "quit",
+        }
+    }
+}
+
+/// The ticks a stranded bot still plays: a moment to see its death and
+/// finish with its own reason.
+const DEATH_GRACE_TICKS: u32 = 2;
+
+/// The headless bot run loop: read how the run stands, then tick, until the
+/// bot finishes, the player stays dead with no save past the grace ticks,
+/// the game quits or `max_ticks` ticks have run. `tick` is one app update
+/// of `driver` with whatever the driver feeds it; the game's own order inside
+/// it (the film check, the sound fade step, the task pass) is the update's.
+pub(super) fn play<D, E>(
+    driver: &mut D,
+    max_ticks: u64,
+    mut state: impl FnMut(&mut D) -> Result<RunState, E>,
+    mut tick: impl FnMut(&mut D) -> Result<super::AppFlow, E>,
+) -> Result<RunOutcome, E> {
+    let mut dead_ticks = 0u32;
+    for _ in 0..max_ticks {
+        match state(driver)? {
+            RunState::Running => dead_ticks = 0,
+            RunState::Finished => return Ok(RunOutcome::Finished),
+            RunState::Stranded if dead_ticks < DEATH_GRACE_TICKS => dead_ticks += 1,
+            RunState::Stranded => return Ok(RunOutcome::Death),
+        }
+        if tick(driver)? == super::AppFlow::Quit {
+            return Ok(RunOutcome::Quit);
+        }
+    }
+    Ok(match state(driver)? {
+        RunState::Running => RunOutcome::MaxTicks,
+        RunState::Finished => RunOutcome::Finished,
+        RunState::Stranded => RunOutcome::Death,
+    })
+}
+
 /// The flag banks whose changes the run log records (`story: ...`): bank 0
 /// (scenario) and bank 1 (common), where the story's scenes and branches
 /// leave their marks.
@@ -140,38 +216,6 @@ const STORY_BANK_NAMES: [&str; STORY_BANKS] = ["scenario", "common"];
 /// The current room's own flag bank (`FG_ROOM`): a fact's flag there reads
 /// only while the bot is in that room.
 const ROOM_FLAG_BANK: u8 = 4;
-
-/// The default risk: how much danger the planner may accept, 0..=1.
-pub const DEFAULT_RISK: f64 = 0.25;
-
-/// The bot run options the CLI adds on top of a normal boot.
-#[derive(Clone, Debug, PartialEq)]
-pub struct BotOptions {
-    /// Drive the game from the pack's `bot/**.lua` entries.
-    pub enabled: bool,
-    /// Run without a window or audio, as fast as the simulation allows.
-    pub headless: bool,
-    /// Headless app-update budget; ignored by the interactive path.
-    pub max_ticks: u64,
-    /// Write the headless run's statistics as JSON to this path.
-    pub stats_path: Option<std::path::PathBuf>,
-    /// The planner's risk setting, `0.0..=1.0`; read-only to
-    /// Lua as `bot:risk()`.
-    pub risk: f64,
-    /// The room whose entry ends the run, such as
-    /// `"20D"`; read-only to Lua as `bot:goal_room()`.
-    pub goal_room: Option<String>,
-    /// The game-RNG seed; `None` leaves the game's own random
-    /// stream untouched.
-    pub seed: Option<u32>,
-    /// The story parameters picked for this run,
-    /// checked against the pack's `params/<game>.xml` when the bot attaches.
-    pub params: Vec<(String, String)>,
-    /// The debug INVINCIBLE cheat for every session of the run
-    /// (the bot's `invincible` option): health stays full and the game-over machine
-    /// never runs. The bot is not told; it plays as it would.
-    pub invincible: bool,
-}
 
 /// The game RNG state for the `session`th session of a seeded run
 /// (0 for the first, then one more per bot reload). A pure function of
@@ -184,22 +228,6 @@ pub fn seeded_rand_state(seed: u32, session: u32) -> u32 {
     x ^= x >> 31;
     let state = (x ^ (x >> 32)) as u32;
     if state == 1 { 2 } else { state }
-}
-
-impl Default for BotOptions {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            headless: false,
-            max_ticks: 0,
-            stats_path: None,
-            risk: DEFAULT_RISK,
-            goal_room: None,
-            seed: None,
-            params: Vec::new(),
-            invincible: false,
-        }
-    }
 }
 
 /// One tick of input the Lua script asked for. Reset before every call.
@@ -909,10 +937,9 @@ struct MenuItem {
 }
 
 /// The pause/inventory menu, read from the engine's real UI state: the
-/// session's menu slot, fade phase and sub-screens, the values the menu
-/// script publishes (`cursor`, `slot`, `selected_item`, ...) and the
-/// submenu fields of its `M.state` table. Nothing here is derived from what
-/// the bot pressed.
+/// session's menu slot, fade phase and sub-screens, and the view the menu
+/// script publishes (`M.view()` of `ui/main_menu.lua`). Nothing here is
+/// derived from what the bot pressed.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct MenuSnapshot {
     /// The menu screen exists (open, fading in, or fading out to close).
@@ -938,7 +965,7 @@ struct MenuSnapshot {
     /// The highlighted submenu option, zero-based.
     option: Option<i64>,
     /// The submenu's options for the selected item, top to bottom.
-    options: Vec<&'static str>,
+    options: Vec<String>,
     /// The item under the cursor (`0` for none).
     selected_item: u8,
     /// The submenu's open animation has finished.
@@ -980,9 +1007,8 @@ impl ExamineView {
     }
 }
 
-/// The item box screen as a player sees it, read from the shipped script's
-/// `M.state` (`ui/item_box.lua`) and the box's slots, without running any of
-/// its code.
+/// The item box screen as a player sees it: the view its script publishes
+/// (`M.view()` of `ui/item_box.lua`) and the box's slots.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct ItemBoxView {
     /// `"browse"` (the inventory cursor moves) or `"armed"` (a confirmed
@@ -1000,18 +1026,25 @@ struct ItemBoxView {
 
 impl ItemBoxView {
     fn build(session: &GameSession) -> Option<Self> {
-        let screen = session.item_box.as_deref()?;
+        let view = session.item_box.as_deref()?.view()?;
+        let slots = session
+            .game
+            .item_box
+            .iter()
+            .map(|stack| (stack.id, stack.quantity))
+            .collect();
+        Self::from_view(&view, slots)
+    }
+
+    /// The screen from its published view and the box's slots; `None` when
+    /// the view lacks a field, as a screen script that publishes none does.
+    fn from_view(view: &crate::interactive::ScriptValue, slots: Vec<(u8, u8)>) -> Option<Self> {
         Some(Self {
-            mode: screen.state_str("mode")?,
-            box_cursor: screen.state_int("box_cursor")?,
-            cursor: screen.state_int("player_cursor")?,
-            sliding: screen.state_int("slide_dir")? != 0,
-            slots: session
-                .game
-                .item_box
-                .iter()
-                .map(|stack| (stack.id, stack.quantity))
-                .collect(),
+            mode: String::from_utf8_lossy(view.bytes("mode")?).into_owned(),
+            box_cursor: view.int("box_cursor")?,
+            cursor: view.int("cursor")?,
+            sliding: view.bool("sliding")?,
+            slots,
         })
     }
 }
@@ -1030,10 +1063,20 @@ fn set_use_gates(row: &Table, fact: &meta::Use) -> mlua::Result<()> {
     Ok(())
 }
 
-/// The submenu labels the RE1 menu script draws (`draw_submenu`): the first
-/// option is EQUIP for a weapon and USE otherwise; MOVE is the combine.
-fn menu_options(equippable: bool) -> Vec<&'static str> {
-    vec![if equippable { "EQUIP" } else { "USE" }, "CHECK", "MOVE"]
+/// The strings of a published view's list field `key`, in order; empty
+/// when the field is absent.
+fn view_strings(view: &crate::interactive::ScriptValue, key: &str) -> Vec<String> {
+    let Some(list) = view.field(key) else {
+        return Vec::new();
+    };
+    (1..)
+        .map_while(|index| match list.index(index)? {
+            crate::interactive::ScriptValue::Str(text) => {
+                Some(String::from_utf8_lossy(text).into_owned())
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 impl MenuSnapshot {
@@ -1078,7 +1121,10 @@ impl MenuSnapshot {
                 ..Self::default()
             };
         };
-        let viewing = menu.value("viewing") != 0;
+        // A menu script that publishes no view reads as a menu with nothing
+        // selected and no submenu.
+        let shown = Self::from_view(&menu.view().unwrap_or_default());
+        let viewing = shown.viewing;
         let phase = match session.menu_fade_phase {
             super::MenuFadePhase::Out => "fade_out",
             super::MenuFadePhase::In => "fade_in",
@@ -1088,39 +1134,45 @@ impl MenuSnapshot {
             super::MenuFadePhase::None if game.message.active => "message",
             super::MenuFadePhase::None => "input",
         };
-        let mode = menu.state_int("mode").map(|mode| match mode {
-            0 => "navigation",
-            1 => "actions",
-            _ => "move",
-        });
-        let selected_item = menu.value("selected_item") as u8;
-        let options = match menu.state_int("equippable") {
-            Some(equippable) if selected_item != 0 => menu_options(equippable != 0),
-            _ => Vec::new(),
-        };
-        let slot = menu.value("slot");
         Self {
             open: true,
             requested,
             phase,
             accepts_input: phase == "input",
             screen,
-            cursor: Some(menu.value("cursor")),
-            slot: (slot >= 0).then_some(slot),
-            mode,
-            option: menu.state_int("action"),
-            options,
-            selected_item,
-            ready: menu.value("ready") != 0,
-            closing: menu.value("closing") != 0,
-            viewing,
             capacity,
             items,
-            move_cursor: (mode == Some("move"))
-                .then(|| menu.state_int("move_cursor"))
-                .flatten(),
             item_box,
             examine,
+            ..shown
+        }
+    }
+
+    /// The fields the menu's published view gives (`M.view()` of
+    /// `ui/main_menu.lua`); the rest are left at their defaults. A field the
+    /// view lacks reads as nothing selected: cursor 0, no slot, no submenu.
+    fn from_view(view: &crate::interactive::ScriptValue) -> Self {
+        let mode = match view.bytes("mode") {
+            Some(b"navigation") => Some("navigation"),
+            Some(b"actions") => Some("actions"),
+            Some(b"move") => Some("move"),
+            _ => None,
+        };
+        let slot = view.int("slot").unwrap_or(-1);
+        Self {
+            cursor: Some(view.int("cursor").unwrap_or(0)),
+            slot: (slot >= 0).then_some(slot),
+            mode,
+            option: view.int("option"),
+            options: view_strings(view, "options"),
+            selected_item: view.int("selected_item").unwrap_or(0) as u8,
+            ready: view.bool("ready").unwrap_or(false),
+            closing: view.bool("closing").unwrap_or(false),
+            viewing: view.bool("viewing").unwrap_or(false),
+            move_cursor: (mode == Some("move"))
+                .then(|| view.int("move_cursor"))
+                .flatten(),
+            ..Self::default()
         }
     }
 }
@@ -4514,7 +4566,7 @@ impl UserData for BotCtx {
             table.set("option", menu.option)?;
             table.set(
                 "options",
-                lua.create_sequence_from(menu.options.iter().copied())?,
+                lua.create_sequence_from(menu.options.iter().map(String::as_str))?,
             )?;
             table.set("selected_item", menu.selected_item)?;
             table.set("ready", menu.ready)?;
@@ -5076,9 +5128,6 @@ pub struct BotRuntime {
     /// The bot drove an app screen (the title or the load screen) since the
     /// last session started, so the next session is its reload.
     screen_driven: bool,
-    /// A route error is logged and the pad handed back to the player
-    /// rather than ending the app (the interactive bot).
-    errors_logged: bool,
 }
 
 impl BotRuntime {
@@ -5104,19 +5153,7 @@ impl BotRuntime {
             checkpoint: None,
             previous_checkpoint: None,
             screen_driven: false,
-            errors_logged: false,
         })
-    }
-
-    /// Log a route error and hand the pad back instead of failing the app's
-    /// update: the interactive bot, where `--watch` can fix the route.
-    pub fn log_errors(&mut self) {
-        self.errors_logged = true;
-    }
-
-    /// Whether a route error should be logged rather than returned.
-    pub fn errors_logged(&self) -> bool {
-        self.errors_logged
     }
 
     /// End the run with `reason` (the first reason given is kept): the
@@ -5480,6 +5517,8 @@ impl BotRuntime {
         self.shares.finish_reason.borrow().clone()
     }
 
+    /// The ticks the bot has played, for tests.
+    #[cfg(test)]
     pub fn ticks(&self) -> u64 {
         self.tick
     }
@@ -5569,10 +5608,6 @@ impl BotRuntime {
             run,
             &self.shares.profile.borrow(),
         )
-    }
-
-    pub fn room_path(&self) -> Vec<String> {
-        self.shares.memory.borrow().room_path.clone()
     }
 }
 
@@ -5838,10 +5873,166 @@ mod tests {
         assert_eq!(row(0, 7).get::<String>("result").unwrap(), "no_recipe");
     }
 
+    /// Run [`play`] over a scripted run: `states[i]` is how the run stands
+    /// before tick `i` (the last one repeats); the ticks it ran and the
+    /// outcome.
+    fn play_scripted(
+        max_ticks: u64,
+        states: &[RunState],
+        quit_at: Option<u64>,
+    ) -> (u64, RunOutcome) {
+        // (state reads, ticks)
+        let mut run = (0usize, 0u64);
+        let outcome = play::<_, ()>(
+            &mut run,
+            max_ticks,
+            |(reads, ticks)| {
+                // A state is read once before each tick, and once more when the
+                // budget runs out.
+                assert_eq!(*reads as u64, *ticks, "one read per tick");
+                *reads += 1;
+                Ok(states[(*reads - 1).min(states.len() - 1)])
+            },
+            |(_, ticks)| {
+                *ticks += 1;
+                Ok(if quit_at == Some(*ticks) {
+                    super::super::AppFlow::Quit
+                } else {
+                    super::super::AppFlow::Continue
+                })
+            },
+        )
+        .unwrap();
+        (run.1, outcome)
+    }
+
     #[test]
-    fn menu_options_follow_the_menu_scripts_labels() {
-        assert_eq!(menu_options(true), vec!["EQUIP", "CHECK", "MOVE"]);
-        assert_eq!(menu_options(false), vec!["USE", "CHECK", "MOVE"]);
+    fn the_run_loop_checks_the_run_before_every_tick() {
+        use RunState::*;
+        // A bot that finishes before tick 3 plays three ticks.
+        assert_eq!(
+            play_scripted(10, &[Running, Running, Running, Finished], None),
+            (3, RunOutcome::Finished)
+        );
+        // Finished on the first read: no tick at all.
+        assert_eq!(
+            play_scripted(10, &[Finished], None),
+            (0, RunOutcome::Finished)
+        );
+        // The budget runs out while running.
+        assert_eq!(
+            play_scripted(4, &[Running], None),
+            (4, RunOutcome::MaxTicks)
+        );
+        // A quit ends the run on the tick it happens.
+        assert_eq!(
+            play_scripted(10, &[Running], Some(2)),
+            (2, RunOutcome::Quit)
+        );
+    }
+
+    #[test]
+    fn a_stranded_bot_plays_two_grace_ticks_before_the_death() {
+        use RunState::*;
+        assert_eq!(
+            play_scripted(10, &[Running, Stranded], None),
+            (1 + 2, RunOutcome::Death)
+        );
+        // The bot can still finish in its grace ticks.
+        assert_eq!(
+            play_scripted(10, &[Stranded, Stranded, Finished], None),
+            (2, RunOutcome::Finished)
+        );
+        // A run that is running again starts the grace over.
+        assert_eq!(
+            play_scripted(10, &[Stranded, Stranded, Running, Stranded], None),
+            (3 + 2, RunOutcome::Death)
+        );
+        // Stranded when the budget runs out is a death.
+        assert_eq!(
+            play_scripted(1, &[Running, Stranded], None),
+            (1, RunOutcome::Death)
+        );
+    }
+
+    /// A menu or item box script that publishes no view (a mod's own
+    /// screen) reads as nothing selected and no box, without a panic.
+    #[test]
+    fn a_screen_without_a_view_reads_as_the_defaults() {
+        let empty = crate::interactive::ScriptValue::default();
+        let menu = MenuSnapshot::from_view(&empty);
+        assert_eq!(
+            (menu.cursor, menu.slot, menu.mode, menu.option),
+            (Some(0), None, None, None)
+        );
+        assert!(menu.options.is_empty());
+        assert_eq!(menu.selected_item, 0);
+        assert!(!menu.ready && !menu.closing && !menu.viewing);
+        assert_eq!(menu.move_cursor, None);
+        assert_eq!(ItemBoxView::from_view(&empty, vec![(0, 0)]), None);
+    }
+
+    #[test]
+    fn a_published_view_fills_the_menu_and_box_snapshots() {
+        use crate::interactive::{ScriptKey, ScriptValue};
+        let field = |key: &str, value| (ScriptKey::Str(key.as_bytes().to_vec()), value);
+        let mut entries = vec![
+            field("cursor", ScriptValue::Int(10)),
+            field("slot", ScriptValue::Int(1)),
+            field("mode", ScriptValue::Str(b"move".to_vec())),
+            field("option", ScriptValue::Int(2)),
+            field("selected_item", ScriptValue::Int(0x44)),
+            field("ready", ScriptValue::Bool(true)),
+            field("closing", ScriptValue::Bool(false)),
+            field("viewing", ScriptValue::Bool(true)),
+            field("move_cursor", ScriptValue::Int(12)),
+        ];
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+        let menu = MenuSnapshot::from_view(&ScriptValue::Table(entries));
+        assert_eq!(
+            (
+                menu.cursor,
+                menu.slot,
+                menu.mode,
+                menu.option,
+                menu.move_cursor
+            ),
+            (Some(10), Some(1), Some("move"), Some(2), Some(12))
+        );
+        assert_eq!(menu.selected_item, 0x44);
+        assert!(menu.ready && !menu.closing && menu.viewing);
+
+        let mut entries = vec![
+            field("mode", ScriptValue::Str(b"armed".to_vec())),
+            field("box_cursor", ScriptValue::Int(3)),
+            field("cursor", ScriptValue::Int(8)),
+            field("sliding", ScriptValue::Bool(false)),
+        ];
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+        let view = ItemBoxView::from_view(&ScriptValue::Table(entries), vec![(0x41, 1)]).unwrap();
+        assert_eq!(
+            (
+                view.mode.as_str(),
+                view.box_cursor,
+                view.cursor,
+                view.sliding
+            ),
+            ("armed", 3, 8, false)
+        );
+        assert_eq!(view.slots, vec![(0x41, 1)]);
+    }
+
+    #[test]
+    fn view_strings_reads_a_published_list_in_order() {
+        use crate::interactive::{ScriptKey, ScriptValue};
+        let list = ScriptValue::Table(vec![
+            (ScriptKey::Int(1), ScriptValue::Str(b"USE".to_vec())),
+            (ScriptKey::Int(2), ScriptValue::Str(b"CHECK".to_vec())),
+            (ScriptKey::Int(3), ScriptValue::Str(b"MOVE".to_vec())),
+        ]);
+        let view = ScriptValue::Table(vec![(ScriptKey::Str(b"options".to_vec()), list)]);
+        assert_eq!(view_strings(&view, "options"), vec!["USE", "CHECK", "MOVE"]);
+        assert!(view_strings(&view, "missing").is_empty());
     }
 
     #[test]

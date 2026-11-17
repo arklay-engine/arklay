@@ -28,6 +28,12 @@ jobs:
           LD_LIBRARY_PATH: ${{ github.workspace }}/target/debug
           SDL_VIDEODRIVER: dummy
           SDL_AUDIODRIVER: dummy
+      # A build without the default-on `bot` feature refuses the bot calls.
+      - run: cargo test --no-default-features --features sdl3-sys/build-from-source,sdl3-sys/sdl-unix-console-build --test script a_build_without_the_bot_refuses_the_bot_calls
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/target/debug
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
       - run: cargo test --profile fast-release --features sdl3-sys/build-from-source,sdl3-sys/sdl-unix-console-build
         env:
           LD_LIBRARY_PATH: ${{ github.workspace }}/target/fast-release

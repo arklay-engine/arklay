@@ -827,6 +827,7 @@ pub(crate) fn check_weapon_line_of_sight(
 
 /// [`check_weapon_line_of_sight`] without the flag write-back, for the
 /// engine's own queries (the bot), which the original never makes.
+#[cfg_attr(not(feature = "bot"), allow(dead_code))]
 pub(crate) fn peek_weapon_line_of_sight(
     game: &GameState,
     room: &RoomState,

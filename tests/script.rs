@@ -307,7 +307,6 @@ fn engine_trace_with(
             ..arklay::trace::TraceOptions::default()
         },
         authoring,
-        arklay::engine::BotOptions::default(),
     )
     .unwrap();
     std::fs::read(path).unwrap()
@@ -344,7 +343,6 @@ fn a_sound_capture_matches_the_engines() {
             ..arklay::trace::TraceOptions::default()
         },
         arklay::engine::Authoring::default(),
-        arklay::engine::BotOptions::default(),
     )
     .unwrap();
     success(&script(
@@ -637,7 +635,6 @@ fn engine_title_trace(dir: &TempDir, title_special: i8, out: &str) -> Vec<u8> {
             ..arklay::trace::TraceOptions::default()
         },
         arklay::engine::Authoring::default(),
-        arklay::engine::BotOptions::default(),
     )
     .unwrap();
     std::fs::read(path).unwrap()
@@ -813,6 +810,7 @@ fn presses_match_an_input_file() {
 }
 
 /// A bot that walks nowhere and ends its run on its fifth tick.
+#[cfg(feature = "bot")]
 const FIVE_TICK_BOT: &[u8] = b"function on_bot_tick(bot)
     if bot:tick() >= 5 then
         bot:finish('five ticks')
@@ -820,6 +818,7 @@ const FIVE_TICK_BOT: &[u8] = b"function on_bot_tick(bot)
 end
 ";
 
+#[cfg(feature = "bot")]
 #[test]
 fn bot_run_plays_the_packs_bot_until_it_finishes() {
     let dir = TempDir::new("bot-run");
@@ -847,6 +846,7 @@ fn bot_run_plays_the_packs_bot_until_it_finishes() {
     assert!(stats.contains("\"outcome\": \"finished\""), "{stats}");
 }
 
+#[cfg(feature = "bot")]
 #[test]
 fn bot_start_attaches_the_bot_for_the_scripts_own_ticks() {
     let dir = TempDir::new("bot-start");
@@ -869,6 +869,7 @@ fn bot_start_attaches_the_bot_for_the_scripts_own_ticks() {
     assert_eq!(out, "false\tnil\n3\tfive ticks\n");
 }
 
+#[cfg(feature = "bot")]
 #[test]
 fn bot_run_stops_at_its_tick_budget() {
     let dir = TempDir::new("bot-budget");
@@ -890,6 +891,7 @@ fn bot_run_stops_at_its_tick_budget() {
 
 /// A bot that counts its ticks in the route's state, keeps a note on its
 /// second tick, and ends its run on its sixth with all it knows.
+#[cfg(feature = "bot")]
 const COUNTING_BOT: &[u8] = b"BOT_STATE = BOT_STATE or { count = 0, seen = { ticks = {} } }
 function on_bot_tick(bot)
     local state = BOT_STATE
@@ -908,6 +910,7 @@ function on_bot_tick(bot)
 end
 ";
 
+#[cfg(feature = "bot")]
 #[test]
 fn a_bot_plays_on_from_a_memory_file() {
     let dir = TempDir::new("bot-memory");
@@ -941,6 +944,7 @@ fn a_bot_plays_on_from_a_memory_file() {
     );
 }
 
+#[cfg(feature = "bot")]
 #[test]
 fn the_bot_calls_fail_with_a_message() {
     let dir = TempDir::new("bot-errors");
@@ -987,6 +991,21 @@ fn the_bot_calls_fail_with_a_message() {
     ] {
         assert_failure(&script(&dir, &lenient(source), &[]), needle);
     }
+}
+
+#[cfg(not(feature = "bot"))]
+#[test]
+fn a_build_without_the_bot_refuses_the_bot_calls() {
+    let dir = TempDir::new("no-bot");
+    write_pack(&dir.join("game.akpak"), &[]);
+    assert_failure(
+        &script(
+            &dir,
+            &lenient("load_game_pack('game.akpak') load_room('100') bot_run()"),
+            &[],
+        ),
+        "bot_run: this build has no player bot",
+    );
 }
 
 #[test]

@@ -7,7 +7,12 @@ description = "A from-scratch engine for the classic Resident Evil games"
 license = "MIT"
 
 [features]
-default = ["hd"]
+default = ["hd", "bot"]
+# The Lua player bot (`mods/bot`, `src/engine/bot.rs`): the driver API's
+# `bot_start`/`bot_run` and the bot's hooks in the app update. On by default,
+# as the bot's routes and tests need it; a build without it has no bot and
+# answers those calls with an error. It brings no dependencies of its own.
+bot = []
 # The replacement-format decoders an HD mod pack needs: PNG and WebP art, OGG
 # Vorbis audio and H.264/AAC films. Art and audio are pure-Rust crates; the
 # H.264 decoder is Cisco's BSD-licensed OpenH264, built from source by its

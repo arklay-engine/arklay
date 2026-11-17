@@ -21,7 +21,8 @@
 --   box's cursor;
 -- * `present(api, show_cursor, show_name, backdrop)`: what the next draw
 --   shows; `backdrop` is the item viewer's blue for the screen's clear
---   colour (0 without a viewer).
+--   colour (0 without a viewer);
+-- * `view()`: the published view, what the screen shows a player.
 --
 -- After `tick` and `update` the engine reads `event` (and `event_id`):
 -- `1` close the menu (the engine plays the exit's cancel cue), `2` close it
@@ -317,6 +318,40 @@ function M.move_cursor(api, cursor)
         refresh_selection(api)
     end
     publish(api)
+end
+
+local MODE_NAMES = { [NAVIGATION] = "navigation", [ACTIONS] = "actions", [MOVE] = "move" }
+
+--- The published view: what the screen shows a player, for observers such as
+--- the player bot. It is the screen's contract with them; nothing outside
+--- this file reads `s`. `cursor` is the cursor byte (`0, 2, 4, 6` the top
+--- tabs, `8 + 2 * slot` the item slots) and `slot` the inventory slot under
+--- it (`-1` on a tab); `mode` "navigation", "actions" (the item submenu) or
+--- "move" (the MOVE target cursor, `move_cursor`); `option` the highlighted
+--- submenu row (0-based) and `options` its labels, top to bottom, while an
+--- item is selected (`selected_item`, `0` for none); `ready` the submenu's
+--- open animation has finished, `closing` its close animation runs,
+--- `viewing` the CHECK slide or viewer is up. Empty before `open`.
+function M.view()
+    if s.cursor == nil then
+        return {}
+    end
+    local options = {}
+    if s.selected_item ~= 0 then
+        options = { s.equippable and "EQUIP" or "USE", "CHECK", "MOVE" }
+    end
+    return {
+        cursor = s.cursor,
+        slot = Grid.slot_of_cursor(s.cursor) or -1,
+        mode = MODE_NAMES[s.mode],
+        option = s.action,
+        options = options,
+        selected_item = s.selected_item,
+        ready = s.frames >= SUBMENU_OPEN_FRAMES,
+        closing = s.closing,
+        viewing = s.view ~= nil,
+        move_cursor = s.move_cursor,
+    }
 end
 
 --- What the next draw shows: the cursors, the item-name line and the

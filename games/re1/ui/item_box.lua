@@ -25,7 +25,8 @@
 -- shown)` before each draw. The screen plays its own cues (the
 -- `play_sfx(3, ...)` calls of `menu_itembox_interaction`, plus the page
 -- slide's room-bank `play_sfx(2, 0x21)`), so a dropped or refused input stays
--- silent.
+-- silent. `M.view()` is the screen's published view for observers such as
+-- the player bot.
 --
 -- The frame tables preserve the original's memory layout order: entries are
 -- listed in the order the original's backwards walk draws them.
@@ -258,6 +259,22 @@ end
 
 function M.cursor_shown(_api, shown)
     s.cursor_shown = shown == true
+end
+
+--- The published view: what the screen shows a player, for observers such as
+--- the player bot. It is the screen's contract with them; nothing outside
+--- this file reads `s`. `mode` is "browse" (the inventory cursor moves) or
+--- "armed" (a confirmed inventory slot waits for the box slot to swap with);
+--- `box_cursor` the box slot in the preview (0-based); `cursor` the inventory
+--- cursor (`8 + 2 * slot`, `4`/`6` on the EXIT tab row); `sliding` a page
+--- slide is running, which reads no buttons until it ends.
+function M.view()
+    return {
+        mode = s.mode,
+        box_cursor = s.box_cursor,
+        cursor = s.player_cursor,
+        sliding = s.slide_dir ~= 0,
+    }
 end
 
 -- One state-3 slide step: step the counter, wrap it at `SLIDE_WRAP`, and on
