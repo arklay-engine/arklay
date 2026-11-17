@@ -3811,8 +3811,11 @@ mod tests {
     const EMBRYO_STUB: &str = "
         w.timers = TIMERS or { [0] = 0, 0, 0, 0 }
         w.spd = SPEED or w.spd
-        w.move_no, w.move_cnt, w.hokan, w.xz, w.hidden, w.shadow = 0, 0, 0, 0, 0, -1
+        w.move_no, w.move_cnt, w.hokan, w.xz, w.hidden, w.shadow = 0, 0, 0, 0, HIDDEN or 0, -1
         w.rot_by = -1
+        function e:hidden_parts() return w.hidden end
+        function e:parent_apply(part, x, y, z) return x, y, z end
+        function e:parent_part(part) return 0, 0, 0 end
         function e:clip(n, c, h)
             w.clips[#w.clips + 1] = n
             w.move_no, w.move_cnt, w.hokan, w.frame = n, c, h, 0
@@ -3969,6 +3972,34 @@ mod tests {
         let template = run_embryo(0, &[1], 2, "");
         assert_eq!((template.get("drawn"), template.get("frame")), (1, 1));
         assert_eq!(routines(&template), (1, 0, 0, 0));
+    }
+
+    /// A `Type` 2 (`FUN_004742e0`) is drawn with parts 0, 2 and 3 only;
+    /// its ride (`FUN_00476060`) shows part 1 at `Timer2` 0x3c and the rest
+    /// as it drops. Part 0's drawn place is where its `Ground` is found.
+    #[test]
+    fn a_spat_embryo_shows_its_parts_as_it_comes_out() {
+        let rider = run_embryo(2, &[1], 1, "");
+        assert_eq!(routines(&rider), (1, 6, 0, 0));
+        assert_eq!(rider.get("hidden"), 0x3F2);
+        let setup = "ROUTINES = { [0] = 1, 6, 1, 0 } HIDDEN = 0x3F2";
+        let riding = run_embryo(
+            0x2002,
+            &[0; 4],
+            1,
+            &format!("{setup} TIMERS = {{ [0] = 0x1E, 0, 0x3D, 0 }}"),
+        );
+        assert_eq!(riding.get("hidden"), 0x3F2);
+        let riding = run_embryo(
+            0x2002,
+            &[0; 4],
+            1,
+            &format!("{setup} TIMERS = {{ [0] = 0x1E, 0, 0x3C, 0 }}"),
+        );
+        assert_eq!(riding.get("hidden"), 0x3F0);
+        let setup = "ROUTINES = { [0] = 1, 6, 2, 0 } HIDDEN = 0x3F0 POS = { 0, -9000, 0 }";
+        let dropping = run_embryo(0x2002, &[0; 4], 1, setup);
+        assert_eq!((dropping.get("hidden"), dropping.get("r2")), (0, 3));
     }
 
     /// The crawl's first tick: `Timer0`, `Timer2`'s refill and `Rnd & 3`,
@@ -7281,6 +7312,155 @@ mod tests {
             let (sub, flags, drawn): (i64, i64, i64) =
                 eval(&lua, "return w.r[2], w.vars[5], w.drawn");
             assert_eq!((sub, flags & 1, drawn), (5, 0, 0));
+        }
+    }
+
+    /// The G adult's (`Em_28`) birth, state 8 (0x478460), on the stub `e`.
+    mod adult_birth {
+        use super::smg_flame_tyrant_ivy::{eval, run};
+
+        /// `Em_28` as `update`, with `joint` ending its clip when `w.ended`
+        /// and `Sce_free0` as `w.free`.
+        fn adult() -> String {
+            format!(
+                "function e:joint() return w.ended end
+                 function e:sce_free() return w.free or 0 end
+                 function e:kind() return w.kind or 0 end
+                 function e:set_kind(v) w.kind = v end
+                 {}",
+                include_str!("../../games/re2/enemy/28/enemy.lua")
+            )
+        }
+
+        /// The birth state's vars as `FUN_004771d0` leaves a `Type` 0: part
+        /// 1's first weight full and the parts at their first sizes.
+        const BORN: &str = "w.r = { [0] = 1, 8, 0, 0 } w.vars[28] = 1 w.vars[10] = 0x1000
+            w.vars[26] = 1 w.vars[25] = 0 w.vars[29] = 0x200 w.vars[30] = 0 w.vars[31] = 0
+            w.vars[32] = 0 w.vars[33] = 0xC00 w.vars[34] = 0x400 w.vars[35] = 0xC00
+            w.vars[36] = 0x800";
+
+        /// `Type` 0's init: the body's `Type` 0x4000, part 1's first weight
+        /// full, clip 0xc's first frame backwards, and the birth (state 8).
+        #[test]
+        fn a_type_0_adult_starts_as_the_body() {
+            let (lua, log) = run(&adult(), "", 1, &["clip", "joint", "morph"]);
+            let (r1, kind, weighted, weight): (i64, i64, i64, i64) =
+                eval(&lua, "return w.r[1], w.kind, w.vars[28], w.vars[10]");
+            assert_eq!((r1, kind, weighted, weight), (8, 0x4000, 1, 0x1000));
+            assert_eq!(
+                log,
+                [
+                    "clip(1,0,0)",
+                    "morph(1,4096,0)",
+                    "morph_all(1,4096,0)",
+                    "clip(12,0,0)",
+                ]
+            );
+            let sizes: (i64, i64, i64, i64) = eval(
+                &lua,
+                "return w.vars[33], w.vars[34], w.vars[35], w.vars[36]",
+            );
+            assert_eq!(sizes, (0xC00, 0x400, 0xC00, 0x800));
+        }
+
+        /// Sub 0 draws once a tick for `Timer3` until the scene sets
+        /// `Sce_free0`, then counts it down (sub 1).
+        #[test]
+        fn the_body_draws_once_a_tick_until_the_scene_frees_it() {
+            let (lua, _) = run(&adult(), BORN, 3, &[]);
+            let (sub, drawn): (i64, i64) = eval(&lua, "return w.r[2], w.drawn");
+            assert_eq!((sub, drawn), (0, 3));
+            let setup = format!("{BORN} w.free = 1 w.draws = {{ 0x0B }}");
+            let (lua, _) = run(&adult(), &setup, 1, &[]);
+            let (sub, timer2, timer3): (i64, i64, i64) =
+                eval(&lua, "return w.r[2], w.timers[2], w.timers[3]");
+            assert_eq!((sub, timer2, timer3), (1, 5, (0x0B & 7) + 7));
+        }
+
+        /// Sub 1's wait ends with sound 8 and the eye's two draws; the sixth
+        /// end of clip 0xc in sub 2 starts the growth (sub 3) with sound 9.
+        #[test]
+        fn the_body_throbs_six_times() {
+            let setup = format!("{BORN} w.r[2] = 1 w.timers = {{ [0] = 0, 1, 3, 0 }}");
+            let (lua, log) = run(&adult(), &setup, 1, &["sound"]);
+            let (sub, drawn): (i64, i64) = eval(&lua, "return w.r[2], w.drawn");
+            assert_eq!((sub, drawn, log), (2, 2, vec!["sound(8)".to_string()]));
+            let setup =
+                format!("{BORN} w.r[2] = 2 w.ended = true w.timers = {{ [0] = 0, 1, 3, 0 }}");
+            let (lua, _) = run(&adult(), &setup, 1, &[]);
+            let (sub, timer2): (i64, i64) = eval(&lua, "return w.r[2], w.timers[2]");
+            assert_eq!((sub, timer2), (1, 2));
+            let setup =
+                format!("{BORN} w.r[2] = 2 w.ended = true w.timers = {{ [0] = 0, 1, 0, 0 }}");
+            let (lua, log) = run(&adult(), &setup, 1, &["sound"]);
+            let (sub, timer2, timer3): (i64, i64, i64) =
+                eval(&lua, "return w.r[2], w.timers[2], w.timers[3]");
+            assert_eq!((sub, timer2, timer3), (3, 0, 0x78));
+            assert_eq!(log, ["sound(9)"]);
+        }
+
+        /// The growth's first tick (`Timer0` 2, `Timer2` 0): part 1's two
+        /// sprays (8 draws), its weight down by `GROW[0] * 3`, no spray for
+        /// an odd `Timer2`, part 0x10's spray (6) and three thrown-away
+        /// triples: 23 draws.
+        #[test]
+        fn the_growths_first_tick_draws_23() {
+            let setup = format!(
+                "{BORN} w.r[2] = 3 w.timers = {{ [0] = 1, 1, 0, 5 }}
+                 w.draws = {{ 1, 2, 3, 4 }}"
+            );
+            let (lua, log) = run(&adult(), &setup, 1, &["effect"]);
+            let (drawn, weight, timer2): (i64, i64, i64) =
+                eval(&lua, "return w.drawn, w.vars[10], w.timers[2]");
+            assert_eq!((drawn, weight, timer2), (23, 0x1000 - 15, 1));
+            assert_eq!(log.len(), 3, "{log:?}");
+            assert_eq!(log[0], "effect(0,8,6128,48,1,1008,-200,504)");
+            assert!(log[1].starts_with("effect(0,16,6096,0,1,"), "{log:?}");
+            assert!(log[2].starts_with("effect(0,8,3096,0,16,"), "{log:?}");
+            let (size10y, size12y): (i64, i64) = eval(&lua, "return w.vars[33], w.vars[35]");
+            // Parts 0x10 and 0x12 grow by `GROW[1] * 3`, after part 1's step.
+            assert_eq!((size10y, size12y), (0xC00 + 42, 0xC00 + 42));
+        }
+
+        /// Part 1's weight going below 0 holds it at 0 and sets `+0x21e`'s 8
+        /// (the swell is done) and `+0x21f`'s 1 (the wobble).
+        #[test]
+        fn the_weight_ends_at_0_and_starts_the_wobble() {
+            let setup =
+                format!("{BORN} w.r[2] = 3 w.vars[10] = 3 w.timers = {{ [0] = 0x20, 1, 1, 5 }}");
+            let (lua, _) = run(&adult(), &setup, 1, &[]);
+            let (weight, b21e, b21f): (i64, i64, i64) =
+                eval(&lua, "return w.vars[10], w.vars[4], w.vars[5]");
+            assert_eq!((weight, b21e & 8, b21f & 1), (0, 8, 1));
+        }
+
+        /// Full-size parts stop growing and draw less: part 0x10 and 0x12
+        /// at 0x1000 set `+0x21e`'s 0x10 to 0x80, and their sprays stop.
+        #[test]
+        fn full_size_parts_stop_drawing() {
+            let setup = format!(
+                "{BORN} w.r[2] = 3 w.vars[4] = 8 w.vars[33] = 0x1000 w.vars[34] = 0x1000
+                 w.vars[35] = 0x1000 w.vars[36] = 0x1000 w.timers = {{ [0] = 0x20, 1, 0x10, 5 }}"
+            );
+            let (lua, log) = run(&adult(), &setup, 1, &["effect"]);
+            let (drawn, b21e): (i64, i64) = eval(&lua, "return w.drawn, w.vars[4]");
+            // `Timer0` 0x21, `Timer2` 0x10: no triple is thrown away either.
+            assert_eq!((drawn, b21e), (0, 0xF8));
+            assert!(log.is_empty(), "{log:?}");
+        }
+
+        /// Sub 4's clip end goes to sub 5, which sets part 1's weight to 0,
+        /// clears `Type`'s 0x4000 and walks (state 1).
+        #[test]
+        fn the_grown_adult_walks() {
+            let setup = format!(
+                "{BORN} w.r[2] = 5 w.kind = 0x4000 w.vars[4] = 0xF8
+                 w.timers = {{ [0] = 0x200, 1, 0x10, 5 }}"
+            );
+            let (lua, _) = run(&adult(), &setup, 1, &[]);
+            let (r1, r2, kind, weight): (i64, i64, i64, i64) =
+                eval(&lua, "return w.r[1], w.r[2], w.kind, w.vars[10]");
+            assert_eq!((r1, r2, kind, weight), (1, 0, 0, 0));
         }
     }
 

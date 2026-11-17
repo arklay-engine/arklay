@@ -382,7 +382,7 @@ fn joint_matrix(matrix: &player2::Matrix) -> crate::anim::Mat4x3 {
 const PARTS_MASK: u16 = 0x2000;
 
 /// How many of the work's fields the script keeps for itself.
-const VARS: usize = 34;
+const VARS: usize = 40;
 /// The dog, whose script is `enemy/20/enemy.lua`.
 pub const DOG_ID: u8 = 0x20;
 /// The crow, whose script is `enemy/21/enemy.lua`.
@@ -630,6 +630,10 @@ pub struct Zombie {
     /// the player's bolts read on the next tick, and the effects on a part
     /// (`Esp_call`'s matrix) on this tick's `Esp_move` and the next tick's calls.
     pub(crate) drawn: Vec<Option<player2::Matrix>>,
+    /// Part 0's place in `drawn` a tick ago: where `Game_loop`'s draw pass
+    /// finds an embryo's `Ground` (`Sca_ck_hit` on `kage->pPos`, part 0's
+    /// `Workm.t`) before it draws the body again.
+    pub(crate) kage_pos: Option<[i32; 3]>,
     /// The pose `drawn` is composed from, for the parts down that move after it.
     pose_tree: player2::PoseTree,
     /// `pDamage_work`'s `+0x99`: the part the last bolt stuck in.
@@ -1356,6 +1360,8 @@ impl Em<'_, '_, '_> {
     /// `Sce_em_set` left it.
     fn run_embryo(&mut self) {
         self.root_ck();
+        let kage = self.z.kage_pos.unwrap_or(self.mover.player.pos);
+        self.z.kage_pos = self.z.drawn.first().copied().flatten().map(|part| part.t);
         if self.world.stopped {
             return;
         }
@@ -1363,9 +1369,13 @@ impl Em<'_, '_, '_> {
             self.z.damage_cnt -= 1;
         }
         self.old_pos = self.mover.player.pos;
-        self.z.vars[EMBRYO_GROUND] = self.mover.tick.room.sca.as_ref().map_or(0, |sca| {
-            crate::sca::ground_at(sca, self.old_pos, 0, MASK).height
-        });
+        self.z.vars[EMBRYO_GROUND] = self
+            .mover
+            .tick
+            .room
+            .sca
+            .as_ref()
+            .map_or(0, |sca| crate::sca::ground_at(sca, kage, 0, MASK).height);
         self.z.parts = self.mover.posed_parts();
         self.script();
         if *self.be_flg != 0 {
