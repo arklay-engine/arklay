@@ -2278,7 +2278,7 @@ pub fn separate_from_character(
 pub fn separate_all(game: &mut GameState, slot: usize) -> bool {
     let player_pos = game.entities[0].pos;
     let player_angle = game.entities[0].angle;
-    let player_status = game.entities[0].status_flags;
+    let player_status = game.player_status_flags();
     let player_radius = player_radius(game.id.player_flag);
     let others: Vec<SeparationTarget> = game
         .entities
@@ -2475,9 +2475,12 @@ pub fn separate_player_from_entities(game: &mut GameState, prev_pos: [i32; 3]) -
             )
         })
         .collect();
+    // The original's `(entA->status_flags | entB->status_flags) & 2` test
+    // reads the player's whole flags byte: a hold that raises the grabbed bit
+    // through `player_flags` takes the player out of every pair.
+    let player_status = game.player_status_flags();
     let player = &mut game.entities[0];
     let player_state = player.state();
-    let player_status = player.status_flags;
     let player_angle = player.angle;
     let volume = ScaHit::player(radius);
     let mut hit = false;
@@ -2521,7 +2524,7 @@ pub(crate) fn player_radius(player_flag: u8) -> i32 {
 pub fn update(game: &mut GameState, slot: usize, room: &RoomState, clips: &[Clip]) {
     let player_pos = game.entities[0].pos;
     let player_angle = game.entities[0].angle;
-    let player_status = game.entities[0].status_flags;
+    let player_status = game.player_status_flags();
     let player_radius = player_radius(game.id.player_flag);
     let seed = game.rand_seed;
     let slow = game.flags[5].bit(crate::game::MSF2_EFFECT_ZONE);
@@ -3573,6 +3576,33 @@ mod tests {
         game.entities[1] = asleep;
         assert!(!separate_player_from_entities(&mut game, [500, 0, 500]));
         assert_eq!(game.entities[0].pos, [500, 0, 500]);
+    }
+
+    #[test]
+    fn a_grab_raised_through_the_player_flags_skips_separation() {
+        // Plant 42's lift raises the grabbed bit in `player_flags`, the upper
+        // half of the original's flags byte: the held player rides through
+        // the vine instead of being pushed out of it.
+        let overlapping = || {
+            let mut game = GameState::default();
+            game.entities[0].pos = [500, 0, 500];
+            game.entities[0].set_active(true);
+            let mut plant = entity([1200, 0, 500], 0, 0);
+            plant.sca_radius = 422;
+            game.entities[1] = plant;
+            game.entities[1].set_active(true);
+            game
+        };
+        let mut game = overlapping();
+        game.player_flags = 2;
+        assert!(!separate_player_from_entities(&mut game, [500, 0, 500]));
+        assert_eq!(game.entities[0].pos, [500, 0, 500]);
+
+        let mut game = overlapping();
+        game.player_flags = 2;
+        separate_all(&mut game, 1);
+        assert_eq!(game.entities[0].pos, [500, 0, 500]);
+        assert_eq!(game.entities[1].pos, [1200, 0, 500]);
     }
 
     fn blocked_room() -> RoomState {

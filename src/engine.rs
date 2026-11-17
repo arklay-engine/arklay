@@ -4998,9 +4998,7 @@ impl GameSession {
             // The explosion cleared the player's entity flags: no body.
             (
                 "corpse",
-                ScreenArg::Int(i64::from(
-                    self.game.entities[0].status_flags | self.game.player_flags,
-                )),
+                ScreenArg::Int(i64::from(self.game.player_status_flags())),
             ),
         ];
         let mut cx = self.ui_context(pack);
@@ -21100,7 +21098,8 @@ fn render_frame_on(
                 entity.roll,
                 entity.joint_scale,
             );
-            let frozen = game.tyrant.frozen_joints(entity, &game.joint_trails[slot]);
+            let mut frozen = game.tyrant.frozen_joints(entity, &game.joint_trails[slot]);
+            frozen.extend_from_slice(&game.entity_anims[slot].held);
             let mut joints =
                 anim::joint_matrices_frozen(&model.skeleton, &keyframe, &entity_matrix, &frozen);
             apply_look_at(&mut joints, entity, &game.entity_anims[slot]);

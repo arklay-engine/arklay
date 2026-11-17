@@ -47,6 +47,11 @@ pub struct EntityAnim {
     /// pass never recomposes them); `reset_joints` clears it with the rest of
     /// the clock.
     pub yawn: Option<Box<crate::enemy::custom_anim::YawnPose>>,
+    /// The joints a script composed itself, at the world it left them: the
+    /// original clears their `+0x00` bit 2, so the render pass keeps the
+    /// world the script wrote (and their children compose from it) until the
+    /// bit is raised again.
+    pub held: Vec<(usize, crate::anim::Mat4x3)>,
 }
 
 impl Default for EntityAnim {
@@ -58,6 +63,7 @@ impl Default for EntityAnim {
             keyframes: None,
             skeleton: None,
             yawn: None,
+            held: Vec::new(),
         }
     }
 }
@@ -258,7 +264,46 @@ impl EntityAnim {
             entity.roll,
             entity.joint_scale,
         );
-        crate::anim::joint_matrices_frozen(skeleton, &pose, &matrix, frozen)
+        if self.held.is_empty() {
+            return crate::anim::joint_matrices_frozen(skeleton, &pose, &matrix, frozen);
+        }
+        let mut frozen = frozen.to_vec();
+        frozen.extend_from_slice(&self.held);
+        crate::anim::joint_matrices_frozen(skeleton, &pose, &matrix, &frozen)
+    }
+
+    /// Add `delta` to `joint`'s posed rotation, the original's write straight
+    /// into the joint struct: it stays in the pose on screen, so the next
+    /// blend eases out of it. Folded at once, since the custom Plant 42 clock
+    /// blends from the pose on screen without folding pending steps.
+    pub fn rotate_joint(&mut self, clips: &[Clip], joint: usize, delta: [i16; 3]) {
+        self.player.rotate_joints(vec![(joint, delta)]);
+        if let Some(keyframes) = self.keyframes.clone() {
+            self.player.pose_keyframe(clips, &keyframes);
+        }
+    }
+
+    /// Compose `joint`'s world from `parent_world` and the joint's posed local
+    /// transform (`ApplyLVAndMul0Matrix(parent->world, &joint->transform,
+    /// &joint->world)`) and hold it there until [`Self::release_joint`].
+    pub fn hold_joint(
+        &mut self,
+        entity: &Entity,
+        clips: &[Clip],
+        joint: usize,
+        parent_world: &crate::anim::Mat4x3,
+    ) {
+        let Some(local) = self.local_transforms(entity, clips).get(joint).copied() else {
+            return;
+        };
+        let world = crate::anim::compose(parent_world, &local);
+        self.held.retain(|(held, _)| *held != joint);
+        self.held.push((joint, world));
+    }
+
+    /// Let the hierarchy compose `joint` again (its bit 2 raised).
+    pub fn release_joint(&mut self, joint: usize) {
+        self.held.retain(|(held, _)| *held != joint);
     }
 
     /// `EntityApplyLookAtRotation`: turn the tracking joint's world by the
@@ -802,6 +847,58 @@ mod tests {
             ..EntityAnim::default()
         };
         assert!(bare.joint_worlds(&entity, &clips).is_empty());
+    }
+
+    #[test]
+    fn a_held_joint_keeps_its_script_world_and_carries_its_children() {
+        use crate::model::{Keyframe, Skeleton};
+        use std::sync::Arc;
+
+        let clips = vec![clip(&[(0, 1)])];
+        let keyframes = vec![Keyframe {
+            vertex: [0, 0, 0],
+            offset: [0, 0, 0],
+            rotations: vec![[0, 0, 0]; 3],
+        }];
+        let skeleton = Skeleton {
+            relative: vec![[0, 0, 0], [100, 0, 0], [0, 0, 100]],
+            children: vec![vec![1], vec![2], vec![]],
+        };
+        let mut clock = EntityAnim {
+            keyframes: Some(Arc::new(keyframes)),
+            skeleton: Some(Arc::new(skeleton)),
+            ..EntityAnim::default()
+        };
+        let entity = entity(0, 0, 0);
+        let rest = clock.joint_worlds(&entity, &clips);
+        assert_eq!(rest[2].t, [99, 0, 99]);
+
+        // The turn lands in the pose on screen, so the next compose (and a
+        // second turn) builds on it.
+        clock.rotate_joint(&clips, 1, [0x200, 0, 0]);
+        clock.rotate_joint(&clips, 1, [0x200, 0, 0]);
+        let pose = clock.player.applied_pose().expect("folded");
+        assert_eq!(pose.rotations[1], [0x400, 0, 0]);
+        let turned = clock.joint_worlds(&entity, &clips);
+        assert_eq!(turned[1].t, rest[1].t, "the joint turns in place");
+        assert_ne!(turned[2].t, rest[2].t, "its child swings with it");
+
+        // A held joint composes off the parent world it was handed, not the
+        // pose's own parent, and its child follows the held world.
+        let parent = crate::anim::Mat4x3 {
+            r: [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]],
+            t: [0, 500, 0],
+        };
+        clock.hold_joint(&entity, &clips, 1, &parent);
+        let local = clock.local_transforms(&entity, &clips);
+        let held = clock.joint_worlds(&entity, &clips);
+        assert_eq!(held[1], crate::anim::compose(&parent, &local[1]));
+        assert_eq!(held[1].t, [100, 500, 0]);
+        assert_eq!(held[2], crate::anim::compose(&held[1], &local[2]));
+
+        // Released, the hierarchy composes it again.
+        clock.release_joint(1);
+        assert_eq!(clock.joint_worlds(&entity, &clips), turned);
     }
 
     #[test]

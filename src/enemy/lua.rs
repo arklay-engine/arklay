@@ -3991,6 +3991,49 @@ mod imp {
                 Ok(())
             });
 
+            // Add to a posed joint's rotation, the original's write into the
+            // joint struct's `rotation`.
+            methods.add_method_mut(
+                "rotate_joint",
+                |_lua, api, (joint, x, y, z): (i64, i64, i64, i64)| {
+                    let clips = api.clips;
+                    let slot = api.slot;
+                    // SAFETY: the clips pointer borrows the caller's model for
+                    // the whole call (see the type-level comment).
+                    let clips = unsafe { &*clips };
+                    api.game().entity_anims[slot].rotate_joint(
+                        clips,
+                        joint as usize,
+                        [x as i16, y as i16, z as i16],
+                    );
+                    Ok(())
+                },
+            );
+
+            // Compose a joint's world from `parent`'s stored world (the one
+            // the previous update's render pass left) and the joint's posed
+            // transform, and keep the hierarchy compose off it: the original
+            // clears the joint's bit 2 and writes `joint->world` itself.
+            methods.add_method_mut("hold_joint", |_lua, api, (joint, parent): (i64, i64)| {
+                let clips = api.clips;
+                let slot = api.slot;
+                // SAFETY: as above.
+                let clips = unsafe { &*clips };
+                let game = api.game();
+                let Some(parent_world) = game.joint_worlds[slot].get(parent as usize).copied()
+                else {
+                    return Ok(());
+                };
+                let entity = game.entities[slot];
+                game.entity_anims[slot].hold_joint(&entity, clips, joint as usize, &parent_world);
+                Ok(())
+            });
+            methods.add_method_mut("release_joint", |_lua, api, joint: i64| {
+                let slot = api.slot;
+                api.game().entity_anims[slot].release_joint(joint as usize);
+                Ok(())
+            });
+
             // `snap_player_to_grab_position`: pin the grabbing entity's
             // `unk_c6`/`unk_c8` offsets and the player's copies to the root
             // motion vertex's world position, the bite anchor.
@@ -16468,6 +16511,58 @@ mod computer_arms_tests {
         }
 
         #[test]
+        fn plant42_kill_twists_joint_twelve_off_joint_eleven() {
+            use std::sync::Arc;
+            let pack = pack();
+            let mut game = plant(0);
+            let mut host = LuaEnemyHost::new();
+            head_low(&mut game);
+            assert!(step(&mut host, &mut game, &pack)); // init
+            game.entity_anims[1].skeleton = Some(Arc::new(crate::model::Skeleton {
+                relative: vec![[0, -100, 0]; 16],
+                children: (0..16)
+                    .map(|joint| if joint < 15 { vec![joint + 1] } else { vec![] })
+                    .collect(),
+            }));
+            game.entity_anims[1].keyframes = Some(Arc::new(vec![crate::model::Keyframe {
+                rotations: vec![[0, 0, 0]; 16],
+                ..Default::default()
+            }]));
+            game.entities[1].state_field = 1;
+            game.entities[1].set_ignore(1);
+            game.entities[1].action_behavior = 8;
+            game.entities[1].action_state = 1;
+            game.entities[1].set_p42_grab_joint(15);
+            game.entities[1].set_p42_ticks(5);
+            head_low(&mut game);
+            let eleven = crate::anim::Mat4x3 {
+                r: [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]],
+                t: [300, -2000, 700],
+            };
+            game.joint_worlds[1][11] = eleven;
+            assert!(step(&mut host, &mut game, &pack));
+
+            // Joint 12 turned by 2 and composed off the stored joint 11 world
+            // (the previous render's), not this tick's.
+            let clock = &game.entity_anims[1];
+            let pose = clock.player.applied_pose().expect("the twist folds");
+            assert_eq!(pose.rotations[12], [2, 0, 0]);
+            let (joint, held) = clock.held[0];
+            assert_eq!(joint, 12);
+            let local = crate::anim::Mat4x3 {
+                r: crate::anim::rotation_matrix(2, 0, 0),
+                t: [0, -100, 0],
+            };
+            assert_eq!(held, crate::anim::compose(&eleven, &local));
+            assert_eq!(game.joint_worlds[1][12], held);
+
+            // The release lets the hierarchy compose it again.
+            game.entities[1].action_state = 4;
+            assert!(step(&mut host, &mut game, &pack));
+            assert!(game.entity_anims[1].held.is_empty());
+        }
+
+        #[test]
         fn plant42_kill_feeds_the_player_into_the_eat_window() {
             let pack = pack();
             let mut game = plant(0);
@@ -16514,7 +16609,7 @@ mod computer_arms_tests {
             assert_eq!(game.entities[0].action_state, 1);
             assert_eq!(game.entities[0].attack_anim, 2, "the eaten clip");
             assert_eq!(game.entities[0].action_ticks_counter, 0xE);
-            assert_eq!(game.entities[0].flags & 4, 4);
+            assert_eq!(game.player_flags & 4, 4);
             assert_eq!(player_state.clip_source, crate::player::ClipSource::Damage);
             assert_eq!(player_state.anim.clip, 2);
         }
@@ -17688,7 +17783,7 @@ mod computer_arms_tests {
             assert_eq!(game.entities[0].action_state, 1);
             assert_eq!(game.entities[0].attack_anim, 2, "the impale clip");
             assert_eq!(game.entities[0].is_being_attacked, 0x80);
-            assert_eq!(game.entities[0].flags & 6, 6);
+            assert_eq!(game.player_flags & 6, 6);
         }
 
         // -----------------------------------------------------------------

@@ -1334,11 +1334,11 @@ fn plant42_eat(
                     entity.action_state = 1;
                     entity.attack_anim = 2;
                     entity.unk_8c = 3;
-                    entity.flags |= 4;
                     entity.action_ticks_counter = 0xF;
                     entity.death_timer = 0;
                     entity.move_speed[1] = 0;
                 }
+                game.player_flags |= 4;
                 wound_player(game, &[0, 2, 1]);
                 play_player_sound(game, room, 3, 3);
                 // Bank 4 is the original's special/BGM pan update; the port
@@ -1514,11 +1514,11 @@ fn neptune_devour(game: &mut GameState, player: &mut PlayerState, clips: &[Clip]
 fn tyrant_impale(game: &mut GameState, player: &mut PlayerState, room: &RoomState, clips: &[Clip]) {
     match game.entities[0].action_state {
         0 => {
+            game.player_flags |= 6;
             let entity = &mut game.entities[0];
             entity.action_state = 1;
             entity.attack_anim = 2;
             entity.is_being_attacked = 0x80;
-            entity.flags |= 6;
             entity.animation_frame_id = 0;
             entity.unk_bf = 0;
             entity.unk_8c = 0;
@@ -4530,7 +4530,7 @@ mod tests {
             game.entities[0].action_ticks_counter, 0xE,
             "the entry tick counts down"
         );
-        assert_eq!(game.entities[0].flags & 4, 4);
+        assert_eq!(game.player_flags & 4, 4);
         assert_eq!(player.clip_source, ClipSource::Damage);
         assert_eq!(player.anim.clip, 2);
         assert!(
@@ -4726,7 +4726,7 @@ mod tests {
         assert_eq!(game.entities[0].action_state, 1);
         assert_eq!(game.entities[0].attack_anim, 2);
         assert_eq!(game.entities[0].is_being_attacked, 0x80);
-        assert_eq!(game.entities[0].flags & 6, 6);
+        assert_eq!(game.player_flags & 6, 6);
         assert_eq!(game.entities[0].animation_frame_id, 0);
         assert_eq!(game.entities[0].unk_bf, 0);
         assert_eq!(game.entities[0].unk_8c, 0);
