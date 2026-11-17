@@ -5163,6 +5163,21 @@ impl GameState {
         }
     }
 
+    /// The enemy positions the backward walk's view scan tests (the enemy
+    /// loop of `player_ctrl_behavior_run`, 0x00495f1e). The original walks
+    /// `g_EnemiesList`'s 30 slots and spends `g_enemy_count` on active slots
+    /// only, so the scan covers the first `enemy_count` active slots. A dead
+    /// or suppressed one uses up a place without being tested; an inactive
+    /// slot costs nothing.
+    pub fn back_walk_view_points(&self) -> impl Iterator<Item = [i32; 3]> + '_ {
+        self.entities[1..=crate::combat::ENEMY_LIST_LEN]
+            .iter()
+            .filter(|entity| entity.active())
+            .take(usize::from(self.enemy_count))
+            .filter(|entity| entity.health >= 0 && entity.behavior_flags & 0x80 == 0)
+            .map(|entity| entity.pos)
+    }
+
     /// `get_eml_state` (0x39): copy an enemy's `behavior_flags` into the byte
     /// scripts read back. An out-of-range slot leaves the byte untouched.
     pub fn read_enemy_flags(&mut self, index: u8) {
@@ -14973,6 +14988,52 @@ mod tests {
             [0, 0, 0],
             "an id past the live count is not scanned"
         );
+    }
+
+    #[test]
+    fn back_walk_scan_spends_its_count_on_active_slots_only() {
+        let mut state = game();
+        state.entities[1].pos = [100, 0, 0];
+        state.entities[2].set_active(true);
+        state.entities[2].pos = [200, 0, 0];
+        state.entities[3].set_active(true);
+        state.entities[3].pos = [300, 0, 0];
+        state.enemy_count = 1;
+        let points: Vec<_> = state.back_walk_view_points().collect();
+        assert_eq!(points, [[200, 0, 0]], "slot 3 is past the count");
+        state.enemy_count = 2;
+        let points: Vec<_> = state.back_walk_view_points().collect();
+        assert_eq!(points, [[200, 0, 0], [300, 0, 0]]);
+    }
+
+    #[test]
+    fn back_walk_scan_counts_dead_and_suppressed_enemies_without_testing_them() {
+        let mut state = game();
+        state.entities[1].set_active(true);
+        state.entities[1].health = -1;
+        state.entities[1].pos = [100, 0, 0];
+        state.entities[2].set_active(true);
+        state.entities[2].behavior_flags = 0x80;
+        state.entities[2].pos = [200, 0, 0];
+        state.entities[3].set_active(true);
+        state.entities[3].pos = [300, 0, 0];
+        state.enemy_count = 2;
+        assert_eq!(state.back_walk_view_points().count(), 0);
+        state.enemy_count = 3;
+        let points: Vec<_> = state.back_walk_view_points().collect();
+        assert_eq!(points, [[300, 0, 0]]);
+    }
+
+    #[test]
+    fn back_walk_scan_stops_at_the_thirtieth_enemy_slot() {
+        let mut state = game();
+        state.entities[30].set_active(true);
+        state.entities[30].pos = [300, 0, 0];
+        state.entities[31].set_active(true);
+        state.entities[31].pos = [400, 0, 0];
+        state.enemy_count = 31;
+        let points: Vec<_> = state.back_walk_view_points().collect();
+        assert_eq!(points, [[300, 0, 0]], "slot 31 is past the 30-slot list");
     }
 
     #[test]

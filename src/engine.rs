@@ -18736,12 +18736,10 @@ fn tick_interactive(context: &mut RoomContext<'_>, cancel_held: bool) {
 /// (or weapon) machine run in the original's order.
 fn tick_pad_driven_player(context: &mut RoomContext<'_>, pad: player::Input) {
     context.player.enemy_view_points.clear();
-    context.player.enemy_view_points.extend(
-        context.game.entities[1..]
-            .iter()
-            .filter(|e| e.status_flags & 1 != 0 && e.health >= 0 && e.behavior_flags & 0x80 == 0)
-            .map(|e| e.pos),
-    );
+    context
+        .player
+        .enemy_view_points
+        .extend(context.game.back_walk_view_points());
     // `player_input_to_behavior`'s action-key scan runs at the top of the
     // player's frame-0 dispatch, before the behaviour it selects executes on
     // the same tick (`update_player_anim`, 0x00480ebd). `pad` is already
