@@ -12,7 +12,7 @@
 // Modes (`in_mode.x & 0xFF`):
 // 0: the item's colour.
 // 1: the atlas texel through the map, times the colour; a clear texel draws
-//    nothing.
+//    nothing. With `TEXEL_ALPHA` the texel's alpha scales the colour's.
 // 2: HD art times the colour, kept to the map's opaque atlas texels when
 //    `MASKED`.
 // 3: as 2, through the original page's indices and the recolouring rows of
@@ -52,6 +52,7 @@ const uint MIRROR_Y = 2u;
 const uint CENTRED = 4u;
 const uint MASKED = 8u;
 const uint ADDITIVE = 32u;
+const uint TEXEL_ALPHA = 64u;
 
 int source_texel(int pixel, int start, int extent, int source, bool centred, bool mirror) {
     // As `draw2d::Map::texel` computes it.
@@ -84,10 +85,18 @@ void main() {
         colour = in_colour;
     } else if (mode == 1u) {
         vec4 texel = atlas_texel(pixel, flags);
-        if (texel.a < 0.5) {
-            discard;
+        if ((flags & TEXEL_ALPHA) != 0u) {
+            // `draw2d::TEXEL_ALPHA`: the texel's alpha is its coverage.
+            if (texel.a == 0.0) {
+                discard;
+            }
+            colour = vec4(texel.rgb * in_colour.rgb, texel.a * in_colour.a);
+        } else {
+            if (texel.a < 0.5) {
+                discard;
+            }
+            colour = vec4(texel.rgb * in_colour.rgb, in_colour.a);
         }
-        colour = vec4(texel.rgb * in_colour.rgb, in_colour.a);
     } else if (mode == 4u) {
         out_colour = texture(image, in_uv) * in_colour.a;
         return;

@@ -189,6 +189,9 @@ pub enum UiCue {
     MapZoom,
     /// The MAP tab's objective-label blink (`Mapled`, character-table slot 10).
     MapLabel,
+    /// A slot of a global sound bank (`LoadSoundBank(bank)` then
+    /// `play_sfx(1, slot)`): the ending's bank 14 for its own cues.
+    Bank(u8, u8),
     /// A current-room bank sound (`play_sfx(2, slot)`): the slot of the
     /// loaded room's sound-table row, which only the session can resolve.
     RoomSound(u8),
@@ -216,6 +219,7 @@ impl UiCue {
             UiCue::PageTurn => Some(crate::sfx::UI_PAGE_TURN),
             UiCue::MapZoom => Some(crate::sfx::UI_MAP_ZOOM),
             UiCue::MapLabel => Some(crate::sfx::UI_MAP_LABEL),
+            UiCue::Bank(bank, slot) => crate::sfx::global_sfx(bank, slot),
             UiCue::RoomSound(_) | UiCue::Core(_) | UiCue::CoreBank(_) => None,
         }
     }

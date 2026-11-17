@@ -339,7 +339,7 @@ const HANDLER_EVENT: u8 = 9;
 const HANDLER_TYPEWRITER: u8 = 16;
 /// `room_check_actions` index of the room effect-zone handler, which raises
 /// `MSF2_EFFECT_ZONE` while the player is inside its zone.
-const HANDLER_EFFECT_ZONE: u8 = 0x0B;
+pub(crate) const HANDLER_EFFECT_ZONE: u8 = 0x0B;
 /// `room_check_actions` index of the stair/ladder entry handler.
 const HANDLER_STAIRS_ZONE: u8 = 0x0C;
 /// `room_check_actions` index of the stair height ramp handler.
@@ -3848,6 +3848,11 @@ pub struct GameState {
     /// devour transform built from the shark's mouth joint, dragged by the
     /// swallow's own step.
     pub neptune_capture: crate::anim::Mat4x3,
+    /// The rotation a hold last wrote into the player's local matrix (the
+    /// Plant 42 and Yawn holds and the Neptune devour write the whole
+    /// matrix). It stands in place of the facing while the captured bit
+    /// (`zone_flags & 0x80`) is up; see [`GameState::player_matrix`].
+    pub player_held_rotation: [[i32; 3]; 3],
     /// The Tyrant's render-only scratch: the slash ribbon, the two claw
     /// ghosts and the five rocket-death limbs. One Tyrant is alive at a time,
     /// and the block resets with the room.
@@ -4088,6 +4093,15 @@ pub struct GameState {
     /// gameplay; [`GameState::tick_entities`] draws it once per gameplay tick.
     /// Inside [`crate::joint_trail::damage_after_compose`].
     pub effect_pass_hit: bool,
+    /// `g_playerEntity.move_speed_current` for the room action pass: the
+    /// effect zone (0x0B) only ripples under a player who is moving.
+    pub player_move_speed: i16,
+    /// `g_spriteAnimActive`, the half of the double buffer this frame draws
+    /// to: the effect zone ripples only on the frames it is set.
+    pub buffer_half: u8,
+    /// `g_roomActionEffectIndex` (0x004b9308): the effect zone's next ripple
+    /// offset, a process-wide counter no room resets.
+    pub effect_zone_index: u8,
     pub rand_state: u32,
     /// This frame's platform-random draw (the original's `g_RandSeed`), written
     /// once per gameplay tick before entity thinking and read by the NPC and
@@ -4212,6 +4226,28 @@ impl Rumble {
 }
 
 impl GameState {
+    /// The player's local matrix at `pos`. The original's joint compose
+    /// skips `RotMatrix` of the player's facing while the captured bit
+    /// (`zone_flags & 0x80`) is up, so the rotation a hold wrote stands.
+    pub fn player_matrix(&self, pos: [i32; 3], angle: u16) -> crate::anim::Mat4x3 {
+        if self.entities[0].zone_flags & 0x80 != 0 {
+            crate::anim::Mat4x3 {
+                r: self.player_held_rotation,
+                t: pos,
+            }
+        } else {
+            crate::anim::entity_matrix(pos, angle)
+        }
+    }
+
+    /// Write a hold's composed matrix into the player's: the translation
+    /// moves both position mirrors, the rotation stands while captured.
+    pub fn hold_player_matrix(&mut self, held: &crate::anim::Mat4x3) {
+        self.entities[0].pos = held.t;
+        self.entities[0].zone_flags |= 0x80;
+        self.player_held_rotation = held.r;
+    }
+
     /// Ask for `rumble`, merged with any already asked for this tick.
     pub fn rumble(&mut self, rumble: Rumble) {
         self.rumble = Some(self.rumble.map_or(rumble, |pending| pending.max(rumble)));
@@ -4327,6 +4363,7 @@ impl Default for GameState {
             player_frozen_joints: Vec::new(),
             yawn_capture: crate::anim::Mat4x3::default(),
             neptune_capture: crate::anim::Mat4x3::default(),
+            player_held_rotation: crate::anim::Mat4x3::default().r,
             tyrant: crate::enemy::tyrant::TyrantState::default(),
             player_attacker: None,
             player_damage: None,
@@ -4400,6 +4437,9 @@ impl Default for GameState {
             snd3d_noops: BTreeMap::new(),
             sfx_requests: Vec::new(),
             effect_pass_hit: false,
+            player_move_speed: 0,
+            buffer_half: 0,
+            effect_zone_index: 0,
             rand_state: 1,
             rand_seed: 0,
             screen_shake: [0, 0],
@@ -8814,11 +8854,26 @@ impl GameState {
     }
 
     /// `room_action_effect` (handler 0x0B): raise the effect-zone bit, which
-    /// shifts every footstep sound column by -3. The original also spawns a
-    /// dust billboard under a moving player; that cosmetic half is not ported
-    /// (#737).
+    /// shifts every footstep sound column by -3, and on every other frame
+    /// ripple the water under a moving player: a type-0x17 billboard on the
+    /// player's matrix, at the next of six offsets round the feet, dropped to
+    /// the surface at height 0 (`DAT_00d226e8`, never written).
     fn raise_effect_zone(&mut self) {
+        const RIPPLE_X: [i32; 6] = [0, -346, -346, 0, 346, 346];
+        const RIPPLE_Z: [i32; 6] = [-400, 346, -346, 346, 200, 346];
         self.flags[5].apply(MSF2_EFFECT_ZONE, 0);
+        if self.player_move_speed > 0 && self.buffer_half != 0 {
+            let index = usize::from(self.effect_zone_index) % RIPPLE_X.len();
+            let pos = [
+                RIPPLE_X[index],
+                0i32.wrapping_sub(self.entities[0].pos[1]),
+                RIPPLE_Z[index],
+            ];
+            let room = Rc::clone(&self.room_effects);
+            let _slot =
+                effects::create_attached(self, &room, 0x17, 8, effects::Attach::Player, pos, 0, 0);
+            self.effect_zone_index = ((index + 1) % RIPPLE_X.len()) as u8;
+        }
     }
 
     /// Run one room action handler by index, as `aot_on` and `give_item` do.
@@ -8831,8 +8886,7 @@ impl GameState {
     ///
     /// The desk handler (0x0E) runs the full lock/key/open/award flow through
     /// [`Self::check_desk`]; the effect-zone handler (0x0B) raises
-    /// `MSF2_EFFECT_ZONE` but does not draw the original's moving-player dust
-    /// billboards (documented deviation).
+    /// `MSF2_EFFECT_ZONE` and ripples the water under a moving player.
     pub fn run_room_action(&mut self, slot: u8, handler: u8) -> bool {
         let Some(action) = self.room_actions.get(usize::from(slot)).copied().flatten() else {
             return false;
@@ -11888,6 +11942,26 @@ mod tests {
         command_op(code).unwrap()
     }
 
+    #[test]
+    fn a_captured_player_keeps_the_rotation_its_hold_wrote() {
+        let mut state = GameState::new(RoomId::parse("2000").unwrap(), &RoomState::default());
+        let held = crate::anim::Mat4x3 {
+            r: crate::anim::rotation_matrix(0x200, 0x100, 0x40),
+            t: [100, -200, 300],
+        };
+        state.hold_player_matrix(&held);
+        assert_eq!(state.entities[0].pos, held.t);
+        assert_eq!(state.player_matrix([1, 2, 3], 0x400).r, held.r);
+        assert_eq!(state.player_matrix([1, 2, 3], 0x400).t, [1, 2, 3]);
+
+        // Released, the facing builds the rotation again.
+        state.entities[0].zone_flags &= !0x80;
+        assert_eq!(
+            state.player_matrix([1, 2, 3], 0x400),
+            crate::anim::entity_matrix([1, 2, 3], 0x400)
+        );
+    }
+
     fn game() -> GameState {
         GameState::new(RoomId::parse("1001").unwrap(), &RoomState::default())
     }
@@ -13032,6 +13106,57 @@ mod tests {
         // The direct handler path (`cmd_room_action`) raises it too.
         assert!(state.run_room_action(0, HANDLER_EFFECT_ZONE));
         assert!(state.flags[5].bit(MSF2_EFFECT_ZONE));
+    }
+
+    #[test]
+    fn effect_zone_drops_a_ripple_under_a_moving_player_every_other_frame() {
+        use crate::effects::fixtures::{block, sprite};
+        let mut state = game();
+        state.weapon_effects.sprites.push(sprite(
+            0x17,
+            std::array::from_fn(|_| vec![vec![block(2, 0, 0)]]),
+        ));
+        state.entities[0].pos = [0, -1800, 0];
+        state.room_actions[0] = Some(RoomAction {
+            slot: 0,
+            kind: RoomActionKind::EffectZone,
+            zone: [0, 0, 100, 100],
+            sce: HANDLER_EFFECT_ZONE,
+            handler: HANDLER_EFFECT_ZONE,
+            flags: 0x41,
+            params: [0; 8],
+            item_data: None,
+            room_items_flag: 0xFF,
+            reach_animation: false,
+        });
+        // Standing still, or on the frame the sprite animations skip, there
+        // is no ripple.
+        state.buffer_half = 1;
+        assert!(state.run_room_action(0, HANDLER_EFFECT_ZONE));
+        state.player_move_speed = 40;
+        state.buffer_half = 0;
+        assert!(state.run_room_action(0, HANDLER_EFFECT_ZONE));
+        assert_eq!(state.effects.active_count(), 0);
+        // Moving on a drawing frame: one ripple per frame, round the six
+        // offsets about the player, at the floor under the player's height.
+        state.buffer_half = 1;
+        let expected = [
+            [0, -400],
+            [-346, 346],
+            [-346, -346],
+            [0, 346],
+            [346, 200],
+            [346, 346],
+            [0, -400],
+        ];
+        for (frame, [x, z]) in expected.into_iter().enumerate() {
+            assert!(state.run_room_action(0, HANDLER_EFFECT_ZONE));
+            let ripple = state.effects.slot(63 - frame).expect("a seated ripple");
+            assert_eq!(ripple.effect_type, 0x17);
+            assert_eq!(ripple.depth_group, 8);
+            assert_eq!(ripple.attach, crate::effects::Attach::Player);
+            assert_eq!(ripple.spawn_pos, [x, 1800, z]);
+        }
     }
 
     #[test]

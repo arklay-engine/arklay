@@ -327,6 +327,13 @@ impl UserData for Api<'_> {
             Ok(())
         });
 
+        // A slot of an RE 1 global sound bank (`play_sfx(1, slot)` with
+        // `LoadSoundBank(bank)` loaded): an empty slot plays nothing.
+        methods.add_method("bank_sound", |_lua, api, (bank, slot): (u8, u8)| {
+            api.cx.play_cue(UiCue::Bank(bank, slot));
+            Ok(())
+        });
+
         // An RE 2 core-bank slot (`Snd_se_on(0x4nn0000)`): the title's cues.
         methods.add_method("core_sound", |_lua, api, slot: u8| {
             api.cx.play_cue(UiCue::Core(slot));

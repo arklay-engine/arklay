@@ -426,15 +426,22 @@ fn loaded(result: anyhow::Result<usize>) -> (Option<usize>, Option<String>) {
     }
 }
 
+/// The error an effect call raises before `api:effect_scene`.
+fn no_scene() -> mlua::Error {
+    mlua::Error::RuntimeError("the screen has no effect scene (call api:effect_scene first)".into())
+}
+
 /// A clamped `[x, y, w, h]`.
-/// The `page_lut` `blend` option.
-fn lut_blend(name: Option<&str>) -> mlua::Result<SpriteBlend> {
+/// A page draw's `blend` name: `opaque` (the default), `half`, `variant`
+/// (the original's variant-2 half alpha) or `add`.
+fn sprite_blend(name: Option<&str>) -> mlua::Result<SpriteBlend> {
     match name {
         None | Some("opaque") => Ok(SpriteBlend::Opaque),
         Some("half") => Ok(SpriteBlend::Half),
+        Some("variant") => Ok(SpriteBlend::HalfVariant),
         Some("add") => Ok(SpriteBlend::Add),
         Some(other) => Err(mlua::Error::RuntimeError(format!(
-            "unknown page_lut blend {other:?}"
+            "unknown blend {other:?} (opaque, half, variant, add)"
         ))),
     }
 }

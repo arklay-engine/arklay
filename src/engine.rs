@@ -359,6 +359,8 @@ pub struct Authoring<'a> {
     pub stats_frame_rate: Option<u32>,
     /// `--model`: the model viewer's model, bank and clip.
     pub model: Option<ModelView<'a>>,
+    /// `--ending` with `--ui result`: the RESULT screen's ending row.
+    pub ending: Option<u8>,
 }
 
 /// The `--model` viewer's model: a pack entry, an animation bank and a clip
@@ -4377,6 +4379,7 @@ impl GameSession {
             return Ok(());
         }
         let message_before = self.game.message.menu_choice_id() & 0x80 != 0;
+        self.game.buffer_half = self.buffer_half;
         let transition = tick_room(
             &mut self.command_vm,
             &mut self.event_vm,
@@ -4964,7 +4967,13 @@ impl GameSession {
         if self.plant_eaten_corpse() {
             // The Plant 42 corpse: joints 0 and 2 drawn and composed from
             // their parents again (flags 0x83), the torn legs off the vine.
+            // The captured bit drops and the body's pitch and roll are zeroed,
+            // so the corpse is composed from its facing again, not the hold's
+            // tilt.
             let entity = &mut self.game.entities[0];
+            entity.zone_flags &= 0x7F;
+            entity.pitch = 0;
+            entity.roll = 0;
             entity.set_joint_flag(0, 0x83);
             entity.set_joint_flag(2, 0x83);
             self.game.player_frozen_joints.clear();
@@ -8761,7 +8770,7 @@ impl GameSession {
             else {
                 return false;
             };
-            let entity = crate::anim::entity_matrix(player.pos, player.angle);
+            let entity = game.player_matrix(player.pos, player.angle);
             let mut locals = crate::anim::joint_local_transforms(&assets.emd.skeleton, &keyframe);
             if torn_legs {
                 tear_plant_corpse(&mut locals);
@@ -8802,6 +8811,7 @@ impl GameSession {
                 joints: &joints,
                 tint: [255; 3],
                 blend_weight: None,
+                joint_blend: false,
                 hidden_joints: game.entities[0].joint_flags,
                 light_pos: None,
                 per_joint_light: false,
@@ -11869,8 +11879,11 @@ impl App {
             ScreenAction::Resume => {
                 if matches!(self.mode, Mode::Save(_)) {
                     // The next-cycle save screen always continues to the title,
-                    // whether or not the player wrote a slot.
-                    self.ending = None;
+                    // whether or not the player wrote a slot, and the run
+                    // counts as cleared (`g_dwClearCount++`).
+                    if self.ending.take().is_some() {
+                        self.record_clear();
+                    }
                     self.open_title()?;
                 }
             }
@@ -11880,6 +11893,17 @@ impl App {
             ScreenAction::Quit => return Ok(AppFlow::Quit),
         }
         Ok(AppFlow::Continue)
+    }
+
+    /// Count the finished ending as a cleared run of this game pack; a
+    /// failure is reported and the game goes on.
+    fn record_clear(&self) {
+        let Some(id) = self.pack.manifest().map(|manifest| manifest.id.clone()) else {
+            return;
+        };
+        if let Err(err) = ending::record_clear(&ending::clears_path(), &id) {
+            crate::warning!("warning: the cleared run was not recorded: {err:#}");
+        }
     }
 
     /// The next attract reel to play and the advanced cycle: the original's
@@ -12546,7 +12570,7 @@ pub fn run_ui_with_mods(
         "view" => AppBoot::View,
         "death" => AppBoot::Death(character & 1),
         "result" => AppBoot::EndingResult {
-            id: 1,
+            id: authoring.ending.unwrap_or(1),
             character: character & 1,
         },
         "epilogue" => AppBoot::EndingEpilogue,
@@ -17876,6 +17900,115 @@ fn build_effect_quads(
     quads
 }
 
+/// A 2D screen's own billboard pool: the effects a screen runs with no room
+/// loaded, inside a fabricated one-camera room (the RESULT screen's no-save
+/// bonus, which `ending_result_build` sets up with its own camera, switch zone
+/// and empty collision).
+///
+/// The pool resolves only the global weapon-FX types (`core00`), which
+/// `game_start` loads once and nothing unloads; the pages are a fixed room's
+/// (`ROOM1000`), whose sheets are the shipped `esp000`/`esp001`.
+pub(crate) struct EffectScene {
+    game: Box<game::GameState>,
+    room: RoomState,
+    id: RoomId,
+    pages: EffectPages,
+    tween: Tween,
+    /// The pool as the last tick left it, and as the tick before left it:
+    /// the frame shows the older one, since the original presents its
+    /// ordering table a frame behind the task that fills it.
+    latest: Box<effects::EffectPool>,
+    shown: Box<effects::EffectPool>,
+}
+
+impl EffectScene {
+    /// A scene seen through `cut`, its effects drawn only inside the switch
+    /// zone `zone` (the four corners, as `is_entity_in_switch_zone` reads
+    /// them). The effects run from the start (`g_message_flags`' effect bit).
+    pub(crate) fn new(pack: &Pack, cut: crate::state::Cut, zone: [[i16; 2]; 4]) -> Self {
+        let id = RoomId {
+            stage: 1,
+            room: 0,
+            player_flag: 0,
+            mansion2: false,
+        };
+        let room = RoomState {
+            stage: id.stage,
+            room: id.room,
+            cuts: vec![cut],
+            zones: vec![crate::state::Zone {
+                cam_to: 0,
+                cam_from: 0,
+                corners: zone,
+            }],
+            ..RoomState::default()
+        };
+        let mut game = Box::new(game::GameState::new(id, &room));
+        game.origins = pack.room_origins().clone();
+        game.set_weapon_effects(effects::WeaponEffects::load(pack));
+        game.resolve_room_effects(&room);
+        game.message_flags |= game::MESSAGE_FLAG_EFFECTS;
+        let pages = build_effect_pages(pack, id, &game.room_effects);
+        let latest = game.effects.clone();
+        let shown = game.effects.clone();
+        Self {
+            game,
+            room,
+            id,
+            pages,
+            tween: Tween::default(),
+            latest,
+            shown,
+        }
+    }
+
+    /// `Effect_CreateBillboard(effect_type, group, 0, NULL, pos, 0)`: the
+    /// first slot, or `None` when the type is not declared or the pool is full.
+    pub(crate) fn spawn(&mut self, effect_type: u8, group: u8, pos: [i32; 3]) -> Option<u8> {
+        let room = Rc::clone(&self.game.room_effects);
+        effects::create(&mut self.game, &room, effect_type, group, 0, pos, 0, 0)
+    }
+
+    /// Free every slot of `effect_type` in `group` (`FUN_0047cf80(3, ...)`).
+    pub(crate) fn kill(&mut self, effect_type: u8, group: u8) {
+        self.game.effects.kill_matching_depth(effect_type, group);
+    }
+
+    /// `update_2d_effects`: one tick of every live slot.
+    pub(crate) fn tick(&mut self) {
+        self.game.tick_effects(&self.room);
+        std::mem::swap(&mut self.shown, &mut self.latest);
+        self.latest.clone_from(&self.game.effects);
+    }
+
+    /// Draw the live billboards over `framebuffer`, the projection centre
+    /// moved by `screen`.
+    pub(crate) fn draw(&mut self, framebuffer: &mut Framebuffer, screen: [i32; 2]) {
+        let Some(cut) = self.room.cuts.first() else {
+            return;
+        };
+        let mut camera = Camera::from_cut(cut);
+        camera.screen = screen;
+        std::mem::swap(&mut self.game.effects, &mut self.shown);
+        let quads = build_effect_quads(
+            &self.game,
+            &self.room,
+            self.id,
+            &camera,
+            &self.pages,
+            &mut self.tween,
+        );
+        std::mem::swap(&mut self.game.effects, &mut self.shown);
+        if quads.is_empty() {
+            return;
+        }
+        let mut pages: Vec<Option<&Image>> = Vec::with_capacity(16);
+        pages.extend(self.pages.base.iter().map(Option::as_ref));
+        pages.extend(self.pages.variants.iter().map(Option::as_ref));
+        framebuffer.draw_effect_quads(&pages, &quads);
+    }
+}
+
 /// `(value + correction) >> 12`, truncating toward zero.
 fn sar12(value: i32) -> i32 {
     (value + ((value >> 31) & 0xFFF)) >> 12
@@ -19194,6 +19327,12 @@ fn tick_room_timed(
                 work.sca_hit = resolved.hit;
                 player::CollisionResolution::from_sca(resolved)
             }
+            // `check_room_collision` returns before it looks for a body whose
+            // status bit 2 is up (the seized, carried or impaled player), so
+            // the position a hold wrote stands and the rollback anchor keeps.
+            _ if (context.game.entities[0].status_flags | context.game.player_flags) & 4 != 0 => {
+                player::CollisionResolution::unresolved(context.game.entities[0].pos)
+            }
             _ => player::resolve_pushed_player(
                 context.room,
                 prev,
@@ -19283,14 +19422,6 @@ fn tick_room_timed(
     if let Some(phases) = phases.as_mut() {
         phases.update += update_start.elapsed();
     }
-    // The effects run after the player's physics and before the action probe,
-    // so a script that spawns this frame animates this frame and a dust effect
-    // the probe spawns does too.
-    let effect_start = Instant::now();
-    context.game.tick_effects(context.room);
-    if let Some(phases) = phases.as_mut() {
-        phases.effect += effect_start.elapsed();
-    }
     // `Om_move` runs after the player's move and before `Sce_at`: an RE2
     // room's objects are pushed, and hold the characters out, here.
     if context.game.is_re2_room {
@@ -19309,6 +19440,13 @@ fn tick_room_timed(
         // `Sce_at`: RE2's action areas answer the check a `pl_br_*` asked for
         // this tick, from where the move left the player.
         let check = context.game.is_re2_room && std::mem::take(&mut context.game.re2.player.check);
+        // `g_playerEntity.move_speed_current`: the pad machine keeps it on the
+        // player, a scripted state on the entity.
+        context.game.player_move_speed = if crate::player_script::is_scripted(context.player) {
+            context.game.entities[0].move_speed_current as i16
+        } else {
+            context.player.move_speed_current as i16
+        };
         let mut host = game::ScdGameHost::new(context.game);
         host.interact(context.player.pos, context.player.angle, check);
     }
@@ -19392,6 +19530,14 @@ fn tick_room_timed(
     // (the 0x80 the action scan raised) in the tick they warp.
     if std::mem::take(&mut context.player.clear_attacked_flag) {
         context.game.entities[0].is_being_attacked = 0;
+    }
+    // `update_2d_effects` runs after the entities, the player's position pass
+    // (its action probe spawns the effect-zone ripples) and the room objects,
+    // so everything spawned this frame takes its first step together.
+    let effect_start = Instant::now();
+    context.game.tick_effects(context.room);
+    if let Some(phases) = phases.as_mut() {
+        phases.effect += effect_start.elapsed();
     }
     crate::joint_trail::advance(context.game);
     context.game.transition.take()
@@ -20453,7 +20599,7 @@ fn store_player_joint_worlds(
         .player
         .set_applied_pose(Some(keyframe.clone()));
     player.anim.set_applied_pose(Some(keyframe.clone()));
-    let entity = crate::anim::entity_matrix(player.pos, player.angle);
+    let entity = game.player_matrix(player.pos, player.angle);
     let worlds = crate::anim::joint_matrices_frozen(
         skeleton,
         &keyframe,
@@ -21091,7 +21237,7 @@ fn render_frame_on(
         if game.is_re2_room {
             game.re2.player.neck.apply(&mut keyframe);
         }
-        let entity = anim::entity_matrix(player_state.pos, player_state.angle);
+        let entity = game.player_matrix(player_state.pos, player_state.angle);
         let mut joints =
             anim::joint_matrices_frozen(skeleton, &keyframe, &entity, &game.player_frozen_joints);
         apply_look_at(&mut joints, &game.entities[0], &game.entity_anims[0]);
@@ -21439,6 +21585,7 @@ fn render_frame_on(
             blend_weight: (!game.is_re2_room)
                 .then(|| render::record_blend_weight(&asset.model, record.blend_override))
                 .flatten(),
+            joint_blend: false,
             hidden_joints: 0,
             // `update_entity_lighting(record + 0x34)`: the record's own
             // position, not the composed one, so a parented object lights
@@ -21463,6 +21610,7 @@ fn render_frame_on(
             joints,
             tint: [255; 3],
             blend_weight: render::record_blend_weight(&asset.model, None),
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: None,
             per_joint_light: false,
@@ -21555,6 +21703,7 @@ fn render_frame_on(
             joints,
             tint: *tint,
             blend_weight: None,
+            joint_blend: !game.is_re2_room,
             hidden_joints: *hidden,
             light_pos: None,
             per_joint_light: false,
@@ -21596,6 +21745,7 @@ fn render_frame_on(
             joints,
             tint: *tint,
             blend_weight: None,
+            joint_blend: !game.is_re2_room,
             hidden_joints: *hidden | weapon_slot,
             light_pos: Some(light_pos),
             per_joint_light,
@@ -21614,6 +21764,7 @@ fn render_frame_on(
             joints: &strips.joints,
             tint: [255; 3],
             blend_weight: Some(0),
+            joint_blend: false,
             hidden_joints: strips.hidden,
             light_pos: None,
             per_joint_light: false,
@@ -21633,6 +21784,7 @@ fn render_frame_on(
             joints,
             tint: npc_tints[*index],
             blend_weight: None,
+            joint_blend: !game.is_re2_room,
             hidden_joints: 0,
             light_pos: Some(light_pos),
             per_joint_light,
@@ -21672,6 +21824,7 @@ fn render_frame_on(
             joints,
             tint: npc_tints[*index],
             blend_weight: None,
+            joint_blend: !game.is_re2_room,
             hidden_joints: 0,
             // The weapon slot is one of the character's joints: it shares
             // the character's latch.
@@ -21692,6 +21845,7 @@ fn render_frame_on(
             joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: Some(*pos),
             per_joint_light: false,
@@ -21729,6 +21883,7 @@ fn render_frame_on(
             tint: [255; 3],
             blend_weight: None,
             // Every animated joint is hidden; only the clip's object 15 draws.
+            joint_blend: !game.is_re2_room,
             hidden_joints: (1 << (crate::weapons::WEAPON_JOINT + 1)) - 1,
             // `update_entity_lighting` latches at the player matrix, then the
             // light matrix is `MulMatrix0(g_lightMatrix, clip.world)`.
@@ -21772,6 +21927,7 @@ fn render_frame_on(
             joints,
             tint: game.player_tint,
             blend_weight: None,
+            joint_blend: !game.is_re2_room,
             hidden_joints: hidden | game.re2.player.hidden_parts,
             light_pos: Some(player_light_pos),
             per_joint_light: false,
@@ -21805,6 +21961,7 @@ fn render_frame_on(
             joints: &weapon_joints[0],
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: !game.is_re2_room,
             hidden_joints: 0,
             light_pos: Some(player_light_pos),
             per_joint_light: false,
@@ -21891,6 +22048,7 @@ fn render_frame_on(
             joints,
             tint: *tint,
             blend_weight: None,
+            joint_blend: !game.is_re2_room,
             hidden_joints: *hidden,
             light_pos: Some(light_pos),
             per_joint_light: false,
@@ -22003,6 +22161,7 @@ fn render_frame_on(
             joints,
             tint: *tint,
             blend_weight: None,
+            joint_blend: !game.is_re2_room,
             hidden_joints: *hidden,
             light_pos: Some(light_pos),
             per_joint_light: false,
@@ -28727,6 +28886,7 @@ mod tests {
             joints: &joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: None,
             per_joint_light: false,
@@ -33586,6 +33746,111 @@ return M
             player_state,
             synthetic_player_assets(),
         )
+    }
+
+    /// `check_room_collision` returns before it looks for a body whose
+    /// status bit 2 is up, so a seized or carried player stays where the
+    /// hold put it: the Neptune devour carries the player through the tank's
+    /// wall rectangle.
+    #[test]
+    fn a_player_with_status_bit_two_skips_the_room_resolve() {
+        let rect = crate::state::CollisionRect {
+            x_max: 1500,
+            z_max: 2000,
+            x_min: 500,
+            z_min: 900,
+            kind: 1,
+            flags: 0x300,
+        };
+        let settle = |flags: u8| {
+            let (pack, _id, mut room, mut game, mut player_state, assets) = scripted_room_fixture();
+            for quadrant in &mut room.collision.quadrants {
+                quadrant.push(rect);
+            }
+            player_state.pos = [1000, 0, 1000];
+            game.sync_entity_from_player(&player_state);
+            player_state.collision_mirror = [1000, 1000];
+            game.player_flags |= flags;
+            let scripts = scd::ir::Scripts::default();
+            let mut command_vm = scd::vm::CommandVm::new(&scripts);
+            let mut event_vm = scd::vm::EventVm::new(&scripts);
+            tick_scripted_room(
+                &pack,
+                &mut room,
+                &mut game,
+                &mut player_state,
+                &assets,
+                &mut command_vm,
+                &mut event_vm,
+                player::Input::default(),
+            );
+            game.entities[0].pos
+        };
+        assert_ne!(settle(0), [1000, 0, 1000], "the wall pushes a free player");
+        assert_eq!(settle(4), [1000, 0, 1000], "a held player stays put");
+    }
+
+    #[test]
+    fn the_effects_step_after_the_probe_spawns_its_ripple() {
+        use crate::effects::fixtures::{block, sprite};
+        let ripple = || sprite(0x17, std::array::from_fn(|_| vec![vec![block(2, 0, 0)]; 3]));
+        let zone = game::RoomAction {
+            slot: 0,
+            kind: game::RoomActionKind::EffectZone,
+            zone: [0, 0, 8000, 8000],
+            sce: game::HANDLER_EFFECT_ZONE,
+            handler: game::HANDLER_EFFECT_ZONE,
+            flags: 0x41,
+            params: [0; 8],
+            item_data: None,
+            room_items_flag: 0xFF,
+            reach_animation: false,
+        };
+        let (pack, _id, mut room, mut game, mut player_state, assets) = scripted_room_fixture();
+        game.room_actions[0] = Some(zone);
+        game.weapon_effects.sprites.push(ripple());
+        game.buffer_half = 1;
+        game.message_flags |= game::MESSAGE_FLAG_EFFECTS;
+        let scripts = scd::ir::Scripts::default();
+        let mut command_vm = scd::vm::CommandVm::new(&scripts);
+        let mut event_vm = scd::vm::EventVm::new(&scripts);
+        for _ in 0..8 {
+            tick_scripted_room(
+                &pack,
+                &mut room,
+                &mut game,
+                &mut player_state,
+                &assets,
+                &mut command_vm,
+                &mut event_vm,
+                player::Input {
+                    up: true,
+                    ..player::Input::default()
+                },
+            );
+            if game.effects.active_count() > 0 {
+                break;
+            }
+        }
+        let live = *game.effects.slot(63).expect("the walk dropped a ripple");
+        assert_ne!(live.anim_id, 0, "the walk dropped a ripple");
+
+        // `update_2d_effects` runs after `update_player_position`, so the
+        // ripple the probe seats takes its first step in the same frame,
+        // together with whatever the entities spawned before it.
+        let (_, _, room, mut fresh, _, _) = scripted_room_fixture();
+        fresh.room_actions[0] = Some(zone);
+        fresh.weapon_effects.sprites.push(ripple());
+        fresh.entities[0].pos = game.entities[0].pos;
+        fresh.player_move_speed = 1;
+        fresh.buffer_half = 1;
+        fresh.message_flags |= game::MESSAGE_FLAG_EFFECTS;
+        assert!(fresh.run_room_action(0, game::HANDLER_EFFECT_ZONE));
+        let seated = *fresh.effects.slot(63).unwrap();
+        fresh.tick_effects(&room);
+        let stepped = *fresh.effects.slot(63).unwrap();
+        assert_ne!(seated, stepped, "the fixture's first step is visible");
+        assert_eq!(live, stepped);
     }
 
     #[test]
@@ -40982,6 +41247,10 @@ end
         let entity = &mut session.game.entities[0];
         entity.set_joint_flag(0, 0x13);
         entity.set_joint_flag(2, 0x51);
+        // Still held by the vine: the captured bit and a tilted body.
+        entity.zone_flags |= 0x80;
+        entity.pitch = 0x123;
+        entity.roll = 0x456;
         let world = anim::Mat4x3 {
             r: anim::IDENTITY_MATRIX,
             t: [0, -3000, 0],
@@ -41000,6 +41269,10 @@ end
         assert_eq!(session.game.entities[0].joint_flag(0), 0x83);
         assert_eq!(session.game.entities[0].joint_flag(2), 0x83);
         assert!(session.game.player_frozen_joints.is_empty());
+        // The corpse is composed from its facing again.
+        assert_eq!(session.game.entities[0].zone_flags & 0x80, 0);
+        assert_eq!(session.game.entities[0].pitch, 0);
+        assert_eq!(session.game.entities[0].roll, 0);
     }
 
     /// `display_die_screen`'s Plant 42 legs: turned by `(1500, 0, 500)` and

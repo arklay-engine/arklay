@@ -52,6 +52,11 @@ pub const PUNCH: u32 = 16;
 /// covering it ([`crate::render::SpriteBlend::Add`]).
 pub const ADDITIVE: u32 = 32;
 
+/// [`Map::flags`]: a sprite keeps its sampled texels' alpha, which scales the
+/// item's own alpha, instead of drawing each kept texel whole (the effect
+/// billboards, whose page alpha is their coverage).
+pub const TEXEL_ALPHA: u32 = 64;
+
 /// What an [`Item`] draws.
 #[derive(Clone, Debug)]
 pub enum Kind {
@@ -374,7 +379,12 @@ impl DrawList {
                 let [x, y] = [origin[0] + column as i32, origin[1] + row as i32];
                 let [x, y] = if per_pixel { map.texel(x, y) } else { [x, y] };
                 if let Some(rgba) = sample(x, y) {
-                    *texel = [rgba[0], rgba[1], rgba[2], 255];
+                    let alpha = if map.flags & TEXEL_ALPHA != 0 {
+                        rgba[3]
+                    } else {
+                        255
+                    };
+                    *texel = [rgba[0], rgba[1], rgba[2], alpha];
                 }
             }
         }
@@ -451,6 +461,28 @@ mod tests {
         assert_eq!(map.texel(-3, 1), [0, 0]);
         assert_eq!(map.texel(-2, 2), [1, 1]);
         assert_eq!(map.texel(400, 300), [159, 119]);
+    }
+
+    #[test]
+    fn only_a_texel_alpha_sprite_keeps_its_texels_alpha() {
+        let texel = [10, 20, 30, 128];
+        for (flags, stored) in [(TEXEL_ALPHA, texel), (0, [10, 20, 30, 255])] {
+            let mut list = DrawList::new([320, 240]);
+            let map = Map {
+                dst: [0, 0, 1, 1],
+                src: [1, 1],
+                atlas: [0, 0],
+                flags,
+            };
+            list.sprite(map, [0, 0, 1, 1], [1.0; 4], |_, _| Some(texel));
+            // The atlas stores an identical block once, so the stored texel
+            // is the one that finds the sprite's block.
+            assert_eq!(
+                list.atlas.insert(1, 1, &stored),
+                Some([0, 0]),
+                "flags {flags}"
+            );
+        }
     }
 
     #[test]

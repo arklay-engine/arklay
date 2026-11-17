@@ -270,6 +270,70 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
         },
     );
 
+    // `effect_scene({from, to, fov}, {{x, z} x4})`: give the screen its own
+    // billboard pool, seen through that camera and drawn only inside the
+    // switch-zone quad. It holds the global weapon-FX types (`core00`).
+    methods.add_method_mut(
+        "effect_scene",
+        |_lua, api, (camera, zone): (Table, Table)| {
+            let corner = |index: usize| -> mlua::Result<[i16; 2]> {
+                let point: Table = zone.get(index + 1)?;
+                Ok([point.get(1)?, point.get(2)?])
+            };
+            let zone = [corner(0)?, corner(1)?, corner(2)?, corner(3)?];
+            let cut = crate::state::Cut {
+                pos: triple(&camera, "from")?,
+                look_at: triple(&camera, "to")?,
+                fov: field(&camera, "fov")?,
+                ..crate::state::Cut::default()
+            };
+            api.host.effects = Some(Box::new(crate::engine::EffectScene::new(
+                api.cx.pack,
+                cut,
+                zone,
+            )));
+            Ok(())
+        },
+    );
+
+    // `spawn_effect(type, group, x, y, z)`: `Effect_CreateBillboard` in the
+    // screen's pool; the first slot, or nil.
+    methods.add_method_mut(
+        "spawn_effect",
+        |_lua, api, (effect_type, group, x, y, z): (u8, u8, i32, i32, i32)| {
+            let scene = api.host.effects.as_deref_mut().ok_or_else(no_scene)?;
+            Ok(scene.spawn(effect_type, group, [x, y, z]))
+        },
+    );
+
+    // `kill_effects(type, group)`: free every slot of that type and group.
+    methods.add_method_mut(
+        "kill_effects",
+        |_lua, api, (effect_type, group): (u8, u8)| {
+            let scene = api.host.effects.as_deref_mut().ok_or_else(no_scene)?;
+            scene.kill(effect_type, group);
+            Ok(())
+        },
+    );
+
+    // `update_effects()`: one tick of the screen's pool.
+    methods.add_method_mut("update_effects", |_lua, api, ()| {
+        let scene = api.host.effects.as_deref_mut().ok_or_else(no_scene)?;
+        scene.tick();
+        Ok(())
+    });
+
+    // `draw_effects()`: draw the screen's live billboards.
+    methods.add_method_mut("draw_effects", |_lua, api, ()| {
+        let Api {
+            host, framebuffer, ..
+        } = api;
+        let framebuffer = framebuffer.as_deref_mut().ok_or_else(no_draw)?;
+        let scene = host.effects.as_deref_mut().ok_or_else(no_scene)?;
+        scene.draw(framebuffer, band_centre(framebuffer, [0, 0]));
+        Ok(())
+    });
+
     // `draw_ivm(model, {joints = {...}, objects = {{...}, ...}, camera =
     // {from, to, fov, screen = {x, y}}, light})`: object `i` takes the
     // joint chain `objects[i]`, and every object past the list the one
@@ -573,7 +637,7 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
                         options.get::<Option<i32>>("dw")?,
                         options.get::<Option<i32>>("dh")?,
                     ],
-                    lut_blend(options.get::<Option<String>>("blend")?.as_deref())?,
+                    sprite_blend(options.get::<Option<String>>("blend")?.as_deref())?,
                 ),
                 None => ([None; 2], SpriteBlend::Opaque),
             };
@@ -707,7 +771,7 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
         "page_sprite_scaled",
         |_lua,
          api,
-         (handle, sx, sy, sw, sh, dx, dy, dw, dh, clut, scale, tint): (
+         (handle, sx, sy, sw, sh, dx, dy, dw, dh, clut, scale, tint, blend): (
             usize,
             i32,
             i32,
@@ -720,11 +784,13 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
             usize,
             i64,
             Option<Value>,
+            Option<String>,
         )| {
             let tint = match tint {
                 Some(Value::Nil) | None => crate::font::Tint::White,
                 Some(value) => colour_tint(&value)?,
             };
+            let blend = sprite_blend(blend.as_deref())?;
             let Api {
                 host, framebuffer, ..
             } = api;
@@ -733,7 +799,7 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
             let (src, dst, row) = (rect(sx, sy, sw, sh), rect(dx, dy, dw, dh), clut.min(255));
             let scale = byte(scale);
             let draw = |framebuffer: &mut Framebuffer| {
-                framebuffer.draw_page_sprite_scaled(art, src, dst, row, scale, tint);
+                framebuffer.draw_page_sprite_scaled(art, src, dst, row, scale, tint, blend);
             };
             match hd_art(&host.assets, api.cx.pack, framebuffer, handle, row) {
                 Some(hd) => {

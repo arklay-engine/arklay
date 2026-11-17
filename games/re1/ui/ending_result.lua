@@ -3,8 +3,8 @@
 -- A port of the reference's ending_result_* (EndingScreen.cpp:327-681): it
 -- reveals five baked plates from the en05/en07 page in pairs, fades each
 -- slot, prints the clear time and the save count, waits at the step-4 input
--- gate, and - for ending 6 - shows the additive fifth plate before the
--- confetti bonus. The row's `background` flag selects the plate page and the
+-- gate, and - for ending 6 - shows the half-alpha fifth plate before the
+-- no-save bonus billboard. The row's `background` flag selects the plate page and the
 -- character backdrop, and the already-cleared-once bit (0x7B) swaps in the
 -- alternate stills. The original draws no letter rank or item summary.
 --
@@ -17,18 +17,21 @@ local M = {}
 
 -- The step-4 wait before the timeout advances.
 local INPUT_TIMEOUT = 0x708
--- Frames the confetti burst runs before it is retired (0x1E + 0x32).
-local CONFETTI_FRAMES = 0x1E + 0x32
 -- One clear-time hour in ticks, for the over-two-digit re-centring.
 local TICKS_PER_HOUR_CENTRE = 0x34BC0
 
-local CONFETTI_COLORS = {
-    { 255, 64, 64 },
-    { 255, 220, 64 },
-    { 64, 220, 96 },
-    { 64, 160, 255 },
-    { 255, 128, 220 },
-}
+-- The no-save bonus: the weapon-FX billboard type and group
+-- `Effect_CreateBillboard(0x0B, 0x0A, ...)` spawns at the origin.
+local BONUS_TYPE = 0x0B
+local BONUS_GROUP = 0x0A
+-- The ending's sound bank (`LoadSoundBank(0xE)`): slot 0 is `Ending07`,
+-- slot 1 is empty.
+local ENDING_BANK = 0x0E
+-- The fabricated room ending_result_build installs: its camera (from, to and
+-- the 0x82 fov it stamps on camera 0) and the camera-switch quad the effects
+-- are drawn inside (0x004b3840).
+local CAMERA = { from = { 0x5DC, -1500, -1500 }, to = { 6000, 0, 0 }, fov = 0x82 }
+local ZONE = { { 0, 0 }, { 0, 0x7D00 }, { 0x7D00, 0x7D00 }, { 0x7D00, 0 } }
 
 local plate
 local backdrop
@@ -42,38 +45,6 @@ local function backdrop_stem(character, second_playthrough)
         return second_playthrough and "ui/clis01" or "ui/chris02"
     end
     return second_playthrough and "ui/jill01" or "ui/jill02"
-end
-
---- One step of the deterministic LCG the port uses for the confetti.
-local function lcg(seed)
-    return (seed * 1664525 + 1013904223) & 0xFFFFFFFF
-end
-
---- Spawn the no-save run's confetti burst.
-local function spawn_confetti(count)
-    local particles = {}
-    local seed = 0x12345678
-    for index = 0, count - 1 do
-        seed = lcg(seed)
-        local x = (seed >> 8) % 320
-        seed = lcg(seed)
-        local vx = (seed >> 12) % 5 - 2
-        seed = lcg(seed)
-        local vy = -((seed >> 10) % 6) - 4
-        particles[#particles + 1] = {
-            x = x, y = 96, vx = vx, vy = vy,
-            color = CONFETTI_COLORS[index % #CONFETTI_COLORS + 1],
-        }
-    end
-    s.confetti = particles
-end
-
-local function step_confetti()
-    for _, particle in ipairs(s.confetti) do
-        particle.x = particle.x + particle.vx
-        particle.y = particle.y + particle.vy
-        particle.vy = particle.vy + 1
-    end
 end
 
 --- Install the five RESULT slots from the credit table
@@ -126,8 +97,7 @@ function M.open(api, args)
         timer = 0,
         effects = false,
         done = false,
-        confetti = {},
-        confetti_timer = 0,
+        backdrop_shade = 0,
     }
     s.background.active = true
     local empty = { kind = "sprite", x = 0, y = 0, tex_v = 0, height = 0 }
@@ -156,6 +126,7 @@ local function step(api, input)
         s.background.fade_level = 0
         s.background.fade_vel = E.FADE_STEP
         build(api)
+        api:effect_scene(CAMERA, ZONE)
         s.step = 1
     elseif st == 1 then
         s.timer = s.timer + 1
@@ -206,14 +177,14 @@ local function step(api, input)
             local fifth = s.slots[5]
             fifth.active = true
             fifth.fade_vel = E.FADE_STEP
-            fifth.additive = true
+            fifth.translucent = true
             s.timer = 0
             s.step = 8
         end
     elseif st == 8 then
         s.timer = s.timer + 1
         if s.slots[5].fade_level >= E.FADE_FULL then
-            s.slots[5].additive = false
+            s.slots[5].translucent = false
         end
         if s.timer > 0x96 then
             s.timer = 0
@@ -226,7 +197,7 @@ local function step(api, input)
             s.timer = 0
             s.step = 10
             s.slots[5].fade_vel = -E.FADE_STEP
-            s.slots[5].additive = true
+            s.slots[5].translucent = true
         end
     elseif st == 10 then
         s.timer = s.timer + 1
@@ -239,18 +210,18 @@ local function step(api, input)
                 slot.active = false
             end
             if s.effects then
-                -- The reference's Effect_CreateBillboard(0x0B, 0x0A); the
-                -- port approximates it with a deterministic burst.
-                spawn_confetti(48)
-                api:sound("decide")
+                api:spawn_effect(BONUS_TYPE, BONUS_GROUP, 0, 0, 0)
+                api:bank_sound(ENDING_BANK, 0)
+                api:bank_sound(ENDING_BANK, 1)
             end
-            s.confetti_timer = 0
             s.step = 11
             s.timer = 0
         end
     elseif st == 11 then
         s.timer = s.timer + 1
         if s.timer > 0x32 then
+            -- Retire the bonus billboard (FUN_0047cf80(3, 0x0B, 10)).
+            api:kill_effects(BONUS_TYPE, BONUS_GROUP)
             s.step = 12
         end
     elseif st == 12 then
@@ -260,16 +231,22 @@ local function step(api, input)
 end
 
 function M.update(api, input)
-    -- Step every slot's fade first, exactly once per fixed tick.
+    for _, slot in ipairs(s.slots) do
+        slot:latch()
+    end
+    step(api, input)
+    if s.effects then
+        api:update_effects()
+    end
+    -- The backdrop quad is drawn with the colour the type-1 slot set on the
+    -- frame before (`setSomeColor`), one frame behind the plates.
+    s.backdrop_shade = s.background:shade()
+    -- ending_result_draw steps every slot's fade after the update has run, so
+    -- a slot the step raised or a flag it changed shows on this frame.
     s.background:step_fade()
     for _, slot in ipairs(s.slots) do
         slot:step_fade()
     end
-    if s.effects and s.confetti_timer < CONFETTI_FRAMES then
-        step_confetti()
-        s.confetti_timer = s.confetti_timer + 1
-    end
-    step(api, input)
     if s.done then
         api:exit("ending_epilogue")
     end
@@ -279,7 +256,7 @@ function M.draw(api)
     E.black(api)
     if backdrop then
         -- A full-frame still is stretched, so a replacement may be any size.
-        local shade = E.shade_scale(s.background:shade())
+        local shade = E.shade_scale(s.backdrop_shade)
         api:draw_background(backdrop, 0, 0, shade, shade, shade)
     end
     for _, slot in ipairs(s.slots) do
@@ -291,12 +268,8 @@ function M.draw(api)
         end
         slot:draw(api, plate, text)
     end
-    if s.effects and s.confetti_timer < CONFETTI_FRAMES then
-        local ox, oy = E.origin(api)
-        for _, particle in ipairs(s.confetti) do
-            local c = particle.color
-            api:fill_rect(particle.x + ox, particle.y + oy, 2, 2, c[1], c[2], c[3], 255)
-        end
+    if s.effects then
+        api:draw_effects()
     end
 end
 

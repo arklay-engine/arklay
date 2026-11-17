@@ -278,12 +278,29 @@ pub fn compose_inverse(a: &Mat4x3) -> Mat4x3 {
     Mat4x3 { r, t }
 }
 
-/// `plant42_capture_setup`: build the capture matrix from a grabbing joint's
-/// world matrix and the player's local matrix, so
-/// [`hold_player`] can re-apply the player's relative transform to the
-/// (moved) joint.
+/// `plant42_capture_setup` (0x0048c530, shared by the Yawn and the Neptune):
+/// build the capture matrix from a grabbing joint's world matrix and the
+/// player's local matrix, so [`hold_player`] can re-apply the player's
+/// relative transform to the (moved) joint.
+///
+/// The original multiplies the transposed joint rotation into the player's
+/// and rotates the translation difference `player.t - joint.t` by the
+/// transpose (`ApplyMatrixLV`), so the difference is rounded once rather than
+/// each translation on its own.
 pub fn capture_setup(joint: &Mat4x3, player: &Mat4x3) -> Mat4x3 {
-    crate::anim::compose(&compose_inverse(joint), player)
+    let transposed = Mat4x3 {
+        r: compose_inverse(joint).r,
+        t: [0; 3],
+    };
+    let relative = Mat4x3 {
+        r: player.r,
+        t: [
+            player.t[0].wrapping_sub(joint.t[0]),
+            player.t[1].wrapping_sub(joint.t[1]),
+            player.t[2].wrapping_sub(joint.t[2]),
+        ],
+    };
+    crate::anim::compose(&transposed, &relative)
 }
 
 /// `plant42_hold_player`: the player's local matrix under the capture
@@ -1024,6 +1041,42 @@ fn fp_lerp(current: [i16; 3], target: [i16; 3], w_cur: i32, w_tgt: i32) -> [i16;
 mod tests {
     use super::*;
     use crate::model::{ClipFrame, Keyframe};
+
+    #[test]
+    fn the_capture_setup_rounds_the_translation_difference_once() {
+        // The original rotates `player.t - joint.t` by the transposed joint
+        // rotation (`ApplyMatrixLV`: Y negated around per-product truncated
+        // 4.12 multiplies). Rounding each translation on its own lands a unit
+        // or two away, which the Neptune devour's carried player showed.
+        let joint = Mat4x3 {
+            r: crate::anim::rotation_matrix(0x123, 0x456, 0x78),
+            t: [1001, -503, 777],
+        };
+        let player = crate::anim::entity_matrix([1500, -200, 900], 0x300);
+        let capture = capture_setup(&joint, &player);
+
+        let fixed = |a: i32, b: i32| (i64::from(a) * i64::from(b) / 4096) as i32;
+        let rel = [
+            player.t[0] - joint.t[0],
+            -(player.t[1] - joint.t[1]),
+            player.t[2] - joint.t[2],
+        ];
+        let mut expected = [0; 3];
+        for (row, value) in expected.iter_mut().enumerate() {
+            *value = (0..3).map(|k| fixed(joint.r[k][row], rel[k])).sum();
+        }
+        expected[1] = -expected[1];
+        assert_eq!(capture.t, expected);
+        assert_eq!(
+            capture.r,
+            crate::anim::compose(&compose_inverse(&joint), &player).r
+        );
+        assert_ne!(
+            capture.t,
+            crate::anim::compose(&compose_inverse(&joint), &player).t,
+            "this input tells the two roundings apart"
+        );
+    }
 
     #[test]
     fn the_plant_blend_prescale_rounds_like_the_original() {

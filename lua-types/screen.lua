@@ -349,6 +349,12 @@ function ScreenApi:log(text) end
 ---@param name ScreenSound
 function ScreenApi:sound(name) end
 
+---Queue a sound from a numbered global sound bank, such as RE 1's ending
+---bank `0x0E`. Like `sound`, the cue plays after the call.
+---@param bank integer The bank number.
+---@param slot integer The slot in that bank.
+function ScreenApi:bank_sound(bank, slot) end
+
 ---Queue a sound from RE 2's core bank, the original's
 ---`Snd_se_on(0x4nn0000)` (the title's cues).
 ---@param slot integer The core-bank slot.
@@ -802,7 +808,43 @@ function ScreenApi:picture_sprite_scaled(picture, sx, sy, sw, sh, dx, dy, dw, dh
 ---@param clut integer The CLUT row (capped at 255).
 ---@param scale integer The colour scale, `0..=255`.
 ---@param tint? ScreenTextColour Default white.
-function ScreenApi:page_sprite_scaled(page, sx, sy, sw, sh, dx, dy, dw, dh, clut, scale, tint) end
+---@param blend? "opaque"|"half"|"variant"|"add" Default `"opaque"`. `"variant"` is the original's variant-2 half alpha over the frame; `"half"` averages, `"add"` adds.
+function ScreenApi:page_sprite_scaled(page, sx, sy, sw, sh, dx, dy, dw, dh, clut, scale, tint, blend) end
+
+---@class ScreenEffectCamera
+---@field from integer[] `{x, y, z}` eye position.
+---@field to integer[] `{x, y, z}` look-at point.
+---@field fov integer The projection distance.
+
+---Give the screen its own effect pool, spawning from the weapon effect
+---sheets (the screen has no room of its own), viewed through `camera`. `zone`
+---is the camera zone, as four `{x, z}` corners, where the effects may draw.
+---Calling it again replaces the pool.
+---@param camera ScreenEffectCamera
+---@param zone integer[][]
+function ScreenApi:effect_scene(camera, zone) end
+
+---Spawn effect `type` with depth group `group` at `{x, y, z}` in the
+---screen's pool (`effect_scene` first).
+---@param type integer
+---@param group integer
+---@param x integer
+---@param y integer
+---@param z integer
+---@return integer? slot The first slot taken, or nil when nothing spawned.
+function ScreenApi:spawn_effect(type, group, x, y, z) end
+
+---Remove every effect of `type` in depth group `group` from the screen's pool.
+---@param type integer
+---@param group integer
+function ScreenApi:kill_effects(type, group) end
+
+---Run one tick of the screen's effects. Call it once per `update`.
+function ScreenApi:update_effects() end
+
+---*Draw only.* Draw the screen's effects as they stood before the latest
+---`update_effects`, one frame behind the way the original draws them.
+function ScreenApi:draw_effects() end
 
 ---*Draw only.* A page region flipped per axis. With `whole`, an HD
 ---replacement covers the region's transparent texels too and its own alpha

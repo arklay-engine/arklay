@@ -131,6 +131,8 @@ struct Host {
     values: HashMap<String, i64>,
     /// Art loaded by handle (`api:picture`, `api:page`).
     assets: draw::Assets,
+    /// The screen's own billboard pool (`api:effect_scene`).
+    effects: Option<Box<crate::engine::EffectScene>>,
 }
 
 impl Host {
@@ -287,6 +289,7 @@ impl LuaScreen {
             overlay: None,
             values: HashMap::new(),
             assets: draw::Assets::default(),
+            effects: None,
         };
         let vm = ScreenVm::load(entry, Loader::new(sources))?;
         host.rescan();

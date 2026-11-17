@@ -327,6 +327,53 @@ fn draw_mode(blend_weight: Option<u8>, cull: bool) -> u32 {
     mode
 }
 
+/// The record weights a mesh draws under, each with the joints its draw
+/// hides: the mesh's one weight, or under [`EntityMesh::joint_blend`] one draw
+/// per distinct joint weight (`EntityMesh::object_blend_weight`), since a
+/// draw's `draw_mode` and `material` hold a single weight.
+pub fn blend_groups(mesh: &EntityMesh<'_>) -> Vec<(Option<u8>, u32)> {
+    if !mesh.joint_blend {
+        return vec![(mesh.blend_weight, 0)];
+    }
+    let weights: Vec<Option<u8>> = mesh
+        .mesh
+        .objects
+        .iter()
+        .take(MAX_JOINTS)
+        .map(|object| mesh.object_blend_weight(object))
+        .collect();
+    let mut groups: Vec<(Option<u8>, u32)> = Vec::new();
+    for &weight in &weights {
+        if groups.iter().any(|(seen, _)| *seen == weight) {
+            continue;
+        }
+        let hidden = weights
+            .iter()
+            .enumerate()
+            .filter(|(_, other)| **other != weight)
+            .fold(0u32, |mask, (joint, _)| mask | 1 << joint);
+        groups.push((weight, hidden));
+    }
+    if groups.is_empty() {
+        groups.push((mesh.blend_weight, 0));
+    }
+    groups
+}
+
+/// `uniforms` drawn under record weight `weight` with the joints in `hidden`
+/// left out.
+pub fn with_record_weight(
+    mut uniforms: DrawUniforms,
+    weight: Option<u8>,
+    hidden: u32,
+) -> DrawUniforms {
+    uniforms.flags[0] |= hidden;
+    let cull = uniforms.flags[1] & DRAW_CULL != 0;
+    let kept = uniforms.flags[1] & !(DRAW_CULL | DRAW_RECORD | DRAW_RECORD_BLENDS);
+    uniforms.flags[1] = draw_mode(weight, cull) | kept;
+    uniforms
+}
+
 /// Which vertices of a mesh's buffer the pass draws, as `(first, count)` of
 /// `vertex_count` with the blended packets from `blend_start`: the opaque
 /// pass draws them all (its shader drops the blending texels), the blend pass
@@ -936,6 +983,85 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_joint_blending_mesh_draws_once_per_record_weight() {
+        let object = |blend: bool, tsb: u16| crate::model::TmdObject {
+            vertices: vec![[0; 3]; 3],
+            normals: vec![[0, 0, 4096]],
+            prims: vec![crate::model::TmdPrim {
+                vertices: [0, 1, 2],
+                normals: [0, 0, 0],
+                uv: [[0, 0]; 3],
+                clut: 0,
+                tsb,
+                textured: true,
+                blend,
+                additive: false,
+                raw_y: false,
+                flat_color: None,
+                quad: None,
+                uv_nudge: [0; 3],
+            }],
+        };
+        let tmd = Tmd {
+            objects: vec![
+                object(false, 0),
+                object(true, 0),
+                object(false, 0),
+                object(true, 1 << 5),
+            ],
+        };
+        let texture = Texture8 {
+            width: 4,
+            height: 4,
+            indices: vec![],
+            palettes: vec![],
+            stp: vec![],
+        };
+        let joints = [identity(); 4];
+        let mut entity = EntityMesh {
+            mesh: &tmd,
+            texture: &texture,
+            joints: &joints,
+            tint: [255; 3],
+            blend_weight: None,
+            joint_blend: true,
+            hidden_joints: 0,
+            light_pos: None,
+            per_joint_light: false,
+            light_rotation: None,
+            fixed_light: None,
+            joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: None,
+            complex_object: None,
+            view_z_shift: 0,
+        };
+        assert_eq!(
+            blend_groups(&entity),
+            [(None, 0b1010), (Some(0x80), 0b1101), (Some(0x00), 0b0111)]
+        );
+        let uniforms = DrawUniforms {
+            projection: [0.0; 4],
+            ambient: [0.0; 4],
+            light_colour: [[0.0; 4]; 3],
+            tint: [0.0; 4],
+            flags: [0b1_0000, DRAW_CULL | DRAW_NEAR_CLIP, 4, 4],
+            joints: [[0.0; 4]; MAX_JOINTS * 6],
+        };
+        let half = with_record_weight(uniforms, Some(0x80), 0b1101);
+        assert_eq!(half.flags[0], 0b1_1101);
+        assert_eq!(
+            half.flags[1],
+            DRAW_CULL | DRAW_NEAR_CLIP | DRAW_RECORD | DRAW_RECORD_BLENDS
+        );
+        let packets = with_record_weight(half, None, 0);
+        assert_eq!(packets.flags[1], DRAW_CULL | DRAW_NEAR_CLIP);
+        // Without per-joint weights the mesh's one weight draws everything.
+        entity.joint_blend = false;
+        entity.blend_weight = Some(0x33);
+        assert_eq!(blend_groups(&entity), [(Some(0x33), 0)]);
+    }
+
+    #[test]
     fn fingerprints_see_every_byte_and_the_stp_flags() {
         let mut image = Image {
             width: 320,
@@ -1109,6 +1235,7 @@ mod tests {
             joints: &joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: None,
             per_joint_light: false,
@@ -1196,6 +1323,7 @@ mod tests {
             joints: &joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: None,
             per_joint_light: false,
@@ -1277,6 +1405,7 @@ mod tests {
             joints: &joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: None,
             per_joint_light: false,
@@ -1322,6 +1451,7 @@ mod tests {
             joints: &joints,
             tint: [255; 3],
             blend_weight: None,
+            joint_blend: false,
             hidden_joints: 0,
             light_pos: None,
             per_joint_light: false,
@@ -1342,6 +1472,7 @@ mod tests {
         // Joint 0 draws; joint 1 has no matrix; joints past the mesh never draw.
         assert_eq!(uniforms.flags[0], !1);
         let entity = EntityMesh {
+            joint_blend: false,
             hidden_joints: 1,
             ..entity
         };

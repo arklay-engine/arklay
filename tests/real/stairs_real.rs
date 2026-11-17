@@ -877,6 +877,7 @@ fn capture_player_partway_up_the_lab_stairway() {
         joints: &joints,
         tint: [255; 3],
         blend_weight: None,
+        joint_blend: false,
         hidden_joints: 0,
         light_pos: None,
         per_joint_light: false,
