@@ -67,6 +67,7 @@ pub fn tick(
                     slot,
                     &model,
                     false,
+                    false,
                 );
             }
             character.zombie = Some(zombie);
@@ -676,10 +677,11 @@ fn run_zombie(
     slot: usize,
     model: &Emd,
     loading: bool,
+    pending_place: bool,
 ) -> Vec<usize> {
     let tick = tick_of(room, game, character, slot, model, None);
     zombie.parts_num = parts_num(model);
-    let player = game.entities[0].pos;
+    let (player, player_angle) = player_at(game, pending_place);
     let scene_target = body_of(game, character.work.dest[1]).unwrap_or(character.body.pos);
     let mut bodies = vec![crate::zombie2::Oba {
         slot: crate::zombie2::PLAYER_BODY,
@@ -702,7 +704,7 @@ fn run_zombie(
         .0
         .get(SPLAYER_SLOT)
         .is_some_and(|other| other.as_deref().is_some_and(|other| other.be_flg & 1 != 0));
-    let root_target = zombie_root_target(game, room, character);
+    let root_target = zombie_root_target(game, room, character, pending_place);
     let stopped = game.re2.character_stopped(slot);
     let easy = game.re2.flag(0, FG_SYSTEM_EASY);
     let difficulty = game.re2.difficulty();
@@ -713,7 +715,6 @@ fn run_zombie(
     let origin = game.origin();
     let stage = origin.stage;
     let room_code = u16::from(stage) << 8 | u16::from(origin.room);
-    let player_angle = game.entities[0].angle;
     let player_id = game.re2.pl_id;
     let weapon = game.re2_weapon().id;
     let common_a4 = game.re2.flag(FG_COMMON, FG_COMMON_LICKER);
@@ -1012,6 +1013,7 @@ fn run_spawned(
                     slot,
                     &model,
                     false,
+                    false,
                 );
             }
             character.zombie = Some(zombie);
@@ -1173,6 +1175,7 @@ pub fn init(
                     slot,
                     &model,
                     true,
+                    true,
                 );
                 let (start, flags) = character.start;
                 if start != 0 {
@@ -1186,6 +1189,7 @@ pub fn init(
                         &mut zombie,
                         slot,
                         &model,
+                        true,
                         true,
                     );
                 }
@@ -1456,6 +1460,8 @@ fn run_load_stop_with(
                     slot,
                     &model,
                     false,
+                    // The load's place for the player is still pending here.
+                    true,
                 );
             }
             character.zombie = Some(zombie);
@@ -1576,8 +1582,13 @@ fn partner_ground(room: &RoomState, pos: [i32; 3]) -> i16 {
 
 /// `Em_Zombie`'s `Root_ck` target: the partner, when she has this zombie
 /// first on her list and stands in a guide area, else the player.
-fn zombie_root_target(game: &GameState, room: &RoomState, character: &Character) -> [i32; 3] {
-    let player = game.entities[0].pos;
+fn zombie_root_target(
+    game: &GameState,
+    room: &RoomState,
+    character: &Character,
+    pending_place: bool,
+) -> [i32; 3] {
+    let (player, _) = player_at(game, pending_place);
     if !game.re2.partner_bit() || character.l_spl & crate::partner2::L_SPL_LISTED != 1 << 30 {
         return player;
     }
@@ -1694,8 +1705,26 @@ fn enemy_spl_root_ck_sys(game: &mut GameState, room: &RoomState, slot: usize, lo
     game.re2.characters.0[slot] = Some(character);
 }
 
-/// `loading`: the room's load, where the player is where the door or a
-/// script's `pos_set` put them, which the port applies only at the next tick.
+/// The player's position and facing as an enemy's pass sees them. In the
+/// room's load and its last pass (`pending_place`) the player is already where
+/// the door, a script's `pos_set` or a driver's warp put them, which the port
+/// applies only once the scripts' pass ends.
+fn player_at(game: &GameState, pending_place: bool) -> ([i32; 3], u16) {
+    let (player, player_angle) = game
+        .entities
+        .first()
+        .map_or(([0; 3], 0), |p| (p.pos, p.angle));
+    if !pending_place {
+        return (player, player_angle);
+    }
+    let pending = &game.re2.pending_player;
+    (
+        pending.pos.unwrap_or(player),
+        pending.angle.unwrap_or(player_angle),
+    )
+}
+
+/// `loading`: the room's load (see [`player_at`]).
 fn root_ck_sys(game: &GameState, room: &RoomState, character: &mut Character, loading: bool) {
     let Some(partner) = character.partner.as_deref_mut() else {
         // Anyone else's `Type` has `0x1000`, so only its turn counts.
@@ -1706,19 +1735,7 @@ fn root_ck_sys(game: &GameState, room: &RoomState, character: &mut Character, lo
         .sca
         .as_ref()
         .map_or(&[][..], |sca| sca.records.as_slice());
-    let (player, player_angle) = game
-        .entities
-        .first()
-        .map_or(([0; 3], 0), |p| (p.pos, p.angle));
-    let pending = &game.re2.pending_player;
-    let (player, player_angle) = if loading {
-        (
-            pending.pos.unwrap_or(player),
-            pending.angle.unwrap_or(player_angle),
-        )
-    } else {
-        (player, player_angle)
-    };
+    let (player, player_angle) = player_at(game, loading);
     let world = crate::partner2::RootSys {
         guides: &room.guides,
         sca,
@@ -2185,6 +2202,43 @@ mod tests {
         }
         assert_eq!(turns, [2, 1, 0, 6, 5], "Root_ck's turn");
         assert!(!game.re2.enemies_stopped(), "the room's stop as it was");
+    }
+
+    /// The load's last pass: a door, a script's `pos_set` or a driver's warp
+    /// has placed the player, which the port applies only once the scripts'
+    /// pass ends. A zombie whose `Root_ck` looks in that pass routes toward
+    /// that place, as the original's does (`leon_a_20a_20c`'s zombie 0 starts
+    /// with the warp's place as its `Dest`), not toward the last tick's.
+    #[test]
+    fn the_loads_last_pass_routes_a_zombie_toward_the_pending_place() {
+        let model = std::sync::Arc::new(posable_model());
+        let pack = Pack::from_bytes(crate::pack::PackWriter::new().to_bytes().unwrap()).unwrap();
+        let mut zombie = crate::zombie2::Zombie::default();
+        zombie.set_sight_turn(1);
+        let mut character = sherry(0);
+        character.id = 0x10;
+        character.model = 0x10;
+        character.partner = None;
+        character.body.pos = [1000, 0, 2000];
+        character.work.routine = [1, 0, 0, 0];
+        character.zombie = Some(zombie);
+        let mut game = GameState::default();
+        game.re2.characters.0 = vec![Some(Box::new(character))];
+        game.entities[0].pos = [-20000, 0, -20000];
+        game.re2.pending_player.pos = Some([3000, 0, 4000]);
+        let room = RoomState {
+            guides: vec![crate::state::Guide {
+                x0: 0,
+                z0: 0,
+                x1: 5000,
+                z1: 5000,
+                links: 0,
+            }],
+            ..RoomState::default()
+        };
+        run_load_stop_with(&mut game, &room, &pack, None, |_| Some(model.clone()));
+        let character = game.re2.characters.0[0].as_deref().unwrap();
+        assert_eq!(character.work.dest, [3000, 4000]);
     }
 
     #[test]
