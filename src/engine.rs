@@ -3433,18 +3433,25 @@ impl GameSession {
 
     /// Whether this frame keeps the last presented one: a skipped frame
     /// ([`GameSession::present_skip`]) of the room, with nothing over it that
-    /// owns the frame instead (a menu, a door, a film, a screen).
+    /// owns the frame instead (a menu, a door, a film, a screen). The room
+    /// the status screen's or the get-item window's first ticks still show
+    /// is the room's own frame, which a skipped present doesn't draw either:
+    /// a `cut_chg` in the tick that opened the screen loads the new cut at
+    /// its `Swap_Cbuff`, and the open's first tick keeps the frame before.
     fn holds_presented_frame(&self) -> bool {
+        let screen = self.re2_status_view().or_else(|| self.re2_item_get_view());
+        let room_only = match screen {
+            None => self.menu.is_none(),
+            Some(view) => matches!(view, Re2StatusView::Room(_)),
+        };
         self.present_held
             && !self.present_skip.black()
-            && self.menu.is_none()
+            && room_only
             && self.boot_message.is_none()
             && self.movie.is_none()
             && self.death_screen.is_none()
             && !self.door_on_screen()
             && self.cutscene_skip.is_none()
-            && self.re2_status_view().is_none()
-            && self.re2_item_get_view().is_none()
     }
 
     /// [`GameSession::tick`]'s work, before RE2's status screen animates.
@@ -25374,6 +25381,38 @@ mod tests {
         assert_eq!(session.re2_status_open, Some(1));
         assert_eq!(session.menu_fade_phase, MenuFadePhase::Out);
         session
+    }
+
+    /// A `cut_chg` in the tick that opens the status screen loads the new cut
+    /// at that tick's `Swap_Cbuff` (`Movie_set(2)`), and `WinMain` skips the
+    /// open's first tick's present too: its frame is the one before, not the
+    /// room drawn again. A START open, with no load, draws the room.
+    #[test]
+    fn re2_status_open_keeps_the_frame_a_cut_load_skips() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = re2_status_open_session(&pack, a);
+        assert_eq!(
+            session.re2_status_view(),
+            Some(Re2StatusView::Room(None)),
+            "the open's first tick shows the room"
+        );
+        assert!(!session.holds_presented_frame(), "START's open draws it");
+        // The load's two frames: the cut change's tick, then the open's.
+        session
+            .present_skip
+            .movie_set(transition::RE2_CUT_LOAD_FRAMES);
+        session.present_held = !session.present_skip.present();
+        session.present_held = !session.present_skip.present();
+        assert!(session.present_held);
+        assert!(session.holds_presented_frame(), "the load's second frame");
+        // The fade's frames and the screen are the open's own, held or not.
+        session.re2_status_open = Some(2);
+        assert!(session.holds_presented_frame());
+        session.re2_status_open = Some(RE2_STATUS_BLACK);
+        assert!(!session.holds_presented_frame(), "black draws nothing");
+        session.re2_status_open = Some(RE2_STATUS_SHOWN);
+        assert!(!session.holds_presented_frame(), "the screen is drawn");
     }
 
     /// `Status` (0x501BD0) calls its page (`St_tbl`, `St_main00`) on every
