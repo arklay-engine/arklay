@@ -88,6 +88,9 @@ pub const STATE_BYTE_CHARACTER: u8 = 43;
 pub const STATE_BYTE_HEALTH_COPY: u8 = 0x1E;
 /// State byte holding the health status flags (BioCard 0x232).
 pub const STATE_BYTE_HEALTH_STATUS: u8 = 50;
+/// State byte holding the room-item backup (BioCard 0x22A, `g_RoomItemBackup`):
+/// the equipped item Chris had when Rebecca took his place.
+pub const STATE_BYTE_ROOM_ITEM_BACKUP: u8 = 0x2A;
 /// Inventory slots Chris can use (the first half of the 12 slot bytes).
 pub const INVENTORY_SLOTS_CHRIS: usize = 6;
 /// Inventory slots Jill can use (Chris's six plus two more).
@@ -6099,14 +6102,13 @@ impl GameState {
             self.apply_flag(5, MSF2_COSTUME_VARIANT, 0);
             self.state_bytes[model] &= 7;
         }
-        // The same switch's playable branch: a model id below 4 (Chris, Jill,
-        // Barry, Rebecca) becomes the player entity's id. Chris's game plays
-        // Rebecca this way: a script stores model 3 (`setb 9, 3`) and the next
-        // room load makes the player id 3, which the doors with lock bit 0x40
-        // refuse (`try_door`); storing 0 makes him Chris again. The switch
-        // to Rebecca backs up Chris's health, equipped item and inventory and
-        // gives her 88 health and her own six slots; the switch back puts
-        // his back (`begin_partner_turn`, `end_partner_turn`).
+        // A model id below 4 (Chris, Jill, Barry, Rebecca) from Chris or Jill
+        // is the Rebecca swap: a script stores model 3 (`setb 9, 3`) and the
+        // next room load makes the player id 3, which the doors with lock
+        // bit 0x40 refuse (`try_door`); storing 0 makes him Chris again. The
+        // switch to Rebecca backs up Chris's health, equipped item and
+        // inventory and gives her 88 health and her own six slots; the switch
+        // back puts his back (`begin_partner_turn`, `end_partner_turn`).
         let model_id = self.state_bytes[model];
         if model_id < 4 && self.entities[0].id < 4 {
             let was = self.entities[0].id;
@@ -6116,6 +6118,10 @@ impl GameState {
             } else if was == 3 && model_id != 3 {
                 self.end_partner_turn();
             }
+        } else {
+            // 0x00477982: any other model id becomes the player id too, so the
+            // ladder models 4 and 5 (rooms 302, 310) are stored.
+            self.entities[0].id = model_id;
         }
     }
 
@@ -6134,6 +6140,8 @@ impl GameState {
             max_health: self.max_health,
             equipped: self.equipped,
         });
+        // 0x004778c6: `g_RoomItemBackup = g_EquippedItemId`.
+        self.state_bytes[usize::from(STATE_BYTE_ROOM_ITEM_BACKUP)] = self.equipped.unwrap_or(0);
         self.inventory = self
             .rebecca_inventory
             .iter()
@@ -6154,6 +6162,8 @@ impl GameState {
         let Some(backup) = self.partner_backup.take() else {
             return;
         };
+        // 0x00477914 clears `g_RoomItemBackup` once Chris's item is back.
+        self.state_bytes[usize::from(STATE_BYTE_ROOM_ITEM_BACKUP)] = 0;
         self.rebecca_inventory = [InventoryItem::default(); INVENTORY_SLOTS_CHRIS];
         for (slot, stack) in self.rebecca_inventory.iter_mut().zip(self.inventory.iter()) {
             *slot = *stack;
@@ -13440,6 +13450,37 @@ mod tests {
         state.state_bytes[model] = 3;
         state.apply_model_switch();
         assert_eq!(state.entities[0].id, 3);
+    }
+
+    /// The ladder models 4 and 5 (rooms 302 and 310) become the player id
+    /// too (`room_set` 0x00477982). Neither is Rebecca, so the lock-0x40 door
+    /// lets them through, where id 3 is barred, and storing 0 again leaves
+    /// no swap behind.
+    #[test]
+    fn the_ladder_models_store_the_player_id() {
+        let mut state = game();
+        let model = usize::from(STATE_BYTE_CHARACTER_MODEL);
+        let restricted = door(1, 0x40);
+        let walk_through = |state: &mut GameState| {
+            state.room_actions[0] = Some(door_action(restricted));
+            state.doors[0] = Some(restricted);
+            state.transition = None;
+            state.interact([-550, 0, 50], 0, true);
+            state.transition.is_some()
+        };
+        for ladder in [4, 5] {
+            state.state_bytes[model] = ladder;
+            state.enter_room(RoomId::parse("3020").unwrap(), &RoomState::default());
+            assert_eq!(state.entities[0].id, ladder);
+            assert!(walk_through(&mut state), "model {ladder} is not Rebecca");
+        }
+        state.entities[0].id = 3;
+        assert!(!walk_through(&mut state), "the 0x40 door bars id 3");
+
+        state.state_bytes[model] = 0;
+        state.enter_room(RoomId::parse("3020").unwrap(), &RoomState::default());
+        assert_eq!(state.entities[0].id, 0);
+        assert!(state.partner_backup.is_none());
     }
 
     /// Her turn is hers in kit too: `room_set` backs up Chris's health,

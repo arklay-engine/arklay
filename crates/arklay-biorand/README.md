@@ -71,7 +71,9 @@ Screen scripts' `<save_dir>` means that folder. A Chris with eight slots keeps
 Rebecca's overlapped save slots in an extra save trailer (`AKY\x04`), so a
 six-slot game's saves stay byte-identical to the original's. Likewise a save
 in a room the block cannot name (a long id) keeps it in the `AKY\x05`
-trailer, and the block names the room's origin.
+trailer, and the block names the room's origin. A save on Rebecca's turn keeps
+Chris's health in the `AKY\x06` trailer, which the original's block has no
+field for.
 
 Under `DOOR_RANDOMIZER` the map screen is off.
 

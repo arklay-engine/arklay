@@ -39,7 +39,8 @@ pub struct SaveFile {
     pub used_item: u8,
     /// Last item picked up (0x213).
     pub picked_item: u8,
-    /// Player health (0x21E).
+    /// Player health (0x21E): Rebecca's own on her turn, as the original's
+    /// health copy holds.
     pub health: i16,
     /// Play timer snapshot (0x224).
     pub timer: u32,
@@ -91,6 +92,10 @@ pub struct SaveFile {
     /// stacks and the block's shared run would overwrite ones she holds
     /// ([`super::PARTNER_TRAILER`]); `None` in a retail game.
     pub partner_slots: Option<[InventoryItem; INVENTORY_SLOTS_CHRIS]>,
+    /// Port-only: Chris's health while Rebecca plays, which the original keeps
+    /// in `HEALTH_BKP` ([`super::PARTNER_BACKUP_TRAILER`]); `None` unless the
+    /// save was taken on her turn.
+    pub partner_backup_health: Option<i16>,
     /// Port-only: the room the save is in, when the block's stage and room
     /// bytes cannot name it ([`super::ROOM_TRAILER`]); the block then names
     /// the room's origin. `None` for every retail room. Its player digit is
@@ -138,6 +143,7 @@ impl Default for SaveFile {
             player_slots: [InventoryItem::default(); PLAYER_SLOT_COUNT],
             room_bgm: [0; ROOM_BGM_LEN],
             partner_slots: None,
+            partner_backup_health: None,
             room_ext: None,
         }
     }
