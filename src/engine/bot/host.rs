@@ -1,10 +1,7 @@
-//! The app's side of the player bot: the bot attached to an [`App`], the
-//! update hooks that hand it the pad, and the headless run.
+//! The app's side of the player bot: the bot attached to an [`App`] and the
+//! update hooks that hand it the pad.
 
-use std::path::Path;
-use std::time::Instant;
-
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 
 use super::super::{
     App, AppFlow, GameSession, Mode, gui_cues, player, seeded_rand_state, ui, watch,
@@ -18,7 +15,9 @@ pub(in crate::engine) struct AttachedBot {
     pub(in crate::engine) runtime: BotRuntime,
     /// The game-RNG seed; `None` leaves the game's own stream untouched.
     seed: Option<u32>,
-    /// The sessions the seed has seeded so far.
+    /// The sessions the app's bots have seeded so far: a bot attached again
+    /// in the same app (a second `bot_start`) carries the count on, so it
+    /// plays a fresh stream rather than the first bot's again.
     seeded_sessions: u32,
     /// Every session the bot runs has the INVINCIBLE cheat on.
     invincible: bool,
@@ -80,10 +79,11 @@ impl App {
         if invincible {
             eprintln!("[bot] invincible: the INVINCIBLE cheat is on for the run");
         }
+        let seeded_sessions = self.bot.as_ref().map_or(0, |bot| bot.seeded_sessions);
         let bot = self.bot.insert(AttachedBot {
             runtime,
             seed,
-            seeded_sessions: 0,
+            seeded_sessions,
             invincible,
         });
         // The boot already started the first session; it has not ticked yet.
@@ -200,16 +200,7 @@ impl App {
         // The bot's only output is pad/UI input: equip, heal, item use and
         // room actions go through the menu and the action button exactly as
         // a player's input does.
-        let bot = match runtime.tick(session, &self.pack) {
-            Ok(input) => input,
-            // The tick has already ended the run; the pad is the player's
-            // again.
-            Err(err) if runtime.errors_logged() => {
-                eprintln!("[bot] {err:#}; the pad is yours");
-                return Ok((ui, input, action));
-            }
-            Err(err) => return Err(err),
-        };
+        let bot = runtime.tick(session, &self.pack)?;
         self.feed_bot_native_screen(&bot.ui);
         Ok((bot.ui, bot.input, bot.action))
     }
@@ -292,86 +283,6 @@ impl App {
             Mode::Load(screen) => BotScreen::Load(screen.bot_view()),
             _ => return Ok(None),
         };
-        match runtime.tick_screen(screen) {
-            Ok(input) => Ok(Some(input)),
-            Err(err) if runtime.errors_logged() => {
-                eprintln!("[bot] {err:#}; the pad is yours");
-                Ok(None)
-            }
-            Err(err) => Err(err),
-        }
-    }
-}
-
-/// Run the attached bot with no display or audio until it finishes, dies or
-/// spends `max_ticks` app updates ([`super::play`]). Prints a concise
-/// `[bot]` report.
-pub(in crate::engine) fn run_headless(
-    app: &mut App,
-    max_ticks: u64,
-    stats_path: Option<&Path>,
-) -> Result<()> {
-    let started = Instant::now();
-    let played = super::play(
-        app,
-        max_ticks,
-        |app| Ok(app.bot_run_state()),
-        |app| {
-            let flow = app.update(UiInput::default(), player::Input::default(), false)?;
-            app.post_present();
-            Ok(flow)
-        },
-    );
-    let outcome = match played {
-        Ok(outcome) => outcome.name(),
-        Err(err) => {
-            print_report(app, "error", started.elapsed());
-            write_stats(app, "error", started.elapsed(), stats_path)?;
-            return Err(err);
-        }
-    };
-    print_report(app, outcome, started.elapsed());
-    write_stats(app, outcome, started.elapsed(), stats_path)
-}
-
-/// Write the bot's JSON stats report, whatever the outcome.
-fn write_stats(
-    app: &App,
-    outcome: &str,
-    elapsed: std::time::Duration,
-    path: Option<&Path>,
-) -> Result<()> {
-    let (Some(path), Some(runtime)) = (path, app.bot()) else {
-        return Ok(());
-    };
-    let json = runtime.stats_json(outcome, elapsed.as_secs_f64(), app.bot_run_facts());
-    if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
-        std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
-    }
-    std::fs::write(path, serde_json::to_string_pretty(&json)?)
-        .with_context(|| format!("writing bot stats to {}", path.display()))?;
-    println!("[bot] stats: {}", path.display());
-    Ok(())
-}
-
-/// Print the headless run's tick count, room path and finish reason.
-fn print_report(app: &App, outcome: &str, elapsed: std::time::Duration) {
-    let Some(runtime) = app.bot() else {
-        println!("[bot] no bot attached");
-        return;
-    };
-    println!(
-        "[bot] outcome={outcome} ticks={} elapsed={:.2}s",
-        runtime.ticks(),
-        elapsed.as_secs_f64()
-    );
-    if let Some(reason) = runtime.finish_reason() {
-        println!("[bot] finish: {reason}");
-    }
-    let path = runtime.room_path();
-    if path.is_empty() {
-        println!("[bot] rooms: (none)");
-    } else {
-        println!("[bot] rooms: {}", path.join(" -> "));
+        runtime.tick_screen(screen).map(Some)
     }
 }

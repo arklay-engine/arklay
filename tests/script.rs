@@ -307,7 +307,6 @@ fn engine_trace_with(
             ..arklay::trace::TraceOptions::default()
         },
         authoring,
-        arklay::engine::BotOptions::default(),
     )
     .unwrap();
     std::fs::read(path).unwrap()
@@ -344,7 +343,6 @@ fn a_sound_capture_matches_the_engines() {
             ..arklay::trace::TraceOptions::default()
         },
         arklay::engine::Authoring::default(),
-        arklay::engine::BotOptions::default(),
     )
     .unwrap();
     success(&script(
@@ -637,7 +635,6 @@ fn engine_title_trace(dir: &TempDir, title_special: i8, out: &str) -> Vec<u8> {
             ..arklay::trace::TraceOptions::default()
         },
         arklay::engine::Authoring::default(),
-        arklay::engine::BotOptions::default(),
     )
     .unwrap();
     std::fs::read(path).unwrap()

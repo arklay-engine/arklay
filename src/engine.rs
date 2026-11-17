@@ -36,7 +36,6 @@
 
 #[cfg(feature = "bot")]
 mod bot;
-mod bot_options;
 mod debug_hud;
 mod debug_view;
 mod script;
@@ -45,8 +44,7 @@ mod watch;
 pub use script::{ScriptOptions, run_script};
 
 #[cfg(feature = "bot")]
-pub use bot::{parse_bot_param, seeded_rand_state};
-pub use bot_options::{BotOptions, DEFAULT_MAX_TICKS, DEFAULT_RISK};
+pub use bot::{DEFAULT_MAX_TICKS, DEFAULT_RISK, parse_bot_param, seeded_rand_state};
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::{CStr, CString, c_void};
@@ -12380,7 +12378,6 @@ pub fn run_ui_with_options(
         player::Options::default(),
         trace::TraceOptions::default(),
         Authoring::default(),
-        BotOptions::default(),
     )
 }
 
@@ -12391,8 +12388,7 @@ pub fn run_ui_with_options(
 /// trace line per tick and the `capture_every` BMP cadence. `authoring` adds
 /// the oracle seams: a `--load` continue boot, the setup-script
 /// chunk and the save-out dump. `player_options` are the run options the
-/// booted sessions run with. `bot` enables the pack's restricted Lua player
-/// bot and, when `headless`, runs it without a display.
+/// booted sessions run with.
 #[allow(clippy::too_many_arguments)] // the CLI boot options are all needed
 pub fn run_ui_with_mods(
     pack: &Path,
@@ -12408,7 +12404,6 @@ pub fn run_ui_with_mods(
     player_options: player::Options,
     trace: trace::TraceOptions<'_>,
     authoring: Authoring<'_>,
-    bot: BotOptions,
 ) -> Result<()> {
     if authoring.load.is_some() && screen != "game" {
         bail!("--load is only supported with `--ui game`");
@@ -12461,7 +12456,6 @@ pub fn run_ui_with_mods(
         player_options,
         trace,
         authoring,
-        bot,
         None,
     )
 }
@@ -12494,7 +12488,6 @@ pub fn run_root(
             renderer,
             ..Authoring::default()
         },
-        BotOptions::default(),
         None,
     )
 }
@@ -12528,7 +12521,6 @@ pub(crate) fn run_root_with_display(
             renderer,
             ..Authoring::default()
         },
-        BotOptions::default(),
         Some(display),
     )
 }
@@ -12598,46 +12590,9 @@ fn run_ui_impl(
     player_options: player::Options,
     trace: trace::TraceOptions<'_>,
     authoring: Authoring<'_>,
-    bot: BotOptions,
     shared: Option<&mut Display>,
 ) -> Result<()> {
     let save_dir = &pack_save_dir(pack, save_dir);
-    #[cfg(not(feature = "bot"))]
-    if bot.enabled || bot.headless {
-        bail!("this build has no player bot: it was built without the `bot` feature");
-    }
-    #[cfg(feature = "bot")]
-    if bot.headless {
-        if capture.is_some() || trace.path.is_some() || trace.input.is_some() {
-            bail!("a headless bot run does not take a capture, a trace or an input script");
-        }
-        let pack = open_game_pack(pack, mods, language)?;
-        let mut app = App::new(pack, save_dir.to_path_buf(), false);
-        app.player_options = player_options;
-        app.boot(boot)?;
-        app.enable_skips();
-        app.attach_bot(
-            bot.risk,
-            bot.goal_room.as_deref(),
-            bot.seed,
-            &bot.params,
-            bot.invincible,
-        )?;
-        // A headless run has no frame to stay responsive for: let one update
-        // fast-forward the whole scene instead of a 12 ms burst, so where
-        // control returns does not depend on the machine's load. Every later
-        // session (a reload) inherits it.
-        app.unbounded_cutscene_skip = true;
-        if let Mode::Play(session) = &mut app.mode {
-            session.cutscene_skip_burst = None;
-        }
-        let max_ticks = if bot.max_ticks == 0 {
-            DEFAULT_MAX_TICKS
-        } else {
-            bot.max_ticks
-        };
-        return bot::run_headless(&mut app, max_ticks, bot.stats_path.as_deref());
-    }
     if capture.is_some()
         || trace.path.is_some()
         || trace.capture_dir.is_some()
@@ -12834,20 +12789,6 @@ fn run_ui_impl(
         session.run_setup_script(authoring.setup_script)?;
     } else if authoring.setup_script.is_some() {
         bail!("a setup script requires a boot that opens a game session");
-    }
-    #[cfg(feature = "bot")]
-    if bot.enabled {
-        app.enable_skips();
-        app.attach_bot(
-            bot.risk,
-            bot.goal_room.as_deref(),
-            bot.seed,
-            &bot.params,
-            bot.invincible,
-        )?;
-        if let Some(bot) = app.bot.as_mut() {
-            bot.runtime.log_errors();
-        }
     }
     let mut owned = None;
     let display = match shared {
@@ -30511,42 +30452,6 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "bot")]
-    #[test]
-    fn headless_bot_attaches_and_finishes_on_a_pack_mod() {
-        let dir = TempDir::new();
-        let pack_path = new_game_pack_with(
-            &dir,
-            &[(
-                "bot/init.lua",
-                b"function on_bot_tick(bot)\n  bot:finish('test done')\nend\n",
-            )],
-        );
-        let saves = dir.0.join("saves");
-        run_ui_with_mods(
-            &pack_path,
-            "game",
-            None,
-            &saves,
-            1,
-            None,
-            0,
-            &ModOptions::default(),
-            false,
-            None,
-            player::Options::default(),
-            trace::TraceOptions::default(),
-            Authoring::default(),
-            BotOptions {
-                enabled: true,
-                headless: true,
-                max_ticks: 20,
-                ..BotOptions::default()
-            },
-        )
-        .unwrap();
-    }
-
     #[test]
     fn app_debug_clear_game_plays_the_ending_chain() {
         let dir = TempDir::new();
@@ -30665,7 +30570,6 @@ mod tests {
                 save_out: Some(&saved),
                 ..Authoring::default()
             },
-            BotOptions::default(),
         )
         .unwrap();
 
@@ -30701,7 +30605,6 @@ mod tests {
                 load: Some(&saved),
                 ..Authoring::default()
             },
-            BotOptions::default(),
         )
         .unwrap();
 
@@ -30972,7 +30875,6 @@ mod tests {
                 player::Options::default(),
                 trace::TraceOptions::default(),
                 Authoring::default(),
-                BotOptions::default(),
             )
             .unwrap();
         }
@@ -31178,7 +31080,6 @@ mod tests {
                 player::Options::default(),
                 trace::TraceOptions::default(),
                 Authoring::default(),
-                BotOptions::default(),
             )
             .unwrap();
         }
@@ -36644,6 +36545,37 @@ off_0010:
             ..UiInput::default()
         };
         assert_eq!(run(keys), (ticks, frames));
+    }
+
+    /// A bot attached again in the same app (a second `bot_start`) seeds the
+    /// next stream, as the app's session count goes on, not the first one's.
+    #[cfg(feature = "bot")]
+    #[test]
+    fn a_bot_attached_again_plays_on_the_next_seed_stream() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack_with(
+            &dir,
+            &[("bot/init.lua", b"function on_bot_tick(bot) end\n")],
+        );
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut app = App::new(pack, dir.0.join("saves"), false);
+        let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+        app.start_session(session);
+        let rand_state = |app: &App| {
+            let Mode::Play(session) = &app.mode else {
+                panic!("expected a play mode");
+            };
+            session.game.rand_state
+        };
+        app.attach_bot(DEFAULT_RISK, None, Some(7), &[], false)
+            .unwrap();
+        assert_eq!(rand_state(&app), seeded_rand_state(7, 0));
+        app.attach_bot(DEFAULT_RISK, None, Some(7), &[], false)
+            .unwrap();
+        assert_eq!(rand_state(&app), seeded_rand_state(7, 1));
+        let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+        app.start_session(session);
+        assert_eq!(rand_state(&app), seeded_rand_state(7, 2));
     }
 
     #[cfg(feature = "bot")]

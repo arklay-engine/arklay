@@ -4459,6 +4459,35 @@ fn main_menu_publishes_its_view() {
     check(&menu, "actions", &weapon);
     menu.finish_close();
     check(&menu, "navigation", &weapon);
+    // CHECK: the options slide out, the viewer opens, and the view says so
+    // on every frame.
+    menu.confirm();
+    while menu.value("ready") == 0 {
+        menu.tick();
+    }
+    menu.down();
+    menu.confirm();
+    let mut opened = false;
+    for _ in 0..20 {
+        let event = menu.tick();
+        check(&menu, "actions", &weapon);
+        if event.0 == 3 {
+            opened = true;
+            break;
+        }
+    }
+    assert!(opened, "the viewer opened");
+    assert_eq!(menu.value("viewing"), 1);
+    let cx = menu.harness.context();
+    menu.screen
+        .signal_with_game("view_closed", (), &cx, &mut menu.game);
+    while menu.value("viewing") != 0 {
+        menu.tick();
+        check(&menu, "actions", &weapon);
+    }
+    menu.cancel();
+    menu.finish_close();
+    check(&menu, "navigation", &weapon);
     menu.right();
     check(&menu, "navigation", &["USE", "CHECK", "MOVE"]);
     menu.up();

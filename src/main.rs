@@ -1411,7 +1411,6 @@ fn main() -> Result<()> {
                     player_options,
                     arklay::trace::TraceOptions::default(),
                     authoring,
-                    arklay::engine::BotOptions::default(),
                 );
             }
             if let Some(room) = cli.room {
