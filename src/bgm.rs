@@ -547,6 +547,11 @@ pub fn step_fade(mixer: &mut Option<Mixer>, game: &mut GameState) {
         return;
     };
     apply_bank_fade(mixer, game, sweep);
+    // The teardown's -4 `setSndStop`s the voice bank at once
+    // (SoundSystem.cpp:254), whichever task owns the frame.
+    if fading && game.bgm.fade.kind == -4 {
+        mixer.stop_voice();
+    }
     // `UpdateSoundFade` and the teardown's `setSndStop`s act on the banks
     // directly, so the channels' new volumes and stops reach the mixer on
     // the tick they step, a door's included.

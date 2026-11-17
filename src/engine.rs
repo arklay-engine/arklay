@@ -15156,9 +15156,21 @@ pub fn simulate_door(
     slot: u8,
     frame_dir: Option<&Path>,
 ) -> Result<SimulatedDoor> {
+    simulate_door_with(pack, id, slot, frame_dir, |_| {})
+}
+
+/// [`simulate_door`] with `setup` run on the fresh game state first.
+fn simulate_door_with(
+    pack: &Pack,
+    id: RoomId,
+    slot: u8,
+    frame_dir: Option<&Path>,
+    setup: impl FnOnce(&mut game::GameState),
+) -> Result<SimulatedDoor> {
     let mut loaded = load_room(pack, id)?;
     let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_fresh_state(pack, &mut game);
+    setup(&mut game);
     let mut player_state = player::spawn(id, &loaded.room);
     run_room_init(&mut loaded, &mut game);
     apply_camera(&mut loaded.room, &mut game, None);
@@ -15201,6 +15213,9 @@ pub fn simulate_door(
     let mut mid_frame = None;
     let mut mid_index = None;
     for _ in 0..MAX_TRANSITION_FRAMES {
+        // `main_loop`'s sound fade under the door's task, as
+        // `GameSession::tick_transition` steps it.
+        bgm::step_fade(&mut mixer, &mut game);
         let frame = session.transition.tick(false);
         session.frame = frame;
         for effect in session.transition.stepper_mut().take_sfx() {
@@ -31833,6 +31848,60 @@ mod tests {
                 "the music fades"
             );
         }
+    }
+
+    /// The teardown's -4 stops the voice bank on its own tick, under a door
+    /// whose ticks never reach `tick_voice`.
+    #[test]
+    fn the_fade_stops_a_voice_line_through_a_door() {
+        let dir = TempDir::new();
+        let (pack, a, _) = two_room_door_pack(&dir);
+        let mut session = fading_door_session(&pack, a);
+        trigger_test_door(&pack, &mut session);
+        let line = audio::Wav::from_s16(&[1000; 60000], 1, audio::SAMPLE_RATE);
+        session.music.as_mut().unwrap().play_voice(line, 1.0, 0.0);
+        // Five ticks short of the voice stop.
+        session.game.bgm.fade = game::SoundFade {
+            dist_steps: -234,
+            kind: -9,
+            steps: [0; 3],
+        };
+        for _ in 0..4 {
+            session.tick_transition(&pack, false);
+            assert!(session.music.as_ref().unwrap().voice_playing());
+        }
+        session.tick_transition(&pack, false);
+        assert!(session.transition.is_some(), "still in the door");
+        assert_eq!(session.game.bgm.fade.kind, -4);
+        assert!(
+            !session.music.as_ref().unwrap().voice_playing(),
+            "the -4 tick stops the voice"
+        );
+    }
+
+    /// The headless door steps the fade as the windowed one does: once per
+    /// door tick.
+    #[test]
+    fn a_headless_door_steps_the_fade_like_the_windowed_one() {
+        let dir = TempDir::new();
+        let (pack, a, _) = two_room_door_pack(&dir);
+        let mut session = fading_door_session(&pack, a);
+        trigger_test_door(&pack, &mut session);
+        arm_test_fade(&mut session.game);
+        let mut frames = 0;
+        while session
+            .transition
+            .as_ref()
+            .is_some_and(|transition| !transition.frame.finished)
+        {
+            session.tick_transition(&pack, false);
+            frames += 1;
+        }
+        let windowed = session.game.bgm.fade.steps[0];
+        assert_eq!(windowed, 42 - frames);
+        let sim = simulate_door_with(&pack, a, 0, None, arm_test_fade).unwrap();
+        assert_eq!(sim.timeline.len() as i32, frames);
+        assert_eq!(sim.game.bgm.fade.steps[0], windowed);
     }
 
     /// `main_loop` leaves through its F9-prompt exit before
