@@ -145,3 +145,15 @@ input = "g1_scene_303.txt"
 input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,fgscn,fgstat"
 record = "--warp 303:-16852:-5400:-19090:552:3 --flag 4:55 --life 200"
+
+[[run]]
+name = "embryo_ben_301"
+room = "301"
+character = 0
+sound = true
+ticks = 4500
+# Leon A back in Ben's cell (3:64, 3:66; 3:65 clear): the room's scene (event 4) runs, the talk, and the embryo that rides in Ben (Em_27 Type 1, state 3) bursts out of him and crawls away
+input = "none.txt"
+voice_from_ref = true
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,fgstat,fgscn"
+record = "--warp 301:-25100:0:-16450:1024:0 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:27 --flag 3:33 --flag 3:64 --flag 3:66 --life 110"
