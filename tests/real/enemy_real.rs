@@ -718,7 +718,7 @@ fn boot_and_tick(pack: &Pack, id: RoomId, ticks: usize) -> arklay::game::GameSta
     }
     let mut models = arklay::enemy::EntityModelCache::default();
     let mut lua = arklay::enemy::LuaEnemyHost::new();
-    let room_state = arklay::state::RoomState::default();
+    let mut room_state = arklay::state::RoomState::default();
     for _ in 0..ticks {
         for slot in 1..ENTITY_COUNT {
             if !game.entities[slot].active() {
@@ -737,7 +737,7 @@ fn boot_and_tick(pack: &Pack, id: RoomId, ticks: usize) -> arklay::game::GameSta
                 game.entity_anims[slot].skeleton = Some(skeleton);
             }
             let clips: &[arklay::model::Clip] = model.as_ref().map_or(&[], |model| &model.clips);
-            lua.update(&mut game, &room_state, pack, slot, clips);
+            lua.update(&mut game, &mut room_state, pack, slot, clips);
         }
     }
     assert_eq!(lua.failed_scripts(), 0, "no script errored");

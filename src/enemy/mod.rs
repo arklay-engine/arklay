@@ -329,7 +329,7 @@ pub(crate) fn note_player_damage_bank(game: &mut GameState, model: Option<&Emd>)
 /// message that masks the character-think bit pauses them, exactly as before.
 pub fn update_all(
     game: &mut GameState,
-    room: &RoomState,
+    room: &mut RoomState,
     models: &mut EntityModelCache,
     pack: &Pack,
     mut lua: Option<&mut LuaEnemyHost>,
@@ -407,7 +407,7 @@ pub fn update_all(
 pub fn update_entity(
     game: &mut GameState,
     slot: usize,
-    room: &RoomState,
+    room: &mut RoomState,
     clips: &[Clip],
     look_at_target: Option<[i32; 3]>,
 ) {
@@ -626,21 +626,21 @@ mod tests {
             game.entities[slot].set_active(true);
         }
         game.enemy_count = 2;
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut host = LuaEnemyHost::new();
         let bank = |game: &GameState| game.player_damage.as_ref().map(|bank| bank.clips.len());
 
-        update_all(&mut game, &room, &mut models, &pack, Some(&mut host));
+        update_all(&mut game, &mut room, &mut models, &pack, Some(&mut host));
         assert_eq!(game.player_damage_owner, None);
         assert_eq!(bank(&game), Some(3), "no attack yet: the last model wins");
 
         game.flags[0].apply(1, 0);
-        update_all(&mut game, &room, &mut models, &pack, Some(&mut host));
+        update_all(&mut game, &mut room, &mut models, &pack, Some(&mut host));
         assert_eq!(game.player_damage_owner, Some(1));
         assert_eq!(bank(&game), Some(2), "the zombie's bite plays its own bank");
 
         game.flags[0].apply(1, 1);
-        update_all(&mut game, &room, &mut models, &pack, Some(&mut host));
+        update_all(&mut game, &mut room, &mut models, &pack, Some(&mut host));
         assert_eq!(bank(&game), Some(2), "the hunter's later update keeps it");
 
         game.enter_room(crate::state::RoomId::default(), &room);

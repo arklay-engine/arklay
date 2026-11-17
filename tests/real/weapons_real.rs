@@ -136,8 +136,8 @@ fn real_room_web_dies_through_the_weapon_input_path() {
             fire_pressed: tick == 0,
             ..Input::default()
         };
-        weapons::update(&mut run.game, &mut run.player, &run.room, &clips, input);
-        assert!(host.update(&mut run.game, &run.room, &pack, slot, &[]));
+        weapons::update(&mut run.game, &mut run.player, &mut run.room, &clips, input);
+        assert!(host.update(&mut run.game, &mut run.room, &pack, slot, &[]));
     }
 
     assert_eq!(
@@ -319,7 +319,7 @@ fn handgun_fire_queues_weapon_bank_sounds_that_are_packed() {
             ..Input::default()
         };
         let before = run.game.entity_sounds.len();
-        weapons::update(&mut run.game, &mut run.player, &run.room, &clips, input);
+        weapons::update(&mut run.game, &mut run.player, &mut run.room, &clips, input);
         queued.extend(
             run.game.entity_sounds[before..]
                 .iter()
@@ -441,7 +441,7 @@ fn real_tactical_reload_refills_the_beretta_from_its_ammo_stack() {
             run: true,
             ..Input::default()
         };
-        weapons::update(&mut run.game, &mut run.player, &run.room, &clips, input);
+        weapons::update(&mut run.game, &mut run.player, &mut run.room, &clips, input);
         reached_reload |= run.player.weapon.behavior == 0x18;
         lowest = lowest.min(run.game.item_count(2) as u8);
         if run.game.item_count(2) == 15 {
@@ -531,8 +531,8 @@ fn jill_grenade_round_hits_a_distant_zombie() {
             fire_pressed: tick == 0,
             ..Input::default()
         };
-        weapons::update(&mut run.game, &mut run.player, &run.room, &clips, input);
-        arklay::effects::behaviour::update(&mut run.game, &run.room);
+        weapons::update(&mut run.game, &mut run.player, &mut run.room, &clips, input);
+        arklay::effects::behaviour::update(&mut run.game, &mut run.room);
         if hit_tick.is_none() && run.game.entities[slot].health < health {
             hit_tick = Some(tick);
         }

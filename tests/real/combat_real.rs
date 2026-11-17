@@ -101,7 +101,7 @@ fn real_room_web_dies_through_the_shared_fire_entry() {
     // the 55-health web outright.
     run.game.player_flags = 0x40;
     run.game.entities[0].pos = web.pos;
-    assert_eq!(run.game.apply_weapon_damage(&run.room, 10), 1);
+    assert_eq!(run.game.apply_weapon_damage(&mut run.room, 10), 1);
     assert_eq!(run.game.entities[slot].state(), 3);
     assert!(
         run.game.flags[usize::from(BANK_ENEMIES)].bit(death_bit),
@@ -110,7 +110,7 @@ fn real_room_web_dies_through_the_shared_fire_entry() {
 
     // The web's destroy state clears the last strands and parks.
     let mut host = LuaEnemyHost::new();
-    assert!(host.update(&mut run.game, &run.room, &pack, slot, &[]));
+    assert!(host.update(&mut run.game, &mut run.room, &pack, slot, &[]));
     assert_eq!(run.game.entities[slot].state(), 4);
     assert_eq!(run.game.entities[slot].joint_flags, 0b0011_1111);
     assert_eq!(run.game.entities[slot].status_flags & 0x02, 0x02);
@@ -138,7 +138,7 @@ fn the_packed_tables_drive_a_deterministic_hit() {
             .unwrap();
         run.game.player_flags = 0x40;
         run.game.entities[0].pos = run.game.entities[slot].pos;
-        let hit = run.game.apply_weapon_damage(&run.room, 8);
+        let hit = run.game.apply_weapon_damage(&mut run.room, 8);
         outcome.push((
             hit,
             run.game.entities[slot].health,

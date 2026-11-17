@@ -1233,7 +1233,7 @@ fn enemy_snapshots(
         let dz = entity.pos[2] - player_pos[2];
         let distance =
             ((i64::from(dx) * i64::from(dx) + i64::from(dz) * i64::from(dz)) as f64).sqrt() as i32;
-        let visible = crate::combat::check_weapon_line_of_sight(game, room, entity.pos) == 0;
+        let visible = crate::combat::peek_weapon_line_of_sight(game, room, entity.pos) == 0;
         enemies.push(EnemySnapshot {
             slot: slot as u8,
             id: entity.id,

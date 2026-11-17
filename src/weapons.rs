@@ -819,7 +819,7 @@ fn tag_effect(game: &mut GameState, slot: u8, field: usize, weapon: u8) {
 pub fn update(
     game: &mut GameState,
     player: &mut PlayerState,
-    room: &RoomState,
+    room: &mut RoomState,
     clips: &WeaponClips<'_>,
     input: Input,
 ) {
@@ -962,7 +962,7 @@ fn holster_done(player: &mut PlayerState) {
 fn tick(
     game: &mut GameState,
     player: &mut PlayerState,
-    room: &RoomState,
+    room: &mut RoomState,
     clips: &WeaponClips<'_>,
     input: Input,
 ) {
@@ -1576,7 +1576,7 @@ fn gun_hold_input(
 fn gun_autoaim(
     game: &mut GameState,
     player: &mut PlayerState,
-    room: &RoomState,
+    room: &mut RoomState,
     clips: &WeaponClips<'_>,
     input: Input,
 ) {
@@ -1647,7 +1647,7 @@ fn gun_autoaim(
 fn autoaim_raise(
     game: &mut GameState,
     player: &mut PlayerState,
-    room: &RoomState,
+    room: &mut RoomState,
     clips: &WeaponClips<'_>,
 ) {
     player.weapon.state = 1;
@@ -1666,7 +1666,7 @@ fn autoaim_raise(
 fn autoaim_fire(
     game: &mut GameState,
     player: &mut PlayerState,
-    room: &RoomState,
+    room: &mut RoomState,
     clips: &WeaponClips<'_>,
     input: Input,
 ) {
@@ -1812,7 +1812,7 @@ fn autoaim_reverse(
 fn autoaim_holdfire(
     game: &mut GameState,
     player: &mut PlayerState,
-    room: &RoomState,
+    room: &mut RoomState,
     clips: &WeaponClips<'_>,
     input: Input,
 ) {
@@ -2518,7 +2518,7 @@ fn knife_hold(
 fn knife_swing(
     game: &mut GameState,
     player: &mut PlayerState,
-    room: &RoomState,
+    room: &mut RoomState,
     clips: &WeaponClips<'_>,
 ) {
     if player.weapon.state == 0 {
@@ -3192,7 +3192,7 @@ mod tests {
             _ => -1800,
         };
         let (skeleton, keyframes) = rig(root_y);
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         for _ in 0..ticks {
             let clips = WeaponClips {
                 emd: &emd,
@@ -3204,7 +3204,7 @@ mod tests {
                 weapon_keyframes: &keyframes,
                 weapon_skeleton: &skeleton,
             };
-            update(game, player, &room, &clips, input);
+            update(game, player, &mut room, &clips, input);
         }
         (emd, weapon_clips, skeleton, keyframes)
     }
@@ -3311,7 +3311,7 @@ mod tests {
     fn a_locked_quick_turn_blocks_the_aim_entry() {
         let (mut game, mut player) = armed(2, 15);
         game.player_options.quick_turn = true;
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let emd = clip_bank(0x24, 8);
         let weapon_clips = clip_bank(15, 8);
         let (skeleton, keyframes) = rig(-2400);
@@ -3345,7 +3345,7 @@ mod tests {
                 weapon_keyframes: &keyframes,
                 weapon_skeleton: &skeleton,
             };
-            update(&mut game, &mut player, &room, &clips, input);
+            update(&mut game, &mut player, &mut room, &clips, input);
         }
         assert_eq!(player.locked, player::LockedAction::QuickTurn);
         assert_eq!(
@@ -3506,7 +3506,7 @@ mod tests {
         let emd = clip_bank(0x24, 8);
         let weapon_clips = clip_bank(15, 32);
         let (skeleton, keyframes) = rig(-2400);
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut reached_reload = false;
         let mut empty_during_reload = false;
         for tick in 0..120 {
@@ -3526,7 +3526,7 @@ mod tests {
                 weapon_keyframes: &keyframes,
                 weapon_skeleton: &skeleton,
             };
-            update(&mut game, &mut player, &room, &clips, input);
+            update(&mut game, &mut player, &mut room, &clips, input);
             if player.weapon.behavior == 0x18 {
                 reached_reload = true;
                 empty_during_reload |= game.inventory[0].quantity == 0;
@@ -3613,7 +3613,7 @@ mod tests {
         let emd = clip_bank(0x24, 8);
         let weapon_clips = clip_bank(15, 32);
         let (skeleton, keyframes) = rig(-2400);
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         for _ in 0..ticks {
             let clips = WeaponClips {
                 emd: &emd,
@@ -3625,7 +3625,7 @@ mod tests {
                 weapon_keyframes: &keyframes,
                 weapon_skeleton: &skeleton,
             };
-            update(game, player, &room, &clips, input);
+            update(game, player, &mut room, &clips, input);
         }
     }
 
@@ -3762,7 +3762,7 @@ mod tests {
         let emd = clip_bank(0x24, 8);
         let weapon_clips = clip_bank(15, 32);
         let (skeleton, keyframes) = rig(-2400);
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         for _ in 0..ticks {
             let clips = WeaponClips {
                 emd: &emd,
@@ -3774,7 +3774,7 @@ mod tests {
                 weapon_keyframes: &keyframes,
                 weapon_skeleton: &skeleton,
             };
-            update(game, player, &room, &clips, input);
+            update(game, player, &mut room, &clips, input);
             update_detached_clip(game, player, &room);
         }
     }
@@ -4437,7 +4437,7 @@ mod tests {
             _ => -1800,
         };
         let (skeleton, keyframes) = rig(root_y);
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         for tick in 0..ticks {
             let input = aiming(tick < fire_ticks);
             let clips = WeaponClips {
@@ -4450,7 +4450,7 @@ mod tests {
                 weapon_keyframes: &keyframes,
                 weapon_skeleton: &skeleton,
             };
-            update(game, player, &room, &clips, input);
+            update(game, player, &mut room, &clips, input);
         }
     }
 
@@ -4525,7 +4525,7 @@ mod tests {
             game.entities[1].health = 100;
             player.pos = [0, 0, 0];
             player.angle = 0;
-            let room = RoomState {
+            let mut room = RoomState {
                 cuts: vec![crate::state::Cut {
                     look_at: [0, 0, 1000],
                     fov: 200,
@@ -4537,7 +4537,7 @@ mod tests {
                 drive(&mut game, &mut player, aiming(true), 1);
                 game.entities[0].pos = player.pos;
                 game.entities[0].angle = player.angle;
-                crate::effects::behaviour::update(&mut game, &room);
+                crate::effects::behaviour::update(&mut game, &mut room);
                 // The hit gate reopens the way the enemy's damage state does.
                 game.entities[1].hit_state = 0;
             }
@@ -4576,7 +4576,7 @@ mod tests {
         let emd = clip_bank(0x24, 8);
         let weapon_clips = clip_bank(15, 32);
         let (skeleton, keyframes) = rig(-2400);
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut reached_reload = false;
         for tick in 0..80 {
             let input = Input {
@@ -4595,7 +4595,7 @@ mod tests {
                 weapon_keyframes: &keyframes,
                 weapon_skeleton: &skeleton,
             };
-            update(&mut game, &mut player, &room, &clips, input);
+            update(&mut game, &mut player, &mut room, &clips, input);
             if player.weapon.behavior == 0x18 {
                 reached_reload = true;
             }
@@ -4874,7 +4874,7 @@ mod tests {
         let emd = clip_bank(0x24, 8);
         let weapon_clips = clip_bank(15, 8);
         let (skeleton, keyframes) = rig(-2400);
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let clips = WeaponClips {
             emd: &emd,
             emw: &emd,
@@ -4887,12 +4887,12 @@ mod tests {
         };
         // Aim until the machine owns the tick.
         for _ in 0..3 {
-            update(&mut game, &mut player, &room, &clips, aiming(false));
+            update(&mut game, &mut player, &mut room, &clips, aiming(false));
         }
         assert!(player.weapon.active(), "the aim machine started");
         // Release the aim: the holster motion runs and control returns.
         for _ in 0..80 {
-            update(&mut game, &mut player, &room, &clips, Input::default());
+            update(&mut game, &mut player, &mut room, &clips, Input::default());
             if !player.weapon.active() {
                 break;
             }
@@ -4902,7 +4902,7 @@ mod tests {
         // on the clip the holster last played; the body clip is armed on the
         // idle handler's own first tick.
         assert_eq!(player.clip_source, player::ClipSource::Weapon);
-        update(&mut game, &mut player, &room, &clips, Input::default());
+        update(&mut game, &mut player, &mut room, &clips, Input::default());
         assert_eq!(player.clip_source, player::ClipSource::Emd);
         assert_eq!(player.behavior, 0, "idle behavior code");
     }
@@ -4913,7 +4913,7 @@ mod tests {
         game.set_equipped(None);
         let emd = clip_bank(0x24, 8);
         let empty: Vec<Clip> = Vec::new();
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let clips = WeaponClips {
             emd: &emd,
             emw: &emd,
@@ -4924,7 +4924,7 @@ mod tests {
             weapon_keyframes: &[],
             weapon_skeleton: &Skeleton::default(),
         };
-        update(&mut game, &mut player, &room, &clips, aiming(false));
+        update(&mut game, &mut player, &mut room, &clips, aiming(false));
         assert!(!player.weapon.active(), "no weapon, no machine");
     }
 

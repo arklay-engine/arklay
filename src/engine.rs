@@ -17988,7 +17988,7 @@ impl EffectScene {
 
     /// `update_2d_effects`: one tick of every live slot.
     pub(crate) fn tick(&mut self) {
-        self.game.tick_effects(&self.room);
+        self.game.tick_effects(&mut self.room);
         std::mem::swap(&mut self.shown, &mut self.latest);
         self.latest.clone_from(&self.game.effects);
     }
@@ -18886,9 +18886,10 @@ fn run_player_machine(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad:
             .player
             .adopt_scripted_handback(&context.game.entities[0]);
     }
-    let room_clips = context
-        .room
-        .room_anim
+    // The weapon pass takes the room mutably (the sight check's flag
+    // write-back), so the room clips are lent out of it for the call.
+    let room_anim = context.room.room_anim.take();
+    let room_clips = room_anim
         .as_ref()
         .map(|anim| anim.clips.as_slice())
         .unwrap_or(&[]);
@@ -18913,6 +18914,7 @@ fn run_player_machine(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad:
         weapon_skeleton: &weapon.skeleton,
     };
     crate::weapons::update(context.game, context.player, context.room, &clips, pad);
+    context.room.room_anim = room_anim;
 }
 
 /// Re-slice the room's backgrounds to 316x236 while the screen-border flag
@@ -33922,7 +33924,7 @@ return M
         // `update_2d_effects` runs after `update_player_position`, so the
         // ripple the probe seats takes its first step in the same frame,
         // together with whatever the entities spawned before it.
-        let (_, _, room, mut fresh, _, _) = scripted_room_fixture();
+        let (_, _, mut room, mut fresh, _, _) = scripted_room_fixture();
         fresh.room_actions[0] = Some(zone);
         fresh.weapon_effects.sprites.push(ripple());
         fresh.entities[0].pos = game.entities[0].pos;
@@ -33931,7 +33933,7 @@ return M
         fresh.message_flags |= game::MESSAGE_FLAG_EFFECTS;
         assert!(fresh.run_room_action(0, game::HANDLER_EFFECT_ZONE));
         let seated = *fresh.effects.slot(63).unwrap();
-        fresh.tick_effects(&room);
+        fresh.tick_effects(&mut room);
         let stepped = *fresh.effects.slot(63).unwrap();
         assert_ne!(seated, stepped, "the fixture's first step is visible");
         assert_eq!(live, stepped);
@@ -40349,7 +40351,7 @@ off_0010:
     #[test]
     fn effect_quads_apply_scale_tint_and_the_depth_cull() {
         let id = RoomId::parse("1000").unwrap();
-        let room = effect_test_room();
+        let mut room = effect_test_room();
         let mut game = game::GameState::new(id, &room);
         let mut block = crate::effects::fixtures::block(1, 0, 0);
         block[14] = 0x02; // transform bit, so the position integrates
@@ -40365,7 +40367,7 @@ off_0010:
         let room_effects = Rc::clone(&game.room_effects);
         crate::effects::create(&mut game, &room_effects, 9, 8, 0, [100, 0, 1000], 0, 1).unwrap();
         crate::effects::create(&mut game, &room_effects, 9, 8, 0, [100, 0, 300_000], 0, 1).unwrap();
-        game.tick_effects(&room);
+        game.tick_effects(&mut room);
 
         let camera = Camera::from_cut(&room.cuts[0]);
         let pages = effect_test_pages();
@@ -40391,7 +40393,7 @@ off_0010:
     #[test]
     fn room_sprites_keep_their_authored_palette() {
         let id = RoomId::parse("1000").unwrap();
-        let room = effect_test_room();
+        let mut room = effect_test_room();
         let mut game = game::GameState::new(id, &room);
         let mut room_effects = crate::effects::RoomEffects::default();
         let mut block = crate::effects::fixtures::block(1, 0, 0);
@@ -40407,7 +40409,7 @@ off_0010:
 
         let room_effects = Rc::clone(&game.room_effects);
         crate::effects::create(&mut game, &room_effects, 38, 8, 0, [100, 0, 1000], 0, 1).unwrap();
-        game.tick_effects(&room);
+        game.tick_effects(&mut room);
 
         let camera = Camera::from_cut(&room.cuts[0]);
         let quads = build_effect_quads(

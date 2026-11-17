@@ -403,7 +403,7 @@ fn real_room3030_mass_mask_hides_and_restores() {
     for _ in 0..3 {
         arklay::effects::create(&mut sim.game, &room_effects, 11, 10, 0, focus, 0, 0);
     }
-    sim.game.tick_effects(&sim.room);
+    sim.game.tick_effects(&mut sim.room);
     let visible = render(&pack, id, &sim);
     let hidden_expected = cleared_render(&pack, id, &sim);
     let visible_pixels = changed_pixels(&visible, &hidden_expected);
@@ -443,13 +443,13 @@ fn real_room5080_clut_rows_tint_differently() {
     let camera = Camera::from_cut(&low.room.cuts[low.room.current_cut]);
     let focus = visible_zone_point(&low.room, &camera);
     arklay::effects::create(&mut low.game, &room_effects, 10, 0, 0, focus, 0, 0);
-    low.game.tick_effects(&low.room);
+    low.game.tick_effects(&mut low.room);
     let low_frame = render(&pack, id, &low);
 
     let mut high = booted(&pack, id);
     let room_effects = Rc::clone(&high.game.room_effects);
     arklay::effects::create(&mut high.game, &room_effects, 10, 8, 0, focus, 0, 0);
-    high.game.tick_effects(&high.room);
+    high.game.tick_effects(&mut high.room);
     let high_frame = render(&pack, id, &high);
 
     let low_cleared = cleared_render(&pack, id, &low);
@@ -521,7 +521,7 @@ fn real_effect_outside_the_camera_zone_paints_nothing() {
     arklay::effects::create(&mut sim.game, &room_effects, 11, 10, 0, inside, 0, 0);
     let outside_slot =
         arklay::effects::create(&mut sim.game, &room_effects, 11, 10, 0, outside, 0, 0).unwrap();
-    sim.game.tick_effects(&sim.room);
+    sim.game.tick_effects(&mut sim.room);
     let with = render(&pack, id, &sim);
     let without = cleared_render(&pack, id, &sim);
     let inside_pixels = changed_pixels(&with, &without);

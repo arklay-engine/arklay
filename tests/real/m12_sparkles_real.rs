@@ -112,7 +112,7 @@ fn room_100_sparkle_paints_over_the_item_and_vanishes_on_pickup() {
     );
     // One behaviour tick arms the sparkle's transform bit (the first frame's
     // behaviour writes the header flags), so later re-projections project it.
-    sim.game.tick_effects(&sim.room);
+    sim.game.tick_effects(&mut sim.room);
     // Isolate the sparkle pixels: hide the item mesh (the sparkle still
     // resolves the item's frame), render with and without the `0x0B` slots,
     // and keep the cut where the sparkle paints the most, so the capture does
@@ -175,7 +175,7 @@ fn room_100_sparkle_paints_over_the_item_and_vanishes_on_pickup() {
         if !any_sparkle(&sim.game) {
             break;
         }
-        sim.game.tick_effects(&sim.room);
+        sim.game.tick_effects(&mut sim.room);
     }
     assert!(!any_sparkle(&sim.game), "the sparkle did not vanish");
     let after = render(&pack, id, &sim, &sim.game);
@@ -212,12 +212,12 @@ fn room_513_parented_sparkle_tracks_omodel_6() {
     assert_eq!(effect.attach, effects::Attach::Item(model as u8));
     assert_eq!(effect.local_offset, [0, -32, 0], "bias byte 0x10 is -32");
 
-    sim.game.tick_effects(&sim.room);
+    sim.game.tick_effects(&mut sim.room);
     let before = sim.game.effects.slot(handle).unwrap().pos;
 
     // Move the parent: the sparkle's world position must follow.
     sim.game.objects.record_mut(6).unwrap().pos[0] += 250;
-    sim.game.tick_effects(&sim.room);
+    sim.game.tick_effects(&mut sim.room);
     let after = sim.game.effects.slot(handle).unwrap().pos;
     assert_eq!(
         i32::from(after[0]) - i32::from(before[0]),
@@ -287,10 +287,10 @@ fn corpus_walk_spawns_all_43_shipped_sparkles_and_frees_them() {
     let mut rooms_with_sparkles = 0usize;
     for &id in &rooms {
         let name = format!("{:04x}", id.rdt_number());
-        let Ok(loaded) = room::load(&pack, id) else {
+        let Ok(mut loaded) = room::load(&pack, id) else {
             continue;
         };
-        let room = &loaded.state;
+        let room = &mut loaded.state;
         if room.item_models.is_empty() {
             continue;
         }

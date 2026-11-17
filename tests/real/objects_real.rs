@@ -781,7 +781,7 @@ fn effect_attached_to_an_omodel_follows_its_transform() {
     };
     let data = jpn_rdt(&root, "JPN/STAGE2/ROOM20A0.RDT");
     let id = RoomId::parse("20A0").unwrap();
-    let room = rdt::parse(&data, id).unwrap();
+    let mut room = rdt::parse(&data, id).unwrap();
     let scripts = scd::reader::parse(&data).unwrap();
     let mut game = game::GameState::new(id, &room);
     {
@@ -813,7 +813,7 @@ fn effect_attached_to_an_omodel_follows_its_transform() {
 
     let object = *game.objects.record(0).unwrap();
     assert!(object.active(), "omodel 0 is not active");
-    arklay::effects::behaviour::update(&mut game, &room);
+    arklay::effects::behaviour::update(&mut game, &mut room);
     let effect = game.effects.slot(usize::from(slot)).unwrap();
     assert_eq!(
         effect.sprite_offset, object.pos,

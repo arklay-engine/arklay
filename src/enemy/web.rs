@@ -567,7 +567,7 @@ mod tests {
         let pack =
             crate::pack::Pack::from_bytes(crate::pack::PackWriter::new().to_bytes().unwrap())
                 .unwrap();
-        game.tick_entities(&room(), &mut models, &pack, None);
+        game.tick_entities(&mut room(), &mut models, &pack, None);
         assert!(!game.web_clones[slot].as_ref().unwrap().live);
     }
 }

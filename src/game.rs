@@ -5199,7 +5199,7 @@ impl GameState {
     /// updated.
     pub fn tick_entities(
         &mut self,
-        room: &RoomState,
+        room: &mut RoomState,
         models: &mut crate::enemy::EntityModelCache,
         pack: &crate::pack::Pack,
         lua: Option<&mut crate::enemy::LuaEnemyHost>,
@@ -5289,7 +5289,7 @@ impl GameState {
     /// animation and projection. Called after the entity/player update, before
     /// the room action probe, so an effect spawned this frame animates this
     /// frame.
-    pub fn tick_effects(&mut self, room: &RoomState) {
+    pub fn tick_effects(&mut self, room: &mut RoomState) {
         effects::behaviour::update(self, room);
     }
 
@@ -14605,12 +14605,12 @@ mod tests {
         state.entities[3].id = crate::enemy::FIRST_ID + 1;
         state.entities[1].set_active(true);
         state.entities[3].set_active(true);
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let pack =
             crate::pack::Pack::from_bytes(crate::pack::PackWriter::new().to_bytes().unwrap())
                 .unwrap();
         let mut models = crate::enemy::EntityModelCache::default();
-        assert_eq!(state.tick_entities(&room, &mut models, &pack, None), 2);
+        assert_eq!(state.tick_entities(&mut room, &mut models, &pack, None), 2);
         assert!(state.entities[1].active());
         assert!(state.entities[3].active());
 
@@ -14618,7 +14618,7 @@ mod tests {
         // characters, and the character driver must not run behind the window.
         state.show_message(1, MESSAGE_FLAG_ENTITIES);
         assert!(state.message_freezes_entities());
-        assert_eq!(state.tick_entities(&room, &mut models, &pack, None), 0);
+        assert_eq!(state.tick_entities(&mut room, &mut models, &pack, None), 0);
 
         // The player-state bit is a different one: a message that only masks
         // it keeps the characters running.
@@ -14626,7 +14626,7 @@ mod tests {
         state.show_message(1, MESSAGE_FLAG_PLAYER_STATE);
         assert!(state.message_locks_controls());
         assert!(!state.message_freezes_entities());
-        assert_eq!(state.tick_entities(&room, &mut models, &pack, None), 2);
+        assert_eq!(state.tick_entities(&mut room, &mut models, &pack, None), 2);
     }
 
     #[test]
@@ -17280,7 +17280,7 @@ mod tests {
 
             // The tick lands the billboard on the item's own position plus
             // the vertical bias (the Y rotation seed here is zero).
-            state.tick_effects(&camera_room());
+            state.tick_effects(&mut camera_room());
             let effect = *state.effects.slot(usize::from(record.sparkle)).unwrap();
             for (axis, expected) in [100, -200 + bias as i16, 300].iter().enumerate() {
                 assert!(
@@ -17317,7 +17317,7 @@ mod tests {
             state.entities[0].pos,
             state.entities[0].angle,
         );
-        state.tick_effects(&camera_room());
+        state.tick_effects(&mut camera_room());
         let effect = *state.effects.slot(usize::from(record.sparkle)).unwrap();
         for (axis, expected) in [item_world.t[0], item_world.t[1] - 32, item_world.t[2]]
             .iter()
@@ -17357,7 +17357,7 @@ mod tests {
             state.entities[0].pos,
             state.entities[0].angle,
         );
-        state.tick_effects(&camera_room());
+        state.tick_effects(&mut camera_room());
         let effect = *state.effects.slot(usize::from(record.sparkle)).unwrap();
         for (axis, expected) in [item_world.t[0], item_world.t[1] - 32, item_world.t[2]]
             .iter()
