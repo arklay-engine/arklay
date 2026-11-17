@@ -1839,9 +1839,10 @@ enum PickupKind {
     /// A door key used down to an empty stack: global 0xC7's discard prompt
     /// (the yes branch drops the stack), then the pause menu stays open.
     DiscardKey,
-    /// A script's put-back of a selected non-key item (116's shotgun rack,
-    /// 308's flamethrower hook): global 0xC4's put-down prompt (the yes
-    /// branch uses the item), then the menu closes back to the game.
+    /// A script's put-back of a selected item up to `ITEM_OIL` (116's
+    /// shotgun rack, 308's flamethrower hook): mode 1's global 0xC4 put-down
+    /// prompt over the inventory panel with no model viewer (the yes branch
+    /// uses the item), then the menu closes back to the game.
     PutDown,
 }
 
@@ -1880,7 +1881,8 @@ struct PickupView {
     slot: u8,
     /// Which prompt the flow runs.
     kind: PickupKind,
-    /// The model viewer; `None` for the document reader flow.
+    /// The model viewer; `None` for the document reader and mode 1's
+    /// put-down prompt.
     screen: Option<Box<ui::lua_screen::LuaScreen>>,
     /// The document reader (`ui/file.lua` opened with `pickup`); `None` for
     /// the model-viewer flows.
@@ -6593,12 +6595,12 @@ impl GameSession {
         if self.pickup_view.is_some() {
             return;
         }
-        let item = if matches!(
-            request.kind,
-            game::ItemViewKind::DiscardKey | game::ItemViewKind::PutDown
-        ) {
-            // Modes 1 and 6 view the selected item itself; there is no room
-            // action.
+        let item = if request.kind == game::ItemViewKind::PutDown {
+            // Mode 1 loads no model (MainMenu.cpp:365) and prompts over
+            // whatever is selected, id 0 included.
+            Some(self.game.selected_item.unwrap_or(0))
+        } else if request.kind == game::ItemViewKind::DiscardKey {
+            // Mode 6 views the selected item itself; there is no room action.
             self.game
                 .selected_item
                 .filter(|&item| self.game.has_item(item))
@@ -6630,13 +6632,16 @@ impl GameSession {
         };
         self.open_menu(pack);
         // The original sets `g_selectedItemId` to the item being taken as the
-        // mode opens, so the prompt's `\i` substitution names it.
-        self.game.select_item(Some(item));
+        // mode opens, so the prompt's `\i` substitution names it. Mode 1
+        // leaves the selection alone.
+        if kind != PickupKind::PutDown {
+            self.game.select_item(Some(item));
+        }
         let (screen, reader, phase) = match kind {
-            PickupKind::Take
-            | PickupKind::GotItem
-            | PickupKind::DiscardKey
-            | PickupKind::PutDown => {
+            // Mode 1 goes straight from the opening fade to 0xC4's prompt
+            // (MainMenu.cpp:462).
+            PickupKind::PutDown => (None, None, PickupPhase::Intro),
+            PickupKind::Take | PickupKind::GotItem | PickupKind::DiscardKey => {
                 let screen = {
                     let mut cx = self.ui_context(pack);
                     ui::lua_screen::LuaScreen::open_screen(
@@ -6644,13 +6649,7 @@ impl GameSession {
                         &[
                             ("item", ScreenArg::Int(i64::from(item))),
                             ("pickup", ScreenArg::Bool(true)),
-                            (
-                                "discard",
-                                ScreenArg::Bool(matches!(
-                                    kind,
-                                    PickupKind::DiscardKey | PickupKind::PutDown
-                                )),
-                            ),
+                            ("discard", ScreenArg::Bool(kind == PickupKind::DiscardKey)),
                         ],
                         ScreenAction::Resume,
                         &mut cx,
@@ -6722,6 +6721,12 @@ impl GameSession {
         // the viewer raises types its first glyph this frame, and one that
         // resolves this frame is only seen by the viewer on the next.
         let had_view = self.pickup_view.is_some();
+        // Mode 1's state 2 draws the monitor only while its prompt is still
+        // up as the frame starts (MainMenu.cpp:522).
+        let put_down_monitor = self.game.message.active
+            && self.pickup_view.as_ref().is_some_and(|pickup| {
+                pickup.kind == PickupKind::PutDown && pickup.phase == PickupPhase::Message
+            });
         self.step_pickup_view(pack, ui);
         // The action press that dismissed the viewer belongs to the menu, not
         // to the room-action probe: a reach-gated ground item would otherwise
@@ -6735,10 +6740,11 @@ impl GameSession {
         // on every frame the viewer stays up, so the face and the EKG keep
         // sweeping (and drawing from the shared `rand()`) under the model.
         // The document reader is the panel-less state 8 and has no monitor.
-        if self
-            .pickup_view
-            .as_ref()
-            .is_some_and(|pickup| pickup.screen.is_some())
+        if put_down_monitor
+            || self
+                .pickup_view
+                .as_ref()
+                .is_some_and(|pickup| pickup.screen.is_some())
         {
             self.menu_signal(pack, "tick_monitor", ());
         }
@@ -6893,6 +6899,12 @@ impl GameSession {
                 }
                 if let Some(pickup) = self.pickup_view.as_mut() {
                     pickup.phase = PickupPhase::Exit;
+                }
+                // Mode 1 has no exit animation: state 2 runs the menu's
+                // closing fade on the frame it sees the prompt gone
+                // (MainMenu.cpp:523).
+                if kind == Some(PickupKind::PutDown) {
+                    self.close_pickup_view(pack);
                 }
             }
             PickupPhase::Exit => {
@@ -37724,10 +37736,10 @@ off_0010:
 
     /// A room script that puts a held weapon back (116's shotgun rack, 308's
     /// flamethrower hook) selects it and raises `MSF_MENU_KEY_DEPLETED`. For
-    /// a non-key item that is the original's mode 1: global 0xC4's put-down
-    /// prompt, whose Yes uses the item (gone, unequipped, recorded for the
-    /// script's `testitem`) and No keeps it. Either way the menu closes back
-    /// to the game.
+    /// an id up to `ITEM_OIL` that is the original's mode 1: global 0xC4's
+    /// put-down prompt with no model viewer, whose Yes uses the item (gone,
+    /// unequipped, recorded for the script's `testitem`) and No keeps it.
+    /// Either way the menu closes back to the game.
     #[test]
     fn a_scripted_put_down_opens_the_put_down_prompt() {
         for put_down in [true, false] {
@@ -37748,15 +37760,14 @@ off_0010:
             session
                 .tick(&pack, UiInput::default(), player::Input::default(), false)
                 .unwrap();
-            assert!(session.pickup_view.is_some(), "the bit opened the viewer");
-            assert_eq!(
+            assert!(session.pickup_view.is_some(), "the bit opened the prompt");
+            assert!(session.menu.is_some(), "the inventory panel is underneath");
+            assert!(
                 session
                     .pickup_view
                     .as_ref()
-                    .and_then(|pickup| pickup.screen.as_ref())
-                    .map(|screen| screen.value("item") as u8),
-                Some(ITEM_SHOTGUN),
-                "the viewer loaded the shotgun's model"
+                    .is_some_and(|pickup| pickup.screen.is_none()),
+                "mode 1 loads no model (MainMenu.cpp:365)"
             );
             tick_until(&mut session, &pack, 300, "the put-down prompt", |session| {
                 session.game.message.id == Some(game::MESSAGE_PUT_DOWN)
@@ -37796,9 +37807,12 @@ off_0010:
                 "only Yes unequips it"
             );
 
-            tick_until(&mut session, &pack, 300, "the viewer close", |session| {
-                session.pickup_view.is_none()
-            });
+            // State 2 starts the menu's closing fade on the next frame, with
+            // no viewer exit animation (MainMenu.cpp:523).
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            assert!(session.pickup_view.is_none(), "the prompt closed the mode");
             settle_menu_fade(&mut session, &pack);
             assert!(session.menu.is_none(), "the menu closes back to the game");
             assert!(!session.game.menu_pending());

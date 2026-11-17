@@ -2779,14 +2779,20 @@ fn last_point_outside_walls(
 /// rollback anchor: [`resolve_room_collision`] of `pushed`, as the original
 /// does.
 ///
-/// Port guard (#736): an entity's push has no
-/// cap, and the room resolve pushes a point past a wall box's middle out of
-/// the box's far face, so a push deep into a wall (Plant 42's head volume,
-/// radius 2000, sweeping over a player who stands at 40C's wall) set the
-/// player down outside the room with no way back. When the resolved point
-/// lies across a wall from `prev`, the push stops where its line meets the
-/// wall instead, and the resolve sets the player down at the near face. An
-/// RE 2 room's SCA collision resolves as before.
+/// Port guard: when the resolved point lies across a wall from `prev`, the
+/// push stops where its line meets the wall and the resolve sets the player
+/// down at the near face. An RE 2 room's SCA collision resolves as before.
+///
+/// The original has no such guard and, for Plant 42, never needs one. A
+/// push is under the two radii per axis (EntityCommon.cpp:649-687; the
+/// `2 * radiusA` bonus at 667 needs the player's height to change). The
+/// head box is radius 200 on joint 14 and the radius-2000 column stays at
+/// the plant's fixed origin (Plant42.cpp:64-69, 2262-2266, 2387-2392), so
+/// the column only undoes the player's own step and the head pushes under
+/// `200 + radius`, while 40C's thinnest wall is 1656 deep. No push reaches a
+/// wall's middle, past which `collision_push_rect` exits the far face
+/// (RoomCollision.cpp:148-233). The bot's 40C escapes came from the old
+/// port carrying the column on the head joint.
 pub(crate) fn resolve_pushed_player(
     room: &RoomState,
     prev: [i32; 3],
@@ -3804,9 +3810,8 @@ mod tests {
     #[test]
     fn an_entity_push_through_a_wall_stops_at_its_near_face() {
         let room = west_walled_room();
-        // A bot run's tick in 40C: the player stands at the west wall and
-        // Plant 42's head volume pushes them to x 715, past the wall's
-        // middle (999).
+        // A synthetic push from the west wall to x 715, past the wall's
+        // middle (999); the old port's misplaced Plant 42 column did this.
         let prev = [2438, 0, 14298];
         let unpushed = [2445, 0, 14295];
         let pushed = [715, 0, 14081];
