@@ -1,0 +1,281 @@
+# room 118 on HARD, at run_119's start as Claire: EQUIP the Colt S.A.A. from slot 2 as play begins (so that Pl_weapon_ch loads its own clips), then two presses in a cycle of 60 ticks; every cycle raise the aim, which turns to the nearest zombie, press fire and lower; an empty gun reloads on the next press (#500)
+346 start
+350
+382 down
+386
+402 confirm
+406
+422 confirm
+426
+462 start
+466
+624 aim
+636 aim fire
+641 aim
+660 aim fire
+665 aim
+670
+684 aim
+696 aim fire
+701 aim
+720 aim fire
+725 aim
+730
+744 aim
+756 aim fire
+761 aim
+780 aim fire
+785 aim
+790
+804 aim
+816 aim fire
+821 aim
+840 aim fire
+845 aim
+850
+864 aim
+876 aim fire
+881 aim
+900 aim fire
+905 aim
+910
+924 aim
+936 aim fire
+941 aim
+960 aim fire
+965 aim
+970
+984 aim
+996 aim fire
+1001 aim
+1020 aim fire
+1025 aim
+1030
+1044 aim
+1056 aim fire
+1061 aim
+1080 aim fire
+1085 aim
+1090
+1104 aim
+1116 aim fire
+1121 aim
+1140 aim fire
+1145 aim
+1150
+1164 aim
+1176 aim fire
+1181 aim
+1200 aim fire
+1205 aim
+1210
+1224 aim
+1236 aim fire
+1241 aim
+1260 aim fire
+1265 aim
+1270
+1284 aim
+1296 aim fire
+1301 aim
+1320 aim fire
+1325 aim
+1330
+1344 aim
+1356 aim fire
+1361 aim
+1380 aim fire
+1385 aim
+1390
+1404 aim
+1416 aim fire
+1421 aim
+1440 aim fire
+1445 aim
+1450
+1464 aim
+1476 aim fire
+1481 aim
+1500 aim fire
+1505 aim
+1510
+1524 aim
+1536 aim fire
+1541 aim
+1560 aim fire
+1565 aim
+1570
+1584 aim
+1596 aim fire
+1601 aim
+1620 aim fire
+1625 aim
+1630
+1644 aim
+1656 aim fire
+1661 aim
+1680 aim fire
+1685 aim
+1690
+1704 aim
+1716 aim fire
+1721 aim
+1740 aim fire
+1745 aim
+1750
+1764 aim
+1776 aim fire
+1781 aim
+1800 aim fire
+1805 aim
+1810
+1824 aim
+1836 aim fire
+1841 aim
+1860 aim fire
+1865 aim
+1870
+1884 aim
+1896 aim fire
+1901 aim
+1920 aim fire
+1925 aim
+1930
+1944 aim
+1956 aim fire
+1961 aim
+1980 aim fire
+1985 aim
+1990
+2004 aim
+2016 aim fire
+2021 aim
+2040 aim fire
+2045 aim
+2050
+2064 aim
+2076 aim fire
+2081 aim
+2100 aim fire
+2105 aim
+2110
+2124 aim
+2136 aim fire
+2141 aim
+2160 aim fire
+2165 aim
+2170
+2184 aim
+2196 aim fire
+2201 aim
+2220 aim fire
+2225 aim
+2230
+2244 aim
+2256 aim fire
+2261 aim
+2280 aim fire
+2285 aim
+2290
+2304 aim
+2316 aim fire
+2321 aim
+2340 aim fire
+2345 aim
+2350
+2364 aim
+2376 aim fire
+2381 aim
+2400 aim fire
+2405 aim
+2410
+2424 aim
+2436 aim fire
+2441 aim
+2460 aim fire
+2465 aim
+2470
+2484 aim
+2496 aim fire
+2501 aim
+2520 aim fire
+2525 aim
+2530
+2544 aim
+2556 aim fire
+2561 aim
+2580 aim fire
+2585 aim
+2590
+2604 aim
+2616 aim fire
+2621 aim
+2640 aim fire
+2645 aim
+2650
+2664 aim
+2676 aim fire
+2681 aim
+2700 aim fire
+2705 aim
+2710
+2724 aim
+2736 aim fire
+2741 aim
+2760 aim fire
+2765 aim
+2770
+2784 aim
+2796 aim fire
+2801 aim
+2820 aim fire
+2825 aim
+2830
+2844 aim
+2856 aim fire
+2861 aim
+2880 aim fire
+2885 aim
+2890
+2904 aim
+2916 aim fire
+2921 aim
+2940 aim fire
+2945 aim
+2950
+2964 aim
+2976 aim fire
+2981 aim
+3000 aim fire
+3005 aim
+3010
+3024 aim
+3036 aim fire
+3041 aim
+3060 aim fire
+3065 aim
+3070
+3084 aim
+3096 aim fire
+3101 aim
+3120 aim fire
+3125 aim
+3130
+3144 aim
+3156 aim fire
+3161 aim
+3180 aim fire
+3185 aim
+3190
+3204 aim
+3216 aim fire
+3221 aim
+3240 aim fire
+3245 aim
+3250
+3264 aim
+3276 aim fire
+3281 aim
+3300 aim fire
+3305 aim
+3310
