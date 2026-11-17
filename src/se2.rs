@@ -2,7 +2,7 @@
 //!
 //! The PC release keeps each bank's sounds as one `.sap` under
 //! `Common/Sound` (see [`crate::sap`]: a WAV per mask bit, the bit being the
-//! slot). `convert-game` writes every bank as one WAV per slot, named as the
+//! slot). `pack convert game` writes every bank as one WAV per slot, named as the
 //! executable formats the source file (`SsLoadSap`) but with the bank number
 //! in hex, the way the rest of the pack numbers things:
 //!

@@ -4,8 +4,7 @@
 //! freezes the room and opens a tool list: ROOM SELECT, INVENTORY, PLAYER,
 //! FLAGS, CHEATS, SAVE, ITEM BOX and CLEAR GAME. Up/down move the cursor,
 //! confirm enters a tool, cancel backs out one level (tool, main list, closed)
-//! and F1 closes the menu from anywhere. The menu is always available
-//! (`--debug-menu` is accepted for compatibility only).
+//! and F1 closes the menu from anywhere. The menu is always available.
 //!
 //! The menu draws at the window's resolution with the in-game menu's faces,
 //! theme and input hints, and takes its input per presented frame as

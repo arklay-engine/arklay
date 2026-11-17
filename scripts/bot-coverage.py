@@ -6,7 +6,7 @@
 
 A bot run logs every story flag it changes (`story: common 0x61 set`, banks 0
 scenario and 1 common), and bot-batch.sh writes the run's story parameters
-(`--bot-param`) to batch.txt. A batch is one parameter set over some seeds;
+(`bot_run`'s `params`) to batch.txt. A batch is one parameter set over some seeds;
 its coverage is the union of the flags its runs set. The names file
 (mods/bot/params/re1-story.xml) labels the flags that mark a scene or a
 branch; unnamed flags are counted but not listed.

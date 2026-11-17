@@ -2,7 +2,7 @@
 //!
 //! These tests need both `ARKLAY_RE1_ROOT` and `ARKLAY_RE1_PACK`; with neither
 //! set they return early, and a partial configuration fails. They run the same
-//! public seams the engine's `--ui menu` capture, the door transition path and
+//! public seams the engine's menu screen capture, the door transition path and
 //! the locked-door message path use.
 
 use crate::common;

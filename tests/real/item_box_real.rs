@@ -11,7 +11,7 @@
 //!
 //! The first test deposits a stack in room 1001, changes rooms, withdraws it
 //! again and round-trips the whole state through a save block. The second
-//! renders the `--ui box` capture twice and requires it to be deterministic
+//! renders the box screen capture twice and requires it to be deterministic
 //! and non-empty.
 
 use crate::common;

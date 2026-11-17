@@ -4,7 +4,7 @@
 //! game's own data, so the pack names them in [`ENTRY`], a Lua chunk of
 //! `api:set_flag_name(bank, bit, name, description)` calls. `build.rs`
 //! generates the shipped chunk from `games/re1/inc/flags.akinc`, the defines
-//! the room scripts are written with ([`generate`]), and `convert-game` packs
+//! the room scripts are written with ([`generate`]), and `pack convert game` packs
 //! it with the other `game/*.lua` scripts. The engine's own banks keep the
 //! names in [`crate::ui::debug_menu`].
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Local bot benchmark: runs the headless bot on three scenarios and compares
-# the --bot-stats JSON against a recorded baseline.
+# the `bot_run` stats JSON against a recorded baseline.
 #
 #   ./scripts/bot-bench.sh                     run all, compare with baselines
 #   ./scripts/bot-bench.sh --only re1          run one scenario
@@ -24,7 +24,7 @@ declare -A PACKS=(
   [rando-123456]="$CACHE/games/biorand-123456.akpak"
   [rando-777777]="$CACHE/games/biorand-777777.akpak"
 )
-# The room whose entry ends a scenario's run (--bot-goal-room); none for the
+# The room whose entry ends a scenario's run (bot_run's goal_room); none for the
 # randomised packs, which run until the planner finishes or the tick budget.
 # re1-full ends at the completion point: 300, the courtyard behind 11B, whose
 # door opens only once all four crests are in the 11A wall (lock 0x17).
@@ -35,6 +35,21 @@ declare -A GOALS=(
 # re1-full needs a longer budget than the 20D run.
 declare -A BUDGETS=(
   [re1-full]=120000
+)
+# One bot run: the options the checked-in driver scripts use (mods/bot/routes/),
+# booted as the game window's new game is (`interactive`).
+DRIVER=$(cat <<'LUA'
+local pack, goal_room, max_ticks, stats = arg[1], arg[2], arg[3], arg[4]
+strict(false)
+load_game_pack(pack, { mods = { "mods/bot" }, quick_turn = true, tactical_reload = true })
+new_game({ character = 1, interactive = true })
+local run = bot_run({
+    goal_room = goal_room ~= "" and goal_room or nil,
+    max_ticks = tonumber(max_ticks),
+    stats = stats,
+})
+print(json(run.score))
+LUA
 )
 LABELS=(re1 rando-123456 rando-777777)
 # re1-full is run on its own: --only re1-full.
@@ -70,11 +85,11 @@ for label in "${LABELS[@]}"; do
   json="$OUT/$label-$stamp.json"
   log="$OUT/$label-$stamp.log"
   echo "== $label ($pack)"
-  goal=()
-  [ -n "${GOALS[$label]:-}" ] && goal=(--bot-goal-room "${GOALS[$label]}")
   start=$EPOCHREALTIME
-  "$BIN" "$pack" --mod mods/bot --bot --bot-headless "${goal[@]}" \
-    --bot-max-ticks "${BOT_BENCH_MAX_TICKS:-${BUDGETS[$label]:-$MAX_TICKS}}" --bot-stats "$json" >"$log" 2>&1 || \
+  # The driver script is piped in: arg[1..] are the pack, goal room (empty for
+  # none), max ticks and the stats path.
+  printf '%s\n' "$DRIVER" | "$BIN" script --headless - "$pack" "${GOALS[$label]:-}" \
+    "${BOT_BENCH_MAX_TICKS:-${BUDGETS[$label]:-$MAX_TICKS}}" "$json" >"$log" 2>&1 || \
     echo "warning: $label exited non-zero (see $log)" >&2
   wall=$(python3 -I -c "import sys;print(float(sys.argv[1])-float(sys.argv[2]))" "$EPOCHREALTIME" "$start")
   if [ ! -s "$json" ]; then

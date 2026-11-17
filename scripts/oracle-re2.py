@@ -180,9 +180,69 @@ def choice_state(difficulty: str, arrange: bool) -> tuple[int, int, int]:
     return fg, int(difficulty == "hard"), int(arrange)
 
 
-def choice_args(args: argparse.Namespace) -> list[str]:
-    """arklay's options for the same choice."""
-    return ["--difficulty", args.difficulty] + (["--arrange"] if args.arrange else [])
+def lua_str(text: str) -> str:
+    """`text` as a Lua string literal."""
+    out = []
+    for byte in text.encode():
+        char = chr(byte)
+        if char in '"\\' or byte < 0x20 or byte >= 0x7F:
+            out.append(f"\\{byte:03d}")
+        else:
+            out.append(char)
+    return '"' + "".join(out) + '"'
+
+
+def arklay_driver(args: argparse.Namespace, trace: Path, input_path: str | None, frames: Path | None = None,
+                  every: int = 1, room: str | None = None) -> str:
+    """The arklay driver script for the same new game: the choice, `ticks` traced ticks of the scripted input (an
+    input traces every frame, a door's and the death screen's too, as the original's `--test-input` does) and, with
+    `frames`, a capture every `every` traced ticks."""
+    options = [f"difficulty = {lua_str(args.difficulty)}"] + (["arrange = true"] if args.arrange else [])
+    boot = [f"character = {CHARACTERS[args.start]}"] + ([f"room = {lua_str(room)}"] if room else [])
+    held = {}
+    if input_path:
+        for line in Path(input_path).read_text().splitlines():
+            words = line.split("#", 1)[0].split()
+            if words:
+                held[int(words[0])] = words[1:]
+    table = ", ".join(f"[{tick}] = {{ {', '.join(lua_str(b) for b in buttons)} }}"
+                      for tick, buttons in sorted(held.items()))
+    return f"""strict(false)
+load_game_pack({lua_str(str(Path(args.pack).resolve()))}, {{ {', '.join(options)} }})
+new_game({{ {', '.join(boot)} }})
+trace_start({lua_str(str(trace))}, {{ all_frames = {'true' if input_path else 'false'} }})
+local held = {{ {table} }}
+local ticks, every = {args.ticks}, {every}
+local frames = {lua_str(str(frames)) if frames else 'nil'}
+local applied
+local updates, bound = 0, ticks * 2 + 10000
+while trace_ticks() < ticks and updates < bound do
+    local index = trace_ticks()
+    if index ~= applied then
+        applied = index
+        local buttons = held[index]
+        if buttons then
+            release()
+            if #buttons > 0 then hold(table.unpack(buttons)) end
+        end
+    end
+    tick()
+    updates = updates + 1
+    if frames and trace_ticks() > index and index % every == 0 then
+        capture(frames .. string.format("/f%05d.bmp", index))
+    end
+end
+"""
+
+
+def run_arklay(args: argparse.Namespace, out: Path, driver: str) -> None:
+    """Run arklay on a driver script, kept beside the traces as `ark.lua`."""
+    path = out / "ark.lua"
+    path.write_text(driver)
+    subprocess.run([str(Path(args.arklay).resolve()), "script", "--headless", str(path)], check=True,
+                   stdout=subprocess.DEVNULL)
+
+
 # What the two engines can compare today. arklay's random stream, fades and frames
 # aren't RE2's yet.
 RE2_FIELDS = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot"
@@ -1833,13 +1893,7 @@ def scenario_command(args: argparse.Namespace) -> int:
     ref_trace = out / "ref.trace"
     ark_trace = out / "ark.trace"
     record(args, ref_trace, Path(args.work).resolve())
-    command = [
-        args.arklay, args.pack, "--ui", "game", "--character", str(CHARACTERS[args.start]),
-        "--ticks", str(args.ticks), "--no-mods", "--trace", str(ark_trace), *choice_args(args),
-    ]
-    if args.input:
-        command += ["--input", args.input]
-    subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
+    run_arklay(args, out, arklay_driver(args, ark_trace.resolve(), args.input))
     return subprocess.run(
         [sys.executable, str(repo / "scripts" / "oracle.py"), "compare", str(ref_trace),
          str(ark_trace), "--offset", "0", "--fields", args.fields, "--first", "3",
@@ -1866,17 +1920,8 @@ def pixels_command(args: argparse.Namespace) -> int:
     args.shot_every = args.every
     if not args.reuse_ref:
         record(args, out / "ref.trace", Path(args.work).resolve())
-    command = [
-        str(Path(args.arklay).resolve()), str(Path(args.pack).resolve()), "--ui", "game",
-        "--character", str(CHARACTERS[args.start]),
-        "--ticks", str(args.ticks), "--no-mods", "--trace", str(out / "ark.trace"), *choice_args(args),
-        "--capture-every", str(args.every), "--capture-dir", str(ark_dir),
-    ]
-    arklay_input = args.arklay_input or args.input
-    if arklay_input:
-        command += ["--input", str(Path(arklay_input).resolve())]
-    command += args.arklay_arg
-    subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
+    run_arklay(args, out, arklay_driver(args, out / "ark.trace", args.arklay_input or args.input, ark_dir,
+                                        args.every, args.arklay_room))
 
     def regions(diff: "Image.Image") -> str:
         """The worst of a 4x3 grid, which says where to look."""
@@ -2074,8 +2119,8 @@ def main() -> int:
         help="arklay's own input when its ticks are offset from the reference's",
     )
     command.add_argument(
-        "--arklay-arg", action="append", default=[], metavar="ARG",
-        help="one more argument for arklay, such as --room",
+        "--arklay-room", default=None, metavar="ROOM",
+        help="start arklay's new game in this room instead of the start room",
     )
     command.set_defaults(func=pixels_command)
 

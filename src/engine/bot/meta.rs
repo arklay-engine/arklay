@@ -59,8 +59,8 @@
 //! differently. [`load`] drops the other character's facts.
 //!
 //! Every fact element also takes an optional `when="NAME=VALUE ..."`: the
-//! fact holds only while the run's story parameters (`params/<game>.xml`,
-//! `--bot-param`) match, so one room file can steer each branch of the
+//! fact holds only while the run's story parameters (`params/<game>.xml`)
+//! match, so one room file can steer each branch of the
 //! story. See [`super::params`].
 //!
 //! The merged pack resolves the file next to the room's other entries, so a

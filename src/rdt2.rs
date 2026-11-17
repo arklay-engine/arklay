@@ -248,7 +248,7 @@ pub fn sound_body(data: &[u8]) -> Result<Option<&[u8]>> {
     Ok(data.get(start..start + size.saturating_sub(header.len())))
 }
 
-/// The room's effects, as `convert-game` writes them ([`crate::esp2`]).
+/// The room's effects, as `pack convert game` writes them ([`crate::esp2`]).
 pub fn effect_container(data: &[u8]) -> Result<Option<Vec<u8>>> {
     const ESP_SLOT: usize = 18;
     crate::esp2::room_container(

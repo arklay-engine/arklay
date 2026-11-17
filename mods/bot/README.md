@@ -18,30 +18,38 @@ F8, F12), and Escape opens the in-game menu: the bot is suspended until it
 closes, as it is under the F1 debug menu and the F9 prompt.
 
 ```sh
-# Watch the bot in the normal window (bare --bot implies --ui game --character 1)
-target/fast-release/arklay re1 --mod mods/bot --bot
+# Watch the bot in the normal window: a windowed script run shows every tick.
+# The driver script boots a new Jill game and lets the bot play it; run
+# options such as quick_turn come from the script, not arklay.toml.
+cat > /tmp/bot.lua <<'LUA'
+load_game_pack("re1", { mods = { "mods/bot" }, quick_turn = true, tactical_reload = true })
+new_game({ character = 1 })
+local run = bot_run({ max_ticks = 400000 })
+print(json(run.score))
+LUA
+target/fast-release/arklay script /tmp/bot.lua
 
-# Edit bot/**.lua while the bot runs: --watch re-executes the chunks in the
-# same Lua state, so BOT_STATE and the engine's bot memory keep their progress.
-target/fast-release/arklay re1 --mod mods/bot --bot --watch
+# bot_run's `risk` (0.0..1.0, default 0.25) is how much danger the planner may
+# accept; the planner reads it as bot:risk(). Values outside the range are an
+# error.
 
-# --bot-risk 0.0..1.0 (default 0.25) is how much danger the planner may accept;
-# the planner reads it as bot:risk(). Values outside the range are an error.
+# `seed` (an integer) seeds the game's random number generator so each seed
+# plays a different game (hunter health, enemy choices, poison). The same
+# seed, code and `risk` replay identically; without it the game's own stream
+# is untouched. A reload after a death gets a fresh stream derived from the
+# seed. Compare changes over many seeds: scripts/bot-batch.sh.
 
-# --bot-seed N (u32, needs --bot) seeds the game's random number generator so
-# each seed plays a different game (hunter health, enemy choices, poison).
-# The same seed, code and --bot-risk replay identically; without the flag the
-# game's own stream is untouched. A reload after a death gets a fresh stream
-# derived from the seed. Compare changes over many seeds: scripts/bot-batch.sh.
+# `goal_room` finishes the run on entering that room (three hex digits).
 
-# --bot-goal-room ROOM finishes the run on entering ROOM (three hex digits).
+# `params` (a table) steers story decisions for this run; see "Story
+# parameters" below. Example: params = { richard = "leave" }
 
-# --bot-param NAME=VALUE (repeatable) steers a story decision for this run;
-# see "Story parameters" below. Example: --bot-param richard=leave
-
-# Headless: runs as fast as the simulation allows and reports ticks/rooms/reason
-target/fast-release/arklay re1 --mod mods/bot --bot --bot-headless
+# Headless: runs as fast as the simulation allows; bot_run returns the report
+# (ticks, rooms, reason), and `stats = "stats.json"` also writes it as JSON.
+# `-` reads the driver from stdin, with the pack as arg[1].
+target/fast-release/arklay script --headless - re1 < /tmp/bot.lua
 ```
+
 
 `mods/bot/routes/` holds one driver script per route through the game
 (`arklay script [--headless] mods/bot/routes/re1_jill_best_ending.lua
@@ -61,16 +69,14 @@ instead of this checkout's: a copy of the bot with a change to try,
 measured against the same scenes.
 
 A bot run saves at typewriters through the game's own save screen. Without
-an explicit `--save-dir` it writes to a fresh directory of its own,
-`<temp>/arklay-bot-saves-<pid>`, so it never overwrites the player's saves.
+a `save_dir` option on `load_game_pack` it writes to a scratch directory of
+its own that is removed when the run ends, so it never overwrites the
+player's saves.
 
-`--watch` reloads the bot in place when `bot/**.lua` changes: the chunks
-re-run in the same Lua state, so `BOT_STATE` keeps its plan and the engine
-keeps its remembered memory, navigation and tick count. Editing a bot file
-does not restart the room or the run. A new game or restart rebuilds the bot
-VM from the pack, so bot globals start fresh there. A changed
-`room/<id>/bot.xml` invalidates the cached room metadata, which the planner sees
-through `bot:room_meta()` on the next tick.
+A change to `bot/**.lua` takes effect on the next run: the driver script
+loads the pack's mod layers when it boots. A changed `room/<id>/bot.xml`
+invalidates the cached room metadata, which the planner sees through
+`bot:room_meta()`.
 
 ## Planner
 
@@ -353,7 +359,7 @@ Priorities, highest first:
    runs while the bot waits on a door a room event made a message: 305's
    heliport door waited for good with zones never pressed. Then
    `frontier empty: nothing reachable is left` (with the goals marked
-   looping, by key). Entering the `--bot-goal-room` finishes with
+   looping, by key). Entering the `goal_room` finishes with
    `goal room X reached`. Every finish lists the locked doors
    (`needs key 0x..`) and the blocked goals with their reason.
 
@@ -482,7 +488,7 @@ no node sees (the end of a dead end narrower than the step, like the strip
 beside 406's crate) is reached through one bend: the planner walks out
 from it along an axis, up to 4096 units, to the first point a node sees.
 
-`--bot-goal-room ROOM` (three hex digits, needs `--bot`) is read as
+`bot_run`'s `goal_room` (three hex digits) is read as
 `bot:goal_room()`. `scripts/bot-bench.sh` passes `20D` for the `re1`
 scenario and `300` for `re1-full` (run it with `--only re1-full`): the
 courtyard behind 11B, whose door opens once all four crests are in the 11A
@@ -1335,11 +1341,11 @@ leaves the game session.
 | `bot:room()` | `{id, stage, room, player_flag, mansion2, camera, controllable}`. |
 | `bot:room_meta()` | The current room's authored `room/<id>/bot.xml` metadata, or `nil`. Read-only; see [Room metadata](#room-metadata). |
 | `bot:world()` | The observed world model: rooms, doors, items, action presses and the frontier. Read-only; see [World model](#world-model). |
-| `bot:risk()` | The `--bot-risk` setting, `0.0..1.0` (default `0.25`). Scales the heal, fight-or-run, save and critical-health thresholds. |
-| `bot:param(name)` | The story parameter's value for this run, a string (`params/re1.xml`, `--bot-param`). An undeclared name is an error. |
+| `bot:risk()` | The `risk` option of `bot_run`/`bot_start`, `0.0..1.0` (default `0.25`). Scales the heal, fight-or-run, save and critical-health thresholds. |
+| `bot:param(name)` | The story parameter's value for this run, a string (`params/re1.xml`, the `params` option of `bot_run`/`bot_start`). An undeclared name is an error. |
 | `bot:saves()` | The run's saves, read-only: `{count, slot, room, tick, previous_slot, previous_room, previous_tick, fallbacks, reloads, deaths, deaths_since_save, needs_ribbon, ribbons, ribbon_item}`. `slot` (0-based), `room` and `tick` describe the latest save the engine's save screen wrote and are `nil` before the first. The `previous_` fields describe the save before it while its slot still holds it, and `fallbacks` counts `bot:fall_back_save()` calls. `needs_ribbon` is the character's ink ribbon rule, `ribbons` the held count and `ribbon_item` the ribbon's id. |
 | `bot:fall_back_save()` | After a death: makes the save before the latest one the save the next reload loads, with the memory the bot had then (the death lessons stay). Returns `false` when there is none. One level only. The death handler calls it once a save has failed MAX_DEATHS times. |
-| `bot:goal_room()` | The `--bot-goal-room` id (uppercase, such as `"20D"`), or `nil`. |
+| `bot:goal_room()` | The `goal_room` option (uppercase, such as `"20D"`), or `nil`. |
 | `bot:cameras()` | The current room's camera switch zones: `{from, to, x, z}` rows, `x`/`z` the zone's corner mean. Each cut group's header record is skipped. |
 | `bot:player()` | `{x, y, z, angle, reach_x, reach_z, health, max_health, state, being_attacked, equipped, collision_flags, grabbed, poisoned, seriously_poisoned}`. `collision_flags` is the live health-status/collision byte (bit `0x10` skips shape-5 floor volumes). `poisoned` and `seriously_poisoned` are the engine's health-status poison bits (`0x02`, cured by a blue herb; `0x20`, cured by the serum). `grabbed` is the entity's grab zone flag. `reach_x`/`reach_z` is the forward action probe (`probe_actions`, a reach ahead of the player): a zone press fires only when it is inside the zone, and `press_zone` holds forward into furniture while it falls short. |
 | `bot:scene()` | `{mode, skippable, film, transition, cutscene_skip, message, message_takes_input, message_waiting, prompt, prompt_choice, pickup, reader, frozen, controls_locked, controllable, dead, ending, typewriter, save_screen, computer, panel}`. `panel` (only while room 408's number panel is up) is `{active, x, y, lamps}`: whether the pad takes input (false during its prompt and success animation), the cursor's column and row (0-based) and the nine lamps row by row (booleans). `ending` is the scripted death variant, the escape scene ending the game (it raises `dead` too); the bot then finishes with `game completed`. `computer` (only while the lab terminal is up) is `{stage, sub, cell, menu_row, typed}`: what the terminal waits for (`login`/`menu`/`exit`, the menu's leave question/`command`/`unlocked`, or `busy` while it takes no input), its field (`user`/`secret`), the keyboard cursor cell, the door menu row and how many characters the field holds. The terminal reads the game pad (directions and the action key), not the UI edges. `prompt` is a yes/no prompt on screen and `prompt_choice` its highlighted answer (`"yes"`/`"no"`; left selects No, right Yes). `reader` is a document pick-up's FILE reader, which closes on cancel. `typewriter` is the fade into or out of the typewriter's save screen; `save_screen` (only while it is up) is `{mode, stage, cursor, exit_row, slots, rows, answer}`: `mode` `"save"`, `stage` `idle`/`confirm_overwrite`/`save_anim`/`error`/`fade_out`, `cursor` the highlighted row (0-based; rows `0..7` are the slots), `slots` whether each slot holds a save. The modern screen also sets `rows`, the 0-based slot each row writes or loads (`-1` for none; save mode's first row is the new save, writing the first free slot), and `answer`, the open question's highlighted answer (`"yes"`/`"no"`; left selects Yes); `cursor` is `-1` while no row is highlighted. |
@@ -1528,9 +1534,9 @@ candle with the lighter, 401's cup, 405's statue, Enrico's body in 30A)
 carry `when="items=random"`, so a normal game does not spend time on them:
 ungated, the two lighter uses alone made the lighter a needed item and the
 17-seed benchmark fell from 17 completed runs to 15. It is for a randomized (BioRand) pack:
-`--bot-param items=random`.
+`params = { items = "random" }`.
 
-`--bot-param NAME=VALUE` (repeatable) picks another value for one run, and
+`bot_run`'s `params = { NAME = "VALUE" }` picks another value for one run, and
 every fact element takes `when="NAME=VALUE"`: the fact holds only while the
 parameter has that value. `NAME!=VALUE` negates, `a|b` lists alternatives,
 and several conditions separated by spaces must all hold

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run many full bot games in parallel, one per --bot-seed, and summarise them.
+# Run many full bot games in parallel, one per bot seed, and summarise them.
 # A single run is deterministic, so one run per change says little; a batch of
 # seeds shows the spread.
 #
@@ -11,16 +11,16 @@
 #   -n, --name NAME      batch name              (BATCH_NAME, default: timestamp)
 #   -o, --out DIR        output root             (BATCH_OUT, default target/bot-batches)
 #   -s, --seeds LIST     comma list or range     (BATCH_SEEDS, default 1,2,3,4,5,6,7,8; 1-16 works;
-#                        seed 0 is the default run, without --bot-seed)
-#   -r, --risk R         --bot-risk              (BATCH_RISK, default 0.25)
+#                        seed 0 is the default run, without a seed)
+#   -r, --risk R         bot_run's risk          (BATCH_RISK, default 0.25)
 #   -j, --jobs N         parallel runs           (BATCH_JOBS, default: CPU count)
 #   -p, --pack PACK      game pack: an installed pack's id or a path (BOT_PACK,
 #                        default `re1`, the installed RE1 pack)
 #   -t, --timeout SEC    per-run timeout         (BATCH_TIMEOUT, default 1100)
-#       --max-ticks N    --bot-max-ticks         (BATCH_MAX_TICKS, default 400000)
-#   -P, --param K=V      --bot-param, repeatable (BATCH_PARAMS, space-separated K=V list):
+#       --max-ticks N    bot_run's max_ticks     (BATCH_MAX_TICKS, default 400000)
+#   -P, --param K=V      bot_run's params, repeatable (BATCH_PARAMS, space-separated K=V list):
 #                        a story decision (mods/bot/params/re1.xml declares them)
-#       --invincible     --bot-invincible: the INVINCIBLE cheat for every run
+#       --invincible     bot_run's invincible: the INVINCIBLE cheat for every run
 #                        (BATCH_INVINCIBLE=1), to time a route without deaths
 #       --no-build       skip `cargo build --profile fast-release`
 #       --keep-saves     keep seed-<s>.saves/ after each run (KEEP_SAVES=1), to
@@ -101,20 +101,49 @@ printf 'pack=%s\nrisk=%s\nseeds=%s\nmax_ticks=%s\nparams=%s\ncommit=%s\n' \
   "$PACK" "$RISK" "$(echo $seed_list | tr ' ' ',')" "$MAX_TICKS" "$PARAMS" \
   "$(git rev-parse --short HEAD 2>/dev/null)" > "$DIR/batch.txt"
 
-export BIN PACK RISK MAX_TICKS TIMEOUT DIR here PARAMS KEEP_SAVES INVINCIBLE
+# One bot run: the options the checked-in driver scripts use (mods/bot/routes/),
+# booted as the game window's new game is (`interactive`).
+DRIVER=$(cat <<'LUA'
+local pack, seed, risk, max_ticks, invincible, save_dir = arg[1], arg[2], arg[3], arg[4], arg[5], arg[6]
+local params = {}
+for i = 7, #arg do
+    local name, value = arg[i]:match("^([%w_]+)=(.+)$")
+    if not name then
+        error("bad parameter `" .. arg[i] .. "` (want NAME=VALUE)")
+    end
+    params[name] = value
+end
+strict(false)
+load_game_pack(pack, { mods = { "mods/bot" }, quick_turn = true, tactical_reload = true, save_dir = save_dir })
+new_game({ character = 1, interactive = true })
+local run = bot_run({
+    params = params,
+    risk = tonumber(risk),
+    seed = tonumber(seed),
+    invincible = invincible == "1",
+    max_ticks = tonumber(max_ticks),
+})
+-- The lines bot-batch-summary.py reads.
+print(string.format("[bot] outcome=%s ticks=%d", run.outcome, run.ticks))
+if run.finish_reason then
+    print("[bot] finish: " .. run.finish_reason)
+end
+print(json(run.score))
+LUA
+)
+export DRIVER BIN PACK RISK MAX_TICKS TIMEOUT DIR here PARAMS KEEP_SAVES INVINCIBLE
 run_one() {
   s="$1"
   rm -rf "$DIR/seed-$s.saves"; mkdir -p "$DIR/seed-$s.saves"
   start=$(date +%s)
-  # Seed 0 is the default run: no --bot-seed, the game's own RNG.
-  seed_arg=(--bot-seed "$s")
-  [ "$s" = 0 ] && seed_arg=()
-  param_arg=()
-  for p in $PARAMS; do param_arg+=(--bot-param "$p"); done
-  [ -n "$INVINCIBLE" ] && param_arg+=(--bot-invincible)
-  ( cd "$here" && timeout "$TIMEOUT" "$BIN" "$PACK" --mod mods/bot --bot --bot-headless \
-      --bot-max-ticks "$MAX_TICKS" --bot-risk "$RISK" "${seed_arg[@]}" "${param_arg[@]}" \
-      --save-dir "$DIR/seed-$s.saves" ) > "$DIR/seed-$s.log" 2>&1
+  # Seed 0 is the default run: no seed, the game's own RNG.
+  seed_arg="$s"; [ "$s" = 0 ] && seed_arg=""
+  inv=""; [ -n "$INVINCIBLE" ] && inv=1
+  # The driver script is piped in: arg[1..] are the pack, seed, risk, max ticks,
+  # invincible flag, save dir, then the K=V story params.
+  ( cd "$here" && printf '%s\n' "$DRIVER" | timeout "$TIMEOUT" "$BIN" script --headless - \
+      "$PACK" "$seed_arg" "$RISK" "$MAX_TICKS" "$inv" "$DIR/seed-$s.saves" $PARAMS \
+      ) > "$DIR/seed-$s.log" 2>&1
   code=$?
   echo "exit=$code secs=$(( $(date +%s) - start ))" > "$DIR/seed-$s.exit"
   [ -n "$KEEP_SAVES" ] || rm -rf "$DIR/seed-$s.saves"

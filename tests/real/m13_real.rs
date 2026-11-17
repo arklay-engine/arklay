@@ -12,7 +12,6 @@ use crate::common;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use arklay::bgm;
 use arklay::convert::convert_game_with_options;
@@ -1126,27 +1125,6 @@ fn real_m13_corpus_audit_has_no_implemented_placeholders() {
     }
 }
 
-/// Run the CLI capture for one room and return the written bytes.
-fn cli_capture(pack: &Path, room: &str, ticks: u32, extra: &[&str], out: &Path) -> Vec<u8> {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_arklay"));
-    command
-        .arg(pack)
-        .arg("--room")
-        .arg(room)
-        .arg("--player")
-        .arg("0")
-        .arg("--ticks")
-        .arg(ticks.to_string())
-        .arg("--capture")
-        .arg(out)
-        .env("SDL_AUDIODRIVER", "dummy")
-        .env("SDL_VIDEODRIVER", "dummy");
-    command.args(extra);
-    let status = command.status().expect("spawn arklay");
-    assert!(status.success(), "the CLI capture failed");
-    std::fs::read(out).expect("read the CLI capture")
-}
-
 #[test]
 #[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
 fn real_captures_stay_deterministic_and_audio_free() {
@@ -1158,9 +1136,9 @@ fn real_captures_stay_deterministic_and_audio_free() {
     std::fs::create_dir_all(&dir).unwrap();
 
     // Two CLI runs with the same arguments are byte-identical.
-    let first = cli_capture(&pack_path, "100", 30, &[], &dir.join("first.bmp"));
-    let second = cli_capture(&pack_path, "100", 30, &[], &dir.join("second.bmp"));
-    assert_eq!(first, second, "two --ticks captures differ");
+    let first = common::room_capture(&pack_path, &[], "100", 0, 30, &dir.join("first.bmp"));
+    let second = common::room_capture(&pack_path, &[], "100", 0, 30, &dir.join("second.bmp"));
+    assert_eq!(first, second, "two scripted captures differ");
 
     // The library seam reproduces the CLI frame exactly (the audio state
     // machine ran in both).

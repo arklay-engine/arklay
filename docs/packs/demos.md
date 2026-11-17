@@ -18,7 +18,7 @@ recorded length runs out or when a button is pressed.
 To watch one reel, give its position in that sorted list:
 
 ```sh
-arklay re1.akpak --ui demo --demo 2
+arklay --game re1.akpak --ui demo --demo 2
 ```
 
 ## The reel format

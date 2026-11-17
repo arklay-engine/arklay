@@ -10,7 +10,7 @@
 //! `file/<doc>_<page>_fg_ja-JP`) plus the menu sheets and font. The first
 //! test loads every page and checks the sizes the JPN reader indexes; the
 //! reader's paging is covered by the Lua screen's unit tests. The second
-//! renders the `--ui file` capture twice and requires it to be deterministic
+//! renders the FILE tab capture twice and requires it to be deterministic
 //! and to draw its own layer over the menu.
 
 use crate::common;

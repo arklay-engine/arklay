@@ -73,7 +73,7 @@
 --             - for a door into a room not yet entered, the bonus of an item
 --               a <holds> fact places there that the bot lacks and needs
 --               (BotPlanner.holds_bonus)
---             - GOAL_BONUS for a door into the --bot-goal-room, or
+--             - GOAL_BONUS for a door into the `goal_room`, or
 --               STAGE_BONUS for one into the goal room's stage;
 --      ties go to the doors here, then frontier order. A locked door counts
 --      only with the key it needs. The remote winner becomes the pursued
@@ -96,7 +96,7 @@
 -- A looping mark holds for LOOP_HOLD or until the inventory changes. The
 -- limits are three times what the re1 bench run reaching 20D needs (at most
 -- 2 entries of one room between progress, 1 stall).
--- The goal room, if any, comes from --bot-goal-room. Every room fact comes
+-- The goal room, if any, comes from the `goal_room` option. Every room fact comes
 -- from the world model and the rooms' bot.xml; this module holds no room
 -- literals.
 
@@ -197,7 +197,7 @@ local MAP_DOOR = 15 * C.REACH
 local UNVISITED_BONUS = 15 * C.REACH
 -- A route to a remote frontier item.
 local ITEM_BONUS = 10 * C.REACH
--- A door into the --bot-goal-room, and one into the goal's stage. The goal
+-- A door into the `goal_room`, and one into the goal's stage. The goal
 -- door is worth ten door steps: once its key is held it outranks every
 -- other goal short of a long detour.
 local GOAL_BONUS = 10 * DOOR_COST

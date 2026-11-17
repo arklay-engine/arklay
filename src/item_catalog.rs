@@ -57,7 +57,7 @@ mod sources {
 }
 
 /// The checked-in item definitions as `(pack entry, text)` pairs, generated
-/// by `build.rs`; `convert-game` packs exactly this set.
+/// by `build.rs`; `pack convert game` packs exactly this set.
 pub use sources::ITEM_FILES;
 
 /// File name of an item's definition inside its folder.

@@ -34,8 +34,7 @@ recording. The port finds it in the pack as
 common set) and the line in hexadecimal.
 
 The bit comes down when the line ends: after its length in ticks and three
-more, or after the length a `--voice-ticks` list gives, when one is used to
-replay a recording of the original.
+more.
 A line missing from the pack holds the bit for those three ticks only. The
 line plays at the volume [`xa_vol`](xa_vol.md) last set.
 

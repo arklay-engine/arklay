@@ -40,13 +40,6 @@ A mod replaces a model by shipping a whole file. An HD texture pack can
 replace the texture alone by its hash (see
 [HD texture packs](../mods.md#hd-texture-packs)).
 
-To look at a model without playing up to it, the model viewer stands it in
-a room:
-
-```sh
-arklay re1.akpak --room 100 --model enemy/06/enemy_0.emd --clip 3
-```
-
 ## The script
 
 `enemy.lua` is the behaviour. The engine calls its global `update(e)` once

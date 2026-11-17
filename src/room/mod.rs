@@ -25,7 +25,7 @@
 //! Camera and file numbers are two lower-case hex digits (`cut/0a.bmp`);
 //! slot `n` reads file `n` unless `<slots>` says otherwise.
 //!
-//! RE1's definitions are checked in ([`RE1_FILES`]); `convert-game` takes only
+//! RE1's definitions are checked in ([`RE1_FILES`]); `pack convert game` takes only
 //! the models, effect sheets and player animation from an install's RDTs
 //! ([`source::rdt_assets`]).
 //!
@@ -630,7 +630,7 @@ mod checked_in {
 /// and German RDTs' leftover data in rooms the others ship as stubs (and their
 /// unreachable rooms 313 and 412) is not kept.
 ///
-/// `convert-game` packs these in place of anything read from the install's
+/// `pack convert game` packs these in place of anything read from the install's
 /// RDTs, which only supply the room's models and animation.
 pub use checked_in::ROOM_FILES as RE1_FILES;
 

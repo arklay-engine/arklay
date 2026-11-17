@@ -23,7 +23,7 @@ use crate::common;
 
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use arklay::bmp;
 use arklay::pack::Pack;
@@ -45,19 +45,6 @@ impl Drop for TempDir {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.0);
     }
-}
-
-/// Run the capture CLI with `args` and return the written BMP bytes.
-fn cli_capture(pack: &Path, args: &[&str], out: &Path) -> Vec<u8> {
-    let status = std::process::Command::new(env!("CARGO_BIN_EXE_arklay"))
-        .arg(pack)
-        .args(args)
-        .arg("--capture")
-        .arg(out)
-        .status()
-        .expect("failed to run the capture CLI");
-    assert!(status.success(), "capture {args:?} failed");
-    fs::read(out).unwrap()
 }
 
 /// FNV-1a over the decoded frame's RGB bytes in pixel order.
@@ -90,9 +77,9 @@ fn real_ui_captures_are_deterministic_and_the_map_draws() {
     for screen in ["select", "menu", "map", "view"] {
         let first = dir.0.join(format!("{screen}-a.bmp"));
         let second = dir.0.join(format!("{screen}-b.bmp"));
-        let a = cli_capture(&pack_path, &["--ui", screen], &first);
-        let b = cli_capture(&pack_path, &["--ui", screen], &second);
-        assert_eq!(a, b, "--ui {screen} is deterministic");
+        let a = common::ui_capture(&pack_path, &[], screen, 0, &first);
+        let b = common::ui_capture(&pack_path, &[], screen, 0, &second);
+        assert_eq!(a, b, "the {screen} screen capture is deterministic");
         captures.insert(screen, a);
     }
     assert_ne!(
@@ -142,21 +129,30 @@ fn real_item_examine_combos_gate_the_description() {
     assert!(examine::class_message(0x3E).is_some());
 }
 
+/// One sampled golden frame: a room run through a driver script, or a UI
+/// screen rendered through the library.
+#[derive(Debug, Clone, Copy)]
+enum Scenario {
+    /// `(room, ticks)`.
+    Room(&'static str, u32),
+    Ui(&'static str),
+}
+
 /// The sampled golden-frame scenarios, in `hashes_fnv.txt` order.
-const GOLDEN_SCENARIOS: &[(&str, &[&str])] = &[
-    ("room100", &["--room", "100"]),
-    ("room107", &["--room", "107"]),
-    ("room108", &["--room", "108"]),
-    ("room300", &["--room", "300"]),
-    ("room406", &["--room", "406"]),
-    ("room506", &["--room", "506"]),
-    ("npc_20d", &["--room", "20D", "--ticks", "30"]),
-    ("message_107", &["--room", "107", "--ticks", "30"]),
-    ("ui_title", &["--ui", "title"]),
-    ("ui_select", &["--ui", "select"]),
-    ("ui_menu", &["--ui", "menu"]),
-    ("ui_map", &["--ui", "map"]),
-    ("ui_view", &["--ui", "view"]),
+const GOLDEN_SCENARIOS: &[(&str, Scenario)] = &[
+    ("room100", Scenario::Room("100", 0)),
+    ("room107", Scenario::Room("107", 0)),
+    ("room108", Scenario::Room("108", 0)),
+    ("room300", Scenario::Room("300", 0)),
+    ("room406", Scenario::Room("406", 0)),
+    ("room506", Scenario::Room("506", 0)),
+    ("npc_20d", Scenario::Room("20D", 30)),
+    ("message_107", Scenario::Room("107", 30)),
+    ("ui_title", Scenario::Ui("title")),
+    ("ui_select", Scenario::Ui("select")),
+    ("ui_menu", Scenario::Ui("menu")),
+    ("ui_map", Scenario::Ui("map")),
+    ("ui_view", Scenario::Ui("view")),
 ];
 
 /// The configured golden directory, or `None` when the variable is unset. A
@@ -211,13 +207,22 @@ fn golden_frames_match_the_sampled_set() {
         golden.display()
     );
     let dir = TempDir::new("golden");
-    for (name, args) in GOLDEN_SCENARIOS {
+    for (name, scenario) in GOLDEN_SCENARIOS {
         let out = dir.0.join(format!("{name}.bmp"));
-        let bytes = cli_capture(&pack_path, args, &out);
+        let bytes = match *scenario {
+            Scenario::Room(room, ticks) => {
+                common::room_capture(&pack_path, &[], room, 0, ticks, &out)
+            }
+            Scenario::Ui(screen) => common::ui_capture(&pack_path, &[], screen, 0, &out),
+        };
         let expected = hashes
             .get(*name)
             .unwrap_or_else(|| panic!("the golden set has no hash for {name}"));
-        assert_eq!(fnv1a_rgb(&bytes), *expected, "{name} frame hash ({args:?})");
+        assert_eq!(
+            fnv1a_rgb(&bytes),
+            *expected,
+            "{name} frame hash ({scenario:?})"
+        );
         // An optional BMP golden is compared pixel for pixel as well.
         let golden_bmp = golden.join(format!("{name}.bmp"));
         if golden_bmp.is_file() {

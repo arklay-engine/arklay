@@ -85,7 +85,7 @@
 ---`HU_att`.
 ---
 ---The base game's scripts live in the engine repository under
----`games/re1/enemy/` and `games/re1/lib/` and are packed by `convert-game`.
+---`games/re1/enemy/` and `games/re1/lib/` and are packed by `pack convert game`.
 ---A mod overrides any one of them by carrying an `enemy/{id:02x}/enemy.lua`
 ---(or model) entry of its own: pack layering is the override mechanism, as
 ---for any other entry.

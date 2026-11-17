@@ -4,7 +4,7 @@
 //! Steam installation itself. The search reads the registry's `SteamPath`
 //! (or `InstallPath`) on Windows, then every library in
 //! `steamapps/libraryfolders.vdf`, and finally checks the default install
-//! locations. A candidate only counts when `convert-game` recognises its
+//! locations. A candidate only counts when `pack convert game` recognises its
 //! layout, so an unrelated Steam library entry never gets offered as the
 //! game.
 

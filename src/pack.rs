@@ -3229,7 +3229,7 @@ mod tests {
     }
 
     /// The pack the in-memory writer produces for `entries`, compressed as
-    /// `convert-mod` compresses them.
+    /// `pack convert mod` compresses them.
     fn in_memory_pack(entries: &[(String, Vec<u8>)]) -> Vec<u8> {
         let mut writer = PackWriter::new();
         for (path, data) in entries {

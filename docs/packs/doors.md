@@ -17,7 +17,7 @@ There are two formats: the RE 1 format, `.dor`, and the RE 2 format,
 To watch one transition without walking up to it:
 
 ```sh
-arklay re2.akpak --door 1f --ticks 30 --capture door.bmp
+arklay --game re2.akpak --door 1f
 ```
 
 ## RE 1 format: `.dor`

@@ -7,7 +7,7 @@
 //! one, `0.0..=1.0`. Nothing here is read back by the simulation; a disabled
 //! [`Tween`] (traces, captures, plain headless runs and any rate at or below
 //! the tick rate) records nothing and leaves every value exact. Only a
-//! headless `--stats --frame-rate` run above 30 enables one, to time the
+//! headless stats run with a frame rate above 30 enables one, to time the
 //! frames it would present.
 //!
 //! The cache works on what the renderer is about to draw, so one mechanism

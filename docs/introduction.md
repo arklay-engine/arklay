@@ -6,7 +6,7 @@ mods on top of them.
 
 The engine itself holds no game. Everything a game needs (its rooms, models,
 music, text and scripts) is in a **game pack**: a single `.akpak` file, or a
-directory with the same files in it. `arklay convert-game` builds a pack from
+directory with the same files in it. `arklay pack convert game` builds a pack from
 your own installation of the original game, and the engine runs that pack.
 A **mod** is a smaller pack that sits on top of a game pack: any file it
 carries replaces the file at the same path in the pack below.
@@ -23,13 +23,13 @@ This book is for people who build packs and mods:
 
 ## A first look at a pack
 
-`arklay extract` unpacks a pack into a directory, and the engine runs that
+`arklay pack extract` unpacks a pack into a directory, and the engine runs that
 directory as it runs the `.akpak`:
 
 ```sh
-arklay convert-game "C:\GOG Games\Resident Evil" --out re1.akpak
-arklay extract re1.akpak --out re1
-arklay re1 --room 100
+arklay pack convert game "C:\GOG Games\Resident Evil" --out re1.akpak
+arklay pack extract re1.akpak --out re1
+arklay --game re1 --room 100
 ```
 
 Edit any file in `re1/` and run it again to see the change. To keep your

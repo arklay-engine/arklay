@@ -8,7 +8,7 @@
 //! It is the automation seam for agents and tests: new automation goes into
 //! this API rather than into more command-line flags.
 //!
-//! A tick is one app update, the unit `--ticks` counts: a fixed 30 Hz tick in
+//! A tick is one app update, the unit `tick` counts: a fixed 30 Hz tick in
 //! a room. The run is deterministic: the user's game options are ignored
 //! (and, headless, their installed mods), the run options are the oracle
 //! runs' unless the script passes them, no audio device opens and no film
@@ -264,9 +264,44 @@ impl Drop for ScratchSaves {
 /// The trace a script is recording (`trace_start`).
 struct ScriptTrace {
     writer: trace::TraceWriter,
-    /// Trace the frames of a door transition and the death screen too, as a
-    /// `--trace` run with `--input` does.
+    /// Trace the frames of a door transition and the death screen too.
     all_frames: bool,
+    /// A screen trace: started on a screen outside play (the title), it
+    /// writes a line every tick in the screen format, whatever the app shows.
+    screen: bool,
+    /// `sound_wav`: the session's mix, captured as it plays.
+    wav: Option<WavCapture>,
+}
+
+/// A trace's audio capture: each tick mixes the wall time it takes when
+/// played (a door's frames run on the 16 ms limiter), and each traced tick
+/// is logged with the capture's length after it, so the WAV lines up with
+/// the original's capture tick by tick.
+struct WavCapture {
+    path: PathBuf,
+    /// The sample frames owed to the capture, carried between ticks.
+    due: f64,
+    /// `FILE.ticks`: a traced tick and its time in seconds per line.
+    ticks: String,
+}
+
+impl ScriptTrace {
+    /// Flush the trace and write its WAV and `.ticks` log, from `app`'s
+    /// session mix.
+    fn close(mut self, app: Option<&App>) -> Result<()> {
+        self.writer.flush()?;
+        let Some(wav) = self.wav else {
+            return Ok(());
+        };
+        let pcm = match app.map(|app| &app.mode) {
+            Some(Mode::Play(session)) => session.music.as_ref().and_then(Mixer::captured),
+            _ => None,
+        };
+        write_stereo_wav(&wav.path, pcm.unwrap_or_default())?;
+        let ticks = wav.path.with_extension("ticks");
+        std::fs::write(&ticks, wav.ticks)
+            .with_context(|| format!("failed to write {}", ticks.display()))
+    }
 }
 
 /// The live view of a windowed run.
@@ -307,7 +342,7 @@ struct Driver {
     pressed: u64,
     /// The booted session has not ticked yet: what its state was before
     /// the script's `game` edits, so the first tick (or a `save_game` or
-    /// `capture`) reruns what they invalidate once, as `--setup-script` does.
+    /// `capture`) reruns what they invalidate once, as an authored setup does.
     baseline: Option<AuthorBaseline>,
     /// A `game` call other than a getter ran since the boot.
     edited: bool,
@@ -592,7 +627,7 @@ impl Driver {
         self.check_running()?;
         if matches!(self.app()?.mode, Mode::Boot) {
             return Err(mlua::Error::RuntimeError(
-                "nothing is booted: call load_room, new_game or load_save first".into(),
+                "nothing is booted: call load_room, new_game, load_save or open_title first".into(),
             ));
         }
         self.settle_authoring()?;
@@ -611,6 +646,15 @@ impl Driver {
             matches!(&app.mode, Mode::Play(session) if session.transition.is_some());
         let screen_before =
             matches!(&app.mode, Mode::Play(session) if session.death_screen.is_some());
+        // The wall time this tick takes when played, which the audio capture
+        // mixes for it.
+        let frame_ms = match &app.mode {
+            Mode::Play(session) => {
+                session_tick_interval(session.transition.is_some(), session.ui_tick_rate())
+            }
+            _ => TICK_MS,
+        };
+        let mut traced = None;
         let mut tick = self.input.tick_scripted(word);
         if let Some(window) = self.window.as_mut() {
             // The player's host keys reach the game; their other game keys
@@ -624,11 +668,14 @@ impl Driver {
             return Err(self.stop_on_quit());
         }
         // Films never play: the frames stay deterministic and audio-free, as
-        // on the `--trace` path.
-        if let Mode::Play(session) = &mut app.mode {
-            session.movie = None;
+        // in a trace. An attached bot sees them and skips them as a player
+        // would, as it does in the game window.
+        if app.bot.is_none() {
+            if let Mode::Play(session) = &mut app.mode {
+                session.movie = None;
+            }
+            app.pending_movie = None;
         }
-        app.pending_movie = None;
         // A headless bot run draws nothing: no frame is shown, traced or
         // (until `capture` draws its own) written, and a game is long. A
         // window draws the frames it presents itself, on its renderer.
@@ -637,20 +684,41 @@ impl Driver {
         if self.drawn {
             app.draw();
         }
-        if let Some(trace) = self.trace.as_mut()
-            && let Mode::Play(session) = &app.mode
-            && was_play
-            && ((!in_transition && !screen_before) || trace.all_frames)
-        {
-            trace
-                .writer
-                .write_tick(&session.trace_tick(&app.framebuffer))
-                .map_err(engine_error)?;
+        if let Some(trace) = self.trace.as_mut() {
+            if trace.screen {
+                let sounds = std::mem::take(&mut app.ui_sounds);
+                let line = screen_trace_line(app, trace.writer.tick_index(), word, &sounds);
+                trace.writer.write_line(&line).map_err(engine_error)?;
+            } else if let Mode::Play(session) = &app.mode
+                && was_play
+                && ((!in_transition && !screen_before) || trace.all_frames)
+            {
+                traced = Some(trace.writer.tick_index());
+                trace
+                    .writer
+                    .write_tick(&session.trace_tick(&app.framebuffer))
+                    .map_err(engine_error)?;
+            }
         }
         if self.window.is_some() {
             self.drawn |= self.present()?;
         } else {
             app.post_present();
+        }
+        if let Some(wav) = self.trace.as_mut().and_then(|trace| trace.wav.as_mut())
+            && let Some(app) = self.app.as_mut()
+            && let Mode::Play(session) = &mut app.mode
+            && let Some(mixer) = &mut session.music
+        {
+            wav.due += frame_ms * f64::from(audio::SAMPLE_RATE) / 1000.0;
+            let frames = wav.due.floor();
+            wav.due -= frames;
+            mixer.capture_frames(frames as usize);
+            if let Some(index) = traced {
+                let mixed = mixer.captured().map_or(0, |pcm| pcm.len() / 4);
+                let seconds = mixed as f64 / f64::from(audio::SAMPLE_RATE);
+                wav.ticks.push_str(&format!("{index} {seconds:.4}\n"));
+            }
         }
         self.pump()?;
         self.check_warnings()
@@ -711,7 +779,7 @@ impl Driver {
         })
     }
 
-    /// The attached bot's report (`bot_stats`), as `--bot-stats` writes it.
+    /// The attached bot's report (`bot_stats`), as `bot_run`'s `stats` writes it.
     fn bot_report(&mut self, outcome: &str) -> mlua::Result<serde_json::Value> {
         let elapsed = self
             .bot_started
@@ -752,11 +820,17 @@ impl Driver {
         })
     }
 
+    /// Close the running trace, if any.
+    fn close_trace(&mut self) -> Result<()> {
+        match self.trace.take() {
+            Some(trace) => trace.close(self.app.as_ref()),
+            None => Ok(()),
+        }
+    }
+
     /// Flush the trace and close the window at the end of the run.
     fn finish(&mut self) -> Result<()> {
-        if let Some(mut trace) = self.trace.take() {
-            trace.writer.flush()?;
-        }
+        self.close_trace()?;
         self.window = None;
         self.app = None;
         self.saves = None;
@@ -995,7 +1069,7 @@ fn open_pack(
     Ok(pack)
 }
 
-/// The key bit a button name maps to: the `--input` names plus `forward`
+/// The key bit a button name maps to: the input-script names plus `forward`
 /// and `backward` for the tank controls' up and down.
 fn button_bit(name: &str) -> mlua::Result<u64> {
     let bit = match name {
@@ -1280,6 +1354,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                 let blood: Option<bool> = options.get("blood")?;
                 let difficulty: Option<String> = options.get("difficulty")?;
                 let arrange: Option<bool> = options.get("arrange")?;
+                let title_special: Option<i8> = options.get("title_special")?;
                 options.finish()?;
                 let (easy, hard_mode) = match difficulty.as_deref().unwrap_or("normal") {
                     "normal" => (false, false),
@@ -1324,6 +1399,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                         hard_mode,
                         censorship_off: arrange.unwrap_or(false),
                     },
+                    title_special,
                     ..player::Options::default()
                 };
                 if let Some(window) = driver.window.as_mut() {
@@ -1374,6 +1450,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                 let room: Option<String> = options.get("room")?;
                 let player: Option<u8> = options.get("player")?;
                 let mansion2: Option<bool> = options.get("mansion2")?;
+                let interactive: Option<bool> = options.get("interactive")?;
                 options.finish()?;
                 let character = character.unwrap_or(0);
                 let app = driver.app()?;
@@ -1400,7 +1477,13 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                     ),
                 }
                 .map_err(engine_error)?;
-                driver.start(session, true)?;
+                if interactive.unwrap_or(false) {
+                    let mut session = session;
+                    session.place_room_boot_spawn();
+                    driver.start(session, false)?;
+                } else {
+                    driver.start(session, true)?;
+                }
                 Ok(())
             })
         })?,
@@ -1421,6 +1504,40 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                 )
                 .map_err(engine_error)?;
                 driver.start(session, true)?;
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "mark_authored",
+        lua.create_function(move |_lua, ()| {
+            with(&shared, |driver| {
+                if driver.baseline.is_none() {
+                    return Err(mlua::Error::RuntimeError(
+                        "mark_authored: only between a boot and its first tick".into(),
+                    ));
+                }
+                driver.edited = true;
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "open_title",
+        lua.create_function(move |_lua, ()| {
+            with(&shared, |driver| {
+                let app = driver.app()?;
+                app.open_title().map_err(engine_error)?;
+                app.pending_movie = None;
+                driver.baseline = None;
+                driver.edited = false;
+                driver.arm = false;
+                driver.drawn = false;
+                driver.input = InputState::default();
                 Ok(())
             })
         })?,
@@ -1566,14 +1683,48 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
             with(&shared, |driver| {
                 let mut options = Options::new("trace_start", table);
                 let all_frames: Option<bool> = options.get("all_frames")?;
+                let sound: Option<bool> = options.get("sound")?;
+                let voice_ticks: Option<Vec<u32>> = options.get("voice_ticks")?;
+                let sound_wav: Option<String> = options.get("sound_wav")?;
                 options.finish()?;
-                if let Some(mut trace) = driver.trace.take() {
-                    trace.writer.flush().map_err(engine_error)?;
+                driver.close_trace().map_err(engine_error)?;
+                let screen = driver
+                    .app
+                    .as_ref()
+                    .is_some_and(|app| !matches!(app.mode, Mode::Boot | Mode::Play(_)));
+                if sound.unwrap_or(false) || voice_ticks.is_some() || sound_wav.is_some() {
+                    let app = driver.app()?;
+                    let Mode::Play(session) = &mut app.mode else {
+                        return Err(mlua::Error::RuntimeError(
+                            "trace_start: sound, voice_ticks and sound_wav need a game session"
+                                .into(),
+                        ));
+                    };
+                    session.sound_device |= sound.unwrap_or(false);
+                    if let Some(ticks) = voice_ticks {
+                        session.game.re2.voice_ticks = ticks.into();
+                    }
+                    if sound_wav.is_some() {
+                        session.music = Some(Mixer::capture());
+                        session.start_audio(&app.pack);
+                    }
                 }
-                let writer = trace::TraceWriter::create(Path::new(&path)).map_err(engine_error)?;
+                let writer = if screen {
+                    driver.app()?.ui_sounds.clear();
+                    trace::TraceWriter::create_screen(Path::new(&path))
+                } else {
+                    trace::TraceWriter::create(Path::new(&path))
+                }
+                .map_err(engine_error)?;
                 driver.trace = Some(ScriptTrace {
                     writer,
                     all_frames: all_frames.unwrap_or(false),
+                    screen,
+                    wav: sound_wav.map(|path| WavCapture {
+                        path: PathBuf::from(path),
+                        due: 0.0,
+                        ticks: String::new(),
+                    }),
                 });
                 Ok(())
             })
@@ -1582,14 +1733,19 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
 
     let shared = Rc::clone(driver);
     globals.set(
-        "trace_stop",
+        "trace_ticks",
         lua.create_function(move |_lua, ()| {
             with(&shared, |driver| {
-                if let Some(mut trace) = driver.trace.take() {
-                    trace.writer.flush().map_err(engine_error)?;
-                }
-                Ok(())
+                Ok(driver.trace.as_ref().map(|trace| trace.writer.tick_index()))
             })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "trace_stop",
+        lua.create_function(move |_lua, ()| {
+            with(&shared, |driver| driver.close_trace().map_err(engine_error))
         })?,
     )?;
 

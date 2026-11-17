@@ -5,7 +5,7 @@ original 0x800-byte BioCard block (`src/save.rs` writes exactly the original
 layout, no port-only tail), so the same file boots **both** engines into the
 same game state:
 
-- arklay: `arklay <pack> --ui game --load <file> [--input ...] [--trace ...]`
+- arklay: a driver script (`arklay script --headless -`) calling `load_save(<file>)`, then `trace_start` and its input
 - reference: `residentevil --test-load <file> [--test-input ...] [--test-trace ...]`
 
 The files are committed so they stay loadable forever and can be re-checked
@@ -16,9 +16,9 @@ authored setup chunk next to each file:
 scripts/oracle-saves.sh [NAME...]
 ```
 
-For every save the script boots `--ui game --room <room> --player <p>
---character <c>` on arklay, runs `<name>.lua` as the `--setup-script` chunk and
-writes the state with `--save-out`. The table of boot parameters is in
+For every save the script boots `new_game({ room = <room>, player = <p>,
+character = <c> })` in an arklay driver script, runs `<name>.lua` on `game`
+before the first tick and writes the state with `save_game`. The table of boot parameters is in
 `scripts/oracle-saves.sh`; regenerate after any engine change and commit the
 diff so the data stays honest.
 
@@ -26,7 +26,7 @@ diff so the data stays honest.
 
 All saves were generated from the Japanese MediaKite assets at
 `/usr/share/games/re1` (the install the reference's `config.ini` points at,
-`[Assets] Version=JPN`) packed by `arklay convert-game`. They are:
+`[Assets] Version=JPN`) packed by `arklay pack convert game`. They are:
 
 | Save | Boot | Authored state |
 | --- | --- | --- |

@@ -42,26 +42,47 @@ impl Drop for TempDir {
     }
 }
 
-fn run(args: &[&str]) -> Output {
-    run_env(args, &[])
-}
-
-/// [`run`] with extra environment variables.
+/// Run the binary with `args`.
 ///
 /// Every run points `ARKLAY_CONFIG_DIR` at a directory that does not exist, so
-/// a developer's own `arklay.toml` cannot change a test's behaviour; a test
-/// that wants a config names the variable itself.
-fn run_env(args: &[&str], env: &[(&str, &str)]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_arklay"));
-    command.args(args);
-    command.env(
-        "ARKLAY_CONFIG_DIR",
-        std::env::temp_dir().join("arklay-cli-no-config"),
-    );
-    for (key, value) in env {
-        command.env(key, value);
-    }
-    command.output().expect("the arklay binary runs")
+/// a developer's own `arklay.toml` cannot change a test's behaviour.
+fn run(args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_arklay"))
+        .args(args)
+        .env(
+            "ARKLAY_CONFIG_DIR",
+            std::env::temp_dir().join("arklay-cli-no-config"),
+        )
+        .output()
+        .expect("the arklay binary runs")
+}
+
+/// Run `source` as a headless driver script piped into `arklay script`.
+fn run_script(source: &str) -> Output {
+    use std::io::Write as _;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_arklay"))
+        .args(["script", "--headless", "-"])
+        .env(
+            "ARKLAY_CONFIG_DIR",
+            std::env::temp_dir().join("arklay-cli-no-config"),
+        )
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("the arklay binary runs");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(source.as_bytes())
+        .unwrap();
+    child.wait_with_output().expect("the arklay binary runs")
+}
+
+/// A Lua string literal of `path`.
+fn lua_path(path: &Path) -> String {
+    format!("{:?}", path.to_str().unwrap())
 }
 
 fn stdout(output: &Output) -> String {
@@ -189,7 +210,7 @@ fn raw_pack(entries: &[(&str, u64, u64)]) -> Vec<u8> {
 
 #[test]
 fn a_missing_pack_fails_with_a_read_error() {
-    let output = run(&["list", "definitely-not-here.akpak"]);
+    let output = run(&["pack", "list", "definitely-not-here.akpak"]);
     assert_failure(&output, "failed to read pack");
 }
 
@@ -275,7 +296,7 @@ fn a_pack_with_bad_magic_is_rejected() {
     let dir = TempDir::new("bad-magic");
     let path = dir.join("bad.akpak");
     std::fs::write(&path, b"NOPE00000000").unwrap();
-    let output = run(&["list", path.to_str().unwrap()]);
+    let output = run(&["pack", "list", path.to_str().unwrap()]);
     assert_failure(&output, "magic");
 }
 
@@ -285,7 +306,7 @@ fn a_truncated_entry_range_is_rejected() {
     let path = dir.join("bad.akpak");
     // One entry whose data range starts far past the end of the file.
     std::fs::write(&path, raw_pack(&[("room/1000/room.rdt", 1_000_000, 16)])).unwrap();
-    let output = run(&["list", path.to_str().unwrap()]);
+    let output = run(&["pack", "list", path.to_str().unwrap()]);
     assert_failure(&output, "out of bounds");
 }
 
@@ -294,7 +315,7 @@ fn an_unsafe_entry_path_is_rejected() {
     let dir = TempDir::new("unsafe-path");
     let path = dir.join("bad.akpak");
     std::fs::write(&path, raw_pack(&[("../evil.rdt", 0, 0)])).unwrap();
-    let output = run(&["list", path.to_str().unwrap()]);
+    let output = run(&["pack", "list", path.to_str().unwrap()]);
     assert_failure(&output, "unsafe path");
 }
 
@@ -307,7 +328,7 @@ fn a_malformed_manifest_is_rejected_at_open() {
         .add(manifest::ENTRY, b"not = valid = manifest".to_vec())
         .unwrap();
     writer.write(&path).unwrap();
-    let output = run(&["list", path.to_str().unwrap()]);
+    let output = run(&["pack", "list", path.to_str().unwrap()]);
     assert_failure(&output, "manifest");
 }
 
@@ -324,7 +345,7 @@ fn directory_packs_and_directory_mods_list_and_extract() {
     std::fs::write(game.join("room/1000/room.rdt"), b"base").unwrap();
     std::fs::write(game.join("notes.txt"), b"notes").unwrap();
 
-    let output = run(&["list", game.to_str().unwrap()]);
+    let output = run(&["pack", "list", game.to_str().unwrap()]);
     assert!(output.status.success(), "{}", stderr(&output));
     let listed = stdout(&output);
     assert!(listed.contains("room/1000/room.rdt"), "{listed}");
@@ -342,6 +363,7 @@ fn directory_packs_and_directory_mods_list_and_extract() {
 
     let out = dir.join("out");
     let output = run(&[
+        "pack",
         "extract",
         game.to_str().unwrap(),
         "--out",
@@ -379,24 +401,11 @@ fn a_missing_room_fails_before_any_display() {
     let dir = TempDir::new("missing-room");
     let path = dir.join("game.akpak");
     write_room_pack(&path);
-    let output = run(&[
-        path.to_str().unwrap(),
-        "--room",
-        "11C",
-        "--ticks",
-        "1",
-        "--stats",
-    ]);
+    let output = run_script(&format!(
+        "load_game_pack({})\nload_room(\"11C\")\n",
+        lua_path(&path)
+    ));
     assert_failure(&output, "room/11c/room.xml");
-}
-
-#[test]
-fn ticks_without_capture_or_stats_is_refused() {
-    let dir = TempDir::new("ticks-only");
-    let path = dir.join("game.akpak");
-    write_room_pack(&path);
-    let output = run(&[path.to_str().unwrap(), "--room", "100", "--ticks", "10"]);
-    assert_failure(&output, "--ticks requires --capture");
 }
 
 #[test]
@@ -416,7 +425,13 @@ fn a_mismatched_mod_base_is_rejected() {
     };
     write_manifest_pack(&m, &mod_manifest, &[("room/1000/room.rdt", b"mod")]);
 
-    let output = run(&["list", base.to_str().unwrap(), "--mod", m.to_str().unwrap()]);
+    let output = run(&[
+        "pack",
+        "list",
+        base.to_str().unwrap(),
+        "--mod",
+        m.to_str().unwrap(),
+    ]);
     assert_failure(&output, "declares base");
 }
 
@@ -441,6 +456,7 @@ fn duplicate_and_repeated_layers_are_rejected() {
 
     // Two different layers with the same manifest id.
     let output = run(&[
+        "pack",
         "list",
         base.to_str().unwrap(),
         "--mod",
@@ -452,6 +468,7 @@ fn duplicate_and_repeated_layers_are_rejected() {
 
     // The same layer path twice.
     let output = run(&[
+        "pack",
         "list",
         base.to_str().unwrap(),
         "--mod",
@@ -470,7 +487,7 @@ fn verify_exits_zero_on_a_good_pack_and_reports_the_table() {
     writer.add("ui/blue.tim", tiny_tim()).unwrap();
     writer.write(&path).unwrap();
 
-    let output = run(&["verify", path.to_str().unwrap()]);
+    let output = run(&["pack", "verify", path.to_str().unwrap()]);
     let out = stdout(&output);
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     assert!(out.contains("format"), "{out}");
@@ -490,7 +507,7 @@ fn verify_exits_nonzero_and_names_a_bad_entry() {
     writer.add("ui/bad.tim", b"not a tim".to_vec()).unwrap();
     writer.write(&path).unwrap();
 
-    let output = run(&["verify", path.to_str().unwrap()]);
+    let output = run(&["pack", "verify", path.to_str().unwrap()]);
     let out = stdout(&output);
     assert!(!output.status.success());
     assert!(
@@ -512,11 +529,11 @@ fn verify_strict_fails_an_unknown_extension() {
     writer.add("data/core00.esp", vec![1, 2, 3]).unwrap();
     writer.write(&path).unwrap();
 
-    let lenient = run(&["verify", path.to_str().unwrap()]);
+    let lenient = run(&["pack", "verify", path.to_str().unwrap()]);
     assert!(lenient.status.success(), "stderr: {}", stderr(&lenient));
     assert!(stdout(&lenient).contains("opaque"));
 
-    let strict = run(&["verify", "--strict", path.to_str().unwrap()]);
+    let strict = run(&["pack", "verify", "--strict", path.to_str().unwrap()]);
     assert!(!strict.status.success());
     assert!(stdout(&strict).contains("data/core00.esp"));
 }
@@ -553,6 +570,7 @@ fn verify_merges_mod_layers_before_classifying() {
     writer.write(&layer).unwrap();
 
     let output = run(&[
+        "pack",
         "verify",
         base.to_str().unwrap(),
         "--mod",
@@ -584,7 +602,7 @@ fn verify_validates_the_checked_in_hd_mods_png_and_ogg_replacements() {
     ]);
     assert!(built.status.success(), "stderr: {}", stderr(&built));
 
-    let output = run(&["verify", pack.to_str().unwrap()]);
+    let output = run(&["pack", "verify", pack.to_str().unwrap()]);
     let out = stdout(&output);
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     assert!(out.contains("cut "), "{out}");
@@ -607,7 +625,7 @@ fn verify_validates_the_checked_in_hd_mods_png_and_ogg_replacements() {
         .unwrap();
     writer.add("bgm/013.ogg", b"not vorbis".to_vec()).unwrap();
     writer.write(&bad).unwrap();
-    let output = run(&["verify", bad.to_str().unwrap()]);
+    let output = run(&["pack", "verify", bad.to_str().unwrap()]);
     assert!(!output.status.success());
     assert!(
         stdout(&output).contains("bgm/013.ogg"),
@@ -706,246 +724,31 @@ fn mod_build_does_not_warn_about_a_format_override() {
 }
 
 #[test]
-fn stats_runs_without_a_capture_and_reports_ordered_counters() {
-    let dir = TempDir::new("stats");
-    let path = dir.join("game.akpak");
-    write_room_pack(&path);
-
-    let output = run(&[
-        path.to_str().unwrap(),
-        "--room",
-        "100",
-        "--ticks",
-        "30",
-        "--stats",
-        "--frame-rate",
-        "60",
-    ]);
-    let out = stdout(&output);
-    assert!(output.status.success(), "stderr: {}", stderr(&output));
-
-    let line = |prefix: &str| {
-        out.lines()
-            .find(|line| line.starts_with(prefix))
-            .unwrap_or_else(|| panic!("no `{prefix}` line in:\n{out}"))
-    };
-    assert_eq!(line("stats ticks "), "stats ticks 30");
-    let tick: Vec<&str> = line("stats tick_us ").split_whitespace().collect();
-    assert_eq!(&tick[..2], ["stats", "tick_us"]);
-    let value = |key: &str| -> u64 {
-        let index = tick.iter().position(|word| *word == key).unwrap();
-        tick[index + 1].parse().unwrap()
-    };
-    assert!(value("min") <= value("avg"));
-    assert!(value("avg") <= value("p95"));
-    assert!(value("p95") <= value("max"));
-    let phase: Vec<&str> = line("stats phase_us ").split_whitespace().collect();
-    for key in ["load", "update", "effect", "render"] {
-        assert!(phase.contains(&key), "phase line lacks {key}: {phase:?}");
-    }
-    assert!(line("stats high_water ").contains("entities"));
-    // Two presentation frames a tick at 60 fps, timed against 1/60 s.
-    let render: Vec<&str> = line("stats render ").split_whitespace().collect();
-    let field = |key: &str| render[render.iter().position(|word| *word == key).unwrap() + 1];
-    assert_eq!(field("frame_rate"), "60");
-    assert_eq!(field("frames"), "60");
-    assert_eq!(field("budget_us"), "16666");
-}
-
-#[test]
-fn a_configured_quick_turn_never_changes_a_trace() {
-    let dir = TempDir::new("quick-turn-trace");
-    let pack = dir.join("game.akpak");
-    write_room_pack(&pack);
-    let config = dir.join("config");
-    fs::create_dir_all(&config).unwrap();
-    fs::write(config.join("arklay.toml"), "[game]\nquick_turn = true\n").unwrap();
-    let trace = |name: &str, extra: &[&str], env: &[(&str, &str)]| {
-        let path = dir.join(name);
-        let mut args = vec![
-            pack.to_str().unwrap(),
-            "--room",
-            "100",
-            "--ticks",
-            "30",
-            "--trace",
-            path.to_str().unwrap(),
-        ];
-        args.extend_from_slice(extra);
-        let output = run_env(&args, env);
-        assert!(output.status.success(), "stderr: {}", stderr(&output));
-        std::fs::read(&path).unwrap()
-    };
-    let plain = trace("plain.trace", &[], &[]);
-    assert!(!plain.is_empty());
-    let config_dir = config.to_str().unwrap();
-    assert!(
-        plain
-            == trace(
-                "configured.trace",
-                &[],
-                &[("ARKLAY_CONFIG_DIR", config_dir)]
-            ),
-        "a configured quick turn changed a --trace run without --quick-turn"
-    );
-    assert!(
-        plain
-            == trace(
-                "forced_off.trace",
-                &["--no-quick-turn"],
-                &[("ARKLAY_CONFIG_DIR", config_dir)]
-            ),
-        "--no-quick-turn changed the trace"
-    );
-}
-
-#[test]
-fn the_frame_rate_never_changes_a_trace() {
-    let dir = TempDir::new("frame-rate-trace");
-    let pack = dir.join("game.akpak");
-    write_room_pack(&pack);
-    let trace = |name: &str, extra: &[&str]| {
-        let path = dir.join(name);
-        let mut args = vec![
-            pack.to_str().unwrap(),
-            "--room",
-            "100",
-            "--ticks",
-            "30",
-            "--trace",
-            path.to_str().unwrap(),
-        ];
-        args.extend_from_slice(extra);
-        let output = run(&args);
-        assert!(output.status.success(), "stderr: {}", stderr(&output));
-        (std::fs::read(&path).unwrap(), stdout(&output))
-    };
-    let (plain, _) = trace("plain.trace", &[]);
-    let (tweened, out) = trace("tweened.trace", &["--frame-rate", "120", "--stats"]);
-    assert!(!plain.is_empty());
-    assert!(plain == tweened, "a 120 fps --stats run changed the trace");
-    assert!(
-        out.contains("stats render frame_rate 120 frames 120 "),
-        "{out}"
-    );
-    // Without --frame-rate a headless report draws no presentation frames,
-    // whatever the config says.
-    let config = dir.join("config");
-    std::fs::create_dir_all(&config).unwrap();
-    std::fs::write(config.join("arklay.toml"), "[graphics]\nframe_rate = 240\n").unwrap();
-    let output = run_env(
-        &[
-            pack.to_str().unwrap(),
-            "--room",
-            "100",
-            "--ticks",
-            "30",
-            "--stats",
-        ],
-        &[("ARKLAY_CONFIG_DIR", config.to_str().unwrap())],
-    );
-    assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert!(
-        !stdout(&output).contains("stats render"),
-        "{}",
-        stdout(&output)
-    );
-}
-
-#[test]
 fn the_authentic_mode_never_changes_a_trace_without_a_refusal() {
     let dir = TempDir::new("authentic-trace");
     let pack = dir.join("game.akpak");
     write_room_pack(&pack);
-    let trace = |name: &str, extra: &[&str]| {
+    let trace = |name: &str, authentic: bool| {
         let path = dir.join(name);
-        let mut args = vec![
-            pack.to_str().unwrap(),
-            "--room",
-            "100",
-            "--ticks",
-            "30",
-            "--trace",
-            path.to_str().unwrap(),
-        ];
-        args.extend_from_slice(extra);
-        let output = run_env(&args, &[]);
+        let output = run_script(&format!(
+            "strict(false)\n\
+             load_game_pack({}, {{ authentic = {authentic} }})\n\
+             load_room(\"100\")\n\
+             trace_start({})\n\
+             tick(30)\n",
+            lua_path(&pack),
+            lua_path(&path)
+        ));
         assert!(output.status.success(), "stderr: {}", stderr(&output));
         fs::read(&path).unwrap()
     };
-    let plain = trace("plain.trace", &[]);
-    let authentic = trace("authentic.trace", &["--authentic"]);
+    let plain = trace("plain.trace", false);
+    let authentic = trace("authentic.trace", true);
     assert!(!plain.is_empty());
     assert!(
         plain == authentic,
-        "--authentic changed a trace that uses no healing item"
+        "authentic mode changed a trace that uses no healing item"
     );
-}
-
-#[test]
-fn the_tactical_reload_never_changes_a_trace() {
-    let dir = TempDir::new("tactical-reload-trace");
-    let pack = dir.join("game.akpak");
-    write_room_pack(&pack);
-    let config = dir.join("config");
-    fs::create_dir_all(&config).unwrap();
-    fs::write(
-        config.join("arklay.toml"),
-        "[game]\ntactical_reload = true\n",
-    )
-    .unwrap();
-    let trace = |name: &str, env: &[(&str, &str)]| {
-        let path = dir.join(name);
-        let output = run_env(
-            &[
-                pack.to_str().unwrap(),
-                "--room",
-                "100",
-                "--ticks",
-                "30",
-                "--trace",
-                path.to_str().unwrap(),
-            ],
-            env,
-        );
-        assert!(output.status.success(), "stderr: {}", stderr(&output));
-        fs::read(&path).unwrap()
-    };
-    let plain = trace("plain.trace", &[]);
-    let configured = trace(
-        "configured.trace",
-        &[("ARKLAY_CONFIG_DIR", config.to_str().unwrap())],
-    );
-    assert!(!plain.is_empty());
-    assert!(
-        plain == configured,
-        "the config's tactical reload changed a trace"
-    );
-    // The synthetic room carries no player weapon bank, so the reload itself
-    // cannot fire here; the flag resolution is unit-tested in `src/main.rs`.
-    // This covers the config table being accepted while a trace stays
-    // byte-identical, the end-to-end half of the trace-invariance guarantee.
-}
-
-#[test]
-fn a_frame_rate_outside_30_to_1000_is_refused() {
-    for rate in ["0", "29", "1001"] {
-        let output = run(&["game.akpak", "--room", "100", "--frame-rate", rate]);
-        assert_failure(&output, "--frame-rate");
-    }
-}
-
-#[test]
-fn stats_is_refused_with_fmv_and_ending() {
-    for extra in [
-        ["--fmv", "0", "--ticks", "5", "--stats"],
-        ["--ending", "1", "--ticks", "5", "--stats"],
-    ] {
-        let mut args = vec!["game.akpak"];
-        args.extend_from_slice(&extra);
-        let output = run(&args);
-        assert_failure(&output, "--stats");
-    }
 }
 
 #[test]
@@ -1009,147 +812,6 @@ fn a_failed_output_rename_keeps_the_destination_and_removes_the_temporary() {
 }
 
 #[test]
-fn the_config_file_is_read_and_a_bad_value_is_a_warning() {
-    let dir = TempDir::new("config");
-    let path = dir.join("game.akpak");
-    write_room_pack(&path);
-    let config_dir = dir.join("config");
-    std::fs::create_dir_all(&config_dir).unwrap();
-    let config = config_dir.join("arklay.toml");
-    let capture = dir.join("capture.bmp");
-    let saves = dir.join("cfg-saves");
-    let config_env = config_dir.to_str().unwrap();
-
-    // A config naming a save location: the load screen runs from it, and the
-    // pack carries no Lua, so the ported original screen opens.
-    std::fs::write(
-        &config,
-        // The literal string form keeps a Windows path valid without escaping.
-        format!("save_dir = '{}'\n", saves.display()),
-    )
-    .unwrap();
-    let output = run_env(
-        &[
-            path.to_str().unwrap(),
-            "--ui",
-            "load",
-            "--capture",
-            capture.to_str().unwrap(),
-        ],
-        &[("ARKLAY_CONFIG_DIR", config_env)],
-    );
-    assert!(output.status.success(), "{}", stderr(&output));
-    assert!(capture.is_file());
-
-    // A malformed value is reported as a warning and the run goes on with
-    // its default.
-    std::fs::write(&config, "save_dir = 3\n").unwrap();
-    let output = run_env(
-        &[
-            path.to_str().unwrap(),
-            "--ui",
-            "load",
-            "--capture",
-            capture.to_str().unwrap(),
-        ],
-        &[("ARKLAY_CONFIG_DIR", config_env)],
-    );
-    assert!(output.status.success(), "{}", stderr(&output));
-    assert!(
-        stderr(&output).contains("warning:") && stderr(&output).contains("expects a quoted string"),
-        "{}",
-        stderr(&output)
-    );
-}
-
-/// A pack whose Lua hook registers a probe save screen: the screen logs
-/// `saves=<count>`, the number of files in the save directory it was given.
-fn write_lua_screen_pack(path: &Path) {
-    let id = RoomId::parse("1000").unwrap();
-    let rdt_entry = id.rdt_entry();
-    let cut_entry = id.cut_entry(0);
-    let rdt = synthetic_rdt();
-    let cut = background();
-    let manifest = manifest::Manifest {
-        lua: vec!["lua/hook.lua".to_string()],
-        ..manifest::Manifest::base("probe")
-    };
-    let hook = b"\
-function on_init(api)
-    api:register_save_screen(\"script/probe.lua\")
-end
-";
-    let screen = b"\
-function on_open(api)
-    api:log(\"saves=\" .. #api:saves())
-end
-function update(api, input)
-end
-";
-    write_manifest_pack(
-        path,
-        &manifest,
-        &[
-            (&rdt_entry, &rdt),
-            (&cut_entry, &cut),
-            ("lua/hook.lua", hook),
-            ("script/probe.lua", screen),
-        ],
-    );
-}
-
-/// The config's `save_dir` is the directory the screen lists: the probe screen
-/// logs the number of files it sees, so the count proves which directory was
-/// read.
-#[test]
-fn the_config_save_dir_drives_a_registered_lua_screen() {
-    let dir = TempDir::new("config-save-dir");
-    let path = dir.join("game.akpak");
-    write_lua_screen_pack(&path);
-    let config_dir = dir.join("config");
-    std::fs::create_dir_all(&config_dir).unwrap();
-    let config = config_dir.join("arklay.toml");
-    let capture = dir.join("capture.bmp");
-    let saves = dir.join("cfg-saves");
-    let config_env = config_dir.to_str().unwrap();
-    let load = || {
-        run_env(
-            &[
-                path.to_str().unwrap(),
-                "--ui",
-                "load",
-                "--capture",
-                capture.to_str().unwrap(),
-            ],
-            &[("ARKLAY_CONFIG_DIR", config_env)],
-        )
-    };
-
-    // The configured directory exists but is empty.
-    std::fs::write(&config, format!("save_dir = '{}'\n", saves.display())).unwrap();
-    let output = load();
-    assert!(output.status.success(), "{}", stderr(&output));
-    assert!(capture.is_file());
-    assert!(stderr(&output).contains("saves=0"), "{}", stderr(&output));
-
-    // A save in the pack's folder there is what the screen lists.
-    let file = arklay::save::SaveFile::from_state(&arklay::game::GameState::default());
-    let pack_saves = saves.join("probe");
-    std::fs::create_dir_all(&pack_saves).unwrap();
-    arklay::save::save_to_path(&pack_saves.join("savedat1.dat"), &file).unwrap();
-    let output = load();
-    assert!(output.status.success(), "{}", stderr(&output));
-    assert!(stderr(&output).contains("saves=1"), "{}", stderr(&output));
-
-    // Without the key the screen reads the default location, not the
-    // configured one, so the file that sits there is not listed.
-    std::fs::remove_file(&config).unwrap();
-    let output = load();
-    assert!(output.status.success(), "{}", stderr(&output));
-    assert!(stderr(&output).contains("saves=0"), "{}", stderr(&output));
-}
-
-#[test]
 fn a_failed_capture_writes_no_partial_file() {
     let dir = TempDir::new("failed-capture");
     let path = dir.join("game.akpak");
@@ -1159,13 +821,11 @@ fn a_failed_capture_writes_no_partial_file() {
     let capture = dir.join("capture.bmp");
     std::fs::create_dir_all(capture.join("occupied")).unwrap();
 
-    let output = run(&[
-        path.to_str().unwrap(),
-        "--room",
-        "100",
-        "--capture",
-        capture.to_str().unwrap(),
-    ]);
+    let output = run_script(&format!(
+        "strict(false)\nload_game_pack({})\nload_room(\"100\")\ncapture({})\n",
+        lua_path(&path),
+        lua_path(&capture)
+    ));
     assert_failure(&output, "failed to");
     assert!(capture.is_dir(), "the blocked capture path was replaced");
     let leftovers: Vec<_> = std::fs::read_dir(dir.path())
@@ -1184,6 +844,7 @@ fn extraction_writes_every_entry_and_rejects_a_layered_duplicate() {
 
     let out = dir.join("out");
     let output = run(&[
+        "pack",
         "extract",
         path.to_str().unwrap(),
         "--out",

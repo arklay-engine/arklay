@@ -16,7 +16,7 @@
 //! | Room load (RDT, cuts, scripts, player assets) | 3.0-5.8 ms | 60 ms |
 //! | One capture render | 2.9-3.7 ms | 30 ms |
 //! | Script/entity/player update, 600 ticks | 8.7-13.6 ms (2026-10-16, worst room 106) | 25 ms |
-//! | 600-tick room run, process start included | 318-524 ms | 5 s |
+//! | 600-tick room run, pack open included | 318-524 ms (with process start) | 5 s |
 //!
 //! Measured on a 4-vCPU Haswell (Linux, rustc 1.98) and re-checked on an
 //! i7-4702HQ; the p95 is the upper edge of a power-of-two microsecond bucket
@@ -29,7 +29,6 @@
 #[path = "common/mod.rs"]
 mod common;
 
-use std::process::Command;
 use std::time::Instant;
 
 /// Sampled rooms: a large hall, a corridor and a stage-2 room.
@@ -47,10 +46,10 @@ const RENDER_BUDGET_MS: f64 = 30.0;
 /// the enemy milestone: the pack's Lua scripts run on every scripted entity
 /// tick and load on the room's first tick.
 const UPDATE_BUDGET_MS: f64 = 25.0;
-/// Wall clock for the whole 600-tick run, process start included.
+/// Wall clock for the whole 600-tick run, pack open included.
 const ROOM_600_BUDGET_MS: u64 = 5_000;
 
-/// The subset of the `--stats` report the budgets read.
+/// The subset of the frame-time report (`src/stats.rs`) the budgets read.
 #[derive(Debug, Default)]
 struct Report {
     ticks: u64,
@@ -141,19 +140,30 @@ fn real_room_budgets_hold_on_sampled_rooms() {
         .unwrap_or(TICK_P95_BUDGET_MS);
 
     for room in SAMPLE_ROOMS {
+        let saves = std::env::temp_dir().join(format!("arklay-perf-{}", std::process::id()));
+        let id = arklay::state::RoomId::from_room_and_player(room, 0).unwrap();
+        let mut stats = Vec::new();
         let start = Instant::now();
-        let output = Command::new(env!("CARGO_BIN_EXE_arklay"))
-            .arg(&pack_path)
-            .args(["--room", room, "--ticks", "600", "--stats"])
-            .output()
-            .expect("the arklay binary runs");
-        let wall_ms = start.elapsed().as_millis() as u64;
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(
-            output.status.success(),
-            "room {room} failed: {stderr}\n{stdout}"
+        let run = arklay::engine::run_with_options(
+            &pack_path,
+            id,
+            None,
+            TICKS as u32,
+            &saves,
+            &arklay::engine::ModOptions::default(),
+            Some(&mut stats),
+            false,
+            None,
+            arklay::player::Options::default(),
+            arklay::trace::TraceOptions::default(),
+            arklay::engine::Authoring::default(),
         );
+        let wall_ms = start.elapsed().as_millis() as u64;
+        let _ = std::fs::remove_dir_all(&saves);
+        let stdout = String::from_utf8_lossy(&stats);
+        if let Err(err) = run {
+            panic!("room {room} failed: {err:#}\n{stdout}");
+        }
 
         let report = parse_report(&stdout);
         assert_eq!(report.ticks, TICKS, "room {room}: {stdout}");

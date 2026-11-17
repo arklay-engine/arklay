@@ -16,9 +16,9 @@
 #   ARKLAY_LANGUAGE  display language tag (default ja-JP for the JPN assets)
 #
 # Each save's boot (room, player, character) is recorded in the file's entry
-# in README.md and at the top of its .lua: the CLI always boots
-# `--ui game --room <room> --player <p> --character <c>` with the script
-# applied before the state is serialized.
+# in README.md and at the top of its .lua: a driver script boots
+# `new_game({ room = <room>, player = <p>, character = <c> })`, runs the .lua
+# chunk on `game` before the first tick and writes the state with `save_game`.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -73,10 +73,20 @@ for name in "${selected[@]}"; do
     fi
     IFS='|' read -r _ room player character <<<"$row"
     echo "== $name (room $room player $player character $character)"
-    "$ARK_BIN" "$PACK" \
-        --ui game --room "$room" --player "$player" --character "$character" \
-        --setup-script "$SAVE_DIR/$name.lua" \
-        --save-out "$SAVE_DIR/$name.dat" \
-        --language "$LANGUAGE" --no-mods
+    {
+        echo 'local pack, language, room, player, character, out ='
+        echo '    arg[1], arg[2], arg[3], tonumber(arg[4]), tonumber(arg[5]), arg[6]'
+        echo 'strict(false)'
+        echo 'load_game_pack(pack, { language = language })'
+        echo 'new_game({ room = room, player = player, character = character })'
+        echo 'do'
+        # The chunk takes the game state as its argument (`local api = ...`).
+        sed 's/^local api = \.\.\.$/local api = game/' "$SAVE_DIR/$name.lua"
+        echo 'end'
+        # Settled as an authored boot, as the setup script always was.
+        echo 'mark_authored()'
+        echo 'save_game(out)'
+    } | "$ARK_BIN" script --headless - \
+        "$PACK" "$LANGUAGE" "$room" "$player" "$character" "$SAVE_DIR/$name.dat"
 done
 echo "regenerated ${#selected[@]} save(s) in $SAVE_DIR"

@@ -32,15 +32,15 @@
 //! The 16 ms non-gameplay screens (title, menus, door transitions) present
 //! once per tick at about 62 fps whatever the rate below that.
 //!
-//! `--capture`, traces and tests never read these options: a capture draws
+//! Captures, traces and tests never read these options: a capture draws
 //! the exact 320x240 frame in software through a fixed 3x window. A headless
-//! `--stats` run times presentation frames only at an explicit
-//! `--frame-rate`.
+//! stats run times presentation frames only at an explicit
+//! frame rate.
 //!
 //! # Aspect ratio
 //!
-//! `aspect` (default `4:3`) is the one option a capture also honours
-//! (`--aspect`). A wider aspect is a presentation crop: the frame keeps the
+//! `aspect` (default `4:3`) is the one option a capture also honours.
+//! A wider aspect is a presentation crop: the frame keeps the
 //! full 320 pixel width and shows a [`View`] band of [`Aspect::height`]
 //! rows (180 at 16:9, 200 at 16:10) of the 4:3 scene. Gameplay, masks,
 //! collision and cameras stay in 4:3 space; the band follows the player

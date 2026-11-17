@@ -9,7 +9,7 @@
 //! `ui/staitem.tim`, the `item/<id>/item.bmp` icons, `font/01.bmp`); a stale pack fails
 //! the test rather than silently skipping.
 //!
-//! The test renders the `--ui menu` capture (`ui/main_menu.lua` over the
+//! The test renders the menu screen capture (`ui/main_menu.lua` over the
 //! room boot's inventory) twice and requires it to be deterministic and to
 //! draw the panel art. The menu's rules are covered by the screen tests over
 //! the checked-in script.

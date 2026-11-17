@@ -83,7 +83,7 @@ so that counters stay aligned. Japanese text always draws whole cells.
 ## Previewing
 
 ```sh
-arklay re1.akpak --ui font --language en-US --capture font.bmp
+arklay --game re1.akpak --ui font --language en-US
 ```
 
 draws a sample of the font the session's language would use, so a

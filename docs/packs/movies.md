@@ -32,7 +32,7 @@ picture.
 To watch a film on its own:
 
 ```sh
-arklay re1.akpak --fmv 0
+arklay --game re1.akpak --movie 0
 ```
 
 H.264 and AAC need the default `hd` build feature. A build without it plays

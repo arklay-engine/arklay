@@ -14,10 +14,10 @@ The engine runs both the same way, and reads a directory's files only when it
 needs them. Every path in a pack is lower case and uses `/`.
 
 ```sh
-arklay list re1.akpak                        # every entry with its size
-arklay extract re1.akpak --out re1           # unpack into a directory
-arklay verify re1                            # parse every entry it knows
-arklay re1 --room 100                        # run the directory
+arklay pack list re1.akpak                   # every entry with its size
+arklay pack extract re1.akpak --out re1      # unpack into a directory
+arklay pack verify re1                       # parse every entry it knows
+arklay --game re1 --room 100                 # run the directory
 ```
 
 ## The folders

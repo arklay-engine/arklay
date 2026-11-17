@@ -1,5 +1,5 @@
 //! M12 integration pass: the desk flow on the shipped rooms (401 and 102), the
-//! corpus desk/item reachability audit and the deterministic `--ticks`
+//! corpus desk/item reachability audit and the deterministic scripted
 //! captures.
 //!
 //! Run with:
@@ -8,8 +8,6 @@
 use crate::common;
 
 use std::collections::BTreeSet;
-use std::path::Path;
-use std::process::Command;
 
 use arklay::engine::{
     NEW_GAME_ROOM_ITEMS, SimulatedRoom, render_game_frame, simulate_room, simulate_room_prepared,
@@ -448,26 +446,6 @@ fn corpus_desks_run_the_full_flow_and_items_stay_in_bounds() {
     assert_eq!(desk_rooms.len(), 6, "the desks span six rooms");
 }
 
-/// Run the CLI capture for one room and return the written bytes.
-fn cli_capture(pack: &Path, room: &str, ticks: u32, out: &Path) -> Vec<u8> {
-    let status = Command::new(env!("CARGO_BIN_EXE_arklay"))
-        .arg(pack)
-        .arg("--room")
-        .arg(room)
-        .arg("--player")
-        .arg("0")
-        .arg("--ticks")
-        .arg(ticks.to_string())
-        .arg("--capture")
-        .arg(out)
-        .env("SDL_AUDIODRIVER", "dummy")
-        .env("SDL_VIDEODRIVER", "dummy")
-        .status()
-        .expect("spawn arklay");
-    assert!(status.success(), "the CLI capture failed");
-    std::fs::read(out).expect("read the CLI capture")
-}
-
 #[test]
 #[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
 fn real_room_401_ticks_captures_are_deterministic() {
@@ -479,9 +457,9 @@ fn real_room_401_ticks_captures_are_deterministic() {
     std::fs::create_dir_all(&dir).unwrap();
 
     // Two CLI runs with the same arguments are byte-identical.
-    let first = cli_capture(&pack_path, "401", 30, &dir.join("first.bmp"));
-    let second = cli_capture(&pack_path, "401", 30, &dir.join("second.bmp"));
-    assert_eq!(first, second, "two --ticks captures differ");
+    let first = common::room_capture(&pack_path, &[], "401", 0, 30, &dir.join("first.bmp"));
+    let second = common::room_capture(&pack_path, &[], "401", 0, 30, &dir.join("second.bmp"));
+    assert_eq!(first, second, "two scripted captures differ");
 
     // The library seam reproduces the CLI frame exactly.
     let pack = Pack::open(&pack_path).unwrap();

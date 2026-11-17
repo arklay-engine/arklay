@@ -1,4 +1,4 @@
-//! Fixed-bucket frame-time instrumentation for `--stats`.
+//! Fixed-bucket frame-time instrumentation for the stats collector.
 //!
 //! [`Stats`] records one duration per fixed tick plus the phase totals for room
 //! load, script/entity update, effect update and render, and the entities and
@@ -17,9 +17,9 @@
 //!
 //! The `render` line reports the presented frames at the frame rate: how many, the rate they came at, the time each took to draw
 //! (`frame_us`) against the per-frame budget `1 / frame_rate`, and how many
-//! went `over` it. A headless `--ticks` run prints it only with `--frame-rate`,
+//! went `over` it. A headless tick run prints it only with a frame rate set,
 //! drawing the frames a display at that rate would present between its ticks,
-//! so its `fps` is per simulated second; an interactive `--stats` run (at the
+//! so its `fps` is per simulated second; an interactive stats run (at the
 //! `[graphics] frame_rate`) counts the frames it actually presented over
 //! wall time and prints only this line, at exit.
 
@@ -147,7 +147,7 @@ pub struct PhaseTotals {
     pub render: Duration,
 }
 
-/// The presented frames of a `--stats` run.
+/// The presented frames of a stats run.
 #[derive(Debug, Default, Clone)]
 pub struct RenderStats {
     /// The configured `frame_rate`.
@@ -216,7 +216,7 @@ fn micros(duration: Duration) -> u64 {
     duration.as_micros().min(u128::from(u64::MAX)) as u64
 }
 
-/// The `--stats` collector.
+/// The stats collector.
 #[derive(Debug, Default, Clone)]
 pub struct Stats {
     /// Fixed ticks recorded.

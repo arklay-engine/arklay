@@ -39,7 +39,7 @@ base = "re1"
 Run the game with it, then build it into one file to share:
 
 ```sh
-arklay re1.akpak --mod mods/mansion-hd --room 100
+arklay --game re1.akpak --mod mods/mansion-hd --room 100
 arklay mod build mods/mansion-hd --out mansion-hd.akpak
 ```
 
@@ -117,13 +117,13 @@ at 2 GiB; a mod may be up to 64 GiB, and any one entry up to 1 GiB.
 ```sh
 # Explicit layers, repeatable; later load_order wins a shared entry. A mod may
 # be an .akpak or a source directory.
-arklay re1.akpak --mod mods/balance.akpak --mod mods/demo --room 100
+arklay --game re1.akpak --mod mods/balance.akpak --mod mods/demo --room 100
 
 # Discovery: every mod found in the mods/ directories below is applied
-arklay re1.akpak --room 100
+arklay --game re1.akpak --room 100
 
 # A clean vanilla run: no discovery, no --mod
-arklay re1.akpak --no-mods --room 100
+arklay --game re1.akpak --no-mods --room 100
 ```
 
 Without `--no-mods`, the engine and the launcher look for mods in these
@@ -173,8 +173,8 @@ pack, whatever its `base` says. (The folder was called `htexture/` in
 single-pack path, so a run without `--mod` (and with no discovered mods) is
 byte-identical to earlier releases.
 
-`arklay list`, `arklay extract` and `arklay pack info` accept `--mod` too;
-`pack info` prints the manifest, the applied layers and the merged entry table.
+`arklay pack list`, `pack extract`, `pack verify` and `pack info` accept `--mod`
+too; `pack info` prints the manifest, the applied layers and the merged entry table.
 Their `--mod` paths accept directories, but they do not auto-discover the
 sibling or per-user directories.
 
@@ -204,7 +204,7 @@ build --no-default-features` turns off, keeping that build's dependency list to
 `zstd`). A build without `hd` still resolves replacements by stem but refuses
 to decode those formats, naming the feature. BMP, TIM and WAV stay the port's
 own decoders with the same size budgets as the shipped formats. `mod build`
-packs replacement sources verbatim and stores them raw, and `convert-game`
+packs replacement sources verbatim and stores them raw, and `pack convert game`
 needs no change: it reads the install's own BMP/TIM/WAV/PIX sources, which
 never carry a replacement format.
 
@@ -247,7 +247,7 @@ The film formats and codecs are listed in [Movies](packs/movies.md).
 | film | `movie/00`, `movie/17`, `movie/0f` (the film id); RE2 `movie/opn1stl`, `movie/staff` (the film name) | mp4, avi, mpg | any size up to 4096x4096, any frame rate |
 
 The stems are the shipped entries' paths without their extensions, as
-`arklay list` prints them. Each folder's page in [Game packs](packs/index.md)
+`arklay pack list` prints them. Each folder's page in [Game packs](packs/index.md)
 gives its naming, and [Names](packs/index.md#names) the numbering they share.
 
 ### When a replacement does not fit
@@ -301,13 +301,11 @@ that carry their own compression.
 
 `--watch` keeps a running interactive game in sync with the applied source
 directories. Start it on an interactive boot (`--ui game`, `--ui title`,
-`--room` or a continue); it is rejected with `--capture`, `--trace`, `--input`,
-`--save-out` and `--bot-headless`, which have no interactive loop to reload
-into.
+`--room` or a continue).
 
 ```sh
-# Edit mods/bot/bot/init.lua (or a lua/**.lua hook) while the game runs.
-arklay re1.akpak --mod mods/bot --bot --watch
+# Edit a lua/**.lua hook of mods/demo while the game runs.
+arklay --game re1.akpak --mod mods/demo --room 100 --watch
 ```
 
 The watcher polls the base pack and every layered source directory. It scans
@@ -498,10 +496,10 @@ pack lacks the texture or its name was hashed from different pixels.
 
 ## Converting Classic REbirth mods
 
-`arklay convert-mod <mod>` turns a Classic REbirth (CR) mod, a `.zip` or an
+`arklay pack convert mod <mod>` turns a Classic REbirth (CR) mod, a `.zip` or an
 extracted directory, into a mod pack. A CR mod is the game's own files with
 overrides, so each file is mapped by the folder it sits in onto the entry
-`convert-game` gives the file it replaces:
+`pack convert game` gives the file it replaces:
 
 | CR file | Pack entry |
 | --- | --- |
@@ -546,9 +544,9 @@ only when it holds the same mod id (a re-conversion, such as a new BioRand
 seed); `--force` replaces any file.
 
 ```sh
-arklay convert-mod RE-ENHANCE_RE1_v2.0_GOG.zip
-arklay convert-mod path/to/biorand/mod_biorand --out biorand.akpak
-arklay convert-mod re-hd.zip --root re1hd --base re1.akpak
+arklay pack convert mod RE-ENHANCE_RE1_v2.0_GOG.zip
+arklay pack convert mod path/to/biorand/mod_biorand --out biorand.akpak
+arklay pack convert mod re-hd.zip --root re1hd --base re1.akpak
 ```
 
 ## Hosted mods
@@ -602,7 +600,7 @@ its `manifest.toml` (name, version, category, authors, credits, homepage), a
 
 - `scripts/import-mods.py [id...]` (re)fills a mod directory's content from
   the archives the mod was released as, per the recipes in the script:
-  `convert-mod` over the files it selects, or plain copies. It keeps the
+  `pack convert mod` over the files it selects, or plain copies. It keeps the
   hand-written `manifest.toml` and thumbnail, and writes a minimal manifest
   on a first import.
 - `scripts/publish-mods.py [id...]` builds every directory with
@@ -622,6 +620,6 @@ overrides.
 ## Determinism
 
 A capture or headless run is deterministic. Lua hooks run in a fixed order on
-fixed ticks, and `api:log` writes to stderr only, so a `--capture` BMP with
+fixed ticks, and `api:log` writes to stderr only, so a `capture` with
 hooks still matches between runs; a run with no `--mod` and no discovered mods
 matches the pre-M15 captures exactly.

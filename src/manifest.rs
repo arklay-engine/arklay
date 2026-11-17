@@ -128,7 +128,7 @@ pub struct Manifest {
     pub start_angle: Option<u16>,
     pub start_health: Option<i16>,
     /// Base packs: the region whose room scripts the converted install
-    /// ships (`convert-game` records it), which picks a mod's per-region
+    /// ships (`pack convert game` records it), which picks a mod's per-region
     /// script builds. Absent, a mod's scripts run their USA build.
     pub region: Option<Region>,
     /// Base packs: the randomizer seed that generated the pack. Its presence

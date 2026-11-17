@@ -78,7 +78,7 @@ language, and a `language/<tag>.txt` that sets the same key still wins (see
 A pack's `item.xml` replaces that item's definition whole, so a mod
 restates every field it keeps. A definition that does not parse is
 reported and the item is left undefined, and unknown elements and
-attributes are errors: run `arklay verify` on a mod to catch a typo.
+attributes are errors: run `arklay pack verify` on a mod to catch a typo.
 
 ## Icons and models
 

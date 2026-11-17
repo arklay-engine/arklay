@@ -1,4 +1,4 @@
-//! Run statistics for the headless bot (`--bot-stats <path>`).
+//! Run statistics for the headless bot (`bot_run`'s `stats` file).
 //!
 //! Everything here is derived on the Rust side from the per-tick session
 //! snapshot and the pad input the Lua route asked for, so it measures the

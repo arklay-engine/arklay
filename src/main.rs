@@ -11,131 +11,89 @@ use arklay::pack::Pack;
 use arklay::progress::{Progress, format_duration};
 
 #[derive(Parser, Debug)]
-#[command(
-    name = "arklay",
-    version,
-    about = "A from-scratch engine for the classic Resident Evil games"
-)]
+#[command(name = "arklay", version, disable_help_subcommand = true)]
 struct Cli {
     /// Game pack to launch: a path, or the id of an installed pack (`re1`,
     /// `re2`), found under the data roots' `games/` folders as the launcher
     /// finds it
-    #[arg(value_name = "PACK")]
-    pack: Option<PathBuf>,
+    #[arg(long, value_name = "PACK")]
+    game: Option<PathBuf>,
 
     /// Room id, three hex digits: stage digit plus room, e.g. 100 or 11C; RE2's
     /// letter stages are A-G, e.g. G01
-    #[arg(long, value_name = "ROOM", requires = "pack")]
+    #[arg(long, value_name = "ROOM", requires = "game")]
     room: Option<String>,
 
     /// Player/flag digit selecting the RDT variant (0-9)
-    #[arg(long, default_value_t = 0, value_name = "N", requires = "pack", value_parser = clap::value_parser!(u8).range(0..=9))]
+    #[arg(long, default_value_t = 0, value_name = "N", requires = "game", value_parser = clap::value_parser!(u8).range(0..=9))]
     player: u8,
-
-    /// Boot the `--room` (a mansion room, stage 1 or 2) on its second visit
-    #[arg(long, requires = "room")]
-    mansion2: bool,
 
     /// Attract-demo reel ordinal for `--ui demo`: the index into the pack's
     /// sorted `demo/<hex>.dat` entries (0 = first reel)
-    #[arg(long, default_value_t = 0, value_name = "N", requires = "pack")]
+    #[arg(long, default_value_t = 0, value_name = "N", requires = "game")]
     demo: u8,
 
     /// UI screen to boot straight into instead of a room:
     /// `title`, `select`, `game`, `demo`, `menu`, `box`, `debug`, `file`, `map`,
     /// `view`, `save`, `load`, `death`, `result`, `epilogue` or `font`.
     /// `--ui game` also accepts `--room` to boot the new game straight into
-    /// that room through the session flow (the oracle anchor for room-specific
-    /// differentials); `--ui demo` plays the `--demo` attract reel.
-    #[arg(long, value_name = "SCREEN", requires = "pack")]
+    /// that room through the session flow; `--ui demo` plays the `--demo`
+    /// attract reel.
+    #[arg(long, value_name = "SCREEN", requires = "game")]
     ui: Option<String>,
 
     /// Directory holding save files (default: `<config dir>/save`, or
     /// `save_dir` in `arklay.toml`)
-    #[arg(long, value_name = "DIR", requires = "pack")]
+    #[arg(long, value_name = "DIR", requires = "game")]
     save_dir: Option<PathBuf>,
 
     /// Load the save block (`savedatN.dat`) at FILE and boot its saved game
     /// immediately instead of starting a new one: the saved stage, room,
-    /// character, position, health, inventory and flags drive the session.
-    /// Use it with `--ui game --load FILE` for the oracle trace, or alone for
-    /// the interactive continue
+    /// character, position, health, inventory and flags drive the session
     #[arg(
         long,
         value_name = "FILE",
-        requires = "pack",
-        conflicts_with_all = ["room", "fmv", "ending"]
+        requires = "game",
+        conflicts_with_all = ["room", "movie", "ending"]
     )]
     load: Option<PathBuf>,
 
-    /// Run this Lua chunk once on the freshly booted session, before its first
-    /// tick, to author a test state. The chunk receives the game state as its
-    /// first argument (`local api = ...`); this is the oracle/authoring seam,
-    /// not a mod hook
-    #[arg(
-        long,
-        value_name = "FILE",
-        requires = "pack",
-        conflicts_with_all = ["fmv", "ending"]
-    )]
-    setup_script: Option<PathBuf>,
-
-    /// Write the booted session's save block to FILE and exit before the first
-    /// tick. The deterministic save generator for the oracle: pair it with
-    /// `--setup-script` for an authored state or use it bare for the new-game
-    /// state. This is the oracle/authoring seam, not a mod hook
-    #[arg(
-        long,
-        value_name = "FILE",
-        requires = "pack",
-        conflicts_with_all = ["fmv", "ending"]
-    )]
-    save_out: Option<PathBuf>,
-
     /// Play one film standalone and exit: an RE1 film id (0-28) or a film
     /// name (`movie/<name>` in the pack, such as RE2's `opn1stl`, `r109` or
-    /// `staff`); with `--capture` the frame after `--ticks` fixed ticks is
-    /// written headlessly
+    /// `staff`)
     #[arg(
         long,
         value_name = "FILM",
-        requires = "pack",
+        requires = "game",
         conflicts_with_all = ["room", "ui", "ending"]
     )]
-    fmv: Option<String>,
+    movie: Option<String>,
 
     /// Play RE2 door `ID` (two hex digits, `door/<ID>.do2`) as a door
-    /// transition headlessly and write the frame after `--ticks` fixed ticks
-    /// to the `--capture` file
+    /// transition and exit
     #[arg(
         long,
         value_name = "ID",
-        requires_all = ["pack", "capture"],
-        conflicts_with_all = ["room", "ui", "fmv", "ending"],
+        requires = "game",
+        conflicts_with_all = ["room", "ui", "movie", "ending", "load"],
         value_parser = parse_hex_byte
     )]
     door: Option<u8>,
 
-    /// The door-type byte `--door` plays: its low seven bits pick the
-    /// animation variant
-    #[arg(long, value_name = "N", default_value_t = 0, requires = "door", value_parser = parse_hex_byte)]
-    door_type: u8,
-
     /// Play ending row `ID` (1-7): its film chain, the RESULT screen, the
     /// rocket-launcher epilogue (endings 6/7) and the next-cycle save, then the
-    /// title. With `--capture` the frame after `--ticks` fixed ticks is
-    /// written headlessly. With `--ui result` it only picks the RESULT
-    /// screen's row (default 1).
+    /// title. With `--ui result` it only picks the RESULT screen's row
+    /// (default 1).
     #[arg(
         long,
         value_name = "ID",
-        requires = "pack",
+        requires = "game",
         conflicts_with_all = ["room"],
         value_parser = clap::value_parser!(u8).range(1..=7)
     )]
     ending: Option<u8>,
 
-    /// Character for the `--ui game`/`--ui death` boot, the `--fmv` prologue
+    /// Character for the `--ui game`/`--ui death` boot, the `--movie` prologue
     /// cut and the `--ending` chain
     /// (0 Chris, 1 Jill; an RE2 pack: 0 Leon, 1 Claire, and 2 and 3 are the
     /// same two in Scenario B)
@@ -149,348 +107,40 @@ struct Cli {
 
     /// Language tag for the displayed strings, e.g. `en-GB`; the default is
     /// the OS locale, then `en-US`
-    #[arg(long, value_name = "TAG", requires = "pack")]
+    #[arg(long, value_name = "TAG", requires = "game")]
     language: Option<String>,
 
     /// Mod pack layers to apply, repeatable (ignored with `--no-mods`)
-    #[arg(long = "mod", value_name = "PATH", requires = "pack")]
+    #[arg(long = "mod", value_name = "PATH", requires = "game")]
     mods: Vec<PathBuf>,
 
-    /// Accepted for compatibility; the port-only debug room-select overlay
-    /// (F1 while playing) is always enabled and this flag no longer changes
-    /// anything
-    #[arg(long, requires = "pack")]
-    debug_menu: bool,
-
     /// Ignore the `--mod` layers and the sibling `mods/` directory
-    #[arg(long, requires = "pack")]
+    #[arg(long, requires = "game")]
     no_mods: bool,
 
-    /// Watch the applied mod source directories while the interactive game
-    /// runs: a change to a `lua/**.lua` hook or a `bot/**.lua` route reloads it
-    /// in place, keeping the current room, session and bot memory. Room XML,
-    /// room scripts, assets and `.akpak` changes still need a room reload or a
-    /// restart. Not available with `--capture`, `--trace`, `--input`,
-    /// `--bot-headless` or `--save-out`
-    #[arg(long, requires = "pack")]
+    /// Watch the applied mod source directories while the game runs: a
+    /// change to a `lua/**.lua` hook or a `bot/**.lua` route reloads it in
+    /// place, keeping the current room and session. Room XML, room scripts,
+    /// assets and `.akpak` changes still need a room reload or a restart
+    #[arg(long, requires = "game")]
     watch: bool,
-
-    /// Drive the game with the pack's restricted `bot/**.lua` mod instead of
-    /// the keyboard: normal player input only, no state authoring. Without
-    /// `--ui` it implies `--ui game --character 1` (Jill); use
-    /// `--ui game --character 0` for Chris. Example:
-    /// `arklay re1.akpak --mod mods/bot --bot`
-    #[arg(long, requires = "pack")]
-    bot: bool,
-
-    /// Run `--bot` without a window or audio, as fast as the simulation
-    /// allows, and exit when the bot finishes, dies or `--bot-max-ticks` is
-    /// reached. Example: `arklay re1.akpak --mod mods/bot --bot --bot-headless`
-    #[arg(
-        long,
-        requires = "bot",
-        conflicts_with_all = ["capture", "trace", "input", "stats"]
-    )]
-    bot_headless: bool,
-
-    /// Maximum app updates a `--bot-headless` run may take (default 100000)
-    #[arg(
-        long,
-        value_name = "N",
-        default_value_t = arklay::engine::DEFAULT_MAX_TICKS,
-        requires = "bot_headless"
-    )]
-    bot_max_ticks: u64,
-
-    /// Write a JSON statistics report (outcome, ticks, room entries, health,
-    /// damage, fire presses, turn-in-place ticks, scene ticks, door-unlock
-    /// timing) to this path when a `--bot-headless` run ends
-    #[arg(long, value_name = "PATH", requires = "bot_headless")]
-    bot_stats: Option<PathBuf>,
-
-    /// How much danger the bot's planner may accept, from 0.0 (none) to 1.0
-    /// (any); the route reads it as `bot:risk()`. Example: `--bot-risk 0.5`
-    #[arg(
-        long,
-        value_name = "0.0..1.0",
-        default_value_t = arklay::engine::DEFAULT_RISK,
-        value_parser = parse_bot_risk,
-        requires = "bot"
-    )]
-    bot_risk: f64,
-
-    /// Seed the game's random number generator for this bot run, so each
-    /// seed plays a different game (hunter health, enemy choices, poison);
-    /// the same seed, code and `--bot-risk` replay identically. Without it
-    /// the game's own stream is untouched. Example: `--bot-seed 7`
-    #[arg(long, value_name = "N", requires = "bot")]
-    bot_seed: Option<u32>,
-
-    /// Set one of the bot's story parameters for this run, steering a
-    /// decision the game leaves to the player (repeatable). The pack's
-    /// `params/<game>.xml` declares the names, values and defaults; room
-    /// facts with a matching `when` apply, and Lua reads `bot:param(name)`.
-    /// Example: `--bot-param richard=leave`
-    #[arg(long, value_name = "NAME=VALUE", value_parser = parse_bot_param, requires = "bot")]
-    bot_param: Vec<(String, String)>,
-
-    /// Turn on the debug INVINCIBLE cheat for every session of this bot
-    /// run: health stays full and the player never dies. The bot plays as
-    /// it would otherwise; use it to time a route without deaths.
-    #[arg(long, requires = "bot")]
-    bot_invincible: bool,
-
-    /// End the bot run when the player enters this room: a three-digit room
-    /// id such as `20D` (stage, then room, in hex). Lua reads it as
-    /// `bot:goal_room()`. Example: `--bot-goal-room 20D`
-    #[arg(long, value_name = "ROOM", value_parser = parse_bot_goal_room, requires = "bot")]
-    bot_goal_room: Option<String>,
-
-    /// Enable Classic REbirth's quick turn for this run: while walking
-    /// backward, RUN turns the player 180 degrees in place over eight ticks.
-    /// Overrides `[game] quick_turn` in arklay.toml
-    #[arg(long, requires = "pack", overrides_with = "no_quick_turn")]
-    quick_turn: bool,
-
-    /// Disable the quick turn for this run, whatever `[game] quick_turn` says
-    #[arg(long, requires = "pack", overrides_with = "quick_turn")]
-    no_quick_turn: bool,
-
-    /// Enable Classic REbirth's tactical reload for this run: while a gun is
-    /// aimed, holding RUN reloads it when the clip is not full and the
-    /// matching ammunition is held. Overrides `[game] tactical_reload`
-    #[arg(
-        long,
-        requires = "pack",
-        conflicts_with_all = ["no_tactical_reload", "fmv"]
-    )]
-    tactical_reload: bool,
-
-    /// Disable the tactical reload for this run, whatever
-    /// `[game] tactical_reload` says
-    #[arg(long, requires = "pack", conflicts_with = "fmv")]
-    no_tactical_reload: bool,
 
     /// Play by the original's item rules where the port is more lenient: a
     /// healing item that would do nothing is refused, such as the first-aid
     /// spray and the herbs at full health, and a blue herb while the player is
     /// not poisoned. Off by default; `arklay.toml` has no key for it
-    #[arg(long, requires = "pack", conflicts_with = "fmv")]
+    #[arg(long, requires = "game", conflicts_with = "movie")]
     authentic: bool,
 
-    /// An RE2 new game's difficulty, as the title's choice sets it, for a
-    /// game this run starts (`--ui game`, `--room`): normal, easy or hard
-    #[arg(
-        long,
-        value_enum,
-        value_name = "LEVEL",
-        default_value = "normal",
-        requires = "pack"
-    )]
-    difficulty: DifficultyArg,
-
-    /// RE2's config.ini `SPECIAL`: which extras the title's SPECIAL shows
-    /// (0 EXIT alone, 1 GALLERY, 2 or 3 EX.BATTLE, 4 to 7 the 4th Survivor,
-    /// anything else all of them, To-fu too). The default is 15
-    #[arg(
-        long,
-        value_name = "N",
-        allow_negative_numbers = true,
-        requires = "pack"
-    )]
-    title_special: Option<i8>,
-
-    /// An RE2 new game in ARRANGE MODE rather than ORIGINAL MODE
-    /// (`censorship_off`), for a game this run starts
-    #[arg(long, requires = "pack")]
-    arrange: bool,
-
-    /// Render one frame to a file and exit (headless testing)
-    #[arg(long, value_name = "FILE", requires = "pack")]
-    capture: Option<PathBuf>,
-
-    /// Start in a debug render mode (F4 cycles them): `normal`, `background`,
-    /// `masks`, `models`, `aot`, `collision-wire`, `collision-solid` or
-    /// `collision-overlay` (the collision drawn over the scene)
-    #[arg(
-        long,
-        value_name = "MODE",
-        requires = "pack",
-        value_parser = clap::builder::PossibleValuesParser::new(arklay::engine::render_mode_names())
-    )]
-    render_mode: Option<String>,
-
-    /// Model viewer: stand a model of the pack in the `--room`, posed and
-    /// animated with no AI, in front of the current camera. ENTRY is an RE1
-    /// or RE2 `.emd`, an RE2 `.pld`, or an RE2 `.plw` (drawn in its
-    /// character's hands), e.g. `enemy/10/enemy_0.emd`
-    #[arg(long, value_name = "ENTRY", requires = "room", conflicts_with_all = ["ui", "load"])]
-    model: Option<String>,
-
-    /// The `--model` animation bank: 0 is the model's own clips, 1 and 2 an
-    /// RE2 enemy's further banks
-    #[arg(long, value_name = "N", default_value_t = 0, requires = "model")]
-    bank: usize,
-
-    /// The `--model` clip of the bank, looped
-    #[arg(long, value_name = "N", default_value_t = 0, requires = "model")]
-    clip: usize,
-
-    /// Stand the `--model` at world position X,Y,Z instead of in front of
-    /// the camera (still facing it), e.g. behind a masked foreground
-    #[arg(long, value_name = "X,Y,Z", requires = "model", value_parser = parse_position, allow_hyphen_values = true)]
-    model_pos: Option<[i32; 3]>,
-
-    /// Run N fixed 30 Hz ticks before a capture frame is drawn, so scripted
-    /// NPC scenes and `--fmv` frames can be captured deterministically and
-    /// audio-free; with `--ui game` and `--trace` it runs the oracle ticks
-    #[arg(long, value_name = "N", default_value_t = 0)]
-    ticks: u32,
-
-    /// Write the oracle trace v1 (one line per fixed tick) of a `--room` or
-    /// `--ui game` headless run to FILE
-    #[arg(long, value_name = "FILE", requires = "pack")]
-    trace: Option<PathBuf>,
-
-    /// Scripted per-tick input playback for a `--ui game` oracle run: one
-    /// `<tick> <button>...` entry per line (`up`, `down`, `left`, `right`,
-    /// `confirm`, `cancel`, `run`, `aim`, `fire`, `start`, `page_left`,
-    /// `page_right`, `quick_turn`, `reload`, `map`, `weapon_prev`,
-    /// `weapon_next`, `target_prev`, `target_next`, `equip_1`..`equip_10`).
-    /// Requires `--trace`.
-    #[arg(long, value_name = "FILE", requires = "pack")]
-    input: Option<PathBuf>,
-
-    /// Trace a `--ui game` run as the game plays with a sound device, to
-    /// compare with the RE2 oracle's `--sound` recordings: a door holds the
-    /// next room's load for the music. Requires `--trace`.
-    #[arg(long, requires = "trace")]
-    sound: bool,
-
-    /// With `--sound`, also mix the run's audio as the game plays it and
-    /// write it to FILE as a 22050 Hz stereo WAV. Each traced tick mixes the
-    /// time it takes to play (1/30 s, or 16 ms while a transition or a menu
-    /// runs); a `.ticks` file beside it lists where each tick ends, in seconds
-    #[arg(long, value_name = "FILE", requires = "sound")]
-    sound_wav: Option<PathBuf>,
-
-    /// With `--sound`, hold each RE2 voice line for the ticks FILE lists, one
-    /// number a line in the order the lines play, instead of the line's own
-    /// length: with sound the original ends a line by DirectSound's clock, so
-    /// its length in ticks depends on the recording's pace. The regression
-    /// runner writes it from the recording's `fg_status` voice bit
-    #[arg(long, value_name = "FILE", requires = "sound")]
-    voice_ticks: Option<PathBuf>,
-
-    /// Write a frame BMP every N traced ticks; requires `--capture-dir` and
-    /// `--trace`
-    #[arg(
-        long,
-        value_name = "N",
-        requires = "pack",
-        value_parser = clap::value_parser!(u32).range(1..)
-    )]
-    capture_every: Option<u32>,
-
-    /// Directory the `--capture-every` frames are written to as `f%05d.bmp`
-    #[arg(long, value_name = "DIR", requires = "pack")]
-    capture_dir: Option<PathBuf>,
-
-    /// Print a frame-time report after the run. With `--ticks` the run is
-    /// headless: per-tick min/avg/p95/max, the load/update/effect/render phase
-    /// totals and the entity/effect high-water marks (with `--frame-rate`,
-    /// also the draw time of the frames a display at that rate would present
-    /// against its per-frame budget); a `--capture` is not needed. Without `--ticks` the room is
-    /// played in the window and the actual presented frame rate and draw times
-    /// are printed when it closes
-    #[arg(long, conflicts_with_all = ["ui", "ending", "fmv"])]
-    stats: bool,
-
-    /// Renderer for the interactive window's gameplay scene (default: the
-    /// config's `[graphics] renderer`, else GPU). `gpu` draws the 3D scene
-    /// with SDL_GPU at the window's resolution (it needs a Vulkan driver and
-    /// falls back to software without one). Captures, traces and `--stats`
-    /// always draw in software
-    #[arg(long, value_enum, requires = "pack")]
+    /// Renderer for the window's gameplay scene (default: the config's
+    /// `[graphics] renderer`, else GPU). `gpu` draws the 3D scene with SDL_GPU
+    /// at the window's resolution (it needs a Vulkan driver and falls back to
+    /// software without one)
+    #[arg(long, value_enum, requires = "game")]
     renderer: Option<RendererArg>,
-
-    /// The `--renderer gpu` scene's resolution as a percentage of the
-    /// viewport, e.g. 50, 75, 100, 150 or 200 (default: the config's
-    /// `[graphics] render_scale`, else 100)
-    #[arg(
-        long,
-        value_name = "PERCENT",
-        requires = "pack",
-        value_parser = clap::value_parser!(u32).range(
-            i64::from(*arklay::video::RENDER_SCALE_RANGE.start())
-                ..=i64::from(*arklay::video::RENDER_SCALE_RANGE.end())
-        )
-    )]
-    render_scale: Option<u32>,
-
-    /// The `--renderer gpu` scene's multisample anti-aliasing: 1, 2, 4 or 8
-    /// samples per pixel (default: the config's `[graphics] msaa`, else 1)
-    #[arg(
-        long,
-        value_name = "SAMPLES",
-        requires = "pack",
-        value_parser = parse_msaa
-    )]
-    msaa: Option<u32>,
-
-    /// Presented frames per second, 30 to 1000 (default: the config's `[graphics]
-    /// frame_rate`, else 30). The simulation always ticks at 30 Hz; a higher
-    /// rate draws the scene between ticks
-    #[arg(
-        long,
-        value_name = "FPS",
-        requires = "pack",
-        value_parser = clap::value_parser!(u32).range(i64::from(arklay::video::MIN_FRAME_RATE)..=i64::from(arklay::video::MAX_FRAME_RATE))
-    )]
-    frame_rate: Option<u32>,
-
-    /// The presented aspect ratio, `4:3` or a wider `W:H` such as `16:9`
-    /// (default: the config's `[graphics] aspect`, except under --trace,
-    /// else 4:3). A wider aspect crops the 4:3 frame's rows; captures take
-    /// the cropped shape
-    #[arg(long, value_name = "W:H", requires = "pack", value_parser = parse_aspect)]
-    aspect: Option<arklay::video::Aspect>,
 
     #[command(subcommand)]
     command: Option<Command>,
-}
-
-/// Parse `--aspect`: `W:H` from 4:3 up to 32:9.
-fn parse_aspect(value: &str) -> Result<arklay::video::Aspect, String> {
-    arklay::video::Aspect::parse(value)
-        .ok_or_else(|| format!("expected W:H from 4:3 to 32:9, got `{value}`"))
-}
-
-/// The quick-turn setting for this run.
-///
-/// An explicit `--quick-turn` (or `--no-quick-turn`) wins. Otherwise the
-/// config's `[game] quick_turn` applies, except to a scripted oracle run
-/// (`--trace`/`--input`), which stays off so its output is unchanged.
-fn quick_turn_enabled(explicit: Option<bool>, configured: bool, scripted: bool) -> bool {
-    explicit.unwrap_or(configured && !scripted)
-}
-
-/// The tactical-reload setting for this run.
-///
-/// An explicit `--tactical-reload` (or `--no-tactical-reload`) wins.
-/// Otherwise the config's `[game] tactical_reload` applies, except to a
-/// scripted oracle run (`--trace`/`--input`), which stays off so its output
-/// is unchanged.
-fn tactical_reload_enabled(explicit: Option<bool>, configured: bool, scripted: bool) -> bool {
-    explicit.unwrap_or(configured && !scripted)
-}
-
-/// Parse `--msaa`: one of [`arklay::video::MSAA_COUNTS`].
-fn parse_msaa(text: &str) -> Result<u32, String> {
-    text.parse::<u32>()
-        .ok()
-        .filter(|samples| arklay::video::MSAA_COUNTS.contains(samples))
-        .ok_or_else(|| "expected 1, 2, 4 or 8".to_string())
 }
 
 /// The `--renderer` choices.
@@ -500,24 +150,7 @@ enum RendererArg {
     Gpu,
 }
 
-/// The `--difficulty` choices.
-#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
-enum DifficultyArg {
-    Normal,
-    Easy,
-    Hard,
-}
-
-/// The new-game choice `--difficulty` and `--arrange` make.
-fn new_game_choice(difficulty: DifficultyArg, arrange: bool) -> arklay::ui::NewGameChoice {
-    arklay::ui::NewGameChoice {
-        easy: difficulty == DifficultyArg::Easy,
-        hard_mode: difficulty == DifficultyArg::Hard,
-        censorship_off: arrange,
-    }
-}
-
-/// The `convert-game --game` choices.
+/// The `pack convert game --game` choices.
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 enum GameArg {
     Re1,
@@ -540,86 +173,6 @@ enum Command {
         #[command(subcommand)]
         action: BiorandAction,
     },
-    /// Convert a game installation into an .akpak game pack
-    ConvertGame {
-        /// Root of the game installation or data directory
-        root: PathBuf,
-
-        /// Output pack path (default: re1.akpak or re2.akpak, by game)
-        #[arg(long)]
-        out: Option<PathBuf>,
-
-        /// The game to convert (default: detected from the install)
-        #[arg(long, value_enum)]
-        game: Option<GameArg>,
-
-        /// Number of worker threads (default: one per available CPU)
-        #[arg(long, value_name = "N", value_parser = clap::value_parser!(u16).range(1..))]
-        jobs: Option<u16>,
-
-        /// Print one line per packed file with its plain and stored size
-        #[arg(long)]
-        verbose: bool,
-    },
-
-    /// Convert a Classic REbirth mod (.zip or directory) into a mod .akpak
-    ///
-    /// HD textures, films, rooms, models, sounds, room text and a BioRand
-    /// start inventory are mapped onto the entries they override; the CR
-    /// runtime (DLLs, executables, configuration) and save data are left
-    /// out. Without --out the pack is written to the arklay mods folder.
-    ConvertMod {
-        /// The CR mod: a .zip archive or an extracted directory
-        input: PathBuf,
-
-        /// Output pack path (default: <mods dir>/<id>.akpak)
-        #[arg(long, short)]
-        out: Option<PathBuf>,
-
-        /// Only convert this folder of the input (e.g. re1hd of a multi-game zip)
-        #[arg(long, value_name = "DIR")]
-        root: Option<String>,
-
-        /// Base game pack (default: games/re1.akpak under the data roots)
-        #[arg(long, value_name = "PACK")]
-        base: Option<PathBuf>,
-
-        /// Pack id (default: derived from the mod name)
-        #[arg(long)]
-        id: Option<String>,
-
-        /// Pack display name (default: the CR manifest name or file name)
-        #[arg(long)]
-        name: Option<String>,
-
-        /// Pack version (default: parsed from the description or file name)
-        #[arg(long)]
-        version: Option<String>,
-
-        /// Replace an existing output pack even when it holds another mod
-        #[arg(long)]
-        force: bool,
-
-        /// Number of worker threads (default: one per available CPU)
-        #[arg(long, value_name = "N", value_parser = clap::value_parser!(u16).range(1..))]
-        jobs: Option<u16>,
-    },
-
-    /// Extract every entry of a game pack into a directory
-    Extract {
-        /// Game pack to read
-        #[arg(value_name = "PACK")]
-        pack: PathBuf,
-
-        /// Output directory (created if needed)
-        #[arg(long, short, value_name = "OUT_DIR")]
-        out: PathBuf,
-
-        /// Mod pack layers to apply, repeatable
-        #[arg(long = "mod", value_name = "PATH")]
-        mods: Vec<PathBuf>,
-    },
-
     /// Print the HD texture-pack file names (`<class>/<hash>.webp`) that
     /// replace the textures in an original game file
     Hash {
@@ -638,35 +191,6 @@ enum Command {
         /// `MSF2_SCREEN_BORDER`
         #[arg(long)]
         border: bool,
-    },
-
-    /// List every entry of a game pack with its stored size
-    List {
-        /// Game pack to read
-        #[arg(value_name = "PACK")]
-        pack: PathBuf,
-
-        /// Mod pack layers to apply, repeatable
-        #[arg(long = "mod", value_name = "PATH")]
-        mods: Vec<PathBuf>,
-    },
-
-    /// Validate a game pack: parse every known-format entry and report a
-    /// per-format table. Unknown entries are counted opaque and do not fail
-    /// the run unless `--strict` is set.
-    Verify {
-        /// Game pack to read
-        #[arg(value_name = "PACK")]
-        pack: PathBuf,
-
-        /// Mod pack layers to apply, repeatable
-        #[arg(long = "mod", value_name = "PATH")]
-        mods: Vec<PathBuf>,
-
-        /// Treat every entry whose format is not in the verifier's table as a
-        /// failure
-        #[arg(long)]
-        strict: bool,
     },
 
     /// Run a Lua script that drives the engine: boot a pack and a room,
@@ -712,7 +236,7 @@ enum Command {
         action: ModAction,
     },
 
-    /// Pack inspection tools
+    /// Game and mod pack tools
     Pack {
         #[command(subcommand)]
         action: PackAction,
@@ -859,6 +383,56 @@ fn parse_player_choice(text: &str) -> Result<arklay::biorand::PlayerChoice, Stri
 
 #[derive(Subcommand, Debug)]
 enum PackAction {
+    /// Convert a game installation or a Classic REbirth mod into an .akpak
+    Convert {
+        #[command(subcommand)]
+        action: ConvertAction,
+    },
+
+    /// Extract every entry of a game pack into a directory
+    Extract {
+        /// Game pack to read
+        #[arg(value_name = "PACK")]
+        pack: PathBuf,
+
+        /// Output directory (created if needed)
+        #[arg(long, short, value_name = "OUT_DIR")]
+        out: PathBuf,
+
+        /// Mod pack layers to apply, repeatable
+        #[arg(long = "mod", value_name = "PATH")]
+        mods: Vec<PathBuf>,
+    },
+
+    /// List every entry of a game pack with its stored size
+    List {
+        /// Game pack to read
+        #[arg(value_name = "PACK")]
+        pack: PathBuf,
+
+        /// Mod pack layers to apply, repeatable
+        #[arg(long = "mod", value_name = "PATH")]
+        mods: Vec<PathBuf>,
+    },
+
+    /// Validate a game pack: parse every known-format entry and report a
+    /// per-format table. Unknown entries are counted opaque and do not fail
+    /// the run unless `--strict` is set.
+    Verify {
+        /// Game pack to read
+        #[arg(value_name = "PACK")]
+        pack: PathBuf,
+
+        /// Mod pack layers to apply, repeatable
+        #[arg(long = "mod", value_name = "PATH")]
+        mods: Vec<PathBuf>,
+
+        /// Treat every entry whose format is not in the verifier's table as a
+        /// failure
+        #[arg(long)]
+        strict: bool,
+    },
+
     /// Print a pack's manifest, applied layers and merged entries
     Info {
         /// Game pack to read
@@ -868,6 +442,74 @@ enum PackAction {
         /// Mod pack layers to apply, repeatable
         #[arg(long = "mod", value_name = "PATH")]
         mods: Vec<PathBuf>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ConvertAction {
+    /// Convert a game installation into an .akpak game pack
+    Game {
+        /// Root of the game installation or data directory
+        root: PathBuf,
+
+        /// Output pack path (default: re1.akpak or re2.akpak, by game)
+        #[arg(long)]
+        out: Option<PathBuf>,
+
+        /// The game to convert (default: detected from the install)
+        #[arg(long, value_enum)]
+        game: Option<GameArg>,
+
+        /// Number of worker threads (default: one per available CPU)
+        #[arg(long, value_name = "N", value_parser = clap::value_parser!(u16).range(1..))]
+        jobs: Option<u16>,
+
+        /// Print one line per packed file with its plain and stored size
+        #[arg(long)]
+        verbose: bool,
+    },
+
+    /// Convert a Classic REbirth mod (.zip or directory) into a mod .akpak
+    ///
+    /// HD textures, films, rooms, models, sounds, room text and a BioRand
+    /// start inventory are mapped onto the entries they override; the CR
+    /// runtime (DLLs, executables, configuration) and save data are left
+    /// out. Without --out the pack is written to the arklay mods folder.
+    Mod {
+        /// The CR mod: a .zip archive or an extracted directory
+        input: PathBuf,
+
+        /// Output pack path (default: <mods dir>/<id>.akpak)
+        #[arg(long, short)]
+        out: Option<PathBuf>,
+
+        /// Only convert this folder of the input (e.g. re1hd of a multi-game zip)
+        #[arg(long, value_name = "DIR")]
+        root: Option<String>,
+
+        /// Base game pack (default: games/re1.akpak under the data roots)
+        #[arg(long, value_name = "PACK")]
+        base: Option<PathBuf>,
+
+        /// Pack id (default: derived from the mod name)
+        #[arg(long)]
+        id: Option<String>,
+
+        /// Pack display name (default: the CR manifest name or file name)
+        #[arg(long)]
+        name: Option<String>,
+
+        /// Pack version (default: parsed from the description or file name)
+        #[arg(long)]
+        version: Option<String>,
+
+        /// Replace an existing output pack even when it holds another mod
+        #[arg(long)]
+        force: bool,
+
+        /// Number of worker threads (default: one per available CPU)
+        #[arg(long, value_name = "N", value_parser = clap::value_parser!(u16).range(1..))]
+        jobs: Option<u16>,
     },
 }
 
@@ -930,20 +572,6 @@ enum ScdAction {
     },
 }
 
-/// The room `--room`, `--player` and `--mansion2` name.
-fn room_id(room: &str, player: u8, mansion2: bool) -> Result<arklay::state::RoomId> {
-    let id = arklay::state::RoomId::from_room_and_player(room, player)?;
-    if !id.has_short_form() {
-        // A generated room's visit follows its origin, which only the pack
-        // knows: the engine settles it when it loads the room.
-        return Ok(arklay::state::RoomId { mansion2, ..id });
-    }
-    if mansion2 && !id.is_mansion() {
-        bail!("--mansion2 needs a mansion room (stage 1 or 2), not {room}");
-    }
-    Ok(id.with_visit(mansion2))
-}
-
 /// Parse a region name such as `jpn`.
 fn parse_region(text: &str) -> Result<arklay::scd::akscr::Region, String> {
     arklay::scd::akscr::Region::parse(text)
@@ -969,67 +597,6 @@ fn parse_region_pack(text: &str) -> Result<(arklay::scd::akscr::Region, PathBuf)
 fn parse_hex_byte(text: &str) -> Result<u8, String> {
     u8::from_str_radix(text.trim_start_matches("0x"), 16)
         .map_err(|err| format!("`{text}` is not a hex byte: {err}"))
-}
-
-/// A bot run's own empty save directory, `arklay-bot-saves-<pid>` under the
-/// system temp directory, removed again when the run ends.
-struct BotSaveDir(PathBuf);
-
-impl BotSaveDir {
-    fn create() -> Result<Self> {
-        let dir = std::env::temp_dir().join(format!("arklay-bot-saves-{}", std::process::id()));
-        if dir.exists() {
-            fs::remove_dir_all(&dir).with_context(|| format!("clearing {}", dir.display()))?;
-        }
-        fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-        Ok(Self(dir))
-    }
-}
-
-impl Drop for BotSaveDir {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
-}
-
-/// `--bot-param`: `NAME=VALUE`, checked against the pack's declarations
-/// when the bot attaches.
-fn parse_bot_param(text: &str) -> Result<(String, String), String> {
-    arklay::engine::parse_bot_param(text)
-}
-
-/// `--bot-risk`: a number in `0.0..=1.0`.
-fn parse_bot_risk(text: &str) -> Result<f64, String> {
-    let risk: f64 = text
-        .trim()
-        .parse()
-        .map_err(|err| format!("`{text}` is not a number: {err}"))?;
-    if !(0.0..=1.0).contains(&risk) {
-        return Err(format!("`{text}` is outside 0.0..1.0"));
-    }
-    Ok(risk)
-}
-
-/// `--bot-goal-room`: three hex digits such as `20D`, returned uppercased.
-fn parse_bot_goal_room(text: &str) -> Result<String, String> {
-    let room = text.trim();
-    if room.len() != 3 || !room.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(format!(
-            "`{text}` is not a room id; use three hex digits such as 20D"
-        ));
-    }
-    Ok(room.to_ascii_uppercase())
-}
-
-fn parse_position(text: &str) -> Result<[i32; 3], String> {
-    let parts: Vec<i32> = text
-        .split(',')
-        .map(|part| part.trim().parse())
-        .collect::<Result<_, _>>()
-        .map_err(|err| format!("`{text}` is not X,Y,Z: {err}"))?;
-    parts
-        .try_into()
-        .map_err(|_| format!("`{text}` is not three comma-separated numbers X,Y,Z"))
 }
 
 fn parse_room_id(text: &str) -> Result<u16, String> {
@@ -1567,7 +1134,7 @@ fn pack_info(pack_path: &Path, mods: &[PathBuf]) -> Result<()> {
     write_pack_info(pack_path, &pack, &mut out)
 }
 
-/// `convert-mod`: convert and print the summary.
+/// `pack convert mod`: convert and print the summary.
 fn convert_mod(options: arklay::convert_mod::ConvertModOptions) -> Result<()> {
     let summary = arklay::convert_mod::convert_mod(&options)?;
     for warning in &summary.warnings {
@@ -1653,55 +1220,11 @@ fn main() -> Result<()> {
                 Ok(())
             }
         },
-        Some(Command::ConvertGame {
-            root,
-            out,
-            game,
-            jobs,
-            verbose,
-        }) => {
-            let game = match game {
-                Some(game) => game.game(),
-                None => arklay::convert::detect_game(&root)?,
-            };
-            let out = out.unwrap_or_else(|| PathBuf::from(game.default_pack_name()));
-            arklay::convert::convert_game_as(
-                &root,
-                &out,
-                Some(game),
-                jobs.map_or(0, usize::from),
-                verbose,
-            )
-        }
-        Some(Command::ConvertMod {
-            input,
-            out,
-            root,
-            base,
-            id,
-            name,
-            version,
-            force,
-            jobs,
-        }) => convert_mod(arklay::convert_mod::ConvertModOptions {
-            input,
-            out,
-            root,
-            base,
-            id,
-            name,
-            version,
-            force,
-            jobs: jobs.map_or(0, usize::from),
-        }),
-        Some(Command::Extract { pack, out, mods }) => extract_pack(&pack, &out, &mods),
         Some(Command::Hash {
             file,
             class,
             border,
         }) => hash_file(&file, class.as_deref(), border),
-        Some(Command::List { pack, mods }) => list_pack(&pack, &mods),
-        Some(Command::Verify { pack, mods, strict }) => verify_pack(&pack, &mods, strict),
         Some(Command::Script {
             script,
             args,
@@ -1723,58 +1246,77 @@ fn main() -> Result<()> {
             ModAction::LuaTypes { out } => write_lua_types(&out),
         },
         Some(Command::Pack { action }) => match action {
+            PackAction::Convert { action } => match action {
+                ConvertAction::Game {
+                    root,
+                    out,
+                    game,
+                    jobs,
+                    verbose,
+                } => {
+                    let game = match game {
+                        Some(game) => game.game(),
+                        None => arklay::convert::detect_game(&root)?,
+                    };
+                    let out = out.unwrap_or_else(|| PathBuf::from(game.default_pack_name()));
+                    arklay::convert::convert_game_as(
+                        &root,
+                        &out,
+                        Some(game),
+                        jobs.map_or(0, usize::from),
+                        verbose,
+                    )
+                }
+                ConvertAction::Mod {
+                    input,
+                    out,
+                    root,
+                    base,
+                    id,
+                    name,
+                    version,
+                    force,
+                    jobs,
+                } => convert_mod(arklay::convert_mod::ConvertModOptions {
+                    input,
+                    out,
+                    root,
+                    base,
+                    id,
+                    name,
+                    version,
+                    force,
+                    jobs: jobs.map_or(0, usize::from),
+                }),
+            },
+            PackAction::Extract { pack, out, mods } => extract_pack(&pack, &out, &mods),
+            PackAction::List { pack, mods } => list_pack(&pack, &mods),
+            PackAction::Verify { pack, mods, strict } => verify_pack(&pack, &mods, strict),
             PackAction::Info { pack, mods } => pack_info(&pack, &mods),
         },
         None => {
-            let Some(pack) = cli.pack else {
+            let Some(pack) = cli.game else {
                 return arklay::launcher::run();
             };
             // A pack id (`re1`) names the installed pack, as the launcher
             // finds it.
             let pack = arklay::pack::resolve_game_pack(&pack)?;
-            let tracing = cli.trace.is_some();
             let (config, warnings) = arklay::config::Config::load_default();
             for warning in warnings {
                 eprintln!("warning: {warning}");
             }
-            // `--quick-turn`/`--no-quick-turn` override the config. Scripted
-            // oracle runs force it off unless the user asked for it explicitly,
-            // so existing traces and oracle output stay byte-identical.
-            let explicit_quick_turn = cli
-                .quick_turn
-                .then_some(true)
-                .or_else(|| cli.no_quick_turn.then_some(false));
-            let explicit_tactical_reload = cli
-                .tactical_reload
-                .then_some(true)
-                .or_else(|| cli.no_tactical_reload.then_some(false));
             let player_options = arklay::player::Options {
-                quick_turn: quick_turn_enabled(
-                    explicit_quick_turn,
-                    config.game.quick_turn,
-                    tracing || cli.input.is_some(),
-                ),
-                tactical_reload: tactical_reload_enabled(
-                    explicit_tactical_reload,
-                    config.game.tactical_reload,
-                    tracing || cli.input.is_some(),
-                ),
-                // A scripted run has no stick; keep it off like the other
-                // options so the traces never depend on it.
-                analog_movement: config.game.analog_movement && !(tracing || cli.input.is_some()),
-                // A scripted run keeps the original's aim and blood and the
-                // default ink ribbon rules.
-                no_auto_aim: !(config.game.auto_aim || tracing || cli.input.is_some()),
-                no_blood: !(config.game.blood || tracing || cli.input.is_some()),
-                no_chris_ink_ribbons: !(config.game.chris_ink_ribbons
-                    || tracing
-                    || cli.input.is_some()),
-                jill_ink_ribbons: config.game.jill_ink_ribbons && !(tracing || cli.input.is_some()),
-                // A scripted run never writes into the save directory.
-                no_autosave: !config.game.autosave || tracing || cli.input.is_some(),
+                quick_turn: config.game.quick_turn,
+                tactical_reload: config.game.tactical_reload,
+                analog_movement: config.game.analog_movement,
+                no_auto_aim: !config.game.auto_aim,
+                no_blood: !config.game.blood,
+                no_chris_ink_ribbons: !config.game.chris_ink_ribbons,
+                jill_ink_ribbons: config.game.jill_ink_ribbons,
+                no_autosave: !config.game.autosave,
                 authentic: cli.authentic,
-                new_game: new_game_choice(cli.difficulty, cli.arrange),
-                title_special: cli.title_special,
+                new_game: arklay::ui::NewGameChoice::default(),
+                title_special: None,
             };
             let mut renderer = config.graphics;
             if let Some(kind) = cli.renderer {
@@ -1783,142 +1325,10 @@ fn main() -> Result<()> {
                     RendererArg::Gpu => arklay::video::RendererKind::Gpu,
                 };
             }
-            renderer.render_scale = cli.render_scale.unwrap_or(renderer.render_scale);
-            renderer.msaa = cli.msaa.unwrap_or(renderer.msaa);
-            renderer.frame_rate = cli.frame_rate.unwrap_or(renderer.frame_rate);
-            // A trace compares against the 4:3 reference, so only an explicit
-            // `--aspect` changes its shape.
-            if tracing {
-                renderer.aspect = arklay::video::Aspect::STANDARD;
-            }
-            renderer.aspect = cli.aspect.unwrap_or(renderer.aspect);
             arklay::video::set_aspect(renderer.aspect);
-            // An app-level `--ui` boot plays a scripted `--input` without a
-            // trace: its frames are the screens' regression captures.
-            let app_script = cli.input.is_some()
-                && !tracing
-                && cli.capture_dir.is_some()
-                && cli
-                    .ui
-                    .as_deref()
-                    .is_some_and(|screen| !matches!(screen, "game" | "demo" | "font"));
-            // `--ui title --trace` traces the title's ticks (the RE 2 oracle's
-            // `--boot` record).
-            let title_trace = tracing && cli.ui.as_deref() == Some("title");
-            if let Some(screen) = &cli.ui
-                && cli.ticks > 0
-                && ((screen != "game" && screen != "demo") || !tracing)
-                && !app_script
-                && !title_trace
-            {
-                bail!(
-                    "--ticks with --ui is only supported for `--ui game` with --trace, or an \
-                     app screen with --input and --capture-dir"
-                );
+            if cli.watch && cli.ui.as_deref() == Some("font") {
+                bail!("--watch needs the interactive window; `--ui font` has none");
             }
-            if let Some(mode) = &cli.render_mode {
-                arklay::engine::set_render_mode(mode)?;
-            }
-            if cli.ticks > 0 && cli.capture.is_none() && !cli.stats && !tracing && !app_script {
-                bail!("--ticks requires --capture (or --stats)");
-            }
-            if cli.stats && cli.room.is_none() {
-                bail!("--stats requires --room");
-            }
-            if cli.capture_every.is_some() && cli.capture_dir.is_none() {
-                bail!("--capture-every requires --capture-dir");
-            }
-            if cli.capture_every.is_some() && !tracing && !app_script {
-                bail!("--capture-every requires --trace");
-            }
-            if cli.capture_every.is_some() && cli.ticks == 0 {
-                bail!("--capture-every requires --ticks > 0");
-            }
-            if cli.capture_dir.is_some() && cli.capture_every.is_none() {
-                bail!("--capture-dir requires --capture-every");
-            }
-            // `--load` without `--ui` defaults to the game boot, so it is a
-            // valid trace target like `--ui game`/`--ui demo`.
-            if tracing
-                && cli.room.is_none()
-                && !matches!(cli.ui.as_deref(), Some("game" | "demo" | "title"))
-                && (cli.load.is_none() || cli.ui.is_some())
-            {
-                bail!("--trace is only supported for --room or --ui game/demo/title");
-            }
-            if cli.input.is_some() && !tracing && !app_script {
-                bail!("--input requires --trace (or an app --ui screen with --capture-dir)");
-            }
-            if (cli.setup_script.is_some() || cli.save_out.is_some())
-                && cli.ui.is_none()
-                && cli.room.is_none()
-                && cli.load.is_none()
-            {
-                bail!("--setup-script/--save-out require --room, --load or a --ui boot");
-            }
-            let bot_enabled = cli.bot || cli.bot_headless;
-            if bot_enabled {
-                if let Some(screen) = cli.ui.as_deref()
-                    && screen != "game"
-                {
-                    bail!(
-                        "--bot/--bot-headless are only supported with `--ui game`, not `{screen}`"
-                    );
-                }
-                if cli.capture.is_some() {
-                    bail!("--bot does not take --capture; let the bot finish and report instead");
-                }
-                if cli.stats {
-                    bail!("--bot does not take --stats");
-                }
-                if tracing {
-                    bail!("--bot does not take --trace/--input");
-                }
-            }
-            if cli.watch {
-                if cli.capture.is_some() {
-                    bail!("--watch needs the interactive window; it does not take --capture");
-                }
-                if tracing || cli.input.is_some() {
-                    bail!("--watch needs the interactive window; it does not take --trace/--input");
-                }
-                if cli.bot_headless {
-                    bail!("--watch needs the interactive window; it does not take --bot-headless");
-                }
-                if cli.save_out.is_some() {
-                    bail!("--watch needs the interactive window; it does not take --save-out");
-                }
-                if cli.stats && cli.ticks > 0 {
-                    bail!(
-                        "--watch needs the interactive window; it does not take --stats with --ticks"
-                    );
-                }
-                if cli.ui.as_deref() == Some("font") {
-                    bail!("--watch needs the interactive window; `--ui font` has none");
-                }
-            }
-            // A bare `--bot` implies the new Jill game the opening route starts
-            // from; an explicit `--ui game --character N` keeps N.
-            let (ui_screen, character) = if bot_enabled && cli.ui.is_none() {
-                (Some("game".to_string()), 1)
-            } else {
-                (cli.ui.clone(), cli.character)
-            };
-            let bot_options = arklay::engine::BotOptions {
-                enabled: bot_enabled,
-                headless: cli.bot_headless,
-                max_ticks: cli.bot_max_ticks,
-                stats_path: cli.bot_stats.clone(),
-                risk: cli.bot_risk,
-                goal_room: cli.bot_goal_room.clone(),
-                seed: cli.bot_seed,
-                params: cli.bot_param.clone(),
-                invincible: cli.bot_invincible,
-            };
-            let input_script = match cli.input.as_deref() {
-                Some(path) => Some(arklay::engine::InputScript::from_file(path)?),
-                None => None,
-            };
             let language = cli.language.clone().or_else(|| config.language.clone());
             let mods = arklay::engine::ModOptions {
                 explicit: cli.mods.clone(),
@@ -1931,153 +1341,104 @@ fn main() -> Result<()> {
                 global_dirs: arklay::config::Config::mod_dirs(),
                 watch: cli.watch,
             };
-            let trace_options = arklay::trace::TraceOptions {
-                path: cli.trace.as_deref(),
-                capture_every: cli.capture_every.unwrap_or(0),
-                capture_dir: cli.capture_dir.as_deref(),
-                ticks: cli.ticks,
-                input: input_script.as_ref(),
-                sound: cli.sound,
-                sound_wav: cli.sound_wav.as_deref(),
-                voice_ticks: cli.voice_ticks.as_deref(),
-            };
             let authoring = arklay::engine::Authoring {
                 load: cli.load.as_deref(),
-                setup_script: cli.setup_script.as_deref(),
-                save_out: cli.save_out.as_deref(),
                 renderer,
-                stats_frame_rate: cli.frame_rate,
-                model: cli.model.as_deref().map(|entry| arklay::engine::ModelView {
-                    entry,
-                    bank: cli.bank,
-                    clip: cli.clip,
-                    pos: cli.model_pos,
-                }),
                 ending: cli.ending,
+                ..arklay::engine::Authoring::default()
             };
-            // A bot run saves at typewriters through the game's save screen;
-            // without an explicit --save-dir it writes to a fresh directory of
-            // its own, never over the player's saves.
-            let bot_saves = match &cli.save_dir {
-                None if bot_enabled => Some(BotSaveDir::create()?),
-                _ => None,
-            };
-            let save_dir = match (&cli.save_dir, &bot_saves) {
-                (Some(dir), _) => dir.clone(),
-                (None, Some(saves)) => saves.0.clone(),
-                (None, None) => config
+            let save_dir = cli.save_dir.clone().unwrap_or_else(|| {
+                config
                     .save_dir
                     .clone()
-                    .unwrap_or_else(arklay::config::Config::default_save_dir),
-            };
+                    .unwrap_or_else(arklay::config::Config::default_save_dir)
+            });
             if let (Some(id), None) = (cli.ending, &cli.ui) {
                 return arklay::engine::run_ending(
                     &pack,
                     id,
                     cli.character,
-                    cli.capture.as_deref(),
-                    cli.ticks,
+                    None,
+                    0,
                     &mods,
                     renderer,
                     player_options,
                 );
             }
-            if let (Some(id), Some(capture)) = (cli.door, cli.capture.as_deref()) {
-                return arklay::engine::run_door(
-                    &pack,
-                    id,
-                    cli.door_type,
-                    capture,
-                    cli.ticks,
-                    &mods,
-                );
+            if let Some(id) = cli.door {
+                return arklay::engine::run_door(&pack, id, &mods, renderer);
             }
-            if let Some(film) = &cli.fmv {
+            if let Some(film) = &cli.movie {
                 return arklay::engine::run_fmv(
                     &pack,
                     film,
                     cli.character,
-                    cli.capture.as_deref(),
-                    cli.ticks,
+                    None,
+                    0,
                     &mods,
                     renderer,
                 );
             }
-            if let Some(screen) = ui_screen {
+            // `--load` without `--ui` is the continue: the same game boot as
+            // `--ui game --load`.
+            let screen = match (&cli.ui, &cli.load) {
+                (Some(screen), _) => Some(screen.as_str()),
+                (None, Some(_)) => Some("game"),
+                (None, None) => None,
+            };
+            if let Some(screen) = screen {
                 // `--ui game --room <id>` boots the new game straight into the
-                // room through the session flow, the anchor the reference's
-                // test-only room boot mirrors.
+                // room through the session flow.
                 let room = cli
                     .room
                     .as_deref()
-                    .map(|room| room_id(room, cli.player, cli.mansion2))
+                    .map(|room| arklay::state::RoomId::from_room_and_player(room, cli.player))
                     .transpose()?;
                 if room.is_some() && screen != "game" {
                     bail!("--room with --ui is only supported for `--ui game`");
                 }
                 return arklay::engine::run_ui_with_mods(
                     &pack,
-                    &screen,
-                    cli.capture.as_deref(),
+                    screen,
+                    None,
                     &save_dir,
-                    character,
+                    cli.character,
                     room,
                     cli.demo,
                     &mods,
-                    cli.debug_menu,
+                    false,
                     language.as_deref(),
                     player_options,
-                    trace_options,
+                    arklay::trace::TraceOptions::default(),
                     authoring,
-                    bot_options.clone(),
-                );
-            }
-            // `--load` without `--ui` is the interactive continue: the same
-            // game boot `--ui game --load` drives headlessly.
-            if cli.load.is_some() {
-                return arklay::engine::run_ui_with_mods(
-                    &pack,
-                    "game",
-                    cli.capture.as_deref(),
-                    &save_dir,
-                    character,
-                    None,
-                    cli.demo,
-                    &mods,
-                    cli.debug_menu,
-                    language.as_deref(),
-                    player_options,
-                    trace_options,
-                    authoring,
-                    bot_options,
+                    arklay::engine::BotOptions::default(),
                 );
             }
             if let Some(room) = cli.room {
-                let id = room_id(&room, cli.player, cli.mansion2)?;
+                let id = arklay::state::RoomId::from_room_and_player(&room, cli.player)?;
                 return arklay::engine::run_with_options(
                     &pack,
                     id,
-                    cli.capture.as_deref(),
-                    cli.ticks,
+                    None,
+                    0,
                     &save_dir,
                     &mods,
-                    cli.stats,
-                    cli.debug_menu,
+                    None,
+                    false,
                     language.as_deref(),
                     player_options,
-                    trace_options,
+                    arklay::trace::TraceOptions::default(),
                     authoring,
                 );
             }
             // No room and no `--ui`: boot the app root, whose interactive run
-            // plays the logos, the title opening and the select prologue. A
-            // capture still boots the title directly and plays no films.
+            // plays the logos, the title opening and the select prologue.
             arklay::engine::run_root(
                 &pack,
-                cli.capture.as_deref(),
+                None,
                 &save_dir,
                 &mods,
-                cli.debug_menu,
+                false,
                 language.as_deref(),
                 renderer,
                 player_options,
@@ -2125,200 +1486,11 @@ mod tests {
     }
 
     #[test]
-    fn the_quick_turn_override_beats_the_config_but_not_a_trace() {
-        // No explicit flag: the config applies to gameplay runs, while a
-        // scripted oracle run keeps the reference default.
-        assert!(!quick_turn_enabled(None, false, false));
-        assert!(quick_turn_enabled(None, true, false));
-        assert!(!quick_turn_enabled(None, true, true));
-        // An explicit flag wins either way, including over a trace.
-        assert!(quick_turn_enabled(Some(true), false, false));
-        assert!(quick_turn_enabled(Some(true), false, true));
-        assert!(!quick_turn_enabled(Some(false), true, false));
-        assert!(!quick_turn_enabled(Some(false), true, true));
-    }
-
-    #[test]
-    fn the_cli_takes_the_new_game_choice() {
-        let cli =
-            Cli::try_parse_from(["arklay", "game.akpak", "--difficulty", "hard", "--arrange"])
-                .unwrap();
-        assert_eq!(
-            new_game_choice(cli.difficulty, cli.arrange),
-            arklay::ui::NewGameChoice {
-                easy: false,
-                hard_mode: true,
-                censorship_off: true,
-            }
-        );
-        let cli = Cli::try_parse_from(["arklay", "game.akpak", "--difficulty", "easy"]).unwrap();
-        assert_eq!(
-            new_game_choice(cli.difficulty, cli.arrange),
-            arklay::ui::NewGameChoice {
-                easy: true,
-                ..Default::default()
-            }
-        );
-        let cli = Cli::try_parse_from(["arklay", "game.akpak"]).unwrap();
-        assert_eq!(
-            new_game_choice(cli.difficulty, cli.arrange),
-            arklay::ui::NewGameChoice::default()
-        );
-    }
-
-    #[test]
-    fn the_bot_risk_is_validated_and_needs_bot() {
-        let parse = |args: &[&str]| Cli::try_parse_from(args.iter().copied());
-        let cli = parse(&["arklay", "game.akpak", "--bot"]).unwrap();
-        assert_eq!(cli.bot_risk, arklay::engine::DEFAULT_RISK);
-        let cli = parse(&["arklay", "game.akpak", "--bot", "--bot-risk", "0.8"]).unwrap();
-        assert_eq!(cli.bot_risk, 0.8);
-        let cli = parse(&["arklay", "game.akpak", "--bot", "--bot-risk", "1"]).unwrap();
-        assert_eq!(cli.bot_risk, 1.0);
-        for bad in ["1.5", "-0.1", "NaN", "high"] {
-            let flag = format!("--bot-risk={bad}");
-            let error = parse(&["arklay", "game.akpak", "--bot", &flag])
-                .err()
-                .unwrap_or_else(|| panic!("--bot-risk {bad} was accepted"));
-            assert!(error.to_string().contains(bad), "{error}");
-        }
-        assert!(parse(&["arklay", "game.akpak", "--bot-risk", "0.5"]).is_err());
-    }
-
-    #[test]
-    fn the_bot_seed_parses_and_needs_bot() {
-        let parse = |args: &[&str]| Cli::try_parse_from(args.iter().copied());
-        assert_eq!(
-            parse(&["arklay", "game.akpak", "--bot"]).unwrap().bot_seed,
-            None
-        );
-        let cli = parse(&["arklay", "game.akpak", "--bot", "--bot-seed", "42"]).unwrap();
-        assert_eq!(cli.bot_seed, Some(42));
-        assert!(parse(&["arklay", "game.akpak", "--bot", "--bot-seed", "x"]).is_err());
-        assert!(parse(&["arklay", "game.akpak", "--bot", "--bot-seed", "-1"]).is_err());
-        assert!(parse(&["arklay", "game.akpak", "--bot-seed", "3"]).is_err());
-    }
-
-    #[test]
-    fn the_bot_invincible_flag_needs_bot() {
-        let parse = |args: &[&str]| Cli::try_parse_from(args.iter().copied());
-        assert!(
-            !parse(&["arklay", "game.akpak", "--bot"])
-                .unwrap()
-                .bot_invincible
-        );
-        assert!(
-            parse(&["arklay", "game.akpak", "--bot", "--bot-invincible"])
-                .unwrap()
-                .bot_invincible
-        );
-        assert!(parse(&["arklay", "game.akpak", "--bot-invincible"]).is_err());
-    }
-
-    #[test]
-    fn bot_params_repeat_and_need_bot() {
-        let parse = |args: &[&str]| Cli::try_parse_from(args.iter().copied());
-        assert!(
-            parse(&["arklay", "game.akpak", "--bot"])
-                .unwrap()
-                .bot_param
-                .is_empty()
-        );
-        let cli = parse(&[
-            "arklay",
-            "game.akpak",
-            "--bot",
-            "--bot-param",
-            "richard=leave",
-            "--bot-param=go_first=no",
-        ])
-        .unwrap();
-        assert_eq!(
-            cli.bot_param,
-            vec![
-                ("richard".to_string(), "leave".to_string()),
-                ("go_first".to_string(), "no".to_string())
-            ]
-        );
-        for bad in ["richard", "richard=", "Richard=leave"] {
-            assert!(
-                parse(&["arklay", "game.akpak", "--bot", "--bot-param", bad]).is_err(),
-                "{bad}"
-            );
-        }
-        assert!(parse(&["arklay", "game.akpak", "--bot-param", "richard=leave"]).is_err());
-    }
-
-    #[test]
-    fn the_bot_goal_room_is_validated_and_needs_bot() {
-        let parse = |args: &[&str]| Cli::try_parse_from(args.iter().copied());
-        assert_eq!(
-            parse(&["arklay", "game.akpak", "--bot"])
-                .unwrap()
-                .bot_goal_room,
-            None
-        );
-        let cli = parse(&["arklay", "game.akpak", "--bot", "--bot-goal-room", "20d"]).unwrap();
-        assert_eq!(cli.bot_goal_room.as_deref(), Some("20D"));
-        for bad in ["20", "20DD", "2G0", ""] {
-            let flag = format!("--bot-goal-room={bad}");
-            assert!(
-                parse(&["arklay", "game.akpak", "--bot", &flag]).is_err(),
-                "--bot-goal-room {bad:?} was accepted"
-            );
-        }
-        assert!(parse(&["arklay", "game.akpak", "--bot-goal-room", "20D"]).is_err());
-    }
-
-    #[test]
-    fn the_cli_accepts_the_tactical_reload_flags() {
-        let cli = Cli::try_parse_from(["arklay", "game.akpak", "--tactical-reload"]).unwrap();
-        assert!(cli.tactical_reload);
-        assert!(!cli.no_tactical_reload);
-        let cli = Cli::try_parse_from(["arklay", "game.akpak", "--no-tactical-reload"]).unwrap();
-        assert!(cli.no_tactical_reload);
-        assert!(!cli.tactical_reload);
-        // The two are exclusive overrides.
-        assert!(
-            Cli::try_parse_from([
-                "arklay",
-                "game.akpak",
-                "--tactical-reload",
-                "--no-tactical-reload"
-            ])
-            .is_err()
-        );
-        // A standalone film has no gameplay to reload.
-        assert!(
-            Cli::try_parse_from(["arklay", "game.akpak", "--fmv", "0", "--tactical-reload"])
-                .is_err()
-        );
-        assert!(
-            Cli::try_parse_from(["arklay", "game.akpak", "--fmv", "0", "--no-tactical-reload"])
-                .is_err()
-        );
-    }
-
-    #[test]
     fn the_cli_turns_authentic_mode_on_only_when_asked() {
-        let cli = Cli::try_parse_from(["arklay", "game.akpak"]).unwrap();
+        let cli = Cli::try_parse_from(["arklay", "--game", "game.akpak"]).unwrap();
         assert!(!cli.authentic);
-        let cli = Cli::try_parse_from(["arklay", "game.akpak", "--authentic"]).unwrap();
+        let cli = Cli::try_parse_from(["arklay", "--game", "game.akpak", "--authentic"]).unwrap();
         assert!(cli.authentic);
-    }
-
-    #[test]
-    fn the_tactical_reload_override_beats_the_config_but_not_a_trace() {
-        // No explicit flag: the config applies to gameplay runs, while a
-        // scripted oracle run keeps the reference default.
-        assert!(!tactical_reload_enabled(None, false, false));
-        assert!(tactical_reload_enabled(None, true, false));
-        assert!(!tactical_reload_enabled(None, true, true));
-        // An explicit flag wins either way, including over a trace.
-        assert!(tactical_reload_enabled(Some(true), false, false));
-        assert!(tactical_reload_enabled(Some(true), false, true));
-        assert!(!tactical_reload_enabled(Some(false), true, false));
-        assert!(!tactical_reload_enabled(Some(false), true, true));
     }
 
     #[test]
@@ -2570,6 +1742,7 @@ entries:
     fn the_cli_accepts_the_runtime_mod_flags() {
         let cli = Cli::try_parse_from([
             "arklay",
+            "--game",
             "game.akpak",
             "--room",
             "100",
@@ -2589,38 +1762,57 @@ entries:
 
         // The subcommands keep their own `--mod` flags.
         let list =
-            Cli::try_parse_from(["arklay", "list", "game.akpak", "--mod", "x.akpak"]).unwrap();
+            Cli::try_parse_from(["arklay", "pack", "list", "game.akpak", "--mod", "x.akpak"])
+                .unwrap();
         assert!(matches!(
             list.command,
-            Some(Command::List { mods, .. }) if mods == [PathBuf::from("x.akpak")]
+            Some(Command::Pack { action: PackAction::List { mods, .. } })
+                if mods == [PathBuf::from("x.akpak")]
         ));
     }
 
     #[test]
-    fn the_cli_accepts_the_oracle_authoring_flags() {
-        let cli = Cli::try_parse_from([
-            "arklay",
-            "game.akpak",
-            "--ui",
-            "game",
-            "--load",
-            "savedat1.dat",
-            "--setup-script",
-            "setup.lua",
-            "--save-out",
-            "out.dat",
-        ])
-        .unwrap();
+    fn the_cli_takes_the_game_as_an_option() {
+        let cli =
+            Cli::try_parse_from(["arklay", "--game", "re1", "--load", "savedat1.dat"]).unwrap();
+        assert_eq!(cli.game.as_deref(), Some(Path::new("re1")));
         assert_eq!(cli.load.as_deref(), Some(Path::new("savedat1.dat")));
-        assert_eq!(cli.setup_script.as_deref(), Some(Path::new("setup.lua")));
-        assert_eq!(cli.save_out.as_deref(), Some(Path::new("out.dat")));
+
+        // The game is no longer positional, and every boot option needs it.
+        assert!(Cli::try_parse_from(["arklay", "game.akpak"]).is_err());
+        assert!(Cli::try_parse_from(["arklay", "--room", "100"]).is_err());
 
         // `--load` is the continue boot: it cannot combine with a new-game
         // room or the film/ending boots.
         assert!(
-            Cli::try_parse_from(["arklay", "game.akpak", "--load", "s.dat", "--room", "101"])
+            Cli::try_parse_from([
+                "arklay", "--game", "re1", "--load", "s.dat", "--room", "101"
+            ])
+            .is_err()
+        );
+        assert!(
+            Cli::try_parse_from(["arklay", "--game", "re1", "--load", "s.dat", "--movie", "0"])
                 .is_err()
         );
+    }
+
+    #[test]
+    fn the_door_takes_only_its_id() {
+        let cli = Cli::try_parse_from(["arklay", "--game", "re2", "--door", "0a"]).unwrap();
+        assert_eq!(cli.door, Some(0x0A));
+        assert!(
+            Cli::try_parse_from(["arklay", "--game", "re2", "--door", "0a", "--room", "100"])
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn the_cli_has_no_help_subcommand() {
+        assert!(Cli::try_parse_from(["arklay", "help"]).is_err());
+        let help = Cli::try_parse_from(["arklay", "--help"]).unwrap_err();
+        assert_eq!(help.kind(), clap::error::ErrorKind::DisplayHelp);
+        let help = Cli::try_parse_from(["arklay", "-h"]).unwrap_err();
+        assert_eq!(help.kind(), clap::error::ErrorKind::DisplayHelp);
     }
 
     #[test]
@@ -2639,20 +1831,12 @@ entries:
     }
 
     #[test]
-    fn the_cli_accepts_the_debug_menu_flag() {
-        let cli =
-            Cli::try_parse_from(["arklay", "game.akpak", "--room", "100", "--debug-menu"]).unwrap();
-        assert!(cli.debug_menu);
-
-        let cli = Cli::try_parse_from(["arklay", "game.akpak", "--room", "100"]).unwrap();
-        assert!(!cli.debug_menu);
-    }
-
-    #[test]
     fn the_cli_accepts_verbose_conversions() {
         let cli = Cli::try_parse_from([
             "arklay",
-            "convert-game",
+            "pack",
+            "convert",
+            "game",
             "re1-install",
             "--out",
             "re1.akpak",
@@ -2661,12 +1845,18 @@ entries:
         .unwrap();
         assert!(matches!(
             cli.command,
-            Some(Command::ConvertGame { verbose: true, .. })
+            Some(Command::Pack {
+                action: PackAction::Convert {
+                    action: ConvertAction::Game { verbose: true, .. }
+                }
+            })
         ));
 
         let cli = Cli::try_parse_from([
             "arklay",
-            "convert-game",
+            "pack",
+            "convert",
+            "game",
             "re1-install",
             "--out",
             "re1.akpak",
@@ -2674,25 +1864,35 @@ entries:
         .unwrap();
         assert!(matches!(
             cli.command,
-            Some(Command::ConvertGame { verbose: false, .. })
+            Some(Command::Pack {
+                action: PackAction::Convert {
+                    action: ConvertAction::Game { verbose: false, .. }
+                }
+            })
         ));
     }
 
     #[test]
     fn convert_mod_parses_its_options() {
-        let cli = Cli::try_parse_from(["arklay", "convert-mod", "mod.zip"]).unwrap();
+        let cli = Cli::try_parse_from(["arklay", "pack", "convert", "mod", "mod.zip"]).unwrap();
         assert!(matches!(
             cli.command,
-            Some(Command::ConvertMod {
-                out: None,
-                force: false,
-                ..
+            Some(Command::Pack {
+                action: PackAction::Convert {
+                    action: ConvertAction::Mod {
+                        out: None,
+                        force: false,
+                        ..
+                    }
+                }
             })
         ));
 
         let cli = Cli::try_parse_from([
             "arklay",
-            "convert-mod",
+            "pack",
+            "convert",
+            "mod",
             "mod.zip",
             "-o",
             "out.akpak",
@@ -2701,8 +1901,14 @@ entries:
             "--force",
         ])
         .unwrap();
-        let Some(Command::ConvertMod { out, id, force, .. }) = cli.command else {
-            panic!("expected convert-mod");
+        let Some(Command::Pack {
+            action:
+                PackAction::Convert {
+                    action: ConvertAction::Mod { out, id, force, .. },
+                },
+        }) = cli.command
+        else {
+            panic!("expected pack convert mod");
         };
         assert_eq!(out.as_deref(), Some(Path::new("out.akpak")));
         assert_eq!(id.as_deref(), Some("hd"));

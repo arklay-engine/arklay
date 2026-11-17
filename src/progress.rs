@@ -69,7 +69,7 @@ pub type ProgressObserver = Box<dyn FnMut(ProgressSnapshot) + Send>;
 pub struct Progress {
     /// When this reporter was created; basis for [`Progress::elapsed`].
     started: Instant,
-    /// Fixed prefix of the rendered line, e.g. `convert-game`.
+    /// Fixed prefix of the rendered line, e.g. `pack convert game`.
     title: String,
     /// Total phases the run will report; set once they are known.
     phases_total: u64,

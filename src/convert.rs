@@ -1,4 +1,4 @@
-//! `convert-game`: migrate a full game installation into an `.akpak` pack.
+//! `pack convert game`: migrate a full game installation into an `.akpak` pack.
 //!
 //! Discovers `STAGE1`..`STAGE7`, `ENEMY`, `PLAYERS`, `sound`, `objspr`,
 //! `ITEM_M1`, `effspr`, `voice`, `movie` and `DATA` (case-insensitively, up to
@@ -71,7 +71,7 @@ const WRITE_CHUNK: usize = 1 << 20;
 const PRECOMPRESSED_EXTENSIONS: &[&str] = &["avi", "mp4", "mpg", "ogg", "png", "webp"];
 
 /// Whether an entry's format already carries its own compression, in which
-/// case `convert-game` stores it raw instead of zstd-compressing it.
+/// case `pack convert game` stores it raw instead of zstd-compressing it.
 pub(crate) fn is_precompressed(entry: &str) -> bool {
     Path::new(entry).extension().is_some_and(|extension| {
         PRECOMPRESSED_EXTENSIONS
@@ -364,7 +364,7 @@ pub fn convert_game(root: &Path, out: &Path) -> Result<()> {
     convert_game_with_options(root, out, 0, false)
 }
 
-/// A game `convert-game` can convert.
+/// A game `pack convert game` can convert.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Game {
     /// Resident Evil (the PC, Classic REbirth and Steam releases).
@@ -541,9 +541,9 @@ fn convert_observed_as(
     // The phase count is only known once the plan is built; `build_plan` fills
     // it in before the first phase begins.
     let mut progress = match observer {
-        Some(observer) => Progress::observed("convert-game", 0, observer, cancel),
+        Some(observer) => Progress::observed("pack convert game", 0, observer, cancel),
         None => {
-            let mut progress = Progress::new("convert-game", 0);
+            let mut progress = Progress::new("pack convert game", 0);
             if let Some(cancel) = cancel {
                 progress.set_cancel(cancel);
             }
@@ -2674,7 +2674,7 @@ fn copy_map_art(
     copy_converted_files(files, "map", writer, progress, jobs, indexed_tim_bmp)
 }
 
-/// The id of the pack `convert-game` writes.
+/// The id of the pack `pack convert game` writes.
 pub const BASE_PACK_ID: &str = "re1";
 
 /// Revision of the converted pack's contents and layout.
@@ -3308,7 +3308,7 @@ struct Plan {
 /// Discover, enumerate, and validate every conversion input.
 #[cfg(test)]
 fn build_plan(root: &Path) -> Result<Plan> {
-    build_plan_with_progress(root, &mut Progress::new("convert-game", 0))
+    build_plan_with_progress(root, &mut Progress::new("pack convert game", 0))
 }
 
 /// The number of phases [`convert_game_with_options`] will report, matching its

@@ -2,7 +2,7 @@
 //!
 //! The binary is a Windows GUI-subsystem program so double-clicking it never
 //! flashes a console behind the launcher. [`init`] attaches to a parent
-//! console when one exists (so `arklay list` still prints in a terminal,
+//! console when one exists (so `arklay pack list` still prints in a terminal,
 //! and the test harness's pipes keep working); when there is neither a
 //! console nor inherited pipes it points stdout and stderr at
 //! `<primary data>/logs/arklay.log`, which also catches the game's

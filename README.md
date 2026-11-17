@@ -4,9 +4,9 @@ A from-scratch engine for the classic Resident Evil games (RE1, RE2, RE3),
 written in Rust with SDL3. Each game is a game pack; everything game-specific
 lives in the pack. Mods layer on top with any asset overridable.
 
-The engine reads the player's own game installation: `convert-game` migrates a
+The engine reads the player's own game installation: `pack convert game` migrates a
 supported install into an `.akpak` pack, and the engine runs the pack. A pack
-may also be a directory of unpacked entries (the layout `arklay extract`
+may also be a directory of unpacked entries (the layout `arklay pack extract`
 writes); directory entries are read on demand, not loaded wholesale.
 
 ## Build
@@ -91,13 +91,13 @@ under the SIL Open Font License. Both are in the core pack, `games/core/`.
 
 ```sh
 # Convert an RE1 installation into a game pack (parallel across CPUs)
-cargo run -- convert-game /path/to/re1 --out re1.akpak
+cargo run -- pack convert game /path/to/re1 --out re1.akpak
 
 # The same, with one line per packed file: its plain and stored size
-cargo run -- convert-game /path/to/re1 --out re1.akpak --verbose
+cargo run -- pack convert game /path/to/re1 --out re1.akpak --verbose
 
 # Limit the conversion to N workers (default: one per available CPU)
-cargo run -- convert-game /path/to/re1 --out re1.akpak --jobs 4
+cargo run -- pack convert game /path/to/re1 --out re1.akpak --jobs 4
 
 # Convert the Steam release's install root: the walk finds the language trees
 # (english/USA, french/FRA, german/GER, japanese/JPN), takes the shared assets
@@ -106,7 +106,7 @@ cargo run -- convert-game /path/to/re1 --out re1.akpak --jobs 4
 # and packs every game-text sheet it carries, so the one pack renders
 # English/French/German with the original 8px Latin glyphs and `ja-JP` with the
 # Japanese sheet
-cargo run -- convert-game /path/to/steam/4249100_Biohazard --out re1.akpak
+cargo run -- pack convert game /path/to/steam/4249100_Biohazard --out re1.akpak
 
 # Convert the RE2 PC release (the directory holding data/Pl0, data/Pl1 and
 # data/Common) into re2.akpak: rooms, backgrounds, models, audio and films.
@@ -134,15 +134,15 @@ cargo run -- convert-game /path/to/steam/4249100_Biohazard --out re1.akpak
 # room 205's bodies and the alligator are ported; the G forms are part way (G1,
 # G2 and G3 are done, the G embryo walks, jumps, latches on and struggles, and
 # the G adult walks, bites and spits, but the G adult's hits and death, its
-# birth and the embryos that ride its back are to come). The engine also poses any RE2 EMD, PLD or PLW with --model, plays RE2 doors with --door,
+# birth and the embryos that ride its back are to come). The engine also plays RE2 doors with --door,
 # and plays its sounds and films (see issue #244 and oracle/re2-deviations.md);
 # --game re2 skips detection
-cargo run -- convert-game /path/to/re2
+cargo run -- pack convert game /path/to/re2
 
 # Convert a Classic REbirth mod (.zip or directory: HD texture packs, BioRand
 # seeds, ...) into a mod pack in the per-user mods directory; see
 # docs/mods.md for the mapping
-cargo run -- convert-mod RE-ENHANCE_RE1_v2.0_GOG.zip
+cargo run -- pack convert mod RE-ENHANCE_RE1_v2.0_GOG.zip
 
 # Generate a BioRand game (items, the start inventory and doors randomized,
 # locks and enemies on request; see docs/modding.md), one pack per player,
@@ -151,56 +151,52 @@ cargo run -- biorand generate re1.akpak --seed 123456 --player both
 cargo run -- biorand verify biorand-123456-chris.akpak
 
 # List every pack entry with its size, then the entry count and total bytes
-cargo run -- list re1.akpak
+cargo run -- pack list re1.akpak
 
 # Validate a pack: parse every known-format entry and print a per-format
 # report; exits 1 when a known-format entry fails (--strict also fails
 # unknown extensions)
-cargo run -- verify re1.akpak
+cargo run -- pack verify re1.akpak
 
 # Extract every pack entry below a directory, preserving relative paths
-cargo run -- extract re1.akpak --out extracted/
+cargo run -- pack extract re1.akpak --out extracted/
 
-# Launch room 100 as player 0 (RDT 1000); the pack may also be a directory
-cargo run -- re1.akpak --room 100 --player 0
-cargo run -- extracted/ --room 100 --player 0
+# Launch room 100 as player 0 (RDT 1000); the game may be a pack path, a
+# directory or the id of an installed pack
+cargo run -- --game re1.akpak --room 100 --player 0
+cargo run -- --game extracted/ --room 100 --player 0
+cargo run -- --game re1 --room 100
 
 # Pick the displayed language; the default is the OS locale, then en-US
-cargo run -- re1.akpak --room 100 --language ja-JP
+cargo run -- --game re1.akpak --room 100 --language ja-JP
 
 # Boot a screen directly (--ui title|select|game|demo|menu|box|file|map|view|save|load|
 # death|result|epilogue|font|debug)
-cargo run -- re1.akpak
+cargo run -- --game re1.akpak --ui title
 
-# Play one attract reel directly (the reference's --test-demo oracle anchor):
-# --demo N is the Nth entry of the pack's sorted demo/<hex>.dat list; with
-# --ticks/--trace it emits the per-tick differential trace
-cargo run -- re1.akpak --ui demo --demo 0 --ticks 600 --trace demo0.trace
+# Play one attract reel directly: --demo N is the Nth entry of the pack's
+# sorted demo/<hex>.dat list
+cargo run -- --game re1.akpak --ui demo --demo 0
 
 # `--ui game` with `--room` boots the new game straight into that room through
-# the session flow (boot narration, entry fade, camera and idle mirroring), the
-# anchor the reference oracle's test-only room boot mirrors
-cargo run -- re1.akpak --ui game --room 101 --player 0 --ticks 600 \
-  --trace room101.trace
+# the session flow (boot narration, entry fade, camera and idle mirroring)
+cargo run -- --game re1.akpak --ui game --room 101 --player 0
 
 # Load a save block (savedatN.dat) and boot its saved game immediately: the
 # file's stage, room, character, position, health, inventory and flags drive
-# the session. `--ui game --load` is the oracle anchor; without `--ui` it is
-# the interactive continue
-cargo run -- re1.akpak --ui game --load savedat1.dat --ticks 600 \
-  --trace loaded.trace
-cargo run -- re1.akpak --load savedat1.dat
+# the session
+cargo run -- --game re1.akpak --load savedat1.dat
 
-# Authoring/oracle seams: run a Lua chunk once on the freshly booted session
-# (before its first tick; it receives the game state as `local api = ...`) and
-# serialise the resulting state to a save block, or both
-cargo run -- re1.akpak --ui game --room 101 \
-  --setup-script oracle/saves/pause_chris_101.lua \
-  --save-out out/savedat1.dat
+# Play a film, an RE2 door transition (DO2 id in hex) or an ending end to end
+# (the films, RESULT, epilogue and next-cycle save)
+cargo run -- --game re1.akpak --movie 0
+cargo run -- --game re2.akpak --door 03
+cargo run -- --game re1.akpak --ending 1
 
-# Drive the engine from a Lua script: boot a room, hold buttons, tick, and
-# print or capture what happens (docs/scripting/lua/script.md). Without
-# --headless a window shows every tick
+# Everything else (headless captures, oracle traces, authored states, bot runs)
+# is a Lua driver script: boot a room, hold buttons, tick, and print, capture,
+# trace or save what happens (docs/scripting/lua/script.md). Without
+# --headless a window shows every tick; `-` reads the script from stdin
 cat > walk.lua <<'LUA'
 load_game_pack("re1")
 load_room("10A")
@@ -211,71 +207,41 @@ capture("walk.png")
 LUA
 cargo run -- script --headless walk.lua
 
-# Headless capture (no display)
-cargo run -- re1.akpak --room 100 --player 0 --capture cut0.bmp
-# An RE2 room (letter stages A-G name rooms too, e.g. --room G01), in a debug
-# render mode: the collision drawn over the background (F4 cycles the modes)
-cargo run -- re2.akpak --room 100 --render-mode collision-overlay --capture col.bmp
-# An RE2 model posed and animated in a room (no AI): any EMD, PLD or PLW
-cargo run -- re2.akpak --room 100 --model enemy/10/enemy_0.emd --clip 0 --ticks 30 --capture zombie.bmp
-# The same model stood at a world position, here behind room 100's masked car
-cargo run -- re2.akpak --room 100 --model player/00/model_0.pld --model-pos 17899,0,-4323 --capture masked.bmp
-# An RE2 door (DO2 id in hex, door type in hex) played headlessly; the
-# capture is the frame after --ticks, or the last one
-cargo run -- re2.akpak --door 03 --ticks 40 --capture door.bmp
-# Run N fixed 30 Hz ticks before a room capture (deterministic, audio-free),
-# so scripted NPC scenes are captured in motion
-cargo run -- re1.akpak --room 20D --player 0 --ticks 30 --capture npc.bmp
-cargo run -- re1.akpak --ui title --capture title.bmp
-cargo run -- re1.akpak --ui select --capture select.bmp
-cargo run -- re1.akpak --ui menu --capture menu.bmp
-cargo run -- re1.akpak --ui box --capture box.bmp
-cargo run -- re1.akpak --ui file --capture file.bmp
-cargo run -- re1.akpak --ui map --capture map.bmp
-cargo run -- re1.akpak --ui view --capture view.bmp
-# Kill the player and capture the DIED screen (--character 0|1)
-cargo run -- re1.akpak --ui death --character 1 --capture died.bmp
-# Capture the post-film ending screens
-cargo run -- re1.akpak --ui result --capture result.bmp
-cargo run -- re1.akpak --ui epilogue --capture epilogue.bmp
-# Play an ending end to end: the films, RESULT, epilogue and next-cycle save
-cargo run -- re1.akpak --ending 1
+# A new game's oracle trace: one line per tick (oracle/trace-v1.md)
+cargo run -- script --headless - <<'LUA'
+load_game_pack("re1")
+new_game({ room = "101" })
+trace_start("room101.trace")
+tick(600)
+LUA
 
-# Frame-time report for a 600-tick room run: per-tick min/avg/p95/max, the
-# load/update/effect/render phase totals and the entity/effect high-water
-# marks. Needs no --capture; the budgets live in tests/perf_real.rs. Adding
-# --frame-rate 120 also times the frames a 120 fps display would draw between
-# the ticks against the per-frame budget
-cargo run -- re1.akpak --room 100 --ticks 600 --stats
-
-# Present 120 frames per second (the simulation stays at 30 Hz; the scene is
-# drawn between ticks). With --stats and no --ticks the room is played in the
-# window and the actual presented rate is printed when it closes
-cargo run -- re1.akpak --room 100 --frame-rate 120 --stats
-
-# The 3D scene defaults to the GPU (SDL_GPU over Vulkan) at the window's
-# resolution; --renderer software or a failed device uses the 320x240
-# rasterizer instead. Captures and --stats always use software.
-cargo run -- re1.akpak --render-scale 150 --msaa 4
+# Author a state and write it as a save block, for both engines to boot
+cargo run -- script --headless - <<'LUA'
+load_game_pack("re1")
+new_game({ room = "101" })
+game:give_item(2, 15)
+save_game("out/savedat1.dat")
+LUA
 
 # Port-only debug tools: press F1 while playing to freeze the room and open
 # the tool list (ROOM SELECT, INVENTORY, PLAYER, FLAGS, CHEATS, SAVE, ITEM BOX,
 # CLEAR GAME, CONTROLS, DISPLAY). Confirm opens a tool, Esc backs out one
 # level, F1 closes from anywhere and reopening returns to the same tool.
-# `--ui debug` captures the tool list
-cargo run -- re1.akpak --room 100
-cargo run -- re1.akpak --ui debug --capture debug.bmp
+# F4 cycles the debug render modes. `--ui debug` boots the tool list
+cargo run -- --game re1.akpak --room 100
+cargo run -- --game re1.akpak --ui debug
 
-# Classic REbirth tactical reload is on by default: with a gun aimed, hold RUN
-# to reload instead of firing. Turn it off for one run with:
-cargo run -- re1.akpak --room 100 --no-tactical-reload
+# The 3D scene defaults to the GPU (SDL_GPU over Vulkan) at the window's
+# resolution; --renderer software or a failed device uses the 320x240
+# rasterizer instead. `[graphics]` in arklay.toml sets the render scale,
+# MSAA, frame rate and aspect
+cargo run -- --game re1.akpak --renderer software
 
 # Authentic mode keeps the original's item rules: a healing item that would do
 # nothing is refused, such as the first-aid spray and the herbs at full health,
 # and a blue herb while the player is not poisoned. It is off by default, and
-# only the command line turns it on (for checking the port against the
-# reference):
-cargo run -- re1.akpak --room 100 --authentic
+# only the command line (or a driver script's `authentic` option) turns it on:
+cargo run -- --game re1.akpak --room 100 --authentic
 ```
 
 Captures, assembled scripts and converted packs are written to a sibling
@@ -299,23 +265,22 @@ cargo run -- mod build mods/demo --out demo.akpak
 
 # Layer it explicitly; --mod is repeatable, later load_order wins. A mod
 # source directory can be passed directly, without `mod build` first.
-cargo run -- re1.akpak --mod demo.akpak --room 100 --ticks 40 --capture demo.bmp
-cargo run -- re1.akpak --mod mods/demo --room 100 --ticks 40 --capture demo.bmp
+cargo run -- --game re1.akpak --mod demo.akpak --room 100
+cargo run -- --game re1.akpak --mod mods/demo --room 100
 
 # Edit a mod source directory while the interactive game runs: --watch
-# reloads its lua/**.lua hooks and bot/**.lua route in place, keeping the
-# current room, session and bot memory. A changed room/<id>/bot.xml reloads
-# the bot's room metadata on the next tick. Room XML, room scripts, assets and
-# .akpak changes still need a room reload or a restart.
-cargo run -- re1.akpak --mod mods/bot --bot --watch
+# reloads its lua/**.lua hooks in place, keeping the current room and session.
+# Room XML, room scripts, assets and .akpak changes still need a room reload
+# or a restart.
+cargo run -- --game re1.akpak --mod mods/demo --room 100 --watch
 
 # The replacement-format example: a PNG background, a PNG/WebP UI page and an
 # OGG BGM track over the shipped art
 cargo run -- mod build mods/hd --out hd.akpak
-cargo run -- re1.akpak --mod hd.akpak --room 100 --ticks 120 --capture hd.bmp
+cargo run -- --game re1.akpak --mod hd.akpak --room 100
 
 # A clean vanilla run: no --mod and no discovery
-cargo run -- re1.akpak --no-mods --room 100
+cargo run -- --game re1.akpak --no-mods --room 100
 
 # Every mod the launcher finds applies automatically: the pack's sibling
 # mods/, each data root's mods/ (on Windows %LOCALAPPDATA%\arklay\mods, the
@@ -323,7 +288,7 @@ cargo run -- re1.akpak --no-mods --room 100
 # <config dir>/mods. Only top-level *.akpak files and mod directories are
 # candidates. `[mods]` in arklay.toml enables,
 # disables and orders them by manifest id (see docs/mods.md).
-cargo run -- re1.akpak --room 100
+cargo run -- --game re1.akpak --room 100
 
 # Inspect a pack's manifest, layers and merged entries
 cargo run -- pack info re1.akpak --mod demo.akpak
@@ -343,34 +308,30 @@ cargo run -- scd export-rooms path/to/install --out games/re1/room
 cargo run -- scd export-rooms usa=english jpn=japanese eur=french --out games/re1/room
 cargo run -- scd build games/re1/room/103/room.akscr --out room/103/room.scd
 cargo run -- scd build games/re1/room/103/room.akscr --room 6031 --region jpn --out 6031.scd
-
-# Boot a mansion room on its second visit
-cargo run -- re1.akpak --room 106 --mansion2
 ```
 
-`--watch` is for the interactive window only: `--ui game`, `--ui title`,
+`--watch` is for the interactive window: `--ui game`, `--ui title`,
 `--room` and a continue all accept it. It polls the base pack and every layered
 mod source directory, reloads changed `lua/**.lua` hooks into a fresh VM (hook
 globals reset; `on_init` and `on_room_load` run over the live room) and
 re-executes the `bot/**.lua` chunks in the same VM (route globals such as
 `BOT_STATE` survive). A changed `room/<id>/bot.xml` invalidates the cached
 room metadata, so `bot:room_meta()` returns the new puzzles on the next tick;
-room XML and assets are still not hot-reloaded. It is rejected with
-`--capture`, `--trace`, `--input` and `--bot-headless`.
+room XML and assets are still not hot-reloaded.
 
 The documentation is an mdbook in `docs/` (`mdbook serve docs`), published at
 <https://arklay-engine.github.io/arklay/>. `docs/packs/` has a page per pack
 folder (the manifest, rooms, items, enemies, fonts, language files and the
 rest), with each folder's file formats and naming; `docs/mods.md` documents
 mod layering, the replacement formats, HD texture packs, `mod build` and
-`convert-mod`; `docs/scripting/` is the Lua API and the `.akscr` room script
+`pack convert mod`; `docs/scripting/` is the Lua API and the `.akscr` room script
 language (`docs/scripting/room/re1/` and `docs/scripting/room/re2/`, with a
 page per opcode). Where RE 2 play still differs from the original is listed
 in `oracle/re2-deviations.md`; RE 1's open differences are GitHub issues. A run
 without any layer stays byte-identical to a pre-M15 run, Lua or not.
 
-`convert-game` and `extract` report progress on stderr as a single bar for the
-whole command. `convert-game` runs its asset categories (rooms, camera cuts,
+`pack convert game` and `extract` report progress on stderr as a single bar for the
+whole command. `pack convert game` runs its asset categories (rooms, camera cuts,
 BGM, player files, compression, bytes written) as internal phases under that
 one bar, which names the phase in progress, so a conversion never scrolls a bar
 per category. On a terminal it hides the cursor and redraws the bar in place
@@ -451,7 +412,7 @@ hides these lines; their timing still runs. The French, German, Spanish,
 Italian, Finnish and Japanese texts carry subtitle text. The USA release's
 English (and the Russian seed) keeps only the timing, so
 English shows no subtitles until a language file or mod adds them. Captures,
-traces and `--ticks` runs still draw the message window as before.
+traces and driver scripts still draw the message window as before.
 
 `quick_turn` enables Classic REbirth's quick turn: while walking backward
 (including the back diagonals), pressing RUN turns the player 180 degrees in
@@ -459,8 +420,7 @@ place over eight ticks, plays the no-weapon walk animation and its footsteps,
 and hands control back to normal movement. The QUICK TURN button (`Q`)
 starts the same turn without the backward press, from standing too. The
 player does not move or collide during the turn, and the new facing is live
-for rendering, collision and scripts. `--quick-turn` and `--no-quick-turn`
-override the file for one run.
+for rendering, collision and scripts.
 
 `tactical_reload` is the Classic REbirth tactical reload: while a gun is
 aimed, holding RUN reloads it instead of firing, provided the clip is not full
@@ -477,8 +437,7 @@ full clip or a missing reserve is a no-op. The beretta also ejects its empty
 magazine on the reload's tenth motion frame: the clip falls from the hand,
 bounces once off the floor and disappears, driven by the original's joint-15
 fall physics (the shotgun and the two Pythons have no such mesh, and this
-applies to the empty-clip reload too). `--tactical-reload` and
-`--no-tactical-reload` override the setting for one run.
+applies to the empty-clip reload too).
 
 `analog_movement` is the port's camera-relative stick movement, like the
 RE1 remake's alternate controls: pushing the gamepad's left stick moves the
@@ -490,11 +449,10 @@ walk does not double back over the cut line. The keyboard and the D-pad keep
 the tank controls, and aiming and the menus still read the stick as
 directions. Turn it off for tank controls on the stick too.
 
-A `--trace` or `--input` run leaves quick turn and tactical reload off
-unless the matching positive flag is passed, and always leaves
-`analog_movement` off, so existing traces stay byte-identical. It never
-turns on `--authentic` either; the oracle scripts pass that flag themselves
-when they compare with the reference.
+A driver script (`arklay script`) ignores these options: quick turn,
+tactical reload, `analog_movement` and authentic mode stay off unless the
+script's `load_game_pack` options turn them on, so traces stay
+byte-identical.
 
 ### Controls
 
@@ -517,7 +475,7 @@ when they compare with the reference.
 | `Shift` | West (X / Square) | Run (hold) |
 | `Shift` + `,` | Previous camera cut |
 | `Shift` + `.` | Next camera cut |
-| `F4` | Port-only debug render modes: normal, background only, masks only, models only, the AOT overlay, collision wireframe, solid collision, and collision drawn over the scene from the cut camera (`--render-mode` picks one at launch) |
+| `F4` | Port-only debug render modes: normal, background only, masks only, models only, the AOT overlay, collision wireframe, solid collision, and collision drawn over the scene from the cut camera |
 | `F1` (gamepad Back + Start together) | Port-only debug tools: freeze the room and open the tool list (room select, inventory, player, flags, cheats, save/load, item box, clear game, controls, display); Esc backs out one level, F1 closes |
 | `F2`, `F3` | Port-only game speed: F2 steps down and F3 up, 1x to 3x in 0.5x steps; the new speed shows briefly in the bottom-left corner |
 | `F6` | Port-only debug HUD: steps through full information (engine, FPS, resolution, memory, CPU, pack, mods, room, player, boss), a compact player panel (health, condition, ammo) with the boss's health, the FPS alone in the top-right corner, and off |
@@ -618,7 +576,7 @@ any rate below that. The F1 menu's DISPLAY tool steps it through 30, 60, 120,
 Turning it off lets the frame pacer own the rate and may tear, which can feel
 more responsive.
 
-`aspect` (also `--aspect` and the F1 DISPLAY tool) presents a wider frame by
+`aspect` (also the F1 DISPLAY tool) presents a wider frame by
 cropping the 320x240 view rather than pillarboxing it. In a room the visible
 band follows the player's chest row with a small dead zone, also during
 cutscenes, which draw no letterbox bars at a wider aspect; films show the
@@ -637,7 +595,7 @@ draws the original 320x240 frame and only scales it up.
 Any bound or unbound key, mouse button, wheel notch or gamepad input counts as
 "any key" for prompts that take one. `Shift` + `,`/`.` stay the fixed
 camera-cut keys, so binding `,` or `.` to an action also steps the camera when
-`Shift` is held. Scripted `--input` runs are unaffected by bindings.
+`Shift` is held. Driver scripts are unaffected by bindings.
 
 The character select slides the two cards between their poses while the pick
 changes; the item viewer spins the model while a direction is held and confirm
@@ -664,8 +622,8 @@ autosave is written and synced to a temporary file first, then
 `autosave1.dat` moves over `autosave2.dat` and the new file takes its place,
 on a background thread. An autosave does not count towards the ending's save
 count, and loading a save or starting a game does not autosave. Only the
-interactive window autosaves: `--trace`, `--input`, captures, the oracle
-scripts, the soak and the tests never write one.
+interactive window autosaves: driver scripts, the oracle scripts, the soak
+and the tests never write one.
 
 Both save/load screens list the autosaves. The ported original shows them in
 load mode as extra rows after the eight slots, newest first (with no autosave
@@ -684,7 +642,7 @@ and layered like any other mod:
 
 ```sh
 cargo run -- mod build mods/crloadsave --out crloadsave.akpak
-cargo run -- re1.akpak --mod crloadsave.akpak
+cargo run -- --game re1.akpak --mod crloadsave.akpak
 ```
 
 The ignored `tests/real/m16_ui_real.rs` golden harness compares sampled

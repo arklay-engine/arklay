@@ -1,5 +1,5 @@
 //! Real-asset death and game-over tests: the shipped `ui/died.tim` decodes,
-//! the headless `--ui death` capture is deterministic and draws the screen,
+//! the headless death screen capture is deterministic and draws the screen,
 //! and a shipped room's player death runs the fall → fade → DIED → title
 //! flow.
 //!
@@ -9,7 +9,7 @@
 use crate::common;
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use arklay::bmp;
 use arklay::pack::Pack;
@@ -32,19 +32,6 @@ impl Drop for TempDir {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.0);
     }
-}
-
-/// Run the capture CLI with `args` and return the written BMP bytes.
-fn cli_capture(pack: &Path, args: &[&str], out: &Path) -> Vec<u8> {
-    let status = std::process::Command::new(env!("CARGO_BIN_EXE_arklay"))
-        .arg(pack)
-        .args(args)
-        .arg("--capture")
-        .arg(out)
-        .status()
-        .expect("failed to run the capture CLI");
-    assert!(status.success(), "capture {args:?} failed");
-    fs::read(out).unwrap()
 }
 
 /// Pixels whose red channel dominates both others: the wavy strip's red text.
@@ -93,16 +80,12 @@ fn real_ui_death_capture_is_deterministic_and_draws_the_died_screen() {
     let dir = TempDir::new("capture");
     let first = dir.0.join("death-a.bmp");
     let second = dir.0.join("death-b.bmp");
-    let a = cli_capture(&pack_path, &["--ui", "death"], &first);
-    let b = cli_capture(&pack_path, &["--ui", "death"], &second);
-    assert_eq!(a, b, "--ui death is deterministic");
+    let a = common::ui_capture(&pack_path, &[], "death", 0, &first);
+    let b = common::ui_capture(&pack_path, &[], "death", 0, &second);
+    assert_eq!(a, b, "the death screen capture is deterministic");
     // The character digit selects the corpse model.
-    let jill = cli_capture(
-        &pack_path,
-        &["--ui", "death", "--character", "1"],
-        &dir.0.join("death-jill.bmp"),
-    );
-    assert_ne!(a, jill, "--character selects the corpse model");
+    let jill = common::ui_capture(&pack_path, &[], "death", 1, &dir.0.join("death-jill.bmp"));
+    assert_ne!(a, jill, "the character selects the corpse model");
 
     let image = bmp::decode(&a).expect("the capture is a BMP");
     assert_eq!((image.width, image.height), (320, 240));

@@ -28,8 +28,7 @@
 //! [custom_pad]
 //! start = ["pad:b"]
 //!
-//! # Gameplay options, both on by default (`--quick-turn` and
-//! # `--tactical-reload` override them; `--no-...` turns one off for a run).
+//! # Gameplay options, both on by default.
 //! [game]
 //! quick_turn = true      # BACKWARD + RUN (or quick_turn) turns the player
 //!                        # 180 degrees

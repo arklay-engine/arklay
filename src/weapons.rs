@@ -24,7 +24,7 @@
 //!   and the matching ammunition item is in the inventory. It uses the
 //!   original's empty-clip reload behaviour (`0x18`) and its per-weapon cues;
 //!   no new animation or ammo path. Off unless `[game] tactical_reload` or
-//!   `--tactical-reload` enables it.
+//!   the run option enables it.
 //! - The detached magazine ([`DetachedClip`], the original's accessory joint
 //!   15): the beretta's reload arms the empty clip's own TMD at frame `0x0a`
 //!   and [`update_detached_clip`] runs the original's fall/bounce physics and

@@ -29,7 +29,7 @@ Run them from the repository root: the bot is the mod layer `mods/bot`.
 |---|---|
 | `PACK` | The RE1 game pack: an installed pack's id, or a path to an `.akpak` (default `re1`, the installed RE1 pack, found under the data roots' `games/` folders as the launcher finds it). |
 | `SEED` | A bot seed: it varies the game's random stream, the same way in every run with that seed. Empty or absent: the game's own stream. |
-| `STATS` | A file to write the full report to, as `--bot-stats` does. |
+| `STATS` | A file to write the full report to, as `bot_run`'s `stats` option does. |
 
 A route prints one JSON line on stdout: its name, the `outcome`
 (`finished`, `death` or `max_ticks`), the checks it `missed` and the

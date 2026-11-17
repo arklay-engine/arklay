@@ -26,7 +26,7 @@ mod scripts {
     include!(concat!(env!("OUT_DIR"), "/ui_scripts.rs"));
 }
 /// The checked-in screen scripts (`games/re1/ui/**.lua`) as `(entry, source)`
-/// pairs. `convert-game` packs them; a pack that predates them (or a test
+/// pairs. `pack convert game` packs them; a pack that predates them (or a test
 /// pack) falls back to these copies, so every pack has its screens.
 pub use scripts::UI_SCRIPTS;
 
@@ -78,7 +78,7 @@ pub struct UiInput {
     /// menu's INVENTORY tool uses it to clear a slot.
     pub start: bool,
     /// F1: the port-only debug room overlay's edge. The overlay is always
-    /// available; `--debug-menu` is accepted for compatibility only.
+    /// available.
     pub debug_menu: bool,
     /// F9: the in-game return-to-title prompt's edge. A second F9 confirms
     /// the return and any other key cancels.

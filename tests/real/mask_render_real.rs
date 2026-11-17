@@ -4,7 +4,7 @@
 //! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_PACK=target/tmp-test/game.akpak cargo test --profile fast-release --test real mask_render_real:: -- --ignored --nocapture`
 //!
 //! The pack must have been built after the room-mask converter landed
-//! (`cargo run --release -- convert-game <install> --out target/tmp-test/game.akpak`);
+//! (`cargo run --release -- pack convert game <install> --out target/tmp-test/game.akpak`);
 //! a pack that is missing `room/1000/mask/00.bmp` fails the test, so a stale
 //! pack cannot silently hide a regression. Only an unset `ARKLAY_RE1_PACK`
 //! skips.
