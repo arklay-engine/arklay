@@ -1,0 +1,294 @@
+# leon_a_20c_20d: Leon A from 20A's door 2 through 20C: the crawler in the east arm shot from the south (11 rounds), then north, west and south round the U, each standing zombie shot as it comes in sight (the handgun reloads by itself), the Club Key used in door 1 and on into 20D's hand back
+345 up run left
+347 up run
+354 up run left
+355 up run
+363 right
+366 aim
+373 aim fire
+375 aim
+381 aim fire
+383 aim
+389 aim fire
+391 aim
+397 aim fire
+399 aim
+405 aim fire
+407 aim
+413 aim fire
+415 aim
+421 aim fire
+423 aim
+429 aim fire
+431 aim
+437 aim fire
+439 aim
+445 aim fire
+447 aim
+453 aim fire
+455 aim
+461 aim fire
+463 aim
+469 aim fire
+471 aim
+477 aim fire
+479 aim
+485 aim fire
+487 aim
+493 aim fire
+495 aim
+501 aim fire
+503 aim
+509 aim fire
+511 aim
+517 aim fire
+519 aim
+525 aim fire
+527 aim
+533 aim fire
+535 aim
+541 aim fire
+543 aim
+549 aim fire
+551 aim
+557 aim fire
+559 aim
+565 aim fire
+567 aim
+573 aim fire
+575 aim
+581 aim fire
+583 aim
+589 aim fire
+591 aim
+597 aim fire
+599 aim
+605 aim fire
+607 aim
+613 aim fire
+615 aim
+621 aim fire
+623 up run
+657 up run right
+658 up run
+683 up run left
+687 up run
+691 up run right
+692 up run
+694 up run right
+695 up run left
+697 up run
+699 up run left
+701 up run right
+707 up run
+715 up run left
+717 up run
+720 aim
+727 aim fire
+728 right
+730 up run right
+743 aim
+750 aim fire
+752 aim
+758 aim fire
+760 aim
+766 aim fire
+768 aim
+774 aim fire
+776 aim
+782 aim fire
+784 aim
+790 aim fire
+792 aim
+798 aim fire
+800 aim
+806 aim fire
+808 aim
+814 aim fire
+816 aim
+822 aim fire
+824 aim
+830 aim fire
+832 aim
+838 aim fire
+840 aim
+846 aim fire
+848 aim
+854 aim fire
+856 aim
+862 aim fire
+864 aim
+870 aim fire
+872 aim
+878 aim fire
+880 aim
+886 aim fire
+888 aim
+894 aim fire
+896 aim
+902 aim fire
+904 aim
+910 aim fire
+912 aim
+918 aim fire
+920 aim
+926 aim fire
+928 aim
+934 aim fire
+936 aim
+942 aim fire
+944 aim
+950 aim fire
+952 aim
+958 aim fire
+960 aim
+966 aim fire
+968 aim
+974 aim fire
+976 aim
+982 aim fire
+984 aim
+990 aim fire
+992 aim
+998 aim fire
+1000 aim
+1006 aim fire
+1008 aim
+1014 aim fire
+1016 aim
+1022 aim fire
+1024 aim
+1030 aim fire
+1032 aim
+1038 aim fire
+1040 aim
+1046 aim fire
+1048 aim
+1054 aim fire
+1056 aim
+1062 aim fire
+1064 aim
+1070 aim fire
+1072 aim
+1078 aim fire
+1080 aim
+1086 aim fire
+1088 aim
+1094 aim fire
+1096 aim
+1102 aim fire
+1104 aim
+1110 aim fire
+1112 aim
+1118 aim fire
+1120 aim
+1126 aim fire
+1128 aim
+1134 aim fire
+1136 aim
+1142 aim fire
+1144 aim
+1150 aim fire
+1152 aim
+1158 aim fire
+1160 aim
+1166 aim fire
+1168 aim
+1174 aim fire
+1176 aim
+1177 up run right
+1196 up run
+1197 up run right
+1198 up run
+1202 left
+1207 up run left
+1222 up run
+1226 up run left
+1229 up run
+1232 up run right
+1234 up run
+1237 up run right
+1238 up run
+1239 up run right
+1240 aim
+1247 aim fire
+1249 aim
+1250 up run left
+1255 aim
+1262 aim fire
+1264 aim
+1270 aim fire
+1272 aim
+1278 aim fire
+1280 aim
+1286 aim fire
+1288 aim
+1294 aim fire
+1296 aim
+1302 aim fire
+1304 up run left
+1305 up run
+1330 up run left
+1331 up run
+1355 up run right
+1356 up run
+1357 up run left
+1358 up run
+1364 up run right
+1365 left
+1375 up run left
+1389 up run right
+1390 up run
+1395 up run left
+1397 up run
+1401 up run right
+1402 up run
+1404 up run right
+1405 up run
+1407 up run left
+1409 up run
+1414 up run right
+1415 up run
+1427 up run right
+1428 up run
+1440 up run left
+1442 up run
+1446 up run left
+1447 up run
+1451 up run right
+1454 up run
+1464 up run left
+1466 up run
+1473 up run left
+1474 up  left
+1476 left
+1479 up  left
+1481 left
+1485 up  left
+1486 left
+1488 up  left
+1489 left
+1491 up  left
+1492 left
+1494 up  left
+1495 left
+1497 up  left
+1498 left
+1501 up  left
+1502 left
+1505 up  left
+1506 left
+1509 up  left
+1510 left
+1514 up  left
+1515 left
+1519 up  left
+1520 right
+1536 action
+1540
+1600 action
+1604
+1646 action
+1648
+1683 up
+1989

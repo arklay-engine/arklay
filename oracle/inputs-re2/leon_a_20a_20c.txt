@@ -1,0 +1,56 @@
+# leon_a_20a_20c: Leon A from 20B's door 0 round 20A's corridors past its six zombies (two bites, 50 life) to door 2 (20C), pressed facing south, and on to 20C's hand back
+345 right
+350 up run right
+370 up run
+375 up run left
+376 up run
+377 up run left
+378 up run
+381 left
+414 up run left
+421 up run right
+426 right
+430 up run right
+431 right
+433 up run right
+435 right
+437 up run right
+441 right
+443 up run right
+460 up run
+462 up run left
+464 up run
+465 up run left
+469 up run
+474 up run right
+476 up run
+477 up run right
+486 up run
+491 up run left
+579 left
+600 up run left
+614 up run
+616 up run right
+639 up run
+652 up run right
+671 up run
+674 up run left
+693 up run
+722 up run left
+723 up run
+729 up run right
+730 up run
+740 up run left
+741 up run
+748 up run right
+749 up run
+759 up run left
+761 up run
+767 up run left
+768 up run
+778
+780 left
+799 action
+801
+836 up
+1142
