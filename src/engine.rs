@@ -8806,7 +8806,6 @@ impl GameSession {
                 light_pos: None,
                 per_joint_light: false,
                 complex_object: None,
-                aliased_light: false,
                 view_z_shift: 0,
                 light_rotation: None,
                 fixed_light: None,
@@ -20759,6 +20758,30 @@ fn joint_hidden_mask(
     hidden
 }
 
+/// A companion's light: where the room lights latch, and the light matrix's
+/// rotation operand.
+type CompanionLight = ([i32; 3], Option<[[i32; 3]; 3]>);
+
+/// The light a companion draws under. The plant companions latch the room
+/// lights at their own translation from before their machine ran
+/// (`update_entity_lighting(&local.t)`), not at the placeholder first joint.
+/// The flower body's light matrix is `MulMatrix0(g_lightMatrix, identity)`,
+/// the room light itself, and the root ball draws unlit through the complex
+/// pool. The heart latches them at its owner's position
+/// (`update_entity_lighting(&owner->localMatrix.t)`) and turns them by its
+/// anchor's rotation.
+fn companion_light(
+    game: &crate::game::GameState,
+    companion: &enemy::companion::Companion,
+) -> CompanionLight {
+    let light_pos = if companion.kind == enemy::companion::CompanionKind::Heart {
+        game.entities[usize::from(companion.owner)].pos
+    } else {
+        companion.light_pos()
+    };
+    (light_pos, companion.anchor_rotation)
+}
+
 /// Draw one gameplay frame: the cut background, one mesh per active scripted
 /// character, the player model, the player's ground shadow and the camera's
 /// room-mask layer, depth-sorted together.
@@ -21423,7 +21446,6 @@ fn render_frame_on(
             light_pos: Some(record.pos),
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: object_view_z_shift(room, record),
             light_rotation: None,
             // `Om_disp`'s bit 4 leaves the lights out: the colour alone, whose
@@ -21445,7 +21467,6 @@ fn render_frame_on(
             light_pos: None,
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
@@ -21538,7 +21559,6 @@ fn render_frame_on(
             light_pos: None,
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
@@ -21580,7 +21600,6 @@ fn render_frame_on(
             light_pos: Some(light_pos),
             per_joint_light,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
@@ -21599,7 +21618,6 @@ fn render_frame_on(
             light_pos: None,
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
@@ -21619,7 +21637,6 @@ fn render_frame_on(
             light_pos: Some(light_pos),
             per_joint_light,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
@@ -21661,7 +21678,6 @@ fn render_frame_on(
             light_pos: Some(npc_lights[*index].0),
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
@@ -21680,7 +21696,6 @@ fn render_frame_on(
             light_pos: Some(*pos),
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
@@ -21720,7 +21735,6 @@ fn render_frame_on(
             light_pos: Some(game.entities[0].pos),
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: Some(player_state.detached_clip.world.r),
             fixed_light: None,
@@ -21762,7 +21776,6 @@ fn render_frame_on(
             light_pos: Some(player_light_pos),
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
@@ -21796,7 +21809,6 @@ fn render_frame_on(
             light_pos: Some(player_light_pos),
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
@@ -21883,7 +21895,6 @@ fn render_frame_on(
             light_pos: Some(light_pos),
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
@@ -21902,9 +21913,6 @@ fn render_frame_on(
     let mut companion_hidden: Vec<u32> = Vec::new();
     let mut companion_tints: Vec<[u8; 3]> = Vec::new();
     let mut companion_complex: Vec<Option<usize>> = Vec::new();
-    // Per companion: the light latch position, whether the light matrix is
-    // the aliased identity product, and the light matrix's rotation operand.
-    type CompanionLight = ([i32; 3], bool, Option<[[i32; 3]; 3]>);
     let mut companion_light_pos: Vec<CompanionLight> = Vec::new();
     for (companion_index, companion) in game.companions.iter().enumerate() {
         let Some(companion) = companion else {
@@ -21978,20 +21986,9 @@ fn render_frame_on(
         // routes its object through the reference's complex pool.
         companion_complex
             .push((companion.kind == enemy::companion::CompanionKind::Roots).then_some(object));
-        // The plant companions latch the room lights at their own
-        // translation (`update_entity_lighting(&local.t)`), not at the
-        // placeholder first joint, and light through the aliased identity
-        // product. The heart latches them at its owner's position
-        // (`update_entity_lighting(&owner->localMatrix.t)`) and its light
-        // matrix is a plain product.
-        let light_pos = if heart {
-            game.entities[usize::from(companion.owner)].pos
-        } else {
-            companion.entity.pos
-        };
-        companion_light_pos.push((light_pos, !heart, companion.anchor_rotation));
+        companion_light_pos.push(companion_light(game, companion));
     }
-    for (((((model, joints), hidden), tint), complex), &(light_pos, aliased, light_rotation)) in
+    for (((((model, joints), hidden), tint), complex), &(light_pos, light_rotation)) in
         companion_models
             .iter()
             .zip(&companion_joints)
@@ -22010,7 +22007,6 @@ fn render_frame_on(
             light_pos: Some(light_pos),
             per_joint_light: false,
             complex_object: *complex,
-            aliased_light: complex.is_none() && aliased,
             view_z_shift: 0,
             light_rotation,
             fixed_light: None,
@@ -22795,6 +22791,40 @@ mod tests {
         SDL_SCANCODE_RIGHTBRACKET, SDL_SCANCODE_RSHIFT, SDL_SCANCODE_S, SDL_SCANCODE_SPACE,
         SDL_SCANCODE_TAB, SDL_SCANCODE_UP, SDL_SCANCODE_W, SDL_SCANCODE_X, SDL_SCANCODE_Z,
     };
+
+    /// The Plant 42 flower body draws under the room light itself, latched
+    /// where it stood before its machine ran; the heart latches at its owner
+    /// and turns the light by its anchor.
+    #[test]
+    fn companions_latch_and_turn_their_light_like_the_original() {
+        let mut game = game::GameState::default();
+        let plant = &mut game.entities[1];
+        plant.id = 0x08;
+        plant.set_active(true);
+        plant.pos = [1000, 0, 1000];
+        let (body, _) = enemy::companion::plant42_spawn(&mut game, 1, 0).unwrap();
+        let mut companion = game.companions[usize::from(body)].clone().unwrap();
+        companion.entity.pos = [1200, -2500, 900];
+        assert_eq!(
+            companion_light(&game, &companion),
+            ([1200, -2500, 900], None)
+        );
+
+        companion.latched_light_pos = Some([1200, -2600, 900]);
+        assert_eq!(
+            companion_light(&game, &companion),
+            ([1200, -2600, 900], None),
+            "the light latches before the fall moves the body"
+        );
+
+        let anchor = [[0, 0, 4096], [0, 4096, 0], [-4096, 0, 0]];
+        companion.kind = enemy::companion::CompanionKind::Heart;
+        companion.anchor_rotation = Some(anchor);
+        assert_eq!(
+            companion_light(&game, &companion),
+            ([1000, 0, 1000], Some(anchor))
+        );
+    }
 
     #[test]
     fn a_pack_names_its_own_new_game_room() {
@@ -28701,7 +28731,6 @@ mod tests {
             light_pos: None,
             per_joint_light: false,
             complex_object: None,
-            aliased_light: false,
             view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
