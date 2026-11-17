@@ -70,7 +70,7 @@ use crate::effects::{self, Attach};
 use crate::game::{BANK_SCENARIO, EntitySound, GameState, InfiniteAmmo, MSF2_EFFECT_ZONE};
 use crate::model::{Clip, Keyframe, Skeleton};
 use crate::player::{ClipSource, Input, LockedAction, PlayerState};
-use crate::state::RoomState;
+use crate::state::{Collision, CollisionRect, RoomState};
 
 /// The infinite rocket launcher's scenario flag.
 pub const SCENARIO_FLAG_INF_R_LAUNCHER: u8 = 0x7E;
@@ -1250,7 +1250,7 @@ fn play_fire_sounds(game: &mut GameState, weapon: u8, index: usize) {
 fn gun_aim(
     game: &mut GameState,
     player: &mut PlayerState,
-    room: &RoomState,
+    room: &mut RoomState,
     clips: &WeaponClips<'_>,
     input: Input,
 ) {
@@ -1442,7 +1442,7 @@ fn gun_raise(game: &mut GameState, player: &mut PlayerState, clips: &WeaponClips
 fn gun_hold_input(
     game: &mut GameState,
     player: &mut PlayerState,
-    room: &RoomState,
+    room: &mut RoomState,
     clips: &WeaponClips<'_>,
     input: Input,
 ) {
@@ -2282,7 +2282,7 @@ fn gun_click(game: &mut GameState, player: &mut PlayerState) {
 fn gun_lockon_fire(
     game: &mut GameState,
     player: &mut PlayerState,
-    room: &RoomState,
+    room: &mut RoomState,
     clips: &WeaponClips<'_>,
     input: Input,
 ) {
@@ -2376,7 +2376,7 @@ fn turn_tail(game: &mut GameState, player: &mut PlayerState) {
 fn knife_aim(
     game: &mut GameState,
     player: &mut PlayerState,
-    room: &RoomState,
+    room: &mut RoomState,
     clips: &WeaponClips<'_>,
     input: Input,
 ) {
@@ -2442,7 +2442,7 @@ fn knife_motion(game: &GameState) -> u8 {
 fn knife_hold(
     game: &mut GameState,
     player: &mut PlayerState,
-    room: &RoomState,
+    room: &mut RoomState,
     clips: &WeaponClips<'_>,
     input: Input,
 ) {
@@ -2621,7 +2621,7 @@ fn knife_holster(
 fn knife_turn(
     game: &mut GameState,
     player: &mut PlayerState,
-    room: &RoomState,
+    room: &mut RoomState,
     clips: &WeaponClips<'_>,
     input: Input,
 ) {
@@ -2724,54 +2724,90 @@ fn rotate_toward_target(player: &mut PlayerState, target: [i32; 2], step_in: u16
     }
 }
 
-/// `player_aim_cone_test`: whether the ray from the player through `delta`
-/// crosses a fully sight-blocking room record. Walks all four quadrant lists
-/// with the original's two-diagonal straddle test.
-pub fn aim_cone_blocked(room: &RoomState, player: &PlayerState, delta: [i32; 2]) -> bool {
+/// `player_aim_cone_test` (0x00496be0): whether the ray from the player
+/// through `delta` crosses a fully sight-blocking room record. Walks all four
+/// quadrant lists in order with the original's two-diagonal straddle test.
+///
+/// Like `room_check_sight_blocked`, the original masks each record it walks
+/// to `flags & 0x300` and writes it back before filtering, up to and including
+/// the record that blocks, so the floor/step units are lost until the RDT
+/// reloads.
+pub fn aim_cone_blocked(collision: &mut Collision, player: &PlayerState, delta: [i32; 2]) -> bool {
+    let hit = aim_cone_blocking_record(collision, player, delta);
+    for (quadrant, records) in collision.quadrants.iter_mut().enumerate() {
+        let walked = match hit {
+            Some((q, _)) if q < quadrant => 0,
+            Some((q, index)) if q == quadrant => index + 1,
+            _ => records.len(),
+        };
+        for rect in &mut records[..walked] {
+            rect.flags &= 0x300;
+        }
+    }
+    hit.is_some()
+}
+
+/// [`aim_cone_blocked`] without the flag write-back, for the port-only target
+/// cycling, which the original never runs.
+fn peek_aim_cone_blocked(collision: &Collision, player: &PlayerState, delta: [i32; 2]) -> bool {
+    aim_cone_blocking_record(collision, player, delta).is_some()
+}
+
+/// The aim cone's record walk: the quadrant and index of the first record that
+/// blocks the ray, if any.
+fn aim_cone_blocking_record(
+    collision: &Collision,
+    player: &PlayerState,
+    delta: [i32; 2],
+) -> Option<(usize, usize)> {
     let player_x = player.pos[0] / 18;
     let player_z = player.pos[2] / 18;
     let dir_x = delta[0] / 18;
     let dir_z = delta[1] / 18;
     let cross_y = |a: [i32; 2], b: [i32; 2]| a[1] * b[0] - b[1] * a[0];
-    for quadrant in &room.collision.quadrants {
-        for rect in quadrant {
-            if rect.flags & 0x300 != 0x300 {
-                continue;
-            }
-            if rect.kind & 0xFF == 4 || rect.kind & 0xFF == 5 {
-                continue;
-            }
-            let x_max = i32::from(rect.x_max) / 18;
-            let z_max = i32::from(rect.z_max) / 18;
-            let x_min = i32::from(rect.x_min) / 18;
-            let z_min = i32::from(rect.z_min) / 18;
+    let blocks = |rect: &CollisionRect| {
+        if rect.flags & 0x300 != 0x300 {
+            return false;
+        }
+        // The full type word, as the original compares it.
+        if rect.kind == 4 || rect.kind == 5 {
+            return false;
+        }
+        let x_max = i32::from(rect.x_max) / 18;
+        let z_max = i32::from(rect.z_max) / 18;
+        let x_min = i32::from(rect.x_min) / 18;
+        let z_min = i32::from(rect.z_min) / 18;
 
-            // Diagonal 1: (xMax, zMin) -> (xMin, zMax), with the normalize.
-            let edge = [x_min - x_max, z_max - z_min];
-            let p1 = [player_x + dir_x - x_max, player_z + dir_z - z_min];
-            let p0 = [player_x - x_max, player_z - z_min];
-            if cross_y(edge, p0) ^ cross_y(edge, p1) < 0 {
-                let p1 = cross_y(delta, [x_min - player_x, z_min - player_z]);
-                let p0 = cross_y(delta, vector_normal([x_max - player_x, z_max - player_z]));
-                if p0 ^ p1 < 0 {
-                    return true;
-                }
-            }
-
-            // Diagonal 2: (xMin, zMin) -> (xMax, zMax), no normalize.
-            let edge = [x_max - x_min, z_max - z_min];
-            let p1 = [player_x + dir_x - x_min, player_z + dir_z - z_min];
-            let p0 = [player_x - x_min, player_z - z_min];
-            if cross_y(edge, p0) ^ cross_y(edge, p1) < 0 {
-                let p1 = cross_y(delta, [x_max - player_x, z_max - player_z]);
-                let p0 = cross_y(delta, [x_min - player_x, z_min - player_z]);
-                if p0 ^ p1 < 0 {
-                    return true;
-                }
+        // Diagonal 1: (xMax, zMin) -> (xMin, zMax), with the normalize.
+        let edge = [x_min - x_max, z_max - z_min];
+        let p1 = [player_x + dir_x - x_max, player_z + dir_z - z_min];
+        let p0 = [player_x - x_max, player_z - z_min];
+        if cross_y(edge, p0) ^ cross_y(edge, p1) < 0 {
+            let p1 = cross_y(delta, [x_min - player_x, z_min - player_z]);
+            let p0 = cross_y(delta, vector_normal([x_max - player_x, z_max - player_z]));
+            if p0 ^ p1 < 0 {
+                return true;
             }
         }
-    }
-    false
+
+        // Diagonal 2: (xMin, zMin) -> (xMax, zMax), no normalize.
+        let edge = [x_max - x_min, z_max - z_min];
+        let p1 = [player_x + dir_x - x_min, player_z + dir_z - z_min];
+        let p0 = [player_x - x_min, player_z - z_min];
+        if cross_y(edge, p0) ^ cross_y(edge, p1) < 0 {
+            let p1 = cross_y(delta, [x_max - player_x, z_max - player_z]);
+            let p0 = cross_y(delta, [x_min - player_x, z_min - player_z]);
+            if p0 ^ p1 < 0 {
+                return true;
+            }
+        }
+        false
+    };
+    collision
+        .quadrants
+        .iter()
+        .enumerate()
+        .find_map(|(q, records)| records.iter().position(blocks).map(|index| (q, index)))
 }
 
 /// `VectorNormal`: scale a 2D XZ vector to length 4096.
@@ -2787,7 +2823,7 @@ fn vector_normal(point: [i32; 2]) -> [i32; 2] {
 
 /// `player_reticle_enemy`: the nearest valid target's entity slot. With auto
 /// aim off nothing is ever locked.
-fn reticle_scan(game: &GameState, player: &PlayerState, room: &RoomState) -> Option<u8> {
+fn reticle_scan(game: &GameState, player: &PlayerState, room: &mut RoomState) -> Option<u8> {
     if game.player_options.no_auto_aim {
         return None;
     }
@@ -2806,7 +2842,7 @@ fn reticle_scan(game: &GameState, player: &PlayerState, room: &RoomState) -> Opt
         }
         let dx = entity.pos[0] - player.pos[0];
         let dz = entity.pos[2] - player.pos[2];
-        if aim_cone_blocked(room, player, [dx, dz]) {
+        if aim_cone_blocked(&mut room.collision, player, [dx, dz]) {
             continue;
         }
         let distance = dx
@@ -2837,7 +2873,7 @@ fn reticle_scan(game: &GameState, player: &PlayerState, room: &RoomState) -> Opt
 fn player_find_aim_target(
     game: &mut GameState,
     player: &mut PlayerState,
-    room: &RoomState,
+    room: &mut RoomState,
 ) -> bool {
     let count = usize::from(game.enemy_count).min(30);
     if count == 0 || game.player_options.no_auto_aim {
@@ -2847,7 +2883,9 @@ fn player_find_aim_target(
     let start = player.weapon.target.map_or(1usize, usize::from);
     for step in 0..slots {
         let slot = 1 + (start.saturating_sub(1) + step) % slots;
-        if aim_candidate(game, player, room, slot) {
+        if aim_candidate(game, player, slot)
+            .is_some_and(|delta| !aim_cone_blocked(&mut room.collision, player, delta))
+        {
             player.weapon.target = Some(slot as u8);
             return true;
         }
@@ -2855,9 +2893,9 @@ fn player_find_aim_target(
     false
 }
 
-/// Whether entity `slot` is an alive, script-free enemy the aim cone reaches:
-/// `player_find_aim_target`'s lock test.
-fn aim_candidate(game: &GameState, player: &PlayerState, room: &RoomState, slot: usize) -> bool {
+/// The player-to-entity delta when entity `slot` is an alive, script-free
+/// enemy: `player_find_aim_target`'s lock test before its aim cone.
+fn aim_candidate(game: &GameState, player: &PlayerState, slot: usize) -> Option<[i32; 2]> {
     let entity = &game.entities[slot];
     if !entity.active()
         || entity.has_enter_switch_zone == 0
@@ -2865,11 +2903,11 @@ fn aim_candidate(game: &GameState, player: &PlayerState, room: &RoomState, slot:
         || entity.behavior_flags & 0xC0 != 0
         || entity.id >= 0x13
     {
-        return false;
+        return None;
     }
     let dx = entity.pos[0] - player.pos[0];
     let dz = entity.pos[2] - player.pos[2];
-    !aim_cone_blocked(room, player, [dx, dz])
+    Some([dx, dz])
 }
 
 /// Whether the tactical reload can run: a reloadable gun (ids 2..=5) is
@@ -2885,7 +2923,7 @@ fn tactical_reload_ready(game: &GameState) -> bool {
 }
 
 /// Port-only: move the auto-aim lock `step` targets along (`1` next, `-1`
-/// previous) among the entities [`aim_candidate`] accepts, in slot order and
+/// previous) among the entities [`aim_candidate`] and the aim cone accept, in slot order and
 /// wrapping. Only while the weapon is raising or held with the auto aim on;
 /// the hold then turns the player toward the new lock
 /// ([`follow_retarget`]).
@@ -2900,7 +2938,10 @@ fn cycle_target(game: &GameState, player: &mut PlayerState, room: &RoomState, st
         return;
     }
     let candidates: Vec<u8> = (1..crate::game::ENTITY_COUNT)
-        .filter(|&slot| aim_candidate(game, player, room, slot))
+        .filter(|&slot| {
+            aim_candidate(game, player, slot)
+                .is_some_and(|delta| !peek_aim_cone_blocked(&room.collision, player, delta))
+        })
         .map(|slot| slot as u8)
         .collect();
     let Some(&first) = candidates.first() else {
@@ -5159,5 +5200,66 @@ mod tests {
         game.entities[2].set_active(false);
         drive(&mut game, &mut player, aiming(false), 1);
         assert!(!player.weapon.retarget);
+    }
+
+    fn cone_rect(x: [u16; 2], kind: u16, flags: u16) -> CollisionRect {
+        CollisionRect {
+            x_max: x[1],
+            z_max: 300,
+            x_min: x[0],
+            z_min: 0,
+            kind,
+            flags,
+        }
+    }
+
+    #[test]
+    fn aim_cone_masks_the_records_it_walks_up_to_the_blocker() {
+        let mut player = player::spawn(RoomId::default(), &RoomState::default());
+        player.pos = [100, 0, 100];
+        // A down-step (units 5) away from the ray, then a wall across it.
+        let step = cone_rect([2000, 3000], 0x8201, 0x0005);
+        let wall = cone_rect([500, 600], 1, 0xF300);
+        let mut collision = Collision::default();
+        collision.quadrants[0] = vec![step, wall, step];
+        collision.quadrants[1] = vec![step];
+        assert!(peek_aim_cone_blocked(&collision, &player, [900, 0]));
+        assert_eq!(
+            collision.quadrants[0][0].flags, 0x0005,
+            "the peek writes nothing"
+        );
+
+        assert!(aim_cone_blocked(&mut collision, &player, [900, 0]));
+        let flags: Vec<Vec<u16>> = collision
+            .quadrants
+            .iter()
+            .map(|q| q.iter().map(|r| r.flags).collect())
+            .collect();
+        // Everything up to and including the wall is masked; the walk stops
+        // there, so the rest of quadrant 0 and all of quadrant 1 keep theirs.
+        assert_eq!(
+            flags,
+            [vec![0x0000, 0x0300, 0x0005], vec![0x0005], vec![], vec![]]
+        );
+
+        // A clear ray walks every quadrant.
+        let mut collision = Collision::default();
+        collision.quadrants[0] = vec![step];
+        collision.quadrants[3] = vec![step];
+        assert!(!aim_cone_blocked(&mut collision, &player, [0, 900]));
+        assert_eq!(collision.quadrants[0][0].flags, 0);
+        assert_eq!(collision.quadrants[3][0].flags, 0);
+    }
+
+    #[test]
+    fn aim_cone_skips_shapes_4_and_5_by_the_full_type_word() {
+        let mut player = player::spawn(RoomId::default(), &RoomState::default());
+        player.pos = [100, 0, 100];
+        let mut collision = Collision::default();
+        collision.quadrants[0] = vec![cone_rect([500, 600], 4, 0x0300)];
+        assert!(!aim_cone_blocked(&mut collision, &player, [900, 0]));
+        // A shape-4 record with a high type byte is not skipped.
+        collision.quadrants[0] = vec![cone_rect([500, 600], 0x0104, 0x0300)];
+        assert!(aim_cone_blocked(&mut collision, &player, [900, 0]));
     }
 }

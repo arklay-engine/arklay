@@ -1045,7 +1045,11 @@ impl GameState {
             return 0;
         };
         let enemy_pos = self.entities[slot].pos;
-        if weapon_adj < 5 && check_weapon_line_of_sight(self, room, enemy_pos) != 0 {
+        // The original runs the sight check for every weapon, projectiles
+        // included, and only then ignores the wall for slots >= 5
+        // (`apply_weapon_damage`, 0x0043c020): the check's flag
+        // write-back happens either way.
+        if check_weapon_line_of_sight(self, room, enemy_pos) != 0 && weapon_adj < 5 {
             return 0;
         }
         let enemy_type = self.entities[slot].id;
@@ -2442,6 +2446,27 @@ mod tests {
         );
         // The projectile class skips the line-of-sight rule (weapon slot >= 5).
         assert_eq!(game.apply_weapon_damage(&mut blocked_room, 10), 1);
+    }
+
+    #[test]
+    fn a_projectile_hit_still_runs_the_sight_check_write_back() {
+        use crate::state::CollisionRect;
+
+        let mut room = RoomState::default();
+        room.collision.quadrants[0].push(CollisionRect {
+            x_max: 3000,
+            z_max: 3000,
+            x_min: 2000,
+            z_min: 2000,
+            kind: 0x8201,
+            flags: 0x0005,
+        });
+        let mut game = armed_game();
+        game.entities[0].angle = 0;
+        place_enemy(&mut game, 1, 0x00, [800, 0, 0]);
+        // The rocket (slot 10) ignores walls but still walks the sight check.
+        assert_eq!(game.apply_weapon_damage(&mut room, 10), 1);
+        assert_eq!(room.collision.quadrants[0][0].flags, 0);
     }
 
     #[test]
