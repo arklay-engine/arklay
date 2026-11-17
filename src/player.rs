@@ -2783,15 +2783,17 @@ fn last_point_outside_walls(
 /// push stops where its line meets the wall and the resolve sets the player
 /// down at the near face. An RE 2 room's SCA collision resolves as before.
 ///
-/// The original has no such guard and, for Plant 42, never needs one. A
-/// push is under the two radii per axis (EntityCommon.cpp:649-687; the
-/// `2 * radiusA` bonus at 667 needs the player's height to change). The
-/// head box is radius 200 on joint 14 and the radius-2000 column stays at
-/// the plant's fixed origin (Plant42.cpp:64-69, 2262-2266, 2387-2392), so
-/// the column only undoes the player's own step and the head pushes under
-/// `200 + radius`, while 40C's thinnest wall is 1656 deep. No push reaches a
-/// wall's middle, past which `collision_push_rect` exits the far face
-/// (RoomCollision.cpp:148-233). The bot's 40C escapes came from the old
+/// The original has no such guard. The guard applies to every entity, but it
+/// is only shown behaviour-neutral for Plant 42. A push per axis is under
+/// the two radii plus, when the player's height changed, `2 * radiusA` of the
+/// entity's radius (EntityCommon.cpp:649-687, the bonus at 667). The head
+/// box is radius 200 on joint 14 and the radius-2000 column stays at the
+/// plant's fixed origin (Plant42.cpp:64-69, 2262-2266, 2387-2392), so the
+/// column only undoes the player's own step and the head pushes at most
+/// `200 + radius - 1 + 400`: 1021 for Chris. The middle of 40C's thinnest
+/// wall (1656 deep) is 828 past its face, so it needs more than
+/// `828 + radius` (1250); past the middle `collision_push_rect` exits the far
+/// face (RoomCollision.cpp:148-233). The bot's 40C escapes came from the old
 /// port carrying the column on the head joint.
 pub(crate) fn resolve_pushed_player(
     room: &RoomState,

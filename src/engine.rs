@@ -4149,7 +4149,13 @@ impl GameSession {
             // 2's status page has no such frame: it runs on every tick.
             if self.menu_open_delay {
                 self.menu_open_delay = false;
-                if !self.re2_status_page_runs() {
+                // Mode 1's state 0 raises 0xC4 on this very frame
+                // (MainMenu.cpp:453-464); its monitor starts on the next.
+                let put_down = self
+                    .pickup_view
+                    .as_ref()
+                    .is_some_and(|pickup| pickup.kind == PickupKind::PutDown);
+                if !put_down && !self.re2_status_page_runs() {
                     return Ok(());
                 }
             }
@@ -6630,13 +6636,17 @@ impl GameSession {
             game::ItemViewKind::DiscardKey => PickupKind::DiscardKey,
             game::ItemViewKind::PutDown => PickupKind::PutDown,
         };
+        // The menu script's open selects its first slot; put the selection
+        // back. The original sets `g_selectedItemId` to the item being taken
+        // as the mode opens, so the prompt's `\i` substitution names it,
+        // while mode 1 keeps the script's selection, empty included.
+        let selection = if kind == PickupKind::PutDown {
+            self.game.selected_item
+        } else {
+            Some(item)
+        };
         self.open_menu(pack);
-        // The original sets `g_selectedItemId` to the item being taken as the
-        // mode opens, so the prompt's `\i` substitution names it. Mode 1
-        // leaves the selection alone.
-        if kind != PickupKind::PutDown {
-            self.game.select_item(Some(item));
-        }
+        self.game.select_item(selection);
         let (screen, reader, phase) = match kind {
             // Mode 1 goes straight from the opening fade to 0xC4's prompt
             // (MainMenu.cpp:462).
@@ -37751,6 +37761,9 @@ off_0010:
                     .unwrap();
             place_player(&mut session);
             settle_control(&mut session, &pack);
+            // The Beretta in the first slot is what the menu script's open
+            // selects; the prompt must stay on the shotgun.
+            session.game.add_item(ITEM_BERETTA, 15);
             session.game.add_item(ITEM_SHOTGUN, 7);
             session.game.set_equipped(Some(ITEM_SHOTGUN));
             session.game.select_item(Some(ITEM_SHOTGUN));
@@ -37762,6 +37775,11 @@ off_0010:
                 .unwrap();
             assert!(session.pickup_view.is_some(), "the bit opened the prompt");
             assert!(session.menu.is_some(), "the inventory panel is underneath");
+            assert_eq!(
+                session.game.selected_item,
+                Some(ITEM_SHOTGUN),
+                "the menu's open keeps the script's selection"
+            );
             assert!(
                 session
                     .pickup_view
@@ -37796,6 +37814,7 @@ off_0010:
                 !put_down,
                 "Yes puts the shotgun down, No keeps it"
             );
+            assert!(session.game.has_item(ITEM_BERETTA), "the Beretta stays");
             assert_eq!(
                 session.game.state_bytes[usize::from(game::STATE_BYTE_USED_ITEM)] == ITEM_SHOTGUN,
                 put_down,
@@ -37818,6 +37837,50 @@ off_0010:
             assert!(!session.game.menu_pending());
             assert_eq!(session.game.item_view_request(), None);
         }
+    }
+
+    /// Mode 1's state 0 raises 0xC4 on the first frame it sees the opening
+    /// fade finished, and state 2 draws the first monitor frame on the next
+    /// (MainMenu.cpp:453-464, 520-526).
+    #[test]
+    fn a_scripted_put_down_prompts_on_the_fade_completion_frame() {
+        let dir = TempDir::new();
+        let pack_path = message_pack(&dir);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut session =
+            GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
+                .unwrap();
+        place_player(&mut session);
+        settle_control(&mut session, &pack);
+        session.game.add_item(ITEM_SHOTGUN, 7);
+        session.game.select_item(Some(ITEM_SHOTGUN));
+        session.game.apply_flag(5, 18, 0);
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        assert!(session.pickup_view.is_some(), "the bit opened the prompt");
+        tick_until(&mut session, &pack, 300, "the opening fade", |session| {
+            session.menu_fade_phase == MenuFadePhase::None
+        });
+        assert!(session.menu_open_delay, "the fade has just completed");
+        assert_eq!(session.game.message.id, None);
+        let monitor = |session: &GameSession| session.menu.as_ref().unwrap().value("monitor");
+        assert_eq!(monitor(&session), 0);
+
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        assert_eq!(
+            session.game.message.id,
+            Some(game::MESSAGE_PUT_DOWN),
+            "state 0 raises 0xC4 on the fade's completion frame"
+        );
+        assert_eq!(monitor(&session), 0, "state 0 draws no monitor");
+
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        assert_eq!(monitor(&session), 1, "state 2 starts the monitor");
     }
 
     /// The inventory panel under the pick-up viewer keeps its health monitor
