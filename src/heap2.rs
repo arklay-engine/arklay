@@ -23,6 +23,8 @@ pub const WORK_SIZE: usize = 0x248;
 pub const PART_SIZE: usize = 0xAC;
 /// `Dest`'s offset in a work.
 pub const DEST: usize = 0x1C4;
+/// `Spd_x`, `Spd_y` and `Spd_z`'s offset in a work.
+pub const SPD: usize = 0x144;
 /// A part's `Poly_rgb`, which `PartsWork_link` sets to 0x808080.
 const PART_POLY_RGB: usize = 0x70;
 /// `Snd_bgm_main` and `Snd_bgm_sub` load their bank at `Mem_top + 0x10` (rounded down to 16 bytes),
@@ -219,6 +221,26 @@ impl Image {
     }
 }
 
+/// What a new work's memory held at the fields some inits leave as they find them, each when it's
+/// known.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Held {
+    /// `Dest`, which neither `Sce_em_set` nor the zombies' inits set.
+    pub dest: Option<[i16; 2]>,
+    /// `Spd_x`, `Spd_y` and `Spd_z`, which the licker keeps until its first move.
+    pub spd: Option<[i16; 3]>,
+}
+
+/// The `N` signed words at `at`, when every byte is known.
+fn words<const N: usize>(image: &Image, at: usize) -> Option<[i16; N]> {
+    let known = image.known.get(at..at.checked_add(N * 2)?)?;
+    known.iter().all(|&k| k).then(|| {
+        std::array::from_fn(|i| {
+            i16::from_le_bytes([image.bytes[at + 2 * i], image.bytes[at + 2 * i + 1]])
+        })
+    })
+}
+
 /// A work put in play this room.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Work {
@@ -355,9 +377,8 @@ impl Heap {
 
     /// `Sce_em_set` puts enemy `id` (model type `model_type`, as the script gives it) in `slot`: its
     /// work at `Mem_top`, its model after it unless the last `Sce_em_set` loaded the same id, and its
-    /// parts. Returns the `Dest` the work holds, when it's known. `disc` is the scenario's (0 Leon,
-    /// 1 Claire), whose folder the files come from; `mirror` is `fg_status`'s 0x10000, whose
-    /// `Mirror_model_cp` isn't modelled; `loading` is a set by the load's scripts.
+    /// parts. Returns what the work's memory holds ([`Held`]). `disc` is the scenario's (0 Leon,
+    /// 1 Claire), whose folder the files come from; `loading` is a set by the load's scripts.
     #[allow(clippy::too_many_arguments)]
     pub fn em_set(
         &mut self,
@@ -366,21 +387,23 @@ impl Heap {
         id: u8,
         model_type: u8,
         disc: u8,
-        mirror: bool,
         loading: bool,
-    ) -> Option<[i16; 2]> {
-        let at = self.top?;
+    ) -> Held {
+        let Some(at) = self.top else {
+            return Held::default();
+        };
         let image = Arc::make_mut(&mut self.image);
-        let start = image.word(at + DEST).map(|word| {
-            let [a, b, c, d] = word.to_le_bytes();
-            [i16::from_le_bytes([a, b]), i16::from_le_bytes([c, d])]
-        });
+        let start = words(image, at + DEST);
+        let held = Held {
+            dest: start,
+            spd: words(image, at + SPD),
+        };
         self.works.push(Work { slot, at, start });
         image.forget(at, WORK_SIZE);
         if (0x50..=0x5A).contains(&id) {
             // `Emd_load` picks these models' files by the zapping flags.
             self.top = None;
-            return start;
+            return held;
         }
         let buffer = at + WORK_SIZE;
         let parts = match self.model.filter(|model| model.id == id) {
@@ -407,14 +430,14 @@ impl Heap {
                     None => {
                         self.model = None;
                         self.top = None;
-                        return start;
+                        return held;
                     }
                 }
             }
         };
         let Some(top) = self.top.filter(|&top| top < CAP) else {
             self.top = None;
-            return start;
+            return held;
         };
         image.forget(top, parts * PART_SIZE);
         for part in 0..parts {
@@ -424,24 +447,26 @@ impl Heap {
             );
         }
         self.top = Some(top + parts * PART_SIZE).filter(|&top| top < CAP);
-        // A mirror's copy of the model, and an init that allocates more after its work at its first
-        // move (Mr. X's and the G's joints, Ada's, Leon's as a partner), leave `Mem_top` where this
-        // doesn't follow it.
-        if mirror {
-            self.top = None;
-        } else if !plain_init(id) {
+        // An init that allocates more after its work at its first move (Mr. X's and the G's joints,
+        // Ada's, Leon's as a partner) leaves `Mem_top` where this doesn't follow it.
+        if !plain_init(id) {
             if loading {
                 self.pending_init = true;
             } else {
                 self.top = None;
             }
         }
-        start
+        held
     }
 
-    /// `Psp_init0` and `Psp_init1`, after the load's scripts: the RDT's `rdt[7]` works of
-    /// 0x44 bytes at `Mem_top`.
-    pub fn after_load(&mut self) {
+    /// The end of `Sce_scheduler_set`, then `Psp_init0` and `Psp_init1`: with `fg_status`'s
+    /// 0x10000 up (`mirror`), `Sce_mirror_init` copies the player's parts to `Mem_top`
+    /// (`Mirror_model_cp`), which isn't followed; then the RDT's `rdt[7]` works of 0x44 bytes at
+    /// `Mem_top`.
+    pub fn after_load(&mut self, mirror: bool) {
+        if mirror {
+            self.top = None;
+        }
         let sprites = usize::from(self.sprites);
         if let Some(top) = self.top {
             Arc::make_mut(&mut self.image).forget(top, sprites * PSP_SIZE);

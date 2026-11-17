@@ -79,13 +79,34 @@ fn a_work_starts_with_the_rdt_bytes_under_it() {
     ]);
     let mut heap = Heap::default();
     heap.enter_room(&files, "1000", NO_MUSIC, false);
-    let held = heap.em_set(&files, 0, ZOMBIE, 0, 0, false, true);
+    let held = heap.em_set(&files, 0, ZOMBIE, 0, 0, true).dest;
     assert_eq!(held, Some(word_at(&room, 0x100 + DEST)));
     // The next work of the same id shares the model: it sits on the model's bytes.
     let model = zombie_model();
-    let held = heap.em_set(&files, 1, ZOMBIE, 0, 0, false, true);
+    let held = heap.em_set(&files, 1, ZOMBIE, 0, 0, true).dest;
     let at = second_work(0x100) - (0x100 + WORK_SIZE);
     assert_eq!(held, Some(word_at(&model, at + DEST)));
+}
+
+/// Room 20E's licker (neither `Sce_em_set` nor `Em22_Init` writes `Spd`) sits on its RDT's
+/// section 2: its speed is the bytes there.
+#[test]
+fn a_work_holds_the_rdt_bytes_at_spd() {
+    let room = rdt(0x2000, 0x100);
+    let files = files(vec![(rdt_entry("1000"), room.clone())]);
+    let mut heap = Heap::default();
+    heap.enter_room(&files, "1000", NO_MUSIC, false);
+    let held = heap.em_set(&files, 0, 0x22, 0, 0, true);
+    let [x, y] = word_at(&room, 0x100 + SPD);
+    let z = i16::from_le_bytes([room[0x100 + SPD + 4], room[0x100 + SPD + 5]]);
+    assert_eq!(held.spd, Some([x, y, z]));
+    // A work on bytes nothing wrote holds nothing known.
+    let mut heap = Heap::default();
+    heap.enter_room(&files, "1000", NO_MUSIC, false);
+    Arc::make_mut(&mut heap.image).forget(0x100 + SPD + 4, 1);
+    let held = heap.em_set(&files, 0, 0x22, 0, 0, true);
+    assert_eq!(held.spd, None);
+    assert!(held.dest.is_some());
 }
 
 #[test]
@@ -102,12 +123,12 @@ fn a_slots_dest_survives_a_load_into_a_room_whose_zombie_does_not_set_it() {
     ]);
     let mut heap = Heap::default();
     heap.enter_room(&files, "1000", NO_MUSIC, false);
-    heap.em_set(&files, 0, ZOMBIE, 0, 0, false, true);
-    heap.em_set(&files, 1, ZOMBIE, 0, 0, false, true);
-    heap.after_load();
+    heap.em_set(&files, 0, ZOMBIE, 0, 0, true);
+    heap.em_set(&files, 1, ZOMBIE, 0, 0, true);
+    heap.after_load(false);
     heap.leave_room(|slot| Some([slot as i16 * 100 + 7, -300]));
     heap.enter_room(&files, "1010", NO_MUSIC, false);
-    let held = heap.em_set(&files, 3, 0x13, 0, 0, false, true);
+    let held = heap.em_set(&files, 3, 0x13, 0, 0, true).dest;
     assert_eq!(held, Some([107, -300]), "slot 1's last `Dest`");
 }
 
@@ -126,11 +147,11 @@ fn a_new_occupant_overwrites_what_its_load_writes() {
     ]);
     let mut heap = Heap::default();
     heap.enter_room(&files, "1000", NO_MUSIC, false);
-    heap.em_set(&files, 0, ZOMBIE, 0, 0, false, true);
-    heap.em_set(&files, 1, ZOMBIE, 0, 0, false, true);
+    heap.em_set(&files, 0, ZOMBIE, 0, 0, true);
+    heap.em_set(&files, 1, ZOMBIE, 0, 0, true);
     heap.leave_room(|_| Some([1, 2]));
     heap.enter_room(&files, "1010", NO_MUSIC, false);
-    heap.em_set(&files, 0, 0x13, 0, 0, false, true);
+    heap.em_set(&files, 0, 0x13, 0, 0, true);
     // 1000's second work's `Dest` now holds the model's bytes.
     let image = &heap.image;
     let at = second + DEST;
@@ -156,13 +177,13 @@ fn a_dest_never_given_stays_unknown() {
     let mut heap = Heap::default();
     // Room 1000's second work sits past what this boot wrote: its `Dest` is unknown.
     heap.enter_room(&files, "1000", NO_MUSIC, false);
-    heap.em_set(&files, 0, ZOMBIE, 0, 0, false, true);
+    heap.em_set(&files, 0, ZOMBIE, 0, 0, true);
     Arc::make_mut(&mut heap.image).forget(second, WORK_SIZE);
-    assert_eq!(heap.em_set(&files, 1, ZOMBIE, 0, 0, false, true), None);
+    assert_eq!(heap.em_set(&files, 1, ZOMBIE, 0, 0, true).dest, None);
     // `Root_ck` never gave it one: still 0 when the room ends.
     heap.leave_room(|_| Some([0, 0]));
     heap.enter_room(&files, "1010", NO_MUSIC, false);
-    assert_eq!(heap.em_set(&files, 0, ZOMBIE, 0, 0, false, true), None);
+    assert_eq!(heap.em_set(&files, 0, ZOMBIE, 0, 0, true).dest, None);
 }
 
 #[test]
@@ -177,10 +198,10 @@ fn the_first_model_of_a_room_keeps_its_tmd_where_the_file_has_it() {
     ]);
     let mut heap = Heap::default();
     heap.enter_room(&files, "1000", NO_MUSIC, false);
-    heap.em_set(&files, 0, ZOMBIE, 0x80, 0, false, true);
+    heap.em_set(&files, 0, ZOMBIE, 0x80, 0, true);
     let moved = second_work(0x100);
     assert_eq!(heap.top, Some(moved), "not moved");
-    heap.em_set(&files, 1, 0x13, 0x80, 0, false, true);
+    heap.em_set(&files, 1, 0x13, 0x80, 0, true);
     // Moved: the TMD goes to 0x1000, so the model ends at 0x1800.
     assert_eq!(heap.top, Some(moved + WORK_SIZE + 0x1800 + 2 * PART_SIZE));
     let buffer = moved + WORK_SIZE;
@@ -198,7 +219,7 @@ fn a_parts_colour_is_known() {
     ]);
     let mut heap = Heap::default();
     heap.enter_room(&files, "1000", NO_MUSIC, false);
-    heap.em_set(&files, 0, ZOMBIE, 0, 0, false, true);
+    heap.em_set(&files, 0, ZOMBIE, 0, 0, true);
     let parts = 0x100 + WORK_SIZE + 0x3800;
     assert_eq!(heap.image.word(parts + PART_POLY_RGB), Some(0x80_8080));
     assert_eq!(
@@ -217,11 +238,11 @@ fn an_init_that_allocates_ends_what_is_known_after_the_load() {
     ]);
     let mut heap = Heap::default();
     heap.enter_room(&files, "1000", NO_MUSIC, false);
-    heap.em_set(&files, 0, 0x2A, 0, 0, false, true);
+    heap.em_set(&files, 0, 0x2A, 0, 0, true);
     // Mr. X's joints come at his first move, after the load's sets.
-    assert!(heap.em_set(&files, 1, ZOMBIE, 0, 0, false, true).is_some());
-    heap.after_load();
-    assert_eq!(heap.em_set(&files, 2, ZOMBIE, 0, 0, false, false), None);
+    assert!(heap.em_set(&files, 1, ZOMBIE, 0, 0, true).dest.is_some());
+    heap.after_load(false);
+    assert_eq!(heap.em_set(&files, 2, ZOMBIE, 0, 0, false).dest, None);
 }
 
 #[test]
@@ -236,14 +257,14 @@ fn an_init_run_again_starts_from_the_loads_image() {
     ]);
     let mut heap = Heap::default();
     heap.enter_room(&files, "1000", NO_MUSIC, false);
-    heap.em_set(&files, 0, ZOMBIE, 0, 0, false, true);
-    heap.em_set(&files, 1, ZOMBIE, 0, 0, false, true);
+    heap.em_set(&files, 0, ZOMBIE, 0, 0, true);
+    heap.em_set(&files, 1, ZOMBIE, 0, 0, true);
     heap.leave_room(|_| Some([5, 6]));
     heap.enter_room(&files, "1010", NO_MUSIC, false);
-    let first = heap.em_set(&files, 0, 0x13, 0, 0, false, true);
-    heap.after_load();
+    let first = heap.em_set(&files, 0, 0x13, 0, 0, true).dest;
+    heap.after_load(false);
     heap.enter_room(&files, "1010", NO_MUSIC, true);
-    assert_eq!(heap.em_set(&files, 0, 0x13, 0, 0, false, true), first);
+    assert_eq!(heap.em_set(&files, 0, 0x13, 0, 0, true).dest, first);
     assert_eq!(first, Some([5, 6]));
 }
 
@@ -287,7 +308,7 @@ fn the_originals_numbers() {
     // The first work at section 2 (0x100): its `Dest` at 0x2C4.
     heap.enter_room(&files, "1000", NO_MUSIC, false);
     assert_eq!(
-        heap.em_set(&files, 0, ZOMBIE, 0, 0, false, true),
+        heap.em_set(&files, 0, ZOMBIE, 0, 0, true).dest,
         Some([0x1234, 0x5678])
     );
     // The model at 0x348; its TMD (0x3000, 0x800 long) ends at 0x3B48, then two parts of 0xAC, the
@@ -296,7 +317,7 @@ fn the_originals_numbers() {
     assert_eq!(heap.image.word(0x3BB8 + 0xAC), Some(0x80_8080));
     assert_eq!(heap.top, Some(0x3CA0));
     assert_eq!(
-        heap.em_set(&files, 1, ZOMBIE, 0, 0, false, true),
+        heap.em_set(&files, 1, ZOMBIE, 0, 0, true).dest,
         Some(word_at(&model, 0x3B1C))
     );
     // The header's section 2 offset is relocated to `Work_buffer`'s 0x8FF8A0.
@@ -318,7 +339,7 @@ fn model_type_0x40_moves_what_follows_the_sub_animations_down() {
     ]);
     let mut heap = Heap::default();
     heap.enter_room(&files, "1000", NO_MUSIC, false);
-    heap.em_set(&files, 0, ZOMBIE, 0x40, 0, false, true);
+    heap.em_set(&files, 0, ZOMBIE, 0x40, 0, true);
     // From the first sub-animation (0x1000) on, down to the main ones (0xC): the TMD is at 0x200C.
     let buffer = 0x100 + WORK_SIZE;
     assert_eq!(
@@ -337,7 +358,7 @@ fn the_tmds_pointers_are_mapped() {
     ]);
     let mut heap = Heap::default();
     heap.enter_room(&files, "1000", NO_MUSIC, false);
-    heap.em_set(&files, 0, ZOMBIE, 0, 0, false, true);
+    heap.em_set(&files, 0, ZOMBIE, 0, 0, true);
     let tmd = 0x100 + WORK_SIZE + 0x3000;
     assert_eq!(heap.image.word(tmd + 4), Some(1));
     let table = tmd + 0xC;
@@ -386,24 +407,31 @@ fn the_zapping_models_a_mirror_and_an_em_set2_end_what_is_known() {
         let mut heap = Heap::default();
         heap.enter_room(&files, "1000", NO_MUSIC, false);
         first(&mut heap);
-        heap.em_set(&files, 1, ZOMBIE, 0, 0, false, true)
+        heap.em_set(&files, 1, ZOMBIE, 0, 0, true).dest
     };
     // `Emd_load` picks 0x50 to 0x5A's files by the zapping flags.
     for id in [0x50, 0x55, 0x5A] {
         assert_eq!(
             after(&|heap: &mut Heap| {
-                assert!(heap.em_set(&files, 0, id, 0, 0, false, true).is_some());
+                assert!(heap.em_set(&files, 0, id, 0, 0, true).dest.is_some());
             }),
             None,
             "{id:#x}"
         );
     }
-    // `Mirror_model_cp`.
+    // `Mirror_model_cp`, after the load's scripts: a work the load puts in play is still followed.
     assert_eq!(
         after(&|heap: &mut Heap| {
-            heap.em_set(&files, 0, ZOMBIE, 0, 0, true, true);
+            heap.em_set(&files, 0, ZOMBIE, 0, 0, true);
+            heap.after_load(true);
         }),
         None
+    );
+    assert!(
+        after(&|heap: &mut Heap| {
+            heap.em_set(&files, 0, ZOMBIE, 0, 0, true);
+        })
+        .is_some()
     );
     assert_eq!(after(&|heap: &mut Heap| heap.em_set2()), None);
     assert!(after(&|_: &mut Heap| {}).is_some());
@@ -422,7 +450,7 @@ fn rbj_reset_forgets_what_it_moves() {
     assert_eq!(heap.image.word(0xFFC), None);
     assert!(heap.image.word(0x7FC).is_some());
     assert!(heap.image.word(0x1000).is_some());
-    assert_eq!(heap.em_set(&files, 0, ZOMBIE, 0, 0, false, true), None);
+    assert_eq!(heap.em_set(&files, 0, ZOMBIE, 0, 0, true).dest, None);
 }
 
 #[test]
@@ -430,7 +458,7 @@ fn the_computers_work_is_unknown() {
     let files = files(vec![(rdt_entry("2000"), rdt(0x8000, 0x100))]);
     let mut heap = Heap::default();
     heap.enter_room(&files, "2000", NO_MUSIC, false);
-    heap.after_load();
+    heap.after_load(false);
     heap.scratch(COMPUTER_SIZE);
     assert_eq!(heap.image.word(0x100), None);
     assert_eq!(heap.image.word(0x100 + 0x53DC), None);
@@ -448,9 +476,9 @@ fn nothing_past_the_cap_is_kept() {
     ]);
     let mut heap = Heap::default();
     heap.enter_room(&files, "1000", NO_MUSIC, false);
-    assert_eq!(heap.em_set(&files, 0, ZOMBIE, 0, 0, false, true), None);
+    assert_eq!(heap.em_set(&files, 0, ZOMBIE, 0, 0, true).dest, None);
     heap.enter_room(&files, "1010", NO_MUSIC, false);
-    heap.em_set(&files, 0, ZOMBIE, 0, 0, false, true);
+    heap.em_set(&files, 0, ZOMBIE, 0, 0, true);
     assert!(heap.image.bytes.len() <= CAP);
     assert_eq!(heap.top, None);
 }

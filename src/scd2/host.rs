@@ -181,6 +181,10 @@ pub struct Re2State {
     pub effect_sounds: Vec<SoundRequest>,
     /// `sce_scr_move`: how far the background has scrolled down.
     pub scroll: i16,
+    /// `mirror_set`'s plane (`0x989E75` to `0x989E7B`), which the mirrored
+    /// drawing reads while `fg_status`'s 0x10000 is up. Nothing clears it: the
+    /// next `mirror_set` writes over it.
+    pub mirror: Mirror,
     /// `Rnd`, for what's ported to its stream. A save doesn't hold it: the
     /// room's load seeds it.
     pub rnd: crate::zombie2::Rnd,
@@ -566,8 +570,21 @@ const STATUS_ENEMY_FLAGS: u8 = 6;
 pub const STATUS_PLAYER: u8 = 0;
 /// `fg_status`'s `0x10000000`: the partner is with the player.
 const PARTNER_BIT: u8 = 3;
-/// `fg_status`'s `0x10000`: the room has a mirror (`Sce_mirror_init`).
-const MIRROR_STATUS: u8 = 15;
+/// `fg_status`'s `0x10000`: the room has a mirror (`Mirror_set`,
+/// `Sce_mirror_init`). `Set_room`'s mask lowers it on the next load.
+pub const MIRROR_STATUS: u8 = 15;
+
+/// `mirror_set`'s plane: the axis it's across (`DWORD_00989e74`'s second
+/// byte: 0 z, 1 x, 2 y), where on it (the third and fourth bytes), and the
+/// span of the view's other axis that shows the reflection (`WORD_00989e7a`
+/// to `WORD_00989e78`, which `Mirror_in_view` reads).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Mirror {
+    pub axis: u8,
+    pub at: i16,
+    pub from: i16,
+    pub to: i16,
+}
 /// `fg_status`'s `0x2000`: `Om_move` pushed an object this tick.
 const PUSH_BIT: u8 = 18;
 /// `fg_stop`'s `0x8000000`: the objects don't move.
@@ -911,6 +928,7 @@ impl Default for Re2State {
             sounds: Vec::new(),
             effect_sounds: Vec::new(),
             scroll: 0,
+            mirror: Mirror::default(),
             rnd: Default::default(),
             tongue_owner: 0,
             em2d_groan: 0,
@@ -2437,7 +2455,6 @@ impl GameHost<'_> {
             id,
             at(7) as u8,
             self.game.id.player_flag & 1,
-            self.game.re2.flag(1, MIRROR_STATUS),
             self.game.re2.room_loading,
         );
         if slot != SPLAYER_SLOT {
@@ -2492,8 +2509,12 @@ impl GameHost<'_> {
         let kind = (at(3) as u16) | (at(4) as u16) << 8;
         if zombie {
             work.kind = kind;
-            if let Some(dest) = held {
+            if let Some(dest) = held.dest {
                 work.dest = dest;
+            }
+            // `Em22_Init` and `Em_24`'s init don't set `Spd`.
+            if licker && let Some(spd) = held.spd {
+                work.spd = spd;
             }
             let room = u16::from(self.game.id.stage) << 8 | u16::from(self.game.id.room);
             let given = &mut self.game.re2_enemy_dest;
@@ -2544,7 +2565,12 @@ impl GameHost<'_> {
                 let mut zombie = crate::zombie2::spawned(slot as u8, at(5) as u8, at(7) as u8);
                 zombie.dead_flag = dead;
                 if licker {
-                    zombie.licker = Some(Box::default());
+                    // `Sce_em_set` sets `Sca_old_x` and `Sca_old_z` to where it puts the work,
+                    // which the licker's first `Sca_ck_em` starts from.
+                    zombie.licker = Some(Box::new(crate::zombie2::licker::Licker::placed([
+                        at(9) as i16,
+                        at(11) as i16,
+                    ])));
                 }
                 for (index, value) in vars {
                     zombie.set_var(index, value);
@@ -2994,6 +3020,16 @@ impl Host for GameHost<'_> {
             }
             "cut_auto" => self.game.camera.locked = at(0) == 0,
             "sce_scr_move" => self.game.re2.scroll = at(1) as i16,
+            // `Mirror_set` (0x4E8DB0).
+            "mirror_set" => {
+                self.game.re2.set_flag(STATUS_BANK, MIRROR_STATUS, 1);
+                self.game.re2.mirror = Mirror {
+                    axis: at(0) as u8,
+                    at: at(1) as i16,
+                    from: at(2) as i16,
+                    to: at(3) as i16,
+                };
+            }
             // `Weapon_chg`: `Pl_weapon_ch` follows when the tick next looks.
             "weapon_chg" => self
                 .game
@@ -3615,6 +3651,25 @@ mod tests {
         GameHost { game }.exec(0, op, operands);
     }
 
+    /// Room 20E's window (`mirror_set(0, -19800, -25000, -19000)`): the flag
+    /// is up until the next load's `Set_room` mask, and the plane stays.
+    #[test]
+    fn mirror_set_raises_fg_status_0x10000_and_keeps_the_plane() {
+        let mut game = GameState::default();
+        exec(&mut game, "mirror_set", &[0, 45736, 40536, 46536]);
+        assert_eq!(game.re2.banks[usize::from(STATUS_BANK)][0], 0x10000);
+        let plane = Mirror {
+            axis: 0,
+            at: -19800,
+            from: -25000,
+            to: -19000,
+        };
+        assert_eq!(game.re2.mirror, plane);
+        game.re2.enter_room_status();
+        assert!(!game.re2.flag(STATUS_BANK, MIRROR_STATUS));
+        assert_eq!(game.re2.mirror, plane);
+    }
+
     #[test]
     fn movie_on_with_the_films_off_leaves_0x200_down_and_asks_for_two_held_frames() {
         let mut game = GameState::default();
@@ -4071,6 +4126,20 @@ mod tests {
         assert_eq!(character.body.pos, [-14869, -5700, -3479]);
         assert_eq!(character.work.sce_free[0], 1);
         assert_eq!(character.body.angle, angle);
+    }
+
+    /// Room 20E's licker from door 2 (`Type` 0x4013): `Sce_em_set` leaves
+    /// `Sca_old` at its place, which its first `Sca_ck_em` starts from.
+    #[test]
+    fn a_new_licker_starts_its_sca_old_where_it_is_put() {
+        let mut game = GameState::default();
+        let licker = [
+            0, 0, 0x22, 0x13, 0x40, 0, 14, 0, 108, -21478, -800, -27503, 3072, 0, 0,
+        ];
+        exec(&mut game, "sce_em_set", &licker);
+        let character = game.re2.characters.0[0].as_ref().unwrap();
+        let licker = character.zombie.as_ref().unwrap().licker.as_ref().unwrap();
+        assert_eq!(licker.sca_old, [-21478, -27503]);
     }
 
     /// `main_02`'s other branch, once 4:86 is set: a plain ceiling licker.

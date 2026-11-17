@@ -52,7 +52,7 @@ pub struct Licker {
     /// `Timer1`.
     pub(super) timer1: i16,
     /// `Sca_old_x`, `Sca_old_z`.
-    sca_old: [i32; 2],
+    pub(crate) sca_old: [i32; 2],
     /// `Atd[0]`'s `Atw_x` and `Atw_z`: its `Ofs` turned with the body, as the
     /// last `Oba_set_ofs` left them for `Sca_ck_em`.
     atw: [i32; 2],
@@ -69,6 +69,16 @@ pub struct Licker {
     /// Every part's `Workm` from the last `Joint_trans2`, which a part the
     /// script hides keeps.
     parts: Vec<Option<player2::Matrix>>,
+}
+
+impl Licker {
+    /// A new work, with `Sca_old_x` and `Sca_old_z` as `Sce_em_set` leaves them.
+    pub fn placed(sca_old: [i16; 2]) -> Self {
+        Self {
+            sca_old: sca_old.map(i32::from),
+            ..Self::default()
+        }
+    }
 }
 
 /// `Em22_before`, which `Game_loop` calls before `Joint_trans2`: its drool is

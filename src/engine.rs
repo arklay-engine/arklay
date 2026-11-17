@@ -18435,8 +18435,12 @@ fn run_re2_init(
     // The load's last step (`0x5023D0`) marks the room visited and its floor
     // stood on, for the MAP page.
     game.re2_room_set();
-    // `Psp_init0` and `Psp_init1`, after the scheduler's first pass.
-    game.re2_heap.after_load();
+    // `Sce_mirror_init`, then `Psp_init0` and `Psp_init1`, after the scheduler's first pass.
+    let mirror = game.re2.flag(
+        crate::scd2::host::STATUS_BANK,
+        crate::scd2::host::MIRROR_STATUS,
+    );
+    game.re2_heap.after_load(mirror);
     game.re2.vm = Some(Box::new(vm));
 }
 
