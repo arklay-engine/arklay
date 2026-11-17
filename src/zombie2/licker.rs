@@ -313,11 +313,7 @@ impl Em22<'_, '_, '_, '_> {
     fn oba_set_ofs(&mut self, at: [i32; 3]) {
         let angle = self.em.mover.player.angle;
         let m = self.em.work().body_rotation(angle);
-        self.l.atw = place(&m, at, &mut self.em.z.atd);
-        place(&m, at, &mut self.l.head);
-        if let Some(back) = &mut self.l.back {
-            place(&m, at, back);
-        }
+        place_boxes(self.l, &mut self.em.z.atd, &m, at);
     }
 
     /// `Sca_ck_em`, on `Atd[0]`.
@@ -333,7 +329,7 @@ impl Em22<'_, '_, '_, '_> {
         let at = self.em.z.atd.at;
         let [old_x, old_z] = self.l.sca_old;
         let prev = [old_x, self.em.mover.player.pos[1], old_z];
-        let resolved = sca_resolve(sca, prev, &self.em.z.atd, self.l.atw, self.em.z.floor);
+        let resolved = sca_resolve(sca, prev, &self.em.z.atd, self.l, self.em.z.floor);
         let (dx, dz) = (resolved.pos[0] - at[0], resolved.pos[2] - at[2]);
         let body = &mut *self.em.mover.player;
         body.pos[0] += dx;
@@ -365,18 +361,30 @@ fn place(m: &super::surface::Rotation, at: [i32; 3], atd: &mut Atd) -> [i32; 2] 
     [i32::from(ofs[0] as i16), i32::from(ofs[2] as i16)]
 }
 
+/// `Oba_set_ofs` on the licker's boxes: `Atd[0]`, the head and, on a wall or
+/// the ceiling, the back. It leaves `Atd[0]`'s turned offset in `Licker::atw`
+/// for `Sca_ck_em`.
+fn place_boxes(l: &mut Licker, atd: &mut Atd, m: &super::surface::Rotation, at: [i32; 3]) {
+    l.atw = place(m, at, atd);
+    place(m, at, &mut l.head);
+    if let Some(back) = &mut l.back {
+        place(m, at, back);
+    }
+}
+
 /// `Sca_ck_info` on `Atd[0]`, with the room's records for the enemies.
 /// `Sca_hit_hishi` reads the box's `Atw_x` and `Atw_z` as well, so a diamond
-/// is tested `Ofs` further on (`0x2A0` ahead of a licker on the floor).
+/// is tested `Ofs` further on (`0x2A0` ahead of a licker on the floor): the
+/// offset is the one the licker's last `Oba_set_ofs` left.
 fn sca_resolve(
     sca: &crate::state::Sca,
     prev: [i32; 3],
     atd: &Atd,
-    atw: [i32; 2],
+    l: &Licker,
     floor: u8,
 ) -> crate::sca::Resolved {
     let radius = i32::from(atd.w);
-    crate::sca::resolve_with_offset(sca, super::MASK, prev, atd.at, radius, floor, atw)
+    crate::sca::resolve_with_offset(sca, super::MASK, prev, atd.at, radius, floor, l.atw)
 }
 
 #[cfg(test)]
@@ -486,31 +494,19 @@ mod tests {
         };
         // Facing -x, towards the diamond's right-hand corner.
         let m = player2::rot_matrix([0, 0x800, 0]);
-        let atw = place(&m, [3828, 0, 3000], &mut atd);
-        assert_eq!(atw, [-672, 0]);
+        // The licker's own `Oba_set_ofs` leaves the offset `Sca_ck_em` reads.
+        let mut licker = Licker::default();
+        place_boxes(&mut licker, &mut atd, &m, [3828, 0, 3000]);
+        assert_eq!(licker.atw, [-672, 0]);
         assert_eq!(atd.at, [3156, 0, 3000]);
         let prev = [3256, 0, 3100];
-        let clear = sca_resolve(
-            &sca,
-            prev,
-            &Atd {
-                at: [4500, 0, 3000],
-                ..atd
-            },
-            [0, 0],
-            4,
-        );
+        let at_the_edge = Atd {
+            at: [4500, 0, 3000],
+            ..atd
+        };
+        let clear = sca_resolve(&sca, prev, &at_the_edge, &Licker::default(), 4);
         assert!(!clear.hit, "1060 from the edge, outside the box's reach");
-        let met = sca_resolve(
-            &sca,
-            prev,
-            &Atd {
-                at: [4500, 0, 3000],
-                ..atd
-            },
-            atw,
-            4,
-        );
+        let met = sca_resolve(&sca, prev, &at_the_edge, &licker, 4);
         assert!(met.hit, "585 from the edge once Atw is added");
         assert_ne!(met.pos, [4500, 0, 3000]);
     }
