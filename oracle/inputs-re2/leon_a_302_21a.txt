@@ -1,0 +1,55 @@
+# leon_a_302_21a: Leon A with the Club Key from 302 door 1 back round the west side past the two spiders to the ladder (aot 3: its message, the press on the second confirms Yes), up to 21A
+345 up run right
+380 up run
+384 up run right
+385 up run
+391 up run right
+392 up run
+398 up run right
+399 up run
+413 up run right
+414 up run
+457 up run right
+458 up run
+470 up run left
+471 up run
+474 up run left
+475 up run
+479 up run left
+480 up run
+483 up run left
+484 up run
+485 up run left
+486 up run
+488 up run left
+490 up run
+491 up run left
+494 up run
+495 up run left
+499 up run
+561 up run left
+563 up run
+581 up run left
+582 up run
+594 up run left
+595 up run
+598 up run left
+599 up run
+601 up run left
+618 up run
+698 up run left
+699 up run
+717 up run left
+718 up run
+720 up run left
+746 up run right
+751 up run
+757 up run right
+758 up run
+763 up run right
+765
+767 right
+787 action
+789
+849 action
+851
