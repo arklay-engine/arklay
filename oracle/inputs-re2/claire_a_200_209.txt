@@ -1,0 +1,253 @@
+# Claire A from the foot of 110's ladder in 200 through 201, 204, 205 and 207 to 209, the Diamond Key at 207's door 4 (#685 Part 2) (oracle/re2.md, "Claire A to the Heart Key")
+# made in arklay by waypoints along leon_a_200_209's path (Leon's presses fit his 84 life's pace, not Claire's): 200 west, down the west stairs and on to door 1; 201 to door 1; 204 west and north to door 1 (Claire has no rounds to take in 203); 205 with 4:48 set, out of the bodies' reach, to door 2; 207 south to door 4: the used-key message, the close (a use off) and the press that opens it, up held through 209's load
+344 right
+353 up run right
+358 right
+360 up run right
+361 right
+363 up run right
+364 up run
+368 up run left
+369 up run
+371 up run left
+372 up run
+374 up run left
+375 up run
+377 up run left
+378 up run
+400 up run left
+401 up run
+402 up run left
+404 left
+412 up run left
+420 up run right
+421 up run
+422 up run right
+423 up run
+426 up run right
+427 up run
+429 up run right
+430 up run
+431 up run right
+432 up run
+433 up run right
+434 up run
+447 up run left
+448 up run
+460 up run left
+461 up run
+471 up run right
+472 up run
+473 up run right
+474 up run
+482 up run left
+483 up run
+485 up run left
+486 up run
+500 up run left
+502 up run
+506 up run right
+507 up run
+509 up run right
+510 up run
+511 up run right
+512 up run
+513 up run right
+514 up run
+515 up run right
+529 up run left
+531
+532 action
+534
+899 up run right
+903 up run
+906 up run right
+907 up run
+908 up run right
+909 up run
+910 up run right
+911 up run
+920 up run left
+921 up run
+922 up run left
+925 up run
+933 up run left
+934 up run
+937 up run left
+939 up run
+949 up run right
+950 up run
+951 up run right
+953 left
+960 up run left
+968 up run
+972 up run left
+973 up run
+976 up run left
+977 up run
+981 up run left
+983 right
+988
+989 action
+991
+1330 up run
+1420 right
+1426 up run right
+1432 up run
+1435 up run right
+1436 up run
+1438 up run right
+1439 up run
+1441 up run right
+1442 up run
+1443 up run right
+1445 up run
+1466 up run left
+1467 up run
+1468 up run left
+1470 up run
+1471 up run left
+1472 up run
+1478 up run left
+1479 up run
+1483 up run left
+1484 up run
+1485 up run left
+1488 up run right
+1489 up run
+1493 up run right
+1494 up run
+1498 up run right
+1499 up run
+1501 up run right
+1502 up run
+1503 up run right
+1504 up run
+1506 up run right
+1507 up run
+1525 left
+1528
+1529 action
+1531
+1870 up run
+1912 up run left
+1913 up run
+1928 up run right
+1930 up run
+1939 up run left
+1941 up run
+1946 up run right
+1950 up run
+1958 up run right
+1959 right
+1962 up run right
+1976 up run
+1977 up run right
+1980 up run
+1985 right
+2000 up run right
+2008 up run
+2009 up run right
+2010 up run
+2014 up run right
+2016 up run left
+2017 up run
+2018 up run left
+2021 left
+2026 up run left
+2035 left
+2037 up run left
+2039 left
+2041 up run left
+2042 up run right
+2043 up run
+2044 up run right
+2045 up run
+2046 up run right
+2047 left
+2065 up run left
+2066 left
+2068 up run left
+2073 up run
+2075 up run left
+2076 up run
+2082 right
+2089 up run right
+2098 right
+2102 up run right
+2103 up run left
+2104 up run
+2105 up run left
+2106 up run
+2107 up run left
+2108 up run
+2109 up run left
+2111 up run
+2128 up run left
+2129 up run
+2137 up run right
+2139 up run
+2154 up run left
+2156 up run
+2162 up run right
+2164 up run
+2172 up run right
+2182 right
+2184 up run right
+2187 up run
+2190 up run right
+2191 up run
+2193 up run right
+2196 up run
+2208 up run left
+2209 up run
+2210 up run left
+2214 up run
+2219 up run right
+2222 left
+2225 up run left
+2232 left
+2234 up run left
+2239 up run
+2240 up run left
+2241 up run
+2242 up run left
+2244 up run
+2253 up run right
+2256 right
+2258 up run right
+2259 right
+2262 up run right
+2263 left
+2268
+2269 action
+2271
+2610 up run right
+2621 right
+2624 up run right
+2630 up run
+2631 up run right
+2632 up run
+2633 up run right
+2634 up run
+2635 up run right
+2643 up run
+2645 up run right
+2646 up run
+2647 up run right
+2648 right
+2659 up run right
+2666 left
+2686 up run left
+2691 up run
+2703 up run left
+2706 right
+2721
+2722 action
+2724
+2782 action
+2784
+2842 action
+2844
+2902 up
+3178

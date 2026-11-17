@@ -1,0 +1,193 @@
+# Claire A, the Diamond Key in 10B down 110's ladder into 200 (#685 Part 1) (oracle/re2.md, "Claire A to the Heart Key")
+# 10B from the desk, where route_claire_a_diamond leaves Claire: north-east to door 1 (449), up held through the load as leon_a_10b_200's; 10A (no zombies for Claire) by waypoints from Leon's path to door 1
+344 up run left
+350 up run
+362 up run left
+363 up run
+420 up run right
+421 up run
+425 up run right
+426 up run
+430 up run right
+431 up run
+433 up run right
+435 up run left
+441 left
+444 up run left
+445 right
+447
+448 action
+450
+486 up
+791 left
+799 up run left
+804 up run
+808 up run left
+809 up run
+813 up run left
+814 up run
+819 up run left
+820 up run
+822 up run left
+823 up run
+824 up run left
+828 up run
+834 up run right
+835 up run
+837 up run right
+838 up run
+842 up run right
+843 up run
+844 up run right
+845 left
+848 up run left
+857 up run
+861 up run left
+862 up run
+864 up run left
+866 up run
+868 up run left
+869 up run
+870 up run left
+871 up run
+872 up run left
+875 up run
+887 up run right
+888 up run
+892 up run right
+893 up run
+898 up run right
+899 up run
+900 up run right
+901 up run
+902 up run right
+906 up run
+908 up run right
+909 up run
+911 up run right
+912 up run
+913 up run right
+914 right
+921
+# from 10A's door 1 on: leon_a_10b_200.txt's presses, 62 ticks sooner
+# door 1 into 10F
+922 action
+924
+959 up
+# 10F: west to door 1
+1263 up run left
+1268 up run
+1282 up run left
+1283 up run
+1288 up run left
+1291 up run
+1303 up run left
+1304 up run
+1311 up run left
+1312 up run
+1314
+1315 right
+1324 up
+1336
+# door 1 into 110
+1339 action
+1341
+1376 up
+# 110 (back on 1690): north up the east corridor and west along the north one to the ladder (area 1) by waypoints from Leon's path, and south onto it
+1690 up run right
+1695 up run
+1699 up run right
+1700 up run
+1701 up run right
+1703 up run
+1704 up run right
+1706 up run
+1729 up run right
+1730 up run
+1749 up run right
+1750 up run
+1764 up run right
+1765 up run
+1772 up run right
+1773 up run
+1779 up run right
+1780 up run
+1782 up run right
+1783 up run
+1784 up run right
+1785 up run
+1786 up run right
+1788 up run left
+1792 up run
+1796 up run left
+1797 up run
+1824 up run left
+1825 up run
+1833 up run left
+1834 up run
+1837 up run left
+1838 up run
+1839 up run left
+1841 up run
+1863 up run left
+1864 up run
+1866 up run left
+1867 left
+1871 up run left
+1878 up run
+1884 up run left
+1885 up run
+1890 up run left
+1891 up run
+1893 up run left
+1894 up run
+1895 up run left
+1898 up run
+1901 up run right
+1902 up run
+1908 up run right
+1909 up run
+1916 up run right
+1917 up run
+1920 up run right
+1921 up run
+1922 up run right
+1924 up run
+1925 up run right
+1926 left
+1934 up run left
+1943 left
+1945 up run left
+1946 left
+1949 up run left
+1950 left
+1955 up run left
+1956 right
+1966
+# from the ladder's question on: leon_a_10b_200.txt's presses, 93 ticks sooner
+# the ladder's question (a press every 12 ticks: the text, Yes), and main_02's event lowers it (4:148)
+1968 action
+1970
+1980 action
+1982
+1992 action
+1994
+2004 action
+2006
+2016 action
+2018
+2028 action
+2030
+2040 action
+2042
+2052 action
+2054
+# the ladder again: its question and Yes, and aot_on(2), the ladder's door into 200
+2265 action
+2267
+2277 action
+2279
+2289 action
+2291
+2329 up
+2663

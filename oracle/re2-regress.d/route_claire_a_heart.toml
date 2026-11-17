@@ -1,0 +1,57 @@
+# Claire A's route from the Diamond Key (10B) to the Heart Key (21B), room by room from warps (oracle/re2.md, "Claire A to the Heart Key", #685), recorded with --start claire and compared with player = 1 and character = 1, each warp starting Claire as the run before leaves her, the first as route_claire_a_diamond leaves her: 109 life, 2 rounds in the handgun and none spare, the knife, the ink ribbons in slot 2, the Red Jewel in slot 3, the valve handle in slot 4, the Diamond Key (two uses) in slot 5, every common (bank 4) and item (bank 8) flag and fg_key's bits the route has raised, 3:32 and 3:100, and the dead flags of 204's licker, 207's four zombies, 114's zombie and 107's four.
+
+# Rooms 10B, 10A, 10F and 110: from the desk to 10B's door 1, 10A with no zombies for Claire, 10F, and 110 to the ladder (area 1): its question, Yes, main_02's event lowers it (4:148), and the ladder's door down into 200.
+[[run]]
+name = "claire_a_10b_200"
+room = "10B"
+player = 1
+character = 1
+setup_script = "claire_a_10b_200.lua"
+input = "claire_a_10b_200.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 2707
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 2706]
+# 0.96 measured; the worst, 6.29 on 1375, is 110's first frame through 10F's door 1
+frame_max_mean = 1.05
+expect = "match"
+record = "--start claire --warp 10B:-19608:0:-25977:3527:3 --flag 3:32 --flag 3:100 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:152 --flag 4:255 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 109 --give 0:3:2 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:2"
+
+# Rooms 200, 201, 204, 205 and 207: from the foot of 110's ladder through the hall and 201, 204 north to door 1, the corridor of bodies (4:48), and 207's door 4: the Diamond Key's first use, into 209.
+[[run]]
+name = "claire_a_200_209"
+room = "200"
+player = 1
+character = 1
+setup_script = "claire_a_200_209.lua"
+input = "claire_a_200_209.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 3215
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 3214]
+# 1.13 measured; the worst are 201's first frame through 200's door 1 (568, 12.39, #672) and the second frame after a view's reload (1872 in 205, 17.50, and 2649 in 207, 35.03, #752)
+frame_max_mean = 1.25
+expect = "match"
+record = "--start claire --warp 200:-13956:-1800:6456:1024:5 --flag 3:32 --flag 3:100 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:148 --flag 4:152 --flag 4:255 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 109 --give 0:3:2 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:2"
+
+# Rooms 209 and 202: past 209's six zombies to the cabinet (3:33, 0x41), door 7 into 202, Marvin's second scene (4:9), 0x40, the halves combined into 0x42 (the pack is full), the 15 handgun rounds, and door 0 into 200.
+[[run]]
+name = "claire_a_209_202"
+room = "209"
+player = 1
+character = 1
+setup_script = "claire_a_209_202.lua"
+input = "claire_a_209_202.txt"
+input_shift = 344
+input_drop_early = true
+# Marvin's line holds for as many ticks as the recording's pace gave it
+voice_from_ref = true
+ticks = 3419
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 3418]
+# 1.02 measured; the worst are the first frames of 200 through 202's door 0 (3112, 7.10) and of 202 through 209's door 7 (976, 7.08)
+frame_max_mean = 1.1
+expect = "match"
+record = "--start claire --warp 209:-16934:0:-26037:2125:1 --flag 3:32 --flag 3:100 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:148 --flag 4:152 --flag 4:255 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:17 --flag 31:27 --life 109 --give 0:3:2 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"
