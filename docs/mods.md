@@ -199,9 +199,11 @@ ships both `x.png` and `x.webp` gets the WebP. A higher layer's PNG beats a
 lower layer's WebP, because the override is decided per layer first.
 
 PNG, WebP and OGG Vorbis are decoded by the pure-Rust `png`, `image-webp` and
-`lewton` crates behind the default-on `hd` feature (the same switch `cargo
+Symphonia crates behind the default-on `hd` feature (the same switch `cargo
 build --no-default-features` turns off, keeping that build's dependency list to
-`zstd`). A build without `hd` still resolves replacements by stem but refuses
+`zstd`). An `.ogg` replacement must be a plain Vorbis file as an encoder writes
+it: every logical stream Vorbis, every page intact, and nothing before the
+first page or after the last. Of a chained file, only the first link plays. A build without `hd` still resolves replacements by stem but refuses
 to decode those formats, naming the feature. BMP, TIM and WAV stay the port's
 own decoders with the same size budgets as the shipped formats. `mod build`
 packs replacement sources verbatim and stores them raw, and `pack convert game`
