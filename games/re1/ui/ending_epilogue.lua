@@ -95,13 +95,21 @@ function M.update(api)
         end
         s.timer = s.timer + 1
         if s.timer > HOLD then
+            -- The hold's end arms the fade-out and runs its first step in the
+            -- same frame (`fade_update()` right after the counter is set).
             s.step = 2
+            s.fade = s.fade + FADE_STEP
         end
     elseif s.step == 2 then
-        s.fade = s.fade + FADE_STEP
+        -- The step reads the fade the previous frame left: the frame after it
+        -- saturates ends the screen.
         if s.fade >= 255 then
-            s.fade = 255
             s.done = true
+        else
+            s.fade = s.fade + FADE_STEP
+            if s.fade > 255 then
+                s.fade = 255
+            end
         end
     end
     -- Spin the model about Z one step per frame.

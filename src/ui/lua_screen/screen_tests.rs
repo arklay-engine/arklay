@@ -689,10 +689,12 @@ fn ending_fade_shade_and_scale_ramp_to_full() {
     assert_eq!(eval("E.fade_shade(-1)"), 0);
     assert_eq!(eval("E.shade_scale(0)"), 0);
     assert_eq!(eval("E.shade_scale(0x80)"), 255);
-    assert_eq!(eval("E.shade_scale(0x40)"), 127);
+    assert_eq!(eval("E.shade_scale(0x40)"), 0x80);
+    // A fading plate at 0x7800: 240, not 239.
+    assert_eq!(eval("E.shade_scale(0x78)"), 240);
     // The epilogue's fixed backdrop shade (`s_bgSlot->fadeLevel` 0x6000).
     assert_eq!(eval("E.fade_shade(0x6000)"), 0x60);
-    assert_eq!(eval("E.shade_scale(E.fade_shade(0x6000))"), 191);
+    assert_eq!(eval("E.shade_scale(E.fade_shade(0x6000))"), 192);
 }
 
 #[test]
@@ -732,11 +734,22 @@ fn ending_epilogue_runs_and_spins_the_model() {
         screen.test_eval::<i64>("return M.state.captions[1].fade_level"),
         0x8000
     );
+    // The build tick, then the 0x10D hold: the update past it arms the fade
+    // out and takes its first step at once.
+    let fade = |screen: &LuaScreen| screen.test_eval::<i64>("return M.state.fade");
+    for _ in 0..0x10E {
+        assert!(matches!(
+            screen.update(&cx, neutral()),
+            ScreenResult::Continue
+        ));
+    }
+    assert_eq!(fade(&screen), 0, "faded in, still holding");
+    screen.update(&cx, neutral());
+    assert_eq!(fade(&screen), 16, "the hold's end takes the first step");
     let (action, ticks) = run_to_result(&mut screen, &cx, 0x1000);
     assert_eq!(action, ScreenAction::EndingSave);
-    // The 0x10D hold (plus the build tick and the step past it), then the
-    // 16-step fade out.
-    assert_eq!(ticks, 1 + 0x10E + 16);
+    // The other 15 steps, then the frame that reads the saturated fade.
+    assert_eq!(ticks, 15 + 1);
     assert_ne!(
         screen.test_eval::<i64>("return M.state.spin"),
         0,

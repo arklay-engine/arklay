@@ -55,9 +55,11 @@ function E.fade_shade(level)
     return (level >> 8) & 0xFF
 end
 
---- The 0..255 colour multiplier a PSX 0x80 (full) shade maps to.
+--- The 0..255 colour multiplier a PSX 0x80 (full) shade maps to: the PC
+--- sprite path scales the colour by `2 / 255` and back by 255, so a shade
+--- doubles and saturates at 255.
 function E.shade_scale(shade)
-    local scale = shade * 255 // 0x80
+    local scale = shade * 2
     return scale < 255 and scale or 255
 end
 
