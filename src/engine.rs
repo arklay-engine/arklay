@@ -3822,9 +3822,6 @@ impl GameSession {
         if self.system_menu_open {
             return Ok(());
         }
-        // `main_loop` steps the sound fade ahead of every task, whichever owns
-        // the frame.
-        bgm::step_fade(&mut self.music, &mut self.game);
         // RE2's pad has one button for the confirm and the shot (raw 0x80,
         // which `Pad_set` gives both): held fire is a held confirm for the
         // windows and the messages too, and a new press of it confirms in
@@ -3893,6 +3890,7 @@ impl GameSession {
         // tick the message clears arms the room-entry fade, so the first room
         // frames fade up from black exactly like the original.
         if self.boot_message.is_some() {
+            self.step_sound_fade();
             self.tick_boot_message(input, action);
             return Ok(());
         }
@@ -3906,6 +3904,7 @@ impl GameSession {
         if self.itembox_open_delay > 0 {
             self.itembox_open_delay -= 1;
             if self.itembox_open_delay == 0 {
+                self.step_sound_fade();
                 let _ = self.game.take_itembox_open();
                 self.begin_item_box_open(pack);
                 return Ok(());
@@ -3918,6 +3917,7 @@ impl GameSession {
         // screen owns the frame after that.
         if let Some(ink_ribbon) = self.typewriter_open {
             self.typewriter_open = None;
+            self.step_sound_fade();
             self.open_typewriter_save(pack, ink_ribbon);
             return Ok(());
         }
@@ -3940,17 +3940,20 @@ impl GameSession {
         // frozen and the screen's state machine, fade and spinning corpse
         // advance on their own, exactly like the original's display loop.
         if self.death_screen.is_some() {
-            // The sound fade stepped at the top of the tick, before the
-            // screen's task.
+            // `main_loop` steps the sound fade before the screen's task.
+            self.step_sound_fade();
             bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
             self.tick_death_screen(pack, ui, input);
             return Ok(());
         }
         // `die_state` sleeps a frame at a time until the sound fade is over.
+        // `die_state` sleeps a frame at a time while `g_SndFadeType != 0`
+        // (DeathScreen.cpp 0x00481310): it reads the fade after this frame's
+        // `main_loop` step, one step a tick.
         if self.death.is_waiting_for_sound_fade() {
+            self.step_sound_fade();
             bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
-            if self.game.bgm.fade.over_after_next_tick() {
-                bgm::end_fade(&mut self.music, &mut self.game);
+            if !self.game.bgm.fade.active() {
                 self.finish_death();
             }
             return Ok(());
@@ -4074,6 +4077,7 @@ impl GameSession {
             return Ok(());
         }
         if self.save_screen.is_some() {
+            self.step_sound_fade();
             self.tick_save_screen(pack, ui);
             return Ok(());
         }
@@ -4097,6 +4101,10 @@ impl GameSession {
             self.open_return_title(pack);
             return Ok(());
         }
+        // `main_loop` reaches `UpdateSoundFadeState` only past its FMV and
+        // F9-prompt exits (MainLoop.cpp), ahead of the task pass: a film, the
+        // prompt and the port's frozen overlays hold the fade.
+        self.step_sound_fade();
         // The menu task's frame loop counts `Game_timer` too (`0x40b5b4`). It
         // takes over ten frames into the fade out of the room and counts
         // until the fade back to it begins.
@@ -5015,14 +5023,9 @@ impl GameSession {
                 screen.value("fade_counter") as i32,
                 screen.value("fade_state") as i16,
             );
-            // `die_state`'s black frame, then its wait for the sound fade: the
-            // title follows the frame whose step ends it.
-            if self.game.bgm.fade.over_after_next_tick() {
-                bgm::end_fade(&mut self.music, &mut self.game);
-                self.finish_death();
-            } else {
-                self.death.wait_for_sound_fade();
-            }
+            // `die_state`'s `Task_sleep(1)`, then its wait for the sound fade,
+            // which reads the fade after each later frame's step.
+            self.death.wait_for_sound_fade();
             return;
         }
         let spin = screen.value("spin") as u16;
@@ -8102,10 +8105,15 @@ impl GameSession {
     /// destination's `room_set` and, on the frame it returns, its tail. The
     /// finished flag is held until [`GameSession::finish_transition`] drops
     /// the timeline after the frame was presented.
+    /// One `main_loop` pass of `UpdateSoundFadeState` (MainLoop.cpp:215).
+    fn step_sound_fade(&mut self) {
+        bgm::step_fade(&mut self.music, &mut self.game);
+    }
+
     fn tick_transition(&mut self, pack: &Pack, skip: bool) {
         self.tween.advance();
         // `main_loop` keeps stepping the sound fade under the door's task.
-        bgm::step_fade(&mut self.music, &mut self.game);
+        self.step_sound_fade();
         // `Snd_se_call` goes on through a door, so the music fades.
         if self.game.is_re2_room {
             bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
@@ -31809,12 +31817,86 @@ mod tests {
         let mut session = fading_door_session(&pack, a);
         trigger_test_door(&pack, &mut session);
         arm_test_fade(&mut session.game);
+        let track = audio::Wav::from_s16(&[1000; 4096], 1, audio::SAMPLE_RATE);
+        let mixer = session.music.as_mut().unwrap();
+        mixer.play_bgm_channel(0, track, true);
+        mixer.set_bgm_channel_volume(0, sfx::volume_gain(-1));
         for tick in 1..=3 {
             session.tick_transition(&pack, false);
             assert!(session.transition.is_some());
             assert_eq!(bank_volume(&session, 1, 0), Some(-1 - 234 * tick));
             assert_eq!(session.game.bgm.fade.steps[0], 42 - tick);
+            let gain = session.music.as_ref().unwrap().state().bgm_channel_gain(0);
+            assert_eq!(
+                gain,
+                Some(sfx::volume_gain(-1 - 234 * tick)),
+                "the music fades"
+            );
         }
+    }
+
+    /// `main_loop` leaves through its F9-prompt exit before
+    /// `UpdateSoundFadeState`: the fade holds on the tick that opens the
+    /// prompt and while it is up.
+    #[test]
+    fn the_return_title_prompt_holds_the_sound_fade() {
+        let dir = TempDir::new();
+        let (pack, a, _) = two_room_door_pack(&dir);
+        let mut session = fading_door_session(&pack, a);
+        arm_test_fade(&mut session.game);
+        let f9 = UiInput {
+            return_title: true,
+            ..UiInput::default()
+        };
+        session
+            .tick(&pack, f9, player::Input::default(), false)
+            .unwrap();
+        assert!(session.return_title.is_some(), "the prompt opened");
+        for _ in 0..3 {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        }
+        assert!(session.return_title.is_some());
+        assert_eq!(
+            session.game.bgm.fade.steps[0], 42,
+            "no step under the prompt"
+        );
+    }
+
+    /// A film holds `main_loop` at its FMV exit, so the fade doesn't step
+    /// while it plays.
+    #[test]
+    fn a_film_holds_the_sound_fade() {
+        let dir = TempDir::new();
+        let pack_path = dir.0.join("game.akpak");
+        let id = RoomId::parse("1000").unwrap();
+        let bmp_bytes = bmp::encode_to_vec(&test_image()).unwrap();
+        let mut writer = PackWriter::new();
+        // The init script's bytes: `movie_on 3` then `end`.
+        writer
+            .add(&id.rdt_entry(), synthetic_rdt(&[0x29, 0x03, 0x00, 0x00]))
+            .unwrap();
+        writer.add(&id.cut_entry(0), bmp_bytes).unwrap();
+        writer
+            .add("movie/03.avi", crate::movie::test_avi(30))
+            .unwrap();
+        writer.write(&pack_path).unwrap();
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut session = GameSession::from_room(&pack, id, Path::new("saves")).unwrap();
+        session.music = Some(Mixer::capture());
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        assert!(session.movie.is_some(), "the film plays");
+        arm_test_fade(&mut session.game);
+        for _ in 0..3 {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        }
+        assert!(session.movie.is_some(), "the film still plays");
+        assert_eq!(session.game.bgm.fade.steps[0], 42, "no step under the film");
     }
 
     /// `room_transition_load` reloads the room SFX pair (`load_room_sfx`)
@@ -41405,8 +41487,8 @@ end
     /// The DIED screen fades the music out (`BuildSndFadeTbl(0xFD, 0x2B)`)
     /// instead of stopping it, and `die_state` holds its black frame until the
     /// fade is over: skipped on the screen's second tick, a full-volume
-    /// track's 42 steps and the fade's 30-tick teardown keep the title back
-    /// until 70 ticks after the screen opened.
+    /// track's 42 steps and the fade's 29-step teardown keep the title back
+    /// until 71 ticks after the screen opened, one step a tick.
     #[test]
     fn a_skipped_died_screen_waits_for_the_music_fade() {
         let dir = TempDir::new();
@@ -41440,6 +41522,12 @@ end
         session.game.bgm.channels[0].volume = -1;
         session.game.apply_player_hurt(i16::MAX, 0);
 
+        // The fade's steps so far: 42 down, then the teardown from -30 to 0.
+        let stepped = |fade: game::SoundFade| match fade.kind {
+            0 => 42 + 29,
+            kind if kind < 0 => 42 + (kind + 30),
+            _ => 42 - fade.steps[0],
+        };
         let mut open_at = None;
         let mut title_at = None;
         for tick in 0..900 {
@@ -41465,13 +41553,22 @@ end
                 assert!(session.death.is_waiting_for_sound_fade());
                 assert_eq!(session.game.bgm.channels[0].volume, -1 - 234);
             }
+            if let Some(open) = open_at {
+                assert_eq!(
+                    stepped(session.game.bgm.fade),
+                    tick - open,
+                    "one step a tick"
+                );
+            }
             if session.take_return_title_request() {
                 title_at = Some(tick);
                 break;
             }
         }
         let open_at = open_at.expect("the DIED screen opened");
-        assert_eq!(title_at.expect("the title returned") - open_at, 70);
+        // `die_state` leaves once `g_SndFadeType` reads 0 after the frame's
+        // step: 42 steps and the 29 of the teardown.
+        assert_eq!(title_at.expect("the title returned") - open_at, 71);
         assert!(!session.game.bgm.fade.active(), "the fade is over");
     }
 

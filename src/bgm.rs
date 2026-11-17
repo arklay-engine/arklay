@@ -541,19 +541,22 @@ pub fn apply_stop(mixer: &mut Option<Mixer>, game: &mut GameState) {
 /// before anything of the tick plays a sound; the counters advance without
 /// an audio device too.
 pub fn step_fade(mixer: &mut Option<Mixer>, game: &mut GameState) {
+    let fading = game.bgm.fade.active();
     let sweep = advance_fade(game);
-    if let Some(mixer) = mixer.as_mut() {
-        apply_bank_fade(mixer, game, sweep);
-    }
-}
-
-/// Runs a fade's last step when it is the one that ends the fade: the frame
-/// `die_state` sees the fade over is the one whose `main_loop` step ended it,
-/// and the title follows that frame without another gameplay tick. The last
-/// step (`-2` to `0`) only nudges banks the `-2` step already destroyed.
-pub fn end_fade(mixer: &mut Option<Mixer>, game: &mut GameState) {
-    if game.bgm.fade.over_after_next_tick() {
-        step_fade(mixer, game);
+    let Some(mixer) = mixer.as_mut() else {
+        return;
+    };
+    apply_bank_fade(mixer, game, sweep);
+    // `UpdateSoundFade` and the teardown's `setSndStop`s act on the banks
+    // directly, so the channels' new volumes and stops reach the mixer on
+    // the tick they step, a door's included.
+    if fading && !game.is_re2_room {
+        for index in 0..BGM_CHANNELS {
+            if std::mem::take(&mut game.bgm.channels[index].stop) {
+                mixer.stop_bgm_channel(index);
+            }
+            apply_channel_levels(mixer, game, index);
+        }
     }
 }
 
@@ -1211,14 +1214,12 @@ mod tests {
         assert_eq!(game.bgm.fade.steps, [42, 0, 0]);
 
         let mut ticks = 0;
-        while !game.bgm.fade.over_after_next_tick() {
+        while game.bgm.fade.active() {
             step_fade(&mut None, &mut game);
             ticks += 1;
         }
-        assert_eq!(ticks, 42 + 28, "the steps, then -30 up to -2");
-        end_fade(&mut None, &mut game);
-        assert!(!game.bgm.fade.active(), "the last step ends it");
-        end_fade(&mut None, &mut game);
+        assert_eq!(ticks, 42 + 29, "the steps, then -30 up to 0");
+        step_fade(&mut None, &mut game);
         assert!(!game.bgm.fade.active(), "an idle fade stays idle");
     }
 

@@ -859,12 +859,6 @@ impl SoundFade {
     pub fn active(&self) -> bool {
         self.kind != 0
     }
-
-    /// Whether the fade has finished once the next tick's step has run: it is
-    /// idle, or that step ends its countdown.
-    pub fn over_after_next_tick(&self) -> bool {
-        self.kind == 0 || self.kind == -2
-    }
 }
 
 /// BGM state: the live state byte, the three channel banks and the scripted

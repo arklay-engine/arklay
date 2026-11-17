@@ -721,6 +721,15 @@ impl MixState {
             .map(|voice| voice.pan)
     }
 
+    /// BGM channel `index`'s gain.
+    #[cfg(test)]
+    pub(crate) fn bgm_channel_gain(&self, index: usize) -> Option<f32> {
+        self.bgm_channels
+            .get(index)
+            .and_then(Option::as_ref)
+            .map(|channel| channel.gain)
+    }
+
     /// The voice channel's gain.
     #[cfg(test)]
     pub(crate) fn voice_gain(&self) -> Option<f32> {
