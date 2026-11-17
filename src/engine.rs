@@ -113,7 +113,7 @@ use sdl3_sys::video::{
 
 use crate::anim;
 use crate::assets;
-use crate::audio::{self, Mixer};
+use crate::audio::{self, Mixer, sfx_bank_key};
 use crate::bgm;
 use crate::bmp;
 use crate::controls::{self, Action};
@@ -3100,6 +3100,14 @@ impl GameSession {
         bgm_handoff: RoomBgmHandoff,
     ) {
         self.apply_costume_model(pack);
+        // `room_set` reloads the room/enemy banks (`Room_LoadEnemySoundBanks`);
+        // a fresh start (`GameStart`) loads every bank table.
+        self.game.reload_sfx_bank(2);
+        if from.is_none() {
+            for bank in [0, 1, 3] {
+                self.game.reload_sfx_bank(bank);
+            }
+        }
         // The original stores the outgoing room id in
         // `g_AttractMode_RoomCameraId` on a same-stage door; `init_room`
         // resets it to 0x1F. The hunter's scripted intro reads it as a camera
@@ -3935,7 +3943,7 @@ impl GameSession {
         if self.death.is_waiting_for_sound_fade() {
             bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
             if self.game.bgm.fade.over_after_next_tick() {
-                bgm::end_fade(&mut self.game);
+                bgm::end_fade(&mut self.music, &mut self.game);
                 self.finish_death();
             }
             return Ok(());
@@ -4996,7 +5004,7 @@ impl GameSession {
             // `die_state`'s black frame, then its wait for the sound fade: the
             // title follows the frame whose step ends it.
             if self.game.bgm.fade.over_after_next_tick() {
-                bgm::end_fade(&mut self.game);
+                bgm::end_fade(&mut self.music, &mut self.game);
                 self.finish_death();
             } else {
                 self.death.wait_for_sound_fade();
@@ -6040,7 +6048,7 @@ impl GameSession {
         if let Some(wav) = self.sfx_cache.load(pack, name)
             && let Some(mixer) = &mut self.music
         {
-            mixer.play_sfx_on_bank(sfx_bank_key(2, column), wav, 1.0, 0.0);
+            mixer.play_sfx_on_bank_held(sfx_bank_key(2, column), wav, 0.0);
         }
     }
 
@@ -6051,7 +6059,7 @@ impl GameSession {
         if let Some(wav) = self.sfx_cache.load(pack, name)
             && let Some(mixer) = &mut self.music
         {
-            mixer.play_sfx_on_bank(sfx_bank_key(3, slot), wav, 1.0, 0.0);
+            mixer.play_sfx_on_bank_held(sfx_bank_key(3, slot), wav, 0.0);
         }
     }
 
@@ -14832,6 +14840,8 @@ fn finish_transition(
     // The original's `room_transition_load` latches the record's sfx byte and
     // reloads `g_RoomSfxBanks` before the destination's init runs; camera-only
     // records reload the pair too, even though the room stays.
+    // `load_room_sfx` reloads the pair on either kind of record.
+    game.reload_sfx_bank(0);
     if session.camera_only {
         loaded.room.room_sfx = session.door.sfx;
         game.reset_message_flags_after_door();
@@ -16040,13 +16050,6 @@ fn apply_door_message(game: &mut game::GameState, message: door::vm::Message) {
     game.show_message(message.id, message.value);
 }
 
-/// The original's one-buffer-per-bank key: the bank table in the high byte and
-/// its slot in the low byte, so a repeated cue on one bank restarts that
-/// bank's voice while a different bank appends.
-fn sfx_bank_key(bank: u8, slot: u8) -> u64 {
-    (u64::from(bank) << 8) | u64::from(slot)
-}
-
 /// Play the room-SFX `slot` (0 open, 1 close) of the door's SFX pair.
 fn play_room_sfx(
     music: &mut Option<Mixer>,
@@ -16062,7 +16065,7 @@ fn play_room_sfx(
         return;
     };
     if let Some(wav) = cache.load(pack, name) {
-        mixer.play_sfx_on_bank(sfx_bank_key(0, slot as u8), wav, 1.0, 0.0);
+        mixer.play_sfx_on_bank_held(sfx_bank_key(0, slot as u8), wav, 0.0);
     }
 }
 
@@ -16100,7 +16103,7 @@ fn play_door_animation_sfx(
         return;
     };
     if let Some(wav) = cache.load(pack, name) {
-        mixer.play_sfx_on_bank(sfx_bank_key(0, effect.id), wav, 1.0, 0.0);
+        mixer.play_sfx_on_bank_held(sfx_bank_key(0, effect.id), wav, 0.0);
     }
 }
 

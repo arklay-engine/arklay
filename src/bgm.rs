@@ -83,11 +83,14 @@ pub fn build_snd_fade_tbl(game: &mut GameState, steps: i8, kind: u8) {
 /// The positive phase steps every channel still carrying a step count down by
 /// `dist_steps` millibels; once every count runs out the fade enters the
 /// original's negative countdown, which stops the banks and finally destroys
-/// them. The original also steps the voice/sfx/enemy banks; the port fades the
-/// three BGM channels only (documented).
-fn advance_fade(game: &mut GameState) {
+/// them.
+///
+/// Returns the millibels `UpdateSoundFade` also steps the voice and one-shot
+/// banks by this tick ([`Mixer::fade_sound_banks`]): `dist_steps` on every
+/// positive tick, ahead of the channels, and the final `-1` nudge.
+fn advance_fade(game: &mut GameState) -> Option<i32> {
     if game.bgm.fade.kind == 0 {
-        return;
+        return None;
     }
     if game.bgm.fade.kind < 0 {
         game.bgm.fade.kind += 1;
@@ -117,10 +120,11 @@ fn advance_fade(game: &mut GameState) {
                     }
                 }
                 game.bgm.fade.kind = 0;
+                return Some(-1);
             }
             _ => {}
         }
-        return;
+        return None;
     }
 
     // The scripted fade reaches the channels through the original's global
@@ -142,6 +146,21 @@ fn advance_fade(game: &mut GameState) {
     }
     if game.bgm.fade.steps.iter().all(|steps| *steps < 1) {
         game.bgm.fade.kind = -30;
+    }
+    Some(dist_steps)
+}
+
+/// Hand one tick's fade sweep to the mixer's voice and one-shot banks,
+/// after resetting the bank tables the game reloaded. RE2 shares neither the
+/// fade nor RE1's bank tables, so an RE2 room holds no bank volume.
+fn apply_bank_fade(mixer: &mut Mixer, game: &GameState, sweep: Option<i32>) {
+    if game.is_re2_room {
+        mixer.forget_sfx_bank_volumes();
+        return;
+    }
+    mixer.sync_sfx_bank_loads(game.sfx_bank_loads);
+    if let Some(delta) = sweep {
+        mixer.fade_sound_banks(delta);
     }
 }
 
@@ -526,9 +545,12 @@ pub fn apply_stop(mixer: &mut Option<Mixer>, game: &mut GameState) {
 /// `die_state` sees the fade over is the one whose `main_loop` step ended it,
 /// and the title follows that frame without another gameplay tick. The last
 /// step (`-2` to `0`) only nudges banks the `-2` step already destroyed.
-pub fn end_fade(game: &mut GameState) {
+pub fn end_fade(mixer: &mut Option<Mixer>, game: &mut GameState) {
     if game.bgm.fade.over_after_next_tick() {
-        advance_fade(game);
+        let sweep = advance_fade(game);
+        if let Some(mixer) = mixer.as_mut() {
+            apply_bank_fade(mixer, game, sweep);
+        }
     }
 }
 
@@ -541,7 +563,7 @@ pub fn apply_live(
     // The original runs the fade state machine before the decay ramp; both
     // advance once per tick even when no audio device is open, so scripts and
     // tests observe the same counters.
-    advance_fade(game);
+    let sweep = advance_fade(game);
     advance_ramp(game);
     if game.is_re2_room {
         game.re2.music.tick();
@@ -555,6 +577,7 @@ pub fn apply_live(
     let Some(mixer) = mixer.as_mut() else {
         return;
     };
+    apply_bank_fade(mixer, game, sweep);
     if stop_all {
         // `bgm_fade_out_all` stopped and destroyed every bank. Without this the
         // channel records are already cleared, so the loop below would leave
@@ -1187,9 +1210,9 @@ mod tests {
             ticks += 1;
         }
         assert_eq!(ticks, 42 + 28, "the steps, then -30 up to -2");
-        end_fade(&mut game);
+        end_fade(&mut None, &mut game);
         assert!(!game.bgm.fade.active(), "the last step ends it");
-        end_fade(&mut game);
+        end_fade(&mut None, &mut game);
         assert!(!game.bgm.fade.active(), "an idle fade stays idle");
     }
 
@@ -1229,6 +1252,150 @@ mod tests {
         }
         assert!(!game.bgm.fade.active());
         assert!(game.bgm.channels.iter().all(|bank| bank.track.is_none()));
+    }
+
+    /// `UpdateSoundFade` sweeps the one-shot banks with the channels: a
+    /// sounding effect steps down `dist_steps` a tick from its own volume, a
+    /// `play_sfx` started mid-fade plays at its bank's faded volume, and the
+    /// banks hold silent once the fade is over until they reload.
+    #[test]
+    fn snd_fade_steps_the_one_shot_banks_down_and_holds_them() {
+        use crate::audio::{Wav, sfx_bank_key};
+        let (_path, pack) = empty_pack("fade-banks");
+        let mut game = game_for(RoomId::parse("1000").unwrap());
+        game.bgm.channels[0].track = Some(0x013);
+        game.bgm.channels[0].volume = -1;
+        let mut mixer = Some(audio::Mixer::capture());
+        let wav = || Wav::from_s16(&[1000; 4096], 1, audio::SAMPLE_RATE);
+        let footstep = sfx_bank_key(2, 5);
+        let grunt = sfx_bank_key(3, 0);
+        let unswept = sfx_bank_key(3, 9);
+        {
+            let mixer = mixer.as_mut().unwrap();
+            mixer.play_sfx_on_bank(footstep, wav(), sfx::volume_gain(-1000), 0.5);
+            mixer.play_sfx_on_bank_held(unswept, wav(), 0.0);
+        }
+        let state = |mixer: &Option<audio::Mixer>, key| {
+            let state = mixer.as_ref().unwrap().state();
+            (state.sfx_bank_volume(key), state.sfx_bank_gain(key))
+        };
+
+        build_snd_fade_tbl(&mut game, -3, SCRIPT_FADE);
+        let mut cache = BgmCache::default();
+        apply_live(&mut mixer, &mut game, &mut cache, &pack);
+        // The first sweep found the footstep's bank at its load volume, -1:
+        // the port's bank has no volume until a fade steps it.
+        assert_eq!(state(&mixer, footstep).0, Some(-1 - 234));
+        assert_eq!(state(&mixer, footstep).1, Some(sfx::volume_gain(-1 - 234)));
+        assert_eq!(
+            state(&mixer, unswept),
+            (None, Some(1.0)),
+            "record 9 is past the sweep"
+        );
+
+        // A grunt started mid-fade plays at its bank's faded volume.
+        mixer
+            .as_mut()
+            .unwrap()
+            .play_sfx_on_bank_held(grunt, wav(), 0.0);
+        assert_eq!(state(&mixer, grunt).1, Some(sfx::volume_gain(-1 - 234)));
+        // A `Play3DSnd` sets its bank's volume first, and the fade steps on
+        // from there.
+        mixer
+            .as_mut()
+            .unwrap()
+            .play_sfx_on_bank(footstep, wav(), sfx::volume_gain(-1000), 0.5);
+        assert_eq!(state(&mixer, footstep).0, Some(-1000));
+        apply_live(&mut mixer, &mut game, &mut cache, &pack);
+        assert_eq!(state(&mixer, footstep).0, Some(-1000 - 234));
+        assert_eq!(
+            state(&mixer, footstep).1,
+            Some(sfx::volume_gain(-1000 - 234))
+        );
+        assert_eq!(state(&mixer, grunt).0, Some(-1 - 2 * 234));
+
+        while game.bgm.fade.active() {
+            apply_live(&mut mixer, &mut game, &mut cache, &pack);
+        }
+        // The channel's 42 steps, then the teardown's -1 nudge: held, not
+        // stopped. The footstep's bank, reset to -1000 a tick in, hits the
+        // floor; the grunt's, stepped from -1, stops short of it.
+        let held = [(footstep, -9999), (grunt, -1 - 42 * 234 - 1)];
+        for (key, volume) in held {
+            assert_eq!(state(&mixer, key).0, Some(volume));
+            assert_eq!(state(&mixer, key).1, Some(sfx::volume_gain(volume)));
+        }
+        assert_eq!(state(&mixer, unswept), (None, Some(1.0)));
+        mixer
+            .as_mut()
+            .unwrap()
+            .play_sfx_on_bank_held(grunt, wav(), 0.0);
+        assert_eq!(state(&mixer, grunt).1, Some(sfx::volume_gain(held[1].1)));
+
+        // `load_character_sfx` resets the character banks; the room's stay.
+        game.reload_sfx_bank(3);
+        apply_live(&mut mixer, &mut game, &mut cache, &pack);
+        assert_eq!(state(&mixer, grunt).0, None);
+        assert_eq!(state(&mixer, footstep).0, Some(-9999));
+        mixer
+            .as_mut()
+            .unwrap()
+            .play_sfx_on_bank_held(grunt, wav(), 0.0);
+        assert_eq!(state(&mixer, grunt).1, Some(1.0));
+    }
+
+    /// The voice line fades with the banks.
+    #[test]
+    fn snd_fade_steps_the_voice_line_down() {
+        let (_path, pack) = empty_pack("fade-voice");
+        let mut game = game_for(RoomId::parse("1000").unwrap());
+        game.bgm.channels[0].track = Some(0x013);
+        game.bgm.channels[0].volume = -1;
+        let mut mixer = Some(audio::Mixer::capture());
+        let wav = audio::Wav::from_s16(&[1000; 4096], 1, audio::SAMPLE_RATE);
+        mixer
+            .as_mut()
+            .unwrap()
+            .play_voice(wav, sfx::volume_gain(-300), 0.0);
+        build_snd_fade_tbl(&mut game, -3, SCRIPT_FADE);
+        let mut cache = BgmCache::default();
+        for tick in 1..=3 {
+            apply_live(&mut mixer, &mut game, &mut cache, &pack);
+            let gain = mixer.as_ref().unwrap().state().voice_gain();
+            assert_eq!(gain, Some(sfx::volume_gain(-300 - tick * 234)));
+        }
+    }
+
+    /// An RE2 room neither sweeps nor keeps RE1's bank volumes.
+    #[test]
+    fn an_re2_room_keeps_no_faded_bank_volume() {
+        use crate::audio::{Wav, sfx_bank_key};
+        let (_path, pack) = empty_pack("fade-re2");
+        let mut game = game_for(RoomId::parse("1000").unwrap());
+        let mut mixer = Some(audio::Mixer::capture());
+        let key = sfx_bank_key(2, 0);
+        mixer.as_mut().unwrap().play_sfx_on_bank(
+            key,
+            Wav::from_s16(&[1000; 4096], 1, audio::SAMPLE_RATE),
+            0.5,
+            0.0,
+        );
+        build_snd_fade_tbl(&mut game, -3, SCRIPT_FADE);
+        let mut cache = BgmCache::default();
+        apply_live(&mut mixer, &mut game, &mut cache, &pack);
+        assert!(
+            mixer
+                .as_ref()
+                .unwrap()
+                .state()
+                .sfx_bank_volume(key)
+                .is_some()
+        );
+        game.is_re2_room = true;
+        apply_live(&mut mixer, &mut game, &mut cache, &pack);
+        let state = mixer.as_ref().unwrap().state();
+        assert_eq!(state.sfx_bank_volume(key), None);
+        assert_eq!(state.sfx_bank_gain(key), Some(sfx::volume_gain(-1 - 234)));
     }
 
     #[test]

@@ -3963,6 +3963,11 @@ pub struct GameState {
     /// different weapon; unequipping never reloads it, so the last weapon's
     /// sounds stay loaded.
     pub weapon_bank: u8,
+    /// How often each one-shot bank table (indexed like `play_sfx`: 0 room
+    /// SFX pair, 1 weapon, 2 room/enemy, 3 character) has been reloaded. A
+    /// reload resets the bank's volume, which `UpdateSoundFade` leaves held
+    /// ([`crate::audio::Mixer::sync_sfx_bank_loads`]).
+    pub sfx_bank_loads: [u32; 4],
     /// The player's `PlayerEntity` flags byte (offset 0x00): the aim
     /// direction (`0x20` up, `0x40` neutral, `0x80` down) and the animation
     /// state bits. Combat does not raise the aim bits yet, so this stays `0`;
@@ -4388,6 +4393,7 @@ impl Default for GameState {
             // so `SetupCharacterData` leaves weapon id 2 in place.
             equipped_weapon_id: 2,
             weapon_bank: 2,
+            sfx_bank_loads: [0; 4],
             player_flags: 0,
             cerberus_barked: false,
             scratch_vec: [0; 3],
@@ -6325,6 +6331,14 @@ impl GameState {
         self.state_bytes[usize::from(STATE_BYTE_USED_ITEM)] = item;
     }
 
+    /// Note that one-shot bank table `bank` was reloaded (`LoadSoundBank`,
+    /// `load_room_sfx`, `Room_LoadEnemySoundBanks`, `load_character_sfx`).
+    pub fn reload_sfx_bank(&mut self, bank: usize) {
+        if let Some(loads) = self.sfx_bank_loads.get_mut(bank) {
+            *loads = loads.wrapping_add(1);
+        }
+    }
+
     /// Equip (or clear) an item.
     pub fn set_equipped(&mut self, item: Option<u8>) {
         self.equipped = item;
@@ -6333,6 +6347,9 @@ impl GameState {
         // item's own id (the item-slot table maps every weapon to itself).
         self.equipped_weapon_id = item.unwrap_or(0);
         if let Some(item) = item.filter(|item| *item != 0) {
+            if item != self.weapon_bank {
+                self.reload_sfx_bank(1);
+            }
             self.weapon_bank = item;
         }
         self.state_bytes[usize::from(STATE_BYTE_EQUIPPED)] = item.unwrap_or(0);
