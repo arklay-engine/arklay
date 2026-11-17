@@ -524,9 +524,12 @@ end
 
 -- `BYTE_00528d16`: per state (the weapon that hit, as `Routine_1`), the spray's
 -- strength (the second spray needs over 3) and what the hurt marker loses.
+-- Its rows end at the gatling gun (0x12): a Beretta's hit lands as weapon 3
+-- or 6 (`Weapon_at_ck`), so no body sees 0x13.
 local HIT_TABLE <const> = {
     [0] = { 0, 0 }, { 2, 3 }, { 2, 1 }, { 2, 1 }, { 2, 1 }, { 10, 3 }, { 15, 3 }, { 4, 2 },
     { 6, 2 }, { 16, 0 }, { 16, 0 }, { 20, 0 }, { 6, 0 }, { 2, 1 }, { 16, 0 }, { 1, 0 }, { 4, 0 },
+    { 20, 0 }, { 2, 0 },
 }
 
 -- `FUN_00479b00`'s blood on the first tick of a hit: it sprays from part 1 away
@@ -631,12 +634,13 @@ local function reel(e)
             e:set_routine(2, 3)
             e:set_var(BRK_T0, 0xFF)
         end
+        -- On part 1's `Workm`, within 0x40 of part 9's offset.
         if e:timer(0) & 3 == 0 then
-            local dir = i16(e:angle() - 0x400)
-            e:rnd()
-            e:rnd()
-            e:rnd()
-            e:call_effect(0, 9, e:rnd() * 8 + 0x1000, dir, 0, 0, 0)
+            local ox, oy, oz = e:part_offset(9)
+            local x = ox - (e:rnd() & 0x7F) + 0x40
+            local y = oy - (e:rnd() & 0x7F) + 0x40
+            local z = oz - (e:rnd() & 0x7F) + 0x40
+            e:effect(0, 9, e:rnd() * 8 + 0x1000, i16(e:angle() - 0x400), 1, x, y, z)
         end
     elseif sub == 3 or sub == 4 then
         if sub == 3 then

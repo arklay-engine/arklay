@@ -7283,4 +7283,53 @@ mod tests {
             assert_eq!((sub, flags & 1, drawn), (5, 0, 0));
         }
     }
+
+    /// The G adult's (`Em_28`) hit, `FUN_00479b00`, on the stub `e`.
+    mod adult_hit {
+        use super::smg_flame_tyrant_ivy::{eval, run};
+
+        fn adult() -> String {
+            format!(
+                "function e:rot_apply() return 0, 0, 0 end
+                 function e:part_rot() return 0, 0, 0 end
+                 function e:drawn_part_point() return 10, 20, 30 end
+                 function e:part_offset(p) return 100, 200, 300 end
+                 {}",
+                include_str!("../../games/re2/enemy/28/enemy.lua")
+            )
+        }
+
+        /// `BYTE_00528d16` has rows up to 0x12: the rocket launcher's (0x14,
+        /// 0) sprays twice and the gatling gun's (2, 0) once, and neither
+        /// takes from the hurt marker. (A Beretta's hit lands as weapon 3 or
+        /// 6, in `Weapon_at_ck`, so no body sees 0x13.)
+        #[test]
+        fn the_rocket_launcher_and_the_gatling_gun_hit_a_hurt_adult() {
+            for (weapon, rows) in [(0x11, &[9, 8][..]), (0x12, &[9])] {
+                // Every draw 1, so the sparks' `Rnd & 3` check fails.
+                let setup = format!(
+                    "w.r = {{ [0] = 2, {weapon}, 0, 0 }} w.vars[6] = 3
+                     w.draws = {{ 1, 1, 1, 1, 1, 1, 1 }}"
+                );
+                let (lua, log) = run(&adult(), &setup, 1, &["call_effect"]);
+                let called: Vec<i64> = log
+                    .iter()
+                    .map(|call| call.split(',').nth(1).unwrap().parse().unwrap())
+                    .collect();
+                assert_eq!(called, rows, "{weapon:#x}: {log:?}");
+                let mark: i64 = eval(&lua, "return w.vars[6]");
+                assert_eq!(mark, 3, "{weapon:#x}");
+            }
+        }
+
+        /// The reel's blood every fourth `Timer0` (`FUN_0047a790` sub 2) is
+        /// on part 1's `Workm`, at part 9's offset moved by the three draws.
+        #[test]
+        fn the_reels_blood_is_on_part_9() {
+            let setup = "w.r = { [0] = 2, 2, 2, 0 } w.timers = { [0] = 5, 0, 0, 1 }
+                         w.draws = { 1, 2, 3, 4 }";
+            let (_, log) = run(&adult(), setup, 1, &["effect", "call_effect"]);
+            assert_eq!(log, ["effect(0,9,4128,-1024,1,163,262,361)"]);
+        }
+    }
 }
