@@ -2455,6 +2455,7 @@ impl GameHost<'_> {
             id,
             at(7) as u8,
             self.game.id.player_flag & 1,
+            self.game.re2.flag(STATUS_BANK, MIRROR_STATUS),
             self.game.re2.room_loading,
         );
         if slot != SPLAYER_SLOT {

@@ -25,6 +25,8 @@ pub const PART_SIZE: usize = 0xAC;
 pub const DEST: usize = 0x1C4;
 /// `Spd_x`, `Spd_y` and `Spd_z`'s offset in a work.
 pub const SPD: usize = 0x144;
+/// What `Mirror_model_cp` leaves after a player's mirrored parts for the mirrored weapon's.
+const MIRROR_WEAPON_SIZE: usize = 0xD70;
 /// A part's `Poly_rgb`, which `PartsWork_link` sets to 0x808080.
 const PART_POLY_RGB: usize = 0x70;
 /// `Snd_bgm_main` and `Snd_bgm_sub` load their bank at `Mem_top + 0x10` (rounded down to 16 bytes),
@@ -378,7 +380,8 @@ impl Heap {
     /// `Sce_em_set` puts enemy `id` (model type `model_type`, as the script gives it) in `slot`: its
     /// work at `Mem_top`, its model after it unless the last `Sce_em_set` loaded the same id, and its
     /// parts. Returns what the work's memory holds ([`Held`]). `disc` is the scenario's (0 Leon,
-    /// 1 Claire), whose folder the files come from; `loading` is a set by the load's scripts.
+    /// 1 Claire), whose folder the files come from; `mirror` is `fg_status`'s 0x10000, with which
+    /// `Mirror_model_cp` copies the parts after themselves; `loading` is a set by the load's scripts.
     #[allow(clippy::too_many_arguments)]
     pub fn em_set(
         &mut self,
@@ -387,6 +390,7 @@ impl Heap {
         id: u8,
         model_type: u8,
         disc: u8,
+        mirror: bool,
         loading: bool,
     ) -> Held {
         let Some(at) = self.top else {
@@ -446,7 +450,18 @@ impl Heap {
                 &0x80_8080u32.to_le_bytes(),
             );
         }
-        self.top = Some(top + parts * PART_SIZE).filter(|&top| top < CAP);
+        let mut end = top + parts * PART_SIZE;
+        if mirror {
+            // `Mirror_model_cp`: the mirror's parts are a copy of the work's, after them, and a
+            // player's are followed by its mirrored weapon's (0xD70 bytes).
+            image.copy_within(top, parts * PART_SIZE, end);
+            end += parts * PART_SIZE;
+            if id < 0x10 {
+                image.forget(end, MIRROR_WEAPON_SIZE);
+                end += MIRROR_WEAPON_SIZE;
+            }
+        }
+        self.top = Some(end).filter(|&top| top < CAP);
         // An init that allocates more after its work at its first move (Mr. X's and the G's joints,
         // Ada's, Leon's as a partner) leaves `Mem_top` where this doesn't follow it.
         if !plain_init(id) {
