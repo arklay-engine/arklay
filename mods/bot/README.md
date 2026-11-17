@@ -427,8 +427,13 @@ fact: once given up after 3 attempts, it stays off limits only while the
 bot, or a route, enters its room from a room in `bad_from`, and is planned
 as a way through from any other
 (30F's passage to 305 starts at the east end, reached from 30D's door but
-not from 306's; three entries from 306 had given it up for good). Like
-every mark it lives in the Lua VM, so a reload forgets it. An `<avoid>` item is marked as avoided before the free-slot check,
+not from 306's; three entries from 306 had given it up for good). The route
+search keys such a room by the room it was entered from, as the mental
+map does, so a route may reach it from the side that works, or step out
+and back in. Each side it was given up from is a lesson in the memory
+(`door_side:ROOM:SLOT:FROM`), which a reload keeps like a met fight, and
+the fresh VM's marks are rebuilt from it: 507's door 0, out of reach from
+the 50C side, was walked to three times again after every reload. An `<avoid>` item is marked as avoided before the free-slot check,
 so a full inventory does not turn it into a goal that lifts on the next
 inventory change. After 3 attempts the mark holds, except an `inventory
 full` mark on a key or an item a `<use>` fact needs: that waits for the
@@ -884,10 +889,11 @@ fresh). Without a save the run finishes `dead, no save`; more than 3 deaths
 since one save finish the run too. The stats JSON counts `saves`,
 `reloads` and `deaths_before_reload`.
 
-The reload keeps two kinds of memory key from the death, the lessons: the
-bosses met (`fight_met:ROOM:ENEMY`) and the deaths (`died:ROOM`, the
+The reload keeps three kinds of memory key from the death, the lessons:
+the bosses met (`fight_met:ROOM:ENEMY`), the deaths (`died:ROOM`, the
 deaths in that room since the bot last walked out of it alive:
-`BotNav.died_in`). Without the second the reload plays the same room with
+`BotNav.died_in`) and the doors given up from a side
+(`door_side:ROOM:SLOT:FROM`, `BotPlanner.restore_door_lessons`). Without the second the reload plays the same room with
 the same kit the same way: one seed walked into 509's four zombies four
 times from one save, an empty launcher, an empty shotgun and the knife
 held, the handgun and a clip in the box, and the run ended there. While a
@@ -1277,7 +1283,19 @@ drives the box screen with pad input only.
   not equipped, nothing loaded, and no round for any of its loadings held
   or boxed. The staple (the handgun) never is: its rounds are the most
   common, and Chris boxed his empty handgun in 50E for a herb, then met
-  513's Tyrant with an empty shotgun beside the clip that lies there. Like the reserve-floor top-up, the gear-up and the ammunition
+  513's Tyrant with an empty shotgun beside the clip that lies there.
+  Only a brew's bottle slots (Rebecca's V-JOLT, with no box after her
+  switch) still take the empty staple. After a death in the room of a
+  boss still to be won, every boxed gun with a band for it comes out as
+  gear too, the staple even with no round known (the map a reload
+  restores was drawn before the boss's room), and takes a slot held for a
+  pickup: Chris came back to 513's Tyrant four times with a shotgun the
+  lab's zombies had emptied, the handgun in 50E's box. A boxed gun's
+  rounds lying on the map are no rounds for no gun either: they are worth
+  a trip, count as known ammunition, and under the reserve floor rank and
+  make room as the equipped gun's rounds do; held, they bring the gun back
+  out of the box (the rearm). Chris had walked past 28 shells in 219, 401
+  and 410 with the shotgun boxed and met the lab with none. Like the reserve-floor top-up, the gear-up and the ammunition
   of a held gun that is not equipped leave the slots a needed pickup was
   just given: the clip went in for a key and came back out for the held
   handgun at 502's box for 240000 ticks.
