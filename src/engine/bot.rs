@@ -131,6 +131,76 @@ fn route_state_value(lua: &Lua, json: &serde_json::Value) -> mlua::Result<Value>
 /// The default headless tick budget (about 55 minutes at 30 Hz).
 pub const DEFAULT_MAX_TICKS: u64 = 100_000;
 
+/// How a bot run stands between two ticks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum RunState {
+    /// The run goes on: the player is alive, or dead with a save to load.
+    Running,
+    /// The bot ended the run.
+    Finished,
+    /// The player died with no save to load.
+    Stranded,
+}
+
+/// How a headless bot run ended ([`play`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum RunOutcome {
+    /// The bot ended the run with its reason.
+    Finished,
+    /// The player died with no save to load.
+    Death,
+    /// The tick budget ran out.
+    MaxTicks,
+    /// The game quit.
+    Quit,
+}
+
+impl RunOutcome {
+    /// The outcome's name in the run reports.
+    pub(super) fn name(self) -> &'static str {
+        match self {
+            RunOutcome::Finished => "finished",
+            RunOutcome::Death => "death",
+            RunOutcome::MaxTicks => "max_ticks",
+            RunOutcome::Quit => "quit",
+        }
+    }
+}
+
+/// The ticks a stranded bot still plays: a moment to see its death and
+/// finish with its own reason.
+const DEATH_GRACE_TICKS: u32 = 2;
+
+/// The headless bot run loop: read how the run stands, then tick, until the
+/// bot finishes, the player stays dead with no save past the grace ticks,
+/// the game quits or `max_ticks` ticks have run. `tick` is one app update
+/// of `driver` with whatever the driver feeds it; the game's own order inside
+/// it (the film check, the sound fade step, the task pass) is the update's.
+pub(super) fn play<D, E>(
+    driver: &mut D,
+    max_ticks: u64,
+    mut state: impl FnMut(&mut D) -> Result<RunState, E>,
+    mut tick: impl FnMut(&mut D) -> Result<super::AppFlow, E>,
+) -> Result<RunOutcome, E> {
+    let mut dead_ticks = 0u32;
+    for _ in 0..max_ticks {
+        match state(driver)? {
+            RunState::Running => dead_ticks = 0,
+            RunState::Finished => return Ok(RunOutcome::Finished),
+            RunState::Stranded if dead_ticks < DEATH_GRACE_TICKS => dead_ticks += 1,
+            RunState::Stranded => return Ok(RunOutcome::Death),
+        }
+        if tick(driver)? == super::AppFlow::Quit {
+            return Ok(RunOutcome::Quit);
+        }
+    }
+    Ok(match state(driver)? {
+        RunState::Running => RunOutcome::MaxTicks,
+        RunState::Finished => RunOutcome::Finished,
+        RunState::Stranded => RunOutcome::Death,
+    })
+}
+
 /// The flag banks whose changes the run log records (`story: ...`): bank 0
 /// (scenario) and bank 1 (common), where the story's scenes and branches
 /// leave their marks.
@@ -5843,6 +5913,88 @@ mod tests {
         // A slot onto itself, or past the inventory, is no recipe.
         assert_eq!(row(1, 1).get::<String>("result").unwrap(), "no_recipe");
         assert_eq!(row(0, 7).get::<String>("result").unwrap(), "no_recipe");
+    }
+
+    /// Run [`play`] over a scripted run: `states[i]` is how the run stands
+    /// before tick `i` (the last one repeats); the ticks it ran and the
+    /// outcome.
+    fn play_scripted(
+        max_ticks: u64,
+        states: &[RunState],
+        quit_at: Option<u64>,
+    ) -> (u64, RunOutcome) {
+        // (state reads, ticks)
+        let mut run = (0usize, 0u64);
+        let outcome = play::<_, ()>(
+            &mut run,
+            max_ticks,
+            |(reads, ticks)| {
+                // A state is read once before each tick, and once more when the
+                // budget runs out.
+                assert_eq!(*reads as u64, *ticks, "one read per tick");
+                *reads += 1;
+                Ok(states[(*reads - 1).min(states.len() - 1)])
+            },
+            |(_, ticks)| {
+                *ticks += 1;
+                Ok(if quit_at == Some(*ticks) {
+                    super::super::AppFlow::Quit
+                } else {
+                    super::super::AppFlow::Continue
+                })
+            },
+        )
+        .unwrap();
+        (run.1, outcome)
+    }
+
+    #[test]
+    fn the_run_loop_checks_the_run_before_every_tick() {
+        use RunState::*;
+        // A bot that finishes before tick 3 plays three ticks.
+        assert_eq!(
+            play_scripted(10, &[Running, Running, Running, Finished], None),
+            (3, RunOutcome::Finished)
+        );
+        // Finished on the first read: no tick at all.
+        assert_eq!(
+            play_scripted(10, &[Finished], None),
+            (0, RunOutcome::Finished)
+        );
+        // The budget runs out while running.
+        assert_eq!(
+            play_scripted(4, &[Running], None),
+            (4, RunOutcome::MaxTicks)
+        );
+        // A quit ends the run on the tick it happens.
+        assert_eq!(
+            play_scripted(10, &[Running], Some(2)),
+            (2, RunOutcome::Quit)
+        );
+    }
+
+    #[test]
+    fn a_stranded_bot_plays_two_grace_ticks_before_the_death() {
+        use RunState::*;
+        assert_eq!(
+            play_scripted(10, &[Running, Stranded], None),
+            (1 + 2, RunOutcome::Death)
+        );
+        // The bot can still finish in its grace ticks.
+        assert_eq!(
+            play_scripted(10, &[Stranded, Stranded, Finished], None),
+            (2, RunOutcome::Finished)
+        );
+        // A run that is running again starts the grace over.
+        assert_eq!(
+            play_scripted(10, &[Stranded, Stranded, Running, Stranded], None),
+            (3 + 2, RunOutcome::Death)
+        );
+        // Stranded when the budget runs out is a death.
+        assert_eq!(
+            play_scripted(1, &[Running, Stranded], None),
+            (1, RunOutcome::Death)
+        );
     }
 
     #[test]

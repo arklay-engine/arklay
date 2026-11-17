@@ -11414,6 +11414,21 @@ impl App {
         matches!(&self.mode, Mode::Play(session) if session.player_dead())
     }
 
+    /// How the attached bot's run stands ([`bot::play`]): a dead player with
+    /// a save to load plays on, through the title's load screen.
+    fn bot_run_state(&self) -> bot::RunState {
+        let Some(runtime) = self.bot.as_ref() else {
+            return bot::RunState::Running;
+        };
+        if runtime.finished() {
+            bot::RunState::Finished
+        } else if self.bot_player_dead() && !runtime.has_save() {
+            bot::RunState::Stranded
+        } else {
+            bot::RunState::Running
+        }
+    }
+
     /// What the bot's report reads from the session when it is written: the
     /// ending the game's own rule picks, once the escape scene has completed
     /// the game (the scripted death variant), and the play timer.
@@ -13384,47 +13399,28 @@ fn write_trace_capture(app: &App, options: &trace::TraceOptions<'_>, index: u32)
 }
 
 /// Run the attached bot with no display or audio until it finishes, dies or
-/// spends `max_ticks` app updates. Prints a concise `[bot]` report.
+/// spends `max_ticks` app updates ([`bot::play`]). Prints a concise `[bot]`
+/// report.
 fn run_bot_headless(app: &mut App, max_ticks: u64, stats_path: Option<&Path>) -> Result<()> {
     let started = Instant::now();
-    let mut outcome = "max_ticks";
-    // A bot with a save loads it after a death; one without gets a moment
-    // to see the death and finish with its own reason.
-    let mut dead_ticks = 0u32;
-    for _ in 0..max_ticks {
-        if app.bot.as_ref().is_some_and(bot::BotRuntime::finished) {
-            outcome = "finished";
-            break;
+    let played = bot::play(
+        app,
+        max_ticks,
+        |app| Ok(app.bot_run_state()),
+        |app| {
+            let flow = app.update(UiInput::default(), player::Input::default(), false)?;
+            app.post_present();
+            Ok(flow)
+        },
+    );
+    let outcome = match played {
+        Ok(outcome) => outcome.name(),
+        Err(err) => {
+            print_bot_report(app, "error", started.elapsed());
+            write_bot_stats(app, "error", started.elapsed(), stats_path)?;
+            return Err(err);
         }
-        if app.bot_player_dead() {
-            dead_ticks += 1;
-            let reloading = app.bot.as_ref().is_some_and(bot::BotRuntime::has_save);
-            if !reloading && dead_ticks > 2 {
-                outcome = "death";
-                break;
-            }
-        } else {
-            dead_ticks = 0;
-        }
-        match app.update(UiInput::default(), player::Input::default(), false) {
-            Ok(AppFlow::Quit) => {
-                outcome = "quit";
-                break;
-            }
-            Ok(AppFlow::Continue) => {}
-            Err(err) => {
-                print_bot_report(app, "error", started.elapsed());
-                write_bot_stats(app, "error", started.elapsed(), stats_path)?;
-                return Err(err);
-            }
-        }
-        app.post_present();
-    }
-    if app.bot.as_ref().is_some_and(bot::BotRuntime::finished) {
-        outcome = "finished";
-    } else if outcome == "max_ticks" && app.bot_player_dead() {
-        outcome = "death";
-    }
+    };
     print_bot_report(app, outcome, started.elapsed());
     write_bot_stats(app, outcome, started.elapsed(), stats_path)
 }

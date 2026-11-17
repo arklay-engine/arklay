@@ -792,32 +792,26 @@ impl Driver {
     /// ended it, with its reason) or `death` (the player died with no save
     /// to load).
     fn bot_outcome(&mut self) -> mlua::Result<&'static str> {
-        if self.bot()?.finished() {
-            return Ok("finished");
-        }
-        let app = self.app()?;
-        let stranded = app.bot_player_dead() && !app.bot.as_ref().is_some_and(|bot| bot.has_save());
-        Ok(if stranded { "death" } else { "running" })
+        self.bot()?;
+        Ok(match self.app()?.bot_run_state() {
+            bot::RunState::Running => "running",
+            bot::RunState::Finished => "finished",
+            bot::RunState::Stranded => "death",
+        })
     }
 
     /// Tick until the attached bot's run ends or `max_ticks` more ticks have
-    /// run (`bot_run`): the outcome, `max_ticks` when the budget ran out.
+    /// run (`bot_run`, [`bot::play`]): the outcome, `max_ticks` when the
+    /// budget ran out. A game that quits fails the run ([`Self::tick`]).
     fn bot_play(&mut self, max_ticks: u64) -> mlua::Result<&'static str> {
-        // A bot without a save gets a moment to see its death and finish
-        // with its own reason.
-        let mut dead_ticks = 0u32;
-        for _ in 0..max_ticks {
-            match self.bot_outcome()? {
-                "running" => dead_ticks = 0,
-                "death" if dead_ticks < 2 => dead_ticks += 1,
-                outcome => return Ok(outcome),
-            }
-            self.tick()?;
-        }
-        Ok(match self.bot_outcome()? {
-            "running" => "max_ticks",
-            outcome => outcome,
-        })
+        self.bot()?;
+        let outcome = bot::play(
+            self,
+            max_ticks,
+            |driver| Ok(driver.app()?.bot_run_state()),
+            |driver| driver.tick().map(|()| AppFlow::Continue),
+        )?;
+        Ok(outcome.name())
     }
 
     /// Close the running trace, if any.
