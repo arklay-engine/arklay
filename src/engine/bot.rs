@@ -16,6 +16,7 @@
 //! `bot:room_meta()`. The observed world model is in [`world`] and reaches
 //! Lua as `bot:world()`.
 
+mod host;
 mod knowledge;
 #[cfg(test)]
 mod lua_lint;
@@ -28,6 +29,8 @@ pub(crate) use stats::RunFacts;
 mod steer;
 mod world;
 
+pub(super) use host::{AttachedBot, run_headless};
+
 use std::cell::{Cell, RefCell};
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap};
@@ -36,7 +39,7 @@ use std::rc::Rc;
 use anyhow::{Context, Result, anyhow, bail};
 use mlua::{Function, Lua, Table, UserData, UserDataMethods, Value};
 
-use super::GameSession;
+use super::{DEFAULT_RISK, GameSession};
 use crate::budget;
 use crate::game::{self, FlagBank, InventoryItem, RoomActionKind};
 use crate::pack::Pack;
@@ -128,9 +131,6 @@ fn route_state_value(lua: &Lua, json: &serde_json::Value) -> mlua::Result<Value>
     })
 }
 
-/// The default headless tick budget (about 55 minutes at 30 Hz).
-pub const DEFAULT_MAX_TICKS: u64 = 100_000;
-
 /// How a bot run stands between two ticks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RunState {
@@ -211,38 +211,6 @@ const STORY_BANK_NAMES: [&str; STORY_BANKS] = ["scenario", "common"];
 /// only while the bot is in that room.
 const ROOM_FLAG_BANK: u8 = 4;
 
-/// The default risk: how much danger the planner may accept, 0..=1.
-pub const DEFAULT_RISK: f64 = 0.25;
-
-/// The bot run options the CLI adds on top of a normal boot.
-#[derive(Clone, Debug, PartialEq)]
-pub struct BotOptions {
-    /// Drive the game from the pack's `bot/**.lua` entries.
-    pub enabled: bool,
-    /// Run without a window or audio, as fast as the simulation allows.
-    pub headless: bool,
-    /// Headless app-update budget; ignored by the interactive path.
-    pub max_ticks: u64,
-    /// Write the headless run's statistics as JSON to this path.
-    pub stats_path: Option<std::path::PathBuf>,
-    /// The planner's risk setting, `0.0..=1.0`; read-only to
-    /// Lua as `bot:risk()`.
-    pub risk: f64,
-    /// The room whose entry ends the run, such as
-    /// `"20D"`; read-only to Lua as `bot:goal_room()`.
-    pub goal_room: Option<String>,
-    /// The game-RNG seed; `None` leaves the game's own random
-    /// stream untouched.
-    pub seed: Option<u32>,
-    /// The story parameters picked for this run,
-    /// checked against the pack's `params/<game>.xml` when the bot attaches.
-    pub params: Vec<(String, String)>,
-    /// The debug INVINCIBLE cheat for every session of the run
-    /// (the bot's `invincible` option): health stays full and the game-over machine
-    /// never runs. The bot is not told; it plays as it would.
-    pub invincible: bool,
-}
-
 /// The game RNG state for the `session`th session of a seeded run
 /// (0 for the first, then one more per bot reload). A pure function of
 /// both, so a seeded run replays exactly; different seeds, and a reload,
@@ -254,22 +222,6 @@ pub fn seeded_rand_state(seed: u32, session: u32) -> u32 {
     x ^= x >> 31;
     let state = (x ^ (x >> 32)) as u32;
     if state == 1 { 2 } else { state }
-}
-
-impl Default for BotOptions {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            headless: false,
-            max_ticks: 0,
-            stats_path: None,
-            risk: DEFAULT_RISK,
-            goal_room: None,
-            seed: None,
-            params: Vec::new(),
-            invincible: false,
-        }
-    }
 }
 
 /// One tick of input the Lua script asked for. Reset before every call.

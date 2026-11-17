@@ -26,6 +26,8 @@ Lua 5.4 is vendored and compiled from source on every build.
 The `hd` feature (also default) pulls the pure-Rust `png`, `image-webp` and
 Symphonia crates that decode a mod's replacement art and audio; without it the
 engine still resolves replacements by stem but refuses to decode those formats.
+The `bot` feature (default too) builds the Lua player bot that `mods/bot` drives
+through `arklay script`; without it the script's `bot_*` calls fail.
 
 ## Launcher
 

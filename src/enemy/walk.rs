@@ -1572,6 +1572,7 @@ pub(crate) fn room_check_sight_blocked(
 
 /// [`room_check_sight_blocked`] without the flag write-back, for engine-side
 /// queries the original never makes (the bot's view of the room).
+#[cfg_attr(not(feature = "bot"), allow(dead_code))]
 pub(crate) fn peek_sight_blocked(
     collision: &Collision,
     entity: &Entity,
