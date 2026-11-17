@@ -19,9 +19,10 @@
 -- state 1 and `Type` 0 (the room's other adult, with `Routine_3`'s 1 set), and
 -- a `Type` 0 `Type`'s `0x4000` and the birth (state 8).
 --
--- Not ported: the other `Type`s of `FUN_00477870`, the hit and the death
--- (`Routine_0` 2 to 4), the birth (state 8), the spark trail, and the effects, whose `Rnd` draws are kept where the move
--- draws them but not the effects themselves. The neck's turn is a third of
+-- Not ported: the other `Type`s of `FUN_00477870`, `Routine_0` 4, the birth
+-- (state 8), the heavy flinch (`0x47b360`) and the blood of the weapons from 9
+-- on, and the part sizes and colours, which only draw. The move's effects
+-- keep their `Rnd` draws but are not made. The neck's turn is a third of
 -- `Rot_neck_em_n`'s on each of parts 2 to 4 (`Neck::apply`); the wobble
 -- places every part (`FUN_004e0070`) as well as part 1's children.
 
@@ -36,6 +37,20 @@ local HURT <const> = 7 -- `+0x222` (`At_obj_no`): the hurt marker, `0x82` while 
 local SINGLE <const> = 8 -- `+0x228`: counts down.
 local PHASE <const> = 9 -- `+0x221` (`Sc_id`): where the wobble is in its table.
 local SWAY <const> = 10 -- Part 1's morph weight, which the wobble moves about.
+local BRK <const> = 11 -- Part 9's `Free[0]` (`+0x98`): where the break-up is.
+local BRK_CNT <const> = 12 -- Part 9's `Timer1` (`+0x79`).
+local BRK_N <const> = 13 -- Part 9's `Timer2` (`+0x7a`).
+local BRK_T0 <const> = 14 -- Part 9's `Timer0` (`+0x84`).
+local BRK_SIZE <const> = 15 -- Part 9's `Size_y` (`+0x8e`) in state 3.
+local BRK_RGB <const> = 16 -- Part 9's `Poly_rgb` (`+0x70`), 0x808080 at first.
+local BRK_PART <const> = 17 -- Size_y of the part state 8 grows.
+local FLAG223 <const> = 18 -- `+0x223`: the magnum's trail, 1 to start it and 2 while it runs.
+local TRAIL <const> = 23 -- `+0x224`: the spray the trail is at.
+local TRAIL_DIR <const> = 24 -- `+0x226`: the way it was sprayed.
+local BRK_Y <const> = 19 -- Part 9's `Workm.t` y (`+0x60`), as the break-up leaves it.
+local SWELL <const> = 25 -- Part 1's second morph weight, once the death moves it.
+local SWOLLEN <const> = 26 -- 1 once `SWELL` holds the weight.
+local SHRINK <const> = 27 -- The ticks the death's boxes have shrunk.
 
 -- `BYTE_005289f8`: the wobble's sine, as signed bytes.
 local WOBBLE <const> = {
@@ -507,6 +522,526 @@ local function move(e)
     end
 end
 
+-- `BYTE_00528d16`: per state (the weapon that hit, as `Routine_1`), the spray's
+-- strength (the second spray needs over 3) and what the hurt marker loses.
+local HIT_TABLE <const> = {
+    [0] = { 0, 0 }, { 2, 3 }, { 2, 1 }, { 2, 1 }, { 2, 1 }, { 10, 3 }, { 15, 3 }, { 4, 2 },
+    { 6, 2 }, { 16, 0 }, { 16, 0 }, { 20, 0 }, { 6, 0 }, { 2, 1 }, { 16, 0 }, { 1, 0 }, { 4, 0 },
+}
+
+-- `FUN_00479b00`'s blood on the first tick of a hit: it sprays from part 1 away
+-- from the player (`Esp_call` kind 0 row 9 and 8), the draws kept in order.
+local function hit_blood(e, weapon)
+    local dir = e:direction_to_player()
+    local vz = 0x80 - e:rnd()
+    local vx, vy = 800, 0
+    if e:damage_no() == 0 then
+        vx, vy = 500, 200
+    end
+    local x, y, z = e:rot_apply(0, dir, vz, vx, vy, vz)
+    local px, py, pz = e:drawn_part_point(1, 0, 0, 0)
+    x, y, z = i16(x + (px or 0)), i16(y + (py or 0)), i16(z + (pz or 0))
+    e:call_effect(0, 9, e:rnd() * 8 + 0x1FA0, dir, x, y, z)
+    if HIT_TABLE[weapon][1] > 3 then
+        y = i16(y + 0x40 - (e:rnd() & 0x3F))
+        e:call_effect(0, 8, e:rnd() * 8 + 0x1FA0, dir, x, y, z)
+    end
+    if e:rnd() & 3 == 0 then
+        e:call_effect(0x00, 0x10, 0x17D0, dir, x, y, z)
+        e:call_effect(0x1F, 0x08, 0x17D0, i16(dir + e:rnd() * -4 + 0x200), x, y, z)
+    end
+end
+
+-- The two draws that end a hit's and a death's steps on every sixteenth frame
+-- (`DWORD_00689558`'s pad shake).
+local function shake(e)
+    if e:move_cnt() & 0xF == 0 then
+        e:rnd()
+        e:rnd()
+    end
+end
+
+-- `FUN_0047b240`: the flinch of a hit that most weapons start.
+local function flinch(e)
+    local sub = e:routine(2)
+    e:set_var(HURT, e:var(HURT) | 0x82)
+    if sub == 0 then
+        -- `Cdir_y += part 0's Cdir_y`: the turn the walk's frame left on the root.
+        local _, root_turn = e:part_rot(0)
+        e:set_angle((e:angle() + root_turn) & 0xFFFF)
+        e:clip(6, 0, 7)
+        e:set_routine(2, 1)
+        e:set_neck_flags(e:neck_flags() & ~2)
+        e:set_timer(0, 0)
+        e:set_var(B21F, e:var(B21F) | 0x10)
+    elseif sub ~= 1 then
+        shake(e)
+        return
+    end
+    e:spd()
+    if e:joint(0x200) then
+        e:routines(1, 1, 0, 0)
+        e:set_var(HURT, e:var(HURT) & 0x7F)
+        e:set_var(B21F, e:var(B21F) & ~0x10)
+    end
+    e:add_speed_xz()
+    shake(e)
+end
+
+-- `FUN_0047a790`: the hit of a hurt adult (`Id` 0): it reels (clip 2), shakes
+-- (clip 9) for 180 ticks with blood, then gets up (clips 0xb and 3).
+local function reel(e)
+    local sub = e:routine(2)
+    e:set_var(HURT, e:var(HURT) | 0x52)
+    if sub == 0 then
+        e:clip(2, 0, 0x1F)
+        e:set_var(B21E, e:var(B21E) | 1)
+        e:set_routine(2, 1)
+        e:set_var(B21F, e:var(B21F) | 2)
+        e:set_neck_flags(e:neck_flags() & ~2)
+        sub = 1
+    end
+    if sub == 1 then
+        e:spd()
+        if e:joint(0x80) then
+            e:set_routine(2, 2)
+            e:clip(9, 0, 0x1F)
+            e:set_timer(0, 0xB4)
+            e:set_timer(3, 0)
+        end
+        e:add_speed_xz()
+    elseif sub == 2 then
+        local timer = e:timer(3)
+        e:set_timer(3, timer - 1)
+        if timer == 0 then
+            e:set_timer(3, (e:rnd() & 1) + 1)
+            e:set_timer(1, 0x20 - (e:rnd() & 0x3F))
+            e:set_speed_x(0x10 - (e:rnd() & 0x1F))
+            local spd_z = 0x10 - (e:rnd() & 0x1F)
+            e:set_speed_z(spd_z)
+        end
+        local sx = e:speed_x()
+        local _, _, sz = e:speed()
+        e:set_angle((e:angle() + e:timer(1)) & 0xFFFF)
+        e:add_pos(sx, 0, sz)
+        e:joint(0x80)
+        local t0 = e:timer(0)
+        e:set_timer(0, (t0 - 1) & 0xFFFF)
+        if t0 == 0 then
+            e:set_routine(2, 3)
+            e:set_var(BRK_T0, 0xFF)
+        end
+        if e:timer(0) & 3 == 0 then
+            local dir = i16(e:angle() - 0x400)
+            e:rnd()
+            e:rnd()
+            e:rnd()
+            e:call_effect(0, 9, e:rnd() * 8 + 0x1000, dir, 0, 0, 0)
+        end
+    elseif sub == 3 or sub == 4 then
+        if sub == 3 then
+            e:clip(0xB, 0, 0x1F)
+            e:set_routine(2, 4)
+        end
+        if e:joint(0x80) then
+            e:set_routine(2, 5)
+            e:clip(3, 0, 0x1F)
+        end
+    elseif sub == 5 then
+        if e:joint(0x80) then
+            e:routines(1, 1, 0, 0)
+            e:set_var(B21F, e:var(B21F) & ~2)
+            e:set_var(MARK, 6)
+            e:set_var(HURT, e:var(HURT) & 0x7F)
+        end
+    end
+    shake(e)
+end
+
+-- `FUN_0047b5b0`'s `asStack_10`: the throb of part 1's second morph weight.
+local THROB <const> = { [0] = 0x1F, 0x28, 0x16, -0x14, -0x1E, 10, 0x16, 0 }
+
+-- Part 1's second morph weight (`pSa_dat_head[4]`), which the death swells:
+-- the model's until the death first moves it.
+local function swell(e)
+    if e:var(SWOLLEN) ~= 0 then
+        return e:var(SWELL)
+    end
+    local _, weight = e:morph_weights(1)
+    return weight or 0
+end
+
+local function set_swell(e, weight)
+    e:set_var(SWOLLEN, 1)
+    e:set_var(SWELL, i16(weight))
+end
+
+-- `Timer2` counts down to the next throb, which `Timer3` (`0xff` between
+-- them) steps through `THROB`; at 0 it starts one and waits `reload` more.
+local function throb(e, reload)
+    local wait = e:timer(2)
+    if wait == 0 then
+        e:set_timer(3, 0)
+        e:set_timer(2, reload(e:rnd()))
+    else
+        e:set_timer(2, wait - 1)
+    end
+    local step = e:timer(3)
+    if step == -1 then
+        return nil
+    end
+    e:set_timer(3, step + 1 > 7 and -1 or step + 1)
+    return THROB[step]
+end
+
+-- `FUN_0047b5b0`, `Routine_0` 3: the death. It falls (clip 7, then 0xe), its
+-- boxes shrink and part 1 swells, then it lays the room's young (`Em_27`
+-- `Type` 3, up to four bodies in the room) and throbs for 500 ticks. Not
+-- ported: the weapons that start their own effects (`Routine_1` 9, 10, 11,
+-- 14, 16 and 17), and what only draws (the parts' sizes and colours, the
+-- shadow's fade).
+local function death(e)
+    if e:var(B21F) & 0x20 ~= 0 then
+        e:set_life(0)
+        e:restore_routine()
+        move(e)
+        return
+    end
+    local sub = e:routine(2)
+    local weapon = e:routine(1)
+    local mask
+    if sub == 0 then
+        e:set_died()
+        e:clip(7, 0, 0x3F)
+        if e:var(B21F) & 2 ~= 0 then
+            e:set_move_cnt(0x32)
+            e:spd()
+        end
+        e:set_routine(2, 1)
+        e:set_damage_cnt(e:damage_cnt() | 0x80)
+        e:set_timer(3, 0)
+        -- A death while the arm is off stops its break-up at once.
+        if e:var(B21E) & 2 ~= 0 then
+            e:set_timer(3, 1)
+            e:set_var(B21E, e:var(B21E) & ~2)
+        end
+        if (weapon == 5 or weapon == 6) and e:var(FLAG223) == 0 then
+            e:set_var(FLAG223, 1)
+        end
+        e:set_var(B21F, e:var(B21F) | 0x40)
+        sub = 1
+    end
+    if sub == 1 then
+        e:spd()
+        if e:joint(0x40) then
+            e:set_routine(2, 2)
+            e:clip(0xE, 0, 0x3F)
+            e:set_timer(0, 0)
+            e:set_timer(2, (e:rnd() & 0x1F) + 8)
+            e:set_timer(3, -1)
+            e:sound(0xC)
+        end
+        e:add_speed_xz()
+        mask = 0xF
+    elseif sub == 2 then
+        e:joint(0x40)
+        local shrunk = e:var(SHRINK)
+        if 0x514 - 6 * shrunk > 300 then
+            shrunk = shrunk + 1
+            e:set_var(SHRINK, shrunk)
+            local w = 0x514 - 6 * shrunk
+            e:set_atd(0, 0, -1500, w, 1500, w)
+        end
+        local t0 = e:timer(0)
+        if t0 == 0x3C then
+            e:clip(0xF, 0, 0x3F)
+        elseif t0 == 0x78 then
+            e:clip(0x10, 0, 0x3F)
+        end
+        local weight = swell(e) + 10
+        local step = throb(e, function(draw)
+            return (draw & 0x1F) + 0xC
+        end)
+        if step then
+            weight = weight + step * -2
+        end
+        weight = i16(weight)
+        if weight > 0x1000 then
+            weight = 0x1000
+            e:set_routine(2, 3)
+        end
+        set_swell(e, weight)
+        if i16(t0) % 3 == 0 then
+            local vx = 0x400 - e:rnd() * 8
+            local vz = 0x400 - e:rnd() * 8
+            local dir = i16(e:rnd() << 4)
+            e:effect(0, 9, e:rnd() * 8 + 0x830, dir, 1, vx, -200, vz)
+        end
+        e:set_timer(0, (t0 + 1) & 0xFFFF)
+        mask = 7
+    else
+        if sub == 3 then
+            e:set_be_flg(e:be_flg() | 2)
+            local x, y, z = e:pos()
+            for _ = 1, 4 - e:enemies() do
+                if e:spawn(0x27, 3, {}) then
+                    e:place_spawn(x, y, z, (e:rnd() << 4) & 0xFFFF, {}, false)
+                else
+                    e:rnd()
+                end
+            end
+            e:set_routine(2, 4)
+            e:set_timer(0, 500)
+            e:set_timer(1, swell(e) & 0xFFFF)
+            sub = 4
+        end
+        if sub == 4 then
+            local step = throb(e, function(draw)
+                return (draw & 0x3F) + 0x10
+            end)
+            if step then
+                set_swell(e, step * 3 + i16(e:timer(1)))
+            end
+            local t0 = e:timer(0)
+            e:set_timer(0, (t0 - 1) & 0xFFFF)
+            if t0 == 0 then
+                e:set_var(B21F, e:var(B21F) & ~1)
+                e:set_routine(2, 5)
+            end
+        end
+        return
+    end
+    if e:move_cnt() & mask == 0 then
+        e:rnd()
+        e:rnd()
+    end
+end
+
+-- `FUN_00479b00`, `Routine_0` 2: the hit. `Routine_1` is the weapon.
+local function hit(e)
+    local weapon = e:routine(1)
+    if e:routine(2) == 0 then
+        e:rnd()
+        e:rnd()
+        if weapon ~= 0x10 then
+            hit_blood(e, weapon)
+        end
+        if e:var(MARK) ~= 0 then
+            local left = i8(e:var(MARK) - HIT_TABLE[weapon][2])
+            e:set_var(MARK, left < 1 and 1 or left)
+            e:set_angle((e:angle() - 0x23E) & 0xFFFF)
+            local turning = face(e, 0x1C2)
+            e:set_angle((e:angle() + 0x23E) & 0xFFFF)
+            if turning == 0 and e:var(MARK) == 1 then
+                e:set_var(MARK, 0)
+            end
+        end
+        if (weapon == 5 or weapon == 6) and e:var(FLAG223) == 0 then
+            e:set_var(FLAG223, 1)
+        end
+        e:set_var(B21F, e:var(B21F) & ~0x20)
+        if e:var(HURT) ~= 0 then
+            e:restore_routine()
+            if e:routine(0) ~= 2 then
+                move(e)
+                return
+            end
+            if e:var(B21F) & 0x10 ~= 0 and e:var(MARK) == 0 then
+                e:set_var(MARK, 1)
+            end
+        end
+    end
+    if e:var(MARK) == 0 then
+        reel(e)
+    else
+        flinch(e)
+    end
+end
+
+-- `FUN_004797a0`: the trail of blood a magnum's hit (`+0x223` 1) throws from
+-- part 0 along the way the player stood, four sprays a tick for four ticks.
+local function trail(e)
+    local state = e:var(FLAG223)
+    if state == 1 then
+        e:set_var(FLAG223, 2)
+        e:set_var(TRAIL, 0)
+        e:set_var(TRAIL_DIR, e:direction_to_player())
+    elseif state ~= 2 then
+        return
+    end
+    local dir = i16(e:var(TRAIL_DIR))
+    local n = i8(e:var(TRAIL))
+    local x0, _, z0 = e:pos()
+    local ax, _, az = e:rot_apply(0, dir, 0, (-1 - n) * 200, 200, 0)
+    local bx, _, bz = e:rot_apply(0, dir, 0, -200, 0, 0)
+    local _, y = e:part_point(0, 0, 0, 0)
+    y = y or 0
+    local function size()
+        return i8(e:var(TRAIL)) * -0xA0 + 0x1080 - e:rnd()
+    end
+    e:call_effect(0, 9, size(), dir, x0 + ax, y, z0 + az)
+    e:set_var(TRAIL, e:var(TRAIL) + 1)
+    local x = x0 - e:rnd() + bx + 0x80 + ax
+    local z = z0 - e:rnd() + bz + 0x80 + az
+    local big = size()
+    e:call_effect(0, 9 - (e:rnd() & 1), big, dir, x, y, z)
+    if i8(e:var(TRAIL)) == 1 then
+        e:call_effect(0, 0xA, 0x1000, dir + 0x800, x, y, z)
+    end
+    e:set_var(TRAIL, e:var(TRAIL) + 1)
+    x, z = bx * 2 + x0 + ax, bz * 2 + z0 + az
+    e:call_effect(0, 9, size(), dir, x, y, z)
+    e:set_var(TRAIL, e:var(TRAIL) + 1)
+    x = bx * 3 - e:rnd() + x0 + 0x80 + ax
+    z = bz * 3 - e:rnd() + z0 + 0x80 + az
+    big = size()
+    e:call_effect(0, 9 - (e:rnd() & 1), big, dir, x, y, z)
+    local last = i8(e:var(TRAIL))
+    e:set_var(TRAIL, last + 1)
+    if last > 12 then
+        e:set_var(FLAG223, 0)
+    end
+end
+
+-- `FUN_0047ab00`: the break-up of part 9 once `B21E` bit 0 is set (the reel
+-- starts it): blood from the head in states 0 to 3, the colour's fade in 4 to
+-- 6, and the regrowth in 8. The draws are the original's; the parts' sizes
+-- and colours, which only draw, are kept where they steer the states.
+local function breakup(e)
+    local flags = e:var(B21E)
+    if flags & 1 ~= 0 then
+        flags = (flags & ~1) | 2
+        e:set_var(B21E, flags)
+        e:set_var(BRK, 0)
+        e:set_var(BRK_RGB, 0x808080)
+    end
+    if flags & 2 == 0 then
+        return
+    end
+    local state = e:var(BRK)
+    local dir = i16(e:angle() - 0x400)
+    local ox, oy, oz = e:part_offset(9)
+    -- A point within 0x40 of part 9's offset, three draws.
+    local function spot()
+        local x = ox - (e:rnd() & 0x7F) + 0x40
+        local y = oy - (e:rnd() & 0x7F) + 0x40
+        local z = oz - (e:rnd() & 0x7F) + 0x40
+        return x, y, z
+    end
+    -- A point within 0x40 of the part's origin, three draws.
+    local function scatter()
+        local x = 0x40 - (e:rnd() & 0x7F)
+        local y = 0x40 - (e:rnd() & 0x7F)
+        local z = 0x40 - (e:rnd() & 0x7F)
+        return x, y, z
+    end
+    if state == 0 then
+        e:set_var(BRK, 1)
+        e:set_var(BRK_T0, 100)
+        e:set_var(BRK_N, 4)
+        e:set_var(BRK_CNT, 0)
+        local x, y, z = spot()
+        e:effect(0, 9, 0x1F40, dir, 1, x, y, z)
+        state = 1
+    end
+    if state == 1 then
+        local count = i8(e:var(BRK_CNT) + 1)
+        e:set_var(BRK_CNT, count & 0xFF)
+        if count < 0x5A and count & 3 == 0 then
+            local x, y, z = spot()
+            e:effect(0, 8, e:rnd() * 8 + 0x1000, dir, 1, x, y, z)
+            x, y, z = scatter()
+            e:effect(0, 8, e:rnd() * 8 + 0x1000, 0, 9, x, y, z)
+        end
+        local t0 = i16(e:var(BRK_T0) + 0x1E)
+        e:set_var(BRK_T0, t0 & 0xFFFF)
+        local _, py = e:part_point(9, 0, 0, 0)
+        -- The part's `Workm` keeps what the last tick added: it falls on.
+        local y = e:var(BRK_Y)
+        if state == 0 or e:var(BRK_CNT) == 1 then
+            y = py or 0
+        end
+        y = y + t0
+        e:set_var(BRK_Y, y)
+        local limit = e:ground() - 200
+        if limit < y then
+            e:set_var(BRK_Y, limit)
+            e:set_var(BRK_N, e:var(BRK_N) - 1)
+            e:set_var(BRK_T0, (-t0 >> 1) & 0xFFFF)
+            local x, vy, z = scatter()
+            e:effect(0, 8, e:rnd() * 8 + 0x1000, 0, 9, x, vy, z)
+            if e:var(BRK_N) == 0 then
+                e:set_var(BRK, 2)
+            end
+        end
+    elseif state == 2 or state == 3 then
+        if state == 2 then
+            e:set_var(BRK, 3)
+            e:set_var(BRK_SIZE, 0x1000)
+            e:set_var(BRK_T0, 0)
+        end
+        e:set_var(BRK_T0, e:var(BRK_T0) + 1)
+        e:set_var(BRK_SIZE, i16(e:var(BRK_SIZE) - 0x28))
+        e:set_var(BRK_RGB, e:var(BRK_RGB) - 0x10001)
+        if e:var(BRK_T0) & 1 == 0 then
+            local vx, vy, vz = 0x80 - e:rnd(), 0x80 - e:rnd(), 0x80 - e:rnd()
+            local part = 10 + (e:rnd() & 1)
+            e:effect(0, 8, e:rnd() * 4 + 0x448, 0, part, vx, vy, vz)
+        end
+        if e:var(BRK_SIZE) < 0x28 then
+            e:set_var(BRK, 4)
+        end
+    elseif state == 4 or state == 5 then
+        e:set_var(BRK, 5)
+        local rgb = e:var(BRK_RGB)
+        if state == 4 then
+            rgb = rgb - 0x2000
+        end
+        if rgb & 0xFF ~= 0 then
+            rgb = rgb - 0x10001
+        end
+        if (rgb >> 8) & 0xFF == 0 then
+            e:set_var(BRK, 6)
+        else
+            rgb = rgb - 0x100
+        end
+        e:set_var(BRK_RGB, rgb)
+    elseif state == 6 or state == 7 then
+        if state == 6 then
+            e:set_var(BRK, 7)
+            e:set_var(BRK_T0, 0)
+        end
+        if e:var(BRK_T0) == 0xFF then
+            e:set_var(BRK, 8)
+            e:set_var(BRK_N, 4)
+            e:set_var(BRK_T0, 0)
+            e:set_var(BRK_CNT, 1)
+            e:set_var(BRK_PART, 0)
+        end
+    elseif state == 8 then
+        local t0 = (e:var(BRK_T0) + 1) & 0xFFFF
+        e:set_var(BRK_T0, t0)
+        if t0 & 3 == 0 then
+            local vx, vy, vz = 0x80 - e:rnd(), 0x80 - e:rnd(), 0x80 - e:rnd()
+            e:effect(0, 8, e:rnd() * 8 + 0xC18, dir, 9, vx, vy, vz)
+            vx, vy, vz = 0x80 - e:rnd(), 0x80 - e:rnd(), 0x80 - e:rnd()
+            e:effect(0, 17, e:rnd() * 8 + 0x830, dir, 9, vx, vy, vz)
+        end
+        local cnt = i8(e:var(BRK_CNT))
+        local size = i16(e:var(BRK_PART) + (cnt + 2) * 0x78)
+        e:set_var(BRK_CNT, (-cnt) & 0xFF)
+        if size > 0x1000 then
+            e:set_var(BRK_PART, 0)
+            e:set_var(BRK_N, e:var(BRK_N) - 1)
+            if e:var(BRK_N) == 0 then
+                e:set_var(BRK, 9)
+            end
+        else
+            e:set_var(BRK_PART, size)
+        end
+    end
+end
+
 function update(e)
     local hurt = e:var(HURT) & 0x7F
     if hurt ~= 0 then
@@ -517,6 +1052,10 @@ function update(e)
         init(e)
     elseif routine == 1 then
         move(e)
+    elseif routine == 2 then
+        hit(e)
+    elseif routine == 3 then
+        death(e)
     end
     if e:var(COOL) ~= 0 then
         e:set_var(COOL, e:var(COOL) - 1)
@@ -537,9 +1076,14 @@ function update(e)
         local phase = e:var(PHASE)
         local weights = { e:morph_weights(1) }
         weights[1] = i16((weights[1] or 0) - 5 * WOBBLE[phase])
+        if e:var(SWOLLEN) ~= 0 then
+            weights[2] = e:var(SWELL)
+        end
         e:morph_all(1, table.unpack(weights))
         e:set_var(PHASE, (phase + 1) & 0x3F)
     end
+    trail(e)
+    breakup(e)
     -- `Rot_neck_em_n` on `Neck_no` 4 (rate 0x20, limit 0x32c, from `Init`):
     -- the posing turns parts 2 to 4 a third of it each.
     if e:var(B21F) & 0x40 == 0 then
