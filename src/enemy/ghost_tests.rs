@@ -87,13 +87,13 @@ impl Rig {
 
     fn run(&mut self, id: u8, behavior: u8, player: [i32; 3], hidden: bool) -> Vec<Observed> {
         self.host.reset();
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut game = game(id, behavior, player, hidden);
         (0..FRAMES)
             .map(|frame| {
                 game.rand_seed = 12345 + frame as u16;
                 self.host
-                    .update(&mut game, &room, &self.pack, 1, &self.clips);
+                    .update(&mut game, &mut room, &self.pack, 1, &self.clips);
                 observe(&game.entities[1])
             })
             .collect()

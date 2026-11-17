@@ -139,7 +139,7 @@ mod imp {
         pub fn update(
             &mut self,
             game: &mut GameState,
-            room: &RoomState,
+            room: &mut RoomState,
             pack: &Pack,
             slot: usize,
             clips: &[Clip],
@@ -154,7 +154,7 @@ mod imp {
             // call; `Lua::scope` seals it so the script cannot retain it.
             let mut api = EnemyApi {
                 game: game as *mut GameState,
-                room: room as *const RoomState,
+                room: room as *mut RoomState,
                 clips: clips as *const [Clip],
                 slot,
             };
@@ -659,7 +659,7 @@ mod imp {
     /// call.
     struct EnemyApi {
         game: *mut GameState,
-        room: *const RoomState,
+        room: *mut RoomState,
         clips: *const [Clip],
         slot: usize,
     }
@@ -3001,7 +3001,7 @@ mod imp {
                 let room = api.room;
                 // SAFETY: the room pointer borrows the caller's room for the
                 // whole call (see the type-level comment).
-                let room = unsafe { &*room };
+                let room = unsafe { &mut *room };
                 let slot = api.slot;
                 let game = api.game();
                 // GHOST: the pathfinder reports the target blocked.
@@ -3510,7 +3510,7 @@ mod imp {
                 let room = api.room;
                 // SAFETY: the room pointer borrows the caller's room for the
                 // whole call (see the type-level comment).
-                let room = unsafe { &*room };
+                let room = unsafe { &mut *room };
                 let player = api.game_ref().entities[0].pos;
                 // GHOST: the sight line to the player is always blocked.
                 let result = if api.game_ref().ghost_hides_player_from(api.slot) {
@@ -5451,7 +5451,7 @@ mod tests {
     }
 
     fn update(host: &mut LuaEnemyHost, game: &mut GameState, pack: &Pack) -> bool {
-        host.update(game, &RoomState::default(), pack, 1, &[])
+        host.update(game, &mut RoomState::default(), pack, 1, &[])
     }
 
     #[test]
@@ -5529,7 +5529,7 @@ mod tests {
     #[test]
     fn a_scripted_web_kill_runs_through_the_shared_damage_pipeline() {
         let pack = pack(&[("enemy/13/enemy.lua", spiderweb_source())]);
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut game = spiderweb_game();
         let mut host = LuaEnemyHost::new();
         // Spawn init then idle: the web carries its aligned target bit.
@@ -5539,7 +5539,7 @@ mod tests {
         game.entities[1].pos = [200, 0, 0];
 
         // Knife: 10 damage, the surviving hit enters state 2.
-        assert_eq!(game.apply_weapon_damage(&room, 1), 1);
+        assert_eq!(game.apply_weapon_damage(&mut room, 1), 1);
         assert_eq!(game.entities[1].health, 0x37 - 10);
         assert_eq!(game.entities[1].state(), 2);
         assert_eq!(game.entities[1].hit_state, 0x08 | 1 | 2);
@@ -5550,7 +5550,7 @@ mod tests {
 
         // The rocket one-shots it through the projectile class; the killing
         // blow enters state 3 and the web's death state raises the flag.
-        assert_eq!(game.apply_weapon_damage(&room, 10), 1);
+        assert_eq!(game.apply_weapon_damage(&mut room, 10), 1);
         assert_eq!(game.entities[1].state(), 3);
         assert!(!game.flags[crate::game::BANK_ENEMIES as usize].bit(3));
         assert!(update(&mut host, &mut game, &pack));
@@ -5566,11 +5566,11 @@ mod tests {
     #[test]
     fn the_roots_hit_state_gate_rejects_every_weapon() {
         let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut game = roots_game(0x80);
         game.entities[1].death_event_id = 0xFF;
         let mut host = LuaEnemyHost::new();
-        let _ = roots_step(&mut host, &mut game, &pack, &room);
+        let _ = roots_step(&mut host, &mut game, &pack, &mut room);
         assert_eq!(game.entities[1].hit_state, 1, "the init armed the gate");
         game.player_flags = 0x40;
         game.entities[1].pos = [200, 0, 0];
@@ -5578,7 +5578,7 @@ mod tests {
 
         for weapon in [1u8, 2, 5, 10] {
             assert_eq!(
-                game.apply_weapon_damage(&room, weapon),
+                game.apply_weapon_damage(&mut room, weapon),
                 0,
                 "weapon {weapon} must be rejected by the hit-state gate"
             );
@@ -5592,7 +5592,7 @@ mod tests {
                 .any(|byte| *byte != 0),
             "the roots raise no death flag"
         );
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         assert_eq!(game.entities[1].state(), 1);
     }
 
@@ -5647,7 +5647,7 @@ end
         use crate::state::RoomId;
 
         let pack = pack(crate::enemy::ENEMY_SCRIPTS);
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut host = LuaEnemyHost::new();
 
         // (flags setup, stage, room) variants: bare, wounded Rebecca and
@@ -5683,8 +5683,8 @@ end
                     for tick in 0..8 {
                         let clips: &[crate::model::Clip] = &[];
                         let target = crate::enemy::live_look_at_target(&native, 1);
-                        crate::enemy::update_entity(&mut native, 1, &room, clips, target);
-                        assert!(host.update(&mut scripted, &room, &pack, 1, clips));
+                        crate::enemy::update_entity(&mut native, 1, &mut room, clips, target);
+                        assert!(host.update(&mut scripted, &mut room, &pack, 1, clips));
                         assert_eq!(
                             native.entities[1], scripted.entities[1],
                             "id {id:#04x} behaviour {behavior} tick {tick}"
@@ -5781,7 +5781,7 @@ end
         }
 
         let pack = pack(crate::enemy::ENEMY_SCRIPTS);
-        let room = RoomState {
+        let mut room = RoomState {
             stage: 1,
             room: 0,
             footstep_zones: vec![FootstepZone {
@@ -5994,9 +5994,9 @@ end
                 let mut scripted = seed(&template, id, case);
                 for tick in 0..case.ticks {
                     let target = crate::enemy::live_look_at_target(&native, 1);
-                    crate::enemy::update_entity(&mut native, 1, &room, &clips, target);
+                    crate::enemy::update_entity(&mut native, 1, &mut room, &clips, target);
                     assert!(
-                        host.update(&mut scripted, &room, &pack, 1, &clips),
+                        host.update(&mut scripted, &mut room, &pack, 1, &clips),
                         "id {id:#04x} case {index} tick {tick}: script did not run"
                     );
                     if usize::from(case.behavior) < covered.len() {
@@ -6088,7 +6088,7 @@ end
         }];
 
         let mut host = LuaEnemyHost::new();
-        assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+        assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
         // First tick: no stored hand world yet, so the entity is pulled back
         // until the current pose's hand chain end sits at the origin on X/Z.
         assert_ne!(game.entities[1].pos, [1000, 0, 2000], "the anchor moved");
@@ -6099,7 +6099,7 @@ end
         // Second tick: the stored hand world is the current pose's, so the
         // anchor is a no-op and the position holds.
         let anchored = game.entities[1].pos;
-        assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+        assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
         assert_eq!(game.entities[1].pos, anchored, "the anchor is stable");
     }
 
@@ -6164,9 +6164,9 @@ end
         let mut host = LuaEnemyHost::new();
         for tick in 0..20 {
             let target = crate::enemy::live_look_at_target(&game, 1);
-            crate::enemy::update_entity(&mut game, 1, &room, &clips, target);
+            crate::enemy::update_entity(&mut game, 1, &mut room, &clips, target);
             assert!(
-                host.update(&mut scripted, &room, &pack, 1, &clips),
+                host.update(&mut scripted, &mut room, &pack, 1, &clips),
                 "tick {tick}: script did not run"
             );
             assert_eq!(
@@ -6953,7 +6953,7 @@ end
         let mut slow_names = std::collections::HashSet::new();
         let mut fast_names = std::collections::HashSet::new();
 
-        for (label, room, cases) in &fixtures {
+        for (label, room, cases) in &mut fixtures {
             for (index, case) in cases.iter().enumerate() {
                 let mut native = seed(case);
                 let mut scripted = seed(case);
@@ -7098,7 +7098,7 @@ end
         pack: &Pack,
         clips: &[crate::model::Clip],
     ) -> bool {
-        host.update(game, &adder_room(), pack, 1, clips)
+        host.update(game, &mut adder_room(), pack, 1, clips)
     }
 
     /// The checked-in wasp script, so the tests exercise the real port.
@@ -7174,7 +7174,7 @@ end
         pack: &Pack,
         clips: &[crate::model::Clip],
     ) -> bool {
-        host.update(game, &adder_room(), pack, 1, clips)
+        host.update(game, &mut adder_room(), pack, 1, clips)
     }
 
     /// The wasp's manhattan distance word for the current player position,
@@ -7789,7 +7789,7 @@ end
     fn adder_reset_between_frames_preserves_the_scene() {
         let pack = pack(&[("enemy/0a/enemy.lua", adder_source())]);
         let (clips, keyframes, skeleton) = adder_model();
-        let room = adder_room();
+        let mut room = adder_room();
         let mut cached_game = adder_game(2);
         let mut reset_game = adder_game(2);
         for game in [&mut cached_game, &mut reset_game] {
@@ -7833,9 +7833,9 @@ end
                     game.entities[1].hit_state = hit_state;
                 }
             }
-            assert!(cached.update(&mut cached_game, &room, &pack, 1, &clips));
+            assert!(cached.update(&mut cached_game, &mut room, &pack, 1, &clips));
             reset.reset();
-            assert!(reset.update(&mut reset_game, &room, &pack, 1, &clips));
+            assert!(reset.update(&mut reset_game, &mut room, &pack, 1, &clips));
             assert_eq!(
                 cached_game, reset_game,
                 "the scene diverged at tick {tick} (state {state})"
@@ -7851,9 +7851,9 @@ end
                 game.entities[1].action_behavior = 0;
                 game.entities[1].hit_state = 0x08;
             }
-            assert!(cached.update(&mut cached_game, &room, &pack, 1, &clips));
+            assert!(cached.update(&mut cached_game, &mut room, &pack, 1, &clips));
             reset.reset();
-            assert!(reset.update(&mut reset_game, &room, &pack, 1, &clips));
+            assert!(reset.update(&mut reset_game, &mut room, &pack, 1, &clips));
             assert_eq!(
                 cached_game, reset_game,
                 "the writhe scene diverged at tick {tick}"
@@ -8683,9 +8683,9 @@ end
                     game.entities[1].hit_state = 0x10;
                 }
             }
-            assert!(cached.update(&mut cached_game, &adder_room(), &pack, 1, &clips));
+            assert!(cached.update(&mut cached_game, &mut adder_room(), &pack, 1, &clips));
             reset.reset();
-            assert!(reset.update(&mut reset_game, &adder_room(), &pack, 1, &clips));
+            assert!(reset.update(&mut reset_game, &mut adder_room(), &pack, 1, &clips));
             assert_eq!(
                 cached_game, reset_game,
                 "the wasp scene diverged at tick {tick} (state {state})"
@@ -8702,9 +8702,9 @@ end
                     game.entities[1].action_state = 2;
                 }
             }
-            assert!(cached.update(&mut cached_game, &adder_room(), &pack, 1, &clips));
+            assert!(cached.update(&mut cached_game, &mut adder_room(), &pack, 1, &clips));
             reset.reset();
-            assert!(reset.update(&mut reset_game, &adder_room(), &pack, 1, &clips));
+            assert!(reset.update(&mut reset_game, &mut adder_room(), &pack, 1, &clips));
             assert_eq!(
                 cached_game, reset_game,
                 "the respawn scene diverged at tick {tick}"
@@ -8867,7 +8867,7 @@ end
         pack: &Pack,
         clips: &[crate::model::Clip],
     ) -> bool {
-        host.update(game, &crow_room(), pack, 1, clips)
+        host.update(game, &mut crow_room(), pack, 1, clips)
     }
 
     #[test]
@@ -9839,7 +9839,7 @@ end
             kind: 0x8300,
             flags: 0x0004,
         });
-        assert!(host.update(&mut game, &floor_room, &pack, 1, &clips));
+        assert!(host.update(&mut game, &mut floor_room, &pack, 1, &clips));
         assert_eq!(game.entities[1].floor_step, -3399);
         assert_eq!(game.entities[1].shadow_half_x, 0, "a deep floor step");
         game.entities[1].pos = [9000, -2500, 9000];
@@ -10052,9 +10052,9 @@ end
                     game.entities[1].floor_step = 1;
                 }
             }
-            assert!(cached.update(&mut cached_game, &crow_room(), &pack, 1, &clips));
+            assert!(cached.update(&mut cached_game, &mut crow_room(), &pack, 1, &clips));
             reset.reset();
-            assert!(reset.update(&mut reset_game, &crow_room(), &pack, 1, &clips));
+            assert!(reset.update(&mut reset_game, &mut crow_room(), &pack, 1, &clips));
             assert_eq!(
                 cached_game, reset_game,
                 "the crow scene diverged at tick {tick} (state {state})"
@@ -10202,7 +10202,7 @@ end
         game.entities[2].set_active(true);
         let mut host = LuaEnemyHost::new();
 
-        assert!(!host.update(&mut game, &RoomState::default(), &pack, 2, &[]));
+        assert!(!host.update(&mut game, &mut RoomState::default(), &pack, 2, &[]));
         assert!(
             update(&mut host, &mut game, &pack),
             "the other id still runs"
@@ -10251,7 +10251,7 @@ end
         host: &mut LuaEnemyHost,
         game: &mut GameState,
         pack: &Pack,
-        room: &RoomState,
+        room: &mut RoomState,
     ) -> bool {
         host.update(game, room, pack, 1, &[])
     }
@@ -10263,7 +10263,7 @@ end
             let mut game = roots_game(behavior);
             let mut host = LuaEnemyHost::new();
             assert!(
-                roots_step(&mut host, &mut game, &pack, &RoomState::default()),
+                roots_step(&mut host, &mut game, &pack, &mut RoomState::default()),
                 "kind {behavior:#04x}"
             );
             let entity = &game.entities[1];
@@ -10305,7 +10305,7 @@ end
                 &mut host,
                 &mut game,
                 &pack,
-                &RoomState::default()
+                &mut RoomState::default()
             ));
         }
         let entity = &game.entities[1];
@@ -10322,11 +10322,11 @@ end
         let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
         let mut game = roots_game(0x01);
         let mut host = LuaEnemyHost::new();
-        let room = RoomState::default();
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        let mut room = RoomState::default();
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
 
         // First idle frame: the one-shot retract.
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         let entity = &game.entities[1];
         assert_eq!(
             entity.ignore(),
@@ -10352,7 +10352,7 @@ end
         // snaps the mass back to the frozen spawn point.
         game.entities[1].pos[0] += 321;
         game.entities[1].pos[2] -= 99;
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         let entity = &game.entities[1];
         assert_eq!(entity.joint_scale, 0x9C4, "the collapse does not repeat");
         assert_eq!(entity.tint_queue, [0, -6, -12]);
@@ -10364,11 +10364,11 @@ end
         let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
         let mut game = roots_game(0x00);
         let mut host = LuaEnemyHost::new();
-        let room = RoomState::default();
+        let mut room = RoomState::default();
 
         // Call 0 is init; call 1 runs phase 0 (start) plus the first bob.
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         let entity = &game.entities[1];
         assert_eq!(entity.ignore(), 1, "phase 0 bumps to 1");
         assert_eq!(entity.writhe_velocity(), 0);
@@ -10380,7 +10380,7 @@ end
 
         // Eleven rise ticks ramp the amplitude to the cap and bump the phase.
         for _ in 0..11 {
-            assert!(roots_step(&mut host, &mut game, &pack, &room));
+            assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         }
         let entity = &game.entities[1];
         assert_eq!(entity.ignore(), 2);
@@ -10391,7 +10391,7 @@ end
         // The ninth shrink tick packs the cadence word and fires the first
         // tint flash.
         for _ in 0..9 {
-            assert!(roots_step(&mut host, &mut game, &pack, &room));
+            assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         }
         let entity = &game.entities[1];
         assert_eq!(entity.tint_flashes(), 5);
@@ -10403,7 +10403,7 @@ end
         // Run the rest of the shrink phase; the exit branch parks the phase at
         // 3 with the cadence and flash words collapsed to one.
         while game.entities[1].ignore() == 2 {
-            assert!(roots_step(&mut host, &mut game, &pack, &room));
+            assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         }
         let entity = &game.entities[1];
         assert_eq!(entity.ignore(), 3);
@@ -10418,7 +10418,7 @@ end
         // The sink phase bleeds the amplitude down, wobbles every fourth tick
         // and raises the death event when it bottoms out.
         while game.entities[1].ignore() == 3 {
-            assert!(roots_step(&mut host, &mut game, &pack, &room));
+            assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         }
         let entity = &game.entities[1];
         assert_eq!(entity.ignore(), 4);
@@ -10429,7 +10429,7 @@ end
         // Phase 4 stops the cycle: the machine holds still from here on.
         let latched = *entity;
         for _ in 0..3 {
-            assert!(roots_step(&mut host, &mut game, &pack, &room));
+            assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         }
         assert_eq!(game.entities[1], latched);
     }
@@ -10439,14 +10439,14 @@ end
         let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
         let mut game = roots_game(0x00);
         let mut host = LuaEnemyHost::new();
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         for _ in 0..4 {
-            assert!(roots_step(&mut host, &mut game, &pack, &room));
+            assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         }
         assert_eq!(game.entities[1].ignore(), 1);
         game.entities[1].set_state(2);
         game.entities[1].hit_state = 0x10;
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         let entity = &game.entities[1];
         assert_eq!(entity.state(), 1);
         assert_eq!(entity.ignore(), 0);
@@ -10458,31 +10458,31 @@ end
         let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
         let mut game = roots_game(0x80);
         let mut host = LuaEnemyHost::new();
-        let room = RoomState::default();
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        let mut room = RoomState::default();
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
 
         // Raw state 6 starts a cycle without the idle bob.
         game.entities[1].set_state(6);
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         assert_eq!(game.entities[1].ignore(), 1);
         assert_eq!(game.entities[1].writhe_amplitude(), 0);
 
         // Raw state 7 is one rise step; raw state 9 one sink step.
         game.entities[1].set_state(7);
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         assert_eq!(game.entities[1].writhe_amplitude(), 0x200);
         game.entities[1].set_state(9);
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         assert_eq!(game.entities[1].writhe_amplitude(), 0x200 - 0x70);
     }
 
     #[test]
     fn roots_groan_timer_draws_in_order_and_queues_the_enemy_bank() {
         let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
-        let room = roots_room();
+        let mut room = roots_room();
         let mut game = roots_game(0x00);
         let mut host = LuaEnemyHost::new();
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
 
         // Park the timer one tick from expiry and run a single writhe frame:
         // two low-bit draws reload it, then the one-in-32 roll draws once.
@@ -10493,7 +10493,7 @@ end
         let second = crate::game::platform_rand(&mut expected_state) & 7;
         let roll = crate::game::platform_rand(&mut expected_state) & 0x1F;
         assert_ne!(roll, 1, "seed 1 picks the single-groan branch");
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         assert_eq!(
             game.entities[1].groan_timer(),
             (first + second + 0xC) as i16
@@ -10517,7 +10517,7 @@ end
         game.entity_sounds.clear();
         game.entities[1].set_groan_timer(1);
         game.rand_state = lucky;
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         assert_eq!(
             game.entity_sounds.len(),
             2,
@@ -10527,7 +10527,7 @@ end
         // Kind 0x80 never reaches the writhe sub-behaviour, so no draws.
         let mut game = roots_game(0x80);
         let before = game.rand_state;
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         assert_eq!(game.rand_state, before);
         assert!(game.entity_sounds.is_empty());
     }
@@ -10535,13 +10535,13 @@ end
     #[test]
     fn roots_cycle_start_cue_is_out_of_the_enemy_helper_range() {
         let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
-        let room = roots_room();
+        let mut room = roots_room();
         // The script's phase-0 call requests id 0x18; the shared helper only
         // accepts the group-relative ids 0..=9, so it queues nothing.
         let mut game = roots_game(0x00);
         let mut host = LuaEnemyHost::new();
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         assert!(
             game.entity_sounds.is_empty(),
             "the cycle-start cue is inert, exactly like the original"
@@ -10553,14 +10553,14 @@ end
         let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
         let mut game = roots_game(0x01);
         let mut host = LuaEnemyHost::new();
-        let room = RoomState::default();
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        let mut room = RoomState::default();
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         game.message_flags &= !crate::game::MESSAGE_FLAG_MONSTERS;
 
         // The state machine and the collision pass are gated; the position
         // pin and the camera-zone word still run.
         game.entities[1].pos[0] += 500;
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         let entity = &game.entities[1];
         assert_eq!(entity.ignore(), 0, "move_b did not run");
         assert_eq!(entity.joint_scale, 0x1000);
@@ -10569,7 +10569,7 @@ end
 
         // Releasing the gate runs the parked first idle frame.
         game.message_flags |= crate::game::MESSAGE_FLAG_MONSTERS;
-        assert!(roots_step(&mut host, &mut game, &pack, &room));
+        assert!(roots_step(&mut host, &mut game, &pack, &mut room));
         assert_eq!(game.entities[1].ignore(), 1);
         assert_eq!(game.entities[1].joint_scale, 0x9C4);
     }
@@ -10577,7 +10577,7 @@ end
     #[test]
     fn roots_reset_between_frames_preserves_the_cycle() {
         let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
-        let room = roots_room();
+        let mut room = roots_room();
         let mut cached_game = roots_game(0x00);
         let mut reset_game = roots_game(0x00);
         let mut cached = LuaEnemyHost::new();
@@ -10586,9 +10586,9 @@ end
         // Twenty-five ticks span the init, the whole rise and the first tint
         // flash, so the reset path re-reads every scratch word.
         for tick in 0..25 {
-            assert!(roots_step(&mut cached, &mut cached_game, &pack, &room));
+            assert!(roots_step(&mut cached, &mut cached_game, &pack, &mut room));
             reset.reset();
-            assert!(roots_step(&mut reset, &mut reset_game, &pack, &room));
+            assert!(roots_step(&mut reset, &mut reset_game, &pack, &mut room));
             assert_eq!(
                 cached_game, reset_game,
                 "the roots state diverged at tick {tick}"
@@ -10624,7 +10624,7 @@ end
             &mut host,
             &mut game,
             &pack,
-            &RoomState::default()
+            &mut RoomState::default()
         ));
         let entity = &game.entities[1];
         assert_eq!(entity.writhe_velocity(), -0x1234);
@@ -10662,15 +10662,15 @@ mod pause_tests {
         let mut game = GameState::default();
         game.entities[1].id = 0x13;
         game.entities[1].set_active(true);
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut host = LuaEnemyHost::new();
 
         game.message_flags &= !MESSAGE_FLAG_MONSTERS;
-        assert!(host.update(&mut game, &room, &pack, 1, &[]));
+        assert!(host.update(&mut game, &mut room, &pack, 1, &[]));
         assert_eq!(game.entities[1].health, 0, "the pause held the dispatch");
 
         game.message_flags |= MESSAGE_FLAG_MONSTERS;
-        assert!(host.update(&mut game, &room, &pack, 1, &[]));
+        assert!(host.update(&mut game, &mut room, &pack, 1, &[]));
         assert_eq!(game.entities[1].health, 9);
     }
 }
@@ -10763,7 +10763,7 @@ mod spider_tests {
     }
 
     fn step(host: &mut LuaEnemyHost, game: &mut GameState, pack: &Pack, clips: &[Clip]) -> bool {
-        host.update(game, &spider_room(), pack, 1, clips)
+        host.update(game, &mut spider_room(), pack, 1, clips)
     }
 
     #[test]
@@ -11292,9 +11292,9 @@ end
                     _ => {}
                 }
             }
-            assert!(cached.update(&mut cached_game, &spider_room(), &pack, 1, &clips));
+            assert!(cached.update(&mut cached_game, &mut spider_room(), &pack, 1, &clips));
             reset.reset();
-            assert!(reset.update(&mut reset_game, &spider_room(), &pack, 1, &clips));
+            assert!(reset.update(&mut reset_game, &mut spider_room(), &pack, 1, &clips));
             assert_eq!(
                 cached_game, reset_game,
                 "the webspinner scene diverged at tick {tick}"
@@ -11345,9 +11345,9 @@ end
                     _ => {}
                 }
             }
-            assert!(cached.update(&mut cached_game, &spider_room(), &pack, 1, &clips));
+            assert!(cached.update(&mut cached_game, &mut spider_room(), &pack, 1, &clips));
             reset.reset();
-            assert!(reset.update(&mut reset_game, &spider_room(), &pack, 1, &clips));
+            assert!(reset.update(&mut reset_game, &mut spider_room(), &pack, 1, &clips));
             assert_eq!(
                 cached_game, reset_game,
                 "the blacktiger scene diverged at tick {tick}"
@@ -11397,7 +11397,7 @@ mod zombie_tests {
     }
 
     fn step(host: &mut LuaEnemyHost, game: &mut GameState, pack: &Pack) -> bool {
-        host.update(game, &RoomState::default(), pack, 1, &[])
+        host.update(game, &mut RoomState::default(), pack, 1, &[])
     }
 
     /// One one-frame clip per id, so `advance_anim` completes on the first
@@ -11420,7 +11420,7 @@ mod zombie_tests {
         pack: &Pack,
         clips: &[crate::model::Clip],
     ) -> bool {
-        host.update(game, &RoomState::default(), pack, 1, clips)
+        host.update(game, &mut RoomState::default(), pack, 1, clips)
     }
 
     /// A room with one rectangular boundary around `(0, 0)`, for the floor
@@ -12385,8 +12385,8 @@ mod zombie_tests {
         game.entities[1].pos = [0, 0, 0];
         // Keep the player outside the pushed-back attack gate.
         game.entities[0].pos = [9000, 0, 0];
-        let room = walled_room();
-        assert!(host.update(&mut game, &room, &pack, 1, &[]));
+        let mut room = walled_room();
+        assert!(host.update(&mut game, &mut room, &pack, 1, &[]));
         let _ = before;
         assert_eq!(game.entities[1].state(), 1, "the walk state held");
     }
@@ -12530,8 +12530,8 @@ end
         game.entities[1].action_behavior = 0;
         game.entities[1].action_state = 1;
         game.entities[1].action_ticks_counter = 100;
-        let room = walled_room();
-        assert!(host.update(&mut game, &room, &pack, 1, &[]));
+        let mut room = walled_room();
+        assert!(host.update(&mut game, &mut room, &pack, 1, &[]));
         // The head starts at Y 0 (> -100) with frame 0 (< 6): the fall runs,
         // the counter increments and the first gravity step lands at -100.
         assert_eq!(game.entities[1].joint_blood[2].counter, 1);
@@ -12695,7 +12695,7 @@ mod cerberus_tests {
     }
 
     fn step(host: &mut LuaEnemyHost, game: &mut GameState, pack: &Pack) -> bool {
-        host.update(game, &dog_room(), pack, 1, &[])
+        host.update(game, &mut dog_room(), pack, 1, &[])
     }
 
     /// One-frame clips for every animation id, so `advance_anim` completes on
@@ -12718,7 +12718,7 @@ mod cerberus_tests {
         pack: &Pack,
         clips: &[crate::model::Clip],
     ) -> bool {
-        host.update(game, &dog_room(), pack, 1, clips)
+        host.update(game, &mut dog_room(), pack, 1, clips)
     }
 
     const HEALTH: [i16; 16] = [
@@ -13322,7 +13322,7 @@ mod chimera_tests {
     }
 
     fn step(host: &mut LuaEnemyHost, game: &mut GameState, pack: &Pack) -> bool {
-        host.update(game, &chimera_room(), pack, 1, &[])
+        host.update(game, &mut chimera_room(), pack, 1, &[])
     }
 
     fn clips() -> Vec<crate::model::Clip> {
@@ -13343,7 +13343,7 @@ mod chimera_tests {
         pack: &Pack,
         clips: &[crate::model::Clip],
     ) -> bool {
-        host.update(game, &chimera_room(), pack, 1, clips)
+        host.update(game, &mut chimera_room(), pack, 1, clips)
     }
 
     /// The room the shadow-resize tail needs: one camera zone containing the
@@ -13728,7 +13728,7 @@ mod chimera_tests {
         game.joint_worlds[1] = vec![identity; 8];
         let mut host = LuaEnemyHost::new();
         game.joint_worlds[1] = vec![identity; 8];
-        host.update(&mut game, &camera_room(), &pack, 1, &[]);
+        host.update(&mut game, &mut camera_room(), &pack, 1, &[]);
         // joint Y 0 -> size (0 >> 4) + 800 = 800; (-0 - 0x898) as u32 is huge,
         // so the 600 clamp does not fire; halves are 800 + 0x32 and 1000.
         assert_eq!(game.entities[1].shadow_half_x, 800 + 0x32);
@@ -13738,13 +13738,13 @@ mod chimera_tests {
         game.joint_worlds[1] = vec![identity; 8];
         game.joint_worlds[1][3].t[1] = -0x898;
         game.entities[1].set_c_fade_freeze(0);
-        host.update(&mut game, &camera_room(), &pack, 1, &[]);
+        host.update(&mut game, &mut camera_room(), &pack, 1, &[]);
         assert_eq!(game.entities[1].shadow_half_x, 600 + 0x32);
 
         // A frozen fade keeps the old quad.
         game.entities[1].set_c_fade_freeze(1);
         game.entities[1].shadow_half_x = 77;
-        host.update(&mut game, &camera_room(), &pack, 1, &[]);
+        host.update(&mut game, &mut camera_room(), &pack, 1, &[]);
         assert_eq!(game.entities[1].shadow_half_x, 77);
     }
 
@@ -13902,7 +13902,7 @@ mod hunter_tests {
     }
 
     fn step(host: &mut LuaEnemyHost, game: &mut GameState, pack: &Pack, slot: usize) -> bool {
-        host.update(game, &room(), pack, slot, &[])
+        host.update(game, &mut room(), pack, slot, &[])
     }
 
     fn step_clipped(
@@ -13912,7 +13912,7 @@ mod hunter_tests {
         slot: usize,
         clips: &[crate::model::Clip],
     ) -> bool {
-        host.update(game, &room(), pack, slot, clips)
+        host.update(game, &mut room(), pack, slot, clips)
     }
 
     /// Thirty-two one-frame clips, so every advance completes.
@@ -15014,7 +15014,7 @@ mod monster_plant_tests {
     }
 
     fn step(host: &mut LuaEnemyHost, game: &mut GameState, pack: &Pack) -> bool {
-        host.update(game, &RoomState::default(), pack, 1, &[])
+        host.update(game, &mut RoomState::default(), pack, 1, &[])
     }
 
     fn step_clipped(
@@ -15023,7 +15023,7 @@ mod monster_plant_tests {
         pack: &Pack,
         clips: &[crate::model::Clip],
     ) -> bool {
-        host.update(game, &RoomState::default(), pack, 1, clips)
+        host.update(game, &mut RoomState::default(), pack, 1, clips)
     }
 
     /// Thirty-two one-frame clips: every advance completes on the tick it is
@@ -15613,7 +15613,7 @@ mod monster_plant_tests {
                 if reset && tick > 0 {
                     host.reset();
                 }
-                assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+                assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
             }
             (game.entities[1], game.rand_state, game.monster_plant_sides)
         };
@@ -15668,7 +15668,7 @@ mod computer_arms_tests {
         pack: &Pack,
         clips: &[crate::model::Clip],
     ) -> bool {
-        host.update(game, &RoomState::default(), pack, 1, clips)
+        host.update(game, &mut RoomState::default(), pack, 1, clips)
     }
 
     /// Thirty-two one-frame clips: every advance completes on its tick.
@@ -16069,8 +16069,8 @@ mod computer_arms_tests {
                 };
                 game.entities[1].behavior_flags = flags;
                 game.entities[2].behavior_flags = flags;
-                assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
-                assert!(host.update(&mut game, &RoomState::default(), &pack, 2, &clips));
+                assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
+                assert!(host.update(&mut game, &mut RoomState::default(), &pack, 2, &clips));
             }
             (
                 game.entities[1],
@@ -16157,7 +16157,7 @@ mod computer_arms_tests {
         }
 
         fn step(host: &mut LuaEnemyHost, game: &mut GameState, pack: &Pack) -> bool {
-            host.update(game, &room(), pack, 1, &clips())
+            host.update(game, &mut room(), pack, 1, &clips())
         }
 
         /// Give the head joints a low world translation so the idle's
@@ -16987,7 +16987,7 @@ mod computer_arms_tests {
             pack: &Pack,
             clips: &[Clip],
         ) -> bool {
-            host.update(game, &RoomState::default(), pack, 1, clips)
+            host.update(game, &mut RoomState::default(), pack, 1, clips)
         }
 
         // ---------------------------------------------------------------
@@ -17409,7 +17409,8 @@ mod computer_arms_tests {
                     // The segments tick through the same VM.
                     let segments = crate::enemy::yawn::segment_slots(&game, 1).unwrap();
                     for slot in segments {
-                        let _ = host.update(&mut game, &RoomState::default(), &pack, slot, &clips);
+                        let _ =
+                            host.update(&mut game, &mut RoomState::default(), &pack, slot, &clips);
                     }
                 }
                 (
@@ -17518,7 +17519,7 @@ mod computer_arms_tests {
             pack: &Pack,
             clips: &[Clip],
         ) -> bool {
-            host.update(game, &RoomState::default(), pack, 2, clips)
+            host.update(game, &mut RoomState::default(), pack, 2, clips)
         }
 
         // -----------------------------------------------------------------
@@ -18044,7 +18045,7 @@ mod computer_arms_tests {
         }
 
         fn step(host: &mut LuaEnemyHost, game: &mut GameState, pack: &Pack, slot: usize) -> bool {
-            host.update(game, &RoomState::default(), pack, slot, &[])
+            host.update(game, &mut RoomState::default(), pack, slot, &[])
         }
 
         fn run_all(host: &mut LuaEnemyHost, game: &mut GameState, pack: &Pack) {
@@ -18258,25 +18259,25 @@ mod computer_arms_tests {
 
             // State 0 of the swim actions picks the animation and the 0x78
             // cruise speed.
-            assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+            assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
             assert_eq!(game.entities[1].action_state, 1);
             assert_eq!(game.entities[1].move_speed_current, 0x78);
 
             // Far and running: speed up to 0x82 in sub-state 2.
-            assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+            assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
             assert_eq!(game.entities[1].action_state, 2);
             assert_eq!(game.entities[1].move_speed_current, 0x82);
 
             // Close in: drop back to sub-state 1 at speed 100.
             game.entities[0].pos = [5000, 0, 0];
-            assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+            assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
             assert_eq!(game.entities[1].action_state, 1);
             assert_eq!(game.entities[1].move_speed_current, 100);
 
             // A stopped player keeps the shark in the far sub-state.
             game.entities[0].pos = [20000, 0, 0];
             game.entities[0].action_behavior = 0;
-            assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+            assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
             assert_eq!(game.entities[1].action_state, 1);
             assert_eq!(game.entities[1].move_speed_current, 100);
         }
@@ -18291,7 +18292,7 @@ mod computer_arms_tests {
             game.entities[0].pos = [1000, 0, 0];
             game.entities[0].health = 10;
             let mut host = LuaEnemyHost::new();
-            assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+            assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
             assert_eq!(game.entities[1].ignore(), 1);
             assert_eq!(game.entities[1].action_behavior, 4);
             assert_eq!(game.entities[1].action_state, 1, "the seize ran");
@@ -18301,7 +18302,7 @@ mod computer_arms_tests {
             game.entities[0].pos = [2000, 0, 0];
             game.entities[0].health = 50;
             let mut host = LuaEnemyHost::new();
-            assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+            assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
             assert_eq!(game.entities[1].action_behavior, 5);
             assert_eq!(game.entities[1].action_state, 1, "the close began");
 
@@ -18310,7 +18311,7 @@ mod computer_arms_tests {
             game.entities[0].pos = [4000, 0, 0];
             game.entities[0].health = 50;
             let mut host = LuaEnemyHost::new();
-            assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+            assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
             assert_eq!(game.entities[1].action_behavior, 0);
 
             // The small variant never attacks.
@@ -18319,7 +18320,7 @@ mod computer_arms_tests {
             game.entities[0].pos = [1000, 0, 0];
             game.entities[0].health = 10;
             let mut host = LuaEnemyHost::new();
-            assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+            assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
             assert_eq!(game.entities[1].action_behavior, 0);
 
             // Off-axis: the 768 half-window test refuses the attack.
@@ -18327,7 +18328,7 @@ mod computer_arms_tests {
             game.entities[0].pos = [0, 0, 1000];
             game.entities[0].health = 10;
             let mut host = LuaEnemyHost::new();
-            assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+            assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
             assert_eq!(game.entities[1].action_behavior, 0);
 
             // A player already being attacked is never interrupted.
@@ -18336,7 +18337,7 @@ mod computer_arms_tests {
             game.entities[0].health = 10;
             game.entities[0].is_being_attacked = 1;
             let mut host = LuaEnemyHost::new();
-            assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+            assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
             assert_eq!(game.entities[1].action_behavior, 0);
         }
 
@@ -18351,7 +18352,7 @@ mod computer_arms_tests {
 
             // The attack decision selects the devour; the seize takes the
             // player's animation and facing.
-            assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+            assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
             assert_eq!(game.entities[1].action_behavior, 4);
             assert_eq!(game.entities[1].action_state, 1);
             assert_eq!(game.entities[1].status_flags & 2, 2);
@@ -18362,7 +18363,7 @@ mod computer_arms_tests {
             let mut saw_spit = false;
             let mut saw_recover = false;
             for _ in 0..200 {
-                assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+                assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
                 match game.entities[1].action_state {
                     5 => saw_spit = true,
                     6 => saw_recover = true,
@@ -18401,7 +18402,7 @@ mod computer_arms_tests {
             entity.action_behavior = 1;
             entity.action_state = 0;
             let mut host = LuaEnemyHost::new();
-            assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+            assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
             assert_eq!(game.entities[1].action_state, 1);
             assert_eq!(game.entities[1].animation_id, 3);
             assert_eq!(game.entities[1].move_speed_current, 0x32);
@@ -18426,7 +18427,7 @@ mod computer_arms_tests {
             entity.player_pos_x = 1000;
             entity.player_pos_z = 0;
             let mut host = LuaEnemyHost::new();
-            assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+            assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
             let entity = game.entities[1];
             assert_eq!(entity.splatter_flag & 0x80, 0x80, "the stuck flag");
             assert_eq!(entity.angle_turn_delta, 10, "turn_limit / 6");
@@ -18452,7 +18453,7 @@ mod computer_arms_tests {
             let mut host = LuaEnemyHost::new();
 
             // The first tick claims the shark and runs the turn.
-            assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+            assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
             let entity = game.entities[1];
             assert_eq!(entity.ignore(), 1);
             assert_eq!(entity.action_ticks_counter, 0x1E);
@@ -18463,7 +18464,7 @@ mod computer_arms_tests {
 
             // The sink counts the 30-frame timer down and resets the block.
             for _ in 0..40 {
-                assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
+                assert!(host.update(&mut game, &mut RoomState::default(), &pack, 1, &clips));
                 if game.entities[1].state() == 1 {
                     break;
                 }

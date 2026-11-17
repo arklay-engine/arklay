@@ -93,8 +93,8 @@ impl FireScene {
             self.room.current_cut = self.game.camera.current_cut;
         }
         self.game
-            .tick_entities(&self.room, &mut self.models, pack, None);
-        self.game.tick_effects(&self.room);
+            .tick_entities(&mut self.room, &mut self.models, pack, None);
+        self.game.tick_effects(&mut self.room);
     }
 }
 
@@ -263,7 +263,7 @@ fn real_room1051_capture_shows_the_muzzle_pixels() {
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("1051").unwrap();
     let sim = engine::simulate_room(&pack, id, 0, player::Input::default()).unwrap();
-    let room = sim.room.clone();
+    let mut room = sim.room.clone();
     let mut game = sim.game.clone();
     // Pose Barry exactly as the firing script does, on the boot camera that
     // frames him.
@@ -281,8 +281,8 @@ fn real_room1051_capture_shows_the_muzzle_pixels() {
     let mut models = EntityModelCache::default();
     let mut capture = None;
     for _ in 0..8 {
-        game.tick_entities(&room, &mut models, &pack, None);
-        game.tick_effects(&room);
+        game.tick_entities(&mut room, &mut models, &pack, None);
+        game.tick_effects(&mut room);
         let muzzle = game
             .effects
             .active()
@@ -337,7 +337,7 @@ fn real_room40c1_flamethrower_runs_without_the_wait_flag() {
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("40C1").unwrap();
     let sim = engine::simulate_room(&pack, id, 0, player::Input::default()).unwrap();
-    let room = sim.room;
+    let mut room = sim.room;
     let mut game = sim.game;
 
     // The room's flamethrower character (behavior_flags 5 -> weapon 3) as its
@@ -364,8 +364,8 @@ fn real_room40c1_flamethrower_runs_without_the_wait_flag() {
     let mut models = EntityModelCache::default();
     let mut sprayed = false;
     for _ in 0..200 {
-        game.tick_entities(&room, &mut models, &pack, None);
-        game.tick_effects(&room);
+        game.tick_entities(&mut room, &mut models, &pack, None);
+        game.tick_effects(&mut room);
         sprayed |= game
             .effects
             .active()
@@ -432,7 +432,7 @@ fn real_effect_pool_resets_across_a_room_transition() {
         sim.game.effects.free_slots(),
         effects::EFFECT_POOL_SIZE as u8
     );
-    sim.game.tick_effects(&sim.room);
+    sim.game.tick_effects(&mut sim.room);
     assert_eq!(sim.game.effects.active_count(), 0);
 }
 

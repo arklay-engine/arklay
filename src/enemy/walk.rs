@@ -33,7 +33,7 @@ use crate::game::{Entity, EntitySound, GameState};
 use crate::model::Clip;
 use crate::player;
 use crate::sfx;
-use crate::state::RoomState;
+use crate::state::{Collision, CollisionRect, RoomState};
 
 use crate::anim::{Mat4x3, compose};
 
@@ -1541,52 +1541,74 @@ fn ray_crosses_diagonal(
     (cross_y(delta, p1) ^ cross_y(delta, p0)) < 0
 }
 
-/// `room_check_sight_blocked`: does the straight line from the entity to the
-/// entity plus `delta` cross a sight-blocking boundary record of quadrant
-/// `cell` (0-3)? The per-record test walks the box's two diagonals; only
-/// fully-blocking records (`flags & 0x300 == 0x300`) occlude, except for Yawn
-/// (ids 13 and 18), for which every record occludes. Coordinates are scaled
-/// down by 18 before the cross products to keep them inside 32 bits.
+/// `room_check_sight_blocked` (0x0047db90): does the straight line from the
+/// entity to the entity plus `delta` cross a sight-blocking boundary record of
+/// quadrant `cell` (0-3)? The per-record test walks the box's two diagonals;
+/// only fully-blocking records (`flags & 0x300 == 0x300`) occlude, except for
+/// Yawn (ids 13 and 18), for which every record occludes. Coordinates are
+/// scaled down by 18 before the cross products to keep them inside 32 bits.
 ///
-/// The original also clobbers each tested record's `flags` down to the two
-/// blocking bits; the port cannot write through the shared room, so that
-/// destructive side effect is dropped here.
+/// The original masks every record it walks down to its two blocking bits and
+/// writes that back (0x0047dc4a), before the occluder filter and up to and
+/// including the record that blocks. The floor/step fine value in the low byte
+/// is lost until the room's RDT is reloaded, and `check_room_collision` reads
+/// it.
 pub(crate) fn room_check_sight_blocked(
-    room: &RoomState,
+    collision: &mut Collision,
     entity: &Entity,
     ent_pos: [i32; 3],
     delta: [i32; 3],
     cell: u8,
 ) -> u8 {
-    let quadrant = usize::from(cell & 3);
-    let records = &room.collision.quadrants[quadrant];
+    let records = &mut collision.quadrants[usize::from(cell & 3)];
+    let hit = sight_blocking_record(records, entity.id, ent_pos, delta);
+    let walked = hit.map_or(records.len(), |index| index + 1);
+    for rec in &mut records[..walked] {
+        rec.flags &= 0x300;
+    }
+    u8::from(hit.is_some())
+}
 
-    let ent_x = ent_pos[0] / 18;
-    let ent_z = ent_pos[2] / 18;
-    let dir_x = delta[0] / 18;
-    let dir_z = delta[2] / 18;
-    let ent = [ent_x, ent_z];
-    let dir = [dir_x, dir_z];
+/// [`room_check_sight_blocked`] without the flag write-back, for engine-side
+/// queries the original never makes (the bot's view of the room).
+pub(crate) fn peek_sight_blocked(
+    collision: &Collision,
+    entity: &Entity,
+    ent_pos: [i32; 3],
+    delta: [i32; 3],
+    cell: u8,
+) -> u8 {
+    let records = &collision.quadrants[usize::from(cell & 3)];
+    u8::from(sight_blocking_record(records, entity.id, ent_pos, delta).is_some())
+}
 
-    for rec in records {
+/// The record walk shared by the two sight checks: the index of the first
+/// record that blocks the ray, if any. The blocking bits read are the same
+/// before and after the original's mask, so the walk itself is unaffected by
+/// the write-back.
+fn sight_blocking_record(
+    records: &[CollisionRect],
+    entity_id: u8,
+    ent_pos: [i32; 3],
+    delta: [i32; 3],
+) -> Option<usize> {
+    let ent = [ent_pos[0] / 18, ent_pos[2] / 18];
+    let dir = [delta[0] / 18, delta[2] / 18];
+    records.iter().position(|rec| {
         let blocking = rec.flags & 0x300;
-        if blocking != 0x300 && entity.id != 13 && entity.id != 18 {
-            continue;
+        if blocking != 0x300 && entity_id != 13 && entity_id != 18 {
+            return false;
         }
         if rec.kind == 4 || rec.kind == 5 {
-            continue;
+            return false;
         }
         let x_max = i32::from(rec.x_max / 18);
         let z_max = i32::from(rec.z_max / 18);
         let x_min = i32::from(rec.x_min / 18);
         let z_min = i32::from(rec.z_min / 18);
-        if ray_crosses_diagonal(ent, dir, [x_max, z_min], [x_min, z_max], true)
+        ray_crosses_diagonal(ent, dir, [x_max, z_min], [x_min, z_max], true)
             || ray_crosses_diagonal(ent, dir, [x_min, z_min], [x_max, z_max], false)
-        {
-            return 1;
-        }
-    }
-    0
+    })
 }
 
 /// `entity_check_angular_los`: is `target` outside the entity's angular field
@@ -1595,7 +1617,7 @@ pub(crate) fn room_check_sight_blocked(
 /// original passes to `room_check_sight_blocked` as the quadrant index; the
 /// caller only reaches this with the counter at 0-3.
 fn entity_check_angular_los(
-    room: &RoomState,
+    room: &mut RoomState,
     entity: &Entity,
     fov_half: i16,
     target: [i32; 3],
@@ -1611,7 +1633,7 @@ fn entity_check_angular_los(
     }
 
     let dir = [target[0] - entity.pos[0], 0, target[2] - entity.pos[2]];
-    room_check_sight_blocked(room, entity, entity.pos, dir, cell)
+    room_check_sight_blocked(&mut room.collision, entity, entity.pos, dir, cell)
 }
 
 /// `entity_pathfind_update`: the obstacle pathfinder state machine the state-9
@@ -1624,7 +1646,11 @@ fn entity_check_angular_los(
 /// Returns 0 (blocked at the waypoint frame), 1 (waypoint refreshed) or
 /// 2 (still counting); the state-9 driver ignores the value, exactly like the
 /// original.
-pub fn entity_pathfind_update(room: &RoomState, entity: &mut Entity, player_pos: [i32; 3]) -> u8 {
+pub fn entity_pathfind_update(
+    room: &mut RoomState,
+    entity: &mut Entity,
+    player_pos: [i32; 3],
+) -> u8 {
     let val = entity.pathfind_state;
     let counter = val & 0x1F;
     if counter > 3 {
@@ -2521,7 +2547,7 @@ pub(crate) fn player_radius(player_flag: u8) -> i32 {
 /// the SCA volume pairs (the player first, then every other active character),
 /// then resolve the result against the room collision with the last accepted
 /// position as the rollback point.
-pub fn update(game: &mut GameState, slot: usize, room: &RoomState, clips: &[Clip]) {
+pub fn update(game: &mut GameState, slot: usize, room: &mut RoomState, clips: &[Clip]) {
     let player_pos = game.entities[0].pos;
     let player_angle = game.entities[0].angle;
     let player_status = game.player_status_flags();
@@ -2688,14 +2714,14 @@ fn apply_matrix_lv(matrix: &crate::anim::Mat4x3, v: [i32; 3]) -> [i32; 3] {
 /// `check_line_of_sight`: 0 when the entity's sight line to `target` is clear,
 /// 1 when a fully-blocking boundary record crosses it. The quadrant comes from
 /// the target's own boundary cell (`ChkOutsideCell` with the zero offset).
-pub fn check_line_of_sight(room: &RoomState, entity: &Entity, target: [i32; 3]) -> u8 {
+pub fn check_line_of_sight(room: &mut RoomState, entity: &Entity, target: [i32; 3]) -> u8 {
     let cell = player::quadrant(&room.collision, target[0], target[2]);
     let delta = [
         target[0].wrapping_sub(entity.pos[0]),
         target[1].wrapping_sub(entity.pos[1]),
         target[2].wrapping_sub(entity.pos[2]),
     ];
-    room_check_sight_blocked(room, entity, entity.pos, delta, cell)
+    room_check_sight_blocked(&mut room.collision, entity, entity.pos, delta, cell)
 }
 
 /// The field-agnostic core of `entity_update_wander_turn`: the callers pass
@@ -4094,7 +4120,7 @@ mod tests {
 
     #[test]
     fn entity_pathfind_update_cycles_and_latches_the_waypoint() {
-        let room = corridor();
+        let mut room = corridor();
         let mut e = Entity {
             id: 0x23,
             pos: [50, 0, 50],
@@ -4103,24 +4129,24 @@ mod tests {
         let player = [80, 0, 50];
         // A clear straight-ahead line: the counter just advances.
         for _ in 0..3 {
-            assert_eq!(entity_pathfind_update(&room, &mut e, player), 2);
+            assert_eq!(entity_pathfind_update(&mut room, &mut e, player), 2);
         }
         // Counter 3 with the LOS bit clear: latch the player waypoint.
-        assert_eq!(entity_pathfind_update(&room, &mut e, player), 1);
+        assert_eq!(entity_pathfind_update(&mut room, &mut e, player), 1);
         assert_eq!((e.player_pos_x, e.player_pos_z), (80, 50));
         assert_eq!(e.pathfind_state & 0x1F, 4);
         assert_eq!(e.pathfind_state & 0x20, 0, "the LOS bit stays clear");
 
         // Past 3 the byte just counts; at 0x10 it clamps back to zero.
         for _ in 0..12 {
-            assert_eq!(entity_pathfind_update(&room, &mut e, player), 2);
+            assert_eq!(entity_pathfind_update(&mut room, &mut e, player), 2);
         }
         assert_eq!(e.pathfind_state & 0x1F, 0, "the counter clamps at 16");
     }
 
     #[test]
     fn entity_pathfind_update_blocked_los_skips_the_latch() {
-        let room = corridor();
+        let mut room = corridor();
         let mut e = Entity {
             id: 0x23,
             pos: [50, 0, 50],
@@ -4131,10 +4157,10 @@ mod tests {
         // every LOS result is blocked.
         let player = [-100, 0, 50];
         for _ in 0..3 {
-            entity_pathfind_update(&room, &mut e, player);
+            entity_pathfind_update(&mut room, &mut e, player);
         }
         let waypoint = (e.player_pos_x, e.player_pos_z);
-        assert_eq!(entity_pathfind_update(&room, &mut e, player), 0);
+        assert_eq!(entity_pathfind_update(&mut room, &mut e, player), 0);
         assert_eq!(
             (e.player_pos_x, e.player_pos_z),
             waypoint,
@@ -4203,7 +4229,7 @@ mod tests {
 
     #[test]
     fn state9_entry_resets_the_look_at_and_marks_the_ignore() {
-        let room = corridor();
+        let mut room = corridor();
         let mut game = GameState::default();
         game.entities[0].pos = [2000, 0, 0];
         game.entities[1] = Entity {
@@ -4213,7 +4239,7 @@ mod tests {
             ..Entity::default()
         };
         game.entities[1].set_active(true);
-        update(&mut game, 1, &room, &[]);
+        update(&mut game, 1, &mut room, &[]);
         assert_eq!(game.entities[1].ignore(), 1);
         assert_eq!(game.entities[1].look_at_flags, 0x10);
         assert_eq!(game.entities[1].action_state, 1, "the pace wait started");
@@ -4247,7 +4273,7 @@ mod tests {
             ..Entity::default()
         };
         game.entities[1].set_active(true);
-        update(&mut game, 1, &room, &[]);
+        update(&mut game, 1, &mut room, &[]);
         assert_eq!(
             game.entities[1].pos, accepted,
             "the tail kept the object-pass push instead of the accepted position"
@@ -4257,7 +4283,7 @@ mod tests {
 
     #[test]
     fn distance_thresholds_swap_the_follow_behaviour() {
-        let room = corridor();
+        let mut room = corridor();
         let mut game = GameState::default();
         let mut entity = Entity {
             id: 0x23,
@@ -4272,7 +4298,7 @@ mod tests {
         // Player close: behaviour 1 swaps to the pace (0).
         game.entities[0].pos = [1000, 0, 50];
         game.entities[1].pos = [1500, 0, 50];
-        update(&mut game, 1, &room, &[]);
+        update(&mut game, 1, &mut room, &[]);
         assert_eq!(game.entities[1].action_behavior, 0);
 
         // Player far: behaviour 1 swaps to the fast walk (2).
@@ -4286,7 +4312,7 @@ mod tests {
         entity.sca_radius = 100;
         game.entities[1] = entity;
         game.entities[0].pos = [8000, 0, 0];
-        update(&mut game, 1, &room, &[]);
+        update(&mut game, 1, &mut room, &[]);
         assert_eq!(game.entities[1].action_behavior, 2);
 
         // A close player keeps behaviour 3 backing away (its near slot is
@@ -4301,17 +4327,17 @@ mod tests {
         entity.sca_radius = 100;
         game.entities[1] = entity;
         game.entities[0].pos = [1500, 0, 0];
-        update(&mut game, 1, &room, &[]);
+        update(&mut game, 1, &mut room, &[]);
         assert_eq!(game.entities[1].action_behavior, 3);
 
         game.entities[0].pos = [6000, 0, 0];
-        update(&mut game, 1, &room, &[]);
+        update(&mut game, 1, &mut room, &[]);
         assert_eq!(game.entities[1].action_behavior, 0, "past 0x09C4");
     }
 
     #[test]
     fn walk_to_player_closes_the_distance() {
-        let room = corridor();
+        let mut room = corridor();
         let mut game = GameState::default();
         game.entities[0].pos = [2900, 0, 50];
         game.entities[1] = Entity {
@@ -4327,7 +4353,7 @@ mod tests {
 
         let start = xz_distance_to(&game.entities[1], game.entities[0].pos);
         for _ in 0..30 {
-            update(&mut game, 1, &room, &[]);
+            update(&mut game, 1, &mut room, &[]);
             if game.entities[1].action_behavior != 1 {
                 break;
             }
@@ -4343,8 +4369,8 @@ mod tests {
 
     #[test]
     fn fast_walk_advances_further_than_the_walk() {
-        let room = corridor();
-        let run = |behavior: u8| {
+        let mut room = corridor();
+        let mut run = |behavior: u8| {
             let mut game = GameState::default();
             game.entities[0].pos = [2000, 0, 50];
             game.entities[1] = Entity {
@@ -4359,7 +4385,7 @@ mod tests {
             };
             game.entities[1].set_active(true);
             for _ in 0..10 {
-                update(&mut game, 1, &room, &[]);
+                update(&mut game, 1, &mut room, &[]);
             }
             game.entities[1].pos[0]
         };
@@ -4387,7 +4413,7 @@ mod tests {
 
     #[test]
     fn face_and_retreat_walks_back_at_the_exact_window_boundary() {
-        let room = corridor();
+        let mut room = corridor();
         let mut game = GameState::default();
         // The player sits along heading 0x200 and the character's yaw is 0, so
         // the window delta is exactly 0x200 + 0x200 = 0x400. The original's
@@ -4403,7 +4429,7 @@ mod tests {
             ..Entity::default()
         };
         game.entities[1].set_active(true);
-        update(&mut game, 1, &room, &[]);
+        update(&mut game, 1, &mut room, &[]);
         assert_eq!(
             game.entities[1].animation_id, 3,
             "the exact 0x400 boundary takes the backward walk"
@@ -4412,7 +4438,7 @@ mod tests {
 
     #[test]
     fn face_and_retreat_backs_away_from_the_player() {
-        let room = corridor();
+        let mut room = corridor();
         let mut game = GameState::default();
         game.entities[0].pos = [1000, 0, 50];
         game.entities[1] = Entity {
@@ -4426,7 +4452,7 @@ mod tests {
         };
         game.entities[1].set_active(true);
         for _ in 0..5 {
-            update(&mut game, 1, &room, &[]);
+            update(&mut game, 1, &mut room, &[]);
         }
         assert_eq!(game.entities[1].animation_id, 3, "the backward clip");
         assert!(
@@ -4550,7 +4576,7 @@ mod tests {
 
     #[test]
     fn effect_zone_flag_shifts_the_state9_footstep_column() {
-        let room = RoomState {
+        let mut room = RoomState {
             stage: 1,
             room: 6,
             footstep_zones: vec![FootstepZone {
@@ -4594,7 +4620,7 @@ mod tests {
         };
 
         place(&mut game);
-        update(&mut game, 1, &room, &clips);
+        update(&mut game, 1, &mut room, &clips);
         assert_eq!(
             game.entity_sounds
                 .last()
@@ -4606,7 +4632,7 @@ mod tests {
         // by three: the concrete footstep variant plays.
         game.flags[5].apply(crate::game::MSF2_EFFECT_ZONE, 0);
         place(&mut game);
-        update(&mut game, 1, &room, &clips);
+        update(&mut game, 1, &mut room, &clips);
         assert_eq!(
             game.entity_sounds
                 .last()
@@ -4916,7 +4942,7 @@ mod tests {
 
     #[test]
     fn state9_tail_resolves_the_character_against_other_characters() {
-        let room = corridor();
+        let mut room = corridor();
         let mut game = GameState::default();
         // The player sits outside behaviour 0's swap ring, so only the
         // character pair resolve can move the slot.
@@ -4938,7 +4964,7 @@ mod tests {
             ..Entity::default()
         };
         game.entities[2].set_active(true);
-        update(&mut game, 1, &room, &[]);
+        update(&mut game, 1, &mut room, &[]);
         let entity = game.entities[1];
         assert!(
             entity.pos[0] < 1100,
@@ -5164,7 +5190,7 @@ mod tests {
         let e = entity([100, 0, 100], 0, 0);
         // No collision records: the sight line is clear.
         assert_eq!(
-            check_line_of_sight(&RoomState::default(), &e, [1000, 0, 100]),
+            check_line_of_sight(&mut RoomState::default(), &e, [1000, 0, 100]),
             0
         );
 
@@ -5178,9 +5204,111 @@ mod tests {
             kind: 1,
             flags: 0x300,
         });
-        assert_eq!(check_line_of_sight(&room, &e, [1000, 0, 100]), 1);
+        assert_eq!(check_line_of_sight(&mut room, &e, [1000, 0, 100]), 1);
         // The same record behind the entity does not block the forward ray.
-        assert_eq!(check_line_of_sight(&room, &e, [-1000, 0, 100]), 0);
+        assert_eq!(check_line_of_sight(&mut room, &e, [-1000, 0, 100]), 0);
+    }
+
+    /// A down-step floor record: tens 2 in the type's high byte, units 5 in
+    /// the flags' low byte, so the step decodes to `-(25 * 100) | 1`.
+    fn step_record() -> CollisionRect {
+        CollisionRect {
+            x_max: 3000,
+            z_max: 3000,
+            x_min: 2000,
+            z_min: 2000,
+            kind: 0x8201,
+            flags: 0x0005,
+        }
+    }
+
+    fn wall_record(flags: u16) -> CollisionRect {
+        CollisionRect {
+            x_max: 600,
+            z_max: 300,
+            x_min: 500,
+            z_min: 0,
+            kind: 1,
+            flags,
+        }
+    }
+
+    #[test]
+    fn sight_check_masks_every_walked_record_up_to_the_blocker() {
+        let e = entity([100, 0, 100], 0, 0);
+        let mut room = RoomState::default();
+        room.collision.quadrants[0] = vec![step_record(), wall_record(0xF300), step_record()];
+        assert_eq!(check_line_of_sight(&mut room, &e, [1000, 0, 100]), 1);
+        let flags: Vec<u16> = room.collision.quadrants[0]
+            .iter()
+            .map(|r| r.flags)
+            .collect();
+        // The step before the wall loses its low byte, the wall its non-blocking
+        // high bits; the walk returns at the wall, so the last record is kept.
+        assert_eq!(flags, [0x0000, 0x0300, 0x0005]);
+
+        // A clear ray walks, and masks, the whole quadrant.
+        room.collision.quadrants[0] = vec![step_record(), wall_record(0x0207)];
+        assert_eq!(check_line_of_sight(&mut room, &e, [100, 0, 1000]), 0);
+        let flags: Vec<u16> = room.collision.quadrants[0]
+            .iter()
+            .map(|r| r.flags)
+            .collect();
+        assert_eq!(flags, [0x0000, 0x0200]);
+    }
+
+    #[test]
+    fn sight_check_masks_only_the_tested_quadrant_and_peek_masks_nothing() {
+        let e = entity([100, 0, 100], 0, 0);
+        let mut room = RoomState::default();
+        for quadrant in &mut room.collision.quadrants {
+            quadrant.push(step_record());
+        }
+        let delta = [900, 0, 0];
+        assert_eq!(peek_sight_blocked(&room.collision, &e, e.pos, delta, 2), 0);
+        assert!(
+            room.collision
+                .quadrants
+                .iter()
+                .all(|q| q[0].flags == 0x0005)
+        );
+        assert_eq!(
+            room_check_sight_blocked(&mut room.collision, &e, e.pos, delta, 2),
+            0
+        );
+        let flags: Vec<u16> = room
+            .collision
+            .quadrants
+            .iter()
+            .map(|q| q[0].flags)
+            .collect();
+        assert_eq!(flags, [0x0005, 0x0005, 0x0000, 0x0005]);
+    }
+
+    #[test]
+    fn pathfind_sight_check_clobbers_the_step_a_later_resolve_reads() {
+        let mut room = RoomState::default();
+        room.collision.quadrants[0].push(step_record());
+        let prev = [500, 0, 500];
+        let proposed = [520, 0, 500];
+        let enemy_step = |room: &RoomState| {
+            resolve_collision_two_radius(&room.collision, prev, proposed, 400, 400, 0x04).floor_step
+        };
+        let player_step = |room: &RoomState| {
+            player::resolve_collision_full(&room.collision, prev, proposed, 400, 0x04).floor_step
+        };
+        assert_eq!(enemy_step(&room), -2499);
+        assert_eq!(player_step(&room), -2499);
+
+        // Counter 0 walks quadrant 0 on the way to the player ahead.
+        let mut e = entity([100, 0, 100], 0, 0);
+        e.pathfind_state = 0;
+        entity_pathfind_update(&mut room, &mut e, [1000, 0, 100]);
+
+        // The original's `check_room_collision` now reads units 0: -(20 * 100) | 1.
+        assert_eq!(enemy_step(&room), -1999);
+        assert_eq!(player_step(&room), -1999);
+        assert_eq!(room.collision.quadrants[0][0].flags, 0);
     }
 
     #[test]

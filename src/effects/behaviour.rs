@@ -38,18 +38,19 @@ pub const fn implemented(id: u8) -> bool {
 }
 
 /// One tick of every live effect slot.
-pub fn update(game: &mut GameState, room: &RoomState) {
+pub fn update(game: &mut GameState, room: &mut RoomState) {
     let Some(cut) = room.cuts.get(room.current_cut) else {
         return;
     };
     let camera = Camera::from_cut(cut);
+    let fov = cut.fov;
     let running = game.message_flags & MESSAGE_FLAG_EFFECTS != 0;
     game.effects.clear_last_draws();
     for index in (0..EFFECT_POOL_SIZE).rev() {
         if game.effects.slot(index).is_none_or(|e| e.anim_id == 0) {
             continue;
         }
-        step(game, room, &camera, cut.fov, index, running);
+        step(game, room, &camera, fov, index, running);
         if game.effects.slot(index).is_some_and(|e| e.anim_id == 0) {
             game.effects.mark_last_draw(index);
         }
@@ -59,7 +60,7 @@ pub fn update(game: &mut GameState, room: &RoomState) {
 /// One slot's full update-and-render step.
 fn step(
     game: &mut GameState,
-    room: &RoomState,
+    room: &mut RoomState,
     camera: &Camera,
     fov: i32,
     index: usize,
@@ -267,7 +268,7 @@ fn ground_splat(game: &mut GameState, index: usize) {
 /// gate was shut.
 fn projectile_hit_check(
     game: &mut GameState,
-    room: &RoomState,
+    room: &mut RoomState,
     range: i32,
     x: i16,
     z: i16,
@@ -373,7 +374,7 @@ fn web_hit_check(game: &mut GameState, range: i32, x: i16, z: i16) -> bool {
 /// shared damage pipeline measured from its own position. A hit or a landing
 /// ends in [`shot_impact`]; a miss counts the flight ticks and, once the
 /// round has flown nine, rewinds the sprite's frame cursor every tick.
-fn bullet(game: &mut GameState, room: &RoomState, index: usize) {
+fn bullet(game: &mut GameState, room: &mut RoomState, index: usize) {
     let Some(effect) = game.effects.slot(index).copied() else {
         return;
     };
@@ -436,7 +437,7 @@ fn bullet(game: &mut GameState, room: &RoomState, index: usize) {
 /// leaves the flame to its animation. The original restores the player's
 /// flags afterwards; the port passes the staged byte to the pipeline instead
 /// and never writes the player's.
-fn flamethrower(game: &mut GameState, room: &RoomState, index: usize) {
+fn flamethrower(game: &mut GameState, room: &mut RoomState, index: usize) {
     let Some(effect) = game.effects.slot(index).copied() else {
         return;
     };
@@ -458,7 +459,7 @@ fn flamethrower(game: &mut GameState, room: &RoomState, index: usize) {
 
 /// Behaviour 45 (0x0040f5d0), the rocket launcher's round: trail a tracer from
 /// the header, leave the room or hit a wall or an enemy from its own position.
-fn rocket(game: &mut GameState, room: &RoomState, index: usize) {
+fn rocket(game: &mut GameState, room: &mut RoomState, index: usize) {
     spawn_from_header(game, index);
     let Some(effect) = game.effects.slot(index).copied() else {
         return;
@@ -1269,7 +1270,7 @@ fn animate_sprite(game: &mut GameState, index: usize) {
 
 /// Dispatch behaviour `id` on the slot. Unimplemented ids only bump the
 /// placeholder counter.
-fn run_behavior(game: &mut GameState, room: &RoomState, index: usize, id: u8) {
+fn run_behavior(game: &mut GameState, room: &mut RoomState, index: usize, id: u8) {
     if !implemented(id) {
         if let Some(count) = game.effect_placeholder_hits.get_mut(usize::from(id)) {
             *count += 1;
@@ -2100,7 +2101,7 @@ fn autoaim_flags(game: &GameState) -> u8 {
 }
 
 /// Ground-contact splat shared by behaviours 21 and 22.
-fn drop_splat(game: &mut GameState, room: &RoomState, index: usize) {
+fn drop_splat(game: &mut GameState, room: &mut RoomState, index: usize) {
     let Some(effect) = game.effects.slot(index).copied() else {
         return;
     };
@@ -2472,7 +2473,7 @@ mod tests {
         assert_eq!(attach_matrix(&game, Attach::Player), facing);
     }
 
-    fn run(game: &mut GameState, room: &RoomState) {
+    fn run(game: &mut GameState, room: &mut RoomState) {
         update(game, room);
     }
 
@@ -2543,7 +2544,7 @@ mod tests {
         ];
         let mut game = game_with_row(&blocks);
         let slot = spawn(&mut game, 0, [0, 0, 0], 123, 7);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         let effect = game.effects.slot(usize::from(slot)).unwrap();
         assert_eq!(effect.anim_id, 13);
         assert_eq!(effect.yaw, 123);
@@ -2577,7 +2578,7 @@ mod tests {
             },
         ];
         let slot = spawn(&mut game, 0, [0, 0, 0], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         let effect = game.effects.slot(usize::from(slot)).unwrap();
         assert_eq!(effect.frame_entry, 2);
         assert_eq!(effect.frame_index, 2);
@@ -2589,7 +2590,7 @@ mod tests {
         let mut game = game_with_row(&[raw_block(47, 0)]);
         spawn(&mut game, 0, [0, 0, 0], 0, 0);
         assert_eq!(game.effects.active_count(), 1);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(game.effects.active_count(), 0);
         assert_eq!(game.effects.free_slots(), EFFECT_POOL_SIZE as u8);
     }
@@ -2603,7 +2604,7 @@ mod tests {
         // A child depth row so the spawn resolves.
         game.weapon_effects.sprites[0].anim.depth_frames[3] = vec![frame(&[raw_block(1, 0)])];
         let slot = spawn(&mut game, 0, [100, 200, 300], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(game.effects.active_count(), 2);
         let child = game.last_effect_spawn.expect("child spawned");
         assert_ne!(child, slot);
@@ -2627,10 +2628,10 @@ mod tests {
             height: 8,
         });
         let slot = spawn(&mut game, 0, [0, 0, 0], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(game.effects.slot(usize::from(slot)).unwrap().anim_id, 51);
         game.apply_flag(BANK_SYSTEM, 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         let effect = game.effects.slot(usize::from(slot)).unwrap();
         assert_eq!(effect.anim_id, 1);
         assert_eq!(effect.frame_entry, 1);
@@ -2643,12 +2644,12 @@ mod tests {
         bytes[8..10].copy_from_slice(&10i16.to_le_bytes());
         let mut game = game_with_row(&[bytes]);
         let slot = spawn(&mut game, 0, [100, 200, 300], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(
             game.effects.slot(usize::from(slot)).unwrap().pos,
             [100, 200, 300]
         );
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         // The trig table saturates one below full scale, so the yaw matrix
         // scales by 4095/4096 before the identity apply.
         assert_eq!(
@@ -2663,7 +2664,7 @@ mod tests {
         bytes[14] = 0x02 | 0x04; // transform + y = 0
         let mut game = game_with_row(&[bytes]);
         let slot = spawn(&mut game, 0, [0, 250, 0], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(game.effects.slot(usize::from(slot)).unwrap().pos[1], 0);
 
         let mut bytes = raw_block(1, 0);
@@ -2671,7 +2672,7 @@ mod tests {
         let mut game = game_with_row(&[bytes]);
         game.entities[0].pos = [0, 777, 0];
         let slot = spawn(&mut game, 0, [0, 250, 0], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(game.effects.slot(usize::from(slot)).unwrap().pos[1], 777);
     }
 
@@ -2682,7 +2683,7 @@ mod tests {
         let mut game = game_with_row(&[bytes]);
         game.entities[0].angle = 0x400;
         let slot = create(&mut game, &RoomEffects::default(), 9, 0, 1, [0, 0, 0], 0, 0).unwrap();
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         let transform = game.effects.slot(usize::from(slot)).unwrap().transform;
         assert_ne!(transform, IDENTITY_MATRIX);
 
@@ -2690,7 +2691,7 @@ mod tests {
             effect.active = 2;
             effect.transform = IDENTITY_MATRIX;
         }
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(
             game.effects.slot(usize::from(slot)).unwrap().transform,
             IDENTITY_MATRIX
@@ -2723,12 +2724,12 @@ mod tests {
             },
         ];
         let slot = spawn(&mut game, 0, [0, 0, 0], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         let effect = game.effects.slot(usize::from(slot)).unwrap();
         assert_eq!(effect.frame_entry, 1);
         assert_eq!(effect.frame_index, 1);
         assert_eq!(effect.frame_delay, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(game.effects.active_count(), 0);
     }
 
@@ -2764,7 +2765,7 @@ mod tests {
             },
         ];
         let slot = spawn(&mut game, 0, [0, 0, 0], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         let effect = game.effects.slot(usize::from(slot)).unwrap();
         assert_eq!(effect.frame_entry, 3);
         assert_eq!(effect.frame_index, 4);
@@ -2793,7 +2794,7 @@ mod tests {
         let slot = spawn(&mut game, 0, [0, 0, 0], 0, 0);
         game.effects.modify_flags(0, 0x8000);
         assert!(hidden(game.effects.slot(usize::from(slot)).unwrap()));
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         let effect = game.effects.slot(usize::from(slot)).unwrap();
         assert_eq!(effect.frame_delay, 2);
         assert!(hidden(effect));
@@ -2806,7 +2807,7 @@ mod tests {
         // nothing and leaves the slot alone.
         let mut game = game_with_row(&[raw_block(64, 0)]);
         let slot = spawn(&mut game, 0, [0, 0, 0], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(game.effect_placeholder_hits.iter().sum::<u32>(), 0);
         assert_eq!(game.effects.slot(usize::from(slot)).unwrap().anim_id, 64);
     }
@@ -2825,7 +2826,7 @@ mod tests {
         }];
         let slot = spawn(&mut game, 0, [0, 0, 0], 0, 0);
         game.message_flags &= !crate::game::MESSAGE_FLAG_EFFECTS;
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         let effect = game.effects.slot(usize::from(slot)).unwrap();
         assert_eq!(effect.frame_delay, 3);
         assert_eq!(effect.header[3], 1);
@@ -2849,12 +2850,12 @@ mod tests {
         let mut game = game_with_row(&[first, next]);
         game.entities[0].pos[1] = 0;
         let slot = spawn(&mut game, 0, [0, -500, 0], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         let effect = game.effects.slot(usize::from(slot)).unwrap();
         assert_eq!(effect.update_id, 10, "still falling");
 
         game.effects.slot_mut(usize::from(slot)).unwrap().pos[1] = 100;
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         let effect = game.effects.slot(usize::from(slot)).unwrap();
         assert_eq!(effect.update_id, 23, "the next block's update behaviour");
         assert_eq!(effect.flags() & 0x400b, 0x400b);
@@ -2864,9 +2865,9 @@ mod tests {
     fn blink_toggles_the_hidden_bit() {
         let mut game = game_with_row(&[raw_block(14, 0)]);
         let slot = spawn(&mut game, 0, [0, 0, 0], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert!(hidden(game.effects.slot(usize::from(slot)).unwrap()));
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert!(!hidden(game.effects.slot(usize::from(slot)).unwrap()));
     }
 
@@ -2879,7 +2880,7 @@ mod tests {
         let second = raw_block(13, 0);
         let mut game = game_with_row(&[first, second]);
         let slot = spawn(&mut game, 0, [100, 200, 300], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         let effect = game.effects.slot(usize::from(slot)).unwrap();
         assert_eq!(effect.local_offset, [106, 196, 302]);
         assert_eq!(effect.anim_id, 13);
@@ -2891,7 +2892,7 @@ mod tests {
         bytes[7] = 0x01; // the X accumulator bit
         let mut game = game_with_row(&[bytes]);
         let slot = spawn(&mut game, 0, [0, 0, 0], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         let delta = (game.rand_seed % 5) as i16;
         let effect = game.effects.slot(usize::from(slot)).unwrap();
         assert_eq!(h16(effect, 0x0c), delta);
@@ -2905,7 +2906,7 @@ mod tests {
         bytes[7] = 0x7F; // phase
         let mut game = game_with_row(&[bytes]);
         let slot = spawn(&mut game, 0, [100, 200, 300], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         let effect = game.effects.slot(usize::from(slot)).unwrap();
         let low = (game.rand_seed & 3) as i16;
         assert_eq!(h16(effect, 0x0e), (0x23 - low) * 2);
@@ -2922,7 +2923,7 @@ mod tests {
         second[3] = 0x2A; // the next phase's authored light
         let mut game = game_with_row(&[first, second]);
         let source = spawn(&mut game, 0, [0, 0, 0], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(
             game.effects.slot(usize::from(source)).unwrap().anim_id,
             1,
@@ -2946,7 +2947,7 @@ mod tests {
         let mut game = game_with_row(&[raw_block(40, 0)]);
         game.player_flags = 0x60;
         let slot = spawn(&mut game, 0, [0, 0, 0], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(
             game.effects.slot(usize::from(slot)).unwrap().header[2],
             0x60
@@ -2959,7 +2960,7 @@ mod tests {
         game.player_flags = 0x60;
         game.equipped = Some(0x0B);
         let slot = spawn(&mut game, 0, [0, 0, 0], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         let effect = game.effects.slot(usize::from(slot)).unwrap();
         assert_eq!(effect.header[0], 0x60);
         assert_eq!(effect.header[1], 0x0B);
@@ -2972,7 +2973,7 @@ mod tests {
         game.equipped = Some(0x0B);
         game.add_item(0x0B, 7);
         let slot = spawn(&mut game, 0, [0, 0, 0], 0, 0);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(
             game.effects.slot(usize::from(slot)).unwrap().header[2],
             7 & 3
@@ -2981,7 +2982,7 @@ mod tests {
         let mut empty = game_with_row(&[raw_block(58, 0)]);
         empty.equipped = Some(0x0B);
         let slot = spawn(&mut empty, 0, [0, 0, 0], 0, 0);
-        run(&mut empty, &room());
+        run(&mut empty, &mut room());
         assert_eq!(empty.effects.slot(usize::from(slot)).unwrap().header[2], 0);
     }
 
@@ -3015,12 +3016,12 @@ mod tests {
         place_zombie(&mut game, [6000, 0, 0]);
 
         let slot = grenade_round(&mut game, 7, [3000, -1000, 0]);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(game.entities[1].health, 100, "out of reach");
         assert_eq!(game.effects.slot(slot).unwrap().header[2], 1, "flight tick");
 
         game.effects.slot_mut(slot).unwrap().pos[0] = 5800;
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert!(game.entities[1].health < 100, "the round hits the zombie");
         assert_ne!(game.entities[1].hit_state, 0);
         assert_eq!(
@@ -3062,7 +3063,7 @@ mod tests {
         // it: within the flamethrower's 400-unit projectile range.
         let mut game = flame_game(840);
         let slot = flame(&mut game, [540, -1260, 0], 0x40);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(
             game.entities[1].health,
             100 - 20,
@@ -3087,7 +3088,7 @@ mod tests {
         for zombie_x in [-700, 3000] {
             let mut game = flame_game(zombie_x);
             let slot = flame(&mut game, [540, -1260, 0], 0x40);
-            run(&mut game, &room());
+            run(&mut game, &mut room());
             assert_eq!(game.entities[1].health, 100, "zombie at x={zombie_x}");
             assert_eq!(game.entities[1].hit_state, 0);
             assert_eq!(
@@ -3105,13 +3106,13 @@ mod tests {
         let mut game = flame_game(840);
         game.player_flags = 0x40;
         flame(&mut game, [540, -1260, 0], 0x80);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(game.entities[1].health, 100);
 
         let mut game = flame_game(840);
         game.player_flags = 0x80;
         flame(&mut game, [540, -1260, 0], 0x40);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(game.entities[1].health, 80);
         assert_eq!(game.player_flags, 0x80);
     }
@@ -3124,7 +3125,7 @@ mod tests {
         game.player_flags = 0x40;
         place_zombie(&mut game, [3000, 0, 0]);
         let slot = grenade_round(&mut game, 8, [3000, -3000, 0]);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(game.entities[1].health, 100);
         assert_eq!(game.effects.slot(slot).unwrap().anim_id, 43, "still flying");
     }
@@ -3133,7 +3134,7 @@ mod tests {
     fn grenade_round_below_the_floor_lands() {
         let mut game = game_with_row(&[raw_block(43, 0)]);
         let slot = grenade_round(&mut game, 9, [0, 100, 0]);
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         assert_eq!(
             game.effects.slot(slot).unwrap().anim_id,
             0,
@@ -3172,7 +3173,7 @@ mod tests {
         for id in 0..=63u8 {
             let mut game = game_with_row(&[raw_block(id, 0)]);
             let slot = spawn(&mut game, 0, [0, 0, 0], 0, 0);
-            run(&mut game, &room());
+            run(&mut game, &mut room());
             let counted = game.effect_placeholder_hits[usize::from(id)] > 0;
             assert_eq!(counted, !implemented(id), "behaviour {id} tier mismatch");
             assert!(
@@ -3207,7 +3208,7 @@ mod tests {
         bytes[14] = 0x02; // transform bit, so the slot projects
         let mut game = game_with_row(&[bytes]);
         let slot = spawn(&mut game, 0, [1000, 0, 500], 0, 0);
-        run(&mut game, &room);
+        run(&mut game, &mut room);
         let before = game.effects.slot(usize::from(slot)).unwrap().screen;
 
         room.current_cut = 1;
@@ -3248,7 +3249,7 @@ mod tests {
         game.entities[0].animation_id = clip;
         let slot = usize::from(spawn(&mut game, 0, [0, 0, 0], 0, 0));
         game.effects.slot_mut(slot).unwrap().pos = [100, -500, 100];
-        run(&mut game, &room());
+        run(&mut game, &mut room());
         game
     }
 
@@ -3272,7 +3273,13 @@ mod tests {
     fn acid_landing_near_the_30c_web_damages_it_like_a_knife_cut() {
         let mut game = tiger_room();
         // 1000 from the web: outside the 600 range, inside its 500 grace.
-        assert!(projectile_hit_check(&mut game, &room(), 600, 2000, 3000));
+        assert!(projectile_hit_check(
+            &mut game,
+            &mut room(),
+            600,
+            2000,
+            3000
+        ));
         let web = &game.entities[2];
         assert_eq!(web.health, 0x37 - 5);
         assert_eq!(web.hit_state, 9);
@@ -3281,12 +3288,24 @@ mod tests {
         assert_eq!(game.entities[0].health, 100, "the player is untouched");
 
         // The hit gate is shut until the web's damaged state clears it.
-        assert!(projectile_hit_check(&mut game, &room(), 600, 2000, 3000));
+        assert!(projectile_hit_check(
+            &mut game,
+            &mut room(),
+            600,
+            2000,
+            3000
+        ));
         assert_eq!(game.entities[2].health, 0x37 - 5);
 
         // Just past the grace: no hit.
         game.entities[2].hit_state = 0;
-        assert!(!projectile_hit_check(&mut game, &room(), 600, 1900, 3000));
+        assert!(!projectile_hit_check(
+            &mut game,
+            &mut room(),
+            600,
+            1900,
+            3000
+        ));
         assert_eq!(game.entities[2].health, 0x37 - 5);
     }
 
@@ -3295,7 +3314,13 @@ mod tests {
         let mut game = tiger_room();
         let mut hits = 0;
         loop {
-            assert!(projectile_hit_check(&mut game, &room(), 900, 3000, 3000));
+            assert!(projectile_hit_check(
+                &mut game,
+                &mut room(),
+                900,
+                3000,
+                3000
+            ));
             hits += 1;
             if game.entities[2].state() == 3 {
                 break;
@@ -3315,23 +3340,47 @@ mod tests {
     fn acid_ignores_a_web_in_another_room_or_another_entity() {
         let mut game = tiger_room();
         game.id = crate::state::RoomId::parse("30D").unwrap();
-        assert!(!projectile_hit_check(&mut game, &room(), 600, 3000, 3000));
+        assert!(!projectile_hit_check(
+            &mut game,
+            &mut room(),
+            600,
+            3000,
+            3000
+        ));
         assert_eq!(game.entities[2].health, 0x37);
 
         let mut game = tiger_room();
         game.id = crate::state::RoomId::parse("40C").unwrap();
-        assert!(!projectile_hit_check(&mut game, &room(), 600, 3000, 3000));
+        assert!(!projectile_hit_check(
+            &mut game,
+            &mut room(),
+            600,
+            3000,
+            3000
+        ));
         assert_eq!(game.entities[2].health, 0x37);
 
         let mut game = tiger_room();
         game.entities[2].id = 0x12;
-        assert!(!projectile_hit_check(&mut game, &room(), 600, 3000, 3000));
+        assert!(!projectile_hit_check(
+            &mut game,
+            &mut room(),
+            600,
+            3000,
+            3000
+        ));
         assert_eq!(game.entities[2].health, 0x37);
 
         // The web in the first enemy slot is not the one the branch tests.
         let mut game = tiger_room();
         game.entities.swap(1, 2);
-        assert!(!projectile_hit_check(&mut game, &room(), 600, 3000, 3000));
+        assert!(!projectile_hit_check(
+            &mut game,
+            &mut room(),
+            600,
+            3000,
+            3000
+        ));
         assert_eq!(game.entities[1].health, 0x37);
     }
 
@@ -3339,7 +3388,13 @@ mod tests {
     fn acid_hitting_the_player_spares_the_web() {
         let mut game = tiger_room();
         game.entities[0].pos = [3000, 0, 3000];
-        assert!(projectile_hit_check(&mut game, &room(), 600, 3000, 3000));
+        assert!(projectile_hit_check(
+            &mut game,
+            &mut room(),
+            600,
+            3000,
+            3000
+        ));
         // The Black Tiger's acid on a first playthrough: 12.
         assert_eq!(game.entities[0].health, 100 - 12);
         assert_eq!(game.entities[0].is_being_attacked, 1);
@@ -3353,7 +3408,13 @@ mod tests {
         // Out of the player's range and no web: no hit, as before.
         let mut game = tiger_room();
         game.entities[2].id = 0;
-        assert!(!projectile_hit_check(&mut game, &room(), 600, 3000, 3000));
+        assert!(!projectile_hit_check(
+            &mut game,
+            &mut room(),
+            600,
+            3000,
+            3000
+        ));
         assert_eq!(game.entities[0].health, 100);
     }
 }

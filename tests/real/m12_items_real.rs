@@ -213,7 +213,7 @@ fn room_513_lab_key_rides_omodel_6() {
 
     // Once the behaviour has armed the billboard, its world Y is the item's
     // world Y minus the 32-unit bias, not the old 2-unit nibble reading.
-    sim.game.tick_effects(&sim.room);
+    sim.game.tick_effects(&mut sim.room);
     let effect = *sim.game.effects.slot(handle).unwrap();
     for (axis, expected) in [world.t[0], world.t[1] - 32, world.t[2]].iter().enumerate() {
         assert!(

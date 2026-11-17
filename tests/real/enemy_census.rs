@@ -37,7 +37,7 @@ fn corpus_monster_records_run_or_park_without_script_errors() {
         let Ok(scripts) = loaded.own_scripts(&pack) else {
             continue;
         };
-        let room = loaded.state;
+        let mut room = loaded.state;
         // Every `eml_state` (0x28) sub-command every corpus stream uses. The
         // reader only decodes a known sub-command's width, so this is also
         // the gate that keeps a new sub-command from silently truncating a
@@ -81,7 +81,7 @@ fn corpus_monster_records_run_or_park_without_script_errors() {
                 continue;
             }
             records += 1;
-            if host.update(&mut game, &room, &pack, slot, &[]) {
+            if host.update(&mut game, &mut room, &pack, slot, &[]) {
                 *scripted.entry(entity.id).or_default() += 1;
             } else {
                 parked.insert(entity.id);

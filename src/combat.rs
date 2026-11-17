@@ -800,26 +800,58 @@ fn detect_projectile(
     false
 }
 
-/// `check_weapon_line_of_sight`: walk the room's four sight-blocking layers
-/// from the player to the hit point. Returns non-zero when the sight line is
-/// blocked; the effect splash test (and the weapon aim) treat `0` as clear.
+/// `check_weapon_line_of_sight` (0x0048a530): walk the room's four
+/// sight-blocking layers from the player to the hit point. Returns non-zero
+/// when the sight line is blocked; the effect splash test (and the weapon aim)
+/// treat `0` as clear. Each layer's walk masks the records it passes, as
+/// [`crate::enemy::walk::room_check_sight_blocked`] does.
 pub(crate) fn check_weapon_line_of_sight(
+    game: &GameState,
+    room: &mut RoomState,
+    target: [i32; 3],
+) -> u8 {
+    let player = &game.entities[0];
+    let dir = weapon_sight_delta(player, target);
+    let mut blocked = 0u8;
+    for layer in (0..=3u8).rev() {
+        blocked |= crate::enemy::walk::room_check_sight_blocked(
+            &mut room.collision,
+            player,
+            player.pos,
+            dir,
+            layer,
+        );
+    }
+    blocked
+}
+
+/// [`check_weapon_line_of_sight`] without the flag write-back, for the
+/// engine's own queries (the bot), which the original never makes.
+pub(crate) fn peek_weapon_line_of_sight(
     game: &GameState,
     room: &RoomState,
     target: [i32; 3],
 ) -> u8 {
     let player = &game.entities[0];
-    let dir = [
+    let dir = weapon_sight_delta(player, target);
+    (0..=3u8).rev().fold(0, |blocked, layer| {
+        blocked
+            | crate::enemy::walk::peek_sight_blocked(
+                &room.collision,
+                player,
+                player.pos,
+                dir,
+                layer,
+            )
+    })
+}
+
+fn weapon_sight_delta(player: &Entity, target: [i32; 3]) -> [i32; 3] {
+    [
         target[0] - player.pos[0],
         target[1] - player.pos[1],
         target[2] - player.pos[2],
-    ];
-    let mut blocked = 0u8;
-    for layer in (0..=3u8).rev() {
-        blocked |=
-            crate::enemy::walk::room_check_sight_blocked(room, player, player.pos, dir, layer);
-    }
-    blocked
+    ]
 }
 
 /// The hit-billboard yaw: player facing minus enemy facing plus the 0x800
@@ -912,7 +944,7 @@ impl GameState {
     /// binds no key to it. Returns `1` when a monster was hit, `0` on a miss,
     /// or the target's id when the closest candidate is an NPC id
     /// (`>= 0x14`), which takes no damage.
-    pub fn apply_weapon_damage(&mut self, room: &RoomState, weapon_id: u8) -> u8 {
+    pub fn apply_weapon_damage(&mut self, room: &mut RoomState, weapon_id: u8) -> u8 {
         let origin = self.entities[0].pos;
         let flags = self.player_flags;
         self.apply_weapon_damage_with(room, weapon_id, origin, flags)
@@ -923,7 +955,7 @@ impl GameState {
     /// flame/rocket position and stage the player's aim byte before firing.
     pub fn apply_weapon_damage_with(
         &mut self,
-        room: &RoomState,
+        room: &mut RoomState,
         weapon_id: u8,
         projectile_origin: [i32; 3],
         aim_flags: u8,
@@ -1013,7 +1045,11 @@ impl GameState {
             return 0;
         };
         let enemy_pos = self.entities[slot].pos;
-        if weapon_adj < 5 && check_weapon_line_of_sight(self, room, enemy_pos) != 0 {
+        // The original runs the sight check for every weapon, projectiles
+        // included, and only then ignores the wall for slots >= 5
+        // (`apply_weapon_damage`, 0x0043c020): the check's flag
+        // write-back happens either way.
+        if check_weapon_line_of_sight(self, room, enemy_pos) != 0 && weapon_adj < 5 {
             return 0;
         }
         let enemy_type = self.entities[slot].id;
@@ -2223,10 +2259,10 @@ mod tests {
 
     #[test]
     fn knife_hit_damages_and_sets_the_damaged_state() {
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut game = armed_game();
         place_enemy(&mut game, 1, 0x13, [200, 0, 0]);
-        assert_eq!(game.apply_weapon_damage(&room, 1), 1);
+        assert_eq!(game.apply_weapon_damage(&mut room, 1), 1);
         let web = &game.entities[1];
         assert_eq!(web.health, 55 - 10);
         assert_eq!(web.state(), 2, "surviving hit enters state 2");
@@ -2243,12 +2279,12 @@ mod tests {
 
     #[test]
     fn a_killing_blow_enters_state_three_and_leaves_the_death_flag_to_the_enemy() {
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut game = armed_game();
         place_enemy(&mut game, 1, 0x13, [200, 0, 0]);
         game.entities[1].death_event_id = 7;
         game.entities[1].health = 3;
-        assert_eq!(game.apply_weapon_damage(&room, 1), 1);
+        assert_eq!(game.apply_weapon_damage(&mut room, 1), 1);
         assert_eq!(game.entities[1].state(), 3);
         // The enemy's own death state raises it; only a head pop does it here.
         assert!(!game.flags[usize::from(BANK_ENEMIES)].bit(7));
@@ -2258,83 +2294,87 @@ mod tests {
     fn an_enemy_past_an_empty_slot_is_still_a_candidate() {
         // Room 103's Jill variant spawns its zombies into slots 1 and 3, so
         // the live count (2) is smaller than the last occupied slot.
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut game = armed_game();
         place_enemy(&mut game, 1, 0x13, [-5000, 0, 0]);
         place_enemy(&mut game, 3, 0x13, [200, 0, 0]);
         game.enemy_count = 2;
-        assert_eq!(game.apply_weapon_damage(&room, 1), 1);
+        assert_eq!(game.apply_weapon_damage(&mut room, 1), 1);
         assert_eq!(game.entities[3].health, 55 - 10);
         assert_eq!(game.entities[1].health, 55);
     }
 
     #[test]
     fn the_candidate_walk_stops_after_enemy_count_active_slots() {
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut game = armed_game();
         place_enemy(&mut game, 1, 0x13, [-5000, 0, 0]);
         place_enemy(&mut game, 3, 0x13, [200, 0, 0]);
         game.enemy_count = 1;
-        assert_eq!(game.apply_weapon_damage(&room, 1), 0);
+        assert_eq!(game.apply_weapon_damage(&mut room, 1), 0);
         assert_eq!(game.entities[3].health, 55);
     }
 
     #[test]
     fn the_hit_state_gate_rejects_a_second_shot_until_it_is_cleared() {
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut game = armed_game();
         place_enemy(&mut game, 1, 0x13, [200, 0, 0]);
-        assert_eq!(game.apply_weapon_damage(&room, 1), 1);
-        assert_eq!(game.apply_weapon_damage(&room, 1), 0, "hit_state gate");
+        assert_eq!(game.apply_weapon_damage(&mut room, 1), 1);
+        assert_eq!(game.apply_weapon_damage(&mut room, 1), 0, "hit_state gate");
         game.entities[1].hit_state = 0;
-        assert_eq!(game.apply_weapon_damage(&room, 1), 1);
+        assert_eq!(game.apply_weapon_damage(&mut room, 1), 1);
     }
 
     #[test]
     fn the_aim_mask_gate_and_npc_id_path() {
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut game = armed_game();
         place_enemy(&mut game, 1, 0x13, [200, 0, 0]);
         game.player_flags = 0;
-        assert_eq!(game.apply_weapon_damage(&room, 1), 0, "no aim bits");
+        assert_eq!(game.apply_weapon_damage(&mut room, 1), 0, "no aim bits");
         game.player_flags = 0x40;
         game.entities[1].id = 0x20;
-        assert_eq!(game.apply_weapon_damage(&room, 1), 0x20, "NPC id path");
+        assert_eq!(game.apply_weapon_damage(&mut room, 1), 0x20, "NPC id path");
         assert_eq!(game.entities[1].health, 55, "NPCs take no damage");
     }
 
     #[test]
     fn second_playthrough_reads_the_second_table() {
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut game = armed_game();
         place_enemy(&mut game, 1, 0x13, [200, 0, 0]);
         game.apply_flag(BANK_SCENARIO, SCENARIO_FLAG_SECOND_PLAYTHROUGH, 0);
-        assert_eq!(game.apply_weapon_damage(&room, 1), 1);
+        assert_eq!(game.apply_weapon_damage(&mut room, 1), 1);
         assert_eq!(game.entities[1].health, 55 - 6, "knife second-run damage");
     }
 
     #[test]
     fn closest_candidate_wins_over_a_farther_in_range_one() {
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut game = armed_game();
         place_enemy(&mut game, 1, 0x13, [500, 0, 0]);
         place_enemy(&mut game, 2, 0x13, [200, 0, 0]);
-        assert_eq!(game.apply_weapon_damage(&room, 1), 1);
+        assert_eq!(game.apply_weapon_damage(&mut room, 1), 1);
         assert_eq!(game.entities[2].health, 45, "the closer web was hit");
         assert_eq!(game.entities[1].health, 55, "the farther web was not");
     }
 
     #[test]
     fn gun_cone_hits_the_target_ahead_and_misses_the_one_behind() {
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut game = armed_game();
         game.entities[0].angle = 0;
         place_enemy(&mut game, 1, 0x00, [800, 0, 0]);
-        assert_eq!(game.apply_weapon_damage(&room, 2), 1, "handgun in front");
+        assert_eq!(
+            game.apply_weapon_damage(&mut room, 2),
+            1,
+            "handgun in front"
+        );
         game.entities[1].hit_state = 0;
         game.entities[1].health = 55;
         game.entities[1].pos = [-800, 0, 0];
-        assert_eq!(game.apply_weapon_damage(&room, 2), 0, "behind the cone");
+        assert_eq!(game.apply_weapon_damage(&mut room, 2), 0, "behind the cone");
     }
 
     /// The bot's knowledge file (`mods/bot/knowledge/re1.xml`) quotes this
@@ -2343,7 +2383,7 @@ mod tests {
     /// line, with no far limit (the shotgun only weakens past 9000).
     #[test]
     fn gun_cone_is_a_forward_strip_from_650_as_wide_as_the_range() {
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         for (weapon, range) in [(2u8, 1300), (3u8, 2600)] {
             let mut game = armed_game();
             game.id.player_flag = 1;
@@ -2354,7 +2394,7 @@ mod tests {
                 game.entities[1].pos = pos;
                 game.entities[1].hit_state = 0;
                 game.entities[1].health = 55;
-                game.apply_weapon_damage(&room, weapon)
+                game.apply_weapon_damage(&mut room, weapon)
             };
             assert_eq!(shoot([640, 0, 0]), 0, "weapon {weapon}: inside 650");
             assert_eq!(shoot([660, 0, 0]), 1, "weapon {weapon}: just past 650");
@@ -2377,11 +2417,15 @@ mod tests {
     fn line_of_sight_blocks_a_gun_shot_through_a_wall() {
         use crate::state::CollisionRect;
 
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut game = armed_game();
         game.entities[0].angle = 0;
         place_enemy(&mut game, 1, 0x00, [800, 0, 0]);
-        assert_eq!(game.apply_weapon_damage(&room, 2), 1, "clear line of sight");
+        assert_eq!(
+            game.apply_weapon_damage(&mut room, 2),
+            1,
+            "clear line of sight"
+        );
 
         // One fully-blocking boundary record sits on the shot's path.
         let mut blocked_room = RoomState::default();
@@ -2396,22 +2440,77 @@ mod tests {
         game.entities[1].hit_state = 0;
         game.entities[1].health = 55;
         assert_eq!(
-            game.apply_weapon_damage(&blocked_room, 2),
+            game.apply_weapon_damage(&mut blocked_room, 2),
             0,
             "the wall blocks the handgun"
         );
         // The projectile class skips the line-of-sight rule (weapon slot >= 5).
-        assert_eq!(game.apply_weapon_damage(&blocked_room, 10), 1);
+        assert_eq!(game.apply_weapon_damage(&mut blocked_room, 10), 1);
+    }
+
+    #[test]
+    fn a_projectile_hit_still_runs_the_sight_check_write_back() {
+        use crate::state::CollisionRect;
+
+        let mut room = RoomState::default();
+        room.collision.quadrants[0].push(CollisionRect {
+            x_max: 3000,
+            z_max: 3000,
+            x_min: 2000,
+            z_min: 2000,
+            kind: 0x8201,
+            flags: 0x0005,
+        });
+        let mut game = armed_game();
+        game.entities[0].angle = 0;
+        place_enemy(&mut game, 1, 0x00, [800, 0, 0]);
+        // The rocket (slot 10) ignores walls but still walks the sight check.
+        assert_eq!(game.apply_weapon_damage(&mut room, 10), 1);
+        assert_eq!(room.collision.quadrants[0][0].flags, 0);
+    }
+
+    #[test]
+    fn weapon_sight_check_masks_all_four_layers_and_the_peek_none() {
+        use crate::state::CollisionRect;
+
+        let step = CollisionRect {
+            x_max: 3000,
+            z_max: 3000,
+            x_min: 2000,
+            z_min: 2000,
+            kind: 0x8201,
+            flags: 0x0405,
+        };
+        let mut room = RoomState::default();
+        for quadrant in &mut room.collision.quadrants {
+            quadrant.push(step);
+        }
+        let game = armed_game();
+        let flags = |room: &RoomState| -> Vec<u16> {
+            room.collision
+                .quadrants
+                .iter()
+                .map(|q| q[0].flags)
+                .collect()
+        };
+        assert_eq!(peek_weapon_line_of_sight(&game, &room, [800, 0, 0]), 0);
+        assert_eq!(flags(&room), [0x0405; 4]);
+        assert_eq!(check_weapon_line_of_sight(&game, &mut room, [800, 0, 0]), 0);
+        assert_eq!(flags(&room), [0x0000; 4]);
     }
 
     #[test]
     fn projectile_uses_the_parked_origin() {
-        let room = RoomState::default();
+        let mut room = RoomState::default();
         let mut game = armed_game();
         place_enemy(&mut game, 1, 0x0A, [2000, 0, 0]);
-        assert_eq!(game.apply_weapon_damage(&room, 10), 0, "outside 1100+200");
         assert_eq!(
-            game.apply_weapon_damage_with(&room, 10, [2000, 0, 0], 0x40),
+            game.apply_weapon_damage(&mut room, 10),
+            0,
+            "outside 1100+200"
+        );
+        assert_eq!(
+            game.apply_weapon_damage_with(&mut room, 10, [2000, 0, 0], 0x40),
             1,
             "the parked projectile origin reaches"
         );
