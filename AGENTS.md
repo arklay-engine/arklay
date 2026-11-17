@@ -2,6 +2,11 @@
 
 Use the `fast-release` cargo profile for non-distributed builds.
 
+# Command line
+
+No new CLI commands or options are to be added without the user's express permission.
+Piping a Lua script into `arklay script --headless -` is the recommended way for an agent to control the game (see `lua-types/script.lua`).
+
 # Testing
 
 Testing, particularly for regressions, should be fully covered by unit tests

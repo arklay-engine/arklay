@@ -3,8 +3,8 @@
 
 Usage: scripts/bot-idle-report.py <stats.json> [<run.log>] [--top N]
 
-Run the bot with `--bot-stats <stats.json>` and keep its log
-(`... --bot-stats r/stats.json > r/run.log 2>&1`); the log defaults to
+Run the bot with `bot_run { stats = "stats.json" }` and keep its log
+(`arklay script --headless - ... > r/run.log 2>&1`); the log defaults to
 `run.log` beside the stats file. Needs the `timeline` and
 `stalled_walk_ticks` fields the stats module writes (src/engine/bot/stats.rs).
 

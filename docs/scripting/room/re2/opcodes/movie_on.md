@@ -31,7 +31,7 @@ The original's handler (`0x4E8C40`) calls `0x4CAEC0` with the movie and
 then `0x441870(2)`. Record 5 of its table, for instance, is
 `zmovie\r200.bin`, the four-second clip of the statue in room 200 that the
 Unicorn Medal starts (proc 8, after `cut_chg(14)`). The port has an MPEG-1
-decoder (`--fmv`) but does not play movies from scripts, so the scene goes
+decoder (`--movie`) but does not play movies from scripts, so the scene goes
 on without the clip. How many ticks the original spends in the movie has not
 been measured.
 

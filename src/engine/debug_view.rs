@@ -37,7 +37,7 @@ impl RenderMode {
         RenderMode::CollisionOverlay,
     ];
 
-    /// The mode's `--render-mode` name.
+    /// The mode's name.
     pub(super) fn name(self) -> &'static str {
         match self {
             RenderMode::Normal => "normal",
@@ -100,7 +100,7 @@ pub(super) fn mode() -> RenderMode {
     RenderMode::ALL[usize::from(MODE.load(Ordering::Relaxed)) % RenderMode::ALL.len()]
 }
 
-/// The `--render-mode` names, in cycle order.
+/// The mode names, in cycle order.
 pub(super) fn names() -> impl Iterator<Item = &'static str> {
     RenderMode::ALL.into_iter().map(RenderMode::name)
 }

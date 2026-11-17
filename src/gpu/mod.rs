@@ -1,7 +1,7 @@
 //! The SDL_GPU hardware renderer for the gameplay scene and the default.
 //!
 //! The software rasterizer in [`crate::render`] stays authoritative: the
-//! oracle, the goldens, `--capture`, `--trace`, `--stats` and every test draw
+//! oracle, the goldens, captures, traces, stats runs and every test draw
 //! through it. This renderer is an interactive-only alternative selected by
 //! default (or explicitly with `--renderer gpu`). It draws the same
 //! [`GameplayScene`] at the window's

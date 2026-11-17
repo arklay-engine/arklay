@@ -12,8 +12,8 @@ It never touches the hand-authored files (`manifest.toml`, `thumbnail.*`):
 on a first import it writes a minimal manifest to start from, and on a
 re-import it keeps the existing one.
 
-A recipe either runs `arklay convert-mod` over the archive files it selects
-(Classic REbirth's RE1 layout, which convert-mod maps onto pack entries) or
+A recipe either runs `arklay pack convert mod` over the archive files it selects
+(Classic REbirth's RE1 layout, which `pack convert mod` maps onto pack entries) or
 copies files onto entries by pattern (RE2's HD textures and MP4 films, which
 need no conversion).
 
@@ -74,7 +74,7 @@ class Recipe:
     base: str
     load_order: int
     sources: list[Source]
-    # Without copy rules the selected files are run through convert-mod.
+    # Without copy rules the selected files are run through `pack convert mod`.
     copies: list[Copy] = field(default_factory=list)
 
 
@@ -306,14 +306,14 @@ def import_recipe(recipe: Recipe, args: argparse.Namespace) -> None:
             pack = Path(temp) / f"{recipe.id}.akpak"
             run(
                 [
-                    str(args.arklay), "convert-mod", str(staging),
+                    str(args.arklay), "pack", "convert", "mod", str(staging),
                     "--base", str(base),
                     "--id", recipe.id, "--name", recipe.name, "--version", recipe.version,
                     "--out", str(pack), "--force",
                 ]
             )
-            run([str(args.arklay), "extract", str(pack), "--out", str(fresh)])
-        # convert-mod's manifest only seeds a first import.
+            run([str(args.arklay), "pack", "extract", str(pack), "--out", str(fresh)])
+        # `pack convert mod`'s manifest only seeds a first import.
         (fresh / "manifest.toml").unlink(missing_ok=True)
     remove_tree(staging)
 

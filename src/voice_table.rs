@@ -1,4 +1,4 @@
-//! The shipped per-stage voice-line name tables, read only by `convert-game`.
+//! The shipped per-stage voice-line name tables, read only by `pack convert game`.
 //!
 //! Each room's table row selects one of five name rows through the selector
 //! in [`crate::voice`]: the second mansion visit's rows (5 and 6) reuse the

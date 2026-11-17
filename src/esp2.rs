@@ -3,7 +3,7 @@
 //! A room's RDT holds up to eight effect types, each with a sprite table, a
 //! motion table and a TIM (`Esp_data_set0`, `Esp_data_set1`), and
 //! `Common/Data/CORE00.ESP` holds the eight every room shares, drawn from
-//! `Common/Data/espcore.bin`. `convert-game` writes each set as one
+//! `Common/Data/espcore.bin`. `pack convert game` writes each set as one
 //! [`container`] entry.
 //!
 //! A slot of the pool runs two behaviours a tick, picked from `Esp_tbl` by the
@@ -2737,7 +2737,7 @@ pub struct Part<'a> {
     pub tim: &'a [u8],
 }
 
-/// What `convert-game` writes for a set: the count, then each type's id, its
+/// What `pack convert game` writes for a set: the count, then each type's id, its
 /// record and its TIM, each with its length.
 pub fn container(parts: &[Part<'_>]) -> Vec<u8> {
     let mut out = vec![parts.len() as u8];

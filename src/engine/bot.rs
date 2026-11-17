@@ -141,7 +141,7 @@ const STORY_BANK_NAMES: [&str; STORY_BANKS] = ["scenario", "common"];
 /// only while the bot is in that room.
 const ROOM_FLAG_BANK: u8 = 4;
 
-/// The default `--bot-risk`: how much danger the planner may accept, 0..=1.
+/// The default risk: how much danger the planner may accept, 0..=1.
 pub const DEFAULT_RISK: f64 = 0.25;
 
 /// The bot run options the CLI adds on top of a normal boot.
@@ -155,25 +155,25 @@ pub struct BotOptions {
     pub max_ticks: u64,
     /// Write the headless run's statistics as JSON to this path.
     pub stats_path: Option<std::path::PathBuf>,
-    /// The planner's risk setting (`--bot-risk`), `0.0..=1.0`; read-only to
+    /// The planner's risk setting, `0.0..=1.0`; read-only to
     /// Lua as `bot:risk()`.
     pub risk: f64,
-    /// The room whose entry ends the run (`--bot-goal-room`), such as
+    /// The room whose entry ends the run, such as
     /// `"20D"`; read-only to Lua as `bot:goal_room()`.
     pub goal_room: Option<String>,
-    /// The game-RNG seed (`--bot-seed`); `None` leaves the game's own random
+    /// The game-RNG seed; `None` leaves the game's own random
     /// stream untouched.
     pub seed: Option<u32>,
-    /// The story parameters picked for this run (`--bot-param NAME=VALUE`),
+    /// The story parameters picked for this run,
     /// checked against the pack's `params/<game>.xml` when the bot attaches.
     pub params: Vec<(String, String)>,
     /// The debug INVINCIBLE cheat for every session of the run
-    /// (`--bot-invincible`): health stays full and the game-over machine
+    /// (the bot's `invincible` option): health stays full and the game-over machine
     /// never runs. The bot is not told; it plays as it would.
     pub invincible: bool,
 }
 
-/// The game RNG state for the `session`th session of a `--bot-seed` run
+/// The game RNG state for the `session`th session of a seeded run
 /// (0 for the first, then one more per bot reload). A pure function of
 /// both, so a seeded run replays exactly; different seeds, and a reload,
 /// land on different streams. Never 1, the unseeded start state.
@@ -3555,11 +3555,11 @@ struct BotCtx {
     /// The game's combat knowledge file, if the pack carries one.
     knowledge: Option<Rc<knowledge::Knowledge>>,
     tick: u64,
-    /// The `--bot-risk` setting.
+    /// The risk setting.
     risk: f64,
-    /// The story parameters (`params/<game>.xml`, `--bot-param`).
+    /// The story parameters (`params/<game>.xml`).
     params: Rc<params::Params>,
-    /// The `--bot-goal-room` setting.
+    /// The goal room setting.
     goal_room: Option<Rc<str>>,
     shares: BotShares,
 }
@@ -5044,10 +5044,10 @@ pub struct BotRuntime {
     facts: Option<(bool, Rc<meta::GameFacts>)>,
     /// `knowledge/<game>.xml`, read with the chunks.
     knowledge: Option<Rc<knowledge::Knowledge>>,
-    /// The `--bot-risk` setting; kept across [`Self::reset`].
+    /// The risk setting; kept across [`Self::reset`].
     risk: f64,
     /// The story parameters: declared in `params/<game>.xml`, set by
-    /// `--bot-param`; kept across [`Self::reset`].
+    /// the run's params; kept across [`Self::reset`].
     params: Rc<params::Params>,
     /// The story flag banks (scenario, common) as the last tick saw them:
     /// each bit that changes is logged (`story: ...`), the coverage record
@@ -5056,9 +5056,9 @@ pub struct BotRuntime {
     /// The story flags a tick of the run saw become set, per bank: the
     /// scenes the run reached, whatever cleared them later.
     story_seen: [BTreeSet<u8>; STORY_BANKS],
-    /// The `--bot-goal-room` setting; kept across [`Self::reset`].
+    /// The goal room setting; kept across [`Self::reset`].
     goal_room: Option<Rc<str>>,
-    /// Run statistics for `--bot-stats`.
+    /// Run statistics for the bot's report.
     stats: stats::BotStats,
     /// Saves, reloads and deaths; kept across a reload.
     save_log: SaveLog,
@@ -5077,7 +5077,7 @@ pub struct BotRuntime {
     /// last session started, so the next session is its reload.
     screen_driven: bool,
     /// A route error is logged and the pad handed back to the player
-    /// rather than ending the app (the interactive `--bot`).
+    /// rather than ending the app (the interactive bot).
     errors_logged: bool,
 }
 
@@ -5109,7 +5109,7 @@ impl BotRuntime {
     }
 
     /// Log a route error and hand the pad back instead of failing the app's
-    /// update: the interactive `--bot`, where `--watch` can fix the route.
+    /// update: the interactive bot, where `--watch` can fix the route.
     pub fn log_errors(&mut self) {
         self.errors_logged = true;
     }
@@ -5129,7 +5129,7 @@ impl BotRuntime {
         }
     }
 
-    /// Set the room whose entry ends the run (`--bot-goal-room`). The id is
+    /// Set the room whose entry ends the run. The id is
     /// stored uppercased, the way `bot:room().id` spells it.
     pub fn with_goal_room(mut self, room: Option<&str>) -> Self {
         self.goal_room = room.map(|room| Rc::from(room.to_ascii_uppercase()));
@@ -5166,7 +5166,7 @@ impl BotRuntime {
         self.story = Some(now);
     }
 
-    /// Set the story parameters (`--bot-param NAME=VALUE`, repeatable): each
+    /// Set the story parameters (`NAME=VALUE` pairs): each
     /// name and value must be declared in the pack's `params/<game>.xml`.
     pub fn with_params(mut self, pack: &Pack, overrides: &[(String, String)]) -> Result<Self> {
         self.params = Rc::new(params::load(pack, overrides)?);
@@ -5178,7 +5178,7 @@ impl BotRuntime {
         self.params.summary()
     }
 
-    /// Set the planner's risk setting (`--bot-risk`), clamped to `0..=1`.
+    /// Set the planner's risk setting, clamped to `0..=1`.
     pub fn with_risk(mut self, risk: f64) -> Self {
         self.risk = if risk.is_finite() {
             risk.clamp(0.0, 1.0)

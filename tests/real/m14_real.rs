@@ -546,40 +546,41 @@ fn the_wall_clock_finishes_a_short_film_within_its_header_duration() {
     println!("film 0 wall clock: {elapsed_ms:.1} ms vs {expected_ms:.1} ms header, {guard} ticks");
 }
 
+/// Mod options for a vanilla run: no installed or sibling mod layers.
+fn vanilla_mods() -> arklay::engine::ModOptions {
+    arklay::engine::ModOptions {
+        no_mods: true,
+        ..arklay::engine::ModOptions::default()
+    }
+}
+
 #[test]
 #[ignore = "requires a converted game pack and SDL's offscreen driver"]
 fn standalone_fmv_capture_is_deterministic_and_not_blank() {
-    use std::process::Command;
-
     let Some((_root, pack_path)) = common::asset_env() else {
         return;
     };
     let dir = TempDir::new("fmv");
     let first = dir.0.join("first.bmp");
     let second = dir.0.join("second.bmp");
-    // The current test binary carries no `arklay` CLI, so shell out to the
-    // built binary: `--fmv 23 --ticks 6 --capture` is frame 2 of the Capcom
-    // logo, the same bytes every run.
-    let binary = env!("CARGO_BIN_EXE_arklay");
+    // Film 23 after 6 ticks is frame 2 of the Capcom logo, the same bytes
+    // every run.
     for path in [&first, &second] {
-        let status = Command::new(binary)
-            .args([
-                pack_path.to_str().unwrap(),
-                "--fmv",
-                "23",
-                "--ticks",
-                "6",
-                "--capture",
-                path.to_str().unwrap(),
-            ])
-            .status()
-            .expect("failed to run the arklay binary");
-        assert!(status.success(), "standalone --fmv capture failed");
+        arklay::engine::run_fmv(
+            &pack_path,
+            "23",
+            0,
+            Some(path),
+            6,
+            &vanilla_mods(),
+            arklay::video::Graphics::default(),
+        )
+        .expect("standalone film capture failed");
     }
     assert_eq!(
         fs::read(&first).unwrap(),
         fs::read(&second).unwrap(),
-        "--fmv captures differ between runs"
+        "film captures differ between runs"
     );
     let image = arklay::bmp::decode(&fs::read(&first).unwrap()).unwrap();
     assert_eq!((image.width, image.height), (320, 240));
@@ -593,7 +594,7 @@ fn standalone_fmv_capture_is_deterministic_and_not_blank() {
         "the Capcom logo frame is blank"
     );
     println!(
-        "--fmv 23 capture: {} bytes",
+        "film 23 capture: {} bytes",
         fs::metadata(&first).unwrap().len()
     );
 }
@@ -737,8 +738,6 @@ fn room_104s_deferred_camera_switch_starts_its_film_and_wakes_the_zombie() {
 #[test]
 #[ignore = "requires a converted game pack and SDL's offscreen driver"]
 fn captures_stay_deterministic_with_the_films_in_the_pack() {
-    use std::process::Command;
-
     let Some((_root, pack_path)) = common::asset_env() else {
         return;
     };
@@ -748,23 +747,8 @@ fn captures_stay_deterministic_with_the_films_in_the_pack() {
     // Room 5130 requests `movie_on 11` from its init script; the capture loop
     // drains the request, so the packed film never plays and the frame is
     // stable across runs.
-    let binary = env!("CARGO_BIN_EXE_arklay");
     for path in [&first, &second] {
-        let status = Command::new(binary)
-            .args([
-                pack_path.to_str().unwrap(),
-                "--room",
-                "513",
-                "--player",
-                "0",
-                "--ticks",
-                "120",
-                "--capture",
-                path.to_str().unwrap(),
-            ])
-            .status()
-            .expect("failed to run the arklay binary");
-        assert!(status.success(), "the room capture failed");
+        common::room_capture(&pack_path, &[], "513", 0, 120, path);
     }
     assert_eq!(
         fs::read(&first).unwrap(),
@@ -776,70 +760,44 @@ fn captures_stay_deterministic_with_the_films_in_the_pack() {
         fs::metadata(&first).unwrap().len()
     );
 
-    // The title capture skips the boot/title films, so it is stable too, and
-    // the bare root capture is the same frame.
+    // The title capture skips the boot/title films, so it is stable too.
     let title = dir.0.join("title.bmp");
-    let root = dir.0.join("root.bmp");
-    let status = Command::new(binary)
-        .args([
-            pack_path.to_str().unwrap(),
-            "--ui",
-            "title",
-            "--capture",
-            title.to_str().unwrap(),
-        ])
-        .status()
-        .expect("failed to run the arklay binary");
-    assert!(status.success(), "the title capture failed");
-    let status = Command::new(binary)
-        .args([
-            pack_path.to_str().unwrap(),
-            "--capture",
-            root.to_str().unwrap(),
-        ])
-        .status()
-        .expect("failed to run the arklay binary");
-    assert!(status.success(), "the root capture failed");
+    let again = dir.0.join("title-again.bmp");
     assert_eq!(
-        fs::read(&title).unwrap(),
-        fs::read(&root).unwrap(),
-        "the root capture is the title capture"
+        common::ui_capture(&pack_path, &[], "title", 0, &title),
+        common::ui_capture(&pack_path, &[], "title", 0, &again),
+        "the title capture is not deterministic"
     );
 }
 
 #[test]
 #[ignore = "requires a converted game pack and SDL's offscreen driver"]
 fn ending_chain_captures_are_deterministic() {
-    use std::process::Command;
-
     let Some((_root, pack_path)) = common::asset_env() else {
         return;
     };
     let dir = TempDir::new("ending");
     let first = dir.0.join("first.bmp");
     let second = dir.0.join("second.bmp");
-    let binary = env!("CARGO_BIN_EXE_arklay");
     // Ending 1's chain is 14, 15, 27, 22; 500 ticks cross the pre-ending film
     // (402 ticks) and present a frame of the ending film.
     for path in [&first, &second] {
-        let status = Command::new(binary)
-            .args([
-                pack_path.to_str().unwrap(),
-                "--ending",
-                "1",
-                "--ticks",
-                "500",
-                "--capture",
-                path.to_str().unwrap(),
-            ])
-            .status()
-            .expect("failed to run the arklay binary");
-        assert!(status.success(), "the ending capture failed");
+        arklay::engine::run_ending(
+            &pack_path,
+            1,
+            0,
+            Some(path),
+            500,
+            &vanilla_mods(),
+            arklay::video::Graphics::default(),
+            player::Options::default(),
+        )
+        .expect("the ending capture failed");
     }
     assert_eq!(
         fs::read(&first).unwrap(),
         fs::read(&second).unwrap(),
-        "--ending captures differ between runs"
+        "ending captures differ between runs"
     );
     let image = arklay::bmp::decode(&fs::read(&first).unwrap()).unwrap();
     assert_eq!((image.width, image.height), (320, 240));
@@ -853,7 +811,7 @@ fn ending_chain_captures_are_deterministic() {
         "the ending capture is blank"
     );
     println!(
-        "--ending 1 capture: {} bytes",
+        "ending 1 capture: {} bytes",
         fs::metadata(&first).unwrap().len()
     );
 }
@@ -861,34 +819,20 @@ fn ending_chain_captures_are_deterministic() {
 #[test]
 #[ignore = "requires a converted game pack and SDL's offscreen driver"]
 fn ending_result_and_epilogue_captures_are_deterministic() {
-    use std::process::Command;
-
     let Some((_root, pack_path)) = common::asset_env() else {
         return;
     };
-    let binary = env!("CARGO_BIN_EXE_arklay");
-
     for screen in ["result", "epilogue"] {
         let dir = TempDir::new(&format!("ending-{screen}"));
         let first = dir.0.join("first.bmp");
         let second = dir.0.join("second.bmp");
         for path in [&first, &second] {
-            let status = Command::new(binary)
-                .args([
-                    pack_path.to_str().unwrap(),
-                    "--ui",
-                    screen,
-                    "--capture",
-                    path.to_str().unwrap(),
-                ])
-                .status()
-                .expect("failed to run the arklay binary");
-            assert!(status.success(), "the --ui {screen} capture failed");
+            common::ui_capture(&pack_path, &[], screen, 0, path);
         }
         assert_eq!(
             fs::read(&first).unwrap(),
             fs::read(&second).unwrap(),
-            "--ui {screen} captures differ between runs"
+            "the {screen} screen captures differ between runs"
         );
         let image = arklay::bmp::decode(&fs::read(&first).unwrap()).unwrap();
         assert_eq!((image.width, image.height), (320, 240));
@@ -899,10 +843,10 @@ fn ending_result_and_epilogue_captures_are_deterministic() {
                 .0
                 .iter()
                 .any(|pixel| pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0),
-            "the --ui {screen} capture is blank"
+            "the {screen} screen capture is blank"
         );
         println!(
-            "--ui {screen} capture: {} bytes",
+            "{screen} screen capture: {} bytes",
             fs::metadata(&first).unwrap().len()
         );
     }

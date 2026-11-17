@@ -93,7 +93,7 @@ fn main() {
 }
 
 /// Generate the pack-entry table for the checked-in map-wide BioRand files
-/// under `games/re1/biorand/`, so `convert-game` packs them beside the rooms'
+/// under `games/re1/biorand/`, so `pack convert game` packs them beside the rooms'
 /// `random.xml` files and the randomizer reads them from the pack.
 fn emit_biorand_files() {
     let root = manifest_dir().join("games/re1/biorand");
@@ -141,7 +141,7 @@ fn emit_biorand_files() {
 }
 
 /// Generate the pack-entry table for the checked-in Lua scripts under each
-/// `games/re1/{dir}/` of `dirs`, so `convert-game` packs exactly the scripts in
+/// `games/re1/{dir}/` of `dirs`, so `pack convert game` packs exactly the scripts in
 /// the tree without a hand-maintained list. `generated` adds scripts this
 /// build wrote, as `(entry, path)`.
 fn emit_scripts(dirs: &[&str], table: &str, file: &str, generated: &[(String, PathBuf)]) {
@@ -228,7 +228,7 @@ fn collect_lua(dir: &PathBuf, prefix: &str, entries: &mut Vec<(String, PathBuf)>
 }
 
 /// Generate the pack-entry table for the checked-in item definitions under
-/// `games/re1/item/<id>/item.xml`, so `convert-game` packs exactly the items
+/// `games/re1/item/<id>/item.xml`, so `pack convert game` packs exactly the items
 /// in the tree and the engine has them without a pack.
 fn emit_item_files() {
     let root = manifest_dir().join("games/re1/item");
@@ -275,7 +275,7 @@ fn emit_item_files() {
 }
 
 /// Generate the pack-entry table for the checked-in language sources under
-/// `games/re1/language/`, so `convert-game` packs exactly the files in the
+/// `games/re1/language/`, so `pack convert game` packs exactly the files in the
 /// tree and can parse each one before it ships.
 fn emit_language_files() {
     let root = manifest_dir().join("games/re1/language");
@@ -323,7 +323,7 @@ fn emit_language_files() {
 }
 
 /// Compile the checked-in room scripts under `games/re1/room/` into the SCD
-/// bytecode `convert-game` packs as each room's `room.scd`: one runtime build
+/// bytecode `pack convert game` packs as each room's `room.scd`: one runtime build
 /// per room, which carries every RDT variant and region and picks between
 /// them as it runs.
 fn emit_room_scripts() {
@@ -433,7 +433,7 @@ fn emit_room_scripts() {
 
 /// Generate the table of the checked-in RE1 room definitions under
 /// `games/re1/room/`: every `<id>/` folder's XML files (`room.xml` and its
-/// `effect/<slot>.xml`). `convert-game` packs them in place of anything read
+/// `effect/<slot>.xml`). `pack convert game` packs them in place of anything read
 /// from the install's RDTs.
 fn emit_room_files() {
     fn walk(dir: &Path, root: &Path, files: &mut Vec<(String, PathBuf)>) {

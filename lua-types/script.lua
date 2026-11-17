@@ -37,8 +37,8 @@
 ---
 ---- **The script is the program.** Nothing happens until the script calls
 ---  for it, and the run ends when the script returns.
----- **One tick is one app update**, the unit `--ticks` counts: a fixed
----  30 Hz tick while a room plays, a 16 ms step on a UI screen.
+---- **One tick is one app update**: a fixed 30 Hz tick while a room
+---  plays, a 16 ms step on a UI screen.
 ---- **Deterministic.** The game options of the user's `arklay.toml` are
 ---  ignored, and the run options are the oracle runs' unless the script sets
 ---  them in [`load_game_pack`](#load_game_pack). A `--headless` run also
@@ -92,7 +92,7 @@
 ---
 ---Calls change the live state, and the player follows a position or angle
 ---a call wrote. Between a boot and the first tick, edits author the booted
----state the way `--setup-script` does: the first `tick` (or a `save_game` or
+---state: the first `tick` (or a `save_game` or
 ---`capture` before it) reruns the room's init scripts once if the edits
 ---changed the RE 2 flags or random stream. The getters (`room`,
 ---`player_pos`, `flag_get`, ...) do not count as edits.
@@ -112,10 +112,10 @@ game = {}
 ---load_game_pack("re2.akpak", { difficulty = "hard", mods = { "mods/hd.akpak" } })
 ---```
 ---@param path string The game pack: the id of an installed pack (`"re1"`, `"re2"`), found under the data roots' `games/` folders as the launcher finds it, or a path to an `.akpak`.
----@param options? { mods?: string[], user_mods?: boolean, language?: string, save_dir?: string, quick_turn?: boolean, tactical_reload?: boolean, authentic?: boolean, auto_aim?: boolean, blood?: boolean, difficulty?: "normal"|"easy"|"hard", arrange?: boolean } `mods` are the mod layers to apply in order (none by default); `user_mods` also layers the user's installed mods under them, as `arklay.toml` selects them for a normal launch (default: on with a window, off with `--headless`); `language` the pack language to use; `save_dir` where in-game saves go (default: a scratch directory removed at exit). The rest are the run options, as the command-line flags of the same names set them: all off by default except `auto_aim` and `blood`, and `difficulty` defaults to `normal`. An unknown key is an error.
+---@param options? { mods?: string[], user_mods?: boolean, language?: string, save_dir?: string, quick_turn?: boolean, tactical_reload?: boolean, authentic?: boolean, auto_aim?: boolean, blood?: boolean, difficulty?: "normal"|"easy"|"hard", arrange?: boolean, title_special?: integer } `mods` are the mod layers to apply in order (none by default); `user_mods` also layers the user's installed mods under them, as `arklay.toml` selects them for a normal launch (default: on with a window, off with `--headless`); `language` the pack language to use; `save_dir` where in-game saves go (default: a scratch directory removed at exit). The rest are the run options: all off by default except `auto_aim` and `blood`, and `difficulty` defaults to `normal`. `title_special` is RE 2's config.ini `SPECIAL`, which picks the extras the title's SPECIAL shows (0 EXIT alone, 1 GALLERY, 2 or 3 EX.BATTLE, 4 to 7 the 4th Survivor, anything else all of them, To-fu too; default 15). An unknown key is an error.
 function load_game_pack(path, options) end
 
----Boot a room directly, like `arklay PACK --room ROOM`: a fresh game state
+---Boot a room directly, like `arklay --game PACK --room ROOM`: a fresh game state
 ---with the player at the room's entry.
 ---@param room string Three hex digits: the stage digit plus the room, e.g. `"106"`; RE 2's letter stages are A-G, e.g. `"G01"`.
 ---@param options? { player?: integer, mansion2?: boolean } `player` is the digit (`0`-`9`) that selects the RDT variant (default 0); `mansion2` boots a mansion room on its second visit.
@@ -123,17 +123,29 @@ function load_room(room, options) end
 
 ---Start a new game through the session flow, like `--ui game`: the
 ---new-game items, flags and health, and the start room or `room`.
----@param options? { character?: integer, room?: string, player?: integer, mansion2?: boolean } `character` is `0` Chris/Leon or `1` Jill/Claire (RE 2: `2`/`3` for scenario B); `room` boots straight into that room instead of the start room, with `player` (default: the character) and `mansion2` as in `load_room`.
+---@param options? { character?: integer, room?: string, player?: integer, mansion2?: boolean, interactive?: boolean } `character` is `0` Chris/Leon or `1` Jill/Claire (RE 2: `2`/`3` for scenario B); `room` boots straight into that room instead of the start room, with `player` (default: the character) and `mansion2` as in `load_room`. By default the boot is the traced one, as the original's record has it: the room-set event pass and the entry fade run on the first tick. `interactive` boots as the game window's new game does instead, with the player placed at the room's spawn straight away.
 function new_game(options) end
 
 ---Continue from a save block (`savedatN.dat`), like `--load FILE`.
 ---@param path string
 function load_save(path) end
 
+---Settle the booted state on the first tick as an authored one, though no
+---`game` call edited it: the player is set from the game state and, in an
+---RE 2 room, the head is placed where the idle's first frame puts it, as the
+---original's `--warp` start has it. For a setup that leaves the boot as it is
+---but must start like one that edits it. Only between a boot and its first
+---tick (or a `save_game` or `capture` before it).
+function mark_authored() end
+
+---Open the title screen, as the game shows it after its logos, with no
+---films. A game the title starts is a session like any other; `game` calls
+---need one.
+function open_title() end
+
 -- # Input
 
----The buttons are the `--input` names: `up` (or `forward`), `down` (or
----`backward`), `left`, `right`, `confirm` (or `action`, `cross`), `cancel`
+---The buttons are `up` (or `forward`), `down` (or `backward`), `left`, `right`, `confirm` (or `action`, `cross`), `cancel`
 ---(`circle`), `run`, `aim` (`square`), `fire`, `start` (`inventory`),
 ---`page_left` (`l1`), `page_right` (`r1`) and `f9` (`return_title`), plus
 ---`back` for `down`, and every other action by its `[bindings]` name (`quick_turn`, `reload`, `map`, `weapon_next`,
@@ -158,7 +170,7 @@ function release(...) end
 ---@param ... string
 function press(...) end
 
----Replace the held buttons with a raw key word (the `--input` key bits).
+---Replace the held buttons with a raw key word (the engine's key bits).
 ---@param word? integer The new held word; nil leaves it.
 ---@return integer previous The held word before the call.
 function pad(word) end
@@ -182,7 +194,7 @@ function tick_until(condition, max) end
 
 ---The app's current screen: `play` while a game session runs, else
 ---`title`, `select`, `load`, `save`, `movie`, `ending`, `epilogue`, or
----`none` before a pack is open or a session booted.
+---`none` before a pack is open or a session or screen booted.
 ---@return string
 function mode() end
 
@@ -218,7 +230,7 @@ function bot_start(options) end
 ---@return string? reason The bot's own reason, when the run has ended.
 function bot_finished() end
 
----The attached bot's report so far, as `--bot-stats` writes it. `score`
+---The attached bot's report so far, as `bot_run`'s `stats` writes it. `score`
 ---holds what a playthrough is judged by: `completed` and the `ending` (the
 ---game's rows 1 to 7, once the escape completed the game), `ticks`,
 ---`game_time` (the game's clear time, `h:mm:ss`), `hits` (health drops of
@@ -273,16 +285,31 @@ function json(value) end
 function capture(path) end
 
 ---Write the session's state as a save block (`savedatN.dat`), which
----`load_save` and `--load` read back: the `--save-out` seam.
+---`load_save` and `--load` read back.
 ---@param path string
 function save_game(path) end
 
 ---Start writing the oracle trace (`oracle/trace-v1.md`) to `path`: one line
----per gameplay tick from the next tick on, as a `--ui game --trace` run
----writes. A trace already running is closed first.
+---per gameplay tick from the next tick on. A trace already running is closed first.
+---
+---A trace started on a screen outside play (after [`open_title`](#open_title))
+---is a screen trace instead: a line every tick in the screen format (the
+---title's state and its sounds), whatever the app shows, the game it starts
+---included.
 ---@param path string
----@param options? { all_frames?: boolean } `all_frames` also traces the frames of a door transition and the death screen, as a `--trace` run with `--input` does.
+---@param options? { all_frames?: boolean, sound?: boolean, voice_ticks?: integer[] } `all_frames` also traces the frames of a door transition and the death screen. `sound` runs the session as the game plays with a sound device, to compare with recordings of the original made with sound: an RE 2 door holds the next room's load for the music. `voice_ticks` holds each RE 2 voice line for the ticks the list gives, one number a line in the order the lines play, instead of the line's own length: with sound the original ends a line by DirectSound's clock, so its length in ticks follows the recording's pace. `sound` and `voice_ticks` need a game session and apply to it.
 function trace_start(path, options) end
+
+---The lines the running trace has written: the gameplay ticks traced so
+---far. A tick that runs a door transition's frames or the death screen
+---writes none unless the trace has `all_frames`.
+---
+---```lua
+---trace_start("room.trace")
+---while trace_ticks() < 600 do tick() end
+---```
+---@return integer? ticks `nil` when no trace is running.
+function trace_ticks() end
 
 ---Close the running trace. The run closes it at the end too.
 function trace_stop() end

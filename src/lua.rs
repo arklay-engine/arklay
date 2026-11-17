@@ -17,7 +17,7 @@
 //! (`api:room()`, `api:flag_get`/`api:flag_set`,
 //! `api:item_count`/`api:give_item`/`api:item_remove`, `api:kill_event`,
 //! `api:message`, `api:log`) plus the coarser state-authoring methods the
-//! CLI's `--setup-script`/`--save-out` oracle seam uses (inventory slots, the
+//! authoring seam (`Authoring::setup_script`/`save_out`) uses (inventory slots, the
 //! item box, player health/position/character, room identity/camera, FILE and
 //! item-use flags, raw flag banks, state bytes and the static room-music
 //! tables). Methods use Lua's colon
@@ -196,7 +196,7 @@ mod imp {
             }))
         }
 
-        /// An empty VM with no pack hooks, for the CLI `--setup-script` seam
+        /// An empty VM with no pack hooks, for the setup-script authoring seam
         /// on a pack that carries no `lua/` entries: the chunk still runs in
         /// the same sandbox and the same authoring API.
         pub fn empty() -> Result<LuaVm> {
@@ -208,7 +208,7 @@ mod imp {
             })
         }
 
-        /// Run a CLI `--setup-script` chunk against `game`.
+        /// Run a setup-script chunk against `game`.
         ///
         /// The chunk is called with the `api` userdata as its first argument
         /// (`local api = ...`). Unlike the hook calls, a failure is returned
@@ -1089,7 +1089,7 @@ mod scripts {
     include!(concat!(env!("OUT_DIR"), "/game_scripts.rs"));
 }
 /// The checked-in game scripts (`games/re1/game/**.lua`) as `(entry, source)`
-/// pairs. `convert-game` packs them; a pack that predates them falls back to
+/// pairs. `pack convert game` packs them; a pack that predates them falls back to
 /// these copies.
 pub use scripts::GAME_SCRIPTS;
 

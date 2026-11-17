@@ -102,7 +102,8 @@ function on_message(api, id) end
 ---these methods exist; call them with Lua colon syntax (`api:room()`).
 ---
 ---The state-authoring methods (`set_*`, `clear_inventory`, `item_box_*`)
----exist for the CLI's `--setup-script`/`--save-out` oracle seam: a mod may
+---exist for authoring test states (a driver script's `game` edits and
+---`save_game`): a mod may
 ---use them too, but they are deliberately coarse. `set_room` only rewrites
 ---the identity the save block serialises; it does not load another room.
 ---@class HookApi
@@ -371,7 +372,8 @@ function HookApi:set_room_music_state(stage, room, state, options) end
 -- # RE 2 state
 
 ---Set one bit of RE 2's flag banks, numbered as `ck` and `set` number them.
----In a `--setup-script`, the room's scripts start again if any bit changed.
+---Between a driver script's boot and its first tick, the room's scripts start
+---again if any bit changed.
 ---@param bank integer
 ---@param index integer
 ---@param value? boolean Defaults to `true`.

@@ -17,7 +17,7 @@
 
 Each run is `arklay script --headless ROUTE.lua PACK SEED STATS`: its result
 line goes to <out>/<name>/<route>-s<seed>.out, the bot's log to .log and the
-full report (as --bot-stats writes it) to .json. The table is also written to
+full report (as `bot_run`'s `stats` writes it) to .json. The table is also written to
 <out>/<name>/summary.txt, and the scores to summary.json.
 
 The score of a playthrough is: the ticks it took (30 a second; `time` is the

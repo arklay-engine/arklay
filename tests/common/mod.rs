@@ -99,3 +99,72 @@ pub fn original_room(name: &str) -> arklay::state::RoomId {
     let number = u16::from_str_radix(&digits, 16).unwrap_or_else(|_| panic!("room `{name}`"));
     arklay::state::RoomId::from_original(number).unwrap_or_else(|| panic!("room `{name}`"))
 }
+
+/// Boot `room` (RDT variant `player`) from `pack` with the `mods` layers
+/// (none: the vanilla pack, no discovered mods) through the library's room
+/// capture (the player at the room's spawn, as
+/// `simulate_room` places it), run `ticks` ticks and return the BMP capture
+/// written to `out`.
+#[allow(dead_code)]
+pub fn room_capture(
+    pack: &Path,
+    mods: &[&Path],
+    room: &str,
+    player: u8,
+    ticks: u32,
+    out: &Path,
+) -> Vec<u8> {
+    let id = arklay::state::RoomId::from_room_and_player(room, player).expect("a room id");
+    let saves = out.with_extension("saves");
+    arklay::engine::run_with_options(
+        pack,
+        id,
+        Some(out),
+        ticks,
+        &saves,
+        &arklay::engine::ModOptions {
+            explicit: mods.iter().map(|layer| layer.to_path_buf()).collect(),
+            no_mods: mods.is_empty(),
+            ..arklay::engine::ModOptions::default()
+        },
+        None,
+        false,
+        None,
+        arklay::player::Options::default(),
+        arklay::trace::TraceOptions::default(),
+        arklay::engine::Authoring::default(),
+    )
+    .expect("the room capture");
+    let _ = std::fs::remove_dir_all(&saves);
+    std::fs::read(out).expect("read the room capture")
+}
+
+/// Render the `--ui`-style `screen` capture of `pack` with the `mods` layers
+/// (none: the vanilla pack) through the library, as the old `--ui SCREEN
+/// --capture` run did, and return the BMP written to `out`.
+#[allow(dead_code)]
+pub fn ui_capture(pack: &Path, mods: &[&Path], screen: &str, character: u8, out: &Path) -> Vec<u8> {
+    let saves = out.with_extension("saves");
+    arklay::engine::run_ui_with_mods(
+        pack,
+        screen,
+        Some(out),
+        &saves,
+        character,
+        None,
+        0,
+        &arklay::engine::ModOptions {
+            explicit: mods.iter().map(|layer| layer.to_path_buf()).collect(),
+            no_mods: mods.is_empty(),
+            ..arklay::engine::ModOptions::default()
+        },
+        false,
+        None,
+        arklay::player::Options::default(),
+        arklay::trace::TraceOptions::default(),
+        arklay::engine::Authoring::default(),
+        arklay::engine::BotOptions::default(),
+    )
+    .unwrap_or_else(|error| panic!("the {screen} capture failed: {error:#}"));
+    std::fs::read(out).expect("read the UI capture")
+}

@@ -30,7 +30,7 @@ pub struct Re2State {
     pub gates: [ActionGate; ROOM_ACTION_SLOTS],
     /// `door_locks`: the unlocked doors' bits.
     pub door_locks: [u32; 2],
-    /// While an authored setup runs (`--setup-script`, or a driver's `game`
+    /// While an authored setup runs (a setup script, or a driver's `game`
     /// calls before its first tick): the flag bits it wrote and their
     /// values, which the room's rerun applies to the flags the boot found.
     pub authored_flags: Option<Box<AuthoredFlags>>,
@@ -38,7 +38,7 @@ pub struct Re2State {
     pub random: u32,
     /// `Xa_control`'s voice line.
     pub voice: VoiceLine,
-    /// `--voice-ticks`: how long the oracle's recording held each voice line,
+    /// How long the oracle's recording held each voice line,
     /// in its order. With sound the original ends a line by DirectSound's
     /// clock, so its length in ticks follows the recording's pace.
     pub voice_ticks: std::collections::VecDeque<u32>,

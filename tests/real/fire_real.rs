@@ -16,8 +16,7 @@
 
 use crate::common;
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::PathBuf;
 
 use arklay::enemy::EntityModelCache;
 use arklay::game::{BANK_SYSTEM, GameState, ScdGameHost};
@@ -117,24 +116,6 @@ fn capture_dir(label: &str) -> PathBuf {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
-}
-
-/// Run the CLI's `--room ... --ticks ... --capture` path and return the BMP.
-fn cli_capture(pack: &Path, room: &str, ticks: u32, out: &Path) -> Vec<u8> {
-    let status = Command::new(env!("CARGO_BIN_EXE_arklay"))
-        .arg(pack)
-        .arg("--room")
-        .arg(room)
-        .arg("--player")
-        .arg("0")
-        .arg("--ticks")
-        .arg(ticks.to_string())
-        .arg("--capture")
-        .arg(out)
-        .status()
-        .expect("spawn arklay");
-    assert!(status.success(), "the CLI capture failed");
-    std::fs::read(out).expect("read the CLI capture")
 }
 
 /// The fire scene's outcome for one room.
@@ -463,8 +444,8 @@ fn real_room1051_ticks_capture_is_deterministic() {
     };
     let pack = pack_path;
     let dir = capture_dir("determinism");
-    let first = cli_capture(&pack, "105", 30, &dir.join("first.bmp"));
-    let second = cli_capture(&pack, "105", 30, &dir.join("second.bmp"));
+    let first = common::room_capture(&pack, &[], "105", 0, 30, &dir.join("first.bmp"));
+    let second = common::room_capture(&pack, &[], "105", 0, 30, &dir.join("second.bmp"));
     assert!(!first.is_empty());
-    assert_eq!(first, second, "--ticks captures must be byte-identical");
+    assert_eq!(first, second, "scripted captures must be byte-identical");
 }

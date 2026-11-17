@@ -1,5 +1,5 @@
 //! The model viewer: any character, enemy or weapon model of the pack,
-//! posed and animated in a room with no AI (`--model`).
+//! posed and animated in a room with no AI.
 //!
 //! A model is named by its pack entry and loaded by [`load`], whatever game
 //! it is from: an RE1 EMD, an RE2 enemy EMD (with the texture page and CLUT swatches beside it), an
@@ -108,7 +108,7 @@ pub struct Viewer {
     pub angle: u16,
     /// The cut the model was last stood in front of.
     placed: Option<usize>,
-    /// `--model-pos`: where the model stands instead of in front of the cut.
+    /// Where the model stands instead of in front of the cut.
     fixed: Option<[i32; 3]>,
     /// The first pose's extent about the entity origin, facing angle 0:
     /// the widest horizontal reach and the top and bottom (`y` grows down).

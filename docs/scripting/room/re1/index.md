@@ -128,7 +128,7 @@ second mansion visit, so `103/room.akscr` holds RDTs 1030, 1031, 6030 and
 
 When Arklay is compiled, its build script compiles every room script once,
 as the runtime build, and stores the bytecode in the executable.
-`arklay convert-game` packs each room's bytecode as `room/<room>/room.scd`.
+`arklay pack convert game` packs each room's bytecode as `room/<room>/room.scd`.
 It also records, as the base manifest's `region`, the release that the
 install's language belongs to: Japanese is JPN, French or German is EUR,
 and any other language is USA. The scripts' region tests read that region.

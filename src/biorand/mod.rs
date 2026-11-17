@@ -62,7 +62,7 @@ mod checked_in {
 }
 
 /// The checked-in map-wide BioRand files (`games/re1/biorand/*.xml`) as
-/// `(pack entry, text)`. `convert-game` packs exactly these, beside the rooms'
+/// `(pack entry, text)`. `pack convert game` packs exactly these, beside the rooms'
 /// `random.xml` files.
 pub use checked_in::BIORAND_FILES;
 

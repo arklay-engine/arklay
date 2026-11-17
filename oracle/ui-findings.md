@@ -409,18 +409,16 @@ from camera 0 with no input at all (state and pixels match for 200 ticks).
 
 ## Open
 
-- **Bare `--room` boot camera.** The headless room boot (`arklay --room ROOM
-  --ticks/--capture/--trace`, `run_with_options`) places the player at the
+- **Bare room boot camera.** The library's headless room boot
+  (`run_with_options`, the real-asset tests' room captures) places the player at the
   walk-zone spawn *before* its switch-zone scan, so it picks the camera at that
   point. The reference scans at the new-game position and only then moves the
   player to the walk-zone centre without re-scanning (`room_set`'s camera
-  block, then `TestHooks_PlaceRoomSpawn`), which is what `--ui game --room`
-  reproduces: room 104 boots `cam=0` bare and `cam=2` there, while the
+  block, then `TestHooks_PlaceRoomSpawn`), which is what a driver script's
+  `new_game({ room = ... })` reproduces: room 104 boots `cam=0` bare and `cam=2` there, while the
   reference's room-mode trace says 2 in both cases. Left alone here because it
   only feeds the port's own headless captures (the m16 golden scenarios) and
-  the oracle paths all use `--ui game`. `--save-out` on the bare path also
-  writes the block before the camera scan, so an authored block carries the
-  pre-scan id.
+  the oracle paths all use `new_game`.
 - **FILE reader blink phase.** The reader's arrows and the selector's icons
   blink off the state block's shared `state[0x12]` counter, which the original
   advances only in the selector's display state and the reader's settled state

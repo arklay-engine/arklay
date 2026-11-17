@@ -19,7 +19,7 @@
 --      knowledge file's entry, the risk setting, health and rounds;
 --   6. the planner (bot/planner.lua): room puzzle facts, items, stairs,
 --      doors, and the finish when nothing reachable is left or the
---      --bot-goal-room is entered.
+--      goal room (the `goal_room` option of bot_run) is entered.
 -- A death loads the latest save through the title's load screen
 -- (on_bot_screen below); without a save the run finishes "dead, no save".
 -- The scripted death variant (scene.ending) is the escape scene ending the

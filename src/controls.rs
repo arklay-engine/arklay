@@ -153,7 +153,7 @@ pub const RETURN_TITLE_BIT: u64 = 1 << 33;
 pub const SYSTEM_MENU_BIT: u64 = 1 << 34;
 
 impl Action {
-    /// The action's bit in an input word (the `--input` script word and the
+    /// The action's bit in an input word (the input-script word and the
     /// engine's latched held/pressed words).
     pub const fn bit(self) -> u64 {
         1 << self as u64

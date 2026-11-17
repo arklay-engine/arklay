@@ -191,14 +191,14 @@ pub struct TraceOptions<'a> {
     pub capture_dir: Option<&'a Path>,
     /// Fixed ticks to run.
     pub ticks: u32,
-    /// Scripted per-tick input playback (`--input`), or `None` for an idle run.
+    /// Scripted per-tick input playback, or `None` for an idle run.
     pub input: Option<&'a crate::engine::InputScript>,
-    /// Run as the game does with a sound device (`--sound`), for the
-    /// oracle's `--sound` recordings: an RE2 door holds for the music.
+    /// Run as the game does with a sound device, for the
+    /// oracle's recordings made with sound: an RE2 door holds for the music.
     pub sound: bool,
-    /// Mix the run's audio and write it here as a WAV (`--sound-wav`).
+    /// Mix the run's audio and write it here as a WAV.
     pub sound_wav: Option<&'a Path>,
-    /// Each RE2 voice line's length in ticks, in order (`--voice-ticks`).
+    /// Each RE2 voice line's length in ticks, in order.
     pub voice_ticks: Option<&'a Path>,
 }
 
@@ -214,12 +214,29 @@ pub struct TraceWriter {
 impl TraceWriter {
     /// Create `path` and write the engine header line.
     pub fn create(path: &Path) -> Result<Self> {
+        Self::with_header(path, b"oracle-trace v1 engine=ark\n")
+    }
+
+    /// Create `path` for a screen trace (the title and the other screens
+    /// outside play), whose lines are written with [`TraceWriter::write_line`].
+    pub fn create_screen(path: &Path) -> Result<Self> {
+        Self::with_header(path, b"oracle-trace v1 engine=arklay\n")
+    }
+
+    fn with_header(path: &Path, header: &[u8]) -> Result<Self> {
         let file =
             File::create(path).with_context(|| format!("failed to create {}", path.display()))?;
         let mut out = BufWriter::new(file);
-        out.write_all(b"oracle-trace v1 engine=ark\n")
+        out.write_all(header)
             .with_context(|| format!("failed to write {}", path.display()))?;
         Ok(Self { out, ticks: 0 })
+    }
+
+    /// Emit one screen-trace line, already formatted; `t` increments.
+    pub fn write_line(&mut self, line: &str) -> Result<()> {
+        writeln!(self.out, "{line}")?;
+        self.ticks += 1;
+        Ok(())
     }
 
     /// The `t` of the next tick line.

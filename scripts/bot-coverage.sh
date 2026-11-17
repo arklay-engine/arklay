@@ -15,7 +15,7 @@
 #
 # Output: target/bot-batches/<NAME>-<combo>/ per combination, and
 # target/bot-batches/<NAME>-coverage.txt. The combinations are the regression
-# set: each one is a set of --bot-param values (mods/bot/params/re1.xml)
+# set: each one is a set of bot_run `params` (mods/bot/params/re1.xml)
 # that steers Jill down a branch of the story; together they should reach
 # every scene the names file (mods/bot/params/re1-story.xml) lists.
 set -uo pipefail

@@ -403,33 +403,10 @@ fn build_demo_pack(dir: &std::path::Path) -> PathBuf {
     out
 }
 
-/// Run the runtime capture CLI and return the written BMP bytes.
-fn capture(
-    pack: &std::path::Path,
-    mods: &[&std::path::Path],
-    no_mods: bool,
-    out: &PathBuf,
-) -> Vec<u8> {
-    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_arklay"));
-    command.arg(pack);
-    for layer in mods {
-        command.arg("--mod").arg(layer);
-    }
-    if no_mods {
-        command.arg("--no-mods");
-    }
-    command
-        .args(["--room", "100", "--ticks", "40", "--capture"])
-        .arg(out);
-    let status = command.status().expect("failed to run the capture CLI");
-    assert!(status.success(), "capture failed");
-    fs::read(out).unwrap()
-}
-
 #[test]
 #[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
 fn demo_pack_boots_room_1000_with_the_script_lua_and_background() {
-    // `--room 100` is RDT 1000: the three-digit CLI id is stage 1, room 0x00.
+    // Room `100` is RDT 1000: the three-digit id is stage 1, room 0x00.
     let Some((_root, pack_path)) = common::asset_env() else {
         return;
     };
@@ -477,19 +454,16 @@ fn demo_pack_boots_room_1000_with_the_script_lua_and_background() {
     let vanilla = simulate_room(&base, id, 40, player::Input::default()).unwrap();
     assert_ne!(run.frame.rgba, vanilla.frame.rgba);
 
-    // The same acceptance through the CLI's `--capture`: deterministic with
-    // `--mod`, and `--no-mods` gives today's vanilla capture byte-for-byte.
+    // The same acceptance through a driver script's `capture`: deterministic
+    // with the layer, and different from the vanilla capture.
     let demo_first = temp.path.join("demo-first.bmp");
     let demo_second = temp.path.join("demo-second.bmp");
     let base_bmp = temp.path.join("base.bmp");
-    let no_mods_bmp = temp.path.join("no-mods.bmp");
-    let first = capture(&pack_path, &[&demo_pack], false, &demo_first);
-    let second = capture(&pack_path, &[&demo_pack], false, &demo_second);
-    let plain = capture(&pack_path, &[], false, &base_bmp);
-    let ignored = capture(&pack_path, &[&demo_pack], true, &no_mods_bmp);
+    let first = common::room_capture(&pack_path, &[&demo_pack], "100", 0, 40, &demo_first);
+    let second = common::room_capture(&pack_path, &[&demo_pack], "100", 0, 40, &demo_second);
+    let plain = common::room_capture(&pack_path, &[], "100", 0, 40, &base_bmp);
     assert_eq!(first, second, "the demo capture is deterministic");
     assert_ne!(first, plain, "the background override changed the frame");
-    assert_eq!(ignored, plain, "--no-mods ignores every layer");
     assert_eq!(fs::read(&demo_first).unwrap(), first);
 }
 
@@ -537,12 +511,12 @@ fn list_reports_layer_warnings_on_stderr_only() {
     writer.write(&layer).unwrap();
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_arklay"))
-        .args(["list"])
+        .args(["pack", "list"])
         .arg(&base)
         .arg("--mod")
         .arg(&layer)
         .output()
-        .expect("failed to run arklay list");
+        .expect("failed to run arklay pack list");
     assert!(output.status.success());
 
     // The stem-derived base id warns; the warning must not corrupt the TOC.

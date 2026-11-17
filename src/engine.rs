@@ -335,42 +335,42 @@ impl Drop for SurfaceHandle {
 /// chunk through [`Authoring::setup_script`]) and serialise it to a
 /// `savedatN.dat` block ([`Authoring::save_out`]) so both engines can boot the
 /// exact same state from the same file ([`Authoring::load`]). None of them
-/// widen the mod-facing sandbox: `--setup-script` reads a CLI-fixed path and
-/// `--save-out` writes a CLI-fixed path, both from Rust.
+/// widen the mod-facing sandbox: `setup_script` reads a host-fixed path and
+/// `save_out` writes a host-fixed path, both from Rust.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Authoring<'a> {
     /// `--load`: continue from the save block at this path instead of building
     /// a new game.
     pub load: Option<&'a Path>,
-    /// `--setup-script`: a Lua chunk run once on the freshly booted session,
+    /// A Lua chunk run once on the freshly booted session,
     /// before the first tick. It receives the game state as its first argument
     /// (`local api = ...`) and may use any authoring method of the `api`.
     pub setup_script: Option<&'a Path>,
-    /// `--save-out`: write the session's current save block to this path and
+    /// Write the session's current save block to this path and
     /// exit before ticking. The oracle's deterministic save generator.
     pub save_out: Option<&'a Path>,
-    /// The `[graphics]` options with `--renderer`, `--render-scale` and
-    /// `--msaa` applied: the interactive window and what it draws with.
+    /// The `[graphics]` options with the renderer, render scale and
+    /// MSAA overrides applied: the interactive window and what it draws with.
     pub renderer: Graphics,
-    /// `--frame-rate` as given on the command line: a headless `--stats`
+    /// The frame rate as given for the run: a headless stats
     /// run also draws and times the frames a display at this rate would
     /// present. Never taken from the config, so the report does not depend
     /// on the machine's settings.
     pub stats_frame_rate: Option<u32>,
-    /// `--model`: the model viewer's model, bank and clip.
+    /// The model viewer's model, bank and clip.
     pub model: Option<ModelView<'a>>,
     /// `--ending` with `--ui result`: the RESULT screen's ending row.
     pub ending: Option<u8>,
 }
 
-/// The `--model` viewer's model: a pack entry, an animation bank and a clip
+/// The model viewer's model: a pack entry, an animation bank and a clip
 /// of it (see [`crate::model_viewer`]).
 #[derive(Debug, Clone, Copy)]
 pub struct ModelView<'a> {
     pub entry: &'a str,
     pub bank: usize,
     pub clip: usize,
-    /// `--model-pos`: stand the model here instead of in front of the cut.
+    /// Stand the model here instead of in front of the cut.
     pub pos: Option<[i32; 3]>,
 }
 
@@ -379,7 +379,7 @@ impl ModelView<'_> {
     fn viewer(&self, pack: &Pack) -> Result<Box<crate::model_viewer::Viewer>> {
         let model = crate::model_viewer::load(pack, self.entry)?;
         let mut viewer = crate::model_viewer::Viewer::new(model, self.bank, self.clip)
-            .with_context(|| format!("--model {}", self.entry))?;
+            .with_context(|| format!("model {}", self.entry))?;
         if let Some(pos) = self.pos {
             viewer = viewer.with_position(pos);
         }
@@ -406,7 +406,7 @@ pub fn run(pack: &Path, id: RoomId, capture: Option<&Path>, ticks: u32) -> Resul
         ticks,
         &save::default_save_dir(),
         &ModOptions::default(),
-        false,
+        None,
         false,
         None,
         player::Options::default(),
@@ -415,19 +415,19 @@ pub fn run(pack: &Path, id: RoomId, capture: Option<&Path>, ticks: u32) -> Resul
     )
 }
 
-/// [`run`] with the runtime layers and the `--stats` frame-time report.
+/// [`run`] with the runtime layers and the frame-time report.
 ///
 /// `mods` is the runtime layer selection, exactly like [`open_game_pack`].
 /// With `stats` the fixed-tick run records a per-tick histogram and the
-/// load/update/effect/render
-/// phases and prints the [`crate::stats`] report to stdout at exit; it runs
-/// without a capture and without opening a display. `_debug_menu` is retained
-/// for CLI compatibility: the port-only F1 room-select overlay is always
+/// load/update/effect/render phases and writes the [`crate::stats`] report
+/// to it at exit; it runs without a capture and without opening a display
+/// (an interactive run prints its presented frame rate to stdout instead).
+/// `_debug_menu` is unused: the port-only F1 room-select overlay is always
 /// enabled. `player_options` are the run options this run uses: the `[game]`
 /// gameplay options and `--authentic`.
 /// `trace` enables the oracle trace of `oracle/trace-v1.md`: one line
 /// per fixed tick (rendering each tick so the frame hash exists) plus the
-/// `--capture-every` BMP cadence.
+/// BMP capture cadence.
 #[allow(clippy::too_many_arguments)] // the CLI run options are all needed
 pub fn run_with_options(
     pack: &Path,
@@ -436,7 +436,7 @@ pub fn run_with_options(
     ticks: u32,
     save_dir: &Path,
     mods: &ModOptions,
-    stats: bool,
+    mut stats: Option<&mut dyn std::io::Write>,
     _debug_menu: bool,
     language: Option<&str>,
     player_options: player::Options,
@@ -447,7 +447,7 @@ pub fn run_with_options(
     let pack = open_game_pack(pack, mods, language)?;
 
     if capture.is_some()
-        || (stats && ticks > 0)
+        || (stats.is_some() && ticks > 0)
         || trace.path.is_some()
         || authoring.save_out.is_some()
     {
@@ -490,11 +490,11 @@ pub fn run_with_options(
                 .with_context(|| format!("failed to create {}", dir.display()))?;
         }
         let mut framebuffer = Framebuffer::new();
-        // `--stats --frame-rate` also draws the frames a display at that rate
+        // A stats run with a frame rate also draws the frames a display at that rate
         // would present between the ticks, off to the side of the simulation.
         let mut presentation = authoring
             .stats_frame_rate
-            .filter(|_| stats)
+            .filter(|_| stats.is_some())
             .map(Presentation::new);
         if ticks > 0 {
             let scripts = Rc::new(loaded.scripts.clone());
@@ -515,7 +515,7 @@ pub fn run_with_options(
                 let tick_start = Instant::now();
                 // A door transition owns the tick and follows into its
                 // destination room, exactly like the interactive session (but
-                // audio-free): the `--ticks` capture ends in the room the last
+                // audio-free): the tick-limited capture ends in the room the last
                 // scripted door led to.
                 if bgm_sleep > 0 {
                     bgm_sleep -= 1;
@@ -734,11 +734,9 @@ pub fn run_with_options(
             display.present(&framebuffer)?;
             display.capture(capture_path)?;
         }
-        if stats {
+        if let Some(out) = stats.as_mut() {
             timings.render = presentation.map(|presentation| presentation.render);
-            let stdout = std::io::stdout();
-            let mut out = stdout.lock();
-            timings.report(&mut out)?;
+            timings.report(out)?;
         }
         return Ok(());
     }
@@ -757,10 +755,10 @@ pub fn run_with_options(
     app.configure_watch(mods.watch);
     app.player_options = player_options;
     app.start_session(session);
-    run_app_loop(&mut app, &mut display, stats)
+    run_app_loop(&mut app, &mut display, stats.is_some())
 }
 
-/// The presentation frames of a headless `--stats` run: after each tick, the
+/// The presentation frames of a headless stats run: after each tick, the
 /// frames a display presenting `frame_rate` frames per second would draw
 /// before the next one (one exact frame per tick at or below the tick rate,
 /// tweened frames above it, as [`crate::pacer`] schedules them), each timed
@@ -964,11 +962,11 @@ fn call_lua_room_load(lua: Option<&lua::LuaVm>, game: &mut game::GameState, id: 
     }
 }
 
-/// Run the CLI `--setup-script` chunk once against the room state.
+/// Run the setup-script chunk once against the room state.
 ///
 /// The chunk runs whatever the pack's own Lua entries are: a pack with hooks
 /// reuses its VM, a pack without one gets a throwaway sandboxed state, so
-/// `--setup-script` works with every pack. Errors are fatal: this is an
+/// a setup script works with every pack. Errors are fatal: this is an
 /// authoring seam, so a broken setup must not silently produce a save.
 fn run_setup_chunk(
     lua: Option<&lua::LuaVm>,
@@ -990,7 +988,7 @@ fn run_setup_chunk(
 
 /// Write `game` as a save block to `path`, with the pack's bio-card prefix.
 ///
-/// The `--save-out` half of [`run_setup_chunk`]: the same
+/// The save-out half of [`run_setup_chunk`]: the same
 /// [`save::SaveFile::from_state`] capture the typewriter screen writes, so the
 /// file loads through `--load` here and `--test-load` in the reference.
 fn write_save_file(game: &game::GameState, path: &Path) -> Result<()> {
@@ -1057,7 +1055,7 @@ struct LoopClock {
     /// The F2/F3 gameplay speed multiplier: the fixed tick runs this many
     /// times per wall-clock tick interval.
     speed: Speed,
-    /// `--stats`: the presented frames and when the loop started.
+    /// The presented frames and when the loop started.
     render: Option<(stats::RenderStats, u64)>,
 }
 
@@ -1131,7 +1129,7 @@ impl LoopClock {
         }
     }
 
-    /// `--stats`: record a frame drawn since `start`.
+    /// Record a frame drawn since `start`.
     fn frame_drawn(&mut self, start: Instant) {
         let Some((render, start_ns)) = &mut self.render else {
             return;
@@ -1143,7 +1141,7 @@ impl LoopClock {
         render.elapsed = std::time::Duration::from_nanos(now.saturating_sub(*start_ns));
     }
 
-    /// `--stats`: print the render-rate report.
+    /// Print the render-rate report.
     fn report(&self) -> Result<()> {
         if let Some((render, _)) = &self.render {
             render.report(&mut std::io::stdout().lock())?;
@@ -2192,7 +2190,7 @@ struct GameSession {
     enemy_lua: enemy::LuaEnemyHost,
     music: Option<Mixer>,
     /// The game has a sound device: the mixer opened, or a trace runs as the
-    /// oracle's `--sound` does. RE2's doors then hold for `Snd_bgm_ck`.
+    /// oracle's sound recordings do. RE2's doors then hold for `Snd_bgm_ck`.
     sound_device: bool,
     /// An RE2 door has handed back: the next tick's frame draws the player's
     /// head (see [`GameSession::place_re2_door_neck`]).
@@ -2397,7 +2395,7 @@ struct GameSession {
     boot_message: Option<u8>,
     /// Whether the action button may skip the loading narration and the
     /// letterboxed cutscenes. Only the interactive loops turn it on, so a
-    /// scripted `--input`/`--trace` run plays every scene out like the
+    /// scripted input or trace run plays every scene out like the
     /// reference.
     skips_enabled: bool,
     /// The Subtitles option is off: a voiced line's subtitle message runs
@@ -2461,9 +2459,7 @@ struct GameSession {
     /// The bank-5 `MSF_SCREEN_INTENSITY` flag ramps it 16 a frame: up to `0xF0`
     /// while the flag is set, back down to zero while it is clear.
     sprite_anim_intensity: i16,
-    /// Whether the port-only room overlay may open on F1. Enabled by default;
-    /// `--debug-menu` is retained for CLI compatibility and no longer changes
-    /// the behaviour.
+    /// Whether the port-only room overlay may open on F1. Enabled by default.
     debug_menu_enabled: bool,
     /// The open debug room-select overlay; the room stays frozen while it is
     /// up and the last gameplay frame stays under it.
@@ -7001,13 +6997,13 @@ impl GameSession {
         save::SaveFile::from_state(&self.game)
     }
 
-    /// Run the `--setup-script` authoring chunk over the freshly booted
+    /// Run the setup-script authoring chunk over the freshly booted
     /// session, then mirror the authored player state into the live player.
     ///
     /// The chunk runs after the room boot (init script, room edits and the
     /// pack's `on_room_load`) and before the first tick, so tick 0 sees the
     /// authored state. This is the CLI's oracle seam, not a mod-facing hook:
-    /// the path comes from `--setup-script`, never from the sandbox.
+    /// the path comes from the host, never from the sandbox.
     fn run_setup_script(&mut self, script: Option<&Path>) -> Result<()> {
         let baseline = self.author_baseline();
         run_setup_chunk(self.lua.as_ref(), &mut self.game, script)?;
@@ -7026,7 +7022,7 @@ impl GameSession {
         }
     }
 
-    /// After the freshly booted state was edited (the `--setup-script` chunk,
+    /// After the freshly booted state was edited (the setup-script chunk,
     /// or a driver script's `game` calls before its first tick), rerun what
     /// the edit invalidates since `baseline`; `mirror` also moves the live
     /// player to the authored state.
@@ -7157,7 +7153,7 @@ impl GameSession {
 
     /// Write the session's current state to `path` as a save block.
     ///
-    /// The `--save-out` authoring seam: the same capture the typewriter save
+    /// The save-out authoring seam: the same capture the typewriter save
     /// screen writes, so the file loads through `--load` and the reference's
     /// `--test-load`.
     fn write_save(&self, path: &Path) -> Result<()> {
@@ -10206,12 +10202,12 @@ fn entry_spot_free(room: &RoomState, pos: [i32; 3]) -> bool {
         })
 }
 
-/// Select the debug render mode named `name` (`--render-mode`).
+/// Select the debug render mode named `name`.
 pub fn set_render_mode(name: &str) -> Result<()> {
     debug_view::set(name)
 }
 
-/// The debug render modes' `--render-mode` names, in F4 cycle order.
+/// The debug render modes' names, in F4 cycle order.
 pub fn render_mode_names() -> impl Iterator<Item = &'static str> {
     debug_view::names()
 }
@@ -10241,8 +10237,7 @@ fn pack_start_room(pack: &Pack, character: u8) -> Option<RoomId> {
     RoomId::from_room_and_player(room, character & 1).ok()
 }
 
-/// RE 2's new-game choice in the run options (`--difficulty`, `--arrange`,
-/// or the title's), as `FUN_004b73c0` and `Title_game_init` leave it: before
+/// RE 2's new-game choice in the run options (or the title's), as `FUN_004b73c0` and `Title_game_init` leave it: before
 /// the room's boot, so that the room's scripts and the enemies' inits read
 /// it. No choice leaves the game as it starts. EASY's start items
 /// (`Stage_init_item`) are RE 2's only (`re2_room`): an RE 1 pack's slots stay
@@ -10563,7 +10558,7 @@ struct EndingFlow {
 /// The mode machine: one screen at a time, with the pack and decoded shared
 /// assets owned here.
 /// A film an app screen queued: the session plus the action to apply when it
-/// finishes (`None` for the standalone `--fmv` playback, which quits).
+/// finishes (`None` for the standalone `--movie` playback, which quits).
 struct PendingMovie {
     session: MovieSession,
     action: Option<ScreenAction>,
@@ -10657,8 +10652,7 @@ struct App {
     /// `(kind, slot, volume, pan)`, the trace's `snd` field.
     ui_sounds: Vec<(u8, u8, u8, i32)>,
     /// Whether the port-only debug room overlay is enabled for the gameplay
-    /// sessions this app starts. Enabled by default; `--debug-menu` is
-    /// retained for CLI compatibility.
+    /// sessions this app starts. Enabled by default.
     debug_menu: bool,
     /// The run options (the `[game]` gameplay options and `--authentic`) every
     /// gameplay session this app starts runs with.
@@ -10671,10 +10665,10 @@ struct App {
     /// Where the in-game menu's RESTART goes: the save last loaded or
     /// written, else the new game this run started.
     restart_point: Option<RestartPoint>,
-    /// `--bot-seed`, and how many sessions it has already seeded.
+    /// The bot's seed, and how many sessions it has already seeded.
     bot_seed: Option<u32>,
     bot_seed_sessions: u32,
-    /// `--bot-invincible`: every session the bot runs has the INVINCIBLE
+    /// Every session the bot runs has the INVINCIBLE
     /// cheat on.
     bot_invincible: bool,
     /// The optional Lua-driven player bot. While it is active its input
@@ -10836,7 +10830,7 @@ impl App {
     }
 
     /// One tick of the active film. When it ends, the queued action runs (or
-    /// the app quits for a standalone `--fmv`).
+    /// the app quits for a standalone `--movie`).
     fn tick_movie(&mut self, ui: UiInput, input: player::Input) -> Result<AppFlow> {
         let consumed = self.movie_music.as_ref().map(Mixer::movie_samples_played);
         let Mode::Movie(session) = &mut self.mode else {
@@ -11262,7 +11256,7 @@ impl App {
         invincible: bool,
     ) -> Result<()> {
         if !matches!(self.mode, Mode::Play(_)) {
-            bail!("--bot requires a game session (use `--ui game`)");
+            bail!("the bot requires a game session");
         }
         let runtime = bot::BotRuntime::load(&self.pack)?
             .with_risk(risk)
@@ -11407,7 +11401,7 @@ impl App {
             eprintln!("[bot] could not reset the bot route: {err:#}");
             bot.fail(format!("could not reset the route: {err:#}"));
         }
-        // `--bot-seed`: every session the bot runs gets its own stream, the
+        // The bot seed: every session the bot runs gets its own stream, the
         // reload after a death included (a save does not carry the RNG state).
         if self.bot.is_some() {
             apply_bot_seed(self.bot_seed, &mut self.bot_seed_sessions, &mut session);
@@ -12521,8 +12515,8 @@ pub fn run_ui_with_options(
 /// compatibility: the port-only F1 room-select overlay is always enabled.
 /// `trace` enables the `--ui game` oracle run: `ticks` fixed updates with a
 /// trace line per tick and the `capture_every` BMP cadence. `authoring` adds
-/// the CLI's oracle seams: a `--load` continue boot, the `--setup-script`
-/// chunk and the `--save-out` dump. `player_options` are the run options the
+/// the oracle seams: a `--load` continue boot, the setup-script
+/// chunk and the save-out dump. `player_options` are the run options the
 /// booted sessions run with. `bot` enables the pack's restricted Lua player
 /// bot and, when `headless`, runs it without a display.
 #[allow(clippy::too_many_arguments)] // the CLI boot options are all needed
@@ -12736,7 +12730,7 @@ fn run_ui_impl(
     let save_dir = &pack_save_dir(pack, save_dir);
     if bot.headless {
         if capture.is_some() || trace.path.is_some() || trace.input.is_some() {
-            bail!("--bot-headless does not take --capture, --trace or --input");
+            bail!("a headless bot run does not take a capture, a trace or an input script");
         }
         let pack = open_game_pack(pack, mods, language)?;
         let mut app = App::new(pack, save_dir.to_path_buf(), false);
@@ -12960,7 +12954,7 @@ fn run_ui_impl(
     if let Mode::Play(session) = &mut app.mode {
         session.run_setup_script(authoring.setup_script)?;
     } else if authoring.setup_script.is_some() {
-        bail!("--setup-script requires a boot that opens a game session");
+        bail!("a setup script requires a boot that opens a game session");
     }
     if bot.enabled {
         app.enable_skips();
@@ -12983,10 +12977,10 @@ fn run_ui_impl(
     run_app_loop(&mut app, display, false)
 }
 
-/// Play a scripted `--input` over an app-level `--ui` boot (the title, the
-/// menus, the ending screens) when one is given without `--trace`: one app
+/// Play a scripted input over an app-level `--ui` boot (the title, the
+/// menus, the ending screens) when one is given without a trace: one app
 /// update per scripted tick, each followed by a draw and a `f%05d.bmp`
-/// capture on the `--capture-every` cadence. The screens' own regression
+/// capture on the capture cadence. The screens' own regression
 /// captures drive them through whole interactions this way.
 ///
 /// Returns `false` (nothing played) for a plain capture boot.
@@ -13020,14 +13014,13 @@ fn play_app_script(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<b
     Ok(true)
 }
 
-/// The `--ui title --trace` run: `options.ticks` app updates from the
-/// title's first tick with the scripted `--input`, each followed by a draw,
+/// The title trace run: `options.ticks` app updates from the
+/// title's first tick with the scripted input, each followed by a draw,
 /// one trace line and, on the `capture_every` cadence, a `f%05d.bmp` frame.
 /// The line carries the fields the RE 2 oracle's `--boot` record writes for
 /// the title (`ti`, `tlogo`, `tfade`, `tsel`, `snd`), from the values the title's
 /// script publishes; a tick off the title writes `ti=-`.
 fn run_screen_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()> {
-    use std::io::Write as _;
     let Some(path) = options.path else {
         return Ok(());
     };
@@ -13037,10 +13030,7 @@ fn run_screen_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<
         std::fs::create_dir_all(dir)
             .with_context(|| format!("failed to create {}", dir.display()))?;
     }
-    let file = std::fs::File::create(path)
-        .with_context(|| format!("failed to create {}", path.display()))?;
-    let mut out = std::io::BufWriter::new(file);
-    writeln!(out, "oracle-trace v1 engine=arklay")?;
+    let mut out = trace::TraceWriter::create_screen(path)?;
     let mut script_input = InputState::default();
     app.ui_sounds.clear();
     for index in 0..options.ticks {
@@ -13055,7 +13045,7 @@ fn run_screen_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<
         app.pending_movie = None;
         app.draw();
         let sounds = std::mem::take(&mut app.ui_sounds);
-        writeln!(out, "{}", screen_trace_line(app, index, word, &sounds))?;
+        out.write_line(&screen_trace_line(app, index, word, &sounds))?;
         if options.capture_every > 0 && index % options.capture_every == 0 {
             write_trace_capture(app, options, index)?;
         }
@@ -13133,8 +13123,8 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
     line
 }
 
-/// Apply the CLI authoring seams to the session an app boot just opened:
-/// `--setup-script` runs once over it and `--save-out` serialises it and asks
+/// Apply the authoring seams to the session an app boot just opened:
+/// the setup script runs once over it and save-out serialises it and asks
 /// the caller to exit before the first tick.
 ///
 /// Returns `true` when the run should stop now (the save was written).
@@ -13143,7 +13133,7 @@ fn apply_authoring(app: &mut App, authoring: Authoring<'_>) -> Result<bool> {
         return Ok(false);
     }
     let Mode::Play(session) = &mut app.mode else {
-        bail!("--setup-script/--save-out require a boot that opens a game session");
+        bail!("a setup script or save-out requires a boot that opens a game session");
     };
     session.run_setup_script(authoring.setup_script)?;
     let Some(path) = authoring.save_out else {
@@ -13190,14 +13180,14 @@ fn run_game_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()
     // them. With scripted input the reference traces every `main_loop` frame
     // instead (`--test-input`), so the door's frames are traced here too and
     // the script's ticks land on the same frames on both sides of the door.
-    // `--ticks` counts traced lines, so the loop keeps iterating (with a
+    // The tick count counts traced lines, so the loop keeps iterating (with a
     // safety bound) until that many lines have been written.
     let mut emitted = 0u32;
     let mut iterations = 0u32;
     let mut script_input = InputState::default();
-    // The `--sound-wav` frames owed but not yet mixed, a fraction of one.
+    // The sound-WAV frames owed but not yet mixed, a fraction of one.
     let mut sound_due = 0.0f64;
-    // `--sound-wav`'s `.ticks`: each traced tick's end in the WAV, in seconds.
+    // The sound WAV's `.ticks`: each traced tick's end in the WAV, in seconds.
     let mut sound_ticks = String::new();
     let mut traced = None;
     let bound = options
@@ -13213,7 +13203,7 @@ fn run_game_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()
         let in_transition =
             matches!(&app.mode, Mode::Play(session) if session.transition.is_some());
         // The wall time this frame takes when played: a door's frames run on
-        // the 16 ms limiter, and `--sound-wav` mixes that much sound for it.
+        // the 16 ms limiter, and the sound WAV mixes that much sound for it.
         let frame_ms = match &app.mode {
             Mode::Play(session) => {
                 session_tick_interval(session.transition.is_some(), session.ui_tick_rate())
@@ -13226,7 +13216,7 @@ fn run_game_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()
         // gameplay. With scripted input it traces every frame, as for a door.
         let screen_before =
             matches!(&app.mode, Mode::Play(session) if session.death_screen.is_some());
-        // The scripted `--input` word is keyed by the trace tick, exactly like
+        // The scripted input word is keyed by the trace tick, exactly like
         // the reference's `--test-input` (which reads it from its own `t`). An
         // iteration that emits no line (a door transition, the death screen)
         // keeps the previous tick's word, matching the reference's per-frame
@@ -13372,7 +13362,7 @@ fn run_bot_headless(app: &mut App, max_ticks: u64, stats_path: Option<&Path>) ->
     write_bot_stats(app, outcome, started.elapsed(), stats_path)
 }
 
-/// Write the `--bot-stats` JSON report, whatever the outcome.
+/// Write the bot's JSON stats report, whatever the outcome.
 fn write_bot_stats(
     app: &App,
     outcome: &str,
@@ -13426,7 +13416,7 @@ fn poll_movie_skip_for_frame(app: &mut App, human_buttons: u16) {
 }
 
 /// The interactive app loop shared by `--room`, `--ui` and the standalone
-/// `--fmv` playback: fixed ticks from the latched input, frames presented at
+/// `--movie` playback: fixed ticks from the latched input, frames presented at
 /// the display's `frame_rate` (tweened between the last two ticks above the
 /// tick rate). With `stats` the presented frames are reported at exit.
 fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()> {
@@ -13888,7 +13878,7 @@ fn cpu_brand() -> Option<String> {
 /// What `arklay.toml` keeps after the menu changed `before` into `after`:
 /// the file's own values with only the settings the change touched replaced
 /// (the window's by what took effect, `graphics`), so a run's command-line
-/// overrides (`--quick-turn`, `--language`, `--renderer`) stay out of it.
+/// overrides (`--language`, `--renderer`) stay out of it.
 pub(crate) fn persisted_options(
     file: crate::config::Config,
     before: &gui::Settings,
@@ -14093,7 +14083,7 @@ fn apply_menu_settings(
     }
 }
 
-/// Play one film standalone, the `--fmv` debug path. `film` is a table id
+/// Play one film standalone, the `--movie` debug path. `film` is a table id
 /// (`0`-`28`) or the name of a pack film (`movie/<name>`, any accepted
 /// format), the way RE2's opening, in-game films and staff roll are played.
 ///
@@ -14186,7 +14176,7 @@ pub fn run_ending(
     // without the films would otherwise warn per film and run the RESULT
     // screen silently.
     if !movie::exists(&app.pack, films[0]) {
-        bail!("no ending film could be opened; re-run convert-game with the films");
+        bail!("no ending film could be opened; re-run `pack convert game` with the films");
     }
     app.ending = Some(flow);
     let chain: Vec<(u8, u8)> = films.iter().map(|&film| (film, character)).collect();
@@ -14207,7 +14197,7 @@ fn run_font_ui(pack_path: &Path, capture: Option<&Path>, mods: &ModOptions) -> R
     // `--language en-US --ui font` samples a packed Western sheet.
     let text = Text::load(&pack, pack.language());
     let font = font::load_session(&pack, text.script())
-        .context("the pack has no usable font (re-run convert-game)")?;
+        .context("the pack has no usable font (re-run `pack convert game`)")?;
 
     if capture.is_some() {
         unsafe {
@@ -14620,7 +14610,7 @@ impl DoorStepper for DoorAnimation {
 }
 
 /// The ticks `Snd_bgm_ck` holds an RE2 door after the placement with sound:
-/// the oracle's `--sound` runs load rooms 101, 118 and 200 90 ticks later.
+/// the oracle's runs with sound load rooms 101, 118 and 200 90 ticks later.
 const RE2_SOUND_HOLD_TICKS: u8 = 90;
 
 /// Start a transition for `record`'s destination: resolve and parse its
@@ -15050,32 +15040,42 @@ pub fn simulate_do2(
     bail!("{path} did not finish in {MAX_TRANSITION_FRAMES} frames")
 }
 
-/// `--door`: play RE2 door `id` headlessly and write the frame after `ticks`
-/// fixed ticks (or the last one) to `capture`.
-pub fn run_door(
-    pack: &Path,
-    id: u8,
-    kind: u8,
-    capture: &Path,
-    ticks: u32,
-    mods: &ModOptions,
-) -> Result<()> {
+/// `--door`: play RE2 door `id` in a window at the game's 30 Hz and exit
+/// when it finishes or the window closes.
+pub fn run_door(pack: &Path, id: u8, mods: &ModOptions, renderer: Graphics) -> Result<()> {
     let pack = open_game_pack(pack, mods, None)?;
-    let mut shot = None;
-    let simulated = simulate_do2(&pack, id, kind, |index, framebuffer| {
-        if shot.is_none() || index <= ticks as usize {
-            shot = Some(Image {
-                width: framebuffer.width,
-                height: framebuffer.height,
-                rgba: framebuffer.rgba.clone(),
-            });
+    let mut display = Display::new("Arklay - door", false, renderer)?;
+    let mut event = SDL_Event::default();
+    let mut keys = PortKeys::default();
+    let mut input = InputState::default();
+    let tick = std::time::Duration::from_secs_f64(TICK_MS / 1000.0);
+    let mut next = Instant::now();
+    /// Closing the window stops the simulation through the frame callback.
+    #[derive(Debug)]
+    struct Closed;
+    impl std::fmt::Display for Closed {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("the door window was closed")
+        }
+    }
+    impl std::error::Error for Closed {}
+    let simulated = simulate_do2(&pack, id, 0, |_, framebuffer| {
+        if poll_events(&mut event, &mut input, &mut keys, Some(&mut display)) {
+            return Err(Closed.into());
+        }
+        display.present(framebuffer)?;
+        next += tick;
+        if let Some(wait) = next.checked_duration_since(Instant::now()) {
+            std::thread::sleep(wait);
         }
         Ok(())
-    })?;
-    let shot = shot.context("the door drew no frame")?;
-    bmp::encode(&shot, capture)?;
+    });
+    let simulated = match simulated {
+        Err(err) if err.is::<Closed>() => return Ok(()),
+        other => other?,
+    };
     println!(
-        "door {id:02x} type {kind:#04x}: {} frames, sounds {:?}",
+        "door {id:02x}: {} frames, sounds {:?}",
         simulated.timeline.len(),
         simulated.sounds
     );
@@ -15329,7 +15329,7 @@ pub fn simulate_room_with_input(
     simulate_loaded(pack, loaded, game, player_state, ticks, input)
 }
 
-/// The `--model` viewer's frames: `view` standing in room `id` (or the room
+/// The model viewer's frames: `view` standing in room `id` (or the room
 /// alone, for `None`), drawn after each tick count of `ticks` (ascending).
 /// Only the viewer's clip advances; the room's scripts do not run. With `gpu` the frames are the GPU
 /// renderer's scene (HD textures where the pack layers them), else the
@@ -17188,17 +17188,17 @@ impl VoiceCache {
     }
 }
 
-/// `--voice-ticks`: one number a line, blank lines and `#` comments skipped.
+/// The voice-ticks file: one number a line, blank lines and `#` comments skipped.
 fn read_voice_ticks(path: &Path) -> Result<std::collections::VecDeque<u32>> {
     let text = std::fs::read_to_string(path)
-        .with_context(|| format!("reading --voice-ticks {}", path.display()))?;
+        .with_context(|| format!("reading voice ticks {}", path.display()))?;
     text.lines()
         .map(str::trim)
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
         .map(|line| {
             line.parse::<u32>().with_context(|| {
                 format!(
-                    "--voice-ticks {}: {line:?} is not a tick count",
+                    "voice ticks {}: {line:?} is not a tick count",
                     path.display()
                 )
             })
@@ -18139,7 +18139,7 @@ fn pack_region(pack: &Pack) -> scd::akscr::Region {
         .unwrap_or(scd::akscr::Region::Usa)
 }
 
-/// Seed `session`'s game RNG from `--bot-seed` (a no-op without it) and count
+/// Seed `session`'s game RNG from the bot seed (a no-op without it) and count
 /// the session.
 fn apply_bot_seed(seed: Option<u32>, sessions: &mut u32, session: &mut GameSession) {
     if let Some(seed) = seed {
@@ -18938,7 +18938,7 @@ fn tick_room(
     tick_room_timed(command_vm, event_vm, context, input, None)
 }
 
-/// [`tick_room`] with optional phase timers for `--stats`.
+/// [`tick_room`] with optional phase timers for a stats run.
 ///
 /// When `phases` is given, the script/entity/player update and the effect pool
 /// update add their durations to it.
@@ -19700,7 +19700,7 @@ const KEY_SYSTEM: u64 = controls::SYSTEM_MENU_BIT;
 /// (the font sampler) cannot grow the queue without bound.
 const MAX_GUI_EVENTS: usize = 256;
 
-/// A scripted per-tick input playback for the oracle (`--input`).
+/// A scripted per-tick input playback for the oracle.
 ///
 /// The file lists `<tick> <button>...` entries, one per line; a later entry
 /// replaces the held button set from its tick on, and a tick with no buttons
@@ -19720,7 +19720,7 @@ pub struct InputScript {
     entries: Vec<(u32, u64)>,
 }
 
-/// The key bit a `--input` button name maps to, or `None` for an unknown name.
+/// The key bit an input-script button name maps to, or `None` for an unknown name.
 fn script_button_bit(name: &str) -> Option<u64> {
     Some(match name {
         "up" => KEY_UP,
@@ -19741,7 +19741,7 @@ fn script_button_bit(name: &str) -> Option<u64> {
 }
 
 impl InputScript {
-    /// Parse an `--input` script body.
+    /// Parse an input script body.
     pub fn parse(text: &str) -> Result<Self> {
         let mut entries: Vec<(u32, u64)> = Vec::new();
         for (number, line) in text.lines().enumerate() {
@@ -19774,7 +19774,7 @@ impl InputScript {
         Ok(Self { entries })
     }
 
-    /// Read and parse an `--input` script file.
+    /// Read and parse an input script file.
     pub fn from_file(path: &Path) -> Result<Self> {
         let text = std::fs::read_to_string(path)
             .with_context(|| format!("failed to read input script {}", path.display()))?;
@@ -21529,7 +21529,7 @@ fn render_frame_on(
         }
     }
 
-    // The `--model` viewer's model, stood in front of the current camera.
+    // The model viewer's model, stood in front of the current camera.
     let viewer_pose = game.model_viewer.as_deref_mut().and_then(|viewer| {
         viewer.follow(&room.cuts, room.current_cut);
         Some((Arc::clone(&viewer.model), viewer.joints()?, viewer.pos))
@@ -23070,7 +23070,7 @@ mod tests {
         );
     }
 
-    /// `--difficulty` and `--arrange` reach the game before the room's boot,
+    /// The difficulty and ARRANGE MODE reach the game before the room's boot,
     /// whichever way the session starts it, as the original sets the choice
     /// before room 100 loads.
     #[test]
@@ -27391,7 +27391,7 @@ mod tests {
         assert_eq!(player_state.stairs.height, game.stair_height);
     }
 
-    /// The M16 slice-2 acceptance: two `--ticks 60 --capture` runs of the
+    /// The M16 slice-2 acceptance: two 60-tick capture runs of the
     /// deterministic room are byte-identical under the exact camera and shake.
     #[test]
     #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
@@ -27408,7 +27408,7 @@ mod tests {
         run(Path::new(&path), id, Some(&second_path), 60).unwrap();
         let first = std::fs::read(&first_path).unwrap();
         let second = std::fs::read(&second_path).unwrap();
-        assert_eq!(first, second, "two --ticks 60 captures differ");
+        assert_eq!(first, second, "two 60-tick captures differ");
     }
 
     /// The GPU display presents recorded frames and software ones through
@@ -30745,7 +30745,7 @@ mod tests {
         );
     }
 
-    /// The `--setup-script`/`--save-out` authoring seam and the `--load`
+    /// The setup-script/save-out authoring seam and the `--load`
     /// continue seam: a chunk authored with the Lua API serialises to a block
     /// that boots back through the CLI flag with the authored state.
     #[test]

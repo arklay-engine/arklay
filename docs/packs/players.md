@@ -61,11 +61,3 @@ player/00/
 `n` is the scenario, `0` or `1`. The engine reads scenario 0's file first,
 and scenario 1's when there is none.
 
-## Looking at a model
-
-The model viewer stands a model in a room, posed and animated:
-
-```sh
-arklay re1.akpak --room 100 --model player/00/skin/00.emd
-arklay re2.akpak --room 100 --model player/00/weapon/02_0.plw
-```

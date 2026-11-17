@@ -26,7 +26,7 @@ up to the closing `]`), and a single `[pack]` section.
 | `name`, `version` | Labels shown to players. Optional. |
 | `description` | Longer text; `\n` breaks a line. Optional. |
 | `authors`, `credits` | Who made the pack, and further acknowledgements, one string each. Optional. |
-| `tags` | Free-form labels, one string each. `"official"` marks a pack made by `convert-game` and `"randomizer"` a generated one; the launcher's PLAY screen lists official games first. Optional. |
+| `tags` | Free-form labels, one string each. `"official"` marks a pack made by `pack convert game` and `"randomizer"` a generated one; the launcher's PLAY screen lists official games first. Optional. |
 | `homepage` | The pack's home page URL. Optional. |
 | `thumbnail` | The entry holding a 4:3 picture for the pack's card on the PLAY screen, such as `"ui/title.bmp"`. Optional. |
 | `language` | The language of the pack's own room text, such as `"ja-JP"`. Optional. |
@@ -34,7 +34,7 @@ up to the closing `]`), and a single `[pack]` section.
 | `region` | `"USA"`, `"JPN"` or `"EUR"`, which room scripts can test with `if (USA)`. Default `"USA"`. |
 | `lua` | The Lua hooks to run, in order. Left out or empty, every `lua/**.lua` file runs (see [Scripting](scripting.md#hooks)). |
 | `engine` | A note about the engine build the pack is made for. Optional and not checked. |
-| `convert_version`, `source_hash` | Written by `convert-game`, so the launcher can offer to rebuild an outdated pack. |
+| `convert_version`, `source_hash` | Written by `pack convert game`, so the launcher can offer to rebuild an outdated pack. |
 
 A pack has no key for its game: each model, room and sound file says what
 format it is in by its own content.

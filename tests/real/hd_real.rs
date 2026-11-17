@@ -60,19 +60,6 @@ fn build_hd_pack(dir: &Path) -> PathBuf {
     out
 }
 
-/// Run the capture CLI and return the written BMP bytes.
-fn capture(pack: &Path, mods: &[&Path], args: &[&str], out: &Path) -> Vec<u8> {
-    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_arklay"));
-    command.arg(pack);
-    for layer in mods {
-        command.arg("--mod").arg(layer);
-    }
-    command.args(args).arg("--capture").arg(out);
-    let status = command.status().expect("failed to run the capture CLI");
-    assert!(status.success(), "capture failed");
-    fs::read(out).unwrap()
-}
-
 /// The RGB of one pixel of a 24-bit bottom-up BMP capture.
 fn pixel(bmp: &[u8], x: usize, y: usize) -> [u8; 3] {
     let width = i32::from_le_bytes(bmp[18..22].try_into().unwrap()) as usize;
@@ -152,36 +139,35 @@ fn hd_pack_swaps_a_background_a_ui_page_and_a_bgm_track() {
     let red = ((60 * 320 + 60) * 4) as usize;
     assert_eq!(&run.frame.rgba[red..red + 4], &[200, 0, 0, 255]);
 
-    // The CLI capture agrees, pixel for pixel, and `--no-mods` gives the
-    // vanilla frame byte for byte.
-    let modded = capture(
+    // The scripted capture agrees, pixel for pixel, and a run without the
+    // layer gives the vanilla frame.
+    let modded = common::room_capture(
         &pack_path,
         &[&hd_pack],
-        &["--room", "100", "--ticks", "120"],
+        "100",
+        0,
+        120,
         &temp.path.join("modded.bmp"),
     );
     assert_eq!(pixel(&modded, 2, 2), [0, 200, 0]);
     assert_eq!(pixel(&modded, 60, 60), [200, 0, 0]);
-    let plain = capture(
-        &pack_path,
-        &[],
-        &["--room", "100", "--ticks", "120"],
-        &temp.path.join("plain.bmp"),
-    );
+    let plain = common::room_capture(&pack_path, &[], "100", 0, 120, &temp.path.join("plain.bmp"));
     assert_ne!(modded, plain, "the background override changed the frame");
 
     // The item box draws the replacement page: the shipped sheet's dark frame
     // becomes the mod's blue field with a magenta border.
-    let item_box = capture(
+    let item_box = common::ui_capture(
         &pack_path,
         &[&hd_pack],
-        &["--ui", "box"],
+        "box",
+        0,
         &temp.path.join("box.bmp"),
     );
-    let vanilla_box = capture(
+    let vanilla_box = common::ui_capture(
         &pack_path,
         &[],
-        &["--ui", "box"],
+        "box",
+        0,
         &temp.path.join("vanilla-box.bmp"),
     );
     assert_ne!(

@@ -125,9 +125,10 @@ two traces is a hook bug, not a comparator feature.
 A room-specific scenario boots the same new-game flow directly into another
 room instead of 106:
 
-- arklay: `--ui game --room <3hex> --player <n> --ticks N --trace ark.trace`
-  (the session flow: boot narration, room-entry fade, camera and idle
-  mirroring).
+- arklay: a driver script's `new_game({ room = "<3hex>", player = <n> })`,
+  `trace_start("ark.trace")` and N traced ticks (the session flow: boot
+  narration, room-entry fade, camera and idle mirroring); see
+  `scripts/oracle-room.sh`.
 - reference: `--test-newgame <0|1> --test-room <3hex> --test-trace
   ref.trace --test-exit-after N --test-nolimit` (test-only hooks that apply
   the room override before `init_room` and spawn the player at the room's
@@ -144,7 +145,7 @@ Without scripted input both engines trace gameplay ticks only: the
 reference's `game_loop` hook, arklay's room ticks. A door transition, the
 pause menu and the DIED screen produce no lines.
 
-With scripted input (`--test-input` / `--input`) the reference traces every
+With scripted input (`--test-input` / a driver script's `all_frames`) the reference traces every
 `main_loop` frame past the arm point, and arklay does the same for door
 transitions: one line per frame of the original's door, so input keyed by
 `t` lands on the same frame in both engines across a room change. Those frames

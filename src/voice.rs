@@ -9,7 +9,7 @@
 //! reads `voice/01_09.wav`.
 //!
 //! The name tables themselves live in [`crate::voice_table`] and are read
-//! only by `convert-game`. A request whose record is empty or past the row
+//! only by `pack convert game`. A request whose record is empty or past the row
 //! end formats a path no entry matches, and the engine's missing-line
 //! handling counts the miss without ever stalling the F7 wait.
 

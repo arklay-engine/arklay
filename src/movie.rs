@@ -42,7 +42,7 @@
 //! table: [`MovieSession::open_named`] opens one by its pack name (`opn1stl`,
 //! `r109`, `staff`) with the [`NAMED_ID`] id, no prologue cut and any button
 //! as a skip, and [`MovieSession::open_reference`] takes either form, as
-//! `--fmv` does.
+//! `--movie` does.
 
 use anyhow::{Context, Result, bail};
 

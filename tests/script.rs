@@ -266,24 +266,57 @@ fn a_timeout_stops_a_runaway_script() {
     assert_failure(&output, "timed out");
 }
 
+/// The engine's own new-game trace of room 100 in `dir`'s `game.akpak`:
+/// `ticks` ticks driven by the `--input`-format `input`, with the oracle's
+/// run options. The reference a driver script's trace must match.
+fn engine_trace(dir: &TempDir, ticks: u32, input: Option<&str>, out: &str) -> Vec<u8> {
+    engine_trace_with(dir, ticks, input, out, arklay::engine::Authoring::default())
+}
+
+fn engine_trace_with(
+    dir: &TempDir,
+    ticks: u32,
+    input: Option<&str>,
+    out: &str,
+    authoring: arklay::engine::Authoring,
+) -> Vec<u8> {
+    let input = input.map(|text| arklay::engine::InputScript::parse(text).unwrap());
+    let path = dir.join(out);
+    arklay::engine::run_ui_with_mods(
+        &dir.join("game.akpak"),
+        "game",
+        None,
+        &dir.join("engine-saves"),
+        0,
+        Some(RoomId::from_room_and_player("100", 0).unwrap()),
+        0,
+        &arklay::engine::ModOptions {
+            no_mods: true,
+            ..arklay::engine::ModOptions::default()
+        },
+        false,
+        None,
+        arklay::player::Options {
+            no_autosave: true,
+            ..arklay::player::Options::default()
+        },
+        arklay::trace::TraceOptions {
+            path: Some(&path),
+            ticks,
+            input: input.as_ref(),
+            ..arklay::trace::TraceOptions::default()
+        },
+        authoring,
+        arklay::engine::BotOptions::default(),
+    )
+    .unwrap();
+    std::fs::read(path).unwrap()
+}
+
 #[test]
-fn a_script_trace_matches_the_cli_trace() {
+fn a_script_trace_matches_the_engine_trace() {
     let dir = pack_dir("trace");
-    let cli = arklay(&dir)
-        .args([
-            "game.akpak",
-            "--ui",
-            "game",
-            "--room",
-            "100",
-            "--ticks",
-            "30",
-            "--trace",
-            "cli.trace",
-        ])
-        .output()
-        .unwrap();
-    success(&cli);
+    let engine = engine_trace(&dir, 30, None, "engine.trace");
     success(&script(
         &dir,
         &lenient(
@@ -296,37 +329,18 @@ fn a_script_trace_matches_the_cli_trace() {
         ),
         &[],
     ));
-    let cli = std::fs::read(dir.join("cli.trace")).unwrap();
     let ours = std::fs::read(dir.join("script.trace")).unwrap();
-    assert!(cli.len() > 100, "the CLI wrote a trace");
+    assert!(engine.len() > 100, "the engine wrote a trace");
     assert!(
-        cli == ours,
-        "the script's trace differs from `--ui game --trace`"
+        engine == ours,
+        "the script's trace differs from the engine's new-game trace"
     );
 }
 
 #[test]
 fn scripted_input_matches_an_input_file() {
     let dir = pack_dir("input");
-    std::fs::write(dir.join("input.txt"), "0 up run\n10 left\n20\n").unwrap();
-    success(
-        &arklay(&dir)
-            .args([
-                "game.akpak",
-                "--ui",
-                "game",
-                "--room",
-                "100",
-                "--ticks",
-                "30",
-                "--input",
-                "input.txt",
-                "--trace",
-                "cli.trace",
-            ])
-            .output()
-            .unwrap(),
-    );
+    let engine = engine_trace(&dir, 30, Some("0 up run\n10 left\n20\n"), "engine.trace");
     success(&script(
         &dir,
         &lenient(
@@ -346,9 +360,8 @@ fn scripted_input_matches_an_input_file() {
         &[],
     ));
     assert!(
-        std::fs::read(dir.join("cli.trace")).unwrap()
-            == std::fs::read(dir.join("script.trace")).unwrap(),
-        "held buttons and an --input file drive the same ticks"
+        engine == std::fs::read(dir.join("script.trace")).unwrap(),
+        "held buttons and an input script drive the same ticks"
     );
 }
 
@@ -532,27 +545,194 @@ fn mode_pad_and_trace_restarts() {
     assert_eq!(lines("b.trace"), 4);
 }
 
+/// The engine's screen trace of the title on `dir`'s pack, with
+/// `title_special` as config.ini's `SPECIAL`: PRESS START gives way to the
+/// menu and the cursor moves down once.
+fn engine_title_trace(dir: &TempDir, title_special: i8, out: &str) -> Vec<u8> {
+    let input = "0\n5 confirm\n6\n20 down\n21\n";
+    let path = dir.join(out);
+    let script_input = arklay::engine::InputScript::parse(input).unwrap();
+    arklay::engine::run_ui_with_mods(
+        &dir.join("game.akpak"),
+        "title",
+        None,
+        &dir.join("engine-saves"),
+        0,
+        None,
+        0,
+        &arklay::engine::ModOptions {
+            no_mods: true,
+            ..arklay::engine::ModOptions::default()
+        },
+        false,
+        None,
+        arklay::player::Options {
+            no_autosave: true,
+            title_special: Some(title_special),
+            ..arklay::player::Options::default()
+        },
+        arklay::trace::TraceOptions {
+            path: Some(&path),
+            ticks: 40,
+            input: Some(&script_input),
+            ..arklay::trace::TraceOptions::default()
+        },
+        arklay::engine::Authoring::default(),
+        arklay::engine::BotOptions::default(),
+    )
+    .unwrap();
+    std::fs::read(path).unwrap()
+}
+
+#[test]
+fn a_title_trace_matches_the_engine_screen_trace() {
+    let dir = pack_dir("title-trace");
+    let engine = engine_title_trace(&dir, 3, "engine.trace");
+    let out = success(&script(
+        &dir,
+        &lenient(
+            r#"
+        load_game_pack("game.akpak", { title_special = 3 })
+        open_title()
+        print(mode())
+        trace_start("script.trace")
+        tick(5) press("confirm") tick(15)
+        hold("down") tick(1) release() tick(19)
+        print(trace_ticks())
+        "#,
+        ),
+        &[],
+    ));
+    assert_eq!(out, "title\n40\n");
+    let ours = std::fs::read(dir.join("script.trace")).unwrap();
+    assert!(engine.starts_with(b"oracle-trace v1 engine=arklay\n"));
+    assert!(
+        engine == ours,
+        "the script's title trace differs from the engine's screen trace"
+    );
+}
+
+#[test]
+fn a_marked_boot_traces_as_an_engine_setup_that_edits_nothing() {
+    let dir = pack_dir("mark-authored");
+    let setup = dir.join("setup.lua");
+    std::fs::write(&setup, "local api = ...\n").unwrap();
+    let engine = engine_trace_with(
+        &dir,
+        20,
+        None,
+        "engine.trace",
+        arklay::engine::Authoring {
+            setup_script: Some(&setup),
+            ..arklay::engine::Authoring::default()
+        },
+    );
+    success(&script(
+        &dir,
+        &lenient(
+            r#"
+        load_game_pack("game.akpak")
+        new_game{ room = "100" }
+        mark_authored()
+        trace_start("script.trace")
+        tick(20)
+        "#,
+        ),
+        &[],
+    ));
+    assert!(
+        engine == std::fs::read(dir.join("script.trace")).unwrap(),
+        "the marked boot's trace differs from the engine's setup-script trace"
+    );
+    let output = script(&dir, "mark_authored()", &[]);
+    assert_failure(&output, "mark_authored");
+    let output = script(
+        &dir,
+        &lenient(
+            r#"
+        load_game_pack("game.akpak")
+        load_room("100")
+        tick(1)
+        mark_authored()
+        "#,
+        ),
+        &[],
+    );
+    assert_failure(&output, "mark_authored");
+}
+
+#[test]
+fn trace_sound_options_need_a_session_and_are_checked() {
+    let dir = pack_dir("trace-sound");
+    let output = script(
+        &dir,
+        r#"load_game_pack("game.akpak") trace_start("a.trace", { sound = true })"#,
+        &[],
+    );
+    assert_failure(&output, "need a game session");
+    let output = script(
+        &dir,
+        &lenient(
+            r#"
+        load_game_pack("game.akpak")
+        load_room("100")
+        trace_start("a.trace", { voice_ticks = { "x" } })
+        "#,
+        ),
+        &[],
+    );
+    assert_failure(&output, "voice_ticks");
+    let output = script(
+        &dir,
+        r#"load_game_pack("game.akpak", { title_special = 300 })"#,
+        &[],
+    );
+    assert_failure(&output, "title_special");
+    success(&script(
+        &dir,
+        &lenient(
+            r#"
+        load_game_pack("game.akpak", { title_special = -1 })
+        load_room("100")
+        trace_start("a.trace", { sound = true, voice_ticks = { 40, 12 } })
+        tick(3)
+        "#,
+        ),
+        &[],
+    ));
+}
+
+#[test]
+fn trace_ticks_counts_the_written_lines() {
+    let dir = pack_dir("trace-ticks");
+    let out = success(&script(
+        &dir,
+        &lenient(
+            r#"
+        load_game_pack("game.akpak")
+        load_room("100")
+        print(trace_ticks())
+        trace_start("a.trace")
+        print(trace_ticks())
+        while trace_ticks() < 5 do tick() end
+        print(trace_ticks())
+        trace_stop()
+        print(trace_ticks())
+        "#,
+        ),
+        &[],
+    ));
+    assert_eq!(out, "nil\n0\n5\nnil\n");
+}
+
 #[test]
 fn presses_match_an_input_file() {
     let dir = pack_dir("press");
-    std::fs::write(dir.join("input.txt"), "0 confirm\n1\n2 confirm\n3\n").unwrap();
-    success(
-        &arklay(&dir)
-            .args([
-                "game.akpak",
-                "--ui",
-                "game",
-                "--room",
-                "100",
-                "--ticks",
-                "6",
-                "--input",
-                "input.txt",
-                "--trace",
-                "cli.trace",
-            ])
-            .output()
-            .unwrap(),
+    let engine = engine_trace(
+        &dir,
+        6,
+        Some("0 confirm\n1\n2 confirm\n3\n"),
+        "engine.trace",
     );
     success(&script(
         &dir,
@@ -568,8 +748,7 @@ fn presses_match_an_input_file() {
         &[],
     ));
     assert!(
-        std::fs::read(dir.join("cli.trace")).unwrap()
-            == std::fs::read(dir.join("script.trace")).unwrap(),
+        engine == std::fs::read(dir.join("script.trace")).unwrap(),
         "a press holds for one tick"
     );
 }
@@ -749,4 +928,34 @@ fn the_bot_calls_fail_with_a_message() {
     ] {
         assert_failure(&script(&dir, &lenient(source), &[]), needle);
     }
+}
+
+#[test]
+fn an_interactive_new_game_places_the_player_at_once() {
+    // The traced boot leaves the player at the room's entry until its first
+    // tick's room-set pass; the window's boot places them at its spawn
+    // straight away, where the traced one lands after that tick.
+    let dir = pack_dir("interactive");
+    let out = success(&script(
+        &dir,
+        &lenient(
+            r#"
+        load_game_pack("game.akpak")
+        new_game{ room = "100", interactive = true }
+        print(game:player_pos())
+        new_game{ room = "100" }
+        print(game:player_pos())
+        tick(1)
+        print(game:player_pos())
+        "#,
+        ),
+        &[],
+    ));
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines.len(), 3, "{out}");
+    assert_ne!(lines[0], lines[1], "the interactive boot placed the player");
+    assert_eq!(
+        lines[0], lines[2],
+        "both boots place the player at one spot"
+    );
 }

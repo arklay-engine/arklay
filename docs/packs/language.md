@@ -133,7 +133,7 @@ mods/fr/
 ```
 
 ```sh
-arklay re1.akpak --mod mods/fr --language fr-FR --room 100
+arklay --game re1.akpak --mod mods/fr --language fr-FR --room 100
 ```
 
 ## Glyphs

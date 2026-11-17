@@ -12,7 +12,7 @@
 #
 #   ROOM    three hex digits, stage + room (e.g. 100, 11C), in the
 #           reference's numbering: 6xx and 7xx are the second mansion visit
-#           of rooms 1xx and 2xx (arklay's `--room 1xx --mansion2`)
+#           of rooms 1xx and 2xx (arklay's room 1xx with `mansion2`)
 #   PLAYER  0 = Chris, 1 = Jill (selects the RDT variant on both sides)
 #   TICKS   traced gameplay ticks (default 600)
 #   OUTDIR  output directory (default target/oracle/room<ROOM>_p<PLAYER>)
@@ -48,7 +48,7 @@ for path in "$REF_BIN" "$ARK_BIN" "$PACK"; do
         echo "  reference: cmake -S $REF_REPO -B $REF_REPO/build/linux -DCMAKE_BUILD_TYPE=Release" >&2
         echo "             RE1_M32_LIBDIR=$SYSROOT/usr/lib32 RE1_M32_INCLUDE=$SYSROOT/usr/include \\" >&2
         echo "             cmake --build $REF_REPO/build/linux -j" >&2
-        echo "  pack:      $ARK_BIN convert-game $ASSETS --out $PACK" >&2
+        echo "  pack:      $ARK_BIN pack convert game $ASSETS --out $PACK" >&2
         exit 2
     fi
 done
@@ -109,23 +109,42 @@ LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe MESA_LOADER_DRIVER_OVERRIDE=llvm
     --test-capture-every 30 --test-capture-dir "$OUT/refcaps" \
     --test-exit-after "$TICKS" --test-nolimit )
 
-# arklay names the second mansion visit by its room and `--mansion2`.
+# arklay names the second mansion visit by its room and `mansion2`.
 ARK_ROOM="$ROOM"
-ARK_VISIT=()
+ARK_VISIT=false
 case "$ROOM" in
     6??|7??)
         ARK_ROOM="$(( ${ROOM:0:1} - 5 ))${ROOM:1}"
-        ARK_VISIT=(--mansion2)
+        ARK_VISIT=true
         ;;
 esac
 
 echo "== arklay: room $ROOM player $PLAYER, $TICKS ticks"
 # The reference refuses a healing item with no effect, so compare under the
-# authentic item rules.
-"$ARK_BIN" "$PACK" --ui game --room "$ARK_ROOM" "${ARK_VISIT[@]}" --player "$PLAYER" \
-    --character "$PLAYER" --ticks "$TICKS" --no-mods \
-    --language "$LANGUAGE" --authentic --trace "$OUT/ark.trace" \
-    --capture-every 30 --capture-dir "$OUT/arkcaps"
+# authentic item rules. The run goes on until TICKS gameplay ticks are traced
+# (a door transition's frames are not traced), and a frame is captured after
+# every 30th traced tick, counting from 0, as the reference's
+# --test-capture-every does.
+"$ARK_BIN" script --headless - "$PACK" "$OUT" "$LANGUAGE" "$ARK_ROOM" "$PLAYER" "$ARK_VISIT" "$TICKS" <<'LUA'
+local pack, out, language, room = arg[1], arg[2], arg[3], arg[4]
+local player, mansion2, ticks = tonumber(arg[5]), arg[6] == "true", tonumber(arg[7])
+strict(false)
+load_game_pack(pack, { language = language, authentic = true })
+new_game({ room = room, player = player, character = player, mansion2 = mansion2 })
+trace_start(out .. "/ark.trace")
+local updates = 0
+while trace_ticks() < ticks do
+    local index = trace_ticks()
+    tick()
+    updates = updates + 1
+    if updates > ticks + 100000 then
+        error("the game stopped tracing after " .. index .. " ticks")
+    end
+    if trace_ticks() > index and index % 30 == 0 then
+        capture(out .. "/arkcaps/" .. string.format("f%05d.bmp", index))
+    end
+end
+LUA
 
 echo "== compare"
 python3 "$REPO_ROOT/scripts/oracle.py" compare "$OUT/ref.trace" "$OUT/ark.trace" \

@@ -54,7 +54,7 @@ jobs:
           open('smoke/tiny.akpak', 'wb').write(
               b'APAK' + struct.pack('<HI', 1, 1) + toc + b'a\x00')
           PY
-          ./smoke/arklay list smoke/tiny.akpak
+          ./smoke/arklay pack list smoke/tiny.akpak
       - uses: actions/upload-artifact@v4
         with:
           name: arklay-linux-x86_64

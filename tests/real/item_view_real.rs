@@ -13,7 +13,7 @@
 //! model loads, the shipped `ui/item_view.lua` renders the combat knife as a
 //! non-empty model (stable across two draws, and different after a
 //! rotation), the knife's confirm asks for its description, and the
-//! `--ui view` capture is deterministic.
+//! view screen capture is deterministic.
 
 use crate::common;
 

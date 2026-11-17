@@ -41,7 +41,7 @@ this page.
 
 ## Where the scripts live
 
-`convert-game` writes each RE 2 room into the folder of its RDT,
+`pack convert game` writes each RE 2 room into the folder of its RDT,
 `room/<stage><room><disc>/`, with the room's scripts in `room.akscr` next to
 `room.xml`. The stage is `1` to `7` or one of the letter stages `a` to `g`,
 the room is two hex digits, and the disc is `0` for Leon's files (`Pl0`) and
@@ -502,7 +502,7 @@ proc main_02
   (written with `@`), undecodable bytes (written with `raw`) and blocks
   nested deeper than the decompiler structures. The tests check this on
   random bytes. All 501 retail RE 2 rooms decompile with every block
-  structured. `convert-game` checks the round trip for every room it writes.
+  structured. `pack convert game` checks the round trip for every room it writes.
 - **Text to bytes to text.** This gives back the canonical form, not the
   same text. Comments and layout are lost, a condition at the start of an
   `if` body moves into the head, and a loop with several conditions comes
@@ -565,7 +565,7 @@ over:
 - **One script per RDT.** Leon's and Claire's rooms are separate files, and
   there are no merged variants, region tests, `when` or `nopad`.
 - **Generated, not checked in.** The RE 1 scripts are maintained as source
-  under `games/re1/room/`. The RE 2 scripts are written by `convert-game` from
+  under `games/re1/room/`. The RE 2 scripts are written by `pack convert game` from
   the install, and the repository has none.
 - **Tooling.** `scd build` and `mod build` take only RE 1 scripts. Errors
   give a line but not a column.

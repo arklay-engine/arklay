@@ -201,13 +201,13 @@ pub struct Options {
     /// `arklay.toml` has no key for it.
     pub authentic: bool,
     /// RE 2's new-game choice (the difficulty and ARRANGE MODE) for a game
-    /// the session starts itself: `--difficulty` and `--arrange`, or the
-    /// title's. The session applies it before the first room's first tick,
+    /// the session starts itself (`load_game_pack`'s `difficulty` and
+    /// `arrange`), or the title's. The session applies it before the first room's first tick,
     /// as the original sets the choice before room 100 loads; a continue
     /// keeps the save's.
     pub new_game: crate::ui::NewGameChoice,
     /// RE 2's config.ini `SPECIAL` (`Special`, `0x524EB8`), which picks the
-    /// extras SPECIAL shows on the title: `--title-special`. `None` is the
+    /// extras SPECIAL shows on the title. `None` is the
     /// install's 15, every extra.
     pub title_special: Option<i8>,
 }

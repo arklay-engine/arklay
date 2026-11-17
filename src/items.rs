@@ -26,7 +26,7 @@ pub const ITEM_LOOKUP_BYTES: usize = 459;
 /// (`0x13B`) and the heal table (`0x10A`), exactly as the original overlays
 /// them; [`HEAL_TABLE`] exposes the latter, whose tail the examine messages
 /// read. Item behaviour itself comes from each item's `item.xml`
-/// ([`crate::item_catalog`]); `convert-game` reads these tables only to cut
+/// ([`crate::item_catalog`]); `pack convert game` reads these tables only to cut
 /// the shipped art per item.
 pub const ITEM_LOOKUP: [u8; ITEM_LOOKUP_BYTES] = [
     0x00, 0x00, 0x00, 0x00, 0x01, 0x80, 0x80, 0x0F, 0x02, 0x00, 0x80, 0x07, 0x03, 0x01, 0x80, 0x06,

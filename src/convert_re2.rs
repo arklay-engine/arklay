@@ -1,4 +1,4 @@
-//! `convert-game` for Resident Evil 2 (the PC release, `bio2 1.10`).
+//! `pack convert game` for Resident Evil 2 (the PC release, `bio2 1.10`).
 //!
 //! The install is split into two disc trees, `Pl0` (Leon) and `Pl1`
 //! (Claire), and a shared `Common` tree. Everything lands in one pack with

@@ -1,5 +1,5 @@
 //! The bot's story parameters: `params/<game>.xml` declares them, and
-//! `--bot-param NAME=VALUE` picks a value for one run.
+//! a `NAME=VALUE` pair picks a value for one run.
 //!
 //! A parameter is a decision the game leaves to the player (answer Barry's
 //! prompt, deliver the serum, free a cell), so that runs can be steered down
@@ -38,7 +38,7 @@ pub struct Decl {
     pub name: String,
     /// The allowed values, in declaration order.
     pub values: Vec<String>,
-    /// The value without `--bot-param`: the bot's usual choice.
+    /// The value when none is picked: the bot's usual choice.
     pub default: String,
     /// What the decision is, for the run log and the docs.
     pub label: String,
@@ -61,7 +61,7 @@ impl Params {
         Self { decls, values }
     }
 
-    /// Set `name` to `value` (`--bot-param`): both must be declared.
+    /// Set `name` to `value` (a `NAME=VALUE` pair): both must be declared.
     pub fn set(&mut self, name: &str, value: &str) -> Result<()> {
         let decl = self.decl(name)?;
         if !decl.values.iter().any(|allowed| allowed == value) {
@@ -182,7 +182,7 @@ impl When {
     }
 }
 
-/// Parse `--bot-param NAME=VALUE`'s text into its two halves.
+/// Parse a `NAME=VALUE` text into its two halves.
 pub fn parse_assignment(text: &str) -> Result<(String, String), String> {
     let (name, value) = text
         .split_once('=')
@@ -218,7 +218,7 @@ pub fn load(pack: &Pack, overrides: &[(String, String)]) -> Result<Params> {
         break;
     }
     for (name, value) in overrides {
-        params.set(name, value).context("--bot-param")?;
+        params.set(name, value).context("bot param")?;
     }
     Ok(params)
 }

@@ -7,7 +7,6 @@
 use crate::common;
 
 use std::path::Path;
-use std::process::Command;
 
 use arklay::anim;
 use arklay::engine::{SimulatedRoom, simulate_new_game, simulate_room};
@@ -28,27 +27,6 @@ fn changed_pixels(a: &Image, b: &Image) -> usize {
         .zip(b.rgba.as_chunks::<4>().0)
         .filter(|(a, b)| a != b)
         .count()
-}
-
-/// Run the CLI's `--room ... --ticks ... --capture` path and return the BMP.
-///
-/// This is the end-to-end check of the flag: the spawned binary opens the pack,
-/// runs the fixed ticks and writes the scaled capture.
-fn cli_capture(pack: &Path, room: &str, ticks: u32, out: &Path) -> Vec<u8> {
-    let status = Command::new(env!("CARGO_BIN_EXE_arklay"))
-        .arg(pack)
-        .arg("--room")
-        .arg(room)
-        .arg("--player")
-        .arg("0")
-        .arg("--ticks")
-        .arg(ticks.to_string())
-        .arg("--capture")
-        .arg(out)
-        .status()
-        .expect("spawn arklay");
-    assert!(status.success(), "the CLI capture failed");
-    std::fs::read(out).expect("read the CLI capture")
 }
 
 /// A private capture directory for one test.
@@ -220,9 +198,9 @@ fn real_room20d0_ticks_capture_is_stable_and_culls_off_zone_spawns() {
     let dir = capture_dir("room20d");
 
     // Two CLI runs with the same arguments are byte-identical.
-    let first = cli_capture(&pack_path, "20D", 30, &dir.join("first.bmp"));
-    let second = cli_capture(&pack_path, "20D", 30, &dir.join("second.bmp"));
-    assert_eq!(first, second, "two --ticks captures differ");
+    let first = common::room_capture(&pack_path, &[], "20D", 0, 30, &dir.join("first.bmp"));
+    let second = common::room_capture(&pack_path, &[], "20D", 0, 30, &dir.join("second.bmp"));
+    assert_eq!(first, second, "two scripted captures differ");
 
     // The capture writer stores one sample per framebuffer pixel; the decoded
     // BMP must reproduce the library seam's frame exactly.
@@ -574,7 +552,7 @@ fn real_room1000_ticks_capture_contains_the_spawned_character() {
     let id = RoomId::parse("1000").unwrap();
     let dir = capture_dir("room1000");
 
-    let bytes = cli_capture(&pack_path, "100", 30, &dir.join("room.bmp"));
+    let bytes = common::room_capture(&pack_path, &[], "100", 0, 30, &dir.join("room.bmp"));
     let captured = arklay::bmp::decode(&bytes).unwrap();
     let sim = simulate_room(&pack, id, 30, player::Input::default()).unwrap();
     assert_eq!(

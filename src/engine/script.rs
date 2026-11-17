@@ -8,7 +8,7 @@
 //! It is the automation seam for agents and tests: new automation goes into
 //! this API rather than into more command-line flags.
 //!
-//! A tick is one app update, the unit `--ticks` counts: a fixed 30 Hz tick in
+//! A tick is one app update, the unit `tick` counts: a fixed 30 Hz tick in
 //! a room. The run is deterministic: the user's game options are ignored
 //! (and, headless, their installed mods), the run options are the oracle
 //! runs' unless the script passes them, no audio device opens and no film
@@ -264,9 +264,11 @@ impl Drop for ScratchSaves {
 /// The trace a script is recording (`trace_start`).
 struct ScriptTrace {
     writer: trace::TraceWriter,
-    /// Trace the frames of a door transition and the death screen too, as a
-    /// `--trace` run with `--input` does.
+    /// Trace the frames of a door transition and the death screen too.
     all_frames: bool,
+    /// A screen trace: started on a screen outside play (the title), it
+    /// writes a line every tick in the screen format, whatever the app shows.
+    screen: bool,
 }
 
 /// The live view of a windowed run.
@@ -307,7 +309,7 @@ struct Driver {
     pressed: u64,
     /// The booted session has not ticked yet: what its state was before
     /// the script's `game` edits, so the first tick (or a `save_game` or
-    /// `capture`) reruns what they invalidate once, as `--setup-script` does.
+    /// `capture`) reruns what they invalidate once, as an authored setup does.
     baseline: Option<AuthorBaseline>,
     /// A `game` call other than a getter ran since the boot.
     edited: bool,
@@ -592,7 +594,7 @@ impl Driver {
         self.check_running()?;
         if matches!(self.app()?.mode, Mode::Boot) {
             return Err(mlua::Error::RuntimeError(
-                "nothing is booted: call load_room, new_game or load_save first".into(),
+                "nothing is booted: call load_room, new_game, load_save or open_title first".into(),
             ));
         }
         self.settle_authoring()?;
@@ -624,11 +626,14 @@ impl Driver {
             return Err(self.stop_on_quit());
         }
         // Films never play: the frames stay deterministic and audio-free, as
-        // on the `--trace` path.
-        if let Mode::Play(session) = &mut app.mode {
-            session.movie = None;
+        // in a trace. An attached bot sees them and skips them as a player
+        // would, as it does in the game window.
+        if app.bot.is_none() {
+            if let Mode::Play(session) = &mut app.mode {
+                session.movie = None;
+            }
+            app.pending_movie = None;
         }
-        app.pending_movie = None;
         // A headless bot run draws nothing: no frame is shown, traced or
         // (until `capture` draws its own) written, and a game is long. A
         // window draws the frames it presents itself, on its renderer.
@@ -637,15 +642,20 @@ impl Driver {
         if self.drawn {
             app.draw();
         }
-        if let Some(trace) = self.trace.as_mut()
-            && let Mode::Play(session) = &app.mode
-            && was_play
-            && ((!in_transition && !screen_before) || trace.all_frames)
-        {
-            trace
-                .writer
-                .write_tick(&session.trace_tick(&app.framebuffer))
-                .map_err(engine_error)?;
+        if let Some(trace) = self.trace.as_mut() {
+            if trace.screen {
+                let sounds = std::mem::take(&mut app.ui_sounds);
+                let line = screen_trace_line(app, trace.writer.tick_index(), word, &sounds);
+                trace.writer.write_line(&line).map_err(engine_error)?;
+            } else if let Mode::Play(session) = &app.mode
+                && was_play
+                && ((!in_transition && !screen_before) || trace.all_frames)
+            {
+                trace
+                    .writer
+                    .write_tick(&session.trace_tick(&app.framebuffer))
+                    .map_err(engine_error)?;
+            }
         }
         if self.window.is_some() {
             self.drawn |= self.present()?;
@@ -711,7 +721,7 @@ impl Driver {
         })
     }
 
-    /// The attached bot's report (`bot_stats`), as `--bot-stats` writes it.
+    /// The attached bot's report (`bot_stats`), as `bot_run`'s `stats` writes it.
     fn bot_report(&mut self, outcome: &str) -> mlua::Result<serde_json::Value> {
         let elapsed = self
             .bot_started
@@ -995,7 +1005,7 @@ fn open_pack(
     Ok(pack)
 }
 
-/// The key bit a button name maps to: the `--input` names plus `forward`
+/// The key bit a button name maps to: the input-script names plus `forward`
 /// and `backward` for the tank controls' up and down.
 fn button_bit(name: &str) -> mlua::Result<u64> {
     let bit = match name {
@@ -1280,6 +1290,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                 let blood: Option<bool> = options.get("blood")?;
                 let difficulty: Option<String> = options.get("difficulty")?;
                 let arrange: Option<bool> = options.get("arrange")?;
+                let title_special: Option<i8> = options.get("title_special")?;
                 options.finish()?;
                 let (easy, hard_mode) = match difficulty.as_deref().unwrap_or("normal") {
                     "normal" => (false, false),
@@ -1324,6 +1335,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                         hard_mode,
                         censorship_off: arrange.unwrap_or(false),
                     },
+                    title_special,
                     ..player::Options::default()
                 };
                 if let Some(window) = driver.window.as_mut() {
@@ -1374,6 +1386,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                 let room: Option<String> = options.get("room")?;
                 let player: Option<u8> = options.get("player")?;
                 let mansion2: Option<bool> = options.get("mansion2")?;
+                let interactive: Option<bool> = options.get("interactive")?;
                 options.finish()?;
                 let character = character.unwrap_or(0);
                 let app = driver.app()?;
@@ -1400,7 +1413,13 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                     ),
                 }
                 .map_err(engine_error)?;
-                driver.start(session, true)?;
+                if interactive.unwrap_or(false) {
+                    let mut session = session;
+                    session.place_room_boot_spawn();
+                    driver.start(session, false)?;
+                } else {
+                    driver.start(session, true)?;
+                }
                 Ok(())
             })
         })?,
@@ -1421,6 +1440,40 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                 )
                 .map_err(engine_error)?;
                 driver.start(session, true)?;
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "mark_authored",
+        lua.create_function(move |_lua, ()| {
+            with(&shared, |driver| {
+                if driver.baseline.is_none() {
+                    return Err(mlua::Error::RuntimeError(
+                        "mark_authored: only between a boot and its first tick".into(),
+                    ));
+                }
+                driver.edited = true;
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "open_title",
+        lua.create_function(move |_lua, ()| {
+            with(&shared, |driver| {
+                let app = driver.app()?;
+                app.open_title().map_err(engine_error)?;
+                app.pending_movie = None;
+                driver.baseline = None;
+                driver.edited = false;
+                driver.arm = false;
+                driver.drawn = false;
+                driver.input = InputState::default();
                 Ok(())
             })
         })?,
@@ -1566,16 +1619,50 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
             with(&shared, |driver| {
                 let mut options = Options::new("trace_start", table);
                 let all_frames: Option<bool> = options.get("all_frames")?;
+                let sound: Option<bool> = options.get("sound")?;
+                let voice_ticks: Option<Vec<u32>> = options.get("voice_ticks")?;
                 options.finish()?;
                 if let Some(mut trace) = driver.trace.take() {
                     trace.writer.flush().map_err(engine_error)?;
                 }
-                let writer = trace::TraceWriter::create(Path::new(&path)).map_err(engine_error)?;
+                let screen = driver
+                    .app
+                    .as_ref()
+                    .is_some_and(|app| !matches!(app.mode, Mode::Boot | Mode::Play(_)));
+                if sound.unwrap_or(false) || voice_ticks.is_some() {
+                    let session = driver.session().map_err(|_| {
+                        mlua::Error::RuntimeError(
+                            "trace_start: sound and voice_ticks need a game session".into(),
+                        )
+                    })?;
+                    session.sound_device |= sound.unwrap_or(false);
+                    if let Some(ticks) = voice_ticks {
+                        session.game.re2.voice_ticks = ticks.into();
+                    }
+                }
+                let writer = if screen {
+                    driver.app()?.ui_sounds.clear();
+                    trace::TraceWriter::create_screen(Path::new(&path))
+                } else {
+                    trace::TraceWriter::create(Path::new(&path))
+                }
+                .map_err(engine_error)?;
                 driver.trace = Some(ScriptTrace {
                     writer,
                     all_frames: all_frames.unwrap_or(false),
+                    screen,
                 });
                 Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "trace_ticks",
+        lua.create_function(move |_lua, ()| {
+            with(&shared, |driver| {
+                Ok(driver.trace.as_ref().map(|trace| trace.writer.tick_index()))
             })
         })?,
     )?;

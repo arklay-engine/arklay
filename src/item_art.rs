@@ -2,7 +2,7 @@
 //!
 //! The original keys inventory art by *image type*: one row of
 //! `DATA/ITEM_ALL.PIX` and one `ITEM_M2/I<imageType>V.IVM` serve every item
-//! that shares a class. A pack built by `convert-game` stores the art in each
+//! that shares a class. A pack built by `pack convert game` stores the art in each
 //! item's own folder instead, so an item's icon and model can diverge from
 //! its class and the folder can be copied to another id or pack whole:
 //!
