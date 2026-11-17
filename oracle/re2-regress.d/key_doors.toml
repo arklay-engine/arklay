@@ -11,8 +11,6 @@ fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgk
 frames = [360, 999]
 frame_max_mean = 0.4
 boxes = [[0, 165, 232, 240]]
-# the door opens on tick 900 and draws the original's rseed differently, as every door does (oracle/re2.md)
-ignore = [[900, "rseed"]]
 expect = "match"
 record = "--no-enemies --life 200 --warp 20B:-1814:0:-12103:3029 --give 2:0x5B:1 --give 3:0x14:30"
 
@@ -35,8 +33,6 @@ input = "key_door_207.txt"
 input_shift = 344
 ticks = 900
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgkey,fgstat"
-# the door opens on tick 700 and draws the original's rseed differently, as every door does (oracle/re2.md)
-ignore = [[700, "rseed"]]
 expect = "match"
 record = "--no-enemies --life 200 --warp 207:-25770:0:-24897:1846 --give 2:0x5A:2"
 

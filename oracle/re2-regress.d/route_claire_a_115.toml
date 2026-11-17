@@ -39,23 +39,6 @@ frame_max_mean = 0.95
 # each room on its own, from its hand back to its door's press: 208, 207, 10C, 114; measured 0.16, 0.14, 0.53 (the jewel's question and item view included) and 0.11
 frame_windows = [[360, 534, 0.25], [875, 1025, 0.25], [1236, 3877, 0.6], [4220, 4309, 0.2]]
 expect = "match"
-ignore = [
-  # the doors' own ticks (oracle/re2.md, oracle/re2-deviations.md): 208's door 0, 207's door 3 and 10C's door 2
-  [535, "rng"], [535, "rseed"], [1026, "rng"], [1026, "rseed"], [3878, "rng"], [3878, "rseed"],
-  # the warp's flags, as in leon_a_208_114: the original raises 8:141 before 208's init, so the taken ribbons' object
-  # (slot 2) is out of play when the load's pass clears the objects' areas; arklay's setup script raises it after
-  [344, 569, "om2"],
-  # the three loads, as in leon_a_208_114: the original lists the old room's objects until the new room's are set up,
-  # about 90 ticks into the load, where arklay lists the new room's from the load; nothing reads them then
-  [570, 660, "om0"], [570, 660, "om1"], [570, 660, "om2"],
-  [1061, 1153, "om0"], [1061, 1153, "om1"], [1061, 1153, "om2"],
-  [3913, 4003, "om0"], [3913, 4003, "om1"], [3913, 4003, "om2"],
-  # 10C's object 0 (the pedestal) takes its floor from its height a tick sooner in arklay as play comes back after
-  # the stairs door (leon_a_208_114's load range covers the same tick, its 1148)
-  [1234, "om0"],
-  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
-  [570, 660, "hk"], [1061, 1153, "hk"], [3913, 4003, "hk"],
-]
 record = "--start claire --warp 208:-19956:0:-19363:149:1 --flag 8:141 --flag 6:71 --flag 6:72 --flag 6:115 --flag 6:116 --life 119 --give 0:3:6 --give 2:0x14:20 --give 3:0x1E:3"
 
 # Rooms 114 and 115: down the empty corridor to door 1, then the desk: Chris's Diary and the Unicorn Medal (event 5, no
@@ -70,7 +53,7 @@ input = "claire_a_114_115.txt"
 input_shift = 344
 input_drop_early = true
 ticks = 2850
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,scene,fl,esp,fgscn,fgstat,fgitem,fgroom,fgcom,om3,om7,om8,om9,zm0"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,em,msg,hk,om0,om1,om2,scene,fl,esp,fgscn,fgstat,fgitem,fgroom,fgcom,om3,om7,om8,om9,zm0"
 frames = [360, 2849]
 # 0.71 measured; 115's frames 1342 to 1345 keep the desk's close-up as the original's do (`cut_chg` with bit 7, oracle/re2-deviations.md, "The frames of a cut")
 frame_max_mean = 0.8
@@ -78,12 +61,8 @@ frame_max_mean = 0.8
 frame_windows = [[360, 435, 0.25], [777, 1341, 0.3], [1342, 2424, 0.75], [2425, 2849, 0.35]]
 expect = "match"
 ignore = [
-  # 114's door 1
-  [436, "rng"], [436, "rseed"],
   # the load, as in claire_a_208_114: the original lists 114's objects (none) until 115's are set up, 90 ticks in
   [471, 561, "om3"], [471, 561, "om7"], [471, 561, "om8"], [471, 561, "om9"],
-  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
-  [471, 561, "hk"],
 ]
 record = "--start claire --warp 114:-25260:0:-3420:2048:5 --life 119 --give 0:3:6 --give 2:0x14:20 --give 3:0x1E:3 --give 4:0x33:1"
 

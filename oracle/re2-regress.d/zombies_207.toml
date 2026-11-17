@@ -43,8 +43,6 @@ frames = [650, 2059]
 # their blood's place (oracle/re2-deviations.md, "Zombies")
 frame_windows = [[650, 1976, 0.9]]
 expect = "match"
-# the door's own tick (oracle/re2.md, oracle/re2-deviations.md)
-ignore = [[1977, "rng"], [1977, "rseed"]]
 record = "--warp 207:-25640:0:-16590:0:1 --life 200 --give 0:2:13 --give 2:0x14:39"
 
 # The fight's sound: room 207's sound types (44, 42) are a swapped pair, bank 0x38, so slot 0 plays its second half.
@@ -59,4 +57,3 @@ input_shift = 344
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,snd,bgm,xavol"
 keep_sound_3 = true
 expect = "match"
-ignore = [[1977, "rng"], [1977, "rseed"]]

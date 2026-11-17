@@ -9,7 +9,7 @@ input = "leon_a_10b_200.txt"
 input_shift = 344
 input_drop_early = true
 ticks = 2800
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,om0,om1,om2,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2"
 frames = [360, 2799]
 # 0.96 measured: the doors' frames count only in the whole run's mean (10F's door 1 into 110 is about 6 at worst)
 frame_max_mean = 1.1
@@ -17,10 +17,8 @@ frame_max_mean = 1.1
 frame_windows = [[360, 456, 0.25], [798, 983, 0.7], [1324, 1400, 0.3], [1753, 2381, 0.25], [2755, 2799, 1.15]]
 expect = "match"
 ignore = [
-  # the warp's head on its first ticks (oracle/re2.md), and the doors' own ticks: 10B's door 1, 10A's door 1, 10F's door 1, and the tick after the last press of 110's ladder question, whose Yes opens the ladder's door (`aot_on(2)`)
-  [344, 350, "pneck"], [458, "rng"], [458, "rseed"], [984, "rng"], [984, "rseed"], [1401, "rng"], [1401, "rseed"], [2383, "rng"], [2383, "rseed"],
-  # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
-  [493, 583, "hk"], [1019, 1109, "hk"], [1436, 1526, "hk"], [2418, 2510, "hk"],
+  # the warp's head on its first ticks (oracle/re2.md)
+  [344, 350, "pneck"],
 ]
 record = "--warp 10B:-19749:0:-25562:31:3 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 84 --give 0:2:6 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:2"
 
@@ -41,12 +39,8 @@ frame_max_mean = 1.15
 frame_windows = [[360, 574, 0.4], [943, 1050, 0.4], [1393, 1687, 0.4], [2030, 2871, 0.6], [3214, 3305, 0.3], [3648, 4187, 0.5], [4530, 4776, 0.25], [5114, 5149, 2.2]]
 expect = "match"
 ignore = [
-  # the warp's head on its first ticks, and the doors' own ticks: 200's door 1, 201's door 1, 204's door 2, 203's door 0, 204's door 1, 205's door 2 and 207's door 4
-  [344, 350, "pneck"], [575, "rng"], [575, "rseed"], [1051, "rng"], [1051, "rseed"], [1688, "rng"], [1688, "rseed"], [2872, "rng"], [2872, "rseed"], [3306, "rng"], [3306, "rseed"], [4188, "rng"], [4188, "rseed"], [4777, "rng"], [4777, "rseed"],
-  # the drawers' trace (`hk`) over each load
-  [610, 700, "hk"], [1086, 1176, "hk"], [1723, 1813, "hk"], [2907, 2997, "hk"], [3341, 3431, "hk"], [4223, 4313, "hk"], [4812, 4902, "hk"],
-  # the objects: `om0` is compared for 203's box, in 203 only, as `route_200_spade` compares 10C's: elsewhere the original's slot holds what an earlier room left in it
-  [344, 1813, "om0"], [2907, 5149, "om0"],
+  # the warp's head on its first ticks
+  [344, 350, "pneck"],
 ]
 record = "--warp 200:-13956:-1800:6456:1024:5 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 84 --give 0:2:6 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:2"
 
@@ -61,7 +55,7 @@ input_drop_early = true
 # Marvin's scene has a voice line, which ends by the recording's clock: the run takes its length from the reference
 voice_from_ref = true
 ticks = 2450
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,om0,om1,om2,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 2449]
 # 1.04 measured: door 7's frames count only in the whole run's mean (7.1 at worst, on 1267)
 frame_max_mean = 1.15
@@ -69,10 +63,8 @@ frame_max_mean = 1.15
 frame_windows = [[360, 1230, 1.0], [1573, 2449, 1.05]]
 expect = "match"
 ignore = [
-  # the warp's head on its first ticks, and door 7's own tick
-  [344, 350, "pneck"], [1231, "rng"], [1231, "rseed"],
-  # the drawers' trace (`hk`) over the load
-  [1266, 1356, "hk"],
+  # the warp's head on its first ticks
+  [344, 350, "pneck"],
 ]
 record = "--warp 209:-16934:0:-26037:2125:1 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:17 --flag 31:27 --life 84 --give 0:2:6 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x14:15"
 
