@@ -22735,15 +22735,30 @@ fn read_re2_player_file<'a>(
         .find_map(|disc| pack.read(&path(disc)).ok())
 }
 
-/// RE2's character `character` holding `weapon`, `Player_set`'s PLD and
-/// `Pl_weapon_ch`'s PLW from disc `disc`.
-fn load_re2_player_with(pack: &Pack, character: u8, weapon: u8, disc: u8) -> Option<PlayerAssets> {
-    let pld_bytes = read_re2_player_file(pack, disc, |disc| {
+/// A player's PLD and PLW bytes.
+type Re2PlayerFiles<'a> = (std::borrow::Cow<'a, [u8]>, std::borrow::Cow<'a, [u8]>);
+
+/// `Player_set`'s PLD and `Pl_weapon_ch`'s PLW for character `character`
+/// holding `weapon`, each from disc `disc` or else the other disc.
+fn re2_player_files(
+    pack: &Pack,
+    character: u8,
+    weapon: u8,
+    disc: u8,
+) -> Option<Re2PlayerFiles<'_>> {
+    let pld = read_re2_player_file(pack, disc, |disc| {
         format!("player/{character:02x}/model_{disc}.pld")
     })?;
-    let plw_bytes = read_re2_player_file(pack, disc, |disc| {
+    let plw = read_re2_player_file(pack, disc, |disc| {
         format!("player/{character:02x}/weapon/{weapon:02x}_{disc}.plw")
     })?;
+    Some((pld, plw))
+}
+
+/// RE2's character `character` holding `weapon`, from disc `disc`'s files
+/// ([`re2_player_files`]).
+fn load_re2_player_with(pack: &Pack, character: u8, weapon: u8, disc: u8) -> Option<PlayerAssets> {
+    let (pld_bytes, plw_bytes) = re2_player_files(pack, character, weapon, disc)?;
     let banks = crate::emd2::parse_pld(&pld_bytes).and_then(|pld| {
         let plw = crate::emd2::parse_plw(&plw_bytes)?;
         crate::emd2::player_banks(&pld, &plw).context("the weapon has no locomotion clips")
@@ -28404,36 +28419,43 @@ mod tests {
     }
 
     /// `Player_set` and `Pl_weapon_ch` read `pl1\` with flag 1:0 up: in
-    /// Claire's scenario Sherry's PLW is disc 1's, whose clip 1 is her run.
-    /// The other disc's file stands in when the pack has only that one.
+    /// Claire's scenario Sherry's PLD and PLW are disc 1's, whose PLW's clip 1
+    /// is her run. The other disc's file stands in, either way, when the pack
+    /// has only that one.
     #[test]
     fn re2_player_files_come_from_the_scenarios_disc() {
         let mut writer = crate::pack::PackWriter::new();
-        writer
-            .add("player/0f/weapon/00_0.plw", b"leon's disc".to_vec())
-            .unwrap();
-        writer
-            .add("player/0f/weapon/00_1.plw", b"claire's disc".to_vec())
-            .unwrap();
-        writer
-            .add("player/0e/weapon/03_0.plw", b"ada".to_vec())
-            .unwrap();
+        for (path, bytes) in [
+            ("player/0f/model_0.pld", "sherry pld 0"),
+            ("player/0f/model_1.pld", "sherry pld 1"),
+            ("player/0f/weapon/00_0.plw", "sherry plw 0"),
+            ("player/0f/weapon/00_1.plw", "sherry plw 1"),
+            ("player/0e/model_0.pld", "ada pld 0"),
+            ("player/0e/weapon/03_0.plw", "ada plw 0"),
+            ("player/0d/model_1.pld", "other pld 1"),
+            ("player/0d/weapon/02_1.plw", "other plw 1"),
+        ] {
+            writer.add(path, bytes.as_bytes().to_vec()).unwrap();
+        }
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
-        let plw = |id: u8, weapon: u8, disc: u8| {
-            read_re2_player_file(&pack, disc, |disc| {
-                format!("player/{id:02x}/weapon/{weapon:02x}_{disc}.plw")
+        let leon = game::GameState::default();
+        let mut claire = game::GameState::default();
+        claire.re2.set_flag(crate::scd2::host::STATUS_BANK, 0, 1);
+        let files = |game: &game::GameState, id: u8, weapon: u8| {
+            re2_player_files(&pack, id, weapon, re2_player_disc(game)).map(|(pld, plw)| {
+                (
+                    String::from_utf8(pld.into_owned()).unwrap(),
+                    String::from_utf8(plw.into_owned()).unwrap(),
+                )
             })
-            .map(|bytes| bytes.into_owned())
         };
-        assert_eq!(plw(0xF, 0, 1).as_deref(), Some(&b"claire's disc"[..]));
-        assert_eq!(plw(0xF, 0, 0).as_deref(), Some(&b"leon's disc"[..]));
-        assert_eq!(plw(0xE, 3, 1).as_deref(), Some(&b"ada"[..]));
-        assert_eq!(plw(0xE, 4, 1), None);
+        let pair = |pld: &str, plw: &str| Some((pld.to_owned(), plw.to_owned()));
 
-        let mut game = game::GameState::default();
-        assert_eq!(re2_player_disc(&game), 0);
-        game.re2.set_flag(crate::scd2::host::STATUS_BANK, 0, 1);
-        assert_eq!(re2_player_disc(&game), 1);
+        assert_eq!(files(&claire, 0xF, 0), pair("sherry pld 1", "sherry plw 1"));
+        assert_eq!(files(&leon, 0xF, 0), pair("sherry pld 0", "sherry plw 0"));
+        assert_eq!(files(&claire, 0xE, 3), pair("ada pld 0", "ada plw 0"));
+        assert_eq!(files(&leon, 0xD, 2), pair("other pld 1", "other plw 1"));
+        assert_eq!(files(&claire, 0xE, 4), None);
     }
 
     /// Ada as the player (`Player_set` for id 0xE): `player/0e/model_*.pld`
