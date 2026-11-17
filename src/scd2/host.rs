@@ -313,11 +313,27 @@ pub struct SoundRequest {
     /// sounds play ([`Re2State::placement_cut`]): every other sound starts
     /// after the scripts, as in `Game_loop`.
     pub cut: Option<u8>,
+    /// Played by `Snd_se_enem` rather than `Snd_se_on`, which leaves out
+    /// `Snd_se_on`'s per-room levels ([`crate::se2::positional_volume`]).
+    pub enemy: bool,
 }
 
 impl SoundRequest {
     pub fn new(id: crate::se2::SoundId, pos: [i32; 3]) -> Self {
-        Self { id, pos, cut: None }
+        Self {
+            id,
+            pos,
+            cut: None,
+            enemy: false,
+        }
+    }
+
+    /// An enemy's sound, as `Snd_se_enem` plays it.
+    pub fn enemy(id: crate::se2::SoundId, pos: [i32; 3]) -> Self {
+        Self {
+            enemy: true,
+            ..Self::new(id, pos)
+        }
     }
 }
 
@@ -2588,6 +2604,7 @@ impl GameHost<'_> {
             id,
             pos: std::array::from_fn(|axis| origin[axis] + offset[axis]),
             cut: self.game.re2.var_cut,
+            enemy: false,
         });
     }
 

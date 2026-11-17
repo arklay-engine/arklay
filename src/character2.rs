@@ -963,7 +963,7 @@ fn run_zombie(
     for (sound, pos) in zombie.sounds.drain(..) {
         if let Some(id) = enemy_sound(sound) {
             re2.sounds
-                .push(crate::scd2::host::SoundRequest::new(id, pos));
+                .push(crate::scd2::host::SoundRequest::enemy(id, pos));
         }
     }
     let mine = character.body.angle;

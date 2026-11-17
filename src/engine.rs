@@ -16324,7 +16324,13 @@ fn play_re2_sounds(
     // `Snd_se_3D` places a sound from `scd_var_cut` as it is when the sound
     // starts: a script's `cut_chg` moves it for every sound after it.
     let re2 = &game.re2;
-    let mut play = |id: SoundId, pos: [i32; 3], forced: Option<(u8, i32)>, placed: Option<u8>| {
+    let game_id = game.id;
+    // `enemy`: played by `Snd_se_enem`, without `Snd_se_on`'s room levels.
+    let mut play = |id: SoundId,
+                    pos: [i32; 3],
+                    forced: Option<(u8, i32)>,
+                    placed: Option<u8>,
+                    enemy: bool| {
         let cut = re2
             .placement_cut(placed)
             .and_then(|placed| room.cuts.get(usize::from(placed)))
@@ -16352,7 +16358,7 @@ fn play_re2_sounds(
                     .tone(id.kind, id.slot)
                     .is_some_and(|tone| tone.0 == 0);
             (
-                volume.saturating_add(if louder { 10 } else { 0 }).min(0x7f),
+                se2::positional_volume(volume, louder, enemy, game_id.stage, game_id.room, id.slot),
                 pan,
             )
         } else if id.kind == Kind::Room && id.slot == 0x14 {
@@ -16379,7 +16385,7 @@ fn play_re2_sounds(
     };
     let room_200 = (game.id.stage, game.id.room) == (2, 0);
     for request in requests {
-        let logged = play(request.id, request.pos, None, request.cut);
+        let logged = play(request.id, request.pos, None, request.cut, request.enemy);
         if room_200 && request.id.kind == Kind::Room && request.id.slot == 0x12 {
             // `Snd_se_on`'s case for room 200 (`0x4EDC77`): slot 0x13 starts
             // with 0x12 at full volume from the centre, the computer's door
@@ -16393,6 +16399,7 @@ fn play_re2_sounds(
                     request.pos,
                     Some(level),
                     request.cut,
+                    false,
                 );
             }
         }
@@ -16407,6 +16414,7 @@ fn play_re2_sounds(
             footstep.pos,
             None,
             None,
+            false,
         );
     }
     for sound in weapon {
@@ -16416,10 +16424,10 @@ fn play_re2_sounds(
             positional: true,
             muffled: true,
         };
-        play(id, sound.pos, None, None);
+        play(id, sound.pos, None, None, false);
     }
     for request in effects {
-        play(request.id, request.pos, None, request.cut);
+        play(request.id, request.pos, None, request.cut, false);
     }
     sounds.played = played;
 }

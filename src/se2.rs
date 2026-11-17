@@ -634,6 +634,30 @@ pub fn place(from: [i32; 3], to: [i32; 3], sound: [i32; 3]) -> (u8, i32) {
     (volume as u8, pan)
 }
 
+/// What `Snd_se_on` (`0x4ED950`) adds to `Snd_se_3D`'s volume of a
+/// positional sound in room `stage`/`room` (`stage` as the room id's digit):
+/// 10 for the weapon's own sounds of its first program (`louder`), and 0x14
+/// for slot 10 of any bank in room 10A (`Bgm_ck_room(0, 10, -1)`, which
+/// leaves the type unchecked). The level is clamped to 0x7F after both. An
+/// `enemy` sound is `Snd_se_enem`'s, which adds neither.
+pub fn positional_volume(
+    volume: u8,
+    louder: bool,
+    enemy: bool,
+    stage: u8,
+    room: u8,
+    slot: u8,
+) -> u8 {
+    let mut volume = u16::from(volume);
+    if louder && !enemy {
+        volume += 10;
+    }
+    if !enemy && (stage, room, slot) == (1, 0x0a, 10) {
+        volume += 0x14;
+    }
+    volume.min(0x7f) as u8
+}
+
 /// `Snd_se_dir_ck`: the 12-bit yaw from one point to another.
 pub(crate) fn se_dir_ck(from_x: i32, from_z: i32, to_x: i32, to_z: i32) -> i32 {
     let dx = to_x - from_x;
@@ -837,6 +861,21 @@ mod tests {
         let left = place(from, to, [-5000, 0, 5000]).1;
         let right = place(from, to, [5000, 0, 5000]).1;
         assert!(left != 0 && right != 0 && left.signum() != right.signum());
+    }
+
+    #[test]
+    fn room_10a_raises_slot_10_but_not_an_enemys() {
+        // 10A's blast (`main_05`'s `se_on(2, 266, ..)`) from cut 8: 75 after
+        // the wall, 95 in the original.
+        assert_eq!(positional_volume(75, false, false, 1, 0x0a, 10), 95);
+        assert_eq!(positional_volume(75, false, false, 1, 0x0a, 11), 75);
+        assert_eq!(positional_volume(75, false, false, 1, 0x0b, 10), 75);
+        assert_eq!(positional_volume(75, false, false, 2, 0x0a, 10), 75);
+        assert_eq!(positional_volume(75, true, false, 1, 0x0a, 10), 105);
+        assert_eq!(positional_volume(120, true, false, 2, 0, 3), 0x7f);
+        assert_eq!(positional_volume(120, false, false, 1, 0x0a, 10), 0x7f);
+        // A zombie's slot 10 in 10A (`route_200_heart`'s 97) is `Snd_se_enem`'s.
+        assert_eq!(positional_volume(97, false, true, 1, 0x0a, 10), 97);
     }
 
     #[test]
