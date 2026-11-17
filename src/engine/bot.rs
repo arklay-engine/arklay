@@ -7469,6 +7469,151 @@ mod tests {
     }
 
     #[test]
+    fn an_empty_staple_handgun_is_never_dead_weight() {
+        let vm = tactics_vm();
+        // `held` maps an item to its count; `boxed` the remembered box.
+        let empty = |held: &str, boxed: &str, equipped: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local held = {{ {held} }}
+                    local memory = {{ box_items = "{boxed}" }}
+                    local bot = {{}}
+                    function bot:memory() return memory end
+                    function bot:has_item(id) return held[id] ~= nil end
+                    function bot:item_count(id) return held[id] or 0 end
+                    local ammo = {{ [0x02] = 0x0B, [0x03] = 0x0C }}
+                    function bot:ammo_for(id) return ammo[id] end
+                    local out = {{}}
+                    for id, _ in pairs(BotInventory.empty_guns(bot, K, {equipped}, nil) or {{}}) do
+                        out[#out + 1] = string.format("%02X", id)
+                    end
+                    table.sort(out)
+                    return table.concat(out, ",")"#
+                ),
+            )
+        };
+        // The empty shotgun with no shells anywhere is dead weight; the
+        // empty handgun beside it is not, clips or none.
+        assert_eq!(empty("[0x02] = 0, [0x03] = 0", "", "nil"), "03");
+        // Shells held or boxed, or the shotgun equipped: it stays.
+        assert_eq!(empty("[0x02] = 0, [0x03] = 0, [0x0C] = 7", "", "nil"), "");
+        assert_eq!(empty("[0x02] = 0, [0x03] = 0", "0C", "nil"), "");
+        assert_eq!(empty("[0x02] = 0, [0x03] = 0", "", "0x03"), "");
+        // Loaded: never.
+        assert_eq!(empty("[0x03] = 2", "", "nil"), "");
+    }
+
+    #[test]
+    fn a_cure_left_on_a_full_inventory_is_never_given_up_while_poisoned() {
+        let vm = tactics_vm();
+        // 0x45 is the blue herb (a cure that does not heal), 0x42 the serum.
+        let needed = |poison: &str, held: &str, item: u8| -> bool {
+            eval(
+                &vm,
+                &format!(
+                    r#"local held = {{ {held} }}
+                    local bot = {{}}
+                    function bot:knowledge() return K end
+                    function bot:tick() return {item} end
+                    function bot:use_facts() return {{}} end
+                    function bot:player() return {{ {poison} }} end
+                    function bot:has_item(id) return held[id] ~= nil end
+                    function bot:item_kind(id) return "heal", false, false end
+                    return BotPlanner.full_mark_needed(bot, {item})"#
+                ),
+            )
+        };
+        assert!(needed("poisoned = true", "", 0x45));
+        // Not poisoned, or a cure already held: a plain non-healing herb.
+        assert!(!needed("poisoned = false", "", 0x45));
+        assert!(!needed("poisoned = true", "[0x45] = 1", 0x45));
+        // The serum cures only the serious poison.
+        assert!(!needed("poisoned = true", "", 0x42));
+        assert!(needed("seriously_poisoned = true", "", 0x42));
+    }
+
+    #[test]
+    fn a_lying_cure_is_a_needed_pickup_while_poisoned_with_none_held() {
+        let vm = tactics_vm();
+        let count = |cure_now: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local bot = setmetatable({{}}, {{ __index = function()
+                        return function() return {{}} end
+                    end }})
+                    function bot:knowledge() return K end
+                    function bot:tick() return 1 end
+                    function bot:room() return {{ id = "300" }} end
+                    function bot:player() return {{ health = 90, max_health = 140 }} end
+                    function bot:has_item() return false end
+                    function bot:item_count() return 0 end
+                    function bot:flag() return false end
+                    function bot:memory() return {{}} end
+                    function bot:menu() return {{ items = {{ {{ item = 0x44, kind = "heal", quantity = 1 }} }} }} end
+                    function bot:item_kind(id) return "heal", false, id == 0x44 end
+                    function bot:world()
+                        return {{ rooms = {{}}, frontier = {{
+                            {{ kind = "item", room = "300", slot = 6, item = 0x45 }},
+                            {{ kind = "item", room = "300", slot = 7, item = 0x45 }} }} }}
+                    end
+                    local ctx = {{ uses = {{}}, cure_now = {cure_now} }}
+                    local n, progress = BotInventory.needed_pickups(bot, ctx)
+                    return n .. "," .. progress"#
+                ),
+            )
+        };
+        // One of the two herbs counts, as a progress item.
+        assert_eq!(count("{ [0x45] = true }"), "1,1");
+        assert_eq!(count("nil"), "0,0");
+    }
+
+    #[test]
+    fn a_door_unreachable_from_one_side_stays_open_from_the_others() {
+        let vm = route_vm();
+        let open = |mark: &str, kind: &str, side: &str| -> bool {
+            eval(
+                &vm,
+                &format!(
+                    r#"local m = {{ {mark} }}
+                    return BotPlanner.other_side(m, "{kind}", {side})"#
+                ),
+            )
+        };
+        let failed =
+            r#"reason = "every approach failed", attempts = 3, bad_from = { ["306"] = true }"#;
+        // 30F's passage to 305, given up from 306: still a way from 30D.
+        assert!(open(failed, "door", r#""30D""#));
+        assert!(!open(failed, "door", r#""306""#));
+        // Not given up yet: it lifts on the next entry as any approach mark.
+        assert!(!open(
+            &failed.replace("attempts = 3", "attempts = 2"),
+            "door",
+            r#""30D""#
+        ));
+        // No side known (the first room after a reload), not a door, a
+        // permanent mark, a <reach> door or another failure: as marked.
+        assert!(!open(failed, "door", "nil"));
+        assert!(!open(failed, "item", r#""30D""#));
+        assert!(!open(
+            &format!("{failed}, permanent = true"),
+            "door",
+            r#""30D""#
+        ));
+        assert!(!open(
+            &format!("{failed}, reach_state = false"),
+            "door",
+            r#""30D""#
+        ));
+        assert!(!open(
+            r#"reason = "locked for good", bad_from = { ["306"] = true }"#,
+            "door",
+            r#""30D""#
+        ));
+    }
+
+    #[test]
     fn aim_pose_follows_the_status_bit_the_engine_matches() {
         let vm = tactics_vm();
         let pose = |args: &str| -> String {

@@ -970,6 +970,37 @@ function BotInventory.regear()
     state().geared = nil
 end
 
+-- The held firearms that are dead weight, {[id] = true} or nil: not a
+-- hand weapon, not the staple, not `equipped`, not in the `loadout`, no
+-- round loaded, and none for any of its loadings held or in the
+-- remembered box. The staple (the handgun) is never dead weight: its
+-- rounds are the most common, and Chris boxed his empty handgun in 50E
+-- for a herb, met 513's Tyrant with an empty shotgun beside the clip that
+-- lies there, and died nine times on one save.
+function BotInventory.empty_guns(bot, knowledge, equipped, loadout)
+    local out = nil
+    local box = BotInventory.remembered(bot)
+    for id, row in pairs(knowledge and knowledge.weapons or {}) do
+        if not row.melee and not row.staple and id ~= equipped and bot:has_item(id)
+            and bot:item_count(id) == 0 and not (loadout and loadout[id]) then
+            local base = row.variant_of or id
+            local at_hand = false
+            for other_id, other in pairs(knowledge.weapons) do
+                local ammo = (other_id == base or other.variant_of == base)
+                    and bot:ammo_for(other_id)
+                if ammo and (bot:item_count(ammo) > 0 or box[ammo]) then
+                    at_hand = true
+                end
+            end
+            if not at_hand then
+                out = out or {}
+                out[id] = true
+            end
+        end
+    end
+    return out
+end
+
 -- The policy context from the live state.
 -- The fewest <use> items of one room that make a set to carry together
 -- (BotInventory.context: 11A's four crests).
@@ -1334,27 +1365,7 @@ function BotInventory.context(bot)
         end
     end
     -- A held firearm that is dead weight (soft_deposits' gear tier).
-    do
-        local box = BotInventory.remembered(bot)
-        for id, row in pairs(knowledge and knowledge.weapons or {}) do
-            if not row.melee and id ~= ctx.equipped and bot:has_item(id)
-                and bot:item_count(id) == 0 and not (ctx.loadout and ctx.loadout[id]) then
-                local base = row.variant_of or id
-                local at_hand = false
-                for other_id, other in pairs(knowledge.weapons) do
-                    local ammo = (other_id == base or other.variant_of == base)
-                        and bot:ammo_for(other_id)
-                    if ammo and (bot:item_count(ammo) > 0 or box[ammo]) then
-                        at_hand = true
-                    end
-                end
-                if not at_hand then
-                    ctx.empty_guns = ctx.empty_guns or {}
-                    ctx.empty_guns[id] = true
-                end
-            end
-        end
-    end
+    ctx.empty_guns = BotInventory.empty_guns(bot, knowledge, ctx.equipped, ctx.loadout)
     -- The loadout keeps a hand weapon a fight in this stage prefers; one
     -- whose fight is in a later stage is spare until then (the knife,
     -- held for 30C's web from the first room, took a slot the shells
@@ -1950,9 +1961,10 @@ end
 
 -- Known pickups that need a free slot and that the run needs: a key, an
 -- item a <use> fact needs, the ammunition a held gun lacks, a firearm the
--- bot has none of, or what a held <use> item's room hands over first
+-- bot has none of, a heal or a cure while none is held and one is due, or
+-- what a held <use> item's room hands over first
 -- (BotInventory.handed_over). The second result counts the keys, <use>
--- items, handovers and fetches among them: progress items worth a spare
+-- items, handovers, fetches and the cure among them: progress items worth a spare
 -- gun's slot. The third counts the new firearms: worth a spare heal's.
 -- A full inventory of keys, a spray and three herb mixes carried the
 -- broken shotgun ten doors to the rack, could not take the shotgun down,
@@ -1970,6 +1982,10 @@ function BotInventory.needed_pickups(bot, ctx, skip)
     -- marked `inventory full`, the herbs among them, and the run ended on
     -- an empty frontier.
     local heal_due = BotInventory.heal_wanted(bot)
+    -- One cure, while the bot is poisoned and holds none (ctx.cure_now): a
+    -- progress item, as a key is. Every slot used, Chris left 300's blue
+    -- herb behind on each pass and walked poisoned until he died.
+    local cure_due = ctx.cure_now ~= nil
     for _, goal in ipairs(bot:world().frontier) do
         if goal.kind == "item" and not (skip and skip(goal))
             and not (BotPlanner and BotPlanner.unlock_covers and BotPlanner.unlock_covers(bot, goal)) then
@@ -1979,6 +1995,11 @@ function BotInventory.needed_pickups(bot, ctx, skip)
                 n = n + 1
                 progress = progress + 1
                 ctx.heal_swap = true
+            end
+            if cure_due and ctx.cure_now[goal.item] then
+                cure_due = false
+                n = n + 1
+                progress = progress + 1
             end
             -- A required hand weapon (ctx.required) counts here only while
             -- none is boxed: the box's loadout withdrawal counts that one,

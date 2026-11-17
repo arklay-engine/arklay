@@ -495,7 +495,7 @@ end
 -- a heal while the bot is hurt with none held (408's wasps stung it to 1
 -- with the mansion's green herbs given up), or the ammunition of a gun
 -- held or in the box (35 shells were left on full inventories while the
--- bot ran dry).
+-- bot ran dry), or a cure for the poison the bot has with none held.
 local open_use_cache = { tick = nil, items = {} }
 local function full_mark_needed(bot, item)
     -- An item an open <use> fact takes now, though it was not one when it
@@ -517,6 +517,14 @@ local function full_mark_needed(bot, item)
     end
     local kind, _, heals = bot:item_kind(item)
     if kind == "heal" then
+        -- A cure for the poison the bot has while none is held: given up
+        -- after three full passes, the blue herb in 300 was dropped as a
+        -- target on each arrival, and Chris walked 40000 ticks poisoned
+        -- between 300 and 118's box until he died.
+        local wanted = BotPuzzle.wanted_items(bot)[item]
+        if wanted and wanted.cure then
+            return true
+        end
         return heals == true and BotInventory.heal_wanted(bot)
     end
     if kind ~= "ammo" then
@@ -531,15 +539,40 @@ local function full_mark_needed(bot, item)
     end
     return false
 end
+BotPlanner.full_mark_needed = full_mark_needed
+
+-- Whether door mark `m` (of `kind`), given up after MAX_ATTEMPTS, failed
+-- only from other sides than `side`: every approach failed from each room
+-- in m.bad_from, and the bot comes in from another one. Under
+-- MAX_ATTEMPTS the mark lifts as any approach mark does. Not for a door
+-- with a <reach> fact, whose mark follows its flag instead, nor a
+-- permanent mark.
+function BotPlanner.other_side(m, kind, side)
+    return kind == "door" and side ~= nil and m.bad_from ~= nil and not m.bad_from[side]
+        and not m.permanent and m.reach_state == nil and (m.attempts or 0) >= MAX_ATTEMPTS
+        and m.reason:find("every approach failed", 1, true) ~= nil
+end
 
 -- Whether a marked goal is still off limits. A goal is tried again once
 -- the inventory changes; a goal that failed on its approach is also tried
 -- again on a later entry into its room (the bot may now stand in a part of
 -- the room that reaches it), but `remote` planning from another room does
 -- not head back for it.
-local function blocked(bot, kind, room, slot, remote)
+local function blocked(bot, kind, room, slot, remote, side)
     local m = plan().marks[mark_key(kind, room, slot)]
     if not m then
+        return false
+    end
+    -- A door planned unreachable from the side the bot came in by holds
+    -- only for that side (m.bad_from): `side` is the room a route enters
+    -- `room` from, else, in the bot's own room, the room it came from. 30F's
+    -- passage to 305 starts at the east end, reached from 30D's door but
+    -- not from 306's: three entries from 306 gave the door up for good,
+    -- and the run never brought the Wolf Medal to 305's fountain.
+    if side == nil and room == bot:room().id then
+        side = plan().last_from
+    end
+    if BotPlanner.other_side(m, kind, side) then
         return false
     end
     if m.needs ~= nil and not m.permanent
@@ -1107,7 +1140,7 @@ local function door_passable(bot, room_id, door, from)
         return from ~= nil and room_id ~= bot:room().id
             and rides_out(bot, room_id, door.slot, from)
     end
-    if blocked(bot, "door", room_id, door.slot, true) then
+    if blocked(bot, "door", room_id, door.slot, true, from) then
         return false
     end
     -- Nor is a door a <reach> fact keeps out of reach (20C's door to 21A

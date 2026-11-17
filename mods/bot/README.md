@@ -422,7 +422,13 @@ changed. A `<use>` goal whose every approach failed remembers the room the
 bot had entered from (`bad_from`): the remote trip back to it, otherwise
 never made, is planned while a route enters its room from another room
 (507's computer, behind the wall from the door to 50C, is reached from
-505), its attempts counting as usual. An `<avoid>` item is marked as avoided before the free-slot check,
+505), its attempts counting as usual. So does a door with no `<reach>`
+fact: once given up after 3 attempts, it stays off limits only while the
+bot, or a route, enters its room from a room in `bad_from`, and is planned
+as a way through from any other
+(30F's passage to 305 starts at the east end, reached from 30D's door but
+not from 306's; three entries from 306 had given it up for good). Like
+every mark it lives in the Lua VM, so a reload forgets it. An `<avoid>` item is marked as avoided before the free-slot check,
 so a full inventory does not turn it into a goal that lifts on the next
 inventory change. After 3 attempts the mark holds, except an `inventory
 full` mark on a key or an item a `<use>` fact needs: that waits for the
@@ -1195,7 +1201,12 @@ drives the box screen with pad input only.
   held`), as it is once per hurt episode: after Yawn's bite the moon
   crest's trip kept the pursuit while the serum's fetch waited, and seed 6
   walked 38k ticks poisoned toward 30C, fetching heals on the way, and
-  died there.
+  died there. While it is poisoned with none held, a cure lying on the
+  frontier is a needed pickup like a key (one of them: the deposits make
+  room for it), and its `inventory full` mark is never given up: with
+  every slot used Chris passed 300's blue herb three times, dropped it as
+  a target on each later arrival, and walked 40k ticks poisoned between
+  300 and 118's box until he died.
 - Rearm: a firearm in the remembered box (not a `reserve` one) comes out
   with its ammunition, the way the loadout does
   (`rearm: a boxed gun's ammunition is at hand`), when that ammunition is
@@ -1226,8 +1237,8 @@ drives the box screen with pad input only.
   403's box kept the launcher while the bot carried six flame rounds out
   past it and met seven hunters with the handgun. It takes every slot it
   needs or none, and leaves the slots a key or `<use>` pickup waits for;
-  short of slots, a held firearm that is dead weight (not equipped,
-  nothing loaded, no round for it held or boxed) goes in for it on the
+  short of slots, a held firearm that is dead weight (not the staple, not
+  equipped, nothing loaded, no round for it held or boxed) goes in for it on the
   same visit (`ctx.swap_out`): in over half of the hunter rooms entered
   with the launcher and its rounds boxed, the bot carried an empty
   shotgun with no shell anywhere. The held reserve gun and one stack of
@@ -1264,7 +1275,9 @@ drives the box screen with pad input only.
   it comes out only at a box the bot is at anyway. When every slot is
   used, the first thing to go in for it is a firearm that is dead weight:
   not equipped, nothing loaded, and no round for any of its loadings held
-  or boxed. Like the reserve-floor top-up, the gear-up and the ammunition
+  or boxed. The staple (the handgun) never is: its rounds are the most
+  common, and Chris boxed his empty handgun in 50E for a herb, then met
+  513's Tyrant with an empty shotgun beside the clip that lies there. Like the reserve-floor top-up, the gear-up and the ammunition
   of a held gun that is not equipped leave the slots a needed pickup was
   just given: the clip went in for a key and came back out for the held
   handgun at 502's box for 240000 ticks.
