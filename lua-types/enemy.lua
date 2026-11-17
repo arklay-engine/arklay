@@ -2084,6 +2084,7 @@ local EnemyArmViews = {}
 ---@field p42_pod_counter integer `i8`.
 ---@field p42_ticks integer `i16`, the frame timer.
 ---@field plant42_capture_t0 integer Read-only. The shared capture matrix's `t[0]` as `i16`, the sweep's knock-back facing; set it with [`e:set_plant42_capture_t0`](#EnemyApi.set_plant42_capture_t0).
+---@field death_animation_flag boolean `g_deathAnimationFlag`: the Plant 42 eat's last state raises it and the plant's init clears it. With a Plant 42 at the head of the enemy list the DIED screen draws the torn-apart corpse.
 ---@field plant42_body_y integer? Read-only. The flower body's height, which gates the ambient spray; `nil` without a body.
 local EnemyPlant42Views = {}
 

@@ -52,16 +52,23 @@ pub fn start_volume_ramp(game: &mut GameState, channel: u8, delta: i8, frames: u
     };
 }
 
-/// Build the scripted fade table (`snd_fade_set`, 0x27; the original's
-/// `BuildSndFadeTbl`).
+/// The fade type `snd_fade_set` (0x27) passes.
+pub const SCRIPT_FADE: u8 = 0x7F;
+/// The DIED screen's fade (`BuildSndFadeTbl(0xFD, 0x2B)`): 3 steps of 0x4E
+/// millibels down each tick.
+pub const DEATH_FADE: (i8, u8) = (-3, 0x2B);
+
+/// Build the fade table (the original's `BuildSndFadeTbl`), for `snd_fade_set`
+/// (0x27) and the DIED screen.
 ///
 /// Each loaded channel gets the number of `steps * 0x4E` millibel ticks it
-/// needs to reach silence; unloaded channels get zero. `steps == 0` would
-/// fault the original's divide; the port refuses it (documented hardening).
-pub fn build_snd_fade_tbl(game: &mut GameState, steps: i8) {
+/// needs to reach silence; unloaded channels get zero. `kind` is the fade
+/// type, only ever tested for its sign and for zero. `steps == 0` would fault
+/// the original's divide; the port refuses it (documented hardening).
+pub fn build_snd_fade_tbl(game: &mut GameState, steps: i8, kind: u8) {
     let dist_steps = i32::from(steps) * STEP_SCALE;
     game.bgm.fade.dist_steps = dist_steps;
-    game.bgm.fade.kind = 0x7F;
+    game.bgm.fade.kind = i32::from(kind);
     for (index, bank) in game.bgm.channels.iter().enumerate() {
         game.bgm.fade.steps[index] = if bank.track.is_none() || dist_steps == 0 {
             0
@@ -515,6 +522,16 @@ pub fn apply_stop(mixer: &mut Option<Mixer>, game: &mut GameState) {
 /// `pending_load` are read from the pack and loaded, `restart` edges seek the
 /// mixer channel to sample 0, disabled channels stop, and the scripted volume
 /// and pan reach the mixer.
+/// Runs a fade's last step when it is the one that ends the fade: the frame
+/// `die_state` sees the fade over is the one whose `main_loop` step ended it,
+/// and the title follows that frame without another gameplay tick. The last
+/// step (`-2` to `0`) only nudges banks the `-2` step already destroyed.
+pub fn end_fade(game: &mut GameState) {
+    if game.bgm.fade.over_after_next_tick() {
+        advance_fade(game);
+    }
+}
+
 pub fn apply_live(
     mixer: &mut Option<Mixer>,
     game: &mut GameState,
@@ -1148,6 +1165,34 @@ mod tests {
         assert!(game.bgm.channels[1].stop);
     }
 
+    /// The DIED screen's fade (`BuildSndFadeTbl(0xFD, 0x2B)`): 3 steps of
+    /// 0x4E millibels, fade type 0x2B, and over once the step after the
+    /// teardown's -2 has run.
+    #[test]
+    fn the_death_fade_runs_three_steps_down_a_tick() {
+        let (_path, pack) = empty_pack("death-fade");
+        let mut game = game_for(RoomId::parse("1000").unwrap());
+        game.bgm.channels[0].track = Some(0x013);
+        game.bgm.channels[0].volume = -1;
+        let (steps, kind) = DEATH_FADE;
+        build_snd_fade_tbl(&mut game, steps, kind);
+        assert_eq!(game.bgm.fade.kind, 0x2B);
+        assert_eq!(game.bgm.fade.dist_steps, -234);
+        assert_eq!(game.bgm.fade.steps, [42, 0, 0]);
+
+        let mut cache = BgmCache::default();
+        let mut ticks = 0;
+        while !game.bgm.fade.over_after_next_tick() {
+            apply_live(&mut None, &mut game, &mut cache, &pack);
+            ticks += 1;
+        }
+        assert_eq!(ticks, 42 + 28, "the steps, then -30 up to -2");
+        end_fade(&mut game);
+        assert!(!game.bgm.fade.active(), "the last step ends it");
+        end_fade(&mut game);
+        assert!(!game.bgm.fade.active(), "an idle fade stays idle");
+    }
+
     #[test]
     fn snd_fade_steps_the_channels_down_then_stops_them() {
         let (_path, pack) = empty_pack("fade");
@@ -1158,7 +1203,7 @@ mod tests {
         game.bgm.channels[1].track = Some(0x101);
         game.bgm.channels[1].volume = -1;
         game.bgm.state = 0x08 | 0x10;
-        build_snd_fade_tbl(&mut game, -5);
+        build_snd_fade_tbl(&mut game, -5, SCRIPT_FADE);
         assert_eq!(game.bgm.fade.dist_steps, -5 * 0x4E);
         assert_eq!(game.bgm.fade.kind, 0x7F);
         assert_eq!(game.bgm.fade.steps[0], (-10000 + 1) / (-5 * 0x4E));

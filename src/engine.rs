@@ -169,6 +169,8 @@ const WINDOW_WIDTH: i32 = WIDTH * SCALE;
 const FOLLOW_BODY_HEIGHT: i32 = 900;
 /// Fixed simulation step in milliseconds (30 Hz, the original frame rate).
 const TICK_MS: f64 = 1000.0 / 30.0;
+/// RE1's Plant 42 entity id.
+const PLANT42_ID: u8 = 0x08;
 /// The core bank RE 2's title loads (`Title`'s `Snd_load_core(0x10)`).
 const TITLE_CORE_BANK: u8 = 0x10;
 /// The volume `Snd_se_on` gives a core sound on the title (`0x4EDA1E`).
@@ -3926,7 +3928,18 @@ impl GameSession {
         // frozen and the screen's state machine, fade and spinning corpse
         // advance on their own, exactly like the original's display loop.
         if self.death_screen.is_some() {
+            // `main_loop` steps the sound fade before the screen's task.
+            bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
             self.tick_death_screen(pack, ui, input);
+            return Ok(());
+        }
+        // `die_state` sleeps a frame at a time until the sound fade is over.
+        if self.death.is_waiting_for_sound_fade() {
+            bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
+            if self.game.bgm.fade.over_after_next_tick() {
+                bgm::end_fade(&mut self.game);
+                self.finish_death();
+            }
             return Ok(());
         }
         // The original's room-events gate (`g_message_flags` bit 0x80): the
@@ -4709,7 +4722,10 @@ impl GameSession {
     /// the dead flag, start the sequence and advance its delay/fade. Once the
     /// fade completes the DIED screen opens over the corpse.
     fn tick_death(&mut self, pack: &Pack, input: player::Input) {
-        if self.death.finished || self.death_screen.is_some() {
+        if self.death.finished
+            || self.death_screen.is_some()
+            || self.death.is_waiting_for_sound_fade()
+        {
             return;
         }
         if self.game.is_re2_room {
@@ -4940,6 +4956,19 @@ impl GameSession {
         let Some(mut screen) = self.death_screen.take() else {
             return;
         };
+        if self.death.count_screen_tick() == 0 {
+            // The screen's state 0 starts the sound fade.
+            let (steps, kind) = bgm::DEATH_FADE;
+            bgm::build_snd_fade_tbl(&mut self.game, steps, kind);
+        }
+        if self.plant_eaten_corpse() {
+            // The Plant 42 corpse: joints 0 and 2 drawn and composed from
+            // their parents again (flags 0x83), the torn legs off the vine.
+            let entity = &mut self.game.entities[0];
+            entity.set_joint_flag(0, 0x83);
+            entity.set_joint_flag(2, 0x83);
+            self.game.player_frozen_joints.clear();
+        }
         let ui = UiInput {
             confirm: ui.confirm || input.action_held,
             ..ui
@@ -4955,7 +4984,14 @@ impl GameSession {
                 screen.value("fade_counter") as i32,
                 screen.value("fade_state") as i16,
             );
-            self.finish_death();
+            // `die_state`'s black frame, then its wait for the sound fade: the
+            // title follows the frame whose step ends it.
+            if self.game.bgm.fade.over_after_next_tick() {
+                bgm::end_fade(&mut self.game);
+                self.finish_death();
+            } else {
+                self.death.wait_for_sound_fade();
+            }
             return;
         }
         let spin = screen.value("spin") as u16;
@@ -4965,7 +5001,8 @@ impl GameSession {
     }
 
     /// Open the DIED screen over the fallen player: the fixed camera anchors
-    /// on the corpse, the head one-shot is consumed and the room's BGM stops.
+    /// on the corpse and the head one-shot is consumed. The screen's first
+    /// tick starts the music's fade-out.
     fn open_death_screen(&mut self, pack: &Pack) {
         // The shared grab/death one-shot hides the head joint on the first
         // death screen, exactly like the original's image value.
@@ -5011,12 +5048,14 @@ impl GameSession {
             Err(err) => {
                 crate::warning!("warning: DIED screen unavailable: {err:#}");
                 self.finish_death();
-                return;
             }
         }
-        if let Some(mixer) = &mut self.music {
-            mixer.stop_all_bgm();
-        }
+    }
+
+    /// Whether the DIED screen shows the Plant 42 corpse
+    /// (`g_EnemiesList[0].id == 8 && g_deathAnimationFlag`).
+    fn plant_eaten_corpse(&self) -> bool {
+        self.game.death_animation_flag && self.game.entities[1].id == PLANT42_ID
     }
 
     /// The original's `die_state` teardown: clear the screen flags and the
@@ -8670,7 +8709,9 @@ impl GameSession {
     /// The GPU pass never reaches the software rasterizer: a recording
     /// failure is an error. Returns whether the frame shows a GPU scene.
     fn render_death_screen(&mut self, pack: &Pack, pass: ScenePass<'_>) -> Result<bool> {
+        let torn_corpse = self.plant_eaten_corpse();
         let Self {
+            death,
             death_screen,
             save_dir,
             font,
@@ -8684,6 +8725,9 @@ impl GameSession {
         let Some(screen) = death_screen.as_mut() else {
             return Ok(false);
         };
+        // The screen moves the Plant 42 corpse's legs after composing a
+        // frame, so the first frame still shows them as the eat left them.
+        let torn_legs = torn_corpse && death.screen_ticks() > 1;
         let cx = UiContext {
             authentic: game.player_options.authentic,
             pack,
@@ -8718,7 +8762,16 @@ impl GameSession {
                 return false;
             };
             let entity = crate::anim::entity_matrix(player.pos, player.angle);
-            let mut joints = crate::anim::joint_matrices(&assets.emd.skeleton, &keyframe, &entity);
+            let mut locals = crate::anim::joint_local_transforms(&assets.emd.skeleton, &keyframe);
+            if torn_legs {
+                tear_plant_corpse(&mut locals);
+            }
+            let mut joints = crate::anim::joint_matrices_from_locals(
+                &assets.emd.skeleton,
+                &locals,
+                &entity,
+                &game.player_frozen_joints,
+            );
             apply_look_at(&mut joints, &game.entities[0], &game.entity_anims[0]);
             let lighting = Lighting::from_room(&loaded.room);
             if software {
@@ -20402,8 +20455,16 @@ fn store_player_joint_worlds(
         .set_applied_pose(Some(keyframe.clone()));
     player.anim.set_applied_pose(Some(keyframe.clone()));
     let entity = crate::anim::entity_matrix(player.pos, player.angle);
-    let worlds = crate::anim::joint_matrices(skeleton, &keyframe, &entity);
+    let worlds = crate::anim::joint_matrices_frozen(
+        skeleton,
+        &keyframe,
+        &entity,
+        &game.player_frozen_joints,
+    );
     if !worlds.is_empty() {
+        if !game.is_re2_room {
+            freeze_flagged_joints(game, &worlds);
+        }
         game.joint_worlds[0] = worlds;
     }
 }
@@ -20596,6 +20657,45 @@ fn object_render_skipped(room: &RoomState, camera: usize, record: &objects::Obje
         return true;
     }
     false
+}
+
+/// `rotate_entity`'s one-off compose: a player joint flagged 8 keeps the world
+/// this compose built, its children composing from it, and is flagged 0x50
+/// (frozen, and `Joint_move` leaves it alone).
+fn freeze_flagged_joints(game: &mut game::GameState, joints: &[anim::Mat4x3]) {
+    for (joint, world) in joints.iter().enumerate().take(32) {
+        let entity = &mut game.entities[0];
+        let flag = entity.joint_flag(joint);
+        if flag & 8 != 0 && flag & 0x40 == 0 {
+            entity.set_joint_flag(joint, (flag & 0xF5) | 0x50);
+            game.player_frozen_joints
+                .retain(|(frozen, _)| *frozen != joint);
+            game.player_frozen_joints.push((joint, *world));
+        }
+    }
+}
+
+/// The DIED screen's Plant 42 corpse (`display_die_screen`): the legs (joint
+/// 2) turned by `(1500, 0, 500)` and moved 1600 along the body's (joint 0's)
+/// X axis, `ApplyMatrixSV` of its local matrix, keeping their own Z offset.
+fn tear_plant_corpse(locals: &mut [anim::Mat4x3]) {
+    const LEGS_TURN: [i32; 3] = [1500, 0, 500];
+    const LEGS_REACH: i32 = 1600;
+    let Some(body) = locals.first().copied() else {
+        return;
+    };
+    let Some(legs) = locals.get_mut(2) else {
+        return;
+    };
+    legs.r = anim::rotation_matrix(LEGS_TURN[0], LEGS_TURN[1], LEGS_TURN[2]);
+    // `ApplyMatrixSV`: each row times the vector, `>> 12` toward zero, kept
+    // as a short; the Y row is negated around the product.
+    let reach = |row: usize| {
+        let product = body.r[row][0] * LEGS_REACH;
+        ((product + ((product >> 31) & 0xFFF)) >> 12) as i16
+    };
+    legs.t[0] = i32::from(reach(0));
+    legs.t[1] = i32::from(reach(1).wrapping_neg());
 }
 
 /// Compose the look-at tracking joint's aim onto a character's world matrices.
@@ -20969,7 +21069,8 @@ fn render_frame_on(
             game.re2.player.neck.apply(&mut keyframe);
         }
         let entity = anim::entity_matrix(player_state.pos, player_state.angle);
-        let mut joints = anim::joint_matrices(skeleton, &keyframe, &entity);
+        let mut joints =
+            anim::joint_matrices_frozen(skeleton, &keyframe, &entity, &game.player_frozen_joints);
         apply_look_at(&mut joints, &game.entities[0], &game.entity_anims[0]);
         Some(joints)
     });
@@ -40736,6 +40837,188 @@ end
         assert!(title_at > screen_open_at, "the screen ran before the title");
         assert!(session.death_screen.is_none());
         assert!(session.game.flags[5].bit(game::MSF_PLAYER_DEAD));
+    }
+
+    /// The DIED screen fades the music out (`BuildSndFadeTbl(0xFD, 0x2B)`)
+    /// instead of stopping it, and `die_state` holds its black frame until the
+    /// fade is over: skipped on the screen's second tick, a full-volume
+    /// track's 42 steps and the fade's 30-tick teardown keep the title back
+    /// until 70 ticks after the screen opened.
+    #[test]
+    fn a_skipped_died_screen_waits_for_the_music_fade() {
+        let dir = TempDir::new();
+        let id = RoomId {
+            stage: 1,
+            room: 0,
+            player_flag: 0,
+            mansion2: false,
+        };
+        let bmp_bytes = bmp::encode_to_vec(&test_image()).unwrap();
+        let pack_path = dir.0.join("death-music.akpak");
+        let mut writer = PackWriter::new();
+        writer
+            .add(
+                &id.rdt_entry(),
+                synthetic_rdt_with_blocking_collision(&door_init_record(
+                    1,
+                    [777, 0, 888],
+                    0x200,
+                    0,
+                )),
+            )
+            .unwrap();
+        writer.add(&id.cut_entry(0), bmp_bytes).unwrap();
+        writer.add("ui/died.tim", synthetic_died_tim()).unwrap();
+        writer.write(&pack_path).unwrap();
+        let pack = Pack::open(&pack_path).unwrap();
+
+        let mut session = GameSession::from_room(&pack, id, Path::new("saves")).unwrap();
+        session.game.bgm.channels[0].track = Some(1);
+        session.game.bgm.channels[0].volume = -1;
+        session.game.apply_player_hurt(i16::MAX, 0);
+
+        let mut open_at = None;
+        let mut title_at = None;
+        for tick in 0..900 {
+            let confirm = open_at.is_some_and(|open| tick == open + 1);
+            let ui = UiInput {
+                confirm,
+                ..UiInput::default()
+            };
+            session
+                .tick(&pack, ui, player::Input::default(), false)
+                .unwrap();
+            if open_at.is_none() && session.death_screen.is_some() {
+                open_at = Some(tick);
+                assert!(
+                    session.game.bgm.channels[0].track.is_some(),
+                    "still playing"
+                );
+                assert_eq!(session.game.bgm.fade.kind, 0x2B, "the fade started");
+                assert_eq!(session.game.bgm.fade.steps[0], 42);
+            }
+            if open_at.is_some_and(|open| tick == open + 1) {
+                assert!(session.death_screen.is_none(), "skipped");
+                assert!(session.death.is_waiting_for_sound_fade());
+                assert_eq!(session.game.bgm.channels[0].volume, -1 - 234);
+            }
+            if session.take_return_title_request() {
+                title_at = Some(tick);
+                break;
+            }
+        }
+        let open_at = open_at.expect("the DIED screen opened");
+        assert_eq!(title_at.expect("the title returned") - open_at, 70);
+        assert!(!session.game.bgm.fade.active(), "the fade is over");
+    }
+
+    /// The Plant 42 corpse: with the eat's flag up and a Plant 42 heading the
+    /// enemy list, every DIED screen tick draws and composes joints 0 and 2
+    /// again (flags 0x83), which lets the legs go from the vine.
+    #[test]
+    fn the_died_screen_draws_the_plant_eaten_corpse_whole() {
+        let dir = TempDir::new();
+        let id = RoomId {
+            stage: 1,
+            room: 0,
+            player_flag: 0,
+            mansion2: false,
+        };
+        let bmp_bytes = bmp::encode_to_vec(&test_image()).unwrap();
+        let pack_path = dir.0.join("death-plant.akpak");
+        let mut writer = PackWriter::new();
+        writer
+            .add(
+                &id.rdt_entry(),
+                synthetic_rdt_with_blocking_collision(&door_init_record(
+                    1,
+                    [777, 0, 888],
+                    0x200,
+                    0,
+                )),
+            )
+            .unwrap();
+        writer.add(&id.cut_entry(0), bmp_bytes).unwrap();
+        writer.add("ui/died.tim", synthetic_died_tim()).unwrap();
+        writer.write(&pack_path).unwrap();
+        let pack = Pack::open(&pack_path).unwrap();
+
+        let mut session = GameSession::from_room(&pack, id, Path::new("saves")).unwrap();
+        session.game.apply_player_hurt(i16::MAX, 0);
+        assert!(!session.plant_eaten_corpse(), "no flag");
+        session.game.death_animation_flag = true;
+        assert!(!session.plant_eaten_corpse(), "no Plant 42");
+        session.game.entities[1].id = PLANT42_ID;
+        assert!(session.plant_eaten_corpse());
+        let entity = &mut session.game.entities[0];
+        entity.set_joint_flag(0, 0x13);
+        entity.set_joint_flag(2, 0x51);
+        let world = anim::Mat4x3 {
+            r: anim::IDENTITY_MATRIX,
+            t: [0, -3000, 0],
+        };
+        session.game.player_frozen_joints.push((2, world));
+
+        for _ in 0..400 {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            if session.death_screen.is_some() {
+                break;
+            }
+        }
+        assert!(session.death_screen.is_some(), "the DIED screen opened");
+        assert_eq!(session.game.entities[0].joint_flag(0), 0x83);
+        assert_eq!(session.game.entities[0].joint_flag(2), 0x83);
+        assert!(session.game.player_frozen_joints.is_empty());
+    }
+
+    /// `display_die_screen`'s Plant 42 legs: turned by `(1500, 0, 500)` and
+    /// moved 1600 along the body's X axis through `ApplyMatrixSV`, each row
+    /// truncated toward zero and the Y row negated; their Z offset stays.
+    #[test]
+    fn the_plant_corpse_moves_the_legs_off_the_body() {
+        let body = anim::Mat4x3 {
+            r: [[-399, -4057, 388], [4076, -401, 0], [38, 386, 4077]],
+            t: [0, -1708, 0],
+        };
+        let legs = anim::Mat4x3 {
+            r: anim::IDENTITY_MATRIX,
+            t: [5, 6, 7],
+        };
+        let mut locals = vec![body, anim::Mat4x3::default(), legs];
+        tear_plant_corpse(&mut locals);
+        assert_eq!(locals[2].r, anim::rotation_matrix(1500, 0, 500));
+        // -399 * 1600 / 4096 = -155.9 and 4076 * 1600 / 4096 = 1592.2.
+        assert_eq!(locals[2].t, [-155, -1592, 7]);
+        assert_eq!(locals[0], body, "the body stays");
+    }
+
+    /// `rotate_entity`'s one-off compose: a player joint flagged 8 keeps the
+    /// world it composed to and is flagged 0x50; a frozen joint is not taken
+    /// again.
+    #[test]
+    fn a_compose_freezes_the_player_joints_flagged_8() {
+        let mut game = game::GameState::new(
+            RoomId {
+                stage: 1,
+                room: 0,
+                player_flag: 0,
+                mansion2: false,
+            },
+            &RoomState::default(),
+        );
+        let flag = game.entities[0].joint_flag(2);
+        game.entities[0].set_joint_flag(2, flag | 0x0A);
+        let at = |y| anim::Mat4x3 {
+            r: anim::IDENTITY_MATRIX,
+            t: [0, y, 0],
+        };
+        freeze_flagged_joints(&mut game, &[at(1), at(2), at(3)]);
+        assert_eq!(game.entities[0].joint_flag(2), 0x51);
+        assert_eq!(game.player_frozen_joints, vec![(2, at(3))]);
+        freeze_flagged_joints(&mut game, &[at(4), at(5), at(6)]);
+        assert_eq!(game.player_frozen_joints, vec![(2, at(3))], "kept");
     }
 
     /// A scripted death's fade request skips the 90-frame delay: the screen
