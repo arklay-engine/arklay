@@ -3141,6 +3141,32 @@ mod tests {
         );
     }
 
+    /// `effect_shot_impact` (0x0040f850, decomp `EffectSystem.cpp:1582-1584`)
+    /// plays the flame round's cue, bank 1 slot 0x0e, on a landing and on a
+    /// hit alike. The flame round is weapon 9, so the bank loaded for it is
+    /// Grfire (row 9), whose slot 0x0e is Grfire03.
+    #[test]
+    fn a_flame_round_impact_queues_grfire03() {
+        for landed in [true, false] {
+            let mut game = game_with_row(&[raw_block(43, 0)]);
+            game.weapon_bank = 9;
+            let slot = grenade_round(&mut game, 9, [1200, -300, 400]);
+
+            shot_impact(&mut game, slot, landed);
+
+            assert_eq!(game.entity_sounds.len(), 1, "landed {landed}");
+            let cue = game.entity_sounds[0];
+            assert_eq!(cue.name, "Grfire03", "landed {landed}");
+            assert_eq!((cue.bank, cue.column), (1, 0x0e), "landed {landed}");
+            assert_eq!(cue.pos, [1200, -300, 400], "landed {landed}");
+            assert_eq!(
+                game.effects.slot(slot).unwrap().anim_id,
+                0,
+                "the impact frees the round"
+            );
+        }
+    }
+
     #[test]
     fn every_implemented_id_dispatches_without_a_placeholder() {
         for id in 0..=63u8 {
