@@ -1,0 +1,321 @@
+# Claire A through 209's six zombies, the cabinet and door 7, into 202: Marvin's second scene, 0x40 and the 15 rounds, and door 0 back to 200 (#685 Part 3) (oracle/re2.md, "Claire A to the Heart Key")
+# made in arklay: wait 140 ticks at the Diamond door's arrival so the zombies walk east along the south aisle (zombie 3 comes down the east passage), then run west along the aisle's north wall past them to the cabinet at its west end (the question and 0x41's window hold the zombies; a press every 12 ticks), out of the aisle's south-west gap and east along its south corridor to door 7 (the door's text holds them too; the third press opens it); 202: north up the corridor, area 6 starts Marvin's scene, then west along its north edge to area 7 (0x40; the pack of eight is full, so COMBN 0x40 onto 0x41 makes 0x42), dash east through Marvin's reach (two bites), down the corridor to the rounds, east to door 0 (the third press opens it); 200 hands back on 3418
+344
+484 up run right
+497 up run left
+511 up run
+525 up run left
+526 up run
+530 up run left
+531 up run
+532 up run right
+533 right
+535
+536 up
+542 action
+544
+554 action
+556
+566 action
+568
+578 action
+580
+590 action
+592
+602 action
+604
+614 action
+616
+626 action
+628
+638 action
+640
+650 action
+652
+662 action
+664
+674 action
+676
+686 action
+688
+698 action
+700
+710 action
+712
+722 action
+724
+734 action
+736
+746 action
+748
+758 action
+760
+770 action
+772
+782 action
+784
+794 action
+796
+806 action
+808
+818 action
+820
+830 action
+832
+842 action
+844
+854 action
+856
+866 up run left
+902 right
+915
+916 action
+918
+928 action
+930
+940 action
+942
+1282 up run left
+1286 up run
+1301 up run left
+1302 up run
+1305 up run left
+1306 up run
+1309 up run left
+1310 up run
+1313 up run left
+1314 up run
+1317 up run left
+1318 up run
+1320 up run left
+1321 up run
+1323 up run left
+1324 up run
+1325 up run left
+1326 up run
+1328 up run left
+1329 up run
+1330 up run left
+1331 up run
+1332 up run left
+1333 up run
+1334 up run left
+1335 up run
+1336 up run left
+1337 up run
+1338 up run left
+1339 up run
+1340 up run left
+1344 up run
+1345 up run left
+1353 up run
+1354 up run left
+1355 up run
+1356 up run left
+1357 up run
+1359 up run left
+1360 up run
+1361 up run left
+1362 up run
+1364 up run left
+1365 up run
+1368 up run left
+1369 up run
+1372 up run right
+1373 up run
+1379 up run right
+1380 up run
+1381 up run left
+1382 up run
+1385 up run left
+1386 up run
+1393 up run right
+1394 up run
+1402 up run right
+1456 up run
+1460 up run right
+1461 up run left
+1487 up run
+1491 up run right
+1492 up run
+1493 up run right
+1494 up run
+1497 up run right
+1498 up run
+1502 up run left
+1503 up run
+1505 up run right
+1655
+1786 right
+1805
+1806 up run
+1813 up run left
+1835 right
+1845
+1846 action
+1848
+1858 action
+1860
+1870 action
+1872
+1882 action
+1884
+1894 action
+1896
+1906 action
+1908
+1918 action
+1920
+1930 action
+1932
+1942 action
+1944
+1954 action
+1956
+1966 action
+1968
+1978 action
+1980
+1990 right
+1993 up run right
+2017 up run left
+2150 up run
+2151 up run right
+2154 up run left
+2160 up run
+2162 up run left
+2163 up run
+2170 up run right
+2171 up run
+2172 up run right
+2173 up run
+2174 up run right
+2175 up run
+2178 up run right
+2179 up run
+2216 up run right
+2217 up run
+2222 up run left
+2223 up run
+2254 up run right
+2255 up run
+2262 up run left
+2263 up run
+2274 start
+2276
+2316 down
+2318
+2328 down
+2330
+2340 down
+2342
+2352 right
+2354
+2364 confirm
+2366
+2396 down
+2398
+2408 down
+2410
+2420 confirm
+2422
+2452 left
+2454
+2464 confirm
+2466
+2506 start
+2508
+2549 action
+2551
+2561 action
+2563
+2573 action
+2575
+2585 action
+2587
+2597 action
+2599
+2609 action
+2611
+2621 action
+2623
+2633 action
+2635
+2645 action
+2647
+2657 action
+2659
+2669 action
+2671
+2681 action
+2683
+2693 action
+2695
+2705 action
+2707
+2717 action
+2719
+2729 action
+2731
+2741 up run right
+2756 up run
+2763 up run left
+2764 up run
+2767 up run left
+2768 up run
+2771 up run left
+2772 up run
+2774 up run left
+2775 up run
+2776 up run left
+2777 up run
+2779 up run left
+2780 up run
+2781 up run left
+2782 up run
+2784 up run left
+2785 up run
+2787 up run left
+2788 up run
+2791 up run left
+2792 up run
+2795 up run left
+2796 up run
+2800 up run left
+2801 up run
+2806 up run left
+2807 up run
+2821 up run left
+2822 up run
+2861 up run right
+2870 up run
+2879 up run left
+2880 up run
+2883 up run left
+2884 up run
+2889 up run left
+2890 up run
+2904 up run left
+2905 up run
+2913 up run right
+3011 up run
+3015 up run left
+3016 up run
+3017 up run left
+3018 up run
+3020 up run left
+3021 up run
+3022 up run left
+3023 up run
+3024 up run left
+3025 up run
+3026 up run right
+3027 up run
+3043 right
+3051
+3052 action
+3054
+3064 action
+3066
+3076 action
+3078
