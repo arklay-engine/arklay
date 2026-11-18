@@ -917,9 +917,11 @@ impl GameState {
     /// open's sixth tick, the frame before the fade in's first.
     pub fn init_re2_status(&mut self) {
         self.re2_file.blink = Blink::OPEN;
-        // `St_init00` (`0x4F7CD0`): on EASY, the character's hint file's
-        // last page from the flags.
-        if self.re2.easy() {
+        // `St_init00` (`0x4F7CD0`), START's screen's alone: on EASY, the
+        // character's hint file's last page from the flags.
+        let start_screen =
+            self.re2_box.is_none() && self.re2_script_map.is_none() && self.re2_key_map.is_none();
+        if start_screen && self.re2.easy() {
             let character = self.id.player_flag & 1;
             let re2 = &self.re2;
             self.re2_file.hint_pages[usize::from(character)] =

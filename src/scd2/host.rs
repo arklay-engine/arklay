@@ -5150,6 +5150,20 @@ mod tests {
         state.set_key(CONFIRM | FORWARD);
         assert_eq!(state.key, CONFIRM | FORWARD);
         assert_eq!(state.key_trg, 0);
+
+        // The map key is one a stop leaves out, so it is no press either on
+        // the tick the stop ends; it is on a tick of its own.
+        let map = crate::player2::KEY_MAP;
+        state.set_key(0);
+        state.set_flag(STOP_BANK, STOP_INPUT, 1);
+        state.set_key(map);
+        assert_eq!((state.key, state.key_trg), (0, 0));
+        state.set_flag(STOP_BANK, STOP_INPUT, 0);
+        state.set_key(map);
+        assert_eq!((state.key, state.key_trg), (map, 0));
+        state.set_key(0);
+        state.set_key(map);
+        assert_eq!(state.key_trg, map);
     }
 
     #[test]

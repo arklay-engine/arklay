@@ -248,13 +248,13 @@ pub struct Input {
     /// unbound and no default pad button reaches it, so in practice it only
     /// arrives through an attract reel's recorded pad word.
     pub lock_drop: bool,
+    /// The press edge of that bit (`g_PlayerPadHeld & 4`): the knife's turn to
+    /// a target and the lock-on fire's retarget.
+    pub lock_pressed: bool,
     /// The raw pad's held bit `0x0010`: the PC's map key, which RE 2's
     /// `Pad_set` maps to `Key`'s `0x4000` and counts among the status
     /// screen's repeat keys.
     pub map_held: bool,
-    /// The press edge of that bit (`g_PlayerPadHeld & 4`): the knife's turn to
-    /// a target and the lock-on fire's retarget.
-    pub lock_pressed: bool,
     /// `MSF2_EFFECT_ZONE` this tick: walk/run speeds halve and the locomotion
     /// animation advances only every other tick (the original's slow-motion
     /// variant).

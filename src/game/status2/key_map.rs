@@ -55,6 +55,9 @@ pub struct KeyMap {
     pub drawn: Drawn,
     /// `St_exit` has run: the mode byte is 0 again.
     pub exited: bool,
+    /// START was pressed on the request's tick too: without the map key's
+    /// `Key_trg` the screen that opens is START's.
+    pub start_too: bool,
 }
 
 /// What a tick of the screen draws.
@@ -76,6 +79,7 @@ impl Default for KeyMap {
             started: false,
             drawn: Drawn::Nothing,
             exited: false,
+            start_too: false,
         }
     }
 }
@@ -100,9 +104,26 @@ pub struct KeyMapOutcome {
 
 impl GameState {
     /// The map key in play: the status screen opens in mode 3 where START
-    /// would open it.
-    pub fn request_re2_key_map(&mut self) {
-        self.re2_key_map = Some(KeyMap::default());
+    /// would open it. `start_too` says START was pressed with it.
+    pub fn request_re2_key_map(&mut self, start_too: bool) {
+        self.re2_key_map = Some(KeyMap {
+            start_too,
+            ..KeyMap::default()
+        });
+    }
+
+    /// `Game_loop`'s test of the map key, after the scripts: the key is
+    /// `Key_trg`'s (`0x4000`), which a stop leaves out and the tick a stop
+    /// ends on doesn't raise. Without it the request is START's alone
+    /// (true), or nothing (false).
+    pub fn confirm_re2_key_map(&mut self) -> bool {
+        match self.re2_key_map {
+            Some(map) if self.re2.key_trg & crate::player2::KEY_MAP == 0 => {
+                self.re2_key_map = None;
+                map.start_too
+            }
+            _ => true,
+        }
     }
 
     /// `St_init03`'s step 0, on the open's sixth tick after `Status`'s
@@ -225,7 +246,7 @@ mod tests {
         for floor in [3, 4] {
             game.re2.set_flag(map::FLOOR_BANK, floor, 1);
         }
-        game.request_re2_key_map();
+        game.request_re2_key_map(false);
         game.init_re2_status();
         game.start_re2_key_map();
         game
@@ -243,7 +264,7 @@ mod tests {
         let mut game = GameState::new(RoomId::parse("2010").unwrap(), &RoomState::default());
         game.is_re2_room = true;
         assert_eq!(game.re2_map_trace(), "-");
-        game.request_re2_key_map();
+        game.request_re2_key_map(false);
         assert_eq!(game.re2_map_trace(), "0,0,0");
         // Before the start a tick does nothing and draws nothing.
         assert_eq!(tick(&mut game, CLOSE), KeyMapOutcome::default());

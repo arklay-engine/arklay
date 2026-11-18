@@ -1135,6 +1135,26 @@ fn easy_new_game_holds_the_hint_file() {
     assert_eq!(scenario_b.re2.files[0], NO_FILE);
 }
 
+/// The hint file grows in `St_init00`, START's screen's start alone: the
+/// map key's (`St_init03`), a script's map's and the box's leave it.
+#[test]
+fn only_starts_screen_grows_the_hint_file() {
+    let easy = || {
+        let mut game = GameState::new(RoomId::parse("1020").unwrap(), &RoomState::default());
+        game.re2.start_new_game(true, false, false);
+        game.seed_re2_easy();
+        game.re2.set_flag(4, 0x0F, 1);
+        game
+    };
+    let mut map_key = easy();
+    map_key.request_re2_key_map(false);
+    map_key.init_re2_status();
+    assert_eq!(map_key.re2_file.pages_last(0x17), 1);
+    let mut start = easy();
+    start.init_re2_status();
+    assert_eq!(start.re2_file.pages_last(0x17), 2);
+}
+
 /// `Sort_item` at `Status`'s start: the slots after the first empty one move
 /// up one and the last is cleared, so EASY's bullets in slot 3 move to slot
 /// 2; an inventory with no gap before its end stays as it is.

@@ -275,7 +275,7 @@ impl AttractState {
                 fire: action,
                 fire_pressed: false,
                 lock_drop: word & 0x0004 != 0,
-                map_held: false,
+                map_held: word & 0x0010 != 0,
                 lock_pressed: false,
                 aim,
                 aim_pressed: false,
@@ -442,6 +442,14 @@ pub(crate) mod tests {
         assert!(!state.should_end(false), "cur + 10 == max still plays");
         state.timer_cur = state.timer_max - 9;
         assert!(state.should_end(false));
+    }
+
+    /// The raw pad's `0x10` is RE 2's map key, which its `Pad_set` maps
+    /// into `Key`.
+    #[test]
+    fn a_reels_map_key_is_held() {
+        assert!(AttractState::input(0x0010).player.map_held);
+        assert!(!AttractState::input(0x0004).player.map_held);
     }
 
     #[test]
