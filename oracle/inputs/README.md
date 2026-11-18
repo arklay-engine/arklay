@@ -150,3 +150,17 @@ Save mode (each header names its save):
 - `knife_swings.txt` — the same saves: the raise, the swings with up and down
   held, the turns, the holster and a second raise, with nothing in reach
   until the last swing. Run it for 420 ticks.
+- `finale_lift_chris.txt` — `lift_chris_501.dat`: room 303's finale from the
+  lift, as a vanilla run reaches it. Set the battery in 501's socket (Rebecca
+  boards with Chris, Barry with Jill), ride the lift through 50D and its shakes onto the
+  heliport, fire the flare, equip the launcher and fire on the Tyrant until it
+  dies: its death, the rocket replay's cuts in 311 and the fade-out into the
+  ending. Play ends after 4620 traced ticks; run it for 6800 to capture RESULT
+  and the save screen after it, which `arklay` reaches 7 frames ahead of the
+  reference (see `oracle/room-303-parity.md`, "Into RESULT").
+- `finale_lift_jill.txt` — `lift_jill_501.dat`: the same for Jill, whose
+  boarding scene is shorter. Play ends after 4155 traced ticks; run it for
+  6400.
+- `finale_pickup.txt` — `pickup_chris_303.dat`: fire the flare, run from the
+  Tyrant until Brad drops the rocket launcher, pick it up through the viewer's
+  Yes/No prompt and equip it. Run it for 3960 ticks.

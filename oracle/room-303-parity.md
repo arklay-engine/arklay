@@ -14,7 +14,8 @@ pixel. The reference is a port, so each entry says which side matches
   and reads the flag live when it draws, so it shows a stale roll on the frame
   the flag rises and none on the frame it falls. The original rolls at the end
   of the frame (`0x004297f6`), which `arklay` follows. Room 700's shake frames
-  differ only at those two edges.
+  differ only at those two edges, and so does the lift ride in 50D (the 61%
+  frame of the lift finale is the tick its last-but-one shake falls).
 - **Gore strips.** Colour scale and UVs come from the worker at `0x4399b0`
   (`1/128`, `u/256`, first material record, `0x439b8f..0x439ba6`). The
   reference tuned them.
@@ -117,6 +118,38 @@ draw:
 - **Item cursor.** The pad came back a frame early after Equip, so the cursor turned
   bright a frame early. It now returns a frame after the box is gone.
 
+## Found by finishing the game from the lift
+
+The lift finale (`finale_lift_chris.txt`, `finale_lift_jill.txt`) rides into
+303, fires the flare, kills the Tyrant and runs the replay into the ending.
+Its 4620 and 4155 traced ticks match the reference; two things in the harness
+did not:
+
+- **Voice pacing.** The reference's test runs silence the sound
+  (`TestHooks_SilenceSound`), so a voice line's wait clears on the next frame.
+  A headless `arklay` run holds it for the line's length, which kept 501's
+  boarding scene 37 ticks behind from its first line. A trace without `sound`
+  now clears the wait as the reference does; a run with no trace still holds it.
+- **The ending.** A scripted run drops films, and dropping the ending's first
+  film left the chain waiting for its end, so the run held the faded-out 311
+  for good. The chain now runs on to RESULT.
+
+What is left is in the hand-over, not the screens:
+
+- **Into RESULT.** Before RESULT a clear plays the pre-ending film, the ending's
+  film and a congratulations film (endings 1 to 3 then hold black and play the
+  staff roll). A `Bio.exe` run plays them for their own length, so the frames
+  across them cannot be compared. A reference run booted from a save
+  (`--test-load`) requests the films: `die_state` and `ending_state` each sleep a
+  frame first, and the task sleeps one more for each request, while the films
+  themselves play outside the frames it traces. `arklay` drops them in no frame, so on the lift finale RESULT opens 7
+  traced frames earlier in `arklay`. Booted with `--test-ending`, which
+  requests no films, RESULT for endings 4 and 5 matches but for the digit
+  shades (see the clock digits below), 2 frames earlier in `arklay`: the
+  reference's boot hook sleeps a frame before it chains `ending_state`, which
+  sleeps another as it starts. The save screen after it is the reference's own
+  (see above).
+
 ## Still different, not understood or not fixed
 
 - **Monster Plant (rooms 10C, 40C).** `e.status` turns 5 ticks apart; the states
@@ -125,7 +158,6 @@ draw:
   tick.** Each diverges late in a 620-tick idle run.
 - **Clock digits.** Same glyphs and places; the shades differ with the font page
   (see the font entry above).
-- **After RESULT.** The hand-over back to the title runs 5 to 10 ticks apart.
 - **Effect zone dust.** Not drawn by the port (#737).
 - **The corpse's edges.** About 150 isolated edge pixels of the corpse differ on the
   DIED screen; the pose, colours and lights match.

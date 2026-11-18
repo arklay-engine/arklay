@@ -1,0 +1,48 @@
+30 start
+31
+60 confirm
+61
+75 confirm
+76
+3400 up run left
+3408 up run left
+3416 up run left
+3424 up run right
+3432 up run right
+3440 up run right
+3448 up run right
+3456 up run right
+3464 up run right
+3472 up run right
+3480 up run left
+3488 up run right
+3496 up run left
+3504 up run right
+3512 up run left
+3526
+3536 confirm
+3537
+3570 confirm
+3571
+3600 confirm
+3601
+3630 confirm
+3631
+3660 confirm
+3661
+3690 confirm
+3691
+3720 confirm
+3721
+3750 confirm
+3751
+3830 start
+3831
+3860 down
+3861
+3875 confirm
+3876
+3890 confirm
+3891
+3920 cancel
+3921

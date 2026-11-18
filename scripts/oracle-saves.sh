@@ -54,6 +54,9 @@ SAVES=(
     "knife_chris_101|101|0|0"
     "knife_jill_101|101|1|1"
     "knife_wall_chris_101|101|0|0"
+    "lift_chris_501|501|0|0"
+    "lift_jill_501|501|1|1"
+    "pickup_chris_303|303|0|0"
 )
 
 selected=("$@")

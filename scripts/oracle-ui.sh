@@ -167,16 +167,24 @@ else
     new_game({ room = what, player = player, character = player })
 end
 trace_start(out .. "/ark.trace", { all_frames = true })
-while trace_ticks() < ticks do
-    local index = trace_ticks()
+-- The first update that leaves play (a clear's RESULT screen, the title after
+-- DIED) writes no row: the trace stops there, and the run goes on an update a
+-- frame, as the reference's traced frames do, capturing as before.
+local tracing = true
+for index = 0, ticks - 1 do
     local buttons = held[index]
     if buttons then
         release()
         if #buttons > 0 then hold(table.unpack(buttons)) end
     end
+    local traced = tracing and trace_ticks()
     tick()
-    if trace_ticks() == index then
-        error("the game stopped tracing after " .. index .. " ticks")
+    if tracing and trace_ticks() == traced then
+        if mode() == "play" then
+            error("the game stopped tracing after " .. traced .. " ticks")
+        end
+        trace_stop()
+        tracing = false
     end
     if index % every == 0 then
         capture(out .. "/arkcaps/" .. string.format("f%05d.bmp", index))

@@ -1242,6 +1242,12 @@ impl Mixer {
         self.capture.as_deref()
     }
 
+    /// Take a capture mixer's output so far, leaving it capturing from
+    /// empty: the caller then owns the mix whatever becomes of the mixer.
+    pub fn take_captured(&mut self) -> Option<Vec<u8>> {
+        self.capture.as_mut().map(std::mem::take)
+    }
+
     /// Initialize SDL audio and open a default playback device.
     ///
     /// Returns `None` when the audio subsystem or a default playback device

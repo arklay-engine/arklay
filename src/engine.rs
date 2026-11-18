@@ -10902,6 +10902,20 @@ impl App {
         }
     }
 
+    /// Drop the queued film unplayed, as the headless runs do so their frames
+    /// stay deterministic. A film chain's film ends there and then: the rest
+    /// of the chain is dropped the same way and its action runs, so the
+    /// escape's ending reaches its RESULT screen instead of holding the
+    /// faded-out room for good.
+    fn drop_pending_movie(&mut self) -> Result<AppFlow> {
+        while self.pending_movie.take().is_some() && self.chain_active {
+            if let AppFlow::Quit = self.advance_chain()? {
+                return Ok(AppFlow::Quit);
+            }
+        }
+        Ok(AppFlow::Continue)
+    }
+
     /// Start a queued film: open the film mixer on the interactive path, queue
     /// its opening audio and enter [`Mode::Movie`].
     fn install_movie(&mut self, pending: PendingMovie) {
@@ -12848,7 +12862,9 @@ fn play_app_script(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<b
         if let Mode::Play(session) = &mut app.mode {
             session.movie = None;
         }
-        app.pending_movie = None;
+        if let AppFlow::Quit = app.drop_pending_movie()? {
+            break;
+        }
         app.draw();
         if options.capture_every > 0 && index % options.capture_every == 0 {
             write_trace_capture(app, options, index)?;
@@ -16956,6 +16972,12 @@ struct VoiceCache {
     silent_ticks: u32,
     /// The wait is held by `silent_ticks`, not by the mixer's channel.
     silent: bool,
+    /// The reference's silenced test mode (`TestHooks_SilenceSound`): with
+    /// no mixer, an RE 1 line paces nothing and its wait clears on the next
+    /// tick. A script's trace without `sound` or `sound_wav` runs this way,
+    /// as the reference it is compared with does; a scene paced by its line
+    /// (10A's upstairs radio call) then plays as it does there.
+    unpaced: bool,
 }
 
 impl VoiceCache {
@@ -17071,7 +17093,8 @@ fn voice_line_ticks(wav: &audio::Wav) -> u32 {
 /// ends its main thread first, and the fork leaves the player in its
 /// scripted animation for good. A line whose entry is absent from the pack
 /// clears the flag at once (the documented hardening), and so does any wait
-/// with no line behind it.
+/// with no line behind it. With no mixer, an unpaced cache (an oracle trace)
+/// clears every RE 1 wait at once, as the reference's silenced sound does.
 fn tick_voice(
     music: &mut Option<Mixer>,
     cache: &mut VoiceCache,
@@ -17082,6 +17105,17 @@ fn tick_voice(
     cache.silent_ticks = cache.silent_ticks.saturating_sub(1);
     let Some(mixer) = music.as_mut() else {
         cache.pending = None;
+        if cache.unpaced && !game.is_re2_room {
+            // The reference's sound wrappers are no-ops in its test runs, so
+            // `UpdateMusicWaitState` clears the bit on the next frame.
+            game.voice.request = None;
+            game.voice.stop_requested = false;
+            cache.active = false;
+            cache.silent = false;
+            cache.silent_ticks = 0;
+            game.clear_voice_playing();
+            return;
+        }
         if cache.active {
             // The mixer was parked mid-line: the rest of the line's length
             // still holds the wait.
@@ -23121,10 +23155,10 @@ mod tests {
         );
     }
 
-    struct TempDir(std::path::PathBuf);
+    pub(super) struct TempDir(pub(super) std::path::PathBuf);
 
     impl TempDir {
-        fn new() -> Self {
+        pub(super) fn new() -> Self {
             let nanos = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -29300,6 +29334,53 @@ mod tests {
         game.set_voice_playing();
         tick_voice(&mut music, &mut cache, &mut game, &pack);
         assert!(!game.voice_playing(), "a stray wait bit clears");
+    }
+
+    #[test]
+    fn an_unpaced_voice_line_releases_the_wait_on_the_next_tick() {
+        let dir = TempDir::new();
+        let path = dir.0.join("voice.akpak");
+        let mut writer = PackWriter::new();
+        // A second at 22050 Hz: thirty ticks when paced.
+        writer
+            .add("voice/0c_21.wav", voice_wav_bytes(&[0; 22050]))
+            .unwrap();
+        writer.write(&path).unwrap();
+        let pack = Pack::open(&path).unwrap();
+        let mut music = None;
+        let mut cache = VoiceCache {
+            unpaced: true,
+            ..VoiceCache::default()
+        };
+        let id = RoomId::parse("5010").unwrap();
+        let mut game = game::GameState::new(id, &RoomState::default());
+
+        // The reference's oracle runs silence the sound, so 501's boarding
+        // scene ends its `wait_message` on the frame after the line starts
+        // and Rebecca walks on t=268 of the lift route. Held for the line's
+        // length, she walked 37 ticks late.
+        game.voice.request = Some(game::VoiceRequest {
+            path: "voice/0c_21.wav".to_string(),
+            volume: 0,
+            pan: 0,
+        });
+        game.set_voice_playing();
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        assert!(!game.voice_playing(), "the wait cleared at once");
+        assert!(game.voice.request.is_none(), "the line was dropped");
+        assert_eq!(game.voice.misses, 0, "a dropped line is not a miss");
+
+        // Paced again (the trace stopped), the next line holds its length.
+        cache.unpaced = false;
+        game.voice.request = Some(game::VoiceRequest {
+            path: "voice/0c_21.wav".to_string(),
+            volume: 0,
+            pan: 0,
+        });
+        game.set_voice_playing();
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        tick_voice(&mut music, &mut cache, &mut game, &pack);
+        assert!(game.voice_playing(), "a paced line holds the wait");
     }
 
     #[test]
@@ -35781,7 +35862,7 @@ off_0010:
     }
 
     /// A pack carrying a room and one synthetic film per `(id, name)` entry.
-    fn film_pack(dir: &TempDir, films: &[(u8, &str)]) -> Pack {
+    pub(super) fn film_pack(dir: &TempDir, films: &[(u8, &str)]) -> Pack {
         let pack_path = dir.0.join("films.akpak");
         let bmp_bytes = bmp::encode_to_vec(&test_image()).unwrap();
         let mut writer = PackWriter::new();
@@ -36947,6 +37028,37 @@ off_0010:
                 .unwrap(),
             AppFlow::Quit
         );
+    }
+
+    #[test]
+    fn a_dropped_ending_film_runs_the_chain_on_to_the_result_screen() {
+        let dir = TempDir::new();
+        let pack = film_pack(&dir, &[(14, "dme"), (15, "ed1")]);
+        let mut app = App::new(pack, dir.0.clone(), false);
+        app.ending = Some(EndingFlow {
+            stats: ending::EndStats::debug(1, 0, 1),
+            second_playthrough: false,
+            has_special_key: false,
+            has_infinite_launcher: false,
+        });
+        app.play_film_chain(vec![(14, 0), (15, 0)], Some(ScreenAction::EndingResult))
+            .unwrap();
+        assert!(app.pending_movie.is_some(), "the first film is queued");
+
+        // A headless run drops its films. Room 303's escape ends the game
+        // through this chain, and dropping the film alone left the scripted
+        // run on the faded-out room with no RESULT screen.
+        assert_eq!(app.drop_pending_movie().unwrap(), AppFlow::Continue);
+        assert!(app.pending_movie.is_none(), "no film is left queued");
+        assert!(!app.chain_active, "the chain ran out");
+        assert!(matches!(app.mode, Mode::Ending(_)), "RESULT is open");
+
+        // A film outside a chain is dropped with nothing after it.
+        let film = app.open_movie(14, 0).unwrap();
+        app.queue_movie(film, None);
+        assert_eq!(app.drop_pending_movie().unwrap(), AppFlow::Continue);
+        assert!(app.pending_movie.is_none());
+        assert!(matches!(app.mode, Mode::Ending(_)), "the screen is kept");
     }
 
     #[test]
