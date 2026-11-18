@@ -2929,11 +2929,13 @@ pub fn neptune_wander_turn(
 /// boundary walk (end B first) and either accept the pushed position or, when
 /// end A is still blocked, re-test end B in its previous quadrant and roll the
 /// position and angle back unless neither end B's pass nor the re-test found
-/// flag bits. Returns end B's flag bits (0/1/2) on acceptance,
-/// `0x80` on the rollback, and 0 for a deactivated entity.
+/// flag bits. Returns end B's flag bits (`0..=3`) when end A is clear, `1` when
+/// end A is blocked but end B stays clear, `0x80` on the rollback, and 0 for a
+/// deactivated entity.
 ///
-/// The walk's shape handlers write the push-axis status bit as they push, so
-/// it sticks whichever way the pass ends; the re-test runs no handler.
+/// Every shape handler that pushes writes the push-axis status bit, so the
+/// last such write sticks whichever way the pass ends; the re-test runs no
+/// handler.
 pub fn two_point_probe(
     collision: &crate::state::Collision,
     entity: &mut Entity,
@@ -5474,7 +5476,8 @@ mod tests {
     #[test]
     fn two_point_probe_keeps_the_push_axis_through_the_retest() {
         // Both ends in quadrant 1: end B Z-pushed out of a flagless record
-        // (setting the bit), end A inside a full block with no handler.
+        // (setting the bit), end A inside a full block whose nearer exits agree
+        // with its movement (rect selector 0): a rewind, no axis write.
         let mut collision = crate::state::Collision {
             cell_x: 6000,
             ..Default::default()
@@ -5482,7 +5485,7 @@ mod tests {
         collision.quadrants[1].push(boundary(4599, 5649, 4950, 6000, 1));
         collision.quadrants[1].push(CollisionRect {
             flags: 0x300,
-            ..boundary(4300, 4500, 4900, 5100, 0)
+            ..boundary(4300, 4450, 4900, 5100, 1)
         });
 
         // Nothing in quadrant 0: the retest finds no further bits and the
