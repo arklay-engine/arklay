@@ -4428,8 +4428,13 @@ impl GameSession {
         // point: the scripts still see the raw pad this frame, and the player's
         // state machine is skipped after the entity update. Only the dismissed
         // action edge is swallowed here.
+        // RE2's map key isn't the swallowed one: `Pad_set` reads it by
+        // itself, so its press under a held action key is still a press.
         let input = if self.swallow_action {
-            player::Input::default()
+            player::Input {
+                map_held: input.map_held,
+                ..player::Input::default()
+            }
         } else {
             input
         };
@@ -5980,8 +5985,9 @@ impl GameSession {
         }
         if let Some(close) = self.re2_status_close {
             // The tick of the press still draws under the open's fade in:
-            // `St_fade_out_set` replaces the fade on the tick after. Only
-            // the maps take a key that early.
+            // `St_fade_out_set` replaces the fade on the tick after. That
+            // is the close of any of the screens that take a key that
+            // early: the maps', START's on the item page and the box's.
             if close == 0
                 && let Some(open) = self.re2_status_open
             {
@@ -19082,10 +19088,15 @@ fn tick_room_timed(
     if context.game.is_re2_room && std::mem::take(&mut context.game.re2_status_start) {
         // The map key's `Key_trg`, as this tick's `Pad_set` left it.
         let asked = context.game.confirm_re2_key_map();
-        if !asked || context.game.re2_status_request || context.game.re2_computer_request.is_some()
+        if !asked
+            || context.game.re2_status_request
+            || context.game.re2_computer_request.is_some()
+            || context.game.re2.input_stop_raised()
         {
-            // The scripts set `Game` (`Sce_Status`, `Sce_Windows`): START is
-            // tested only while it is 0, so the tick runs on.
+            // The scripts set `Game` (`Sce_Status`, `Sce_Windows`) or
+            // raised `fg_stop`'s `0x1000000` (a message's stop word): the
+            // keys are tested only with `Game` 0 and that bit clear, so the
+            // tick runs on.
             context.game.re2_status_start_dropped = true;
         } else {
             if let Some(id) = crate::se2::SoundId::decode(game::status2::Sound::Decide.id()) {
@@ -26260,6 +26271,113 @@ mod tests {
         );
     }
 
+    /// START's screen takes START under its fade in too, and its close
+    /// draws the same way: the press's tick under the fade in's step, the
+    /// next with no fade.
+    #[test]
+    fn re2_starts_screen_closed_under_the_fade_in_keeps_that_ticks_fade() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.message_flags |= START_MESSAGE_BITS;
+        let start = UiInput {
+            start: true,
+            any: true,
+            ..UiInput::default()
+        };
+        re2_tick(&mut session, &pack, start);
+        while session.re2_status_open != Some(RE2_BOX_START + 1) {
+            re2_tick(&mut session, &pack, UiInput::default());
+        }
+        assert!(session.game.re2_items.is_some(), "START's screen");
+        re2_tick(&mut session, &pack, start);
+        assert_eq!(session.re2_status_close, Some(0));
+        let open = session.re2_status_open.unwrap();
+        let view = session.re2_status_view();
+        assert_eq!(view, Some(re2_status_open_view(open)));
+        assert!(
+            matches!(view, Some(Re2StatusView::Screen(Some(_)))),
+            "{view:?}"
+        );
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert_eq!(session.re2_status_view(), Some(Re2StatusView::Screen(None)));
+    }
+
+    /// The press that closed a message is swallowed while its key is held,
+    /// and the map key isn't that key: its press then still opens the map.
+    #[test]
+    fn re2_map_key_under_a_swallowed_action_key_opens_the_map() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.message_flags |= START_MESSAGE_BITS;
+        session.swallow_action = true;
+        let pad = player::Input {
+            map_held: true,
+            action_held: true,
+            ..player::Input::default()
+        };
+        session
+            .tick(&pack, re2_map_press(false), pad, true)
+            .unwrap();
+        assert!(session.swallow_action, "the action key is still held");
+        assert!(session.game.re2_key_map.is_some());
+        assert!(!session.game.re2_status_start_dropped);
+        session.tick(&pack, UiInput::default(), pad, true).unwrap();
+        assert!(session.menu.is_some(), "the map's screen opens");
+        assert!(session.game.re2_items.is_none());
+    }
+
+    /// A stop takes the map key out of `Key` (`Pad_set`'s mask), and the
+    /// tick the stop ends on raises no `Key_trg` for a key held through it:
+    /// the press under the stop opens nothing, nor does the held key after.
+    #[test]
+    fn re2_map_key_held_through_a_stop_opens_nothing() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.message_flags |= START_MESSAGE_BITS;
+        session.game.re2.set_input_stop(true);
+        re2_map_tick(&mut session, &pack, re2_map_press(false));
+        assert!(session.game.re2_key_map.is_none(), "no `Key_trg`");
+        session.game.re2.set_input_stop(false);
+        for _ in 0..3 {
+            re2_map_tick(&mut session, &pack, UiInput::default());
+            assert!(session.menu.is_none() && session.menu_request.is_none());
+        }
+        // Released and pressed again, it is the map's.
+        re2_tick(&mut session, &pack, UiInput::default());
+        re2_map_tick(&mut session, &pack, re2_map_press(false));
+        assert!(session.game.re2_key_map.is_some());
+    }
+
+    /// `Game_loop` tests `fg_stop`'s `0x1000000` after the scripts: START
+    /// pressed under it opens nothing, and the tick runs on.
+    #[test]
+    fn re2_start_under_the_input_stop_is_not_taken() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.message_flags |= START_MESSAGE_BITS;
+        let flags = session.game.message_flags;
+        session.game.re2.set_input_stop(true);
+        let start = UiInput {
+            start: true,
+            any: true,
+            ..UiInput::default()
+        };
+        re2_tick(&mut session, &pack, start);
+        assert!(session.game.re2_status_start_dropped);
+        assert!(session.game.re2.sounds.is_empty(), "no decide cue");
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(session.menu.is_none() && session.menu_request.is_none());
+        assert_eq!(session.game.message_flags, flags, "the mask is undone");
+    }
+
     /// The map key is `Key_trg`'s: a press `Pad_set` raised no `0x4000` for
     /// (the tick a stop ends on) opens nothing, or START's screen when
     /// START was pressed with it.
@@ -26296,8 +26414,10 @@ mod tests {
         let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
         session.game.is_re2_room = true;
         re2_open_key_map(&mut session, &pack, false);
+        session.game.re2_script_map = Some(game::status2::script_map::ScriptMap::new(2));
         session.close_menu();
         assert!(session.game.re2_key_map.is_none());
+        assert!(session.game.re2_script_map.is_none());
         session.re2_status_open = None;
         session.game.request_re2_key_map(false);
         session.game.message_flags |= START_MESSAGE_BITS;

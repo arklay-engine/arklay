@@ -1181,6 +1181,16 @@ impl Re2State {
         self.flag(STOP_BANK, STOP_INPUT) || self.door_key_stop
     }
 
+    /// `fg_stop`'s `0x1000000` as it stands: `Game_loop` tests it after the
+    /// scripts, before it takes START or the map key.
+    pub fn input_stop_raised(&self) -> bool {
+        self.flag(STOP_BANK, STOP_INPUT)
+    }
+
+    pub fn set_input_stop(&mut self, stopped: bool) {
+        self.set_flag(STOP_BANK, STOP_INPUT, u8::from(stopped));
+    }
+
     /// The `em` and `es` trace fields: a character's position, facing and
     /// motion.
     /// The zombies in play: the oracle's `zm` field.

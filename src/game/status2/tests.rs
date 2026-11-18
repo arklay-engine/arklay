@@ -1135,8 +1135,9 @@ fn easy_new_game_holds_the_hint_file() {
     assert_eq!(scenario_b.re2.files[0], NO_FILE);
 }
 
-/// The hint file grows in `St_init00`, START's screen's start alone: the
-/// map key's (`St_init03`), a script's map's and the box's leave it.
+/// The hint file grows in `St_init00`, mode 0's start alone (START's
+/// screen and `Sce_Status`'s): the map key's (`St_init03`), a script's
+/// map's and the box's leave it.
 #[test]
 fn only_starts_screen_grows_the_hint_file() {
     let easy = || {
@@ -1150,6 +1151,14 @@ fn only_starts_screen_grows_the_hint_file() {
     map_key.request_re2_key_map(false);
     map_key.init_re2_status();
     assert_eq!(map_key.re2_file.pages_last(0x17), 1);
+    let mut script_map = easy();
+    script_map.request_re2_script_map(2);
+    script_map.init_re2_status();
+    assert_eq!(script_map.re2_file.pages_last(0x17), 1);
+    let mut item_box = easy();
+    item_box.open_re2_box();
+    item_box.init_re2_status();
+    assert_eq!(item_box.re2_file.pages_last(0x17), 1);
     let mut start = easy();
     start.init_re2_status();
     assert_eq!(start.re2_file.pages_last(0x17), 2);
