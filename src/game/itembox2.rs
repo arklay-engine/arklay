@@ -486,6 +486,16 @@ impl GameState {
                 } else if input.down {
                     out.room_sounds.push(SOUND_SCROLL);
                     page.sub = SUB_DOWN;
+                } else if (input.page_up && !input.cancel) || (!input.page_up && input.page_down) {
+                    // The raw pad's `0x4` and `0x8` (the aim key) on a
+                    // repeat tick: five rows up or down at once, with the
+                    // decide cue. `0x4` gives way to a cancel; `0x8` keeps
+                    // one from being read. The tick also draws the name of
+                    // the row above the list, as a scroll up does, where
+                    // the panel covers it.
+                    out.sounds.push(Sound::Decide);
+                    let rows = if input.page_up { 0x3B } else { 5 };
+                    page.top = (page.top + rows) & 0x3F;
                 } else if input.cancel {
                     out.sounds.push(Sound::Cancel);
                     page.sub = SUB_INVENTORY;
@@ -789,6 +799,8 @@ mod tests {
         confirm: false,
         cancel: false,
         start: false,
+        page_up: false,
+        page_down: false,
         held: 0,
     };
     const DOWN: Input = Input {
@@ -811,10 +823,107 @@ mod tests {
         let input = Input {
             up: repeat.gated(pad::UP),
             down: repeat.gated(pad::DOWN),
+            page_up: repeat.gated(pad::LOCK),
+            page_down: repeat.gated(pad::AIM),
             held: repeat.raw,
             ..Input::default()
         };
         game.tick_re2_box(input).unwrap()
+    }
+
+    /// As [`held`], with a press of the cancel key on the tick.
+    fn held_with_cancel(game: &mut GameState, bits: u16) -> BoxOutcome {
+        use crate::game::pad_repeat as pad;
+        game.pad_repeat.step(bits);
+        let repeat = game.pad_repeat;
+        let input = Input {
+            down: repeat.gated(pad::DOWN),
+            page_up: repeat.gated(pad::LOCK),
+            page_down: repeat.gated(pad::AIM),
+            cancel: true,
+            held: repeat.raw,
+            ..Input::default()
+        };
+        game.tick_re2_box(input).unwrap()
+    }
+
+    /// The box's list, from the inventory's first slot.
+    fn in_the_list() -> GameState {
+        let mut game = game();
+        game.pad_repeat.set(crate::game::pad_repeat::STATUS_SETTING);
+        press(&mut game, CONFIRM);
+        assert_eq!(game.re2_box.unwrap().sub, SUB_BOX);
+        game
+    }
+
+    /// The raw pad's `0x8` (the aim key) on a repeat tick jumps five rows
+    /// down with the decide cue, and `0x4` five up: on the press, 11 ticks
+    /// later, then every 7 (`box_page_201`'s 560 to 585).
+    #[test]
+    fn the_aim_key_jumps_five_rows_on_each_repeat() {
+        use crate::game::pad_repeat as pad;
+        for (key, rows) in [(pad::AIM, 5u8), (pad::LOCK, 0x3B)] {
+            let mut game = in_the_list();
+            let top = game.re2_box.unwrap().top;
+            let mut jumps = Vec::new();
+            for t in 0..30 {
+                let before = game.re2_box.unwrap().top;
+                let out = held(&mut game, key);
+                let page = game.re2_box.unwrap();
+                assert_eq!(page.sub, SUB_BOX, "no scroll");
+                assert!(out.room_sounds.is_empty());
+                if out.sounds.is_empty() {
+                    assert_eq!(page.top, before);
+                } else {
+                    assert_eq!(out.sounds, [Sound::Decide]);
+                    assert_eq!(page.top, (before + rows) & 0x3F);
+                    jumps.push(t);
+                }
+            }
+            assert_eq!(jumps, [0, 11, 18, 25]);
+            assert_eq!(game.re2_box.unwrap().top, (top + 4 * rows) & 0x3F);
+        }
+    }
+
+    /// Up and down come first: with the aim key held too the box scrolls a
+    /// row. With both jump keys held, `0x4` is the one read.
+    #[test]
+    fn a_direction_wins_over_the_jump_and_0x4_over_0x8() {
+        use crate::game::pad_repeat as pad;
+        let mut game = in_the_list();
+        let top = game.re2_box.unwrap().top;
+        let out = held(&mut game, pad::DOWN | pad::AIM);
+        assert_eq!(out.room_sounds, [SOUND_SCROLL]);
+        assert_eq!(game.re2_box.unwrap().sub, SUB_DOWN);
+        assert_eq!(game.re2_box.unwrap().top, top);
+
+        let mut game = in_the_list();
+        held(&mut game, pad::LOCK | pad::AIM);
+        assert_eq!(game.re2_box.unwrap().top, (top + 0x3B) & 0x3F);
+    }
+
+    /// A cancel pressed on a jump's tick: `0x4` gives way to it, and `0x8`
+    /// keeps it from being read. Off a repeat tick the held key hides
+    /// nothing.
+    #[test]
+    fn a_cancel_on_the_jumps_tick() {
+        use crate::game::pad_repeat as pad;
+        let mut game = in_the_list();
+        let top = game.re2_box.unwrap().top;
+        let out = held_with_cancel(&mut game, pad::LOCK);
+        assert_eq!(out.sounds, [Sound::Cancel]);
+        assert_eq!(game.re2_box.unwrap().sub, SUB_INVENTORY);
+        assert_eq!(game.re2_box.unwrap().top, top);
+
+        let mut game = in_the_list();
+        let out = held_with_cancel(&mut game, pad::AIM);
+        assert_eq!(out.sounds, [Sound::Decide]);
+        assert_eq!(game.re2_box.unwrap().sub, SUB_BOX);
+        assert_eq!(game.re2_box.unwrap().top, (top + 5) & 0x3F);
+        // The key still held, no flag: the cancel is read.
+        let out = held_with_cancel(&mut game, pad::AIM);
+        assert_eq!(out.sounds, [Sound::Cancel]);
+        assert_eq!(game.re2_box.unwrap().sub, SUB_INVENTORY);
     }
 
     #[test]

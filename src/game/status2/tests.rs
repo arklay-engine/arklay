@@ -42,6 +42,8 @@ const NONE: Input = Input {
     confirm: false,
     cancel: false,
     start: false,
+    page_up: false,
+    page_down: false,
     held: 0,
 };
 

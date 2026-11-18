@@ -1,0 +1,24 @@
+# room 201's item box and the aim key (oracle/re2.md, "Key repeat"): into the box's list, a press of the aim key jumps five rows, a hold jumps on each repeat, the aim key with cancel on one tick jumps and doesn't cancel, down with the aim key scrolls a row; then cancel twice and EXIT
+0
+420 action
+423
+480 confirm
+483
+520 aim
+523
+560 aim
+592
+630 aim cancel
+633
+670 down aim
+673
+720 cancel
+723
+760 confirm
+763
+790 aim
+812
+840 cancel
+843
+880 cancel
+883

@@ -7680,6 +7680,8 @@ impl GameSession {
             confirm: ui.confirm,
             cancel: ui.cancel,
             start: ui.start && !ui.cancel,
+            page_up: repeat.gated(pad::LOCK),
+            page_down: repeat.gated(pad::AIM),
             held: repeat.raw,
         }
     }

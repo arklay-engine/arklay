@@ -264,6 +264,8 @@ mod tests {
         confirm: false,
         cancel: false,
         start: false,
+        page_up: false,
+        page_down: false,
         held: 0,
     };
     const LEFT: Input = Input {
