@@ -152,10 +152,10 @@ fn advance_fade(game: &mut GameState) -> Option<i32> {
 
 /// Hand one tick's fade sweep to the mixer's voice and one-shot banks,
 /// after resetting the bank tables the game reloaded. RE2 shares neither the
-/// fade nor RE1's bank tables, so an RE2 room holds no bank volume.
+/// fade nor RE1's bank tables, so an RE2 room holds no bank volume or pan.
 fn apply_bank_fade(mixer: &mut Mixer, game: &GameState, sweep: Option<i32>) {
     if game.is_re2_room {
-        mixer.forget_sfx_bank_volumes();
+        mixer.forget_sfx_banks();
         return;
     }
     mixer.sync_sfx_bank_loads(game.sfx_bank_loads);
@@ -169,19 +169,19 @@ fn apply_bank_fade(mixer: &mut Mixer, game: &GameState, sweep: Option<i32>) {
 /// The step is the original's `vol + (400 / (frames_left + 1) * direction) /
 /// 100`; once the volume passes -10000 or the frames run out the channel is
 /// stopped and its volume reset to -1.
-fn advance_ramp(game: &mut GameState) {
+///
+/// Returns the channel it stepped.
+fn advance_ramp(game: &mut GameState) -> Option<usize> {
     if !game.bgm.ramp.active() {
-        return;
+        return None;
     }
     let index = usize::from(game.bgm.ramp.channel);
     let direction = game.bgm.ramp.direction;
     let Some(bank) = game.bgm.channels.get_mut(index) else {
         game.bgm.ramp = crate::game::VolumeRamp::default();
-        return;
+        return None;
     };
-    if bank.track.is_none() {
-        return;
-    }
+    bank.track?;
     let mut volume = bank.volume;
     if volume == 2000 {
         volume = -9999;
@@ -195,6 +195,7 @@ fn advance_ramp(game: &mut GameState) {
         bank.volume = -1;
         bank.stop = true;
     }
+    Some(index)
 }
 
 /// The three tracks the original loads muted and later fades up with the
@@ -535,14 +536,16 @@ pub fn apply_stop(mixer: &mut Option<Mixer>, game: &mut GameState) {
     }
 }
 
-/// One tick of `main_loop`'s `UpdateSoundFadeState` (MainLoop.cpp, ahead of
-/// the task pass): step the scripted fade's channels, then sweep the voice
-/// and one-shot banks. It runs once per simulation tick, doors included,
-/// before anything of the tick plays a sound; the counters advance without
-/// an audio device too.
+/// One tick of `main_loop`'s `UpdateSoundFadeState` and `UpdateSoundDecay`
+/// (MainLoop.cpp:215, ahead of the task pass): step the scripted fade's
+/// channels and sweep the voice and one-shot banks, then step the volume
+/// ramp. It runs once per simulation tick, doors included, before anything
+/// of the tick plays a sound; the counters advance without an audio device
+/// too.
 pub fn step_fade(mixer: &mut Option<Mixer>, game: &mut GameState) {
     let fading = game.bgm.fade.active();
     let sweep = advance_fade(game);
+    let ramped = advance_ramp(game);
     let Some(mixer) = mixer.as_mut() else {
         return;
     };
@@ -552,11 +555,14 @@ pub fn step_fade(mixer: &mut Option<Mixer>, game: &mut GameState) {
     if fading && game.bgm.fade.kind == -4 {
         mixer.stop_voice();
     }
-    // `UpdateSoundFade` and the teardown's `setSndStop`s act on the banks
-    // directly, so the channels' new volumes and stops reach the mixer on
-    // the tick they step, a door's included.
-    if fading && !game.is_re2_room {
-        for index in 0..BGM_CHANNELS {
+    // `UpdateSoundFade`, the teardown's `setSndStop`s and `UpdateSoundDecay`
+    // act on the banks directly, so the channels' new volumes and stops
+    // reach the mixer on the tick they step, a door's included.
+    if game.is_re2_room {
+        return;
+    }
+    for index in 0..BGM_CHANNELS {
+        if fading || ramped == Some(index) {
             if std::mem::take(&mut game.bgm.channels[index].stop) {
                 mixer.stop_bgm_channel(index);
             }
@@ -577,10 +583,7 @@ pub fn apply_live(
     cache: &mut BgmCache,
     pack: &Pack,
 ) {
-    // The fade itself steps in [`step_fade`]; the ramp advances here even
-    // when no audio device is open, so scripts and tests observe the same
-    // counters.
-    advance_ramp(game);
+    // The fade and the ramp step in [`step_fade`].
     if game.is_re2_room {
         game.re2.music.tick();
         measure_re2_tracks(game, cache, pack);
@@ -1178,7 +1181,6 @@ mod tests {
 
     #[test]
     fn volume_ramp_steps_towards_silence_and_stops() {
-        let (_path, pack) = empty_pack("ramp");
         let id = RoomId::parse("1000").unwrap();
         let mut game = game_for(id);
         game.bgm.state = 0x10;
@@ -1187,8 +1189,7 @@ mod tests {
         start_volume_ramp(&mut game, 1, 95, 30);
         assert_eq!(game.bgm.ramp.direction, (95 / 30) * 0x4E);
         assert_eq!(game.bgm.ramp.frames_left, 60);
-        let mut cache = BgmCache::default();
-        apply_live(&mut None, &mut game, &mut cache, &pack);
+        step_fade(&mut None, &mut game);
         assert!(
             game.bgm.channels[1].volume > -9999,
             "the first ramp tick raises the seed"
@@ -1198,10 +1199,51 @@ mod tests {
         // A ramp that passes silence stops the channel and resets the volume.
         game.bgm.channels[1].volume = -9999;
         start_volume_ramp(&mut game, 1, -95, 1);
-        apply_live(&mut None, &mut game, &mut cache, &pack);
+        step_fade(&mut None, &mut game);
         assert!(!game.bgm.ramp.active());
         assert_eq!(game.bgm.channels[1].volume, -1);
         assert!(game.bgm.channels[1].stop);
+    }
+
+    /// `main_loop` runs `UpdateSoundDecay` right after `UpdateSoundFadeState`
+    /// (MainLoop.cpp:215): a ramp on a fading channel steps from the volume
+    /// the fade just left, and its `set_volume` reaches the bank at once.
+    /// Reconciling the mixer after the tasks does not step it again.
+    #[test]
+    fn the_volume_ramp_steps_after_the_fade() {
+        let (_path, pack) = empty_pack("ramp-order");
+        let mut game = game_for(RoomId::parse("1000").unwrap());
+        game.bgm.state = 0x08;
+        game.bgm.channels[0].track = Some(0x013);
+        game.bgm.channels[0].volume = -1000;
+        let mut mixer = Some(audio::Mixer::capture());
+        let wav = audio::Wav::from_s16(&[1000; 4096], 1, audio::SAMPLE_RATE);
+        mixer.as_mut().unwrap().play_bgm_channel(0, wav, true);
+        build_snd_fade_tbl(&mut game, -3, SCRIPT_FADE);
+        start_volume_ramp(&mut game, 0, 90, 30);
+        let direction = game.bgm.ramp.direction;
+        step_fade(&mut mixer, &mut game);
+        let faded = -1000 - 234;
+        let ramped = faded + (400 / 60 * direction) / 100;
+        assert_eq!(game.bgm.channels[0].volume, ramped);
+        let gain = mixer.as_ref().unwrap().state().bgm_channel_gain(0);
+        assert_eq!(gain, Some(sfx::volume_gain(ramped)));
+        let mut cache = BgmCache::default();
+        apply_live(&mut mixer, &mut game, &mut cache, &pack);
+        assert_eq!(game.bgm.channels[0].volume, ramped);
+        assert_eq!(game.bgm.ramp.frames_left, 59);
+
+        // The ramp's last step stops the bank on the same tick.
+        game.bgm.ramp.frames_left = 1;
+        game.bgm.fade = Default::default();
+        step_fade(&mut mixer, &mut game);
+        assert!(!game.bgm.ramp.active());
+        assert!(!game.bgm.channels[0].stop, "stopped straight away");
+        assert!(!mixer.as_ref().unwrap().bgm_channel_playing(0));
+        assert_eq!(
+            mixer.as_ref().unwrap().state().bgm_channel_gain(0),
+            Some(sfx::volume_gain(-1))
+        );
     }
 
     /// The DIED screen's fade (`BuildSndFadeTbl(0xFD, 0x2B)`): 3 steps of
@@ -1282,7 +1324,7 @@ mod tests {
         {
             let mixer = mixer.as_mut().unwrap();
             mixer.play_sfx_on_bank(footstep, wav(), sfx::volume_gain(-1000), 0.5);
-            mixer.play_sfx_on_bank_held(unswept, wav(), 0.0);
+            mixer.play_bank_cue(unswept, wav(), None, None);
         }
         let state = |mixer: &Option<audio::Mixer>, key| {
             let state = mixer.as_ref().unwrap().state();
@@ -1308,7 +1350,7 @@ mod tests {
         mixer
             .as_mut()
             .unwrap()
-            .play_sfx_on_bank_held(grunt, wav(), 0.0);
+            .play_bank_cue(grunt, wav(), None, None);
         assert_eq!(state(&mixer, grunt).1, Some(sfx::volume_gain(-1 - 234)));
         // A `Play3DSnd` sets its bank's volume first, and the fade steps on
         // from there.
@@ -1340,7 +1382,7 @@ mod tests {
         mixer
             .as_mut()
             .unwrap()
-            .play_sfx_on_bank_held(grunt, wav(), 0.0);
+            .play_bank_cue(grunt, wav(), None, None);
         assert_eq!(state(&mixer, grunt).1, Some(sfx::volume_gain(held[1].1)));
 
         // `load_character_sfx` resets the character banks; the room's stay.
@@ -1351,7 +1393,7 @@ mod tests {
         mixer
             .as_mut()
             .unwrap()
-            .play_sfx_on_bank_held(grunt, wav(), 0.0);
+            .play_bank_cue(grunt, wav(), None, None);
         assert_eq!(state(&mixer, grunt).1, Some(1.0));
     }
 

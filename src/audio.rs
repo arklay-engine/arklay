@@ -452,6 +452,18 @@ const FADED_SFX_BANKS: [(u8, u8); 4] = [(1, 16), (0, 2), (3, 9), (2, 48)];
 /// A bank's volume when it loads (`g_SfxVolume` and its siblings idle at -1).
 const BANK_LOAD_VOLUME: i32 = -1;
 
+/// What a one-shot bank's DirectSound buffer holds between its sounds. The
+/// original's volume and pan belong to the buffer, not the sound: a load sets
+/// them (`pan_set(bank, 0)`), and they outlive every sound the bank plays.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct BankMix {
+    /// Millibels from the bank's last `set_volume` or fade step; `None` at
+    /// its load volume, which plays at full gain.
+    volume: Option<i32>,
+    /// The pan from the bank's last `pan_set` (-1 left, 1 right).
+    pan: f32,
+}
+
 /// `set_volume`'s clamp of a DirectSound volume to `-9999..=-1` millibels.
 fn clamp_bank_volume(millibels: i32) -> i32 {
     millibels.clamp(-9999, -1)
@@ -628,13 +640,12 @@ pub(crate) struct MixState {
     /// The player's levels; [`Mixer::update`] refreshes them before each
     /// render.
     volumes: Volumes,
-    /// The DirectSound volume of each one-shot bank, in millibels, from its
-    /// first `set_volume` or fade step. The original's volume belongs to the
-    /// bank, not the sound: it outlives the sound, a `Play3DSnd` overwrites
-    /// it, a fade steps it and holds it until the bank reloads, and a
-    /// `play_sfx` or `Snd_em` plays at it. A bank without an entry is at its
-    /// load volume.
-    bank_volumes: HashMap<u64, i32>,
+    /// The DirectSound volume and pan each one-shot bank holds. A
+    /// `Play3DSnd` or `PlayEntitySnd` sets the volume, a `Snd_em` the pan, a
+    /// fade steps the volume, and every cue plays at whatever the bank holds
+    /// of the rest until the bank reloads. A bank without an entry is as it
+    /// loaded: full volume, centred.
+    banks: HashMap<u64, BankMix>,
     /// The game's [`crate::game::GameState::sfx_bank_loads`] last seen.
     bank_loads: [u32; 4],
 }
@@ -652,7 +663,7 @@ impl MixState {
             paused_bgm: [false; 3],
             paused_voice: false,
             volumes: Volumes::default(),
-            bank_volumes: HashMap::new(),
+            banks: HashMap::new(),
             bank_loads: [0; 4],
         }
     }
@@ -670,9 +681,10 @@ impl MixState {
         for (bank, records) in FADED_SFX_BANKS {
             for slot in 0..records {
                 let key = sfx_bank_key(bank, slot);
-                let volume = self.bank_volumes.entry(key).or_insert(BANK_LOAD_VOLUME);
-                *volume = step_bank_volume(*volume, delta);
-                let gain = crate::sfx::volume_gain(*volume);
+                let mix = self.banks.entry(key).or_default();
+                let volume = step_bank_volume(mix.volume.unwrap_or(BANK_LOAD_VOLUME), delta);
+                mix.volume = Some(volume);
+                let gain = crate::sfx::volume_gain(volume);
                 if let Some(voice) = self.sfx.iter_mut().find(|voice| voice.bank == Some(key)) {
                     voice.gain = gain;
                 }
@@ -680,27 +692,32 @@ impl MixState {
         }
     }
 
-    /// Reset the held volumes of every bank table whose load count changed
-    /// since the last call: a reload sets each bank's volume afresh.
+    /// Reset the held volume and pan of every bank table whose load count
+    /// changed since the last call: a reload sets each bank's afresh.
     pub(crate) fn sync_sfx_bank_loads(&mut self, loads: [u32; 4]) {
         for (table, (seen, now)) in self.bank_loads.iter_mut().zip(loads).enumerate() {
             if *seen != now {
                 *seen = now;
-                self.bank_volumes
-                    .retain(|key, _| (key >> 8) as usize != table);
+                self.banks.retain(|key, _| (key >> 8) as usize != table);
             }
         }
     }
 
-    /// Drop every held bank volume (an RE2 room keeps none).
-    pub(crate) fn forget_sfx_bank_volumes(&mut self) {
-        self.bank_volumes.clear();
+    /// Drop every held bank volume and pan (an RE2 room keeps none).
+    pub(crate) fn forget_sfx_banks(&mut self) {
+        self.banks.clear();
     }
 
-    /// `bank`'s held volume, if a fade has stepped it.
+    /// `bank`'s held volume, once a sound or a fade has set it.
     #[cfg(test)]
     pub(crate) fn sfx_bank_volume(&self, bank: u64) -> Option<i32> {
-        self.bank_volumes.get(&bank).copied()
+        self.banks.get(&bank).and_then(|mix| mix.volume)
+    }
+
+    /// `bank`'s held pan.
+    #[cfg(test)]
+    pub(crate) fn sfx_bank_held_pan(&self, bank: u64) -> f32 {
+        self.banks.get(&bank).map_or(0.0, |mix| mix.pan)
     }
 
     /// The gain of `bank`'s sounding one-shot.
@@ -877,14 +894,37 @@ impl MixState {
     /// progress give way oldest-first, so a burst of new sounds can never
     /// evict the copy that was just started.
     pub(crate) fn play_sfx_on_bank(&mut self, bank: u64, pcm: Vec<i16>, gain: f32, pan: f32) {
+        self.play_bank_cue(bank, pcm, Some(gain), Some(pan));
+    }
+
+    /// Start a one-shot on `bank`, first setting the bank's volume to `gain`
+    /// and its pan to `pan` where given; the rest plays at what the bank
+    /// holds. RE1's `Play3DSnd` and `PlayEntitySnd` only `set_volume`
+    /// (Bio.exe 0x468279, 0x468484), `Snd_em` only `pan_set`s (0x468503)
+    /// and `play_sfx` sets neither (0x0047fb10): the sound plays at the
+    /// volume and pan the bank's last sound or a fade left.
+    pub(crate) fn play_bank_cue(
+        &mut self,
+        bank: u64,
+        pcm: Vec<i16>,
+        gain: Option<f32>,
+        pan: Option<f32>,
+    ) {
         if pcm.is_empty() {
             return;
         }
-        // `Play3DSnd`/`PlayEntitySnd` `set_volume` the bank before playing,
-        // and the bank keeps it after the sound ends.
-        self.bank_volumes
-            .insert(bank, clamp_bank_volume(gain_millibels(gain)));
-        self.start_sfx_on_bank(bank, pcm, gain, pan);
+        let held = self.banks.get(&bank).copied().unwrap_or_default();
+        if gain.is_some() || pan.is_some() {
+            let mix = self.banks.entry(bank).or_default();
+            if let Some(gain) = gain {
+                mix.volume = Some(clamp_bank_volume(gain_millibels(gain)));
+            }
+            if let Some(pan) = pan {
+                mix.pan = pan;
+            }
+        }
+        let gain = gain.unwrap_or_else(|| held.volume.map_or(1.0, crate::sfx::volume_gain));
+        self.start_sfx_on_bank(bank, pcm, gain, pan.unwrap_or(held.pan));
     }
 
     /// Start or restart `bank`'s one-shot at `gain`.
@@ -908,21 +948,6 @@ impl MixState {
         let mut voice = Voice::new(pcm, gain.max(0.0), pan, false, seq);
         voice.bank = Some(bank);
         self.sfx.push(voice);
-    }
-
-    /// Start a one-shot on `bank` at the bank's own volume, the original's
-    /// `play_sfx` (0x0047fb10) and `Snd_em` (0x0047fca0), which do not
-    /// `set_volume`: the sound plays at the volume the bank's last sound or a
-    /// fade left. A bank at its load volume plays at full gain.
-    pub(crate) fn play_sfx_on_bank_held(&mut self, bank: u64, pcm: Vec<i16>, pan: f32) {
-        if pcm.is_empty() {
-            return;
-        }
-        let gain = self
-            .bank_volumes
-            .get(&bank)
-            .map_or(1.0, |v| crate::sfx::volume_gain(*v));
-        self.start_sfx_on_bank(bank, pcm, gain, pan);
     }
 
     /// Start an unkeyed one-shot voice, always appending.
@@ -1432,13 +1457,14 @@ impl Mixer {
         self.update();
     }
 
-    /// [`Mixer::play_sfx_on_bank`] at the bank's own volume (`play_sfx`,
-    /// which does not `set_volume` first).
-    pub fn play_sfx_on_bank_held(&mut self, bank: u64, wav: Wav, pan: f32) {
+    /// [`Mixer::play_sfx_on_bank`] that sets only the given parts of the
+    /// bank's volume and pan, and plays at what the bank holds of the rest
+    /// (`MixState::play_bank_cue`).
+    pub fn play_bank_cue(&mut self, bank: u64, wav: Wav, gain: Option<f32>, pan: Option<f32>) {
         let Some(mono) = mono_or_warn(&wav) else {
             return;
         };
-        self.state.play_sfx_on_bank_held(bank, mono, pan);
+        self.state.play_bank_cue(bank, mono, gain, pan);
         self.resume();
         self.update();
     }
@@ -1449,15 +1475,15 @@ impl Mixer {
         self.state.fade_sound_banks(delta);
     }
 
-    /// Reset the held volumes of the bank tables the game reloaded
+    /// Reset the held volumes and pans of the bank tables the game reloaded
     /// ([`crate::game::GameState::sfx_bank_loads`]).
     pub fn sync_sfx_bank_loads(&mut self, loads: [u32; 4]) {
         self.state.sync_sfx_bank_loads(loads);
     }
 
-    /// Drop every held bank volume.
-    pub fn forget_sfx_bank_volumes(&mut self) {
-        self.state.forget_sfx_bank_volumes();
+    /// Drop every held bank volume and pan.
+    pub fn forget_sfx_banks(&mut self) {
+        self.state.forget_sfx_banks();
     }
 
     /// The mixer state, for tests.
@@ -2121,12 +2147,47 @@ mod tests {
         assert_eq!(state.active_sfx(), 0, "the sound ended");
         state.fade_sound_banks(-234);
         assert_eq!(state.sfx_bank_volume(key), Some(-1234));
-        state.play_sfx_on_bank_held(key, vec![1000; 4], 0.25);
+        state.play_bank_cue(key, vec![1000; 4], None, None);
         assert_eq!(
             state.sfx_bank_gain(key),
             Some(crate::sfx::volume_gain(-1234))
         );
-        assert_eq!(state.sfx_bank_pan(key), Some(0.25));
+    }
+
+    /// A bank keeps its pan too: a `Snd_em` pans it, a `Play3DSnd` sets only
+    /// its volume and a `play_sfx` neither, so both play at the `Snd_em`'s pan
+    /// until the bank's table reloads, which centres it again.
+    #[test]
+    fn a_bank_keeps_its_pan_until_it_reloads() {
+        let mut state = MixState::new();
+        let key = sfx_bank_key(2, 5);
+        state.play_bank_cue(key, vec![1000; 64], None, None);
+        assert_eq!(
+            state.sfx_bank_pan(key),
+            Some(0.0),
+            "a loaded bank is centred"
+        );
+        assert_eq!(state.sfx_bank_gain(key), Some(1.0));
+        state.play_bank_cue(key, vec![1000; 64], None, Some(-0.25));
+        assert_eq!(state.sfx_bank_gain(key), Some(1.0), "a pan sets no volume");
+        let gain = crate::sfx::volume_gain(-1000);
+        state.play_bank_cue(key, vec![1000; 64], Some(gain), None);
+        assert_eq!(state.sfx_bank_pan(key), Some(-0.25));
+        assert_eq!(state.sfx_bank_gain(key), Some(gain));
+        let mut out = Vec::new();
+        state.render(64, &mut out);
+        assert_eq!(state.active_sfx(), 0, "the sound ended");
+        state.play_bank_cue(key, vec![1000; 64], None, None);
+        assert_eq!(state.sfx_bank_pan(key), Some(-0.25));
+        assert_eq!(state.sfx_bank_gain(key), Some(gain));
+        // Another table's reload leaves it; its own centres it.
+        state.sync_sfx_bank_loads([0, 1, 0, 0]);
+        assert_eq!(state.sfx_bank_held_pan(key), -0.25);
+        state.sync_sfx_bank_loads([0, 1, 1, 0]);
+        assert_eq!(state.sfx_bank_held_pan(key), 0.0);
+        state.play_bank_cue(key, vec![1000; 64], None, None);
+        assert_eq!(state.sfx_bank_pan(key), Some(0.0));
+        assert_eq!(state.sfx_bank_gain(key), Some(1.0));
     }
 
     #[test]

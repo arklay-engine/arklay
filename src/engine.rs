@@ -4644,6 +4644,7 @@ impl GameSession {
             &self.loaded.room,
             &mut self.player,
             slow,
+            self.game.is_re2_room,
         );
         play_entity_sounds(
             &mut self.music,
@@ -4652,6 +4653,7 @@ impl GameSession {
             &self.loaded.room,
             &mut self.enemy_lua,
             &mut self.game.entity_sounds,
+            self.game.is_re2_room,
         );
         play_player_sounds(
             &mut self.music,
@@ -4661,6 +4663,7 @@ impl GameSession {
             &mut self.player,
             self.game.player_banks(),
             slow,
+            self.game.is_re2_room,
         );
         // Queued non-positional room SEs (`play_sfx(2, id)`) resolve through
         // the current room's sound-table column, exactly like the original's
@@ -6104,7 +6107,7 @@ impl GameSession {
         if let Some(wav) = self.sfx_cache.load(pack, name)
             && let Some(mixer) = &mut self.music
         {
-            mixer.play_sfx_on_bank_held(sfx_bank_key(2, column), wav, 0.0);
+            mixer.play_bank_cue(sfx_bank_key(2, column), wav, None, None);
         }
     }
 
@@ -6115,7 +6118,7 @@ impl GameSession {
         if let Some(wav) = self.sfx_cache.load(pack, name)
             && let Some(mixer) = &mut self.music
         {
-            mixer.play_sfx_on_bank_held(sfx_bank_key(3, slot), wav, 0.0);
+            mixer.play_bank_cue(sfx_bank_key(3, slot), wav, None, None);
         }
     }
 
@@ -15823,7 +15826,7 @@ fn play_room_sfx(
         return;
     };
     if let Some(wav) = cache.load(pack, name) {
-        mixer.play_sfx_on_bank_held(sfx_bank_key(0, slot as u8), wav, 0.0);
+        mixer.play_bank_cue(sfx_bank_key(0, slot as u8), wav, None, None);
     }
 }
 
@@ -15861,7 +15864,7 @@ fn play_door_animation_sfx(
         return;
     };
     if let Some(wav) = cache.load(pack, name) {
-        mixer.play_sfx_on_bank_held(sfx_bank_key(0, effect.id), wav, 0.0);
+        mixer.play_bank_cue(sfx_bank_key(0, effect.id), wav, None, None);
     }
 }
 
@@ -15926,13 +15929,21 @@ fn play_snd3d_requests(
         let Some(wav) = cache.load(pack, name) else {
             continue;
         };
-        mixer.play_sfx_on_bank(
+        mixer.play_bank_cue(
             sfx_bank_key(request.bank, request.id),
             wav,
-            play.gain,
-            play.pan,
+            Some(play.gain),
+            placed_pan(game.is_re2_room, play.pan),
         );
     }
+}
+
+/// The pan a positional one-shot sets on its bank. RE1's `Play3DSnd` and
+/// `PlayEntitySnd` work out a pan only for `CalcPanVolume`'s volume and never
+/// `pan_set` the bank (Bio.exe 0x468252-0x46828d, 0x468454-0x46849c), so the
+/// sound plays at the bank's held pan; an RE2 room's sounds pan as placed.
+fn placed_pan(re2_room: bool, pan: f32) -> Option<f32> {
+    re2_room.then_some(pan)
 }
 
 /// Consume the tick's footstep events: resolve the floor zone's sound and play
@@ -15944,6 +15955,7 @@ fn play_footsteps(
     room: &RoomState,
     player_state: &mut player::PlayerState,
     slow: bool,
+    re2_room: bool,
 ) {
     let footsteps = player_state.take_footsteps();
     if footsteps.is_empty() {
@@ -15968,7 +15980,12 @@ fn play_footsteps(
         let column =
             sfx::entity_sound_column(room, footstep.pos, footstep.sound_type, slow).unwrap_or(0);
         let (gain, pan) = sfx::sound_gain_pan(cut.pos, cut.look_at, footstep.pos);
-        mixer.play_sfx_on_bank(sfx_bank_key(2, column), wav, gain, pan);
+        mixer.play_bank_cue(
+            sfx_bank_key(2, column),
+            wav,
+            Some(gain),
+            placed_pan(re2_room, pan),
+        );
     }
 }
 
@@ -16361,6 +16378,7 @@ fn player_sound_bank(id: u16) -> (u8, u8) {
 
 /// Consume the tick's locked-behaviour sound cues through the same bank
 /// dispatch as `se_play_3d`.
+#[allow(clippy::too_many_arguments)]
 fn play_player_sounds(
     music: &mut Option<Mixer>,
     cache: &mut SfxCache,
@@ -16369,6 +16387,7 @@ fn play_player_sounds(
     player_state: &mut player::PlayerState,
     banks: sfx::PlayerBanks,
     slow: bool,
+    re2_room: bool,
 ) {
     let sounds = player_state.take_sounds();
     if sounds.is_empty() {
@@ -16390,7 +16409,12 @@ fn play_player_sounds(
             };
             let column = sfx::entity_sound_column(room, sound.pos, 0, slow).unwrap_or(0);
             let (gain, pan) = sfx::sound_gain_pan(cut.pos, cut.look_at, sound.pos);
-            mixer.play_sfx_on_bank(sfx_bank_key(2, column), wav, gain, pan);
+            mixer.play_bank_cue(
+                sfx_bank_key(2, column),
+                wav,
+                Some(gain),
+                placed_pan(re2_room, pan),
+            );
             continue;
         }
         let (bank, id) = player_sound_bank(sound.id);
@@ -16402,7 +16426,12 @@ fn play_player_sounds(
         let Some(wav) = cache.load(pack, name) else {
             continue;
         };
-        mixer.play_sfx_on_bank(sfx_bank_key(bank, id), wav, play.gain, play.pan);
+        mixer.play_bank_cue(
+            sfx_bank_key(bank, id),
+            wav,
+            Some(play.gain),
+            placed_pan(re2_room, play.pan),
+        );
     }
 }
 
@@ -16419,6 +16448,7 @@ fn play_entity_sounds(
     room: &RoomState,
     enemy_lua: &mut enemy::LuaEnemyHost,
     sounds: &mut Vec<game::EntitySound>,
+    re2_room: bool,
 ) {
     if sounds.is_empty() {
         return;
@@ -16446,10 +16476,12 @@ fn play_entity_sounds(
         };
         let (gain, pan) = sfx::sound_gain_pan(cut.pos, cut.look_at, sound.pos);
         let key = sfx_bank_key(sound.bank, sound.column);
+        // `Snd_em` only pans its bank; `PlayEntitySnd`/`Play3DSnd` only set
+        // its volume.
         if sound.pan_only {
-            mixer.play_sfx_on_bank_held(key, wav, pan);
+            mixer.play_bank_cue(key, wav, None, Some(pan));
         } else {
-            mixer.play_sfx_on_bank(key, wav, gain, pan);
+            mixer.play_bank_cue(key, wav, Some(gain), placed_pan(re2_room, pan));
         }
     }
 }
@@ -28845,6 +28877,7 @@ mod tests {
             &RoomState::default(),
             &mut enemy::LuaEnemyHost::new(),
             &mut sounds,
+            false,
         );
         assert!(sounds.is_empty(), "an absent mixer still drains the queue");
     }
@@ -28905,6 +28938,7 @@ mod tests {
                 room,
                 &mut enemy::LuaEnemyHost::new(),
                 &mut sounds,
+                false,
             );
         }
 
@@ -31731,9 +31765,11 @@ mod tests {
     }
 
     /// A `Snd_em` cue sets only its bank's pan: it plays at the volume the
-    /// bank holds, where a `PlayEntitySnd` cue sets its own.
+    /// bank holds. A `PlayEntitySnd` cue sets only the volume and plays at
+    /// the pan the `Snd_em` left (Bio.exe 0x468454 never `pan_set`s); an RE2
+    /// room's cue pans as placed.
     #[test]
-    fn an_enemy_cue_plays_at_its_banks_held_volume() {
+    fn an_enemy_cue_plays_at_its_banks_held_volume_and_pan() {
         let dir = TempDir::new();
         let wav = voice_wav_bytes(&[1000; 6000]);
         let (pack, _, _) = two_room_door_pack_with(&dir, &[("se/ft_wda.wav", wav)]);
@@ -31754,8 +31790,7 @@ mod tests {
             .as_mut()
             .unwrap()
             .play_sfx_on_bank(key, held, sfx::volume_gain(-3000), 0.0);
-        let pos = [1000, 0, 700];
-        let cue = |music: &mut Option<Mixer>, pan_only| {
+        let cue = |music: &mut Option<Mixer>, pos, pan_only, re2_room| {
             let mut sounds = vec![game::EntitySound {
                 name: "ft_wdA".into(),
                 bank: 2,
@@ -31770,19 +31805,31 @@ mod tests {
                 &room,
                 &mut enemy::LuaEnemyHost::new(),
                 &mut sounds,
+                re2_room,
             );
         };
-        let (gain, pan) = sfx::sound_gain_pan(room.cuts[0].pos, room.cuts[0].look_at, pos);
+        let left = [1000, 0, 700];
+        let right = [1000, 0, -700];
+        let place = |pos| sfx::sound_gain_pan(room.cuts[0].pos, room.cuts[0].look_at, pos);
+        let (gain, pan) = place(left);
+        let (right_gain, right_pan) = place(right);
         assert_ne!(gain, sfx::volume_gain(-3000));
-        cue(&mut music, true);
+        assert_ne!(pan, 0.0);
+        assert_ne!(pan, right_pan);
+        cue(&mut music, left, true, false);
         let state = music.as_ref().unwrap().state();
         assert_eq!(state.sfx_bank_gain(key), Some(sfx::volume_gain(-3000)));
         assert_eq!(state.sfx_bank_pan(key), Some(pan));
         assert_eq!(state.sfx_bank_volume(key), Some(-3000));
-        cue(&mut music, false);
+        cue(&mut music, right, false, false);
+        let state = music.as_ref().unwrap().state();
+        assert_eq!(state.sfx_bank_gain(key), Some(right_gain));
+        assert_eq!(state.sfx_bank_pan(key), Some(pan), "the Snd_em's pan");
+        cue(&mut music, right, false, true);
         assert_eq!(
-            music.as_ref().unwrap().state().sfx_bank_gain(key),
-            Some(gain)
+            music.as_ref().unwrap().state().sfx_bank_pan(key),
+            Some(right_pan),
+            "an RE2 room places it"
         );
     }
 
