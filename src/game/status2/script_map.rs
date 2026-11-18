@@ -131,6 +131,7 @@ impl GameState {
         map.floor = floor_for(map.target);
         map.fade_in = Some(0);
         map.drawn = true;
+        self.re2_file.map_floor = map.floor;
         self.re2_file.blink = super::files::Blink {
             level: 10,
             falling: true,
@@ -244,6 +245,7 @@ impl GameState {
             clut: 0,
         };
         let drawn = super::map::DrawnRoom {
+            record: target,
             x: record.x,
             y: record.y,
             w: record.w,
@@ -253,13 +255,9 @@ impl GameState {
         };
         // The target is drawn in its place in the record order whether or
         // not it is visited.
-        match view
-            .rooms
-            .iter()
-            .position(|room| room.x == record.x && room.y == record.y)
-        {
-            Some(index) => view.rooms[index] = drawn,
-            None => view.rooms.push(drawn),
+        match view.rooms.binary_search_by_key(&target, |room| room.record) {
+            Ok(index) => view.rooms[index] = drawn,
+            Err(index) => view.rooms.insert(index, drawn),
         }
         Some(view)
     }
@@ -325,6 +323,44 @@ mod tests {
         game.tick_re2_script_map(false);
         assert_eq!(game.re2_file.blink.level, 14);
         assert!(game.re2_script_map_view().is_some());
+    }
+
+    /// `0x4FB800` draws the target in its place among the records whether
+    /// or not it would show on the MAP page, the locked doors' icons of a
+    /// floor whose map is held, and neither arrows nor a marker.
+    #[test]
+    fn the_view_keeps_the_record_order_and_draws_the_doors() {
+        use super::super::map::{FLOOR_BANK, HELD_BANK, VISITED_BANK};
+        let records = |game: &GameState| -> Vec<u8> {
+            let view = game.re2_script_map_view().unwrap();
+            view.rooms.iter().map(|room| room.record).collect()
+        };
+        let mut game = game();
+        game.is_re2_room = true;
+        // Operand 4: floor 3, and its first record the target.
+        game.request_re2_script_map(4);
+        game.start_re2_script_map();
+        let map = game.re2_script_map.unwrap();
+        assert_eq!((map.floor, map.target_record()), (3, 0));
+        // Nothing visited, no map held: the target alone.
+        assert_eq!(records(&game), [0]);
+        assert!(game.re2_script_map_view().unwrap().doors.is_empty());
+        // The floor's last room visited: the target is still first.
+        let rooms = floors(&game.re2_map_context())[3].rooms;
+        let last = rooms.len() as u8 - 1;
+        game.re2
+            .set_flag(VISITED_BANK, rooms[usize::from(last)].visit, 1);
+        assert_eq!(records(&game), [0, last]);
+        // The floor's map held: its locked door's icon, and still no
+        // arrows or marker, whatever floors the player has stood on.
+        game.re2.set_flag(HELD_BANK, 3, 1);
+        for floor in [2, 4] {
+            game.re2.set_flag(FLOOR_BANK, floor, 1);
+        }
+        let view = game.re2_script_map_view().unwrap();
+        assert_eq!(view.doors.len(), 1);
+        assert!(view.arrows.is_empty() && view.marker.is_none());
+        assert!(view.rooms.is_sorted_by_key(|room| room.record));
     }
 
     /// The press plays the cancel cue and starts the close; the draw still

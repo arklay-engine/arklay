@@ -1,0 +1,21 @@
+# room 20B's open safe: take the police station map (yes), close its message, then open MAP on the status screen and close it (oracle/re2.md, "MAP floors")
+400 action
+404
+520 confirm
+524
+620 confirm
+624
+760 start
+764
+800 up
+804
+820 up
+824
+840 left
+844
+860 confirm
+864
+940 cancel
+944
+1000 start
+1004

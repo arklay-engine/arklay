@@ -1098,7 +1098,9 @@ function ScreenApi:re2_box() end
 ---@return integer mark
 function ScreenApi:re2_box_slot(slot) end
 
----What RE 2's MAP page draws on the player's floor.
+---What RE 2's MAP page draws on the floor it shows. While the page isn't
+---up that is the floor last chosen, on the page or by a script's map
+---(`Sce_84`), which share it: 0 before either, and not the player's.
 ---@return Re2Map? map `nil` without a game.
 function ScreenApi:re2_map() end
 
@@ -1325,7 +1327,10 @@ local Re2Computer = {}
 ---@field floor integer
 ---@field map integer The map picture's number.
 ---@field rooms Re2MapRoom[] In draw order.
----@field marker? { x: integer, y: integer, u: integer, v: integer } The player's marker.
+---@field marker? { x: integer, y: integer, u: integer, v: integer } The player's marker, when the player is on the floor.
+---@field arrows { x: integer, y: integer, u: integer }[] The arrows to the floors below and above, in the order the original adds them (it draws the last first).
+---@field doors { x: integer, y: integer, u: integer }[] The locked doors' icons, in the order the original adds them.
+---@field blink_falling boolean The way of the screen's blink, which colours the arrows and the icons.
 local Re2Map = {}
 
 ---One room of the MAP page.

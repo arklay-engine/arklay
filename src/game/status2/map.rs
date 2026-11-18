@@ -11,8 +11,10 @@
 //! in the colour of its state. The banks are `Flg_addr`'s (`0x53B218`), as
 //! the scripts' `ck` and `set` number them.
 //!
-//! The floor change (up and down, to a floor whose bit is set in bank 35)
-//! and the arrows that show it are not ported yet.
+//! Up and down change the floor shown ([`MAP_UP_FLOOR`],
+//! [`MAP_DOWN_FLOOR`]) to one the player has stood on (bank 35), which the
+//! page's arrows show, and a floor whose map is held shows its doors that
+//! are still locked ([`DOOR_ICONS`]).
 
 use super::super::GameState;
 
@@ -31,6 +33,89 @@ pub const HELD_BANK: u8 = 33;
 pub const FLOOR_BANK: u8 = 35;
 /// `fg_common` (`0x98EB4C`, bank 4), which the floor test reads.
 const COMMON_BANK: u8 = 4;
+use crate::scd2::host::KEY_BANK;
+
+/// `map_up_floor` (`0x53DA28`) and `map_down_floor` (`0x53DA40`): the floor
+/// above and below each floor, 0 where there is none. The police station
+/// is floor 5 (B1), 2, 3 and 4 from the bottom up.
+pub const MAP_UP_FLOOR: [u8; 24] = [
+    0, 0, 3, 4, 0, 2, 0, 0, 7, 0, 0, 0, 0, 0, 13, 14, 15, 16, 0, 0, 0, 0, 0, 0,
+];
+pub const MAP_DOWN_FLOOR: [u8; 24] = [
+    0, 0, 5, 2, 3, 0, 0, 8, 0, 0, 0, 0, 0, 14, 15, 16, 17, 0, 0, 0, 0, 0, 0, 0,
+];
+
+/// The floor up or down from `floor` that the page can change to
+/// (`0x4FA240`'s sub 3, and the arrows' test in `0x4FA990`): the table's
+/// entry when it is a floor past 1 that the player has stood on.
+fn floor_next(table: &[u8; 24], floor: u8, flag: &impl Fn(u8, u8) -> bool) -> Option<u8> {
+    let next = table.get(usize::from(floor)).copied().unwrap_or(0);
+    (next > 1 && flag(FLOOR_BANK, next)).then_some(next)
+}
+
+/// The floor the MAP page shows after a repeat tick with `up` and `down`
+/// held (`0x4FA240`'s sub 3): up first, to the floor above when it is a
+/// floor past 1 that the player has stood on, then down from where that
+/// left it, by the same test; the page loads a map only when the floor it
+/// ends on is another.
+/// Floors 0 and 1 have no others.
+pub fn floor_after(floor: u8, up: bool, down: bool, flag: impl Fn(u8, u8) -> bool) -> u8 {
+    if floor < 2 {
+        return floor;
+    }
+    let mut shown = floor;
+    if up {
+        shown = floor_next(&MAP_UP_FLOOR, shown, &flag).unwrap_or(shown);
+    }
+    if down {
+        shown = floor_next(&MAP_DOWN_FLOOR, shown, &flag).unwrap_or(shown);
+    }
+    shown
+}
+
+/// A locked door's record (`0x53DA70`, 8 bytes each).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DoorRecord {
+    /// The door's bit in `fg_key`.
+    pub key: u8,
+    pub floor: u8,
+    /// Bits 0 and 1 pick the icon; `0x40` and `0x80` hide it by scenario.
+    pub flags: u8,
+    /// Zero picks the icons' second set.
+    pub set: u8,
+    pub x: i16,
+    pub y: i16,
+}
+
+const fn door(key: u8, floor: u8, flags: u8, set: u8, x: i16, y: i16) -> DoorRecord {
+    DoorRecord {
+        key,
+        floor,
+        flags,
+        set,
+        x,
+        y,
+    }
+}
+
+/// The locked doors' records in the order `0x4FA710` walks them, from
+/// `0x53DAD8` down to `0x53DA70`.
+pub const DOOR_ICONS: [DoorRecord; 14] = [
+    door(23, 17, 0x00, 0, 71, 60),
+    door(21, 16, 0x00, 1, 203, 172),
+    door(24, 16, 0x42, 0, 148, 53),
+    door(22, 13, 0x01, 0, 176, 125),
+    door(22, 13, 0x01, 0, 176, 123),
+    door(14, 5, 0x02, 1, 249, 137),
+    door(14, 5, 0x02, 1, 247, 137),
+    door(9, 3, 0x80, 0, 64, 159),
+    door(5, 2, 0x00, 0, 55, 140),
+    door(8, 2, 0x01, 0, 101, 108),
+    door(13, 2, 0x01, 0, 201, 82),
+    door(12, 2, 0x02, 0, 211, 122),
+    door(19, 2, 0x02, 1, 244, 91),
+    door(4, 2, 0x03, 1, 244, 135),
+];
 
 /// The texture slots the map's five pictures load into (`0x4FA240`'s sub
 /// 0), in the order of the ADT's TIMs.
@@ -338,6 +423,8 @@ pub struct MapSprite {
 /// A room as the page draws it: its fill, translucent, then its outline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DrawnRoom {
+    /// Its record on the floor: the rooms are drawn in record order.
+    pub record: u8,
     pub x: i16,
     pub y: i16,
     pub w: u8,
@@ -356,14 +443,102 @@ pub struct Marker {
     pub v: u8,
 }
 
-/// What the MAP page draws on floor `floor`: its rooms in the draw order
-/// and the player's marker when the player is on it.
+/// A floor arrow: a 14x12 cell of texture 0x14 at `u`, row 0x18, opaque,
+/// at full colour while the blink rises and half while it falls.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Arrow {
+    pub x: i16,
+    pub y: i16,
+    pub u: u8,
+}
+
+/// The arrows' cell row and size.
+pub const ARROW_V: u8 = 0x18;
+pub const ARROW_SIZE: [u8; 2] = [14, 12];
+
+/// A locked door's icon: an 8x8 cell of [`PIECES`] at `u`, row 0x38,
+/// opaque, at colour 0x50 while the blink rises and 0x80 while it falls.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DoorIcon {
+    pub x: i16,
+    pub y: i16,
+    pub u: u8,
+}
+
+/// The door icons' cell row and size.
+pub const DOOR_ICON_V: u8 = 0x38;
+pub const DOOR_ICON_SIZE: u8 = 8;
+
+/// What the MAP page draws on floor `floor`: its rooms in the draw order,
+/// the player's marker when the player is on it, the arrows to the floors
+/// it can change to and the locked doors' icons.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MapView {
     pub floor: u8,
     pub map: u16,
     pub rooms: Vec<DrawnRoom>,
     pub marker: Option<Marker>,
+    /// In the order the page adds them: down, then up. The original draws
+    /// the last added first; they never overlap.
+    pub arrows: Vec<Arrow>,
+    /// In the order `0x4FA710` adds them; the last added is drawn first.
+    pub doors: Vec<DoorIcon>,
+}
+
+/// `0x4FA990`'s arrows on floor `floor`: none below floor 2, else the down
+/// arrow at the foot of the map and the up arrow at its head, each when
+/// the page could change to that floor.
+fn arrows(floor: u8, flag: &impl Fn(u8, u8) -> bool) -> Vec<Arrow> {
+    if floor < 2 {
+        return Vec::new();
+    }
+    let mut arrows = Vec::new();
+    if floor_next(&MAP_DOWN_FLOOR, floor, flag).is_some() {
+        arrows.push(Arrow {
+            x: 0x98,
+            y: 0xC2 + 0x14,
+            u: 14,
+        });
+    }
+    if floor_next(&MAP_UP_FLOOR, floor, flag).is_some() {
+        arrows.push(Arrow {
+            x: 0x98,
+            y: 0x14,
+            u: 0,
+        });
+    }
+    arrows
+}
+
+/// `0x4FA710`: the icons of floor `floor`'s doors that are still locked,
+/// once the floor's map is held. The held test reads the floor's own
+/// number in `fg_map_i`, not [`Floor::held`]. In the A scenario a record
+/// with `0x40` is hidden; in the B scenario one with `0x80` is, and
+/// Claire's B hides `0x40` too. `fg_status`'s `0x2000000` (the extra
+/// modes) hides them all.
+fn door_icons(floor: u8, context: &MapContext, flag: &impl Fn(u8, u8) -> bool) -> Vec<DoorIcon> {
+    if context.status & 0x0200_0000 != 0 || !flag(HELD_BANK, floor) {
+        return Vec::new();
+    }
+    let scenario_b = context.status & 0x4000_0000 != 0;
+    let claire = context.status & 0x8000_0000 != 0;
+    DOOR_ICONS
+        .iter()
+        .filter(|record| record.floor == floor && !flag(KEY_BANK, record.key))
+        .filter(|record| {
+            let hidden = if scenario_b {
+                (claire && record.flags & 0x40 != 0) || record.flags & 0x80 != 0
+            } else {
+                record.flags & 0x40 != 0
+            };
+            !hidden
+        })
+        .map(|record| DoorIcon {
+            x: record.x,
+            y: record.y,
+            u: ((record.flags & 3) + if record.set == 0 { 4 } else { 0 }) << 3,
+        })
+        .collect()
 }
 
 impl GameState {
@@ -412,28 +587,58 @@ impl GameState {
             .join(",")
     }
 
-    /// The MAP page's view of the player's floor (`0x4FA990`).
-    pub fn re2_map_view(&self) -> MapView {
+    /// `Check_room_no` (`0x4FAF80`) of the room the player is in.
+    pub fn re2_player_floor(&self) -> u8 {
         let context = self.re2_map_context();
         let stage = self.id.stage.saturating_sub(1);
+        floor_of(stage, self.id.room, &context, |bank, index| {
+            self.re2.flag(bank, index)
+        })
+    }
+
+    /// The trace's `map`: the floor the MAP page shows (`0x691F7A`), the
+    /// blink and its way, or `-` while the status screen's page isn't MAP.
+    pub fn re2_map_trace(&self) -> String {
+        let work = &self.re2_file;
+        match self.re2_items {
+            Some(page) if page.page == super::PAGE_MAP => format!(
+                "{},{},{}",
+                work.map_floor,
+                work.blink.level,
+                u8::from(work.blink.falling)
+            ),
+            _ => "-".to_string(),
+        }
+    }
+
+    /// The MAP page's view of the floor it shows (`0x4FA990`). While the
+    /// page isn't up that is the floor last chosen, on the page or by a
+    /// script's map, which share `map_floor`.
+    pub fn re2_map_view(&self) -> MapView {
+        let context = self.re2_map_context();
         let room = self.id.room;
         let flag = |bank: u8, index: u8| self.re2.flag(bank, index);
-        let floor = floor_of(stage, room, &context, flag);
+        let floor = self.re2_player_floor();
         let player = &self.entities[0];
-        map_view(
-            floor,
+        let shown = self.re2_file.map_floor;
+        let mut view = map_view(
+            shown,
             floor,
             room,
             [player.pos[0], player.pos[2]],
             player.angle,
             &context,
             flag,
-        )
+        );
+        view.arrows = arrows(shown, &flag);
+        view
     }
 }
 
 /// `0x4FA990`'s drawing of floor `floor` with the player in room `room` of
-/// floor `player_floor`, at `(x, z)` facing `angle`.
+/// floor `player_floor`, at `(x, z)` facing `angle`: the rooms, the marker
+/// and the doors, which the scripts' map (`0x4FB800`) draws too. The arrows
+/// are the MAP page's alone ([`GameState::re2_map_view`]).
 pub fn map_view(
     floor: u8,
     player_floor: u8,
@@ -450,6 +655,8 @@ pub fn map_view(
             map: 0,
             rooms: Vec::new(),
             marker: None,
+            arrows: Vec::new(),
+            doors: Vec::new(),
         };
     };
     let here = record_of(floor, room);
@@ -478,6 +685,7 @@ pub fn map_view(
     for (index, record) in entry.rooms.iter().enumerate() {
         let record = &patched(floor, index, record, context);
         let mut drawn = DrawnRoom {
+            record: index as u8,
             x: record.x,
             y: record.y,
             w: record.w,
@@ -527,6 +735,8 @@ pub fn map_view(
         map: entry.map,
         rooms,
         marker,
+        arrows: Vec::new(),
+        doors: door_icons(floor, context, &flag),
     }
 }
 
@@ -589,7 +799,8 @@ fn special_room(
         }
         fill
     } else {
-        if flag(VISITED_BANK, 0x2C) && !held {
+        // Not drawn until the room is visited or the floor's map held.
+        if !flag(VISITED_BANK, 0x2C) && !held {
             return None;
         }
         if bit(0xB) {
@@ -605,6 +816,7 @@ fn special_room(
         }
     };
     Some(DrawnRoom {
+        record: 0xE,
         x: record.x,
         y: record.y,
         w: record.w,
@@ -782,8 +994,7 @@ mod tests {
         let held = |bank: u8, index: u8| (bank, index) == (HELD_BANK, 2);
         let view = map_view(2, 2, 1, [0, 0], 0, &MapContext::default(), held);
         assert_eq!(view.rooms.len(), 18);
-        // Without the map only the visited rooms show (and room 0xE, which
-        // has its own test).
+        // Without the map only the visited rooms show.
         let visited = |bank: u8, index: u8| (bank, index) == (VISITED_BANK, 0x1F);
         let view = map_view(2, 2, 1, [0, 0], 0, &MapContext::default(), visited);
         let here = view
@@ -792,11 +1003,146 @@ mod tests {
             .find(|room| (room.x, room.y) == (99, 139))
             .unwrap();
         assert_eq!(here.fill.map(|fill| fill.clut), Some(1));
-        assert!(view.rooms.len() < 18);
+        assert_eq!(view.rooms.len(), 1);
         let held = map_view(2, 2, 1, [0, 0], 0, &MapContext::default(), |bank, index| {
             held(bank, index) || visited(bank, index)
         });
         assert_eq!(held.rooms.len(), 18);
+    }
+
+    /// `0x4FAC2C`'s first test outside the room: floor 2's room 0xE isn't
+    /// drawn until it is visited (bank 9's 0x2C) or the floor's map held.
+    #[test]
+    fn floor_2s_room_0xe_needs_a_visit_or_the_map() {
+        let shows = |flag: fn(u8, u8) -> bool| {
+            map_view(2, 2, 1, [0, 0], 0, &MapContext::default(), flag)
+                .rooms
+                .iter()
+                .any(|room| room.record == 0xE)
+        };
+        assert!(!shows(|_, _| false));
+        assert!(shows(|bank, index| (bank, index) == (VISITED_BANK, 0x2C)));
+        assert!(shows(|bank, index| (bank, index) == (HELD_BANK, 2)));
+    }
+
+    /// A floor's map held doesn't make it a floor to change to: only
+    /// having stood on it does.
+    #[test]
+    fn a_held_map_is_not_a_floor_stood_on() {
+        let held = |bank: u8, _: u8| bank == HELD_BANK;
+        assert_eq!(floor_after(2, true, false, held), 2);
+        assert_eq!(floor_after(3, false, true, held), 3);
+        assert_eq!(floor_after(2, true, true, held), 2);
+        assert!(arrows(2, &held).is_empty());
+    }
+
+    #[test]
+    fn the_arrows_need_the_target_floor() {
+        let stood = |floors: &'static [u8]| {
+            move |bank: u8, index: u8| bank == FLOOR_BANK && floors.contains(&index)
+        };
+        assert_eq!(
+            arrows(2, &stood(&[3])),
+            [Arrow {
+                x: 152,
+                y: 20,
+                u: 0
+            }]
+        );
+        // The down arrow is added first.
+        assert_eq!(
+            arrows(2, &stood(&[3, 5])),
+            [
+                Arrow {
+                    x: 152,
+                    y: 214,
+                    u: 14
+                },
+                Arrow {
+                    x: 152,
+                    y: 20,
+                    u: 0
+                }
+            ]
+        );
+        assert_eq!(arrows(4, &stood(&[2, 3, 4, 5])).len(), 1);
+        assert!(arrows(2, &stood(&[])).is_empty());
+        // Floors 0 and 1 have none, whatever is set.
+        assert!(arrows(0, &|_, _| true).is_empty());
+        assert!(arrows(1, &|_, _| true).is_empty());
+    }
+
+    #[test]
+    fn the_door_icons() {
+        let leon_a = MapContext::default();
+        let held = |floor: u8| move |bank: u8, index: u8| (bank, index) == (HELD_BANK, floor);
+        // Floor 2 held, every door locked: its six records as walked.
+        let icons = door_icons(2, &leon_a, &held(2));
+        assert_eq!(
+            icons
+                .iter()
+                .map(|icon| (icon.x, icon.y, icon.u))
+                .collect::<Vec<_>>(),
+            [
+                (55, 140, 32),
+                (101, 108, 40),
+                (201, 82, 40),
+                (211, 122, 48),
+                (244, 91, 16),
+                (244, 135, 24)
+            ]
+        );
+        // A door unlocked (`fg_key`'s bit 4) has no icon.
+        let unlocked = |bank: u8, index: u8| held(2)(bank, index) || (bank, index) == (KEY_BANK, 4);
+        assert_eq!(door_icons(2, &leon_a, &unlocked).len(), 5);
+        // Without the floor's map there are none, nor in the extra modes.
+        assert!(door_icons(2, &leon_a, &|_, _| false).is_empty());
+        let extra = MapContext {
+            status: 0x0200_0000,
+            ..leon_a
+        };
+        assert!(door_icons(2, &extra, &held(2)).is_empty());
+        // Flags 0x80 (floor 3's door 9): drawn in A, hidden in B.
+        let b = MapContext {
+            status: 0x4000_0000,
+            ..leon_a
+        };
+        let claire_b = MapContext {
+            status: 0xC000_0000,
+            ..leon_a
+        };
+        assert_eq!(door_icons(3, &leon_a, &held(3)).len(), 1);
+        assert!(door_icons(3, &b, &held(3)).is_empty());
+        // Flags 0x42 (floor 16's door 24): hidden in A and for Claire in B.
+        assert_eq!(door_icons(16, &leon_a, &held(16)).len(), 1);
+        assert_eq!(door_icons(16, &b, &held(16)).len(), 2);
+        assert_eq!(door_icons(16, &claire_b, &held(16)).len(), 1);
+    }
+
+    #[test]
+    fn the_view_shows_the_shown_floors_doors_and_the_page_its_arrows() {
+        let mut game = re2_game("2010");
+        game.re2_room_set();
+        for floor in [2, 3, 4] {
+            game.re2.set_flag(HELD_BANK, floor, 1);
+        }
+        game.re2.set_flag(FLOOR_BANK, 3, 1);
+        game.re2_file.map_floor = 2;
+        let view = game.re2_map_view();
+        assert_eq!(view.doors.len(), 6);
+        assert_eq!(view.arrows.len(), 1);
+        assert!(view.marker.is_some());
+        // One of its doors unlocked.
+        game.re2.set_flag(KEY_BANK, 5, 1);
+        assert_eq!(game.re2_map_view().doors.len(), 5);
+        // Floor 3: down only until floor 4 is stood on, its one door, and
+        // no marker.
+        game.re2_file.map_floor = 3;
+        let view = game.re2_map_view();
+        assert_eq!((view.map, view.arrows.len(), view.doors.len()), (2, 1, 1));
+        game.re2.set_flag(FLOOR_BANK, 4, 1);
+        assert_eq!(game.re2_map_view().arrows.len(), 2);
+        assert!(view.marker.is_none());
     }
 
     #[test]

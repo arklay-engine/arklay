@@ -211,6 +211,10 @@ pub struct FileWork {
     /// slides out is still the old one.
     pub shown_page: u8,
     pub blink: Blink,
+    /// The floor the MAP page shows (`0x691F7A`): the player's from each
+    /// time the page loads, then where up and down take it. The scripts'
+    /// map sets it too.
+    pub map_floor: u8,
     /// The binders' zoom (`0x691F8E`).
     pub zoom: i16,
     /// The zoom `ST_Om_trans` (`0x500470`) last moved the eye by (it writes
@@ -250,6 +254,7 @@ impl Default for FileWork {
                 level: 0,
                 falling: false,
             },
+            map_floor: 0,
             zoom: 0,
             eye_zoom: 0,
             view_zoom: 0,

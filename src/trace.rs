@@ -120,6 +120,9 @@ pub struct TraceTick<'a> {
     /// RE2's map banks, the oracle's `mapfg`: bank 9's first five words
     /// (`fg_map`), then the first words of banks 32, 33 and 35, in hex.
     pub re2_map_flags: Option<String>,
+    /// RE2's MAP page, the oracle's `map`: the floor it shows, the blink
+    /// and its way, or `-` while the status screen's page isn't MAP.
+    pub re2_map: Option<String>,
     /// RE2: the status screen's item page (`ip`), as the end of the
     /// oracle's `gi`.
     pub re2_item_page: Option<String>,
@@ -384,6 +387,9 @@ impl TraceWriter {
         if let Some(flags) = &tick.re2_map_flags {
             write!(self.out, " mapfg={flags}")?;
         }
+        if let Some(map) = &tick.re2_map {
+            write!(self.out, " map={map}")?;
+        }
         if let Some(page) = &tick.re2_item_page {
             write!(self.out, " ip={page}")?;
         }
@@ -562,6 +568,7 @@ mod tests {
             re2_inventory: None,
             re2_pl: None,
             re2_map_flags: None,
+            re2_map: None,
             re2_item_page: None,
             re2_file: None,
             re2_pad_repeat: None,
@@ -637,6 +644,7 @@ mod tests {
                 re2_inventory: None,
                 re2_pl: None,
                 re2_map_flags: None,
+                re2_map: None,
                 re2_item_page: None,
                 re2_file: None,
                 re2_pad_repeat: None,
@@ -708,6 +716,7 @@ mod tests {
                 re2_inventory: None,
                 re2_pl: None,
                 re2_map_flags: None,
+                re2_map: None,
                 re2_item_page: None,
                 re2_item_box: None,
                 re2_file: None,
@@ -777,6 +786,7 @@ mod tests {
                 re2_inventory: None,
                 re2_pl: None,
                 re2_map_flags: None,
+                re2_map: None,
                 re2_item_page: None,
                 re2_item_box: None,
                 re2_file: None,
@@ -846,6 +856,7 @@ mod tests {
             re2_inventory: None,
             re2_pl: None,
             re2_map_flags: None,
+            re2_map: None,
             re2_item_page: None,
             re2_file: None,
             re2_pad_repeat: None,
@@ -926,6 +937,7 @@ mod tests {
             re2_inventory: None,
             re2_pl: None,
             re2_map_flags: None,
+            re2_map: None,
             re2_item_page: None,
             re2_file: None,
             re2_pad_repeat: None,
@@ -1016,6 +1028,7 @@ mod tests {
             re2_inventory: None,
             re2_pl: None,
             re2_map_flags: None,
+            re2_map: None,
             re2_item_page: None,
             re2_file: None,
             re2_pad_repeat: None,
@@ -1086,6 +1099,7 @@ mod tests {
             re2_inventory: None,
             re2_pl: None,
             re2_map_flags: None,
+            re2_map: None,
             re2_item_page: None,
             re2_file: None,
             re2_pad_repeat: None,

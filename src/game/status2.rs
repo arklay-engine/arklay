@@ -467,27 +467,41 @@ fn heal(item: u8) -> Option<(Option<u8>, u8)> {
     })
 }
 
-/// One tick of the MAP page (`0x4FA240`). Sub 0 loads the floor's map and
-/// its pictures in the tick (`common\\file\\map<nn>.adt`, the floor from
-/// `0x4FAF80`); sub 1 slides it in for 14 ticks, the last of which plays
-/// cue 9 and shows it (sub 3). There the cancel key plays the cancel cue and
-/// slides it out (sub 2) for 14 ticks, back to the tab bar. Up and down
-/// change floors only on a floor with others above or below it
-/// (`0x53DA28`, `0x53DA40`) whose map the player holds, which no route
-/// room has: the route's floor, the city's map 0, has none. START does
-/// nothing on this page (`0x691F76` is 0). Sub 3 steps the marker's blink
-/// first, and sub 4 resets it.
-fn re2_map(page: &mut ItemPage, blink: &mut Blink, input: Input, out: &mut Outcome) {
-    if page.sub == MAP_SHOWN {
-        blink.step_map();
-    }
+/// One tick of the MAP page (`0x4FA240`), by sub:
+///
+/// - 0 takes the player's floor (`0x4FAF80`) as the floor shown, loads its
+///   map's pictures in the tick (`common\\file\\map<nn>.adt`) and starts
+///   sub 1.
+/// - 1 slides the screen's parts out for 14 ticks; the last plays cue 9 and
+///   starts sub 3.
+/// - 3 steps the marker's blink; then, on a repeat tick with up or down
+///   held, changes the floor shown ([`map::floor_after`]) and, if it is
+///   another, plays the cursor cue and starts sub 4; then, on the cancel
+///   key, plays the cancel cue and starts sub 2. Both tests run on one
+///   tick, so a change with the cancel key changes the floor, plays both
+///   cues and slides out.
+/// - 4 loads the new floor's map, resets the blink and goes back to sub 3.
+/// - 2 slides the parts back for 14 ticks, to the tab bar.
+///
+/// The map is drawn on a tick that starts and ends in sub 3, so not on the
+/// slide's last tick, a change's or a load's. START does nothing on this
+/// page (`0x691F76` is 0).
+fn re2_map(
+    page: &mut ItemPage,
+    work: &mut files::FileWork,
+    player_floor: u8,
+    flag: impl Fn(u8, u8) -> bool,
+    input: Input,
+    out: &mut Outcome,
+) {
     match page.sub {
         MAP_LOAD => {
+            work.map_floor = player_floor;
             page.sub = MAP_IN;
             page.command = 0;
         }
         MAP_FLOOR => {
-            *blink = Blink::RESET;
+            work.blink = Blink::RESET;
             page.sub = MAP_SHOWN;
         }
         MAP_IN | MAP_OUT => {
@@ -504,9 +518,18 @@ fn re2_map(page: &mut ItemPage, blink: &mut Blink, input: Input, out: &mut Outco
                 }
             }
         }
-        MAP_SHOWN if input.cancel => {
-            out.sounds.push(Sound::Cancel);
-            page.sub = MAP_OUT;
+        MAP_SHOWN => {
+            work.blink.step_map();
+            let floor = map::floor_after(work.map_floor, input.up, input.down, flag);
+            if floor != work.map_floor {
+                work.map_floor = floor;
+                page.sub = MAP_FLOOR;
+                out.sounds.push(Sound::Cursor);
+            }
+            if input.cancel {
+                out.sounds.push(Sound::Cancel);
+                page.sub = MAP_OUT;
+            }
         }
         _ => {}
     }
@@ -990,7 +1013,18 @@ impl GameState {
         self.re2_items_start = Some(page.page);
         match page.page {
             PAGE_TABS => self.re2_tabs(&mut page, input, &mut out),
-            PAGE_MAP => re2_map(&mut page, &mut self.re2_file.blink, input, &mut out),
+            PAGE_MAP => {
+                let floor = self.re2_player_floor();
+                let re2 = &self.re2;
+                re2_map(
+                    &mut page,
+                    &mut self.re2_file,
+                    floor,
+                    |bank, index| re2.flag(bank, index),
+                    input,
+                    &mut out,
+                );
+            }
             PAGE_FILE => re2_file(
                 &mut page,
                 &mut self.re2_file,

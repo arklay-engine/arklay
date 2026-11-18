@@ -238,26 +238,33 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         Ok((id, count, mark))
     });
 
-    // `re2_map()`: what RE2's MAP page draws on the player's floor: its
+    // `re2_map()`: what RE2's MAP page draws on the floor it shows (the
+    // floor it last showed while the page isn't up, 0 before the first): its
     // `map` picture's number, its `rooms` in the draw order (each `x`, `y`,
     // `w`, `h`, an `outline` and maybe a translucent `fill`, both a
-    // `texture` slot, `u`, `v` and `clut`) and the player's `marker` (`x`,
-    // `y`, `u`, `v`), or nil without a game.
+    // `texture` slot, `u`, `v` and `clut`), the player's `marker` (`x`,
+    // `y`, `u`, `v`) when the player is on that floor, the floor `arrows`
+    // and the locked `doors`' icons (each `x`, `y` and its cell's `u`, in
+    // the order the original adds them) and `blink_falling`, the way of
+    // the blink that colours both, or nil without a game.
     methods.add_method("re2_map", |lua, api, ()| {
-        let Some(view) = api.game().map(|game| game.re2_map_view()) else {
+        let Some(game) = api.game() else {
             return Ok(mlua::Value::Nil);
         };
-        map_view_table(lua, &view)
+        map_view_table(lua, &game.re2_map_view(), game.re2_file.blink.falling)
     });
 
     // `re2_script_map()`: what the status screen's script map (`Sce_84`)
     // draws, in `re2_map()`'s shape with no `marker`, or nil while none is
     // up.
     methods.add_method("re2_script_map", |lua, api, ()| {
-        let Some(view) = api.game().and_then(|game| game.re2_script_map_view()) else {
+        let Some(game) = api.game() else {
             return Ok(mlua::Value::Nil);
         };
-        map_view_table(lua, &view)
+        let Some(view) = game.re2_script_map_view() else {
+            return Ok(mlua::Value::Nil);
+        };
+        map_view_table(lua, &view, game.re2_file.blink.falling)
     });
 
     // `re2_computer()`: what room 200's computer draws this tick: the
@@ -427,10 +434,12 @@ fn consume_slot(game: &mut GameState, slot: usize) {
     }
 }
 
-/// A map view as `re2_map()` hands it to Lua.
+/// A map view as `re2_map()` hands it to Lua, with the way of the screen's
+/// blink, which colours the arrows and the doors' icons.
 fn map_view_table(
     lua: &mlua::Lua,
     view: &crate::game::status2::map::MapView,
+    blink_falling: bool,
 ) -> mlua::Result<mlua::Value> {
     let sprite = |sprite: crate::game::status2::map::MapSprite| -> mlua::Result<mlua::Table> {
         let table = lua.create_table()?;
@@ -465,6 +474,25 @@ fn map_view_table(
         entry.set("v", marker.v)?;
         table.set("marker", entry)?;
     }
+    let arrows = lua.create_table()?;
+    for (index, arrow) in view.arrows.iter().enumerate() {
+        let entry = lua.create_table()?;
+        entry.set("x", arrow.x)?;
+        entry.set("y", arrow.y)?;
+        entry.set("u", arrow.u)?;
+        arrows.set(index + 1, entry)?;
+    }
+    table.set("arrows", arrows)?;
+    let doors = lua.create_table()?;
+    for (index, icon) in view.doors.iter().enumerate() {
+        let entry = lua.create_table()?;
+        entry.set("x", icon.x)?;
+        entry.set("y", icon.y)?;
+        entry.set("u", icon.u)?;
+        doors.set(index + 1, entry)?;
+    }
+    table.set("doors", doors)?;
+    table.set("blink_falling", blink_falling)?;
     Ok(mlua::Value::Table(table))
 }
 
