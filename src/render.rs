@@ -17,18 +17,19 @@
 //! - A player triangle's key is its mean view-space Z. The original's
 //!   ordering table takes an entity at `z >> 4` and stores a mask at
 //!   `fade << 4`, so the two keys are directly comparable without any extra
-//!   scaling. This engine sorts on integer keys, so the mean is rounded to the
-//!   nearest unit; a triangle whose rounded key equals a mask's key ties with
-//!   it, and the original flushes only *strictly* farther masks before a
-//!   triangle, so equal-depth masks are submitted after player triangles here
-//!   too and win the tie.
+//!   scaling. The original flushes only *strictly* farther masks, shadows and
+//!   effects before a triangle, comparing against its float mean. This engine
+//!   sorts on integer keys, so the mean is floored and the triangles go
+//!   ahead of every scene sprite: a sprite whose key equals the floor paints
+//!   after the triangle, as it does in the original.
 //!
 //! A [`MaskLayer`] carries the camera's decoded `room/<id>/mask/<camera>.bmp`
 //! page and its [`Cut`]; a later engine step only has to load and decode that
 //! page, then pass the layer to [`draw_gameplay_scene`]. An [`EffectLayer`]
 //! carries the room's composited effect pages and this frame's
-//! [`EffectQuad`]s, submitted after the masks so an exact key tie paints the
-//! billboard over the model. [`Framebuffer::draw_model`] remains the plain
+//! [`EffectQuad`]s, queued after the shadows and before the masks, so an
+//! exact key tie paints the billboard over the model and under the mask.
+//! [`Framebuffer::draw_model`] remains the plain
 //! player-only path used by the tests and the non-mask case, and
 //! [`Framebuffer::draw_ivm_unlit`] is the item viewer's full-bright path over
 //! an `.ivm` mesh and its own texture page.
@@ -3018,17 +3019,16 @@ impl GameplayScene<'_> {
 
 /// Draw one gameplay frame: the background, then the depth-sorted scene list.
 ///
-/// The ground shadows are submitted first, then the meshes' triangles collected
-/// in slice order and pre-sorted far-to-near with a stable sort, then the
-/// masks in [`mask::mask_submission_order`] (the order the original paints
-/// equal-key sprites in). [`mask::order_far_to_near`] is the stable sort, so
-/// equal keys keep this submission order: the caller places the NPC meshes in
-/// entity-slot order and the player mesh last (the original queues the enemies
-/// before the player), so at an exact tie the player paints over an NPC, and a
-/// mask whose key ties a triangle follows it and paints over the model, which
-/// is how the original's strictly-farther mask flush resolves the tie.
-/// Inactive groups and hidden entries never reach the list. Each triangle
-/// keeps the index of its mesh's texture page.
+/// The meshes' triangles are collected in slice order and pre-sorted
+/// far-to-near with a stable sort, so at an exact tie the player, whose mesh
+/// the caller places after the NPCs' (the original queues the enemies before
+/// the player), paints over an NPC. The scene sprites are then merged in
+/// (`scene_order`): a sprite paints before a triangle only when its key is
+/// strictly greater than the triangle's mean view Z, and equal-key sprites
+/// keep the original's queue order: the ground shadows, then the masks in
+/// [`mask::mask_submission_order`]. Inactive groups and hidden entries
+/// never reach the list. Each triangle keeps the index of its mesh's texture
+/// page.
 pub fn draw_gameplay_scene(
     framebuffer: &mut Framebuffer,
     background: Option<&Image>,
@@ -3059,9 +3059,10 @@ pub fn draw_gameplay_scene(
 /// `origin` is the display origin the background samples through (screen
 /// panning and shake; the sampled window shifts the opposite way, so a
 /// positive X moves the image right) and `colour` its global colour
-/// multiplier. The effect quads are submitted after the masks (the original's
-/// `update_2d_effects` runs after the entity pass), so at an exact key tie an
-/// effect paints over a mask or triangle submitted earlier in the frame.
+/// multiplier. The effect quads are queued after the ground shadows and before
+/// the masks (the original's `update_2d_effects` runs after the entity pass
+/// and before `DrawRoomSpr`), so at an exact key tie an effect paints over a
+/// triangle or shadow and under a mask.
 /// `mirror_from` is the first mesh index eligible for the mirror pass: the
 /// room object and item meshes come first and are never reflected.
 ///
@@ -3123,18 +3124,6 @@ fn draw_gameplay_scene_with_ribbon<'a>(
     if let Some(background) = background {
         framebuffer.draw_background(background, origin, colour);
     }
-
-    let mut items = Vec::new();
-
-    // The shadows are submitted before the models, so a mask or triangle whose
-    // rounded key ties one wins the tie the way the original's later
-    // submission into the shared ordering table does.
-    items.extend(
-        ribbon_polys(ribbon.0, ribbon.1, camera)
-            .into_iter()
-            .chain(shadow_polys(shadows, camera))
-            .map(SceneItem::Shadow),
-    );
 
     let mut triangles = Vec::new();
     for (texture, mesh) in meshes.iter().enumerate() {
@@ -3213,20 +3202,23 @@ fn draw_gameplay_scene_with_ribbon<'a>(
             }
         }
     }
-    // The integer scene key can tie triangles that are less than a unit apart;
-    // the stable sort keeps this submission order for those ties.
     triangles.sort_by(|a, b| b.depth.total_cmp(&a.depth));
-    items.extend(triangles.into_iter().map(SceneItem::Triangle));
 
-    if let Some(layer) = mask_layer {
-        collect_masks(layer, camera.screen, &mut items);
-    }
-
+    // The scene sprites in the order the original queues them each frame: the
+    // slash ribbon and the ground shadows (`DrawFadeSpr`), the effect
+    // billboards (`update_2d_effects`), then the room masks (`DrawRoomSpr`).
+    let mut sprites: Vec<SceneItem<'_>> = ribbon_polys(ribbon.0, ribbon.1, camera)
+        .into_iter()
+        .chain(shadow_polys(shadows, camera))
+        .map(SceneItem::Shadow)
+        .collect();
     if let Some(layer) = effect_layer {
-        items.extend(layer.quads.iter().copied().map(SceneItem::Effect));
+        sprites.extend(layer.quads.iter().copied().map(SceneItem::Effect));
     }
-
-    mask::order_far_to_near(&mut items, SceneItem::key);
+    if let Some(layer) = mask_layer {
+        collect_masks(layer, camera.screen, &mut sprites);
+    }
+    let items = scene_order(triangles, sprites);
 
     let textures: Vec<&Texture8> = meshes.iter().map(|mesh| mesh.texture).collect();
     let effect_pages: Vec<Option<&Image>> = effect_layer
@@ -3238,6 +3230,22 @@ fn draw_gameplay_scene_with_ribbon<'a>(
         &effect_pages,
         &items,
     );
+}
+
+/// Merge the far-to-near triangles with the scene sprites into one paint order.
+///
+/// The original's flush walks the sorted triangles and, before each one, draws
+/// every queued sprite whose key is strictly greater than the triangle's mean
+/// view Z (a float). So a sprite that ties a triangle, or sits less than a
+/// unit nearer than its mean, paints after it, and the sprites keep their
+/// queue order among equal keys. For an integer key `k`, `k > depth` exactly
+/// when `k > floor(depth)`, so the triangles go first into one stable sort on
+/// [`triangle_depth_key`]'s floored key.
+fn scene_order<'a>(triangles: Vec<Triangle>, sprites: Vec<SceneItem<'a>>) -> Vec<SceneItem<'a>> {
+    let mut items: Vec<SceneItem<'a>> = triangles.into_iter().map(SceneItem::Triangle).collect();
+    items.extend(sprites);
+    mask::order_far_to_near(&mut items, SceneItem::key);
+    items
 }
 
 /// The world position a mesh's light is latched from: its root joint's
@@ -4246,13 +4254,15 @@ impl SceneItem<'_> {
 /// original submits an overlay at `fade << 4` and a triangle enters the same
 /// ordering table at `mean_z >> 4`, which is exactly the port's
 /// `OT index * 16` depth-sort scale. This engine sorts on integer keys, so the
-/// mean is rounded to the nearest unit; negative depths cannot reach here (the
-/// near plane drops them), but clamp anyway so a key can never wrap.
+/// mean is floored: a sprite's integer key is greater than the mean exactly
+/// when it is greater than the floor, which is the comparison
+/// [`scene_order`] needs. Negative depths cannot reach here (the near plane
+/// drops them), but clamp anyway so a key can never wrap.
 fn triangle_depth_key(depth: f64) -> u32 {
     if depth <= 0.0 {
         0
     } else {
-        depth.round() as u32
+        depth.floor() as u32
     }
 }
 
@@ -6289,8 +6299,63 @@ mod tests {
         assert_eq!(triangle_depth_key(0.0), 0);
         assert_eq!(triangle_depth_key(6080.0), 6080);
         assert_eq!(triangle_depth_key(6080.4), 6080);
-        assert_eq!(triangle_depth_key(6080.5), 6081);
+        assert_eq!(triangle_depth_key(6080.5), 6080);
+        assert_eq!(triangle_depth_key(6080.99), 6080);
         assert_eq!(triangle_depth_key(f64::INFINITY), u32::MAX);
+    }
+
+    #[test]
+    fn a_sprite_paints_before_a_triangle_only_when_strictly_farther() {
+        // The original flushes a queued scene sprite ahead of a triangle only
+        // while the sprite's key is greater than the triangle's float mean
+        // view Z: a blood cell at 1000 goes under a triangle at 999.6, but
+        // over one at exactly 1000 or anywhere in 1000..1001.
+        let triangle = |depth: f64| {
+            let SceneItem::Triangle(mut triangle) = scene_triangle(0) else {
+                unreachable!()
+            };
+            triangle.depth = depth;
+            triangle.key = triangle_depth_key(depth);
+            triangle
+        };
+        let effect = |key: u32| {
+            SceneItem::Effect(EffectQuad {
+                key,
+                ..effect_quad(0, [0, 0], [1, 1], [255; 3], 0)
+            })
+        };
+        let effect_first = |depth: f64, key: u32| {
+            matches!(
+                scene_order(vec![triangle(depth)], vec![effect(key)])[0],
+                SceneItem::Effect(_)
+            )
+        };
+        assert!(effect_first(999.6, 1000));
+        assert!(effect_first(998.99, 999));
+        assert!(!effect_first(1000.0, 1000));
+        assert!(!effect_first(1000.5, 1000));
+        assert!(!effect_first(999.9, 999));
+
+        // A ground shadow and a mask are queued sprites too: a tie paints
+        // them after the triangle, and equal-key sprites keep the queue order
+        // (shadows, then effects, then masks).
+        let page = solid_image(1, 1, [0; 4]);
+        let shadow = SceneItem::Shadow(ShadowPoly {
+            key: 1000,
+            triangles: Vec::new(),
+            texture: &page,
+        });
+        let mask = SceneItem::Mask(MaskQuad {
+            key: 1000,
+            uv: (0, 0),
+            pos: (0, 0),
+            size: (1, 1),
+        });
+        let order = scene_order(vec![triangle(1000.25)], vec![shadow, effect(1000), mask]);
+        assert!(matches!(order[0], SceneItem::Triangle(_)));
+        assert!(matches!(order[1], SceneItem::Shadow(_)));
+        assert!(matches!(order[2], SceneItem::Effect(_)));
+        assert!(matches!(order[3], SceneItem::Mask(_)));
     }
 
     #[test]
@@ -6359,8 +6424,8 @@ mod tests {
         );
         assert_eq!(framebuffer_pixel(&tied, 180, 100), [0, 254, 0, 255]);
 
-        // A mask whose rounded key also ties both triangles is collected after
-        // them, so it wins the tie and samples its own page.
+        // A mask whose key also ties both triangles paints after them, so it
+        // wins the tie and samples its own page.
         let cut = Cut {
             masks: vec![crate::mask::MaskSprite {
                 uv: (0, 0),
@@ -7002,6 +7067,34 @@ mod tests {
         }
     }
 
+    #[test]
+    fn tied_shadow_keys_keep_the_queue_order() {
+        // `DrawFadeSpr`'s selection pass only swaps a strictly nearer quad
+        // forward, so two tied quads with nothing nearer to swap past them
+        // keep their queue order: the first takes layer 0 and paints first.
+        // That is why the queue order matters, and why `engine::render_frame`
+        // queues RE1's player quad after the enemies'.
+        let texture = solid_image(1, 1, [255, 255, 255, 128]);
+        let enemy = Shadow {
+            tint: [0, 0, 1],
+            ..shadow_at([0, 0, 1000], 400, 400, &texture)
+        };
+        let player = Shadow {
+            tint: [0, 0, 2],
+            ..shadow_at([0, 0, 1000], 400, 400, &texture)
+        };
+        let camera = straight_camera();
+        let blue = |shadows: &[Shadow<'_>]| -> Vec<f32> {
+            shadow_polys(shadows, &camera)
+                .iter()
+                .map(|poly| poly.triangles[0][0].color[2])
+                .collect()
+        };
+        let [first, second] = [1.0f32, 2.0].map(|byte| byte * (1.0 / 255.0));
+        assert_eq!(blue(&[enemy, player]), [first, second]);
+        assert_eq!(blue(&[player, enemy]), [second, first]);
+    }
+
     /// The ring corners of a single-command shadow: the fan (0,1,2) + (0,2,3).
     fn ribbon_camera() -> Camera {
         Camera::from_cut(&Cut {
@@ -7453,9 +7546,10 @@ mod tests {
     }
 
     #[test]
-    fn effect_ties_paint_over_masks_and_entities() {
-        // A mask and an effect with the same key keep their submission order
-        // through the stable sort, and the effect was submitted last.
+    fn effect_ties_paint_under_masks_and_over_entities() {
+        // The original queues the effects (`update_2d_effects`) before the
+        // room masks (`DrawRoomSpr`), so a mask with the same key paints over
+        // the effect.
         let mask_page = solid_image(1, 1, [0, 0, 255, 255]);
         let effect_page = effect_image(&[[255, 0, 0, 255]; 4]);
         let mask = SceneItem::Mask(MaskQuad {
@@ -7465,17 +7559,53 @@ mod tests {
             size: (1, 1),
         });
         let effect = SceneItem::Effect(effect_quad(0, [10, 10], [4, 4], [255, 255, 255], 0));
-        let mut items = vec![mask, effect];
-        mask::order_far_to_near(&mut items, SceneItem::key);
-        assert!(matches!(items[0], SceneItem::Mask(_)));
-        assert!(matches!(items[1], SceneItem::Effect(_)));
+        let items = scene_order(Vec::new(), vec![effect, mask]);
+        assert!(matches!(items[0], SceneItem::Effect(_)));
+        assert!(matches!(items[1], SceneItem::Mask(_)));
 
-        let mut framebuffer = Framebuffer::new();
+        // The scene queues them in that order: a mask at pos_data 64 (key
+        // 1024) over an effect at the same key.
+        let cut = Cut {
+            masks: vec![mask_sprite((10, 10), 64, 1)],
+            mask_active: 1,
+            ..Cut::default()
+        };
+        let layer = MaskLayer::new(room(), 0, &cut, &mask_page);
         let effect_pages = [Some(&effect_page)];
-        framebuffer.draw_scene(&[], Some(&mask_page), &effect_pages, &items);
-        assert_eq!(framebuffer_pixel(&framebuffer, 10, 10), [255, 0, 0, 255]);
+        let quads = [EffectQuad {
+            key: 1024,
+            ..effect_quad(0, [10, 10], [4, 4], [255, 255, 255], 0)
+        }];
+        let effects = EffectLayer {
+            pages: &effect_pages,
+            hd: &[],
+            quads: &quads,
+        };
+        let lighting = Lighting {
+            ambient: [0; 3],
+            lights: [Light::default(); 3],
+        };
+        let mut framebuffer = Framebuffer::new();
+        draw_gameplay_scene_with_effects(
+            &mut framebuffer,
+            None,
+            [0, 0],
+            [255; 3],
+            &[],
+            &[],
+            &straight_camera(),
+            &lighting,
+            Some(&layer),
+            Some(&effects),
+            0,
+            None,
+        );
+        assert_eq!(framebuffer_pixel(&framebuffer, 10, 10), [0, 0, 255, 255]);
+        assert_eq!(framebuffer_pixel(&framebuffer, 11, 11), [255, 0, 0, 255]);
 
-        // The same effect against a real entity triangle at the same key.
+        // The same effect against a real entity triangle whose mean view Z is
+        // exactly its key: the triangle draws first and the effect over it.
+        // One unit farther, the effect draws first and the triangle covers it.
         let texture = solid_texture([0, 0, 255, 255]);
         let mesh = mesh_at(1000, false);
         let joints = [identity()];
@@ -7502,28 +7632,35 @@ mod tests {
             lights: [Light::default(); 3],
         };
         let pages = [Some(&effect_page)];
-        let quads = [effect_quad(0, [160, 120], [200, 200], [255, 255, 255], 0)];
-        let layer = EffectLayer {
-            pages: &pages,
-            hd: &[],
-            quads: &quads,
+        let draw = |key: u32| {
+            let quads = [EffectQuad {
+                key,
+                ..effect_quad(0, [160, 0], [200, 200], [255, 255, 255], 0)
+            }];
+            let layer = EffectLayer {
+                pages: &pages,
+                hd: &[],
+                quads: &quads,
+            };
+            let mut framebuffer = Framebuffer::new();
+            draw_gameplay_scene_with_effects(
+                &mut framebuffer,
+                None,
+                [0, 0],
+                [255; 3],
+                &meshes,
+                &[],
+                &camera,
+                &lighting,
+                None,
+                Some(&layer),
+                0,
+                None,
+            );
+            framebuffer_pixel(&framebuffer, 180, 100)
         };
-        let mut framebuffer = Framebuffer::new();
-        draw_gameplay_scene_with_effects(
-            &mut framebuffer,
-            None,
-            [0, 0],
-            [255; 3],
-            &meshes,
-            &[],
-            &camera,
-            &lighting,
-            None,
-            Some(&layer),
-            0,
-            None,
-        );
-        assert_eq!(framebuffer_pixel(&framebuffer, 160, 130), [255, 0, 0, 255]);
+        assert_eq!(draw(1000), [255, 0, 0, 255]);
+        assert_eq!(draw(1001), [0, 0, 254, 255]);
     }
 
     #[test]

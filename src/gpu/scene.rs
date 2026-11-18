@@ -595,10 +595,10 @@ pub struct SpriteRun<'a> {
 /// key per pixel.
 ///
 /// That target stands in for the painter's sort where a mask is involved:
-/// the software sorts shadows, triangles, masks and effects (submitted in
-/// that order) stably far to near, so a mask paints over a shadow or
-/// triangle whose key is at or behind its own and over an effect strictly
-/// behind it. Meshes, shadows and effects drop a fragment whose key the
+/// the software sorts the triangles, then the shadows, effects and masks
+/// (submitted in that order) stably far to near, on the triangle's floored
+/// mean view Z, so a mask paints over a triangle, shadow or effect whose key
+/// is at or behind its own. Meshes, shadows and effects drop a fragment whose key the
 /// target says a mask covers, and the masks write no scene depth.
 #[derive(Debug, Default)]
 pub struct Sprites<'a> {
@@ -804,9 +804,9 @@ pub fn scene_sprites<'a>(scene: &GameplayScene<'a>) -> Sprites<'a> {
                 key_depth(quad.key),
                 [tint[0], tint[1], tint[2], alpha],
                 SPRITE_TEXTURED,
-                // An effect follows the masks in the submission order, so a
-                // mask only covers one strictly behind it.
-                quad.key as f32 - 1.0,
+                // An effect is queued before the masks, so a mask covers one
+                // at or behind its own key.
+                quad.key as f32,
             );
             let hd = layer.hd.get(quad.page).copied().flatten();
             if let Some(run) = sprites.run(page, first) {

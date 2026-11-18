@@ -20937,8 +20937,14 @@ fn render_frame_on(
     // (or the room forces it on),
     // and one per active character that has entered the camera's switch zone,
     // using `character_init`'s tint, half extents and local offset.
+    //
+    // RE1 queues the enemies' quads in `update_entities` and the player's
+    // after them in `update_player_anim`. `DrawFadeSpr`'s selection pass
+    // starts from that queue, which decides the order and layer lift of quads
+    // whose keys tie, so the player's is pushed last.
     let shadow_texture = shadows.page_for(pack, game.is_re2_room);
     let mut shadow_list: Vec<render::Shadow<'_>> = Vec::new();
+    let mut player_shadow = None;
     if let Some(texture) = shadow_texture
         && game.is_re2_room
     {
@@ -21031,7 +21037,7 @@ fn render_frame_on(
         ];
         let mut shadow_angle = player_state.angle;
         tween.shadow(tween::Key::Player, &mut shadow_pos, &mut shadow_angle);
-        shadow_list.push(render::Shadow {
+        player_shadow = Some(render::Shadow {
             texture,
             pos: shadow_pos,
             angle: shadow_angle,
@@ -22132,6 +22138,7 @@ fn render_frame_on(
         },
         camera: camera.mirrored(game.mirror_axis_x(), i32::from(game.mirror.plane)),
     });
+    shadow_list.extend(player_shadow);
     // The global colour stays white in gameplay.
     let display_origin = display_origin(game, shake);
     let global_colour = [255; 3];
