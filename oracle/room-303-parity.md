@@ -140,12 +140,14 @@ What is left is in the hand-over, not the screens:
   film and a congratulations film (endings 1 to 3 then hold black and play the
   staff roll). A `Bio.exe` run plays them for their own length, so the frames
   across them cannot be compared. A reference run booted from a save
-  (`--test-load`) requests the films and skips them in a few frames, and
-  `arklay` drops them in none, so RESULT opens 7 frames earlier in `arklay` on
-  the lift finale. Booted with `--test-ending`, which requests no films, RESULT
-  for endings 4 and 5 matches but for the digit shades (see the clock digits
-  below), 2 frames earlier in `arklay`, as the reference's boot sleeps twice
-  before `ending_state` starts. The save screen after it is the reference's own
+  (`--test-load`) requests the films: `die_state` and `ending_state` each sleep a
+  frame first, and the task sleeps one more for each request, while the films
+  themselves play outside the frames it traces. `arklay` drops them in no frame, so on the lift finale RESULT opens 7
+  traced frames earlier in `arklay`. Booted with `--test-ending`, which
+  requests no films, RESULT for endings 4 and 5 matches but for the digit
+  shades (see the clock digits below), 2 frames earlier in `arklay`: the
+  reference's boot hook sleeps a frame before it chains `ending_state`, which
+  sleeps another as it starts. The save screen after it is the reference's own
   (see above).
 
 ## Still different, not understood or not fixed
