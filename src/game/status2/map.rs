@@ -611,8 +611,9 @@ impl GameState {
         }
     }
 
-    /// The MAP page's view of the floor it shows (`0x4FA990`), which is the
-    /// floor it last showed while the page isn't up.
+    /// The MAP page's view of the floor it shows (`0x4FA990`). While the
+    /// page isn't up that is the floor last chosen, on the page or by a
+    /// script's map, which share `map_floor`.
     pub fn re2_map_view(&self) -> MapView {
         let context = self.re2_map_context();
         let room = self.id.room;
@@ -1029,6 +1030,8 @@ mod tests {
     #[test]
     fn a_held_map_is_not_a_floor_stood_on() {
         let held = |bank: u8, _: u8| bank == HELD_BANK;
+        assert_eq!(floor_after(2, true, false, held), 2);
+        assert_eq!(floor_after(3, false, true, held), 3);
         assert_eq!(floor_after(2, true, true, held), 2);
         assert!(arrows(2, &held).is_empty());
     }

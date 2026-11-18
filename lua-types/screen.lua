@@ -1099,8 +1099,8 @@ function ScreenApi:re2_box() end
 function ScreenApi:re2_box_slot(slot) end
 
 ---What RE 2's MAP page draws on the floor it shows. While the page isn't
----up that is the floor it last showed (0 before the first), not the
----player's.
+---up that is the floor last chosen, on the page or by a script's map
+---(`Sce_84`), which share it: 0 before either, and not the player's.
 ---@return Re2Map? map `nil` without a game.
 function ScreenApi:re2_map() end
 
