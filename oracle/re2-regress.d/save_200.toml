@@ -9,7 +9,7 @@ ticks = 1100
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,snd,msg,tw,gm,fgstat,sv"
 frames = [540, 1099]
 saves = true
-frame_max_mean = 1.6
+frame_max_mean = 0.8
 expect = "match"
 record = "--no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200 --give 2:0x1E:3"
 
@@ -24,6 +24,21 @@ ticks = 1300
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,snd,msg,tw,gm,fgstat,sv"
 frames = [540, 1299]
 saves = true
-frame_max_mean = 0.6
+frame_max_mean = 0.3
+expect = "match"
+record = "--no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200 --give 2:0x1E:3"
+
+[[run]]
+name = "save_200_overwrite"
+room = "200"
+# the save screen's overwrite: a save to a new file, then a second Yes, decide on the save's row, the overwrite choice cancelled, taken again, moved and decided, the write, the label's reveal, the wait and the exit (oracle/re2.md, "The save screen")
+setup_script = "typewriter_200_ribbon.lua"
+input = "save_200_overwrite.txt"
+input_shift = 344
+ticks = 1700
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,snd,msg,tw,gm,fgstat,sv"
+frames = [540, 1699]
+saves = true
+frame_max_mean = 1.1
 expect = "match"
 record = "--no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200 --give 2:0x1E:3"

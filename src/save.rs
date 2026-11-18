@@ -1093,8 +1093,23 @@ pub fn save_to_path(path: &Path, file: &SaveFile) -> Result<()> {
     {
         fs::create_dir_all(dir).with_context(|| format!("failed to create {}", dir.display()))?;
     }
-    fs::write(path, file.to_file_bytes())
+    write_whole(path, &file.to_file_bytes())
         .with_context(|| format!("failed to write {}", path.display()))
+}
+
+/// Write `bytes` beside `path` and rename them over it, so a write that
+/// fails part way leaves the file that was there as it was.
+fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    // A linked save keeps its link: the file it names is the one replaced.
+    let path = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let mut partial = path.clone().into_os_string();
+    partial.push(".part");
+    let partial = PathBuf::from(partial);
+    let written = fs::write(&partial, bytes).and_then(|()| fs::rename(&partial, &path));
+    if written.is_err() {
+        let _ = fs::remove_file(&partial);
+    }
+    written
 }
 
 /// Remove a save file. A missing file is not an error.
@@ -1137,7 +1152,7 @@ pub fn save(dir: &Path, index: usize, file: &SaveFile) -> Result<()> {
     let path =
         slot_path(dir, index).with_context(|| format!("save slot {index} is out of range"))?;
     fs::create_dir_all(dir).with_context(|| format!("failed to create {}", dir.display()))?;
-    fs::write(&path, file.to_file_bytes())
+    write_whole(&path, &file.to_file_bytes())
         .with_context(|| format!("failed to write {}", path.display()))
 }
 
@@ -2160,6 +2175,27 @@ mod tests {
         assert!(!path.exists());
         remove_file(&path).unwrap();
         remove_file(&dir.path.join("missing.dat")).unwrap();
+    }
+
+    /// A write that fails leaves the save that was there whole, and no
+    /// write leaves its partial file behind.
+    #[test]
+    fn a_failed_write_keeps_the_file_that_was_there() {
+        let dir = TempDir::new("explicit-kept");
+        let path = dir.path.join("Jill_01.dat");
+        let old = filled();
+        save_to_path(&path, &old).unwrap();
+        let mut new = filled();
+        new.room = 0x35;
+        // The partial file can't be made: a folder has its name.
+        let partial = dir.path.join("Jill_01.dat.part");
+        fs::create_dir(&partial).unwrap();
+        assert!(save_to_path(&path, &new).is_err());
+        assert_eq!(load_file(&path).unwrap(), old);
+        fs::remove_dir(&partial).unwrap();
+        save_to_path(&path, &new).unwrap();
+        assert_eq!(load_file(&path).unwrap().room, 0x35);
+        assert_eq!(fs::read_dir(&dir.path).unwrap().count(), 1);
     }
 
     #[test]
