@@ -38,10 +38,9 @@
 -- The head-explosion and limb gore *state machine* is complete: the joint
 -- flag bytes (bit 0 active, 0x28 armed/exploded, 0x0C severed arm, 0x88
 -- vomiting head), the 0xCC/0x40 head tests, the blood scratch the vomit arms
--- and the blood billboards/cues all run, as do the per-joint colour tints and
--- the gore strips (`src/joint_trail.rs`). The joint-based second ground quad
--- (the severed limb's pool at the joint world position) keeps its
--- flag/position contract only.
+-- and the blood billboards/cues all run, as do the per-joint colour tints,
+-- the gore strips (`src/joint_trail.rs`), the severed arm's fall
+-- (`src/enemy/limb.rs`) and the pool under it.
 --
 -- Director's Cut is not modelled: the port has no DC mode, so the 0xC/0xD/0xE
 -- spawn nibbles, the third SCA record, the double-step fast zombie and
@@ -98,6 +97,10 @@ local STATE_ACTION_UPDATE = 8
 
 local FLAG_LAYING_DOWN = 0x02
 local FLAG_VOMITING = 0x40
+
+-- The second ground quad `zombie_init` builds: the pool under a severed arm.
+local LIMB_POOL_HALF = 400
+local LIMB_POOL_TINT = 0x00FFFF50
 local FLAG_SCD_CONTROLLED = 0x80
 
 local STATUS_ACTIVE = 0x01
@@ -327,9 +330,7 @@ init = function(e, config)
 
     -- Two ground quads are built here in the original: the 700x900 dark body
     -- shadow (the per-frame fade sprite) and a 400x400 blood-tinted quad the
-    -- severed-limb tail draws at the joint position. The port models the body
-    -- shadow; the limb quad keeps its flag/position contract and stays with
-    -- the joint-object renderer deferral.
+    -- severed-limb tail draws at the joint position, which is queued there.
     e:set_shadow_offset(0, 0, 0)
     e.shadow_half_x = 700
     e.shadow_half_z = 900
@@ -2437,12 +2438,10 @@ M.run = function(e, config)
 
     e:update_switch_zone()
     -- The body shadow is drawn by the renderer from the shadow fields while
-    -- the switch-zone bit is set; the limb quad's flag/position contract:
-    if (e:joint_flag(4) & 4) ~= 0
-        and e:joint_world_y(4) == -100
-        and e.has_enter_switch_zone ~= 0 then
-        -- The 400x400 blood quad at the joint position is the deferred
-        -- joint-object half; the state above is what it will read.
+    -- the switch-zone bit is set. A severed arm lying on the floor has the
+    -- second quad under it, the blood pool.
+    if (e:joint_flag(4) & 4) ~= 0 and e:joint_world_y(4) == -100 then
+        e:queue_limb_pool(4, LIMB_POOL_HALF, LIMB_POOL_HALF, LIMB_POOL_TINT)
     end
 end
 

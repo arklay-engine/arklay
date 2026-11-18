@@ -63,6 +63,7 @@ pub mod data;
 #[cfg(test)]
 mod ghost_tests;
 pub mod idle;
+pub mod limb;
 pub mod lua;
 pub mod scd;
 pub mod tyrant;

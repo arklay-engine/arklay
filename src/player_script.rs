@@ -2584,10 +2584,6 @@ fn advance_player_clock(
     step: u16,
 ) -> bool {
     sync_player_bytes_to_clock(entity);
-    // `Joint_move` skips the joints flagged 0x10.
-    clock.player.held = (0..32)
-        .filter(|&joint| entity.joint_flag(joint) & 0x10 != 0)
-        .fold(0, |mask, joint| mask | 1 << joint);
     let completed = clock.advance(entity, clips, reverse, step);
     sync_player_bytes_from_clock(entity);
     completed

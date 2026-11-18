@@ -288,6 +288,9 @@ pub struct Entity {
     pub shadow_offset: [i16; 3],
     /// Scripted ground-shadow tint (`0xRRGGBB`).
     pub shadow_tint: u32,
+    /// The second ground quad its script queued this frame, under a severed
+    /// limb lying in the camera's switch zone.
+    pub limb_pool: Option<LimbPool>,
     /// The obstacle pathfinder's state byte (entity +0x164): bits 0-4 are the
     /// frame counter, bit 5 the last line-of-sight result. State 9's
     /// `entity_pathfind_update` cycles it and latches the player waypoint.
@@ -427,6 +430,19 @@ pub struct JointsBeforeHit {
     pub joint_flags: u32,
     /// Set on the tick of the hit, whose frame this snapshot is for.
     pub fresh: bool,
+}
+
+/// The ground quad under a severed limb at rest, queued for one frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LimbPool {
+    /// The limb joint's world position.
+    pub pos: [i32; 3],
+    /// The quad's turn about Y.
+    pub angle: u16,
+    pub half_x: i16,
+    pub half_z: i16,
+    /// `0xRRGGBB`.
+    pub tint: u32,
 }
 
 /// The per-joint blood-splatter scratch `blood_splatter_physics` keeps at

@@ -1858,7 +1858,7 @@ pub mod pad_repeat;
 pub mod pl_change2;
 pub mod save2;
 pub mod status2;
-pub use entity::{Entity, JointBlood, JointTrail, JointsBeforeHit, LookTargetRecord};
+pub use entity::{Entity, JointBlood, JointTrail, JointsBeforeHit, LimbPool, LookTargetRecord};
 
 impl Entity {
     /// `JointSetColorTint`: the joint then draws unlit in `colour`.
@@ -5095,6 +5095,7 @@ impl GameState {
             // The new character's model brings fresh joint structs: no joint
             // stays held at the world a previous occupant's script wrote.
             self.entity_anims[slot].held.clear();
+            self.entity_anims[slot].loose.clear();
             if !occupied {
                 self.enemy_count = self.enemy_count.saturating_add(1);
             }

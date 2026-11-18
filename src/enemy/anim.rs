@@ -52,6 +52,11 @@ pub struct EntityAnim {
     /// world the script wrote (and their children compose from it) until the
     /// bit is raised again.
     pub held: Vec<(usize, crate::anim::Mat4x3)>,
+    /// The severed joints, each at the world it is drawn at
+    /// ([`crate::enemy::limb`]). The render pass moves a loose joint after it
+    /// has composed the skeleton, so the joints under one compose from
+    /// [`Self::held`], its world of the frame before.
+    pub loose: Vec<(usize, crate::anim::Mat4x3)>,
 }
 
 impl Default for EntityAnim {
@@ -64,6 +69,7 @@ impl Default for EntityAnim {
             skeleton: None,
             yawn: None,
             held: Vec::new(),
+            loose: Vec::new(),
         }
     }
 }
@@ -109,6 +115,10 @@ impl EntityAnim {
         self.player.reverse = reverse;
         self.player.blend_step = blend_step;
         self.player.blend_counter = u16::from(entity.blend_counter);
+        // `Joint_move` skips the joints flagged 0x10.
+        self.player.held = (0..32)
+            .filter(|&joint| entity.joint_flag(joint) & 0x10 != 0)
+            .fold(0, |mask, joint| mask | 1 << joint);
         // The first consuming tick after a reset. `ResetJointTransforms` left
         // every joint at identity, so the original's `Joint_move` blends the
         // first frame's rotations out of zero instead of snapping straight to
@@ -847,6 +857,26 @@ mod tests {
             ..EntityAnim::default()
         };
         assert!(bare.joint_worlds(&entity, &clips).is_empty());
+    }
+
+    #[test]
+    fn advance_leaves_the_joints_flagged_sixteen_out_of_the_clip() {
+        let clips = vec![clip(&[(0, 1)])];
+        let mut clock = EntityAnim::default();
+        let mut entity = entity(0, 0, 0);
+        clock.advance(&mut entity, &clips, false, 0x400);
+        assert_eq!(clock.player.held, 0);
+
+        // `Joint_move` skips them, so a severed arm keeps the pose it was
+        // cut in while the rest of the body plays on.
+        entity.set_joint_flag(5, entity.joint_flag(5) | 0x10);
+        entity.set_joint_flag(9, entity.joint_flag(9) | 0x10);
+        clock.advance(&mut entity, &clips, false, 0x400);
+        assert_eq!(clock.player.held, 1 << 5 | 1 << 9);
+
+        entity.set_joint_flag(5, entity.joint_flag(5) & !0x10);
+        clock.advance(&mut entity, &clips, false, 0x400);
+        assert_eq!(clock.player.held, 1 << 9);
     }
 
     #[test]

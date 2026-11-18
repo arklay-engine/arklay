@@ -447,6 +447,15 @@ function EnemyApi:set_shadow_offset(x, y, z) end
 ---@param half_z integer
 function EnemyApi:adjust_shadow_size(half_x, half_z) end
 
+---Queue the ground quad under a severed limb for this frame (the zombie's
+---blood pool under its arm): drawn on the floor at `joint`'s world position
+---while that position lies in the current camera's switch zone.
+---@param joint integer
+---@param half_x integer
+---@param half_z integer
+---@param tint integer `0xRRGGBB`.
+function EnemyApi:queue_limb_pool(joint, half_x, half_z, tint) end
+
 ---Recompute whether the entity stands in the current camera's switch zone,
 ---store it in `has_enter_switch_zone` and return it. The renderer hides an
 ---entity that has not entered the zone.

@@ -150,6 +150,8 @@ mod imp {
                 return false;
             };
             self.budget.begin();
+            // A limb's ground quad lasts the frame its script queued it for.
+            game.entities[slot].limb_pool = None;
             // The scoped userdata borrows the call's data for exactly this
             // call; `Lua::scope` seals it so the script cannot retain it.
             let mut api = EnemyApi {
@@ -174,6 +176,7 @@ mod imp {
             // between two entity updates, so the next tick's script (the
             // state-8 `EntityUpdateWeaponJoint` anchor reads them) and this
             // tick's later effect pass read exactly these matrices.
+            crate::enemy::limb::settle(game, slot);
             let frozen = game
                 .tyrant
                 .frozen_joints(&game.entities[slot], &game.joint_trails[slot]);
@@ -189,6 +192,9 @@ mod imp {
                     &frozen,
                 );
             }
+            // The same pass then lets go of a newly cut limb and moves the
+            // loose ones.
+            crate::enemy::limb::advance(game, slot, &mut worlds);
             game.entity_anims[slot].apply_look_at(&game.entities[slot], &mut worlds);
             if !worlds.is_empty() {
                 game.joint_worlds[slot] = worlds;
@@ -2530,6 +2536,36 @@ mod imp {
                 "set_shadow_offset",
                 |_lua, api, (x, y, z): (i64, i64, i64)| {
                     api.entity_mut().shadow_offset = [x as i16, y as i16, z as i16];
+                    Ok(())
+                },
+            );
+
+            // `zombie_update`'s second `entity_add_fade_sprite`: the quad
+            // under a severed limb, tested against the switch zone at the
+            // joint and turned by the joint's fall word.
+            methods.add_method_mut(
+                "queue_limb_pool",
+                |_lua, api, (joint, half_x, half_z, tint): (i64, i64, i64, i64)| {
+                    let room = api.room;
+                    let slot = api.slot;
+                    let game = api.game();
+                    // SAFETY: the room pointer borrows the caller's room for
+                    // the whole call (see the type-level comment).
+                    let room = unsafe { &*room };
+                    let joint = joint as usize & 31;
+                    let Some(pos) = game.joint_worlds[slot].get(joint).map(|world| world.t) else {
+                        return Ok(());
+                    };
+                    if in_camera_zone(room, room.current_cut, pos) {
+                        let entity = &mut game.entities[slot];
+                        entity.limb_pool = Some(crate::game::LimbPool {
+                            pos,
+                            angle: entity.joint_blood[joint].vel_y as u16,
+                            half_x: half_x as i16,
+                            half_z: half_z as i16,
+                            tint: tint as u32,
+                        });
+                    }
                     Ok(())
                 },
             );
@@ -12296,6 +12332,111 @@ mod zombie_tests {
         // The update tail's timer tick runs after the handler.
         assert_eq!(entity.internal_timer, 149);
         assert_eq!(entity.animation_id, 4, "behaviour 0 plays the stagger");
+    }
+
+    #[test]
+    fn a_severed_arm_falls_loose_and_pools_where_it_lands() {
+        use crate::model::{Keyframe, Skeleton};
+        use crate::state::Zone;
+        use std::sync::Arc;
+
+        let pack = pack();
+        let clips = clips();
+        let mut game = zombie_game(0x00, 0);
+        game.entities[1].pos = [2500, 0, 2500];
+        game.entities[0].pos = [3500, 0, 2500];
+        // A chain of unturned joints at shoulder height: the forearm (4)
+        // carries the hand (5).
+        game.entity_anims[1].skeleton = Some(Arc::new(Skeleton {
+            relative: vec![[0, 0, 0]; 7],
+            children: (1..=7)
+                .map(|child| if child < 7 { vec![child] } else { vec![] })
+                .collect(),
+        }));
+        game.entity_anims[1].keyframes = Some(Arc::new(vec![Keyframe {
+            vertex: [0, 0, 0],
+            offset: [0, -1500, 0],
+            rotations: vec![[0, 0, 0]; 7],
+        }]));
+        let mut room = RoomState {
+            zones: vec![Zone {
+                cam_to: 0,
+                cam_from: 0,
+                corners: [[0, 0], [0, 5000], [5000, 5000], [5000, 0]],
+            }],
+            ..RoomState::default()
+        };
+        let mut host = LuaEnemyHost::new();
+        assert!(host.update(&mut game, &mut room, &pack, 1, &clips));
+        let rest = game.joint_worlds[1][4].t;
+        assert_eq!((rest[0], rest[2]), (2500, 2500));
+        assert_eq!(game.entities[1].limb_pool, None);
+
+        game.entities[1].set_state(2);
+        game.entities[1].set_ignore(0);
+        game.entities[1].action_behavior = 0;
+        game.entities[1].action_state = 0;
+        game.entities[1].hit_state = 3;
+        game.entities[1].animation_id = 4;
+        game.rand_seed = 6;
+        assert!(host.update(&mut game, &mut room, &pack, 1, &clips));
+        // The pass that composed the cut arm let it go and moved it a frame:
+        // thrown up by 200 and back along the body's X.
+        assert_eq!(game.entities[1].joint_flag(4) & 0x5C, 0x54, "loose");
+        assert_eq!(game.joint_worlds[1][4].t[1], rest[1] - 200);
+        assert!(game.joint_worlds[1][4].t[0] < rest[0]);
+        assert_eq!(
+            game.joint_worlds[1][5].t, rest,
+            "the hand is a frame behind"
+        );
+
+        let mut heights = Vec::new();
+        let mut pooled = None;
+        for _ in 0..60 {
+            let before = game.joint_worlds[1][4];
+            assert!(host.update(&mut game, &mut room, &pack, 1, &clips));
+            let arm = game.joint_worlds[1][4];
+            heights.push(arm.t[1]);
+            // The script reads the joint the last pass left, so the quad
+            // starts the frame after the arm lands.
+            match game.entities[1].limb_pool {
+                Some(pool) => {
+                    assert_eq!(before.t[1], crate::enemy::limb::FLOOR_Y);
+                    pooled.get_or_insert(pool);
+                }
+                None => assert_ne!(before.t[1], crate::enemy::limb::FLOOR_Y),
+            }
+            if arm != before {
+                assert_eq!(game.joint_worlds[1][5].t, before.t, "the hand trails");
+            }
+        }
+        assert!(heights.contains(&-350), "it bounces once");
+        assert_eq!(heights.last(), Some(&crate::enemy::limb::FLOOR_Y));
+        // The quad lies under the arm, turned by the joint's throw word: the
+        // speed it landed at for the first frame, the throw's own after.
+        let arm = game.joint_worlds[1][4].t;
+        let lying = crate::game::LimbPool {
+            pos: arm,
+            angle: 200,
+            half_x: 400,
+            half_z: 400,
+            tint: 0x00FF_FF50,
+        };
+        assert_eq!(game.entities[1].limb_pool, Some(lying), "every frame");
+        let landed = pooled.expect("queued the frame after it landed");
+        assert_ne!(landed.angle, 200);
+        assert_eq!(
+            landed,
+            crate::game::LimbPool {
+                angle: landed.angle,
+                ..lying
+            }
+        );
+
+        // Out of the camera's zone the arm lies there without it.
+        room.zones[0].corners = [[0, 0], [0, 100], [100, 100], [100, 0]];
+        assert!(host.update(&mut game, &mut room, &pack, 1, &clips));
+        assert_eq!(game.entities[1].limb_pool, None);
     }
 
     #[test]

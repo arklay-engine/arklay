@@ -21149,6 +21149,22 @@ fn render_frame_on(
                 shadow_list.push(shadow);
             }
         }
+        // The quad under a severed limb was tested against the zone at the
+        // limb when its script queued it.
+        if let Some(texture) = shadow_texture
+            && let Some(pool) = entity.limb_pool
+        {
+            shadow_list.push(render::Shadow {
+                texture,
+                pos: [pool.pos[0], 0, pool.pos[2]],
+                angle: pool.angle,
+                half_x: i32::from(pool.half_x),
+                half_z: i32::from(pool.half_z),
+                shift: [0, 0],
+                lift: shadow::offset_y(origin, room.current_cut),
+                tint: shadow::billboard_tint(pool.tint),
+            });
+        }
         if yawn_segment {
             continue;
         }
@@ -21179,6 +21195,13 @@ fn render_frame_on(
             frozen.extend_from_slice(&game.entity_anims[slot].held);
             let mut joints =
                 anim::joint_matrices_frozen(&model.skeleton, &keyframe, &entity_matrix, &frozen);
+            // A severed joint is drawn where this frame's move left it; the
+            // joints under it were composed before the move.
+            for &(joint, world) in &game.entity_anims[slot].loose {
+                if let Some(drawn) = joints.get_mut(joint) {
+                    *drawn = world;
+                }
+            }
             apply_look_at(&mut joints, entity, &game.entity_anims[slot]);
             joints
         };
