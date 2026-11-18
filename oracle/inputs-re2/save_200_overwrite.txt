@@ -1,0 +1,35 @@
+# room 200: a save to a new file, then the typewriter again: decide on the save's row, cancel the overwrite choice, decide again, move the choice right and left, and decide; the label types, the screen fades out and the player walks off (oracle/re2.md, "The save screen")
+364 action
+368
+410 action
+414
+460 action
+464
+540 action
+544
+600 action
+604
+900 action
+904
+946 action
+950
+996 action
+1000
+1076 action
+1080
+1140 down
+1142
+1180 action
+1184
+1220 cancel
+1224
+1260 action
+1264
+1300 right
+1304
+1320 left
+1324
+1340 action
+1344
+1640 down
+1680

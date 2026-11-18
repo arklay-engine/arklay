@@ -18,20 +18,25 @@
 -- | 1 | the folder's saves counted (`cnt0`), the rows `min(10, cnt0 - mode + 2)`; then 2 |
 -- | 2 | the list: a held direction moves the cursor every 4 ticks with the move cue (`4:4`), wrapping; decide picks the row (`FUN_00431D10`), cancel plays `4:5` and goes to 99 |
 -- | 3 | the write: the ribbon and the count (the engine's write tick), the file; then 0x22 |
--- | 0x22 | the label types a character on each tick the timer is 0, then 4 ticks (`2:22`) or 8 after a space or `_` (`2:24`); then 0x24 with the timer at 60 |
--- | 0x24 | waits: a press, or the timer run out, goes to 0x61 |
+-- | 0x1E | the overwrite choice, as Classic REbirth patches it: left and right (edges) move it between Overwrite and Cancel with the move cue; decide on Overwrite deletes the row's file and goes to 0x1F with the decide cue; decide on Cancel, or cancel, plays `4:5` and goes back to 2 |
+-- | 0x1F | as 3, the new save taking the row; then 0x20 |
+-- | 0x22, 0x20 | the label types a character on each tick the timer is 0, then 4 ticks (`2:22`) or 8 after a space or `_` (`2:24`); then 0x24 (0x21 from 0x20) with the timer at 60 |
+-- | 0x24, 0x21 | waits: a press, or the timer run out, goes to 0x61 |
 -- | 0x61, 99 | the exit |
 --
 -- The engine reads the work back for the trace's `sv` (`api:set("sv_*")`).
 -- Classic REbirth patches the drawing, the names and the overwrite choice
 -- (`oracle/re2.md`, "The save screen"): the layout here is measured from
--- the original's frames. The overwrite (0x1E), the load (10), the keyboard
--- paging (`FUN_00432670`) and the name scroll aren't ported.
+-- the original's frames, and the overwrite is the patched one (the
+-- executable's own is a three-way choice with an Update that keeps the
+-- name). The load (10), the failed write (0x62), the keyboard paging
+-- (`FUN_00432670`) and the name scroll aren't ported.
 
 local M = {}
 
 local STATE_FONT, STATE_LIST, STATE_BROWSE, STATE_WRITE = 0, 1, 2, 3
 local STATE_REVEAL, STATE_WAIT, STATE_DONE, STATE_CANCEL = 0x22, 0x24, 0x61, 99
+local STATE_ASK, STATE_OVERWRITE, STATE_RETYPE, STATE_REWAIT = 0x1E, 0x1F, 0x20, 0x21
 
 local FADE_STEP, FADE_FULL = 0x1800, 0x8000
 
@@ -44,7 +49,15 @@ local ROW_Y, ROW_H = 0x31, 15
 local BAR_X, BAR_W, BAR_H, BAR_GREY = 0x0A, 0x12C, 0x0E, 0x50
 local TEXT_DY = 0
 local FOOTER_Y = 0xD8
-local BLUE = "#3F7DFA"
+-- The footer's count has its digits in cells as wide as the widest digit.
+local DIGIT_W = 12
+local BLUE = "#1E64FF"
+-- The overwrite choice under the window: the question, the two answers a
+-- row below it and `Cursor_disp`'s arrowhead left of the lit one.
+local ASK_Y, ANSWER_Y = 0xCF, 0xDE
+local ANSWER_X = { [0] = 0x38, 0xCC }
+local ARROW_DX, ARROW_DY = -7, 4
+local GREEN = "#00C80A"
 
 -- The core bank's cues (`Snd_se_on(0x40n0000)`) and the reveal's keys
 -- (`0x2220000`, `0x2240000`).
@@ -95,9 +108,10 @@ function M.save_name(player, scenario_b, count, time)
     return string.format("%s_%02d_%s", name, count % 100, stamp)
 end
 
--- What a row shows: a save's name with `^` back to `:`.
+-- What a row shows: a save's name with `^` back to `:`, and its `_` as
+-- the `/` Classic REbirth prints for it.
 local function label_of(name)
-    return (name:gsub("%^", ":"))
+    return (name:gsub("%^", ":"):gsub("_", "/"))
 end
 
 local function newest_first(a, b)
@@ -202,6 +216,11 @@ local function browse(api, input)
         elseif row == 4 then
             api:core_sound(CUE_CANCEL)
             s.state = STATE_CANCEL
+        elseif row == 1 and s.mode == 0 then
+            s.choice = 0
+            s.picked = s.cursor + s.top
+            s.state = STATE_ASK
+            api:core_sound(CUE_DECIDE)
         elseif row == 1 and s.mode == 1 then
             -- The load (state 10): not ported; it loads at once.
             api:core_sound(CUE_DECIDE)
@@ -219,11 +238,36 @@ local function browse(api, input)
     end
 end
 
--- State 3: the write. The engine takes the ribbon and raises the count on
--- the same tick; a failed write goes on as a written one, as the
--- original's does (its rollback runs only while `string` is set, which
--- the save mode's 99 and 0x61 clear).
-local function write(api)
+-- State 0x1E: the overwrite choice, the directions' edges first.
+local function ask(api, input)
+    if input.left or input.right then
+        -- Left wraps from 0 to 1 and right from 1 to 0: either moves it.
+        s.choice = 1 - s.choice
+        api:core_sound(CUE_MOVE)
+    elseif (input.confirm or input.start) and s.choice == 0 then
+        -- `RemoveSave`: the row's file goes on this tick, a tick before
+        -- the new one is written.
+        local entry = s.saves[s.picked]
+        if entry then
+            local ok, err = api:remove(entry.name)
+            if not ok then
+                api:log("warning: the old save was not removed: " .. tostring(err))
+            end
+        end
+        s.state = STATE_OVERWRITE
+        api:core_sound(CUE_DECIDE)
+    elseif input.confirm or input.start or input.cancel then
+        api:core_sound(CUE_CANCEL)
+        s.state = STATE_BROWSE
+    end
+end
+
+-- States 3 and 0x1F: the write. The engine takes the ribbon and raises
+-- the count on the same tick; a failed write goes on as a written one, as
+-- the original's does (its rollback runs only while `string` is set,
+-- which the save mode's 99 and 0x61 clear). `reveal` is the state that
+-- types the label: 0x22 for a new file, 0x20 for a row's.
+local function write(api, reveal)
     local pending = api:pending() or { character = 0, saves = 0 }
     local character = api:character()
     s.name = M.save_name(character & 1, character & 2 ~= 0, pending.saves + 1, api:local_time())
@@ -240,10 +284,12 @@ local function write(api)
     end
     s.timer = 0
     s.typed = 0
-    s.state = STATE_REVEAL
+    s.state = reveal
 end
 
-local function reveal(api)
+-- States 0x22 and 0x20, which Classic REbirth gives 0x22's timers; `wait`
+-- is the state that follows.
+local function reveal(api, wait)
     if s.timer ~= 0 then
         s.timer = s.timer - 1
         return
@@ -258,7 +304,7 @@ local function reveal(api)
             api:room_sound(KEY)
         end
     else
-        s.state = STATE_WAIT
+        s.state = wait
         s.timer = 0x3C
     end
 end
@@ -288,11 +334,17 @@ local function step(api, input)
     elseif state == STATE_BROWSE then
         browse(api, input)
     elseif state == STATE_WRITE then
-        write(api)
+        write(api, STATE_REVEAL)
     elseif state == STATE_REVEAL then
-        reveal(api)
-    elseif state == STATE_WAIT then
+        reveal(api, STATE_WAIT)
+    elseif state == STATE_WAIT or state == STATE_REWAIT then
         wait(input)
+    elseif state == STATE_ASK then
+        ask(api, input)
+    elseif state == STATE_OVERWRITE then
+        write(api, STATE_RETYPE)
+    elseif state == STATE_RETYPE then
+        reveal(api, STATE_REWAIT)
     elseif state == STATE_DONE or state == STATE_CANCEL then
         start_exit()
     end
@@ -310,6 +362,7 @@ function M.open(api)
     s.mode = api:mode() == "load" and 1 or 0
     s.state = STATE_FONT
     s.cursor, s.top, s.rows, s.timer, s.choice, s.typed, s.cnt0, s.count = 0, 0, 0, 0, 0, 0, 0, 0
+    s.blink, s.blink_choice = 0, 0
     s.saves = {}
     -- `Cardaccess_init`'s step 0: fade 0 from black, a step already taken
     -- on this tick's draw.
@@ -338,6 +391,18 @@ function M.update(api, input)
         end
     elseif s.sub == 2 then
         step(api, input)
+        if s.sub == 2 and s.state == STATE_ASK then
+            -- `Card_Mess_disp` steps the answers' blink (the state word's
+            -- third byte) as it draws them: 32 ticks, the first 15 lit,
+            -- from the start again when the choice isn't the one it last
+            -- drew (`Mwork_pc2`). The original keeps both from one screen
+            -- to the next; each screen here starts them at 0.
+            if s.blink_choice ~= s.choice then
+                s.blink_choice = s.choice
+                s.blink = 0x1F
+            end
+            s.blink = (s.blink + 1) & 0x1F
+        end
     elseif s.sub == 4 then
         if s.step == 1 then
             s.level = s.level + FADE_STEP
@@ -358,9 +423,39 @@ end
 
 -- ---------------------------------------------------------------- drawing
 
+-- `SavePrint`, Classic REbirth's print for this screen: the message font,
+-- each glyph set a pixel closer than its width. The frames show three
+-- glyphs apart from that (`{dx, advance less the font's}`): `f` keeps its
+-- width, `O` is two pixels closer, and `?` sits a pixel later and is a
+-- pixel wider.
+local SAVE_GLYPHS = { f = { 0, 0 }, O = { 0, -2 }, ["?"] = { 1, 1 } }
+
+local function glyph_width(api, glyph)
+    local odd = SAVE_GLYPHS[glyph]
+    return api:text_width(glyph) + (odd and odd[2] or -1)
+end
+
+local function save_width(api, text)
+    local w = 0
+    for i = 1, #text do
+        w = w + glyph_width(api, text:sub(i, i))
+    end
+    return w
+end
+
+local function save_print(api, x, y, text, colour)
+    local opts = { colour = colour }
+    for i = 1, #text do
+        local glyph = text:sub(i, i)
+        local odd = SAVE_GLYPHS[glyph]
+        api:text(x + (odd and odd[1] or 0), y, glyph, opts)
+        x = x + glyph_width(api, glyph)
+    end
+end
+
 local function centred(api, y, text, colour)
-    local w = api:text_width(text)
-    api:text(160 - w // 2, y, text, { colour = colour })
+    -- A line is centred as two pixels wider than it prints.
+    save_print(api, 159 - (save_width(api, text) + 1) // 2, y, text, colour)
 end
 
 local function draw_footer(api, info)
@@ -369,13 +464,43 @@ local function draw_footer(api, info)
     end
     local name = (info.character & 1 == 1 and "Claire" or "Leon") .. (info.character & 2 ~= 0 and " B" or " A")
     local place = api:location_bytes(info.stage, info.room) or ""
-    local rest = string.format("/%02d/", info.saves % 100)
+    local slash = api:text_width("/")
     local w1 = api:text_width(name)
-    local w2 = api:text_width(rest) + api:glyphs_width(place)
+    local w2 = 2 * slash + 2 * DIGIT_W + api:glyphs_width(place)
     local x = (320 - w1 - w2) // 2
     api:text(x, FOOTER_Y, name, { colour = BLUE })
-    api:text(x + w1, FOOTER_Y, rest)
-    api:glyphs(x + w1 + api:text_width(rest), FOOTER_Y, place)
+    x = x + w1
+    api:text(x, FOOTER_Y, "/")
+    x = x + slash
+    -- The count's two digits, each centred in a cell.
+    for digit in string.format("%02d", info.saves % 100):gmatch(".") do
+        api:text(x + (DIGIT_W - api:text_width(digit) + 1) // 2, FOOTER_Y, digit)
+        x = x + DIGIT_W
+    end
+    api:text(x, FOOTER_Y, "/")
+    api:glyphs(x + slash, FOOTER_Y, place)
+end
+
+-- `Cursor_disp`: the debug print's `&`, a 6 by 9 arrowhead in three
+-- greys, as the frames have it.
+local function draw_arrow(api, x, y)
+    for row = 0, 8 do
+        local n = row < 5 and row or 8 - row
+        api:fill_rect(x, y + row, n + 2, 1, 57, 49, 74)
+        if n > 0 then
+            api:fill_rect(x + 1, y + row, n - 1, 1, 206, 206, 189)
+            api:fill_rect(x + n, y + row, 1, 1, 115, 115, 107)
+        end
+    end
+end
+
+local function draw_ask(api)
+    centred(api, ASK_Y, "Proceed to overwrite this save file?")
+    save_print(api, ANSWER_X[0], ANSWER_Y, "Overwrite", s.choice == 0 and GREEN or nil)
+    save_print(api, ANSWER_X[1], ANSWER_Y, "Cancel", s.choice == 1 and GREEN or nil)
+    if s.blink < 0xF then
+        draw_arrow(api, ANSWER_X[s.choice] + ARROW_DX, ANSWER_Y + ARROW_DY)
+    end
 end
 
 function M.draw(api)
@@ -390,10 +515,10 @@ function M.draw(api)
         return
     end
     centred(api, TITLE_Y, s.mode == 1 and "Load" or "Save")
+    -- A new file's label types in the first row with no bar; an
+    -- overwritten row's types in its own row, under the bar.
     local typing = state == STATE_WRITE or state == STATE_REVEAL or state == STATE_WAIT
-    if not typing then
-        api:fade_tile(1, BAR_GREY, BAR_X, ROW_Y + s.cursor * ROW_H, BAR_W, BAR_H)
-    end
+    local retyping = state == STATE_RETYPE or state == STATE_REWAIT
     for row = 0, s.rows - 1 do
         local i = row + s.top
         local y = ROW_Y + row * ROW_H + TEXT_DY
@@ -407,18 +532,28 @@ function M.draw(api)
             end
         elseif i <= s.count - s.mode then
             local entry = s.saves[i + s.mode]
-            if entry then
-                centred(api, y, label_of(entry.base))
+            if retyping and i == s.picked then
+                centred(api, y, s.label:sub(1, s.typed), BLUE)
+            elseif entry then
+                centred(api, y, label_of(entry.base), BLUE)
             end
         else
             centred(api, y, "Exit")
         end
     end
+    if not typing then
+        -- The bar is added over its row's text.
+        api:fade_tile(1, BAR_GREY, BAR_X, ROW_Y + s.cursor * ROW_H, BAR_W, BAR_H)
+    end
     if typing then
         if state ~= STATE_WRITE then
             draw_footer(api, s.new)
         end
-    else
+    elseif retyping then
+        draw_footer(api, s.new)
+    elseif state == STATE_ASK then
+        draw_ask(api)
+    elseif state ~= STATE_OVERWRITE then
         local i = s.cursor + s.top
         if i > -s.mode and i <= s.count - s.mode then
             draw_footer(api, s.saves[i + s.mode])
