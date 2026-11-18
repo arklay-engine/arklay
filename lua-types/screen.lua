@@ -1104,9 +1104,10 @@ function ScreenApi:re2_box_slot(slot) end
 ---@return Re2Map? map `nil` without a game.
 function ScreenApi:re2_map() end
 
----What RE 2's status screen draws when a script opens it on a floor's map
----(`Sce_84`): the floor's rooms, the target's fill blinking, and no marker.
----@return Re2Map? map `nil` while no script map is up, or on a tick that draws none.
+---What RE 2's status screen draws in its map mode: a script's map
+---(`Sce_84`), which is the floor's rooms with the target's fill blinking and
+---no marker, or the map key's, which is the MAP page's.
+---@return Re2Map? map `nil` while no such map is up, or on a tick that draws nothing; with no `rooms` on a tick that draws the backdrop alone.
 function ScreenApi:re2_script_map() end
 
 ---What room 200's computer draws this tick (`Computer200`).
@@ -1326,10 +1327,11 @@ local Re2Computer = {}
 ---@class Re2Map
 ---@field floor integer
 ---@field map integer The map picture's number.
----@field rooms Re2MapRoom[] In draw order.
+---@field rooms? Re2MapRoom[] In draw order. Absent only from `re2_script_map`'s backdrop-only tick, with every other field.
 ---@field marker? { x: integer, y: integer, u: integer, v: integer } The player's marker, when the player is on the floor.
 ---@field arrows { x: integer, y: integer, u: integer }[] The arrows to the floors below and above, in the order the original adds them (it draws the last first).
 ---@field doors { x: integer, y: integer, u: integer }[] The locked doors' icons, in the order the original adds them.
+---@field blink integer The screen's blink level, which colours the marker.
 ---@field blink_falling boolean The way of the screen's blink, which colours the arrows and the icons.
 local Re2Map = {}
 

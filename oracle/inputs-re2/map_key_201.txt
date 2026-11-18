@@ -1,0 +1,21 @@
+# room 201 with the police station's maps held: the map key opens the map from play, up two floors and down two, and the map key closes it; then it is opened again and closed with the cancel key, and again with START (oracle/re2.md, "MAP floors")
+400 map
+404
+460 up
+464
+500 up
+504
+540 down
+544
+580 down
+584
+620 map
+624
+700 map
+704
+760 cancel
+764
+840 map
+844
+900 start
+904

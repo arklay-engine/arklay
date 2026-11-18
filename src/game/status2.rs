@@ -32,6 +32,7 @@ use crate::scd2::host::item_max;
 pub mod binders;
 pub mod file_get;
 pub mod files;
+pub mod key_map;
 pub mod map;
 pub mod script_map;
 

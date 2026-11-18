@@ -311,8 +311,9 @@ function M.open(api, args)
         emit(api)
         return
     end
-    -- A script's map (`Sce_84`, the status task's mode 4): the engine runs
-    -- its page (`src/game/status2/script_map.rs`).
+    -- A script's map (`Sce_84`, the status task's mode 4) or the map key's
+    -- (mode 3): the engine runs its page (`src/game/status2/script_map.rs`,
+    -- `key_map.rs`).
     if args ~= nil and args.mode == "map" then
         s.script_map = true
         api:set("canvas", 1)
@@ -1048,8 +1049,7 @@ local function draw_map(api, d, view)
     end
     local marker = view.marker
     if marker ~= nil then
-        local blink = s.page and s.page.blink or PULSE_START
-        translucent(api, d, d.pages[MARKER], 0, blink + MARKER_BASE,
+        translucent(api, d, d.pages[MARKER], 0, view.blink + MARKER_BASE,
             marker.x, marker.y, MARKER_SIZE, MARKER_SIZE, marker.u, marker.v)
     end
 end
@@ -1379,13 +1379,14 @@ function B.draw_box(api)
     end
 end
 
--- A script's map (`0x4FB800` and `St_disp_wall`): the background, the
--- backdrop's tiles and the floor's rooms, the target's fill blinking, with no frame, tab or
--- marker.
+-- The status screen's map mode: a script's map (`0x4FB800` and
+-- `St_disp_wall`: the background, the backdrop's tiles and the floor's
+-- rooms, the target's fill blinking, with no frame, tab or marker) or the
+-- map key's (`St_main03`: the same backdrop under the MAP page's map).
 local function draw_script_map(api)
     api:fill_rect(0, 0, api:width(), api:height(), 8, 8, 32)
-    -- The tick that finds the fade in done draws nothing over the
-    -- background.
+    -- A tick that draws nothing over the background: the one that finds a
+    -- script's map's fade in done, and the map key's before its first.
     local view = api:re2_script_map()
     if view == nil then
         return
@@ -1397,7 +1398,10 @@ local function draw_script_map(api)
             sprite(api, d, ST + 1, TILE * column, TILE * row, TILE, TILE, TILE_U, TILE_V)
         end
     end
-    draw_map(api, d, view)
+    -- The map key's floor change draws the backdrop alone.
+    if view.rooms ~= nil then
+        draw_map(api, d, view)
+    end
 end
 
 function M.draw(api)

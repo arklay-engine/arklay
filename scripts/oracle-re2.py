@@ -139,6 +139,8 @@ BUTTONS = {
     "fire": 0x0080,
     "start": 0x0800,
     "inventory": 0x0800,
+    # The PC's map key: `Pad_set`'s table maps it to `Key`'s 0x4000.
+    "map": 0x0010,
 }
 
 BOOT_TICKS = 3000
@@ -1068,15 +1070,17 @@ def item_box_trace(game: Game) -> str:
 # The MAP page's banks: `fg_map`'s five words, `fg_map_c`, `fg_map_i` and the floors' bank 35.
 MAP_FLAGS = (0x98EC04, 0x98EC08, 0x98EC0C, 0x98EC10, 0x98EC14, 0x98EC18, 0x98EC1C, 0x98EC00)
 STATUS_PAGE = 0x691F61  # the status screen's page: 4 is MAP
+STATUS_MODE = 0x691F70  # the status task's mode: 3 is the map key's map, from the press to `St_exit`
 MAP_FLOOR = 0x691F7A  # the floor the MAP page shows
 MAP_BLINK = 0x691F88  # the marker's blink, then its direction
 
 
 def map_flags_trace(game: Game) -> str:
-    """The MAP page's banks (`mapfg`), then the page's floor and blink while the page is MAP (`map`)."""
+    """The MAP page's banks (`mapfg`), then the map's floor and blink while the page is MAP or the status
+    task is in the map key's mode (`map`)."""
     flags = ",".join(f"{game.u32(address):08x}" for address in MAP_FLAGS)
     page = "-"
-    if game.u8(STATUS_PAGE) == 4:
+    if game.u8(STATUS_PAGE) == 4 or game.u8(STATUS_MODE) == 3:
         page = f"{game.u8(MAP_FLOOR)},{game.u8(MAP_BLINK)},{game.u8(MAP_BLINK + 1)}"
     return f"mapfg={flags} map={page}"
 

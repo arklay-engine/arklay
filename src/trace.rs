@@ -120,8 +120,8 @@ pub struct TraceTick<'a> {
     /// RE2's map banks, the oracle's `mapfg`: bank 9's first five words
     /// (`fg_map`), then the first words of banks 32, 33 and 35, in hex.
     pub re2_map_flags: Option<String>,
-    /// RE2's MAP page, the oracle's `map`: the floor it shows, the blink
-    /// and its way, or `-` while the status screen's page isn't MAP.
+    /// RE2's map, the oracle's `map`: the floor it shows, the blink and its
+    /// way, or `-` while neither the MAP page nor the map key's map is up.
     pub re2_map: Option<String>,
     /// RE2: the status screen's item page (`ip`), as the end of the
     /// oracle's `gi`.

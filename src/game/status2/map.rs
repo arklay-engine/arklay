@@ -596,18 +596,25 @@ impl GameState {
         })
     }
 
-    /// The trace's `map`: the floor the MAP page shows (`0x691F7A`), the
-    /// blink and its way, or `-` while the status screen's page isn't MAP.
+    /// The trace's `map`: the floor the map shows (`0x691F7A`), the blink
+    /// and its way, while the status screen's page is MAP or the status
+    /// task is in the map key's mode (from the key's press to `St_exit`),
+    /// else `-`.
     pub fn re2_map_trace(&self) -> String {
         let work = &self.re2_file;
-        match self.re2_items {
-            Some(page) if page.page == super::PAGE_MAP => format!(
+        let page = self
+            .re2_items
+            .is_some_and(|page| page.page == super::PAGE_MAP);
+        let key = self.re2_key_map.is_some_and(|map| !map.exited);
+        if page || key {
+            format!(
                 "{},{},{}",
                 work.map_floor,
                 work.blink.level,
                 u8::from(work.blink.falling)
-            ),
-            _ => "-".to_string(),
+            )
+        } else {
+            "-".to_string()
         }
     }
 

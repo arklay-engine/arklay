@@ -275,6 +275,7 @@ impl AttractState {
                 fire: action,
                 fire_pressed: false,
                 lock_drop: word & 0x0004 != 0,
+                map_held: false,
                 lock_pressed: false,
                 aim,
                 aim_pressed: false,
