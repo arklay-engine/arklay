@@ -1,0 +1,46 @@
+# room 102 with six items (oracle/re2.md, "Key repeat"): COMBN's target with right, down, left and up held, a decide under a held right and a cancel under a held down, then CHECK with down pressed twice under its description, decides at 820 and 852 that leave the message up and one at 900 that closes it, left held from 840, and START
+0
+364 start
+368
+400 down
+404
+420 confirm
+424
+440 down
+444
+460 down
+464
+480 confirm
+484
+500 right
+540
+550 down
+575
+585 left
+620
+630 up
+655
+665 right
+680 right confirm
+684 right
+700
+720 down
+735 down cancel
+739 down
+750
+770 confirm
+774
+790 down
+794
+800 down
+804
+820 confirm
+824
+840 left
+852 left confirm
+856 left
+900 left confirm
+904 left
+930
+960 start
+964
