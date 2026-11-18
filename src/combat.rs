@@ -31,13 +31,6 @@
 //!
 //! # Documented deviations
 //!
-//! - **The knife and the joint-attached gore.** The original measures the
-//!   knife reach from the player's knife-hand joint world matrix and anchors
-//!   several hit reactions on specific joints. The port has no game-layer
-//!   joint matrices yet, so the knife origin is the player position plus the
-//!   per-character reach offset rotated by the yaw (ahead of the player for
-//!   both characters), and the joint-attached gore spurts/tints are skipped.
-//!   The hit/miss rules, ranges and damage stay exact.
 //! - **Per-joint fudges in the head reaction.** The original clamps the
 //!   lifted head blood against joint 1's world height; the port compares
 //!   against the entity origin instead and documents the difference.
@@ -51,6 +44,7 @@ use std::rc::Rc;
 
 use anyhow::{Result, bail};
 
+use crate::anim::Mat4x3;
 use crate::effects::Attach;
 use crate::game::{
     BANK_ENEMIES, BANK_SCENARIO, Entity, GameState, SCENARIO_FLAG_SECOND_PLAYTHROUGH,
@@ -716,31 +710,36 @@ fn detect_gun(
     check_entity_in_range_cone(aim, dist, far_left, far_right, displacement)
 }
 
-/// `weapon_hit_detect_knife`: radial reach from the player's knife-hand
-/// reach point (the port anchors it at the player origin plus the
-/// per-character reach offset rotated by the yaw).
+/// The knife point in the weapon joint's space, per character (Chris, then
+/// Jill): `weapon_hit_detect_knife`'s reach origin and the stab blood's anchor.
+const KNIFE_POINT: [[i32; 3]; 2] = [[0x99, 0, 0], [-0x17C, 0, 0]];
+
+/// The world matrix of the player's weapon joint (`jointsStructs[0xE].world`)
+/// as the last render pass composed it. A player whose skeleton has not been
+/// posed yet has no joints; the entity matrix stands in for the hand then.
+fn knife_hand(game: &GameState) -> Mat4x3 {
+    game.joint_worlds[0]
+        .get(crate::weapons::WEAPON_JOINT)
+        .copied()
+        .unwrap_or_else(|| crate::anim::entity_matrix(game.entities[0].pos, game.entities[0].angle))
+}
+
+/// `weapon_hit_detect_knife`: radial reach from the knife point, which is
+/// [`KNIFE_POINT`] carried through the weapon joint's world matrix.
 fn detect_knife(
     aim_flags: u8,
     candidate: &Entity,
     range: i16,
     player_character: u8,
-    player_angle: u16,
-    player_pos: [i32; 3],
+    hand: &Mat4x3,
     displacement: &mut u32,
 ) -> bool {
-    // Both reach points lie ahead of the player: the original's -0x17C for
-    // Jill is a hand-joint offset, and taken as a distance along the yaw it
-    // put her knife point behind her, out of reach of anything in front
-    // (30C's web, which her route must cut, stands 671 past the nearest
-    // floor). Part of the documented joint-matrix approximation.
-    let offset: i16 = if player_character & 1 == 0 {
-        0x99
-    } else {
-        0x17C
+    let point = Mat4x3 {
+        r: crate::anim::IDENTITY_MATRIX,
+        t: KNIFE_POINT[usize::from(player_character & 1)],
     };
-    let (reach_x, reach_z) = crate::player::rotate_speed(player_angle, 0, i32::from(offset));
-    let knife = [player_pos[0] + reach_x, player_pos[2] + reach_z];
-    let dist = [candidate.pos[0] - knife[0], candidate.pos[2] - knife[1]];
+    let knife = crate::anim::compose(hand, &point).t;
+    let dist = [candidate.pos[0] - knife[0], candidate.pos[2] - knife[2]];
 
     let enemy_id = candidate.id;
     if matches!(enemy_id, 0x00 | 0x01 | 0x11) && aim_flags & 0x80 != 0 {
@@ -895,28 +894,6 @@ fn spawn_billboard(
     );
 }
 
-/// Spawn one hit billboard anchored to the player's matrix (the knife-hand
-/// blood the port cannot place in the hand joint's space).
-fn spawn_player_billboard(
-    game: &mut GameState,
-    effect_type: u8,
-    depth: u8,
-    offset: [i32; 3],
-    yaw: i16,
-) {
-    let room_effects = Rc::clone(&game.room_effects);
-    let _ = crate::effects::create_attached(
-        game,
-        &room_effects,
-        effect_type,
-        depth,
-        Attach::Player,
-        offset,
-        yaw,
-        0,
-    );
-}
-
 /// Queue the enemy-bank cue `id` at `slot`'s position (the monster `Snd_em`).
 fn queue_enemy_cue(game: &mut GameState, slot: usize, id: u8) {
     let group = (game.entities[slot].variant >> 4) & 0x7;
@@ -1006,6 +983,7 @@ impl GameState {
             .unwrap_or(0) as i16;
         let player_angle = self.entities[0].angle;
         let player_pos = self.entities[0].pos;
+        let hand = knife_hand(self);
         let mut displacement = 0x7FFF_FFFFu32;
         let mut enemy_slot: Option<usize> = None;
 
@@ -1021,8 +999,7 @@ impl GameState {
                     &candidate,
                     range,
                     player_character,
-                    player_angle,
-                    player_pos,
+                    &hand,
                     &mut displacement,
                 ),
                 WeaponClass::Gun => detect_gun(
@@ -1114,20 +1091,14 @@ impl GameState {
         pre_health: i16,
     ) {
         let yaw = hit_billboard_rot(self, &self.entities[slot]);
-        let offset = [
-            i32::from(record.knockback[0]),
-            i32::from(record.knockback[1]),
-            i32::from(record.knockback[2]),
-        ];
         match post_hit_class(weapon_adj) {
             Some(PostHit::Knife) => {
-                // The original's bank-1 stab cue and the knife-hand blood
-                // billboard use the weapon-joint space the port does not
-                // model; the billboard anchors to the player instead.
-                if record.effect_type != 1 {
-                    spawn_player_billboard(self, record.effect_type, record.effect_data, offset, 0);
-                }
-                self.dispatch_reaction(
+                // The stab (`Play3DSnd(1, 1)`), from the player.
+                crate::weapons::play_weapon_sound(self, crate::weapons::ITEM_KNIFE, 1);
+                // The reaction first: its billboards take their effect slots
+                // before the stab's, and it leaves the effect type the stab
+                // blood reads.
+                let effect_type = self.dispatch_reaction(
                     slot,
                     record,
                     displacement,
@@ -1136,9 +1107,20 @@ impl GameState {
                     pre_health,
                     yaw,
                 );
+                if effect_type != 1 {
+                    let character = usize::from(self.id.player_flag & 1);
+                    // The stab's blood, at the knife point and unturned.
+                    let _ = crate::weapons::spawn_hand_fx(
+                        self,
+                        effect_type,
+                        record.effect_data,
+                        KNIFE_POINT[character],
+                        0,
+                    );
+                }
             }
             Some(PostHit::Reaction) => {
-                self.dispatch_reaction(
+                let _ = self.dispatch_reaction(
                     slot,
                     record,
                     displacement,
@@ -1153,7 +1135,7 @@ impl GameState {
                     self.entities[slot].health = self.entities[slot].health.wrapping_add(10);
                     self.entities[slot].hit_state = self.entities[slot].hit_state.wrapping_sub(1);
                 }
-                self.dispatch_reaction(
+                let _ = self.dispatch_reaction(
                     slot,
                     record,
                     displacement,
@@ -1181,7 +1163,9 @@ impl GameState {
         let _ = weapon_id;
     }
 
-    /// The per-enemy reaction the post-hit callbacks dispatch.
+    /// The per-enemy reaction the post-hit callbacks dispatch. Returns the
+    /// record's effect type as the reaction leaves it in the shared scratch
+    /// (`g_collPushDepthZHi`): the zombie's turns a 4 into 0.
     #[allow(clippy::too_many_arguments)]
     fn dispatch_reaction(
         &mut self,
@@ -1192,7 +1176,7 @@ impl GameState {
         aim_flags: u8,
         pre_health: i16,
         yaw: i16,
-    ) {
+    ) -> u8 {
         let enemy_type = self.entities[slot].id;
         let offset = [
             i32::from(record.knockback[0]),
@@ -1237,9 +1221,17 @@ impl GameState {
                 }
             }
             HitReaction::Zombie => {
-                self.zombie_reaction(slot, record, displacement, weapon_adj, aim_flags, yaw);
+                return self.zombie_reaction(
+                    slot,
+                    record,
+                    displacement,
+                    weapon_adj,
+                    aim_flags,
+                    yaw,
+                );
             }
         }
+        record.effect_type
     }
 
     /// The zombie reaction: the aim-gated instant head-pop (shotgun point
@@ -1255,7 +1247,7 @@ impl GameState {
         weapon_adj: u8,
         aim_flags: u8,
         yaw: i16,
-    ) {
+    ) -> u8 {
         let mut offset = [
             i32::from(record.knockback[0]),
             i32::from(record.knockback[1]),
@@ -1325,6 +1317,7 @@ impl GameState {
             self.entities[slot].hit_state &= !0xE0;
         }
         spawn_billboard(self, slot, effect_type, record.effect_data, offset, yaw);
+        effect_type
     }
 
     /// An aim-up headshot lifts the blood to head height, or to a low fixed
@@ -2277,6 +2270,144 @@ mod tests {
             "knife id shifted plus the record hit plus the neutral-aim step"
         );
         assert!(!game.flags[usize::from(BANK_ENEMIES)].bit(0));
+    }
+
+    /// Pose the player's weapon joint, unturned, at `pos`.
+    fn pose_knife_hand(game: &mut GameState, pos: [i32; 3]) {
+        game.joint_worlds[0] = vec![
+            Mat4x3 {
+                r: crate::anim::IDENTITY_MATRIX,
+                t: pos,
+            };
+            crate::weapons::WEAPON_JOINT + 1
+        ];
+    }
+
+    #[test]
+    fn the_knife_reaches_from_the_weapon_joint_not_the_players_origin() {
+        // A lunge carries the hand far ahead of the origin: the enemy at the
+        // blade is cut, and one standing on the origin is out of reach.
+        let mut room = RoomState::default();
+        let mut game = armed_game();
+        pose_knife_hand(&mut game, [1300, -1200, 0]);
+        place_enemy(&mut game, 1, 0x13, [200, 0, 0]);
+        assert_eq!(game.apply_weapon_damage(&mut room, 1), 0, "behind the hand");
+        assert_eq!(game.entities[1].health, 55);
+
+        // Chris's point is 0x99 along the hand, his reach 400 from there.
+        place_enemy(&mut game, 1, 0x13, [1300 + 0x99 + 399, 0, 0]);
+        assert_eq!(game.apply_weapon_damage(&mut room, 1), 1);
+        assert_eq!(game.entities[1].health, 55 - 10);
+
+        let mut game = armed_game();
+        pose_knife_hand(&mut game, [1300, -1200, 0]);
+        place_enemy(&mut game, 1, 0x13, [1300 + 0x99 + 400, 0, 0]);
+        assert_eq!(game.apply_weapon_damage(&mut room, 1), 0, "a unit too far");
+    }
+
+    #[test]
+    fn the_knife_point_turns_with_the_hand() {
+        // The hand turned a quarter about Y carries its X along the world's Z.
+        let turned = Mat4x3 {
+            r: crate::anim::rotation_matrix(0, 0x400, 0),
+            t: [0, 0, 0],
+        };
+        let point = Mat4x3 {
+            r: crate::anim::IDENTITY_MATRIX,
+            t: KNIFE_POINT[0],
+        };
+        let knife = crate::anim::compose(&turned, &point).t;
+        assert_eq!(knife[0], 0, "off the world's X");
+        assert!(knife[2].abs() >= 0x98, "and along its Z");
+
+        let mut room = RoomState::default();
+        for (pos, hit) in [
+            ([0, 0, knife[2].signum() * (0x99 + 350)], true),
+            ([0x99 + 350, 0, 0], false),
+        ] {
+            let mut game = armed_game();
+            game.joint_worlds[0] = vec![turned; crate::weapons::WEAPON_JOINT + 1];
+            place_enemy(&mut game, 1, 0x13, pos);
+            assert_eq!(game.apply_weapon_damage(&mut room, 1) != 0, hit, "{pos:?}");
+        }
+    }
+
+    #[test]
+    fn jills_knife_point_lies_the_other_way_along_her_hand() {
+        let mut room = RoomState::default();
+        for (character, hit) in [(0u8, false), (1, true)] {
+            let mut game = armed_game();
+            game.id.player_flag = character;
+            pose_knife_hand(&mut game, [0, 0, 0]);
+            // 499 past her point at -0x17C, inside her reach of 500.
+            place_enemy(&mut game, 1, 0x13, [-0x17C - 499, 0, 0]);
+            assert_eq!(
+                game.apply_weapon_damage(&mut room, 1) != 0,
+                hit,
+                "character {character}"
+            );
+        }
+    }
+
+    /// A knife hit on an enemy of `id` standing at the knife point: the cues
+    /// it queued through the weapon bank and the blood it left on the hand.
+    fn knife_hit(character: u8, id: u8) -> (Vec<u8>, Vec<crate::effects::Effect>) {
+        let mut room = RoomState::default();
+        let mut game = armed_game();
+        game.id.player_flag = character;
+        game.set_equipped(Some(crate::weapons::ITEM_KNIFE));
+        pose_knife_hand(&mut game, [0, 0, 0]);
+        for effect_type in [0u8, 1] {
+            game.weapon_effects
+                .sprites
+                .push(crate::effects::fixtures::sprite(
+                    effect_type,
+                    std::array::from_fn(|_| vec![vec![crate::effects::fixtures::block(1, 0, 0)]]),
+                ));
+        }
+        let point = KNIFE_POINT[usize::from(character)];
+        place_enemy(&mut game, 1, id, [point[0], 0, 0]);
+        assert_eq!(game.apply_weapon_damage(&mut room, 1), 1);
+        let cues = game
+            .entity_sounds
+            .iter()
+            .filter(|sound| sound.bank == 1)
+            .map(|sound| sound.column)
+            .collect();
+        let blood = game
+            .effects
+            .active()
+            .filter(|(_, effect)| {
+                effect.attach == Attach::Joint(0, crate::weapons::WEAPON_JOINT as u8)
+            })
+            .map(|(_, effect)| *effect)
+            .collect();
+        (cues, blood)
+    }
+
+    #[test]
+    fn a_knife_hit_sounds_the_stab_and_bleeds_from_the_knife_point() {
+        for character in [0u8, 1] {
+            // Type 9 has no reaction of its own, and its record bleeds (type 0).
+            let (cues, blood) = knife_hit(character, 0x09);
+            assert_eq!(cues, [1], "`Play3DSnd(1, 1)`, the stab");
+            assert_eq!(blood.len(), 1, "character {character}");
+            assert_eq!(blood[0].effect_type, 0);
+            // On the weapon joint at the knife point, unturned.
+            assert_eq!(
+                blood[0].local_offset,
+                KNIFE_POINT[usize::from(character)].map(|v| v as i16)
+            );
+            assert_eq!(blood[0].yaw, 0);
+        }
+    }
+
+    #[test]
+    fn a_knife_hit_whose_record_names_effect_one_leaves_no_blood_on_the_hand() {
+        // The web's knife record: the stab still sounds.
+        let (cues, blood) = knife_hit(0, 0x13);
+        assert_eq!(cues, [1]);
+        assert!(blood.is_empty());
     }
 
     #[test]

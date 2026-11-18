@@ -741,7 +741,7 @@ pub fn fire_consume_ammo_stack(game: &mut GameState) {
 /// Queue one weapon sample through the weapon bank (`Play3DSnd(1, id)`): each
 /// bank slot is its own handle the original restarts (`SetSndSlot(handle,
 /// 0)`), so the bank key is `(1, id)`, shared with scripted bank-1 cues.
-fn play_weapon_sound(game: &mut GameState, weapon: u8, id: u8) {
+pub(crate) fn play_weapon_sound(game: &mut GameState, weapon: u8, id: u8) {
     let Some(name) = crate::sfx::weapon_sound(weapon, id) else {
         return;
     };
@@ -763,7 +763,7 @@ fn effect_zone_step(game: &GameState, player: &mut PlayerState, sound_type: u8) 
 }
 
 /// Spawn one billboard attached to the weapon hand.
-fn spawn_hand_fx(
+pub(crate) fn spawn_hand_fx(
     game: &mut GameState,
     effect_type: u8,
     depth: u8,
@@ -2383,7 +2383,11 @@ fn knife_aim(
     input: Input,
 ) {
     if player.weapon.state == 0 {
-        reset_frame(player);
+        // The raise names its first frame and leaves `unk_bf` alone, the one
+        // knife state that does: a frame the last clip was still holding
+        // plays out its ticks before the raise's first frame is read.
+        player.anim.frame = 0;
+        player.anim.display_frame = 0;
         player.move_speed_current = 1;
         player.weapon.state = 1;
         player.weapon.cooldown = 0;
@@ -2541,22 +2545,26 @@ fn knife_swing(
         play_weapon_sound(game, ITEM_KNIFE, 0);
     }
 
-    // The original's swing sounds above the room's reference height. Its 0x17
-    // billboards here stay with the other effect-zone dust, a recorded
-    // deviation.
-    if frame == 0
-        && player.anim.timing == 0
-        && game.flags[5].bit(MSF2_EFFECT_ZONE)
+    // In water, above the room's reference height: the blade splashes (the
+    // swing aimed with up held over its first three frames, the others on
+    // every even one) and the swing's first tick sounds the water.
+    if game.flags[5].bit(MSF2_EFFECT_ZONE)
         && game
             .objects
             .records
             .first()
             .is_some_and(|record| player.pos[1] - record.pos[1] > 1000)
     {
-        if player.anim.clip == 7 {
-            player.emit_footstep(0, 1);
-        } else {
-            play_weapon_sound(game, ITEM_KNIFE, 2);
+        let up = player.anim.clip == 7;
+        if if up { frame < 3 } else { frame & 1 == 0 } {
+            let _ = spawn_hand_fx(game, 0x17, 8, [0x96, 0, 0], 0);
+        }
+        if frame == 0 && player.anim.timing == 0 {
+            if up {
+                player.emit_footstep(0, 1);
+            } else {
+                play_weapon_sound(game, ITEM_KNIFE, 2);
+            }
         }
     }
 
@@ -4868,9 +4876,115 @@ mod tests {
         // pair is KNIFE_FIRE_WINDOW[6..8], not Chris's first pair.
         let (mut game, mut player) = armed(1, 0);
         game.id.player_flag = 1;
-        place_enemy(&mut game, 1, 0x13, [200, 0, 0]);
+        // Her knife point lies 0x17C back along the hand's X, which the
+        // rig's unturned hand leaves behind the origin.
+        place_enemy(&mut game, 1, 0x13, [-200, 0, 0]);
         drive(&mut game, &mut player, aiming(true), 40);
         assert_eq!(game.entities[1].health, 45, "the web knife record");
+    }
+
+    #[test]
+    fn the_knife_raise_plays_out_the_frame_the_last_clip_held() {
+        let (mut game, mut player) = armed(1, 0);
+        player.anim.frame = 5;
+        player.anim.display_frame = 5;
+        player.anim.timing = 3;
+        // The first tick only enters the raise; the second runs its state 0.
+        drive(&mut game, &mut player, aiming(false), 2);
+        assert_eq!(player.weapon.behavior, 0x12, "raising");
+        assert_eq!(
+            (player.anim.frame, player.anim.timing),
+            (0, 2),
+            "the held ticks count on under the raise's first frame"
+        );
+        drive(&mut game, &mut player, aiming(false), 1);
+        assert_eq!((player.anim.frame, player.anim.timing), (0, 1));
+        drive(&mut game, &mut player, aiming(false), 1);
+        assert_eq!(player.anim.frame, 1, "and only then is the frame read");
+    }
+
+    /// A knife swing started from the hold, in or out of the water: the
+    /// frames it splashed on and those it did not, the weapon cues and the
+    /// steps it made.
+    fn knife_swing_splashes(up: bool, water: bool) -> (Vec<u8>, Vec<u8>, Vec<u8>, usize) {
+        let (mut game, mut player) = armed(1, 0);
+        game.weapon_effects
+            .sprites
+            .push(crate::effects::fixtures::sprite(
+                0x17,
+                std::array::from_fn(|_| vec![vec![crate::effects::fixtures::block(1, 0, 0)]]),
+            ));
+        game.objects.records = vec![crate::objects::ObjectRecord {
+            pos: [0, -1200, 0],
+            ..crate::objects::ObjectRecord::default()
+        }];
+        drive(&mut game, &mut player, aiming(false), 40);
+        assert_eq!(player.weapon.behavior, 0x13, "the knife hold");
+        if water {
+            game.flags[5].apply(MSF2_EFFECT_ZONE, 0);
+        }
+        let held = Input {
+            aim: true,
+            up,
+            ..Input::default()
+        };
+        drive(&mut game, &mut player, Input { fire: true, ..held }, 1);
+        assert_eq!(player.weapon.behavior, 0x14, "swinging");
+        game.entity_sounds.clear();
+        let _ = player.take_footsteps();
+
+        let splashes = |game: &GameState| {
+            game.effects
+                .active()
+                .filter(|(_, effect)| effect.effect_type == 0x17)
+                .count()
+        };
+        let (mut wet, mut dry) = (Vec::new(), Vec::new());
+        while player.weapon.behavior == 0x14 {
+            // The swing's first tick names frame 0 before it reads it.
+            let frame = if player.weapon.state == 0 {
+                0
+            } else {
+                player.anim.frame as u8
+            };
+            let before = splashes(&game);
+            drive(&mut game, &mut player, held, 1);
+            match splashes(&game) - before {
+                0 => dry.push(frame),
+                1 => wet.push(frame),
+                more => panic!("{more} splashes on frame {frame}"),
+            }
+            assert_eq!(player.anim.clip == 7, up);
+        }
+        let cues = game
+            .entity_sounds
+            .iter()
+            .map(|sound| sound.column)
+            .filter(|&column| column != 0)
+            .collect();
+        (wet, dry, cues, player.take_footsteps().len())
+    }
+
+    #[test]
+    fn the_knife_swing_splashes_in_water_above_the_room_reference_height() {
+        let all: Vec<u8> = (0..8).collect();
+        for up in [false, true] {
+            let (wet, dry, cues, steps) = knife_swing_splashes(up, false);
+            assert_eq!((wet, cues, steps), (vec![], vec![], 0), "dry (up={up})");
+            assert_eq!(dry, all, "the whole eight-frame swing (up={up})");
+        }
+        // A level swing splashes on its even frames and sounds the knife
+        // bank's water cue on its first.
+        let (wet, dry, cues, steps) = knife_swing_splashes(false, true);
+        assert_eq!(wet, [0, 2, 4, 6]);
+        assert_eq!(dry, [1, 3, 5, 7]);
+        assert_eq!((cues, steps), (vec![2], 0));
+        // The one with up held splashes over its first three frames and
+        // sounds a step in the water instead.
+        let (wet, dry, cues, steps) = knife_swing_splashes(true, true);
+        assert_eq!(wet, [0, 1, 2]);
+        assert_eq!(dry, [3, 4, 5, 6, 7]);
+        assert_eq!((cues, steps), (vec![], 1));
     }
 
     #[test]
