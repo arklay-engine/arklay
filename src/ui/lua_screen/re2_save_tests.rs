@@ -8,6 +8,7 @@ use super::*;
 
 use crate::game::GameState;
 use crate::pack::Pack;
+use crate::render::Framebuffer;
 use crate::save::SaveFile;
 use crate::state::{RoomId, RoomState};
 use crate::ui::{Screen, ScreenResult, UiCue, UiInput};
@@ -354,6 +355,156 @@ fn the_overwrite_choice_moves_and_cancels() {
     // The next decide starts on Overwrite again.
     tick(&mut screen, &dir, press(|input| input.confirm = true));
     assert_eq!(sv(&screen)[2..], [0x1E, 0, 1, 0, 3, 0, 0, 0, 1]);
+    // A direction's press comes before a decide on the same tick, and a
+    // decide before a cancel.
+    let both = UiInput {
+        right: true,
+        confirm: true,
+        ..UiInput::default()
+    };
+    let (_, cues) = tick(&mut screen, &dir, both);
+    assert_eq!(cues, [UiCue::Core(4)]);
+    assert_eq!(sv(&screen)[2..], [0x1E, 0, 1, 0, 3, 0, 1, 0, 1]);
+    tick(&mut screen, &dir, press(|input| input.left = true));
+    let both = UiInput {
+        confirm: true,
+        cancel: true,
+        ..UiInput::default()
+    };
+    let (_, cues) = tick(&mut screen, &dir, both);
+    assert_eq!(cues, [UiCue::Core(6)]);
+    assert_eq!(sv(&screen)[2], 0x1F);
+}
+
+/// With the list scrolled, the save overwritten is the one under the
+/// cursor: the row's index is the cursor's and the top row's together.
+#[test]
+fn a_scrolled_lists_overwrite_takes_the_row_under_the_cursor() {
+    let dir = folder("overwrite-scrolled");
+    saves_in(&dir, 12);
+    let mut screen = open(&dir);
+    to_the_list(&mut screen, &dir);
+    // Eleven rows down: the cursor on the last of ten rows, the list two
+    // down. Row 0 is the new file, so the row is the eleventh newest save.
+    for _ in 0..11 {
+        tick(&mut screen, &dir, held_down());
+        for _ in 0..3 {
+            tick(&mut screen, &dir, UiInput::default());
+        }
+    }
+    assert_eq!(sv(&screen)[4..6], [9, 2]);
+    tick(&mut screen, &dir, press(|input| input.confirm = true));
+    assert_eq!(sv(&screen)[2], 0x1E);
+    tick(&mut screen, &dir, press(|input| input.confirm = true));
+    tick(&mut screen, &dir, UiInput::default());
+    assert_eq!(sv(&screen)[2], 0x20);
+    let left: Vec<bool> = (0..12)
+        .map(|index| dir.join(format!("save{index:02}.dat")).exists())
+        .collect();
+    let mut expected = [true; 12];
+    expected[1] = false;
+    assert_eq!(left, expected);
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 12);
+}
+
+/// A write that fails loses no save: the row's file is deleted only once
+/// the new one is written. The screen carries on as after a save, as a new
+/// file's failed write does.
+#[test]
+fn a_failed_overwrite_keeps_the_old_save() {
+    let dir = folder("overwrite-failed");
+    saves_in(&dir, 1);
+    let mut screen = open(&dir);
+    // A folder stands where the new file would go.
+    screen.test_eval::<()>("M.save_name = function() return 'blocked' end");
+    std::fs::create_dir(dir.join("blocked.dat")).unwrap();
+    to_the_list(&mut screen, &dir);
+    to_the_choice(&mut screen, &dir);
+    tick(&mut screen, &dir, press(|input| input.confirm = true));
+    tick(&mut screen, &dir, UiInput::default());
+    assert_eq!(sv(&screen)[2], 0x20);
+    assert!(dir.join("save00.dat").exists());
+}
+
+/// A font sheet whose every cell is a solid white block, so a drawn glyph
+/// shows in a frame without the pack's art.
+fn solid_font() -> crate::font::Font {
+    let (width, height) = (256u32, 224u32);
+    let texture = crate::model::Texture8 {
+        width,
+        height,
+        indices: vec![1; (width * height) as usize],
+        palettes: vec![[255, 255, 255, 255]; 256],
+        stp: vec![false; 256],
+    };
+    crate::font::Font::new(texture, crate::font::FontDef::western())
+}
+
+/// A frame of the list, the choice and the retyped row, over a solid-cell
+/// font: a save whose file name isn't ASCII draws, the answers' arrowhead
+/// shows only while the blink is under 15, and the new label types in the
+/// save's own row.
+#[test]
+fn the_overwrite_draws_its_arrowhead_and_types_in_the_row() {
+    let dir = folder("overwrite-draw");
+    write_at(&dir, "Caf\u{e9} \u{4e16}.dat", &block(1), 0);
+    let font = solid_font();
+    let frame = |screen: &mut LuaScreen| {
+        let mut cx = context(&dir);
+        cx.font = Some(&font);
+        let mut framebuffer = Framebuffer::new();
+        screen.draw(&cx, &mut framebuffer);
+        assert!(!screen.failed(), "the draw ran");
+        framebuffer
+    };
+    let pixel = |framebuffer: &Framebuffer, x: usize, y: usize| {
+        let at = (y * framebuffer.width as usize + x) * 4;
+        [
+            framebuffer.rgba[at],
+            framebuffer.rgba[at + 1],
+            framebuffer.rgba[at + 2],
+        ]
+    };
+    // Whether any pixel of the row at `y` (15 high) isn't black.
+    let row_drawn = |framebuffer: &Framebuffer, y: usize| {
+        (y..y + 14).any(|y| (20..300).any(|x| pixel(framebuffer, x, y) != [0, 0, 0]))
+    };
+    let mut screen = open(&dir);
+    to_the_list(&mut screen, &dir);
+    let list = frame(&mut screen);
+    assert!(row_drawn(&list, 0x31 + 15), "the save's row");
+    to_the_choice(&mut screen, &dir);
+    // The arrowhead's body, 7 left of the lit answer and 4 down its row.
+    const BODY: [u8; 3] = [206, 206, 189];
+    let arrow = |framebuffer: &Framebuffer, answer_x: usize| {
+        pixel(framebuffer, answer_x - 7 + 1, 0xDE + 4 + 4) == BODY
+    };
+    let lit = frame(&mut screen);
+    assert!(arrow(&lit, 0x38) && !arrow(&lit, 0xCC));
+    for _ in 0..14 {
+        tick(&mut screen, &dir, UiInput::default());
+    }
+    let out = frame(&mut screen);
+    assert!(!arrow(&out, 0x38), "out from the blink's 15th tick");
+    tick(&mut screen, &dir, press(|input| input.right = true));
+    let moved = frame(&mut screen);
+    assert!(arrow(&moved, 0xCC) && !arrow(&moved, 0x38));
+    // The overwrite: the row is empty on the write's tick and fills as the
+    // label types; the new file's row keeps "Create New".
+    tick(&mut screen, &dir, press(|input| input.left = true));
+    tick(&mut screen, &dir, press(|input| input.confirm = true));
+    tick(&mut screen, &dir, UiInput::default());
+    assert_eq!(sv(&screen)[2], 0x20);
+    let empty = frame(&mut screen);
+    assert!(row_drawn(&empty, 0x31));
+    let bar_only = |framebuffer: &Framebuffer| {
+        let first = pixel(framebuffer, 20, 0x31 + 15 + 3);
+        (20..300).all(|x| pixel(framebuffer, x, 0x31 + 15 + 3) == first)
+    };
+    assert!(bar_only(&empty), "nothing typed yet");
+    tick(&mut screen, &dir, UiInput::default());
+    let typed = frame(&mut screen);
+    assert!(!bar_only(&typed), "the first character, in the save's row");
 }
 
 #[test]
@@ -394,15 +545,16 @@ fn decide_on_overwrite_replaces_the_save_and_types_in_its_row() {
     let mut screen = open(&dir);
     to_the_list(&mut screen, &dir);
     to_the_choice(&mut screen, &dir);
-    // P: the old file goes with the decide cue, and state 0x1F.
+    // P: the decide cue and state 0x1F; the old file is still there.
     let (_, cues) = tick(&mut screen, &dir, press(|input| input.confirm = true));
     assert_eq!(cues, [UiCue::Core(6)]);
     assert_eq!(sv(&screen)[2..], [0x1F, 0, 1, 0, 3, 0, 0, 0, 1]);
-    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+    assert!(dir.join("save00.dat").exists());
     assert!(screen.take_outcome().is_none());
-    // P+1: the write, once, under the new name; the folder's count isn't
-    // read again.
+    // P+1: the write, once, under the new name, and the old file goes;
+    // the folder's count isn't read again.
     tick(&mut screen, &dir, UiInput::default());
+    assert!(!dir.join("save00.dat").exists());
     assert_eq!(sv(&screen)[2..], [0x20, 0, 1, 0, 3, 0, 0, 0, 1]);
     assert!(
         screen
@@ -456,8 +608,12 @@ fn a_press_ends_the_overwrites_wait() {
     to_the_choice(&mut screen, &dir);
     tick(&mut screen, &dir, press(|input| input.start = true));
     assert_eq!(sv(&screen)[2], 0x1F, "START decides too");
+    // The write, then 29 characters at 9 ticks each at most.
+    let mut ticks = 0;
     while sv(&screen)[2] != 0x21 {
         tick(&mut screen, &dir, UiInput::default());
+        ticks += 1;
+        assert!(ticks < 300, "the reveal ends");
     }
     let (_, cues) = tick(&mut screen, &dir, press(|input| input.cancel = true));
     assert!(cues.is_empty());

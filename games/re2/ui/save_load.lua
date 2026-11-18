@@ -18,8 +18,8 @@
 -- | 1 | the folder's saves counted (`cnt0`), the rows `min(10, cnt0 - mode + 2)`; then 2 |
 -- | 2 | the list: a held direction moves the cursor every 4 ticks with the move cue (`4:4`), wrapping; decide picks the row (`FUN_00431D10`), cancel plays `4:5` and goes to 99 |
 -- | 3 | the write: the ribbon and the count (the engine's write tick), the file; then 0x22 |
--- | 0x1E | the overwrite choice, as Classic REbirth patches it: left and right (edges) move it between Overwrite and Cancel with the move cue; decide on Overwrite deletes the row's file and goes to 0x1F with the decide cue; decide on Cancel, or cancel, plays `4:5` and goes back to 2 |
--- | 0x1F | as 3, the new save taking the row; then 0x20 |
+-- | 0x1E | the overwrite choice, as Classic REbirth patches it: left and right (edges) move it between Overwrite and Cancel with the move cue; decide on Overwrite goes to 0x1F with the decide cue; decide on Cancel, or cancel, plays `4:5` and goes back to 2 |
+-- | 0x1F | as 3, the new save taking the row, whose old file is deleted once the new one is written (the original deletes it in 0x1E, before the write); then 0x20 |
 -- | 0x22, 0x20 | the label types a character on each tick the timer is 0, then 4 ticks (`2:22`) or 8 after a space or `_` (`2:24`); then 0x24 (0x21 from 0x20) with the timer at 60 |
 -- | 0x24, 0x21 | waits: a press, or the timer run out, goes to 0x61 |
 -- | 0x61, 99 | the exit |
@@ -245,15 +245,9 @@ local function ask(api, input)
         s.choice = 1 - s.choice
         api:core_sound(CUE_MOVE)
     elseif (input.confirm or input.start) and s.choice == 0 then
-        -- `RemoveSave`: the row's file goes on this tick, a tick before
-        -- the new one is written.
-        local entry = s.saves[s.picked]
-        if entry then
-            local ok, err = api:remove(entry.name)
-            if not ok then
-                api:log("warning: the old save was not removed: " .. tostring(err))
-            end
-        end
+        -- The original deletes the row's file here (`RemoveSave`), a tick
+        -- before it writes the new one; `write` deletes it once the new
+        -- one is written, so a write that fails loses no save.
         s.state = STATE_OVERWRITE
         api:core_sound(CUE_DECIDE)
     elseif input.confirm or input.start or input.cancel then
@@ -266,8 +260,9 @@ end
 -- the count on the same tick; a failed write goes on as a written one, as
 -- the original's does (its rollback runs only while `string` is set,
 -- which the save mode's 99 and 0x61 clear). `reveal` is the state that
--- types the label: 0x22 for a new file, 0x20 for a row's.
-local function write(api, reveal)
+-- types the label: 0x22 for a new file, 0x20 for a row's, whose old file
+-- (`replaced`) goes once the new one is written.
+local function write(api, reveal, replaced)
     local pending = api:pending() or { character = 0, saves = 0 }
     local character = api:character()
     s.name = M.save_name(character & 1, character & 2 ~= 0, pending.saves + 1, api:local_time())
@@ -278,9 +273,15 @@ local function write(api, reveal)
         stage = pending.stage,
         room = pending.room,
     }
-    local ok, err = api:save(s.name .. ".dat", true)
+    local file = s.name .. ".dat"
+    local ok, err = api:save(file, true)
     if not ok then
         api:log("warning: the save was not written: " .. tostring(err))
+    elseif replaced and replaced.name ~= file then
+        local removed, why = api:remove(replaced.name)
+        if not removed then
+            api:log("warning: the old save was not removed: " .. tostring(why))
+        end
     end
     s.timer = 0
     s.typed = 0
@@ -342,7 +343,7 @@ local function step(api, input)
     elseif state == STATE_ASK then
         ask(api, input)
     elseif state == STATE_OVERWRITE then
-        write(api, STATE_RETYPE)
+        write(api, STATE_RETYPE, s.saves[s.picked])
     elseif state == STATE_RETYPE then
         reveal(api, STATE_REWAIT)
     elseif state == STATE_DONE or state == STATE_CANCEL then
@@ -435,18 +436,21 @@ local function glyph_width(api, glyph)
     return api:text_width(glyph) + (odd and odd[2] or -1)
 end
 
+-- One character of a line: a save's row is its file's name, which may
+-- hold more than ASCII.
+local CHARACTER = "[\0-\x7F\xC2-\xFD][\x80-\xBF]*"
+
 local function save_width(api, text)
     local w = 0
-    for i = 1, #text do
-        w = w + glyph_width(api, text:sub(i, i))
+    for glyph in text:gmatch(CHARACTER) do
+        w = w + glyph_width(api, glyph)
     end
     return w
 end
 
 local function save_print(api, x, y, text, colour)
     local opts = { colour = colour }
-    for i = 1, #text do
-        local glyph = text:sub(i, i)
+    for glyph in text:gmatch(CHARACTER) do
         local odd = SAVE_GLYPHS[glyph]
         api:text(x + (odd and odd[1] or 0), y, glyph, opts)
         x = x + glyph_width(api, glyph)
