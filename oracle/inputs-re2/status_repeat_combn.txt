@@ -1,4 +1,4 @@
-# room 102 with six items (oracle/re2.md, "Key repeat"): COMBN's target with right, down, left and up held, a decide under a held right, a cancel under a held down, then the mix with left held through its question
+# room 102 with six items (oracle/re2.md, "Key repeat"): COMBN's target with right, down, left and up held, a decide under a held right and a cancel under a held down, then CHECK with down pressed twice under its description, decides at 820 and 852 that leave the message up and one at 900 that closes it, left held from 840, and START
 0
 364 start
 368
