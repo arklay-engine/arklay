@@ -1181,6 +1181,16 @@ impl Re2State {
         self.flag(STOP_BANK, STOP_INPUT) || self.door_key_stop
     }
 
+    /// `fg_stop`'s `0x1000000` as it stands: `Game_loop` tests it after the
+    /// scripts, before it takes START or the map key.
+    pub fn input_stop_raised(&self) -> bool {
+        self.flag(STOP_BANK, STOP_INPUT)
+    }
+
+    pub fn set_input_stop(&mut self, stopped: bool) {
+        self.set_flag(STOP_BANK, STOP_INPUT, u8::from(stopped));
+    }
+
     /// The `em` and `es` trace fields: a character's position, facing and
     /// motion.
     /// The zombies in play: the oracle's `zm` field.
@@ -5150,6 +5160,20 @@ mod tests {
         state.set_key(CONFIRM | FORWARD);
         assert_eq!(state.key, CONFIRM | FORWARD);
         assert_eq!(state.key_trg, 0);
+
+        // The map key is one a stop leaves out, so it is no press either on
+        // the tick the stop ends; it is on a tick of its own.
+        let map = crate::player2::KEY_MAP;
+        state.set_key(0);
+        state.set_flag(STOP_BANK, STOP_INPUT, 1);
+        state.set_key(map);
+        assert_eq!((state.key, state.key_trg), (0, 0));
+        state.set_flag(STOP_BANK, STOP_INPUT, 0);
+        state.set_key(map);
+        assert_eq!((state.key, state.key_trg), (map, 0));
+        state.set_key(0);
+        state.set_key(map);
+        assert_eq!(state.key_trg, map);
     }
 
     #[test]

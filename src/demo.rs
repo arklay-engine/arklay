@@ -275,6 +275,8 @@ impl AttractState {
                 fire: action,
                 fire_pressed: false,
                 lock_drop: word & 0x0004 != 0,
+                // The reels are RE 1's, whose pad has no map key.
+                map_held: false,
                 lock_pressed: false,
                 aim,
                 aim_pressed: false,

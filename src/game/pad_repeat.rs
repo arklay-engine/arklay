@@ -11,6 +11,8 @@ pub const DOWN: u16 = 0x4000;
 pub const LEFT: u16 = 0x8000;
 /// The aim key.
 pub const AIM: u16 = 0x0008;
+/// The PC's map key, in `STATUS_SETTING`'s mask.
+pub const MAP: u16 = 0x0010;
 /// The lock-drop bit (`Input::lock_drop`), in `STATUS_SETTING`'s mask: a
 /// press reloads the counter and raises the flag like a direction's.
 pub const LOCK: u16 = 0x0004;

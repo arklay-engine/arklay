@@ -3373,6 +3373,9 @@ impl GameSession {
             {
                 self.play_re2_script_map(pack, &outcome);
             }
+            if self.menu.is_some() {
+                self.game.start_re2_key_map();
+            }
         }
         self.animate_re2_status(pack);
         result
@@ -3413,7 +3416,8 @@ impl GameSession {
                 | held(input.down, pad::DOWN)
                 | held(input.left, pad::LEFT)
                 | held(input.aim, pad::AIM)
-                | held(input.lock_drop, pad::LOCK),
+                | held(input.lock_drop, pad::LOCK)
+                | held(input.map_held, pad::MAP),
         );
     }
 
@@ -3485,6 +3489,8 @@ impl GameSession {
             if let Some((_, message_flags)) = self.menu_request.take() {
                 self.game.message_flags = message_flags;
             }
+            // The map key is tested with START, so it is dropped with it.
+            self.game.re2_key_map = None;
         }
         self.finish_menu_request(pack);
         if std::mem::take(&mut self.game.re2_box_open) {
@@ -4363,7 +4369,11 @@ impl GameSession {
         // menu.
         let re2_holds_game = self.game.is_re2_room && self.game.re2.player.holds_game;
         if !message_pauses_menu && self.game.entities[0].is_being_attacked == 0 && !re2_holds_game {
-            let request = if ui.start {
+            // RE2's `Game_loop` takes the map key where it takes START
+            // (`Key_trg & 0x4000`, `0x4C0379`): the status screen opens in
+            // its mode 3, the map key's map, also with START on the tick.
+            let re2_map = self.game.is_re2_room && ui.map;
+            let request = if ui.start || re2_map {
                 Some(MenuRequest::Menu)
             } else if ui.map {
                 // The port's map button opens the map straight from free play,
@@ -4375,6 +4385,12 @@ impl GameSession {
             if let Some(kind) = request {
                 self.menu_request = Some((kind, self.game.message_flags));
                 self.game.message_flags &= 0xFF7A;
+                // The request says which screen: nothing a screen left
+                // behind turns START's into the map.
+                self.game.re2_key_map = None;
+                if re2_map {
+                    self.game.request_re2_key_map(ui.start);
+                }
                 // RE2's `Game_loop` takes START after the scripts: it plays
                 // the decide cue and leaves for game mode 1 before anyone
                 // moves (`0x4C0379`). The room's tick plays the cue, after
@@ -4412,8 +4428,13 @@ impl GameSession {
         // point: the scripts still see the raw pad this frame, and the player's
         // state machine is skipped after the entity update. Only the dismissed
         // action edge is swallowed here.
+        // RE2's map key isn't the swallowed one: `Pad_set` reads it by
+        // itself, so its press under a held action key is still a press.
         let input = if self.swallow_action {
-            player::Input::default()
+            player::Input {
+                map_held: input.map_held,
+                ..player::Input::default()
+            }
         } else {
             input
         };
@@ -5499,6 +5520,10 @@ impl GameSession {
     fn close_menu(&mut self) {
         self.menu = None;
         self.game.close_re2_items();
+        // A screen that failed leaves here, not by the status screen's
+        // close: its map goes with it.
+        self.game.re2_script_map = None;
+        self.game.re2_key_map = None;
         self.examine = None;
         self.item_box = None;
         if std::mem::take(&mut self.map_direct) {
@@ -5608,9 +5633,26 @@ impl GameSession {
     /// Open RE2's status screen on a floor's map (`Sce_84`): the status
     /// task in its mode 4 (`St_init04`), over the same open as START's.
     fn begin_re2_script_map_open(&mut self, pack: &Pack) {
-        if self.menu.is_some() {
+        if !self.open_re2_map_screen(pack) {
             self.game.re2_script_map = None;
-            return;
+        }
+    }
+
+    /// Open RE2's status screen on the player's floor's map (the map key):
+    /// the status task in its mode 3 (`St_init03`), over the same open as
+    /// START's.
+    fn begin_re2_key_map_open(&mut self, pack: &Pack) {
+        if !self.open_re2_map_screen(pack) {
+            self.game.re2_key_map = None;
+        }
+    }
+
+    /// Open the status screen's script in its map mode, which draws the
+    /// scripts' map or the map key's with no item page under it. False when
+    /// a menu is up already or the script fails.
+    fn open_re2_map_screen(&mut self, pack: &Pack) -> bool {
+        if self.menu.is_some() {
+            return false;
         }
         let opened = self.with_menu(pack, |menu, cx, game| {
             let args = [("mode", ScreenArg::Str("map".to_owned()))];
@@ -5626,20 +5668,41 @@ impl GameSession {
         });
         if let Err(err) = opened {
             crate::warning!("warning: the status screen's map unavailable: {err:#}");
-            self.game.re2_script_map = None;
-            return;
+            return false;
         }
         self.game.message_menu = true;
         self.freeze_room_frame = true;
         self.re2_status_open = Some(1);
         self.game.re2.stopped_door = false;
+        true
+    }
+
+    /// One tick of the map key's screen (`St_main03`): up and down change
+    /// the floor, and START, the cancel key or the map key closes it.
+    fn tick_re2_key_map(&mut self, pack: &Pack, ui: UiInput) {
+        let input = self.status_input(ui);
+        let input = game::status2::key_map::KeyMapInput {
+            up: input.up,
+            down: input.down,
+            close: ui.start || ui.cancel || ui.map,
+        };
+        let Some(outcome) = self.game.tick_re2_key_map(input) else {
+            return;
+        };
+        self.play_re2_status_sounds(pack, &outcome.sounds);
+        self.tick_menu_screen(pack);
+        if outcome.close {
+            self.re2_status_close = Some(0);
+        }
     }
 
     /// One tick of the script map's screen (`St_init04`'s fade in, then
-    /// `St_main04`): cancel or START closes it.
+    /// `St_main04`): START, the cancel key or the map key closes it.
     fn tick_re2_script_map(&mut self, pack: &Pack, ui: UiInput) {
-        let input = self.status_input(ui);
-        let Some(outcome) = self.game.tick_re2_script_map(input.cancel || input.start) else {
+        // `0x4FBE50`: START, the cancel key or the map key (`Key_trg &
+        // 0x6000`).
+        let close = ui.start || ui.cancel || ui.map;
+        let Some(outcome) = self.game.tick_re2_script_map(close) else {
             return;
         };
         self.play_re2_script_map(pack, &outcome);
@@ -5921,6 +5984,15 @@ impl GameSession {
             return None;
         }
         if let Some(close) = self.re2_status_close {
+            // The tick of the press still draws under the open's fade in:
+            // `St_fade_out_set` replaces the fade on the tick after. That
+            // is the close of any of the screens that take a key that
+            // early: the maps', START's on the item page and the box's.
+            if close == 0
+                && let Some(open) = self.re2_status_open
+            {
+                return Some(re2_status_open_view(open));
+            }
             return Some(re2_status_close_view(close));
         }
         // `St_init04` draws the map under its fade in from its step 0, the
@@ -5939,9 +6011,13 @@ impl GameSession {
         };
         self.game.message_flags = message_flags;
         if self.transition.is_some() || self.movie.is_some() || !self.death.is_idle() {
+            self.game.re2_key_map = None;
             return;
         }
         match kind {
+            MenuRequest::Menu if self.game.re2_key_map.is_some() => {
+                self.begin_re2_key_map_open(pack);
+            }
             MenuRequest::Menu => self.begin_menu_open(pack),
             MenuRequest::Map => self.begin_map_open(pack),
         }
@@ -7429,6 +7505,10 @@ impl GameSession {
             self.tick_re2_script_map(pack, ui);
             return;
         }
+        if self.game.re2_key_map.is_some() {
+            self.tick_re2_key_map(pack, ui);
+            return;
+        }
         if self.game.re2_box.is_some() {
             self.tick_re2_box(pack, ui, message_input);
             return;
@@ -7838,6 +7918,7 @@ impl GameSession {
         // tick's `Swap_Cbuff` loads the room's view again (`Movie_set(2)`).
         if ticks == RE2_STATUS_UNCUT_TICK {
             self.game.re2.bg_load = true;
+            self.game.exit_re2_key_map();
         }
         // The box's routines and its draw run through the close's seventh
         // tick, the last before the screen's task reaches `St_exit`.
@@ -7846,6 +7927,8 @@ impl GameSession {
             if let Some(outcome) = self.game.tick_re2_script_map_close() {
                 self.play_re2_script_map(pack, &outcome);
             }
+            self.game
+                .tick_re2_key_map(game::status2::key_map::KeyMapInput::default());
         }
         if ticks < RE2_STATUS_CLOSE_TICKS {
             return;
@@ -7855,6 +7938,7 @@ impl GameSession {
         self.menu = None;
         self.game.close_re2_items();
         self.game.re2_script_map = None;
+        self.game.re2_key_map = None;
         if self.game.re2_box.is_some() {
             self.game.close_re2_box();
             // Game mode 5: the lid's routine runs its last count and shuts
@@ -19002,9 +19086,17 @@ fn tick_room_timed(
     // the enemies' and the player's moves (`0x4C03B0`), so the player keeps
     // the frame it had.
     if context.game.is_re2_room && std::mem::take(&mut context.game.re2_status_start) {
-        if context.game.re2_status_request || context.game.re2_computer_request.is_some() {
-            // The scripts set `Game` (`Sce_Status`, `Sce_Windows`): START is
-            // tested only while it is 0, so the tick runs on.
+        // The map key's `Key_trg`, as this tick's `Pad_set` left it.
+        let asked = context.game.confirm_re2_key_map();
+        if !asked
+            || context.game.re2_status_request
+            || context.game.re2_computer_request.is_some()
+            || context.game.re2.input_stop_raised()
+        {
+            // The scripts set `Game` (`Sce_Status`, `Sce_Windows`) or
+            // raised `fg_stop`'s `0x1000000` (a message's stop word): the
+            // keys are tested only with `Game` 0 and that bit clear, so the
+            // tick runs on.
             context.game.re2_status_start_dropped = true;
         } else {
             if let Some(id) = crate::se2::SoundId::decode(game::status2::Sound::Decide.id()) {
@@ -20161,6 +20253,7 @@ impl InputState {
                 // The PC key map leaves the joystick button that feeds the raw
                 // pad's bit 4 unbound, so the keyboard never raises it.
                 lock_drop: false,
+                map_held: active & KEY_MAP != 0,
                 lock_pressed: false,
                 slow_motion: false,
                 message_blocked: false,
@@ -26053,6 +26146,313 @@ mod tests {
                 assert_eq!(session.game.message_flags, flags, "START's mask is undone");
             }
         }
+    }
+
+    /// A tick with the map key down in the pad (`Key`'s `0x4000`), pressed
+    /// on it or held from before.
+    fn re2_map_tick(session: &mut GameSession, pack: &Pack, ui: UiInput) {
+        let pad = player::Input {
+            map_held: true,
+            ..player::Input::default()
+        };
+        session.tick(pack, ui, pad, false).unwrap();
+    }
+
+    /// The map key's press, with START too or without.
+    fn re2_map_press(start: bool) -> UiInput {
+        UiInput {
+            map: true,
+            start,
+            any: true,
+            ..UiInput::default()
+        }
+    }
+
+    /// From play to `St_init03`'s tick (the open's sixth) of the map key's
+    /// screen.
+    fn re2_open_key_map(session: &mut GameSession, pack: &Pack, start: bool) {
+        session.game.message_flags |= START_MESSAGE_BITS;
+        re2_map_tick(session, pack, re2_map_press(start));
+        assert!(session.menu_request.is_some(), "the screen is asked for");
+        assert!(session.game.re2_key_map.is_some());
+        // The key is still down on the next tick: held, no new press.
+        re2_map_tick(session, pack, UiInput::default());
+        assert!(session.menu.is_some(), "start {start}: the screen opens");
+        assert!(session.game.re2_items.is_none(), "with no item page");
+        assert!(session.map.is_none(), "and not the port's own map");
+        for _ in 1..RE2_BOX_START {
+            assert!(!session.game.re2_key_map.unwrap().started);
+            re2_tick(session, pack, UiInput::default());
+        }
+        assert_eq!(session.re2_status_open, Some(RE2_BOX_START));
+        assert!(session.game.re2_key_map.unwrap().started);
+    }
+
+    /// `Game_loop` takes the map key where it takes START (`Key_trg &
+    /// 0x4000`): the status screen opens in its mode 3, the map key's map,
+    /// with no item page, also when START is down on the same tick. START,
+    /// the cancel key and the map key each close it, and the map is drawn
+    /// through the close's seventh tick.
+    #[test]
+    fn re2_map_key_opens_the_status_screen_on_the_map() {
+        type Close = (&'static str, fn(&mut UiInput));
+        let closes: [Close; 3] = [
+            ("the map key", |ui| ui.map = true),
+            ("the cancel key", |ui| ui.cancel = true),
+            ("START", |ui| ui.start = true),
+        ];
+        for (index, (name, set)) in closes.into_iter().enumerate() {
+            let dir = TempDir::new();
+            let (pack, a, _) = debug_menu_pack(&dir);
+            let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+            session.game.is_re2_room = true;
+            re2_open_key_map(&mut session, &pack, index == 1);
+            // Past the fade in.
+            for _ in 0..6 {
+                re2_tick(&mut session, &pack, UiInput::default());
+                assert!(session.re2_status_close.is_none());
+            }
+            assert_eq!(session.re2_status_view(), Some(Re2StatusView::Screen(None)));
+            let mut close = UiInput {
+                any: true,
+                ..UiInput::default()
+            };
+            set(&mut close);
+            re2_tick(&mut session, &pack, close);
+            assert_eq!(session.re2_status_close, Some(0), "{name} closes it");
+            for tick in 1..RE2_STATUS_CLOSE_TICKS {
+                re2_tick(&mut session, &pack, UiInput::default());
+                assert_eq!(session.re2_status_close, Some(tick));
+                let map = session.game.re2_key_map.expect("up until the close ends");
+                // `St_exit` on the eighth tick: the mode byte is 0 again and
+                // the trace's `map` is `-`.
+                assert_eq!(map.exited, tick >= RE2_STATUS_UNCUT_TICK, "tick {tick}");
+                assert_eq!(
+                    session.game.re2_map_trace() == "-",
+                    tick >= RE2_STATUS_UNCUT_TICK,
+                    "tick {tick}"
+                );
+                if tick <= RE2_BOX_CLOSE_DRAWN {
+                    assert!(session.game.re2_key_map_view().is_some(), "tick {tick}");
+                }
+            }
+            re2_tick(&mut session, &pack, UiInput::default());
+            assert!(session.menu.is_none() && session.game.re2_key_map.is_none());
+        }
+    }
+
+    /// The map takes keys under its fade in. A close then still draws its
+    /// tick under the fade in's step, and `St_fade_out_set` replaces the
+    /// fade on the next (`map_key_201`'s 958 and 959).
+    #[test]
+    fn re2_map_key_closed_under_the_fade_in_keeps_that_ticks_fade() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        re2_open_key_map(&mut session, &pack, false);
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert_eq!(
+            session.re2_status_view(),
+            Some(Re2StatusView::Screen(Some(160)))
+        );
+        re2_tick(&mut session, &pack, re2_map_press(false));
+        assert_eq!(session.re2_status_close, Some(0));
+        assert_eq!(
+            session.re2_status_view(),
+            Some(Re2StatusView::Screen(Some(112)))
+        );
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert_eq!(session.re2_status_view(), Some(Re2StatusView::Screen(None)));
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert_eq!(
+            session.re2_status_view(),
+            Some(Re2StatusView::Screen(Some(48)))
+        );
+    }
+
+    /// START's screen takes START under its fade in too, and its close
+    /// draws the same way: the press's tick under the fade in's step, the
+    /// next with no fade.
+    #[test]
+    fn re2_starts_screen_closed_under_the_fade_in_keeps_that_ticks_fade() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.message_flags |= START_MESSAGE_BITS;
+        let start = UiInput {
+            start: true,
+            any: true,
+            ..UiInput::default()
+        };
+        re2_tick(&mut session, &pack, start);
+        while session.re2_status_open != Some(RE2_BOX_START + 1) {
+            re2_tick(&mut session, &pack, UiInput::default());
+        }
+        assert!(session.game.re2_items.is_some(), "START's screen");
+        re2_tick(&mut session, &pack, start);
+        assert_eq!(session.re2_status_close, Some(0));
+        let open = session.re2_status_open.unwrap();
+        let view = session.re2_status_view();
+        assert_eq!(view, Some(re2_status_open_view(open)));
+        assert!(
+            matches!(view, Some(Re2StatusView::Screen(Some(_)))),
+            "{view:?}"
+        );
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert_eq!(session.re2_status_view(), Some(Re2StatusView::Screen(None)));
+    }
+
+    /// The press that closed a message is swallowed while its key is held,
+    /// and the map key isn't that key: its press then still opens the map.
+    #[test]
+    fn re2_map_key_under_a_swallowed_action_key_opens_the_map() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.message_flags |= START_MESSAGE_BITS;
+        session.swallow_action = true;
+        let pad = player::Input {
+            map_held: true,
+            action_held: true,
+            ..player::Input::default()
+        };
+        session
+            .tick(&pack, re2_map_press(false), pad, true)
+            .unwrap();
+        assert!(session.swallow_action, "the action key is still held");
+        assert!(session.game.re2_key_map.is_some());
+        assert!(!session.game.re2_status_start_dropped);
+        session.tick(&pack, UiInput::default(), pad, true).unwrap();
+        assert!(session.menu.is_some(), "the map's screen opens");
+        assert!(session.game.re2_items.is_none());
+    }
+
+    /// A stop takes the map key out of `Key` (`Pad_set`'s mask), and the
+    /// tick the stop ends on raises no `Key_trg` for a key held through it:
+    /// the press under the stop opens nothing, nor does the held key after.
+    #[test]
+    fn re2_map_key_held_through_a_stop_opens_nothing() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.message_flags |= START_MESSAGE_BITS;
+        session.game.re2.set_input_stop(true);
+        re2_map_tick(&mut session, &pack, re2_map_press(false));
+        assert!(session.game.re2_key_map.is_none(), "no `Key_trg`");
+        session.game.re2.set_input_stop(false);
+        for _ in 0..3 {
+            re2_map_tick(&mut session, &pack, UiInput::default());
+            assert!(session.menu.is_none() && session.menu_request.is_none());
+        }
+        // Released and pressed again, it is the map's.
+        re2_tick(&mut session, &pack, UiInput::default());
+        re2_map_tick(&mut session, &pack, re2_map_press(false));
+        assert!(session.game.re2_key_map.is_some());
+    }
+
+    /// `Game_loop` tests `fg_stop`'s `0x1000000` after the scripts: START
+    /// pressed under it opens nothing, and the tick runs on.
+    #[test]
+    fn re2_start_under_the_input_stop_is_not_taken() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.message_flags |= START_MESSAGE_BITS;
+        let flags = session.game.message_flags;
+        session.game.re2.set_input_stop(true);
+        let start = UiInput {
+            start: true,
+            any: true,
+            ..UiInput::default()
+        };
+        re2_tick(&mut session, &pack, start);
+        assert!(session.game.re2_status_start_dropped);
+        assert!(session.game.re2.sounds.is_empty(), "no decide cue");
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(session.menu.is_none() && session.menu_request.is_none());
+        assert_eq!(session.game.message_flags, flags, "the mask is undone");
+    }
+
+    /// The map key is `Key_trg`'s: a press `Pad_set` raised no `0x4000` for
+    /// (the tick a stop ends on) opens nothing, or START's screen when
+    /// START was pressed with it.
+    #[test]
+    fn re2_map_key_without_its_key_trg_is_not_the_maps() {
+        for start in [false, true] {
+            let dir = TempDir::new();
+            let (pack, a, _) = debug_menu_pack(&dir);
+            let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+            session.game.is_re2_room = true;
+            session.game.message_flags |= START_MESSAGE_BITS;
+            let flags = session.game.message_flags;
+            // The pad's word has no map key in it.
+            re2_tick(&mut session, &pack, re2_map_press(start));
+            assert!(session.game.re2_key_map.is_none());
+            assert_eq!(session.game.re2_status_start_dropped, !start);
+            re2_tick(&mut session, &pack, UiInput::default());
+            assert_eq!(session.menu.is_some(), start, "start {start}");
+            assert_eq!(session.game.re2_items.is_some(), start);
+            assert!(session.menu_request.is_none());
+            if !start {
+                assert_eq!(session.game.message_flags, flags, "the mask is undone");
+            }
+        }
+    }
+
+    /// A map left behind by a screen that failed doesn't make the next
+    /// START the map's: the menu's own teardown drops it, and so does the
+    /// request.
+    #[test]
+    fn re2_a_stale_key_map_is_not_starts_screen() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        re2_open_key_map(&mut session, &pack, false);
+        session.game.re2_script_map = Some(game::status2::script_map::ScriptMap::new(2));
+        session.close_menu();
+        assert!(session.game.re2_key_map.is_none());
+        assert!(session.game.re2_script_map.is_none());
+        session.re2_status_open = None;
+        session.game.request_re2_key_map(false);
+        session.game.message_flags |= START_MESSAGE_BITS;
+        let start = UiInput {
+            start: true,
+            any: true,
+            ..UiInput::default()
+        };
+        re2_tick(&mut session, &pack, start);
+        assert!(session.game.re2_key_map.is_none());
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(session.game.re2_items.is_some(), "START's screen");
+    }
+
+    /// The map key is tested with START, only while `Game` is 0: on the tick
+    /// the scripts fire an `Sce_Status` it is dropped, and the screen that
+    /// opens is the area's, the item page.
+    #[test]
+    fn re2_map_key_on_the_tick_of_an_sce_status_is_not_taken() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1\n#game re2\nproc main_00 { evt_end(0); }\nproc main_01 { aot_set(4, 12, 0x51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0); aot_on(4); evt_end(0); }",
+        )
+        .unwrap();
+        session.game.re2.vm = Some(Box::new(crate::scd2::vm::Vm::new(&scripts)));
+        session.game.message_flags |= START_MESSAGE_BITS;
+        re2_map_tick(&mut session, &pack, re2_map_press(false));
+        assert!(session.game.re2_status_start_dropped);
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(session.menu.is_some(), "the area's screen opens");
+        assert!(session.game.re2_key_map.is_none());
+        assert!(session.game.re2_items.is_some());
     }
 
     /// The return's mode 3 tick falls into the room pass under `fg_stop`'s

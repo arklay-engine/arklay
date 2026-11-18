@@ -30,6 +30,9 @@ const KEY_SIDE_LEFT: u16 = 0x0400;
 const KEY_SIDE_RIGHT: u16 = 0x0800;
 const KEY_CONFIRM: u16 = 0x1000;
 const KEY_CANCEL: u16 = 0x2000;
+/// The PC's map key (the raw pad's `0x10`): `Game_loop` opens the map on its
+/// `Key_trg`, and a stop leaves it out of the word.
+pub const KEY_MAP: u16 = 0x4000;
 /// What `Pad_set` leaves of the word while the input is stopped.
 pub const KEYS_IN_A_STOP: u16 = KEY_SIDE_LEFT | KEY_SIDE_RIGHT | KEY_CONFIRM | KEY_CANCEL;
 
@@ -2122,6 +2125,7 @@ pub fn key_word(input: &Input) -> u16 {
         | bit(input.run, KEY_RUN | KEY_CANCEL)
         | bit(action || input.fire, KEY_CONFIRM | KEY_FIRE | KEY_ACTION)
         | bit(input.aim, KEY_AIM)
+        | bit(input.map_held, KEY_MAP)
 }
 
 impl<'a, 'b> Mover<'a, 'b> {
