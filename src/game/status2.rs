@@ -139,6 +139,10 @@ pub struct Input {
     pub confirm: bool,
     pub cancel: bool,
     pub start: bool,
+    /// The raw pad's `0x4` and `0x8` (the aim key), gated like the
+    /// directions: the item box's five rows up and down.
+    pub page_up: bool,
+    pub page_down: bool,
     /// The raw pad as held (`0x9885FC`), for the few tests that read it
     /// with no repeat flag.
     pub held: u16,
