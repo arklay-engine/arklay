@@ -995,14 +995,29 @@ local function translucent(api, d, handle, row, rgb, x, y, w, h, u, v)
     api:page_lut(handle, u, v, w, h, d.ox + x, d.oy + y, lut, false, { blend = "half" })
 end
 
--- The floor's map (`0x4FA990`): the rooms' fills, the signs, the rooms'
--- outlines and the player's marker, in the original's order.
+-- The floor's map (`0x4FA990`), in the original's order: the rooms' fills,
+-- the signs and the floor arrows (its last layer), the rooms' outlines, the
+-- locked doors' icons (`0x4FA710`) and the player's marker. The arrows are
+-- at full colour while the blink rises and half while it falls, the icons
+-- at 0x50 and then full; a layer draws its last primitive first. The
+-- arrows are 14x12 cells of the marker's picture on row 0x18 (down at u 14,
+-- up at u 0), the icons 8x8 cells of the map's fifth picture on row 0x38.
 local function draw_map(api, d, view)
     view = view or api:re2_map()
     if view == nil then
         return
     end
     local pages = map_art(api, d, view.map)
+    local falling = view.blink_falling
+    -- A piece of one of the map's pictures, opaque, its colour modulated by
+    -- `colour` (0x80 leaves it as it is).
+    local function map_piece(handle, x, y, w, h, u, v, colour)
+        if handle == nil then
+            return
+        end
+        local rgb = colour ~= 0x80 and { colour, colour, colour } or nil
+        api:page_sprite_scaled(handle, u, v, w, h, d.ox + x, d.oy + y, w, h, 0, 255, tint(rgb))
+    end
     for _, room in ipairs(view.rooms) do
         local fill = room.fill
         if fill ~= nil then
@@ -1011,10 +1026,12 @@ local function draw_map(api, d, view)
         end
     end
     for _, p in ipairs(SIGN_PIECES) do
-        local handle = pages[SIGNS]
-        if handle ~= nil then
-            api:page_sprite_scaled(handle, p[5], p[6], p[3], p[4], d.ox + p[1], d.oy + p[2], p[3], p[4], 0, 255)
-        end
+        map_piece(pages[SIGNS], p[1], p[2], p[3], p[4], p[5], p[6], 0x80)
+    end
+    local arrows = view.arrows or {}
+    for k = #arrows, 1, -1 do
+        local a = arrows[k]
+        map_piece(d.pages[MARKER], a.x, a.y, 14, 12, a.u, 0x18, falling and 0x40 or 0x80)
     end
     for _, room in ipairs(view.rooms) do
         local o = room.outline
@@ -1023,6 +1040,11 @@ local function draw_map(api, d, view)
             api:page_sprite_scaled(handle, o.u, o.v, room.w, room.h, d.ox + room.x, d.oy + room.y,
                 room.w, room.h, o.clut, 255)
         end
+    end
+    local doors = view.doors or {}
+    for k = #doors, 1, -1 do
+        local icon = doors[k]
+        map_piece(pages[0x1F], icon.x, icon.y, 8, 8, icon.u, 0x38, falling and 0x80 or 0x50)
     end
     local marker = view.marker
     if marker ~= nil then

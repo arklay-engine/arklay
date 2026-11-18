@@ -670,6 +670,7 @@ pub fn run_with_options(
                         re2_inventory: None,
                         re2_pl: None,
                         re2_map_flags: None,
+                        re2_map: None,
                         re2_item_page: None,
                         re2_file: None,
                         re2_pad_repeat: None,
@@ -9223,6 +9224,7 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.game.re2_map_flags_trace()),
+            re2_map: self.game.is_re2_room.then(|| self.game.re2_map_trace()),
             re2_item_page: self
                 .game
                 .is_re2_room

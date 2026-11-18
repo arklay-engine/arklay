@@ -131,6 +131,7 @@ impl GameState {
         map.floor = floor_for(map.target);
         map.fade_in = Some(0);
         map.drawn = true;
+        self.re2_file.map_floor = map.floor;
         self.re2_file.blink = super::files::Blink {
             level: 10,
             falling: true,

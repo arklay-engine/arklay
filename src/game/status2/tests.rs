@@ -478,6 +478,103 @@ fn the_map_slides_in_and_out_over_fourteen_ticks() {
     assert_eq!((ticks, sounds), (15, vec![Sound::Cancel]));
 }
 
+/// A game in room 201 (floor 2) with the MAP page shown, as
+/// `map_floors_201` has it once the map has slid in.
+fn map_shown(floors: &[u8]) -> GameState {
+    let mut game = game(&[(0x02, 18)]);
+    game.id = RoomId::parse("2010").unwrap();
+    game.re2_room_set();
+    for &floor in floors {
+        game.re2.set_flag(map::FLOOR_BANK, floor, 1);
+    }
+    on(&mut game, PAGE_MAP, MAP_LOAD);
+    ticks_until(&mut game, NONE, |p, _| p.sub == MAP_SHOWN);
+    game
+}
+
+/// `map_floors_201`'s tick 520 and 521: up changes to floor 3 on the press
+/// with the cursor cue and sub 4, and the next tick loads it, with the
+/// blink at 2, rising.
+#[test]
+fn up_changes_floor_when_its_bit_is_set() {
+    let mut game = map_shown(&[3]);
+    assert_eq!(game.re2_file.map_floor, 2);
+    let level = game.re2_file.blink.level;
+    assert_eq!(tick(&mut game, UP), vec![Sound::Cursor]);
+    assert_eq!((game.re2_file.map_floor, page(&game).sub), (3, MAP_FLOOR));
+    // The blink steps before the change.
+    assert_eq!(game.re2_file.blink.level, level + 2);
+    assert_eq!(game.re2_map_trace(), format!("3,{},0", level + 2));
+    assert_eq!(tick(&mut game, NONE), vec![]);
+    assert_eq!(page(&game).sub, MAP_SHOWN);
+    assert_eq!(game.re2_file.blink, Blink::RESET);
+    assert_eq!(game.re2_map_trace(), "3,2,0");
+    // And back down: floor 2's bit is the room load's.
+    assert_eq!(tick(&mut game, DOWN), vec![Sound::Cursor]);
+    assert_eq!((game.re2_file.map_floor, page(&game).sub), (2, MAP_FLOOR));
+}
+
+#[test]
+fn no_floor_change_without_the_bit_or_below_floor_2() {
+    // Floor 2 without floor 3's bit, and with no floor 5 below.
+    let mut game = map_shown(&[]);
+    assert_eq!(tick(&mut game, UP), vec![]);
+    assert_eq!(tick(&mut game, DOWN), vec![]);
+    assert_eq!((game.re2_file.map_floor, page(&game).sub), (2, MAP_SHOWN));
+    // Floor 4 has none above it.
+    let mut game = map_shown(&[3, 4]);
+    tick(&mut game, UP);
+    tick(&mut game, NONE);
+    tick(&mut game, UP);
+    tick(&mut game, NONE);
+    assert_eq!(game.re2_file.map_floor, 4);
+    assert_eq!(tick(&mut game, UP), vec![]);
+    assert_eq!((game.re2_file.map_floor, page(&game).sub), (4, MAP_SHOWN));
+    // Floors 0 and 1 change to none, whatever is set.
+    let every = |_: u8, _: u8| true;
+    assert_eq!(map::floor_after(0, true, true, every), 0);
+    assert_eq!(map::floor_after(1, true, true, every), 1);
+    assert_eq!(map::floor_after(5, true, false, every), 2);
+    assert_eq!(map::floor_after(8, true, false, every), 7);
+    assert_eq!(map::floor_after(7, false, true, every), 8);
+}
+
+/// Up is taken first and down from where it left the floor, so both
+/// together come back to the floor shown: no load and no cue.
+#[test]
+fn up_then_down_in_one_tick() {
+    let mut game = map_shown(&[3]);
+    let both = Input { down: true, ..UP };
+    assert_eq!(tick(&mut game, both), vec![]);
+    assert_eq!((game.re2_file.map_floor, page(&game).sub), (2, MAP_SHOWN));
+}
+
+/// The cancel test comes after the floor change: both cues play, the
+/// floor has changed and the map slides out.
+#[test]
+fn cancel_wins_over_a_floor_change() {
+    let mut game = map_shown(&[3]);
+    let both = Input { cancel: true, ..UP };
+    assert_eq!(tick(&mut game, both), vec![Sound::Cursor, Sound::Cancel]);
+    assert_eq!((game.re2_file.map_floor, page(&game).sub), (3, MAP_OUT));
+}
+
+#[test]
+fn each_opening_of_the_map_starts_on_the_players_floor() {
+    let mut game = map_shown(&[3]);
+    tick(&mut game, UP);
+    tick(&mut game, NONE);
+    ticks_until(&mut game, CANCEL, |p, _| p.page == PAGE_TABS);
+    // The floor byte keeps the floor left on until the page loads again.
+    assert_eq!(game.re2_file.map_floor, 3);
+    assert_eq!(game.re2_map_trace(), "-");
+    // The cancel's tick stepped the blink once more.
+    on(&mut game, PAGE_MAP, MAP_LOAD);
+    assert_eq!(game.re2_map_trace(), "3,4,0");
+    tick(&mut game, NONE);
+    assert_eq!(game.re2_file.map_floor, 2);
+}
+
 /// `status_file`: the binders slide in over 13 ticks, turn over 13 with
 /// cue 10 (wrapping 0 to 2), and slide out on the cancel key.
 #[test]
