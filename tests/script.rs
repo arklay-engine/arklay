@@ -641,6 +641,47 @@ fn engine_title_trace(dir: &TempDir, title_special: i8, out: &str) -> Vec<u8> {
 }
 
 #[test]
+fn open_ending_runs_the_result_screen_into_the_epilogue() {
+    let dir = pack_dir("open-ending");
+    let out = success(&script(
+        &dir,
+        &lenient(
+            r#"
+        load_game_pack("game.akpak")
+        open_ending(6, { character = 1 })
+        print(mode())
+        tick(5)
+        press("confirm")
+        tick_until(function() return mode() ~= "ending" end, 4000)
+        print(mode())
+        "#,
+        ),
+        &[],
+    ));
+    assert_eq!(out, "ending\nepilogue\n");
+}
+
+#[test]
+fn open_ending_refuses_an_unknown_ending_or_option() {
+    let dir = pack_dir("open-ending-errors");
+    for (source, needle) in [
+        ("open_ending(8)", "ending 8 is outside 1-7"),
+        ("open_ending(0)", "ending 0 is outside 1-7"),
+        ("open_ending(1, { character = 2 })", "character 2 is not 0"),
+        ("open_ending(1, { player = 1 })", "unknown option `player`"),
+    ] {
+        assert_failure(
+            &script(
+                &dir,
+                &lenient(&format!("load_game_pack(\"game.akpak\")\n{source}")),
+                &[],
+            ),
+            needle,
+        );
+    }
+}
+
+#[test]
 fn a_title_trace_matches_the_engine_screen_trace() {
     let dir = pack_dir("title-trace");
     let engine = engine_title_trace(&dir, 3, "engine.trace");

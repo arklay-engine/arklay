@@ -11142,15 +11142,7 @@ impl App {
             AppBoot::Map => self.open_map_capture(),
             AppBoot::View => self.open_view(),
             AppBoot::Death(character) => self.open_death_capture(character),
-            AppBoot::EndingResult { id, character } => {
-                self.ending = Some(EndingFlow {
-                    stats: ending::EndStats::debug(id, character, 1),
-                    second_playthrough: false,
-                    has_special_key: false,
-                    has_infinite_launcher: false,
-                });
-                self.open_result()
-            }
+            AppBoot::EndingResult { id, character } => self.open_debug_ending(id, character),
             AppBoot::EndingEpilogue => {
                 self.ending = Some(EndingFlow {
                     stats: ending::EndStats::debug(6, 0, 1),
@@ -11616,6 +11608,20 @@ impl App {
         session.open_typewriter_save(&self.pack, true);
         self.start_session(session);
         Ok(())
+    }
+
+    /// Start the post-film ending sequence for ending `id` as a no-save first
+    /// run with a zero clear time, the state the reference's `--test-ending`
+    /// boot gives: the RESULT screen, then the epilogue and the next-cycle
+    /// save as the sequence chains them.
+    fn open_debug_ending(&mut self, id: u8, character: u8) -> Result<()> {
+        self.ending = Some(EndingFlow {
+            stats: ending::EndStats::debug(id, character, 1),
+            second_playthrough: false,
+            has_special_key: false,
+            has_infinite_launcher: false,
+        });
+        self.open_result()
     }
 
     /// Record the active ending sequence and open its RESULT screen.
@@ -12761,13 +12767,7 @@ fn run_ui_impl(
                 app.settle(DEATH_CAPTURE_TICKS)?;
             }
             AppBoot::EndingResult { id, character } => {
-                app.ending = Some(EndingFlow {
-                    stats: ending::EndStats::debug(id, character, 1),
-                    second_playthrough: false,
-                    has_special_key: false,
-                    has_infinite_launcher: false,
-                });
-                app.open_result()?;
+                app.open_debug_ending(id, character)?;
                 if apply_authoring(&mut app, authoring)? {
                     return Ok(());
                 }

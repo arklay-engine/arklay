@@ -143,6 +143,14 @@ function mark_authored() end
 ---need one.
 function open_title() end
 
+---Open ending `id`'s RESULT screen, as the game shows it after the ending
+---films, with no films: a no-save first run with a zero clear time, like the
+---reference's `--test-ending` boot. The sequence then runs as the game's does,
+---through the epilogue (endings 6 and 7) to the next-cycle save. RE 1 only.
+---@param id integer The ending, 1-7.
+---@param options? { character?: integer } `character` is `0` Chris (the default) or `1` Jill.
+function open_ending(id, options) end
+
 -- # Input
 
 ---The buttons are `up` (or `forward`), `down` (or `backward`), `left`, `right`, `confirm` (or `action`, `cross`), `cancel`

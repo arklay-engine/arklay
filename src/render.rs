@@ -134,9 +134,11 @@ pub enum SpriteBlend {
     Opaque,
     /// `(source + destination) / 2`, the PSX half blend.
     Half,
-    /// The original's variant-2 semi-transparency: `127/256` of the (already
-    /// colour-modulated) source over the destination, rounded - the reference's
-    /// GPU chain, which the FILE reader's backdrop pieces use.
+    /// The original's variant-2 semi-transparency: a vertex alpha of `127/255`
+    /// over the (already colour-modulated) source, with the source and
+    /// destination terms each rounded to 8 bits before they add - the
+    /// reference's GPU chain, which the FILE reader's backdrop pieces and the
+    /// ending's caption plates use.
     HalfVariant,
     /// Mix the destination towards black by `alpha`/255 wherever a texel is
     /// opaque; the text shadow's pass. The source colour is ignored.
@@ -773,7 +775,7 @@ impl Framebuffer {
     /// Draw one indexed sprite the way the FILE reader's backdrop pieces are:
     /// the texel is modulated by `2 * ramp` (the original's `DAT_004af48c`
     /// colour field) and then blended over the destination with the
-    /// descriptor's variant-2 half alpha (`127/256`), rounding at both stages
+    /// descriptor's variant-2 half alpha (`127/255`), rounding at both stages
     /// exactly like the reference's GPU chain.
     pub fn draw_indexed_sprite_ramp(
         &mut self,
@@ -897,8 +899,10 @@ impl Framebuffer {
             if texel[3] == 0 {
                 return None;
             }
+            // The reference's GL modulate rounds the texel x colour product
+            // (texel 41 at 128 is 21, not 20); at a full 255 it is exact.
             let mix = |channel: u8, tint: u8| {
-                (u32::from(channel) * u32::from(tint) / 255 * scale / 255) as u8
+                ((u32::from(channel) * u32::from(tint) / 255 * scale + 127) / 255) as u8
             };
             Some([
                 mix(texel[0], tint[0]),
@@ -1151,10 +1155,10 @@ impl Framebuffer {
             if texel[3] == 0 {
                 return None;
             }
-            // A white tint is a no-op multiplier, so the existing RGBA
-            // callers keep their exact `channel * scale / 255` truncation.
+            // Rounded like the indexed path, so a replacement page fades
+            // exactly as the art it replaces.
             let mix = |channel: u8, tint: u8| {
-                (u32::from(channel) * u32::from(tint) / 255 * scale / 255) as u8
+                ((u32::from(channel) * u32::from(tint) / 255 * scale + 127) / 255) as u8
             };
             Some([
                 mix(texel[0], tint[0]),
@@ -1681,7 +1685,7 @@ impl Framebuffer {
             let colour = match blend {
                 SpriteBlend::Opaque => [1.0; 4],
                 SpriteBlend::Half => [1.0, 1.0, 1.0, 0.5],
-                SpriteBlend::HalfVariant => [1.0, 1.0, 1.0, 127.0 / 256.0],
+                SpriteBlend::HalfVariant => [1.0, 1.0, 1.0, 127.0 / 255.0],
                 SpriteBlend::BlackAlpha(alpha) => [0.0, 0.0, 0.0, f32::from(alpha) / 255.0],
                 SpriteBlend::Add => [1.0; 4],
             };
@@ -1729,9 +1733,9 @@ impl Framebuffer {
                     }
                     SpriteBlend::HalfVariant => {
                         for (channel, &destination) in pixel[..3].iter_mut().zip(slot.iter()) {
-                            *channel =
-                                ((u32::from(*channel) * 127 + u32::from(destination) * 129 + 128)
-                                    >> 8) as u8;
+                            *channel = ((u32::from(*channel) * 127 + 127) / 255
+                                + (u32::from(destination) * 128 + 127) / 255)
+                                as u8;
                         }
                     }
                     SpriteBlend::BlackAlpha(alpha) => {
@@ -8956,6 +8960,75 @@ mod tests {
                 [*value, *value, *value, 255],
                 "texel {}",
                 texels[x]
+            );
+        }
+    }
+
+    /// Draw a one-texel indexed sprite of grey `texel` at colour `scale` over a
+    /// grey `destination` and read the pixel back.
+    fn scaled_texel(texel: u8, scale: u8, destination: u8, blend: SpriteBlend) -> u8 {
+        let texture = indexed_texture(vec![1; 4], &[[0; 4], [texel, texel, texel, 255]]);
+        let mut framebuffer = Framebuffer::new();
+        framebuffer.blit(&solid_image(
+            320,
+            240,
+            [destination, destination, destination, 255],
+        ));
+        framebuffer.draw_indexed_sprite_full(
+            &texture,
+            [0, 0, 1, 1],
+            [0, 0, 1, 1],
+            0,
+            scale,
+            Tint::White,
+            blend,
+            [false; 2],
+        );
+        framebuffer_pixel(&framebuffer, 0, 0)[0]
+    }
+
+    #[test]
+    fn scaled_sprite_colour_rounds_like_the_reference() {
+        // The RE1 RESULT plates fading in: the reference's GL modulate rounds
+        // texel x colour, where truncating left them a level dark.
+        assert_eq!(scaled_texel(41, 128, 0, SpriteBlend::Opaque), 21);
+        assert_eq!(scaled_texel(8, 144, 0, SpriteBlend::Opaque), 5);
+        // Full colour is exact either way.
+        assert_eq!(scaled_texel(131, 255, 0, SpriteBlend::Opaque), 131);
+    }
+
+    #[test]
+    fn an_rgba_page_fades_like_the_indexed_page_it_replaces() {
+        for (texel, scale) in [(41u8, 128u8), (8, 144), (131, 255), (200, 37)] {
+            let mut framebuffer = Framebuffer::new();
+            framebuffer.draw_page_sprite_scaled(
+                &Artwork::Rgba(solid_image(1, 1, [texel, texel, texel, 255])),
+                [0, 0, 1, 1],
+                [0, 0, 1, 1],
+                0,
+                scale,
+                Tint::White,
+                SpriteBlend::Opaque,
+            );
+            assert_eq!(
+                framebuffer_pixel(&framebuffer, 0, 0)[0],
+                scaled_texel(texel, scale, 0, SpriteBlend::Opaque),
+                "texel {texel} at {scale}"
+            );
+        }
+    }
+
+    #[test]
+    fn half_variant_rounds_each_blend_term_like_the_reference() {
+        // The RE1 epilogue caption fading in over its backdrop at colour 144:
+        // the reference rounds `source * 127/255` and `destination * 128/255`
+        // separately. The old single `(s * 127 + d * 129) / 256` showed each
+        // of these a level bright.
+        for (texel, destination, shown) in [(8, 8, 6), (8, 74, 39), (41, 24, 23), (24, 148, 81)] {
+            assert_eq!(
+                scaled_texel(texel, 144, destination, SpriteBlend::HalfVariant),
+                shown,
+                "texel {texel} over {destination}"
             );
         }
     }

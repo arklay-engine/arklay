@@ -1366,6 +1366,37 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
 
     let shared = Rc::clone(driver);
     globals.set(
+        "open_ending",
+        lua.create_function(move |_lua, (id, table): (u8, Option<Table>)| {
+            with(&shared, |driver| {
+                if crate::ending::row(id).is_none() {
+                    return Err(mlua::Error::RuntimeError(format!(
+                        "open_ending: ending {id} is outside 1-7"
+                    )));
+                }
+                let mut options = Options::new("open_ending", table);
+                let character: u8 = options.get("character")?.unwrap_or(0);
+                options.finish()?;
+                if character > 1 {
+                    return Err(mlua::Error::RuntimeError(format!(
+                        "open_ending: character {character} is not 0 (Chris) or 1 (Jill)"
+                    )));
+                }
+                let app = driver.app()?;
+                app.open_debug_ending(id, character).map_err(engine_error)?;
+                app.pending_movie = None;
+                driver.baseline = None;
+                driver.edited = false;
+                driver.arm = false;
+                driver.drawn = false;
+                driver.input = InputState::default();
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
         "hold",
         lua.create_function(move |_lua, names: Variadic<String>| {
             with(&shared, |driver| {
