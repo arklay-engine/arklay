@@ -353,6 +353,64 @@ local function note_reaches(p, bot, room_id)
     end
 end
 
+-- The memory key (bot:remember) of door `slot` of `room` given up from
+-- `side`: a lesson the engine keeps past a reload, as it keeps a met
+-- fight (src/engine/bot.rs's LESSON_PREFIXES).
+local DOOR_LESSON = "door_side:"
+function BotPlanner.door_lesson_key(room, slot, side)
+    return string.format("%s%s:%s:%s", DOOR_LESSON, room, tostring(slot), side)
+end
+
+-- The door marks the memory's lessons hold (door_lesson_key), put back
+-- once a VM life (the marks live in the VM a reload rebuilds): given up
+-- from each remembered side, open from any other (BotPlanner.other_side).
+function BotPlanner.restore_door_lessons(bot)
+    local p = plan()
+    if p.door_lessons_read then
+        return
+    end
+    p.door_lessons_read = true
+    local changed = false
+    for key, _ in pairs(bot:memory()) do
+        local room, slot, side = string.match(key, "^" .. DOOR_LESSON .. "(%w+):(%d+):(%w+)$")
+        if room then
+            slot = tonumber(slot)
+            local mk = mark_key("door", room, slot)
+            local m = p.marks[mk] or {
+                kind = "door", room = room, slot = slot, attempts = MAX_ATTEMPTS,
+                reason = "every approach failed (a lesson kept past a reload)",
+                sig = "", permanent = false,
+            }
+            m.bad_from = m.bad_from or {}
+            m.bad_from[side] = true
+            p.marks[mk] = m
+            p.door_lessons = p.door_lessons or {}
+            p.door_lessons[key] = { mark = mk, side = side }
+            changed = true
+        end
+    end
+    if changed then
+        marks_changed()
+    end
+end
+
+-- The lessons whose door mark has since cleared, or holds from that side
+-- no more, are forgotten: a puzzle step or a <reach> flag may open the
+-- way (clear_unreachable, blocked), and a reload must not put the mark
+-- back for good. 30F's door given up from 30D before the passages turned
+-- would stay given up past the hex crank.
+function BotPlanner.forget_cleared_door_lessons(bot)
+    local p = plan()
+    for key, lesson in pairs(p.door_lessons or {}) do
+        local m = p.marks[lesson.mark]
+        if not (m and m.bad_from and m.bad_from[lesson.side]
+                and BotPlanner.other_side(m, "door", "")) then
+            bot:remember(key, nil)
+            p.door_lessons[key] = nil
+        end
+    end
+end
+
 local function mark(bot, kind, room, slot, reason, permanent)
     local p = plan()
     local key = mark_key(kind, room, slot)
@@ -391,6 +449,20 @@ local function mark(bot, kind, room, slot, reason, permanent)
         m.reach_state = reach_state(bot, reach)
     else
         m.reach_state = nil
+    end
+    -- A door given up from some sides is a lesson the memory keeps past a
+    -- death or a reload (BotPlanner.restore_door_lessons): 507's door 0,
+    -- out of reach from the 50C side, was walked to three times again
+    -- after every reload.
+    if BotPlanner.other_side(m, kind, "") then
+        p.door_lessons = p.door_lessons or {}
+        for side, _ in pairs(m.bad_from) do
+            local lesson = BotPlanner.door_lesson_key(room, slot, side)
+            if not p.door_lessons[lesson] then
+                bot:remember(lesson, "1")
+                p.door_lessons[lesson] = { mark = key, side = side }
+            end
+        end
     end
     -- A box: the needed pickups waiting for a slot now (blocked lifts the
     -- mark once there are more).
@@ -495,7 +567,7 @@ end
 -- a heal while the bot is hurt with none held (408's wasps stung it to 1
 -- with the mansion's green herbs given up), or the ammunition of a gun
 -- held or in the box (35 shells were left on full inventories while the
--- bot ran dry).
+-- bot ran dry), or a cure for the poison the bot has with none held.
 local open_use_cache = { tick = nil, items = {} }
 local function full_mark_needed(bot, item)
     -- An item an open <use> fact takes now, though it was not one when it
@@ -517,6 +589,14 @@ local function full_mark_needed(bot, item)
     end
     local kind, _, heals = bot:item_kind(item)
     if kind == "heal" then
+        -- A cure for the poison the bot has while none is held: given up
+        -- after three full passes, the blue herb in 300 was dropped as a
+        -- target on each arrival, and Chris walked 40000 ticks poisoned
+        -- between 300 and 118's box until he died.
+        local wanted = BotPuzzle.wanted_items(bot)[item]
+        if wanted and wanted.cure then
+            return true
+        end
         return heals == true and BotInventory.heal_wanted(bot)
     end
     if kind ~= "ammo" then
@@ -531,15 +611,40 @@ local function full_mark_needed(bot, item)
     end
     return false
 end
+BotPlanner.full_mark_needed = full_mark_needed
+
+-- Whether door mark `m` (of `kind`), given up after MAX_ATTEMPTS, failed
+-- only from other sides than `side`: every approach failed from each room
+-- in m.bad_from, and the bot comes in from another one. Under
+-- MAX_ATTEMPTS the mark lifts as any approach mark does. Not for a door
+-- with a <reach> fact, whose mark follows its flag instead, nor a
+-- permanent mark.
+function BotPlanner.other_side(m, kind, side)
+    return kind == "door" and side ~= nil and m.bad_from ~= nil and not m.bad_from[side]
+        and not m.permanent and m.reach_state == nil and (m.attempts or 0) >= MAX_ATTEMPTS
+        and m.reason:find("every approach failed", 1, true) ~= nil
+end
 
 -- Whether a marked goal is still off limits. A goal is tried again once
 -- the inventory changes; a goal that failed on its approach is also tried
 -- again on a later entry into its room (the bot may now stand in a part of
 -- the room that reaches it), but `remote` planning from another room does
 -- not head back for it.
-local function blocked(bot, kind, room, slot, remote)
+local function blocked(bot, kind, room, slot, remote, side)
     local m = plan().marks[mark_key(kind, room, slot)]
     if not m then
+        return false
+    end
+    -- A door planned unreachable from the side the bot came in by holds
+    -- only for that side (m.bad_from): `side` is the room a route enters
+    -- `room` from, else, in the bot's own room, the room it came from. 30F's
+    -- passage to 305 starts at the east end, reached from 30D's door but
+    -- not from 306's: three entries from 306 gave the door up for good,
+    -- and the run never brought the Wolf Medal to 305's fountain.
+    if side == nil and room == bot:room().id then
+        side = plan().last_from
+    end
+    if BotPlanner.other_side(m, kind, side) then
         return false
     end
     if m.needs ~= nil and not m.permanent
@@ -718,6 +823,8 @@ local function clear_unreachable(bot, room, doors)
         end
     end
 end
+BotPlanner.mark = mark
+BotPlanner.clear_unreachable = clear_unreachable
 
 local function progress(bot, note)
     local p = plan()
@@ -1107,7 +1214,7 @@ local function door_passable(bot, room_id, door, from)
         return from ~= nil and room_id ~= bot:room().id
             and rides_out(bot, room_id, door.slot, from)
     end
-    if blocked(bot, "door", room_id, door.slot, true) then
+    if blocked(bot, "door", room_id, door.slot, true, from) then
         return false
     end
     -- Nor is a door a <reach> fact keeps out of reach (20C's door to 21A
@@ -1293,41 +1400,72 @@ local function map_route(bot, world, from, to, tree, point)
     return steps, cost
 end
 
+-- The rooms with a given-up door mark that holds for some sides only
+-- (BotPlanner.other_side: any side not in its bad_from, "" here, passes),
+-- {[room] = true}, read once per marks generation.
+local sided_cache = { gen = nil, rooms = {} }
+local function sided_rooms()
+    local gen = plan().marks_gen or 0
+    if sided_cache.gen ~= gen then
+        local rooms = {}
+        for _, m in pairs(plan().marks) do
+            if BotPlanner.other_side(m, m.kind, "") then
+                rooms[m.room] = true
+            end
+        end
+        sided_cache.gen, sided_cache.rooms = gen, rooms
+    end
+    return sided_cache.rooms
+end
+
 -- Breadth-first route over the remembered doors: the list of
 -- {room, slot, target} steps from `from` to `to`, or nil. With `bad_from`
 -- (a set of room ids), the route never enters `to` from one of them.
+-- A search state is a room, and for a room with a door that passes from
+-- some sides only (sided_rooms) the room it was entered from, as in
+-- map_tree: reached first from a side its onward door failed from, such a
+-- room is still entered from another, the bot's own room included (out and
+-- back in through a side that works). Any other room is entered once, as
+-- its side changes nothing.
 local function route(bot, world, from, to, bad_from)
     if from == to then
         return {}
     end
-    local prev = { [from] = false }
-    local queue = { from }
+    local sided = sided_rooms()
+    local start = from .. "|"
+    local prev = { [start] = false }
+    local queue = { { room = from, key = start } }
     local head = 1
     while queue[head] do
-        local id = queue[head]
+        local node = queue[head]
         head = head + 1
+        local id = node.room
+        local came = prev[node.key] and prev[node.key].room or nil
         local room = world_room(world, id)
         for _, door in ipairs(room and room.doors or {}) do
             local target = door.target
-            if target and prev[target] == nil
+            local key = target and (sided[target] and target .. "|" .. id or target)
+            if target and prev[key] == nil and (target ~= from or sided[target])
                 and not (bad_from and target == to and bad_from[id])
-                and door_passable(bot, id, door, prev[id] and prev[id].room or nil) then
-                prev[target] = { room = id, slot = door.slot, target = target }
+                and door_passable(bot, id, door, came) then
+                prev[key] = { room = id, slot = door.slot, target = target, key = node.key }
                 if target == to then
                     local steps = {}
-                    local step = prev[target]
+                    local step = prev[key]
                     while step do
-                        table.insert(steps, 1, step)
-                        step = prev[step.room]
+                        table.insert(steps, 1, { room = step.room, slot = step.slot,
+                            target = step.target })
+                        step = prev[step.key]
                     end
                     return steps
                 end
-                queue[#queue + 1] = target
+                queue[#queue + 1] = { room = target, key = key }
             end
         end
     end
     return nil
 end
+BotPlanner.route = route
 
 -- Goal constructors. Each goal has a kind, a label and a press job.
 local function zone_of(row)
@@ -2220,6 +2358,15 @@ local function untraversed(world_here, slot)
     return true, nil
 end
 
+-- The ammunition of the firearms the remembered box holds and the bot
+-- does not, {[item] = true}: not a hand weapon nor a reserve gun (the
+-- launchers come out by their own rules), and only while the rearm could
+-- hand the gun back (BotInventory.context's ctx.boxed_ammo). What a
+-- player sees in the box and on the floor; nothing hidden.
+function BotPlanner.boxed_gun_ammo(bot)
+    return BotInventory.context(bot).boxed_ammo or {}
+end
+
 -- The way-out bonus of a route to the remote frontier item `item` (catalog
 -- kind `kind`): ITEM_BONUS, plus KEY_BONUS for a key that a remembered
 -- locked door needs (`needed[item]` names the door), else AMMO_BONUS for
@@ -3073,6 +3220,11 @@ local function choose(bot)
                 ammos[other] = true
             end
         end
+        -- So do a boxed gun's (BotPlanner.boxed_gun_ammo): with them held
+        -- the box hands the gun back (BotInventory's rearm).
+        for item, _ in pairs(BotPlanner.boxed_gun_ammo(bot)) do
+            ammos[item] = true
+        end
         -- A gun the bot has none of comes with its clip
         -- (BotInventory.new_guns).
         local guns = BotInventory.new_guns(bot)
@@ -3313,6 +3465,14 @@ local function choose(bot)
             gun_rounds[bot:ammo_for(id)] = true
         end
     end
+    -- A boxed gun's rounds are worth the trip as well: the box hands the
+    -- gun back once they are held (BotInventory's rearm). Chris boxed the
+    -- shotgun for the mansion's keys, walked past 28 shells in 219, 401
+    -- and 410 as rounds for no gun, and met the lab's zombies with none.
+    local boxed_rounds = BotPlanner.boxed_gun_ammo(bot)
+    for item, _ in pairs(boxed_rounds) do
+        gun_rounds[item] = true
+    end
     local new_guns = BotInventory.new_guns(bot)
     local function consider_frontier(allow_unfit)
         for _, goal in ipairs(world.frontier) do
@@ -3343,7 +3503,10 @@ local function choose(bot)
                         local _, _, heals = bot:item_kind(goal.item)
                         local cures = cure_now ~= nil and cure_now[goal.item] == true
                         heals = (hurt and heals == true) or cures
-                        local bonus, tag = BotPlanner.item_bonus(goal.item, goal.item_kind, ammo,
+                        -- Under the floor a boxed gun's rounds are the
+                        -- ammunition the bot needs, as the equipped gun's are.
+                        local want = (ammo and boxed_rounds[goal.item]) and goal.item or ammo
+                        local bonus, tag = BotPlanner.item_bonus(goal.item, goal.item_kind, want,
                             needed, heals, new_guns, cures)
                         local left = plan().marks[mark_key("item", goal.room, goal.slot)]
                         if not tag and left and left.reason:find("inventory full", 1, true) then
@@ -4384,6 +4547,8 @@ end
 function BotPlanner.step(bot)
     local p = plan()
     local room = bot:room().id
+    BotPlanner.restore_door_lessons(bot)
+    BotPlanner.forget_cleared_door_lessons(bot)
     if not p.monster_tick or bot:tick() - p.monster_tick >= MONSTER_EVERY then
         p.monster_tick = bot:tick()
         p.monsters[room] = #bot:enemies()

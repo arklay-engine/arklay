@@ -445,8 +445,9 @@ impl BotMemory {
     }
 
     /// Carry the values a reload keeps over from `current` (the memory at
-    /// the death): the bosses met (`fight_met:` keys) and the rooms the bot
-    /// died in and has not left alive since (`died:` keys). A player who
+    /// the death): the bosses met (`fight_met:` keys), the rooms the bot
+    /// died in and has not left alive since (`died:` keys) and the doors it
+    /// gave up from a side (`door_side:` keys). A player who
     /// died to a boss knows it is there, though the save was written before
     /// it, and does not walk into the room that killed them the same way.
     fn keep_lessons(&mut self, current: &BotMemory) {
@@ -479,7 +480,7 @@ fn boot_idle_ticks() -> u64 {
 }
 
 /// The memory keys a reload keeps ([`BotMemory::keep_lessons`]).
-const LESSON_PREFIXES: [&str; 2] = ["fight_met:", "died:"];
+const LESSON_PREFIXES: [&str; 3] = ["fight_met:", "died:", "door_side:"];
 
 impl From<&ActionSnapshot> for ActionMemory {
     fn from(action: &ActionSnapshot) -> Self {
@@ -6197,7 +6198,15 @@ mod tests {
         current.remember("steps_done".to_string(), Some("4".to_string()));
         current.remember("fight_met:30C:04".to_string(), Some("1".to_string()));
         current.remember("died:509".to_string(), Some("2".to_string()));
+        current.remember("door_side:507:0:50C".to_string(), Some("1".to_string()));
         checkpoint.keep_lessons(&current);
+        assert_eq!(
+            checkpoint
+                .values
+                .get("door_side:507:0:50C")
+                .map(String::as_str),
+            Some("1")
+        );
         assert_eq!(
             checkpoint.values.get("died:509").map(String::as_str),
             Some("2")
@@ -7466,6 +7475,431 @@ mod tests {
             function bot:knowledge() return K end
             return BotInventory.dry_gun(bot, 0x01, {})"#
         ));
+    }
+
+    #[test]
+    fn an_empty_staple_handgun_is_never_dead_weight() {
+        let vm = tactics_vm();
+        // `held` maps an item to its count; `boxed` the remembered box.
+        let empty_with = |held: &str, boxed: &str, equipped: &str, staple: bool| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local held = {{ {held} }}
+                    local memory = {{ box_items = "{boxed}" }}
+                    local bot = {{}}
+                    function bot:memory() return memory end
+                    function bot:has_item(id) return held[id] ~= nil end
+                    function bot:item_count(id) return held[id] or 0 end
+                    local ammo = {{ [0x02] = 0x0B, [0x03] = 0x0C }}
+                    function bot:ammo_for(id) return ammo[id] end
+                    local out = {{}}
+                    for id, _ in pairs(BotInventory.empty_guns(bot, K, {equipped}, nil, {staple}) or {{}}) do
+                        out[#out + 1] = string.format("%02X", id)
+                    end
+                    table.sort(out)
+                    return table.concat(out, ",")"#
+                ),
+            )
+        };
+        let empty =
+            |held: &str, boxed: &str, equipped: &str| empty_with(held, boxed, equipped, false);
+        // The empty shotgun with no shells anywhere is dead weight; the
+        // empty handgun beside it is not, clips or none.
+        assert_eq!(empty("[0x02] = 0, [0x03] = 0", "", "nil"), "03");
+        // Shells held or boxed, or the shotgun equipped: it stays.
+        assert_eq!(empty("[0x02] = 0, [0x03] = 0, [0x0C] = 7", "", "nil"), "");
+        assert_eq!(empty("[0x02] = 0, [0x03] = 0", "0C", "nil"), "");
+        assert_eq!(empty("[0x02] = 0, [0x03] = 0", "", "0x03"), "");
+        // Loaded: never.
+        assert_eq!(empty("[0x03] = 2", "", "nil"), "");
+        // A brew's bottle slots (with_staple) take the empty handgun too.
+        assert_eq!(
+            empty_with("[0x02] = 0, [0x03] = 0", "", "nil", true),
+            "02,03"
+        );
+        assert_eq!(empty_with("[0x02] = 0", "0B", "nil", true), "");
+    }
+
+    #[test]
+    fn a_cure_left_on_a_full_inventory_is_never_given_up_while_poisoned() {
+        let vm = tactics_vm();
+        // 0x45 is the blue herb (a cure that does not heal), 0x42 the serum.
+        let needed = |poison: &str, held: &str, item: u8| -> bool {
+            eval(
+                &vm,
+                &format!(
+                    r#"local held = {{ {held} }}
+                    local bot = {{}}
+                    function bot:knowledge() return K end
+                    function bot:tick() return {item} end
+                    function bot:use_facts() return {{}} end
+                    function bot:player() return {{ {poison} }} end
+                    function bot:has_item(id) return held[id] ~= nil end
+                    function bot:item_kind(id) return "heal", false, false end
+                    return BotPlanner.full_mark_needed(bot, {item})"#
+                ),
+            )
+        };
+        assert!(needed("poisoned = true", "", 0x45));
+        // Not poisoned, or a cure already held: a plain non-healing herb.
+        assert!(!needed("poisoned = false", "", 0x45));
+        assert!(!needed("poisoned = true", "[0x45] = 1", 0x45));
+        // The serum cures only the serious poison.
+        assert!(!needed("poisoned = true", "", 0x42));
+        assert!(needed("seriously_poisoned = true", "", 0x42));
+    }
+
+    #[test]
+    fn a_lying_cure_counts_once_as_a_needed_pickup_while_poisoned() {
+        let vm = tactics_vm();
+        // 0x45 is the blue herb (cures, no heal), 0x48 a mix that cures and
+        // heals. The bot is hurt with no heal held, so a heal is due too.
+        let count = |poisoned: bool| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"local bot = setmetatable({{}}, {{ __index = function()
+                        return function() return {{}} end
+                    end }})
+                    function bot:knowledge() return K end
+                    function bot:tick() return 1 end
+                    function bot:room() return {{ id = "300" }} end
+                    function bot:player()
+                        return {{ health = 40, max_health = 140, poisoned = {poisoned} }}
+                    end
+                    function bot:has_item() return false end
+                    function bot:item_count() return 0 end
+                    function bot:flag() return false end
+                    function bot:memory() return {{}} end
+                    function bot:menu() return {{ items = {{}} }} end
+                    function bot:item_kind(id) return "heal", false, id == 0x48 end
+                    function bot:world()
+                        return {{ rooms = {{}}, frontier = {{
+                            {{ kind = "item", room = "300", slot = 6, item = 0x45 }},
+                            {{ kind = "item", room = "300", slot = 7, item = 0x48 }} }} }}
+                    end
+                    -- ctx.uses as BotInventory.context fills it: the wanted
+                    -- items, a cure for the poison among them.
+                    local ctx = {{ uses = {{}} }}
+                    for item, _ in pairs(BotPuzzle.wanted_items(bot)) do
+                        ctx.uses[item] = true
+                    end
+                    local n, progress = BotInventory.needed_pickups(bot, ctx)
+                    return n .. "," .. progress"#
+                ),
+            )
+        };
+        // Poisoned: each herb once, the mix not again as the due heal.
+        assert_eq!(count(true), "2,2");
+        // Not poisoned: only the mix, as the due heal.
+        assert_eq!(count(false), "1,1");
+    }
+
+    #[test]
+    fn a_boxed_guns_rounds_count_only_while_the_rearm_could_hand_it_back() {
+        let vm = tactics_vm();
+        // Chris with the handgun (`loaded` rounds, no clip), three other
+        // items and two free slots; the shotgun in the box, shells lying in
+        // 219, and maybe a key on the frontier there too.
+        let boxed = |loaded: u32, key: bool| -> String {
+            let key = if key {
+                r#"{ kind = "item", room = "219", slot = 2, item = 0x3A },"#
+            } else {
+                ""
+            };
+            eval(
+                &vm,
+                &format!(
+                    r#"local bot = setmetatable({{}}, {{ __index = function()
+                        return function() return {{}} end
+                    end }})
+                    local ammo = {{ [0x02] = 0x0B, [0x03] = 0x0C }}
+                    function bot:knowledge() return K end
+                    function bot:tick() return 1 end
+                    function bot:room() return {{ id = "106" }} end
+                    function bot:player()
+                        return {{ health = 140, max_health = 140, equipped = 0x02 }}
+                    end
+                    function bot:ammo_for(id) return ammo[id] end
+                    function bot:has_item(id) return id == 0x02 end
+                    function bot:item_count(id) return id == 0x02 and {loaded} or 0 end
+                    function bot:flag() return false end
+                    function bot:memory() return {{ box_items = "03" }} end
+                    function bot:menu()
+                        return {{ capacity = 6, items = {{
+                            {{ slot = 1, item = 0x02, kind = "weapon", quantity = {loaded} }},
+                            {{ slot = 2, item = 0x40, kind = "key", quantity = 1 }},
+                            {{ slot = 3, item = 0x41, kind = "key", quantity = 1 }},
+                            {{ slot = 4, item = 0x42, kind = "key", quantity = 1 }},
+                            {{ slot = 5, item = 0, quantity = 0 }},
+                            {{ slot = 6, item = 0, quantity = 0 }} }} }}
+                    end
+                    function bot:item_kind(id)
+                        if id == 0x0C then return "ammo" end
+                        return "key"
+                    end
+                    function bot:world()
+                        return {{ rooms = {{}}, frontier = {{ {key}
+                            {{ kind = "item", room = "219", slot = 1, item = 0x0C }} }} }}
+                    end
+                    local ctx = BotInventory.context(bot)
+                    return tostring(ctx.boxed_ammo and ctx.boxed_ammo[0x0C])
+                        .. "," .. tostring(BotPlanner.boxed_gun_ammo(bot)[0x0C])"#
+                ),
+            )
+        };
+        // Room for the shells and the gun: rounds for a gun.
+        assert_eq!(boxed(8, false), "true,true");
+        // A key needs a free slot: the rearm would keep the gun in, so the
+        // shells are no known ammunition.
+        assert_eq!(boxed(8, true), "nil,nil");
+        // Unarmed, the rearm takes the slot anyway: they count again.
+        assert_eq!(boxed(0, true), "true,true");
+    }
+
+    #[test]
+    fn a_door_unreachable_from_one_side_stays_open_from_the_others() {
+        let vm = route_vm();
+        let open = |mark: &str, kind: &str, side: &str| -> bool {
+            eval(
+                &vm,
+                &format!(
+                    r#"local m = {{ {mark} }}
+                    return BotPlanner.other_side(m, "{kind}", {side})"#
+                ),
+            )
+        };
+        let failed =
+            r#"reason = "every approach failed", attempts = 3, bad_from = { ["306"] = true }"#;
+        // 30F's passage to 305, given up from 306: still a way from 30D.
+        assert!(open(failed, "door", r#""30D""#));
+        assert!(!open(failed, "door", r#""306""#));
+        // Not given up yet: it lifts on the next entry as any approach mark.
+        assert!(!open(
+            &failed.replace("attempts = 3", "attempts = 2"),
+            "door",
+            r#""30D""#
+        ));
+        // No side known (the first room after a reload), not a door, a
+        // permanent mark, a <reach> door or another failure: as marked.
+        assert!(!open(failed, "door", "nil"));
+        assert!(!open(failed, "item", r#""30D""#));
+        assert!(!open(
+            &format!("{failed}, permanent = true"),
+            "door",
+            r#""30D""#
+        ));
+        assert!(!open(
+            &format!("{failed}, reach_state = false"),
+            "door",
+            r#""30D""#
+        ));
+        assert!(!open(
+            r#"reason = "locked for good", bad_from = { ["306"] = true }"#,
+            "door",
+            r#""30D""#
+        ));
+    }
+
+    #[test]
+    fn a_route_enters_a_room_again_from_the_side_its_door_works_from() {
+        let vm = route_vm();
+        // R's door 2 to T was given up from A (every approach failed); from
+        // B it is a way through. The bot stands in `here`, come from `came`.
+        let route = |world: &str, from: &str, here: &str, came: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"BOT_STATE = {{ plan = {{ marks = {{
+                        ["door:R:2"] = {{ kind = "door", room = "R", slot = 2, attempts = 3,
+                            reason = "every approach failed", bad_from = {{ A = true }} }} }},
+                        marks_gen = 1, last_from = "{came}",
+                        stairs = {{}}, locked = {{}}, entries = {{}}, lens = {{}}, progress = 0 }} }}
+                    local bot = setmetatable({{}}, {{ __index = function()
+                        return function() return {{}} end
+                    end }})
+                    function bot:tick() return 1 end
+                    function bot:room() return {{ id = "{here}" }} end
+                    function bot:flag() return false end
+                    local function door(slot, target)
+                        return {{ slot = slot, target = target, x = 1000, z = 1000, present = true }}
+                    end
+                    local steps = BotPlanner.route(bot, {world}, "{from}", "T")
+                    if not steps then return "nil" end
+                    local out = {{}}
+                    for _, step in ipairs(steps) do out[#out + 1] = step.room .. ">" .. step.target end
+                    return table.concat(out, ",")"#
+                ),
+            )
+        };
+        // S reaches R through A first (A's door is listed first): the side
+        // search goes on through B.
+        let through = r#"{ rooms = {
+            { id = "S", doors = { door(0, "A"), door(1, "B") } },
+            { id = "A", doors = { door(0, "R") } },
+            { id = "B", doors = { door(0, "R") } },
+            { id = "R", doors = { door(0, "A"), door(1, "B"), door(2, "T") } } } }"#;
+        assert_eq!(route(through, "S", "S", ""), "S>B,B>R,R>T");
+        // In R, come in from A: out through B and back in.
+        assert_eq!(route(through, "R", "R", "A"), "R>B,B>R,R>T");
+        // Come in from B: straight through.
+        assert_eq!(route(through, "R", "R", "B"), "R>T");
+        // With B gone there is no way.
+        let no_b = r#"{ rooms = {
+            { id = "S", doors = { door(0, "A") } },
+            { id = "A", doors = { door(0, "R") } },
+            { id = "R", doors = { door(0, "A"), door(2, "T") } } } }"#;
+        assert_eq!(route(no_b, "S", "S", ""), "nil");
+    }
+
+    #[test]
+    fn a_door_given_up_from_a_side_is_a_lesson_a_reload_keeps() {
+        let vm = route_vm();
+        // A fresh VM's plan (after a reload) and the memory the engine kept:
+        // 507's door 0 given up from 50C.
+        let state = |memory: &str, from: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    r#"BOT_STATE = {{}}
+                    local memory = {{ {memory} }}
+                    local bot = setmetatable({{}}, {{ __index = function()
+                        return function() return {{}} end
+                    end }})
+                    function bot:memory() return memory end
+                    BotPlanner.restore_door_lessons(bot)
+                    local m = BOT_STATE.plan.marks["door:507:0"]
+                    if not m then return "none" end
+                    return tostring(BotPlanner.other_side(m, "door", "{from}"))"#
+                ),
+            )
+        };
+        let lesson = r#"["door_side:507:0:50C"] = "1""#;
+        // Still given up from 50C; open from 505.
+        assert_eq!(state(lesson, "50C"), "false");
+        assert_eq!(state(lesson, "505"), "true");
+        assert_eq!(state(r#"["died:509"] = "1""#, "505"), "none");
+        // The mark writes the lesson once given up (three failures from
+        // 50C), and a puzzle step that clears the mark forgets it, so a
+        // reload does not give the door up again.
+        let written: String = eval(
+            &vm,
+            r#"BOT_STATE = {}
+            local memory = {}
+            local bot = setmetatable({}, { __index = function()
+                return function() return {} end
+            end })
+            function bot:memory() return memory end
+            function bot:remember(key, value) memory[key] = value end
+            function bot:room() return { id = "507" } end
+            BotPlanner.restore_door_lessons(bot)
+            BOT_STATE.plan.last_from = "50C"
+            local function keys()
+                local out = {}
+                for key, _ in pairs(memory) do out[#out + 1] = key end
+                table.sort(out)
+                return table.concat(out, ",")
+            end
+            local seen = {}
+            for _ = 1, 3 do
+                BotPlanner.mark(bot, "door", "507", 0, "every approach failed")
+                seen[#seen + 1] = keys()
+                BotPlanner.forget_cleared_door_lessons(bot)
+            end
+            BotPlanner.clear_unreachable(bot, "30F", true)
+            BotPlanner.forget_cleared_door_lessons(bot)
+            seen[#seen + 1] = keys()
+            return table.concat(seen, "|")"#,
+        );
+        assert_eq!(written, "||door_side:507:0:50C|");
+    }
+
+    #[test]
+    fn a_boss_the_bot_died_to_gears_up_every_boxed_gun_that_hurts_it() {
+        let vm = tactics_vm();
+        // Chris back in 50E after a death to 513's Tyrant (met): the
+        // shotgun and seven shells held, the handgun boxed (or held), its
+        // clip on 513's floor.
+        let clip = r#"{ kind = "item", room = "513", slot = 4, item = 0x0B }"#;
+        let mock = |died: &str, won: bool, frontier: &str, handgun: &str| -> String {
+            format!(
+                r#"local held = {{ [0x03] = 1, [0x0C] = 7 {handgun} }}
+                local memory = {{ box_items = "02,2F", ["fight_met:513:0C"] = "1" {died} }}
+                local bot = {{}}
+                function bot:knowledge() return K end
+                function bot:tick() return 1 end
+                function bot:memory() return memory end
+                function bot:has_item(id) return held[id] ~= nil end
+                function bot:item_count(id) return held[id] or 0 end
+                local ammo = {{ [0x02] = 0x0B, [0x03] = 0x0C, [0x07] = 0x10,
+                    [0x08] = 0x11, [0x09] = 0x12, [0x04] = 0x0D, [0x05] = 0x0E, [0x06] = 0x0F }}
+                function bot:ammo_for(id) return ammo[id] end
+                function bot:flag() return {won} end
+                function bot:fight_facts()
+                    return {{ {{ room = "513", enemy = 0x0C, bank = 3, bit = 112 }} }}
+                end
+                function bot:world()
+                    return {{ frontier = {{ {frontier} }} }}
+                end
+                local function ids(set)
+                    local out = {{}}
+                    for id, _ in pairs(set or {{}}) do
+                        out[#out + 1] = string.format("%02X", id)
+                    end
+                    table.sort(out)
+                    return table.concat(out, ",")
+                end
+                local gear, kept = BotInventory.gear_set(bot, K)"#
+            )
+        };
+        let gear_seen = |died: &str, won: bool, frontier: &str| -> String {
+            eval(
+                &vm,
+                &format!(
+                    "{}\nreturn ids(gear) .. '|' .. ids(kept)",
+                    mock(died, won, frontier, "")
+                ),
+            )
+        };
+        let gear = |died: &str, won: bool| gear_seen(died, won, clip);
+        let died = r#", ["died:513"] = "1""#;
+        // Died in 513: the handgun comes out for the clip there.
+        assert_eq!(gear(died, false), "02|03,0C");
+        // The staple comes out with no round known too (a reload's map
+        // was drawn before 513): the same with the clip unseen.
+        assert_eq!(gear_seen(died, false, ""), "02|03,0C");
+        // Not died there, or the Tyrant won: the shotgun is enough gear.
+        assert_eq!(gear("", false), "|");
+        assert_eq!(gear(died, true), "|");
+
+        // The handgun out of the box into the one free slot, a key on the
+        // frontier: the key's slot is not the handgun's, and once held the
+        // handgun does not go back in for it (then gear again, it would
+        // come out again for good).
+        let cycle: String = eval(
+            &vm,
+            &format!(
+                r#"{}
+                local slot_held = BotInventory.withdrawals(
+                    {{ {{ item = 0x02, kind = "weapon" }} }},
+                    {{ gear = gear, boss_kept = kept, hold_free = 1 }}, 1)
+                {}
+                local gear2, kept2 = BotInventory.gear_set(bot, K)
+                local items = {{ {{ slot = 1, item = 0x03, kind = "weapon" }},
+                    {{ slot = 2, item = 0x02, kind = "weapon" }} }}
+                local ctx = {{ full = true, swap = true, swaps = 1, equipped = 0x03,
+                    gear = gear2, boss_kept = kept2,
+                    spare_guns = {{ [0x02] = 0 }}, staple_guns = {{ [0x02] = true }} }}
+                -- Nothing boxed is gear now (the retreat's question).
+                return #slot_held .. "|" .. ids(gear2) .. "|" .. ids(kept2) .. "|"
+                    .. #BotInventory.soft_deposits(items, ctx, 1) .. "|"
+                    .. tostring(BotInventory.gear_boxed(bot))"#,
+                mock(died, false, clip, ""),
+                "held[0x02] = 1",
+            ),
+        );
+        assert_eq!(cycle, "0||02,03,0C|0|false");
     }
 
     #[test]

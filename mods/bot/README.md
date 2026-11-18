@@ -422,7 +422,21 @@ changed. A `<use>` goal whose every approach failed remembers the room the
 bot had entered from (`bad_from`): the remote trip back to it, otherwise
 never made, is planned while a route enters its room from another room
 (507's computer, behind the wall from the door to 50C, is reached from
-505), its attempts counting as usual. An `<avoid>` item is marked as avoided before the free-slot check,
+505), its attempts counting as usual. So does a door with no `<reach>`
+fact: once given up after 3 attempts, it stays off limits only while the
+bot, or a route, enters its room from a room in `bad_from`, and is planned
+as a way through from any other
+(30F's passage to 305 starts at the east end, reached from 30D's door but
+not from 306's; three entries from 306 had given it up for good). The route
+search keys such a room by the room it was entered from, as the mental
+map does, so a route may reach it from the side that works, or step out
+and back in. Each side it was given up from is a lesson in the memory
+(`door_side:ROOM:SLOT:FROM`), which a reload keeps like a met fight, and
+the fresh VM's marks are rebuilt from it: 507's door 0, out of reach from
+the 50C side, was walked to three times again after every reload. A
+lesson whose mark clears (a puzzle step, a `<reach>` flag) or holds from
+that side no more is forgotten, so a reload does not give the door up
+again after the way opened. An `<avoid>` item is marked as avoided before the free-slot check,
 so a full inventory does not turn it into a goal that lifts on the next
 inventory change. After 3 attempts the mark holds, except an `inventory
 full` mark on a key or an item a `<use>` fact needs: that waits for the
@@ -878,10 +892,11 @@ fresh). Without a save the run finishes `dead, no save`; more than 3 deaths
 since one save finish the run too. The stats JSON counts `saves`,
 `reloads` and `deaths_before_reload`.
 
-The reload keeps two kinds of memory key from the death, the lessons: the
-bosses met (`fight_met:ROOM:ENEMY`) and the deaths (`died:ROOM`, the
+The reload keeps three kinds of memory key from the death, the lessons:
+the bosses met (`fight_met:ROOM:ENEMY`), the deaths (`died:ROOM`, the
 deaths in that room since the bot last walked out of it alive:
-`BotNav.died_in`). Without the second the reload plays the same room with
+`BotNav.died_in`) and the doors given up from a side
+(`door_side:ROOM:SLOT:FROM`, `BotPlanner.restore_door_lessons`). Without the second the reload plays the same room with
 the same kit the same way: one seed walked into 509's four zombies four
 times from one save, an empty launcher, an empty shotgun and the knife
 held, the handgun and a clip in the box, and the run ended there. While a
@@ -1195,7 +1210,12 @@ drives the box screen with pad input only.
   held`), as it is once per hurt episode: after Yawn's bite the moon
   crest's trip kept the pursuit while the serum's fetch waited, and seed 6
   walked 38k ticks poisoned toward 30C, fetching heals on the way, and
-  died there.
+  died there. While it is poisoned with none held, a cure lying on the
+  frontier is a needed pickup like a key (one of them: the deposits make
+  room for it), and its `inventory full` mark is never given up: with
+  every slot used Chris passed 300's blue herb three times, dropped it as
+  a target on each later arrival, and walked 40k ticks poisoned between
+  300 and 118's box until he died.
 - Rearm: a firearm in the remembered box (not a `reserve` one) comes out
   with its ammunition, the way the loadout does
   (`rearm: a boxed gun's ammunition is at hand`), when that ammunition is
@@ -1226,8 +1246,8 @@ drives the box screen with pad input only.
   403's box kept the launcher while the bot carried six flame rounds out
   past it and met seven hunters with the handgun. It takes every slot it
   needs or none, and leaves the slots a key or `<use>` pickup waits for;
-  short of slots, a held firearm that is dead weight (not equipped,
-  nothing loaded, no round for it held or boxed) goes in for it on the
+  short of slots, a held firearm that is dead weight (not the staple, not
+  equipped, nothing loaded, no round for it held or boxed) goes in for it on the
   same visit (`ctx.swap_out`): in over half of the hunter rooms entered
   with the launcher and its rounds boxed, the bot carried an empty
   shotgun with no shell anywhere. The held reserve gun and one stack of
@@ -1264,7 +1284,25 @@ drives the box screen with pad input only.
   it comes out only at a box the bot is at anyway. When every slot is
   used, the first thing to go in for it is a firearm that is dead weight:
   not equipped, nothing loaded, and no round for any of its loadings held
-  or boxed. Like the reserve-floor top-up, the gear-up and the ammunition
+  or boxed. The staple (the handgun) never is: its rounds are the most
+  common, and Chris boxed his empty handgun in 50E for a herb, then met
+  513's Tyrant with an empty shotgun beside the clip that lies there.
+  Only a brew's bottle slots (Rebecca's V-JOLT, with no box after her
+  switch) still take the empty staple. After a death in the room of a
+  boss still to be won, every boxed gun with a band for it comes out as
+  gear too, the staple even with no round known (the map a reload
+  restores was drawn before the boss's room): Chris came back to 513's
+  Tyrant four times with a shotgun the lab's zombies had emptied, the
+  handgun in 50E's box. Like all gear it leaves the slots held for needed
+  pickups alone, and once held such a gun and its rounds stay held: boxed
+  again for a key's slot, it would be gear again and come straight back
+  out. A boxed gun's
+  rounds lying on the map are no rounds for no gun either, while the
+  rearm could take the gun back out (its slot rule above, for them and
+  the gun): they are worth a trip, count as known ammunition, and under the reserve floor rank and
+  make room as the equipped gun's rounds do; held, they bring the gun back
+  out of the box (the rearm). Chris had walked past 28 shells in 219, 401
+  and 410 with the shotgun boxed and met the lab with none. Like the reserve-floor top-up, the gear-up and the ammunition
   of a held gun that is not equipped leave the slots a needed pickup was
   just given: the clip went in for a key and came back out for the held
   handgun at 502's box for 240000 ticks.
