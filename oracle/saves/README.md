@@ -52,6 +52,7 @@ All saves were generated from the Japanese MediaKite assets at
 | `computer_jill_506.dat` | room 506, Jill | the same spot for Jill, whose hands type every other character at fixed gaps. |
 | `knife_chris_101.dat` | room 101, Chris | Combat Knife equipped (a new game leaves Chris unarmed) + First Aid Spray, player on the open floor south of the dining table (12000, 18200) facing the zombie that walks up to it. |
 | `knife_jill_101.dat` | room 101, Jill | the same spot and inventory for Jill, whose knife point, reach and fire windows are her own. |
+| `knife_wall_chris_101.dat` | room 101, Chris | the `knife_chris_101` inventory with Chris at (13050, 20100), angle 166, so the zombie he kills falls with its body against the dining-room wall and the prone body's floor probe pushes it out. |
 
 ## Format notes
 

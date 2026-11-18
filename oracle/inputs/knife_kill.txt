@@ -1,6 +1,7 @@
-# knife_chris_101.dat / knife_jill_101.dat: raise the knife, then hold the
-# swing until the dining-room zombie is dead. Arklay's `confirm` is not its
-# fire button and the reference does not know `fire`, so a swing names both.
+# knife_chris_101.dat / knife_jill_101.dat / knife_wall_chris_101.dat: raise
+# the knife, then hold the swing until the dining-room zombie is dead.
+# Arklay's `confirm` is not its fire button and the reference does not know
+# `fire`, so a swing names both.
 # Run it for 700 ticks.
 5 aim
 60 aim confirm fire

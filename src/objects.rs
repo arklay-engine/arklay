@@ -44,6 +44,10 @@ pub const OBJECT_FLAG_INTANGIBLE: u8 = 0x02;
 pub const OBJECT_FLAG_SKIP_FLOOR_PROBE: u8 = 0x04;
 /// Object flag bit `0x08`: no collision.
 pub const OBJECT_FLAG_NO_COLLISION: u8 = 0x08;
+/// Object flag bit `0x10`: the axis of the floor probe's last push. The
+/// original runs the probe with the object as `ENTITY`, so the shape handlers'
+/// `status_flags` write lands here: set for a Z push, clear for an X push.
+pub const OBJECT_FLAG_PUSH_Z: u8 = 0x10;
 /// Object flag bit `0x20`: not pushable.
 pub const OBJECT_FLAG_NOT_PUSHABLE: u8 = 0x20;
 /// Object flag bit `0x40`: climbable.
