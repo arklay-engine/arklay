@@ -256,6 +256,22 @@ local function ask(api, input)
     end
 end
 
+-- Whether the save `old` is a file of its own beside the new `file`. Two
+-- names that differ only in case are one file where the folder folds case,
+-- and that one must stay.
+local function another_file(api, old, file)
+    if old:lower() ~= file:lower() then
+        return true
+    end
+    local found = 0
+    for _, entry in ipairs(api:saves()) do
+        if entry.name:lower() == file:lower() then
+            found = found + 1
+        end
+    end
+    return found > 1
+end
+
 -- States 3 and 0x1F: the write. The engine takes the ribbon and raises
 -- the count on the same tick; a failed write goes on as a written one, as
 -- the original's does (its rollback runs only while `string` is set,
@@ -277,7 +293,7 @@ local function write(api, reveal, replaced)
     local ok, err = api:save(file, true)
     if not ok then
         api:log("warning: the save was not written: " .. tostring(err))
-    elseif replaced and replaced.name ~= file then
+    elseif replaced and another_file(api, replaced.name, file) then
         local removed, why = api:remove(replaced.name)
         if not removed then
             api:log("warning: the old save was not removed: " .. tostring(why))

@@ -426,6 +426,26 @@ fn a_failed_overwrite_keeps_the_old_save() {
     assert!(dir.join("save00.dat").exists());
 }
 
+/// A save whose name is the new one's but for its case is one file with it
+/// where the folder folds case, and another where it doesn't: either way
+/// the overwrite leaves the new save, alone.
+#[test]
+fn an_overwrite_of_a_name_differing_in_case_leaves_the_new_save() {
+    let dir = folder("overwrite-case");
+    write_at(&dir, "FIXED.DAT", &block(1), 0);
+    let mut screen = open(&dir);
+    screen.test_eval::<()>("M.save_name = function() return 'fixed' end");
+    to_the_list(&mut screen, &dir);
+    to_the_choice(&mut screen, &dir);
+    tick(&mut screen, &dir, press(|input| input.confirm = true));
+    tick(&mut screen, &dir, UiInput::default());
+    assert_eq!(sv(&screen)[2], 0x20);
+    let left = crate::save::scan_dir(&dir);
+    assert_eq!(left.len(), 1, "{:?}", left[0].name);
+    assert!(left[0].name.eq_ignore_ascii_case("fixed.dat"));
+    assert!(left[0].info.is_some(), "a whole save");
+}
+
 /// A font sheet whose every cell is a solid white block, so a drawn glyph
 /// shows in a frame without the pack's art.
 fn solid_font() -> crate::font::Font {
@@ -473,6 +493,13 @@ fn the_overwrite_draws_its_arrowhead_and_types_in_the_row() {
     to_the_list(&mut screen, &dir);
     let list = frame(&mut screen);
     assert!(row_drawn(&list, 0x31 + 15), "the save's row");
+    // The label starts where a line of its six characters centres, which
+    // a count of its bytes would move, and its accented letter is drawn:
+    // four cells of ink, then the space and a character the font lacks.
+    let inked: Vec<usize> = (20..300)
+        .filter(|&x| (0x31 + 15..0x31 + 29).any(|y| pixel(&list, x, y) != [0, 0, 0]))
+        .collect();
+    assert_eq!((inked[0], *inked.last().unwrap()), (137, 166));
     to_the_choice(&mut screen, &dir);
     // The arrowhead's body, 7 left of the lit answer and 4 down its row.
     const BODY: [u8; 3] = [206, 206, 189];
