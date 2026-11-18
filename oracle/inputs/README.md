@@ -142,3 +142,11 @@ Save mode (each header names its save):
   changes, so `update_room_bgm`'s `bgm_fade_out_all` holds the black tail for
   six more frames before the room-entry fade arms. Run it for 400 ticks to
   cover that hold and 101's gameplay after it.
+- `knife_kill.txt` — `knife_chris_101.dat` and `knife_jill_101.dat`: raise the
+  knife and hold the swing until the dining-room zombie dies. Covers the
+  reach from the weapon joint, the stab blood on the hand, the zombie's
+  stagger and grab, the severed arm's fall and its pool, and the corpse. Run
+  it for 700 ticks.
+- `knife_swings.txt` — the same saves: the raise, the swings with up and down
+  held, the turns, the holster and a second raise, with nothing in reach
+  until the last swing. Run it for 420 ticks.

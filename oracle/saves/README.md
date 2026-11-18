@@ -50,6 +50,8 @@ All saves were generated from the Japanese MediaKite assets at
 | `bootcam_chris_104.dat` | room 104, Chris | player inside a collision volume at the room's far wall (3700, 6600, facing north); the block carries the boot camera (cut 2), not the cut the saved position selects. |
 | `computer_chris_506.dat` | room 506, Chris | player where walking east into the small laboratory's console stops (15886, 7717, facing east), inside the lab computer's action rect: confirm, confirm opens the terminal. |
 | `computer_jill_506.dat` | room 506, Jill | the same spot for Jill, whose hands type every other character at fixed gaps. |
+| `knife_chris_101.dat` | room 101, Chris | Combat Knife equipped (a new game leaves Chris unarmed) + First Aid Spray, player on the open floor south of the dining table (12000, 18200) facing the zombie that walks up to it. |
+| `knife_jill_101.dat` | room 101, Jill | the same spot and inventory for Jill, whose knife point, reach and fire windows are her own. |
 
 ## Format notes
 

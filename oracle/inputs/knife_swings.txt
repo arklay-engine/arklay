@@ -1,0 +1,20 @@
+# knife_chris_101.dat / knife_jill_101.dat: every knife state with nothing in
+# reach. Raise, swing with up held, swing with down held, turn both ways,
+# holster, raise again, swing level, then swing with down held as the zombie
+# closes. Run it for 420 ticks.
+5 aim
+20 aim up
+24 aim up confirm fire
+25 aim up
+46 aim down
+50 aim down confirm fire
+51 aim down
+72 aim left
+80 aim right
+88 aim
+92
+104 aim
+120 aim confirm fire
+121 aim
+140 aim down
+141 aim down confirm fire
