@@ -20311,6 +20311,33 @@ impl PlayerAssets {
     }
 }
 
+/// The held weapon whose mesh stands in the player's weapon joint, if the
+/// equipped weapon has one.
+fn player_weapon_mesh<'a>(
+    game: &game::GameState,
+    player: &player::PlayerState,
+    assets: &'a PlayerAssets,
+) -> Option<&'a crate::model::Emw> {
+    assets
+        .weapon(player_weapon_item(game, player))
+        .filter(|weapon| !weapon.mesh.objects.is_empty())
+}
+
+/// The body joints a held weapon's mesh replaces: `LoadEquippedWeaponAnimation`
+/// points the weapon joint at the weapon's TMD, so the body's own hand there
+/// is not drawn under it.
+fn weapon_joint_mask(
+    game: &game::GameState,
+    player: &player::PlayerState,
+    assets: &PlayerAssets,
+) -> u32 {
+    if player_weapon_mesh(game, player, assets).is_some() {
+        1 << crate::weapons::WEAPON_JOINT
+    } else {
+        0
+    }
+}
+
 /// The weapon id the player's EMW bank is loaded for: the weapon machine's
 /// file while it runs, otherwise `equippedWeaponId`'s, the id the original's
 /// `LoadEquippedWeaponAnimation` loads, so the frame the aim starts reads the
@@ -21751,6 +21778,7 @@ fn render_frame_on(
             && !debug_view::unculled()
             && re2_player_out_of_view(room, game.entities[0].pos, game.re2.player.be_flg);
         let hidden = if out_of_view { u32::MAX } else { hidden };
+        let weapon_slot = weapon_joint_mask(game, player_state, assets);
         meshes.push(EntityMesh {
             mesh: &assets.emd.mesh,
             texture: &assets.emd.texture,
@@ -21758,7 +21786,7 @@ fn render_frame_on(
             tint: game.player_tint,
             blend_weight: None,
             joint_blend: !game.is_re2_room,
-            hidden_joints: hidden | game.re2.player.hidden_parts,
+            hidden_joints: hidden | game.re2.player.hidden_parts | weapon_slot,
             light_pos: Some(player_light_pos),
             per_joint_light: false,
             complex_object: None,
@@ -21776,10 +21804,8 @@ fn render_frame_on(
     let mut weapon_joints: Vec<Vec<anim::Mat4x3>> = Vec::new();
     // The weapon slot's TMD is the hand joint's mesh whenever a weapon is
     // equipped, so it draws in every bank (idle, walk, turn), not just aiming.
-    let weapon_item = player_weapon_item(game, player_state);
     if let (Some(assets), Some(joints)) = (assets, &player_joints)
-        && let Some(weapon) = assets.weapon(weapon_item)
-        && !weapon.mesh.objects.is_empty()
+        && let Some(weapon) = player_weapon_mesh(game, player_state, assets)
         && let Some(hand) = joints.get(crate::weapons::WEAPON_JOINT)
     {
         weapon_joints.push(vec![*hand]);
@@ -33544,6 +33570,26 @@ return M
             re2_weapon: None,
             re2_character: 0,
         }
+    }
+
+    #[test]
+    fn a_held_weapons_mesh_replaces_the_bodys_hand() {
+        let (_pack, _id, _room, mut game, mut player_state, mut assets) = scripted_room_fixture();
+        let hand = 1 << crate::weapons::WEAPON_JOINT;
+        let knife = crate::weapons::ITEM_KNIFE;
+        let mut held = assets.emw.clone();
+        held.mesh.objects = vec![crate::model::TmdObject::default()];
+        assets.weapons.insert(knife, held);
+        // A weapon file with clips but no mesh leaves the body's hand drawn.
+        assets.weapons.insert(0x02, assets.emw.clone());
+
+        game.equipped_weapon_id = 0;
+        player_state.weapon.weapon_item = None;
+        assert_eq!(weapon_joint_mask(&game, &player_state, &assets), 0);
+        player_state.weapon.weapon_item = Some(knife);
+        assert_eq!(weapon_joint_mask(&game, &player_state, &assets), hand);
+        player_state.weapon.weapon_item = Some(0x02);
+        assert_eq!(weapon_joint_mask(&game, &player_state, &assets), 0);
     }
 
     /// The locomotion clips follow the equipped weapon's EMW, as the
