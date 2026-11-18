@@ -8897,7 +8897,7 @@ impl GameState {
             return false;
         }
         let mut pos = record.pos;
-        let bits = crate::player::object_two_point_probe(
+        let (bits, push_z) = crate::player::object_two_point_probe(
             &room.collision,
             &mut pos,
             [
@@ -8911,6 +8911,11 @@ impl GameState {
             i32::from(record.radius),
         );
         record.pos = pos;
+        match push_z {
+            Some(true) => record.flag |= crate::objects::OBJECT_FLAG_PUSH_Z,
+            Some(false) => record.flag &= !crate::objects::OBJECT_FLAG_PUSH_Z,
+            None => {}
+        }
         bits != 0
     }
 
@@ -20369,6 +20374,11 @@ mod tests {
         record.radius = 100;
         assert!(!state.object_floor_probe(&room, &mut record));
         assert_eq!(record.pos, [500, 0, -118], "the endpoint push displaced it");
+        assert_ne!(
+            record.flag & crate::objects::OBJECT_FLAG_PUSH_Z,
+            0,
+            "the Z push set the object's push-axis bit"
+        );
 
         // With the blocking flag bits the same record vetoes the push.
         room.collision.quadrants[0][0].flags = 0x300;

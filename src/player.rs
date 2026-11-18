@@ -3343,7 +3343,8 @@ fn accept_code(floor_step: i16, clear_result: u8) -> u8 {
 /// second endpoint first, pushes accumulate on the entity's live position, and
 /// shapes 4 and 5 are skipped. Every record that classifies ORs its
 /// `(flags & 0x300) >> 8` bits into the result; the caller treats a nonzero
-/// result as blocked.
+/// result as blocked. The result also carries the last push's axis
+/// ([`TwoPointProbe::push_z`]) for the object's flag bit 0x10.
 ///
 /// The endpoints are signed 16-bit values: a negative endpoint points behind
 /// the record's centre, and zero-extending it would test a bogus far point.
@@ -3355,9 +3356,9 @@ pub(crate) fn object_two_point_probe(
     mirror: u16,
     probes: [[i16; 2]; 2],
     radius: i32,
-) -> u16 {
+) -> (u16, Option<bool>) {
     let split = two_point_probe_split(collision, pos, committed, yaw, mirror, probes, radius);
-    split.bits_a | split.bits_b
+    (split.bits_a | split.bits_b, split.push_z)
 }
 
 /// The endpoints' flag bits and the end-B quadrant from [`two_point_probe_split`].
@@ -3371,6 +3372,10 @@ pub(crate) struct TwoPointProbe {
     /// End B's tested centre after its own pass, the point the two-point
     /// pass's blocked re-walk re-tests.
     pub point_b: [i32; 3],
+    /// The axis of the walk's last push, for the entity's `status_flags` bit
+    /// 0x10: `Some(true)` for Z, `Some(false)` for X, `None` when no handler
+    /// pushed. The handlers write the bit as they push, so the last one wins.
+    pub push_z: Option<bool>,
 }
 
 /// [`object_two_point_probe`]'s walk, keeping the two endpoints' results
@@ -3389,6 +3394,7 @@ pub(crate) fn two_point_probe_split(
     let mut bits = [0u16; 2];
     let mut cell_b = 0u8;
     let mut point_b = [0i32; 3];
+    let mut push_z = None;
     // The original starts with end B (probe slot 1); a push moves the live
     // position, so the next endpoint's centre is computed from the displacement.
     for which in [1usize, 0] {
@@ -3413,19 +3419,15 @@ pub(crate) fn two_point_probe_split(
             if classify(point[0], point[2], rect, radius).is_none() {
                 continue;
             }
-            match shape {
-                1 => {
-                    if let Some((dx, dz)) = push_rect_probe(rect, prev, &mut centre, radius) {
-                        pos[0] += dx;
-                        pos[2] += dz;
-                    }
-                }
-                3 => {
-                    let (dx, dz) = circle_push_delta(rect, centre[0], centre[2], radius);
-                    pos[0] += dx;
-                    pos[2] += dz;
-                }
-                _ => {}
+            let push = match shape {
+                1 => push_rect_probe(rect, prev, &mut centre, radius),
+                3 => circle_push_delta(rect, centre[0], centre[2], radius),
+                _ => None,
+            };
+            if let Some((dx, dz, axis)) = push {
+                pos[0] += dx;
+                pos[2] += dz;
+                push_z = Some(axis);
             }
             bits[which] |= (rect.flags & 0x300) >> 8;
         }
@@ -3438,45 +3440,30 @@ pub(crate) fn two_point_probe_split(
         bits_b: bits[1],
         cell_b,
         point_b,
+        push_z,
     }
 }
 
 /// The blocked two-point pass's re-walk: classify the already-tested end-B
-/// centre against the records of the PREVIOUS quadrant, with the zero offset
-/// the pass left behind and the full push. Returns any further flag bits.
+/// centre against the records of the PREVIOUS quadrant and return any further
+/// flag bits. The original only classifies here: no shape handler runs, so
+/// nothing is pushed and the push-axis status bit is left alone.
 pub(crate) fn two_point_retest_previous(
     collision: &Collision,
     point: [i32; 3],
-    committed_world: [i32; 3],
     cell_b: u8,
     radius: i32,
 ) -> u16 {
-    let mut bits = 0u16;
     if cell_b == 0 {
         return 0;
     }
-    let records = &collision.quadrants[usize::from(cell_b - 1)];
-    let mut centre = point;
-    for rect in records {
-        let shape = rect.kind & 0xFF;
-        if shape == 4 || shape == 5 {
-            continue;
-        }
-        if classify(point[0], point[2], rect, radius).is_none() {
-            continue;
-        }
-        match shape {
-            1 => {
-                let _ = push_rect_probe(rect, committed_world, &mut centre, radius);
-            }
-            3 => {
-                let _ = circle_push_delta(rect, centre[0], centre[2], radius);
-            }
-            _ => {}
-        }
-        bits |= (rect.flags & 0x300) >> 8;
-    }
-    bits
+    collision.quadrants[usize::from(cell_b - 1)]
+        .iter()
+        .filter(|rect| {
+            let shape = rect.kind & 0xFF;
+            shape != 4 && shape != 5 && classify(point[0], point[2], rect, radius).is_some()
+        })
+        .fold(0, |bits, rect| bits | (rect.flags & 0x300) >> 8)
 }
 
 /// The boundary quadrant `(x, z)` falls in, the same selection
@@ -3645,12 +3632,14 @@ fn push_rect(
 /// two-point path: only selector 0 rolls it back to `prev`, while the accepted
 /// corrections are returned for the caller to apply to the entity's live
 /// position (the original's handler writes the entity matrix, not the point).
+/// The returned axis is the handler's `status_flags` bit 0x10 write, as in
+/// [`push_rect`]: `true` for Z, `false` for X; selector 0 writes nothing.
 fn push_rect_probe(
     rect: &CollisionRect,
     prev: [i32; 3],
     point: &mut [i32; 3],
     radius: i32,
-) -> Option<(i32, i32)> {
+) -> Option<(i32, i32, bool)> {
     let (push_x, push_z, selector, _entity_bkp) = rect_push(rect, prev, point, radius);
 
     match selector {
@@ -3659,13 +3648,13 @@ fn push_rect_probe(
             point[2] = prev[2];
             None
         }
-        1 if push_within_limit(push_x) => Some((i32::from(push_x), 0)),
-        2 if push_within_limit(push_z) => Some((0, i32::from(push_z))),
+        1 if push_within_limit(push_x) => Some((i32::from(push_x), 0, false)),
+        2 if push_within_limit(push_z) => Some((0, i32::from(push_z), true)),
         _ => {
             if i32::from(push_z).abs() > i32::from(push_x).abs() {
-                Some((i32::from(push_x), 0))
+                Some((i32::from(push_x), 0, false))
             } else {
-                Some((0, i32::from(push_z)))
+                Some((0, i32::from(push_z), true))
             }
         }
     }
@@ -3696,22 +3685,28 @@ fn circle_overlap(
     (penetration >= 1).then_some((penetration, dx, dz, dist))
 }
 
-/// Shapes 3: the circle push correction for the point `(x, z)`, or `(0, 0)`
-/// when it does not overlap. The original's two-point path writes the
-/// correction straight to the entity's live position without moving the tested
-/// point, so [`object_two_point_probe`] consumes this delta directly.
-fn circle_push_delta(rect: &CollisionRect, x: i32, z: i32, radius: i32) -> (i32, i32) {
-    let Some((penetration, dx, dz, dist)) = circle_overlap(rect, x, z, radius) else {
-        return (0, 0);
-    };
+/// Shapes 3: the circle push correction for the point `(x, z)` and its axis,
+/// or `None` when it does not overlap. The original's two-point path writes
+/// the correction straight to the entity's live position without moving the
+/// tested point, so [`object_two_point_probe`] consumes this delta directly.
+/// The axis is [`push_circle`]'s status-bit choice: `true` (Z) only when the Z
+/// correction is the larger, so an overlap whose corrections both truncate to
+/// zero still writes X. At dead centre the original divides by zero; like the
+/// reference, this pushes along +X and writes X instead.
+fn circle_push_delta(
+    rect: &CollisionRect,
+    x: i32,
+    z: i32,
+    radius: i32,
+) -> Option<(i32, i32, bool)> {
+    let (penetration, dx, dz, dist) = circle_overlap(rect, x, z, radius)?;
     if dist == 0 {
-        return (penetration, 0);
+        return Some((penetration, 0, false));
     }
 
-    (
-        penetration.wrapping_mul(dx) / dist,
-        penetration.wrapping_mul(dz) / dist,
-    )
+    let push_x = penetration.wrapping_mul(dx) / dist;
+    let push_z = penetration.wrapping_mul(dz) / dist;
+    Some((push_x, push_z, push_x.abs() < push_z.abs()))
 }
 
 /// Shapes 3: push the entity out of a circular obstacle whose radius is the
@@ -4604,7 +4599,7 @@ mod tests {
         }
 
         let mut pos = [0, 0, 0];
-        let bits = object_two_point_probe(
+        let (bits, _) = object_two_point_probe(
             &room.collision,
             &mut pos,
             [0, 0, 0],
@@ -6764,7 +6759,7 @@ mod tests {
 
         // The blocked re-walk of end B's previous quadrant is empty at cell 0.
         assert_eq!(
-            two_point_retest_previous(&collision, split.point_b, [0, 0, 0], 0, 100),
+            two_point_retest_previous(&collision, split.point_b, 0, 100),
             0
         );
     }

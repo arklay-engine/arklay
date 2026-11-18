@@ -53,6 +53,7 @@ SAVES=(
     "computer_jill_506|506|1|1"
     "knife_chris_101|101|0|0"
     "knife_jill_101|101|1|1"
+    "knife_wall_chris_101|101|0|0"
 )
 
 selected=("$@")

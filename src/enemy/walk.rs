@@ -2928,8 +2928,12 @@ pub fn neptune_wander_turn(
 /// floor-probe endpoints by the entity yaw, run the original's two-endpoint
 /// boundary walk (end B first) and either accept the pushed position or, when
 /// end A is still blocked, re-test end B in its previous quadrant and roll the
-/// position and angle back. Returns end B's flag bits (0/1/2) on acceptance,
+/// position and angle back unless neither end B's pass nor the re-test found
+/// flag bits. Returns end B's flag bits (0/1/2) on acceptance,
 /// `0x80` on the rollback, and 0 for a deactivated entity.
+///
+/// The walk's shape handlers write the push-axis status bit as they push, so
+/// it sticks whichever way the pass ends; the re-test runs no handler.
 pub fn two_point_probe(
     collision: &crate::state::Collision,
     entity: &mut Entity,
@@ -2953,6 +2957,7 @@ pub fn two_point_probe(
         [end_a, end_b],
         radius,
     );
+    apply_push_axis(entity, split.push_z);
 
     if split.bits_a == 0 {
         entity.pos = pos;
@@ -2961,11 +2966,8 @@ pub fn two_point_probe(
         return split.bits_b as u8;
     }
 
-    let (world_x, world_z) = player::rotate_xz(mirror, i32::from(end_b[0]), i32::from(end_b[1]));
-    let world_b = [committed[0] + world_x, committed[1], committed[2] + world_z];
-    let extra =
-        player::two_point_retest_previous(collision, split.point_b, world_b, split.cell_b, radius);
-    if extra != 0 {
+    let extra = player::two_point_retest_previous(collision, split.point_b, split.cell_b, radius);
+    if (split.bits_b | extra) != 0 {
         entity.pos = committed;
         entity.angle = mirror;
         return 0x80;
@@ -5367,6 +5369,159 @@ mod tests {
             0
         );
         assert_eq!(e.pos, [0, 0, 0]);
+    }
+
+    /// A prone body at (5000, 5000), committed where it stands. Its +600 end B
+    /// tests (5599, 5000) and its -600 end A (4401, 5000): the 4.12 yaw
+    /// matrix's cosine at angle 0 is 4095, so each endpoint lands one short.
+    fn prone_body(status_flags: u8) -> Entity {
+        let mut e = entity([5000, 0, 5000], 0, 0);
+        e.saved_pos = Some(e.pos);
+        e.status_flags = status_flags;
+        e
+    }
+
+    fn boundary(x_min: u16, x_max: u16, z_min: u16, z_max: u16, kind: u16) -> CollisionRect {
+        CollisionRect {
+            x_max,
+            z_max,
+            x_min,
+            z_min,
+            kind,
+            flags: 0,
+        }
+    }
+
+    /// End B's push against one boundary record: the body's status byte and
+    /// position after the pass, which accepts because end A stays clear. The
+    /// status seeds keep bit 0x04 clear, or the probe would skip the body.
+    fn push_end_b(rect: CollisionRect, status_flags: u8) -> (u8, [i32; 3]) {
+        let mut collision = crate::state::Collision::default();
+        collision.quadrants[0].push(rect);
+        let mut e = prone_body(status_flags);
+        assert_eq!(two_point_probe(&collision, &mut e, [-600, 0], [600, 0]), 0);
+        (e.status_flags, e.pos)
+    }
+
+    #[test]
+    fn two_point_probe_writes_the_rect_push_axis() {
+        // Selector 1: end B sits 50 inside the -x face, the +z face nearer
+        // than the -z one. An X push clears the bit.
+        let (flags, pos) = push_end_b(boundary(5549, 6549, 4000, 5050, 1), 0xFB);
+        assert_eq!(flags, 0xEB, "an X push clears bit 0x10");
+        assert_eq!(pos, [5000 - 168, 0, 5000]);
+
+        // Selector 2: the -z face nearer, the +x face nearer. A Z push sets it.
+        let (flags, pos) = push_end_b(boundary(4599, 5649, 4950, 6000, 1), 0);
+        assert_eq!(flags, 0x10, "a Z push sets bit 0x10");
+        assert_eq!(pos, [5000, 0, 5000 - 168]);
+
+        // Selector 3, the shallower Z exit: the ambiguous fallback pushes Z.
+        let (flags, pos) = push_end_b(boundary(5499, 6549, 4950, 6000, 1), 0);
+        assert_eq!(flags, 0x10);
+        assert_eq!(pos, [5000, 0, 5000 - 168]);
+
+        // Selector 3, the shallower X exit: the fallback pushes X.
+        let (flags, pos) = push_end_b(boundary(5549, 6549, 4900, 6000, 1), 0xFB);
+        assert_eq!(flags, 0xEB);
+        assert_eq!(pos, [5000 - 168, 0, 5000]);
+
+        // Selector 2 past the 400-unit limit falls back to the shallower X.
+        let (flags, pos) = push_end_b(boundary(5149, 5649, 4500, 6000, 1), 0xFB);
+        assert_eq!(flags, 0xEB, "the deep Z push resolves along X");
+        assert_eq!(pos, [5000 + 168, 0, 5000]);
+
+        // Selector 0 rolls the probe point back and writes no bit either way.
+        for status in [0, 0x10] {
+            let (flags, pos) = push_end_b(boundary(4599, 5649, 4000, 5050, 1), status);
+            assert_eq!(flags, status, "the rollback leaves bit 0x10 alone");
+            assert_eq!(pos, [5000, 0, 5000]);
+        }
+    }
+
+    #[test]
+    fn two_point_probe_writes_the_circle_push_axis() {
+        // Circles of radius 200 (+100 entity radius) just off end B's point.
+        // Centre 50 to the +x: the larger X correction clears the bit.
+        let (flags, pos) = push_end_b(boundary(5449, 5849, 4800, 5200, 3), 0xFB);
+        assert_eq!(flags, 0xEB);
+        assert_eq!(pos, [5000 - 250, 0, 5000]);
+
+        // Centre 50 to the +z: the larger Z correction sets it.
+        let (flags, pos) = push_end_b(boundary(5399, 5799, 4850, 5250, 3), 0);
+        assert_eq!(flags, 0x10);
+        assert_eq!(pos, [5000, 0, 5000 - 250]);
+
+        // Dead centre: the +x push clears it.
+        let (flags, pos) = push_end_b(boundary(5399, 5799, 4800, 5200, 3), 0xFB);
+        assert_eq!(flags, 0xEB);
+        assert_eq!(pos, [5000 + 300, 0, 5000]);
+
+        // Overlapping by one unit at offset (180, 239): both corrections
+        // truncate to zero, so nothing moves but the X write still lands.
+        let (flags, pos) = push_end_b(boundary(5219, 5619, 4561, 4961, 3), 0xFB);
+        assert_eq!(flags, 0xEB, "the zero-length push writes X");
+        assert_eq!(pos, [5000, 0, 5000]);
+
+        // Out of reach of the circle but inside its box: no push, no write.
+        for status in [0, 0x10] {
+            let (flags, pos) = push_end_b(boundary(5649, 6049, 5050, 5450, 3), status);
+            assert_eq!(flags, status);
+            assert_eq!(pos, [5000, 0, 5000]);
+        }
+    }
+
+    #[test]
+    fn two_point_probe_keeps_the_push_axis_through_the_retest() {
+        // Both ends in quadrant 1: end B Z-pushed out of a flagless record
+        // (setting the bit), end A inside a full block with no handler.
+        let mut collision = crate::state::Collision {
+            cell_x: 6000,
+            ..Default::default()
+        };
+        collision.quadrants[1].push(boundary(4599, 5649, 4950, 6000, 1));
+        collision.quadrants[1].push(CollisionRect {
+            flags: 0x300,
+            ..boundary(4300, 4500, 4900, 5100, 0)
+        });
+
+        // Nothing in quadrant 0: the retest finds no further bits and the
+        // pushed position is accepted.
+        let mut e = prone_body(0);
+        assert_eq!(two_point_probe(&collision, &mut e, [-600, 0], [600, 0]), 1);
+        assert_eq!(e.status_flags, 0x10, "end B's Z push set the bit");
+        assert_eq!(e.pos, [5000, 0, 5000 - 168]);
+
+        // Quadrant 0 holds a partial record shaped for an X push at end B's
+        // point. The retest only classifies it: no handler runs, so the bit
+        // stays set and the body rolls back with it.
+        collision.quadrants[0].push(CollisionRect {
+            flags: 0x100,
+            ..boundary(5549, 6549, 4000, 5050, 1)
+        });
+        let mut e = prone_body(0);
+        e.mirror_angle = 0;
+        assert_eq!(
+            two_point_probe(&collision, &mut e, [-600, 0], [600, 0]),
+            0x80
+        );
+        assert_eq!(e.status_flags, 0x10, "the retest writes no push axis");
+        assert_eq!(
+            e.pos,
+            [5000, 0, 5000],
+            "rolled back to the committed position"
+        );
+        // End B's own pass flagged: with end A blocked the body rolls back even
+        // though the retest finds nothing more, and the Z write still sticks.
+        collision.quadrants[0].clear();
+        collision.quadrants[1][0].flags = 0x100;
+        let mut e = prone_body(0);
+        assert_eq!(
+            two_point_probe(&collision, &mut e, [-600, 0], [600, 0]),
+            0x80
+        );
+        assert_eq!(e.status_flags, 0x10);
+        assert_eq!(e.pos, [5000, 0, 5000]);
     }
 
     #[test]
