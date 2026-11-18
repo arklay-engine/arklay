@@ -24,7 +24,9 @@ layout(location = 7) in uint in_packed;
 layout(location = 0) out vec2 out_uv;
 layout(location = 1) out vec3 out_shade;
 layout(location = 2) flat out uint out_packed;
-// The triangle's painter's key: its corners' mean view Z, rounded.
+// The triangle's painter's key: its corners' mean view Z, floored. The sum is
+// in f32, where the software sums in f64, so a mean within a rounding step of
+// an integer can floor one unit apart from the software's.
 layout(location = 3) flat out float out_key;
 // View Z, interpolated perspective-correct: exact at the corners the near
 // clip makes, where `z / w` (quadratic in `w`) is not.
@@ -198,5 +200,5 @@ void main() {
     precise float mean = (corner_of(in_packed >> 16 & 3u, v0, v1, v2, v3).z
         + corner_of(in_packed >> 18 & 3u, v0, v1, v2, v3).z
         + corner_of(in_packed >> 20 & 3u, v0, v1, v2, v3).z) * (1.0 / 3.0);
-    out_key = floor(mean + 0.5);
+    out_key = floor(mean);
 }
