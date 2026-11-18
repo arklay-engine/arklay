@@ -11,3 +11,18 @@ frame_max_mean = 0.5
 boxes = [[0, 165, 232, 240]]
 expect = "match"
 record = "--no-enemies --warp 201:-14471:0:-24100:1024 --life 200 --flag 33:2 --flag 33:3 --flag 33:4 --flag 35:3 --flag 35:4"
+
+# Room 20B's police station map, a script's question (oracle/re2.md, "MAP floors"): the action key at the open safe runs its scene, yes takes the map (the maps of floors 2 to 4 and their floor bits, with the script's cue), and the MAP page then shows every room of floor 2.
+[[run]]
+name = "map_pickup_20b"
+room = "20B"
+setup_script = "map_pickup_20b.lua"
+input = "map_pickup_20b.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1100
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,mapfg,map,msg,snd,fgstat"
+frames = [360, 1099]
+frame_max_mean = 0.75
+expect = "match"
+record = "--no-enemies --warp 20B:-11732:0:-10700:1024 --flag 4:37 --flag 8:78 --life 200"
