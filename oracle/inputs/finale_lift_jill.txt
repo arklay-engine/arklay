@@ -1,0 +1,89 @@
+30 start
+31
+60 confirm
+61
+75 confirm
+76
+1835 start
+1836
+1875 confirm
+1876
+1890 confirm
+1891
+1920 cancel
+1921
+1955 start
+1956
+1975 down
+1976
+1985 confirm
+1986
+2000 confirm
+2001
+3365 aim
+3390 aim confirm fire
+3396 aim
+3405 aim
+3430 aim confirm fire
+3436 aim
+3445 aim
+3470 aim confirm fire
+3476 aim
+3485 aim
+3510 aim confirm fire
+3516 aim
+3525 aim
+3550 aim confirm fire
+3556 aim
+3565 aim
+3590 aim confirm fire
+3596 aim
+3605 aim
+3630 aim confirm fire
+3636 aim
+3645 aim
+3670 aim confirm fire
+3676 aim
+3685 aim
+3710 aim confirm fire
+3716 aim
+3725 aim
+3750 aim confirm fire
+3756 aim
+3765 aim
+3790 aim confirm fire
+3796 aim
+3805 aim
+3830 aim confirm fire
+3836 aim
+3845 aim
+3870 aim confirm fire
+3876 aim
+3885 aim
+3910 aim confirm fire
+3916 aim
+3925 aim
+3950 aim confirm fire
+3956 aim
+3965 aim
+3990 aim confirm fire
+3996 aim
+4005 aim
+4030 aim confirm fire
+4036 aim
+4045 aim
+4070 aim confirm fire
+4076 aim
+4085 aim
+4110 aim confirm fire
+4116 aim
+4125 aim
+4150 aim confirm fire
+4156 aim
+4165 aim
+4190 aim confirm fire
+4196 aim
+4205 aim
+4230 aim confirm fire
+4236 aim
+4245

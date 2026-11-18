@@ -1,0 +1,89 @@
+30 start
+31
+60 confirm
+61
+75 confirm
+76
+2300 start
+2301
+2340 confirm
+2341
+2355 confirm
+2356
+2385 cancel
+2386
+2420 start
+2421
+2440 down
+2441
+2450 confirm
+2451
+2465 confirm
+2466
+3830 aim
+3855 aim confirm fire
+3861 aim
+3870 aim
+3895 aim confirm fire
+3901 aim
+3910 aim
+3935 aim confirm fire
+3941 aim
+3950 aim
+3975 aim confirm fire
+3981 aim
+3990 aim
+4015 aim confirm fire
+4021 aim
+4030 aim
+4055 aim confirm fire
+4061 aim
+4070 aim
+4095 aim confirm fire
+4101 aim
+4110 aim
+4135 aim confirm fire
+4141 aim
+4150 aim
+4175 aim confirm fire
+4181 aim
+4190 aim
+4215 aim confirm fire
+4221 aim
+4230 aim
+4255 aim confirm fire
+4261 aim
+4270 aim
+4295 aim confirm fire
+4301 aim
+4310 aim
+4335 aim confirm fire
+4341 aim
+4350 aim
+4375 aim confirm fire
+4381 aim
+4390 aim
+4415 aim confirm fire
+4421 aim
+4430 aim
+4455 aim confirm fire
+4461 aim
+4470 aim
+4495 aim confirm fire
+4501 aim
+4510 aim
+4535 aim confirm fire
+4541 aim
+4550 aim
+4575 aim confirm fire
+4581 aim
+4590 aim
+4615 aim confirm fire
+4621 aim
+4630 aim
+4655 aim confirm fire
+4661 aim
+4670 aim
+4695 aim confirm fire
+4701 aim
+4710

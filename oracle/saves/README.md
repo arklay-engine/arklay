@@ -53,6 +53,9 @@ All saves were generated from the Japanese MediaKite assets at
 | `knife_chris_101.dat` | room 101, Chris | Combat Knife equipped (a new game leaves Chris unarmed) + First Aid Spray, player on the open floor south of the dining table (12000, 18200) facing the zombie that walks up to it. |
 | `knife_jill_101.dat` | room 101, Jill | the same spot and inventory for Jill, whose knife point, reach and fire windows are her own. |
 | `knife_wall_chris_101.dat` | room 101, Chris | the `knife_chris_101` inventory with Chris at (13050, 20100), angle 166, so the zombie he kills falls with its body against the dining-room wall and the prone body's floor probe pushes it out. |
+| `lift_chris_501.dat` | room 501, Chris | the self-destruct running (scenario bit `0x2B`) and the passage voice line heard (common bit `0x45`), standing at the elevator socket (4000, 29800) with the battery (`0x27`), the rocket launcher (`0x0A`, 4 rounds), the Beretta and the flare (`0x2A`). Health 30000, so the Tyrant cannot end the run early. The room 303 finale from the lift, to the ending. |
+| `lift_jill_501.dat` | room 501, Jill | the same state for Jill. |
+| `pickup_chris_303.dat` | room 303, Chris | the self-destruct running, on the heliport (19850, 24600) with the flare, the Beretta and the knife, health 30000. The flare, Brad's drop and the launcher's pick-up. |
 
 ## Format notes
 

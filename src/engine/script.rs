@@ -271,6 +271,9 @@ struct ScriptTrace {
     screen: bool,
     /// `sound_wav`: the session's mix, captured as it plays.
     wav: Option<WavCapture>,
+    /// Neither `sound` nor `sound_wav`: the session's voice lines pace
+    /// nothing, as in the reference's silenced test runs.
+    unpaced_voice: bool,
 }
 
 /// A trace's audio capture: each tick mixes the wall time it takes when
@@ -656,8 +659,12 @@ impl Driver {
         let Some(app) = self.app.as_mut() else {
             unreachable!("checked above");
         };
-        if arm && let Mode::Play(session) = &mut app.mode {
-            session.arm_new_game_boot();
+        if let Mode::Play(session) = &mut app.mode {
+            if arm {
+                session.arm_new_game_boot();
+            }
+            session.voice_cache.unpaced =
+                self.trace.as_ref().is_some_and(|trace| trace.unpaced_voice);
         }
         let was_play = matches!(app.mode, Mode::Play(_));
         let in_transition =
@@ -686,13 +693,16 @@ impl Driver {
             return Err(self.stop_on_quit());
         }
         // Films never play: the frames stay deterministic and audio-free, as
-        // in a trace. An attached bot sees them and skips them as a player
-        // would, as it does in the game window.
+        // in a trace, and a film chain (the ending's) runs on to what follows
+        // it. An attached bot sees them and skips them as a player would, as
+        // it does in the game window.
         if !app.bot_attached() {
             if let Mode::Play(session) = &mut app.mode {
                 session.movie = None;
             }
-            app.pending_movie = None;
+            if let AppFlow::Quit = app.drop_pending_movie().map_err(engine_error)? {
+                return Err(self.stop_on_quit());
+            }
         }
         // A headless bot run draws nothing: no frame is shown, traced or
         // (until `capture` draws its own) written, and a game is long. A
@@ -1568,10 +1578,12 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                     trace::TraceWriter::create(Path::new(&path))
                 }
                 .map_err(engine_error)?;
+                let unpaced_voice = !sound.unwrap_or(false) && sound_wav.is_none();
                 driver.trace = Some(ScriptTrace {
                     writer,
                     all_frames: all_frames.unwrap_or(false),
                     screen,
+                    unpaced_voice,
                     wav: sound_wav.map(|path| WavCapture {
                         path: PathBuf::from(path),
                         due: 0.0,
