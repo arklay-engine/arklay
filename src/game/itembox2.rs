@@ -817,6 +817,20 @@ mod tests {
     /// One tick with `bits` of the raw pad held, the directions gated on the
     /// repeat flag as the engine builds them.
     fn held(game: &mut GameState, bits: u16) -> BoxOutcome {
+        held_with(game, bits, Input::default())
+    }
+
+    /// As [`held`], with a press of the cancel key on the tick.
+    fn held_with_cancel(game: &mut GameState, bits: u16) -> BoxOutcome {
+        let cancel = Input {
+            cancel: true,
+            ..Input::default()
+        };
+        held_with(game, bits, cancel)
+    }
+
+    /// As [`held`], with `edges`' key presses on the tick.
+    fn held_with(game: &mut GameState, bits: u16, edges: Input) -> BoxOutcome {
         use crate::game::pad_repeat as pad;
         game.pad_repeat.step(bits);
         let repeat = game.pad_repeat;
@@ -826,23 +840,7 @@ mod tests {
             page_up: repeat.gated(pad::LOCK),
             page_down: repeat.gated(pad::AIM),
             held: repeat.raw,
-            ..Input::default()
-        };
-        game.tick_re2_box(input).unwrap()
-    }
-
-    /// As [`held`], with a press of the cancel key on the tick.
-    fn held_with_cancel(game: &mut GameState, bits: u16) -> BoxOutcome {
-        use crate::game::pad_repeat as pad;
-        game.pad_repeat.step(bits);
-        let repeat = game.pad_repeat;
-        let input = Input {
-            down: repeat.gated(pad::DOWN),
-            page_up: repeat.gated(pad::LOCK),
-            page_down: repeat.gated(pad::AIM),
-            cancel: true,
-            held: repeat.raw,
-            ..Input::default()
+            ..edges
         };
         game.tick_re2_box(input).unwrap()
     }
@@ -897,9 +895,35 @@ mod tests {
         assert_eq!(game.re2_box.unwrap().sub, SUB_DOWN);
         assert_eq!(game.re2_box.unwrap().top, top);
 
+        for key in [pad::AIM, pad::LOCK, pad::AIM | pad::LOCK] {
+            let mut game = in_the_list();
+            let out = held(&mut game, pad::UP | key);
+            assert_eq!(out.room_sounds, [SOUND_SCROLL], "{key:#x}");
+            assert_eq!(game.re2_box.unwrap().sub, SUB_UP);
+            assert_eq!(game.re2_box.unwrap().top, top);
+        }
+
         let mut game = in_the_list();
         held(&mut game, pad::LOCK | pad::AIM);
         assert_eq!(game.re2_box.unwrap().top, (top + 0x3B) & 0x3F);
+    }
+
+    /// A jump's tick does not read the decide key: the box stays in its
+    /// list, and the press is read on a tick with no repeat flag.
+    #[test]
+    fn a_decide_on_the_jumps_tick_is_not_read() {
+        use crate::game::pad_repeat as pad;
+        for (key, rows) in [(pad::AIM, 5u8), (pad::LOCK, 0x3B)] {
+            let mut game = in_the_list();
+            let top = game.re2_box.unwrap().top;
+            let out = held_with(&mut game, key, CONFIRM);
+            assert_eq!(out.sounds, [Sound::Decide], "the jump's cue alone");
+            assert_eq!(game.re2_box.unwrap().sub, SUB_BOX);
+            assert_eq!(game.re2_box.unwrap().top, (top + rows) & 0x3F);
+            held_with(&mut game, key, CONFIRM);
+            assert_eq!(game.re2_box.unwrap().sub, SUB_EXCHANGE, "decide is read");
+            assert_eq!(game.re2_box.unwrap().top, (top + rows) & 0x3F);
+        }
     }
 
     /// A cancel pressed on a jump's tick: `0x4` gives way to it, and `0x8`
@@ -924,6 +948,13 @@ mod tests {
         let out = held_with_cancel(&mut game, pad::AIM);
         assert_eq!(out.sounds, [Sound::Cancel]);
         assert_eq!(game.re2_box.unwrap().sub, SUB_INVENTORY);
+
+        // Both jump keys: `0x4` is the one read, and it gives way.
+        let mut game = in_the_list();
+        let out = held_with_cancel(&mut game, pad::LOCK | pad::AIM);
+        assert_eq!(out.sounds, [Sound::Cancel]);
+        assert_eq!(game.re2_box.unwrap().sub, SUB_INVENTORY);
+        assert_eq!(game.re2_box.unwrap().top, top);
     }
 
     #[test]

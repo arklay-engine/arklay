@@ -26128,6 +26128,45 @@ mod tests {
         assert_eq!(session.re2_stopped_frame_draws, [true, true, true, false]);
     }
 
+    /// The item box's five-row jump reads the raw pad's `0x8` and `0x4`: the
+    /// aim key and the one beside it, through `Pad_set`'s repeat flag.
+    #[test]
+    fn re2_item_box_jumps_five_rows_on_the_aim_key_and_back_on_0x4() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.re2_box_open = true;
+        let tick = |session: &mut GameSession, ui: UiInput, input: player::Input| {
+            session.tick(&pack, ui, input, false).unwrap();
+            session.game.re2_box.unwrap()
+        };
+        for _ in 0..12 {
+            tick(&mut session, UiInput::default(), player::Input::default());
+        }
+        let confirm = UiInput {
+            confirm: true,
+            ..UiInput::default()
+        };
+        let page = tick(&mut session, confirm, player::Input::default());
+        assert_eq!(page.sub, game::itembox2::SUB_BOX, "in the box's list");
+        let top = page.top;
+
+        let aim = player::Input {
+            aim: true,
+            ..player::Input::default()
+        };
+        let page = tick(&mut session, UiInput::default(), aim);
+        assert_eq!(page.top, (top + 5) & 0x3F);
+        tick(&mut session, UiInput::default(), player::Input::default());
+        let lock = player::Input {
+            lock_drop: true,
+            ..player::Input::default()
+        };
+        let page = tick(&mut session, UiInput::default(), lock);
+        assert_eq!((page.top, page.sub), (top, game::itembox2::SUB_BOX));
+    }
+
     /// `Item_box_entrance`'s case 2 opens the item box as START opens the
     /// status screen (`Game` 1 and `fg_status`'s `0x8000`), in the room
     /// pass's back routine, so the next tick is mode 1's: from there the
