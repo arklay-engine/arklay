@@ -126,17 +126,18 @@ cargo run -- pack convert game /path/to/steam/4249100_Biohazard --out re1.akpak
 # Leon A is one continuous run from the new game to the Manhole Opener in 301,
 # and goes on in warp runs through the kennel's manhole and the sewer, with Ada
 # as the player, to the Club Key, then back up to the police station for the
-# chess plugs (matched as far as 112); Claire A goes on from the Spade Key
-# through its doors, the water tank and 108's stairs to the Diamond Key (the
-# continuous run of that stretch is still to come). Both characters fire the knife and weapons 2
+# chess plugs (matched as far as 112, then 20A to 20E's Rook plug); Claire A is one
+# continuous run from the new game to the Diamond Key, and goes on in warp runs
+# from the Diamond Key down 110's ladder to 209 and 202's bomb half, and up to
+# 10A's wall. Both characters fire the knife and weapons 2
 # to 8 and the grenade launcher, bowgun, Colt S.A.A., spark shot, Beretta,
 # sub-machine gun, flamethrower, rocket launcher and gatling gun (weapons 9 to
 # 0x13). Zombies,
 # lickers, dogs, crows, Mr. X, the plants, the spiders, the cockroaches (in part),
 # room 205's bodies and the alligator are ported; the G forms are part way (G1,
 # G2 and G3 are done, the G embryo walks, jumps, latches on and struggles, and
-# the G adult walks, bites and spits, but the G adult's hits and death, its
-# birth and the embryos that ride its back are to come). The engine also plays RE2 doors with --door,
+# the G adult walks, bites, spits, is born, takes hits and dies, but the embryos
+# that ride its back are to come). The engine also plays RE2 doors with --door,
 # and plays its sounds and films (see issue #244 and oracle/re2-deviations.md);
 # --game re2 skips detection
 cargo run -- pack convert game /path/to/re2
@@ -147,7 +148,7 @@ cargo run -- pack convert game /path/to/re2
 cargo run -- pack convert mod RE-ENHANCE_RE1_v2.0_GOG.zip
 
 # Generate a BioRand game (items, the start inventory and doors randomized,
-# locks and enemies on request; see docs/modding.md), one pack per player,
+# locks and enemies on request; see docs/mods.md), one pack per player,
 # and check one again
 cargo run -- biorand generate re1.akpak --seed 123456 --player both
 cargo run -- biorand verify biorand-123456-chris.akpak
