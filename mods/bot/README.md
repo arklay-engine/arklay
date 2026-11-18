@@ -433,7 +433,10 @@ map does, so a route may reach it from the side that works, or step out
 and back in. Each side it was given up from is a lesson in the memory
 (`door_side:ROOM:SLOT:FROM`), which a reload keeps like a met fight, and
 the fresh VM's marks are rebuilt from it: 507's door 0, out of reach from
-the 50C side, was walked to three times again after every reload. An `<avoid>` item is marked as avoided before the free-slot check,
+the 50C side, was walked to three times again after every reload. A
+lesson whose mark clears (a puzzle step, a `<reach>` flag) or holds from
+that side no more is forgotten, so a reload does not give the door up
+again after the way opened. An `<avoid>` item is marked as avoided before the free-slot check,
 so a full inventory does not turn it into a goal that lifts on the next
 inventory change. After 3 attempts the mark holds, except an `inventory
 full` mark on a key or an item a `<use>` fact needs: that waits for the
@@ -1288,11 +1291,15 @@ drives the box screen with pad input only.
   switch) still take the empty staple. After a death in the room of a
   boss still to be won, every boxed gun with a band for it comes out as
   gear too, the staple even with no round known (the map a reload
-  restores was drawn before the boss's room), and takes a slot held for a
-  pickup: Chris came back to 513's Tyrant four times with a shotgun the
-  lab's zombies had emptied, the handgun in 50E's box. A boxed gun's
-  rounds lying on the map are no rounds for no gun either: they are worth
-  a trip, count as known ammunition, and under the reserve floor rank and
+  restores was drawn before the boss's room): Chris came back to 513's
+  Tyrant four times with a shotgun the lab's zombies had emptied, the
+  handgun in 50E's box. Like all gear it leaves the slots held for needed
+  pickups alone, and once held such a gun and its rounds stay held: boxed
+  again for a key's slot, it would be gear again and come straight back
+  out. A boxed gun's
+  rounds lying on the map are no rounds for no gun either, while the
+  rearm could take the gun back out (its slot rule above, for them and
+  the gun): they are worth a trip, count as known ammunition, and under the reserve floor rank and
   make room as the equipped gun's rounds do; held, they bring the gun back
   out of the box (the rearm). Chris had walked past 28 shells in 219, 401
   and 410 with the shotgun boxed and met the lab with none. Like the reserve-floor top-up, the gear-up and the ammunition

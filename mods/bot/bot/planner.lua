@@ -384,11 +384,30 @@ function BotPlanner.restore_door_lessons(bot)
             m.bad_from = m.bad_from or {}
             m.bad_from[side] = true
             p.marks[mk] = m
+            p.door_lessons = p.door_lessons or {}
+            p.door_lessons[key] = { mark = mk, side = side }
             changed = true
         end
     end
     if changed then
         marks_changed()
+    end
+end
+
+-- The lessons whose door mark has since cleared, or holds from that side
+-- no more, are forgotten: a puzzle step or a <reach> flag may open the
+-- way (clear_unreachable, blocked), and a reload must not put the mark
+-- back for good. 30F's door given up from 30D before the passages turned
+-- would stay given up past the hex crank.
+function BotPlanner.forget_cleared_door_lessons(bot)
+    local p = plan()
+    for key, lesson in pairs(p.door_lessons or {}) do
+        local m = p.marks[lesson.mark]
+        if not (m and m.bad_from and m.bad_from[lesson.side]
+                and BotPlanner.other_side(m, "door", "")) then
+            bot:remember(key, nil)
+            p.door_lessons[key] = nil
+        end
     end
 end
 
@@ -436,8 +455,13 @@ local function mark(bot, kind, room, slot, reason, permanent)
     -- out of reach from the 50C side, was walked to three times again
     -- after every reload.
     if BotPlanner.other_side(m, kind, "") then
+        p.door_lessons = p.door_lessons or {}
         for side, _ in pairs(m.bad_from) do
-            bot:remember(BotPlanner.door_lesson_key(room, slot, side), "1")
+            local lesson = BotPlanner.door_lesson_key(room, slot, side)
+            if not p.door_lessons[lesson] then
+                bot:remember(lesson, "1")
+                p.door_lessons[lesson] = { mark = key, side = side }
+            end
         end
     end
     -- A box: the needed pickups waiting for a slot now (blocked lifts the
@@ -799,6 +823,8 @@ local function clear_unreachable(bot, room, doors)
         end
     end
 end
+BotPlanner.mark = mark
+BotPlanner.clear_unreachable = clear_unreachable
 
 local function progress(bot, note)
     local p = plan()
@@ -2334,18 +2360,11 @@ end
 
 -- The ammunition of the firearms the remembered box holds and the bot
 -- does not, {[item] = true}: not a hand weapon nor a reserve gun (the
--- launchers come out by their own rules). What a player sees in the box
--- and on the floor; nothing hidden.
+-- launchers come out by their own rules), and only while the rearm could
+-- hand the gun back (BotInventory.context's ctx.boxed_ammo). What a
+-- player sees in the box and on the floor; nothing hidden.
 function BotPlanner.boxed_gun_ammo(bot)
-    local out = {}
-    local box = BotInventory.remembered(bot)
-    for id, row in pairs((bot:knowledge() or {}).weapons or {}) do
-        local ammo = bot:ammo_for(id)
-        if ammo and box[id] and not bot:has_item(id) and not row.melee and not row.reserve then
-            out[ammo] = true
-        end
-    end
-    return out
+    return BotInventory.context(bot).boxed_ammo or {}
 end
 
 -- The way-out bonus of a route to the remote frontier item `item` (catalog
@@ -4529,6 +4548,7 @@ function BotPlanner.step(bot)
     local p = plan()
     local room = bot:room().id
     BotPlanner.restore_door_lessons(bot)
+    BotPlanner.forget_cleared_door_lessons(bot)
     if not p.monster_tick or bot:tick() - p.monster_tick >= MONSTER_EVERY then
         p.monster_tick = bot:tick()
         p.monsters[room] = #bot:enemies()

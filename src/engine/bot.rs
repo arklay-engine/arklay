@@ -7597,6 +7597,68 @@ mod tests {
     }
 
     #[test]
+    fn a_boxed_guns_rounds_count_only_while_the_rearm_could_hand_it_back() {
+        let vm = tactics_vm();
+        // Chris with the handgun (`loaded` rounds, no clip), three other
+        // items and two free slots; the shotgun in the box, shells lying in
+        // 219, and maybe a key on the frontier there too.
+        let boxed = |loaded: u32, key: bool| -> String {
+            let key = if key {
+                r#"{ kind = "item", room = "219", slot = 2, item = 0x3A },"#
+            } else {
+                ""
+            };
+            eval(
+                &vm,
+                &format!(
+                    r#"local bot = setmetatable({{}}, {{ __index = function()
+                        return function() return {{}} end
+                    end }})
+                    local ammo = {{ [0x02] = 0x0B, [0x03] = 0x0C }}
+                    function bot:knowledge() return K end
+                    function bot:tick() return 1 end
+                    function bot:room() return {{ id = "106" }} end
+                    function bot:player()
+                        return {{ health = 140, max_health = 140, equipped = 0x02 }}
+                    end
+                    function bot:ammo_for(id) return ammo[id] end
+                    function bot:has_item(id) return id == 0x02 end
+                    function bot:item_count(id) return id == 0x02 and {loaded} or 0 end
+                    function bot:flag() return false end
+                    function bot:memory() return {{ box_items = "03" }} end
+                    function bot:menu()
+                        return {{ capacity = 6, items = {{
+                            {{ slot = 1, item = 0x02, kind = "weapon", quantity = {loaded} }},
+                            {{ slot = 2, item = 0x40, kind = "key", quantity = 1 }},
+                            {{ slot = 3, item = 0x41, kind = "key", quantity = 1 }},
+                            {{ slot = 4, item = 0x42, kind = "key", quantity = 1 }},
+                            {{ slot = 5, item = 0, quantity = 0 }},
+                            {{ slot = 6, item = 0, quantity = 0 }} }} }}
+                    end
+                    function bot:item_kind(id)
+                        if id == 0x0C then return "ammo" end
+                        return "key"
+                    end
+                    function bot:world()
+                        return {{ rooms = {{}}, frontier = {{ {key}
+                            {{ kind = "item", room = "219", slot = 1, item = 0x0C }} }} }}
+                    end
+                    local ctx = BotInventory.context(bot)
+                    return tostring(ctx.boxed_ammo and ctx.boxed_ammo[0x0C])
+                        .. "," .. tostring(BotPlanner.boxed_gun_ammo(bot)[0x0C])"#
+                ),
+            )
+        };
+        // Room for the shells and the gun: rounds for a gun.
+        assert_eq!(boxed(8, false), "true,true");
+        // A key needs a free slot: the rearm would keep the gun in, so the
+        // shells are no known ammunition.
+        assert_eq!(boxed(8, true), "nil,nil");
+        // Unarmed, the rearm takes the slot anyway: they count again.
+        assert_eq!(boxed(0, true), "true,true");
+    }
+
+    #[test]
     fn a_door_unreachable_from_one_side_stays_open_from_the_others() {
         let vm = route_vm();
         let open = |mark: &str, kind: &str, side: &str| -> bool {
@@ -7718,68 +7780,126 @@ mod tests {
         assert_eq!(state(lesson, "50C"), "false");
         assert_eq!(state(lesson, "505"), "true");
         assert_eq!(state(r#"["died:509"] = "1""#, "505"), "none");
-        // The mark writes the lesson once given up: three failures from 50C.
+        // The mark writes the lesson once given up (three failures from
+        // 50C), and a puzzle step that clears the mark forgets it, so a
+        // reload does not give the door up again.
         let written: String = eval(
             &vm,
-            r#"local memory = {}
-            local m = { kind = "door", room = "507", slot = 0, attempts = 3,
-                reason = "every approach failed", bad_from = { ["50C"] = true } }
-            assert(BotPlanner.other_side(m, "door", ""))
-            return BotPlanner.door_lesson_key("507", 0, "50C")"#,
+            r#"BOT_STATE = {}
+            local memory = {}
+            local bot = setmetatable({}, { __index = function()
+                return function() return {} end
+            end })
+            function bot:memory() return memory end
+            function bot:remember(key, value) memory[key] = value end
+            function bot:room() return { id = "507" } end
+            BotPlanner.restore_door_lessons(bot)
+            BOT_STATE.plan.last_from = "50C"
+            local function keys()
+                local out = {}
+                for key, _ in pairs(memory) do out[#out + 1] = key end
+                table.sort(out)
+                return table.concat(out, ",")
+            end
+            local seen = {}
+            for _ = 1, 3 do
+                BotPlanner.mark(bot, "door", "507", 0, "every approach failed")
+                seen[#seen + 1] = keys()
+                BotPlanner.forget_cleared_door_lessons(bot)
+            end
+            BotPlanner.clear_unreachable(bot, "30F", true)
+            BotPlanner.forget_cleared_door_lessons(bot)
+            seen[#seen + 1] = keys()
+            return table.concat(seen, "|")"#,
         );
-        assert_eq!(written, "door_side:507:0:50C");
+        assert_eq!(written, "||door_side:507:0:50C|");
     }
 
     #[test]
     fn a_boss_the_bot_died_to_gears_up_every_boxed_gun_that_hurts_it() {
         let vm = tactics_vm();
         // Chris back in 50E after a death to 513's Tyrant (met): the
-        // shotgun and seven shells held, the handgun boxed, its clip on
-        // 513's floor.
+        // shotgun and seven shells held, the handgun boxed (or held), its
+        // clip on 513's floor.
         let clip = r#"{ kind = "item", room = "513", slot = 4, item = 0x0B }"#;
+        let mock = |died: &str, won: bool, frontier: &str, handgun: &str| -> String {
+            format!(
+                r#"local held = {{ [0x03] = 1, [0x0C] = 7 {handgun} }}
+                local memory = {{ box_items = "02,2F", ["fight_met:513:0C"] = "1" {died} }}
+                local bot = {{}}
+                function bot:knowledge() return K end
+                function bot:tick() return 1 end
+                function bot:memory() return memory end
+                function bot:has_item(id) return held[id] ~= nil end
+                function bot:item_count(id) return held[id] or 0 end
+                local ammo = {{ [0x02] = 0x0B, [0x03] = 0x0C, [0x07] = 0x10,
+                    [0x08] = 0x11, [0x09] = 0x12, [0x04] = 0x0D, [0x05] = 0x0E, [0x06] = 0x0F }}
+                function bot:ammo_for(id) return ammo[id] end
+                function bot:flag() return {won} end
+                function bot:fight_facts()
+                    return {{ {{ room = "513", enemy = 0x0C, bank = 3, bit = 112 }} }}
+                end
+                function bot:world()
+                    return {{ frontier = {{ {frontier} }} }}
+                end
+                local function ids(set)
+                    local out = {{}}
+                    for id, _ in pairs(set or {{}}) do
+                        out[#out + 1] = string.format("%02X", id)
+                    end
+                    table.sort(out)
+                    return table.concat(out, ",")
+                end
+                local gear, kept = BotInventory.gear_set(bot, K)"#
+            )
+        };
         let gear_seen = |died: &str, won: bool, frontier: &str| -> String {
             eval(
                 &vm,
                 &format!(
-                    r#"local held = {{ [0x03] = 1, [0x0C] = 7 }}
-                    local memory = {{ box_items = "02,2F", ["fight_met:513:0C"] = "1" {died} }}
-                    local bot = {{}}
-                    function bot:tick() return 1 end
-                    function bot:memory() return memory end
-                    function bot:has_item(id) return held[id] ~= nil end
-                    function bot:item_count(id) return held[id] or 0 end
-                    local ammo = {{ [0x02] = 0x0B, [0x03] = 0x0C, [0x07] = 0x10,
-                        [0x08] = 0x11, [0x09] = 0x12, [0x04] = 0x0D, [0x05] = 0x0E, [0x06] = 0x0F }}
-                    function bot:ammo_for(id) return ammo[id] end
-                    function bot:flag() return {won} end
-                    function bot:fight_facts()
-                        return {{ {{ room = "513", enemy = 0x0C, bank = 3, bit = 112 }} }}
-                    end
-                    function bot:world()
-                        return {{ frontier = {{ {frontier} }} }}
-                    end
-                    local gear, boss = BotInventory.gear_set(bot, K)
-                    local out = {{}}
-                    for id, _ in pairs(gear) do
-                        out[#out + 1] = string.format("%02X", id)
-                    end
-                    table.sort(out)
-                    -- The boss's gun takes a slot held for a pickup.
-                    local held_slot = BotInventory.dry_ammo({{ boss_gear = boss }},
-                        {{ item = 0x02, kind = "weapon" }}, "gear")
-                    return table.concat(out, ",") .. (held_slot and " held" or "")"#
+                    "{}\nreturn ids(gear) .. '|' .. ids(kept)",
+                    mock(died, won, frontier, "")
                 ),
             )
         };
         let gear = |died: &str, won: bool| gear_seen(died, won, clip);
+        let died = r#", ["died:513"] = "1""#;
         // Died in 513: the handgun comes out for the clip there.
-        assert_eq!(gear(r#", ["died:513"] = "1""#, false), "02 held");
+        assert_eq!(gear(died, false), "02|03,0C");
         // The staple comes out with no round known too (a reload's map
         // was drawn before 513): the same with the clip unseen.
-        assert_eq!(gear_seen(r#", ["died:513"] = "1""#, false, ""), "02 held");
+        assert_eq!(gear_seen(died, false, ""), "02|03,0C");
         // Not died there, or the Tyrant won: the shotgun is enough gear.
-        assert_eq!(gear("", false), "");
-        assert_eq!(gear(r#", ["died:513"] = "1""#, true), "");
+        assert_eq!(gear("", false), "|");
+        assert_eq!(gear(died, true), "|");
+
+        // The handgun out of the box into the one free slot, a key on the
+        // frontier: the key's slot is not the handgun's, and once held the
+        // handgun does not go back in for it (then gear again, it would
+        // come out again for good).
+        let cycle: String = eval(
+            &vm,
+            &format!(
+                r#"{}
+                local slot_held = BotInventory.withdrawals(
+                    {{ {{ item = 0x02, kind = "weapon" }} }},
+                    {{ gear = gear, boss_kept = kept, hold_free = 1 }}, 1)
+                {}
+                local gear2, kept2 = BotInventory.gear_set(bot, K)
+                local items = {{ {{ slot = 1, item = 0x03, kind = "weapon" }},
+                    {{ slot = 2, item = 0x02, kind = "weapon" }} }}
+                local ctx = {{ full = true, swap = true, swaps = 1, equipped = 0x03,
+                    gear = gear2, boss_kept = kept2,
+                    spare_guns = {{ [0x02] = 0 }}, staple_guns = {{ [0x02] = true }} }}
+                -- Nothing boxed is gear now (the retreat's question).
+                return #slot_held .. "|" .. ids(gear2) .. "|" .. ids(kept2) .. "|"
+                    .. #BotInventory.soft_deposits(items, ctx, 1) .. "|"
+                    .. tostring(BotInventory.gear_boxed(bot))"#,
+                mock(died, false, clip, ""),
+                "held[0x02] = 1",
+            ),
+        );
+        assert_eq!(cycle, "0||02,03,0C|0|false");
     }
 
     #[test]
