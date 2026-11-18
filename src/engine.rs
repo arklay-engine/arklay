@@ -16973,9 +16973,10 @@ struct VoiceCache {
     /// The wait is held by `silent_ticks`, not by the mixer's channel.
     silent: bool,
     /// The reference's silenced test mode (`TestHooks_SilenceSound`): with
-    /// no device, an RE 1 line paces nothing and its wait clears on the next
-    /// tick. An oracle trace without `sound` runs this way, as the reference
-    /// it is compared with does.
+    /// no mixer, an RE 1 line paces nothing and its wait clears on the next
+    /// tick. A script's trace without `sound` or `sound_wav` runs this way,
+    /// as the reference it is compared with does; a scene paced by its line
+    /// (10A's upstairs radio call) then plays as it does there.
     unpaced: bool,
 }
 
@@ -17092,8 +17093,8 @@ fn voice_line_ticks(wav: &audio::Wav) -> u32 {
 /// ends its main thread first, and the fork leaves the player in its
 /// scripted animation for good. A line whose entry is absent from the pack
 /// clears the flag at once (the documented hardening), and so does any wait
-/// with no line behind it. An unpaced cache (an oracle trace) clears every
-/// RE 1 wait at once, as the reference's silenced sound does.
+/// with no line behind it. With no mixer, an unpaced cache (an oracle trace)
+/// clears every RE 1 wait at once, as the reference's silenced sound does.
 fn tick_voice(
     music: &mut Option<Mixer>,
     cache: &mut VoiceCache,
@@ -23154,10 +23155,10 @@ mod tests {
         );
     }
 
-    struct TempDir(std::path::PathBuf);
+    pub(super) struct TempDir(pub(super) std::path::PathBuf);
 
     impl TempDir {
-        fn new() -> Self {
+        pub(super) fn new() -> Self {
             let nanos = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -35861,7 +35862,7 @@ off_0010:
     }
 
     /// A pack carrying a room and one synthetic film per `(id, name)` entry.
-    fn film_pack(dir: &TempDir, films: &[(u8, &str)]) -> Pack {
+    pub(super) fn film_pack(dir: &TempDir, films: &[(u8, &str)]) -> Pack {
         let pack_path = dir.0.join("films.akpak");
         let bmp_bytes = bmp::encode_to_vec(&test_image()).unwrap();
         let mut writer = PackWriter::new();

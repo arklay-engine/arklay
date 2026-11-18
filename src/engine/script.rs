@@ -286,6 +286,9 @@ struct WavCapture {
     due: f64,
     /// `FILE.ticks`: a traced tick and its time in seconds per line.
     ticks: String,
+    /// The session's mix, kept when the ending's films hand the session
+    /// over to RESULT, which takes its mixer with it.
+    kept: Option<Vec<u8>>,
 }
 
 impl ScriptTrace {
@@ -300,7 +303,7 @@ impl ScriptTrace {
             Some(Mode::Play(session)) => session.music.as_ref().and_then(Mixer::captured),
             _ => None,
         };
-        write_stereo_wav(&wav.path, pcm.unwrap_or_default())?;
+        write_stereo_wav(&wav.path, pcm.or(wav.kept.as_deref()).unwrap_or_default())?;
         let ticks = wav.path.with_extension("ticks");
         std::fs::write(&ticks, wav.ticks)
             .with_context(|| format!("failed to write {}", ticks.display()))
@@ -699,6 +702,15 @@ impl Driver {
         if !app.bot_attached() {
             if let Mode::Play(session) = &mut app.mode {
                 session.movie = None;
+            }
+            // Dropping a chain's film ends the session; keep its mix.
+            if app.chain_active
+                && app.pending_movie.is_some()
+                && let Some(wav) = self.trace.as_mut().and_then(|trace| trace.wav.as_mut())
+                && let Mode::Play(session) = &app.mode
+                && let Some(pcm) = session.music.as_ref().and_then(Mixer::captured)
+            {
+                wav.kept = Some(pcm.to_vec());
             }
             if let AppFlow::Quit = app.drop_pending_movie().map_err(engine_error)? {
                 return Err(self.stop_on_quit());
@@ -1588,6 +1600,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                         path: PathBuf::from(path),
                         due: 0.0,
                         ticks: String::new(),
+                        kept: None,
                     }),
                 });
                 Ok(())
@@ -1699,6 +1712,105 @@ mod tests {
             }
         );
         assert!(!add_host_keys(&mut ui, &UiInput::default()));
+    }
+
+    use crate::engine::tests::{TempDir, film_pack};
+
+    /// A headless driver over a game session in a pack with every ending
+    /// film, as a script's `load_game_pack` and `new_game` leave it.
+    fn playing_driver(dir: &TempDir) -> Driver {
+        let films: Vec<(u8, &str)> = (14..=27).map(|id| (id, "film")).collect();
+        let pack = film_pack(dir, &films);
+        let mut app = App::new(pack, dir.0.join("saves"), false);
+        let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+        app.start_session(session);
+        let stop = Rc::new(Stop {
+            exit: Cell::new(None),
+            timed_out: Cell::new(false),
+            deadline: None,
+            timeout: Duration::default(),
+        });
+        let mut driver = Driver::new(true, stop);
+        // Other tests' warnings share the counter.
+        driver.strict = false;
+        driver.app = Some(app);
+        driver
+    }
+
+    fn trace(dir: &TempDir, unpaced_voice: bool, wav: Option<&str>) -> ScriptTrace {
+        ScriptTrace {
+            writer: trace::TraceWriter::create(&dir.0.join("run.trace")).unwrap(),
+            all_frames: false,
+            screen: false,
+            wav: wav.map(|name| WavCapture {
+                path: dir.0.join(name),
+                due: 0.0,
+                ticks: String::new(),
+                kept: None,
+            }),
+            unpaced_voice,
+        }
+    }
+
+    fn play_session(driver: &mut Driver) -> &mut GameSession {
+        match &mut driver.app.as_mut().unwrap().mode {
+            Mode::Play(session) => session,
+            _ => panic!("no session"),
+        }
+    }
+
+    #[test]
+    fn a_silent_trace_unpaces_the_voice_lines_while_it_runs() {
+        let dir = TempDir::new();
+        let mut driver = playing_driver(&dir);
+        driver.tick().unwrap();
+        assert!(!play_session(&mut driver).voice_cache.unpaced, "no trace: paced");
+
+        // The oracle's trace: the reference's sound is silenced.
+        driver.trace = Some(trace(&dir, true, None));
+        driver.tick().unwrap();
+        assert!(play_session(&mut driver).voice_cache.unpaced);
+
+        driver.close_trace().unwrap();
+        driver.tick().unwrap();
+        assert!(!play_session(&mut driver).voice_cache.unpaced, "paced again");
+
+        // A trace with `sound` keeps the lines paced.
+        driver.trace = Some(trace(&dir, false, None));
+        driver.tick().unwrap();
+        assert!(!play_session(&mut driver).voice_cache.unpaced);
+    }
+
+    #[test]
+    fn a_scripted_clear_reaches_the_result_screen_and_keeps_its_mix() {
+        let dir = TempDir::new();
+        let mut driver = playing_driver(&dir);
+        let app = driver.app.as_mut().unwrap();
+        let Mode::Play(session) = &mut app.mode else {
+            unreachable!();
+        };
+        session.music = Some(Mixer::capture());
+        session.start_audio(&app.pack);
+        driver.trace = Some(trace(&dir, false, Some("run.wav")));
+        for _ in 0..3 {
+            driver.tick().unwrap();
+        }
+
+        // The escape scene's death variant ends in the ending's film chain.
+        // The driver drops the films, and the chain runs on to RESULT.
+        play_session(&mut driver).clear_game_requested = Some(4);
+        driver.tick().unwrap();
+        let app = driver.app.as_ref().unwrap();
+        assert!(matches!(app.mode, Mode::Ending(_)), "RESULT is open");
+        assert!(app.pending_movie.is_none() && !app.chain_active);
+
+        // The mix before the hand-over is still written.
+        driver.close_trace().unwrap();
+        let wav = std::fs::read(dir.0.join("run.wav")).unwrap();
+        assert!(
+            wav.len() > 44 + 22050 * 4 * 3 * 30 / 1000,
+            "the mix was kept"
+        );
     }
 
     #[test]

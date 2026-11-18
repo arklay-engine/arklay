@@ -155,10 +155,12 @@ Save mode (each header names its save):
   boards with Chris, Barry with Jill), ride the lift through 50D and its shakes onto the
   heliport, fire the flare, equip the launcher and fire on the Tyrant until it
   dies: its death, the rocket replay's cuts in 311 and the fade-out into the
-  ending. Run it for 4620 ticks; the next tick is the ending's first, which the
-  scenario does not trace.
+  ending. Play ends after 4620 traced ticks; run it for 6800 to capture RESULT
+  and the save screen after it, which `arklay` reaches 7 frames ahead of the
+  reference (see `oracle/room-303-parity.md`, "Into RESULT").
 - `finale_lift_jill.txt` — `lift_jill_501.dat`: the same for Jill, whose
-  boarding scene is shorter. Run it for 4155 ticks.
+  boarding scene is shorter. Play ends after 4155 traced ticks; run it for
+  6400.
 - `finale_pickup.txt` — `pickup_chris_303.dat`: fire the flare, run from the
   Tyrant until Brad drops the rocket launcher, pick it up through the viewer's
   Yes/No prompt and equip it. Run it for 3960 ticks.
