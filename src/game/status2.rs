@@ -467,17 +467,25 @@ fn heal(item: u8) -> Option<(Option<u8>, u8)> {
     })
 }
 
-/// One tick of the MAP page (`0x4FA240`). Sub 0 takes the player's floor
-/// (`0x4FAF80`) as the floor shown and loads its map and its pictures in the
-/// tick (`common\\file\\map<nn>.adt`); sub 1 slides it in for 14 ticks, the
-/// last of which plays cue 9 and shows it (sub 3). There a repeat tick with
-/// up or down held changes the floor shown to the one above or below
-/// ([`map::floor_after`]) with the cursor cue, and sub 4 loads that floor's
-/// map on the next tick; then the cancel key plays the cancel cue and slides
-/// the map out (sub 2) for 14 ticks, back to the tab bar. Cancel is tested
-/// after the floor change, so a tick with both changes the floor, plays
-/// both cues and slides out. START does nothing on this page (`0x691F76` is
-/// 0). Sub 3 steps the marker's blink first, and sub 4 resets it.
+/// One tick of the MAP page (`0x4FA240`), by sub:
+///
+/// - 0 takes the player's floor (`0x4FAF80`) as the floor shown, loads its
+///   map's pictures in the tick (`common\\file\\map<nn>.adt`) and starts
+///   sub 1.
+/// - 1 slides the screen's parts out for 14 ticks; the last plays cue 9 and
+///   starts sub 3.
+/// - 3 steps the marker's blink; then, on a repeat tick with up or down
+///   held, changes the floor shown ([`map::floor_after`]) and, if it is
+///   another, plays the cursor cue and starts sub 4; then, on the cancel
+///   key, plays the cancel cue and starts sub 2. Both tests run on one
+///   tick, so a change with the cancel key changes the floor, plays both
+///   cues and slides out.
+/// - 4 loads the new floor's map, resets the blink and goes back to sub 3.
+/// - 2 slides the parts back for 14 ticks, to the tab bar.
+///
+/// The map is drawn on a tick that starts and ends in sub 3, so not on the
+/// slide's last tick, a change's or a load's. START does nothing on this
+/// page (`0x691F76` is 0).
 fn re2_map(
     page: &mut ItemPage,
     work: &mut files::FileWork,

@@ -606,7 +606,7 @@ The recorder writes `MovieEnable = 0` to `config.ini`, which the executable read
 | `snd` | each sound started on the tick, `type:index:volume:pan`, joined with `/`; with `--sound` only. Compared only when `--fields` names it |
 | `esp` | `Esp_` (`0x992CA0`, 0x60 slots of 0x7C bytes): the live count (`+0x18`'s 0x8000), then each slot whose `+0x18` isn't 0 (the slots `Esp_call`'s free search sees as taken, deferred ones included) as `slot:anim,update,kind,row,flags,frame,x,y,z`: `+0x00`, `+0x01`, `+0x1C`, `+0x1E`, `+0x18` and `+0x21` in hex, and `+0x34`, the place `Esp_pos` writes in the world, in decimal; joined with `;`, or `-`. A dead slot keeps its kind (`Esp_init_R` and `Esp_kill` clear only the flags), so the flags decide. `scripts/oracle.py` compares it as `espn` (the count), `espk` (the kinds and rows that are out, without their slots: one effect missing on one side moves the slot of every later one, as the search goes from the top) and `esp<slot>`; `esp` selects all three. Compared only when `--fields` names it |
 | `mapfg` | the MAP page's banks in hex: `fg_map`'s five words (bank 9, `0x98EC04`), then the first words of `fg_map_c` (bank 32), `fg_map_i` (bank 33) and the floors' bank 35 (`0x98EC00`). Compared only when `--fields` names it |
-| `map` | the MAP page's shown floor (`0x691F7A`), the marker's blink and its direction (`0x691F88`, `0x691F89`) while `0x691F61` is 4, else `-`; the original's only |
+| `map` | the MAP page's shown floor (`0x691F7A`), the marker's blink and its direction (`0x691F88`, `0x691F89`) while `0x691F61` is 4, else `-`. Compared only when `--fields` names it |
 
 `rseed`, `fade` and `f` are placeholders so the line parses: `rseed` and the fade
 have no RE2 equivalent recorded yet, and the frame isn't hashed. A screenshot of
@@ -624,7 +624,7 @@ health, and `mot` (`--fields`). The enemy and presentation fields are opt-in:
 `zm<slot>` for one enemy slot's work and `zm*` for every slot's,
 `om<n>` for one room object and `om*` for every one,
 `neck` for the player's neck, the `snd` and `die` traces for sound and the
-game over, and `esp` (or `espn` and `espk` alone) for the effect pool. arklay emits `fgcom`, `fgscn`, `fgitem`, `fgstat` and `fgroom` (the banks), `scene`, `fg_status`'s scene bit, and `mapfg`, the MAP page's banks; it doesn't write `fgsys` or `fgstop`. Add each new field to
+game over, and `esp` (or `espn` and `espk` alone) for the effect pool. arklay emits `fgcom`, `fgscn`, `fgitem`, `fgstat` and `fgroom` (the banks), `scene`, `fg_status`'s scene bit, and `mapfg` and `map`, the MAP page's banks and its floor and blink; it doesn't write `fgsys` or `fgstop`. Add each new field to
 the default in `RE2_FIELDS` when the milestone that makes it comparable lands.
 
 ## Classic Rebirth

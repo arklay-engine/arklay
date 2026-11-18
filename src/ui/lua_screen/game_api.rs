@@ -238,7 +238,8 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         Ok((id, count, mark))
     });
 
-    // `re2_map()`: what RE2's MAP page draws on the floor it shows: its
+    // `re2_map()`: what RE2's MAP page draws on the floor it shows (the
+    // floor it last showed while the page isn't up, 0 before the first): its
     // `map` picture's number, its `rooms` in the draw order (each `x`, `y`,
     // `w`, `h`, an `outline` and maybe a translucent `fill`, both a
     // `texture` slot, `u`, `v` and `clut`), the player's `marker` (`x`,

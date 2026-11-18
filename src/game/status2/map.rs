@@ -54,8 +54,11 @@ fn floor_next(table: &[u8; 24], floor: u8, flag: &impl Fn(u8, u8) -> bool) -> Op
 }
 
 /// The floor the MAP page shows after a repeat tick with `up` and `down`
-/// held (`0x4FA240`'s sub 3): up first, then down from where that left it,
-/// so both together come back. Floors 0 and 1 have no others.
+/// held (`0x4FA240`'s sub 3): up first, to the floor above when it is a
+/// floor past 1 that the player has stood on, then down from where that
+/// left it, by the same test; the page loads a map only when the floor it
+/// ends on is another.
+/// Floors 0 and 1 have no others.
 pub fn floor_after(floor: u8, up: bool, down: bool, flag: impl Fn(u8, u8) -> bool) -> u8 {
     if floor < 2 {
         return floor;
@@ -420,6 +423,8 @@ pub struct MapSprite {
 /// A room as the page draws it: its fill, translucent, then its outline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DrawnRoom {
+    /// Its record on the floor: the rooms are drawn in record order.
+    pub record: u8,
     pub x: i16,
     pub y: i16,
     pub w: u8,
@@ -606,7 +611,8 @@ impl GameState {
         }
     }
 
-    /// The MAP page's view of the floor it shows (`0x4FA990`).
+    /// The MAP page's view of the floor it shows (`0x4FA990`), which is the
+    /// floor it last showed while the page isn't up.
     pub fn re2_map_view(&self) -> MapView {
         let context = self.re2_map_context();
         let room = self.id.room;
@@ -678,6 +684,7 @@ pub fn map_view(
     for (index, record) in entry.rooms.iter().enumerate() {
         let record = &patched(floor, index, record, context);
         let mut drawn = DrawnRoom {
+            record: index as u8,
             x: record.x,
             y: record.y,
             w: record.w,
@@ -791,7 +798,8 @@ fn special_room(
         }
         fill
     } else {
-        if flag(VISITED_BANK, 0x2C) && !held {
+        // Not drawn until the room is visited or the floor's map held.
+        if !flag(VISITED_BANK, 0x2C) && !held {
             return None;
         }
         if bit(0xB) {
@@ -807,6 +815,7 @@ fn special_room(
         }
     };
     Some(DrawnRoom {
+        record: 0xE,
         x: record.x,
         y: record.y,
         w: record.w,
@@ -984,8 +993,7 @@ mod tests {
         let held = |bank: u8, index: u8| (bank, index) == (HELD_BANK, 2);
         let view = map_view(2, 2, 1, [0, 0], 0, &MapContext::default(), held);
         assert_eq!(view.rooms.len(), 18);
-        // Without the map only the visited rooms show (and room 0xE, which
-        // has its own test).
+        // Without the map only the visited rooms show.
         let visited = |bank: u8, index: u8| (bank, index) == (VISITED_BANK, 0x1F);
         let view = map_view(2, 2, 1, [0, 0], 0, &MapContext::default(), visited);
         let here = view
@@ -994,11 +1002,35 @@ mod tests {
             .find(|room| (room.x, room.y) == (99, 139))
             .unwrap();
         assert_eq!(here.fill.map(|fill| fill.clut), Some(1));
-        assert!(view.rooms.len() < 18);
+        assert_eq!(view.rooms.len(), 1);
         let held = map_view(2, 2, 1, [0, 0], 0, &MapContext::default(), |bank, index| {
             held(bank, index) || visited(bank, index)
         });
         assert_eq!(held.rooms.len(), 18);
+    }
+
+    /// `0x4FAC2C`'s first test outside the room: floor 2's room 0xE isn't
+    /// drawn until it is visited (bank 9's 0x2C) or the floor's map held.
+    #[test]
+    fn floor_2s_room_0xe_needs_a_visit_or_the_map() {
+        let shows = |flag: fn(u8, u8) -> bool| {
+            map_view(2, 2, 1, [0, 0], 0, &MapContext::default(), flag)
+                .rooms
+                .iter()
+                .any(|room| room.record == 0xE)
+        };
+        assert!(!shows(|_, _| false));
+        assert!(shows(|bank, index| (bank, index) == (VISITED_BANK, 0x2C)));
+        assert!(shows(|bank, index| (bank, index) == (HELD_BANK, 2)));
+    }
+
+    /// A floor's map held doesn't make it a floor to change to: only
+    /// having stood on it does.
+    #[test]
+    fn a_held_map_is_not_a_floor_stood_on() {
+        let held = |bank: u8, _: u8| bank == HELD_BANK;
+        assert_eq!(floor_after(2, true, true, held), 2);
+        assert!(arrows(2, &held).is_empty());
     }
 
     #[test]
