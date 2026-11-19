@@ -12288,6 +12288,42 @@ mod tests {
         assert_eq!(game.inventory, [stack(3, 7)]);
     }
 
+    /// `Sort_item` closes the first gap, not the one just made: an item
+    /// that isn't held still sorts, and a reload that empties its stack
+    /// after an earlier gap leaves the stack's own slot empty.
+    #[test]
+    fn sort_item_closes_the_first_gap_whichever_was_made() {
+        let stack = |id, quantity| InventoryItem { id, quantity };
+        // EASY's start, the gap before the bullets.
+        let mut game = GameState {
+            is_re2_room: true,
+            equipped_slot: Some(3),
+            inventory: vec![stack(1, 1), stack(0x26, 1), stack(0, 0), stack(2, 18)],
+            ..Default::default()
+        };
+        game.lose_re2_item(0x31);
+        assert_eq!(game.inventory, [stack(1, 1), stack(0x26, 1), stack(2, 18)]);
+        assert_eq!(game.equipped_slot, Some(2));
+
+        let mut game = GameState {
+            is_re2_room: true,
+            equipped: Some(3),
+            equipped_weapon_id: 3,
+            equipped_slot: Some(0),
+            inventory: vec![
+                stack(3, 2),
+                stack(0, 0),
+                stack(RE2_HANDGUN_BULLETS, 5),
+                stack(0x30, 1),
+            ],
+            ..Default::default()
+        };
+        game.re2.player.reloaded = true;
+        game.re2_settle_ammo();
+        assert_eq!(game.inventory, [stack(3, 7), stack(0, 0), stack(0x30, 1)]);
+        assert_eq!(game.equipped_slot, Some(0));
+    }
+
     /// The empty slots a rebuild drops take the equipped slot up with them.
     #[test]
     fn a_rebuild_keeps_the_equipped_slot_on_its_item() {

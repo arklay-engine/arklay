@@ -398,6 +398,11 @@ impl SaveFile {
             .copied()
             .filter(|stack| stack.id != 0)
             .collect();
+        // The block keeps the equipped item, not its slot: the first that
+        // holds it.
+        state.equipped_slot = state
+            .equipped
+            .and_then(|item| state.inventory.iter().position(|stack| stack.id == item));
         state.item_box = self.item_box;
         if let Some(re2) = &self.re2 {
             state.is_re2_room = true;
@@ -1951,6 +1956,29 @@ mod tests {
         let bytes = vec![0u8; budget::MAX_SAVE_BYTES + 1];
         let message = budget::assert_cap_error(SaveFile::from_bytes(&bytes));
         assert!(message.contains("save block size"), "{message}");
+    }
+
+    /// The block keeps the equipped item, not its slot: a load equips the
+    /// first slot that holds it.
+    #[test]
+    fn a_load_equips_the_first_slot_that_holds_the_item() {
+        let mut state = GameState::new(RoomId::parse("11C1").unwrap(), &RoomState::default());
+        for (id, quantity) in [(1, 1), (2, 15), (2, 7)] {
+            state.inventory.push(InventoryItem { id, quantity });
+        }
+        state.rebuild_slots();
+        state.set_equipped(Some(2));
+        state.equipped_slot = Some(2);
+        let file = SaveFile::from_state(&state);
+        let mut restored = GameState::default();
+        file.apply_to(&mut restored);
+        assert_eq!(restored.equipped, Some(2));
+        assert_eq!(restored.equipped_slot, Some(1));
+        // Nothing equipped, no slot.
+        state.set_equipped(None);
+        let mut restored = GameState::default();
+        SaveFile::from_state(&state).apply_to(&mut restored);
+        assert_eq!(restored.equipped_slot, None);
     }
 
     #[test]

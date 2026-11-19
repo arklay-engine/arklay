@@ -156,7 +156,14 @@ pub fn st_chenge_pl(game: &mut GameState, next: u8) {
             .filter(|&id| id != 0);
         game.set_equipped(equipped);
         if equipped.is_some() {
-            game.equipped_slot = Some(usize::from(stash.equip_slot));
+            // The restored slots are compact: the equipped one is up by
+            // the empty ones the stash had before it.
+            let slot = usize::from(stash.equip_slot);
+            let holes = stash.slots[..slot]
+                .iter()
+                .filter(|slot| slot[0] == 0)
+                .count();
+            game.equipped_slot = Some(slot - holes);
         }
         game.re2.personal_item = [if next & 1 == 0 { LIGHTER } else { LOCKPICK }, 1];
     }
@@ -274,6 +281,32 @@ mod tests {
             game.re2_inventory_trace(),
             "3:13,14:45,23:1,0:0,0:0,0:0,0:0,0:0,0:0,0:0,57:15/8"
         );
+    }
+
+    /// The way back keeps the equipped slot on its item: a two-slot
+    /// weapon's right half, and over an empty slot the stash had before it.
+    #[test]
+    fn st_chenge_pl_back_keeps_the_equipped_slot() {
+        let mut game = leon();
+        game.inventory = [(0, 0), (0x0F, 50), (0x0F, 50), (2, 15)]
+            .iter()
+            .map(|&(id, quantity)| InventoryItem { id, quantity })
+            .collect();
+        game.set_equipped(Some(0x0F));
+        game.equipped_slot = Some(2);
+        st_chenge_pl(&mut game, ADA);
+        assert_eq!(game.re2.pl_stash.equip_slot, 2);
+        st_chenge_pl(&mut game, 0);
+        assert_eq!(
+            game.inventory[..2],
+            [InventoryItem {
+                id: 0x0F,
+                quantity: 50
+            }; 2]
+        );
+        assert_eq!(game.equipped, Some(0x0F));
+        assert_eq!(game.equipped_slot, Some(1));
+        assert_eq!(game.re2_equip_slot(), 1);
     }
 
     #[test]
