@@ -21,6 +21,13 @@ const SHARED: &str = include_str!("../../games/re2/language/en-US.txt");
 const TABLE: &str =
     " .___()__“”_0123456789:_,\"!?_ABCDEFGHIJKLMNOPQRSTUVWXYZ[/]'-_abcdefghijklmnopqrstuvwxyz";
 
+/// The period a plain `S`, `T`, `A` or `R` is followed by: the fullwidth one,
+/// which prints as the period does. The Latin script spells those letters
+/// with an ASCII period as the `S.T.A.R.S.` cells (RE2's own two-byte ones
+/// below), where RE2 prints the letter and then the period (`S. Machine
+/// Gun`).
+const PLAIN_PERIOD: char = '．';
+
 /// A message stream as a language value, in the terms of `Mess_disp`: the
 /// printing bytes, the line and page breaks, the character delay and how the
 /// message ends. A delay of zero skips to the next `0xFA`, which holds the
@@ -77,6 +84,7 @@ pub(super) fn decode_message(stream: &[u8]) -> String {
             _ => match table.get(usize::from(byte)) {
                 Some('_') | None => {}
                 Some('"') => value.push_str("\\\""),
+                Some('.') if value.ends_with(['S', 'T', 'A', 'R']) => value.push(PLAIN_PERIOD),
                 Some(ch) => value.push(*ch),
             },
         }
@@ -357,6 +365,35 @@ mod tests {
         state.entities[0].health = 200;
         state.use_item(0x26);
         assert_eq!(state.entities[0].health, 200);
+    }
+
+    /// A plain letter and period are not the `S.T.A.R.S.` cells: `S.
+    /// Machine Gun` (`2F 01 00 ..`) keeps its letter and its period apart
+    /// through the Latin script's greedy pairs, where RE2's own two-byte
+    /// `S.` is the one cell.
+    #[test]
+    fn a_plain_letter_and_period_stay_two_glyphs() {
+        use crate::charset::{Script, encode};
+        let latin = |text: &str| {
+            let mut bytes = Vec::new();
+            encode(text, Script::Latin, &mut bytes);
+            bytes
+        };
+        let period = latin(".");
+        assert_eq!(period.len(), 1);
+        let name = decode_message(&[0x2F, 0x01, 0x00, 0x29, 0xF7]);
+        assert_eq!(name, "S． M");
+        assert_eq!(latin(&name), [0x2F, period[0], 0x00, 0x29]);
+        for (byte, letter) in [(0x30, 'T'), (0x1D, 'A'), (0x2E, 'R')] {
+            let pair = decode_message(&[byte, 0x01]);
+            assert_eq!(pair, format!("{letter}．"));
+            assert_eq!(latin(&pair), [byte, period[0]]);
+        }
+        // Another letter's period is the ASCII one, and so is RE2's cell's.
+        assert_eq!(decode_message(&[0x24, 0x01, 0x00, 0x23]), "H. G");
+        let stars = decode_message(&[0xEF, 0xE6, 0xF0, 0x09, 0x01]);
+        assert_eq!(stars, "S.T..");
+        assert_eq!(latin("S.").len(), 1, "the cell");
     }
 
     #[test]

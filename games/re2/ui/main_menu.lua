@@ -528,14 +528,56 @@ local function half_cell(item)
     return ICONS + 2, 40 * (cell % 3), 30 * (cell // 3)
 end
 
-local function is_wide(item)
+-- The two-slot weapons (the script's local variables are at Lua's limit,
+-- so what they need shares one table).
+local WIDE = {}
+
+function WIDE.is(item)
     return item // 48 == 0 and item % 48 >= 14 and item % 48 <= 18
 end
+
+-- A slot's two-slot mark (`Item_work`'s third byte, `itembox2::marks`): 1
+-- on a two-slot weapon's left half, 2 on its right, 0 on anything else, a
+-- two-slot weapon held in one slot included.
+function WIDE.mark(api, slot)
+    local index = 0
+    while index < s.slots do
+        local item = api:re2_slot(index)
+        if WIDE.is(item) and index + 1 < s.slots and api:re2_slot(index + 1) == item then
+            if slot == index then
+                return 1
+            elseif slot == index + 1 then
+                return 2
+            end
+            index = index + 2
+        else
+            index = index + 1
+        end
+    end
+    return 0
+end
+
+-- The cursor's three pieces from the slot by its mark (`0x53EFAC`): the
+-- right, the middle and the left, from the counts' origin.
+WIDE.CURSOR = {
+    [0] = { 25, 3, 3 },
+    { 65, 25, 3 },
+    { 25, -15, -37 },
+}
+-- The equipped panel starts 0x14 left of a one-slot item's, and its count
+-- with it (`St_disp_equip`, `St_disp_num`).
+WIDE.EQUIP_DX = 0x14
+-- COMBN's target's two (`0x53EFDC`): the right and the left.
+WIDE.TARGET = {
+    [0] = { 25, 5 },
+    { 65, 5 },
+    { 25, -35 },
+}
 
 local function slot_icon(api, d, slot, x, y)
     local item = api:re2_slot(slot)
     local texture, u, v = icon_cell(item)
-    if slot % 2 == 1 and is_wide(item) then
+    if WIDE.mark(api, slot) == 2 then
         texture, u, v = half_cell(item)
     end
     sprite(api, d, texture, x, y, SLOT_W, SLOT_H, u, v)
@@ -793,7 +835,7 @@ end
 -- cursor crosses a column at 4 a tick, 2 onto a two-slot weapon.
 local function cursor_step(api, cursor, target)
     local dx
-    if is_wide(api:re2_slot(target)) then
+    if WIDE.is(api:re2_slot(target)) then
         dx = cursor % 2 == 1 and -2 or 2
     else
         dx = 4 * (target % 2 - cursor % 2)
@@ -830,21 +872,26 @@ local function slide(api, page)
     return 0, 0, dx * c, dy * c
 end
 
+-- The item's cursor (`St_disp_cursol0`, `0x4FE5F0`): its pieces spread
+-- over both slots of a two-slot weapon.
 local function draw_cursor(api, d, slot, grey, dx, dy)
     local x, y = cursor_at(slot)
-    x, y = x + dx, y + dy
+    x, y = x + dx - 3, y + dy
+    local at = WIDE.CURSOR[WIDE.mark(api, slot)]
     local rgb = { grey, grey, grey }
-    sprite(api, d, ST + 3, x, y, 22, 34, 0, 30, rgb)
-    sprite(api, d, ST + 3, x, y, 40, 34, 2, 30, rgb)
-    sprite(api, d, ST + 3, x + 22, y, 22, 34, 22, 30, rgb)
+    sprite(api, d, ST + 3, x + at[3], y, 22, 34, 0, 30, rgb)
+    sprite(api, d, ST + 3, x + at[2], y, 40, 34, 2, 30, rgb)
+    sprite(api, d, ST + 3, x + at[1], y, 22, 34, 22, 30, rgb)
 end
 
+-- COMBN's target (`St_disp_cursol1`, `0x4FE7C0`), spread the same way.
 local function draw_target(api, d, slot, grey, dx, dy)
     local x, y = cursor_at(slot)
-    x, y = x + dx, y + dy
+    x, y = x + dx - 3, y + dy
+    local at = WIDE.TARGET[WIDE.mark(api, slot)]
     local rgb = { grey, grey, grey }
-    sprite(api, d, ST + 3, x + 2, y + 2, 22, 30, 0, 0, rgb)
-    sprite(api, d, ST + 3, x + 22, y + 2, 22, 30, 20, 0, rgb)
+    sprite(api, d, ST + 3, x + at[2], y + 2, 22, 30, 0, 0, rgb)
+    sprite(api, d, ST + 3, x + at[1], y + 2, 22, 30, 20, 0, rgb)
 end
 
 -- How far the MAP page has slid the item page's frame out, 0 to 14.
@@ -1110,19 +1157,20 @@ local function draw_get(api)
     if equip ~= nil then
         local item, quantity = api:re2_slot(equip)
         local texture, u, v = icon_cell(item)
-        if is_wide(item) then
+        local wide = WIDE.mark(api, equip) ~= 0
+        if wide then
             sprite(api, d, texture, EQUIP_X - 20, EQUIP_Y, SLOT_W, SLOT_H, u, v)
             local half, hu, hv = half_cell(item)
             sprite(api, d, half, EQUIP_X + 20, EQUIP_Y, SLOT_W, SLOT_H, hu, hv)
         else
             sprite(api, d, texture, EQUIP_X, EQUIP_Y, SLOT_W, SLOT_H, u, v)
         end
-        count(api, d, item, quantity, EQUIP_COUNT_X, EQUIP_COUNT_Y)
+        count(api, d, item, quantity, EQUIP_COUNT_X - (wide and WIDE.EQUIP_DX or 0), EQUIP_COUNT_Y)
     end
     for slot = 0, s.slots - 1 do
         local item, quantity = api:re2_slot(slot)
         local at = COUNT_AT[slot]
-        if item ~= 0 and not (slot % 2 == 1 and is_wide(item)) then
+        if item ~= 0 and WIDE.mark(api, slot) ~= 2 then
             count(api, d, item, quantity, COUNT_ORIGIN_X + at[1], COUNT_ORIGIN_Y + at[2])
         end
     end
@@ -1179,11 +1227,7 @@ B.END = { 0x80, 0x20, 0x20 }
 B.EQUIP_DX, B.EQUIP_COUNT_DX = 0x34, 0x36
 -- The cursor's pieces from the slot by its two-slot mark (`0x53EFAC`): the
 -- right, the middle and the left.
-B.CURSOR = {
-    [0] = { 25, 3, 3 },
-    { 65, 25, 3 },
-    { 25, -15, -37 },
-}
+B.CURSOR = WIDE.CURSOR
 
 function B.box_art(api, d)
     if d.box == nil then
@@ -1228,24 +1272,9 @@ function B.box_line(api, d, y, rgb)
     api:line(d.ox + B.X + 6, d.oy + y, d.ox + B.X + 0xC4 + 1, d.oy + y, rgb[1], rgb[2], rgb[3])
 end
 
--- A slot's two-slot mark: 1 on a two-slot weapon's left half, 2 on its
--- right (`itembox2::marks`).
+-- A slot's two-slot mark (`WIDE.mark`).
 function B.inventory_mark(api, slot)
-    local index = 0
-    while index < s.slots do
-        local item = api:re2_slot(index)
-        if is_wide(item) and index + 1 < s.slots and api:re2_slot(index + 1) == item then
-            if slot == index then
-                return 1
-            elseif slot == index + 1 then
-                return 2
-            end
-            index = index + 2
-        else
-            index = index + 1
-        end
-    end
-    return 0
+    return WIDE.mark(api, slot)
 end
 
 function B.draw_box(api)
@@ -1284,19 +1313,20 @@ function B.draw_box(api)
         local item, quantity = api:re2_slot(equip)
         local texture, u, v = icon_cell(item)
         local x = EQUIP_X + B.EQUIP_DX
-        if is_wide(item) then
+        local wide = WIDE.mark(api, equip) ~= 0
+        if wide then
             sprite(api, d, texture, x - 20, EQUIP_Y, SLOT_W, SLOT_H, u, v)
             local half, hu, hv = half_cell(item)
             sprite(api, d, half, x + 20, EQUIP_Y, SLOT_W, SLOT_H, hu, hv)
         else
             sprite(api, d, texture, x, EQUIP_Y, SLOT_W, SLOT_H, u, v)
         end
-        count(api, d, item, quantity, EQUIP_COUNT_X + B.EQUIP_COUNT_DX, EQUIP_COUNT_Y)
+        count(api, d, item, quantity, EQUIP_COUNT_X + B.EQUIP_COUNT_DX - (wide and WIDE.EQUIP_DX or 0), EQUIP_COUNT_Y)
     end
     for slot = 0, s.slots - 1 do
         local item, quantity = api:re2_slot(slot)
         local at = COUNT_AT[slot]
-        if item ~= 0 and not (slot % 2 == 1 and is_wide(item)) then
+        if item ~= 0 and WIDE.mark(api, slot) ~= 2 then
             count(api, d, item, quantity, COUNT_ORIGIN_X + at[1], COUNT_ORIGIN_Y + at[2])
         end
     end
@@ -1517,19 +1547,20 @@ function M.draw(api)
     if equip ~= nil then
         local item, quantity = api:re2_slot(equip)
         local texture, u, v = icon_cell(item)
-        if is_wide(item) then
+        local wide = WIDE.mark(api, equip) ~= 0
+        if wide then
             sprite(api, d, texture, EQUIP_X + R - 20, EQUIP_Y, SLOT_W, SLOT_H, u, v)
             local half, hu, hv = half_cell(item)
             sprite(api, d, half, EQUIP_X + R + 20, EQUIP_Y, SLOT_W, SLOT_H, hu, hv)
         else
             sprite(api, d, texture, EQUIP_X + R, EQUIP_Y, SLOT_W, SLOT_H, u, v)
         end
-        count(api, d, item, quantity, EQUIP_COUNT_X + R, EQUIP_COUNT_Y)
+        count(api, d, item, quantity, EQUIP_COUNT_X + R - (wide and WIDE.EQUIP_DX or 0), EQUIP_COUNT_Y)
     end
     for slot = 0, s.slots - 1 do
         local item, quantity = api:re2_slot(slot)
         local at = COUNT_AT[slot]
-        if item ~= 0 and not (slot % 2 == 1 and is_wide(item)) then
+        if item ~= 0 and WIDE.mark(api, slot) ~= 2 then
             count(api, d, item, quantity, COUNT_ORIGIN_X + R + at[1], COUNT_ORIGIN_Y + at[2])
         end
     end

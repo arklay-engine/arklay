@@ -1,0 +1,43 @@
+# A two-slot weapon taken in a room (`St_get_check`, `Set_item`; oracle/re2.md, "Two-slot weapons"): room 60F's sub-machine gun, by a press in its area, with the enemies off. `box` is the inventory's two-slot marks.
+
+[[run]]
+name = "two_slot_60f"
+room = "60F"
+setup_script = "two_slot_60f.lua"
+input = "two_slot_60f.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1200
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,box,msg,snd,hk,fgstat,fgitem"
+frames = [360, 1199]
+frame_max_mean = 0.7
+expect = "match"
+record = "--no-enemies --warp 60F:-11960:0:-20830:0 --life 200 --give 2:0x14:30"
+
+[[run]]
+name = "two_slot_60f_status"
+# two_slot_60f's record from the status screen on, with the item page's state (`ip`): the cursor across the weapon's two slots, its command list and EQUIP
+room = "60F"
+ref = "two_slot_60f"
+setup_script = "two_slot_60f.lua"
+input = "two_slot_60f.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1200
+compare_from = 600
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,box,ip,msg,snd,hk,fgstat,fgitem"
+expect = "match"
+
+[[run]]
+name = "two_slot_60f_one_free"
+room = "60F"
+setup_script = "two_slot_60f_one_free.lua"
+input = "two_slot_60f_one_free.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 900
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,box,msg,snd,hk,fgstat,fgitem"
+frames = [360, 899]
+frame_max_mean = 0.45
+expect = "match"
+record = "--no-enemies --warp 60F:-11960:0:-20830:0 --life 200 --give 2:0x14:30 --give 3:0x26:1 --give 4:0x27:1 --give 5:0x28:1 --give 6:0x23:1"

@@ -754,25 +754,31 @@ pub fn item_max(item: u8) -> u8 {
     })
 }
 
-/// The get-item window's slot for `amount` of `item` (`0x4FD5C0`): the first
-/// stack of the same id with room for all of it, else a new slot, else
-/// `None` (the inventory is full). The pick-up never splits.
+/// The get-item window's slot for `amount` of `item` (`St_get_check`,
+/// `0x4FD5C0`): the first stack of the same id with room for all of it,
+/// else a new slot, else the message that refuses it: the inventory is
+/// full, or it has one slot free and the item is a two-slot weapon
+/// (`Check_item_space`, `0x502570`). The pick-up never splits.
 pub fn item_get_slot(
     inventory: &[crate::game::InventoryItem],
     capacity: usize,
     item: u8,
     amount: u8,
-) -> Option<ItemGetSlot> {
+) -> Result<ItemGetSlot, u8> {
     if item_stacks(item) {
         let room = item_max(item).saturating_sub(amount);
         if let Some(index) = inventory
             .iter()
             .position(|stack| stack.id == item && stack.quantity <= room)
         {
-            return Some(ItemGetSlot::Merge(index));
+            return Ok(ItemGetSlot::Merge(index));
         }
     }
-    (inventory.len() < capacity).then_some(ItemGetSlot::New)
+    match capacity.saturating_sub(inventory.len()) {
+        0 => Err(MESSAGE_FULL),
+        1 if crate::game::itembox2::is_wide(item) => Err(MESSAGE_NO_ROOM_WIDE),
+        _ => Ok(ItemGetSlot::New),
+    }
 }
 
 /// Where [`item_get_slot`] puts a pick-up.
@@ -780,7 +786,8 @@ pub fn item_get_slot(
 pub enum ItemGetSlot {
     /// Onto the stack in this slot.
     Merge(usize),
-    /// Into the first free slot (`0x502820`).
+    /// Into the first free slot, or, a two-slot weapon, into the first two
+    /// slots with the rest moved down (`Set_item`, `0x502820`).
     New,
 }
 
@@ -795,6 +802,8 @@ pub const KEY_LOCKED: u8 = 0xFF;
 pub const MESSAGE_TAKE: u8 = 0;
 /// "You can't carry any more items."
 pub const MESSAGE_FULL: u8 = 1;
+/// The get-item window's refusal of a two-slot weapon with one slot free.
+pub const MESSAGE_NO_ROOM_WIDE: u8 = 4;
 /// The get-item window's "You've taken the item."
 pub const MESSAGE_TAKEN: u8 = 6;
 /// The file pick-up's "filed" message (`St_get_file`'s sub 6, `Mess_set(0xAF0010, 0xE400, 10, 0)`).
@@ -5764,20 +5773,33 @@ mod tests {
         ];
         assert_eq!(
             item_get_slot(&inventory, 8, 0x14, 30),
-            Some(ItemGetSlot::Merge(3))
+            Ok(ItemGetSlot::Merge(3))
         );
         let full: Vec<_> = (0..8).map(|_| stack(0x14, 240)).collect();
-        assert_eq!(item_get_slot(&full, 8, 0x14, 30), None);
-        assert_eq!(
-            item_get_slot(&full, 8, 0x14, 10),
-            Some(ItemGetSlot::Merge(0))
-        );
+        assert_eq!(item_get_slot(&full, 8, 0x14, 30), Err(MESSAGE_FULL));
+        assert_eq!(item_get_slot(&full, 8, 0x14, 10), Ok(ItemGetSlot::Merge(0)));
         // An item that doesn't stack needs a free slot.
-        assert_eq!(item_get_slot(&inventory, 4, 0x1F, 1), None);
-        assert_eq!(
-            item_get_slot(&inventory, 8, 0x59, 1),
-            Some(ItemGetSlot::New)
-        );
+        assert_eq!(item_get_slot(&inventory, 4, 0x1F, 1), Err(MESSAGE_FULL));
+        assert_eq!(item_get_slot(&inventory, 8, 0x59, 1), Ok(ItemGetSlot::New));
+        // A two-slot weapon (0x0E to 0x12) needs two: with one free the
+        // window says so, with none that the inventory is full.
+        for wide in 0x0E..=0x12 {
+            assert_eq!(
+                item_get_slot(&inventory, 6, wide, 100),
+                Ok(ItemGetSlot::New)
+            );
+            assert_eq!(
+                item_get_slot(&inventory, 5, wide, 100),
+                Err(MESSAGE_NO_ROOM_WIDE)
+            );
+            assert_eq!(item_get_slot(&inventory, 4, wide, 100), Err(MESSAGE_FULL));
+        }
+        for narrow in [0x0D, 0x13] {
+            assert_eq!(
+                item_get_slot(&inventory, 5, narrow, 6),
+                Ok(ItemGetSlot::New)
+            );
+        }
         assert_eq!(item_max(0x14), 250);
         assert_eq!(item_max(0x1D), 240);
         assert_eq!(item_max(0x17), 100);
@@ -5941,6 +5963,95 @@ mod tests {
         // `0x502027` on the close's eighth tick.
         assert_eq!(cuts, [0, 0, 0, 0, 0, 0, 0, 0, 3, 3]);
         assert_eq!(game.re2_item_get_cut(3), 3);
+    }
+
+    /// The get-item window for the item area `ops` sets, run until its
+    /// check has shown the question or a refusal.
+    fn item_window(game: &mut GameState, item: i64, amount: i64) {
+        let ops = [
+            8, 2, 49, 0, 0, -100, -100, 200, 200, item, amount, 154, 1, 0,
+        ];
+        let mut host = GameHost { game: &mut *game };
+        host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        let action = game.room_actions[8].unwrap();
+        game.fire_re2_area(action);
+        for _ in 0..7 {
+            game.tick_re2_item_get(crate::game::status2::Input::default());
+        }
+        assert!(game.message.active);
+    }
+
+    fn stacks(slots: &[(u8, u8)]) -> Vec<crate::game::InventoryItem> {
+        slots
+            .iter()
+            .map(|&(id, quantity)| crate::game::InventoryItem { id, quantity })
+            .collect()
+    }
+
+    /// `Set_item` (`0x502820`) with a two-slot weapon: `0x502720` moves
+    /// every item two slots down, the weapon takes slots 0 and 1 with its
+    /// count in both, and the equipped slot follows its item.
+    #[test]
+    fn a_two_slot_weapon_is_taken_into_the_first_two_slots() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.inventory = stacks(&[(0x02, 18), (0x01, 1), (0x14, 30)]);
+        game.set_equipped(Some(0x02));
+        assert_eq!(game.equipped_slot, Some(0));
+        item_window(&mut game, 0x0F, 100);
+        assert_eq!(
+            game.re2_item_get.unwrap().phase,
+            crate::game::Re2ItemGetPhase::Ask
+        );
+        // The question's default is its yes.
+        while game.re2_item_get.is_some() {
+            game.message.active = false;
+            game.tick_re2_item_get(crate::game::status2::Input::default());
+        }
+        assert_eq!(
+            game.inventory,
+            stacks(&[(0x0F, 100), (0x0F, 100), (0x02, 18), (0x01, 1), (0x14, 30)])
+        );
+        assert_eq!(game.re2_marks(), [1, 2, 0, 0, 0]);
+        assert_eq!(game.equipped, Some(0x02));
+        assert_eq!(game.equipped_slot, Some(2));
+        assert_eq!(game.weapon_slot(0x02), Some(2));
+    }
+
+    /// `St_get_check` (`0x4FD5C0`) with one slot free: a two-slot weapon
+    /// gets message 4 and no question, and stays in the room; a one-slot
+    /// item is asked for.
+    #[test]
+    fn a_two_slot_weapon_with_one_slot_free_is_refused() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let capacity = game.inventory_capacity();
+        let held: Vec<(u8, u8)> = (1..capacity).map(|slot| (0x20 + slot as u8, 1)).collect();
+        game.inventory = stacks(&held);
+        item_window(&mut game, 0x0F, 100);
+        assert_eq!(
+            game.re2_item_get.unwrap().phase,
+            crate::game::Re2ItemGetPhase::Shown
+        );
+        assert_eq!(
+            game.message.id_word(),
+            Some(u16::from(MESSAGE_NO_ROOM_WIDE) | 0x40)
+        );
+        while game.re2_item_get.is_some() {
+            game.message.active = false;
+            game.tick_re2_item_get(crate::game::status2::Input::default());
+        }
+        assert_eq!(game.inventory, stacks(&held));
+        assert!(game.room_actions[8].is_some(), "the area stays");
+        // The message closed by hand above: its "up" bit goes with it.
+        game.message.set_menu_choice_id(0);
+
+        item_window(&mut game, 0x14, 30);
+        assert_eq!(
+            game.re2_item_get.unwrap().phase,
+            crate::game::Re2ItemGetPhase::Ask
+        );
+        assert_eq!(game.message.id_word(), Some(u16::from(MESSAGE_TAKE) | 0x40));
     }
 
     /// The get-item window's close ends in `St_exit`, whose

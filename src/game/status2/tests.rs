@@ -1059,6 +1059,82 @@ fn a_held_right_moves_the_item_cursor_at_11_then_every_7() {
     assert_eq!(page(&game).cursor, 7);
 }
 
+/// The grid's step (`0x4F8177`) and COMBN's (`0x4F88B0`) over a two-slot
+/// weapon, whose slots `Item_work` marks 1 and 2.
+#[test]
+fn the_cursor_steps_over_a_two_slot_weapon() {
+    let step = |from: u8, marks: &[u8], input: Input, tabs: bool| {
+        let mut cursor = from;
+        move_cursor(&mut cursor, 8, marks, input, tabs);
+        cursor
+    };
+    for tabs in [true, false] {
+        // The weapon in the first two slots, as a pick-up leaves it.
+        let first = [1, 2, 0, 0, 0, 0, 0, 0];
+        assert_eq!(step(0, &first, RIGHT, tabs), 2);
+        assert_eq!(step(2, &first, LEFT, tabs), 1);
+        // Left from its right half has nowhere to go.
+        assert_eq!(step(1, &first, LEFT, tabs), 1);
+        assert_eq!(step(1, &first, RIGHT, tabs), 2);
+        // Down and up are the rows', marks or not.
+        assert_eq!(step(1, &first, DOWN, tabs), 3);
+        assert_eq!(step(3, &first, UP, tabs), 1);
+        // In the second row: right goes over it, left from its right half
+        // leaves it, and left from the slot after it lands on that half.
+        let second = [0, 0, 1, 2, 0, 0, 0, 0];
+        assert_eq!(step(1, &second, RIGHT, tabs), 2);
+        assert_eq!(step(2, &second, RIGHT, tabs), 4);
+        assert_eq!(step(3, &second, LEFT, tabs), 1);
+        assert_eq!(step(4, &second, LEFT, tabs), 3);
+        assert_eq!(step(2, &second, LEFT, tabs), 1);
+        // No marks: the plain steps.
+        assert_eq!(step(2, &[0; 8], RIGHT, tabs), 3);
+        assert_eq!(step(3, &[0; 8], LEFT, tabs), 2);
+    }
+    // In the last two slots the grid's right goes to the right half; COMBN's
+    // has no such test and leaves the slots (`0x4F88F5`).
+    let last = [0, 0, 0, 0, 0, 0, 1, 2];
+    assert_eq!(step(6, &last, RIGHT, true), 7);
+    assert_eq!(step(6, &last, RIGHT, false), 8);
+    assert_eq!(step(7, &last, RIGHT, true), 7);
+}
+
+/// The item page with the sub-machine gun as a pick-up leaves it: bullets
+/// combined onto either of its slots count in both (`Set_iwork_num`,
+/// `0x502500`).
+#[test]
+fn rounds_load_into_both_slots_of_a_two_slot_weapon() {
+    let smg = crate::player2::SMG;
+    // The target starts on the cursor's slot: up puts it on the weapon's
+    // right half, and a left from there on... nothing, the weapon holds
+    // the first two slots.
+    for (moves, target) in [(&[UP][..], 1), (&[UP, LEFT][..], 1)] {
+        let start = game(&[(smg, 40), (smg, 40), (0x02, 18), (0x1B, 100)]);
+        let mut run = Run::new(start, 399);
+        let mut presses = vec![
+            (400, DOWN),
+            (420, RIGHT),
+            (440, CONFIRM),
+            (460, DOWN),
+            (480, DOWN),
+            (500, CONFIRM),
+        ];
+        let mut tick = 520;
+        for input in moves {
+            presses.push((tick, *input));
+            tick += 20;
+        }
+        presses.push((tick, CONFIRM));
+        run.until(tick + 40, &presses);
+        assert_eq!(run.game.re2_items.unwrap().target, target);
+        assert_eq!(
+            run.inventory(),
+            "f:100,f:100,2:18,1b:40,0:0,0:0,0:0,0:0",
+            "{moves:?}"
+        );
+    }
+}
+
 #[test]
 fn a_held_left_in_the_carousel_turns_again_at_the_end_of_a_turn() {
     use crate::game::pad_repeat as pad;

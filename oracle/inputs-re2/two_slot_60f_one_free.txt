@@ -1,0 +1,10 @@
+# Room 60F's sub-machine gun with one slot free (oracle/re2.md, "Two-slot weapons"): the window says there is no room for a two-slot weapon, and a press closes it; a second try says the same.
+0
+360 action
+362
+500 action
+502
+620 action
+622
+760 action
+762

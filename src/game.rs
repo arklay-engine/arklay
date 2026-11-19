@@ -9726,7 +9726,7 @@ impl GameState {
     /// cue it plays: the cancel cue when the "taken" or "full" message has
     /// closed or a no has counted out (sub 0, `0x4FD701`).
     pub fn tick_re2_item_get(&mut self, input: status2::Input) -> Vec<status2::Sound> {
-        use crate::scd2::host::{MESSAGE_FILED, MESSAGE_FULL, MESSAGE_TAKE, file_of_item};
+        use crate::scd2::host::{MESSAGE_FILED, MESSAGE_TAKE, file_of_item};
         let Some(mut get) = self.re2_item_get.take() else {
             return Vec::new();
         };
@@ -9795,13 +9795,18 @@ impl GameState {
             }
             Re2ItemGetPhase::Open if get.ticks == ITEM_GET_ASK_TICK => {
                 self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = item;
-                get.slot = self.re2_item_get_slot(get.action);
-                if get.slot.is_some() {
-                    self.show_re2_global(MESSAGE_TAKE);
-                    next(Re2ItemGetPhase::Ask)
-                } else {
-                    self.show_re2_global(MESSAGE_FULL);
-                    next(Re2ItemGetPhase::Shown)
+                let check = self.re2_item_get_slot(get.action);
+                get.slot = check.ok();
+                match check {
+                    Ok(_) => {
+                        self.show_re2_global(MESSAGE_TAKE);
+                        next(Re2ItemGetPhase::Ask)
+                    }
+                    // Full, or one slot free for a two-slot weapon.
+                    Err(message) => {
+                        self.show_re2_global(message);
+                        next(Re2ItemGetPhase::Shown)
+                    }
                 }
             }
             Re2ItemGetPhase::Ask if !self.message.active => {
@@ -10038,14 +10043,16 @@ impl GameState {
     }
 
     /// Where the window's check (`0x4FD5C0`) puts the area's item.
-    fn re2_item_get_slot(&self, action: RoomAction) -> Option<crate::scd2::host::ItemGetSlot> {
+    fn re2_item_get_slot(&self, action: RoomAction) -> Result<crate::scd2::host::ItemGetSlot, u8> {
         let [item, amount, ..] = action.params;
         crate::scd2::host::item_get_slot(&self.inventory, self.inventory_capacity(), item, amount)
     }
 
     /// Routine 3's sub 3 (`0x4FD875`): the item joins the stack the check
-    /// chose, or the first free slot (`0x502820`), its flag is set and its
-    /// area and object go. HARD's table rewrites the area's count once more
+    /// chose, or the first free slot (`Set_item`, `0x502820`), its flag is
+    /// set and its area and object go. A two-slot weapon takes the first
+    /// two slots: every item moves two slots down (`0x502720`), and the
+    /// equipped slot with them. HARD's table rewrites the area's count once more
     /// first ([`crate::scd2::host::st_get_item_count`]), and the stack's add is
     /// a byte add, which wraps.
     fn take_re2_item(
@@ -10067,6 +10074,14 @@ impl GameState {
             Some(ItemGetSlot::Merge(index)) => {
                 let stack = &mut self.inventory[index];
                 stack.quantity = stack.quantity.wrapping_add(amount);
+            }
+            Some(ItemGetSlot::New) | None if itembox2::is_wide(item) => {
+                let half = InventoryItem {
+                    id: item,
+                    quantity: amount,
+                };
+                self.inventory.splice(0..0, [half, half]);
+                self.equipped_slot = self.equipped_slot.map(|slot| slot + 2);
             }
             Some(ItemGetSlot::New) | None => self.inventory.push(InventoryItem {
                 id: item,
@@ -10190,21 +10205,21 @@ impl GameState {
     }
 
     /// `Tama_decrease_i` and `Tama_reload`, for what the player's tick did.
+    /// Each writes the weapon's count through `Set_iwork_num`.
     pub fn re2_settle_ammo(&mut self) {
         let weapon = self.equipped_weapon_id;
         let held = self.weapon_slot(weapon);
-        if std::mem::take(&mut self.re2.player.fired)
-            && let Some(slot) = held.and_then(|index| self.inventory.get_mut(index))
-        {
+        let mut spent = std::mem::take(&mut self.re2.player.spent);
+        if std::mem::take(&mut self.re2.player.fired) {
             // `FUN_004d58c0`: the bowgun's shot takes three.
-            let taken = if weapon == crate::bow2::BOW { 3 } else { 1 };
-            slot.quantity = slot.quantity.saturating_sub(taken);
+            spent = spent.saturating_add(if weapon == crate::bow2::BOW { 3 } else { 1 });
         }
-        let spent = std::mem::take(&mut self.re2.player.spent);
         if spent != 0
-            && let Some(slot) = held.and_then(|index| self.inventory.get_mut(index))
+            && let Some(index) = held.filter(|&index| index < self.inventory.len())
         {
+            let slot = &mut self.inventory[index];
             slot.quantity = slot.quantity.saturating_sub(spent);
+            self.sync_re2_wide(index);
         }
         if std::mem::take(&mut self.re2.player.reloaded) {
             let (ammo, magazine) = re2_ammo(weapon);
@@ -10217,13 +10232,36 @@ impl GameState {
             if spare.quantity == 0 {
                 self.inventory.remove(index);
             }
-            if let Some(slot) = self
+            if let Some(index) = self
                 .weapon_slot(weapon)
-                .and_then(|index| self.inventory.get_mut(index))
+                .filter(|&index| index < self.inventory.len())
             {
+                let slot = &mut self.inventory[index];
                 slot.quantity = slot.quantity.saturating_add(taken);
+                self.sync_re2_wide(index);
             }
         }
+    }
+
+    /// The slots' two-slot marks (`Item_work`'s third bytes).
+    pub(crate) fn re2_marks(&self) -> Vec<u8> {
+        let slots: Vec<[u8; 2]> = self
+            .inventory
+            .iter()
+            .map(|stack| [stack.id, stack.quantity])
+            .collect();
+        itembox2::marks(&slots)
+    }
+
+    /// `Set_iwork_num` (`0x502500`): a two-slot weapon's count is written
+    /// to both its slots. Call after writing the count of slot `index`.
+    pub(crate) fn sync_re2_wide(&mut self, index: usize) {
+        let other = match self.re2_marks().get(index) {
+            Some(1) => index + 1,
+            Some(2) => index - 1,
+            _ => return,
+        };
+        self.inventory[other].quantity = self.inventory[index].quantity;
     }
 
     /// One of the executable's own messages, for the get-item window or the
@@ -12097,6 +12135,64 @@ mod tests {
         assert_eq!(game.countdown_frame, 0, "the second restarts, then stays");
         game.tick_countdown();
         assert_eq!(game.countdown_frame, 0);
+    }
+
+    /// `Set_iwork_num` (`0x502500`): a shot and a reload write the count
+    /// of a two-slot weapon to both its slots, whichever half is equipped.
+    #[test]
+    fn a_two_slot_weapons_count_is_kept_in_both_slots() {
+        let stack = |id, quantity| InventoryItem { id, quantity };
+        for equipped in [0, 1] {
+            let mut game = GameState {
+                equipped_weapon_id: crate::player2::SMG,
+                equipped_slot: Some(equipped),
+                inventory: vec![
+                    stack(crate::player2::SMG, 50),
+                    stack(crate::player2::SMG, 50),
+                    stack(2, 18),
+                    stack(re2_ammo(crate::player2::SMG).0, 30),
+                ],
+                ..Default::default()
+            };
+            game.re2.player.fired = true;
+            game.re2.player.spent = 4;
+            game.re2_settle_ammo();
+            assert_eq!(
+                game.inventory[..3],
+                [
+                    stack(crate::player2::SMG, 45),
+                    stack(crate::player2::SMG, 45),
+                    stack(2, 18)
+                ],
+                "equipped slot {equipped}"
+            );
+            game.re2.player.reloaded = true;
+            game.re2_settle_ammo();
+            // The thirty spare rounds go in, and their empty stack goes;
+            // the one-slot item beside the weapon keeps its own count.
+            assert_eq!(
+                game.inventory,
+                [
+                    stack(crate::player2::SMG, 75),
+                    stack(crate::player2::SMG, 75),
+                    stack(2, 18)
+                ],
+                "equipped slot {equipped}"
+            );
+        }
+        // A weapon held in one slot (mark 0) writes that slot alone.
+        let mut game = GameState {
+            inventory: vec![stack(crate::player2::SMG, 50), stack(2, 18)],
+            ..Default::default()
+        };
+        game.inventory[0].quantity = 7;
+        game.sync_re2_wide(0);
+        game.sync_re2_wide(1);
+        game.sync_re2_wide(9);
+        assert_eq!(
+            game.inventory,
+            [stack(crate::player2::SMG, 7), stack(2, 18)]
+        );
     }
 
     #[test]
