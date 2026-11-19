@@ -685,7 +685,15 @@ LOAD GAME runs `Title_main_load` (`0x505320`): its first tick (531 in `title_loa
 - The screen is black through 820: the room's first `Bg_loadPC`, at 818's `Swap_Cbuff`, skips two frames (`Movie_set(2)`, not a door's four). 821 shows the room under the fade's 0x2000, 822 under 0x800, and 823 is clear.
 - The walk from 900, the turn from 980 and the walk on from 1030 move the player as they do in a new game's room 200.
 
-arklay holds a save the title starts for six ticks on black after the tick its session starts on, enters on the seventh with the fade a step on and three frames to stay black, and starts it with the random base as above (`GameSession::start_from_re2_title`). It poses the player when the save loads, where the original does on the first tick's move, so `mot` on 818 is the one known difference.
+arklay holds a save the title starts for six ticks on black after the tick its session starts on, enters on the seventh with the fade a step on and three frames to stay black (`GameSession::start_from_re2_title`). Every load sets the random base as above before it sets the room (`SaveFile::apply_to`), so the room's start steps it as `Set_room` does. It poses the player when the save loads, where the original does on the first tick's move, so `mot` on 818 is the one known difference.
+
+`title_load_start` (1000 ticks) presses START on 819, 821 and 823, in that fade in, and cancel on 920:
+
+- 819's press is taken at once, under the black frames: the decide cue, `Game` 1 (`gi`'s first value) and `fg_stop` 0xFF000000 before anyone moves, so the player's first move waits for the screen's close (`mot` stays 0,0,2,1,0) and the random base stops after 819's step.
+- `Game_loop`'s mode 1 starts the screen's fade only once `Fade_status(0)` says fade 0 is idle, so it waits through 822 while the entry fade runs on over the stopped room (820 black, 821 under 0x2000, 822 under 0x800), and goes to mode 2 on 823 (`Fade_set(0x200, 0x3000)`), the tick a START with no fade on does the tick after its press. The room darkens on 824 and 825, 826 to 828 are black and the screen fades in from 829.
+- The presses on 821 and 823 find `Game` at 1 and do nothing. Cancel on 920 plays its cue and leaves the item list for the tabs (`gi`'s fourth value 3 to 2); the run ends in the screen.
+
+arklay keeps START's request while the room's fade is on (`GameSession::re2_start_waits`), running the stopped passes of the open's room ticks, and opens the screen on the tick the fade is over. `mot` isn't compared in this run: arklay's player is posed from the load.
 
 In arklay the title's script is kept as it stands while the load screen is up (it has `on_resume`) and takes its next tick when that screen comes back. A save chosen there is read when the screen ends, not on state 10's tick, and held for the title (its `on_loaded`), which starts the game from it on the tick after it wakes (`api:exit("continue")`), as it starts a new game on the tick after its choice. `fgsys` and `room` aren't compared on the title (arklay's title has no `fg_system` bits but the ones it sets).
 

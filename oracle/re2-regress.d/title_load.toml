@@ -26,6 +26,7 @@ input_drop_early = true
 saves_from = "save_200_new"
 fields = "ti,tlogo,tfade,tfade3,snd,sv,svs,svb"
 frames = [189, 810]
+frame_max_mean = 0.1
 expect = "match"
 record = ""
 
@@ -43,7 +44,32 @@ input_drop_early = true
 saves_from = "save_200_new"
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,msg,fgstat"
 frames = [811, 1099]
+frame_max_mean = 0.05
+# The black frames and the fade in: 0.1 over the six, from the fade's two frames.
+frame_windows = [[818, 823, 0.2]]
 # arklay poses the player as the save loads, the original on the first tick's move.
 ignore = [[818, "mot"]]
+expect = "match"
+record = ""
+
+# START in the loaded game's entry fade: 819's press is taken at once (the cue, `Game` 1), under the black frames,
+# and the status screen's fade out waits for the entry fade's end, on 823; then cancel in the screen.
+[[run]]
+name = "title_load_start"
+ui = "title"
+offset = 189
+ticks = 1000
+compare_from = 818
+input = "title_load_start.txt"
+input_shift = 189
+input_drop_early = true
+saves_from = "save_200_new"
+# No `mot`: arklay poses the player as the save loads, the original on its first move, which this START holds back.
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,inv,ip,snd,fgstat"
+frames = [811, 999]
+# The status screen's own frames, as inv_check's.
+frame_max_mean = 0.8
+# The black frames, the fade in and the screen's fade out over the room.
+frame_windows = [[818, 828, 0.1]]
 expect = "match"
 record = ""

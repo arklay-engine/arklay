@@ -1024,12 +1024,11 @@ impl Re2State {
         Some(slot)
     }
 
-    /// The random base as a game's start leaves it, a new game's or a
-    /// load's: `scd_init` sets it and `Set_room`'s `Sce_scheduler_set` steps
-    /// it once. The original's save doesn't hold it.
+    /// `scd_init`'s random base, which every game starts from, a load too:
+    /// the original's save doesn't hold it. The room's set-up steps it once
+    /// before its first scripts (`Sce_scheduler_set`).
     pub fn start_random(&mut self) {
         self.random = RANDOM_START;
-        self.sce_rnd_set();
     }
 
     /// `Sce_rnd_set`. Extreme Battle's `Rnd` branch isn't ported.
