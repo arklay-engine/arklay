@@ -31674,7 +31674,7 @@ mod tests {
         const TITLE: &str = "local M = {}
             function M.update(api, input)
                 if input.confirm then api:exit(M.loaded and 'continue' or 'save_load') end
-                if input.cancel then api:exit('attract') end
+                if input.cancel then api:exit('save_load') end
             end
             function M.draw() end
             RESUME
@@ -31736,11 +31736,14 @@ mod tests {
             assert_eq!(title.value("loaded"), 1);
             assert!(app.pending_load.is_some() && app.sleeping_title.is_none());
             if let Some(how) = forgets {
-                // Another exit of the title's (the attract reel isn't in
-                // this pack: the title comes back either way), or a title
-                // opened over it: the save is forgotten.
+                // Another exit of the title's (the load screen again, the
+                // title asleep as it stands), or a title opened over it:
+                // the save is forgotten.
                 match how {
-                    "exit" => app_press(&mut app, |ui| ui.cancel = true),
+                    "exit" => {
+                        app_press(&mut app, |ui| ui.cancel = true);
+                        assert!(app.sleeping_title.is_some());
+                    }
                     _ => app.open_title().unwrap(),
                 }
                 assert!(app.pending_load.is_none());
@@ -31756,6 +31759,10 @@ mod tests {
             };
             assert_eq!(session.game.entities[0].health, 55);
             assert!(app.pending_load.is_none());
+            assert!(
+                matches!(&app.restart_point, Some(RestartPoint::File(file)) if file.health == 55),
+                "a restart reloads the save"
+            );
         }
     }
 

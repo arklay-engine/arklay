@@ -546,7 +546,8 @@ function ScreenApi:save_slot(slot) end
 function ScreenApi:remove(name) end
 
 ---Load `<save_dir>/<name>`: once this `update` returns, the screen closes
----and the game continues from that save, or, under a title with
+---and the game continues from that save, or, under a title with both
+---[`on_resume`](#ScreenModule.on_resume) and
 ---[`on_loaded`](#ScreenModule.on_loaded), that title wakes to start it.
 ---Load mode only; the file must be a readable save.
 ---@param name string One plain file name.
