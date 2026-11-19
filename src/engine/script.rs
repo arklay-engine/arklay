@@ -914,19 +914,33 @@ fn open_pack(
     Ok(pack)
 }
 
-/// The key bit a button name maps to: the input-script names plus `forward`
-/// and `backward` for the tank controls' up and down.
 /// `load_game_pack`'s `title_gallery`: config.ini's `GALLERY0` to
-/// `GALLERY4`, all five.
-fn gallery_words(words: Vec<u32>) -> mlua::Result<[u32; 5]> {
-    <[u32; 5]>::try_from(words).map_err(|words| {
-        mlua::Error::RuntimeError(format!(
-            "load_game_pack: title_gallery has {} words, not 5",
-            words.len()
-        ))
-    })
+/// `GALLERY4`, a table of exactly five integers of 32 bits. Anything else is
+/// an error, since a word that isn't what was meant opens other pictures.
+fn gallery_words(table: &Table) -> mlua::Result<[u32; 5]> {
+    let bad =
+        |what: String| mlua::Error::RuntimeError(format!("load_game_pack: title_gallery {what}"));
+    let mut words = [None; 5];
+    for pair in table.pairs::<Value, Value>() {
+        let (key, value) = pair?;
+        let slot = match key {
+            Value::Integer(n @ 1..=5) => n as usize - 1,
+            _ => return Err(bad("is five words, numbered 1 to 5".to_owned())),
+        };
+        words[slot] = Some(match value {
+            Value::Integer(word) => u32::try_from(word)
+                .map_err(|_| bad(format!("word {} isn't a 32-bit value", slot + 1)))?,
+            _ => return Err(bad(format!("word {} isn't an integer", slot + 1))),
+        });
+    }
+    match words {
+        [Some(a), Some(b), Some(c), Some(d), Some(e)] => Ok([a, b, c, d, e]),
+        _ => Err(bad("is five words, numbered 1 to 5".to_owned())),
+    }
 }
 
+/// The key bit a button name maps to: the input-script names plus `forward`
+/// and `backward` for the tank controls' up and down.
 fn button_bit(name: &str) -> mlua::Result<u64> {
     let bit = match name {
         "forward" => Some(KEY_UP),
@@ -1211,9 +1225,9 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                 let difficulty: Option<String> = options.get("difficulty")?;
                 let arrange: Option<bool> = options.get("arrange")?;
                 let title_special: Option<i8> = options.get("title_special")?;
-                let title_gallery: Option<Vec<u32>> = options.get("title_gallery")?;
+                let title_gallery: Option<Table> = options.get("title_gallery")?;
                 options.finish()?;
-                let title_gallery = title_gallery.map(gallery_words).transpose()?;
+                let title_gallery = title_gallery.as_ref().map(gallery_words).transpose()?;
                 let (easy, hard_mode) = match difficulty.as_deref().unwrap_or("normal") {
                     "normal" => (false, false),
                     "easy" => (true, false),
@@ -1865,19 +1879,33 @@ mod tests {
     }
 
     #[test]
-    fn the_titles_gallery_words_are_all_five_or_an_error() {
-        let words = vec![0x9000_0000, 0x10, 0, 0, u32::MAX];
+    fn the_titles_gallery_words_are_five_whole_32_bit_values_or_an_error() {
+        let lua = Lua::new();
+        let words = |source: &str| {
+            let table: Table = lua.load(source).eval().unwrap();
+            gallery_words(&table).map_err(|error| error.to_string())
+        };
         assert_eq!(
-            gallery_words(words.clone()).unwrap(),
-            [0x9000_0000, 0x10, 0, 0, u32::MAX]
+            words("return { 0x90000000, 0x10, 0, 0, 0xFFFFFFFF }"),
+            Ok([0x9000_0000, 0x10, 0, 0, u32::MAX])
         );
-        for short in [vec![], words[..4].to_vec(), [words, vec![1]].concat()] {
-            let count = short.len();
-            let error = gallery_words(short).unwrap_err().to_string();
-            assert!(
-                error.contains(&format!("has {count} words, not 5")),
-                "{error}"
-            );
+        for (source, problem) in [
+            ("return {}", "is five words"),
+            ("return { 1, 2, 3, 4 }", "is five words"),
+            ("return { 1, 2, 3, 4, 5, 6 }", "is five words"),
+            ("return { 1, 2, 3, 4, 5, [7] = 6 }", "is five words"),
+            ("return { 1, 2, 3, 4, 5, more = 6 }", "is five words"),
+            ("return { 1, 2, nil, 4, 5 }", "is five words"),
+            ("return { 1, 2, 3, 4, 1.5 }", "word 5 isn't an integer"),
+            ("return { 1, '2', 3, 4, 5 }", "word 2 isn't an integer"),
+            ("return { -1, 2, 3, 4, 5 }", "word 1 isn't a 32-bit value"),
+            (
+                "return { 1, 2, 3, 0x100000000, 5 }",
+                "word 4 isn't a 32-bit value",
+            ),
+        ] {
+            let error = words(source).unwrap_err();
+            assert!(error.contains(problem), "{source}: {error}");
         }
     }
 

@@ -521,6 +521,15 @@ local function draw_view(api, g, ox, oy, black)
     end
     local key = view.key
     if key then
+        -- A key starts halfway down a pixel, whose upper half is the
+        -- panel's row above it. That row is drawn alone first, so that the
+        -- key's first goes over it and not over the panel's two rows
+        -- already halved. The keys have no see-through texel.
+        local low = PANEL[2]
+        local above = key[3] - 1
+        local lut = lut_for(art.left02, 0x80, false, black)
+        local options = { dw = 50, dh = 1, blend = 255 }
+        api:page_lut(art.left02.page, key[2], above - low[3], 100, 1, ox + key[2] // 2, oy + above // 2, lut, false, options)
         half(api, art.left02, ox, oy, key[2], key[3], 100, 25, key[4], key[5], 0x80, false, black)
     end
     -- `GalleryDrawPrim`: a number from 1, as two digits.

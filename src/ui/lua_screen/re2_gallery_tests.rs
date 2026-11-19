@@ -808,7 +808,10 @@ fn the_pictures_draw_at_half_size_in_the_originals_colours() {
     let dir = test_dir("gallery-view");
     let cx = context(&dir);
     let white = [0xFF; 3];
-    let (panel, low_panel) = ([shown(10, 0x80), 0, 0], [0, 0, shown(12, 0x80)]);
+    // The lower panel's rows are two blues in turn, and a pixel their mean.
+    let panel = [shown(10, 0x80), 0, 0];
+    let (even_row, odd_row) = (shown(14, 0x80), shown(12, 0x80));
+    let low_panel = [0, 0, ((u16::from(even_row) + u16::from(odd_row)) / 2) as u8];
     let grey = |level: u32| [shown(level, 0x80); 3];
     let mut screen = open_pictures(&cx, &dir, false, None);
     let frame = render(&mut screen, &cx);
@@ -883,7 +886,11 @@ fn the_pictures_draw_at_half_size_in_the_originals_colours() {
         (91, 35, white),
         (8, 150, low_panel),
         (9, 141, low_panel),
-        (9, 142, halved(grey(20), low_panel)),
+        // The key's first row shares its pixels with the panel's row above
+        // it alone, not with the panel's pixel.
+        (9, 142, halved(grey(20), [0, 0, even_row])),
+        (58, 142, halved(grey(20), [0, 0, even_row])),
+        (59, 142, low_panel),
         (9, 143, grey(20)),
         (58, 154, grey(20)),
         (58, 155, low_panel),

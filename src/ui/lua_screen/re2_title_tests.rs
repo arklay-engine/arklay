@@ -124,9 +124,10 @@ const fn grey(level: u16) -> u16 {
 /// The art of the gallery's pictures (`re2_gallery_tests`), each sheet a
 /// few flat colours of its own.
 ///
-/// The panel: `left01` a red of level 10 and `left02` a blue of level 12,
-/// each with a green right of its 154 columns that must never show;
-/// `left02`'s four lit keys there are greys of levels 20, 22, 24 and 26.
+/// The panel: `left01` a red of level 10 and `left02` a blue of level 14
+/// on its even rows and 12 on its odd ones, each with a green right of its
+/// 154 columns that must never show; `left02`'s four lit keys there are
+/// greys of levels 20, 22, 24 and 26.
 /// `gnum2`: digit `d` a grey of level `d + 1`, the stroke one of level 15.
 ///
 /// The pictures: LEON's first (300 x 200, a blue of level 20), second and
@@ -134,7 +135,13 @@ const fn grey(level: u16) -> u16 {
 /// CLAIRE's first and last (20 x 10). The rest are missing.
 fn gallery_pictures_art() -> Vec<(&'static str, Vec<u8>)> {
     let keys = |u: u32, v: u32| match (u, v) {
-        (0..154, _) => 1,
+        (0..154, _) => {
+            if v & 1 == 0 {
+                6
+            } else {
+                1
+            }
+        }
         (154..254, 0..100) => 2 + (v / 25) as u8,
         _ => 0,
     };
@@ -155,7 +162,18 @@ fn gallery_pictures_art() -> Vec<(&'static str, Vec<u8>)> {
         ),
         (
             "left02",
-            sheet_tim(&[0, 12 << 10, grey(20), grey(22), grey(24), grey(26)], keys),
+            sheet_tim(
+                &[
+                    0,
+                    12 << 10,
+                    grey(20),
+                    grey(22),
+                    grey(24),
+                    grey(26),
+                    14 << 10,
+                ],
+                keys,
+            ),
         ),
         ("gnum2", tim_8bit(64, 64, &digit_colours, digits)),
         ("rough01", tim_8bit(300, 200, &[0, 20 << 10], |_, _| 1)),
@@ -1868,9 +1886,13 @@ fn a_new_game_runs_the_prologue_before_it_starts() {
             692 => {
                 assert_eq!(ti(screen)[..4], [2, 3, 0, 2]);
                 assert_eq!(screen.value("ti_fade_level"), -1, "fade 0 is off");
+                // The task is started, and a trace has it from its first
+                // tick.
+                assert_eq!(screen.value("pro_on"), 0);
             }
             693 => {
                 assert_eq!(ti(screen)[..4], [2, 3, 0, 3]);
+                assert_eq!(screen.value("pro_on"), 1);
                 assert_eq!(pro(screen), [0, 1, 1, 1, 0]);
                 assert_eq!(screen.value("pro_slot"), 3);
             }

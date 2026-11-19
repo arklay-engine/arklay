@@ -80,6 +80,9 @@ def load_manifest(path: Path) -> tuple[dict, list[dict]]:
         run.setdefault("ref", run["name"])
         fields = run.get("fields", "")
         run["fields"] = fieldsets.get(fields, fields)
+        unknown = [name for name in run["fields"].split(",") if name and not oracle.comparable(name)]
+        if unknown:
+            raise SystemExit(f"re2-regress: {run['name']}: the comparison has no field {', '.join(unknown)}")
         ignore_pairs(run.get("ignore", []))
         runs.append(run)
     names = [run["name"] for run in runs]
@@ -490,8 +493,45 @@ def self_test() -> int:
     if starts != [(344, None), (1818, None)] or None in bad or kept != (1818, None):
         print(f"re2-regress self-test FAILED: compare_from {starts} {bad}", file=sys.stderr)
         return 1
+    problem = self_test_fields()
+    if problem:
+        print(f"re2-regress self-test FAILED: {problem}", file=sys.stderr)
+        return 1
     print("re2-regress self-test ok")
     return 0
+
+
+def self_test_fields() -> str | None:
+    """Every screen field reaches the comparison: a trace that differs in one alone diverges in it, when the
+    run names it and only then. And a name the comparison doesn't know is refused."""
+    tmp = Path(tempfile.mkdtemp(prefix="re2-regress-fields-"))
+    try:
+        names = list(oracle.SCREEN_FIELDS)
+
+        def write(name: str, changed: str | None) -> Path:
+            fields = " ".join(f"{key}={'2' if key == changed else '1'}" for key in names)
+            path = tmp / name
+            path.write_text(f"oracle-trace v1 engine=test\nt=0 room=1:0 {fields}\n")
+            return path
+
+        ref = write("ref.trace", None)
+        for key in names:
+            ark = write("ark.trace", key)
+            named = compare_traces(ref, ark, 0, key)
+            if named["fields"] != [key]:
+                return f"a changed {key} isn't compared: {named}"
+            others = ",".join(name for name in names if name != key)
+            if compare_traces(ref, ark, 0, others)["fields"]:
+                return f"a changed {key} diverges a run that doesn't name it"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    for name in ("gal", "galv", "p.x", "zm3", "zm*", "om12", "om*", "esp", "espk", "esp4", "e2.x", "e*", "snd"):
+        if not oracle.comparable(name):
+            return f"{name} isn't taken as a field"
+    for name in ("gall", "p.q", "zm", "omx", "e2.q", "e.x", ""):
+        if oracle.comparable(name):
+            return f"{name!r} is taken as a field"
+    return None
 
 
 FRAME_RE = re.compile(r"f(\d{5})\.bmp")

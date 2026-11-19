@@ -119,6 +119,8 @@ OPT_IN_FIELDS = {
     "fgstat",
     "fguse",
     "fl",
+    "gal",
+    "galv",
     "gm",
     "hk",
     "ib",
@@ -131,9 +133,14 @@ OPT_IN_FIELDS = {
     "om",
     "opt",
     "pc",
+    "pl",
     "pneck",
     "pon",
     "prep",
+    "pro",
+    "prs",
+    "prz",
+    "rc",
     "scene",
     "scv",
     "snd",
@@ -167,6 +174,8 @@ SCREEN_FIELDS = (
     "fgscn",
     "fguse",
     "fl",
+    "gal",
+    "galv",
     "gm",
     "hk",
     "ib",
@@ -174,8 +183,13 @@ SCREEN_FIELDS = (
     "mapfg",
     "opt",
     "pc",
+    "pl",
     "pon",
     "prep",
+    "pro",
+    "prs",
+    "prz",
+    "rc",
     "scv",
     "sv",
     "svs",
@@ -407,6 +421,27 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
         for name in ENTITY_FIELDS:
             items.append((f"e{slot}.{name}", entity.fields.get(name, "?")))
     return items
+
+
+# The other names `--fields` may hold: a tick's own fields, and the patterns `selected` reads.
+NAMED_FIELDS = {
+    "room", "rng", "rseed", "fade", "cam", "mot", "em", "es", "spl", "spe", "spc", "bgm", "pneck", "xavol", "movie",
+    "snd", "inv", "ip", "msg", "fgkey", "fgstat", "scene", "zp", "zd", "esp", "espn", "espk", "zm*", "om*", "e*",
+}
+
+
+def comparable(name: str) -> bool:
+    """Whether `name` is a field the comparison reads from a trace. A name it doesn't know would select nothing,
+    and a run that lists it would pass without the field ever being compared."""
+    if name in NAMED_FIELDS or name in SCREEN_FIELDS:
+        return True
+    if name.startswith("p."):
+        return name[2:] in PLAYER_FIELDS
+    for prefix in ("zm", "om", "esp"):
+        if name.startswith(prefix) and name[len(prefix):].isdigit():
+            return True
+    slot, dot, part = name.partition(".")
+    return bool(dot) and slot.startswith("e") and slot[1:].isdigit() and part in ENTITY_FIELDS
 
 
 def selected(key: str, fields: list[str] | None) -> bool:
