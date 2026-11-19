@@ -11668,6 +11668,11 @@ impl App {
         let special = i64::from(self.player_options.title_special.unwrap_or(15));
         self.sleeping_title = None;
         self.pending_load = None;
+        // A title asleep under a film it asked for goes with that film: the
+        // new title is not woken by it.
+        if self.film_title.take().is_some() {
+            self.pending_movie = None;
+        }
         self.stop_screen_music();
         let mut cx = self.context();
         let screen = ui::lua_screen::LuaScreen::open_screen(
@@ -11679,15 +11684,15 @@ impl App {
             ScreenAction::Quit,
             &mut cx,
         )?;
-        let cues = cx.cues.into_inner();
         let mut screen = Box::new(screen);
-        if boot {
-            self.opening_played = true;
-        }
         let own_boot = boot && screen.boots();
         if own_boot {
-            let cx = self.context();
             screen.signal("on_boot", &cx);
+        }
+        // The open's cues, then the boot's.
+        let cues = cx.cues.into_inner();
+        if boot {
+            self.opening_played = true;
         }
         self.mode = Mode::Title(screen);
         self.play_ui_cues(cues);
@@ -38724,6 +38729,7 @@ off_0010:
             function M.on_boot(api)
                 M.boot = true
                 api:set('boot', 1)
+                api:music(0x2B)
             end
             function M.update(api, input)
                 if M.boot and not M.asked then
@@ -38741,6 +38747,7 @@ off_0010:
         app.boot(AppBoot::Boot).unwrap();
         assert_eq!(title_value(&app, "boot"), 1);
         assert!(app.opening_played && app.pending_movie.is_none());
+        assert_eq!(app.screen_music, Some(true), "the hook's cue is played");
         idle(&mut app);
         assert!(app.film_title.is_some() && app.pending_movie.is_some());
         run_app_until(&mut app, |app| matches!(app.mode, Mode::Title(_)));
@@ -38748,6 +38755,17 @@ off_0010:
         app.open_title().unwrap();
         assert_eq!(title_value(&app, "boot"), 0);
         assert!(app.pending_movie.is_none());
+
+        // A title opened over one asleep under its film takes the film
+        // with the sleeper: nothing wakes the old title over the new.
+        app.open_title_from(true).unwrap();
+        idle(&mut app);
+        assert!(app.film_title.is_some() && app.pending_movie.is_some());
+        app.open_title().unwrap();
+        assert!(app.film_title.is_none() && app.pending_movie.is_none());
+        idle(&mut app);
+        assert_eq!(title_value(&app, "boot"), 0);
+        assert_eq!(title_value(&app, "woke"), 0);
 
         // A run that plays no films opens the title as after the boot,
         // unless it asks for the boot's; its film is then over unplayed.

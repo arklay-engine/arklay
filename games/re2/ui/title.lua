@@ -1932,7 +1932,10 @@ local function boot_main(api)
             b.step = 3
         end
     elseif b.step == 3 then
+        -- The title's task's first tick: `Title`'s step 0 sets the pad's
+        -- repeat (`Pad_rep_set`), after this tick's pad. Then
         -- `Capcom_logo`'s steps 0 and 4.
+        s.rep_mask, s.rep_delay = 0x5000, 0x20A
         api:core_bank(0x10)
         s.init = 1
         s.sub = 5
@@ -2196,6 +2199,8 @@ function M.on_boot(api)
     s.mv = 0
     s.init = 0
     s.fg_system = 0
+    -- No key repeats until the title's task sets its own.
+    s.rep_mask, s.rep_delay = 0, 0
     s.boot = { step = 0, sleep = 1, flag = 0 }
     publish(api)
 end

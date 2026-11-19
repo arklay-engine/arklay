@@ -175,7 +175,18 @@ fn the_boot_shows_the_warning_then_asks_for_the_titles_film() {
         let mut film = None;
         for tick in 0..=188i64 {
             cx.cues.borrow_mut().clear();
-            let result = screen.update(&cx, UiInput::default());
+            // A direction held under the warning repeats nothing: the pad's
+            // repeat is the title's from its task's first tick, 35.
+            let input = UiInput {
+                down: tick == 10,
+                held_down: (10..=30).contains(&tick),
+                ..UiInput::default()
+            };
+            let result = screen.update(&cx, input);
+            let repeat: (Option<i64>, Option<i64>) =
+                screen.test_eval("return M.state.rep_mask, M.state.rep_count");
+            let expected = if tick < 35 { (0, 1) } else { (0x5000, 1) };
+            assert_eq!(repeat, (Some(expected.0), Some(expected.1)), "tick {tick}");
             let steps = match tick {
                 0 => [0, 0, 1, 0],
                 1..=34 => [0, 0, 2, 0],

@@ -219,15 +219,17 @@ function ScreenModule.on_loaded(api) end
 ---([`api:exit("film", id)`](#ScreenApi.exit)) is over: the title wakes as
 ---it stood and carries on from its next `update`. A film the pack lacks,
 ---or a run that plays no films, is over at once, before the next `update`,
----and never `played`. A title that has this plays its own opening films,
----and the engine adds none of its own to the new game it starts.
+---and never `played`. A title that has this plays the films of the new
+---game it starts itself, and the engine adds none of its own to that game;
+---the boot's opening film is [`on_boot`](#ScreenModule.on_boot)'s.
 ---@param api ScreenApi
 ---@param skipped boolean Whether a press ended the film.
 ---@param played boolean Whether the film started at all.
 function ScreenModule.on_film(api, skipped, played) end
 
----Called on the title screen the game's boot opens, once per run, right
----after its `open`: the title runs the boot itself, showing what the game
+---Called on the title screen the game's boot opens, right after its
+---`open` (once per run, and whenever a control script opens the title with
+---`boot`): the title runs the boot itself, showing what the game
 ---shows before its title and asking for its own opening film
 ---([`api:exit("film", id)`](#ScreenApi.exit), with
 ---[`on_film`](#ScreenModule.on_film)). The engine adds no opening film of
