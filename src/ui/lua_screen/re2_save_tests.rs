@@ -179,6 +179,7 @@ fn the_save_screen_steps_one_state_a_tick() {
     let dir = folder("steps");
     saves_in(&dir, 3);
     let mut screen = open(&dir);
+    assert_eq!(screen.value("game_active"), 1, "the game's limiter");
     // 547: `Cardaccess_init`'s step 0 ran with the open.
     assert_eq!(sv(&screen), [3, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     // 548 to 551: the fade in; 552 its end.
@@ -684,11 +685,11 @@ fn left_and_right_step_the_name_scroll_between_0_and_21() {
                 continue;
             }
             assert_eq!(cues, [UiCue::Core(4)]);
-            assert_eq!(at % 4, 0, "a step every fourth tick");
             assert_eq!(sv(&screen)[7], 3);
-            steps.push(screen.value("sv_scroll"));
+            steps.push((at, screen.value("sv_scroll")));
         }
-        assert_eq!(steps, expected);
+        // A step every fourth tick.
+        assert_eq!(steps, [0, 4, 8].map(|at| (at, expected[at / 4])));
         assert_eq!(sv(&screen)[7], 0, "no wait once it stands");
     }
     // The decide on "Create New" would write; with a direction held it

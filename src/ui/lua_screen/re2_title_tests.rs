@@ -155,15 +155,25 @@ fn load_game_sleeps_under_the_load_screen_and_starts_again_after_it() {
     let asleep = ti(&screen);
     screen.resume(&cx);
     assert_eq!(ti(&screen), asleep, "708: its work stands");
+    // What the load screen left: nothing loaded, and fade 3 off in its
+    // mode.
+    assert_eq!(screen.value("ti_fgsys") & 0x400, 0x400);
+    assert_eq!(
+        ["level", "add", "mode"].map(|key| screen.value(&format!("ti_fade3_{key}"))),
+        [-1, 0, 1]
+    );
+    assert_eq!(screen.value("game_active"), 1, "the game's limiter still");
     assert_eq!(
         screen.update(&cx, UiInput::default()),
         ScreenResult::Continue
     );
     assert_eq!(ti(&screen)[..4], [1, 2, 1, 0], "709");
+    assert_eq!(screen.value("ti_fgsys") & 0x400, 0);
     assert_eq!(screen.value("ti_fade_level"), 0x7FFF, "still black");
     screen.update(&cx, UiInput::default());
     assert_eq!(ti(&screen), [2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0], "710");
     assert_eq!(screen.value("ti_kido"), 0x7C00);
+    assert_eq!(screen.value("game_active"), 0, "the title's limiter");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -517,6 +527,7 @@ fn open_option(cx: &UiContext<'_>, name: &str) -> (LuaScreen, std::path::PathBuf
     run(&mut screen, cx, UiInput::default(), 1);
     assert_eq!(screen.value("opt_on"), 1);
     assert_eq!(opt(&screen), [1, 0, 0, 0, 0, 2, 0, 100, 100]);
+    assert_eq!(screen.value("game_active"), 1, "the game's limiter");
     assert_eq!(frame(&screen).as_deref(), Some("black"));
     let (room, title) = backgrounds(&screen);
     assert!(room.is_some() && title.is_some());

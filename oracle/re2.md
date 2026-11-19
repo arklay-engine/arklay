@@ -660,14 +660,16 @@ The words are drawn twice, once in blend 1 (added) and a line lower in blend 0 (
 
 LOAD GAME runs `Title_main_load` (`0x505320`): its first tick (531 in `title_load.txt`) starts `Mem_card` as task 1 and sleeps under it, with the task's step (`ti`'s fourth value) at 1; `Mem_card` is the save screen's task in mode 1 ("The save screen"), and its first call runs on that same tick. A `--boot` record's `sv` and `svs` are the save screen's fields, and its `ti` goes on showing the title's work as it stood, with `tfade` the load screen's fade (slot 0).
 
-`title_load_empty` (`oracle/re2-regress.d/title_load.toml`, 1420 ticks, an empty folder, comparing `ti,tlogo,tfade,snd,sv,svs`) matches on every tick, frames 0.05:
+`title_load_empty` (`oracle/re2-regress.d/title_load.toml`, 1420 ticks, an empty folder, comparing `ti,tlogo,tfade,tfade3,snd,sv,svs`) matches on every tick, frames 0.05:
 
-- 531 to 539: `Cardaccess_init`'s fade in from black (slot 0 from 0x5000 down by 0x1800 a tick, left at -0x1000), the skipped tick, states 0 and 1, and the list at 539 with one row, the leave row ("Exit", with "Do not load" as its footer under the title "Load").
+- 531 to 539: `Cardaccess_init`'s fade in from black (slot 0 from 0x5000 down by 0x1800 a tick, left at -0x1000; slot 3 set at 0 in mode 1, which the exit's first tick takes away, the mode staying), the skipped tick, states 0 and 1, and the list at 539 with one row, the leave row ("Exit", with "Do not load" as its footer under the title "Load").
 - Down (600) and up (620) wrap the cursor onto the same row with `4:4` and the three-tick wait. Left at 0 (640) does nothing; right steps the name scroll to 8, 16 and 21 (660 to 680) and left back to 13, 5 and 0 (720 to 734), as on the save screen; up held (780) repeats every fourth tick.
-- The cancel key (820, `4:5`) goes through state 99 to `Cardaccess_exit`: slot 0 up by 0x1800 a tick from 821, black on 827, and the task ends on 828. The title's task wakes on 829 (`ti` 1,2,1,0: `Title_bg_reload`, `title_mv_state` 1 and the step back to 0) and `Title_init` runs on 830 on its branch from black, as after OPTION.
+- The cancel key (820, `4:5`) goes through state 99 to `Cardaccess_exit`: slot 0 up by 0x1800 a tick from 821, black on 827, and the task ends on 828, with `fg_system`'s 0x400 (nothing loaded) up from 821 through 828. The title's task wakes on 829, clears the bit (`ti` 1,2,1,0: `Title_bg_reload`, `title_mv_state` 1 and the step back to 0) and `Title_init` runs on 830 on its branch from black, as after OPTION.
 - LOAD GAME again (920): the screen opens on 1191 with the rows the first listing left (1) until its own state 1, and the decide on the leave row (1270) leaves as the cancel key does.
 
-In arklay the title's script is kept as it stands while the load screen is up (it has `on_resume`) and takes its next tick when that screen comes back; a load starts the game and doesn't come back. A list with saves, and the load itself (state 10), have no run: the runner can't yet start arklay from a recording's saves (`saves_from`).
+`Cardaccess_init` and `Config_set_data` pick the game's frame limiter (`0x98F07A` at 2) and `Title_init` the title's (0), so the load screen and the option screen run at the game's 30 ticks a second and the title at 60, which no recording shows (a recording is a tick at a time); arklay's loop paces them the same way from what the scripts publish (`game_active`).
+
+In arklay the title's script is kept as it stands while the load screen is up (it has `on_resume`) and takes its next tick when that screen comes back; a load starts the game and doesn't come back. `fgsys` itself isn't compared on the title (arklay's title has no `fg_system` bits but the ones it sets). A list with saves, and the load itself (state 10), have no run: the runner can't yet start arklay from a recording's saves (`saves_from`).
 
 ## The option screen
 

@@ -105,6 +105,15 @@ local function publish(api)
     end
     api:set("sv_fade_level", level)
     api:set("sv_fade_add", add)
+    -- `Cardaccess_init` sets fade 3 at 0, which the exit takes away, and a
+    -- leave without a save or a load has `fg_system`'s 0x400 up from the
+    -- exit's first tick, for the title's task to find.
+    local leaving = s.sub == 4
+    api:set("sv_fade3_level", leaving and -1 or 0)
+    api:set("sv_fg_system", leaving and s.state == STATE_CANCEL and 0x400 or 0)
+    -- `Cardaccess_init` picks the game's limiter (`0x98F07A` at 2): the
+    -- screen runs at the game's 30 ticks a second, in load mode too.
+    api:set("game_active", true)
 end
 
 -- `FUN_00509BE0`: the characters that type with the space's timing.

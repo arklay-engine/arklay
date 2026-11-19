@@ -11123,7 +11123,9 @@ impl App {
     /// The original runs the title, character select, load screen and every
     /// in-game menu/modal with its game-active flag clear, i.e. on the 16 ms
     /// non-gameplay limiter; gameplay and films use the 33 ms one. The title
-    /// switches to gameplay pacing once NEW GAME or LOAD GAME is confirmed.
+    /// switches to gameplay pacing once NEW GAME or LOAD GAME is confirmed,
+    /// and RE 2's does under its option screen; a screen's script says so by
+    /// publishing `game_active`.
     fn tick_interval(&self) -> f64 {
         match &self.mode {
             Mode::Title(screen) => {
@@ -11132,6 +11134,11 @@ impl App {
                 } else {
                     UI_TICK_MS
                 }
+            }
+            // RE 2's save and load screen picks the game's limiter
+            // (`Cardaccess_init`), which its script says the title's way.
+            Mode::Load(screen) | Mode::Save(screen) if screen.value("game_active") == Some(1) => {
+                TICK_MS
             }
             Mode::Boot | Mode::Select(_) | Mode::Load(_) | Mode::Save(_) => UI_TICK_MS,
             Mode::Play(session) => {
@@ -11541,6 +11548,12 @@ impl App {
 
     /// Enter a gameplay session, opening audio on the interactive path.
     fn start_session(&mut self, mut session: Box<GameSession>) {
+        // A session started from under the load screen (the script host's
+        // can be) leaves no title asleep, and its save screen opens with
+        // the rows the last listing left, as the original's statics have
+        // them.
+        self.sleeping_title = None;
+        session.re2_card_rows = self.card_rows;
         #[cfg(feature = "bot")]
         self.start_bot_session(&mut session);
         session.set_debug_menu(self.debug_menu);
@@ -13083,15 +13096,20 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
     };
     if let Some(screen) = title {
         let v = |key: &str| screen.value(key);
-        // Fade slot 0 is the load screen's while it is up.
+        // Fade slot 0 is the load screen's while it is up, as are slot 3's
+        // level and `fg_system`'s no-load bit.
         let fade = |key: &str, own: &str| {
             load.and_then(|load| load.value(key))
                 .unwrap_or_else(|| v(own))
         };
+        let fg_system = v("ti_fgsys") as u32
+            | load
+                .and_then(|load| load.value("sv_fg_system"))
+                .unwrap_or(0) as u32;
         line.push_str(&format!(
             " fgsys={:08x} ti={},{},{},{},{},{},{},{},{},{},{} tlogo={},{},{} tfade={},{},{},{},{} \
              tsel={:x},{},{}",
-            v("ti_fgsys") as u32,
+            fg_system,
             v("ti_mv"),
             v("ti_disp"),
             v("ti_init"),
@@ -13129,9 +13147,14 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
             v("ti_fade2_level"),
             v("ti_fade2_add"),
             v("ti_fade2_mode"),
-            v("ti_fade3_level"),
+            fade("sv_fade3_level", "ti_fade3_level"),
             v("ti_fade3_add"),
-            v("ti_fade3_mode"),
+            // `Cardaccess_init`'s `Fade_set(0x103, 0)`.
+            if load.is_some() {
+                1
+            } else {
+                v("ti_fade3_mode")
+            },
         ));
         if v("opt_on") != 0 {
             line.push_str(&format!(
@@ -31476,6 +31499,7 @@ mod tests {
             RESUME
             return M";
         const LOAD: &str = "local M = {}
+            function M.open(api) api:set('game_active', RESUMES) end
             function M.update(api, input)
                 if input.cancel then api:exit('title') end
             end
@@ -31488,11 +31512,12 @@ mod tests {
         for resumes in [true, false] {
             let dir = TempDir::new();
             let title = TITLE.replace("RESUME", if resumes { RESUME } else { "" });
+            let load = LOAD.replace("RESUMES", if resumes { "true" } else { "false" });
             let pack_path = new_game_pack_with(
                 &dir,
                 &[
                     ("ui/title.lua", title.as_bytes()),
-                    ("ui/save_load.lua", LOAD.as_bytes()),
+                    ("ui/save_load.lua", load.as_bytes()),
                 ],
             );
             let pack = Pack::open(&pack_path).unwrap();
@@ -31507,6 +31532,11 @@ mod tests {
             app_press(&mut app, |ui| ui.confirm = true);
             assert!(matches!(app.mode, Mode::Load(_)), "the load screen is up");
             assert_eq!(app.sleeping_title.is_some(), resumes);
+            // The load screen says which limiter it runs on.
+            assert_eq!(
+                app.tick_interval(),
+                if resumes { TICK_MS } else { UI_TICK_MS }
+            );
             idle(&mut app);
             if let Some(title) = &app.sleeping_title {
                 assert_eq!(title.value("ticks"), 3, "asleep: no tick of its own");
