@@ -330,7 +330,7 @@ function ScreenApi:height() end
 ---Publish a value the engine reads back. Each engine screen has its own
 ---keys (the pause menu's `cursor`, the item box's `selected_item`, ...);
 ---`canvas` set to 1 asks any screen's frame for the full-height canvas.
----Up to 64 keys; a new key past that raises an error, overwriting one never
+---Up to 96 keys; a new key past that raises an error, overwriting one never
 ---does. An unset key reads as 0.
 ---@param key string
 ---@param value integer|boolean|nil An integer, a boolean (stored as 1 or 0), or `nil` to clear the key. A float or any other type raises an error.
@@ -403,6 +403,22 @@ function ScreenApi:core_sound(slot) end
 ---To-fu's 0x13, and the title's own is 0x10).
 ---@param id integer The core bank.
 function ScreenApi:core_bank(id) end
+
+---Play a line of RE 2's voice bank that no stage owns, the original's
+---`Xa_play(1, line)` (the prologue's narration), or stop the line with no
+---argument (`Xa_stop`). Like `sound`, it plays after the call, and a capture
+---run stays silent.
+---@param line? integer The line, or `nil` to stop.
+---@param player? integer `0` Leon's bank, `1` Claire's. Default 0.
+function ScreenApi:voice(line, player) end
+
+---Play RE 2's main music `id` from its start (`Snd_bgm_main`, then
+---`Snd_bgm_ctr(0x1000000)`), or stop the music with no argument.
+---@param id? integer The main music's id, or `nil` to stop.
+function ScreenApi:music(id) end
+
+---Fade the music out (`Snd_bgm_fade_ON`).
+function ScreenApi:music_fade() end
 
 ---Queue a current-room bank sound, the original's `play_sfx(2, slot)`:
 ---slot `slot` of the loaded room's sound-table row, played after the call
@@ -848,7 +864,7 @@ function ScreenApi:picture_sprite_scaled(picture, sx, sy, sw, sh, dx, dy, dw, dh
 ---@param clut integer The CLUT row (capped at 255).
 ---@param scale integer The colour scale, `0..=255`.
 ---@param tint? ScreenTextColour Default white.
----@param blend? "opaque"|"half"|"variant"|"add" Default `"opaque"`. `"variant"` is the original's variant-2 half alpha over the frame; `"half"` averages, `"add"` adds.
+---@param blend? "opaque"|"half"|"variant"|"add"|integer Default `"opaque"`. `"variant"` is the original's variant-2 half alpha over the frame; `"half"` averages, `"add"` adds. An integer `0..=255` is an alpha: the sprite goes over the frame at that weight.
 function ScreenApi:page_sprite_scaled(page, sx, sy, sw, sh, dx, dy, dw, dh, clut, scale, tint, blend) end
 
 ---@class ScreenEffectCamera

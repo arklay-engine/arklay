@@ -68,7 +68,7 @@ fn full_png() -> Vec<u8> {
 }
 
 /// A 4x4 4bpp TIM whose palette index 1 is blue.
-fn test_tim() -> Vec<u8> {
+pub(super) fn test_tim() -> Vec<u8> {
     let mut bytes = Vec::new();
     bytes.extend_from_slice(&0x10u32.to_le_bytes());
     bytes.extend_from_slice(&0x08u32.to_le_bytes());

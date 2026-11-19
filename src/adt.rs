@@ -472,6 +472,47 @@ pub(crate) mod fixture {
         stream.extend(bits.out);
         stream
     }
+
+    /// An ADT stream that decodes to `bytes` (fewer than 65536), every one
+    /// a literal: the 256 byte symbols all have 8-bit codes, their own
+    /// values.
+    pub(crate) fn literals(bytes: &[u8]) -> Vec<u8> {
+        let count = u32::try_from(bytes.len()).unwrap();
+        assert!((1..0x1_0000).contains(&count));
+        let mut bits = Bits::default();
+        bits.push(count & 0xFF, 8);
+        bits.push(count >> 8, 8);
+        // Small table: only symbol 8 (the delta 8) has a code, `0`.
+        for _ in 0..8 {
+            bits.push(0, 1);
+        }
+        bits.push(1, 1);
+        bits.code(1);
+        bits.push(1, 1);
+        bits.code(1);
+        for _ in 10..16 {
+            bits.push(0, 1);
+        }
+        // Symbol table: the length goes to 8 at symbol 0 and back to 0 at
+        // symbol 256, each a run of one delta with a zero run after it.
+        bits.push(1, 1);
+        for _ in 0..2 {
+            bits.code(1);
+            bits.push(0, 1);
+            bits.code(255);
+        }
+        // Distance table: no symbol.
+        for _ in 0..16 {
+            bits.push(0, 1);
+        }
+        for &byte in bytes {
+            bits.push(u32::from(byte), 8);
+        }
+        bits.push(0, 16);
+        let mut stream = vec![0u8; 4];
+        stream.extend(bits.out);
+        stream
+    }
 }
 
 #[cfg(test)]
@@ -486,6 +527,12 @@ mod tests {
         assert_eq!(widen(0x001F), [0xFF, 0, 0]);
         assert_eq!(widen(0x7C00), [0, 0, 0xFF]);
         assert_eq!(widen(0x0010), [0x84, 0, 0]);
+    }
+
+    #[test]
+    fn the_literal_fixture_decodes_to_its_bytes() {
+        let bytes: Vec<u8> = (0..=255).chain([7, 7, 0, 255]).collect();
+        assert_eq!(decode(&super::fixture::literals(&bytes)).unwrap(), bytes);
     }
 
     #[test]

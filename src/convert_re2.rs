@@ -20,6 +20,7 @@
 //! | `Common/Data/Title_bg.adt` | `ui/title/title_bg.bmp` |
 //! | `Common/Data/tmoji.bin` (TIM `k`) | `ui/title/tmoji_<k>.tim` |
 //! | `Common/Data/Title_o.adt`, `Title_o2.adt` | `ui/title/title_o.bmp`, `ui/title/title_o2.bmp` |
+//! | `Common/Data/open0<n>.adt` (TIM `k`), `open1<n>.adt` | `ui/prologue/open0<n>_<k>.tim`, `ui/prologue/open1<n>.bmp` |
 //! | `Common/Data/room.adt`, `color2.adt` | `ui/option/room.bmp`, `ui/option/color2.bmp` |
 //! | `Common/Data/parts.tim`, `moji1.tim` | `ui/option/parts.tim`, `ui/option/moji1.tim` |
 //! | `Common/Data/spy_logo.tim`, `tofulogo.tim` | `ui/title/spy_logo.tim`, `ui/title/tofulogo.tim` |
@@ -575,6 +576,7 @@ pub(crate) fn convert(
         &mut tally,
         &mut warnings,
     )?;
+    copy_prologue_art(&layout, &mut writer, &mut tally, &mut warnings)?;
     copy_option_art(
         &layout,
         ddraw.as_ref().map(|(_, bytes)| bytes.as_slice()),
@@ -731,6 +733,10 @@ fn copy_text(
         (
             "ui/cr_text.lua",
             include_str!("../games/re2/ui/cr_text.lua"),
+        ),
+        (
+            "ui/prologue.lua",
+            include_str!("../games/re2/ui/prologue.lua"),
         ),
         (
             "lib/zombie.lua",
@@ -1953,6 +1959,57 @@ fn copy_title_art(
             &format!("ui/title/tmoji_{index}.tim"),
             tim.to_vec(),
         )?;
+    }
+    Ok(())
+}
+
+/// The prologue's art (`Prologue_load`, `0x4CF1F0`): the sheets of its
+/// pictures and lines, `Common/Data/open00.adt` to `open04.adt`, each an ADT
+/// stream of TIMs laid end to end (textures 0x12 to 0x1F), as
+/// `ui/prologue/open0<n>_<k>.tim`, and its full-screen pictures,
+/// `open10.adt` to `open14.adt`, as `ui/prologue/open1<n>.bmp`.
+fn copy_prologue_art(
+    layout: &Layout,
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let data_files = files_in(layout.common(&["Data"]))?;
+    let find = |stem: &str| {
+        data_files
+            .iter()
+            .find(|path| upper_parts(path).is_some_and(|(name, ext)| name == stem && ext == "ADT"))
+    };
+    let mut missing = Vec::new();
+    for n in 0..5 {
+        let stem = format!("OPEN0{n}");
+        let Some(path) = find(&stem) else {
+            missing.push(stem);
+            continue;
+        };
+        let decoded = adt::decode(&read(path)?).with_context(|| format!("{}", path.display()))?;
+        let tims = split_tims(&decoded).with_context(|| format!("{}", path.display()))?;
+        for (index, tim) in tims.into_iter().enumerate() {
+            let entry = format!("ui/prologue/open0{n}_{index}.tim");
+            tally.add(writer, "ui", &entry, tim.to_vec())?;
+        }
+    }
+    for n in 0..5 {
+        let stem = format!("OPEN1{n}");
+        let Some(path) = find(&stem) else {
+            missing.push(stem);
+            continue;
+        };
+        let decoded = adt::decode(&read(path)?).with_context(|| format!("{}", path.display()))?;
+        let image = adt::frame_image(&decoded).with_context(|| format!("{}", path.display()))?;
+        let entry = format!("ui/prologue/open1{n}.bmp");
+        tally.add(writer, "ui", &entry, bmp::encode_to_vec(&image)?)?;
+    }
+    if !missing.is_empty() && layout.common.is_some() {
+        warnings.push(format!(
+            "no Common/Data/{}.adt; the prologue lacks its art",
+            missing.join(", ").to_lowercase()
+        ));
     }
     Ok(())
 }

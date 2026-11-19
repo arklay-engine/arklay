@@ -30,6 +30,7 @@
 -- args.folder_saves: a registered save screen lists the whole save folder.
 
 local CrText = require("ui/cr_text")
+local Prologue = require("ui/prologue")
 
 local M = {}
 
@@ -291,6 +292,19 @@ end
 local function fade_off(n)
     s.fades[n].level = -1
 end
+
+-- The fades as the prologue's task uses them (`ui/prologue.lua`).
+local PROLOGUE_FADES = {
+    set = fade_set,
+    done = fade_done,
+    off = fade_off,
+    level = function(n, level)
+        fade_adjust(level, n)
+    end,
+    add = function(n, add)
+        s.fades[n].add = add
+    end,
+}
 
 -- `Init_global` (0x4C4D70) as the title sees it: the four fades off,
 -- `fg_status` cleared and `fg_system` down to 0x1000899.
@@ -1556,6 +1570,12 @@ local function title_main(api)
         s.mv = 1
     elseif s.disp == 3 then
         s.exit = s.attract and "attract" or "new_game"
+        if not s.attract and s.prologue_art then
+            -- `Title_game_init`'s step 2 starts the prologue's task on the
+            -- next tick (0x506750) and the game waits for it to end.
+            s.exit = nil
+            s.game_init = 0
+        end
         s.character = s.claire and 1 or 0
         -- What the game starts with besides the character: the difficulty
         -- confirm's EASY bit and `hard_mode`, and ARRANGE MODE's
@@ -1572,6 +1592,27 @@ local function title_main(api)
         s.disp = 1
         s.mv = 1
         s.opt = option_new()
+    end
+end
+
+-- `Title_game_init` (0x506750) from the tick after the hand-over, for a
+-- new game: its step 2 starts the prologue's task (`Prologue`, 0x4CEFF0),
+-- which runs from the next tick, and its step 3 waits for that task's end,
+-- the tick the game is started on.
+local function game_init(api, input)
+    s.game_init = s.game_init + 1
+    if s.game_init == 1 then
+        s.init, s.sub = 0, 2
+        fade_off(0)
+        s.background = nil
+        s.pro = Prologue.new(PROLOGUE_FADES)
+        return
+    end
+    s.sub = 3
+    Prologue.tick(s.pro, input)
+    Prologue.sound(api, s.pro, s.claire and 1 or 0)
+    if s.pro.done then
+        s.exit = "new_game"
     end
 end
 
@@ -1788,6 +1829,7 @@ end
 -- ---------------------------------------------------------------- the screen
 
 local function publish(api)
+    Prologue.publish(api, s.pro)
     api:set("ti_mv", s.mv)
     api:set("ti_disp", s.disp)
     api:set("ti_init", s.init)
@@ -1881,6 +1923,8 @@ function M.open(api, args)
     }
     s.title_background = api:picture("ui/title/title_bg")
     s.background = s.title_background
+    Prologue.reset()
+    s.prologue_art = api:has_image("ui/prologue/open10")
     -- The title starts at `Title_init`: the boot's logos and warning before
     -- it aren't ported.
     s.mv = 1
@@ -1911,7 +1955,9 @@ function M.update(api, input)
     s.frame = nil
     local shown = s.drawn_fades[0]
     pad_set(input)
-    if s.opt then
+    if s.game_init then
+        game_init(api, input)
+    elseif s.opt then
         -- The option task's ticks: the title's task sleeps.
         option_task(api)
     elseif s.mv == 1 then
@@ -2040,6 +2086,10 @@ function M.draw(api)
                 api:fade_tile(f.mode, level)
             end
         end
+    end
+    if s.pro and not s.pro.done then
+        Prologue.draw(api, s.pro, ox, oy, fade)
+        return
     end
     -- Slot 3 goes on the back list (`AddTile`'s `is_back`): over the
     -- background, under every sprite.

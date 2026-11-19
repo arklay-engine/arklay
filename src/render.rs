@@ -146,6 +146,9 @@ pub enum SpriteBlend {
     BlackAlpha(u8),
     /// `source + destination`, saturating: the PSX additive blend (ABR 1).
     Add,
+    /// The source over the destination at `alpha`/255, wherever a texel is
+    /// opaque: RE 2's prologue fades its pictures in so.
+    Alpha(u8),
 }
 
 /// One pending 2D sprite, submitted to [`Framebuffer::draw_sprites`].
@@ -1689,6 +1692,7 @@ impl Framebuffer {
                 SpriteBlend::HalfVariant => [1.0, 1.0, 1.0, 127.0 / 255.0],
                 SpriteBlend::BlackAlpha(alpha) => [0.0, 0.0, 0.0, f32::from(alpha) / 255.0],
                 SpriteBlend::Add => [1.0; 4],
+                SpriteBlend::Alpha(alpha) => [1.0, 1.0, 1.0, f32::from(alpha) / 255.0],
             };
             let visible = [start_x, start_y, end_x, end_y];
             let flags = u32::from(blend == SpriteBlend::Add) * crate::draw2d::ADDITIVE;
@@ -1696,6 +1700,59 @@ impl Framebuffer {
             return;
         }
         let width = self.width as usize;
+        if let SpriteBlend::Alpha(alpha) = blend
+            && (src_w != dst_w || src_h != dst_h)
+        {
+            // A scaled sprite as the original's 640 x 480 frame has it,
+            // brought down to this one: each pixel is the mean of its four
+            // device pixels, each sampled at its centre.
+            let (over, keep) = (u32::from(alpha), u32::from(255 - alpha));
+            let texel = |at: i32, origin: i32, dst_n: i32, src_n: i32, half: i64| {
+                let centre = (i64::from(at) - i64::from(origin)) * 4 + 1 + 2 * half;
+                (centre * i64::from(src_n) / (4 * i64::from(dst_n))) as i32
+            };
+            for y in start_y..end_y {
+                for x in start_x..end_x {
+                    let offset = (y as usize * width + x as usize) * 4;
+                    let Some(slot) = self.rgba.get_mut(offset..offset + 4) else {
+                        continue;
+                    };
+                    let under = [slot[0], slot[1], slot[2]];
+                    let mut sum = [0u32; 3];
+                    for (half_x, half_y) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                        let (offset_x, offset_y) = (
+                            texel(x, dst_x, dst_w, src_w, half_x),
+                            texel(y, dst_y, dst_h, src_h, half_y),
+                        );
+                        let tex_x = if mirror[0] {
+                            src_x + src_w - 1 - offset_x
+                        } else {
+                            src_x + offset_x
+                        };
+                        let tex_y = if mirror[1] {
+                            src_y + src_h - 1 - offset_y
+                        } else {
+                            src_y + offset_y
+                        };
+                        let pixel = sample(tex_x, tex_y);
+                        for (channel, total) in sum.iter_mut().enumerate() {
+                            let below = u32::from(under[channel]);
+                            *total += match pixel {
+                                Some(pixel) => {
+                                    (u32::from(pixel[channel]) * over + below * keep + 127) / 255
+                                }
+                                None => below,
+                            };
+                        }
+                    }
+                    for (channel, total) in sum.into_iter().enumerate() {
+                        slot[channel] = ((total + 2) / 4).min(255) as u8;
+                    }
+                    slot[3] = 255;
+                }
+            }
+            return;
+        }
         for y in start_y..end_y {
             let Ok(offset_y) = i32::try_from(
                 (i64::from(y) - i64::from(dst_y)) * i64::from(src_h) / i64::from(dst_h),
@@ -1748,6 +1805,14 @@ impl Framebuffer {
                     SpriteBlend::Add => {
                         for (channel, &destination) in pixel[..3].iter_mut().zip(slot.iter()) {
                             *channel = channel.saturating_add(destination);
+                        }
+                    }
+                    SpriteBlend::Alpha(alpha) => {
+                        let (over, keep) = (u32::from(alpha), u32::from(255 - alpha));
+                        for (channel, &destination) in pixel[..3].iter_mut().zip(slot.iter()) {
+                            *channel =
+                                ((u32::from(*channel) * over + u32::from(destination) * keep + 127)
+                                    / 255) as u8;
                         }
                     }
                 }
@@ -9168,6 +9233,58 @@ mod tests {
                 "texel {texel} over {destination}"
             );
         }
+    }
+
+    #[test]
+    fn an_alpha_sprite_goes_over_the_frame_at_its_weight() {
+        // RE 2's prologue at its full colour (0x60 of 0x80, an alpha of
+        // 191): a quarter of what is under the picture stays.
+        assert_eq!(scaled_texel(200, 255, 40, SpriteBlend::Alpha(191)), 160);
+        assert_eq!(scaled_texel(200, 255, 40, SpriteBlend::Alpha(0)), 40);
+        assert_eq!(scaled_texel(200, 255, 40, SpriteBlend::Alpha(255)), 200);
+        assert_eq!(scaled_texel(0, 255, 40, SpriteBlend::Alpha(191)), 10);
+        // A transparent texel leaves the frame as it was.
+        let clear = indexed_texture(vec![0; 4], &[[0; 4]]);
+        let mut framebuffer = Framebuffer::new();
+        framebuffer.blit(&solid_image(320, 240, [40, 40, 40, 255]));
+        framebuffer.draw_page_sprite_scaled(
+            &Artwork::Indexed(clear),
+            [0, 0, 2, 2],
+            [0, 0, 2, 2],
+            0,
+            255,
+            Tint::White,
+            SpriteBlend::Alpha(191),
+        );
+        assert_eq!(framebuffer_pixel(&framebuffer, 0, 0)[0], 40);
+    }
+
+    #[test]
+    fn a_scaled_alpha_sprite_is_the_mean_of_its_device_pixels() {
+        // Two texels across three pixels, as the original's 640 x 480 frame
+        // samples them at six device pixels' centres: the first three read
+        // the left texel, so the middle pixel is half of each.
+        let texture = indexed_texture(
+            vec![1, 2, 1, 2],
+            &[[0; 4], [0, 0, 0, 255], [200, 200, 200, 255]],
+        );
+        let draw = |alpha: u8| {
+            let mut framebuffer = Framebuffer::new();
+            framebuffer.blit(&solid_image(320, 240, [40, 40, 40, 255]));
+            framebuffer.draw_page_sprite_scaled(
+                &Artwork::Indexed(texture.clone()),
+                [0, 0, 2, 2],
+                [10, 10, 3, 3],
+                0,
+                255,
+                Tint::White,
+                SpriteBlend::Alpha(alpha),
+            );
+            [9, 10, 11, 12, 13].map(|x| framebuffer_pixel(&framebuffer, x, 11)[0])
+        };
+        assert_eq!(draw(255), [40, 0, 100, 200, 40]);
+        // Each device pixel is blended, then the four are averaged.
+        assert_eq!(draw(191), [40, 10, 85, 160, 40]);
     }
 
     #[test]

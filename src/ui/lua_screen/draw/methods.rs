@@ -784,13 +784,13 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
             usize,
             i64,
             Option<Value>,
-            Option<String>,
+            Option<Value>,
         )| {
             let tint = match tint {
                 Some(Value::Nil) | None => crate::font::Tint::White,
                 Some(value) => colour_tint(&value)?,
             };
-            let blend = sprite_blend(blend.as_deref())?;
+            let blend = sprite_blend_value(blend.as_ref())?;
             let Api {
                 host, framebuffer, ..
             } = api;

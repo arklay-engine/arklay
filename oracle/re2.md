@@ -745,6 +745,38 @@ The custom handgun's hit (weapon 4) and a Beretta's second roll have no recordin
 
 arklay's `ui/char_select.lua` opens `ui/title.lua` on ORIGINAL MODE's character rows, as the confirm leaves them, with no white from the boot; the hand-off passes the character and the choice (`api:exit("new_game", character, {easy, hard_mode, censorship_off})`) on to the game, which starts with them as `FUN_004b73c0` and `Title_game_init` do (`oracle/re2-deviations.md`, "The new-game choice").
 
+## The prologue
+
+A new game doesn't start on the hand-off. `Title_game_init` (`0x506750`) runs from the next tick: its step 2 starts task 1 on `Prologue` (`0x4CEFF0`) and puts fade 0 off, and its step 3 waits for that task to end. The task runs for any start with `fg_system`'s `0x1002000` and `8` clear; for a load `Prologue_load` (`0x4CF1F0`) ends it at once unless the save's place is `0xF` or `0x10`, a second scenario's start. A new game picks its sequence from `fg_status`: bit 31 (Claire) and bit 30 (the second scenario) index `Prologue_mv`, which holds `Prologue_mv00` (`0x4CF990`) for both first scenarios, `Prologue_mv01` and `Prologue_mv02` for the second ones, and `Prologue_mv03` (`0x4CF170`), a skip's wait. `Prologue_r` is the fades' routine: 0 `Prologue_init` (the full-screen picture fades in), 1 nothing, 2 `Prologue_move` (it fades out), 3 `Prologue_exit`.
+
+`Prologue_load` reads `Common/Data/open00.adt` to `open03.adt`, each an ADT stream of TIMs end to end, as textures `0x12` to `0x1F`: the cells' picture in four pieces (`open00`), the mansion and the laboratory (`open01`), the S.T.A.R.S. and Umbrella logos (`open02`) and the Japanese lines (`open03`, `open04`). The first scenarios also load `open10.adt` (the zombie, into `Work_buffer`) and `open11.adt` (the helicopter, into `Bg_buffer`), main music `0x2B`, and `intro_sprt0` (`0x533600`), 28 records of 12 bytes: a mode, a kind in the high nibble of the next byte, a depth, an entry of `intromap_gfx` (`0x533490`) or `intromap_sub` (`0x533520`), x, y and a colour. A mode's bits are 1 shown, 4 fading in (the colour up by 2 a tick to `0x60`), 8 fading out (down by 2, or 1 for a zooming picture), `0x10` scrolling up a line every 11th tick, `0x20` growing and `0x40` shrinking (2 texels every 4th tick). `Prologue_set_mode(no, clear)` gives the sprites of a mask (`0x980AE4`) a mode. The step is `0x9800B6`, its count `0x980AE2`, and a step that starts on tick S acts on count k on tick S + k.
+
+`Prologue_mv00`, from the recording `prologue_leon` (`oracle/re2-regress.d/prologue.toml`; the choice of `newgame_leon.txt`, the hand-off on 690):
+
+| Tick | What happens |
+|---|---|
+| 691, 692 | `Title_game_init`'s steps: `ti` 2,3,1,0, then 2,3,0,2 with the task started and fade 0 off |
+| 693 | the task's first tick: step 1, count 1, fade slot 3, music `0x2B`, `fg_status`'s `0x10` (a scene's bands) |
+| step 1 (693) | 240 the zombie fades in (slot 3, `0x100` a tick), 420 the narration's first line (`Xa_play(1, 1)`), 430 to 793 a text line, 823 the picture fades out and the cells fade in and scroll |
+| step 2 (1516) | 64 the narration's line 2, 74 to 875 two text lines, 905 the cells fade out and the S.T.A.R.S. logo shrinks in |
+| step 3 (2421) | 94 the mansion fades in with the narration's line 3, 104 to 321 a text line, 204 the logo fades out, 351 the helicopter fades in and the mansion goes |
+| step 4 (2772) | 94 every sprite off and the narration's line 4, 104 to 550 a text line, 580 the picture fades out and the Umbrella logo grows in |
+| step 5 (3352) | 96 the laboratory with the narration's line 5, 106 to 261 a text line, 261 the logo fades out, 271 to 445 the last text line, 445 the music fades, fade slot 0 takes the frame to black and no skip is taken |
+| step 6 (3925) | count 100: the bands go and `Init_movie_work(3)` starts the scenario's opening film |
+| step 7 (4025) | the film over: `Init_movie_work(0xF)`, the second film, unless the first was skipped (`0x9814B5`) |
+| step 9 (4026) | the film over: routine 3 |
+| 4028 | `Prologue_exit`: fades 0 and 3 off, and the task ends |
+| 4029 to 4031 | `Title_game_init`'s last steps |
+| 4032 | `Game_loop`'s first tick |
+
+A press of decide, cancel or START (the pad's `0x9F0`) while `0x9800B9` is up skips: the line stops (`Xa_stop`), the music fades, slot 0 takes the frame to black under `Prologue_mv03`, and when it is black the sequence comes back in at step 6 with a count of `0x5A`, so its films still play. `prologue_leon_skip` confirms on 1300: black by 1428, step 7 on 1439, the task's end on 1442 and `Game_loop`'s first tick on 1446. A second press once the sequence is back ends the task on that tick (the code's; no recording presses twice).
+
+The recorder runs with the films off, so each `Init_movie_work` is over on its own tick. `record --boot` writes the task's work as `pro` (the task's three steps at +8 to +10, the sequence, the step, the count, the routine, the fade flags, the fade slot, `0x9800B9`, the skip state, the frame count, the scroll's and the zoom's waits and the mask), `prs` (each sprite's mode and colour in hex and its y) and `prz` (the two zooming pictures' sizes), or `-` when task 1 isn't `Prologue`. `prologue_leon` (4028 ticks) and `prologue_leon_skip` (1442) compare `pro,prs,prz,tfade,tfade3,snd` from 691 and match on every tick. Both end on the task's last tick, which is the tick arklay's title hands the game over on.
+
+What the frames show of the PC's renderer: the bands are 24 lines top and bottom; a sprite goes over the frame as a blend at its colour's weight of `0x80`, the texels themselves unmodulated (`out = under * (1 - c/128) + texel * c/128`), so a picture at its full `0x60` leaves a quarter of what is under it; a zooming picture is `w` by `h` about the screen's centre from 189 by 190 texels, sampled nearest at the 640 by 480 frame's pixel centres. Under Classic REbirth the Japanese lines (kind 1) aren't drawn, though their sprites keep their modes. With those, `prologue_leon`'s frames differ by a mean of 0.09 (0.46 at worst, in the cells' scroll) and `prologue_leon_skip`'s by 0.00.
+
+The game the prologue starts (`prologue_leon_skip_play`, the same recording to tick 2000): room 100's opening matches on `Rnd`, the player, the six zombies (`zm0` to `zm5`, `zd`) and the effects from 1447. On 1446 itself the original has already set the room's enemies and effects (`Rnd` goes from the title's 27812 to 6114 before `Game_loop`'s first tick) and arklay sets them on that tick. The frames are black to 1448 on both sides; from there the room's own differences show (a mean of 3.08: the zombies' look and the flames), as in the room's other runs.
+
 ## The regression runner
 
 The original is deterministic, so a recording of it is made once and kept. `scripts/re2-regress.py` plays the runs in `oracle/re2-regress.toml`, and then those in the files of `oracle/re2-regress.d/` in name order, in arklay and compares each with its stored recording, with no Wine and no new recording. Run it for any change to RE 2's play, and read the lines it prints:

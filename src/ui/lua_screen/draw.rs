@@ -434,6 +434,20 @@ fn no_scene() -> mlua::Error {
 /// A clamped `[x, y, w, h]`.
 /// A page draw's `blend` name: `opaque` (the default), `half`, `variant`
 /// (the original's variant-2 half alpha) or `add`.
+/// A sprite's blend: a mode's name, or an integer, the alpha the sprite
+/// goes over the frame at.
+fn sprite_blend_value(value: Option<&Value>) -> mlua::Result<SpriteBlend> {
+    match value {
+        None | Some(Value::Nil) => Ok(SpriteBlend::Opaque),
+        Some(Value::Integer(alpha)) => Ok(SpriteBlend::Alpha(byte(*alpha))),
+        Some(Value::String(name)) => sprite_blend(Some(&name.to_str()?)),
+        Some(other) => Err(mlua::Error::RuntimeError(format!(
+            "a blend is a name or an alpha, got {}",
+            other.type_name()
+        ))),
+    }
+}
+
 fn sprite_blend(name: Option<&str>) -> mlua::Result<SpriteBlend> {
     match name {
         None | Some("opaque") => Ok(SpriteBlend::Opaque),

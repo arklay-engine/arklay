@@ -106,6 +106,26 @@ TITLE_EF2 = 0x00691EF2  # EX.BATTLE's level page bytes
 # The option screen (`0x44A040`, `Config_main` 0x44A0B0), task 1 of `TASKS` while it runs.
 OPTION_TASK = 0x0044A040
 GAME_LOOP = 0x004BF810  # `Game_loop`, which the title's task chains to: play
+# `Prologue` (0x4CEFF0), task 1's routine from `Title_game_init`'s step 2 until it ends, and its work: the scroll's
+# and the zoom's waits, the sequence (`Prologue_mv`'s index), the step in it, its count, the sprites' mask, the
+# routine (`Prologue_r`'s index), the fade's flags and slot, the skip's gate and state, the frames drawn, the
+# sprite table and its length, and the two pictures' sizes in `intromap_gfx` (entries 4 and 9), which zoom.
+PROLOGUE = 0x004CEFF0
+PROLOGUE_SCROLL_WAIT = 0x009800A4
+PROLOGUE_ZOOM_WAIT = 0x009800A6
+PROLOGUE_MV = 0x009800A8
+PROLOGUE_FRAMES = 0x009800AC
+PROLOGUE_FADE_SLOT = 0x009800B4
+PROLOGUE_STEP = 0x009800B6
+PROLOGUE_FADE_FLAGS = 0x009800B8
+PROLOGUE_SKIP_OK = 0x009800B9
+PROLOGUE_SPRITE_COUNT = 0x009800BA
+PROLOGUE_SPRITES = 0x009800BC
+PROLOGUE_R = 0x009800C0
+PROLOGUE_SKIP = 0x009800C1
+PROLOGUE_COUNT = 0x00980AE2
+PROLOGUE_MASK = 0x00980AE4
+INTROMAP_GFX = 0x00533490
 OPTION_STATE = 0x0099D001  # `Config_main`'s state
 OPTION_CURSOR = 0x0099CF68  # the menu's row
 OPTION_TYPE = 0x0068915C  # the sound page's row
@@ -1807,8 +1827,36 @@ def title_trace(game: Game) -> str:
         f"tx={task[0xA]},{game.u8(TITLE_MENU_2)},{game.u8(TITLE_DIM)},{game.u8(TITLE_B8C)},"
         f"{game.u8(TITLE_EF2)},{game.u8(TITLE_EF2 + 1)},{game.u8(EX_LEVEL)},"
         f"{game.u32(FG_SYSTEM) & 0x01020009:x},{game.u32(FG_STATUS) & 0x02004000:x} "
-        f"tfade2={fade_slot(game, 2)} tfade3={fade_slot(game, 3)} opt={option_trace(game)}"
+        f"tfade2={fade_slot(game, 2)} tfade3={fade_slot(game, 3)} opt={option_trace(game)} {prologue_trace(game)}"
     )
+
+
+def prologue_trace(game: Game) -> str:
+    """The prologue's state while its task runs (`Prologue`, `0x4CEFF0`). `pro`: the task's three steps, the
+    sequence, its step and count, the routine, the fade's flags and slot, the skip's gate and state, the frames
+    drawn, the scroll's and the zoom's waits and the sprites' mask. `prs`: each sprite's mode, the low byte of its
+    colour and its y. `prz`: the two zooming pictures' sizes."""
+    task = TASKS + 0x24
+    if game.u32(task + 4) != PROLOGUE:
+        return "pro=- prs=- prz=-"
+    steps = game.read(task + 8, 3)
+    state = (
+        f"{steps[0]},{steps[1]},{steps[2]},{game.u16(PROLOGUE_MV)},{game.u16(PROLOGUE_STEP)},"
+        f"{game.u16(PROLOGUE_COUNT)},{game.u8(PROLOGUE_R)},{game.u8(PROLOGUE_FADE_FLAGS)},"
+        f"{game.u8(PROLOGUE_FADE_SLOT)},{game.u8(PROLOGUE_SKIP_OK)},{game.u8(PROLOGUE_SKIP)},"
+        f"{game.u32(PROLOGUE_FRAMES)},{game.u16(PROLOGUE_SCROLL_WAIT)},{game.u16(PROLOGUE_ZOOM_WAIT)},"
+        f"{game.u32(PROLOGUE_MASK):x}"
+    )
+    table, count = game.u32(PROLOGUE_SPRITES), game.u16(PROLOGUE_SPRITE_COUNT)
+    sprites = "-"
+    if table and 0 < count <= 0x40:
+        records = game.read(table, count * 12)
+        sprites = ",".join(
+            f"{records[i]:02x}{records[i + 8]:02x}:{struct.unpack_from('<h', records, i + 6)[0]}"
+            for i in range(0, len(records), 12)
+        )
+    sizes = ",".join(str(value) for entry in (4, 9) for value in game.read(INTROMAP_GFX + entry * 10 + 8, 2))
+    return f"pro={state} prs={sprites} prz={sizes}"
 
 
 def option_trace(game: Game) -> str:

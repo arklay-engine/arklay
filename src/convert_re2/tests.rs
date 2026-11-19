@@ -690,3 +690,32 @@ fn the_option_screens_sheets_are_copied() {
     assert!(!pack.contains("ui/option/room.bmp"));
     assert!(!pack.contains("ui/option/color2.bmp"));
 }
+
+/// The prologue's art (`Prologue_load`): each `open0<n>.adt` is a stream of
+/// TIMs, split into its sheets, and each `open1<n>.adt` a full-screen
+/// picture; the script that shows them is packed with the title's.
+#[test]
+fn the_prologues_art_is_converted() {
+    let root = TempDir::new("prologue-art");
+    make_install(&root.path);
+    let data = root.path.join("data");
+    let (first, second) = (tiny_tim(2, 1), tiny_tim(3, 2));
+    let sheets = crate::adt::fixture::literals(&[first.clone(), second.clone()].concat());
+    write(&data.join("Common/Data/open00.adt"), &sheets);
+    write(&data.join("Common/Data/OPEN02.ADT"), &sheets);
+    let picture = crate::adt::fixture::uniform_background(0x21);
+    write(&data.join("Common/Data/open10.adt"), &picture);
+    write(&data.join("Common/Data/Open11.adt"), &picture);
+    let out = root.path.join("out.akpak");
+    convert_game(&root.path, &out).unwrap();
+    let pack = Pack::open(&out).unwrap();
+    assert_eq!(read(&pack, "ui/prologue/open00_0.tim"), first);
+    assert_eq!(read(&pack, "ui/prologue/open00_1.tim"), second);
+    assert_eq!(read(&pack, "ui/prologue/open02_1.tim"), second);
+    assert!(!pack.contains("ui/prologue/open01_0.tim"));
+    let image = crate::bmp::decode(&read(&pack, "ui/prologue/open10.bmp")).unwrap();
+    assert_eq!((image.width, image.height), (320, 240));
+    assert!(pack.contains("ui/prologue/open11.bmp"));
+    assert!(!pack.contains("ui/prologue/open12.bmp"));
+    assert!(pack.contains("ui/prologue.lua"));
+}

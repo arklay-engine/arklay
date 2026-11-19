@@ -1,0 +1,10 @@
+# From boot: ORIGINAL MODE, LEON, NORMAL, then the prologue left to run to its end and into the new game (oracle/re2.md, "The prologue").
+0
+260 down
+263
+300 confirm
+303
+360 confirm
+363
+420 confirm
+423
