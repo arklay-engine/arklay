@@ -255,6 +255,10 @@ pub struct Re2State {
     pub pl_stash: PlStash,
     /// `inventory_size` (`0x98E9A4`): the inventory's slots.
     pub inventory_size: u8,
+    /// The save place (`0x98E9A7`), which `Sce_Save` copies from its area
+    /// and the save block keeps. Like the original's global it stays
+    /// across rooms.
+    pub save_place: u8,
 }
 
 /// `St_chenge_pl`'s and `Set_room`'s stash of the scenario's character: the
@@ -512,7 +516,9 @@ pub const NO_FILE: u8 = 0xFF;
 const RANDOM_START: u32 = 0x1382_01C3;
 
 /// The bytes of [`Re2State::to_save_bytes`].
-const SAVE_LEN: usize = SAVE_LEN_NO_PLAYER + 2;
+const SAVE_LEN: usize = SAVE_LEN_NO_PLACE + 1;
+/// A save from before the save place.
+const SAVE_LEN_NO_PLACE: usize = SAVE_LEN_NO_PLAYER + 2;
 /// A save from before the player's id and slot count.
 const SAVE_LEN_NO_PLAYER: usize = SAVE_LEN_NO_PARTNER + 3;
 /// A save from before the partner's life and poison.
@@ -958,6 +964,7 @@ impl Default for Re2State {
             pl_id: 0,
             pl_stash: PlStash::default(),
             inventory_size: crate::game::INVENTORY_SLOTS_JILL as u8,
+            save_place: 0,
         }
     }
 }
@@ -995,6 +1002,8 @@ impl Re2State {
         // `Save_push`'s `player_index` and `inventory_size`.
         out.push(self.pl_id);
         out.push(self.inventory_size);
+        // `Save_push`'s save place.
+        out.push(self.save_place);
         out
     }
 
@@ -1043,6 +1052,7 @@ impl Re2State {
     /// Restore [`Self::to_save_bytes`]; `None` for bytes of another length.
     pub fn load_save_bytes(&mut self, bytes: &[u8]) -> Option<()> {
         if bytes.len() != SAVE_LEN
+            && bytes.len() != SAVE_LEN_NO_PLACE
             && bytes.len() != SAVE_LEN_NO_PLAYER
             && bytes.len() != SAVE_LEN_NO_PARTNER
             && bytes.len() != SAVE_LEN_NO_FILES
@@ -1128,6 +1138,11 @@ impl Re2State {
         if let [id, size, ..] = bytes.get(SAVE_LEN_NO_PLAYER..).unwrap_or(&[]) {
             self.pl_id = *id;
             self.inventory_size = *size;
+        }
+        // A save from before it keeps the place the caller set (the new
+        // game's).
+        if let Some(&place) = bytes.get(SAVE_LEN_NO_PLACE) {
+            self.save_place = place;
         }
         Some(())
     }
@@ -5291,7 +5306,11 @@ mod tests {
         let mut restored = Re2State::default();
         restored.load_save_bytes(&bytes).unwrap();
         assert_eq!(restored, state);
-        assert!(restored.load_save_bytes(&bytes[1..]).is_none());
+        // A length no version of the save has is refused (one byte fewer
+        // is the save from before the save place).
+        let longer = [bytes.as_slice(), &[0]].concat();
+        assert!(restored.load_save_bytes(&longer).is_none());
+        assert!(restored.load_save_bytes(&bytes[4..]).is_none());
     }
 
     /// Room 103's area 3 (`aot_set 3, 3, 66, 3, ...`, the enemy bit and the
@@ -6440,6 +6459,31 @@ mod tests {
         assert!(!game.re2.partner_poisoned);
         let partner = splayer(&game).partner.as_deref().unwrap();
         assert_eq!((partner.life, partner.max_life), (200, 200));
+    }
+
+    /// `Save_push` keeps the save place (`0x98E9A7`), so a loaded game has
+    /// the typewriter's it was saved at. A save from before it leaves the
+    /// place its caller set, a new game's.
+    #[test]
+    fn the_save_place_survives_a_save() {
+        let state = Re2State {
+            save_place: 1,
+            ..Default::default()
+        };
+        let bytes = state.to_save_bytes();
+        assert_eq!(bytes.len(), SAVE_LEN);
+        let mut loaded = Re2State {
+            save_place: 0x0F,
+            ..Default::default()
+        };
+        loaded.load_save_bytes(&bytes).unwrap();
+        assert_eq!(loaded.save_place, 1);
+        let mut old = Re2State {
+            save_place: 0x0F,
+            ..Default::default()
+        };
+        old.load_save_bytes(&bytes[..SAVE_LEN_NO_PLACE]).unwrap();
+        assert_eq!(old.save_place, 0x0F);
     }
 
     #[test]

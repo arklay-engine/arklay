@@ -74,7 +74,7 @@ impl GameState {
         let entrance = &mut self.re2_box_entrance;
         entrance.state = 0;
         entrance.saved_stop = saved;
-        self.re2_save_place = place;
+        self.re2.save_place = place;
     }
 
     /// `Search_item_id` (`0x502660`): the first of the inventory's
@@ -158,7 +158,7 @@ impl GameState {
             "tw={:x},{},{}",
             self.re2_back.address(),
             self.re2_box_entrance.state,
-            self.re2_save_place
+            self.re2.save_place
         )
     }
 }
@@ -247,7 +247,7 @@ mod tests {
         assert_eq!(game.re2_box_entrance.state, 0);
         assert_eq!(game.re2_box_entrance.saved_stop, HELD);
         assert_eq!(fg_stop(&mut game), 0xFF00_0000 | HELD);
-        assert_eq!(game.re2_save_place, 1);
+        assert_eq!(game.re2.save_place, 1);
         assert!(!game.message.active);
     }
 

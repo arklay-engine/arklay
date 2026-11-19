@@ -1450,6 +1450,22 @@ mod tests {
         assert_eq!(restored.re2.random & 0xFFFF, 10439);
     }
 
+    /// A save at room 200's typewriter (place 1) loads with that place, over
+    /// the new game's the session starts with (`title_load_play`'s `tw`).
+    #[test]
+    fn an_re2_load_restores_the_save_place() {
+        let mut state = GameState::new(RoomId::parse("200").unwrap(), &RoomState::default());
+        state.is_re2_room = true;
+        state.sce_save(1);
+        let file = SaveFile::from_bytes(&SaveFile::from_state(&state).to_file_bytes())
+            .expect("the save reads back");
+        let mut restored = GameState::default();
+        restored.re2.save_place = crate::game::save2::new_game_place(0, false);
+        file.apply_to(&mut restored);
+        assert_eq!(restored.re2.save_place, 1);
+        assert!(restored.re2_typewriter_trace().ends_with(",1"));
+    }
+
     #[test]
     fn an_re2_load_clears_fg_stop() {
         let mut state = GameState::new(RoomId::parse("200").unwrap(), &RoomState::default());

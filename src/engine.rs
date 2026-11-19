@@ -18695,7 +18695,7 @@ fn new_game_state(
     }
     seed_re2_music_table(pack, &mut game, false);
     // RE2's new game sets the save place for its scenario (`0x4B73C0`).
-    game.re2_save_place = game::save2::new_game_place(id.player_flag, false);
+    game.re2.save_place = game::save2::new_game_place(id.player_flag, false);
     game.set_combat_tables(crate::combat::CombatTables::load(pack));
     game.item_defs = std::sync::Arc::new(crate::item_catalog::ItemCatalog::load(pack));
     let weapon = effects::WeaponEffects::load(pack);

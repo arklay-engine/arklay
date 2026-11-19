@@ -3716,9 +3716,6 @@ pub struct GameState {
     /// RE2's back routine slot 2 (`0x98E794`): the item box's lid or the
     /// typewriter's prompt.
     pub re2_back: save2::BackRoutine,
-    /// RE2's save place (`0x98E9A7`), which `Sce_Save` copies from its area.
-    /// Like the original's global it stays across rooms.
-    pub re2_save_place: u8,
     /// The typewriter's prompt was answered Yes this tick (game mode 1,
     /// `fg_system | 0x40000`): the engine hands the room to the save screen.
     pub re2_save_requested: bool,
@@ -4326,7 +4323,6 @@ impl Default for GameState {
             re2_status_start_dropped: false,
             re2_box_entrance: itembox2::Entrance::default(),
             re2_back: save2::BackRoutine::None,
-            re2_save_place: 0,
             re2_save_requested: false,
             re2_save_fired: None,
             re2_hikidashi: hikidashi2::Hikidashi::default(),
