@@ -3057,7 +3057,13 @@ impl Host for GameHost<'_> {
                 }
             }
             "message_on" => {
+                let up = self.game.message.menu_choice_id() & 0x80 != 0;
                 self.game.show_re2_message(at(1) as u8);
+                // `Mess_set` raises `fg_status`'s `0x40` with a message it
+                // takes; `Mess_disp` drops it at the tick's end.
+                if !up && self.game.message.menu_choice_id() & 0x80 != 0 {
+                    self.game.re2.set_flag(STATUS_BANK, STATUS_HOLD, 1);
+                }
                 // Its last two bytes, a word, are the `fg_stop` bits the
                 // message holds up while it shows: `0xFFFF` on a check in
                 // play, none in a scene.
@@ -5933,6 +5939,25 @@ mod tests {
         assert!(game.re2.player_stopped());
         game.cancel_message();
         assert_eq!(*game.re2.fg_stop_mut(), 0x0100_0000);
+    }
+
+    /// `Mess_set` raises `fg_status`'s `0x40` with a message it takes,
+    /// where a later instruction of the pass can clear it; a request it
+    /// refuses (one is up) raises nothing.
+    #[test]
+    fn a_scripts_message_raises_the_game_hold_with_it() {
+        use crate::scd2::opcode::lookup;
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, lookup(0x2B).unwrap(), &[0, 0, 0, 0, 0]);
+        assert!(game.re2.flag(STATUS_BANK, STATUS_HOLD));
+        // A script's `set(1, 25, 0)` writes the bank.
+        game.re2.set_flag(STATUS_BANK, STATUS_HOLD, 0);
+        // The message is still up: a second request is refused.
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, lookup(0x2B).unwrap(), &[0, 0, 0, 0, 0]);
+        assert!(!game.re2.flag(STATUS_BANK, STATUS_HOLD));
     }
 
     #[test]

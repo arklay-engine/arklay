@@ -4995,6 +4995,14 @@ impl GameSession {
     /// RE2's game over, after the tick's routines: `Game_loop` starts `Die`
     /// on the tick the player's life falls below zero.
     fn tick_re2_die(&mut self, pack: &Pack) {
+        // `fg_system`'s `0x4000000` as a script wrote it is the same bit:
+        // it joins the latch `Die` starts on, and is spent with it.
+        if self.game.re2.flag(0, crate::scd2::host::FG_SYSTEM_DIE) {
+            self.game
+                .re2
+                .set_flag(0, crate::scd2::host::FG_SYSTEM_DIE, 0);
+            self.game.re2.player.die_start = true;
+        }
         if self.re2_die.is_none()
             && self.game.re2.player.die_start
             && !self.game.re2.player.die_held_back
@@ -19526,8 +19534,10 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     };
     context.game.tick_re2_crouch();
     let re2 = &mut context.game.re2;
+    let dropped = std::mem::take(&mut re2.player.status_drop);
     let raised = std::mem::take(&mut re2.player.status_raise);
-    re2.banks[usize::from(crate::scd2::host::STATUS_BANK)][0] |= raised;
+    let status = &mut re2.banks[usize::from(crate::scd2::host::STATUS_BANK)][0];
+    *status = (*status & !dropped) | raised;
     crate::character2::shot_draws(
         context.game,
         context.room.cuts.get(context.room.current_cut),
@@ -19724,7 +19734,15 @@ fn tick_room_timed(
     // scripts' `cut_auto` releases this tick still held the cut for this
     // tick's check (room 303's plug panel: `cut_chg(3)`, `cut_auto(1)`).
     let cut_locked_before = context.game.is_re2_room && context.game.camera.locked;
+    // A message the tick's hook put up (`Key_lost`, a drawer), which the
+    // scripts' own don't count as: theirs raise `fg_status`'s `0x40` where
+    // the scripts can still clear it.
+    let hook_message = !message_before && context.game.message.menu_choice_id() & 0x80 != 0;
     tick_re2_scripts(&mut context);
+    let script_message = context.game.is_re2_room
+        && !message_before
+        && !hook_message
+        && context.game.message.menu_choice_id() & 0x80 != 0;
     context.game.re2.script_door =
         context.game.is_re2_room && !door_pending && context.game.transition_door.is_some();
     {
@@ -19866,9 +19884,7 @@ fn tick_room_timed(
     if context.game.is_re2_room && std::mem::take(&mut context.game.re2_status_start) {
         // The map key's `Key_trg`, as this tick's `Pad_set` left it.
         let asked = context.game.confirm_re2_key_map();
-        // `Mess_set` raises `fg_status`'s `0x40` with the message.
-        let message_set = !message_before && context.game.message.menu_choice_id() & 0x80 != 0;
-        if !asked || context.game.re2_start_refused(message_set) {
+        if !asked || context.game.re2_start_refused(hook_message) {
             // The scripts closed the gate the keys are tested under, so
             // the tick runs on.
             context.game.re2_status_start_dropped = true;
@@ -19885,6 +19901,15 @@ fn tick_room_timed(
             }
             return context.game.transition.take();
         }
+    }
+    // `Mess_disp`'s first pass, at the tick's end, drops the `0x40` that
+    // `Mess_set` raised with the scripts' message, whoever else held it.
+    if script_message {
+        context.game.re2.set_flag(
+            crate::scd2::host::STATUS_BANK,
+            crate::scd2::host::STATUS_HOLD,
+            0,
+        );
     }
     // `Game_loop` runs the enemy slots whether or not the player may move.
     if context.game.is_re2_room {
@@ -27116,7 +27141,7 @@ mod tests {
             game
         };
         assert!(!play().re2_start_refused(false));
-        assert!(play().re2_start_refused(true), "a message went up");
+        assert!(play().re2_start_refused(true), "the hook's message");
         // `Cut_check` moved the live cut; the screen still has the old one.
         let mut game = play();
         game.set_camera_cut(3);
@@ -27153,6 +27178,42 @@ mod tests {
             game.re2.player.die_start = true;
             game.debug.invincible = true;
         }));
+    }
+
+    /// `fg_system`'s `0x4000000` as a script writes it refuses START on
+    /// its tick and is then spent as `Game_loop` starts `Die` on it, so it
+    /// locks nothing out afterwards. `fg_status`'s `0x40` a script raises
+    /// and clears in one pass refuses nothing.
+    #[test]
+    fn re2_script_written_gate_bits_are_spent_or_cleared() {
+        use crate::scd2::host::{FG_SYSTEM_DIE, STATUS_BANK, STATUS_HOLD};
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.re2.set_flag(0, FG_SYSTEM_DIE, 1);
+        session.game.message_flags |= START_MESSAGE_BITS;
+        let start = UiInput {
+            start: true,
+            any: true,
+            ..UiInput::default()
+        };
+        re2_tick(&mut session, &pack, start);
+        assert!(session.game.re2_status_start_dropped);
+        assert!(!session.game.re2.flag(0, FG_SYSTEM_DIE), "spent");
+        assert!(session.re2_die.is_some(), "`Die` started on it");
+        assert!(!session.game.re2.player.die_start);
+
+        let nothing = |_: &mut GameSession| {};
+        assert_eq!(
+            re2_start_with_script("set(1, 25, 1); set(1, 25, 0);", nothing),
+            (false, true)
+        );
+        // The bit alone, in a default state: what the predicate reads.
+        let mut game = game::GameState::default();
+        game.is_re2_room = true;
+        game.re2.set_flag(STATUS_BANK, STATUS_HOLD, 1);
+        assert!(game.re2_start_refused(false));
     }
 
     /// `Die` runs as task 1, which the gate wants idle: START asks for

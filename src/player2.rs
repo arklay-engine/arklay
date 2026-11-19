@@ -493,6 +493,11 @@ pub struct Work {
     /// The bits of `fg_status` the routines raised this tick, which the
     /// caller ORs into the status bank.
     pub status_raise: u32,
+    /// The bits of `fg_status` the routines dropped this tick, whoever had
+    /// raised them, which the caller clears in the status bank first:
+    /// `pl_mv_00` to `pl_mv_04` drop `0x40` in their case 0 (their `0x80`
+    /// is [`crate::scd2::host::Re2State::view_held`]).
+    pub status_drop: u32,
     /// `WORD_00691f8c`: the burst weapons' calls of `Tama_decrease_i` since
     /// one last took rounds. Only the new game clears it.
     pub tama_count: i16,
@@ -720,6 +725,8 @@ const GATLING_CASE: (u32, [i16; 3]) = (0x201_0A00, [-200, 0x82, 0x14]);
 /// on each tick of the hold, and `Tama_ck_i`'s `0x800000` when its count is
 /// `0xFF`, which never runs out.
 const STATUS_ROCKET_HELD: u32 = 0x4_0000;
+/// `fg_status`'s `0x40` as a word's bit ([`Work::holds_game`]).
+const STATUS_GAME_HOLD: u32 = 0x40;
 const STATUS_ENDLESS: u32 = 0x80_0000;
 /// The count of a weapon that never runs out (`Tama_ck_i`, `Tama_decrease_i`).
 pub const ENDLESS: u8 = 0xFF;
@@ -1245,6 +1252,7 @@ impl Default for Work {
             attw: (0, 0),
             spent: 0,
             status_raise: 0,
+            status_drop: 0,
             tama_count: 0,
             spark_target: None,
             view_released: false,
@@ -1900,6 +1908,9 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
     }
     work.first_tick_assumed = false;
     let held_game = work.holds_game_now();
+    if work.routine[0] == MODE_MOVE && work.routine[1] <= MOVE_ROTATE && work.routine[2] == 0 {
+        work.status_drop |= STATUS_GAME_HOLD;
+    }
     if work.damage_cnt & !DAMAGE_LOCK != 0 {
         work.damage_cnt -= 1;
     }
@@ -11207,6 +11218,37 @@ mod tests {
         // whatever it started in.
         setup.work.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
         assert!(!setup.work.holds_game_in_routine() && !setup.work.holds_game_now());
+    }
+
+    /// `pl_mv_00` to `pl_mv_04` drop `fg_status`'s `0x40` in their case 0,
+    /// whoever raised it: the tick tells its caller, once, and a routine
+    /// past its case 0 or one that holds the game drops nothing.
+    #[test]
+    fn the_first_tick_of_a_plain_move_drops_the_game_hold() {
+        for routine in [
+            MOVE_IDLE,
+            MOVE_FORWARD,
+            MOVE_RUN,
+            MOVE_BACKWARD,
+            MOVE_ROTATE,
+        ] {
+            let mut setup = Setup::new(0);
+            setup.work.routine = [MODE_MOVE, routine, 0, 0];
+            setup.work.status_drop = 0;
+            setup.tick(Input::default(), 190);
+            assert_eq!(
+                setup.work.status_drop, STATUS_GAME_HOLD,
+                "routine {routine}"
+            );
+        }
+        let mut setup = Setup::new(0);
+        setup.work.routine = [MODE_MOVE, MOVE_IDLE, 1, 0];
+        setup.work.status_drop = 0;
+        setup.tick(Input::default(), 190);
+        assert_eq!(setup.work.status_drop, 0, "past its case 0");
+        setup.work.routine = [MODE_DAMAGE, 0, 0, 0];
+        setup.tick(Input::default(), 190);
+        assert_eq!(setup.work.status_drop, 0, "a hit");
     }
 
     #[test]

@@ -1023,9 +1023,10 @@ impl GameState {
     ///
     /// - with `Game` set: `Sce_Status`, `Sce_Windows`, `Sce_Item`'s window
     ///   or `Sce_Door`, fired by the scripts, or a drawer's hand-off;
-    /// - with `fg_status`'s `0x40`, which `Mess_set` raises with any
-    ///   message (`message_set`: one went up this tick) and a script can
-    ///   set, or its `0x10` (a scene's bars);
+    /// - with `fg_status`'s `0x40`, which a script can write and
+    ///   `Mess_set` raises with a message (the scripts' in the status bank,
+    ///   where a later instruction can clear it; `hook_message`: the tick's
+    ///   hook put one up), or its `0x10` (a scene's bars);
     /// - under `fg_stop`'s `0x1000000` (a message's stop word);
     /// - with a view to load (`BYTE_0098F07B`, a `cut_chg` or `cut_old`) or
     ///   `scd_var_cut` not the live cut (a zone's switch, which
@@ -1037,7 +1038,7 @@ impl GameState {
     ///
     /// The player's own `0x40` ([`crate::player2::Work::holds_game`]) and
     /// task 1 are tested where START is asked for.
-    pub fn re2_start_refused(&self, message_set: bool) -> bool {
+    pub fn re2_start_refused(&self, hook_message: bool) -> bool {
         use crate::scd2::host::{FG_SYSTEM_DIE, FG_SYSTEM_MOVIE, STATUS_BANK, STATUS_HOLD};
         let re2 = &self.re2;
         let var_cut = re2.var_cut.unwrap_or(re2.shown_cut);
@@ -1047,7 +1048,7 @@ impl GameState {
             || self.re2_computer_request.is_some()
             || self.re2_item_get.is_some()
             || re2.script_door
-            || message_set
+            || hook_message
             || re2.flag(STATUS_BANK, STATUS_HOLD)
             || self.scene_bars()
             || re2.input_stop_raised()
