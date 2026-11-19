@@ -414,6 +414,9 @@ impl SaveFile {
             let id = state.re2.pl_id;
             state.set_re2_player_id(id);
             state.re2.pl_stash.life = self.health;
+            // `scd_init` runs before the room is set, so the random base is
+            // a new game's whatever it was at the save.
+            state.re2.start_random();
             // `Game_loop`'s step 1 starts a loaded game with `fg_stop` and
             // `0x6897C8` at 0 whatever the save holds, so a save taken under
             // a hold never loads frozen.
@@ -1426,6 +1429,25 @@ mod tests {
             assert_eq!(parsed.pos_y, pos_y);
             assert_eq!(parsed.re2.as_deref(), Some(&[1, 2, 3][..]));
         }
+    }
+
+    /// A load starts from `scd_init`'s random base, as a new game does: the
+    /// room's set-up then steps it once (`title_load_play`'s `rseed`, 451
+    /// and then 10439).
+    #[test]
+    fn an_re2_load_starts_from_the_random_bases_start() {
+        let mut state = GameState::default();
+        state.is_re2_room = true;
+        let start = state.re2.random;
+        assert_eq!(start & 0xFFFF, 451);
+        state.re2.sce_rnd_set();
+        state.re2.sce_rnd_set();
+        let file = SaveFile::from_state(&state);
+        let mut restored = GameState::default();
+        file.apply_to(&mut restored);
+        assert_eq!(restored.re2.random, start);
+        restored.re2.sce_rnd_set();
+        assert_eq!(restored.re2.random & 0xFFFF, 10439);
     }
 
     #[test]

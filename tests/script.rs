@@ -709,6 +709,41 @@ fn a_title_trace_matches_the_engine_screen_trace() {
     );
 }
 
+/// A screen's trace that goes on into play (a load from the title, a new
+/// game's choice) writes the game's lines from there, a line a tick still.
+#[test]
+fn a_title_trace_goes_on_with_the_games_lines_in_play() {
+    let dir = pack_dir("title-into-play");
+    let out = success(&script(
+        &dir,
+        &lenient(
+            r#"
+        load_game_pack("game.akpak")
+        open_title()
+        trace_start("script.trace")
+        tick(2)
+        new_game{ room = "100" }
+        tick(2)
+        print(trace_ticks())
+        "#,
+        ),
+        &[],
+    ));
+    assert_eq!(out, "4\n");
+    let trace = std::fs::read_to_string(dir.join("script.trace")).unwrap();
+    let lines: Vec<&str> = trace.lines().skip(1).collect();
+    assert_eq!(lines.len(), 4);
+    for (index, line) in lines.iter().enumerate() {
+        assert!(line.starts_with(&format!("t={index} ")), "{line}");
+        assert_eq!(
+            line.contains(" ti="),
+            index < 2,
+            "the title's lines: {line}"
+        );
+        assert_eq!(line.contains(" p="), index >= 2, "the game's lines: {line}");
+    }
+}
+
 #[test]
 fn a_marked_boot_traces_as_an_engine_setup_that_edits_nothing() {
     let dir = pack_dir("mark-authored");

@@ -186,6 +186,10 @@ const TITLE_CORE_VOLUME: u8 = 0x6E;
 /// platform frame. The port ticks those at this interval so their wall-clock
 /// timing matches.
 const UI_TICK_MS: f64 = 16.0;
+/// The ticks `Title_game_init` (`0x506750`) takes between the title's
+/// hand-over and `Game_loop`'s first tick, after the tick the session
+/// starts on: a load's seven ticks in all (`title_load_play`'s 811 to 817).
+const RE2_TITLE_START_TICKS: u8 = 6;
 /// The absent Virgin logo the boot sequence requests first.
 const BOOT_VLOGO_ID: u8 = 28;
 /// The Capcom logo the boot sequence requests after the Virgin logo.
@@ -2415,6 +2419,11 @@ struct GameSession {
     /// room stays frozen and the room-entry fade is not armed until the
     /// message's encoded delay dismisses it.
     boot_message: Option<u8>,
+    /// RE 2's start from the title (`Title_game_init`, `0x506750`): the
+    /// ticks its steps still take before `Game_loop`'s first, held on black
+    /// under [`GameSession::boot_message`]. `None` for a session the title
+    /// didn't start.
+    re2_title_start: Option<u8>,
     /// Whether the action button may skip the loading narration and the
     /// letterboxed cutscenes. Only the interactive loops turn it on, so a
     /// scripted input or trace run plays every scene out like the
@@ -3027,6 +3036,7 @@ impl GameSession {
             examine: None,
             swallow_action: false,
             boot_message: None,
+            re2_title_start: None,
             skips_enabled: false,
             subtitles_off: false,
             native_subtitle: false,
@@ -3493,7 +3503,9 @@ impl GameSession {
             // The map key is tested with START, so it is dropped with it.
             self.game.re2_key_map = None;
         }
-        self.finish_menu_request(pack);
+        if !self.re2_start_waits() {
+            self.finish_menu_request(pack);
+        }
         if std::mem::take(&mut self.game.re2_box_open) {
             self.begin_re2_box_open(pack);
         }
@@ -3923,7 +3935,22 @@ impl GameSession {
         // frames fade up from black exactly like the original.
         if self.boot_message.is_some() {
             self.step_sound_fade();
+            if let Some(left) = self.re2_title_start.filter(|&left| left > 0) {
+                self.re2_title_start = Some(left - 1);
+                return Ok(());
+            }
             self.tick_boot_message(input, action);
+            if self.boot_message.is_none() && self.re2_title_start.take().is_some() {
+                self.enter_from_re2_title();
+            }
+            return Ok(());
+        }
+        // START's mode 1 under a fade: everyone is stopped and the fade goes
+        // on over the room.
+        if self.re2_start_waits() {
+            self.step_sound_fade();
+            self.room_fade_draw = self.room_fade.overlay();
+            self.room_fade.tick();
             return Ok(());
         }
         // The item box's menu handshake: the frame after the lid settles the
@@ -5567,13 +5594,15 @@ impl GameSession {
     /// when the status's USE looks. The item box's open is the same: case 2
     /// of `Item_box_entrance` sets `Game` to 1 and `fg_status`'s `0x8000`
     /// as START does, so from the next tick its modes 1 and 2 run these
-    /// passes too, the lid's count among them.
+    /// passes too, the lid's count among them. So are the ticks mode 1 waits
+    /// for a fade on ([`GameSession::re2_start_waits`]).
     fn re2_status_open_areas(&mut self, pack: &Pack) {
+        let shows_room = matches!(
+            self.re2_status_open.map(re2_status_open_view),
+            Some(Re2StatusView::Room(_))
+        );
         if !self.game.is_re2_room
-            || !matches!(
-                self.re2_status_open.map(re2_status_open_view),
-                Some(Re2StatusView::Room(_))
-            )
+            || !(shows_room || self.re2_start_waits())
             || self.game.entities[0].health < 0
         {
             return;
@@ -6014,6 +6043,24 @@ impl GameSession {
             return Some(Re2StatusView::Screen(Some(RE2_SCRIPT_MAP_FIRST_ALPHA)));
         }
         self.re2_status_open.map(re2_status_open_view)
+    }
+
+    /// Whether START's request waits this tick: `Game_loop`'s mode 1 leaves
+    /// for the status screen (`Fade_set`, mode 2) only once fade 0 is idle
+    /// (`Fade_status(0)`, `0x4BFB36`'s case 1), with `fg_stop` all up since
+    /// the press. START is taken with a fade on only under the one a game
+    /// started from the title enters through. Only a fade that is clearing
+    /// is waited for: one a script holds or darkens would never end with the
+    /// scripts stopped, and a request the next tick drops (a door, a film,
+    /// a death) holds nothing.
+    fn re2_start_waits(&self) -> bool {
+        self.game.is_re2_room
+            && self.menu_request.is_some()
+            && self.room_fade.is_active()
+            && self.room_fade.counter() < 0
+            && self.transition.is_none()
+            && self.movie.is_none()
+            && self.death.is_idle()
     }
 
     /// The frame after a menu was requested: restore the message word the
@@ -9078,6 +9125,27 @@ impl GameSession {
         self.boot_message = Some(id);
     }
 
+    /// A save loaded from RE 2's title starts as the original's does: the
+    /// title's hand-over, six ticks of `Title_game_init`'s steps on black,
+    /// and `Game_loop`'s first tick on the seventh.
+    fn start_from_re2_title(&mut self) {
+        if !self.game.is_re2_room || self.boot_message.is_none() {
+            return;
+        }
+        self.re2_title_start = Some(RE2_TITLE_START_TICKS);
+    }
+
+    /// `Game_loop`'s first tick after `Title_game_init`: the entry fade it
+    /// sets is a step on by the tick's end (`0x5000`), and the room's first
+    /// `Bg_loadPC` at that tick's `Swap_Cbuff` skips two frames
+    /// (`Movie_set(2)`), so the screen stays black for this tick and the two
+    /// after it.
+    fn enter_from_re2_title(&mut self) {
+        self.room_fade_draw = self.room_fade.overlay();
+        self.room_fade.tick();
+        self.present_skip.movie_set_black(3);
+    }
+
     /// One tick of the loading narration: advance the message window and, the
     /// tick its encoded delay clears it, arm the room-entry fade. No room
     /// script, entity, effect or player tick runs while the narration is up.
@@ -9628,7 +9696,10 @@ impl GameSession {
         // RE2's status screen draws the room under the first frames of its
         // fade, the way the original's suspended game loop still draws it.
         let re2_room = matches!(re2_status, Some(Re2StatusView::Room(_)));
-        let door_black = self.present_held && self.present_skip.black() && self.menu.is_none();
+        // A skipped present's black stays under the open's first ticks too:
+        // they show the room, which the original doesn't present either.
+        let door_black =
+            self.present_held && self.present_skip.black() && (self.menu.is_none() || re2_room);
         if (canvas.is_some() && !re2_room) || door_black {
             self.framebuffer.clear();
             self.gpu_scene_visible = false;
@@ -12108,6 +12179,9 @@ impl App {
                 Some(file) => {
                     self.continue_from_file((*file).clone())?;
                     self.restart_point = Some(RestartPoint::File(file));
+                    if let Mode::Play(session) = &mut self.mode {
+                        session.start_from_re2_title();
+                    }
                 }
                 None => {
                     crate::warning!("warning: a screen continued with no save chosen");
@@ -13154,8 +13228,15 @@ fn run_screen_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<
         }
         app.pending_movie = None;
         app.draw();
-        let sounds = std::mem::take(&mut app.ui_sounds);
-        out.write_line(&screen_trace_line(app, index, word, &sounds))?;
+        // A screen's trace that goes on into play (a load, a new game's
+        // choice) writes the game's line from there, a line a tick still.
+        if let Mode::Play(session) = &app.mode {
+            app.ui_sounds.clear();
+            out.write_tick(&session.trace_tick(&app.framebuffer))?;
+        } else {
+            let sounds = std::mem::take(&mut app.ui_sounds);
+            out.write_line(&screen_trace_line(app, index, word, &sounds))?;
+        }
         if options.capture_every > 0 && index % options.capture_every == 0 {
             write_trace_capture(app, options, index)?;
         }
@@ -26822,6 +26903,66 @@ mod tests {
         assert_eq!(session.re2_stopped_frame_draws, [true, true, true, false]);
     }
 
+    /// START taken under a fade (a loaded game's entry): `Game_loop`'s mode 1
+    /// starts the open only once `Fade_status(0)` says the fade is over, so
+    /// the request waits with the room stopped, the fade going on and the
+    /// stopped passes running, and a skipped present's black stays black
+    /// under the open's first ticks.
+    #[test]
+    fn re2_start_waits_for_the_entry_fade() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        // The entry fade as START's own tick left it, three steps from over.
+        session.room_fade.set(2, -0x1800, 0x3800 - 1);
+        session.menu_request = Some((MenuRequest::Menu, session.game.message_flags));
+        let idle = |session: &mut GameSession| {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        };
+        for (alpha, left) in [(0x6F, 0x2000 - 1), (0x3F, 0x800 - 1), (0x0F, -0x1001)] {
+            let passes = session.re2_stopped_enemy_passes;
+            idle(&mut session);
+            assert!(session.menu.is_none() && session.re2_status_open.is_none());
+            assert!(session.menu_request.is_some(), "still asked for");
+            assert_eq!(session.room_fade_draw_alpha(), Some(alpha));
+            assert_eq!(session.room_fade.state(), left);
+            assert_eq!(session.re2_stopped_enemy_passes, passes + 1);
+        }
+        idle(&mut session);
+        assert!(session.menu.is_some() && session.menu_request.is_none());
+        assert_eq!(session.re2_status_open, Some(1), "the fade is over");
+
+        // A request with no fade on opens on the next tick, and so does one
+        // under a fade that isn't clearing: a level a script holds, which
+        // the stopped scripts would never take away, or a fade to black.
+        for fade in [None, Some((0, 0x4000)), Some((0x200, 0))] {
+            let mut plain = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+            plain.game.is_re2_room = true;
+            if let Some((counter, state)) = fade {
+                plain.room_fade.set(2, counter, state);
+            }
+            plain.menu_request = Some((MenuRequest::Menu, plain.game.message_flags));
+            idle(&mut plain);
+            assert_eq!(plain.re2_status_open, Some(1), "under {fade:?}");
+        }
+
+        // The black of a skipped present covers the open's room frames.
+        let mut session = re2_status_open_session(&pack, a);
+        let lit = |session: &GameSession| {
+            let (pixels, _) = session.framebuffer.rgba.as_chunks::<4>();
+            pixels.iter().any(|pixel| pixel[..3] != [0, 0, 0])
+        };
+        session.render(&pack);
+        assert!(lit(&session), "the open's first tick draws the room");
+        session.present_skip.movie_set_black(3);
+        session.present_held = !session.present_skip.present();
+        session.render(&pack);
+        assert!(!lit(&session), "nothing of the room is drawn");
+    }
+
     /// The item box's five-row jump reads the raw pad's `0x8` and `0x4`: the
     /// aim key and the one beside it, through `Pad_set`'s repeat flag.
     #[test]
@@ -34167,6 +34308,55 @@ mod tests {
             Some(255),
             "the room fades up from black as after a watched narration"
         );
+    }
+
+    /// A save RE 2's title starts (`title_load_play`): six ticks of
+    /// `Title_game_init`'s steps on black with nothing armed, then the tick
+    /// the game enters on, with the entry fade a step on (`0x5000`) and
+    /// three frames to stay black. Another game's session isn't held.
+    #[test]
+    fn a_save_re2s_title_starts_enters_on_the_seventh_tick() {
+        let dir = TempDir::new();
+        let pack = Pack::open(&new_game_pack(&dir)).unwrap();
+        let open = |re2: bool| {
+            let mut session = GameSession::new(&pack, 0, &dir.0.join("saves")).unwrap();
+            session.game.is_re2_room = re2;
+            // This pack's narration waits for a press; RE 2 has none.
+            session.set_skips_enabled(true);
+            session.request_boot_message(game::MESSAGE_BOOT_CONTINUE);
+            session.start_from_re2_title();
+            session
+        };
+        let press = |session: &mut GameSession| {
+            session
+                .tick(&pack, UiInput::default(), action_press(), true)
+                .unwrap();
+        };
+        let idle = |session: &mut GameSession| {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        };
+        let mut session = open(true);
+        for tick in 0..6 {
+            // A press in the hold isn't the narration's to take.
+            press(&mut session);
+            assert!(session.boot_message.is_some(), "held on tick {tick}");
+            assert_eq!(session.room_fade.state(), -1, "nothing armed");
+        }
+        idle(&mut session);
+        assert!(session.boot_message.is_some(), "this pack's narration");
+        press(&mut session);
+        assert!(session.boot_message.is_none() && session.re2_title_start.is_none());
+        assert_eq!(session.room_fade.state(), 0x5000 - 1);
+        // This tick's frame is the first of the three that stay black.
+        assert!(session.present_held && session.present_skip.black());
+        assert_eq!(session.present_skip.left(), 2);
+
+        let mut other = open(false);
+        press(&mut other);
+        assert!(other.boot_message.is_none(), "no hold");
+        assert_eq!(other.room_fade.state(), 0x6800 - 1);
     }
 
     /// A continue's narration ends in the room-entry fade with the room-events

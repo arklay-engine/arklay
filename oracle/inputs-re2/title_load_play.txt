@@ -1,0 +1,12 @@
+# The title from boot: LOAD GAME with one save (save_200_new's), the decide on it at 800, then in the loaded game a walk forward, a turn left and a walk on (oracle/re2.md, "The load screen").
+0
+260 confirm
+263
+800 confirm
+803
+900 up
+960
+980 left
+1010
+1030 up
+1080

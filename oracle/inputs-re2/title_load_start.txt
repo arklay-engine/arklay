@@ -1,0 +1,14 @@
+# The title from boot: LOAD GAME with one save (save_200_new's), the decide on it at 800, then START on 819, under the loaded game's black frames and its fade in (the presses on 821 and 823 find `Game` at 1 and do nothing), and the cancel key in the status screen (oracle/re2.md, "The load screen").
+0
+260 confirm
+263
+800 confirm
+803
+819 start
+820
+821 start
+822
+823 start
+824
+920 cancel
+923
