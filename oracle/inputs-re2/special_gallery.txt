@@ -1,0 +1,50 @@
+# The title from boot: SPECIAL, GALLERY, its choice of Leon or Claire and EXIT (oracle/re2.md, "The title"): right and left on the names, down to EXIT and back, EXIT's confirm; then in again and the cancel key.
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 down
+443
+470 right
+473
+500 confirm
+503
+560 right
+563
+590 right
+593
+620 left
+623
+650 down
+653
+680 down
+683
+710 up
+713
+740 right
+743
+770 down
+773
+800 confirm
+803
+860 down
+863
+890 down
+893
+920 confirm
+923
+980 down
+983
+1010 right
+1013
+1040 confirm
+1043
+1100 left
+1103
+1130 cancel
+1133

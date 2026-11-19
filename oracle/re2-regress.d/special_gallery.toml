@@ -1,0 +1,27 @@
+# SPECIAL's GALLERY on the title (oracle/re2.md, "The title"): its page of Leon, Claire and EXIT, and the confirm's fade to the gallery. Boot records, compared from the title's first tick.
+
+[[run]]
+name = "special_gallery"
+ui = "title"
+offset = 189
+ticks = 1250
+input = "special_gallery.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
+frames = [189, 1249]
+expect = "match"
+record = ""
+
+[[run]]
+name = "special_gallery_enter"
+ui = "title"
+offset = 189
+ticks = 618
+input = "special_gallery_enter.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
+frames = [189, 617]
+expect = "match"
+record = ""

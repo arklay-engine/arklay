@@ -1,0 +1,20 @@
+# The title from boot: SPECIAL, GALLERY, right to Claire and the confirm that fades into the gallery (oracle/re2.md, "The title").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 down
+443
+470 right
+473
+500 confirm
+503
+560 right
+563
+600 confirm
+603
