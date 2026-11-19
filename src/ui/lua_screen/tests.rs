@@ -244,8 +244,28 @@ end
     screen.update(&cx, press(|input| input.start = true));
     assert!(screen.failed(), "300 is no film's id");
 
-    let plain = Fixture::new("no-film", "function update() end\nfunction draw() end");
-    assert!(!plain.load().plays_films());
+    // A screen without `on_film` couldn't be woken: its film is an error,
+    // raised before the screen leaves.
+    let plain = Fixture::new(
+        "no-film",
+        r##"
+function update(api, input)
+    if input.confirm then
+        asked = pcall(function() api:exit("film", 3) end)
+    end
+end
+function draw() end
+"##,
+    );
+    let cx = plain.context();
+    let mut screen = plain.load();
+    assert!(!screen.plays_films());
+    let confirm = UiInput {
+        confirm: true,
+        ..UiInput::default()
+    };
+    assert_eq!(screen.update(&cx, confirm), ScreenResult::Continue);
+    assert!(!screen.test_global::<bool>("asked"));
 }
 
 /// RE 2's narration and music cues: a line of Leon's or Claire's bank, the

@@ -487,6 +487,13 @@ impl UserData for Api<'_> {
             "exit",
             |_lua, api, (action, arg, choice): (Option<String>, Option<i64>, Option<Table>)| {
                 if let Some(name) = action {
+                    // Nothing could wake a screen without `on_film` after
+                    // its film, so it is refused before the screen leaves.
+                    if name == "film" && !api.host.plays_films {
+                        return Err(mlua::Error::RuntimeError(
+                            "api:exit(\"film\") needs the screen's on_film".into(),
+                        ));
+                    }
                     api.host.action = Some(action_of(&name, arg, choice.as_ref())?);
                 }
                 api.host.exited = true;

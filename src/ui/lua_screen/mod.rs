@@ -122,6 +122,8 @@ struct Host {
     load: Option<PathBuf>,
     exited: bool,
     failed: bool,
+    /// Whether the script has `on_film`, which `api:exit("film")` needs.
+    plays_films: bool,
     images: HashMap<String, Decoded>,
     /// The layout space the script lays itself out in (`api:width()`).
     layout: (u32, u32),
@@ -286,6 +288,7 @@ impl LuaScreen {
             load: None,
             exited: false,
             failed: false,
+            plays_films: false,
             images: HashMap::new(),
             layout: (crate::render::WIDTH, crate::video::aspect().height()),
             action: None,
@@ -295,6 +298,7 @@ impl LuaScreen {
             effects: None,
         };
         let vm = ScreenVm::load(entry, Loader::new(sources))?;
+        host.plays_films = vm.has_function("on_film");
         host.rescan();
         vm.call_open(&mut host, cx, game, args)
             .with_context(|| format!("screen script {entry} open failed"))?;
@@ -539,7 +543,7 @@ impl LuaScreen {
     /// ([`ScreenAction::Film`]) and its owner adds none of its own to a new
     /// game it starts.
     pub fn plays_films(&self) -> bool {
-        !self.host.failed && self.vm.has_function("on_film")
+        !self.host.failed && self.host.plays_films
     }
 
     /// Put a screen that left for a film back to work, calling its

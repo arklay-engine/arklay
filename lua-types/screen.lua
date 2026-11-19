@@ -880,7 +880,7 @@ function ScreenApi:picture_sprite_scaled(picture, sx, sy, sw, sh, dx, dy, dw, dh
 ---@param clut integer The CLUT row (capped at 255).
 ---@param scale integer The colour scale, `0..=255`.
 ---@param tint? ScreenTextColour Default white.
----@param blend? "opaque"|"half"|"variant"|"add"|integer Default `"opaque"`. `"variant"` is the original's variant-2 half alpha over the frame; `"half"` averages, `"add"` adds. An integer is an alpha, clamped to `0..=255`: the sprite goes over the frame at that weight, and one drawn at another size than its texels is smoothed as the original's 640 x 480 frame shows it.
+---@param blend? "opaque"|"half"|"variant"|"add"|integer Default `"opaque"`. `"variant"` is the original's variant-2 half alpha over the frame; `"half"` averages, `"add"` adds. An integer is an alpha, clamped to `0..=255`: the sprite goes over the frame at that weight, from the page itself (an HD replacement isn't drawn at a weight). The software renderer smooths one drawn at another size than its texels as the original's 640 x 480 frame shows it; the GPU renderer samples it once to a pixel.
 function ScreenApi:page_sprite_scaled(page, sx, sy, sw, sh, dx, dy, dw, dh, clut, scale, tint, blend) end
 
 ---@class ScreenEffectCamera
@@ -1449,5 +1449,6 @@ local Re2MapSprite = {}
 ---title's, after its [`on_loaded`](#ScreenModule.on_loaded): the game
 ---continues from the save the load screen chose. `film` is a title's with
 ---[`on_film`](#ScreenModule.on_film): it takes one of RE 2's film ids,
----sleeps while the film plays and wakes after it.
+---sleeps while the film plays and wakes after it. Without `on_film` it
+---raises an error, and from a screen that isn't the title it is dropped.
 ---@alias ScreenExit "title"|"char_select"|"save_load"|"continue"|"attract"|"resume"|"quit"|"ending_result"|"ending_epilogue"|"ending_save"|"new_game"|"load_game"|"film"
