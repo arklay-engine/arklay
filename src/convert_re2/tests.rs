@@ -671,3 +671,22 @@ fn file_chunks_follow_the_offset_table() {
     assert!(file_chunks(&data).is_err());
     assert!(file_chunks(&[0; 0x10]).is_err());
 }
+
+/// The option screen's two sheets are copied as they are, whatever the
+/// case of their names; a picture with no ADT to decode is left out.
+#[test]
+fn the_option_screens_sheets_are_copied() {
+    let root = TempDir::new("option-art");
+    make_install(&root.path);
+    let data = root.path.join("data");
+    let (words, parts) = (tiny_tim(2, 1), tiny_tim(3, 2));
+    write(&data.join("Common/Data/MOJI1.tim"), &words);
+    write(&data.join("Common/Data/parts.TIM"), &parts);
+    let out = root.path.join("out.akpak");
+    convert_game(&root.path, &out).unwrap();
+    let pack = Pack::open(&out).unwrap();
+    assert_eq!(read(&pack, "ui/option/moji1.tim"), words);
+    assert_eq!(read(&pack, "ui/option/parts.tim"), parts);
+    assert!(!pack.contains("ui/option/room.bmp"));
+    assert!(!pack.contains("ui/option/color2.bmp"));
+}

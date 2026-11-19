@@ -1,0 +1,40 @@
+# The title's OPTION screen (`0x44A040`, `Config_main` 0x44A0B0; oracle/re2.md, "The option screen"). `opt` is its trace: the task's step, the state, the menu's row, the sound page's row, a change's wait, the speaker mode, the sound quality, the two volumes and the arrows' five blink counts.
+
+[[run]]
+name = "title_option_menu"
+ui = "title"
+offset = 189
+ticks = 800
+input = "title_option_menu.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd,opt"
+frames = [189, 799]
+expect = "match"
+record = ""
+
+[[run]]
+name = "title_option_sound"
+ui = "title"
+offset = 189
+ticks = 1540
+input = "title_option_sound.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd,opt"
+frames = [189, 1539]
+expect = "match"
+record = ""
+
+[[run]]
+name = "title_option_monitor"
+ui = "title"
+offset = 189
+ticks = 780
+input = "title_option_monitor.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd,opt"
+frames = [189, 779]
+expect = "match"
+record = ""

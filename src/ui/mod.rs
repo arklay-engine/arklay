@@ -64,6 +64,9 @@ pub struct UiInput {
     pub held_right: bool,
     /// Confirm (Space or Return by default).
     pub confirm: bool,
+    /// Held level of confirm: RE 2's option screen steps a volume by ten
+    /// while it is held.
+    pub held_confirm: bool,
     /// Cancel (X, Backspace or Escape by default).
     pub cancel: bool,
     /// L1 (`[` by default): pages the item box back.

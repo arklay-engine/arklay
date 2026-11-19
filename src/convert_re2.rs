@@ -20,6 +20,8 @@
 //! | `Common/Data/Title_bg.adt` | `ui/title/title_bg.bmp` |
 //! | `Common/Data/tmoji.bin` (TIM `k`) | `ui/title/tmoji_<k>.tim` |
 //! | `Common/Data/Title_o.adt`, `Title_o2.adt` | `ui/title/title_o.bmp`, `ui/title/title_o2.bmp` |
+//! | `Common/Data/room.adt`, `color2.adt` | `ui/option/room.bmp`, `ui/option/color2.bmp` |
+//! | `Common/Data/parts.tim`, `moji1.tim` | `ui/option/parts.tim`, `ui/option/moji1.tim` |
 //! | `Common/Data/spy_logo.tim`, `tofulogo.tim` | `ui/title/spy_logo.tim`, `ui/title/tofulogo.tim` |
 //! | `Common/Data/font0.tim` | `font/00.bmp`, `font/00.xml` (moved onto the Western cells, `convert_re2/font.rs`) |
 //! | `bio2 1.10.exe`'s English tables, rooms' RDT text, CR's `exe/sys.tex` | `language/en-US.txt` (`convert_re2/exe.rs`, `text.rs`) |
@@ -573,6 +575,13 @@ pub(crate) fn convert(
         &mut tally,
         &mut warnings,
     )?;
+    copy_option_art(
+        &layout,
+        ddraw.as_ref().map(|(_, bytes)| bytes.as_slice()),
+        &mut writer,
+        &mut tally,
+        &mut warnings,
+    )?;
     copy_core_effects(&layout, &mut writer, &mut tally, &mut warnings)?;
     copy_die_text(&layout, &mut writer, &mut tally)?;
     copy_init_table(&layout, &mut writer, &mut tally, &mut warnings)?;
@@ -718,6 +727,10 @@ fn copy_text(
         (
             "ui/save_load.lua",
             include_str!("../games/re2/ui/save_load.lua"),
+        ),
+        (
+            "ui/cr_text.lua",
+            include_str!("../games/re2/ui/cr_text.lua"),
         ),
         (
             "lib/zombie.lua",
@@ -1769,6 +1782,78 @@ fn file_chunks(data: &[u8]) -> Result<Vec<&[u8]>> {
         bail!("the file has no chunk");
     }
     Ok(chunks)
+}
+
+/// The option screen's art (`Config_set_data`, `0x44AD40`): its background,
+/// `Common/Data/room.adt`, and MONITOR TUNING's picture, `color2.adt`, as
+/// `ui/option/room.bmp` and `ui/option/color2.bmp`, and the two sheets the
+/// executable uploads as textures 0x1A and 0x1B, `parts.tim` and `moji1.tim`,
+/// as they are. `color2.adt` and `parts.tim` are the copies in `ddraw.dll`'s
+/// archive when it has them.
+fn copy_option_art(
+    layout: &Layout,
+    ddraw: Option<&[u8]>,
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let data_files = files_in(layout.common(&["Data"]))?;
+    let mut patched: BTreeMap<String, Vec<u8>> = ddraw
+        .and_then(sevenz::find)
+        .map(|archive| {
+            sevenz::extract(archive, |name| {
+                let name = name.to_ascii_lowercase();
+                name == "common/data/color2.adt" || name == "common/data/parts.tim"
+            })
+        })
+        .transpose()
+        .unwrap_or_else(|error| {
+            warnings.push(format!(
+                "ddraw.dll: its option art is unread, the game folder's is used: {error:#}"
+            ));
+            None
+        })
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(name, bytes)| (name.to_ascii_lowercase(), bytes))
+        .collect();
+    for (stem, extension) in [
+        ("ROOM", "ADT"),
+        ("COLOR2", "ADT"),
+        ("PARTS", "TIM"),
+        ("MOJI1", "TIM"),
+    ] {
+        let file = format!("{stem}.{extension}").to_ascii_lowercase();
+        let bytes = match patched.remove(&format!("common/data/{file}")) {
+            Some(bytes) => bytes,
+            None => match data_files.iter().find(|path| {
+                upper_parts(path).is_some_and(|(name, ext)| name == stem && ext == extension)
+            }) {
+                Some(path) => read(path)?,
+                None => {
+                    if layout.common.is_some() {
+                        warnings.push(format!("no Common/Data/{file}; the option screen lacks it"));
+                    }
+                    continue;
+                }
+            },
+        };
+        let entry = stem.to_ascii_lowercase();
+        if extension == "ADT" {
+            let decoded = adt::decode(&bytes).with_context(|| format!("Common/Data/{file}"))?;
+            let image =
+                adt::frame_image(&decoded).with_context(|| format!("Common/Data/{file}"))?;
+            tally.add(
+                writer,
+                "ui",
+                &format!("ui/option/{entry}.bmp"),
+                bmp::encode_to_vec(&image)?,
+            )?;
+        } else {
+            tally.add(writer, "ui", &format!("ui/option/{entry}.tim"), bytes)?;
+        }
+    }
+    Ok(())
 }
 
 /// The title's menu sheets in the 7z archive of `ddraw.dll`.

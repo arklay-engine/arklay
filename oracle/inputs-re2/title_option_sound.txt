@@ -1,0 +1,104 @@
+# The title from boot to OPTION and its SOUND page: the mode and the quality changed and put back, the two volumes with left and right held, with the decide key held too, down to 1 and back to 100 through every digit, the rows walked, a long stay on EXIT, EXIT, the page again and the cancel key out of it and out of the menu, then OPTION and the page a second time (oracle/re2.md, "The option screen").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+350 down
+353
+400 confirm
+403
+440 down
+443
+460 down
+463
+480 confirm
+483
+500 left
+503
+520 right
+523
+540 down
+543
+560 right
+563
+580 right
+583
+600 right
+603
+620 left
+623
+640 left
+643
+660 left
+663
+680 down
+683
+700 left
+730
+740 left confirm
+760
+770 right
+790
+800 right confirm
+840
+850 down
+853
+860 left confirm
+889
+900 left
+945
+950 left confirm
+967
+975 left confirm
+978
+990 left
+993
+1000 left
+1003
+1010 right confirm
+1075
+1090 up
+1093
+1100 up
+1103
+1110 up
+1113
+1120 up
+1123
+1130 down
+1133
+1140 down
+1143
+1150 down
+1153
+1160 down
+1163
+1170 down
+1173
+1230 confirm
+1233
+1250 confirm
+1253
+1270 cancel
+1273
+1290 cancel
+1293
+1380 down
+1383
+1390 down
+1393
+1400 down
+1403
+1410 down
+1413
+1430 confirm
+1433
+1460 down
+1463
+1470 down
+1473
+1480 confirm
+1483

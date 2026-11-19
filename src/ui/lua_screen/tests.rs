@@ -661,6 +661,14 @@ fn pad_words_match_the_original_layout() {
         }),
         0x0C00
     );
+    assert_eq!(
+        super::held_word(UiInput {
+            held_confirm: true,
+            held_left: true,
+            ..UiInput::default()
+        }),
+        0x0041
+    );
 }
 
 #[test]
@@ -1193,7 +1201,7 @@ api:background("art/bg.bmp", {colour = "#FF8000", blend = "half"})"##,
 }
 
 /// A solid `width` x `height` BMP in one colour.
-fn solid_bmp(width: u32, height: u32, rgb: [u8; 3]) -> Vec<u8> {
+pub(super) fn solid_bmp(width: u32, height: u32, rgb: [u8; 3]) -> Vec<u8> {
     let mut rgba = Vec::with_capacity((width * height * 4) as usize);
     for _ in 0..width * height {
         rgba.extend_from_slice(&[rgb[0], rgb[1], rgb[2], 255]);

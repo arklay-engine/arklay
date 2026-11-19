@@ -1,0 +1,28 @@
+# The title from boot to OPTION and MONITOR TUNING: the picture, left with the decide key and with the cancel key, then START in the menu (oracle/re2.md, "The option screen").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+350 down
+353
+400 confirm
+403
+440 down
+443
+460 confirm
+463
+500 up
+503
+510 left
+513
+530 confirm
+533
+560 confirm
+563
+600 cancel
+603
+630 start
+633

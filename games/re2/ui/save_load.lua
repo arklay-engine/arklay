@@ -32,6 +32,8 @@
 -- name). The load (10), the failed write (0x62), the keyboard paging
 -- (`FUN_00432670`) and the name scroll aren't ported.
 
+local CrText = require("ui/cr_text")
+
 local M = {}
 
 local STATE_FONT, STATE_LIST, STATE_BROWSE, STATE_WRITE = 0, 1, 2, 3
@@ -440,38 +442,8 @@ end
 
 -- ---------------------------------------------------------------- drawing
 
--- `SavePrint`, Classic REbirth's print for this screen: the message font,
--- each glyph set a pixel closer than its width. The frames show three
--- glyphs apart from that (`{dx, advance less the font's}`): `f` keeps its
--- width, `O` is two pixels closer, and `?` sits a pixel later and is a
--- pixel wider.
-local SAVE_GLYPHS = { f = { 0, 0 }, O = { 0, -2 }, ["?"] = { 1, 1 } }
-
-local function glyph_width(api, glyph)
-    local odd = SAVE_GLYPHS[glyph]
-    return api:text_width(glyph) + (odd and odd[2] or -1)
-end
-
--- One character of a line: a save's row is its file's name, which may
--- hold more than ASCII.
-local CHARACTER = "[\0-\x7F\xC2-\xFD][\x80-\xBF]*"
-
-local function save_width(api, text)
-    local w = 0
-    for glyph in text:gmatch(CHARACTER) do
-        w = w + glyph_width(api, glyph)
-    end
-    return w
-end
-
-local function save_print(api, x, y, text, colour)
-    local opts = { colour = colour }
-    for glyph in text:gmatch(CHARACTER) do
-        local odd = SAVE_GLYPHS[glyph]
-        api:text(x + (odd and odd[1] or 0), y, glyph, opts)
-        x = x + glyph_width(api, glyph)
-    end
-end
+-- `SavePrint`, Classic REbirth's print for this screen (`ui/cr_text.lua`).
+local save_width, save_print = CrText.width, CrText.print
 
 local function centred(api, y, text, colour)
     -- A line is centred as two pixels wider than it prints.

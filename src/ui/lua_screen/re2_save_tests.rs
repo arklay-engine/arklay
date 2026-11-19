@@ -20,6 +20,14 @@ fn pack() -> &'static Pack {
         let mut writer = crate::pack::PackWriter::new();
         writer
             .add(
+                "ui/cr_text.lua",
+                include_str!("../../../games/re2/ui/cr_text.lua")
+                    .as_bytes()
+                    .to_vec(),
+            )
+            .unwrap();
+        writer
+            .add(
                 "ui/save_load.lua",
                 include_str!("../../../games/re2/ui/save_load.lua")
                     .as_bytes()

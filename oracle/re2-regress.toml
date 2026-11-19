@@ -928,8 +928,8 @@ frames = [189, 529]
 expect = "match"
 record = ""
 
-# OPTION: the decide cue and a fade to black; the title hands over to the option task on tick 409, which arklay
-# doesn't have (oracle/re2-deviations.md, "The title").
+# OPTION: the decide cue and a fade to black; the title hands over to the option task on tick 409, where this run
+# ends (re2-regress.d/title_option.toml's runs carry on through the option screen).
 [[run]]
 name = "title_option"
 ui = "title"
