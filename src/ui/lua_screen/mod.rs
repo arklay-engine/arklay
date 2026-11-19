@@ -124,6 +124,8 @@ struct Host {
     failed: bool,
     /// Whether the script has `on_film`, which `api:exit("film")` needs.
     plays_films: bool,
+    /// Whether the script has `on_volumes`: it shows the settings' volumes.
+    shows_volumes: bool,
     images: HashMap<String, Decoded>,
     /// The layout space the script lays itself out in (`api:width()`).
     layout: (u32, u32),
@@ -289,6 +291,7 @@ impl LuaScreen {
             exited: false,
             failed: false,
             plays_films: false,
+            shows_volumes: false,
             images: HashMap::new(),
             layout: (crate::render::WIDTH, crate::video::aspect().height()),
             action: None,
@@ -299,6 +302,7 @@ impl LuaScreen {
         };
         let vm = ScreenVm::load(entry, Loader::new(sources))?;
         host.plays_films = vm.has_function("on_film");
+        host.shows_volumes = vm.has_function("on_volumes");
         host.rescan();
         vm.call_open(&mut host, cx, game, args)
             .with_context(|| format!("screen script {entry} open failed"))?;
@@ -318,6 +322,24 @@ impl LuaScreen {
     /// it never set one.
     pub fn value(&self, key: &str) -> i64 {
         self.host.values.get(key).copied().unwrap_or(0)
+    }
+
+    /// A value the script published with `api:set(key, value)`, or `None`
+    /// when it never set one.
+    pub fn published(&self, key: &str) -> Option<i64> {
+        self.host.values.get(key).copied()
+    }
+
+    /// Drop a published value, as if the script never set it.
+    pub fn forget(&mut self, key: &str) {
+        self.host.values.remove(key);
+    }
+
+    /// Whether the script has `on_volumes`: its own option screen shows and
+    /// sets the settings' music and effects volumes, which its owner tells
+    /// it and takes back from what it publishes.
+    pub fn shows_volumes(&self) -> bool {
+        !self.host.failed && self.host.shows_volumes
     }
 
     /// What the screen shows a player, as its script's `view()` publishes

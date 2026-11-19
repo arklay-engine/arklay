@@ -10974,8 +10974,9 @@ struct App {
     /// `None` in a run with no settings, where such a screen keeps its own.
     screen_volumes: Option<[u8; 2]>,
     /// What the title last published as its `music_volume` and
-    /// `effects_volume`, to tell a change of its own from what it was told.
-    screen_volumes_shown: [i64; 2],
+    /// `effects_volume`, to tell a change of its own from what it was told;
+    /// `None` until it publishes one after it is told.
+    screen_volumes_shown: [Option<i64>; 2],
     /// A change the title made, for the window's loop to apply and save
     /// ([`save_screen_volumes`]).
     volume_change: Option<[u8; 2]>,
@@ -11108,7 +11109,7 @@ impl App {
             next_demo: 0,
             pending_return_title: false,
             screen_volumes: None,
-            screen_volumes_shown: [0; 2],
+            screen_volumes_shown: [None; 2],
             volume_change: None,
             prologue_pending: false,
             film_title: None,
@@ -11308,7 +11309,9 @@ impl App {
             return TICK_MS;
         }
         match &self.mode {
-            Mode::Title(screen) => {
+            // The new-game choice's entry may run the title's script, with
+            // its option screen.
+            Mode::Title(screen) | Mode::Select(screen) => {
                 if screen.value("game_active") != 0 {
                     TICK_MS
                 } else {
@@ -11320,7 +11323,7 @@ impl App {
             Mode::Load(screen) | Mode::Save(screen) if screen.value("game_active") == Some(1) => {
                 TICK_MS
             }
-            Mode::Boot | Mode::Select(_) | Mode::Load(_) | Mode::Save(_) => UI_TICK_MS,
+            Mode::Boot | Mode::Load(_) | Mode::Save(_) => UI_TICK_MS,
             Mode::Play(session) => {
                 session_tick_interval(session.transition.is_some(), session.ui_tick_rate())
             }
@@ -11720,17 +11723,24 @@ impl App {
 
     /// Tell the title the settings' volumes (`on_volumes(api, music,
     /// effects)`) and note what it shows of them: a script may keep them in
-    /// a range of its own.
+    /// a range of its own. A script that publishes nothing from the hook
+    /// has its first value after it taken as what it shows.
     fn tell_screen_volumes(&mut self) {
         let Some([music, effects]) = self.screen_volumes else {
             return;
         };
         // The screen is lent out of the mode while the app's context is.
         let mut mode = std::mem::replace(&mut self.mode, Mode::Boot);
-        if let Mode::Title(screen) | Mode::Select(screen) = &mut mode {
+        if let Mode::Title(screen) | Mode::Select(screen) = &mut mode
+            && screen.shows_volumes()
+        {
+            // What it published before is of the volumes it had then.
+            for key in SCREEN_VOLUME_KEYS {
+                screen.forget(key);
+            }
             let cx = self.context();
             screen.signal_with("on_volumes", (i64::from(music), i64::from(effects)), &cx);
-            self.screen_volumes_shown = SCREEN_VOLUME_KEYS.map(|key| screen.value(key));
+            self.screen_volumes_shown = SCREEN_VOLUME_KEYS.map(|key| screen.published(key));
         }
         self.mode = mode;
     }
@@ -11744,19 +11754,24 @@ impl App {
         else {
             return;
         };
-        let shown = SCREEN_VOLUME_KEYS.map(|key| screen.value(key));
+        if !screen.shows_volumes() {
+            return;
+        }
+        let shown = SCREEN_VOLUME_KEYS.map(|key| screen.published(key));
         if shown == self.screen_volumes_shown {
             return;
         }
-        for (index, &value) in shown.iter().enumerate() {
-            if value != self.screen_volumes_shown[index]
-                && let Ok(percent) = u8::try_from(value)
+        for (index, value) in shown.into_iter().enumerate() {
+            let before = std::mem::replace(&mut self.screen_volumes_shown[index], value);
+            // The first value after it was told is what it shows of that.
+            if before.is_some()
+                && before != value
+                && let Some(percent) = value.and_then(|value| u8::try_from(value).ok())
                 && percent <= 100
             {
                 volumes[index] = percent;
             }
         }
-        self.screen_volumes_shown = shown;
         if self.screen_volumes != Some(volumes) {
             self.screen_volumes = Some(volumes);
             self.volume_change = Some(volumes);
@@ -14349,15 +14364,7 @@ pub(crate) fn pad_style(device: u32) -> gui::PadStyle {
 /// gameplay options and language and the rest of `arklay.toml`.
 fn menu_settings(app: &App, display: &Display) -> gui::Settings {
     let (config, _) = crate::config::Config::load_default();
-    let mut game = config.game;
-    game.quick_turn = app.player_options.quick_turn;
-    game.tactical_reload = app.player_options.tactical_reload;
-    game.analog_movement = app.player_options.analog_movement;
-    game.auto_aim = !app.player_options.no_auto_aim;
-    game.blood = !app.player_options.no_blood;
-    game.chris_ink_ribbons = !app.player_options.no_chris_ink_ribbons;
-    game.jill_ink_ribbons = app.player_options.jill_ink_ribbons;
-    game.autosave = !app.player_options.no_autosave;
+    let game = menu_game_options(app, config.game);
     gui::Settings {
         graphics: display.graphics().copied().unwrap_or(config.graphics),
         game,
@@ -14367,6 +14374,25 @@ fn menu_settings(app: &App, display: &Display) -> gui::Settings {
         custom_pad: config.custom_pad_or_default(),
         system: system_info(display),
     }
+}
+
+/// The settings file's `[game]` options as the run has them: its gameplay
+/// options, and the two volumes a title's own option screen may have set
+/// since the file was read, which hold even when they could not be saved.
+fn menu_game_options(app: &App, mut game: crate::config::Game) -> crate::config::Game {
+    game.quick_turn = app.player_options.quick_turn;
+    game.tactical_reload = app.player_options.tactical_reload;
+    game.analog_movement = app.player_options.analog_movement;
+    game.auto_aim = !app.player_options.no_auto_aim;
+    game.blood = !app.player_options.no_blood;
+    game.chris_ink_ribbons = !app.player_options.no_chris_ink_ribbons;
+    game.jill_ink_ribbons = app.player_options.jill_ink_ribbons;
+    game.autosave = !app.player_options.no_autosave;
+    if let Some([music, effects]) = app.screen_volumes {
+        game.music_volume = music;
+        game.effects_volume = effects;
+    }
+    game
 }
 
 /// The machine, for the options' PC Specs row; looked up once. The GPU is
@@ -38741,7 +38767,8 @@ off_0010:
     }
 
     /// The new-game choice's entry runs the title's script ([`Mode::Select`]):
-    /// its films play as the title's do, and it wakes as itself.
+    /// where the app plays films, its films play as the title's do, and it
+    /// wakes as itself. (Opened on its own it plays none: `App::films`.)
     #[test]
     fn the_choice_entrys_films_play_as_the_titles() {
         let dir = TempDir::new();
@@ -38775,55 +38802,111 @@ off_0010:
     /// settings tells and takes nothing.
     #[test]
     fn a_titles_volumes_are_the_settings_and_its_changes_are_taken() {
+        // `LATE` publishes from its `update` only, `false` from the hook too.
         const TITLE: &str = "local M = { music = 100, effects = 100 }
+            local function publish(api)
+                api:set('music_volume', M.music)
+                api:set('effects_volume', M.effects)
+            end
             function M.on_volumes(api, music, effects)
                 M.music, M.effects = music, effects < 1 and 1 or effects
                 M.told = (M.told or 0) + 1
                 api:set('told', M.told)
-                api:set('music_volume', M.music)
-                api:set('effects_volume', M.effects)
+                if not LATE then publish(api) end
             end
             function M.update(api, input)
                 if input.left then M.music = M.music - 5 end
                 if input.right then M.effects = M.effects + 200 end
-                api:set('music_volume', M.music)
-                api:set('effects_volume', M.effects)
+                if input.up then M.effects = M.effects + 1 end
+                publish(api)
+            end
+            function M.draw() end
+            return M";
+        for late in [false, true] {
+            let dir = TempDir::new();
+            let title = TITLE.replace("LATE", if late { "true" } else { "false" });
+            let pack_path = new_game_pack_with(&dir, &[("ui/title.lua", title.as_bytes())]);
+            let open = |settings: Option<[u8; 2]>| {
+                let mut app = App::new(Pack::open(&pack_path).unwrap(), dir.0.join("saves"), false);
+                app.screen_volumes = settings;
+                app.boot(AppBoot::Title).unwrap();
+                app
+            };
+            let mut app = open(Some([40, 0]));
+            assert_eq!(title_value(&app, "told"), 1);
+            idle(&mut app);
+            assert_eq!(title_value(&app, "music_volume"), 40);
+            assert_eq!(app.volume_change, None, "showing 1 for 0 is no change");
+            assert_eq!(app.screen_volumes, Some([40, 0]));
+            app_press(&mut app, |ui| ui.left = true);
+            assert_eq!(app.volume_change.take(), Some([35, 0]));
+            idle(&mut app);
+            assert_eq!(app.volume_change, None, "taken once");
+            // A value no setting can hold is left out.
+            app_press(&mut app, |ui| ui.right = true);
+            assert_eq!(app.volume_change, None);
+            assert_eq!(app.screen_volumes, Some([35, 0]));
+            // The settings change under the title (the launcher's menu), to
+            // values it showed before and to a 0 it shows as 1.
+            app.set_screen_volumes(80, 0);
+            assert_eq!(title_value(&app, "told"), 2);
+            idle(&mut app);
+            assert_eq!(app.volume_change, None, "what it was told is no change");
+            assert_eq!(app.screen_volumes, Some([80, 0]));
+            // The floored volume moves from what is shown.
+            app_press(&mut app, |ui| ui.up = true);
+            assert_eq!(app.volume_change.take(), Some([80, 2]));
+            // The in-game menu starts from the run's volumes, whatever the
+            // settings file holds.
+            let game = menu_game_options(&app, crate::config::Game::default());
+            assert_eq!((game.music_volume, game.effects_volume), (80, 2));
+
+            let mut app = open(None);
+            assert_eq!(title_value(&app, "told"), 0);
+            app_press(&mut app, |ui| ui.left = true);
+            assert_eq!(app.volume_change, None);
+            let game = menu_game_options(&app, crate::config::Game::default());
+            assert_eq!((game.music_volume, game.effects_volume), (100, 100));
+        }
+
+        // A title with no hook is told nothing, and what it publishes under
+        // those names is its own.
+        let dir = TempDir::new();
+        let title = "local M = {}
+            function M.update(api, input)
+                api:set('music_volume', input.left and 5 or 50)
+            end
+            function M.draw() end
+            return M";
+        let pack_path = new_game_pack_with(&dir, &[("ui/title.lua", title.as_bytes())]);
+        let mut app = App::new(Pack::open(&pack_path).unwrap(), dir.0.join("saves"), false);
+        app.screen_volumes = Some([40, 40]);
+        app.boot(AppBoot::Title).unwrap();
+        idle(&mut app);
+        app_press(&mut app, |ui| ui.left = true);
+        assert_eq!(app.volume_change, None);
+        assert_eq!(app.screen_volumes, Some([40, 40]));
+    }
+
+    /// The new-game choice's entry runs at the limiter its script asks for,
+    /// as the title does: RE 2's opens the title's option screen.
+    #[test]
+    fn the_choice_entry_runs_at_its_scripts_limiter() {
+        const SELECT: &str = "local M = {}
+            function M.update(api, input)
+                api:set('game_active', input.left and 1 or 0)
             end
             function M.draw() end
             return M";
         let dir = TempDir::new();
-        let pack_path = new_game_pack_with(&dir, &[("ui/title.lua", TITLE.as_bytes())]);
-        let open = |settings: Option<[u8; 2]>| {
-            let mut app = App::new(Pack::open(&pack_path).unwrap(), dir.0.join("saves"), false);
-            app.screen_volumes = settings;
-            app.boot(AppBoot::Title).unwrap();
-            app
-        };
-        let mut app = open(Some([40, 0]));
-        assert_eq!(title_value(&app, "told"), 1);
-        assert_eq!(title_value(&app, "music_volume"), 40);
+        let pack_path = new_game_pack_with(&dir, &[("ui/char_select.lua", SELECT.as_bytes())]);
+        let mut app = App::new(Pack::open(&pack_path).unwrap(), dir.0.join("saves"), false);
+        app.boot(AppBoot::CharSelect).unwrap();
+        assert!(matches!(app.mode, Mode::Select(_)));
         idle(&mut app);
-        assert_eq!(app.volume_change, None, "showing 1 for 0 is no change");
-        assert_eq!(app.screen_volumes, Some([40, 0]));
+        assert_eq!(app.tick_interval(), UI_TICK_MS);
         app_press(&mut app, |ui| ui.left = true);
-        assert_eq!(app.volume_change.take(), Some([35, 0]));
-        idle(&mut app);
-        assert_eq!(app.volume_change, None, "taken once");
-        // A value no setting can hold is left out.
-        app_press(&mut app, |ui| ui.right = true);
-        assert_eq!(app.volume_change, None);
-        assert_eq!(app.screen_volumes, Some([35, 0]));
-        // The settings change under the title (the launcher's menu).
-        app.set_screen_volumes(80, 60);
-        assert_eq!(title_value(&app, "told"), 2);
-        idle(&mut app);
-        assert_eq!(app.volume_change, None, "what it was told is no change");
-        assert_eq!(app.screen_volumes, Some([80, 60]));
-
-        let mut app = open(None);
-        assert_eq!(title_value(&app, "told"), 0);
-        app_press(&mut app, |ui| ui.left = true);
-        assert_eq!(app.volume_change, None);
+        assert_eq!(app.tick_interval(), TICK_MS);
     }
 
     /// A change of the title's is saved to the settings file with the rest
