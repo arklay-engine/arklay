@@ -1017,6 +1017,32 @@ impl GameState {
         self.inventory_capacity() as u8
     }
 
+    /// `Game_loop`'s gate on START and the map key (`0x4C02A0`), as the
+    /// tick's `Cut_check` and `Sce_scheduler` left it: the keys aren't
+    /// taken with `Game` set (`Sce_Status`, `Sce_Windows`, `Sce_Item`'s
+    /// window or `Sce_Door`, fired by the scripts), under `fg_stop`'s
+    /// `0x1000000` (a message's stop word), with a view to load
+    /// (`BYTE_0098F07B`, a `cut_chg` or `cut_old`) or the live cut not yet
+    /// the one on screen (a zone's switch, which `Swap_Cbuff` loads at the
+    /// tick's end), with `fg_system`'s `0x4000000` (the player's death,
+    /// waiting for `Die`) or `0x200` (a film), or with `fg_status`'s `0x10`
+    /// (a scene's bars).
+    pub fn re2_start_refused(&self) -> bool {
+        use crate::scd2::host::FG_SYSTEM_MOVIE;
+        let re2 = &self.re2;
+        let on_screen = re2.var_cut.unwrap_or(re2.shown_cut);
+        self.re2_status_request
+            || self.re2_computer_request.is_some()
+            || self.re2_item_get.is_some()
+            || re2.script_door
+            || re2.input_stop_raised()
+            || re2.bg_load
+            || usize::from(on_screen) != self.camera.current_cut
+            || re2.player.die_start
+            || re2.flag(0, FG_SYSTEM_MOVIE)
+            || self.scene_bars()
+    }
+
     /// One tick of the status screen's item page and its panel, before the
     /// message's tick. `None` while the page isn't up.
     pub fn tick_re2_items(&mut self, input: Input) -> Option<Outcome> {
