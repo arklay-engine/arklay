@@ -1,0 +1,22 @@
+# The title from boot into LEON's DATA GALLERY: down to MOVIE and the cancel key on it, to the tick its screen starts (oracle/re2.md, "The gallery").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 down
+443
+470 right
+473
+500 confirm
+503
+560 confirm
+563
+640 down
+643
+680 cancel
+683

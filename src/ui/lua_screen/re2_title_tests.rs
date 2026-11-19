@@ -21,6 +21,10 @@ fn build_pack(prologue_art: bool) -> Pack {
             include_str!("../../../games/re2/ui/prologue.lua"),
         ),
         (
+            "ui/gallery.lua",
+            include_str!("../../../games/re2/ui/gallery.lua"),
+        ),
+        (
             "ui/title.lua",
             include_str!("../../../games/re2/ui/title.lua"),
         ),
@@ -44,6 +48,24 @@ fn build_pack(prologue_art: bool) -> Pack {
         let picture = super::tests::solid_bmp(4, 4, [index as u8; 3]);
         writer.add(&format!("ui/{stem}.bmp"), picture).unwrap();
     }
+    // The gallery's sheets (`re2_gallery_tests`): sheet `n` of the picture
+    // is all index 0, a red of level `n`, but for the right half of the
+    // fifth, a green; the words' sheet is white where a word is and
+    // see-through black elsewhere.
+    for n in 1..=5u16 {
+        let sheet = sheet_tim(&[n, 5 << 5], |u, _| u8::from(n == 5 && u >= 128));
+        writer
+            .add(&format!("ui/gallery/title{n}.tim"), sheet)
+            .unwrap();
+    }
+    let words = sheet_tim(&[0, 0x7FFF], |u, v| {
+        u8::from(
+            GALLERY_WORDS
+                .iter()
+                .any(|&[u0, v0, w, h]| (u0..u0 + w).contains(&u) && (v0..v0 + h).contains(&v)),
+        )
+    });
+    writer.add("ui/gallery/moji.tim", words).unwrap();
     if prologue_art {
         for stem in ["open10", "open11"] {
             let picture = super::tests::solid_bmp(4, 4, [0x40; 3]);
@@ -65,6 +87,33 @@ fn build_pack(prologue_art: bool) -> Pack {
     Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
 }
 
+/// The words of the gallery's sheet, each `[u, v, w, h]`: ROUGH SKETCH,
+/// MOVIE, ILLUSTRATION, 3D MODEL and EXIT.
+pub(super) const GALLERY_WORDS: [[u32; 4]; 5] = [
+    [0, 0, 244, 22],
+    [0, 22, 103, 22],
+    [0, 44, 226, 22],
+    [0, 66, 157, 22],
+    [0, 110, 79, 21],
+];
+
+/// An 8-bit 256 x 256 TIM: `palette`'s 15-bit colours from index 0, and
+/// each texel's index from `texel(u, v)`.
+fn sheet_tim(palette: &[u16], texel: impl Fn(u32, u32) -> u8) -> Vec<u8> {
+    let mut tim = vec![0x10, 0, 0, 0, 9, 0, 0, 0];
+    tim.extend((12u32 + 512).to_le_bytes());
+    tim.extend([0, 0, 0, 0, 0, 1, 1, 0]);
+    for index in 0..256 {
+        tim.extend(palette.get(index).copied().unwrap_or(0).to_le_bytes());
+    }
+    tim.extend((12u32 + 256 * 256).to_le_bytes());
+    tim.extend([0, 0, 0, 0, 128, 0, 0, 1]);
+    for v in 0..256 {
+        tim.extend((0..256).map(|u| texel(u, v)));
+    }
+    tim
+}
+
 fn pack() -> &'static Pack {
     use std::sync::OnceLock;
     static PACK: OnceLock<Pack> = OnceLock::new();
@@ -77,7 +126,7 @@ fn prologue_pack() -> &'static Pack {
     PACK.get_or_init(|| build_pack(true))
 }
 
-fn context<'a>(dir: &'a std::path::Path) -> UiContext<'a> {
+pub(super) fn context<'a>(dir: &'a std::path::Path) -> UiContext<'a> {
     context_over(pack(), dir)
 }
 
@@ -96,7 +145,7 @@ fn context_over<'a>(pack: &'static Pack, dir: &'a std::path::Path) -> UiContext<
 }
 
 /// The trace's `ti` field from the values the script publishes.
-fn ti(screen: &LuaScreen) -> Vec<i64> {
+pub(super) fn ti(screen: &LuaScreen) -> Vec<i64> {
     [
         "ti_mv", "ti_disp", "ti_init", "ti_sub", "ti_menu", "ti_step", "ti_sel", "ti_cur",
         "ti_pulse", "ti_slide", "ti_demo",
@@ -473,14 +522,14 @@ fn open_special(cx: &UiContext<'_>, dir: &std::path::Path, special: i64) -> LuaS
     screen
 }
 
-fn run(screen: &mut LuaScreen, cx: &UiContext<'_>, input: UiInput, ticks: usize) {
+pub(super) fn run(screen: &mut LuaScreen, cx: &UiContext<'_>, input: UiInput, ticks: usize) {
     screen.update(cx, input);
     for _ in 1..ticks {
         screen.update(cx, UiInput::default());
     }
 }
 
-fn press(direction: &str) -> UiInput {
+pub(super) fn press(direction: &str) -> UiInput {
     let mut input = UiInput::default();
     match direction {
         "down" => (input.down, input.held_down) = (true, true),
@@ -626,7 +675,7 @@ fn the_4th_survivors_exit_goes_back_to_the_title_from_black() {
 
 /// SPECIAL with every extra, its cursor taken to GALLERY and confirmed: the
 /// tick of the confirm, with the cues it played.
-fn open_gallery(cx: &UiContext<'_>, dir: &std::path::Path) -> LuaScreen {
+pub(super) fn open_gallery(cx: &UiContext<'_>, dir: &std::path::Path) -> LuaScreen {
     let mut screen = open_special(cx, dir, 15);
     run(&mut screen, cx, UiInput::default(), 20);
     run(&mut screen, cx, press("down"), 10);
@@ -640,7 +689,7 @@ fn open_gallery(cx: &UiContext<'_>, dir: &std::path::Path) -> LuaScreen {
 /// The words the tick drew from the title's sheet, less the licence line,
 /// each as `u:v:w:h:x:y:colour`. A word is two sprites, the second a line
 /// lower with blend 0: one that isn't is listed as `unpaired`.
-fn words(screen: &LuaScreen) -> Vec<String> {
+pub(super) fn words(screen: &LuaScreen) -> Vec<String> {
     let listed: String = screen.test_eval(
         "local out = {}
         local list = M.state.sprites
@@ -663,7 +712,7 @@ fn words(screen: &LuaScreen) -> Vec<String> {
 
 /// GALLERY's page as it draws: LEON, CLAIRE, EXIT and the word GALLERY,
 /// with `lit` (0 to 2) at `colour`.
-fn gallery_words(lit: usize, colour: u8) -> Vec<String> {
+pub(super) fn gallery_words(lit: usize, colour: u8) -> Vec<String> {
     [
         "0:32:48:12:104:151",
         "0:44:56:12:168:151",
@@ -677,7 +726,7 @@ fn gallery_words(lit: usize, colour: u8) -> Vec<String> {
 }
 
 /// Several keys pressed on one tick.
-fn press_all(keys: &[&str]) -> UiInput {
+pub(super) fn press_all(keys: &[&str]) -> UiInput {
     let mut input = UiInput::default();
     for key in keys {
         let one = press(key);
@@ -827,7 +876,7 @@ fn the_gallerys_exit_and_cancel_go_back_to_the_rows_on_original_mode() {
 }
 
 #[test]
-fn the_gallerys_confirm_fades_out_and_leaves_the_page_at_its_choice() {
+fn the_gallerys_confirm_fades_out_and_starts_the_gallery() {
     let dir = std::env::temp_dir().join(format!("arklay-re2-gallery-in-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let cx = context(&dir);
@@ -873,11 +922,12 @@ fn the_gallerys_confirm_fades_out_and_leaves_the_page_at_its_choice() {
         screen.test_eval::<i64>("return M.state.drawn_fades[2].level"),
         0x200 + 15 * 0x800
     );
-    // The gallery isn't ported: the page is back on the next tick.
-    run(&mut screen, &cx, UiInput::default(), 1);
-    assert_eq!(frame(&screen), None);
-    assert!(screen.test_eval::<bool>("return M.state.drawn_fades[2] == nil"));
-    assert_eq!(words(&screen).len(), 4);
+    // The gallery's task starts with it, and the title sleeps under it.
+    assert_eq!(screen.value("gal_on"), 1);
+    let asleep = ti(&screen);
+    run(&mut screen, &cx, UiInput::default(), 5);
+    assert_eq!(ti(&screen), asleep);
+    assert_eq!(screen.test_eval::<i64>("return #M.state.sprites"), 0);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -982,7 +1032,7 @@ fn opt(screen: &LuaScreen) -> [i64; 9] {
 
 /// What the tick left of the frame: `"black"`, `"held"` (the frame before
 /// stays up) or nothing for an ordinary draw.
-fn frame(screen: &LuaScreen) -> Option<String> {
+pub(super) fn frame(screen: &LuaScreen) -> Option<String> {
     screen.test_eval("return M.state.frame")
 }
 

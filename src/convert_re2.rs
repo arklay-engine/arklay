@@ -25,6 +25,7 @@
 //! | `Common/Data/room.adt`, `color2.adt` | `ui/option/room.bmp`, `ui/option/color2.bmp` |
 //! | `Common/Data/parts.tim`, `moji1.tim` | `ui/option/parts.tim`, `ui/option/moji1.tim` |
 //! | `Common/Data/spy_logo.tim`, `tofulogo.tim` | `ui/title/spy_logo.tim`, `ui/title/tofulogo.tim` |
+//! | `Gallery/TITLE<n>.dat`, `Moji.dat` (each a TIM) | `ui/gallery/title<n>.tim`, `ui/gallery/moji.tim` |
 //! | `Common/Data/font0.tim` | `font/00.bmp`, `font/00.xml` (moved onto the Western cells, `convert_re2/font.rs`) |
 //! | `bio2 1.10.exe`'s English tables, rooms' RDT text, CR's `exe/sys.tex` | `language/en-US.txt` (`convert_re2/exe.rs`, `text.rs`) |
 //! | `bio2 1.10.exe`'s computer strings (0x533AD0 and on) | `ui/computer/rc200.txt` |
@@ -578,6 +579,7 @@ pub(crate) fn convert(
         &mut warnings,
     )?;
     copy_prologue_art(&layout, &mut writer, &mut tally, &mut warnings)?;
+    copy_gallery_art(&layout, &mut writer, &mut tally, &mut warnings)?;
     copy_option_art(
         &layout,
         ddraw.as_ref().map(|(_, bytes)| bytes.as_slice()),
@@ -738,6 +740,10 @@ fn copy_text(
         (
             "ui/prologue.lua",
             include_str!("../games/re2/ui/prologue.lua"),
+        ),
+        (
+            "ui/gallery.lua",
+            include_str!("../games/re2/ui/gallery.lua"),
         ),
         (
             "lib/zombie.lua",
@@ -2046,6 +2052,44 @@ fn copy_prologue_art(
         warnings.push(format!(
             "no Common/Data/{}.adt; the prologue lacks its art",
             missing.join(", ").to_lowercase()
+        ));
+    }
+    Ok(())
+}
+
+/// DATA GALLERY's menu at 640 x 480 (`GalleryMain`, `0x439A80`): the five
+/// sheets of its picture, `Gallery/TITLE1.dat` to `TITLE5.dat`, and its
+/// rows' words, `Gallery/Moji.dat`. Each is a TIM under another extension,
+/// kept as it is in `ui/gallery/<stem>.tim`. An install with no `Gallery`
+/// folder has no gallery, and says nothing.
+fn copy_gallery_art(
+    layout: &Layout,
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let Some(folder) = child(&layout.data, "Gallery").filter(|folder| folder.is_dir()) else {
+        return Ok(());
+    };
+    let files = files_in(Some(folder))?;
+    let mut missing = Vec::new();
+    for stem in ["TITLE1", "TITLE2", "TITLE3", "TITLE4", "TITLE5", "MOJI"] {
+        let Some(path) = files
+            .iter()
+            .find(|path| upper_parts(path).is_some_and(|(name, ext)| name == stem && ext == "DAT"))
+        else {
+            missing.push(stem.to_ascii_lowercase());
+            continue;
+        };
+        let bytes = read(path)?;
+        let len = tim::byte_len(&bytes).with_context(|| format!("{}", path.display()))?;
+        let entry = format!("ui/gallery/{}.tim", stem.to_ascii_lowercase());
+        tally.add(writer, "ui", &entry, bytes[..len].to_vec())?;
+    }
+    if !missing.is_empty() {
+        warnings.push(format!(
+            "no Gallery/{}.dat; the gallery's menu lacks its art",
+            missing.join(", ")
         ));
     }
     Ok(())

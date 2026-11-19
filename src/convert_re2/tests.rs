@@ -738,6 +738,43 @@ fn the_boots_warning_is_converted() {
 /// TIMs, split into its sheets, and each `open1<n>.adt` a full-screen
 /// picture; the script that shows them is packed with the title's.
 #[test]
+fn the_gallerys_menu_art_is_converted() {
+    let root = TempDir::new("gallery-art");
+    make_install(&root.path);
+    let data = root.path.join("data");
+    let (picture, words) = (tiny_tim(2, 1), tiny_tim(3, 2));
+    write(&data.join("Gallery/TITLE1.dat"), &picture);
+    write(&data.join("Gallery/Title2.dat"), &picture);
+    // Bytes after the TIM aren't part of it.
+    write(
+        &data.join("Gallery/Moji.dat"),
+        &[words.clone(), vec![0; 4]].concat(),
+    );
+    // The 320 x 240 menu's sheets and the other screens' aren't packed.
+    write(&data.join("Gallery/top32_1.dat"), &picture);
+    write(&data.join("Gallery/ILLUST01.dat"), &picture);
+    let out = root.path.join("out.akpak");
+    convert_game(&root.path, &out).unwrap();
+    let pack = Pack::open(&out).unwrap();
+    assert_eq!(read(&pack, "ui/gallery/title1.tim"), picture);
+    assert_eq!(read(&pack, "ui/gallery/title2.tim"), picture);
+    assert_eq!(read(&pack, "ui/gallery/moji.tim"), words);
+    for entry in ["title3.tim", "top32_1.tim", "illust01.tim"] {
+        assert!(!pack.contains(&format!("ui/gallery/{entry}")), "{entry}");
+    }
+    assert!(pack.contains("ui/gallery.lua"));
+}
+
+#[test]
+fn an_install_with_no_gallery_folder_converts() {
+    let root = TempDir::new("no-gallery");
+    make_install(&root.path);
+    let out = root.path.join("out.akpak");
+    convert_game(&root.path, &out).unwrap();
+    assert!(!Pack::open(&out).unwrap().contains("ui/gallery/moji.tim"));
+}
+
+#[test]
 fn the_prologues_art_is_converted() {
     let root = TempDir::new("prologue-art");
     make_install(&root.path);

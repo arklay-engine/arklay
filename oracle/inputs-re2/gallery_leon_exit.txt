@@ -1,0 +1,26 @@
+# The title from boot into LEON's DATA GALLERY: up to EXIT and the confirm on it, then the title's page again, its EXIT and the rows (oracle/re2.md, "The gallery").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 down
+443
+470 right
+473
+500 confirm
+503
+560 confirm
+563
+640 up
+643
+680 confirm
+683
+740 down
+743
+780 confirm
+783

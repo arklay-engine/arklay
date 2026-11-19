@@ -637,7 +637,7 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
                         options.get::<Option<i32>>("dw")?,
                         options.get::<Option<i32>>("dh")?,
                     ],
-                    sprite_blend(options.get::<Option<String>>("blend")?.as_deref())?,
+                    sprite_blend_value(options.get::<Option<Value>>("blend")?.as_ref())?,
                 ),
                 None => ([None; 2], SpriteBlend::Opaque),
             };
@@ -663,7 +663,13 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
             };
             // The HD page through CLUT row 0, recoloured on the GPU by the
             // original's indices, so the lookup applies at its resolution.
-            match hd_art(&host.assets, api.cx.pack, framebuffer, handle, 0) {
+            // A replacement's quad carries no alpha, so a rectangle at a
+            // weight draws from the page itself.
+            let hd = match blend {
+                SpriteBlend::Alpha(_) => None,
+                _ => hd_art(&host.assets, api.cx.pack, framebuffer, handle, 0),
+            };
+            match hd {
                 Some(art) => {
                     let (corners, uv) = sprite_quad(&art, src, dst, [false; 2]);
                     let palette = std::array::from_fn(|index| {

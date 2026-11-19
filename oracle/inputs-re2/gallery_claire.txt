@@ -1,0 +1,40 @@
+# The title from boot: SPECIAL, GALLERY and the confirm on CLAIRE, then DATA GALLERY's menu with its 3D MODEL row: down four times, up four times, down to EXIT and the cancel key on it, back to the title's page (oracle/re2.md, "The gallery").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 down
+443
+470 right
+473
+500 confirm
+503
+540 right
+543
+570 confirm
+573
+660 down
+663
+690 down
+693
+720 down
+723
+750 down
+753
+780 up
+783
+810 up
+813
+840 up
+843
+870 up
+873
+900 up
+903
+940 cancel
+943

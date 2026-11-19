@@ -111,6 +111,9 @@ GAME_LOOP = 0x004BF810  # `Game_loop`, which the title's task chains to: play
 # routine (`Prologue_r`'s index), the fade's flags and slot, the skip's gate and state, the frames drawn, the
 # sprite table and its length, and the two pictures' sizes in `intromap_gfx` (entries 4 and 9), which zoom.
 PROLOGUE = 0x004CEFF0
+# The gallery (`Gallery`, 0x4BF760), task 1 of `TASKS` while it runs, and its work (`pGallery`).
+GALLERY_TASK = 0x004BF760
+GALLERY = 0x0066BEC8
 PROLOGUE_SCROLL_WAIT = 0x009800A4
 PROLOGUE_ZOOM_WAIT = 0x009800A6
 PROLOGUE_MV = 0x009800A8
@@ -1875,6 +1878,23 @@ def option_trace(game: Game) -> str:
     )
 
 
+def gallery_trace(game: Game) -> str:
+    """The gallery's state while its task runs (`Gallery`, `0x4BF760`): the task's step and, once it has its work,
+    the screen (`GalleryLoop`'s case), the screen's step and row, the lit row's level, the fade's level and the
+    flags."""
+    task = TASKS + 0x24
+    if game.u32(task + 4) != GALLERY_TASK:
+        return "-"
+    work = game.u32(GALLERY)
+    if not work:
+        return str(game.u8(task + 8))
+    screen, step, row = game.i32s(work, 3)
+    return (
+        f"{game.u8(task + 8)},{screen},{step},{row},{game.i16(work + 0x1468)},{game.i16(work + 0x1474)},"
+        f"{game.u32(work + 0x1478):x}"
+    )
+
+
 def fade_slot(game: Game, slot: int) -> str:
     """A fade slot's level, step and mode (`Fade_set`)."""
     fade = game.read(FADE + slot * FADE_SLOT, 5)
@@ -1899,6 +1919,7 @@ def boot_trace_line(game: Game, tick: int, pad: int) -> str:
         f"svb={(game.u32(CARD_STATE) >> 16) & 0xFF}",
         music_trace(game),
         "snd=" + ("/".join(game.sounds) or "-"),
+        "gal=" + gallery_trace(game),
     ]
     game.sounds.clear()
     return " ".join(fields)
