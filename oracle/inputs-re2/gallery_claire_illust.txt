@@ -1,0 +1,30 @@
+# The title from boot into CLAIRE's DATA GALLERY and its ILLUSTRATION: left round the start, right twice, and down to the movies, to the tick their screen starts (oracle/re2.md, "The gallery").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 down
+443
+470 right
+473
+500 confirm
+503
+540 right
+543
+570 confirm
+573
+650 confirm
+653
+700 left
+703
+730 right
+733
+760 right
+763
+800 down
+803

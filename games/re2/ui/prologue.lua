@@ -460,6 +460,7 @@ end
 -- One tick of the task. `keys` are this tick's presses. A film the tick
 -- started is left in `p.film` for the caller to play.
 function M.tick(p, keys)
+    p.running = true
     p.xa = nil
     p.music = nil
     p.film = nil
@@ -522,10 +523,12 @@ function M.sound(api, p, player)
     end
 end
 
--- The values of a trace's `pro`, `prs` and `prz`.
+-- The values of a trace's `pro`, `prs` and `prz`, from the task's first
+-- tick: the tick that starts it leaves no task for a trace to read.
 function M.publish(api, p)
-    api:set("pro_on", (p and not p.done) and 1 or 0)
-    if not p or p.done then
+    local on = p and p.running and not p.done
+    api:set("pro_on", on and 1 or 0)
+    if not on then
         return
     end
     api:set("pro_task0", p.task[1])

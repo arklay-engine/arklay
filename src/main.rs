@@ -1317,6 +1317,7 @@ fn main() -> Result<()> {
                 authentic: cli.authentic,
                 new_game: arklay::ui::NewGameChoice::default(),
                 title_special: None,
+                title_gallery: None,
             };
             let mut renderer = config.graphics;
             if let Some(kind) = cli.renderer {

@@ -2532,6 +2532,7 @@ impl Launcher {
             // The title chooses.
             new_game: crate::ui::NewGameChoice::default(),
             title_special: None,
+            title_gallery: None,
         };
         // The new renderer's window stays black until the game's first frame.
         if let Err(err) = display.present_black() {

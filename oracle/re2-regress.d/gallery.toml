@@ -1,4 +1,5 @@
-# DATA GALLERY's menu from the title (oracle/re2.md, "The gallery"). Boot records, compared from the title's first tick.
+# DATA GALLERY's menu and its pictures from the title (oracle/re2.md, "The gallery"). Boot records, compared from the title's first tick.
+# The frames' means are 0.05 to 0.07 measured; a window is the pictures' own ticks.
 
 [[run]]
 name = "gallery_leon"
@@ -10,6 +11,7 @@ input_shift = 189
 input_drop_early = true
 fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal"
 frames = [189, 931]
+frame_max_mean = 0.12
 expect = "match"
 record = ""
 
@@ -23,6 +25,7 @@ input_shift = 189
 input_drop_early = true
 fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal"
 frames = [189, 1049]
+frame_max_mean = 0.12
 expect = "match"
 record = ""
 
@@ -36,6 +39,7 @@ input_shift = 189
 input_drop_early = true
 fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal"
 frames = [189, 879]
+frame_max_mean = 0.12
 expect = "match"
 record = ""
 
@@ -49,6 +53,7 @@ input_shift = 189
 input_drop_early = true
 fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal"
 frames = [189, 695]
+frame_max_mean = 0.12
 expect = "match"
 record = ""
 
@@ -62,5 +67,69 @@ input_shift = 189
 input_drop_early = true
 fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal"
 frames = [189, 735]
+frame_max_mean = 0.12
 expect = "match"
 record = ""
+
+[[run]]
+name = "gallery_leon_sketch"
+ui = "title"
+offset = 189
+ticks = 940
+input = "gallery_leon_sketch.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
+frames = [189, 939]
+frame_max_mean = 0.12
+frame_windows = [[654, 901, 0.1]]
+expect = "match"
+record = ""
+
+[[run]]
+name = "gallery_claire_illust"
+ui = "title"
+offset = 189
+ticks = 832
+input = "gallery_claire_illust.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
+frames = [189, 831]
+frame_max_mean = 0.12
+frame_windows = [[668, 831, 0.1]]
+expect = "match"
+record = ""
+
+# `gallery`: config.ini's GALLERY0 to GALLERY4, what play has opened.
+[[run]]
+name = "gallery_leon_locked"
+ui = "title"
+offset = 189
+ticks = 860
+input = "gallery_leon_locked.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
+frames = [189, 859]
+frame_max_mean = 0.12
+frame_windows = [[654, 859, 0.1]]
+expect = "match"
+gallery = [0x90000000, 0x00000010, 0x00000000, 0x00000000, 0x00000000]
+record = "--config GALLERY0=0x90000000 --config GALLERY1=0x00000010 --config GALLERY2=0x00000000 --config GALLERY3=0x00000000 --config GALLERY4=0x00000000"
+
+[[run]]
+name = "gallery_claire_locked"
+ui = "title"
+offset = 189
+ticks = 860
+input = "gallery_claire_locked.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
+frames = [189, 859]
+frame_max_mean = 0.12
+frame_windows = [[668, 859, 0.1]]
+expect = "match"
+gallery = [0x00000000, 0x00000000, 0x80000002, 0x00000000, 0x00000000]
+record = "--config GALLERY0=0x00000000 --config GALLERY1=0x00000000 --config GALLERY2=0x80000002 --config GALLERY3=0x00000000 --config GALLERY4=0x00000000"

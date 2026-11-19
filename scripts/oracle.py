@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import struct
 import sys
 from dataclasses import dataclass, field
@@ -119,6 +120,8 @@ OPT_IN_FIELDS = {
     "fgstat",
     "fguse",
     "fl",
+    "gal",
+    "galv",
     "gm",
     "hk",
     "ib",
@@ -131,9 +134,14 @@ OPT_IN_FIELDS = {
     "om",
     "opt",
     "pc",
+    "pl",
     "pneck",
     "pon",
     "prep",
+    "pro",
+    "prs",
+    "prz",
+    "rc",
     "scene",
     "scv",
     "snd",
@@ -167,6 +175,8 @@ SCREEN_FIELDS = (
     "fgscn",
     "fguse",
     "fl",
+    "gal",
+    "galv",
     "gm",
     "hk",
     "ib",
@@ -174,8 +184,13 @@ SCREEN_FIELDS = (
     "mapfg",
     "opt",
     "pc",
+    "pl",
     "pon",
     "prep",
+    "pro",
+    "prs",
+    "prz",
+    "rc",
     "scv",
     "sv",
     "svs",
@@ -377,7 +392,14 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
         items.append(("fgkey", tick.door_locks))
     if tick.scene is not None:
         items.append(("scene", tick.scene))
-    items.extend(sorted(tick.screen.items()))
+    for key, value in sorted(tick.screen.items()):
+        values = value.split(",")
+        if key == "pl" and len(values) > 2:
+            # `Max_life` on its own, so that a run can leave it out and keep the rest; `pl` names both.
+            items.append(("pl", ",".join(values[:2] + values[3:])))
+            items.append(("plmax", values[2]))
+        else:
+            items.append((key, value))
     if tick.zombies not in (None, "-"):
         # Without the speed, which a zombie that's standing leaves stale.
         for row in tick.zombies.split(";"):
@@ -409,6 +431,41 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
     return items
 
 
+# The other names `--fields` may hold: a tick's own fields, and the patterns `selected` reads.
+NAMED_FIELDS = {
+    "room", "rng", "rseed", "fade", "cam", "mot", "em", "es", "spl", "spe", "spc", "bgm", "pneck", "xavol", "movie",
+    "snd", "inv", "ip", "msg", "fgkey", "fgstat", "scene", "zp", "zd", "esp", "espn", "espk", "zm*", "om*", "e*",
+    "plmax",
+}
+# A slot as a trace's key spells it: `tick_fields` writes an entity's from the number it parsed, so `e01.x` names
+# nothing.
+SLOT = r"(0|[1-9][0-9]*)"
+
+
+def comparable(name: str) -> bool:
+    """Whether `name` is a field the comparison reads from a trace. A name it doesn't know would select nothing,
+    and a run that lists it would pass without the field ever being compared."""
+    if name in NAMED_FIELDS or name in SCREEN_FIELDS:
+        return True
+    if name.startswith("p."):
+        return name[2:] in PLAYER_FIELDS
+    if re.fullmatch(f"(zm|om|esp){SLOT}", name, re.ASCII):
+        return True
+    entity = re.fullmatch(f"e-?{SLOT}\\.(.+)", name, re.ASCII)
+    return bool(entity) and entity.group(2) in ENTITY_FIELDS
+
+
+def checked_fields(text: str | None) -> list[str] | None:
+    """A `--fields` list, each name one the comparison reads."""
+    if not text:
+        return None
+    names = text.split(",")
+    unknown = [name for name in names if not comparable(name)]
+    if unknown:
+        raise SystemExit(f"the comparison has no field {', '.join(unknown)}")
+    return names
+
+
 def selected(key: str, fields: list[str] | None) -> bool:
     """Whether `key` is compared: `None` compares everything but the opt-in
     fields, else a name, `zm*` (every enemy slot's `zm<slot>`) or `e*`. The
@@ -416,6 +473,8 @@ def selected(key: str, fields: list[str] | None) -> bool:
     themselves. So are the room objects' `om<n>`: `om*` selects every one."""
     if key.startswith("esp"):
         return fields is not None and (key in fields or "esp" in fields)
+    if key == "plmax":
+        return fields is not None and (key in fields or "pl" in fields)
     if key.startswith("om") and key[2:].isdigit():
         return fields is not None and (key in fields or "om*" in fields)
     if fields is None:
@@ -735,7 +794,7 @@ def main() -> int:
 
     result = compare_pair(
         ref, ark, alignment["offset"], args.ark_offset, args.first, args.context,
-        args.fields.split(",") if args.fields else None,
+        checked_fields(args.fields),
     )
     result["alignment_scan"] = alignment
 

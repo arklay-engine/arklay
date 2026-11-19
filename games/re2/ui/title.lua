@@ -24,7 +24,9 @@
 -- (the title starts again) and whose EXIT goes back to `Title_init`,
 -- GALLERY opens its character's choice (page 7), whose confirm fades to
 -- the gallery (`ui/gallery.lua`), a task the title sleeps under until its
--- EXIT, and EX.BATTLE's confirm does nothing; OPTION fades out into the
+-- EXIT, with config.ini's `GALLERY0` to `GALLERY4` (`args.gallery0` to
+-- `args.gallery4`, everything opened without them), and EX.BATTLE's
+-- confirm does nothing; OPTION fades out into the
 -- option screen, which runs here as a task of its own ("the option screen"
 -- below) and gives the title back at `Title_init`. An idle title fades into
 -- the attract demo after 0x708 ticks.
@@ -1052,7 +1054,7 @@ local function gallery()
             fade_off(2)
             -- `Task_execute(1, Gallery)`: the task's first step runs on
             -- this tick, and its menu from the next.
-            s.gal = Gallery.new(s.claire)
+            s.gal = Gallery.new(s.claire, s.gallery)
             -- `Movie_set(1)`: this frame isn't presented, so the screen
             -- keeps the fade's last one.
             s.frame = "held"
@@ -2173,6 +2175,14 @@ function M.open(api, args)
     -- config.ini's SPECIAL, read as the signed byte it is.
     local special = args and args.special or 15
     s.special = special >= 0x80 and special - 0x100 or special
+    -- config.ini's GALLERY0 to GALLERY4, what play has opened of the
+    -- gallery: all of it without them.
+    if args and args.gallery0 then
+        s.gallery = {}
+        for n = 0, 4 do
+            s.gallery[n + 1] = args["gallery" .. n] or 0
+        end
+    end
     moji_set_work()
     publish(api)
 end
@@ -2204,7 +2214,7 @@ function M.update(api, input)
     elseif s.gal then
         -- The gallery's ticks: the title's task sleeps, through the tick
         -- the gallery closes on, which shows the title's picture alone.
-        Gallery.tick(api, s.gal, s.edge, s.cue)
+        Gallery.tick(api, s.gal, s.edge, s.raw, s.cue)
         s.sleeping = true
         if s.gal.task == 0 then
             s.gal = nil

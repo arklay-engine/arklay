@@ -1,0 +1,36 @@
+# CLAIRE's ILLUSTRATION with only the first five's bit and the last's opened: right six times and left once (oracle/re2.md, "The gallery").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 down
+443
+470 right
+473
+500 confirm
+503
+540 right
+543
+570 confirm
+573
+650 confirm
+653
+700 right
+703
+720 right
+723
+740 right
+743
+760 right
+763
+780 right
+783
+800 right
+803
+820 left
+823

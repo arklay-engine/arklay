@@ -114,6 +114,8 @@ PROLOGUE = 0x004CEFF0
 # The gallery (`Gallery`, 0x4BF760), task 1 of `TASKS` while it runs, and its work (`pGallery`).
 GALLERY_TASK = 0x004BF760
 GALLERY = 0x0066BEC8
+# config.ini's GALLERY0 to GALLERY4: the bits of what play has opened in the gallery.
+GALLERY_FLAGS = 0x0068059C
 PROLOGUE_SCROLL_WAIT = 0x009800A4
 PROLOGUE_ZOOM_WAIT = 0x009800A6
 PROLOGUE_MV = 0x009800A8
@@ -1893,6 +1895,26 @@ def gallery_trace(game: Game) -> str:
     )
 
 
+def hold_gallery_flags(game: Game) -> None:
+    """Put back the gallery's flags that `--config GALLERYn=...` set. Classic REbirth opens all of the gallery as
+    the title boots (the five words become ffffffff, fffffff0, fffffffe, ffffffff and ffffffff on boot tick 34,
+    whatever config.ini had), so a record of a gallery with less opened writes its words again before each tick.
+    Nothing at the title writes them: the game sets a bit in play (`Set_registry_flg`, `0x442EA0`)."""
+    for n in range(5):
+        value = CONFIG_OVERRIDES.get(f"GALLERY{n}")
+        if value is not None:
+            game.write(GALLERY_FLAGS + 4 * n, struct.pack("<I", int(value, 16)))
+
+
+def gallery_view_trace(game: Game) -> str:
+    """The gallery's pictures (`GalleryIllustrations`, `0x438DA0`), while `gallery_trace` has a state: the
+    picture's index and the count of the textures it is cut into, which is 0 until the tick that loads it."""
+    work = game.u32(GALLERY)
+    if game.u32(TASKS + 0x24 + 4) != GALLERY_TASK or not work:
+        return "-"
+    return f"{game.i16(work + 0x146A)},{game.i32s(work + 0x1470, 1)[0]}"
+
+
 def fade_slot(game: Game, slot: int) -> str:
     """A fade slot's level, step and mode (`Fade_set`)."""
     fade = game.read(FADE + slot * FADE_SLOT, 5)
@@ -1918,6 +1940,7 @@ def boot_trace_line(game: Game, tick: int, pad: int) -> str:
         music_trace(game),
         "snd=" + ("/".join(game.sounds) or "-"),
         "gal=" + gallery_trace(game),
+        "galv=" + gallery_view_trace(game),
     ]
     game.sounds.clear()
     return " ".join(fields)
@@ -1959,6 +1982,7 @@ def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
                 while cursor < len(entries) and entries[cursor][0] <= tick:
                     pad = entries[cursor][1]
                     cursor += 1
+                hold_gallery_flags(game)
                 tick += 1
                 regs.rax = pad
                 game.resume_from_break(tid, regs, original)
@@ -2127,7 +2151,7 @@ def main() -> int:
         )
         command.add_argument(
             "--config", action="append", default=[], metavar="KEY=VALUE",
-            help="set a key of the game's config.ini for this run (repeatable), such as SPECIAL=0x1 (the game reads its numbers in hex, 0x first)",
+            help="set a key of the game's config.ini for this run (repeatable), such as SPECIAL=0x1 (the game reads its numbers in hex, 0x first); with --boot a GALLERYn is also held in memory, past Classic REbirth's opening of the gallery",
         )
         command.add_argument("--input", default=None)
         command.add_argument("--shot-dir", default=None)
