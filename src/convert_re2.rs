@@ -1808,7 +1808,9 @@ fn copy_option_art(
         })
         .transpose()
         .unwrap_or_else(|error| {
-            warnings.push(format!("ddraw.dll: no option art: {error:#}"));
+            warnings.push(format!(
+                "ddraw.dll: its option art is unread, the game folder's is used: {error:#}"
+            ));
             None
         })
         .unwrap_or_default()

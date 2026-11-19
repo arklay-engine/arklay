@@ -17,12 +17,12 @@ record = ""
 name = "title_option_sound"
 ui = "title"
 offset = 189
-ticks = 1200
+ticks = 1540
 input = "title_option_sound.txt"
 input_shift = 189
 input_drop_early = true
 fields = "ti,tlogo,tfade,snd,opt"
-frames = [189, 1199]
+frames = [189, 1539]
 expect = "match"
 record = ""
 

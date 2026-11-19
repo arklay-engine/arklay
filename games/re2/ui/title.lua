@@ -172,8 +172,8 @@ local function new_state()
         sub2 = 0,
         -- `fg_status`'s bits the extras set (flag 1:6, `0x02000000`).
         fg_status = 0,
-        -- `Pad_set`'s state.
-        raw = 0,
+        -- `Pad_set`'s state; `raw` is the held word of the tick before, once
+        -- there is one.
         rep_mask = 0,
         rep_delay = 0,
         rep_count = 1,
@@ -210,7 +210,9 @@ local function pad_set(input)
     if input.start then
         raw = raw | PAD_START
     end
-    s.edge = (s.raw ~ raw) & raw
+    -- The original's pad has run since boot, so a direction held as the
+    -- title opens is no edge here.
+    s.edge = ((s.raw or raw) ~ raw) & raw
     if input.up then
         s.edge = s.edge | PAD_UP
     end
@@ -1044,17 +1046,23 @@ local OPT_TEXT_GREEN, OPT_DIGIT_GREEN = "#00C80A", "#00FF40"
 -- them.
 local sound = { speaker = 2, quality = 0, bgm = 100, se = 100 }
 
+-- The screen's work, which is static in the original and so outlasts a
+-- visit too: a second one opens with the cursor's row until `Config_main`
+-- clears it, and with the blink counts where the first left them.
+local option_work = {
+    step = 0,
+    state = 0,
+    cursor = 0,
+    type = 0,
+    wait = 0,
+    -- The arrows' blink counts: the mode's, the quality's, the two
+    -- volumes' and EXIT's.
+    blink = { mode = 0, quality = 0, bgm = 0, se = 0, exit = 0 },
+}
+
 local function option_new()
-    return {
-        step = 0,
-        state = 0,
-        cursor = 0,
-        type = 0,
-        wait = 0,
-        -- The arrows' blink counts: the mode's, the quality's, the two
-        -- volumes' and EXIT's.
-        blink = { mode = 0, quality = 0, bgm = 0, se = 0, exit = 0 },
-    }
+    option_work.step, option_work.state = 0, 0
+    return option_work
 end
 
 local function option_sprt(page, x, y, u, v, w, rgb)
@@ -1065,13 +1073,14 @@ local function option_colour(on)
     return on and OPT_GREEN or OPT_GREY
 end
 
--- A row's blink: its arrows show 20 ticks of each 30 while the row is the
--- cursor's, and the count stands while it isn't.
+-- A row's blink: its arrows show the count's first 20 ticks while the row
+-- is the cursor's, and the count stands while it isn't. The original's
+-- period is 31 ticks, which EXIT's keeps; Classic REbirth's rows have 30.
 local function option_blink(count)
     local o = s.opt
     local shown = o.blink[count] < 0x14
     o.blink[count] = o.blink[count] + 1
-    if o.blink[count] >= 0x1E then
+    if o.blink[count] > (count == "exit" and 0x1E or 0x1D) then
         o.blink[count] = 0
     end
     return shown
@@ -1980,8 +1989,10 @@ function M.draw(api)
     for _, t in ipairs(s.opt_texts or {}) do
         local parts = cache[OPT_PARTS]
         if t.cell then
-            -- A digit sits in the middle of its cell, as on the font's sheet.
-            local x = t.cell + (15 - api:text_width(t.text)) // 2
+            -- The original's sprite is the font's whole cell, and the print
+            -- here trims a glyph's left: the trim is half of what the width
+            -- leaves of the cell, but the 6's, a pixel less.
+            local x = t.cell + (15 - api:text_width(t.text)) // 2 - (t.text == "6" and 1 or 0)
             api:text(ox + x, oy + t.y, t.text, { colour = t.on and OPT_DIGIT_GREEN or nil })
         else
             -- The print starts a pixel before the sheet's word did.
