@@ -657,13 +657,33 @@ fn a_press_ends_the_overwrites_wait() {
     assert_eq!(sv(&screen)[7], 0);
 }
 
+/// The load screen left without a load has `fg_system`'s 0x400 up from its
+/// exit's first tick (`title_load_empty`'s 821), for the title to find.
+#[test]
+fn a_load_screen_left_without_a_load_says_so() {
+    let dir = folder("no-load");
+    let mut screen = open_load(&dir);
+    to_the_list(&mut screen, &dir);
+    assert_eq!(sv(&screen)[3], 1, "load mode");
+    let cancel = UiInput {
+        cancel: true,
+        ..UiInput::default()
+    };
+    tick(&mut screen, &dir, cancel);
+    assert_eq!(sv(&screen)[2], 99);
+    assert_eq!(screen.value("sv_fg_system"), 0);
+    tick(&mut screen, &dir, UiInput::default());
+    assert_eq!(sv(&screen)[..2], [4, 1]);
+    assert_eq!(screen.value("sv_fg_system"), 0x400);
+}
+
 /// Left and right held step the name scroll by 8 between 0 and 21, each
 /// step with the move cue and the cursor's wait, and nothing at either end;
 /// a held direction keeps a decide from being taken (`save_200_scroll`'s
 /// 600 to 720).
 #[test]
 fn left_and_right_step_the_name_scroll_between_0_and_21() {
-    let dir = folder("scroll");
+    let dir = folder("name-scroll");
     let mut screen = open(&dir);
     to_the_list(&mut screen, &dir);
     let left = UiInput {
@@ -768,8 +788,11 @@ fn cancel_and_leave_both_exit_without_a_write() {
         let (_, cues) = tick(&mut screen, &dir, if leave { confirm } else { cancel });
         assert_eq!(cues, [UiCue::Core(5)]);
         assert_eq!(sv(&screen)[2], 99);
+        assert_eq!(screen.value("sv_fade3_level"), 0, "fade 3 stands");
         tick(&mut screen, &dir, UiInput::default());
         assert_eq!(sv(&screen)[..2], [4, 1]);
+        assert_eq!(screen.value("sv_fade3_level"), -1, "the exit takes it");
+        assert_eq!(screen.value("sv_fg_system"), 0, "the bit is load mode's");
         let mut ticks = 0;
         while tick(&mut screen, &dir, UiInput::default()).0 == ScreenResult::Continue {
             ticks += 1;

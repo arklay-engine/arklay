@@ -11365,6 +11365,11 @@ impl App {
             .is_some_and(|entry| self.pack.contains(entry));
         let special = i64::from(self.player_options.title_special.unwrap_or(15));
         self.sleeping_title = None;
+        // A session's save screens leave their last listing's rows behind,
+        // as the title's load screen leaves its own to a session.
+        if let Mode::Play(session) = &self.mode {
+            self.card_rows = session.re2_card_rows;
+        }
         let mut cx = self.context();
         let screen = ui::lua_screen::LuaScreen::open_screen(
             "title",
@@ -13464,13 +13469,17 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
         // The film skip state advances on every loop pass, not the fixed
         // tick, exactly like the original's platform-driven film update.
         poll_movie_skip_for_frame(app, movie_buttons_held(input.held_word()));
-        let tick_ms = clock.scaled_tick_interval(app.tick_interval(), app.speed_applies());
+        let mut tick_ms = clock.scaled_tick_interval(app.tick_interval(), app.speed_applies());
         while clock.accumulator >= tick_ms {
             let tick = input.tick();
             if let AppFlow::Quit = app.update(tick.ui, tick.player, tick.action)? {
                 return clock.report();
             }
             clock.ticked(tick_ms);
+            // The tick may have changed the screen and with it the limiter,
+            // which the original reads after each pass of its scheduler:
+            // the wait before the next tick is the new screen's.
+            tick_ms = clock.scaled_tick_interval(app.tick_interval(), app.speed_applies());
         }
         if let Some(rumble) = app.take_rumble() {
             input.pads.rumble(rumble);
@@ -31557,6 +31566,30 @@ mod tests {
             };
             assert_eq!(title.value("ticks"), if resumes { 4 } else { 1 });
         }
+    }
+
+    /// The save screen's rows and save count are the process's in the
+    /// original: a session starts with what the title's load screen last
+    /// listed, and the title gets back what the session's screens left.
+    #[test]
+    fn app_hands_the_last_listings_rows_to_a_session_and_back() {
+        let dir = TempDir::new();
+        let pack = Pack::open(&new_game_pack(&dir)).unwrap();
+        let mut app = App::new(pack, dir.0.join("saves"), false);
+        app.card_rows = [1, 0];
+        app.apply(ScreenAction::NewGame {
+            character: 0,
+            choice: Default::default(),
+        })
+        .unwrap();
+        let Mode::Play(session) = &mut app.mode else {
+            panic!("expected a session");
+        };
+        assert_eq!(session.re2_card_rows, [1, 0]);
+        session.re2_card_rows = [4, 2];
+        app.apply(ScreenAction::Title).unwrap();
+        assert!(matches!(app.mode, Mode::Title(_)));
+        assert_eq!(app.card_rows, [4, 2]);
     }
 
     #[test]
