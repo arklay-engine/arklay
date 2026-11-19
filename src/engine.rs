@@ -5464,13 +5464,14 @@ impl GameSession {
             let Self {
                 menu,
                 save_dir,
+                screen_statics,
                 font,
                 text,
                 game,
                 ..
             } = self;
             let mut cx = UiContext {
-                statics: None,
+                statics: Some(screen_statics),
                 authentic: game.player_options.authentic,
                 pack,
                 save_dir,
@@ -5765,6 +5766,7 @@ impl GameSession {
         let Self {
             menu,
             save_dir,
+            screen_statics,
             font,
             text,
             game,
@@ -5772,7 +5774,7 @@ impl GameSession {
         } = self;
         if let Some(screen) = menu.as_mut() {
             let cx = UiContext {
-                statics: None,
+                statics: Some(screen_statics),
                 authentic: game.player_options.authentic,
                 pack,
                 save_dir,
@@ -5795,13 +5797,14 @@ impl GameSession {
         let Self {
             re2_item_screen,
             save_dir,
+            screen_statics,
             font,
             text,
             game,
             ..
         } = self;
         let mut cx = UiContext {
-            statics: None,
+            statics: Some(screen_statics),
             authentic: game.player_options.authentic,
             pack,
             save_dir,
@@ -5830,13 +5833,14 @@ impl GameSession {
         let Self {
             re2_computer_screen,
             save_dir,
+            screen_statics,
             font,
             text,
             game,
             ..
         } = self;
         let mut cx = UiContext {
-            statics: None,
+            statics: Some(screen_statics),
             authentic: game.player_options.authentic,
             pack,
             save_dir,
@@ -5866,6 +5870,7 @@ impl GameSession {
         let Self {
             re2_computer_screen,
             save_dir,
+            screen_statics,
             font,
             text,
             game,
@@ -5874,7 +5879,7 @@ impl GameSession {
         } = self;
         if let Some(screen) = re2_computer_screen.as_mut() {
             let cx = UiContext {
-                statics: None,
+                statics: Some(screen_statics),
                 authentic: game.player_options.authentic,
                 pack,
                 save_dir,
@@ -5908,6 +5913,7 @@ impl GameSession {
         let Self {
             re2_item_screen,
             save_dir,
+            screen_statics,
             font,
             text,
             game,
@@ -5915,7 +5921,7 @@ impl GameSession {
         } = self;
         if let Some(screen) = re2_item_screen.as_mut() {
             let cx = UiContext {
-                statics: None,
+                statics: Some(screen_statics),
                 authentic: game.player_options.authentic,
                 pack,
                 save_dir,
@@ -7173,7 +7179,10 @@ impl GameSession {
             .as_ref()
             .filter(|_| self.re2_save == Some(Re2Save::Screen))
             .and_then(|screen| screen.value(shown))
-            .or_else(|| self.screen_statics.get(kept))
+            .or_else(|| {
+                self.screen_statics
+                    .get(ui::save_load::SAVE_LOAD_ENTRY, kept)
+            })
             .unwrap_or(0)
     }
 
@@ -8925,6 +8934,7 @@ impl GameSession {
             death,
             death_screen,
             save_dir,
+            screen_statics,
             font,
             text,
             game,
@@ -8940,7 +8950,7 @@ impl GameSession {
         // frame, so the first frame still shows them as the eat left them.
         let torn_legs = torn_corpse && death.screen_ticks() > 1;
         let cx = UiContext {
-            statics: None,
+            statics: Some(screen_statics),
             authentic: game.player_options.authentic,
             pack,
             save_dir,
@@ -9758,6 +9768,7 @@ impl GameSession {
             let Self {
                 menu,
                 save_dir,
+                screen_statics,
                 font,
                 text,
                 game,
@@ -9766,7 +9777,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = menu.as_mut() {
                 let cx = UiContext {
-                    statics: None,
+                    statics: Some(screen_statics),
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -9788,6 +9799,7 @@ impl GameSession {
             let Self {
                 re2_item_screen,
                 save_dir,
+                screen_statics,
                 font,
                 text,
                 game,
@@ -9796,7 +9808,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = re2_item_screen.as_mut() {
                 let cx = UiContext {
-                    statics: None,
+                    statics: Some(screen_statics),
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -9819,11 +9831,12 @@ impl GameSession {
                 text,
                 game,
                 save_dir,
+                screen_statics,
                 ..
             } = self;
             if let Some(viewer) = examine.as_mut() {
                 let cx = UiContext {
-                    statics: None,
+                    statics: Some(screen_statics),
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -9848,11 +9861,12 @@ impl GameSession {
                 text,
                 game,
                 save_dir,
+                screen_statics,
                 ..
             } = self;
             if let Some(screen) = item_box.as_mut() {
                 let cx = UiContext {
-                    statics: None,
+                    statics: Some(screen_statics),
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -9870,6 +9884,7 @@ impl GameSession {
             let Self {
                 file,
                 save_dir,
+                screen_statics,
                 font,
                 text,
                 game,
@@ -9878,7 +9893,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = file.as_mut() {
                 let cx = UiContext {
-                    statics: None,
+                    statics: Some(screen_statics),
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -9895,6 +9910,7 @@ impl GameSession {
             let Self {
                 map,
                 save_dir,
+                screen_statics,
                 font,
                 text,
                 game,
@@ -9903,7 +9919,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = map.as_mut() {
                 let cx = UiContext {
-                    statics: None,
+                    statics: Some(screen_statics),
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -9920,6 +9936,7 @@ impl GameSession {
             let Self {
                 save_screen,
                 save_dir,
+                screen_statics,
                 font,
                 text,
                 game,
@@ -9928,7 +9945,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = save_screen {
                 let cx = UiContext {
-                    statics: None,
+                    statics: Some(screen_statics),
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -9949,6 +9966,7 @@ impl GameSession {
             let Self {
                 pickup_view,
                 save_dir,
+                screen_statics,
                 font,
                 text,
                 game,
@@ -9957,7 +9975,7 @@ impl GameSession {
             } = self;
             if let Some(pickup) = pickup_view.as_mut() {
                 let cx = UiContext {
-                    statics: None,
+                    statics: Some(screen_statics),
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -10040,6 +10058,7 @@ impl GameSession {
             let Self {
                 return_title,
                 save_dir,
+                screen_statics,
                 font,
                 text,
                 game,
@@ -10048,7 +10067,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = return_title.as_mut() {
                 let cx = UiContext {
-                    statics: None,
+                    statics: Some(screen_statics),
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -12307,6 +12326,7 @@ impl App {
         let App {
             pack,
             save_dir,
+            statics,
             font,
             text,
             mode,
@@ -12321,7 +12341,7 @@ impl App {
             Mode::Boot => {}
             Mode::Title(screen) => {
                 let cx = UiContext {
-                    statics: None,
+                    statics: Some(statics),
                     authentic: self.player_options.authentic,
                     pack,
                     save_dir,
@@ -12336,7 +12356,7 @@ impl App {
             }
             Mode::Select(screen) => {
                 let cx = UiContext {
-                    statics: None,
+                    statics: Some(statics),
                     authentic: self.player_options.authentic,
                     pack,
                     save_dir,
@@ -12351,7 +12371,7 @@ impl App {
             }
             Mode::Load(screen) => {
                 let cx = UiContext {
-                    statics: None,
+                    statics: Some(statics),
                     authentic: self.player_options.authentic,
                     pack,
                     save_dir,
@@ -12366,7 +12386,7 @@ impl App {
             }
             Mode::Save(screen) => {
                 let cx = UiContext {
-                    statics: None,
+                    statics: Some(statics),
                     authentic: self.player_options.authentic,
                     pack,
                     save_dir,
@@ -12381,7 +12401,7 @@ impl App {
             }
             Mode::Ending(screen) => {
                 let cx = UiContext {
-                    statics: None,
+                    statics: Some(statics),
                     authentic: self.player_options.authentic,
                     pack,
                     save_dir,
@@ -12396,7 +12416,7 @@ impl App {
             }
             Mode::Epilogue(screen) => {
                 let cx = UiContext {
-                    statics: None,
+                    statics: Some(statics),
                     authentic: self.player_options.authentic,
                     pack,
                     save_dir,
@@ -13226,7 +13246,18 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
     line.push_str(&format!(
         " svs={}",
         load.and_then(|load| load.value("sv_scroll"))
-            .or_else(|| app.statics.get("card_scroll"))
+            .or_else(|| app
+                .statics
+                .get(ui::save_load::SAVE_LOAD_ENTRY, "card_scroll"))
+            .unwrap_or(0)
+    ));
+    // The overwrite question's blink count, kept the same way.
+    line.push_str(&format!(
+        " svb={}",
+        load.and_then(|load| load.value("sv_blink"))
+            .or_else(|| app
+                .statics
+                .get(ui::save_load::SAVE_LOAD_ENTRY, "card_blink"))
             .unwrap_or(0)
     ));
     let snd: Vec<String> = sounds
@@ -26933,7 +26964,9 @@ mod tests {
         let (pack, mut session) = re2_typewriter_session(&dir);
         assert_eq!(session.re2_save_screen_trace(), "-");
         session.game.state_bytes[usize::from(game::STATE_BYTE_SAVES)] = 0;
-        session.screen_statics.set("card_scroll", Some(8));
+        session
+            .screen_statics
+            .set(ui::save_load::SAVE_LOAD_ENTRY, "card_scroll", Some(8));
         assert_eq!(session.re2_save_scroll_trace(), 8, "the last screen's");
         let mut screen = writing_screen(&[
             ("sv_sub", 3),
@@ -31598,7 +31631,7 @@ mod tests {
         let dir = TempDir::new();
         let pack = Pack::open(&new_game_pack(&dir)).unwrap();
         let mut app = App::new(pack, dir.0.join("saves"), false);
-        app.statics.set("card_scroll", Some(8));
+        app.statics.set("ui/save_load.lua", "card_scroll", Some(8));
         app.apply(ScreenAction::NewGame {
             character: 0,
             choice: Default::default(),
@@ -31607,9 +31640,12 @@ mod tests {
         let Mode::Play(session) = &mut app.mode else {
             panic!("expected a session");
         };
-        assert_eq!(session.screen_statics.get("card_scroll"), Some(8));
-        session.screen_statics.set("card_scroll", Some(0));
-        assert_eq!(app.statics.get("card_scroll"), Some(0));
+        let kept = |statics: &ui::ScreenStatics| statics.get("ui/save_load.lua", "card_scroll");
+        assert_eq!(kept(&session.screen_statics), Some(8));
+        session
+            .screen_statics
+            .set("ui/save_load.lua", "card_scroll", Some(0));
+        assert_eq!(kept(&app.statics), Some(0));
     }
 
     #[test]

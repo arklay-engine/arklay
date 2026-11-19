@@ -328,16 +328,18 @@ function ScreenApi:height() end
 function ScreenApi:set(key, value) end
 
 ---Keep a value past this screen: the engine holds it for as long as it
----runs and gives it back to any screen that asks, this one's next opening
----included. It is for work the original keeps in static data, which a
+---runs and gives it back to this script's next opening, in a session or
+---on the title. It is for work the original keeps in static data, which a
 ---screen finds as the last one left it (the save list's name scroll, the
----option screen's rows); it is never saved. Up to 64 keys in all, shared by
----every screen of the pack; a new key past that raises an error.
+---option screen's rows); it is never saved, and a load doesn't change it.
+---The keys are the script's own: another screen's script neither reads
+---them nor counts against them. Up to 64 keys a script; a new key past
+---that raises an error.
 ---@param key string
 ---@param value integer|boolean|nil An integer, a boolean (kept as 1 or 0), or `nil` to forget the key.
 function ScreenApi:keep(key, value) end
 
----A value [`api:keep`](#ScreenApi.keep) kept.
+---A value this script kept with [`api:keep`](#ScreenApi.keep).
 ---@param key string
 ---@return integer? value `nil` when nothing is kept under `key`.
 function ScreenApi:kept(key) end

@@ -467,7 +467,10 @@ impl UserData for Api<'_> {
         );
 
         methods.add_method("kept", |_lua, api, key: String| {
-            Ok(api.cx.statics.and_then(|statics| statics.get(&key)))
+            Ok(api
+                .cx
+                .statics
+                .and_then(|statics| statics.get(&api.host.entry, &key)))
         });
 
         methods.add_method("keep", |_lua, api, (key, value): (String, Value)| {
@@ -483,9 +486,11 @@ impl UserData for Api<'_> {
                 }
             };
             match api.cx.statics {
-                Some(statics) if !statics.set(&key, value) => Err(mlua::Error::RuntimeError(
-                    format!("api:keep({key}): the screens keep no more than 64 values"),
-                )),
+                Some(statics) if !statics.set(&api.host.entry, &key, value) => {
+                    Err(mlua::Error::RuntimeError(format!(
+                        "api:keep({key}): a screen keeps no more than 64 values"
+                    )))
+                }
                 _ => Ok(()),
             }
         });

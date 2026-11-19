@@ -1844,6 +1844,7 @@ def boot_trace_line(game: Game, tick: int, pad: int) -> str:
         save_screen_trace(game),
         # The list's name scroll (`0x986384`), which left and right step.
         f"svs={game.i32s(CARD_SCROLL, 1)[0]}",
+        f"svb={(game.u32(CARD_STATE) >> 16) & 0xFF}",
         music_trace(game),
         "snd=" + ("/".join(game.sounds) or "-"),
     ]

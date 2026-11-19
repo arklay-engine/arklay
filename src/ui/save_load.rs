@@ -45,7 +45,7 @@ fn modern(cx: &UiContext<'_>) -> bool {
 }
 
 /// The shipped save/load screen script.
-const SAVE_LOAD_ENTRY: &str = "ui/save_load.lua";
+pub(crate) const SAVE_LOAD_ENTRY: &str = "ui/save_load.lua";
 
 /// A completed save: the slot that was written and whether the flow consumed
 /// an ink ribbon.

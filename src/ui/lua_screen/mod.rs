@@ -101,6 +101,8 @@ impl Decoded {
 
 /// The persistent state behind the `api` userdata.
 struct Host {
+    /// The script's pack entry, the scope of what it keeps (`api:keep`).
+    entry: String,
     mode: Mode,
     save_dir: PathBuf,
     /// The byte space the script's text is encoded in.
@@ -270,6 +272,7 @@ impl LuaScreen {
         let sources = Sources::collect(cx.pack, entry)?;
         let text = cx.text;
         let mut host = Host {
+            entry: entry.to_string(),
             mode,
             save_dir: cx.save_dir.to_path_buf(),
             script: text.map(Text::script).unwrap_or_default(),
