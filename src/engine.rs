@@ -7180,8 +7180,8 @@ impl GameSession {
             .filter(|_| self.re2_save == Some(Re2Save::Screen))
             .and_then(|screen| screen.value(shown))
             .or_else(|| {
-                self.screen_statics
-                    .get(ui::save_load::SAVE_LOAD_ENTRY, kept)
+                let scope = ui::save_load::kept_scope(self.game.save_screen.as_deref());
+                self.screen_statics.get(scope, kept)
             })
             .unwrap_or(0)
     }
@@ -13242,24 +13242,16 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
         }
         None => line.push_str(" sv=-"),
     }
-    // The list's name scroll, which the screen keeps for the next one.
-    line.push_str(&format!(
-        " svs={}",
-        load.and_then(|load| load.value("sv_scroll"))
-            .or_else(|| app
-                .statics
-                .get(ui::save_load::SAVE_LOAD_ENTRY, "card_scroll"))
+    // The list's name scroll and the overwrite question's blink count,
+    // which the screen keeps for the next one.
+    let kept = |shown: &str, kept: &str| {
+        let scope = ui::save_load::kept_scope(app.save_screen.as_deref());
+        load.and_then(|load| load.value(shown))
+            .or_else(|| app.statics.get(scope, kept))
             .unwrap_or(0)
-    ));
-    // The overwrite question's blink count, kept the same way.
-    line.push_str(&format!(
-        " svb={}",
-        load.and_then(|load| load.value("sv_blink"))
-            .or_else(|| app
-                .statics
-                .get(ui::save_load::SAVE_LOAD_ENTRY, "card_blink"))
-            .unwrap_or(0)
-    ));
+    };
+    line.push_str(&format!(" svs={}", kept("sv_scroll", "card_scroll")));
+    line.push_str(&format!(" svb={}", kept("sv_blink", "card_blink")));
     let snd: Vec<String> = sounds
         .iter()
         .map(|(kind, slot, volume, pan)| format!("{kind}:{slot:x}:{volume}:{pan}"))

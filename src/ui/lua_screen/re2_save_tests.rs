@@ -825,6 +825,7 @@ fn the_api_keeps_values_past_a_screen() {
         Some(7),
         "the store's, under the script's own scope"
     );
+    assert_eq!(statics.get("UI/Save_Load.lua", "a"), Some(7), "in any case");
     assert_eq!(statics.get("ui/title.lua", "a"), None);
     assert_eq!(
         eval(true, "api:keep('b', true) return api:kept('b')"),

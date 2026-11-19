@@ -153,6 +153,13 @@ pub trait NativeScreen {
     fn draw(&mut self, width: u32, height: u32, gpu: bool) -> bool;
 }
 
+/// The scope of what the save screen keeps past itself
+/// ([`super::ScreenStatics`]): the pack entry its scripts registered, or
+/// the shipped screen's.
+pub fn kept_scope(entry: Option<&str>) -> &str {
+    entry.unwrap_or(SAVE_LOAD_ENTRY)
+}
+
 /// Open the load screen: the pack entry its scripts registered, the modern
 /// screen, or the shipped screen. A registered screen that cannot load falls back to the
 /// shipped one with a warning, so a broken mod never leaves the player

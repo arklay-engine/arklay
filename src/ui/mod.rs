@@ -265,8 +265,9 @@ pub fn load_picture(
 /// the option screen's rows), where it lasts as long as the process. The
 /// app owns one and shares it with its sessions; it is never saved.
 ///
-/// Each screen script has its own keys (its pack entry is the scope), so one
-/// script can neither read nor crowd out another's.
+/// Each screen script has its own keys (its pack entry is the scope, in any
+/// case, as the entry is looked up), so one script can neither read nor
+/// crowd out another's.
 #[derive(Debug, Clone, Default)]
 pub struct ScreenStatics(
     std::rc::Rc<std::cell::RefCell<std::collections::BTreeMap<(String, String), i64>>>,
@@ -280,7 +281,7 @@ impl ScreenStatics {
     pub fn get(&self, scope: &str, key: &str) -> Option<i64> {
         self.0
             .borrow()
-            .get(&(scope.to_owned(), key.to_owned()))
+            .get(&(scope.to_ascii_lowercase(), key.to_owned()))
             .copied()
     }
 
@@ -288,13 +289,13 @@ impl ScreenStatics {
     /// `None`. A script's new key past [`Self::MAX_KEYS`] is refused.
     pub fn set(&self, scope: &str, key: &str, value: Option<i64>) -> bool {
         let mut kept = self.0.borrow_mut();
-        let at = (scope.to_owned(), key.to_owned());
+        let at = (scope.to_ascii_lowercase(), key.to_owned());
         match value {
             None => {
                 kept.remove(&at);
             }
             Some(value) => {
-                let held = kept.keys().filter(|(owner, _)| owner == scope).count();
+                let held = kept.keys().filter(|(owner, _)| *owner == at.0).count();
                 if !kept.contains_key(&at) && held >= Self::MAX_KEYS {
                     return false;
                 }
