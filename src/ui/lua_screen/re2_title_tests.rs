@@ -488,6 +488,7 @@ fn press(direction: &str) -> UiInput {
         "left" => (input.left, input.held_left) = (true, true),
         "right" => (input.right, input.held_right) = (true, true),
         "confirm" => input.confirm = true,
+        "cancel" => input.cancel = true,
         "start" => input.start = true,
         _ => unreachable!(),
     }
@@ -620,6 +621,344 @@ fn the_4th_survivors_exit_goes_back_to_the_title_from_black() {
     run(&mut screen, &cx, UiInput::default(), 1);
     assert_eq!(screen.value("ti_disp"), 1);
     assert_eq!(screen.value("ti_kido"), 0x7C00);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// SPECIAL with every extra, its cursor taken to GALLERY and confirmed: the
+/// tick of the confirm, with the cues it played.
+fn open_gallery(cx: &UiContext<'_>, dir: &std::path::Path) -> LuaScreen {
+    let mut screen = open_special(cx, dir, 15);
+    run(&mut screen, cx, UiInput::default(), 20);
+    run(&mut screen, cx, press("down"), 10);
+    run(&mut screen, cx, press("right"), 10);
+    assert_eq!(screen.value("ti_cur"), 4);
+    cx.cues.borrow_mut().clear();
+    run(&mut screen, cx, press("confirm"), 1);
+    screen
+}
+
+/// The words the tick drew from the title's sheet, less the licence line,
+/// each as `u:v:w:h:x:y:colour`. A word is two sprites, the second a line
+/// lower with blend 0: one that isn't is listed as `unpaired`.
+fn words(screen: &LuaScreen) -> Vec<String> {
+    let listed: String = screen.test_eval(
+        "local out = {}
+        local list = M.state.sprites
+        for i, sprite in ipairs(list) do
+            if sprite.page == 0 and sprite.blend == 1 then
+                local low = list[i + 1]
+                local paired = low and low.page == 0 and low.blend == 0 and low.y == sprite.y + 1
+                for _, key in ipairs({ 'u', 'v', 'w', 'h', 'x', 'colour' }) do
+                    paired = paired and low[key] == sprite[key]
+                end
+                out[#out + 1] = paired and table.concat({
+                    sprite.u, sprite.v, sprite.w, sprite.h, sprite.x, sprite.y, sprite.colour,
+                }, ':') or 'unpaired'
+            end
+        end
+        return table.concat(out, ',')",
+    );
+    listed.split(',').map(str::to_owned).collect()
+}
+
+/// GALLERY's page as it draws: LEON, CLAIRE, EXIT and the word GALLERY,
+/// with `lit` (0 to 2) at `colour`.
+fn gallery_words(lit: usize, colour: u8) -> Vec<String> {
+    [
+        "0:32:48:12:104:151",
+        "0:44:56:12:168:151",
+        "0:123:256:13:32:173",
+        "170:96:74:12:123:132",
+    ]
+    .iter()
+    .enumerate()
+    .map(|(k, word)| format!("{word}:{}", if k == lit { colour } else { 0x20 }))
+    .collect()
+}
+
+/// Several keys pressed on one tick.
+fn press_all(keys: &[&str]) -> UiInput {
+    let mut input = UiInput::default();
+    for key in keys {
+        let one = press(key);
+        input.down |= one.down;
+        input.up |= one.up;
+        input.left |= one.left;
+        input.right |= one.right;
+        input.held_down |= one.held_down;
+        input.held_up |= one.held_up;
+        input.held_left |= one.held_left;
+        input.held_right |= one.held_right;
+        input.confirm |= one.confirm;
+        input.cancel |= one.cancel;
+        input.start |= one.start;
+    }
+    input
+}
+
+#[test]
+fn gallery_opens_its_characters_choice() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-gallery-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut screen = open_gallery(&cx, &dir);
+    // The confirm's tick: the decide cue, page 7 at step 0 with SPECIAL's
+    // cursor and its slide still up.
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(6)]);
+    assert_eq!(
+        ["ti_menu", "ti_step", "ti_cur", "ti_slide"].map(|key| screen.value(key)),
+        [7, 0, 4, 8]
+    );
+    // Step 0 runs step 1 with it, so the slide's 8 ticks end on the eighth.
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(
+        ["ti_step", "ti_cur", "ti_slide", "ti_dim", "ti_b8c"].map(|key| screen.value(key)),
+        [1, 0, 1, 0x70, 0x10]
+    );
+    // The page draws its three words and GALLERY's from the first tick, at
+    // their own places and unfaded, and none of the rows.
+    assert_eq!(words(&screen), gallery_words(0, 0x20));
+    run(&mut screen, &cx, UiInput::default(), 7);
+    assert_eq!(
+        ["ti_step", "ti_slide", "ti_dim", "ti_b8c"].map(|key| screen.value(key)),
+        [2, 8, 0, 0x80]
+    );
+    // Right and left choose the character, each once; LEON is lit first.
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(words(&screen), gallery_words(0, 0x22));
+    for (direction, cues, claire) in [
+        ("left", 0, false),
+        ("right", 1, true),
+        ("right", 0, true),
+        ("left", 1, false),
+        ("right", 1, true),
+    ] {
+        cx.cues.borrow_mut().clear();
+        run(&mut screen, &cx, press(direction), 5);
+        assert_eq!(cx.cues.borrow().len(), cues, "{direction}");
+        assert!(cx.cues.borrow().iter().all(|cue| *cue == UiCue::Core(4)));
+        assert_eq!(
+            screen.test_eval::<bool>("return M.state.claire"),
+            claire,
+            "{direction}"
+        );
+        assert_eq!(screen.value("ti_cur"), 0);
+    }
+    let lit = |screen: &LuaScreen| {
+        words(screen)
+            .iter()
+            .position(|word| !word.ends_with(":32"))
+            .unwrap()
+    };
+    assert_eq!(lit(&screen), 1);
+    // Down to EXIT, where the sideways keys do nothing, and back up to the
+    // character it left.
+    cx.cues.borrow_mut().clear();
+    run(&mut screen, &cx, press("down"), 5);
+    assert_eq!(screen.value("ti_cur"), 1);
+    assert_eq!(lit(&screen), 2);
+    run(&mut screen, &cx, press("down"), 5);
+    run(&mut screen, &cx, press("left"), 5);
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(4)]);
+    assert!(screen.test_eval::<bool>("return M.state.claire"));
+    run(&mut screen, &cx, press("up"), 5);
+    assert_eq!(screen.value("ti_cur"), 0);
+    assert_eq!(lit(&screen), 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_gallerys_exit_and_cancel_go_back_to_the_rows_on_original_mode() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-gallery-exit-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    for leave in [&["right", "down", "confirm"][..], &["right", "cancel"][..]] {
+        let mut screen = open_gallery(&cx, &dir);
+        run(&mut screen, &cx, UiInput::default(), 20);
+        for key in &leave[..leave.len() - 1] {
+            run(&mut screen, &cx, press(key), 5);
+        }
+        cx.cues.borrow_mut().clear();
+        run(&mut screen, &cx, press(leave[leave.len() - 1]), 1);
+        assert_eq!(*cx.cues.borrow(), [UiCue::Core(5)], "{leave:?}");
+        assert_eq!(screen.value("ti_step"), 3);
+        // The slide's count back down over 8 ticks, the page's words still
+        // up, then the rows with the cursor on ORIGINAL MODE.
+        run(&mut screen, &cx, UiInput::default(), 7);
+        assert_eq!(
+            ["ti_menu", "ti_step", "ti_slide", "ti_pulse"].map(|key| screen.value(key)),
+            [7, 3, 1, 0]
+        );
+        let lit = leave.len() - 1;
+        assert_eq!(words(&screen), gallery_words(lit, 0x20));
+        // The tick the count ends still draws the page; the rows draw from
+        // the next.
+        run(&mut screen, &cx, UiInput::default(), 1);
+        assert_eq!(
+            [
+                "ti_menu", "ti_step", "ti_cur", "ti_slide", "ti_dim", "ti_b8c"
+            ]
+            .map(|key| screen.value(key)),
+            [0, 0, 1, 0, 0x80, 0],
+            "{leave:?}"
+        );
+        assert_eq!(words(&screen), gallery_words(lit, 0x20));
+        run(&mut screen, &cx, UiInput::default(), 1);
+        let rows = words(&screen);
+        assert_eq!(rows.len(), 5);
+        assert!(rows.iter().all(|word| word != "unpaired"));
+        assert!(!rows.contains(&gallery_words(3, 0)[3]));
+        // SPECIAL again, and GALLERY from it: the page starts over on LEON.
+        assert!(screen.test_eval::<bool>("return M.state.claire"));
+        run(&mut screen, &cx, press("down"), 5);
+        run(&mut screen, &cx, press("down"), 5);
+        run(&mut screen, &cx, press("confirm"), 20);
+        assert_eq!((screen.value("ti_menu"), screen.value("ti_cur")), (3, 0));
+        run(&mut screen, &cx, press("down"), 5);
+        run(&mut screen, &cx, press("right"), 5);
+        run(&mut screen, &cx, press("confirm"), 10);
+        assert_eq!(
+            ["ti_menu", "ti_step", "ti_cur"].map(|key| screen.value(key)),
+            [7, 2, 0]
+        );
+        assert!(!screen.test_eval::<bool>("return M.state.claire"));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_gallerys_confirm_fades_out_and_leaves_the_page_at_its_choice() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-gallery-in-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut screen = open_gallery(&cx, &dir);
+    run(&mut screen, &cx, UiInput::default(), 20);
+    run(&mut screen, &cx, press("right"), 5);
+    cx.cues.borrow_mut().clear();
+    run(&mut screen, &cx, press("confirm"), 1);
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(6)]);
+    assert_eq!(screen.value("ti_step"), 4);
+    let pulse = screen.value("ti_pulse");
+    // Slot 2 to black from 0x200 by 0x800 a tick; the pulse holds.
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(screen.value("ti_step"), 5);
+    assert_eq!(
+        ["ti_fade2_level", "ti_fade2_add", "ti_fade2_mode"].map(|key| screen.value(key)),
+        [0x200 + 0x800, 0x800, 2]
+    );
+    run(&mut screen, &cx, UiInput::default(), 15);
+    assert_eq!(screen.value("ti_step"), 5);
+    assert_eq!(screen.value("ti_pulse"), pulse);
+    // The tick the fade is done hands off to the gallery: the page back at
+    // step 2 with slot 2 off, the character kept.
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(
+        [
+            "ti_menu",
+            "ti_step",
+            "ti_cur",
+            "ti_fade2_level",
+            "ti_fade2_add",
+            "ti_fade2_mode"
+        ]
+        .map(|key| screen.value(key)),
+        [7, 2, 0, -1, 0, 2]
+    );
+    assert!(screen.test_eval::<bool>("return M.state.claire"));
+    assert_eq!(cx.cues.borrow().len(), 1);
+    // That tick's frame isn't presented: the fade's last one stays up.
+    assert_eq!(frame(&screen).as_deref(), Some("held"));
+    assert_eq!(words(&screen), gallery_words(1, 0x20 + pulse as u8));
+    assert_eq!(
+        screen.test_eval::<i64>("return M.state.drawn_fades[2].level"),
+        0x200 + 15 * 0x800
+    );
+    // The gallery isn't ported: the page is back on the next tick.
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(frame(&screen), None);
+    assert!(screen.test_eval::<bool>("return M.state.drawn_fades[2] == nil"));
+    assert_eq!(words(&screen).len(), 4);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_gallerys_keys_together_take_the_originals_order() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-gallery-keys-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let claire = |screen: &LuaScreen| screen.test_eval::<bool>("return M.state.claire");
+    let mut screen = open_gallery(&cx, &dir);
+    run(&mut screen, &cx, UiInput::default(), 20);
+    // Left and right together change the character once, either way.
+    for now in [true, false] {
+        cx.cues.borrow_mut().clear();
+        run(&mut screen, &cx, press_all(&["left", "right"]), 5);
+        assert_eq!(claire(&screen), now);
+        assert_eq!(*cx.cues.borrow(), [UiCue::Core(4)]);
+    }
+    // A move down or up is the tick's only one.
+    cx.cues.borrow_mut().clear();
+    run(&mut screen, &cx, press_all(&["down", "right"]), 5);
+    assert_eq!((screen.value("ti_cur"), claire(&screen)), (1, false));
+    run(&mut screen, &cx, press_all(&["up", "right"]), 5);
+    assert_eq!((screen.value("ti_cur"), claire(&screen)), (0, false));
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(4), UiCue::Core(4)]);
+    // The move comes before the confirm, which then reads EXIT.
+    cx.cues.borrow_mut().clear();
+    run(&mut screen, &cx, press_all(&["down", "confirm"]), 1);
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(4), UiCue::Core(5)]);
+    assert_eq!(screen.value("ti_step"), 3);
+    // The cancel wins over the confirm on a character.
+    let mut screen = open_gallery(&cx, &dir);
+    run(&mut screen, &cx, UiInput::default(), 20);
+    cx.cues.borrow_mut().clear();
+    run(&mut screen, &cx, press_all(&["cancel", "confirm"]), 1);
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(5)]);
+    assert_eq!(screen.value("ti_step"), 3);
+    // START confirms as the decide key does.
+    let mut screen = open_gallery(&cx, &dir);
+    run(&mut screen, &cx, UiInput::default(), 20);
+    cx.cues.borrow_mut().clear();
+    run(&mut screen, &cx, press("start"), 1);
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(6)]);
+    assert_eq!(screen.value("ti_step"), 4);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn every_special_layout_with_gallery_opens_its_page() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-gallery-rows-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    // The way to GALLERY from each layout's opening cursor.
+    for (special, way) in [
+        (1, &[][..]),
+        (2, &["right"][..]),
+        (5, &["down"][..]),
+        (15, &["down", "right"][..]),
+    ] {
+        let mut screen = open_special(&cx, &dir, special);
+        run(&mut screen, &cx, UiInput::default(), 20);
+        for key in way {
+            run(&mut screen, &cx, press(key), 5);
+        }
+        assert_eq!(screen.value("ti_cur"), 4, "SPECIAL {special}");
+        cx.cues.borrow_mut().clear();
+        run(&mut screen, &cx, press("confirm"), 1);
+        assert_eq!(*cx.cues.borrow(), [UiCue::Core(6)], "SPECIAL {special}");
+        assert_eq!(
+            (screen.value("ti_menu"), screen.value("ti_step")),
+            (7, 0),
+            "SPECIAL {special}"
+        );
+        run(&mut screen, &cx, UiInput::default(), 9);
+        assert_eq!(words(&screen), gallery_words(0, 0x22), "SPECIAL {special}");
+    }
+    // With no extras EXIT is all there is.
+    let mut screen = open_special(&cx, &dir, 0);
+    run(&mut screen, &cx, UiInput::default(), 20);
+    run(&mut screen, &cx, press("confirm"), 1);
+    assert_eq!((screen.value("ti_menu"), screen.value("ti_step")), (3, 3));
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -21,8 +21,10 @@
 -- and TO-FU fade to their own title (`title_mv_state` 3 and 4, with
 -- `title_o.adt`, `title_o2.adt` and the logos `spy_logo.tim` and
 -- `tofulogo.tim` as texture 0x15) whose START isn't ported past its fade
--- (the title starts again) and whose EXIT goes back to `Title_init`, and
--- EX.BATTLE's and GALLERY's confirms do nothing; OPTION fades out into the
+-- (the title starts again) and whose EXIT goes back to `Title_init`,
+-- GALLERY opens its character's choice (page 7), whose confirm fades to
+-- the gallery, which isn't ported (the choice shows again), and
+-- EX.BATTLE's confirm does nothing; OPTION fades out into the
 -- option screen, which runs here as a task of its own ("the option screen"
 -- below) and gives the title back at `Title_init`. An idle title fades into
 -- the attract demo after 0x708 ticks.
@@ -100,7 +102,7 @@ local ROW_LOAD, ROW_ORIGINAL, ROW_ARRANGE, ROW_SPECIAL, ROW_OPTION = 0, 1, 2, 3,
 
 -- Pages of the menu (`0x691B82`): 0 the rows, 1 to 7 the choices below them;
 -- 4 is the confirm's way out.
-local MENU_ROWS, MENU_OUT = 0, 4
+local MENU_ROWS, MENU_OUT, MENU_GALLERY = 0, 4, 7
 
 -- `fg_system`'s bits the title reads or sets.
 local FG_REPEAT = 0x80000000
@@ -699,8 +701,9 @@ end
 -- the choices `Special` opens show below it and take the directions. EXIT
 -- and the cancel slide back to the rows. A confirm on 4TH or TO-FU fades
 -- slot 2 to black (steps 4 and 5) and, on the tick it is done, starts that
--- mode's title (`title_mv_state` 3). EX.BATTLE's and GALLERY's confirms
--- aren't ported and do nothing.
+-- mode's title (`title_mv_state` 3). GALLERY's confirm opens its
+-- character's choice (page 7) on the next tick. EX.BATTLE's confirm isn't
+-- ported and does nothing.
 local function special()
     local stepped = s.step
     local case = special_case()
@@ -728,6 +731,10 @@ local function special()
             elseif s.cur == 0 or s.cur == 1 then
                 s.cue(SE_DECIDE)
                 s.step = 4
+            elseif s.cur == 4 then
+                s.cue(SE_DECIDE)
+                s.menu = MENU_GALLERY
+                s.step = 0
             end
         end
     elseif s.step == 3 then
@@ -976,6 +983,82 @@ local function difficulty_menu()
     game_rows(s.diff_flag)
 end
 
+-- GALLERY's word (the table's last entry, `p` at 0x691EC4).
+local GALLERY_WORD = 39
+
+-- GALLERY's character (`0x505020`, page 7): the word GALLERY over LEON and
+-- CLAIRE with the directions, and EXIT below them; the rows aren't drawn
+-- under it. It counts the slide's 8 ticks in and out as the other choices
+-- do, though nothing it draws moves or fades with them. EXIT and the
+-- cancel go back to the rows with the cursor on ORIGINAL MODE. The confirm
+-- on a character fades slot 2 to black (steps 4 and 5) and, on the tick it
+-- is done, puts the page back at step 2 and starts the gallery's task with
+-- that character (`fg_status` bit 31), under which the title's sleeps
+-- until the gallery's EXIT. The gallery isn't ported, so the page is back
+-- on the next tick as it is after that EXIT.
+local function gallery()
+    if s.step == 0 then
+        slide_start()
+        s.claire = false
+        s.cur = 0
+        slide_in()
+    elseif s.step == 1 then
+        slide_in()
+    elseif s.step == 2 then
+        if s.edge & PAD_DOWN ~= 0 and s.cur == 0 then
+            s.cur = 1
+            s.cue(SE_CURSOR)
+        elseif s.edge & PAD_UP ~= 0 and s.cur ~= 0 then
+            s.cur = s.cur - 1
+            s.cue(SE_CURSOR)
+        elseif s.cur == 0 then
+            if s.edge & PAD_LEFT ~= 0 and s.claire then
+                s.claire = false
+                s.cue(SE_CURSOR)
+            elseif s.edge & PAD_RIGHT ~= 0 and not s.claire then
+                s.claire = true
+                s.cue(SE_CURSOR)
+            end
+        end
+        pulse()
+        if s.key_trg & KEY_CANCEL ~= 0 then
+            s.cue(SE_CANCEL)
+            s.step = 3
+        elseif confirm() then
+            if s.cur == 1 then
+                s.cue(SE_CANCEL)
+                s.step = 3
+            else
+                s.cue(SE_DECIDE)
+                s.step = 4
+            end
+        end
+    elseif s.step == 3 then
+        if slide_out() then
+            s.cur = 1
+            s.menu = MENU_ROWS
+            s.step = 0
+        end
+    elseif s.step == 4 or s.step == 5 then
+        if s.step == 4 then
+            fade_set(0x202, 0x800)
+            fade_adjust(0x200, 2)
+            s.step = 5
+        end
+        if fade_done(2) then
+            fade_set(0x202, 0)
+            fade_adjust(0x7FFF, 2)
+            s.step = 2
+            fade_off(2)
+            -- `Movie_set(1)`: this frame isn't presented, so the screen
+            -- keeps the fade's last one.
+            s.frame = "held"
+        end
+    end
+    draw_characters()
+    draw_word(GALLERY_WORD, 0x20, MOJI[GALLERY_WORD][2])
+end
+
 -- The choices below the rows.
 local function sub_menu(api)
     if s.menu == 5 or s.menu == 6 then
@@ -984,6 +1067,8 @@ local function sub_menu(api)
         difficulty_menu()
     elseif s.menu == 3 then
         special()
+    elseif s.menu == MENU_GALLERY then
+        gallery()
     end
 end
 
@@ -2099,7 +2184,10 @@ function M.update(api, input)
     -- What the frame shows besides the tick's draw: "black" on a tick with
     -- no draw at all, "held" while the last presented frame stays up.
     s.frame = nil
-    local shown = s.drawn_fades[0]
+    local shown = {}
+    for n = 0, 3 do
+        shown[n] = s.drawn_fades[n]
+    end
     pad_set(input)
     if s.boot then
         boot(api)
@@ -2135,7 +2223,9 @@ function M.update(api, input)
         end
     end
     if s.frame == "held" then
-        s.drawn_fades[0] = shown
+        for n = 0, 3 do
+            s.drawn_fades[n] = shown[n]
+        end
     end
     for _, slot in ipairs(cues) do
         api:core_sound(slot)
