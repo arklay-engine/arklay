@@ -68,7 +68,7 @@ fn full_png() -> Vec<u8> {
 }
 
 /// A 4x4 4bpp TIM whose palette index 1 is blue.
-fn test_tim() -> Vec<u8> {
+pub(super) fn test_tim() -> Vec<u8> {
     let mut bytes = Vec::new();
     bytes.extend_from_slice(&0x10u32.to_le_bytes());
     bytes.extend_from_slice(&0x08u32.to_le_bytes());
@@ -181,6 +181,140 @@ fn draw(screen: &mut LuaScreen, cx: &crate::ui::UiContext<'_>) -> crate::render:
     let mut framebuffer = crate::render::Framebuffer::new();
     screen.draw(cx, &mut framebuffer);
     framebuffer
+}
+
+/// A title's film: `api:exit("film", id, { claire })` names it, and the
+/// screen wakes through `on_film` with how the film ended, its exit
+/// forgotten. An id no film has is an error.
+#[test]
+fn a_film_exit_names_the_film_and_on_film_wakes_the_screen() {
+    let fixture = Fixture::new(
+        "film",
+        r##"
+woke = 0
+function update(api, input)
+    if input.map then api:exit("film", 3, { claire = true }) end
+    if input.cancel then api:exit("film", 0xF) end
+    if input.start then api:exit("film", 300) end
+end
+function draw(api) end
+function on_film(api, skipped)
+    woke = woke + 1
+    api:set("skipped", skipped and 1 or 0)
+end
+"##,
+    );
+    let cx = fixture.context();
+    let mut screen = fixture.load();
+    assert!(screen.plays_films());
+    assert_eq!(
+        screen.update(&cx, UiInput::default()),
+        ScreenResult::Continue
+    );
+    let press = |set: fn(&mut UiInput)| {
+        let mut input = UiInput::default();
+        set(&mut input);
+        input
+    };
+    assert_eq!(
+        screen.update(&cx, press(|input| input.map = true)),
+        ScreenResult::Done(ScreenAction::Film {
+            id: 3,
+            claire: true
+        })
+    );
+    screen.resume_film(&cx, true);
+    assert_eq!(screen.value("skipped"), 1);
+    assert_eq!(
+        screen.update(&cx, UiInput::default()),
+        ScreenResult::Continue,
+        "the exit is forgotten"
+    );
+    assert_eq!(
+        screen.update(&cx, press(|input| input.cancel = true)),
+        ScreenResult::Done(ScreenAction::Film {
+            id: 0xF,
+            claire: false
+        })
+    );
+    screen.resume_film(&cx, false);
+    assert_eq!(screen.value("skipped"), 0);
+    assert_eq!(screen.test_global::<i64>("woke"), 2);
+    assert!(!screen.failed());
+    screen.update(&cx, press(|input| input.start = true));
+    assert!(screen.failed(), "300 is no film's id");
+
+    // A screen without `on_film` couldn't be woken: its film is an error,
+    // raised before the screen leaves.
+    let plain = Fixture::new(
+        "no-film",
+        r##"
+function update(api, input)
+    if input.confirm then
+        asked = pcall(function() api:exit("film", 3) end)
+    end
+end
+function draw() end
+"##,
+    );
+    let cx = plain.context();
+    let mut screen = plain.load();
+    assert!(!screen.plays_films());
+    let confirm = UiInput {
+        confirm: true,
+        ..UiInput::default()
+    };
+    assert_eq!(screen.update(&cx, confirm), ScreenResult::Continue);
+    assert!(!screen.test_global::<bool>("asked"));
+}
+
+/// RE 2's narration and music cues: a line of Leon's or Claire's bank, the
+/// main music, its fade, and both off. Another player is an error.
+#[test]
+fn the_voice_and_music_cues() {
+    use crate::ui::UiCue;
+    let fixture = Fixture::new(
+        "voice",
+        r##"
+function update(api, input)
+    if input.confirm then
+        api:voice(2, 1)
+        api:voice(3)
+        api:music(0x2B)
+        api:music_fade()
+        api:voice()
+        api:music()
+    end
+    if input.cancel then api:voice(1, 2) end
+end
+function draw(api) end
+"##,
+    );
+    let cx = fixture.context();
+    let mut screen = fixture.load();
+    let confirm = UiInput {
+        confirm: true,
+        ..UiInput::default()
+    };
+    screen.update(&cx, confirm);
+    assert_eq!(
+        *cx.cues.borrow(),
+        [
+            UiCue::Voice { player: 1, line: 2 },
+            UiCue::Voice { player: 0, line: 3 },
+            UiCue::Music(0x2B),
+            UiCue::MusicFade,
+            UiCue::VoiceStop,
+            UiCue::MusicStop,
+        ]
+    );
+    assert!(!screen.failed());
+    let cancel = UiInput {
+        cancel: true,
+        ..UiInput::default()
+    };
+    screen.update(&cx, cancel);
+    assert!(screen.failed(), "player 2 has no bank");
 }
 
 #[test]

@@ -171,11 +171,19 @@ pub fn re2_film(id: u8, claire: bool) -> Option<Re2Film> {
     })
 }
 
+/// The map key in the film button word: outside RE 1's `0x0FFF`, so only a
+/// mask that names it ([`re2_skip_buttons`]) takes it as a skip.
+pub const MAP_BUTTON: u16 = 0x1000;
+
 /// An RE2 raw skip mask in the port's film button word ([`MovieSession`]'s
 /// `skip_mask`): of 0x9F0's bits, the port's pad has confirm (0x80), cancel
-/// and run (0x40) and start (0x800). The d-pad and the shoulders never skip.
+/// and run (0x40), start (0x800) and the PC's map key (0x10). The d-pad and
+/// the shoulders never skip.
 pub fn re2_skip_buttons(raw_mask: u16) -> u16 {
     let mut word = 0;
+    if raw_mask & 0x10 != 0 {
+        word |= MAP_BUTTON;
+    }
     if raw_mask & 0x80 != 0 {
         word |= 0x0001;
     }
@@ -1484,7 +1492,8 @@ mod tests {
         assert_eq!(re2_film(5, false).unwrap().subtitles, None);
         assert_eq!(RE2_ATTR[5] & 0x40, 0);
         assert_eq!(RE2_ATTR[10] & 0x40, 0);
-        assert_eq!(re2_skip_buttons(0x9F0), 0x000B);
+        assert_eq!(re2_skip_buttons(0x9F0), 0x000B | MAP_BUTTON);
+        assert_eq!(SKIPPABLE_MASK & MAP_BUTTON, 0, "RE 1's films don't take it");
         assert_eq!(re2_skip_buttons(0), 0);
     }
 
@@ -1501,7 +1510,7 @@ mod tests {
         assert!(MovieSession::open_re2(&pack, 10, true).is_err());
         assert!(MovieSession::open_re2(&pack, 1, false).is_err());
         let mut session = MovieSession::open_re2(&pack, 10, false).unwrap();
-        assert_eq!(session.skip_mask(), 0x000B);
+        assert_eq!(session.skip_mask(), 0x000B | MAP_BUTTON);
         // The first poll latches; a d-pad edge doesn't skip, a confirm does.
         assert!(!session.poll_skip(0));
         assert!(!session.poll_skip(0x0010));

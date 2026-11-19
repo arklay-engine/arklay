@@ -215,6 +215,16 @@ function ScreenModule.on_resume(api) end
 ---@param api ScreenApi
 function ScreenModule.on_loaded(api) end
 
+---Called on a title screen when a film it left for
+---([`api:exit("film", id)`](#ScreenApi.exit)) is over: the title wakes as
+---it stood and carries on from its next `update`. A film the pack lacks,
+---or a run that plays no films, is over at once, before the next `update`.
+---A title that has this plays its own opening films, and the engine adds
+---none of its own to the new game it starts.
+---@param api ScreenApi
+---@param skipped boolean Whether a press ended the film.
+function ScreenModule.on_film(api, skipped) end
+
 ---The published view: what the screen shows a player, as a table of
 ---integers, numbers, strings, booleans and nested tables of them, for
 ---observers such as the player bot. It is the screen's contract with them:
@@ -330,7 +340,7 @@ function ScreenApi:height() end
 ---Publish a value the engine reads back. Each engine screen has its own
 ---keys (the pause menu's `cursor`, the item box's `selected_item`, ...);
 ---`canvas` set to 1 asks any screen's frame for the full-height canvas.
----Up to 64 keys; a new key past that raises an error, overwriting one never
+---Up to 96 keys; a new key past that raises an error, overwriting one never
 ---does. An unset key reads as 0.
 ---@param key string
 ---@param value integer|boolean|nil An integer, a boolean (stored as 1 or 0), or `nil` to clear the key. A float or any other type raises an error.
@@ -356,11 +366,11 @@ function ScreenApi:kept(key) end
 ---Leave the screen once the current call returns, reporting `action`. With
 ---no action the screen leaves its default way: back to gameplay from a
 ---save screen, back to the title from the load screen, the opener's
----fallback from an engine screen. An unknown action, or `new_game` or
----`load_game` without `arg`, raises an error.
+---fallback from an engine screen. An unknown action, or `new_game`,
+---`load_game` or `film` without `arg`, raises an error.
 ---@param action? ScreenExit
----@param arg? integer `new_game`: the character, clamped to `0..=255`. `load_game`: the slot, clamped to `0..=7`.
----@param choice? NewGameChoice `new_game` only: the options the title chose.
+---@param arg? integer `new_game`: the character, clamped to `0..=255`. `load_game`: the slot, clamped to `0..=7`. `film`: RE 2's film id, `0..=255`.
+---@param choice? NewGameChoice|{ claire?: boolean } `new_game`: the options the title chose. `film`: `claire` for Claire's copy of the film.
 function ScreenApi:exit(action, arg, choice) end
 
 ---Set the full-screen overlay drawn over the screen: black or white at
@@ -403,6 +413,28 @@ function ScreenApi:core_sound(slot) end
 ---To-fu's 0x13, and the title's own is 0x10).
 ---@param id integer The core bank.
 function ScreenApi:core_bank(id) end
+
+---Play a line of RE 2's voice bank that no stage owns, the original's
+---`Xa_play(1, line)` (the prologue's narration), or stop the line with no
+---argument (`Xa_stop`). It plays after the call, on the app's own screens
+---only (the title and the screens it opens): an in-game screen's call is
+---dropped, and a capture run stays silent. The line stops when the screen
+---is replaced.
+---@param line? integer The line, or `nil` to stop.
+---@param player? integer `0` Leon's bank, `1` Claire's; any other raises an error. Default 0.
+function ScreenApi:voice(line, player) end
+
+---Play RE 2's main music `id` from its start, looping (`Snd_bgm_main`, then
+---`Snd_bgm_ctr(0x1000000)`), or stop the music with no argument. Like
+---[`api:voice`](#ScreenApi.voice) it is the app's own screens', and the
+---music ends when the screen is replaced; a title asleep under its load
+---screen keeps it.
+---@param id? integer The main music's id, or `nil` to stop.
+function ScreenApi:music(id) end
+
+---Fade the music [`api:music`](#ScreenApi.music) started out
+---(`Snd_bgm_fade_ON`), over about four seconds.
+function ScreenApi:music_fade() end
 
 ---Queue a current-room bank sound, the original's `play_sfx(2, slot)`:
 ---slot `slot` of the loaded room's sound-table row, played after the call
@@ -848,7 +880,7 @@ function ScreenApi:picture_sprite_scaled(picture, sx, sy, sw, sh, dx, dy, dw, dh
 ---@param clut integer The CLUT row (capped at 255).
 ---@param scale integer The colour scale, `0..=255`.
 ---@param tint? ScreenTextColour Default white.
----@param blend? "opaque"|"half"|"variant"|"add" Default `"opaque"`. `"variant"` is the original's variant-2 half alpha over the frame; `"half"` averages, `"add"` adds.
+---@param blend? "opaque"|"half"|"variant"|"add"|integer Default `"opaque"`. `"variant"` is the original's variant-2 half alpha over the frame; `"half"` averages, `"add"` adds. An integer is an alpha, clamped to `0..=255`: the sprite goes over the frame at that weight, from the page itself (an HD replacement isn't drawn at a weight). The software renderer smooths one drawn at another size than its texels as the original's 640 x 480 frame shows it; the GPU renderer samples it once to a pixel.
 function ScreenApi:page_sprite_scaled(page, sx, sy, sw, sh, dx, dy, dw, dh, clut, scale, tint, blend) end
 
 ---@class ScreenEffectCamera
@@ -1170,6 +1202,7 @@ function ScreenApi:re2_slot(slot) end
 ---@field page_left boolean L1.
 ---@field page_right boolean R1.
 ---@field start boolean
+---@field map boolean The map key.
 ---@field any boolean Any button was pressed.
 ---@field return_title boolean The return-to-title key (F9).
 ---@field pad integer The edge word of the fields above.
@@ -1414,5 +1447,8 @@ local Re2MapSprite = {}
 ---An [`api:exit`](#ScreenApi.exit) action: where the game goes next.
 ---`new_game` takes the character, `load_game` the slot. `continue` is a
 ---title's, after its [`on_loaded`](#ScreenModule.on_loaded): the game
----continues from the save the load screen chose.
----@alias ScreenExit "title"|"char_select"|"save_load"|"continue"|"attract"|"resume"|"quit"|"ending_result"|"ending_epilogue"|"ending_save"|"new_game"|"load_game"
+---continues from the save the load screen chose. `film` is a title's with
+---[`on_film`](#ScreenModule.on_film): it takes one of RE 2's film ids,
+---sleeps while the film plays and wakes after it. Without `on_film` it
+---raises an error, and from a screen that isn't the title it is dropped.
+---@alias ScreenExit "title"|"char_select"|"save_load"|"continue"|"attract"|"resume"|"quit"|"ending_result"|"ending_epilogue"|"ending_save"|"new_game"|"load_game"|"film"

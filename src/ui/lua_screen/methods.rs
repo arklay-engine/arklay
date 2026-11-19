@@ -345,6 +345,34 @@ impl UserData for Api<'_> {
             Ok(())
         });
 
+        // RE 2's `Xa_play(1, line)` for `player`, or `Xa_stop` with no line.
+        methods.add_method(
+            "voice",
+            |_lua, api, (line, player): (Option<u8>, Option<u8>)| {
+                let player = player.unwrap_or(0);
+                if player > 1 {
+                    return Err(mlua::Error::RuntimeError(format!(
+                        "api:voice: player {player} is neither 0 (Leon) nor 1 (Claire)"
+                    )));
+                }
+                api.cx.play_cue(match line {
+                    Some(line) => UiCue::Voice { player, line },
+                    None => UiCue::VoiceStop,
+                });
+                Ok(())
+            },
+        );
+        // RE 2's main music `id` from its start, or the music off.
+        methods.add_method("music", |_lua, api, id: Option<u8>| {
+            api.cx.play_cue(id.map_or(UiCue::MusicStop, UiCue::Music));
+            Ok(())
+        });
+        // `Snd_bgm_fade_ON`: the music fades out.
+        methods.add_method("music_fade", |_lua, api, ()| {
+            api.cx.play_cue(UiCue::MusicFade);
+            Ok(())
+        });
+
         // A current-room bank sound (`play_sfx(2, slot)`); the session
         // resolves the slot through the loaded room's sound table.
         methods.add_method("room_sound", |_lua, api, slot: u8| {
@@ -459,6 +487,13 @@ impl UserData for Api<'_> {
             "exit",
             |_lua, api, (action, arg, choice): (Option<String>, Option<i64>, Option<Table>)| {
                 if let Some(name) = action {
+                    // Nothing could wake a screen without `on_film` after
+                    // its film, so it is refused before the screen leaves.
+                    if name == "film" && !api.host.plays_films {
+                        return Err(mlua::Error::RuntimeError(
+                            "api:exit(\"film\") needs the screen's on_film".into(),
+                        ));
+                    }
                     api.host.action = Some(action_of(&name, arg, choice.as_ref())?);
                 }
                 api.host.exited = true;
@@ -512,7 +547,7 @@ impl UserData for Api<'_> {
             };
             // Overwriting a published key never grows the table.
             if !api.host.values.contains_key(&key) {
-                budget::check_len(api.host.values.len() + 1, 64, "screen values")
+                budget::check_len(api.host.values.len() + 1, 96, "screen values")
                     .map_err(|err| mlua::Error::RuntimeError(format!("{err:#}")))?;
             }
             api.host.values.insert(key, value);

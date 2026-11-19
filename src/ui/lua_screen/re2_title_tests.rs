@@ -7,52 +7,80 @@ use super::*;
 use crate::pack::Pack;
 use crate::ui::{Screen, ScreenAction, ScreenResult, UiCue, UiInput};
 
+/// The title's pack; `prologue_art` adds what the prologue shows, which is
+/// what makes a new game run it.
+fn build_pack(prologue_art: bool) -> Pack {
+    let mut writer = crate::pack::PackWriter::new();
+    for (path, source) in [
+        (
+            "ui/cr_text.lua",
+            include_str!("../../../games/re2/ui/cr_text.lua"),
+        ),
+        (
+            "ui/prologue.lua",
+            include_str!("../../../games/re2/ui/prologue.lua"),
+        ),
+        (
+            "ui/title.lua",
+            include_str!("../../../games/re2/ui/title.lua"),
+        ),
+        (
+            "ui/char_select.lua",
+            include_str!("../../../games/re2/ui/char_select.lua"),
+        ),
+    ] {
+        writer.add(path, source.as_bytes().to_vec()).unwrap();
+    }
+    // The backgrounds, so a test can tell which one is up.
+    for (index, stem) in ["title/title_bg", "option/room", "option/color2"]
+        .into_iter()
+        .enumerate()
+    {
+        let picture = super::tests::solid_bmp(4, 4, [index as u8; 3]);
+        writer.add(&format!("ui/{stem}.bmp"), picture).unwrap();
+    }
+    if prologue_art {
+        for stem in ["open10", "open11"] {
+            let picture = super::tests::solid_bmp(4, 4, [0x40; 3]);
+            writer
+                .add(&format!("ui/prologue/{stem}.bmp"), picture)
+                .unwrap();
+        }
+        for (sheet, count) in [("open00", 4), ("open01", 4), ("open02", 2)] {
+            for index in 0..count {
+                writer
+                    .add(
+                        &format!("ui/prologue/{sheet}_{index}.tim"),
+                        super::tests::test_tim(),
+                    )
+                    .unwrap();
+            }
+        }
+    }
+    Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
+}
+
 fn pack() -> &'static Pack {
     use std::sync::OnceLock;
     static PACK: OnceLock<Pack> = OnceLock::new();
-    PACK.get_or_init(|| {
-        let mut writer = crate::pack::PackWriter::new();
-        writer
-            .add(
-                "ui/cr_text.lua",
-                include_str!("../../../games/re2/ui/cr_text.lua")
-                    .as_bytes()
-                    .to_vec(),
-            )
-            .unwrap();
-        writer
-            .add(
-                "ui/title.lua",
-                include_str!("../../../games/re2/ui/title.lua")
-                    .as_bytes()
-                    .to_vec(),
-            )
-            .unwrap();
-        writer
-            .add(
-                "ui/char_select.lua",
-                include_str!("../../../games/re2/ui/char_select.lua")
-                    .as_bytes()
-                    .to_vec(),
-            )
-            .unwrap();
-        // The backgrounds, so a test can tell which one is up.
-        for (index, stem) in ["title/title_bg", "option/room", "option/color2"]
-            .into_iter()
-            .enumerate()
-        {
-            let picture = super::tests::solid_bmp(4, 4, [index as u8; 3]);
-            writer.add(&format!("ui/{stem}.bmp"), picture).unwrap();
-        }
-        Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
-    })
+    PACK.get_or_init(|| build_pack(false))
+}
+
+fn prologue_pack() -> &'static Pack {
+    use std::sync::OnceLock;
+    static PACK: OnceLock<Pack> = OnceLock::new();
+    PACK.get_or_init(|| build_pack(true))
 }
 
 fn context<'a>(dir: &'a std::path::Path) -> UiContext<'a> {
+    context_over(pack(), dir)
+}
+
+fn context_over<'a>(pack: &'static Pack, dir: &'a std::path::Path) -> UiContext<'a> {
     UiContext {
         statics: None,
         authentic: false,
-        pack: pack(),
+        pack,
         save_dir: dir,
         font: None,
         text: None,
@@ -1064,5 +1092,357 @@ fn a_direction_held_as_the_title_opens_is_no_press() {
     screen.update(&cx, UiInput::default());
     screen.update(&cx, held);
     assert_eq!(screen.test_eval::<i64>("return M.state.edge"), 0x4000);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ------------------------------------------------------- the prologue
+
+/// The trace's `pro` field's step, count and skip, with the sequence and the
+/// routine (`mv`, `r`).
+fn pro(screen: &LuaScreen) -> [i64; 5] {
+    ["pro_mv", "pro_step", "pro_count", "pro_r", "pro_skip"].map(|key| screen.value(key))
+}
+
+fn confirm() -> UiInput {
+    UiInput {
+        confirm: true,
+        ..UiInput::default()
+    }
+}
+
+/// What a run of the prologue left: the tick the title handed the game over
+/// on, its action, and the films it asked for on the way (tick, id, Claire's).
+struct Prologue {
+    end: u32,
+    action: ScreenAction,
+    films: Vec<(u32, u8, bool)>,
+}
+
+/// A title over the prologue's art, run through `prologue_leon.txt`'s choice
+/// (down on 260, confirms on 300, 360 and 420; with `claire`, right on 340)
+/// and then `presses`, from `Title_init` (the original's tick 189) until it
+/// hands the game over. A film it asks for is over at once, as in the
+/// recordings, by a press when it is `skipped_film`. `each` sees every tick
+/// after its update, with the cues it played.
+fn run_prologue(
+    dir: &std::path::Path,
+    claire: bool,
+    presses: &[(u32, UiInput)],
+    skipped_film: Option<u8>,
+    mut each: impl FnMut(u32, &LuaScreen, &[UiCue]),
+) -> Prologue {
+    let cx = context_over(prologue_pack(), dir);
+    let mut cx_open = context_over(prologue_pack(), dir);
+    let mut screen =
+        LuaScreen::open_screen("title", &[], ScreenAction::Quit, &mut cx_open).unwrap();
+    assert!(screen.plays_films());
+    let down = UiInput {
+        down: true,
+        held_down: true,
+        ..UiInput::default()
+    };
+    let right = UiInput {
+        right: true,
+        held_right: true,
+        ..UiInput::default()
+    };
+    let mut films = Vec::new();
+    for tick in 189..5000 {
+        let input = match tick {
+            260 => down,
+            340 if claire => right,
+            300 | 360 | 420 => confirm(),
+            _ => presses
+                .iter()
+                .find(|(at, _)| *at == tick)
+                .map_or_else(UiInput::default, |(_, input)| *input),
+        };
+        cx.cues.borrow_mut().clear();
+        let result = screen.update(&cx, input);
+        each(tick, &screen, &cx.cues.borrow());
+        match result {
+            ScreenResult::Continue => {}
+            ScreenResult::Done(ScreenAction::Film { id, claire }) => {
+                films.push((tick, id, claire));
+                screen.resume_film(&cx, skipped_film == Some(id));
+            }
+            ScreenResult::Done(action) => {
+                return Prologue {
+                    end: tick,
+                    action,
+                    films,
+                };
+            }
+        }
+    }
+    panic!("the title never handed over");
+}
+
+fn prologue_dir(label: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-{label}-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+/// `prologue_leon`: `Title_game_init` starts the task two ticks after the
+/// hand-over (692), its first tick is 693, the narration's lines start on
+/// their counts, the two films are asked for on 4025 and 4026, and the
+/// game starts when the task ends on 4028. A press under the last fade
+/// (3800) skips nothing.
+#[test]
+fn a_new_game_runs_the_prologue_before_it_starts() {
+    let dir = prologue_dir("prologue");
+    let mut voices = Vec::new();
+    let mut music = Vec::new();
+    let presses = [(3800, confirm())];
+    let run = run_prologue(&dir, false, &presses, None, |tick, screen, cues| {
+        match tick {
+            690 => assert_eq!(screen.value("pro_on"), 0),
+            691 => assert_eq!(ti(screen)[..4], [2, 3, 1, 0]),
+            692 => {
+                assert_eq!(ti(screen)[..4], [2, 3, 0, 2]);
+                assert_eq!(screen.value("ti_fade_level"), -1, "fade 0 is off");
+            }
+            693 => {
+                assert_eq!(ti(screen)[..4], [2, 3, 0, 3]);
+                assert_eq!(pro(screen), [0, 1, 1, 1, 0]);
+                assert_eq!(screen.value("pro_slot"), 3);
+            }
+            // Step 1's last count starts step 2, and so on to the films'.
+            1516 => assert_eq!(pro(screen), [0, 2, 1, 2, 0]),
+            2421 => assert_eq!(pro(screen)[..3], [0, 3, 1]),
+            2772 => assert_eq!(pro(screen)[..3], [0, 4, 1]),
+            3352 => assert_eq!(pro(screen)[..3], [0, 5, 1]),
+            3797 => {
+                assert_eq!(screen.value("pro_skip_ok"), 0);
+                assert_eq!(screen.value("pro_slot"), 0);
+            }
+            3801 => assert_eq!(pro(screen)[4], 2, "no skip under the last fade"),
+            3925 => assert_eq!(pro(screen)[..3], [0, 6, 1]),
+            4025 => assert_eq!(pro(screen)[..3], [0, 7, 1]),
+            4026 => assert_eq!(pro(screen)[..3], [0, 9, 1]),
+            4027 => assert_eq!(pro(screen), [4, 9, 2, 3, 2]),
+            _ => {}
+        }
+        for cue in cues {
+            match cue {
+                UiCue::Voice { player, line } => voices.push((tick, *player, *line)),
+                UiCue::VoiceStop => voices.push((tick, 0xFF, 0)),
+                UiCue::Music(_) | UiCue::MusicFade | UiCue::MusicStop => music.push((tick, *cue)),
+                _ => {}
+            }
+        }
+    });
+    assert_eq!(run.end, 4028);
+    assert_eq!(
+        run.action,
+        ScreenAction::NewGame {
+            character: 0,
+            choice: Default::default(),
+        }
+    );
+    // `Init_movie_work(3)` and `(0xF)`, each over on its own tick.
+    assert_eq!(run.films, [(4025, 3, false), (4026, 0xF, false)]);
+    // `Xa_play(1, n)` on each step's count, and `Xa_stop` at the end.
+    assert_eq!(
+        voices,
+        [
+            (693 + 420, 0, 1),
+            (1516 + 64, 0, 2),
+            (2421 + 94, 0, 3),
+            (2772 + 94, 0, 4),
+            (3352 + 96, 0, 5),
+            (4028, 0xFF, 0),
+        ]
+    );
+    assert_eq!(
+        music,
+        [
+            (693, UiCue::Music(0x2B)),
+            (3352 + 445, UiCue::MusicFade),
+            (4028, UiCue::MusicStop),
+        ]
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A press that ends the first film (`0x9814B5`) leaves the second out:
+/// step 7 goes to the task's end, a tick sooner.
+#[test]
+fn a_skipped_first_film_takes_the_second_with_it() {
+    let dir = prologue_dir("pro-film-skip");
+    let run = run_prologue(&dir, false, &[], Some(3), |tick, screen, _| {
+        if tick == 4026 {
+            assert_eq!(pro(screen), [4, 9, 1, 3, 2]);
+        }
+    });
+    assert_eq!(run.films, [(4025, 3, false)]);
+    assert_eq!(run.end, 4027);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Claire's first scenario is `Prologue_mv`'s entry 1, the same routine:
+/// her bank's lines, her films, and the entry a skip comes back to.
+#[test]
+fn claires_prologue_is_entry_1_with_her_lines_and_films() {
+    let dir = prologue_dir("pro-claire");
+    let mut voices = Vec::new();
+    let presses = [(1300, confirm())];
+    let run = run_prologue(&dir, true, &presses, None, |tick, screen, cues| {
+        match tick {
+            693 => assert_eq!(pro(screen), [1, 1, 1, 1, 0]),
+            1300 => assert_eq!(pro(screen)[..2], [4, 6]),
+            1428 => assert_eq!(pro(screen), [1, 6, 0x5A, 1, 2]),
+            _ => {}
+        }
+        voices.extend(cues.iter().filter_map(|cue| match cue {
+            UiCue::Voice { player, line } => Some((tick, *player, *line)),
+            _ => None,
+        }));
+    });
+    assert_eq!(voices, [(693 + 420, 1, 1)]);
+    assert_eq!(run.films, [(1439, 3, true), (1440, 0xF, true)]);
+    assert_eq!(run.end, 1442);
+    assert_eq!(
+        run.action,
+        ScreenAction::NewGame {
+            character: 1,
+            choice: Default::default(),
+        }
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `prologue_leon_skip`: a confirm on 1300 stops the line, fades the music
+/// and the frame out and takes the sequence to its films' step, and the
+/// game starts on 1442. The pad's other skip keys do the same.
+#[test]
+fn a_press_skips_the_prologue_to_its_films() {
+    let dir = prologue_dir("pro-skip");
+    let keys: [fn(&mut UiInput); 4] = [
+        |input| input.confirm = true,
+        |input| input.cancel = true,
+        |input| input.start = true,
+        |input| input.map = true,
+    ];
+    for key in keys {
+        let mut press = UiInput::default();
+        key(&mut press);
+        let run = run_prologue(&dir, false, &[(1300, press)], None, |tick, screen, cues| {
+            match tick {
+                1299 => assert_eq!(pro(screen)[4], 0),
+                1300 => {
+                    assert_eq!(pro(screen)[..2], [4, 6]);
+                    assert_eq!(pro(screen)[4], 1);
+                    assert_eq!(screen.value("pro_slot"), 0);
+                    assert!(cues.contains(&UiCue::VoiceStop));
+                    assert!(cues.contains(&UiCue::MusicFade));
+                }
+                // Slot 0's fade is over: the sequence comes back in at 0x5A.
+                1428 => assert_eq!(pro(screen), [0, 6, 0x5A, 1, 2]),
+                1439 => assert_eq!(pro(screen)[..2], [0, 7]),
+                1441 => assert_eq!(pro(screen)[..2], [4, 9]),
+                _ => {}
+            }
+        });
+        assert_eq!(run.films, [(1439, 3, false), (1440, 0xF, false)]);
+        assert_eq!(run.end, 1442);
+    }
+    // A direction is no skip key.
+    let down = UiInput {
+        down: true,
+        held_down: true,
+        ..UiInput::default()
+    };
+    assert_eq!(
+        run_prologue(&dir, false, &[(1300, down)], None, |_, _, _| {}).end,
+        4028
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A second press, once the frame is black and the sequence is back, ends
+/// the task on that tick: no film is asked for. So does a first press after
+/// the last fade, while step 6 counts to its films.
+#[test]
+fn a_press_on_black_ends_the_prologue_with_no_film() {
+    let dir = prologue_dir("pro-skip2");
+    let presses = [(1300, confirm()), (1430, confirm())];
+    let run = run_prologue(&dir, false, &presses, None, |tick, screen, _| {
+        if tick == 1429 {
+            assert_eq!(pro(screen), [0, 6, 0x5B, 1, 2]);
+        }
+    });
+    assert_eq!(run.end, 1430);
+    assert_eq!(run.films, []);
+
+    let run = run_prologue(
+        &dir,
+        false,
+        &[(3950, confirm())],
+        None,
+        |tick, screen, _| {
+            if tick == 3949 {
+                assert_eq!(pro(screen)[..2], [0, 6]);
+                assert_eq!(screen.value("pro_skip_ok"), 1);
+            }
+        },
+    );
+    assert_eq!(run.end, 3950);
+    assert_eq!(run.films, []);
+    assert!(matches!(run.action, ScreenAction::NewGame { .. }));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The frame of step 2 (tick 1566): the cells' pieces at their full colour,
+/// three quarters over what is under them, between the scene's black bands.
+#[test]
+fn the_prologue_draws_its_pieces_between_the_bands() {
+    let dir = prologue_dir("pro-draw");
+    let cx = context_over(prologue_pack(), &dir);
+    let mut cx_open = context_over(prologue_pack(), &dir);
+    let mut screen =
+        LuaScreen::open_screen("title", &[], ScreenAction::Quit, &mut cx_open).unwrap();
+    let down = UiInput {
+        down: true,
+        held_down: true,
+        ..UiInput::default()
+    };
+    for tick in 189..=1566 {
+        let input = match tick {
+            260 => down,
+            300 | 360 | 420 => confirm(),
+            _ => UiInput::default(),
+        };
+        screen.update(&cx, input);
+    }
+    // Pieces 2 to 5 scroll up from 10 and 170, a line every 11 ticks.
+    let (top, bottom): (i32, i32) =
+        screen.test_eval("local p = M.state.pro return p.sprites[2].y, p.sprites[4].y");
+    assert_eq!((top, bottom), (5, 165));
+    assert_eq!(
+        screen.test_eval::<i64>("return M.state.pro.sprites[4].colour"),
+        0x60
+    );
+    let mut framebuffer = Framebuffer::new();
+    screen.draw(&cx, &mut framebuffer);
+    let pixel = |x: i32, y: i32| {
+        let at = (y as usize * framebuffer.width as usize + x as usize) * 4;
+        <[u8; 3]>::try_from(&framebuffer.rgba[at..at + 3]).unwrap()
+    };
+    // The first full-screen picture is fading out under them (slot 3).
+    let under = pixel(8, bottom);
+    assert!(under[0] > 0 && under[0] < 0x40, "{under:?}");
+    assert_eq!(pixel(0, bottom + 4), under);
+    // The sheet's 4 x 4 blue texels at alpha 191 over it.
+    let over = |texel: u32, under: u8| ((texel * 191 + u32::from(under) * 64 + 127) / 255) as u8;
+    let blue = [over(0, under[0]), over(0, under[1]), over(255, under[2])];
+    assert_eq!(pixel(0, bottom), blue);
+    assert_eq!(pixel(259, bottom + 3), blue);
+    // The upper pieces are behind the top band.
+    assert_eq!(pixel(0, top), [0, 0, 0]);
+    assert_eq!(pixel(8, 23), [0, 0, 0]);
+    assert_eq!(pixel(8, 24), under);
+    assert_eq!(pixel(8, 216), [0, 0, 0]);
     let _ = std::fs::remove_dir_all(&dir);
 }

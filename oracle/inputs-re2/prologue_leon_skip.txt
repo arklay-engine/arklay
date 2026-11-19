@@ -1,0 +1,12 @@
+# From boot: ORIGINAL MODE, LEON, NORMAL, then confirm on 1300, in the prologue's first picture with its first line up, which skips it (oracle/re2.md, "The prologue").
+0
+260 down
+263
+300 confirm
+303
+360 confirm
+363
+420 confirm
+423
+1300 confirm
+1303

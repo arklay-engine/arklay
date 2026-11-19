@@ -784,13 +784,13 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
             usize,
             i64,
             Option<Value>,
-            Option<String>,
+            Option<Value>,
         )| {
             let tint = match tint {
                 Some(Value::Nil) | None => crate::font::Tint::White,
                 Some(value) => colour_tint(&value)?,
             };
-            let blend = sprite_blend(blend.as_deref())?;
+            let blend = sprite_blend_value(blend.as_ref())?;
             let Api {
                 host, framebuffer, ..
             } = api;
@@ -801,7 +801,13 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
             let draw = |framebuffer: &mut Framebuffer| {
                 framebuffer.draw_page_sprite_scaled(art, src, dst, row, scale, tint, blend);
             };
-            match hd_art(&host.assets, api.cx.pack, framebuffer, handle, row) {
+            // A replacement's quad carries no alpha, so a sprite at a
+            // weight draws from the page itself.
+            let hd = match blend {
+                SpriteBlend::Alpha(_) => None,
+                _ => hd_art(&host.assets, api.cx.pack, framebuffer, handle, row),
+            };
+            match hd {
                 Some(hd) => {
                     let (corners, uv) = sprite_quad(&hd, src, dst, [false; 2]);
                     let colour = sprite_colour(tint, scale);

@@ -151,6 +151,11 @@ pub enum ScreenAction {
     CharSelect,
     /// Open the load screen.
     SaveLoad,
+    /// Play RE 2's film `id` ([`crate::movie::re2_film`]), Claire's with
+    /// `claire`, while the title that asked sleeps, then wake it with how
+    /// the film ended (its `on_film`). A film that can't play is over at
+    /// once.
+    Film { id: u8, claire: bool },
     /// The ending films finished: open the RESULT screen.
     EndingResult,
     /// The RESULT screen finished: run the rocket-launcher epilogue (endings
@@ -207,6 +212,19 @@ pub enum UiCue {
     /// `Snd_load_core(id)`: the core bank the later [`UiCue::Core`] cues
     /// play from (the 4th Survivor's title loads 0x12, To-fu's 0x13).
     CoreBank(u8),
+    /// RE 2's `Xa_play(1, line)`: line `line` of the voice bank no stage
+    /// owns, for `player` (`voice/<player>/00_<line>.wav`), at the
+    /// prologue's level.
+    Voice { player: u8, line: u8 },
+    /// `Xa_stop`: the voice line off.
+    VoiceStop,
+    /// `Snd_bgm_main` and `Snd_bgm_ctr(0x1000000)`: RE 2's main music `id`
+    /// from its start.
+    Music(u8),
+    /// `Snd_bgm_fade_ON`: the music fades out.
+    MusicFade,
+    /// The music off.
+    MusicStop,
 }
 
 impl UiCue {
@@ -226,7 +244,14 @@ impl UiCue {
             UiCue::MapZoom => Some(crate::sfx::UI_MAP_ZOOM),
             UiCue::MapLabel => Some(crate::sfx::UI_MAP_LABEL),
             UiCue::Bank(bank, slot) => crate::sfx::global_sfx(bank, slot),
-            UiCue::RoomSound(_) | UiCue::Core(_) | UiCue::CoreBank(_) => None,
+            UiCue::RoomSound(_)
+            | UiCue::Core(_)
+            | UiCue::CoreBank(_)
+            | UiCue::Voice { .. }
+            | UiCue::VoiceStop
+            | UiCue::Music(_)
+            | UiCue::MusicFade
+            | UiCue::MusicStop => None,
         }
     }
 }
