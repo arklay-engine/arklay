@@ -327,6 +327,21 @@ function ScreenApi:height() end
 ---@param value integer|boolean|nil An integer, a boolean (stored as 1 or 0), or `nil` to clear the key. A float or any other type raises an error.
 function ScreenApi:set(key, value) end
 
+---Keep a value past this screen: the engine holds it for as long as it
+---runs and gives it back to any screen that asks, this one's next opening
+---included. It is for work the original keeps in static data, which a
+---screen finds as the last one left it (the save list's name scroll, the
+---option screen's rows); it is never saved. Up to 64 keys in all, shared by
+---every screen of the pack; a new key past that raises an error.
+---@param key string
+---@param value integer|boolean|nil An integer, a boolean (kept as 1 or 0), or `nil` to forget the key.
+function ScreenApi:keep(key, value) end
+
+---A value [`api:keep`](#ScreenApi.keep) kept.
+---@param key string
+---@return integer? value `nil` when nothing is kept under `key`.
+function ScreenApi:kept(key) end
+
 ---Leave the screen once the current call returns, reporting `action`. With
 ---no action the screen leaves its default way: back to gameplay from a
 ---save screen, back to the title from the load screen, the opener's

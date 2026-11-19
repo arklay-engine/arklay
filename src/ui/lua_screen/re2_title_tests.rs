@@ -50,6 +50,7 @@ fn pack() -> &'static Pack {
 
 fn context<'a>(dir: &'a std::path::Path) -> UiContext<'a> {
     UiContext {
+        statics: None,
         authentic: false,
         pack: pack(),
         save_dir: dir,
@@ -508,11 +509,16 @@ fn tick_cues(screen: &mut LuaScreen, cx: &UiContext<'_>, input: UiInput) -> Vec<
     cx.cues.borrow().clone()
 }
 
-/// The title's OPTION confirmed, to the first tick its menu reads the pad.
-fn open_option(cx: &UiContext<'_>, name: &str) -> (LuaScreen, std::path::PathBuf) {
+/// A title opened with what `cx` keeps, and its OPTION confirmed, to the
+/// option task's first tick (black, with the fade in set).
+fn open_option_to_its_first_tick(
+    cx: &UiContext<'_>,
+    name: &str,
+) -> (LuaScreen, std::path::PathBuf) {
     let dir = std::env::temp_dir().join(format!("arklay-re2-{name}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let mut cx_open = context(&dir);
+    cx_open.statics = cx.statics;
     let mut screen =
         LuaScreen::open_screen("title", &[], ScreenAction::Quit, &mut cx_open).unwrap();
     run(&mut screen, cx, UiInput::default(), 70);
@@ -521,11 +527,17 @@ fn open_option(cx: &UiContext<'_>, name: &str) -> (LuaScreen, std::path::PathBuf
     }
     assert_eq!(screen.value("ti_cur"), 4, "OPTION's row");
     // `title_option_menu`: the confirm at 400, the task's first tick at 409
-    // (black, with the fade in set) and the menu from 414.
+    // and the menu from 414.
     run(&mut screen, cx, press("confirm"), 9);
     assert_eq!(screen.value("opt_on"), 0);
     run(&mut screen, cx, UiInput::default(), 1);
     assert_eq!(screen.value("opt_on"), 1);
+    (screen, dir)
+}
+
+/// The title's OPTION confirmed, to the first tick its menu reads the pad.
+fn open_option(cx: &UiContext<'_>, name: &str) -> (LuaScreen, std::path::PathBuf) {
+    let (mut screen, dir) = open_option_to_its_first_tick(cx, name);
     assert_eq!(opt(&screen), [1, 0, 0, 0, 0, 2, 0, 100, 100]);
     assert_eq!(screen.value("game_active"), 1, "the game's limiter");
     assert_eq!(frame(&screen).as_deref(), Some("black"));
@@ -958,6 +970,44 @@ fn a_volumes_digit_sits_where_its_cell_puts_it() {
     assert_eq!(place("1", 6), 0x104);
     assert_eq!(place("6", 9), 0x102);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The option screen's work and its sound values are the process's in the
+/// original: a title opened again (after a game) finds them as the last one
+/// left them, where a context with nowhere to keep them starts over.
+#[test]
+fn the_option_screens_work_outlasts_the_title() {
+    let dir = std::env::temp_dir();
+    let statics = crate::ui::ScreenStatics::default();
+    for kept in [true, false] {
+        let mut cx = context(&dir);
+        if kept {
+            cx.statics = Some(&statics);
+        }
+        let (mut screen, folder) = open_option(&cx, "option-kept");
+        run(&mut screen, &cx, press("down"), 2);
+        run(&mut screen, &cx, press("down"), 2);
+        run(&mut screen, &cx, press("confirm"), 4);
+        // MONO, and the mode's arrows four ticks into their blink.
+        run(&mut screen, &cx, press("left"), 7);
+        let left = opt(&screen);
+        assert_eq!(left[5], 1, "MONO");
+        let blink = screen.value("opt_blink_mode");
+        assert_ne!(blink, 0);
+        let _ = std::fs::remove_dir_all(&folder);
+        // A title opened anew: its option screen's black tick.
+        let (again, folder) = open_option_to_its_first_tick(&cx, "option-kept-again");
+        let found = opt(&again);
+        if kept {
+            assert_eq!(found[2], left[2], "the row, until `Config_main` clears it");
+            assert_eq!(found[5..], left[5..], "the sound values");
+            assert_eq!(again.value("opt_blink_mode"), blink);
+        } else {
+            assert_eq!(found, [1, 0, 0, 0, 0, 2, 0, 100, 100]);
+            assert_eq!(again.value("opt_blink_mode"), 0);
+        }
+        let _ = std::fs::remove_dir_all(&folder);
+    }
 }
 
 /// The original's pad has run since boot, so a direction held as the title

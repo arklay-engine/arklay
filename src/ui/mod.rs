@@ -260,6 +260,41 @@ pub fn load_picture(
         .with_context(|| format!("invalid {}", asset.path()))
 }
 
+/// What the screens keep from one opening to the next: the original holds
+/// such work in the executable's static data (the save list's name scroll,
+/// the option screen's rows), where it lasts as long as the process. The
+/// app owns one and shares it with its sessions; it is never saved.
+#[derive(Debug, Clone, Default)]
+pub struct ScreenStatics(std::rc::Rc<std::cell::RefCell<std::collections::BTreeMap<String, i64>>>);
+
+impl ScreenStatics {
+    /// The most keys the screens may keep.
+    pub const MAX_KEYS: usize = 64;
+
+    /// The value kept under `key`.
+    pub fn get(&self, key: &str) -> Option<i64> {
+        self.0.borrow().get(key).copied()
+    }
+
+    /// Keep `value` under `key`, or forget the key with `None`. A new key
+    /// past [`Self::MAX_KEYS`] is refused.
+    pub fn set(&self, key: &str, value: Option<i64>) -> bool {
+        let mut kept = self.0.borrow_mut();
+        match value {
+            None => {
+                kept.remove(key);
+            }
+            Some(value) => {
+                if !kept.contains_key(key) && kept.len() >= Self::MAX_KEYS {
+                    return false;
+                }
+                kept.insert(key.to_owned(), value);
+            }
+        }
+        true
+    }
+}
+
 /// Everything a screen may read while it runs.
 ///
 /// The context is built fresh each tick by the app, so screens never own (or
@@ -283,6 +318,10 @@ pub struct UiContext<'a> {
     /// The paused session's game state, for the in-game screens' rule
     /// queries; `None` outside a session.
     pub game: Option<&'a crate::game::GameState>,
+    /// Where the screen's scripts keep values past the screen
+    /// (`api:keep`); `None` for a context with nowhere to keep them, where a
+    /// kept value reads as absent.
+    pub statics: Option<&'a ScreenStatics>,
     /// Whether the run was started with `--authentic`. Screens with no paused
     /// session read it through `api:authentic()`; a paused session's game
     /// state answers when there is one.

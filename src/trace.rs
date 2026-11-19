@@ -157,6 +157,8 @@ pub struct TraceTick<'a> {
     pub re2_save_screen: Option<String>,
     /// The RE 2 save screen's name scroll (`svs`), while the screen is up.
     pub re2_save_scroll: Option<i64>,
+    /// The RE 2 save screen's answers' blink count (`svb`).
+    pub re2_save_blink: Option<i64>,
     /// RE2: the common flags (`fgcom`, `fg_common`'s eight words as their
     /// bytes) and the computer's state (`pc`, `-` without one).
     pub re2_computer: Option<String>,
@@ -432,6 +434,9 @@ impl TraceWriter {
         if let Some(scroll) = tick.re2_save_scroll {
             write!(self.out, " svs={scroll}")?;
         }
+        if let Some(blink) = tick.re2_save_blink {
+            write!(self.out, " svb={blink}")?;
+        }
         if let Some(fields) = &tick.re2_computer {
             write!(self.out, " {fields}")?;
         }
@@ -585,6 +590,7 @@ mod tests {
             re2_game_mode: None,
             re2_save_screen: None,
             re2_save_scroll: None,
+            re2_save_blink: None,
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
@@ -662,6 +668,7 @@ mod tests {
                 re2_game_mode: None,
                 re2_save_screen: None,
                 re2_save_scroll: None,
+                re2_save_blink: None,
                 re2_computer: None,
                 re2_hikidashi: None,
                 re2_objects: None,
@@ -735,6 +742,7 @@ mod tests {
                 re2_game_mode: None,
                 re2_save_screen: None,
                 re2_save_scroll: None,
+                re2_save_blink: None,
                 re2_computer: None,
                 re2_hikidashi: None,
                 re2_objects: None,
@@ -806,6 +814,7 @@ mod tests {
                 re2_game_mode: None,
                 re2_save_screen: None,
                 re2_save_scroll: None,
+                re2_save_blink: None,
                 re2_computer: None,
                 re2_hikidashi: None,
                 re2_objects: None,
@@ -877,6 +886,7 @@ mod tests {
             re2_game_mode: None,
             re2_save_screen: None,
             re2_save_scroll: None,
+            re2_save_blink: None,
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
@@ -959,6 +969,7 @@ mod tests {
             re2_game_mode: None,
             re2_save_screen: None,
             re2_save_scroll: None,
+            re2_save_blink: None,
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
@@ -1051,6 +1062,7 @@ mod tests {
             re2_game_mode: Some(0),
             re2_save_screen: Some("-".to_string()),
             re2_save_scroll: None,
+            re2_save_blink: None,
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
@@ -1123,6 +1135,7 @@ mod tests {
             re2_game_mode: None,
             re2_save_screen: None,
             re2_save_scroll: None,
+            re2_save_blink: None,
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,

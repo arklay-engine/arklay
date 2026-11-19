@@ -682,6 +682,7 @@ pub fn run_with_options(
                         re2_game_mode: None,
                         re2_save_screen: None,
                         re2_save_scroll: None,
+                        re2_save_blink: None,
                         re2_computer: None,
                         re2_hikidashi: None,
                         re2_objects: None,
@@ -2252,10 +2253,9 @@ struct GameSession {
     /// The `fg_stop` the hand-off puts back on R+1 (`0x6897C8`): the word
     /// `Sce_Save` saved before its prompt, and whatever the screen set.
     re2_save_stop: u32,
-    /// `Card_access`'s rows shown (`0x986394`) and the folder's saves
-    /// (`cnt0`, `0x663188`): globals the screen's state 1 sets and nothing
-    /// clears, so a screen shows the last one's until its own state 1.
-    re2_card_rows: [i64; 2],
+    /// What the screens keep past a screen (`api:keep`): the app's, shared
+    /// with it once the app starts the session.
+    screen_statics: ui::ScreenStatics,
     /// How many `Game_loop` passes ran the enemies under `fg_stop` outside
     /// the room's own tick ([`GameSession::re2_stopped_enemy_pass`]).
     #[cfg(test)]
@@ -3049,7 +3049,7 @@ impl GameSession {
             re2_status_return: None,
             re2_save: None,
             re2_save_stop: 0,
-            re2_card_rows: [0; 2],
+            screen_statics: ui::ScreenStatics::default(),
             #[cfg(test)]
             re2_stopped_enemy_passes: 0,
             #[cfg(test)]
@@ -5470,6 +5470,7 @@ impl GameSession {
                 ..
             } = self;
             let mut cx = UiContext {
+                statics: None,
                 authentic: game.player_options.authentic,
                 pack,
                 save_dir,
@@ -5771,6 +5772,7 @@ impl GameSession {
         } = self;
         if let Some(screen) = menu.as_mut() {
             let cx = UiContext {
+                statics: None,
                 authentic: game.player_options.authentic,
                 pack,
                 save_dir,
@@ -5799,6 +5801,7 @@ impl GameSession {
             ..
         } = self;
         let mut cx = UiContext {
+            statics: None,
             authentic: game.player_options.authentic,
             pack,
             save_dir,
@@ -5833,6 +5836,7 @@ impl GameSession {
             ..
         } = self;
         let mut cx = UiContext {
+            statics: None,
             authentic: game.player_options.authentic,
             pack,
             save_dir,
@@ -5870,6 +5874,7 @@ impl GameSession {
         } = self;
         if let Some(screen) = re2_computer_screen.as_mut() {
             let cx = UiContext {
+                statics: None,
                 authentic: game.player_options.authentic,
                 pack,
                 save_dir,
@@ -5910,6 +5915,7 @@ impl GameSession {
         } = self;
         if let Some(screen) = re2_item_screen.as_mut() {
             let cx = UiContext {
+                statics: None,
                 authentic: game.player_options.authentic,
                 pack,
                 save_dir,
@@ -7136,7 +7142,6 @@ impl GameSession {
             return "-".to_string();
         };
         let value = |key: &str| screen.value(key).unwrap_or(0);
-        let [rows, saves] = self.re2_card_rows;
         format!(
             "{},{},{:x},{},{},{},{},{},{},{},{},{}",
             value("sv_sub"),
@@ -7145,22 +7150,30 @@ impl GameSession {
             value("sv_mode"),
             value("sv_cursor"),
             value("sv_top"),
-            rows,
+            value("sv_rows"),
             value("sv_timer"),
             value("sv_choice"),
             value("sv_typed"),
-            saves,
+            value("sv_saves"),
             self.game.state_bytes[usize::from(game::STATE_BYTE_SAVES)],
         )
     }
 
     /// The oracle's `svs` field: the save screen's name scroll (`0x986384`),
-    /// 0 while the screen isn't up.
+    /// which the screen keeps for the next one (`card_scroll`).
     fn re2_save_scroll_trace(&self) -> i64 {
+        self.re2_save_kept_trace("sv_scroll", "card_scroll")
+    }
+
+    /// A value of the save screen's work that is static in the original:
+    /// what the screen publishes as `shown` while it is up, and what the
+    /// last screen kept as `kept` otherwise.
+    fn re2_save_kept_trace(&self, shown: &str, kept: &str) -> i64 {
         self.save_screen
             .as_ref()
             .filter(|_| self.re2_save == Some(Re2Save::Screen))
-            .and_then(|screen| screen.value("sv_scroll"))
+            .and_then(|screen| screen.value(shown))
+            .or_else(|| self.screen_statics.get(kept))
             .unwrap_or(0)
     }
 
@@ -7336,6 +7349,7 @@ impl GameSession {
     /// The session's UI context for a screen that runs over the frozen room.
     fn ui_context<'a>(&'a self, pack: &'a Pack) -> UiContext<'a> {
         UiContext {
+            statics: Some(&self.screen_statics),
             authentic: self.game.player_options.authentic,
             pack,
             save_dir: &self.save_dir,
@@ -7385,12 +7399,14 @@ impl GameSession {
                 font,
                 text,
                 game,
+                screen_statics,
                 ..
             } = self;
             let Some(screen) = save_screen.as_mut() else {
                 return;
             };
             let cx = UiContext {
+                statics: Some(screen_statics),
                 authentic: game.player_options.authentic,
                 pack,
                 save_dir,
@@ -7405,14 +7421,6 @@ impl GameSession {
         };
         let re2_screen = self.re2_save == Some(Re2Save::Screen);
         if re2_screen {
-            // The script publishes these from its state 1 on.
-            if let Some(screen) = self.save_screen.as_ref() {
-                for (kept, key) in self.re2_card_rows.iter_mut().zip(["sv_rows", "sv_saves"]) {
-                    if let Some(shown) = screen.value(key) {
-                        *kept = shown;
-                    }
-                }
-            }
             self.play_re2_screen_cues(pack, cues);
             // `Card_access`'s state 3 changes the live state on the write
             // tick, while the screen goes on: the ribbon and the count.
@@ -8932,6 +8940,7 @@ impl GameSession {
         // frame, so the first frame still shows them as the eat left them.
         let torn_legs = torn_corpse && death.screen_ticks() > 1;
         let cx = UiContext {
+            statics: None,
             authentic: game.player_options.authentic,
             pack,
             save_dir,
@@ -9355,6 +9364,10 @@ impl GameSession {
                 .then(|| self.re2_save.map_or(0, Re2Save::game_mode)),
             re2_save_screen: self.game.is_re2_room.then(|| self.re2_save_screen_trace()),
             re2_save_scroll: self.game.is_re2_room.then(|| self.re2_save_scroll_trace()),
+            re2_save_blink: self
+                .game
+                .is_re2_room
+                .then(|| self.re2_save_kept_trace("sv_blink", "card_blink")),
             re2_computer: self.game.is_re2_room.then(|| {
                 let common: String = self.game.re2.banks[4]
                     .iter()
@@ -9753,6 +9766,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = menu.as_mut() {
                 let cx = UiContext {
+                    statics: None,
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -9782,6 +9796,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = re2_item_screen.as_mut() {
                 let cx = UiContext {
+                    statics: None,
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -9808,6 +9823,7 @@ impl GameSession {
             } = self;
             if let Some(viewer) = examine.as_mut() {
                 let cx = UiContext {
+                    statics: None,
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -9836,6 +9852,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = item_box.as_mut() {
                 let cx = UiContext {
+                    statics: None,
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -9861,6 +9878,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = file.as_mut() {
                 let cx = UiContext {
+                    statics: None,
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -9885,6 +9903,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = map.as_mut() {
                 let cx = UiContext {
+                    statics: None,
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -9909,6 +9928,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = save_screen {
                 let cx = UiContext {
+                    statics: None,
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -9937,6 +9957,7 @@ impl GameSession {
             } = self;
             if let Some(pickup) = pickup_view.as_mut() {
                 let cx = UiContext {
+                    statics: None,
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -10027,6 +10048,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = return_title.as_mut() {
                 let cx = UiContext {
+                    statics: None,
                     authentic: game.player_options.authentic,
                     pack,
                     save_dir,
@@ -10855,11 +10877,9 @@ struct App {
     /// script that resumes (`on_resume`): the original's title task sleeps
     /// under `Mem_card` and wakes when it ends.
     sleeping_title: Option<Box<ui::lua_screen::LuaScreen>>,
-    /// The load screen's rows and its folder's saves as the last listing
-    /// left them (`sv_rows`, `sv_saves`): the original's words keep a
-    /// screen's values until the next one lists its folder, and the trace's
-    /// `sv` shows them.
-    card_rows: [i64; 2],
+    /// What the screens keep past a screen (`api:keep`), shared with the
+    /// sessions the app starts.
+    statics: ui::ScreenStatics,
     /// Whether the port-only debug room overlay is enabled for the gameplay
     /// sessions this app starts. Enabled by default.
     debug_menu: bool,
@@ -10957,7 +10977,7 @@ impl App {
             ui_banks: None,
             ui_sounds: Vec::new(),
             sleeping_title: None,
-            card_rows: [0; 2],
+            statics: ui::ScreenStatics::default(),
             debug_menu: true,
             player_options: player::Options::default(),
             ending: None,
@@ -11162,6 +11182,7 @@ impl App {
     /// Build the shared screen context.
     fn context(&self) -> UiContext<'_> {
         UiContext {
+            statics: Some(&self.statics),
             authentic: self.player_options.authentic,
             pack: &self.pack,
             save_dir: &self.save_dir,
@@ -11365,11 +11386,6 @@ impl App {
             .is_some_and(|entry| self.pack.contains(entry));
         let special = i64::from(self.player_options.title_special.unwrap_or(15));
         self.sleeping_title = None;
-        // A session's save screens leave their last listing's rows behind,
-        // as the title's load screen leaves its own to a session.
-        if let Mode::Play(session) = &self.mode {
-            self.card_rows = session.re2_card_rows;
-        }
         let mut cx = self.context();
         let screen = ui::lua_screen::LuaScreen::open_screen(
             "title",
@@ -11554,11 +11570,11 @@ impl App {
     /// Enter a gameplay session, opening audio on the interactive path.
     fn start_session(&mut self, mut session: Box<GameSession>) {
         // A session started from under the load screen (the script host's
-        // can be) leaves no title asleep, and its save screen opens with
-        // the rows the last listing left, as the original's statics have
-        // them.
+        // can be) leaves no title asleep, and its screens keep their work
+        // where the title's do, as the original's statics are the
+        // process's.
         self.sleeping_title = None;
-        session.re2_card_rows = self.card_rows;
+        session.screen_statics = self.statics.clone();
         #[cfg(feature = "bot")]
         self.start_bot_session(&mut session);
         session.set_debug_menu(self.debug_menu);
@@ -12159,10 +12175,11 @@ impl App {
                 text,
                 mode,
                 ticks,
-                card_rows,
+                statics,
                 ..
             } = self;
             let cx = UiContext {
+                statics: Some(statics),
                 authentic: self.player_options.authentic,
                 pack,
                 save_dir,
@@ -12175,15 +12192,7 @@ impl App {
             let result = match mode {
                 Mode::Title(screen) => screen.update(&cx, ui),
                 Mode::Select(screen) => screen.update(&cx, ui),
-                Mode::Load(screen) => {
-                    let result = screen.update(&cx, ui);
-                    for (kept, key) in card_rows.iter_mut().zip(["sv_rows", "sv_saves"]) {
-                        if let Some(value) = screen.value(key) {
-                            *kept = value;
-                        }
-                    }
-                    result
-                }
+                Mode::Load(screen) => screen.update(&cx, ui),
                 Mode::Save(screen) => screen.update(&cx, ui),
                 Mode::Ending(screen) => screen.update(&cx, ui),
                 Mode::Epilogue(screen) => screen.update(&cx, ui),
@@ -12312,6 +12321,7 @@ impl App {
             Mode::Boot => {}
             Mode::Title(screen) => {
                 let cx = UiContext {
+                    statics: None,
                     authentic: self.player_options.authentic,
                     pack,
                     save_dir,
@@ -12326,6 +12336,7 @@ impl App {
             }
             Mode::Select(screen) => {
                 let cx = UiContext {
+                    statics: None,
                     authentic: self.player_options.authentic,
                     pack,
                     save_dir,
@@ -12340,6 +12351,7 @@ impl App {
             }
             Mode::Load(screen) => {
                 let cx = UiContext {
+                    statics: None,
                     authentic: self.player_options.authentic,
                     pack,
                     save_dir,
@@ -12354,6 +12366,7 @@ impl App {
             }
             Mode::Save(screen) => {
                 let cx = UiContext {
+                    statics: None,
                     authentic: self.player_options.authentic,
                     pack,
                     save_dir,
@@ -12368,6 +12381,7 @@ impl App {
             }
             Mode::Ending(screen) => {
                 let cx = UiContext {
+                    statics: None,
                     authentic: self.player_options.authentic,
                     pack,
                     save_dir,
@@ -12382,6 +12396,7 @@ impl App {
             }
             Mode::Epilogue(screen) => {
                 let cx = UiContext {
+                    statics: None,
                     authentic: self.player_options.authentic,
                     pack,
                     save_dir,
@@ -13190,7 +13205,6 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
     match load.filter(|load| load.value("sv_sub").is_some()) {
         Some(load) => {
             let value = |key: &str| load.value(key).unwrap_or(0);
-            let [rows, saves] = app.card_rows;
             line.push_str(&format!(
                 " sv={},{},{:x},{},{},{},{},{},{},{},{},0",
                 value("sv_sub"),
@@ -13199,19 +13213,21 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
                 value("sv_mode"),
                 value("sv_cursor"),
                 value("sv_top"),
-                rows,
+                value("sv_rows"),
                 value("sv_timer"),
                 value("sv_choice"),
                 value("sv_typed"),
-                saves,
+                value("sv_saves"),
             ));
         }
         None => line.push_str(" sv=-"),
     }
-    // The list's name scroll.
+    // The list's name scroll, which the screen keeps for the next one.
     line.push_str(&format!(
         " svs={}",
-        load.and_then(|load| load.value("sv_scroll")).unwrap_or(0)
+        load.and_then(|load| load.value("sv_scroll"))
+            .or_else(|| app.statics.get("card_scroll"))
+            .unwrap_or(0)
     ));
     let snd: Vec<String> = sounds
         .iter()
@@ -26909,21 +26925,28 @@ mod tests {
     }
 
     /// The trace's `sv`: the screen's work and the save count while the
-    /// typewriter's screen runs, the rows and `cnt0` kept from the last
-    /// screen until its state 1, and `-` otherwise.
+    /// typewriter's screen runs, and `-` otherwise. `svs` is the scroll the
+    /// screen shows, or the one the last screen kept.
     #[test]
     fn the_trace_writes_sv_while_the_screen_runs() {
         let dir = TempDir::new();
         let (pack, mut session) = re2_typewriter_session(&dir);
         assert_eq!(session.re2_save_screen_trace(), "-");
         session.game.state_bytes[usize::from(game::STATE_BYTE_SAVES)] = 0;
-        session.re2_card_rows = [2, 0];
-        let mut screen = writing_screen(&[("sv_sub", 3), ("sv_step", 1)]);
+        session.screen_statics.set("card_scroll", Some(8));
+        assert_eq!(session.re2_save_scroll_trace(), 8, "the last screen's");
+        let mut screen = writing_screen(&[
+            ("sv_sub", 3),
+            ("sv_step", 1),
+            ("sv_rows", 2),
+            ("sv_scroll", 16),
+        ]);
         screen.outcome = None;
         session.save_screen = Some(screen);
         assert_eq!(session.re2_save_screen_trace(), "-", "not the typewriter's");
         session.re2_save = Some(Re2Save::Screen);
         assert_eq!(session.re2_save_screen_trace(), "3,1,0,0,0,0,2,0,0,0,0,0");
+        assert_eq!(session.re2_save_scroll_trace(), 16, "the screen's own");
         session.save_screen = Some(writing_screen(&[
             ("sv_sub", 2),
             ("sv_state", 0x22),
@@ -31568,15 +31591,14 @@ mod tests {
         }
     }
 
-    /// The save screen's rows and save count are the process's in the
-    /// original: a session starts with what the title's load screen last
-    /// listed, and the title gets back what the session's screens left.
+    /// What the screens keep is the process's in the original: a session
+    /// the app starts keeps its screens' work where the title's screens do.
     #[test]
-    fn app_hands_the_last_listings_rows_to_a_session_and_back() {
+    fn app_shares_what_its_screens_keep_with_a_session() {
         let dir = TempDir::new();
         let pack = Pack::open(&new_game_pack(&dir)).unwrap();
         let mut app = App::new(pack, dir.0.join("saves"), false);
-        app.card_rows = [1, 0];
+        app.statics.set("card_scroll", Some(8));
         app.apply(ScreenAction::NewGame {
             character: 0,
             choice: Default::default(),
@@ -31585,11 +31607,9 @@ mod tests {
         let Mode::Play(session) = &mut app.mode else {
             panic!("expected a session");
         };
-        assert_eq!(session.re2_card_rows, [1, 0]);
-        session.re2_card_rows = [4, 2];
-        app.apply(ScreenAction::Title).unwrap();
-        assert!(matches!(app.mode, Mode::Title(_)));
-        assert_eq!(app.card_rows, [4, 2]);
+        assert_eq!(session.screen_statics.get("card_scroll"), Some(8));
+        session.screen_statics.set("card_scroll", Some(0));
+        assert_eq!(app.statics.get("card_scroll"), Some(0));
     }
 
     #[test]
