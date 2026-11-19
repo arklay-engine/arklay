@@ -691,6 +691,49 @@ fn the_option_screens_sheets_are_copied() {
     assert!(!pack.contains("ui/option/color2.bmp"));
 }
 
+/// The boot's warning (`Load_disclaimer`): `gw2.adt`'s picture, Classic
+/// REbirth's copy in `ddraw.dll`'s archive before the install's own.
+#[test]
+fn the_boots_warning_is_converted() {
+    let colour = |pack: &Pack| {
+        let image = crate::bmp::decode(&read(pack, "ui/title/warning.bmp")).unwrap();
+        assert_eq!((image.width, image.height), (320, 240));
+        image.rgba[..3].to_vec()
+    };
+    let root = TempDir::new("boot-warning");
+    make_install(&root.path);
+    let out = root.path.join("out.akpak");
+    convert_game(&root.path, &out).unwrap();
+    assert!(!Pack::open(&out).unwrap().contains("ui/title/warning.bmp"));
+
+    let (own, english) = (
+        crate::adt::fixture::uniform_background(0x21),
+        crate::adt::fixture::uniform_background(0x42),
+    );
+    write(&root.path.join("data/Common/Data/GW2.ADT"), &own);
+    convert_game(&root.path, &out).unwrap();
+    let installs = colour(&Pack::open(&out).unwrap());
+
+    let mut dll = ddraw(&[]);
+    dll.extend(crate::sevenz::tests::stored(&[(
+        "common/data/gw2.adt",
+        &english,
+    )]));
+    write(&root.path.join("DDRAW.DLL"), &dll);
+    convert_game(&root.path, &out).unwrap();
+    assert_ne!(colour(&Pack::open(&out).unwrap()), installs);
+
+    // An archive's copy that can't be decoded gives way to the install's.
+    let mut dll = ddraw(&[]);
+    dll.extend(crate::sevenz::tests::stored(&[(
+        "common/data/gw2.adt",
+        b"not an ADT stream",
+    )]));
+    write(&root.path.join("DDRAW.DLL"), &dll);
+    convert_game(&root.path, &out).unwrap();
+    assert_eq!(colour(&Pack::open(&out).unwrap()), installs);
+}
+
 /// The prologue's art (`Prologue_load`): each `open0<n>.adt` is a stream of
 /// TIMs, split into its sheets, and each `open1<n>.adt` a full-screen
 /// picture; the script that shows them is packed with the title's.

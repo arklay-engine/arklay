@@ -27,6 +27,10 @@
 -- below) and gives the title back at `Title_init`. An idle title fades into
 -- the attract demo after 0x708 ticks.
 --
+-- From the game's boot (`M.on_boot`) the title starts 189 ticks before
+-- `Title_init`, with the warning's picture and the title's film ("the
+-- boot" below).
+--
 -- args.folder_saves: a registered save screen lists the whole save folder.
 
 local CrText = require("ui/cr_text")
@@ -1844,6 +1848,128 @@ end
 
 -- ---------------------------------------------------------------- the screen
 
+-- ---------------------------------------------------------------- the boot
+
+-- The boot before the title. `Init_main` (0x4C4000) starts task 1 on
+-- `Load_disclaimer` (0x4C4FF0), which shows the warning's picture
+-- (`gw2.adt`) under a fade in and says so (`0x98F1B9` at 1); the main task
+-- then goes on to `Capcom_logo` (0x503680), which loads the core bank,
+-- sleeps 0x78 ticks and asks the warning to go (2); it fades out and ends
+-- (0), and `Capcom_logo` plays the title's film and hands over to
+-- `Title_init`: 189 ticks in all.
+local BOOT_HOLD = 0x78
+
+-- Task 1, `Load_disclaimer`, a tick: each step falls into the next.
+local function boot_warning()
+    local b = s.boot
+    if b.task == 0 then
+        -- `BYTE_0098F1B7`: the picture is drawn from this tick on.
+        s.background = s.warning
+        fade_set(0x200, -0x400)
+        b.task = 4
+    end
+    if b.task == 4 then
+        if not fade_done(0) then
+            return
+        end
+        b.flag = 1
+        b.task = 5
+    end
+    if b.task == 5 then
+        if b.flag ~= 2 then
+            return
+        end
+        fade_set(0x200, 0x400)
+        b.task = 6
+    end
+    if b.task == 6 and fade_done(0) then
+        s.background = nil
+        b.flag = 0
+        b.task = nil
+    end
+end
+
+-- The title's film (`Init_movie_work(0)`): Leon's or Claire's, which the
+-- original picks with a generator it seeds from the clock.
+local function boot_film(api)
+    local time = api:local_time()
+    return { id = 0, claire = time ~= nil and time.second % 2 == 1 }
+end
+
+-- `Capcom_logo`'s end: the title's task starts at `Title_init` on the
+-- next tick. `Title_bg_reload`'s picture is first drawn then.
+local function boot_end()
+    s.frame = "black"
+    s.mv = 1
+    s.sub = 0
+    s.boot = nil
+end
+
+-- Task 0 through the boot, a tick: `Init_main`'s steps, then
+-- `Capcom_logo`'s (`s.sub`), with `Task_sleep` as `b.sleep`.
+local function boot_main(api)
+    local b = s.boot
+    b.sleep = b.sleep - 1
+    if b.sleep > 0 then
+        return
+    end
+    b.sleep = 1
+    if b.step == 0 then
+        s.init = 1
+        b.step = 1
+    elseif b.step == 1 or b.step == 2 then
+        if b.step == 1 then
+            b.flag = 0
+            b.task = 0
+            s.init = 2
+            b.step = 2
+        end
+        if b.flag ~= 0 then
+            -- The rest of `Init_main`: the fonts and the effects' sheets,
+            -- and the main task is the title's from the next tick, come
+            -- from the logo.
+            s.fg_system = s.fg_system | FG_FROM_LOGO
+            b.step = 3
+        end
+    elseif b.step == 3 then
+        -- The title's task's first tick: `Title`'s step 0 sets the pad's
+        -- repeat (`Pad_rep_set`), after this tick's pad. Then
+        -- `Capcom_logo`'s steps 0 and 4.
+        s.rep_mask, s.rep_delay = 0x5000, 0x20A
+        api:core_bank(0x10)
+        s.init = 1
+        s.sub = 5
+        b.step = 5
+        b.sleep = BOOT_HOLD
+    elseif b.step == 5 then
+        b.flag = 2
+        s.sub = 6
+        b.step = 6
+    elseif b.step == 8 then
+        -- The film played: the task's first tick after it.
+        boot_end()
+    else
+        s.sub = 7
+        b.step = 7
+        if b.flag == 0 then
+            -- Step 8 waits for the film (`fg_system`'s 0x200), which is
+            -- over on this tick in a run that plays none (`M.on_film`).
+            s.film = boot_film(api)
+            s.exit = "film"
+            s.frame = "black"
+            s.sub = 8
+            b.step = 8
+        end
+    end
+end
+
+local function boot(api)
+    boot_main(api)
+    if s.boot and s.boot.task then
+        boot_warning()
+    end
+end
+
 local function publish(api)
     Prologue.publish(api, s.pro)
     if volumes_given then
@@ -1945,8 +2071,8 @@ function M.open(api, args)
     s.background = s.title_background
     Prologue.reset()
     s.prologue_art = api:has_image("ui/prologue/open10")
-    -- The title starts at `Title_init`: the boot's logos and warning before
-    -- it aren't ported.
+    -- The title starts at `Title_init`, or, from the boot, 189 ticks before
+    -- it with the warning (`M.on_boot`).
     s.mv = 1
     s.init = 1
     -- From the boot, the white branch of `Title_init`; the new-game choice's
@@ -1975,7 +2101,9 @@ function M.update(api, input)
     s.frame = nil
     local shown = s.drawn_fades[0]
     pad_set(input)
-    if s.game_init then
+    if s.boot then
+        boot(api)
+    elseif s.game_init then
         game_init(api, input)
     elseif s.opt then
         -- The option task's ticks: the title's task sleeps.
@@ -2019,7 +2147,10 @@ function M.update(api, input)
         if exit == "new_game" then
             api:exit("new_game", s.character or 0, s.choice)
         elseif exit == "film" then
-            api:exit("film", s.pro.film, { claire = s.claire })
+            -- The boot's film, or the one the prologue asks for.
+            local film = s.film or { id = s.pro.film, claire = s.claire }
+            s.film = nil
+            api:exit("film", film.id, { claire = film.claire })
         else
             api:exit(exit)
         end
@@ -2060,10 +2191,31 @@ function M.on_volumes(api, music, effects)
     api:set("effects_volume", sound.se)
 end
 
--- The film the prologue left for is over, or never played: its sequence
--- finds that on the next tick.
-function M.on_film(api, skipped)
-    if s.pro then
+-- The title is the boot's first: it starts with `Init_main`, before the
+-- warning ("the boot").
+function M.on_boot(api)
+    s.warning = api:has_image("ui/title/warning") and api:picture("ui/title/warning") or nil
+    s.background = nil
+    s.mv = 0
+    s.init = 0
+    s.fg_system = 0
+    -- No key repeats until the title's task sets its own.
+    s.rep_mask, s.rep_delay = 0, 0
+    s.boot = { step = 0, sleep = 1, flag = 0 }
+    publish(api)
+end
+
+-- The film the title left for is over, or never played. The prologue's
+-- sequence finds that on its next tick. The boot's `Capcom_logo` ends on
+-- the tick it asked when the film never played, and on its next tick
+-- after one that did.
+function M.on_film(api, skipped, played)
+    if s.boot then
+        if not played then
+            boot_end()
+            publish(api)
+        end
+    elseif s.pro then
         Prologue.film_over(s.pro, skipped)
     end
 end

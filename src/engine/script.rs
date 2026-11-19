@@ -1373,10 +1373,22 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
     let shared = Rc::clone(driver);
     globals.set(
         "open_title",
-        lua.create_function(move |_lua, ()| {
+        lua.create_function(move |_lua, table: Option<Table>| {
+            let mut options = Options::new("open_title", table);
+            let boot = match options.get::<Value>("boot")? {
+                None | Some(Value::Nil) => false,
+                Some(Value::Boolean(boot)) => boot,
+                Some(other) => {
+                    return Err(mlua::Error::RuntimeError(format!(
+                        "open_title: option `boot`: expected a boolean, got {}",
+                        other.type_name()
+                    )));
+                }
+            };
+            options.finish()?;
             with(&shared, |driver| {
                 let app = driver.app()?;
-                app.open_title().map_err(engine_error)?;
+                app.open_title_from(boot).map_err(engine_error)?;
                 app.pending_movie = None;
                 driver.baseline = None;
                 driver.edited = false;

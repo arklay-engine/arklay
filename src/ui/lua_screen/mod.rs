@@ -126,6 +126,8 @@ struct Host {
     plays_films: bool,
     /// Whether the script has `on_volumes`: it shows the settings' volumes.
     shows_volumes: bool,
+    /// Whether the script has `on_boot`: it runs the game's boot itself.
+    boots: bool,
     images: HashMap<String, Decoded>,
     /// The layout space the script lays itself out in (`api:width()`).
     layout: (u32, u32),
@@ -292,6 +294,7 @@ impl LuaScreen {
             failed: false,
             plays_films: false,
             shows_volumes: false,
+            boots: false,
             images: HashMap::new(),
             layout: (crate::render::WIDTH, crate::video::aspect().height()),
             action: None,
@@ -303,6 +306,7 @@ impl LuaScreen {
         let vm = ScreenVm::load(entry, Loader::new(sources))?;
         host.plays_films = vm.has_function("on_film");
         host.shows_volumes = vm.has_function("on_volumes");
+        host.boots = vm.has_function("on_boot");
         host.rescan();
         vm.call_open(&mut host, cx, game, args)
             .with_context(|| format!("screen script {entry} open failed"))?;
@@ -569,11 +573,19 @@ impl LuaScreen {
     }
 
     /// Put a screen that left for a film back to work, calling its
-    /// `on_film(api, skipped)`: the film is over, by a press when `skipped`.
-    pub fn resume_film(&mut self, cx: &UiContext<'_>, skipped: bool) {
+    /// `on_film(api, skipped, played)`: the film is over, by a press when
+    /// `skipped`, or never started when not `played`.
+    pub fn resume_film(&mut self, cx: &UiContext<'_>, skipped: bool, played: bool) {
         self.host.exited = false;
         self.host.action = None;
-        self.signal_with("on_film", skipped, cx);
+        self.signal_with("on_film", (skipped, played), cx);
+    }
+
+    /// Whether the script has `on_boot`: as the boot's first title it shows
+    /// what the game shows before its title and plays its own opening film,
+    /// so its owner adds none.
+    pub fn boots(&self) -> bool {
+        !self.host.failed && self.host.boots
     }
 
     /// [`LuaScreen::resume`] after the screen it left for chose a save,

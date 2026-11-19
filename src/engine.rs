@@ -11193,7 +11193,7 @@ impl App {
             // A title asleep under the film wakes as after a film played
             // to its end.
             if let Some(title) = self.film_title.take() {
-                self.wake_film_title(title, false);
+                self.wake_film_title(title, false, false);
             }
             if !self.chain_active {
                 break;
@@ -11242,7 +11242,7 @@ impl App {
         }
         // A title that asked for the film wakes to how it ended.
         if let Some(title) = self.film_title.take() {
-            self.wake_film_title(title, tick == MovieTick::Skipped);
+            self.wake_film_title(title, tick == MovieTick::Skipped, true);
             return Ok(AppFlow::Continue);
         }
         if self.chain_active {
@@ -11647,8 +11647,17 @@ impl App {
     }
 
     /// Open the title screen. On the interactive root boot the first entry
-    /// also queues the opening film (id 0) exactly once per process.
+    /// is the boot's ([`App::open_title_from`]), once per process.
     fn open_title(&mut self) -> Result<()> {
+        let boot = self.films && !self.opening_played;
+        self.open_title_from(boot)
+    }
+
+    /// Open the title screen, from the boot when `boot`: a title that runs
+    /// the boot itself is told so (`on_boot`), to show what the game shows
+    /// before its title and play its own opening film; for any other the
+    /// opening film (id 0) is queued, unless the run plays none.
+    fn open_title_from(&mut self, boot: bool) -> Result<()> {
         // A registration that names a missing entry falls back to the ported
         // screen when it opens, which only lists the eight slots, so the
         // folder probe follows the entry the pack actually carries.
@@ -11659,6 +11668,11 @@ impl App {
         let special = i64::from(self.player_options.title_special.unwrap_or(15));
         self.sleeping_title = None;
         self.pending_load = None;
+        // A title asleep under a film it asked for goes with that film: the
+        // new title is not woken by it.
+        if self.film_title.take().is_some() {
+            self.pending_movie = None;
+        }
         self.stop_screen_music();
         let mut cx = self.context();
         let screen = ui::lua_screen::LuaScreen::open_screen(
@@ -11670,12 +11684,20 @@ impl App {
             ScreenAction::Quit,
             &mut cx,
         )?;
+        let mut screen = Box::new(screen);
+        let own_boot = boot && screen.boots();
+        if own_boot {
+            screen.signal("on_boot", &cx);
+        }
+        // The open's cues, then the boot's.
         let cues = cx.cues.into_inner();
-        self.mode = Mode::Title(Box::new(screen));
+        if boot {
+            self.opening_played = true;
+        }
+        self.mode = Mode::Title(screen);
         self.play_ui_cues(cues);
         self.tell_screen_volumes();
-        if self.films && !self.opening_played {
-            self.opening_played = true;
+        if boot && self.films && !own_boot {
             match self.open_movie(TITLE_OPENING_ID, 0) {
                 Ok(session) => self.queue_movie(session, Some(ScreenAction::Title)),
                 Err(err) => crate::warning!("warning: opening film unavailable: {err:#}"),
@@ -12342,10 +12364,15 @@ impl App {
     }
 
     /// Put the title that slept under its film back in charge: the film is
-    /// over, by a press when `skipped`, or never played.
-    fn wake_film_title(&mut self, mut title: Box<ui::lua_screen::LuaScreen>, skipped: bool) {
+    /// over, by a press when `skipped`, or never started when not `played`.
+    fn wake_film_title(
+        &mut self,
+        mut title: Box<ui::lua_screen::LuaScreen>,
+        skipped: bool,
+        played: bool,
+    ) {
         let cx = self.context();
-        title.resume_film(&cx, skipped);
+        title.resume_film(&cx, skipped, played);
         let cues = cx.cues.into_inner();
         self.mode = if self.film_title_is_select {
             Mode::Select(title)
@@ -12463,9 +12490,9 @@ impl App {
                     }
                     Some(Err(err)) => {
                         crate::warning!("warning: film {id} unavailable: {err:#}");
-                        self.wake_film_title(title, false);
+                        self.wake_film_title(title, false, false);
                     }
-                    None => self.wake_film_title(title, false),
+                    None => self.wake_film_title(title, false, false),
                 }
             }
             ScreenAction::LoadGame { slot } => {
@@ -38646,6 +38673,11 @@ off_0010:
     /// An RE 2 pack (one that names its start room) with [`FILM_TITLE`] and
     /// `films` under `movie/`.
     fn re2_opening_pack(films: &[&str]) -> Pack {
+        re2_title_pack(FILM_TITLE, films)
+    }
+
+    /// An RE 2 pack with `title` as its title's script and `films` by name.
+    fn re2_title_pack(title: &str, films: &[&str]) -> Pack {
         let mut manifest = crate::manifest::Manifest::base("re2");
         manifest.start_room = Some("100".to_string());
         let mut writer = PackWriter::new();
@@ -38656,7 +38688,7 @@ off_0010:
             .add("room/1000/room.rdt", crate::rdt2::tests::sample())
             .unwrap();
         writer
-            .add("ui/title.lua", FILM_TITLE.as_bytes().to_vec())
+            .add("ui/title.lua", title.as_bytes().to_vec())
             .unwrap();
         for film in films {
             writer
@@ -38684,6 +38716,86 @@ off_0010:
     fn idle(app: &mut App) {
         app.update(UiInput::default(), player::Input::default(), false)
             .unwrap();
+    }
+
+    /// The boot's first title is told it is the boot's when it runs the
+    /// boot itself (`on_boot`), and gets no opening film of the app's: RE
+    /// 2's shows the warning and then asks for the title's film. A title
+    /// opened later isn't the boot's, and a title with `on_film` alone
+    /// still gets the app's opening film.
+    #[test]
+    fn the_boots_title_is_told_and_plays_its_own_opening() {
+        const TITLE: &str = "local M = {}
+            function M.on_boot(api)
+                M.boot = true
+                api:set('boot', 1)
+                api:music(0x2B)
+            end
+            function M.update(api, input)
+                if M.boot and not M.asked then
+                    M.asked = true
+                    api:exit('film', 0, { claire = true })
+                end
+            end
+            function M.on_film(api, skipped, played)
+                api:set('woke', played and 2 or 1)
+            end
+            function M.draw() end
+            return M";
+        let dir = TempDir::new();
+        let mut app = App::new(re2_title_pack(TITLE, &["titlec"]), dir.0.clone(), false);
+        app.boot(AppBoot::Boot).unwrap();
+        assert_eq!(title_value(&app, "boot"), 1);
+        assert!(app.opening_played && app.pending_movie.is_none());
+        assert_eq!(app.screen_music, Some(true), "the hook's cue is played");
+        idle(&mut app);
+        assert!(app.film_title.is_some() && app.pending_movie.is_some());
+        run_app_until(&mut app, |app| matches!(app.mode, Mode::Title(_)));
+        assert_eq!(title_value(&app, "woke"), 2, "the film played");
+        app.open_title().unwrap();
+        assert_eq!(title_value(&app, "boot"), 0);
+        assert!(app.pending_movie.is_none());
+
+        // A title opened over one asleep under its film takes the film
+        // with the sleeper: nothing wakes the old title over the new.
+        app.open_title_from(true).unwrap();
+        idle(&mut app);
+        assert!(app.film_title.is_some() && app.pending_movie.is_some());
+        app.open_title().unwrap();
+        assert!(app.film_title.is_none() && app.pending_movie.is_none());
+        idle(&mut app);
+        assert_eq!(title_value(&app, "boot"), 0);
+        assert_eq!(title_value(&app, "woke"), 0);
+
+        // A run that plays no films opens the title as after the boot,
+        // unless it asks for the boot's; its film is then over unplayed.
+        let mut app = App::new(re2_title_pack(TITLE, &["titlec"]), dir.0.clone(), false);
+        app.boot(AppBoot::Title).unwrap();
+        assert_eq!(title_value(&app, "boot"), 0);
+        app.open_title_from(true).unwrap();
+        assert_eq!(title_value(&app, "boot"), 1);
+        assert!(app.opening_played && app.pending_movie.is_none());
+        idle(&mut app);
+        assert_eq!(title_value(&app, "woke"), 1);
+
+        // `on_film` alone doesn't make a title the boot's: the app's
+        // opening film is queued for it as for any other.
+        let title = TITLE.replace("M.on_boot", "M.not_the_boot");
+        let pack_path = dir.0.join("films.akpak");
+        let mut writer = PackWriter::new();
+        writer.add("ui/title.lua", title.into_bytes()).unwrap();
+        writer
+            .add(
+                &crate::movie::pack_path(TITLE_OPENING_ID),
+                crate::movie::test_avi(30),
+            )
+            .unwrap();
+        writer.write(&pack_path).unwrap();
+        let mut app = App::new(Pack::open(&pack_path).unwrap(), dir.0.clone(), false);
+        app.boot(AppBoot::Boot).unwrap();
+        assert_eq!(title_value(&app, "boot"), 0);
+        let pending = app.pending_movie.as_ref().expect("the app's opening film");
+        assert_eq!(pending.session.id(), TITLE_OPENING_ID);
     }
 
     /// A title's films (RE 2's prologue asks for ids 3 and 0xF): the title

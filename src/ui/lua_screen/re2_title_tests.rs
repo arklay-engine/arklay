@@ -32,9 +32,14 @@ fn build_pack(prologue_art: bool) -> Pack {
         writer.add(path, source.as_bytes().to_vec()).unwrap();
     }
     // The backgrounds, so a test can tell which one is up.
-    for (index, stem) in ["title/title_bg", "option/room", "option/color2"]
-        .into_iter()
-        .enumerate()
+    for (index, stem) in [
+        "title/title_bg",
+        "option/room",
+        "option/color2",
+        "title/warning",
+    ]
+    .into_iter()
+    .enumerate()
     {
         let picture = super::tests::solid_bmp(4, 4, [index as u8; 3]);
         writer.add(&format!("ui/{stem}.bmp"), picture).unwrap();
@@ -144,6 +149,108 @@ fn the_title_opens_as_the_boot_reaches_it() {
     assert_eq!(screen.value("ti_cur"), 1);
     assert!(cx.cues.borrow().contains(&UiCue::Core(4)));
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The boot before the title (`title_boot`, the original's ticks 0 to 188):
+/// `Init_main` and `Capcom_logo` step as the trace's `ti` has them, the
+/// warning's picture is up under its two fades, the core bank loads on 35,
+/// and tick 188 asks for the title's film. With no film played
+/// `Capcom_logo` ends on that tick and `Title_init` runs on the next; after
+/// one that played, by a press or not, its step 8 takes a black tick first.
+#[test]
+fn the_boot_shows_the_warning_then_asks_for_the_titles_film() {
+    for (played, skipped) in [(false, false), (true, false), (true, true)] {
+        let dir = std::env::temp_dir().join(format!(
+            "arklay-re2-boot-{}-{played}-{skipped}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cx = context(&dir);
+        let mut cx_open = context(&dir);
+        let mut screen =
+            LuaScreen::open_screen("title", &[], ScreenAction::Quit, &mut cx_open).unwrap();
+        assert!(screen.boots());
+        screen.signal("on_boot", &cx);
+        assert_eq!(ti(&screen)[..4], [0, 0, 0, 0]);
+        let mut film = None;
+        for tick in 0..=188i64 {
+            cx.cues.borrow_mut().clear();
+            // A direction held under the warning repeats nothing: the pad's
+            // repeat is the title's from its task's first tick, 35.
+            let input = UiInput {
+                down: tick == 10,
+                held_down: (10..=30).contains(&tick),
+                ..UiInput::default()
+            };
+            let result = screen.update(&cx, input);
+            let repeat: (Option<i64>, Option<i64>) =
+                screen.test_eval("return M.state.rep_mask, M.state.rep_count");
+            let expected = if tick < 35 { (0, 1) } else { (0x5000, 1) };
+            assert_eq!(repeat, (Some(expected.0), Some(expected.1)), "tick {tick}");
+            let steps = match tick {
+                0 => [0, 0, 1, 0],
+                1..=34 => [0, 0, 2, 0],
+                35..=154 => [0, 0, 1, 5],
+                155 => [0, 0, 1, 6],
+                156..=187 => [0, 0, 1, 7],
+                _ => [0, 0, 1, 8],
+            };
+            assert_eq!(ti(&screen)[..4], steps, "tick {tick}");
+            // `fg_system`'s "from the logo" bit goes up as `Init_main` ends.
+            assert_eq!(screen.value("ti_fgsys") & 2 != 0, tick >= 34, "tick {tick}");
+            // The fade after the tick's step: in from 0x7C00, then out to
+            // 0x8000.
+            let fade = match tick {
+                0 => [-1, 0, 0],
+                1..=31 => [0x7C00 - 0x400 * tick, -0x400, 2],
+                32..=154 => [-0x400, -0x400, 2],
+                155..=185 => [0x400 * (tick - 154), 0x400, 2],
+                _ => [-0x8000, 0x400, 2],
+            };
+            let shown =
+                ["ti_fade_level", "ti_fade_add", "ti_fade_mode"].map(|key| screen.value(key));
+            assert_eq!(shown, fade, "tick {tick}");
+            let (background, title) = backgrounds(&screen);
+            assert_eq!(
+                background.is_some(),
+                (1..=186).contains(&tick),
+                "tick {tick}"
+            );
+            assert_ne!(background, title, "tick {tick}");
+            let bank = cx.cues.borrow().contains(&UiCue::CoreBank(0x10));
+            assert_eq!(bank, tick == 35, "tick {tick}");
+            match result {
+                ScreenResult::Continue => assert!(tick < 188),
+                ScreenResult::Done(ScreenAction::Film { id, .. }) => {
+                    assert_eq!(tick, 188);
+                    film = Some(id);
+                }
+                ScreenResult::Done(action) => panic!("tick {tick}: {action:?}"),
+            }
+        }
+        assert_eq!(film, Some(0));
+        assert_eq!(frame(&screen).as_deref(), Some("black"));
+        screen.resume_film(&cx, skipped, played);
+        if played {
+            assert_eq!(ti(&screen)[..4], [0, 0, 1, 8], "the task hasn't run yet");
+            assert_eq!(
+                screen.update(&cx, UiInput::default()),
+                ScreenResult::Continue
+            );
+            assert_eq!(frame(&screen).as_deref(), Some("black"));
+        }
+        assert_eq!(ti(&screen)[..4], [1, 0, 1, 0]);
+        // `Title_init`, as a title opened after the boot starts (the
+        // original's tick 189 with no film).
+        screen.update(&cx, UiInput::default());
+        assert_eq!(ti(&screen), [2, 5, 1, 0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(screen.value("ti_fade_level"), 0x7F80);
+        assert_eq!(screen.value("ti_fgsys") & 2, 0, "`Title_init` took the bit");
+        let (background, title) = backgrounds(&screen);
+        assert!(background.is_some() && background == title);
+        assert!(!screen.failed());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 /// The title up to its hand-off to the load screen: the confirm at 260 and
@@ -1217,7 +1324,7 @@ fn run_prologue(
             ScreenResult::Continue => {}
             ScreenResult::Done(ScreenAction::Film { id, claire }) => {
                 films.push((tick, id, claire));
-                screen.resume_film(&cx, skipped_film == Some(id));
+                screen.resume_film(&cx, skipped_film == Some(id), true);
             }
             ScreenResult::Done(action) => {
                 return Prologue {

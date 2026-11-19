@@ -669,6 +669,11 @@ fn open_ending_refuses_an_unknown_ending_or_option() {
         ("open_ending(0)", "ending 0 is outside 1-7"),
         ("open_ending(1, { character = 2 })", "character 2 is not 0"),
         ("open_ending(1, { player = 1 })", "unknown option `player`"),
+        ("open_title({ bot = true })", "unknown option `bot`"),
+        (
+            "open_title({ boot = \"false\" })",
+            "option `boot`: expected a boolean",
+        ),
     ] {
         assert_failure(
             &script(
@@ -707,6 +712,29 @@ fn a_title_trace_matches_the_engine_screen_trace() {
         engine == ours,
         "the script's title trace differs from the engine's screen trace"
     );
+}
+
+/// The title opened as the game's boot opens it is the title still: a
+/// pack whose title runs no boot of its own opens as any other.
+#[test]
+fn open_title_takes_the_boot_option() {
+    let dir = pack_dir("title-boot");
+    let out = success(&script(
+        &dir,
+        &lenient(
+            r#"
+        load_game_pack("game.akpak")
+        open_title({ boot = true })
+        tick(3)
+        print(mode())
+        open_title({ boot = false })
+        open_title({})
+        print(mode())
+        "#,
+        ),
+        &[],
+    ));
+    assert_eq!(out, "title\ntitle\n");
 }
 
 /// A screen's trace that goes on into play (a load from the title, a new

@@ -18,6 +18,7 @@
 //! | `Common/Data/st_file.ts` | `ui/status/st_file.ts` |
 //! | `Common/Data/type00.adt` | `ui/type00.bmp` |
 //! | `Common/Data/Title_bg.adt` | `ui/title/title_bg.bmp` |
+//! | `Common/Data/gw2.adt` | `ui/title/warning.bmp` |
 //! | `Common/Data/tmoji.bin` (TIM `k`) | `ui/title/tmoji_<k>.tim` |
 //! | `Common/Data/Title_o.adt`, `Title_o2.adt` | `ui/title/title_o.bmp`, `ui/title/title_o2.bmp` |
 //! | `Common/Data/open0<n>.adt` (TIM `k`), `open1<n>.adt` | `ui/prologue/open0<n>_<k>.tim`, `ui/prologue/open1<n>.bmp` |
@@ -1865,11 +1866,17 @@ fn copy_option_art(
 /// The title's menu sheets in the 7z archive of `ddraw.dll`.
 const TITLE_MOJI_7Z: &str = "common/data/tmoji.bin";
 
+/// The boot's warning in the 7z archive of `ddraw.dll`.
+const WARNING_7Z: &str = "common/data/gw2.adt";
+
 /// The title's art (`Title_bg_load`, `0x503810`): its background,
 /// `Common/Data/Title_bg.adt`, as `ui/title/title_bg.bmp`, and the three TIMs
 /// of `Common/Data/tmoji.bin` (the copy in `ddraw.dll`'s archive when there
 /// is one), which the executable uploads as textures 0x12 to 0x14: the menu's
-/// words and the logo, as `ui/title/tmoji_<k>.tim`.
+/// words and the logo, as `ui/title/tmoji_<k>.tim`. With them the picture
+/// the boot shows before the title (`Load_disclaimer`, `0x4C4FF0`),
+/// `Common/Data/gw2.adt` (the archive's copy first, as the sheets), as
+/// `ui/title/warning.bmp`.
 fn copy_title_art(
     layout: &Layout,
     ddraw: Option<&[u8]>,
@@ -1898,6 +1905,45 @@ fn copy_title_art(
         }
         None if layout.common.is_some() => {
             warnings.push("no Common/Data/Title_bg.adt; the title has no background".into());
+        }
+        None => {}
+    }
+    let archived = |name: &'static str, warnings: &mut Vec<String>| {
+        ddraw
+            .and_then(sevenz::find)
+            .map(|archive| sevenz::extract(archive, |entry| entry.eq_ignore_ascii_case(name)))
+            .transpose()
+            .unwrap_or_else(|error| {
+                warnings.push(format!("ddraw.dll: no {name}: {error:#}"));
+                None
+            })
+            .and_then(|mut files| (!files.is_empty()).then(|| files.remove(0).1))
+    };
+    // The archive's copy that can't be shown gives way to the install's.
+    let picture = |bytes: &[u8]| adt::decode(bytes).and_then(|decoded| adt::frame_image(&decoded));
+    let english = archived(WARNING_7Z, warnings).and_then(|bytes| {
+        picture(&bytes)
+            .map_err(|error| warnings.push(format!("ddraw.dll: gw2.adt: {error:#}")))
+            .ok()
+    });
+    let warning = match (english, find("GW2")) {
+        (Some(image), _) => Some(image),
+        (None, Some(path)) => {
+            Some(picture(&read(path)?).with_context(|| format!("{}", path.display()))?)
+        }
+        (None, None) => None,
+    };
+    match warning {
+        Some(image) => {
+            tally.add(
+                writer,
+                "ui",
+                "ui/title/warning.bmp",
+                bmp::encode_to_vec(&image)?,
+            )?;
+        }
+        None if layout.common.is_some() => {
+            warnings.push("no Common/Data/gw2.adt; the boot has no warning".into());
         }
         None => {}
     }
@@ -1930,16 +1976,7 @@ fn copy_title_art(
             ));
         }
     }
-    let english = ddraw
-        .and_then(sevenz::find)
-        .map(|archive| sevenz::extract(archive, |name| name.eq_ignore_ascii_case(TITLE_MOJI_7Z)))
-        .transpose()
-        .unwrap_or_else(|error| {
-            warnings.push(format!("ddraw.dll: no title sheets: {error:#}"));
-            None
-        })
-        .and_then(|mut files| (!files.is_empty()).then(|| files.remove(0).1));
-    let bytes = match english {
+    let bytes = match archived(TITLE_MOJI_7Z, warnings) {
         Some(bytes) => bytes,
         None => match find("TMOJI") {
             Some(path) => read(path)?,

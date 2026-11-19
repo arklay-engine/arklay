@@ -471,18 +471,24 @@ pub fn extract(archive: &[u8], wanted: impl Fn(&str) -> bool) -> Result<Vec<(Str
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// Write `value` as a 7z number.
     fn number(out: &mut Vec<u8>, value: u64) {
-        assert!(value < 0x80, "the fixtures only need one-byte numbers");
-        out.push(value as u8);
+        // The first byte's leading ones count the bytes after it, which
+        // hold the value's low bytes; its other bits are the value's top.
+        let extra = (0..7u32)
+            .find(|&extra| value < 1 << (7 * extra + 7))
+            .expect("the fixtures only need short numbers");
+        let lead = !(0xFFu8 >> extra);
+        out.push(lead | (value >> (8 * extra)) as u8);
+        out.extend(&value.to_le_bytes()[..extra as usize]);
     }
 
     /// A stored (copy-coder) archive of `files`, one folder each, with a
     /// plain header.
-    fn stored(files: &[(&str, &[u8])]) -> Vec<u8> {
+    pub(crate) fn stored(files: &[(&str, &[u8])]) -> Vec<u8> {
         let packed: Vec<u8> = files.iter().flat_map(|(_, data)| data.to_vec()).collect();
         let mut header = vec![K_HEADER as u8, K_MAIN_STREAMS as u8, K_PACK_INFO as u8];
         number(&mut header, 0);
