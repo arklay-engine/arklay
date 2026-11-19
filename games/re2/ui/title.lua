@@ -23,8 +23,8 @@
 -- `tofulogo.tim` as texture 0x15) whose START isn't ported past its fade
 -- (the title starts again) and whose EXIT goes back to `Title_init`,
 -- GALLERY opens its character's choice (page 7), whose confirm fades to
--- the gallery, which isn't ported (the choice shows again), and
--- EX.BATTLE's confirm does nothing; OPTION fades out into the
+-- the gallery (`ui/gallery.lua`), a task the title sleeps under until its
+-- EXIT, and EX.BATTLE's confirm does nothing; OPTION fades out into the
 -- option screen, which runs here as a task of its own ("the option screen"
 -- below) and gives the title back at `Title_init`. An idle title fades into
 -- the attract demo after 0x708 ticks.
@@ -37,6 +37,7 @@
 
 local CrText = require("ui/cr_text")
 local Prologue = require("ui/prologue")
+local Gallery = require("ui/gallery")
 
 local M = {}
 
@@ -994,8 +995,7 @@ local GALLERY_WORD = 39
 -- on a character fades slot 2 to black (steps 4 and 5) and, on the tick it
 -- is done, puts the page back at step 2 and starts the gallery's task with
 -- that character (`fg_status` bit 31), under which the title's sleeps
--- until the gallery's EXIT. The gallery isn't ported, so the page is back
--- on the next tick as it is after that EXIT.
+-- until the gallery's EXIT.
 local function gallery()
     if s.step == 0 then
         slide_start()
@@ -1050,6 +1050,9 @@ local function gallery()
             fade_adjust(0x7FFF, 2)
             s.step = 2
             fade_off(2)
+            -- `Task_execute(1, Gallery)`: the task's first step runs on
+            -- this tick, and its menu from the next.
+            s.gal = Gallery.new(s.claire)
             -- `Movie_set(1)`: this frame isn't presented, so the screen
             -- keeps the fade's last one.
             s.frame = "held"
@@ -2057,6 +2060,7 @@ end
 
 local function publish(api)
     Prologue.publish(api, s.pro)
+    Gallery.publish(api, s.gal)
     if volumes_given then
         api:set("music_volume", sound.bgm)
         api:set("effects_volume", sound.se)
@@ -2155,6 +2159,7 @@ function M.open(api, args)
     s.title_background = api:picture("ui/title/title_bg")
     s.background = s.title_background
     Prologue.reset()
+    Gallery.reset()
     s.prologue_art = api:has_image("ui/prologue/open10")
     -- The title starts at `Title_init`, or, from the boot, 189 ticks before
     -- it with the warning (`M.on_boot`).
@@ -2196,6 +2201,14 @@ function M.update(api, input)
     elseif s.opt then
         -- The option task's ticks: the title's task sleeps.
         option_task(api)
+    elseif s.gal then
+        -- The gallery's ticks: the title's task sleeps, through the tick
+        -- the gallery closes on, which shows the title's picture alone.
+        Gallery.tick(api, s.gal, s.edge, s.cue)
+        s.sleeping = true
+        if s.gal.task == 0 then
+            s.gal = nil
+        end
     elseif s.mv == 1 then
         title_init()
     elseif s.mv == 2 then
@@ -2357,6 +2370,10 @@ function M.draw(api)
     api:fill_rect(0, 0, api:width(), api:height(), 0, 0, 0)
     local ox, oy = api:width() // 2 - 160, api:height() // 2 - 120
     if s.frame == "black" then
+        return
+    end
+    if s.gal and s.gal.ticked then
+        Gallery.draw(api, s.gal, ox, oy)
         return
     end
     if s.background then

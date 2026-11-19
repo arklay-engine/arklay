@@ -1,0 +1,36 @@
+# The title from boot: SPECIAL, GALLERY and the confirm on LEON, then DATA GALLERY's menu: down, down, down, up, up, up and the confirm on EXIT, back to the title's page and its EXIT (oracle/re2.md, "The gallery").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 down
+443
+470 right
+473
+500 confirm
+503
+560 confirm
+563
+660 down
+663
+700 down
+703
+740 down
+743
+780 up
+783
+820 up
+823
+860 up
+863
+900 confirm
+903
+960 down
+963
+990 confirm
+993

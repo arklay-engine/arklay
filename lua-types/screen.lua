@@ -986,7 +986,7 @@ function ScreenApi:page_sprite_mirrored(page, sx, sy, sw, sh, dx, dy, dw, dh, cl
 ---@param dx integer
 ---@param dy integer
 ---@param lut table<integer, integer>
----@param whole? boolean With `true`, a lookup that tints every index alike lets an HD replacement cover the whole rectangle, for art the HD page redraws.
+---@param whole? boolean With `true`, a lookup that tints every index alike lets an HD replacement cover the whole rectangle, for art the HD page redraws. It does nothing with an alpha for `options.blend`, which never draws a replacement.
 ---@param options? LutOptions
 function ScreenApi:page_lut(page, sx, sy, w, h, dx, dy, lut, whole, options) end
 
@@ -1256,9 +1256,9 @@ local DrawOptions = {}
 
 ---The options of [`api:page_lut`](#ScreenApi.page_lut).
 ---@class LutOptions
----@field dw? integer Stretch the rectangle over a destination this wide (nearest sampling).
+---@field dw? integer Stretch the rectangle over a destination this wide (nearest sampling, but see `blend`'s alpha).
 ---@field dh? integer Stretch it over a destination this high.
----@field blend? "opaque"|"half"|"add" `"opaque"` (default), `"half"` averages with the frame, `"add"` adds to it.
+---@field blend? "opaque"|"half"|"variant"|"add"|integer `"opaque"` (default), `"half"` averages with the frame, `"variant"` is the original's variant-2 half alpha, `"add"` adds to it. An integer is an alpha, clamped to `0..=255`, as [`api:page_sprite_scaled`](#ScreenApi.page_sprite_scaled) takes it: the rectangle goes over the frame at that weight, from the page itself, and the software renderer smooths one stretched to another size as the original's 640 x 480 frame shows it.
 local LutOptions = {}
 
 ---A new game's options, for `api:exit("new_game", character, choice)`. Each

@@ -1,0 +1,66 @@
+# DATA GALLERY's menu from the title (oracle/re2.md, "The gallery"). Boot records, compared from the title's first tick.
+
+[[run]]
+name = "gallery_leon"
+ui = "title"
+offset = 189
+ticks = 932
+input = "gallery_leon.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal"
+frames = [189, 931]
+expect = "match"
+record = ""
+
+[[run]]
+name = "gallery_claire"
+ui = "title"
+offset = 189
+ticks = 1050
+input = "gallery_claire.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal"
+frames = [189, 1049]
+expect = "match"
+record = ""
+
+[[run]]
+name = "gallery_leon_exit"
+ui = "title"
+offset = 189
+ticks = 880
+input = "gallery_leon_exit.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal"
+frames = [189, 879]
+expect = "match"
+record = ""
+
+[[run]]
+name = "gallery_leon_movie"
+ui = "title"
+offset = 189
+ticks = 696
+input = "gallery_leon_movie.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal"
+frames = [189, 695]
+expect = "match"
+record = ""
+
+[[run]]
+name = "gallery_claire_model"
+ui = "title"
+offset = 189
+ticks = 736
+input = "gallery_claire_model.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal"
+frames = [189, 735]
+expect = "match"
+record = ""

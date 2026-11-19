@@ -13749,8 +13749,23 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
         } else {
             line.push_str(" opt=-");
         }
+        // The gallery's task, as `scripts/oracle-re2.py`'s `gal` has it.
+        if v("gal_on") != 0 {
+            line.push_str(&format!(
+                " gal={},{},{},{},{},{},{:x}",
+                v("gal_task"),
+                v("gal_screen"),
+                v("gal_step"),
+                v("gal_row"),
+                v("gal_pulse"),
+                v("gal_fade"),
+                v("gal_flags"),
+            ));
+        } else {
+            line.push_str(" gal=-");
+        }
     } else {
-        line.push_str(" ti=-");
+        line.push_str(" ti=- gal=-");
     }
     // `sv`, as a session's trace has it (`re2_save_screen_trace`): no saves
     // made before play, and a loaded save's count once the screen has read
