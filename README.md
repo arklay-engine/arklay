@@ -114,8 +114,10 @@ cargo run -- pack convert game /path/to/steam/4249100_Biohazard --out re1.akpak
 # data/Common) into re2.akpak: rooms, backgrounds, models, audio and films.
 # You can play the RE2 pack as Leon or Claire, in either scenario: rooms, doors,
 # items, the typewriter, saves and the scripts' scenes with their characters and
-# voice lines work. The title, the new-game choice, the inventory, the status
-# screen and the item box are drawn from the original's art. Leon A's route from
+# voice lines work. The title (with its load and option screens, except the
+# option screen's key config page), the new-game choice, the inventory, the status
+# screen with its map, the save screen and the item box are drawn from the
+# original's art. Leon A's route from
 # the new game through Marvin's room 202, the Blue Card Key, the darkroom (208),
 # the S.T.A.R.S. office (115), the Spade Key and its doors, the Diamond Key in
 # 10B, and back down 110's ladder, through 203's rounds, 207's Diamond door and
