@@ -1043,7 +1043,8 @@ local OPT_TEXT_GREEN, OPT_DIGIT_GREEN = "#00C80A", "#00FF40"
 -- The sound settings, which outlast a visit: the speaker mode (1 monaural, 2
 -- stereo), the quality (`Config_get_squal`: 0 is 44.1 kHz at 16 bits) and
 -- the two volumes. They are the screen's own; arklay's sound doesn't read
--- them.
+-- them, and like the work below they last as long as this script does,
+-- which is one opening of the title (oracle/re2-deviations.md, "The title").
 local sound = { speaker = 2, quality = 0, bgm = 100, se = 100 }
 
 -- The screen's work, which is static in the original and so outlasts a
@@ -1133,6 +1134,13 @@ local function option_volume(count, y, name, value, on)
             option_arrow(OPT_VALUE_END, y, true)
         end
     end
+end
+
+-- Where the print puts a digit for the original's cell: the original's
+-- sprite is the font's whole cell and the print trims a glyph's left, by
+-- half of what its width leaves of the cell, but the 6's, a pixel less.
+function M.option_digit_x(cell, digit, width)
+    return cell + (15 - width) // 2 - (digit == "6" and 1 or 0)
 end
 
 local OPT_SPEAKERS = { "MONO", "STEREO" }
@@ -1989,10 +1997,7 @@ function M.draw(api)
     for _, t in ipairs(s.opt_texts or {}) do
         local parts = cache[OPT_PARTS]
         if t.cell then
-            -- The original's sprite is the font's whole cell, and the print
-            -- here trims a glyph's left: the trim is half of what the width
-            -- leaves of the cell, but the 6's, a pixel less.
-            local x = t.cell + (15 - api:text_width(t.text)) // 2 - (t.text == "6" and 1 or 0)
+            local x = M.option_digit_x(t.cell, t.text, api:text_width(t.text))
             api:text(ox + x, oy + t.y, t.text, { colour = t.on and OPT_DIGIT_GREEN or nil })
         else
             -- The print starts a pixel before the sheet's word did.

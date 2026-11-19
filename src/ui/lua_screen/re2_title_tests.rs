@@ -416,20 +416,29 @@ fn frame(screen: &LuaScreen) -> Option<String> {
     screen.test_eval("return M.state.frame")
 }
 
-/// Whether the background is the title's own picture.
-fn title_background(screen: &LuaScreen) -> bool {
-    screen.test_eval("return M.state.background == M.state.title_background")
+/// The background's picture handle, and the title's own.
+fn backgrounds(screen: &LuaScreen) -> (Option<i64>, Option<i64>) {
+    screen.test_eval("return M.state.background, M.state.title_background")
 }
 
-/// The arrow sprites the tick drew from `parts.tim`.
-fn arrow_sprites(screen: &LuaScreen) -> i64 {
-    screen.test_eval(
-        "local n = 0
+/// The arrow sprites the tick drew from `parts.tim`: each one's x and the
+/// u of its cell.
+fn arrow_sprites(screen: &LuaScreen) -> Vec<(i64, i64)> {
+    let listed: String = screen.test_eval(
+        "local out = {}
         for _, sprite in ipairs(M.state.sprites) do
-            if sprite.page == 5 then n = n + 1 end
+            if sprite.page == 5 then out[#out + 1] = sprite.x .. ':' .. sprite.u end
         end
-        return n",
-    )
+        return table.concat(out, ',')",
+    );
+    listed
+        .split(',')
+        .filter(|entry| !entry.is_empty())
+        .map(|entry| {
+            let (x, u) = entry.split_once(':').unwrap();
+            (x.parse().unwrap(), u.parse().unwrap())
+        })
+        .collect()
 }
 
 /// One tick, and the cues it played.
@@ -459,7 +468,9 @@ fn open_option(cx: &UiContext<'_>, name: &str) -> (LuaScreen, std::path::PathBuf
     assert_eq!(screen.value("opt_on"), 1);
     assert_eq!(opt(&screen), [1, 0, 0, 0, 0, 2, 0, 100, 100]);
     assert_eq!(frame(&screen).as_deref(), Some("black"));
-    assert!(!title_background(&screen), "the room's picture is loaded");
+    let (room, title) = backgrounds(&screen);
+    assert!(room.is_some() && title.is_some());
+    assert_ne!(room, title, "the room's picture is loaded");
     assert_eq!(ti(&screen)[..2], [1, 1], "the title waits at its start");
     assert_eq!(screen.value("ti_fade_level"), 0x5000);
     assert_eq!(screen.value("ti_fade_add"), -0x1800);
@@ -536,11 +547,13 @@ fn the_option_menus_exit_goes_back_to_the_title() {
     assert_eq!(screen.value("opt_on"), 0, "the task has ended");
     assert_eq!(frame(&screen).as_deref(), Some("black"));
     assert_eq!(ti(&screen)[..2], [1, 1]);
-    assert!(!title_background(&screen));
+    let (room, title) = backgrounds(&screen);
+    assert!(room.is_some() && room != title, "the room's still");
     run(&mut screen, &cx, UiInput::default(), 1);
     assert_eq!(ti(&screen)[..2], [2, 1], "`Title_init`'s branch from black");
     assert_eq!(screen.value("ti_kido"), 0x7C00);
-    assert!(title_background(&screen), "the title's picture is back");
+    let (background, title) = backgrounds(&screen);
+    assert_eq!(background, title, "the title's picture is back");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -577,6 +590,7 @@ fn monitor_tuning_shows_its_picture_until_a_key() {
     let dir = std::env::temp_dir();
     let cx = context(&dir);
     let (mut screen, dir) = open_option(&cx, "option-monitor");
+    let (room, title) = backgrounds(&screen);
     run(&mut screen, &cx, press("down"), 2);
     for (key, cue) in [("confirm", 6), ("cancel", 5)] {
         assert_eq!(
@@ -586,6 +600,8 @@ fn monitor_tuning_shows_its_picture_until_a_key() {
         assert_eq!(screen.value("opt_state"), 3);
         run(&mut screen, &cx, UiInput::default(), 1);
         assert_eq!(screen.value("opt_state"), 7);
+        let (picture, _) = backgrounds(&screen);
+        assert!(picture.is_some() && picture != room && picture != title);
         assert!(tick_cues(&mut screen, &cx, press("up")).is_empty());
         let mut input = UiInput::default();
         match key {
@@ -594,6 +610,7 @@ fn monitor_tuning_shows_its_picture_until_a_key() {
         }
         assert_eq!(tick_cues(&mut screen, &cx, input), [UiCue::Core(cue)]);
         assert_eq!(opt(&screen)[1..3], [1, 1], "back on its row");
+        assert_eq!(backgrounds(&screen).0, room, "and the room's picture");
         run(&mut screen, &cx, UiInput::default(), 1);
     }
     let _ = std::fs::remove_dir_all(&dir);
@@ -742,7 +759,13 @@ fn the_sound_pages_arrows_blink_20_ticks_of_a_period() {
         let count = screen.value("opt_blink_exit");
         // The tick drew by the count before its step.
         let shown = (1..=20).contains(&count);
-        assert_eq!(arrow_sprites(&screen), if shown { 2 } else { 0 }, "{count}");
+        // About EXIT at 132: a cell before it and after its 53 pixels.
+        let arrows: &[(i64, i64)] = if shown {
+            &[(118, 0xD1), (185, 0xDF)]
+        } else {
+            &[]
+        };
+        assert_eq!(arrow_sprites(&screen), arrows, "{count}");
         counts.push(count);
     }
     let wrap = counts.iter().position(|&count| count == 0).unwrap();
@@ -854,6 +877,25 @@ fn a_second_visit_keeps_the_first_ones_work() {
     assert_eq!(screen.value("opt_blink_mode"), count);
     run(&mut screen, &cx, press("confirm"), 1);
     assert_eq!(screen.value("opt_blink_mode"), count + 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A volume's digit is printed where the original's whole cell puts its
+/// glyph: in the middle of the cell, but the 6, a pixel left of it (the
+/// print's trims, from `title_option_sound`'s frames).
+#[test]
+fn a_volumes_digit_sits_where_its_cell_puts_it() {
+    let dir = std::env::temp_dir();
+    let cx = context(&dir);
+    let (screen, dir) = open_option(&cx, "option-digit");
+    let place = |digit: &str, width: i64| -> i64 {
+        screen.test_eval(&format!(
+            "return M.option_digit_x(0x100, '{digit}', {width})"
+        ))
+    };
+    assert_eq!(place("0", 9), 0x103);
+    assert_eq!(place("1", 6), 0x104);
+    assert_eq!(place("6", 9), 0x102);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
