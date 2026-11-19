@@ -901,6 +901,21 @@ frame_max_mean = 0.75
 
 # The title from boot (oracle/re2.md, "The title"): the original reaches `Title_init` on tick 189, which is arklay's
 # tick 0 of `--ui title`.
+# The boot before it: the warning's picture under its fades, then the title. The reference is `title_menu`'s, from
+# its first tick (the recorder plays no films, so the title's film is over on its own tick).
+[[run]]
+name = "title_boot"
+ui = "title"
+boot = true
+ref = "title_menu"
+offset = 0
+ticks = 700
+input = "title_menu.txt"
+fields = "ti,tlogo,tfade,snd"
+frames = [0, 699]
+expect = "match"
+record = ""
+
 [[run]]
 name = "title_menu"
 ui = "title"

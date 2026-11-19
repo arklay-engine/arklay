@@ -200,7 +200,8 @@ def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input
             # config.ini's SPECIAL, which the record's `--config SPECIAL=N` sets.
             options.append(f"title_special = {int(run['special'])}")
         lines.append(f"load_game_pack({lua_str(str(ctx['pack']))}, {{ {', '.join(options)} }})")
-        lines.append("open_title()")
+        # `boot = true`: from the game's boot, the warning before the title, as the record has it from its tick 0.
+        lines.append("open_title({ boot = true })" if run.get("boot") else "open_title()")
         lines.append(f"trace_start({lua_str(str(trace))})")
     else:
         options += choice_options(run)

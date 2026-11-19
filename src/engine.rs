@@ -11647,8 +11647,17 @@ impl App {
     }
 
     /// Open the title screen. On the interactive root boot the first entry
-    /// also queues the opening film (id 0) exactly once per process.
+    /// is the boot's ([`App::open_title_from`]), once per process.
     fn open_title(&mut self) -> Result<()> {
+        let boot = self.films && !self.opening_played;
+        self.open_title_from(boot)
+    }
+
+    /// Open the title screen, from the boot when `boot`: the title is told
+    /// so (`args.boot`) and may show what the game shows before it, and the
+    /// opening film (id 0) is queued unless the title plays its own films,
+    /// or the run plays none.
+    fn open_title_from(&mut self, boot: bool) -> Result<()> {
         // A registration that names a missing entry falls back to the ported
         // screen when it opens, which only lists the eight slots, so the
         // folder probe follows the entry the pack actually carries.
@@ -11666,16 +11675,20 @@ impl App {
             &[
                 ("folder_saves", ScreenArg::Bool(folder_saves)),
                 ("special", ScreenArg::Int(special)),
+                ("boot", ScreenArg::Bool(boot)),
             ],
             ScreenAction::Quit,
             &mut cx,
         )?;
         let cues = cx.cues.into_inner();
+        let own_films = screen.plays_films();
         self.mode = Mode::Title(Box::new(screen));
         self.play_ui_cues(cues);
         self.tell_screen_volumes();
-        if self.films && !self.opening_played {
+        if boot {
             self.opening_played = true;
+        }
+        if boot && self.films && !own_films {
             match self.open_movie(TITLE_OPENING_ID, 0) {
                 Ok(session) => self.queue_movie(session, Some(ScreenAction::Title)),
                 Err(err) => crate::warning!("warning: opening film unavailable: {err:#}"),
@@ -38646,6 +38659,11 @@ off_0010:
     /// An RE 2 pack (one that names its start room) with [`FILM_TITLE`] and
     /// `films` under `movie/`.
     fn re2_opening_pack(films: &[&str]) -> Pack {
+        re2_title_pack(FILM_TITLE, films)
+    }
+
+    /// An RE 2 pack with `title` as its title's script and `films` by name.
+    fn re2_title_pack(title: &str, films: &[&str]) -> Pack {
         let mut manifest = crate::manifest::Manifest::base("re2");
         manifest.start_room = Some("100".to_string());
         let mut writer = PackWriter::new();
@@ -38656,7 +38674,7 @@ off_0010:
             .add("room/1000/room.rdt", crate::rdt2::tests::sample())
             .unwrap();
         writer
-            .add("ui/title.lua", FILM_TITLE.as_bytes().to_vec())
+            .add("ui/title.lua", title.as_bytes().to_vec())
             .unwrap();
         for film in films {
             writer
@@ -38684,6 +38702,50 @@ off_0010:
     fn idle(app: &mut App) {
         app.update(UiInput::default(), player::Input::default(), false)
             .unwrap();
+    }
+
+    /// The boot's first title is told it is the boot's (`args.boot`), and
+    /// one that plays its own films gets no opening film of the app's: RE
+    /// 2's shows the warning and then asks for the title's film itself. A
+    /// title opened later isn't the boot's.
+    #[test]
+    fn the_boots_title_is_told_and_plays_its_own_opening() {
+        const TITLE: &str = "local M = {}
+            function M.open(api, args)
+                api:set('boot', args.boot and 1 or 0)
+            end
+            function M.update(api, input)
+                if not M.asked then
+                    M.asked = true
+                    api:exit('film', 0, { claire = true })
+                end
+            end
+            function M.on_film(api, skipped)
+                api:set('woke', 1)
+            end
+            function M.draw() end
+            return M";
+        let dir = TempDir::new();
+        let mut app = App::new(re2_title_pack(TITLE, &["titlec"]), dir.0.clone(), false);
+        app.boot(AppBoot::Boot).unwrap();
+        assert_eq!(title_value(&app, "boot"), 1);
+        assert!(app.opening_played && app.pending_movie.is_none());
+        idle(&mut app);
+        assert!(app.film_title.is_some() && app.pending_movie.is_some());
+        run_app_until(&mut app, |app| matches!(app.mode, Mode::Title(_)));
+        assert_eq!(title_value(&app, "woke"), 1);
+        app.open_title().unwrap();
+        assert_eq!(title_value(&app, "boot"), 0);
+        assert!(app.pending_movie.is_none());
+
+        // A run that plays no films opens the title as after the boot,
+        // unless it asks for the boot's.
+        let mut app = App::new(re2_title_pack(TITLE, &[]), dir.0.clone(), false);
+        app.boot(AppBoot::Title).unwrap();
+        assert_eq!(title_value(&app, "boot"), 0);
+        app.open_title_from(true).unwrap();
+        assert_eq!(title_value(&app, "boot"), 1);
+        assert!(app.opening_played && app.pending_movie.is_none());
     }
 
     /// A title's films (RE 2's prologue asks for ids 3 and 0xF): the title

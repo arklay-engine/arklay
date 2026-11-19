@@ -1373,10 +1373,14 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
     let shared = Rc::clone(driver);
     globals.set(
         "open_title",
-        lua.create_function(move |_lua, ()| {
+        lua.create_function(move |_lua, options: Option<mlua::Table>| {
+            let boot = match &options {
+                Some(options) => options.get::<Option<bool>>("boot")?.unwrap_or(false),
+                None => false,
+            };
             with(&shared, |driver| {
                 let app = driver.app()?;
-                app.open_title().map_err(engine_error)?;
+                app.open_title_from(boot).map_err(engine_error)?;
                 app.pending_movie = None;
                 driver.baseline = None;
                 driver.edited = false;
