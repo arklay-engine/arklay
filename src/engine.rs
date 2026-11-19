@@ -2683,6 +2683,7 @@ impl GameSession {
         let mut game = new_game_state(pack, id, &loaded.room, options);
         game.is_re2_room = loaded.re2_vm.is_some();
         game.re2.scenario_b = scenario_b;
+        game.re2.save_place = game::save2::new_game_place(character, scenario_b);
         seed_re2_music_table(pack, &mut game, scenario_b);
         seed_new_game(pack, &mut game, character);
         seed_re2_save_count(&mut game, loaded.re2_vm.is_some());
@@ -18694,8 +18695,9 @@ fn new_game_state(
         game.set_health_copy(health);
     }
     seed_re2_music_table(pack, &mut game, false);
-    // RE2's new game sets the save place for its scenario (`0x4B73C0`).
-    game.re2_save_place = game::save2::new_game_place(id.player_flag, false);
+    // RE2's new game sets the save place for its scenario (`0x4B73C0`): the
+    // first scenario's here, and a second scenario's in its own start.
+    game.re2.save_place = game::save2::new_game_place(id.player_flag, false);
     game.set_combat_tables(crate::combat::CombatTables::load(pack));
     game.item_defs = std::sync::Arc::new(crate::item_catalog::ItemCatalog::load(pack));
     let weapon = effects::WeaponEffects::load(pack);
@@ -23635,6 +23637,34 @@ mod tests {
             mansion2: false,
         };
         assert_eq!(new_game_id(&with(None), 0), main_hall);
+    }
+
+    /// The save place a new game starts with (`0x4B73C0`): `0x0F` for a
+    /// first scenario, `0x10` for a second, Leon's or Claire's.
+    #[test]
+    fn a_new_game_starts_with_its_scenarios_save_place() {
+        let mut manifest = crate::manifest::Manifest::base("re2");
+        manifest.start_room = Some("100".to_string());
+        manifest.start_pos = Some([0, 0, 0]);
+        let mut writer = PackWriter::new();
+        writer
+            .add(crate::manifest::ENTRY, manifest.render().into_bytes())
+            .unwrap();
+        for room in ["1000", "1001", "1040", "1041"] {
+            writer
+                .add(
+                    &format!("room/{room}/room.rdt"),
+                    crate::rdt2::tests::sample(),
+                )
+                .unwrap();
+        }
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let dir = TempDir::new();
+        for (character, place) in [(0, 0x0F), (1, 0x0F), (2, 0x10), (3, 0x10)] {
+            let session = GameSession::new(&pack, character, &dir.0).unwrap();
+            assert_eq!(session.game.re2.scenario_b, character & 2 != 0);
+            assert_eq!(session.game.re2.save_place, place, "character {character}");
+        }
     }
 
     #[test]

@@ -1450,6 +1450,53 @@ mod tests {
         assert_eq!(restored.re2.random & 0xFFFF, 10439);
     }
 
+    /// A save at room 200's typewriter (place 1) loads with that place, over
+    /// the new game's the session starts with (`title_load_play`'s `tw`).
+    #[test]
+    fn an_re2_load_restores_the_save_place() {
+        let mut state = GameState::new(RoomId::parse("200").unwrap(), &RoomState::default());
+        state.is_re2_room = true;
+        state.sce_save(1);
+        let file = SaveFile::from_bytes(&SaveFile::from_state(&state).to_file_bytes())
+            .expect("the save reads back");
+        let mut restored = GameState::default();
+        restored.re2.save_place = crate::game::save2::new_game_place(0, false);
+        file.apply_to(&mut restored);
+        assert_eq!(restored.re2.save_place, 1);
+        assert!(restored.re2_typewriter_trace().ends_with(",1"));
+    }
+
+    /// A file from before the save place has a shorter RE 2 trailer, which
+    /// loads with the place the game was started with. A newer file cut a
+    /// byte short still says its full length, so its trailer isn't taken
+    /// for the older one: it is not read at all.
+    #[test]
+    fn an_older_re2_trailer_keeps_the_started_games_save_place() {
+        let mut state = GameState::new(RoomId::parse("200").unwrap(), &RoomState::default());
+        state.is_re2_room = true;
+        state.sce_save(1);
+        state.re2.set_flag(8, 15, 1);
+        let saved = SaveFile::from_state(&state);
+        let current = saved.to_file_bytes();
+        let payload = saved.re2.as_ref().expect("the RE 2 state").len();
+
+        let mut older = saved.clone();
+        older.re2.as_mut().unwrap().truncate(payload - 1);
+        let older = SaveFile::from_bytes(&older.to_file_bytes()).expect("the older save");
+        assert_eq!(older.re2.as_ref().map(Vec::len), Some(payload - 1));
+        let mut restored = GameState::default();
+        restored.re2.save_place = 0x0F;
+        older.apply_to(&mut restored);
+        assert_eq!(restored.re2.save_place, 0x0F);
+        assert!(restored.re2.flag(8, 15), "the rest of it loads");
+
+        let cut = SaveFile::from_bytes(&current[..current.len() - 1]);
+        assert!(
+            cut.map_or(true, |file| file.re2.is_none()),
+            "a cut trailer isn't the older one"
+        );
+    }
+
     #[test]
     fn an_re2_load_clears_fg_stop() {
         let mut state = GameState::new(RoomId::parse("200").unwrap(), &RoomState::default());
