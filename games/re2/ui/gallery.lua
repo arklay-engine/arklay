@@ -1,18 +1,19 @@
 -- RE2's gallery, as the original runs it: the task the title starts from
 -- GALLERY's page (`Gallery`, 0x4BF760), its menu, DATA GALLERY
--- (`GalleryMain`, 0x439A80), and the pictures behind the menu's first row
--- (`GalleryIllustrations`, 0x438DA0): the screens of `GalleryLoop`
--- (0x43AE60). The title's task sleeps under it.
+-- (`GalleryMain`, 0x439A80), the pictures behind the menu's first row
+-- (`GalleryIllustrations`, 0x438DA0) and the movies behind its second
+-- (`GalleryMovie`, 0x437F30): the screens of `GalleryLoop` (0x43AE60). The
+-- title's task sleeps under it.
 --
 -- The gallery draws at 640 x 480 with its own art (`ui/gallery/` in the
 -- pack): the menu's picture in five sheets, `title1` to `title5`, and its
 -- rows' words, `moji`; the pictures, `rough01` to `rough60` and `illust01`
 -- to `illust35`, with their panel, `left01` and `left02`, and its digits,
--- `gnum2`. The places below are the executable's, in those pixels; the
--- frame draws them at half size. With a 320 x 240 display the original has
--- a second layout with smaller art (`top32_1`, `top32_2`, `moji3224` and
--- `left3224`) and, in it alone, a button that doubles a picture's size;
--- neither is ported.
+-- `gnum2`; the movies' words, `movie64`. The places below are the
+-- executable's, in those pixels; the frame draws them at half size. With a
+-- 320 x 240 display the original has a second layout with smaller art
+-- (`top32_1`, `top32_2`, `moji3224`, `left3224` and `movie32`) and, in it
+-- alone, a button that doubles a picture's size; neither is ported.
 --
 -- The state keeps the original's work (`pGallery`) under its own numbers,
 -- so the oracle's `gal` and `galv` fields compare one for one, up to the
@@ -21,10 +22,10 @@
 --
 -- The menu's rows: ROUGH SKETCH (LEON) or ILLUSTRATION (CLAIRE), MOVIE, 3D
 -- MODEL (CLAIRE only) and EXIT. EXIT ends the gallery and wakes the title.
--- A button on another row fades the menu out and opens that row's screen.
--- The pictures are the first row's; the others' (`GalleryMovie`,
--- `Gallery3DArt`) aren't ported, and the menu loads again instead, as it
--- does from the pictures' own way to the movies.
+-- A button on another row fades the menu out and opens that row's screen:
+-- the pictures, the movies, or CLAIRE's 3D models (`Gallery3DArt`), which
+-- aren't ported; the menu loads again instead, as it does from the movies'
+-- own way to the models.
 
 local M = {}
 
@@ -137,6 +138,36 @@ local PLACES = {
     },
 }
 
+-- The movies' words, each with its place, its size and its corner in
+-- `movie64`: the two arrows beside the number and the two beside the ways
+-- out, MOVIE, the button and PLAY, and each character's ways up and down
+-- (ROUGH SKETCH and TO HOME, ILLUSTRATION and 3D MODEL).
+local MOVIE = {
+    left = { 167, 230, 11, 19, 0, 20 },
+    right = { 223, 230, 11, 19, 0, 39 },
+    up = { 316, 219, 19, 11, 0, 58 },
+    down = { 316, 250, 19, 11, 0, 69 },
+    word = { 243, 233, 59, 14, 0, 80 },
+    button = { 282, 398, 16, 16, 0, 165 },
+    play = { 314, 400, 48, 13, 0, 151 },
+    ways = {
+        [false] = { { 350, 218, 139, 14, 0, 94 }, { 379, 248, 81, 14, 0, 108 } },
+        [true] = { { 356, 218, 127, 14, 0, 122 }, { 370, 248, 90, 14, 0, 136 } },
+    },
+}
+
+-- The number's two digits' places. A digit is 12 x 21 in the sheet, ten
+-- in a row, and is drawn 20 high: its eleventh row is left out.
+local MOVIE_DIGITS = { 182, 205 }
+local MOVIE_DIGIT_Y = 230
+
+-- The film of each of a character's sixteen movies (`gmovie_tbl0`,
+-- 0x523248, and `gmovie_tbl1`, 0x523258), an id of the character's films.
+local FILMS = {
+    [false] = { 0, 3, 15, 16, 10, 5, 4, 6, 7, 11, 8, 9, 12, 17, 13, 14 },
+    [true] = { 0, 3, 15, 16, 10, 5, 4, 11, 6, 7, 8, 9, 12, 17, 13, 14 },
+}
+
 -- config.ini's `GALLERY0` to `GALLERY4` with every picture, film and model
 -- open, as a finished game leaves them.
 local ALL_OPEN = { 0xFFFFFFFF, 0xFFFFFFF0, 0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFF }
@@ -182,6 +213,7 @@ local load, picture
 -- The menu's sheets, and the pictures' own.
 local MENU_ART = { "title1", "title2", "title3", "title4", "title5", "moji" }
 local VIEW_ART = { "gnum2", "left01", "left02" }
+local MOVIE_ART = { "movie64" }
 
 -- `GalleryMain`: `false` once EXIT is taken, or when its art can't load.
 local function main(api, g, edge, cue)
@@ -226,10 +258,10 @@ local function main(api, g, edge, cue)
         end
     elseif g.fade < 1 then
         -- The faded row's screen starts from the next tick, and this one
-        -- draws nothing. Only the pictures are ported: from another row
-        -- the menu starts again.
+        -- draws nothing. The models aren't ported: from their row the menu
+        -- starts again.
         local screen = menu.leave[at]
-        g.screen = screen == 1 and 1 or 0
+        g.screen = screen ~= 3 and screen or 0
         g.step = 0
         g.row = 0
         return true
@@ -317,8 +349,8 @@ local function pictures(api, g, edge, held, cue)
         end
     elseif g.fade < 1 then
         -- The menu, or the movies, from the next tick; this one draws
-        -- nothing. The movies aren't ported: the menu starts again.
-        g.screen = 0
+        -- nothing.
+        g.screen = g.step == 4 and 2 or 0
         g.step = 0
         g.row = 0
         g.tiles = 0
@@ -346,12 +378,98 @@ local function pictures(api, g, edge, held, cue)
     return true
 end
 
+-- Whether play has opened a character's movie `index`: a bit each from
+-- the fourth word's top, LEON's sixteen and then CLAIRE's (`FUN_00442ed0`
+-- with kind 3, whose table at 0x524F6C is each index's own number).
+local function film_opened(g, index)
+    local bit = (g.claire and 16 or 0) + index
+    return (g.open[4] or 0) & (0x80000000 >> bit) ~= 0
+end
+
+-- `GalleryMovie`: the movies, by number. `false` when its art can't load.
+local function movies(api, g, edge, held, cue)
+    if g.step == 0 then
+        -- The art is loaded, and the first movie is number 0, opened or
+        -- not. Nothing is drawn.
+        if not load(api, MOVIE_ART) then
+            return false
+        end
+        g.tiles = 0
+        g.index = 0
+        g.step = 1
+        g.row = 0
+        g.flags = (g.flags | FADING) & ~FADING_OUT
+        g.fade = 0xFF
+        disp(g)
+        return true
+    end
+    if g.step == 1 then
+        if edge & PAD_BUTTONS ~= 0 then
+            -- `Init_movie_work`: the movie's film, which the title plays.
+            cue(SE_DECIDE)
+            g.film = FILMS[g.claire][g.index + 1]
+        elseif edge & PAD_UP ~= 0 then
+            -- To the pictures.
+            cue(SE_DECIDE)
+            g.step = 3
+            g.flags = g.flags | FADING | FADING_OUT
+            g.fade = 0xFF
+        elseif edge & PAD_DOWN ~= 0 then
+            -- To the menu, or CLAIRE's models.
+            cue(SE_DECIDE)
+            g.step = 2
+            g.flags = g.flags | FADING | FADING_OUT
+            g.fade = 0xFF
+        elseif edge & (PAD_RIGHT | PAD_LEFT) ~= 0 then
+            -- The next opened movie that way, round the ends.
+            local way = edge & PAD_RIGHT ~= 0 and 1 or -1
+            local from = g.index
+            cue(SE_CURSOR)
+            repeat
+                g.index = (g.index + way) % 16
+            until film_opened(g, g.index) or g.index == from
+            g.tiles = 0
+        end
+    elseif g.fade < 1 then
+        -- The pictures (step 3), or the menu for LEON and the models for
+        -- CLAIRE (step 2), from the next tick; this one draws nothing. The
+        -- models aren't ported: the menu starts again.
+        g.screen = g.step == 3 and 1 or 0
+        g.step = 0
+        g.row = 0
+        g.tiles = 0
+        return true
+    end
+    -- The frame is cleared to black. One thing is lit: the arrow of the
+    -- first held of right, left, up and down, or with none of them the
+    -- button on the tick one is pressed.
+    g.clear = 0
+    local list = { index = g.index }
+    if held & PAD_RIGHT ~= 0 then
+        list.lit = "right"
+    elseif held & PAD_LEFT ~= 0 then
+        list.lit = "left"
+    elseif held & PAD_UP ~= 0 then
+        list.lit = "up"
+    elseif held & PAD_DOWN ~= 0 then
+        list.lit = "down"
+    elseif edge & PAD_BUTTONS ~= 0 then
+        list.lit = "button"
+    end
+    g.list = list
+    disp(g)
+    return true
+end
+
 -- One tick of the task. `edge` is the pad's pressed bits and `held` its
 -- held ones, and `cue` plays a core-bank cue. The task is over (`g.task`
--- 0) the tick after EXIT.
+-- 0) the tick after EXIT. `g.film` is the film a movie asked for on this
+-- tick, for the title to play.
 function M.tick(api, g, edge, held, cue)
     g.words = nil
     g.view = nil
+    g.list = nil
+    g.film = nil
     g.black = nil
     g.ticked = true
     if g.task == 2 then
@@ -362,6 +480,8 @@ function M.tick(api, g, edge, held, cue)
     local alive
     if g.screen == 1 then
         alive = pictures(api, g, edge, held, cue)
+    elseif g.screen == 2 then
+        alive = movies(api, g, edge, held, cue)
     else
         alive = main(api, g, edge, cue)
     end
@@ -546,13 +666,39 @@ local function draw_view(api, g, ox, oy, black)
     number(LAST_X, view.last)
 end
 
+-- The movies' frame: the words dim or at their own level over black, with
+-- the lit one at its own, and the movie's number from 00.
+local function draw_list(api, g, ox, oy, black)
+    local list = g.list
+    local sheet = art.movie64
+    local function word(place, level, x)
+        half(api, sheet, ox, oy, x or place[1], place[2], place[3], place[4], place[5], place[6], level, false, black)
+    end
+    api:fill_rect(ox, oy, 320, 240, 0, 0, 0)
+    for _, name in ipairs({ "left", "right", "up", "down", "button" }) do
+        word(MOVIE[name], list.lit == name and 0x80 or DIM)
+    end
+    for _, way in ipairs(MOVIE.ways[g.claire]) do
+        word(way, 0x80)
+    end
+    word(MOVIE.word, 0x80)
+    word(MOVIE.play, 0x80)
+    for k, d in ipairs({ list.index // 10, list.index % 10 }) do
+        word({ 0, MOVIE_DIGIT_Y, 12, 10, d * 12, 0 }, 0x80, MOVIE_DIGITS[k])
+        word({ 0, MOVIE_DIGIT_Y + 10, 12, 10, d * 12, 11 }, 0x80, MOVIE_DIGITS[k])
+    end
+end
+
 -- The frame the last tick left, with the 320 x 240 picture's corner at
 -- `ox, oy`: nothing on a tick that drew none, else the menu's picture and
--- rows, or the pictures' screen, under the fade's black.
+-- rows, the pictures' screen or the movies', under the fade's black.
 function M.draw(api, g, ox, oy)
     local black = g.black or 0
     if g.view then
         draw_view(api, g, ox, oy, black)
+    end
+    if g.list then
+        draw_list(api, g, ox, oy, black)
     end
     if not g.words then
         return

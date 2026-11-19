@@ -1,5 +1,5 @@
 # DATA GALLERY's menu and its pictures from the title (oracle/re2.md, "The gallery"). Boot records, compared from the title's first tick.
-# The frames' means are 0.05 to 0.07 measured; a window is the pictures' own ticks.
+# The frames' means are 0.04 to 0.07 measured; a window is the pictures' or the movies' own ticks.
 
 [[run]]
 name = "gallery_leon"
@@ -133,3 +133,66 @@ frame_windows = [[668, 859, 0.1]]
 expect = "match"
 gallery = [0x00000000, 0x00000000, 0x80000002, 0x00000000, 0x00000000]
 record = "--config GALLERY0=0x00000000 --config GALLERY1=0x00000000 --config GALLERY2=0x80000002 --config GALLERY3=0x00000000 --config GALLERY4=0x00000000"
+
+# The movies. The locked runs have numbers 0, 3 and 15 of each character's opened.
+[[run]]
+name = "gallery_leon_films"
+ui = "title"
+offset = 189
+ticks = 1270
+input = "gallery_leon_films.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
+frames = [189, 1269]
+frame_max_mean = 0.12
+frame_windows = [[668, 1231, 0.05]]
+expect = "match"
+record = ""
+
+[[run]]
+name = "gallery_claire_films"
+ui = "title"
+offset = 189
+ticks = 862
+input = "gallery_claire_films.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
+frames = [189, 861]
+frame_max_mean = 0.12
+frame_windows = [[698, 861, 0.05]]
+expect = "match"
+record = ""
+
+[[run]]
+name = "gallery_leon_films_locked"
+ui = "title"
+offset = 189
+ticks = 860
+input = "gallery_leon_films_locked.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
+frames = [189, 859]
+frame_max_mean = 0.12
+frame_windows = [[668, 859, 0.05]]
+expect = "match"
+gallery = [0x00000000, 0x00000000, 0x00000000, 0x90019001, 0x00000000]
+record = "--config GALLERY0=0x00000000 --config GALLERY1=0x00000000 --config GALLERY2=0x00000000 --config GALLERY3=0x90019001 --config GALLERY4=0x00000000"
+
+[[run]]
+name = "gallery_claire_films_locked"
+ui = "title"
+offset = 189
+ticks = 890
+input = "gallery_claire_films_locked.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
+frames = [189, 889]
+frame_max_mean = 0.12
+frame_windows = [[698, 889, 0.05]]
+expect = "match"
+gallery = [0x00000000, 0x00000000, 0x00000000, 0x90019001, 0x00000000]
+record = "--config GALLERY0=0x00000000 --config GALLERY1=0x00000000 --config GALLERY2=0x00000000 --config GALLERY3=0x90019001 --config GALLERY4=0x00000000"

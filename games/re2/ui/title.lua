@@ -2216,6 +2216,11 @@ function M.update(api, input)
         -- the gallery closes on, which shows the title's picture alone.
         Gallery.tick(api, s.gal, s.edge, s.raw, s.cue)
         s.sleeping = true
+        if s.gal.film then
+            -- A movie's film: the gallery runs on once it is over.
+            s.film = { id = s.gal.film, claire = s.claire }
+            s.exit = "film"
+        end
         if s.gal.task == 0 then
             s.gal = nil
         end
@@ -2260,7 +2265,8 @@ function M.update(api, input)
         if exit == "new_game" then
             api:exit("new_game", s.character or 0, s.choice)
         elseif exit == "film" then
-            -- The boot's film, or the one the prologue asks for.
+            -- The boot's film, the gallery's, or the one the prologue asks
+            -- for.
             local film = s.film or { id = s.pro.film, claire = s.claire }
             s.film = nil
             api:exit("film", film.id, { claire = film.claire })

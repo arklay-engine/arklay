@@ -8,7 +8,8 @@ use crate::pack::Pack;
 use crate::ui::{Screen, ScreenAction, ScreenResult, UiCue, UiInput};
 
 /// How much of the gallery's art a pack has: none, the menu's sheets, or
-/// those with the pictures' panel and some of the pictures.
+/// those with the pictures' panel, some of the pictures and the movies'
+/// words.
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 enum GalleryArt {
     None,
@@ -182,7 +183,37 @@ fn gallery_pictures_art() -> Vec<(&'static str, Vec<u8>)> {
         ("rough60", tim_8bit(258, 258, &green, |_, _| 1)),
         ("illust01", small()),
         ("illust35", small()),
+        ("movie64", movie_words_art()),
     ]
+}
+
+/// The movies' sheet (`re2_gallery_tests`), each word a grey of its own
+/// level over see-through black: digit `d` level `d + 1` on its rows 0 to 9
+/// and 11 to 19, with a green on row 10, which is never drawn, and nothing
+/// on row 20; then the left arrow 11, the right 12, up 13, down 14, MOVIE
+/// 15, ROUGH SKETCH 16, TO HOME 17, ILLUSTRATION 18, 3D MODEL 19, PLAY 21
+/// and the button 22.
+fn movie_words_art() -> Vec<u8> {
+    let mut colours: Vec<u16> = (0..=22).map(grey).collect();
+    colours[20] = 31 << 5;
+    sheet_tim(&colours, |u, v| match (u, v) {
+        // The rows between the words.
+        (_, 20 | 150 | 164) => 0,
+        (0..120, 0..10 | 11..20) => 1 + (u / 12) as u8,
+        (0..120, 10) => 20,
+        (0..11, 21..39) => 11,
+        (0..11, 39..58) => 12,
+        (0..19, 58..69) => 13,
+        (0..19, 69..80) => 14,
+        (0..59, 80..94) => 15,
+        (0..139, 94..108) => 16,
+        (0..81, 108..122) => 17,
+        (0..127, 122..136) => 18,
+        (0..90, 136..150) => 19,
+        (0..48, 151..164) => 21,
+        (0..16, 165..181) => 22,
+        _ => 0,
+    })
 }
 
 /// An 8-bit 256 x 256 TIM: `palette`'s 15-bit colours from index 0, and

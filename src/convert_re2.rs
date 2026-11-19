@@ -26,7 +26,7 @@
 //! | `Common/Data/parts.tim`, `moji1.tim` | `ui/option/parts.tim`, `ui/option/moji1.tim` |
 //! | `Common/Data/spy_logo.tim`, `tofulogo.tim` | `ui/title/spy_logo.tim`, `ui/title/tofulogo.tim` |
 //! | `Gallery/TITLE<n>.dat`, `Moji.dat` (each a TIM) | `ui/gallery/title<n>.tim`, `ui/gallery/moji.tim` |
-//! | `Gallery/ROUGH<nn>.dat`, `ILLUST<nn>.dat`, `LEFT01.dat`, `LEFT02.dat`, `GNUM2.dat` (each a TIM) | `ui/gallery/<stem>.tim` |
+//! | `Gallery/ROUGH<nn>.dat`, `ILLUST<nn>.dat`, `LEFT01.dat`, `LEFT02.dat`, `GNUM2.dat`, `movie64.dat` (each a TIM) | `ui/gallery/<stem>.tim` |
 //! | `Common/Data/font0.tim` | `font/00.bmp`, `font/00.xml` (moved onto the Western cells, `convert_re2/font.rs`) |
 //! | `bio2 1.10.exe`'s English tables, rooms' RDT text, CR's `exe/sys.tex` | `language/en-US.txt` (`convert_re2/exe.rs`, `text.rs`) |
 //! | `bio2 1.10.exe`'s computer strings (0x533AD0 and on) | `ui/computer/rc200.txt` |
@@ -2071,6 +2071,9 @@ fn copy_prologue_art(
 /// the gallery closes as the pictures open; and the pictures themselves,
 /// LEON's `ROUGH01.dat` to `ROUGH60.dat` and CLAIRE's `ILLUST01.dat` to
 /// `ILLUST35.dat`, where a missing one shows as none.
+///
+/// The movies (`GalleryMovie`, `0x437F30`): their words, `movie64.dat`,
+/// without which the gallery closes as the movies open.
 fn copy_gallery_art(
     layout: &Layout,
     writer: &mut PackWriter,
@@ -2094,7 +2097,7 @@ fn copy_gallery_art(
     let pictures = (1..=60)
         .map(|n| format!("ROUGH{n:02}"))
         .chain((1..=35).map(|n| format!("ILLUST{n:02}")));
-    let sets: [(Vec<String>, &str); 3] = [
+    let sets: [(Vec<String>, &str); 4] = [
         (
             ["TITLE1", "TITLE2", "TITLE3", "TITLE4", "TITLE5", "MOJI"]
                 .map(str::to_owned)
@@ -2106,6 +2109,10 @@ fn copy_gallery_art(
             "the gallery can't show its pictures",
         ),
         (pictures.collect(), "the gallery lacks those pictures"),
+        (
+            vec!["MOVIE64".to_owned()],
+            "the gallery can't show its movies",
+        ),
     ];
     for (stems, effect) in sets {
         let mut missing = Vec::new();

@@ -1,0 +1,34 @@
+# CLAIRE's MOVIE with only numbers 0, 3 and 15 opened: right three times and left twice (oracle/re2.md, "The gallery").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 down
+443
+470 right
+473
+500 confirm
+503
+540 right
+543
+570 confirm
+573
+650 down
+653
+680 confirm
+683
+730 right
+733
+760 right
+763
+790 right
+793
+820 left
+823
+850 left
+853
