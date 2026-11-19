@@ -12,3 +12,19 @@ fields = "ti,tlogo,tfade,tfade3,snd,sv,svs"
 frames = [189, 1419]
 expect = "match"
 record = ""
+
+# LOAD GAME with a save in the folder: the list's moves and name scroll on the save's row, the decide on it, the
+# load (state 10), the screen's fade out and the title's hand-over to the game on tick 810.
+[[run]]
+name = "title_load_game"
+ui = "title"
+offset = 189
+ticks = 811
+input = "title_load_game.txt"
+input_shift = 189
+input_drop_early = true
+saves_from = "save_200_new"
+fields = "ti,tlogo,tfade,tfade3,snd,sv,svs,svb"
+frames = [189, 810]
+expect = "match"
+record = ""

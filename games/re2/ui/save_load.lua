@@ -29,14 +29,14 @@
 -- (`oracle/re2.md`, "The save screen"): the layout here is measured from
 -- the original's frames, and the overwrite is the patched one (the
 -- executable's own is a three-way choice with an Update that keeps the
--- name). The load (10), the failed write (0x62), the keyboard paging
--- (`FUN_00432670`) and the name scroll aren't ported.
+-- name). A file that can't be read or written (0x62 and its message) and
+-- the keyboard paging (`FUN_00432670`) aren't ported.
 
 local CrText = require("ui/cr_text")
 
 local M = {}
 
-local STATE_FONT, STATE_LIST, STATE_BROWSE, STATE_WRITE = 0, 1, 2, 3
+local STATE_FONT, STATE_LIST, STATE_BROWSE, STATE_WRITE, STATE_LOAD = 0, 1, 2, 3, 10
 local STATE_REVEAL, STATE_WAIT, STATE_DONE, STATE_CANCEL = 0x22, 0x24, 0x61, 99
 local STATE_ASK, STATE_OVERWRITE, STATE_RETYPE, STATE_REWAIT = 0x1E, 0x1F, 0x20, 0x21
 
@@ -90,6 +90,8 @@ local function publish(api)
     api:set("sv_typed", s.typed)
     api:set("sv_scroll", s.scroll)
     api:set("sv_blink", s.blink)
+    -- The saves made (`0x98EB20`'s count), which a load takes from the save.
+    api:set("sv_count", s.loaded and s.loaded.saves or 0)
     -- Fade 0 as the original's slot stands after the tick's step: a step on
     -- from the level drawn, and left where the fade in ended until the
     -- fade out is set.
@@ -264,15 +266,9 @@ local function browse(api, input)
             s.state = STATE_ASK
             api:core_sound(CUE_DECIDE)
         elseif row == 1 and s.mode == 1 then
-            -- The load (state 10): not ported; it loads at once.
+            s.picked = s.mode + s.cursor - 1 + s.top + 1
+            s.state = STATE_LOAD
             api:core_sound(CUE_DECIDE)
-            local entry = s.saves[s.mode + s.cursor - 1 + s.top + 1]
-            if entry then
-                local ok, err = api:load(entry.name)
-                if not ok then
-                    api:log("warning: failed to load " .. entry.name .. ": " .. tostring(err))
-                end
-            end
         end
     elseif input.cancel then
         api:core_sound(CUE_CANCEL)
@@ -393,6 +389,14 @@ local function step(api, input)
         s.state = STATE_BROWSE
     elseif state == STATE_BROWSE then
         browse(api, input)
+    elseif state == STATE_LOAD then
+        -- State 10 reads the row's file into the game's work (`Load_pop`)
+        -- and is done: the screen leaves as after a save, and the game
+        -- starts once it is gone. Here the save is read when the screen
+        -- ends; a file that can't be read (state 0x62 and its message)
+        -- leaves as a cancel does.
+        s.loaded = s.saves[s.picked]
+        s.state = s.loaded and STATE_DONE or STATE_CANCEL
     elseif state == STATE_WRITE then
         write(api, STATE_REVEAL)
     elseif state == STATE_REVEAL then
@@ -481,6 +485,13 @@ function M.update(api, input)
         else
             -- `Cardaccess_exit`'s step 2 returns without a sleep: `Mem_card`
             -- ends on this tick.
+            if s.loaded then
+                local ok, err = api:load(s.loaded.name)
+                if ok then
+                    return
+                end
+                api:log("warning: failed to load " .. s.loaded.name .. ": " .. tostring(err))
+            end
             api:exit(s.mode == 1 and "title" or "resume")
             return
         end

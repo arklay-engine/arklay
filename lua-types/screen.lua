@@ -206,6 +206,15 @@ function ScreenModule.draw(api) end
 ---@param api ScreenApi
 function ScreenModule.on_resume(api) end
 
+---Called on a title screen with [`on_resume`](#ScreenModule.on_resume) when
+---the load screen it left for chose a save
+---([`api:load`](#ScreenApi.load)): the title wakes as it stood and starts
+---the game from that save when it is ready, by exiting with `continue`.
+---Any other exit forgets the save. A title without it is dropped, and the
+---game starts at once.
+---@param api ScreenApi
+function ScreenModule.on_loaded(api) end
+
 ---The published view: what the screen shows a player, as a table of
 ---integers, numbers, strings, booleans and nested tables of them, for
 ---observers such as the player bot. It is the screen's contract with them:
@@ -537,8 +546,10 @@ function ScreenApi:save_slot(slot) end
 function ScreenApi:remove(name) end
 
 ---Load `<save_dir>/<name>`: once this `update` returns, the screen closes
----and the game continues from that save. Load mode only; the file must be a
----readable save.
+---and the game continues from that save, or, under a title with both
+---[`on_resume`](#ScreenModule.on_resume) and
+---[`on_loaded`](#ScreenModule.on_loaded), that title wakes to start it.
+---Load mode only; the file must be a readable save.
 ---@param name string One plain file name.
 ---@return boolean ok
 ---@return string? err Why it failed.
@@ -1401,5 +1412,7 @@ local Re2MapSprite = {}
 ---@alias ScreenSound "cursor"|"decide"|"cancel"|"error"|"title"|"select_cursor"|"select_confirm"|"save_cursor"|"save_confirm"|"page_turn"|"map_zoom"|"map_label"
 
 ---An [`api:exit`](#ScreenApi.exit) action: where the game goes next.
----`new_game` takes the character, `load_game` the slot.
----@alias ScreenExit "title"|"char_select"|"save_load"|"attract"|"resume"|"quit"|"ending_result"|"ending_epilogue"|"ending_save"|"new_game"|"load_game"
+---`new_game` takes the character, `load_game` the slot. `continue` is a
+---title's, after its [`on_loaded`](#ScreenModule.on_loaded): the game
+---continues from the save the load screen chose.
+---@alias ScreenExit "title"|"char_select"|"save_load"|"continue"|"attract"|"resume"|"quit"|"ending_result"|"ending_epilogue"|"ending_save"|"new_game"|"load_game"

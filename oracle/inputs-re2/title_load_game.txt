@@ -1,0 +1,18 @@
+# The title from boot: LOAD GAME with one save (save_200_new's), the cursor down to the leave row, on round to the save and back up twice, the name scroll right and left on the save's row, then the decide on the save (oracle/re2.md, "The load screen").
+0
+260 confirm
+263
+600 down
+603
+620 down
+623
+640 up
+643
+660 up
+663
+680 right
+710
+730 left
+760
+800 confirm
+803

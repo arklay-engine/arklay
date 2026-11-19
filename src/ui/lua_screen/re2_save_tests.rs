@@ -881,6 +881,62 @@ fn a_load_screen_left_without_a_load_says_so() {
     assert_eq!(screen.value("sv_fg_system"), 0x400);
 }
 
+/// Classic REbirth's print as a save's label shows it (`title_load_game`):
+/// a glyph a pixel closer than its width, the digits, `/` and `-` a pixel
+/// later and a row up, and `.` and `:` a pixel later on the letters' row.
+#[test]
+fn classic_rebirths_print_sets_the_digits_later_and_a_row_up() {
+    let dir = folder("cr-print");
+    let screen = open(&dir);
+    let placed: String = screen.test_eval(
+        r#"local print = require("ui/cr_text").print
+        local out, api = {}, {}
+        function api:text_width() return 8 end
+        function api:text(x, y, glyph) out[#out + 1] = glyph .. "@" .. x .. "," .. y end
+        print(api, 0, 10, "nA1/-.:9n")
+        return table.concat(out, " ")"#,
+    );
+    assert_eq!(
+        placed,
+        "n@0,10 A@7,10 1@15,9 /@22,9 -@29,9 .@36,10 :@43,10 9@50,9 n@56,10"
+    );
+}
+
+/// The load (`title_load_game`'s 800 to 809): the decide's cue and state
+/// 10, the read on the tick after (state 0x61, with the save's count), the
+/// exit's fade as after a save, and the load on the tick the screen ends.
+#[test]
+fn a_decide_on_a_save_loads_it_as_the_screen_ends() {
+    let dir = folder("load-game");
+    saves_in(&dir, 1);
+    let mut screen = open_load(&dir);
+    to_the_list(&mut screen, &dir);
+    assert_eq!(sv(&screen)[2..], [2, 1, 0, 0, 2, 0, 0, 0, 1]);
+    let (result, cues) = tick(&mut screen, &dir, press(|input| input.confirm = true));
+    assert_eq!(
+        (result, cues),
+        (ScreenResult::Continue, vec![UiCue::Core(6)])
+    );
+    assert_eq!((sv(&screen)[2], screen.value("sv_count")), (10, 0), "800");
+    let (result, cues) = tick(&mut screen, &dir, UiInput::default());
+    assert_eq!((result, cues), (ScreenResult::Continue, vec![]));
+    assert_eq!((sv(&screen)[2], screen.value("sv_count")), (0x61, 1), "801");
+    // 702 to 708 of the recording's shape: six steps of the fade and the
+    // tick it stands full, with nothing for the title to clear.
+    for step in [1, 1, 1, 1, 1, 1, 2] {
+        let (result, _) = tick(&mut screen, &dir, UiInput::default());
+        assert_eq!(result, ScreenResult::Continue);
+        assert_eq!(sv(&screen)[..3], [4, step, 0x61]);
+        assert_eq!(screen.value("sv_fg_system"), 0);
+    }
+    let (result, _) = tick(&mut screen, &dir, UiInput::default());
+    assert_eq!(
+        result,
+        ScreenResult::Done(ScreenAction::LoadFile(dir.join("save00.dat"))),
+        "809"
+    );
+}
+
 /// Left and right held step the name scroll by 8 between 0 and 21, each
 /// step with the move cue and the cursor's wait, and nothing at either end;
 /// a held direction keeps a decide from being taken (`save_200_scroll`'s
