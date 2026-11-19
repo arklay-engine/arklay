@@ -6049,9 +6049,18 @@ impl GameSession {
     /// for the status screen (`Fade_set`, mode 2) only once fade 0 is idle
     /// (`Fade_status(0)`, `0x4BFB36`'s case 1), with `fg_stop` all up since
     /// the press. START is taken with a fade on only under the one a game
-    /// started from the title enters through.
+    /// started from the title enters through. Only a fade that is clearing
+    /// is waited for: one a script holds or darkens would never end with the
+    /// scripts stopped, and a request the next tick drops (a door, a film,
+    /// a death) holds nothing.
     fn re2_start_waits(&self) -> bool {
-        self.game.is_re2_room && self.menu_request.is_some() && self.room_fade.is_active()
+        self.game.is_re2_room
+            && self.menu_request.is_some()
+            && self.room_fade.is_active()
+            && self.room_fade.counter() < 0
+            && self.transition.is_none()
+            && self.movie.is_none()
+            && self.death.is_idle()
     }
 
     /// The frame after a menu was requested: restore the message word the
@@ -26926,12 +26935,19 @@ mod tests {
         assert!(session.menu.is_some() && session.menu_request.is_none());
         assert_eq!(session.re2_status_open, Some(1), "the fade is over");
 
-        // A request with no fade on opens on the next tick.
-        let mut plain = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
-        plain.game.is_re2_room = true;
-        plain.menu_request = Some((MenuRequest::Menu, plain.game.message_flags));
-        idle(&mut plain);
-        assert_eq!(plain.re2_status_open, Some(1));
+        // A request with no fade on opens on the next tick, and so does one
+        // under a fade that isn't clearing: a level a script holds, which
+        // the stopped scripts would never take away, or a fade to black.
+        for fade in [None, Some((0, 0x4000)), Some((0x200, 0))] {
+            let mut plain = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+            plain.game.is_re2_room = true;
+            if let Some((counter, state)) = fade {
+                plain.room_fade.set(2, counter, state);
+            }
+            plain.menu_request = Some((MenuRequest::Menu, plain.game.message_flags));
+            idle(&mut plain);
+            assert_eq!(plain.re2_status_open, Some(1), "under {fade:?}");
+        }
 
         // The black of a skipped present covers the open's room frames.
         let mut session = re2_status_open_session(&pack, a);
