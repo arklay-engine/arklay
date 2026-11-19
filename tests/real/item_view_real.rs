@@ -162,6 +162,7 @@ impl<'a> Viewer<'a> {
 
     fn context<'b>(pack: &'b Pack, text: &'b Text, saves: &'b std::path::Path) -> UiContext<'b> {
         UiContext {
+            statics: None,
             authentic: false,
             pack,
             save_dir: saves,

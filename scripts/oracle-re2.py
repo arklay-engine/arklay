@@ -1265,6 +1265,8 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     fields.append(f"tw={game.u32(BACK_ROUTINE):x},{game.u8(ITEM_BOX_ENTRANCE)},{game.u8(SAVE_PLACE)}")
     fields.append(save_screen_trace(game))
     fields.append(f"svs={game.i32s(CARD_SCROLL, 1)[0]}")
+    # The answers' blink count: the state word's third byte, which `Card_Mess_disp` steps.
+    fields.append(f"svb={(game.u32(CARD_STATE) >> 16) & 0xFF}")
     fields.append(computer_trace(game))
     fields.append(hikidashi_trace(game))
     fields.append(objects_trace(game))
@@ -1842,6 +1844,7 @@ def boot_trace_line(game: Game, tick: int, pad: int) -> str:
         save_screen_trace(game),
         # The list's name scroll (`0x986384`), which left and right step.
         f"svs={game.i32s(CARD_SCROLL, 1)[0]}",
+        f"svb={(game.u32(CARD_STATE) >> 16) & 0xFF}",
         music_trace(game),
         "snd=" + ("/".join(game.sounds) or "-"),
     ]

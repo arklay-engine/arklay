@@ -1049,8 +1049,7 @@ local OPT_TEXT_GREEN, OPT_DIGIT_GREEN = "#00C80A", "#00FF40"
 -- The sound settings, which outlast a visit: the speaker mode (1 monaural, 2
 -- stereo), the quality (`Config_get_squal`: 0 is 44.1 kHz at 16 bits) and
 -- the two volumes. They are the screen's own; arklay's sound doesn't read
--- them, and like the work below they last as long as this script does,
--- which is one opening of the title (oracle/re2-deviations.md, "The title").
+-- them (oracle/re2-deviations.md, "The title").
 local sound = { speaker = 2, quality = 0, bgm = 100, se = 100 }
 
 -- The screen's work, which is static in the original and so outlasts a
@@ -1066,6 +1065,39 @@ local option_work = {
     -- volumes' and EXIT's.
     blink = { mode = 0, quality = 0, bgm = 0, se = 0, exit = 0 },
 }
+
+-- The work and the sound values are the executable's statics, which last as
+-- long as the process: they are kept past this script (`api:keep`), for the
+-- title's next opening to find.
+local OPT_KEPT = {
+    { option_work, "cursor", "opt_cursor" },
+    { option_work, "type", "opt_type" },
+    { option_work, "wait", "opt_wait" },
+    { option_work.blink, "mode", "opt_blink_mode" },
+    { option_work.blink, "quality", "opt_blink_quality" },
+    { option_work.blink, "bgm", "opt_blink_bgm" },
+    { option_work.blink, "se", "opt_blink_se" },
+    { option_work.blink, "exit", "opt_blink_exit" },
+    { sound, "speaker", "snd_speaker" },
+    { sound, "quality", "snd_quality" },
+    { sound, "bgm", "snd_bgm" },
+    { sound, "se", "snd_se" },
+}
+
+local function option_restore(api)
+    for _, kept in ipairs(OPT_KEPT) do
+        local value = api:kept(kept[3])
+        if value then
+            kept[1][kept[2]] = value
+        end
+    end
+end
+
+local function option_keep(api)
+    for _, kept in ipairs(OPT_KEPT) do
+        api:keep(kept[3], kept[1][kept[2]])
+    end
+end
 
 local function option_new()
     option_work.step, option_work.state = 0, 0
@@ -1356,6 +1388,7 @@ local function option_task(api)
         s.frame = "black"
     elseif o.step == 1 then
         option_main(api)
+        option_keep(api)
     else
         -- The exit: the task ends, and the title's wakes on the next tick.
         s.opt = nil
@@ -1829,6 +1862,7 @@ end
 function M.open(api, args)
     s = new_state()
     M.state = s
+    option_restore(api)
     s.any_saves = any_saves(api, args or {})
     pages = {
         [0] = api:indexed_page("ui/title/tmoji_0"),

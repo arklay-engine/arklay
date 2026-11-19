@@ -1,4 +1,4 @@
-# room 200: the typewriter's Yes, then left and right on the save screen's two rows: the name scroll's steps and where they stop on "Create New" and on the leave row, a tap each way, and the cancel key (oracle/re2.md, "The save screen")
+# room 200: the typewriter's Yes, then left and right on the save screen's two rows: the name scroll's steps and where they stop on "Create New" and on the leave row, and the cancel key with the scroll at 8; then a second Yes, and left on the screen it opens, which finds the scroll as the first left it (oracle/re2.md, "The save screen")
 364 action
 368
 410 action
@@ -21,7 +21,17 @@
 890
 900 right
 903
-910 left
+910 cancel
 913
-930 cancel
-933
+990 action
+994
+1040 action
+1044
+1090 action
+1094
+1170 action
+1174
+1240 left
+1243
+1270 cancel
+1273

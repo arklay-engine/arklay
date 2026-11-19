@@ -77,6 +77,7 @@ fn context<'a>(
     game: Option<&'a crate::game::GameState>,
 ) -> UiContext<'a> {
     UiContext {
+        statics: None,
         authentic: false,
         pack: pack(),
         save_dir: dir,

@@ -59,6 +59,7 @@ impl Harness {
 
     fn context(&self) -> UiContext<'_> {
         UiContext {
+            statics: None,
             authentic: false,
             pack: empty_pack(),
             save_dir: &self.dir.0,
@@ -1918,6 +1919,7 @@ impl MapTab {
         let harness = Harness::new(label);
         let screen = {
             let mut cx = UiContext {
+                statics: None,
                 authentic: false,
                 pack: &pack,
                 game: Some(&game),
@@ -1936,6 +1938,7 @@ impl MapTab {
 
     fn step(&mut self, input: UiInput) -> ScreenResult {
         let cx = UiContext {
+            statics: None,
             authentic: false,
             pack: &self.pack,
             game: Some(&self.game),
@@ -1948,6 +1951,7 @@ impl MapTab {
 
     fn draw(&mut self) -> crate::render::Framebuffer {
         let cx = UiContext {
+            statics: None,
             authentic: false,
             pack: &self.pack,
             game: Some(&self.game),
@@ -2398,6 +2402,7 @@ impl FileTab {
         }
         let screen = {
             let mut cx = UiContext {
+                statics: None,
                 authentic: false,
                 pack,
                 text,
@@ -2418,6 +2423,7 @@ impl FileTab {
 
     fn step(&mut self, input: UiInput) -> ScreenResult {
         let cx = UiContext {
+            statics: None,
             authentic: false,
             pack: self.pack,
             text: self.text,
@@ -2435,6 +2441,7 @@ impl FileTab {
 
     fn draw(&mut self) -> crate::render::Framebuffer {
         let cx = UiContext {
+            statics: None,
             authentic: false,
             pack: self.pack,
             text: self.text,
@@ -3264,6 +3271,7 @@ impl ItemView {
         all.extend(args.iter().cloned());
         let screen = {
             let mut cx = UiContext {
+                statics: None,
                 authentic: false,
                 game: Some(&game),
                 ..harness.context()
@@ -3279,6 +3287,7 @@ impl ItemView {
 
     fn step(&mut self, input: UiInput) -> ScreenResult {
         let cx = UiContext {
+            statics: None,
             authentic: false,
             game: Some(&self.game),
             ..self.harness.context()
@@ -3503,6 +3512,7 @@ fn item_view_pickup_spins_in_and_closes_on_begin_exit() {
     assert!(view.screen.value("settled") != 0);
     {
         let cx = UiContext {
+            statics: None,
             authentic: false,
             game: Some(&view.game),
             ..view.harness.context()
@@ -3530,6 +3540,7 @@ impl ItemBoxScreen {
         let harness = Harness::new(label);
         let screen = {
             let mut cx = UiContext {
+                statics: None,
                 authentic: false,
                 game: Some(&game),
                 ..harness.context()
@@ -3559,6 +3570,7 @@ impl ItemBoxScreen {
     /// One frame; whether the box closed.
     fn closes(&mut self, input: UiInput) -> bool {
         let cx = UiContext {
+            statics: None,
             authentic: false,
             game: Some(&self.game),
             ..self.harness.context()
@@ -4219,6 +4231,7 @@ fn item_box_opening_on_a_disabled_tab_uses_exit() {
 fn item_box_without_art_draws_nothing() {
     let mut item_box = ItemBoxScreen::new("box-draw", box_game(), 8);
     let cx = UiContext {
+        statics: None,
         authentic: false,
         game: Some(&item_box.game),
         ..item_box.harness.context()

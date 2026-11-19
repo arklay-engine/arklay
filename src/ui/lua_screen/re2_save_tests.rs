@@ -70,6 +70,7 @@ fn folder(name: &str) -> Folder {
 
 fn context(dir: &Path) -> UiContext<'_> {
     UiContext {
+        statics: None,
         authentic: false,
         pack: pack(),
         save_dir: dir,
@@ -655,6 +656,209 @@ fn a_press_ends_the_overwrites_wait() {
     assert!(cues.is_empty());
     assert_eq!(sv(&screen)[2], 0x61);
     assert_eq!(sv(&screen)[7], 0);
+}
+
+/// The work the original keeps in static data: a screen opens with the rows
+/// and save count of the last listing, the name scroll and the question's
+/// blink as the last screen left them (`save_200_scroll`'s 1177 and
+/// `save_200_ask_twice`'s 1600), and a context that keeps nothing starts
+/// each screen over.
+#[test]
+fn a_screen_finds_the_work_the_last_one_kept() {
+    for kept in [true, false] {
+        let dir = folder(if kept { "kept" } else { "not-kept" });
+        saves_in(&dir, 1);
+        let statics = crate::ui::ScreenStatics::default();
+        let context_of = || {
+            let mut cx = context(&dir);
+            if kept {
+                cx.statics = Some(&statics);
+            }
+            cx
+        };
+        let open_one = || {
+            let mut cx = context_of();
+            LuaScreen::open_save("ui/save_load.lua", &mut cx, block(0), true).unwrap()
+        };
+        let step = |screen: &mut LuaScreen, input: UiInput| {
+            let cx = context_of();
+            screen.update(&cx, input)
+        };
+        let mut screen = open_one();
+        assert_eq!(sv(&screen)[6], 0, "no listing yet");
+        for _ in 0..8 {
+            step(&mut screen, UiInput::default());
+        }
+        assert_eq!((sv(&screen)[6], sv(&screen)[10]), (3, 1));
+        // The scroll to 8, then the question on the save's row for five
+        // ticks.
+        step(
+            &mut screen,
+            UiInput {
+                held_right: true,
+                ..UiInput::default()
+            },
+        );
+        for _ in 0..3 {
+            step(&mut screen, UiInput::default());
+        }
+        step(&mut screen, held_down());
+        for _ in 0..3 {
+            step(&mut screen, UiInput::default());
+        }
+        step(&mut screen, press(|input| input.confirm = true));
+        assert_eq!(sv(&screen)[2], 0x1E);
+        for _ in 0..4 {
+            step(&mut screen, UiInput::default());
+        }
+        assert_eq!(screen.value("sv_blink"), 5);
+        step(&mut screen, press(|input| input.cancel = true));
+        step(&mut screen, press(|input| input.cancel = true));
+        while step(&mut screen, UiInput::default()) == ScreenResult::Continue {}
+        // The next screen, before its own listing.
+        let mut screen = open_one();
+        let found = (
+            sv(&screen)[6],
+            sv(&screen)[10],
+            screen.value("sv_scroll"),
+            screen.value("sv_blink"),
+        );
+        assert_eq!(found, if kept { (3, 1, 8, 5) } else { (0, 0, 0, 0) });
+        for _ in 0..8 {
+            step(&mut screen, UiInput::default());
+        }
+        step(&mut screen, held_down());
+        for _ in 0..3 {
+            step(&mut screen, UiInput::default());
+        }
+        step(&mut screen, press(|input| input.confirm = true));
+        assert_eq!(
+            screen.value("sv_blink"),
+            if kept { 6 } else { 1 },
+            "the question's blink goes on"
+        );
+    }
+}
+
+/// The choice the question last drew is static too (`Mwork_pc2`): a
+/// question left on Cancel starts the next screen's blink over, since that
+/// one opens on Overwrite, where a question left on Overwrite lets it go on
+/// (`a_screen_finds_the_work_the_last_one_kept`).
+#[test]
+fn a_question_left_on_cancel_starts_the_next_screens_blink_over() {
+    for kept in [true, false] {
+        let dir = folder(if kept {
+            "kept-choice"
+        } else {
+            "no-kept-choice"
+        });
+        saves_in(&dir, 1);
+        let statics = crate::ui::ScreenStatics::default();
+        let context_of = || {
+            let mut cx = context(&dir);
+            if kept {
+                cx.statics = Some(&statics);
+            }
+            cx
+        };
+        let step = |screen: &mut LuaScreen, input: UiInput| {
+            let cx = context_of();
+            screen.update(&cx, input)
+        };
+        let to_the_question = |screen: &mut LuaScreen| {
+            for _ in 0..8 {
+                step(screen, UiInput::default());
+            }
+            step(screen, held_down());
+            for _ in 0..3 {
+                step(screen, UiInput::default());
+            }
+            step(screen, press(|input| input.confirm = true));
+            assert_eq!(sv(screen)[2], 0x1E);
+        };
+        let open_one = || {
+            let mut cx = context_of();
+            LuaScreen::open_save("ui/save_load.lua", &mut cx, block(0), true).unwrap()
+        };
+        let mut screen = open_one();
+        to_the_question(&mut screen);
+        // To Cancel, three more ticks of its blink, and out on it.
+        step(&mut screen, press(|input| input.right = true));
+        for _ in 0..3 {
+            step(&mut screen, UiInput::default());
+        }
+        assert_eq!((sv(&screen)[8], screen.value("sv_blink")), (1, 3));
+        step(&mut screen, press(|input| input.confirm = true));
+        step(&mut screen, press(|input| input.cancel = true));
+        while step(&mut screen, UiInput::default()) == ScreenResult::Continue {}
+        let mut screen = open_one();
+        assert_eq!(screen.value("sv_blink"), if kept { 3 } else { 0 });
+        to_the_question(&mut screen);
+        assert_eq!(sv(&screen)[8], 0, "the question opens on Overwrite");
+        assert_eq!(
+            screen.value("sv_blink"),
+            if kept { 0 } else { 1 },
+            "from the start: the last question drew Cancel"
+        );
+    }
+}
+
+/// `api:keep` and `api:kept`: integers and booleans by key, `nil` to forget
+/// one, shared by every screen of the context's store, 64 keys at most, and
+/// nothing kept by a context without a store.
+#[test]
+fn the_api_keeps_values_past_a_screen() {
+    let dir = folder("keep-api");
+    let statics = crate::ui::ScreenStatics::default();
+    let mut screen = open(&dir);
+    let mut eval = |kept: bool, body: &str| -> Option<i64> {
+        let mut cx = context(&dir);
+        if kept {
+            cx.statics = Some(&statics);
+        }
+        screen.test_eval_with_game(&cx, None, body)
+    };
+    assert_eq!(eval(true, "return api:kept('a')"), None);
+    assert_eq!(eval(true, "api:keep('a', 7) return api:kept('a')"), Some(7));
+    assert_eq!(
+        statics.get("ui/save_load.lua", "a"),
+        Some(7),
+        "the store's, under the script's own scope"
+    );
+    assert_eq!(statics.get("UI/Save_Load.lua", "a"), Some(7), "in any case");
+    assert_eq!(statics.get("ui/title.lua", "a"), None);
+    assert_eq!(
+        eval(true, "api:keep('b', true) return api:kept('b')"),
+        Some(1)
+    );
+    assert_eq!(eval(true, "api:keep('a', nil) return api:kept('a')"), None);
+    assert_eq!(
+        eval(true, "return pcall(api.keep, api, 'c', 1.5) and 1 or 0"),
+        Some(0),
+        "an integer, a boolean or nil"
+    );
+    // 64 keys: `b` and 63 more, then no new one, though a kept one changes.
+    assert_eq!(
+        eval(
+            true,
+            "for i = 1, 63 do api:keep('k' .. i, i) end
+            local ok = pcall(api.keep, api, 'one-more', 1)
+            api:keep('k63', 99)
+            return (ok and 1000 or 0) + api:kept('k63')"
+        ),
+        Some(99)
+    );
+    assert_eq!(eval(false, "api:keep('z', 1) return api:kept('z')"), None);
+    assert_eq!(statics.get("ui/save_load.lua", "z"), None);
+    // Another script's keys don't count against this one's 64.
+    for i in 0..64 {
+        assert!(statics.set("ui/other.lua", &format!("k{i}"), Some(i)));
+    }
+    assert!(!statics.set("ui/other.lua", "one-more", Some(0)));
+    assert_eq!(
+        eval(true, "api:keep('k1', 5) return api:kept('k1')"),
+        Some(5)
+    );
 }
 
 /// The load screen left without a load has `fg_system`'s 0x400 up from its

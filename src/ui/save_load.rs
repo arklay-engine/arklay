@@ -45,7 +45,7 @@ fn modern(cx: &UiContext<'_>) -> bool {
 }
 
 /// The shipped save/load screen script.
-const SAVE_LOAD_ENTRY: &str = "ui/save_load.lua";
+pub(crate) const SAVE_LOAD_ENTRY: &str = "ui/save_load.lua";
 
 /// A completed save: the slot that was written and whether the flow consumed
 /// an ink ribbon.
@@ -151,6 +151,13 @@ pub trait NativeScreen {
     /// Draw at `width` x `height` pixels, recorded for the GPU when `gpu`;
     /// returns whether anything was repainted.
     fn draw(&mut self, width: u32, height: u32, gpu: bool) -> bool;
+}
+
+/// The scope of what the save screen keeps past itself
+/// ([`super::ScreenStatics`]): the pack entry its scripts registered, or
+/// the shipped screen's.
+pub fn kept_scope(entry: Option<&str>) -> &str {
+    entry.unwrap_or(SAVE_LOAD_ENTRY)
 }
 
 /// Open the load screen: the pack entry its scripts registered, the modern

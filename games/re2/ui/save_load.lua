@@ -83,15 +83,13 @@ local function publish(api)
     api:set("sv_mode", s.mode)
     api:set("sv_cursor", s.cursor)
     api:set("sv_top", s.top)
-    if s.listed then
-        -- `0x986394` and `cnt0` keep the last screen's until state 1.
-        api:set("sv_rows", s.rows)
-        api:set("sv_saves", s.cnt0)
-    end
+    api:set("sv_rows", s.rows)
+    api:set("sv_saves", s.cnt0)
     api:set("sv_timer", s.timer)
     api:set("sv_choice", s.choice)
     api:set("sv_typed", s.typed)
     api:set("sv_scroll", s.scroll)
+    api:set("sv_blink", s.blink)
     -- Fade 0 as the original's slot stands after the tick's step: a step on
     -- from the level drawn, and left where the fade in ended until the
     -- fade out is set.
@@ -247,6 +245,7 @@ local function browse(api, input)
         end
         if scroll ~= s.scroll then
             s.scroll = scroll
+            api:keep("card_scroll", scroll)
             s.timer = 3
             api:core_sound(CUE_MOVE)
         end
@@ -389,7 +388,8 @@ local function step(api, input)
         s.saves, s.cnt0 = list_saves(api, s.mode == 1)
         s.count = #s.saves
         s.rows = total_rows() < 10 and total_rows() or 10
-        s.listed = true
+        api:keep("card_rows", s.rows)
+        api:keep("card_saves", s.cnt0)
         s.state = STATE_BROWSE
     elseif state == STATE_BROWSE then
         browse(api, input)
@@ -421,9 +421,14 @@ function M.open(api)
     end
     s.mode = api:mode() == "load" and 1 or 0
     s.state = STATE_FONT
-    s.cursor, s.top, s.rows, s.timer, s.choice, s.typed, s.cnt0, s.count = 0, 0, 0, 0, 0, 0, 0, 0
-    s.blink, s.blink_choice = 0, 0
-    s.scroll = 0
+    s.cursor, s.top, s.timer, s.choice, s.typed, s.count = 0, 0, 0, 0, 0, 0
+    -- Static in the original, so the last screen's until this one sets
+    -- them: the answers' blink and the choice it last drew, the rows shown
+    -- (`0x986394`) and the folder's saves (`cnt0`), which state 1 lists,
+    -- and the name scroll (`0x986384`).
+    s.blink, s.blink_choice = api:kept("card_blink") or 0, api:kept("card_blink_choice") or 0
+    s.rows, s.cnt0 = api:kept("card_rows") or 0, api:kept("card_saves") or 0
+    s.scroll = api:kept("card_scroll") or 0
     s.saves = {}
     -- `Cardaccess_init`'s step 0: fade 0 from black, a step already taken
     -- on this tick's draw.
@@ -456,13 +461,15 @@ function M.update(api, input)
             -- `Card_Mess_disp` steps the answers' blink (the state word's
             -- third byte) as it draws them: 32 ticks, the first 15 lit,
             -- from the start again when the choice isn't the one it last
-            -- drew (`Mwork_pc2`). The original keeps both from one screen
-            -- to the next; each screen here starts them at 0.
+            -- drew (`Mwork_pc2`). Both are static, and kept for the next
+            -- screen's question (`save_200_ask_twice`).
             if s.blink_choice ~= s.choice then
                 s.blink_choice = s.choice
                 s.blink = 0x1F
             end
             s.blink = (s.blink + 1) & 0x1F
+            api:keep("card_blink", s.blink)
+            api:keep("card_blink_choice", s.blink_choice)
         end
     elseif s.sub == 4 then
         if s.step == 1 then

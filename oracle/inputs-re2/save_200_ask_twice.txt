@@ -1,0 +1,43 @@
+# room 200: a save to a new file, then the typewriter again: the overwrite's question on the save's row, left 13 ticks into its blink by the cancel key, and the screen left; then a third Yes and the question again, whose blink goes on from where the last screen's stopped (oracle/re2.md, "The save screen")
+364 action
+368
+410 action
+414
+460 action
+464
+540 action
+544
+600 action
+604
+900 action
+904
+946 action
+950
+996 action
+1000
+1076 action
+1080
+1140 down
+1142
+1180 action
+1184
+1193 cancel
+1197
+1230 cancel
+1234
+1310 action
+1314
+1360 action
+1364
+1410 action
+1414
+1490 action
+1494
+1560 down
+1562
+1600 action
+1604
+1660 cancel
+1664
+1700 cancel
+1704

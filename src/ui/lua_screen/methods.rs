@@ -466,6 +466,35 @@ impl UserData for Api<'_> {
             },
         );
 
+        methods.add_method("kept", |_lua, api, key: String| {
+            Ok(api
+                .cx
+                .statics
+                .and_then(|statics| statics.get(&api.host.entry, &key)))
+        });
+
+        methods.add_method("keep", |_lua, api, (key, value): (String, Value)| {
+            let value = match value {
+                Value::Nil => None,
+                Value::Boolean(flag) => Some(i64::from(flag)),
+                Value::Integer(value) => Some(value),
+                other => {
+                    return Err(mlua::Error::RuntimeError(format!(
+                        "api:keep({key}) takes an integer, a boolean or nil, got {}",
+                        other.type_name()
+                    )));
+                }
+            };
+            match api.cx.statics {
+                Some(statics) if !statics.set(&api.host.entry, &key, value) => {
+                    Err(mlua::Error::RuntimeError(format!(
+                        "api:keep({key}): a screen keeps no more than 64 values"
+                    )))
+                }
+                _ => Ok(()),
+            }
+        });
+
         methods.add_method_mut("set", |_lua, api, (key, value): (String, Value)| {
             let value = match value {
                 Value::Nil => {

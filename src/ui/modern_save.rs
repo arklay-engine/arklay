@@ -539,6 +539,7 @@ mod tests {
 
     fn context(dir: &Dir) -> UiContext<'_> {
         UiContext {
+            statics: None,
             authentic: false,
             pack: pack(),
             save_dir: &dir.0,
