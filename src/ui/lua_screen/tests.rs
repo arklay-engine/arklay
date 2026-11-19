@@ -183,7 +183,7 @@ fn draw(screen: &mut LuaScreen, cx: &crate::ui::UiContext<'_>) -> crate::render:
     framebuffer
 }
 
-/// A title's film: `api:exit("film", id, { claire })` names it, and the
+/// A title's film: `api:exit("film", id, { claire, gallery })` names it, and the
 /// screen wakes through `on_film` with how the film ended, its exit
 /// forgotten. An id no film has is an error.
 #[test]
@@ -194,7 +194,7 @@ fn a_film_exit_names_the_film_and_on_film_wakes_the_screen() {
 woke = 0
 function update(api, input)
     if input.map then api:exit("film", 3, { claire = true }) end
-    if input.cancel then api:exit("film", 0xF) end
+    if input.cancel then api:exit("film", 0xF, { gallery = true }) end
     if input.start then api:exit("film", 300) end
 end
 function draw(api) end
@@ -220,7 +220,8 @@ end
         screen.update(&cx, press(|input| input.map = true)),
         ScreenResult::Done(ScreenAction::Film {
             id: 3,
-            claire: true
+            claire: true,
+            gallery: false
         })
     );
     screen.resume_film(&cx, true, true);
@@ -234,7 +235,8 @@ end
         screen.update(&cx, press(|input| input.cancel = true)),
         ScreenResult::Done(ScreenAction::Film {
             id: 0xF,
-            claire: false
+            claire: false,
+            gallery: true
         })
     );
     screen.resume_film(&cx, false, false);

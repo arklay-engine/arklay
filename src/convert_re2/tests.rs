@@ -777,14 +777,17 @@ fn the_gallerys_art_is_converted() {
             &tiny_tim(2, n as u8),
         );
     }
-    for (n, name) in ["LEFT01", "left02", "GNUM2"].into_iter().enumerate() {
+    for (n, name) in ["LEFT01", "left02", "GNUM2", "movie64"]
+        .into_iter()
+        .enumerate()
+    {
         write(
             &data.join(format!("Gallery/{name}.dat")),
             &tiny_tim(3, n as u8),
         );
     }
     // The 320 x 240 layout's sheets and the other screens' aren't packed.
-    for name in ["top32_1", "LEFT3224", "gnum", "movie64", "3DLEFT1"] {
+    for name in ["top32_1", "LEFT3224", "gnum", "movie32", "3DLEFT1"] {
         write(&data.join(format!("Gallery/{name}.dat")), &words);
     }
     let out = root.path.join("out.akpak");
@@ -799,11 +802,14 @@ fn the_gallerys_art_is_converted() {
         let entry = format!("ui/gallery/{stem}.tim");
         assert_eq!(read(&pack, &entry), tiny_tim(2, n as u8), "{entry}");
     }
-    for (n, stem) in ["left01", "left02", "gnum2"].into_iter().enumerate() {
+    for (n, stem) in ["left01", "left02", "gnum2", "movie64"]
+        .into_iter()
+        .enumerate()
+    {
         let entry = format!("ui/gallery/{stem}.tim");
         assert_eq!(read(&pack, &entry), tiny_tim(3, n as u8), "{entry}");
     }
-    for entry in ["top32_1", "left3224", "gnum", "movie64", "3dleft1"] {
+    for entry in ["top32_1", "left3224", "gnum", "movie32", "3dleft1"] {
         assert!(
             !pack.contains(&format!("ui/gallery/{entry}.tim")),
             "{entry}"
@@ -843,6 +849,7 @@ fn a_gallery_short_of_sheets_is_warned_of() {
                 "no Gallery/{}.dat; the gallery lacks those pictures",
                 pictures.join(", ")
             ),
+            "no Gallery/movie64.dat; the gallery can't show its movies".to_owned(),
         ]
     );
     // Some of them: what is there is packed, and the rest named.
@@ -860,6 +867,7 @@ fn a_gallery_short_of_sheets_is_warned_of() {
             "no Gallery/title2, title3, title4, title5.dat; the gallery has no menu",
             "no Gallery/left01.dat; the gallery can't show its pictures",
             "no Gallery/illust07.dat; the gallery lacks those pictures",
+            "no Gallery/movie64.dat; the gallery can't show its movies",
         ]
     );
     convert_game(&root.path, &out).unwrap();

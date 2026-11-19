@@ -1895,15 +1895,36 @@ def gallery_trace(game: Game) -> str:
     )
 
 
+CR_GALLERY_FLAGS = (0xFFFFFFFF, 0xFFFFFFF0, 0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFF)
+GALLERY_HELD: dict[int, tuple[int, bool]] = {}
+
+
+def held_gallery_word(held: int, put_back: bool, now: int, classic: int) -> tuple[int, bool, bool]:
+    """A gallery word's next `(held, put_back)` and whether `held` is to be written, for a word that reads `now`.
+    Classic REbirth's write is put back once; after it, and wherever the word isn't Classic REbirth's, bits set
+    over the held ones are the game's own and are kept, an all-opened word among them."""
+    if now == held or now & held != held:
+        return held, put_back, False
+    if now == classic and not put_back:
+        return held, True, True
+    return now, put_back, False
+
+
 def hold_gallery_flags(game: Game) -> None:
     """Put back the gallery's flags that `--config GALLERYn=...` set. Classic REbirth opens all of the gallery as
     the title boots (the five words become ffffffff, fffffff0, fffffffe, ffffffff and ffffffff on boot tick 34,
-    whatever config.ini had), so a record of a gallery with less opened writes its words again before each tick.
-    Nothing at the title writes them: the game sets a bit in play (`Set_registry_flg`, `0x442EA0`)."""
+    whatever config.ini had), so a record of a gallery with less opened writes a word again when it first finds
+    Classic REbirth's there. The game sets bits of its own (`Set_registry_flg`, `0x442EA0`: `Init_movie_work` opens
+    the film it plays, the gallery's too), and a word with more set than the record's keeps them."""
     for n in range(5):
         value = CONFIG_OVERRIDES.get(f"GALLERY{n}")
-        if value is not None:
-            game.write(GALLERY_FLAGS + 4 * n, struct.pack("<I", int(value, 16)))
+        if value is None:
+            continue
+        held, put_back = GALLERY_HELD.get(n, (int(value, 16), False))
+        held, put_back, write = held_gallery_word(held, put_back, game.u32(GALLERY_FLAGS + 4 * n), CR_GALLERY_FLAGS[n])
+        GALLERY_HELD[n] = (held, put_back)
+        if write:
+            game.write(GALLERY_FLAGS + 4 * n, struct.pack("<I", held))
 
 
 def gallery_view_trace(game: Game) -> str:
