@@ -11,8 +11,8 @@
 -- `moji3224`), which isn't ported.
 --
 -- The state keeps the original's work (`pGallery`) under its own numbers,
--- so the oracle's `gal` field compares one for one, up to the tick a row's
--- screen would start.
+-- so the oracle's `gal` field compares one for one, up to the last tick of
+-- a row's fade out: on the next the original sets the row's screen.
 --
 -- The menu's rows: ROUGH SKETCH (LEON) or ILLUSTRATION (CLAIRE), MOVIE, 3D
 -- MODEL (CLAIRE only) and EXIT. EXIT ends the gallery and wakes the title.
