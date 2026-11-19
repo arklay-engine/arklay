@@ -1,0 +1,28 @@
+# The title from boot: LOAD GAME with no saves, the load screen's directions on its one row and the cancel key back to the title, then LOAD GAME again and the decide on the row (oracle/re2.md, "The load screen").
+0
+260 confirm
+263
+600 down
+603
+620 up
+623
+640 left
+643
+660 right
+663
+670 right
+673
+680 right
+710
+720 left
+723
+730 left
+760
+780 up
+800
+820 cancel
+823
+920 confirm
+923
+1270 confirm
+1273

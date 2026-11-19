@@ -42,3 +42,18 @@ saves = true
 frame_max_mean = 1.1
 expect = "match"
 record = "--no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200 --give 2:0x1E:3"
+
+[[run]]
+name = "save_200_scroll"
+room = "200"
+# the save screen's name scroll: left and right held on "Create New" and on the leave row step it by 8 every 4 ticks with the move cue, up to the row's limit and down to 0 (oracle/re2.md, "The save screen")
+setup_script = "typewriter_200_ribbon.lua"
+input = "save_200_scroll.txt"
+input_shift = 344
+ticks = 1020
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,snd,msg,tw,gm,fgstat,sv,svs"
+frames = [540, 1019]
+saves = true
+frame_max_mean = 0.2
+expect = "match"
+record = "--no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200 --give 2:0x1E:3"

@@ -199,6 +199,13 @@ function ScreenModule.update(api, input) end
 ---@param api ScreenApi
 function ScreenModule.draw(api) end
 
+---Called on a title screen when the load screen it left for comes back
+---without loading a save. A title that has it is kept as it stands while
+---the load screen is up and carries on from its next `update`; one without
+---it is opened anew.
+---@param api ScreenApi
+function ScreenModule.on_resume(api) end
+
 ---The published view: what the screen shows a player, as a table of
 ---integers, numbers, strings, booleans and nested tables of them, for
 ---observers such as the player bot. It is the screen's contract with them:

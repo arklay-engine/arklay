@@ -1102,6 +1102,9 @@ COMPUTER_WINDOWS = 0x4D1F50  # `Windows`, the function task 1 runs in game mode 
 COMPUTER_WORK = 0x9800A0  # `pCom_work`: +0 col, +1 row, +0x2DC the frame's step
 
 
+CARD_SCROLL = 0x986384  # the save screen's name scroll
+
+
 def save_screen_trace(game: Game) -> str:
     """The save screen while `Mem_card` runs (`sv=-` otherwise): `Card_access`'s step, init's or exit's step,
     the state, the mode, the cursor, the top row, the rows, the timer, the choice, the typed count, the
@@ -1261,6 +1264,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     # Slot 2's back routine (`Sce_Save_backfunc` 0x4E9930 or `Item_box_entrance` 0x4E9A20), its state and the save place.
     fields.append(f"tw={game.u32(BACK_ROUTINE):x},{game.u8(ITEM_BOX_ENTRANCE)},{game.u8(SAVE_PLACE)}")
     fields.append(save_screen_trace(game))
+    fields.append(f"svs={game.i32s(CARD_SCROLL, 1)[0]}")
     fields.append(computer_trace(game))
     fields.append(hikidashi_trace(game))
     fields.append(objects_trace(game))
@@ -1835,6 +1839,9 @@ def boot_trace_line(game: Game, tick: int, pad: int) -> str:
         f"pad={pad}",
         f"fgsys={game.u32(FG_SYSTEM):08x}",
         title_trace(game),
+        save_screen_trace(game),
+        # The list's name scroll (`0x986384`), which left and right step.
+        f"svs={game.i32s(CARD_SCROLL, 1)[0]}",
         music_trace(game),
         "snd=" + ("/".join(game.sounds) or "-"),
     ]

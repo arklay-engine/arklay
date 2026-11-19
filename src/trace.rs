@@ -155,6 +155,8 @@ pub struct TraceTick<'a> {
     /// RE2's save screen, the oracle's `sv` field: `Card_access`'s work
     /// while the typewriter's screen runs, `-` otherwise.
     pub re2_save_screen: Option<String>,
+    /// The RE 2 save screen's name scroll (`svs`), while the screen is up.
+    pub re2_save_scroll: Option<i64>,
     /// RE2: the common flags (`fgcom`, `fg_common`'s eight words as their
     /// bytes) and the computer's state (`pc`, `-` without one).
     pub re2_computer: Option<String>,
@@ -427,6 +429,9 @@ impl TraceWriter {
         if let Some(screen) = &tick.re2_save_screen {
             write!(self.out, " sv={screen}")?;
         }
+        if let Some(scroll) = tick.re2_save_scroll {
+            write!(self.out, " svs={scroll}")?;
+        }
         if let Some(fields) = &tick.re2_computer {
             write!(self.out, " {fields}")?;
         }
@@ -579,6 +584,7 @@ mod tests {
             re2_typewriter: None,
             re2_game_mode: None,
             re2_save_screen: None,
+            re2_save_scroll: None,
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
@@ -655,6 +661,7 @@ mod tests {
                 re2_typewriter: None,
                 re2_game_mode: None,
                 re2_save_screen: None,
+                re2_save_scroll: None,
                 re2_computer: None,
                 re2_hikidashi: None,
                 re2_objects: None,
@@ -727,6 +734,7 @@ mod tests {
                 re2_typewriter: None,
                 re2_game_mode: None,
                 re2_save_screen: None,
+                re2_save_scroll: None,
                 re2_computer: None,
                 re2_hikidashi: None,
                 re2_objects: None,
@@ -797,6 +805,7 @@ mod tests {
                 re2_typewriter: None,
                 re2_game_mode: None,
                 re2_save_screen: None,
+                re2_save_scroll: None,
                 re2_computer: None,
                 re2_hikidashi: None,
                 re2_objects: None,
@@ -867,6 +876,7 @@ mod tests {
             re2_typewriter: None,
             re2_game_mode: None,
             re2_save_screen: None,
+            re2_save_scroll: None,
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
@@ -948,6 +958,7 @@ mod tests {
             re2_typewriter: None,
             re2_game_mode: None,
             re2_save_screen: None,
+            re2_save_scroll: None,
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
@@ -1039,6 +1050,7 @@ mod tests {
             re2_typewriter: Some("tw=4e9930,1,1".to_string()),
             re2_game_mode: Some(0),
             re2_save_screen: Some("-".to_string()),
+            re2_save_scroll: None,
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,
@@ -1110,6 +1122,7 @@ mod tests {
             re2_typewriter: None,
             re2_game_mode: None,
             re2_save_screen: None,
+            re2_save_scroll: None,
             re2_computer: None,
             re2_hikidashi: None,
             re2_objects: None,

@@ -1483,7 +1483,18 @@ local function title_main(api)
     elseif s.disp == 5 then
         title_enter()
     elseif s.disp == 2 then
-        s.exit = "save_load"
+        -- `Title_main_load` (0x505320): its first tick starts `Mem_card`
+        -- (the load screen) and sleeps under it; the tick after that task
+        -- ends without a load it reloads the picture and starts the title
+        -- again from `Title_init`. A load doesn't come back here.
+        if s.sub == 0 then
+            s.sub = 1
+            s.exit = "save_load"
+        else
+            s.background = s.title_background
+            s.mv = 1
+            s.sub = 0
+        end
     elseif s.disp == 3 and s.fg_system & 8 ~= 0 then
         -- The 4th Survivor's or To-fu's new game (`Title_game_init`'s
         -- extras branch) isn't ported: the title starts again from
@@ -1891,6 +1902,10 @@ function M.update(api, input)
         end
     end
 end
+
+-- The load screen came back without a load: the title's task, asleep under
+-- it as it stood, wakes on its next tick (`Title_main_load`'s second step).
+function M.on_resume() end
 
 -- A palette channel as the original's renderer expands the sheets' 5-bit
 -- colours: 8v + 7 (arklay's decoder gives v * 255 / 31).

@@ -5,7 +5,7 @@
 use super::*;
 
 use crate::pack::Pack;
-use crate::ui::{Screen, ScreenAction, UiCue, UiInput};
+use crate::ui::{Screen, ScreenAction, ScreenResult, UiCue, UiInput};
 
 fn pack() -> &'static Pack {
     use std::sync::OnceLock;
@@ -114,6 +114,56 @@ fn the_title_opens_as_the_boot_reaches_it() {
     screen.update(&cx, held);
     assert_eq!(screen.value("ti_cur"), 1);
     assert!(cx.cues.borrow().contains(&UiCue::Core(4)));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// LOAD GAME (`Title_main_load`, `title_load_empty`): the confirm at 260,
+/// the hand-off to the load screen on 531 with the task's step at 1, and,
+/// once that screen comes back without a load, the title's picture and
+/// `Title_init`'s branch from black on the two ticks after (709 and 710).
+#[test]
+fn load_game_sleeps_under_the_load_screen_and_starts_again_after_it() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-load-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut cx_open = context(&dir);
+    let mut screen =
+        LuaScreen::open_screen("title", &[], ScreenAction::Quit, &mut cx_open).unwrap();
+    assert!(screen.resumes());
+    for _ in 189..260 {
+        screen.update(&cx, UiInput::default());
+    }
+    let confirm = UiInput {
+        confirm: true,
+        ..UiInput::default()
+    };
+    assert_eq!(screen.update(&cx, confirm), ScreenResult::Continue);
+    for tick in 261..531 {
+        assert_eq!(
+            screen.update(&cx, UiInput::default()),
+            ScreenResult::Continue,
+            "{tick}"
+        );
+    }
+    assert_eq!(ti(&screen)[..4], [2, 2, 1, 0], "530");
+    assert_eq!(
+        screen.update(&cx, UiInput::default()),
+        ScreenResult::Done(ScreenAction::SaveLoad),
+        "531"
+    );
+    assert_eq!(ti(&screen)[..4], [2, 2, 1, 1]);
+    let asleep = ti(&screen);
+    screen.resume(&cx);
+    assert_eq!(ti(&screen), asleep, "708: its work stands");
+    assert_eq!(
+        screen.update(&cx, UiInput::default()),
+        ScreenResult::Continue
+    );
+    assert_eq!(ti(&screen)[..4], [1, 2, 1, 0], "709");
+    assert_eq!(screen.value("ti_fade_level"), 0x7FFF, "still black");
+    screen.update(&cx, UiInput::default());
+    assert_eq!(ti(&screen), [2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0], "710");
+    assert_eq!(screen.value("ti_kido"), 0x7C00);
     let _ = std::fs::remove_dir_all(&dir);
 }
 

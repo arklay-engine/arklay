@@ -68,6 +68,8 @@ local KEY, SPACE = 0x22, 0x24
 
 -- `ScreenInput.held`'s directions.
 local HELD_UP, HELD_DOWN, HELD_LEFT, HELD_RIGHT = 0x10, 0x20, 0x40, 0x80
+-- Where Classic REbirth stops the name scroll.
+local SCROLL_MAX = 21
 
 local s = {}
 M.state = s
@@ -89,6 +91,20 @@ local function publish(api)
     api:set("sv_timer", s.timer)
     api:set("sv_choice", s.choice)
     api:set("sv_typed", s.typed)
+    api:set("sv_scroll", s.scroll)
+    -- Fade 0 as the original's slot stands after the tick's step: a step on
+    -- from the level drawn, and left where the fade in ended until the
+    -- fade out is set.
+    local level, add = -0x1000, -FADE_STEP
+    if s.sub == 4 and s.step == 1 then
+        level, add = (s.level + FADE_STEP + 0x8000) % 0x10000 - 0x8000, FADE_STEP
+    elseif s.sub == 4 then
+        level, add = 0x7FFF, 0
+    elseif s.level > 0 then
+        level = s.level - FADE_STEP
+    end
+    api:set("sv_fade_level", level)
+    api:set("sv_fade_add", add)
 end
 
 -- `FUN_00509BE0`: the characters that type with the space's timing.
@@ -208,7 +224,23 @@ local function browse(api, input)
         s.timer = 3
         api:core_sound(CUE_MOVE)
     elseif held & (HELD_LEFT | HELD_RIGHT) ~= 0 then
-        -- The name scroll, which a held direction keeps from a decide.
+        -- The name scroll (`0x986384`), which a held direction keeps from a
+        -- decide: 8 a step, right before left. Classic REbirth keeps it
+        -- within 0 to 21 on every row and, when a step moves it, plays the
+        -- move cue and waits as a cursor's move does; it draws nothing by
+        -- it on the rows the recordings show.
+        local scroll = s.scroll + (held & HELD_RIGHT ~= 0 and 8 or -8)
+        if scroll > SCROLL_MAX then
+            scroll = SCROLL_MAX
+        end
+        if scroll < 0 then
+            scroll = 0
+        end
+        if scroll ~= s.scroll then
+            s.scroll = scroll
+            s.timer = 3
+            api:core_sound(CUE_MOVE)
+        end
         return
     elseif input.confirm or input.start then
         local row = picked()
@@ -382,6 +414,7 @@ function M.open(api)
     s.state = STATE_FONT
     s.cursor, s.top, s.rows, s.timer, s.choice, s.typed, s.cnt0, s.count = 0, 0, 0, 0, 0, 0, 0, 0
     s.blink, s.blink_choice = 0, 0
+    s.scroll = 0
     s.saves = {}
     -- `Cardaccess_init`'s step 0: fade 0 from black, a step already taken
     -- on this tick's draw.
@@ -549,8 +582,8 @@ function M.draw(api)
         local i = s.cursor + s.top
         if i > -s.mode and i <= s.count - s.mode then
             draw_footer(api, s.saves[i + s.mode])
-        elseif i == s.count - s.mode + 1 and s.mode == 1 then
-            centred(api, FOOTER_Y, "Do not load")
+        elseif i == s.count - s.mode + 1 then
+            centred(api, FOOTER_Y, s.mode == 1 and "Do not load" or "Do not save")
         end
     end
 end

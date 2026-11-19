@@ -1,0 +1,14 @@
+# The title's LOAD GAME: `Mem_card` (0x4C57E0) in load mode (oracle/re2.md, "The load screen").
+
+[[run]]
+name = "title_load_empty"
+ui = "title"
+offset = 189
+ticks = 1420
+input = "title_load_empty.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd,sv,svs"
+frames = [189, 1419]
+expect = "match"
+record = ""
