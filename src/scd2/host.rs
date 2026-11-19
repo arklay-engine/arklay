@@ -544,6 +544,10 @@ const FG_SYSTEM_EASY_CENSORSHIP_OFF: u8 = 12;
 /// `fg_system`'s `0x200`: a film plays (`Init_movie_work` raises it, the
 /// film's end clears it). `Psx_main`'s pause gate reads it.
 pub const FG_SYSTEM_MOVIE: u8 = 22;
+/// `fg_system`'s `0x4000000`: the player's death, which `Game_loop` starts
+/// `Die` on. arklay's own latch is [`crate::player2::Work::die_start`]; this
+/// is the bit as a script writes it.
+pub const FG_SYSTEM_DIE: u8 = 5;
 /// `fg_system`'s `0x8000`, which `Init_movie_work` clears. No reader is known.
 pub const FG_SYSTEM_8000: u8 = 16;
 /// `fg_status`'s `0x4000000`: EASY's.
@@ -646,6 +650,10 @@ fn splc_ret(character: &mut Character, life: i16) {
 pub const STATUS_VOICE: u8 = 26;
 /// A scene is running: the bars come down and the menus stay shut.
 pub const STATUS_SCENE: u8 = 27;
+/// `fg_status`'s `0x40`, under which `Game_loop` takes no START: the bit as
+/// a script or a drawer writes it. The player's routines' is
+/// [`crate::player2::Work::holds_game`].
+pub const STATUS_HOLD: u8 = 25;
 /// What `Set_room` keeps of `fg_status` on every load (`0x4DE93E`): indices
 /// 0 to 11 and 17. The scene, the voice line, the camera's lock and the
 /// quakes go.
@@ -3049,7 +3057,13 @@ impl Host for GameHost<'_> {
                 }
             }
             "message_on" => {
+                let up = self.game.message.menu_choice_id() & 0x80 != 0;
                 self.game.show_re2_message(at(1) as u8);
+                // `Mess_set` raises `fg_status`'s `0x40` with a message it
+                // takes; `Mess_disp` drops it at the tick's end.
+                if !up && self.game.message.menu_choice_id() & 0x80 != 0 {
+                    self.game.re2.set_flag(STATUS_BANK, STATUS_HOLD, 1);
+                }
                 // Its last two bytes, a word, are the `fg_stop` bits the
                 // message holds up while it shows: `0xFFFF` on a check in
                 // play, none in a scene.
@@ -5925,6 +5939,25 @@ mod tests {
         assert!(game.re2.player_stopped());
         game.cancel_message();
         assert_eq!(*game.re2.fg_stop_mut(), 0x0100_0000);
+    }
+
+    /// `Mess_set` raises `fg_status`'s `0x40` with a message it takes,
+    /// where a later instruction of the pass can clear it; a request it
+    /// refuses (one is up) raises nothing.
+    #[test]
+    fn a_scripts_message_raises_the_game_hold_with_it() {
+        use crate::scd2::opcode::lookup;
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, lookup(0x2B).unwrap(), &[0, 0, 0, 0, 0]);
+        assert!(game.re2.flag(STATUS_BANK, STATUS_HOLD));
+        // A script's `set(1, 25, 0)` writes the bank.
+        game.re2.set_flag(STATUS_BANK, STATUS_HOLD, 0);
+        // The message is still up: a second request is refused.
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, lookup(0x2B).unwrap(), &[0, 0, 0, 0, 0]);
+        assert!(!game.re2.flag(STATUS_BANK, STATUS_HOLD));
     }
 
     #[test]

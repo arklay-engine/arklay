@@ -1017,6 +1017,49 @@ impl GameState {
         self.inventory_capacity() as u8
     }
 
+    /// `Game_loop`'s gate on START and the map key (`0x4C02A0`), as the
+    /// tick's hook, `Cut_check` and `Sce_scheduler` left it. The keys
+    /// aren't taken:
+    ///
+    /// - with `Game` set: `Sce_Status`, `Sce_Windows`, `Sce_Item`'s window
+    ///   or `Sce_Door`, fired by the scripts, or a drawer's hand-off;
+    /// - with `fg_status`'s `0x40`, which a script can write and
+    ///   `Mess_set` raises with a message (the scripts' in the status bank,
+    ///   where a later instruction can clear it; `hook_message`: the tick's
+    ///   hook put one up), or its `0x10` (a scene's bars);
+    /// - under `fg_stop`'s `0x1000000` (a message's stop word);
+    /// - with a view to load (`BYTE_0098F07B`, a `cut_chg` or `cut_old`) or
+    ///   `scd_var_cut` not the live cut (a zone's switch, which
+    ///   `Swap_Cbuff` loads at the tick's end);
+    /// - with the player's damage count running (`pPl + 0x1D3`, which a
+    ///   poisoning hit sets after the player's move);
+    /// - with `fg_system`'s `0x4000000` (the player's death, waiting for
+    ///   `Die`) or `0x200` (a film).
+    ///
+    /// The player's own `0x40` ([`crate::player2::Work::holds_game`]) and
+    /// task 1 are tested where START is asked for.
+    pub fn re2_start_refused(&self, hook_message: bool) -> bool {
+        use crate::scd2::host::{FG_SYSTEM_DIE, FG_SYSTEM_MOVIE, STATUS_BANK, STATUS_HOLD};
+        let re2 = &self.re2;
+        let var_cut = re2.var_cut.unwrap_or(re2.shown_cut);
+        // The latch arklay keeps for `Die`'s start, while `Die` will start.
+        let dying = re2.player.die_start && !re2.player.die_held_back && !self.debug.invincible;
+        self.re2_status_request
+            || self.re2_computer_request.is_some()
+            || self.re2_item_get.is_some()
+            || re2.script_door
+            || hook_message
+            || re2.flag(STATUS_BANK, STATUS_HOLD)
+            || self.scene_bars()
+            || re2.input_stop_raised()
+            || re2.bg_load
+            || usize::from(var_cut) != self.camera.current_cut
+            || re2.player.damage_cnt != 0
+            || dying
+            || re2.flag(0, FG_SYSTEM_DIE)
+            || re2.flag(0, FG_SYSTEM_MOVIE)
+    }
+
     /// One tick of the status screen's item page and its panel, before the
     /// message's tick. `None` while the page isn't up.
     pub fn tick_re2_items(&mut self, input: Input) -> Option<Outcome> {
