@@ -103,6 +103,8 @@ local FG_ARRANGE = 0x40
 local FG_FROM_LOGO = 0x2
 local FG_EASY = 0x20
 local FG_NEW_GAME = 0x20000
+-- Up while the load screen has loaded nothing (`Title_main_load`).
+local FG_NO_LOAD = 0x400
 
 local s
 local pages
@@ -172,6 +174,9 @@ local function new_state()
         sub2 = 0,
         -- `fg_status`'s bits the extras set (flag 1:6, `0x02000000`).
         fg_status = 0,
+        -- The frame limiter's choice (`0x98F07A`): 0 the title's, 2 the
+        -- game's.
+        limiter = 0,
         -- `Pad_set`'s state; `raw` is the held word of the tick before, once
         -- there is one.
         rep_mask = 0,
@@ -975,6 +980,7 @@ local function title_init()
     -- `Title_bg_reload` (0x503880), on both branches: the option screen
     -- leaves its own picture behind.
     s.background = s.title_background
+    s.limiter = 0
     s.fg_system = s.fg_system & 0xFFF7FFBF
     s.censorship_off = 0
     s.sel = 0
@@ -1342,6 +1348,7 @@ local function option_task(api)
         -- the fade in by 0x1800 a tick. The pad's repeat is the status
         -- screen's mask with its own delays, which the title keeps after.
         s.rep_mask, s.rep_delay = 0xF01C, 0x40C
+        s.limiter = 2
         s.background = api:picture("ui/option/room")
         fade_set(0x200, -0x1800)
         o.step = 1
@@ -1483,7 +1490,20 @@ local function title_main(api)
     elseif s.disp == 5 then
         title_enter()
     elseif s.disp == 2 then
-        s.exit = "save_load"
+        -- `Title_main_load` (0x505320): its first tick starts `Mem_card`
+        -- (the load screen) and sleeps under it; the tick after that task
+        -- ends without a load it reloads the picture and starts the title
+        -- again from `Title_init`. A load doesn't come back here.
+        if s.sub == 0 then
+            s.sub = 1
+            s.limiter = 2
+            s.exit = "save_load"
+        else
+            s.fg_system = s.fg_system & ~FG_NO_LOAD
+            s.background = s.title_background
+            s.mv = 1
+            s.sub = 0
+        end
     elseif s.disp == 3 and s.fg_system & 8 ~= 0 then
         -- The 4th Survivor's or To-fu's new game (`Title_game_init`'s
         -- extras branch) isn't ported: the title starts again from
@@ -1763,6 +1783,10 @@ local function publish(api)
     api:set("ti_kido", s.kido)
     api:set("ti_add", s.add)
     api:set("ti_fgsys", s.fg_system)
+    -- The frame limiter (`0x98F07A`): the title's own 60 ticks a second, or
+    -- the game's 30 under the option screen and the load screen, until
+    -- `Title_init` runs again.
+    api:set("game_active", s.limiter == 2)
     api:set("ti_hard_mode", s.hard_mode)
     api:set("ti_censorship_off", s.censorship_off)
     -- The trace's `opt`, while the option task runs.
@@ -1890,6 +1914,17 @@ function M.update(api, input)
             api:exit(exit)
         end
     end
+end
+
+-- The load screen came back without a load: the title's task, asleep under
+-- it as it stood, wakes on its next tick (`Title_main_load`'s second step).
+-- The screen leaves fade 3 off in the mode `Cardaccess_init` set it to, and
+-- `fg_system`'s 0x400 up for that step to find and clear.
+function M.on_resume(api)
+    local fade = s.fades[3]
+    fade.level, fade.add, fade.mode = -1, 0, 1
+    s.fg_system = s.fg_system | FG_NO_LOAD
+    publish(api)
 end
 
 -- A palette channel as the original's renderer expands the sheets' 5-bit

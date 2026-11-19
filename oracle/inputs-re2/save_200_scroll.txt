@@ -1,0 +1,27 @@
+# room 200: the typewriter's Yes, then left and right on the save screen's two rows: the name scroll's steps and where they stop on "Create New" and on the leave row, a tap each way, and the cancel key (oracle/re2.md, "The save screen")
+364 action
+368
+410 action
+414
+460 action
+464
+540 action
+544
+600 left
+603
+610 right
+680
+700 left
+770
+790 down
+793
+800 right
+840
+850 left
+890
+900 right
+903
+910 left
+913
+930 cancel
+933

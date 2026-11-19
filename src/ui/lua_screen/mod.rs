@@ -511,6 +511,20 @@ impl LuaScreen {
     pub fn failed(&self) -> bool {
         self.host.failed
     }
+
+    /// Whether the script has `on_resume`: its owner then keeps it while the
+    /// screen it left for runs, and resumes it when that one comes back.
+    pub fn resumes(&self) -> bool {
+        !self.host.failed && self.vm.has_function("on_resume")
+    }
+
+    /// Put a screen that left back to work, calling its `on_resume(api)`:
+    /// the screen it left for has come back to it.
+    pub fn resume(&mut self, cx: &UiContext<'_>) {
+        self.host.exited = false;
+        self.host.action = None;
+        self.signal("on_resume", cx);
+    }
 }
 
 #[cfg(test)]
@@ -716,6 +730,11 @@ impl ScreenVm {
             })
             .map_err(|err| anyhow::anyhow!("{err}"))?;
         Ok(())
+    }
+
+    /// Whether the module has a function `name`.
+    fn has_function(&self, name: &str) -> bool {
+        matches!(self.module.get::<Value>(name), Ok(Value::Function(_)))
     }
 
     /// Run the module's `name(api)`, when it is a function.

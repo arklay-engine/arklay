@@ -681,6 +681,7 @@ pub fn run_with_options(
                         re2_typewriter: None,
                         re2_game_mode: None,
                         re2_save_screen: None,
+                        re2_save_scroll: None,
                         re2_computer: None,
                         re2_hikidashi: None,
                         re2_objects: None,
@@ -7153,6 +7154,16 @@ impl GameSession {
         )
     }
 
+    /// The oracle's `svs` field: the save screen's name scroll (`0x986384`),
+    /// 0 while the screen isn't up.
+    fn re2_save_scroll_trace(&self) -> i64 {
+        self.save_screen
+            .as_ref()
+            .filter(|_| self.re2_save == Some(Re2Save::Screen))
+            .and_then(|screen| screen.value("sv_scroll"))
+            .unwrap_or(0)
+    }
+
     /// Capture the current game state as a save block with the hardcoded
     /// BioCard prefix.
     fn snapshot_save(&self) -> save::SaveFile {
@@ -9343,6 +9354,7 @@ impl GameSession {
                 .is_re2_room
                 .then(|| self.re2_save.map_or(0, Re2Save::game_mode)),
             re2_save_screen: self.game.is_re2_room.then(|| self.re2_save_screen_trace()),
+            re2_save_scroll: self.game.is_re2_room.then(|| self.re2_save_scroll_trace()),
             re2_computer: self.game.is_re2_room.then(|| {
                 let common: String = self.game.re2.banks[4]
                     .iter()
@@ -10839,6 +10851,15 @@ struct App {
     /// The screens' core-bank cues since the trace last took them, as
     /// `(kind, slot, volume, pan)`, the trace's `snd` field.
     ui_sounds: Vec<(u8, u8, u8, i32)>,
+    /// The title screen while the load screen it opened is up, for a title
+    /// script that resumes (`on_resume`): the original's title task sleeps
+    /// under `Mem_card` and wakes when it ends.
+    sleeping_title: Option<Box<ui::lua_screen::LuaScreen>>,
+    /// The load screen's rows and its folder's saves as the last listing
+    /// left them (`sv_rows`, `sv_saves`): the original's words keep a
+    /// screen's values until the next one lists its folder, and the trace's
+    /// `sv` shows them.
+    card_rows: [i64; 2],
     /// Whether the port-only debug room overlay is enabled for the gameplay
     /// sessions this app starts. Enabled by default.
     debug_menu: bool,
@@ -10935,6 +10956,8 @@ impl App {
             ui_sfx_cache: SfxCache::default(),
             ui_banks: None,
             ui_sounds: Vec::new(),
+            sleeping_title: None,
+            card_rows: [0; 2],
             debug_menu: true,
             player_options: player::Options::default(),
             ending: None,
@@ -11100,7 +11123,9 @@ impl App {
     /// The original runs the title, character select, load screen and every
     /// in-game menu/modal with its game-active flag clear, i.e. on the 16 ms
     /// non-gameplay limiter; gameplay and films use the 33 ms one. The title
-    /// switches to gameplay pacing once NEW GAME or LOAD GAME is confirmed.
+    /// switches to gameplay pacing once NEW GAME or LOAD GAME is confirmed,
+    /// and RE 2's does under its option screen; a screen's script says so by
+    /// publishing `game_active`.
     fn tick_interval(&self) -> f64 {
         match &self.mode {
             Mode::Title(screen) => {
@@ -11109,6 +11134,11 @@ impl App {
                 } else {
                     UI_TICK_MS
                 }
+            }
+            // RE 2's save and load screen picks the game's limiter
+            // (`Cardaccess_init`), which its script says the title's way.
+            Mode::Load(screen) | Mode::Save(screen) if screen.value("game_active") == Some(1) => {
+                TICK_MS
             }
             Mode::Boot | Mode::Select(_) | Mode::Load(_) | Mode::Save(_) => UI_TICK_MS,
             Mode::Play(session) => {
@@ -11334,6 +11364,12 @@ impl App {
             .as_deref()
             .is_some_and(|entry| self.pack.contains(entry));
         let special = i64::from(self.player_options.title_special.unwrap_or(15));
+        self.sleeping_title = None;
+        // A session's save screens leave their last listing's rows behind,
+        // as the title's load screen leaves its own to a session.
+        if let Mode::Play(session) = &self.mode {
+            self.card_rows = session.re2_card_rows;
+        }
         let mut cx = self.context();
         let screen = ui::lua_screen::LuaScreen::open_screen(
             "title",
@@ -11517,6 +11553,12 @@ impl App {
 
     /// Enter a gameplay session, opening audio on the interactive path.
     fn start_session(&mut self, mut session: Box<GameSession>) {
+        // A session started from under the load screen (the script host's
+        // can be) leaves no title asleep, and its save screen opens with
+        // the rows the last listing left, as the original's statics have
+        // them.
+        self.sleeping_title = None;
+        session.re2_card_rows = self.card_rows;
         #[cfg(feature = "bot")]
         self.start_bot_session(&mut session);
         session.set_debug_menu(self.debug_menu);
@@ -11928,6 +11970,9 @@ impl App {
 
     /// Apply a completed screen action.
     fn apply(&mut self, action: ScreenAction) -> Result<AppFlow> {
+        // A title asleep under the load screen wakes when that screen comes
+        // back to it, and is dropped by anything else the screen does.
+        let sleeping_title = self.sleeping_title.take();
         match action {
             ScreenAction::CharSelect => {
                 // A randomizer's seed has already picked the character. RE 1's
@@ -11939,7 +11984,19 @@ impl App {
                     None => self.open_select()?,
                 }
             }
-            ScreenAction::SaveLoad => self.open_load()?,
+            ScreenAction::SaveLoad => {
+                let title = match std::mem::replace(&mut self.mode, Mode::Boot) {
+                    Mode::Title(title) if title.resumes() => Some(title),
+                    other => {
+                        self.mode = other;
+                        None
+                    }
+                };
+                self.open_load()?;
+                if matches!(self.mode, Mode::Load(_)) {
+                    self.sleeping_title = title;
+                }
+            }
             ScreenAction::NewGame { character, choice } => {
                 // The interactive root boot plays the prologue film (id 1)
                 // with the chosen character before the session is built. The
@@ -11971,7 +12028,16 @@ impl App {
                 self.continue_from_slot(slot)?;
             }
             ScreenAction::LoadFile(path) => self.continue_from_path(&path)?,
-            ScreenAction::Title => self.open_title()?,
+            ScreenAction::Title => match sleeping_title {
+                Some(mut title) if matches!(self.mode, Mode::Load(_)) => {
+                    let cx = self.context();
+                    title.resume(&cx);
+                    let cues = cx.cues.into_inner();
+                    self.mode = Mode::Title(title);
+                    self.play_ui_cues(cues);
+                }
+                _ => self.open_title()?,
+            },
             ScreenAction::Attract => {
                 // The title's idle timeout: play the next entry of the pack's
                 // `demo/` enumeration and advance the cycle (the original's
@@ -12093,6 +12159,7 @@ impl App {
                 text,
                 mode,
                 ticks,
+                card_rows,
                 ..
             } = self;
             let cx = UiContext {
@@ -12108,7 +12175,15 @@ impl App {
             let result = match mode {
                 Mode::Title(screen) => screen.update(&cx, ui),
                 Mode::Select(screen) => screen.update(&cx, ui),
-                Mode::Load(screen) => screen.update(&cx, ui),
+                Mode::Load(screen) => {
+                    let result = screen.update(&cx, ui);
+                    for (kept, key) in card_rows.iter_mut().zip(["sv_rows", "sv_saves"]) {
+                        if let Some(value) = screen.value(key) {
+                            *kept = value;
+                        }
+                    }
+                    result
+                }
                 Mode::Save(screen) => screen.update(&cx, ui),
                 Mode::Ending(screen) => screen.update(&cx, ui),
                 Mode::Epilogue(screen) => screen.update(&cx, ui),
@@ -13013,12 +13088,33 @@ fn run_screen_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<
 /// One [`run_screen_trace`] line.
 fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)]) -> String {
     let mut line = format!("t={tick} room=1:0 pad={pad}");
-    if let Mode::Title(screen) = &app.mode {
+    // The load screen, and the title: its own, or the one asleep under the
+    // load screen, whose work stands as it left it.
+    let load = match &app.mode {
+        Mode::Load(screen) => Some(screen.as_ref()),
+        _ => None,
+    };
+    let title = match &app.mode {
+        Mode::Title(screen) => Some(screen.as_ref()),
+        Mode::Load(_) => app.sleeping_title.as_deref(),
+        _ => None,
+    };
+    if let Some(screen) = title {
         let v = |key: &str| screen.value(key);
+        // Fade slot 0 is the load screen's while it is up, as are slot 3's
+        // level and `fg_system`'s no-load bit.
+        let fade = |key: &str, own: &str| {
+            load.and_then(|load| load.value(key))
+                .unwrap_or_else(|| v(own))
+        };
+        let fg_system = v("ti_fgsys") as u32
+            | load
+                .and_then(|load| load.value("sv_fg_system"))
+                .unwrap_or(0) as u32;
         line.push_str(&format!(
             " fgsys={:08x} ti={},{},{},{},{},{},{},{},{},{},{} tlogo={},{},{} tfade={},{},{},{},{} \
              tsel={:x},{},{}",
-            v("ti_fgsys") as u32,
+            fg_system,
             v("ti_mv"),
             v("ti_disp"),
             v("ti_init"),
@@ -13033,8 +13129,8 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
             v("ti_flash"),
             v("ti_logo"),
             v("ti_logo_count"),
-            v("ti_fade_level"),
-            v("ti_fade_add"),
+            fade("sv_fade_level", "ti_fade_level"),
+            fade("sv_fade_add", "ti_fade_add"),
             v("ti_fade_mode"),
             v("ti_kido"),
             v("ti_add"),
@@ -13056,9 +13152,14 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
             v("ti_fade2_level"),
             v("ti_fade2_add"),
             v("ti_fade2_mode"),
-            v("ti_fade3_level"),
+            fade("sv_fade3_level", "ti_fade3_level"),
             v("ti_fade3_add"),
-            v("ti_fade3_mode"),
+            // `Cardaccess_init`'s `Fade_set(0x103, 0)`.
+            if load.is_some() {
+                1
+            } else {
+                v("ti_fade3_mode")
+            },
         ));
         if v("opt_on") != 0 {
             line.push_str(&format!(
@@ -13084,6 +13185,34 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
     } else {
         line.push_str(" ti=-");
     }
+    // `sv`, as a session's trace has it (`re2_save_screen_trace`), with no
+    // saves made before play.
+    match load.filter(|load| load.value("sv_sub").is_some()) {
+        Some(load) => {
+            let value = |key: &str| load.value(key).unwrap_or(0);
+            let [rows, saves] = app.card_rows;
+            line.push_str(&format!(
+                " sv={},{},{:x},{},{},{},{},{},{},{},{},0",
+                value("sv_sub"),
+                value("sv_step"),
+                value("sv_state"),
+                value("sv_mode"),
+                value("sv_cursor"),
+                value("sv_top"),
+                rows,
+                value("sv_timer"),
+                value("sv_choice"),
+                value("sv_typed"),
+                saves,
+            ));
+        }
+        None => line.push_str(" sv=-"),
+    }
+    // The list's name scroll.
+    line.push_str(&format!(
+        " svs={}",
+        load.and_then(|load| load.value("sv_scroll")).unwrap_or(0)
+    ));
     let snd: Vec<String> = sounds
         .iter()
         .map(|(kind, slot, volume, pan)| format!("{kind}:{slot:x}:{volume}:{pan}"))
@@ -13340,13 +13469,17 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
         // The film skip state advances on every loop pass, not the fixed
         // tick, exactly like the original's platform-driven film update.
         poll_movie_skip_for_frame(app, movie_buttons_held(input.held_word()));
-        let tick_ms = clock.scaled_tick_interval(app.tick_interval(), app.speed_applies());
+        let mut tick_ms = clock.scaled_tick_interval(app.tick_interval(), app.speed_applies());
         while clock.accumulator >= tick_ms {
             let tick = input.tick();
             if let AppFlow::Quit = app.update(tick.ui, tick.player, tick.action)? {
                 return clock.report();
             }
             clock.ticked(tick_ms);
+            // The tick may have changed the screen and with it the limiter,
+            // which the original reads after each pass of its scheduler:
+            // the wait before the next tick is the new screen's.
+            tick_ms = clock.scaled_tick_interval(app.tick_interval(), app.speed_applies());
         }
         if let Some(rumble) = app.take_rumble() {
             input.pads.rumble(rumble);
@@ -31358,6 +31491,105 @@ mod tests {
         let text = std::fs::read_to_string(&trace_path).unwrap();
         assert_eq!(text.lines().count(), 4, "header plus three ticks");
         assert!(text.contains("t=0 "), "{text}");
+    }
+
+    /// A title with `on_resume` sleeps under the load screen it opens, as it
+    /// stands, and carries on when that screen comes back to it; one without
+    /// is opened anew.
+    #[test]
+    fn app_title_sleeps_under_its_load_screen_when_it_resumes() {
+        const TITLE: &str = "local M = { ticks = 0, resumed = 0 }
+            function M.update(api, input)
+                M.ticks = M.ticks + 1
+                api:set('ticks', M.ticks)
+                if input.confirm then api:exit('save_load') end
+            end
+            function M.draw() end
+            RESUME
+            return M";
+        const LOAD: &str = "local M = {}
+            function M.open(api) api:set('game_active', RESUMES) end
+            function M.update(api, input)
+                if input.cancel then api:exit('title') end
+            end
+            function M.draw() end
+            return M";
+        const RESUME: &str = "function M.on_resume(api)
+                M.resumed = M.resumed + 1
+                api:set('resumed', M.resumed)
+            end";
+        for resumes in [true, false] {
+            let dir = TempDir::new();
+            let title = TITLE.replace("RESUME", if resumes { RESUME } else { "" });
+            let load = LOAD.replace("RESUMES", if resumes { "true" } else { "false" });
+            let pack_path = new_game_pack_with(
+                &dir,
+                &[
+                    ("ui/title.lua", title.as_bytes()),
+                    ("ui/save_load.lua", load.as_bytes()),
+                ],
+            );
+            let pack = Pack::open(&pack_path).unwrap();
+            let mut app = App::new(pack, dir.0.join("saves"), false);
+            app.boot(AppBoot::Title).unwrap();
+            let idle = |app: &mut App| {
+                app.update(UiInput::default(), player::Input::default(), false)
+                    .unwrap();
+            };
+            idle(&mut app);
+            idle(&mut app);
+            app_press(&mut app, |ui| ui.confirm = true);
+            assert!(matches!(app.mode, Mode::Load(_)), "the load screen is up");
+            assert_eq!(app.sleeping_title.is_some(), resumes);
+            // The load screen says which limiter it runs on.
+            assert_eq!(
+                app.tick_interval(),
+                if resumes { TICK_MS } else { UI_TICK_MS }
+            );
+            idle(&mut app);
+            if let Some(title) = &app.sleeping_title {
+                assert_eq!(title.value("ticks"), 3, "asleep: no tick of its own");
+            }
+            app_press(&mut app, |ui| ui.cancel = true);
+            assert!(app.sleeping_title.is_none());
+            let Mode::Title(title) = &app.mode else {
+                panic!("expected the title");
+            };
+            if resumes {
+                assert_eq!((title.value("ticks"), title.value("resumed")), (3, 1));
+            } else {
+                assert_eq!(title.value("ticks"), 0, "a title opened anew");
+            }
+            idle(&mut app);
+            let Mode::Title(title) = &app.mode else {
+                panic!("expected the title");
+            };
+            assert_eq!(title.value("ticks"), if resumes { 4 } else { 1 });
+        }
+    }
+
+    /// The save screen's rows and save count are the process's in the
+    /// original: a session starts with what the title's load screen last
+    /// listed, and the title gets back what the session's screens left.
+    #[test]
+    fn app_hands_the_last_listings_rows_to_a_session_and_back() {
+        let dir = TempDir::new();
+        let pack = Pack::open(&new_game_pack(&dir)).unwrap();
+        let mut app = App::new(pack, dir.0.join("saves"), false);
+        app.card_rows = [1, 0];
+        app.apply(ScreenAction::NewGame {
+            character: 0,
+            choice: Default::default(),
+        })
+        .unwrap();
+        let Mode::Play(session) = &mut app.mode else {
+            panic!("expected a session");
+        };
+        assert_eq!(session.re2_card_rows, [1, 0]);
+        session.re2_card_rows = [4, 2];
+        app.apply(ScreenAction::Title).unwrap();
+        assert!(matches!(app.mode, Mode::Title(_)));
+        assert_eq!(app.card_rows, [4, 2]);
     }
 
     #[test]

@@ -179,6 +179,7 @@ fn the_save_screen_steps_one_state_a_tick() {
     let dir = folder("steps");
     saves_in(&dir, 3);
     let mut screen = open(&dir);
+    assert_eq!(screen.value("game_active"), 1, "the game's limiter");
     // 547: `Cardaccess_init`'s step 0 ran with the open.
     assert_eq!(sv(&screen), [3, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     // 548 to 551: the fade in; 552 its end.
@@ -656,6 +657,113 @@ fn a_press_ends_the_overwrites_wait() {
     assert_eq!(sv(&screen)[7], 0);
 }
 
+/// The load screen left without a load has `fg_system`'s 0x400 up from its
+/// exit's first tick (`title_load_empty`'s 821), for the title to find.
+#[test]
+fn a_load_screen_left_without_a_load_says_so() {
+    let dir = folder("no-load");
+    let mut screen = open_load(&dir);
+    to_the_list(&mut screen, &dir);
+    assert_eq!(sv(&screen)[3], 1, "load mode");
+    let cancel = UiInput {
+        cancel: true,
+        ..UiInput::default()
+    };
+    tick(&mut screen, &dir, cancel);
+    assert_eq!(sv(&screen)[2], 99);
+    assert_eq!(screen.value("sv_fg_system"), 0);
+    tick(&mut screen, &dir, UiInput::default());
+    assert_eq!(sv(&screen)[..2], [4, 1]);
+    assert_eq!(screen.value("sv_fg_system"), 0x400);
+}
+
+/// Left and right held step the name scroll by 8 between 0 and 21, each
+/// step with the move cue and the cursor's wait, and nothing at either end;
+/// a held direction keeps a decide from being taken (`save_200_scroll`'s
+/// 600 to 720).
+#[test]
+fn left_and_right_step_the_name_scroll_between_0_and_21() {
+    let dir = folder("name-scroll");
+    let mut screen = open(&dir);
+    to_the_list(&mut screen, &dir);
+    let left = UiInput {
+        held_left: true,
+        ..UiInput::default()
+    };
+    let right = UiInput {
+        held_right: true,
+        ..UiInput::default()
+    };
+    let (_, cues) = tick(&mut screen, &dir, left);
+    assert!(cues.is_empty(), "nothing below 0");
+    assert_eq!(sv(&screen)[7], 0, "and no wait");
+    for (held, expected) in [(right, [8, 16, 21]), (left, [13, 5, 0])] {
+        let mut steps = Vec::new();
+        for at in 0..20 {
+            let (_, cues) = tick(&mut screen, &dir, held);
+            if cues.is_empty() {
+                continue;
+            }
+            assert_eq!(cues, [UiCue::Core(4)]);
+            assert_eq!(sv(&screen)[7], 3);
+            steps.push((at, screen.value("sv_scroll")));
+        }
+        // A step every fourth tick.
+        assert_eq!(steps, [0, 4, 8].map(|at| (at, expected[at / 4])));
+        assert_eq!(sv(&screen)[7], 0, "no wait once it stands");
+    }
+    // The decide on "Create New" would write; with a direction held it
+    // isn't read.
+    let (_, cues) = tick(
+        &mut screen,
+        &dir,
+        UiInput {
+            confirm: true,
+            ..left
+        },
+    );
+    assert!(cues.is_empty());
+    assert_eq!(sv(&screen)[2], 2);
+    // Up and down come first.
+    let (_, cues) = tick(
+        &mut screen,
+        &dir,
+        UiInput {
+            held_right: true,
+            ..held_down()
+        },
+    );
+    assert_eq!(cues, [UiCue::Core(4)]);
+    assert_eq!((sv(&screen)[4], screen.value("sv_scroll")), (1, 0));
+}
+
+/// The leave row's footer says what leaving does: "Do not save" here, as
+/// the load screen's says "Do not load"; the new file's row has none.
+#[test]
+fn the_leave_row_has_its_footer_in_save_mode() {
+    let dir = folder("leave-footer");
+    let font = solid_font();
+    let footer_drawn = |screen: &mut LuaScreen| {
+        let mut cx = context(&dir);
+        cx.font = Some(&font);
+        let mut framebuffer = Framebuffer::new();
+        screen.draw(&cx, &mut framebuffer);
+        assert!(!screen.failed(), "the draw ran");
+        (216..230usize).any(|y| {
+            (20..300usize).any(|x| {
+                let at = (y * framebuffer.width as usize + x) * 4;
+                framebuffer.rgba[at..at + 3] != [0, 0, 0]
+            })
+        })
+    };
+    let mut screen = open(&dir);
+    to_the_list(&mut screen, &dir);
+    assert!(!footer_drawn(&mut screen), "the new file's row");
+    tick(&mut screen, &dir, held_down());
+    assert_eq!(sv(&screen)[4], 1, "on the leave row");
+    assert!(footer_drawn(&mut screen));
+}
+
 #[test]
 fn cancel_and_leave_both_exit_without_a_write() {
     let cancel = UiInput {
@@ -680,8 +788,11 @@ fn cancel_and_leave_both_exit_without_a_write() {
         let (_, cues) = tick(&mut screen, &dir, if leave { confirm } else { cancel });
         assert_eq!(cues, [UiCue::Core(5)]);
         assert_eq!(sv(&screen)[2], 99);
+        assert_eq!(screen.value("sv_fade3_level"), 0, "fade 3 stands");
         tick(&mut screen, &dir, UiInput::default());
         assert_eq!(sv(&screen)[..2], [4, 1]);
+        assert_eq!(screen.value("sv_fade3_level"), -1, "the exit takes it");
+        assert_eq!(screen.value("sv_fg_system"), 0, "the bit is load mode's");
         let mut ticks = 0;
         while tick(&mut screen, &dir, UiInput::default()).0 == ScreenResult::Continue {
             ticks += 1;
