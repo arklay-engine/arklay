@@ -461,6 +461,22 @@ local function movies(api, g, edge, held, cue)
     return true
 end
 
+-- `Init_movie_work` opens the film it plays, the title's and the
+-- gallery's as play's: in `open`, the title's words of what is opened
+-- (none when everything is), the bit of film `id`'s place in LEON's table,
+-- whoever's film it is, in the half of the character it plays for.
+-- CLAIRE's number 7 so opens her number 9, and that her number 8.
+function M.open_film(open, claire, id)
+    if not open then
+        return
+    end
+    for index, film in ipairs(FILMS[false]) do
+        if film == id then
+            open[4] = (open[4] or 0) | (0x80000000 >> ((claire and 16 or 0) + index - 1))
+        end
+    end
+end
+
 -- One tick of the task. `edge` is the pad's pressed bits and `held` its
 -- held ones, and `cue` plays a core-bank cue. The task is over (`g.task`
 -- 0) the tick after EXIT. `g.film` is the film a movie asked for on this

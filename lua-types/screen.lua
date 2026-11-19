@@ -404,7 +404,7 @@ function ScreenApi:kept(key) end
 ---`load_game` or `film` without `arg`, raises an error.
 ---@param action? ScreenExit
 ---@param arg? integer `new_game`: the character, clamped to `0..=255`. `load_game`: the slot, clamped to `0..=7`. `film`: RE 2's film id, `0..=255`.
----@param choice? NewGameChoice|{ claire?: boolean } `new_game`: the options the title chose. `film`: `claire` for Claire's copy of the film.
+---@param choice? NewGameChoice|{ claire?: boolean, gallery?: boolean } `new_game`: the options the title chose. `film`: `claire` for Claire's copy of the film, and `gallery` for the gallery's playing of it, which any skip button ends and which keeps the frame the title drew as it asked until the film starts.
 function ScreenApi:exit(action, arg, choice) end
 
 ---Set the full-screen overlay drawn over the screen: black or white at

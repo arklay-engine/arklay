@@ -11008,6 +11008,9 @@ struct App {
     /// Whether that title is the new-game choice's entry ([`Mode::Select`]),
     /// which runs the title's script.
     film_title_is_select: bool,
+    /// Whether that title's frame shows until its film starts (the
+    /// gallery's), instead of black.
+    film_title_shows: bool,
     /// Whose the screen music and narration are, while a screen has asked
     /// for any: `Some(true)` the title's, which it keeps while it sleeps
     /// under its load screen; another screen's end when that screen does.
@@ -11131,6 +11134,7 @@ impl App {
             prologue_pending: false,
             film_title: None,
             film_title_is_select: false,
+            film_title_shows: false,
             screen_music: None,
             ui_sfx_cache: SfxCache::default(),
             ui_banks: None,
@@ -12484,7 +12488,11 @@ impl App {
                     }
                 }
             }
-            ScreenAction::Film { id, claire } => {
+            ScreenAction::Film {
+                id,
+                claire,
+                gallery,
+            } => {
                 // Checked above: the title is up, or the choice's entry.
                 let title = match std::mem::replace(&mut self.mode, Mode::Boot) {
                     Mode::Title(title) => {
@@ -12497,14 +12505,19 @@ impl App {
                     }
                     _ => return Ok(AppFlow::Continue),
                 };
-                let film = self
-                    .films
-                    .then(|| MovieSession::open_re2(&self.pack, id, claire));
+                let film = self.films.then(|| {
+                    if gallery {
+                        MovieSession::open_re2_gallery(&self.pack, id, claire)
+                    } else {
+                        MovieSession::open_re2(&self.pack, id, claire)
+                    }
+                });
                 match film {
                     Some(Ok(session)) => {
                         // The screen's music doesn't play under its film.
                         self.stop_screen_music();
                         self.film_title = Some(title);
+                        self.film_title_shows = gallery;
                         self.queue_movie(session, None);
                     }
                     Some(Err(err)) => {
@@ -12802,6 +12815,23 @@ impl App {
         if self.pending_movie.is_some() && !matches!(self.mode, Mode::Movie(_) | Mode::Play(_)) {
             self.framebuffer.view = crate::video::aspect().centred();
             self.framebuffer.clear();
+            // The gallery's film is the exception: the tick that asks for
+            // it draws its frame as any other does.
+            if let (true, Some(title)) = (self.film_title_shows, self.film_title.as_mut()) {
+                let cx = UiContext {
+                    statics: Some(&self.statics),
+                    authentic: self.player_options.authentic,
+                    pack: &self.pack,
+                    save_dir: &self.save_dir,
+                    font: self.font.as_ref(),
+                    text: Some(&self.text),
+                    ticks: self.ticks,
+                    cues: std::cell::RefCell::new(Vec::new()),
+                    game: None,
+                };
+                title.draw(&cx, &mut self.framebuffer);
+                self.framebuffer.fade_overlay(title.overlay());
+            }
             return;
         }
         let App {
@@ -39122,6 +39152,66 @@ off_0010:
         assert!(matches!(app.mode, Mode::Play(_)), "the game started");
     }
 
+    /// The gallery's playing of a film: the frame its title drew as it
+    /// asked shows until the film starts, and a skip button ends a film
+    /// whose own mask has none (the credits, 17). Asked for as any other
+    /// title's film, the frame is black and the film plays out.
+    #[test]
+    fn the_gallerys_film_keeps_its_frame_and_takes_a_skip() {
+        const TITLE: &str = "local M = {}
+            function M.update(api, input)
+                if not M.asked then
+                    M.asked = true
+                    api:exit('film', 17, { gallery = GALLERY })
+                end
+            end
+            function M.on_film(api, skipped, played)
+                api:set('skipped', skipped and 1 or 0)
+                api:set('woke', 1)
+            end
+            function M.draw(api)
+                api:fill_rect(0, 0, 320, 240, 255, 0, 0)
+            end
+            return M";
+        let dir = TempDir::new();
+        for gallery in [true, false] {
+            let title = TITLE.replace("GALLERY", if gallery { "true" } else { "false" });
+            let mut app = App::new(re2_title_pack(&title, &["staff"]), dir.0.clone(), false);
+            app.boot(AppBoot::Title).unwrap();
+            app.films = true;
+            idle(&mut app);
+            let pending = app.pending_movie.as_ref().expect("the film is queued");
+            assert_eq!(pending.session.id(), crate::movie::NAMED_ID);
+            assert_eq!(
+                pending.session.skip_mask(),
+                if gallery {
+                    crate::movie::re2_skip_buttons(crate::movie::RE2_GALLERY_SKIP)
+                } else {
+                    0
+                }
+            );
+            app.draw();
+            let red = app
+                .framebuffer
+                .rgba
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|pixel| pixel[..3] == [255, 0, 0]);
+            assert_eq!(red, gallery, "the asking tick's frame");
+            run_app_until(&mut app, |app| matches!(app.mode, Mode::Movie(_)));
+            // A press is an edge: the map key, one of the gallery's 0x9F0.
+            for _ in 0..4 {
+                app_press(&mut app, |ui| ui.map = true);
+                idle(&mut app);
+            }
+            assert_eq!(matches!(app.mode, Mode::Title(_)), gallery);
+            run_app_until(&mut app, |app| matches!(app.mode, Mode::Title(_)));
+            assert_eq!(title_value(&app, "woke"), 1);
+            assert_eq!(title_value(&app, "skipped"), i64::from(gallery));
+        }
+    }
+
     /// A film that doesn't play is over at once: the title is awake again
     /// before its next tick, whether the run plays no films, the pack lacks
     /// the film, or a headless run drops it.
@@ -39338,6 +39428,7 @@ off_0010:
         app.apply(ScreenAction::Film {
             id: 3,
             claire: false,
+            gallery: false,
         })
         .unwrap();
         assert!(app.pending_movie.is_none() && app.film_title.is_none());

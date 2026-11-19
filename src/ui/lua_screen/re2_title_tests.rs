@@ -194,9 +194,11 @@ fn gallery_pictures_art() -> Vec<(&'static str, Vec<u8>)> {
 /// 15, ROUGH SKETCH 16, TO HOME 17, ILLUSTRATION 18, 3D MODEL 19, PLAY 21
 /// and the button 22.
 fn movie_words_art() -> Vec<u8> {
-    let mut colours: Vec<u16> = (0..=22).map(grey).collect();
+    let mut colours: Vec<u16> = (0..=23).map(grey).collect();
     colours[20] = 31 << 5;
     sheet_tim(&colours, |u, v| match (u, v) {
+        // A digit's last row, which the left arrow's piece starts on too.
+        (0..120, 20) => 23,
         // The rows between the words.
         (_, 20 | 150 | 164) => 0,
         (0..120, 0..10 | 11..20) => 1 + (u / 12) as u8,
@@ -337,6 +339,32 @@ fn the_title_opens_as_the_boot_reaches_it() {
     screen.update(&cx, held);
     assert_eq!(screen.value("ti_cur"), 1);
     assert!(cx.cues.borrow().contains(&UiCue::Core(4)));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `Init_movie_work` opens the film it plays in the gallery's words: the
+/// boot's film of the title is the gallery's number 0, LEON's or CLAIRE's
+/// as the film is.
+#[test]
+fn the_boots_film_opens_the_gallerys_number_0() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-boot-film-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut cx_open = context(&dir);
+    let names = ["gallery0", "gallery1", "gallery2", "gallery3", "gallery4"];
+    let args = names.map(|name| (name, ScreenArg::Int(0)));
+    let mut screen =
+        LuaScreen::open_screen("title", &args, ScreenAction::Quit, &mut cx_open).unwrap();
+    screen.signal("on_boot", &cx);
+    let film = (0..=188).find_map(|_| match screen.update(&cx, UiInput::default()) {
+        ScreenResult::Done(ScreenAction::Film { id: 0, claire, .. }) => Some(claire),
+        _ => None,
+    });
+    let claire = film.expect("the title's film is asked for");
+    assert_eq!(
+        screen.test_eval::<Option<i64>>("return M.state.gallery[4]"),
+        Some(if claire { 0x0000_8000 } else { 0x8000_0000 })
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -1877,7 +1905,11 @@ fn run_prologue(
         each(tick, &screen, &cx.cues.borrow());
         match result {
             ScreenResult::Continue => {}
-            ScreenResult::Done(ScreenAction::Film { id, claire }) => {
+            ScreenResult::Done(ScreenAction::Film {
+                id,
+                claire,
+                gallery: false,
+            }) => {
                 films.push((tick, id, claire));
                 screen.resume_film(&cx, skipped_film == Some(id), true);
             }

@@ -1313,6 +1313,10 @@ fn action_of(name: &str, arg: Option<i64>, choice: Option<&Table>) -> mlua::Resu
                 Some(choice) => exit_flag(choice, name, "claire")?,
                 None => false,
             },
+            gallery: match choice {
+                Some(choice) => exit_flag(choice, name, "gallery")?,
+                None => false,
+            },
         },
         other => {
             return Err(mlua::Error::RuntimeError(format!(

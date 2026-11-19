@@ -1895,15 +1895,28 @@ def gallery_trace(game: Game) -> str:
     )
 
 
+CR_GALLERY_FLAGS = (0xFFFFFFFF, 0xFFFFFFF0, 0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFF)
+GALLERY_HELD: dict[int, int] = {}
+
+
 def hold_gallery_flags(game: Game) -> None:
     """Put back the gallery's flags that `--config GALLERYn=...` set. Classic REbirth opens all of the gallery as
     the title boots (the five words become ffffffff, fffffff0, fffffffe, ffffffff and ffffffff on boot tick 34,
-    whatever config.ini had), so a record of a gallery with less opened writes its words again before each tick.
-    Nothing at the title writes them: the game sets a bit in play (`Set_registry_flg`, `0x442EA0`)."""
+    whatever config.ini had), so a record of a gallery with less opened writes a word again when it finds Classic
+    REbirth's there. The game sets bits of its own (`Set_registry_flg`, `0x442EA0`: `Init_movie_work` opens the film
+    it plays, the gallery's too), and a word with more set than the record's keeps them."""
     for n in range(5):
         value = CONFIG_OVERRIDES.get(f"GALLERY{n}")
-        if value is not None:
-            game.write(GALLERY_FLAGS + 4 * n, struct.pack("<I", int(value, 16)))
+        if value is None:
+            continue
+        held = GALLERY_HELD.setdefault(n, int(value, 16))
+        now = game.u32(GALLERY_FLAGS + 4 * n)
+        if now == held:
+            continue
+        if now == CR_GALLERY_FLAGS[n]:
+            game.write(GALLERY_FLAGS + 4 * n, struct.pack("<I", held))
+        elif now & held == held:
+            GALLERY_HELD[n] = now
 
 
 def gallery_view_trace(game: Game) -> str:

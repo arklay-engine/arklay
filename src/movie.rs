@@ -171,6 +171,9 @@ pub fn re2_film(id: u8, claire: bool) -> Option<Re2Film> {
     })
 }
 
+/// The raw skip mask of every film RE2's gallery plays (`Movie`, 0x4CAF90).
+pub const RE2_GALLERY_SKIP: u16 = 0x9F0;
+
 /// The map key in the film button word: outside RE 1's `0x0FFF`, so only a
 /// mask that names it ([`re2_skip_buttons`]) takes it as a skip.
 pub const MAP_BUTTON: u16 = 0x1000;
@@ -465,6 +468,14 @@ impl MovieSession {
         let film = re2_film(id, claire).with_context(|| format!("RE2 film {id} is null"))?;
         let mut session = Self::open_named(pack, film.name)?;
         session.skip_mask = re2_skip_buttons(film.skip_mask);
+        Ok(session)
+    }
+
+    /// Open RE2's film `id` as its gallery plays it: `Movie` there ends the
+    /// film on any of the pad's 0x9F0, whatever the film's own mask.
+    pub fn open_re2_gallery(pack: &Pack, id: u8, claire: bool) -> Result<Self> {
+        let mut session = Self::open_re2(pack, id, claire)?;
+        session.skip_mask = re2_skip_buttons(RE2_GALLERY_SKIP);
         Ok(session)
     }
 

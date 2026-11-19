@@ -2218,7 +2218,7 @@ function M.update(api, input)
         s.sleeping = true
         if s.gal.film then
             -- A movie's film: the gallery runs on once it is over.
-            s.film = { id = s.gal.film, claire = s.claire }
+            s.film = { id = s.gal.film, claire = s.claire, gallery = true }
             s.exit = "film"
         end
         if s.gal.task == 0 then
@@ -2269,7 +2269,8 @@ function M.update(api, input)
             -- for.
             local film = s.film or { id = s.pro.film, claire = s.claire }
             s.film = nil
-            api:exit("film", film.id, { claire = film.claire })
+            Gallery.open_film(s.gallery, film.claire, film.id)
+            api:exit("film", film.id, { claire = film.claire, gallery = film.gallery })
         else
             api:exit(exit)
         end
@@ -2329,6 +2330,11 @@ end
 -- the tick it asked when the film never played, and on its next tick
 -- after one that did.
 function M.on_film(api, skipped, played)
+    if played then
+        -- `Pad_set` ran through the film: a direction pressed under it
+        -- and still held is no edge on the tick the title wakes.
+        s.raw = nil
+    end
     if s.boot then
         if not played then
             boot_end()

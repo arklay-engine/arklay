@@ -1,0 +1,46 @@
+# CLAIRE's MOVIE with only numbers 0 and 7 opened: number 7, played, opens number 9, which the turns then stop on (oracle/re2.md, "The gallery").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 down
+443
+470 right
+473
+500 confirm
+503
+540 right
+543
+570 confirm
+573
+650 down
+653
+680 confirm
+683
+730 right
+733
+760 right
+763
+790 confirm
+793
+820 right
+823
+850 right
+853
+880 left
+883
+910 confirm
+913
+940 left
+943
+970 confirm
+973
+1000 left
+1003
+1030 left
+1033
