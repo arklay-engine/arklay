@@ -11,7 +11,8 @@
 -- `moji3224`), which isn't ported.
 --
 -- The state keeps the original's work (`pGallery`) under its own numbers,
--- so the oracle's `gal` field compares one for one.
+-- so the oracle's `gal` field compares one for one, up to the tick a row's
+-- screen would start.
 --
 -- The menu's rows: ROUGH SKETCH (LEON) or ILLUSTRATION (CLAIRE), MOVIE, 3D
 -- MODEL (CLAIRE only) and EXIT. EXIT ends the gallery and wakes the title.
@@ -109,10 +110,16 @@ local function disp(g)
     g.fade = g.fade - 8
 end
 
--- `GalleryMain`: `false` once EXIT is taken.
-local function main(g, edge, cue)
+local load
+
+-- `GalleryMain`: `false` once EXIT is taken, or when its art can't load.
+local function main(api, g, edge, cue)
     if g.step == 0 then
-        -- The art is loaded and the menu fades in from the next tick.
+        -- The art is loaded and the menu fades in from the next tick. A
+        -- sheet that can't be made a texture ends the gallery there.
+        if not load(api) then
+            return false
+        end
         g.step = 1
         g.flags = (g.flags | FADING) & ~FADING_OUT
         g.fade = 0x80
@@ -179,7 +186,7 @@ end
 
 -- One tick of the task. `edge` is the pad's pressed bits and `cue` plays a
 -- core-bank cue. The task is over (`g.task` 0) the tick after EXIT.
-function M.tick(g, edge, cue)
+function M.tick(api, g, edge, cue)
     g.words = nil
     g.black = nil
     g.ticked = true
@@ -188,7 +195,7 @@ function M.tick(g, edge, cue)
         g.task = 0
         return
     end
-    if not main(g, edge, cue) then
+    if not main(api, g, edge, cue) then
         g.task = 2
     end
 end
@@ -213,14 +220,21 @@ function M.reset()
     art = nil
 end
 
-local function load(api)
-    art = {}
+-- The six sheets, once: `false` when the pack lacks one.
+load = function(api)
+    if art then
+        return true
+    end
+    local sheets = {}
     for _, stem in ipairs({ "title1", "title2", "title3", "title4", "title5", "moji" }) do
         local page = api:indexed_page("ui/gallery/" .. stem)
-        if page then
-            art[stem] = { page = page, palette = api:page_palette(page, 0) or {}, luts = {} }
+        if not page then
+            return false
         end
+        sheets[stem] = { page = page, palette = api:page_palette(page, 0) or {}, luts = {} }
     end
+    art = sheets
+    return true
 end
 
 -- A sheet's 5-bit level `v` as the original shows it, 8v + 7, and its 0
@@ -230,16 +244,23 @@ local function expand(c)
     return v == 0 and 0 or 8 * v + 7
 end
 
--- A sheet's colours at `level` (0x80 is its own), keyed by texel index.
--- Black is see-through unless the sheet is `opaque`.
-local function lut_for(sheet, level, opaque)
+-- A sheet's colours at `level` (0x80 is its own) under the fade's `black`
+-- (an alpha, 0 for none), keyed by texel index. Black is see-through unless
+-- the sheet is `opaque`. The fade is in the colours, so each of the
+-- original's pixels fades before the frame halves them, as its black
+-- rectangle has it. A sheet keeps the lookups of one fade level.
+local function lut_for(sheet, level, opaque, black)
+    if sheet.black ~= black then
+        sheet.black = black
+        sheet.luts = {}
+    end
     local lut = sheet.luts[level]
     if lut then
         return lut
     end
     lut = {}
     local function at(c)
-        return (expand(c) * level + 64) >> 7
+        return (((expand(c) * level + 64) >> 7) * (255 - black) + 127) // 255
     end
     for index = 0, 255 do
         local rgb = sheet.palette[index]
@@ -253,13 +274,12 @@ end
 
 -- A piece of a sheet at half size, from its place and size at 640 x 480,
 -- with the picture's corner at `ox, oy`. A piece with an odd side takes
--- one more texel, which is see-through in `moji`.
-local function half(api, sheet, ox, oy, x, y, w, h, u, v, level, opaque)
-    if not sheet then
-        return
-    end
+-- one more texel, so that its last pixel is half the piece: `moji` has
+-- see-through black after each word's last column and row, and a sheet
+-- that replaces it has to keep that.
+local function half(api, sheet, ox, oy, x, y, w, h, u, v, level, opaque, black)
     local dw, dh = (w + 1) // 2, (h + 1) // 2
-    local lut = lut_for(sheet, level, opaque)
+    local lut = lut_for(sheet, level, opaque, black)
     local options = { dw = dw, dh = dh, blend = 255 }
     api:page_lut(sheet.page, u, v, dw * 2, dh * 2, ox + x // 2, oy + y // 2, lut, false, options)
 end
@@ -268,20 +288,16 @@ end
 -- `ox, oy`: nothing on a tick that drew no menu, else the picture, the
 -- rows and the fade's black.
 function M.draw(api, g, ox, oy)
-    if not g.words then
+    if not g.words or not art then
         return
     end
-    if not art then
-        load(api)
-    end
+    local black = g.black or 0
     for _, sheet in ipairs(PICTURE) do
-        half(api, art[sheet[1]], ox, oy, sheet[2], sheet[3], sheet[4], sheet[5], sheet[6], 0, 0x80, true)
+        half(api, art[sheet[1]], ox, oy, sheet[2], sheet[3], sheet[4], sheet[5], sheet[6], 0, 0x80, true, black)
     end
     for k, word in ipairs(MENUS[g.claire].words) do
-        half(api, art.moji, ox, oy, word[2], word[3], word[4], word[5], word[6], word[7], g.words[k], false)
-    end
-    if g.black then
-        api:darken(g.black)
+        local level = g.words[k]
+        half(api, art.moji, ox, oy, word[2], word[3], word[4], word[5], word[6], word[7], level, false, black)
     end
 end
 

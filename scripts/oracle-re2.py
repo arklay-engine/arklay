@@ -1879,15 +1879,13 @@ def option_trace(game: Game) -> str:
 
 
 def gallery_trace(game: Game) -> str:
-    """The gallery's state while its task runs (`Gallery`, `0x4BF760`): the task's step and, once it has its work,
-    the screen (`GalleryLoop`'s case), the screen's step and row, the lit row's level, the fade's level and the
-    flags."""
+    """The gallery's state while its task runs with its work (`Gallery`, `0x4BF760`, which makes the work on the
+    tick it starts and frees it on the tick it ends): the task's step, the screen (`GalleryLoop`'s case), the
+    screen's step and row, the lit row's level, the fade's level and the flags."""
     task = TASKS + 0x24
-    if game.u32(task + 4) != GALLERY_TASK:
-        return "-"
     work = game.u32(GALLERY)
-    if not work:
-        return str(game.u8(task + 8))
+    if game.u32(task + 4) != GALLERY_TASK or not work:
+        return "-"
     screen, step, row = game.i32s(work, 3)
     return (
         f"{game.u8(task + 8)},{screen},{step},{row},{game.i16(work + 0x1468)},{game.i16(work + 0x1474)},"

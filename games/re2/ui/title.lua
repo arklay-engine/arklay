@@ -2204,7 +2204,7 @@ function M.update(api, input)
     elseif s.gal then
         -- The gallery's ticks: the title's task sleeps, through the tick
         -- the gallery closes on, which shows the title's picture alone.
-        Gallery.tick(s.gal, s.edge, s.cue)
+        Gallery.tick(api, s.gal, s.edge, s.cue)
         s.sleeping = true
         if s.gal.task == 0 then
             s.gal = nil

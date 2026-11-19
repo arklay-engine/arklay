@@ -612,8 +612,11 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
     // every index alike lets an HD replacement cover the whole rect, as
     // `page_sprite_mirrored`'s does, for art the HD page redraws.
     // `options.dw`/`options.dh` stretch the rect over a destination of that
-    // size (nearest sampling), and `options.blend` mixes it in: `"half"`
-    // averages it with the frame, `"add"` adds it; opaque by default.
+    // size (nearest sampling), and `options.blend` mixes it in as
+    // `page_sprite_scaled`'s does: a name (`"half"` averages it with the
+    // frame, `"add"` adds it; opaque by default) or an alpha, which draws
+    // from the page itself, never a replacement, and which the software
+    // renderer smooths when the rect is stretched.
     #[allow(clippy::type_complexity)]
     methods.add_method_mut(
         "page_lut",

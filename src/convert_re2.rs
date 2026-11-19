@@ -2060,18 +2060,15 @@ fn copy_prologue_art(
 /// DATA GALLERY's menu at 640 x 480 (`GalleryMain`, `0x439A80`): the five
 /// sheets of its picture, `Gallery/TITLE1.dat` to `TITLE5.dat`, and its
 /// rows' words, `Gallery/Moji.dat`. Each is a TIM under another extension,
-/// kept as it is in `ui/gallery/<stem>.tim`. An install with no `Gallery`
-/// folder has no gallery, and says nothing.
+/// kept as it is in `ui/gallery/<stem>.tim`. The menu needs all six: with
+/// one missing the gallery closes as it opens (`ui/gallery.lua`).
 fn copy_gallery_art(
     layout: &Layout,
     writer: &mut PackWriter,
     tally: &mut Tally,
     warnings: &mut Vec<String>,
 ) -> Result<()> {
-    let Some(folder) = child(&layout.data, "Gallery").filter(|folder| folder.is_dir()) else {
-        return Ok(());
-    };
-    let files = files_in(Some(folder))?;
+    let files = files_in(child(&layout.data, "Gallery"))?;
     let mut missing = Vec::new();
     for stem in ["TITLE1", "TITLE2", "TITLE3", "TITLE4", "TITLE5", "MOJI"] {
         let Some(path) = files
@@ -2086,9 +2083,9 @@ fn copy_gallery_art(
         let entry = format!("ui/gallery/{}.tim", stem.to_ascii_lowercase());
         tally.add(writer, "ui", &entry, bytes[..len].to_vec())?;
     }
-    if !missing.is_empty() {
+    if !missing.is_empty() && layout.common.is_some() {
         warnings.push(format!(
-            "no Gallery/{}.dat; the gallery's menu lacks its art",
+            "no Gallery/{}.dat; the gallery has no menu",
             missing.join(", ")
         ));
     }

@@ -8,8 +8,8 @@ use crate::pack::Pack;
 use crate::ui::{Screen, ScreenAction, ScreenResult, UiCue, UiInput};
 
 /// The title's pack; `prologue_art` adds what the prologue shows, which is
-/// what makes a new game run it.
-fn build_pack(prologue_art: bool) -> Pack {
+/// what makes a new game run it, and `gallery_art` the gallery's sheets.
+fn build_pack(prologue_art: bool, gallery_art: bool) -> Pack {
     let mut writer = crate::pack::PackWriter::new();
     for (path, source) in [
         (
@@ -35,7 +35,8 @@ fn build_pack(prologue_art: bool) -> Pack {
     ] {
         writer.add(path, source.as_bytes().to_vec()).unwrap();
     }
-    // The backgrounds, so a test can tell which one is up.
+    // The backgrounds, each a 4 x 4 grey of its own from white down, so a
+    // test can tell which one is up.
     for (index, stem) in [
         "title/title_bg",
         "option/room",
@@ -45,14 +46,14 @@ fn build_pack(prologue_art: bool) -> Pack {
     .into_iter()
     .enumerate()
     {
-        let picture = super::tests::solid_bmp(4, 4, [index as u8; 3]);
+        let picture = super::tests::solid_bmp(4, 4, [0xFF - 0x10 * index as u8; 3]);
         writer.add(&format!("ui/{stem}.bmp"), picture).unwrap();
     }
     // The gallery's sheets (`re2_gallery_tests`): sheet `n` of the picture
     // is all index 0, a red of level `n`, but for the right half of the
     // fifth, a green; the words' sheet is white where a word is and
     // see-through black elsewhere.
-    for n in 1..=5u16 {
+    for n in (1..=5u16).filter(|_| gallery_art) {
         let sheet = sheet_tim(&[n, 5 << 5], |u, _| u8::from(n == 5 && u >= 128));
         writer
             .add(&format!("ui/gallery/title{n}.tim"), sheet)
@@ -65,7 +66,9 @@ fn build_pack(prologue_art: bool) -> Pack {
                 .any(|&[u0, v0, w, h]| (u0..u0 + w).contains(&u) && (v0..v0 + h).contains(&v)),
         )
     });
-    writer.add("ui/gallery/moji.tim", words).unwrap();
+    if gallery_art {
+        writer.add("ui/gallery/moji.tim", words).unwrap();
+    }
     if prologue_art {
         for stem in ["open10", "open11"] {
             let picture = super::tests::solid_bmp(4, 4, [0x40; 3]);
@@ -117,20 +120,27 @@ fn sheet_tim(palette: &[u16], texel: impl Fn(u32, u32) -> u8) -> Vec<u8> {
 fn pack() -> &'static Pack {
     use std::sync::OnceLock;
     static PACK: OnceLock<Pack> = OnceLock::new();
-    PACK.get_or_init(|| build_pack(false))
+    PACK.get_or_init(|| build_pack(false, true))
 }
 
 fn prologue_pack() -> &'static Pack {
     use std::sync::OnceLock;
     static PACK: OnceLock<Pack> = OnceLock::new();
-    PACK.get_or_init(|| build_pack(true))
+    PACK.get_or_init(|| build_pack(true, true))
+}
+
+/// The title's pack with none of the gallery's sheets.
+pub(super) fn pack_without_gallery_art() -> &'static Pack {
+    use std::sync::OnceLock;
+    static PACK: OnceLock<Pack> = OnceLock::new();
+    PACK.get_or_init(|| build_pack(false, false))
 }
 
 pub(super) fn context<'a>(dir: &'a std::path::Path) -> UiContext<'a> {
     context_over(pack(), dir)
 }
 
-fn context_over<'a>(pack: &'static Pack, dir: &'a std::path::Path) -> UiContext<'a> {
+pub(super) fn context_over<'a>(pack: &'static Pack, dir: &'a std::path::Path) -> UiContext<'a> {
     UiContext {
         statics: None,
         authentic: false,
@@ -898,6 +908,10 @@ fn the_gallerys_confirm_fades_out_and_starts_the_gallery() {
     run(&mut screen, &cx, UiInput::default(), 15);
     assert_eq!(screen.value("ti_step"), 5);
     assert_eq!(screen.value("ti_pulse"), pulse);
+    let mut faded = Framebuffer::new();
+    screen.draw(&cx, &mut faded);
+    // The title's picture, nearly black under the fade.
+    assert_eq!(faded.rgba[..3], [0xFF - 0xF4; 3]);
     // The tick the fade is done hands off to the gallery: the page back at
     // step 2 with slot 2 off, the character kept.
     run(&mut screen, &cx, UiInput::default(), 1);
@@ -922,6 +936,9 @@ fn the_gallerys_confirm_fades_out_and_starts_the_gallery() {
         screen.test_eval::<i64>("return M.state.drawn_fades[2].level"),
         0x200 + 15 * 0x800
     );
+    let mut held = Framebuffer::new();
+    screen.draw(&cx, &mut held);
+    assert_eq!(held.rgba, faded.rgba);
     // The gallery's task starts with it, and the title sleeps under it.
     assert_eq!(screen.value("gal_on"), 1);
     let asleep = ti(&screen);

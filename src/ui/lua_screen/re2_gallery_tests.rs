@@ -2,7 +2,8 @@
 //! original's trace and frames (`oracle/re2.md`, "The gallery").
 
 use super::re2_title_tests::{
-    GALLERY_WORDS, context, frame, gallery_words, open_gallery, press, press_all, run, ti, words,
+    GALLERY_WORDS, context, context_over, frame, gallery_words, open_gallery,
+    pack_without_gallery_art, press, press_all, run, ti, words,
 };
 use super::*;
 
@@ -252,6 +253,8 @@ fn exit_ends_the_gallery_and_the_title_wakes_two_ticks_on() {
         assert_eq!(rows(&screen), None);
         assert_eq!(screen.test_eval::<i64>("return #M.state.sprites"), 0);
         assert_eq!(ti(&screen), asleep);
+        let closed = render(&mut screen, &cx);
+        assert_eq!(pixel(&closed, 0, 0), [0xFF; 3], "the title's picture");
         // Then the page runs again where it was left.
         run(&mut screen, &cx, UiInput::default(), 1);
         let awake = ti(&screen);
@@ -296,8 +299,23 @@ fn a_button_on_a_row_fades_the_menu_out_and_the_menu_loads_again() {
         assert!(cx.cues.borrow().is_empty(), "{name}");
         assert_eq!(screen.value("gal_row"), turned, "{name}");
         assert!(rows(&screen).unwrap().iter().all(|level| *level == 0));
-        run(&mut screen, &cx, UiInput::default(), ticks - 2);
-        assert_eq!(screen.value("gal_row"), turned, "{name}");
+        assert_eq!(black(&screen), Some(0xFF - fade + 8), "{name}");
+        // Each tick of it: the black 8 deeper, the rows black, to the last.
+        for tick in 2..ticks {
+            run(&mut screen, &cx, UiInput::default(), 1);
+            assert_eq!(screen.value("gal_row"), turned, "{name} tick {tick}");
+            assert_eq!(
+                black(&screen),
+                Some(0xFF - fade + 8 * tick),
+                "{name} tick {tick}"
+            );
+            assert_eq!(
+                screen.value("gal_fade"),
+                fade - 8 * (tick + 1),
+                "{name} tick {tick}"
+            );
+            assert!(rows(&screen).unwrap().iter().all(|level| *level == 0));
+        }
         assert!(screen.value("gal_fade") < 1, "{name}");
         // The tick that finds the fade done draws nothing. The row's
         // screen isn't ported: the menu starts again from its load.
@@ -388,10 +406,65 @@ fn the_menu_draws_at_half_size_in_the_originals_colours() {
     let faded = render(&mut screen, &cx);
     let under = |level: u8| ((u32::from(level) * 0x80 + 127) / 255) as u8;
     assert_eq!(pixel(&faded, 0, 0), [under(shown(1, 0x80)), 0, 0]);
+    // Each of the original's pixels fades before the frame halves them: a
+    // half-covered pixel is the mean of the faded word and faded picture.
+    // MOVIE, the button's row, is at the lit level.
+    let movie = under(shown(31, rows(&screen).unwrap()[1] as u32));
+    assert_eq!(
+        pixel(&faded, 135 + 51, 193),
+        [
+            half(movie, under(shown(4, 0x80))),
+            half(movie, 0),
+            half(movie, 0)
+        ]
+    );
     // The button's own tick still draws its rows; they are black from the
     // next.
     assert_eq!(pixel(&faded, 99, 171), [under(dim); 3]);
     run(&mut screen, &cx, UiInput::default(), 1);
     assert_eq!(pixel(&render(&mut screen, &cx), 99, 171), [0, 0, 0]);
+    // CLAIRE's four rows at their own places, ILLUSTRATION lit.
+    let mut screen = open_menu(&cx, &dir, true);
+    run(&mut screen, &cx, press("down"), 1);
+    assert_eq!(rows(&screen), Some(vec![0x80, 0x40, 0x40, 0x40]));
+    let frame = render(&mut screen, &cx);
+    let [_, movie, illustration, model, exit] = GALLERY_WORDS;
+    for (word, x, y, level) in [
+        (illustration, 208, 326, 0x80),
+        (movie, 270, 362, 0x40),
+        (model, 242, 398, 0x40),
+        (exit, 280, 434, 0x40),
+    ] {
+        let lit = shown(31, level);
+        let (x, y) = (x / 2, y / 2);
+        let (w, h) = ((word[2] / 2) as usize, (word[3] / 2) as usize);
+        assert_eq!(pixel(&frame, x, y), [lit; 3], "{word:?}");
+        assert_eq!(pixel(&frame, x + w - 1, y + h - 1), [lit; 3], "{word:?}");
+        assert_eq!(pixel(&frame, x - 1, y)[1..], [0, 0], "{word:?}");
+        assert_eq!(pixel(&frame, x, y - 1)[1..], [0, 0], "{word:?}");
+        assert_eq!(pixel(&frame, x, y + h + 1)[1..], [0, 0], "{word:?}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_pack_short_of_the_gallerys_art_closes_the_gallery_as_it_opens() {
+    let dir = test_dir("gallery-bare");
+    let cx = context_over(pack_without_gallery_art(), &dir);
+    let mut screen = start_gallery(&cx, &dir, false);
+    let asleep = ti(&screen);
+    // The load's tick ends the task, with no cue and nothing drawn.
+    cx.cues.borrow_mut().clear();
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(gal(&screen), Some([2, 0, 0, 0, 0, 0, 0]));
+    assert_eq!(rows(&screen), None);
+    assert!(cx.cues.borrow().is_empty());
+    // It closes on the next, and the title's page is back on the one after.
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(gal(&screen), None);
+    assert_eq!(ti(&screen), asleep);
+    run(&mut screen, &cx, press("down"), 1);
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(4)]);
+    assert_eq!(screen.value("ti_cur"), 1);
     let _ = std::fs::remove_dir_all(&dir);
 }

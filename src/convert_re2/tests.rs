@@ -734,46 +734,88 @@ fn the_boots_warning_is_converted() {
     assert_eq!(colour(&Pack::open(&out).unwrap()), installs);
 }
 
-/// The prologue's art (`Prologue_load`): each `open0<n>.adt` is a stream of
-/// TIMs, split into its sheets, and each `open1<n>.adt` a full-screen
-/// picture; the script that shows them is packed with the title's.
+/// The gallery's menu art (`GalleryMain`): each of its six sheets is a TIM
+/// named `.dat`, kept as it is; the script that shows them is packed with
+/// the title's.
 #[test]
 fn the_gallerys_menu_art_is_converted() {
     let root = TempDir::new("gallery-art");
     make_install(&root.path);
     let data = root.path.join("data");
-    let (picture, words) = (tiny_tim(2, 1), tiny_tim(3, 2));
-    write(&data.join("Gallery/TITLE1.dat"), &picture);
-    write(&data.join("Gallery/Title2.dat"), &picture);
+    let words = tiny_tim(3, 6);
+    for (n, name) in ["TITLE1", "Title2", "title3", "TITLE4", "TITLE5"]
+        .into_iter()
+        .enumerate()
+    {
+        let picture = tiny_tim(2, n as u8 + 1);
+        write(&data.join(format!("Gallery/{name}.dat")), &picture);
+    }
     // Bytes after the TIM aren't part of it.
     write(
         &data.join("Gallery/Moji.dat"),
         &[words.clone(), vec![0; 4]].concat(),
     );
     // The 320 x 240 menu's sheets and the other screens' aren't packed.
-    write(&data.join("Gallery/top32_1.dat"), &picture);
-    write(&data.join("Gallery/ILLUST01.dat"), &picture);
+    write(&data.join("Gallery/top32_1.dat"), &words);
+    write(&data.join("Gallery/ILLUST01.dat"), &words);
     let out = root.path.join("out.akpak");
     convert_game(&root.path, &out).unwrap();
     let pack = Pack::open(&out).unwrap();
-    assert_eq!(read(&pack, "ui/gallery/title1.tim"), picture);
-    assert_eq!(read(&pack, "ui/gallery/title2.tim"), picture);
+    for n in 1..=5u8 {
+        let entry = format!("ui/gallery/title{n}.tim");
+        assert_eq!(read(&pack, &entry), tiny_tim(2, n), "{entry}");
+    }
     assert_eq!(read(&pack, "ui/gallery/moji.tim"), words);
-    for entry in ["title3.tim", "top32_1.tim", "illust01.tim"] {
+    for entry in ["top32_1.tim", "illust01.tim"] {
         assert!(!pack.contains(&format!("ui/gallery/{entry}")), "{entry}");
     }
     assert!(pack.contains("ui/gallery.lua"));
+    let layout = Layout::discover(&root.path).unwrap();
+    let mut warnings = Vec::new();
+    let (mut writer, mut tally) = (PackWriter::new(), Tally::default());
+    copy_gallery_art(&layout, &mut writer, &mut tally, &mut warnings).unwrap();
+    assert!(warnings.is_empty(), "{warnings:?}");
 }
 
 #[test]
-fn an_install_with_no_gallery_folder_converts() {
-    let root = TempDir::new("no-gallery");
+fn a_gallery_short_of_sheets_is_warned_of() {
+    let root = TempDir::new("gallery-short");
     make_install(&root.path);
     let out = root.path.join("out.akpak");
+    // No folder at all: the install converts, with nothing of the menu.
     convert_game(&root.path, &out).unwrap();
     assert!(!Pack::open(&out).unwrap().contains("ui/gallery/moji.tim"));
+    let warned = |root: &Path| {
+        let layout = Layout::discover(root).unwrap();
+        let mut warnings = Vec::new();
+        let (mut writer, mut tally) = (PackWriter::new(), Tally::default());
+        copy_gallery_art(&layout, &mut writer, &mut tally, &mut warnings).unwrap();
+        warnings
+    };
+    assert_eq!(
+        warned(&root.path),
+        ["no Gallery/title1, title2, title3, title4, title5, moji.dat; the gallery has no menu"]
+    );
+    // Some of them: what is there is packed, and the rest named.
+    let data = root.path.join("data");
+    write(&data.join("Gallery/TITLE1.dat"), &tiny_tim(2, 1));
+    write(&data.join("Gallery/Moji.dat"), &tiny_tim(3, 2));
+    assert_eq!(
+        warned(&root.path),
+        ["no Gallery/title2, title3, title4, title5.dat; the gallery has no menu"]
+    );
+    convert_game(&root.path, &out).unwrap();
+    let pack = Pack::open(&out).unwrap();
+    assert!(pack.contains("ui/gallery/title1.tim"));
+    assert!(!pack.contains("ui/gallery/title2.tim"));
+    // A sheet that isn't a TIM stops the conversion.
+    write(&data.join("Gallery/TITLE2.dat"), &[1, 2, 3, 4]);
+    assert!(convert_game(&root.path, &out).is_err());
 }
 
+/// The prologue's art (`Prologue_load`): each `open0<n>.adt` is a stream of
+/// TIMs, split into its sheets, and each `open1<n>.adt` a full-screen
+/// picture; the script that shows them is packed with the title's.
 #[test]
 fn the_prologues_art_is_converted() {
     let root = TempDir::new("prologue-art");

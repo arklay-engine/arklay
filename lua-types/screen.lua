@@ -986,7 +986,7 @@ function ScreenApi:page_sprite_mirrored(page, sx, sy, sw, sh, dx, dy, dw, dh, cl
 ---@param dx integer
 ---@param dy integer
 ---@param lut table<integer, integer>
----@param whole? boolean With `true`, a lookup that tints every index alike lets an HD replacement cover the whole rectangle, for art the HD page redraws.
+---@param whole? boolean With `true`, a lookup that tints every index alike lets an HD replacement cover the whole rectangle, for art the HD page redraws. It does nothing with an alpha for `options.blend`, which never draws a replacement.
 ---@param options? LutOptions
 function ScreenApi:page_lut(page, sx, sy, w, h, dx, dy, lut, whole, options) end
 

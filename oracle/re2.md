@@ -685,12 +685,12 @@ A button on EXIT returns 0 that tick: the menu is still drawn (LEON's as ever, C
 
 The runs (`oracle/re2-regress.d/gallery.toml`) are boot records through SPECIAL and GALLERY's page:
 
-- `gallery_leon.txt` confirms LEON on 560. The title hands off on 577 (`gal=1,0,0,0,0,0,0`, the frame held), 578 loads (`1,0,1,0,0,120,1`, black), and the menu shows from 579 under the fade, which is done on 594. Down on 660, 700 and 740 goes through MOVIE and EXIT back to ROUGH SKETCH, up on 780, 820 and 860 the other way, and the confirm on 900 fades ROUGH SKETCH out to its screen on 932, where the run ends.
+- `gallery_leon.txt` confirms LEON on 560. The title hands off on 577 (`gal=1,0,0,0,0,0,0`, the frame held), 578 loads (`1,0,1,0,0,120,1`, black), and the menu shows from 579 under the fade, which is done on 594. Down on 660, 700 and 740 goes through MOVIE and EXIT back to ROUGH SKETCH, up on 780, 820 and 860 the other way, and the confirm on 900 fades ROUGH SKETCH out. The run ends on 931, the fade's last tick; 932 sets the work's screen to 1.
 - `gallery_claire.txt` confirms CLAIRE on 570 (the gallery from 587), goes down through the four rows and back up, up once more to EXIT, and takes it with the cancel key on 940: the task closes on 941 and the title runs from 942.
 - `gallery_leon_exit.txt` goes up to EXIT and confirms on 680; the title is back on 682, and its page's EXIT (down on 740, confirm on 780) returns to the rows.
-- `gallery_leon_movie.txt` takes MOVIE with the cancel key on 680, to its screen on 696, and `gallery_claire_model.txt` takes 3D MODEL with START on 720, to its screen on 736.
+- `gallery_leon_movie.txt` takes MOVIE with the cancel key on 680 and ends on 695, the fade's last tick (696 sets the screen to 2), and `gallery_claire_model.txt` takes 3D MODEL with START on 720 and ends on 735 (736 sets the screen to 3).
 
-All five match on every traced tick, `gal` included, with frames at mean 0.05 to 0.08 (the worst under 2, during a fade). arklay draws the gallery's 640 x 480 art at half size into its 320 x 240 frame, each pixel the mean of its four; where a word's edge covers part of a pixel that mean is taken over the picture already halved, which is the difference left.
+All five match on every traced tick, `gal` included, with frames at mean 0.05 to 0.08. arklay draws the gallery's 640 x 480 art at half size into its 320 x 240 frame, each pixel the mean of its four, with the fade in each texel's colour so that it is applied before the halving as the original's rectangle is. Where a word's edge covers part of a pixel that mean is taken over the picture already halved, which is the difference left in a still frame. The worst frames of a run are the recording's: now and then a captured frame is the one before it again (571, 585 and 589 of `gallery_leon`), which shows as an error of 1 to 2 in a fade.
 
 ## The load screen
 
