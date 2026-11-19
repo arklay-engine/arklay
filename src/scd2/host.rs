@@ -544,6 +544,10 @@ const FG_SYSTEM_EASY_CENSORSHIP_OFF: u8 = 12;
 /// `fg_system`'s `0x200`: a film plays (`Init_movie_work` raises it, the
 /// film's end clears it). `Psx_main`'s pause gate reads it.
 pub const FG_SYSTEM_MOVIE: u8 = 22;
+/// `fg_system`'s `0x4000000`: the player's death, which `Game_loop` starts
+/// `Die` on. arklay's own latch is [`crate::player2::Work::die_start`]; this
+/// is the bit as a script writes it.
+pub const FG_SYSTEM_DIE: u8 = 5;
 /// `fg_system`'s `0x8000`, which `Init_movie_work` clears. No reader is known.
 pub const FG_SYSTEM_8000: u8 = 16;
 /// `fg_status`'s `0x4000000`: EASY's.
@@ -646,6 +650,10 @@ fn splc_ret(character: &mut Character, life: i16) {
 pub const STATUS_VOICE: u8 = 26;
 /// A scene is running: the bars come down and the menus stay shut.
 pub const STATUS_SCENE: u8 = 27;
+/// `fg_status`'s `0x40`, under which `Game_loop` takes no START: the bit as
+/// a script or a drawer writes it. The player's routines' is
+/// [`crate::player2::Work::holds_game`].
+pub const STATUS_HOLD: u8 = 25;
 /// What `Set_room` keeps of `fg_status` on every load (`0x4DE93E`): indices
 /// 0 to 11 and 17. The scene, the voice line, the camera's lock and the
 /// quakes go.

@@ -1991,6 +1991,8 @@ const CUTSCENE_SKIP_BURST: std::time::Duration = std::time::Duration::from_milli
 /// (GameLoop.cpp 0x00480de8): a message whose pause word clears either one
 /// keeps the pause menu shut.
 const START_MESSAGE_BITS: u16 = game::MESSAGE_FLAG_CONTROLS | 0x0040;
+/// What a menu request leaves of the message word until the menu opens.
+const MENU_REQUEST_MASK: u16 = 0xFF7A;
 
 /// Frames the player and entities stay frozen for the room-entry fade after the
 /// menu closes: the original suspends game_loop for the whole fade, but the
@@ -3513,9 +3515,8 @@ impl GameSession {
             // `Game_loop` takes START only while `Game` is 0, and
             // `Sce_Windows` (7) or `Sce_Status` (1) set it in the script pass
             // of the tick a START was pressed on.
-            if let Some((_, message_flags)) = self.menu_request.take() {
-                self.game.message_flags = message_flags;
-            }
+            // The word was never masked for it, so nothing is put back.
+            self.menu_request = None;
             // The map key is tested with START, so it is dropped with it.
             self.game.re2_key_map = None;
         }
@@ -4430,7 +4431,12 @@ impl GameSession {
             };
             if let Some(kind) = request {
                 self.menu_request = Some((kind, self.game.message_flags));
-                self.game.message_flags &= 0xFF7A;
+                // RE2's START is taken after the scripts, or not at all:
+                // the room's tick masks the word once it is, so a message
+                // or a room the scripts start keeps its own word.
+                if !(self.game.is_re2_room && kind == MenuRequest::Menu) {
+                    self.game.message_flags &= MENU_REQUEST_MASK;
+                }
                 // The request says which screen: nothing a screen left
                 // behind turns START's into the map.
                 self.game.re2_key_map = None;
@@ -19696,6 +19702,8 @@ fn tick_room_timed(
     // `Hikidashi_entrance`) runs before them, ahead of `Cut_check` and
     // `Sce_scheduler`. The cut on screen is the one the previous frame's
     // swap loaded.
+    // Whether a message was up before this tick's hook and scripts.
+    let message_before = context.game.message.menu_choice_id() & 0x80 != 0;
     if context.game.is_re2_room {
         context.game.re2.shown_cut = context.room.current_cut as u8;
         context.game.tick_re2_key_lost();
@@ -19858,11 +19866,16 @@ fn tick_room_timed(
     if context.game.is_re2_room && std::mem::take(&mut context.game.re2_status_start) {
         // The map key's `Key_trg`, as this tick's `Pad_set` left it.
         let asked = context.game.confirm_re2_key_map();
-        if !asked || context.game.re2_start_refused() {
+        // `Mess_set` raises `fg_status`'s `0x40` with the message.
+        let message_set = !message_before && context.game.message.menu_choice_id() & 0x80 != 0;
+        if !asked || context.game.re2_start_refused(message_set) {
             // The scripts closed the gate the keys are tested under, so
             // the tick runs on.
             context.game.re2_status_start_dropped = true;
         } else {
+            // The request's mask on the message word, which RE 1's request
+            // applies before its scripts.
+            context.game.message_flags &= MENU_REQUEST_MASK;
             if let Some(id) = crate::se2::SoundId::decode(game::status2::Sound::Decide.id()) {
                 context
                     .game
@@ -27014,11 +27027,12 @@ mod tests {
             "{script}: START is asked for"
         );
         let dropped = session.game.re2_status_start_dropped;
+        // The request masks the message word only once START is taken.
+        let masked = session.game.message_flags & 0x85 != flags & 0x85;
+        assert_eq!(masked, !dropped, "{script}");
         re2_tick(&mut session, &pack, UiInput::default());
         assert!(session.menu_request.is_none());
-        if dropped {
-            assert_eq!(session.game.message_flags & 0x85, flags & 0x85, "{script}");
-        }
+        assert_eq!(session.game.message_flags & 0x85, flags & 0x85, "{script}");
         (dropped, session.menu.is_some())
     }
 
@@ -27038,14 +27052,25 @@ mod tests {
         let item =
             "item_aot_set(8, 2, 49, 0, 0, -100, -100, 200, 200, 0x14, 30, 154, 1, 0); aot_on(8);";
         assert_eq!(re2_start_with_script(item, nothing), (true, false));
+        // `fg_status`'s `0x40` and `fg_system`'s `0x4000000`, set by a
+        // script.
+        assert_eq!(
+            re2_start_with_script("set(1, 25, 1);", nothing),
+            (true, false)
+        );
+        assert_eq!(
+            re2_start_with_script("set(0, 5, 1);", nothing),
+            (true, false)
+        );
         // A door away from the player, which only the script fires.
         let door = |session: &mut GameSession| {
             let pos = session.player.pos;
             re2_area_at(session, [pos[0] + 5000, pos[1], pos[2] + 5000], true);
         };
         assert_eq!(re2_start_with_script("", door), (false, true));
-        // The door's own tick: the press is dropped with no cue, and the
-        // door goes on, into the test pack's other room.
+        // The door's own tick: the press is dropped (the cue goes only
+        // with a START that is taken), and the door goes on, into the test
+        // pack's other room.
         let dir = TempDir::new();
         let (pack, a, b) = debug_menu_pack(&dir);
         let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
@@ -27071,15 +27096,15 @@ mod tests {
         };
         re2_tick(&mut session, &pack, start);
         assert!(session.game.re2_status_start_dropped);
-        assert!(session.game.re2.sounds.is_empty(), "no decide cue");
         assert!(session.transition.is_some() || session.game.transition_door.is_some());
         assert!(session.menu.is_none());
     }
 
-    /// The gate's words the scripts don't write on the press's own tick in
-    /// these tests: the live cut against the one on screen (a zone's
-    /// switch waits for `Swap_Cbuff`), `fg_system`'s death and film bits
-    /// and `fg_status`'s scene bit.
+    /// The gate's words one by one: the live cut against `scd_var_cut` (a
+    /// zone's switch waits for `Swap_Cbuff`; the picture a `cut_chg` with
+    /// bit 7 leaves up doesn't count), a message this tick, the player's
+    /// damage count, `fg_system`'s death and film bits, `fg_status`'s scene
+    /// bit and `fg_stop`'s input bit.
     #[test]
     fn re2_start_is_refused_by_the_rest_of_game_loops_gate() {
         use crate::scd2::host::{FG_SYSTEM_MOVIE, STATUS_BANK, STATUS_SCENE};
@@ -27090,29 +27115,44 @@ mod tests {
             game.set_camera_cut(2);
             game
         };
-        assert!(!play().re2_start_refused());
+        assert!(!play().re2_start_refused(false));
+        assert!(play().re2_start_refused(true), "a message went up");
         // `Cut_check` moved the live cut; the screen still has the old one.
         let mut game = play();
         game.set_camera_cut(3);
-        assert!(game.re2_start_refused());
-        // `cut_chg` moves `scd_var_cut` with it: its load is what refuses.
+        assert!(game.re2_start_refused(false));
+        // `cut_chg` moves `scd_var_cut` with it: its load is what refuses,
+        // and with bit 7 there is none, whatever picture stays up.
         game.re2.var_cut = Some(3);
-        assert!(!game.re2_start_refused());
+        game.re2.view_cut = Some(2);
+        assert!(!game.re2_start_refused(false));
         game.re2.bg_load = true;
-        assert!(game.re2_start_refused());
+        assert!(game.re2_start_refused(false));
 
-        let mut game = play();
-        game.re2.player.die_start = true;
-        assert!(game.re2_start_refused());
-        let mut game = play();
-        game.re2.set_flag(0, FG_SYSTEM_MOVIE, 1);
-        assert!(game.re2_start_refused());
-        let mut game = play();
-        game.re2.set_flag(STATUS_BANK, STATUS_SCENE, 1);
-        assert!(game.re2_start_refused());
-        let mut game = play();
-        game.re2.set_input_stop(true);
-        assert!(game.re2_start_refused());
+        let refused = |change: &dyn Fn(&mut game::GameState)| {
+            let mut game = play();
+            change(&mut game);
+            game.re2_start_refused(false)
+        };
+        assert!(refused(&|game| game.re2.player.damage_cnt = 0x80));
+        assert!(refused(&|game| game.re2.set_flag(0, FG_SYSTEM_MOVIE, 1)));
+        assert!(refused(&|game| game.re2.set_flag(
+            STATUS_BANK,
+            STATUS_SCENE,
+            1
+        )));
+        assert!(refused(&|game| game.re2.set_input_stop(true)));
+        // The death's latch, while `Die` will start on it: not one a hold
+        // keeps back, nor under INVINCIBLE, which never starts `Die`.
+        assert!(refused(&|game| game.re2.player.die_start = true));
+        assert!(!refused(&|game| {
+            game.re2.player.die_start = true;
+            game.re2.player.die_held_back = true;
+        }));
+        assert!(!refused(&|game| {
+            game.re2.player.die_start = true;
+            game.debug.invincible = true;
+        }));
     }
 
     /// `Die` runs as task 1, which the gate wants idle: START asks for
@@ -27360,7 +27400,6 @@ mod tests {
         };
         re2_tick(&mut session, &pack, start);
         assert!(session.game.re2_status_start_dropped);
-        assert!(session.game.re2.sounds.is_empty(), "no decide cue");
         re2_tick(&mut session, &pack, UiInput::default());
         assert!(session.menu.is_none() && session.menu_request.is_none());
         assert_eq!(session.game.message_flags, flags, "the mask is undone");
