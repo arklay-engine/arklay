@@ -352,13 +352,11 @@ impl GameState {
         let capacity = self.inventory_capacity();
         self.inventory
             .resize(capacity, super::InventoryItem::default());
+        // The equipped slot, which of a two-slot weapon's halves included.
         let equipped = self
             .equipped
-            .and_then(|item| {
-                self.inventory
-                    .iter()
-                    .position(|stack| stack.id == item && item != 0)
-            })
+            .filter(|&item| item != 0)
+            .and_then(|item| self.weapon_slot(item))
             .map_or(NONE, |slot| slot as u8);
         self.re2_box = Some(BoxPage {
             equipped,
@@ -426,6 +424,9 @@ impl GameState {
             .filter(|&id| id != 0 && equipped != NONE);
         if item != self.equipped {
             self.set_equipped(item);
+        }
+        if item.is_some() {
+            self.equipped_slot = Some(usize::from(equipped));
         }
     }
 
@@ -1035,6 +1036,36 @@ mod tests {
         press(&mut game, CONFIRM);
         assert_eq!(&slots(&game)[..3], [(2, 18), (1, 1), (0x26, 1)]);
         assert_eq!(game.re2.item_box[2], [0x0E, 7, 3]);
+    }
+
+    /// The page starts from the equipped slot, not the first slot of the
+    /// equipped id: a two-slot weapon's right half stays the equipped one
+    /// through the box.
+    #[test]
+    fn the_box_keeps_the_equipped_half_of_a_two_slot_weapon() {
+        let mut game = GameState::new(RoomId::parse("2010").unwrap(), &RoomState::default());
+        game.is_re2_room = true;
+        game.inventory = [(0x0F, 50), (0x0F, 50), (0x14, 30)]
+            .iter()
+            .map(|&(id, quantity)| InventoryItem { id, quantity })
+            .collect();
+        game.set_equipped(Some(0x0F));
+        game.equipped_slot = Some(1);
+        game.re2.item_box[0] = [0x14, 15, 0];
+        game.open_re2_box();
+        game.start_re2_box();
+        assert_eq!(game.re2_box.unwrap().equipped, 1);
+        // The box's rounds onto the inventory's, as `box_201` does.
+        press(&mut game, DOWN);
+        press(&mut game, CONFIRM);
+        press(&mut game, UP);
+        press(&mut game, UP);
+        press(&mut game, CONFIRM);
+        press(&mut game, CONFIRM);
+        assert_eq!(slots(&game)[2], (0x14, 45));
+        game.close_re2_box();
+        assert_eq!(game.equipped, Some(0x0F));
+        assert_eq!(game.equipped_slot, Some(1));
     }
 
     #[test]

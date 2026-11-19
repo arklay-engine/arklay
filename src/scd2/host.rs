@@ -774,7 +774,9 @@ pub fn item_get_slot(
             return Ok(ItemGetSlot::Merge(index));
         }
     }
-    match capacity.saturating_sub(inventory.len()) {
+    // `Search_item(1)`: the empty slots, wherever they are.
+    let held = inventory.iter().filter(|stack| stack.id != 0).count();
+    match capacity.saturating_sub(held) {
         0 => Err(MESSAGE_FULL),
         1 if crate::game::itembox2::is_wide(item) => Err(MESSAGE_NO_ROOM_WIDE),
         _ => Ok(ItemGetSlot::New),
@@ -3541,7 +3543,8 @@ impl Host for GameHost<'_> {
                     return Step::False;
                 }
             }
-            "sce_item_get" => self.game.add_item(at(0) as u8, at(1) as u8),
+            // `Sce_Item_get` (`0x4E8830`): `Set_item`, which joins no stack.
+            "sce_item_get" => self.game.set_re2_item(at(0) as u8, at(1) as u8),
             // The PC executable has no rumble: both handlers (`0x4E9110`) only
             // step over their operands.
             "vib_set0" | "vib_set1" => {}
@@ -3553,9 +3556,7 @@ impl Host for GameHost<'_> {
                     self.game.re2.xa_volume = level;
                 }
             }
-            "sce_item_lost" => {
-                self.game.remove_item(at(0) as u8);
-            }
+            "sce_item_lost" => self.game.lose_re2_item(at(0) as u8),
             "movie_on" => self.movie_on(at(0) as u8),
             _ => log_unmodelled(op.mnemonic),
         }
@@ -5800,6 +5801,20 @@ mod tests {
                 Ok(ItemGetSlot::New)
             );
         }
+        // `Search_item(1)` counts the empty slots wherever they are: EASY's
+        // start has one before its bullets.
+        let easy = [
+            stack(0x02, 18),
+            stack(0x01, 1),
+            stack(0, 0),
+            stack(0x14, 120),
+        ];
+        assert_eq!(item_get_slot(&easy, 4, 0x59, 1), Ok(ItemGetSlot::New));
+        assert_eq!(
+            item_get_slot(&easy, 4, 0x0F, 100),
+            Err(MESSAGE_NO_ROOM_WIDE)
+        );
+        assert_eq!(item_get_slot(&easy, 5, 0x0F, 100), Ok(ItemGetSlot::New));
         assert_eq!(item_max(0x14), 250);
         assert_eq!(item_max(0x1D), 240);
         assert_eq!(item_max(0x17), 100);
@@ -6016,6 +6031,33 @@ mod tests {
         assert_eq!(game.equipped, Some(0x02));
         assert_eq!(game.equipped_slot, Some(2));
         assert_eq!(game.weapon_slot(0x02), Some(2));
+    }
+
+    /// `Sce_Item_get` (`0x4E8830`) is `Set_item`: a two-slot weapon goes
+    /// to the first two slots, and rounds join no stack. `Sce_Item_lost`
+    /// (`0x4E8700`) clears the first slot that holds the item.
+    #[test]
+    fn the_scripts_give_through_set_item_and_take_a_whole_slot() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.inventory = stacks(&[(0x02, 18), (0x14, 30)]);
+        game.set_equipped(Some(0x02));
+        let mut host = GameHost { game: &mut game };
+        let get = crate::scd2::opcode::by_mnemonic("sce_item_get").unwrap();
+        let lost = crate::scd2::opcode::by_mnemonic("sce_item_lost").unwrap();
+        host.exec(0, get, &[0x0F, 100]);
+        host.exec(0, get, &[0x14, 20]);
+        assert_eq!(
+            game.inventory,
+            stacks(&[(0x0F, 100), (0x0F, 100), (0x02, 18), (0x14, 30), (0x14, 20)])
+        );
+        assert_eq!(game.equipped_slot, Some(2));
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, lost, &[0x14]);
+        assert_eq!(
+            game.inventory,
+            stacks(&[(0x0F, 100), (0x0F, 100), (0x02, 18), (0x14, 20)])
+        );
     }
 
     /// `St_get_check` (`0x4FD5C0`) with one slot free: a two-slot weapon

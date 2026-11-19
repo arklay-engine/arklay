@@ -577,7 +577,8 @@ WIDE.TARGET = {
 local function slot_icon(api, d, slot, x, y)
     local item = api:re2_slot(slot)
     local texture, u, v = icon_cell(item)
-    if WIDE.mark(api, slot) == 2 then
+    -- `St_disp_itemlist` goes by the slot, not its mark.
+    if slot % 2 == 1 and WIDE.is(item) then
         texture, u, v = half_cell(item)
     end
     sprite(api, d, texture, x, y, SLOT_W, SLOT_H, u, v)
@@ -835,7 +836,7 @@ end
 -- cursor crosses a column at 4 a tick, 2 onto a two-slot weapon.
 local function cursor_step(api, cursor, target)
     local dx
-    if WIDE.is(api:re2_slot(target)) then
+    if WIDE.mark(api, target) ~= 0 then
         dx = cursor % 2 == 1 and -2 or 2
     else
         dx = 4 * (target % 2 - cursor % 2)

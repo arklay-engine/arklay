@@ -65,7 +65,7 @@ impl GameState {
     /// `St+8`'s low byte: the slot of the equipped item, 0x80 for none.
     pub fn re2_equip_slot(&self) -> u8 {
         self.equipped
-            .and_then(|item| self.inventory.iter().position(|stack| stack.id == item))
+            .and_then(|item| self.weapon_slot(item))
             .map_or(NO_SLOT, |slot| slot as u8)
     }
 
@@ -155,6 +155,9 @@ pub fn st_chenge_pl(game: &mut GameState, next: u8) {
             .map(|slot| slot[0])
             .filter(|&id| id != 0);
         game.set_equipped(equipped);
+        if equipped.is_some() {
+            game.equipped_slot = Some(usize::from(stash.equip_slot));
+        }
         game.re2.personal_item = [if next & 1 == 0 { LIGHTER } else { LOCKPICK }, 1];
     }
     game.re2.set_flag(FG_COMMON, FG_COMMON_STASHED, 0);

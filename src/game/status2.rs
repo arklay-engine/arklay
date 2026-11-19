@@ -943,14 +943,9 @@ impl GameState {
         // slots after the first empty one move up one and the last is
         // cleared. Only a start that leaves a gap (EASY's bullets in slot
         // 3) shows it.
-        let size = self.inventory_capacity().min(self.inventory.len());
-        if let Some(empty) = self.inventory[..size]
-            .iter()
-            .position(|stack| stack.id == 0)
-        {
-            self.inventory[empty..size].rotate_left(1);
-            self.inventory[size - 1] = super::InventoryItem::default();
-        }
+        let size = self.inventory.len();
+        self.sort_re2_items();
+        self.inventory.resize(size, super::InventoryItem::default());
     }
 
     /// `Stage_init_item`'s (`0x500EE0`) EASY steps at a new game: Leon's
@@ -1323,8 +1318,11 @@ impl GameState {
                     out.sounds.push(Sound::Cursor);
                 }
                 if input.confirm {
-                    // `0x502590`: the same slot and an empty one combine with
-                    // nothing.
+                    // `Check_item_mix` (`0x502590`) reads the target a move
+                    // on this tick left: the same slot and an empty one
+                    // combine with nothing.
+                    let target = page.target;
+                    let [other, _] = self.re2_slot(target);
                     let found = (target != cursor && other != 0)
                         .then(|| recipe(item, other))
                         .flatten();
@@ -1475,6 +1473,10 @@ impl GameState {
                 let next = self.re2_slot(hole + 1);
                 self.set_re2_slot(hole, next);
                 self.set_re2_slot(hole + 1, [0, 0]);
+                // The equipped slot moves with its item.
+                if self.equipped_slot == Some(usize::from(hole) + 1) {
+                    self.equipped_slot = Some(usize::from(hole));
+                }
             }
             _ => {
                 page.close_menu();

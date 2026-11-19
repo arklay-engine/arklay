@@ -6325,8 +6325,24 @@ impl GameState {
     /// rearrange: drop empty stacks and refresh the total-held and selected
     /// state bytes the scripts read.
     pub fn rebuild_slots(&mut self) {
+        // The equipped slot stays on its item as the empty ones before it go.
+        if let Some(slot) = self.equipped_slot {
+            let holes = self
+                .inventory
+                .iter()
+                .take(slot)
+                .filter(|stack| stack.id == 0)
+                .count();
+            self.equipped_slot = Some(slot - holes);
+        }
         self.inventory.retain(|stack| stack.id != 0);
-        self.state_bytes[usize::from(STATE_BYTE_TOTAL_HELD)] = self.inventory.len() as u8;
+        self.sync_slot_bytes();
+    }
+
+    /// The total-held and selected state bytes the scripts read.
+    fn sync_slot_bytes(&mut self) {
+        let held = self.inventory.iter().filter(|stack| stack.id != 0).count();
+        self.state_bytes[usize::from(STATE_BYTE_TOTAL_HELD)] = held as u8;
         self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = self.selected_item.unwrap_or(0);
     }
 
@@ -10048,11 +10064,58 @@ impl GameState {
         crate::scd2::host::item_get_slot(&self.inventory, self.inventory_capacity(), item, amount)
     }
 
+    /// `Set_item` (`0x502820`): the item goes into the first empty slot. A
+    /// two-slot weapon takes the first two slots instead: `0x502720` moves
+    /// every slot down two, the last two falling off, and the equipped slot
+    /// with its item, or to none when that was in the last two. With no
+    /// empty slot a one-slot item is dropped (the original writes outside
+    /// its slots).
+    pub(crate) fn set_re2_item(&mut self, item: u8, quantity: u8) {
+        let stack = InventoryItem { id: item, quantity };
+        let capacity = self.inventory_capacity();
+        if itembox2::is_wide(item) {
+            self.inventory.splice(0..0, [stack, stack]);
+            self.inventory.truncate(capacity);
+            if let Some(slot) = self.equipped_slot {
+                if slot + 2 < capacity {
+                    self.equipped_slot = Some(slot + 2);
+                } else {
+                    self.set_equipped(None);
+                }
+            }
+        } else if let Some(hole) = self.inventory.iter().position(|slot| slot.id == 0) {
+            self.inventory[hole] = stack;
+        } else if self.inventory.len() < capacity {
+            self.inventory.push(stack);
+        }
+        self.sync_slot_bytes();
+    }
+
+    /// `Sort_item` (`0x502690`): the slots after the first empty one move
+    /// up one, and the equipped slot with its item.
+    pub(crate) fn sort_re2_items(&mut self) {
+        let Some(hole) = self.inventory.iter().position(|slot| slot.id == 0) else {
+            return;
+        };
+        self.inventory.remove(hole);
+        if let Some(slot) = self.equipped_slot.filter(|&slot| slot > hole) {
+            self.equipped_slot = Some(slot - 1);
+        }
+    }
+
+    /// `Sce_Item_lost` (`0x4E8700`): the first slot that holds `item` is
+    /// cleared, whatever its count, and `Sort_item` runs, held or not.
+    pub(crate) fn lose_re2_item(&mut self, item: u8) {
+        if let Some(slot) = self.inventory.iter_mut().find(|slot| slot.id == item) {
+            *slot = InventoryItem::default();
+        }
+        self.sort_re2_items();
+        self.sync_slot_bytes();
+    }
+
     /// Routine 3's sub 3 (`0x4FD875`): the item joins the stack the check
-    /// chose, or the first free slot (`Set_item`, `0x502820`), its flag is
-    /// set and its area and object go. A two-slot weapon takes the first
-    /// two slots: every item moves two slots down (`0x502720`), and the
-    /// equipped slot with them. HARD's table rewrites the area's count once more
+    /// chose, or goes where [`Self::set_re2_item`] puts it, its flag is
+    /// set and its area and object go. HARD's table rewrites the area's count once more
     /// first ([`crate::scd2::host::st_get_item_count`]), and the stack's add is
     /// a byte add, which wraps.
     fn take_re2_item(
@@ -10075,20 +10138,10 @@ impl GameState {
                 let stack = &mut self.inventory[index];
                 stack.quantity = stack.quantity.wrapping_add(amount);
             }
-            Some(ItemGetSlot::New) | None if itembox2::is_wide(item) => {
-                let half = InventoryItem {
-                    id: item,
-                    quantity: amount,
-                };
-                self.inventory.splice(0..0, [half, half]);
-                self.equipped_slot = self.equipped_slot.map(|slot| slot + 2);
-            }
-            Some(ItemGetSlot::New) | None => self.inventory.push(InventoryItem {
-                id: item,
-                quantity: amount,
-            }),
+            // An empty slot among the held ones (EASY's start) takes a
+            // one-slot item, and otherwise stays until a `Sort_item`.
+            Some(ItemGetSlot::New) | None => self.set_re2_item(item, amount),
         }
-        self.rebuild_slots();
         // `WORD_0098eaea`: the area's first data word, which the next
         // pass's `Sce_work_clr` sets back to 0xFFFF.
         self.re2.vars[crate::scd2::host::VAR_TAKEN_ITEM] = u16::from(item);
@@ -10230,7 +10283,9 @@ impl GameState {
             let taken = spare.quantity.min(magazine);
             spare.quantity -= taken;
             if spare.quantity == 0 {
-                self.inventory.remove(index);
+                // The emptied stack goes and `Sort_item` closes its gap.
+                self.inventory[index] = InventoryItem::default();
+                self.sort_re2_items();
             }
             if let Some(index) = self
                 .weapon_slot(weapon)
@@ -12135,6 +12190,116 @@ mod tests {
         assert_eq!(game.countdown_frame, 0, "the second restarts, then stays");
         game.tick_countdown();
         assert_eq!(game.countdown_frame, 0);
+    }
+
+    /// `Set_item` (`0x502820`): a one-slot item takes the first empty slot,
+    /// a two-slot weapon the first two, with every slot moved down two.
+    #[test]
+    fn set_re2_item_fills_the_first_gap_or_moves_the_slots_down() {
+        let stack = |id, quantity| InventoryItem { id, quantity };
+        // EASY's start: the bullets in slot 3, slot 2 empty.
+        let easy = vec![stack(2, 18), stack(1, 1), stack(0, 0), stack(0x14, 120)];
+        let mut game = GameState {
+            is_re2_room: true,
+            inventory: easy.clone(),
+            equipped_slot: Some(0),
+            ..Default::default()
+        };
+        game.set_re2_item(0x26, 1);
+        assert_eq!(
+            game.inventory,
+            [stack(2, 18), stack(1, 1), stack(0x26, 1), stack(0x14, 120)]
+        );
+        // No gap: the next slot, and nothing once every slot is held.
+        game.set_re2_item(0x27, 1);
+        assert_eq!(game.inventory[4], stack(0x27, 1));
+        let capacity = game.inventory_capacity();
+        game.inventory.resize(capacity, stack(0x23, 1));
+        game.set_re2_item(0x28, 1);
+        assert_eq!(game.inventory.len(), capacity);
+        assert_eq!(game.item_count(0x28), 0);
+
+        // A two-slot weapon: the gap moves down with the rest.
+        game.inventory = easy;
+        game.set_re2_item(crate::player2::SMG, 100);
+        assert_eq!(
+            game.inventory,
+            [
+                stack(crate::player2::SMG, 100),
+                stack(crate::player2::SMG, 100),
+                stack(2, 18),
+                stack(1, 1),
+                stack(0, 0),
+                stack(0x14, 120)
+            ]
+        );
+        assert_eq!(game.equipped_slot, Some(2));
+        // The last two slots fall off, an equipped one with its item.
+        game.inventory = (0..capacity)
+            .map(|slot| stack(0x20 + slot as u8, 1))
+            .collect();
+        game.equipped = Some(0x20 + capacity as u8 - 1);
+        game.equipped_slot = Some(capacity - 1);
+        game.set_re2_item(crate::player2::SPARK, 100);
+        assert_eq!(game.inventory.len(), capacity);
+        assert_eq!(game.inventory[2], stack(0x20, 1));
+        assert_eq!(
+            game.inventory[capacity - 1],
+            stack(0x20 + capacity as u8 - 3, 1)
+        );
+        assert_eq!((game.equipped, game.equipped_slot), (None, None));
+    }
+
+    /// `Sort_item` (`0x502690`) closes the first gap and moves the equipped
+    /// slot with its item: after `Sce_Item_lost`, which clears a whole
+    /// slot, and after a reload that empties a stack before the weapon.
+    #[test]
+    fn a_closed_gap_moves_the_equipped_slot_with_its_item() {
+        let stack = |id, quantity| InventoryItem { id, quantity };
+        let mut game = GameState {
+            is_re2_room: true,
+            equipped: Some(3),
+            equipped_weapon_id: 3,
+            equipped_slot: Some(2),
+            inventory: vec![
+                stack(0x30, 1),
+                stack(RE2_HANDGUN_BULLETS, 5),
+                stack(3, 2),
+                stack(RE2_HANDGUN_BULLETS, 30),
+            ],
+            ..Default::default()
+        };
+        game.lose_re2_item(0x30);
+        assert_eq!(game.inventory[1], stack(3, 2));
+        assert_eq!(game.equipped_slot, Some(1));
+        // Not held: the sort still runs, on no gap.
+        game.lose_re2_item(0x31);
+        assert_eq!(game.inventory.len(), 3);
+        // The first stack of rounds goes whole into the handgun.
+        game.re2.player.reloaded = true;
+        game.re2_settle_ammo();
+        assert_eq!(
+            game.inventory,
+            [stack(3, 7), stack(RE2_HANDGUN_BULLETS, 30)]
+        );
+        assert_eq!(game.equipped_slot, Some(0));
+        // The whole slot goes, whatever its count.
+        game.lose_re2_item(RE2_HANDGUN_BULLETS);
+        assert_eq!(game.inventory, [stack(3, 7)]);
+    }
+
+    /// The empty slots a rebuild drops take the equipped slot up with them.
+    #[test]
+    fn a_rebuild_keeps_the_equipped_slot_on_its_item() {
+        let stack = |id, quantity| InventoryItem { id, quantity };
+        let mut game = GameState {
+            equipped_slot: Some(3),
+            inventory: vec![stack(0, 0), stack(1, 1), stack(0, 0), stack(2, 18)],
+            ..Default::default()
+        };
+        game.rebuild_slots();
+        assert_eq!(game.inventory, [stack(1, 1), stack(2, 18)]);
+        assert_eq!(game.equipped_slot, Some(1));
     }
 
     /// `Set_iwork_num` (`0x502500`): a shot and a reload write the count
