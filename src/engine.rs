@@ -25789,6 +25789,18 @@ mod tests {
             "the page's ticks passed under the fade"
         );
         assert!(session.re2_status_close.is_none());
+        // The closing fade hands the room back with nothing of the screen
+        // left.
+        let mut close_ticks = 0;
+        while session.menu.is_some() {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            close_ticks += 1;
+            assert!(close_ticks < 100, "the closing fade never ended");
+        }
+        assert!(session.game.re2_items.is_none());
+        assert!(session.re2_status_open.is_none());
     }
 
     /// A new game's start in a wall is pushed out before the first tick, as
