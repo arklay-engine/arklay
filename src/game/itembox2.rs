@@ -352,27 +352,30 @@ impl GameState {
         let capacity = self.inventory_capacity();
         self.inventory
             .resize(capacity, super::InventoryItem::default());
-        let equipped = self
-            .equipped
-            .and_then(|item| {
-                self.inventory
-                    .iter()
-                    .position(|stack| stack.id == item && item != 0)
-            })
-            .map_or(NONE, |slot| slot as u8);
         self.re2_box = Some(BoxPage {
-            equipped,
+            equipped: self.re2_box_equipped(),
             started: false,
             ..self.re2_box_bytes
         });
+    }
+
+    /// The equipped slot for the page, which of a two-slot weapon's halves
+    /// included, or none.
+    fn re2_box_equipped(&self) -> u8 {
+        self.equipped
+            .filter(|&item| item != 0)
+            .and_then(|item| self.weapon_slot(item))
+            .map_or(NONE, |slot| slot as u8)
     }
 
     /// `St_init01`'s step 0, on the screen's sixth tick, once its loads
     /// are done: the page's bytes set, and `fg_stop` back to what it was
     /// before the lid's swing (the original's is 0 again from this tick).
     pub fn start_re2_box(&mut self) {
+        // The slot as the screen's opening `Sort_item` left it.
+        let equipped = self.re2_box_equipped();
         if let Some(page) = self.re2_box.as_mut() {
-            *page = BoxPage::new(0, page.equipped);
+            *page = BoxPage::new(0, equipped);
             *self.re2.fg_stop_mut() = self.re2_box_entrance.saved_stop;
         }
     }
@@ -426,6 +429,9 @@ impl GameState {
             .filter(|&id| id != 0 && equipped != NONE);
         if item != self.equipped {
             self.set_equipped(item);
+        }
+        if item.is_some() {
+            self.equipped_slot = Some(usize::from(equipped));
         }
     }
 
@@ -1035,6 +1041,59 @@ mod tests {
         press(&mut game, CONFIRM);
         assert_eq!(&slots(&game)[..3], [(2, 18), (1, 1), (0x26, 1)]);
         assert_eq!(game.re2.item_box[2], [0x0E, 7, 3]);
+    }
+
+    /// The page starts from the equipped slot, not the first slot of the
+    /// equipped id: a two-slot weapon's right half stays the equipped one
+    /// through the box.
+    #[test]
+    fn the_box_keeps_the_equipped_half_of_a_two_slot_weapon() {
+        let mut game = GameState::new(RoomId::parse("2010").unwrap(), &RoomState::default());
+        game.is_re2_room = true;
+        game.inventory = [(0x0F, 50), (0x0F, 50), (0x14, 30)]
+            .iter()
+            .map(|&(id, quantity)| InventoryItem { id, quantity })
+            .collect();
+        game.set_equipped(Some(0x0F));
+        game.equipped_slot = Some(1);
+        game.re2.item_box[0] = [0x14, 15, 0];
+        game.open_re2_box();
+        game.init_re2_status();
+        game.start_re2_box();
+        assert_eq!(game.re2_box.unwrap().equipped, 1);
+        // The box's rounds onto the inventory's, as `box_201` does.
+        press(&mut game, DOWN);
+        press(&mut game, CONFIRM);
+        press(&mut game, UP);
+        press(&mut game, UP);
+        press(&mut game, CONFIRM);
+        press(&mut game, CONFIRM);
+        assert_eq!(slots(&game)[2], (0x14, 45));
+        game.close_re2_box();
+        assert_eq!(game.equipped, Some(0x0F));
+        assert_eq!(game.equipped_slot, Some(1));
+    }
+
+    /// The screen's opening `Sort_item` runs between the open and the
+    /// page's start: the page starts from the slot the sort left the
+    /// equipped item in.
+    #[test]
+    fn the_box_starts_from_the_equipped_slot_the_opening_sort_left() {
+        let mut game = GameState::new(RoomId::parse("2010").unwrap(), &RoomState::default());
+        game.is_re2_room = true;
+        game.inventory = [(1, 1), (0, 0), (2, 18), (0x16, 7)]
+            .iter()
+            .map(|&(id, quantity)| InventoryItem { id, quantity })
+            .collect();
+        game.set_equipped(Some(2));
+        assert_eq!(game.equipped_slot, Some(2));
+        game.open_re2_box();
+        game.init_re2_status();
+        game.start_re2_box();
+        assert_eq!(&slots(&game)[..3], [(1, 1), (2, 18), (0x16, 7)]);
+        assert_eq!(game.re2_box.unwrap().equipped, 1);
+        game.sync_re2_box_equip(game.re2_box.unwrap().equipped);
+        assert_eq!((game.equipped, game.equipped_slot), (Some(2), Some(1)));
     }
 
     #[test]

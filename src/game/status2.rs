@@ -864,14 +864,23 @@ fn read_out_step(page: &mut ItemPage) {
     }
 }
 
-/// A cursor move on the grid (`0x4F8177`) or over COMBN's target: right,
-/// left, down and up, in that order, all in one tick. Returns whether up
-/// left the top row for the tab bar, which only the grid allows.
-fn move_cursor(cursor: &mut u8, slots: u8, input: Input, tabs: bool) -> bool {
+/// A cursor move on the grid (`0x4F8177`) or over COMBN's target
+/// (`0x4F88B0`): right, left, down and up, in that order, all in one tick.
+/// `marks` are the slots' two-slot marks ([`super::itembox2::marks`]):
+/// right steps over a two-slot weapon's right half (the grid's not when
+/// the weapon holds the last two slots), and left from a right half
+/// leaves the weapon, or stays when it holds the first two. Returns
+/// whether up left the top row for the tab bar, which only the grid allows.
+fn move_cursor(cursor: &mut u8, slots: u8, marks: &[u8], input: Input, tabs: bool) -> bool {
+    let mark = |slot: u8| marks.get(usize::from(slot)).copied().unwrap_or(0);
     if input.right && *cursor < slots.saturating_sub(1) {
-        *cursor += 1;
+        let over = mark(*cursor) == 1 && (!tabs || *cursor < slots.saturating_sub(2));
+        *cursor += if over { 2 } else { 1 };
     }
     if input.left && *cursor > 0 && *cursor != PERSONAL_SLOT {
+        if mark(*cursor) == 2 {
+            *cursor = if *cursor == 1 { 2 } else { *cursor - 1 };
+        }
         *cursor -= 1;
     }
     if input.down {
@@ -934,14 +943,9 @@ impl GameState {
         // slots after the first empty one move up one and the last is
         // cleared. Only a start that leaves a gap (EASY's bullets in slot
         // 3) shows it.
-        let size = self.inventory_capacity().min(self.inventory.len());
-        if let Some(empty) = self.inventory[..size]
-            .iter()
-            .position(|stack| stack.id == 0)
-        {
-            self.inventory[empty..size].rotate_left(1);
-            self.inventory[size - 1] = super::InventoryItem::default();
-        }
+        let size = self.inventory.len();
+        self.sort_re2_items();
+        self.inventory.resize(size, super::InventoryItem::default());
     }
 
     /// `Stage_init_item`'s (`0x500EE0`) EASY steps at a new game: Leon's
@@ -1167,7 +1171,8 @@ impl GameState {
     /// The grid (`0x4F8177`).
     fn re2_grid(&mut self, page: &mut ItemPage, input: Input, out: &mut Outcome) {
         let before = page.cursor;
-        if move_cursor(&mut page.cursor, self.re2_slot_count(), input, true) {
+        let marks = self.re2_marks();
+        if move_cursor(&mut page.cursor, self.re2_slot_count(), &marks, input, true) {
             page.page = PAGE_TABS;
             out.sounds.push(Sound::Cancel);
             return;
@@ -1301,13 +1306,23 @@ impl GameState {
             0 => {
                 // The target, moved like the grid's cursor.
                 let before = page.target;
-                move_cursor(&mut page.target, self.re2_slot_count(), input, false);
+                let marks = self.re2_marks();
+                move_cursor(
+                    &mut page.target,
+                    self.re2_slot_count(),
+                    &marks,
+                    input,
+                    false,
+                );
                 if page.target != before {
                     out.sounds.push(Sound::Cursor);
                 }
                 if input.confirm {
-                    // `0x502590`: the same slot and an empty one combine with
-                    // nothing.
+                    // `Check_item_mix` (`0x502590`) reads the target a move
+                    // on this tick left: the same slot and an empty one
+                    // combine with nothing.
+                    let target = page.target;
+                    let [other, _] = self.re2_slot(target);
                     let found = (target != cursor && other != 0)
                         .then(|| recipe(item, other))
                         .flatten();
@@ -1378,6 +1393,8 @@ impl GameState {
                     self.set_re2_slot(cursor, [item, max]);
                     self.set_re2_slot(target, [other, (sum - u16::from(max)) as u8]);
                 }
+                // `Set_iwork_num`: both slots of a two-slot weapon.
+                self.sync_re2_wide(usize::from(cursor));
                 page.follow = false;
                 page.goto(1);
             }
@@ -1396,6 +1413,7 @@ impl GameState {
                     self.set_re2_slot(target, [other, max]);
                     self.set_re2_slot(cursor, [item, (sum - u16::from(max)) as u8]);
                 }
+                self.sync_re2_wide(usize::from(target));
                 page.follow = true;
                 page.goto(1);
             }
@@ -1455,6 +1473,10 @@ impl GameState {
                 let next = self.re2_slot(hole + 1);
                 self.set_re2_slot(hole, next);
                 self.set_re2_slot(hole + 1, [0, 0]);
+                // The equipped slot moves with its item.
+                if self.equipped_slot == Some(usize::from(hole) + 1) {
+                    self.equipped_slot = Some(usize::from(hole));
+                }
             }
             _ => {
                 page.close_menu();

@@ -1,0 +1,44 @@
+# Room 60F's sub-machine gun, a two-slot weapon, with five slots free (oracle/re2.md, "Two-slot weapons"): take it, close the message, then the status screen: the cursor across the weapon's two slots each way, its command list, EQUIP, and START.
+0
+360 action
+362
+470 action
+472
+560 action
+562
+640 start
+644
+700 left
+704
+720 left
+724
+740 right
+744
+760 right
+764
+780 left
+784
+800 down
+804
+820 up
+824
+840 up
+844
+860 down
+864
+880 right
+884
+900 down
+904
+920 left
+924
+940 up
+944
+960 left
+964
+980 confirm
+984
+1010 confirm
+1014
+1080 start
+1084

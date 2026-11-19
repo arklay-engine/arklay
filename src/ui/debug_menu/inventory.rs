@@ -89,6 +89,10 @@ pub fn adjust(game: &mut GameState, slot: usize, delta: i32) {
     };
     let quantity = i32::from(stack.quantity) + delta;
     game.inventory[slot].quantity = quantity.clamp(0, i32::from(u8::MAX)) as u8;
+    // A two-slot weapon's halves hold one count.
+    if game.is_re2_room {
+        game.sync_re2_wide(slot);
+    }
     game.rebuild_slots();
 }
 

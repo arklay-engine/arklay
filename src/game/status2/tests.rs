@@ -1059,6 +1059,141 @@ fn a_held_right_moves_the_item_cursor_at_11_then_every_7() {
     assert_eq!(page(&game).cursor, 7);
 }
 
+/// The grid's step (`0x4F8177`) and COMBN's (`0x4F88B0`) over a two-slot
+/// weapon, whose slots `Item_work` marks 1 and 2.
+#[test]
+fn the_cursor_steps_over_a_two_slot_weapon() {
+    let step = |from: u8, marks: &[u8], input: Input, tabs: bool| {
+        let mut cursor = from;
+        move_cursor(&mut cursor, 8, marks, input, tabs);
+        cursor
+    };
+    for tabs in [true, false] {
+        // The weapon in the first two slots, as a pick-up leaves it.
+        let first = [1, 2, 0, 0, 0, 0, 0, 0];
+        assert_eq!(step(0, &first, RIGHT, tabs), 2);
+        assert_eq!(step(2, &first, LEFT, tabs), 1);
+        // Left from its right half has nowhere to go.
+        assert_eq!(step(1, &first, LEFT, tabs), 1);
+        assert_eq!(step(1, &first, RIGHT, tabs), 2);
+        // Down and up are the rows', marks or not.
+        assert_eq!(step(1, &first, DOWN, tabs), 3);
+        assert_eq!(step(3, &first, UP, tabs), 1);
+        // In the second row: right goes over it, left from its right half
+        // leaves it, and left from the slot after it lands on that half.
+        let second = [0, 0, 1, 2, 0, 0, 0, 0];
+        assert_eq!(step(1, &second, RIGHT, tabs), 2);
+        assert_eq!(step(2, &second, RIGHT, tabs), 4);
+        assert_eq!(step(3, &second, LEFT, tabs), 1);
+        assert_eq!(step(4, &second, LEFT, tabs), 3);
+        assert_eq!(step(2, &second, LEFT, tabs), 1);
+        // No marks: the plain steps.
+        assert_eq!(step(2, &[0; 8], RIGHT, tabs), 3);
+        assert_eq!(step(3, &[0; 8], LEFT, tabs), 2);
+    }
+    // In the last two slots the grid's right goes to the right half; COMBN's
+    // has no such test and leaves the slots (`0x4F88F5`).
+    let last = [0, 0, 0, 0, 0, 0, 1, 2];
+    assert_eq!(step(6, &last, RIGHT, true), 7);
+    assert_eq!(step(6, &last, RIGHT, false), 8);
+    assert_eq!(step(7, &last, RIGHT, true), 7);
+}
+
+/// Presses 20 ticks apart from tick 400: `select` to the item, its COMBN,
+/// `aim` for the target, then the decide key with `last`.
+fn combine(start: GameState, select: &[Input], aim: &[Input], last: Input) -> Run {
+    let mut presses = Vec::new();
+    let mut tick = 400;
+    let mut press = |input: Input| {
+        presses.push((tick, input));
+        tick += 20;
+    };
+    select.iter().copied().for_each(&mut press);
+    [CONFIRM, DOWN, DOWN, CONFIRM]
+        .into_iter()
+        .for_each(&mut press);
+    aim.iter().copied().for_each(&mut press);
+    press(Input {
+        confirm: true,
+        ..last
+    });
+    let mut run = Run::new(start, 399);
+    run.until(tick + 40, &presses);
+    run
+}
+
+/// The item page with the sub-machine gun as a pick-up leaves it: bullets
+/// combined onto either of its slots, or from either, count in both
+/// (`Set_iwork_num`, `0x502500`).
+#[test]
+fn rounds_load_into_both_slots_of_a_two_slot_weapon() {
+    let smg = crate::player2::SMG;
+    let cases: [(&[Input], &[Input], u8, u8); 4] = [
+        // From the bullets onto the left half, and onto the right; the
+        // cursor follows the rounds to the weapon.
+        (&[DOWN], &[UP], 0, 0),
+        (&[DOWN], &[LEFT], 1, 1),
+        // From the weapon's left half, and from its right, onto the bullets.
+        (&[], &[RIGHT], 0, 2),
+        (&[DOWN, LEFT], &[RIGHT], 1, 2),
+    ];
+    for (select, aim, cursor, target) in cases {
+        let start = game(&[(smg, 40), (smg, 40), (0x1B, 100), (0x02, 18)]);
+        let run = combine(start, select, aim, NONE);
+        let page = run.game.re2_items.unwrap();
+        assert_eq!((page.cursor, page.target), (cursor, target));
+        assert_eq!(
+            run.inventory(),
+            "f:100,f:100,1b:40,2:18,0:0,0:0,0:0,0:0",
+            "from {cursor} onto {target}"
+        );
+    }
+}
+
+/// `St_com_mix` moves the target and then asks `Check_item_mix`, in one
+/// tick: a direction pressed with the decide key combines with the slot the
+/// target lands on, not the one it left.
+#[test]
+fn a_combine_reads_the_target_a_move_on_its_tick_left() {
+    let smg = crate::player2::SMG;
+    let items = [(smg, 40), (smg, 40), (0x1B, 100), (0x02, 18)];
+    // Right over the weapon to its bullets, then right and decide: the
+    // handgun, which the weapon takes nothing from.
+    let run = combine(game(&items), &[], &[RIGHT], RIGHT);
+    let page = run.game.re2_items.unwrap();
+    assert_eq!((page.target, page.step), (3, 0));
+    assert_eq!(run.inventory(), "f:40,f:40,1b:100,2:18,0:0,0:0,0:0,0:0");
+    // The other way: left and decide from the handgun lands on the bullets.
+    let run = combine(game(&items), &[], &[RIGHT, RIGHT], LEFT);
+    assert_eq!(run.inventory(), "f:100,f:100,1b:40,2:18,0:0,0:0,0:0,0:0");
+}
+
+/// COMBN's step 2 moves the equipped slot with its item as a gap closes,
+/// and the close's compaction keeps it there.
+#[test]
+fn the_equipped_slot_follows_its_item_up_a_closing_gap() {
+    let mut game = game(&[(0x26, 1), (0x02, 18), (0x01, 1)]);
+    game.set_equipped(Some(0x02));
+    assert_eq!(game.equipped_slot, Some(1));
+    game.inventory[0] = InventoryItem::default();
+    let mut page = game.re2_items.unwrap();
+    game.re2_compact_step(&mut page);
+    assert_eq!(game.re2_slot(0), [0x02, 18]);
+    assert_eq!(game.equipped_slot, Some(0));
+    game.re2_compact_step(&mut page);
+    assert_eq!(game.re2_slot(1), [0x01, 1]);
+    assert_eq!(game.equipped_slot, Some(0));
+
+    // A screen closed with the gap still open.
+    let mut game = self::game(&[(0x26, 1), (0x01, 1), (0x02, 18)]);
+    game.set_equipped(Some(0x02));
+    game.inventory[0] = InventoryItem::default();
+    game.close_re2_items();
+    assert_eq!(game.inventory.len(), 2);
+    assert_eq!(game.equipped_slot, Some(1));
+    assert_eq!(game.weapon_slot(0x02), Some(1));
+}
+
 #[test]
 fn a_held_left_in_the_carousel_turns_again_at_the_end_of_a_turn() {
     use crate::game::pad_repeat as pad;

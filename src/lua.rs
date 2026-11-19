@@ -550,10 +550,16 @@ mod imp {
                         id,
                         quantity: quantity.unwrap_or(1),
                     };
-                    if slot < game.inventory.len() {
+                    let slot = if slot < game.inventory.len() {
                         game.inventory[slot] = stack;
+                        slot
                     } else {
                         game.inventory.push(stack);
+                        game.inventory.len() - 1
+                    };
+                    // A two-slot weapon's halves hold one count.
+                    if game.is_re2_room && id != 0 {
+                        game.sync_re2_wide(slot);
                     }
                     game.rebuild_slots();
                     Ok(())
