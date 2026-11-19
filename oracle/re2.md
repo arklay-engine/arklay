@@ -743,7 +743,7 @@ The handguns' hits under HARD (`oracle/re2-regress.d/hard-mode-handgun.toml`, #5
 
 The custom handgun's hit (weapon 4) and a Beretta's second roll have no recording: unit tests in `src/weapon2.rs` check them against the decompile.
 
-arklay's `ui/char_select.lua` opens `ui/title.lua` on ORIGINAL MODE's character rows, as the confirm leaves them, with no white from the boot; the hand-off passes the character and the choice (`api:exit("new_game", character, {easy, hard_mode, censorship_off})`) on to the game, which starts with them as `FUN_004b73c0` and `Title_game_init` do (`oracle/re2-deviations.md`, "The new-game choice").
+arklay's `ui/char_select.lua` opens `ui/title.lua` on ORIGINAL MODE's character rows, as the confirm leaves them, with no white from the boot, and is told what the title is (the settings' volumes, the end of a film the prologue asked for) and runs at the limiter the script asks for; opened on its own (`--ui select`) it plays no films, as every `--ui` entry, so the prologue's two are over at once; the hand-off passes the character and the choice (`api:exit("new_game", character, {easy, hard_mode, censorship_off})`) on to the game, which starts with them as `FUN_004b73c0` and `Title_game_init` do (`oracle/re2-deviations.md`, "The new-game choice").
 
 ## The prologue
 
