@@ -10973,10 +10973,11 @@ struct App {
     /// whose own option screen shows and sets them (its `on_volumes`).
     /// `None` in a run with no settings, where such a screen keeps its own.
     screen_volumes: Option<[u8; 2]>,
-    /// What the title last published as its `music_volume` and
-    /// `effects_volume`, to tell a change of its own from what it was told;
-    /// `None` until it publishes one after it is told.
-    screen_volumes_shown: [Option<i64>; 2],
+    /// What the title shows as its `music_volume` and `effects_volume`: the
+    /// value it published from `on_volumes`, then each one taken from it
+    /// since, to tell a change of its own from what it was told. `None`
+    /// when it published none from the hook, and nothing is taken from it.
+    screen_volumes_shown: [Option<u8>; 2],
     /// A change the title made, for the window's loop to apply and save
     /// ([`save_screen_volumes`]).
     volume_change: Option<[u8; 2]>,
@@ -11723,8 +11724,8 @@ impl App {
 
     /// Tell the title the settings' volumes (`on_volumes(api, music,
     /// effects)`) and note what it shows of them: a script may keep them in
-    /// a range of its own. A script that publishes nothing from the hook
-    /// has its first value after it taken as what it shows.
+    /// a range of its own. From a script that publishes nothing from the
+    /// hook nothing is taken.
     fn tell_screen_volumes(&mut self) {
         let Some([music, effects]) = self.screen_volumes else {
             return;
@@ -11740,14 +11741,16 @@ impl App {
             }
             let cx = self.context();
             screen.signal_with("on_volumes", (i64::from(music), i64::from(effects)), &cx);
-            self.screen_volumes_shown = SCREEN_VOLUME_KEYS.map(|key| screen.published(key));
+            self.screen_volumes_shown =
+                SCREEN_VOLUME_KEYS.map(|key| screen_volume(screen.published(key)));
         }
         self.mode = mode;
     }
 
     /// Take a change the title made to the volumes it shows: the value it
-    /// publishes differs from the last one seen. What it only shows
-    /// differently from the settings (a floor of 1) is no change.
+    /// publishes differs from the one it shows. What it only shows
+    /// differently from the settings (a floor of 1) is no change, and a
+    /// value no setting can hold, or none, leaves what it shows as it was.
     fn poll_screen_volumes(&mut self) {
         let (Some(mut volumes), Mode::Title(screen) | Mode::Select(screen)) =
             (self.screen_volumes, &self.mode)
@@ -11757,18 +11760,12 @@ impl App {
         if !screen.shows_volumes() {
             return;
         }
-        let shown = SCREEN_VOLUME_KEYS.map(|key| screen.published(key));
-        if shown == self.screen_volumes_shown {
-            return;
-        }
-        for (index, value) in shown.into_iter().enumerate() {
-            let before = std::mem::replace(&mut self.screen_volumes_shown[index], value);
-            // The first value after it was told is what it shows of that.
-            if before.is_some()
-                && before != value
-                && let Some(percent) = value.and_then(|value| u8::try_from(value).ok())
-                && percent <= 100
+        for (index, key) in SCREEN_VOLUME_KEYS.into_iter().enumerate() {
+            let shown = &mut self.screen_volumes_shown[index];
+            if let (Some(before), Some(percent)) = (*shown, screen_volume(screen.published(key)))
+                && before != percent
             {
+                *shown = Some(percent);
                 volumes[index] = percent;
             }
         }
@@ -14555,6 +14552,13 @@ pub(crate) fn persisted_options(
 /// The values a title publishes for the volumes it shows and sets
 /// ([`App::screen_volumes`]): the music's and the effects', in percent.
 const SCREEN_VOLUME_KEYS: [&str; 2] = ["music_volume", "effects_volume"];
+
+/// A published volume as a setting: a percent from 0 to 100.
+fn screen_volume(published: Option<i64>) -> Option<u8> {
+    published
+        .and_then(|value| u8::try_from(value).ok())
+        .filter(|&percent| percent <= 100)
+}
 
 /// A title's own option screen changed the music or effects volume: save
 /// both to the settings file at `path`, and return its `[game]` options
@@ -38802,7 +38806,7 @@ off_0010:
     /// settings tells and takes nothing.
     #[test]
     fn a_titles_volumes_are_the_settings_and_its_changes_are_taken() {
-        // `LATE` publishes from its `update` only, `false` from the hook too.
+        // With `LATE` the script publishes from its `update` only.
         const TITLE: &str = "local M = { music = 100, effects = 100 }
             local function publish(api)
                 api:set('music_volume', M.music)
@@ -38818,7 +38822,9 @@ off_0010:
                 if input.left then M.music = M.music - 5 end
                 if input.right then M.effects = M.effects + 200 end
                 if input.up then M.effects = M.effects + 1 end
+                if input.down then M.effects = 1 end
                 publish(api)
+                if input.cancel then api:set('effects_volume', nil) end
             end
             function M.draw() end
             return M";
@@ -38839,11 +38845,22 @@ off_0010:
             assert_eq!(app.volume_change, None, "showing 1 for 0 is no change");
             assert_eq!(app.screen_volumes, Some([40, 0]));
             app_press(&mut app, |ui| ui.left = true);
+            if late {
+                // It published nothing from the hook, so what it shows of
+                // the settings isn't known and nothing is taken from it.
+                assert_eq!(app.volume_change, None);
+                assert_eq!(app.screen_volumes, Some([40, 0]));
+                continue;
+            }
             assert_eq!(app.volume_change.take(), Some([35, 0]));
             idle(&mut app);
             assert_eq!(app.volume_change, None, "taken once");
-            // A value no setting can hold is left out.
+            // A value no setting can hold is left out, and so is none; the
+            // floored volume shown again after either is still no change.
             app_press(&mut app, |ui| ui.right = true);
+            app_press(&mut app, |ui| ui.down = true);
+            app_press(&mut app, |ui| ui.cancel = true);
+            idle(&mut app);
             assert_eq!(app.volume_change, None);
             assert_eq!(app.screen_volumes, Some([35, 0]));
             // The settings change under the title (the launcher's menu), to

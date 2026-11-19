@@ -230,13 +230,14 @@ function ScreenModule.on_film(api, skipped) end
 ---screen opens and again whenever the settings change. For a title with an
 ---option screen of its own that shows and sets them. Such a screen
 ---publishes the two it shows as `music_volume` and `effects_volume`
----([`api:set`](#ScreenApi.set)), from this hook or from the `update` after
----it, and again whenever one changes: the first value published after the
----hook is what the screen shows of what it was told, and when it changes
----to another from 0 to 100 the engine takes that as the player's new
----setting, mixes with it and saves it. A value the screen shows otherwise
----than it was told (a range of its own) is so no change until it moves.
----Both published values are forgotten as the hook is called. Not called in
+---([`api:set`](#ScreenApi.set)) from this hook, and again whenever one
+---changes: what it publishes from the hook is what it shows of what it was
+---told, and when a published value changes to another from 0 to 100 the
+---engine takes that as the player's new setting, mixes with it and saves
+---it. A value the screen shows otherwise than it was told (a range of its
+---own) is so no change until it moves. Both published values are forgotten
+---as the hook is called, and nothing is taken of a volume the hook doesn't
+---publish, or of a value outside 0 to 100. Not called in
 ---a run with no settings (a headless one), where the screen keeps its own
 ---values; a screen without the hook may publish what it likes under the
 ---two names.
