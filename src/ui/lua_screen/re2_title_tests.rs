@@ -161,7 +161,8 @@ fn a_load_wakes_the_title_into_its_hand_over() {
     let cx = context(&dir);
     let mut screen = asleep_under_the_load_screen(&dir);
     let asleep = ti(&screen);
-    screen.resume(&cx, true);
+    assert!(screen.continues());
+    screen.resume_loaded(&cx);
     assert_eq!(ti(&screen), asleep, "809: its work stands");
     assert_eq!(screen.value("ti_fgsys") & 0x400, 0);
     assert_eq!(
@@ -188,7 +189,7 @@ fn load_game_sleeps_under_the_load_screen_and_starts_again_after_it() {
     let cx = context(&dir);
     let mut screen = asleep_under_the_load_screen(&dir);
     let asleep = ti(&screen);
-    screen.resume(&cx, false);
+    screen.resume(&cx);
     assert_eq!(ti(&screen), asleep, "708: its work stands");
     // What the load screen left: nothing loaded, and fade 3 off in its
     // mode.

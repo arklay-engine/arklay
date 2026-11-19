@@ -521,13 +521,26 @@ impl LuaScreen {
         !self.host.failed && self.vm.has_function("on_resume")
     }
 
-    /// Put a screen that left back to work, calling its `on_resume(api,
-    /// loaded)`: the screen it left for has come back to it, `loaded` when
-    /// that screen chose a save for the game to continue from.
-    pub fn resume(&mut self, cx: &UiContext<'_>, loaded: bool) {
+    /// Whether the script has `on_loaded` as well: its owner then gives it
+    /// a save the screen it left for chose, to start the game from itself.
+    pub fn continues(&self) -> bool {
+        self.resumes() && self.vm.has_function("on_loaded")
+    }
+
+    /// Put a screen that left back to work, calling its `on_resume(api)`:
+    /// the screen it left for has come back to it.
+    pub fn resume(&mut self, cx: &UiContext<'_>) {
         self.host.exited = false;
         self.host.action = None;
-        self.signal_with("on_resume", loaded, cx);
+        self.signal("on_resume", cx);
+    }
+
+    /// [`LuaScreen::resume`] after the screen it left for chose a save,
+    /// calling its `on_loaded(api)` instead.
+    pub fn resume_loaded(&mut self, cx: &UiContext<'_>) {
+        self.host.exited = false;
+        self.host.action = None;
+        self.signal("on_loaded", cx);
     }
 }
 

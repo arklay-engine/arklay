@@ -10896,10 +10896,11 @@ struct App {
     /// script that resumes (`on_resume`): the original's title task sleeps
     /// under `Mem_card` and wakes when it ends.
     sleeping_title: Option<Box<ui::lua_screen::LuaScreen>>,
-    /// The save the load screen chose under a sleeping title, which the
-    /// title, woken, continues from when it hands over
-    /// ([`ScreenAction::Continue`]); any other action of its drops it.
-    pending_load: Option<PathBuf>,
+    /// The save the load screen chose under a sleeping title, read then,
+    /// which the title, woken, continues from when it hands over
+    /// ([`ScreenAction::Continue`]); any other action of its drops it, and
+    /// so does anything else that takes the title's place.
+    pending_load: Option<Box<save::SaveFile>>,
     /// What the screens keep past a screen (`api:keep`), shared with the
     /// sessions the app starts.
     statics: ui::ScreenStatics,
@@ -11410,6 +11411,7 @@ impl App {
             .is_some_and(|entry| self.pack.contains(entry));
         let special = i64::from(self.player_options.title_special.unwrap_or(15));
         self.sleeping_title = None;
+        self.pending_load = None;
         let mut cx = self.context();
         let screen = ui::lua_screen::LuaScreen::open_screen(
             "title",
@@ -11598,6 +11600,7 @@ impl App {
         // where the title's do, as the original's statics are the
         // process's.
         self.sleeping_title = None;
+        self.pending_load = None;
         session.screen_statics = self.statics.clone();
         #[cfg(feature = "bot")]
         self.start_bot_session(&mut session);
@@ -12009,10 +12012,14 @@ impl App {
     }
 
     /// Put the title that slept under the load screen back in charge,
-    /// `loaded` when that screen chose a save.
+    /// `loaded` when that screen chose a save for it to start.
     fn wake_title(&mut self, mut title: Box<ui::lua_screen::LuaScreen>, loaded: bool) {
         let cx = self.context();
-        title.resume(&cx, loaded);
+        if loaded {
+            title.resume_loaded(&cx);
+        } else {
+            title.resume(&cx);
+        }
         let cues = cx.cues.into_inner();
         self.mode = Mode::Title(title);
         self.play_ui_cues(cues);
@@ -12079,16 +12086,29 @@ impl App {
                 self.continue_from_slot(slot)?;
             }
             ScreenAction::LoadFile(path) => match sleeping_title {
-                // The title that opened the load screen starts the game
-                // itself, as the original's does on the tick it wakes.
-                Some(title) if matches!(self.mode, Mode::Load(_)) => {
-                    self.wake_title(title, true);
-                    self.pending_load = Some(path);
+                // A title that asks for it starts the game itself, as the
+                // original's does once it wakes. The save is read now, so
+                // what the title starts is what the screen chose; one that
+                // can't be read leaves the title as a cancel does.
+                Some(title) if matches!(self.mode, Mode::Load(_)) && title.continues() => {
+                    match save::load_file(&path) {
+                        Ok(file) => {
+                            self.wake_title(title, true);
+                            self.pending_load = Some(Box::new(file));
+                        }
+                        Err(err) => {
+                            crate::warning!("warning: cannot load {}: {err:#}", path.display());
+                            self.wake_title(title, false);
+                        }
+                    }
                 }
                 _ => self.continue_from_path(&path)?,
             },
             ScreenAction::Continue => match pending_load {
-                Some(path) => self.continue_from_path(&path)?,
+                Some(file) => {
+                    self.continue_from_file((*file).clone())?;
+                    self.restart_point = Some(RestartPoint::File(file));
+                }
                 None => {
                     crate::warning!("warning: a screen continued with no save chosen");
                     self.open_title()?;
@@ -31643,11 +31663,12 @@ mod tests {
         }
     }
 
-    /// A save chosen on the load screen under a sleeping title is the
-    /// title's to start: it wakes knowing of the load, and the game starts
-    /// from the save when it exits with `continue`; any other exit of its
-    /// forgets the save. A title that doesn't resume is dropped, and the
-    /// game starts at once.
+    /// A save chosen on the load screen under a sleeping title with
+    /// `on_loaded` is the title's to start: it wakes knowing of the load,
+    /// and the game starts from the save when it exits with `continue`; any
+    /// other exit of its forgets the save, and so does a title opened
+    /// anew. A title without the hook is dropped, and the game starts at
+    /// once.
     #[test]
     fn app_title_starts_the_game_its_load_screen_chose() {
         const TITLE: &str = "local M = {}
@@ -31664,13 +31685,23 @@ mod tests {
             end
             function M.draw() end
             return M";
-        const RESUME: &str = "function M.on_resume(api, loaded)
-                M.loaded = loaded
-                api:set('loaded', loaded)
+        const RESUME: &str = "function M.on_resume(api) end";
+        const LOADED: &str = "function M.on_loaded(api)
+                M.loaded = true
+                api:set('loaded', true)
             end";
-        for (resumes, forgets) in [(true, false), (true, true), (false, false)] {
+        // A title that resumes but has no `on_loaded` is dropped like one
+        // that doesn't resume: the game starts at once.
+        for (hooks, forgets) in [
+            ([RESUME, LOADED].join("\n"), None),
+            ([RESUME, LOADED].join("\n"), Some("exit")),
+            ([RESUME, LOADED].join("\n"), Some("title")),
+            (RESUME.to_string(), None),
+            (String::new(), None),
+        ] {
+            let resumes = hooks.contains("on_loaded");
             let dir = TempDir::new();
-            let title = TITLE.replace("RESUME", if resumes { RESUME } else { "" });
+            let title = TITLE.replace("RESUME", &hooks);
             let pack_path = new_game_pack_with(
                 &dir,
                 &[
@@ -31704,14 +31735,21 @@ mod tests {
             };
             assert_eq!(title.value("loaded"), 1);
             assert!(app.pending_load.is_some() && app.sleeping_title.is_none());
-            if forgets {
-                // The attract reel isn't in this pack: the title comes back
-                // either way, and the save is forgotten.
-                app_press(&mut app, |ui| ui.cancel = true);
+            if let Some(how) = forgets {
+                // Another exit of the title's (the attract reel isn't in
+                // this pack: the title comes back either way), or a title
+                // opened over it: the save is forgotten.
+                match how {
+                    "exit" => app_press(&mut app, |ui| ui.cancel = true),
+                    _ => app.open_title().unwrap(),
+                }
                 assert!(app.pending_load.is_none());
                 assert!(!matches!(app.mode, Mode::Play(_)));
                 continue;
             }
+            // The save is the one the screen chose, read then: the file
+            // going since changes nothing.
+            std::fs::remove_file(app.save_dir.join("chosen.dat")).unwrap();
             app_press(&mut app, |ui| ui.confirm = true);
             let Mode::Play(session) = &app.mode else {
                 panic!("expected the game");

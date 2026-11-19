@@ -693,8 +693,8 @@ def run_inputs(run: dict, out: Path, tag: str) -> tuple[Path | None, Path, str |
 def seed_saves(run: dict, ctx: dict, saves_dir: Path) -> str | None:
     """Fill `saves_dir` for a run with `saves_from`: arklay's own saves of the run it names, since the reference's are
     the original's `.BIOHAZARD2` files, which arklay doesn't read. arklay plays that run first, with no trace
-    compared and no frames, and each save it writes takes the name of the reference's, in order, so the list shows
-    the labels the original's record shows. Returns why it couldn't."""
+    compared and no frames, and each save it writes takes the name and the time of the reference's, in order, so the
+    list shows the rows the original's record shows. Returns why it couldn't."""
     name, out = run["name"], ctx["out"]
     source = ctx["manifest"].get(run["saves_from"])
     if source is None or source.get("ui", "game") != "game" or not source.get("saves"):
@@ -730,8 +730,12 @@ def seed_saves(run: dict, ctx: dict, saves_dir: Path) -> str | None:
     made = sorted(saves_dir.glob("*.dat"))
     if len(made) != len(ref_saves):
         return f"saves_from: arklay made {len(made)} saves playing {source['name']}, the reference has {len(ref_saves)}"
+    # The list is newest first, so each save takes the reference's time with its name.
     for save, ref_save in zip(made, ref_saves):
-        save.rename(save.with_name(ref_save.stem + ".dat"))
+        named = save.with_name(ref_save.stem + ".dat")
+        save.rename(named)
+        times = ref_save.stat()
+        os.utime(named, ns=(times.st_atime_ns, times.st_mtime_ns))
     if not ctx["keep"]:
         for path in out.glob(f"{tag}.*"):
             path.unlink()
@@ -774,12 +778,6 @@ def run_one(run: dict, ctx: dict) -> dict:
     if saves_dir.exists():
         shutil.rmtree(saves_dir)
     saves_dir.mkdir(parents=True)
-    if run.get("saves_from"):
-        why = seed_saves(run, ctx, saves_dir)
-        if why:
-            result["text"] = why
-            result["problems"].append(why)
-            return result
     voice = None
     if screen == "game" and run.get("sound", True) and run.get("voice_from_ref"):
         voice = voice_ticks(ref_trace)
@@ -788,6 +786,12 @@ def run_one(run: dict, ctx: dict) -> dict:
                                  frames_dir if want_frames else None, voice))
     command = [str(ctx["arklay"]), "script", "--headless", str(driver)]
     try:
+        if run.get("saves_from"):
+            why = seed_saves(run, ctx, saves_dir)
+            if why:
+                result["text"] = why
+                result["problems"].append(why)
+                return result
         return finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks, offset, compare_from,
                           ref_dir, ref_trace, ark_trace)
     finally:

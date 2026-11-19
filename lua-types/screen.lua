@@ -199,17 +199,21 @@ function ScreenModule.update(api, input) end
 ---@param api ScreenApi
 function ScreenModule.draw(api) end
 
----Called on a title screen when the load screen it left for comes back. A
----title that has it is kept as it stands while the load screen is up and
----carries on from its next `update`; one without it is opened anew, or
----dropped when the load screen loads a save.
----
----With `loaded`, the load screen chose a save ([`api:load`](#ScreenApi.load))
----and the title starts the game from it when it is ready: it exits with
----`continue`. Any other exit forgets the save.
+---Called on a title screen when the load screen it left for comes back
+---without loading a save. A title that has it is kept as it stands while
+---the load screen is up and carries on from its next `update`; one without
+---it is opened anew.
 ---@param api ScreenApi
----@param loaded boolean Whether the load screen chose a save.
-function ScreenModule.on_resume(api, loaded) end
+function ScreenModule.on_resume(api) end
+
+---Called on a title screen with [`on_resume`](#ScreenModule.on_resume) when
+---the load screen it left for chose a save
+---([`api:load`](#ScreenApi.load)): the title wakes as it stood and starts
+---the game from that save when it is ready, by exiting with `continue`.
+---Any other exit forgets the save. A title without it is dropped, and the
+---game starts at once.
+---@param api ScreenApi
+function ScreenModule.on_loaded(api) end
 
 ---The published view: what the screen shows a player, as a table of
 ---integers, numbers, strings, booleans and nested tables of them, for
@@ -543,7 +547,7 @@ function ScreenApi:remove(name) end
 
 ---Load `<save_dir>/<name>`: once this `update` returns, the screen closes
 ---and the game continues from that save, or, under a title with
----[`on_resume`](#ScreenModule.on_resume), that title wakes to start it.
+---[`on_loaded`](#ScreenModule.on_loaded), that title wakes to start it.
 ---Load mode only; the file must be a readable save.
 ---@param name string One plain file name.
 ---@return boolean ok
@@ -1408,6 +1412,6 @@ local Re2MapSprite = {}
 
 ---An [`api:exit`](#ScreenApi.exit) action: where the game goes next.
 ---`new_game` takes the character, `load_game` the slot. `continue` is a
----title's, after an [`on_resume`](#ScreenModule.on_resume) with `loaded`:
----the game continues from the save the load screen chose.
+---title's, after its [`on_loaded`](#ScreenModule.on_loaded): the game
+---continues from the save the load screen chose.
 ---@alias ScreenExit "title"|"char_select"|"save_load"|"continue"|"attract"|"resume"|"quit"|"ending_result"|"ending_epilogue"|"ending_save"|"new_game"|"load_game"

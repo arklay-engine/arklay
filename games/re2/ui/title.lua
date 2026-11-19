@@ -1962,7 +1962,7 @@ end
 -- stood, wakes on its next tick (`Title_main_load`'s second step). The
 -- screen leaves fade 3 off in the mode `Cardaccess_init` set it to, and,
 -- without a load, `fg_system`'s 0x400 up for that step to find and clear.
-function M.on_resume(api, loaded)
+local function resume(api, loaded)
     local fade = s.fades[3]
     fade.level, fade.add, fade.mode = -1, 0, 1
     s.loaded = loaded
@@ -1970,6 +1970,14 @@ function M.on_resume(api, loaded)
         s.fg_system = s.fg_system | FG_NO_LOAD
     end
     publish(api)
+end
+
+function M.on_resume(api)
+    resume(api, false)
+end
+
+function M.on_loaded(api)
+    resume(api, true)
 end
 
 -- A palette channel as the original's renderer expands the sheets' 5-bit

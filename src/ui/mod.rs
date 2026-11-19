@@ -140,7 +140,7 @@ pub enum ScreenAction {
     /// Continue from an explicit save file, the file a Lua screen chose.
     LoadFile(std::path::PathBuf),
     /// Continue from the save the load screen chose while the title that
-    /// opened it slept (`on_resume`'s `loaded`): the title's hand-over.
+    /// opened it slept (its `on_loaded`): the title's hand-over.
     Continue,
     /// Play the next attract-demo reel (`demo/<hex>.dat`), then return to the
     /// title.
