@@ -535,6 +535,11 @@ impl LuaScreen {
             .unwrap_or_else(|err| panic!("eval {body}: {err}"))
     }
 
+    /// Mark the script failed, as a call that raised an error does.
+    pub(crate) fn test_fail(&mut self) {
+        self.host.failed = true;
+    }
+
     /// Publish `key` as if the script had called `api:set`.
     pub(crate) fn test_set_value(&mut self, key: &str, value: i64) {
         self.host.values.insert(key.to_owned(), value);

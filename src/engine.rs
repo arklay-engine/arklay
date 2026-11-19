@@ -7731,6 +7731,12 @@ impl GameSession {
         if !self.re2_status_page_runs() {
             return false;
         }
+        // A failed menu script is closed by `tick_menu` once the fade is
+        // done; its page takes no more input under the fade either. A close
+        // the screen has begun is its own and runs on.
+        if self.re2_status_close.is_none() && self.menu.as_ref().is_some_and(|menu| menu.failed()) {
+            return false;
+        }
         if self.re2_status_close.is_some() {
             self.tick_re2_status_close(pack);
         } else {
@@ -25749,6 +25755,52 @@ mod tests {
             .unwrap();
         assert!(session.menu.is_none(), "the close ended");
         assert!(session.game.re2_items.is_none());
+    }
+
+    /// A menu script that failed under the open fade: the page takes no input
+    /// while the fade runs, and the menu closes when it is done, as it does
+    /// for a script that fails later.
+    #[test]
+    fn re2_status_page_of_a_failed_menu_waits_for_the_fade_and_closes() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = re2_status_open_session(&pack, a);
+        session.menu.as_mut().unwrap().test_fail();
+        let right = player::Input {
+            right: true,
+            ..player::Input::default()
+        };
+        let mut fade_ticks = 0;
+        while session.menu_fade_phase != MenuFadePhase::Closing {
+            let input = if fade_ticks % 2 == 0 {
+                right
+            } else {
+                player::Input::default()
+            };
+            session
+                .tick(&pack, UiInput::default(), input, false)
+                .unwrap();
+            assert_eq!(session.game.re2_items.unwrap().cursor, 0, "{fade_ticks}");
+            fade_ticks += 1;
+            assert!(fade_ticks < 100, "the menu never closed");
+        }
+        assert!(
+            session.re2_status_open.unwrap() > RE2_STATUS_PAGE_TICK,
+            "the page's ticks passed under the fade"
+        );
+        assert!(session.re2_status_close.is_none());
+        // The closing fade hands the room back with nothing of the screen
+        // left.
+        let mut close_ticks = 0;
+        while session.menu.is_some() {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            close_ticks += 1;
+            assert!(close_ticks < 100, "the closing fade never ended");
+        }
+        assert!(session.game.re2_items.is_none());
+        assert!(session.re2_status_open.is_none());
     }
 
     /// A new game's start in a wall is pushed out before the first tick, as
