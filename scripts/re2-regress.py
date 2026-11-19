@@ -494,12 +494,36 @@ def self_test() -> int:
     if starts != [(344, None), (1818, None)] or None in bad or kept != (1818, None):
         print(f"re2-regress self-test FAILED: compare_from {starts} {bad}", file=sys.stderr)
         return 1
-    problem = self_test_fields()
+    problem = self_test_fields() or self_test_gallery_hold()
     if problem:
         print(f"re2-regress self-test FAILED: {problem}", file=sys.stderr)
         return 1
     print("re2-regress self-test ok")
     return 0
+
+
+def self_test_gallery_hold() -> str | None:
+    """The recorder's hold of a gallery word (`held_gallery_word`): Classic REbirth's write is put back once, and
+    the bits the game sets over the record's are kept, before it and after, the last one's all-opened word too."""
+    spec = importlib.util.spec_from_file_location("oracle_re2", ROOT / "scripts" / "oracle-re2.py")
+    recorder = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(recorder)
+    classic, shut = 0xFFFFFFFF, 0xFFFFFFFE
+    # The memory a word reads tick by tick, and what it holds and whether it is written on each.
+    cases = [
+        (0x100, [0, 0x100, classic, 0x100, 0x140], [(0x100, False)] * 2 + [(0x100, True), (0x100, False), (0x140, False)]),
+        (0x100, [0x8100, classic, 0x8100], [(0x8100, False), (0x8100, True), (0x8100, False)]),
+        (shut, [classic, shut, classic, classic], [(shut, True), (shut, False), (classic, False), (classic, False)]),
+        (classic, [classic, classic], [(classic, False), (classic, False)]),
+    ]
+    for start, memory, want in cases:
+        held, put_back, got = start, False, []
+        for now in memory:
+            held, put_back, write = recorder.held_gallery_word(held, put_back, now, classic)
+            got.append((held, write))
+        if got != want:
+            return f"a gallery word held at {start:#x} over {[f'{now:#x}' for now in memory]} gave {got}"
+    return None
 
 
 def self_test_fields() -> str | None:
