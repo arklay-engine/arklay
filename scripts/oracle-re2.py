@@ -105,6 +105,7 @@ TITLE_B8C = 0x00691B8C  # the slide's second count (the 4TH title's logo level)
 TITLE_EF2 = 0x00691EF2  # EX.BATTLE's level page bytes
 # The option screen (`0x44A040`, `Config_main` 0x44A0B0), task 1 of `TASKS` while it runs.
 OPTION_TASK = 0x0044A040
+GAME_LOOP = 0x004BF810  # `Game_loop`, which the title's task chains to: play
 OPTION_STATE = 0x0099D001  # `Config_main`'s state
 OPTION_CURSOR = 0x0099CF68  # the menu's row
 OPTION_TYPE = 0x0068915C  # the sound page's row
@@ -1834,7 +1835,10 @@ def fade_slot(game: Game, slot: int) -> str:
 
 
 def boot_trace_line(game: Game, tick: int, pad: int) -> str:
-    """One tick from boot, before play: the title's state, the sound and the music."""
+    """One tick from boot. Before play: the title's state, the sound and the music. In play (task 0 runs
+    `Game_loop`): the game's line, with the title's fields after it as they were left."""
+    if game.u32(TASKS + 4) == GAME_LOOP:
+        return f"{trace_line(game, tick, pad)} {title_trace(game)}"
     fields = [
         f"t={tick}",
         f"room={game.u16(STAGE) + 1}:{game.u16(ROOM)}",

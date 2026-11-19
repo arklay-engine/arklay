@@ -186,6 +186,10 @@ const TITLE_CORE_VOLUME: u8 = 0x6E;
 /// platform frame. The port ticks those at this interval so their wall-clock
 /// timing matches.
 const UI_TICK_MS: f64 = 16.0;
+/// The ticks `Title_game_init` (`0x506750`) takes between the title's
+/// hand-over and `Game_loop`'s first tick, after the tick the session
+/// starts on: a load's seven ticks in all (`title_load_play`'s 811 to 817).
+const RE2_TITLE_START_TICKS: u8 = 6;
 /// The absent Virgin logo the boot sequence requests first.
 const BOOT_VLOGO_ID: u8 = 28;
 /// The Capcom logo the boot sequence requests after the Virgin logo.
@@ -2415,6 +2419,11 @@ struct GameSession {
     /// room stays frozen and the room-entry fade is not armed until the
     /// message's encoded delay dismisses it.
     boot_message: Option<u8>,
+    /// RE 2's start from the title (`Title_game_init`, `0x506750`): the
+    /// ticks its steps still take before `Game_loop`'s first, held on black
+    /// under [`GameSession::boot_message`]. `None` for a session the title
+    /// didn't start.
+    re2_title_start: Option<u8>,
     /// Whether the action button may skip the loading narration and the
     /// letterboxed cutscenes. Only the interactive loops turn it on, so a
     /// scripted input or trace run plays every scene out like the
@@ -3027,6 +3036,7 @@ impl GameSession {
             examine: None,
             swallow_action: false,
             boot_message: None,
+            re2_title_start: None,
             skips_enabled: false,
             subtitles_off: false,
             native_subtitle: false,
@@ -3923,7 +3933,14 @@ impl GameSession {
         // frames fade up from black exactly like the original.
         if self.boot_message.is_some() {
             self.step_sound_fade();
+            if let Some(left) = self.re2_title_start.filter(|&left| left > 0) {
+                self.re2_title_start = Some(left - 1);
+                return Ok(());
+            }
             self.tick_boot_message(input, action);
+            if self.boot_message.is_none() && self.re2_title_start.take().is_some() {
+                self.enter_from_re2_title();
+            }
             return Ok(());
         }
         // The item box's menu handshake: the frame after the lid settles the
@@ -9078,6 +9095,29 @@ impl GameSession {
         self.boot_message = Some(id);
     }
 
+    /// A save loaded from RE 2's title starts as the original's does: the
+    /// title's hand-over, six ticks of `Title_game_init`'s steps on black,
+    /// and `Game_loop`'s first tick on the seventh, with the random base as
+    /// a game's start leaves it (the original's save doesn't hold it).
+    fn start_from_re2_title(&mut self) {
+        if !self.game.is_re2_room || self.boot_message.is_none() {
+            return;
+        }
+        self.re2_title_start = Some(RE2_TITLE_START_TICKS);
+        self.game.re2.start_random();
+    }
+
+    /// `Game_loop`'s first tick after `Title_game_init`: the entry fade it
+    /// sets is a step on by the tick's end (`0x5000`), and the room's first
+    /// `Bg_loadPC` at that tick's `Swap_Cbuff` skips two frames
+    /// (`Movie_set(2)`), so the screen stays black for this tick and the two
+    /// after it.
+    fn enter_from_re2_title(&mut self) {
+        self.room_fade_draw = self.room_fade.overlay();
+        self.room_fade.tick();
+        self.present_skip.movie_set_black(3);
+    }
+
     /// One tick of the loading narration: advance the message window and, the
     /// tick its encoded delay clears it, arm the room-entry fade. No room
     /// script, entity, effect or player tick runs while the narration is up.
@@ -12108,6 +12148,9 @@ impl App {
                 Some(file) => {
                     self.continue_from_file((*file).clone())?;
                     self.restart_point = Some(RestartPoint::File(file));
+                    if let Mode::Play(session) = &mut self.mode {
+                        session.start_from_re2_title();
+                    }
                 }
                 None => {
                     crate::warning!("warning: a screen continued with no save chosen");
@@ -13154,8 +13197,15 @@ fn run_screen_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<
         }
         app.pending_movie = None;
         app.draw();
-        let sounds = std::mem::take(&mut app.ui_sounds);
-        out.write_line(&screen_trace_line(app, index, word, &sounds))?;
+        // A screen's trace that goes on into play (a load, a new game's
+        // choice) writes the game's line from there, a line a tick still.
+        if let Mode::Play(session) = &app.mode {
+            app.ui_sounds.clear();
+            out.write_tick(&session.trace_tick(&app.framebuffer))?;
+        } else {
+            let sounds = std::mem::take(&mut app.ui_sounds);
+            out.write_line(&screen_trace_line(app, index, word, &sounds))?;
+        }
         if options.capture_every > 0 && index % options.capture_every == 0 {
             write_trace_capture(app, options, index)?;
         }
@@ -34167,6 +34217,59 @@ mod tests {
             Some(255),
             "the room fades up from black as after a watched narration"
         );
+    }
+
+    /// A save RE 2's title starts (`title_load_play`): six ticks of
+    /// `Title_game_init`'s steps on black with nothing armed, then the tick
+    /// the game enters on, with the entry fade a step on (`0x5000`) and
+    /// three frames to stay black; and the random base is a game start's
+    /// (`rseed` 10439), not the save's. Another game's session isn't held.
+    #[test]
+    fn a_save_re2s_title_starts_enters_on_the_seventh_tick() {
+        let dir = TempDir::new();
+        let pack = Pack::open(&new_game_pack(&dir)).unwrap();
+        let open = |re2: bool| {
+            let mut session = GameSession::new(&pack, 0, &dir.0.join("saves")).unwrap();
+            session.game.is_re2_room = re2;
+            session.game.re2.random = 7;
+            // This pack's narration waits for a press; RE 2 has none.
+            session.set_skips_enabled(true);
+            session.request_boot_message(game::MESSAGE_BOOT_CONTINUE);
+            session.start_from_re2_title();
+            session
+        };
+        let press = |session: &mut GameSession| {
+            session
+                .tick(&pack, UiInput::default(), action_press(), true)
+                .unwrap();
+        };
+        let idle = |session: &mut GameSession| {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        };
+        let mut session = open(true);
+        assert_eq!(session.game.re2.random & 0xFFFF, 10439);
+        for tick in 0..6 {
+            // A press in the hold isn't the narration's to take.
+            press(&mut session);
+            assert!(session.boot_message.is_some(), "held on tick {tick}");
+            assert_eq!(session.room_fade.state(), -1, "nothing armed");
+        }
+        idle(&mut session);
+        assert!(session.boot_message.is_some(), "this pack's narration");
+        press(&mut session);
+        assert!(session.boot_message.is_none() && session.re2_title_start.is_none());
+        assert_eq!(session.room_fade.state(), 0x5000 - 1);
+        // This tick's frame is the first of the three that stay black.
+        assert!(session.present_held && session.present_skip.black());
+        assert_eq!(session.present_skip.left(), 2);
+
+        let mut other = open(false);
+        assert_eq!(other.game.re2.random, 7);
+        press(&mut other);
+        assert!(other.boot_message.is_none(), "no hold");
+        assert_eq!(other.room_fade.state(), 0x6800 - 1);
     }
 
     /// A continue's narration ends in the room-entry fade with the room-events

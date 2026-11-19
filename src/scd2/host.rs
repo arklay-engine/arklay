@@ -508,6 +508,9 @@ pub const FILE_SLOTS: usize = 24;
 /// A slot of `File_tag_bk` holding no file.
 pub const NO_FILE: u8 = 0xFF;
 
+/// `Random_base` (`0x695E58`) as `scd_init` sets it.
+const RANDOM_START: u32 = 0x1382_01C3;
+
 /// The bytes of [`Re2State::to_save_bytes`].
 const SAVE_LEN: usize = SAVE_LEN_NO_PLAYER + 2;
 /// A save from before the player's id and slot count.
@@ -878,7 +881,7 @@ impl Default for Re2State {
             gates: [ActionGate::default(); ROOM_ACTION_SLOTS],
             door_locks: [0; 2],
             authored_flags: None,
-            random: 0x1382_01C3,
+            random: RANDOM_START,
             cut_old: 0,
             shown_cut: 0,
             view_held: false,
@@ -1019,6 +1022,14 @@ impl Re2State {
         let slot = self.files.iter().position(|&held| held == NO_FILE)?;
         self.files[slot] = file;
         Some(slot)
+    }
+
+    /// The random base as a game's start leaves it, a new game's or a
+    /// load's: `scd_init` sets it and `Set_room`'s `Sce_scheduler_set` steps
+    /// it once. The original's save doesn't hold it.
+    pub fn start_random(&mut self) {
+        self.random = RANDOM_START;
+        self.sce_rnd_set();
     }
 
     /// `Sce_rnd_set`. Extreme Battle's `Rnd` branch isn't ported.

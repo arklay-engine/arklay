@@ -714,9 +714,20 @@ impl Driver {
         }
         if let Some(trace) = self.trace.as_mut() {
             if trace.screen {
-                let sounds = std::mem::take(&mut app.ui_sounds);
-                let line = screen_trace_line(app, trace.writer.tick_index(), word, &sounds);
-                trace.writer.write_line(&line).map_err(engine_error)?;
+                // A screen's trace that goes on into play (a new game's
+                // choice, a load) writes the game's line from there, a
+                // line a tick as before it.
+                if let Mode::Play(session) = &app.mode {
+                    app.ui_sounds.clear();
+                    trace
+                        .writer
+                        .write_tick(&session.trace_tick(&app.framebuffer))
+                        .map_err(engine_error)?;
+                } else {
+                    let sounds = std::mem::take(&mut app.ui_sounds);
+                    let line = screen_trace_line(app, trace.writer.tick_index(), word, &sounds);
+                    trace.writer.write_line(&line).map_err(engine_error)?;
+                }
             } else if let Mode::Play(session) = &app.mode
                 && was_play
                 && ((!in_transition && !screen_before) || trace.all_frames)
