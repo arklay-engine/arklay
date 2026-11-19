@@ -207,6 +207,9 @@ pub struct Options {
     /// extras SPECIAL shows on the title. `None` is the
     /// install's 15, every extra.
     pub title_special: Option<i8>,
+    /// RE 2's config.ini `GALLERY0` to `GALLERY4` (`0x68059C`), the bits of
+    /// what play has opened in the gallery. `None` is all of it.
+    pub title_gallery: Option<[u32; 5]>,
 }
 
 /// Keyboard state for one tick.

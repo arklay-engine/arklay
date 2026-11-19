@@ -26,6 +26,7 @@
 //! | `Common/Data/parts.tim`, `moji1.tim` | `ui/option/parts.tim`, `ui/option/moji1.tim` |
 //! | `Common/Data/spy_logo.tim`, `tofulogo.tim` | `ui/title/spy_logo.tim`, `ui/title/tofulogo.tim` |
 //! | `Gallery/TITLE<n>.dat`, `Moji.dat` (each a TIM) | `ui/gallery/title<n>.tim`, `ui/gallery/moji.tim` |
+//! | `Gallery/ROUGH<nn>.dat`, `ILLUST<nn>.dat`, `LEFT01.dat`, `LEFT02.dat`, `GNUM2.dat` (each a TIM) | `ui/gallery/<stem>.tim` |
 //! | `Common/Data/font0.tim` | `font/00.bmp`, `font/00.xml` (moved onto the Western cells, `convert_re2/font.rs`) |
 //! | `bio2 1.10.exe`'s English tables, rooms' RDT text, CR's `exe/sys.tex` | `language/en-US.txt` (`convert_re2/exe.rs`, `text.rs`) |
 //! | `bio2 1.10.exe`'s computer strings (0x533AD0 and on) | `ui/computer/rc200.txt` |
@@ -2057,11 +2058,19 @@ fn copy_prologue_art(
     Ok(())
 }
 
-/// DATA GALLERY's menu at 640 x 480 (`GalleryMain`, `0x439A80`): the five
-/// sheets of its picture, `Gallery/TITLE1.dat` to `TITLE5.dat`, and its
-/// rows' words, `Gallery/Moji.dat`. Each is a TIM under another extension,
-/// kept as it is in `ui/gallery/<stem>.tim`. The menu needs all six: with
-/// one missing the gallery closes as it opens (`ui/gallery.lua`).
+/// DATA GALLERY's art at 640 x 480, each file a TIM under another extension,
+/// kept as it is in `ui/gallery/<stem>.tim` (`ui/gallery.lua`).
+///
+/// The menu (`GalleryMain`, `0x439A80`): the five sheets of its picture,
+/// `Gallery/TITLE1.dat` to `TITLE5.dat`, and its rows' words,
+/// `Gallery/Moji.dat`. It needs all six: with one missing the gallery closes
+/// as it opens.
+///
+/// The pictures (`GalleryIllustrations`, `0x438DA0`): the panel beside them,
+/// `LEFT01.dat` and `LEFT02.dat`, and its digits, `GNUM2.dat`, without which
+/// the gallery closes as the pictures open; and the pictures themselves,
+/// LEON's `ROUGH01.dat` to `ROUGH60.dat` and CLAIRE's `ILLUST01.dat` to
+/// `ILLUST35.dat`, where a missing one shows as none.
 fn copy_gallery_art(
     layout: &Layout,
     writer: &mut PackWriter,
@@ -2069,25 +2078,45 @@ fn copy_gallery_art(
     warnings: &mut Vec<String>,
 ) -> Result<()> {
     let files = files_in(child(&layout.data, "Gallery"))?;
-    let mut missing = Vec::new();
-    for stem in ["TITLE1", "TITLE2", "TITLE3", "TITLE4", "TITLE5", "MOJI"] {
+    let mut copy = |stem: &str| -> Result<bool> {
         let Some(path) = files
             .iter()
             .find(|path| upper_parts(path).is_some_and(|(name, ext)| name == stem && ext == "DAT"))
         else {
-            missing.push(stem.to_ascii_lowercase());
-            continue;
+            return Ok(false);
         };
         let bytes = read(path)?;
         let len = tim::byte_len(&bytes).with_context(|| format!("{}", path.display()))?;
         let entry = format!("ui/gallery/{}.tim", stem.to_ascii_lowercase());
         tally.add(writer, "ui", &entry, bytes[..len].to_vec())?;
-    }
-    if !missing.is_empty() && layout.common.is_some() {
-        warnings.push(format!(
-            "no Gallery/{}.dat; the gallery has no menu",
-            missing.join(", ")
-        ));
+        Ok(true)
+    };
+    let pictures = (1..=60)
+        .map(|n| format!("ROUGH{n:02}"))
+        .chain((1..=35).map(|n| format!("ILLUST{n:02}")));
+    let sets: [(Vec<String>, &str); 3] = [
+        (
+            ["TITLE1", "TITLE2", "TITLE3", "TITLE4", "TITLE5", "MOJI"]
+                .map(str::to_owned)
+                .to_vec(),
+            "the gallery has no menu",
+        ),
+        (
+            ["LEFT01", "LEFT02", "GNUM2"].map(str::to_owned).to_vec(),
+            "the gallery can't show its pictures",
+        ),
+        (pictures.collect(), "the gallery lacks those pictures"),
+    ];
+    for (stems, effect) in sets {
+        let mut missing = Vec::new();
+        for stem in stems {
+            if !copy(&stem)? {
+                missing.push(stem.to_ascii_lowercase());
+            }
+        }
+        if !missing.is_empty() && layout.common.is_some() {
+            warnings.push(format!("no Gallery/{}.dat; {effect}", missing.join(", ")));
+        }
     }
     Ok(())
 }

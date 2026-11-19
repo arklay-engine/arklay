@@ -2,8 +2,8 @@
 //! original's trace and frames (`oracle/re2.md`, "The gallery").
 
 use super::re2_title_tests::{
-    GALLERY_WORDS, context, context_over, frame, gallery_words, open_gallery,
-    pack_without_gallery_art, press, press_all, run, ti, words,
+    GALLERY_WORDS, context, context_over, frame, gallery_words, open_gallery_with,
+    pack_without_gallery_art, pack_without_gallery_pictures, press, press_all, run, ti, words,
 };
 use super::*;
 
@@ -38,10 +38,41 @@ fn black(screen: &LuaScreen) -> Option<i64> {
     screen.test_eval("return M.state.gal and M.state.gal.black")
 }
 
+/// The trace's `galv`: the picture's index and the count of its textures.
+fn galv(screen: &LuaScreen) -> [i64; 2] {
+    ["gal_index", "gal_tiles"].map(|key| screen.value(key))
+}
+
+/// The colour the last tick's pictures screen is cleared to; nothing on a
+/// tick that drew none.
+fn cleared(screen: &LuaScreen) -> Option<i64> {
+    screen.test_eval("local g = M.state.gal return g and g.view and g.view.clear")
+}
+
+/// Whether the last tick's pictures screen has its picture.
+fn pictured(screen: &LuaScreen) -> Option<bool> {
+    screen.test_eval("local g = M.state.gal return g and g.view and g.view.picture")
+}
+
+/// Where the last tick's pictures screen has a lit key, down the panel.
+fn lit_key(screen: &LuaScreen) -> Option<i64> {
+    screen.test_eval("local g = M.state.gal return g and g.view and g.view.key and g.view.key[3]")
+}
+
 /// The title taken into the gallery as LEON or CLAIRE: the tick the title
 /// hands off on, which is the gallery task's first.
 fn start_gallery(cx: &UiContext<'_>, dir: &std::path::Path, claire: bool) -> LuaScreen {
-    let mut screen = open_gallery(cx, dir);
+    start_gallery_with(cx, dir, claire, None)
+}
+
+/// [`start_gallery`], with config.ini's `GALLERY0` to `GALLERY4` at `opened`.
+fn start_gallery_with(
+    cx: &UiContext<'_>,
+    dir: &std::path::Path,
+    claire: bool,
+    opened: Option<[u32; 5]>,
+) -> LuaScreen {
+    let mut screen = open_gallery_with(cx, dir, opened);
     run(&mut screen, cx, UiInput::default(), 20);
     if claire {
         run(&mut screen, cx, press("right"), 5);
@@ -53,10 +84,46 @@ fn start_gallery(cx: &UiContext<'_>, dir: &std::path::Path, claire: bool) -> Lua
 
 /// The gallery with its menu faded in and the cursor on the first row.
 fn open_menu(cx: &UiContext<'_>, dir: &std::path::Path, claire: bool) -> LuaScreen {
-    let mut screen = start_gallery(cx, dir, claire);
+    open_menu_with(cx, dir, claire, None)
+}
+
+fn open_menu_with(
+    cx: &UiContext<'_>,
+    dir: &std::path::Path,
+    claire: bool,
+    opened: Option<[u32; 5]>,
+) -> LuaScreen {
+    let mut screen = start_gallery_with(cx, dir, claire, opened);
     run(&mut screen, cx, UiInput::default(), 40);
     assert_eq!(screen.value("gal_fade"), 0);
     assert_eq!(screen.value("gal_flags") & 3, 0);
+    screen
+}
+
+/// The ticks from a button on the menu's first row to the last of its fade:
+/// LEON's starts at 0xFF and CLAIRE's at 0x80.
+fn first_row_fade(claire: bool) -> usize {
+    if claire { 16 } else { 32 }
+}
+
+/// The gallery's pictures, faded in on the first, with config.ini's
+/// `GALLERY0` to `GALLERY4` at `opened`.
+fn open_pictures(
+    cx: &UiContext<'_>,
+    dir: &std::path::Path,
+    claire: bool,
+    opened: Option<[u32; 5]>,
+) -> LuaScreen {
+    let mut screen = open_menu_with(cx, dir, claire, opened);
+    run(&mut screen, cx, press("confirm"), first_row_fade(claire));
+    // The screen is set, its art loads, and its fade from 0xFF is over on
+    // the 33rd tick after.
+    run(&mut screen, cx, UiInput::default(), 2 + 32);
+    assert_eq!(screen.value("gal_screen"), 1);
+    assert_eq!(screen.value("gal_step"), 1);
+    assert_eq!(screen.value("gal_flags") & 3, 0);
+    assert_eq!(pictured(&screen), Some(true));
+    cx.cues.borrow_mut().clear();
     screen
 }
 
@@ -268,17 +335,18 @@ fn exit_ends_the_gallery_and_the_title_wakes_two_ticks_on() {
 }
 
 #[test]
-fn a_button_on_a_row_fades_the_menu_out_and_the_menu_loads_again() {
+fn a_button_on_a_row_fades_the_menu_out_to_the_pictures_or_the_menu_again() {
     let dir = test_dir("gallery-row");
     let cx = context(&dir);
     // The character, the way to the row, the row it turns to, the level its
-    // fade starts at and the ticks to the one that finds it done.
-    for (claire, way, turned, fade, ticks) in [
-        (false, &[][..], 3, 0xFF, 32),
-        (false, &["down"][..], 4, 0x80, 16),
-        (true, &[][..], 3, 0x80, 16),
-        (true, &["down"][..], 6, 0x80, 16),
-        (true, &["down", "down"][..], 7, 0x80, 16),
+    // fade starts at, the ticks to the one that finds it done and the
+    // screen that one sets.
+    for (claire, way, turned, fade, ticks, opens) in [
+        (false, &[][..], 3, 0xFF, 32, 1),
+        (false, &["down"][..], 4, 0x80, 16, 0),
+        (true, &[][..], 3, 0x80, 16, 1),
+        (true, &["down"][..], 6, 0x80, 16, 0),
+        (true, &["down", "down"][..], 7, 0x80, 16, 0),
     ] {
         let mut screen = open_menu(&cx, &dir, claire);
         for key in way {
@@ -317,12 +385,16 @@ fn a_button_on_a_row_fades_the_menu_out_and_the_menu_loads_again() {
             assert!(rows(&screen).unwrap().iter().all(|level| *level == 0));
         }
         assert!(screen.value("gal_fade") < 1, "{name}");
-        // The tick that finds the fade done draws nothing. The row's
-        // screen isn't ported: the menu starts again from its load.
+        // The tick that finds the fade done draws nothing, and sets the
+        // first row's screen, the pictures. The other rows' screens aren't
+        // ported: the menu starts again from its load.
         run(&mut screen, &cx, UiInput::default(), 1);
         let state = gal(&screen).unwrap();
-        assert_eq!(state[..4], [1, 0, 0, 0], "{name}");
+        assert_eq!(state[..4], [1, opens, 0, 0], "{name}");
         assert_eq!(rows(&screen), None, "{name}");
+        if opens == 1 {
+            continue;
+        }
         run(&mut screen, &cx, UiInput::default(), 1);
         let state = gal(&screen).unwrap();
         assert_eq!((state[2], state[3], state[5]), (1, 0, 120), "{name}");
@@ -466,5 +538,438 @@ fn a_pack_short_of_the_gallerys_art_closes_the_gallery_as_it_opens() {
     run(&mut screen, &cx, press("down"), 1);
     assert_eq!(*cx.cues.borrow(), [UiCue::Core(4)]);
     assert_eq!(screen.value("ti_cur"), 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_first_rows_button_opens_the_pictures_which_fade_in_from_black() {
+    let dir = test_dir("gallery-pictures");
+    let cx = context(&dir);
+    // The first picture's textures: LEON's is 300 x 200, CLAIRE's 20 x 10.
+    for (claire, tiles) in [(false, 2), (true, 1)] {
+        let mut screen = open_menu(&cx, &dir, claire);
+        run(&mut screen, &cx, press("confirm"), first_row_fade(claire));
+        // The tick that finds the menu's fade done sets the screen.
+        run(&mut screen, &cx, UiInput::default(), 1);
+        let pulse = screen.value("gal_pulse");
+        assert_eq!(gal(&screen).unwrap()[..4], [1, 1, 0, 0]);
+        // The panel's art loads: the fade is set to 0xFF and steps once,
+        // the first picture waits (the row), and nothing is drawn.
+        run(&mut screen, &cx, UiInput::default(), 1);
+        assert_eq!(gal(&screen), Some([1, 1, 1, 1, pulse, 247, 1]));
+        assert_eq!(galv(&screen), [0, 0]);
+        assert_eq!(cleared(&screen), None);
+        let shown = render(&mut screen, &cx);
+        assert!(shown.rgba.chunks(4).all(|pixel| pixel[..3] == [0, 0, 0]));
+        // The picture loads on the next, which shows neither it nor the
+        // white behind it: the frame is still cleared to black.
+        run(&mut screen, &cx, UiInput::default(), 1);
+        assert_eq!(gal(&screen), Some([1, 1, 1, 0, pulse, 239, 1]));
+        assert_eq!(galv(&screen), [0, tiles]);
+        assert_eq!(cleared(&screen), Some(0));
+        assert_eq!(pictured(&screen), Some(false));
+        assert_eq!(black(&screen), Some(247));
+        // Then the picture over white, the black 8 lighter a tick.
+        for tick in 2..32 {
+            run(&mut screen, &cx, UiInput::default(), 1);
+            assert_eq!(cleared(&screen), Some(0xFF), "tick {tick}");
+            assert_eq!(pictured(&screen), Some(true), "tick {tick}");
+            assert_eq!(black(&screen), Some(255 - 8 * tick), "tick {tick}");
+            assert_eq!(screen.value("gal_flags"), 1, "tick {tick}");
+        }
+        // The fade is over on the tick that finds it under 1. The menu's
+        // lit level has stood still.
+        run(&mut screen, &cx, UiInput::default(), 1);
+        assert_eq!(gal(&screen), Some([1, 1, 1, 0, pulse, -1, 0]));
+        assert_eq!(black(&screen), None);
+        assert_eq!(lit_key(&screen), None);
+        assert!(cx.cues.borrow().iter().all(|cue| *cue != UiCue::Core(10)));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn left_and_right_turn_the_pictures_round_their_ends() {
+    let dir = test_dir("gallery-turn");
+    let cx = context(&dir);
+    let mut screen = open_pictures(&cx, &dir, false, None);
+    // A turn loads the picture on its own tick, which shows none; the key
+    // is lit while it is held.
+    run(&mut screen, &cx, press("right"), 1);
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(10)]);
+    assert_eq!(gal(&screen).unwrap()[..4], [1, 1, 1, 0]);
+    assert_eq!(galv(&screen), [1, 1]);
+    assert_eq!(pictured(&screen), Some(false));
+    assert_eq!(cleared(&screen), Some(0xFF));
+    assert_eq!(lit_key(&screen), Some(285));
+    let held = UiInput {
+        held_right: true,
+        ..UiInput::default()
+    };
+    for _ in 0..3 {
+        screen.update(&cx, held);
+        assert_eq!(galv(&screen), [1, 1], "a held key turns once");
+        assert_eq!(pictured(&screen), Some(true));
+        assert_eq!(lit_key(&screen), Some(285));
+    }
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(lit_key(&screen), None);
+    // Back, and round the start to the last, whose 258 x 258 is cut in
+    // four; then round the end to the first.
+    cx.cues.borrow_mut().clear();
+    for (key, lit, picture) in [
+        ("left", 321, [0, 2]),
+        ("left", 321, [59, 4]),
+        ("right", 285, [0, 2]),
+    ] {
+        run(&mut screen, &cx, press(key), 1);
+        assert_eq!(galv(&screen), picture, "{key}");
+        assert_eq!(lit_key(&screen), Some(lit), "{key}");
+        run(&mut screen, &cx, UiInput::default(), 1);
+    }
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(10); 3]);
+    // A picture whose file the pack lacks shows as none.
+    run(&mut screen, &cx, press("right"), 2);
+    run(&mut screen, &cx, press("right"), 2);
+    assert_eq!(galv(&screen), [2, 0]);
+    assert_eq!(pictured(&screen), Some(false));
+    assert_eq!(cleared(&screen), Some(0xFF));
+    // Right is asked before left, and up before either.
+    run(&mut screen, &cx, press_all(&["left", "right"]), 2);
+    assert_eq!(galv(&screen), [3, 1]);
+    // The buttons do nothing here.
+    cx.cues.borrow_mut().clear();
+    for button in ["confirm", "cancel", "start"] {
+        run(&mut screen, &cx, press(button), 2);
+    }
+    assert!(cx.cues.borrow().is_empty());
+    assert_eq!(gal(&screen).unwrap()[..4], [1, 1, 1, 0]);
+    assert_eq!(galv(&screen), [3, 1]);
+    run(&mut screen, &cx, press_all(&["up", "right"]), 1);
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(6)]);
+    assert_eq!(screen.value("gal_step"), 2);
+    assert_eq!(galv(&screen), [3, 1]);
+    // The lit key is the first held of right, left, up and down.
+    assert_eq!(lit_key(&screen), Some(285));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_frame_is_cleared_to_what_the_tick_before_asked_for() {
+    let dir = test_dir("gallery-clear");
+    let cx = context(&dir);
+    let mut screen = open_menu(&cx, &dir, false);
+    run(&mut screen, &cx, press("confirm"), first_row_fade(false));
+    // The screen, its art, and the first picture's load, on a frame still
+    // cleared to black.
+    run(&mut screen, &cx, UiInput::default(), 3);
+    assert_eq!(cleared(&screen), Some(0));
+    assert_eq!(pictured(&screen), Some(false));
+    // A turn on the next tick loads again: white, as the first load's tick
+    // asked, and no picture yet.
+    run(&mut screen, &cx, press("right"), 1);
+    assert_eq!(galv(&screen), [1, 1]);
+    assert_eq!(cleared(&screen), Some(0xFF));
+    assert_eq!(pictured(&screen), Some(false));
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(cleared(&screen), Some(0xFF));
+    assert_eq!(pictured(&screen), Some(true));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_turn_skips_the_pictures_play_hasnt_opened() {
+    let dir = test_dir("gallery-opened");
+    let cx = context(&dir);
+    let turns = |claire: bool, opened: [u32; 5], keys: &[(&str, i64)]| {
+        let mut screen = open_pictures(&cx, &dir, claire, Some(opened));
+        for (n, (key, index)) in keys.iter().enumerate() {
+            run(&mut screen, &cx, press(key), 2);
+            assert_eq!(
+                screen.value("gal_index"),
+                *index,
+                "claire {claire} {opened:x?} turn {n}"
+            );
+        }
+        assert_eq!(cx.cues.borrow().len(), keys.len());
+        screen
+    };
+    // LEON's sketches have a bit each from the first word's top: the
+    // first, the fourth and the sixtieth.
+    turns(
+        false,
+        [0x9000_0000, 0x10, 0, 0, 0],
+        &[
+            ("right", 3),
+            ("right", 59),
+            ("right", 0),
+            ("left", 59),
+            ("left", 3),
+            ("left", 0),
+        ],
+    );
+    // CLAIRE's are in the third word, where her first five share the top
+    // bit: those and the last.
+    turns(
+        true,
+        [0, 0, 0x8000_0002, 0, 0],
+        &[
+            ("right", 1),
+            ("right", 2),
+            ("right", 3),
+            ("right", 4),
+            ("right", 34),
+            ("right", 0),
+            ("left", 34),
+            ("left", 4),
+        ],
+    );
+    // Her sixth alone: the first shows as the screen opens, opened or not,
+    // and isn't come back to.
+    turns(
+        true,
+        [0, 0, 0x4000_0000, 0, 0],
+        &[("right", 5), ("right", 5), ("left", 5)],
+    );
+    // The other character's words aren't hers.
+    turns(true, [!0, !0, 0, !0, !0], &[("right", 0), ("left", 0)]);
+    // With nothing opened a turn comes back to the picture it left, which
+    // loads again.
+    let mut screen = turns(false, [0; 5], &[("right", 0)]);
+    run(&mut screen, &cx, press("left"), 1);
+    assert_eq!(galv(&screen), [0, 2]);
+    assert_eq!(pictured(&screen), Some(false));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn up_and_down_fade_the_pictures_out_and_the_menu_loads() {
+    let dir = test_dir("gallery-leave");
+    let cx = context(&dir);
+    for (key, step, lit) in [("up", 2, 357), ("down", 4, 393)] {
+        let mut screen = open_pictures(&cx, &dir, false, None);
+        run(&mut screen, &cx, press("right"), 2);
+        let pulse = screen.value("gal_pulse");
+        cx.cues.borrow_mut().clear();
+        run(&mut screen, &cx, press(key), 1);
+        assert_eq!(*cx.cues.borrow(), [UiCue::Core(6)], "{key}");
+        assert_eq!(gal(&screen), Some([1, 1, step, 0, pulse, 247, 3]), "{key}");
+        assert_eq!(black(&screen), Some(0), "{key}");
+        assert_eq!(lit_key(&screen), Some(lit), "{key}");
+        // The keys do nothing while it fades.
+        run(&mut screen, &cx, press_all(&["right", "down", "up"]), 1);
+        assert_eq!(cx.cues.borrow().len(), 1, "{key}");
+        assert_eq!(galv(&screen), [1, 1], "{key}");
+        assert_eq!(screen.value("gal_step"), step, "{key}");
+        assert_eq!(black(&screen), Some(8), "{key}");
+        // The black 8 deeper a tick, over white until the tick after the
+        // one that finds the level under 0x20, then over black.
+        for tick in 2..32 {
+            run(&mut screen, &cx, UiInput::default(), 1);
+            assert_eq!(black(&screen), Some(8 * tick), "{key} tick {tick}");
+            let white = 255 - 8 * (tick - 1) >= 0x20;
+            assert_eq!(
+                cleared(&screen),
+                Some(if white { 0xFF } else { 0 }),
+                "{key} tick {tick}"
+            );
+            assert_eq!(pictured(&screen), Some(true), "{key} tick {tick}");
+        }
+        assert_eq!(screen.value("gal_fade"), -1, "{key}");
+        // The tick that finds it done sets the menu and draws nothing. Down
+        // is the way to the movies, which aren't ported: the menu as well.
+        run(&mut screen, &cx, UiInput::default(), 1);
+        assert_eq!(gal(&screen), Some([1, 0, 0, 0, pulse, -1, 3]), "{key}");
+        assert_eq!(galv(&screen), [1, 0], "{key}");
+        assert_eq!(cleared(&screen), None, "{key}");
+        assert_eq!(rows(&screen), None, "{key}");
+        run(&mut screen, &cx, UiInput::default(), 1);
+        assert_eq!(gal(&screen), Some([1, 0, 1, 0, pulse, 120, 1]), "{key}");
+        run(&mut screen, &cx, UiInput::default(), 20);
+        assert_eq!(rows(&screen).map(|rows| rows.len()), Some(3), "{key}");
+        // The pictures start over on the first.
+        run(&mut screen, &cx, press("confirm"), first_row_fade(false));
+        run(&mut screen, &cx, UiInput::default(), 3);
+        assert_eq!(galv(&screen), [0, 2], "{key}");
+        assert_eq!(cleared(&screen), Some(0), "{key}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A colour of the pictures' screen at half weight over `under`.
+fn halved(over: [u8; 3], under: [u8; 3]) -> [u8; 3] {
+    std::array::from_fn(|k| {
+        ((u32::from(over[k]) * 128 + u32::from(under[k]) * 127 + 127) / 255) as u8
+    })
+}
+
+#[test]
+fn the_pictures_draw_at_half_size_in_the_originals_colours() {
+    let dir = test_dir("gallery-view");
+    let cx = context(&dir);
+    let white = [0xFF; 3];
+    let (panel, low_panel) = ([shown(10, 0x80), 0, 0], [0, 0, shown(12, 0x80)]);
+    let grey = |level: u32| [shown(level, 0x80); 3];
+    let mut screen = open_pictures(&cx, &dir, false, None);
+    let frame = render(&mut screen, &cx);
+    // The first sketch, 300 x 200 at 270, 13 of 640 x 480: its first and
+    // last rows share their pixels with the white behind.
+    let sketch = [0, 0, shown(20, 0x80)];
+    for (x, y, colour) in [
+        (310, 5, white),
+        (134, 50, white),
+        (135, 50, sketch),
+        (284, 50, sketch),
+        (285, 50, white),
+        (140, 5, white),
+        (140, 6, halved(sketch, white)),
+        (140, 7, sketch),
+        (140, 105, sketch),
+        (140, 106, halved(sketch, white)),
+        (140, 107, white),
+        // The panel's two sheets, 154 columns of each.
+        (0, 0, panel),
+        (76, 127, panel),
+        (77, 127, white),
+        (0, 128, low_panel),
+        (76, 239, low_panel),
+        (77, 239, white),
+        // No key is lit.
+        (20, 150, low_panel),
+        // The count, "01/ 60", each digit 12 x 20 at 455 down: its first
+        // and last rows are halves too.
+        (280, 226, white),
+        (280, 227, halved(grey(1), white)),
+        (280, 228, grey(1)),
+        (285, 236, grey(1)),
+        (285, 237, halved(grey(1), white)),
+        (285, 238, white),
+        (286, 230, grey(2)),
+        (292, 230, grey(15)),
+        (297, 230, grey(15)),
+        (298, 230, white),
+        (300, 230, grey(7)),
+        (306, 230, grey(1)),
+        (311, 230, grey(1)),
+        (312, 230, white),
+    ] {
+        assert_eq!(pixel(&frame, x, y), colour, "{x}, {y}");
+    }
+    // The second, 20 x 10 at 162, 67, with right held: its key is lit, 100
+    // x 25 at 18, 285, over the panel.
+    run(&mut screen, &cx, press("right"), 1);
+    let turning = render(&mut screen, &cx);
+    assert_eq!(
+        pixel(&turning, 85, 35),
+        white,
+        "the turn's tick has no picture"
+    );
+    assert_eq!(pixel(&turning, 140, 50), white);
+    assert_eq!(pixel(&turning, 286, 230), grey(3), "02");
+    let held = UiInput {
+        held_right: true,
+        ..UiInput::default()
+    };
+    screen.update(&cx, held);
+    let frame = render(&mut screen, &cx);
+    let small = [0, shown(10, 0x80), 0];
+    for (x, y, colour) in [
+        (140, 50, white),
+        (80, 35, white),
+        (81, 33, halved(small, white)),
+        (81, 34, small),
+        (90, 37, small),
+        (90, 38, halved(small, white)),
+        (91, 35, white),
+        (8, 150, low_panel),
+        (9, 141, low_panel),
+        (9, 142, halved(grey(20), low_panel)),
+        (9, 143, grey(20)),
+        (58, 154, grey(20)),
+        (58, 155, low_panel),
+        (59, 150, low_panel),
+        (286, 230, grey(3)),
+    ] {
+        assert_eq!(pixel(&frame, x, y), colour, "{x}, {y}");
+    }
+    // Each of the other keys' own.
+    for (key, y, level) in [("left", 321, 22), ("up", 357, 24), ("down", 393, 26)] {
+        let mut screen = open_pictures(&cx, &dir, false, None);
+        run(&mut screen, &cx, press(key), 1);
+        let frame = render(&mut screen, &cx);
+        assert_eq!(pixel(&frame, 30, y / 2 + 5), grey(level), "{key}");
+        assert_eq!(pixel(&frame, 30, y / 2 + 13), low_panel, "{key}");
+    }
+    // The fade's black over all of it, the white as well, and on the fade
+    // out's last ticks over black.
+    let under = |colour: [u8; 3], black: u32| {
+        colour.map(|c| ((u32::from(c) * (255 - black) + 127) / 255) as u8)
+    };
+    let mut screen = open_pictures(&cx, &dir, false, None);
+    run(&mut screen, &cx, press("up"), 1);
+    let held = UiInput {
+        held_up: true,
+        ..UiInput::default()
+    };
+    screen.update(&cx, held);
+    assert_eq!(black(&screen), Some(8));
+    let faded = render(&mut screen, &cx);
+    assert_eq!(pixel(&faded, 310, 5), under(white, 8));
+    assert_eq!(pixel(&faded, 0, 0), under(panel, 8));
+    assert_eq!(pixel(&faded, 140, 50), under(sketch, 8));
+    assert_eq!(
+        pixel(&faded, 140, 6),
+        halved(under(sketch, 8), under(white, 8))
+    );
+    assert_eq!(pixel(&faded, 30, 357 / 2 + 5), under(grey(24), 8));
+    run(&mut screen, &cx, UiInput::default(), 27);
+    assert_eq!(black(&screen), Some(224));
+    let late = render(&mut screen, &cx);
+    assert_eq!(pixel(&late, 310, 5), under(white, 224));
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(black(&screen), Some(232));
+    let last = render(&mut screen, &cx);
+    assert_eq!(pixel(&last, 310, 5), [0, 0, 0]);
+    assert_eq!(pixel(&last, 0, 0), under(panel, 232));
+    assert_eq!(pixel(&last, 140, 50), under(sketch, 232));
+    // The first load's tick: the panel and the count under the black, over
+    // a frame still cleared to black.
+    let mut screen = open_menu(&cx, &dir, false);
+    run(&mut screen, &cx, press("confirm"), first_row_fade(false));
+    run(&mut screen, &cx, UiInput::default(), 3);
+    assert_eq!(black(&screen), Some(247));
+    let loading = render(&mut screen, &cx);
+    assert_eq!(pixel(&loading, 310, 5), [0, 0, 0]);
+    assert_eq!(pixel(&loading, 140, 50), [0, 0, 0]);
+    assert_eq!(pixel(&loading, 0, 0), under(panel, 247));
+    assert_eq!(pixel(&loading, 292, 230), under(grey(15), 247));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_pack_short_of_the_pictures_panel_closes_the_gallery_as_they_open() {
+    let dir = test_dir("gallery-panel");
+    let cx = context_over(pack_without_gallery_pictures(), &dir);
+    let mut screen = open_menu(&cx, &dir, false);
+    let asleep = ti(&screen);
+    run(
+        &mut screen,
+        &cx,
+        press("confirm"),
+        first_row_fade(false) + 1,
+    );
+    assert_eq!(gal(&screen).unwrap()[..4], [1, 1, 0, 0]);
+    // The load's tick ends the task, with nothing drawn.
+    cx.cues.borrow_mut().clear();
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(gal(&screen).unwrap()[..4], [2, 1, 0, 0]);
+    assert_eq!(cleared(&screen), None);
+    assert!(cx.cues.borrow().is_empty());
+    // It closes on the next, and the title's page is back on the one after.
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(gal(&screen), None);
+    assert_eq!(ti(&screen), asleep);
+    run(&mut screen, &cx, press("down"), 1);
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(4)]);
     let _ = std::fs::remove_dir_all(&dir);
 }

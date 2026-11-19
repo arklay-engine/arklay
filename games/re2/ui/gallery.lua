@@ -1,32 +1,39 @@
 -- RE2's gallery, as the original runs it: the task the title starts from
--- GALLERY's page (`Gallery`, 0x4BF760) and its menu, DATA GALLERY
--- (`GalleryMain`, 0x439A80, the first case of `GalleryLoop`, 0x43AE60).
--- The title's task sleeps under it.
+-- GALLERY's page (`Gallery`, 0x4BF760), its menu, DATA GALLERY
+-- (`GalleryMain`, 0x439A80), and the pictures behind the menu's first row
+-- (`GalleryIllustrations`, 0x438DA0): the screens of `GalleryLoop`
+-- (0x43AE60). The title's task sleeps under it.
 --
 -- The gallery draws at 640 x 480 with its own art (`ui/gallery/` in the
--- pack): the picture's five sheets, `title1` to `title5`, and the rows'
--- words, `moji`. The places below are the executable's, in those pixels;
--- the frame draws them at half size. With a 320 x 240 display the original
--- has a second layout with smaller art (`top32_1`, `top32_2` and
--- `moji3224`), which isn't ported.
+-- pack): the menu's picture in five sheets, `title1` to `title5`, and its
+-- rows' words, `moji`; the pictures, `rough01` to `rough60` and `illust01`
+-- to `illust35`, with their panel, `left01` and `left02`, and its digits,
+-- `gnum2`. The places below are the executable's, in those pixels; the
+-- frame draws them at half size. With a 320 x 240 display the original has
+-- a second layout with smaller art (`top32_1`, `top32_2`, `moji3224` and
+-- `left3224`) and, in it alone, a button that doubles a picture's size;
+-- neither is ported.
 --
 -- The state keeps the original's work (`pGallery`) under its own numbers,
--- so the oracle's `gal` field compares one for one, up to the last tick of
--- a row's fade out: on the next the original sets the row's screen.
+-- so the oracle's `gal` and `galv` fields compare one for one, up to the
+-- last tick of a fade out to a screen that isn't ported: on the next the
+-- original sets that screen.
 --
 -- The menu's rows: ROUGH SKETCH (LEON) or ILLUSTRATION (CLAIRE), MOVIE, 3D
 -- MODEL (CLAIRE only) and EXIT. EXIT ends the gallery and wakes the title.
--- A button on another row fades the menu out and, in the original, opens
--- that row's screen (`GalleryIllustrations`, `GalleryMovie`,
--- `Gallery3DArt`); those aren't ported, and the menu loads again instead.
+-- A button on another row fades the menu out and opens that row's screen.
+-- The pictures are the first row's; the others' (`GalleryMovie`,
+-- `Gallery3DArt`) aren't ported, and the menu loads again instead, as it
+-- does from the pictures' own way to the movies.
 
 local M = {}
 
--- `Gallery_Padd_trg`'s bits: up, down, and any button.
-local PAD_UP, PAD_DOWN, PAD_BUTTONS = 0x1000, 0x4000, 0x0FFF
+-- `Gallery_Padd`'s bits: the directions, and any button.
+local PAD_UP, PAD_RIGHT, PAD_DOWN, PAD_LEFT = 0x1000, 0x2000, 0x4000, 0x8000
+local PAD_BUTTONS = 0x0FFF
 
 -- `GallerySeOn`'s core-bank cues.
-local SE_CURSOR, SE_DECIDE = 4, 6
+local SE_CURSOR, SE_DECIDE, SE_TURN = 4, 6, 10
 
 -- The work's flags (`+0x1478`): the fade's black is drawn, the fade goes
 -- out rather than in, and the lit row's level is falling.
@@ -81,9 +88,65 @@ local MENUS = {
     },
 }
 
+-- The pictures' panel: its two sheets, each with its place and size.
+local PANEL = {
+    { "left01", 0, 0, 154, 256 },
+    { "left02", 0, 256, 154, 224 },
+}
+
+-- The panel's keys, lit while held, in the order the original asks for
+-- them: the pad's bit, with the lit key's place and its corner in `left02`.
+-- Each is 100 x 25.
+local KEYS = {
+    { PAD_RIGHT, 18, 285, 154, 0 },
+    { PAD_LEFT, 18, 321, 154, 25 },
+    { PAD_UP, 18, 357, 154, 50 },
+    { PAD_DOWN, 18, 393, 154, 75 },
+}
+
+-- The count's place, "01/ 60": the picture's number and the last one's,
+-- with `gnum2`'s stroke between. A digit is 12 x 20, five to a row.
+local NUMBER_X, LAST_X, COUNT_Y = 560, 600, 455
+local DIGIT_W, DIGIT_H = 12, 20
+local STROKE = { 35, 40 }
+
+-- Where each picture's corner goes (`tbl_sketches`, 0x522F50, and
+-- `tbl_illustrations`, 0x523130), in the order of their files.
+local PLACES = {
+    [false] = {
+        stem = "rough",
+        { 270, 13 }, { 162, 67 }, { 253, 18 }, { 253, 15 }, { 282, 12 }, { 264, 11 },
+        { 234, 8 }, { 213, 10 }, { 226, 9 }, { 266, 14 }, { 177, 58 }, { 242, 11 },
+        { 217, 4 }, { 239, 10 }, { 257, 13 }, { 243, 12 }, { 226, 9 }, { 220, 5 },
+        { 285, 4 }, { 267, 6 }, { 233, 10 }, { 317, 53 }, { 316, 47 }, { 294, 39 },
+        { 251, 9 }, { 289, 8 }, { 280, 34 }, { 276, 2 }, { 245, 28 }, { 195, 43 },
+        { 155, 56 }, { 199, 4 }, { 162, 66 }, { 164, 60 }, { 221, 24 }, { 205, 7 },
+        { 278, 16 }, { 297, 15 }, { 236, 16 }, { 249, 21 }, { 230, 17 }, { 271, 17 },
+        { 239, 22 }, { 161, 85 }, { 207, 5 }, { 166, 107 }, { 201, 7 }, { 158, 59 },
+        { 154, 62 }, { 160, 75 }, { 155, 62 }, { 154, 50 }, { 156, 62 }, { 154, 64 },
+        { 155, 69 }, { 155, 67 }, { 219, 0 }, { 155, 69 }, { 154, 67 }, { 157, 69 },
+    },
+    [true] = {
+        stem = "illust",
+        { 183, 6 }, { 287, 2 }, { 202, 6 }, { 265, 10 }, { 296, 8 }, { 303, 6 },
+        { 312, 55 }, { 286, 7 }, { 286, 10 }, { 209, 61 }, { 209, 61 }, { 212, 12 },
+        { 212, 12 }, { 212, 12 }, { 249, 3 }, { 280, 28 }, { 210, 33 }, { 211, 58 },
+        { 231, 48 }, { 154, 87 }, { 217, 25 }, { 211, 43 }, { 233, 3 }, { 173, 31 },
+        { 236, 5 }, { 219, 5 }, { 199, 3 }, { 154, 59 }, { 154, 86 }, { 267, 7 },
+        { 213, 5 }, { 202, 72 }, { 331, 9 }, { 218, 21 }, { 218, 11 },
+    },
+}
+
+-- config.ini's `GALLERY0` to `GALLERY4` with every picture, film and model
+-- open, as a finished game leaves them.
+local ALL_OPEN = { 0xFFFFFFFF, 0xFFFFFFF0, 0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFF }
+
 -- The task as `Gallery`'s first step leaves it, on the tick the title
--- starts it: step 1, with the work it has just cleared.
-function M.new(claire)
+-- starts it: step 1, with the work it has just cleared. `open` is the five
+-- words of what play has opened (`ALL_OPEN` without them). `clear` is the
+-- colour the renderer clears the next frame to, which stays as the last
+-- screen set it.
+function M.new(claire, open)
     return {
         task = 1,
         screen = 0,
@@ -92,6 +155,10 @@ function M.new(claire)
         pulse = 0,
         fade = 0,
         flags = 0,
+        index = 0,
+        tiles = 0,
+        clear = 0,
+        open = open or ALL_OPEN,
         claire = claire and true or false,
     }
 end
@@ -110,14 +177,18 @@ local function disp(g)
     g.fade = g.fade - 8
 end
 
-local load
+local load, picture
+
+-- The menu's sheets, and the pictures' own.
+local MENU_ART = { "title1", "title2", "title3", "title4", "title5", "moji" }
+local VIEW_ART = { "gnum2", "left01", "left02" }
 
 -- `GalleryMain`: `false` once EXIT is taken, or when its art can't load.
 local function main(api, g, edge, cue)
     if g.step == 0 then
         -- The art is loaded and the menu fades in from the next tick. A
         -- sheet that can't be made a texture ends the gallery there.
-        if not load(api) then
+        if not load(api, MENU_ART) then
             return false
         end
         g.step = 1
@@ -155,7 +226,10 @@ local function main(api, g, edge, cue)
         end
     elseif g.fade < 1 then
         -- The faded row's screen starts from the next tick, and this one
-        -- draws nothing. None of them is ported: the menu starts again.
+        -- draws nothing. Only the pictures are ported: from another row
+        -- the menu starts again.
+        local screen = menu.leave[at]
+        g.screen = screen == 1 and 1 or 0
         g.step = 0
         g.row = 0
         return true
@@ -184,10 +258,100 @@ local function main(api, g, edge, cue)
     return alive
 end
 
--- One tick of the task. `edge` is the pad's pressed bits and `cue` plays a
--- core-bank cue. The task is over (`g.task` 0) the tick after EXIT.
-function M.tick(api, g, edge, cue)
+-- Whether play has opened picture `index` (`FUN_00442ed0`, with the bit
+-- tables at 0x524F0C and 0x524F48): LEON's sketches have a bit each from
+-- the first word's top, and CLAIRE's illustrations from the third's, where
+-- her first five share one.
+local function opened(g, index)
+    local bit, word = index, 1
+    if g.claire then
+        bit, word = index < 5 and 0 or index - 4, 3
+    end
+    return (g.open[word + (bit >> 5)] or 0) & (0x80000000 >> (bit & 31)) ~= 0
+end
+
+-- `GalleryIllustrations`: the pictures, one at a time. `false` when the
+-- panel's art can't load. Here the work's row (`+8`) is 1 while a picture
+-- waits to be loaded.
+local function pictures(api, g, edge, held, cue)
+    local count = #PLACES[g.claire]
+    if g.step == 0 then
+        -- The panel's art is loaded, and the first picture is the first
+        -- file, opened or not. Nothing is drawn.
+        if not load(api, VIEW_ART) then
+            return false
+        end
+        g.tiles = 0
+        g.index = 0
+        g.step = 1
+        g.row = 1
+        g.flags = (g.flags | FADING) & ~FADING_OUT
+        g.fade = 0xFF
+        disp(g)
+        return true
+    end
+    if g.step == 1 then
+        if edge & PAD_UP ~= 0 then
+            -- To the menu.
+            cue(SE_DECIDE)
+            g.step = 2
+            g.flags = g.flags | FADING | FADING_OUT
+            g.fade = 0xFF
+        elseif edge & PAD_DOWN ~= 0 then
+            -- To the movies.
+            cue(SE_DECIDE)
+            g.step = 4
+            g.flags = g.flags | FADING | FADING_OUT
+            g.fade = 0xFF
+        elseif edge & (PAD_RIGHT | PAD_LEFT) ~= 0 then
+            -- The next opened picture that way, round the ends: the same
+            -- one again when no other is.
+            local way = edge & PAD_RIGHT ~= 0 and 1 or -1
+            local from = g.index
+            cue(SE_TURN)
+            repeat
+                g.index = (g.index + way) % count
+            until opened(g, g.index) or g.index == from
+            g.row = 1
+            g.tiles = 0
+        end
+    elseif g.fade < 1 then
+        -- The menu, or the movies, from the next tick; this one draws
+        -- nothing. The movies aren't ported: the menu starts again.
+        g.screen = 0
+        g.step = 0
+        g.row = 0
+        g.tiles = 0
+        return true
+    end
+    -- The frame is cleared to the colour the tick before asked for: white,
+    -- and black once a fade out's level is under 0x20. So the screen's
+    -- first frame is still cleared to black, and a fade out's last three.
+    -- The tick a picture is loaded on doesn't draw it.
+    local view = { index = g.index, last = count - 1, clear = g.clear, picture = g.row == 0 and g.tiles > 0 }
+    local out = (g.step == 2 or g.step == 4) and g.fade < 0x20
+    g.clear = out and 0 or 0xFF
+    if g.row ~= 0 then
+        g.tiles = picture(api, g)
+        g.row = 0
+    end
+    for _, key in ipairs(KEYS) do
+        if held & key[1] ~= 0 then
+            view.key = key
+            break
+        end
+    end
+    g.view = view
+    disp(g)
+    return true
+end
+
+-- One tick of the task. `edge` is the pad's pressed bits and `held` its
+-- held ones, and `cue` plays a core-bank cue. The task is over (`g.task`
+-- 0) the tick after EXIT.
+function M.tick(api, g, edge, held, cue)
     g.words = nil
+    g.view = nil
     g.black = nil
     g.ticked = true
     if g.task == 2 then
@@ -195,12 +359,18 @@ function M.tick(api, g, edge, cue)
         g.task = 0
         return
     end
-    if not main(api, g, edge, cue) then
+    local alive
+    if g.screen == 1 then
+        alive = pictures(api, g, edge, held, cue)
+    else
+        alive = main(api, g, edge, cue)
+    end
+    if not alive then
         g.task = 2
     end
 end
 
--- The trace's `gal`.
+-- The trace's `gal` and `galv`.
 function M.publish(api, g)
     api:set("gal_on", g and g.task ~= 0 and 1 or 0)
     if g then
@@ -211,30 +381,54 @@ function M.publish(api, g)
         api:set("gal_pulse", g.pulse)
         api:set("gal_fade", g.fade)
         api:set("gal_flags", g.flags)
+        api:set("gal_index", g.index)
+        api:set("gal_tiles", g.tiles)
     end
 end
 
-local art
+local art = {}
 
 function M.reset()
-    art = nil
+    art = {}
 end
 
--- The six sheets, once: `false` when the pack lacks one.
-load = function(api)
-    if art then
-        return true
-    end
-    local sheets = {}
-    for _, stem in ipairs({ "title1", "title2", "title3", "title4", "title5", "moji" }) do
+-- A sheet of the pack's, once: nil when the pack lacks it.
+local function sheet_of(api, stem)
+    local sheet = art[stem]
+    if sheet == nil then
         local page = api:indexed_page("ui/gallery/" .. stem)
-        if not page then
+        sheet = page and { page = page, palette = api:page_palette(page, 0) or {}, luts = {} } or false
+        art[stem] = sheet
+    end
+    return sheet or nil
+end
+
+-- A screen's sheets: `false` when the pack lacks one.
+load = function(api, stems)
+    for _, stem in ipairs(stems) do
+        if not sheet_of(api, stem) then
             return false
         end
-        sheets[stem] = { page = page, palette = api:page_palette(page, 0) or {}, luts = {} }
     end
-    art = sheets
     return true
+end
+
+-- The file of a character's picture `index`.
+local function picture_stem(claire, index)
+    local n = index + 1
+    return PLACES[claire].stem .. (n < 10 and "0" or "") .. n
+end
+
+-- `GalleryLoadIllust`: the picture is loaded, and the count of the 256 x
+-- 256 textures the original cuts it into is the work's; none for a file
+-- the pack lacks, which shows no picture.
+picture = function(api, g)
+    local sheet = sheet_of(api, picture_stem(g.claire, g.index))
+    if not sheet then
+        return 0
+    end
+    local w, h = api:art_size(sheet.page)
+    return ((w + 255) // 256) * ((h + 255) // 256)
 end
 
 -- A sheet's 5-bit level `v` as the original shows it, 8v + 7, and its 0
@@ -272,26 +466,88 @@ local function lut_for(sheet, level, opaque, black)
     return lut
 end
 
+-- One side of a piece at half size: the runs of its texels from `from`
+-- that share pixels, as `{ pixel, texel, texels, weight }`. A piece that
+-- starts or ends halfway through a pixel has a run of the one texel there
+-- at half weight.
+local function runs(at, size, from)
+    local out = {}
+    local head = at & 1
+    local body = (size - head) & ~1
+    if head == 1 then
+        out[#out + 1] = { at // 2, from, 1, 1 }
+    end
+    if body > 0 then
+        out[#out + 1] = { (at + head) // 2, from + head, body, 2 }
+    end
+    if head + body < size then
+        out[#out + 1] = { (at + size - 1) // 2, from + size - 1, 1, 1 }
+    end
+    return out
+end
+
+-- The weight of a part by its two runs' (4 is a whole pixel).
+local WEIGHT = { 64, 128, [4] = 255 }
+
 -- A piece of a sheet at half size, from its place and size at 640 x 480,
--- with the picture's corner at `ox, oy`. A piece with an odd side takes
--- one more texel, so that its last pixel is half the piece: `moji` has
--- see-through black after each word's last column and row, and a sheet
--- that replaces it has to keep that.
+-- with the picture's corner at `ox, oy`. Each pixel is the mean of the
+-- piece's texels in it; where the piece covers half a pixel, or a quarter
+-- at a corner, its texels go over the frame at that weight.
 local function half(api, sheet, ox, oy, x, y, w, h, u, v, level, opaque, black)
-    local dw, dh = (w + 1) // 2, (h + 1) // 2
     local lut = lut_for(sheet, level, opaque, black)
-    local options = { dw = dw, dh = dh, blend = 255 }
-    api:page_lut(sheet.page, u, v, dw * 2, dh * 2, ox + x // 2, oy + y // 2, lut, false, options)
+    local rows = runs(y, h, v)
+    for _, col in ipairs(runs(x, w, u)) do
+        for _, row in ipairs(rows) do
+            local options = { dw = (col[3] + 1) // 2, dh = (row[3] + 1) // 2, blend = WEIGHT[col[4] * row[4]] }
+            api:page_lut(sheet.page, col[2], row[2], col[3], row[3], ox + col[1], oy + row[1], lut, false, options)
+        end
+    end
+end
+
+-- The pictures' frame: the cleared frame, the picture, the panel with the
+-- held key lit, and the count.
+local function draw_view(api, g, ox, oy, black)
+    local view = g.view
+    local clear = (view.clear * (255 - black) + 127) // 255
+    api:fill_rect(ox, oy, 320, 240, clear, clear, clear)
+    local sheet = view.picture and art[picture_stem(g.claire, view.index)]
+    if sheet then
+        local place = PLACES[g.claire][view.index + 1]
+        local w, h = api:art_size(sheet.page)
+        half(api, sheet, ox, oy, place[1], place[2], w, h, 0, 0, 0x80, false, black)
+    end
+    for _, part in ipairs(PANEL) do
+        half(api, art[part[1]], ox, oy, part[2], part[3], part[4], part[5], 0, 0, 0x80, false, black)
+    end
+    local key = view.key
+    if key then
+        half(api, art.left02, ox, oy, key[2], key[3], 100, 25, key[4], key[5], 0x80, false, black)
+    end
+    -- `GalleryDrawPrim`: a number from 1, as two digits.
+    local function digit(x, d)
+        local u, v = (d % 5) * DIGIT_W, (d // 5) * DIGIT_H
+        half(api, art.gnum2, ox, oy, x, COUNT_Y, DIGIT_W, DIGIT_H, u, v, 0x80, false, black)
+    end
+    local function number(x, n)
+        digit(x, (n + 1) // 10)
+        digit(x + DIGIT_W, (n + 1) % 10)
+    end
+    number(NUMBER_X, view.index)
+    half(api, art.gnum2, ox, oy, NUMBER_X + 2 * DIGIT_W, COUNT_Y, DIGIT_W, DIGIT_H, STROKE[1], STROKE[2], 0x80, false, black)
+    number(LAST_X, view.last)
 end
 
 -- The frame the last tick left, with the 320 x 240 picture's corner at
--- `ox, oy`: nothing on a tick that drew no menu, else the picture, the
--- rows and the fade's black.
+-- `ox, oy`: nothing on a tick that drew none, else the menu's picture and
+-- rows, or the pictures' screen, under the fade's black.
 function M.draw(api, g, ox, oy)
-    if not g.words or not art then
+    local black = g.black or 0
+    if g.view then
+        draw_view(api, g, ox, oy, black)
+    end
+    if not g.words then
         return
     end
-    local black = g.black or 0
     for _, sheet in ipairs(PICTURE) do
         half(api, art[sheet[1]], ox, oy, sheet[2], sheet[3], sheet[4], sheet[5], sheet[6], 0, 0x80, true, black)
     end

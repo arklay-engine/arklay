@@ -7,9 +7,18 @@ use super::*;
 use crate::pack::Pack;
 use crate::ui::{Screen, ScreenAction, ScreenResult, UiCue, UiInput};
 
+/// How much of the gallery's art a pack has: none, the menu's sheets, or
+/// those with the pictures' panel and some of the pictures.
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
+enum GalleryArt {
+    None,
+    Menu,
+    All,
+}
+
 /// The title's pack; `prologue_art` adds what the prologue shows, which is
 /// what makes a new game run it, and `gallery_art` the gallery's sheets.
-fn build_pack(prologue_art: bool, gallery_art: bool) -> Pack {
+fn build_pack(prologue_art: bool, gallery_art: GalleryArt) -> Pack {
     let mut writer = crate::pack::PackWriter::new();
     for (path, source) in [
         (
@@ -53,7 +62,7 @@ fn build_pack(prologue_art: bool, gallery_art: bool) -> Pack {
     // is all index 0, a red of level `n`, but for the right half of the
     // fifth, a green; the words' sheet is white where a word is and
     // see-through black elsewhere.
-    for n in (1..=5u16).filter(|_| gallery_art) {
+    for n in (1..=5u16).filter(|_| gallery_art >= GalleryArt::Menu) {
         let sheet = sheet_tim(&[n, 5 << 5], |u, _| u8::from(n == 5 && u >= 128));
         writer
             .add(&format!("ui/gallery/title{n}.tim"), sheet)
@@ -66,8 +75,15 @@ fn build_pack(prologue_art: bool, gallery_art: bool) -> Pack {
                 .any(|&[u0, v0, w, h]| (u0..u0 + w).contains(&u) && (v0..v0 + h).contains(&v)),
         )
     });
-    if gallery_art {
+    if gallery_art >= GalleryArt::Menu {
         writer.add("ui/gallery/moji.tim", words).unwrap();
+    }
+    if gallery_art == GalleryArt::All {
+        for (stem, sheet) in gallery_pictures_art() {
+            writer
+                .add(&format!("ui/gallery/{stem}.tim"), sheet)
+                .unwrap();
+        }
     }
     if prologue_art {
         for stem in ["open10", "open11"] {
@@ -100,19 +116,77 @@ pub(super) const GALLERY_WORDS: [[u32; 4]; 5] = [
     [0, 110, 79, 21],
 ];
 
+/// The grey of 5-bit level `level`, as a TIM colour.
+const fn grey(level: u16) -> u16 {
+    level | level << 5 | level << 10
+}
+
+/// The art of the gallery's pictures (`re2_gallery_tests`), each sheet a
+/// few flat colours of its own.
+///
+/// The panel: `left01` a red of level 10 and `left02` a blue of level 12,
+/// each with a green right of its 154 columns that must never show;
+/// `left02`'s four lit keys there are greys of levels 20, 22, 24 and 26.
+/// `gnum2`: digit `d` a grey of level `d + 1`, the stroke one of level 15.
+///
+/// The pictures: LEON's first (300 x 200, a blue of level 20), second and
+/// fourth (20 x 10, a green of level 10) and last (258 x 258), and
+/// CLAIRE's first and last (20 x 10). The rest are missing.
+fn gallery_pictures_art() -> Vec<(&'static str, Vec<u8>)> {
+    let keys = |u: u32, v: u32| match (u, v) {
+        (0..154, _) => 1,
+        (154..254, 0..100) => 2 + (v / 25) as u8,
+        _ => 0,
+    };
+    let digits = |u: u32, v: u32| match (u, v) {
+        (35..47, 40..60) => 11,
+        (0..60, 0..40) => 1 + (v / 20 * 5 + u / 12) as u8,
+        _ => 0,
+    };
+    let mut digit_colours = vec![0];
+    digit_colours.extend((1..=10).map(grey));
+    digit_colours.push(grey(15));
+    let green = [0, 10 << 5];
+    let small = || tim_8bit(20, 10, &green, |_, _| 1);
+    vec![
+        (
+            "left01",
+            sheet_tim(&[0, 10, 5 << 5], |u, _| 1 + u8::from(u >= 154)),
+        ),
+        (
+            "left02",
+            sheet_tim(&[0, 12 << 10, grey(20), grey(22), grey(24), grey(26)], keys),
+        ),
+        ("gnum2", tim_8bit(64, 64, &digit_colours, digits)),
+        ("rough01", tim_8bit(300, 200, &[0, 20 << 10], |_, _| 1)),
+        ("rough02", small()),
+        ("rough04", small()),
+        ("rough60", tim_8bit(258, 258, &green, |_, _| 1)),
+        ("illust01", small()),
+        ("illust35", small()),
+    ]
+}
+
 /// An 8-bit 256 x 256 TIM: `palette`'s 15-bit colours from index 0, and
 /// each texel's index from `texel(u, v)`.
 fn sheet_tim(palette: &[u16], texel: impl Fn(u32, u32) -> u8) -> Vec<u8> {
+    tim_8bit(256, 256, palette, texel)
+}
+
+/// An 8-bit TIM of an even `width`.
+fn tim_8bit(width: u16, height: u16, palette: &[u16], texel: impl Fn(u32, u32) -> u8) -> Vec<u8> {
     let mut tim = vec![0x10, 0, 0, 0, 9, 0, 0, 0];
     tim.extend((12u32 + 512).to_le_bytes());
     tim.extend([0, 0, 0, 0, 0, 1, 1, 0]);
     for index in 0..256 {
         tim.extend(palette.get(index).copied().unwrap_or(0).to_le_bytes());
     }
-    tim.extend((12u32 + 256 * 256).to_le_bytes());
-    tim.extend([0, 0, 0, 0, 128, 0, 0, 1]);
-    for v in 0..256 {
-        tim.extend((0..256).map(|u| texel(u, v)));
+    tim.extend((12u32 + u32::from(width) * u32::from(height)).to_le_bytes());
+    tim.extend([0, 0, 0, 0]);
+    tim.extend((width / 2).to_le_bytes());
+    tim.extend(height.to_le_bytes());
+    for v in 0..u32::from(height) {
+        tim.extend((0..u32::from(width)).map(|u| texel(u, v)));
     }
     tim
 }
@@ -120,20 +194,27 @@ fn sheet_tim(palette: &[u16], texel: impl Fn(u32, u32) -> u8) -> Vec<u8> {
 fn pack() -> &'static Pack {
     use std::sync::OnceLock;
     static PACK: OnceLock<Pack> = OnceLock::new();
-    PACK.get_or_init(|| build_pack(false, true))
+    PACK.get_or_init(|| build_pack(false, GalleryArt::All))
 }
 
 fn prologue_pack() -> &'static Pack {
     use std::sync::OnceLock;
     static PACK: OnceLock<Pack> = OnceLock::new();
-    PACK.get_or_init(|| build_pack(true, true))
+    PACK.get_or_init(|| build_pack(true, GalleryArt::All))
 }
 
 /// The title's pack with none of the gallery's sheets.
 pub(super) fn pack_without_gallery_art() -> &'static Pack {
     use std::sync::OnceLock;
     static PACK: OnceLock<Pack> = OnceLock::new();
-    PACK.get_or_init(|| build_pack(false, false))
+    PACK.get_or_init(|| build_pack(false, GalleryArt::None))
+}
+
+/// The title's pack with the gallery's menu and none of its pictures' art.
+pub(super) fn pack_without_gallery_pictures() -> &'static Pack {
+    use std::sync::OnceLock;
+    static PACK: OnceLock<Pack> = OnceLock::new();
+    PACK.get_or_init(|| build_pack(false, GalleryArt::Menu))
 }
 
 pub(super) fn context<'a>(dir: &'a std::path::Path) -> UiContext<'a> {
@@ -504,14 +585,24 @@ fn arrange_mode_on_hard_hands_off_its_choice() {
 /// `title_special.txt`'s presses up to SPECIAL's first tick (the original's
 /// 260, 290 and 320 down and 380 confirm, from `Title_init` at 189).
 fn open_special(cx: &UiContext<'_>, dir: &std::path::Path, special: i64) -> LuaScreen {
+    open_special_with(cx, dir, special, None)
+}
+
+/// [`open_special`], with config.ini's `GALLERY0` to `GALLERY4` at `opened`.
+fn open_special_with(
+    cx: &UiContext<'_>,
+    dir: &std::path::Path,
+    special: i64,
+    opened: Option<[u32; 5]>,
+) -> LuaScreen {
     let mut cx_open = context(dir);
-    let mut screen = LuaScreen::open_screen(
-        "title",
-        &[("special", ScreenArg::Int(special))],
-        ScreenAction::Quit,
-        &mut cx_open,
-    )
-    .unwrap();
+    let mut args = vec![("special", ScreenArg::Int(special))];
+    let names = ["gallery0", "gallery1", "gallery2", "gallery3", "gallery4"];
+    for (name, word) in names.into_iter().zip(opened.into_iter().flatten()) {
+        args.push((name, ScreenArg::Int(i64::from(word))));
+    }
+    let mut screen =
+        LuaScreen::open_screen("title", &args, ScreenAction::Quit, &mut cx_open).unwrap();
     let down = UiInput {
         down: true,
         held_down: true,
@@ -686,7 +777,16 @@ fn the_4th_survivors_exit_goes_back_to_the_title_from_black() {
 /// SPECIAL with every extra, its cursor taken to GALLERY and confirmed: the
 /// tick of the confirm, with the cues it played.
 pub(super) fn open_gallery(cx: &UiContext<'_>, dir: &std::path::Path) -> LuaScreen {
-    let mut screen = open_special(cx, dir, 15);
+    open_gallery_with(cx, dir, None)
+}
+
+/// [`open_gallery`], with config.ini's `GALLERY0` to `GALLERY4` at `opened`.
+pub(super) fn open_gallery_with(
+    cx: &UiContext<'_>,
+    dir: &std::path::Path,
+    opened: Option<[u32; 5]>,
+) -> LuaScreen {
+    let mut screen = open_special_with(cx, dir, 15, opened);
     run(&mut screen, cx, UiInput::default(), 20);
     run(&mut screen, cx, press("down"), 10);
     run(&mut screen, cx, press("right"), 10);

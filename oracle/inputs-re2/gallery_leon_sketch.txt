@@ -1,0 +1,34 @@
+# The title from boot into LEON's DATA GALLERY and its ROUGH SKETCH: right on the tick after the first sketch loads, right again, left three times round the start, a held right, and up to the menu (oracle/re2.md, "The gallery").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 down
+443
+470 right
+473
+500 confirm
+503
+560 confirm
+563
+620 confirm
+623
+655 right
+657
+700 right
+703
+730 left
+733
+760 left
+763
+790 left
+793
+820 right
+850
+870 up
+873

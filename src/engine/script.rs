@@ -916,6 +916,17 @@ fn open_pack(
 
 /// The key bit a button name maps to: the input-script names plus `forward`
 /// and `backward` for the tank controls' up and down.
+/// `load_game_pack`'s `title_gallery`: config.ini's `GALLERY0` to
+/// `GALLERY4`, all five.
+fn gallery_words(words: Vec<u32>) -> mlua::Result<[u32; 5]> {
+    <[u32; 5]>::try_from(words).map_err(|words| {
+        mlua::Error::RuntimeError(format!(
+            "load_game_pack: title_gallery has {} words, not 5",
+            words.len()
+        ))
+    })
+}
+
 fn button_bit(name: &str) -> mlua::Result<u64> {
     let bit = match name {
         "forward" => Some(KEY_UP),
@@ -1200,7 +1211,9 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                 let difficulty: Option<String> = options.get("difficulty")?;
                 let arrange: Option<bool> = options.get("arrange")?;
                 let title_special: Option<i8> = options.get("title_special")?;
+                let title_gallery: Option<Vec<u32>> = options.get("title_gallery")?;
                 options.finish()?;
+                let title_gallery = title_gallery.map(gallery_words).transpose()?;
                 let (easy, hard_mode) = match difficulty.as_deref().unwrap_or("normal") {
                     "normal" => (false, false),
                     "easy" => (true, false),
@@ -1245,6 +1258,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                         censorship_off: arrange.unwrap_or(false),
                     },
                     title_special,
+                    title_gallery,
                     ..player::Options::default()
                 };
                 if let Some(window) = driver.window.as_mut() {
@@ -1848,6 +1862,23 @@ mod tests {
     #[test]
     fn a_clear_with_no_films_keeps_its_mix_too() {
         clear_to_result(false);
+    }
+
+    #[test]
+    fn the_titles_gallery_words_are_all_five_or_an_error() {
+        let words = vec![0x9000_0000, 0x10, 0, 0, u32::MAX];
+        assert_eq!(
+            gallery_words(words.clone()).unwrap(),
+            [0x9000_0000, 0x10, 0, 0, u32::MAX]
+        );
+        for short in [vec![], words[..4].to_vec(), [words, vec![1]].concat()] {
+            let count = short.len();
+            let error = gallery_words(short).unwrap_err().to_string();
+            assert!(
+                error.contains(&format!("has {count} words, not 5")),
+                "{error}"
+            );
+        }
     }
 
     #[test]

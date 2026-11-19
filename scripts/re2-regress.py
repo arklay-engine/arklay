@@ -199,6 +199,9 @@ def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input
         if "special" in run:
             # config.ini's SPECIAL, which the record's `--config SPECIAL=N` sets.
             options.append(f"title_special = {int(run['special'])}")
+        if "gallery" in run:
+            # config.ini's GALLERY0 to GALLERY4, which the record's `--config GALLERYn=0x...` set.
+            options.append("title_gallery = { " + ", ".join(str(int(word)) for word in run["gallery"]) + " }")
         lines.append(f"load_game_pack({lua_str(str(ctx['pack']))}, {{ {', '.join(options)} }})")
         # `boot = true`: from the game's boot, the warning before the title, as the record has it from its tick 0.
         lines.append("open_title({ boot = true })" if run.get("boot") else "open_title()")

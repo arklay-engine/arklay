@@ -11682,6 +11682,16 @@ impl App {
             .as_deref()
             .is_some_and(|entry| self.pack.contains(entry));
         let special = i64::from(self.player_options.title_special.unwrap_or(15));
+        let mut args = vec![
+            ("folder_saves", ScreenArg::Bool(folder_saves)),
+            ("special", ScreenArg::Int(special)),
+        ];
+        if let Some(gallery) = self.player_options.title_gallery {
+            const NAMES: [&str; 5] = ["gallery0", "gallery1", "gallery2", "gallery3", "gallery4"];
+            for (name, word) in NAMES.into_iter().zip(gallery) {
+                args.push((name, ScreenArg::Int(i64::from(word))));
+            }
+        }
         self.sleeping_title = None;
         self.pending_load = None;
         // A title asleep under a film it asked for goes with that film: the
@@ -11691,15 +11701,8 @@ impl App {
         }
         self.stop_screen_music();
         let mut cx = self.context();
-        let screen = ui::lua_screen::LuaScreen::open_screen(
-            "title",
-            &[
-                ("folder_saves", ScreenArg::Bool(folder_saves)),
-                ("special", ScreenArg::Int(special)),
-            ],
-            ScreenAction::Quit,
-            &mut cx,
-        )?;
+        let screen =
+            ui::lua_screen::LuaScreen::open_screen("title", &args, ScreenAction::Quit, &mut cx)?;
         let mut screen = Box::new(screen);
         let own_boot = boot && screen.boots();
         if own_boot {
@@ -13749,10 +13752,11 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
         } else {
             line.push_str(" opt=-");
         }
-        // The gallery's task, as `scripts/oracle-re2.py`'s `gal` has it.
+        // The gallery's task, as `scripts/oracle-re2.py`'s `gal` and `galv`
+        // have it.
         if v("gal_on") != 0 {
             line.push_str(&format!(
-                " gal={},{},{},{},{},{},{:x}",
+                " gal={},{},{},{},{},{},{:x} galv={},{}",
                 v("gal_task"),
                 v("gal_screen"),
                 v("gal_step"),
@@ -13760,12 +13764,14 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
                 v("gal_pulse"),
                 v("gal_fade"),
                 v("gal_flags"),
+                v("gal_index"),
+                v("gal_tiles"),
             ));
         } else {
-            line.push_str(" gal=-");
+            line.push_str(" gal=- galv=-");
         }
     } else {
-        line.push_str(" ti=- gal=-");
+        line.push_str(" ti=- gal=- galv=-");
     }
     // `sv`, as a session's trace has it (`re2_save_screen_trace`): no saves
     // made before play, and a loaded save's count once the screen has read

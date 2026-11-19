@@ -734,11 +734,20 @@ fn the_boots_warning_is_converted() {
     assert_eq!(colour(&Pack::open(&out).unwrap()), installs);
 }
 
-/// The gallery's menu art (`GalleryMain`): each of its six sheets is a TIM
-/// named `.dat`, kept as it is; the script that shows them is packed with
-/// the title's.
+/// The stems of the gallery's pictures, LEON's sixty and CLAIRE's
+/// thirty-five, as its warning lists them.
+fn gallery_pictures() -> Vec<String> {
+    (1..=60)
+        .map(|n| format!("rough{n:02}"))
+        .chain((1..=35).map(|n| format!("illust{n:02}")))
+        .collect()
+}
+
+/// The gallery's art (`GalleryMain`, `GalleryIllustrations`): each of the
+/// menu's six sheets, the pictures and their panel's three is a TIM under
+/// another extension, packed as it is.
 #[test]
-fn the_gallerys_menu_art_is_converted() {
+fn the_gallerys_art_is_converted() {
     let root = TempDir::new("gallery-art");
     make_install(&root.path);
     let data = root.path.join("data");
@@ -755,9 +764,29 @@ fn the_gallerys_menu_art_is_converted() {
         &data.join("Gallery/Moji.dat"),
         &[words.clone(), vec![0; 4]].concat(),
     );
-    // The 320 x 240 menu's sheets and the other screens' aren't packed.
-    write(&data.join("Gallery/top32_1.dat"), &words);
-    write(&data.join("Gallery/ILLUST01.dat"), &words);
+    // The pictures and their panel, under whatever case the install has.
+    let pictures = gallery_pictures();
+    for (n, stem) in pictures.iter().enumerate() {
+        let name = if n % 2 == 0 {
+            stem.to_uppercase()
+        } else {
+            stem.clone()
+        };
+        write(
+            &data.join(format!("Gallery/{name}.dat")),
+            &tiny_tim(2, n as u8),
+        );
+    }
+    for (n, name) in ["LEFT01", "left02", "GNUM2"].into_iter().enumerate() {
+        write(
+            &data.join(format!("Gallery/{name}.dat")),
+            &tiny_tim(3, n as u8),
+        );
+    }
+    // The 320 x 240 layout's sheets and the other screens' aren't packed.
+    for name in ["top32_1", "LEFT3224", "gnum", "movie64", "3DLEFT1"] {
+        write(&data.join(format!("Gallery/{name}.dat")), &words);
+    }
     let out = root.path.join("out.akpak");
     convert_game(&root.path, &out).unwrap();
     let pack = Pack::open(&out).unwrap();
@@ -766,8 +795,19 @@ fn the_gallerys_menu_art_is_converted() {
         assert_eq!(read(&pack, &entry), tiny_tim(2, n), "{entry}");
     }
     assert_eq!(read(&pack, "ui/gallery/moji.tim"), words);
-    for entry in ["top32_1.tim", "illust01.tim"] {
-        assert!(!pack.contains(&format!("ui/gallery/{entry}")), "{entry}");
+    for (n, stem) in pictures.iter().enumerate() {
+        let entry = format!("ui/gallery/{stem}.tim");
+        assert_eq!(read(&pack, &entry), tiny_tim(2, n as u8), "{entry}");
+    }
+    for (n, stem) in ["left01", "left02", "gnum2"].into_iter().enumerate() {
+        let entry = format!("ui/gallery/{stem}.tim");
+        assert_eq!(read(&pack, &entry), tiny_tim(3, n as u8), "{entry}");
+    }
+    for entry in ["top32_1", "left3224", "gnum", "movie64", "3dleft1"] {
+        assert!(
+            !pack.contains(&format!("ui/gallery/{entry}.tim")),
+            "{entry}"
+        );
     }
     assert!(pack.contains("ui/gallery.lua"));
     let layout = Layout::discover(&root.path).unwrap();
@@ -792,17 +832,35 @@ fn a_gallery_short_of_sheets_is_warned_of() {
         copy_gallery_art(&layout, &mut writer, &mut tally, &mut warnings).unwrap();
         warnings
     };
+    let pictures = gallery_pictures();
     assert_eq!(
         warned(&root.path),
-        ["no Gallery/title1, title2, title3, title4, title5, moji.dat; the gallery has no menu"]
+        [
+            "no Gallery/title1, title2, title3, title4, title5, moji.dat; the gallery has no menu"
+                .to_owned(),
+            "no Gallery/left01, left02, gnum2.dat; the gallery can't show its pictures".to_owned(),
+            format!(
+                "no Gallery/{}.dat; the gallery lacks those pictures",
+                pictures.join(", ")
+            ),
+        ]
     );
     // Some of them: what is there is packed, and the rest named.
     let data = root.path.join("data");
     write(&data.join("Gallery/TITLE1.dat"), &tiny_tim(2, 1));
     write(&data.join("Gallery/Moji.dat"), &tiny_tim(3, 2));
+    write(&data.join("Gallery/LEFT02.dat"), &tiny_tim(3, 3));
+    write(&data.join("Gallery/gnum2.dat"), &tiny_tim(3, 4));
+    for stem in pictures.iter().filter(|stem| *stem != "illust07") {
+        write(&data.join(format!("Gallery/{stem}.dat")), &tiny_tim(2, 5));
+    }
     assert_eq!(
         warned(&root.path),
-        ["no Gallery/title2, title3, title4, title5.dat; the gallery has no menu"]
+        [
+            "no Gallery/title2, title3, title4, title5.dat; the gallery has no menu",
+            "no Gallery/left01.dat; the gallery can't show its pictures",
+            "no Gallery/illust07.dat; the gallery lacks those pictures",
+        ]
     );
     convert_game(&root.path, &out).unwrap();
     let pack = Pack::open(&out).unwrap();
