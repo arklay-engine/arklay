@@ -17,5 +17,9 @@ end
 
 M.update = Title.update
 M.draw = Title.draw
+-- What the engine tells the title, it tells this entry: the settings'
+-- volumes for the SOUND page, and the end of a film the prologue asked for.
+M.on_volumes = Title.on_volumes
+M.on_film = Title.on_film
 
 return M

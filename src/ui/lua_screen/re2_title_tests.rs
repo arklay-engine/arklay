@@ -1095,6 +1095,59 @@ fn a_direction_held_as_the_title_opens_is_no_press() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The SOUND page's two volumes are the settings' music and effects volumes
+/// when the engine gives them (`on_volumes`), held to the page's 1 to 100,
+/// and a change on the page is published for the engine to take. A title
+/// told nothing publishes neither.
+#[test]
+fn the_sound_pages_volumes_are_the_settings_when_they_are_given() {
+    let dir = std::env::temp_dir();
+    let cx = context(&dir);
+    let (mut screen, dir) = open_option(&cx, "option-volumes");
+    let volumes = |screen: &LuaScreen| {
+        ["music_volume", "effects_volume", "opt_bgm", "opt_se"].map(|key| screen.value(key))
+    };
+    assert_eq!(volumes(&screen), [0, 0, 100, 100], "its own, unpublished");
+    screen.signal_with("on_volumes", (40i64, 0i64), &cx);
+    assert_eq!(volumes(&screen)[..2], [40, 1], "no page volume is 0");
+    // SOUND, then down to the music's volume and left by one.
+    run(&mut screen, &cx, press("down"), 2);
+    run(&mut screen, &cx, press("down"), 2);
+    run(&mut screen, &cx, press("confirm"), 1);
+    assert_eq!(volumes(&screen), [40, 1, 40, 1]);
+    run(&mut screen, &cx, press("down"), 2);
+    run(&mut screen, &cx, press("down"), 2);
+    let left = UiInput {
+        held_left: true,
+        ..UiInput::default()
+    };
+    screen.update(&cx, left);
+    assert_eq!(volumes(&screen), [39, 1, 39, 1]);
+    // The settings changed elsewhere: the page follows.
+    screen.signal_with("on_volumes", (100i64, 55i64), &cx);
+    assert_eq!(volumes(&screen)[..2], [100, 55]);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(volumes(&screen), [100, 55, 100, 55]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The new-game choice's entry runs the title's script, so it takes what
+/// the engine tells the title: the settings' volumes and a film's end.
+#[test]
+fn the_choice_entry_takes_the_titles_hooks() {
+    let dir = prologue_dir("choice-hooks");
+    let cx = context(&dir);
+    let mut cx_open = context(&dir);
+    let mut screen =
+        LuaScreen::open_screen("char_select", &[], ScreenAction::Quit, &mut cx_open).unwrap();
+    assert!(screen.plays_films());
+    screen.signal_with("on_volumes", (70i64, 30i64), &cx);
+    assert_eq!(screen.value("music_volume"), 70);
+    assert_eq!(screen.value("effects_volume"), 30);
+    assert!(!screen.failed());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 // ------------------------------------------------------- the prologue
 
 /// The trace's `pro` field's step, count and skip, with the sequence and the

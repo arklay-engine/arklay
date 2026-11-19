@@ -1062,9 +1062,22 @@ local OPT_TEXT_GREEN, OPT_DIGIT_GREEN = "#00C80A", "#00FF40"
 
 -- The sound settings, which outlast a visit: the speaker mode (1 monaural, 2
 -- stereo), the quality (`Config_get_squal`: 0 is 44.1 kHz at 16 bits) and
--- the two volumes. They are the screen's own; arklay's sound doesn't read
--- them (oracle/re2-deviations.md, "The title").
+-- the two volumes. The volumes are arklay's music and effects volumes when
+-- the engine has settings to give (`M.on_volumes`); the rest is the
+-- screen's own (oracle/re2-deviations.md, "The title").
 local sound = { speaker = 2, quality = 0, bgm = 100, se = 100 }
+
+-- Whether the engine gave the volumes, which are then published for it
+-- to take a change from (`music_volume`, `effects_volume`).
+local volumes_given = false
+
+-- A volume as the page holds it: 1 to 100.
+local function option_volume_range(value)
+    if value < 1 then
+        return 1
+    end
+    return value > 100 and 100 or value
+end
 
 -- The screen's work, which is static in the original and so outlasts a
 -- visit too: a second one opens with the cursor's row until `Config_main`
@@ -1833,6 +1846,10 @@ end
 
 local function publish(api)
     Prologue.publish(api, s.pro)
+    if volumes_given then
+        api:set("music_volume", sound.bgm)
+        api:set("effects_volume", sound.se)
+    end
     api:set("ti_mv", s.mv)
     api:set("ti_disp", s.disp)
     api:set("ti_init", s.init)
@@ -2029,6 +2046,18 @@ end
 
 function M.on_loaded(api)
     resume(api, true)
+end
+
+-- arklay's music and effects volumes, in percent, as the title opens and
+-- whenever the settings change: the SOUND page's two volumes are these,
+-- held to the page's 1 to 100, and the engine takes a change of the page's
+-- from what is published.
+function M.on_volumes(api, music, effects)
+    volumes_given = true
+    sound.bgm = option_volume_range(music)
+    sound.se = option_volume_range(effects)
+    api:set("music_volume", sound.bgm)
+    api:set("effects_volume", sound.se)
 end
 
 -- The film the prologue left for is over, or never played: its sequence

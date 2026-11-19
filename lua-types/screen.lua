@@ -225,6 +225,22 @@ function ScreenModule.on_loaded(api) end
 ---@param skipped boolean Whether a press ended the film.
 function ScreenModule.on_film(api, skipped) end
 
+---Called on a title screen, or on the new-game choice's entry, with the
+---player's music and effects volumes in percent (0 to 100): once as the
+---screen opens and again whenever the settings change. For a title with an
+---option screen of its own that shows and sets them. Such a screen
+---publishes the two it shows as `music_volume` and `effects_volume`
+---([`api:set`](#ScreenApi.set)) on each `update`: when a published value
+---changes to one from 0 to 100, the engine takes it as the player's new
+---setting, mixes with it and saves it. A value the screen shows otherwise
+---than it was told (a range of its own) is no change until it moves. Not
+---called in a run with no settings (a headless one), where the screen
+---keeps its own values.
+---@param api ScreenApi
+---@param music integer The music volume, 0 to 100.
+---@param effects integer The effects volume, 0 to 100.
+function ScreenModule.on_volumes(api, music, effects) end
+
 ---The published view: what the screen shows a player, as a table of
 ---integers, numbers, strings, booleans and nested tables of them, for
 ---observers such as the player bot. It is the screen's contract with them:

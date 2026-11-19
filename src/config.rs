@@ -934,6 +934,15 @@ impl Config {
         Self::update(path, |config| config.graphics.aspect = aspect)
     }
 
+    /// Persist the music and effects volumes a game's own option screen set
+    /// (RE 2's SOUND page), leaving the rest of the file as it is.
+    pub fn save_screen_volumes(path: &Path, music: u8, effects: u8) -> Result<()> {
+        Self::update(path, |config| {
+            config.game.music_volume = music.min(100);
+            config.game.effects_volume = effects.min(100);
+        })
+    }
+
     /// Persist the launcher's options: the whole `[graphics]` table, the
     /// root `language` key and the `[game]` toggles. Rewritten like
     /// [`Config::save_bindings`].
