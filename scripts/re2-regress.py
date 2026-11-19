@@ -81,6 +81,7 @@ def load_manifest(path: Path) -> tuple[dict, list[dict]]:
         fields = run.get("fields", "")
         run["fields"] = fieldsets.get(fields, fields)
         unknown = [name for name in run["fields"].split(",") if name and not oracle.comparable(name)]
+        unknown += [entry[-1] for entry in run.get("ignore", []) if not oracle.comparable(str(entry[-1]))]
         if unknown:
             raise SystemExit(f"re2-regress: {run['name']}: the comparison has no field {', '.join(unknown)}")
         ignore_pairs(run.get("ignore", []))
@@ -523,14 +524,42 @@ def self_test_fields() -> str | None:
             others = ",".join(name for name in names if name != key)
             if compare_traces(ref, ark, 0, others)["fields"]:
                 return f"a changed {key} diverges a run that doesn't name it"
+
+        # An entity's field, by the slot's own spelling, and `Max_life` apart from the rest of `pl`.
+        def entity(name: str, x: str, life: str) -> Path:
+            path = tmp / name
+            path.write_text(f"oracle-trace v1 engine=test\nt=0 room=1:0 e=1,7,{x},0 pl=0,0,{life},3\n")
+            return path
+
+        ref = entity("ref.trace", "5", "200")
+        cases = [
+            ("6", "200", "e1.x", ["e1.x"]),
+            ("6", "200", "e1.y,pl", []),
+            ("5", "140", "pl", ["plmax"]),
+            ("5", "140", "plmax", ["plmax"]),
+            ("5", "140", "e1.x", []),
+        ]
+        for x, life, fields, want in cases:
+            got = compare_traces(ref, entity("ark.trace", x, life), 0, fields)["fields"]
+            if got != want:
+                return f"fields {fields} with x {x} and life {life} gave {got}, not {want}"
+        ignored = compare_traces(ref, entity("ark.trace", "5", "140"), 0, "pl", [[0, "plmax"]])
+        if ignored["fields"] or ignored["ignored"] != 1:
+            return f"an ignored plmax still counts: {ignored}"
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-    for name in ("gal", "galv", "p.x", "zm3", "zm*", "om12", "om*", "esp", "espk", "esp4", "e2.x", "e*", "snd"):
+    known = ("gal", "galv", "p.x", "zm3", "zm*", "om12", "om*", "esp", "espk", "esp4", "e2.x", "e-1.x", "e*", "snd", "pl", "plmax")
+    for name in known:
         if not oracle.comparable(name):
             return f"{name} isn't taken as a field"
-    for name in ("gall", "p.q", "zm", "omx", "e2.q", "e.x", ""):
+    for name in ("gall", "p.q", "zm", "omx", "e2.q", "e.x", "e01.x", "e\u00b9.x", "zm03", "om\u00b2", "fgsys", ""):
         if oracle.comparable(name):
             return f"{name!r} is taken as a field"
+    try:
+        oracle.checked_fields("room,gall")
+        return "a list with an unknown field is taken"
+    except SystemExit:
+        pass
     return None
 
 
@@ -938,6 +967,10 @@ def finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks
     if run.get("frames"):
         if not want_frames:
             text += "; frames: no reference frames"
+            limits = [key for key in ("frame_max_mean", "frame_windows") if run.get(key) is not None]
+            if limits:
+                # A limit nothing is held to would let the run pass on its trace alone.
+                result["problems"].append(f"the reference has no frames for {' and '.join(limits)}: record it again")
         else:
             if streamed is None:
                 streamed = {"errors": frame_errors(ref_dir / "frames", frames_dir, first, last, offset, variants), "outside": []}

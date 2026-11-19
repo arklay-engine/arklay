@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import struct
 import sys
 from dataclasses import dataclass, field
@@ -391,7 +392,14 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
         items.append(("fgkey", tick.door_locks))
     if tick.scene is not None:
         items.append(("scene", tick.scene))
-    items.extend(sorted(tick.screen.items()))
+    for key, value in sorted(tick.screen.items()):
+        values = value.split(",")
+        if key == "pl" and len(values) > 2:
+            # `Max_life` on its own, so that a run can leave it out and keep the rest; `pl` names both.
+            items.append(("pl", ",".join(values[:2] + values[3:])))
+            items.append(("plmax", values[2]))
+        else:
+            items.append((key, value))
     if tick.zombies not in (None, "-"):
         # Without the speed, which a zombie that's standing leaves stale.
         for row in tick.zombies.split(";"):
@@ -427,7 +435,11 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
 NAMED_FIELDS = {
     "room", "rng", "rseed", "fade", "cam", "mot", "em", "es", "spl", "spe", "spc", "bgm", "pneck", "xavol", "movie",
     "snd", "inv", "ip", "msg", "fgkey", "fgstat", "scene", "zp", "zd", "esp", "espn", "espk", "zm*", "om*", "e*",
+    "plmax",
 }
+# A slot as a trace's key spells it: `tick_fields` writes an entity's from the number it parsed, so `e01.x` names
+# nothing.
+SLOT = r"(0|[1-9][0-9]*)"
 
 
 def comparable(name: str) -> bool:
@@ -437,11 +449,21 @@ def comparable(name: str) -> bool:
         return True
     if name.startswith("p."):
         return name[2:] in PLAYER_FIELDS
-    for prefix in ("zm", "om", "esp"):
-        if name.startswith(prefix) and name[len(prefix):].isdigit():
-            return True
-    slot, dot, part = name.partition(".")
-    return bool(dot) and slot.startswith("e") and slot[1:].isdigit() and part in ENTITY_FIELDS
+    if re.fullmatch(f"(zm|om|esp){SLOT}", name, re.ASCII):
+        return True
+    entity = re.fullmatch(f"e-?{SLOT}\\.(.+)", name, re.ASCII)
+    return bool(entity) and entity.group(2) in ENTITY_FIELDS
+
+
+def checked_fields(text: str | None) -> list[str] | None:
+    """A `--fields` list, each name one the comparison reads."""
+    if not text:
+        return None
+    names = text.split(",")
+    unknown = [name for name in names if not comparable(name)]
+    if unknown:
+        raise SystemExit(f"the comparison has no field {', '.join(unknown)}")
+    return names
 
 
 def selected(key: str, fields: list[str] | None) -> bool:
@@ -451,6 +473,8 @@ def selected(key: str, fields: list[str] | None) -> bool:
     themselves. So are the room objects' `om<n>`: `om*` selects every one."""
     if key.startswith("esp"):
         return fields is not None and (key in fields or "esp" in fields)
+    if key == "plmax":
+        return fields is not None and (key in fields or "pl" in fields)
     if key.startswith("om") and key[2:].isdigit():
         return fields is not None and (key in fields or "om*" in fields)
     if fields is None:
@@ -770,7 +794,7 @@ def main() -> int:
 
     result = compare_pair(
         ref, ark, alignment["offset"], args.ark_offset, args.first, args.context,
-        args.fields.split(",") if args.fields else None,
+        checked_fields(args.fields),
     )
     result["alignment_scan"] = alignment
 
