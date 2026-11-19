@@ -141,7 +141,7 @@ function mark_authored() end
 ---Open the title screen, as the game shows it after its logos, with no
 ---films. A game the title starts is a session like any other; `game` calls
 ---need one.
----@param options? { boot: boolean? } `boot`: open it as the game's boot does, with what the title shows before itself (RE 2's warning).
+---@param options? { boot: boolean? } `boot`: open it as the game's boot does: a title that runs the boot itself shows what the game shows before its title (RE 2's warning).
 function open_title(options) end
 
 ---Open ending `id`'s RESULT screen, as the game shows it after the ending

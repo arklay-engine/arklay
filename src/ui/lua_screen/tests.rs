@@ -223,7 +223,7 @@ end
             claire: true
         })
     );
-    screen.resume_film(&cx, true);
+    screen.resume_film(&cx, true, true);
     assert_eq!(screen.value("skipped"), 1);
     assert_eq!(
         screen.update(&cx, UiInput::default()),
@@ -237,7 +237,7 @@ end
             claire: false
         })
     );
-    screen.resume_film(&cx, false);
+    screen.resume_film(&cx, false, false);
     assert_eq!(screen.value("skipped"), 0);
     assert_eq!(screen.test_global::<i64>("woke"), 2);
     assert!(!screen.failed());

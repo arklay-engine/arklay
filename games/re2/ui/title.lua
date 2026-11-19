@@ -27,7 +27,7 @@
 -- below) and gives the title back at `Title_init`. An idle title fades into
 -- the attract demo after 0x708 ticks.
 --
--- From the game's boot (`args.boot`) the title starts 189 ticks before
+-- From the game's boot (`M.on_boot`) the title starts 189 ticks before
 -- `Title_init`, with the warning's picture and the title's film ("the
 -- boot" below).
 --
@@ -1896,6 +1896,15 @@ local function boot_film(api)
     return { id = 0, claire = time ~= nil and time.second % 2 == 1 }
 end
 
+-- `Capcom_logo`'s end: the title's task starts at `Title_init` on the
+-- next tick. `Title_bg_reload`'s picture is first drawn then.
+local function boot_end()
+    s.frame = "black"
+    s.mv = 1
+    s.sub = 0
+    s.boot = nil
+end
+
 -- Task 0 through the boot, a tick: `Init_main`'s steps, then
 -- `Capcom_logo`'s (`s.sub`), with `Task_sleep` as `b.sleep`.
 local function boot_main(api)
@@ -1917,7 +1926,9 @@ local function boot_main(api)
         end
         if b.flag ~= 0 then
             -- The rest of `Init_main`: the fonts and the effects' sheets,
-            -- and the main task is the title's from the next tick.
+            -- and the main task is the title's from the next tick, come
+            -- from the logo.
+            s.fg_system = s.fg_system | FG_FROM_LOGO
             b.step = 3
         end
     elseif b.step == 3 then
@@ -1931,19 +1942,20 @@ local function boot_main(api)
         b.flag = 2
         s.sub = 6
         b.step = 6
+    elseif b.step == 8 then
+        -- The film played: the task's first tick after it.
+        boot_end()
     else
         s.sub = 7
         b.step = 7
         if b.flag == 0 then
-            -- Step 8 finds the film over on its own tick in a run that
-            -- plays none. `Title_bg_reload`'s picture is first drawn on
-            -- `Title_init`'s tick.
+            -- Step 8 waits for the film (`fg_system`'s 0x200), which is
+            -- over on this tick in a run that plays none (`M.on_film`).
             s.film = boot_film(api)
             s.exit = "film"
             s.frame = "black"
-            s.mv = 1
-            s.sub = 0
-            s.boot = nil
+            s.sub = 8
+            b.step = 8
         end
     end
 end
@@ -2057,16 +2069,9 @@ function M.open(api, args)
     Prologue.reset()
     s.prologue_art = api:has_image("ui/prologue/open10")
     -- The title starts at `Title_init`, or, from the boot, 189 ticks before
-    -- it with the warning (`boot`).
+    -- it with the warning (`M.on_boot`).
     s.mv = 1
     s.init = 1
-    if args and args.boot then
-        s.warning = api:has_image("ui/title/warning") and api:picture("ui/title/warning") or nil
-        s.background = nil
-        s.mv = 0
-        s.init = 0
-        s.boot = { step = 0, sleep = 1, flag = 0 }
-    end
     -- From the boot, the white branch of `Title_init`; the new-game choice's
     -- entry (`ui/char_select.lua`) fades in and opens on ORIGINAL MODE's.
     s.fg_system = args and args.choice and 0 or FG_FROM_LOGO
@@ -2183,10 +2188,29 @@ function M.on_volumes(api, music, effects)
     api:set("effects_volume", sound.se)
 end
 
--- The film the prologue left for is over, or never played: its sequence
--- finds that on the next tick.
-function M.on_film(api, skipped)
-    if s.pro then
+-- The title is the boot's first: it starts with `Init_main`, before the
+-- warning ("the boot").
+function M.on_boot(api)
+    s.warning = api:has_image("ui/title/warning") and api:picture("ui/title/warning") or nil
+    s.background = nil
+    s.mv = 0
+    s.init = 0
+    s.fg_system = 0
+    s.boot = { step = 0, sleep = 1, flag = 0 }
+    publish(api)
+end
+
+-- The film the title left for is over, or never played. The prologue's
+-- sequence finds that on its next tick. The boot's `Capcom_logo` ends on
+-- the tick it asked when the film never played, and on its next tick
+-- after one that did.
+function M.on_film(api, skipped, played)
+    if s.boot then
+        if not played then
+            boot_end()
+            publish(api)
+        end
+    elseif s.pro then
         Prologue.film_over(s.pro, skipped)
     end
 end

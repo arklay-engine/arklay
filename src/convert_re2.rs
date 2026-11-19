@@ -1919,17 +1919,22 @@ fn copy_title_art(
             })
             .and_then(|mut files| (!files.is_empty()).then(|| files.remove(0).1))
     };
-    let warning = match archived(WARNING_7Z, warnings) {
-        Some(bytes) => Some((bytes, "ddraw.dll's gw2.adt".to_owned())),
-        None => match find("GW2") {
-            Some(path) => Some((read(path)?, path.display().to_string())),
-            None => None,
-        },
+    // The archive's copy that can't be shown gives way to the install's.
+    let picture = |bytes: &[u8]| adt::decode(bytes).and_then(|decoded| adt::frame_image(&decoded));
+    let english = archived(WARNING_7Z, warnings).and_then(|bytes| {
+        picture(&bytes)
+            .map_err(|error| warnings.push(format!("ddraw.dll: gw2.adt: {error:#}")))
+            .ok()
+    });
+    let warning = match (english, find("GW2")) {
+        (Some(image), _) => Some(image),
+        (None, Some(path)) => {
+            Some(picture(&read(path)?).with_context(|| format!("{}", path.display()))?)
+        }
+        (None, None) => None,
     };
     match warning {
-        Some((bytes, source)) => {
-            let decoded = adt::decode(&bytes).with_context(|| source.clone())?;
-            let image = adt::frame_image(&decoded).with_context(|| source.clone())?;
+        Some(image) => {
             tally.add(
                 writer,
                 "ui",

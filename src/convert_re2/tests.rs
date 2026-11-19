@@ -722,6 +722,16 @@ fn the_boots_warning_is_converted() {
     write(&root.path.join("DDRAW.DLL"), &dll);
     convert_game(&root.path, &out).unwrap();
     assert_ne!(colour(&Pack::open(&out).unwrap()), installs);
+
+    // An archive's copy that can't be decoded gives way to the install's.
+    let mut dll = ddraw(&[]);
+    dll.extend(crate::sevenz::tests::stored(&[(
+        "common/data/gw2.adt",
+        b"not an ADT stream",
+    )]));
+    write(&root.path.join("DDRAW.DLL"), &dll);
+    convert_game(&root.path, &out).unwrap();
+    assert_eq!(colour(&Pack::open(&out).unwrap()), installs);
 }
 
 /// The prologue's art (`Prologue_load`): each `open0<n>.adt` is a stream of
