@@ -151,6 +151,11 @@ pub enum ScreenAction {
     CharSelect,
     /// Open the load screen.
     SaveLoad,
+    /// Play RE 2's film `id` ([`crate::movie::re2_film`]), Claire's with
+    /// `claire`, while the title that asked sleeps, then wake it with how
+    /// the film ended (its `on_film`). A film that can't play is over at
+    /// once.
+    Film { id: u8, claire: bool },
     /// The ending films finished: open the RESULT screen.
     EndingResult,
     /// The RESULT screen finished: run the rocket-launcher epilogue (endings

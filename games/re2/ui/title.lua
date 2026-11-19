@@ -1605,7 +1605,7 @@ local function game_init(api, input)
         s.init, s.sub = 0, 2
         fade_off(0)
         s.background = nil
-        s.pro = Prologue.new(PROLOGUE_FADES)
+        s.pro = Prologue.new(PROLOGUE_FADES, s.claire)
         return
     end
     s.sub = 3
@@ -1613,6 +1613,9 @@ local function game_init(api, input)
     Prologue.sound(api, s.pro, s.claire and 1 or 0)
     if s.pro.done then
         s.exit = "new_game"
+    elseif s.pro.film then
+        -- The title sleeps while the film plays (`M.on_film`).
+        s.exit = "film"
     end
 end
 
@@ -1998,6 +2001,8 @@ function M.update(api, input)
         s.exit = nil
         if exit == "new_game" then
             api:exit("new_game", s.character or 0, s.choice)
+        elseif exit == "film" then
+            api:exit("film", s.pro.film, { claire = s.claire })
         else
             api:exit(exit)
         end
@@ -2024,6 +2029,14 @@ end
 
 function M.on_loaded(api)
     resume(api, true)
+end
+
+-- The film the prologue left for is over, or never played: its sequence
+-- finds that on the next tick.
+function M.on_film(api, skipped)
+    if s.pro then
+        Prologue.film_over(s.pro, skipped)
+    end
 end
 
 -- A palette channel as the original's renderer expands the sheets' 5-bit

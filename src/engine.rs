@@ -199,6 +199,12 @@ const PROLOGUE_VOICE_LEVEL: u8 = 0x6B;
 /// How long a screen's music fade takes: the prologue's
 /// `Snd_bgm_fade_ON(0x78, 0x18)` is over within its 128-tick fade out.
 const UI_MUSIC_FADE_TICKS: u16 = 120;
+
+/// The level a screen's music starts at: the sequence volume
+/// `Prologue_load` sets (100 of 127).
+fn screen_music_gain() -> f32 {
+    crate::se2::volume_gain(100)
+}
 /// The absent Virgin logo the boot sequence requests first.
 const BOOT_VLOGO_ID: u8 = 28;
 /// The Capcom logo the boot sequence requests after the Virgin logo.
@@ -207,9 +213,6 @@ const BOOT_CAPCOM_ID: u8 = 23;
 const TITLE_OPENING_ID: u8 = 0;
 /// The prologue film the character confirm requests before a new game.
 const PROLOGUE_ID: u8 = 1;
-/// The films RE 2's `Prologue` plays after its pictures (`Init_movie_work`
-/// in its steps 6 and 7): the scenario's opening and the film after it.
-const RE2_OPENING_IDS: [u8; 2] = [3, 0xF];
 
 /// The process-wide SDL lifetime.
 ///
@@ -10965,11 +10968,14 @@ struct App {
     /// opens the title instead of running another gameplay tick, so the tick
     /// that finished the death is still traced with the session's final state.
     pending_return_title: bool,
-    /// How many of the new game's opening films ([`App::opening_films`])
-    /// have been asked for: the follow-up `NewGame` action of one plays the
-    /// next, and builds the session once they are through. A later confirm
-    /// plays them anew, exactly like the original.
-    opening_film: u8,
+    /// Whether the prologue film (id 1) is playing for a pending new game:
+    /// the follow-up `NewGame` action then builds the session instead of
+    /// queueing the film again. A later confirm queues the prologue anew,
+    /// exactly like the original.
+    prologue_pending: bool,
+    /// The title asleep under a film it asked for ([`ScreenAction::Film`]),
+    /// to wake when the film is over.
+    film_title: Option<Box<ui::lua_screen::LuaScreen>>,
     /// One-shot cache for the UI cue sounds (`se/cursor.wav`, ...).
     ui_sfx_cache: SfxCache,
     /// RE 2's sound banks for the screens outside play: the title's core
@@ -11083,7 +11089,8 @@ impl App {
             demos,
             next_demo: 0,
             pending_return_title: false,
-            opening_film: 0,
+            prologue_pending: false,
+            film_title: None,
             ui_sfx_cache: SfxCache::default(),
             ui_banks: None,
             ui_sounds: Vec::new(),
@@ -11114,34 +11121,6 @@ impl App {
             session.allow_skip();
         }
         Ok(session)
-    }
-
-    /// The next opening film of a pending new game, or `None` once they are
-    /// through. RE 1 plays its prologue (id 1); RE 2's `Prologue` plays the
-    /// scenario's opening (id 3) and then the second film (id 0xF) as its
-    /// steps 7 and 9, after the pictures the title has shown, unless the
-    /// first was skipped. A film that cannot be opened is logged and passed
-    /// over.
-    fn next_opening_film(&mut self, character: u8) -> Option<MovieSession> {
-        let re2 = pack_start_room(&self.pack, character).is_some();
-        let films: &[u8] = if re2 {
-            &RE2_OPENING_IDS
-        } else {
-            &[PROLOGUE_ID]
-        };
-        while let Some(&id) = films.get(usize::from(self.opening_film)) {
-            self.opening_film += 1;
-            let session = if re2 {
-                MovieSession::open_re2(&self.pack, id, character & 1 != 0)
-            } else {
-                self.open_movie(id, character)
-            };
-            match session {
-                Ok(session) => return Some(session),
-                Err(err) => crate::warning!("warning: intro film unavailable: {err:#}"),
-            }
-        }
-        None
     }
 
     /// Play `films` back to back, then apply `action` (`None` quits the app).
@@ -11185,7 +11164,15 @@ impl App {
     /// escape's ending reaches its RESULT screen instead of holding the
     /// faded-out room for good.
     fn drop_pending_movie(&mut self) -> Result<AppFlow> {
-        while self.pending_movie.take().is_some() && self.chain_active {
+        while self.pending_movie.take().is_some() {
+            // A title asleep under the film wakes as after a film played
+            // to its end.
+            if let Some(title) = self.film_title.take() {
+                self.wake_film_title(title, false);
+            }
+            if !self.chain_active {
+                break;
+            }
             if let AppFlow::Quit = self.advance_chain()? {
                 return Ok(AppFlow::Quit);
             }
@@ -11228,10 +11215,10 @@ impl App {
             mixer.stop_movie_audio();
             mixer.resume_game_sounds();
         }
-        // A skipped opening film takes the rest with it (`Movie` leaves
-        // `0x9814B5` at 1, and `Prologue`'s step 7 then starts no other).
-        if tick == MovieTick::Skipped && self.opening_film != 0 {
-            self.opening_film = u8::MAX;
+        // A title that asked for the film wakes to how it ended.
+        if let Some(title) = self.film_title.take() {
+            self.wake_film_title(title, tick == MovieTick::Skipped);
+            return Ok(AppFlow::Continue);
         }
         if self.chain_active {
             return self.advance_chain();
@@ -11413,14 +11400,20 @@ impl App {
                 Music(id) => {
                     *ui_music_fade = None;
                     mixer.stop_all_bgm();
+                    // `Snd_bgm_ctr(0x1000000)` gives the first channel the
+                    // sequence's volume whatever the loader's table says
+                    // of it, and plays the others as they were loaded.
                     for (channel, name) in crate::bgm2::main_tracks(id).into_iter().enumerate() {
+                        if channel != 0 && !crate::bgm2::main_audible(id, channel) {
+                            continue;
+                        }
                         let stem = name.and_then(crate::bgm2::track_stem);
-                        let wav = stem.and_then(|stem| ui_sfx_cache.load_stem(pack, stem));
-                        if let Some(wav) = wav
-                            && crate::bgm2::main_audible(id, channel)
+                        if let Some(wav) = stem.and_then(|stem| ui_sfx_cache.load_stem(pack, stem))
                         {
-                            mixer.play_bgm_channel(channel, wav, true);
-                            mixer.set_bgm_channel_volume(channel, 1.0);
+                            mixer.load_bgm_channel(channel, wav, true);
+                            mixer.set_bgm_channel_kind(channel, crate::music::TrackKind::Music);
+                            mixer.set_bgm_channel_volume(channel, screen_music_gain());
+                            mixer.restart_bgm_channel(channel);
                         }
                     }
                 }
@@ -11451,11 +11444,21 @@ impl App {
             self.ui_music_fade = None;
             return;
         }
-        let gain = f32::from(left) / f32::from(UI_MUSIC_FADE_TICKS);
+        let gain = screen_music_gain() * f32::from(left) / f32::from(UI_MUSIC_FADE_TICKS);
         for channel in 0..3 {
             mixer.set_bgm_channel_volume(channel, gain);
         }
         self.ui_music_fade = Some(left);
+    }
+
+    /// A screen's music and narration end with it: a screen that opens, or
+    /// the game, starts without them. The one-shot cues play on.
+    fn stop_screen_music(&mut self) {
+        self.ui_music_fade = None;
+        if let Some(mixer) = &mut self.ui_music {
+            mixer.stop_all_bgm();
+            mixer.stop_voice();
+        }
     }
 
     /// Play the RE 2 core-bank cues among `cues` (`Snd_se_on(0x4nn0000)`, at
@@ -11619,6 +11622,7 @@ impl App {
         let special = i64::from(self.player_options.title_special.unwrap_or(15));
         self.sleeping_title = None;
         self.pending_load = None;
+        self.stop_screen_music();
         let mut cx = self.context();
         let screen = ui::lua_screen::LuaScreen::open_screen(
             "title",
@@ -11658,6 +11662,7 @@ impl App {
 
     /// Open the character-selection screen.
     fn open_select(&mut self) -> Result<()> {
+        self.stop_screen_music();
         let mut cx = self.context();
         let screen = ui::lua_screen::LuaScreen::open_screen(
             "char_select",
@@ -11845,6 +11850,7 @@ impl App {
     /// Windows main thread's 1 MiB stack. Keeping the moves in this small
     /// helper bounds the frame.
     fn start_new_game(&mut self, character: u8, choice: crate::ui::NewGameChoice) -> Result<()> {
+        self.stop_screen_music();
         // RE 2's title passes its difficulty and ARRANGE MODE on, and the
         // session starts with them, before the first room's first tick.
         let options = player::Options {
@@ -11901,6 +11907,7 @@ impl App {
 
     /// Continue from a parsed save block (a Lua screen's chosen file).
     fn continue_from_file(&mut self, file: save::SaveFile) -> Result<()> {
+        self.stop_screen_music();
         let session =
             GameSession::from_save_with(&self.pack, &file, &self.save_dir, self.player_options)?;
         self.start_narrated_session(session, game::MESSAGE_BOOT_CONTINUE);
@@ -12232,6 +12239,16 @@ impl App {
         self.play_ui_cues(cues);
     }
 
+    /// Put the title that slept under its film back in charge: the film is
+    /// over, by a press when `skipped`, or never played.
+    fn wake_film_title(&mut self, mut title: Box<ui::lua_screen::LuaScreen>, skipped: bool) {
+        let cx = self.context();
+        title.resume_film(&cx, skipped);
+        let cues = cx.cues.into_inner();
+        self.mode = Mode::Title(title);
+        self.play_ui_cues(cues);
+    }
+
     /// Apply a completed screen action.
     fn apply(&mut self, action: ScreenAction) -> Result<AppFlow> {
         // A title asleep under the load screen wakes when that screen comes
@@ -12257,33 +12274,76 @@ impl App {
                         None
                     }
                 };
+                // A title that sleeps keeps its music; one that is dropped
+                // takes it along.
+                if title.is_none() {
+                    self.stop_screen_music();
+                }
                 self.open_load()?;
                 if matches!(self.mode, Mode::Load(_)) {
                     self.sleeping_title = title;
                 }
             }
             ScreenAction::NewGame { character, choice } => {
-                // The interactive root boot plays the opening films with
-                // the chosen character before the session is built. Each
-                // film's follow-up action comes back here for the next, and
-                // the last one's builds the session; a missing film falls
-                // through directly.
-                if self.films
-                    && let Some(session) = self.next_opening_film(character)
-                {
+                // The interactive root boot plays the prologue film (id 1)
+                // with the chosen character before the session is built. The
+                // film's follow-up action comes back here and builds the
+                // session; a missing film falls through directly.
+                // A title that plays its own films (RE 2's, in its prologue)
+                // has played them by now.
+                let own_films = matches!(&self.mode, Mode::Title(title) if title.plays_films());
+                if self.films && !self.prologue_pending && !own_films {
+                    self.prologue_pending = true;
                     // The reference's `DisplayIntroAndStartGame` hard-stops the
                     // confirmation cue (`sounds_reset`) the moment the film
                     // starts; the UI mixer is that cue's home.
                     self.ui_music = None;
-                    self.queue_movie(session, Some(ScreenAction::NewGame { character, choice }));
+                    match self.open_movie(PROLOGUE_ID, character) {
+                        Ok(session) => self.queue_movie(
+                            session,
+                            Some(ScreenAction::NewGame { character, choice }),
+                        ),
+                        Err(err) => {
+                            crate::warning!("warning: intro film unavailable: {err:#}");
+                            self.prologue_pending = false;
+                            self.start_new_game(character, choice)?;
+                        }
+                    }
                 } else {
-                    self.opening_film = 0;
+                    self.prologue_pending = false;
                     self.start_new_game(character, choice)?;
                     // RE 2's title has run its prologue: the game starts
                     // as the original's does after it.
                     if let Mode::Play(session) = &mut self.mode {
                         session.start_from_re2_title(RE2_TITLE_NEW_GAME_TICKS);
                     }
+                }
+            }
+            ScreenAction::Film { id, claire } => {
+                let title = match std::mem::replace(&mut self.mode, Mode::Boot) {
+                    Mode::Title(title) if title.plays_films() => title,
+                    other => {
+                        // Nothing to wake: the screen is left as it is.
+                        crate::warning!("warning: film {id} asked for by a screen without on_film");
+                        self.mode = other;
+                        return Ok(AppFlow::Continue);
+                    }
+                };
+                let film = self
+                    .films
+                    .then(|| MovieSession::open_re2(&self.pack, id, claire));
+                match film {
+                    Some(Ok(session)) => {
+                        // The screen's music doesn't play under its film.
+                        self.stop_screen_music();
+                        self.film_title = Some(title);
+                        self.queue_movie(session, None);
+                    }
+                    Some(Err(err)) => {
+                        crate::warning!("warning: film {id} unavailable: {err:#}");
+                        self.wake_film_title(title, false);
+                    }
+                    None => self.wake_film_title(title, false),
                 }
             }
             ScreenAction::LoadGame { slot } => {
@@ -13457,8 +13517,9 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
         ));
         if v("pro_on") != 0 {
             // The prologue's task, as `scripts/oracle-re2.py`'s `pro`, `prs`
-            // and `prz` have it.
-            let sprites: Vec<String> = (0..v("pro_sprites"))
+            // and `prz` have it: a count it wouldn't list writes no sprite.
+            let count = Some(v("pro_sprites")).filter(|count| (1..=64).contains(count));
+            let sprites: Vec<String> = (0..count.unwrap_or(0))
                 .map(|index| {
                     // Two sprites to a value.
                     let pair = v(&format!("pro_s{}", index / 2)) as u64;
@@ -13488,7 +13549,11 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
                 v("pro_scroll"),
                 v("pro_zoom"),
                 v("pro_mask"),
-                sprites.join(","),
+                if sprites.is_empty() {
+                    "-".to_string()
+                } else {
+                    sprites.join(",")
+                },
                 v("pro_z0") >> 8,
                 v("pro_z0") & 0xFF,
                 v("pro_z1") >> 8,
@@ -38328,7 +38393,7 @@ off_0010:
             None,
             "the room-entry fade waits for the narration to clear"
         );
-        assert_eq!(app.opening_film, 0);
+        assert!(!app.prologue_pending);
 
         // A later confirm queues the prologue again, like the original.
         app.films = true;
@@ -38342,8 +38407,32 @@ off_0010:
         assert_eq!(pending.session.character(), 0);
     }
 
-    /// An RE 2 pack (one that names its start room) with `films` under
-    /// `movie/`.
+    /// A title that plays its own films as RE 2's prologue does: film 3
+    /// (Claire's copy), then film 0xF unless a press ended the first, then
+    /// the new game.
+    const FILM_TITLE: &str = "local M = { stage = 0, woke = 0 }
+        function M.update(api, input)
+            M.stage = M.stage + 1
+            api:set('stage', M.stage)
+            if M.stage == 1 then
+                api:exit('film', 3, { claire = true })
+            elseif M.stage == 2 and not M.skipped then
+                api:exit('film', 0xF)
+            else
+                api:exit('new_game', 0)
+            end
+        end
+        function M.on_film(api, skipped)
+            M.skipped = skipped
+            M.woke = M.woke + 1
+            api:set('woke', M.woke)
+            api:set('skipped', skipped and 1 or 0)
+        end
+        function M.draw() end
+        return M";
+
+    /// An RE 2 pack (one that names its start room) with [`FILM_TITLE`] and
+    /// `films` under `movie/`.
     fn re2_opening_pack(films: &[&str]) -> Pack {
         let mut manifest = crate::manifest::Manifest::base("re2");
         manifest.start_room = Some("100".to_string());
@@ -38354,6 +38443,9 @@ off_0010:
         writer
             .add("room/1000/room.rdt", crate::rdt2::tests::sample())
             .unwrap();
+        writer
+            .add("ui/title.lua", FILM_TITLE.as_bytes().to_vec())
+            .unwrap();
         for film in films {
             writer
                 .add(&format!("movie/{film}.avi"), crate::movie::test_avi(30))
@@ -38362,87 +38454,150 @@ off_0010:
         Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
     }
 
+    /// An app on [`FILM_TITLE`], before its first tick.
+    fn film_title_app(dir: &TempDir, films: &[&str], play: bool) -> App {
+        let mut app = App::new(re2_opening_pack(films), dir.0.clone(), false);
+        app.boot(AppBoot::Title).unwrap();
+        app.films = play;
+        app
+    }
+
+    fn title_value(app: &App, key: &str) -> i64 {
+        match &app.mode {
+            Mode::Title(title) => title.value(key),
+            _ => panic!("the title isn't up"),
+        }
+    }
+
+    fn idle(app: &mut App) {
+        app.update(UiInput::default(), player::Input::default(), false)
+            .unwrap();
+    }
+
+    /// A title's films (RE 2's prologue asks for ids 3 and 0xF): the title
+    /// sleeps under each and wakes after it, the app adds no film of its
+    /// own to the new game, and the game is held for `Title_game_init`'s
+    /// three ticks.
+    #[test]
+    fn a_titles_films_play_while_it_sleeps_and_the_game_starts_after_them() {
+        let dir = TempDir::new();
+        let mut app = film_title_app(&dir, &["opn1stc", "opn2ndl"], true);
+        idle(&mut app);
+        assert!(app.film_title.is_some(), "the title sleeps");
+        assert!(app.pending_movie.is_some(), "Claire's copy of film 3");
+        run_app_until(&mut app, |app| matches!(app.mode, Mode::Title(_)));
+        assert!(app.film_title.is_none());
+        assert_eq!(title_value(&app, "woke"), 1);
+        assert_eq!(title_value(&app, "skipped"), 0);
+        // Its next tick asks for the second film.
+        idle(&mut app);
+        assert!(app.film_title.is_some() && app.pending_movie.is_some());
+        run_app_until(&mut app, |app| matches!(app.mode, Mode::Title(_)));
+        assert_eq!(title_value(&app, "woke"), 2);
+        idle(&mut app);
+        let Mode::Play(session) = &app.mode else {
+            panic!("the game started");
+        };
+        assert_eq!(session.re2_title_start, Some(RE2_TITLE_NEW_GAME_TICKS));
+        assert!(app.pending_movie.is_none() && !app.prologue_pending);
+    }
+
+    /// A press that ends the first film reaches the title, which then asks
+    /// for no second (`Movie`'s `0x9814B5` and `Prologue`'s step 7).
+    #[test]
+    fn a_titles_film_ended_by_a_press_wakes_it_as_skipped() {
+        let dir = TempDir::new();
+        let mut app = film_title_app(&dir, &["opn1stc", "opn2ndl"], true);
+        idle(&mut app);
+        run_app_until(&mut app, |app| matches!(app.mode, Mode::Movie(_)));
+        // A press is an edge: one every other tick until the film ends.
+        for tick in 0..16 {
+            if matches!(app.mode, Mode::Title(_)) {
+                break;
+            }
+            if tick % 2 == 0 {
+                app_press(&mut app, |ui| ui.confirm = true);
+            } else {
+                idle(&mut app);
+            }
+        }
+        assert_eq!(title_value(&app, "skipped"), 1);
+        idle(&mut app);
+        assert!(app.pending_movie.is_none(), "no second film");
+        assert!(matches!(app.mode, Mode::Play(_)), "the game started");
+    }
+
+    /// A film that doesn't play is over at once: the title is awake again
+    /// before its next tick, whether the run plays no films, the pack lacks
+    /// the film, or a headless run drops it.
+    #[test]
+    fn a_titles_film_that_does_not_play_is_over_at_once() {
+        let dir = TempDir::new();
+        for (films, play) in [(&["opn1stc", "opn2ndl"][..], false), (&[][..], true)] {
+            let mut app = film_title_app(&dir, films, play);
+            idle(&mut app);
+            assert!(app.pending_movie.is_none() && app.film_title.is_none());
+            assert_eq!(title_value(&app, "woke"), 1);
+            assert_eq!(title_value(&app, "skipped"), 0);
+            idle(&mut app);
+            assert_eq!(title_value(&app, "woke"), 2);
+            idle(&mut app);
+            assert!(matches!(app.mode, Mode::Play(_)));
+        }
+
+        let mut app = film_title_app(&dir, &["opn1stc"], true);
+        idle(&mut app);
+        assert!(app.pending_movie.is_some());
+        assert_eq!(app.drop_pending_movie().unwrap(), AppFlow::Continue);
+        assert!(app.pending_movie.is_none() && app.film_title.is_none());
+        assert_eq!(title_value(&app, "woke"), 1);
+    }
+
+    /// A screen with no `on_film` can't be woken, so its film isn't played
+    /// and it stays up.
+    #[test]
+    fn a_film_from_a_screen_without_on_film_is_refused() {
+        let dir = TempDir::new();
+        let mut app = film_title_app(&dir, &["opn1stl"], true);
+        app.mode = Mode::Boot;
+        app.apply(ScreenAction::Film {
+            id: 3,
+            claire: false,
+        })
+        .unwrap();
+        assert!(app.pending_movie.is_none() && app.film_title.is_none());
+        assert!(matches!(app.mode, Mode::Boot));
+    }
+
+    /// An RE 1 pack that names its own start room still plays its intro
+    /// film before a new game.
+    #[test]
+    fn an_re1_pack_with_its_own_start_room_keeps_its_intro() {
+        let mut manifest = crate::manifest::Manifest::base("re1");
+        manifest.start_room = Some("100".to_string());
+        let mut writer = PackWriter::new();
+        writer
+            .add(crate::manifest::ENTRY, manifest.render().into_bytes())
+            .unwrap();
+        writer
+            .add(&crate::movie::pack_path(1), crate::movie::test_avi(30))
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let dir = TempDir::new();
+        let mut app = App::new(pack, dir.0.clone(), false);
+        app.films = true;
+        app.apply(re2_new_game()).unwrap();
+        let pending = app.pending_movie.as_ref().expect("the intro film");
+        assert_eq!(pending.session.id(), 1);
+        assert_eq!(pending.action, Some(re2_new_game()));
+        assert!(app.prologue_pending);
+    }
+
     fn re2_new_game() -> ScreenAction {
         ScreenAction::NewGame {
             character: 0,
             choice: Default::default(),
         }
-    }
-
-    /// RE 2's `Prologue` plays its two films (ids 3 and 0xF) after the
-    /// pictures the title has shown, and the game starts after the second,
-    /// held for `Title_game_init`'s three ticks.
-    #[test]
-    fn an_re2_new_game_plays_both_opening_films() {
-        let dir = TempDir::new();
-        let mut app = App::new(
-            re2_opening_pack(&["opn1stl", "opn2ndl"]),
-            dir.0.clone(),
-            false,
-        );
-        app.films = true;
-        app.apply(re2_new_game()).unwrap();
-        assert_eq!(app.opening_film, 1);
-        assert_eq!(
-            app.pending_movie.as_ref().expect("the first film").action,
-            Some(re2_new_game())
-        );
-        // The first film runs out and its action queues the second.
-        run_app_until(&mut app, |app| app.opening_film == 2);
-        assert!(app.pending_movie.is_some(), "the second film");
-        assert!(!matches!(app.mode, Mode::Play(_)));
-        run_app_until(&mut app, |app| matches!(app.mode, Mode::Play(_)));
-        assert_eq!(app.opening_film, 0);
-        let Mode::Play(session) = &app.mode else {
-            unreachable!();
-        };
-        assert_eq!(session.re2_title_start, Some(RE2_TITLE_NEW_GAME_TICKS));
-    }
-
-    /// A skip of the first film leaves `Movie`'s skipped byte up, and
-    /// `Prologue` then starts no second film.
-    #[test]
-    fn a_skipped_re2_opening_film_takes_the_second_with_it() {
-        let dir = TempDir::new();
-        let mut app = App::new(
-            re2_opening_pack(&["opn1stl", "opn2ndl"]),
-            dir.0.clone(),
-            false,
-        );
-        app.films = true;
-        app.apply(re2_new_game()).unwrap();
-        run_app_until(&mut app, |app| matches!(app.mode, Mode::Movie(_)));
-        for _ in 0..8 {
-            app_press(&mut app, |ui| ui.confirm = true);
-            assert!(app.pending_movie.is_none(), "no second film");
-            if matches!(app.mode, Mode::Play(_)) {
-                break;
-            }
-            app.update(UiInput::default(), player::Input::default(), false)
-                .unwrap();
-        }
-        assert!(matches!(app.mode, Mode::Play(_)), "the game started");
-        assert_eq!(app.opening_film, 0);
-    }
-
-    /// A film the pack lacks is passed over: the second still plays, and a
-    /// pack with neither starts the game at once.
-    #[test]
-    fn a_missing_re2_opening_film_is_passed_over() {
-        let dir = TempDir::new();
-        let mut app = App::new(re2_opening_pack(&["opn2ndl"]), dir.0.clone(), false);
-        app.films = true;
-        app.apply(re2_new_game()).unwrap();
-        assert_eq!(app.opening_film, 2);
-        assert!(app.pending_movie.is_some(), "the second film");
-        run_app_until(&mut app, |app| matches!(app.mode, Mode::Play(_)));
-
-        let mut app = App::new(re2_opening_pack(&[]), dir.0.clone(), false);
-        app.films = true;
-        app.apply(re2_new_game()).unwrap();
-        assert!(app.pending_movie.is_none());
-        assert!(matches!(app.mode, Mode::Play(_)));
-        assert_eq!(app.opening_film, 0);
     }
 
     /// A screen's voice and music cues are the app's mixer's alone: with no
@@ -38466,6 +38621,10 @@ off_0010:
         app.ui_music_fade = Some(5);
         app.step_ui_music_fade();
         assert_eq!(app.ui_music_fade, None);
+        // A screen that opens starts without the last one's fade.
+        app.ui_music_fade = Some(5);
+        app.open_title().unwrap();
+        assert_eq!(app.ui_music_fade, None);
     }
 
     /// The headless trace's `pro`, `prs` and `prz` from what the title's
@@ -38480,7 +38639,7 @@ off_0010:
                     api:set('pro_' .. key, i)
                 end
                 api:set('pro_mask', 0x3C)
-                api:set('pro_sprites', 3)
+                api:set('pro_sprites', COUNT)
                 -- Mode 0x17, colour 0x60 at y -2; mode 1, colour 0x80 at 180.
                 api:set('pro_s0', (0x1760 << 16 | 0xFFFE) | (0x0180 << 16 | 180) << 32)
                 api:set('pro_s1', 0x0B02 << 16 | 10)
@@ -38490,21 +38649,22 @@ off_0010:
             function M.update() end
             function M.draw() end
             return M";
-        for (on, expected) in [
-            (
-                "1",
-                " pro=1,2,3,4,5,6,7,8,9,10,11,12,13,14,3c prs=1760:-2,0180:180,0b02:10 \
-                 prz=200,198,20,22 ",
-            ),
-            ("0", " pro=- prs=- prz=- "),
+        const TASK: &str = " pro=1,2,3,4,5,6,7,8,9,10,11,12,13,14,3c ";
+        for (on, count, expected) in [
+            ("1", "3", "prs=1760:-2,0180:180,0b02:10 prz=200,198,20,22 "),
+            // A count the recorder wouldn't list writes no sprite.
+            ("1", "0", "prs=- prz=200,198,20,22 "),
+            ("1", "65", "prs=- prz=200,198,20,22 "),
+            ("0", "3", " pro=- prs=- prz=- "),
         ] {
             let dir = TempDir::new();
-            let title = TITLE.replace("ON", on);
+            let title = TITLE.replace("ON", on).replace("COUNT", count);
             let pack_path = new_game_pack_with(&dir, &[("ui/title.lua", title.as_bytes())]);
             let mut app = App::new(Pack::open(&pack_path).unwrap(), dir.0.join("saves"), false);
             app.boot(AppBoot::Title).unwrap();
             let line = screen_trace_line(&app, 7, 0, &[]);
             assert!(line.contains(expected), "{line}");
+            assert_eq!(line.contains(TASK), on == "1", "{line}");
         }
     }
 

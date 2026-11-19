@@ -535,6 +535,21 @@ impl LuaScreen {
         self.signal("on_resume", cx);
     }
 
+    /// Whether the script has `on_film`: it plays its own films
+    /// ([`ScreenAction::Film`]) and its owner adds none of its own to a new
+    /// game it starts.
+    pub fn plays_films(&self) -> bool {
+        !self.host.failed && self.vm.has_function("on_film")
+    }
+
+    /// Put a screen that left for a film back to work, calling its
+    /// `on_film(api, skipped)`: the film is over, by a press when `skipped`.
+    pub fn resume_film(&mut self, cx: &UiContext<'_>, skipped: bool) {
+        self.host.exited = false;
+        self.host.action = None;
+        self.signal_with("on_film", skipped, cx);
+    }
+
     /// [`LuaScreen::resume`] after the screen it left for chose a save,
     /// calling its `on_loaded(api)` instead.
     pub fn resume_loaded(&mut self, cx: &UiContext<'_>) {
@@ -904,6 +919,7 @@ fn input_table(lua: &Lua, input: UiInput) -> mlua::Result<Table> {
     table.set("page_left", input.page_left)?;
     table.set("page_right", input.page_right)?;
     table.set("start", input.start)?;
+    table.set("map", input.map)?;
     table.set("any", input.any)?;
     table.set("return_title", input.return_title)?;
     table.set("pad", pad_word(input))?;
@@ -1228,7 +1244,7 @@ fn slot_table(lua: &Lua, info: &save::SaveSlotInfo) -> mlua::Result<Table> {
 
 /// The action an `api:exit(name, arg, choice)` names. `choice` is a new
 /// game's table of `easy`, `hard_mode` and `censorship_off`, each true or 1
-/// when set ([`super::NewGameChoice`]).
+/// when set ([`super::NewGameChoice`]), or a film's, with `claire`.
 fn action_of(name: &str, arg: Option<i64>, choice: Option<&Table>) -> mlua::Result<ScreenAction> {
     let arg = |what: &str| {
         arg.ok_or_else(|| mlua::Error::RuntimeError(format!("api:exit(\"{name}\") needs {what}")))
@@ -1251,9 +1267,35 @@ fn action_of(name: &str, arg: Option<i64>, choice: Option<&Table>) -> mlua::Resu
         "load_game" => ScreenAction::LoadGame {
             slot: arg("a slot")?.clamp(0, 7) as usize,
         },
+        "film" => ScreenAction::Film {
+            id: u8::try_from(arg("a film id")?).map_err(|_| {
+                mlua::Error::RuntimeError("api:exit(\"film\"): the id is not a film's".into())
+            })?,
+            claire: match choice {
+                Some(choice) => exit_flag(choice, name, "claire")?,
+                None => false,
+            },
+        },
         other => {
             return Err(mlua::Error::RuntimeError(format!(
                 "unknown exit action `{other}`"
+            )));
+        }
+    })
+}
+
+/// A flag of the table an `api:exit(name, ...)` passes: true, or a number
+/// other than 0.
+fn exit_flag(table: &Table, name: &str, key: &str) -> mlua::Result<bool> {
+    Ok(match table.get::<Value>(key)? {
+        Value::Nil => false,
+        Value::Boolean(on) => on,
+        Value::Integer(n) => n != 0,
+        Value::Number(n) => n != 0.0,
+        other => {
+            return Err(mlua::Error::RuntimeError(format!(
+                "api:exit(\"{name}\"): `{key}` is a {}, not a flag",
+                other.type_name()
             )));
         }
     })
@@ -1264,20 +1306,7 @@ fn new_game_choice(choice: Option<&Table>) -> mlua::Result<super::NewGameChoice>
     let Some(choice) = choice else {
         return Ok(super::NewGameChoice::default());
     };
-    let set = |key: &str| -> mlua::Result<bool> {
-        Ok(match choice.get::<Value>(key)? {
-            Value::Nil => false,
-            Value::Boolean(on) => on,
-            Value::Integer(n) => n != 0,
-            Value::Number(n) => n != 0.0,
-            other => {
-                return Err(mlua::Error::RuntimeError(format!(
-                    "api:exit(\"new_game\"): `{key}` is a {}, not a flag",
-                    other.type_name()
-                )));
-            }
-        })
-    };
+    let set = |key: &str| exit_flag(choice, "new_game", key);
     Ok(super::NewGameChoice {
         easy: set("easy")?,
         hard_mode: set("hard_mode")?,

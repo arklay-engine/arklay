@@ -349,11 +349,14 @@ impl UserData for Api<'_> {
         methods.add_method(
             "voice",
             |_lua, api, (line, player): (Option<u8>, Option<u8>)| {
+                let player = player.unwrap_or(0);
+                if player > 1 {
+                    return Err(mlua::Error::RuntimeError(format!(
+                        "api:voice: player {player} is neither 0 (Leon) nor 1 (Claire)"
+                    )));
+                }
                 api.cx.play_cue(match line {
-                    Some(line) => UiCue::Voice {
-                        player: player.unwrap_or(0) & 1,
-                        line,
-                    },
+                    Some(line) => UiCue::Voice { player, line },
                     None => UiCue::VoiceStop,
                 });
                 Ok(())

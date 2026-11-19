@@ -1103,32 +1103,55 @@ fn pro(screen: &LuaScreen) -> [i64; 5] {
     ["pro_mv", "pro_step", "pro_count", "pro_r", "pro_skip"].map(|key| screen.value(key))
 }
 
+fn confirm() -> UiInput {
+    UiInput {
+        confirm: true,
+        ..UiInput::default()
+    }
+}
+
+/// What a run of the prologue left: the tick the title handed the game over
+/// on, its action, and the films it asked for on the way (tick, id, Claire's).
+struct Prologue {
+    end: u32,
+    action: ScreenAction,
+    films: Vec<(u32, u8, bool)>,
+}
+
 /// A title over the prologue's art, run through `prologue_leon.txt`'s choice
-/// (down on 260, confirms on 300, 360 and 420) and then `presses`, from
-/// `Title_init` (the original's tick 189) until it hands the game over.
-/// `each` sees every tick after its update, with the cues it played.
+/// (down on 260, confirms on 300, 360 and 420; with `claire`, right on 340)
+/// and then `presses`, from `Title_init` (the original's tick 189) until it
+/// hands the game over. A film it asks for is over at once, as in the
+/// recordings, by a press when it is `skipped_film`. `each` sees every tick
+/// after its update, with the cues it played.
 fn run_prologue(
     dir: &std::path::Path,
+    claire: bool,
     presses: &[(u32, UiInput)],
+    skipped_film: Option<u8>,
     mut each: impl FnMut(u32, &LuaScreen, &[UiCue]),
-) -> (u32, ScreenAction) {
+) -> Prologue {
     let cx = context_over(prologue_pack(), dir);
     let mut cx_open = context_over(prologue_pack(), dir);
     let mut screen =
         LuaScreen::open_screen("title", &[], ScreenAction::Quit, &mut cx_open).unwrap();
+    assert!(screen.plays_films());
     let down = UiInput {
         down: true,
         held_down: true,
         ..UiInput::default()
     };
-    let confirm = UiInput {
-        confirm: true,
+    let right = UiInput {
+        right: true,
+        held_right: true,
         ..UiInput::default()
     };
+    let mut films = Vec::new();
     for tick in 189..5000 {
         let input = match tick {
             260 => down,
-            300 | 360 | 420 => confirm,
+            340 if claire => right,
+            300 | 360 | 420 => confirm(),
             _ => presses
                 .iter()
                 .find(|(at, _)| *at == tick)
@@ -1137,28 +1160,42 @@ fn run_prologue(
         cx.cues.borrow_mut().clear();
         let result = screen.update(&cx, input);
         each(tick, &screen, &cx.cues.borrow());
-        if let ScreenResult::Done(action) = result {
-            return (tick, action);
+        match result {
+            ScreenResult::Continue => {}
+            ScreenResult::Done(ScreenAction::Film { id, claire }) => {
+                films.push((tick, id, claire));
+                screen.resume_film(&cx, skipped_film == Some(id));
+            }
+            ScreenResult::Done(action) => {
+                return Prologue {
+                    end: tick,
+                    action,
+                    films,
+                };
+            }
         }
     }
     panic!("the title never handed over");
 }
 
+fn prologue_dir(label: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-{label}-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
 /// `prologue_leon`: `Title_game_init` starts the task two ticks after the
 /// hand-over (692), its first tick is 693, the narration's lines start on
-/// their counts, and the game starts when the task ends on 4028. A press
-/// under the last fade (3800) skips nothing.
+/// their counts, the two films are asked for on 4025 and 4026, and the
+/// game starts when the task ends on 4028. A press under the last fade
+/// (3800) skips nothing.
 #[test]
 fn a_new_game_runs_the_prologue_before_it_starts() {
-    let dir = std::env::temp_dir().join(format!("arklay-re2-prologue-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let confirm = UiInput {
-        confirm: true,
-        ..UiInput::default()
-    };
+    let dir = prologue_dir("prologue");
     let mut voices = Vec::new();
     let mut music = Vec::new();
-    let (end, action) = run_prologue(&dir, &[(3800, confirm)], |tick, screen, cues| {
+    let presses = [(3800, confirm())];
+    let run = run_prologue(&dir, false, &presses, None, |tick, screen, cues| {
         match tick {
             690 => assert_eq!(screen.value("pro_on"), 0),
             691 => assert_eq!(ti(screen)[..4], [2, 3, 1, 0]),
@@ -1196,14 +1233,16 @@ fn a_new_game_runs_the_prologue_before_it_starts() {
             }
         }
     });
-    assert_eq!(end, 4028);
+    assert_eq!(run.end, 4028);
     assert_eq!(
-        action,
+        run.action,
         ScreenAction::NewGame {
             character: 0,
             choice: Default::default(),
         }
     );
+    // `Init_movie_work(3)` and `(0xF)`, each over on its own tick.
+    assert_eq!(run.films, [(4025, 3, false), (4026, 0xF, false)]);
     // `Xa_play(1, n)` on each step's count, and `Xa_stop` at the end.
     assert_eq!(
         voices,
@@ -1227,53 +1266,131 @@ fn a_new_game_runs_the_prologue_before_it_starts() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A press that ends the first film (`0x9814B5`) leaves the second out:
+/// step 7 goes to the task's end, a tick sooner.
+#[test]
+fn a_skipped_first_film_takes_the_second_with_it() {
+    let dir = prologue_dir("pro-film-skip");
+    let run = run_prologue(&dir, false, &[], Some(3), |tick, screen, _| {
+        if tick == 4026 {
+            assert_eq!(pro(screen), [4, 9, 1, 3, 2]);
+        }
+    });
+    assert_eq!(run.films, [(4025, 3, false)]);
+    assert_eq!(run.end, 4027);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Claire's first scenario is `Prologue_mv`'s entry 1, the same routine:
+/// her bank's lines, her films, and the entry a skip comes back to.
+#[test]
+fn claires_prologue_is_entry_1_with_her_lines_and_films() {
+    let dir = prologue_dir("pro-claire");
+    let mut voices = Vec::new();
+    let presses = [(1300, confirm())];
+    let run = run_prologue(&dir, true, &presses, None, |tick, screen, cues| {
+        match tick {
+            693 => assert_eq!(pro(screen), [1, 1, 1, 1, 0]),
+            1300 => assert_eq!(pro(screen)[..2], [4, 6]),
+            1428 => assert_eq!(pro(screen), [1, 6, 0x5A, 1, 2]),
+            _ => {}
+        }
+        voices.extend(cues.iter().filter_map(|cue| match cue {
+            UiCue::Voice { player, line } => Some((tick, *player, *line)),
+            _ => None,
+        }));
+    });
+    assert_eq!(voices, [(693 + 420, 1, 1)]);
+    assert_eq!(run.films, [(1439, 3, true), (1440, 0xF, true)]);
+    assert_eq!(run.end, 1442);
+    assert_eq!(
+        run.action,
+        ScreenAction::NewGame {
+            character: 1,
+            choice: Default::default(),
+        }
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// `prologue_leon_skip`: a confirm on 1300 stops the line, fades the music
 /// and the frame out and takes the sequence to its films' step, and the
-/// game starts on 1442.
+/// game starts on 1442. The pad's other skip keys do the same.
 #[test]
 fn a_press_skips_the_prologue_to_its_films() {
-    let dir = std::env::temp_dir().join(format!("arklay-re2-pro-skip-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let confirm = UiInput {
-        confirm: true,
+    let dir = prologue_dir("pro-skip");
+    let keys: [fn(&mut UiInput); 4] = [
+        |input| input.confirm = true,
+        |input| input.cancel = true,
+        |input| input.start = true,
+        |input| input.map = true,
+    ];
+    for key in keys {
+        let mut press = UiInput::default();
+        key(&mut press);
+        let run = run_prologue(&dir, false, &[(1300, press)], None, |tick, screen, cues| {
+            match tick {
+                1299 => assert_eq!(pro(screen)[4], 0),
+                1300 => {
+                    assert_eq!(pro(screen)[..2], [4, 6]);
+                    assert_eq!(pro(screen)[4], 1);
+                    assert_eq!(screen.value("pro_slot"), 0);
+                    assert!(cues.contains(&UiCue::VoiceStop));
+                    assert!(cues.contains(&UiCue::MusicFade));
+                }
+                // Slot 0's fade is over: the sequence comes back in at 0x5A.
+                1428 => assert_eq!(pro(screen), [0, 6, 0x5A, 1, 2]),
+                1439 => assert_eq!(pro(screen)[..2], [0, 7]),
+                1441 => assert_eq!(pro(screen)[..2], [4, 9]),
+                _ => {}
+            }
+        });
+        assert_eq!(run.films, [(1439, 3, false), (1440, 0xF, false)]);
+        assert_eq!(run.end, 1442);
+    }
+    // A direction is no skip key.
+    let down = UiInput {
+        down: true,
+        held_down: true,
         ..UiInput::default()
     };
-    let (end, _) = run_prologue(&dir, &[(1300, confirm)], |tick, screen, cues| match tick {
-        1299 => assert_eq!(pro(screen)[4], 0),
-        1300 => {
-            assert_eq!(pro(screen)[..2], [4, 6]);
-            assert_eq!(pro(screen)[4], 1);
-            assert_eq!(screen.value("pro_slot"), 0);
-            assert!(cues.contains(&UiCue::VoiceStop));
-            assert!(cues.contains(&UiCue::MusicFade));
-        }
-        // Slot 0's fade is over: the sequence comes back in at 0x5A.
-        1428 => assert_eq!(pro(screen), [0, 6, 0x5A, 1, 2]),
-        1439 => assert_eq!(pro(screen)[..2], [0, 7]),
-        1441 => assert_eq!(pro(screen)[..2], [4, 9]),
-        _ => {}
-    });
-    assert_eq!(end, 1442);
+    assert_eq!(
+        run_prologue(&dir, false, &[(1300, down)], None, |_, _, _| {}).end,
+        4028
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A second press, once the frame is black and the sequence is back, ends
-/// the task on that tick instead of waiting for the films' count.
+/// the task on that tick: no film is asked for. So does a first press after
+/// the last fade, while step 6 counts to its films.
 #[test]
-fn a_second_press_ends_a_skipped_prologue() {
-    let dir = std::env::temp_dir().join(format!("arklay-re2-pro-skip2-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let confirm = UiInput {
-        confirm: true,
-        ..UiInput::default()
-    };
-    let presses = [(1300, confirm), (1430, confirm)];
-    let (end, _) = run_prologue(&dir, &presses, |tick, screen, _| {
+fn a_press_on_black_ends_the_prologue_with_no_film() {
+    let dir = prologue_dir("pro-skip2");
+    let presses = [(1300, confirm()), (1430, confirm())];
+    let run = run_prologue(&dir, false, &presses, None, |tick, screen, _| {
         if tick == 1429 {
             assert_eq!(pro(screen), [0, 6, 0x5B, 1, 2]);
         }
     });
-    assert_eq!(end, 1430);
+    assert_eq!(run.end, 1430);
+    assert_eq!(run.films, []);
+
+    let run = run_prologue(
+        &dir,
+        false,
+        &[(3950, confirm())],
+        None,
+        |tick, screen, _| {
+            if tick == 3949 {
+                assert_eq!(pro(screen)[..2], [0, 6]);
+                assert_eq!(screen.value("pro_skip_ok"), 1);
+            }
+        },
+    );
+    assert_eq!(run.end, 3950);
+    assert_eq!(run.films, []);
+    assert!(matches!(run.action, ScreenAction::NewGame { .. }));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -1281,8 +1398,7 @@ fn a_second_press_ends_a_skipped_prologue() {
 /// three quarters over what is under them, between the scene's black bands.
 #[test]
 fn the_prologue_draws_its_pieces_between_the_bands() {
-    let dir = std::env::temp_dir().join(format!("arklay-re2-pro-draw-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = prologue_dir("pro-draw");
     let cx = context_over(prologue_pack(), &dir);
     let mut cx_open = context_over(prologue_pack(), &dir);
     let mut screen =
@@ -1292,14 +1408,10 @@ fn the_prologue_draws_its_pieces_between_the_bands() {
         held_down: true,
         ..UiInput::default()
     };
-    let confirm = UiInput {
-        confirm: true,
-        ..UiInput::default()
-    };
     for tick in 189..=1566 {
         let input = match tick {
             260 => down,
-            300 | 360 | 420 => confirm,
+            300 | 360 | 420 => confirm(),
             _ => UiInput::default(),
         };
         screen.update(&cx, input);

@@ -82,9 +82,10 @@ local BAND = 24
 -- The two full-screen pictures: `Work_buffer`'s and `Bg_buffer`'s.
 local PICTURE_A, PICTURE_B = "ui/prologue/open10", "ui/prologue/open11"
 
--- The buttons that skip (`0x9F0`): the title's decide, cancel and START.
+-- The buttons that skip (the raw pad's `0x9F0`): decide, cancel, START and
+-- the PC's map key.
 local function skip_pressed(keys)
-    return keys.confirm or keys.cancel or keys.start
+    return keys.confirm or keys.cancel or keys.start or keys.map
 end
 
 -- `Prologue_mv00`'s steps 1 to 5: at each count, in the routine's order,
@@ -138,14 +139,17 @@ local function u8(v)
     return v & 0xFF
 end
 
--- A prologue as `Prologue_load` leaves it. `fades` is the title's:
--- `set(a0, add)`, `done(n)`, `off(n)`, `level(n, level)` and `add(n, add)`.
-function M.new(fades)
+-- A prologue as `Prologue_load` leaves it for a first scenario, Claire's
+-- with `claire`. `fades` is the title's: `set(a0, add)`, `done(n)`,
+-- `off(n)`, `level(n, level)` and `add(n, add)`.
+function M.new(fades, claire)
     local p = {
         fades = fades,
         -- The task's steps (+8, +9, +10).
         task = { 0, 0, 0 },
-        mv = 0,
+        -- `Prologue_mv`'s entry: 0 for Leon, 1 for Claire, both
+        -- `Prologue_mv00`.
+        mv = claire and 1 or 0,
         step = 0,
         count = 0,
         mask = 0,
@@ -167,6 +171,12 @@ function M.new(fades)
         -- "stop", and the music's "start" (main 0x2B), "fade" or "stop".
         xa = nil,
         music = nil,
+        -- The film a step started this tick (`Init_movie_work`), for the
+        -- title to play; `film_on` until it says the film is over
+        -- (`M.film_over`), and whether a press ended it (`0x9814B5`).
+        film = nil,
+        film_on = false,
+        film_skipped = false,
         done = false,
     }
     for i = 0, COUNT - 1 do
@@ -221,7 +231,21 @@ local function move(p)
     end
 end
 
--- `Prologue_exit` (0x4CF730): once the fade is over, the task ends.
+-- `Init_movie_work(id)`: the sequence waits for the film.
+local function film(p, id)
+    p.film = id
+    p.film_on = true
+    p.film_skipped = false
+end
+
+-- The film a step started is over, `skipped` when a press ended it.
+function M.film_over(p, skipped)
+    p.film_on = false
+    p.film_skipped = skipped and true or false
+end
+
+-- `Prologue_exit` (0x4CF730): once the fade is over, the task ends. Until
+-- then the task sleeps in it, and nothing else of the tick runs.
 local function exit(p)
     if p.task[3] == 0 then
         if not p.fades.done(p.slot) then
@@ -298,21 +322,31 @@ local function sequence(p)
         end
     elseif p.step == 6 then
         if p.count == FILM_COUNT then
-            -- `Init_movie_work(3)`: with the films off it is over at once.
-            p.film = 3
+            -- The scenario's opening film.
+            film(p, 3)
             p.step = 7
             p.count = 1
             return
         end
     elseif p.step == 7 then
-        -- The first film is over: `Init_movie_work(0xF)`.
-        p.film = 0xF
-        p.step = 9
-        p.count = 1
-        return
+        if not p.film_on then
+            -- The first film is over: the second follows it unless a
+            -- press ended the first.
+            p.step = 9
+            p.count = 1
+            if p.film_skipped then
+                p.r = 3
+                p.mv = 4
+            else
+                film(p, 0xF)
+            end
+            return
+        end
     elseif p.step == 9 then
-        p.r = 3
-        p.mv = 4
+        if not p.film_on then
+            p.r = 3
+            p.mv = 4
+        end
     end
     p.count = (p.count + 1) & 0xFFFF
 end
@@ -423,7 +457,8 @@ local function animate(p)
     end
 end
 
--- One tick of the task. `keys` are this tick's presses.
+-- One tick of the task. `keys` are this tick's presses. A film the tick
+-- started is left in `p.film` for the caller to play.
 function M.tick(p, keys)
     p.xa = nil
     p.music = nil
@@ -457,9 +492,7 @@ function M.tick(p, keys)
         move(p)
     elseif p.r == 3 then
         exit(p)
-        if p.done then
-            return
-        end
+        return
     end
     if p.mv == 4 then
         skipped(p)

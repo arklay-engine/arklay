@@ -1707,9 +1707,9 @@ impl Framebuffer {
             // brought down to this one: each pixel is the mean of its four
             // device pixels, each sampled at its centre.
             let (over, keep) = (u32::from(alpha), u32::from(255 - alpha));
-            let texel = |at: i32, origin: i32, dst_n: i32, src_n: i32, half: i64| {
-                let centre = (i64::from(at) - i64::from(origin)) * 4 + 1 + 2 * half;
-                (centre * i64::from(src_n) / (4 * i64::from(dst_n))) as i32
+            let texel = |at: i32, origin: i32, dst_n: i32, src_n: i32, half: i128| {
+                let centre = (i128::from(at) - i128::from(origin)) * 4 + 1 + 2 * half;
+                (centre * i128::from(src_n) / (4 * i128::from(dst_n))) as i32
             };
             for y in start_y..end_y {
                 for x in start_x..end_x {
@@ -1724,17 +1724,17 @@ impl Framebuffer {
                             texel(x, dst_x, dst_w, src_w, half_x),
                             texel(y, dst_y, dst_h, src_h, half_y),
                         );
-                        let tex_x = if mirror[0] {
-                            src_x + src_w - 1 - offset_x
+                        let tex_x = src_x.checked_add(if mirror[0] {
+                            src_w - 1 - offset_x
                         } else {
-                            src_x + offset_x
-                        };
-                        let tex_y = if mirror[1] {
-                            src_y + src_h - 1 - offset_y
+                            offset_x
+                        });
+                        let tex_y = src_y.checked_add(if mirror[1] {
+                            src_h - 1 - offset_y
                         } else {
-                            src_y + offset_y
-                        };
-                        let pixel = sample(tex_x, tex_y);
+                            offset_y
+                        });
+                        let pixel = tex_x.zip(tex_y).and_then(|(x, y)| sample(x, y));
                         for (channel, total) in sum.iter_mut().enumerate() {
                             let below = u32::from(under[channel]);
                             *total += match pixel {
@@ -9285,6 +9285,35 @@ mod tests {
         assert_eq!(draw(255), [40, 0, 100, 200, 40]);
         // Each device pixel is blended, then the four are averaged.
         assert_eq!(draw(191), [40, 10, 85, 160, 40]);
+
+        // A rectangle far off the frame, as wide as a rectangle can be,
+        // still samples within the page.
+        let mut framebuffer = Framebuffer::new();
+        framebuffer.blit(&solid_image(320, 240, [40, 40, 40, 255]));
+        framebuffer.draw_page_sprite_scaled(
+            &Artwork::Indexed(texture.clone()),
+            [0, 0, 2, 2],
+            [-2_000_000_000, 0, i32::MAX, 240],
+            0,
+            255,
+            Tint::White,
+            SpriteBlend::Alpha(255),
+        );
+        assert_eq!(framebuffer_pixel(&framebuffer, 0, 0)[0], 200);
+        framebuffer.draw_page_sprite_scaled(
+            &Artwork::Indexed(texture),
+            [i32::MAX - 1, 0, i32::MAX, 2],
+            [-2_000_000_000, 0, i32::MAX, 240],
+            0,
+            255,
+            Tint::White,
+            SpriteBlend::Alpha(255),
+        );
+        assert_eq!(
+            framebuffer_pixel(&framebuffer, 0, 0)[0],
+            200,
+            "off the page"
+        );
     }
 
     #[test]
