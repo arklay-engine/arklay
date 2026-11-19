@@ -521,12 +521,13 @@ impl LuaScreen {
         !self.host.failed && self.vm.has_function("on_resume")
     }
 
-    /// Put a screen that left back to work, calling its `on_resume(api)`:
-    /// the screen it left for has come back to it.
-    pub fn resume(&mut self, cx: &UiContext<'_>) {
+    /// Put a screen that left back to work, calling its `on_resume(api,
+    /// loaded)`: the screen it left for has come back to it, `loaded` when
+    /// that screen chose a save for the game to continue from.
+    pub fn resume(&mut self, cx: &UiContext<'_>, loaded: bool) {
         self.host.exited = false;
         self.host.action = None;
-        self.signal("on_resume", cx);
+        self.signal_with("on_resume", loaded, cx);
     }
 }
 
@@ -1223,6 +1224,7 @@ fn action_of(name: &str, arg: Option<i64>, choice: Option<&Table>) -> mlua::Resu
         "title" => ScreenAction::Title,
         "char_select" => ScreenAction::CharSelect,
         "save_load" => ScreenAction::SaveLoad,
+        "continue" => ScreenAction::Continue,
         "attract" => ScreenAction::Attract,
         "resume" => ScreenAction::Resume,
         "quit" => ScreenAction::Quit,

@@ -1531,12 +1531,20 @@ local function title_main(api)
             s.sub = 1
             s.limiter = 2
             s.exit = "save_load"
+        elseif s.loaded then
+            -- A save was read (`fg_system`'s 0x400 down): step 3 is the
+            -- hand-over to the game, on the next tick.
+            s.fg_system = s.fg_system & ~FG_NEW_GAME
+            s.disp = 3
+            s.sub = 0
         else
             s.fg_system = s.fg_system & ~FG_NO_LOAD
             s.background = s.title_background
             s.mv = 1
             s.sub = 0
         end
+    elseif s.disp == 3 and s.loaded then
+        s.exit = "continue"
     elseif s.disp == 3 and s.fg_system & 8 ~= 0 then
         -- The 4th Survivor's or To-fu's new game (`Title_game_init`'s
         -- extras branch) isn't ported: the title starts again from
@@ -1950,14 +1958,17 @@ function M.update(api, input)
     end
 end
 
--- The load screen came back without a load: the title's task, asleep under
--- it as it stood, wakes on its next tick (`Title_main_load`'s second step).
--- The screen leaves fade 3 off in the mode `Cardaccess_init` set it to, and
--- `fg_system`'s 0x400 up for that step to find and clear.
-function M.on_resume(api)
+-- The load screen came back: the title's task, asleep under it as it
+-- stood, wakes on its next tick (`Title_main_load`'s second step). The
+-- screen leaves fade 3 off in the mode `Cardaccess_init` set it to, and,
+-- without a load, `fg_system`'s 0x400 up for that step to find and clear.
+function M.on_resume(api, loaded)
     local fade = s.fades[3]
     fade.level, fade.add, fade.mode = -1, 0, 1
-    s.fg_system = s.fg_system | FG_NO_LOAD
+    s.loaded = loaded
+    if not loaded then
+        s.fg_system = s.fg_system | FG_NO_LOAD
+    end
     publish(api)
 end
 

@@ -669,6 +669,75 @@ def frame_summary(errors) -> dict:
 # ---------------------------------------------------------------- one run
 
 
+def run_inputs(run: dict, out: Path, tag: str) -> tuple[Path | None, Path, str | None]:
+    """A run's setup chunk and its input as arklay takes them, written under `out` as `tag`'s where they are made;
+    and the name of one that is missing."""
+    if run.get("ui", "game") != "game":
+        setup = None
+    elif run.get("setup_script"):
+        setup = INPUTS / run["setup_script"]
+    else:
+        setup = out / f"{tag}.setup.lua"
+        setup.write_text(setup_lua(run["setup"]))
+    if run.get("input_shift"):
+        input_path = out / f"{tag}.input.txt"
+        shift_input(INPUTS / run["input"], input_path, run["input_shift"], run.get("input_drop_early", False))
+    else:
+        input_path = INPUTS / run["input"]
+    for needed in (setup, input_path):
+        if needed is not None and not needed.exists():
+            return setup, input_path, needed.name
+    return setup, input_path, None
+
+
+def seed_saves(run: dict, ctx: dict, saves_dir: Path) -> str | None:
+    """Fill `saves_dir` for a run with `saves_from`: arklay's own saves of the run it names, since the reference's are
+    the original's `.BIOHAZARD2` files, which arklay doesn't read. arklay plays that run first, with no trace
+    compared and no frames, and each save it writes takes the name of the reference's, in order, so the list shows
+    the labels the original's record shows. Returns why it couldn't."""
+    name, out = run["name"], ctx["out"]
+    source = ctx["manifest"].get(run["saves_from"])
+    if source is None or source.get("ui", "game") != "game" or not source.get("saves"):
+        return f"saves_from: {run['saves_from']} isn't a game run that keeps its saves"
+    ref_saves = sorted((ctx["refs"] / source["ref"] / "saves").glob("*.BIOHAZARD2"))
+    if not ref_saves:
+        return f"saves_from: no saves in the reference {source['ref']} (see: re2-regress.py record {source['name']})"
+    tag = f"{name}.seed"
+    setup, input_path, missing = run_inputs(source, out, tag)
+    if missing:
+        return f"saves_from: {missing} is missing"
+    driver = out / f"{tag}.driver.lua"
+    driver.write_text(driver_lua(source, ctx, "game", source["ticks"] - source.get("offset", 344),
+                                 out / f"{tag}.ark.trace", input_path, setup, saves_dir, None, None))
+    if STOP.is_set():
+        raise Interrupted()
+    with open(out / f"{tag}.log", "w") as log:
+        proc = subprocess.Popen([str(ctx["arklay"]), "script", "--headless", str(driver)], cwd=ROOT, stdout=log,
+                                stderr=subprocess.STDOUT, text=True)
+        with LIVE_LOCK:
+            LIVE.add(proc)
+        try:
+            wait_for(proc)
+        except BaseException:
+            proc.kill()
+            proc.wait()
+            raise
+        finally:
+            with LIVE_LOCK:
+                LIVE.discard(proc)
+    if proc.returncode:
+        return f"saves_from: arklay exited {proc.returncode} playing {source['name']} ({tag}.log)"
+    made = sorted(saves_dir.glob("*.dat"))
+    if len(made) != len(ref_saves):
+        return f"saves_from: arklay made {len(made)} saves playing {source['name']}, the reference has {len(ref_saves)}"
+    for save, ref_save in zip(made, ref_saves):
+        save.rename(save.with_name(ref_save.stem + ".dat"))
+    if not ctx["keep"]:
+        for path in out.glob(f"{tag}.*"):
+            path.unlink()
+    return None
+
+
 def run_one(run: dict, ctx: dict) -> dict:
     name = run["name"]
     out: Path = ctx["out"]
@@ -684,31 +753,16 @@ def run_one(run: dict, ctx: dict) -> dict:
     offset = run.get("offset", 344)
     ticks = run["ticks"] - offset
     compare_from, why = comparison_start(run)
-    if not why and run.get("saves_from"):
-        # The reference's saves are the original's `.BIOHAZARD2` files, which arklay can't read yet.
-        why = "saves_from seeds only the original's record: arklay can't start with the reference's saves yet"
     if why:
         result["text"] = why
         result["problems"].append(why)
         return result
     screen = run.get("ui", "game")
-    if screen != "game":
-        setup = None
-    elif run.get("setup_script"):
-        setup = INPUTS / run["setup_script"]
-    else:
-        setup = out / f"{name}.setup.lua"
-        setup.write_text(setup_lua(run["setup"]))
-    if run.get("input_shift"):
-        input_path = out / f"{name}.input.txt"
-        shift_input(INPUTS / run["input"], input_path, run["input_shift"], run.get("input_drop_early", False))
-    else:
-        input_path = INPUTS / run["input"]
-    for needed in (setup, input_path):
-        if needed is not None and not needed.exists():
-            result["problems"].append(f"{needed.name} is missing")
-            result["text"] = "setup or input missing"
-            return result
+    setup, input_path, missing = run_inputs(run, out, name)
+    if missing:
+        result["problems"].append(f"{missing} is missing")
+        result["text"] = "setup or input missing"
+        return result
 
     want_frames = bool(run.get("frames")) and (ref_dir / "frames").is_dir()
     ark_trace = out / f"{name}.ark.trace"
@@ -720,6 +774,12 @@ def run_one(run: dict, ctx: dict) -> dict:
     if saves_dir.exists():
         shutil.rmtree(saves_dir)
     saves_dir.mkdir(parents=True)
+    if run.get("saves_from"):
+        why = seed_saves(run, ctx, saves_dir)
+        if why:
+            result["text"] = why
+            result["problems"].append(why)
+            return result
     voice = None
     if screen == "game" and run.get("sound", True) and run.get("voice_from_ref"):
         voice = voice_ticks(ref_trace)
@@ -1121,7 +1181,8 @@ def main() -> int:
     if record:
         names = names[1:]
     _, runs = load_manifest(Path(args.manifest))
-    known = {run["name"] for run in runs}
+    manifest = {run["name"]: run for run in runs}
+    known = set(manifest)
     unknown = [name for name in names if name not in known]
     if unknown:
         raise SystemExit(f"re2-regress: not in the manifest: {', '.join(unknown)}")
@@ -1151,7 +1212,8 @@ def main() -> int:
     sweep_capture_roots()
     jobs = max(1, args.jobs)
     ctx = {"out": out, "refs": refs, "arklay": args.arklay.resolve(), "keep": args.keep, "comparers": None,
-           "capture_root": capture_root(out, args.keep, jobs), "workers": compare_workers(jobs)}
+           "capture_root": capture_root(out, args.keep, jobs), "workers": compare_workers(jobs),
+           "manifest": manifest}
     ctx["pack"] = ensure_pack(args, out).resolve()
 
     results = []

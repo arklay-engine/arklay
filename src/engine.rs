@@ -10896,6 +10896,10 @@ struct App {
     /// script that resumes (`on_resume`): the original's title task sleeps
     /// under `Mem_card` and wakes when it ends.
     sleeping_title: Option<Box<ui::lua_screen::LuaScreen>>,
+    /// The save the load screen chose under a sleeping title, which the
+    /// title, woken, continues from when it hands over
+    /// ([`ScreenAction::Continue`]); any other action of its drops it.
+    pending_load: Option<PathBuf>,
     /// What the screens keep past a screen (`api:keep`), shared with the
     /// sessions the app starts.
     statics: ui::ScreenStatics,
@@ -10996,6 +11000,7 @@ impl App {
             ui_banks: None,
             ui_sounds: Vec::new(),
             sleeping_title: None,
+            pending_load: None,
             statics: ui::ScreenStatics::default(),
             debug_menu: true,
             player_options: player::Options::default(),
@@ -12003,11 +12008,22 @@ impl App {
         }
     }
 
+    /// Put the title that slept under the load screen back in charge,
+    /// `loaded` when that screen chose a save.
+    fn wake_title(&mut self, mut title: Box<ui::lua_screen::LuaScreen>, loaded: bool) {
+        let cx = self.context();
+        title.resume(&cx, loaded);
+        let cues = cx.cues.into_inner();
+        self.mode = Mode::Title(title);
+        self.play_ui_cues(cues);
+    }
+
     /// Apply a completed screen action.
     fn apply(&mut self, action: ScreenAction) -> Result<AppFlow> {
         // A title asleep under the load screen wakes when that screen comes
         // back to it, and is dropped by anything else the screen does.
         let sleeping_title = self.sleeping_title.take();
+        let pending_load = self.pending_load.take();
         match action {
             ScreenAction::CharSelect => {
                 // A randomizer's seed has already picked the character. RE 1's
@@ -12062,15 +12078,24 @@ impl App {
             ScreenAction::LoadGame { slot } => {
                 self.continue_from_slot(slot)?;
             }
-            ScreenAction::LoadFile(path) => self.continue_from_path(&path)?,
-            ScreenAction::Title => match sleeping_title {
-                Some(mut title) if matches!(self.mode, Mode::Load(_)) => {
-                    let cx = self.context();
-                    title.resume(&cx);
-                    let cues = cx.cues.into_inner();
-                    self.mode = Mode::Title(title);
-                    self.play_ui_cues(cues);
+            ScreenAction::LoadFile(path) => match sleeping_title {
+                // The title that opened the load screen starts the game
+                // itself, as the original's does on the tick it wakes.
+                Some(title) if matches!(self.mode, Mode::Load(_)) => {
+                    self.wake_title(title, true);
+                    self.pending_load = Some(path);
                 }
+                _ => self.continue_from_path(&path)?,
+            },
+            ScreenAction::Continue => match pending_load {
+                Some(path) => self.continue_from_path(&path)?,
+                None => {
+                    crate::warning!("warning: a screen continued with no save chosen");
+                    self.open_title()?;
+                }
+            },
+            ScreenAction::Title => match sleeping_title {
+                Some(title) if matches!(self.mode, Mode::Load(_)) => self.wake_title(title, false),
                 _ => self.open_title()?,
             },
             ScreenAction::Attract => {
@@ -13220,13 +13245,14 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
     } else {
         line.push_str(" ti=-");
     }
-    // `sv`, as a session's trace has it (`re2_save_screen_trace`), with no
-    // saves made before play.
+    // `sv`, as a session's trace has it (`re2_save_screen_trace`): no saves
+    // made before play, and a loaded save's count once the screen has read
+    // it.
     match load.filter(|load| load.value("sv_sub").is_some()) {
         Some(load) => {
             let value = |key: &str| load.value(key).unwrap_or(0);
             line.push_str(&format!(
-                " sv={},{},{:x},{},{},{},{},{},{},{},{},0",
+                " sv={},{},{:x},{},{},{},{},{},{},{},{},{}",
                 value("sv_sub"),
                 value("sv_step"),
                 value("sv_state"),
@@ -13238,6 +13264,7 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
                 value("sv_choice"),
                 value("sv_typed"),
                 value("sv_saves"),
+                value("sv_count"),
             ));
         }
         None => line.push_str(" sv=-"),
@@ -31613,6 +31640,84 @@ mod tests {
                 panic!("expected the title");
             };
             assert_eq!(title.value("ticks"), if resumes { 4 } else { 1 });
+        }
+    }
+
+    /// A save chosen on the load screen under a sleeping title is the
+    /// title's to start: it wakes knowing of the load, and the game starts
+    /// from the save when it exits with `continue`; any other exit of its
+    /// forgets the save. A title that doesn't resume is dropped, and the
+    /// game starts at once.
+    #[test]
+    fn app_title_starts_the_game_its_load_screen_chose() {
+        const TITLE: &str = "local M = {}
+            function M.update(api, input)
+                if input.confirm then api:exit(M.loaded and 'continue' or 'save_load') end
+                if input.cancel then api:exit('attract') end
+            end
+            function M.draw() end
+            RESUME
+            return M";
+        const LOAD: &str = "local M = {}
+            function M.update(api, input)
+                if input.confirm then assert(api:load('chosen.dat')) end
+            end
+            function M.draw() end
+            return M";
+        const RESUME: &str = "function M.on_resume(api, loaded)
+                M.loaded = loaded
+                api:set('loaded', loaded)
+            end";
+        for (resumes, forgets) in [(true, false), (true, true), (false, false)] {
+            let dir = TempDir::new();
+            let title = TITLE.replace("RESUME", if resumes { RESUME } else { "" });
+            let pack_path = new_game_pack_with(
+                &dir,
+                &[
+                    ("ui/title.lua", title.as_bytes()),
+                    ("ui/save_load.lua", LOAD.as_bytes()),
+                ],
+            );
+            let saves = dir.0.join("saves");
+            std::fs::create_dir_all(&saves).unwrap();
+            let file = save::SaveFile {
+                stage: 0,
+                room: NEW_GAME_ROOM,
+                health: 55,
+                ..save::SaveFile::default()
+            };
+            save::save_to_path(&saves.join("chosen.dat"), &file).unwrap();
+            let mut app = App::new(Pack::open(&pack_path).unwrap(), saves, false);
+            app.boot(AppBoot::Title).unwrap();
+            app_press(&mut app, |ui| ui.confirm = true);
+            assert!(matches!(app.mode, Mode::Load(_)), "the load screen is up");
+            app_press(&mut app, |ui| ui.confirm = true);
+            if !resumes {
+                let Mode::Play(session) = &app.mode else {
+                    panic!("expected the game at once");
+                };
+                assert_eq!(session.game.entities[0].health, 55);
+                continue;
+            }
+            let Mode::Title(title) = &app.mode else {
+                panic!("expected the title, awake");
+            };
+            assert_eq!(title.value("loaded"), 1);
+            assert!(app.pending_load.is_some() && app.sleeping_title.is_none());
+            if forgets {
+                // The attract reel isn't in this pack: the title comes back
+                // either way, and the save is forgotten.
+                app_press(&mut app, |ui| ui.cancel = true);
+                assert!(app.pending_load.is_none());
+                assert!(!matches!(app.mode, Mode::Play(_)));
+                continue;
+            }
+            app_press(&mut app, |ui| ui.confirm = true);
+            let Mode::Play(session) = &app.mode else {
+                panic!("expected the game");
+            };
+            assert_eq!(session.game.entities[0].health, 55);
+            assert!(app.pending_load.is_none());
         }
     }
 

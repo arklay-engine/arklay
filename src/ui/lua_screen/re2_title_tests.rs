@@ -118,16 +118,11 @@ fn the_title_opens_as_the_boot_reaches_it() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// LOAD GAME (`Title_main_load`, `title_load_empty`): the confirm at 260,
-/// the hand-off to the load screen on 531 with the task's step at 1, and,
-/// once that screen comes back without a load, the title's picture and
-/// `Title_init`'s branch from black on the two ticks after (709 and 710).
-#[test]
-fn load_game_sleeps_under_the_load_screen_and_starts_again_after_it() {
-    let dir = std::env::temp_dir().join(format!("arklay-re2-load-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let cx = context(&dir);
-    let mut cx_open = context(&dir);
+/// The title up to its hand-off to the load screen: the confirm at 260 and
+/// the hand-off on 531, with the task's step at 1.
+fn asleep_under_the_load_screen(dir: &std::path::Path) -> LuaScreen {
+    let cx = context(dir);
+    let mut cx_open = context(dir);
     let mut screen =
         LuaScreen::open_screen("title", &[], ScreenAction::Quit, &mut cx_open).unwrap();
     assert!(screen.resumes());
@@ -153,8 +148,47 @@ fn load_game_sleeps_under_the_load_screen_and_starts_again_after_it() {
         "531"
     );
     assert_eq!(ti(&screen)[..4], [2, 2, 1, 1]);
+    screen
+}
+
+/// A load (`title_load_game`): the title wakes with nothing to clear, its
+/// step goes to 3 on that tick (810) and it hands the game over on the
+/// next, as a new game's choice does.
+#[test]
+fn a_load_wakes_the_title_into_its_hand_over() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-loaded-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut screen = asleep_under_the_load_screen(&dir);
     let asleep = ti(&screen);
-    screen.resume(&cx);
+    screen.resume(&cx, true);
+    assert_eq!(ti(&screen), asleep, "809: its work stands");
+    assert_eq!(screen.value("ti_fgsys") & 0x400, 0);
+    assert_eq!(
+        screen.update(&cx, UiInput::default()),
+        ScreenResult::Continue
+    );
+    assert_eq!(ti(&screen)[..4], [2, 3, 1, 0], "810");
+    assert_eq!(screen.value("ti_fgsys") & 0x20000, 0);
+    assert_eq!(
+        screen.update(&cx, UiInput::default()),
+        ScreenResult::Done(ScreenAction::Continue)
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// LOAD GAME (`Title_main_load`, `title_load_empty`): the confirm at 260,
+/// the hand-off to the load screen on 531 with the task's step at 1, and,
+/// once that screen comes back without a load, the title's picture and
+/// `Title_init`'s branch from black on the two ticks after (709 and 710).
+#[test]
+fn load_game_sleeps_under_the_load_screen_and_starts_again_after_it() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-load-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut screen = asleep_under_the_load_screen(&dir);
+    let asleep = ti(&screen);
+    screen.resume(&cx, false);
     assert_eq!(ti(&screen), asleep, "708: its work stands");
     // What the load screen left: nothing loaded, and fade 3 off in its
     // mode.
