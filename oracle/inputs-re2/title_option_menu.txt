@@ -1,0 +1,32 @@
+# The title from boot to OPTION, then its menu: up on the first row, down and up held, down to EXIT and past it, right and left, and the decide on EXIT (oracle/re2.md, "The option screen").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+350 down
+353
+400 confirm
+403
+440 up
+443
+460 down
+500
+520 up
+560
+580 down
+583
+590 down
+593
+600 down
+603
+620 down
+623
+630 right
+633
+640 left
+643
+660 confirm
+663

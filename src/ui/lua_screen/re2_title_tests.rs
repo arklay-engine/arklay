@@ -13,6 +13,14 @@ fn pack() -> &'static Pack {
         let mut writer = crate::pack::PackWriter::new();
         writer
             .add(
+                "ui/cr_text.lua",
+                include_str!("../../../games/re2/ui/cr_text.lua")
+                    .as_bytes()
+                    .to_vec(),
+            )
+            .unwrap();
+        writer
+            .add(
                 "ui/title.lua",
                 include_str!("../../../games/re2/ui/title.lua")
                     .as_bytes()
@@ -372,5 +380,311 @@ fn the_4th_survivors_exit_goes_back_to_the_title_from_black() {
     run(&mut screen, &cx, UiInput::default(), 1);
     assert_eq!(screen.value("ti_disp"), 1);
     assert_eq!(screen.value("ti_kido"), 0x7C00);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The trace's `opt` field, less the arrows' blink counts: the task's step,
+/// the state, the menu's row, the sound page's row, the wait, the speaker
+/// mode, the quality and the two volumes.
+fn opt(screen: &LuaScreen) -> [i64; 9] {
+    [
+        "opt_step",
+        "opt_state",
+        "opt_cursor",
+        "opt_type",
+        "opt_wait",
+        "opt_speaker",
+        "opt_quality",
+        "opt_bgm",
+        "opt_se",
+    ]
+    .map(|key| screen.value(key))
+}
+
+/// One tick, and the cues it played.
+fn tick_cues(screen: &mut LuaScreen, cx: &UiContext<'_>, input: UiInput) -> Vec<UiCue> {
+    cx.cues.borrow_mut().clear();
+    screen.update(cx, input);
+    cx.cues.borrow().clone()
+}
+
+/// The title's OPTION confirmed, to the first tick its menu reads the pad.
+fn open_option(cx: &UiContext<'_>, name: &str) -> (LuaScreen, std::path::PathBuf) {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-{name}-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut cx_open = context(&dir);
+    let mut screen =
+        LuaScreen::open_screen("title", &[], ScreenAction::Quit, &mut cx_open).unwrap();
+    run(&mut screen, cx, UiInput::default(), 70);
+    for _ in 0..4 {
+        run(&mut screen, cx, press("down"), 20);
+    }
+    assert_eq!(screen.value("ti_cur"), 4, "OPTION's row");
+    // `title_option_menu`: the confirm at 400, the task's first tick at 409
+    // (black, with the fade in set) and the menu from 414.
+    run(&mut screen, cx, press("confirm"), 9);
+    assert_eq!(screen.value("opt_on"), 0);
+    run(&mut screen, cx, UiInput::default(), 1);
+    assert_eq!(screen.value("opt_on"), 1);
+    assert_eq!(opt(&screen), [1, 0, 0, 0, 0, 2, 0, 100, 100]);
+    assert_eq!(ti(&screen)[..2], [1, 1], "the title waits at its start");
+    assert_eq!(screen.value("ti_fade_level"), 0x5000);
+    assert_eq!(screen.value("ti_fade_add"), -0x1800);
+    run(&mut screen, cx, UiInput::default(), 4);
+    assert_eq!(screen.value("opt_state"), 0, "under the fade in");
+    run(&mut screen, cx, UiInput::default(), 1);
+    assert_eq!(screen.value("opt_state"), 1);
+    (screen, dir)
+}
+
+/// The option menu's rows move on the keys' presses alone, stop at both
+/// ends, and KEYCONFIG, whose page isn't ported, takes no decide.
+#[test]
+fn the_option_menu_moves_between_its_four_rows() {
+    let dir = std::env::temp_dir();
+    let cx = context(&dir);
+    let (mut screen, dir) = open_option(&cx, "option-menu");
+    assert!(tick_cues(&mut screen, &cx, press("up")).is_empty());
+    assert_eq!(screen.value("opt_cursor"), 0);
+    assert!(tick_cues(&mut screen, &cx, press("confirm")).is_empty());
+    assert_eq!(screen.value("opt_state"), 1, "KEYCONFIG");
+    // Down held: one row, on its press.
+    let held = UiInput {
+        held_down: true,
+        ..UiInput::default()
+    };
+    assert_eq!(tick_cues(&mut screen, &cx, press("down")), [UiCue::Core(4)]);
+    for _ in 0..30 {
+        assert!(tick_cues(&mut screen, &cx, held).is_empty());
+    }
+    assert_eq!(screen.value("opt_cursor"), 1);
+    run(&mut screen, &cx, UiInput::default(), 2);
+    for row in 2..=3 {
+        run(&mut screen, &cx, press("down"), 2);
+        assert_eq!(screen.value("opt_cursor"), row);
+    }
+    assert!(tick_cues(&mut screen, &cx, press("down")).is_empty());
+    assert_eq!(screen.value("opt_cursor"), 3);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// EXIT plays the cancel cue, fades out over 32 ticks, and two ticks after
+/// the fade the title starts again from black (`title_option_menu`'s 660 to
+/// 696).
+#[test]
+fn the_option_menus_exit_goes_back_to_the_title() {
+    let dir = std::env::temp_dir();
+    let cx = context(&dir);
+    let (mut screen, dir) = open_option(&cx, "option-exit");
+    for _ in 0..3 {
+        run(&mut screen, &cx, press("down"), 2);
+    }
+    assert_eq!(
+        tick_cues(&mut screen, &cx, press("confirm")),
+        [UiCue::Core(5)]
+    );
+    assert_eq!(screen.value("opt_state"), 6);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(screen.value("opt_state"), 0x16);
+    assert_eq!(screen.value("ti_fade_add"), 0x400);
+    run(&mut screen, &cx, UiInput::default(), 31);
+    assert_eq!(screen.value("opt_state"), 0x16);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(screen.value("opt_state"), 0x17);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(opt(&screen)[..2], [2, 0]);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(screen.value("opt_on"), 0, "the task has ended");
+    assert_eq!(ti(&screen)[..2], [1, 1]);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(ti(&screen)[..2], [2, 1], "`Title_init`'s branch from black");
+    assert_eq!(screen.value("ti_kido"), 0x7C00);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// START and the cancel key leave the menu the same way, and a decide on
+/// START's tick is not read.
+#[test]
+fn start_and_cancel_leave_the_option_menu() {
+    let dir = std::env::temp_dir();
+    let cx = context(&dir);
+    for key in ["start", "cancel"] {
+        let (mut screen, dir) = open_option(&cx, "option-leave");
+        run(&mut screen, &cx, press("down"), 2);
+        run(&mut screen, &cx, press("down"), 2);
+        let mut input = UiInput {
+            confirm: true,
+            ..UiInput::default()
+        };
+        match key {
+            "start" => input.start = true,
+            _ => input.cancel = true,
+        }
+        let cues = tick_cues(&mut screen, &cx, input);
+        assert_eq!(cues.last(), Some(&UiCue::Core(5)), "{key}");
+        assert_eq!(screen.value("opt_state"), 0x16, "{key}");
+        assert_eq!(cues.len(), if key == "start" { 1 } else { 2 }, "{key}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+/// MONITOR TUNING shows its picture until the decide key or the cancel key,
+/// each with its cue.
+#[test]
+fn monitor_tuning_shows_its_picture_until_a_key() {
+    let dir = std::env::temp_dir();
+    let cx = context(&dir);
+    let (mut screen, dir) = open_option(&cx, "option-monitor");
+    run(&mut screen, &cx, press("down"), 2);
+    for (key, cue) in [("confirm", 6), ("cancel", 5)] {
+        assert_eq!(
+            tick_cues(&mut screen, &cx, press("confirm")),
+            [UiCue::Core(6)]
+        );
+        assert_eq!(screen.value("opt_state"), 3);
+        run(&mut screen, &cx, UiInput::default(), 1);
+        assert_eq!(screen.value("opt_state"), 7);
+        assert!(tick_cues(&mut screen, &cx, press("up")).is_empty());
+        let mut input = UiInput::default();
+        match key {
+            "confirm" => input.confirm = true,
+            _ => input.cancel = true,
+        }
+        assert_eq!(tick_cues(&mut screen, &cx, input), [UiCue::Core(cue)]);
+        assert_eq!(opt(&screen)[1..3], [1, 1], "back on its row");
+        run(&mut screen, &cx, UiInput::default(), 1);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The SOUND page: left and right change a row's value while they are held,
+/// once every six ticks; a volume steps by one, or by ten with the decide
+/// key held too, within 1 to 100; and the values outlast the page.
+#[test]
+fn the_sound_page_changes_its_values_on_the_held_keys() {
+    let dir = std::env::temp_dir();
+    let cx = context(&dir);
+    let (mut screen, dir) = open_option(&cx, "option-sound");
+    run(&mut screen, &cx, press("down"), 2);
+    run(&mut screen, &cx, press("down"), 2);
+    assert_eq!(
+        tick_cues(&mut screen, &cx, press("confirm")),
+        [UiCue::Core(6)]
+    );
+    assert_eq!(opt(&screen)[1..4], [4, 2, 0]);
+    let left = UiInput {
+        held_left: true,
+        ..UiInput::default()
+    };
+    let right = UiInput {
+        held_right: true,
+        ..UiInput::default()
+    };
+    let with_decide = |input: UiInput| UiInput {
+        held_confirm: true,
+        ..input
+    };
+    // The mode: monaural on the press, the wait's five ticks, stereo again
+    // on the sixth.
+    assert_eq!(tick_cues(&mut screen, &cx, left), [UiCue::Core(4)]);
+    assert_eq!(opt(&screen)[1..6], [8, 2, 0, 5, 1]);
+    for wait in (0..5).rev() {
+        assert!(tick_cues(&mut screen, &cx, left).is_empty());
+        assert_eq!(screen.value("opt_wait"), wait);
+    }
+    assert_eq!(screen.value("opt_state"), 4);
+    assert_eq!(tick_cues(&mut screen, &cx, left), [UiCue::Core(4)]);
+    assert_eq!(screen.value("opt_speaker"), 2);
+    run(&mut screen, &cx, UiInput::default(), 6);
+    // The quality: right goes high, medium, low and round.
+    run(&mut screen, &cx, press("down"), 2);
+    for quality in [1, 2, 0] {
+        run(&mut screen, &cx, right, 1);
+        assert_eq!(screen.value("opt_quality"), quality);
+        run(&mut screen, &cx, UiInput::default(), 6);
+    }
+    for quality in [2, 1, 0] {
+        run(&mut screen, &cx, left, 1);
+        assert_eq!(screen.value("opt_quality"), quality);
+        run(&mut screen, &cx, UiInput::default(), 6);
+    }
+    // The music's volume: at 100 right does nothing; left by one, then by
+    // ten with the decide key, down to 1 and no lower.
+    run(&mut screen, &cx, press("down"), 2);
+    assert!(tick_cues(&mut screen, &cx, right).is_empty());
+    assert_eq!(screen.value("opt_state"), 4);
+    for _ in 0..12 {
+        screen.update(&cx, left);
+    }
+    assert_eq!(screen.value("opt_bgm"), 98);
+    run(&mut screen, &cx, UiInput::default(), 6);
+    for _ in 0..12 * 6 {
+        screen.update(&cx, with_decide(left));
+    }
+    assert_eq!(screen.value("opt_bgm"), 1);
+    assert!(tick_cues(&mut screen, &cx, with_decide(left)).is_empty());
+    run(&mut screen, &cx, with_decide(right), 1);
+    assert_eq!(screen.value("opt_bgm"), 11);
+    run(&mut screen, &cx, UiInput::default(), 6);
+    // The effects' volume has the same rule.
+    run(&mut screen, &cx, press("down"), 2);
+    run(&mut screen, &cx, with_decide(left), 1);
+    assert_eq!(screen.value("opt_se"), 90);
+    run(&mut screen, &cx, UiInput::default(), 6);
+    run(&mut screen, &cx, with_decide(right), 1);
+    run(&mut screen, &cx, UiInput::default(), 6);
+    run(&mut screen, &cx, right, 1);
+    assert_eq!(screen.value("opt_se"), 100, "no higher");
+    run(&mut screen, &cx, UiInput::default(), 6);
+    // EXIT takes the decide; the rows above don't.
+    run(&mut screen, &cx, press("up"), 2);
+    assert!(tick_cues(&mut screen, &cx, press("confirm")).is_empty());
+    run(&mut screen, &cx, press("down"), 2);
+    run(&mut screen, &cx, press("down"), 2);
+    assert_eq!(screen.value("opt_type"), 4);
+    assert!(tick_cues(&mut screen, &cx, press("down")).is_empty());
+    assert_eq!(
+        tick_cues(&mut screen, &cx, press("confirm")),
+        [UiCue::Core(6)]
+    );
+    assert_eq!(opt(&screen), [1, 1, 2, 0, 0, 2, 0, 11, 100]);
+    // The page again, left by the cancel key.
+    run(&mut screen, &cx, UiInput::default(), 1);
+    run(&mut screen, &cx, press("confirm"), 2);
+    assert_eq!(screen.value("opt_state"), 4);
+    let cancel = UiInput {
+        cancel: true,
+        ..UiInput::default()
+    };
+    assert_eq!(tick_cues(&mut screen, &cx, cancel), [UiCue::Core(5)]);
+    assert_eq!(opt(&screen)[1..4], [1, 2, 0]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The arrows about the cursor's row show 20 ticks of each 30, and a row's
+/// count stands while the cursor is elsewhere (`title_option_sound`'s 480
+/// to 509).
+#[test]
+fn the_sound_pages_arrows_blink_20_of_30_ticks() {
+    let dir = std::env::temp_dir();
+    let cx = context(&dir);
+    let (mut screen, dir) = open_option(&cx, "option-blink");
+    run(&mut screen, &cx, press("down"), 2);
+    run(&mut screen, &cx, press("down"), 2);
+    run(&mut screen, &cx, press("confirm"), 1);
+    let counts: Vec<i64> = (0..31)
+        .map(|_| {
+            let count = screen.value("opt_blink_mode");
+            screen.update(&cx, UiInput::default());
+            count
+        })
+        .collect();
+    assert_eq!(counts[..3], [1, 2, 3]);
+    assert_eq!(counts[28..], [29, 0, 1]);
+    run(&mut screen, &cx, press("down"), 5);
+    let stood = screen.value("opt_blink_mode");
+    run(&mut screen, &cx, UiInput::default(), 10);
+    assert_eq!(screen.value("opt_blink_mode"), stood);
+    assert_eq!(screen.value("opt_blink_quality"), 15);
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -103,6 +103,18 @@ TITLE_MENU_2 = 0x00691B84  # the title's second page byte (the 4TH title's)
 TITLE_DIM = 0x00691B8B  # the slide's dim
 TITLE_B8C = 0x00691B8C  # the slide's second count (the 4TH title's logo level)
 TITLE_EF2 = 0x00691EF2  # EX.BATTLE's level page bytes
+# The option screen (`0x44A040`, `Config_main` 0x44A0B0), task 1 of `TASKS` while it runs.
+OPTION_TASK = 0x0044A040
+OPTION_STATE = 0x0099D001  # `Config_main`'s state
+OPTION_CURSOR = 0x0099CF68  # the menu's row
+OPTION_TYPE = 0x0068915C  # the sound page's row
+OPTION_WAIT = 0x0068914C  # a change's wait
+OPTION_BLINKS = (0x00689158, 0x00689160, 0x00689154, 0x006880F0, 0x00689148)  # the arrows' counts: mode, quality, BGM, SE, exit
+SPEAKER_CONFIG = 0x00669CFC  # 1 monaural, 2 stereo
+SOUND_FREQUENCY = 0x00669D9C
+SOUND_DEPTH = 0x00669F40
+BGM_VOL = 0x00693471
+SFX_VOL = 0x00693C48
 EX_LEVEL = 0x00989E91
 HARD_MODE = 0x006805B1  # `hard_mode`: the difficulty's HARD
 CENSORSHIP_OFF = 0x006805B3  # `censorship_off`: ARRANGE MODE's
@@ -1788,7 +1800,23 @@ def title_trace(game: Game) -> str:
         f"tx={task[0xA]},{game.u8(TITLE_MENU_2)},{game.u8(TITLE_DIM)},{game.u8(TITLE_B8C)},"
         f"{game.u8(TITLE_EF2)},{game.u8(TITLE_EF2 + 1)},{game.u8(EX_LEVEL)},"
         f"{game.u32(FG_SYSTEM) & 0x01020009:x},{game.u32(FG_STATUS) & 0x02004000:x} "
-        f"tfade2={fade_slot(game, 2)} tfade3={fade_slot(game, 3)}"
+        f"tfade2={fade_slot(game, 2)} tfade3={fade_slot(game, 3)} opt={option_trace(game)}"
+    )
+
+
+def option_trace(game: Game) -> str:
+    """The option screen's state while its task runs (`Config_main`, `0x44A0B0`): the task's step, the state, the
+    menu's row, the sound page's row, a change's wait, the speaker mode, the sound quality (`Config_get_squal`), the
+    two volumes and the arrows' five blink counts."""
+    task = TASKS + 0x24
+    if game.u32(task + 4) != OPTION_TASK:
+        return "-"
+    frequency, depth = game.u32(SOUND_FREQUENCY), game.u32(SOUND_DEPTH)
+    quality = {(0xAC44, 16): 0, (0x5622, 16): 1, (0x5622, 8): 2}.get((frequency, depth), -1)
+    blinks = ",".join(str(game.u32(address)) for address in OPTION_BLINKS)
+    return (
+        f"{game.u8(task + 8)},{game.u8(OPTION_STATE)},{game.u32(OPTION_CURSOR)},{game.u32(OPTION_TYPE)},"
+        f"{game.u32(OPTION_WAIT)},{game.u32(SPEAKER_CONFIG)},{quality},{game.u8(BGM_VOL)},{game.u8(SFX_VOL)},{blinks}"
     )
 
 

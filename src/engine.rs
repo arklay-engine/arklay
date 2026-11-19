@@ -12966,8 +12966,9 @@ fn play_app_script(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<b
 /// title's first tick with the scripted input, each followed by a draw,
 /// one trace line and, on the `capture_every` cadence, a `f%05d.bmp` frame.
 /// The line carries the fields the RE 2 oracle's `--boot` record writes for
-/// the title (`ti`, `tlogo`, `tfade`, `tsel`, `snd`), from the values the title's
-/// script publishes; a tick off the title writes `ti=-`.
+/// the title (`ti`, `tlogo`, `tfade`, `tsel`, `snd`, and `opt` while its option
+/// screen is up), from the values the title's script publishes; a tick off
+/// the title writes `ti=-`.
 fn run_screen_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()> {
     let Some(path) = options.path else {
         return Ok(());
@@ -13053,6 +13054,27 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
             v("ti_fade3_add"),
             v("ti_fade3_mode"),
         ));
+        if v("opt_on") != 0 {
+            line.push_str(&format!(
+                " opt={},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+                v("opt_step"),
+                v("opt_state"),
+                v("opt_cursor"),
+                v("opt_type"),
+                v("opt_wait"),
+                v("opt_speaker"),
+                v("opt_quality"),
+                v("opt_bgm"),
+                v("opt_se"),
+                v("opt_blink_mode"),
+                v("opt_blink_quality"),
+                v("opt_blink_bgm"),
+                v("opt_blink_se"),
+                v("opt_blink_exit"),
+            ));
+        } else {
+            line.push_str(" opt=-");
+        }
     } else {
         line.push_str(" ti=-");
     }
@@ -20275,6 +20297,7 @@ impl InputState {
                 held_left: self.held & KEY_LEFT != 0,
                 held_right: self.held & KEY_RIGHT != 0,
                 confirm: pressed & KEY_CONFIRM != 0,
+                held_confirm: self.held & KEY_CONFIRM != 0,
                 cancel: pressed & KEY_CANCEL != 0,
                 page_left: pressed & KEY_PAGE_LEFT != 0,
                 page_right: pressed & KEY_PAGE_RIGHT != 0,

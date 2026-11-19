@@ -22,11 +22,14 @@
 -- `title_o.adt`, `title_o2.adt` and the logos `spy_logo.tim` and
 -- `tofulogo.tim` as texture 0x15) whose START isn't ported past its fade
 -- (the title starts again) and whose EXIT goes back to `Title_init`, and
--- EX.BATTLE's and GALLERY's confirms do nothing; OPTION fades out and, arklay having no option
--- screen, the title starts again (`oracle/re2-deviations.md`, "The title"). An
--- idle title fades into the attract demo after 0x708 ticks.
+-- EX.BATTLE's and GALLERY's confirms do nothing; OPTION fades out into the
+-- option screen, which runs here as a task of its own ("the option screen"
+-- below) and gives the title back at `Title_init`. An idle title fades into
+-- the attract demo after 0x708 ticks.
 --
 -- args.folder_saves: a registered save screen lists the whole save folder.
+
+local CrText = require("ui/cr_text")
 
 local M = {}
 
@@ -189,18 +192,21 @@ end
 -- `Pad_set` for the keys the title reads: the edges and the repeat flag.
 local function pad_set(input)
     local raw = 0
-    if input.held_up then
+    local held = input.held or 0
+    if held & 0x10 ~= 0 then
         raw = raw | PAD_UP
     end
-    if input.held_down then
+    if held & 0x20 ~= 0 then
         raw = raw | PAD_DOWN
     end
-    if input.held_left then
+    if held & 0x40 ~= 0 then
         raw = raw | PAD_LEFT
     end
-    if input.held_right then
+    if held & 0x80 ~= 0 then
         raw = raw | PAD_RIGHT
     end
+    -- The decide key's level, which only the option screen reads.
+    s.held_confirm = held & 1 ~= 0
     if input.start then
         raw = raw | PAD_START
     end
@@ -964,6 +970,9 @@ end
 -- off the screen, and step 5 next. Any later entry (back from OPTION) fades
 -- in from black over 31 ticks (`Ti_kido` from 0x7C00 down by 0x400).
 local function title_init()
+    -- `Title_bg_reload` (0x503880), on both branches: the option screen
+    -- leaves its own picture behind.
+    s.background = s.title_background
     s.fg_system = s.fg_system & 0xFFF7FFBF
     s.censorship_off = 0
     s.sel = 0
@@ -1004,6 +1013,329 @@ local function title_init()
         s.b8c[1] = 0
         s.censorship_off = 0
         s.step = 0
+    end
+end
+
+-- ------------------------------------------------------- the option screen
+
+-- OPTION's screen: task 1 (`0x44A040`), which runs while the title's task
+-- sleeps. Its step 0 is `Config_set_data` (0x44AD40), step 1 `Config_main`
+-- (0x44A0B0) with its draw (0x44B180), and step 2 the exit (0x44AED0).
+-- `Config_main`'s states: 0 the fade in, 1 the menu, 3 and 7 MONITOR
+-- TUNING's picture, 4 the SOUND page and 8 the wait after a change there, 6,
+-- 0x16 and 0x17 the way out. KEYCONFIG (states 2 and 9 to 0x15, the keys'
+-- page with the player's model) isn't ported: its row takes no decide
+-- (oracle/re2-deviations.md, "The title"; #807).
+--
+-- The sheets are textures 0x1B (`moji1.tim`, the words) and 0x1A
+-- (`parts.tim`, the arrows); the volumes' digits are the message font's.
+-- Classic REbirth sets the sound page's rows with its own print in place
+-- of the sheet's words, each value ending where the volumes' right arrow
+-- starts: the recordings are where its words and their places come from.
+local OPT_WORDS, OPT_PARTS = 4, 5
+local OPT_GREY, OPT_GREEN = { 0x80, 0x80, 0x80 }, { 0x00, 0xA0, 0x20 }
+-- The cursor's row in Classic REbirth's print, and in the digits, which
+-- take the sheets' green at the font's level.
+local OPT_TEXT_GREEN, OPT_DIGIT_GREEN = "#00C80A", "#00FF40"
+
+-- The sound settings, which outlast a visit: the speaker mode (1 monaural, 2
+-- stereo), the quality (`Config_get_squal`: 0 is 44.1 kHz at 16 bits) and
+-- the two volumes. They are the screen's own; arklay's sound doesn't read
+-- them.
+local sound = { speaker = 2, quality = 0, bgm = 100, se = 100 }
+
+local function option_new()
+    return {
+        step = 0,
+        state = 0,
+        cursor = 0,
+        type = 0,
+        wait = 0,
+        -- The arrows' blink counts: the mode's, the quality's, the two
+        -- volumes' and EXIT's.
+        blink = { mode = 0, quality = 0, bgm = 0, se = 0, exit = 0 },
+    }
+end
+
+local function option_sprt(page, x, y, u, v, w, rgb)
+    s.sprites[#s.sprites + 1] = { page = page, u = u, v = v, w = w, h = 14, x = x, y = y, rgb = rgb }
+end
+
+local function option_colour(on)
+    return on and OPT_GREEN or OPT_GREY
+end
+
+-- A row's blink: its arrows show 20 ticks of each 30 while the row is the
+-- cursor's, and the count stands while it isn't.
+local function option_blink(count)
+    local o = s.opt
+    local shown = o.blink[count] < 0x14
+    o.blink[count] = o.blink[count] + 1
+    if o.blink[count] >= 0x1E then
+        o.blink[count] = 0
+    end
+    return shown
+end
+
+local function option_arrow(x, y, right)
+    option_sprt(OPT_PARTS, x, y, right and 0xDF or 0xD1, 199, 14, OPT_GREEN)
+end
+
+-- `Config_draw_sexit` (0x44BEA0): EXIT, with the arrows on the sound page.
+local function option_exit(x, y, on)
+    local o = s.opt
+    option_sprt(OPT_WORDS, x, y, 0, 0xD2, 0x35, option_colour(on))
+    if on and (o.state == 4 or o.state == 8) and option_blink("exit") then
+        option_arrow(x - 14, y, false)
+        option_arrow(x + 0x35, y, true)
+    end
+end
+
+-- Where the sound page's values end, and the volumes' digit cells.
+local OPT_VALUE_END = 0x10E
+local OPT_DIGITS = { 0xE4, 0xF2, 0x100 }
+
+-- A row of the sound page: its name from x 0x32, and its value's word up
+-- to `OPT_VALUE_END` with the arrows about it while the blink shows them.
+local function option_row(count, y, name, value, on)
+    local texts = s.opt_texts
+    texts[#texts + 1] = { x = 0x32, y = y, text = name, on = on }
+    texts[#texts + 1] = { y = y, text = value, on = on, arrows = on and option_blink(count) }
+end
+
+-- `Config_draw_bgmvol` (0x44C050) and `Config_draw_sevol` (0x44C2E0): the
+-- name, the value's digits in their cells in the row's colour, and the
+-- arrows towards what the volume can still reach.
+local function option_volume(count, y, name, value, on)
+    local texts = s.opt_texts
+    texts[#texts + 1] = { x = 0x32, y = y, text = name, on = on }
+    if value // 100 ~= 0 then
+        texts[#texts + 1] = { cell = OPT_DIGITS[1], y = y, text = "1", on = on }
+    end
+    if value // 10 ~= 0 then
+        texts[#texts + 1] = { cell = OPT_DIGITS[2], y = y, text = tostring(value // 10 % 10), on = on }
+    end
+    texts[#texts + 1] = { cell = OPT_DIGITS[3], y = y, text = tostring(value % 10), on = on }
+    if on and option_blink(count) then
+        if value > 1 then
+            option_arrow(0xD6, y, false)
+        end
+        if value < 100 then
+            option_arrow(OPT_VALUE_END, y, true)
+        end
+    end
+end
+
+local OPT_SPEAKERS = { "MONO", "STEREO" }
+local OPT_QUALITIES = { [0] = "HIGH", "MEDIUM", "LOW" }
+
+-- The draw (0x44B180), by the state `Config_main` left.
+local function option_draw()
+    local o = s.opt
+    local state = o.state
+    if state == 1 or state == 3 then
+        option_sprt(OPT_WORDS, 0x61, 0x4B, 0x3A, 0, 0x7E, option_colour(o.cursor == 0))
+        option_sprt(OPT_WORDS, 0x41, 0x63, 0x3A, 0x0E, 0xBD, option_colour(o.cursor == 1))
+        option_sprt(OPT_WORDS, 0x40, 0x7B, 0x36, 0xD2, 0x46, option_colour(o.cursor == 2))
+        -- The mode beside SOUND (`Config_draw_monoraul`, 0x44BD80, and
+        -- `Config_draw_stereo`, 0x44BE10), in Classic REbirth's print too.
+        s.opt_texts[#s.opt_texts + 1] = { y = 0x7B, text = OPT_SPEAKERS[sound.speaker], on = o.cursor == 2 }
+        option_exit(0x85, 0x93, o.cursor == 3)
+    elseif state == 4 or state == 8 then
+        option_sprt(OPT_WORDS, 0x7D, 0x32, 0x36, 0xD2, 0x46, OPT_GREEN)
+        -- `Config_draw_sound` (0x44BFE0): the mode, the quality, the two
+        -- volumes and EXIT.
+        option_row("mode", 0x50, "MODE", OPT_SPEAKERS[sound.speaker], o.type == 0)
+        option_row("quality", 0x63, "QUALITY", OPT_QUALITIES[sound.quality], o.type == 1)
+        option_volume("bgm", 0x76, "BGM VOLUME", sound.bgm, o.type == 2)
+        option_volume("se", 0x89, "SE.VOLUME", sound.se, o.type == 3)
+        option_exit(0x84, 0x9C, o.type == 4)
+    elseif state == 7 then
+        option_exit(0xF5, 0xCA, true)
+    end
+end
+
+-- A volume a step down or up: one, or ten with the decide key held, kept
+-- within 1 to 100.
+local function option_step(value, way)
+    value = value + way * (s.held_confirm and 10 or 1)
+    if value < 1 then
+        return 1
+    end
+    return value > 100 and 100 or value
+end
+
+-- The SOUND page (state 4): the rows on the edges, the values on the raw
+-- pad's left and right, each change followed by state 8's five ticks.
+local function option_sound()
+    local o = s.opt
+    local trg = s.edge
+    if trg & PAD_UP ~= 0 then
+        if o.type == 0 then
+            return
+        end
+        s.cue(SE_CURSOR)
+        o.type = o.type - 1
+    end
+    if trg & PAD_DOWN ~= 0 then
+        if o.type == 4 then
+            return
+        end
+        s.cue(SE_CURSOR)
+        o.type = o.type + 1
+    end
+    if trg & PAD_CANCEL ~= 0 then
+        s.cue(SE_CANCEL)
+        o.state = 1
+        o.type = 0
+    end
+    if trg & PAD_CONFIRM ~= 0 and o.type == 4 then
+        s.cue(SE_DECIDE)
+        o.state = 1
+        o.type = 0
+    end
+    local function changed()
+        o.state = 8
+        o.wait = 5
+    end
+    if s.raw & PAD_LEFT ~= 0 then
+        if o.type == 0 then
+            s.cue(SE_CURSOR)
+            sound.speaker = sound.speaker == 2 and 1 or 2
+            changed()
+        elseif o.type == 1 then
+            sound.quality = ({ [0] = 2, 0, 1 })[sound.quality]
+            s.cue(SE_CURSOR)
+            changed()
+        elseif o.type == 2 and sound.bgm > 1 then
+            s.cue(SE_CURSOR)
+            sound.bgm = option_step(sound.bgm, -1)
+            changed()
+        elseif o.type == 3 and sound.se > 1 then
+            s.cue(SE_CURSOR)
+            sound.se = option_step(sound.se, -1)
+            changed()
+        end
+    end
+    if s.raw & PAD_RIGHT ~= 0 then
+        if o.type == 0 then
+            s.cue(SE_CURSOR)
+            sound.speaker = sound.speaker == 1 and 2 or 1
+            changed()
+        elseif o.type == 1 then
+            sound.quality = ({ [0] = 1, 2, 0 })[sound.quality]
+            s.cue(SE_CURSOR)
+            changed()
+        elseif o.type == 2 and sound.bgm < 100 then
+            s.cue(SE_CURSOR)
+            sound.bgm = option_step(sound.bgm, 1)
+            changed()
+        elseif o.type == 3 and sound.se < 100 then
+            s.cue(SE_CURSOR)
+            sound.se = option_step(sound.se, 1)
+            changed()
+        end
+    end
+end
+
+-- The way out: slot 0 fades to black by 0x400 a tick.
+local function option_leave()
+    s.opt.state = 0x16
+    fade_set(0x200, 0x400)
+end
+
+-- `Config_main`: one state a tick, then the draw of the state it left.
+local function option_main(api)
+    local o = s.opt
+    local trg = s.edge
+    if o.state == 0 then
+        if fade_done(0) then
+            o.state = 1
+        end
+        o.cursor = 0
+    elseif o.state == 1 then
+        o.type = 0
+        if trg & PAD_START ~= 0 then
+            s.cue(SE_CANCEL)
+            option_leave()
+        end
+        if trg & PAD_UP ~= 0 and o.cursor > 0 then
+            s.cue(SE_CURSOR)
+            o.cursor = o.cursor - 1
+        end
+        if trg & PAD_DOWN ~= 0 and o.cursor < 3 then
+            s.cue(SE_CURSOR)
+            o.cursor = o.cursor + 1
+        end
+        -- The decide adds the row to the state as it stands, which after a
+        -- START on the same tick is a state the original has no case for;
+        -- here START's way out stands. KEYCONFIG's row takes no decide.
+        if trg & PAD_CONFIRM ~= 0 and o.state == 1 and o.cursor ~= 0 then
+            if o.cursor == 3 then
+                s.cue(SE_CANCEL)
+                o.state = 6
+            else
+                s.cue(SE_DECIDE)
+                o.state = o.cursor + 2
+            end
+        end
+        if trg & PAD_CANCEL ~= 0 then
+            s.cue(SE_CANCEL)
+            option_leave()
+        end
+    elseif o.state == 3 then
+        s.background = api:picture("ui/option/color2")
+        o.state = 7
+    elseif o.state == 4 then
+        option_sound()
+    elseif o.state == 6 then
+        option_leave()
+    elseif o.state == 7 then
+        if trg & (PAD_CONFIRM | PAD_CANCEL) ~= 0 then
+            s.cue(trg & PAD_CONFIRM ~= 0 and SE_DECIDE or SE_CANCEL)
+            o.state = 1
+            s.background = api:picture("ui/option/room")
+        end
+    elseif o.state == 8 then
+        o.wait = o.wait - 1
+        if o.wait == 0 then
+            o.state = 4
+        end
+    elseif o.state == 0x16 then
+        -- `Movie_set(2)`: this frame and the next aren't presented, so the
+        -- screen keeps the fade's last one.
+        if fade_done(0) then
+            o.state = 0x17
+            s.frame = "held"
+        end
+    elseif o.state == 0x17 then
+        o.state = 0
+        o.step = 2
+        s.frame = "held"
+        return
+    end
+    option_draw()
+end
+
+-- One tick of the option task.
+local function option_task(api)
+    local o = s.opt
+    if o.step == 0 then
+        -- `Config_set_data`: black on both buffers, the room's picture and
+        -- the fade in by 0x1800 a tick. The pad's repeat is the status
+        -- screen's mask with its own delays, which the title keeps after.
+        s.rep_mask, s.rep_delay = 0xF01C, 0x40C
+        s.background = api:picture("ui/option/room")
+        fade_set(0x200, -0x1800)
+        o.step = 1
+        -- The picture is the draw's (`Bg_draw`), which this tick hasn't.
+        s.frame = "black"
+    elseif o.step == 1 then
+        option_main(api)
+    else
+        -- The exit: the task ends, and the title's wakes on the next tick.
+        s.opt = nil
+        s.frame = "black"
     end
 end
 
@@ -1156,11 +1488,12 @@ local function title_main(api)
             censorship_off = s.censorship_off ~= 0,
         }
     elseif s.disp == 4 then
-        -- OPTION: step 4 starts the option task (`0x44A040`) and leaves the
-        -- title to start again from `Title_init` once it ends. arklay has no
-        -- option screen, so the title starts again on the next tick.
+        -- OPTION (`Title_main_option`, 0x505400): step 4 starts the option
+        -- task, which runs from this tick while the title's sleeps, and
+        -- leaves the title to start again from `Title_init` once it ends.
         s.disp = 1
         s.mv = 1
+        s.opt = option_new()
     end
 end
 
@@ -1415,6 +1748,25 @@ local function publish(api)
     api:set("ti_fgsys", s.fg_system)
     api:set("ti_hard_mode", s.hard_mode)
     api:set("ti_censorship_off", s.censorship_off)
+    -- The trace's `opt`, while the option task runs.
+    local o = s.opt
+    api:set("opt_on", o and 1 or 0)
+    if o then
+        api:set("opt_step", o.step)
+        api:set("opt_state", o.state)
+        api:set("opt_cursor", o.cursor)
+        api:set("opt_type", o.type)
+        api:set("opt_wait", o.wait)
+        api:set("opt_speaker", sound.speaker)
+        api:set("opt_quality", sound.quality)
+        api:set("opt_bgm", sound.bgm)
+        api:set("opt_se", sound.se)
+        api:set("opt_blink_mode", o.blink.mode)
+        api:set("opt_blink_quality", o.blink.quality)
+        api:set("opt_blink_bgm", o.blink.bgm)
+        api:set("opt_blink_se", o.blink.se)
+        api:set("opt_blink_exit", o.blink.exit)
+    end
 end
 
 local function any_saves(api, args)
@@ -1441,8 +1793,11 @@ function M.open(api, args)
         [0] = api:indexed_page("ui/title/tmoji_0"),
         api:indexed_page("ui/title/tmoji_1"),
         api:indexed_page("ui/title/tmoji_2"),
+        [OPT_WORDS] = api:indexed_page("ui/option/moji1"),
+        [OPT_PARTS] = api:indexed_page("ui/option/parts"),
     }
-    s.background = api:picture("ui/title/title_bg")
+    s.title_background = api:picture("ui/title/title_bg")
+    s.background = s.title_background
     -- The title starts at `Title_init`: the boot's logos and warning before
     -- it aren't ported.
     s.mv = 1
@@ -1467,8 +1822,16 @@ function M.update(api, input)
     s.sprites = {}
     s.bands = nil
     s.sleeping = false
+    s.opt_texts = {}
+    -- What the frame shows besides the tick's draw: "black" on a tick with
+    -- no draw at all, "held" while the last presented frame stays up.
+    s.frame = nil
+    local shown = s.drawn_fades[0]
     pad_set(input)
-    if s.mv == 1 then
+    if s.opt then
+        -- The option task's ticks: the title's task sleeps.
+        option_task(api)
+    elseif s.mv == 1 then
         title_init()
     elseif s.mv == 2 then
         title_main(api)
@@ -1480,6 +1843,10 @@ function M.update(api, input)
     if not s.sleeping and (s.mv == 2 or s.mv == 3) then
         title_image()
     end
+    -- OPTION's confirm starts the option task on its own tick.
+    if s.opt and s.opt.step == 0 then
+        option_task(api)
+    end
     -- `System_trans`: each fade is drawn at its level, then steps.
     for n = 0, 3 do
         local fade = s.fades[n]
@@ -1489,6 +1856,9 @@ function M.update(api, input)
         else
             s.drawn_fades[n] = nil
         end
+    end
+    if s.frame == "held" then
+        s.drawn_fades[0] = shown
     end
     for _, slot in ipairs(cues) do
         api:core_sound(slot)
@@ -1512,9 +1882,18 @@ local function expand(c)
     return v == 0 and 0 or 8 * v + 7
 end
 
--- A sheet rect through the page's palette at the sprite's colour.
-local function lut_for(page, colour)
-    local key = colour
+-- A sheet rect through the page's palette at the sprite's colour: one
+-- level for the three channels, or the option screen's own three.
+local function lut_for(page, colour, tint)
+    local cr, cg, cb = colour, colour, colour
+    if tint then
+        -- A channel past 0x80 is the sheet's own colour, no brighter.
+        local function level(c)
+            return c > 0x80 and 0x80 or c
+        end
+        cr, cg, cb = level(tint[1]), level(tint[2]), level(tint[3])
+    end
+    local key = (cr << 16) | (cg << 8) | cb
     page.luts = page.luts or {}
     local lut = page.luts[key]
     if lut then
@@ -1524,9 +1903,9 @@ local function lut_for(page, colour)
     for index = 1, 255 do
         local rgb = page.palette[index]
         if rgb and rgb ~= 0 then
-            local r = (expand((rgb >> 16) & 0xFF) * colour) >> 7
-            local g = (expand((rgb >> 8) & 0xFF) * colour) >> 7
-            local b = (expand(rgb & 0xFF) * colour) >> 7
+            local r = (expand((rgb >> 16) & 0xFF) * cr) >> 7
+            local g = (expand((rgb >> 8) & 0xFF) * cg) >> 7
+            local b = (expand(rgb & 0xFF) * cb) >> 7
             r = r > 255 and 255 or r
             g = g > 255 and 255 or g
             b = b > 255 and 255 or b
@@ -1542,6 +1921,9 @@ local BLENDS = { [0] = "half", "add", "sub", "quarter" }
 function M.draw(api)
     api:fill_rect(0, 0, api:width(), api:height(), 0, 0, 0)
     local ox, oy = api:width() // 2 - 160, api:height() // 2 - 120
+    if s.frame == "black" then
+        return
+    end
     if s.background then
         api:draw_background(s.background, ox, oy)
     end
@@ -1559,7 +1941,7 @@ function M.draw(api)
     fade(3)
     local cache = M.cache or {}
     M.cache = cache
-    for k = 0, 3 do
+    for k = 0, OPT_PARTS do
         if pages[k] and (not cache[k] or cache[k].page ~= pages[k]) then
             cache[k] = { page = pages[k], palette = api:page_palette(pages[k], 0) or {} }
         end
@@ -1583,12 +1965,32 @@ function M.draw(api)
             local sp = s.sprites[i]
             if (sp.depth or (sp.logo and 6 or 10)) == depth and pages[sp.page] then
                 local colour = sp.colour or 0x80
-                local lut = lut_for(cache[sp.page], colour)
+                local lut = lut_for(cache[sp.page], colour, sp.rgb)
                 local options = nil
                 if sp.blend then
                     options = { blend = BLENDS[sp.blend] }
                 end
                 api:page_lut(pages[sp.page], sp.u, sp.v, sp.w, sp.h, ox + sp.x, oy + sp.y, lut, false, options)
+            end
+        end
+    end
+    -- The option screen's sound page: the names and the values' words in
+    -- Classic REbirth's print, the digits in their cells, and the arrows
+    -- about a word.
+    for _, t in ipairs(s.opt_texts or {}) do
+        local parts = cache[OPT_PARTS]
+        if t.cell then
+            -- A digit sits in the middle of its cell, as on the font's sheet.
+            local x = t.cell + (15 - api:text_width(t.text)) // 2
+            api:text(ox + x, oy + t.y, t.text, { colour = t.on and OPT_DIGIT_GREEN or nil })
+        else
+            -- The print starts a pixel before the sheet's word did.
+            local x = t.x or OPT_VALUE_END - CrText.width(api, t.text)
+            CrText.print(api, ox + x - 1, oy + t.y, t.text, t.on and OPT_TEXT_GREEN or nil)
+            if t.arrows and parts then
+                local lut = lut_for(parts, 0x80, OPT_GREEN)
+                api:page_lut(parts.page, 0xD1, 199, 14, 14, ox + x - 14, oy + t.y, lut, false)
+                api:page_lut(parts.page, 0xDF, 199, 14, 14, ox + OPT_VALUE_END, oy + t.y, lut, false)
             end
         end
     end

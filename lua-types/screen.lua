@@ -1138,7 +1138,7 @@ function ScreenApi:re2_slot(slot) end
 ---@field any boolean Any button was pressed.
 ---@field return_title boolean The return-to-title key (F9).
 ---@field pad integer The edge word of the fields above.
----@field held integer The held directions and L1/R1.
+---@field held integer The held confirm, directions and L1/R1.
 local ScreenInput = {}
 
 ---The options table the entry-drawn methods take. An unknown colour or
