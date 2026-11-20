@@ -1,0 +1,6 @@
+# room 201's item box and START under the screen's fade in (oracle/re2.md, "The item box"): START on the page's first tick, which the close waits the fade in out for
+0
+420 action
+423
+461 start
+464

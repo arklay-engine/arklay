@@ -1,0 +1,26 @@
+# room 201's item box and the equipped weapon (oracle/re2.md, "The item box"): the equipped handgun goes into the box, which puts the page back on the inventory, and cancel closes it, the close changing the weapon; the aim key with nothing in hand; the box again, the knife in for the handgun, cancel, and the aim key once more. The cancels on 620 and 980 fall in play
+0
+420 action
+423
+500 confirm
+503
+540 confirm
+543
+580 cancel
+583
+620 cancel
+623
+700 aim
+730
+780 action
+783
+860 confirm
+863
+900 confirm
+903
+940 cancel
+943
+980 cancel
+983
+1060 aim
+1090

@@ -2091,6 +2091,8 @@ const RE2_SCRIPT_MAP_FIRST_ALPHA: u8 = 208;
 const RE2_STATUS_PAGE_TICK: u8 = 7;
 /// The close's ticks on which the item box's screen still runs.
 const RE2_BOX_CLOSE_DRAWN: u8 = 7;
+/// The open's first tick with the screen's fade in done (`Fade_status`).
+const RE2_STATUS_FADED_IN: u8 = 11;
 
 /// What RE2's status screen's open and close draw on a frame
 /// ([`GameSession::re2_status_view`]), over the same ticks as RE 1's fades.
@@ -2263,6 +2265,9 @@ struct GameSession {
     /// RE2's status screen is closing: the ticks since its page went to 0
     /// (see [`RE2_STATUS_CLOSE_TICKS`]).
     re2_status_close: Option<u8>,
+    /// The close began on routine 1 with no fade out set (START on the
+    /// item box's inventory): the screen is black once no fade is running.
+    re2_status_unfaded: bool,
     /// RE2's status screen is up: the ticks since START opened it, 1 on the
     /// opening tick (see [`GameSession::re2_status_view`]).
     re2_status_open: Option<u8>,
@@ -3073,6 +3078,7 @@ impl GameSession {
             menu_fade: transition::Fade::inactive(),
             menu_fade_phase: MenuFadePhase::None,
             re2_status_close: None,
+            re2_status_unfaded: false,
             re2_status_open: None,
             re2_status_return: None,
             re2_save: None,
@@ -6062,7 +6068,10 @@ impl GameSession {
             // `St_fade_out_set` replaces the fade on the tick after. That
             // is the close of any of the screens that take a key that
             // early: the maps', START's on the item page and the box's.
-            if close == 0
+            // A close with no fade out of its own draws under the open's
+            // until it is black.
+            let unfaded = self.re2_status_unfaded && close < RE2_STATUS_SHOWN;
+            if (close == 0 || unfaded)
                 && let Some(open) = self.re2_status_open
             {
                 return Some(re2_status_open_view(open));
@@ -7962,6 +7971,7 @@ impl GameSession {
         self.tick_menu_screen(pack);
         if outcome.close {
             self.re2_status_close = Some(0);
+            self.re2_status_unfaded = outcome.unfaded;
         }
     }
 
@@ -8026,6 +8036,16 @@ impl GameSession {
             return;
         };
         *ticks += 1;
+        // START on the item box's inventory goes straight to page 1 with no
+        // fade out set, so its wait ends once no fade is running: on the
+        // next tick, or with the open's fade in. The screen is black from
+        // there, six ticks sooner than a faded close (`box_start_201`'s 571).
+        if self.re2_status_unfaded && *ticks < RE2_STATUS_SHOWN {
+            let fading_in = self
+                .re2_status_open
+                .is_some_and(|open| open < RE2_STATUS_FADED_IN);
+            *ticks = if fading_in { 1 } else { RE2_STATUS_SHOWN };
+        }
         let ticks = *ticks;
         // `St_exit` puts `Cut_no` back and raises `BYTE_0098f07b`, so this
         // tick's `Swap_Cbuff` loads the room's view again (`Movie_set(2)`).
@@ -8047,6 +8067,7 @@ impl GameSession {
             return;
         }
         self.re2_status_close = None;
+        self.re2_status_unfaded = false;
         self.re2_status_return = Some(1);
         self.menu = None;
         self.game.close_re2_items();
@@ -27820,6 +27841,105 @@ mod tests {
             "mode 3's pass"
         );
         assert_eq!(session.re2_stopped_frame_draws, [true, true, true, false]);
+    }
+
+    /// START on the item box's inventory goes straight to the fade out's
+    /// wait with no fade set (`St_select_item_m`, `0x4FC110`): the screen
+    /// is black on the next tick and the room is back four ticks after the
+    /// press, where a cancel takes ten (`box_start_201`'s 570 to 574).
+    #[test]
+    fn re2_item_box_start_closes_with_no_fade() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.re2_box_open = true;
+        let tick = |session: &mut GameSession, ui: UiInput| {
+            session
+                .tick(&pack, ui, player::Input::default(), false)
+                .unwrap();
+        };
+        for _ in 0..12 {
+            tick(&mut session, UiInput::default());
+        }
+        assert_eq!(session.re2_status_view(), Some(Re2StatusView::Screen(None)));
+        let start = UiInput {
+            start: true,
+            any: true,
+            ..UiInput::default()
+        };
+        tick(&mut session, start);
+        let page = session.game.re2_box.unwrap();
+        assert_eq!(page.routine, game::itembox2::ROUTINE_FADE_WAIT);
+        assert_eq!(session.re2_status_close, Some(0));
+        assert_eq!(
+            session.re2_status_view(),
+            Some(Re2StatusView::Screen(None)),
+            "the press's tick still draws the screen"
+        );
+        // The wait's one tick: the page's draw steps once more, on black.
+        tick(&mut session, UiInput::default());
+        assert_eq!(session.re2_status_close, Some(RE2_STATUS_SHOWN));
+        assert_eq!(session.re2_status_view(), Some(Re2StatusView::Black));
+        assert_ne!(session.game.re2_box.unwrap().pulse, page.pulse);
+        let pulse = session.game.re2_box.unwrap().pulse;
+        for _ in 0..2 {
+            tick(&mut session, UiInput::default());
+            assert_eq!(session.re2_status_view(), Some(Re2StatusView::Black));
+            assert_eq!(session.game.re2_box.unwrap().pulse, pulse);
+        }
+        tick(&mut session, UiInput::default());
+        assert!(session.game.re2_box.is_none() && session.menu.is_none());
+        assert!(session.re2_status_close.is_none() && !session.re2_status_unfaded);
+        assert_eq!(session.re2_status_return, Some(1), "the room fades in");
+
+        // Under the screen's fade in the wait lasts as long as the fade:
+        // START on the page's first tick draws that tick and the next
+        // three under the fade's steps, and the screen is black on the
+        // tick the fade is done (`box_start_early_201`'s 461 to 465).
+        session.game.re2_box_open = true;
+        while session.re2_status_open != Some(RE2_BOX_START) {
+            tick(&mut session, UiInput::default());
+        }
+        tick(&mut session, start);
+        assert_eq!(session.re2_status_close, Some(0));
+        let mut views = vec![session.re2_status_view().unwrap()];
+        for _ in 0..3 {
+            tick(&mut session, UiInput::default());
+            assert_eq!(session.re2_status_close, Some(1), "waiting");
+            views.push(session.re2_status_view().unwrap());
+        }
+        assert_eq!(
+            views,
+            [160, 112, 64, 16].map(|alpha| Re2StatusView::Screen(Some(alpha)))
+        );
+        tick(&mut session, UiInput::default());
+        assert_eq!(session.re2_status_close, Some(RE2_STATUS_SHOWN));
+        assert_eq!(session.re2_status_view(), Some(Re2StatusView::Black));
+        for _ in 0..3 {
+            assert!(session.game.re2_box.is_some());
+            tick(&mut session, UiInput::default());
+        }
+        assert!(session.game.re2_box.is_none() && !session.re2_status_unfaded);
+
+        // The cancel key's close fades, and so does the next one.
+        session.game.re2_box_open = true;
+        for _ in 0..13 {
+            tick(&mut session, UiInput::default());
+        }
+        assert!(session.game.re2_box.is_some_and(|page| page.started));
+        let cancel = UiInput {
+            cancel: true,
+            any: true,
+            ..UiInput::default()
+        };
+        tick(&mut session, cancel);
+        assert_eq!(session.re2_status_close, Some(0));
+        assert!(!session.re2_status_unfaded);
+        for close in 1..RE2_STATUS_CLOSE_TICKS {
+            tick(&mut session, UiInput::default());
+            assert_eq!(session.re2_status_close, Some(close));
+        }
     }
 
     /// A save screen that ends on its first tick, with no write.

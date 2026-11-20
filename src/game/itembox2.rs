@@ -173,6 +173,9 @@ pub struct BoxOutcome {
     pub room_sounds: Vec<u32>,
     /// The page has gone to routine 0 (or 1, from START): the close starts.
     pub close: bool,
+    /// The close starts on routine 1 (`St_fade_out_wait`), START's: no
+    /// fade out is set, so the wait ends as soon as no fade is running.
+    pub unfaded: bool,
 }
 
 /// The inventory's two-slot marks, 1 on a two-slot weapon's left half and
@@ -605,6 +608,7 @@ impl GameState {
             out.sounds.push(Sound::Cancel);
             page.routine = ROUTINE_FADE_WAIT;
             out.close = true;
+            out.unfaded = true;
         }
     }
 
