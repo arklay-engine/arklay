@@ -17828,13 +17828,16 @@ fn movie_buttons(ui: UiInput, input: player::Input) -> u16 {
     if ui.page_right {
         word |= 0x0800;
     }
-    // Outside the accept mask: only a film whose own mask names the map key
-    // or the fire button (RE 2's) takes them.
+    // Outside the accept mask: only a film whose own mask names the map key,
+    // the fire button or the in-game menu's key (RE 2's) takes them.
     if ui.map || input.map_held {
         word |= crate::movie::MAP_BUTTON;
     }
     if input.fire || input.fire_pressed {
         word |= crate::movie::FIRE_BUTTON;
+    }
+    if ui.system_menu {
+        word |= crate::movie::OPTION_BUTTON;
     }
     word
 }
@@ -17880,6 +17883,9 @@ fn movie_buttons_held(active: u64) -> u16 {
     }
     if active & KEY_FIRE != 0 {
         word |= crate::movie::FIRE_BUTTON;
+    }
+    if active & KEY_SYSTEM != 0 {
+        word |= crate::movie::OPTION_BUTTON;
     }
     word
 }
@@ -38097,6 +38103,16 @@ off_0010:
             );
         }
         assert_eq!(movie_buttons_held(KEY_FIRE), crate::movie::FIRE_BUTTON);
+        // And the in-game menu's key, RE 2's option key.
+        let menu = UiInput {
+            system_menu: true,
+            ..UiInput::default()
+        };
+        assert_eq!(
+            movie_buttons(menu, player::Input::default()),
+            crate::movie::OPTION_BUTTON
+        );
+        assert_eq!(movie_buttons_held(KEY_SYSTEM), crate::movie::OPTION_BUTTON);
     }
 
     #[test]
