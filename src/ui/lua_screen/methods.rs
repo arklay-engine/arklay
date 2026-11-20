@@ -95,7 +95,8 @@ impl UserData for Api<'_> {
         // a name.
         // `item_name_bytes(id, examined)`: with `examined`, the menu's name:
         // an unchecked item whose class the session has not examined yet
-        // keeps its unchecked name.
+        // keeps its unchecked name; RE 2's classes are its own, as its
+        // status screen reads them (`re2_screen_name`).
         methods.add_method(
             "item_name_bytes",
             |lua, api, (id, examined): (u16, Option<bool>)| {
@@ -103,6 +104,9 @@ impl UserData for Api<'_> {
                     return Ok(None);
                 };
                 let name = match (examined.unwrap_or(false), u8::try_from(id), api.game()) {
+                    (true, Ok(item), Some(game)) if game.is_re2_room => {
+                        crate::message::re2_screen_name(text, item, &game.examined_flags())
+                    }
                     (true, Ok(item), Some(game)) => {
                         crate::message::menu_item_name(text, item, &game.examined_flags())
                     }

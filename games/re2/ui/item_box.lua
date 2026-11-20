@@ -101,7 +101,7 @@ function M.draw(api)
         if item == 0 then
             api:text(ox + LIST_X, y, "-")
         else
-            api:glyphs(ox + LIST_X, y, api:item_name_bytes(item) or "", { fit = 104 })
+            api:glyphs(ox + LIST_X, y, api:item_name_bytes(item, true) or "", { fit = 104 })
             if quantity > 0 then
                 api:text(ox + LIST_X + 108, y, tostring(quantity))
             end

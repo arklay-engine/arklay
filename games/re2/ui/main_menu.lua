@@ -1249,7 +1249,7 @@ function B.box_icon(api, d, item, mark, x, y)
 end
 
 function B.box_name(api, d, item, x, y)
-    local bytes = api:item_name_bytes(item == 0 and 100 or item)
+    local bytes = api:item_name_bytes(item == 0 and 100 or item, true)
     if bytes ~= nil then
         api:glyphs(d.ox + x, d.oy + y, bytes)
     end
@@ -1390,7 +1390,7 @@ function B.draw_box(api)
         if page.sub ~= 5 then
             local item = api:re2_slot(slot)
             if item ~= 0 then
-                api:glyphs(d.ox + NAME_X, d.oy + NAME_Y, api:item_name_bytes(item) or "")
+                api:glyphs(d.ox + NAME_X, d.oy + NAME_Y, api:item_name_bytes(item, true) or "")
             end
         end
     end
@@ -1577,7 +1577,7 @@ function M.draw(api)
         end
         local item = slot and api:re2_slot(slot) or 0
         if item ~= 0 then
-            api:glyphs(d.ox + NAME_X, d.oy + NAME_Y, api:item_name_bytes(item) or "")
+            api:glyphs(d.ox + NAME_X, d.oy + NAME_Y, api:item_name_bytes(item, true) or "")
         end
     end
 
@@ -1585,7 +1585,7 @@ function M.draw(api)
     -- ticks too).
     if started.page == PAGE_FILE and started.sub == FILE_LIST and page.page == PAGE_FILE
         and page.file ~= nil and page.file ~= 0xFF then
-        api:glyphs(d.ox + FILE_NAME_X, d.oy + FILE_NAME_Y, api:item_name_bytes(FILE_NAMES + page.file) or "")
+        api:glyphs(d.ox + FILE_NAME_X, d.oy + FILE_NAME_Y, api:item_name_bytes(FILE_NAMES + page.file, true) or "")
     end
 
     -- The shown map, on the ticks its logic leaves it shown.

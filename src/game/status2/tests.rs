@@ -247,6 +247,51 @@ fn check_shows_the_description_and_returns_to_the_grid() {
     assert_eq!(run.at(865).1, "2:18,1:1,26:1,27:1,0:0,0:0,0:0,0:0");
 }
 
+/// CHECK names an item with two names as its description closes
+/// (`St_com_inspect`'s step 7, `inv_check_key`): the Spade Key's class in
+/// the checked flags (`0x98EBE4`), and nothing for an item with one name.
+#[test]
+fn check_names_a_key_when_its_description_closes() {
+    let spade = (0x8000_0000u32 >> 1).to_le_bytes();
+    let mut run = Run::new(game(&[(0x02, 18), (0x01, 1), (0x59, 1), (0x26, 1)]), 399);
+    let presses = [
+        (400, DOWN),
+        (420, CONFIRM),
+        (440, DOWN),
+        (460, CONFIRM),
+        (600, CONFIRM),
+    ];
+    run.until(600, &presses);
+    assert_eq!(run.at(600).0, "2,2,7,9,2,2,2,0", "the description is up");
+    assert_eq!(run.game.examined_flags(), [0; 4]);
+    run.until(601, &presses);
+    assert_eq!(run.at(601).0, "2,2,8,0,2,2,2,0");
+    assert_eq!(run.game.examined_flags(), spade);
+    // The name is the game's from then on: through the next room's load and
+    // a save.
+    run.game
+        .enter_room(RoomId::parse("1030").unwrap(), &RoomState::default());
+    assert_eq!(run.game.examined_flags(), spade);
+    let save = crate::save::SaveFile::from_state(&run.game);
+    assert_eq!(save.examined, spade);
+
+    // The green herb, in slot 3: right of the key.
+    let mut run = Run::new(game(&[(0x02, 18), (0x01, 1), (0x59, 1), (0x26, 1)]), 399);
+    run.until(
+        640,
+        &[
+            (400, DOWN),
+            (410, RIGHT),
+            (420, CONFIRM),
+            (440, DOWN),
+            (460, CONFIRM),
+            (600, CONFIRM),
+        ],
+    );
+    // It has no class: `Flg_on` sets class 0's flag, which names nothing.
+    assert_eq!(run.game.examined_flags(), 0x8000_0000u32.to_le_bytes());
+}
+
 /// `inv_mix`: COMBN the green herb with the red, yes to the question.
 #[test]
 fn a_mix_asks_then_combines_and_closes_the_gap() {

@@ -1321,9 +1321,10 @@ impl GameState {
         match page.step {
             7 => {
                 if !self.message.active {
-                    // The cancel cue, and the item's name stops being the
-                    // unchecked one (`0x98EBE4`, not ported).
+                    // The cancel cue, and an item with two names has its
+                    // checked one from here (`0x98EBE4`).
                     out.sounds.push(Sound::Cancel);
+                    self.mark_re2_checked(self.re2_slot(page.cursor)[0]);
                     page.goto(8);
                 }
             }

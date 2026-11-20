@@ -1,0 +1,21 @@
+# room 102: CHECK the Spade Key, which names it (the "Precinct Key" before), then the screen again (oracle/re2.md, "Items")
+364 start
+368
+400 down
+404
+420 confirm
+424
+440 down
+444
+460 confirm
+464
+560 confirm
+564
+660 start
+664
+740 start
+744
+780 down
+784
+860 start
+864

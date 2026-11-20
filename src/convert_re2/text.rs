@@ -252,7 +252,14 @@ pub(super) fn save_places(sys_tex: &[u8], rooms: &[(RoomId, &[u8])]) -> HashMap<
 fn exe_lines(exe: &super::exe::ExeText, text: &mut String) {
     for (item, name) in exe.names.iter().enumerate().skip(1) {
         let name = decode_message(name);
-        if !name.is_empty() {
+        // An item with two names (`re2_name_class`): the one CHECK gives it
+        // is its name, and the one by its id its unchecked name.
+        let class = usize::from(exe.name_classes.get(item).copied().unwrap_or(0));
+        if let Some(checked) = exe.checked_names.get(class).filter(|_| class != 0) {
+            let checked = decode_message(checked);
+            let _ = writeln!(text, "ITEM_{item:02X}_NAME = \"{checked}\"");
+            let _ = writeln!(text, "ITEM_{item:02X}_NAME_UNCHECKED = \"{name}\"");
+        } else if !name.is_empty() {
             let _ = writeln!(text, "ITEM_{item:02X}_NAME = \"{name}\"");
         }
     }
@@ -496,6 +503,41 @@ mod tests {
         assert_eq!(name(0x26), "Green Herb");
         assert_eq!(name(0x29), "Mixed Herb");
         assert_eq!(name(0x42), "Bomb & Det.");
+        // The items CHECK names: the table's classes are the engine's, and
+        // each has its second name.
+        assert_eq!(exe.checked_error, None);
+        for (item, &class) in exe.name_classes.iter().enumerate() {
+            assert_eq!(
+                class,
+                crate::message::re2_name_class(item as u8),
+                "item {item:#x}"
+            );
+        }
+        let checked =
+            |item: usize| decode_message(&exe.checked_names[usize::from(exe.name_classes[item])]);
+        assert_eq!(
+            (name(0x59), checked(0x59)),
+            ("Precinct Key".into(), "Spade Key".into())
+        );
+        assert_eq!(
+            (name(0x5C), checked(0x5C)),
+            ("Precinct Key".into(), "Club Key".into())
+        );
+        assert_eq!(
+            (name(0x33), checked(0x33)),
+            ("Red Jewel".into(), "Virgin Heart".into())
+        );
+        assert_eq!(checked(0x43), "Square Crank");
+        assert_eq!(checked(0x53), "Locker Key");
+        assert_eq!(
+            (checked(0x5D), checked(0x5E)),
+            ("Down Key".into(), "Up Key".into())
+        );
+        let mut lines = String::new();
+        exe_lines(&exe, &mut lines);
+        assert!(lines.contains("ITEM_59_NAME = \"Spade Key\"\n"));
+        assert!(lines.contains("ITEM_59_NAME_UNCHECKED = \"Precinct Key\"\n"));
+        assert!(!lines.contains("ITEM_26_NAME_UNCHECKED"));
         let system = |id: usize| decode_message(&exe.system[id]);
         assert_eq!(
             system(0),

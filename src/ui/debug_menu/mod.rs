@@ -1262,6 +1262,18 @@ impl Cx<'_> {
         }
     }
 
+    /// The name of an item `game` holds, as its screens name it: in a game
+    /// of RE 2's, by what CHECK has named.
+    fn held_item_name(&self, game: &GameState, item: u8) -> String {
+        if !game.is_re2_room {
+            return self.item_name(item);
+        }
+        match crate::message::re2_item_name(self.text, item, &game.examined_flags()) {
+            Some(bytes) => title_case(self.text.decode(bytes).trim()),
+            None => format!("Item {item:02X}"),
+        }
+    }
+
     /// `item`'s icon, HD when the pack has one.
     fn icon(&mut self, item: u8) -> Option<Arc<Picture>> {
         self.art.icon(self.pack, item)
