@@ -1385,10 +1385,13 @@ class FrameWriter:
     """Takes the Wine display's pictures in process and writes their PNGs on worker threads.
 
     A record takes a picture of every tick while the game is held at its break, so the
-    picture's cost sets the record's pace. ImageMagick's `import`, started once per frame,
-    takes about 0.28 s; a picture over XCB takes about 0.01 s once the display has settled
-    (`settled`), and its PNG (0.15 s to encode) is written by a worker while the game plays
-    on. The pixels are the same either way. Without Pillow's XCB support, and for a picture
+    picture's cost sets the record's pace, and with `--sound` the pace is part of what is
+    recorded: a voice line ends by DirectSound's clock, so it holds for more ticks the
+    faster they go. A record that has to agree with another's ticks follows it with
+    `--pace`, as the regression runner does for a reference it records again.
+    ImageMagick's `import`, started once per frame, takes about 0.28 s; a picture over XCB
+    takes about 0.01 s once the display has settled (`settled`), and its PNG (0.15 s to
+    encode) is written by a worker while the game plays on. The pixels are the same either way. Without Pillow's XCB support, and for a picture
     XCB can't take, `import` takes it as before."""
 
     WORKERS = 4
@@ -1398,7 +1401,10 @@ class FrameWriter:
     SETTLE = 0.04
     STILL = 0.02
     STILL_TRIES = 10
-    UNCHANGED = 0.3
+    # Under the 0.28 s `import` took, which is the pace of every reference recorded with it:
+    # a record that follows one of those with `--pace` must not fall behind it on a tick that
+    # draws what the last one drew.
+    UNCHANGED = 0.15
 
     def __init__(self, display: str) -> None:
         self.display = display
@@ -1449,14 +1455,14 @@ class FrameWriter:
         - the first picture waits `SETTLE` seconds;
         - the display must then hold still for `STILL` more (two pictures in a row the same);
         - a picture that is still the last tick's own is what a late one looks like, so it is
-          taken again until it changes or `UNCHANGED` seconds have passed since the break, a
-          little longer than `import` took. A tick that draws what the last one drew costs
-          that long, and so does a tick with no last picture to compare (the first, and the
-          one after a picture `import` took).
+          taken again until it changes or `UNCHANGED` seconds have passed since the break,
+          fifteen times as long as the latest picture measured. A tick that draws what the
+          last one drew costs that long, and so does a tick with no last picture to compare
+          (the first, and the one after a picture `import` took).
 
-        What this cannot tell from the tick's own picture: one later than `UNCHANGED`, which
-        `import` missed as well, and a display that changes, holds still for `STILL` and then
-        changes again within the tick, where `import` showed whichever it found.
+        What this cannot tell from the tick's own picture: one later than `UNCHANGED`, and a
+        display that changes, holds still for `STILL` and then changes again within the tick,
+        where `import` showed whichever it found.
 
         A display that never holds still (a movie, or drawing on another of the game's
         threads) gives whatever it showed last, as `import` gave whatever it showed when it
@@ -1832,8 +1838,7 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
             game.watch_sounds()
 
             started = time.monotonic()
-            pace = read_pace(Path(args.pace)) if getattr(args, "pace", None) else {}
-            pace_origin: float | None = None
+            pace = Pace(getattr(args, "pace", None))
             boot_tick = 0
             cursor = 0
             pad = 0
@@ -1918,15 +1923,8 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                     boot_tick += 1
                 else:
                     # This stop is the end of the tick before it.
-                    if tick > 0 and tick - 1 in pace:
-                        # Reach this tick when the recording being followed did, counted
-                        # from tick 0, with the game's other threads running meanwhile.
-                        if pace_origin is None:
-                            pace_origin = time.monotonic() - pace[tick - 1]
-                        wait = pace_origin + pace[tick - 1] - time.monotonic()
-                        if wait > 0:
-                            game.hold(tid, wait)
                     if tick > 0:
+                        pace.wait(game, tid, tick - 1)
                         trace.write(trace_line(game, tick - 1, pad) + "\n")
                         if tick_log:
                             tick_log.write(f"{tick - 1} {time.monotonic() - session.capture_started:.4f}\n")
@@ -1947,6 +1945,7 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                 game.resume_from_break(tid, regs, original)
             elapsed = time.monotonic() - started
             print(f"{boot_tick + args.ticks} ticks in {elapsed:.1f}s")
+            pace.report()
     finally:
         session.close()
     session.frames_written()
@@ -1962,6 +1961,41 @@ def read_pace(path: Path) -> dict[int, float]:
         tick, seconds = line.split()
         pace[int(tick)] = float(seconds)
     return pace
+
+
+class Pace:
+    """Follows a stored recording's `.ticks` (`--pace`): each tick is reached when that recording reached it,
+    counted from the first tick the two share, with the game's other threads running meanwhile.
+
+    A record can only wait for the stored pace, not catch up with it, so the ticks reached late are counted:
+    a voice line that ends in one of them may hold for a tick less than it did in the stored recording."""
+
+    # Later than this is a tick's worth at the pace `import` gave.
+    LATE = 0.25
+
+    def __init__(self, path: str | None) -> None:
+        self.ticks = read_pace(Path(path)) if path else {}
+        self.origin: float | None = None
+        self.late = 0
+        self.latest = 0.0
+
+    def wait(self, game: "Game", tid: int, tick: int) -> None:
+        """Hold the game at the break that ends `tick` until the stored recording's time for it."""
+        if tick not in self.ticks:
+            return
+        if self.origin is None:
+            self.origin = time.monotonic() - self.ticks[tick]
+        wait = self.origin + self.ticks[tick] - time.monotonic()
+        if wait > 0:
+            game.hold(tid, wait)
+        elif -wait > self.LATE:
+            self.late += 1
+            self.latest = max(self.latest, -wait)
+
+    def report(self) -> None:
+        if self.ticks:
+            late = f"{self.late} ticks more than {self.LATE}s late, {self.latest:.2f}s at most" if self.late else "no tick late"
+            print(f"followed the pace of {len(self.ticks)} stored ticks: {late}")
 
 
 def title_trace(game: Game) -> str:
@@ -2136,6 +2170,7 @@ def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
             game.write(BREAK_PAD, b"\xcc")
             game.watch_sounds()
             started = time.monotonic()
+            pace = Pace(getattr(args, "pace", None))
             cursor = 0
             pad = 0
             tick = 0
@@ -2143,6 +2178,7 @@ def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
                 tid, regs = game.run_to_break()
                 # This stop is the end of the tick before it.
                 if tick > 0:
+                    pace.wait(game, tid, tick - 1)
                     trace.write(boot_trace_line(game, tick - 1, pad) + "\n")
                     if tick_log:
                         tick_log.write(f"{tick - 1} {time.monotonic() - session.capture_started:.4f}\n")
@@ -2156,6 +2192,7 @@ def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
                 regs.rax = pad
                 game.resume_from_break(tid, regs, original)
             print(f"{args.ticks} ticks from boot in {time.monotonic() - started:.1f}s")
+            pace.report()
     finally:
         session.close()
     session.frames_written()
@@ -2383,7 +2420,8 @@ def main() -> int:
         )
         command.add_argument(
             "--pace", default=None, metavar="TICKS_LOG",
-            help="with --sound, reach each tick no sooner than the recording whose .ticks log this is did",
+            help="with --sound, reach each tick no sooner than the recording whose .ticks log this is did "
+            "(the regression runner gives a reference's own when it records it again)",
         )
 
     command = commands.add_parser("record", help="record a trace from the original")

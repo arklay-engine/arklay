@@ -498,7 +498,7 @@ def self_test() -> int:
     if starts != [(344, None), (1818, None)] or None in bad or kept != (1818, None):
         print(f"re2-regress self-test FAILED: compare_from {starts} {bad}", file=sys.stderr)
         return 1
-    problem = self_test_fields() or self_test_gallery_hold()
+    problem = self_test_fields() or self_test_gallery_hold() or self_test_pace() or self_test_pictures()
     if problem:
         print(f"re2-regress self-test FAILED: {problem}", file=sys.stderr)
         return 1
@@ -509,9 +509,7 @@ def self_test() -> int:
 def self_test_gallery_hold() -> str | None:
     """The recorder's hold of a gallery word (`held_gallery_word`): Classic REbirth's write is put back once, and
     the bits the game sets over the record's are kept, before it and after, the last one's all-opened word too."""
-    spec = importlib.util.spec_from_file_location("oracle_re2", ROOT / "scripts" / "oracle-re2.py")
-    recorder = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(recorder)
+    recorder = load_recorder()
     classic, shut = 0xFFFFFFFF, 0xFFFFFFFE
     # The memory a word reads tick by tick, and what it holds and whether it is written on each.
     cases = [
@@ -528,6 +526,113 @@ def self_test_gallery_hold() -> str | None:
         if got != want:
             return f"a gallery word held at {start:#x} over {[f'{now:#x}' for now in memory]} gave {got}"
     return None
+
+
+def load_recorder():
+    spec = importlib.util.spec_from_file_location("oracle_re2", ROOT / "scripts" / "oracle-re2.py")
+    recorder = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(recorder)
+    return recorder
+
+
+def self_test_pace() -> str | None:
+    """A record's pace: which `.ticks` the runner hands a record (`pace_source`), and the recorder's following of
+    it (`Pace`): a tick waits for the stored recording's time, and one reached late is counted."""
+    with tempfile.TemporaryDirectory() as folder:
+        refs = Path(folder)
+        for name, text in (("old", "0 0.0\n1 0.3\n"), ("empty", "")):
+            (refs / name).mkdir()
+            (refs / name / "ref.ticks").write_text(text)
+        cases = [
+            # A reference recorded again follows its own ticks; a first record sets its own pace.
+            ({"ref": "old"}, [], refs / "old" / "ref.ticks"),
+            ({"ref": "new"}, [], None),
+            ({"ref": "empty"}, [], None),
+            # A run that carries another's ticks on follows that one's.
+            ({"ref": "new", "pace_from": "old"}, [], refs / "old" / "ref.ticks"),
+            ({"ref": "new", "pace_from": "none"}, [], ValueError),
+            # A silent record has no pace to keep, and a `--pace` of the run's own stands.
+            ({"ref": "old", "sound": False}, [], None),
+            ({"ref": "old", "sound": False, "pace_from": "old"}, [], ValueError),
+            ({"ref": "old"}, ["--pace", "x"], None),
+        ]
+        for run, command, want in cases:
+            try:
+                got = pace_source(run, refs, command)
+            except ValueError:
+                got = ValueError
+            if got != want:
+                return f"the pace of {run} with {command} is {got}, not {want}"
+    recorder = load_recorder()
+
+    class Held:
+        def __init__(self):
+            self.waits = []
+
+        def hold(self, tid, seconds):
+            self.waits.append(round(seconds, 1))
+
+    with tempfile.TemporaryDirectory() as folder:
+        ticks = Path(folder) / "ref.ticks"
+        ticks.write_text("5 10.0\n6 10.2\n7 10.4\n8 10.5\n")
+        pace, game = recorder.Pace(str(ticks)), Held()
+        for tick in (4, 5, 6, 7):
+            pace.wait(game, 0, tick)
+        # The fake hold returns at once, so each tick is as early as its stored time is after the first's.
+        if game.waits != [0.2, 0.4] or pace.late:
+            return f"a record following 0.2s ticks held {game.waits} with {pace.late} late"
+        pace.origin -= 1.0
+        pace.wait(game, 0, 8)
+        if game.waits != [0.2, 0.4] or pace.late != 1 or not 0.4 < pace.latest < 0.6:
+            return f"a tick half a second late: held {game.waits}, {pace.late} late by {pace.latest:.2f}"
+    return None
+
+
+def self_test_pictures() -> str | None:
+    """The recorder's wait for a tick's picture (`FrameWriter.settled`), on scripted displays: a late picture is
+    waited for, a tick that draws what the last drew costs the unchanged wait, a display that never holds still
+    is named, and a picture that fails to write fails the record."""
+    recorder = load_recorder()
+
+    class Picture:
+        def __init__(self, pixels):
+            self.pixels = pixels
+
+        def tobytes(self):
+            return self.pixels
+
+        def save(self, path):
+            raise OSError("no room")
+
+    def writer(script):
+        frames = object.__new__(recorder.FrameWriter)
+        frames.display, frames.unsettled, frames.errors, frames.last = ":0", [], [], b"old"
+        frames.room = threading.BoundedSemaphore(4)
+        shown = iter(script)
+        frames.grab = lambda xdisplay: Picture(next(shown))
+        return frames
+
+    late = writer([b"old", b"old", b"new", b"new", b"new"])
+    if late.settled("late").tobytes() != b"new" or late.last != b"new" or late.unsettled:
+        return "a picture that arrives late is not waited for"
+    same = writer([b"old"] * 100)
+    started = time.monotonic()
+    if same.settled("same").tobytes() != b"old" or time.monotonic() - started < recorder.FrameWriter.UNCHANGED:
+        return "a tick that draws what the last drew does not wait for a late picture"
+    if time.monotonic() - started > recorder.FrameWriter.UNCHANGED + 0.1:
+        return "the unchanged wait runs past its time"
+    moving = writer([bytes([n]) for n in range(100)])
+    moving.settled("moving")
+    if moving.unsettled != ["moving"]:
+        return "a display that never holds still is not named"
+    failed = writer([])
+    failed.room.acquire()
+    failed.write(Picture(b""), Path("nowhere.png"))
+    try:
+        failed.check()
+    except SystemExit:
+        return None
+    return "a picture that was not written does not fail the record"
 
 
 def self_test_fields() -> str | None:
@@ -1084,6 +1189,26 @@ def check_out(path: str) -> Path:
 # ---------------------------------------------------------------- record
 
 
+def pace_source(run: dict, refs: Path, command: list[str]) -> Path | None:
+    """The `.ticks` log a record of `run` follows with `--pace`, or None for a record that sets its own pace.
+
+    With `--sound` a voice line ends by DirectSound's clock, so the ticks it holds for depend on how fast the
+    record goes, and with them every scene that waits for a line: a record's pace is part of its reference. A
+    run that carries another's ticks on names it (`pace_from`), and a reference recorded again follows its own
+    stored `.ticks`, so that a faster recorder or a busier machine gives the same ticks. A run's first record
+    goes as fast as the recorder does. A `--pace` in the run's own `record` arguments is left alone."""
+    if not run.get("sound", True) or "--pace" in command:
+        if run.get("pace_from"):
+            raise ValueError("pace_from needs a --sound run without its own --pace")
+        return None
+    source = refs / run.get("pace_from", run["ref"]) / "ref.ticks"
+    if source.is_file() and source.stat().st_size:
+        return source
+    if run.get("pace_from"):
+        raise ValueError(f"pace_from needs {source} (record {run['pace_from']} with --sound first)")
+    return None
+
+
 def record_run(run: dict, args, refs: Path) -> int:
     """Record the original for a run into the refs dir, with the meta.txt the other references have."""
     name = run["name"]
@@ -1123,14 +1248,30 @@ def record_run(run: dict, args, refs: Path) -> int:
     if run.get("saves"):
         command += ["--keep-saves", str(dest / "saves")]
     command += choice_args(run) + shlex.split(run["record"])
+    try:
+        pace = pace_source(run, refs, command)
+    except ValueError as error:
+        print(f"{name}: {error}")
+        return 1
     if not args.dry_run:
         dest.mkdir(parents=True, exist_ok=True)
+    held = None
+    if pace is not None:
+        # The record writes its own `.ticks` over the one it may be following: follow a copy.
+        held = dest / "pace.ticks"
+        if not args.dry_run:
+            shutil.copyfile(pace, held)
+        command += ["--pace", str(held)]
     print(f"{name}: " + " ".join(shlex.quote(part) for part in command), flush=True)
     if args.dry_run:
         return 0
     log = dest / "ref.log"
-    with open(log, "w") as handle:
-        code = subprocess.run(command, cwd=ROOT, stdout=handle, stderr=subprocess.STDOUT).returncode
+    try:
+        with open(log, "w") as handle:
+            code = subprocess.run(command, cwd=ROOT, stdout=handle, stderr=subprocess.STDOUT).returncode
+    finally:
+        if held is not None:
+            held.unlink(missing_ok=True)
     if code:
         print(f"{name}: the record failed (exit {code}, see {log})")
         return code
