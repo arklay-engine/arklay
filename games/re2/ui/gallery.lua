@@ -1,31 +1,30 @@
 -- RE2's gallery, as the original runs it: the task the title starts from
 -- GALLERY's page (`Gallery`, 0x4BF760), its menu, DATA GALLERY
 -- (`GalleryMain`, 0x439A80), the pictures behind the menu's first row
--- (`GalleryIllustrations`, 0x438DA0) and the movies behind its second
--- (`GalleryMovie`, 0x437F30): the screens of `GalleryLoop` (0x43AE60). The
--- title's task sleeps under it.
+-- (`GalleryIllustrations`, 0x438DA0), the movies behind its second
+-- (`GalleryMovie`, 0x437F30) and CLAIRE's models (`Gallery3DArt`,
+-- 0x4375B0): the screens of `GalleryLoop` (0x43AE60). The title's task
+-- sleeps under it.
 --
 -- The gallery draws at 640 x 480 with its own art (`ui/gallery/` in the
 -- pack): the menu's picture in five sheets, `title1` to `title5`, and its
 -- rows' words, `moji`; the pictures, `rough01` to `rough60` and `illust01`
 -- to `illust35`, with their panel, `left01` and `left02`, and its digits,
--- `gnum2`; the movies' words, `movie64`. The places below are the
--- executable's, in those pixels; the frame draws them at half size. With a
--- 320 x 240 display the original has a second layout with smaller art
--- (`top32_1`, `top32_2`, `moji3224`, `left3224` and `movie32`) and, in it
+-- `gnum2`; the movies' words, `movie64`; the models' panel, `3dleft1` and
+-- `3dleft2`, and its digits, `gnum`. The places below are the executable's,
+-- in those pixels; the frame draws them at half size. With a 320 x 240
+-- display the original has a second layout with smaller art (`top32_1`,
+-- `top32_2`, `moji3224`, `left3224`, `movie32` and `3d3224`) and, in it
 -- alone, a button that doubles a picture's size; neither is ported.
 --
 -- The state keeps the original's work (`pGallery`) under its own numbers,
--- so the oracle's `gal` and `galv` fields compare one for one, up to the
--- last tick of a fade out to a screen that isn't ported: on the next the
--- original sets that screen.
+-- so the oracle's `gal` and `galv` fields compare one for one.
 --
 -- The menu's rows: ROUGH SKETCH (LEON) or ILLUSTRATION (CLAIRE), MOVIE, 3D
 -- MODEL (CLAIRE only) and EXIT. EXIT ends the gallery and wakes the title.
 -- A button on another row fades the menu out and opens that row's screen:
--- the pictures, the movies, or CLAIRE's 3D models (`Gallery3DArt`), which
--- aren't ported; the menu loads again instead, as it does from the movies'
--- own way to the models.
+-- the pictures, the movies, or CLAIRE's 3D models. The models' screen has
+-- its panel and its count; the model itself isn't drawn.
 
 local M = {}
 
@@ -37,8 +36,9 @@ local PAD_BUTTONS = 0x0FFF
 local SE_CURSOR, SE_DECIDE, SE_TURN = 4, 6, 10
 
 -- The work's flags (`+0x1478`): the fade's black is drawn, the fade goes
--- out rather than in, and the lit row's level is falling.
-local FADING, FADING_OUT, FALLING = 0x01, 0x02, 0x20
+-- out rather than in, a model is loaded, and the lit row's level is
+-- falling.
+local FADING, FADING_OUT, MODEL, FALLING = 0x01, 0x02, 0x10, 0x20
 
 -- A row that isn't lit.
 local DIM = 0x40
@@ -89,15 +89,19 @@ local MENUS = {
     },
 }
 
--- The pictures' panel: its two sheets, each with its place and size.
+-- A panel's two sheets' places and sizes, and the sheets of the pictures'
+-- panel and of the models': the upper, the lower, which has the lit keys
+-- too, and the count's digits.
 local PANEL = {
-    { "left01", 0, 0, 154, 256 },
-    { "left02", 0, 256, 154, 224 },
+    { 0, 0, 154, 256 },
+    { 0, 256, 154, 224 },
 }
+local PICTURE_SHEETS = { "left01", "left02", digits = "gnum2" }
+local MODEL_SHEETS = { "3dleft1", "3dleft2", digits = "gnum" }
 
--- The panel's keys, lit while held, in the order the original asks for
--- them: the pad's bit, with the lit key's place and its corner in `left02`.
--- Each is 100 x 25.
+-- A panel's keys, lit while held, in the order the original asks for
+-- them: the pad's bit, with the lit key's place and its corner in the
+-- panel's lower sheet. Each is 100 x 25.
 local KEYS = {
     { PAD_RIGHT, 18, 285, 154, 0 },
     { PAD_LEFT, 18, 321, 154, 25 },
@@ -106,7 +110,7 @@ local KEYS = {
 }
 
 -- The count's place, "01/ 60": the picture's number and the last one's,
--- with `gnum2`'s stroke between. A digit is 12 x 20, five to a row.
+-- with the digits' stroke between. A digit is 12 x 20, five to a row.
 local NUMBER_X, LAST_X, COUNT_Y = 560, 600, 455
 local DIGIT_W, DIGIT_H = 12, 20
 local STROKE = { 35, 40 }
@@ -214,6 +218,15 @@ local load, picture
 local MENU_ART = { "title1", "title2", "title3", "title4", "title5", "moji" }
 local VIEW_ART = { "gnum2", "left01", "left02" }
 local MOVIE_ART = { "movie64" }
+local MODEL_ART = { "gnum", "3dleft1", "3dleft2" }
+
+-- The bit of the fifth word that opens each of the thirty-eight models
+-- (kind 4's table, 0x524F8C): the first two share one, and six of the
+-- zombies another.
+local MODEL_BITS = {
+    0, 0, 3, 4, 5, 1, 2, 1, 1, 1, 1, 6, 7, 1, 8, 9, 10, 11, 12,
+    13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+}
 
 -- `GalleryMain`: `false` once EXIT is taken, or when its art can't load.
 local function main(api, g, edge, cue)
@@ -258,10 +271,8 @@ local function main(api, g, edge, cue)
         end
     elseif g.fade < 1 then
         -- The faded row's screen starts from the next tick, and this one
-        -- draws nothing. The models aren't ported: from their row the menu
-        -- starts again.
-        local screen = menu.leave[at]
-        g.screen = screen ~= 3 and screen or 0
+        -- draws nothing.
+        g.screen = menu.leave[at]
         g.step = 0
         g.row = 0
         return true
@@ -360,7 +371,13 @@ local function pictures(api, g, edge, held, cue)
     -- and black once a fade out's level is under 0x20. So the screen's
     -- first frame is still cleared to black, and a fade out's last three.
     -- The tick a picture is loaded on doesn't draw it.
-    local view = { index = g.index, last = count - 1, clear = g.clear, picture = g.row == 0 and g.tiles > 0 }
+    local view = {
+        index = g.index,
+        last = count - 1,
+        clear = g.clear,
+        picture = g.row == 0 and g.tiles > 0,
+        sheets = PICTURE_SHEETS,
+    }
     local out = (g.step == 2 or g.step == 4) and g.fade < 0x20
     g.clear = out and 0 or 0xFF
     if g.row ~= 0 then
@@ -432,9 +449,8 @@ local function movies(api, g, edge, held, cue)
         end
     elseif g.fade < 1 then
         -- The pictures (step 3), or the menu for LEON and the models for
-        -- CLAIRE (step 2), from the next tick; this one draws nothing. The
-        -- models aren't ported: the menu starts again.
-        g.screen = g.step == 3 and 1 or 0
+        -- CLAIRE (step 2), from the next tick; this one draws nothing.
+        g.screen = g.step == 3 and 1 or (g.claire and 3 or 0)
         g.step = 0
         g.row = 0
         g.tiles = 0
@@ -457,6 +473,91 @@ local function movies(api, g, edge, held, cue)
         list.lit = "button"
     end
     g.list = list
+    disp(g)
+    return true
+end
+
+-- Whether play has opened model `index` (`FUN_00442ed0` with kind 4).
+local function model_opened(g, index)
+    return (g.open[5] or 0) & (0x80000000 >> MODEL_BITS[index + 1]) ~= 0
+end
+
+-- `Gallery3DArt`: CLAIRE's models, one at a time beside a panel. `false`
+-- when its art can't load. Here the work's row (`+8`) is 1 while a model
+-- waits to be loaded.
+local function models(api, g, edge, held, cue)
+    if g.step == 0 then
+        -- The panel's art is loaded, and the first model is number 0,
+        -- opened or not. Nothing is drawn.
+        if not load(api, MODEL_ART) then
+            return false
+        end
+        g.tiles = 0
+        g.index = 0
+        g.step = 1
+        g.row = 1
+        g.flags = (g.flags | FADING) & ~(FADING_OUT | MODEL)
+        g.fade = 0xFF
+        disp(g)
+        return true
+    end
+    if g.step == 1 then
+        if edge & PAD_UP ~= 0 then
+            -- To the movies.
+            cue(SE_DECIDE)
+            g.step = 2
+            g.flags = g.flags | FADING | FADING_OUT
+            g.fade = 0xFF
+        elseif edge & PAD_DOWN ~= 0 then
+            -- To the menu.
+            cue(SE_DECIDE)
+            g.step = 4
+            g.flags = g.flags | FADING | FADING_OUT
+            g.fade = 0xFF
+        elseif edge & (PAD_RIGHT | PAD_LEFT) ~= 0 then
+            -- The next opened model that way, round the ends. The buttons
+            -- do nothing.
+            local way = edge & PAD_RIGHT ~= 0 and 1 or -1
+            local from = g.index
+            cue(SE_CURSOR)
+            repeat
+                g.index = (g.index + way) % #MODEL_BITS
+            until model_opened(g, g.index) or g.index == from
+            g.row = 1
+            g.tiles = 0
+        end
+    elseif g.fade < 1 then
+        -- The movies (step 2) or the menu (step 4) from the next tick;
+        -- this one draws nothing.
+        g.screen = g.step == 2 and 2 or 0
+        g.step = 0
+        g.row = 0
+        g.tiles = 0
+        g.flags = g.flags & ~MODEL
+        return true
+    end
+    -- The frame is cleared to black. The tick a model is loaded on
+    -- (`GalleryLoadModel`: the screen's first, and a turn's) doesn't show
+    -- it.
+    local view = {
+        index = g.index,
+        last = #MODEL_BITS - 1,
+        clear = g.clear,
+        model = g.row == 0 and g.flags & MODEL ~= 0,
+        sheets = MODEL_SHEETS,
+    }
+    g.clear = 0
+    if g.row ~= 0 then
+        g.flags = g.flags | MODEL
+        g.row = 0
+    end
+    for _, key in ipairs(KEYS) do
+        if held & key[1] ~= 0 then
+            view.key = key
+            break
+        end
+    end
+    g.view = view
     disp(g)
     return true
 end
@@ -498,6 +599,8 @@ function M.tick(api, g, edge, held, cue)
         alive = pictures(api, g, edge, held, cue)
     elseif g.screen == 2 then
         alive = movies(api, g, edge, held, cue)
+    elseif g.screen == 3 then
+        alive = models(api, g, edge, held, cue)
     else
         alive = main(api, g, edge, cue)
     end
@@ -640,10 +743,11 @@ local function half(api, sheet, ox, oy, x, y, w, h, u, v, level, opaque, black)
     end
 end
 
--- The pictures' frame: the cleared frame, the picture, the panel with the
--- held key lit, and the count.
+-- The pictures' frame, or the models': the cleared frame, the picture,
+-- the panel with the held key lit, and the count. A model isn't drawn.
 local function draw_view(api, g, ox, oy, black)
     local view = g.view
+    local low, digits = art[view.sheets[2]], art[view.sheets.digits]
     local clear = (view.clear * (255 - black) + 127) // 255
     api:fill_rect(ox, oy, 320, 240, clear, clear, clear)
     local sheet = view.picture and art[picture_stem(g.claire, view.index)]
@@ -652,33 +756,46 @@ local function draw_view(api, g, ox, oy, black)
         local w, h = api:art_size(sheet.page)
         half(api, sheet, ox, oy, place[1], place[2], w, h, 0, 0, 0x80, false, black)
     end
-    for _, part in ipairs(PANEL) do
-        half(api, art[part[1]], ox, oy, part[2], part[3], part[4], part[5], 0, 0, 0x80, false, black)
+    for k, part in ipairs(PANEL) do
+        half(api, art[view.sheets[k]], ox, oy, part[1], part[2], part[3], part[4], 0, 0, 0x80, false, black)
     end
     local key = view.key
     if key then
         -- A key starts halfway down a pixel, whose upper half is the
         -- panel's row above it. That row is drawn alone first, so that the
         -- key's first goes over it and not over the panel's two rows
-        -- already halved. The keys have no see-through texel.
-        local low = PANEL[2]
+        -- already halved.
+        local top = PANEL[2][2]
         local above = key[3] - 1
-        local lut = lut_for(art.left02, 0x80, false, black)
-        local options = { dw = 50, dh = 1, blend = 255 }
-        api:page_lut(art.left02.page, key[2], above - low[3], 100, 1, ox + key[2] // 2, oy + above // 2, lut, false, options)
-        half(api, art.left02, ox, oy, key[2], key[3], 100, 25, key[4], key[5], 0x80, false, black)
+        local lut = lut_for(low, 0x80, false, black)
+        local px, py = ox + key[2] // 2, oy + above // 2
+        api:page_lut(low.page, key[2], above - top, 98, 1, px, py, lut, false, { dw = 49, dh = 1, blend = 255 })
+        half(api, low, ox, oy, key[2], key[3], 98, 25, key[4], key[5], 0x80, false, black)
+        -- The models' keys have a see-through last column, where the
+        -- panel's own column shows beside the key's last but one. So the
+        -- last pixels are drawn from below: the panel's column alone, the
+        -- key's last two over it, and on the first row the panel's row
+        -- above over both at the half the key's first row leaves it.
+        local edge, last = key[2] + 99, px + 49
+        local one = { dw = 1, dh = 1, blend = 255 }
+        api:page_lut(low.page, edge, key[3] - top, 1, 1, last, py, lut, false, one)
+        api:page_lut(low.page, key[4] + 98, key[5], 2, 1, last, py, lut, false, one)
+        api:page_lut(low.page, edge - 1, above - top, 2, 1, last, py, lut, false, { dw = 1, dh = 1, blend = 127 })
+        local rest = { dw = 1, dh = 12, blend = 255 }
+        api:page_lut(low.page, edge, key[3] + 1 - top, 1, 24, last, py + 1, lut, false, rest)
+        api:page_lut(low.page, key[4] + 98, key[5] + 1, 2, 24, last, py + 1, lut, false, rest)
     end
     -- `GalleryDrawPrim`: a number from 1, as two digits.
     local function digit(x, d)
         local u, v = (d % 5) * DIGIT_W, (d // 5) * DIGIT_H
-        half(api, art.gnum2, ox, oy, x, COUNT_Y, DIGIT_W, DIGIT_H, u, v, 0x80, false, black)
+        half(api, digits, ox, oy, x, COUNT_Y, DIGIT_W, DIGIT_H, u, v, 0x80, false, black)
     end
     local function number(x, n)
         digit(x, (n + 1) // 10)
         digit(x + DIGIT_W, (n + 1) % 10)
     end
     number(NUMBER_X, view.index)
-    half(api, art.gnum2, ox, oy, NUMBER_X + 2 * DIGIT_W, COUNT_Y, DIGIT_W, DIGIT_H, STROKE[1], STROKE[2], 0x80, false, black)
+    half(api, digits, ox, oy, NUMBER_X + 2 * DIGIT_W, COUNT_Y, DIGIT_W, DIGIT_H, STROKE[1], STROKE[2], 0x80, false, black)
     number(LAST_X, view.last)
 end
 

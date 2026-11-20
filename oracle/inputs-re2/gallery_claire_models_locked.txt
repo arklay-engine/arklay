@@ -1,0 +1,48 @@
+# CLAIRE's 3D MODEL with only bits 1, 3 and 31 of the models' word set: right nine times through models 2, 5, 7 to 10, 13 and 37 and round to 2, and left twice (oracle/re2.md, "The gallery").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 down
+443
+470 right
+473
+500 confirm
+503
+540 right
+543
+570 confirm
+573
+650 down
+653
+680 down
+683
+720 start
+723
+800 right
+803
+830 right
+833
+860 right
+863
+890 right
+893
+920 right
+923
+950 right
+953
+980 right
+983
+1010 right
+1013
+1040 right
+1043
+1070 left
+1073
+1100 left
+1103
