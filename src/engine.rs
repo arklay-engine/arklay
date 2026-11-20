@@ -27967,20 +27967,35 @@ mod tests {
     /// unfaded close among them.
     #[test]
     fn re2_item_box_page_goes_with_a_failed_screen() {
+        use game::save2::BackRoutine;
         let dir = TempDir::new();
         let (pack, a, _) = debug_menu_pack(&dir);
         let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
         session.game.is_re2_room = true;
-        session.game.re2_box_open = true;
         let tick = |session: &mut GameSession, ui: UiInput| {
             session
                 .tick(&pack, ui, player::Input::default(), false)
                 .unwrap();
         };
+        // The lid's swing, as the room pass's back routine runs it, opens
+        // the screen, and its routine holds in its last state while the
+        // screen is up.
+        session.game.objects.records = vec![crate::objects::ObjectRecord::default()];
+        let lid = |session: &GameSession| session.game.objects.records[0].rotation[2];
+        session.game.open_re2_box_entrance(0);
+        let mut swing = 0;
+        while !session.game.tick_re2_box_entrance() {
+            swing += 1;
+            assert!(swing < 100, "the lid never stopped");
+        }
+        session.game.re2_box_open = true;
         for _ in 0..12 {
             tick(&mut session, UiInput::default());
         }
         assert!(session.game.re2_box.is_some_and(|page| page.started));
+        assert_eq!(session.game.re2_back, BackRoutine::ItemBox);
+        assert_eq!(session.game.re2_box_entrance.state, 3);
+        assert_eq!(lid(&session), -902, "open");
         session
             .menu
             .as_mut()
@@ -27992,14 +28007,29 @@ mod tests {
             ticks += 1;
             assert!(ticks < 100, "the failed screen never closed");
         }
+        // On the tick the screen goes: the page with it, and the lid's last
+        // count, which shuts it and ends its routine.
         assert!(session.game.re2_box.is_none(), "the page went with it");
+        assert_eq!(session.game.re2_back, BackRoutine::None);
+        assert_eq!(session.game.re2_box_entrance.state, 0);
+        assert_eq!(lid(&session), 0, "shut");
         assert!(session.re2_status_close.is_none() && !session.re2_status_unfaded);
 
         // The status screen after it is its own: START closes it through
         // the fade.
         session.open_menu(&pack);
-        assert!(session.game.re2_box.is_none());
-        session.re2_status_close = Some(0);
+        for _ in 0..12 {
+            tick(&mut session, UiInput::default());
+        }
+        assert!(session.game.re2_box.is_none() && session.re2_status_close.is_none());
+        let start = UiInput {
+            start: true,
+            any: true,
+            ..UiInput::default()
+        };
+        tick(&mut session, start);
+        assert_eq!(session.re2_status_close, Some(0), "START closes it");
+        assert!(!session.re2_status_unfaded);
         for close in 1..RE2_STATUS_CLOSE_TICKS {
             tick(&mut session, UiInput::default());
             assert_eq!(session.re2_status_close, Some(close));
