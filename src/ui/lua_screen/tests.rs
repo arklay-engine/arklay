@@ -898,6 +898,9 @@ api:text(104, 8, "H", { colour = "yellow" })
 api:text(136, 8, "H", { colour = "#00C80A" })
 api:text(168, 8, "H", { colour = "#00C80A", row = 2 })
 api:text_8x14(200, 8, "H", { colour = "#00C80A", row = 1 })
+api:glyphs(232, 8, "H", { colour = "#00C80A", row = 1 })
+-- Only a text draw reads `row`: another call's table may hold anything there.
+assert(api:glyphs_width("H", { row = "header" }) > 0)
 end
 "##,
     );
@@ -925,7 +928,7 @@ end
         cx.font = Some(font);
         let frame = draw(&mut screen, &cx);
         assert!(!screen.failed());
-        [8usize, 40, 72, 104, 136, 168, 200].map(|x| {
+        [8usize, 40, 72, 104, 136, 168, 200, 232].map(|x| {
             let at = (12 * 320 + x + 3) * 4;
             [frame.rgba[at], frame.rgba[at + 1], frame.rgba[at + 2]]
         })
@@ -940,6 +943,7 @@ end
             [0, 161, 7],
             [0, 161, 7],
             [0, 162, 7],
+            [0, 162, 7],
         ]
     );
     assert_eq!(
@@ -949,6 +953,7 @@ end
             [0, 206, 0],
             [0, 206, 0],
             [206, 206, 0],
+            [0, 161, 7],
             [0, 161, 7],
             [0, 161, 7],
             [0, 161, 7],

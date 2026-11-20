@@ -1554,11 +1554,11 @@ local Re2MapSprite = {}
 ---A text or sprite colour: a tint name (`white`, `green`, `red`,
 ---`grey`/`gray`, `yellow`), a CLUT row number, or `"#RRGGBB"`. A text
 ---`"#RRGGBB"` is a per-channel multiplier over the font sheet's grey ramp,
----so `"#3F7DFA"` draws the blue the built-in screen's save rows use, and a
----name is its colour the same way. A row number is one of the text's colour
----rows, as a message's colour code is: the font's own colour for the row
----when it has one, else green for 1, red for 2, grey for 3 and yellow for
----any other.
+---so `"#1E64FF"` draws the sheet's white as a blue, and a name is its
+---colour the same way. A row number is one of the text's colour rows, as a
+---message's colour code is: white for 0, and for the others the font's own
+---colour for the row when it has one, else green for 1 and 8, red for 2,
+---grey for 3 and yellow for any other.
 ---@alias ScreenTextColour string|integer
 
 ---A screen sound name. `error` is the cancel cue.

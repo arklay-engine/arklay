@@ -1775,6 +1775,22 @@ mod tests {
         assert_eq!(boxed(&font, Tint::Yellow), [7, 19, 74]);
         assert_eq!(boxed(&font, Tint::White), [57, 49, 74]);
         assert_eq!(boxed(&font, Tint::Red), [57, 0, 0]);
+        // A dimmed box is its row's ink dimmed as its text is, whatever the
+        // ink's transparency bit says: text draws opaque.
+        let mut marked = sheet.clone();
+        marked.stp = vec![false; PALETTE_ROW_LEN];
+        marked.stp[1] = true;
+        marked.stp[8] = true;
+        let mut def = FontDef::japanese();
+        def.tints[4] = Some([15, 50, 128]);
+        let marked = Font::new(marked, def);
+        let dimmed = |bytes: &[u8]| {
+            let mut framebuffer = Framebuffer::new();
+            marked.draw_text(&mut framebuffer, 10, 10, Tint::Yellow, 15, bytes, false);
+            pixel(&framebuffer, 10, 10)
+        };
+        assert_eq!(dimmed(&crate::charset::MISSING), [3, 9, 37]);
+        assert_eq!(dimmed(&[0x0C]), [12, 40, 94]);
         // A row the description leaves alone is the engine's tint.
         assert_eq!(drawn(&font, Tint::Red), [206, 0, 0]);
         assert_eq!(drawn(&font, Tint::Grey), [164, 164, 151]);

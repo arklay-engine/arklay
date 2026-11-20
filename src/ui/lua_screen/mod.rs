@@ -1008,32 +1008,37 @@ pub type ActorDraw<'a> = dyn FnMut(&str, &crate::render::Camera, &mut Framebuffe
 /// The draw options table shared by `text`, `sprite` and friends.
 struct Options {
     tint: Tint,
-    /// The font's colour row a text takes in place of `tint`, where the
-    /// font has a colour of its own for it.
-    row: Option<i32>,
     brightness: u8,
     tight: bool,
     clut: usize,
     blend: SpriteBlend,
 }
 
-impl Options {
-    /// The tint a text draws in over `font`: its colour row's, where the
-    /// options name one the font has a colour for, else `tint`.
-    fn text_tint(&self, font: &crate::font::Font) -> Tint {
-        match self.row {
-            Some(row) if font.tints_row(row) => Tint::from_clut_row(row),
-            _ => self.tint,
-        }
-    }
+/// The tint a text draws in over `font`: that of the options table's `row`,
+/// where the font has a colour of its own for the row, else the options'
+/// `colour`. Only a text reads `row`, so a table shared with a sprite may
+/// hold anything under the name.
+fn text_tint(
+    opts: &Options,
+    table: Option<&Table>,
+    font: &crate::font::Font,
+) -> mlua::Result<Tint> {
+    let row = match table {
+        Some(table) => table.get::<Option<i64>>("row")?,
+        None => None,
+    };
+    Ok(match row.map(|row| row.clamp(0, 255) as i32) {
+        Some(row) if font.tints_row(row) => Tint::from_clut_row(row),
+        _ => opts.tint,
+    })
 }
 
-/// Parse an options table: `{colour = "green"|3, row = 1, brightness = 2,
-/// tight = true, clut = 0, blend = "opaque"}`.
+/// Parse an options table: `{colour = "green"|3, brightness = 2,
+/// tight = true, clut = 0, blend = "opaque"}`. A text's `row` is
+/// [`text_tint`]'s to read.
 fn options(host: &Host, table: Option<&Table>) -> mlua::Result<Options> {
     let mut parsed = Options {
         tint: Tint::White,
-        row: None,
         brightness: 2,
         tight: host.tight,
         clut: 0,
@@ -1044,9 +1049,6 @@ fn options(host: &Host, table: Option<&Table>) -> mlua::Result<Options> {
     };
     if let Some(value) = table.get::<Option<Value>>("colour")? {
         parsed.tint = colour_tint(&value)?;
-    }
-    if let Some(row) = table.get::<Option<i64>>("row")? {
-        parsed.row = Some(row.clamp(0, 255) as i32);
     }
     if let Some(brightness) = table.get::<Option<i64>>("brightness")? {
         parsed.brightness = brightness.clamp(0, 30) as u8;
