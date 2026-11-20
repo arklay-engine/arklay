@@ -1283,6 +1283,8 @@ api:page_sprite_modulated(flat, 0, 0, 4, 1, 12, 26, 4, 1, 0, nil, nil, "half")
 -- nothing, and nor does an empty rect.
 api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 27, 64, 1, 0, { 999, -5, 0x80 }, "bits")
 api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 28, 64, 1, 9, nil, "bits")
+api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 30, 64, 1, 1, { 0x40, 0x80, 0x80 }, "seven", "variant")
+api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 31, 64, 1, 1, nil, "seven", "add")
 api:page_sprite_modulated(sheet, 0, 0, 64, 0, 10, 28, 64, 1, 0)
 api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 28, 0, 1, 0)
 for _, bad in ipairs({
@@ -1384,10 +1386,48 @@ end
         .iter()
         .map(|quad| matches!(quad.image, crate::draw2d::Kind::Recoloured(_)))
         .collect();
-    assert_eq!(kinds, [false, false, false, false, false, true, false]);
+    assert_eq!(
+        kinds,
+        [false, false, false, false, false, true, false, true, true]
+    );
     assert_eq!(quads[5].dst, [10.0, 25.0, 74.0, 26.0]);
     assert_eq!(quads[5].colour, [1.0; 3]);
     assert_eq!(quads[6].colour, [1.0, 0.0, 1.0]);
+    // Each keeps its blend: half at 128 of 255, the variant at 127, and
+    // the added one opaque and additive, all cut to the original's texels.
+    let items: Vec<&crate::draw2d::Item> = recorded
+        .list()
+        .unwrap()
+        .items
+        .iter()
+        .filter(|item| {
+            use crate::draw2d::Kind;
+            matches!(item.kind, Kind::Art(_) | Kind::Recoloured(_))
+        })
+        .collect();
+    assert_eq!(items.len(), 9);
+    let blend = |at: usize| {
+        let flags = items[at].map.flags;
+        assert_ne!(flags & crate::draw2d::MASKED, 0, "{at}");
+        (items[at].colour[3], flags & crate::draw2d::ADDITIVE != 0)
+    };
+    assert_eq!(blend(0), (1.0, false));
+    assert_eq!(blend(4), (128.0 / 255.0, false));
+    assert_eq!(blend(5), (128.0 / 255.0, false));
+    assert_eq!(blend(7), (127.0 / 255.0, false));
+    assert_eq!(blend(8), (1.0, true));
+    // The lookup takes the first row's colour of an index to the drawn
+    // row's, widened and under the colour: index 42 is red level 10 and
+    // green level 1 there, and green level 9 in the second row.
+    let lut = |at: usize| match &items[at].kind {
+        crate::draw2d::Kind::Recoloured(recoloured) => recoloured.lut,
+        other => panic!("{other:?}"),
+    };
+    let of = crate::hires::Recolour::of;
+    assert_eq!(lut(5)[42], Some(of([82, 8, 0], [82, 74, 0])));
+    assert_eq!(lut(7)[42], Some(of([82, 8, 0], [44, 79, 0])));
+    assert_eq!(lut(8)[42], Some(of([82, 8, 0], [87, 79, 0])));
+    assert_eq!(lut(5)[0], None);
     assert_eq!(quads[0].dst, [10.0, 20.0, 74.0, 21.0]);
     assert_eq!(quads[1].colour, [1.0; 3]);
     assert_eq!(quads[3].colour, [80.0 / 255.0, 1.0, 80.0 / 255.0]);
