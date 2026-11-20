@@ -626,7 +626,8 @@ function M.publish(api, g)
 end
 
 local art = {}
--- The file of the one picture held.
+-- The file of the picture last asked for, whose art is the one picture's
+-- held (none when the pack lacks the file).
 local held_picture
 
 function M.reset()
@@ -664,8 +665,8 @@ end
 -- `GalleryLoadIllust`: the picture is loaded, and the count of the 256 x
 -- 256 textures the original cuts it into is the work's; none for a file
 -- the pack lacks, which shows no picture. The picture before is let go,
--- as the original's textures are: a character's pictures are more than a
--- screen's art may hold at once.
+-- as the original's textures are: with the title's art and the gallery's
+-- own, LEON's sixty are more than a screen's art may hold at once.
 picture = function(api, g)
     local stem = picture_stem(g.claire, g.index)
     if held_picture ~= stem then
