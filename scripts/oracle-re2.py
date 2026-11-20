@@ -27,6 +27,7 @@ does. Input scripts (the format of ``oracle/inputs``) count from there. See
 from __future__ import annotations
 
 import argparse
+import bisect
 import ctypes
 import os
 import re
@@ -35,6 +36,7 @@ import signal
 import struct
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -1361,12 +1363,185 @@ def neck_position(game: Game) -> str:
     return f"pneck={x},{y},{z}"
 
 
-def screenshot(display: str, path: Path) -> None:
-    """The display as an image; the game's frame starts at `FRAME_ORIGIN`."""
-    subprocess.run(
-        ["import", "-window", "root", str(path)],
-        env=dict(os.environ, DISPLAY=display), check=False, capture_output=True,
-    )
+def screenshot(display: str, path: Path) -> str | None:
+    """The display as an image at `path`; the game's frame starts at `FRAME_ORIGIN`. What went wrong, if the
+    picture wasn't taken: `path` is then no file, so that an older picture there can't pass for this one."""
+    part = path.with_name(path.name + ".part")
+    try:
+        done = subprocess.run(
+            ["import", "-window", "root", f"png:{part}"],
+            env=dict(os.environ, DISPLAY=display), check=False, capture_output=True, text=True,
+        )
+        error = None if done.returncode == 0 and part.is_file() else (done.stderr.strip() or f"import exited {done.returncode}")
+    except OSError as failed:
+        error = str(failed)
+    if error is None:
+        part.replace(path)
+    else:
+        part.unlink(missing_ok=True)
+        path.unlink(missing_ok=True)
+    return error
+
+
+def display_grabber():
+    """Pillow's in-process picture of an X display, or None without Pillow's XCB support."""
+    try:
+        from PIL import ImageGrab, features
+    except ImportError:
+        return None
+    if not features.check_feature("xcb"):
+        return None
+    return ImageGrab.grab
+
+
+class FrameWriter:
+    """Takes the Wine display's pictures in process and writes their PNGs on worker threads.
+
+    A record takes a picture of every tick while the game is held at its break, so the
+    picture's cost sets the record's pace, and with `--sound` the pace is part of what is
+    recorded: a voice line ends by DirectSound's clock, so it holds for more ticks the
+    faster they go. A record that has to agree with another's ticks follows it with
+    `--pace`, as the regression runner does for a reference it records again.
+    ImageMagick's `import`, started once per frame, takes about 0.28 s; a picture over XCB
+    takes about 0.01 s once the display has settled (`settled`), and its PNG (0.15 s to
+    encode) is written by a worker while the game plays on. The pixels are the same either way. Without Pillow's XCB support, and for a picture
+    XCB can't take, `import` takes it as before."""
+
+    WORKERS = 4
+    # Pictures waiting for a worker: 2.3 MB each, so a writer that falls behind holds the record.
+    BACKLOG = 32
+    # See `settled`.
+    SETTLE = 0.04
+    STILL = 0.02
+    STILL_TRIES = 10
+    # Under the 0.28 s `import` took of a tick with a picture on it. A black display took it
+    # 0.09 s (a room's load, a door), less than this: a record that follows a stored pace
+    # (`--pace`) gives each picture the time that pace leaves it (`take`'s `within`), down to
+    # `SETTLE + STILL`, so that it doesn't fall behind there and then run the ticks after
+    # faster than they were to catch up.
+    UNCHANGED = 0.15
+
+    def __init__(self, display: str) -> None:
+        self.display = display
+        self.grab = display_grabber()
+        self.pool = None
+        self.room = threading.BoundedSemaphore(self.BACKLOG)
+        # What went wrong writing a picture; a record with any has failed.
+        self.errors: list[str] = []
+        # The frames whose display never held still.
+        self.unsettled: list[str] = []
+        self.last: bytes | None = None
+        # The frame `last` is the picture of: its name's letters and its number.
+        self.last_frame: tuple[str, int] | None = None
+        if self.grab is not None:
+            from concurrent.futures import ThreadPoolExecutor
+
+            self.pool = ThreadPoolExecutor(max_workers=self.WORKERS, thread_name_prefix="frame")
+
+    def take(self, path: Path, within: float | None = None) -> None:
+        """The display as it is now, written to `path` by the time `close` returns. `within`: the seconds
+        a stored pace leaves this picture, which a tick that draws nothing new then waits at most."""
+        unchanged = self.UNCHANGED if within is None else min(self.UNCHANGED, max(self.SETTLE + self.STILL, within))
+        # `last` tells a late picture only as the picture of the tick before this one: after a
+        # gap (`--shot-every`, or the boot frames' end) the display may have shown ticks in
+        # between that no picture was taken of.
+        letters = path.stem.rstrip("0123456789")
+        frame = (letters, int(path.stem[len(letters):] or 0))
+        if self.last_frame != (letters, frame[1] - 1):
+            self.last = None
+        self.last_frame = frame
+        if self.pool is not None:
+            try:
+                picture = self.settled(path.stem, unchanged)
+            except OSError:
+                picture = None
+            if picture is not None:
+                self.room.acquire()
+                try:
+                    self.pool.submit(self.write, picture, path)
+                except BaseException:
+                    self.room.release()
+                    raise
+                return
+        # `import`'s picture isn't seen here, so the next tick has no last picture to tell
+        # a late one by.
+        self.last = None
+        error = screenshot(self.display, path)
+        if error is not None:
+            self.errors.append(f"{path.name}: {error}")
+
+    def settled(self, name: str, unchanged: float | None = None):
+        """The display once the tick's picture is on it. `unchanged` is `UNCHANGED`, or less under a stored
+        pace (`take`).
+
+        The game's thread reaches its break before the X server has drawn the picture the
+        tick presented: a picture taken at once is the tick before's on about half the ticks,
+        and one taken 10 ms later was the tick's own on every tick measured. Nothing tells
+        the recorder that the picture has arrived, so it waits as `import` did, but only for
+        as long as the display gives it reason to:
+
+        - the first picture waits `SETTLE` seconds;
+        - the display must then hold still for `STILL` more (two pictures in a row the same);
+        - a picture that is still the last tick's own is what a late one looks like, so it is
+          taken again until it changes or `UNCHANGED` seconds have passed since the break,
+          fifteen times as long as the latest picture measured. A tick that draws what the
+          last one drew costs that long, and so does a tick with no last picture to compare
+          (the first, the one after a tick no picture was taken of, and the one after a
+          picture `import` took).
+
+        What this cannot tell from the tick's own picture: one later than `UNCHANGED`, and a
+        display that changes, holds still for `STILL` and then changes again within the tick,
+        where `import` showed whichever it found.
+
+        A display that never holds still (a movie, or drawing on another of the game's
+        threads) gives whatever it showed last, as `import` gave whatever it showed when it
+        ran; `close` names those frames."""
+        unchanged = self.UNCHANGED if unchanged is None else unchanged
+        start = time.monotonic()
+        time.sleep(self.SETTLE)
+        picture = self.grab(xdisplay=self.display).tobytes()
+        moved = 0
+        while True:
+            time.sleep(self.STILL)
+            again = self.grab(xdisplay=self.display)
+            if again.tobytes() != picture:
+                picture = again.tobytes()
+                moved += 1
+                if moved >= self.STILL_TRIES:
+                    self.unsettled.append(name)
+                    break
+            elif (self.last is not None and picture != self.last) or time.monotonic() - start >= unchanged:
+                break
+        self.last = picture
+        return again
+
+    def write(self, picture, path: Path) -> None:
+        try:
+            picture.save(path)
+        except Exception as error:  # whatever it is, the frame is missing
+            self.errors.append(f"{path.name}: {error}")
+            # Not half a picture, and not an older record's.
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        finally:
+            self.room.release()
+
+    def close(self) -> None:
+        """Wait for every picture taken so far to be on the disk."""
+        if self.pool is not None:
+            self.pool.shutdown(wait=True)
+            self.pool = None
+        if self.unsettled:
+            shown = ", ".join(self.unsettled[:8]) + (", ..." if len(self.unsettled) > 8 else "")
+            print(f"{len(self.unsettled)} frames whose display never held still: {shown}", file=sys.stderr)
+
+    def check(self) -> None:
+        """Fail the record if a picture wasn't written."""
+        if self.errors:
+            shown = "; ".join(self.errors[:4]) + ("; ..." if len(self.errors) > 4 else "")
+            raise SystemExit(f"{len(self.errors)} frames were not written: {shown}")
 
 
 class WineSession:
@@ -1385,6 +1560,7 @@ class WineSession:
         self.sink_module = None
         self.sound_capture = None
         self.capture_started = 0.0
+        self.frames: FrameWriter | None = None
         # The callers' `finally: session.close()` starts only once this returns,
         # so a start that fails stops what it has started itself.
         try:
@@ -1427,8 +1603,10 @@ class WineSession:
                 raise SystemExit("Pad_set is not the expected code: wrong executable?")
             time.sleep(0.01)
 
-    def screenshot(self, path: Path) -> None:
-        screenshot(self.display, path)
+    def screenshot(self, path: Path, within: float | None = None) -> None:
+        if self.frames is None:
+            self.frames = FrameWriter(self.display)
+        self.frames.take(path, within)
 
     def idle(self, seconds: float) -> None:
         """Let the game run untraced for a while."""
@@ -1439,7 +1617,17 @@ class WineSession:
 
         A second Ctrl-C, SIGTERM or SIGHUP waits until it is done."""
         with signals_held():
-            self.stop_all()
+            try:
+                self.stop_all()
+            finally:
+                # The pictures are already taken: writing them needs neither the game nor the display.
+                if self.frames is not None:
+                    self.frames.close()
+
+    def frames_written(self) -> None:
+        """Fail the record, once it is closed, if one of its pictures wasn't written."""
+        if self.frames is not None:
+            self.frames.check()
 
     def stop_all(self) -> None:
         if self.env is not None:
@@ -1611,7 +1799,7 @@ class WindowsSession:
                 raise SystemExit(f"can't capture the game's window: {error}") from None
         self.capture.stopped()
 
-    def screenshot(self, path: Path) -> None:
+    def screenshot(self, path: Path, within: float | None = None) -> None:
         """The game's 640x480 picture placed on a 1024x768 image at `FRAME_ORIGIN`, as Wine's display has it.
 
         Until the window is up, a boot frame (which nothing compares) is skipped; a frame of
@@ -1643,6 +1831,9 @@ class WindowsSession:
             if event is not None and self.game.handle(event):
                 raise SystemExit("Pad_set's breakpoint is armed outside a trace")
 
+    def frames_written(self) -> None:
+        """Each picture is written as it is taken, so a failed one has already stopped the record."""
+
     def close(self) -> None:
         if self.capture:
             self.capture.close()
@@ -1661,6 +1852,7 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
     """Record `args.ticks` ticks of play from the title route `args.start`, `args.difficulty` and `args.arrange`."""
     route = title_route(args.start, args.difficulty, args.arrange)
     entries = parse_input(Path(args.input) if args.input else None)
+    pace = Pace(getattr(args, "pace", None))
     if args.shot_dir:
         Path(args.shot_dir).mkdir(parents=True, exist_ok=True)
     sound_out = str(trace_path.with_suffix(".wav")) if args.sound else None
@@ -1685,8 +1877,6 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
             game.watch_sounds()
 
             started = time.monotonic()
-            pace = read_pace(Path(args.pace)) if getattr(args, "pace", None) else {}
-            pace_origin: float | None = None
             boot_tick = 0
             cursor = 0
             pad = 0
@@ -1771,20 +1961,14 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                     boot_tick += 1
                 else:
                     # This stop is the end of the tick before it.
-                    if tick > 0 and tick - 1 in pace:
-                        # Reach this tick when the recording being followed did, counted
-                        # from tick 0, with the game's other threads running meanwhile.
-                        if pace_origin is None:
-                            pace_origin = time.monotonic() - pace[tick - 1]
-                        wait = pace_origin + pace[tick - 1] - time.monotonic()
-                        if wait > 0:
-                            game.hold(tid, wait)
                     if tick > 0:
+                        pace.reached(tick - 1)
                         trace.write(trace_line(game, tick - 1, pad) + "\n")
                         if tick_log:
                             tick_log.write(f"{tick - 1} {time.monotonic() - session.capture_started:.4f}\n")
                         if args.shot_dir and args.shot_every and (tick - 1) % args.shot_every == 0:
-                            session.screenshot(Path(args.shot_dir) / f"t{tick - 1:06d}.png")
+                            within = pace.left(tick) if tick < args.ticks else None
+                            session.screenshot(Path(args.shot_dir) / f"t{tick - 1:06d}.png", within)
                     while cursor < len(entries) and entries[cursor][0] <= tick:
                         pad = entries[cursor][1]
                         cursor += 1
@@ -1797,11 +1981,16 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                 regs.rax = pad
                 if tick_delay:
                     game.hold(tid, tick_delay)
+                # The run after the last traced tick is no one's to pace.
+                if 0 < tick <= args.ticks:
+                    pace.release(game, tid, tick - 1)
                 game.resume_from_break(tid, regs, original)
             elapsed = time.monotonic() - started
             print(f"{boot_tick + args.ticks} ticks in {elapsed:.1f}s")
+            pace.report()
     finally:
         session.close()
+    session.frames_written()
     # `scenario`, `pixels` and `determinism` record through here too, without the option.
     if getattr(args, "keep_saves", None):
         keep_saves(work / "game", Path(args.keep_saves))
@@ -1814,6 +2003,114 @@ def read_pace(path: Path) -> dict[int, float]:
         tick, seconds = line.split()
         pace[int(tick)] = float(seconds)
     return pace
+
+
+class Pace:
+    """Follows a stored recording's `.ticks` (`--pace`), so that the game's thread runs each tick when it ran
+    it in that recording, with the game's other threads running meanwhile.
+
+    What a voice line's ticks depend on is when the thread runs: DirectSound's clock is read inside a tick.
+    The log holds when each tick ended, which is one run after the thread was let go (the stored recording
+    took its picture in between, with the thread held). So the thread is let go for the run that ends a tick
+    at that tick's stored time less what a run takes here (the median of the last `RUNS`), counted from the
+    first tick the two recordings share: the tick then ends when it did there, however long this recorder's
+    picture takes. The picture itself is taken as soon as the tick ends, before the wait.
+
+    A tick the log doesn't hold has the time its neighbours in the log give it: between two of them in
+    proportion, and past the last one the log's median tick a tick (a record longer than the stored one). A
+    record can only wait for the stored pace, not catch up with it, so the ticks let go late are counted: a
+    voice line that ends in one of them may hold for a tick less than it did in the stored recording. A run
+    that takes much longer than the ones before it (a room's load) is late too, and the ticks after it until
+    the record has caught up."""
+
+    # Later than this is a tick's worth at the pace `import` gave.
+    LATE = 0.25
+    RUNS = 9
+
+    def __init__(self, path: str | None, clock=time.monotonic) -> None:
+        if path == "":
+            raise SystemExit("--pace: no log is named")
+        self.ticks = read_pace(Path(path)) if path else {}
+        if path and not self.ticks:
+            raise SystemExit(f"--pace: {path} holds no ticks")
+        self.clock = clock
+        self.known = sorted(self.ticks)
+        steps = sorted(
+            (self.ticks[after] - self.ticks[before]) / (after - before)
+            for before, after in zip(self.known, self.known[1:])
+        )
+        self.step = steps[len(steps) // 2] if steps else 0.0
+        # This record's clock at the stored recording's 0.
+        self.origin: float | None = None
+        self.released: float | None = None
+        self.runs: list[float] = []
+        # The record's ticks the log holds, and the runs let go by a stored time and by one worked out.
+        self.shared = 0
+        self.stored = 0
+        self.stepped = 0
+        self.late = 0
+        self.latest = 0.0
+
+    def time(self, tick: int) -> float:
+        """The stored time of `tick`'s end, or the one its neighbours in the log give it."""
+        if tick in self.ticks:
+            return self.ticks[tick]
+        at = bisect.bisect_left(self.known, tick)
+        if at == 0:
+            first = self.known[0]
+            return self.ticks[first] - (first - tick) * self.step
+        before = self.known[at - 1]
+        if at == len(self.known):
+            return self.ticks[before] + (tick - before) * self.step
+        after = self.known[at]
+        part = (tick - before) / (after - before)
+        return self.ticks[before] + part * (self.ticks[after] - self.ticks[before])
+
+    def reached(self, tick: int) -> None:
+        """The break that ends `tick`."""
+        now = self.clock()
+        if self.released is not None:
+            self.runs = (self.runs + [now - self.released])[-self.RUNS:]
+        if tick in self.ticks:
+            self.shared += 1
+            if self.origin is None:
+                self.origin = now - self.ticks[tick]
+
+    def run(self) -> float:
+        """What a run takes here."""
+        return sorted(self.runs)[len(self.runs) // 2] if self.runs else 0.0
+
+    def left(self, tick: int) -> float | None:
+        """The seconds until the run that ends `tick` is due, which the picture of the tick before has to
+        fit in; None with no pace to keep."""
+        if self.origin is None:
+            return None
+        return self.origin + self.time(tick) - self.run() - self.clock()
+
+    def release(self, game: "Game", tid: int, tick: int) -> None:
+        """Hold the thread at its break until the run that ends `tick` is due."""
+        if self.origin is not None:
+            if tick in self.ticks:
+                self.stored += 1
+            else:
+                self.stepped += 1
+            due = self.origin + self.time(tick) - self.run()
+            if (wait := due - self.clock()) > 0:
+                game.hold(tid, wait)
+            # After the wait, so that a hold that overruns counts as well.
+            if (over := self.clock() - due) > self.LATE:
+                self.late += 1
+                self.latest = max(self.latest, over)
+        self.released = self.clock()
+
+    def report(self) -> None:
+        if not self.ticks:
+            return
+        if not self.shared:
+            raise SystemExit("--pace: the log holds none of this record's ticks, so it set its own pace")
+        more = f", and {self.stepped} more by its neighbours' (its median tick is {self.step:.3f}s)" if self.stepped else ""
+        late = f"{self.late} ticks more than {self.LATE}s late, {self.latest:.2f}s at most" if self.late else "no tick late"
+        print(f"followed the stored pace for {self.stored} ticks{more}: {late}")
 
 
 def title_trace(game: Game) -> str:
@@ -1972,6 +2269,7 @@ def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
     if getattr(args, "keep_saves", None):
         raise SystemExit("--keep-saves isn't supported with --boot yet")
     entries = parse_input(Path(args.input) if args.input else None)
+    pace = Pace(getattr(args, "pace", None))
     if args.shot_dir:
         Path(args.shot_dir).mkdir(parents=True, exist_ok=True)
     sound_out = str(trace_path.with_suffix(".wav")) if args.sound else None
@@ -1995,21 +2293,27 @@ def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
                 tid, regs = game.run_to_break()
                 # This stop is the end of the tick before it.
                 if tick > 0:
+                    pace.reached(tick - 1)
                     trace.write(boot_trace_line(game, tick - 1, pad) + "\n")
                     if tick_log:
                         tick_log.write(f"{tick - 1} {time.monotonic() - session.capture_started:.4f}\n")
                     if args.shot_dir and args.shot_every and (tick - 1) % args.shot_every == 0:
-                        session.screenshot(Path(args.shot_dir) / f"t{tick - 1:06d}.png")
+                        within = pace.left(tick) if tick < args.ticks else None
+                        session.screenshot(Path(args.shot_dir) / f"t{tick - 1:06d}.png", within)
                 while cursor < len(entries) and entries[cursor][0] <= tick:
                     pad = entries[cursor][1]
                     cursor += 1
                 hold_gallery_flags(game)
                 tick += 1
                 regs.rax = pad
+                if tick <= args.ticks:
+                    pace.release(game, tid, tick - 1)
                 game.resume_from_break(tid, regs, original)
             print(f"{args.ticks} ticks from boot in {time.monotonic() - started:.1f}s")
+            pace.report()
     finally:
         session.close()
+    session.frames_written()
 
 
 def game_root(args: argparse.Namespace) -> Path:
@@ -2154,7 +2458,8 @@ def patches_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """The command line's parser: the regression runner reads a record's arguments with it too."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -2234,7 +2539,9 @@ def main() -> int:
         )
         command.add_argument(
             "--pace", default=None, metavar="TICKS_LOG",
-            help="with --sound, reach each tick no sooner than the recording whose .ticks log this is did",
+            help="with --sound, run each tick no sooner than the recording whose .ticks log this is did "
+            "(the regression runner gives a reference's own when it records it again); read before "
+            "anything is written, so it may be the log this record writes",
         )
 
     command = commands.add_parser("record", help="record a trace from the original")
@@ -2293,8 +2600,11 @@ def main() -> int:
     command.add_argument("--work", default="target/oracle-re2/run")
     command.add_argument("--wait", type=float, default=15.0)
     command.set_defaults(func=patches_command)
+    return parser
 
-    args = parser.parse_args()
+
+def main() -> int:
+    args = build_parser().parse_args()
     # SIGTERM (from `timeout`, `docker stop` or a queue) and SIGHUP end the record
     # as an error does, so that every `finally` runs and the session stops its
     # display and Wine.
