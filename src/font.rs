@@ -536,6 +536,29 @@ impl Glyphs<'_> {
     }
 }
 
+/// Give `texture` a palette row for each text colour row after its first:
+/// the first row under the row's multiplier, each channel's product over
+/// 255 rounded as RE2's PC version rounds a sprite's, or the first row
+/// again where the row has none.
+fn tint_rows(texture: &mut Texture8, tints: &[Option<[u8; 3]>; xml::TINT_ROWS]) {
+    let first: Vec<([u8; 4], bool)> = (0..=u8::MAX)
+        .map(|index| (texture.palette(0, index), texture.palette_stp(0, index)))
+        .collect();
+    texture.palettes.resize(PALETTE_ROW_LEN, [0; 4]);
+    texture.stp.resize(PALETTE_ROW_LEN, false);
+    for tint in &tints[1..] {
+        for &([r, g, b, a], stp) in &first {
+            let [r, g, b] = match tint {
+                Some(by) => [(r, by[0]), (g, by[1]), (b, by[2])]
+                    .map(|(channel, by)| ((u32::from(channel) * u32::from(by) + 127) / 255) as u8),
+                None => [r, g, b],
+            };
+            texture.palettes.push([r, g, b, a]);
+            texture.stp.push(stp);
+        }
+    }
+}
+
 /// A loaded font sheet with the script and metrics its description declares.
 #[derive(Debug, Clone)]
 pub struct Font {
@@ -551,16 +574,28 @@ pub struct Font {
     pub glyph_table: GlyphTable,
     /// The HD replacement of the sheet's glyph page, when the pack has one.
     pub hd: Option<HdGlyphs>,
+    /// The multiplier of each text colour row the description tints
+    /// ([`FontDef::tints`]): twice the primitive's colour, capped. The
+    /// sheet's palette row of the same number holds its first row under it.
+    tints: [Option<[u8; 3]>; xml::TINT_ROWS],
 }
 
 impl Font {
     /// Pair `texture` with the script and metrics `def` describes.
     ///
-    /// The decoded sheet is left byte-identical; the missing-glyph placeholder
-    /// is a separate synthetic texture, so no sheet cell is ever clobbered.
-    pub fn new(texture: Texture8, def: FontDef) -> Self {
+    /// The decoded sheet's texels and first palette row are left
+    /// byte-identical; the missing-glyph placeholder is a separate synthetic
+    /// texture, so no sheet cell is ever clobbered. A description with
+    /// tints gets a palette row for each text colour row after the first.
+    pub fn new(mut texture: Texture8, def: FontDef) -> Self {
         let missing = missing_box_texture(&texture, def.metrics.glyph_w);
         let glyph_table = GlyphTable::new(&texture, &def);
+        let tints = def
+            .tints
+            .map(|tint| tint.map(|colour| colour.map(|channel| channel.saturating_mul(2))));
+        if tints.iter().any(Option::is_some) {
+            tint_rows(&mut texture, &tints);
+        }
         Self {
             texture,
             metrics: def.metrics,
@@ -568,6 +603,29 @@ impl Font {
             missing,
             glyph_table,
             hd: None,
+            tints,
+        }
+    }
+
+    /// How `tint`'s text draws: the sheet's palette row, the tint over it,
+    /// and the whole as a colour multiplier (an HD page's, the missing
+    /// glyph's). A row the description tints is drawn from its own palette
+    /// row, where the product is rounded as the original's is; so is a
+    /// colour of the caller's own that is one of those rows'.
+    fn tinted(&self, tint: Tint) -> (usize, Tint, [u8; 3]) {
+        let row = match tint {
+            Tint::White => None,
+            Tint::Green => Some(1),
+            Tint::Red => Some(2),
+            Tint::Grey => Some(3),
+            Tint::Yellow => Some(4),
+            Tint::Rgb(r, g, b) => {
+                (1..xml::TINT_ROWS).find(|&row| self.tints[row] == Some([r, g, b]))
+            }
+        };
+        match row.and_then(|row| Some((row, self.tints[row]?))) {
+            Some((row, by)) => (row, Tint::White, by),
+            None => (0, tint, tint.rgb()),
         }
     }
 
@@ -753,6 +811,7 @@ impl Font {
         tint: Tint,
     ) {
         let src = [glyph.u, glyph.v, glyph.width, glyph.height];
+        let (row, over, [r, g, b]) = self.tinted(tint);
         if glyph.missing {
             sprites.push(SpriteDraw::indexed(
                 &self.missing,
@@ -760,7 +819,7 @@ impl Font {
                 dst,
                 0,
                 brightness,
-                tint,
+                Tint::Rgb(r, g, b),
             ));
             return;
         }
@@ -772,9 +831,9 @@ impl Font {
                 &self.texture,
                 src,
                 dst,
-                0,
+                row,
                 brightness,
-                tint,
+                over,
             ));
             return;
         };
@@ -783,7 +842,7 @@ impl Font {
         let [dx, dy, dw, dh] = dst.map(|v| v as f32);
         let uv = [sx / fw, sy / fh, (sx + sw) / fw, (sy + sh) / fh];
         let scale = f32::from(crate::render::brightness_scale(brightness)) / 255.0;
-        let colour = tint.rgb().map(|channel| f32::from(channel) / 255.0 * scale);
+        let colour = [r, g, b].map(|channel| f32::from(channel) / 255.0 * scale);
         framebuffer.draw_replaced(
             hd.art.clone(),
             [dx, dy, dx + dw, dy + dh],
@@ -1656,6 +1715,50 @@ mod tests {
             }
             assert_eq!(pixel(&framebuffer, 24, 11), [200, 200, 200, 255]);
         }
+    }
+
+    #[test]
+    fn a_tinted_row_draws_the_sheets_colour_under_it_rounded() {
+        fn pixel(framebuffer: &Framebuffer, x: i32, y: i32) -> [u8; 3] {
+            let offset = (y as usize * 320 + x as usize) * 4;
+            framebuffer.rgba[offset..offset + 3].try_into().unwrap()
+        }
+        // RE2's white, and its green and blue rows.
+        let mut sheet = sheet_with_ink(&[(168, 28, 0, 13)]);
+        sheet.palettes[1] = [206, 206, 189, 255];
+        let mut def = FontDef::japanese();
+        def.tints[1] = Some([0, 100, 5]);
+        def.tints[4] = Some([15, 50, 128]);
+        let font = Font::new(sheet.clone(), def);
+        let drawn = |font: &Font, tint: Tint| {
+            let mut framebuffer = Framebuffer::new();
+            font.draw_text(&mut framebuffer, 10, 10, tint, 2, &[0x0C], false);
+            pixel(&framebuffer, 10, 10)
+        };
+        assert_eq!(drawn(&font, Tint::White), [206, 206, 189]);
+        // 206 x 200 / 255 is 161.6: 162, where the engine's own tint would
+        // floor it. A colour of the caller's that is the row's is the row.
+        assert_eq!(drawn(&font, Tint::Green), [0, 162, 7]);
+        assert_eq!(drawn(&font, Tint::Rgb(0, 200, 10)), [0, 162, 7]);
+        assert_eq!(drawn(&font, Tint::Rgb(0, 200, 11)), [0, 161, 8]);
+        assert_eq!(font.tinted(Tint::Green), (1, Tint::White, [0, 200, 10]));
+        // Twice 128 is capped: the blue's own channel is the sheet's.
+        assert_eq!(drawn(&font, Tint::Yellow), [24, 81, 189]);
+        assert_eq!(font.tinted(Tint::Yellow), (4, Tint::White, [30, 100, 255]));
+        // A row the description leaves alone is the engine's tint.
+        assert_eq!(drawn(&font, Tint::Red), [206, 0, 0]);
+        assert_eq!(drawn(&font, Tint::Grey), [164, 164, 151]);
+        assert_eq!(font.tinted(Tint::Red), (0, Tint::Red, [255, 0, 0]));
+        // The sheet's texels and first row are as they were decoded.
+        assert_eq!(font.texture.indices, sheet.indices);
+        assert_eq!(font.texture.palettes[..PALETTE_ROW_LEN], sheet.palettes[..]);
+        assert_eq!(font.texture.palettes.len(), 5 * PALETTE_ROW_LEN);
+        assert_eq!(font.texture.palette(2, 1), [206, 206, 189, 255]);
+        // A font with no tint keeps its palette and the engine's tints.
+        let plain = Font::new(sheet.clone(), FontDef::japanese());
+        assert_eq!(plain.texture.palettes, sheet.palettes);
+        assert_eq!(drawn(&plain, Tint::Green), [0, 206, 0]);
+        assert_eq!(drawn(&plain, Tint::Rgb(0, 200, 10)), [0, 161, 7]);
     }
 
     #[test]

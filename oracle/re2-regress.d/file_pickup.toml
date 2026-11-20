@@ -10,7 +10,7 @@ input_drop_early = true
 ticks = 800
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,fl,msg,snd,hk,fgstat,fgitem"
 frames = [360, 799]
-frame_max_mean = 0.23
+frame_max_mean = 0.21
 expect = "match"
 record = "--no-enemies --warp 201:-19000:0:-24850:1024 --life 200 --file 0:0"
 
@@ -24,7 +24,7 @@ input_drop_early = true
 ticks = 700
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,fl,msg,snd,hk,fgstat"
 frames = [360, 699]
-frame_max_mean = 0.16
+frame_max_mean = 0.14
 expect = "match"
 record = "--no-enemies --warp 206:-17200:0:-9100:3072 --life 200"
 
@@ -38,7 +38,7 @@ input_drop_early = true
 ticks = 900
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,fl,msg,snd,hk,fgstat,fgitem"
 frames = [360, 899]
-frame_max_mean = 0.22
+frame_max_mean = 0.2
 expect = "match"
 record = "--no-enemies --warp 208:-19000:0:-19400:0 --life 200"
 
@@ -52,6 +52,6 @@ input_drop_early = true
 ticks = 1000
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,fl,msg,snd,hk,fgstat,fgitem"
 frames = [360, 789]
-frame_max_mean = 0.14
+frame_max_mean = 0.12
 expect = "match"
 record = "--no-enemies --warp 115:-20000:0:-18100:3072 --life 200"

@@ -17,6 +17,13 @@
 //! question's choice on the question's last line: `Yes` at `yesX`, `No` at
 //! `noX`, and the cursor cell `cursorX` from its label (RE2's layout).
 //!
+//! A `<tint row colour>` gives the colour the original draws a text colour
+//! row's glyphs under, as a sprite's primitive colour (`#RRGGBB`, `0x80` a
+//! channel leaving the sheet's own): rows 1 to 4, the green, red, grey and
+//! last of the text's colours. A font with one draws that row's text in the
+//! sheet's colours scaled by twice the tint over 255, rounded, as RE2's PC
+//! version does; without, the engine's own tint multiplies.
+//!
 //! `cell` is the left grid's index: a plain byte, or `0xEA + nn` for
 //! `0xF8 nn`; every other cell, and the whole right page, takes the default
 //! `advance` with no indent. Integers are decimal or `0x` hex. Unknown
@@ -49,7 +56,13 @@ pub struct FontDef {
     pub metrics: FontMetrics,
     /// The left-grid cells whose metric is not the default advance.
     pub glyphs: Vec<(usize, GlyphMetric)>,
+    /// The primitive colour each text colour row (1 to 4) is drawn under,
+    /// where the font gives one.
+    pub tints: [Option<[u8; 3]>; TINT_ROWS],
 }
+
+/// The text colour rows a font can tint: the sheet's own and four more.
+pub const TINT_ROWS: usize = 5;
 
 impl FontDef {
     /// Parse a `font/<id>.xml` document.
@@ -104,7 +117,20 @@ impl FontDef {
             },
         };
         let mut glyphs = Vec::new();
+        let mut tints = [None; TINT_ROWS];
         for node in root.children().filter(Node::is_element) {
+            if node.tag_name().name() == "tint" {
+                check_attributes(node, &["row", "colour"])?;
+                let row: usize = attr(node, "row")?;
+                let Some(tint) = tints.get_mut(row).filter(|_| row != 0) else {
+                    bail!("<tint> `row` {row} is not 1 to {}", TINT_ROWS - 1);
+                };
+                if tint.is_some() {
+                    bail!("<tint> row {row} is listed twice");
+                }
+                *tint = Some(colour(attr_text(node, "colour")?)?);
+                continue;
+            }
             if node.tag_name().name() != "glyph" {
                 bail!("unknown <font> child <{}>", node.tag_name().name());
             }
@@ -132,6 +158,7 @@ impl FontDef {
             script,
             metrics,
             glyphs,
+            tints,
         })
     }
 
@@ -167,6 +194,19 @@ pub fn stem(id: u8) -> String {
 /// The pack entry of font `id`'s description.
 pub fn entry(id: u8) -> String {
     format!("{}.xml", stem(id))
+}
+
+/// A `#RRGGBB` colour.
+fn colour(text: &str) -> Result<[u8; 3]> {
+    let channel = |at: usize| {
+        text.get(at..at + 2)
+            .filter(|_| text.len() == 7 && text.starts_with('#'))
+            .and_then(|digits| u8::from_str_radix(digits, 16).ok())
+    };
+    match [channel(1), channel(3), channel(5)] {
+        [Some(r), Some(g), Some(b)] => Ok([r, g, b]),
+        _ => bail!("`colour` value `{text}` is not #RRGGBB"),
+    }
 }
 
 fn check_attributes(node: Node<'_, '_>, known: &[&str]) -> Result<()> {
@@ -238,6 +278,36 @@ mod tests {
         assert_eq!(japanese.metrics.glyph_w, 14);
         assert_eq!(japanese.metrics.left_margin, 0x22);
         assert_eq!(japanese.glyphs.len(), 85);
+    }
+
+    #[test]
+    fn a_tint_is_a_text_rows_colour() {
+        let base = r#"<font format="1" script="latin" advance="8" cellWidth="14" margin="0" textY="0" menuY="0">"#;
+        let parse = |children: &str| FontDef::parse(&format!("{base}{children}</font>"));
+        assert_eq!(parse("").unwrap().tints, [None; TINT_ROWS]);
+        let def = parse(
+            r##"<tint row="1" colour="#006405"/><glyph cell="1" advance="2"/><tint row="4" colour="#0F3280"/>"##,
+        )
+        .unwrap();
+        assert_eq!(
+            def.tints,
+            [None, Some([0, 100, 5]), None, None, Some([15, 50, 128])]
+        );
+        assert_eq!(def.glyphs.len(), 1);
+        // The first row is the sheet's own, and there are five.
+        assert!(parse(r##"<tint row="0" colour="#808080"/>"##).is_err());
+        assert!(parse(r##"<tint row="5" colour="#808080"/>"##).is_err());
+        assert!(
+            parse(r##"<tint row="1" colour="#808080"/><tint row="1" colour="#808080"/>"##).is_err()
+        );
+        for colour in ["808080", "#80808", "#8080800", "#80808g", "green", "#é0808"] {
+            assert!(
+                parse(&format!("<tint row=\"1\" colour=\"{colour}\"/>")).is_err(),
+                "{colour}"
+            );
+        }
+        assert!(parse(r##"<tint row="1"/>"##).is_err());
+        assert!(parse(r##"<tint row="1" colour="#808080" rgb="1"/>"##).is_err());
     }
 
     #[test]
