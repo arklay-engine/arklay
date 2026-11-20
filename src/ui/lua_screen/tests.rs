@@ -1925,6 +1925,178 @@ end
     assert!(!model.vertices.is_empty());
 }
 
+/// A screen that draws the character model `player/0b/model_1.pld` as
+/// `spec` has it, and publishes what the calls answered.
+fn character_screen(spec: &str) -> String {
+    format!(
+        r#"
+function update(api, input) end
+function draw(api)
+local model, why = api:character_model("player/0b/model_1.pld")
+api:set("loaded", model and 1 or 0)
+local missing, message = api:character_model("player/0c/model_1.pld")
+api:set("missing", (missing == nil and type(message) == "string") and 1 or 0)
+if model then
+    api:set("drew", api:draw_character(model, {spec}) and 1 or 0)
+end
+end
+"#
+    )
+}
+
+/// A triangle 800 wide and 800 tall on its point at the part's origin,
+/// which the fixture's skeleton puts 100 above the entity's.
+fn character_pld() -> Vec<u8> {
+    crate::emd2::tests::pld_of([[-400, -800, 0], [400, -800, 0], [0, 0, 0], [0; 3]])
+}
+
+/// The triangle's own CLUT row shows the fixture's index 1 as BGR555
+/// `0x101`, as stored.
+const CHARACTER_COLOUR: [u8; 3] = [8, 65, 0];
+
+/// What a screen drawing the fixture's character as `spec` has it answered
+/// for the draw, and the `[left, top, right, bottom]` of what it painted.
+fn character_drawn(spec: &str) -> (i64, Option<[usize; 4]>) {
+    let fixture = art_pack(
+        "character-placed",
+        &character_screen(spec),
+        vec![("player/0b/model_1.pld", character_pld())],
+    );
+    let mut screen = fixture.load();
+    let cx = fixture.context();
+    let framebuffer = draw(&mut screen, &cx);
+    let painted: Vec<(usize, usize)> = framebuffer
+        .rgba
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .enumerate()
+        .filter(|(_, pixel)| pixel[..3] == CHARACTER_COLOUR)
+        .map(|(index, _)| (index % 320, index / 320))
+        .collect();
+    let bounds = (!painted.is_empty()).then(|| {
+        let xs = painted.iter().map(|&(x, _)| x);
+        let ys = painted.iter().map(|&(_, y)| y);
+        [
+            xs.clone().min().unwrap(),
+            ys.clone().min().unwrap(),
+            xs.max().unwrap(),
+            ys.max().unwrap(),
+        ]
+    });
+    (screen.value("drew"), bounds)
+}
+
+#[test]
+fn a_character_draws_unposed_in_its_textures_own_colours() {
+    // Straight down Z with the entity's origin 100 below the centre and
+    // 3000 away, a tenth of the size: the point at the centre, the top
+    // edge 80 above it and 80 wide.
+    let spec = "{ view = { at = { 0, 100, 3000 }, fov = 300 } }";
+    let fixture = art_pack(
+        "character",
+        &character_screen(spec),
+        vec![("player/0b/model_1.pld", character_pld())],
+    );
+    let mut screen = fixture.load();
+    let cx = fixture.context();
+    let framebuffer = draw(&mut screen, &cx);
+    assert_eq!(screen.value("loaded"), 1);
+    assert_eq!(screen.value("missing"), 1);
+    assert_eq!(screen.value("drew"), 1);
+    let pixel = |x: usize, y: usize| {
+        let index = (y * 320 + x) * 4;
+        [
+            framebuffer.rgba[index],
+            framebuffer.rgba[index + 1],
+            framebuffer.rgba[index + 2],
+        ]
+    };
+    for (x, y, inside) in [
+        (160, 60, true),
+        (160, 110, true),
+        (130, 45, true),
+        (190, 45, true),
+        (160, 36, false),
+        (160, 124, false),
+        (110, 60, false),
+        (210, 60, false),
+        (140, 100, false),
+    ] {
+        assert_eq!(
+            pixel(x, y) == CHARACTER_COLOUR,
+            inside,
+            "{x}, {y}: {:?}",
+            pixel(x, y)
+        );
+    }
+
+    // The GPU renderer is handed the model instead.
+    let mut recorded = crate::render::Framebuffer::new();
+    recorded.record();
+    screen.draw(&cx, &mut recorded);
+    let quad = one_quad(&recorded);
+    let crate::draw2d::Kind::Model(model) = &quad.image else {
+        panic!("a model quad");
+    };
+    assert!(matches!(
+        model.source,
+        crate::hires::ModelSource::Character(_)
+    ));
+    assert_eq!(model.vertices.len(), 3);
+}
+
+#[test]
+fn a_characters_turn_view_and_pose_place_it() {
+    let unposed = character_drawn("{ view = { at = { 0, 100, 3000 }, fov = 300 } }");
+    assert_eq!(unposed, (1, Some([120, 40, 199, 118])));
+    // Turned half round it shows its back, which is culled.
+    let turned =
+        character_drawn("{ turn = { 0, 0x800, 0 }, view = { at = { 0, 100, 3000 }, fov = 300 } }");
+    assert_eq!(turned, (1, None));
+    // Tipped forward by an eighth it is shorter.
+    let (_, tipped) =
+        character_drawn("{ turn = { 0x200, 0, 0 }, view = { at = { 0, 100, 3000 }, fov = 300 } }");
+    let [_, top, _, bottom] = tipped.unwrap();
+    assert!((50..=70).contains(&(bottom - top)), "{top} {bottom}");
+
+    // `Set_view` from 3000 along X at the origin's height shows the same
+    // thing of a model turned a quarter round to face it.
+    let (_, from_x) = character_drawn(
+        "{ turn = { 0, 0xC00, 0 }, view = { from = { 3000, -100, 0 }, to = { 0, -100, 0 }, fov = 300 } }",
+    );
+    let [left, top, right, bottom] = from_x.unwrap();
+    assert!(
+        left.abs_diff(120) <= 1 && right.abs_diff(199) <= 1,
+        "{left} {right}"
+    );
+    assert!(
+        top.abs_diff(40) <= 1 && bottom.abs_diff(118) <= 1,
+        "{top} {bottom}"
+    );
+
+    // A frame of an animation: the fixture's clip turns the root. A frame
+    // the model lacks draws nothing and says so.
+    let at = "view = { at = { 0, 100, 3000 }, fov = 300 }";
+    let posed = character_drawn(&format!(
+        "{{ pose = {{ bank = 0, clip = 0, frame = 1 }}, {at} }}"
+    ));
+    assert_eq!(posed.0, 1);
+    assert_ne!(posed.1, unposed.1);
+    for missing in [
+        "pose = { bank = 0, clip = 0, frame = 2 }",
+        "pose = { bank = 0, clip = 1, frame = 0 }",
+        "pose = { bank = 1, clip = 0, frame = 0 }",
+        "pose = { bank = 0, clip = -1, frame = 0 }",
+    ] {
+        assert_eq!(
+            character_drawn(&format!("{{ {missing}, {at} }}")),
+            (0, None),
+            "{missing}"
+        );
+    }
+}
+
 #[test]
 fn pending_local_time_and_tagged_strings_reach_the_script() {
     let fixture = Fixture::new(

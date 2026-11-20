@@ -619,6 +619,11 @@ impl LuaScreen {
             .unwrap_or_else(|err| panic!("eval {body}: {err}"))
     }
 
+    /// How many pieces of art the screen holds against its budget.
+    pub(crate) fn test_live_art(&self) -> usize {
+        self.host.assets.live()
+    }
+
     /// Mark the script failed, as a call that raised an error does.
     pub(crate) fn test_fail(&mut self) {
         self.host.failed = true;

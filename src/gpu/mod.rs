@@ -3066,7 +3066,7 @@ impl GpuRenderer {
                     draw2d::Kind::Model(model) => {
                         let page = self.ensure_page(
                             copy,
-                            &model.ivm.texture,
+                            model.source.texture(),
                             0,
                             None,
                             model.page.as_ref(),
@@ -3893,6 +3893,7 @@ mod tests {
             mirrored: false,
             view_z_shift: 0,
             near_clip: false,
+            stored: None,
         };
         let lighting = Lighting {
             ambient: [4095; 3],
@@ -4748,7 +4749,7 @@ mod tests {
         let model = |vertices: Vec<hires::ModelVertex>| {
             item(
                 draw2d::Kind::Model(Arc::new(hires::Model {
-                    ivm: ivm.clone(),
+                    source: hires::ModelSource::Item(ivm.clone()),
                     vertices,
                     page: None,
                 })),
@@ -4843,7 +4844,7 @@ mod tests {
         let model = |page: Option<Arc<hires::Replacement>>| {
             list_of(vec![item(
                 draw2d::Kind::Model(Arc::new(hires::Model {
-                    ivm: ivm.clone(),
+                    source: hires::ModelSource::Item(ivm.clone()),
                     vertices: vertices.clone(),
                     page,
                 })),

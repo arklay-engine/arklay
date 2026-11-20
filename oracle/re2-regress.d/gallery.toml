@@ -223,8 +223,9 @@ input_shift = 189
 input_drop_early = true
 fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
 frames = [189, 1469]
-# The model isn't drawn (#831): the limit is what its absence costs.
-frame_max_mean = 3.0
+# A model's edges and texels differ: the original draws it at 640 x 480 with
+# its textures filtered.
+frame_max_mean = 0.45
 frame_windows = [[737, 738, 0.1]]
 expect = "match"
 record = ""
@@ -239,9 +240,44 @@ input_shift = 189
 input_drop_early = true
 fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
 frames = [189, 1129]
-# The model isn't drawn (#831): the limit is what its absence costs.
-frame_max_mean = 3.0
+# A model's edges and texels differ, and the skins of zombies 0x12 and 0x1F
+# are `Rnd`'s in the original.
+frame_max_mean = 1.0
 frame_windows = [[737, 738, 0.1]]
 expect = "match"
 gallery = [0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x50000001]
 record = "--config GALLERY0=0x00000000 --config GALLERY1=0x00000000 --config GALLERY2=0x00000000 --config GALLERY3=0x00000000 --config GALLERY4=0x50000001"
+
+[[run]]
+name = "gallery_claire_models_right"
+ui = "title"
+offset = 189
+ticks = 1290
+input = "gallery_claire_models_right.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
+frames = [189, 1289]
+# A model's edges and texels differ, and the skins of zombies 0x12 and 0x1F
+# are `Rnd`'s in the original.
+frame_max_mean = 0.8
+frame_windows = [[737, 738, 0.1]]
+expect = "match"
+record = ""
+
+[[run]]
+name = "gallery_claire_models_left"
+ui = "title"
+offset = 189
+ticks = 1290
+input = "gallery_claire_models_left.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
+frames = [189, 1289]
+# A model's edges and texels differ, the more the nearer it is, and model
+# 30's first angle is `Rnd`'s in the original.
+frame_max_mean = 1.05
+frame_windows = [[737, 738, 0.1]]
+expect = "match"
+record = ""

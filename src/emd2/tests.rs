@@ -75,9 +75,18 @@ fn emr(skeleton: bool) -> Vec<u8> {
 /// One part: three vertices and normals, a triangle on page 1 and a quad on
 /// page 0.
 fn md1() -> Vec<u8> {
+    md1_of(
+        [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]],
+        [0, 1, 2, 3],
+    )
+}
+
+/// [`md1`] with its four vertices at `corners`: the triangle is the first
+/// three and the quad those numbered `quad`.
+fn md1_of(corners: [[i16; 3]; 4], quad: [u16; 4]) -> Vec<u8> {
     let mut body = Vec::new();
     let vertices = body.len();
-    for vertex in [[1i16, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]] {
+    for vertex in corners {
         for value in vertex {
             put16(&mut body, value as u16);
         }
@@ -101,8 +110,9 @@ fn md1() -> Vec<u8> {
     body.extend_from_slice(&[5, 6]);
     put16(&mut body, 0);
     let quads = body.len();
-    for value in [0u16, 0, 1, 1, 2, 2, 3, 3] {
-        put16(&mut body, value);
+    for (normal, vertex) in quad.into_iter().enumerate() {
+        put16(&mut body, normal as u16);
+        put16(&mut body, vertex);
     }
     let quad_textures = body.len();
     for corner in 0..4u8 {
@@ -168,6 +178,18 @@ pub(crate) fn tim(width: u16, height: u16, rows: u16, index: impl Fn(u16, u16) -
 /// A whole PLD: one clip, two joints, one part and a two-page texture.
 pub(crate) fn pld() -> Vec<u8> {
     container(&[edd(), emr(true), md1(), tim(256, 256, 2, |_, _| 0)])
+}
+
+/// [`pld`] with its part's vertices at `corners` and no quad to speak of,
+/// all of it at the last, and every texel index 1, which the triangle's row
+/// shows as BGR555 `0x101`.
+pub(crate) fn pld_of(corners: [[i16; 3]; 4]) -> Vec<u8> {
+    container(&[
+        edd(),
+        emr(true),
+        md1_of(corners, [3; 4]),
+        tim(256, 256, 2, |_, _| 1),
+    ])
 }
 
 #[test]

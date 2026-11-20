@@ -1748,6 +1748,173 @@ fn a_turn_skips_the_models_play_hasnt_opened() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The angles the last tick's model is shown at, none on a tick that
+/// shows no model.
+fn turned(screen: &LuaScreen) -> Option<[i64; 3]> {
+    let angles: Option<Vec<i64>> = screen.test_eval(
+        "local g = M.state.gal
+        local model = g and g.view and g.view.model
+        return model or nil",
+    );
+    angles.map(|angles| [angles[0], angles[1], angles[2]])
+}
+
+#[test]
+fn a_model_turns_by_five_a_tick_from_its_load() {
+    let dir = test_dir("gallery-model-turn");
+    let cx = context(&dir);
+    let mut screen = open_models(&cx, &dir, None);
+    // The screen's own load, its tick that loads the model, and 31 that
+    // showed it.
+    assert_eq!(turned(&screen), Some([0, 155, 0]));
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(turned(&screen), Some([0, 160, 0]));
+    // A turn's tick loads the next, an enemy's too, which starts over;
+    // the keys held don't stop it.
+    run(&mut screen, &cx, press("right"), 1);
+    assert_eq!(turned(&screen), None);
+    for tick in 1..=3 {
+        screen.update(
+            &cx,
+            UiInput {
+                held_right: true,
+                ..UiInput::default()
+            },
+        );
+        assert_eq!(turned(&screen), Some([0, 5 * tick, 0]));
+    }
+    // It turns on through the fade out, to the tick the screen changes on.
+    run(&mut screen, &cx, press("up"), 1);
+    assert_eq!(turned(&screen), Some([0, 20, 0]));
+    run(&mut screen, &cx, UiInput::default(), 31);
+    assert_eq!(turned(&screen), Some([0, 175, 0]));
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(turned(&screen), None);
+    assert_eq!(screen.value("gal_screen"), 2);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_players_models_turn_on_from_one_another() {
+    let dir = test_dir("gallery-model-players");
+    let cx = context(&dir);
+    let mut screen = open_models(&cx, &dir, None);
+    let mut step = |key: &str, shown: usize| {
+        run(&mut screen, &cx, press(key), 1);
+        assert_eq!(turned(&screen), None, "{key}");
+        run(&mut screen, &cx, UiInput::default(), shown);
+        (screen.value("gal_index"), turned(&screen).unwrap()[1])
+    };
+    // The second model is an enemy's; the next three are the player's own
+    // work, whose angle is kept from one to the next, and back.
+    assert_eq!(step("right", 4), (1, 20));
+    assert_eq!(step("right", 4), (2, 20));
+    assert_eq!(step("right", 3), (3, 35));
+    assert_eq!(step("right", 2), (4, 45));
+    assert_eq!(step("left", 1), (3, 50));
+    // An enemy's between them starts over, and leaves the player's be.
+    assert_eq!(step("right", 1), (4, 55));
+    assert_eq!(step("right", 6), (5, 30));
+    assert_eq!(step("left", 1), (4, 60));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn one_model_is_tipped_forward_and_one_swings() {
+    let dir = test_dir("gallery-model-swing");
+    let cx = context(&dir);
+    // Bits 11 and 22 of the fifth word open models 17 and 28.
+    let opened = Some([!0, !0, !0, !0, 0x0010_0200]);
+    let mut screen = open_models(&cx, &dir, opened);
+    run(&mut screen, &cx, press("right"), 2);
+    assert_eq!(screen.value("gal_index"), 17);
+    assert_eq!(turned(&screen), Some([150, 5, 0]));
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(turned(&screen), Some([150, 10, 0]));
+    // The swing starts at its nearer end, goes a step past the other and
+    // comes back, and a step past the first again.
+    run(&mut screen, &cx, press("right"), 2);
+    assert_eq!(screen.value("gal_index"), 28);
+    assert_eq!(turned(&screen), Some([0, 605, 0]));
+    run(&mut screen, &cx, UiInput::default(), 219);
+    assert_eq!(turned(&screen), Some([0, 1700, 0]));
+    for angle in [1705, 1695, 1690] {
+        run(&mut screen, &cx, UiInput::default(), 1);
+        assert_eq!(turned(&screen), Some([0, angle, 0]));
+    }
+    run(&mut screen, &cx, UiInput::default(), 218);
+    assert_eq!(turned(&screen), Some([0, 600, 0]));
+    for angle in [595, 605, 610] {
+        run(&mut screen, &cx, UiInput::default(), 1);
+        assert_eq!(turned(&screen), Some([0, angle, 0]));
+    }
+    // Loaded again, it starts over.
+    run(&mut screen, &cx, press("left"), 2);
+    run(&mut screen, &cx, press("right"), 2);
+    assert_eq!(turned(&screen), Some([0, 605, 0]));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_model_draws_under_the_fade_and_only_while_it_is_shown() {
+    let dir = test_dir("gallery-model-shown");
+    let cx = context(&dir);
+    // The player's first model: the fixture's triangle, on its point 100
+    // above the floor. The level view is 4900 off along X, 1500 up and
+    // 700 aside, 300 from the screen.
+    let colour = [8, 65, 0];
+    let at = (202, 180);
+    let mut screen = open_models(&cx, &dir, None);
+    let first = render(&mut screen, &cx);
+    assert_eq!(
+        pixel(&first, at.0, at.1),
+        [0, 0, 0],
+        "the enemy's is elsewhere"
+    );
+    run(&mut screen, &cx, press("right"), 2);
+    run(&mut screen, &cx, press("right"), 1);
+    assert_eq!(screen.value("gal_index"), 2);
+    let loading = render(&mut screen, &cx);
+    assert_eq!(pixel(&loading, at.0, at.1), [0, 0, 0]);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    let shown = render(&mut screen, &cx);
+    assert_eq!(pixel(&shown, at.0, at.1), colour);
+    assert_eq!(pixel(&shown, at.0, 150), [0, 0, 0], "above it");
+    assert_eq!(pixel(&shown, at.0 - 30, at.1), [0, 0, 0], "beside it");
+    // One model is held: the one before is let go as the next loads, the
+    // same one loaded again is the same art, and one the pack lacks is
+    // none.
+    let held = screen.test_live_art();
+    for (key, index, art) in [
+        ("left", 1, held - 1),
+        ("left", 0, held),
+        ("left", 37, held - 1),
+        ("right", 0, held),
+        ("right", 1, held - 1),
+        ("right", 2, held),
+    ] {
+        run(&mut screen, &cx, press(key), 2);
+        assert_eq!(screen.value("gal_index"), index);
+        assert_eq!(screen.test_live_art(), art, "{key} to {index}");
+    }
+    run(&mut screen, &cx, UiInput::default(), 1);
+    // The fade's black is over the model as over the panel.
+    run(&mut screen, &cx, press("down"), 2);
+    assert_eq!(black(&screen), Some(8));
+    let faded = render(&mut screen, &cx);
+    let under = |c: u8| ((u32::from(c) * 247 + 127) / 255) as u8;
+    assert_eq!(pixel(&faded, at.0, at.1), colour.map(under));
+    // A model the pack lacks shows nothing, and the panel all the same.
+    let mut screen = open_models(&cx, &dir, None);
+    run(&mut screen, &cx, press("right"), 3);
+    assert_eq!(screen.value("gal_index"), 1);
+    assert!(modelled(&screen).unwrap());
+    let bare = render(&mut screen, &cx);
+    assert_eq!(pixel(&bare, at.0, at.1), [0, 0, 0]);
+    assert_ne!(pixel(&bare, 20, 100), [0, 0, 0]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn the_models_panel_draws_at_half_size_in_the_originals_colours() {
     let dir = test_dir("gallery-model-draw");

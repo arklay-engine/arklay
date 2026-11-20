@@ -19,6 +19,7 @@ use crate::budget;
 use crate::font::{GLYPH_HEIGHT, Tint};
 use crate::hires::{self, Replacement};
 use crate::ivm::Ivm;
+use crate::model::{Emd, Keyframe};
 use crate::pack::{AssetClass, Pack};
 use crate::render::{Camera, EntityLight, EntityLightSource, Framebuffer, SpriteBlend};
 use crate::state::Image;
@@ -33,6 +34,8 @@ enum Asset {
     Page(Artwork),
     /// An item-view model and the size of the file it was parsed from.
     Model(Arc<Ivm>, usize),
+    /// A character's model and the size of the file it was parsed from.
+    Character(Arc<Emd>, usize),
 }
 
 impl Asset {
@@ -41,6 +44,7 @@ impl Asset {
             Self::Picture(image) => (image.width, image.height),
             Self::Page(art) => (art.width(), art.height()),
             Self::Model(model, _) => (model.texture.width, model.texture.height),
+            Self::Character(model, _) => (model.texture.width, model.texture.height),
         }
     }
 
@@ -51,7 +55,7 @@ impl Asset {
             .saturating_mul(height as usize)
             .saturating_mul(4);
         match self {
-            Self::Model(_, file) => pixels.saturating_add(*file),
+            Self::Model(_, file) | Self::Character(_, file) => pixels.saturating_add(*file),
             _ => pixels,
         }
     }
@@ -179,6 +183,12 @@ impl Assets {
         }
     }
 
+    /// How much art counts against the screen's budget just now.
+    #[cfg(test)]
+    pub(super) fn live(&self) -> usize {
+        self.live
+    }
+
     /// The handle `key`'s art was loaded under, if it is still live.
     fn handle(&self, key: &str) -> Option<usize> {
         self.by_key.get(key).copied()
@@ -263,6 +273,9 @@ impl Assets {
                     }
                     Asset::Page(Artwork::Indexed(texture)) => hires::page_candidates(texture, row),
                     Asset::Model(model, _) => hires::page_candidates(&model.texture, row),
+                    // A character's polygons pick their own CLUT rows, so
+                    // one row's replacement can't stand for its page.
+                    Asset::Character(..) => Vec::new(),
                 };
                 if candidates.is_empty() {
                     None
@@ -340,6 +353,15 @@ impl Assets {
             Asset::Model(model, _) => Ok(model),
             _ => Err(mlua::Error::RuntimeError(format!(
                 "art handle {handle} is not a model"
+            ))),
+        }
+    }
+
+    fn character(&self, handle: usize) -> mlua::Result<&Arc<Emd>> {
+        match self.get(handle)? {
+            Asset::Character(model, _) => Ok(model),
+            _ => Err(mlua::Error::RuntimeError(format!(
+                "art handle {handle} is not a character's model"
             ))),
         }
     }
@@ -554,6 +576,86 @@ fn light(table: &Table) -> mlua::Result<EntityLight> {
     })
 }
 
+/// A character's pose: the keyframe of `{bank, clip, frame}`, bank 0 the
+/// model's own animations and bank `n` its `n`th further one, or with no
+/// `pose` the model as its file has it, every joint unturned. `None` when
+/// the model has no such frame.
+///
+/// A pose's `height` scales the root's height in 4.12, as a short zombie's
+/// `Parts0_pos_y` does, and its `turn` adds `{x, y, z}` to the angles of the
+/// joints it is keyed by, numbered from 0, as a neck's turn does.
+fn character_pose(model: &Emd, pose: Option<Table>) -> mlua::Result<Option<Keyframe>> {
+    let Some(pose) = pose else {
+        return Ok(Some(Keyframe {
+            offset: model.skeleton.relative.first().copied().unwrap_or_default(),
+            vertex: [0; 3],
+            rotations: vec![anim::IDENTITY_ROTATION; model.skeleton.relative.len()],
+        }));
+    };
+    let index = |key: &str| -> mlua::Result<usize> {
+        Ok(usize::try_from(field(&pose, key)?).unwrap_or(usize::MAX))
+    };
+    let (keyframes, clips) = match index("bank")?.checked_sub(1) {
+        None => (&model.keyframes, &model.clips),
+        Some(bank) => match model.banks.get(bank) {
+            Some(bank) => (&bank.keyframes, &bank.clips),
+            None => return Ok(None),
+        },
+    };
+    let Some(mut keyframe) = clips
+        .get(index("clip")?)
+        .and_then(|clip| clip.frames.get(index("frame").ok()?))
+        .and_then(|frame| keyframes.get(usize::from(frame.keyframe)))
+        .cloned()
+    else {
+        return Ok(None);
+    };
+    if let Some(height) = pose.get::<Option<i32>>("height")? {
+        keyframe.offset[1] = ((i32::from(keyframe.offset[1]) * height) >> 12) as i16;
+    }
+    if let Some(turn) = pose.get::<Option<Table>>("turn")? {
+        for pair in turn.pairs::<usize, Table>() {
+            let (joint, by) = pair?;
+            let Some(angles) = keyframe.rotations.get_mut(joint) else {
+                continue;
+            };
+            if *angles == anim::IDENTITY_ROTATION {
+                *angles = [0; 3];
+            }
+            for (axis, angle) in angles.iter_mut().enumerate() {
+                *angle = angle.wrapping_add(by.get::<i32>(axis + 1)? as i16);
+            }
+        }
+    }
+    Ok(Some(keyframe))
+}
+
+/// The matrices of a character's parts beyond its skeleton's, each `{parent,
+/// x, y, z}`: a part unturned at that place on part `parent`'s, numbered
+/// from 0, as an enemy's routine hangs one. They follow `joints` in order;
+/// a part whose parent isn't there yet is an error.
+fn extra_parts(joints: &mut Vec<Mat4x3>, parts: Option<Table>) -> mlua::Result<()> {
+    let Some(parts) = parts else {
+        return Ok(());
+    };
+    for part in parts.sequence_values::<Table>() {
+        let part = part?;
+        let parent: usize = part.get(1)?;
+        let parent = joints.get(parent).ok_or_else(|| {
+            mlua::Error::RuntimeError(format!("part {} has no part {parent}", joints.len()))
+        })?;
+        let local = Mat4x3 {
+            r: anim::IDENTITY_MATRIX,
+            t: [part.get(2)?, part.get(3)?, part.get(4)?],
+        };
+        let world = anim::compose(parent, &local);
+        budget::check_len(joints.len() + 1, budget::MAX_EMD_JOINTS, "character parts")
+            .map_err(mlua::Error::external)?;
+        joints.push(world);
+    }
+    Ok(())
+}
+
 /// Draw `bytes` through the font sheet's own grid addressing:
 /// `u = (c % 18) * cell_w`, `v = (c / 18) * 14`, no header offset, advancing
 /// `glyph_w` (the reference's `ending_draw_text`, `EndingScreen.cpp:296-324`). The
@@ -632,6 +734,104 @@ fn band_centre(framebuffer: &Framebuffer, screen: [i32; 2]) -> [i32; 2] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The fixture's model: two joints, and one clip whose frames are the
+    /// keyframes with roots at `(1, 2, 3)` and `(0, 2, 3)`.
+    fn character() -> Emd {
+        crate::emd2::parse_pld(&crate::emd2::tests::pld()).unwrap()
+    }
+
+    #[test]
+    fn a_pose_is_a_frame_or_the_file_scaled_and_turned_as_asked() {
+        let lua = mlua::Lua::new();
+        let pose = |source: &str| {
+            let table: Table = lua.load(source).eval().unwrap();
+            character_pose(&character(), Some(table)).unwrap()
+        };
+        // With no pose the joints are unturned, the root where the
+        // skeleton has it.
+        let unposed = character_pose(&character(), None).unwrap().unwrap();
+        assert_eq!(unposed.offset, [0, -100, 0]);
+        assert_eq!(unposed.rotations, vec![anim::IDENTITY_ROTATION; 2]);
+
+        let frame = pose("return { bank = 0, clip = 0, frame = 0 }").unwrap();
+        assert_eq!(frame.offset, [1, 2, 3]);
+        assert_eq!(
+            frame.rotations,
+            vec![[0x123, 0x456, 0x789], [0xABC, 0xDEF, 0x010]]
+        );
+        assert_eq!(
+            pose("return { bank = 0, clip = 0, frame = 1 }")
+                .unwrap()
+                .offset,
+            [0, 2, 3]
+        );
+        // The root's height alone is scaled, and floored.
+        let short = pose("return { bank = 0, clip = 0, frame = 0, height = 0xE66 }").unwrap();
+        assert_eq!(short.offset, [1, 1, 3]);
+        assert_eq!(short.rotations, frame.rotations);
+        // A turn adds to the angles of the joints it names; one the
+        // skeleton lacks is nothing.
+        let turned = pose(
+            "return { bank = 0, clip = 0, frame = 0, turn = { [1] = { 0, -96, 1 }, [7] = { 1, 1, 1 } } }",
+        )
+        .unwrap();
+        assert_eq!(
+            turned.rotations,
+            vec![[0x123, 0x456, 0x789], [0xABC, 0xDEF - 96, 0x011]]
+        );
+        for missing in [
+            "return { bank = 0, clip = 0, frame = 2 }",
+            "return { bank = 0, clip = 1, frame = 0 }",
+            "return { bank = 1, clip = 0, frame = 0 }",
+            "return { bank = -1, clip = 0, frame = 0 }",
+        ] {
+            assert_eq!(pose(missing), None, "{missing}");
+        }
+    }
+
+    #[test]
+    fn extra_parts_hang_unturned_on_the_parts_before_them() {
+        let lua = mlua::Lua::new();
+        let parts = |source: &str| lua.load(source).eval::<Option<Table>>().unwrap();
+        let root = Mat4x3 {
+            r: anim::rotation_matrix(0, 0x400, 0),
+            t: [0, -100, 0],
+        };
+        let mut joints = vec![root];
+        extra_parts(&mut joints, parts("return nil")).unwrap();
+        assert_eq!(joints, [root]);
+        // The second hangs on the first of them, whose place the root's
+        // quarter turn has moved.
+        extra_parts(
+            &mut joints,
+            parts("return { { 0, 10, 20, 30 }, { 1, 0, 5, 0 } }"),
+        )
+        .unwrap();
+        let hung = anim::compose(
+            &root,
+            &Mat4x3 {
+                r: anim::IDENTITY_MATRIX,
+                t: [10, 20, 30],
+            },
+        );
+        assert_eq!(joints[1], hung);
+        assert_eq!(joints[1].r, root.r);
+        assert_ne!(joints[1].t, [10, -80, 30]);
+        assert_eq!(
+            joints[2],
+            anim::compose(
+                &hung,
+                &Mat4x3 {
+                    r: anim::IDENTITY_MATRIX,
+                    t: [0, 5, 0],
+                },
+            )
+        );
+        // A part can't hang on one that isn't there.
+        assert!(extra_parts(&mut joints, parts("return { { 3, 0, 0, 0 } }")).is_err());
+        assert_eq!(joints.len(), 3);
+    }
 
     #[test]
     fn released_art_returns_its_count_and_bytes_to_the_budget() {

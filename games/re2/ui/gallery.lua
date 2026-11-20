@@ -212,7 +212,7 @@ local function disp(g)
     g.fade = g.fade - 8
 end
 
-local load, picture
+local load, picture, model
 
 -- The menu's sheets, and the pictures' own.
 local MENU_ART = { "title1", "title2", "title3", "title4", "title5", "moji" }
@@ -226,6 +226,105 @@ local MODEL_ART = { "gnum", "3dleft1", "3dleft2" }
 local MODEL_BITS = {
     0, 0, 3, 4, 5, 1, 2, 1, 1, 1, 1, 6, 7, 1, 8, 9, 10, 11, 12,
     13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+}
+
+-- The models' two views (`model_viewP0` and `R0`, `P1` and `R1`), each
+-- from a point towards another through `Set_view`, 300 from the screen.
+local VIEW = { from = { 5000, -1500, -700 }, to = { 100, -1500, -700 }, fov = 300 }
+local VIEW_HIGH = { from = { 5000, -1800, -1000 }, to = { 1000, -1000, -400 }, fov = 300 }
+
+-- A view straight down Z with the model's feet at `x, y, z` before it.
+local function before(x, y, z)
+    return { at = { x, y, z }, fov = 300 }
+end
+
+-- A model's file on CLAIRE's disc: an enemy's, or a player's.
+local function enemy(id)
+    return ("enemy/%02x/enemy_1.emd"):format(id)
+end
+
+local function player(id)
+    return ("player/%02x/model_1.pld"):format(id)
+end
+
+-- A zombie as `Em10_Init` and its first tick leave it: on a frame of the
+-- zombies' shared animations, its head (part 8) a step of 96 round
+-- towards the player's work.
+local function zombie(id, height)
+    return { enemy(id), pose = { bank = 1, clip = 1, frame = 0, height = height, turn = { [8] = { 0, -96, 0 } } } }
+end
+
+-- The thirty-eight models (`model_tbl`, 0x523268), in order. A model
+-- stands where its routine's first tick leaves it: as its file has it, or
+-- in `pose`, a frame of one of its animations (`{bank, clip, frame}`). Its
+-- view is the level one unless the table places it (`view`). The table's
+-- flag 8 tips a model forward (`pitch`), and its flag 0x10 swings one
+-- between two angles where the others turn (`swing`).
+--
+-- A pose's `turn` is what a routine's first tick adds to a part's angles:
+-- a neck's step towards the player's work, mostly. The short zombie's root
+-- is at 0xE66 of its height (`Parts0_pos_y`). Two
+-- have parts past their skeletons that their routines hang (`parts`, each
+-- its parent and its place there): the second model's ponytail, a chain
+-- of four from her head (`FUN_004BF3F0`), and the last G, whose skeleton
+-- is two parts and whose other five `Em36_Init` places.
+local MODELS = {
+    { enemy(0x50) },
+    {
+        enemy(0x51),
+        parts = { { 8, -40, -368, 0 }, { 15, -48, -32, 0 }, { 16, -91, 97, 0 }, { 17, -1, 127, 0 } },
+    },
+    { player(0x0B), player = true },
+    { player(0x0C), player = true },
+    { player(0x0D), player = true },
+    zombie(0x10),
+    zombie(0x11),
+    zombie(0x12),
+    zombie(0x13, 0xE66),
+    zombie(0x15),
+    zombie(0x16),
+    zombie(0x17),
+    zombie(0x18),
+    zombie(0x1F),
+    { enemy(0x20), pose = { bank = 0, clip = 0, frame = 1 } },
+    { enemy(0x21), pose = { bank = 0, clip = 0, frame = 0 }, view = before(250, 150, 2000) },
+    { enemy(0x22), pose = { bank = 0, clip = 1, frame = 0 }, view = before(700, 800, 5000) },
+    { enemy(0x23), pose = { bank = 0, clip = 1, frame = 0 }, view = before(100, 200, 13000), pitch = 150 },
+    { enemy(0x25), pose = { bank = 0, clip = 1, frame = 0 } },
+    { enemy(0x27), pose = { bank = 0, clip = 6, frame = 59 }, view = before(200, 200, 2000) },
+    { enemy(0x28), pose = { bank = 0, clip = 1, frame = 0, turn = { [4] = { 0, 10, 0 } } } },
+    { enemy(0x2A), view = before(600, 1800, 5000) },
+    { enemy(0x2B), view = before(600, 2000, 6000) },
+    { enemy(0x2E), pose = { bank = 0, clip = 0, frame = 0 } },
+    { enemy(0x30), pose = { bank = 0, clip = 0, frame = 0 }, view = before(700, 1800, 5000) },
+    { enemy(0x31) },
+    {
+        enemy(0x33),
+        pose = { bank = 0, clip = 0, frame = 0, turn = { [3] = { 0, 64, 0 } } },
+        view = before(600, 2000, 6200),
+    },
+    { enemy(0x34), pose = { bank = 0, clip = 0, frame = 0, turn = { [26] = { 0, 16, -24 } } }, view = VIEW_HIGH },
+    {
+        enemy(0x36),
+        view = before(1000, 2000, 12000),
+        swing = { 600, 1700 },
+        parts = {
+            { 0, 1800, 4500, 0 },
+            { 0, 800, 500, 0 },
+            { 2, 1698, -1398, 0 },
+            { 2, 1432, -2691, 1023 },
+            { 2, 1430, -2284, -2078 },
+        },
+    },
+    { enemy(0x3A), pose = { bank = 0, clip = 0, frame = 0 } },
+    { enemy(0x3B), pose = { bank = 0, clip = 0, frame = 11 }, view = before(250, 400, 2000) },
+    { enemy(0x40) },
+    { enemy(0x41) },
+    { enemy(0x45) },
+    { enemy(0x46) },
+    { enemy(0x47) },
+    { enemy(0x48) },
+    { enemy(0x4A) },
 }
 
 -- `GalleryMain`: `false` once EXIT is taken, or when its art can't load.
@@ -482,6 +581,27 @@ local function model_opened(g, index)
     return (g.open[5] or 0) & (0x80000000 >> MODEL_BITS[index + 1]) ~= 0
 end
 
+-- `GallerySetupModel`: the model's angles on a tick that shows it. It
+-- turns by 5 a tick, or swings by 5 between its two angles, the first tick
+-- taking it to the nearer.
+local function turned(g)
+    local spec = MODELS[g.index + 1]
+    local turn = g.turn
+    turn.y = (turn.y + 5) & 0xFFFF
+    local swing = spec.swing
+    if swing then
+        if g.swing.at < swing[1] then
+            g.swing = { at = swing[1], by = 5 }
+        end
+        if g.swing.at > swing[2] then
+            g.swing = { at = swing[2], by = -5 }
+        end
+        g.swing.at = g.swing.at + g.swing.by
+        turn.y = g.swing.at
+    end
+    return { spec.pitch or 0, turn.y, 0 }
+end
+
 -- `Gallery3DArt`: CLAIRE's models, one at a time beside a panel. `false`
 -- when its art can't load. Here the work's row (`+8`) is 1 while a model
 -- waits to be loaded.
@@ -521,7 +641,7 @@ local function models(api, g, edge, held, cue)
             local from = g.index
             cue(SE_CURSOR)
             repeat
-                g.index = (g.index + way) % #MODEL_BITS
+                g.index = (g.index + way) % #MODELS
             until model_opened(g, g.index) or g.index == from
             g.row = 1
             g.tiles = 0
@@ -541,13 +661,14 @@ local function models(api, g, edge, held, cue)
     -- it.
     local view = {
         index = g.index,
-        last = #MODEL_BITS - 1,
+        last = #MODELS - 1,
         clear = g.clear,
-        model = g.row == 0 and g.flags & MODEL ~= 0,
+        model = g.row == 0 and g.flags & MODEL ~= 0 and turned(g),
         sheets = MODEL_SHEETS,
     }
     g.clear = 0
     if g.row ~= 0 then
+        model(api, g)
         g.flags = g.flags | MODEL
         g.row = 0
     end
@@ -629,10 +750,18 @@ local art = {}
 -- The file of the picture last asked for, whose art is the one picture's
 -- held (none when the pack lacks the file).
 local held_picture
+-- The file of the model last asked for, and its art: `false` when the
+-- pack lacks it.
+local held_model, model_art
+-- A player's angles, which the original keeps in the player's own work:
+-- its three models turn on from where the last of them was left.
+local player_turn = { y = 0 }
 
 function M.reset()
     art = {}
     held_picture = nil
+    held_model, model_art = nil, nil
+    player_turn = { y = 0 }
 end
 
 -- A sheet of the pack's, once: nil when the pack lacks it.
@@ -683,6 +812,22 @@ picture = function(api, g)
     end
     local w, h = api:art_size(sheet.page)
     return ((w + 255) // 256) * ((h + 255) // 256)
+end
+
+-- `GalleryLoadModel`: the model is loaded, the one before let go as a
+-- picture is. An enemy's work is new, so it starts unturned; a player's is
+-- the player's own.
+model = function(api, g)
+    local spec = MODELS[g.index + 1]
+    if held_model ~= spec[1] then
+        if model_art then
+            api:release(model_art)
+        end
+        held_model = spec[1]
+        model_art = api:character_model(spec[1]) or false
+    end
+    g.turn = spec.player and player_turn or { y = 0 }
+    g.swing = { at = 0, by = 5 }
 end
 
 -- A sheet's 5-bit level `v` as the original shows it, 8v + 7, and its 0
@@ -758,8 +903,8 @@ local function half(api, sheet, ox, oy, x, y, w, h, u, v, level, opaque, black)
     end
 end
 
--- The pictures' frame, or the models': the cleared frame, the picture,
--- the panel with the held key lit, and the count. A model isn't drawn.
+-- The pictures' frame, or the models': the cleared frame, the picture or
+-- the model, the panel with the held key lit, and the count.
 local function draw_view(api, g, ox, oy, black)
     local view = g.view
     local low, digits = art[view.sheets[2]], art[view.sheets.digits]
@@ -770,6 +915,20 @@ local function draw_view(api, g, ox, oy, black)
         local place = PLACES[g.claire][view.index + 1]
         local w, h = api:art_size(sheet.page)
         half(api, sheet, ox, oy, place[1], place[2], w, h, 0, 0, 0x80, false, black)
+    end
+    if view.model and model_art then
+        -- The model is all the frame holds yet, so the fade's black over
+        -- the frame is over it alone.
+        local spec = MODELS[view.index + 1]
+        api:draw_character(model_art, {
+            pose = spec.pose,
+            turn = view.model,
+            view = spec.view or VIEW,
+            parts = spec.parts,
+        })
+        if black > 0 then
+            api:darken(black)
+        end
     end
     for k, part in ipairs(PANEL) do
         half(api, art[view.sheets[k]], ox, oy, part[1], part[2], part[3], part[4], 0, 0, 0x80, false, black)

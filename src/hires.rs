@@ -804,13 +804,32 @@ impl From<Arc<Replacement>> for QuadImage {
     }
 }
 
+/// The model a queued draw's triangles came from, held for its page.
+#[derive(Debug, Clone)]
+pub enum ModelSource {
+    /// An item-view model.
+    Item(Arc<crate::ivm::Ivm>),
+    /// A character's model.
+    Character(Arc<crate::model::Emd>),
+}
+
+impl ModelSource {
+    /// The model's texture page.
+    pub fn texture(&self) -> &crate::model::Texture8 {
+        match self {
+            Self::Item(ivm) => &ivm.texture,
+            Self::Character(model) => &model.texture,
+        }
+    }
+}
+
 /// A model draw the GPU renders into its own target, cleared to
 /// transparent, and then draws over the frame as its item
 /// ([`crate::draw2d::Kind::Model`], whose `uv` spans the target).
 #[derive(Debug)]
 pub struct Model {
     /// The model whose page the triangles sample.
-    pub ivm: Arc<crate::ivm::Ivm>,
+    pub source: ModelSource,
     /// Three per triangle, back to front, in the item's clip space.
     pub vertices: Vec<ModelVertex>,
     /// A named or content-hash HD replacement of the model's page, covering
