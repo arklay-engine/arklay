@@ -581,6 +581,9 @@ const CHARACTER_SIZES: [u16; 28] = [
 ];
 /// `fg_status`'s bank, whose bit picks the second `fg_enemy`.
 pub const STATUS_BANK: u8 = 1;
+/// `fg_status`'s `0x8000`: a status task's window is up (`Sce_Item`,
+/// `0x4E96C0`, raises it as it opens the get-item window).
+pub const STATUS_WINDOW: u8 = 16;
 const STATUS_ENEMY_FLAGS: u8 = 6;
 /// `fg_status`'s bit for the character whose voices play: 1 is Claire.
 pub const STATUS_PLAYER: u8 = 0;
@@ -676,6 +679,8 @@ const SPLAYER_OPERAND: i64 = 255;
 const MESSAGE_BANK: u8 = 11;
 /// The item-collected flag bank (`FlagGroup::Item`).
 pub const ITEM_BANK: u8 = 8;
+/// `fg_scenario` (`0x98EB2C`).
+pub const SCENARIO_BANK: u8 = 3;
 /// `fg_item_2` (`0x98EBD4`), the item flags of the stages from `scd_var_stage`
 /// 4 up.
 pub const ITEM_BANK_2: u8 = 34;
@@ -3005,10 +3010,28 @@ impl Host for GameHost<'_> {
         {
             return true;
         }
+        // A status task's bit is its screen's own state, not the bank's: a
+        // scene that gives an item waits on it (room 60C's `aot_on`, then
+        // `ck(1, 16, 1)`).
+        if bank == STATUS_BANK && index == STATUS_WINDOW {
+            return self.game.re2_status_task_up();
+        }
         self.game.re2.flag(bank, index)
     }
 
     fn set_flag(&mut self, bank: u8, index: u8, op: u8) {
+        // A script that raises the status task's bit itself asks for the
+        // status screen: `Game_loop` opens it for the bit as for START's
+        // press, with the decide cue (room 111, once the crank is gone).
+        // The bank never holds the bit.
+        if bank == STATUS_BANK && index == STATUS_WINDOW {
+            if op != 0 && !self.game.re2_status_task_up() {
+                self.game.re2_status_request = true;
+                self.game
+                    .push_re2_sound(crate::game::status2::Sound::Decide.id());
+            }
+            return;
+        }
         self.game.re2.set_flag(bank, index, op);
     }
 
@@ -6037,6 +6060,207 @@ mod tests {
             .iter()
             .map(|&(id, quantity)| crate::game::InventoryItem { id, quantity })
             .collect()
+    }
+
+    /// The get-item window's `fg_status` bit from the first tick of its
+    /// close: up through the eighth, down on the ninth, and the window gone
+    /// on the tenth. The bank never holds it.
+    fn window_bit_through_the_close(game: &mut GameState) {
+        use crate::game::status2::Input;
+        let window = |game: &mut GameState| GameHost { game }.flag(STATUS_BANK, STATUS_WINDOW);
+        let get = game.re2_item_get.unwrap();
+        assert_eq!(
+            (get.phase, get.ticks),
+            (crate::game::Re2ItemGetPhase::Close, 0)
+        );
+        for _ in 0..8 {
+            assert!(window(game));
+            game.tick_re2_item_get(Input::default());
+        }
+        assert!(window(game), "the close's eighth tick");
+        game.tick_re2_item_get(Input::default());
+        assert!(game.re2_item_get.is_some() && !window(game));
+        game.tick_re2_item_get(Input::default());
+        assert!(game.re2_item_get.is_none() && !window(game));
+        assert!(!game.re2.flag(STATUS_BANK, STATUS_WINDOW));
+    }
+
+    /// A script that asks for the status screen or the map reads
+    /// `fg_status`'s `0x8000` up in the same pass (`Sce_Status`, `Sce_84`).
+    #[test]
+    fn a_scripts_status_request_raises_the_status_bit_at_once() {
+        let window = |game: &mut GameState| GameHost { game }.flag(STATUS_BANK, STATUS_WINDOW);
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        assert!(!window(&mut game));
+        game.re2_status_request = true;
+        assert!(window(&mut game));
+        game.re2_status_request = false;
+        game.request_re2_script_map(0);
+        assert!(window(&mut game));
+        // Up while the screen it asked for is: the item page, or the box.
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.open_re2_items();
+        assert!(window(&mut game));
+        game.re2_items = None;
+        assert!(!window(&mut game));
+
+        // A script's own write of the bit asks for the screen, with
+        // START's cue, and leaves the bank alone; lowering it does nothing.
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 0);
+        assert!(!game.re2_status_request && !window(&mut game));
+        GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 1);
+        assert!(game.re2_status_request && window(&mut game));
+        assert!(!game.re2.flag(STATUS_BANK, STATUS_WINDOW));
+        let cues: Vec<_> = game.re2.sounds.iter().map(|sound| sound.id).collect();
+        let decide = crate::game::status2::Sound::Decide.id();
+        assert_eq!(cues, [crate::se2::SoundId::decode(decide).unwrap()]);
+    }
+
+    /// `Status`'s start (`0x501BD0`): the Side Pack's flag makes the
+    /// inventory ten slots, and Leon's lighter is back in the personal slot
+    /// once scenario flag 0xA2 says the G-Virus is gone. Claire's slot is
+    /// left alone.
+    #[test]
+    fn the_status_tasks_start_restores_the_lighter_and_grows_the_inventory() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.re2.inventory_size = 8;
+        game.re2.personal_item = [0x52, 1];
+        game.start_re2_status_task();
+        assert_eq!(game.re2.personal_item, [0x52, 1]);
+        assert_eq!(game.inventory_capacity(), 8);
+        game.re2.set_flag(SCENARIO_BANK, 0xA2, 1);
+        game.re2.set_flag(ITEM_BANK, 0x3F, 1);
+        // The status screen's own start, and the get-item window's.
+        game.open_re2_items();
+        game.init_re2_status();
+        assert_eq!(game.re2.personal_item, [0x2F, 1]);
+        assert_eq!(game.inventory_capacity(), 10);
+        assert_eq!(game.inventory.len(), 10);
+
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.re2.personal_item = [0x52, 1];
+        game.re2.set_flag(SCENARIO_BANK, 0xA2, 1);
+        item_window(&mut game, 0x14, 15);
+        assert_eq!(game.re2.personal_item, [0x2F, 1]);
+
+        let mut claire = GameState::default();
+        claire.is_re2_room = true;
+        claire.re2.set_flag(STATUS_BANK, STATUS_PLAYER, 1);
+        claire.re2.set_flag(SCENARIO_BANK, 0xA2, 1);
+        claire.re2.personal_item = [0x4E, 1];
+        claire.start_re2_status_task();
+        assert_eq!(claire.re2.personal_item, [0x4E, 1]);
+    }
+
+    /// `St_get_check`'s sub 0x13 (`item_gvirus_60c`): Leon's G-Virus and
+    /// Claire's Vaccine go to the personal slot with no question, after a
+    /// count of 52 ticks, and whatever the slots hold.
+    #[test]
+    fn the_personal_slots_item_is_taken_unasked() {
+        use crate::game::Re2ItemGetPhase as Phase;
+        use crate::game::status2::{Input, Sound};
+        let area = |game: &mut GameState, item: i64| {
+            let ops = [8, 2, 49, 0, 0, -100, -100, 200, 200, item, 1, 16, 2, 0];
+            let mut host = GameHost { game: &mut *game };
+            host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+            let action = game.room_actions[8].unwrap();
+            game.fire_re2_area(action);
+        };
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let full = vec![(0x26, 1); game.inventory_capacity()];
+        game.inventory = stacks(&full);
+        game.re2.personal_item = [0x2F, 1];
+        area(&mut game, 0x52);
+        assert!(GameHost { game: &mut game }.flag(STATUS_BANK, STATUS_WINDOW));
+        for _ in 0..7 {
+            assert!(game.tick_re2_item_get(Input::default()).is_empty());
+        }
+        assert_eq!(game.re2_item_get.unwrap().phase, Phase::Wait);
+        assert!(!game.message.active, "no question");
+        for _ in 0..52 {
+            assert!(game.tick_re2_item_get(Input::default()).is_empty());
+            assert_eq!(game.re2_item_get.unwrap().phase, Phase::Wait);
+            assert_eq!(game.re2_item_get_fly(), None);
+        }
+        // Sub 0x14: the decide cue and the fly's start for slot 10.
+        assert_eq!(game.tick_re2_item_get(Input::default()), [Sound::Decide]);
+        assert_eq!(game.re2_item_get.unwrap().phase, Phase::Fly);
+        let fly = game.re2_item_get_fly().unwrap();
+        assert_eq!([fly.x, fly.y, fly.w, fly.h], [14, 2, 0x70, 0x48]);
+        for _ in 0..18 {
+            assert!(game.tick_re2_item_get(Input::default()).is_empty());
+            assert_eq!(game.re2.personal_item, [0x2F, 1]);
+        }
+        assert!(game.tick_re2_item_get(Input::default()).is_empty());
+        assert_eq!(game.re2.personal_item, [0x52, 1]);
+        assert_eq!(game.inventory, stacks(&full), "no slot is touched");
+        assert!(game.re2.flag(item_bank(game.id.stage), 16));
+        assert_eq!(game.re2_item_get.unwrap().phase, Phase::Shown);
+        assert!(game.message.active, "the taken message");
+        game.message.active = false;
+        assert_eq!(game.tick_re2_item_get(Input::default()), [Sound::Cancel]);
+        assert_eq!(game.re2_item_get.unwrap().phase, Phase::Close);
+        // The scene that gave it waits on `fg_status`'s `0x8000`, which is
+        // up from the open to the close's ninth tick; the bank never holds
+        // it.
+        window_bit_through_the_close(&mut game);
+
+        // The other character's is an item like any other: Claire is asked
+        // for the G-Virus, and takes the Vaccine unasked.
+        let claire = || {
+            let mut game = GameState::default();
+            game.is_re2_room = true;
+            game.re2.set_flag(STATUS_BANK, STATUS_PLAYER, 1);
+            game
+        };
+        let mut game = claire();
+        item_window(&mut game, 0x52, 1);
+        assert_eq!(game.re2_item_get.unwrap().phase, Phase::Ask);
+        // A no's count out lowers the bit on the same tick of its close,
+        // and takes nothing.
+        game.message.set_menu_choice_id(1);
+        game.message.active = false;
+        for _ in 0..40 {
+            if game.re2_item_get.unwrap().phase == Phase::Close {
+                break;
+            }
+            game.tick_re2_item_get(Input::default());
+        }
+        window_bit_through_the_close(&mut game);
+        assert!(game.inventory.iter().all(|slot| slot.id != 0x52));
+        assert_eq!(game.re2.personal_item[0], 0);
+        assert!(!game.re2.flag(item_bank(game.id.stage), 154));
+
+        // The Vaccine, in the lab: one in the slot whatever the area
+        // counts, and its flag in the later stages' bank.
+        let mut game = claire();
+        game.id = crate::state::RoomId::parse("6151").unwrap();
+        game.re2.personal_item = [0x30, 1];
+        let ops = [8, 2, 49, 0, 0, -100, -100, 200, 200, 0x4E, 3, 44, 7, 0];
+        GameHost { game: &mut game }.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+        let action = game.room_actions[8].unwrap();
+        game.fire_re2_area(action);
+        for _ in 0..7 {
+            game.tick_re2_item_get(Input::default());
+        }
+        assert_eq!(game.re2_item_get.unwrap().phase, Phase::Wait);
+        for _ in 0..53 + 19 {
+            game.tick_re2_item_get(Input::default());
+        }
+        assert_eq!(game.re2.personal_item, [0x4E, 1]);
+        assert!(game.inventory.iter().all(|slot| slot.id == 0));
+        assert!(game.re2.flag(ITEM_BANK_2, 44) && !game.re2.flag(ITEM_BANK, 44));
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        item_window(&mut game, 0x4E, 1);
+        assert_eq!(game.re2_item_get.unwrap().phase, Phase::Ask);
     }
 
     /// `Set_item` (`0x502820`) with a two-slot weapon: `0x502720` moves

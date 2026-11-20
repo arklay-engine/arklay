@@ -925,6 +925,7 @@ impl GameState {
     /// resets the shared blink. The original's recordings show it on the
     /// open's sixth tick, the frame before the fade in's first.
     pub fn init_re2_status(&mut self) {
+        self.start_re2_status_task();
         self.re2_file.blink = Blink::OPEN;
         // `Status`'s start clears the screen's work: the cursors the last
         // close left are gone on this tick, the one before the page's

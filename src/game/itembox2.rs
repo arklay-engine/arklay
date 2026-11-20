@@ -1108,6 +1108,41 @@ mod tests {
         assert_eq!(game.re2.item_box[2], [0x0E, 7, 3]);
     }
 
+    /// The box as the first status task after the Side Pack: `Status`'s
+    /// start makes the inventory ten slots under the open box, whose work
+    /// then writes the two new ones back.
+    #[test]
+    fn the_box_takes_into_the_side_packs_slots() {
+        let mut game = GameState::new(RoomId::parse("2010").unwrap(), &RoomState::default());
+        game.is_re2_room = true;
+        game.re2.inventory_size = 8;
+        game.inventory = vec![
+            InventoryItem {
+                id: 0x26,
+                quantity: 1
+            };
+            8
+        ];
+        game.re2.set_flag(crate::scd2::host::ITEM_BANK, 0x3F, 1);
+        game.open_re2_box();
+        assert_eq!(game.inventory.len(), 8);
+        game.init_re2_status();
+        game.start_re2_box();
+        assert_eq!(game.inventory_capacity(), 10);
+        assert_eq!(game.inventory.len(), 10);
+        let mut work = game.re2_box_work(0);
+        assert_eq!(work.slots.len(), 10);
+        work.slots[8] = [0x14, 15, 0];
+        game.set_re2_box_work(&work);
+        assert_eq!(
+            game.inventory[8],
+            InventoryItem {
+                id: 0x14,
+                quantity: 15
+            }
+        );
+    }
+
     /// The page starts from the equipped slot, not the first slot of the
     /// equipped id: a two-slot weapon's right half stays the equipped one
     /// through the box.

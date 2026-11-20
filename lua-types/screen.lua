@@ -1480,7 +1480,7 @@ local Re2FilePageSprite = {}
 ---@field item integer
 ---@field poisoned boolean
 ---@field fly? { x: integer, y: integer, w: integer, h: integer } On the ticks the picture flies to its slot: its rectangle, from the window's origin.
----@field phase "open"|"ask"|"fly"|"refuse"|"shown"|"close"|"file_fade"|"file_read"
+---@field phase "open"|"ask"|"wait"|"fly"|"refuse"|"shown"|"close"|"file_fade"|"file_read"
 ---@field sub? integer A file's `St_get_file` sub, once it is filed.
 ---@field file? integer A file's number, once it is filed.
 ---@field file_page? Re2FilePageSprite[] In a file's phases, on the ticks the page draws: its sprites in paint order.
