@@ -406,7 +406,6 @@ impl SaveFile {
         state.item_box = self.item_box;
         if let Some(re2) = &self.re2 {
             state.is_re2_room = true;
-            state.max_health = crate::game::RE2_MAX_HEALTH;
             // A save from before `player_index` was kept plays the
             // scenario's character.
             state.re2.pl_id = self.character & 1;
@@ -418,6 +417,8 @@ impl SaveFile {
             // `Player_set` writes the id to `scd_var_next_pld`.
             let id = state.re2.pl_id;
             state.set_re2_player_id(id);
+            // `Player_set`'s `Max_life`, the loaded player's.
+            state.max_health = crate::game::pl_change2::max_life(id);
             state.re2.pl_stash.life = self.health;
             // `scd_init` runs before the room is set, so the random base is
             // a new game's whatever it was at the save.
@@ -1500,6 +1501,22 @@ mod tests {
             cut.map_or(true, |file| file.re2.is_none()),
             "a cut trailer isn't the older one"
         );
+    }
+
+    /// `Title_game_init`'s load runs `Player_set`, whose `Max_life` is the
+    /// loaded player's: 200, and 400 for player 0xD.
+    #[test]
+    fn an_re2_load_has_the_loaded_players_max_life() {
+        for (id, max) in [(0, 200), (crate::game::pl_change2::ADA, 200), (0xD, 400)] {
+            let mut state = GameState::new(RoomId::parse("200").unwrap(), &RoomState::default());
+            state.is_re2_room = true;
+            state.re2.pl_id = id;
+            let file = SaveFile::from_state(&state);
+            let mut restored = GameState::default();
+            file.apply_to(&mut restored);
+            assert_eq!(restored.re2.pl_id, id);
+            assert_eq!(restored.max_health, max, "player {id:#x}");
+        }
     }
 
     #[test]

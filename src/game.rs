@@ -6064,10 +6064,15 @@ impl GameState {
             self.state_bytes[usize::from(STATE_BYTE_CHARACTER_MODEL)] = character;
             self.entities[0].id = character;
             self.apply_flag(5, MSF_CHAR_VARIANT, if character == 1 { 0 } else { 1 });
-            self.max_health = character_max_health(character);
-            if self.entities[0].health > self.max_health {
-                self.entities[0].health = self.max_health;
-                self.set_health_copy(self.max_health);
+            // RE 1's maximums: an RE 2 player's is `Player_set`'s. On a room
+            // load the flag is still the room's being left, which is the
+            // same game's: no pack mixes the two.
+            if !self.is_re2_room {
+                self.max_health = character_max_health(character);
+                if self.entities[0].health > self.max_health {
+                    self.entities[0].health = self.max_health;
+                    self.set_health_copy(self.max_health);
+                }
             }
         }
         if choice.costume == 0 {
@@ -6076,7 +6081,7 @@ impl GameState {
             self.apply_flag(5, MSF2_COSTUME_VARIANT, 0);
             self.costume_variant = (choice.costume - 1) & 1;
         }
-        if body_changed {
+        if body_changed && !self.is_re2_room {
             // `room_set`'s Rebecca swap: her own 88 health.
             self.max_health = if body == Some(3) {
                 88
@@ -19978,6 +19983,39 @@ mod tests {
                 "item {item:#04x}"
             );
         }
+    }
+
+    /// The debug menu's player choice changes RE 1's maximums (Chris 140,
+    /// Jill 96, Rebecca 88) and clamps the health to them. An RE 2 player's
+    /// maximum is `Player_set`'s, so in an RE 2 room the choice leaves both.
+    #[test]
+    fn a_player_choice_keeps_an_re2_players_life() {
+        let mut state = GameState::new(RoomId::parse("100").unwrap(), &RoomState::default());
+        state.is_re2_room = true;
+        state.max_health = RE2_MAX_HEALTH;
+        state.entities[0].health = 180;
+        for character in [1, 3, 0] {
+            state.apply_player_choice(PlayerChoice {
+                character,
+                costume: 0,
+            });
+            assert_eq!(state.max_health, RE2_MAX_HEALTH, "choice {character}");
+            assert_eq!(state.entities[0].health, 180, "choice {character}");
+        }
+
+        // RE 1's rules as they were.
+        let mut state = GameState::new(RoomId::parse("100").unwrap(), &RoomState::default());
+        state.entities[0].health = 140;
+        state.apply_player_choice(PlayerChoice {
+            character: 1,
+            costume: 0,
+        });
+        assert_eq!((state.max_health, state.entities[0].health), (96, 96));
+        state.apply_player_choice(PlayerChoice {
+            character: 3,
+            costume: 0,
+        });
+        assert_eq!((state.max_health, state.entities[0].health), (88, 88));
     }
 
     #[test]
