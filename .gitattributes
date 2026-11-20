@@ -2,3 +2,6 @@
 # must match the room XML writer's output, so they keep LF line endings on
 # every platform.
 games/re1/room/**/*.xml text eol=lf
+# An RE 2 pack's scripts and language file are embedded and packed byte for
+# byte, so every platform's build packs the same ones.
+games/re2/** text eol=lf

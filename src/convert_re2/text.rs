@@ -14,7 +14,7 @@ use crate::state::RoomId;
 const SYSTEM_MESSAGES: usize = 0x11;
 
 /// The strings no RE2 file carries.
-const SHARED: &str = include_str!("../../games/re2/language/en-US.txt");
+pub(super) const SHARED: &str = include_str!("../../games/re2/language/en-US.txt");
 
 /// The characters of RE2's message bytes, `BioString`'s table; `_` is a byte
 /// with no spelling.
@@ -144,6 +144,18 @@ pub(super) fn item_definitions() -> Vec<(u8, String)> {
         .collect()
 }
 
+/// The lines of RE1's language file an RE2 pack takes: the interface's.
+/// The typewriter's messages are the executable's door messages 0 and 1
+/// (`MESSAGE_21`, `MESSAGE_22`), not RE1's.
+pub(super) fn interface_lines() -> impl Iterator<Item = &'static str> {
+    crate::language::LANGUAGE_FILES
+        .iter()
+        .find(|(entry, _)| entry.eq_ignore_ascii_case("language/en-US.txt"))
+        .map_or("", |(_, source)| source)
+        .lines()
+        .filter(|line| line.starts_with("UI_") && !line.starts_with("UI_SAVE_CHARACTER_"))
+}
+
 /// The language file: `rooms` lists each room's id and RDT, `exe` holds the
 /// executable's English strings and `places` the save screen's name of each
 /// room with a typewriter.
@@ -156,17 +168,7 @@ pub(super) fn language_file(
     if let Some(exe) = exe {
         exe_lines(exe, &mut text);
     }
-    for line in crate::language::LANGUAGE_FILES
-        .iter()
-        .find(|(entry, _)| entry.eq_ignore_ascii_case("language/en-US.txt"))
-        .map_or("", |(_, source)| source)
-        .lines()
-        .filter(|line| {
-            // The interface. The typewriter's messages are the executable's
-            // door messages 0 and 1 (`MESSAGE_21`, `MESSAGE_22`), not RE1's.
-            line.starts_with("UI_") && !line.starts_with("UI_SAVE_CHARACTER_")
-        })
-    {
+    for line in interface_lines() {
         text.push_str(line);
         text.push('\n');
     }
