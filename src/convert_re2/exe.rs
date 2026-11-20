@@ -81,10 +81,14 @@ const COMPUTER_TITLE: &[u8] = b"DOOR LOCK SERVICE]";
 pub(super) struct ExeText {
     /// Item names by id.
     pub names: Vec<Vec<u8>>,
-    /// The names CHECK gives, by the item's class ([`CHECKED_NAMES`]).
+    /// The names CHECK gives, by the item's class ([`CHECKED_NAMES`]);
+    /// empty when [`ExeText::checked_error`] says why.
     pub checked_names: Vec<Vec<u8>>,
-    /// Each item's class, by id ([`ITEM_TABLE`]).
+    /// Each item's class, by id ([`ITEM_TABLE`]); empty with the names.
     pub name_classes: Vec<u8>,
+    /// Why the pack gets no second names: the executable's classes aren't
+    /// the engine's, or its table doesn't read.
+    pub checked_error: Option<String>,
     /// System messages by id.
     pub system: Vec<Vec<u8>>,
     /// Door messages by id.
@@ -96,16 +100,17 @@ pub(super) struct ExeText {
 impl ExeText {
     /// Read the English tables of `exe`, a copy of `bio2 1.10.exe`.
     pub fn read(exe: &[u8]) -> Result<Self> {
+        // The second names are the engine's to show by its own classes: an
+        // executable that has others keeps its first names alone.
+        let (checked_names, name_classes, checked_error) = match checked_names(exe) {
+            Ok((names, classes)) => (names, classes, None),
+            Err(error) => (Vec::new(), Vec::new(), Some(format!("{error:#}"))),
+        };
         let text = Self {
             names: strings(exe, &NAMES, 0xF7).context("the item names")?,
-            checked_names: strings(exe, &CHECKED_NAMES, 0xF7).context("the checked names")?,
-            name_classes: (0..ITEM_ROWS)
-                .map(|item| {
-                    exe.get(ITEM_TABLE - IMAGE_BASE + item * 8 + 1)
-                        .copied()
-                        .context("the item table is outside the executable")
-                })
-                .collect::<Result<_>>()?,
+            checked_names,
+            name_classes,
+            checked_error,
             system: strings(exe, &SYSTEM, 0xFE).context("the system messages")?,
             door: strings(exe, &DOOR, 0xFE).context("the door messages")?,
             computer: computer_strings(exe).context("the computer's strings")?,
@@ -125,6 +130,28 @@ impl ExeText {
         );
         Ok(text)
     }
+}
+
+/// The names CHECK gives ([`CHECKED_NAMES`]) and each item's class
+/// ([`ITEM_TABLE`]), when the classes are the ones the engine sets and reads
+/// (`crate::message::re2_name_class`).
+fn checked_names(exe: &[u8]) -> Result<(Vec<Vec<u8>>, Vec<u8>)> {
+    let classes = (0..ITEM_ROWS)
+        .map(|item| {
+            exe.get(ITEM_TABLE - IMAGE_BASE + item * 8 + 1)
+                .copied()
+                .context("the item table is outside the executable")
+        })
+        .collect::<Result<Vec<u8>>>()?;
+    for (item, &class) in classes.iter().enumerate() {
+        let known = crate::message::re2_name_class(item as u8);
+        ensure!(
+            class == known,
+            "item {item:#x} has name class {class}, not the engine's {known}"
+        );
+    }
+    let names = strings(exe, &CHECKED_NAMES, 0xF7).context("the checked names")?;
+    Ok((names, classes))
 }
 
 /// [`COMPUTER`]'s strings, each up to its NUL. They are printable ASCII, so
@@ -177,4 +204,51 @@ fn strings(exe: &[u8], table: &Table, end: u8) -> Result<Vec<Vec<u8>>> {
             Ok(tail[..len.min(tail.len())].to_vec())
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An executable's image up to the item table's end, with the engine's
+    /// classes and every checked name the one string at the names' base.
+    fn image() -> Vec<u8> {
+        let mut exe = vec![0u8; ITEM_TABLE - IMAGE_BASE + ITEM_ROWS * 8];
+        for item in 0..ITEM_ROWS {
+            exe[ITEM_TABLE - IMAGE_BASE + item * 8 + 1] =
+                crate::message::re2_name_class(item as u8);
+        }
+        let base = CHECKED_NAMES.base - IMAGE_BASE;
+        exe[base..base + 3].copy_from_slice(&[0x2D, 0x4B, 0xF7]);
+        exe
+    }
+
+    #[test]
+    fn the_checked_names_read_with_the_engines_classes() {
+        let (names, classes) = checked_names(&image()).unwrap();
+        assert_eq!(names.len(), CHECKED_NAMES.len);
+        assert!(names.iter().all(|name| name == &[0x2D, 0x4B, 0xF7]));
+        assert_eq!(classes.len(), ITEM_ROWS);
+        assert_eq!((classes[0x59], classes[0x5E], classes[0x58]), (1, 9, 0));
+    }
+
+    /// Another build's classes would name the wrong items: it gets none.
+    #[test]
+    fn other_classes_or_a_broken_table_give_no_checked_names() {
+        // A class the engine doesn't set, and one it sets that is gone.
+        for (item, class) in [(0x58, 3), (0x59, 0), (0x5A, 1)] {
+            let mut exe = image();
+            exe[ITEM_TABLE - IMAGE_BASE + item * 8 + 1] = class;
+            let error = checked_names(&exe).unwrap_err();
+            assert!(format!("{error:#}").contains("name class"), "{error:#}");
+        }
+        // A name with no end.
+        let mut exe = image();
+        let base = CHECKED_NAMES.base - IMAGE_BASE;
+        exe[base + 2] = 0;
+        assert!(checked_names(&exe).is_err());
+        // An image that stops short of the item table.
+        let exe = image();
+        assert!(checked_names(&exe[..ITEM_TABLE - IMAGE_BASE]).is_err());
+    }
 }

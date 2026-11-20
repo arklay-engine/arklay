@@ -5917,7 +5917,7 @@ impl GameState {
             // RE2's `fg_message` keeps its typed bit too: only `Mess_set`
             // clears it.
             let typed = self.message.message_state() & 0x40 != 0;
-            self.message = MessageWindow::default();
+            self.reset_message();
             self.message.set_typed(typed);
             let choice = self.state_bytes[usize::from(STATE_BYTE_MENU_CHOICE)] & 0x7F;
             self.message.set_menu_choice_id(choice);
@@ -10530,8 +10530,15 @@ impl GameState {
             self.message_flags = self.message_flags_backup;
             self.release_re2_message_stop();
         }
-        self.message = MessageWindow::default();
+        self.reset_message();
         self.state_bytes[usize::from(STATE_BYTE_MENU_CHOICE)] = 0;
+    }
+
+    /// A new message window. The examined flags are the game's (a save
+    /// holds them), not the window's: they stay.
+    fn reset_message(&mut self) {
+        self.message = self.message.cleared();
+        self.message.re2_names = self.is_re2_room;
     }
 
     /// Press the action key for a message window that is waiting on one (a
@@ -10597,6 +10604,7 @@ impl GameState {
         let stop = std::mem::take(&mut self.re2_message_stop_pending);
         self.hold_re2_message_stop(stop);
         let selected = self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)];
+        self.message.re2_names = self.is_re2_room;
         self.message.update(input, text, selected);
         // A dismissal (input, timer or an empty source) releases the pause
         // mask before any replacement the post-actions request. The original
@@ -13105,6 +13113,41 @@ mod tests {
         assert_eq!(state.entities[1].model_tint_rgb(), [255; 3]);
         // Other slot scratch still carries over, as in the original.
         assert_eq!(state.entities[1].action_ticks_counter, 7);
+    }
+
+    /// The examined flags are the game's, which a save holds: a room's load
+    /// and a cancelled message make a new window and leave them.
+    #[test]
+    fn the_examined_flags_outlive_the_message_window() {
+        let mut state = game();
+        state.is_re2_room = true;
+        state.mark_re2_checked(0x59);
+        let spade = (0x8000_0000u32 >> 1).to_le_bytes();
+        assert_eq!(state.examined_flags(), spade);
+
+        state.enter_room(RoomId::parse("1010").unwrap(), &RoomState::default());
+        assert!(!state.message.active);
+        assert_eq!(state.examined_flags(), spade);
+        assert!(
+            state.message.re2_names,
+            "the names are RE 2's from the start"
+        );
+
+        state.show_message(0x40, 0xFF);
+        state.cancel_message();
+        assert!(!state.message.active);
+        assert_eq!(state.examined_flags(), spade);
+        assert!(state.message.re2_names);
+
+        // RE 1's flags too.
+        let mut state = game();
+        state.mark_examined_bit(0x0D);
+        let flags = state.examined_flags();
+        state.enter_room(RoomId::parse("1010").unwrap(), &RoomState::default());
+        state.show_message(0x40, 0xFF);
+        state.cancel_message();
+        assert_eq!(state.examined_flags(), flags);
+        assert!(!state.message.re2_names);
     }
 
     #[test]

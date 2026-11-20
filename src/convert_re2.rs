@@ -398,7 +398,15 @@ fn find_exe_text(root: &Path, data: &Path, warnings: &mut Vec<String>) -> Option
         .map_err(anyhow::Error::from)
         .and_then(|bytes| exe::ExeText::read(&bytes))
     {
-        Ok(text) => Some(text),
+        Ok(text) => {
+            if let Some(error) = &text.checked_error {
+                warnings.push(format!(
+                    "{}: no second names for the items CHECK names: {error}",
+                    path.display()
+                ));
+            }
+            Some(text)
+        }
         Err(error) => {
             warnings.push(format!(
                 "{}: no item names or system messages: {error:#}",

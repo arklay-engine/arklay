@@ -1585,7 +1585,7 @@ function M.draw(api)
     -- ticks too).
     if started.page == PAGE_FILE and started.sub == FILE_LIST and page.page == PAGE_FILE
         and page.file ~= nil and page.file ~= 0xFF then
-        api:glyphs(d.ox + FILE_NAME_X, d.oy + FILE_NAME_Y, api:item_name_bytes(FILE_NAMES + page.file) or "")
+        api:glyphs(d.ox + FILE_NAME_X, d.oy + FILE_NAME_Y, api:item_name_bytes(FILE_NAMES + page.file, true) or "")
     end
 
     -- The shown map, on the ticks its logic leaves it shown.

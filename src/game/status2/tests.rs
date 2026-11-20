@@ -267,6 +267,13 @@ fn check_names_a_key_when_its_description_closes() {
     run.until(601, &presses);
     assert_eq!(run.at(601).0, "2,2,8,0,2,2,2,0");
     assert_eq!(run.game.examined_flags(), spade);
+    // The name is the game's from then on: through the next room's load and
+    // a save.
+    run.game
+        .enter_room(RoomId::parse("1030").unwrap(), &RoomState::default());
+    assert_eq!(run.game.examined_flags(), spade);
+    let save = crate::save::SaveFile::from_state(&run.game);
+    assert_eq!(save.examined, spade);
 
     // The green herb, in slot 3: right of the key.
     let mut run = Run::new(game(&[(0x02, 18), (0x01, 1), (0x59, 1), (0x26, 1)]), 399);

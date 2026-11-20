@@ -505,6 +505,7 @@ mod tests {
         assert_eq!(name(0x42), "Bomb & Det.");
         // The items CHECK names: the table's classes are the engine's, and
         // each has its second name.
+        assert_eq!(exe.checked_error, None);
         for (item, &class) in exe.name_classes.iter().enumerate() {
             assert_eq!(
                 class,

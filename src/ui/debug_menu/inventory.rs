@@ -286,7 +286,7 @@ impl InventoryEditor {
             let selected = !self.on_size && slot == self.slot;
             match game.inventory.get(slot) {
                 Some(stack) => {
-                    let name = cx.item_name(stack.id);
+                    let name = cx.held_item_name(game, stack.id);
                     let label = Label {
                         icon: Some(cx.icon(stack.id)),
                         ..Label::lead(&lead, &name)

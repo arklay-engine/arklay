@@ -245,7 +245,21 @@ pub const fn re2_name_class(item: u8) -> u8 {
 /// (the pack's `ITEM_<id>_NAME_UNCHECKED`, "Precinct Key") until CHECK has
 /// set its class's flag, then the one CHECK gives it (`ITEM_<id>_NAME`,
 /// "Spade Key"). An item with one name has `ITEM_<id>_NAME` alone.
+///
+/// `St_disp_name` reads the class of a file's name too (the FILE page's
+/// list, names `0x68` and up), past the item table's end, and masks it to
+/// four bits: three of those bytes give class 8, so the Sewer Manager Fax,
+/// the Vaccine Synthesis and the Rookie Files are listed as the "Down Key"
+/// once that key is checked. (A fourth, name `0x7D`, reads class 15, which
+/// no item sets.)
 pub fn re2_item_name<'a>(text: &'a Text, item: u8, checked: &[u8; 4]) -> Option<&'a [u8]> {
+    /// The Down Key, whose class the three files' names read.
+    const DOWN_KEY: u8 = 0x5D;
+    if matches!(item, 0x7A | 0x7C | 0x80) && examined_bit(checked, re2_name_class(DOWN_KEY)) {
+        return text
+            .item_name(u16::from(DOWN_KEY))
+            .or_else(|| text.item_name(u16::from(item)));
+    }
     let class = re2_name_class(item);
     (class != 0 && !examined_bit(checked, class))
         .then(|| text.item_name_unchecked(u16::from(item)))
@@ -284,6 +298,9 @@ pub struct MessageWindow {
     pub active: bool,
     /// The four-byte examined-item bank item-name substitution reads.
     pub examined: [u8; 4],
+    /// The item tags' names follow RE 2's classes ([`re2_item_name`]): the
+    /// game's, which its owner sets.
+    pub re2_names: bool,
 
     phase: MessagePhase,
     bytes: Vec<u8>,
@@ -354,6 +371,7 @@ impl Default for MessageWindow {
             pause: 0,
             active: false,
             examined: [0; 4],
+            re2_names: false,
             phase: MessagePhase::Idle,
             bytes: Vec::new(),
             source_ready: false,
@@ -512,10 +530,20 @@ impl MessageWindow {
     }
 
     /// Keep `Mess_disp`'s timing from now on, for a message whose yes/no
-    /// The name a message's item tag draws: RE 2's own rule in its
-    /// messages, else [`item_name_bytes`]'s.
+    /// A new window that keeps what isn't a message's: the examined flags
+    /// and the game's rule for names.
+    pub fn cleared(&self) -> Self {
+        Self {
+            examined: self.examined,
+            re2_names: self.re2_names,
+            ..Self::default()
+        }
+    }
+
+    /// The name a message's item tag draws: RE 2's own rule in its game,
+    /// else [`item_name_bytes`]'s.
     fn item_name(&self, text: &Text, item: u8) -> Vec<u8> {
-        if self.re2_timing {
+        if self.re2_names {
             re2_item_name(text, item, &self.examined)
                 .unwrap_or(&[])
                 .to_vec()
@@ -1316,7 +1344,7 @@ mod tests {
         writer
             .add(
                 "language/en-US.txt",
-                b"MESSAGE_00 = \"0\"\nITEM_59_NAME = \"S\"\nITEM_59_NAME_UNCHECKED = \"P\"\nITEM_5A_NAME = \"D\"\nITEM_26_NAME = \"G\"\nITEM_26_NAME_UNCHECKED = \"H\"\n"
+                b"MESSAGE_00 = \"0\"\nITEM_59_NAME = \"S\"\nITEM_59_NAME_UNCHECKED = \"P\"\nITEM_5A_NAME = \"D\"\nITEM_26_NAME = \"G\"\nITEM_26_NAME_UNCHECKED = \"H\"\nITEM_5D_NAME = \"W\"\nITEM_5D_NAME_UNCHECKED = \"C\"\nITEM_7A_NAME = \"A\"\nITEM_7B_NAME = \"B\"\nITEM_7C_NAME = \"E\"\nITEM_80_NAME = \"R\"\n"
                     .to_vec(),
             )
             .unwrap();
@@ -1341,13 +1369,31 @@ mod tests {
                 examined,
                 ..MessageWindow::default()
             };
-            if re2 {
-                window.set_re2_timing(true, false);
-            }
-            window.item_name(&text, 0x59)
+            window.re2_names = re2;
+            // The tag through a message's own update, as `Mess_set` reads it.
+            assert!(window.start(1, 0, &[0x06, 0x59, 0x07, 0x01, 0x00], false));
+            window.update(held(false), &text, 99);
+            window.name.clone()
         };
         assert_eq!(Some(name(true, [0; 4]).as_slice()), plain);
         assert_eq!(Some(name(true, spade).as_slice()), checked);
+        // RE 1's rule has no such class: the item's own name.
+        assert_eq!(Some(name(false, [0; 4]).as_slice()), checked);
+
+        // The FILE list's three names that read the Down Key's class.
+        let down = (0x8000_0000u32 >> 8).to_le_bytes();
+        for file in [0x7A, 0x7C, 0x80] {
+            assert_eq!(
+                re2_item_name(&text, file, &[0; 4]),
+                text.item_name(file.into())
+            );
+            assert_eq!(re2_item_name(&text, file, &down), text.item_name(0x5D));
+            assert_eq!(
+                re2_item_name(&text, file, &spade),
+                text.item_name(file.into())
+            );
+        }
+        assert_eq!(re2_item_name(&text, 0x7B, &down), text.item_name(0x7B));
     }
 
     /// A language-file value for an encoded stream: every byte as `\xNN`,
