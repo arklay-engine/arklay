@@ -945,9 +945,9 @@ const SCRIPTS: &[(&str, &str)] = &[
 /// changed script reaches a pack converted before it. What the converter's
 /// own code decides is [`CONVERT_VERSION`]'s to say.
 ///
-/// The Western font's description is only packed for an installation without
-/// a font of its own, and no pack says which it was: a change to it asks
-/// every pack for a rebuild.
+/// The Western font's description is only packed when the installation has
+/// no font the converter can use, and no pack says which it was: a change to
+/// it asks every pack for a rebuild.
 pub fn packed_source_hash() -> String {
     source_hash(SCRIPTS)
 }
