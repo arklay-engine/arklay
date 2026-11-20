@@ -7,14 +7,15 @@ use super::*;
 use crate::pack::Pack;
 use crate::ui::{Screen, ScreenAction, ScreenResult, UiCue, UiInput};
 
-/// How much of the gallery's art a pack has: none, the menu's sheets, or
+/// How much of the gallery's art a pack has: none, the menu's sheets,
 /// those with the pictures' panel, some of the pictures and the movies'
-/// words.
+/// words, or those with every one of LEON's sketches.
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 enum GalleryArt {
     None,
     Menu,
     All,
+    Sketches,
 }
 
 /// The title's pack; `prologue_art` adds what the prologue shows, which is
@@ -79,8 +80,21 @@ fn build_pack(prologue_art: bool, gallery_art: GalleryArt) -> Pack {
     if gallery_art >= GalleryArt::Menu {
         writer.add("ui/gallery/moji.tim", words).unwrap();
     }
-    if gallery_art == GalleryArt::All {
-        for (stem, sheet) in gallery_pictures_art() {
+    if gallery_art >= GalleryArt::All {
+        let mut art: Vec<(String, Vec<u8>)> = gallery_pictures_art()
+            .into_iter()
+            .map(|(stem, sheet)| (stem.to_owned(), sheet))
+            .collect();
+        if gallery_art == GalleryArt::Sketches {
+            // The sketches the others lack, each a 20 x 10 green.
+            for n in 1..=60 {
+                let stem = format!("rough{n:02}");
+                if art.iter().all(|(held, _)| *held != stem) {
+                    art.push((stem, tim_8bit(20, 10, &[0, 10 << 5], |_, _| 1)));
+                }
+            }
+        }
+        for (stem, sheet) in art {
             writer
                 .add(&format!("ui/gallery/{stem}.tim"), sheet)
                 .unwrap();
@@ -289,6 +303,13 @@ pub(super) fn pack_without_gallery_pictures() -> &'static Pack {
     use std::sync::OnceLock;
     static PACK: OnceLock<Pack> = OnceLock::new();
     PACK.get_or_init(|| build_pack(false, GalleryArt::Menu))
+}
+
+/// The title's pack with every one of LEON's sketches.
+pub(super) fn pack_with_every_sketch() -> &'static Pack {
+    use std::sync::OnceLock;
+    static PACK: OnceLock<Pack> = OnceLock::new();
+    PACK.get_or_init(|| build_pack(false, GalleryArt::Sketches))
 }
 
 pub(super) fn context<'a>(dir: &'a std::path::Path) -> UiContext<'a> {

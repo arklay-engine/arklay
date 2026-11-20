@@ -3,7 +3,8 @@
 
 use super::re2_title_tests::{
     GALLERY_WORDS, context, context_over, frame, gallery_words, open_gallery_with,
-    pack_without_gallery_art, pack_without_gallery_pictures, press, press_all, run, ti, words,
+    pack_with_every_sketch, pack_without_gallery_art, pack_without_gallery_pictures, press,
+    press_all, run, ti, words,
 };
 use super::*;
 
@@ -648,6 +649,49 @@ fn left_and_right_turn_the_pictures_round_their_ends() {
     assert_eq!(galv(&screen), [3, 1]);
     // The lit key is the first held of right, left, up and down.
     assert_eq!(lit_key(&screen), Some(285));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The pictures are more than a screen's art may hold at once: each is let
+/// go as the next loads, so every one of them shows, on any lap.
+#[test]
+fn every_picture_shows_however_many_were_turned_through() {
+    let dir = test_dir("gallery-every-picture");
+    let cx = context_over(pack_with_every_sketch(), &dir);
+    let mut screen = open_pictures(&cx, &dir, false, Some([!0; 5]));
+    for turn in 1..=130 {
+        let key = if turn <= 70 { "right" } else { "left" };
+        run(&mut screen, &cx, press(key), 2);
+        let [index, tiles] = galv(&screen);
+        assert_eq!(
+            index,
+            if turn <= 70 {
+                turn % 60
+            } else {
+                (140 - turn) % 60
+            }
+        );
+        assert_eq!(
+            pictured(&screen),
+            Some(true),
+            "turn {turn}, picture {index}"
+        );
+        assert_eq!(
+            tiles,
+            match index {
+                0 => 2,
+                59 => 4,
+                _ => 1,
+            },
+            "turn {turn}, picture {index}"
+        );
+    }
+    // The eleventh, 20 x 10 at 177, 58 of 640 x 480, is still drawn after
+    // the others were let go.
+    assert_eq!(galv(&screen), [10, 1]);
+    let framebuffer = render(&mut screen, &cx);
+    assert_eq!(pixel(&framebuffer, 92, 31), [0, shown(10, 0x80), 0]);
+    assert_eq!(pixel(&framebuffer, 92, 36), [0xFF; 3]);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
