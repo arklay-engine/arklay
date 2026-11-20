@@ -1,0 +1,64 @@
+# The title from boot into CLAIRE's DATA GALLERY and its 3D MODEL, then right nineteen times, 25 ticks apart: every model from the second to the twentieth (oracle/re2.md, "The gallery").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 down
+443
+470 right
+473
+500 confirm
+503
+540 right
+543
+570 confirm
+573
+650 down
+653
+680 down
+683
+720 start
+723
+800 right
+803
+825 right
+828
+850 right
+853
+875 right
+878
+900 right
+903
+925 right
+928
+950 right
+953
+975 right
+978
+1000 right
+1003
+1025 right
+1028
+1050 right
+1053
+1075 right
+1078
+1100 right
+1103
+1125 right
+1128
+1150 right
+1153
+1175 right
+1178
+1200 right
+1203
+1225 right
+1228
+1250 right
+1253

@@ -118,6 +118,7 @@
 ---  the file and map screens and the examine viewer use it.
 ---
 ---Model draws ([`api:draw_ivm`](#ScreenApi.draw_ivm),
+---[`api:draw_character`](#ScreenApi.draw_character),
 ---[`api:draw_actor`](#ScreenApi.draw_actor)) project about the centre of
 ---the layout space, so a camera's `screen` offset stays relative to the
 ---centre of the 320x240 layout.
@@ -770,14 +771,23 @@ function ScreenApi:item_icon(item) end
 ---@return string? err When the item has no model or its file is missing.
 function ScreenApi:item_model(item) end
 
+---Load a character's model from the pack entry `entry`, as the model viewer
+---loads one: an enemy's `.emd` (RE 2's with the texture page beside it), an
+---RE 2 player's `.pld`, or a weapon's `.plw` on its player. For
+---[`api:draw_character`](#ScreenApi.draw_character).
+---@param entry string A pack entry, such as `enemy/10/enemy_0.emd`.
+---@return integer? handle A character model handle.
+---@return string? err When the entry is missing or is no model.
+function ScreenApi:character_model(entry) end
+
 ---Load RE 2's FILE binders model (`ui/status/st_file.ts`), for
 ---[`api:draw_re2_binders`](#ScreenApi.draw_re2_binders).
 ---@return integer? handle A model handle.
 ---@return string? err When the pack has none.
 function ScreenApi:re2_binders_model() end
 
----The number of objects a model carries. A handle that is not a model
----raises an error.
+---The number of objects an item model carries. A handle that is not one,
+---a character's among them, raises an error.
 ---@param model integer
 ---@return integer
 function ScreenApi:model_objects(model) end
@@ -1009,6 +1019,17 @@ function ScreenApi:page_ramp(page, sx, sy, w, h, dx, dy, ramp) end
 ---@param model integer A model handle.
 ---@param spec IvmSpec
 function ScreenApi:draw_ivm(model, spec) end
+
+---*Draw only.* Draw a character's model standing at the origin, in its
+---textures' own colours with no lights, as RE 2's gallery shows its models.
+---Each of the mesh's objects takes its joint of the skeleton; the objects
+---past the skeleton's joints draw only where `spec.parts` places them.
+---While the GPU renderer draws the frame, the model renders on the GPU, cut
+---to the clip rect.
+---@param model integer A character model handle.
+---@param spec CharacterSpec
+---@return boolean drew `false` when the model has no such pose.
+function ScreenApi:draw_character(model, spec) end
 
 ---*Draw only.* Draw an engine-owned actor through the screen's camera. The
 ---DIED screen offers `"player"`, the posed corpse.
@@ -1334,6 +1355,34 @@ local ScreenJoint = {}
 ---@field camera ScreenCamera
 ---@field light? ScreenLight Unlit when absent.
 local IvmSpec = {}
+
+---What [`api:draw_character`](#ScreenApi.draw_character) draws.
+---@class CharacterSpec
+---@field pose? CharacterPose A frame of one of the model's animations. When absent the model is as its file has it, every joint unturned.
+---@field turn? integer[] `{x, y, z}`: the character's own rotation, in 12-bit angles.
+---@field view CharacterView
+---@field parts? integer[][] The parts past the skeleton's joints, in order, each `{parent, x, y, z}`: unturned at that place on part `parent`, numbered from 0. An enemy whose routine hangs parts on its skeleton needs them given here.
+local CharacterSpec = {}
+
+---A frame of a character's animation.
+---@class CharacterPose
+---@field bank? integer 0, the default, for the model's own animations; `n` for its `n`th further bank (an RE 2 enemy has up to two). This, `clip` and `frame` are Lua integers: a float raises an error, `1.0` as much as `0.5`, and a negative one is a frame the model lacks.
+---@field clip? integer The clip, from 0.
+---@field frame? integer The clip's frame, from 0.
+---@field height? integer Scales the root's height, in 4.12 (`0x1000` is as stored).
+---@field turn? table<integer, integer[]> Angles added to the frame's, `{x, y, z}` keyed by joint, numbered from 0. A joint the model lacks is skipped; a key that is not an integer raises an error.
+local CharacterPose = {}
+
+---A character's view: from a point towards another as RE 2's `Set_view`
+---builds it (`from` and `to`), or straight down Z with the world's origin at
+---`at` before the eye.
+---@class CharacterView
+---@field from? integer[] `{x, y, z}`, the eye.
+---@field to? integer[] `{x, y, z}`, the point looked at.
+---@field at? integer[] `{x, y, z}`: where the origin is in the view. With it, `from` and `to` are not read.
+---@field fov integer The distance to the screen, in the pixels of the 320x240 layout: 2 or more, or the draw raises an error.
+---@field screen? integer[] `{x, y}`: moves the drawn model by that many pixels from the layout's centre, each clamped to `-4096..=4096`. The view is not tilted for it.
+local CharacterView = {}
 
 ---A model light, built as the original builds it.
 ---@class ScreenLight

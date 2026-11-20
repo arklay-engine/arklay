@@ -1925,6 +1925,270 @@ end
     assert!(!model.vertices.is_empty());
 }
 
+/// A screen that draws the character model `player/0b/model_1.pld` as
+/// `spec` has it, and publishes what the calls answered.
+fn character_screen(spec: &str) -> String {
+    format!(
+        r#"
+function update(api, input) end
+function draw(api)
+local model, why = api:character_model("player/0b/model_1.pld")
+api:set("loaded", model and 1 or 0)
+local missing, message = api:character_model("player/0c/model_1.pld")
+api:set("missing", (missing == nil and type(message) == "string") and 1 or 0)
+if model then
+    api:set("drew", api:draw_character(model, {spec}) and 1 or 0)
+end
+end
+"#
+    )
+}
+
+/// A triangle 800 wide and 800 tall on its point at the part's origin,
+/// which the fixture's skeleton puts 100 above the entity's.
+fn character_pld() -> Vec<u8> {
+    crate::emd2::tests::pld_of([[-400, -800, 0], [400, -800, 0], [0, 0, 0], [0; 3]])
+}
+
+/// The triangle's own CLUT row shows its own page's index 1 as BGR555
+/// `0x101`, as stored. The texture's other page is index 2, `[16, 65, 0]`.
+const CHARACTER_COLOUR: [u8; 3] = [8, 65, 0];
+
+/// What a screen drawing the fixture's character as `spec` has it answered
+/// for the draw, and the `[left, top, right, bottom]` of what it painted.
+fn character_drawn(spec: &str) -> (i64, Option<[usize; 4]>) {
+    let fixture = art_pack(
+        "character-placed",
+        &character_screen(spec),
+        vec![("player/0b/model_1.pld", character_pld())],
+    );
+    let mut screen = fixture.load();
+    let cx = fixture.context();
+    let framebuffer = draw(&mut screen, &cx);
+    let painted: Vec<(usize, usize)> = framebuffer
+        .rgba
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .enumerate()
+        .filter(|(_, pixel)| pixel[..3] == CHARACTER_COLOUR)
+        .map(|(index, _)| (index % 320, index / 320))
+        .collect();
+    let bounds = (!painted.is_empty()).then(|| {
+        let xs = painted.iter().map(|&(x, _)| x);
+        let ys = painted.iter().map(|&(_, y)| y);
+        [
+            xs.clone().min().unwrap(),
+            ys.clone().min().unwrap(),
+            xs.max().unwrap(),
+            ys.max().unwrap(),
+        ]
+    });
+    (screen.value("drew"), bounds)
+}
+
+#[test]
+fn a_character_draws_unposed_in_its_textures_own_colours() {
+    // Straight down Z with the entity's origin 100 below the centre and
+    // 3000 away, a tenth of the size: the point at the centre, the top
+    // edge 80 above it and 80 wide.
+    let spec = "{ view = { at = { 0, 100, 3000 }, fov = 300 } }";
+    let fixture = art_pack(
+        "character",
+        &character_screen(spec),
+        vec![("player/0b/model_1.pld", character_pld())],
+    );
+    let mut screen = fixture.load();
+    let cx = fixture.context();
+    let framebuffer = draw(&mut screen, &cx);
+    assert_eq!(screen.value("loaded"), 1);
+    assert_eq!(screen.value("missing"), 1);
+    assert_eq!(screen.value("drew"), 1);
+    let pixel = |x: usize, y: usize| {
+        let index = (y * 320 + x) * 4;
+        [
+            framebuffer.rgba[index],
+            framebuffer.rgba[index + 1],
+            framebuffer.rgba[index + 2],
+        ]
+    };
+    for (x, y, inside) in [
+        (160, 60, true),
+        (160, 110, true),
+        (130, 45, true),
+        (190, 45, true),
+        (160, 36, false),
+        (160, 124, false),
+        (110, 60, false),
+        (210, 60, false),
+        (140, 100, false),
+    ] {
+        assert_eq!(
+            pixel(x, y) == CHARACTER_COLOUR,
+            inside,
+            "{x}, {y}: {:?}",
+            pixel(x, y)
+        );
+    }
+
+    // The GPU renderer is handed the model instead.
+    let mut recorded = crate::render::Framebuffer::new();
+    recorded.record();
+    screen.draw(&cx, &mut recorded);
+    let quad = one_quad(&recorded);
+    let crate::draw2d::Kind::Model(model) = &quad.image else {
+        panic!("a model quad");
+    };
+    assert!(matches!(
+        model.source,
+        crate::hires::ModelSource::Character(_)
+    ));
+    assert_eq!(model.vertices.len(), 3);
+    // Each corner is on the triangle's row, and its depth its own view Z's
+    // as an RE 2 character's is: the point is 3000 away, at the centre.
+    for vertex in &model.vertices {
+        assert_eq!(vertex.packed, 1 << 8 | 1 << 22);
+        assert_eq!(vertex.clip[3], 3000.0);
+        assert_eq!(vertex.shade, [1.0; 3]);
+    }
+    let point = model.vertices[2].clip;
+    assert!(
+        point[0].abs() < 3000.0 / 160.0 && point[1].abs() < 3000.0 / 120.0,
+        "{point:?}"
+    );
+}
+
+#[test]
+fn a_characters_turn_view_and_pose_place_it() {
+    let unposed = character_drawn("{ view = { at = { 0, 100, 3000 }, fov = 300 } }");
+    assert_eq!(unposed, (1, Some([120, 40, 199, 118])));
+    // Turned half round it shows its back, which is culled.
+    let turned =
+        character_drawn("{ turn = { 0, 0x800, 0 }, view = { at = { 0, 100, 3000 }, fov = 300 } }");
+    assert_eq!(turned, (1, None));
+    // Tipped forward by an eighth it is shorter.
+    let (_, tipped) =
+        character_drawn("{ turn = { 0x200, 0, 0 }, view = { at = { 0, 100, 3000 }, fov = 300 } }");
+    let [_, top, _, bottom] = tipped.unwrap();
+    assert!((50..=70).contains(&(bottom - top)), "{top} {bottom}");
+
+    // `Set_view` from 3000 along X at the origin's height shows the same
+    // thing of a model turned a quarter round to face it.
+    let (_, from_x) = character_drawn(
+        "{ turn = { 0, 0xC00, 0 }, view = { from = { 3000, -100, 0 }, to = { 0, -100, 0 }, fov = 300 } }",
+    );
+    let [left, top, right, bottom] = from_x.unwrap();
+    assert!(
+        left.abs_diff(120) <= 1 && right.abs_diff(199) <= 1,
+        "{left} {right}"
+    );
+    assert!(
+        top.abs_diff(40) <= 1 && bottom.abs_diff(118) <= 1,
+        "{top} {bottom}"
+    );
+
+    // The view's `screen` moves what is drawn by that much and no more:
+    // it isn't a shake, which would tilt the view.
+    let moved =
+        character_drawn("{ view = { at = { 0, 100, 3000 }, fov = 300, screen = { 20, -30 } } }");
+    assert_eq!(moved, (1, Some([140, 10, 219, 88])));
+
+    // A frame of an animation: the fixture's clip turns the root by
+    // (0x123, 0x456, 0x789), which shows its back, and puts it at
+    // (0, 2, 3), 102 lower than its file does. Turned back by the pose,
+    // it faces the view that much lower. A frame the model lacks draws
+    // nothing and says so.
+    let at = "view = { at = { 0, 100, 3000 }, fov = 300 }";
+    let posed = character_drawn(&format!(
+        "{{ pose = {{ bank = 0, clip = 0, frame = 1 }}, {at} }}"
+    ));
+    assert_eq!(posed, (1, None));
+    let back = "turn = { [0] = { -0x123, -0x456, -0x789 } }";
+    let posed = character_drawn(&format!(
+        "{{ pose = {{ bank = 0, clip = 0, frame = 1, {back} }}, {at} }}"
+    ));
+    assert_eq!(posed, (1, Some([120, 50, 199, 128])));
+    for missing in [
+        "pose = { bank = 0, clip = 0, frame = 2 }",
+        "pose = { bank = 0, clip = 1, frame = 0 }",
+        "pose = { bank = 1, clip = 0, frame = 0 }",
+        "pose = { bank = 0, clip = -1, frame = 0 }",
+        "pose = { bank = 0, clip = 0, frame = -1 }",
+        "pose = { bank = -1, clip = 0, frame = 0 }",
+    ] {
+        assert_eq!(
+            character_drawn(&format!("{{ {missing}, {at} }}")),
+            (0, None),
+            "{missing}"
+        );
+    }
+}
+
+#[test]
+fn a_characters_spec_is_checked_and_its_numbers_cannot_overflow() {
+    let failed = |spec: &str| {
+        let fixture = art_pack(
+            "character-checked",
+            &character_screen(spec),
+            vec![("player/0b/model_1.pld", character_pld())],
+        );
+        let mut screen = fixture.load();
+        let cx = fixture.context();
+        let mut framebuffer = crate::render::Framebuffer::new();
+        screen.draw(&cx, &mut framebuffer);
+        screen.failed()
+    };
+    let at = "view = { at = { 0, 100, 3000 }, fov = 300 }";
+    assert!(!failed(&format!("{{ {at} }}")));
+    // A pose's numbers are whole, and its turns keyed by joints' numbers.
+    for bad in [
+        "pose = { bank = 0, clip = 0, frame = 0.5 }",
+        "pose = { bank = 0, clip = 'first', frame = 0 }",
+        "pose = { bank = 0, clip = 0, frame = 0, turn = { head = { 0, 1, 0 } } }",
+        "pose = { bank = 0, clip = 0, frame = 0, turn = { ['1'] = { 0, 1, 0 } } }",
+        "pose = { bank = 0, clip = 0, frame = 0, turn = { [0.5] = { 0, 1, 0 } } }",
+    ] {
+        assert!(failed(&format!("{{ {bad}, {at} }}")), "{bad}");
+    }
+    // A whole number written as a float is one all the same to Lua, and
+    // isn't one here.
+    assert!(failed(&format!(
+        "{{ pose = {{ bank = 0, clip = 0, frame = 1.0 }}, {at} }}"
+    )));
+    // The screen is some way before the eye, so that the near plane is.
+    for fov in ["0", "1", "-300", "nil"] {
+        assert!(
+            failed(&format!(
+                "{{ view = {{ at = {{ 0, 100, 3000 }}, fov = {fov} }} }}"
+            )),
+            "{fov}"
+        );
+    }
+    // A joint the model lacks is skipped.
+    let spare = "pose = { bank = 0, clip = 0, frame = 0, turn = { [-1] = { 0, 1, 0 }, [9] = { 0, 1, 0 } } }";
+    assert!(!failed(&format!("{{ {spare}, {at} }}")));
+    // The widest numbers a script can give draw nothing anyone sees, and
+    // don't stop the screen.
+    let (low, high) = (i32::MIN, i32::MAX);
+    for wide in [
+        format!("pose = {{ bank = 0, clip = 0, frame = 0, height = {low} }}, {at}"),
+        format!("pose = {{ bank = 0, clip = 0, frame = 0, height = {high} }}, {at}"),
+        format!("view = {{ at = {{ {low}, {low}, {low} }}, fov = 2 }}"),
+        format!("view = {{ at = {{ {high}, {high}, {high} }}, fov = {high} }}"),
+        format!("view = {{ at = {{ 0, 100, 3000 }}, fov = 300, screen = {{ {high}, {low} }} }}"),
+        format!("view = {{ at = {{ 0, 100, 3000 }}, fov = 300, screen = {{ {low}, {high} }} }}"),
+        format!(
+            "view = {{ from = {{ {low}, {high}, {low} }}, to = {{ {high}, {low}, 0 }}, fov = {high} }}"
+        ),
+        format!("turn = {{ {low}, {high}, {low} }}, {at}"),
+        format!(
+            "parts = {{ {{ 0, {low}, {high}, {low} }}, {{ 2, {high}, {high}, {high} }} }}, {at}"
+        ),
+    ] {
+        assert!(!failed(&format!("{{ {wide} }}")), "{wide}");
+    }
+}
+
 #[test]
 fn pending_local_time_and_tagged_strings_reach_the_script() {
     let fixture = Fixture::new(

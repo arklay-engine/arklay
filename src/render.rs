@@ -1942,6 +1942,72 @@ impl Framebuffer {
         self.rasterize_triangles(texture, triangles);
     }
 
+    /// Draw a screen's RE 2 character in its textures' own colours: the
+    /// gallery's models, whose polygons take the colour `0x808080` where
+    /// play's take the room's lights. Each polygon samples its own page and
+    /// palette row, as in play. While the GPU renderer draws the frame the
+    /// model is queued for it, as [`Framebuffer::draw_ivm_captured`] queues
+    /// an item's.
+    ///
+    /// `offset` moves the drawn model by that many pixels. It isn't the
+    /// camera's [`Camera::screen`], which is a shake and tilts the view with
+    /// it.
+    pub fn draw_character_unlit(
+        &mut self,
+        model: &std::sync::Arc<crate::model::Emd>,
+        joints: &[anim::Mat4x3],
+        camera: &Camera,
+        offset: [i32; 2],
+    ) {
+        // Play's path, under lights of RE 2's kind that the colour replaces.
+        let dark = Light {
+            pos: [0; 3],
+            color: [0; 3],
+            kind: 0,
+            radius: 0,
+            re2_gain: Some(0),
+        };
+        let lighting = Lighting {
+            ambient: [0; 3],
+            lights: [dark; 3],
+        };
+        let light = lighting.latched([0; 3]);
+        let mut triangles: Vec<Triangle> = Vec::new();
+        for (object, joint) in model.mesh.objects.iter().zip(joints) {
+            collect_triangles(
+                object,
+                joint,
+                camera,
+                Some(&lighting),
+                Some(light),
+                true,
+                0,
+                [255; 3],
+                Some([0x80; 3]),
+                None,
+                false,
+                &mut triangles,
+            );
+        }
+        for corner in triangles
+            .iter_mut()
+            .flat_map(|triangle| &mut triangle.raster)
+        {
+            corner.position[0] += offset[0] as f32;
+            corner.position[1] += offset[1] as f32;
+        }
+        if self.list.is_none() {
+            self.rasterize_triangles(&model.texture, triangles);
+            return;
+        }
+        triangles.sort_by(|a, b| b.depth.total_cmp(&a.depth));
+        self.queue_model(
+            crate::hires::ModelSource::Character(model.clone()),
+            &triangles,
+            None,
+        );
+    }
+
     /// Draw an item-view (`.ivm`) model full-bright: the item viewer's path.
     ///
     /// The item mesh keeps its own texture page (one 256-colour CLUT row, so
@@ -2005,7 +2071,11 @@ impl Framebuffer {
             collect_ivm_triangles(object, joint, camera, light, &mut triangles);
         }
         triangles.sort_by(|a, b| b.depth.total_cmp(&a.depth));
-        self.queue_model(ivm, &triangles, page);
+        self.queue_model(
+            crate::hires::ModelSource::Item(ivm.clone()),
+            &triangles,
+            page,
+        );
     }
 
     /// Draw polygons already on the screen through `ivm`'s page, in the
@@ -2057,14 +2127,18 @@ impl Framebuffer {
             }
             return;
         }
-        self.queue_model(ivm, &triangles, page);
+        self.queue_model(
+            crate::hires::ModelSource::Item(ivm.clone()),
+            &triangles,
+            page,
+        );
     }
 
     /// Queue `triangles`, drawn in order, for the GPU renderer's model pass
     /// ([`crate::draw2d::Kind::Model`]).
     fn queue_model(
         &mut self,
-        ivm: &std::sync::Arc<crate::ivm::Ivm>,
+        source: crate::hires::ModelSource,
         triangles: &[Triangle],
         page: Option<std::sync::Arc<crate::hires::Replacement>>,
     ) {
@@ -2072,7 +2146,8 @@ impl Framebuffer {
         else {
             return;
         };
-        if triangles.is_empty() || ivm.texture.width == 0 || ivm.texture.height == 0 {
+        let texture = source.texture();
+        if triangles.is_empty() || texture.width == 0 || texture.height == 0 {
             return;
         }
         let [x0, y0, x1, y1] = visible;
@@ -2081,6 +2156,7 @@ impl Framebuffer {
             .iter()
             .flat_map(|triangle| {
                 let packed = (triangle.palette_row as u32 & 0xFF) << 8
+                    | u32::from(triangle.view_depth) << 22
                     | u32::from(triangle.blend) << 24
                     | u32::from(triangle.flat.is_some()) << 25;
                 std::array::from_fn::<_, 3, _>(|corner| {
@@ -2090,7 +2166,7 @@ impl Framebuffer {
                     let ndc_y = 1.0 - (vertex.position[1] - y0 as f32) / height * 2.0;
                     crate::hires::ModelVertex {
                         clip: [ndc_x * w, ndc_y * w, depth_ndc(w) * w, w],
-                        uv: stored_uv(vertex, triangle.uv_nudge[corner], &ivm.texture),
+                        uv: stored_uv(vertex, triangle.uv_nudge[corner], texture),
                         shade: vertex.shade,
                         packed,
                     }
@@ -2102,7 +2178,7 @@ impl Framebuffer {
         let rect = [x0 + x, y0 + y, x1 + x, y1 + y];
         list.push(crate::draw2d::Item {
             kind: crate::draw2d::Kind::Model(std::sync::Arc::new(crate::hires::Model {
-                ivm: ivm.clone(),
+                source,
                 vertices,
                 page,
             })),
@@ -3703,6 +3779,11 @@ pub struct Camera {
     /// (`re2_near_clip`), lit or not: an RE2 door's camera. An RE2-lit
     /// draw is clipped whatever its camera.
     pub near_clip: bool,
+    /// The game's own view matrix, in the Y-up form, and its translation,
+    /// for a camera given as those ([`Camera::from_view`]): a model's
+    /// projection takes them as they are, where it otherwise rebuilds the
+    /// room camera's from `from` and `look_at` (`ref_camera`).
+    pub stored: Option<([[i32; 3]; 3], [i32; 3])>,
 }
 
 /// `a * b` for two 4.12 rotation matrices, each product truncated toward zero
@@ -3798,6 +3879,91 @@ impl Camera {
             mirrored: false,
             view_z_shift: 0,
             near_clip: false,
+            stored: None,
+        }
+    }
+
+    /// A camera of the game's own view matrix and translation, which take a
+    /// world point to a view whose Y grows down the screen: `view` has that
+    /// row negated (see [`Camera::from_points_rolled`]), and a model is
+    /// projected through the matrix itself ([`Camera::stored`]).
+    ///
+    /// The camera has no eye and no look-at point of its own, so
+    /// [`Camera::mirrored`], which reflects those, doesn't keep the matrix.
+    pub fn from_view(matrix: [[i32; 3]; 3], trans: [i32; 3], fov: i32) -> Self {
+        let y_up = std::array::from_fn(|row| {
+            std::array::from_fn(|column| {
+                if (row == 1) != (column == 1) {
+                    matrix[row][column].wrapping_neg()
+                } else {
+                    matrix[row][column]
+                }
+            })
+        });
+        Self {
+            stored: Some((y_up, trans)),
+            view: [matrix[0], matrix[1].map(i32::wrapping_neg), matrix[2]],
+            trans: [trans[0], trans[1].wrapping_neg(), trans[2]],
+            fov,
+            roll: 0,
+            screen: [0, 0],
+            from: [0; 3],
+            look_at: [0; 3],
+            mirrored: false,
+            view_z_shift: 0,
+            near_clip: false,
+        }
+    }
+
+    /// RE 2's `Set_view` (0x502DB0), the camera of its gallery's models: the
+    /// view from `from` towards `to`, a pitch about X times a yaw about Y.
+    ///
+    /// Each sine and cosine is a 4.12 quotient by a length from the table
+    /// square root (`sca::square_root0`), which rounds down coarsely:
+    /// a length of 4900 reads 4884, and the view's rows are that much longer
+    /// than a rotation's. Every sum is made in 32 bits and floored at 12
+    /// fractional bits, and the matrix keeps the low 16 bits of each, which
+    /// the translation is then made from. A view straight up or down has no
+    /// yaw.
+    pub fn from_set_view(from: [i32; 3], to: [i32; 3], fov: i32) -> Self {
+        let [dx, dy, dz]: [i32; 3] = std::array::from_fn(|axis| to[axis].wrapping_sub(from[axis]));
+        let square = |value: i32| value.wrapping_mul(value);
+        let level = square(dx).wrapping_add(square(dz));
+        let length = crate::sca::square_root0(level.wrapping_add(square(dy)));
+        let across = crate::sca::square_root0(level);
+        let quotient = |value: i32, by: i32| {
+            if by == 0 {
+                0
+            } else {
+                i32::from(value.wrapping_mul(0x1000).wrapping_div(by) as i16)
+            }
+        };
+        // `MulMatrix0` and `ApplyMatrixLV`: each sum in 32 bits, floored,
+        // and a `MATRIX` holds shorts.
+        let dot = |a: [i32; 3], b: [i32; 3]| {
+            (0..3).fold(0i32, |sum, k| sum.wrapping_add(a[k].wrapping_mul(b[k]))) >> FIXED_BITS
+        };
+        let mul = |a: &[[i32; 3]; 3], b: &[[i32; 3]; 3]| -> [[i32; 3]; 3] {
+            std::array::from_fn(|i| {
+                std::array::from_fn(|j| i32::from(dot(a[i], [b[0][j], b[1][j], b[2][j]]) as i16))
+            })
+        };
+        // A negated sine is a short again: -0x8000 stays as it is.
+        let negated = |sin: i32| i32::from(sin.wrapping_neg() as i16);
+        let (cos, sin) = (quotient(across, length), quotient(dy, length));
+        let mut view = [[0x1000, 0, 0], [0, cos, negated(sin)], [0, sin, cos]];
+        if across != 0 {
+            let (cos, sin) = (quotient(dz, across), quotient(dx, across));
+            view = mul(
+                &view,
+                &[[cos, 0, negated(sin)], [0, 0x1000, 0], [sin, 0, cos]],
+            );
+        }
+        let trans = view.map(|row| dot(row, from.map(i32::wrapping_neg)));
+        Self {
+            from,
+            look_at: to,
+            ..Self::from_view(view, trans, fov)
         }
     }
 
@@ -4987,8 +5153,13 @@ fn shake_tilt(camera: &Camera) -> Option<[[f32; 3]; 3]> {
 
 /// `g_RoomCameraData`: the stored camera rotation and translation.
 pub(crate) fn ref_camera(camera: &Camera) -> ([[i32; 3]; 3], [i32; 3]) {
-    let mut view = stored_camera_matrix(camera.from, camera.look_at);
-    let mut view_t = apply_matrix_lv(&view, camera.from.map(i32::wrapping_neg));
+    let (mut view, mut view_t) = camera.stored.unwrap_or_else(|| {
+        let view = stored_camera_matrix(camera.from, camera.look_at);
+        (
+            view,
+            apply_matrix_lv(&view, camera.from.map(i32::wrapping_neg)),
+        )
+    });
     if camera.mirrored {
         // `entity_draw_mirror_reflection` composes a negated-X identity
         // into the reflected camera, rotation and translation alike.
@@ -5718,6 +5889,7 @@ mod tests {
             mirrored: false,
             view_z_shift: 0,
             near_clip: false,
+            stored: None,
         }
     }
 
@@ -6131,6 +6303,83 @@ mod tests {
         // whole unit. Y is negated on the way in and out.
         let m = [[1, 1, 0], [0, 1, 1], [-1, 0, -1]];
         assert_eq!(apply_matrix_sv(&m, [2048, -2048, 2048]), [1, -1, -1]);
+    }
+
+    #[test]
+    fn set_views_camera_is_the_originals_matrix_with_its_coarse_lengths() {
+        // The gallery's two views as the original's `Sp_matrix` and its
+        // translation held them, with the Y row negated as a camera stores
+        // it. The level one looks along X, 4900 away by a length read 4884.
+        let level = Camera::from_set_view([5000, -1500, -700], [100, -1500, -700], 300);
+        assert_eq!(level.view, [[0, 0, 4109], [0, -4096, 0], [-4109, 0, 0]]);
+        assert_eq!(level.trans, [702, -1500, 5015]);
+        assert_eq!(level.fov, 300);
+        // A model is projected through the matrix itself, in the Y-up form
+        // of a part's, and the translation as the original has it.
+        assert_eq!(
+            ref_camera(&level),
+            (
+                [[0, 0, 4109], [0, 4096, 0], [-4109, 0, 0]],
+                [702, 1500, 5015]
+            )
+        );
+        let raised = Camera::from_set_view([5000, -1800, -1000], [1000, -1000, -400], 300);
+        assert_eq!(
+            raised.view,
+            [[608, 0, 4056], [-792, -4039, 119], [-4000, 800, 599]]
+        );
+        assert_eq!(raised.trans, [248, -779, 5380]);
+        assert_eq!(
+            ref_camera(&raised),
+            (
+                [[608, 0, 4056], [-792, 4039, 119], [-4000, -800, 599]],
+                [248, 779, 5380]
+            )
+        );
+        // It is the room camera's view but for those lengths.
+        let room = Camera::from_points([5000, -1800, -1000], [1000, -1000, -400], 300);
+        for (row, other) in raised.view.iter().zip(&room.view) {
+            for (value, other) in row.iter().zip(other) {
+                assert!((value - other).abs() <= 32, "{raised:?} {room:?}");
+            }
+        }
+        // Straight down there is no yaw, and nowhere at all no view.
+        let down = Camera::from_set_view([0, -1024, 0], [0, 0, 0], 300);
+        assert_eq!(down.view, [[4096, 0, 0], [0, 0, 4096], [0, 4096, 0]]);
+        assert_eq!(down.trans, [0, 0, 1024]);
+        let nowhere = Camera::from_set_view([7, 8, 9], [7, 8, 9], 300);
+        assert_eq!(nowhere.view, [[4096, 0, 0], [0, 0, 0], [0, 0, 0]]);
+        // Lengths past a short's wrap, and the matrix keeps the low 16 bits
+        // of each sum: the translation is made from those.
+        let wrapped = Camera::from_set_view([4096, 0, 0], [69633, 65538, 0], 300);
+        let (matrix, trans) = ref_camera(&wrapped);
+        assert_eq!(matrix[1][0], -23256);
+        assert_eq!(trans[1], -23256);
+        assert_eq!(wrapped.view[1][0], -23256);
+        assert_eq!(wrapped.trans[1], 23256);
+        // The translation's own sums wrap at 32 bits before they are
+        // floored: 4096 * -524289 is 2147479552 there.
+        let far = Camera::from_set_view([524289, 0, 0], [524289, 0, 4096], 300);
+        assert_eq!(far.view, [[4096, 0, 0], [0, -4096, 0], [0, 0, 4096]]);
+        assert_eq!(far.trans, [524287, 0, 0]);
+        // A sine of -0x8000 is its own negation in a short. Here the pitch's
+        // is, over a length the table reads as 10932, and the yaw's sine is
+        // 3673: the product is -0x8000 * 3673 and not its opposite.
+        let steep = Camera::from_set_view([0, 0, 0], [1000, -262370, 500], 300);
+        assert_eq!(ref_camera(&steep).0[1][0], 29384);
+        assert_eq!(steep.view[1][0], 29384);
+        for row in wrapped.view {
+            for value in row {
+                assert_eq!(value, i32::from(value as i16));
+            }
+        }
+        // Nothing a script can ask for is more than the arithmetic holds.
+        for far in [i32::MIN, i32::MAX] {
+            let _ = Camera::from_set_view([far; 3], [far.wrapping_add(7), 0, far], far);
+            let _ = Camera::from_set_view([0; 3], [far; 3], far);
+            let camera = Camera::from_view(anim::IDENTITY_MATRIX, [far; 3], far);
+            let _ = ref_camera(&camera);
+        }
     }
 
     #[test]
@@ -8724,7 +8973,10 @@ mod tests {
         let crate::draw2d::Kind::Model(queued) = &item.kind else {
             panic!("not a model item");
         };
-        assert!(std::sync::Arc::ptr_eq(&queued.ivm, &model));
+        assert!(matches!(
+            &queued.source,
+            crate::hires::ModelSource::Item(ivm) if std::sync::Arc::ptr_eq(ivm, &model)
+        ));
         assert_eq!(queued.vertices.len(), 3);
         // Untextured, and the triangle spans the whole clip: its corners
         // land outside the item's clip space.

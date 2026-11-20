@@ -75,9 +75,18 @@ fn emr(skeleton: bool) -> Vec<u8> {
 /// One part: three vertices and normals, a triangle on page 1 and a quad on
 /// page 0.
 fn md1() -> Vec<u8> {
+    md1_of(
+        [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]],
+        [0, 1, 2, 3],
+    )
+}
+
+/// [`md1`] with its four vertices at `corners`: the triangle is the first
+/// three and the quad those numbered `quad`.
+fn md1_of(corners: [[i16; 3]; 4], quad: [u16; 4]) -> Vec<u8> {
     let mut body = Vec::new();
     let vertices = body.len();
-    for vertex in [[1i16, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]] {
+    for vertex in corners {
         for value in vertex {
             put16(&mut body, value as u16);
         }
@@ -101,8 +110,9 @@ fn md1() -> Vec<u8> {
     body.extend_from_slice(&[5, 6]);
     put16(&mut body, 0);
     let quads = body.len();
-    for value in [0u16, 0, 1, 1, 2, 2, 3, 3] {
-        put16(&mut body, value);
+    for (normal, vertex) in quad.into_iter().enumerate() {
+        put16(&mut body, normal as u16);
+        put16(&mut body, vertex);
     }
     let quad_textures = body.len();
     for corner in 0..4u8 {
@@ -168,6 +178,19 @@ pub(crate) fn tim(width: u16, height: u16, rows: u16, index: impl Fn(u16, u16) -
 /// A whole PLD: one clip, two joints, one part and a two-page texture.
 pub(crate) fn pld() -> Vec<u8> {
     container(&[edd(), emr(true), md1(), tim(256, 256, 2, |_, _| 0)])
+}
+
+/// A two-page texture whose first page is index 2 and second index 1. The
+/// fixture's triangle is on the second, and its row shows that as BGR555
+/// `0x101`; the first page's would be `0x102`.
+pub(crate) fn paged_tim() -> Vec<u8> {
+    tim(256, 256, 2, |x, _| if x < 128 { 2 } else { 1 })
+}
+
+/// [`pld`] with its part's vertices at `corners` and no quad to speak of,
+/// all of it at the last, under [`paged_tim`].
+pub(crate) fn pld_of(corners: [[i16; 3]; 4]) -> Vec<u8> {
+    container(&[edd(), emr(true), md1_of(corners, [3; 4]), paged_tim()])
 }
 
 #[test]
@@ -236,6 +259,22 @@ pub(crate) fn emd() -> Vec<u8> {
     ])
 }
 
+/// [`emd`] with its part's vertices at `corners` and no quad to speak of,
+/// as [`pld_of`] has them.
+pub(crate) fn emd_of(corners: [[i16; 3]; 4]) -> Vec<u8> {
+    let empty = vec![0u8; 4];
+    container(&[
+        empty.clone(),
+        edd(),
+        emr(true),
+        edd(),
+        emr(false),
+        empty.clone(),
+        empty,
+        md1_of(corners, [3; 4]),
+    ])
+}
+
 /// A three-row enemy texture with STP bits set, including on the black
 /// transparent entry.
 pub(crate) fn enemy_tim() -> Vec<u8> {
@@ -279,6 +318,61 @@ fn an_emd_has_three_banks_and_takes_its_texture_from_the_tim() {
     // EM020's second bank: four-byte chunks with nothing in them.
     assert_eq!(model.banks[1], AnimBank::default());
     assert_eq!(model.texture.indices[0], 7);
+}
+
+/// An MD1 of `parts` parts that all name one pool of four vertices and
+/// normals and one list of `triangles` triangles, with no quads.
+fn shared_md1(parts: usize, triangles: usize) -> Vec<u8> {
+    let table = parts * 2 * MD1_OBJECT_LEN;
+    let vectors = 4 * MD1_VECTOR_LEN;
+    let list = triangles * MD1_TRIANGLE_LEN;
+    let mut data = Vec::new();
+    put32(&mut data, 0);
+    put32(&mut data, 0);
+    put32(&mut data, parts as u32 * 2);
+    for object in 0..parts * 2 {
+        for value in [
+            table,
+            4,
+            table + vectors,
+            4,
+            table + 2 * vectors,
+            if object % 2 == 0 { triangles } else { 0 },
+            table + 2 * vectors + list,
+        ] {
+            put32(&mut data, value as u32);
+        }
+    }
+    data.resize(data.len() + 2 * vectors + 2 * list, 0);
+    data
+}
+
+#[test]
+fn parts_sharing_their_pools_are_held_to_the_budget_together() {
+    // Every part of a file can name the same vertices and primitives, and
+    // each decodes its own, so 90 KB can ask for over a million primitives.
+    // It is refused before any part is read.
+    let data = shared_md1(1100, 1000);
+    assert!(data.len() < 100_000);
+    let error = parse_md1(&data).unwrap_err();
+    assert!(
+        format!("{error:#}").contains("MD1 primitive total"),
+        "{error:#}"
+    );
+    // Within the budget each part is its own copy, and the model's size
+    // counts every one.
+    let shared = parse_md1(&shared_md1(3, 2)).unwrap();
+    assert_eq!(shared.objects.len(), 3);
+    assert_eq!(shared.objects[0].prims.len(), 2);
+    assert_eq!(shared.objects[2], shared.objects[0]);
+    let mut model = parse_pld(&pld()).unwrap();
+    model.mesh = parse_md1(&shared_md1(1, 2)).unwrap();
+    let single = model.decoded_bytes();
+    let part = std::mem::size_of::<TmdObject>()
+        + 8 * std::mem::size_of::<[i16; 3]>()
+        + 2 * std::mem::size_of::<crate::model::TmdPrim>();
+    model.mesh = shared;
+    assert_eq!(model.decoded_bytes(), single + 2 * part);
 }
 
 #[test]
@@ -461,6 +555,63 @@ fn a_part_blends_through_the_shapes_it_is_given() {
     assert_eq!(half[0], [0x87F, 0x1000, 0x1800]);
     // A table that runs off the chunk gives no shapes rather than a wrong one.
     assert!(parse_morphs(&chunk[..50], &mesh, &Skeleton::default()).is_empty());
+}
+
+#[test]
+fn a_small_file_cannot_ask_for_copies_without_end() {
+    // A part with no vertices has shapes of no length, as many as it
+    // likes, and each target copies every joint's place: 16 KiB of zeroes
+    // would be a hundred megabytes. A target without its word of weight
+    // isn't one, and the morphs keep to the mesh's budget of vectors.
+    let mesh = Tmd {
+        objects: vec![TmdObject::default()],
+    };
+    let skeleton = Skeleton {
+        relative: vec![[0; 3]; budget::MAX_EMD_JOINTS],
+        children: vec![Vec::new(); budget::MAX_EMD_JOINTS],
+    };
+    for targets in [16_384u32, 4000] {
+        let mut chunk = Vec::new();
+        for word in [1, 0, 0, 0, 0, targets] {
+            put32(&mut chunk, word);
+        }
+        chunk.resize(16_384, 0);
+        assert!(
+            parse_morphs(&chunk, &mesh, &skeleton).is_empty(),
+            "{targets}"
+        );
+    }
+    // A hundred of them is within it.
+    let mut chunk = Vec::new();
+    for word in [1, 0, 0, 0, 0, 100] {
+        put32(&mut chunk, word);
+    }
+    chunk.resize(16_384, 0);
+    let morphs = parse_morphs(&chunk, &mesh, &skeleton);
+    assert_eq!(morphs[0].all_targets.len(), 100);
+
+    // Every joint of a skeleton can name the same list of children, each
+    // a copy: together they are held to a skeleton's worth.
+    let joints = budget::MAX_EMD_JOINTS;
+    let armature = 8 + joints * 6;
+    let skeleton = |children: u16| {
+        let mut data = Vec::new();
+        for value in [armature as u16, 0, joints as u16, 0] {
+            put16(&mut data, value);
+        }
+        data.resize(armature, 0);
+        for _ in 0..joints {
+            put16(&mut data, children);
+            put16(&mut data, 0);
+        }
+        parse_skeleton(&data, 0, data.len())
+    };
+    assert_eq!(skeleton(1).unwrap().children.len(), joints);
+    let error = skeleton(2).unwrap_err();
+    assert!(
+        format!("{error:#}").contains("EMR child total"),
+        "{error:#}"
+    );
 }
 
 #[test]

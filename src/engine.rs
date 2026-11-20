@@ -29114,7 +29114,7 @@ mod tests {
             objects: Vec::new(),
         });
         let model = std::sync::Arc::new(crate::hires::Model {
-            ivm: model,
+            source: crate::hires::ModelSource::Item(model),
             vertices: [[-1.0, 1.0], [1.0, 1.0], [-1.0, -1.0]]
                 .map(|[x, y]| crate::hires::ModelVertex {
                     clip: [x, y, 0.5, 1.0],

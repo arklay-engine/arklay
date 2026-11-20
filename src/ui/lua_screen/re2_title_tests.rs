@@ -99,6 +99,28 @@ fn build_pack(prologue_art: bool, gallery_art: GalleryArt) -> Pack {
                 .add(&format!("ui/gallery/{stem}.tim"), sheet)
                 .unwrap();
         }
+        // Two of the gallery's models, each a triangle 800 wide and 800
+        // tall on its point, facing along X (`re2_gallery_tests`): its
+        // first, an enemy's file with its page and its second row's
+        // swatch, 1600 up, and the first player's.
+        let mut texture = crate::emd2::texture_bmps(&crate::emd2::tests::paged_tim())
+            .unwrap()
+            .into_iter();
+        let triangle =
+            crate::emd2::tests::emd_of([[0, -2400, -400], [0, -2400, 400], [0, -1600, 0], [0; 3]]);
+        writer.add("enemy/50/enemy_1.emd", triangle).unwrap();
+        writer
+            .add("enemy/50/enemy_1.bmp", texture.next().unwrap())
+            .unwrap();
+        writer
+            .add(
+                &crate::emd2::clut_entry("enemy/50/enemy_1", 1),
+                texture.next().unwrap(),
+            )
+            .unwrap();
+        let triangle =
+            crate::emd2::tests::pld_of([[0, -800, -400], [0, -800, 400], [0, 0, 0], [0; 3]]);
+        writer.add("player/0b/model_1.pld", triangle).unwrap();
     }
     if prologue_art {
         for stem in ["open10", "open11"] {

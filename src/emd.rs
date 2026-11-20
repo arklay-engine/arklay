@@ -217,6 +217,9 @@ pub(crate) fn parse_skeleton(data: &[u8], emr_offset: usize, emr_end: usize) -> 
         "EMR armature entries",
     )?;
     let mut children = budget::alloc(joint_count, "EMR joint children")?;
+    // The joints' lists can be one and the same bytes, each copied: all of
+    // them together are held to what a tree of that many joints could have.
+    let mut listed = 0usize;
     for (index, entry) in entries
         .as_chunks::<ARMATURE_ENTRY_LEN>()
         .0
@@ -228,6 +231,8 @@ pub(crate) fn parse_skeleton(data: &[u8], emr_offset: usize, emr_end: usize) -> 
         if child_count < 0 || child_list_offset < 0 {
             bail!("EMR armature entry {index} has a negative child count or list offset");
         }
+        listed += child_count as usize;
+        budget::check_len(listed, budget::MAX_EMD_JOINTS, "EMR child total")?;
         let list_start = armature_base
             .checked_add(child_list_offset as usize)
             .context("EMR child list offset overflows")?;
