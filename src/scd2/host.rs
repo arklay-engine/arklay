@@ -6336,6 +6336,55 @@ mod tests {
     }
 
     #[test]
+    fn the_window_names_its_item_to_the_message_a_file_too() {
+        // `Sce_Item`: `Mess_item = *area`, which message 10's name tag reads.
+        for item in [0x1E, 0x6B, 0x71] {
+            let game = press_item_area(item, 94, 2);
+            let named = game.state_bytes[usize::from(crate::game::STATE_BYTE_SELECTED_ITEM)];
+            assert_eq!(named, item);
+        }
+    }
+
+    #[test]
+    fn the_filed_message_shows_the_files_name() {
+        use crate::game::status2::Input;
+        use crate::message::MessageInput;
+        use crate::pack::{Pack, PackWriter};
+        // Message 10 is its name tag and a letter; file 3's name two more.
+        let language = "MESSAGE_0A = \"\\x06\\x00\\x1D\"\nITEM_6B_NAME = \"\\x1E\\x1F\"\n";
+        let mut writer = PackWriter::new();
+        writer
+            .add("language/en-US.txt", language.as_bytes().to_vec())
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let text = crate::text::Text::load(&pack, None);
+        let name = text.decode(&[0x1E, 0x1F]);
+        assert_eq!(name.chars().count(), 2);
+
+        let mut game = press_item_area(0x6B, 94, 2);
+        run_to(&mut game, crate::game::Re2ItemGetPhase::FileRead);
+        for _ in 0..13 {
+            game.tick_re2_item_get(Input::default());
+        }
+        let cancel = Input {
+            cancel: true,
+            ..Input::default()
+        };
+        game.tick_re2_item_get(cancel);
+        assert!(game.message.active, "message 10 is up");
+        let room = crate::state::RoomState::default();
+        for _ in 0..40 {
+            game.update_message(MessageInput::default(), &room, &text);
+        }
+        assert!(game.message.active);
+        let shown = game.message.page_lines(&text).concat();
+        assert!(shown.starts_with(&name), "{shown:?} names {name:?}");
+        assert_eq!(shown.chars().count(), 3);
+        // The inventory's chosen item is another thing, and stays.
+        assert_eq!(game.selected_item, None);
+    }
+
+    #[test]
     fn a_file_whose_object_is_0xff_clears_no_object() {
         // `St_get_file` sub 6: `if (object != 0xff) pOm[object * 0x7e] = 0`.
         let mut game = press_item_area(0x71, 25, 0xFF);

@@ -927,6 +927,38 @@ function ScreenApi:picture_sprite_scaled(picture, sx, sy, sw, sh, dx, dy, dw, dh
 ---@param blend? "opaque"|"half"|"variant"|"add"|integer Default `"opaque"`. `"variant"` is the original's variant-2 half alpha over the frame; `"half"` averages, `"add"` adds. An integer is an alpha, clamped to `0..=255`: the sprite goes over the frame at that weight, from the page itself (an HD replacement isn't drawn at a weight). The software renderer smooths one drawn at another size than its texels as the original's 640 x 480 frame shows it; the GPU renderer samples it once to a pixel.
 function ScreenApi:page_sprite_scaled(page, sx, sy, sw, sh, dx, dy, dw, dh, clut, scale, tint, blend) end
 
+---*Draw only.* A page region through CLUT row `clut` as RE 2's PC version
+---draws a sprite. Each channel of an indexed page's texel is multiplied by
+---twice the colour's (capped at 255) over 255 and rounded, so `0x80` is the
+---texel as it is, less dims it and more does nothing. `widen` names how that version
+---made the page's 15-bit colours 8-bit, which differs from sheet to sheet:
+---`"bits"` repeats a level's top bits below it (level 20 is 165) and
+---`"seven"` is eight times the level plus 7, with 0 left at 0 (level 10 is
+---87); without it the colours are the pack's (level 20 is 164). A colour
+---with a channel that isn't a 5-bit level's (a page of a mod's own) is kept
+---whole either way. Index 0 is clear, and so is black without the
+---PlayStation's semi-transparency bit; an empty rect, or a row the page
+---hasn't, draws nothing. An HD replacement of the row is drawn in its own
+---colours under `rgb` as a tint; a row with none takes the replacement of
+---the page's first row, recoloured by the page's indices, so one made from
+---the first row serves them all. A page that isn't indexed has no rows or
+---levels: `clut` and `widen` don't apply, and it is drawn under `rgb` as the
+---engine's tint (twice the colour over 255, not rounded).
+---@param page integer A page handle.
+---@param sx integer
+---@param sy integer
+---@param sw integer
+---@param sh integer
+---@param dx integer
+---@param dy integer
+---@param dw integer
+---@param dh integer
+---@param clut integer The CLUT row (capped at 255).
+---@param rgb? integer[] `{r, g, b}`, each held to `0..=255`. Default `{0x80, 0x80, 0x80}`.
+---@param widen? "bits"|"seven"
+---@param blend? "opaque"|"half"|"variant"|"add"|integer As [`api:page_sprite_scaled`](#ScreenApi.page_sprite_scaled) takes it, but that `"half"` is this version's: the sprite at 128 of 255 over the frame, rounded, with an HD replacement drawn at that weight too. An integer alpha draws from the page itself, as there.
+function ScreenApi:page_sprite_modulated(page, sx, sy, sw, sh, dx, dy, dw, dh, clut, rgb, widen, blend) end
+
 ---@class ScreenEffectCamera
 ---@field from integer[] `{x, y, z}` eye position.
 ---@field to integer[] `{x, y, z}` look-at point.

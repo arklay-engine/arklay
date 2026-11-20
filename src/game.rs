@@ -9698,6 +9698,10 @@ impl GameState {
     }
 
     fn open_re2_item_get(&mut self, action: RoomAction) {
+        // `Sce_Item` (`0x4E96C0`) names the area's item to the message
+        // window (`Mess_item`, `0x98504F`), a file's id among them: message
+        // 10's name is the file's.
+        self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = action.params[0];
         self.re2_item_get = Some(Re2ItemGet {
             action,
             phase: Re2ItemGetPhase::Open,
