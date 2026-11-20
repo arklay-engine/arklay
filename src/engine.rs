@@ -27512,6 +27512,39 @@ mod tests {
         assert_eq!(session.loaded.id, a);
     }
 
+    /// `Status`'s start clears the screen's work on the open's sixth tick
+    /// (`inv_cursor_reopen`, 606): the cursors the last screen left stand
+    /// in the trace until then, and not on the page's first tick.
+    #[test]
+    fn re2s_status_start_clears_the_last_screens_work_on_its_sixth_tick() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.message_flags |= START_MESSAGE_BITS;
+        const LEFT: &str = "0,0,0,0,3,1,0,0";
+        session.game.re2_items_trace = LEFT.to_string();
+        let start = UiInput {
+            start: true,
+            any: true,
+            ..UiInput::default()
+        };
+        re2_tick(&mut session, &pack, start);
+        let mut cleared = None;
+        for _ in 0..RE2_STATUS_INIT + 1 {
+            re2_tick(&mut session, &pack, UiInput::default());
+            let open = session.re2_status_open.expect("the screen is opening");
+            let trace = session.game.re2_items_trace.as_str();
+            if open < RE2_STATUS_INIT {
+                assert_eq!(trace, LEFT, "tick {open}");
+            } else if cleared.is_none() {
+                assert_eq!(trace, game::status2::ItemPage::CLEARED_TRACE);
+                cleared = Some(open);
+            }
+        }
+        assert_eq!(cleared, Some(RE2_STATUS_INIT));
+    }
+
     /// `Game_loop` tests START after `Sce_scheduler`, and only while `Game`
     /// is 0: a START pressed on the tick the scripts' `aot_on` fires an
     /// `Sce_Status` (room 108's event 7) isn't taken, and its mask on the

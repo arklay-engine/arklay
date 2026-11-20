@@ -5,12 +5,10 @@
 404
 420 right
 424
-440 down
+440 confirm
 444
-460 confirm
-464
-480 down
-484
+470 down
+474
 500 cancel
 504
 520 start

@@ -148,6 +148,13 @@ impl BoxPage {
         }
     }
 
+    /// The status screen's work as the box leaves it (the oracle's `gi`,
+    /// arklay's `ip`): the box's sub, count and cursor are the item page's
+    /// own bytes (`0x691F62`, `0x691F63` and the slot cursor, `0x691F6C`).
+    pub fn items_trace(&self) -> String {
+        format!("{},{},0,0,{},0,0,0", self.sub, self.count, self.cursor)
+    }
+
     /// The oracle's `ib` page bytes.
     pub fn trace(&self) -> String {
         format!(
@@ -466,6 +473,7 @@ impl GameState {
             _ => self.re2_box_page(&mut page, input, &mut out),
         }
         page.step_pulse();
+        self.re2_items_trace = page.items_trace();
         self.re2_box = Some(page);
         Some(out)
     }
@@ -1129,6 +1137,38 @@ mod tests {
         game.close_re2_box();
         assert_eq!(game.equipped, Some(0x0F));
         assert_eq!(game.equipped_slot, Some(1));
+    }
+
+    /// The box's sub, count and cursor are the item page's own work bytes:
+    /// the status screen's trace (`ip`, the oracle's `gi`) follows them
+    /// while the box runs (`box_201`: the cursor's 2 from 480, sub 1 on
+    /// 510), from the cleared work the screen's start leaves.
+    #[test]
+    fn the_box_moves_the_item_pages_work() {
+        let mut game = GameState::new(RoomId::parse("2010").unwrap(), &RoomState::default());
+        game.is_re2_room = true;
+        game.inventory = [(2, 18), (1, 1), (0x14, 30)]
+            .iter()
+            .map(|&(id, quantity)| InventoryItem { id, quantity })
+            .collect();
+        game.re2.item_box[0] = [0x14, 15, 0];
+        game.re2_items_trace = "0,0,0,0,3,0,2,0".to_string();
+        game.open_re2_box();
+        game.init_re2_status();
+        assert_eq!(game.re2_items_trace, "0,0,0,0,0,0,0,0");
+        game.start_re2_box();
+        press(&mut game, DOWN);
+        let page = game.re2_box.unwrap();
+        assert_eq!(page.cursor, 2);
+        assert_eq!(game.re2_items_trace, "0,0,0,0,2,0,0,0");
+        press(&mut game, CONFIRM);
+        let page = game.re2_box.unwrap();
+        assert_ne!(page.sub, 0);
+        assert_eq!(game.re2_items_trace, page.items_trace());
+        assert_eq!(
+            page.items_trace(),
+            format!("{},{},0,0,2,0,0,0", page.sub, page.count)
+        );
     }
 
     /// The screen's opening `Sort_item` runs between the open and the

@@ -926,9 +926,9 @@ impl GameState {
     /// open's sixth tick, the frame before the fade in's first.
     pub fn init_re2_status(&mut self) {
         self.re2_file.blink = Blink::OPEN;
-        // `Status`'s start clears the screen's work: the cursor the last
-        // close left (the tab bar's EXIT) is gone on this tick, the one
-        // before the page's first.
+        // `Status`'s start clears the screen's work: the cursors the last
+        // close left are gone on this tick, the one before the page's
+        // first.
         self.re2_items_trace = ItemPage::CLEARED_TRACE.to_string();
         // `St_init00` (`0x4F7CD0`), mode 0's alone (START's screen and
         // `Sce_Status`'s): on EASY, the character's hint file's last page
