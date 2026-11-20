@@ -2000,11 +2000,14 @@ const MENU_REQUEST_MASK: u16 = 0xFF7A;
 /// the suspension takes hold.
 const MENU_CLOSE_FREEZE_FRAMES: u8 = 4;
 
-/// RE2's status screen's close: from the tick its page goes to 0 to the tick
-/// game mode 3 restarts the player, the world moving again on the next. The
-/// fade out takes six ticks (`0x1800` a tick), page 1 sees its end on the
-/// next, and the room's return and the main task's states take three more;
-/// every recording closes in the same ten.
+/// RE2's status screen's close with its fade out: from the tick its page
+/// goes to 0 to the tick game mode 3 restarts the player, the world moving
+/// again on the next. The fade out takes six ticks (`0x1800` a tick), page 1
+/// sees its end on the next, and the room's return and the main task's
+/// states take three more; every recording of a faded close takes the same
+/// ten. A close with no fade out of its own (START on the item box's
+/// inventory) skips the count to the seventh, the first black one, as soon
+/// as no fade is running.
 const RE2_STATUS_CLOSE_TICKS: u8 = 10;
 /// The status screen's open tick from which `Cut_no` reads 0.
 const RE2_STATUS_CUT_TICK: u8 = 6;
@@ -5589,9 +5592,15 @@ impl GameSession {
         self.menu = None;
         self.game.close_re2_items();
         // A screen that failed leaves here, not by the status screen's
-        // close: its map goes with it.
+        // close: its map and its item box's page go with it, or the next
+        // screen's keys would be the page's.
         self.game.re2_script_map = None;
         self.game.re2_key_map = None;
+        if self.game.re2_box.is_some() {
+            self.game.close_re2_box();
+            self.game.tick_re2_box_entrance();
+        }
+        self.re2_status_unfaded = false;
         self.examine = None;
         self.item_box = None;
         if std::mem::take(&mut self.map_direct) {
@@ -27877,17 +27886,26 @@ mod tests {
             Some(Re2StatusView::Screen(None)),
             "the press's tick still draws the screen"
         );
-        // The wait's one tick: the page's draw steps once more, on black.
+        // The wait's one tick: the page's draw steps once more, on black,
+        // with the cut still the screen's.
         tick(&mut session, UiInput::default());
         assert_eq!(session.re2_status_close, Some(RE2_STATUS_SHOWN));
         assert_eq!(session.re2_status_view(), Some(Re2StatusView::Black));
         assert_ne!(session.game.re2_box.unwrap().pulse, page.pulse);
+        assert!(session.re2_status_clears_cut());
+        assert_eq!(session.present_skip.left(), 0);
         let pulse = session.game.re2_box.unwrap().pulse;
+        // `St_exit` hands the cut back on the next, whose `Swap_Cbuff` loads
+        // the room's view.
+        let mut held = Vec::new();
         for _ in 0..2 {
             tick(&mut session, UiInput::default());
             assert_eq!(session.re2_status_view(), Some(Re2StatusView::Black));
             assert_eq!(session.game.re2_box.unwrap().pulse, pulse);
+            assert!(!session.re2_status_clears_cut());
+            held.push(session.present_skip.left());
         }
+        assert_eq!(held, [1, 0], "the load's held frame");
         tick(&mut session, UiInput::default());
         assert!(session.game.re2_box.is_none() && session.menu.is_none());
         assert!(session.re2_status_close.is_none() && !session.re2_status_unfaded);
@@ -27898,9 +27916,10 @@ mod tests {
         // three under the fade's steps, and the screen is black on the
         // tick the fade is done (`box_start_early_201`'s 461 to 465).
         session.game.re2_box_open = true;
-        while session.re2_status_open != Some(RE2_BOX_START) {
+        for _ in 0..RE2_BOX_START {
             tick(&mut session, UiInput::default());
         }
+        assert_eq!(session.re2_status_open, Some(RE2_BOX_START));
         tick(&mut session, start);
         assert_eq!(session.re2_status_close, Some(0));
         let mut views = vec![session.re2_status_view().unwrap()];
@@ -27936,6 +27955,51 @@ mod tests {
         tick(&mut session, cancel);
         assert_eq!(session.re2_status_close, Some(0));
         assert!(!session.re2_status_unfaded);
+        for close in 1..RE2_STATUS_CLOSE_TICKS {
+            tick(&mut session, UiInput::default());
+            assert_eq!(session.re2_status_close, Some(close));
+        }
+    }
+
+    /// An item box whose script fails closes through the menu's own fade,
+    /// not the status screen's close, and its page goes with the screen:
+    /// left behind, it would take the next status screen's keys, START's
+    /// unfaded close among them.
+    #[test]
+    fn re2_item_box_page_goes_with_a_failed_screen() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.re2_box_open = true;
+        let tick = |session: &mut GameSession, ui: UiInput| {
+            session
+                .tick(&pack, ui, player::Input::default(), false)
+                .unwrap();
+        };
+        for _ in 0..12 {
+            tick(&mut session, UiInput::default());
+        }
+        assert!(session.game.re2_box.is_some_and(|page| page.started));
+        session
+            .menu
+            .as_mut()
+            .unwrap()
+            .test_eval::<()>("M.tick = function() error('boom') end");
+        let mut ticks = 0;
+        while session.menu.is_some() {
+            tick(&mut session, UiInput::default());
+            ticks += 1;
+            assert!(ticks < 100, "the failed screen never closed");
+        }
+        assert!(session.game.re2_box.is_none(), "the page went with it");
+        assert!(session.re2_status_close.is_none() && !session.re2_status_unfaded);
+
+        // The status screen after it is its own: START closes it through
+        // the fade.
+        session.open_menu(&pack);
+        assert!(session.game.re2_box.is_none());
+        session.re2_status_close = Some(0);
         for close in 1..RE2_STATUS_CLOSE_TICKS {
             tick(&mut session, UiInput::default());
             assert_eq!(session.re2_status_close, Some(close));

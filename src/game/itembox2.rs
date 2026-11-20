@@ -824,6 +824,59 @@ mod tests {
         ..UP
     };
 
+    /// START on the inventory closes the box on routine 1, the fade out's
+    /// wait, with the cancel cue (`St_select_item_m`'s sub 0, after its
+    /// tests of the decide and cancel keys); nothing else on the page reads
+    /// it.
+    #[test]
+    fn start_on_the_inventory_closes_with_no_fade_out() {
+        const START: Input = Input {
+            start: true,
+            up: false,
+            ..UP
+        };
+        let mut state = game();
+        let out = state.tick_re2_box(START).unwrap();
+        assert_eq!(out.sounds, [Sound::Cancel]);
+        assert!(out.close && out.unfaded);
+        assert_eq!(state.re2_box.unwrap().routine, ROUTINE_FADE_WAIT);
+
+        // The cancel key on the same tick wins, and its close fades.
+        let mut state = game();
+        let both = Input {
+            cancel: true,
+            ..START
+        };
+        let out = state.tick_re2_box(both).unwrap();
+        assert_eq!(out.sounds, [Sound::Cancel]);
+        assert!(out.close && !out.unfaded);
+        assert_eq!(state.re2_box.unwrap().routine, ROUTINE_FADE_SET);
+
+        // So does the decide key, into the box's list, where START is not
+        // read.
+        let mut state = game();
+        let both = Input {
+            confirm: true,
+            ..START
+        };
+        let out = state.tick_re2_box(both).unwrap();
+        assert_eq!(out.sounds, [Sound::Decide]);
+        assert!(!out.close && !out.unfaded);
+        assert_eq!(state.re2_box.unwrap().sub, SUB_BOX);
+        let out = state.tick_re2_box(START).unwrap();
+        assert_eq!(out, BoxOutcome::default());
+        assert_eq!(state.re2_box.unwrap().sub, SUB_BOX);
+
+        // Nor on EXIT, up from the top row.
+        let mut state = game();
+        let out = state.tick_re2_box(UP).unwrap();
+        assert!(!out.close);
+        assert_eq!(state.re2_box.unwrap().routine, ROUTINE_EXIT);
+        let out = state.tick_re2_box(START).unwrap();
+        assert_eq!(out, BoxOutcome::default());
+        assert_eq!(state.re2_box.unwrap().routine, ROUTINE_EXIT);
+    }
+
     /// One tick with `bits` of the raw pad held, the directions gated on the
     /// repeat flag as the engine builds them.
     fn held(game: &mut GameState, bits: u16) -> BoxOutcome {
