@@ -28089,7 +28089,7 @@ mod tests {
         let loaded = GameSession::from_save_with(&pack, &bare, saves, options).unwrap();
         assert_eq!(loaded.game.max_health, game::RE2_MAX_HEALTH, "a bare block");
 
-        // A pack's start life is not its maximum.
+        // The fresh state has it, and a new game's seeds keep it.
         let mut game = new_game_state(&pack, id, &room.loaded, options);
         assert_eq!(game.max_health, game::RE2_MAX_HEALTH);
         seed_new_game(&pack, &mut game, 1, true);
@@ -28101,6 +28101,39 @@ mod tests {
         game.set_re2_player_id(0xD);
         seed_re2_max_life(&mut game, true);
         assert_eq!(game.max_health, 400);
+
+        // A pack's start life is the player's life, not its maximum, and its
+        // new game's script has the last word on both.
+        let start = |script: Option<&str>| {
+            let mut manifest = crate::manifest::Manifest::base("re2");
+            manifest.start_room = Some("100".to_string());
+            manifest.start_health = Some(150);
+            let mut writer = PackWriter::new();
+            writer
+                .add(crate::manifest::ENTRY, manifest.render().into_bytes())
+                .unwrap();
+            writer
+                .add("room/1000/room.rdt", crate::rdt2::tests::sample())
+                .unwrap();
+            if let Some(script) = script {
+                writer
+                    .add(crate::lua::NEW_GAME_ENTRY, script.as_bytes().to_vec())
+                    .unwrap();
+            }
+            let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+            let life = |session: Box<GameSession>| {
+                (session.game.entities[0].health, session.game.max_health)
+            };
+            [
+                life(GameSession::new_with(&pack, 0, saves, options).unwrap()),
+                life(GameSession::new_in_room_with(&pack, id, 0, saves, options).unwrap()),
+                life(GameSession::from_room_with(&pack, id, saves, options).unwrap()),
+            ]
+        };
+        // A room start takes RE 1's start life, as it did.
+        assert_eq!(start(None), [(150, 200), (140, 200), (150, 200)]);
+        let script = "local api = ...\napi:set_max_health(170)\n";
+        assert_eq!(start(Some(script)), [(150, 170), (140, 170), (150, 200)]);
 
         // RE 1 keeps its own.
         let dir = TempDir::new();

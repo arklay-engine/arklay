@@ -6064,7 +6064,9 @@ impl GameState {
             self.state_bytes[usize::from(STATE_BYTE_CHARACTER_MODEL)] = character;
             self.entities[0].id = character;
             self.apply_flag(5, MSF_CHAR_VARIANT, if character == 1 { 0 } else { 1 });
-            // RE 1's maximums: an RE 2 player's is `Player_set`'s.
+            // RE 1's maximums: an RE 2 player's is `Player_set`'s. On a room
+            // load the flag is still the room's being left, which is the
+            // same game's: no pack mixes the two.
             if !self.is_re2_room {
                 self.max_health = character_max_health(character);
                 if self.entities[0].health > self.max_health {
