@@ -934,11 +934,14 @@ function ScreenApi:page_sprite_scaled(page, sx, sy, sw, sh, dx, dy, dw, dh, clut
 ---made the page's 15-bit colours 8-bit, which differs from sheet to sheet:
 ---`"bits"` repeats a level's top bits below it (level 20 is 165) and
 ---`"seven"` is eight times the level plus 7, with 0 left at 0 (level 10 is
----87); without it the colours are the pack's (level 20 is 164). A colour of
----a page that isn't a 5-bit level's is kept either way. Index 0 is clear,
----and so is black without the PlayStation's semi-transparency bit. An HD
----replacement is drawn in its own colours under `rgb` as a tint, and so is a
----page that isn't indexed.
+---87); without it the colours are the pack's (level 20 is 164). A colour
+---with a channel that isn't a 5-bit level's (a page of a mod's own) is kept
+---whole either way. Index 0 is clear, and so is black without the
+---PlayStation's semi-transparency bit; an empty rect, or a row the page
+---hasn't, draws nothing. An HD replacement of the row is drawn in its own
+---colours under `rgb` as a tint, and so is a page that isn't indexed; a row
+---with none takes the replacement of the page's first row, recoloured by
+---the page's indices, so one made from the first row serves them all.
 ---@param page integer A page handle.
 ---@param sx integer
 ---@param sy integer
@@ -949,7 +952,7 @@ function ScreenApi:page_sprite_scaled(page, sx, sy, sw, sh, dx, dy, dw, dh, clut
 ---@param dw integer
 ---@param dh integer
 ---@param clut integer The CLUT row (capped at 255).
----@param rgb? integer[] `{r, g, b}`, each `0..=255`. Default `{0x80, 0x80, 0x80}`.
+---@param rgb? integer[] `{r, g, b}`, each held to `0..=255`. Default `{0x80, 0x80, 0x80}`.
 ---@param widen? "bits"|"seven"
 ---@param blend? "opaque"|"half"|"variant"|"add"|integer As [`api:page_sprite_scaled`](#ScreenApi.page_sprite_scaled) takes it, but that `"half"` is this version's: the sprite at 128 of 255 over the frame, rounded.
 function ScreenApi:page_sprite_modulated(page, sx, sy, sw, sh, dx, dy, dw, dh, clut, rgb, widen, blend) end

@@ -899,6 +899,8 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
     // texel as it is (the default), and `widen` how the page's colours
     // became 8-bit ([`Widen`]). An HD replacement is drawn under the same
     // colour instead, in its own colours; so is a page that isn't indexed.
+    // A row without one takes the first row's, recoloured as `page_lut`
+    // recolours it.
     #[allow(clippy::type_complexity)]
     methods.add_method_mut(
         "page_sprite_modulated",
@@ -933,6 +935,9 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
             } = api;
             let framebuffer = framebuffer.as_deref_mut().ok_or_else(no_draw)?;
             let art = host.assets.page(handle)?;
+            if [sw, sh, dw, dh].iter().any(|&side| side <= 0) {
+                return Ok(());
+            }
             let (src, dst, row) = (rect(sx, sy, sw, sh), rect(dx, dy, dw, dh), clut.min(255));
             // The colour as a multiplier, for what has colours of its own.
             let [r, g, b] = rgb.map(|channel| byte(i64::from(channel) * 2));
@@ -942,27 +947,56 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
                 SpriteBlend::Half => SpriteBlend::Alpha(128),
                 other => other,
             };
-            let draw = |framebuffer: &mut Framebuffer| match art {
-                Artwork::Indexed(texture) => {
-                    let colours = modulated_colours(texture, row, rgb, widen);
-                    framebuffer.draw_indexed_sprite_lut(texture, src, dst, &colours, mixed);
-                }
-                Artwork::Rgba(_) => {
-                    framebuffer.draw_page_sprite_scaled(art, src, dst, row, 255, tint, blend);
-                }
+            let colours = match art {
+                Artwork::Indexed(texture) => Some(modulated_colours(texture, row, rgb, widen)),
+                Artwork::Rgba(_) => None,
             };
-            let hd = match blend {
-                SpriteBlend::Alpha(_) => None,
-                _ => hd_art(&host.assets, api.cx.pack, framebuffer, handle, row),
-            };
-            match hd {
-                Some(hd) => {
-                    let (corners, uv) = sprite_quad(&hd, src, dst, [false; 2]);
-                    let colour = sprite_colour(tint, 255);
-                    framebuffer.draw_replaced(hd, corners, uv, colour, draw);
-                }
-                None => draw(framebuffer),
+            // A row with nothing to show (one the page hasn't) draws nothing.
+            if colours.is_some_and(|colours| colours.iter().all(Option::is_none)) {
+                return Ok(());
             }
+            let draw = |framebuffer: &mut Framebuffer| match (art, &colours) {
+                (Artwork::Indexed(texture), Some(colours)) => {
+                    framebuffer.draw_indexed_sprite_lut(texture, src, dst, colours, mixed);
+                }
+                _ => framebuffer.draw_page_sprite_scaled(art, src, dst, row, 255, tint, mixed),
+            };
+            if matches!(blend, SpriteBlend::Alpha(_)) {
+                draw(framebuffer);
+                return Ok(());
+            }
+            // The row's own HD page under the colour, or the page's first
+            // row's recoloured by the original's indices, as a page made
+            // from one row serves the others (the map's rooms).
+            let pack = api.cx.pack;
+            if let Some(hd) = hd_art(&host.assets, pack, framebuffer, handle, row) {
+                let (corners, uv) = sprite_quad(&hd, src, dst, [false; 2]);
+                framebuffer.draw_replaced(hd, corners, uv, sprite_colour(tint, 255), draw);
+                return Ok(());
+            }
+            let first = match (art, &colours) {
+                (Artwork::Indexed(texture), Some(colours)) if row != 0 => {
+                    hd_art(&host.assets, pack, framebuffer, handle, 0)
+                        .map(|hd| (hd, texture, colours))
+                }
+                _ => None,
+            };
+            let Some((hd, texture, colours)) = first else {
+                draw(framebuffer);
+                return Ok(());
+            };
+            let (corners, uv) = sprite_quad(&hd, src, dst, [false; 2]);
+            let palette = std::array::from_fn(|index| {
+                let [r, g, b, _] = texture.palette(0, index as u8);
+                [r, g, b]
+            });
+            let recoloured = hires::Recoloured {
+                art: hd,
+                indices: host.assets.indices(handle)?,
+                lut: hires::Recolour::lut(&palette, colours),
+            };
+            let image = hires::QuadImage::Recoloured(Arc::new(recoloured));
+            framebuffer.draw_replaced(image, corners, uv, [1.0; 3], draw);
             Ok(())
         },
     );

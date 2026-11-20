@@ -466,18 +466,20 @@ impl Widen {
         }
     }
 
-    /// The channel `channel` of a pack colour. One that isn't a 5-bit
-    /// level's (a mod's own page) is kept.
-    pub(super) fn channel(self, channel: u8) -> u8 {
-        let level = (u32::from(channel) * 31).div_ceil(255);
-        if level * 255 / 31 != u32::from(channel) {
-            return channel;
-        }
+    /// The pack colour `colour` as the PC version holds it. One with a
+    /// channel that isn't a 5-bit level's (a mod's own page) is kept whole.
+    pub(super) fn colour(self, colour: [u8; 3]) -> [u8; 3] {
+        let level = |channel: u8| {
+            let level = (u32::from(channel) * 31).div_ceil(255);
+            (level * 255 / 31 == u32::from(channel)).then_some(level)
+        };
+        let [Some(r), Some(g), Some(b)] = colour.map(level) else {
+            return colour;
+        };
         match self {
-            Self::Kept => channel,
-            Self::Bits => (level << 3 | level >> 2) as u8,
-            Self::Seven if level == 0 => 0,
-            Self::Seven => (level * 8 + 7) as u8,
+            Self::Kept => colour,
+            Self::Bits => [r, g, b].map(|level| (level << 3 | level >> 2) as u8),
+            Self::Seven => [r, g, b].map(|level| (level * 8 + 7 * level.min(1)) as u8),
         }
     }
 }
@@ -498,10 +500,10 @@ pub(super) fn modulated_colours(
         let texel = texture.palette(row, index as u8);
         let clear = texel[..3] == [0; 3] && !texture.palette_stp(row, index as u8);
         (index != 0 && texel[3] != 0 && !clear).then(|| {
+            let wide = widen.colour([texel[0], texel[1], texel[2]]);
             std::array::from_fn(|channel| {
-                let wide = u32::from(widen.channel(texel[channel]));
                 let by = (u32::from(rgb[channel]) * 2).min(255);
-                ((wide * by + 127) / 255) as u8
+                ((u32::from(wide[channel]) * by + 127) / 255) as u8
             })
         })
     })
@@ -850,15 +852,27 @@ mod tests {
             (20, 165, 167),
             (31, 255, 255),
         ] {
-            assert_eq!(Widen::Kept.channel(pack(level)), pack(level));
-            assert_eq!(Widen::Bits.channel(pack(level)), bits, "{level}");
-            assert_eq!(Widen::Seven.channel(pack(level)), seven, "{level}");
+            let colour = [pack(level), 0, pack(31)];
+            assert_eq!(Widen::Kept.colour(colour), colour);
+            assert_eq!(Widen::Bits.colour(colour), [bits, 0, 255], "{level}");
+            assert_eq!(Widen::Seven.colour(colour), [seven, 0, 255], "{level}");
         }
         assert_eq!(pack(20), 164);
-        // A colour that is no level's is a mod's own, and kept.
+        // Every level comes back from the pack's colour of it, and no other
+        // byte is one's.
+        let levels: Vec<u8> = (0..32).map(pack).collect();
+        for channel in 0..=255u8 {
+            let [wide, ..] = Widen::Bits.colour([channel, 0, 0]);
+            match levels.iter().position(|&level| level == channel) {
+                Some(level) => assert_eq!(usize::from(wide), level << 3 | level >> 2),
+                None => assert_eq!(wide, channel),
+            }
+        }
+        // A colour with a channel that is no level's is a mod's own, and
+        // kept whole: 164 is level 20's, but not beside 100.
         for widen in [Widen::Bits, Widen::Seven] {
-            assert_eq!(widen.channel(100), 100);
-            assert_eq!(widen.channel(254), 254);
+            assert_eq!(widen.colour([164, 100, 0]), [164, 100, 0]);
+            assert_eq!(widen.colour([254, 255, 255]), [254, 255, 255]);
         }
         assert_eq!(Widen::named(None).unwrap(), Widen::Kept);
         assert_eq!(Widen::named(Some("bits")).unwrap(), Widen::Bits);

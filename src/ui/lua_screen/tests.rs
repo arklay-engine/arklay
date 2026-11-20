@@ -1256,19 +1256,46 @@ fn a_modulated_sprite_draws_the_pc_versions_colours_and_tints_its_hd_page() {
     use crate::pack::PackWriter;
 
     // A 64 x 4 sheet whose texel at column `x` is index `x`: red at level
-    // `x & 31`, green at level `x >> 5`.
-    let tim = crate::emd2::tests::tim(64, 4, 1, |x, _| x as u8);
+    // `x & 31`, green at level `x >> 5`, and eight levels more in its second
+    // row. Beside it a page with colours of its own.
+    let tim = crate::emd2::tests::tim(64, 4, 2, |x, _| x as u8);
+    let flat = crate::bmp::encode_to_vec(&crate::state::Image {
+        width: 4,
+        height: 1,
+        rgba: [23, 0, 0, 255].repeat(4),
+    })
+    .unwrap();
     let source = r#"
 function update(api, input) end
 
 function draw(api)
-api:fill_rect(0, 20, 320, 5, 8, 0, 0)
+api:fill_rect(0, 20, 320, 9, 8, 0, 0)
 local sheet = api:page("art/sheet")
+local flat = api:page("art/flat")
 api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 20, 64, 1, 0)
 api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 21, 64, 1, 0, nil, "bits")
 api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 22, 64, 1, 0, { 0x80, 0x80, 0x80 }, "seven")
 api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 23, 64, 1, 0, { 40, 0x80, 40 }, "bits")
 api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 24, 64, 1, 0, nil, "seven", "half")
+api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 25, 64, 1, 1, nil, "bits", "half")
+api:page_sprite_modulated(flat, 0, 0, 4, 1, 12, 26, 4, 1, 0, nil, nil, "half")
+-- A colour's channels are held to a byte; a row the page hasn't draws
+-- nothing, and nor does an empty rect.
+api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 27, 64, 1, 0, { 999, -5, 0x80 }, "bits")
+api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 28, 64, 1, 9, nil, "bits")
+api:page_sprite_modulated(sheet, 0, 0, 64, 0, 10, 28, 64, 1, 0)
+api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 28, 0, 1, 0)
+for _, bad in ipairs({
+    { { "red", 0, 0 } },
+    { { 1, 2 } },
+    { nil, "eight" },
+    { nil, nil, "quarter" },
+}) do
+    local ok = pcall(api.page_sprite_modulated, api, sheet, 0, 0, 64, 1, 10, 28, 64, 1, 0, bad[1], bad[2], bad[3])
+    if ok then
+        error("a bad argument drew")
+    end
+end
 end
 "#;
     let build = |hd: Option<(u32, Vec<u8>)>| {
@@ -1277,6 +1304,7 @@ end
             .add("screen/save.lua", source.as_bytes().to_vec())
             .unwrap();
         writer.add("art/sheet.tim", tim.clone()).unwrap();
+        writer.add("art/flat.bmp", flat.clone()).unwrap();
         if let Some((hash, bytes)) = hd {
             writer
                 .add(&format!("hires/misc/{hash:08X}.bmp"), bytes)
@@ -1313,7 +1341,7 @@ end
     assert_eq!(pixel(32 + 10, 22), [87, 15, 0]);
     assert_eq!(pixel(32, 22), [0, 15, 0]);
     // Index 0 is clear: the fill shows.
-    for row in 20..25 {
+    for row in 20..29 {
         assert_eq!(pixel(0, row), [8, 0, 0], "{row}");
     }
     // Each channel under its own colour, rounded: red level 19 (156) at 40
@@ -1322,6 +1350,13 @@ end
     // Half is 128 of 255 over the frame: red level 2 (23) over 8 is 16.
     assert_eq!(pixel(2, 24), [16, 0, 0]);
     assert_eq!(pixel(32 + 22, 24), [96, 8, 0]);
+    // The second row's green is eight levels up (level 8 is 66; red level
+    // 2 is 16), and a page with colours of its own mixes as an indexed one
+    // does.
+    assert_eq!(pixel(2, 25), [12, 33, 0]);
+    assert_eq!(pixel(2, 26), [16, 0, 0]);
+    assert_eq!(pixel(32 + 20, 27), [165, 0, 0]);
+    assert_eq!(pixel(20, 28), [8, 0, 0]);
 
     // An HD replacement of the page is drawn in its own colours instead,
     // under twice the colour as a tint.
@@ -1342,11 +1377,17 @@ end
     let mut recorded = crate::render::Framebuffer::new();
     recorded.record();
     screen.draw(&replaced.context(), &mut recorded);
+    // The page made from the first row serves the second, recoloured by
+    // the original's indices; the page with colours of its own has none.
     let quads = hd_quads(&recorded);
-    assert_eq!(quads.len(), 5);
-    for quad in &quads {
-        assert!(matches!(quad.image, crate::draw2d::Kind::Art(_)));
-    }
+    let kinds: Vec<bool> = quads
+        .iter()
+        .map(|quad| matches!(quad.image, crate::draw2d::Kind::Recoloured(_)))
+        .collect();
+    assert_eq!(kinds, [false, false, false, false, false, true, false]);
+    assert_eq!(quads[5].dst, [10.0, 25.0, 74.0, 26.0]);
+    assert_eq!(quads[5].colour, [1.0; 3]);
+    assert_eq!(quads[6].colour, [1.0, 0.0, 1.0]);
     assert_eq!(quads[0].dst, [10.0, 20.0, 74.0, 21.0]);
     assert_eq!(quads[1].colour, [1.0; 3]);
     assert_eq!(quads[3].colour, [80.0 / 255.0, 1.0, 80.0 / 255.0]);
