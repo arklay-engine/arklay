@@ -561,8 +561,11 @@ def self_test_pace() -> str | None:
             ({"ref": "old", "sound": False}, ["record"], None),
             ({"ref": "old", "sound": False}, ["record", "--no-enemies", "--sound"], refs / "old" / "ref.ticks"),
             ({"ref": "old", "pace_from": "old"}, ["record"], ValueError),
-            ({"ref": "old"}, sound + ["--pace", "x"], None),
-            ({"ref": "old"}, sound + ["--pace=x"], None),
+            # A `--pace` of the run's own is the one followed, however argparse lets it be spelt.
+            ({"ref": "old"}, sound + ["--pace", "x"], Path("x")),
+            ({"ref": "old"}, sound + ["--pace=x"], Path("x")),
+            ({"ref": "old"}, sound + ["--pac", "x"], Path("x")),
+            ({"ref": "old", "sound": False}, ["record", "--soun"], refs / "old" / "ref.ticks"),
             ({"ref": "old", "pace_from": "old"}, sound + ["--pace=x"], ValueError),
         ]
         for run, command, want in cases:
@@ -607,7 +610,7 @@ def self_test_pace() -> str | None:
         # as stored, though the picture takes 0.05 s here; 10 and 11 are past the log and keep its median.
         ends = play(pace, clock, range(4, 12))
         gaps = [round(ends[tick] - ends[tick - 1], 3) for tick in range(6, 12)]
-        if gaps != [0.2] * 6 or pace.late or (pace.stored, pace.stepped) != (4, 2):
+        if gaps != [0.2] * 6 or pace.late or (pace.stored, pace.stepped, pace.shared) != (4, 2, 5):
             return f"a record following 0.2s ticks ended them {gaps} apart ({pace.stored} stored, {pace.stepped} stepped, {pace.late} late)"
         # The picture of the tick before has what the pace leaves it: 0.2 s less the run and what has passed.
         left = pace.left(12)
@@ -618,6 +621,29 @@ def self_test_pace() -> str | None:
         play(pace, clock, [12])
         if pace.late != 1 or not 0.35 < pace.latest < 0.45:
             return f"a hold that overran by 0.4s: {pace.late} late by {pace.latest:.2f}"
+        # A tick missing inside the log has its neighbours' time in proportion, not a median tick after the last.
+        sparse = Path(folder) / "sparse.ticks"
+        sparse.write_text("0 0.0\n3 0.6\n4 0.7\n6 0.9\n")
+        holes = recorder.Pace(str(sparse), Clock())
+        times = [round(holes.time(tick), 3) for tick in range(-1, 9)]
+        # 0.2 a tick from 0 to 3, the log's median tick of 0.1 before its first and after its last.
+        if times != [-0.1, 0.0, 0.2, 0.4, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1]:
+            return f"a log with ticks 0, 3, 4 and 6 gives the ticks around them {times}"
+        # A record that only shares its last tick with the log has still met it; an empty log is refused.
+        met = recorder.Pace(str(sparse), Clock())
+        met.reached(4)
+        try:
+            with open(os.devnull, "w") as quiet, contextlib.redirect_stdout(quiet):
+                met.report()
+        except SystemExit:
+            return "a record whose last tick is the log's first shared one is refused"
+        empty = Path(folder) / "empty.ticks"
+        empty.write_text("")
+        try:
+            recorder.Pace(str(empty))
+            return "an empty pace log is taken for no pace"
+        except SystemExit:
+            pass
         # A log that holds none of the record's ticks is not a pace followed.
         stray = recorder.Pace(str(ticks), Clock())
         play(stray, stray.clock, range(20, 23))
@@ -686,8 +712,49 @@ def self_test_record_place() -> str | None:
         if (old / "ref.trace").read_text() != "new\n" or (old / "frames").exists() or (refs / "scene.recording").exists():
             return "a whole record did not replace all of the stored reference"
         meta = (old / "meta.txt").read_text()
-        if "pace: scene/ref.ticks sha256 " not in meta or ".recording" in meta:
+        if "pace: scene/ref.ticks sha256 " not in meta or ".recording" in meta or (old / "recording.pid").exists():
             return f"the record's meta.txt does not say what it followed: {meta}"
+        # A swap stopped half way: the old reference is back before the next record looks for it.
+        aside = refs / "scene.replaced"
+        old.rename(aside)
+        recover_reference(old)
+        if not (old / "ref.trace").is_file() or aside.exists():
+            return "a reference moved aside by a stopped swap is not put back"
+        stage = refs / "scene.recording"
+        stage.mkdir()
+        real_rename = Path.rename
+
+        def failing(self, target):
+            if self == stage:
+                raise OSError("no room")
+            return real_rename(self, target)
+
+        Path.rename = failing
+        try:
+            publish_record(stage, old)
+            return "a swap that fails passes"
+        except OSError:
+            pass
+        finally:
+            Path.rename = real_rename
+        if (old / "ref.trace").read_text() != "new\n":
+            return "a failed swap lost the stored reference"
+        # A stage a live record holds is refused; a dead one's is cleared.
+        (stage / "recording.pid").write_text(f"{os.getppid()}\n")
+        try:
+            claim_stage(stage)
+            return "a stage another live record holds is taken"
+        except ValueError:
+            pass
+        (stage / "recording.pid").write_text("not a pid\n")
+        (stage / "left").write_text("")
+        claim_stage(stage)
+        if (stage / "left").exists() or (stage / "recording.pid").read_text() != f"{os.getpid()}\n":
+            return "a dead record's stage is not cleared"
+        # A recorder a signal ended is a failure in a batch's worst code.
+        killed = [sys.executable, "-c", "import os, signal; os.kill(os.getpid(), signal.SIGKILL)"]
+        if os.name != "nt" and run_recorder(killed, refs / "log") <= 0:
+            return "a recorder a signal ended counts as a success"
     return None
 
 
@@ -1336,13 +1403,13 @@ def pace_source(run: dict, refs: Path, command: list[str], manifest: dict[str, d
     run that carries another's ticks on names that run (`pace_from`), and a reference recorded again follows
     its own stored `.ticks`, so that a faster recorder or a busier machine gives the same ticks. A run's first
     record goes as fast as the recorder does. What decides is the recorder's `command` as it will run: a
-    `--sound` or a `--pace` among the run's own `record` arguments counts."""
-    own = any(part == "--pace" or part.startswith("--pace=") for part in command)
+    `--sound` among the run's own `record` arguments counts, and a `--pace` there is the log the record follows."""
     named = run.get("pace_from")
-    if "--sound" not in command or own:
+    own = option_value(command, "--pace")
+    if not has_option(command, "--sound") or own is not None:
         if named:
             raise ValueError("pace_from needs a --sound run without its own --pace")
-        return None
+        return Path(own) if own else None
     if named and named not in manifest:
         raise ValueError(f"pace_from names {named}, which is not a run in the manifest")
     source = refs / (manifest[named]["ref"] if named else run["ref"]) / "ref.ticks"
@@ -1353,22 +1420,53 @@ def pace_source(run: dict, refs: Path, command: list[str], manifest: dict[str, d
     return None
 
 
+def option_names(name: str) -> list[str]:
+    """`name` and the abbreviations of it the recorder's `argparse` takes (from four characters: `--pa`)."""
+    return [name[:length] for length in range(4, len(name) + 1)]
+
+
+def has_option(command: list[str], name: str) -> bool:
+    return any(part in option_names(name) for part in command)
+
+
+def option_value(command: list[str], name: str) -> str | None:
+    """The value `command` gives the option `name`, as `--name VALUE` or `--name=VALUE`: the last one."""
+    value = None
+    for index, part in enumerate(command):
+        key, equals, given = part.partition("=")
+        if key in option_names(name):
+            value = given if equals else (command[index + 1] if index + 1 < len(command) else "")
+    return value
+
+
 def run_recorder(command: list[str], log: Path) -> int:
     """Run the recorder to its end, a Ctrl-C's too: it stops Wine and unloads its sound sink as it goes, and
     `subprocess.run` would kill it a quarter of a second after the Ctrl-C."""
     with open(log, "w") as handle:
         recorder = subprocess.Popen(command, cwd=ROOT, stdout=handle, stderr=subprocess.STDOUT)
         try:
-            return recorder.wait()
+            code = recorder.wait()
         except KeyboardInterrupt:
             # A terminal's Ctrl-C reached the recorder too, and by now it holds a second one back until it
-            # has stopped everything; a signal sent to the runner alone didn't, so pass it on.
+            # has stopped everything; a signal sent to the runner alone didn't, so pass it on (a Windows
+            # console's always reaches both).
             try:
                 recorder.wait(0.5)
             except subprocess.TimeoutExpired:
-                recorder.send_signal(signal.SIGINT)
-            recorder.wait()
+                if os.name != "nt":
+                    recorder.send_signal(signal.SIGINT)
+            except KeyboardInterrupt:
+                pass
+            # A second Ctrl-C doesn't leave the recorder behind either.
+            while True:
+                try:
+                    recorder.wait()
+                    break
+                except KeyboardInterrupt:
+                    continue
             raise
+    # A recorder a signal ended (a negative code) has failed, whatever else a batch's other records did.
+    return code if code >= 0 else 128 - code
 
 
 def record_run(run: dict, args, refs: Path, manifest: dict[str, dict]) -> int:
@@ -1387,6 +1485,8 @@ def record_run(run: dict, args, refs: Path, manifest: dict[str, dict]) -> int:
         return 1
     dest = refs / run["ref"]
     stage = refs / (run["ref"] + ".recording")
+    if not args.dry_run:
+        recover_reference(dest)
     if (dest / "ref.trace").exists() and not args.force:
         print(f"{name}: {dest / 'ref.trace'} exists (--force records it again)")
         return 1
@@ -1422,9 +1522,13 @@ def record_run(run: dict, args, refs: Path, manifest: dict[str, dict]) -> int:
         return 1
     followed = None
     if pace is not None:
-        # The stored log itself: the record writes its own in `stage`, and this one stands until that is whole.
-        command += ["--pace", str(pace)]
-        followed = f"pace: {pace.relative_to(refs)} sha256 {hashlib.sha256(pace.read_bytes()).hexdigest()}"
+        if option_value(command, "--pace") is None:
+            # The stored log itself: the record writes its own in `stage`, and this one stands until that is whole.
+            command += ["--pace", str(pace)]
+        source = pace if pace.is_absolute() else ROOT / pace
+        named = source.relative_to(refs) if source.is_relative_to(refs) else pace
+        digest = hashlib.sha256(source.read_bytes()).hexdigest() if source.is_file() else "unread"
+        followed = f"pace: {named} sha256 {digest}"
     # As it reads once the record has taken the reference's place.
     shown = [part if part != game else "$ARKLAY_RE2_ROOT" for part in command]
     shown = [part.replace(str(stage), str(dest)).replace(str(refs), "$ARKLAY_RE2_REFS").replace(str(work), "$WORK") for part in shown]
@@ -1433,10 +1537,16 @@ def record_run(run: dict, args, refs: Path, manifest: dict[str, dict]) -> int:
     print(f"{name}: " + " ".join(shlex.quote(part) for part in command), flush=True)
     if args.dry_run:
         return 0
-    shutil.rmtree(stage, ignore_errors=True)
-    stage.mkdir(parents=True)
+    try:
+        claim_stage(stage)
+    except ValueError as error:
+        print(f"{name}: {error}")
+        return 1
     log = stage / "ref.log"
-    code = run_recorder(command, log)
+    try:
+        code = run_recorder(command, log)
+    finally:
+        (stage / "recording.pid").unlink(missing_ok=True)
     if code:
         print(f"{name}: the record failed (exit {code}, see {log}); the stored reference is as it was")
         return code
@@ -1460,13 +1570,58 @@ def record_run(run: dict, args, refs: Path, manifest: dict[str, dict]) -> int:
     return 0
 
 
+def claim_stage(stage: Path) -> None:
+    """Make `stage` this record's own: empty but for its `recording.pid`. One a live record holds is refused, and
+    one a dead record left is cleared."""
+    held = stage / "recording.pid"
+    try:
+        other = int(held.read_text())
+    except (OSError, ValueError):
+        other = None
+    if other is not None and other != os.getpid() and process_alive(other):
+        raise ValueError(f"{stage} is another record's (process {other})")
+    shutil.rmtree(stage, ignore_errors=True)
+    stage.mkdir(parents=True)
+    held.write_text(f"{os.getpid()}\n")
+
+
+def process_alive(pid: int) -> bool:
+    if os.name == "nt":
+        # No cheap test there: a `recording.pid` is taken to be a live record's.
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def replaced_folder(dest: Path) -> Path:
+    return dest.with_name(dest.name + ".replaced")
+
+
+def recover_reference(dest: Path) -> None:
+    """Put back a reference a stopped `publish_record` moved aside without putting the new one in its place."""
+    replaced = replaced_folder(dest)
+    if replaced.is_dir() and not dest.exists():
+        replaced.rename(dest)
+
+
 def publish_record(stage: Path, dest: Path) -> None:
-    """Put a whole record in the reference's place."""
-    replaced = dest.with_name(dest.name + ".replaced")
+    """Put a whole record in the reference's place. The old one is moved aside first and removed last: if the
+    new one doesn't get there, the old one is put back, at once or by the next record's `recover_reference`."""
+    recover_reference(dest)
+    replaced = replaced_folder(dest)
     shutil.rmtree(replaced, ignore_errors=True)
     if dest.exists():
         dest.rename(replaced)
-    stage.rename(dest)
+    try:
+        stage.rename(dest)
+    except BaseException:
+        recover_reference(dest)
+        raise
     shutil.rmtree(replaced, ignore_errors=True)
 
 

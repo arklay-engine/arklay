@@ -27,6 +27,7 @@ does. Input scripts (the format of ``oracle/inputs``) count from there. See
 from __future__ import annotations
 
 import argparse
+import bisect
 import ctypes
 import os
 import re
@@ -1966,7 +1967,8 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                         if tick_log:
                             tick_log.write(f"{tick - 1} {time.monotonic() - session.capture_started:.4f}\n")
                         if args.shot_dir and args.shot_every and (tick - 1) % args.shot_every == 0:
-                            session.screenshot(Path(args.shot_dir) / f"t{tick - 1:06d}.png", pace.left(tick))
+                            within = pace.left(tick) if tick < args.ticks else None
+                            session.screenshot(Path(args.shot_dir) / f"t{tick - 1:06d}.png", within)
                     while cursor < len(entries) and entries[cursor][0] <= tick:
                         pad = entries[cursor][1]
                         cursor += 1
@@ -1979,7 +1981,8 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                 regs.rax = pad
                 if tick_delay:
                     game.hold(tid, tick_delay)
-                if tick > 0:
+                # The run after the last traced tick is no one's to pace.
+                if 0 < tick <= args.ticks:
                     pace.release(game, tid, tick - 1)
                 game.resume_from_break(tid, regs, original)
             elapsed = time.monotonic() - started
@@ -2013,11 +2016,12 @@ class Pace:
     first tick the two recordings share: the tick then ends when it did there, however long this recorder's
     picture takes. The picture itself is taken as soon as the tick ends, before the wait.
 
-    A tick the log doesn't hold (a record longer than the stored one) comes the log's median tick after the
-    one before it. A record can only wait for the stored pace, not catch up with it, so the ticks let go late
-    are counted: a voice line that ends in one of them may hold for a tick less than it did in the stored
-    recording. A run that takes much longer than the ones before it (a room's load) is late too, and the
-    ticks after it until the record has caught up."""
+    A tick the log doesn't hold has the time its neighbours in the log give it: between two of them in
+    proportion, and past the last one the log's median tick a tick (a record longer than the stored one). A
+    record can only wait for the stored pace, not catch up with it, so the ticks let go late are counted: a
+    voice line that ends in one of them may hold for a tick less than it did in the stored recording. A run
+    that takes much longer than the ones before it (a room's load) is late too, and the ticks after it until
+    the record has caught up."""
 
     # Later than this is a tick's worth at the pace `import` gave.
     LATE = 0.25
@@ -2025,28 +2029,50 @@ class Pace:
 
     def __init__(self, path: str | None, clock=time.monotonic) -> None:
         self.ticks = read_pace(Path(path)) if path else {}
+        if path and not self.ticks:
+            raise SystemExit(f"--pace: {path} holds no ticks")
         self.clock = clock
-        times = [self.ticks[tick] for tick in sorted(self.ticks)]
-        gaps = sorted(after - before for before, after in zip(times, times[1:]))
-        self.step = gaps[len(gaps) // 2] if gaps else 0.0
-        # This record's clock at the stored recording's 0, and the stored time of the tick being run.
+        self.known = sorted(self.ticks)
+        steps = sorted(
+            (self.ticks[after] - self.ticks[before]) / (after - before)
+            for before, after in zip(self.known, self.known[1:])
+        )
+        self.step = steps[len(steps) // 2] if steps else 0.0
+        # This record's clock at the stored recording's 0.
         self.origin: float | None = None
-        self.at = 0.0
         self.released: float | None = None
         self.runs: list[float] = []
+        # The record's ticks the log holds, and the runs let go by a stored time and by one worked out.
+        self.shared = 0
         self.stored = 0
         self.stepped = 0
         self.late = 0
         self.latest = 0.0
+
+    def time(self, tick: int) -> float:
+        """The stored time of `tick`'s end, or the one its neighbours in the log give it."""
+        if tick in self.ticks:
+            return self.ticks[tick]
+        at = bisect.bisect_left(self.known, tick)
+        if at == 0:
+            first = self.known[0]
+            return self.ticks[first] - (first - tick) * self.step
+        before = self.known[at - 1]
+        if at == len(self.known):
+            return self.ticks[before] + (tick - before) * self.step
+        after = self.known[at]
+        part = (tick - before) / (after - before)
+        return self.ticks[before] + part * (self.ticks[after] - self.ticks[before])
 
     def reached(self, tick: int) -> None:
         """The break that ends `tick`."""
         now = self.clock()
         if self.released is not None:
             self.runs = (self.runs + [now - self.released])[-self.RUNS:]
-        if self.origin is None and tick in self.ticks:
-            self.origin = now - self.ticks[tick]
-            self.at = self.ticks[tick]
+        if tick in self.ticks:
+            self.shared += 1
+            if self.origin is None:
+                self.origin = now - self.ticks[tick]
 
     def run(self) -> float:
         """What a run takes here."""
@@ -2057,18 +2083,16 @@ class Pace:
         fit in; None with no pace to keep."""
         if self.origin is None:
             return None
-        return self.origin + self.ticks.get(tick, self.at + self.step) - self.run() - self.clock()
+        return self.origin + self.time(tick) - self.run() - self.clock()
 
     def release(self, game: "Game", tid: int, tick: int) -> None:
         """Hold the thread at its break until the run that ends `tick` is due."""
         if self.origin is not None:
             if tick in self.ticks:
-                self.at = self.ticks[tick]
                 self.stored += 1
             else:
-                self.at += self.step
                 self.stepped += 1
-            due = self.origin + self.at - self.run()
+            due = self.origin + self.time(tick) - self.run()
             if (wait := due - self.clock()) > 0:
                 game.hold(tid, wait)
             # After the wait, so that a hold that overruns counts as well.
@@ -2080,9 +2104,9 @@ class Pace:
     def report(self) -> None:
         if not self.ticks:
             return
-        if not self.stored:
+        if not self.shared:
             raise SystemExit("--pace: the log holds none of this record's ticks, so it set its own pace")
-        more = f", and {self.stepped} more at its median of {self.step:.3f}s" if self.stepped else ""
+        more = f", and {self.stepped} more by its neighbours' (its median tick is {self.step:.3f}s)" if self.stepped else ""
         late = f"{self.late} ticks more than {self.LATE}s late, {self.latest:.2f}s at most" if self.late else "no tick late"
         print(f"followed the stored pace for {self.stored} ticks{more}: {late}")
 
@@ -2272,14 +2296,16 @@ def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
                     if tick_log:
                         tick_log.write(f"{tick - 1} {time.monotonic() - session.capture_started:.4f}\n")
                     if args.shot_dir and args.shot_every and (tick - 1) % args.shot_every == 0:
-                        session.screenshot(Path(args.shot_dir) / f"t{tick - 1:06d}.png", pace.left(tick))
+                        within = pace.left(tick) if tick < args.ticks else None
+                        session.screenshot(Path(args.shot_dir) / f"t{tick - 1:06d}.png", within)
                 while cursor < len(entries) and entries[cursor][0] <= tick:
                     pad = entries[cursor][1]
                     cursor += 1
                 hold_gallery_flags(game)
                 tick += 1
                 regs.rax = pad
-                pace.release(game, tid, tick - 1)
+                if tick <= args.ticks:
+                    pace.release(game, tid, tick - 1)
                 game.resume_from_break(tid, regs, original)
             print(f"{args.ticks} ticks from boot in {time.monotonic() - started:.1f}s")
             pace.report()
