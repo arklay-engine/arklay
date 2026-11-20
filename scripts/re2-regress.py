@@ -206,6 +206,10 @@ def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input
         if "gallery" in run:
             # config.ini's GALLERY0 to GALLERY4, which the record's `--config GALLERYn=0x...` set.
             options.append("title_gallery = { " + ", ".join(str(int(word)) for word in run["gallery"]) + " }")
+        if "seed" in run:
+            # The first value of the title's generator, which the record took from the clock: its pick of Leon or
+            # Claire for the attract demo.
+            options.append(f"title_seed = {int(run['seed'])}")
         lines.append(f"load_game_pack({lua_str(str(ctx['pack']))}, {{ {', '.join(options)} }})")
         # `boot = true`: from the game's boot, the warning before the title, as the record has it from its tick 0.
         lines.append("open_title({ boot = true })" if run.get("boot") else "open_title()")

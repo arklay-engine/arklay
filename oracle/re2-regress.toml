@@ -973,7 +973,7 @@ expect = "match"
 record = ""
 
 # No input: the idle count reaches 0x708 at tick 1990, the screen fades to black over 128 ticks, and on tick 2118 the
-# title hands over to the attract demo (arklay's own reel; oracle/re2-deviations.md, "The title").
+# title hands over to the attract demo (oracle/re2-regress.d/title_demo.toml plays it).
 [[run]]
 name = "title_demo"
 ui = "title"

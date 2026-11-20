@@ -1,0 +1,4 @@
+# The title from boot with no input until the attract demo plays, then a key in it: the demo ends (oracle/re2.md, "The attract demo").
+0
+2300 confirm
+2303

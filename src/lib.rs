@@ -26,6 +26,7 @@ pub mod convert_mod;
 pub mod convert_re2;
 pub mod core_pack;
 pub mod demo;
+pub mod demo2;
 pub mod die2;
 pub mod door;
 pub mod door2;

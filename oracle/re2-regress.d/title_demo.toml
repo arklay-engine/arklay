@@ -1,0 +1,103 @@
+# The title's attract demo (oracle/re2.md, "The attract demo"). The record's clock picked Claire, whose first demo is
+# room 203's: `seed` gives arklay's title the same pick (its film's at the boot, then the demo's).
+
+# The reel's play, from `Game_loop`'s first tick (2125) to the last black tick before the title's task takes over.
+[[run]]
+name = "title_demo_play"
+ui = "title"
+boot = true
+seed = 0x80000000
+offset = 0
+ticks = 2781
+compare_from = 2125
+input = "title_demo.txt"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,pl,bgm,snd,fgstat"
+frames = [2118, 2780]
+# arklay poses the player as the reel loads, the original on the first tick's move.
+ignore = [[2125, "mot"]]
+expect = "match"
+record = ""
+
+# The title after it: the logo's 120 ticks on black, and the title's entry as from the boot.
+[[run]]
+name = "title_demo_return"
+ref = "title_demo_play"
+ui = "title"
+boot = true
+seed = 0x80000000
+offset = 0
+ticks = 3200
+compare_from = 2781
+input = "title_demo.txt"
+fields = "ti,tlogo,tfade,snd"
+frames = [2781, 3199]
+expect = "match"
+record = ""
+
+# A key in the reel: this record's clock picked Leon, whose first demo is room 10C's. The press on 2300 ends the
+# demo at once, with a 16-tick fade.
+[[run]]
+name = "title_demo_abort"
+ui = "title"
+boot = true
+seed = 0
+offset = 0
+ticks = 2318
+compare_from = 2124
+input = "title_demo_abort.txt"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,pl,bgm,snd,em,fgstat"
+frames = [2118, 2317]
+# arklay poses the player as the reel loads, the original on the first tick's move.
+ignore = [[2124, "mot"]]
+expect = "match"
+record = ""
+
+# The title after it, as after a game: the logo's 120 ticks on black, then the title's picture fading in.
+[[run]]
+name = "title_demo_abort_return"
+ref = "title_demo_abort"
+ui = "title"
+boot = true
+seed = 0
+offset = 0
+ticks = 2700
+compare_from = 2318
+input = "title_demo_abort.txt"
+fields = "ti,tlogo,tfade,snd"
+frames = [2318, 2699]
+expect = "match"
+record = ""
+
+# Three demos in a row with no input, the title's cycle of three reels: the record's clock picked Claire's first
+# (room 203's, as `title_demo_play`), Leon's second (room 10A's, with the shotgun) and Claire's third (room 11B's),
+# which are the generator's picks from 0x80000000. The record has no frames.
+# The second, from `Game_loop`'s first tick: a tick later than room 10C's from the boot, as the stage changed.
+[[run]]
+name = "title_demo_cycle_2"
+ref = "title_demo_cycle"
+ui = "title"
+boot = true
+seed = 0x80000000
+offset = 0
+ticks = 5568
+compare_from = 4840
+input = "title_demo.txt"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,pl,bgm,snd,em,fgstat"
+# The room's enemies draw from `Rnd` as it loads, which arklay's trace shows a tick later, as on a door's tick.
+ignore = [[4840, "mot"], [4840, "rng"]]
+expect = "match"
+
+# The third.
+[[run]]
+name = "title_demo_cycle"
+ui = "title"
+boot = true
+seed = 0x80000000
+offset = 0
+ticks = 8356
+compare_from = 7626
+input = "title_demo.txt"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,pl,bgm,snd,em,fgstat"
+ignore = [[7626, "mot"], [7626, "rng"]]
+expect = "match"
+record = ""

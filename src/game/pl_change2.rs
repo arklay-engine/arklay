@@ -90,6 +90,27 @@ impl GameState {
         self.rebuild_slots();
     }
 
+    /// An attract reel's `Item_work` and equipped slot
+    /// (`Title_game_init`'s demo branch, `0x506750`), with the eight slots
+    /// it plays with.
+    pub fn set_re2_demo_items(&mut self, reel: &crate::demo2::Reel) {
+        let slots = reel.items.map(|[id, count, mark, _]| [id, count, mark]);
+        self.set_re2_item_work(&slots);
+        self.re2.personal_item = [slots[10][0], slots[10][1]];
+        self.re2.inventory_size = 8;
+        let slot = usize::from(reel.equipped_slot);
+        let equipped = slots[..10]
+            .get(slot)
+            .is_some_and(|held| held[0] != 0 && held[0] == reel.equipped);
+        self.set_equipped(equipped.then_some(reel.equipped));
+        if equipped {
+            // The slots are kept compact: the equipped one is up by the
+            // empty ones the reel has before it.
+            let holes = slots[..slot].iter().filter(|held| held[0] == 0).count();
+            self.equipped_slot = Some(slot - holes);
+        }
+    }
+
     /// The trace's `pl` field: `pPl.Id`, `scd_var_next_pld`, `Max_life`,
     /// `St+8` and `St+0xA`, the stash's slot and size, the stashed life,
     /// `poison_status` and `poison_timer`.

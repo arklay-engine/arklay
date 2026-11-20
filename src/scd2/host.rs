@@ -548,6 +548,9 @@ pub const FG_SYSTEM_MOVIE: u8 = 22;
 /// `Die` on. arklay's own latch is [`crate::player2::Work::die_start`]; this
 /// is the bit as a script writes it.
 pub const FG_SYSTEM_DIE: u8 = 5;
+/// `fg_system`'s `0x2000`: the attract demo. The music's calls do nothing
+/// under it ([`crate::bgm2`]).
+pub const FG_SYSTEM_DEMO: u8 = 18;
 /// `fg_system`'s `0x8000`, which `Init_movie_work` clears. No reader is known.
 pub const FG_SYSTEM_8000: u8 = 16;
 /// `fg_status`'s `0x4000000`: EASY's.
