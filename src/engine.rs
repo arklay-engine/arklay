@@ -2720,6 +2720,7 @@ impl GameSession {
             game.max_health = health;
             game.set_health_copy(health);
         }
+        seed_re2_max_life(&mut game, loaded.re2_vm.is_some());
         game.sync_entity_from_player(&player_state);
         let mut session = Self::from_loaded(pack, loaded, game, player_state, save_dir, options)?;
         session.push_re2_start_out_of_walls();
@@ -2791,6 +2792,7 @@ impl GameSession {
         let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_new_game(pack, &mut game, character);
         seed_re2_save_count(&mut game, loaded.re2_vm.is_some());
+        seed_re2_max_life(&mut game, loaded.re2_vm.is_some());
         seed_new_game_choice(&mut game, options, loaded.re2_vm.is_some());
         apply_pack_setup(pack, &mut game);
         let mut player_state = player::spawn(id, &loaded.room);
@@ -2922,6 +2924,7 @@ impl GameSession {
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_fresh_state(pack, &mut game);
+        seed_re2_max_life(&mut game, loaded.re2_vm.is_some());
         seed_new_game_choice(&mut game, options, loaded.re2_vm.is_some());
         let player_state = player::spawn(id, &loaded.room);
         game.sync_entity_from_player(&player_state);
@@ -10647,6 +10650,16 @@ fn continue_save_counter(game: &mut game::GameState, file: &save::SaveFile) {
 fn seed_re2_save_count(game: &mut game::GameState, re2: bool) {
     if re2 {
         game.state_bytes[usize::from(game::STATE_BYTE_SAVES)] = 0;
+    }
+}
+
+/// RE 2's maximum life at a game's start: `Player_set` (`0x4D93A0`) gives
+/// the player its `Max_life` whatever life the game starts with, where RE 1's
+/// `InitializeGame` derives Chris's 140 and Jill's 96. The trace's `pl`
+/// shows it.
+fn seed_re2_max_life(game: &mut game::GameState, re2: bool) {
+    if re2 {
+        game.max_health = game::pl_change2::max_life(game.re2.pl_id);
     }
 }
 
@@ -28034,6 +28047,29 @@ mod tests {
             tick(&mut session, UiInput::default());
             assert_eq!(session.re2_status_close, Some(close));
         }
+    }
+
+    /// An RE 2 game starts with `Player_set`'s `Max_life`, not RE 1's: a room
+    /// start seeds RE 1's start health after the pack's own, which left Leon
+    /// 140.
+    #[test]
+    fn re2_starts_with_player_sets_max_life() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let room = load_room(&pack, a).unwrap();
+        let mut game = new_game_state(&pack, a, &room.room, player::Options::default());
+        seed_new_game(&pack, &mut game, 0);
+        assert_eq!(game.max_health, 140, "RE 1's Chris");
+        seed_re2_max_life(&mut game, false);
+        assert_eq!(game.max_health, 140, "an RE 1 room keeps it");
+        seed_re2_max_life(&mut game, true);
+        assert_eq!(game.max_health, game::RE2_MAX_HEALTH);
+        game.set_re2_player_id(1);
+        seed_re2_max_life(&mut game, true);
+        assert_eq!(game.max_health, 200, "Claire");
+        game.set_re2_player_id(0xD);
+        seed_re2_max_life(&mut game, true);
+        assert_eq!(game.max_health, 400);
     }
 
     /// A save screen that ends on its first tick, with no write.

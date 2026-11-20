@@ -123,6 +123,16 @@ impl GameState {
     }
 }
 
+/// `Player_set`'s `Max_life` (`0x4D93A0`) for the player `id`: 200, and 400
+/// for player 0xD.
+pub fn max_life(id: u8) -> i16 {
+    if id == 0xD {
+        400
+    } else {
+        super::RE2_MAX_HEALTH
+    }
+}
+
 /// `St_chenge_pl` (`0x502190`): into Ada or Sherry, stash the scenario's
 /// character's items and give the table's; back, restore ten slots, the
 /// slot count and the equipped slot, with the lighter or the lockpick as the
@@ -199,11 +209,7 @@ pub fn set_room_change(game: &mut GameState) -> bool {
     // `Player_set`: `Rnd`'s seed (`0xD2706CA4`), `Max_life` and
     // `scd_var_next_pld = Id`.
     game.re2.rnd = crate::zombie2::Rnd::default();
-    game.max_health = if next == 0xD {
-        400
-    } else {
-        super::RE2_MAX_HEALTH
-    };
+    game.max_health = max_life(next);
     game.re2.vars[VAR_NEXT_PLD] = u16::from(next);
     // The new body's parts start zeroed: the neck joint's world position
     // (what a partner's `Root_ck` aims at) reads 0 until the player's
