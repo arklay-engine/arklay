@@ -581,6 +581,9 @@ const CHARACTER_SIZES: [u16; 28] = [
 ];
 /// `fg_status`'s bank, whose bit picks the second `fg_enemy`.
 pub const STATUS_BANK: u8 = 1;
+/// `fg_status`'s `0x8000`: a status task's window is up (`Sce_Item`,
+/// `0x4E96C0`, raises it as it opens the get-item window).
+pub const STATUS_WINDOW: u8 = 16;
 const STATUS_ENEMY_FLAGS: u8 = 6;
 /// `fg_status`'s bit for the character whose voices play: 1 is Claire.
 pub const STATUS_PLAYER: u8 = 0;
@@ -3003,6 +3006,12 @@ impl Host for GameHost<'_> {
         if bank == MESSAGE_BANK
             && u32::from(self.game.message.menu_choice_id()) & (0x8000_0000 >> (index & 31)) != 0
         {
+            return true;
+        }
+        // The get-item window's bit is the window's own state, not the
+        // bank's: a scene that gives an item waits on it (room 60C's
+        // `aot_on`, then `ck(1, 16, 1)`).
+        if bank == STATUS_BANK && index == STATUS_WINDOW && self.game.re2_item_get_status() {
             return true;
         }
         self.game.re2.flag(bank, index)
@@ -6037,6 +6046,93 @@ mod tests {
             .iter()
             .map(|&(id, quantity)| crate::game::InventoryItem { id, quantity })
             .collect()
+    }
+
+    /// `St_get_check`'s sub 0x13 (`item_gvirus_60c`): Leon's G-Virus and
+    /// Claire's Vaccine go to the personal slot with no question, after a
+    /// count of 52 ticks, and whatever the slots hold.
+    #[test]
+    fn the_personal_slots_item_is_taken_unasked() {
+        use crate::game::Re2ItemGetPhase as Phase;
+        use crate::game::status2::{Input, Sound};
+        let area = |game: &mut GameState, item: i64| {
+            let ops = [8, 2, 49, 0, 0, -100, -100, 200, 200, item, 1, 16, 2, 0];
+            let mut host = GameHost { game: &mut *game };
+            host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+            let action = game.room_actions[8].unwrap();
+            game.fire_re2_area(action);
+        };
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let full = vec![(0x26, 1); game.inventory_capacity()];
+        game.inventory = stacks(&full);
+        game.re2.personal_item = [0x2F, 1];
+        area(&mut game, 0x52);
+        assert!(GameHost { game: &mut game }.flag(STATUS_BANK, STATUS_WINDOW));
+        for _ in 0..7 {
+            assert!(game.tick_re2_item_get(Input::default()).is_empty());
+        }
+        assert_eq!(game.re2_item_get.unwrap().phase, Phase::Wait);
+        assert!(!game.message.active, "no question");
+        for _ in 0..52 {
+            assert!(game.tick_re2_item_get(Input::default()).is_empty());
+            assert_eq!(game.re2_item_get.unwrap().phase, Phase::Wait);
+            assert_eq!(game.re2_item_get_fly(), None);
+        }
+        // Sub 0x14: the decide cue and the fly's start for slot 10.
+        assert_eq!(game.tick_re2_item_get(Input::default()), [Sound::Decide]);
+        assert_eq!(game.re2_item_get.unwrap().phase, Phase::Fly);
+        let fly = game.re2_item_get_fly().unwrap();
+        assert_eq!([fly.x, fly.y, fly.w, fly.h], [14, 2, 0x70, 0x48]);
+        for _ in 0..18 {
+            assert!(game.tick_re2_item_get(Input::default()).is_empty());
+            assert_eq!(game.re2.personal_item, [0x2F, 1]);
+        }
+        assert!(game.tick_re2_item_get(Input::default()).is_empty());
+        assert_eq!(game.re2.personal_item, [0x52, 1]);
+        assert_eq!(game.inventory, stacks(&full), "no slot is touched");
+        assert!(game.re2.flag(item_bank(game.id.stage), 16));
+        assert_eq!(game.re2_item_get.unwrap().phase, Phase::Shown);
+        assert!(game.message.active, "the taken message");
+        game.message.active = false;
+        assert_eq!(game.tick_re2_item_get(Input::default()), [Sound::Cancel]);
+        assert_eq!(game.re2_item_get.unwrap().phase, Phase::Close);
+        // The scene that gave it waits on `fg_status`'s `0x8000`, which is
+        // up from the open to the close's ninth tick; the bank never holds
+        // it.
+        let window = |game: &mut GameState| GameHost { game }.flag(STATUS_BANK, STATUS_WINDOW);
+        for _ in 0..8 {
+            assert!(window(&mut game));
+            game.tick_re2_item_get(Input::default());
+        }
+        assert!(window(&mut game), "the close's eighth tick");
+        game.tick_re2_item_get(Input::default());
+        assert!(game.re2_item_get.is_some() && !window(&mut game));
+        game.tick_re2_item_get(Input::default());
+        assert!(game.re2_item_get.is_none() && !window(&mut game));
+        assert!(!game.re2.flag(STATUS_BANK, STATUS_WINDOW));
+
+        // The other character's is an item like any other: Claire is asked
+        // for the G-Virus, and takes the Vaccine unasked.
+        let claire = || {
+            let mut game = GameState::default();
+            game.is_re2_room = true;
+            game.re2.set_flag(STATUS_BANK, STATUS_PLAYER, 1);
+            game
+        };
+        let mut game = claire();
+        item_window(&mut game, 0x52, 1);
+        assert_eq!(game.re2_item_get.unwrap().phase, Phase::Ask);
+        let mut game = claire();
+        area(&mut game, 0x4E);
+        for _ in 0..7 {
+            game.tick_re2_item_get(Input::default());
+        }
+        assert_eq!(game.re2_item_get.unwrap().phase, Phase::Wait);
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        item_window(&mut game, 0x4E, 1);
+        assert_eq!(game.re2_item_get.unwrap().phase, Phase::Ask);
     }
 
     /// `Set_item` (`0x502820`) with a two-slot weapon: `0x502720` moves

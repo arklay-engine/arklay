@@ -27,6 +27,9 @@ const FLY_STARTS: [[i8; 4]; 11] = [
     [14, 2, -3, 15],
 ];
 
+/// [`Fly::start`]'s slot for the personal item.
+pub const PERSONAL_SLOT: usize = 10;
+
 /// How many ticks sub 2 runs (`0x692FBC` counts to `0x12`); the picture is
 /// drawn on the tick sub 1 starts it and on each of these but the last.
 pub const FLY_TICKS: u8 = 0x12;

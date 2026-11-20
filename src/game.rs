@@ -1001,6 +1001,9 @@ pub enum Re2ItemGetPhase {
     Open,
     /// Sub 1: the question waits for its answer.
     Ask,
+    /// Subs 0x13 and 0x14: the personal slot's item is taken unasked, once
+    /// its count has run out.
+    Wait,
     /// Sub 2: the item flies to the inventory, then sub 3 takes it.
     Fly,
     /// Subs 4-0x11: a "no" counts out.
@@ -1022,6 +1025,12 @@ const BLUE_CARD_KEY: u8 = 0x35;
 /// The door table's "Will you use the {item}?", which the computer asks.
 const DOOR_MESSAGE_USE: u8 = 7;
 const ITEM_GET_TAKE_TICK: u8 = 19;
+/// Sub 0x13 counts `0x691F63` past 0x32 from the tick after the check, a
+/// tick each, and sub 0x14 starts the fly on the tick after that.
+const ITEM_GET_WAIT_TICKS: u8 = 0x35;
+/// The items `St_get_check` gives the personal slot: Claire's Vaccine and
+/// Leon's G-Virus (`(St_is_leon() & 4) + 0x4E`).
+const PERSONAL_PICKUPS: [u8; 2] = [0x52, 0x4E];
 const ITEM_GET_REFUSE_TICKS: u8 = 15;
 const ITEM_GET_CLOSE_TICKS: u8 = 10;
 /// The open's first ticks, before its fade hands the frame to the window.
@@ -9725,6 +9734,16 @@ impl GameState {
         });
     }
 
+    /// `fg_status`'s `0x8000` for the get-item window: up from `Sce_Item`'s
+    /// open to the close's ninth tick, the one before the player is handed
+    /// back (`item_gvirus_60c`: the cancel cue on 3001, the bit down on
+    /// 3010).
+    pub fn re2_item_get_status(&self) -> bool {
+        self.re2_item_get.is_some_and(|get| {
+            get.phase != Re2ItemGetPhase::Close || get.ticks < ITEM_GET_CLOSE_TICKS - 1
+        })
+    }
+
     /// Whether the get-item window's next tick is still a `Game_loop` frame,
     /// with `fg_stop` up so only the enemies' `Root_ck` runs: the three while
     /// game mode 1 starts the fade and mode 2 waits for it (`0x4BFB36`), and
@@ -9831,6 +9850,13 @@ impl GameState {
                 let check = self.re2_item_get_slot(get.action);
                 get.slot = check.ok();
                 match check {
+                    // `St_get_check` sends the personal slot's item to sub
+                    // 0x13 before it looks at the slots: no question, and
+                    // no refusal with every slot held.
+                    _ if self.re2_personal_pickup(item) => {
+                        get.slot = None;
+                        next(Re2ItemGetPhase::Wait)
+                    }
                     Ok(_) => {
                         self.show_re2_global(MESSAGE_TAKE);
                         next(Re2ItemGetPhase::Ask)
@@ -9851,6 +9877,12 @@ impl GameState {
                 } else {
                     next(Re2ItemGetPhase::Refuse)
                 }
+            }
+            // Sub 0x14: the fly to the personal slot, with the decide cue.
+            Re2ItemGetPhase::Wait if get.ticks == ITEM_GET_WAIT_TICKS => {
+                get.fly.start(item_get2::PERSONAL_SLOT);
+                cues.push(status2::Sound::Decide);
+                next(Re2ItemGetPhase::Fly)
             }
             Re2ItemGetPhase::Fly if get.ticks == ITEM_GET_TAKE_TICK => {
                 self.take_re2_item(get.action, get.slot);
@@ -10075,6 +10107,17 @@ impl GameState {
         }
     }
 
+    /// Whether `item` is the one the get-item window gives this scenario's
+    /// character's personal slot (`St_is_leon`: `fg_status`'s top bit
+    /// clear).
+    fn re2_personal_pickup(&self, item: u8) -> bool {
+        let claire = self.re2.flag(
+            crate::scd2::host::STATUS_BANK,
+            crate::scd2::host::STATUS_PLAYER,
+        );
+        item == PERSONAL_PICKUPS[usize::from(claire)]
+    }
+
     /// Where the window's check (`0x4FD5C0`) puts the area's item.
     fn re2_item_get_slot(&self, action: RoomAction) -> Result<crate::scd2::host::ItemGetSlot, u8> {
         let [item, amount, ..] = action.params;
@@ -10151,6 +10194,9 @@ impl GameState {
         }
         let [item, amount, flag, ..] = action.params;
         match slot {
+            // `Set_iwork(10, item, 1, 0)`: in place of the lighter or the
+            // lockpick, one whatever the area counts.
+            _ if self.re2_personal_pickup(item) => self.re2.personal_item = [item, 1],
             Some(ItemGetSlot::Merge(index)) => {
                 let stack = &mut self.inventory[index];
                 stack.quantity = stack.quantity.wrapping_add(amount);

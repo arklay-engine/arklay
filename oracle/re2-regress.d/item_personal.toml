@@ -1,0 +1,16 @@
+# The pick-up that goes to the personal slot (`St_get_check`'s sub 0x13: Leon's G-Virus, 0x52, and Claire's Vaccine, 0x4E): room 60C's
+# scene with Annette, started by item flag 14 of the later stages' bank (34:14), ends in `aot_on` on the G-Virus's area. No question:
+# the window waits 52 ticks, plays the decide cue and flies the picture to the personal slot (oracle/re2.md, "Items").
+
+[[run]]
+name = "item_gvirus_60c"
+room = "60C"
+ticks = 3200
+input = "item_gvirus_60c.txt"
+input_shift = 344
+voice_from_ref = true
+setup = { pos = [15109, 0, -18578], angle = 0, health = 200, rnd = 6114, camera = 0, flags = [[34, 14]] }
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat"
+frames = [2800, 3199]
+expect = "match"
+record = "--warp 60C:15109:0:-18578:0 --flag 34:14 --life 200"

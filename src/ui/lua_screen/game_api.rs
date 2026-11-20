@@ -176,6 +176,7 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
             match get.phase {
                 Phase::Open => "open",
                 Phase::Ask => "ask",
+                Phase::Wait => "wait",
                 Phase::Fly => "fly",
                 Phase::Refuse => "refuse",
                 Phase::Shown => "shown",

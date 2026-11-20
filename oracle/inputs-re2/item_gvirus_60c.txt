@@ -1,0 +1,3 @@
+# Room 60C's scene with Annette to its end, where the script's aot_on gives Leon the G-Virus: the decide key closes "You've taken the G-Virus." (oracle/re2.md, "Items").
+3000 confirm
+3003
