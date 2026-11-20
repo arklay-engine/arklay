@@ -2584,7 +2584,9 @@ struct GameSession {
     /// place of the live one, and `Game_loop`'s end of it.
     re2_demo: Option<Re2Demo>,
     /// The demo is over and the title is due: `Some(true)` when a key ended
-    /// it. Taken once by the app.
+    /// it. Taken once by the app, on the update after the one that set it,
+    /// to open the title as the original's does after a demo (its `demo`
+    /// argument).
     re2_demo_over: Option<bool>,
     /// The player's death sequence: the delay, the fades and the DIED screen.
     death: ui::death::DeathSequence,
@@ -2681,13 +2683,14 @@ fn authored_over<const N: usize, const W: usize>(
     })
 }
 
-/// The room one of RE 2's reels starts in, when the pack has it as a room
-/// of RE 2's.
-fn re2_demo_room(pack: &Pack, reel: &crate::demo2::Reel) -> Option<RoomId> {
+/// The room a reel's bytes start in read as one of RE 2's, when the pack
+/// has it as a room of RE 2's. A reel doesn't say which game recorded it:
+/// this is what tells.
+fn re2_demo_room(pack: &Pack, reel: &[u8]) -> Option<RoomId> {
     let id = RoomId {
-        stage: reel.stage.checked_add(1)?,
-        room: reel.room,
-        player_flag: reel.player & 1,
+        stage: reel.first()?.checked_add(1)?,
+        room: *reel.get(1)?,
+        player_flag: reel.get(6)? & 1,
         mansion2: false,
     };
     (id.stage <= RoomId::MAX_STAGE_ID
@@ -2701,6 +2704,9 @@ struct Re2Demo {
     play: crate::demo2::Playback,
     /// The reel's pad, as the buttons it holds and newly presses.
     keys: InputState,
+    /// The raw pad `Pad_set` last left (`0x9885F4`): the reel's word, or
+    /// the live pad before the play.
+    last: u16,
     /// `Game_loop`'s end of the demo: the ticks since it set the fade out.
     end: Option<u8>,
 }
@@ -2710,6 +2716,7 @@ impl Re2Demo {
         Self {
             play: crate::demo2::Playback::new(reel),
             keys: InputState::default(),
+            last: 0,
             end: None,
         }
     }
@@ -2741,22 +2748,30 @@ fn re2_pad_keys(pad: u16, key_type: u8) -> u64 {
     .fold(0, |keys, (_, key)| keys | key)
 }
 
-/// A new press that ends RE 2's demo: `Pad_set` tests the raw pad's low
-/// twelve bits, every button but the directions.
-fn re2_demo_key(ui: &UiInput, input: &player::Input) -> bool {
-    ui.confirm
-        || ui.cancel
-        || ui.start
-        || ui.map
+/// The live pad as RE 2's raw word, for `Pad_set`'s test of a demo's end:
+/// the buttons with a held level, under the first key config. The
+/// directions (the high four bits) aren't tested.
+fn re2_live_pad(ui: &UiInput, input: &player::Input) -> u16 {
+    let held = |down: bool, bit: u16| if down { bit } else { 0 };
+    held(input.action_held || input.fire || ui.held_confirm, 0x0080)
+        | held(input.run || input.cancel_held, 0x0040)
+        | held(input.map_held, 0x0010)
+        | held(input.aim, 0x0008)
+        | held(input.lock_drop, 0x0004)
+}
+
+/// A press that ends RE 2's demo whatever the reel holds: START and the
+/// port's own buttons, which no reel's word has, and F9, whose
+/// `Vk_press` bit (`0x40`) `Pad_set` takes as a key in a demo.
+fn re2_demo_press(ui: &UiInput, input: &player::Input) -> bool {
+    ui.start
+        || ui.return_title
         || ui.system_menu
+        || ui.map
         || ui.page_left
         || ui.page_right
         || ui.weapon_step != 0
         || ui.equip_slot.is_some()
-        || input.action_pressed
-        || input.run_pressed
-        || input.aim_pressed
-        || input.fire_pressed
         || input.quick_turn_pressed
         || input.reload_pressed
         || input.target_step != 0
@@ -2940,15 +2955,15 @@ impl GameSession {
         let bytes = pack
             .read(entry)
             .with_context(|| format!("missing attract demo reel {entry}"))?;
-        // A reel doesn't say which game recorded it: it is RE 2's when,
-        // read as one, it starts in a room of RE 2's.
-        if let Ok(reel) = crate::demo2::Reel::parse(entry, &bytes)
-            && let Some(id) = re2_demo_room(pack, &reel)
-        {
+        if let Some(id) = re2_demo_room(pack, &bytes) {
+            let reel = crate::demo2::Reel::parse(entry, &bytes)?;
             return Self::from_re2_demo(pack, reel, id, save_dir, options);
         }
         let reel = demo::DemoReel::parse(entry, &bytes)?;
         let id = reel.room;
+        if crate::room::dialect(pack, id) == crate::format::Dialect::Re2 {
+            bail!("attract demo reel {entry} starts in no room of the pack's");
+        }
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded, options);
         seed_new_game(pack, &mut game, reel.character, loaded.re2_vm.is_some());
@@ -3037,12 +3052,18 @@ impl GameSession {
         player_state.angle = reel.angle as u16;
         game.sync_entity_from_player(&player_state);
         let cut = usize::from(reel.cut);
+        if cut >= loaded.room.cuts.len() {
+            bail!(
+                "attract demo reel {} starts on cut {cut}; room {} has {}",
+                reel.entry,
+                id.code(),
+                loaded.room.cuts.len()
+            );
+        }
         let mut session = Self::from_loaded(pack, loaded, game, player_state, save_dir, options)?;
         // `Cut_change(scd_var_cut)`, then `Cut_check`'s zones from there.
-        if cut < session.loaded.room.cuts.len() {
-            session.loaded.room.current_cut = cut;
-            session.game.set_camera_cut(cut);
-        }
+        session.loaded.room.current_cut = cut;
+        session.game.set_camera_cut(cut);
         apply_camera(
             &mut session.loaded.room,
             &mut session.game,
@@ -3617,6 +3638,11 @@ impl GameSession {
     /// `Game_loop`'s first tick on (`fg_system`'s `0x40000000`), a word a
     /// frame, and nothing once the words are out or a button ended them.
     /// The pad before that tick isn't read: a key then does nothing.
+    ///
+    /// The key is a button the live pad holds that the pad `Pad_set` last
+    /// left didn't, and that is the reel's word: a button held from a tick
+    /// whose word held it ends the demo on the first tick after a word
+    /// without it. A film stops `Psx_main`, and the words with it.
     fn re2_demo_pad(
         &mut self,
         ui: UiInput,
@@ -3624,14 +3650,20 @@ impl GameSession {
         action: bool,
     ) -> (UiInput, player::Input, bool) {
         let playing = self.re2_title_start.is_none_or(|left| left == 0);
+        let film = self.movie.is_some();
         let Some(demo) = self.re2_demo.as_mut() else {
             return (ui, input, action);
         };
-        let key = re2_demo_key(&ui, &input);
-        let pad = demo.play.pad(key, playing).unwrap_or(0);
+        if film {
+            return (UiInput::default(), player::Input::default(), false);
+        }
+        let live = re2_live_pad(&ui, &input);
+        let key = live & !demo.last & 0x0FFF != 0 || re2_demo_press(&ui, &input);
+        let pad = demo.play.pad(key, playing);
+        demo.last = pad.unwrap_or(live);
         let tick = demo
             .keys
-            .tick_scripted(re2_pad_keys(pad, demo.play.reel.key_type));
+            .tick_scripted(re2_pad_keys(pad.unwrap_or(0), demo.play.reel.key_type));
         (tick.ui, tick.player, tick.action)
     }
 
@@ -3639,6 +3671,9 @@ impl GameSession {
     /// its tick. On the first tick with the reel's words out (the tick after
     /// the last, or a key's) and the game in no other mode, it stops
     /// everything (`fg_stop`) and sets fade 0 to black, faster after a key.
+    /// A room's entry is a mode too (5, for the tick after the one that set
+    /// its fade), so a key on the game's first tick fades out from its
+    /// third.
     /// The stopped ticks run until the fade is done; then the screen is
     /// black for [`RE2_DEMO_BLACK_TICKS`] and the title is due
     /// ([`Self::re2_demo_over`]). Returns whether the tick is one of the
@@ -3647,7 +3682,10 @@ impl GameSession {
         let idle = self.menu_request.is_none()
             && self.re2_status_open.is_none()
             && self.re2_die.is_none()
-            && self.death.is_idle();
+            && self.death.is_idle()
+            && self.boot_message.is_none()
+            && !self.room_boot_gate
+            && self.movie.is_none();
         let Some(demo) = self.re2_demo.as_mut() else {
             return false;
         };
@@ -4858,11 +4896,16 @@ impl GameSession {
         // Yes in the room tick and set game mode 1 with `fg_stop` still held:
         // the rest of the tick runs, and the hand-off starts on the next
         // ([`GameSession::step_re2_save`]).
-        if self.game.is_re2_room && std::mem::take(&mut self.game.re2_save_requested) {
+        // A reel's typewriter saves nothing.
+        if self.game.is_re2_room
+            && std::mem::take(&mut self.game.re2_save_requested)
+            && !self.in_demo()
+        {
             self.re2_save = Some(Re2Save::Requested);
         }
         if !self.game.is_re2_room
             && let Some(ink_ribbon) = self.game.take_typewriter_confirm()
+            && !self.in_demo()
         {
             self.typewriter_arm = Some(ink_ribbon);
             return Ok(());
@@ -5484,7 +5527,11 @@ impl GameSession {
         // game: the reference's `game_loop` returns 0 for it and `game_start`
         // chains `ending_state` instead of the title.
         let attract = self.game.flags[5].bit(game::MSF2_ATTRACT_DEMO);
-        if self.game.flags[5].bit(game::MSF2_DEATH_VARIANT) && !attract {
+        if let Some(demo) = &self.re2_demo {
+            // `Die_move_end` leaves `fg_system`'s demo bit, and `Game_loop`
+            // goes to the title as at the reel's end.
+            self.re2_demo_over = Some(demo.play.aborted());
+        } else if self.game.flags[5].bit(game::MSF2_DEATH_VARIANT) && !attract {
             self.clear_game_requested = Some(ui::debug_menu::default_ending(&self.game));
         } else {
             self.return_title_requested = true;
@@ -11274,10 +11321,6 @@ struct App {
     /// opens the title instead of running another gameplay tick, so the tick
     /// that finished the death is still traced with the session's final state.
     pending_return_title: bool,
-    /// RE 2's attract demo is over, by a key with `Some(true)`: the next
-    /// update opens the title as the original's does after one (its `demo`
-    /// argument), in place of a gameplay tick.
-    pending_demo_title: Option<bool>,
     /// The stage RE 2's `Set_room` last set (`0x989E7D`), which outlasts the
     /// game: 1 from the boot, then the stage of every room a session loads.
     re2_stage: u8,
@@ -11424,7 +11467,6 @@ impl App {
             demos,
             next_demo: 0,
             pending_return_title: false,
-            pending_demo_title: None,
             re2_stage: 1,
             screen_volumes: None,
             screen_volumes_shown: [None; 2],
@@ -12044,6 +12086,10 @@ impl App {
         let cues = cx.cues.into_inner();
         if boot {
             self.opening_played = true;
+        }
+        if own_boot {
+            // `Init_main` clears the stage the last room was set in too.
+            self.re2_stage = 1;
         }
         self.mode = Mode::Title(screen);
         self.play_ui_cues(cues);
@@ -13000,7 +13046,12 @@ impl App {
         if std::mem::take(&mut self.pending_return_title) {
             return self.apply(ScreenAction::Title);
         }
-        if let Some(key) = self.pending_demo_title.take() {
+        // The demo's last tick has been traced too: its title owns this
+        // update. The session holds the hand-off, so one started in its
+        // place is left alone.
+        if let Mode::Play(session) = &mut self.mode
+            && let Some(key) = session.re2_demo_over.take()
+        {
             self.open_title_after_demo(key)?;
             return Ok(AppFlow::Continue);
         }
@@ -13075,7 +13126,7 @@ impl App {
     fn play_update(&mut self, ui: UiInput, input: player::Input, action: bool) -> Result<AppFlow> {
         let mut return_title = false;
         let mut death_finished = false;
-        let mut demo_over = None;
+        let mut demo_over = false;
         let mut re2_stage = None;
         let mut load_request = None;
         let mut clear_game = None;
@@ -13103,7 +13154,7 @@ impl App {
                 }
                 return_title = session.take_return_title_request();
                 death_finished = session.death.finished;
-                demo_over = session.re2_demo_over.take();
+                demo_over = session.re2_demo_over.is_some();
                 if session.game.is_re2_room {
                     re2_stage = Some(session.loaded.id.stage);
                 }
@@ -13121,10 +13172,9 @@ impl App {
         if let Some(stage) = re2_stage {
             self.re2_stage = stage;
         }
-        if demo_over.is_some() {
-            // The demo's last black tick is still the game's: the title
-            // opens on the next update.
-            self.pending_demo_title = demo_over;
+        if demo_over {
+            // The demo's last tick is still the game's: the title opens on
+            // the next update.
             return Ok(AppFlow::Continue);
         }
         if let Some(file) = autosave
@@ -39907,6 +39957,180 @@ off_0010:
         assert_eq!(session.re2_demo_over, Some(true));
     }
 
+    /// `Pad_set` takes as a key a button the live pad holds that the pad it
+    /// last left, the reel's word, didn't: one held from a tick whose word
+    /// held it ends the demo on the tick after the first word without it.
+    /// F9 (`Vk_press`'s `0x40`) is a key whatever the words hold.
+    #[test]
+    fn a_held_button_ends_an_re2_reel_once_a_word_lacks_it() {
+        let pack = re2_demo_pack(&[0x0080, 0x0080, 0x1000, 0x1000, 0x1000]);
+        let mut session = re2_demo_session(&pack, player::Options::default());
+        let demo = |session: &GameSession| {
+            let demo = session.re2_demo.as_ref().unwrap();
+            (demo.keys.held, demo.play.aborted())
+        };
+        let shot = KEY_CONFIRM | KEY_FIRE;
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        assert_eq!(demo(&session), (shot, false));
+        let hold = |session: &mut GameSession| {
+            session
+                .tick(&pack, UiInput::default(), action_press(), true)
+                .unwrap();
+        };
+        hold(&mut session);
+        assert_eq!(demo(&session), (shot, false), "the word before held it");
+        hold(&mut session);
+        assert_eq!(demo(&session), (KEY_UP, false), "and so did this one's");
+        hold(&mut session);
+        assert_eq!(demo(&session), (0, true));
+
+        let mut session = re2_demo_session(&pack, player::Options::default());
+        let f9 = UiInput {
+            return_title: true,
+            ..UiInput::default()
+        };
+        session
+            .tick(&pack, f9, player::Input::default(), false)
+            .unwrap();
+        assert_eq!(demo(&session), (0, true));
+        assert!(session.re2_demo.as_ref().unwrap().play.over());
+    }
+
+    /// `Game_loop` ends the demo only in mode 0, and a room's entry leaves
+    /// mode 5 for a tick: a key on the game's first tick sets the fade out
+    /// on its third, over the entry's.
+    #[test]
+    fn a_button_on_an_re2_reels_first_tick_fades_out_after_the_entry() {
+        let pack = re2_demo_pack(&[0x1000; 40]);
+        let mut session = re2_demo_session(&pack, player::Options::default());
+        session.request_boot_message(game::MESSAGE_BOOT_CONTINUE);
+        session.start_from_re2_title(1);
+        let idle = |session: &mut GameSession| {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        };
+        idle(&mut session);
+        assert!(session.boot_message.is_some(), "held");
+        session
+            .tick(&pack, confirm_input(), action_press(), true)
+            .unwrap();
+        assert!(session.boot_message.is_none(), "the game's first tick");
+        let demo = |session: &GameSession| {
+            let demo = session.re2_demo.as_ref().unwrap();
+            (demo.play.aborted(), demo.end)
+        };
+        assert_eq!(demo(&session), (true, None));
+        assert!(session.room_fade.counter() < 0, "the entry's fade");
+        idle(&mut session);
+        assert_eq!(demo(&session), (true, None), "mode 5's tick");
+        assert!(session.room_fade.counter() < 0);
+        idle(&mut session);
+        assert_eq!(demo(&session), (true, Some(0)));
+        assert_eq!(
+            (session.room_fade.counter(), session.room_fade.state()),
+            (RE2_DEMO_KEY_FADE, 0x800),
+            "set at 0 and a step on by the tick's end"
+        );
+    }
+
+    /// A film stops `Psx_main`, `Pad_set` with it: the reel's next word
+    /// waits for the first tick after the film, and the live pad doesn't
+    /// reach the game meanwhile.
+    #[test]
+    fn a_film_holds_an_re2_reels_words() {
+        let mut reel = crate::demo2::tests::reel_bytes(&[0x1000, 0x0088]);
+        reel[..3].copy_from_slice(&[0, 0, 0]);
+        reel[6] = 0;
+        let pack = re2_title_pack_with(DEMO_TITLE, &["opn1stc"], &[("demo/01.dat", reel)]);
+        let mut session = re2_demo_session(&pack, player::Options::default());
+        session.movie = Some(MovieSession::open_named(&pack, "opn1stc").unwrap());
+        for _ in 0..3 {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        }
+        let demo = session.re2_demo.as_ref().unwrap();
+        assert_eq!(
+            (demo.keys.held, demo.play.over(), demo.end),
+            (0, false, None)
+        );
+        session.movie = None;
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        assert_eq!(session.re2_demo.as_ref().unwrap().keys.held, KEY_UP);
+    }
+
+    /// A death in the demo ends it as its last word does
+    /// (`Die_move_end` leaves `fg_system`'s demo bit, and `Game_loop` goes
+    /// to the title by its demo's branch): the title is the demo's, opened
+    /// as after a key when one was latched.
+    #[test]
+    fn a_death_in_an_re2_reel_goes_to_the_demos_title() {
+        let pack = re2_demo_pack(&[0x1000; 40]);
+        let mut session = re2_demo_session(&pack, player::Options::default());
+        session.finish_death();
+        assert_eq!(session.re2_demo_over, Some(false));
+        assert!(!session.return_title_requested);
+
+        let mut session = re2_demo_session(&pack, player::Options::default());
+        session.re2_demo.as_mut().unwrap().play.pad(true, true);
+        session.finish_death();
+        assert_eq!(session.re2_demo_over, Some(true));
+    }
+
+    /// A reel is RE 2's by the room its first bytes name, and then only
+    /// RE 2's: one cut short, or on a cut the room lacks, is refused and
+    /// not read as RE 1's.
+    #[test]
+    fn a_bad_re2_reel_is_refused() {
+        let session = |change: &dyn Fn(&mut Vec<u8>)| {
+            let mut reel = crate::demo2::tests::reel_bytes(&[0x1000; 4]);
+            reel[..3].copy_from_slice(&[0, 0, 0]);
+            reel[6] = 0;
+            change(&mut reel);
+            let pack = re2_title_pack_with(DEMO_TITLE, &[], &[("demo/01.dat", reel)]);
+            GameSession::from_demo_with(
+                &pack,
+                "demo/01.dat",
+                Path::new("saves"),
+                player::Options::default(),
+            )
+            .map(|_| ())
+        };
+        assert!(session(&|_| ()).is_ok());
+        let short = session(&|reel| reel.truncate(crate::demo2::HEADER_LEN + 5)).unwrap_err();
+        assert!(short.to_string().contains("pad words"), "{short}");
+        let cut = session(&|reel| reel[2] = 200).unwrap_err();
+        assert!(cut.to_string().contains("cut 200"), "{cut}");
+    }
+
+    /// A reel's typewriter saves nothing: its Yes starts no save screen.
+    #[test]
+    fn an_re2_reels_typewriter_opens_no_save() {
+        let pack = re2_demo_pack(&[0x1000; 40]);
+        let idle = |session: &mut GameSession| {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        };
+        let mut session = re2_demo_session(&pack, player::Options::default());
+        idle(&mut session);
+        session.game.re2_save_requested = true;
+        idle(&mut session);
+        assert!(!session.game.re2_save_requested && session.re2_save.is_none());
+
+        let mut session = re2_demo_session(&pack, player::Options::default());
+        session.re2_demo = None;
+        idle(&mut session);
+        session.game.re2_save_requested = true;
+        idle(&mut session);
+        assert!(session.re2_save.is_some(), "a game's does");
+    }
+
     /// RE 2's title hands over to the reel it names: the game starts as
     /// after a load, a tick sooner, and when the demo is over the title
     /// opens knowing how it ended. A reel the pack lacks leaves the title
@@ -39936,9 +40160,31 @@ off_0010:
             assert!(matches!(app.mode, Mode::Play(_)));
             idle(&mut app);
         }
-        assert!(matches!(app.mode, Mode::Play(_)) && app.pending_demo_title == Some(false));
+        let over = |app: &App| match &app.mode {
+            Mode::Play(session) => session.re2_demo_over,
+            _ => panic!("the demo's last tick is the game's"),
+        };
+        assert_eq!(over(&app), Some(false));
         idle(&mut app);
         assert_eq!(title_value(&app, "demo"), 1);
+
+        // A game started on that tick is left alone: the title was the
+        // demo's to open.
+        let mut app = boot();
+        for _ in 0..usize::from(RE2_TITLE_DEMO_TICKS) + 20 + 1 + 63 + 2 {
+            idle(&mut app);
+        }
+        assert_eq!(over(&app), Some(false));
+        app.apply(ScreenAction::NewGame {
+            character: 0,
+            choice: Default::default(),
+        })
+        .unwrap();
+        idle(&mut app);
+        let Mode::Play(session) = &app.mode else {
+            panic!("the new game goes on");
+        };
+        assert!(session.re2_demo.is_none());
 
         let mut app = boot();
         for _ in 0..usize::from(RE2_TITLE_DEMO_TICKS) + 4 {
@@ -39980,6 +40226,25 @@ off_0010:
         })
         .unwrap();
         assert_eq!(started(&app), Some(RE2_TITLE_NEW_GAME_TICKS + 1));
+    }
+
+    /// The boot (`Init_main`) puts that stage back to the first: a title
+    /// that boots again starts a game there with no tick more.
+    #[test]
+    fn re2s_boot_forgets_the_stage_last_set() {
+        const TITLE: &str = "local M = {}
+            function M.on_boot(api) end
+            function M.update(api, input) end
+            function M.draw() end
+            return M";
+        let dir = TempDir::new();
+        let mut app = App::new(re2_title_pack_with(TITLE, &[], &[]), dir.0.clone(), false);
+        app.boot(AppBoot::Title).unwrap();
+        app.re2_stage = 2;
+        app.open_title_from(false, None).unwrap();
+        assert_eq!(app.re2_stage, 2, "a title after a game keeps it");
+        app.open_title_from(true, None).unwrap();
+        assert_eq!(app.re2_stage, 1);
     }
 
     /// An app on [`FILM_TITLE`], before its first tick.
