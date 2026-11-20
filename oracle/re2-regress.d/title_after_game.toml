@@ -1,0 +1,27 @@
+# The title after a game (oracle/re2.md, "The title after a game"): prologue_leon_skip's new game left alone in
+# room 100 until the zombies kill Leon, the game over, and the title `Game_loop` chains. Recorded for 6000 ticks.
+[[run]]
+name = "title_after_death_play"
+ref = "title_after_death"
+ui = "title"
+offset = 189
+ticks = 3105
+compare_from = 1447
+input = "prologue_leon_skip.txt"
+input_shift = 189
+input_drop_early = true
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,msg,fgstat,fgroom,zm0,zm1,zm2,zm3,zm4,zm5,zd,esp"
+expect = "match"
+
+[[run]]
+name = "title_after_death"
+ui = "title"
+offset = 189
+ticks = 3700
+compare_from = 3105
+input = "prologue_leon_skip.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tsel,tx,tfade2,tfade3,snd"
+expect = "match"
+record = ""
