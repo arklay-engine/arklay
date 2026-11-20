@@ -2074,6 +2074,10 @@ fn copy_prologue_art(
 ///
 /// The movies (`GalleryMovie`, `0x437F30`): their words, `movie64.dat`,
 /// without which the gallery closes as the movies open.
+///
+/// The models (`Gallery3DArt`, `0x4375B0`): their panel, `3DLEFT1.dat` and
+/// `3DLEFT2.dat`, and its digits, `gnum.dat`, without which the gallery
+/// closes as the models open.
 fn copy_gallery_art(
     layout: &Layout,
     writer: &mut PackWriter,
@@ -2097,7 +2101,7 @@ fn copy_gallery_art(
     let pictures = (1..=60)
         .map(|n| format!("ROUGH{n:02}"))
         .chain((1..=35).map(|n| format!("ILLUST{n:02}")));
-    let sets: [(Vec<String>, &str); 4] = [
+    let sets: [(Vec<String>, &str); 5] = [
         (
             ["TITLE1", "TITLE2", "TITLE3", "TITLE4", "TITLE5", "MOJI"]
                 .map(str::to_owned)
@@ -2112,6 +2116,10 @@ fn copy_gallery_art(
         (
             vec!["MOVIE64".to_owned()],
             "the gallery can't show its movies",
+        ),
+        (
+            ["3DLEFT1", "3DLEFT2", "GNUM"].map(str::to_owned).to_vec(),
+            "the gallery can't show its models",
         ),
     ];
     for (stems, effect) in sets {

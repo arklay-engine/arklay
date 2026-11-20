@@ -777,17 +777,19 @@ fn the_gallerys_art_is_converted() {
             &tiny_tim(2, n as u8),
         );
     }
-    for (n, name) in ["LEFT01", "left02", "GNUM2", "movie64"]
-        .into_iter()
-        .enumerate()
+    for (n, name) in [
+        "LEFT01", "left02", "GNUM2", "movie64", "3DLEFT1", "3dleft2", "gnum",
+    ]
+    .into_iter()
+    .enumerate()
     {
         write(
             &data.join(format!("Gallery/{name}.dat")),
             &tiny_tim(3, n as u8),
         );
     }
-    // The 320 x 240 layout's sheets and the other screens' aren't packed.
-    for name in ["top32_1", "LEFT3224", "gnum", "movie32", "3DLEFT1"] {
+    // The 320 x 240 layout's sheets aren't packed.
+    for name in ["top32_1", "LEFT3224", "movie32", "3D3224"] {
         write(&data.join(format!("Gallery/{name}.dat")), &words);
     }
     let out = root.path.join("out.akpak");
@@ -802,14 +804,16 @@ fn the_gallerys_art_is_converted() {
         let entry = format!("ui/gallery/{stem}.tim");
         assert_eq!(read(&pack, &entry), tiny_tim(2, n as u8), "{entry}");
     }
-    for (n, stem) in ["left01", "left02", "gnum2", "movie64"]
-        .into_iter()
-        .enumerate()
+    for (n, stem) in [
+        "left01", "left02", "gnum2", "movie64", "3dleft1", "3dleft2", "gnum",
+    ]
+    .into_iter()
+    .enumerate()
     {
         let entry = format!("ui/gallery/{stem}.tim");
         assert_eq!(read(&pack, &entry), tiny_tim(3, n as u8), "{entry}");
     }
-    for entry in ["top32_1", "left3224", "gnum", "movie32", "3dleft1"] {
+    for entry in ["top32_1", "left3224", "movie32", "3d3224"] {
         assert!(
             !pack.contains(&format!("ui/gallery/{entry}.tim")),
             "{entry}"
@@ -850,6 +854,7 @@ fn a_gallery_short_of_sheets_is_warned_of() {
                 pictures.join(", ")
             ),
             "no Gallery/movie64.dat; the gallery can't show its movies".to_owned(),
+            "no Gallery/3dleft1, 3dleft2, gnum.dat; the gallery can't show its models".to_owned(),
         ]
     );
     // Some of them: what is there is packed, and the rest named.
@@ -858,6 +863,7 @@ fn a_gallery_short_of_sheets_is_warned_of() {
     write(&data.join("Gallery/Moji.dat"), &tiny_tim(3, 2));
     write(&data.join("Gallery/LEFT02.dat"), &tiny_tim(3, 3));
     write(&data.join("Gallery/gnum2.dat"), &tiny_tim(3, 4));
+    write(&data.join("Gallery/3dleft2.dat"), &tiny_tim(3, 6));
     for stem in pictures.iter().filter(|stem| *stem != "illust07") {
         write(&data.join(format!("Gallery/{stem}.dat")), &tiny_tim(2, 5));
     }
@@ -868,6 +874,7 @@ fn a_gallery_short_of_sheets_is_warned_of() {
             "no Gallery/left01.dat; the gallery can't show its pictures",
             "no Gallery/illust07.dat; the gallery lacks those pictures",
             "no Gallery/movie64.dat; the gallery can't show its movies",
+            "no Gallery/3dleft1, gnum.dat; the gallery can't show its models",
         ]
     );
     convert_game(&root.path, &out).unwrap();

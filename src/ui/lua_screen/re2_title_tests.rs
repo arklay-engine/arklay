@@ -154,6 +154,9 @@ fn gallery_pictures_art() -> Vec<(&'static str, Vec<u8>)> {
     let mut digit_colours = vec![0];
     digit_colours.extend((1..=10).map(grey));
     digit_colours.push(grey(15));
+    let mut model_digit_colours = vec![0];
+    model_digit_colours.extend((11..=20).map(grey));
+    model_digit_colours.push(grey(25));
     let green = [0, 10 << 5];
     let small = || tim_8bit(20, 10, &green, |_, _| 1);
     vec![
@@ -184,6 +187,18 @@ fn gallery_pictures_art() -> Vec<(&'static str, Vec<u8>)> {
         ("illust01", small()),
         ("illust35", small()),
         ("movie64", movie_words_art()),
+        // The models' panel, in reds where the pictures' is blue, with its
+        // own greys for the keys, and its digits: digit `d` level `d + 11`
+        // and the stroke 25.
+        (
+            "3dleft1",
+            sheet_tim(&[0, 9, 5 << 5], |u, _| 1 + u8::from(u >= 154)),
+        ),
+        (
+            "3dleft2",
+            sheet_tim(&[0, 11, grey(21), grey(23), grey(25), grey(27), 13], keys),
+        ),
+        ("gnum", tim_8bit(64, 64, &model_digit_colours, digits)),
     ]
 }
 
