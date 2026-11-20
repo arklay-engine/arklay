@@ -3742,6 +3742,13 @@ pub struct GameState {
     /// The lid's swing ended this tick: the box's screen opens on the next
     /// (game mode 1).
     pub re2_box_open: bool,
+    /// A script raised `fg_status`'s `0x8000` itself: `Game_loop` opens the
+    /// status screen for the bit, as for START's press, on the first tick
+    /// its gate lets it.
+    pub re2_status_raised: bool,
+    /// `Game_loop` took that bit this tick, with no START pressed: the
+    /// message word as it was, for the session's request.
+    pub re2_status_scripted: Option<u16>,
     /// `Sce_Status` (`0x4E9C80`, kind 12) fired this tick: `Game` 1 and
     /// `fg_status`'s `0x8000`, so the status screen opens on the next tick
     /// as START's does.
@@ -4338,6 +4345,8 @@ impl Default for GameState {
             re2_box: None,
             re2_box_bytes: itembox2::BoxPage::default(),
             re2_box_open: false,
+            re2_status_raised: false,
+            re2_status_scripted: None,
             re2_status_request: false,
             re2_script_map: None,
             re2_key_map: None,
@@ -9750,6 +9759,7 @@ impl GameState {
     /// The bank doesn't hold it.
     pub fn re2_status_task_up(&self) -> bool {
         self.re2_item_get_status()
+            || self.re2_status_raised
             || self.re2_status_request
             || self.re2_script_map.is_some()
             || self.re2_key_map.is_some()

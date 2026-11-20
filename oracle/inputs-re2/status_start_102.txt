@@ -1,0 +1,15 @@
+# room 102 with the G-Virus held, its scenario flag and the Side Pack's item flag: START opens the status screen, whose start gives the lighter back and the inventory ten slots; down through the rows to the new one, and START closes it (oracle/re2.md, "Items")
+364 start
+368
+420 down
+424
+440 down
+444
+460 down
+464
+480 down
+484
+500 down
+504
+560 start
+564

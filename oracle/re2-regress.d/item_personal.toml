@@ -14,3 +14,18 @@ fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat"
 frames = [2800, 3199]
 expect = "match"
 record = "--warp 60C:15109:0:-18578:0 --flag 34:14 --life 200"
+
+# Claire's: room 615's machine, with the vaccine made (4:157 and 4:158), gives the Vaccine (0x4E) through the script's `aot_on`.
+[[run]]
+name = "item_vaccine_615"
+room = "615"
+player = 1
+character = 1
+ticks = 800
+input = "item_vaccine_615.txt"
+input_shift = 344
+setup = { pos = [300, 0, -24208], angle = 1024, health = 200, rnd = 6114, camera = 0, flags = [[4, 157], [4, 158]] }
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat"
+frames = [360, 799]
+expect = "match"
+record = "--start claire --warp 615:300:0:-24208:1024 --flag 4:157 --flag 4:158 --life 200"

@@ -1,0 +1,45 @@
+# `Status`'s start (`0x501BD0`), which every status task runs on its sixth tick: with scenario flag 3:162 (the G-Virus gone) Leon's
+# personal slot is the lighter again, and the Side Pack's item flag (8:63) makes the inventory ten slots. The status screen's own start,
+# and the get-item window's (oracle/re2.md, "Items").
+
+[[run]]
+name = "status_start_102"
+room = "102"
+setup_script = "status_start_102.lua"
+input = "status_start_102.txt"
+input_shift = 344
+ticks = 760
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,snd,fgstat"
+frames = [360, 759]
+# Measured: 0.02. The ten slots' frame drawn as eight's gives 0.60.
+frame_max_mean = 0.10
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --give 10:0x52:1 --flag 3:162 --flag 8:63 --life 200"
+
+[[run]]
+name = "status_start_item_102"
+room = "102"
+setup_script = "status_start_102.lua"
+input = "item_take_102.txt"
+input_shift = 344
+ticks = 1000
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat,fgitem"
+frames = [360, 999]
+# Measured: 0.02, as item_take.
+frame_max_mean = 0.10
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --give 10:0x52:1 --flag 3:162 --flag 8:63 --life 200"
+
+# The item box is a status task too: opened as the first one since the flag, its inventory side is ten slots.
+[[run]]
+name = "box_sidepack_201"
+room = "201"
+setup_script = "box_sidepack_201.lua"
+input = "box_sidepack_201.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 950
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,ib,box,snd,fgstat"
+frames = [360, 949]
+expect = "match"
+record = "--no-enemies --warp 201:-14471:0:-24100:1024 --flag 8:63 --give 2:0x14:30 --give 3:0x26:1 --give 4:0x26:1 --give 5:0x14:20 --give 6:0x26:1 --give 7:0x14:10 --box 0:0x26:1 --box 1:0x14:15"

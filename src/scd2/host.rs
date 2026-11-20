@@ -3021,14 +3021,14 @@ impl Host for GameHost<'_> {
 
     fn set_flag(&mut self, bank: u8, index: u8, op: u8) {
         // A script that raises the status task's bit itself asks for the
-        // status screen: `Game_loop` opens it for the bit as for START's
-        // press, with the decide cue (room 111, once the crank is gone).
-        // The bank never holds the bit.
+        // status screen: `Game_loop` tests the bit where it tests START's
+        // press, after the scripts (room 111, once the crank is gone). The
+        // bank never holds the bit.
         if bank == STATUS_BANK && index == STATUS_WINDOW {
-            if op != 0 && !self.game.re2_status_task_up() {
-                self.game.re2_status_request = true;
-                self.game
-                    .push_re2_sound(crate::game::status2::Sound::Decide.id());
+            if op == 0 {
+                self.game.re2_status_raised = false;
+            } else if !self.game.re2_status_task_up() {
+                self.game.re2_status_raised = true;
             }
             return;
         }
@@ -6106,18 +6106,18 @@ mod tests {
         game.re2_items = None;
         assert!(!window(&mut game));
 
-        // A script's own write of the bit asks for the screen, with
-        // START's cue, and leaves the bank alone; lowering it does nothing.
+        // A script's own write of the bit stands until `Game_loop` takes
+        // it, and leaves the bank alone; lowering it takes it back.
         let mut game = GameState::default();
         game.is_re2_room = true;
         GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 0);
-        assert!(!game.re2_status_request && !window(&mut game));
+        assert!(!game.re2_status_raised && !window(&mut game));
         GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 1);
-        assert!(game.re2_status_request && window(&mut game));
+        assert!(game.re2_status_raised && window(&mut game));
+        assert!(!game.re2_status_request && game.re2.sounds.is_empty());
         assert!(!game.re2.flag(STATUS_BANK, STATUS_WINDOW));
-        let cues: Vec<_> = game.re2.sounds.iter().map(|sound| sound.id).collect();
-        let decide = crate::game::status2::Sound::Decide.id();
-        assert_eq!(cues, [crate::se2::SoundId::decode(decide).unwrap()]);
+        GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 0);
+        assert!(!game.re2_status_raised && !window(&mut game));
     }
 
     /// `Status`'s start (`0x501BD0`): the Side Pack's flag makes the

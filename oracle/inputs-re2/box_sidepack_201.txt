@@ -1,0 +1,29 @@
+# Room 201's item box with the Side Pack (oracle/re2.md, "The item box"): open it, go down to the ninth slot, take the box's herb into it (the box's first row, two up), go right to the tenth and take the box's rounds, and cancel.
+420 action
+423
+480 down
+483
+510 down
+513
+540 down
+543
+570 down
+573
+600 confirm
+603
+630 up
+633
+660 up
+663
+690 confirm
+693
+720 right
+723
+750 confirm
+753
+780 down
+783
+810 confirm
+813
+870 cancel
+873
