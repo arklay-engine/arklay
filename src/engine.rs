@@ -475,7 +475,7 @@ pub fn run_with_options(
         let mut timings = stats::Stats::new();
         let load_start = Instant::now();
         let mut loaded = load_room(&pack, id)?;
-        let mut game = new_game_state(&pack, id, &loaded.room, player_options);
+        let mut game = new_game_state(&pack, id, &loaded, player_options);
         seed_fresh_state(&pack, &mut game);
         let mut player_state = player::spawn(id, &loaded.room);
         game.sync_entity_from_player(&player_state);
@@ -2690,12 +2690,12 @@ impl GameSession {
             new_game_id(pack, character)
         };
         let loaded = load_room(pack, id)?;
-        let mut game = new_game_state(pack, id, &loaded.room, options);
+        let mut game = new_game_state(pack, id, &loaded, options);
         game.is_re2_room = loaded.re2_vm.is_some();
         game.re2.scenario_b = scenario_b;
         game.re2.save_place = game::save2::new_game_place(character, scenario_b);
         seed_re2_music_table(pack, &mut game, scenario_b);
-        seed_new_game(pack, &mut game, character);
+        seed_new_game(pack, &mut game, character, loaded.re2_vm.is_some());
         seed_re2_save_count(&mut game, loaded.re2_vm.is_some());
         seed_new_game_choice(&mut game, options, loaded.re2_vm.is_some());
         apply_pack_setup(pack, &mut game);
@@ -2717,10 +2717,11 @@ impl GameSession {
         }
         if let Some(health) = manifest.and_then(|manifest| manifest.start_health) {
             game.entities[0].health = health;
-            game.max_health = health;
+            if loaded.re2_vm.is_none() {
+                game.max_health = health;
+            }
             game.set_health_copy(health);
         }
-        seed_re2_max_life(&mut game, loaded.re2_vm.is_some());
         game.sync_entity_from_player(&player_state);
         let mut session = Self::from_loaded(pack, loaded, game, player_state, save_dir, options)?;
         session.push_re2_start_out_of_walls();
@@ -2789,10 +2790,9 @@ impl GameSession {
         // The second visit is the origin's to have ([`RoomOrigins::with_visit`]).
         let id = pack.room_origins().with_visit(id, id.mansion2);
         let loaded = load_room(pack, id)?;
-        let mut game = new_game_state(pack, id, &loaded.room, options);
-        seed_new_game(pack, &mut game, character);
+        let mut game = new_game_state(pack, id, &loaded, options);
+        seed_new_game(pack, &mut game, character, loaded.re2_vm.is_some());
         seed_re2_save_count(&mut game, loaded.re2_vm.is_some());
-        seed_re2_max_life(&mut game, loaded.re2_vm.is_some());
         seed_new_game_choice(&mut game, options, loaded.re2_vm.is_some());
         apply_pack_setup(pack, &mut game);
         let mut player_state = player::spawn(id, &loaded.room);
@@ -2840,8 +2840,8 @@ impl GameSession {
         let reel = demo::DemoReel::parse(entry, &bytes)?;
         let id = reel.room;
         let loaded = load_room(pack, id)?;
-        let mut game = new_game_state(pack, id, &loaded.room, options);
-        seed_new_game(pack, &mut game, reel.character);
+        let mut game = new_game_state(pack, id, &loaded, options);
+        seed_new_game(pack, &mut game, reel.character, loaded.re2_vm.is_some());
         // The attract branch sets the mode bit before the room loads, so every
         // script and entity driver sees it, and seeds the PRNG as game_loop
         // does for attract playback.
@@ -2922,9 +2922,8 @@ impl GameSession {
         // The second visit is the origin's to have ([`RoomOrigins::with_visit`]).
         let id = pack.room_origins().with_visit(id, id.mansion2);
         let loaded = load_room(pack, id)?;
-        let mut game = new_game_state(pack, id, &loaded.room, options);
+        let mut game = new_game_state(pack, id, &loaded, options);
         seed_fresh_state(pack, &mut game);
-        seed_re2_max_life(&mut game, loaded.re2_vm.is_some());
         seed_new_game_choice(&mut game, options, loaded.re2_vm.is_some());
         let player_state = player::spawn(id, &loaded.room);
         game.sync_entity_from_player(&player_state);
@@ -2951,11 +2950,14 @@ impl GameSession {
         let id = file.room_id();
         let id = pack.room_origins().with_visit(id, id.mansion2);
         let loaded = load_room(pack, id)?;
-        let mut game = new_game_state(pack, id, &loaded.room, options);
+        let mut game = new_game_state(pack, id, &loaded, options);
         file.apply_to(&mut game);
         // `room_set` after `InitializeGame`: a block saved on one of
         // Rebecca's turns (model 3) loads with Rebecca's player id.
         game.apply_model_switch();
+        // `Title_game_init` runs `Player_set` on a load too: a block with
+        // no RE 2 state of its own still plays an RE 2 player.
+        seed_re2_max_life(&mut game, loaded.re2_vm.is_some());
         // The original's room init runs over the loaded flags, so the room
         // the save resumes in is visited (`room_set_visited_flag`) even when
         // the block predates its visit; the map tab highlights it.
@@ -10654,9 +10656,11 @@ fn seed_re2_save_count(game: &mut game::GameState, re2: bool) {
 }
 
 /// RE 2's maximum life at a game's start: `Player_set` (`0x4D93A0`) gives
-/// the player its `Max_life` whatever life the game starts with, where RE 1's
-/// `InitializeGame` derives Chris's 140 and Jill's 96. The trace's `pl`
-/// shows it.
+/// the player its `Max_life` whatever life the game starts with, a new
+/// game's or a load's (`Title_game_init`), where RE 1's `InitializeGame`
+/// derives Chris's 140 and Jill's 96. Every fresh state is seeded with it
+/// ([`new_game_state`]) and a new game's seeds keep it ([`seed_new_game`]),
+/// ahead of the pack's own scripts. The trace's `pl` shows it.
 fn seed_re2_max_life(game: &mut game::GameState, re2: bool) {
     if re2 {
         game.max_health = game::pl_change2::max_life(game.re2.pl_id);
@@ -10718,7 +10722,7 @@ fn apply_pack_setup(pack: &Pack, game: &mut game::GameState) {
 /// `SetInitialItems`, the save counter and the Jill first-run flags. The
 /// room-BGM bytes, item box and room-item bank come from
 /// `game/initial_state.lua`, which `new_game_state` already ran.
-fn seed_new_game(pack: &Pack, game: &mut game::GameState, character: u8) {
+fn seed_new_game(pack: &Pack, game: &mut game::GameState, character: u8, re2: bool) {
     let character = character & 1;
     // `TestHooks_StartNewGame` (and the character-select hand-off it mirrors)
     // raise `MSF_CHAR_VARIANT` for Jill, so the room loads the Jill RDT
@@ -10731,6 +10735,8 @@ fn seed_new_game(pack: &Pack, game: &mut game::GameState, character: u8) {
     // playable start health and the save counter.
     crate::lua::seed_initial_state(pack, game, character);
     seed_start_health(game, character);
+    // Before the pack's `game/new_game.lua`, which may set its own.
+    seed_re2_max_life(game, re2);
     game.state_bytes[usize::from(game::STATE_BYTE_SAVES)] = 1;
     // `InitializeGame` zeroes the play timer on a new game.
     game.state_bytes[0x24..0x28].fill(0);
@@ -10777,8 +10783,8 @@ fn build_next_cycle_save(
     let character = stats.character & 1;
     let id = new_game_id(pack, character);
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room, options);
-    seed_new_game(pack, &mut game, character);
+    let mut game = new_game_state(pack, id, &loaded, options);
+    seed_new_game(pack, &mut game, character, loaded.re2_vm.is_some());
 
     // The reference reloads the blank card and never runs `InitializeGame`'s
     // Jill first-run block (`EndingScreen.cpp:1059-1126`); the port's seed
@@ -15861,7 +15867,7 @@ fn simulate_door_with(
     setup: impl FnOnce(&mut game::GameState),
 ) -> Result<SimulatedDoor> {
     let mut loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
+    let mut game = new_game_state(pack, id, &loaded, player::Options::default());
     seed_fresh_state(pack, &mut game);
     setup(&mut game);
     let mut player_state = player::spawn(id, &loaded.room);
@@ -16067,7 +16073,7 @@ pub fn simulate_room_with_input(
     input: impl FnMut(usize) -> player::Input,
 ) -> Result<SimulatedRoom> {
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
+    let mut game = new_game_state(pack, id, &loaded, player::Options::default());
     seed_fresh_state(pack, &mut game);
     let player_state = player::spawn(id, &loaded.room);
     game.sync_entity_from_player(&player_state);
@@ -16087,7 +16093,7 @@ pub fn model_view_frames(
     mut gpu: Option<&mut GpuRenderer>,
 ) -> Result<Vec<Image>> {
     let mut loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
+    let mut game = new_game_state(pack, id, &loaded, player::Options::default());
     seed_fresh_state(pack, &mut game);
     let player_state = player::spawn(id, &loaded.room);
     game.sync_entity_from_player(&player_state);
@@ -16148,7 +16154,7 @@ pub fn simulate_room_seeded(
     input: player::Input,
 ) -> Result<SimulatedRoom> {
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
+    let mut game = new_game_state(pack, id, &loaded, player::Options::default());
     seed_fresh_state(pack, &mut game);
     for &(bank, bit) in flags {
         game.apply_flag(bank, bit, 0);
@@ -16170,7 +16176,7 @@ pub fn simulate_room_prepared(
     input: impl FnMut(usize) -> player::Input,
 ) -> Result<SimulatedRoom> {
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
+    let mut game = new_game_state(pack, id, &loaded, player::Options::default());
     seed_fresh_state(pack, &mut game);
     for &(bank, bit) in flags {
         game.apply_flag(bank, bit, 0);
@@ -16197,7 +16203,7 @@ pub fn simulate_room_with_movie(
     input: impl FnMut(usize) -> player::Input,
 ) -> Result<SimulatedMovie> {
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
+    let mut game = new_game_state(pack, id, &loaded, player::Options::default());
     seed_fresh_state(pack, &mut game);
     for &(bank, bit) in flags {
         game.apply_flag(bank, bit, 0);
@@ -16269,8 +16275,8 @@ pub fn simulate_new_game(
     let character = character & 1;
     let id = new_game_id(pack, character);
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
-    seed_new_game(pack, &mut game, character);
+    let mut game = new_game_state(pack, id, &loaded, player::Options::default());
+    seed_new_game(pack, &mut game, character, loaded.re2_vm.is_some());
     let mut player_state = player::spawn(id, &loaded.room);
     // A pack's own start room enters like `GameSession::new_with` places it.
     let placement = if pack_start_room(pack, character).is_some() {
@@ -18968,19 +18974,25 @@ fn pack_region(pack: &Pack) -> scd::akscr::Region {
 fn new_game_state(
     pack: &Pack,
     id: RoomId,
-    room: &RoomState,
+    loaded: &LoadedRoom,
     options: player::Options,
 ) -> game::GameState {
-    let mut game = game::GameState::new(id, room);
+    let re2 = loaded.re2_vm.is_some();
+    let mut game = game::GameState::new(id, &loaded.room);
     game.origins = pack.room_origins().clone();
     game.set_region(pack_region(pack));
     game.re2_heap_files = crate::heap2::Files::of_pack(pack);
     game.player_options = options;
     game.music = crate::music::load(pack, options);
     seed_start_health(&mut game, id.player_flag);
+    seed_re2_max_life(&mut game, re2);
     if let Some(health) = pack.manifest().and_then(|manifest| manifest.start_health) {
         game.entities[0].health = health;
-        game.max_health = health;
+        // An RE 2 player's maximum is `Player_set`'s, whatever life the
+        // pack starts the game with.
+        if !re2 {
+            game.max_health = health;
+        }
         game.set_health_copy(health);
     }
     seed_re2_music_table(pack, &mut game, false);
@@ -19001,7 +19013,7 @@ fn new_game_state(
     // `GameState::new` pass above used the empty default table, so resolving
     // from the freshly parsed room data here leaves the UV V bias applied
     // exactly once.
-    game.resolve_room_effects(room);
+    game.resolve_room_effects(&loaded.room);
     // The original's room init (`room_set_visited_flag`) marks the room a
     // session starts in visited, as it does every room it enters; the map
     // tab highlights it.
@@ -24842,8 +24854,8 @@ mod tests {
         let pack = Pack::open(Path::new(&path)).unwrap();
         let id = RoomId::parse("1060").unwrap();
         let mut loaded = load_room(&pack, id).unwrap();
-        let mut game = new_game_state(&pack, id, &loaded.room, player::Options::default());
-        seed_new_game(&pack, &mut game, 0);
+        let mut game = new_game_state(&pack, id, &loaded, player::Options::default());
+        seed_new_game(&pack, &mut game, 0, false);
         let mut player_state = player::spawn(id, &loaded.room);
         game.sync_entity_from_player(&player_state);
         run_room_init(&mut loaded, &mut game);
@@ -24905,7 +24917,7 @@ mod tests {
         // The door of 105 that leads to 106.
         let slot = {
             let mut loaded = load_room(&base, from).unwrap();
-            let mut game = new_game_state(&base, from, &loaded.room, player::Options::default());
+            let mut game = new_game_state(&base, from, &loaded, player::Options::default());
             seed_fresh_state(&base, &mut game);
             run_room_init(&mut loaded, &mut game);
             (0..game.doors.len() as u8)
@@ -25060,7 +25072,7 @@ mod tests {
                     let zone = {
                         let mut loaded = load_room(&pack, from).unwrap();
                         let mut state =
-                            new_game_state(&pack, from, &loaded.room, player::Options::default());
+                            new_game_state(&pack, from, &loaded, player::Options::default());
                         seed_fresh_state(&pack, &mut state);
                         run_room_init(&mut loaded, &mut state);
                         state
@@ -28049,27 +28061,56 @@ mod tests {
         }
     }
 
-    /// An RE 2 game starts with `Player_set`'s `Max_life`, not RE 1's: a room
-    /// start seeds RE 1's start health after the pack's own, which left Leon
-    /// 140.
+    /// An RE 2 game starts with `Player_set`'s `Max_life`, not RE 1's,
+    /// however it starts and whatever the pack's manifest says of its start
+    /// life: a room start seeds RE 1's start health after the fresh state's,
+    /// which left Leon 140 (`leon_a_30b_throw`'s `pl`).
     #[test]
     fn re2_starts_with_player_sets_max_life() {
-        let dir = TempDir::new();
-        let (pack, a, _) = debug_menu_pack(&dir);
-        let room = load_room(&pack, a).unwrap();
-        let mut game = new_game_state(&pack, a, &room.room, player::Options::default());
-        seed_new_game(&pack, &mut game, 0);
-        assert_eq!(game.max_health, 140, "RE 1's Chris");
-        seed_re2_max_life(&mut game, false);
-        assert_eq!(game.max_health, 140, "an RE 1 room keeps it");
-        seed_re2_max_life(&mut game, true);
+        let pack = re2_title_pack("return {}", &[]);
+        let id = RoomId::parse("1000").unwrap();
+        let saves = Path::new("saves");
+        let options = player::Options::default();
+        let room = GameSession::new_in_room_with(&pack, id, 0, saves, options).unwrap();
+        assert!(room.loaded.re2_vm.is_some(), "an RE 2 room");
+        assert_eq!(room.game.max_health, game::RE2_MAX_HEALTH, "a room start");
+        let boot = GameSession::from_room_with(&pack, id, saves, options).unwrap();
+        assert_eq!(boot.game.max_health, game::RE2_MAX_HEALTH, "a direct boot");
+        let new = GameSession::new_with(&pack, 0, saves, options).unwrap();
+        assert_eq!(new.game.max_health, game::RE2_MAX_HEALTH, "a new game");
+
+        // A load, with the save's RE 2 state and without it.
+        let file = crate::save::SaveFile::from_state(&new.game);
+        assert!(file.re2.is_some());
+        let loaded = GameSession::from_save_with(&pack, &file, saves, options).unwrap();
+        assert_eq!(loaded.game.max_health, game::RE2_MAX_HEALTH, "a load");
+        let mut bare = file.clone();
+        bare.re2 = None;
+        let loaded = GameSession::from_save_with(&pack, &bare, saves, options).unwrap();
+        assert_eq!(loaded.game.max_health, game::RE2_MAX_HEALTH, "a bare block");
+
+        // A pack's start life is not its maximum.
+        let mut game = new_game_state(&pack, id, &room.loaded, options);
         assert_eq!(game.max_health, game::RE2_MAX_HEALTH);
-        game.set_re2_player_id(1);
-        seed_re2_max_life(&mut game, true);
-        assert_eq!(game.max_health, 200, "Claire");
+        seed_new_game(&pack, &mut game, 1, true);
+        assert_eq!(
+            game.max_health,
+            game::RE2_MAX_HEALTH,
+            "the new game's seeds"
+        );
         game.set_re2_player_id(0xD);
         seed_re2_max_life(&mut game, true);
         assert_eq!(game.max_health, 400);
+
+        // RE 1 keeps its own.
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let chris = GameSession::new_in_room_with(&pack, a, 0, saves, options).unwrap();
+        assert!(chris.loaded.re2_vm.is_none());
+        assert_eq!(chris.game.max_health, 140);
+        let mut game = new_game_state(&pack, a, &chris.loaded, options);
+        seed_new_game(&pack, &mut game, 1, false);
+        assert_eq!(game.max_health, 96, "Jill");
     }
 
     /// A save screen that ends on its first tick, with no write.
@@ -40037,7 +40078,7 @@ off_0010:
         // The flags round-trip through the scenario bank.
         let id = new_game_id(&pack, 0);
         let loaded = load_room(&pack, id).unwrap();
-        let mut state = new_game_state(&pack, id, &loaded.room, player::Options::default());
+        let mut state = new_game_state(&pack, id, &loaded, player::Options::default());
         file.apply_to(&mut state);
         assert!(state.flag_test(
             game::BANK_SCENARIO,
@@ -40060,7 +40101,7 @@ off_0010:
             has_infinite_launcher: false,
         };
         let file = build_next_cycle_save(&pack, &jill, player::Options::default()).unwrap();
-        let mut state = new_game_state(&pack, id, &loaded.room, player::Options::default());
+        let mut state = new_game_state(&pack, id, &loaded, player::Options::default());
         file.apply_to(&mut state);
         assert!(
             state.flag_test(
