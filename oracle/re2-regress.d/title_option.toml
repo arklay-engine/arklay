@@ -38,3 +38,16 @@ fields = "ti,tlogo,tfade,snd,opt"
 frames = [189, 779]
 expect = "match"
 record = ""
+
+[[run]]
+name = "title_option_mono"
+ui = "title"
+offset = 189
+ticks = 1150
+input = "title_option_mono.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd,opt"
+frames = [189, 1149]
+expect = "match"
+record = ""

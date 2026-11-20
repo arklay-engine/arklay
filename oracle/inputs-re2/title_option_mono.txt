@@ -1,0 +1,64 @@
+# The title from boot to OPTION and its SOUND page with the mode at MONO: the quality changed and the rows walked under it, the cancel key back to the menu's SOUND row, the cursor off the row and on it, the page again with the mode to STEREO and back, out to the title, and OPTION a second time down to its SOUND row (oracle/re2.md, "The option screen").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+350 down
+353
+400 confirm
+403
+440 down
+443
+460 down
+463
+480 confirm
+483
+500 left
+503
+520 down
+523
+540 right
+543
+560 down
+563
+580 down
+583
+600 down
+603
+640 cancel
+643
+700 up
+703
+720 down
+723
+740 down
+743
+760 up
+763
+780 confirm
+783
+800 right
+803
+820 left
+823
+880 cancel
+883
+900 cancel
+903
+990 down
+993
+1000 down
+1003
+1010 down
+1013
+1020 down
+1023
+1040 confirm
+1043
+1070 down
+1073
+1080 down
+1083
