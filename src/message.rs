@@ -216,6 +216,43 @@ pub fn menu_item_name<'a>(text: &'a Text, item: u8, examined: &[u8; 4]) -> Optio
     }
 }
 
+/// RE 2's class of an item whose name CHECK changes (the item table's
+/// second byte, `0x53DE29`): the flag of the checked bank (`0x98EBE4`) and,
+/// past the names by id, the entry of the name table. 0 for an item with
+/// the one name.
+pub const fn re2_name_class(item: u8) -> u8 {
+    match item {
+        // The Red Jewel, the Virgin Heart once checked.
+        0x33 => 6,
+        // The Crank, the Square Crank.
+        0x43 => 7,
+        // The Special Key, the Locker Key.
+        0x53 => 0xA,
+        // The Precinct Keys: the Spade, Diamond, Heart and Club Keys.
+        0x59 => 1,
+        0x5A => 2,
+        0x5B => 4,
+        0x5C => 5,
+        // The C. Panel Keys: the Down and Up Keys.
+        0x5D => 8,
+        0x5E => 9,
+        _ => 0,
+    }
+}
+
+/// RE 2's name of `item` (`name_ptr_set`, `0x4C9909`, for a message, and
+/// `St_disp_name`, `0x502460`, for the status screen): the name by its id
+/// (the pack's `ITEM_<id>_NAME_UNCHECKED`, "Precinct Key") until CHECK has
+/// set its class's flag, then the one CHECK gives it (`ITEM_<id>_NAME`,
+/// "Spade Key"). An item with one name has `ITEM_<id>_NAME` alone.
+pub fn re2_item_name<'a>(text: &'a Text, item: u8, checked: &[u8; 4]) -> Option<&'a [u8]> {
+    let class = re2_name_class(item);
+    (class != 0 && !examined_bit(checked, class))
+        .then(|| text.item_name_unchecked(u16::from(item)))
+        .flatten()
+        .or_else(|| text.item_name(u16::from(item)))
+}
+
 /// Whether `class` is set in the four-byte examined-item flag bank, using the
 /// original's most-significant-bit-first selector.
 pub fn examined_bit(examined: &[u8; 4], class: u8) -> bool {
@@ -475,6 +512,18 @@ impl MessageWindow {
     }
 
     /// Keep `Mess_disp`'s timing from now on, for a message whose yes/no
+    /// The name a message's item tag draws: RE 2's own rule in its
+    /// messages, else [`item_name_bytes`]'s.
+    fn item_name(&self, text: &Text, item: u8) -> Vec<u8> {
+        if self.re2_timing {
+            re2_item_name(text, item, &self.examined)
+                .unwrap_or(&[])
+                .to_vec()
+        } else {
+            item_name_bytes(text, item, &self.examined)
+        }
+    }
+
     /// always cues (`cues`, a system or status message) or only by its own
     /// argument (a room's), with its delays shifted (`shift`, a message of
     /// the status screen or the get-item window) or not (one shown in play).
@@ -549,7 +598,7 @@ impl MessageWindow {
                     };
                     saved = cursor.index();
                     cursor = skip(cursor);
-                    if !item_name_bytes(text, item, &self.examined).is_empty() {
+                    if !self.item_name(text, item).is_empty() {
                         cursor = Cursor::Name(0);
                     }
                 }
@@ -869,7 +918,7 @@ impl MessageWindow {
                         argument
                     };
                     self.saved = saved;
-                    self.name = item_name_bytes(text, item, &self.examined);
+                    self.name = self.item_name(text, item);
                     if !self.name.is_empty() {
                         self.ptr = Cursor::Name(0);
                     }
@@ -1070,7 +1119,7 @@ impl MessageWindow {
                     } else {
                         argument
                     };
-                    name = item_name_bytes(text, item, &self.examined);
+                    name = self.item_name(text, item);
                     saved = tag;
                     cursor = skip(cursor);
                     if !name.is_empty() {
@@ -1255,6 +1304,50 @@ mod tests {
             .add("language/en-US.txt", source.into_bytes())
             .unwrap();
         Text::load(&Pack::from_bytes(writer.to_bytes().unwrap()).unwrap(), None)
+    }
+
+    /// RE 2's items with two names (`name_ptr_set`, `0x4C9909`): the
+    /// unchecked name until CHECK sets the class's flag (`0x98EBE4`), then
+    /// the item's own, in the menus and in a message's item tag alike. An
+    /// item with one name, or no unchecked name in the pack, keeps its own.
+    #[test]
+    fn re2s_checked_name_follows_its_classs_flag() {
+        let mut writer = PackWriter::new();
+        writer
+            .add(
+                "language/en-US.txt",
+                b"MESSAGE_00 = \"0\"\nITEM_59_NAME = \"S\"\nITEM_59_NAME_UNCHECKED = \"P\"\nITEM_5A_NAME = \"D\"\nITEM_26_NAME = \"G\"\nITEM_26_NAME_UNCHECKED = \"H\"\n"
+                    .to_vec(),
+            )
+            .unwrap();
+        let text = Text::load(&Pack::from_bytes(writer.to_bytes().unwrap()).unwrap(), None);
+        let (plain, checked) = (text.item_name_unchecked(0x59), text.item_name(0x59));
+        assert!(plain.is_some() && checked.is_some() && plain != checked);
+        assert_eq!(re2_name_class(0x59), 1);
+        let spade = (0x8000_0000u32 >> 1).to_le_bytes();
+        assert_eq!(re2_item_name(&text, 0x59, &[0; 4]), plain);
+        assert_eq!(re2_item_name(&text, 0x59, &spade), checked);
+        // The Diamond Key's class is its own, and this pack names it once.
+        let diamond = (0x8000_0000u32 >> 2).to_le_bytes();
+        assert_eq!(re2_item_name(&text, 0x5A, &spade), text.item_name(0x5A));
+        assert_eq!(re2_item_name(&text, 0x5A, &diamond), text.item_name(0x5A));
+        // An item of no class has its own name whatever the pack holds.
+        assert_eq!(re2_name_class(0x26), 0);
+        assert_eq!(re2_item_name(&text, 0x26, &[0; 4]), text.item_name(0x26));
+
+        // A message's tag: RE 2's rule in RE 2's messages.
+        let name = |re2: bool, examined: [u8; 4]| {
+            let mut window = MessageWindow {
+                examined,
+                ..MessageWindow::default()
+            };
+            if re2 {
+                window.set_re2_timing(true, false);
+            }
+            window.item_name(&text, 0x59)
+        };
+        assert_eq!(Some(name(true, [0; 4]).as_slice()), plain);
+        assert_eq!(Some(name(true, spade).as_slice()), checked);
     }
 
     /// A language-file value for an encoded stream: every byte as `\xNN`,

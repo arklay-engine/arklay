@@ -29,6 +29,21 @@ const NAMES: Table = Table {
     len: 0x81,
 };
 
+/// The names CHECK gives the items with two (`name_ptr_set`, `0x4C9909`):
+/// the entries after the names by id, by the item's class, `1..=0xA`. Entry
+/// 0 is no item's.
+const CHECKED_NAMES: Table = Table {
+    offsets: NAMES.offsets + 2 * NAMES.len,
+    base: NAMES.base,
+    len: 0xB,
+};
+
+/// The item table (`0x53DE28`): eight bytes an item, the second its class
+/// in [`CHECKED_NAMES`].
+const ITEM_TABLE: usize = 0x53_DE28;
+/// The table's rows: ids `0..=0x71`.
+const ITEM_ROWS: usize = 0x72;
+
 /// The system messages: `0..=0x10`, then each item's description at
 /// `0x10 + id`, ids `1..=0x63`.
 const SYSTEM: Table = Table {
@@ -66,6 +81,10 @@ const COMPUTER_TITLE: &[u8] = b"DOOR LOCK SERVICE]";
 pub(super) struct ExeText {
     /// Item names by id.
     pub names: Vec<Vec<u8>>,
+    /// The names CHECK gives, by the item's class ([`CHECKED_NAMES`]).
+    pub checked_names: Vec<Vec<u8>>,
+    /// Each item's class, by id ([`ITEM_TABLE`]).
+    pub name_classes: Vec<u8>,
     /// System messages by id.
     pub system: Vec<Vec<u8>>,
     /// Door messages by id.
@@ -79,6 +98,14 @@ impl ExeText {
     pub fn read(exe: &[u8]) -> Result<Self> {
         let text = Self {
             names: strings(exe, &NAMES, 0xF7).context("the item names")?,
+            checked_names: strings(exe, &CHECKED_NAMES, 0xF7).context("the checked names")?,
+            name_classes: (0..ITEM_ROWS)
+                .map(|item| {
+                    exe.get(ITEM_TABLE - IMAGE_BASE + item * 8 + 1)
+                        .copied()
+                        .context("the item table is outside the executable")
+                })
+                .collect::<Result<_>>()?,
             system: strings(exe, &SYSTEM, 0xFE).context("the system messages")?,
             door: strings(exe, &DOOR, 0xFE).context("the door messages")?,
             computer: computer_strings(exe).context("the computer's strings")?,

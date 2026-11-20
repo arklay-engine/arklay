@@ -6810,6 +6810,15 @@ impl GameState {
         self.message.examined = bank.to_le_bytes();
     }
 
+    /// RE 2's CHECK names an item with two names (`St_com_inspect`'s
+    /// `Flg_on` on `0x98EBE4`, as its description closes).
+    pub fn mark_re2_checked(&mut self, item: u8) {
+        let class = crate::message::re2_name_class(item);
+        if class != 0 {
+            self.mark_examined_bit(class);
+        }
+    }
+
     /// Set one bit of the examined bank directly (the red book's read zoom
     /// sets bit `0x0D`).
     pub fn mark_examined_bit(&mut self, bit: u8) {
