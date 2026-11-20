@@ -60,8 +60,9 @@ four bytes after it.
 
 ## Resident Evil 2's reels
 
-A reel that starts in a Resident Evil 2 room has that game's format. It is a
-`0x3E`-byte header and then the controller words, little-endian:
+A reel in a Resident Evil 2 pack (one whose new game starts in a room of that
+game's) has that game's format. It is a `0x3E`-byte header and then the
+controller words, little-endian:
 
 | Offset | Size | Field |
 |---|---|---|

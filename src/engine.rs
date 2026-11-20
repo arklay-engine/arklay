@@ -2683,20 +2683,33 @@ fn authored_over<const N: usize, const W: usize>(
     })
 }
 
-/// The room a reel's bytes start in read as one of RE 2's, when the pack
-/// has it as a room of RE 2's. A reel doesn't say which game recorded it:
-/// this is what tells.
-fn re2_demo_room(pack: &Pack, reel: &[u8]) -> Option<RoomId> {
+/// Whether the pack's reels are RE 2's. A reel doesn't say which game
+/// recorded it: a pack's are its game's, the game of the room its new game
+/// starts in.
+fn pack_reels_are_re2(pack: &Pack) -> bool {
+    crate::room::dialect(pack, new_game_id(pack, 0)) == crate::format::Dialect::Re2
+}
+
+/// The room one of RE 2's reels starts in, a room of RE 2's in the pack.
+fn re2_demo_room(pack: &Pack, reel: &crate::demo2::Reel) -> Result<RoomId> {
     let id = RoomId {
-        stage: reel.first()?.checked_add(1)?,
-        room: *reel.get(1)?,
-        player_flag: reel.get(6)? & 1,
+        stage: reel.stage.saturating_add(1),
+        room: reel.room,
+        player_flag: reel.player & 1,
         mansion2: false,
     };
-    (id.stage <= RoomId::MAX_STAGE_ID
-        && crate::room::exists(pack, id)
-        && crate::room::dialect(pack, id) == crate::format::Dialect::Re2)
-        .then_some(id)
+    if id.stage > RoomId::MAX_STAGE_ID
+        || !crate::room::exists(pack, id)
+        || crate::room::dialect(pack, id) != crate::format::Dialect::Re2
+    {
+        bail!(
+            "attract demo reel {} starts in stage {} room {:02X}, which the pack lacks",
+            reel.entry,
+            reel.stage,
+            reel.room
+        );
+    }
+    Ok(id)
 }
 
 /// RE 2's attract demo in its session.
@@ -2749,25 +2762,33 @@ fn re2_pad_keys(pad: u16, key_type: u8) -> u64 {
 }
 
 /// The live pad as RE 2's raw word, for `Pad_set`'s test of a demo's end:
-/// the buttons with a held level, under the first key config. The
-/// directions (the high four bits) aren't tested.
+/// the buttons under the first key config, each down while it is held or
+/// on its press (a tap shorter than a tick still shows). The directions
+/// (the high four bits) aren't tested.
 fn re2_live_pad(ui: &UiInput, input: &player::Input) -> u16 {
     let held = |down: bool, bit: u16| if down { bit } else { 0 };
-    held(input.action_held || input.fire || ui.held_confirm, 0x0080)
-        | held(input.run || input.cancel_held, 0x0040)
-        | held(input.map_held, 0x0010)
-        | held(input.aim, 0x0008)
-        | held(input.lock_drop, 0x0004)
+    let shot = input.action_held
+        || input.action_pressed
+        || input.fire
+        || input.fire_pressed
+        || ui.held_confirm
+        || ui.confirm;
+    let run = input.run || input.run_pressed || input.cancel_held || ui.cancel;
+    held(shot, 0x0080)
+        | held(run, 0x0040)
+        | held(input.map_held || ui.map, 0x0010)
+        | held(input.aim || input.aim_pressed, 0x0008)
+        | held(input.lock_drop || input.lock_pressed, 0x0004)
 }
 
 /// A press that ends RE 2's demo whatever the reel holds: START and the
-/// port's own buttons, which no reel's word has, and F9, whose
-/// `Vk_press` bit (`0x40`) `Pad_set` takes as a key in a demo.
+/// port's own buttons, which have no held level and no reel's word has,
+/// and F9, whose `Vk_press` bit (`0x40`) `Pad_set` takes as a key in a
+/// demo.
 fn re2_demo_press(ui: &UiInput, input: &player::Input) -> bool {
     ui.start
         || ui.return_title
         || ui.system_menu
-        || ui.map
         || ui.page_left
         || ui.page_right
         || ui.weapon_step != 0
@@ -2955,15 +2976,13 @@ impl GameSession {
         let bytes = pack
             .read(entry)
             .with_context(|| format!("missing attract demo reel {entry}"))?;
-        if let Some(id) = re2_demo_room(pack, &bytes) {
+        if pack_reels_are_re2(pack) {
             let reel = crate::demo2::Reel::parse(entry, &bytes)?;
+            let id = re2_demo_room(pack, &reel)?;
             return Self::from_re2_demo(pack, reel, id, save_dir, options);
         }
         let reel = demo::DemoReel::parse(entry, &bytes)?;
         let id = reel.room;
-        if crate::room::dialect(pack, id) == crate::format::Dialect::Re2 {
-            bail!("attract demo reel {entry} starts in no room of the pack's");
-        }
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded, options);
         seed_new_game(pack, &mut game, reel.character, loaded.re2_vm.is_some());
@@ -3642,7 +3661,8 @@ impl GameSession {
     /// The key is a button the live pad holds that the pad `Pad_set` last
     /// left didn't, and that is the reel's word: a button held from a tick
     /// whose word held it ends the demo on the first tick after a word
-    /// without it. A film stops `Psx_main`, and the words with it.
+    /// without it. A film stops `Psx_main`, and the words with it: the film
+    /// reads the live pad itself.
     fn re2_demo_pad(
         &mut self,
         ui: UiInput,
@@ -3655,7 +3675,7 @@ impl GameSession {
             return (ui, input, action);
         };
         if film {
-            return (UiInput::default(), player::Input::default(), false);
+            return (ui, input, action);
         }
         let live = re2_live_pad(&ui, &input);
         let key = live & !demo.last & 0x0FFF != 0 || re2_demo_press(&ui, &input);
@@ -4896,12 +4916,14 @@ impl GameSession {
         // Yes in the room tick and set game mode 1 with `fg_stop` still held:
         // the rest of the tick runs, and the hand-off starts on the next
         // ([`GameSession::step_re2_save`]).
-        // A reel's typewriter saves nothing.
-        if self.game.is_re2_room
-            && std::mem::take(&mut self.game.re2_save_requested)
-            && !self.in_demo()
-        {
-            self.re2_save = Some(Re2Save::Requested);
+        if self.game.is_re2_room && std::mem::take(&mut self.game.re2_save_requested) {
+            if self.in_demo() {
+                // A reel's typewriter saves nothing: its Yes takes the
+                // hold off as its No does.
+                *self.game.re2.fg_stop_mut() = self.game.re2_box_entrance.saved_stop;
+            } else {
+                self.re2_save = Some(Re2Save::Requested);
+            }
         }
         if !self.game.is_re2_room
             && let Some(ink_ribbon) = self.game.take_typewriter_confirm()
@@ -39986,6 +40008,29 @@ off_0010:
         hold(&mut session);
         assert_eq!(demo(&session), (0, true));
 
+        // The map key's bit is the raw pad's too: a press under a word that
+        // holds it is no key.
+        let pack = re2_demo_pack(&[0x0010, 0x0010, 0x1000]);
+        let mut session = re2_demo_session(&pack, player::Options::default());
+        let map = UiInput {
+            map: true,
+            ..UiInput::default()
+        };
+        let tap = |session: &mut GameSession| {
+            session
+                .tick(&pack, map, player::Input::default(), false)
+                .unwrap();
+        };
+        tap(&mut session);
+        assert!(demo(&session).1, "no word before the first");
+        let mut session = re2_demo_session(&pack, player::Options::default());
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        tap(&mut session);
+        assert_eq!(demo(&session), (KEY_MAP, false));
+
+        let pack = re2_demo_pack(&[0x0080, 0x0080, 0x1000, 0x1000, 0x1000]);
         let mut session = re2_demo_session(&pack, player::Options::default());
         let f9 = UiInput {
             return_title: true,
@@ -40037,8 +40082,7 @@ off_0010:
     }
 
     /// A film stops `Psx_main`, `Pad_set` with it: the reel's next word
-    /// waits for the first tick after the film, and the live pad doesn't
-    /// reach the game meanwhile.
+    /// waits for the first tick after the film.
     #[test]
     fn a_film_holds_an_re2_reels_words() {
         let mut reel = crate::demo2::tests::reel_bytes(&[0x1000, 0x0088]);
@@ -40082,9 +40126,9 @@ off_0010:
         assert_eq!(session.re2_demo_over, Some(true));
     }
 
-    /// A reel is RE 2's by the room its first bytes name, and then only
-    /// RE 2's: one cut short, or on a cut the room lacks, is refused and
-    /// not read as RE 1's.
+    /// An RE 2 pack's reel is RE 2's and nothing else: one cut short, in a
+    /// room the pack lacks or on a cut the room lacks is refused and not
+    /// read as RE 1's.
     #[test]
     fn a_bad_re2_reel_is_refused() {
         let session = |change: &dyn Fn(&mut Vec<u8>)| {
@@ -40106,9 +40150,12 @@ off_0010:
         assert!(short.to_string().contains("pad words"), "{short}");
         let cut = session(&|reel| reel[2] = 200).unwrap_err();
         assert!(cut.to_string().contains("cut 200"), "{cut}");
+        let room = session(&|reel| reel[1] = 1).unwrap_err();
+        assert!(room.to_string().contains("room 01"), "{room}");
     }
 
-    /// A reel's typewriter saves nothing: its Yes starts no save screen.
+    /// A reel's typewriter saves nothing: its Yes starts no save screen
+    /// and takes the hold off, as a No does.
     #[test]
     fn an_re2_reels_typewriter_opens_no_save() {
         let pack = re2_demo_pack(&[0x1000; 40]);
@@ -40117,18 +40164,26 @@ off_0010:
                 .tick(&pack, UiInput::default(), player::Input::default(), false)
                 .unwrap();
         };
+        // `Sce_Save`'s hold, then the back routine's Yes.
+        let yes = |session: &mut GameSession| {
+            session.game.re2_box_entrance.saved_stop = *session.game.re2.fg_stop_mut();
+            *session.game.re2.fg_stop_mut() |= 0xFF00_0000;
+            session.game.re2_save_requested = true;
+        };
         let mut session = re2_demo_session(&pack, player::Options::default());
         idle(&mut session);
-        session.game.re2_save_requested = true;
+        yes(&mut session);
         idle(&mut session);
         assert!(!session.game.re2_save_requested && session.re2_save.is_none());
+        assert_eq!(*session.game.re2.fg_stop_mut() >> 24, 0);
 
         let mut session = re2_demo_session(&pack, player::Options::default());
         session.re2_demo = None;
         idle(&mut session);
-        session.game.re2_save_requested = true;
+        yes(&mut session);
         idle(&mut session);
         assert!(session.re2_save.is_some(), "a game's does");
+        assert_eq!(*session.game.re2.fg_stop_mut() >> 24, 0xFF);
     }
 
     /// RE 2's title hands over to the reel it names: the game starts as
