@@ -9752,6 +9752,8 @@ impl GameState {
         self.re2_item_get_status()
             || self.re2_status_request
             || self.re2_script_map.is_some()
+            || self.re2_key_map.is_some()
+            || self.re2_items.is_some()
             || self.re2_box_open
             || self.re2_box.is_some()
     }
@@ -9767,7 +9769,9 @@ impl GameState {
         const LIGHTER: u8 = 0x2F;
         if self.re2.flag(ITEM_BANK, SIDE_PACK_FLAG) {
             self.re2.inventory_size = 10;
-            if self.re2_items.is_some() {
+            // An open page's slots are the inventory's, padded: the new
+            // ones are the page's too, the item box's among them.
+            if self.re2_items.is_some() || self.re2_box.is_some() {
                 let capacity = self.inventory_capacity().max(self.inventory.len());
                 self.inventory.resize(capacity, InventoryItem::default());
             }

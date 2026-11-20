@@ -3833,12 +3833,12 @@ impl GameSession {
         if std::mem::take(&mut self.game.re2_box_open) {
             self.begin_re2_box_open(pack);
         }
-        if std::mem::take(&mut self.game.re2_status_request)
-            && self.transition.is_none()
-            && self.movie.is_none()
-            && self.death.is_idle()
-        {
-            if self.game.re2_script_map.is_some() {
+        if std::mem::take(&mut self.game.re2_status_request) {
+            if self.transition.is_some() || self.movie.is_some() || !self.death.is_idle() {
+                // A request a door, a film or the death takes the place of
+                // is gone, and its map with it.
+                self.game.re2_script_map = None;
+            } else if self.game.re2_script_map.is_some() {
                 self.begin_re2_script_map_open(pack);
             } else {
                 self.begin_menu_open(pack);
@@ -27486,6 +27486,15 @@ mod tests {
         re2_tick(&mut session, &pack, UiInput::default());
         assert!(!session.game.re2_status_request);
         assert!(session.menu.is_none());
+
+        // A map the script asked for goes with its request: the status
+        // bit a script reads is down again.
+        session.game.request_re2_script_map(0);
+        assert!(session.game.re2_status_task_up());
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(session.menu.is_none());
+        assert!(session.game.re2_script_map.is_none());
+        assert!(!session.game.re2_status_task_up());
     }
 
     /// `Sce_Status` and a door on one tick: both set `Game` to 1, and case 1

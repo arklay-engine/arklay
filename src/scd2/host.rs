@@ -3013,13 +3013,25 @@ impl Host for GameHost<'_> {
         // A status task's bit is its screen's own state, not the bank's: a
         // scene that gives an item waits on it (room 60C's `aot_on`, then
         // `ck(1, 16, 1)`).
-        if bank == STATUS_BANK && index == STATUS_WINDOW && self.game.re2_status_task_up() {
-            return true;
+        if bank == STATUS_BANK && index == STATUS_WINDOW {
+            return self.game.re2_status_task_up();
         }
         self.game.re2.flag(bank, index)
     }
 
     fn set_flag(&mut self, bank: u8, index: u8, op: u8) {
+        // A script that raises the status task's bit itself asks for the
+        // status screen: `Game_loop` opens it for the bit as for START's
+        // press, with the decide cue (room 111, once the crank is gone).
+        // The bank never holds the bit.
+        if bank == STATUS_BANK && index == STATUS_WINDOW {
+            if op != 0 && !self.game.re2_status_task_up() {
+                self.game.re2_status_request = true;
+                self.game
+                    .push_re2_sound(crate::game::status2::Sound::Decide.id());
+            }
+            return;
+        }
         self.game.re2.set_flag(bank, index, op);
     }
 
@@ -6086,6 +6098,26 @@ mod tests {
         game.re2_status_request = false;
         game.request_re2_script_map(0);
         assert!(window(&mut game));
+        // Up while the screen it asked for is: the item page, or the box.
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.open_re2_items();
+        assert!(window(&mut game));
+        game.re2_items = None;
+        assert!(!window(&mut game));
+
+        // A script's own write of the bit asks for the screen, with
+        // START's cue, and leaves the bank alone; lowering it does nothing.
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 0);
+        assert!(!game.re2_status_request && !window(&mut game));
+        GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 1);
+        assert!(game.re2_status_request && window(&mut game));
+        assert!(!game.re2.flag(STATUS_BANK, STATUS_WINDOW));
+        let cues: Vec<_> = game.re2.sounds.iter().map(|sound| sound.id).collect();
+        let decide = crate::game::status2::Sound::Decide.id();
+        assert_eq!(cues, [crate::se2::SoundId::decode(decide).unwrap()]);
     }
 
     /// `Status`'s start (`0x501BD0`): the Side Pack's flag makes the
@@ -6191,13 +6223,20 @@ mod tests {
         let mut game = claire();
         item_window(&mut game, 0x52, 1);
         assert_eq!(game.re2_item_get.unwrap().phase, Phase::Ask);
-        // A no's count out lowers the bit on the same tick of its close.
+        // A no's count out lowers the bit on the same tick of its close,
+        // and takes nothing.
         game.message.set_menu_choice_id(1);
         game.message.active = false;
-        while game.re2_item_get.unwrap().phase != Phase::Close {
+        for _ in 0..40 {
+            if game.re2_item_get.unwrap().phase == Phase::Close {
+                break;
+            }
             game.tick_re2_item_get(Input::default());
         }
         window_bit_through_the_close(&mut game);
+        assert!(game.inventory.iter().all(|slot| slot.id != 0x52));
+        assert_eq!(game.re2.personal_item[0], 0);
+        assert!(!game.re2.flag(item_bank(game.id.stage), 154));
 
         // The Vaccine, in the lab: one in the slot whatever the area
         // counts, and its flag in the later stages' bank.
