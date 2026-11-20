@@ -17829,9 +17829,12 @@ fn movie_buttons(ui: UiInput, input: player::Input) -> u16 {
         word |= 0x0800;
     }
     // Outside the accept mask: only a film whose own mask names the map key
-    // (RE 2's) takes it.
+    // or the fire button (RE 2's) takes them.
     if ui.map || input.map_held {
         word |= crate::movie::MAP_BUTTON;
+    }
+    if input.fire || input.fire_pressed {
+        word |= crate::movie::FIRE_BUTTON;
     }
     word
 }
@@ -17874,6 +17877,9 @@ fn movie_buttons_held(active: u64) -> u16 {
     }
     if active & KEY_MAP != 0 {
         word |= crate::movie::MAP_BUTTON;
+    }
+    if active & KEY_FIRE != 0 {
+        word |= crate::movie::FIRE_BUTTON;
     }
     word
 }
@@ -38074,6 +38080,23 @@ off_0010:
             crate::movie::MAP_BUTTON
         );
         assert_eq!(movie_buttons_held(KEY_MAP), crate::movie::MAP_BUTTON);
+        // So is fire, where it has a button of its own.
+        for fire in [
+            player::Input {
+                fire: true,
+                ..player::Input::default()
+            },
+            player::Input {
+                fire_pressed: true,
+                ..player::Input::default()
+            },
+        ] {
+            assert_eq!(
+                movie_buttons(UiInput::default(), fire),
+                crate::movie::FIRE_BUTTON
+            );
+        }
+        assert_eq!(movie_buttons_held(KEY_FIRE), crate::movie::FIRE_BUTTON);
     }
 
     #[test]
