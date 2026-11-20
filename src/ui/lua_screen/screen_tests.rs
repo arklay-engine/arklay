@@ -316,7 +316,7 @@ fn title_the_idle_title_times_out_into_the_attract_demo() {
     // 32 ramp ticks + the 0x708 countdown + the 0x400 fade (8 alpha a tick;
     // the wrap tick ends it).
     let (action, ticks) = run_to_result(&mut screen, &cx, 4000);
-    assert_eq!(action, ScreenAction::Attract);
+    assert_eq!(action, ScreenAction::Attract { reel: None });
     assert_eq!(ticks, 1863);
     assert_eq!(stage(&screen), "attract_fade");
 }

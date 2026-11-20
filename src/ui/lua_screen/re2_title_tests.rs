@@ -2270,3 +2270,165 @@ fn the_prologue_draws_its_pieces_between_the_bands() {
     assert_eq!(pixel(8, 216), [0, 0, 0]);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A title on `statics`, opened with `args`, in a folder of its own.
+fn open_kept<'a>(
+    statics: &'a crate::ui::ScreenStatics,
+    dir: &'a std::path::Path,
+    args: &[(&str, ScreenArg)],
+) -> (LuaScreen, UiContext<'a>) {
+    let mut cx = context(dir);
+    cx.statics = Some(statics);
+    let screen = LuaScreen::open_screen("title", args, ScreenAction::Quit, &mut cx).unwrap();
+    (screen, cx)
+}
+
+/// The title left alone: the reel its idle count hands over to, and the
+/// tick it does.
+fn idle_to_the_demo(screen: &mut LuaScreen, cx: &UiContext<'_>) -> (Option<u8>, usize) {
+    for tick in 0..2200 {
+        if let ScreenResult::Done(action) = screen.update(cx, UiInput::default()) {
+            let ScreenAction::Attract { reel } = action else {
+                panic!("the idle title left for {action:?}");
+            };
+            return (reel, tick);
+        }
+    }
+    panic!("the idle title never handed over");
+}
+
+/// `Title_main_select`'s idle count (`0x503B80`): 0x708 ticks, the fade to
+/// black, and the hand-over to the reel it picked. The three reels go in
+/// turn (`0x989E7F`), each Leon's or Claire's by the title's generator
+/// (`0x50B910`), whose values are the executable's statics: the pack's
+/// `demo/<cycle * 2 + character>.dat`.
+#[test]
+fn the_idle_title_plays_its_three_reels_in_turn() {
+    let dir = std::env::temp_dir();
+    let statics = crate::ui::ScreenStatics::default();
+    // The generator from 0x80000000: Claire, Claire, Leon, Claire.
+    let seed = [("seed", ScreenArg::Int(0x8000_0000))];
+    let mut reels = Vec::new();
+    for _ in 0..4 {
+        let (mut screen, cx) = open_kept(&statics, &dir, &seed);
+        let (reel, tick) = idle_to_the_demo(&mut screen, &cx);
+        // `title_demo`: the title's tick 0 is the original's 189, and the
+        // hand-over is on 2119.
+        assert_eq!(tick, 2119 - 189);
+        reels.push(reel);
+    }
+    assert_eq!(reels, [Some(1), Some(3), Some(4), Some(1)]);
+    // Leon's from 0, and the cycle goes on.
+    let statics = crate::ui::ScreenStatics::default();
+    let (mut screen, cx) = open_kept(&statics, &dir, &[("seed", ScreenArg::Int(0))]);
+    assert_eq!(idle_to_the_demo(&mut screen, &cx).0, Some(0));
+    // The clock's, with no seed: one of the first two.
+    let statics = crate::ui::ScreenStatics::default();
+    let (mut screen, cx) = open_kept(&statics, &dir, &[]);
+    assert!(matches!(idle_to_the_demo(&mut screen, &cx).0, Some(0 | 1)));
+}
+
+/// The title after a demo played to its end (`Game_loop`'s `0x4BFE5D`,
+/// `title_demo_return`): its task starts from `Capcom_logo` with the
+/// statics the hand-over left, sleeps 120 ticks on black, and enters the
+/// title as from the boot. The film plays on the logo's every sixth pass
+/// (`0x689F24`), the boot's being the first.
+#[test]
+fn the_title_after_a_demo_starts_from_the_logo() {
+    let dir = std::env::temp_dir();
+    let statics = crate::ui::ScreenStatics::default();
+    let seed = ("seed", ScreenArg::Int(0));
+    let (mut screen, cx) = open_kept(&statics, &dir, std::slice::from_ref(&seed));
+    idle_to_the_demo(&mut screen, &cx);
+    let played = [seed.clone(), ("demo", ScreenArg::Str("played".to_owned()))];
+    let mut films = Vec::new();
+    for pass in 0..7 {
+        let (mut screen, cx) = open_kept(&statics, &dir, &played);
+        // As the hand-over left them: the last step, the count and the fade.
+        assert_eq!(ti(&screen), [2, 3, 0, 0, 0, 1, 0, 0, 2, 0, 1928]);
+        assert_eq!(logo(&screen), [0, -46, -1]);
+        assert_eq!(screen.value("ti_fade_level"), -1);
+        assert_eq!(screen.value("ti_fade_mode"), 2);
+        screen.update(&cx, UiInput::default());
+        assert_eq!(ti(&screen)[..4], [0, 3, 1, 5]);
+        assert!(cx.cues.borrow().contains(&UiCue::CoreBank(0x10)));
+        assert_eq!(backgrounds(&screen).0, None, "black");
+        run(&mut screen, &cx, UiInput::default(), 119);
+        assert_eq!(ti(&screen)[..4], [0, 3, 1, 5], "the logo's sleep");
+        screen.update(&cx, UiInput::default());
+        assert_eq!(ti(&screen)[..4], [0, 3, 1, 6]);
+        let asked = screen.update(&cx, UiInput::default());
+        let film = matches!(asked, ScreenResult::Done(ScreenAction::Film { id: 0, .. }));
+        if film {
+            // No film plays in a test: it is over on its tick.
+            screen.resume_film(&cx, false, false);
+        }
+        films.push(film);
+        assert_eq!(ti(&screen)[..4], [1, 3, 1, 0], "pass {pass}");
+        // `Title_init`'s entry from the logo: the white, and the logo down.
+        screen.update(&cx, UiInput::default());
+        assert_eq!(ti(&screen)[..2], [2, 5]);
+        assert_eq!(screen.value("ti_fade_level"), 0x7F80);
+        assert_eq!(logo(&screen), [0, 240, -1]);
+    }
+    // No boot came first here, so the first pass is the film's.
+    assert_eq!(films, [true, false, false, false, false, false, true]);
+}
+
+/// The title after a demo a key ended (`title_demo_abort_return`), which
+/// is how it starts after a game: the logo's sleep, then the title's
+/// picture fading in from black, with no film and no entry.
+#[test]
+fn the_title_after_a_demo_a_key_ended_fades_in() {
+    let dir = std::env::temp_dir();
+    let statics = crate::ui::ScreenStatics::default();
+    let (mut screen, cx) = open_kept(&statics, &dir, &[]);
+    idle_to_the_demo(&mut screen, &cx);
+    let key = [("demo", ScreenArg::Str("key".to_owned()))];
+    let (mut screen, cx) = open_kept(&statics, &dir, &key);
+    assert_eq!(ti(&screen), [2, 3, 0, 0, 0, 1, 0, 0, 2, 0, 1928]);
+    run(&mut screen, &cx, UiInput::default(), 121);
+    assert_eq!(ti(&screen)[..4], [0, 3, 1, 6]);
+    assert!(matches!(
+        screen.update(&cx, UiInput::default()),
+        ScreenResult::Continue
+    ));
+    assert_eq!(ti(&screen)[..4], [1, 3, 1, 0]);
+    screen.update(&cx, UiInput::default());
+    assert_eq!(ti(&screen)[..2], [2, 1]);
+    assert_eq!(screen.value("ti_fade_level"), 0x7C00);
+    assert_eq!(screen.value("ti_fade_mode"), 2);
+    assert_eq!(logo(&screen), [0, -46, -1]);
+    // The logo's count is the played demos': the next one's is the film's.
+    let played = [("demo", ScreenArg::Str("played".to_owned()))];
+    let (mut screen, cx) = open_kept(&statics, &dir, &played);
+    run(&mut screen, &cx, UiInput::default(), 121);
+    assert!(matches!(
+        screen.update(&cx, UiInput::default()),
+        ScreenResult::Done(ScreenAction::Film { id: 0, .. })
+    ));
+}
+
+/// The boot's film is Leon's or Claire's by the generator's first value,
+/// and the boot starts the generator, the film's count and the reels'
+/// cycle over.
+#[test]
+fn the_boots_film_is_the_generators_first_pick() {
+    let dir = std::env::temp_dir();
+    for (seed, claire) in [(0x8000_0000i64, true), (0, false), (0x7FFF_FFFF, false)] {
+        let statics = crate::ui::ScreenStatics::default();
+        statics.set("ui/title.lua", "rnd", Some(0x8000_0000));
+        statics.set("ui/title.lua", "films", Some(3));
+        statics.set("ui/title.lua", "demo_cycle", Some(2));
+        let (mut screen, cx) = open_kept(&statics, &dir, &[("seed", ScreenArg::Int(seed))]);
+        screen.signal("on_boot", &cx);
+        let film = (0..=188).find_map(|_| match screen.update(&cx, UiInput::default()) {
+            ScreenResult::Done(ScreenAction::Film { id: 0, claire, .. }) => Some(claire),
+            _ => None,
+        });
+        assert_eq!(film, Some(claire), "seed {seed:#x}");
+        assert_eq!(statics.get("ui/title.lua", "rnd"), Some(seed));
+        assert_eq!(statics.get("ui/title.lua", "films"), Some(1));
+        assert_eq!(statics.get("ui/title.lua", "demo_cycle"), None);
+    }
+}

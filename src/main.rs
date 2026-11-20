@@ -1318,6 +1318,7 @@ fn main() -> Result<()> {
                 new_game: arklay::ui::NewGameChoice::default(),
                 title_special: None,
                 title_gallery: None,
+                title_seed: None,
             };
             let mut renderer = config.graphics;
             if let Some(kind) = cli.renderer {

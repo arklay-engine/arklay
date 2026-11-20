@@ -578,6 +578,9 @@ impl Music {
     /// `Snd_bgm_ctr`, `sce_bgm_control`'s operands. The volume and pan count
     /// from 1, 0 leaving them be.
     pub fn control(&mut self, operands: [u8; 5], place: Place) {
+        if place.system & SYSTEM_NO_MUSIC != 0 {
+            return;
+        }
         if self.door_wait > 0 {
             self.deferred.push(Deferred::Control(operands, place));
             return;
@@ -1210,6 +1213,20 @@ mod tests {
         music.control([0, 1, 0, 101, 0], street());
         assert_eq!(music.channels[0].play, None);
         assert_eq!(music.channels[0].volume, 0);
+    }
+
+    #[test]
+    fn the_attract_demo_leaves_the_music_as_it_is() {
+        let demo = Place {
+            system: SYSTEM_NO_MUSIC,
+            ..street()
+        };
+        let mut music = Music::default();
+        music.enter_room(word(0x01, 0xff), demo);
+        music.control([0, 1, 0, 101, 0], demo);
+        music.leave_room(word(0x02, 0xff), demo.system);
+        assert_eq!(music, Music::default());
+        assert_eq!(music.trace_field(), "ffff,00ff,00ff,00ff,-,-,-,-,-");
     }
 
     #[test]

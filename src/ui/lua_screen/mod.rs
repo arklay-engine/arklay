@@ -1315,6 +1315,7 @@ fn slot_table(lua: &Lua, info: &save::SaveSlotInfo) -> mlua::Result<Table> {
 /// game's table of `easy`, `hard_mode` and `censorship_off`, each true or 1
 /// when set ([`super::NewGameChoice`]), or a film's, with `claire`.
 fn action_of(name: &str, arg: Option<i64>, choice: Option<&Table>) -> mlua::Result<ScreenAction> {
+    let given = arg;
     let arg = |what: &str| {
         arg.ok_or_else(|| mlua::Error::RuntimeError(format!("api:exit(\"{name}\") needs {what}")))
     };
@@ -1323,7 +1324,17 @@ fn action_of(name: &str, arg: Option<i64>, choice: Option<&Table>) -> mlua::Resu
         "char_select" => ScreenAction::CharSelect,
         "save_load" => ScreenAction::SaveLoad,
         "continue" => ScreenAction::Continue,
-        "attract" => ScreenAction::Attract,
+        "attract" => ScreenAction::Attract {
+            reel: given
+                .map(|reel| {
+                    u8::try_from(reel).map_err(|_| {
+                        mlua::Error::RuntimeError(
+                            "api:exit(\"attract\"): the reel is not a demo's number".into(),
+                        )
+                    })
+                })
+                .transpose()?,
+        },
         "resume" => ScreenAction::Resume,
         "quit" => ScreenAction::Quit,
         "ending_result" => ScreenAction::EndingResult,

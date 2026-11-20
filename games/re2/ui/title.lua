@@ -1084,6 +1084,38 @@ end
 -- clears the bit: the screen white (fade slot 0 added at 0x7F80), the logo
 -- off the screen, and step 5 next. Any later entry (back from OPTION) fades
 -- in from black over 31 ticks (`Ti_kido` from 0x7C00 down by 0x400).
+-- The title's generator (`0x50B910`), which picks Leon or Claire for its
+-- film and its attract demo: `x * 5 + 0x19573BA7`, a pick being the high
+-- half of `x * n`. Its first value is the clock's (`timeGetTime`'s bits,
+-- reversed), or a run's own (`load_game_pack`'s `title_seed`). The value is
+-- one of the executable's statics (`0x689FB0`), kept past this script.
+local function title_rnd(api, n)
+    local x = api:kept("rnd")
+    if x then
+        x = (x * 5 + 0x19573BA7) & 0xFFFFFFFF
+    elseif s.seed then
+        x = s.seed & 0xFFFFFFFF
+    else
+        local time = api:local_time()
+        local ms = time and ((time.hour * 60 + time.minute) * 60 + time.second) * 1000 + time.millisecond or 0
+        local reversed = 0
+        for bit = 0, 31 do
+            reversed = reversed | ((ms >> bit) & 1) << (31 - bit)
+        end
+        x = (reversed * 5 + 0x19573BA7) & 0xFFFFFFFF
+    end
+    api:keep("rnd", x)
+    return (x * n) >> 32
+end
+
+-- What the title's statics hold as it hands over to its attract demo, for
+-- the title that starts after it to find (`api:keep`): `Init_global` leaves
+-- them, and `Title_init` sets them again 122 ticks on.
+local DEMO_KEPT = {
+    "mv", "disp", "menu", "step", "sel", "cur", "pulse", "slide", "demo", "flash", "logo", "logo_count", "kido",
+    "add",
+}
+
 local function title_init()
     -- `Title_bg_reload` (0x503880), on both branches: the option screen
     -- leaves its own picture behind.
@@ -1590,9 +1622,15 @@ local function title_select(api)
             s.add = 0x100
             s.kido = 0
         elseif fade_done() then
-            -- The demo's pad file is loaded and step 3 starts it.
+            -- The demo's pad file is loaded and step 3 starts it: Leon's
+            -- or Claire's (`pl<n>\pld\pdemo<n><cycle>.dat`), of the three
+            -- the title plays in turn (`0x989E7F`). The pack has them as
+            -- `demo/<cycle * 2 + n>.dat`.
             fade_set(0x200, 0)
             fade_adjust(0x7FFF)
+            local cycle = api:kept("demo_cycle") or 0
+            s.reel = cycle * 2 + title_rnd(api, 2)
+            api:keep("demo_cycle", (cycle + 1) % 3)
             s.attract = true
             s.disp = 3
         end
@@ -1986,11 +2024,10 @@ local function boot_warning()
     end
 end
 
--- The title's film (`Init_movie_work(0)`): Leon's or Claire's, which the
--- original picks with a generator it seeds from the clock.
+-- The title's film (`Init_movie_work(0)`): Leon's or Claire's, by the
+-- title's generator.
 local function boot_film(api)
-    local time = api:local_time()
-    return { id = 0, claire = time ~= nil and time.second % 2 == 1 }
+    return { id = 0, claire = title_rnd(api, 2) == 1 }
 end
 
 -- `Capcom_logo`'s end: the title's task starts at `Title_init` on the
@@ -2034,6 +2071,7 @@ local function boot_main(api)
         -- `Capcom_logo`'s steps 0 and 4.
         s.rep_mask, s.rep_delay = 0x5000, 0x20A
         api:core_bank(0x10)
+        s.mv = 0
         s.init = 1
         s.sub = 5
         b.step = 5
@@ -2045,10 +2083,22 @@ local function boot_main(api)
     elseif b.step == 8 then
         -- The film played: the task's first tick after it.
         boot_end()
+    elseif b.step == 6 and s.fg_system & FG_FROM_LOGO == 0 then
+        -- Step 9, not from the logo (after a game, or a demo a key
+        -- ended): the title's picture, and no film.
+        boot_end()
     else
         s.sub = 7
         b.step = 7
         if b.flag == 0 then
+            -- The film plays on the boot and then after every sixth demo
+            -- played to its end (`0x689F24` counts them).
+            local films = api:kept("films") or 0
+            api:keep("films", (films + 1) % 6)
+            if films ~= 0 then
+                boot_end()
+                return
+            end
             -- Step 8 waits for the film (`fg_system`'s 0x200), which is
             -- over on this tick in a run that plays none (`M.on_film`).
             s.film = boot_film(api)
@@ -2062,9 +2112,29 @@ end
 
 local function boot(api)
     boot_main(api)
-    if s.boot and s.boot.task then
+    local b = s.boot
+    if b and b.task then
         boot_warning()
+    elseif b and b.acks and b.flag == 2 then
+        -- Task 1 after a demo (`0x4C0820`) only answers the logo's wait.
+        b.flag = 0
     end
+end
+
+-- The title after its attract demo (`Game_loop`'s `0x4BFE5D`): the title's
+-- task starts from `Capcom_logo` again, with its statics as the hand-over
+-- left them. A demo played to its end comes back as from the logo
+-- (`fg_system`'s 2: the film on its turn, and the title's entry); one a
+-- key ended comes back as a game does, to the title's picture.
+local function demo_return(api, key)
+    for _, name in ipairs(DEMO_KEPT) do
+        s[name] = api:kept("demo_" .. name) or s[name]
+    end
+    s.fades[0].mode = 2
+    s.background = nil
+    s.init, s.sub = 0, 0
+    s.fg_system = key and 0 or FG_FROM_LOGO
+    s.boot = { step = 3, sleep = 1, flag = 0, acks = not key }
 end
 
 local function publish(api)
@@ -2179,6 +2249,10 @@ function M.open(api, args)
     s.fg_system = args and args.choice and 0 or FG_FROM_LOGO
     s.open_choice = args and args.choice
     s.rep_mask, s.rep_delay = 0x5000, 0x20A
+    s.seed = args and args.seed
+    if args and args.demo then
+        demo_return(api, args.demo == "key")
+    end
     -- config.ini's SPECIAL, read as the signed byte it is.
     local special = args and args.special or 15
     s.special = special >= 0x80 and special - 0x100 or special
@@ -2271,6 +2345,11 @@ function M.update(api, input)
         s.exit = nil
         if exit == "new_game" then
             api:exit("new_game", s.character or 0, s.choice)
+        elseif exit == "attract" then
+            for _, name in ipairs(DEMO_KEPT) do
+                api:keep("demo_" .. name, s[name])
+            end
+            api:exit("attract", s.reel)
         elseif exit == "film" then
             -- The boot's film, the gallery's, or the one the prologue asks
             -- for.
@@ -2329,6 +2408,11 @@ function M.on_boot(api)
     -- No key repeats until the title's task sets its own.
     s.rep_mask, s.rep_delay = 0, 0
     s.boot = { step = 0, sleep = 1, flag = 0 }
+    -- The process starts: the generator has no value yet, the film plays
+    -- and the demos start from their first.
+    api:keep("rnd", nil)
+    api:keep("films", nil)
+    api:keep("demo_cycle", nil)
     publish(api)
 end
 

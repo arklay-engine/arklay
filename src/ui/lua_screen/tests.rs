@@ -183,6 +183,43 @@ fn draw(screen: &mut LuaScreen, cx: &crate::ui::UiContext<'_>) -> crate::render:
     framebuffer
 }
 
+/// A title's attract demo: `api:exit("attract")` leaves the reel to the
+/// engine, `api:exit("attract", n)` names `demo/<n>.dat`, and a number no
+/// reel can have is an error.
+#[test]
+fn an_attract_exit_may_name_its_reel() {
+    let fixture = Fixture::new(
+        "attract",
+        r##"
+function update(api, input)
+    if input.map then api:exit("attract") end
+    if input.cancel then api:exit("attract", 5) end
+    if input.start then api:exit("attract", 256) end
+end
+function draw(api) end
+"##,
+    );
+    let cx = fixture.context();
+    let press = |set: fn(&mut UiInput)| {
+        let mut input = UiInput::default();
+        set(&mut input);
+        input
+    };
+    let mut screen = fixture.load();
+    assert_eq!(
+        screen.update(&cx, press(|input| input.map = true)),
+        ScreenResult::Done(ScreenAction::Attract { reel: None })
+    );
+    let mut screen = fixture.load();
+    assert_eq!(
+        screen.update(&cx, press(|input| input.cancel = true)),
+        ScreenResult::Done(ScreenAction::Attract { reel: Some(5) })
+    );
+    let mut screen = fixture.load();
+    screen.update(&cx, press(|input| input.start = true));
+    assert!(screen.failed(), "256 is no reel's number");
+}
+
 /// A title's film: `api:exit("film", id, { claire, gallery })` names it, and the
 /// screen wakes through `on_film` with how the film ended, its exit
 /// forgotten. An id no film has is an error.

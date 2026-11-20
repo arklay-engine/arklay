@@ -142,9 +142,10 @@ pub enum ScreenAction {
     /// Continue from the save the load screen chose while the title that
     /// opened it slept (its `on_loaded`): the title's hand-over.
     Continue,
-    /// Play the next attract-demo reel (`demo/<hex>.dat`), then return to the
-    /// title.
-    Attract,
+    /// Play an attract-demo reel (`demo/<hex>.dat`), then return to the
+    /// title: reel `reel` where the title picks its own, as RE 2's does,
+    /// else the next of the pack's.
+    Attract { reel: Option<u8> },
     /// Return to the title screen.
     Title,
     /// Open the character-selection screen.

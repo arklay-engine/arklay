@@ -210,6 +210,10 @@ pub struct Options {
     /// RE 2's config.ini `GALLERY0` to `GALLERY4` (`0x68059C`), the bits of
     /// what play has opened in the gallery. `None` is all of it.
     pub title_gallery: Option<[u32; 5]>,
+    /// The first value of the generator RE 2's title picks Leon or Claire
+    /// with, for its film and its attract demo (`0x689FB0`, which the
+    /// original seeds from the clock). `None` is the clock's.
+    pub title_seed: Option<u32>,
 }
 
 /// Keyboard state for one tick.

@@ -1226,6 +1226,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                 let arrange: Option<bool> = options.get("arrange")?;
                 let title_special: Option<i8> = options.get("title_special")?;
                 let title_gallery: Option<Table> = options.get("title_gallery")?;
+                let title_seed: Option<u32> = options.get("title_seed")?;
                 options.finish()?;
                 let title_gallery = title_gallery.as_ref().map(gallery_words).transpose()?;
                 let (easy, hard_mode) = match difficulty.as_deref().unwrap_or("normal") {
@@ -1273,6 +1274,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                     },
                     title_special,
                     title_gallery,
+                    title_seed,
                     ..player::Options::default()
                 };
                 if let Some(window) = driver.window.as_mut() {
@@ -1416,7 +1418,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
             options.finish()?;
             with(&shared, |driver| {
                 let app = driver.app()?;
-                app.open_title_from(boot).map_err(engine_error)?;
+                app.open_title_from(boot, None).map_err(engine_error)?;
                 app.pending_movie = None;
                 driver.baseline = None;
                 driver.edited = false;
