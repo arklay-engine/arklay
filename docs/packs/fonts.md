@@ -72,6 +72,33 @@ Every other cell, and every cell of the further pages, uses the font's
 and attributes are refused, so a typo fails instead of drawing at the wrong
 width.
 
+A `<tint>` gives one of the text's colour rows a colour of the font's own:
+
+```xml
+  <tint row="1" colour="#006405"/>
+```
+
+| Attribute | Meaning |
+|---|---|
+| `row` | the colour row, `1` to `4`: the rows a message's colour codes pick (green, red, grey, and the last, which is yellow without a tint and RE2's blue with its font's) |
+| `colour` | `#RRGGBB`, the colour the row's glyphs are drawn under: `80` in a channel leaves the sheet's own, less dims it, and more does nothing |
+
+Each channel of a tinted row's text is the sheet's times
+`min(2 × tint, 255) / 255`, rounded, as RE2's PC version draws it. A row
+without a `<tint>` keeps the engine's own colour for it, as every row of the
+RE1 fonts does.
+
+A screen's text in a colour given by name or as `"#RRGGBB"` is never a
+row's. A screen asks for a row by number, or with the `row` option beside a
+colour of its own:
+
+```lua
+api:text(8, 8, "Leon", { colour = "#1E64FF", row = 4 })
+```
+
+draws the font's row 4 where the font has a `<tint>` for it, and the
+`colour` where it has none.
+
 ## Latin text on a Japanese sheet
 
 When the language is not Japanese but the font drawn is a Japanese-script

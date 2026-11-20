@@ -17,6 +17,10 @@
 //! pixel in, and `f` moves on a pixel farther than its ink's end and one. A
 //! Western cell RE2 has no glyph for is placed by its ink.
 //!
+//! The text's colours are the original's `font_rgb` ([`FONT_RGB`]): the PC
+//! version draws every glyph from the sheet's first CLUT row under a
+//! primitive colour, which the description gives each row as a `<tint>`.
+//!
 //! The sheet's palette is the PC version's: each 5-bit level with its top
 //! bits again below it (`v << 3 | v >> 2`), as its frames show the font.
 
@@ -63,6 +67,18 @@ const WIDTHS: [[u8; 2]; 0x57] = [
     [2, 10], [3, 9], [3, 9], [2, 10], [2, 11], [4, 6], [4, 6], [2, 11],
     [4, 6], [0, 14], [2, 11], [2, 10], [2, 10], [2, 10], [3, 8], [3, 9],
     [3, 8], [2, 11], [2, 11], [0, 14], [2, 11], [2, 11], [3, 9],
+];
+
+/// `font_rgb` (`0x985080`), which `Init_main` copies from the fifteen bytes
+/// after `Common/Data/font0.adt`'s picture: the primitive colour of each of
+/// the text's five colour rows (white, green, red, grey and blue), which
+/// `mess_trans` and `Name_disp` draw a glyph under.
+const FONT_RGB: [[u8; 3]; 5] = [
+    [128, 128, 128],
+    [0, 100, 5],
+    [95, 0, 35],
+    [54, 53, 55],
+    [15, 50, 128],
 ];
 
 /// The description's sheet-wide part: the Latin script at the original's
@@ -121,6 +137,11 @@ pub(super) fn sheet(font0: &[u8]) -> Result<(Vec<u8>, String)> {
     let bmp = crate::bmp::encode_indexed_page(&sheet, 0)?;
 
     let mut xml = HEADER.to_owned();
+    for (row, [r, g, b]) in FONT_RGB.iter().enumerate().skip(1) {
+        xml.push_str(&format!(
+            "  <tint row=\"{row}\" colour=\"#{r:02X}{g:02X}{b:02X}\"/>\n"
+        ));
+    }
     for cell in 1..CELLS {
         if SYMBOLS.contains(&cell) {
             continue;
@@ -292,6 +313,18 @@ mod tests {
         // A Western glyph RE2 has none for goes by its own ink.
         let (left, right) = super::ink(&page, western_cell('\u{e9}').unwrap()).unwrap();
         assert_eq!(metric(&xml, '\u{e9}'), Some((left, right - left + 2)));
+        // The text's colours are the original's, the first being the sheet's.
+        let def = crate::font::xml::FontDef::parse(&xml).unwrap();
+        assert_eq!(
+            def.tints,
+            [
+                None,
+                Some([0, 100, 5]),
+                Some([95, 0, 35]),
+                Some([54, 53, 55]),
+                Some([15, 50, 128])
+            ]
+        );
         // The palette is the PC version's: level 25 is 206 and 23 is 189,
         // not the decoder's 205.
         assert_eq!(page.palette(0, 1), [206, 206, 189, 255]);
@@ -309,6 +342,10 @@ mod tests {
         let exe = std::fs::read(root.join("bio2 1.10.exe")).unwrap();
         let table = &exe[0x12_E478..0x12_E478 + 2 * WIDTHS.len()];
         assert_eq!(table, WIDTHS.as_flattened());
+        // `font_rgb`, after the 16-bit picture and its header.
+        let adt = std::fs::read(root.join("data/Common/Data/font0.adt")).unwrap();
+        let adt = crate::adt::decode(&adt).unwrap();
+        assert_eq!(adt[0x2_0014..], *FONT_RGB.as_flattened());
         let font0 = std::fs::read(root.join("data/Common/Data/font0.tim")).unwrap();
         let (bmp, xml) = sheet(&font0).unwrap();
         let def = crate::font::xml::FontDef::parse(&xml).unwrap();

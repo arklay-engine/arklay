@@ -1152,7 +1152,7 @@ local OPT_WORDS, OPT_PARTS = 4, 5
 local OPT_GREY, OPT_GREEN = { 0x80, 0x80, 0x80 }, { 0x00, 0xA0, 0x20 }
 -- The cursor's row in Classic REbirth's print, and in the digits, which
 -- take the sheets' green at the font's level.
-local OPT_TEXT_GREEN, OPT_DIGIT_GREEN = "#00C80A", "#00FF40"
+local OPT_TEXT_GREEN, OPT_DIGIT_GREEN = { colour = "#00C80A", row = 1 }, "#00FF40"
 
 -- The sound settings, which outlast a visit: the speaker mode (1 monaural, 2
 -- stereo), the quality (`Config_get_squal`: 0 is 44.1 kHz at 16 bits) and

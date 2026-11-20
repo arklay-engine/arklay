@@ -1014,8 +1014,28 @@ struct Options {
     blend: SpriteBlend,
 }
 
+/// The tint a text draws in over `font`: that of the options table's `row`,
+/// where the font has a colour of its own for the row, else the options'
+/// `colour`. Only a text reads `row`, so a table shared with a sprite may
+/// hold anything under the name.
+fn text_tint(
+    opts: &Options,
+    table: Option<&Table>,
+    font: &crate::font::Font,
+) -> mlua::Result<Tint> {
+    let row = match table {
+        Some(table) => table.get::<Option<i64>>("row")?,
+        None => None,
+    };
+    Ok(match row.map(|row| row.clamp(0, 255) as i32) {
+        Some(row) if font.tints_row(row) => Tint::from_clut_row(row),
+        _ => opts.tint,
+    })
+}
+
 /// Parse an options table: `{colour = "green"|3, brightness = 2,
-/// tight = true, clut = 0, blend = "opaque"}`.
+/// tight = true, clut = 0, blend = "opaque"}`. A text's `row` is
+/// [`text_tint`]'s to read.
 fn options(host: &Host, table: Option<&Table>) -> mlua::Result<Options> {
     let mut parsed = Options {
         tint: Tint::White,
@@ -1054,7 +1074,9 @@ fn options(host: &Host, table: Option<&Table>) -> mlua::Result<Options> {
     Ok(parsed)
 }
 
-/// A text colour: a tint name, a CLUT row number or `"#RRGGBB"`.
+/// A text colour: a tint name, a CLUT row number or `"#RRGGBB"`. A row is
+/// the text's colour row, which a font may have a colour of its own for; a
+/// name or `"#RRGGBB"` is that colour on any font.
 pub(super) fn colour_tint(value: &Value) -> mlua::Result<Tint> {
     match value {
         Value::Integer(row) => Ok(Tint::from_clut_row(*row as i32)),
@@ -1066,7 +1088,11 @@ pub(super) fn colour_tint(value: &Value) -> mlua::Result<Tint> {
                     .ok_or_else(|| mlua::Error::RuntimeError(format!("invalid colour `{text}`")));
             }
             match tint_named(&text) {
-                Some(tint) => Ok(tint),
+                Some(Tint::White) => Ok(Tint::White),
+                Some(tint) => {
+                    let [red, green, blue] = tint.rgb();
+                    Ok(Tint::Rgb(red, green, blue))
+                }
                 None => Err(mlua::Error::RuntimeError(format!(
                     "unknown colour `{text}` (white, green, red, grey, yellow, a CLUT row, or \"#RRGGBB\")"
                 ))),

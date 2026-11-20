@@ -661,9 +661,9 @@ impl UserData for Api<'_> {
 
         methods.add_method_mut(
             "text",
-            |_lua, api, (x, y, text, opts): (i32, i32, String, Option<Table>)| {
+            |_lua, api, (x, y, text, opts_table): (i32, i32, String, Option<Table>)| {
                 let (x, y) = (coord(x), coord(y));
-                let opts = options(api.host, opts.as_ref())?;
+                let opts = options(api.host, opts_table.as_ref())?;
                 // The framebuffer is taken first so a text call outside
                 // `draw` is the error the API documents.
                 let framebuffer = api.framebuffer.as_deref_mut().ok_or_else(no_draw)?;
@@ -679,7 +679,7 @@ impl UserData for Api<'_> {
                     framebuffer,
                     x,
                     y,
-                    opts.tint,
+                    text_tint(&opts, opts_table.as_ref(), font)?,
                     opts.brightness,
                     &bytes,
                     opts.tight,
@@ -804,7 +804,7 @@ impl UserData for Api<'_> {
                     framebuffer,
                     x,
                     y,
-                    opts.tint,
+                    text_tint(&opts, opts_table.as_ref(), font)?,
                     opts.brightness,
                     &bytes.as_bytes(),
                     opts.tight,
@@ -834,15 +834,16 @@ impl UserData for Api<'_> {
         // unshadowed `PrintText8x14` grid, in `opts.colour`.
         methods.add_method_mut(
             "text_8x14",
-            |_lua, api, (x, y, bytes, opts): (i32, i32, mlua::String, Option<Table>)| {
+            |_lua, api, (x, y, bytes, opts_table): (i32, i32, mlua::String, Option<Table>)| {
                 let (x, y) = (coord(x), coord(y));
-                let opts = options(api.host, opts.as_ref())?;
+                let opts = options(api.host, opts_table.as_ref())?;
                 let framebuffer = api.framebuffer.as_deref_mut().ok_or_else(no_draw)?;
                 let Some(font) = api.cx.font else {
                     api.host.note_missing_font();
                     return Ok(());
                 };
-                font.draw_text_8x14(framebuffer, x, y, opts.tint, &bytes.as_bytes());
+                let tint = text_tint(&opts, opts_table.as_ref(), font)?;
+                font.draw_text_8x14(framebuffer, x, y, tint, &bytes.as_bytes());
                 Ok(())
             },
         );
