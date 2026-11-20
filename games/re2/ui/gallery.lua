@@ -626,9 +626,12 @@ function M.publish(api, g)
 end
 
 local art = {}
+-- The file of the one picture held.
+local held_picture
 
 function M.reset()
     art = {}
+    held_picture = nil
 end
 
 -- A sheet of the pack's, once: nil when the pack lacks it.
@@ -660,9 +663,20 @@ end
 
 -- `GalleryLoadIllust`: the picture is loaded, and the count of the 256 x
 -- 256 textures the original cuts it into is the work's; none for a file
--- the pack lacks, which shows no picture.
+-- the pack lacks, which shows no picture. The picture before is let go,
+-- as the original's textures are: a character's pictures are more than a
+-- screen's art may hold at once.
 picture = function(api, g)
-    local sheet = sheet_of(api, picture_stem(g.claire, g.index))
+    local stem = picture_stem(g.claire, g.index)
+    if held_picture ~= stem then
+        local last = held_picture and art[held_picture]
+        if last then
+            api:release(last.page)
+            art[held_picture] = nil
+        end
+        held_picture = stem
+    end
+    local sheet = sheet_of(api, stem)
     if not sheet then
         return 0
     end
