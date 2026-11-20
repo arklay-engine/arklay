@@ -9744,6 +9744,40 @@ impl GameState {
         })
     }
 
+    /// `fg_status`'s `0x8000` as a script reads it: a status task's screen
+    /// is asked for or up. `Sce_Item`, `Sce_Status` and `Sce_84` raise it
+    /// in the script's own pass, and the item box as its lid hands over.
+    /// The bank doesn't hold it.
+    pub fn re2_status_task_up(&self) -> bool {
+        self.re2_item_get_status()
+            || self.re2_status_request
+            || self.re2_script_map.is_some()
+            || self.re2_box_open
+            || self.re2_box.is_some()
+    }
+
+    /// `Status`'s start (`0x501BD0`), whichever screen the task shows: the
+    /// Side Pack's item flag gives the inventory its ten slots, and Leon
+    /// has his lighter back once the G-Virus is gone (scenario flag 0xA2,
+    /// room 611's), with the slot's count as it was.
+    pub(crate) fn start_re2_status_task(&mut self) {
+        use crate::scd2::host::{ITEM_BANK, SCENARIO_BANK, STATUS_BANK, STATUS_PLAYER};
+        const SIDE_PACK_FLAG: u8 = 0x3F;
+        const GVIRUS_GONE_FLAG: u8 = 0xA2;
+        const LIGHTER: u8 = 0x2F;
+        if self.re2.flag(ITEM_BANK, SIDE_PACK_FLAG) {
+            self.re2.inventory_size = 10;
+            if self.re2_items.is_some() {
+                let capacity = self.inventory_capacity().max(self.inventory.len());
+                self.inventory.resize(capacity, InventoryItem::default());
+            }
+        }
+        let leon = !self.re2.flag(STATUS_BANK, STATUS_PLAYER);
+        if leon && self.re2.flag(SCENARIO_BANK, GVIRUS_GONE_FLAG) {
+            self.re2.personal_item[0] = LIGHTER;
+        }
+    }
+
     /// Whether the get-item window's next tick is still a `Game_loop` frame,
     /// with `fg_stop` up so only the enemies' `Root_ck` runs: the three while
     /// game mode 1 starts the fade and mode 2 waits for it (`0x4BFB36`), and
@@ -9795,6 +9829,7 @@ impl GameState {
             // `Status`'s start, on the window's sixth tick: `Pad_rep_set(0xF01C,
             // 0x60A)`, for every pick-up.
             self.pad_repeat.set(pad_repeat::STATUS_SETTING);
+            self.start_re2_status_task();
             // Game mode's step 5 zeroes `fg_stop` there, which a drawer's
             // open raised.
             self.re2_drawer_window_stop(true);

@@ -144,7 +144,7 @@ impl GameState {
         // the box is due or up. (`Sce_Item`'s crouch raises it only when
         // the crouch ends, and no press reaches the areas mid-crouch.)
         if self.re2_item_get.is_some()
-            || self.re2_box.is_some()
+            || self.re2_status_task_up()
             || self.re2_back == super::save2::BackRoutine::ItemBox
         {
             return;
