@@ -34,7 +34,8 @@ enum Asset {
     Page(Artwork),
     /// An item-view model and the size of the file it was parsed from.
     Model(Arc<Ivm>, usize),
-    /// A character's model and the size of the file it was parsed from.
+    /// A character's model and the bytes it holds besides its texture's
+    /// ([`Emd::decoded_bytes`]).
     Character(Arc<Emd>, usize),
 }
 
@@ -55,7 +56,7 @@ impl Asset {
             .saturating_mul(height as usize)
             .saturating_mul(4);
         match self {
-            Self::Model(_, file) | Self::Character(_, file) => pixels.saturating_add(*file),
+            Self::Model(_, held) | Self::Character(_, held) => pixels.saturating_add(*held),
             _ => pixels,
         }
     }
@@ -503,6 +504,18 @@ fn field(table: &Table, key: &str) -> mlua::Result<i32> {
     Ok(table.get::<Option<i32>>(key)?.unwrap_or(0))
 }
 
+/// A whole-number field of `table`, `0` when absent. Unlike [`field`] it
+/// takes nothing else for one: a number with a fraction is an error.
+fn whole(table: &Table, key: &str) -> mlua::Result<i64> {
+    match table.get::<Value>(key)? {
+        Value::Nil => Ok(0),
+        Value::Integer(value) => Ok(value),
+        _ => Err(mlua::Error::RuntimeError(format!(
+            "{key} is not a whole number"
+        ))),
+    }
+}
+
 /// A `{x, y, z}` triple.
 fn triple(table: &Table, key: &str) -> mlua::Result<[i32; 3]> {
     let value: Table = table.get(key)?;
@@ -579,11 +592,13 @@ fn light(table: &Table) -> mlua::Result<EntityLight> {
 /// A character's pose: the keyframe of `{bank, clip, frame}`, bank 0 the
 /// model's own animations and bank `n` its `n`th further one, or with no
 /// `pose` the model as its file has it, every joint unturned. `None` when
-/// the model has no such frame.
+/// the model has no such frame, as it has none of a negative number;
+/// anything but a whole number is an error.
 ///
 /// A pose's `height` scales the root's height in 4.12, as a short zombie's
 /// `Parts0_pos_y` does, and its `turn` adds `{x, y, z}` to the angles of the
-/// joints it is keyed by, numbered from 0, as a neck's turn does.
+/// joints it is keyed by, numbered from 0, as a neck's turn does. A key
+/// that isn't an integer is an error; a joint the model lacks is skipped.
 fn character_pose(model: &Emd, pose: Option<Table>) -> mlua::Result<Option<Keyframe>> {
     let Some(pose) = pose else {
         return Ok(Some(Keyframe {
@@ -592,10 +607,14 @@ fn character_pose(model: &Emd, pose: Option<Table>) -> mlua::Result<Option<Keyfr
             rotations: vec![anim::IDENTITY_ROTATION; model.skeleton.relative.len()],
         }));
     };
-    let index = |key: &str| -> mlua::Result<usize> {
-        Ok(usize::try_from(field(&pose, key)?).unwrap_or(usize::MAX))
+    let (Ok(bank), Ok(clip), Ok(frame)) = (
+        usize::try_from(whole(&pose, "bank")?),
+        usize::try_from(whole(&pose, "clip")?),
+        usize::try_from(whole(&pose, "frame")?),
+    ) else {
+        return Ok(None);
     };
-    let (keyframes, clips) = match index("bank")?.checked_sub(1) {
+    let (keyframes, clips) = match bank.checked_sub(1) {
         None => (&model.keyframes, &model.clips),
         Some(bank) => match model.banks.get(bank) {
             Some(bank) => (&bank.keyframes, &bank.clips),
@@ -603,20 +622,30 @@ fn character_pose(model: &Emd, pose: Option<Table>) -> mlua::Result<Option<Keyfr
         },
     };
     let Some(mut keyframe) = clips
-        .get(index("clip")?)
-        .and_then(|clip| clip.frames.get(index("frame").ok()?))
+        .get(clip)
+        .and_then(|clip| clip.frames.get(frame))
         .and_then(|frame| keyframes.get(usize::from(frame.keyframe)))
         .cloned()
     else {
         return Ok(None);
     };
     if let Some(height) = pose.get::<Option<i32>>("height")? {
-        keyframe.offset[1] = ((i32::from(keyframe.offset[1]) * height) >> 12) as i16;
+        let scaled = (i64::from(keyframe.offset[1]) * i64::from(height)) >> 12;
+        keyframe.offset[1] = scaled as i16;
     }
     if let Some(turn) = pose.get::<Option<Table>>("turn")? {
-        for pair in turn.pairs::<usize, Table>() {
+        for pair in turn.pairs::<Value, Table>() {
             let (joint, by) = pair?;
-            let Some(angles) = keyframe.rotations.get_mut(joint) else {
+            let Value::Integer(joint) = joint else {
+                return Err(mlua::Error::RuntimeError(format!(
+                    "a pose's turn is keyed by {}, not a joint's number",
+                    joint.type_name()
+                )));
+            };
+            let Some(angles) = usize::try_from(joint)
+                .ok()
+                .and_then(|joint| keyframe.rotations.get_mut(joint))
+            else {
                 continue;
             };
             if *angles == anim::IDENTITY_ROTATION {
@@ -725,10 +754,11 @@ pub(super) fn background_quad(
 /// 4:3 frame's centre, so a shorter layout band (a wider aspect) moves the
 /// centre up by half the rows it lost, and a wider canvas moves it right by
 /// half the columns it gained, keeping the model centred in the layout.
+/// `screen` is the script's own offset, held to the range of [`coord`].
 fn band_centre(framebuffer: &Framebuffer, screen: [i32; 2]) -> [i32; 2] {
     let gained = framebuffer.width as i32 - crate::render::WIDTH as i32;
     let lost = crate::render::HEIGHT as i32 - framebuffer.height as i32;
-    [screen[0] + gained / 2, screen[1] - lost / 2]
+    [coord(screen[0]) + gained / 2, coord(screen[1]) - lost / 2]
 }
 
 #[cfg(test)]

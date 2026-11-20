@@ -185,6 +185,73 @@ pub struct Emd {
     pub morphs: Vec<PartMorph>,
 }
 
+impl Emd {
+    /// The bytes the decoded model holds besides its texture's. A file's
+    /// parts can share their vertices and primitives, each part decoding
+    /// its own, so this can be far more than the file.
+    pub fn decoded_bytes(&self) -> usize {
+        use std::mem::size_of;
+        const VECTOR: usize = size_of::<[i16; 3]>();
+        let keyframes = |list: &[Keyframe]| -> usize {
+            list.iter()
+                .map(|keyframe| size_of::<Keyframe>() + keyframe.rotations.len() * VECTOR)
+                .sum()
+        };
+        let clips = |list: &[Clip]| -> usize {
+            list.iter()
+                .map(|clip| size_of::<Clip>() + clip.frames.len() * size_of::<ClipFrame>())
+                .sum()
+        };
+        let shapes = |list: &[Vec<[i16; 3]>]| -> usize {
+            list.iter()
+                .map(|shape| size_of::<Vec<[i16; 3]>>() + shape.len() * VECTOR)
+                .sum()
+        };
+        let skeleton = self.skeleton.relative.len() * VECTOR
+            + self
+                .skeleton
+                .children
+                .iter()
+                .map(|children| size_of::<Vec<u8>>() + children.len())
+                .sum::<usize>();
+        let mesh: usize = self
+            .mesh
+            .objects
+            .iter()
+            .map(|object| {
+                size_of::<TmdObject>()
+                    + (object.vertices.len() + object.normals.len()) * VECTOR
+                    + object.prims.len() * size_of::<TmdPrim>()
+            })
+            .sum();
+        let banks: usize = self
+            .banks
+            .iter()
+            .map(|bank| keyframes(&bank.keyframes) + clips(&bank.clips))
+            .sum();
+        let morphs: usize = self
+            .morphs
+            .iter()
+            .map(|morph| {
+                size_of::<PartMorph>()
+                    + shapes(&morph.targets)
+                    + shapes(&morph.joint_targets)
+                    + shapes(&morph.all_targets)
+                    + (morph.joints.len() + morph.all_joints.len()) * size_of::<(u8, [i16; 3])>()
+                    + morph.weights.len() * size_of::<i16>()
+            })
+            .sum();
+        skeleton
+            + mesh
+            + banks
+            + morphs
+            + keyframes(&self.keyframes)
+            + keyframes(&self.damage_keyframes)
+            + clips(&self.clips)
+            + clips(&self.damage_clips)
+    }
+}
+
 /// The shapes a part of the mesh can blend between (`Sa_parts_allmv`).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PartMorph {

@@ -771,8 +771,9 @@ function ScreenApi:item_icon(item) end
 ---@return string? err When the item has no model or its file is missing.
 function ScreenApi:item_model(item) end
 
----Load a character's model from the pack entry `entry`: an RE 2 enemy's
----`.emd`, with the texture page beside it, or a player's `.pld`. For
+---Load a character's model from the pack entry `entry`, as the model viewer
+---loads one: an enemy's `.emd` (RE 2's with the texture page beside it), an
+---RE 2 player's `.pld`, or a weapon's `.plw` on its player. For
 ---[`api:draw_character`](#ScreenApi.draw_character).
 ---@param entry string A pack entry, such as `enemy/10/enemy_0.emd`.
 ---@return integer? handle A character model handle.
@@ -785,8 +786,8 @@ function ScreenApi:character_model(entry) end
 ---@return string? err When the pack has none.
 function ScreenApi:re2_binders_model() end
 
----The number of objects a model carries. A handle that is not a model
----raises an error.
+---The number of objects an item model carries. A handle that is not one,
+---a character's among them, raises an error.
 ---@param model integer
 ---@return integer
 function ScreenApi:model_objects(model) end
@@ -1365,11 +1366,11 @@ local CharacterSpec = {}
 
 ---A frame of a character's animation.
 ---@class CharacterPose
----@field bank? integer 0, the default, for the model's own animations; `n` for its `n`th further bank (an RE 2 enemy has up to two).
+---@field bank? integer 0, the default, for the model's own animations; `n` for its `n`th further bank (an RE 2 enemy has up to two). This, `clip` and `frame` are whole numbers: one with a fraction raises an error.
 ---@field clip? integer The clip, from 0.
 ---@field frame? integer The clip's frame, from 0.
 ---@field height? integer Scales the root's height, in 4.12 (`0x1000` is as stored).
----@field turn? table<integer, integer[]> Angles added to the frame's, `{x, y, z}` keyed by joint, numbered from 0.
+---@field turn? table<integer, integer[]> Angles added to the frame's, `{x, y, z}` keyed by joint, numbered from 0. A joint the model lacks is skipped; a key that is not an integer raises an error.
 local CharacterPose = {}
 
 ---A character's view: from a point towards another as RE 2's `Set_view`
@@ -1380,7 +1381,7 @@ local CharacterPose = {}
 ---@field to? integer[] `{x, y, z}`, the point looked at.
 ---@field at? integer[] `{x, y, z}`: where the origin is in the view. With it, `from` and `to` are not read.
 ---@field fov? integer The distance to the screen, in the pixels of the 320x240 layout.
----@field screen? integer[] `{x, y}`: offsets the projection centre from the layout's centre.
+---@field screen? integer[] `{x, y}`: moves the drawn model by that many pixels from the layout's centre. The view is not tilted for it.
 local CharacterView = {}
 
 ---A model light, built as the original builds it.

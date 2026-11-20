@@ -180,16 +180,17 @@ pub(crate) fn pld() -> Vec<u8> {
     container(&[edd(), emr(true), md1(), tim(256, 256, 2, |_, _| 0)])
 }
 
+/// A two-page texture whose first page is index 2 and second index 1. The
+/// fixture's triangle is on the second, and its row shows that as BGR555
+/// `0x101`; the first page's would be `0x102`.
+pub(crate) fn paged_tim() -> Vec<u8> {
+    tim(256, 256, 2, |x, _| if x < 128 { 2 } else { 1 })
+}
+
 /// [`pld`] with its part's vertices at `corners` and no quad to speak of,
-/// all of it at the last, and every texel index 1, which the triangle's row
-/// shows as BGR555 `0x101`.
+/// all of it at the last, under [`paged_tim`].
 pub(crate) fn pld_of(corners: [[i16; 3]; 4]) -> Vec<u8> {
-    container(&[
-        edd(),
-        emr(true),
-        md1_of(corners, [3; 4]),
-        tim(256, 256, 2, |_, _| 1),
-    ])
+    container(&[edd(), emr(true), md1_of(corners, [3; 4]), paged_tim()])
 }
 
 #[test]
@@ -258,6 +259,22 @@ pub(crate) fn emd() -> Vec<u8> {
     ])
 }
 
+/// [`emd`] with its part's vertices at `corners` and no quad to speak of,
+/// as [`pld_of`] has them.
+pub(crate) fn emd_of(corners: [[i16; 3]; 4]) -> Vec<u8> {
+    let empty = vec![0u8; 4];
+    container(&[
+        empty.clone(),
+        edd(),
+        emr(true),
+        edd(),
+        emr(false),
+        empty.clone(),
+        empty,
+        md1_of(corners, [3; 4]),
+    ])
+}
+
 /// A three-row enemy texture with STP bits set, including on the black
 /// transparent entry.
 pub(crate) fn enemy_tim() -> Vec<u8> {
@@ -301,6 +318,61 @@ fn an_emd_has_three_banks_and_takes_its_texture_from_the_tim() {
     // EM020's second bank: four-byte chunks with nothing in them.
     assert_eq!(model.banks[1], AnimBank::default());
     assert_eq!(model.texture.indices[0], 7);
+}
+
+/// An MD1 of `parts` parts that all name one pool of four vertices and
+/// normals and one list of `triangles` triangles, with no quads.
+fn shared_md1(parts: usize, triangles: usize) -> Vec<u8> {
+    let table = parts * 2 * MD1_OBJECT_LEN;
+    let vectors = 4 * MD1_VECTOR_LEN;
+    let list = triangles * MD1_TRIANGLE_LEN;
+    let mut data = Vec::new();
+    put32(&mut data, 0);
+    put32(&mut data, 0);
+    put32(&mut data, parts as u32 * 2);
+    for object in 0..parts * 2 {
+        for value in [
+            table,
+            4,
+            table + vectors,
+            4,
+            table + 2 * vectors,
+            if object % 2 == 0 { triangles } else { 0 },
+            table + 2 * vectors + list,
+        ] {
+            put32(&mut data, value as u32);
+        }
+    }
+    data.resize(data.len() + 2 * vectors + 2 * list, 0);
+    data
+}
+
+#[test]
+fn parts_sharing_their_pools_are_held_to_the_budget_together() {
+    // Every part of a file can name the same vertices and primitives, and
+    // each decodes its own, so 90 KB can ask for over a million primitives.
+    // It is refused before any part is read.
+    let data = shared_md1(1100, 1000);
+    assert!(data.len() < 100_000);
+    let error = parse_md1(&data).unwrap_err();
+    assert!(
+        format!("{error:#}").contains("MD1 primitive total"),
+        "{error:#}"
+    );
+    // Within the budget each part is its own copy, and the model's size
+    // counts every one.
+    let shared = parse_md1(&shared_md1(3, 2)).unwrap();
+    assert_eq!(shared.objects.len(), 3);
+    assert_eq!(shared.objects[0].prims.len(), 2);
+    assert_eq!(shared.objects[2], shared.objects[0]);
+    let mut model = parse_pld(&pld()).unwrap();
+    model.mesh = parse_md1(&shared_md1(1, 2)).unwrap();
+    let single = model.decoded_bytes();
+    let part = std::mem::size_of::<TmdObject>()
+        + 8 * std::mem::size_of::<[i16; 3]>()
+        + 2 * std::mem::size_of::<crate::model::TmdPrim>();
+    model.mesh = shared;
+    assert_eq!(model.decoded_bytes(), single + 2 * part);
 }
 
 #[test]

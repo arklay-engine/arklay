@@ -1861,16 +1861,14 @@ fn a_model_draws_under_the_fade_and_only_while_it_is_shown() {
     let cx = context(&dir);
     // The player's first model: the fixture's triangle, on its point 100
     // above the floor. The level view is 4900 off along X, 1500 up and
-    // 700 aside, 300 from the screen.
+    // 700 aside, 300 from the screen. The enemy's is 1600 higher.
     let colour = [8, 65, 0];
     let at = (202, 180);
+    let enemy = (202, 80);
     let mut screen = open_models(&cx, &dir, None);
     let first = render(&mut screen, &cx);
-    assert_eq!(
-        pixel(&first, at.0, at.1),
-        [0, 0, 0],
-        "the enemy's is elsewhere"
-    );
+    assert_eq!(pixel(&first, enemy.0, enemy.1), colour);
+    assert_eq!(pixel(&first, at.0, at.1), [0, 0, 0], "under the enemy's");
     run(&mut screen, &cx, press("right"), 2);
     run(&mut screen, &cx, press("right"), 1);
     assert_eq!(screen.value("gal_index"), 2);
@@ -1879,6 +1877,7 @@ fn a_model_draws_under_the_fade_and_only_while_it_is_shown() {
     run(&mut screen, &cx, UiInput::default(), 1);
     let shown = render(&mut screen, &cx);
     assert_eq!(pixel(&shown, at.0, at.1), colour);
+    assert_eq!(pixel(&shown, enemy.0, enemy.1), [0, 0, 0], "the enemy's");
     assert_eq!(pixel(&shown, at.0, 150), [0, 0, 0], "above it");
     assert_eq!(pixel(&shown, at.0 - 30, at.1), [0, 0, 0], "beside it");
     // One model is held: the one before is let go as the next loads, the
@@ -1934,7 +1933,7 @@ fn the_models_panel_draws_at_half_size_in_the_originals_colours() {
         (0, 128, low_panel),
         (76, 239, low_panel),
         (77, 239, black),
-        (200, 100, black),
+        (150, 100, black),
         // No key is lit.
         (20, 150, low_panel),
         // The count, "01/ 38", in the models' own digits.

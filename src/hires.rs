@@ -849,8 +849,9 @@ pub struct ModelVertex {
     pub uv: [f32; 2],
     /// The lit colour in `0..=1`; `1` keeps the texel as stored.
     pub shade: [f32; 3],
-    /// `palette_row << 8 | blend << 24 | untextured << 25`, as `mesh.frag`
-    /// reads it.
+    /// `palette_row << 8 | view_depth << 22 | blend << 24 | untextured << 25`,
+    /// as `mesh.frag` reads it: with `view_depth` a pixel's depth is its own
+    /// view Z's, as an RE 2 character's is.
     pub packed: u32,
 }
 

@@ -374,15 +374,17 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
         Ok(())
     });
 
-    // `character_model(entry)`: the model of the pack's `entry`, an enemy's
-    // `.emd` or a player's `.pld`; nil and a message when it can't load.
+    // `character_model(entry)`: the model of the pack's `entry`, as the
+    // model viewer loads one (an enemy's `.emd`, a player's `.pld`, a
+    // weapon's `.plw`); nil and a message when it can't load.
     methods.add_method_mut("character_model", |_lua, api, entry: String| {
         let pack: &Pack = api.cx.pack;
         let cache_key = format!("character:{entry}");
         Ok(loaded(api.host.assets.load(cache_key, || {
             let data = pack.read(&entry)?;
             let model = crate::model_viewer::load_with(pack, &entry, &data)?;
-            Ok(Asset::Character(Arc::new(model), data.len()))
+            let held = model.decoded_bytes();
+            Ok(Asset::Character(Arc::new(model), held))
         })))
     });
 
@@ -391,7 +393,8 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
     // pose of [`character_pose`] and its textures' own colours, as RE 2's
     // gallery shows one. `view` is `{from, to, fov}`, RE 2's `Set_view`, or
     // `{at = {x, y, z}, fov}`, which looks down Z with the origin at `at`
-    // in front of it; `screen` offsets its centre as `draw_ivm`'s does.
+    // in front of it; `screen` moves the drawn model by `{x, y}` pixels
+    // from the layout's centre (see [`band_centre`]).
     // The mesh's objects past the skeleton's joints draw only where `parts`
     // places them ([`extra_parts`]). False when the model has no such pose.
     methods.add_method_mut(
@@ -415,7 +418,7 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
             extra_parts(&mut joints, spec.get("parts")?)?;
             let view: Table = spec.get("view")?;
             let fov = field(&view, "fov")?;
-            let mut camera = if view.contains_key("at")? {
+            let camera = if view.contains_key("at")? {
                 Camera::from_view(anim::IDENTITY_MATRIX, triple(&view, "at")?, fov)
             } else {
                 Camera::from_set_view(triple(&view, "from")?, triple(&view, "to")?, fov)
@@ -424,8 +427,8 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
                 Some(offset) => [offset.get(1)?, offset.get(2)?],
                 None => [0, 0],
             };
-            camera.screen = band_centre(framebuffer, screen);
-            framebuffer.draw_character_unlit(model, &joints, &camera);
+            let offset = band_centre(framebuffer, screen);
+            framebuffer.draw_character_unlit(model, &joints, &camera, offset);
             Ok(true)
         },
     );

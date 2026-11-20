@@ -1948,11 +1948,16 @@ impl Framebuffer {
     /// palette row, as in play. While the GPU renderer draws the frame the
     /// model is queued for it, as [`Framebuffer::draw_ivm_captured`] queues
     /// an item's.
+    ///
+    /// `offset` moves the drawn model by that many pixels. It isn't the
+    /// camera's [`Camera::screen`], which is a shake and tilts the view with
+    /// it.
     pub fn draw_character_unlit(
         &mut self,
         model: &std::sync::Arc<crate::model::Emd>,
         joints: &[anim::Mat4x3],
         camera: &Camera,
+        offset: [i32; 2],
     ) {
         // Play's path, under lights of RE 2's kind that the colour replaces.
         let dark = Light {
@@ -1983,6 +1988,13 @@ impl Framebuffer {
                 false,
                 &mut triangles,
             );
+        }
+        for corner in triangles
+            .iter_mut()
+            .flat_map(|triangle| &mut triangle.raster)
+        {
+            corner.position[0] += offset[0] as f32;
+            corner.position[1] += offset[1] as f32;
         }
         if self.list.is_none() {
             self.rasterize_triangles(&model.texture, triangles);
@@ -2144,6 +2156,7 @@ impl Framebuffer {
             .iter()
             .flat_map(|triangle| {
                 let packed = (triangle.palette_row as u32 & 0xFF) << 8
+                    | u32::from(triangle.view_depth) << 22
                     | u32::from(triangle.blend) << 24
                     | u32::from(triangle.flat.is_some()) << 25;
                 std::array::from_fn::<_, 3, _>(|corner| {
@@ -3874,11 +3887,14 @@ impl Camera {
     /// world point to a view whose Y grows down the screen: `view` has that
     /// row negated (see [`Camera::from_points_rolled`]), and a model is
     /// projected through the matrix itself ([`Camera::stored`]).
+    ///
+    /// The camera has no eye and no look-at point of its own, so
+    /// [`Camera::mirrored`], which reflects those, doesn't keep the matrix.
     pub fn from_view(matrix: [[i32; 3]; 3], trans: [i32; 3], fov: i32) -> Self {
         let y_up = std::array::from_fn(|row| {
             std::array::from_fn(|column| {
                 if (row == 1) != (column == 1) {
-                    -matrix[row][column]
+                    matrix[row][column].wrapping_neg()
                 } else {
                     matrix[row][column]
                 }
@@ -3886,8 +3902,8 @@ impl Camera {
         });
         Self {
             stored: Some((y_up, trans)),
-            view: [matrix[0], matrix[1].map(|value| -value), matrix[2]],
-            trans: [trans[0], -trans[1], trans[2]],
+            view: [matrix[0], matrix[1].map(i32::wrapping_neg), matrix[2]],
+            trans: [trans[0], trans[1].wrapping_neg(), trans[2]],
             fov,
             roll: 0,
             screen: [0, 0],
@@ -3905,8 +3921,9 @@ impl Camera {
     /// Each sine and cosine is a 4.12 quotient by a length from the table
     /// square root (`sca::square_root0`), which rounds down coarsely:
     /// a length of 4900 reads 4884, and the view's rows are that much longer
-    /// than a rotation's. Every sum is floored at 12 fractional bits. A view
-    /// straight up or down has no yaw.
+    /// than a rotation's. Every sum is floored at 12 fractional bits, and the
+    /// matrix keeps the low 16 bits of each, which the translation is then
+    /// made from. A view straight up or down has no yaw.
     pub fn from_set_view(from: [i32; 3], to: [i32; 3], fov: i32) -> Self {
         let [dx, dy, dz]: [i32; 3] = std::array::from_fn(|axis| to[axis].wrapping_sub(from[axis]));
         let square = |value: i32| value.wrapping_mul(value);
@@ -3926,7 +3943,8 @@ impl Camera {
                     let sum: i64 = (0..3)
                         .map(|k| i64::from(a[i][k]) * i64::from(b[k][j]))
                         .sum();
-                    (sum >> FIXED_BITS) as i32
+                    // A `MATRIX` holds shorts.
+                    i32::from((sum >> FIXED_BITS) as i16)
                 })
             })
         };
@@ -6331,6 +6349,26 @@ mod tests {
         assert_eq!(down.trans, [0, 0, 1024]);
         let nowhere = Camera::from_set_view([7, 8, 9], [7, 8, 9], 300);
         assert_eq!(nowhere.view, [[4096, 0, 0], [0, 0, 0], [0, 0, 0]]);
+        // Lengths past a short's wrap, and the matrix keeps the low 16 bits
+        // of each sum: the translation is made from those.
+        let wrapped = Camera::from_set_view([4096, 0, 0], [69633, 65538, 0], 300);
+        let (matrix, trans) = ref_camera(&wrapped);
+        assert_eq!(matrix[1][0], -23256);
+        assert_eq!(trans[1], -23256);
+        assert_eq!(wrapped.view[1][0], -23256);
+        assert_eq!(wrapped.trans[1], 23256);
+        for row in wrapped.view {
+            for value in row {
+                assert_eq!(value, i32::from(value as i16));
+            }
+        }
+        // Nothing a script can ask for is more than the arithmetic holds.
+        for far in [i32::MIN, i32::MAX] {
+            let _ = Camera::from_set_view([far; 3], [far.wrapping_add(7), 0, far], far);
+            let _ = Camera::from_set_view([0; 3], [far; 3], far);
+            let camera = Camera::from_view(anim::IDENTITY_MATRIX, [far; 3], far);
+            let _ = ref_camera(&camera);
+        }
     }
 
     #[test]

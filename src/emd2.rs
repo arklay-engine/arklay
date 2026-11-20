@@ -677,6 +677,22 @@ pub fn parse_md1(data: &[u8]) -> Result<Tmd> {
         data.len(),
         "MD1 object table",
     )?;
+    // Parts can share their pools, each decoding its own, so a small file
+    // can ask for any amount: the whole mesh is held to the budget before a
+    // part is read.
+    let (mut vertices, mut normals, mut prims) = (0usize, 0usize, 0usize);
+    for index in 0..count {
+        let object = md1_object(data, index)?;
+        if index % 2 == 0 {
+            vertices = vertices.saturating_add(object.vertex_count);
+            normals = normals.saturating_add(object.normal_count);
+        }
+        // A quad becomes two triangles.
+        prims = prims.saturating_add(object.prim_count.saturating_mul(1 + index % 2));
+    }
+    budget::check_len(vertices, budget::MAX_TMD_VERTICES, "MD1 vertex total")?;
+    budget::check_len(normals, budget::MAX_TMD_VERTICES, "MD1 normal total")?;
+    budget::check_len(prims, budget::MAX_TMD_PRIMS, "MD1 primitive total")?;
     let objects = (0..count / 2)
         .map(|part| parse_part(data, part).with_context(|| format!("MD1 part {part}")))
         .collect::<Result<_>>()?;
