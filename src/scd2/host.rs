@@ -6336,6 +6336,16 @@ mod tests {
     }
 
     #[test]
+    fn the_window_names_its_item_to_the_message_a_file_too() {
+        // `Sce_Item`: `Mess_item = *area`, which message 10's name tag reads.
+        for item in [0x1E, 0x6B, 0x71] {
+            let game = press_item_area(item, 94, 2);
+            let named = game.state_bytes[usize::from(crate::game::STATE_BYTE_SELECTED_ITEM)];
+            assert_eq!(named, item);
+        }
+    }
+
+    #[test]
     fn a_file_whose_object_is_0xff_clears_no_object() {
         // `St_get_file` sub 6: `if (object != 0xff) pOm[object * 0x7e] = 0`.
         let mut game = press_item_area(0x71, 25, 0xFF);
