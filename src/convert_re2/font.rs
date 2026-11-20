@@ -8,9 +8,18 @@
 //! RE2's glyphs onto the Western cell of the same character. Cells RE2's
 //! sheet has no letter for (the accented Latin) keep the Western glyph.
 //!
-//! The metrics are the ones measured in the original's frames: a glyph's ink
-//! starts at the cursor and the next starts one pixel after its ink ends,
-//! a space is 8 pixels, and an apostrophe keeps two pixels on each side.
+//! The metrics are the executable's `width_tbl` ([`super::exe`]), which
+//! `mess_trans` and `Name_disp` place the first 0x57 cells by: a cell is
+//! drawn its left edge's columns before the cursor, which then moves on by
+//! its advance. Any other cell is a full one, the `0xEE` page's ampersand
+//! among them. Mostly a glyph's ink starts at the cursor and the next starts
+//! a pixel after it ends, which is what a sheet converted without the
+//! executable gets (with an apostrophe's two pixels on each side); the
+//! table's digits are all 12 wide from a pixel in, and its `f` a pixel wider
+//! than its ink.
+//!
+//! The sheet's palette is the PC version's: each 5-bit level with its top
+//! bits again below it (`v << 3 | v >> 2`), as its frames show the font.
 
 use anyhow::{Context, Result, ensure};
 
@@ -54,8 +63,9 @@ const HEADER: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 "#;
 
 /// The pack's font `00`: the converted sheet as an indexed BMP and its
-/// description.
-pub(super) fn sheet(font0: &[u8]) -> Result<(Vec<u8>, String)> {
+/// description, with the executable's `widths` (`[left, advance]` by RE2
+/// cell) when there are any.
+pub(super) fn sheet(font0: &[u8], widths: Option<&[[u8; 2]]>) -> Result<(Vec<u8>, String)> {
     let re2 = crate::tim::decode_4bpp(font0).context("font0.tim")?;
     ensure!(
         re2.width as usize >= COLUMNS * CELL && re2.height as usize >= TOP + CELLS / COLUMNS * CELL,
@@ -78,7 +88,11 @@ pub(super) fn sheet(font0: &[u8]) -> Result<(Vec<u8>, String)> {
     // RE2's own grey ramp, which the text's tint colours.
     sheet.palettes = (0..PALETTE_ROW_LEN)
         .map(|index| match u8::try_from(index) {
-            Ok(index) if index < 16 => re2.palette(0, index),
+            Ok(index) if index < 16 => {
+                let [r, g, b, a] = re2.palette(0, index);
+                let [r, g, b] = [r, g, b].map(pc_level);
+                [r, g, b, a]
+            }
             _ => [0, 0, 0, 255],
         })
         .collect();
@@ -93,17 +107,38 @@ pub(super) fn sheet(font0: &[u8]) -> Result<(Vec<u8>, String)> {
         let Some((left, right)) = ink(&sheet, cell) else {
             continue;
         };
-        let (mut indent, mut advance) = (left, right - left + 2);
-        if Some(cell) == western_cell('\'') {
-            indent -= 1;
-            advance += 2;
-        }
+        // The RE2 cell the glyph came from says how the original places it.
+        let from = moves
+            .iter()
+            .find(|&&(_, to)| to == cell)
+            .map(|&(from, _)| from);
+        let table = widths
+            .zip(from)
+            .map(|(widths, from)| match widths.get(from) {
+                Some(&[left, advance]) => (i32::from(left), i32::from(advance)),
+                None => (0, CELL as i32),
+            });
+        let (indent, advance) = table.unwrap_or_else(|| {
+            let (indent, advance) = (left, right - left + 2);
+            if Some(cell) == western_cell('\'') {
+                (indent - 1, advance + 2)
+            } else {
+                (indent, advance)
+            }
+        });
         xml.push_str(&format!(
             "  <glyph cell=\"{cell:#04X}\" advance=\"{advance}\" indent=\"{indent}\"/>\n"
         ));
     }
     xml.push_str("</font>\n");
     Ok((bmp, xml))
+}
+
+/// A decoded 5-bit level (`v * 255 / 31`) as the PC version holds it, its
+/// top bits again below it.
+fn pc_level(channel: u8) -> u8 {
+    let level = (u32::from(channel) * 31).div_ceil(255);
+    (level << 3 | level >> 2) as u8
 }
 
 /// The Western sheet's cell for `ch`, a plain one-byte cell.
@@ -162,25 +197,98 @@ mod tests {
         assert_eq!(re2[0x3D], 'a');
     }
 
+    /// A 256 x 256 4bpp `font0.tim` whose every cell has ink (index 1, a
+    /// white of levels 25, 25 and 23) in columns 3 to 9.
+    fn font0() -> Vec<u8> {
+        let mut data = Vec::new();
+        let put32 = |data: &mut Vec<u8>, value: u32| data.extend_from_slice(&value.to_le_bytes());
+        let put16 = |data: &mut Vec<u8>, value: u16| data.extend_from_slice(&value.to_le_bytes());
+        put32(&mut data, 0x10);
+        put32(&mut data, 0x08);
+        put32(&mut data, 12 + 32);
+        for value in [0, 480, 16, 1] {
+            put16(&mut data, value);
+        }
+        put16(&mut data, 0);
+        put16(&mut data, 25 | 25 << 5 | 23 << 10);
+        data.resize(data.len() + 28, 0);
+        put32(&mut data, 12 + 128 * 256);
+        for value in [0, 0, 64, 256] {
+            put16(&mut data, value);
+        }
+        for y in 0..256usize {
+            for pair in 0..128usize {
+                let inked =
+                    |x: usize| y >= TOP && (3..=9).contains(&(x % CELL)) && x < COLUMNS * CELL;
+                data.push(u8::from(inked(pair * 2)) | u8::from(inked(pair * 2 + 1)) << 4);
+            }
+        }
+        data
+    }
+
+    /// The description's metric of `ch`'s cell.
+    fn metric(xml: &str, ch: char) -> (i32, i32) {
+        let def = crate::font::xml::FontDef::parse(xml).unwrap();
+        def.glyphs
+            .iter()
+            .find(|(cell, _)| Some(*cell) == western_cell(ch))
+            .map(|(_, metric)| (metric.indent, metric.advance))
+            .unwrap()
+    }
+
+    #[test]
+    fn the_executables_widths_place_the_glyphs_and_the_ink_does_without_them() {
+        let re2: Vec<char> = RE2_CELLS.chars().collect();
+        let cell = |ch: char| re2.iter().position(|&c| c == ch).unwrap();
+        // The table as the executable has these cells.
+        let mut widths = vec![[2u8, 10]; 0x57];
+        widths[cell('f')] = [3, 9];
+        widths[cell('1')] = [1, 12];
+        widths[cell('\'')] = [4, 7];
+        let (bmp, xml) = sheet(&font0(), Some(&widths)).unwrap();
+        assert_eq!(metric(&xml, 'f'), (3, 9));
+        assert_eq!(metric(&xml, '1'), (1, 12));
+        assert_eq!(metric(&xml, '\''), (4, 7));
+        assert_eq!(metric(&xml, 'a'), (2, 10));
+        // The `0xEE` page's cell is past the table: a full cell at the cursor.
+        assert_eq!(metric(&xml, '&'), (0, 14));
+        // The palette is the PC version's: level 25 is 206 and 23 is 189,
+        // not the decoder's 205.
+        let page = crate::bmp::decode_indexed_page(&bmp).unwrap();
+        assert_eq!(page.palette(0, 1), [206, 206, 189, 255]);
+        assert_eq!(pc_level(0), 0);
+        assert_eq!(pc_level(255), 255);
+        assert_eq!(pc_level(164), 165);
+
+        // Without the executable, each glyph's ink starts at the cursor and
+        // the next a pixel after it ends; the apostrophe keeps two pixels a
+        // side.
+        let (_, xml) = sheet(&font0(), None).unwrap();
+        assert_eq!(metric(&xml, 'f'), (3, 8));
+        assert_eq!(metric(&xml, '1'), (3, 8));
+        assert_eq!(metric(&xml, '&'), (3, 8));
+        assert_eq!(metric(&xml, '\''), (2, 10));
+    }
+
     #[test]
     fn the_installed_font_converts() {
         let Some(root) = std::env::var_os("ARKLAY_RE2_ROOT").map(std::path::PathBuf::from) else {
             return;
         };
         let font0 = std::fs::read(root.join("data/Common/Data/font0.tim")).unwrap();
-        let (bmp, xml) = sheet(&font0).unwrap();
+        let exe = std::fs::read(root.join("bio2 1.10.exe")).unwrap();
+        let exe = super::super::exe::ExeText::read(&exe).unwrap();
+        let (bmp, xml) = sheet(&font0, Some(&exe.widths)).unwrap();
         let def = crate::font::xml::FontDef::parse(&xml).unwrap();
         assert_eq!(def.metrics.left_margin, 16);
-        let metric = |ch: char| {
-            def.glyphs
-                .iter()
-                .find(|(cell, _)| Some(*cell) == western_cell(ch))
-                .map(|(_, metric)| *metric)
-                .unwrap()
-        };
-        // `W` fills its cell; `t` starts three columns in.
-        assert_eq!((metric('W').indent, metric('W').advance), (0, 15));
-        assert_eq!(metric('t').indent, 3);
+        // `W` fills its cell and `t` starts three columns in; `f` is a pixel
+        // wider than its ink, and a digit is 12 wide from a pixel in.
+        assert_eq!(metric(&xml, 'W'), (0, 15));
+        assert_eq!(metric(&xml, 't').0, 3);
+        assert_eq!(metric(&xml, 'f'), (3, 9));
+        assert_eq!(metric(&xml, '1'), (1, 12));
+        assert_eq!(metric(&xml, 'O'), (1, 12));
+        assert_eq!(metric(&xml, '\''), (4, 7));
         crate::bmp::decode_indexed_page(&bmp).unwrap();
     }
 }

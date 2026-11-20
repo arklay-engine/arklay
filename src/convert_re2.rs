@@ -887,7 +887,7 @@ fn copy_text(
         .iter()
         .find(|path| upper_parts(path).is_some_and(|(name, ext)| name == "FONT0" && ext == "TIM"))
     {
-        Some(path) => match font::sheet(&read(path)?) {
+        Some(path) => match font::sheet(&read(path)?, exe.map(|exe| exe.widths.as_slice())) {
             Ok(sheet) => Some(sheet),
             Err(error) => {
                 warnings.push(format!(

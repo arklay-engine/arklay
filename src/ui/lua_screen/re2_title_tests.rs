@@ -1773,21 +1773,15 @@ fn a_second_visit_keeps_the_first_ones_work() {
 }
 
 /// A volume's digit is printed where the original's whole cell puts its
-/// glyph: in the middle of the cell, but the 6, a pixel left of it (the
-/// print's trims, from `title_option_sound`'s frames).
+/// glyph: the print draws a digit's cell a pixel before its place, as the
+/// font's table has every digit (`title_option_sound`'s frames).
 #[test]
 fn a_volumes_digit_sits_where_its_cell_puts_it() {
     let dir = std::env::temp_dir();
     let cx = context(&dir);
     let (screen, dir) = open_option(&cx, "option-digit");
-    let place = |digit: &str, width: i64| -> i64 {
-        screen.test_eval(&format!(
-            "return M.option_digit_x(0x100, '{digit}', {width})"
-        ))
-    };
-    assert_eq!(place("0", 9), 0x103);
-    assert_eq!(place("1", 6), 0x104);
-    assert_eq!(place("6", 9), 0x102);
+    let place: i64 = screen.test_eval("return M.option_digit_x(0x100)");
+    assert_eq!(place, 0x101);
     let _ = std::fs::remove_dir_all(&dir);
 }
 

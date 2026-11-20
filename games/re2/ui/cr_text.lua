@@ -1,26 +1,30 @@
 -- Classic REbirth's own print (its `SavePrint`), which the save screen's
 -- rows and the option screen's sound page are set with: the message font,
--- each glyph a pixel closer than its width. The frames show some glyphs
--- apart from that (`{dx, advance less the font's, dy}`): `f` keeps its
--- width, `O` and `Q` are two pixels closer, `?` sits a pixel later and is
--- a pixel wider, `.` and `:` sit a pixel later, and the digits, `/` and `-`
--- sit a pixel later and a row higher (a save's label on the load screen,
--- `title_load_game`).
+-- each glyph a pixel closer than the width the executable's table gives it
+-- (`width_tbl`, the font's own metrics). The frames show the digits and
+-- some punctuation apart from that (`{dx, advance less the font's, dy}`):
+-- each goes by its ink, which starts a pixel after the cursor and is as
+-- wide as the advance, where the table has every digit 12 wide from a pixel
+-- in; and the digits, `/` and `-` sit a row higher (a save's label on the
+-- load screen, `title_load_game`).
 local M = {}
 
 local GLYPHS = {
-    f = { 0, 0, 0 },
-    O = { 0, -2, 0 },
-    Q = { 0, -2, 0 },
-    ["?"] = { 1, 1, 0 },
     ["."] = { 1, -1, 0 },
-    [":"] = { 1, -1, 0 },
+    [":"] = { 0, -3, 0 },
     ["/"] = { 1, -1, -1 },
-    ["-"] = { 1, -1, -1 },
+    ["-"] = { 0, -3, -1 },
+    ["0"] = { 1, -1, -1 },
+    ["1"] = { -3, -8, -1 },
+    ["2"] = { 0, -3, -1 },
+    ["3"] = { 0, -2, -1 },
+    ["4"] = { 1, 0, -1 },
+    ["5"] = { 0, -2, -1 },
+    ["6"] = { 1, -2, -1 },
+    ["7"] = { 0, -2, -1 },
+    ["8"] = { 0, -2, -1 },
+    ["9"] = { 1, -1, -1 },
 }
-for digit = 0, 9 do
-    GLYPHS[tostring(digit)] = { 1, -1, -1 }
-end
 
 -- One character of a line: a save's row is its file's name, which may
 -- hold more than ASCII.

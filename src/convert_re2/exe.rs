@@ -44,6 +44,14 @@ const DOOR: Table = Table {
     len: 0x18,
 };
 
+/// `width_tbl`, which `mess_trans` (`0x4C9978`) places the message font's
+/// glyphs by: for each of the sheet's first [`WIDTH_CELLS`] cells, the
+/// columns its ink starts in from the cell's left and its advance.
+const WIDTHS: usize = 0x52_E478;
+
+/// The cells [`WIDTHS`] covers; `mess_trans` draws any other a full cell.
+pub(super) const WIDTH_CELLS: usize = 0x57;
+
 /// The first system message's opening, which tells the English tables are
 /// where [`SYSTEM`] says: `Will you take`.
 const FIRST_SYSTEM: &[u8] = &[
@@ -72,6 +80,8 @@ pub(super) struct ExeText {
     pub door: Vec<Vec<u8>>,
     /// Room 200's computer's strings, without their NULs ([`COMPUTER`]).
     pub computer: Vec<Vec<u8>>,
+    /// The message font's `[left, advance]` by cell ([`WIDTHS`]).
+    pub widths: Vec<[u8; 2]>,
 }
 
 impl ExeText {
@@ -82,7 +92,17 @@ impl ExeText {
             system: strings(exe, &SYSTEM, 0xFE).context("the system messages")?,
             door: strings(exe, &DOOR, 0xFE).context("the door messages")?,
             computer: computer_strings(exe).context("the computer's strings")?,
+            widths: widths(exe).context("the font's widths")?,
         };
+        // The space, and no glyph outside its 14 columns.
+        ensure!(
+            text.widths[0] == [0, 8]
+                && text
+                    .widths
+                    .iter()
+                    .all(|&[left, advance]| left < 14 && (1..=15).contains(&advance)),
+            "the font's widths are not the message font's"
+        );
         ensure!(
             text.computer[0].starts_with(COMPUTER_TITLE),
             "the computer's strings do not start with its title"
@@ -98,6 +118,15 @@ impl ExeText {
         );
         Ok(text)
     }
+}
+
+/// [`WIDTHS`]'s pairs.
+fn widths(exe: &[u8]) -> Result<Vec<[u8; 2]>> {
+    let start = WIDTHS - IMAGE_BASE;
+    let table = exe
+        .get(start..start + 2 * WIDTH_CELLS)
+        .context("the table is outside the executable")?;
+    Ok(table.as_chunks::<2>().0.to_vec())
 }
 
 /// [`COMPUTER`]'s strings, each up to its NUL. They are printable ASCII, so

@@ -509,7 +509,7 @@ fn the_overwrite_draws_its_arrowhead_and_types_in_the_row() {
     let inked: Vec<usize> = (20..300)
         .filter(|&x| (0x31 + 15..0x31 + 29).any(|y| pixel(&list, x, y) != [0, 0, 0]))
         .collect();
-    assert_eq!((inked[0], *inked.last().unwrap()), (137, 166));
+    assert_eq!((inked[0], *inked.last().unwrap()), (138, 166));
     to_the_choice(&mut screen, &dir);
     // The arrowhead's body, 7 left of the lit answer and 4 down its row.
     const BODY: [u8; 3] = [206, 206, 189];
@@ -882,8 +882,10 @@ fn a_load_screen_left_without_a_load_says_so() {
 }
 
 /// Classic REbirth's print as a save's label shows it (`title_load_game`):
-/// a glyph a pixel closer than its width, the digits, `/` and `-` a pixel
-/// later and a row up, and `.` and `:` a pixel later on the letters' row.
+/// a glyph a pixel closer than its width; the digits, `/` and `-` by their
+/// ink and a row up, and `.` and `:` by theirs on the letters' row. The
+/// widths are the font's: a letter's 8 here, and the executable's table's
+/// for the rest.
 #[test]
 fn classic_rebirths_print_sets_the_digits_later_and_a_row_up() {
     let dir = folder("cr-print");
@@ -891,14 +893,15 @@ fn classic_rebirths_print_sets_the_digits_later_and_a_row_up() {
     let placed: String = screen.test_eval(
         r#"local print = require("ui/cr_text").print
         local out, api = {}, {}
-        function api:text_width() return 8 end
+        local widths = { ["1"] = 12, ["9"] = 12, ["/"] = 15, ["-"] = 14, ["."] = 5, [":"] = 7 }
+        function api:text_width(glyph) return widths[glyph] or 8 end
         function api:text(x, y, glyph) out[#out + 1] = glyph .. "@" .. x .. "," .. y end
         print(api, 0, 10, "nA1/-.:9n")
         return table.concat(out, " ")"#,
     );
     assert_eq!(
         placed,
-        "n@0,10 A@7,10 1@15,9 /@22,9 -@29,9 .@36,10 :@43,10 9@50,9 n@56,10"
+        "n@0,10 A@7,10 1@11,9 /@19,9 -@32,9 .@44,10 :@47,10 9@52,9 n@62,10"
     );
 }
 
