@@ -418,6 +418,12 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
             extra_parts(&mut joints, spec.get("parts")?)?;
             let view: Table = spec.get("view")?;
             let fov = field(&view, "fov")?;
+            // The near plane is at half of it, and has to be before the eye.
+            if fov < 2 {
+                return Err(mlua::Error::RuntimeError(format!(
+                    "a view's fov is {fov}: it is the distance to the screen, 2 or more"
+                )));
+            }
             let camera = if view.contains_key("at")? {
                 Camera::from_view(anim::IDENTITY_MATRIX, triple(&view, "at")?, fov)
             } else {

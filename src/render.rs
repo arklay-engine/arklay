@@ -3921,9 +3921,10 @@ impl Camera {
     /// Each sine and cosine is a 4.12 quotient by a length from the table
     /// square root (`sca::square_root0`), which rounds down coarsely:
     /// a length of 4900 reads 4884, and the view's rows are that much longer
-    /// than a rotation's. Every sum is floored at 12 fractional bits, and the
-    /// matrix keeps the low 16 bits of each, which the translation is then
-    /// made from. A view straight up or down has no yaw.
+    /// than a rotation's. Every sum is made in 32 bits and floored at 12
+    /// fractional bits, and the matrix keeps the low 16 bits of each, which
+    /// the translation is then made from. A view straight up or down has no
+    /// yaw.
     pub fn from_set_view(from: [i32; 3], to: [i32; 3], fov: i32) -> Self {
         let [dx, dy, dz]: [i32; 3] = std::array::from_fn(|axis| to[axis].wrapping_sub(from[axis]));
         let square = |value: i32| value.wrapping_mul(value);
@@ -3937,29 +3938,28 @@ impl Camera {
                 i32::from(value.wrapping_mul(0x1000).wrapping_div(by) as i16)
             }
         };
+        // `MulMatrix0` and `ApplyMatrixLV`: each sum in 32 bits, floored,
+        // and a `MATRIX` holds shorts.
+        let dot = |a: [i32; 3], b: [i32; 3]| {
+            (0..3).fold(0i32, |sum, k| sum.wrapping_add(a[k].wrapping_mul(b[k]))) >> FIXED_BITS
+        };
         let mul = |a: &[[i32; 3]; 3], b: &[[i32; 3]; 3]| -> [[i32; 3]; 3] {
             std::array::from_fn(|i| {
-                std::array::from_fn(|j| {
-                    let sum: i64 = (0..3)
-                        .map(|k| i64::from(a[i][k]) * i64::from(b[k][j]))
-                        .sum();
-                    // A `MATRIX` holds shorts.
-                    i32::from((sum >> FIXED_BITS) as i16)
-                })
+                std::array::from_fn(|j| i32::from(dot(a[i], [b[0][j], b[1][j], b[2][j]]) as i16))
             })
         };
+        // A negated sine is a short again: -0x8000 stays as it is.
+        let negated = |sin: i32| i32::from(sin.wrapping_neg() as i16);
         let (cos, sin) = (quotient(across, length), quotient(dy, length));
-        let mut view = [[0x1000, 0, 0], [0, cos, -sin], [0, sin, cos]];
+        let mut view = [[0x1000, 0, 0], [0, cos, negated(sin)], [0, sin, cos]];
         if across != 0 {
             let (cos, sin) = (quotient(dz, across), quotient(dx, across));
-            view = mul(&view, &[[cos, 0, -sin], [0, 0x1000, 0], [sin, 0, cos]]);
+            view = mul(
+                &view,
+                &[[cos, 0, negated(sin)], [0, 0x1000, 0], [sin, 0, cos]],
+            );
         }
-        let trans = view.map(|row| {
-            let sum: i64 = (0..3)
-                .map(|axis| i64::from(row[axis]) * -i64::from(from[axis]))
-                .sum();
-            (sum >> FIXED_BITS) as i32
-        });
+        let trans = view.map(|row| dot(row, from.map(i32::wrapping_neg)));
         Self {
             from,
             look_at: to,
@@ -6357,6 +6357,17 @@ mod tests {
         assert_eq!(trans[1], -23256);
         assert_eq!(wrapped.view[1][0], -23256);
         assert_eq!(wrapped.trans[1], 23256);
+        // The translation's own sums wrap at 32 bits before they are
+        // floored: 4096 * -524289 is 2147479552 there.
+        let far = Camera::from_set_view([524289, 0, 0], [524289, 0, 4096], 300);
+        assert_eq!(far.view, [[4096, 0, 0], [0, -4096, 0], [0, 0, 4096]]);
+        assert_eq!(far.trans, [524287, 0, 0]);
+        // A sine of -0x8000 is its own negation in a short. Here the pitch's
+        // is, over a length the table reads as 10932, and the yaw's sine is
+        // 3673: the product is -0x8000 * 3673 and not its opposite.
+        let steep = Camera::from_set_view([0, 0, 0], [1000, -262370, 500], 300);
+        assert_eq!(ref_camera(&steep).0[1][0], 29384);
+        assert_eq!(steep.view[1][0], 29384);
         for row in wrapped.view {
             for value in row {
                 assert_eq!(value, i32::from(value as i16));

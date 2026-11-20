@@ -204,7 +204,9 @@ pub fn parse_emd_with(data: &[u8], texture: Texture8) -> Result<Emd> {
 /// have a block, then each block's offset of its base vertices, the length of
 /// a shape, its number of targets and their weights. A shape's vertices are
 /// three `i16`s, padded to four bytes. Whatever doesn't fit its chunk or its
-/// part isn't a morph, and is left out.
+/// part isn't a morph, and is left out, as is whatever would take the
+/// morphs past the mesh's own budget of vectors: a target is a copy of its
+/// part's vertices and of the joints' places, whatever the chunk's size.
 fn parse_morphs(chunk: &[u8], mesh: &Tmd, skeleton: &Skeleton) -> Vec<PartMorph> {
     let word = |at: usize| read_u32(chunk, at).ok().map(|word| word as usize);
     let Some(mask) = word(0) else {
@@ -224,6 +226,7 @@ fn parse_morphs(chunk: &[u8], mesh: &Tmd, skeleton: &Skeleton) -> Vec<PartMorph>
     };
     let mut morphs = Vec::new();
     let mut at = 12;
+    let mut vectors = 0usize;
     for (part, object) in mesh.objects.iter().enumerate().take(32) {
         if mask & (1 << part) == 0 {
             continue;
@@ -234,6 +237,20 @@ fn parse_morphs(chunk: &[u8], mesh: &Tmd, skeleton: &Skeleton) -> Vec<PartMorph>
         };
         let count = object.vertices.len();
         if stride < count * 6 || targets > chunk.len() / stride.max(1) {
+            break;
+        }
+        // Every target has its word of weight in the chunk.
+        let weights_end = targets
+            .checked_mul(4)
+            .and_then(|len| len.checked_add(at + 12));
+        if weights_end.is_none_or(|end| end > chunk.len()) {
+            break;
+        }
+        // A target's vertices, its part's children and every joint.
+        let children = skeleton.children.get(part).map_or(&[][..], Vec::as_slice);
+        let each = count + children.len() + skeleton.relative.len();
+        vectors = vectors.saturating_add(targets.saturating_mul(each));
+        if vectors > budget::MAX_TMD_VERTICES {
             break;
         }
         let shapes = (1..=targets)
@@ -257,7 +274,6 @@ fn parse_morphs(chunk: &[u8], mesh: &Tmd, skeleton: &Skeleton) -> Vec<PartMorph>
         let Some(shapes) = shapes else {
             break;
         };
-        let children = skeleton.children.get(part).map_or(&[][..], Vec::as_slice);
         let joints = children
             .iter()
             .filter_map(|&child| Some((child, joint_at(0, child)?)))

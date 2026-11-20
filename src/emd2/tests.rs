@@ -558,6 +558,63 @@ fn a_part_blends_through_the_shapes_it_is_given() {
 }
 
 #[test]
+fn a_small_file_cannot_ask_for_copies_without_end() {
+    // A part with no vertices has shapes of no length, as many as it
+    // likes, and each target copies every joint's place: 16 KiB of zeroes
+    // would be a hundred megabytes. A target without its word of weight
+    // isn't one, and the morphs keep to the mesh's budget of vectors.
+    let mesh = Tmd {
+        objects: vec![TmdObject::default()],
+    };
+    let skeleton = Skeleton {
+        relative: vec![[0; 3]; budget::MAX_EMD_JOINTS],
+        children: vec![Vec::new(); budget::MAX_EMD_JOINTS],
+    };
+    for targets in [16_384u32, 4000] {
+        let mut chunk = Vec::new();
+        for word in [1, 0, 0, 0, 0, targets] {
+            put32(&mut chunk, word);
+        }
+        chunk.resize(16_384, 0);
+        assert!(
+            parse_morphs(&chunk, &mesh, &skeleton).is_empty(),
+            "{targets}"
+        );
+    }
+    // A hundred of them is within it.
+    let mut chunk = Vec::new();
+    for word in [1, 0, 0, 0, 0, 100] {
+        put32(&mut chunk, word);
+    }
+    chunk.resize(16_384, 0);
+    let morphs = parse_morphs(&chunk, &mesh, &skeleton);
+    assert_eq!(morphs[0].all_targets.len(), 100);
+
+    // Every joint of a skeleton can name the same list of children, each
+    // a copy: together they are held to a skeleton's worth.
+    let joints = budget::MAX_EMD_JOINTS;
+    let armature = 8 + joints * 6;
+    let skeleton = |children: u16| {
+        let mut data = Vec::new();
+        for value in [armature as u16, 0, joints as u16, 0] {
+            put16(&mut data, value);
+        }
+        data.resize(armature, 0);
+        for _ in 0..joints {
+            put16(&mut data, children);
+            put16(&mut data, 0);
+        }
+        parse_skeleton(&data, 0, data.len())
+    };
+    assert_eq!(skeleton(1).unwrap().children.len(), joints);
+    let error = skeleton(2).unwrap_err();
+    assert!(
+        format!("{error:#}").contains("EMR child total"),
+        "{error:#}"
+    );
+}
+
+#[test]
 fn a_morph_moves_the_parts_children_by_their_tables() {
     let object = TmdObject {
         vertices: vec![[0; 3]; 1],

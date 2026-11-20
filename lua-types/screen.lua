@@ -1366,7 +1366,7 @@ local CharacterSpec = {}
 
 ---A frame of a character's animation.
 ---@class CharacterPose
----@field bank? integer 0, the default, for the model's own animations; `n` for its `n`th further bank (an RE 2 enemy has up to two). This, `clip` and `frame` are whole numbers: one with a fraction raises an error.
+---@field bank? integer 0, the default, for the model's own animations; `n` for its `n`th further bank (an RE 2 enemy has up to two). This, `clip` and `frame` are Lua integers: a float raises an error, `1.0` as much as `0.5`, and a negative one is a frame the model lacks.
 ---@field clip? integer The clip, from 0.
 ---@field frame? integer The clip's frame, from 0.
 ---@field height? integer Scales the root's height, in 4.12 (`0x1000` is as stored).
@@ -1380,8 +1380,8 @@ local CharacterPose = {}
 ---@field from? integer[] `{x, y, z}`, the eye.
 ---@field to? integer[] `{x, y, z}`, the point looked at.
 ---@field at? integer[] `{x, y, z}`: where the origin is in the view. With it, `from` and `to` are not read.
----@field fov? integer The distance to the screen, in the pixels of the 320x240 layout.
----@field screen? integer[] `{x, y}`: moves the drawn model by that many pixels from the layout's centre. The view is not tilted for it.
+---@field fov integer The distance to the screen, in the pixels of the 320x240 layout: 2 or more, or the draw raises an error.
+---@field screen? integer[] `{x, y}`: moves the drawn model by that many pixels from the layout's centre, each clamped to `-4096..=4096`. The view is not tilted for it.
 local CharacterView = {}
 
 ---A model light, built as the original builds it.

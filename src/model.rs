@@ -186,9 +186,10 @@ pub struct Emd {
 }
 
 impl Emd {
-    /// The bytes the decoded model holds besides its texture's. A file's
-    /// parts can share their vertices and primitives, each part decoding
-    /// its own, so this can be far more than the file.
+    /// The bytes the decoded model holds: its skeleton, animations, mesh,
+    /// morphs and its texture's indices and palettes. A file's parts can
+    /// share their vertices and primitives, each part decoding its own, so
+    /// this can be far more than the file.
     pub fn decoded_bytes(&self) -> usize {
         use std::mem::size_of;
         const VECTOR: usize = size_of::<[i16; 3]>();
@@ -241,10 +242,14 @@ impl Emd {
                     + morph.weights.len() * size_of::<i16>()
             })
             .sum();
+        let texture = self.texture.indices.len()
+            + self.texture.palettes.len() * size_of::<[u8; 4]>()
+            + self.texture.stp.len();
         skeleton
             + mesh
             + banks
             + morphs
+            + texture
             + keyframes(&self.keyframes)
             + keyframes(&self.damage_keyframes)
             + clips(&self.clips)

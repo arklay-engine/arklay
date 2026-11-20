@@ -2150,6 +2150,20 @@ fn a_characters_spec_is_checked_and_its_numbers_cannot_overflow() {
     ] {
         assert!(failed(&format!("{{ {bad}, {at} }}")), "{bad}");
     }
+    // A whole number written as a float is one all the same to Lua, and
+    // isn't one here.
+    assert!(failed(&format!(
+        "{{ pose = {{ bank = 0, clip = 0, frame = 1.0 }}, {at} }}"
+    )));
+    // The screen is some way before the eye, so that the near plane is.
+    for fov in ["0", "1", "-300", "nil"] {
+        assert!(
+            failed(&format!(
+                "{{ view = {{ at = {{ 0, 100, 3000 }}, fov = {fov} }} }}"
+            )),
+            "{fov}"
+        );
+    }
     // A joint the model lacks is skipped.
     let spare = "pose = { bank = 0, clip = 0, frame = 0, turn = { [-1] = { 0, 1, 0 }, [9] = { 0, 1, 0 } } }";
     assert!(!failed(&format!("{{ {spare}, {at} }}")));
@@ -2159,7 +2173,7 @@ fn a_characters_spec_is_checked_and_its_numbers_cannot_overflow() {
     for wide in [
         format!("pose = {{ bank = 0, clip = 0, frame = 0, height = {low} }}, {at}"),
         format!("pose = {{ bank = 0, clip = 0, frame = 0, height = {high} }}, {at}"),
-        format!("view = {{ at = {{ {low}, {low}, {low} }}, fov = {low} }}"),
+        format!("view = {{ at = {{ {low}, {low}, {low} }}, fov = 2 }}"),
         format!("view = {{ at = {{ {high}, {high}, {high} }}, fov = {high} }}"),
         format!("view = {{ at = {{ 0, 100, 3000 }}, fov = 300, screen = {{ {high}, {low} }} }}"),
         format!("view = {{ at = {{ 0, 100, 3000 }}, fov = 300, screen = {{ {low}, {high} }} }}"),

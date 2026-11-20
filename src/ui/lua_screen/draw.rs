@@ -34,7 +34,7 @@ enum Asset {
     Page(Artwork),
     /// An item-view model and the size of the file it was parsed from.
     Model(Arc<Ivm>, usize),
-    /// A character's model and the bytes it holds besides its texture's
+    /// A character's model and the bytes it holds
     /// ([`Emd::decoded_bytes`]).
     Character(Arc<Emd>, usize),
 }
