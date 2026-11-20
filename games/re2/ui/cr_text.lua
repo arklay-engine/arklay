@@ -84,9 +84,9 @@ function M.width(api, text)
     return w
 end
 
--- `text` from `x`, in `colour` (the font's own when nil).
-function M.print(api, x, y, text, colour)
-    local opts, odds = { colour = colour }, glyphs(api)
+-- `text` from `x`, with `api:text`'s options (its colour).
+function M.print(api, x, y, text, opts)
+    local odds = glyphs(api)
     for glyph in text:gmatch(CHARACTER) do
         local odd = odds[glyph]
         api:text(x + (odd and odd[1] or 0), y + (odd and odd[3] or 0), glyph, opts)

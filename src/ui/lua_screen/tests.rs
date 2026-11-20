@@ -813,10 +813,16 @@ fn colour_parsing_covers_names_numbers_and_hex() {
     use super::{colour_rgb, colour_tint};
     use crate::font::Tint;
     let lua = mlua::Lua::new();
+    // A number is the text's colour row; a name is that colour, whatever
+    // the font has for the row.
     assert_eq!(colour_tint(&mlua::Value::Integer(1)).unwrap(), Tint::Green);
     assert_eq!(
         colour_tint(&mlua::Value::String(lua.create_string("grey").unwrap())).unwrap(),
-        Tint::Grey
+        Tint::Rgb(204, 204, 204)
+    );
+    assert_eq!(
+        colour_tint(&mlua::Value::String(lua.create_string("white").unwrap())).unwrap(),
+        Tint::White
     );
     assert_eq!(
         colour_rgb(&mlua::Value::Integer(0x123456)).unwrap(),
@@ -871,6 +877,82 @@ end
     assert_eq!(
         screen.update(&cx, UiInput::default()),
         ScreenResult::Continue
+    );
+}
+
+/// A text's colour over a font with colours of its own for the text's rows
+/// (RE 2's) and over one without: a row number is the font's row, the
+/// `row` option is it only where the font has one, and a name or
+/// `"#RRGGBB"` is the same multiplier over either.
+#[test]
+fn a_texts_colour_row_is_the_fonts_own_where_it_has_one() {
+    let fixture = Fixture::new(
+        "text-rows",
+        r##"
+function update(api, input) end
+function draw(api)
+api:text(8, 8, "H", { colour = "#1E64FF", row = 4 })
+api:text(40, 8, "H", { colour = "green" })
+api:text(72, 8, "H", { colour = 1 })
+api:text(104, 8, "H", { colour = "yellow" })
+api:text(136, 8, "H", { colour = "#00C80A" })
+api:text(168, 8, "H", { colour = "#00C80A", row = 2 })
+api:text_8x14(200, 8, "H", { colour = "#00C80A", row = 1 })
+end
+"##,
+    );
+    let font = |tinted: bool| {
+        let (width, height) = (256u32, 224u32);
+        let mut palettes = vec![[0u8; 4]; 256];
+        palettes[1] = [206, 206, 189, 255];
+        let texture = crate::model::Texture8 {
+            width,
+            height,
+            indices: vec![1; (width * height) as usize],
+            palettes,
+            stp: vec![false; 256],
+        };
+        let mut def = crate::font::FontDef::western();
+        if tinted {
+            def.tints[1] = Some([0, 100, 5]);
+            def.tints[4] = Some([15, 50, 128]);
+        }
+        crate::font::Font::new(texture, def)
+    };
+    let colours = |font: &crate::font::Font| {
+        let mut screen = fixture.load();
+        let mut cx = fixture.context();
+        cx.font = Some(font);
+        let frame = draw(&mut screen, &cx);
+        assert!(!screen.failed());
+        [8usize, 40, 72, 104, 136, 168, 200].map(|x| {
+            let at = (12 * 320 + x + 3) * 4;
+            [frame.rgba[at], frame.rgba[at + 1], frame.rgba[at + 2]]
+        })
+    };
+    assert_eq!(
+        colours(&font(true)),
+        [
+            [24, 81, 189],
+            [0, 206, 0],
+            [0, 162, 7],
+            [206, 206, 0],
+            [0, 161, 7],
+            [0, 161, 7],
+            [0, 162, 7],
+        ]
+    );
+    assert_eq!(
+        colours(&font(false)),
+        [
+            [24, 80, 189],
+            [0, 206, 0],
+            [0, 206, 0],
+            [206, 206, 0],
+            [0, 161, 7],
+            [0, 161, 7],
+            [0, 161, 7],
+        ]
     );
 }
 

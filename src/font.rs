@@ -588,7 +588,6 @@ impl Font {
     /// texture, so no sheet cell is ever clobbered. A description with
     /// tints gets a palette row for each text colour row after the first.
     pub fn new(mut texture: Texture8, def: FontDef) -> Self {
-        let missing = missing_box_texture(&texture, def.metrics.glyph_w);
         let glyph_table = GlyphTable::new(&texture, &def);
         let tints = def
             .tints
@@ -596,6 +595,8 @@ impl Font {
         if tints.iter().any(Option::is_some) {
             tint_rows(&mut texture, &tints);
         }
+        // The box has the sheet's palette, its tinted rows too.
+        let missing = missing_box_texture(&texture, def.metrics.glyph_w);
         Self {
             texture,
             metrics: def.metrics,
@@ -607,21 +608,25 @@ impl Font {
         }
     }
 
+    /// Whether the description gives text colour row `row` a colour of its
+    /// own ([`FontDef::tints`]).
+    pub fn tints_row(&self, row: i32) -> bool {
+        usize::try_from(row).is_ok_and(|row| self.tints.get(row).is_some_and(Option::is_some))
+    }
+
     /// How `tint`'s text draws: the sheet's palette row, the tint over it,
-    /// and the whole as a colour multiplier (an HD page's, the missing
-    /// glyph's). A row the description tints is drawn from its own palette
-    /// row, where the product is rounded as the original's is; so is a
-    /// colour of the caller's own that is one of those rows'.
+    /// and the whole as a colour multiplier (an HD page's). The named tints
+    /// are the text's colour rows ([`Tint::from_clut_row`]), and one the
+    /// description tints is drawn from its own palette row, where the
+    /// product is rounded as the original's is. A colour of the caller's own
+    /// ([`Tint::Rgb`]) is always the engine's multiplier over the sheet.
     fn tinted(&self, tint: Tint) -> (usize, Tint, [u8; 3]) {
         let row = match tint {
-            Tint::White => None,
+            Tint::White | Tint::Rgb(..) => None,
             Tint::Green => Some(1),
             Tint::Red => Some(2),
             Tint::Grey => Some(3),
             Tint::Yellow => Some(4),
-            Tint::Rgb(r, g, b) => {
-                (1..xml::TINT_ROWS).find(|&row| self.tints[row] == Some([r, g, b]))
-            }
         };
         match row.and_then(|row| Some((row, self.tints[row]?))) {
             Some((row, by)) => (row, Tint::White, by),
@@ -716,7 +721,8 @@ impl Font {
     /// Draw a game-text stream left to right from `(x, y)`.
     ///
     /// Every step advances the cursor by its own advance; glyphs sample
-    /// palette row 0 (the sheet's grey ramp) mixed by `tint` and scaled by
+    /// palette row 0 (the sheet's grey ramp) mixed by `tint`, or the palette
+    /// row of a colour row the font tints ([`Font::tints_row`]), and scaled by
     /// `brightness`. Under `tight` the sheet's per-glyph metrics trim each
     /// cell and use its own advance (the Latin path); otherwise every glyph
     /// fills its cell (the Japanese default). No byte is redirected: see
@@ -817,9 +823,9 @@ impl Font {
                 &self.missing,
                 src,
                 dst,
-                0,
+                row,
                 brightness,
-                Tint::Rgb(r, g, b),
+                over,
             ));
             return;
         }
@@ -1726,6 +1732,7 @@ mod tests {
         // RE2's white, and its green and blue rows.
         let mut sheet = sheet_with_ink(&[(168, 28, 0, 13)]);
         sheet.palettes[1] = [206, 206, 189, 255];
+        sheet.palettes[8] = [57, 49, 74, 255];
         let mut def = FontDef::japanese();
         def.tints[1] = Some([0, 100, 5]);
         def.tints[4] = Some([15, 50, 128]);
@@ -1736,15 +1743,38 @@ mod tests {
             pixel(&framebuffer, 10, 10)
         };
         assert_eq!(drawn(&font, Tint::White), [206, 206, 189]);
-        // 206 x 200 / 255 is 161.6: 162, where the engine's own tint would
-        // floor it. A colour of the caller's that is the row's is the row.
+        // 206 x 200 / 255 is 161.6: 162, where the engine's own tint floors
+        // it, as it does a colour of the caller's own, the row's or not.
         assert_eq!(drawn(&font, Tint::Green), [0, 162, 7]);
-        assert_eq!(drawn(&font, Tint::Rgb(0, 200, 10)), [0, 162, 7]);
-        assert_eq!(drawn(&font, Tint::Rgb(0, 200, 11)), [0, 161, 8]);
+        assert_eq!(drawn(&font, Tint::Rgb(0, 200, 10)), [0, 161, 7]);
+        assert_eq!(font.tinted(Tint::Rgb(0, 200, 10)).0, 0);
+        assert!(font.tints_row(1) && font.tints_row(4));
+        assert!(
+            !font.tints_row(0) && !font.tints_row(2) && !font.tints_row(5) && !font.tints_row(-1)
+        );
         assert_eq!(font.tinted(Tint::Green), (1, Tint::White, [0, 200, 10]));
         // Twice 128 is capped: the blue's own channel is the sheet's.
         assert_eq!(drawn(&font, Tint::Yellow), [24, 81, 189]);
         assert_eq!(font.tinted(Tint::Yellow), (4, Tint::White, [30, 100, 255]));
+        // The box of a glyph the sheet lacks is its ink (index 8) in the
+        // row's palette, rounded as the text around it is: 57 x 30 / 255 is
+        // 6.7.
+        let boxed = |font: &Font, tint: Tint| {
+            let mut framebuffer = Framebuffer::new();
+            font.draw_text(
+                &mut framebuffer,
+                10,
+                10,
+                tint,
+                2,
+                &crate::charset::MISSING,
+                false,
+            );
+            pixel(&framebuffer, 10, 10)
+        };
+        assert_eq!(boxed(&font, Tint::Yellow), [7, 19, 74]);
+        assert_eq!(boxed(&font, Tint::White), [57, 49, 74]);
+        assert_eq!(boxed(&font, Tint::Red), [57, 0, 0]);
         // A row the description leaves alone is the engine's tint.
         assert_eq!(drawn(&font, Tint::Red), [206, 0, 0]);
         assert_eq!(drawn(&font, Tint::Grey), [164, 164, 151]);
@@ -1759,6 +1789,8 @@ mod tests {
         assert_eq!(plain.texture.palettes, sheet.palettes);
         assert_eq!(drawn(&plain, Tint::Green), [0, 206, 0]);
         assert_eq!(drawn(&plain, Tint::Rgb(0, 200, 10)), [0, 161, 7]);
+        assert_eq!(boxed(&plain, Tint::Yellow), [57, 49, 0]);
+        assert!(!plain.tints_row(1));
     }
 
     #[test]

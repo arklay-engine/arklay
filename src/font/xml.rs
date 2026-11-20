@@ -198,15 +198,13 @@ pub fn entry(id: u8) -> String {
 
 /// A `#RRGGBB` colour.
 fn colour(text: &str) -> Result<[u8; 3]> {
-    let channel = |at: usize| {
-        text.get(at..at + 2)
-            .filter(|_| text.len() == 7 && text.starts_with('#'))
-            .and_then(|digits| u8::from_str_radix(digits, 16).ok())
+    let digits = text
+        .strip_prefix('#')
+        .filter(|digits| digits.len() == 6 && digits.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    let Some(value) = digits.and_then(|digits| u32::from_str_radix(digits, 16).ok()) else {
+        bail!("`colour` value `{text}` is not #RRGGBB");
     };
-    match [channel(1), channel(3), channel(5)] {
-        [Some(r), Some(g), Some(b)] => Ok([r, g, b]),
-        _ => bail!("`colour` value `{text}` is not #RRGGBB"),
-    }
+    Ok([(value >> 16) as u8, (value >> 8) as u8, value as u8])
 }
 
 fn check_attributes(node: Node<'_, '_>, known: &[&str]) -> Result<()> {
@@ -300,7 +298,9 @@ mod tests {
         assert!(
             parse(r##"<tint row="1" colour="#808080"/><tint row="1" colour="#808080"/>"##).is_err()
         );
-        for colour in ["808080", "#80808", "#8080800", "#80808g", "green", "#é0808"] {
+        for colour in [
+            "808080", "#80808", "#8080800", "#80808g", "green", "#é0808", "#+1+2+3",
+        ] {
             assert!(
                 parse(&format!("<tint row=\"1\" colour=\"{colour}\"/>")).is_err(),
                 "{colour}"

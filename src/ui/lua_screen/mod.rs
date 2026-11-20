@@ -1008,17 +1008,32 @@ pub type ActorDraw<'a> = dyn FnMut(&str, &crate::render::Camera, &mut Framebuffe
 /// The draw options table shared by `text`, `sprite` and friends.
 struct Options {
     tint: Tint,
+    /// The font's colour row a text takes in place of `tint`, where the
+    /// font has a colour of its own for it.
+    row: Option<i32>,
     brightness: u8,
     tight: bool,
     clut: usize,
     blend: SpriteBlend,
 }
 
-/// Parse an options table: `{colour = "green"|3, brightness = 2,
+impl Options {
+    /// The tint a text draws in over `font`: its colour row's, where the
+    /// options name one the font has a colour for, else `tint`.
+    fn text_tint(&self, font: &crate::font::Font) -> Tint {
+        match self.row {
+            Some(row) if font.tints_row(row) => Tint::from_clut_row(row),
+            _ => self.tint,
+        }
+    }
+}
+
+/// Parse an options table: `{colour = "green"|3, row = 1, brightness = 2,
 /// tight = true, clut = 0, blend = "opaque"}`.
 fn options(host: &Host, table: Option<&Table>) -> mlua::Result<Options> {
     let mut parsed = Options {
         tint: Tint::White,
+        row: None,
         brightness: 2,
         tight: host.tight,
         clut: 0,
@@ -1029,6 +1044,9 @@ fn options(host: &Host, table: Option<&Table>) -> mlua::Result<Options> {
     };
     if let Some(value) = table.get::<Option<Value>>("colour")? {
         parsed.tint = colour_tint(&value)?;
+    }
+    if let Some(row) = table.get::<Option<i64>>("row")? {
+        parsed.row = Some(row.clamp(0, 255) as i32);
     }
     if let Some(brightness) = table.get::<Option<i64>>("brightness")? {
         parsed.brightness = brightness.clamp(0, 30) as u8;
@@ -1054,7 +1072,9 @@ fn options(host: &Host, table: Option<&Table>) -> mlua::Result<Options> {
     Ok(parsed)
 }
 
-/// A text colour: a tint name, a CLUT row number or `"#RRGGBB"`.
+/// A text colour: a tint name, a CLUT row number or `"#RRGGBB"`. A row is
+/// the text's colour row, which a font may have a colour of its own for; a
+/// name or `"#RRGGBB"` is that colour on any font.
 pub(super) fn colour_tint(value: &Value) -> mlua::Result<Tint> {
     match value {
         Value::Integer(row) => Ok(Tint::from_clut_row(*row as i32)),
@@ -1066,7 +1086,11 @@ pub(super) fn colour_tint(value: &Value) -> mlua::Result<Tint> {
                     .ok_or_else(|| mlua::Error::RuntimeError(format!("invalid colour `{text}`")));
             }
             match tint_named(&text) {
-                Some(tint) => Ok(tint),
+                Some(Tint::White) => Ok(Tint::White),
+                Some(tint) => {
+                    let [red, green, blue] = tint.rgb();
+                    Ok(Tint::Rgb(red, green, blue))
+                }
                 None => Err(mlua::Error::RuntimeError(format!(
                     "unknown colour `{text}` (white, green, red, grey, yellow, a CLUT row, or \"#RRGGBB\")"
                 ))),

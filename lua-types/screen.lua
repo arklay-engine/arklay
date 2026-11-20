@@ -1300,6 +1300,7 @@ local ScreenInput = {}
 ---blend raises an error.
 ---@class DrawOptions
 ---@field colour? ScreenTextColour Default white.
+---@field row? integer For text: one of the text's colour rows, drawn in the font's own colour for it in place of `colour` when the font has one (RE 2's font has rows 1 to 4: green, red, grey and blue); over any other font `colour` applies.
 ---@field brightness? integer The font's brightness scale, `0..=30`, default 2.
 ---@field tight? boolean Classic REbirth's proportional widths. The Western sheet always uses them; the Japanese sheet uses CR's Japanese-mode table with `tight` and the original's full 14 px cells without it. Defaults to the session's metrics (fixed cells in a Japanese session).
 ---@field clut? integer An indexed image's CLUT row, default 0.
@@ -1553,7 +1554,11 @@ local Re2MapSprite = {}
 ---A text or sprite colour: a tint name (`white`, `green`, `red`,
 ---`grey`/`gray`, `yellow`), a CLUT row number, or `"#RRGGBB"`. A text
 ---`"#RRGGBB"` is a per-channel multiplier over the font sheet's grey ramp,
----so `"#3F7DFA"` draws the blue the built-in screen's save rows use.
+---so `"#3F7DFA"` draws the blue the built-in screen's save rows use, and a
+---name is its colour the same way. A row number is one of the text's colour
+---rows, as a message's colour code is: the font's own colour for the row
+---when it has one, else green for 1, red for 2, grey for 3 and yellow for
+---any other.
 ---@alias ScreenTextColour string|integer
 
 ---A screen sound name. `error` is the cancel cue.

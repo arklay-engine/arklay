@@ -679,7 +679,7 @@ impl UserData for Api<'_> {
                     framebuffer,
                     x,
                     y,
-                    opts.tint,
+                    opts.text_tint(font),
                     opts.brightness,
                     &bytes,
                     opts.tight,
@@ -804,7 +804,7 @@ impl UserData for Api<'_> {
                     framebuffer,
                     x,
                     y,
-                    opts.tint,
+                    opts.text_tint(font),
                     opts.brightness,
                     &bytes.as_bytes(),
                     opts.tight,
@@ -842,7 +842,8 @@ impl UserData for Api<'_> {
                     api.host.note_missing_font();
                     return Ok(());
                 };
-                font.draw_text_8x14(framebuffer, x, y, opts.tint, &bytes.as_bytes());
+                let tint = opts.text_tint(font);
+                font.draw_text_8x14(framebuffer, x, y, tint, &bytes.as_bytes());
                 Ok(())
             },
         );

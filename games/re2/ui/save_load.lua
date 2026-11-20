@@ -54,13 +54,15 @@ local FOOTER_Y = 0xD8
 -- The footer's count has its digits in cells as wide as the widest digit,
 -- which the font's own table gives every digit.
 local DIGIT_W = 12
-local BLUE = "#1E64FF"
+-- The text's blue and green: the font's own colour rows, or their colours
+-- over a font without them.
+local BLUE = { colour = "#1E64FF", row = 4 }
 -- The overwrite choice under the window: the question, the two answers a
 -- row below it and `Cursor_disp`'s arrowhead left of the lit one.
 local ASK_Y, ANSWER_Y = 0xCF, 0xDE
 local ANSWER_X = { [0] = 0x38, 0xCC }
 local ARROW_DX, ARROW_DY = -7, 4
-local GREEN = "#00C80A"
+local GREEN = { colour = "#00C80A", row = 1 }
 
 -- The core bank's cues (`Snd_se_on(0x40n0000)`) and the reveal's keys
 -- (`0x2220000`, `0x2240000`).
@@ -506,9 +508,9 @@ end
 -- `SavePrint`, Classic REbirth's print for this screen (`ui/cr_text.lua`).
 local save_width, save_print = CrText.width, CrText.print
 
-local function centred(api, y, text, colour)
+local function centred(api, y, text, opts)
     -- A line is centred as two pixels wider than it prints.
-    save_print(api, 159 - (save_width(api, text) + 1) // 2, y, text, colour)
+    save_print(api, 159 - (save_width(api, text) + 1) // 2, y, text, opts)
 end
 
 local function draw_footer(api, info)
@@ -521,7 +523,7 @@ local function draw_footer(api, info)
     local w1 = api:text_width(name)
     local w2 = 2 * slash + 2 * DIGIT_W + api:glyphs_width(place)
     local x = (320 - w1 - w2) // 2
-    api:text(x, FOOTER_Y, name, { colour = BLUE })
+    api:text(x, FOOTER_Y, name, BLUE)
     x = x + w1
     api:text(x, FOOTER_Y, "/")
     x = x + slash
