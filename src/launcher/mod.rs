@@ -64,7 +64,7 @@ use crate::biorand;
 use crate::build_info;
 use crate::config::{Config, Mods, UpdateChannel};
 use crate::controls::{self, Source as Input};
-use crate::convert::{self, CONVERT_VERSION, Game};
+use crate::convert::{self, Game};
 use crate::engine::{self, Display, Gamepads, ModOptions};
 use crate::gui::canvas::{Canvas, Color, Picture, Rect};
 use crate::gui::dom::value::ImageValue;
@@ -3103,7 +3103,7 @@ fn capitalize(text: &str) -> String {
 fn scan_packs() -> Vec<PackRow> {
     let roots = paths::data_roots();
     let custom = env::var_os(paths::DATA_ENV).is_some();
-    let source_hash = convert::packed_source_hash();
+    let packed = packed_by_game();
     let mut seen: HashSet<String> = HashSet::new();
     let mut packs = Vec::new();
     for (index, root) in roots.iter().enumerate() {
@@ -3149,7 +3149,7 @@ fn scan_packs() -> Vec<PackRow> {
                 .unwrap_or_default();
             let stale = manifest
                 .as_ref()
-                .is_none_or(|manifest| is_stale(manifest, &source_hash));
+                .is_none_or(|manifest| is_stale(manifest, &packed));
             packs.push(PackRow {
                 id,
                 name,
@@ -3246,12 +3246,24 @@ fn pack_thumbnail(pack: &PackRow) -> Option<Picture> {
     }
 }
 
-/// Whether a pack needs a rebuild to match this engine. RE1 packs carry
-/// the engine's own scripts and language sheets, fingerprinted by
-/// `source_hash`; an RE2 pack packs none of them, so only its conversion
-/// revision is compared.
-fn is_stale(manifest: &manifest::Manifest, source_hash: &str) -> bool {
-    if manifest.convert_version != Some(CONVERT_VERSION) {
+/// What this engine converts each game's pack with: [`Game::packed`].
+fn packed_by_game() -> HashMap<Game, (u32, String)> {
+    Game::ALL
+        .into_iter()
+        .map(|game| (game, game.packed()))
+        .collect()
+}
+
+/// Whether a pack needs a rebuild to match this engine: its conversion
+/// revision is not its game's, or the engine's own scripts and language
+/// sheets it carries, fingerprinted by `source_hash`, are not this engine's.
+/// A pack that is no game's own is held to RE1's, the game it is built for.
+fn is_stale(manifest: &manifest::Manifest, packed: &HashMap<Game, (u32, String)>) -> bool {
+    let game = Game::from_id(&manifest.id).unwrap_or(Game::Re1);
+    let Some((revision, source_hash)) = packed.get(&game) else {
+        return true;
+    };
+    if manifest.convert_version != Some(*revision) {
         return true;
     }
     // A seed's pack is built from another pack, and keeps being the same game
@@ -3260,8 +3272,7 @@ fn is_stale(manifest: &manifest::Manifest, source_hash: &str) -> bool {
         return manifest.generator_version != Some(biorand::GENERATOR_VERSION)
             || manifest.plan_version != Some(arklay_biorand::plan::GENERATOR_VERSION);
     }
-    Game::from_id(&manifest.id) != Some(Game::Re2)
-        && manifest.source_hash.as_deref() != Some(source_hash)
+    manifest.source_hash.as_deref() != Some(source_hash)
 }
 
 /// Discover every mod beside any pack or in `dirs`, whatever its game,
@@ -3950,17 +3961,18 @@ mod tests {
     #[test]
     fn a_seeds_pack_goes_stale_with_the_generator_not_the_scripts() {
         let mut manifest = manifest::Manifest::base("biorand-000001");
-        manifest.convert_version = Some(CONVERT_VERSION);
+        manifest.convert_version = Some(7);
         manifest.seed = Some(1);
         manifest.generator_version = Some(biorand::GENERATOR_VERSION);
         manifest.plan_version = Some(arklay_biorand::plan::GENERATOR_VERSION);
         manifest.source_hash = Some("older scripts".to_string());
-        assert!(!is_stale(&manifest, "current scripts"));
+        let packed = HashMap::from([(Game::Re1, (7, "current scripts".to_string()))]);
+        assert!(!is_stale(&manifest, &packed));
         manifest.plan_version = Some(arklay_biorand::plan::GENERATOR_VERSION + 1);
-        assert!(is_stale(&manifest, "current scripts"), "a newer plan");
+        assert!(is_stale(&manifest, &packed), "a newer plan");
         manifest.plan_version = Some(arklay_biorand::plan::GENERATOR_VERSION);
         manifest.generator_version = Some(biorand::GENERATOR_VERSION + 1);
-        assert!(is_stale(&manifest, "current scripts"));
+        assert!(is_stale(&manifest, &packed));
     }
 
     #[test]
@@ -4020,22 +4032,52 @@ mod tests {
     }
 
     #[test]
-    fn an_re2_pack_is_current_without_a_source_hash() {
+    fn a_pack_is_stale_by_its_own_games_revision_and_sources() {
         use crate::manifest::Manifest;
-        let current = |id: &str| Manifest {
-            convert_version: Some(CONVERT_VERSION),
+        let packed = HashMap::from([
+            (Game::Re1, (7, "re1 scripts".to_string())),
+            (Game::Re2, (9, "re2 scripts".to_string())),
+        ]);
+        let pack = |id: &str, revision: u32, hash: &str| Manifest {
+            convert_version: Some(revision),
+            source_hash: Some(hash.to_string()),
             ..Manifest::base(id)
         };
-        assert!(!is_stale(&current("re2"), "hash"));
-        assert!(is_stale(&current("re1"), "hash"));
-        assert!(is_stale(&Manifest::base("re2"), "hash"));
-        assert!(!is_stale(
-            &Manifest {
-                source_hash: Some("hash".to_string()),
-                ..current("re1")
-            },
-            "hash"
-        ));
+        assert!(!is_stale(&pack("re1", 7, "re1 scripts"), &packed));
+        assert!(!is_stale(&pack("re2", 9, "re2 scripts"), &packed));
+        assert!(!is_stale(&pack("RE2", 9, "re2 scripts"), &packed));
+        // The other game's revision or sources are not a pack's own.
+        assert!(is_stale(&pack("re2", 7, "re2 scripts"), &packed));
+        assert!(is_stale(&pack("re2", 9, "re1 scripts"), &packed));
+        assert!(is_stale(&pack("re1", 9, "re1 scripts"), &packed));
+        assert!(is_stale(&pack("re1", 7, "re2 scripts"), &packed));
+        // A changed script reaches either game's pack.
+        assert!(is_stale(&pack("re1", 7, "older scripts"), &packed));
+        assert!(is_stale(&pack("re2", 9, "older scripts"), &packed));
+        // A pack converted before its game's packs carried a fingerprint is
+        // rebuilt once.
+        let unsigned = Manifest {
+            convert_version: Some(9),
+            ..Manifest::base("re2")
+        };
+        assert!(is_stale(&unsigned, &packed));
+        assert!(is_stale(&Manifest::base("re2"), &packed));
+        // A pack of neither game's id is held to RE1's.
+        assert!(!is_stale(&pack("custom", 7, "re1 scripts"), &packed));
+        assert!(is_stale(&pack("custom", 9, "re2 scripts"), &packed));
+    }
+
+    #[test]
+    fn this_engines_own_packs_are_current() {
+        for game in Game::ALL {
+            let (revision, hash) = game.packed();
+            let manifest = manifest::Manifest {
+                convert_version: Some(revision),
+                source_hash: Some(hash),
+                ..manifest::Manifest::base(game.id())
+            };
+            assert!(!is_stale(&manifest, &packed_by_game()), "{}", game.id());
+        }
     }
 
     #[test]

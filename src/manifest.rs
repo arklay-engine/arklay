@@ -109,11 +109,12 @@ pub struct Manifest {
     /// Optional note about the engine build this pack targets.
     pub engine: Option<String>,
     /// The conversion revision that produced the pack; a launcher compares
-    /// it with [`crate::convert::CONVERT_VERSION`]. Older packs do not carry
-    /// it.
+    /// it with the pack's game's ([`crate::convert::Game::packed`]). Older
+    /// packs do not carry it.
     pub convert_version: Option<u32>,
     /// A fingerprint of the engine-owned scripts and language sources that
-    /// were packed; see [`crate::convert::packed_source_hash`].
+    /// were packed, by the pack's game: [`crate::convert::packed_source_hash`]
+    /// or [`crate::convert_re2::packed_source_hash`].
     pub source_hash: Option<String>,
     /// Explicit Lua hook paths, in load order.
     pub lua: Vec<String>,

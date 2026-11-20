@@ -408,6 +408,19 @@ impl Game {
             Self::Re2 => "re2.akpak",
         }
     }
+
+    /// What this engine converts the game's pack with: the conversion
+    /// revision and the fingerprint of the sources it packs itself, which a
+    /// current pack's manifest holds as `convert_version` and `source_hash`.
+    pub fn packed(self) -> (u32, String) {
+        match self {
+            Self::Re1 => (CONVERT_VERSION, packed_source_hash()),
+            Self::Re2 => (
+                crate::convert_re2::CONVERT_VERSION,
+                crate::convert_re2::packed_source_hash(),
+            ),
+        }
+    }
 }
 
 /// Which game the install at or under `root` is: RE2 when a data directory
@@ -2677,13 +2690,14 @@ fn copy_map_art(
 /// The id of the pack `pack convert game` writes.
 pub const BASE_PACK_ID: &str = "re1";
 
-/// Revision of the converted pack's contents and layout.
+/// Revision of the converted RE1 pack's contents and layout. An RE2 pack has
+/// [`crate::convert_re2::CONVERT_VERSION`] for its own.
 ///
 /// Bump this whenever a change to the converter would make the same source
 /// installation produce a different pack: asset conversion rules, the packed
 /// scripts and language files, the manifest, or the compression policy. The
 /// launcher compares it with the pack's manifest and asks for a rebuild when
-/// they differ.
+/// they differ. A change both games' packs take bumps both.
 pub const CONVERT_VERSION: u32 = 26;
 
 /// A stable fingerprint of everything this engine packs itself: the conversion
@@ -2693,16 +2707,8 @@ pub const CONVERT_VERSION: u32 = 26;
 /// Comparing it with a pack's manifest catches a changed script or language
 /// file even when nobody remembered to bump [`CONVERT_VERSION`].
 pub fn packed_source_hash() -> String {
-    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
-    const PRIME: u64 = 0x0000_0100_0000_01b3;
-    let mut hash = OFFSET;
-    let mut feed = |bytes: &[u8]| {
-        for byte in bytes {
-            hash ^= u64::from(*byte);
-            hash = hash.wrapping_mul(PRIME);
-        }
-    };
-    feed(&CONVERT_VERSION.to_le_bytes());
+    let mut hash = SourceHash::new();
+    hash.feed(&CONVERT_VERSION.to_le_bytes());
     for &(name, source) in crate::ui::UI_SCRIPTS
         .iter()
         .chain(crate::enemy::ENEMY_SCRIPTS.iter())
@@ -2712,16 +2718,42 @@ pub fn packed_source_hash() -> String {
         .chain(crate::room::RE1_FILES.iter())
         .chain(crate::biorand::BIORAND_FILES.iter())
     {
-        feed(name.as_bytes());
-        feed(&[0]);
-        feed(source.as_bytes());
-        feed(&[0]);
+        hash.file(name, source.as_bytes());
     }
     for script in crate::scd::ROOM_SCRIPTS {
-        feed(&script.room.to_le_bytes());
-        feed(script.container);
+        hash.feed(&script.room.to_le_bytes());
+        hash.feed(script.container);
     }
-    format!("{hash:016x}")
+    hash.finish()
+}
+
+/// The fingerprint of a converter's own sources: FNV-1a over what it is fed.
+pub(crate) struct SourceHash(u64);
+
+impl SourceHash {
+    pub(crate) fn new() -> Self {
+        Self(0xcbf2_9ce4_8422_2325)
+    }
+
+    pub(crate) fn feed(&mut self, bytes: &[u8]) {
+        for byte in bytes {
+            self.0 ^= u64::from(*byte);
+            self.0 = self.0.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+
+    /// A named file: its name and its bytes, each closed by a zero.
+    pub(crate) fn file(&mut self, name: &str, bytes: &[u8]) {
+        self.feed(name.as_bytes());
+        self.feed(&[0]);
+        self.feed(bytes);
+        self.feed(&[0]);
+    }
+
+    /// The sixteen hex digits a manifest's `source_hash` holds.
+    pub(crate) fn finish(&self) -> String {
+        format!("{:016x}", self.0)
+    }
 }
 
 #[cfg(test)]

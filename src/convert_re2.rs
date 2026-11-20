@@ -708,170 +708,7 @@ fn copy_text(
         )?;
     }
     copy_computer_page(rooms, writer, tally, warnings)?;
-    for (entry, source) in [
-        (
-            crate::lua::NEW_GAME_ENTRY,
-            include_str!("../games/re2/game/new_game.lua"),
-        ),
-        (
-            crate::music::INITIAL_STATE_ENTRY,
-            include_str!("../games/re2/game/initial_state.lua"),
-        ),
-        (
-            "ui/main_menu.lua",
-            include_str!("../games/re2/ui/main_menu.lua"),
-        ),
-        (
-            "ui/item_box.lua",
-            include_str!("../games/re2/ui/item_box.lua"),
-        ),
-        (
-            "ui/computer.lua",
-            include_str!("../games/re2/ui/computer.lua"),
-        ),
-        ("ui/title.lua", include_str!("../games/re2/ui/title.lua")),
-        (
-            "ui/save_load.lua",
-            include_str!("../games/re2/ui/save_load.lua"),
-        ),
-        (
-            "ui/cr_text.lua",
-            include_str!("../games/re2/ui/cr_text.lua"),
-        ),
-        (
-            "ui/prologue.lua",
-            include_str!("../games/re2/ui/prologue.lua"),
-        ),
-        (
-            "ui/gallery.lua",
-            include_str!("../games/re2/ui/gallery.lua"),
-        ),
-        (
-            "lib/zombie.lua",
-            include_str!("../games/re2/lib/zombie.lua"),
-        ),
-        (
-            "enemy/10/enemy.lua",
-            include_str!("../games/re2/enemy/10/enemy.lua"),
-        ),
-        (
-            "enemy/11/enemy.lua",
-            include_str!("../games/re2/enemy/11/enemy.lua"),
-        ),
-        (
-            "enemy/12/enemy.lua",
-            include_str!("../games/re2/enemy/12/enemy.lua"),
-        ),
-        (
-            "enemy/13/enemy.lua",
-            include_str!("../games/re2/enemy/13/enemy.lua"),
-        ),
-        (
-            "enemy/15/enemy.lua",
-            include_str!("../games/re2/enemy/15/enemy.lua"),
-        ),
-        (
-            "enemy/16/enemy.lua",
-            include_str!("../games/re2/enemy/16/enemy.lua"),
-        ),
-        (
-            "enemy/17/enemy.lua",
-            include_str!("../games/re2/enemy/17/enemy.lua"),
-        ),
-        (
-            "enemy/18/enemy.lua",
-            include_str!("../games/re2/enemy/18/enemy.lua"),
-        ),
-        (
-            "enemy/1e/enemy.lua",
-            include_str!("../games/re2/enemy/1e/enemy.lua"),
-        ),
-        (
-            "enemy/1f/enemy.lua",
-            include_str!("../games/re2/enemy/1f/enemy.lua"),
-        ),
-        (
-            "enemy/20/enemy.lua",
-            include_str!("../games/re2/enemy/20/enemy.lua"),
-        ),
-        (
-            "enemy/21/enemy.lua",
-            include_str!("../games/re2/enemy/21/enemy.lua"),
-        ),
-        (
-            "enemy/2a/enemy.lua",
-            include_str!("../games/re2/enemy/2a/enemy.lua"),
-        ),
-        (
-            "lib/licker.lua",
-            include_str!("../games/re2/lib/licker.lua"),
-        ),
-        (
-            "enemy/22/enemy.lua",
-            include_str!("../games/re2/enemy/22/enemy.lua"),
-        ),
-        (
-            "enemy/24/enemy.lua",
-            include_str!("../games/re2/enemy/24/enemy.lua"),
-        ),
-        (
-            "enemy/23/enemy.lua",
-            include_str!("../games/re2/enemy/23/enemy.lua"),
-        ),
-        (
-            "enemy/30/enemy.lua",
-            include_str!("../games/re2/enemy/30/enemy.lua"),
-        ),
-        (
-            "enemy/31/enemy.lua",
-            include_str!("../games/re2/enemy/31/enemy.lua"),
-        ),
-        (
-            "enemy/33/enemy.lua",
-            include_str!("../games/re2/enemy/33/enemy.lua"),
-        ),
-        (
-            "enemy/25/enemy.lua",
-            include_str!("../games/re2/enemy/25/enemy.lua"),
-        ),
-        (
-            "enemy/26/enemy.lua",
-            include_str!("../games/re2/enemy/26/enemy.lua"),
-        ),
-        (
-            "enemy/27/enemy.lua",
-            include_str!("../games/re2/enemy/27/enemy.lua"),
-        ),
-        (
-            "enemy/28/enemy.lua",
-            include_str!("../games/re2/enemy/28/enemy.lua"),
-        ),
-        (
-            "enemy/29/enemy.lua",
-            include_str!("../games/re2/enemy/29/enemy.lua"),
-        ),
-        (
-            "enemy/2d/enemy.lua",
-            include_str!("../games/re2/enemy/2d/enemy.lua"),
-        ),
-        ("lib/ivy.lua", include_str!("../games/re2/lib/ivy.lua")),
-        (
-            "enemy/2e/enemy.lua",
-            include_str!("../games/re2/enemy/2e/enemy.lua"),
-        ),
-        (
-            "enemy/2f/enemy.lua",
-            include_str!("../games/re2/enemy/2f/enemy.lua"),
-        ),
-        (
-            "enemy/39/enemy.lua",
-            include_str!("../games/re2/enemy/39/enemy.lua"),
-        ),
-        (
-            "ui/char_select.lua",
-            include_str!("../games/re2/ui/char_select.lua"),
-        ),
-    ] {
+    for &(entry, source) in SCRIPTS {
         tally.add(writer, "text", entry, source.as_bytes().to_vec())?;
     }
     for (item, xml) in text::item_definitions() {
@@ -921,12 +758,209 @@ fn copy_text(
     Ok(())
 }
 
+/// Revision of the RE2 pack's contents and layout, as
+/// [`crate::convert::CONVERT_VERSION`] is the RE1 pack's.
+///
+/// Bump this whenever a change to this converter would make the same
+/// installation produce a different pack. A change to a file the pack takes
+/// as it is checked in needs no bump: [`packed_source_hash`] covers those.
+/// It carries on from the revision the two converters shared.
+pub const CONVERT_VERSION: u32 = 27;
+
+/// The checked-in scripts the pack takes as they are: each entry and its
+/// source.
+const SCRIPTS: &[(&str, &str)] = &[
+    (
+        crate::lua::NEW_GAME_ENTRY,
+        include_str!("../games/re2/game/new_game.lua"),
+    ),
+    (
+        crate::music::INITIAL_STATE_ENTRY,
+        include_str!("../games/re2/game/initial_state.lua"),
+    ),
+    (
+        "ui/main_menu.lua",
+        include_str!("../games/re2/ui/main_menu.lua"),
+    ),
+    (
+        "ui/item_box.lua",
+        include_str!("../games/re2/ui/item_box.lua"),
+    ),
+    (
+        "ui/computer.lua",
+        include_str!("../games/re2/ui/computer.lua"),
+    ),
+    ("ui/title.lua", include_str!("../games/re2/ui/title.lua")),
+    (
+        "ui/save_load.lua",
+        include_str!("../games/re2/ui/save_load.lua"),
+    ),
+    (
+        "ui/cr_text.lua",
+        include_str!("../games/re2/ui/cr_text.lua"),
+    ),
+    (
+        "ui/prologue.lua",
+        include_str!("../games/re2/ui/prologue.lua"),
+    ),
+    (
+        "ui/gallery.lua",
+        include_str!("../games/re2/ui/gallery.lua"),
+    ),
+    (
+        "lib/zombie.lua",
+        include_str!("../games/re2/lib/zombie.lua"),
+    ),
+    (
+        "enemy/10/enemy.lua",
+        include_str!("../games/re2/enemy/10/enemy.lua"),
+    ),
+    (
+        "enemy/11/enemy.lua",
+        include_str!("../games/re2/enemy/11/enemy.lua"),
+    ),
+    (
+        "enemy/12/enemy.lua",
+        include_str!("../games/re2/enemy/12/enemy.lua"),
+    ),
+    (
+        "enemy/13/enemy.lua",
+        include_str!("../games/re2/enemy/13/enemy.lua"),
+    ),
+    (
+        "enemy/15/enemy.lua",
+        include_str!("../games/re2/enemy/15/enemy.lua"),
+    ),
+    (
+        "enemy/16/enemy.lua",
+        include_str!("../games/re2/enemy/16/enemy.lua"),
+    ),
+    (
+        "enemy/17/enemy.lua",
+        include_str!("../games/re2/enemy/17/enemy.lua"),
+    ),
+    (
+        "enemy/18/enemy.lua",
+        include_str!("../games/re2/enemy/18/enemy.lua"),
+    ),
+    (
+        "enemy/1e/enemy.lua",
+        include_str!("../games/re2/enemy/1e/enemy.lua"),
+    ),
+    (
+        "enemy/1f/enemy.lua",
+        include_str!("../games/re2/enemy/1f/enemy.lua"),
+    ),
+    (
+        "enemy/20/enemy.lua",
+        include_str!("../games/re2/enemy/20/enemy.lua"),
+    ),
+    (
+        "enemy/21/enemy.lua",
+        include_str!("../games/re2/enemy/21/enemy.lua"),
+    ),
+    (
+        "enemy/2a/enemy.lua",
+        include_str!("../games/re2/enemy/2a/enemy.lua"),
+    ),
+    (
+        "lib/licker.lua",
+        include_str!("../games/re2/lib/licker.lua"),
+    ),
+    (
+        "enemy/22/enemy.lua",
+        include_str!("../games/re2/enemy/22/enemy.lua"),
+    ),
+    (
+        "enemy/24/enemy.lua",
+        include_str!("../games/re2/enemy/24/enemy.lua"),
+    ),
+    (
+        "enemy/23/enemy.lua",
+        include_str!("../games/re2/enemy/23/enemy.lua"),
+    ),
+    (
+        "enemy/30/enemy.lua",
+        include_str!("../games/re2/enemy/30/enemy.lua"),
+    ),
+    (
+        "enemy/31/enemy.lua",
+        include_str!("../games/re2/enemy/31/enemy.lua"),
+    ),
+    (
+        "enemy/33/enemy.lua",
+        include_str!("../games/re2/enemy/33/enemy.lua"),
+    ),
+    (
+        "enemy/25/enemy.lua",
+        include_str!("../games/re2/enemy/25/enemy.lua"),
+    ),
+    (
+        "enemy/26/enemy.lua",
+        include_str!("../games/re2/enemy/26/enemy.lua"),
+    ),
+    (
+        "enemy/27/enemy.lua",
+        include_str!("../games/re2/enemy/27/enemy.lua"),
+    ),
+    (
+        "enemy/28/enemy.lua",
+        include_str!("../games/re2/enemy/28/enemy.lua"),
+    ),
+    (
+        "enemy/29/enemy.lua",
+        include_str!("../games/re2/enemy/29/enemy.lua"),
+    ),
+    (
+        "enemy/2d/enemy.lua",
+        include_str!("../games/re2/enemy/2d/enemy.lua"),
+    ),
+    ("lib/ivy.lua", include_str!("../games/re2/lib/ivy.lua")),
+    (
+        "enemy/2e/enemy.lua",
+        include_str!("../games/re2/enemy/2e/enemy.lua"),
+    ),
+    (
+        "enemy/2f/enemy.lua",
+        include_str!("../games/re2/enemy/2f/enemy.lua"),
+    ),
+    (
+        "enemy/39/enemy.lua",
+        include_str!("../games/re2/enemy/39/enemy.lua"),
+    ),
+    (
+        "ui/char_select.lua",
+        include_str!("../games/re2/ui/char_select.lua"),
+    ),
+];
+
+/// A stable fingerprint of everything this engine packs into an RE2 pack
+/// itself: the conversion revision, the checked-in scripts, the language
+/// file and the interface's lines of RE1's, and the Western font the pack's
+/// own is laid over. The launcher compares it with a pack's manifest, so a
+/// changed script reaches a pack converted before it.
+pub fn packed_source_hash() -> String {
+    let mut hash = crate::convert::SourceHash::new();
+    hash.feed(&CONVERT_VERSION.to_le_bytes());
+    for &(entry, source) in SCRIPTS {
+        hash.file(entry, source.as_bytes());
+    }
+    hash.file("language/en-US.txt", text::SHARED.as_bytes());
+    for line in text::interface_lines() {
+        hash.file("language/ui", line.as_bytes());
+    }
+    hash.file("font/sheet", crate::font::WESTERN_SHEET);
+    hash.file("font/xml", crate::font::xml::WESTERN.as_bytes());
+    hash.finish()
+}
+
 /// The RE2 pack's self-description.
 fn base_manifest() -> manifest::Manifest {
     let mut manifest = manifest::Manifest::base(BASE_PACK_ID);
     manifest.name = Some("Resident Evil 2".to_string());
     manifest.version = Some(env!("CARGO_PKG_VERSION").to_string());
-    manifest.convert_version = Some(crate::convert::CONVERT_VERSION);
+    manifest.convert_version = Some(CONVERT_VERSION);
+    manifest.source_hash = Some(packed_source_hash());
     manifest.tags = vec![manifest::TAG_OFFICIAL.to_string()];
     // A new game starts on the street, room 100 (Leon's disc is variant 0,
     // Claire's 1).
