@@ -1116,6 +1116,29 @@ local HANDED = {
     "add",
 }
 
+-- The hand-over: those, the new-game page's slide count (`0x689B8C`) and
+-- fade 3's mode (the prologue's), which `Title_init` leaves too.
+local function hand_over(api)
+    for _, name in ipairs(HANDED) do
+        api:keep("handed_" .. name, s[name])
+    end
+    api:keep("handed_b8c", s.b8c[0])
+    api:keep("handed_fade3", s.fades[3].mode)
+end
+
+-- The hand-over's statics, taken: they are one return's alone, so a game no
+-- title handed over (the script host's) comes back to a new title's.
+local function take_handed(api)
+    local handed = { b8c = api:kept("handed_b8c"), fade3 = api:kept("handed_fade3") }
+    api:keep("handed_b8c", nil)
+    api:keep("handed_fade3", nil)
+    for _, name in ipairs(HANDED) do
+        handed[name] = api:kept("handed_" .. name)
+        api:keep("handed_" .. name, nil)
+    end
+    return handed
+end
+
 local function title_init()
     -- `Title_bg_reload` (0x503880), on both branches: the option screen
     -- leaves its own picture behind.
@@ -2127,9 +2150,15 @@ end
 -- (`fg_system`'s 2: the film on its turn, and the title's entry); a game,
 -- and a demo a key ended (`0x98F1BB`), to the title's picture.
 local function game_return(api, demo, fade_add)
+    local handed = take_handed(api)
     for _, name in ipairs(HANDED) do
-        s[name] = api:kept("handed_" .. name) or s[name]
+        s[name] = handed[name] or s[name]
     end
+    s.b8c[0] = handed.b8c or s.b8c[0]
+    s.fades[3].mode = handed.fade3 or s.fades[3].mode
+    -- `Title_game_init` chose the game's limiter (`0x98F07A`), which
+    -- stands until `Title_init`: the logo's wait runs at the game's pace.
+    s.limiter = 2
     -- Fade 0 is the game's, done: its step is what the game last set.
     s.fades[0].mode = 2
     s.fades[0].add = fade_add or 0
@@ -2347,9 +2376,7 @@ function M.update(api, input)
         local exit = s.exit
         s.exit = nil
         if exit == "new_game" or exit == "attract" or exit == "continue" then
-            for _, name in ipairs(HANDED) do
-                api:keep("handed_" .. name, s[name])
-            end
+            hand_over(api)
         end
         if exit == "new_game" then
             api:exit("new_game", s.character or 0, s.choice)
@@ -2418,6 +2445,7 @@ function M.on_boot(api)
     api:keep("rnd", nil)
     api:keep("films", nil)
     api:keep("demo_cycle", nil)
+    take_handed(api)
     publish(api)
 end
 

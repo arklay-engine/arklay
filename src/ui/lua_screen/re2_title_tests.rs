@@ -2341,8 +2341,39 @@ fn the_title_after_a_demo_starts_from_the_logo() {
     let (mut screen, cx) = open_kept(&statics, &dir, std::slice::from_ref(&seed));
     idle_to_the_demo(&mut screen, &cx);
     let played = [seed.clone(), ("after", ScreenArg::Str("demo".to_owned()))];
+    // A return takes the hand-over's statics: each pass is given the one
+    // hand-over's again.
+    let handed: Vec<_> = [
+        "mv",
+        "disp",
+        "menu",
+        "step",
+        "sel",
+        "cur",
+        "pulse",
+        "slide",
+        "demo",
+        "flash",
+        "logo",
+        "logo_count",
+        "kido",
+        "add",
+        "b8c",
+        "fade3",
+    ]
+    .into_iter()
+    .map(|name| format!("handed_{name}"))
+    .map(|key| {
+        let value = statics.get("ui/title.lua", &key);
+        assert!(value.is_some(), "{key}");
+        (key, value)
+    })
+    .collect();
     let mut films = Vec::new();
     for pass in 0..7 {
+        for (key, value) in &handed {
+            statics.set("ui/title.lua", key, *value);
+        }
         let (mut screen, cx) = open_kept(&statics, &dir, &played);
         // As the hand-over left them: the last step, the count and the fade.
         assert_eq!(ti(&screen), [2, 3, 0, 0, 0, 1, 0, 0, 2, 0, 1928]);
@@ -2412,8 +2443,10 @@ fn the_title_after_a_demo_a_key_ended_fades_in() {
 /// The title after a game (`title_after_death`): `Game_loop` chains the
 /// title's task as after a demo a key ended, with the statics the title
 /// had as it handed the game over, a load's here, and fade 0's step as the
-/// game left it (a death's `0x200`). The logo sleeps, and the title's
-/// picture fades in from black.
+/// game left it (a death's `0x200`). The logo sleeps at the game's pace
+/// (`Title_game_init`'s limiter stands until `Title_init`), and the title's
+/// picture fades in from black. The hand-over's statics are that return's
+/// alone: a game no title handed over comes back to a new title's.
 #[test]
 fn the_title_after_a_game_starts_as_it_handed_over() {
     let dir = std::env::temp_dir().join(format!("arklay-re2-after-{}", std::process::id()));
@@ -2436,6 +2469,11 @@ fn the_title_after_a_game_starts_as_it_handed_over() {
     );
     let handed = ti(&screen);
     assert_eq!(handed[..2], [2, 3]);
+    assert_eq!(statics.get("ui/title.lua", "handed_disp"), Some(3));
+    // The new-game page's slide count and the prologue's fade, as a new
+    // game's hand-over leaves them.
+    statics.set("ui/title.lua", "handed_b8c", Some(0x80));
+    statics.set("ui/title.lua", "handed_fade3", Some(2));
 
     let game = [
         ("after", ScreenArg::Str("game".to_owned())),
@@ -2447,6 +2485,10 @@ fn the_title_after_a_game_starts_as_it_handed_over() {
     assert_eq!(opened[4..], handed[4..], "the hand-over's statics");
     assert_eq!(screen.value("ti_fade_level"), -1);
     assert_eq!(screen.value("ti_fade_add"), 0x200);
+    assert_eq!(screen.value("ti_b8c"), 0x80);
+    assert_eq!(screen.value("game_active"), 1, "the game's limiter");
+    assert_eq!(statics.get("ui/title.lua", "handed_disp"), None, "taken");
+    assert_eq!(statics.get("ui/title.lua", "handed_b8c"), None);
     run(&mut screen, &cx, UiInput::default(), 121);
     assert_eq!(ti(&screen)[..4], [0, 3, 1, 6]);
     assert_eq!(ti(&screen)[4..], handed[4..], "through the logo's sleep");
@@ -2455,10 +2497,18 @@ fn the_title_after_a_game_starts_as_it_handed_over() {
         screen.update(&cx, UiInput::default()),
         ScreenResult::Continue
     ));
+    assert_eq!(screen.value("game_active"), 1, "to the logo's last tick");
     screen.update(&cx, UiInput::default());
     assert_eq!(ti(&screen)[..2], [2, 1], "`Title_init`, from black");
     assert_eq!(screen.value("ti_fade_level"), 0x7C00);
     assert_eq!(screen.value("ti_fade_add"), 0);
+    assert_eq!(screen.value("game_active"), 0, "the title's limiter");
+    assert_eq!(screen.value("ti_b8c"), 0x80, "`Title_init` leaves it");
+
+    // A game with no hand-over: a new title's statics through the sleep.
+    let (screen, _) = open_kept(&statics, &dir, &game);
+    assert_eq!(ti(&screen), [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    assert_eq!(screen.value("ti_b8c"), 0);
     let _ = std::fs::remove_dir_all(&dir);
 }
 

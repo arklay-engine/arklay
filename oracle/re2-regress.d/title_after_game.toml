@@ -22,6 +22,6 @@ compare_from = 3105
 input = "prologue_leon_skip.txt"
 input_shift = 189
 input_drop_early = true
-fields = "ti,tlogo,tfade,snd"
+fields = "ti,tlogo,tfade,tsel,tx,tfade2,tfade3,snd"
 expect = "match"
 record = ""
