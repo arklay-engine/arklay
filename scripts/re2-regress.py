@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import contextlib
 import datetime
 import hashlib
 import importlib.util
@@ -536,55 +537,157 @@ def load_recorder():
 
 
 def self_test_pace() -> str | None:
-    """A record's pace: which `.ticks` the runner hands a record (`pace_source`), and the recorder's following of
-    it (`Pace`): a tick waits for the stored recording's time, and one reached late is counted."""
+    """A record's pace: which `.ticks` the runner hands a record (`pace_source`), the recorder's following of
+    it (`Pace`), and a record's place beside the reference until it is whole (`record_run`)."""
+    sound = ["record", "--sound"]
     with tempfile.TemporaryDirectory() as folder:
         refs = Path(folder)
-        for name, text in (("old", "0 0.0\n1 0.3\n"), ("empty", "")):
+        for name, text in (("old", "0 0.0\n1 0.3\n"), ("empty", ""), ("shared", "0 0.0\n1 0.2\n")):
             (refs / name).mkdir()
             (refs / name / "ref.ticks").write_text(text)
+        # `boot` keeps its reference under another run's name, and `absent` has none yet.
+        manifest = {"old": {"ref": "old"}, "boot": {"ref": "shared"}, "absent": {"ref": "absent"}}
         cases = [
             # A reference recorded again follows its own ticks; a first record sets its own pace.
-            ({"ref": "old"}, [], refs / "old" / "ref.ticks"),
-            ({"ref": "new"}, [], None),
-            ({"ref": "empty"}, [], None),
-            # A run that carries another's ticks on follows that one's.
-            ({"ref": "new", "pace_from": "old"}, [], refs / "old" / "ref.ticks"),
-            ({"ref": "new", "pace_from": "none"}, [], ValueError),
-            # A silent record has no pace to keep, and a `--pace` of the run's own stands.
-            ({"ref": "old", "sound": False}, [], None),
-            ({"ref": "old", "sound": False, "pace_from": "old"}, [], ValueError),
-            ({"ref": "old"}, ["--pace", "x"], None),
+            ({"ref": "old"}, sound, refs / "old" / "ref.ticks"),
+            ({"ref": "new"}, sound, None),
+            ({"ref": "empty"}, sound, None),
+            # A run that carries another's ticks on follows that run's reference.
+            ({"ref": "new", "pace_from": "old"}, sound, refs / "old" / "ref.ticks"),
+            ({"ref": "new", "pace_from": "boot"}, sound, refs / "shared" / "ref.ticks"),
+            ({"ref": "new", "pace_from": "absent"}, sound, ValueError),
+            ({"ref": "new", "pace_from": "shared"}, sound, ValueError),
+            # A silent record has no pace to keep, and a `--pace` of the run's own stands: by the command.
+            ({"ref": "old", "sound": False}, ["record"], None),
+            ({"ref": "old", "sound": False}, ["record", "--no-enemies", "--sound"], refs / "old" / "ref.ticks"),
+            ({"ref": "old", "pace_from": "old"}, ["record"], ValueError),
+            ({"ref": "old"}, sound + ["--pace", "x"], None),
+            ({"ref": "old"}, sound + ["--pace=x"], None),
+            ({"ref": "old", "pace_from": "old"}, sound + ["--pace=x"], ValueError),
         ]
         for run, command, want in cases:
             try:
-                got = pace_source(run, refs, command)
+                got = pace_source(run, refs, command, manifest)
             except ValueError:
                 got = ValueError
             if got != want:
                 return f"the pace of {run} with {command} is {got}, not {want}"
     recorder = load_recorder()
 
-    class Held:
+    class Clock:
+        """A clock the held game moves: a hold takes as long as it was asked to, and `slow` more."""
+
         def __init__(self):
-            self.waits = []
+            self.now, self.waits, self.slow = 100.0, [], 0.0
+
+        def __call__(self):
+            return self.now
 
         def hold(self, tid, seconds):
-            self.waits.append(round(seconds, 1))
+            self.waits.append(round(seconds, 3))
+            self.now += seconds + self.slow
+
+    def play(pace, clock, ticks, run=0.01, picture=0.05):
+        """Each tick's run, its break and its picture, as the record loops order them."""
+        ends = {}
+        for tick in ticks:
+            pace.release(clock, 0, tick)
+            clock.now += run
+            pace.reached(tick)
+            ends[tick] = round(clock.now - 100.0, 3)
+            clock.now += picture
+        return ends
 
     with tempfile.TemporaryDirectory() as folder:
         ticks = Path(folder) / "ref.ticks"
-        ticks.write_text("5 10.0\n6 10.2\n7 10.4\n8 10.5\n")
-        pace, game = recorder.Pace(str(ticks)), Held()
-        for tick in (4, 5, 6, 7):
-            pace.wait(game, 0, tick)
-        # The fake hold returns at once, so each tick is as early as its stored time is after the first's.
-        if game.waits != [0.2, 0.4] or pace.late:
-            return f"a record following 0.2s ticks held {game.waits} with {pace.late} late"
-        pace.origin -= 1.0
-        pace.wait(game, 0, 8)
-        if game.waits != [0.2, 0.4] or pace.late != 1 or not 0.4 < pace.latest < 0.6:
-            return f"a tick half a second late: held {game.waits}, {pace.late} late by {pace.latest:.2f}"
+        ticks.write_text("".join(f"{tick} {10.0 + 0.2 * (tick - 5):.4f}\n" for tick in range(5, 10)))
+        clock = Clock()
+        pace = recorder.Pace(str(ticks), clock)
+        # Tick 4 isn't in the log and tick 5 is the first shared; from 6 each tick ends 0.2 s after the last,
+        # as stored, though the picture takes 0.05 s here; 10 and 11 are past the log and keep its median.
+        ends = play(pace, clock, range(4, 12))
+        gaps = [round(ends[tick] - ends[tick - 1], 3) for tick in range(6, 12)]
+        if gaps != [0.2] * 6 or pace.late or (pace.stored, pace.stepped) != (4, 2):
+            return f"a record following 0.2s ticks ended them {gaps} apart ({pace.stored} stored, {pace.stepped} stepped, {pace.late} late)"
+        # The picture of the tick before has what the pace leaves it: 0.2 s less the run and what has passed.
+        left = pace.left(12)
+        if not 0.13 < left < 0.15:
+            return f"the pace leaves the picture after tick 11 {left:.3f}s"
+        # A hold that overruns is late, though the wait began in time.
+        clock.slow = 0.4
+        play(pace, clock, [12])
+        if pace.late != 1 or not 0.35 < pace.latest < 0.45:
+            return f"a hold that overran by 0.4s: {pace.late} late by {pace.latest:.2f}"
+        # A log that holds none of the record's ticks is not a pace followed.
+        stray = recorder.Pace(str(ticks), Clock())
+        play(stray, stray.clock, range(20, 23))
+        try:
+            stray.report()
+            return "a pace log with none of the record's ticks passes"
+        except SystemExit:
+            pass
+        # The log is read before the record writes anything: it may be the record's own output.
+        if "pace = Pace(" not in recorder_source_before_outputs(recorder.record) or \
+                "pace = Pace(" not in recorder_source_before_outputs(recorder.record_boot):
+            return "a record opens its outputs before it has read its pace"
+    return self_test_record_place()
+
+
+def recorder_source_before_outputs(function) -> str:
+    """A record function's source up to where it first opens a file to write."""
+    import inspect
+
+    source = inspect.getsource(function)
+    return source[: source.index('"w"')]
+
+
+def self_test_record_place() -> str | None:
+    """`record_run` with a stand-in recorder: a failed record leaves the stored reference alone, and a whole one
+    replaces all of it and says what pace it followed."""
+    import types
+
+    with tempfile.TemporaryDirectory() as folder:
+        refs = Path(folder) / "refs"
+        old = refs / "scene"
+        (old / "frames").mkdir(parents=True)
+        (old / "ref.trace").write_text("old\n")
+        (old / "ref.ticks").write_text("0 0.0\n1 0.2\n")
+        (old / "frames" / "t000009.png").write_text("old")
+        run = {"name": "scene", "ref": "scene", "input": "item_take_102.txt", "ticks": 2, "record": "", "frames": [0, 1]}
+        args = types.SimpleNamespace(game="game", work=str(Path(folder) / "wine"), out=None, force=True, dry_run=False)
+        seen = {}
+
+        def recorder(code):
+            def run_it(command, log):
+                seen["command"] = command
+                trace = Path(command[command.index("--trace") + 1])
+                trace.write_text("new\n")
+                trace.with_suffix(".ticks").write_text("0 0.0\n" if code else "0 0.0\n1 0.1\n")
+                log.write_text("")
+                return code
+            return run_it
+
+        global run_recorder
+        real = run_recorder
+        try:
+            run_recorder = recorder(1)
+            with open(os.devnull, "w") as quiet, contextlib.redirect_stdout(quiet):
+                failed = record_run(run, args, refs, {"scene": run})
+            if failed != 1 or (old / "ref.trace").read_text() != "old\n" or (old / "ref.ticks").read_text() != "0 0.0\n1 0.2\n":
+                return "a failed record changed the stored reference"
+            run_recorder = recorder(0)
+            with open(os.devnull, "w") as quiet, contextlib.redirect_stdout(quiet):
+                done = record_run(run, args, refs, {"scene": run})
+        finally:
+            run_recorder = real
+        pace = seen["command"][seen["command"].index("--pace") + 1]
+        if done != 0 or pace != str(old / "ref.ticks"):
+            return f"a reference recorded again followed {pace}"
+        if (old / "ref.trace").read_text() != "new\n" or (old / "frames").exists() or (refs / "scene.recording").exists():
+            return "a whole record did not replace all of the stored reference"
+        meta = (old / "meta.txt").read_text()
+        if "pace: scene/ref.ticks sha256 " not in meta or ".recording" in meta:
+            return f"the record's meta.txt does not say what it followed: {meta}"
     return None
 
 
@@ -607,6 +710,7 @@ def self_test_pictures() -> str | None:
     def writer(script):
         frames = object.__new__(recorder.FrameWriter)
         frames.display, frames.unsettled, frames.errors, frames.last = ":0", [], [], b"old"
+        frames.last_frame, frames.pool = ("t", 4), None
         frames.room = threading.BoundedSemaphore(4)
         shown = iter(script)
         frames.grab = lambda xdisplay: Picture(next(shown))
@@ -621,10 +725,45 @@ def self_test_pictures() -> str | None:
         return "a tick that draws what the last drew does not wait for a late picture"
     if time.monotonic() - started > recorder.FrameWriter.UNCHANGED + 0.1:
         return "the unchanged wait runs past its time"
+    # Under a stored pace the unchanged wait is what the pace leaves, down to the settle and the still.
+    paced = writer([b"old"] * 100)
+    waits = []
+    paced.settled = lambda stem, unchanged: waits.append(round(unchanged, 3)) or Picture(b"old")
+    paced.pool = type("Pool", (), {"submit": lambda self, write, picture, path: paced.room.release()})()
+    for number, within in enumerate((None, 1.0, 0.1, 0.0, -2.0), 5):
+        paced.take(Path(f"t{number:06d}.png"), within)
+    floor = round(recorder.FrameWriter.SETTLE + recorder.FrameWriter.STILL, 3)
+    if waits != [recorder.FrameWriter.UNCHANGED, recorder.FrameWriter.UNCHANGED, 0.1, floor, floor]:
+        return f"the unchanged waits under a pace were {waits}"
     moving = writer([bytes([n]) for n in range(100)])
     moving.settled("moving")
     if moving.unsettled != ["moving"]:
         return "a display that never holds still is not named"
+    # After a tick no picture was taken of, the last picture says nothing about this one's.
+    class Pool:
+        def submit(self, write, picture, path):
+            frames.room.release()
+
+    for name, kept in (("t000005", b"old"), ("t000007", None), ("boot000005", None)):
+        frames = writer([b"old"] * 100)
+        frames.pool = Pool()
+        seen = []
+        frames.settled = lambda stem, unchanged: seen.append(frames.last) or Picture(b"old")
+        frames.take(Path(name + ".png"))
+        if seen != [kept]:
+            return f"the picture of {name} after t000004's was told by {seen}, not {kept}"
+    # `import`'s failure is the record's, and leaves no older picture under the frame's name.
+    with tempfile.TemporaryDirectory() as folder:
+        stale = Path(folder) / "t000005.png"
+        stale.write_text("old")
+        frames = writer([])
+        real, recorder.subprocess.run = recorder.subprocess.run, lambda *a, **k: subprocess.CompletedProcess(a, 1, "", "no display")
+        try:
+            frames.take(stale)
+        finally:
+            recorder.subprocess.run = real
+        if stale.exists() or frames.errors != ["t000005.png: no display"]:
+            return f"a failed import left {stale.exists()} and {frames.errors}"
     failed = writer([])
     failed.room.acquire()
     failed.write(Picture(b""), Path("nowhere.png"))
@@ -1189,28 +1328,55 @@ def check_out(path: str) -> Path:
 # ---------------------------------------------------------------- record
 
 
-def pace_source(run: dict, refs: Path, command: list[str]) -> Path | None:
+def pace_source(run: dict, refs: Path, command: list[str], manifest: dict[str, dict]) -> Path | None:
     """The `.ticks` log a record of `run` follows with `--pace`, or None for a record that sets its own pace.
 
     With `--sound` a voice line ends by DirectSound's clock, so the ticks it holds for depend on how fast the
     record goes, and with them every scene that waits for a line: a record's pace is part of its reference. A
-    run that carries another's ticks on names it (`pace_from`), and a reference recorded again follows its own
-    stored `.ticks`, so that a faster recorder or a busier machine gives the same ticks. A run's first record
-    goes as fast as the recorder does. A `--pace` in the run's own `record` arguments is left alone."""
-    if not run.get("sound", True) or "--pace" in command:
-        if run.get("pace_from"):
+    run that carries another's ticks on names that run (`pace_from`), and a reference recorded again follows
+    its own stored `.ticks`, so that a faster recorder or a busier machine gives the same ticks. A run's first
+    record goes as fast as the recorder does. What decides is the recorder's `command` as it will run: a
+    `--sound` or a `--pace` among the run's own `record` arguments counts."""
+    own = any(part == "--pace" or part.startswith("--pace=") for part in command)
+    named = run.get("pace_from")
+    if "--sound" not in command or own:
+        if named:
             raise ValueError("pace_from needs a --sound run without its own --pace")
         return None
-    source = refs / run.get("pace_from", run["ref"]) / "ref.ticks"
+    if named and named not in manifest:
+        raise ValueError(f"pace_from names {named}, which is not a run in the manifest")
+    source = refs / (manifest[named]["ref"] if named else run["ref"]) / "ref.ticks"
     if source.is_file() and source.stat().st_size:
         return source
-    if run.get("pace_from"):
-        raise ValueError(f"pace_from needs {source} (record {run['pace_from']} with --sound first)")
+    if named:
+        raise ValueError(f"pace_from needs {source} (record {named} with --sound first)")
     return None
 
 
-def record_run(run: dict, args, refs: Path) -> int:
-    """Record the original for a run into the refs dir, with the meta.txt the other references have."""
+def run_recorder(command: list[str], log: Path) -> int:
+    """Run the recorder to its end, a Ctrl-C's too: it stops Wine and unloads its sound sink as it goes, and
+    `subprocess.run` would kill it a quarter of a second after the Ctrl-C."""
+    with open(log, "w") as handle:
+        recorder = subprocess.Popen(command, cwd=ROOT, stdout=handle, stderr=subprocess.STDOUT)
+        try:
+            return recorder.wait()
+        except KeyboardInterrupt:
+            # A terminal's Ctrl-C reached the recorder too, and by now it holds a second one back until it
+            # has stopped everything; a signal sent to the runner alone didn't, so pass it on.
+            try:
+                recorder.wait(0.5)
+            except subprocess.TimeoutExpired:
+                recorder.send_signal(signal.SIGINT)
+            recorder.wait()
+            raise
+
+
+def record_run(run: dict, args, refs: Path, manifest: dict[str, dict]) -> int:
+    """Record the original for a run into the refs dir, with the meta.txt the other references have.
+
+    The record is made beside the reference (`<ref>.recording`) and takes its place only once it is whole: a
+    record that fails leaves the stored reference as it was, pace and all, and one that succeeds leaves nothing
+    of the old one behind (a frame past a shorter record's end, a silent record's `.ticks`)."""
     name = run["name"]
     if "record" not in run:
         print(f"{name}: the manifest has no record command for this run")
@@ -1220,6 +1386,7 @@ def record_run(run: dict, args, refs: Path) -> int:
         print("record needs --game or ARKLAY_RE2_ROOT: the install holding bio2 1.10.exe")
         return 1
     dest = refs / run["ref"]
+    stage = refs / (run["ref"] + ".recording")
     if (dest / "ref.trace").exists() and not args.force:
         print(f"{name}: {dest / 'ref.trace'} exists (--force records it again)")
         return 1
@@ -1230,14 +1397,14 @@ def record_run(run: dict, args, refs: Path) -> int:
         sys.executable, str(ROOT / "scripts" / "oracle-re2.py"), "record",
         "--game", game, "--work", str(work),
         "--input", str(input_file.relative_to(ROOT)),
-        "--ticks", str(run["ticks"]), "--trace", str(dest / "ref.trace"),
+        "--ticks", str(run["ticks"]), "--trace", str(stage / "ref.trace"),
     ]
     if run.get("sound", True):
         command.append("--sound")
     if run.get("ui", "game") != "game":
         command.append("--boot")
     if run.get("frames"):
-        command += ["--shot-dir", str(dest / "frames"), "--shot-every", "1"]
+        command += ["--shot-dir", str(stage / "frames"), "--shot-every", "1"]
     # The save screen lists the save folder: it starts empty, or with another reference's saves.
     if run.get("saves_from"):
         source = refs / run["saves_from"] / "saves"
@@ -1246,40 +1413,34 @@ def record_run(run: dict, args, refs: Path) -> int:
             return 1
         command += ["--saves", str(source)]
     if run.get("saves"):
-        command += ["--keep-saves", str(dest / "saves")]
+        command += ["--keep-saves", str(stage / "saves")]
     command += choice_args(run) + shlex.split(run["record"])
     try:
-        pace = pace_source(run, refs, command)
+        pace = pace_source(run, refs, command, manifest)
     except ValueError as error:
         print(f"{name}: {error}")
         return 1
-    if not args.dry_run:
-        dest.mkdir(parents=True, exist_ok=True)
-    held = None
+    followed = None
     if pace is not None:
-        # The record writes its own `.ticks` over the one it may be following: follow a copy.
-        held = dest / "pace.ticks"
-        if not args.dry_run:
-            shutil.copyfile(pace, held)
-        command += ["--pace", str(held)]
+        # The stored log itself: the record writes its own in `stage`, and this one stands until that is whole.
+        command += ["--pace", str(pace)]
+        followed = f"pace: {pace.relative_to(refs)} sha256 {hashlib.sha256(pace.read_bytes()).hexdigest()}"
+    # As it reads once the record has taken the reference's place.
+    shown = [part if part != game else "$ARKLAY_RE2_ROOT" for part in command]
+    shown = [part.replace(str(stage), str(dest)).replace(str(refs), "$ARKLAY_RE2_REFS").replace(str(work), "$WORK") for part in shown]
+    shown[0] = "python3"
+    shown[1] = "scripts/oracle-re2.py"
     print(f"{name}: " + " ".join(shlex.quote(part) for part in command), flush=True)
     if args.dry_run:
         return 0
-    log = dest / "ref.log"
-    try:
-        with open(log, "w") as handle:
-            code = subprocess.run(command, cwd=ROOT, stdout=handle, stderr=subprocess.STDOUT).returncode
-    finally:
-        if held is not None:
-            held.unlink(missing_ok=True)
+    shutil.rmtree(stage, ignore_errors=True)
+    stage.mkdir(parents=True)
+    log = stage / "ref.log"
+    code = run_recorder(command, log)
     if code:
-        print(f"{name}: the record failed (exit {code}, see {log})")
+        print(f"{name}: the record failed (exit {code}, see {log}); the stored reference is as it was")
         return code
-    trace = dest / "ref.trace"
-    shown = [part if part != game else "$ARKLAY_RE2_ROOT" for part in command]
-    shown = [part.replace(str(refs), "$ARKLAY_RE2_REFS").replace(str(work), "$WORK") for part in shown]
-    shown[0] = "python3"
-    shown[1] = "scripts/oracle-re2.py"
+    trace = stage / "ref.trace"
     meta = [
         f"name: {name}",
         f"recorded: {datetime.date.today().isoformat()}",
@@ -1288,12 +1449,25 @@ def record_run(run: dict, args, refs: Path) -> int:
         f"trace_md5: {hashlib.md5(trace.read_bytes()).hexdigest()}",
         "command: " + " ".join(shlex.quote(part) for part in shown),
     ]
+    if followed:
+        meta.append(followed)
     if run.get("saves"):
-        saves = sorted((dest / "saves").glob("*")) if (dest / "saves").is_dir() else []
+        saves = sorted((stage / "saves").glob("*")) if (stage / "saves").is_dir() else []
         meta += [f"save: {path.name} {hashlib.sha256(path.read_bytes()).hexdigest()}" for path in saves] or ["save: none"]
-    (dest / "meta.txt").write_text("\n".join(meta) + "\n")
+    (stage / "meta.txt").write_text("\n".join(meta) + "\n")
+    publish_record(stage, dest)
     print(f"{name}: recorded into {dest}")
     return 0
+
+
+def publish_record(stage: Path, dest: Path) -> None:
+    """Put a whole record in the reference's place."""
+    replaced = dest.with_name(dest.name + ".replaced")
+    shutil.rmtree(replaced, ignore_errors=True)
+    if dest.exists():
+        dest.rename(replaced)
+    stage.rename(dest)
+    shutil.rmtree(replaced, ignore_errors=True)
 
 
 # ---------------------------------------------------------------- main
@@ -1444,7 +1618,7 @@ def main() -> int:
     if record:
         if not names:
             raise SystemExit("re2-regress: record needs run names")
-        return max(record_run(run, args, refs) for run in runs)
+        return max(record_run(run, args, refs, manifest) for run in runs)
 
     if args.list:
         for run in runs:
