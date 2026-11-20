@@ -178,20 +178,46 @@ pub const RE2_GALLERY_SKIP: u16 = 0x9F0;
 /// mask that names it ([`re2_skip_buttons`]) takes it as a skip.
 pub const MAP_BUTTON: u16 = 0x1000;
 
+/// The fire button in the film button word, where it is bound apart from
+/// confirm: outside RE 1's `0x0FFF` as [`MAP_BUTTON`] is.
+pub const FIRE_BUTTON: u16 = 0x2000;
+
+/// The port's in-game menu key (Escape, the pad's start) in the film button
+/// word, outside RE 1's `0x0FFF` as [`MAP_BUTTON`] is.
+pub const OPTION_BUTTON: u16 = 0x4000;
+
 /// An RE2 raw skip mask in the port's film button word ([`MovieSession`]'s
-/// `skip_mask`): of 0x9F0's bits, the port's pad has confirm (0x80), cancel
-/// and run (0x40), start (0x800) and the PC's map key (0x10). The d-pad and
-/// the shoulders never skip.
+/// `skip_mask`): 0x9F0's bits are confirm (0x80), cancel and run (0x40),
+/// start (0x800), the PC's map key (0x10), fire (0x20) and the in-game
+/// menu's key (0x100). The d-pad and the shoulders never skip.
+///
+/// The raw pad's 0x20 is the action button's twin: `Pad_set`'s table
+/// (0x5338D8) gives it the same `Key` bits as 0x80 in the first control type,
+/// the action's, the shot's and the confirm's. No key of the keyboard's
+/// defaults (0x524DE8) has it and no button of the joystick's (0x524D68). The
+/// port's fire, bound to a button of its own, is that twin.
+///
+/// 0x100 is the PC's option key (Ctrl, or the joystick's sixth button),
+/// which `Game_loop` opens the option screen with and `Pad_set` gives no
+/// `Key` bit. The port's settings are in its in-game menu, so that menu's
+/// key is the option key's counterpart; a film reads it before the menu
+/// does, as the original's film reads the pad with `Game_loop` not running.
 pub fn re2_skip_buttons(raw_mask: u16) -> u16 {
     let mut word = 0;
     if raw_mask & 0x10 != 0 {
         word |= MAP_BUTTON;
+    }
+    if raw_mask & 0x20 != 0 {
+        word |= FIRE_BUTTON;
     }
     if raw_mask & 0x80 != 0 {
         word |= 0x0001;
     }
     if raw_mask & 0x40 != 0 {
         word |= 0x0002;
+    }
+    if raw_mask & 0x100 != 0 {
+        word |= OPTION_BUTTON;
     }
     if raw_mask & 0x800 != 0 {
         word |= 0x0008;
@@ -1009,6 +1035,18 @@ mod tests {
 
     use crate::pack::PackWriter;
 
+    /// 0x9F0's bits and the port's button for each.
+    const RE2_SKIP_BUTTONS: [(u16, u16); 6] = [
+        (0x10, MAP_BUTTON),
+        (0x20, FIRE_BUTTON),
+        (0x40, 0x0002),
+        (0x80, 0x0001),
+        (0x100, OPTION_BUTTON),
+        (0x800, 0x0008),
+    ];
+    /// All six in the film button word.
+    const RE2_SKIPS: u16 = 0x000B | MAP_BUTTON | FIRE_BUTTON | OPTION_BUTTON;
+
     /// One 10-byte empty intra frame: a valid Cinepak header with no strips, so
     /// the decoder accepts it and leaves the canvas black.
     fn empty_frame() -> Vec<u8> {
@@ -1503,9 +1541,19 @@ mod tests {
         assert_eq!(re2_film(5, false).unwrap().subtitles, None);
         assert_eq!(RE2_ATTR[5] & 0x40, 0);
         assert_eq!(RE2_ATTR[10] & 0x40, 0);
-        assert_eq!(re2_skip_buttons(0x9F0), 0x000B | MAP_BUTTON);
-        assert_eq!(SKIPPABLE_MASK & MAP_BUTTON, 0, "RE 1's films don't take it");
+        assert_eq!(re2_skip_buttons(0x9F0), RE2_SKIPS);
+        assert_eq!(
+            SKIPPABLE_MASK & (MAP_BUTTON | FIRE_BUTTON | OPTION_BUTTON),
+            0,
+            "RE 1's films don't take them"
+        );
         assert_eq!(re2_skip_buttons(0), 0);
+        // Each of the mask's bits is a button of its own.
+        for (raw, button) in RE2_SKIP_BUTTONS {
+            assert_eq!(re2_skip_buttons(raw), button, "{raw:#x}");
+        }
+        // The d-pad and the shoulders are none either.
+        assert_eq!(re2_skip_buttons(!0x9F0), 0);
     }
 
     #[test]
@@ -1521,13 +1569,72 @@ mod tests {
         assert!(MovieSession::open_re2(&pack, 10, true).is_err());
         assert!(MovieSession::open_re2(&pack, 1, false).is_err());
         let mut session = MovieSession::open_re2(&pack, 10, false).unwrap();
-        assert_eq!(session.skip_mask(), 0x000B | MAP_BUTTON);
+        assert_eq!(session.skip_mask(), RE2_SKIPS);
         // The first poll latches; a d-pad edge doesn't skip, a confirm does.
         assert!(!session.poll_skip(0));
         assert!(!session.poll_skip(0x0010));
         assert!(!session.poll_skip(0));
         assert!(session.poll_skip(0x0001));
         assert!(session.skipped());
+    }
+
+    #[test]
+    fn each_button_of_an_re2_films_mask_ends_it_and_none_ends_one_without() {
+        let mut writer = PackWriter::new();
+        for name in ["r204l", "r700l"] {
+            writer
+                .add(
+                    &format!("movie/{name}.mpg"),
+                    include_bytes!("mpeg/testdata/tiny.mpg").to_vec(),
+                )
+                .unwrap();
+        }
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        // Film 10's mask is 0x9F0 and film 12's is 0, which the gallery
+        // plays with 0x9F0 all the same.
+        type Open = fn(&Pack) -> MovieSession;
+        let opened: [(&str, Open, bool); 3] = [
+            (
+                "a film",
+                |pack| MovieSession::open_re2(pack, 10, false).unwrap(),
+                true,
+            ),
+            (
+                "an unskippable film",
+                |pack| MovieSession::open_re2(pack, 12, false).unwrap(),
+                false,
+            ),
+            (
+                "the gallery's",
+                |pack| MovieSession::open_re2_gallery(pack, 12, false).unwrap(),
+                true,
+            ),
+        ];
+        for (what, open, skips) in opened {
+            for (raw, button) in RE2_SKIP_BUTTONS {
+                // By the frames' poll of the held word.
+                let mut session = open(&pack);
+                assert!(!session.poll_skip(0));
+                assert_eq!(session.poll_skip(button), skips, "{what}, {raw:#x}");
+                assert_eq!(session.skipped(), skips);
+                // By the ticks' word, as a headless run has it.
+                let mut session = open(&pack);
+                assert_ne!(session.tick(0, None), MovieTick::Skipped);
+                let ended = session.tick(button, None) == MovieTick::Skipped;
+                assert_eq!(ended, skips, "{what}, {raw:#x} by the tick");
+            }
+            // The d-pad and the shoulders end none.
+            let mut session = open(&pack);
+            assert!(!session.poll_skip(0));
+            assert!(!session.poll_skip(0x0FF0));
+            // Fire held as the film starts isn't a press: let go and
+            // pressed again, it is.
+            let mut session = open(&pack);
+            assert!(!session.poll_skip(FIRE_BUTTON));
+            assert!(!session.poll_skip(FIRE_BUTTON));
+            assert!(!session.poll_skip(0));
+            assert_eq!(session.poll_skip(FIRE_BUTTON), skips, "{what}");
+        }
     }
 
     #[test]
