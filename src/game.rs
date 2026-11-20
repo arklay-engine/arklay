@@ -3746,6 +3746,10 @@ pub struct GameState {
     /// status screen for the bit, as for START's press, on the first tick
     /// its gate lets it.
     pub re2_status_raised: bool,
+    /// What else `Game_loop`'s gate wants for that bit, as the session has
+    /// it before the tick: task 1 is busy (`Die`, the save screen, a
+    /// drawer's close-up) or the player's own `0x40` is up.
+    pub re2_status_gate_held: bool,
     /// `Game_loop` took that bit this tick, with no START pressed: the
     /// message word as it was, for the session's request.
     pub re2_status_scripted: Option<u16>,
@@ -4346,6 +4350,7 @@ impl Default for GameState {
             re2_box_bytes: itembox2::BoxPage::default(),
             re2_box_open: false,
             re2_status_raised: false,
+            re2_status_gate_held: false,
             re2_status_scripted: None,
             re2_status_request: false,
             re2_script_map: None,
@@ -9758,11 +9763,19 @@ impl GameState {
     /// in the script's own pass, and the item box as its lid hands over.
     /// The bank doesn't hold it.
     pub fn re2_status_task_up(&self) -> bool {
+        self.re2_status_task_owned() || self.re2_status_raised
+    }
+
+    /// The bit as a status task's own: asked for by `Sce_Item`, `Sce_Status`
+    /// or `Sce_84`, or up with its screen. Not a script's own write of it
+    /// ([`Self::re2_status_raised`]), and not the map key's press before
+    /// `Game_loop` has tested it, after the scripts
+    /// ([`Self::re2_status_start`] is still up).
+    pub fn re2_status_task_owned(&self) -> bool {
         self.re2_item_get_status()
-            || self.re2_status_raised
             || self.re2_status_request
             || self.re2_script_map.is_some()
-            || self.re2_key_map.is_some()
+            || (self.re2_key_map.is_some() && !self.re2_status_start)
             || self.re2_items.is_some()
             || self.re2_box_open
             || self.re2_box.is_some()

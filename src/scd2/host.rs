@@ -3025,11 +3025,17 @@ impl Host for GameHost<'_> {
         // press, after the scripts (room 111, once the crank is gone). The
         // bank never holds the bit.
         if bank == STATUS_BANK && index == STATUS_WINDOW {
-            if op == 0 {
-                self.game.re2_status_raised = false;
-            } else if !self.game.re2_status_task_up() {
-                self.game.re2_status_raised = true;
-            }
+            // A status task's own bit isn't the script's to change; `Set`'s
+            // 7 turns the bit over.
+            let owned = self.game.re2_status_task_owned();
+            let up = owned || self.game.re2_status_raised;
+            let raise = match op {
+                0 => false,
+                1 => true,
+                7 => !up,
+                _ => return,
+            };
+            self.game.re2_status_raised = raise && !owned;
             return;
         }
         self.game.re2.set_flag(bank, index, op);
@@ -6118,6 +6124,27 @@ mod tests {
         assert!(!game.re2.flag(STATUS_BANK, STATUS_WINDOW));
         GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 0);
         assert!(!game.re2_status_raised && !window(&mut game));
+        // `Set`'s 7 turns it over: twice leaves it as it was.
+        GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 7);
+        assert!(game.re2_status_raised);
+        GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 7);
+        assert!(!game.re2_status_raised);
+        // The map key's press isn't the bit until `Game_loop` has tested it,
+        // after the scripts: a script's write on that tick stands.
+        game.request_re2_key_map(false);
+        game.re2_status_start = true;
+        assert!(!window(&mut game), "the scripts don't see the key");
+        GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 1);
+        assert!(game.re2_status_raised);
+        // A status task's own bit is not the script's: nothing is raised
+        // under it, and a turn-over doesn't lower it.
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.re2_status_request = true;
+        for op in [1, 7, 0] {
+            GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, op);
+            assert!(!game.re2_status_raised && window(&mut game), "op {op}");
+        }
     }
 
     /// `Status`'s start (`0x501BD0`): the Side Pack's flag makes the
