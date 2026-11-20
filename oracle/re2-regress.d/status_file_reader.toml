@@ -1,14 +1,14 @@
 [[run]]
 name = "status_file_reader"
-# the FILE page's reader (St_menu0_file subs 6 to 0x12) with files 1 and 3 in binder 0: open the binder, move its list, read file 1 to its end marker and back, read file 3 and close it, reopen the binder, turn to an empty one (oracle/re2.md, "Status screen"). The whole run's frames are judged, and each part on its own (`frame_windows`): the binders at rest, zoomed, spun and stacked (360 to 659, 1134 to 1199, 1394 to 1899), the screen's parts sliding out (660 to 675, 1200 to 1215) and back (1120 to 1133, 1380 to 1393), and the pages (676 to 1119, 1216 to 1379). Each limit is a little above the measured mean; the binders' windows sit near 1.4, the error of their textures drawn at 320 x 240 against the original's 640 x 480.
+# the FILE page's reader (St_menu0_file subs 6 to 0x12) with files 1 and 3 in binder 0: open the binder, move its list, read file 1 to its end marker and back, read file 3 and close it, reopen the binder, turn to an empty one (oracle/re2.md, "Status screen"). The whole run's frames are judged, and each part on its own (`frame_windows`): the binders at rest, zoomed, spun and stacked (360 to 659, 1134 to 1199, 1394 to 1899), the screen's parts sliding out (660 to 675, 1200 to 1215) and back (1120 to 1133, 1380 to 1393), and the pages (676 to 1119, 1216 to 1379). Each limit is a little above the measured mean; the binders' windows sit near 0.7, the error of their textures drawn at 320 x 240 against the original's 640 x 480.
 setup_script = "status_file_reader.lua"
 input = "status_file_reader.txt"
 input_shift = 344
 ticks = 1900
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,fl,snd,fgstat"
 frames = [360, 1899]
-frame_max_mean = 0.8
-frame_windows = [[360, 519, 0.95], [520, 659, 1.5], [660, 675, 0.45], [676, 1119, 0.25], [1120, 1133, 0.55], [1134, 1199, 1.5], [1200, 1215, 0.45], [1216, 1379, 0.35], [1380, 1393, 0.55], [1394, 1599, 1.55], [1600, 1899, 1.0]]
+frame_max_mean = 0.42
+frame_windows = [[360, 519, 0.26], [520, 659, 0.75], [660, 675, 0.29], [676, 1119, 0.15], [1120, 1133, 0.35], [1134, 1199, 0.76], [1200, 1215, 0.29], [1216, 1379, 0.29], [1380, 1393, 0.35], [1394, 1599, 0.8], [1600, 1899, 0.51]]
 expect = "match"
 record = "--no-enemies --warp 102:-11378:0:-4587:0 --life 200 --file 0:1 --file 1:3"
 
@@ -23,8 +23,8 @@ input_shift = 344
 ticks = 2400
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,fl,snd,fgstat"
 frames = [360, 2399]
-frame_max_mean = 0.6
-frame_windows = [[360, 480, 0.85], [481, 659, 1.7], [675, 1459, 0.1], [1575, 1839, 0.15], [1575, 1580, 0.15], [1955, 2179, 0.15], [1955, 1960, 0.15], [2193, 2399, 1.7]]
+frame_max_mean = 0.31
+frame_windows = [[360, 480, 0.05], [481, 659, 0.87], [675, 1459, 0.05], [1575, 1839, 0.05], [1575, 1580, 0.05], [1955, 2179, 0.05], [1955, 1960, 0.05], [2193, 2399, 0.86]]
 expect = "match"
 record = "--no-enemies --warp 102:-11378:0:-4587:0 --life 200 --file 1:0xB --file 2:0x13"
 
@@ -41,7 +41,7 @@ input_shift = 344
 ticks = 1300
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,fl,snd,fgstat"
 frames = [360, 1299]
-frame_max_mean = 0.8
-frame_windows = [[360, 480, 0.85], [481, 659, 1.7], [675, 1099, 0.12], [1113, 1299, 1.7]]
+frame_max_mean = 0.41
+frame_windows = [[360, 480, 0.05], [481, 659, 0.88], [675, 1099, 0.05], [1113, 1299, 0.9]]
 expect = "match"
 record = "--start claire --no-enemies --warp 102:-11378:0:-4587:0 --life 200 --flag 4:15 --flag 9:64"

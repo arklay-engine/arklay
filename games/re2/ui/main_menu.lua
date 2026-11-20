@@ -37,6 +37,19 @@ local OPEN_SHOWN, CLOSE_BLACK = 7, 7
 -- The sheets' texture handles in the original's table (`0x67C7D8`): the
 -- character's `st<n>_jp.tim` TIMs 0-7, then the three icon pages.
 local ST, ICONS = 0x12, 0x1A
+-- How the PC version shows each sheet's 5-bit colours, by its frames: most
+-- with a level's top bits below it (level 20 is 165), and the counts'
+-- digits (the screen's third sheet), the icons, the item box's sheet and
+-- the maps at eight times the level plus 7 (level 10 is 87). The screen's
+-- eight sheets are by number; the rest by name.
+local WIDEN = {
+    [0] = "bits", "bits", "seven", "bits", "bits", "bits", "bits", "bits",
+    icons = "seven",
+    box = "seven",
+    map = "seven",
+    check = "bits",
+    file = "bits",
+}
 
 -- The page's frame (texture 0x12), drawn first, in the original's order.
 -- `msg` marks the message box's pieces, which CHECK moves.
@@ -484,24 +497,15 @@ local function art(api)
     return s.art
 end
 
--- The PlayStation's `rgb / 128` modulation as a tint.
-local function tint(rgb)
-    if rgb == nil then
-        return nil
-    end
-    return ("#%02X%02X%02X"):format(
-        min(255, rgb[1] * 2),
-        min(255, rgb[2] * 2),
-        min(255, rgb[3] * 2)
-    )
-end
-
+-- A sprite of the screen's sheets under the primitive's colour, 0x80 the
+-- texel as it is, in the PC version's colours (`WIDEN`).
 local function sprite(api, d, texture, x, y, w, h, u, v, rgb, clut)
     local handle = d.pages[texture]
     if handle == nil then
         return
     end
-    api:page_sprite_scaled(handle, u, v, w, h, d.ox + x, d.oy + y, w, h, clut or 0, 255, tint(rgb))
+    local widen = texture >= ICONS and WIDEN.icons or WIDEN[texture - ST]
+    api:page_sprite_modulated(handle, u, v, w, h, d.ox + x, d.oy + y, w, h, clut or 0, rgb, widen)
 end
 
 local function pieces(api, d, list, dx, dy)
@@ -762,7 +766,7 @@ local function check_picture(api, d, page, y)
     end
     local handle = pictures[item]
     if handle then
-        api:page_sprite_scaled(handle, 0, 0, 112, 72, d.ox + 57, d.oy + y + 10, 112, 72, 0, 255)
+        api:page_sprite_modulated(handle, 0, 0, 112, 72, d.ox + 57, d.oy + y + 10, 112, 72, 0, nil, WIDEN.check)
     end
 end
 
@@ -996,8 +1000,8 @@ local function draw_file_page(api, d, file, sprites)
         end
         if handle ~= nil then
             local c = p.colour
-            local rgb = c ~= 0x80 and { c, c, c } or nil
-            api:page_sprite_scaled(handle, p.u, p.v, p.w, p.h, d.ox + p.x, d.oy + p.y, p.w, p.h, 0, 255, tint(rgb))
+            local widen = p.chunk ~= nil and WIDEN.file or WIDEN[p.sheet]
+            api:page_sprite_modulated(handle, p.u, p.v, p.w, p.h, d.ox + p.x, d.oy + p.y, p.w, p.h, 0, { c, c, c }, widen)
         end
     end
 end
@@ -1015,33 +1019,15 @@ local function map_art(api, d, number)
     return pages
 end
 
--- A translucent sprite (`0x440280` with the primitive's semi-transparency
--- on): every texel is averaged with the frame, the STP bit or not; colour
--- 0 is clear. `rgb` modulates it.
-local function translucent(api, d, handle, row, rgb, x, y, w, h, u, v)
+-- A translucent sprite of the map's (`0x440280` with the primitive's
+-- semi-transparency on): every texel goes half over the frame, the STP bit
+-- or not; colour 0 is clear. `level` modulates it.
+local function translucent(api, d, handle, row, level, x, y, w, h, u, v)
     if handle == nil then
         return
     end
-    d.luts = d.luts or {}
-    local key = ("%d:%d:%d"):format(handle, row, rgb or 128)
-    local lut = d.luts[key]
-    if lut == nil then
-        local palette = api:page_palette(handle, row) or {}
-        local stp = api:page_stp(handle, row) or {}
-        local m = rgb or 128
-        lut = {}
-        for index = 1, 255 do
-            local c = palette[index]
-            if c ~= nil and (c ~= 0 or stp[index]) then
-                local r = min(255, ((c >> 16) & 0xFF) * m // 128)
-                local g = min(255, ((c >> 8) & 0xFF) * m // 128)
-                local b = min(255, (c & 0xFF) * m // 128)
-                lut[index] = (r << 16) | (g << 8) | b
-            end
-        end
-        d.luts[key] = lut
-    end
-    api:page_lut(handle, u, v, w, h, d.ox + x, d.oy + y, lut, false, { blend = "half" })
+    local rgb = level and { level, level, level } or nil
+    api:page_sprite_modulated(handle, u, v, w, h, d.ox + x, d.oy + y, w, h, row, rgb, WIDEN.map, "half")
 end
 
 -- The floor's map (`0x4FA990`), in the original's order: the rooms' fills,
@@ -1064,8 +1050,8 @@ local function draw_map(api, d, view)
         if handle == nil then
             return
         end
-        local rgb = colour ~= 0x80 and { colour, colour, colour } or nil
-        api:page_sprite_scaled(handle, u, v, w, h, d.ox + x, d.oy + y, w, h, 0, 255, tint(rgb))
+        local rgb = { colour, colour, colour }
+        api:page_sprite_modulated(handle, u, v, w, h, d.ox + x, d.oy + y, w, h, 0, rgb, WIDEN.map)
     end
     for _, room in ipairs(view.rooms) do
         local fill = room.fill
@@ -1086,8 +1072,8 @@ local function draw_map(api, d, view)
         local o = room.outline
         local handle = pages[o.texture]
         if handle ~= nil then
-            api:page_sprite_scaled(handle, o.u, o.v, room.w, room.h, d.ox + room.x, d.oy + room.y,
-                room.w, room.h, o.clut, 255)
+            api:page_sprite_modulated(handle, o.u, o.v, room.w, room.h, d.ox + room.x, d.oy + room.y,
+                room.w, room.h, o.clut, nil, WIDEN.map)
         end
     end
     local doors = view.doors or {}
@@ -1116,7 +1102,7 @@ local function picture(api, d, item, x, y, w, h)
     end
     local handle = pictures[item]
     if handle then
-        api:page_sprite_scaled(handle, 0, 0, 112, 72, d.ox + x, d.oy + y, w, h, 0, 255)
+        api:page_sprite_modulated(handle, 0, 0, 112, 72, d.ox + x, d.oy + y, w, h, 0, nil, WIDEN.check)
     end
 end
 
@@ -1240,7 +1226,7 @@ end
 function B.box_sprite(api, d, x, y, w, h, u, v)
     local handle = B.box_art(api, d)
     if handle then
-        api:page_sprite_scaled(handle, u, v, w, h, d.ox + B.X + x, d.oy + B.Y + y, w, h, 0, 255)
+        api:page_sprite_modulated(handle, u, v, w, h, d.ox + B.X + x, d.oy + B.Y + y, w, h, 0, nil, WIDEN.box)
     end
 end
 
@@ -1251,13 +1237,13 @@ function B.box_icon(api, d, item, mark, x, y)
     local texture, u, v = icon_cell(item)
     local handle = d.pages[texture]
     if handle ~= nil then
-        api:page_sprite_scaled(handle, u, v, 39, 30, d.ox + x, d.oy + y, 26, 20, 0, 255)
+        api:page_sprite_modulated(handle, u, v, 39, 30, d.ox + x, d.oy + y, 26, 20, 0, nil, WIDEN.icons)
     end
     if mark ~= 0 then
         local half, hu, hv = half_cell(item)
         handle = d.pages[half]
         if handle ~= nil then
-            api:page_sprite_scaled(handle, hu, hv, 40, 30, d.ox + x + 0x18, d.oy + y, 26, 20, 0, 255)
+            api:page_sprite_modulated(handle, hu, hv, 40, 30, d.ox + x + 0x18, d.oy + y, 26, 20, 0, nil, WIDEN.icons)
         end
     end
 end
@@ -1385,8 +1371,8 @@ function B.draw_box(api)
         local w = mark ~= 0 and 0x30 or 0x18
         local handle = B.box_art(api, d)
         if handle then
-            api:page_sprite_scaled(handle, 40, 60, mark ~= 0 and 80 or 40, 30,
-                d.ox + B.X + 0x92, d.oy + B.Y + scroll + 20 * incoming + 0x1B, w + 2, 20, 0, 255)
+            api:page_sprite_modulated(handle, 40, 60, mark ~= 0 and 80 or 40, 30,
+                d.ox + B.X + 0x92, d.oy + B.Y + scroll + 20 * incoming + 0x1B, w + 2, 20, 0, nil, WIDEN.box)
         end
     end
 

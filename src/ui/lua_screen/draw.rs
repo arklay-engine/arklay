@@ -441,6 +441,72 @@ pub(super) fn sprite_colour(tint: Tint, scale: u8) -> [f32; 3] {
         .map(|channel| f32::from(channel) / 255.0 * f32::from(scale) / 255.0)
 }
 
+/// How a page's 15-bit colours became 8-bit ones in RE 2's PC version, which
+/// differs from sheet to sheet, by its frames. The pack's are the decoder's,
+/// `v * 255 / 31` of a 5-bit level `v`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Widen {
+    /// As the pack has them.
+    Kept,
+    /// The level's top bits again below it, `v << 3 | v >> 2`.
+    Bits,
+    /// `8v + 7`, and 0 for 0.
+    Seven,
+}
+
+impl Widen {
+    pub(super) fn named(name: Option<&str>) -> mlua::Result<Self> {
+        match name {
+            None => Ok(Self::Kept),
+            Some("bits") => Ok(Self::Bits),
+            Some("seven") => Ok(Self::Seven),
+            Some(other) => Err(mlua::Error::RuntimeError(format!(
+                "unknown widening `{other}` (bits, seven)"
+            ))),
+        }
+    }
+
+    /// The channel `channel` of a pack colour. One that isn't a 5-bit
+    /// level's (a mod's own page) is kept.
+    pub(super) fn channel(self, channel: u8) -> u8 {
+        let level = (u32::from(channel) * 31).div_ceil(255);
+        if level * 255 / 31 != u32::from(channel) {
+            return channel;
+        }
+        match self {
+            Self::Kept => channel,
+            Self::Bits => (level << 3 | level >> 2) as u8,
+            Self::Seven if level == 0 => 0,
+            Self::Seven => (level * 8 + 7) as u8,
+        }
+    }
+}
+
+/// The colours RE 2's PC version draws CLUT row `row` of `texture` in as a
+/// sprite under the colour `rgb`, by its frames: each channel of the texel
+/// as `widen` has it, times twice the colour's, capped at 255, over 255 and
+/// rounded. So 0x80 is the texel as it is, and nothing brightens it. Index
+/// 0 draws nothing, as a sprite's doesn't, and nor does black without the
+/// STP bit, the PlayStation's clear colour.
+pub(super) fn modulated_colours(
+    texture: &crate::model::Texture8,
+    row: usize,
+    rgb: [u8; 3],
+    widen: Widen,
+) -> [Option<[u8; 3]>; 256] {
+    std::array::from_fn(|index| {
+        let texel = texture.palette(row, index as u8);
+        let clear = texel[..3] == [0; 3] && !texture.palette_stp(row, index as u8);
+        (index != 0 && texel[3] != 0 && !clear).then(|| {
+            std::array::from_fn(|channel| {
+                let wide = u32::from(widen.channel(texel[channel]));
+                let by = (u32::from(rgb[channel]) * 2).min(255);
+                ((wide * by + 127) / 255) as u8
+            })
+        })
+    })
+}
+
 /// A `(handle)` or `(nil, message)` load result.
 fn loaded(result: anyhow::Result<usize>) -> (Option<usize>, Option<String>) {
     match result {
@@ -769,6 +835,72 @@ mod tests {
     /// keyframes with roots at `(1, 2, 3)` and `(0, 2, 3)`.
     fn character() -> Emd {
         crate::emd2::parse_pld(&crate::emd2::tests::pld()).unwrap()
+    }
+
+    #[test]
+    fn a_sheets_levels_widen_and_modulate_as_the_pc_version_shows_them() {
+        // The pack's colour of a 5-bit level, and the two ways the PC
+        // version has it.
+        let pack = |level: u32| (level * 255 / 31) as u8;
+        for (level, bits, seven) in [
+            (0, 0, 0),
+            (1, 8, 15),
+            (7, 57, 63),
+            (10, 82, 87),
+            (20, 165, 167),
+            (31, 255, 255),
+        ] {
+            assert_eq!(Widen::Kept.channel(pack(level)), pack(level));
+            assert_eq!(Widen::Bits.channel(pack(level)), bits, "{level}");
+            assert_eq!(Widen::Seven.channel(pack(level)), seven, "{level}");
+        }
+        assert_eq!(pack(20), 164);
+        // A colour that is no level's is a mod's own, and kept.
+        for widen in [Widen::Bits, Widen::Seven] {
+            assert_eq!(widen.channel(100), 100);
+            assert_eq!(widen.channel(254), 254);
+        }
+        assert_eq!(Widen::named(None).unwrap(), Widen::Kept);
+        assert_eq!(Widen::named(Some("bits")).unwrap(), Widen::Bits);
+        assert_eq!(Widen::named(Some("seven")).unwrap(), Widen::Seven);
+        assert!(Widen::named(Some("eight")).is_err());
+
+        // A row whose index `i` is red at level `i`, with black at 5 and 6
+        // and the STP bit on 6.
+        let mut palettes: Vec<[u8; 4]> = (0..256u32).map(|i| [pack(i & 31), 0, 0, 255]).collect();
+        palettes[5] = [0, 0, 0, 255];
+        palettes[6] = [0, 0, 0, 255];
+        let mut stp = vec![false; 256];
+        stp[6] = true;
+        let texture = crate::model::Texture8 {
+            width: 1,
+            height: 1,
+            indices: vec![0],
+            palettes,
+            stp,
+        };
+        let red = |rgb: u8, widen: Widen| {
+            let colours = modulated_colours(&texture, 0, [rgb; 3], widen);
+            move |index: usize| colours[index].map(|colour| colour[0])
+        };
+        // 0x80 is the texel as it is, and more is no brighter.
+        let own = red(0x80, Widen::Bits);
+        assert_eq!((own(20), own(31)), (Some(165), Some(255)));
+        assert_eq!(red(0xFF, Widen::Bits)(20), Some(165));
+        // Index 0 is clear, and black without the STP bit.
+        assert_eq!((own(0), own(5), own(6)), (None, None, Some(0)));
+        // Less dims it, rounded: the status screen's dim tabs (40), a lit
+        // label's other channels (64) and the cursor's pulse at 122.
+        let dim = red(40, Widen::Bits);
+        assert_eq!((dim(3), dim(14), dim(19)), (Some(8), Some(36), Some(49)));
+        let half = red(64, Widen::Bits);
+        assert_eq!((half(13), half(21)), (Some(54), Some(87)));
+        let pulse = red(122, Widen::Bits);
+        assert_eq!((pulse(13), pulse(18)), (Some(102), Some(142)));
+        assert_eq!(red(122, Widen::Seven)(13), Some(106));
+        // Each channel takes its own colour.
+        let colours = modulated_colours(&texture, 0, [0x80, 0x40, 0], Widen::Bits);
+        assert_eq!(colours[20], Some([165, 0, 0]));
     }
 
     #[test]

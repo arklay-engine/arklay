@@ -1252,6 +1252,107 @@ end
 }
 
 #[test]
+fn a_modulated_sprite_draws_the_pc_versions_colours_and_tints_its_hd_page() {
+    use crate::pack::PackWriter;
+
+    // A 64 x 4 sheet whose texel at column `x` is index `x`: red at level
+    // `x & 31`, green at level `x >> 5`.
+    let tim = crate::emd2::tests::tim(64, 4, 1, |x, _| x as u8);
+    let source = r#"
+function update(api, input) end
+
+function draw(api)
+api:fill_rect(0, 20, 320, 5, 8, 0, 0)
+local sheet = api:page("art/sheet")
+api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 20, 64, 1, 0)
+api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 21, 64, 1, 0, nil, "bits")
+api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 22, 64, 1, 0, { 0x80, 0x80, 0x80 }, "seven")
+api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 23, 64, 1, 0, { 40, 0x80, 40 }, "bits")
+api:page_sprite_modulated(sheet, 0, 0, 64, 1, 10, 24, 64, 1, 0, nil, "seven", "half")
+end
+"#;
+    let build = |hd: Option<(u32, Vec<u8>)>| {
+        let mut writer = PackWriter::new();
+        writer
+            .add("screen/save.lua", source.as_bytes().to_vec())
+            .unwrap();
+        writer.add("art/sheet.tim", tim.clone()).unwrap();
+        if let Some((hash, bytes)) = hd {
+            writer
+                .add(&format!("hires/misc/{hash:08X}.bmp"), bytes)
+                .unwrap();
+        }
+        Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
+    };
+    let fixture = |hd| {
+        let pack: &'static Pack = Box::leak(Box::new(build(hd)));
+        Fixture {
+            pack,
+            text: Text::load(pack, Some("en-US")),
+            font: test_font(),
+            dir: TempDir::new("modulated-sprite"),
+        }
+    };
+    let plain = fixture(None);
+    let mut screen = plain.load();
+    let frame = draw(&mut screen, &plain.context());
+    assert!(!screen.failed());
+    let pixel = |x: usize, y: usize| {
+        let index = (y * 320 + 10 + x) * 4;
+        [
+            frame.rgba[index],
+            frame.rgba[index + 1],
+            frame.rgba[index + 2],
+        ]
+    };
+    // The pack's colours, each level's top bits below it, and eight times
+    // the level plus 7 with 0 kept.
+    assert_eq!(pixel(20, 20), [164, 0, 0]);
+    assert_eq!(pixel(20, 21), [165, 0, 0]);
+    assert_eq!(pixel(20, 22), [167, 0, 0]);
+    assert_eq!(pixel(32 + 10, 22), [87, 15, 0]);
+    assert_eq!(pixel(32, 22), [0, 15, 0]);
+    // Index 0 is clear: the fill shows.
+    for row in 20..25 {
+        assert_eq!(pixel(0, row), [8, 0, 0], "{row}");
+    }
+    // Each channel under its own colour, rounded: red level 19 (156) at 40
+    // is 49, and green level 1 (8) at 0x80 is itself.
+    assert_eq!(pixel(32 + 19, 23), [49, 8, 0]);
+    // Half is 128 of 255 over the frame: red level 2 (23) over 8 is 16.
+    assert_eq!(pixel(2, 24), [16, 0, 0]);
+    assert_eq!(pixel(32 + 22, 24), [96, 8, 0]);
+
+    // An HD replacement of the page is drawn in its own colours instead,
+    // under twice the colour as a tint.
+    let crate::assets::Artwork::Indexed(page) =
+        crate::ui::load_page(plain.pack, "art/sheet").unwrap()
+    else {
+        panic!("an indexed page");
+    };
+    let candidate = crate::hires::page_candidates(&page, 0)[0];
+    let hd = crate::bmp::encode_to_vec(&crate::state::Image {
+        width: 128,
+        height: 8,
+        rgba: [0, 0, 255, 255].repeat(128 * 8),
+    })
+    .unwrap();
+    let replaced = fixture(Some((candidate.hash, hd)));
+    let mut screen = replaced.load();
+    let mut recorded = crate::render::Framebuffer::new();
+    recorded.record();
+    screen.draw(&replaced.context(), &mut recorded);
+    let quads = hd_quads(&recorded);
+    assert_eq!(quads.len(), 5);
+    for quad in &quads {
+        assert!(matches!(quad.image, crate::draw2d::Kind::Art(_)));
+    }
+    assert_eq!(quads[0].dst, [10.0, 20.0, 74.0, 21.0]);
+    assert_eq!(quads[1].colour, [1.0; 3]);
+    assert_eq!(quads[3].colour, [80.0 / 255.0, 1.0, 80.0 / 255.0]);
+}
+
+#[test]
 fn replaced_entry_art_is_recorded_as_an_hd_item_where_it_draws() {
     let full = crate::render::brightness_scale(2);
     let sprite_colour = [f32::from(full) / 255.0; 3];

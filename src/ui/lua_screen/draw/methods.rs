@@ -892,4 +892,78 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
             Ok(())
         },
     );
+
+    // `page_sprite_modulated(page, sx, sy, sw, sh, dx, dy, dw, dh, clut,
+    // rgb, widen[, blend])`: a sheet region as RE 2's PC version draws a
+    // sprite ([`modulated_colours`]): `rgb` is `{r, g, b}` with 0x80 the
+    // texel as it is (the default), and `widen` how the page's colours
+    // became 8-bit ([`Widen`]). An HD replacement is drawn under the same
+    // colour instead, in its own colours; so is a page that isn't indexed.
+    #[allow(clippy::type_complexity)]
+    methods.add_method_mut(
+        "page_sprite_modulated",
+        |_lua,
+         api,
+         (handle, sx, sy, sw, sh, dx, dy, dw, dh, clut, rgb, widen, blend): (
+            usize,
+            i32,
+            i32,
+            i32,
+            i32,
+            i32,
+            i32,
+            i32,
+            i32,
+            usize,
+            Option<Table>,
+            Option<String>,
+            Option<Value>,
+        )| {
+            let rgb = match rgb {
+                Some(rgb) => {
+                    let channel = |at: usize| rgb.get::<i64>(at).map(byte);
+                    [channel(1)?, channel(2)?, channel(3)?]
+                }
+                None => [0x80; 3],
+            };
+            let widen = Widen::named(widen.as_deref())?;
+            let blend = sprite_blend_value(blend.as_ref())?;
+            let Api {
+                host, framebuffer, ..
+            } = api;
+            let framebuffer = framebuffer.as_deref_mut().ok_or_else(no_draw)?;
+            let art = host.assets.page(handle)?;
+            let (src, dst, row) = (rect(sx, sy, sw, sh), rect(dx, dy, dw, dh), clut.min(255));
+            // The colour as a multiplier, for what has colours of its own.
+            let [r, g, b] = rgb.map(|channel| byte(i64::from(channel) * 2));
+            let tint = crate::font::Tint::Rgb(r, g, b);
+            // That version's half blend is the sprite at 128 of 255.
+            let mixed = match blend {
+                SpriteBlend::Half => SpriteBlend::Alpha(128),
+                other => other,
+            };
+            let draw = |framebuffer: &mut Framebuffer| match art {
+                Artwork::Indexed(texture) => {
+                    let colours = modulated_colours(texture, row, rgb, widen);
+                    framebuffer.draw_indexed_sprite_lut(texture, src, dst, &colours, mixed);
+                }
+                Artwork::Rgba(_) => {
+                    framebuffer.draw_page_sprite_scaled(art, src, dst, row, 255, tint, blend);
+                }
+            };
+            let hd = match blend {
+                SpriteBlend::Alpha(_) => None,
+                _ => hd_art(&host.assets, api.cx.pack, framebuffer, handle, row),
+            };
+            match hd {
+                Some(hd) => {
+                    let (corners, uv) = sprite_quad(&hd, src, dst, [false; 2]);
+                    let colour = sprite_colour(tint, 255);
+                    framebuffer.draw_replaced(hd, corners, uv, colour, draw);
+                }
+                None => draw(framebuffer),
+            }
+            Ok(())
+        },
+    );
 }
