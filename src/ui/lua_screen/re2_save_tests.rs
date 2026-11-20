@@ -882,8 +882,10 @@ fn a_load_screen_left_without_a_load_says_so() {
 }
 
 /// Classic REbirth's print as a save's label shows it (`title_load_game`):
-/// a glyph a pixel closer than its width, the digits, `/` and `-` a pixel
-/// later and a row up, and `.` and `:` a pixel later on the letters' row.
+/// a glyph a pixel closer than its width; the digits, `/` and `-` by their
+/// ink and a row up, and `.` and `:` by theirs on the letters' row. The
+/// widths are the font's: a letter's 8 here, and the executable's table's
+/// for the rest.
 #[test]
 fn classic_rebirths_print_sets_the_digits_later_and_a_row_up() {
     let dir = folder("cr-print");
@@ -891,14 +893,31 @@ fn classic_rebirths_print_sets_the_digits_later_and_a_row_up() {
     let placed: String = screen.test_eval(
         r#"local print = require("ui/cr_text").print
         local out, api = {}, {}
-        function api:text_width() return 8 end
+        local widths = { ["/"] = 15, ["-"] = 14, ["."] = 5, [":"] = 7, ["?"] = 10, n = 11, f = 9, O = 12, Q = 13 }
+        function api:text_width(glyph) return widths[glyph] or (glyph:match("%d") and 12) or 8 end
+        local cr = require("ui/cr_text")
+        out[#out + 1] = tostring(cr.by_table(api)) .. cr.width(api, "f1O") .. ":"
         function api:text(x, y, glyph) out[#out + 1] = glyph .. "@" .. x .. "," .. y end
         print(api, 0, 10, "nA1/-.:9n")
+        out[#out + 1] = "|"
+        print(api, 50, 10, "0123456789n")
+        -- A font with one width of its own isn't the table's, though its
+        -- digits are as wide: its places are each glyph's own, as over a
+        -- font of ink widths.
+        widths.f = 8
+        out[#out + 1] = "|" .. tostring(cr.by_table(api)) .. cr.width(api, "f1O") .. ":"
+        function api:text_width() return 8 end
+        print(api, 0, 10, "nA1/-.:9nfO?")
         return table.concat(out, " ")"#,
     );
+    // Every digit by its ink: a cell is drawn a pixel before its place (the
+    // table's bearing), so the 1, whose ink starts five columns into its
+    // cell and is four wide, is drawn three back and moves on by four.
     assert_eq!(
         placed,
-        "n@0,10 A@7,10 1@15,9 /@22,9 -@29,9 .@36,10 :@43,10 9@50,9 n@56,10"
+        "true23: n@0,10 A@10,10 1@14,9 /@22,9 -@35,9 .@47,10 :@50,10 9@55,9 n@65,10 | \
+         0@51,9 1@58,9 2@65,9 3@74,9 4@85,9 5@96,9 6@107,9 7@116,9 8@126,9 9@137,9 n@147,10 \
+         |false29: n@0,10 A@7,10 1@15,9 /@22,9 -@29,9 .@36,10 :@43,10 9@50,9 n@56,10 f@63,10 O@71,10 ?@78,10"
     );
 }
 

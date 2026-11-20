@@ -51,7 +51,8 @@ local ROW_Y, ROW_H = 0x31, 15
 local BAR_X, BAR_W, BAR_H, BAR_GREY = 0x0A, 0x12C, 0x0E, 0x50
 local TEXT_DY = 0
 local FOOTER_Y = 0xD8
--- The footer's count has its digits in cells as wide as the widest digit.
+-- The footer's count has its digits in cells as wide as the widest digit,
+-- which the font's own table gives every digit.
 local DIGIT_W = 12
 local BLUE = "#1E64FF"
 -- The overwrite choice under the window: the question, the two answers a
