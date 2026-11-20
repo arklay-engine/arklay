@@ -288,7 +288,8 @@ fn check_names_a_key_when_its_description_closes() {
             (600, CONFIRM),
         ],
     );
-    assert_eq!(run.game.examined_flags(), [0; 4]);
+    // It has no class: `Flg_on` sets class 0's flag, which names nothing.
+    assert_eq!(run.game.examined_flags(), 0x8000_0000u32.to_le_bytes());
 }
 
 /// `inv_mix`: COMBN the green herb with the red, yes to the question.

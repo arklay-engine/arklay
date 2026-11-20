@@ -6811,12 +6811,11 @@ impl GameState {
     }
 
     /// RE 2's CHECK names an item with two names (`St_com_inspect`'s
-    /// `Flg_on` on `0x98EBE4`, as its description closes).
+    /// `Flg_on` on `0x98EBE4`, as its description closes). It sets the
+    /// item's class whatever it is: class 0's flag, for an item with one
+    /// name, is read by nothing.
     pub fn mark_re2_checked(&mut self, item: u8) {
-        let class = crate::message::re2_name_class(item);
-        if class != 0 {
-            self.mark_examined_bit(class);
-        }
+        self.mark_examined_bit(crate::message::re2_name_class(item));
     }
 
     /// Set one bit of the examined bank directly (the red book's read zoom

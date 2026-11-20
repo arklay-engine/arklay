@@ -240,31 +240,40 @@ pub const fn re2_name_class(item: u8) -> u8 {
     }
 }
 
-/// RE 2's name of `item` (`name_ptr_set`, `0x4C9909`, for a message, and
-/// `St_disp_name`, `0x502460`, for the status screen): the name by its id
-/// (the pack's `ITEM_<id>_NAME_UNCHECKED`, "Precinct Key") until CHECK has
-/// set its class's flag, then the one CHECK gives it (`ITEM_<id>_NAME`,
-/// "Spade Key"). An item with one name has `ITEM_<id>_NAME` alone.
-///
-/// `St_disp_name` reads the class of a file's name too (the FILE page's
-/// list, names `0x68` and up), past the item table's end, and masks it to
-/// four bits: three of those bytes give class 8, so the Sewer Manager Fax,
-/// the Vaccine Synthesis and the Rookie Files are listed as the "Down Key"
-/// once that key is checked. (A fourth, name `0x7D`, reads class 15, which
-/// no item sets.)
+/// RE 2's name of `item` (`name_ptr_set`, `0x4C9909`, for a message): the
+/// name by its id (the pack's `ITEM_<id>_NAME_UNCHECKED`, "Precinct Key")
+/// until CHECK has set its class's flag, then the one CHECK gives it
+/// (`ITEM_<id>_NAME`, "Spade Key"). An item with one name has
+/// `ITEM_<id>_NAME` alone.
 pub fn re2_item_name<'a>(text: &'a Text, item: u8, checked: &[u8; 4]) -> Option<&'a [u8]> {
-    /// The Down Key, whose class the three files' names read.
-    const DOWN_KEY: u8 = 0x5D;
-    if matches!(item, 0x7A | 0x7C | 0x80) && examined_bit(checked, re2_name_class(DOWN_KEY)) {
-        return text
-            .item_name(u16::from(DOWN_KEY))
-            .or_else(|| text.item_name(u16::from(item)));
-    }
     let class = re2_name_class(item);
     (class != 0 && !examined_bit(checked, class))
         .then(|| text.item_name_unchecked(u16::from(item)))
         .flatten()
         .or_else(|| text.item_name(u16::from(item)))
+}
+
+/// The name RE 2's status screen draws for `name` (`St_disp_name`,
+/// `0x502460`): an item's as [`re2_item_name`] gives it.
+///
+/// The screen reads the class of a file's name too (the FILE page's list,
+/// names `0x68` and up), past the item table's end, and masks it to four
+/// bits, which a message doesn't: three of those bytes give class 8, so the
+/// Sewer Manager Fax, the Vaccine Synthesis and the Rookie Files are listed
+/// as the "Down Key" once that key is checked. (A fourth, name `0x7D`,
+/// reads class 15, which no item sets.) A pack without the key's second
+/// name has none to list them by.
+pub fn re2_screen_name<'a>(text: &'a Text, name: u8, checked: &[u8; 4]) -> Option<&'a [u8]> {
+    /// The Down Key, whose class the three files' names read.
+    const DOWN_KEY: u8 = 0x5D;
+    let down_key = || {
+        text.item_name_unchecked(u16::from(DOWN_KEY))
+            .and_then(|_| text.item_name(u16::from(DOWN_KEY)))
+    };
+    (matches!(name, 0x7A | 0x7C | 0x80) && examined_bit(checked, re2_name_class(DOWN_KEY)))
+        .then(down_key)
+        .flatten()
+        .or_else(|| re2_item_name(text, name, checked))
 }
 
 /// Whether `class` is set in the four-byte examined-item flag bank, using the
@@ -1340,15 +1349,14 @@ mod tests {
     /// item with one name, or no unchecked name in the pack, keeps its own.
     #[test]
     fn re2s_checked_name_follows_its_classs_flag() {
-        let mut writer = PackWriter::new();
-        writer
-            .add(
-                "language/en-US.txt",
-                b"MESSAGE_00 = \"0\"\nITEM_59_NAME = \"S\"\nITEM_59_NAME_UNCHECKED = \"P\"\nITEM_5A_NAME = \"D\"\nITEM_26_NAME = \"G\"\nITEM_26_NAME_UNCHECKED = \"H\"\nITEM_5D_NAME = \"W\"\nITEM_5D_NAME_UNCHECKED = \"C\"\nITEM_7A_NAME = \"A\"\nITEM_7B_NAME = \"B\"\nITEM_7C_NAME = \"E\"\nITEM_80_NAME = \"R\"\n"
-                    .to_vec(),
-            )
-            .unwrap();
-        let text = Text::load(&Pack::from_bytes(writer.to_bytes().unwrap()).unwrap(), None);
+        let load = |lines: &[u8]| {
+            let mut writer = PackWriter::new();
+            writer.add("language/en-US.txt", lines.to_vec()).unwrap();
+            Text::load(&Pack::from_bytes(writer.to_bytes().unwrap()).unwrap(), None)
+        };
+        let text = load(
+            b"MESSAGE_00 = \"0\"\nITEM_59_NAME = \"S\"\nITEM_59_NAME_UNCHECKED = \"P\"\nITEM_5A_NAME = \"D\"\nITEM_26_NAME = \"G\"\nITEM_26_NAME_UNCHECKED = \"H\"\nITEM_5D_NAME = \"W\"\nITEM_5D_NAME_UNCHECKED = \"C\"\nITEM_7A_NAME = \"A\"\nITEM_7B_NAME = \"B\"\nITEM_7C_NAME = \"E\"\nITEM_80_NAME = \"R\"\n",
+        );
         let (plain, checked) = (text.item_name_unchecked(0x59), text.item_name(0x59));
         assert!(plain.is_some() && checked.is_some() && plain != checked);
         assert_eq!(re2_name_class(0x59), 1);
@@ -1380,20 +1388,33 @@ mod tests {
         // RE 1's rule has no such class: the item's own name.
         assert_eq!(Some(name(false, [0; 4]).as_slice()), checked);
 
-        // The FILE list's three names that read the Down Key's class.
+        // The FILE list's three names that read the Down Key's class: on
+        // the screen, not in a message.
         let down = (0x8000_0000u32 >> 8).to_le_bytes();
+        let file_name = |file: u8| text.item_name(file.into());
         for file in [0x7A, 0x7C, 0x80] {
-            assert_eq!(
-                re2_item_name(&text, file, &[0; 4]),
-                text.item_name(file.into())
-            );
-            assert_eq!(re2_item_name(&text, file, &down), text.item_name(0x5D));
-            assert_eq!(
-                re2_item_name(&text, file, &spade),
-                text.item_name(file.into())
-            );
+            assert_eq!(re2_screen_name(&text, file, &[0; 4]), file_name(file));
+            assert_eq!(re2_screen_name(&text, file, &down), text.item_name(0x5D));
+            assert_eq!(re2_screen_name(&text, file, &spade), file_name(file));
+            assert_eq!(re2_item_name(&text, file, &down), file_name(file));
         }
-        assert_eq!(re2_item_name(&text, 0x7B, &down), text.item_name(0x7B));
+        assert_eq!(re2_screen_name(&text, 0x7B, &down), file_name(0x7B));
+        // An item's name is the same on both.
+        for flags in [[0; 4], spade, down] {
+            for item in [0x26, 0x59, 0x5D] {
+                assert_eq!(
+                    re2_screen_name(&text, item, &flags),
+                    re2_item_name(&text, item, &flags)
+                );
+            }
+        }
+        // A pack without the key's second name lists the files as they are.
+        let once = load(b"ITEM_5D_NAME = \"C\"\nITEM_7A_NAME = \"A\"\n");
+        assert_eq!(re2_screen_name(&once, 0x7A, &down), once.item_name(0x7A));
+        // Class 0's flag, which CHECK sets for any other item, names nothing.
+        let zero = 0x8000_0000u32.to_le_bytes();
+        assert_eq!(re2_item_name(&text, 0x26, &zero), text.item_name(0x26));
+        assert_eq!(re2_item_name(&text, 0x59, &zero), plain);
     }
 
     /// A language-file value for an encoded stream: every byte as `\xNN`,
