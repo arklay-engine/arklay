@@ -405,6 +405,29 @@ fn closing_compacts_the_inventory() {
     assert!(game.re2_items.is_none());
 }
 
+/// `Status`'s start clears the screen's work (`inv_cursor_reopen`, 606):
+/// the cursors a close left are gone on the tick before the page's first,
+/// and the page starts at the first slot again.
+#[test]
+fn the_screens_start_clears_the_work_the_last_close_left() {
+    let mut run = Run::new(game(&[(0x02, 18), (0x01, 1), (0x26, 1), (0x27, 1)]), 0);
+    // Into the slots, right, down, the commands and CHECK's row.
+    run.until(
+        24,
+        &[(4, DOWN), (8, RIGHT), (12, DOWN), (16, CONFIRM), (22, DOWN)],
+    );
+    let left = run.game.re2_items_trace.clone();
+    assert_ne!(left, ItemPage::CLEARED_TRACE);
+    run.game.close_re2_items();
+    assert_eq!(run.game.re2_items_trace, left, "a close leaves the work");
+    run.game.open_re2_items();
+    assert_eq!(run.game.re2_items_trace, left, "until the screen starts");
+    run.game.init_re2_status();
+    assert_eq!(run.game.re2_items_trace, ItemPage::CLEARED_TRACE);
+    run.until(25, &[]);
+    assert_eq!(run.at(25).0, ItemPage::CLEARED_TRACE);
+}
+
 #[test]
 fn every_record_names_a_step_the_page_has() {
     for recipe in RECIPES {

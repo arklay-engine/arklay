@@ -1,0 +1,27 @@
+# room 102: the status screen opened twice: the slot cursor moved to slot 3 and its command to CHECK, a close, and the screen again (oracle/re2.md, "Items")
+364 start
+368
+400 down
+404
+420 right
+424
+440 down
+444
+460 confirm
+464
+480 down
+484
+500 cancel
+504
+520 start
+524
+600 start
+604
+640 down
+644
+660 confirm
+664
+700 cancel
+704
+720 start
+724
