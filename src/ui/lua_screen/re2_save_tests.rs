@@ -509,7 +509,7 @@ fn the_overwrite_draws_its_arrowhead_and_types_in_the_row() {
     let inked: Vec<usize> = (20..300)
         .filter(|&x| (0x31 + 15..0x31 + 29).any(|y| pixel(&list, x, y) != [0, 0, 0]))
         .collect();
-    assert_eq!((inked[0], *inked.last().unwrap()), (138, 166));
+    assert_eq!((inked[0], *inked.last().unwrap()), (137, 166));
     to_the_choice(&mut screen, &dir);
     // The arrowhead's body, 7 left of the lit answer and 4 down its row.
     const BODY: [u8; 3] = [206, 206, 189];
@@ -893,15 +893,26 @@ fn classic_rebirths_print_sets_the_digits_later_and_a_row_up() {
     let placed: String = screen.test_eval(
         r#"local print = require("ui/cr_text").print
         local out, api = {}, {}
-        local widths = { ["1"] = 12, ["9"] = 12, ["/"] = 15, ["-"] = 14, ["."] = 5, [":"] = 7 }
-        function api:text_width(glyph) return widths[glyph] or 8 end
+        local widths = { ["/"] = 15, ["-"] = 14, ["."] = 5, [":"] = 7, n = 11 }
+        function api:text_width(glyph) return widths[glyph] or (glyph:match("%d") and 12) or 8 end
         function api:text(x, y, glyph) out[#out + 1] = glyph .. "@" .. x .. "," .. y end
         print(api, 0, 10, "nA1/-.:9n")
+        out[#out + 1] = "|"
+        print(api, 50, 10, "0123456789n")
+        -- Over a font of ink widths, the places are each glyph's own.
+        out[#out + 1] = "|"
+        function api:text_width() return 8 end
+        print(api, 0, 10, "nA1/-.:9nfO?")
         return table.concat(out, " ")"#,
     );
+    // Every digit by its ink: a cell is drawn a pixel before its place (the
+    // table's bearing), so the 1, whose ink starts five columns into its
+    // cell and is four wide, is drawn three back and moves on by four.
     assert_eq!(
         placed,
-        "n@0,10 A@7,10 1@11,9 /@19,9 -@32,9 .@44,10 :@47,10 9@52,9 n@62,10"
+        "n@0,10 A@10,10 1@14,9 /@22,9 -@35,9 .@47,10 :@50,10 9@55,9 n@65,10 | \
+         0@51,9 1@58,9 2@65,9 3@74,9 4@85,9 5@96,9 6@107,9 7@116,9 8@126,9 9@137,9 n@147,10 | \
+         n@0,10 A@7,10 1@15,9 /@22,9 -@29,9 .@36,10 :@43,10 9@50,9 n@56,10 f@63,10 O@71,10 ?@78,10"
     );
 }
 

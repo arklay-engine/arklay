@@ -51,6 +51,9 @@ local ROW_Y, ROW_H = 0x31, 15
 local BAR_X, BAR_W, BAR_H, BAR_GREY = 0x0A, 0x12C, 0x0E, 0x50
 local TEXT_DY = 0
 local FOOTER_Y = 0xD8
+-- The footer's count has its digits in cells as wide as the widest digit,
+-- which the font's own table gives every digit.
+local DIGIT_W = 12
 local BLUE = "#1E64FF"
 -- The overwrite choice under the window: the question, the two answers a
 -- row below it and `Cursor_disp`'s arrowhead left of the lit one.
@@ -516,16 +519,17 @@ local function draw_footer(api, info)
     local place = api:location_bytes(info.stage, info.room) or ""
     local slash = api:text_width("/")
     local w1 = api:text_width(name)
-    -- The count's two digits, each 12 wide in the font.
-    local count = string.format("%02d", info.saves % 100)
-    local w2 = 2 * slash + api:text_width(count) + api:glyphs_width(place)
+    local w2 = 2 * slash + 2 * DIGIT_W + api:glyphs_width(place)
     local x = (320 - w1 - w2) // 2
     api:text(x, FOOTER_Y, name, { colour = BLUE })
     x = x + w1
     api:text(x, FOOTER_Y, "/")
     x = x + slash
-    api:text(x, FOOTER_Y, count)
-    x = x + api:text_width(count)
+    -- The count's two digits, each centred in a cell.
+    for digit in string.format("%02d", info.saves % 100):gmatch(".") do
+        api:text(x + (DIGIT_W - api:text_width(digit) + 1) // 2, FOOTER_Y, digit)
+        x = x + DIGIT_W
+    end
     api:text(x, FOOTER_Y, "/")
     api:glyphs(x + slash, FOOTER_Y, place)
 end

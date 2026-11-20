@@ -1297,10 +1297,13 @@ end
 
 -- Where the print puts a digit for the original's cell: the original's
 -- sprite is the font's whole cell, and the print draws a digit's cell a
--- pixel before its place (the left edge the executable's table gives every
--- digit).
-function M.option_digit_x(cell)
-    return cell + 1
+-- pixel before its place, the bearing the executable's table gives every
+-- digit with its width of 12. A font without the table (Classic REbirth's
+-- Western sheet, in a pack converted without `font0.tim`) trims a glyph to
+-- its ink: by half of what its width leaves of the cell, but the 6's, a
+-- pixel less.
+function M.option_digit_x(cell, digit, width)
+    return cell + (15 - width) // 2 - (digit == "6" and width ~= 12 and 1 or 0)
 end
 
 local OPT_SPEAKERS = { "MONO", "STEREO" }
@@ -2459,7 +2462,7 @@ function M.draw(api)
     for _, t in ipairs(s.opt_texts or {}) do
         local parts = cache[OPT_PARTS]
         if t.cell then
-            local x = M.option_digit_x(t.cell)
+            local x = M.option_digit_x(t.cell, t.text, api:text_width(t.text))
             api:text(ox + x, oy + t.y, t.text, { colour = t.on and OPT_DIGIT_GREEN or nil })
         else
             -- The print starts a pixel before the sheet's word did.
