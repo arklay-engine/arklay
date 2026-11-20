@@ -1,0 +1,49 @@
+# The item box's closes (oracle/re2.md, "The item box"): START on the inventory, the cursor the box shares with the item page, and the weapon change a close makes when the equipped weapon went into the box.
+
+[[run]]
+name = "box_start_201"
+room = "201"
+setup_script = "box_start_201.lua"
+input = "box_start_201.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1050
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,box,snd,fgstat"
+# the status screen's item page keeps its routine and cursor in the bytes `ib` reads, from its start to the box's next one; arklay's `ib` is the box's alone
+ignore = [[666, 879, "ib"]]
+frames = [360, 1049]
+frame_max_mean = 0.22
+# the close's black ticks, and the room's fade back in
+frame_windows = [[571, 573, 0.01], [574, 579, 0.25]]
+expect = "match"
+record = "--no-enemies --warp 201:-14471:0:-24100:1024 --give 2:0x14:30 --box 0:0x14:15 --box 1:0x0E:7:3 --box 2:0x26:1"
+
+[[run]]
+name = "box_weapon_201"
+room = "201"
+setup_script = "box_weapon_201.lua"
+input = "box_weapon_201.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1150
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,box,snd,fgstat"
+frames = [360, 1149]
+frame_max_mean = 0.20
+expect = "match"
+record = "--no-enemies --warp 201:-14471:0:-24100:1024 --give 2:0x14:30 --box 10:0x26:1"
+
+[[run]]
+name = "box_start_early_201"
+room = "201"
+setup_script = "box_start_early_201.lua"
+input = "box_start_early_201.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 600
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,box,snd,fgstat"
+frames = [360, 599]
+frame_max_mean = 0.24
+# the fade in the close waits out, its black ticks, and the room's fade back in
+frame_windows = [[461, 464, 0.25], [465, 467, 0.01], [468, 473, 0.25]]
+expect = "match"
+record = "--no-enemies --warp 201:-14471:0:-24100:1024 --give 2:0x14:30 --box 0:0x14:15 --box 1:0x0E:7:3 --box 2:0x26:1"

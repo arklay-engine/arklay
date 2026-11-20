@@ -1,0 +1,20 @@
+# room 201's item box and START (oracle/re2.md, "The item box"): the cursor to slot 3, START closes the box; the status screen in play, its cursor a slot on, and START again; the box once more, to see where its cursor opens, and cancel
+0
+420 action
+423
+500 right
+503
+530 down
+533
+570 start
+573
+660 start
+664
+720 right
+724
+760 start
+764
+840 action
+843
+930 cancel
+933
