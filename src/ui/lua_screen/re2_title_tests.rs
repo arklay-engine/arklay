@@ -1782,17 +1782,19 @@ fn a_volumes_digit_sits_where_its_cell_puts_it() {
     let dir = std::env::temp_dir();
     let cx = context(&dir);
     let (screen, dir) = open_option(&cx, "option-digit");
-    let place = |digit: &str, width: i64| -> i64 {
+    let place = |digit: &str, width: i64, by_table: bool| -> i64 {
         screen.test_eval(&format!(
-            "return M.option_digit_x(0x100, '{digit}', {width})"
+            "return M.option_digit_x(0x100, '{digit}', {width}, {by_table})"
         ))
     };
     for digit in ["0", "1", "6", "9"] {
-        assert_eq!(place(digit, 12), 0x101, "{digit}");
+        assert_eq!(place(digit, 12, true), 0x101, "{digit}");
     }
-    assert_eq!(place("0", 9), 0x103);
-    assert_eq!(place("1", 6), 0x104);
-    assert_eq!(place("6", 9), 0x102);
+    assert_eq!(place("0", 9, false), 0x103);
+    assert_eq!(place("1", 6, false), 0x104);
+    assert_eq!(place("6", 9, false), 0x102);
+    // A mod's font may make its 6 as wide as the table's without being it.
+    assert_eq!(place("6", 12, false), 0x100);
     let _ = std::fs::remove_dir_all(&dir);
 }
 

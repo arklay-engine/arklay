@@ -14,8 +14,8 @@
 //! advance. Any other cell is a full one, the `0xEE` page's ampersand among
 //! them. Mostly a glyph's ink starts at the cursor and the next starts a
 //! pixel after it ends, but not always: the digits are all 12 wide from a
-//! pixel in, and `f` a pixel wider than its ink. A Western cell RE2 has no
-//! glyph for is placed by its ink.
+//! pixel in, and `f` moves on a pixel farther than its ink's end and one. A
+//! Western cell RE2 has no glyph for is placed by its ink.
 //!
 //! The sheet's palette is the PC version's: each 5-bit level with its top
 //! bits again below it (`v << 3 | v >> 2`), as its frames show the font.
@@ -265,8 +265,9 @@ mod tests {
             _ => Some((3, 9)),
         };
         let (bmp, xml) = sheet(&font0(ink)).unwrap();
-        // The table's place, whatever the ink: `f` a pixel wider than its
-        // ink, the digits 12 wide from a pixel in, and a blank cell too.
+        // The table's place, whatever the ink: `f` moves on by 9 where its
+        // ink's end and one would be 8, the digits are 12 wide from a pixel
+        // in, and a blank cell has its place too.
         assert_eq!(metric(&xml, 'f'), Some((3, 9)));
         assert_eq!(metric(&xml, 'a'), Some((2, 10)));
         assert_eq!(metric(&xml, 'O'), Some((1, 12)));

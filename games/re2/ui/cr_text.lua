@@ -45,10 +45,26 @@ for digit = 0, 9 do
     INK[tostring(digit)] = { 1, -1, -1 }
 end
 
--- The font's glyphs' entries: the table gives a digit a width of 12, which
--- no digit's ink has.
+-- The widths that tell the table's font: every glyph whose entry differs
+-- between the two, as the table has it. A mod's font with widths of its own
+-- is printed as the Western sheet is.
+local SIGN = { [":"] = 7, ["-"] = 14, ["?"] = 10, f = 9, O = 12, Q = 13 }
+for digit = 0, 9 do
+    SIGN[tostring(digit)] = 12
+end
+
+-- Whether the font's widths are the executable's table's.
+function M.by_table(api)
+    for glyph, width in pairs(SIGN) do
+        if api:text_width(glyph) ~= width then
+            return false
+        end
+    end
+    return true
+end
+
 local function glyphs(api)
-    return api:text_width("1") == 12 and TABLE or INK
+    return M.by_table(api) and TABLE or INK
 end
 
 -- One character of a line: a save's row is its file's name, which may
