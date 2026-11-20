@@ -9781,6 +9781,15 @@ impl GameState {
             || self.re2_box.is_some()
     }
 
+    /// A room's tick with no session over it (a capture, a simulation) opens
+    /// no status screen: a script's raised bit that `Game_loop` took is
+    /// dropped, with the message word the request masked put back.
+    pub fn drop_re2_scripted_status(&mut self) {
+        if let Some(message_flags) = self.re2_status_scripted.take() {
+            self.message_flags = message_flags;
+        }
+    }
+
     /// `Status`'s start (`0x501BD0`), whichever screen the task shows: the
     /// Side Pack's item flag gives the inventory its ten slots, and Leon
     /// has his lighter back once the G-Virus is gone (scenario flag 0xA2,

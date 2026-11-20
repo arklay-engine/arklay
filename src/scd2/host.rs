@@ -3025,17 +3025,21 @@ impl Host for GameHost<'_> {
         // press, after the scripts (room 111, once the crank is gone). The
         // bank never holds the bit.
         if bank == STATUS_BANK && index == STATUS_WINDOW {
-            // A status task's own bit isn't the script's to change; `Set`'s
-            // 7 turns the bit over.
-            let owned = self.game.re2_status_task_owned();
-            let up = owned || self.game.re2_status_raised;
+            // `Set`'s 7 turns the bit over.
             let raise = match op {
                 0 => false,
                 1 => true,
-                7 => !up,
+                7 => !self.game.re2_status_task_up(),
                 _ => return,
             };
-            self.game.re2_status_raised = raise && !owned;
+            // `Sce_Status` raised the bit and nothing else of a status
+            // task's, so a `Set` after it in the same pass takes it back:
+            // game mode 1 finds the bit down and loads the pass's door.
+            if !raise && self.game.re2_script_map.is_none() {
+                self.game.re2_status_request = false;
+            }
+            // A status task with a screen of its own keeps its bit.
+            self.game.re2_status_raised = raise && !self.game.re2_status_task_owned();
             return;
         }
         self.game.re2.set_flag(bank, index, op);
@@ -6136,15 +6140,27 @@ mod tests {
         assert!(!window(&mut game), "the scripts don't see the key");
         GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 1);
         assert!(game.re2_status_raised);
-        // A status task's own bit is not the script's: nothing is raised
-        // under it, and a turn-over doesn't lower it.
+        // `Sce_Status` raised the bit and no more: nothing is raised under
+        // it, and a `Set` after it in the pass takes it back.
+        for op in [7, 0] {
+            let mut game = GameState::default();
+            game.is_re2_room = true;
+            game.re2_status_request = true;
+            GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 1);
+            assert!(!game.re2_status_raised && window(&mut game));
+            GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, op);
+            assert!(!game.re2_status_request && !window(&mut game), "op {op}");
+        }
+        // A status task with a screen of its own keeps the bit: a script's
+        // map, or a page that is up.
         let mut game = GameState::default();
         game.is_re2_room = true;
-        game.re2_status_request = true;
+        game.request_re2_script_map(0);
         for op in [1, 7, 0] {
             GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, op);
             assert!(!game.re2_status_raised && window(&mut game), "op {op}");
         }
+        assert!(game.re2_status_request);
     }
 
     /// `Status`'s start (`0x501BD0`): the Side Pack's flag makes the
