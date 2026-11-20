@@ -1410,6 +1410,8 @@ mod re2_gallery_tests;
 #[cfg(test)]
 mod re2_save_tests;
 #[cfg(test)]
+mod re2_status_tests;
+#[cfg(test)]
 mod re2_title_tests;
 #[cfg(test)]
 mod screen_tests;

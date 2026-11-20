@@ -1,0 +1,13 @@
+# room 111: USE of the Crank at its area (7), whose scene ends by raising the status bit itself: the status screen opens with the Crank gone (oracle/re2.md, "Using a key item"): START, down to slot 2, the menu, USE; then cancel to the tabs, and START to close the screen
+354 start
+358
+390 down
+394
+410 confirm
+414
+430 confirm
+434
+900 cancel
+904
+960 start
+964

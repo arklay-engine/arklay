@@ -1044,6 +1044,14 @@ impl GameState {
     /// The player's own `0x40` ([`crate::player2::Work::holds_game`]) and
     /// task 1 are tested where START is asked for.
     pub fn re2_start_refused(&self, hook_message: bool) -> bool {
+        self.scene_bars() || self.re2_status_gate_shut(hook_message)
+    }
+
+    /// The gate `Game_loop` tests START, the map key and `fg_status`'s
+    /// `0x8000` under ([`GameState::re2_start_refused`]'s list, but for the
+    /// scene's bars, which stop the two keys alone): a script that raised
+    /// the bit itself has the status screen once this lets it.
+    pub fn re2_status_gate_shut(&self, hook_message: bool) -> bool {
         use crate::scd2::host::{FG_SYSTEM_DIE, FG_SYSTEM_MOVIE, STATUS_BANK, STATUS_HOLD};
         let re2 = &self.re2;
         let var_cut = re2.var_cut.unwrap_or(re2.shown_cut);
@@ -1055,7 +1063,6 @@ impl GameState {
             || re2.script_door
             || hook_message
             || re2.flag(STATUS_BANK, STATUS_HOLD)
-            || self.scene_bars()
             || re2.input_stop_raised()
             || re2.bg_load
             || usize::from(var_cut) != self.camera.current_cut

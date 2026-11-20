@@ -601,6 +601,7 @@ pub fn run_with_options(
                         Some(&mut timings.phases),
                     );
                     run_lua_tick_hooks(lua.as_ref(), &mut game, message_before);
+                    game.drop_re2_scripted_status();
                     // `Swap_Cbuff`: the cut a `cut_chg` with bit 7 leaves on
                     // screen (the frames it skips aren't modelled here).
                     let now = (loaded.id, loaded.room.current_cut);
@@ -3833,15 +3834,19 @@ impl GameSession {
         if std::mem::take(&mut self.game.re2_box_open) {
             self.begin_re2_box_open(pack);
         }
-        if std::mem::take(&mut self.game.re2_status_request) {
+        if self.game.re2_status_request {
             if self.transition.is_some() || self.movie.is_some() || !self.death.is_idle() {
                 // A request a door, a film or the death takes the place of
                 // is gone, and its map with it.
+                self.game.re2_status_request = false;
                 self.game.re2_script_map = None;
-            } else if self.game.re2_script_map.is_some() {
-                self.begin_re2_script_map_open(pack);
-            } else {
-                self.begin_menu_open(pack);
+            } else if !self.re2_status_request_waits() {
+                self.game.re2_status_request = false;
+                if self.game.re2_script_map.is_some() {
+                    self.begin_re2_script_map_open(pack);
+                } else {
+                    self.begin_menu_open(pack);
+                }
             }
         }
         self.re2_status_open_areas(pack);
@@ -4488,6 +4493,17 @@ impl GameSession {
         // F9-prompt exits (MainLoop.cpp), ahead of the task pass: a film, the
         // prompt and the port's frozen overlays hold the fade.
         self.step_sound_fade();
+        // `Psx_main` runs `System_trans` outside the suspended game task, so
+        // under RE 2's status task (the screen, the item box, the get-item
+        // window) a script's fades still draw and step: room 111's scene
+        // fades back in under the screen's open (`crank_111`).
+        if self.game.is_re2_room
+            && (self.menu.is_some()
+                || self.menu_fade_phase != MenuFadePhase::None
+                || self.game.re2_item_get.is_some())
+        {
+            self.tick_re2_fades();
+        }
         // The menu task's frame loop counts `Game_timer` too (`0x40b5b4`). It
         // takes over ten frames into the fade out of the room and counts
         // until the fade back to it begins.
@@ -4722,6 +4738,14 @@ impl GameSession {
         // bits for it, runs the rest of the tick, and only then leaves for the
         // menu.
         let re2_holds_game = self.game.is_re2_room && self.game.re2.player.holds_game;
+        // A script's raised bit is tested under the same gate, after the
+        // scripts: task 1 idle (the player's own `0x40` is the room tick's
+        // to test).
+        self.game.re2_status_gate_held = self.game.is_re2_room
+            && (self.game.re2_back != game::save2::BackRoutine::None
+                || self.re2_save.is_some()
+                || self.re2_die.is_some()
+                || self.game.re2_hikidashi.opening());
         if !message_pauses_menu && self.game.entities[0].is_being_attacked == 0 && !re2_holds_game {
             // RE2's `Game_loop` takes the map key where it takes START
             // (`Key_trg & 0x4000`, `0x4C0379`): the status screen opens in
@@ -4829,6 +4853,22 @@ impl GameSession {
         }
         if self.game.re2_status_start_dropped {
             re2_start_tick = false;
+        }
+        // A script's raised status bit that `Game_loop` took this tick is a
+        // START from here on: the same request, the same wait for a fade.
+        if let Some(message_flags) = self.game.re2_status_scripted.take() {
+            re2_start_tick = true;
+            if self.menu_request.is_none() {
+                self.menu_request = Some((MenuRequest::Menu, message_flags));
+                self.game.re2_key_map = None;
+            }
+        }
+        // `Game_loop` skips the moves on the tick it opens the status screen
+        // but not the draw: `Joint_trans2` puts the head where the player is
+        // now, which a script may have changed this tick (room 111's scene
+        // puts the player back as it raises the bit, `crank_111`).
+        if re2_start_tick {
+            self.place_re2_neck(false);
         }
         // `Sce_Status` and a door on one tick both set `Game` to 1, and
         // `Game_loop`'s case 1 opens the status screen while `fg_status` has
@@ -6420,6 +6460,15 @@ impl GameSession {
             && self.transition.is_none()
             && self.movie.is_none()
             && self.death.is_idle()
+    }
+
+    /// Whether `Sce_Status`'s request waits this tick: `Game_loop`'s mode 1
+    /// leaves for the status screen only with no message up (`fg_message`'s
+    /// bit 7) and fade 0 idle (`0x4BFB36`'s case 1). `Sce_Status` stops
+    /// nothing (`fg_stop` is raised as mode 1 leaves), so the room runs on
+    /// under the wait, the bit up and START's gate shut.
+    fn re2_status_request_waits(&self) -> bool {
+        self.game.message.menu_choice_id() & 0x80 != 0 || self.room_fade.is_active()
     }
 
     /// The frame after a menu was requested: restore the message word the
@@ -10451,6 +10500,14 @@ impl GameSession {
             {
                 self.framebuffer
                     .fade_to_color(crate::transition::FadeColor::Black, alpha);
+            }
+            // `System_trans` adds a script's fades as it adds fade 0, over
+            // whatever the task shows, its black frames too. The room's
+            // draw has them already.
+            if !matches!(view, Re2StatusView::Room(_)) {
+                for overlay in self.game.re2.fades_drawn.into_iter().flatten() {
+                    self.draw_fade(overlay);
+                }
             }
         } else if let Some(alpha) = self
             .re2_status_return
@@ -16870,6 +16927,7 @@ fn simulate_loaded_with(
             input(tick),
         );
         run_lua_tick_hooks(lua.as_ref(), &mut game, message_before);
+        game.drop_re2_scripted_status();
         // A scripted door follows into its destination: the interactive engine
         // plays the `.dor` timeline and reboots the destination room.
         if let Some(request) = requested {
@@ -19561,6 +19619,7 @@ fn run_re2_init(
     // reads it: a scene's bit, a voice line's and the camera's lock don't
     // outlive their room.
     game.re2.enter_room_status();
+    game.re2_status_raised = false;
     game.re2.gates = Default::default();
     game.re2.reset_mask_groups();
     game.re2.reset_xa_volume();
@@ -20413,14 +20472,55 @@ fn tick_room_timed(
     // START on an RE2 tick: `Game_loop` leaves for the status screen before
     // the enemies' and the player's moves (`0x4C03B0`), so the player keeps
     // the frame it had.
-    if context.game.is_re2_room && std::mem::take(&mut context.game.re2_status_start) {
+    let owned = context.game.is_re2_room && context.game.re2_status_task_owned();
+    let start = context.game.is_re2_room && std::mem::take(&mut context.game.re2_status_start);
+    // A script's own `fg_status |= 0x8000` is tested there too, on every
+    // tick until the gate lets it: the screen opens as START's does.
+    let mut raised = context.game.is_re2_room && context.game.re2_status_raised;
+    if raised && owned {
+        // It is one bit: a status task the scripts started in the same pass
+        // (an item's window, `Sce_Status`, `Sce_84`'s map) has it, and that
+        // task's return lowers it.
+        context.game.re2_status_raised = false;
+        raised = false;
+    } else if raised && context.game.re2.script_door {
+        // `Sce_Door` set `Game` to 1 in the same pass: the gate is skipped,
+        // and game mode 1 finds the bit up and opens the status screen in
+        // place of the door, as it does for `Sce_Status`'s.
+        context.game.re2_status_raised = false;
+        context.game.re2_status_request = true;
+        raised = false;
+    }
+    if start || raised {
         // The map key's `Key_trg`, as this tick's `Pad_set` left it.
-        let asked = context.game.confirm_re2_key_map();
-        if !asked || context.game.re2_start_refused(hook_message) {
+        let asked = start && context.game.confirm_re2_key_map();
+        let shut = context.game.re2_status_gate_shut(hook_message);
+        // The keys want no scene's bars either; the bit wants the rest of
+        // the gate, which START's press was asked under.
+        let key = asked && !shut && !context.game.scene_bars();
+        let bit = raised
+            && !shut
+            && !context.game.re2_status_gate_held
+            && !context.game.re2.player.holds_game;
+        if !(key || bit) {
             // The scripts closed the gate the keys are tested under, so
             // the tick runs on.
-            context.game.re2_status_start_dropped = true;
+            context.game.re2_status_start_dropped = start;
         } else {
+            if bit {
+                // The session opens the screen as it does a START's: its
+                // request, with the message word as it was before the
+                // request's mask.
+                context.game.re2_status_raised = false;
+                if !key {
+                    // A map key the bars refused is no one's: the bit's
+                    // screen is the status screen.
+                    context.game.re2_key_map = None;
+                }
+                if !start {
+                    context.game.re2_status_scripted = Some(context.game.message_flags);
+                }
+            }
             // The request's mask on the message word, which RE 1's request
             // applies before its scripts.
             context.game.message_flags &= MENU_REQUEST_MASK;
@@ -28015,6 +28115,290 @@ mod tests {
         re2_tick(&mut session, &pack, UiInput::default());
         re2_map_tick(&mut session, &pack, re2_map_press(false));
         assert!(session.game.re2_key_map.is_some());
+    }
+
+    /// A script that raises `fg_status`'s `0x8000` itself (room 111's, once
+    /// the crank is gone: `set(1, 16, 1)`, then the scene's bars and the
+    /// input stop down) has the status screen as a START pressed on that
+    /// tick would: `Game_loop` takes the bit after the scripts, masks the
+    /// message word and opens the screen on the next tick. No press is
+    /// asked for or dropped.
+    #[test]
+    fn re2_a_script_raised_status_bit_opens_the_screen_as_start_does() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        let source = "#version 1\n#game re2\nproc main_00 { evt_end(0); }\n\
+            proc main_01 { set(1, 16, 1); set(1, 27, 0); set(2, 7, 0); evt_end(0); }";
+        let scripts = crate::scd2::akscr::compile(source).unwrap();
+        session.game.re2.vm = Some(Box::new(crate::scd2::vm::Vm::new(&scripts)));
+        // The scene the script ends: its bars and the input stop.
+        session
+            .game
+            .re2
+            .set_flag(1, crate::scd2::host::STATUS_SCENE, 1);
+        session.game.re2.set_input_stop(true);
+        session.game.message_flags |= START_MESSAGE_BITS;
+        let flags = session.game.message_flags;
+        // The head as the last draw left it, somewhere the player isn't.
+        // A body of fifteen joints, each 100 above its parent's place.
+        let mut assets = synthetic_player_assets();
+        assets.emd.skeleton.relative = vec![[0, -100, 0]; 15];
+        assets.emd.skeleton.children = vec![Vec::new(); 15];
+        assets.emd.keyframes[0].rotations = vec![[0; 3]; 15];
+        assets.emw.keyframes[0].rotations = vec![[0; 3]; 15];
+        session.loaded.player_assets = Some(assets);
+        session.game.re2.player.neck.position = Some([30000, 0, 30000]);
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(!session.game.re2_status_raised, "the bit is taken");
+        assert!(session.menu_request.is_some(), "as START's request");
+        // `Game_loop` skips the moves but not the draw: `Joint_trans2` puts
+        // the head over the player (`crank_111`'s `pneck` on 584, where the
+        // scene has just put Leon back).
+        let [x, _, z] = session.game.re2.player.neck.position.unwrap();
+        let pos = session.game.entities[0].pos;
+        assert!(
+            (x - pos[0]).abs() < 2000 && (z - pos[2]).abs() < 2000,
+            "the head at {x}, {z} with the player at {pos:?}"
+        );
+        assert!(!session.game.re2_status_start_dropped);
+        assert_ne!(session.game.message_flags & 0x85, flags & 0x85, "masked");
+        assert!(session.menu.is_none());
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(session.menu.is_some(), "the screen opens");
+        assert_eq!(session.re2_status_open, Some(1));
+        assert!(session.game.re2_key_map.is_none());
+    }
+
+    /// A session whose script raises the status bit on every pass, and
+    /// then runs `more`.
+    fn re2_bit_raising_session(pack: &Pack, room: RoomId, more: &str) -> Box<GameSession> {
+        let mut session = GameSession::from_room(pack, room, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        let source = format!(
+            "#version 1\n#game re2\nproc main_00 {{ evt_end(0); }}\n\
+            proc main_01 {{ set(1, 16, 1); {more} evt_end(0); }}"
+        );
+        let scripts = crate::scd2::akscr::compile(&source).unwrap();
+        session.game.re2.vm = Some(Box::new(crate::scd2::vm::Vm::new(&scripts)));
+        session.game.message_flags |= START_MESSAGE_BITS;
+        session
+    }
+
+    /// A door the scripts fire in the pass that raises the bit sets `Game`
+    /// to 1, so the gate isn't reached; game mode 1 then finds the bit up
+    /// and opens the status screen in place of the door, as for
+    /// `Sce_Status`'s.
+    #[test]
+    fn re2_a_script_raised_status_bit_wins_over_a_door_on_its_tick() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = re2_bit_raising_session(&pack, a, "aot_on(1);");
+        let pos = session.player.pos;
+        re2_area_at(&mut session, pos, true);
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(!session.game.re2_status_raised, "the bit is the request's");
+        assert!(session.game.re2_status_request);
+        assert!(session.transition.is_none(), "no door");
+        session.game.room_actions[1] = None;
+        session.game.re2.vm = None;
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(session.menu.is_some(), "the screen opens");
+        assert_eq!(session.loaded.id, a);
+    }
+
+    /// `Sce_Status` only raises the bit and sets `Game` to 1: a `Set` that
+    /// lowers the bit later in the pass leaves game mode 1 the pass's door.
+    #[test]
+    fn re2_a_status_bit_lowered_after_sce_status_leaves_the_pass_its_door() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let more = "aot_on(2); aot_on(1); set(1, 16, 0);";
+        let mut session = re2_bit_raising_session(&pack, a, more);
+        // Out of the player's reach: only the script fires them.
+        let pos = session.player.pos.map(|at| at + 10_000);
+        re2_area_at(&mut session, pos, true);
+        re2_status_area_at(&mut session, pos);
+        // The test pack has no room behind the door: its load is the tick's
+        // error.
+        let door = session.tick(&pack, UiInput::default(), player::Input::default(), false);
+        let door = door.expect_err("the door is loaded").to_string();
+        assert!(door.contains("room 10A"), "{door}");
+        assert!(!session.game.re2_status_request && !session.game.re2_status_raised);
+        assert!(session.menu.is_none() && session.menu_request.is_none());
+    }
+
+    /// `Game_loop`'s mode 1 leaves for the status screen only with fade 0
+    /// idle and no message up. `Sce_Status` stops nothing, so its request
+    /// stands with the room running on until both are so.
+    #[test]
+    fn re2_sce_statuss_request_waits_for_fade_0_and_a_message() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.re2_status_request = true;
+        // Fade 0 three steps from over.
+        session.room_fade.set(2, -0x1800, 0x3800 - 1);
+        for left in [0x2000 - 1, 0x800 - 1, -0x1001] {
+            let frame = session.game.frame;
+            re2_tick(&mut session, &pack, UiInput::default());
+            assert!(session.game.re2_status_request && session.menu.is_none());
+            assert_eq!(session.room_fade.state(), left);
+            assert_eq!(session.game.frame, frame + 1, "the room runs on");
+        }
+        // A message up holds it too.
+        session.game.message.set_menu_choice_id(0x80);
+        assert!(session.re2_status_request_waits());
+        session.game.message.set_menu_choice_id(0);
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(!session.game.re2_status_request);
+        assert!(session.menu.is_some(), "the screen opens");
+    }
+
+    /// It is one bit: a status task the scripts start in the same pass has
+    /// it, and nothing stays raised to open the screen again once that task
+    /// has gone.
+    #[test]
+    fn re2_a_script_raised_status_bit_is_a_status_tasks_started_with_it() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = re2_bit_raising_session(&pack, a, "aot_on(2);");
+        let pos = session.player.pos;
+        re2_status_area_at(&mut session, pos);
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(session.game.re2_status_request, "the status area fired");
+        assert!(!session.game.re2_status_raised, "and has the bit");
+        assert!(session.menu_request.is_none(), "not START's open as well");
+    }
+
+    /// The bit is tested under the gate START's press is: with the player's
+    /// own `0x40` up it stands.
+    #[test]
+    fn re2_a_script_raised_status_bit_waits_for_the_players_hold() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = re2_bit_raising_session(&pack, a, "");
+        session.game.re2.player.holds_game = true;
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(session.game.re2_status_raised, "the bit stands");
+        assert!(session.menu_request.is_none());
+        session.game.re2.player.holds_game = false;
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(
+            !session.game.re2_status_raised,
+            "and is taken once it is down"
+        );
+        assert!(session.menu_request.is_some());
+    }
+
+    /// `System_trans` adds a script's fades over whatever the status task
+    /// shows, as it adds fade 0: the status screen is darkened by one too.
+    #[test]
+    fn re2_a_scripts_fade_is_drawn_over_the_status_screen() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = re2_status_open_session(&pack, a);
+        for _ in 0..RE2_STATUS_FADED_IN + 2 {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        }
+        assert_eq!(session.re2_status_view(), Some(Re2StatusView::Screen(None)));
+        let light = |session: &GameSession| {
+            session
+                .framebuffer
+                .rgba
+                .iter()
+                .map(|&byte| u64::from(byte))
+                .sum::<u64>()
+        };
+        session.render(&pack);
+        let plain = light(&session);
+        // Half way to black, holding.
+        session.game.re2.fades[1].set(2, 0, 0x4000);
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        session.render(&pack);
+        let faded = light(&session);
+        assert!(plain > 0, "the screen draws");
+        assert!(faded < plain, "the fade darkens it: {faded} of {plain}");
+
+        // The open's black frames have a script's fade over them too.
+        let mut session = re2_status_open_session(&pack, a);
+        while session.re2_status_view() != Some(Re2StatusView::Black) {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        }
+        session.render(&pack);
+        assert_eq!(light(&session), 0, "black");
+        // Half way to white, holding.
+        session.game.re2.fades[1].set(1, 0, 0x4000);
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        assert_eq!(session.re2_status_view(), Some(Re2StatusView::Black));
+        session.render(&pack);
+        assert!(light(&session) > 0, "the fade lightens the black");
+    }
+
+    /// `Psx_main` runs `System_trans` outside the suspended game task, so a
+    /// script's fade goes on stepping, and drawing, under the status screen:
+    /// room 111's scene fades back in at `0x1800` a tick as the screen opens
+    /// over it (`crank_111`'s frames at 585 to 587).
+    #[test]
+    fn re2_a_scripts_fade_steps_on_under_the_status_screen() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = re2_status_open_session(&pack, a);
+        session.game.re2.fades[1].set_scripted(2, -0x1800);
+        let alpha = |session: &GameSession| session.game.re2.fades[1].overlay().map(|o| o.alpha);
+        let mut drawn = Vec::new();
+        for _ in 0..4 {
+            let before = alpha(&session);
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            assert_eq!(
+                session.game.re2.fades_drawn[1].map(|o| o.alpha),
+                before,
+                "each tick draws the fade, then steps it"
+            );
+            drawn.push(before.unwrap());
+        }
+        assert!(
+            drawn.windows(2).all(|pair| pair[0] - pair[1] == 0x30),
+            "0x1800 a tick: {drawn:?}"
+        );
+        assert!(alpha(&session) < drawn.last().copied());
+    }
+
+    /// The bit is a level, not a press: under a shut gate (the input stop
+    /// still up) it stands, and the screen opens on the first tick the gate
+    /// lets it.
+    #[test]
+    fn re2_a_script_raised_status_bit_waits_for_game_loops_gate() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.message_flags |= START_MESSAGE_BITS;
+        session.game.re2.set_input_stop(true);
+        session.game.re2_status_raised = true;
+        for _ in 0..3 {
+            re2_tick(&mut session, &pack, UiInput::default());
+            assert!(session.game.re2_status_raised);
+            assert!(session.menu.is_none() && session.menu_request.is_none());
+            assert!(!session.game.re2_status_start_dropped);
+        }
+        session.game.re2.set_input_stop(false);
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(!session.game.re2_status_raised && session.menu_request.is_some());
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(session.menu.is_some());
     }
 
     /// `Game_loop` tests `fg_stop`'s `0x1000000` after the scripts: START

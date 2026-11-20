@@ -1,0 +1,5 @@
+# room 615 with the vaccine made (4:157, 4:158): the action key at the machine fires the script's aot_on on the Vaccine's area, and the decide key closes "You've taken the Vaccine." (oracle/re2.md, "Items")
+364 action
+368
+600 confirm
+604

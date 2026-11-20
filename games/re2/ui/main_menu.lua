@@ -519,6 +519,23 @@ local function fill(api, d, x0, y0, x1, y1, rgb)
 end
 
 -- An icon's cell: 48 a page, six columns of 40x30 (three on the last).
+-- A piece of `FRAME` as it is drawn. `St_disp_itemlist` (`0x4FF360`) sizes
+-- the grid's frame by `inventory_size`, read on every draw: its sides are
+-- 30 a row of slots and its bottom is 15 a slot and 3 under its top (120
+-- and 193 with eight slots, 150 and 223 with the Side Pack's ten, over the
+-- message box's pipe).
+local function frame_piece(index)
+    local p = FRAME[index]
+    local slots = s.slots
+    local y, h = p[2], p[4]
+    if index == #FRAME - 2 then
+        y = COUNT_ORIGIN_Y + 15 * slots + 3
+    elseif index > #FRAME - 2 then
+        h = 30 * (slots // 2)
+    end
+    return p[1], y, p[3], h, p[5], p[6]
+end
+
 local function icon_cell(item)
     local page, cell = item // 48, item % 48
     local columns = page == 2 and 3 or 6
@@ -1124,7 +1141,9 @@ local function draw_get(api)
     pieces(api, d, FRAME_TABS, 0, 0)
     fill(api, d, MESSAGE_BOX[1], MESSAGE_BOX[2], MESSAGE_BOX[3], MESSAGE_BOX[4], MESSAGE_FILL)
     pieces(api, d, MESSAGE_FRAME, 0, 0)
-    pieces(api, d, FRAME, 0, 0)
+    for index = 1, #FRAME do
+        sprite(api, d, ST, frame_piece(index))
+    end
     check_panel(api, d, GET_Y)
     for tab = 0, 3 do
         sprite(api, d, ST + 5, TAB_X + 49 * tab, TAB_Y, TAB_W, TAB_H, 0, TAB_H * tab, TAB_DIM)
@@ -1281,11 +1300,11 @@ function B.draw_box(api)
     fill(api, d, MESSAGE_BOX[1], MESSAGE_BOX[2], MESSAGE_BOX[3], MESSAGE_BOX[4], MESSAGE_FILL)
     pieces(api, d, MESSAGE_FRAME, 0, 0)
     for index = FRAME_LEFT + 1, #FRAME do
-        local p = FRAME[index]
+        local x, y, w, h, u, v = frame_piece(index)
         if index <= FRAME_LEFT + 4 then
-            sprite(api, d, ST, p[1] + B.EQUIP_DX, p[2], p[3], p[4], p[5], p[6])
+            sprite(api, d, ST, x + B.EQUIP_DX, y, w, h, u, v)
         elseif index > FRAME_LEFT + 6 then
-            sprite(api, d, ST, p[1], p[2], p[3], p[4], p[5], p[6])
+            sprite(api, d, ST, x, y, w, h, u, v)
         end
     end
     -- EXIT and the piece under it, lit while its routine runs.
@@ -1422,6 +1441,9 @@ local function draw_script_map(api)
 end
 
 function M.draw(api)
+    -- `inventory_size` as it is now: `Status`'s start makes it ten on the
+    -- task's sixth tick, with the screen already up.
+    s.slots = api:inventory_capacity()
     if s.box then
         B.draw_box(api)
         return
@@ -1474,8 +1496,15 @@ function M.draw(api)
     -- tick started on.
     local ran_items = (last or page).page == PAGE_ITEMS
 
-    -- The command menu, under the frame.
-    local x = on_items and menu_x(page, last) or nil
+    -- The command menu, under the frame. The item page's logic draws it
+    -- too: on the tick a command leaves the page (USE of a key item closes
+    -- the screen, `crank_111`'s tick 432) it is still where it was.
+    local x = nil
+    if on_items then
+        x = menu_x(page, last)
+    elseif ran_items and last ~= nil then
+        x = menu_x(last, nil)
+    end
     if x ~= nil then
         draw_menu(api, d, page, x)
     end
@@ -1500,8 +1529,9 @@ function M.draw(api)
     end
     fill(api, d, MESSAGE_BOX[1] + bx, MESSAGE_BOX[2] + by, MESSAGE_BOX[3] + bx, MESSAGE_BOX[4] + by, MESSAGE_FILL)
     pieces(api, d, MESSAGE_FRAME, bx, by)
-    for index, p in ipairs(FRAME) do
-        sprite(api, d, ST, p[1] + (index <= FRAME_LEFT and L or R), p[2], p[3], p[4], p[5], p[6])
+    for index = 1, #FRAME do
+        local x, y, w, h, u, v = frame_piece(index)
+        sprite(api, d, ST, x + (index <= FRAME_LEFT and L or R), y, w, h, u, v)
     end
     if file_top ~= nil then
         pieces(api, d, FILE_PANEL, 0, file_top)

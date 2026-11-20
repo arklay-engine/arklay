@@ -3021,15 +3021,25 @@ impl Host for GameHost<'_> {
 
     fn set_flag(&mut self, bank: u8, index: u8, op: u8) {
         // A script that raises the status task's bit itself asks for the
-        // status screen: `Game_loop` opens it for the bit as for START's
-        // press, with the decide cue (room 111, once the crank is gone).
-        // The bank never holds the bit.
+        // status screen: `Game_loop` tests the bit where it tests START's
+        // press, after the scripts (room 111, once the crank is gone). The
+        // bank never holds the bit.
         if bank == STATUS_BANK && index == STATUS_WINDOW {
-            if op != 0 && !self.game.re2_status_task_up() {
-                self.game.re2_status_request = true;
-                self.game
-                    .push_re2_sound(crate::game::status2::Sound::Decide.id());
+            // `Set`'s 7 turns the bit over.
+            let raise = match op {
+                0 => false,
+                1 => true,
+                7 => !self.game.re2_status_task_up(),
+                _ => return,
+            };
+            // `Sce_Status` raised the bit and nothing else of a status
+            // task's, so a `Set` after it in the same pass takes it back:
+            // game mode 1 finds the bit down and loads the pass's door.
+            if !raise && self.game.re2_script_map.is_none() {
+                self.game.re2_status_request = false;
             }
+            // A status task with a screen of its own keeps its bit.
+            self.game.re2_status_raised = raise && !self.game.re2_status_task_owned();
             return;
         }
         self.game.re2.set_flag(bank, index, op);
@@ -6106,18 +6116,51 @@ mod tests {
         game.re2_items = None;
         assert!(!window(&mut game));
 
-        // A script's own write of the bit asks for the screen, with
-        // START's cue, and leaves the bank alone; lowering it does nothing.
+        // A script's own write of the bit stands until `Game_loop` takes
+        // it, and leaves the bank alone; lowering it takes it back.
         let mut game = GameState::default();
         game.is_re2_room = true;
         GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 0);
-        assert!(!game.re2_status_request && !window(&mut game));
+        assert!(!game.re2_status_raised && !window(&mut game));
         GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 1);
-        assert!(game.re2_status_request && window(&mut game));
+        assert!(game.re2_status_raised && window(&mut game));
+        assert!(!game.re2_status_request && game.re2.sounds.is_empty());
         assert!(!game.re2.flag(STATUS_BANK, STATUS_WINDOW));
-        let cues: Vec<_> = game.re2.sounds.iter().map(|sound| sound.id).collect();
-        let decide = crate::game::status2::Sound::Decide.id();
-        assert_eq!(cues, [crate::se2::SoundId::decode(decide).unwrap()]);
+        GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 0);
+        assert!(!game.re2_status_raised && !window(&mut game));
+        // `Set`'s 7 turns it over: twice leaves it as it was.
+        GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 7);
+        assert!(game.re2_status_raised);
+        GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 7);
+        assert!(!game.re2_status_raised);
+        // The map key's press isn't the bit until `Game_loop` has tested it,
+        // after the scripts: a script's write on that tick stands.
+        game.request_re2_key_map(false);
+        game.re2_status_start = true;
+        assert!(!window(&mut game), "the scripts don't see the key");
+        GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 1);
+        assert!(game.re2_status_raised);
+        // `Sce_Status` raised the bit and no more: nothing is raised under
+        // it, and a `Set` after it in the pass takes it back.
+        for op in [7, 0] {
+            let mut game = GameState::default();
+            game.is_re2_room = true;
+            game.re2_status_request = true;
+            GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, 1);
+            assert!(!game.re2_status_raised && window(&mut game));
+            GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, op);
+            assert!(!game.re2_status_request && !window(&mut game), "op {op}");
+        }
+        // A status task with a screen of its own keeps the bit: a script's
+        // map, or a page that is up.
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.request_re2_script_map(0);
+        for op in [1, 7, 0] {
+            GameHost { game: &mut game }.set_flag(STATUS_BANK, STATUS_WINDOW, op);
+            assert!(!game.re2_status_raised && window(&mut game), "op {op}");
+        }
+        assert!(game.re2_status_request);
     }
 
     /// `Status`'s start (`0x501BD0`): the Side Pack's flag makes the
