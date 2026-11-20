@@ -2028,6 +2028,8 @@ class Pace:
     RUNS = 9
 
     def __init__(self, path: str | None, clock=time.monotonic) -> None:
+        if path == "":
+            raise SystemExit("--pace: no log is named")
         self.ticks = read_pace(Path(path)) if path else {}
         if path and not self.ticks:
             raise SystemExit(f"--pace: {path} holds no ticks")
@@ -2456,7 +2458,8 @@ def patches_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """The command line's parser: the regression runner reads a record's arguments with it too."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -2597,8 +2600,11 @@ def main() -> int:
     command.add_argument("--work", default="target/oracle-re2/run")
     command.add_argument("--wait", type=float, default=15.0)
     command.set_defaults(func=patches_command)
+    return parser
 
-    args = parser.parse_args()
+
+def main() -> int:
+    args = build_parser().parse_args()
     # SIGTERM (from `timeout`, `docker stop` or a queue) and SIGHUP end the record
     # as an error does, so that every `finally` runs and the session stops its
     # display and Wine.
