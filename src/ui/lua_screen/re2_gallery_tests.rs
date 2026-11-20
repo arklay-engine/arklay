@@ -1479,6 +1479,12 @@ fn modelled(screen: &LuaScreen) -> Option<bool> {
     screen.test_eval("local g = M.state.gal return g and g.view and g.view.model")
 }
 
+/// Whether the last tick left anything to draw: a menu's rows, a panel or
+/// the movies' words.
+fn drew(screen: &LuaScreen) -> bool {
+    screen.test_eval("local g = M.state.gal return (g.words or g.view or g.list) ~= nil")
+}
+
 /// CLAIRE's models, faded in on number 0, with config.ini's `GALLERY0` to
 /// `GALLERY4` at `opened`.
 fn open_models(cx: &UiContext<'_>, dir: &std::path::Path, opened: Option<[u32; 5]>) -> LuaScreen {
@@ -1515,7 +1521,7 @@ fn the_model_rows_button_opens_the_models_which_fade_in() {
     run(&mut screen, &cx, press_all(&["right", "up"]), 1);
     assert_eq!(gal(&screen), Some([1, 3, 1, 1, pulse, 247, 1 | falling]));
     assert_eq!(galv(&screen), [0, 0]);
-    assert_eq!(modelled(&screen), None);
+    assert!(!drew(&screen));
     assert!(cx.cues.borrow().is_empty());
     let shown = render(&mut screen, &cx);
     assert!(shown.rgba.chunks(4).all(|pixel| pixel[..3] == [0, 0, 0]));
@@ -1626,7 +1632,8 @@ fn the_models_keys_turn_and_leave() {
             "{key}"
         );
         assert_eq!(galv(&screen), [1, 0], "{key}");
-        assert_eq!(modelled(&screen), None, "{key}");
+        assert!(!drew(&screen), "{key}");
+        assert_eq!(black(&screen), None, "{key}");
         // The next screen loads: the movies' words, or the menu.
         run(&mut screen, &cx, UiInput::default(), 1);
         assert_eq!(gal(&screen).unwrap()[..4], [1, to, 1, 0], "{key}");
@@ -1668,6 +1675,24 @@ fn a_turn_skips_the_models_play_hasnt_opened() {
     for number in [1, 0, 1] {
         run(&mut screen, &cx, press("right"), 2);
         assert_eq!(screen.value("gal_index"), number);
+    }
+    // Each bit alone opens its models and no others (kind 4's table).
+    let bits: Vec<u32> = [0, 0, 3, 4, 5, 1, 2, 1, 1, 1, 1, 6, 7, 1]
+        .into_iter()
+        .chain(8..32)
+        .collect();
+    assert_eq!(bits.len(), 38);
+    for bit in 0..32 {
+        let models: Vec<i64> = (0..38).filter(|n| bits[*n as usize] == bit).collect();
+        let mut screen = open_models(&cx, &dir, Some([!0, !0, !0, !0, 0x8000_0000 >> bit]));
+        let mut reached: Vec<i64> = (0..models.len())
+            .map(|_| {
+                run(&mut screen, &cx, press("right"), 2);
+                screen.value("gal_index")
+            })
+            .collect();
+        reached.sort_unstable();
+        assert_eq!(reached, models, "bit {bit}");
     }
     // With none opened a turn stays, with its cue, and loads the model
     // again.
@@ -1718,7 +1743,24 @@ fn the_models_panel_draws_at_half_size_in_the_originals_colours() {
     let frame = render(&mut screen, &cx);
     assert_eq!(lit_key(&screen), Some(321));
     assert_eq!(pixel(&frame, 20, 165), grey(23));
+    assert_eq!(pixel(&frame, 57, 165), grey(23));
     assert_eq!(pixel(&frame, 20, 150), low_panel, "right's key isn't");
+    // The key's last column is see-through: its last pixels are the mean of
+    // its last but one and the panel's own column beside it, not of the
+    // panel's halved pixel. On its first row, half a pixel down, the
+    // panel's row above is the other half.
+    let beside = shown(20, 0x80);
+    let mean = |a: u8, b: u8| (u16::from(a) + u16::from(b)).div_ceil(2) as u8;
+    let last = [
+        mean(grey(23)[0], beside),
+        mean(grey(23)[0], 0),
+        mean(grey(23)[0], 0),
+    ];
+    assert_eq!(pixel(&frame, 58, 165), last);
+    assert_eq!(pixel(&frame, 58, 172), last);
+    let above = [mean(shown(13, 0x80), beside), 0, 0];
+    assert_eq!(pixel(&frame, 58, 160), halved(last, above));
+    assert_eq!(pixel(&frame, 59, 165), low_panel, "past the key");
     assert_eq!(pixel(&frame, 280, 230), grey(14), "38");
     assert_eq!(pixel(&frame, 286, 230), grey(19));
     // The fade's black over the panel.

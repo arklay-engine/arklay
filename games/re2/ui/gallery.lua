@@ -764,12 +764,26 @@ local function draw_view(api, g, ox, oy, black)
         -- A key starts halfway down a pixel, whose upper half is the
         -- panel's row above it. That row is drawn alone first, so that the
         -- key's first goes over it and not over the panel's two rows
-        -- already halved. The keys have no see-through texel.
+        -- already halved.
+        local top = PANEL[2][2]
         local above = key[3] - 1
         local lut = lut_for(low, 0x80, false, black)
-        local options = { dw = 50, dh = 1, blend = 255 }
-        api:page_lut(low.page, key[2], above - PANEL[2][2], 100, 1, ox + key[2] // 2, oy + above // 2, lut, false, options)
-        half(api, low, ox, oy, key[2], key[3], 100, 25, key[4], key[5], 0x80, false, black)
+        local px, py = ox + key[2] // 2, oy + above // 2
+        api:page_lut(low.page, key[2], above - top, 98, 1, px, py, lut, false, { dw = 49, dh = 1, blend = 255 })
+        half(api, low, ox, oy, key[2], key[3], 98, 25, key[4], key[5], 0x80, false, black)
+        -- The models' keys have a see-through last column, where the
+        -- panel's own column shows beside the key's last but one. So the
+        -- last pixels are drawn from below: the panel's column alone, the
+        -- key's last two over it, and on the first row the panel's row
+        -- above over both at the half the key's first row leaves it.
+        local edge, last = key[2] + 99, px + 49
+        local one = { dw = 1, dh = 1, blend = 255 }
+        api:page_lut(low.page, edge, key[3] - top, 1, 1, last, py, lut, false, one)
+        api:page_lut(low.page, key[4] + 98, key[5], 2, 1, last, py, lut, false, one)
+        api:page_lut(low.page, edge - 1, above - top, 2, 1, last, py, lut, false, { dw = 1, dh = 1, blend = 127 })
+        local rest = { dw = 1, dh = 12, blend = 255 }
+        api:page_lut(low.page, edge, key[3] + 1 - top, 1, 24, last, py + 1, lut, false, rest)
+        api:page_lut(low.page, key[4] + 98, key[5] + 1, 2, 24, last, py + 1, lut, false, rest)
     end
     -- `GalleryDrawPrim`: a number from 1, as two digits.
     local function digit(x, d)

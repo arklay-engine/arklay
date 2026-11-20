@@ -188,15 +188,23 @@ fn gallery_pictures_art() -> Vec<(&'static str, Vec<u8>)> {
         ("illust35", small()),
         ("movie64", movie_words_art()),
         // The models' panel, in reds where the pictures' is blue, with its
-        // own greys for the keys, and its digits: digit `d` level `d + 11`
-        // and the stroke 25.
+        // own greys for the keys, whose last column is see-through, and a
+        // red of its own down the panel's column beside them; and its
+        // digits: digit `d` level `d + 11` and the stroke 25.
         (
             "3dleft1",
             sheet_tim(&[0, 9, 5 << 5], |u, _| 1 + u8::from(u >= 154)),
         ),
         (
             "3dleft2",
-            sheet_tim(&[0, 11, grey(21), grey(23), grey(25), grey(27), 13], keys),
+            sheet_tim(
+                &[0, 11, grey(21), grey(23), grey(25), grey(27), 13, 20],
+                |u, v| match (u, v) {
+                    (253, 0..100) => 0,
+                    (117, _) => 7,
+                    _ => keys(u, v),
+                },
+            ),
         ),
         ("gnum", tim_8bit(64, 64, &model_digit_colours, digits)),
     ]
