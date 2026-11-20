@@ -2340,7 +2340,7 @@ fn the_title_after_a_demo_starts_from_the_logo() {
     let seed = ("seed", ScreenArg::Int(0));
     let (mut screen, cx) = open_kept(&statics, &dir, std::slice::from_ref(&seed));
     idle_to_the_demo(&mut screen, &cx);
-    let played = [seed.clone(), ("demo", ScreenArg::Str("played".to_owned()))];
+    let played = [seed.clone(), ("after", ScreenArg::Str("demo".to_owned()))];
     let mut films = Vec::new();
     for pass in 0..7 {
         let (mut screen, cx) = open_kept(&statics, &dir, &played);
@@ -2384,7 +2384,7 @@ fn the_title_after_a_demo_a_key_ended_fades_in() {
     let statics = crate::ui::ScreenStatics::default();
     let (mut screen, cx) = open_kept(&statics, &dir, &[]);
     idle_to_the_demo(&mut screen, &cx);
-    let key = [("demo", ScreenArg::Str("key".to_owned()))];
+    let key = [("after", ScreenArg::Str("game".to_owned()))];
     let (mut screen, cx) = open_kept(&statics, &dir, &key);
     assert_eq!(ti(&screen), [2, 3, 0, 0, 0, 1, 0, 0, 2, 0, 1928]);
     run(&mut screen, &cx, UiInput::default(), 121);
@@ -2400,13 +2400,66 @@ fn the_title_after_a_demo_a_key_ended_fades_in() {
     assert_eq!(screen.value("ti_fade_mode"), 2);
     assert_eq!(logo(&screen), [0, -46, -1]);
     // The logo's count is the played demos': the next one's is the film's.
-    let played = [("demo", ScreenArg::Str("played".to_owned()))];
+    let played = [("after", ScreenArg::Str("demo".to_owned()))];
     let (mut screen, cx) = open_kept(&statics, &dir, &played);
     run(&mut screen, &cx, UiInput::default(), 121);
     assert!(matches!(
         screen.update(&cx, UiInput::default()),
         ScreenResult::Done(ScreenAction::Film { id: 0, .. })
     ));
+}
+
+/// The title after a game (`title_after_death`): `Game_loop` chains the
+/// title's task as after a demo a key ended, with the statics the title
+/// had as it handed the game over, a load's here, and fade 0's step as the
+/// game left it (a death's `0x200`). The logo sleeps, and the title's
+/// picture fades in from black.
+#[test]
+fn the_title_after_a_game_starts_as_it_handed_over() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-after-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let statics = crate::ui::ScreenStatics::default();
+    let (mut screen, cx) = open_kept(&statics, &dir, &[]);
+    // LOAD GAME, as `asleep_under_the_load_screen` has it, and a load.
+    run(&mut screen, &cx, UiInput::default(), 260 - 189);
+    screen.update(&cx, confirm());
+    let asleep = (261..=531).find_map(|_| match screen.update(&cx, UiInput::default()) {
+        ScreenResult::Done(action) => Some(action),
+        ScreenResult::Continue => None,
+    });
+    assert_eq!(asleep, Some(ScreenAction::SaveLoad));
+    screen.resume_loaded(&cx);
+    screen.update(&cx, UiInput::default());
+    assert_eq!(
+        screen.update(&cx, UiInput::default()),
+        ScreenResult::Done(ScreenAction::Continue)
+    );
+    let handed = ti(&screen);
+    assert_eq!(handed[..2], [2, 3]);
+
+    let game = [
+        ("after", ScreenArg::Str("game".to_owned())),
+        ("fade_add", ScreenArg::Int(0x200)),
+    ];
+    let (mut screen, cx) = open_kept(&statics, &dir, &game);
+    let opened = ti(&screen);
+    assert_eq!(opened[..4], [2, 3, 0, 0]);
+    assert_eq!(opened[4..], handed[4..], "the hand-over's statics");
+    assert_eq!(screen.value("ti_fade_level"), -1);
+    assert_eq!(screen.value("ti_fade_add"), 0x200);
+    run(&mut screen, &cx, UiInput::default(), 121);
+    assert_eq!(ti(&screen)[..4], [0, 3, 1, 6]);
+    assert_eq!(ti(&screen)[4..], handed[4..], "through the logo's sleep");
+    assert_eq!(screen.value("ti_fade_add"), 0x200);
+    assert!(matches!(
+        screen.update(&cx, UiInput::default()),
+        ScreenResult::Continue
+    ));
+    screen.update(&cx, UiInput::default());
+    assert_eq!(ti(&screen)[..2], [2, 1], "`Title_init`, from black");
+    assert_eq!(screen.value("ti_fade_level"), 0x7C00);
+    assert_eq!(screen.value("ti_fade_add"), 0);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The boot's film is Leon's or Claire's by the generator's first value,

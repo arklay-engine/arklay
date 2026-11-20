@@ -1108,10 +1108,10 @@ local function title_rnd(api, n)
     return (x * n) >> 32
 end
 
--- What the title's statics hold as it hands over to its attract demo, for
--- the title that starts after it to find (`api:keep`): `Init_global` leaves
--- them, and `Title_init` sets them again 122 ticks on.
-local DEMO_KEPT = {
+-- What the title's statics hold as it hands over to a game or to its
+-- attract demo, for the title that starts after it to find (`api:keep`):
+-- `Init_global` leaves them, and `Title_init` sets them again 122 ticks on.
+local HANDED = {
     "mv", "disp", "menu", "step", "sel", "cur", "pulse", "slide", "demo", "flash", "logo", "logo_count", "kido",
     "add",
 }
@@ -2121,20 +2121,22 @@ local function boot(api)
     end
 end
 
--- The title after its attract demo (`Game_loop`'s `0x4BFE5D`): the title's
--- task starts from `Capcom_logo` again, with its statics as the hand-over
--- left them. A demo played to its end comes back as from the logo
--- (`fg_system`'s 2: the film on its turn, and the title's entry); one a
--- key ended comes back as a game does, to the title's picture.
-local function demo_return(api, key)
-    for _, name in ipairs(DEMO_KEPT) do
-        s[name] = api:kept("demo_" .. name) or s[name]
+-- The title after a game or its attract demo (`Game_loop`'s `0x4BFE5D`):
+-- the title's task starts from `Capcom_logo` again, with its statics as the
+-- hand-over left them. A demo played to its end comes back as from the logo
+-- (`fg_system`'s 2: the film on its turn, and the title's entry); a game,
+-- and a demo a key ended (`0x98F1BB`), to the title's picture.
+local function game_return(api, demo, fade_add)
+    for _, name in ipairs(HANDED) do
+        s[name] = api:kept("handed_" .. name) or s[name]
     end
+    -- Fade 0 is the game's, done: its step is what the game last set.
     s.fades[0].mode = 2
+    s.fades[0].add = fade_add or 0
     s.background = nil
     s.init, s.sub = 0, 0
-    s.fg_system = key and 0 or FG_FROM_LOGO
-    s.boot = { step = 3, sleep = 1, flag = 0, acks = not key }
+    s.fg_system = demo and FG_FROM_LOGO or 0
+    s.boot = { step = 3, sleep = 1, flag = 0, acks = demo }
 end
 
 local function publish(api)
@@ -2250,8 +2252,9 @@ function M.open(api, args)
     s.open_choice = args and args.choice
     s.rep_mask, s.rep_delay = 0x5000, 0x20A
     s.seed = args and args.seed
-    if args and args.demo then
-        demo_return(api, args.demo == "key")
+    -- After a game (`"game"`) or a demo played to its end (`"demo"`).
+    if args and args.after then
+        game_return(api, args.after == "demo", args.fade_add)
     end
     -- config.ini's SPECIAL, read as the signed byte it is.
     local special = args and args.special or 15
@@ -2343,12 +2346,14 @@ function M.update(api, input)
     if s.exit then
         local exit = s.exit
         s.exit = nil
+        if exit == "new_game" or exit == "attract" or exit == "continue" then
+            for _, name in ipairs(HANDED) do
+                api:keep("handed_" .. name, s[name])
+            end
+        end
         if exit == "new_game" then
             api:exit("new_game", s.character or 0, s.choice)
         elseif exit == "attract" then
-            for _, name in ipairs(DEMO_KEPT) do
-                api:keep("demo_" .. name, s[name])
-            end
             api:exit("attract", s.reel)
         elseif exit == "film" then
             -- The boot's film, the gallery's, or the one the prologue asks

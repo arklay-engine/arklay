@@ -12053,17 +12053,32 @@ impl App {
         self.open_title_from(boot, None)
     }
 
-    /// Open the title after RE 2's attract demo, which `key` ended: the
-    /// title's `demo` argument is `"key"` then, else `"played"`.
+    /// Open the title after RE 2's attract demo, which `key` ended: a demo
+    /// a key ended is a game to the title (`0x98F1BB`), and its `after`
+    /// argument is `"game"` then, else `"demo"`.
     fn open_title_after_demo(&mut self, key: bool) -> Result<()> {
-        self.open_title_from(false, Some(if key { "key" } else { "played" }))
+        self.open_title_from(false, Some(if key { "game" } else { "demo" }))
+    }
+
+    /// Open the title a game goes back to. After a game of RE 2's the
+    /// title is told so (its `after` argument is `"game"`): `Game_loop`
+    /// chains the title's task with the statics the hand-over left, and
+    /// it starts from the logo's wait, not as the boot's does.
+    fn open_title_after_game(&mut self) -> Result<()> {
+        if matches!(&self.mode, Mode::Play(session) if session.game.is_re2_room) {
+            self.open_title_from(false, Some("game"))
+        } else {
+            self.open_title()
+        }
     }
 
     /// Open the title screen, from the boot when `boot`: a title that runs
     /// the boot itself is told so (`on_boot`), to show what the game shows
     /// before its title and play its own opening film; for any other the
-    /// opening film (id 0) is queued, unless the run plays none.
-    fn open_title_from(&mut self, boot: bool, demo: Option<&str>) -> Result<()> {
+    /// opening film (id 0) is queued, unless the run plays none. `after` is
+    /// what the title comes after, when it is a game (`"game"`) or a demo
+    /// played to its end (`"demo"`): the title's `after` argument.
+    fn open_title_from(&mut self, boot: bool, after: Option<&str>) -> Result<()> {
         // A registration that names a missing entry falls back to the ported
         // screen when it opens, which only lists the eight slots, so the
         // folder probe follows the entry the pack actually carries.
@@ -12085,8 +12100,14 @@ impl App {
         if let Some(seed) = self.player_options.title_seed {
             args.push(("seed", ScreenArg::Int(i64::from(seed))));
         }
-        if let Some(demo) = demo {
-            args.push(("demo", ScreenArg::Str(demo.to_owned())));
+        if let Some(after) = after {
+            args.push(("after", ScreenArg::Str(after.to_owned())));
+            // Fade 0's step is the game's last (a death's `0x200`), which
+            // nothing sets again before `Title_init`.
+            if let Mode::Play(session) = &self.mode {
+                let add = i64::from(session.room_fade.counter());
+                args.push(("fade_add", ScreenArg::Int(add)));
+            }
         }
         self.sleeping_title = None;
         self.pending_load = None;
@@ -12956,7 +12977,7 @@ impl App {
             },
             ScreenAction::Title => match sleeping_title {
                 Some(title) if matches!(self.mode, Mode::Load(_)) => self.wake_title(title, false),
-                _ => self.open_title()?,
+                _ => self.open_title_after_game()?,
             },
             ScreenAction::Attract { reel } => {
                 // The title's idle timeout: play the reel the title picked
@@ -39763,8 +39784,9 @@ off_0010:
     /// demo says how it was opened: 1 played, 2 ended by a key.
     const DEMO_TITLE: &str = "local M = {}
         function M.open(api, args)
-            M.demo = args and args.demo
-            api:set('demo', M.demo == 'key' and 2 or M.demo == 'played' and 1 or 0)
+            M.demo = args and args.after
+            api:set('demo', M.demo == 'game' and 2 or M.demo == 'demo' and 1 or 0)
+            api:set('fade_add', args and args.fade_add or -1)
         end
         function M.update(api, input)
             if not M.demo then
@@ -40252,6 +40274,32 @@ off_0010:
         app.apply(ScreenAction::Attract { reel: Some(9) }).unwrap();
         assert!(matches!(app.mode, Mode::Title(_)), "no reel 9");
         assert_eq!(title_value(&app, "demo"), 0, "a title opened anew");
+    }
+
+    /// A game of RE 2's goes back to a title that is told so
+    /// (`Game_loop` chains it with `0x98F1BB` set, as after a demo a key
+    /// ended), with fade 0's step as the game left it. A title opened from
+    /// anywhere else isn't.
+    #[test]
+    fn re2s_title_after_a_game_is_told_so() {
+        let dir = TempDir::new();
+        let mut app = App::new(re2_demo_pack(&[0x1000; 20]), dir.0.clone(), false);
+        app.apply(ScreenAction::NewGame {
+            character: 0,
+            choice: Default::default(),
+        })
+        .unwrap();
+        let Mode::Play(session) = &mut app.mode else {
+            panic!("the game started");
+        };
+        // A death's fade out.
+        session.room_fade.set(2, 0x200, 0);
+        app.apply(ScreenAction::Title).unwrap();
+        assert_eq!(title_value(&app, "demo"), 2);
+        assert_eq!(title_value(&app, "fade_add"), 0x200);
+        app.apply(ScreenAction::Title).unwrap();
+        assert_eq!(title_value(&app, "demo"), 0, "from the title itself");
+        assert_eq!(title_value(&app, "fade_add"), -1);
     }
 
     /// `Set_room`'s step 3 loads the stage's font and sleeps a tick when
