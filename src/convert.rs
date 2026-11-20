@@ -2750,6 +2750,17 @@ impl SourceHash {
         self.feed(&[0]);
     }
 
+    /// A named text file, whatever line endings its checkout gave it: a
+    /// carriage return is no part of it.
+    pub(crate) fn text(&mut self, name: &str, text: &str) {
+        self.feed(name.as_bytes());
+        self.feed(&[0]);
+        for line in text.split('\r') {
+            self.feed(line.as_bytes());
+        }
+        self.feed(&[0]);
+    }
+
     /// The sixteen hex digits a manifest's `source_hash` holds.
     pub(crate) fn finish(&self) -> String {
         format!("{:016x}", self.0)

@@ -3255,9 +3255,11 @@ fn packed_by_game() -> HashMap<Game, (u32, String)> {
 }
 
 /// Whether a pack needs a rebuild to match this engine: its conversion
-/// revision is not its game's, or the engine's own scripts and language
-/// sheets it carries, fingerprinted by `source_hash`, are not this engine's.
-/// A pack that is no game's own is held to RE1's, the game it is built for.
+/// revision is not its game's, or what it took from the engine's own
+/// scripts, language sheets and other sources, fingerprinted by
+/// `source_hash`, is not this engine's. A pack that is no game's own (a
+/// custom base, a seed) is held to RE1's, the game it is built for; a seed
+/// to RE1's revision and its generators', whatever its fingerprint.
 fn is_stale(manifest: &manifest::Manifest, packed: &HashMap<Game, (u32, String)>) -> bool {
     let game = Game::from_id(&manifest.id).unwrap_or(Game::Re1);
     let Some((revision, source_hash)) = packed.get(&game) else {
@@ -3968,6 +3970,9 @@ mod tests {
         manifest.source_hash = Some("older scripts".to_string());
         let packed = HashMap::from([(Game::Re1, (7, "current scripts".to_string()))]);
         assert!(!is_stale(&manifest, &packed));
+        manifest.convert_version = Some(6);
+        assert!(is_stale(&manifest, &packed), "an older conversion");
+        manifest.convert_version = Some(7);
         manifest.plan_version = Some(arklay_biorand::plan::GENERATOR_VERSION + 1);
         assert!(is_stale(&manifest, &packed), "a newer plan");
         manifest.plan_version = Some(arklay_biorand::plan::GENERATOR_VERSION);

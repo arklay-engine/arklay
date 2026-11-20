@@ -112,9 +112,10 @@ pub struct Manifest {
     /// it with the pack's game's ([`crate::convert::Game::packed`]). Older
     /// packs do not carry it.
     pub convert_version: Option<u32>,
-    /// A fingerprint of the engine-owned scripts and language sources that
-    /// were packed, by the pack's game: [`crate::convert::packed_source_hash`]
-    /// or [`crate::convert_re2::packed_source_hash`].
+    /// A fingerprint of what the pack took from the engine's own sources
+    /// (scripts, language sheets, fonts and the like), by the pack's game:
+    /// [`crate::convert::packed_source_hash`] or
+    /// [`crate::convert_re2::packed_source_hash`].
     pub source_hash: Option<String>,
     /// Explicit Lua hook paths, in load order.
     pub lua: Vec<String>,

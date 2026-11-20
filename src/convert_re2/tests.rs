@@ -379,6 +379,12 @@ fn converts_every_category() {
     assert_eq!(manifest.id, "re2");
     assert_eq!(manifest.kind, manifest::PackKind::Base);
     assert_eq!(manifest.language, None);
+    // What the launcher holds the pack to, and every script it stands for.
+    assert_eq!(manifest.convert_version, Some(CONVERT_VERSION));
+    assert_eq!(manifest.source_hash, Some(packed_source_hash()));
+    for &(entry, source) in SCRIPTS {
+        assert_eq!(read(&pack, entry), source.as_bytes(), "{entry}");
+    }
     let text = String::from_utf8(read(&pack, manifest::ENTRY)).unwrap();
     assert!(!text.contains("rdt =") && !text.contains("scd ="), "{text}");
 
@@ -928,6 +934,15 @@ fn the_manifest_carries_the_converters_revision_and_fingerprint() {
     assert_eq!(hash.len(), 16);
     assert!(hash.chars().all(|ch| ch.is_ascii_hexdigit()));
     assert_ne!(hash, crate::convert::packed_source_hash());
+    assert_eq!(hash, source_hash(SCRIPTS));
+    // A script's text and its entry are the fingerprint's; its checkout's
+    // line endings are not.
+    let of = |entry: &str, source: &str| source_hash(&[SCRIPTS[0], (entry, source)]);
+    let one = of("ui/a.lua", "return 1\nend\n");
+    assert_ne!(one, of("ui/a.lua", "return 2\nend\n"));
+    assert_ne!(one, of("ui/b.lua", "return 1\nend\n"));
+    assert_ne!(one, source_hash(&[SCRIPTS[0]]));
+    assert_eq!(one, of("ui/a.lua", "return 1\r\nend\r\n"));
     assert_eq!(Game::Re2.packed(), (CONVERT_VERSION, hash));
     let parsed = manifest::Manifest::parse(&manifest.render()).unwrap();
     assert_eq!(parsed.convert_version, manifest.convert_version);

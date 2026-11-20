@@ -743,7 +743,9 @@ fn copy_text(
     let (sheet, xml) = converted.unwrap_or_else(|| {
         (
             crate::font::WESTERN_SHEET.to_vec(),
-            crate::font::xml::WESTERN.to_owned(),
+            // As the fingerprint reads it: whatever the checkout's line
+            // endings.
+            crate::font::xml::WESTERN.replace('\r', ""),
         )
     });
     let id = crate::font::WESTERN_ID;
@@ -762,9 +764,10 @@ fn copy_text(
 /// [`crate::convert::CONVERT_VERSION`] is the RE1 pack's.
 ///
 /// Bump this whenever a change to this converter would make the same
-/// installation produce a different pack. A change to a file the pack takes
-/// as it is checked in needs no bump: [`packed_source_hash`] covers those.
-/// It carries on from the revision the two converters shared.
+/// installation produce a different pack: its rules, and the tables in its
+/// own code (the font's widths and colours, the message codes). A change to
+/// what [`packed_source_hash`] covers needs no bump. It carries on from the
+/// revision the two converters shared.
 pub const CONVERT_VERSION: u32 = 27;
 
 /// The checked-in scripts the pack takes as they are: each entry and its
@@ -934,23 +937,38 @@ const SCRIPTS: &[(&str, &str)] = &[
     ),
 ];
 
-/// A stable fingerprint of everything this engine packs into an RE2 pack
-/// itself: the conversion revision, the checked-in scripts, the language
-/// file and the interface's lines of RE1's, and the Western font the pack's
-/// own is laid over. The launcher compares it with a pack's manifest, so a
-/// changed script reaches a pack converted before it.
+/// A stable fingerprint of what an RE2 pack takes from this engine's own
+/// files and from the rest of the engine: the conversion revision, the
+/// checked-in scripts, the language file and the interface's lines of RE1's,
+/// the item definitions (their stacks are the engine's item table's) and the
+/// Western font. The launcher compares it with a pack's manifest, so a
+/// changed script reaches a pack converted before it. What the converter's
+/// own code decides is [`CONVERT_VERSION`]'s to say.
+///
+/// The Western font's description is only packed for an installation without
+/// a font of its own, and no pack says which it was: a change to it asks
+/// every pack for a rebuild.
 pub fn packed_source_hash() -> String {
+    source_hash(SCRIPTS)
+}
+
+/// [`packed_source_hash`] over `scripts`. Text is fed without its carriage
+/// returns, so a checkout's line endings are no part of the fingerprint.
+fn source_hash(scripts: &[(&str, &str)]) -> String {
     let mut hash = crate::convert::SourceHash::new();
     hash.feed(&CONVERT_VERSION.to_le_bytes());
-    for &(entry, source) in SCRIPTS {
-        hash.file(entry, source.as_bytes());
+    for &(entry, source) in scripts {
+        hash.text(entry, source);
     }
-    hash.file("language/en-US.txt", text::SHARED.as_bytes());
+    hash.text("language/en-US.txt", text::SHARED);
     for line in text::interface_lines() {
-        hash.file("language/ui", line.as_bytes());
+        hash.text("language/ui", line);
+    }
+    for (item, xml) in text::item_definitions() {
+        hash.text(&crate::item_catalog::entry(item), &xml);
     }
     hash.file("font/sheet", crate::font::WESTERN_SHEET);
-    hash.file("font/xml", crate::font::xml::WESTERN.as_bytes());
+    hash.text("font/xml", crate::font::xml::WESTERN);
     hash.finish()
 }
 
