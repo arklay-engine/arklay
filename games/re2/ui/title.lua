@@ -1374,13 +1374,12 @@ function M.option_digit_x(cell, digit, width, by_table)
     return cell + (15 - width) // 2 - (digit == "6" and 1 or 0)
 end
 
--- Where the print puts a key's letter for the original's cell on
--- KEYCONFIG's page: the font's glyphs sit in the middle of their 14-pixel
--- cells, and the print's width for one is its ink and a pixel (the table's
--- `O`, as wide as its ink, sits a pixel in like the rest), so a glyph is
--- half of what its width leaves of 15 pixels in.
-function M.option_key_x(cell, width)
-    return cell + (15 - width) // 2
+-- Where the print puts a key's letter on KEYCONFIG's page:
+-- `Config_draw_key` draws the font's whole 14-pixel cell at `cell`, and the
+-- print draws a glyph's cell its indent (`api:text_indent`) left of where
+-- it is asked to.
+function M.option_key_x(cell, indent)
+    return cell + indent
 end
 
 local OPT_SPEAKERS = { "MONO", "STEREO" }
@@ -1569,12 +1568,17 @@ end
 -- button: the directions, then A, B, X, Y, the menu and the view buttons
 -- from 8, the sticks' and the left trigger from 14, the right trigger at
 -- 17): as they stand, lit under the cursor, and red when the page has
--- changed them.
+-- changed them. Buttons 4 to 7 are zeros in the table, which Classic
+-- REbirth draws as they are: the sheet's tile at 0, 0.
 local KEY_PAD_GLYPHS = {
     [0] = { { 188, 72 }, { 223, 227 }, { 188, 155 } },
     [1] = { { 146, 30 }, { 188, 183 }, { 146, 114 } },
     [2] = { { 174, 72 }, { 209, 227 }, { 172, 155 } },
     [3] = { { 202, 72 }, { 237, 227 }, { 202, 155 } },
+    [4] = { { 0, 0 }, { 0, 0 }, { 0, 0 } },
+    [5] = { { 0, 0 }, { 0, 0 }, { 0, 0 } },
+    [6] = { { 0, 0 }, { 0, 0 }, { 0, 0 } },
+    [7] = { { 0, 0 }, { 0, 0 }, { 0, 0 } },
     [8] = { { 160, 30 }, { 13, 241 }, { 160, 114 } },
     [9] = { { 174, 30 }, { 27, 241 }, { 174, 114 } },
     [10] = { { 188, 30 }, { 41, 241 }, { 188, 114 } },
@@ -1724,8 +1728,11 @@ local function key_main()
     elseif o.state == 0xB then
         -- The rows move on the page's own edges of the directions (the
         -- joypad's and the keyboard's arrows, `0x99CF70`), not the title's.
-        local held = s.raw & (PAD_UP | PAD_DOWN | PAD_LEFT | PAD_RIGHT)
-        trg = held & ~k.held
+        -- A press that was let go within the tick reaches the screen with
+        -- no held bit, and is a press here as well.
+        local dirs = PAD_UP | PAD_DOWN | PAD_LEFT | PAD_RIGHT
+        local held = s.raw & dirs
+        trg = (held & ~k.held) | (s.edge & ~s.raw & dirs)
         k.held = held
         if o.type == KEY_EXIT_ROW and s.key_trg & KEY_CONFIRM ~= 0 then
             s.cue(SE_DECIDE)
@@ -3033,7 +3040,7 @@ function M.draw(api)
     for _, t in ipairs(s.opt_texts or {}) do
         local parts = cache[OPT_PARTS]
         if t.key then
-            local x = M.option_key_x(t.key, api:text_width(t.text))
+            local x = M.option_key_x(t.key, api:text_indent(t.text))
             api:text(ox + x, oy + t.y, t.text, { colour = t.red and OPT_KEY_RED or t.on and OPT_DIGIT_GREEN or nil })
         elseif t.cell then
             local x = M.option_digit_x(t.cell, t.text, api:text_width(t.text), CrText.by_table(api))

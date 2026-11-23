@@ -1893,16 +1893,75 @@ fn a_direction_held_into_keyconfigs_list_moves_once() {
         5,
         "then the held key waits for its release"
     );
+    // A tap let go within the tick has no held bit, and still moves.
+    let tap = |key: &str| {
+        let mut input = UiInput {
+            held_down: true,
+            ..UiInput::default()
+        };
+        match key {
+            "down" => input.down = true,
+            _ => input.up = true,
+        }
+        input
+    };
+    let released = UiInput {
+        down: true,
+        ..UiInput::default()
+    };
+    assert_eq!(tick_cues(&mut screen, &cx, released), [UiCue::Core(4)]);
+    assert_eq!(opt(&screen)[3], 6, "a tap within the tick");
+    // Down held again is a press again; then up taps to the last row with
+    // it held, and Exit with the history left holding down.
+    run(&mut screen, &cx, held, 1);
+    assert_eq!(opt(&screen)[3], 7);
+    for _ in 0..8 {
+        run(&mut screen, &cx, tap("up"), 1);
+        run(&mut screen, &cx, held, 1);
+    }
+    assert_eq!(opt(&screen)[3], 10);
+    let held_confirm = UiInput {
+        confirm: true,
+        held_down: true,
+        ..UiInput::default()
+    };
+    run(&mut screen, &cx, held_confirm, 1);
+    run(&mut screen, &cx, held, 5);
+    assert_eq!(opt(&screen)[1..3], [1, 0], "the menu, on KEYCONFIG");
+    // The next visit's state 10 clears that history: down, held again from
+    // the walk in (the menu repeats a held key), moves the list's cursor on
+    // its first tick.
+    run(&mut screen, &cx, UiInput::default(), 1);
+    run(&mut screen, &cx, press("confirm"), 2);
+    assert_eq!(opt(&screen)[1], 9);
+    run(&mut screen, &cx, held_confirm, 1);
+    run(&mut screen, &cx, held, 1);
+    assert_eq!(opt(&screen)[1], 10);
+    run(&mut screen, &cx, held_confirm, 1);
+    assert_eq!(opt(&screen)[1..4], [0xB, 0, 4]);
+    assert_eq!(tick_cues(&mut screen, &cx, held), [UiCue::Core(4)]);
+    assert_eq!(opt(&screen)[3], 5);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// The executable's own pad (`FUN_0044dab0`) as config.ini's `JoyDef`, with
-/// `extra` in the 16th word.
-fn default_pad_with(extra: u32) -> String {
+/// The executable's own pad (`FUN_0044dab0`), a word for each button.
+fn default_pad() -> [u32; 32] {
     let mut pad = [0u32; 32];
     pad[..4].copy_from_slice(&[0x1000, 0x4000, 0x8000, 0x2000]);
     pad[8..15].copy_from_slice(&[0x80, 0x44, 0x08, 0x800, 0x10, 0x100, 0x02]);
+    pad
+}
+
+/// The executable's own pad as config.ini's `JoyDef`, with `extra` in the
+/// 16th word.
+fn default_pad_with(extra: u32) -> String {
+    let mut pad = default_pad();
     pad[16] = extra;
+    joy_def(&pad)
+}
+
+/// A pad's words as config.ini's `JoyDef`.
+fn joy_def(pad: &[u32; 32]) -> String {
     pad.iter()
         .flat_map(|word| word.to_le_bytes())
         .map(|byte| format!("{byte:02X}"))
@@ -1972,19 +2031,12 @@ fn keyconfig_asks_for_a_change_to_the_pad_alone() {
     assert_eq!(opt(&screen)[1], 0xF, "Leave kept the pad as it was");
     run(&mut screen, &cx, press("confirm"), 6);
     assert_eq!(opt(&screen)[1], 1, "Change");
-    open_key_page(&mut screen, &cx);
-    for _ in 0..5 {
-        run(&mut screen, &cx, press("up"), 2);
-    }
-    run(&mut screen, &cx, press("confirm"), 1);
-    assert_eq!(opt(&screen)[1], 0xD, "nothing is changed now");
+    // Default and Exit leave at once: the settings are Default's now.
+    default_then_exit(&mut screen);
+    assert_eq!(opt(&screen)[1], 0xD, "Change took Default's pad");
     // A title opened anew with the boot's settings keeps the last one's.
     let mut again = opened(default_pad_with(0x0001_0000));
-    open_key_page(&mut again, &cx);
-    for _ in 0..5 {
-        run(&mut again, &cx, press("up"), 2);
-    }
-    run(&mut again, &cx, press("confirm"), 1);
+    default_then_exit(&mut again);
     assert_eq!(opt(&again)[1], 0xD, "the kept pad is Default's");
 }
 
@@ -2007,13 +2059,17 @@ fn keyconfig_draws_the_arrows_and_the_fonts_signs() {
     ] {
         keys[row] = key.to_owned();
     }
+    // Get Ready's word on button 4, which Classic REbirth's table has no
+    // place for: its zeros, the sheet's tile at 0, 0.
+    let mut pad = default_pad();
+    (pad[4], pad[10]) = (pad[10], 0);
     let mut cx_open = context(&dir);
     cx_open.statics = Some(&statics);
     let mut screen = LuaScreen::open_screen(
         "title",
         &[
             ("key_def", ScreenArg::Str(keys.join(" "))),
-            ("joy_def", ScreenArg::Str(default_pad_with(0))),
+            ("joy_def", ScreenArg::Str(joy_def(&pad))),
         ],
         ScreenAction::Quit,
         &mut cx_open,
@@ -2029,6 +2085,7 @@ fn keyconfig_draws_the_arrows_and_the_fonts_signs() {
         key_glyphs(&screen)[..6],
         ["134:16", "[", "\\", "176:16", "]g", "_"]
     );
+    assert_eq!(pad_glyphs(&screen)[4], (0, 0));
 }
 
 /// Each visit to the option screen draws once from the title's generator
@@ -2040,7 +2097,9 @@ fn each_option_visit_picks_its_player() {
     let statics = crate::ui::ScreenStatics::default();
     let (mut screen, cx) = open_kept(&statics, &dir, &[("seed", ScreenArg::Int(0x7FFF_FFFF))]);
     let mut models = Vec::new();
-    for _ in 0..2 {
+    // The generator's word after each visit: one draw apiece, the first
+    // the seed itself.
+    for word in [0x7FFF_FFFF, 0x9957_3BA2] {
         run(&mut screen, &cx, UiInput::default(), 70);
         for _ in 0..8 {
             if screen.value("ti_cur") == 4 {
@@ -2052,6 +2111,7 @@ fn each_option_visit_picks_its_player() {
         run(&mut screen, &cx, press("confirm"), 16);
         assert_eq!(opt(&screen)[1], 1);
         models.push(screen.test_eval::<i64>("return M.state.opt.model"));
+        assert_eq!(statics.get("ui/title.lua", "rnd"), Some(word));
         run(&mut screen, &cx, press("cancel"), 1);
         run(&mut screen, &cx, UiInput::default(), 40);
         assert_eq!(screen.value("opt_on"), 0);
@@ -2059,21 +2119,23 @@ fn each_option_visit_picks_its_player() {
     assert_eq!(models, [0, 1]);
 }
 
-/// A key's letter is printed where the original's whole font cell puts its
-/// glyph (`title_option_key`'s frames): the print's width for a glyph is its
-/// ink and a pixel, and the glyph sits half of what that leaves of 15
-/// pixels in.
+/// A key's letter is printed with its whole font cell at the original's
+/// place (`Config_draw_key` at 0x9C, `title_option_key`'s frames): the print
+/// draws a glyph's cell its indent left of the cursor, so the cursor is the
+/// place and the indent.
 #[test]
-fn a_keys_letter_sits_in_the_middle_of_its_cell() {
+fn a_keys_letter_sits_where_the_original_draws_its_cell() {
     let dir = std::env::temp_dir();
     let cx = context(&dir);
     let (screen, dir) = open_option(&cx, "key-letter");
-    let place =
-        |width: i64| -> i64 { screen.test_eval(&format!("return M.option_key_x(0x9C, {width})")) };
-    // O, J, M and I as the recordings have them: ink 12, 12, 14 and 6 wide.
+    let place = |indent: i64| -> i64 {
+        screen.test_eval(&format!("return M.option_key_x(0x9C, {indent})"))
+    };
+    // `width_tbl`'s O, J, M and I (bearings 1, 1, 0 and 4), as the
+    // recordings place them, and Q, which fills its cell from the left.
     assert_eq!(
-        [place(13), place(13), place(15), place(7)],
-        [157, 157, 156, 160]
+        [place(1), place(1), place(0), place(4), place(0)],
+        [157, 157, 156, 160, 156]
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

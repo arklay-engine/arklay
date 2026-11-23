@@ -544,6 +544,14 @@ function ScreenApi:grid_glyph_width() end
 ---@return integer width 0 without a font.
 function ScreenApi:text_width(text, tight) end
 
+---How far left of `x` [`api:text`](#ScreenApi.text) draws the cell of
+---`text`'s first glyph (its left bearing), so that `x + indent` puts the
+---whole cell at `x`.
+---@param text string Characters, encoded like `api:text` encodes them.
+---@param tight? boolean The metrics to measure with; defaults to the session's.
+---@return integer indent 0 without a font or for an empty `text`.
+function ScreenApi:text_indent(text, tight) end
+
 ---The width Classic REbirth's own text measure gives `text`, which CR
 ---centres its lines by. It can differ from the drawn width: CR measures a
 ---kanji from the font's right page as wider than it draws it, and `.` on the

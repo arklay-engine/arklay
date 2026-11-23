@@ -660,6 +660,14 @@ impl Font {
         self.glyphs(tight, bytes).map(|glyph| glyph.advance).sum()
     }
 
+    /// The first glyph's indent under `tight` metrics: how far left of the
+    /// cursor [`Font::draw_text`] blits its cell (0 for an empty `bytes`).
+    pub fn indent(&self, tight: bool, bytes: &[u8]) -> i32 {
+        self.glyphs(tight, bytes)
+            .next()
+            .map_or(0, |glyph| glyph.indent)
+    }
+
     /// The width Classic REbirth's own measure (DLL `0x10069440`) gives
     /// `bytes`: the width CR centres a line by. It reads the same table as
     /// the tight path but differs from the drawn [`Font::advance`] in two
@@ -1274,6 +1282,10 @@ mod tests {
         // Without the table the glyph fills its cell.
         let full = Glyphs::new(&[0x45], font.metrics).next().unwrap();
         assert_eq!((full.indent, full.advance), (0, 14));
+        // `Font::indent` is the first glyph's, under the metrics asked for.
+        assert_eq!(font.indent(true, &[0x45, 0x25]), 4);
+        assert_eq!(font.indent(false, &[0x45]), 0);
+        assert_eq!(font.indent(true, &[]), 0);
         // The space advances 8 under the table, 14 without it.
         assert_eq!(font.advance(true, &[0x00]), 8);
         assert_eq!(font.advance(false, &[0x00]), 14);

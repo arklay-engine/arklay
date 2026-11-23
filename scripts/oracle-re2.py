@@ -468,9 +468,16 @@ def write_config(game: Path, tree: Path, sound: bool) -> None:
         "CutsceneSkip": "0", "DebugMode": "0", "FocusIgnore": "1",
     } | CONFIG_OVERRIDES
     lines = []
+    present = set()
     for line in settings.splitlines():
         key = line.split("=", 1)[0].strip()
+        present.add(key)
         lines.append(f"{key} = {fixed[key]}" if key in fixed else line)
+    # A `--config` key the install's config.ini lacks would be dropped and the
+    # run recorded with the game's own value: refuse it instead.
+    missing = sorted(set(CONFIG_OVERRIDES) - present)
+    if missing:
+        raise SystemExit(f"--config: {game / 'config.ini'} has no {', '.join(missing)} to set")
     (tree / "config.ini").write_text("\n".join(lines) + "\n")
 
 
