@@ -1813,6 +1813,11 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                     .app
                     .as_ref()
                     .is_some_and(|app| !matches!(app.mode, Mode::Boot | Mode::Play(_)));
+                if let Some(ticks) = voice_ticks.as_ref().filter(|_| screen) {
+                    // On a screen: for the game it starts.
+                    driver.app()?.pending_voice_ticks = Some(ticks.clone().into());
+                }
+                let voice_ticks = voice_ticks.filter(|_| !screen);
                 if sound.unwrap_or(false)
                     || voice_ticks.is_some()
                     || sound_wav.is_some()
@@ -1821,7 +1826,8 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                     let app = driver.app()?;
                     let Mode::Play(session) = &mut app.mode else {
                         return Err(mlua::Error::RuntimeError(
-                            "trace_start: sound, voice_ticks, sound_wav and film_pads need a game session"
+                            "trace_start: sound, voice_ticks, sound_wav and film_pads need a game \
+                             session (voice_ticks a screen too)"
                                 .into(),
                         ));
                     };

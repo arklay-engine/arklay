@@ -88,9 +88,11 @@ offset = 0
 ticks = 3200
 compare_from = 1276
 input = "special_4th_walk.txt"
+# The radio's voiced lines hold the record's ticks (oracle/re2-deviations.md, "Voice lines").
+voice_from_ref = true
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,esp,pl"
 frames = [1269, 3199]
-expect = { tick = 2039, fields = ["fgstat"], note = "the radio's first voiced line holds fgstat's 0x20 for 18 ticks in this frame-capturing record and for its length in arklay (oracle/re2-deviations.md, \"Voice lines\"); a title run can't take the record's lengths yet (voice_from_ref is a game run's)" }
+expect = "match"
 record = ""
 
 # The same for TO-FU.
@@ -104,7 +106,9 @@ offset = 0
 ticks = 3240
 compare_from = 1316
 input = "special_tofu_walk.txt"
+# The radio's voiced lines hold the record's ticks (oracle/re2-deviations.md, "Voice lines").
+voice_from_ref = true
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,esp,pl"
 frames = [1309, 3239]
-expect = { tick = 2078, fields = ["fgstat"], note = "the radio's first voiced line holds fgstat's 0x20 for 18 ticks in this frame-capturing record and for its length in arklay (oracle/re2-deviations.md, \"Voice lines\"); a title run can't take the record's lengths yet (voice_from_ref is a game run's)" }
+expect = { tick = 2748, fields = ["esp92", "espk", "espn", "rng"], note = "TO-FU running starts an effect of the player's own bank (kind 1, row 0x26) at head height, which arklay's player doesn't make for him" }
 record = ""

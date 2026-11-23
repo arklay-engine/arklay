@@ -9811,6 +9811,12 @@ impl GameSession {
     /// (`Movie_set(2)`), so the screen stays black for this tick and the two
     /// after it.
     fn enter_from_re2_title(&mut self) {
+        // The tick is `Game_loop`'s mode 5, which leaves `fg_stop` at
+        // `0xEF000000`, input bit included, for the next tick's `Pad_set`,
+        // as a door does: the first `Player_move` reads no direction, and a
+        // demo's reel that runs from its first word moves the player a tick
+        // later (room 11B's, `title_demo_cycle`).
+        self.game.re2.door_key_stop = true;
         self.room_fade_draw = self.room_fade.overlay();
         self.room_fade.tick();
         self.present_skip.movie_set_black(3);
@@ -11674,6 +11680,9 @@ struct App {
     /// Whether [`Self::screen_volumes`] are the settings': a change to them
     /// is then mixed with and saved ([`Self::volume_change`]).
     volumes_are_settings: bool,
+    /// RE 2's voice lines' lengths a trace started on a screen asked for
+    /// (`trace_start`'s `voice_ticks`), for the game the screen starts.
+    pending_voice_ticks: Option<std::collections::VecDeque<u32>>,
     /// What the title shows as its `music_volume` and `effects_volume`: the
     /// value it published from `on_volumes`, then each one taken from it
     /// since, to tell a change of its own from what it was told. `None`
@@ -11814,6 +11823,7 @@ impl App {
             next_demo: 0,
             pending_return_title: false,
             re2_stage: 1,
+            pending_voice_ticks: None,
             screen_volumes: [100; 2],
             volumes_are_settings: false,
             screen_volumes_shown: [None; 2],
@@ -12774,6 +12784,10 @@ impl App {
         self.ending = None;
         self.stop_screen_music();
         session.screen_statics = self.statics.clone();
+        // A trace's voice lengths, asked for while the title was up.
+        if let Some(ticks) = self.pending_voice_ticks.take() {
+            session.game.re2.voice_ticks = ticks;
+        }
         #[cfg(feature = "bot")]
         self.start_bot_session(&mut session);
         session.set_debug_menu(self.debug_menu);
@@ -34040,6 +34054,30 @@ mod tests {
         );
     }
 
+    /// Voice lengths a trace asked for while a screen was up go to the game
+    /// that screen starts next, and to that one only.
+    #[test]
+    fn a_screens_voice_lengths_reach_the_game_it_starts() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack(&dir);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut app = App::new(pack, dir.0.join("saves"), false);
+        app.pending_voice_ticks = Some([18, 22].into());
+        let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+        app.start_session(session);
+        let Mode::Play(session) = &app.mode else {
+            panic!("expected a play mode");
+        };
+        assert_eq!(session.game.re2.voice_ticks, [18, 22]);
+        assert!(app.pending_voice_ticks.is_none());
+        let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+        app.start_session(session);
+        let Mode::Play(session) = &app.mode else {
+            panic!("expected a play mode");
+        };
+        assert!(session.game.re2.voice_ticks.is_empty());
+    }
+
     /// Open the in-game menu's load screen over the playing session,
     /// closing any debug menu first.
     fn app_open_load(app: &mut App) {
@@ -41497,6 +41535,28 @@ off_0010:
     /// after a load, a tick sooner, and when the demo is over the title
     /// opens knowing how it ended. A reel the pack lacks leaves the title
     /// up.
+    /// The demo's game enters through `Game_loop`'s mode 5, whose
+    /// `fg_stop` the next tick's `Pad_set` still finds: that tick's first
+    /// `Player_move` reads no key, and the stop is gone after it.
+    #[test]
+    fn a_title_started_games_first_move_reads_no_key() {
+        let dir = TempDir::new();
+        let mut app = App::new(re2_demo_pack(&[0x1000; 20]), dir.0.clone(), false);
+        app.boot(AppBoot::Title).unwrap();
+        idle(&mut app);
+        let stopped = |app: &App| match &app.mode {
+            Mode::Play(session) => session.game.re2.door_key_stop,
+            _ => panic!("the demo plays"),
+        };
+        let entered = (0..usize::from(RE2_TITLE_DEMO_TICKS) + 3).any(|_| {
+            idle(&mut app);
+            stopped(&app)
+        });
+        assert!(entered, "the entry tick leaves the keys stopped");
+        idle(&mut app);
+        assert!(!stopped(&app), "for one tick");
+    }
+
     #[test]
     fn re2s_title_plays_its_reel_and_opens_again_after_it() {
         let dir = TempDir::new();

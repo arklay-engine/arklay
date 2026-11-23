@@ -582,6 +582,9 @@ pub const FG_SYSTEM_TOFU: u8 = 31;
 /// `fg_status`'s `0x2000000`: an extra mode's game (`Title_game_init`'s
 /// step 1 raises it with [`FG_SYSTEM_EXTRA`]).
 pub const FG_STATUS_EXTRA: u8 = 6;
+/// `fg_status`'s `0x8000000`: an extra mode's script map closed. The map
+/// page's cancel (`0x4FBE50`) raises it under [`FG_SYSTEM_EXTRA`].
+pub const FG_STATUS_EXTRA_MAP: u8 = 4;
 /// `fg_system`'s `0x8000`, which `Init_movie_work` clears. No reader is known.
 pub const FG_SYSTEM_8000: u8 = 16;
 /// `fg_status`'s `0x4000000`: EASY's.

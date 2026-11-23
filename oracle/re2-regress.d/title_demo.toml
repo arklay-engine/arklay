@@ -80,7 +80,7 @@ compare_from = 4840
 input = "title_demo.txt"
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,pl,bgm,snd,em,fgstat"
 # The room's enemies draw from `Rnd` as it loads, which arklay's trace shows a tick later, as on a door's tick.
-ignore = [[4840, "mot"], [4840, "rng"]]
+ignore = [[4840, "rng"]]
 expect = "match"
 
 # The third.
@@ -94,6 +94,6 @@ ticks = 8356
 compare_from = 7626
 input = "title_demo.txt"
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,pl,bgm,snd,em,fgstat"
-ignore = [[7626, "mot"], [7626, "rng"]]
+ignore = [[7626, "rng"]]
 expect = "match"
 record = ""
