@@ -1,0 +1,60 @@
+# The title from boot: SPECIAL, right to TO-FU and confirm, START into To-fu's game: the opening scene in room 304, confirms through its two radio messages, then a walk, a run, turns and an aim (oracle/re2.md, "The 4th Survivor and To-fu").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+420 right
+423
+460 confirm
+463
+1040 start
+1043
+2040 confirm
+2043
+2070 confirm
+2073
+2100 confirm
+2103
+2130 confirm
+2133
+2160 confirm
+2163
+2190 confirm
+2193
+2220 confirm
+2223
+2250 confirm
+2253
+2280 confirm
+2283
+2310 confirm
+2313
+2340 confirm
+2343
+2370 confirm
+2373
+2400 confirm
+2403
+2430 confirm
+2433
+2460 confirm
+2463
+2490 confirm
+2493
+2520 confirm
+2523
+2640 up
+2710 right
+2730 up run
+2810 left
+2830 up
+2890
+2940 aim
+3000
+3040 down
+3070

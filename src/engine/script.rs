@@ -1353,6 +1353,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                         easy,
                         hard_mode,
                         censorship_off: arrange.unwrap_or(false),
+                        extra_player: 0,
                     },
                     title_special,
                     title_gallery,

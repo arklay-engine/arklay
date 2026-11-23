@@ -196,6 +196,11 @@ const RE2_TITLE_START_TICKS: u8 = 5;
 /// end (`Title_game_init`'s steps 4 and 5 and the tick after them:
 /// `prologue_leon`'s 4029 to 4031).
 const RE2_TITLE_NEW_GAME_TICKS: u8 = 3;
+/// The same for the 4th Survivor's and To-fu's games, which start no
+/// prologue (`fg_system`'s 8) and so take the attract demo's ticks: room
+/// 304, of another stage than the title's, is played from the seventh tick
+/// after the hand-over (`special_4th_play`'s 1276, with `fg_stop` held).
+const RE2_TITLE_EXTRA_TICKS: u8 = RE2_TITLE_DEMO_TICKS;
 /// The same for the attract demo, a tick under a load's, which starts the
 /// prologue's task first: room 10C's reel from the boot plays from the
 /// sixth tick (`title_demo_abort`'s 2119 to 2123), room 203's from the
@@ -3145,6 +3150,83 @@ impl GameSession {
             Some(session.player.pos),
         );
         session.re2_demo = Some(Re2Demo::new(reel));
+        Ok(session)
+    }
+
+    /// The 4th Survivor's or To-fu's game, which `Title_game_init`'s extras
+    /// branch (`0x506750`, `fg_system`'s 8) starts with no prologue: player
+    /// `player` ([`game::pl_change2::HUNK`] or [`game::pl_change2::TOFU`]) in
+    /// room 304, cut 3, at -0x1CFF, 0, -0x5FAC facing 0x800, with
+    /// `INIT_TBL.DAT`'s row 4 (its music table and its save place, 0),
+    /// `Stage_init_item`'s row for the player, and `fg_status`'s
+    /// `0x2000000`. `claire` is `fg_status`'s top bit, which picks the
+    /// room's disc.
+    fn new_re2_extra(
+        pack: &Pack,
+        player: u8,
+        claire: bool,
+        save_dir: &Path,
+        options: player::Options,
+    ) -> Result<Box<Self>> {
+        use crate::scd2::host::{FG_STATUS_EXTRA, FG_SYSTEM_EXTRA, FG_SYSTEM_TOFU, STATUS_BANK};
+        let options = player::Options {
+            new_game: Default::default(),
+            ..options
+        };
+        let character = u8::from(claire);
+        let id = RoomId {
+            stage: RE2_EXTRA_STAGE + 1,
+            room: RE2_EXTRA_ROOM,
+            player_flag: character,
+            mansion2: false,
+        };
+        let loaded = load_room(pack, id)?;
+        let mut game = new_game_state(pack, id, &loaded, options);
+        game.is_re2_room = true;
+        game.re2.save_place = 0;
+        if let Some(table) = pack
+            .read(crate::bgm2::INIT_TABLE_ENTRY)
+            .ok()
+            .and_then(|data| crate::bgm2::BgmTable::from_init_table(&data, RE2_EXTRA_INIT_ROW))
+        {
+            game.re2.bgm = table;
+        }
+        seed_new_game(pack, &mut game, character, true);
+        seed_re2_save_count(&mut game, true);
+        game.re2.set_flag(0, FG_SYSTEM_EXTRA, 1);
+        game.re2.set_flag(
+            0,
+            FG_SYSTEM_TOFU,
+            u8::from(player == game::pl_change2::TOFU),
+        );
+        game.re2.set_flag(STATUS_BANK, FG_STATUS_EXTRA, 1);
+        game.set_re2_extra_start(player);
+        let mut loaded = loaded;
+        loaded.room.use_extra_room_anim();
+        // The branch leaves the stashed life (`WORD_0098e9b6`) as row 4 has
+        // it, where a new game's sets 200.
+        game.re2.pl_stash.life = 0;
+        let mut player_state = player::spawn(id, &loaded.room);
+        player_state.pos = RE2_EXTRA_POS;
+        player_state.collision_mirror = [RE2_EXTRA_POS[0], RE2_EXTRA_POS[2]];
+        player_state.angle = RE2_EXTRA_ANGLE;
+        game.sync_entity_from_player(&player_state);
+        let cut = RE2_EXTRA_CUT;
+        if cut >= loaded.room.cuts.len() {
+            bail!(
+                "room {} has no cut {cut} to start the extra mode on",
+                id.code()
+            );
+        }
+        let mut session = Self::from_loaded(pack, loaded, game, player_state, save_dir, options)?;
+        // `Cut_change(scd_var_cut)`, then `Cut_check`'s zones from there.
+        session.loaded.room.current_cut = cut;
+        session.game.set_camera_cut(cut);
+        apply_camera(
+            &mut session.loaded.room,
+            &mut session.game,
+            Some(session.player.pos),
+        );
         Ok(session)
     }
 
@@ -9716,6 +9798,11 @@ impl GameSession {
             return;
         }
         self.re2_title_start = Some(ticks);
+        // `Title_game_init`'s `Player_set` ends in `Pl_init`, and nothing
+        // moves the player before `Game_loop`'s first live tick runs
+        // `Player_move` from there (the routines `1, 0, 0, 0` on clip 2's
+        // first frame, unblended), as a door's start does.
+        self.game.re2.player = self.game.re2.player.clone().after_pl_init();
     }
 
     /// `Game_loop`'s first tick after `Title_game_init`: the entry fade it
@@ -11114,6 +11201,17 @@ pub fn set_render_mode(name: &str) -> Result<()> {
 pub fn render_mode_names() -> impl Iterator<Item = &'static str> {
     debug_view::names()
 }
+
+/// Where the 4th Survivor's and To-fu's games start (`Title_game_init`'s
+/// extras branch): `scd_var_stage` 2 and room 4, room 304, on cut 3.
+const RE2_EXTRA_STAGE: u8 = 2;
+const RE2_EXTRA_ROOM: u8 = 4;
+const RE2_EXTRA_CUT: usize = 3;
+const RE2_EXTRA_POS: [i32; 3] = [-0x1CFF, 0, -0x5FAC];
+const RE2_EXTRA_ANGLE: u16 = 0x800;
+/// `INIT_TBL.DAT`'s row for an extra mode: `Title_game_init`'s step 1 sets
+/// `BYTE_00989e7e` to 4 under `fg_system`'s 8.
+const RE2_EXTRA_INIT_ROW: usize = 4;
 
 /// Where Scenario B starts (`Title_game_init`).
 const RE2_SCENARIO_B_ROOM: &str = "104";
@@ -12724,7 +12822,18 @@ impl App {
             new_game: choice,
             ..self.player_options
         };
-        let session = GameSession::new_with(&self.pack, character, &self.save_dir, options)?;
+        let session = if choice.extra_player != 0 {
+            // SPECIAL's extra modes (`Title_game_init`'s extras branch).
+            GameSession::new_re2_extra(
+                &self.pack,
+                choice.extra_player,
+                character & 1 != 0,
+                &self.save_dir,
+                self.player_options,
+            )?
+        } else {
+            GameSession::new_with(&self.pack, character, &self.save_dir, options)?
+        };
         self.start_narrated_session(session, game::MESSAGE_BOOT_NEW_GAME);
         self.restart_point = Some(RestartPoint::NewGame { character, choice });
         Ok(())
@@ -13204,9 +13313,13 @@ impl App {
                 } else {
                     self.prologue_pending = false;
                     self.start_new_game(character, choice)?;
-                    // RE 2's title has run its prologue: the game starts
-                    // as the original's does after it.
-                    self.start_from_re2_title(RE2_TITLE_NEW_GAME_TICKS);
+                    // RE 2's title has run its prologue, or an extra mode
+                    // has none: the game starts as the original's does.
+                    self.start_from_re2_title(if choice.extra_player != 0 {
+                        RE2_TITLE_EXTRA_TICKS
+                    } else {
+                        RE2_TITLE_NEW_GAME_TICKS
+                    });
                 }
             }
             ScreenAction::Film {
@@ -19811,6 +19924,14 @@ fn run_room_init(loaded: &mut LoadedRoom, game: &mut game::GameState) {
     let mut host = game::ScdGameHost::new(game);
     command_vm.run_init(&mut host);
     run_re2_init(loaded.re2_vm.as_mut(), &loaded.re2_effects, game, false);
+    if game.is_re2_room
+        && game.re2.flag(
+            crate::scd2::host::STATUS_BANK,
+            crate::scd2::host::FG_STATUS_EXTRA,
+        )
+    {
+        loaded.room.use_extra_room_anim();
+    }
     // The load's own passes wrote the zones and the collision and floor
     // records before anything moves: a door holds the scheduler until play
     // resumes, and the door's end tests the zones (`Cut_check(1)`) and its
@@ -20175,7 +20296,26 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
     context.game.re2.sce_work_clr();
     sce_work_clr_at(context.game);
     context.game.re2.vm = Some(vm);
-    crate::character2::run_esprs(context.game, context.room, context.pack, context.npc_models);
+    // `Get_matrix` on one of the player's parts: its matrix as the player's
+    // last tick left it.
+    let player_parts: Vec<(usize, crate::player2::Matrix)> = context
+        .game
+        .re2
+        .pending_esprs
+        .iter()
+        .filter(|(_, matrix)| matrix.slot.is_none())
+        .filter_map(|(_, matrix)| matrix.part)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .filter_map(|part| Some((part, re2_player_part_world(context, part)?)))
+        .collect();
+    crate::character2::run_esprs(
+        context.game,
+        context.room,
+        context.pack,
+        context.npc_models,
+        &player_parts,
+    );
     apply_re2_room_data(context.room, context.game);
     apply_re2_pending_player(context.game, context.player);
 }
@@ -20382,6 +20522,49 @@ fn tick_pad_driven_player(context: &mut RoomContext<'_>, pad: player::Input) {
 const RE2_CHARACTER_TWEEN_SLOT: usize = 0x100;
 
 /// RE2's player machine (`Game_loop`'s call of `Player_move`).
+/// The world matrix of the player's part `part` in the pose it holds now
+/// (`Get_matrix`), when the player has a model.
+fn re2_player_part_world(
+    context: &mut RoomContext<'_>,
+    part: usize,
+) -> Option<crate::player2::Matrix> {
+    let assets = context.player_assets?;
+    let empty: (&[Clip], &[crate::model::Keyframe]) = (&[], &[]);
+    let room_anim = context.room.room_anim.as_ref();
+    let targets = crate::character2::targets(context.game);
+    let neck_targets = context.game.re2.neck_targets();
+    let held_bank = context.game.player_damage.clone();
+    let objects = context.game.objects.records.clone();
+    let tick = crate::player2::Tick {
+        room: context.room,
+        skeleton: &assets.emd.skeleton,
+        morphs: &assets.emd.morphs,
+        banks: crate::player2::Banks {
+            pld: (&assets.emd.clips, &assets.emd.keyframes),
+            weapon: (&assets.emw.clips, &assets.emw.keyframes),
+            room: room_anim.map_or(empty, |anim| (&anim.clips, &anim.keyframes)),
+            held: held_bank.as_ref().map_or(empty, |bank| {
+                (bank.clips.as_slice(), bank.keyframes.as_slice())
+            }),
+        },
+        input: player::Input::default(),
+        options: context.game.player_options,
+        id: context.game.re2.pl_id,
+        life: i32::from(context.game.entities[0].health),
+        poisoned: context.game.re2.player.poisoned,
+        stopped: true,
+        weapon: context.game.re2_weapon(),
+        necks: context.game.re2.necks(),
+        targets: &targets,
+        neck_targets: &neck_targets,
+        enemies: context.game.re2.enemies,
+        pushing: context.game.re2.pushing(),
+        objects: &objects,
+        key_trg: 0,
+    };
+    crate::player2::part_world(&mut context.game.re2.player, context.player, &tick, part)
+}
+
 fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: player::Input) {
     if context.game.re2.player.kind & crate::player2::KIND_NOT_MOVED != 0 {
         return;
@@ -20875,7 +21058,16 @@ fn tick_room_timed(
             context.player.pos[2] = z;
         }
     }
-    if state != 1 || frozen {
+    // RE 2 has no spawn state: once the routines hold `Pl_init`'s rather
+    // than an assumed first tick, `Player_move` runs on the first tick too.
+    let re2_spawn = context.game.is_re2_room
+        && state == 0
+        && !frozen
+        && !context.game.re2.player.first_tick_assumed;
+    if re2_spawn {
+        player_script::spawn_init(context.game, context.player);
+    }
+    if !re2_spawn && (state != 1 || frozen) {
         // The pad-driven idle did not run this tick, so its reference scratch
         // is stale: the trace mirror must not reapply it.
         context.player.idle_trace = None;
@@ -24941,6 +25133,7 @@ mod tests {
                 easy: false,
                 hard_mode: true,
                 censorship_off: true,
+                extra_player: 0,
             },
             ..player::Options::default()
         };
@@ -40913,6 +41106,7 @@ off_0010:
                 easy: true,
                 hard_mode: true,
                 censorship_off: true,
+                extra_player: 0,
             },
             ..player::Options::default()
         };
@@ -41635,6 +41829,11 @@ off_0010:
         };
         assert_eq!(session.re2_title_start, Some(RE2_TITLE_NEW_GAME_TICKS));
         assert!(app.pending_movie.is_none() && !app.prologue_pending);
+        // `Pl_init`'s routines, which `Game_loop`'s first live tick moves on
+        // from, rather than an assumed first tick of `pl_mv_00`.
+        let work = &session.game.re2.player;
+        assert!(!work.first_tick_assumed);
+        assert_eq!((work.routine[2], work.hokan), (0, 0));
     }
 
     /// A press that ends the first film reaches the title, which then asks

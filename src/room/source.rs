@@ -658,6 +658,7 @@ impl RoomSource {
             item_models,
             room_anim,
             character_anims,
+            extra_room_anim: None,
             model_warnings,
         })
     }

@@ -257,6 +257,28 @@ fn reads_the_last_room_animations_for_the_player() {
 }
 
 #[test]
+fn an_extra_modes_player_takes_the_bank_with_bit_31() {
+    let mut data = sample();
+    assert!(extra_room_anim(&data).is_none());
+    let start = data.len();
+    data[OFFSETS + RBJ_SLOT * 4..][..4].copy_from_slice(&(start as u32).to_le_bytes());
+    // The player's bank, then the extra modes' (room 304 has both).
+    for word in [32u32, 2] {
+        data.extend(word.to_le_bytes());
+    }
+    for (mask, emr, edd) in [(1u32, 1u8, 2u8), (0x8000_0000, 4, 5)] {
+        data.extend(mask.to_le_bytes());
+        data.extend([emr; 4]);
+        data.extend([edd; 4]);
+    }
+    for bank in [[8u32, 16], [20, 28]] {
+        data.extend(bank.iter().flat_map(|word| word.to_le_bytes()));
+    }
+    assert_eq!(room_anim(&data), Some((&[1u8; 4][..], &[2u8; 4][..])));
+    assert_eq!(extra_room_anim(&data), Some((&[4u8; 4][..], &[5u8; 4][..])));
+}
+
+#[test]
 fn object_models_end_where_the_next_thing_starts() {
     let mut data = vec![0u8; 0x100];
     data[2] = 2;

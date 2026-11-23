@@ -609,16 +609,22 @@ fn grab(game: &mut GameState, index: i16, base: [i16; 3], model: &Emd) {
 }
 
 /// `Sce_espr_on`'s `Esp_call`s on someone's matrix: what the scripts just asked.
-pub fn run_esprs(
+pub(crate) fn run_esprs(
     game: &mut GameState,
     room: &RoomState,
     pack: &Pack,
     npc_models: &mut EntityModelCache,
+    player_parts: &[(usize, player2::Matrix)],
 ) {
     let scenario = game.id.player_flag & 1;
     for (call, matrix) in std::mem::take(&mut game.re2.pending_esprs) {
         let world = match matrix.slot {
-            None => None,
+            None => matrix.part.and_then(|part| {
+                player_parts
+                    .iter()
+                    .find(|(at, _)| *at == part)
+                    .map(|(_, world)| *world)
+            }),
             Some(slot) => game
                 .re2
                 .characters

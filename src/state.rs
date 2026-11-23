@@ -937,9 +937,19 @@ pub struct RoomState {
     pub room_anim: Option<crate::model::RoomAnim>,
     /// RE2's room animations of the enemy slots that have their own.
     pub character_anims: Vec<(u8, crate::model::RoomAnim)>,
+    /// RE2's room player animations for an extra mode's game (`Rbj_set`'s
+    /// bank with mask bit 31, under `fg_status`'s `0x2000000`), which
+    /// [`RoomState::use_extra_room_anim`] makes the player's.
+    pub extra_room_anim: Option<crate::model::RoomAnim>,
 }
 
 impl RoomState {
+    /// `Rbj_set` in an extra mode's game: the player's room animations are
+    /// the bank for it, or none when the room has none.
+    pub fn use_extra_room_anim(&mut self) {
+        self.room_anim = self.extra_room_anim.clone();
+    }
+
     /// `Hit_ck_point4` on the view quad `Ccut_searc` finds for the current cut.
     /// `None` if the cut has none.
     pub fn in_cut_view(&self, x: i32, z: i32) -> Option<bool> {
