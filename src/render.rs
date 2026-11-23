@@ -111,6 +111,9 @@ pub struct Framebuffer {
     /// One depth buffer the software 3D draws share while it is held
     /// ([`Framebuffer::hold_depth`]), where each otherwise clears its own.
     held_depth: Option<Vec<u32>>,
+    /// This buffer's pixels per game pixel in the 3D rasterizers: 1, or 2
+    /// in RE2's display pass ([`Framebuffer::with_display`]).
+    pub(crate) scale: u32,
 }
 
 impl Default for Framebuffer {
@@ -287,6 +290,7 @@ impl Framebuffer {
             view: crate::video::View::default(),
             list: None,
             held_depth: None,
+            scale: 1,
         }
     }
 
@@ -304,7 +308,48 @@ impl Framebuffer {
             },
             list: None,
             held_depth: None,
+            scale: 1,
         }
+    }
+
+    /// Run `draw` on RE2's display: the original draws its 3D scene into a
+    /// 640x480 surface over the 320x240 background doubled (`DisplayMode`
+    /// in the recordings' `config.ini`), and the recordings halve that
+    /// frame. The display is this frame doubled, nearest, with the clip
+    /// doubled and [`Framebuffer::scale`] 2, so the rasterizers place their
+    /// game-pixel positions on it; afterwards each pixel here is the mean of
+    /// its four. A frame recording the GPU's 2D pass draws in place.
+    pub(crate) fn with_display<R>(&mut self, draw: impl FnOnce(&mut Framebuffer) -> R) -> R {
+        if self.list.is_some() {
+            return draw(self);
+        }
+        let (width, height) = (self.width as usize, self.height as usize);
+        let mut display = Framebuffer::with_size(self.width * 2, self.height * 2);
+        display.scale = self.scale * 2;
+        display.clip = self.clip.map(|rect| rect.map(|side| side * 2));
+        for (row, line) in display.rgba.chunks_exact_mut(width * 8).enumerate() {
+            let source = &self.rgba[row / 2 * width * 4..][..width * 4];
+            let pairs = line.as_chunks_mut::<8>().0.iter_mut();
+            for (pair, pixel) in pairs.zip(source.as_chunks::<4>().0) {
+                pair[..4].copy_from_slice(pixel);
+                pair[4..].copy_from_slice(pixel);
+            }
+        }
+        let result = draw(&mut display);
+        let stride = width * 8;
+        for y in 0..height {
+            for x in 0..width {
+                let top = y * 2 * stride + x * 8;
+                for channel in 0..4 {
+                    let sum: u32 = [top, top + 4, top + stride, top + stride + 4]
+                        .iter()
+                        .map(|&offset| u32::from(display.rgba[offset + channel]))
+                        .sum();
+                    self.rgba[(y * width + x) * 4 + channel] = mean_of_four(sum);
+                }
+            }
+        }
+        result
     }
 
     /// Run `draw` on the visible band as its own frame: a 320 x
@@ -2330,6 +2375,7 @@ impl Framebuffer {
                     mix: PacketMix::Weighted,
                     uv_nudge: [0; 3],
                     view_depth: false,
+                    filtered: false,
                 })
             })
             .collect();
@@ -2415,6 +2461,11 @@ impl Framebuffer {
     }
 
     fn rasterize_triangles(&mut self, texture: &Texture8, mut triangles: Vec<Triangle>) {
+        // RE2's models draw on its 640x480 display.
+        if self.scale == 1 && triangles.iter().any(|triangle| triangle.filtered) {
+            self.with_display(|display| display.rasterize_triangles(texture, triangles));
+            return;
+        }
         triangles.sort_by(|a, b| b.depth.total_cmp(&a.depth));
         let mut depth = self.depth_buffer();
         let mut twins = KnockoutTwins::default();
@@ -2455,12 +2506,17 @@ impl Framebuffer {
         } else {
             1.0
         };
+        let scale = self.scale as f32;
         let vertices = std::array::from_fn(|corner| {
             let vertex = &triangle.raster[corner];
-            let [u, v] = stored_uv(vertex, triangle.uv_nudge[corner], texture);
+            let [u, v] = if triangle.filtered {
+                marni_uv(vertex, texture)
+            } else {
+                stored_uv(vertex, triangle.uv_nudge[corner], texture)
+            };
             crate::raster::GlVertex {
-                x: vertex.position[0],
-                y: vertex.position[1],
+                x: vertex.position[0] * scale,
+                y: vertex.position[1] * scale,
                 depth: depth_ndc(vertex.w),
                 w: vertex.w,
                 u,
@@ -2505,6 +2561,15 @@ impl Framebuffer {
                     // A blended record's weight applies to its untextured packets
                     // too.
                     Some(_) => ([255, 255, 255], triangle.blend),
+                    // RE2's Direct3D filters its models' textures.
+                    None if triangle.filtered => {
+                        let Some((texel, stp)) =
+                            sample_marni(texture, triangle.palette_row, fragment.u, fragment.v)
+                        else {
+                            return;
+                        };
+                        (texel, triangle.blend && (!twin || stp))
+                    }
                     None => {
                         let texel_u = clamp_texel(fragment.u, texture.width);
                         let texel_v = clamp_texel(fragment.v, texture.height);
@@ -2581,7 +2646,7 @@ impl Framebuffer {
         let mut layer = vec![[0u8; 4]; width as usize * height as usize];
         let mut bounds: Option<[i32; 4]> = None;
         for poly in &polys {
-            shadow_fragments(poly, width, height, None, true, |pixel, colour, alpha| {
+            shadow_fragments(poly, width, height, 1.0, None, true, |pixel, colour, alpha| {
                 let under = layer[pixel];
                 layer[pixel] = over_straight([colour[0], colour[1], colour[2], alpha], under);
                 let (x, y) = (
@@ -2678,6 +2743,7 @@ impl Framebuffer {
             poly,
             self.width,
             self.height,
+            self.scale as f32,
             Some(depth),
             view_depth,
             |pixel, colour, alpha| {
@@ -2703,12 +2769,13 @@ impl Framebuffer {
             return;
         }
 
-        let x0 = i64::from(quad.pos.0);
-        let y0 = i64::from(quad.pos.1);
+        let scale = i64::from(self.scale);
+        let x0 = i64::from(quad.pos.0) * scale;
+        let y0 = i64::from(quad.pos.1) * scale;
         let start_x = x0.max(0);
         let start_y = y0.max(0);
-        let end_x = (x0 + i64::from(quad.size.0)).min(i64::from(self.width));
-        let end_y = (y0 + i64::from(quad.size.1)).min(i64::from(self.height));
+        let end_x = (x0 + i64::from(quad.size.0) * scale).min(i64::from(self.width));
+        let end_y = (y0 + i64::from(quad.size.1) * scale).min(i64::from(self.height));
         if start_x >= end_x || start_y >= end_y {
             return;
         }
@@ -2720,12 +2787,12 @@ impl Framebuffer {
         let source_stride = page.width as usize * 4;
         let target_stride = self.width as usize * 4;
         for y in start_y..end_y {
-            let texel_y = v0 + (y - y0);
+            let texel_y = v0 + (y - y0) / scale;
             if !(0..page_height).contains(&texel_y) {
                 continue;
             }
             for x in start_x..end_x {
-                let texel_x = u0 + (x - x0);
+                let texel_x = u0 + (x - x0) / scale;
                 if !(0..page_width).contains(&texel_x) {
                     continue;
                 }
@@ -2827,7 +2894,9 @@ impl Framebuffer {
         // (x, y1)` and `(x, y1) (x1, y) (x1, y1)`, through the same llvmpipe
         // setup as the models. The vertex order fixes the plane rounding that
         // decides which texel a pixel centre on a texel edge lands on.
-        let [x, y, w, h] = [quad.pos[0], quad.pos[1], quad.size[0], quad.size[1]].map(|v| v as f32);
+        let scale = self.scale as f32;
+        let [x, y, w, h] =
+            [quad.pos[0], quad.pos[1], quad.size[0], quad.size[1]].map(|v| v as f32 * scale);
         let (x1, y1) = (x + w, y + h);
         let [top, sheet_height] = quad.sheet.map(u32::from);
         let sheet_height = sheet_height.clamp(1, page.height.saturating_sub(top).max(1));
@@ -2851,7 +2920,7 @@ impl Framebuffer {
         let [[ax, ay], [bx, by], [cx, cy], [dx, dy]] = quad
             .corners
             .map_or([[x, y], [x1, y], [x, y1], [x1, y1]], |corners| {
-                corners.map(|point| point.map(|v| v as f32))
+                corners.map(|point| point.map(|v| v as f32 * scale))
             });
         let triangles = [
             [
@@ -3652,12 +3721,20 @@ fn draw_gameplay_scene_with_ribbon<'a>(
     let effect_pages: Vec<Option<&Image>> = effect_layer
         .map(|layer| layer.pages.to_vec())
         .unwrap_or_default();
-    framebuffer.draw_scene(
-        &textures,
-        mask_layer.map(|layer| layer.page),
-        &effect_pages,
-        &items,
-    );
+    let draw = |framebuffer: &mut Framebuffer| {
+        framebuffer.draw_scene(
+            &textures,
+            mask_layer.map(|layer| layer.page),
+            &effect_pages,
+            &items,
+        );
+    };
+    // RE2 draws its scene on its 640x480 display.
+    if lighting.is_re2() {
+        framebuffer.with_display(draw);
+    } else {
+        draw(framebuffer);
+    }
 }
 
 /// Merge the far-to-near triangles with the scene sprites into one paint order.
@@ -4647,6 +4724,9 @@ struct Triangle {
     /// Each pixel's depth is `TmdDepthNdc` of its own view Z
     /// ([`crate::raster::draw_triangle_depth`]): RE2's near-clipped models.
     view_depth: bool,
+    /// RE2's Direct3D model: bilinear-filtered at the 640x480 display and
+    /// halved ([`sample_marni`]), where the others sample the nearest texel.
+    filtered: bool,
 }
 
 /// A ground shadow's projected commands, ready for rasterization.
@@ -5073,6 +5153,7 @@ fn collect_triangles_with(
             mix: if blend { prim.mix } else { PacketMix::Weighted },
             uv_nudge: prim.uv_nudge,
             view_depth: re2_near.is_some(),
+            filtered: re2_near.is_some(),
         };
         match re2_near {
             Some(near) => clip_triangle_near(
@@ -5301,6 +5382,7 @@ fn collect_complex_pool(
             mix: PacketMix::Weighted,
             uv_nudge: [0; 3],
             view_depth: false,
+            filtered: false,
         });
     }
 }
@@ -5847,6 +5929,7 @@ fn collect_ivm_triangles(
                 mix: PacketMix::Weighted,
                 uv_nudge: [0; 3],
                 view_depth: false,
+                filtered: false,
             });
         }
     }
@@ -5913,6 +5996,17 @@ fn stored_uv(vertex: &RasterVertex, nudge: u8, texture: &Texture8) -> [f32; 2] {
     [u, v]
 }
 
+/// `Marni::TransObjectNgTin3_VinsNins`' normalised texture coordinates of
+/// one corner: the texel position over one less than the texture's size,
+/// plus `Adjust_v` (0, `Marni::Init`).
+fn marni_uv(vertex: &RasterVertex, texture: &Texture8) -> [f32; 2] {
+    let scale = |size: u32| (size.max(2) - 1) as f32;
+    [
+        vertex.u / scale(texture.width),
+        vertex.v / scale(texture.height),
+    ]
+}
+
 /// GL_NEAREST under CLAMP_TO_EDGE: the texel under a normalised coordinate.
 fn clamp_texel(coordinate: f32, size: u32) -> usize {
     ((coordinate * size as f32).floor().max(0.0) as usize).min(size as usize - 1)
@@ -5942,6 +6036,7 @@ fn shadow_fragments(
     poly: &ShadowPoly,
     width: u32,
     height: u32,
+    scale: f32,
     depth: Option<&[u32]>,
     view_depth: bool,
     mut put: impl FnMut(usize, [u8; 3], u8),
@@ -5951,7 +6046,12 @@ fn shadow_fragments(
         return;
     }
     for triangle in &poly.triangles {
-        crate::raster::draw_triangle_depth(triangle, width, height, view_depth, |fragment| {
+        let triangle = triangle.map(|vertex| crate::raster::GlVertex {
+            x: vertex.x * scale,
+            y: vertex.y * scale,
+            ..vertex
+        });
+        crate::raster::draw_triangle_depth(&triangle, width, height, view_depth, |fragment| {
             let pixel = fragment.y * width as usize + fragment.x;
             if let Some(depth) = depth
                 && depth
@@ -6013,6 +6113,67 @@ fn sample_bilinear(texture: &Image, u: f32, v: f32) -> [u8; 4] {
         let bottom = lerp_unorm8(fx, fetch(x0, y1, channel), fetch(x1, y1, channel));
         lerp_unorm8(fy, top, bottom)
     })
+}
+
+/// One axis of a bilinear fetch under `D3DTADDRESS_WRAP`: the two texels a
+/// normalised coordinate falls between and the second's weight in 256ths,
+/// from the coordinate in 8.8 fixed point centred on the texels,
+/// `round(c * size * 256) - 128`, as llvmpipe forms it.
+fn wrapped_axis(coordinate: f32, size: u32) -> (usize, usize, u16) {
+    let scaled = (coordinate * (size as f32 * 256.0)).round_ties_even();
+    let fixed = scaled.clamp(-(1 << 24) as f32, (1 << 24) as f32) as i32 - 128;
+    let whole = fixed >> 8;
+    let size = size as i32;
+    (
+        whole.rem_euclid(size) as usize,
+        (whole + 1).rem_euclid(size) as usize,
+        (fixed & 0xFF) as u16,
+    )
+}
+
+/// RE2's model texel at a normalised `(u, v)`: `Marni::SetFiltering(1)` with
+/// `GraphicTextureInterpolation` on (the recordings' `config.ini`) sets
+/// `D3DFILTER_LINEAR` magnification and minification over a wrapped texture,
+/// which Wine's Direct3D runs on llvmpipe (the 8-bit AoS lerps of
+/// [`lerp_unorm8`]). Palette entry zero is the colour key: it takes part in
+/// the filter with its own colour, and a sample whose four weighted texels
+/// are all keyed is discarded (`None`). The STP bit is the nearest texel's.
+fn sample_marni(texture: &Texture8, row: usize, u: f32, v: f32) -> Option<([u8; 3], bool)> {
+    if texture.width == 0 || texture.height == 0 {
+        return None;
+    }
+    let (x0, x1, fx) = wrapped_axis(u, texture.width);
+    let (y0, y1, fy) = wrapped_axis(v, texture.height);
+    let width = texture.width as usize;
+    let index = |x: usize, y: usize| texture.indices.get(y * width + x).copied().unwrap_or(0);
+    let corners = [index(x0, y0), index(x1, y0), index(x0, y1), index(x1, y1)];
+    // The top-left texel always carries weight; the others only off its
+    // centre line.
+    let weighted = [true, fx != 0, fy != 0, fx != 0 && fy != 0];
+    if !corners
+        .iter()
+        .zip(weighted)
+        .any(|(&entry, weighted)| weighted && entry != 0)
+    {
+        return None;
+    }
+    let colours = corners.map(|entry| texture.palette(row, entry));
+    let channel = |index: usize| {
+        let top = lerp_unorm8(fx, colours[0][index], colours[1][index]);
+        let bottom = lerp_unorm8(fx, colours[2][index], colours[3][index]);
+        lerp_unorm8(fy, top, bottom)
+    };
+    let nearest = corners[usize::from(fx >= 0x80) + 2 * usize::from(fy >= 0x80)];
+    Some((
+        [channel(0), channel(1), channel(2)],
+        texture.palette_stp(row, nearest),
+    ))
+}
+
+/// The mean of four 8-bit samples, rounded (PIL's box filter halving the
+/// recordings' 640x480 frames).
+fn mean_of_four(sum: u32) -> u8 {
+    ((sum + 2) / 4).min(255) as u8
 }
 
 /// `lp_build_lerp` for normalised 8-bit values in 16-bit lanes: the weight
@@ -6988,6 +7149,7 @@ mod tests {
             mix: PacketMix::Weighted,
             uv_nudge: [0; 3],
             view_depth: false,
+            filtered: false,
         })
     }
 
@@ -8299,6 +8461,220 @@ mod tests {
         );
     }
 
+    /// A two-texel row, red then green, drawn over three pixels, on the
+    /// frame itself or on RE2's display: there the middle pixel's halves fall
+    /// either side of the texel edge.
+    fn two_texel_sprite(display: bool, page: &Image, background: [u8; 4]) -> Framebuffer {
+        let quad = effect_quad(0, [10, 10], [3, 3], [255, 255, 255], 0);
+        let mut framebuffer = Framebuffer::new();
+        draw_effects(
+            &mut framebuffer,
+            &solid_image(320, 240, background),
+            page,
+            &[],
+        );
+        if display {
+            framebuffer.with_display(|display| display.rasterize_effect(page, &quad));
+        } else {
+            framebuffer.rasterize_effect(page, &quad);
+        }
+        framebuffer
+    }
+
+    #[test]
+    fn a_sprite_on_the_display_is_the_mean_of_its_four_texels() {
+        let page = effect_image(&[
+            [255, 0, 0, 255],
+            [0, 255, 0, 255],
+            [255, 0, 0, 255],
+            [0, 255, 0, 255],
+        ]);
+        // On the frame, pixel 11's centre is on the texel edge, which the
+        // plane's rounding gives to texel 0.
+        let frame = two_texel_sprite(false, &page, [0, 0, 0, 255]);
+        assert_eq!(framebuffer_pixel(&frame, 11, 10), [255, 0, 0, 255]);
+        let display = two_texel_sprite(true, &page, [0, 0, 0, 255]);
+        assert_eq!(framebuffer_pixel(&display, 10, 10), [255, 0, 0, 255]);
+        assert_eq!(framebuffer_pixel(&display, 11, 10), [128, 128, 0, 255]);
+        assert_eq!(framebuffer_pixel(&display, 12, 10), [0, 255, 0, 255]);
+    }
+
+    #[test]
+    fn a_sprites_transparent_texels_on_the_display_keep_the_frame() {
+        let page = effect_image(&[
+            [255, 0, 0, 255],
+            [0, 0, 0, 0],
+            [255, 0, 0, 255],
+            [0, 0, 0, 0],
+        ]);
+        let display = two_texel_sprite(true, &page, [0, 0, 100, 255]);
+        assert_eq!(framebuffer_pixel(&display, 11, 10), [128, 0, 50, 255]);
+        assert_eq!(framebuffer_pixel(&display, 12, 10), [0, 0, 100, 255]);
+    }
+
+    #[test]
+    fn the_display_doubles_the_frame_and_halves_it_back() {
+        let mut framebuffer = Framebuffer::new();
+        for (index, byte) in framebuffer.rgba.iter_mut().enumerate() {
+            *byte = (index * 7 % 251) as u8;
+        }
+        framebuffer.clip = Some([4, 6, 100, 50]);
+        let before = framebuffer.rgba.clone();
+        framebuffer.with_display(|display| {
+            assert_eq!(
+                (display.width, display.height, display.scale),
+                (640, 480, 2)
+            );
+            assert_eq!(display.clip, Some([8, 12, 200, 100]));
+            assert_eq!(framebuffer_pixel(display, 3, 5), {
+                let offset = (2 * 320 + 1) * 4;
+                <[u8; 4]>::try_from(&before[offset..offset + 4]).unwrap()
+            });
+        });
+        assert_eq!(framebuffer.rgba, before);
+    }
+
+    #[test]
+    fn a_mask_on_the_display_covers_its_pixels_whole() {
+        let page = solid_image(16, 16, [9, 8, 7, 255]);
+        let quad = MaskQuad {
+            key: 0,
+            uv: (0, 0),
+            pos: (5, 5),
+            size: (4, 4),
+        };
+        let mut framebuffer = Framebuffer::new();
+        framebuffer.with_display(|display| display.rasterize_mask(&page, &quad));
+        assert_eq!(framebuffer_pixel(&framebuffer, 5, 5), [9, 8, 7, 255]);
+        assert_eq!(framebuffer_pixel(&framebuffer, 8, 8), [9, 8, 7, 255]);
+        assert_eq!(framebuffer_pixel(&framebuffer, 9, 8), [0, 0, 0, 0]);
+    }
+
+    /// A 2x2 page of `indices` under row 0: entry 0 the colour key (black),
+    /// 1 red and 2 blue.
+    fn marni_texture(indices: Vec<u8>) -> Texture8 {
+        indexed_texture(indices, &[[0, 0, 0, 0], [255, 0, 0, 255], [0, 0, 255, 255]])
+    }
+
+    #[test]
+    fn marni_sampling_is_exact_on_a_texel_centre() {
+        let texture = marni_texture(vec![1, 2, 1, 2]);
+        assert_eq!(
+            sample_marni(&texture, 0, 0.25, 0.25),
+            Some(([255, 0, 0], false))
+        );
+        assert_eq!(
+            sample_marni(&texture, 0, 0.75, 0.75),
+            Some(([0, 0, 255], false))
+        );
+    }
+
+    #[test]
+    fn marni_sampling_lerps_between_texels_with_llvmpipes_rounding() {
+        let texture = marni_texture(vec![1, 2, 1, 2]);
+        // Halfway: weight 128 of 256, `lp_build_lerp`'s rounding.
+        assert_eq!(
+            sample_marni(&texture, 0, 0.5, 0.25),
+            Some(([127, 0, 128], false))
+        );
+        assert_eq!(lerp_unorm8(128, 255, 0), 127);
+        assert_eq!(lerp_unorm8(128, 0, 255), 128);
+        assert_eq!(lerp_unorm8(64, 0, 255), 64);
+    }
+
+    #[test]
+    fn marni_sampling_wraps_at_the_texture_edge() {
+        let texture = marni_texture(vec![1, 2, 1, 2]);
+        // u 0 is halfway between the last column and the first.
+        assert_eq!(
+            sample_marni(&texture, 0, 0.0, 0.25),
+            Some(([128, 0, 127], false))
+        );
+        assert_eq!(wrapped_axis(0.0, 2), (1, 0, 128));
+        assert_eq!(wrapped_axis(0.25, 2), (0, 1, 0));
+        assert_eq!(wrapped_axis(0.999, 2), (1, 0, 127));
+    }
+
+    #[test]
+    fn marni_sampling_filters_the_colour_key_and_drops_it_alone() {
+        let texture = marni_texture(vec![0, 1, 0, 1]);
+        assert_eq!(sample_marni(&texture, 0, 0.25, 0.25), None);
+        // Next to the key, its own black takes half the weight.
+        assert_eq!(
+            sample_marni(&texture, 0, 0.5, 0.25),
+            Some(([128, 0, 0], false))
+        );
+    }
+
+    #[test]
+    fn the_mean_of_four_rounds_to_nearest() {
+        assert_eq!(mean_of_four(0), 0);
+        assert_eq!(mean_of_four(1), 0);
+        assert_eq!(mean_of_four(2), 1);
+        assert_eq!(mean_of_four(255 * 4), 255);
+        assert_eq!(mean_of_four(255 * 2), 128);
+    }
+
+    /// A triangle magnifying the 2x2 page four times across x 0 to 8.
+    fn magnified_triangle(filtered: bool) -> Framebuffer {
+        let texture = marni_texture(vec![1, 2, 1, 2]);
+        let corner = |x: f32, y: f32| RasterVertex {
+            position: [x, y],
+            w: 1.0,
+            u: x / 8.0,
+            v: y / 8.0,
+            shade: [1.0; 3],
+        };
+        let triangle = Triangle {
+            raster: [corner(0.0, 0.0), corner(8.0, 0.0), corner(0.0, 8.0)],
+            filtered,
+            ..match scene_triangle(1) {
+                SceneItem::Triangle(triangle) => triangle,
+                _ => unreachable!(),
+            }
+        };
+        let mut framebuffer = Framebuffer::new();
+        framebuffer.rasterize_triangles(&texture, vec![triangle]);
+        framebuffer
+    }
+
+    #[test]
+    fn marni_uvs_normalise_by_one_less_than_the_size() {
+        let vertex = RasterVertex {
+            position: [0.0; 2],
+            w: 1.0,
+            u: 127.0,
+            v: 63.0,
+            shade: [1.0; 3],
+        };
+        let texture = Texture8 {
+            width: 128,
+            height: 64,
+            ..marni_texture(Vec::new())
+        };
+        assert_eq!(marni_uv(&vertex, &texture), [1.0, 1.0]);
+    }
+
+    #[test]
+    fn a_filtered_triangle_is_bilinear_on_the_display_and_halved() {
+        // Unfiltered: u over the size, the nearest texel, on the frame.
+        let nearest = magnified_triangle(false);
+        assert_eq!(framebuffer_pixel(&nearest, 3, 0), [255, 0, 0, 255]);
+        // Filtered: u over one less than the size, so 0 to 8 spans both
+        // texels' corners. Pixel 3's halves at 640 sample u 0.40625 and
+        // 0.46875 of the page: weights 80 and 112 toward blue.
+        let filtered = magnified_triangle(true);
+        let half = |weight: u16| [lerp_unorm8(weight, 255, 0), lerp_unorm8(weight, 0, 255)];
+        let [a, b] = [half(80), half(112)];
+        let mean = |x: u8, y: u8| mean_of_four(2 * u32::from(x) + 2 * u32::from(y));
+        assert_eq!(
+            framebuffer_pixel(&filtered, 3, 0),
+            [mean(a[0], b[0]), 0, mean(a[1], b[1]), 255]
+        );
+        // Left of texel 0's centre the filter wraps to the last column.
+        assert_ne!(framebuffer_pixel(&filtered, 0, 0)[2], 0);
+    }
+
     #[test]
     fn effect_quads_are_opaque_and_entry_zero_is_transparent() {
         let page = effect_image(&[[255, 0, 0, 255], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]);
@@ -9266,6 +9642,7 @@ mod tests {
             mix: PacketMix::Weighted,
             uv_nudge: [0; 3],
             view_depth: false,
+            filtered: false,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));
@@ -9474,6 +9851,7 @@ mod tests {
             mix: PacketMix::Weighted,
             uv_nudge: [0; 3],
             view_depth: false,
+            filtered: false,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));
@@ -9530,6 +9908,7 @@ mod tests {
             mix: PacketMix::Add,
             uv_nudge: [0; 3],
             view_depth: false,
+            filtered: false,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));

@@ -28,7 +28,7 @@ input_shift = 344
 ticks = 2600
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,zm0,zm1,zp"
 frames = [1700, 2599]
-# 0.54 measured; the worst, about 3.9, is the door's frame into room 205
-frame_max_mean = 0.65
+# 0.42 measured; the worst, about 3.7, is the door's frame into room 205
+frame_max_mean = 0.55
 expect = "match"
 record = "--warp 201:-15773:0:-21630:2040:0 --life 200 --give 0:2:13 --give 2:0x14:39"

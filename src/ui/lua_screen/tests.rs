@@ -2406,7 +2406,9 @@ fn a_character_draws_unposed_in_its_textures_own_colours() {
 #[test]
 fn a_characters_turn_view_and_pose_place_it() {
     let unposed = character_drawn("{ view = { at = { 0, 100, 3000 }, fov = 300 } }");
-    assert_eq!(unposed, (1, Some([120, 40, 199, 118])));
+    // The box of pixels wholly the model's: drawn on RE2's 640x480 display
+    // and halved, the edge pixels it half covers are blends.
+    assert_eq!(unposed, (1, Some([121, 40, 198, 117])));
     // Turned half round it shows its back, which is culled.
     let turned =
         character_drawn("{ turn = { 0, 0x800, 0 }, view = { at = { 0, 100, 3000 }, fov = 300 } }");
@@ -2424,11 +2426,11 @@ fn a_characters_turn_view_and_pose_place_it() {
     );
     let [left, top, right, bottom] = from_x.unwrap();
     assert!(
-        left.abs_diff(120) <= 1 && right.abs_diff(199) <= 1,
+        left.abs_diff(121) <= 1 && right.abs_diff(198) <= 1,
         "{left} {right}"
     );
     assert!(
-        top.abs_diff(40) <= 1 && bottom.abs_diff(118) <= 1,
+        top.abs_diff(40) <= 1 && bottom.abs_diff(117) <= 1,
         "{top} {bottom}"
     );
 
@@ -2436,7 +2438,7 @@ fn a_characters_turn_view_and_pose_place_it() {
     // it isn't a shake, which would tilt the view.
     let moved =
         character_drawn("{ view = { at = { 0, 100, 3000 }, fov = 300, screen = { 20, -30 } } }");
-    assert_eq!(moved, (1, Some([140, 10, 219, 88])));
+    assert_eq!(moved, (1, Some([141, 10, 218, 87])));
 
     // A frame of an animation: the fixture's clip turns the root by
     // (0x123, 0x456, 0x789), which shows its back, and puts it at
@@ -2452,7 +2454,7 @@ fn a_characters_turn_view_and_pose_place_it() {
     let posed = character_drawn(&format!(
         "{{ pose = {{ bank = 0, clip = 0, frame = 1, {back} }}, {at} }}"
     ));
-    assert_eq!(posed, (1, Some([120, 50, 199, 128])));
+    assert_eq!(posed, (1, Some([121, 50, 198, 127])));
     for missing in [
         "pose = { bank = 0, clip = 0, frame = 2 }",
         "pose = { bank = 0, clip = 1, frame = 0 }",
