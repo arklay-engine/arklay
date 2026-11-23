@@ -39,6 +39,7 @@ use mlua::{
 };
 
 use super::*;
+use crate::save::re2_image;
 
 /// The allocation ceiling of a driver script's Lua state.
 const MEMORY_LIMIT: usize = 256 * 1024 * 1024;
@@ -1590,6 +1591,63 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                     .write_save(Path::new(&path))
                     .map_err(engine_error)?;
                 Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "re2_save_image",
+        lua.create_function(move |lua, reference: Option<String>| {
+            with(&shared, |driver| {
+                driver.settle_authoring()?;
+                let app = driver.app()?;
+                let Mode::Play(session) = &app.mode else {
+                    return Err(mlua::Error::RuntimeError(
+                        "re2_save_image: no game session is running".into(),
+                    ));
+                };
+                if !session.game.is_re2_room {
+                    return Err(mlua::Error::RuntimeError(
+                        "re2_save_image: the session isn't an RE 2 game".into(),
+                    ));
+                }
+                let table = app.pack.read(crate::bgm2::INIT_TABLE_ENTRY).ok();
+                let record = table.as_deref().and_then(|table| {
+                    re2_image::init_record(table, re2_image::init_row(&session.game))
+                });
+                let image = re2_image::build(&session.game, record);
+                let ours = lua.create_string(image)?;
+                let Some(reference) = reference else {
+                    return Ok((ours, None));
+                };
+                let theirs = std::fs::read(&reference)
+                    .with_context(|| format!("re2_save_image: reading {reference}"))
+                    .map_err(engine_error)?;
+                let theirs: [u8; re2_image::IMAGE_LEN] =
+                    theirs.try_into().map_err(|bytes: Vec<u8>| {
+                        mlua::Error::RuntimeError(format!(
+                            "re2_save_image: {reference} is {} bytes, not {}",
+                            bytes.len(),
+                            re2_image::IMAGE_LEN
+                        ))
+                    })?;
+                let hex = |bytes: &[u8]| {
+                    bytes
+                        .iter()
+                        .map(|byte| format!("{byte:02x}"))
+                        .collect::<String>()
+                };
+                let list = lua.create_table()?;
+                for difference in re2_image::differences(&image, &theirs) {
+                    let entry = lua.create_table()?;
+                    entry.set("region", difference.region)?;
+                    entry.set("offset", difference.offset)?;
+                    entry.set("ours", hex(&difference.ours))?;
+                    entry.set("theirs", hex(&difference.theirs))?;
+                    list.push(entry)?;
+                }
+                Ok((ours, Some(list)))
             })
         })?,
     )?;

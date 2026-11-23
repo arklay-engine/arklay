@@ -27,6 +27,7 @@ import functools
 import hashlib
 import importlib.util
 import io
+import json
 import multiprocessing
 import os
 import re
@@ -187,6 +188,7 @@ while trace_ticks() < ticks and updates < bound do
     end
     tick()
     updates = updates + 1
+    if after_tick then after_tick() end
     if frames and trace_ticks() > index then
         capture(frames .. string.format("/f%05d.bmp", index))
     end
@@ -242,7 +244,83 @@ def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input
     lines.append(f"local held = {{ {held} }}")
     lines.append(f"local ticks = {ticks}")
     lines.append(f"local frames = {lua_str(str(frames_dir)) if frames_dir else 'nil'}")
+    if screen == "game" and run.get("saves"):
+        refs = {count: path for path in reference_saves(ctx["refs"] / run["ref"]) if (count := save_count(path)) is not None}
+        entries = ", ".join(f"[{count}] = {lua_str(str(path))}" for count, path in sorted(refs.items()))
+        lines.append(f"local save_refs = {{ {entries} }}")
+        lines.append(SAVE_IMAGE_CHECK)
     return "\n".join(lines) + "\n" + DRIVER_LOOP
+
+
+# A run that keeps its saves (`saves = true`) compares the original's save image of each save arklay makes with the
+# reference's file of the same save count, under the image's mask (`src/save/re2_image.rs`): after every update the
+# driver reads the save count from arklay's image (`re2_save_image`, offset 0x220), and when it moves prints one
+# `save-image COUNT JSON` line, the regions that differ (`-` for a save the reference has no file of, one a later save
+# overwrote). `judge_save_images` reads the lines.
+SAVE_IMAGE_CHECK = """
+local saves_seen
+local function save_count(image)
+    return image:byte(0x221) | image:byte(0x222) << 8
+end
+function after_tick()
+    local count = save_count(re2_save_image())
+    if saves_seen == nil then saves_seen = count end
+    if count == saves_seen then return end
+    saves_seen = count
+    local ref = save_refs[count]
+    if ref then
+        local _, differ = re2_save_image(ref)
+        print("save-image " .. count .. " " .. json(differ))
+    else
+        print("save-image " .. count .. " -")
+    end
+end
+"""
+
+
+def reference_saves(ref_dir: Path) -> list[Path]:
+    """The original's save files a reference keeps (`saves = true`), by name."""
+    return sorted((ref_dir / "saves").glob("*.BIOHAZARD2"))
+
+
+def save_count(path: Path) -> int | None:
+    """The save count a save image holds (offset 0x220), or None for a file that isn't one."""
+    data = path.read_bytes()
+    return int.from_bytes(data[0x220:0x222], "little") if len(data) == 0x800 else None
+
+
+def judge_save_images(ref_dir: Path, out_text: str) -> tuple[str, list[str]]:
+    """The save images' verdict from arklay's `save-image` lines: each of the reference's files must have arklay's
+    image of the same save count matching it under the mask, and every save arklay made past the reference's last
+    is one the original didn't make."""
+    refs = {}
+    for path in reference_saves(ref_dir):
+        count = save_count(path)
+        if count is None:
+            return f"save images: {path.name} isn't a save image", [f"{path.name} isn't 2048 bytes"]
+        refs[count] = path
+    made = {}
+    for line in out_text.splitlines():
+        if line.startswith("save-image "):
+            _, count, rest = line.split(" ", 2)
+            made[int(count)] = None if rest == "-" else json.loads(rest)
+    problems = []
+    for count, path in sorted(refs.items()):
+        if count not in made:
+            problems.append(f"save {count}: arklay made no save {count} ({path.name})")
+        elif made[count] is None:
+            problems.append(f"save {count}: arklay's driver had no reference for it")
+        elif made[count]:
+            regions = ", ".join(f"{d['region']} at 0x{d['offset']:03x} (ours {d['ours']}, theirs {d['theirs']})"
+                                for d in made[count])
+            problems.append(f"save {count}'s image differs: {regions}")
+    last = max(refs, default=None)
+    extra = [count for count in made if last is None or count > last]
+    if extra:
+        problems.append(f"arklay made saves the original didn't: {', '.join(str(count) for count in sorted(extra))}")
+    matched = sum(1 for count in refs if made.get(count) == [])
+    text = f"save images {matched}/{len(refs)} match" if refs else "no saves, as the original"
+    return text, problems
 
 
 def shift_input(source: Path, dest: Path, shift: int, drop_early: bool = False) -> None:
@@ -1331,6 +1409,11 @@ def finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks
     if why:
         result["problems"].append(why)
         result["notes"] += cmp["detail"]
+
+    if run.get("saves") and run.get("ui", "game") == "game":
+        saves_text, problems = judge_save_images(ref_dir, out_text)
+        text += f"; {saves_text}"
+        result["problems"].extend(problems)
 
     if run.get("frames"):
         if not want_frames:

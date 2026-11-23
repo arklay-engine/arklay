@@ -160,6 +160,7 @@ pub const MAX_FILE_NAME: usize = 255;
 pub const AUTOSAVE_COUNT: usize = 2;
 
 mod file;
+pub mod re2_image;
 pub use file::SaveFile;
 
 impl SaveFile {

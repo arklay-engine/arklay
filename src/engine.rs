@@ -2270,6 +2270,11 @@ struct GameSession {
     /// that pass from these, with the edit's changes on top
     /// ([`GameSession::finish_authoring`]).
     re2_boot_flags: Option<crate::scd2::host::FlagWords>,
+    /// The script variables as the room's boot found them, beside
+    /// [`Self::re2_boot_flags`]: the rerun starts from them, with the edit's
+    /// changes on top, so a scene the first pass began leaves none of its
+    /// writes (room 200's entry, `save 4, 100`).
+    re2_boot_vars: Option<[u16; 256]>,
     /// Decoded pack text tables (messages, item names, descriptions).
     text: Text,
     /// Decoded glyph sheet for the message window; absent packs cannot draw
@@ -2667,6 +2672,20 @@ struct AuthorBaseline {
     /// `fg_key`, which bank 31's flags are.
     door_locks: [u32; 2],
     rnd: crate::zombie2::Rnd,
+    /// The script variables, so an edit's own writes are kept over the boot's.
+    vars: [u16; 256],
+}
+
+/// `boot`'s script variables with each one an edit changed (from `before`
+/// to `after`) taken from `after`.
+fn authored_vars(boot: [u16; 256], before: [u16; 256], after: [u16; 256]) -> [u16; 256] {
+    std::array::from_fn(|index| {
+        if after[index] == before[index] {
+            boot[index]
+        } else {
+            after[index]
+        }
+    })
 }
 
 /// `boot`'s flags with each bit an edit changed (from `before` to `after`)
@@ -3240,6 +3259,7 @@ impl GameSession {
             re2_door_neck: false,
             re2_boot_room: None,
             re2_boot_flags: None,
+            re2_boot_vars: None,
             text,
             font,
             menu: None,
@@ -3414,6 +3434,7 @@ impl GameSession {
             .re2_vm
             .is_some()
             .then_some((self.game.re2.banks, self.game.re2.door_locks));
+        self.re2_boot_vars = self.loaded.re2_vm.is_some().then_some(self.game.re2.vars);
         run_re2_init(
             self.loaded.re2_vm.as_mut(),
             &self.loaded.re2_effects,
@@ -7674,6 +7695,7 @@ impl GameSession {
             banks: self.game.re2.banks,
             door_locks: self.game.re2.door_locks,
             rnd: self.game.re2.rnd,
+            vars: self.game.re2.vars,
         }
     }
 
@@ -7686,6 +7708,7 @@ impl GameSession {
             banks,
             door_locks,
             rnd,
+            vars,
         } = baseline;
         let flags = (banks, door_locks);
         let authored = self.game.re2.authored_flags.take();
@@ -7740,6 +7763,11 @@ impl GameSession {
             if let Some((edited_banks, edited_locks)) = edited {
                 self.game.re2.banks = edited_banks;
                 self.game.re2.door_locks = edited_locks;
+            }
+            // Nor with the variables the first pass wrote: the boot's, and
+            // each one the edit changed.
+            if let Some(boot_vars) = self.re2_boot_vars {
+                self.game.re2.vars = authored_vars(boot_vars, vars, self.game.re2.vars);
             }
             run_re2_init(
                 self.loaded.re2_vm.as_mut(),
@@ -8817,6 +8845,9 @@ impl GameSession {
         session.transition.set_sound_busy(false);
         self.transition_finished = frame.finished;
         if frame.place {
+            if session.door.re2.is_some() {
+                self.game.re2.leave_room(self.game.origin());
+            }
             place_transition_player(&mut session, &mut self.game, &mut self.loaded);
         }
         if frame.clear {
@@ -46714,6 +46745,30 @@ end
         assert!(session.game.re2.flag(3, 67), "and set its flag again");
         assert!(session.game.re2.flag(6, 200), "the edit's set flag");
         assert!(!session.game.re2.flag(6, 201), "the edit's cleared flag");
+    }
+
+    /// Room 200's entry scene writes `save 4, 100` as it starts, under 4:6
+    /// clear; a setup that raises 4:6 reruns the load, and the rerun starts
+    /// from the variables the boot found, as the original's `--warp` loads
+    /// the room once with the flag up, keeping only the setup's own writes.
+    #[test]
+    fn an_authored_rerun_drops_the_variables_the_first_pass_wrote() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1\n#game re2\nproc init_00 { evt_end(0); }\nproc main_00 { if (ck(4, 6, 0)) { save(4, 100); } evt_end(0); }",
+        )
+        .unwrap();
+        session.loaded.re2_vm = Some(crate::scd2::vm::Vm::new(&scripts));
+        session.enter_room(&pack, None, true, RoomBgmHandoff::Now);
+        assert_eq!(session.game.re2.vars[4], 100, "the first pass's write");
+        let baseline = session.author_baseline();
+        session.game.re2.set_flag(4, 6, 1);
+        session.game.re2.vars[5] = 7;
+        session.finish_authoring(baseline, false);
+        assert_eq!(session.game.re2.vars[4], 0, "the boot's");
+        assert_eq!(session.game.re2.vars[5], 7, "the edit's");
     }
 
     /// A flag the setup writes counts even where the first pass wrote it

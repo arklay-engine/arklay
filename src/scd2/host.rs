@@ -872,6 +872,11 @@ pub const VAR_USED_ITEM: usize = 2;
 /// Variable 3 (`0x98EAEA`): the area's first data word, the item, that the
 /// get-item window's take wrote (`St_get_item`), for one pass.
 pub const VAR_TAKEN_ITEM: usize = 3;
+/// `scd_var_last_rdt` (`0x98EB1A`): the room a door left, its 1-based stage
+/// times 0x100 plus its room (`Set_door`).
+pub const VAR_LAST_RDT: usize = 27;
+/// The two variables `Sce_work_clr_set` sets to `0xFFFF` on every room load.
+const ROOM_VARS: [usize; 2] = [33, 34];
 const VAR_STAGE: u8 = 24;
 const VAR_ROOM: u8 = 25;
 const VAR_CUT: u8 = 26;
@@ -1904,12 +1909,21 @@ impl Re2State {
     }
 
     /// `Sce_work_clr_set` (`0x4E3E50`): every room starts with all of its mask
-    /// groups on and with `fg_room`'s first word (`0x98EB6C`) clear, so a room's
+    /// groups on, with `fg_room`'s first word (`0x98EB6C`) clear, so a room's
     /// scripts never see the last room's bits, nor those of an earlier pass of
-    /// their own load.
+    /// their own load, and with script variables 33 and 34 (`0x98EB26`,
+    /// `0x98EB28`) at `0xFFFF`.
     pub fn reset_mask_groups(&mut self) {
         self.banks[MASK_BANK..MASK_BANK + MASK_BANKS].fill([u32::MAX; 8]);
         self.banks[usize::from(ROOM_BANK)][0] = 0;
+        self.vars[ROOM_VARS[0]] = 0xFFFF;
+        self.vars[ROOM_VARS[1]] = 0xFFFF;
+    }
+
+    /// `Set_door`'s `scd_var_last_rdt`, as it places the player: the room
+    /// the door leaves, `room`, its 1-based stage times 0x100 plus its room.
+    pub fn leave_room(&mut self, room: crate::state::RoomId) {
+        self.vars[VAR_LAST_RDT] = u16::from(room.stage) << 8 | u16::from(room.room);
     }
 
     /// The room's script set-up (`0x4E3F12`, from the room load's
@@ -5214,6 +5228,16 @@ mod tests {
         assert!(!state.flag(ROOM_BANK, 31));
         // The second word is `fg_tick`'s, which only the pass of the scripts clears.
         assert!(state.flag(ROOM_BANK, 40));
+        assert_eq!(state.vars[33..35], [0xFFFF, 0xFFFF]);
+    }
+
+    #[test]
+    fn a_door_keeps_the_room_it_left() {
+        let mut state = Re2State::default();
+        state.leave_room(crate::state::RoomId::parse("1000").unwrap());
+        assert_eq!(state.vars[VAR_LAST_RDT], 0x0100);
+        state.leave_room(crate::state::RoomId::parse("20A0").unwrap());
+        assert_eq!(state.vars[VAR_LAST_RDT], 0x020A);
     }
 
     #[test]

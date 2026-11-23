@@ -300,6 +300,24 @@ function capture(path) end
 ---@param path string
 function save_game(path) end
 
+---The original RE 2's save image of the session's state: the 2048 bytes
+---its save screen writes to a `.BIOHAZARD2` file on a save's write tick
+---(`Save_push` and the save work at `0x98E79C`), built over the scenario's
+---record of the pack's `INIT_TBL.DAT`, as a new game starts it. With
+---`reference`, the path of such a file, it also compares the two under the
+---image's mask (the regions arklay doesn't hold, such as the play clock)
+---and returns the unmasked regions that differ.
+---
+---```lua
+---local image, differ = re2_save_image("Leon A_01_....BIOHAZARD2")
+---local count = image:byte(0x221) | image:byte(0x222) << 8 -- the save count
+---for _, d in ipairs(differ) do print(d.region, d.offset, d.ours, d.theirs) end
+---```
+---@param reference? string
+---@return string image The 2048 bytes.
+---@return { region: string, offset: integer, ours: string, theirs: string }[]? differ With `reference`: each region that differs, by name, with the offset of its first differing byte and both images' bytes from there to its last, in hex; empty when the two match.
+function re2_save_image(reference) end
+
 ---Start writing the oracle trace (`oracle/trace-v1.md`) to `path`: one line
 ---per gameplay tick from the next tick on. A trace already running is closed first.
 ---
