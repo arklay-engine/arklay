@@ -1457,8 +1457,12 @@ end
 -- (0x99CF40 and 0x99CF80), which hold Default's tables until the page first
 -- opens. `count` is state 9's (0x99CF60), `slide` the panel's offset
 -- (0x99CF34) and `choice` the last row's or the question's (0x6893C8).
+-- `held` is the directions the list last saw (0x6893D0), which state 10
+-- clears, so a direction held as the list comes is a press on its first
+-- tick.
 local key_work = {
     count = 0,
+    held = 0,
     slide = 0,
     choice = 0,
     keys = key_defaults(KEY_FIXED),
@@ -1501,8 +1505,11 @@ local function unpack_table(words, bits, into)
     end
 end
 
--- The four tables as `api:keep`'s keys: their names and their values' bits.
-local KEY_KEPT = { { "keys", "key_data", 8 }, { "edit", "key_edit", 8 }, { "pad", "key_pad", 16 }, { "edit_pad", "key_edit_pad", 16 } }
+-- The tables as `api:keep`'s keys: their names and their values' bits.
+-- The pad's words are 32 bits, as the original compares them. The edited
+-- pad table isn't kept: state 2 fills it before anything reads it. The
+-- edited keys are, as the trace shows them before the page first opens.
+local KEY_KEPT = { { "keys", "key_data", 8 }, { "edit", "key_edit", 8 }, { "pad", "key_pad", 32 } }
 
 -- The count, the offset and the choice aren't kept: the page always leaves
 -- the first two at 0 (state 0xB sets the count, nothing but 0 is written to
@@ -1542,7 +1549,7 @@ local function key_definition(text, size, into)
         for b = size, 1, -1 do
             value = value << 8 | bytes[i * size + b]
         end
-        into[i] = value & 0xFFFF
+        into[i] = value
     end
     return true
 end
@@ -1557,21 +1564,26 @@ local function key_trace()
     return string.format("%d,%d,%d/%s", key_work.count, key_work.slide, key_work.choice, table.concat(bytes))
 end
 
--- `parts.tim`'s glyphs, 14 by 14: the pad's by the joypad's button (the
--- directions, then A, B, X, Y, the menu and the view buttons from 8, and
--- the right trigger at 17), as they stand, lit under the cursor, and red
--- when the page has changed them.
+-- `parts.tim`'s glyphs, 14 by 14, of the pad's buttons as Classic REbirth
+-- has them for this layout (its table in `ddraw.dll`, by the joypad's
+-- button: the directions, then A, B, X, Y, the menu and the view buttons
+-- from 8, the sticks' and the left trigger from 14, the right trigger at
+-- 17): as they stand, lit under the cursor, and red when the page has
+-- changed them.
 local KEY_PAD_GLYPHS = {
-    [0] = { { 188, 72 }, { 223, 227 }, { 188, 156 } },
+    [0] = { { 188, 72 }, { 223, 227 }, { 188, 155 } },
     [1] = { { 146, 30 }, { 188, 183 }, { 146, 114 } },
-    [2] = { { 174, 72 }, { 209, 227 }, { 174, 156 } },
-    [3] = { { 202, 72 }, { 237, 227 }, { 202, 156 } },
+    [2] = { { 174, 72 }, { 209, 227 }, { 172, 155 } },
+    [3] = { { 202, 72 }, { 237, 227 }, { 202, 155 } },
     [8] = { { 160, 30 }, { 13, 241 }, { 160, 114 } },
     [9] = { { 174, 30 }, { 27, 241 }, { 174, 114 } },
     [10] = { { 188, 30 }, { 41, 241 }, { 188, 114 } },
     [11] = { { 202, 30 }, { 55, 241 }, { 202, 114 } },
     [12] = { { 216, 30 }, { 69, 241 }, { 216, 114 } },
     [13] = { { 230, 30 }, { 83, 241 }, { 230, 114 } },
+    [14] = { { 160, 58 }, { 97, 241 }, { 160, 141 } },
+    [15] = { { 174, 58 }, { 111, 241 }, { 174, 141 } },
+    [16] = { { 188, 58 }, { 125, 241 }, { 188, 141 } },
     [17] = { { 146, 183 }, { 160, 183 }, { 174, 183 } },
 }
 
@@ -1602,6 +1614,15 @@ for digit = 0, 9 do
     local row = digit == 9 and 2 or digit < 3 and 0 or 1
     KEY_GLYPHS[0x60 + digit] = { 0x92 + (digit + 4 + (digit > 2 and 1 or 0)) * 14 % 0x62, 0x10 + row * 28, 14 }
 end
+-- The arrow keys: the sheet's thin arrows.
+for key = 0x25, 0x28 do
+    KEY_GLYPHS[key] = { (key * 14 + 0x80) & 0xFF, 0x10, 14 }
+end
+
+-- The keys `Config_draw_key` draws from the font's own sheet (texture 8):
+-- a letter or a digit is its own cell, and four of the punctuation keys
+-- are the cells of `[`, `]`, `_` and `\`.
+local KEY_FONT_CELLS = { [0xDB] = "[", [0xDD] = "]", [0xBD] = "_", [0xBF] = "\\" }
 
 -- A changed key's colour, which the cursor's doesn't replace.
 local KEY_RED = { 0x80, 0x10, 0x10 }
@@ -1653,8 +1674,9 @@ local function key_draw_list(rows_short, cursor)
             if sheet then
                 local colour = changed and KEY_RED or option_colour(on)
                 option_sprt(OPT_PARTS, 0xA2 - (sheet[3] == 15 and 7 or 6), entry.y, sheet[1], sheet[2], sheet[3], colour)
-            elseif key >= 0x30 and key <= 0x39 or key >= 0x41 and key <= 0x5A then
-                s.opt_texts[#s.opt_texts + 1] = { key = 0x9C, y = entry.y, text = string.char(key), on = on, red = changed }
+            elseif key >= 0x30 and key <= 0x39 or key >= 0x41 and key <= 0x5A or KEY_FONT_CELLS[key] then
+                local text = KEY_FONT_CELLS[key] or string.char(key)
+                s.opt_texts[#s.opt_texts + 1] = { key = 0x9C, y = entry.y, text = text, on = on, red = changed }
             end
         end
     end
@@ -1692,6 +1714,7 @@ local function key_main()
             o.type = 0x36
         end
     elseif o.state == 10 then
+        k.held = 0
         o.type = o.type - 1
         if o.type == 0 or trg & PAD_CONFIRM ~= 0 then
             o.type = 4
@@ -1699,6 +1722,11 @@ local function key_main()
             k.count = 0
         end
     elseif o.state == 0xB then
+        -- The rows move on the page's own edges of the directions (the
+        -- joypad's and the keyboard's arrows, `0x99CF70`), not the title's.
+        local held = s.raw & (PAD_UP | PAD_DOWN | PAD_LEFT | PAD_RIGHT)
+        trg = held & ~k.held
+        k.held = held
         if o.type == KEY_EXIT_ROW and s.key_trg & KEY_CONFIRM ~= 0 then
             s.cue(SE_DECIDE)
             if k.choice ~= 0 then

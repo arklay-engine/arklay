@@ -1857,6 +1857,208 @@ const RECORDED_KEYS: (&str, &str) = (
      00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
 );
 
+/// A direction held as the list comes is a press on the list's first tick:
+/// state 10 clears the page's own history of the directions (`0x6893D0`),
+/// which the title's edges don't share, and the held key moves one row.
+#[test]
+fn a_direction_held_into_keyconfigs_list_moves_once() {
+    let dir = std::env::temp_dir();
+    let cx = context(&dir);
+    let (mut screen, dir) = open_option(&cx, "key-held");
+    run(&mut screen, &cx, press("confirm"), 2);
+    run(&mut screen, &cx, press("confirm"), 2);
+    assert_eq!(opt(&screen)[1], 10);
+    let held = UiInput {
+        held_down: true,
+        ..UiInput::default()
+    };
+    assert!(tick_cues(&mut screen, &cx, press("down")).is_empty());
+    for _ in 0..10 {
+        assert!(tick_cues(&mut screen, &cx, held).is_empty());
+    }
+    let confirm = UiInput {
+        confirm: true,
+        held_down: true,
+        ..UiInput::default()
+    };
+    run(&mut screen, &cx, confirm, 1);
+    assert_eq!(opt(&screen)[1..4], [0xB, 0, 4]);
+    assert_eq!(tick_cues(&mut screen, &cx, held), [UiCue::Core(4)]);
+    assert_eq!(opt(&screen)[3], 5);
+    for _ in 0..30 {
+        assert!(tick_cues(&mut screen, &cx, held).is_empty());
+    }
+    assert_eq!(
+        opt(&screen)[3],
+        5,
+        "then the held key waits for its release"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The executable's own pad (`FUN_0044dab0`) as config.ini's `JoyDef`, with
+/// `extra` in the 16th word.
+fn default_pad_with(extra: u32) -> String {
+    let mut pad = [0u32; 32];
+    pad[..4].copy_from_slice(&[0x1000, 0x4000, 0x8000, 0x2000]);
+    pad[8..15].copy_from_slice(&[0x80, 0x44, 0x08, 0x800, 0x10, 0x100, 0x02]);
+    pad[16] = extra;
+    pad.iter()
+        .flat_map(|word| word.to_le_bytes())
+        .map(|byte| format!("{byte:02X}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The executable's own keys as config.ini's `KeyDef`.
+fn default_key_def() -> String {
+    (0..32)
+        .map(|i| &DEFAULT_KEYS[i * 2..i * 2 + 2])
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The pad's words are compared whole: a setting that differs from Default's
+/// only in a word's top half still asks on Exit, Leave keeps it, Change
+/// takes Default's, and a title opened anew finds what the last one took.
+#[test]
+fn keyconfig_asks_for_a_change_to_the_pad_alone() {
+    let dir = std::env::temp_dir();
+    let mut cx = context(&dir);
+    let statics = crate::ui::ScreenStatics::default();
+    cx.statics = Some(&statics);
+    let opened = |joy_def: String| {
+        let mut cx_open = context(&dir);
+        cx_open.statics = Some(&statics);
+        let mut screen = LuaScreen::open_screen(
+            "title",
+            &[
+                ("key_def", ScreenArg::Str(default_key_def())),
+                ("joy_def", ScreenArg::Str(joy_def)),
+            ],
+            ScreenAction::Quit,
+            &mut cx_open,
+        )
+        .unwrap();
+        run(&mut screen, &cx, UiInput::default(), 70);
+        for _ in 0..4 {
+            run(&mut screen, &cx, press("down"), 20);
+        }
+        run(&mut screen, &cx, press("confirm"), 16);
+        assert_eq!(opt(&screen)[1], 1);
+        screen
+    };
+    let mut screen = opened(default_pad_with(0x0001_0000));
+    // Default, then Exit: the pad's 16th word differs in its top half.
+    let default_then_exit = |screen: &mut LuaScreen| {
+        open_key_page(screen, &cx);
+        for _ in 0..5 {
+            run(screen, &cx, press("up"), 2);
+        }
+        assert_eq!(opt(screen)[3], 10);
+        run(screen, &cx, press("right"), 2);
+        run(screen, &cx, press("confirm"), 2);
+        assert_eq!(opt(screen)[1], 0xB);
+        run(screen, &cx, press("left"), 2);
+        run(screen, &cx, press("confirm"), 1);
+    };
+    default_then_exit(&mut screen);
+    assert_eq!(opt(&screen)[1], 0xF, "the changed pad asks");
+    run(&mut screen, &cx, UiInput::default(), 1);
+    run(&mut screen, &cx, press("right"), 2);
+    run(&mut screen, &cx, press("confirm"), 6);
+    assert_eq!(opt(&screen)[1], 1, "Leave");
+    default_then_exit(&mut screen);
+    assert_eq!(opt(&screen)[1], 0xF, "Leave kept the pad as it was");
+    run(&mut screen, &cx, press("confirm"), 6);
+    assert_eq!(opt(&screen)[1], 1, "Change");
+    open_key_page(&mut screen, &cx);
+    for _ in 0..5 {
+        run(&mut screen, &cx, press("up"), 2);
+    }
+    run(&mut screen, &cx, press("confirm"), 1);
+    assert_eq!(opt(&screen)[1], 0xD, "nothing is changed now");
+    // A title opened anew with the boot's settings keeps the last one's.
+    let mut again = opened(default_pad_with(0x0001_0000));
+    open_key_page(&mut again, &cx);
+    for _ in 0..5 {
+        run(&mut again, &cx, press("up"), 2);
+    }
+    run(&mut again, &cx, press("confirm"), 1);
+    assert_eq!(opt(&again)[1], 0xD, "the kept pad is Default's");
+}
+
+/// The arrow keys are the sheet's thin arrows, and `[`, `]`, `_` and `\`
+/// the font's own cells (`Config_draw_key`).
+#[test]
+fn keyconfig_draws_the_arrows_and_the_fonts_signs() {
+    let dir = std::env::temp_dir();
+    let mut cx = context(&dir);
+    let statics = crate::ui::ScreenStatics::default();
+    cx.statics = Some(&statics);
+    let mut keys: Vec<String> = default_key_def().split(' ').map(str::to_owned).collect();
+    for (row, key) in [
+        (0, "25"),
+        (1, "DB"),
+        (2, "BF"),
+        (3, "28"),
+        (10, "DD"),
+        (11, "BD"),
+    ] {
+        keys[row] = key.to_owned();
+    }
+    let mut cx_open = context(&dir);
+    cx_open.statics = Some(&statics);
+    let mut screen = LuaScreen::open_screen(
+        "title",
+        &[
+            ("key_def", ScreenArg::Str(keys.join(" "))),
+            ("joy_def", ScreenArg::Str(default_pad_with(0))),
+        ],
+        ScreenAction::Quit,
+        &mut cx_open,
+    )
+    .unwrap();
+    run(&mut screen, &cx, UiInput::default(), 70);
+    for _ in 0..4 {
+        run(&mut screen, &cx, press("down"), 20);
+    }
+    run(&mut screen, &cx, press("confirm"), 16);
+    open_key_page(&mut screen, &cx);
+    assert_eq!(
+        key_glyphs(&screen)[..6],
+        ["134:16", "[", "\\", "176:16", "]g", "_"]
+    );
+}
+
+/// Each visit to the option screen draws once from the title's generator
+/// for the player KEYCONFIG shows (`FUN_0044b100`): from 0x7FFFFFFF, Leon
+/// and then Claire.
+#[test]
+fn each_option_visit_picks_its_player() {
+    let dir = std::env::temp_dir();
+    let statics = crate::ui::ScreenStatics::default();
+    let (mut screen, cx) = open_kept(&statics, &dir, &[("seed", ScreenArg::Int(0x7FFF_FFFF))]);
+    let mut models = Vec::new();
+    for _ in 0..2 {
+        run(&mut screen, &cx, UiInput::default(), 70);
+        for _ in 0..8 {
+            if screen.value("ti_cur") == 4 {
+                break;
+            }
+            run(&mut screen, &cx, press("down"), 20);
+        }
+        assert_eq!(screen.value("ti_cur"), 4, "OPTION's row");
+        run(&mut screen, &cx, press("confirm"), 16);
+        assert_eq!(opt(&screen)[1], 1);
+        models.push(screen.test_eval::<i64>("return M.state.opt.model"));
+        run(&mut screen, &cx, press("cancel"), 1);
+        run(&mut screen, &cx, UiInput::default(), 40);
+        assert_eq!(screen.value("opt_on"), 0);
+    }
+    assert_eq!(models, [0, 1]);
+}
+
 /// A key's letter is printed where the original's whole font cell puts its
 /// glyph (`title_option_key`'s frames): the print's width for a glyph is its
 /// ink and a pixel, and the glyph sits half of what that leaves of 15

@@ -1903,6 +1903,7 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
             boot_tick = 0
             cursor = 0
             pad = 0
+            held_keys = 0
             settled = 0
             tick = -1  # The trace's tick, once play has begun.
             while tick <= args.ticks:
@@ -2001,7 +2002,11 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                         if at == tick:
                             game.write(ITEM_WORK + slot * 4, bytes((item_id, count, 0)))
                     tick += 1
-                regs.rax = pad
+                    if (pad | held_keys) & KEY_WORD_KEYS:
+                        # The keyboard's own keys, as `record_boot` puts them in.
+                        game.write(KEY_WORD, struct.pack("<I", pad & KEY_WORD_KEYS))
+                    held_keys = pad
+                regs.rax = pad & PAD_KEYS
                 if tick_delay:
                     game.hold(tid, tick_delay)
                 # The run after the last traced tick is no one's to pace.
