@@ -345,7 +345,7 @@ function ScreenModule.cursor_shown(api, shown) end
 ---@param cursor integer The item box cursor's slot.
 function ScreenModule.move_cursor(api, cursor) end
 
--- source: src/ui/lua_screen/methods.rs#Api src/ui/lua_screen/draw/methods.rs src/ui/lua_screen/game_api.rs
+-- source: src/ui/lua_screen/methods.rs#Api src/ui/lua_screen/draw/methods.rs src/ui/lua_screen/game_api.rs src/ui/lua_screen/option_model.rs
 ---The screen surface, passed to every entry point and signal. Only these
 ---methods exist; call them with Lua colon syntax (`api:width()`).
 ---
@@ -803,6 +803,30 @@ function ScreenApi:item_model(item) end
 ---@return integer? handle A character model handle.
 ---@return string? err When the entry is missing, is no model, or can't take a move.
 function ScreenApi:character_model(entry, moves) end
+
+---RE 2's KEYCONFIG model: the player beside the option screen's key list,
+---which the engine runs and the screen calls at the points the original's
+---page does. The model's demonstration counters outlive every model the
+---screen makes, as the original's do.
+---
+---- `"make", id, type`: a fresh model of character `id` holding weapon
+---  `type`, standing in its place facing the viewer. False when the pack
+---  has no such player files, and every later call then does nothing.
+---- `"start"`: the model back off to the left with its first step in.
+---- `"walk"`: a step of the walk in.
+---- `"walk_on"`: the walk's routine, which the page writes every tick of
+---  the walk in.
+---- `"place"`: the model in its place at once.
+---- `"face"`: a step of the turn to face the viewer, then the idle.
+---- `"turn_back"`: the next `"row"` turns the model back to face the
+---  viewer first.
+---- `"row", row`: the list's row `row` (0 to 10) acted out for a tick.
+---- `"trace"`: the model as the trace's `kcm` shows it; nil with no model.
+---@param op string
+---@param a? integer
+---@param b? integer
+---@return boolean|string|nil
+function ScreenApi:option_model(op, a, b) end
 
 ---Load RE 2's FILE binders model (`ui/status/st_file.ts`), for
 ---[`api:draw_re2_binders`](#ScreenApi.draw_re2_binders).

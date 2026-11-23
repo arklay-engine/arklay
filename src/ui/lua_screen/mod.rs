@@ -51,6 +51,7 @@ use sources::{Loader, Sources};
 
 mod draw;
 mod game_api;
+mod option_model;
 mod sources;
 
 /// The coordinate range the drawing API accepts; wider values are clamped
@@ -141,6 +142,8 @@ struct Host {
     assets: draw::Assets,
     /// The screen's own billboard pool (`api:effect_scene`).
     effects: Option<Box<crate::engine::EffectScene>>,
+    /// RE 2's KEYCONFIG model (`api:option_model`).
+    option_model: option_model::OptionModel,
 }
 
 impl Host {
@@ -302,6 +305,7 @@ impl LuaScreen {
             values: HashMap::new(),
             assets: draw::Assets::default(),
             effects: None,
+            option_model: Default::default(),
         };
         let vm = ScreenVm::load(entry, Loader::new(sources))?;
         host.plays_films = vm.has_function("on_film");

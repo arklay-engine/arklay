@@ -13,6 +13,8 @@ use crate::model::{Clip, ClipFrame, Keyframe, Skeleton};
 use crate::player::{self, ClipSource, Input, Options, PlayerState};
 use crate::state::{RoomState, ScaRect};
 
+pub mod keyconfig;
+
 /// `Key`, the mapped pad word `pl_br_*` test.
 pub(crate) const KEY_FORWARD: u16 = 0x0001;
 const KEY_RIGHT: u16 = 0x0002;

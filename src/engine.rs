@@ -14766,6 +14766,11 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
             Some(page) => line.push_str(&format!(" kc={page}")),
             None => line.push_str(" kc=-"),
         }
+        // Its model, as the oracle's `kcm` has it.
+        match screen.state_str("kcm") {
+            Some(model) => line.push_str(&format!(" kcm={model}")),
+            None => line.push_str(" kcm=-"),
+        }
         // The gallery's task, as `scripts/oracle-re2.py`'s `gal` and `galv`
         // have it.
         if v("gal_on") != 0 {
