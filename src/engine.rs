@@ -7647,7 +7647,7 @@ impl GameSession {
             value("sv_choice"),
             value("sv_typed"),
             value("sv_saves"),
-            self.game.state_bytes[usize::from(game::STATE_BYTE_SAVES)],
+            self.game.re2_save_count(),
         )
     }
 
@@ -29180,6 +29180,11 @@ mod tests {
         ]));
         session.tick_save_screen(&pack, UiInput::default());
         assert_eq!(session.re2_save_screen_trace(), "2,0,22,0,0,0,5,0,0,4,3,1");
+        // The count is the whole word: the 256th save is 256.
+        session.game.state_bytes[usize::from(game::STATE_BYTE_SAVES)] = 255;
+        session.save_screen = Some(writing_screen(&[("sv_sub", 2), ("sv_state", 0x22)]));
+        session.tick_save_screen(&pack, UiInput::default());
+        assert!(session.re2_save_screen_trace().ends_with(",256"));
     }
 
     /// RE 1's `InitializeGame` zeroes the play timer on a load with no

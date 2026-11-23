@@ -925,8 +925,9 @@ pub fn default_save_dir() -> PathBuf {
 pub struct SaveSlotInfo {
     /// Character id (`0` Chris, `1` Jill).
     pub character: u8,
-    /// Save counter.
-    pub saves: u8,
+    /// Save counter: the block's byte, with an RE 2 trailer's high byte
+    /// over it (`0x98E9BC`'s low word).
+    pub saves: u16,
     /// The 1-based stage of the room the block was saved in.
     pub stage: u8,
     /// Room id.
@@ -946,7 +947,12 @@ impl SaveSlotInfo {
         let id = file.block_room();
         Self {
             character: file.character,
-            saves: file.saves,
+            saves: u16::from(
+                file.re2
+                    .as_deref()
+                    .map_or(0, crate::scd2::host::saves_high_in),
+            ) << 8
+                | u16::from(file.saves),
             stage: id.stage,
             room: id.room,
             mansion2: id.mansion2,

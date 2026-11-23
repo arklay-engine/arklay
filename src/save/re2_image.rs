@@ -116,7 +116,10 @@ pub const REGIONS: &[Region] = &[
     region("position", 0x222, 6),
     // The new game's `DWORD_0098e9c4 = DWORD_0099c8a8 & 1`, and
     // `Flg_on(.., 0x12)` (0x2000) under `DWORD_00995b48 & 0x40`
-    // (`FUN_004b73c0`); nothing in play writes the word.
+    // (`FUN_004b73c0`). In play only the status screen's Konami code writes
+    // it (`Status`, `0x501BD0`: `| 0xFFFFFF00`, or back to bit 0 and
+    // 0x2000), which arklay doesn't port: a recording that enters it differs
+    // in the bits it sets.
     masked_bits(
         "extras",
         0x228,
@@ -250,7 +253,7 @@ pub fn build(game: &GameState, record: Option<&[u8]>) -> [u8; IMAGE_LEN] {
     put(&mut image, 0x21A, &player.health.to_le_bytes());
     put(&mut image, 0x220, &game.re2_save_count().to_le_bytes());
     // The extras word: arklay holds none of its bits (the new game's, from
-    // the clear records), and nothing in play writes it.
+    // the clear records, and the status screen's Konami code, not ported).
     put(&mut image, 0x228, &0u32.to_le_bytes());
     for (axis, &value) in player.pos.iter().enumerate() {
         put(&mut image, 0x222 + axis * 2, &(value as i16).to_le_bytes());

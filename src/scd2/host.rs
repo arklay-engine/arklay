@@ -518,6 +518,12 @@ pub const NO_FILE: u8 = 0xFF;
 /// `Random_base` (`0x695E58`) as `scd_init` sets it.
 const RANDOM_START: u32 = 0x1382_01C3;
 
+/// The save count's high byte in [`Re2State::to_save_bytes`]'s `bytes`, 0
+/// in a save from before it.
+pub fn saves_high_in(bytes: &[u8]) -> u8 {
+    bytes.get(SAVE_LEN_NO_SAVES_HIGH).copied().unwrap_or(0)
+}
+
 /// The bytes of [`Re2State::to_save_bytes`].
 const SAVE_LEN: usize = SAVE_LEN_NO_SAVES_HIGH + 1;
 /// A save from before the save count's high byte.
@@ -7058,6 +7064,8 @@ mod tests {
         old.load_save_bytes(&bytes[..SAVE_LEN_NO_SAVES_HIGH])
             .unwrap();
         assert_eq!(old.saves_high, 0);
+        assert_eq!(saves_high_in(&bytes), 2);
+        assert_eq!(saves_high_in(&bytes[..SAVE_LEN_NO_SAVES_HIGH]), 0);
     }
 
     #[test]
