@@ -6955,6 +6955,7 @@ impl GameSession {
                 weapons::SCENARIO_FLAG_INF_R_LAUNCHER,
                 false,
             ),
+            rnd: self.game.is_re2_room.then_some(self.game.re2.rnd.0),
         };
         (flow, character)
     }
@@ -11312,6 +11313,10 @@ struct EndingFlow {
     has_special_key: bool,
     /// Whether the completed run already owned the infinite rocket launcher.
     has_infinite_launcher: bool,
+    /// RE 2's `Rnd` state as the cleared game left it, for the title the
+    /// ending goes back to (`Result_exit` chains it with the state as it
+    /// stands); none for an ending no RE 2 game played into.
+    rnd: Option<u16>,
 }
 
 /// The mode machine: one screen at a time, with the pack and decoded shared
@@ -12019,6 +12024,7 @@ impl App {
                     second_playthrough: false,
                     has_special_key: false,
                     has_infinite_launcher: false,
+                    rnd: None,
                 });
                 self.open_epilogue()
             }
@@ -12107,14 +12113,21 @@ impl App {
     /// is the boot's ([`App::open_title_from`]), once per process.
     fn open_title(&mut self) -> Result<()> {
         let boot = self.films && !self.opening_played;
-        self.open_title_from(boot, None)
+        self.open_title_from(boot, None, None)
+    }
+
+    /// Open the title the ending `flow` goes back to, with the `Rnd` state
+    /// its game left.
+    fn open_title_after_ending(&mut self, flow: Option<EndingFlow>) -> Result<()> {
+        let boot = self.films && !self.opening_played;
+        self.open_title_from(boot, None, flow.and_then(|flow| flow.rnd))
     }
 
     /// Open the title after RE 2's attract demo, which `key` ended: a demo
     /// a key ended is a game to the title (`0x98F1BB`), and its `after`
     /// argument is `"game"` then, else `"demo"`.
     fn open_title_after_demo(&mut self, key: bool) -> Result<()> {
-        self.open_title_from(false, Some(if key { "game" } else { "demo" }))
+        self.open_title_from(false, Some(if key { "game" } else { "demo" }), None)
     }
 
     /// Open the title a game goes back to. After a game of RE 2's the
@@ -12123,7 +12136,7 @@ impl App {
     /// it starts from the logo's wait, not as the boot's does.
     fn open_title_after_game(&mut self) -> Result<()> {
         if matches!(&self.mode, Mode::Play(session) if session.game.is_re2_room) {
-            self.open_title_from(false, Some("game"))
+            self.open_title_from(false, Some("game"), None)
         } else {
             self.open_title()
         }
@@ -12134,8 +12147,9 @@ impl App {
     /// before its title and play its own opening film; for any other the
     /// opening film (id 0) is queued, unless the run plays none. `after` is
     /// what the title comes after, when it is a game (`"game"`) or a demo
-    /// played to its end (`"demo"`): the title's `after` argument.
-    fn open_title_from(&mut self, boot: bool, after: Option<&str>) -> Result<()> {
+    /// played to its end (`"demo"`): the title's `after` argument. `rnd` is
+    /// RE 2's `Rnd` state an ending carried from its game.
+    fn open_title_from(&mut self, boot: bool, after: Option<&str>, rnd: Option<u16>) -> Result<()> {
         // A registration that names a missing entry falls back to the ported
         // screen when it opens, which only lists the eight slots, so the
         // folder probe follows the entry the pack actually carries.
@@ -12160,11 +12174,23 @@ impl App {
         if let Some(after) = after {
             args.push(("after", ScreenArg::Str(after.to_owned())));
             // Fade 0's step is the game's last (a death's `0x200`), which
-            // nothing sets again before `Title_init`.
+            // nothing sets again before `Title_init`. `Rnd`'s state is the
+            // game's too, for the gallery's models to draw from.
             if let Mode::Play(session) = &self.mode {
                 let add = i64::from(session.room_fade.counter());
                 args.push(("fade_add", ScreenArg::Int(add)));
+                if session.game.is_re2_room {
+                    let rnd = i64::from(session.game.re2.rnd.0);
+                    args.push(("rnd", ScreenArg::Int(rnd)));
+                }
             }
+        }
+        // The title an ending goes back to: the state the cleared game
+        // left, through the ending's screens.
+        if let Some(rnd) = rnd
+            && !args.iter().any(|(name, _)| *name == "rnd")
+        {
+            args.push(("rnd", ScreenArg::Int(i64::from(rnd))));
         }
         self.sleeping_title = None;
         self.pending_load = None;
@@ -12431,6 +12457,9 @@ impl App {
         // process's.
         self.sleeping_title = None;
         self.pending_load = None;
+        // A game started over an ending (the script host's can be) ends it,
+        // and the cleared game's state with it.
+        self.ending = None;
         self.stop_screen_music();
         session.screen_statics = self.statics.clone();
         #[cfg(feature = "bot")]
@@ -12644,6 +12673,7 @@ impl App {
             second_playthrough: false,
             has_special_key: false,
             has_infinite_launcher: false,
+            rnd: None,
         });
         self.open_result()
     }
@@ -12727,7 +12757,7 @@ impl App {
             Err(err) => {
                 crate::warning!("warning: could not build the next-cycle save: {err:#}");
                 self.ending = None;
-                return self.open_title();
+                return self.open_title_after_ending(Some(flow));
             }
         };
         let entry = self.save_screen.clone();
@@ -12739,7 +12769,7 @@ impl App {
             Err(err) => {
                 crate::warning!("warning: save screen unavailable: {err:#}");
                 self.ending = None;
-                return self.open_title();
+                return self.open_title_after_ending(Some(flow));
             }
         };
         self.mode = Mode::Save(screen);
@@ -13071,10 +13101,11 @@ impl App {
                     // The next-cycle save screen always continues to the title,
                     // whether or not the player wrote a slot, and the run
                     // counts as cleared (`g_dwClearCount++`).
-                    if self.ending.take().is_some() {
+                    let ending = self.ending.take();
+                    if ending.is_some() {
                         self.record_clear();
                     }
-                    self.open_title()?;
+                    self.open_title_after_ending(ending)?;
                 }
             }
             ScreenAction::EndingResult => self.open_result()?,
@@ -14031,6 +14062,7 @@ fn run_ui_impl(
                     second_playthrough: false,
                     has_special_key: false,
                     has_infinite_launcher: false,
+                    rnd: None,
                 });
                 app.open_epilogue()?;
                 if apply_authoring(&mut app, authoring)? {
@@ -14185,8 +14217,9 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
                 .and_then(|load| load.value("sv_fg_system"))
                 .unwrap_or(0) as u32;
         line.push_str(&format!(
-            " fgsys={:08x} ti={},{},{},{},{},{},{},{},{},{},{} tlogo={},{},{} tfade={},{},{},{},{} \
+            " rng={} fgsys={:08x} ti={},{},{},{},{},{},{},{},{},{},{} tlogo={},{},{} tfade={},{},{},{},{} \
              tsel={:x},{},{}",
+            v("ti_rnd"),
             fg_system,
             v("ti_mv"),
             v("ti_disp"),
@@ -15361,6 +15394,7 @@ pub fn run_ending(
         second_playthrough: false,
         has_special_key: false,
         has_infinite_launcher: false,
+        rnd: None,
     };
     let films = ending::chain(
         id,
@@ -40213,6 +40247,7 @@ off_0010:
             M.demo = args and args.after
             api:set('demo', M.demo == 'game' and 2 or M.demo == 'demo' and 1 or 0)
             api:set('fade_add', args and args.fade_add or -1)
+            api:set('rnd', args and args.rnd or -1)
         end
         function M.update(api, input)
             if not M.demo then
@@ -40704,8 +40739,69 @@ off_0010:
 
     /// A game of RE 2's goes back to a title that is told so
     /// (`Game_loop` chains it with `0x98F1BB` set, as after a demo a key
-    /// ended), with fade 0's step as the game left it. A title opened from
-    /// anywhere else isn't.
+    /// ended), with fade 0's step and `Rnd`'s state as the game left them.
+    /// A title opened from anywhere else isn't.
+    /// A cleared game's ending carries `Rnd`'s state as the game left it
+    /// from the game's flow through the results and the next cycle's save to
+    /// the title it goes back to.
+    #[test]
+    fn re2s_title_after_an_ending_takes_the_games_rnd() {
+        let dir = TempDir::new();
+        let mut app = App::new(re2_demo_pack(&[0x1000; 20]), dir.0.clone(), false);
+        app.apply(ScreenAction::NewGame {
+            character: 0,
+            choice: Default::default(),
+        })
+        .unwrap();
+        let Mode::Play(session) = &mut app.mode else {
+            panic!("the game started");
+        };
+        session.game.re2.rnd = crate::zombie2::Rnd(0x4321);
+        let (flow, _) = session.ending_flow(1);
+        assert_eq!(flow.rnd, Some(0x4321), "the flow takes the game's state");
+        // Ending 1 has no epilogue: its results go to the save, and the save
+        // to the title.
+        app.ending = Some(flow);
+        app.ending_after_result().unwrap();
+        assert!(matches!(app.mode, Mode::Save(_)));
+        app.apply(ScreenAction::Resume).unwrap();
+        assert!(app.ending.is_none());
+        assert_eq!(title_value(&app, "rnd"), 0x4321);
+        app.apply(ScreenAction::Title).unwrap();
+        assert_eq!(title_value(&app, "rnd"), -1, "only that title");
+    }
+
+    /// An ending something else interrupts (the script host's new game or
+    /// title over its results) leaves its game's `Rnd` to no title.
+    #[test]
+    fn an_interrupted_endings_rnd_reaches_no_title() {
+        let dir = TempDir::new();
+        let mut app = App::new(re2_demo_pack(&[0x1000; 20]), dir.0.clone(), false);
+        let flow = EndingFlow {
+            stats: ending::EndStats::debug(1, 0, 1),
+            second_playthrough: false,
+            has_special_key: false,
+            has_infinite_launcher: false,
+            rnd: Some(0x4321),
+        };
+        app.ending = Some(flow);
+        app.open_title().unwrap();
+        assert_eq!(title_value(&app, "rnd"), -1, "a title opened over it");
+        app.ending = Some(flow);
+        app.apply(ScreenAction::NewGame {
+            character: 0,
+            choice: Default::default(),
+        })
+        .unwrap();
+        assert!(app.ending.is_none(), "a new game ends the ending");
+        let Mode::Play(session) = &mut app.mode else {
+            panic!("the game started");
+        };
+        session.game.re2.rnd = crate::zombie2::Rnd(0x1111);
+        app.apply(ScreenAction::Title).unwrap();
+        assert_eq!(title_value(&app, "rnd"), 0x1111, "the new game's");
+    }
+
     #[test]
     fn re2s_title_after_a_game_is_told_so() {
         let dir = TempDir::new();
@@ -40720,12 +40816,15 @@ off_0010:
         };
         // A death's fade out.
         session.room_fade.set(2, 0x200, 0);
+        session.game.re2.rnd = crate::zombie2::Rnd(0x1234);
         app.apply(ScreenAction::Title).unwrap();
         assert_eq!(title_value(&app, "demo"), 2);
         assert_eq!(title_value(&app, "fade_add"), 0x200);
+        assert_eq!(title_value(&app, "rnd"), 0x1234);
         app.apply(ScreenAction::Title).unwrap();
         assert_eq!(title_value(&app, "demo"), 0, "from the title itself");
         assert_eq!(title_value(&app, "fade_add"), -1);
+        assert_eq!(title_value(&app, "rnd"), -1);
     }
 
     /// `Set_room`'s step 3 loads the stage's font and sleeps a tick when
@@ -40770,9 +40869,9 @@ off_0010:
         let mut app = App::new(re2_title_pack_with(TITLE, &[], &[]), dir.0.clone(), false);
         app.boot(AppBoot::Title).unwrap();
         app.re2_stage = 2;
-        app.open_title_from(false, None).unwrap();
+        app.open_title_from(false, None, None).unwrap();
         assert_eq!(app.re2_stage, 2, "a title after a game keeps it");
-        app.open_title_from(true, None).unwrap();
+        app.open_title_from(true, None, None).unwrap();
         assert_eq!(app.re2_stage, 1);
     }
 
@@ -40836,7 +40935,7 @@ off_0010:
 
         // A title opened over one asleep under its film takes the film
         // with the sleeper: nothing wakes the old title over the new.
-        app.open_title_from(true, None).unwrap();
+        app.open_title_from(true, None, None).unwrap();
         idle(&mut app);
         assert!(app.film_title.is_some() && app.pending_movie.is_some());
         app.open_title().unwrap();
@@ -40850,7 +40949,7 @@ off_0010:
         let mut app = App::new(re2_title_pack(TITLE, &["titlec"]), dir.0.clone(), false);
         app.boot(AppBoot::Title).unwrap();
         assert_eq!(title_value(&app, "boot"), 0);
-        app.open_title_from(true, None).unwrap();
+        app.open_title_from(true, None, None).unwrap();
         assert_eq!(title_value(&app, "boot"), 1);
         assert!(app.opening_played && app.pending_movie.is_none());
         idle(&mut app);
@@ -41382,6 +41481,7 @@ off_0010:
             second_playthrough: false,
             has_special_key: false,
             has_infinite_launcher: false,
+            rnd: None,
         });
         app.play_film_chain(vec![(14, 0), (15, 0)], Some(ScreenAction::EndingResult))
             .unwrap();
@@ -41416,6 +41516,7 @@ off_0010:
             second_playthrough: false,
             has_special_key: false,
             has_infinite_launcher: false,
+            rnd: None,
         });
         app.play_film_chain(
             vec![(14, 0), (15, 0), (27, 0), (22, 0)],
@@ -41466,6 +41567,7 @@ off_0010:
             second_playthrough: false,
             has_special_key: true,
             has_infinite_launcher: false,
+            rnd: None,
         });
         app.ending_after_result().unwrap();
         assert!(
@@ -41478,6 +41580,7 @@ off_0010:
             second_playthrough: false,
             has_special_key: false,
             has_infinite_launcher: false,
+            rnd: None,
         });
         app.ending_after_result().unwrap();
         assert!(
@@ -41495,6 +41598,7 @@ off_0010:
             second_playthrough: false,
             has_special_key: false,
             has_infinite_launcher: false,
+            rnd: None,
         });
         app.ending_after_result().unwrap();
         assert!(matches!(app.mode, Mode::Save(_)));
@@ -41513,6 +41617,7 @@ off_0010:
             second_playthrough: false,
             has_special_key: true,
             has_infinite_launcher: false,
+            rnd: None,
         };
         let file = build_next_cycle_save(&pack, &flow, player::Options::default()).unwrap();
         assert_eq!(file.saves, 0, "the next-cycle counter restarts at zero");
@@ -41551,6 +41656,7 @@ off_0010:
             second_playthrough: false,
             has_special_key: true,
             has_infinite_launcher: false,
+            rnd: None,
         };
         let file = build_next_cycle_save(&pack, &jill, player::Options::default()).unwrap();
         let mut state = new_game_state(&pack, id, &loaded, player::Options::default());
@@ -43884,6 +43990,7 @@ off_0010:
             second_playthrough: false,
             has_special_key: false,
             has_infinite_launcher: false,
+            rnd: None,
         };
         let card_items = |options| {
             let file = build_next_cycle_save(&pack, &flow, options).unwrap();

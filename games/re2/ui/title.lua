@@ -36,6 +36,9 @@
 -- boot" below).
 --
 -- args.folder_saves: a registered save screen lists the whole save folder.
+-- args.rnd: `Rnd`'s state as play left it (0x988610), which the gallery's
+-- models draw from; the boot's seed without it (from the boot itself, 0
+-- until `Init_main` seeds it).
 
 local CrText = require("ui/cr_text")
 local Prologue = require("ui/prologue")
@@ -1054,7 +1057,12 @@ local function gallery()
             fade_off(2)
             -- `Task_execute(1, Gallery)`: the task's first step runs on
             -- this tick, and its menu from the next.
-            s.gal = Gallery.new(s.claire, s.gallery)
+            s.gal = Gallery.new(s.claire, s.gallery, {
+                rnd = s.rnd,
+                easy = s.fg_system & FG_EASY ~= 0,
+                censorship_off = s.censorship_off ~= 0,
+                hard_mode = s.hard_mode ~= 0,
+            })
             -- `Movie_set(1)`: this frame isn't presented, so the screen
             -- keeps the fade's last one.
             s.frame = "held"
@@ -1145,6 +1153,7 @@ local function title_init()
     s.background = s.title_background
     s.limiter = 0
     s.fg_system = s.fg_system & 0xFFF7FFBF
+    s.hard_mode = 0
     s.censorship_off = 0
     s.sel = 0
     s.cur = 0
@@ -2084,8 +2093,10 @@ local function boot_main(api)
         if b.flag ~= 0 then
             -- The rest of `Init_main`: the fonts and the effects' sheets,
             -- and the main task is the title's from the next tick, come
-            -- from the logo.
+            -- from the logo. `Rnd`'s state is seeded as it ends, as a new
+            -- game's `Player_set` seeds it.
             s.fg_system = s.fg_system | FG_FROM_LOGO
+            s.rnd = Gallery.RND_BOOT
             b.step = 3
         end
     elseif b.step == 3 then
@@ -2171,6 +2182,8 @@ end
 local function publish(api)
     Prologue.publish(api, s.pro)
     Gallery.publish(api, s.gal)
+    -- The trace's `rng`.
+    api:set("ti_rnd", s.rnd)
     if volumes_given then
         api:set("music_volume", sound.bgm)
         api:set("effects_volume", sound.se)
@@ -2281,6 +2294,7 @@ function M.open(api, args)
     s.open_choice = args and args.choice
     s.rep_mask, s.rep_delay = 0x5000, 0x20A
     s.seed = args and args.seed
+    s.rnd = (args and args.rnd or Gallery.RND_BOOT) & 0xFFFF
     -- After a game (`"game"`) or a demo played to its end (`"demo"`).
     if args and args.after then
         game_return(api, args.after == "demo", args.fade_add)
@@ -2328,6 +2342,7 @@ function M.update(api, input)
         -- The gallery's ticks: the title's task sleeps, through the tick
         -- the gallery closes on, which shows the title's picture alone.
         Gallery.tick(api, s.gal, s.edge, s.raw, s.cue)
+        s.rnd = s.gal.rnd
         s.sleeping = true
         if s.gal.film then
             -- A movie's film: the gallery runs on once it is over.
@@ -2440,6 +2455,8 @@ function M.on_boot(api)
     -- No key repeats until the title's task sets its own.
     s.rep_mask, s.rep_delay = 0, 0
     s.boot = { step = 0, sleep = 1, flag = 0 }
+    -- `Rnd`'s state is 0 until `Init_main` seeds it.
+    s.rnd = 0
     -- The process starts: the generator has no value yet, the film plays
     -- and the demos start from their first.
     api:keep("rnd", nil)

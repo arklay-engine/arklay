@@ -374,19 +374,50 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
         Ok(())
     });
 
-    // `character_model(entry)`: the model of the pack's `entry`, as the
-    // model viewer loads one (an enemy's `.emd`, a player's `.pld`, a
-    // weapon's `.plw`); nil and a message when it can't load.
-    methods.add_method_mut("character_model", |_lua, api, entry: String| {
-        let pack: &Pack = api.cx.pack;
-        let cache_key = format!("character:{entry}");
-        Ok(loaded(api.host.assets.load(cache_key, || {
-            let data = pack.read(&entry)?;
-            let model = crate::model_viewer::load_with(pack, &entry, &data)?;
-            let held = model.decoded_bytes();
-            Ok(Asset::Character(Arc::new(model), held))
-        })))
-    });
+    // `character_model(entry, moves)`: the model of the pack's `entry`, as
+    // the model viewer loads one (an enemy's `.emd`, a player's `.pld`, a
+    // weapon's `.plw`), with each `{part, page}` of `moves` moved to that
+    // page of its texture (`Texture_Move`); nil and a message when it
+    // can't load.
+    methods.add_method_mut(
+        "character_model",
+        |_lua, api, (entry, moves): (String, Option<Table>)| {
+            // The numbers as Lua gave them, checked as the model loads: a
+            // move it can't take is the call's nil and message.
+            let mut pages: Vec<(i64, i64)> = Vec::new();
+            if let Some(moves) = moves {
+                for item in moves.sequence_values::<Table>() {
+                    let item = item?;
+                    pages.push((item.get(1)?, item.get(2)?));
+                }
+            }
+            let pack: &Pack = api.cx.pack;
+            let cache_key = format!("character:{entry}:{pages:?}");
+            Ok(loaded(api.host.assets.load(cache_key, || {
+                let data = pack.read(&entry)?;
+                let mut model = crate::model_viewer::load_with(pack, &entry, &data)?;
+                for &(part, page) in &pages {
+                    let object = usize::try_from(part)
+                        .ok()
+                        .and_then(|part| model.mesh.objects.get_mut(part))
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("{entry} has no part {part} to move to page {page}")
+                        })?;
+                    let page = u8::try_from(page)
+                        .ok()
+                        .filter(|page| *page <= 0xF)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("{entry}'s part {part}: page {page} is past 15")
+                        })?;
+                    object
+                        .texture_move(page, &model.texture)
+                        .map_err(|why| anyhow::anyhow!("{entry}'s part {part}: {why}"))?;
+                }
+                let held = model.decoded_bytes();
+                Ok(Asset::Character(Arc::new(model), held))
+            })))
+        },
+    );
 
     // `draw_character(model, {pose, turn = {x, y, z}, view, parts})`:
     // a character's model standing at the origin, turned by `turn`, in the

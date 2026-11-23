@@ -36,6 +36,20 @@ fn edd() -> Vec<u8> {
     data
 }
 
+/// `clips` clips of two frames each, keyframes 1 and 0.
+fn edd_clips(clips: u16) -> Vec<u8> {
+    let mut data = Vec::new();
+    for clip in 0..clips {
+        put16(&mut data, 2);
+        put16(&mut data, 4 * clips + 8 * clip);
+    }
+    for _ in 0..clips {
+        put32(&mut data, 1);
+        put32(&mut data, 0);
+    }
+    data
+}
+
 /// Two joints (joint 0 the parent of joint 1) and two keyframes.
 fn emr(skeleton: bool) -> Vec<u8> {
     let joints = 2u16;
@@ -84,6 +98,11 @@ fn md1() -> Vec<u8> {
 /// [`md1`] with its four vertices at `corners`: the triangle is the first
 /// three and the quad those numbered `quad`.
 fn md1_of(corners: [[i16; 3]; 4], quad: [u16; 4]) -> Vec<u8> {
+    md1_parts(corners, quad, 1)
+}
+
+/// [`md1_of`] with `parts` parts, each the same triangle and quad.
+fn md1_parts(corners: [[i16; 3]; 4], quad: [u16; 4], parts: usize) -> Vec<u8> {
     let mut body = Vec::new();
     let vertices = body.len();
     for vertex in corners {
@@ -124,12 +143,13 @@ fn md1_of(corners: [[i16; 3]; 4], quad: [u16; 4]) -> Vec<u8> {
             put16(&mut body, 0x80);
         }
     }
-    let table = 2 * MD1_OBJECT_LEN;
+    let table = 2 * parts * MD1_OBJECT_LEN;
     let mut data = Vec::new();
     put32(&mut data, 0);
     put32(&mut data, 0);
-    put32(&mut data, 2);
-    for (prims, textures) in [(triangles, triangle_textures), (quads, quad_textures)] {
+    put32(&mut data, 2 * parts as u32);
+    let pair = [(triangles, triangle_textures), (quads, quad_textures)];
+    for (prims, textures) in pair.into_iter().cycle().take(2 * parts) {
         for value in [
             vertices + table,
             4,
@@ -272,6 +292,29 @@ pub(crate) fn emd_of(corners: [[i16; 3]; 4]) -> Vec<u8> {
         empty.clone(),
         empty,
         md1_of(corners, [3; 4]),
+    ])
+}
+
+/// [`emd_of`] with `parts` parts, each the same triangle, and two clips in
+/// its second bank, as a zombie's shared one has more, whose keyframes turn
+/// no joint: an enemy with the parts a routine names, standing as its
+/// file has it.
+pub(crate) fn emd_parts(corners: [[i16; 3]; 4], parts: usize) -> Vec<u8> {
+    let empty = vec![0u8; 4];
+    let mut still = emr(false);
+    for frame in 0..2 {
+        let angles = 8 + frame * 24 + 12;
+        still[angles..angles + 9].fill(0);
+    }
+    container(&[
+        empty.clone(),
+        edd(),
+        emr(true),
+        edd_clips(2),
+        still,
+        empty.clone(),
+        empty,
+        md1_parts(corners, [3; 4], parts),
     ])
 }
 

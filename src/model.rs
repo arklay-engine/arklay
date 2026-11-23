@@ -57,6 +57,36 @@ pub struct TmdObject {
     pub prims: Vec<TmdPrim>,
 }
 
+impl TmdObject {
+    /// `Texture_Move`: the part's textured primitives go to page `page` of
+    /// `texture`, counted from 0 at its left, 128 texels wide, each with
+    /// that page's palette row (row `page`, as an RE 2 enemy's texture has
+    /// one row a page: a zombie's other clothes). A page past the texture's
+    /// width (or past 15, the last a primitive can name), or one whose row
+    /// the texture hasn't, moves nothing and is the error.
+    pub fn texture_move(&mut self, page: u8, texture: &Texture8) -> Result<(), String> {
+        let rows = texture.palettes.len() / PALETTE_ROW_LEN;
+        if page > 0xF || (u32::from(page) + 1) * 128 > texture.width {
+            return Err(format!(
+                "page {page} is past the {} x {} texture's",
+                texture.width, texture.height
+            ));
+        }
+        if usize::from(page) >= rows {
+            return Err(format!(
+                "page {page}'s palette row isn't among the texture's {rows}"
+            ));
+        }
+        // A palette row is the CLUT word's y, counted from 480.
+        let row = (480 + u16::from(page)) << 6;
+        for prim in self.prims.iter_mut().filter(|prim| prim.textured) {
+            prim.tsb = (prim.tsb & !0xF) | u16::from(page);
+            prim.clut = (prim.clut & !(0x01FF << 6)) | row;
+        }
+        Ok(())
+    }
+}
+
 /// A parsed TMD mesh, usually one animated body part per object.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Tmd {
@@ -386,4 +416,112 @@ pub struct Emw {
     pub keyframes: Vec<Keyframe>,
     pub clips: Vec<Clip>,
     pub mesh: Tmd,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn prim(tsb: u16, clut: u16, textured: bool) -> TmdPrim {
+        TmdPrim {
+            vertices: [0; 3],
+            normals: [0; 3],
+            uv: [[0; 2]; 3],
+            clut,
+            tsb,
+            textured,
+            blend: false,
+            additive: false,
+            raw_y: false,
+            flat_color: None,
+            quad: None,
+            uv_nudge: [0; 3],
+        }
+    }
+
+    /// A zombie's part on page 1 (palette row 0x1E1) moved to page 3 takes
+    /// row 0x1E3, and one on page 0 moved to page 2 takes row 0x1E2, as
+    /// `Em10_Init` passes `Texture_Move` the page and its row; an
+    /// untextured primitive keeps its words.
+    /// A texture `pages` pages wide with a palette row a page.
+    fn texture(pages: u32) -> Texture8 {
+        Texture8 {
+            width: pages * 128,
+            height: 256,
+            indices: Vec::new(),
+            palettes: vec![[0; 4]; pages as usize * PALETTE_ROW_LEN],
+            stp: Vec::new(),
+        }
+    }
+
+    /// A page the texture hasn't, or whose palette row it hasn't, moves
+    /// nothing: a two-page replacement for a four-page zombie, a page past
+    /// 15 (which a primitive's four bits would wrap to 0), and a wide
+    /// texture short of rows.
+    #[test]
+    fn texture_move_refuses_a_page_the_texture_hasnt() {
+        let before = vec![prim(0x81, 0x7840, true)];
+        let mut object = TmdObject {
+            prims: before.clone(),
+            ..TmdObject::default()
+        };
+        assert!(
+            object
+                .texture_move(3, &texture(2))
+                .unwrap_err()
+                .contains("page 3")
+        );
+        assert!(object.texture_move(16, &texture(32)).is_err());
+        let short = Texture8 {
+            palettes: vec![[0; 4]; 2 * PALETTE_ROW_LEN],
+            ..texture(4)
+        };
+        assert!(
+            object
+                .texture_move(3, &short)
+                .unwrap_err()
+                .contains("palette row")
+        );
+        assert_eq!(object.prims, before);
+        assert!(object.texture_move(1, &texture(2)).is_ok());
+    }
+
+    /// The row is the destination page's, whatever row the primitive had: a
+    /// mod's primitive on page 1 with row 0 goes to page 2 with row 2, and
+    /// page 3 of a texture with three rows is refused.
+    #[test]
+    fn texture_move_writes_the_destination_pages_row() {
+        let mut object = TmdObject {
+            prims: vec![prim(0x81, 0x7800 | 0x5, true)],
+            ..TmdObject::default()
+        };
+        let three_rows = Texture8 {
+            palettes: vec![[0; 4]; 3 * PALETTE_ROW_LEN],
+            ..texture(4)
+        };
+        assert!(object.texture_move(3, &three_rows).is_err());
+        object.texture_move(2, &three_rows).unwrap();
+        assert_eq!(
+            (object.prims[0].tsb, object.prims[0].clut),
+            (0x82, 0x7880 | 0x5)
+        );
+    }
+
+    #[test]
+    fn texture_move_takes_the_page_and_its_palette_row() {
+        let mut object = TmdObject {
+            prims: vec![
+                prim(0x81, 0x7840, true),
+                prim(0x80, 0x7800, true),
+                prim(0x81, 0x7840, false),
+            ],
+            ..TmdObject::default()
+        };
+        object.texture_move(3, &texture(4)).unwrap();
+        assert_eq!((object.prims[0].tsb, object.prims[0].clut), (0x83, 0x78C0));
+        assert_eq!((object.prims[1].tsb, object.prims[1].clut), (0x83, 0x78C0));
+        assert_eq!((object.prims[2].tsb, object.prims[2].clut), (0x81, 0x7840));
+        object.texture_move(2, &texture(4)).unwrap();
+        assert_eq!((object.prims[0].tsb, object.prims[0].clut), (0x82, 0x7880));
+    }
 }

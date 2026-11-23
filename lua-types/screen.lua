@@ -775,10 +775,20 @@ function ScreenApi:item_model(item) end
 ---loads one: an enemy's `.emd` (RE 2's with the texture page beside it), an
 ---RE 2 player's `.pld`, or a weapon's `.plw` on its player. For
 ---[`api:draw_character`](#ScreenApi.draw_character).
+---
+---`moves` moves parts to other pages of the model's texture, as RE 2's
+---`Texture_Move` gives a zombie other clothes: each `{part, page}` puts the
+---part's textured polygons on `page` with that page's palette row. Both
+---numbers count from 0: `part` is the mesh's object, `page` a 128-texel
+---column of the texture from its left, 0 to 15, with a palette row for each
+---page up to it. A move the model can't take (no such part, a page past the
+---texture's width or 15, or a row the texture hasn't) loads nothing and is
+---the error.
 ---@param entry string A pack entry, such as `enemy/10/enemy_0.emd`.
+---@param moves? integer[][] `{part, page}` pairs, in order.
 ---@return integer? handle A character model handle.
----@return string? err When the entry is missing or is no model.
-function ScreenApi:character_model(entry) end
+---@return string? err When the entry is missing, is no model, or can't take a move.
+function ScreenApi:character_model(entry, moves) end
 
 ---Load RE 2's FILE binders model (`ui/status/st_file.ts`), for
 ---[`api:draw_re2_binders`](#ScreenApi.draw_re2_binders).

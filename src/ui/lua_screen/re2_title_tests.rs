@@ -118,6 +118,25 @@ fn build_pack(prologue_art: bool, gallery_art: GalleryArt) -> Pack {
                 texture.next().unwrap(),
             )
             .unwrap();
+        // Zombie 0x12 as a mod might replace it: seventeen parts, each the
+        // enemy's triangle, on a two-page texture, short of the pages its
+        // skins move parts to.
+        let triangle = crate::emd2::tests::emd_parts(
+            [[0, -2400, -400], [0, -2400, 400], [0, -1600, 0], [0; 3]],
+            17,
+        );
+        writer.add("enemy/12/enemy_1.emd", triangle).unwrap();
+        for (row, bmp) in crate::emd2::texture_bmps(&crate::emd2::tests::paged_tim())
+            .unwrap()
+            .into_iter()
+            .enumerate()
+        {
+            let entry = match row {
+                0 => "enemy/12/enemy_1.bmp".to_owned(),
+                row => crate::emd2::clut_entry("enemy/12/enemy_1", row),
+            };
+            writer.add(&entry, bmp).unwrap();
+        }
         let triangle =
             crate::emd2::tests::pld_of([[0, -800, -400], [0, -800, 400], [0, 0, 0], [0; 3]]);
         writer.add("player/0b/model_1.pld", triangle).unwrap();
@@ -481,6 +500,9 @@ fn the_boot_shows_the_warning_then_asks_for_the_titles_film() {
             assert_eq!(ti(&screen)[..4], steps, "tick {tick}");
             // `fg_system`'s "from the logo" bit goes up as `Init_main` ends.
             assert_eq!(screen.value("ti_fgsys") & 2 != 0, tick >= 34, "tick {tick}");
+            // So is `Rnd`'s state seeded: 0 before.
+            let rnd = if tick >= 34 { 0x6CA4 } else { 0 };
+            assert_eq!(screen.value("ti_rnd"), rnd, "tick {tick}");
             // The fade after the tick's step: in from 0x7C00, then out to
             // 0x8000.
             let fade = match tick {
@@ -2534,4 +2556,27 @@ fn the_boots_film_is_the_generators_first_pick() {
         assert_eq!(statics.get("ui/title.lua", "films"), Some(1));
         assert_eq!(statics.get("ui/title.lua", "demo_cycle"), None);
     }
+}
+
+/// `Title_init` clears `hard_mode` and `censorship_off` as it clears
+/// `fg_system`'s ARRANGE bit, so a game played on HARD or in ARRANGE MODE
+/// leaves neither to the title it goes back to; `Rnd`'s state it leaves be.
+#[test]
+fn title_init_clears_hard_mode_and_arrange_mode() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-title-init-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut cx_open = context(&dir);
+    let args = [("rnd", ScreenArg::Int(0x1234))];
+    let mut screen =
+        LuaScreen::open_screen("title", &args, ScreenAction::Quit, &mut cx_open).unwrap();
+    let _: Option<bool> = screen.test_eval(
+        "M.state.hard_mode = 1 M.state.censorship_off = 1 M.state.fg_system = 0x40 return nil",
+    );
+    screen.update(&cx, UiInput::default());
+    let flags: (i64, i64, i64) = screen
+        .test_eval("return M.state.hard_mode, M.state.censorship_off, M.state.fg_system & 0x40");
+    assert_eq!(flags, (0, 0, 0));
+    assert_eq!(screen.value("ti_rnd"), 0x1234);
+    let _ = std::fs::remove_dir_all(&dir);
 }

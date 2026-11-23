@@ -1418,7 +1418,8 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
             options.finish()?;
             with(&shared, |driver| {
                 let app = driver.app()?;
-                app.open_title_from(boot, None).map_err(engine_error)?;
+                app.open_title_from(boot, None, None)
+                    .map_err(engine_error)?;
                 app.pending_movie = None;
                 driver.baseline = None;
                 driver.edited = false;
