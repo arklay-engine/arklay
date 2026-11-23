@@ -1,4 +1,4 @@
-# The option screen's KEYCONFIG page (`Config_main`'s states 2 and 9 to 0xF; oracle/re2.md, "The option screen"). `kc` is the page's trace: state 9's count, the panel's offset, the choice, and the key table being edited. The keyboard's own arrows (`kbup` and the rest in the inputs) are arklay's directions, and `keys` is config.ini's `KeyDef` and `JoyDef_Emulated` in the install the references were recorded from, which the page lists.
+# The option screen's KEYCONFIG page (`Config_main`'s states 2 and 9 to 0xF; oracle/re2.md, "The option screen"). `kc` is the page's trace: state 9's count, the panel's offset, the choice, and the key table being edited. The keyboard's own arrows (`kbup` and the rest in the inputs) are arklay's directions, and `keys` is config.ini's `KeyDef` and `JoyDef_Emulated` in the install the references were recorded from, which the page lists. On the page the frames differ by the player's model beside the list, which isn't drawn (#807): the list and the panel are the original's pixels (a mean of 0.01 inside the panel), and the page's window is held at its measured level until the model is drawn.
 
 [[run]]
 name = "title_option_key"
@@ -10,6 +10,8 @@ input_shift = 189
 input_drop_early = true
 fields = "ti,tlogo,tfade,snd,opt,kc"
 frames = [189, 1059]
+frame_max_mean = 1.57
+frame_windows = [[189, 439, 0.15], [440, 1059, 2.16]]
 expect = "match"
 keys = { keys = "68 62 64 66 00 4D 00 49 00 00 4F 4A 5A 4B 00 00 00 00 00 00 00 00 00 00 00 26 28 25 27 0D 20 1B", pad = "00 10 00 00 00 40 00 00 00 80 00 00 00 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 00 00 00 00 08 00 00 44 00 00 00 00 00 00 00 00 01 00 00 10 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 08 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00" }
 record = ""
@@ -24,6 +26,8 @@ input_shift = 189
 input_drop_early = true
 fields = "ti,tlogo,tfade,snd,opt,kc"
 frames = [189, 1279]
+frame_max_mean = 2.04
+frame_windows = [[189, 439, 0.15], [440, 1279, 2.62]]
 expect = "match"
 keys = { keys = "68 62 64 66 00 4D 00 49 00 00 4F 4A 5A 4B 00 00 00 00 00 00 00 00 00 00 00 26 28 25 27 0D 20 1B", pad = "00 10 00 00 00 40 00 00 00 80 00 00 00 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 00 00 00 00 08 00 00 44 00 00 00 00 00 00 00 00 01 00 00 10 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 08 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00" }
 record = ""
