@@ -382,11 +382,13 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
     methods.add_method_mut(
         "character_model",
         |_lua, api, (entry, moves): (String, Option<Table>)| {
-            let mut pages = Vec::new();
+            // The numbers as Lua gave them, checked as the model loads: a
+            // move it can't take is the call's nil and message.
+            let mut pages: Vec<(i64, i64)> = Vec::new();
             if let Some(moves) = moves {
                 for item in moves.sequence_values::<Table>() {
                     let item = item?;
-                    pages.push((item.get::<usize>(1)?, item.get::<u8>(2)?));
+                    pages.push((item.get(1)?, item.get(2)?));
                 }
             }
             let pack: &Pack = api.cx.pack;
@@ -395,9 +397,18 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
                 let data = pack.read(&entry)?;
                 let mut model = crate::model_viewer::load_with(pack, &entry, &data)?;
                 for &(part, page) in &pages {
-                    let object = model.mesh.objects.get_mut(part).ok_or_else(|| {
-                        anyhow::anyhow!("{entry} has no part {part} to move to page {page}")
-                    })?;
+                    let object = usize::try_from(part)
+                        .ok()
+                        .and_then(|part| model.mesh.objects.get_mut(part))
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("{entry} has no part {part} to move to page {page}")
+                        })?;
+                    let page = u8::try_from(page)
+                        .ok()
+                        .filter(|page| *page <= 0xF)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("{entry}'s part {part}: page {page} is past 15")
+                        })?;
                     object
                         .texture_move(page, &model.texture)
                         .map_err(|why| anyhow::anyhow!("{entry}'s part {part}: {why}"))?;

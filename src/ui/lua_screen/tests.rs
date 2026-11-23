@@ -2296,8 +2296,8 @@ fn character_drawn(spec: &str) -> (i64, Option<[usize; 4]>) {
 /// `Texture_Move` through `character_model`'s moves: the fixture's
 /// triangle, on the second page, moved to the first shows that page's
 /// index 2 in the first CLUT row (BGR555 `0x002`); a part the model
-/// hasn't, and a page past its two-page texture, are errors the call
-/// answers.
+/// hasn't, a page past its two-page texture and a page past 15 are the
+/// call's nil and message, not a raised error.
 #[test]
 fn a_character_s_moves_put_a_part_on_another_page() {
     let source = r#"
@@ -2307,8 +2307,12 @@ local model = api:character_model("player/0b/model_1.pld", { { 0, 0 } })
 api:set("loaded", model and 1 or 0)
 local none, why = api:character_model("player/0b/model_1.pld", { { 5, 2 } })
 local past, beyond = api:character_model("player/0b/model_1.pld", { { 0, 2 } })
+local huge, over = api:character_model("player/0b/model_1.pld", { { 0, 256 } })
+local under, below = api:character_model("player/0b/model_1.pld", { { -1, 0 } })
 api:set("refused", (none == nil and why:find("no part 5") ~= nil
-    and past == nil and beyond:find("page 2 is past") ~= nil) and 1 or 0)
+    and past == nil and beyond:find("page 2 is past") ~= nil
+    and huge == nil and over:find("page 256 is past 15") ~= nil
+    and under == nil and below:find("no part %-1") ~= nil) and 1 or 0)
 if model then
     api:draw_character(model, { view = { at = { 0, 100, 3000 }, fov = 300 } })
 end

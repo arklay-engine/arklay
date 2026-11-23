@@ -1980,9 +1980,10 @@ fn the_zombies_skins_and_model_30s_start_are_rnds() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// A zombie whose texture can't take its skin's pages (the fixture's 0x12,
-/// two pages where the original's has four) is shown as its file has it,
-/// rather than not at all; its draws are the same.
+/// A zombie whose texture can't take its skin's pages (the fixture's 0x12:
+/// all the parts its skin names, on two pages where the original's has
+/// four) is shown as its file has it, in its own palette, rather than not
+/// at all; its draws are the same.
 #[test]
 fn a_skin_the_model_cant_take_leaves_it_unmoved() {
     let dir = test_dir("gallery-model-short-skin");
@@ -1997,8 +1998,20 @@ fn a_skin_the_model_cant_take_leaves_it_unmoved() {
         moves(&screen).starts_with("8:2 0:3"),
         "the skin was asked for"
     );
+    let why: String = screen.test_eval("return M.state.gal.unskinned");
+    assert!(why.contains("page 2 is past"), "{why}");
     assert_eq!(screen.test_live_art(), held, "a model is held");
     assert_eq!(rnd(&screen), 2520);
+    // Its triangle shows the second page's index 1 in the second row, as
+    // the file has it.
+    run(&mut screen, &cx, UiInput::default(), 1);
+    let shown = render(&mut screen, &cx);
+    let own = shown
+        .rgba
+        .chunks(4)
+        .filter(|pixel| pixel[..3] == [8, 65, 0])
+        .count();
+    assert!(own > 0, "the zombie in its own palette");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

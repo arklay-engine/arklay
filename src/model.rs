@@ -60,10 +60,10 @@ pub struct TmdObject {
 impl TmdObject {
     /// `Texture_Move`: the part's textured primitives go to page `page` of
     /// `texture`, counted from 0 at its left, 128 texels wide, each with
-    /// the palette row that goes with that page, as an RE 2 enemy's texture
-    /// has one row a page (a zombie's other clothes). A page past the
-    /// texture's width (or past 15, the last a primitive can name), or one
-    /// whose row the texture hasn't, moves nothing and is the error.
+    /// that page's palette row (row `page`, as an RE 2 enemy's texture has
+    /// one row a page: a zombie's other clothes). A page past the texture's
+    /// width (or past 15, the last a primitive can name), or one whose row
+    /// the texture hasn't, moves nothing and is the error.
     pub fn texture_move(&mut self, page: u8, texture: &Texture8) -> Result<(), String> {
         let rows = texture.palettes.len() / PALETTE_ROW_LEN;
         if page > 0xF || (u32::from(page) + 1) * 128 > texture.width {
@@ -72,26 +72,16 @@ impl TmdObject {
                 texture.width, texture.height
             ));
         }
-        let moved: Vec<(u16, u16)> = self
-            .prims
-            .iter()
-            .filter(|prim| prim.textured)
-            .map(|prim| {
-                let shift = i32::from(page) - i32::from(prim.tsb & 0xF);
-                let clut = i32::from(prim.clut) + (shift << 6);
-                let row = ((clut >> 6) & 0x01FF) - 480;
-                if !(0..rows as i32).contains(&row) || !(0..=0xFFFF).contains(&clut) {
-                    return Err(format!(
-                        "page {page}'s palette row isn't among the texture's {rows}"
-                    ));
-                }
-                Ok(((prim.tsb & !0xF) | u16::from(page), clut as u16))
-            })
-            .collect::<Result<_, _>>()?;
-        let prims = self.prims.iter_mut().filter(|prim| prim.textured);
-        for (prim, (tsb, clut)) in prims.zip(moved) {
-            prim.tsb = tsb;
-            prim.clut = clut;
+        if usize::from(page) >= rows {
+            return Err(format!(
+                "page {page}'s palette row isn't among the texture's {rows}"
+            ));
+        }
+        // A palette row is the CLUT word's y, counted from 480.
+        let row = (480 + u16::from(page)) << 6;
+        for prim in self.prims.iter_mut().filter(|prim| prim.textured) {
+            prim.tsb = (prim.tsb & !0xF) | u16::from(page);
+            prim.clut = (prim.clut & !(0x01FF << 6)) | row;
         }
         Ok(())
     }
@@ -494,6 +484,27 @@ mod tests {
         );
         assert_eq!(object.prims, before);
         assert!(object.texture_move(1, &texture(2)).is_ok());
+    }
+
+    /// The row is the destination page's, whatever row the primitive had: a
+    /// mod's primitive on page 1 with row 0 goes to page 2 with row 2, and
+    /// page 3 of a texture with three rows is refused.
+    #[test]
+    fn texture_move_writes_the_destination_pages_row() {
+        let mut object = TmdObject {
+            prims: vec![prim(0x81, 0x7800 | 0x5, true)],
+            ..TmdObject::default()
+        };
+        let three_rows = Texture8 {
+            palettes: vec![[0; 4]; 3 * PALETTE_ROW_LEN],
+            ..texture(4)
+        };
+        assert!(object.texture_move(3, &three_rows).is_err());
+        object.texture_move(2, &three_rows).unwrap();
+        assert_eq!(
+            (object.prims[0].tsb, object.prims[0].clut),
+            (0x82, 0x7880 | 0x5)
+        );
     }
 
     #[test]

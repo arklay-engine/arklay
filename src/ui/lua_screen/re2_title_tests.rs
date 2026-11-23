@@ -118,10 +118,13 @@ fn build_pack(prologue_art: bool, gallery_art: GalleryArt) -> Pack {
                 texture.next().unwrap(),
             )
             .unwrap();
-        // Zombie 0x12 as a mod might replace it: the enemy's triangle on a
-        // two-page texture, short of the pages its skins move parts to.
-        let triangle =
-            crate::emd2::tests::emd_of([[0, -2400, -400], [0, -2400, 400], [0, -1600, 0], [0; 3]]);
+        // Zombie 0x12 as a mod might replace it: seventeen parts, each the
+        // enemy's triangle, on a two-page texture, short of the pages its
+        // skins move parts to.
+        let triangle = crate::emd2::tests::emd_parts(
+            [[0, -2400, -400], [0, -2400, 400], [0, -1600, 0], [0; 3]],
+            17,
+        );
         writer.add("enemy/12/enemy_1.emd", triangle).unwrap();
         for (row, bmp) in crate::emd2::texture_bmps(&crate::emd2::tests::paged_tim())
             .unwrap()
