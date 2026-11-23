@@ -37,7 +37,8 @@
 --
 -- args.folder_saves: a registered save screen lists the whole save folder.
 -- args.rnd: `Rnd`'s state as play left it (0x988610), which the gallery's
--- models draw from; the boot's without it.
+-- models draw from; the boot's seed without it (from the boot itself, 0
+-- until `Init_main` seeds it).
 
 local CrText = require("ui/cr_text")
 local Prologue = require("ui/prologue")
@@ -1152,6 +1153,7 @@ local function title_init()
     s.background = s.title_background
     s.limiter = 0
     s.fg_system = s.fg_system & 0xFFF7FFBF
+    s.hard_mode = 0
     s.censorship_off = 0
     s.sel = 0
     s.cur = 0
@@ -2091,8 +2093,10 @@ local function boot_main(api)
         if b.flag ~= 0 then
             -- The rest of `Init_main`: the fonts and the effects' sheets,
             -- and the main task is the title's from the next tick, come
-            -- from the logo.
+            -- from the logo. `Rnd`'s state is seeded as it ends, as a new
+            -- game's `Player_set` seeds it.
             s.fg_system = s.fg_system | FG_FROM_LOGO
+            s.rnd = Gallery.RND_BOOT
             b.step = 3
         end
     elseif b.step == 3 then
@@ -2451,6 +2455,8 @@ function M.on_boot(api)
     -- No key repeats until the title's task sets its own.
     s.rep_mask, s.rep_delay = 0, 0
     s.boot = { step = 0, sleep = 1, flag = 0 }
+    -- `Rnd`'s state is 0 until `Init_main` seeds it.
+    s.rnd = 0
     -- The process starts: the generator has no value yet, the film plays
     -- and the demos start from their first.
     api:keep("rnd", nil)

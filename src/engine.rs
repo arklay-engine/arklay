@@ -11461,6 +11461,10 @@ struct App {
     player_options: player::Options,
     /// The active post-film ending sequence, or `None` outside one.
     ending: Option<EndingFlow>,
+    /// RE 2's `Rnd` state as the game the ending follows left it, for the
+    /// title the ending goes back to (`Result_exit` chains it with the
+    /// state as it stands).
+    ending_rnd: Option<u16>,
     /// The native in-game menu over a frozen session, driven per presented
     /// frame by the interactive loop.
     system_menu: Option<Box<gui::SystemMenu>>,
@@ -11564,6 +11568,7 @@ impl App {
             debug_menu: true,
             player_options: player::Options::default(),
             ending: None,
+            ending_rnd: None,
             system_menu: None,
             restart_point: None,
             #[cfg(feature = "bot")]
@@ -12171,6 +12176,13 @@ impl App {
                 }
             }
         }
+        // The title after an ending's results and save: the state the
+        // cleared game left, through the ending's screens.
+        if let Some(rnd) = self.ending_rnd.take()
+            && !args.iter().any(|(name, _)| *name == "rnd")
+        {
+            args.push(("rnd", ScreenArg::Int(i64::from(rnd))));
+        }
         self.sleeping_title = None;
         self.pending_load = None;
         // A title asleep under a film it asked for goes with that film: the
@@ -12211,6 +12223,10 @@ impl App {
     /// Play ending `id`'s film chain into the RESULT screen, as the debug
     /// menu's CLEAR GAME (the `--ending` path over the live run's stats).
     fn clear_game(&mut self, id: u8, flow: EndingFlow, character: u8) -> Result<AppFlow> {
+        self.ending_rnd = match &self.mode {
+            Mode::Play(session) if session.game.is_re2_room => Some(session.game.re2.rnd.0),
+            _ => None,
+        };
         let films = ending::chain(
             id,
             character,
@@ -40713,6 +40729,31 @@ off_0010:
     /// (`Game_loop` chains it with `0x98F1BB` set, as after a demo a key
     /// ended), with fade 0's step and `Rnd`'s state as the game left them.
     /// A title opened from anywhere else isn't.
+    /// A cleared game's ending goes through its films, results and save to
+    /// a title that takes `Rnd`'s state as the game left it, once.
+    #[test]
+    fn re2s_title_after_an_ending_takes_the_games_rnd() {
+        let dir = TempDir::new();
+        let mut app = App::new(re2_demo_pack(&[0x1000; 20]), dir.0.clone(), false);
+        app.apply(ScreenAction::NewGame {
+            character: 0,
+            choice: Default::default(),
+        })
+        .unwrap();
+        let Mode::Play(session) = &mut app.mode else {
+            panic!("the game started");
+        };
+        session.game.re2.rnd = crate::zombie2::Rnd(0x4321);
+        let (flow, character) = session.ending_flow(1);
+        app.clear_game(1, flow, character).unwrap();
+        assert!(!matches!(app.mode, Mode::Play(_)), "the game is over");
+        app.ending = None;
+        app.apply(ScreenAction::Title).unwrap();
+        assert_eq!(title_value(&app, "rnd"), 0x4321);
+        app.apply(ScreenAction::Title).unwrap();
+        assert_eq!(title_value(&app, "rnd"), -1, "taken once");
+    }
+
     #[test]
     fn re2s_title_after_a_game_is_told_so() {
         let dir = TempDir::new();

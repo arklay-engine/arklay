@@ -398,7 +398,9 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
                     let object = model.mesh.objects.get_mut(part).ok_or_else(|| {
                         anyhow::anyhow!("{entry} has no part {part} to move to page {page}")
                     })?;
-                    object.texture_move(page);
+                    object
+                        .texture_move(page, &model.texture)
+                        .map_err(|why| anyhow::anyhow!("{entry}'s part {part}: {why}"))?;
                 }
                 let held = model.decoded_bytes();
                 Ok(Asset::Character(Arc::new(model), held))

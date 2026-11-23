@@ -1980,6 +1980,28 @@ fn the_zombies_skins_and_model_30s_start_are_rnds() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A zombie whose texture can't take its skin's pages (the fixture's 0x12,
+/// two pages where the original's has four) is shown as its file has it,
+/// rather than not at all; its draws are the same.
+#[test]
+fn a_skin_the_model_cant_take_leaves_it_unmoved() {
+    let dir = test_dir("gallery-model-short-skin");
+    let cx = context(&dir);
+    let mut screen = open_models(&cx, &dir, None);
+    let held = screen.test_live_art();
+    for _ in 0..7 {
+        run(&mut screen, &cx, press("right"), 1);
+    }
+    assert_eq!(screen.value("gal_index"), 7);
+    assert!(
+        moves(&screen).starts_with("8:2 0:3"),
+        "the skin was asked for"
+    );
+    assert_eq!(screen.test_live_art(), held, "a model is held");
+    assert_eq!(rnd(&screen), 2520);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn a_zombies_load_draws_more_on_easy_arrange_and_hard() {
     let dir = test_dir("gallery-model-flags");

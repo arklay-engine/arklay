@@ -940,7 +940,11 @@ model = function(api, g)
             api:release(model_art)
         end
         held_model = key
-        model_art = api:character_model(spec[1], moves) or false
+        -- A skin the model can't take (a mod's texture with fewer pages)
+        -- leaves it as its file has it.
+        model_art = #moves > 0 and api:character_model(spec[1], moves)
+            or api:character_model(spec[1])
+            or false
     end
     g.moves = moves
     g.pose = spec.pose
