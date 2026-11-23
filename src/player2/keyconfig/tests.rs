@@ -605,3 +605,41 @@ fn the_raise_tilts_on_the_tilt_keys_past_its_frames() {
     model.demonstrate(&assets, ROW_AIM);
     assert_eq!(model.work.move_no, AIM_HOLD_CLIPS[2]);
 }
+
+#[test]
+fn the_reflections_shadow_is_under_the_root_at_the_negated_x() {
+    let assets = posed_assets(16, 30);
+    let model = settled(&assets);
+    let joints = model.joints(&assets);
+    let shadow = model.shadow(&joints).unwrap();
+    assert_eq!(shadow.pos, [-joints[0].t[0], PLACE[1], joints[0].t[2]]);
+    // Turned by `-Cdir_y`: facing 0xC00, 0x400.
+    assert_eq!(shadow.angle, 0x400);
+    assert_eq!(shadow.half, (0x1A4, 0x208));
+    assert_eq!(model.shadow(&[]), None);
+}
+
+#[test]
+fn the_shadows_sizes_follow_the_character() {
+    // `FUN_00447a20`'s `Kage_work9_set` sizes.
+    assert_eq!(shadow_half(0), (500, 600));
+    assert_eq!(shadow_half(1), (0x1A4, 0x208));
+    assert_eq!(shadow_half(8), (500, 600));
+    assert_eq!(shadow_half(9), (0x1A4, 0x208));
+    assert_eq!(shadow_half(0xB), (500, 600));
+    assert_eq!(shadow_half(0xE), (0x1A4, 0x208));
+    assert_eq!(shadow_half(0xF), (0x172, 0x1CC));
+}
+
+#[test]
+fn the_joints_are_the_drawn_parts() {
+    let assets = posed_assets(16, 30);
+    let model = settled(&assets);
+    let joints = model.joints(&assets);
+    assert_eq!(joints.len(), 8);
+    // The root at the place, and the foot where the planting reads it.
+    let foot = model.drawn_feet[0].unwrap();
+    assert_eq!(joints[7].t, foot);
+    // Drawing doesn't move the model.
+    assert_eq!(model.joints(&assets), joints);
+}

@@ -824,6 +824,11 @@ function ScreenApi:character_model(entry, moves) end
 ---  viewer first.
 ---- `"row", row`: the list's row `row` (0 to 10) acted out for a tick.
 ---- `"trace"`: the model as the trace's `kcm` shows it; nil with no model.
+---- `"draw"` or `"draw", picture, x, y`: in a draw, over the room's picture
+---  drawn already (`picture` and the `x`, `y` it was drawn at with
+---  `draw_background`), the model's reflection and shadow in the mirror, a
+---  strip of the picture at the mirror's left edge drawn again over the
+---  reflection (none without `picture`), and the model in front.
 ---
 ---The arguments must be Lua integers, exactly as many as the operation
 ---takes; anything else raises an error before the model changes.

@@ -486,33 +486,30 @@ mod tests {
 
     #[test]
     fn frame_hash_matches_the_reference_vectors() {
-        let one = Framebuffer {
-            width: 1,
-            height: 1,
-            rgba: vec![255, 0, 0, 255],
-            clip: None,
-            view: crate::video::View::default(),
-            list: None,
+        let one = {
+            let mut frame = Framebuffer::new();
+            frame.width = 1;
+            frame.height = 1;
+            frame.rgba = vec![255, 0, 0, 255];
+            frame
         };
         assert_eq!(frame_hash(&one), 0x6dc1_4b23);
 
-        let two = Framebuffer {
-            width: 2,
-            height: 1,
-            rgba: vec![1, 2, 3, 4, 5, 6, 7, 8],
-            clip: None,
-            view: crate::video::View::default(),
-            list: None,
+        let two = {
+            let mut frame = Framebuffer::new();
+            frame.width = 2;
+            frame.height = 1;
+            frame.rgba = vec![1, 2, 3, 4, 5, 6, 7, 8];
+            frame
         };
         assert_eq!(frame_hash(&two), 0xa4af_09a6);
 
-        let blank = Framebuffer {
-            width: 320,
-            height: 240,
-            rgba: vec![0; 320 * 240 * 4],
-            clip: None,
-            view: crate::video::View::default(),
-            list: None,
+        let blank = {
+            let mut frame = Framebuffer::new();
+            frame.width = 320;
+            frame.height = 240;
+            frame.rgba = vec![0; 320 * 240 * 4];
+            frame
         };
         assert_eq!(frame_hash(&blank), 0xfae3_db1a);
     }

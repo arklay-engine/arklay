@@ -54,6 +54,40 @@ const CENTER_Y: i32 = 120;
 /// Full scale of one colour channel.
 const CHANNEL_MAX: f64 = 255.0;
 
+/// How [`Framebuffer::draw_character_shaded`] colours a screen's RE 2
+/// character.
+#[derive(Debug, Clone, Copy)]
+pub enum CharacterShade {
+    /// One colour at every corner, `0x80` a channel being the textures' own.
+    Flat([u8; 3]),
+    /// RE 2's gallery lighting (`MarniSortEmdGallery`): each corner's normal
+    /// lit by `light` as play's parts are (`re2_vertex_shade`), but at the
+    /// light matrix's own scale, a unit of a light's channel a unit of the
+    /// colour, then the whole lit channel times `modulate` / 255 in integers.
+    Lit { light: EntityLight, modulate: u8 },
+}
+
+/// Which of a model's triangles a draw keeps, and in what order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Slots {
+    /// Every triangle, by its own depth: the gallery's models.
+    All,
+    /// The parts whose origin's view Z falls in these ordering-table slots
+    /// (`z >> 4`), as an ordering table walks them: the furthest slot first
+    /// and, in a slot, the part queued last first. What a sprite queued at
+    /// a slot between them divides into behind and in front of it.
+    Parts(std::ops::RangeInclusive<u32>),
+}
+
+/// The pixels of a rectangle of the frame, kept to be put back
+/// ([`Framebuffer::save_rect`]).
+#[derive(Debug, Clone)]
+pub struct SavedRect {
+    origin: [i32; 2],
+    width: usize,
+    rows: Vec<Vec<u8>>,
+}
+
 /// A 320x240 RGBA8 framebuffer.
 #[derive(Debug, Clone)]
 pub struct Framebuffer {
@@ -74,6 +108,9 @@ pub struct Framebuffer {
     /// ([`Framebuffer::record`]): the 2D primitives append to the list
     /// instead of writing `rgba`.
     pub list: Option<Box<DrawList>>,
+    /// One depth buffer the software 3D draws share while it is held
+    /// ([`Framebuffer::hold_depth`]), where each otherwise clears its own.
+    held_depth: Option<Vec<u32>>,
 }
 
 impl Default for Framebuffer {
@@ -249,6 +286,7 @@ impl Framebuffer {
             clip: None,
             view: crate::video::View::default(),
             list: None,
+            held_depth: None,
         }
     }
 
@@ -265,6 +303,7 @@ impl Framebuffer {
                 pan: 0,
             },
             list: None,
+            held_depth: None,
         }
     }
 
@@ -375,6 +414,89 @@ impl Framebuffer {
     /// Draw pixels again, as the software backend does.
     pub fn stop_recording(&mut self) {
         self.list = None;
+    }
+
+    /// Share one depth buffer among the software 3D draws that follow (the
+    /// characters, the shadows and [`Framebuffer::restore_rect_at`]) until
+    /// [`Framebuffer::release_depth`]: one frame's depth, as the original's
+    /// Z-buffer is, where each draw otherwise clears its own. A recording
+    /// frame has no software depth, so it holds none.
+    pub fn hold_depth(&mut self) {
+        if self.list.is_none() {
+            self.held_depth = Some(self.depth_buffer());
+        }
+    }
+
+    /// Stop sharing the depth [`Framebuffer::hold_depth`] held.
+    pub fn release_depth(&mut self) {
+        self.held_depth = None;
+    }
+
+    /// The held depth buffer, or a cleared one, and whether it was held.
+    fn take_depth(&mut self) -> (Vec<u32>, bool) {
+        match self.held_depth.take() {
+            Some(depth) => (depth, true),
+            None => (self.depth_buffer(), false),
+        }
+    }
+
+    fn put_depth(&mut self, depth: Vec<u32>, held: bool) {
+        if held {
+            self.held_depth = Some(depth);
+        }
+    }
+
+    /// The frame's pixels under `rect` (`[x, y, w, h]`, clamped to the
+    /// frame), to put back later; `None` on a recording frame, whose pixels
+    /// aren't drawn.
+    pub fn save_rect(&self, rect: [i32; 4]) -> Option<SavedRect> {
+        if self.list.is_some() {
+            return None;
+        }
+        let [x, y, w, h] = rect;
+        let (fw, fh) = (self.width as i32, self.height as i32);
+        let (left, right) = (x.clamp(0, fw), (x.saturating_add(w)).clamp(0, fw));
+        let (top, bottom) = (y.clamp(0, fh), (y.saturating_add(h)).clamp(0, fh));
+        let width = (right - left).max(0) as usize * 4;
+        let rows = (top..bottom)
+            .map(|row| {
+                let start = (row * fw + left) as usize * 4;
+                self.rgba[start..start + width].to_vec()
+            })
+            .collect();
+        Some(SavedRect {
+            origin: [left, top],
+            width,
+            rows,
+        })
+    }
+
+    /// Put `saved` back as a sprite at view Z `view_z` is drawn: each pixel
+    /// depth tested against the held depth (`GL_LEQUAL`) and, where it
+    /// passes, written with its depth, so what was drawn nearer stays over
+    /// it and what is drawn after it, further, stays under it.
+    pub fn restore_rect_at(&mut self, saved: &SavedRect, view_z: f32) {
+        let (mut depth, held) = self.take_depth();
+        let z = (depth_ndc(view_z) * crate::raster::DEPTH_CLEAR as f32).round_ties_even() as u32;
+        let fw = self.width as usize;
+        for (index, row) in saved.rows.iter().enumerate() {
+            let y = saved.origin[1] as usize + index;
+            for (column, texel) in row.as_chunks::<4>().0.iter().enumerate() {
+                let pixel = y * fw + saved.origin[0] as usize + column;
+                let Some(stored) = depth.get_mut(pixel) else {
+                    continue;
+                };
+                if z > *stored {
+                    continue;
+                }
+                *stored = z;
+                if let Some(slot) = self.rgba.get_mut(pixel * 4..pixel * 4 + 4) {
+                    slot.copy_from_slice(texel);
+                }
+            }
+        }
+        debug_assert!(saved.rows.iter().all(|row| row.len() == saved.width));
+        self.put_depth(depth, held);
     }
 
     /// Whether the GPU renderer draws this frame's 2D, so a caller can draw
@@ -663,7 +785,30 @@ impl Framebuffer {
     /// frame, so a wider aspect's shorter band crops the picture rather than
     /// squashing it; a wider canvas repeats the edge columns.
     pub fn draw_background(&mut self, image: &Image, origin: [i32; 2], colour: [u8; 3]) {
+        let whole = [0, 0, self.width as i32, self.height as i32];
+        self.draw_background_within(image, origin, colour, whole);
+    }
+
+    /// [`Framebuffer::draw_background`] over the frame's `rect` (`[x, y, w,
+    /// h]`) alone, through the same placement and sampling: a part of the
+    /// picture drawn again, as RE 2's KEYCONFIG redraws its mirror's edge.
+    pub fn draw_background_within(
+        &mut self,
+        image: &Image,
+        origin: [i32; 2],
+        colour: [u8; 3],
+        rect: [i32; 4],
+    ) {
         if image.width == 0 || image.height == 0 {
+            return;
+        }
+        let (fw, fh) = (self.width as i32, self.height as i32);
+        let [left, top] = [rect[0].clamp(0, fw), rect[1].clamp(0, fh)];
+        let [right, bottom] = [
+            rect[0].saturating_add(rect[2]).clamp(0, fw),
+            rect[1].saturating_add(rect[3]).clamp(0, fh),
+        ];
+        if left >= right || top >= bottom {
             return;
         }
         let width = self.width as usize;
@@ -685,7 +830,7 @@ impl Framebuffer {
                 atlas: [0, 0],
                 flags: crate::draw2d::CENTRED,
             };
-            let visible = [x, y, x + self.width as i32, y + self.height as i32];
+            let visible = [left + x, top + y, right + x, bottom + y];
             list.sprite(map, visible, [1.0; 4], |u, v| {
                 let offset = (v as usize * image.width as usize + u as usize) * 4;
                 let texel = image.rgba.get(offset..offset + 4)?;
@@ -698,11 +843,11 @@ impl Framebuffer {
         let scale_y = i64::from(image.height);
         let frame_w = WIDTH as i64;
         let frame_h = HEIGHT as i64;
-        for y in 0..self.height {
+        for y in top as u32..bottom as u32 {
             let source_y = (((i64::from(y) - i64::from(origin[1])) * 2 + 1) * scale_y
                 / (2 * frame_h))
                 .clamp(0, scale_y - 1) as u32;
-            for x in 0..self.width {
+            for x in left as u32..right as u32 {
                 let source_x = (((i64::from(x) - i64::from(origin[0])) * 2 + 1) * scale_x
                     / (2 * frame_w))
                     .clamp(0, scale_x - 1) as u32;
@@ -1959,7 +2104,46 @@ impl Framebuffer {
         camera: &Camera,
         offset: [i32; 2],
     ) {
-        // Play's path, under lights of RE 2's kind that the colour replaces.
+        self.draw_character_coloured(model, joints, camera, offset, [0x80; 3], true);
+    }
+
+    /// [`Framebuffer::draw_character_unlit`] in `colour` (`0x80` a channel
+    /// is the textures' own), back faces dropped with `cull`.
+    pub fn draw_character_coloured(
+        &mut self,
+        model: &std::sync::Arc<crate::model::Emd>,
+        joints: &[anim::Mat4x3],
+        camera: &Camera,
+        offset: [i32; 2],
+        colour: [u8; 3],
+        cull: bool,
+    ) {
+        self.draw_character_shaded(
+            model,
+            joints,
+            camera,
+            offset,
+            &CharacterShade::Flat(colour),
+            cull,
+            Slots::All,
+        );
+    }
+
+    /// [`Framebuffer::draw_character_coloured`] shaded by `shade`, keeping
+    /// the triangles in `slots` of the ordering table.
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_character_shaded(
+        &mut self,
+        model: &std::sync::Arc<crate::model::Emd>,
+        joints: &[anim::Mat4x3],
+        camera: &Camera,
+        offset: [i32; 2],
+        shade: &CharacterShade,
+        cull: bool,
+        slots: Slots,
+    ) {
+        // Play's path, under lights of RE 2's kind that a flat colour
+        // replaces.
         let dark = Light {
             pos: [0; 3],
             color: [0; 3],
@@ -1971,24 +2155,48 @@ impl Framebuffer {
             ambient: [0; 3],
             lights: [dark; 3],
         };
-        let light = lighting.latched([0; 3]);
-        let mut triangles: Vec<Triangle> = Vec::new();
-        for (object, joint) in model.mesh.objects.iter().zip(joints) {
-            collect_triangles(
+        let (light, colour, page) = match shade {
+            CharacterShade::Flat(colour) => (lighting.latched([0; 3]), Some(*colour), None),
+            CharacterShade::Lit { light, modulate } => (*light, None, Some(*modulate)),
+        };
+        let mut parts: Vec<(u32, usize, Vec<Triangle>)> = Vec::new();
+        for (index, (object, joint)) in model.mesh.objects.iter().zip(joints).enumerate() {
+            let slot = (ref_composed(camera, joint).1[2].max(0) >> 4) as u32;
+            if let Slots::Parts(range) = &slots
+                && !range.contains(&slot)
+            {
+                continue;
+            }
+            let mut triangles = Vec::new();
+            collect_triangles_with(
                 object,
                 joint,
                 camera,
                 Some(&lighting),
                 Some(light),
-                true,
+                cull,
                 0,
                 [255; 3],
-                Some([0x80; 3]),
+                colour,
                 None,
                 false,
+                page,
                 &mut triangles,
             );
+            triangles.sort_by(|a, b| b.depth.total_cmp(&a.depth));
+            parts.push((slot, index, triangles));
         }
+        let mut triangles: Vec<Triangle> = match slots {
+            Slots::All => {
+                let mut all: Vec<Triangle> = parts.into_iter().flat_map(|part| part.2).collect();
+                all.sort_by(|a, b| b.depth.total_cmp(&a.depth));
+                all
+            }
+            Slots::Parts(_) => {
+                parts.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)));
+                parts.into_iter().flat_map(|part| part.2).collect()
+            }
+        };
         for corner in triangles
             .iter_mut()
             .flat_map(|triangle| &mut triangle.raster)
@@ -1997,10 +2205,15 @@ impl Framebuffer {
             corner.position[1] += offset[1] as f32;
         }
         if self.list.is_none() {
-            self.rasterize_triangles(&model.texture, triangles);
+            let (mut depth, held) = self.take_depth();
+            let mut twins = KnockoutTwins::default();
+            for triangle in &triangles {
+                let twin = twins.get(&model.texture, triangle);
+                self.rasterize(&model.texture, triangle, twin, &mut depth);
+            }
+            self.put_depth(depth, held);
             return;
         }
-        triangles.sort_by(|a, b| b.depth.total_cmp(&a.depth));
         self.queue_model(
             crate::hires::ModelSource::Character(model.clone()),
             &triangles,
@@ -2336,6 +2549,84 @@ impl Framebuffer {
     /// Paint a sorted scene list: each triangle selects its own texture page,
     /// mask sprites the camera's mask page, shadows the baked shadow mask and
     /// effects the room's decoded effect pages.
+    /// Ground shadows alone, over what the frame already holds, in
+    /// `DrawFadeSpr`'s order, each fragment depth tested at its own
+    /// perspective-correct view Z as the models' and Marni's are: what a
+    /// screen draws under a model of its own,
+    /// moved `offset` pixels as [`Framebuffer::draw_character_unlit`]'s
+    /// model is. While the GPU renderer draws the frame, the shadows are
+    /// rasterized into a layer of their own colour and coverage and queued
+    /// as a sprite of it, as the effects' billboards are; the frame's
+    /// pixels and the software 3D path aren't touched.
+    pub fn draw_shadows(&mut self, shadows: &[Shadow<'_>], camera: &Camera, offset: [i32; 2]) {
+        let mut polys = shadow_polys(shadows, camera);
+        for vertex in polys
+            .iter_mut()
+            .flat_map(|poly| &mut poly.triangles)
+            .flatten()
+        {
+            vertex.x += offset[0] as f32;
+            vertex.y += offset[1] as f32;
+        }
+        if self.list.is_none() {
+            let (depth, held) = self.take_depth();
+            for poly in &polys {
+                self.rasterize_shadow_depth(poly, &depth, true);
+            }
+            self.put_depth(depth, held);
+            return;
+        }
+        let (width, height) = (self.width, self.height);
+        let mut layer = vec![[0u8; 4]; width as usize * height as usize];
+        let mut bounds: Option<[i32; 4]> = None;
+        for poly in &polys {
+            shadow_fragments(poly, width, height, None, true, |pixel, colour, alpha| {
+                let under = layer[pixel];
+                layer[pixel] = over_straight([colour[0], colour[1], colour[2], alpha], under);
+                let (x, y) = (
+                    (pixel % width as usize) as i32,
+                    (pixel / width as usize) as i32,
+                );
+                let [x0, y0, x1, y1] = bounds.get_or_insert([x, y, x + 1, y + 1]);
+                *x0 = (*x0).min(x);
+                *y0 = (*y0).min(y);
+                *x1 = (*x1).max(x + 1);
+                *y1 = (*y1).max(y + 1);
+            });
+        }
+        let Some([x0, y0, x1, y1]) = bounds else {
+            return;
+        };
+        let mut visible = [x0, y0, x1, y1];
+        if let Some([x, y, w, h]) = self.clip {
+            visible = [
+                visible[0].max(x),
+                visible[1].max(y),
+                visible[2].min(x.saturating_add(w)),
+                visible[3].min(y.saturating_add(h)),
+            ];
+        }
+        if visible[0] >= visible[2] || visible[1] >= visible[3] {
+            return;
+        }
+        let area = [x0, y0, x1 - x0, y1 - y0];
+        self.list_sprite(
+            area,
+            area,
+            [false; 2],
+            visible,
+            crate::draw2d::TEXEL_ALPHA,
+            [1.0; 4],
+            |u, v| {
+                if u < 0 || v < 0 || u >= width as i32 || v >= height as i32 {
+                    return None;
+                }
+                let texel = layer[v as usize * width as usize + u as usize];
+                (texel[3] != 0).then_some(texel)
+            },
+        );
+    }
+
     fn draw_scene(
         &mut self,
         textures: &[&Texture8],
@@ -2374,35 +2665,30 @@ impl Framebuffer {
     /// pipeline with bilinear sampling, depth tested but never written, and
     /// alpha-blended by the texel's coverage times the vertex colour.
     fn rasterize_shadow(&mut self, poly: &ShadowPoly, depth: &[u32]) {
+        self.rasterize_shadow_depth(poly, depth, false);
+    }
+
+    /// [`Framebuffer::rasterize_shadow`], each fragment at its own view Z's
+    /// depth with `view_depth`.
+    fn rasterize_shadow_depth(&mut self, poly: &ShadowPoly, depth: &[u32], view_depth: bool) {
         self.assert_software_3d();
-        let texture = poly.texture;
-        if texture.width == 0 || texture.height == 0 {
-            return;
-        }
-        let width = self.width as usize;
         let rgba = &mut self.rgba;
-        for triangle in &poly.triangles {
-            crate::raster::draw_triangle(triangle, self.width, self.height, |fragment| {
-                let pixel = fragment.y * width + fragment.x;
-                if depth
-                    .get(pixel)
-                    .is_none_or(|&stored| fragment.depth > stored)
-                {
-                    return;
-                }
-                let texel = sample_bilinear(texture, fragment.u, fragment.v);
+        shadow_fragments(
+            poly,
+            self.width,
+            self.height,
+            Some(depth),
+            view_depth,
+            |pixel, colour, alpha| {
                 let Some(slot) = rgba.get_mut(pixel * 4..pixel * 4 + 4) else {
                     return;
                 };
-                let alpha = unorm8(f32::from(texel[3]) * (1.0 / 255.0) * fragment.color[3]);
-                for (index, destination) in slot[..3].iter_mut().enumerate() {
-                    let source =
-                        unorm8(f32::from(texel[index]) * (1.0 / 255.0) * fragment.color[index]);
+                for (destination, source) in slot[..3].iter_mut().zip(colour) {
                     *destination = blend_unorm8(source, *destination, alpha);
                 }
                 slot[3] = 255;
-            });
-        }
+            },
+        );
     }
 
     /// Rasterize one mask sprite: opaque, unshaded, nearest-sampled, clipped
@@ -3973,6 +4259,20 @@ impl Camera {
         Self::from_points_rolled(cut.pos, cut.look_at, cut.fov, cut.roll)
     }
 
+    /// The camera with its matrix's `m[0][0]` negated and nothing else, the
+    /// translation kept: RE 2's KEYCONFIG reflection (`FUN_0044db30`), which
+    /// isn't a reflection about a plane ([`Camera::mirrored`]). A camera
+    /// with no stored matrix takes the one a model's projection rebuilds
+    /// from its points (`ref_camera`) as its stored one first, so the
+    /// models and the points both see the negation.
+    pub fn with_x_scale_negated(mut self) -> Self {
+        let (mut view, trans) = self.stored.unwrap_or_else(|| stored_from_points(&self));
+        view[0][0] = view[0][0].wrapping_neg();
+        self.stored = Some((view, trans));
+        self.view[0][0] = self.view[0][0].wrapping_neg();
+        self
+    }
+
     /// The camera reflected about a room mirror plane, with the handedness
     /// flip the original applies after rebuilding the view.
     ///
@@ -4527,6 +4827,41 @@ fn collect_triangles(
     room_object: bool,
     triangles: &mut Vec<Triangle>,
 ) {
+    collect_triangles_with(
+        object,
+        joint,
+        camera,
+        lighting,
+        light,
+        cull,
+        texture,
+        tint,
+        colour,
+        blend_weight,
+        room_object,
+        None,
+        triangles,
+    );
+}
+
+/// [`collect_triangles`], RE 2's lit corners taken by the gallery's
+/// lighting when `gallery` gives its modulate ([`CharacterShade::Lit`]).
+#[allow(clippy::too_many_arguments)]
+fn collect_triangles_with(
+    object: &TmdObject,
+    joint: &anim::Mat4x3,
+    camera: &Camera,
+    lighting: Option<&Lighting>,
+    light: Option<EntityLight>,
+    cull: bool,
+    texture: usize,
+    tint: [u8; 3],
+    colour: Option<[u8; 3]>,
+    blend_weight: Option<u8>,
+    room_object: bool,
+    gallery: Option<u8>,
+    triangles: &mut Vec<Triangle>,
+) {
     // A `JointSetColorTint` colour turns the reference's unlit path on: the
     // colour (1/128 scale) replaces the lighting outright. All-zero is a real
     // black tint (TmdRenderer's unlit path reads it unconditionally).
@@ -4536,6 +4871,10 @@ fn collect_triangles(
     // holds `(x, -y, z)`; the raw-Y form skips the negation, and its pool is
     // built lazily so the common path pays nothing.
     let projection = RefProjection::new(camera, joint);
+    // A view that reflects (a negative determinant, as KEYCONFIG's
+    // `m[0][0]`-negated one) turns every face's winding on the screen, so a
+    // front face is one that seems to face away.
+    let reflected = cull && view_reflects(camera);
     // RE2's models go to Direct3D as pretransformed vertices with nothing
     // culled on the CPU: the device clips each triangle at `sz = 0`
     // ([`re2_near_clip`]).
@@ -4595,7 +4934,7 @@ fn collect_triangles(
         else {
             continue;
         };
-        if cull && !packet_faces_camera([first, second, third], re2_near.is_some()) {
+        if cull && packet_faces_camera([first, second, third], re2_near.is_some()) == reflected {
             continue;
         }
         let (Some(corner0), Some(corner1), Some(corner2)) = (
@@ -4667,6 +5006,9 @@ fn collect_triangles(
                     // light, then folds in the vertex colour and the mesh tint.
                     (Some(lighting), Some(light)) if !full_bright => {
                         let mut shade = match normal {
+                            Some(normal) if gallery.is_some() => {
+                                re2_vertex_light(&joint.r, normal, &light, 1.0)
+                            }
                             Some(normal) if lighting.is_re2() => {
                                 re2_vertex_shade(&joint.r, normal, &light)
                             }
@@ -4685,6 +5027,13 @@ fn collect_triangles(
                         if let Some(scale) = vertex_scale {
                             for (channel, &scale) in shade.iter_mut().zip(&scale) {
                                 *channel *= scale;
+                            }
+                        }
+                        if let Some(modulate) = gallery {
+                            // The lit channel as a byte, then `* m / 255`.
+                            for channel in &mut shade {
+                                let lit = channel.clamp(0.0, CHANNEL_MAX) as u32;
+                                *channel = f64::from(lit * u32::from(modulate) / 255);
                             }
                         }
                         shade
@@ -4758,6 +5107,16 @@ pub(crate) fn re2_near_clip(fov: i32) -> f64 {
 /// corner at or behind it (only RE2's near clip keeps those) has no screen
 /// position, so the triangle's facing in view space decides, which is the
 /// same test where the winding is defined.
+/// Whether `camera`'s matrix reflects, which turns the screen's winding.
+fn view_reflects(camera: &Camera) -> bool {
+    let (m, _) = ref_camera(camera);
+    let m = m.map(|row| row.map(i64::from));
+    let det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    det < 0
+}
+
 fn packet_faces_camera(corners: [ViewCorner; 3], re2: bool) -> bool {
     if !re2 || corners.iter().all(|corner| corner.view[2] > 0.0) {
         let [[x0, y0], [x1, y1], [x2, y2]] = corners.map(|corner| corner.position.map(f64::from));
@@ -5151,15 +5510,19 @@ fn shake_tilt(camera: &Camera) -> Option<[[f32; 3]; 3]> {
     ])
 }
 
+/// The stored rotation and translation a camera without one has, rebuilt
+/// from its points.
+fn stored_from_points(camera: &Camera) -> ([[i32; 3]; 3], [i32; 3]) {
+    let view = stored_camera_matrix(camera.from, camera.look_at);
+    (
+        view,
+        apply_matrix_lv(&view, camera.from.map(i32::wrapping_neg)),
+    )
+}
+
 /// `g_RoomCameraData`: the stored camera rotation and translation.
 pub(crate) fn ref_camera(camera: &Camera) -> ([[i32; 3]; 3], [i32; 3]) {
-    let (mut view, mut view_t) = camera.stored.unwrap_or_else(|| {
-        let view = stored_camera_matrix(camera.from, camera.look_at);
-        (
-            view,
-            apply_matrix_lv(&view, camera.from.map(i32::wrapping_neg)),
-        )
-    });
+    let (mut view, mut view_t) = camera.stored.unwrap_or_else(|| stored_from_points(camera));
     if camera.mirrored {
         // `entity_draw_mirror_reflection` composes a negated-X identity
         // into the reflected camera, rotation and translation alike.
@@ -5278,6 +5641,17 @@ pub(crate) fn re2_vertex_shade(
     normal: [i16; 3],
     light: &EntityLight,
 ) -> [f64; 3] {
+    re2_vertex_light(rotation, normal, light, 255.0 / 128.0)
+}
+
+/// [`re2_vertex_shade`] with each light's channel worth `scale` of the
+/// colour: play's lights `255 / 128`, the gallery's light matrix 1.
+fn re2_vertex_light(
+    rotation: &[[i32; 3]; 3],
+    normal: [i16; 3],
+    light: &EntityLight,
+    scale: f32,
+) -> [f64; 3] {
     let normal = [
         f32::from(normal[0]) / 4096.0,
         -f32::from(normal[1]) / 4096.0,
@@ -5291,7 +5665,7 @@ pub(crate) fn re2_vertex_shade(
                 / 4096.0;
         if d > 0.0 {
             for (channel, &value) in shade.iter_mut().zip(&source.color) {
-                *channel += d * value as f32 * 255.0 / 128.0;
+                *channel += d * value as f32 * scale;
             }
         }
     }
@@ -5555,6 +5929,62 @@ fn unorm8(value: f32) -> u8 {
 /// `round(c * size * 256) - 128`; the integer part picks the two clamped
 /// neighbours and the low byte weights them. The lerps run in 16-bit lanes
 /// with llvmpipe's rounding (`lp_build_lerp` on normalised 8-bit values).
+/// One ground shadow's fragments (`MarniDrawTrianglesPersp`): the model
+/// pipeline with bilinear sampling, depth tested against `depth` (when
+/// given) but never written, each the texel times the vertex colour with
+/// the coverage it blends by, at its pixel's index in a `width` by
+/// `height` frame. With `view_depth` a fragment's depth is its own
+/// perspective-correct view Z's, as a model's is
+/// ([`crate::raster::draw_triangle_depth`]), where play's shadows take the
+/// vertex depths' plane.
+fn shadow_fragments(
+    poly: &ShadowPoly,
+    width: u32,
+    height: u32,
+    depth: Option<&[u32]>,
+    view_depth: bool,
+    mut put: impl FnMut(usize, [u8; 3], u8),
+) {
+    let texture = poly.texture;
+    if texture.width == 0 || texture.height == 0 {
+        return;
+    }
+    for triangle in &poly.triangles {
+        crate::raster::draw_triangle_depth(triangle, width, height, view_depth, |fragment| {
+            let pixel = fragment.y * width as usize + fragment.x;
+            if let Some(depth) = depth
+                && depth
+                    .get(pixel)
+                    .is_none_or(|&stored| fragment.depth > stored)
+            {
+                return;
+            }
+            let texel = sample_bilinear(texture, fragment.u, fragment.v);
+            let alpha = unorm8(f32::from(texel[3]) * (1.0 / 255.0) * fragment.color[3]);
+            let colour = std::array::from_fn(|index| {
+                unorm8(f32::from(texel[index]) * (1.0 / 255.0) * fragment.color[index])
+            });
+            put(pixel, colour, alpha);
+        });
+    }
+}
+
+/// `source` over `under`, both straight (not premultiplied) RGBA: a layer
+/// that the 2D pass later blends by its alpha as the frame would have.
+fn over_straight(source: [u8; 4], under: [u8; 4]) -> [u8; 4] {
+    let (alpha, below) = (u32::from(source[3]), u32::from(under[3]));
+    let kept = below * (255 - alpha) / 255;
+    let total = alpha + kept;
+    if total == 0 {
+        return [0; 4];
+    }
+    let mix = |channel: usize| {
+        ((u32::from(source[channel]) * alpha + u32::from(under[channel]) * kept + total / 2)
+            / total) as u8
+    };
+    [mix(0), mix(1), mix(2), total.min(255) as u8]
+}
+
 fn sample_bilinear(texture: &Image, u: f32, v: f32) -> [u8; 4] {
     let axis = |coordinate: f32, size: u32| {
         let scaled = (coordinate * (size as f32 * 256.0)).round_ties_even();
@@ -7594,6 +8024,52 @@ mod tests {
         }
     }
 
+    /// A strip from x 0 to 100 whose left edge is at view Z `near` and
+    /// right edge at `far`.
+    fn receding_shadow(texture: &Image, near: f32, far: f32) -> ShadowPoly<'_> {
+        let corner = |x: f32, y: f32, w: f32| crate::raster::GlVertex {
+            x,
+            y,
+            depth: depth_ndc(w),
+            w,
+            u: 0.5,
+            v: 0.5,
+            color: [0.0, 0.0, 0.0, 1.0],
+        };
+        let quad = [
+            corner(0.0, 10.0, near),
+            corner(100.0, 10.0, far),
+            corner(100.0, 20.0, far),
+            corner(0.0, 20.0, near),
+        ];
+        ShadowPoly {
+            key: 1000,
+            triangles: vec![[quad[0], quad[1], quad[2]], [quad[0], quad[2], quad[3]]],
+            texture,
+        }
+    }
+
+    /// KEYCONFIG's shadow is depth tested at each fragment's own
+    /// perspective-correct view Z, as the models and Marni are: halfway
+    /// between Z 5200 and 6400 that's about 5738, in front of a model at
+    /// 5770, where the vertex depths' plane gives 5800, behind it.
+    #[test]
+    fn the_pages_shadow_tests_its_own_view_depth() {
+        let texture = solid_image(1, 1, [0, 0, 0, 255]);
+        let poly = receding_shadow(&texture, 5200.0, 6400.0);
+        let model =
+            (depth_ndc(5770.0) * crate::raster::DEPTH_CLEAR as f32).round_ties_even() as u32;
+        let drawn = |view_depth: bool| {
+            let mut framebuffer = Framebuffer::new();
+            framebuffer.blit(&solid_image(320, 240, [200, 200, 200, 255]));
+            let depth = vec![model; 320 * 240];
+            framebuffer.rasterize_shadow_depth(&poly, &depth, view_depth);
+            framebuffer_pixel(&framebuffer, 50, 15) != [200, 200, 200, 255]
+        };
+        assert!(drawn(true), "in front of the model");
+        assert!(!drawn(false), "the plane's depth is behind it");
+    }
+
     fn draw_shadow(framebuffer: &mut Framebuffer, poly: &ShadowPoly) {
         let depth = framebuffer.depth_buffer();
         framebuffer.rasterize_shadow(poly, &depth);
@@ -8006,6 +8482,391 @@ mod tests {
         );
         assert!(mirror_point_visible(true, 12500, 4000, 6300, camera, [12000, 0, 24000]).is_none());
         assert!(mirror_point_visible(true, 12500, 4000, 6300, camera, [14000, 0, 4000]).is_none());
+    }
+
+    #[test]
+    fn keyconfigs_reflection_negates_m00_alone() {
+        // `FUN_0044db30`'s second view, with `m[0][0]` negated in place.
+        let camera = Camera::from_set_view([-100, 80, 0x2134], [-100, 80, 0x1D4C], 0xD0);
+        let negated = camera.with_x_scale_negated();
+        assert_eq!(negated.view[0][0], -camera.view[0][0]);
+        assert_eq!(negated.view[0][1..], camera.view[0][1..]);
+        assert_eq!(negated.view[1..], camera.view[1..]);
+        assert_eq!(negated.trans, camera.trans);
+        let (stored, kept) = (camera.stored.unwrap(), negated.stored.unwrap());
+        assert_eq!(kept.0[0][0], -stored.0[0][0]);
+        assert_eq!((&kept.0[1..], kept.1), (&stored.0[1..], stored.1));
+        // It reflects the world about x = 0, not the eye's plane: the
+        // translation stays, so a point and its x's negation swap.
+        for point in [[-1530, 2020, 2700], [0, 80, 7500], [700, 0, 3000]] {
+            let mirrored = [-point[0], point[1], point[2]];
+            assert_eq!(negated.view_position(point), camera.view_position(mirrored));
+        }
+        // Its winding turns, so the cull takes the faces that seem to face
+        // away.
+        assert!(!view_reflects(&camera));
+        assert!(view_reflects(&negated));
+    }
+
+    /// Off the axes, `m[0][0]` alone turns: a whole row's flip (or a model
+    /// projection that rebuilt the matrix from the points) would show in
+    /// the row's other entries, which aren't zero here.
+    #[test]
+    fn keyconfigs_reflection_negates_m00_alone_off_the_axes() {
+        for camera in [
+            Camera::from_points([300, -500, 900], [-200, 100, -400], 0xD0),
+            Camera::from_set_view([300, -500, 900], [-200, 100, -400], 0xD0),
+        ] {
+            let negated = camera.with_x_scale_negated();
+            let (view, trans) = ref_camera(&camera);
+            let (turned, kept) = ref_camera(&negated);
+            // A view's right row has no Y without a roll.
+            assert_ne!(view[0][2], 0);
+            assert_eq!(turned[0][0], -view[0][0]);
+            assert_eq!(turned[0][1..], view[0][1..]);
+            assert_eq!(turned[1..], view[1..]);
+            assert_eq!(kept, trans);
+            assert_eq!(negated.view[0][0], -camera.view[0][0]);
+            assert_eq!(negated.view[0][1..], camera.view[0][1..]);
+            assert!(view_reflects(&negated));
+            // The model's projection and the points' agree on it.
+            let point = [120, -40, 60];
+            let joint = anim::Mat4x3 {
+                r: identity().r,
+                t: point,
+            };
+            let (_, moved) = ref_composed(&negated, &joint);
+            let (_, plain) = ref_composed(&camera, &joint);
+            assert_eq!(
+                moved[0],
+                apply_matrix_lv(&turned, point)[0].wrapping_add(kept[0])
+            );
+            assert_ne!(moved[0], plain[0]);
+            assert_eq!(moved[1..], plain[1..]);
+        }
+    }
+
+    /// A model of two triangles, one wound to face the eye and one away,
+    /// either side of the view's axis, in a `pixel` texture.
+    fn two_faced_model(pixel: [u8; 4]) -> std::sync::Arc<crate::model::Emd> {
+        let facing = triangle_object([[200, 0, 1000], [200, -1000, 1000], [1200, 0, 1000]]);
+        let away = triangle_object([[-200, 0, 1000], [-200, -1000, 1000], [-1200, 0, 1000]]);
+        std::sync::Arc::new(crate::model::Emd {
+            skeleton: crate::model::Skeleton {
+                relative: vec![[0; 3]; 2],
+                children: vec![Vec::new(); 2],
+            },
+            keyframes: Vec::new(),
+            clips: Vec::new(),
+            damage_clips: Vec::new(),
+            damage_keyframes: Vec::new(),
+            banks: Vec::new(),
+            mesh: Tmd {
+                objects: vec![facing, away],
+            },
+            texture: solid_texture(pixel),
+            morphs: Vec::new(),
+        })
+    }
+
+    /// The painted pixels' colours on each side of the screen's centre.
+    fn painted_halves(framebuffer: &Framebuffer) -> [Vec<[u8; 4]>; 2] {
+        let mut halves = [Vec::new(), Vec::new()];
+        for y in 0..framebuffer.height as usize {
+            for x in 0..framebuffer.width as usize {
+                let pixel = framebuffer_pixel(framebuffer, x, y);
+                if pixel[..3] != [0; 3] {
+                    halves[usize::from(x >= framebuffer.width as usize / 2)].push(pixel);
+                }
+            }
+        }
+        halves
+    }
+
+    /// Through the negated view the faces' winding turns, so the cull keeps
+    /// the face the plain view keeps, now on the other side, and drops the
+    /// one wound away though it seems to face the eye; the pass's colour
+    /// scales the texel.
+    #[test]
+    fn the_reflection_keeps_the_faces_its_turned_winding_shows_in_its_colour() {
+        let model = two_faced_model([200, 100, 50, 255]);
+        let joints = [identity(); 2];
+        let camera = straight_camera();
+        let mut plain = Framebuffer::new();
+        plain.draw_character_coloured(&model, &joints, &camera, [0, 0], [0x80; 3], true);
+        let [left, right] = painted_halves(&plain);
+        // The face wound toward the eye is the one at +x, on the right.
+        assert!(left.is_empty(), "the face wound away is dropped");
+        assert!(!right.is_empty(), "the facing one is drawn");
+        let plain_side = 1;
+        let mut turned = Framebuffer::new();
+        turned.draw_character_coloured(
+            &model,
+            &joints,
+            &camera.with_x_scale_negated(),
+            [0, 0],
+            [0x52; 3],
+            true,
+        );
+        let halves = painted_halves(&turned);
+        // The same face, mirrored to the left; the one wound away, which
+        // now seems to face the eye on the right, is dropped.
+        assert!(
+            halves[plain_side].is_empty(),
+            "the face wound away is dropped"
+        );
+        let drawn = &halves[1 - plain_side];
+        assert!(!drawn.is_empty(), "the facing one is drawn, mirrored");
+        // 0x52 of 0x80 of each channel.
+        assert!(
+            drawn.iter().all(|pixel| *pixel == [128, 64, 32, 255]),
+            "{:?}",
+            drawn[0]
+        );
+    }
+
+    /// Two faces toward the eye with opposite normals, either side of the
+    /// view's axis, in a `pixel` texture: the right one's normal faces -z,
+    /// toward the eye, the left one's away.
+    fn opposed_normals_model(pixel: [u8; 4]) -> std::sync::Arc<crate::model::Emd> {
+        let model = two_faced_model(pixel);
+        let mut model = (*model).clone();
+        let right = &mut model.mesh.objects[0];
+        right.normals = vec![[0, 0, -4096]];
+        let left = &mut model.mesh.objects[1];
+        left.vertices = vec![[-1200, 0, 1000], [-1200, -1000, 1000], [-200, 0, 1000]];
+        left.normals = vec![[0, 0, 4096]];
+        std::sync::Arc::new(model)
+    }
+
+    /// A lit draw is RE 2's corner light at the light matrix's scale, a
+    /// unit of a light's channel a unit of the colour, as a byte times its
+    /// modulate / 255: a directional light along +z lights the face whose
+    /// normal meets it and not the other.
+    #[test]
+    fn a_lit_character_is_its_light_times_the_modulate() {
+        let model = opposed_normals_model([200, 100, 50, 255]);
+        let joints = [identity(); 2];
+        let mut light = EntityLight {
+            ambient: [50.0; 3],
+            ..dark_entity_light()
+        };
+        light.sources[0] = EntityLightSource {
+            dir: [0, 0, 4096],
+            color: [100; 3],
+        };
+        let mut framebuffer = Framebuffer::new();
+        framebuffer.draw_character_shaded(
+            &model,
+            &joints,
+            &straight_camera(),
+            [0, 0],
+            &CharacterShade::Lit {
+                light,
+                modulate: 254,
+            },
+            true,
+            Slots::All,
+        );
+        let [left, right] = painted_halves(&framebuffer);
+        assert!(!left.is_empty() && !right.is_empty());
+        let pixel = |lit: u32| {
+            let colour = lit * 254 / 255;
+            [200.0f32, 100.0, 50.0].map(|texel| (texel * colour as f32 / 255.0).round() as u8)
+        };
+        // 50 + 100 = 150, then 149; and 50 alone, then 49.
+        for (drawn, lit) in [(&right, 150), (&left, 50)] {
+            for got in drawn.iter() {
+                for (got, want) in got[..3].iter().zip(pixel(lit)) {
+                    assert!(got.abs_diff(want) <= 1, "{got} against {want} at {lit}");
+                }
+            }
+        }
+    }
+
+    /// The slots keep the parts whose origin's view Z is in them, whatever
+    /// their triangles' depth.
+    #[test]
+    fn slots_keep_the_parts_whose_origin_is_in_them() {
+        let model = opposed_normals_model([200, 100, 50, 255]);
+        let mut far = identity();
+        far.t = [0, 0, 1600];
+        let joints = [identity(), far];
+        let draw = |slots| {
+            let mut framebuffer = Framebuffer::new();
+            framebuffer.draw_character_shaded(
+                &model,
+                &joints,
+                &straight_camera(),
+                [0, 0],
+                &CharacterShade::Flat([0x80; 3]),
+                true,
+                slots,
+            );
+            painted_halves(&framebuffer).map(|half| half.len())
+        };
+        // Part 0's origin at Z 0, slot 0, on the right; part 1's at 1600,
+        // slot 100, on the left, though its face is at 2600.
+        let [left, right] = draw(Slots::Parts(0..=99));
+        assert!(left == 0 && right > 0);
+        let [left, right] = draw(Slots::Parts(100..=100));
+        assert!(left > 0 && right == 0);
+        assert_eq!(draw(Slots::Parts(101..=u32::MAX)), [0, 0]);
+        assert_eq!(draw(Slots::All), draw(Slots::Parts(0..=u32::MAX)));
+    }
+
+    /// The patch, a sprite at view Z 5000, is depth tested against what the
+    /// held depth has: a face drawn before it nearer than 5000 stays over
+    /// it, one further is covered, and one drawn after it further stays
+    /// under it.
+    #[test]
+    fn a_rect_put_back_at_a_depth_is_depth_tested() {
+        let model = opposed_normals_model([200, 100, 50, 255]);
+        let picture = [10u8, 20, 30, 255];
+        let at = |z: i32| {
+            let mut joint = identity();
+            joint.t = [0, 0, z - 1000];
+            [joint, joint]
+        };
+        let painted = |framebuffer: &Framebuffer| {
+            framebuffer
+                .rgba
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .filter(|pixel| **pixel != picture)
+                .count()
+        };
+        let frame = || {
+            let mut framebuffer = Framebuffer::new();
+            for pixel in framebuffer.rgba.as_chunks_mut::<4>().0 {
+                *pixel = picture;
+            }
+            framebuffer
+        };
+        let draw = |framebuffer: &mut Framebuffer, z| {
+            framebuffer.draw_character_shaded(
+                &model,
+                &at(z),
+                &straight_camera(),
+                [0, 0],
+                &CharacterShade::Flat([0x80; 3]),
+                true,
+                Slots::All,
+            );
+        };
+        for (z, kept) in [(4999, true), (5001, false)] {
+            let mut framebuffer = frame();
+            let saved = framebuffer.save_rect([0, 0, 320, 240]).unwrap();
+            framebuffer.hold_depth();
+            draw(&mut framebuffer, z);
+            assert!(painted(&framebuffer) > 0);
+            framebuffer.restore_rect_at(&saved, 5000.0);
+            assert_eq!(painted(&framebuffer) > 0, kept, "a face at {z}");
+            // Drawn after the patch, further than it: under it.
+            draw(&mut framebuffer, 5200);
+            if !kept {
+                assert_eq!(painted(&framebuffer), 0, "behind the patch");
+            }
+            framebuffer.release_depth();
+        }
+        // Without the held depth the rect simply goes back.
+        let mut framebuffer = frame();
+        let saved = framebuffer.save_rect([0, 0, 320, 240]).unwrap();
+        draw(&mut framebuffer, 4999);
+        framebuffer.restore_rect_at(&saved, 5000.0);
+        assert_eq!(painted(&framebuffer), 0);
+    }
+
+    /// The part of the picture drawn again is the same placement and
+    /// sampling as the whole, on a band of the canvas as on the 4:3 frame.
+    #[test]
+    fn a_background_drawn_within_a_rect_is_the_wholes_pixels() {
+        let mut image = Image {
+            width: 320,
+            height: 240,
+            rgba: Vec::new(),
+        };
+        for y in 0..240u32 {
+            for x in 0..320u32 {
+                image.rgba.extend([x as u8, y as u8, 7, 255]);
+            }
+        }
+        for height in [240, 180] {
+            let mut whole = Framebuffer::with_size(320, height);
+            whole.draw_background(&image, [0, 0], [255; 3]);
+            let mut part = Framebuffer::with_size(320, height);
+            let rect = [0, 0x38 - (240 - height as i32) / 2, 0x37, 0xA0];
+            part.draw_background_within(&image, [0, 0], [255; 3], rect);
+            for y in 0..height as i32 {
+                for x in 0..320 {
+                    let at = ((y * 320 + x) * 4) as usize;
+                    let inside = x < rect[2] && y >= rect[1] && y < rect[1] + rect[3];
+                    let want = if inside {
+                        &whole.rgba[at..at + 4]
+                    } else {
+                        &[0, 0, 0, 0][..]
+                    };
+                    assert_eq!(&part.rgba[at..at + 4], want, "{x}, {y} of {height}");
+                }
+            }
+            // On the band the strip's first row is the picture's row 0x38.
+            let at = (rect[1] * 320 * 4) as usize;
+            assert_eq!(part.rgba[at + 1], 0x38);
+        }
+    }
+
+    /// Under the GPU renderer the shadows go to the 2D pass as a sprite of
+    /// their own colour and coverage, the frame's pixels untouched and the
+    /// software 3D path never reached; drawn on the software path the same
+    /// shadow comes out as that sprite over the frame.
+    #[test]
+    fn shadows_queue_for_the_gpu_and_move_with_the_offset() {
+        let texture = solid_image(4, 4, [10, 20, 30, 128]);
+        let camera = Camera::from_set_view([0, -2000, -2000], [0, 0, 0], 0xD0);
+        let shadow = Shadow {
+            texture: &texture,
+            pos: [0, 0, 0],
+            angle: 0,
+            half_x: 300,
+            half_z: 300,
+            shift: [0, 0],
+            lift: 0,
+            tint: [0; 3],
+        };
+        let mut software = Framebuffer::new();
+        software.blit(&solid_image(320, 240, [200, 200, 200, 255]));
+        let mut moved = software.clone();
+        software.draw_shadows(&[shadow], &camera, [0, 0]);
+        moved.draw_shadows(&[shadow], &camera, [7, -5]);
+        let darkened = |framebuffer: &Framebuffer| -> Vec<(usize, usize)> {
+            let mut at = Vec::new();
+            for y in 0..240 {
+                for x in 0..320 {
+                    if framebuffer_pixel(framebuffer, x, y) != [200, 200, 200, 255] {
+                        at.push((x, y));
+                    }
+                }
+            }
+            at
+        };
+        let under = darkened(&software);
+        assert!(!under.is_empty(), "the shadow is drawn");
+        let shifted: Vec<_> = under
+            .iter()
+            .filter(|&&(x, y)| x + 7 < 320 && y >= 5)
+            .map(|&(x, y)| (x + 7, y - 5))
+            .collect();
+        assert_eq!(darkened(&moved), shifted);
+
+        let mut recorded = Framebuffer::new();
+        recorded.record();
+        recorded.draw_shadows(&[shadow], &camera, [0, 0]);
+        let list = recorded.list().expect("recording");
+        assert_eq!(list.error, None);
+        assert_eq!(list.items.len(), 1);
+        assert!(matches!(list.items[0].kind, crate::draw2d::Kind::Sprite));
+        assert!(recorded.rgba.iter().all(|&channel| channel == 0));
     }
 
     #[test]
