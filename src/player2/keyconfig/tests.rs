@@ -3,11 +3,54 @@ use super::*;
 /// Banks of `clips` clips of `frames` frames each, whose root moves `step`
 /// along x a frame.
 fn assets(clips: usize, frames: usize, step: i16) -> PageAssets {
+    banks(clips, frames, step, Skeleton::default(), |_| Vec::new())
+}
+
+/// [`assets`] on a skeleton whose legs reach out along x (the handguns'
+/// foot chain, parts 0, 1, 5, 6 and 7, and the other leg's), turned by
+/// part 1 a little more each frame, so the foot moves through a clip.
+fn posed_assets(clips: usize, frames: usize) -> PageAssets {
+    let skeleton = Skeleton {
+        relative: vec![
+            [0; 3],
+            [0, -100, 0],
+            [100, 0, 0],
+            [100, 0, 0],
+            [100, 0, 0],
+            [-100, 0, 0],
+            [-100, 0, 0],
+            [-100, 0, 0],
+        ],
+        children: vec![
+            vec![1],
+            vec![2, 5],
+            vec![3],
+            vec![4],
+            vec![],
+            vec![6],
+            vec![7],
+            vec![],
+        ],
+    };
+    banks(clips, frames, 0, skeleton, |index| {
+        let mut rotations = vec![[0; 3]; 8];
+        rotations[1] = [0, index as i16 * 0x40, 0];
+        rotations
+    })
+}
+
+fn banks(
+    clips: usize,
+    frames: usize,
+    step: i16,
+    skeleton: Skeleton,
+    rotations: impl Fn(usize) -> Vec<[i16; 3]>,
+) -> PageAssets {
     let keyframes: Vec<Keyframe> = (0..frames)
         .map(|index| Keyframe {
             offset: [0; 3],
             vertex: [step * (index as i16 + 1), 0, 0],
-            rotations: Vec::new(),
+            rotations: rotations(index),
         })
         .collect();
     let clip = Clip {
@@ -20,7 +63,7 @@ fn assets(clips: usize, frames: usize, step: i16) -> PageAssets {
             .collect(),
     };
     let body = crate::model::Emd {
-        skeleton: Skeleton::default(),
+        skeleton: skeleton.clone(),
         keyframes: keyframes.clone(),
         clips: vec![clip.clone(); clips],
         damage_clips: Vec::new(),
@@ -37,7 +80,7 @@ fn assets(clips: usize, frames: usize, step: i16) -> PageAssets {
         morphs: Vec::new(),
     };
     let weapon = crate::model::Emw {
-        skeleton: Skeleton::default(),
+        skeleton,
         keyframes,
         clips: vec![clip; clips],
         mesh: Default::default(),
@@ -214,13 +257,43 @@ fn the_aim_rows_entry_sets_its_count() {
 
 #[test]
 fn the_fire_row_holds_the_action_key_then_aims_and_fires() {
-    let assets = assets(16, 40, 80);
+    let assets = assets(16, 6, 80);
     let mut model = settled(&assets);
     let mut keys = Vec::new();
+    let mut states = Vec::new();
     for _ in 0..220 {
         model.demonstrate(&assets, ROW_FIRE);
         keys.push(model.statics.key);
+        let w = &model.work;
+        states.push((w.routine[1], w.routine[2], w.bank, w.move_no));
     }
+    // The action key crouches on `Main`'s clip 6, and its release stands
+    // the model up again before the aim.
+    assert_eq!(states[0], (MOVE_ITEM, 1, Bank::Pld, ITEM_CLIP));
+    assert_eq!(states[55].0, MOVE_IDLE);
+    // The aim key raises the gun: the raise, then the level hold.
+    assert_eq!(states[56], (MOVE_AIM, 0, Bank::Weapon, AIM_RAISE_CLIP));
+    assert_eq!(states[104], (MOVE_AIM, 1, Bank::Weapon, AIM_HOLD_CLIPS[1]));
+    // The fire key fires the level shot, which goes back to the hold at its
+    // end and fires again, for as long as it's held.
+    // (the hold hands over and returns; the shot starts its clip next tick).
+    assert_eq!(states[105], (MOVE_AIM, 2, Bank::Weapon, AIM_HOLD_CLIPS[1]));
+    assert_eq!(states[106], (MOVE_AIM, 2, Bank::Weapon, AIM_FIRE_CLIPS[1]));
+    let shots = states[105..179]
+        .windows(2)
+        .filter(|pair| pair[0].1 != 2 && pair[1].1 == 2)
+        .count();
+    assert!(shots > 3, "{shots} shots");
+    // Let go, the shot plays out, then it lowers (the raise backward) and
+    // stands.
+    assert!(
+        states[179..190]
+            .iter()
+            .any(|state| state.1 == 3 && state.3 == AIM_RAISE_CLIP)
+    );
+    assert_eq!(states[218].0, MOVE_IDLE);
+    // The next cycle crouches again.
+    assert_eq!(states[219].0, MOVE_ITEM);
     let mut expected = vec![KEY_ACTION; 25];
     expected.extend([0; 30]);
     expected.push(0);
@@ -339,19 +412,124 @@ fn the_action_key_crouches_until_it_is_let_go() {
 
 #[test]
 fn the_lowering_stops_the_planting_past_its_tenth_tick() {
-    let assets = assets(16, 30, 0);
+    let assets = posed_assets(16, 30);
     let mut model = settled(&assets);
     model.work.routine = [1, MOVE_AIM, 3, 0];
     model.work.move_no = 0xB;
     let mut speeds = Vec::new();
+    let mut places = Vec::new();
     for _ in 0..13 {
         model.demonstrate(&assets, ROW_FORWARD);
         speeds.push(model.work.spd[0]);
+        places.push(model.body.pos);
     }
     // Its first tick counts 1 to 2; the tick that counts past 11 sets 1.
     assert_eq!(speeds[..10], [0; 10]);
     assert_eq!(speeds[10..], [1; 3]);
     assert_eq!(model.work.routine[2..], [3, 14]);
+    // Until then the foot stays where the last draw had it, so the body
+    // moves off its place as the leg turns; from then it stays in its place.
+    assert!(
+        places[..10].iter().all(|place| *place != PLACE),
+        "{places:?}"
+    );
+    assert_eq!(places[10..], [PLACE; 3]);
+}
+
+#[test]
+fn the_planting_keeps_the_drawn_foot_where_it_was() {
+    let assets = posed_assets(16, 30);
+    let mut model = settled(&assets);
+    model.work.routine = [1, MOVE_AIM, 3, 0];
+    model.work.move_no = 0xB;
+    let chain = page_foot_chain(model.id, 3);
+    model.demonstrate(&assets, ROW_FORWARD);
+    let drawn = model.drawn_feet[0].unwrap();
+    model.demonstrate(&assets, ROW_FORWARD);
+    // This tick's foot, at the place the planting moved the body to, is
+    // the last draw's, to the x and z.
+    let now = model
+        .with(&assets, |mover, _| mover.chain_position(chain))
+        .unwrap();
+    assert_eq!([now[0], now[2]], [drawn[0], drawn[2]]);
+    assert_ne!(model.body.pos, PLACE);
+}
+
+#[test]
+fn a_later_option_visit_keeps_the_routine_and_motion_bytes() {
+    let assets = assets(16, 40, 80);
+    let mut first = settled(&assets);
+    first.demonstrate(&assets, ROW_AIM);
+    let routine = first.work.routine;
+    let motion = (first.work.move_no, first.work.move_cnt, first.work.hokan);
+    // OPTION left and entered again: Leon this time, placed and facing.
+    let again = first.again(0, 2);
+    assert_eq!((again.id, again.work.kind), (0, 2));
+    assert_eq!((again.body.pos, again.body.angle), (PLACE, FACING));
+    assert_eq!(again.work.routine, routine);
+    assert_eq!(
+        (again.work.move_no, again.work.move_cnt, again.work.hokan),
+        motion
+    );
+    assert_eq!(again.statics, first.statics);
+    assert!(
+        again
+            .trace()
+            .starts_with("01050001,-1530,2020,2700,3072,09")
+    );
+}
+
+#[test]
+fn the_statics_survive_as_two_words() {
+    for statics in [
+        Statics::default(),
+        Statics {
+            turned: true,
+            returning: true,
+            key: 0x201,
+            count: -3,
+            step: 6,
+            kept: 2,
+            row: 5,
+            last_key: 0x140,
+        },
+    ] {
+        assert_eq!(Statics::from_words(statics.to_words()), statics);
+    }
+}
+
+#[test]
+fn leons_alternates_hold_eights_handgun_and_its_frame() {
+    assert_eq!(plw_holder(0xA, 2), 8);
+    assert_eq!(plw_holder(8, 2), 8);
+    assert_eq!(plw_holder(0, 2), 0);
+    assert_eq!(plw_holder(0xA, 3), 0xA);
+    // `0x4D3010`: the handgun's first byte is 0x85, or 0x03 for 8 and 0xA.
+    assert_eq!(page_frames(0, 2), [0x85, 0x87, 8]);
+    assert_eq!(page_frames(1, 3), [0x85, 0x87, 8]);
+    assert_eq!(page_frames(8, 2), [0x03, 0x87, 8]);
+    assert_eq!(page_frames(0xA, 2), [0x03, 0x87, 8]);
+    assert_eq!(page_foot_chain(0, 2), &AIM_FOOT_CHAIN);
+    assert_eq!(page_foot_chain(8, 2), &AIM_OTHER_FOOT_CHAIN);
+    assert_eq!(page_foot_chain(0xA, 2), &AIM_OTHER_FOOT_CHAIN);
+}
+
+#[test]
+fn leons_alternates_tilt_down_past_frame_three() {
+    let assets = assets(16, 40, 0);
+    for (id, ticks) in [(0, 6), (8, 4), (0xA, 4)] {
+        let mut model = PageModel::new(id, 2, Statics::default());
+        model.work.routine = [1, MOVE_AIM, 0, 0];
+        model.statics.row = ROW_AIM;
+        model.statics.step = 2;
+        let mut count = 0;
+        while model.work.routine[2] == 0 {
+            model.demonstrate(&assets, ROW_AIM);
+            count += 1;
+        }
+        assert_eq!(count, ticks, "id {id:#x}");
+        assert_eq!(model.work.status_flg & 0xE000, TILT_DOWN);
+    }
 }
 
 #[test]

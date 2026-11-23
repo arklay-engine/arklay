@@ -92,6 +92,37 @@ impl Default for Statics {
     }
 }
 
+impl Statics {
+    /// The statics as two words, for a screen to keep past itself: the keys,
+    /// the last keys, the two flags and the row; then the count, the step and
+    /// the kept step.
+    pub fn to_words(&self) -> [i64; 2] {
+        let first = i64::from(self.key)
+            | i64::from(self.last_key) << 16
+            | i64::from(self.turned) << 32
+            | i64::from(self.returning) << 33
+            | i64::from(self.row as i16 as u16) << 40;
+        let second = i64::from(self.count as u32)
+            | i64::from(self.step as i16 as u16) << 32
+            | i64::from(self.kept as i16 as u16) << 48;
+        [first, second]
+    }
+
+    /// [`Statics::to_words`] read back.
+    pub fn from_words([first, second]: [i64; 2]) -> Self {
+        Self {
+            key: first as u16,
+            last_key: (first >> 16) as u16,
+            turned: first >> 32 & 1 != 0,
+            returning: first >> 33 & 1 != 0,
+            row: i32::from((first >> 40) as u16 as i16),
+            count: second as u32 as i32,
+            step: i32::from((second >> 32) as u16 as i16),
+            kept: i32::from((second >> 48) as u16 as i16),
+        }
+    }
+}
+
 /// The model's files: the character's PLD (the `Main` bank) and the held
 /// weapon's PLW (`Sub0`), and an empty room for the routines' [`Tick`].
 pub struct PageAssets {
@@ -112,7 +143,8 @@ impl PageAssets {
                 .ok_or_else(|| anyhow::anyhow!("no {}", path(id & 1)))
         };
         let pld = read(&|disc| format!("player/{id:02x}/model_{disc}.pld"))?;
-        let plw = read(&|disc| format!("player/{id:02x}/weapon/{weapon:02x}_{disc}.plw"))?;
+        let holder = plw_holder(id, weapon);
+        let plw = read(&|disc| format!("player/{holder:02x}/weapon/{weapon:02x}_{disc}.plw"))?;
         let pld = crate::emd2::parse_pld(&pld)?;
         let plw = crate::emd2::parse_plw(&plw)?;
         let (body, weapon) = crate::emd2::player_banks(&pld, &plw)
@@ -126,6 +158,39 @@ impl PageAssets {
             weapon,
             room: RoomState::default(),
         }
+    }
+}
+
+/// Whose folder `Pl_weapon_ch` reads weapon `weapon`'s PLW from for
+/// character `id`: Leon's alternate 0xA holds 0x8's handgun.
+pub fn plw_holder(id: u8, weapon: u8) -> u8 {
+    if weapon == 2 && id == 0xA { 8 } else { id }
+}
+
+/// `DAT_0053A305`'s row for `Type & 0xFFF` `weapon` as the weapon's set-up
+/// (`0x4D3010`) leaves it for character `id`: the handgun's first byte is
+/// 0x85, but 0x03 for Leon's alternates 8 and 0xA, which plant the other
+/// foot and may tilt down past frame 3.
+pub fn page_frames(id: u8, weapon: u8) -> [u8; 3] {
+    let frames = Weapon {
+        id: weapon,
+        ..Weapon::default()
+    }
+    .frames();
+    if weapon == 2 && matches!(id, 8 | 0xA) {
+        [0x03, frames[1], frames[2]]
+    } else {
+        frames
+    }
+}
+
+/// `Foot_set_pl`'s chain for the weapon's frames: the leg the byte of the
+/// character's parity picks.
+fn page_foot_chain(id: u8, weapon: u8) -> &'static [usize; 5] {
+    if page_frames(id, weapon)[usize::from(id & 1)] & 0x80 != 0 {
+        &AIM_FOOT_CHAIN
+    } else {
+        &AIM_OTHER_FOOT_CHAIN
     }
 }
 
@@ -174,6 +239,18 @@ impl PageModel {
         }
     }
 
+    /// `FUN_0044b100` and `Config_set_data` again on a later OPTION visit:
+    /// a fresh character and weapon in the place, but the routine and motion
+    /// bytes of `pPl` as the last visit left them, which neither writes.
+    pub fn again(&self, id: u8, weapon: u16) -> Self {
+        let mut model = Self::new(id, weapon, self.statics);
+        model.work.routine = self.work.routine;
+        model.work.move_no = self.work.move_no;
+        model.work.move_cnt = self.work.move_cnt;
+        model.work.hokan = self.work.hokan;
+        model
+    }
+
     /// Run `f` on the model's [`Mover`], then latch the feet the draw
     /// after it leaves.
     fn with<R>(
@@ -213,8 +290,8 @@ impl PageModel {
         let mut mover = Mover::new(&mut self.work, &mut self.body, &tick);
         let result = f(&mut mover, &mut self.statics);
         let chains = [
-            mover.tick.weapon.foot_chain(self.id),
-            foot_chain_other(mover.tick.weapon.foot_chain(self.id)),
+            page_foot_chain(self.id, mover.tick.weapon.id),
+            foot_chain_other(page_foot_chain(self.id, mover.tick.weapon.id)),
         ];
         self.drawn_feet = chains.map(|chain| mover.chain_position(chain));
         result
@@ -814,12 +891,12 @@ impl Mover<'_, '_> {
         let chain = if matches!(weapon, 6 | 8) && id != 0xB && self.work.routine[2] == 2 {
             Some(&AIM_OTHER_FOOT_CHAIN)
         } else if self.work.spd[0] == 0 && (self.work.routine[2] != 0 || self.work.hokan == 0) {
-            Some(self.tick.weapon.foot_chain(id))
+            Some(page_foot_chain(id, self.tick.weapon.id))
         } else {
             None
         };
         if let Some(chain) = chain {
-            let planted = feet[usize::from(chain != self.tick.weapon.foot_chain(id))];
+            let planted = feet[usize::from(chain != page_foot_chain(id, self.tick.weapon.id))];
             if let (Some(planted), Some(foot)) = (planted, self.chain_position(chain)) {
                 self.player.pos[0] += planted[0] - foot[0];
                 self.player.pos[2] += planted[2] - foot[2];
@@ -871,7 +948,7 @@ impl Mover<'_, '_> {
         if matches!(kind, 0xE | 0x11) {
             return;
         }
-        let frames = self.tick.weapon.frames();
+        let frames = page_frames(self.tick.id, self.tick.weapon.id);
         if self.work.move_cnt > frames[0] & 0x7F && key & KEY_TILT_DOWN != 0 {
             self.aim_stage(1);
             self.set_tilt(TILT_DOWN);
@@ -921,7 +998,7 @@ impl Mover<'_, '_> {
             self.aim_clip(self.tilt_clip(AIM_FIRE_CLIPS));
             self.work.spd = [0; 3];
         }
-        let frames = self.tick.weapon.frames();
+        let frames = page_frames(self.tick.id, self.tick.weapon.id);
         if key & KEY_AIM == 0 && self.work.move_cnt > frames[2] & 0x7F {
             self.aim_stage(1);
             self.work.spd = [0; 3];
