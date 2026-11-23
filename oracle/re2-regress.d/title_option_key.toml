@@ -1,0 +1,29 @@
+# The option screen's KEYCONFIG page (`Config_main`'s states 2 and 9 to 0xF; oracle/re2.md, "The option screen"). `kc` is the page's trace: state 9's count, the panel's offset, the choice, and the key table being edited. The keyboard's own arrows (`kbup` and the rest in the inputs) are arklay's directions, and `keys` is config.ini's `KeyDef` and `JoyDef_Emulated` in the install the references were recorded from, which the page lists.
+
+[[run]]
+name = "title_option_key"
+ui = "title"
+offset = 189
+ticks = 1060
+input = "title_option_key.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd,opt,kc"
+frames = [189, 1059]
+expect = "match"
+keys = { keys = "68 62 64 66 00 4D 00 49 00 00 4F 4A 5A 4B 00 00 00 00 00 00 00 00 00 00 00 26 28 25 27 0D 20 1B", pad = "00 10 00 00 00 40 00 00 00 80 00 00 00 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 00 00 00 00 08 00 00 44 00 00 00 00 00 00 00 00 01 00 00 10 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 08 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00" }
+record = ""
+
+[[run]]
+name = "title_option_key_default"
+ui = "title"
+offset = 189
+ticks = 1280
+input = "title_option_key_default.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,snd,opt,kc"
+frames = [189, 1279]
+expect = "match"
+keys = { keys = "68 62 64 66 00 4D 00 49 00 00 4F 4A 5A 4B 00 00 00 00 00 00 00 00 00 00 00 26 28 25 27 0D 20 1B", pad = "00 10 00 00 00 40 00 00 00 80 00 00 00 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 00 00 00 00 08 00 00 44 00 00 00 00 00 00 00 00 01 00 00 10 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 08 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00" }
+record = ""

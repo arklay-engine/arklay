@@ -2534,6 +2534,7 @@ impl Launcher {
             title_special: None,
             title_gallery: None,
             title_seed: None,
+            title_keys: None,
         };
         // The new renderer's window stays black until the game's first frame.
         if let Err(err) = display.present_black() {

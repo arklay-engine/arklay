@@ -914,6 +914,32 @@ fn open_pack(
     Ok(pack)
 }
 
+/// `load_game_pack`'s `title_keys`: config.ini's `KeyDef` and
+/// `JoyDef_Emulated` as `{ keys = "...", pad = "..." }`, each the line's
+/// value. Anything else is an error, since a table that isn't what was meant
+/// lists other keys.
+fn title_keys_option(table: &Table) -> mlua::Result<player::TitleKeys> {
+    let bad =
+        |what: String| mlua::Error::RuntimeError(format!("load_game_pack: title_keys {what}"));
+    let mut fields = [None, None];
+    for pair in table.pairs::<Value, Value>() {
+        let (key, value) = pair?;
+        let slot = match key.as_string().and_then(|key| key.to_str().ok()).as_deref() {
+            Some("keys") => 0,
+            Some("pad") => 1,
+            _ => return Err(bad("is `keys` and `pad`".to_owned())),
+        };
+        let Value::String(text) = value else {
+            return Err(bad("holds config.ini's values as strings".to_owned()));
+        };
+        fields[slot] = Some(text.to_str()?.to_owned());
+    }
+    let [Some(keys), Some(pad)] = fields else {
+        return Err(bad("needs both `keys` and `pad`".to_owned()));
+    };
+    player::TitleKeys::parse(&keys, &pad).map_err(|what| bad(format!("is wrong: {what}")))
+}
+
 /// `load_game_pack`'s `title_gallery`: config.ini's `GALLERY0` to
 /// `GALLERY4`, a table of exactly five integers of 32 bits. Anything else is
 /// an error, since a word that isn't what was meant opens other pictures.
@@ -1227,8 +1253,10 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                 let title_special: Option<i8> = options.get("title_special")?;
                 let title_gallery: Option<Table> = options.get("title_gallery")?;
                 let title_seed: Option<u32> = options.get("title_seed")?;
+                let title_keys: Option<Table> = options.get("title_keys")?;
                 options.finish()?;
                 let title_gallery = title_gallery.as_ref().map(gallery_words).transpose()?;
+                let title_keys = title_keys.as_ref().map(title_keys_option).transpose()?;
                 let (easy, hard_mode) = match difficulty.as_deref().unwrap_or("normal") {
                     "normal" => (false, false),
                     "easy" => (true, false),
@@ -1275,6 +1303,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                     title_special,
                     title_gallery,
                     title_seed,
+                    title_keys,
                     ..player::Options::default()
                 };
                 if let Some(window) = driver.window.as_mut() {

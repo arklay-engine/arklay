@@ -1319,6 +1319,7 @@ fn main() -> Result<()> {
                 title_special: None,
                 title_gallery: None,
                 title_seed: None,
+                title_keys: None,
             };
             let mut renderer = config.graphics;
             if let Some(kind) = cli.renderer {

@@ -1396,8 +1396,8 @@ fn open_option(cx: &UiContext<'_>, name: &str) -> (LuaScreen, std::path::PathBuf
     (screen, dir)
 }
 
-/// The option menu's rows move on the keys' presses alone, stop at both
-/// ends, and KEYCONFIG, whose page isn't ported, takes no decide.
+/// The option menu's rows move on the keys' presses alone and stop at both
+/// ends.
 #[test]
 fn the_option_menu_moves_between_its_four_rows() {
     let dir = std::env::temp_dir();
@@ -1405,8 +1405,6 @@ fn the_option_menu_moves_between_its_four_rows() {
     let (mut screen, dir) = open_option(&cx, "option-menu");
     assert!(tick_cues(&mut screen, &cx, press("up")).is_empty());
     assert_eq!(screen.value("opt_cursor"), 0);
-    assert!(tick_cues(&mut screen, &cx, press("confirm")).is_empty());
-    assert_eq!(screen.value("opt_state"), 1, "KEYCONFIG");
     // Down held: one row, on its press.
     let held = UiInput {
         held_down: true,
@@ -1424,6 +1422,457 @@ fn the_option_menu_moves_between_its_four_rows() {
     }
     assert!(tick_cues(&mut screen, &cx, press("down")).is_empty());
     assert_eq!(screen.value("opt_cursor"), 3);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The trace's `kc`, KEYCONFIG's page: state 9's count, the panel's offset
+/// and the choice, then the keys being edited.
+fn kc(screen: &LuaScreen) -> (String, String) {
+    let field = screen.state_str("kc").expect("the option task runs");
+    let (page, keys) = field.split_once('/').unwrap();
+    (page.to_owned(), keys.to_owned())
+}
+
+/// The words the tick's list printed, each with whether it is lit.
+fn key_words(screen: &LuaScreen) -> Vec<(String, bool)> {
+    let listed: String = screen.test_eval(
+        "local out = {}
+        for _, t in ipairs(M.state.opt_texts) do
+            if not t.key then out[#out + 1] = t.text .. '=' .. (t.on and 1 or 0) end
+        end
+        return table.concat(out, ',')",
+    );
+    listed
+        .split(',')
+        .filter(|entry| !entry.is_empty())
+        .map(|entry| {
+            let (word, on) = entry.split_once('=').unwrap();
+            (word.to_owned(), on == "1")
+        })
+        .collect()
+}
+
+/// The keys the tick's list drew, a row each: a letter, or `u:v` of the
+/// sheet's glyph, then `r` for the changed key's red or `g` for the lit one.
+fn key_glyphs(screen: &LuaScreen) -> Vec<String> {
+    let listed: String = screen.test_eval(
+        "local out = {}
+        for _, t in ipairs(M.state.opt_texts) do
+            if t.key then out[#out + 1] = t.y .. ' ' .. t.text .. (t.red and 'r' or t.on and 'g' or '') end
+        end
+        for _, sprite in ipairs(M.state.sprites) do
+            if sprite.page == 5 and sprite.x > 0x9A then
+                local colour = sprite.rgb[1] == 0x80 and sprite.rgb[2] == 0x10 and 'r' or sprite.rgb[1] == 0 and 'g' or ''
+                out[#out + 1] = sprite.y .. ' ' .. sprite.u .. ':' .. sprite.v .. colour
+            end
+        end
+        table.sort(out, function(a, b) return tonumber(a:match('^%d+')) < tonumber(b:match('^%d+')) end)
+        for i, entry in ipairs(out) do out[i] = entry:match(' (.+)$') end
+        return table.concat(out, ',')",
+    );
+    listed
+        .split(',')
+        .filter(|entry| !entry.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+/// The pad's glyphs the tick's list drew, down the rows: each one's `u:v`.
+fn pad_glyphs(screen: &LuaScreen) -> Vec<(i64, i64)> {
+    let listed: String = screen.test_eval(
+        "local out = {}
+        for _, sprite in ipairs(M.state.sprites) do
+            if sprite.page == 5 and sprite.x == 0x8C then out[#out + 1] = sprite.u .. ':' .. sprite.v end
+        end
+        return table.concat(out, ',')",
+    );
+    listed
+        .split(',')
+        .filter(|entry| !entry.is_empty())
+        .map(|entry| {
+            let (u, v) = entry.split_once(':').unwrap();
+            (u.parse().unwrap(), v.parse().unwrap())
+        })
+        .collect()
+}
+
+/// The executable's own keys (`FUN_0044da40`): the number pad's 8, 2, 4 and
+/// 6, then V for the run, A for the map, and X, C, Ctrl and Z.
+const DEFAULT_KEYS: &str = "686264660056004100005843115a0000000000000000000000262825270d201b";
+
+/// The option menu's KEYCONFIG decided, to the page's list with its cursor
+/// (state 0xB), on the decide key through the walk in and the rows.
+fn open_key_page(screen: &mut LuaScreen, cx: &UiContext<'_>) {
+    run(screen, cx, press("confirm"), 2);
+    assert_eq!(opt(screen)[1], 9);
+    run(screen, cx, press("confirm"), 2);
+    assert_eq!(opt(screen)[1], 10);
+    run(screen, cx, press("confirm"), 2);
+    assert_eq!(opt(screen)[1..4], [0xB, 0, 4]);
+}
+
+/// KEYCONFIG's decide opens its page: a tick in state 2 that copies the
+/// keys, state 9's 30 ticks with the panel alone, state 10's 54 with a row
+/// more every five, then the list with its cursor on Get Ready
+/// (`title_option_key`'s 440 to 526).
+#[test]
+fn keyconfig_opens_its_page_a_row_at_a_time() {
+    let dir = std::env::temp_dir();
+    let cx = context(&dir);
+    let (mut screen, dir) = open_option(&cx, "key-open");
+    assert_eq!(kc(&screen), ("0,0,0".to_owned(), DEFAULT_KEYS.to_owned()));
+    assert_eq!(
+        tick_cues(&mut screen, &cx, press("confirm")),
+        [UiCue::Core(6)]
+    );
+    assert_eq!(opt(&screen)[1], 2);
+    assert_eq!(
+        tick_cues(&mut screen, &cx, UiInput::default()),
+        [UiCue::Core(8)]
+    );
+    assert_eq!((opt(&screen)[1], kc(&screen).0.as_str()), (9, "30,0,0"));
+    let panel: String = screen.test_eval(
+        "local p = M.state.key_panel return p.x .. ',' .. p.y .. ',' .. p.w .. ',' .. p.h",
+    );
+    assert_eq!(panel, "136,17,177,209");
+    assert!(key_words(&screen).is_empty(), "the panel alone");
+    run(&mut screen, &cx, UiInput::default(), 30);
+    assert_eq!((opt(&screen)[1], kc(&screen).0.as_str()), (9, "0,0,0"));
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(
+        (&opt(&screen)[1..4], kc(&screen).0.as_str()),
+        (&[10, 0, 54][..], "-1,0,0")
+    );
+    assert_eq!(key_words(&screen), [("Forward".to_owned(), false)]);
+    run(&mut screen, &cx, UiInput::default(), 4);
+    assert_eq!(key_words(&screen).len(), 1, "type 50");
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(key_words(&screen).len(), 2, "type 49");
+    run(&mut screen, &cx, UiInput::default(), 45);
+    assert_eq!(opt(&screen)[3], 4);
+    let words = key_words(&screen);
+    assert_eq!(words.len(), 12, "every row, the last one's two words");
+    assert!(words.iter().all(|(_, on)| !on), "no cursor yet");
+    assert_eq!(
+        words[10..],
+        [("Exit".to_owned(), false), ("Default".to_owned(), false)]
+    );
+    run(&mut screen, &cx, UiInput::default(), 4);
+    assert_eq!(
+        (&opt(&screen)[1..4], kc(&screen).0.as_str()),
+        (&[0xB, 0, 4][..], "0,0,0")
+    );
+    let lit: Vec<_> = key_words(&screen)
+        .into_iter()
+        .filter(|(_, on)| *on)
+        .collect();
+    assert_eq!(lit, [("Get Ready".to_owned(), true)]);
+    // The default keys: the number pad's digits from the sheet, the letters
+    // from the font, Ctrl from the sheet, and the cursor's lit.
+    assert_eq!(
+        key_glyphs(&screen),
+        [
+            "230:44", "230:16", "174:44", "202:44", "Xg", "C", "V", "Z", "8:176", "A"
+        ]
+    );
+    // The default pad: the directions, then X, A, B, Y, and the view and
+    // the menu buttons, the cursor's from the lit glyphs.
+    assert_eq!(
+        pad_glyphs(&screen),
+        [
+            (188, 72),
+            (146, 30),
+            (174, 72),
+            (202, 72),
+            (41, 241),
+            (160, 30),
+            (174, 30),
+            (202, 30),
+            (230, 30),
+            (216, 30)
+        ]
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The list's cursor moves on the directions' presses and wraps at both
+/// ends; the sideways keys change the choice on the last row alone; the
+/// pad's other keys do nothing off the last row; and Exit's decide with
+/// nothing changed leaves over state 0xD's five ticks, which draw neither
+/// the panel nor the list (`title_option_key`'s 540 to 865).
+#[test]
+fn keyconfigs_cursor_wraps_and_exit_leaves() {
+    let dir = std::env::temp_dir();
+    let cx = context(&dir);
+    let (mut screen, dir) = open_option(&cx, "key-rows");
+    open_key_page(&mut screen, &cx);
+    assert_eq!(tick_cues(&mut screen, &cx, press("down")), [UiCue::Core(4)]);
+    assert_eq!(opt(&screen)[3], 5);
+    let held = UiInput {
+        held_down: true,
+        ..UiInput::default()
+    };
+    for _ in 0..30 {
+        assert!(tick_cues(&mut screen, &cx, held).is_empty());
+    }
+    assert_eq!(opt(&screen)[3], 5, "a held key moves one row");
+    for key in ["left", "right", "confirm", "cancel", "start"] {
+        run(&mut screen, &cx, UiInput::default(), 1);
+        assert!(tick_cues(&mut screen, &cx, press(key)).is_empty(), "{key}");
+        assert_eq!(
+            (&opt(&screen)[1..4], kc(&screen).0.as_str()),
+            (&[0xB, 0, 5][..], "0,0,0")
+        );
+    }
+    for row in (0..5).rev() {
+        run(&mut screen, &cx, UiInput::default(), 1);
+        run(&mut screen, &cx, press("up"), 1);
+        assert_eq!(opt(&screen)[3], row);
+    }
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(tick_cues(&mut screen, &cx, press("up")), [UiCue::Core(4)]);
+    assert_eq!(opt(&screen)[3], 10, "up from the first row");
+    assert_eq!(
+        key_words(&screen)[10..],
+        [("Exit".to_owned(), true), ("Default".to_owned(), false)]
+    );
+    run(&mut screen, &cx, UiInput::default(), 1);
+    run(&mut screen, &cx, press("down"), 2);
+    assert_eq!(opt(&screen)[3], 0, "down from the last");
+    run(&mut screen, &cx, press("up"), 2);
+    for (key, choice) in [
+        ("right", "0,0,1"),
+        ("right", "0,0,0"),
+        ("left", "0,0,1"),
+        ("left", "0,0,0"),
+    ] {
+        assert_eq!(tick_cues(&mut screen, &cx, press(key)), [UiCue::Core(4)]);
+        assert_eq!(kc(&screen).0, choice);
+        let lit = usize::from(choice == "0,0,1");
+        assert!(key_words(&screen)[10 + lit].1 && !key_words(&screen)[11 - lit].1);
+        run(&mut screen, &cx, UiInput::default(), 1);
+    }
+    assert_eq!(
+        tick_cues(&mut screen, &cx, press("confirm")),
+        [UiCue::Core(6)]
+    );
+    assert_eq!(opt(&screen)[1..5], [0xD, 0, 10, 5]);
+    let drawn: bool = screen.test_eval("return M.state.key_panel ~= nil or #M.state.opt_texts > 0");
+    assert!(!drawn, "state 0xD draws the room alone");
+    run(&mut screen, &cx, UiInput::default(), 4);
+    assert_eq!(opt(&screen)[1..5], [0xD, 0, 10, 1]);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(opt(&screen)[1..5], [1, 0, 0, 0], "the menu, on KEYCONFIG");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Default's decide sets the executable's own keys (state 0xE, a tick) and
+/// leaves the cursor on Default; Exit's decide with the keys changed asks
+/// (state 0xF), where the sideways keys choose and the decide key or the
+/// cancel key answers: Leave keeps the settings, Change takes the edited
+/// keys, and a changed key or button is red until then
+/// (`title_option_key_default`).
+#[test]
+fn keyconfigs_default_asks_before_it_changes_the_keys() {
+    let dir = std::env::temp_dir();
+    let mut cx = context(&dir);
+    let statics = crate::ui::ScreenStatics::default();
+    cx.statics = Some(&statics);
+    let own = crate::player::TitleKeys::parse(RECORDED_KEYS.0, RECORDED_KEYS.1).unwrap();
+    let (key_def, joy_def) = own.definitions();
+    let folder =
+        std::env::temp_dir().join(format!("arklay-re2-key-default-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    let mut cx_open = context(&folder);
+    cx_open.statics = cx.statics;
+    let mut screen = LuaScreen::open_screen(
+        "title",
+        &[
+            ("key_def", ScreenArg::Str(key_def)),
+            ("joy_def", ScreenArg::Str(joy_def)),
+        ],
+        ScreenAction::Quit,
+        &mut cx_open,
+    )
+    .unwrap();
+    run(&mut screen, &cx, UiInput::default(), 70);
+    for _ in 0..4 {
+        run(&mut screen, &cx, press("down"), 20);
+    }
+    run(&mut screen, &cx, press("confirm"), 16);
+    assert_eq!(opt(&screen)[1], 1);
+    // Before the page first opens the edited keys are the defaults.
+    assert_eq!(kc(&screen).1, DEFAULT_KEYS);
+    open_key_page(&mut screen, &cx);
+    let recorded = "68626466004d004900004f4a5a4b0000000000000000000000262825270d201b";
+    assert_eq!(kc(&screen).1, recorded);
+    assert_eq!(
+        key_glyphs(&screen),
+        [
+            "230:44", "230:16", "174:44", "202:44", "Og", "J", "M", "K", "Z", "I"
+        ]
+    );
+    // The recorded pad: the right trigger, A, X, B, the menu and the view.
+    assert_eq!(
+        pad_glyphs(&screen)[4..],
+        [
+            (160, 183),
+            (160, 30),
+            (188, 30),
+            (174, 30),
+            (216, 30),
+            (230, 30)
+        ]
+    );
+    for _ in 0..6 {
+        run(&mut screen, &cx, press("down"), 2);
+    }
+    assert_eq!(opt(&screen)[3], 10);
+    run(&mut screen, &cx, press("right"), 2);
+    assert_eq!(
+        tick_cues(&mut screen, &cx, press("confirm")),
+        [UiCue::Core(6)]
+    );
+    assert_eq!(
+        (opt(&screen)[1], kc(&screen)),
+        (0xE, ("0,0,1".to_owned(), recorded.to_owned()))
+    );
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(
+        (opt(&screen)[1], kc(&screen)),
+        (0xB, ("0,0,1".to_owned(), DEFAULT_KEYS.to_owned()))
+    );
+    // The six changed keys are red, and the pad's changed buttons: X, B, Y,
+    // the view and the menu, with A as it was.
+    assert_eq!(
+        key_glyphs(&screen),
+        [
+            "230:44", "230:16", "174:44", "202:44", "Xr", "Cr", "Vr", "Zr", "8:176r", "Ar"
+        ]
+    );
+    assert_eq!(
+        pad_glyphs(&screen)[4..],
+        [
+            (188, 114),
+            (160, 30),
+            (174, 114),
+            (202, 114),
+            (230, 114),
+            (216, 114)
+        ]
+    );
+    run(&mut screen, &cx, press("left"), 2);
+    assert_eq!(
+        tick_cues(&mut screen, &cx, press("confirm")),
+        [UiCue::Core(6)]
+    );
+    assert_eq!(opt(&screen)[1], 0xF);
+    assert_eq!(
+        key_words(&screen)[10..],
+        [("Change".to_owned(), true), ("Leave".to_owned(), false)]
+    );
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(
+        tick_cues(&mut screen, &cx, press("right")),
+        [UiCue::Core(4)]
+    );
+    assert_eq!(
+        key_words(&screen)[10..],
+        [("Change".to_owned(), false), ("Leave".to_owned(), true)]
+    );
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(
+        tick_cues(&mut screen, &cx, press("confirm")),
+        [UiCue::Core(6)]
+    );
+    assert_eq!(opt(&screen)[1..5], [0xD, 0, 10, 5]);
+    run(&mut screen, &cx, UiInput::default(), 5);
+    assert_eq!(
+        (opt(&screen)[1], kc(&screen).0.as_str()),
+        (1, "0,0,1"),
+        "the choice stands"
+    );
+    // Leave kept the settings: the page opens with them again, choice 0.
+    run(&mut screen, &cx, press("confirm"), 2);
+    assert_eq!(kc(&screen), ("30,0,0".to_owned(), recorded.to_owned()));
+    run(&mut screen, &cx, press("confirm"), 2);
+    run(&mut screen, &cx, press("confirm"), 2);
+    for _ in 0..5 {
+        run(&mut screen, &cx, press("up"), 2);
+    }
+    run(&mut screen, &cx, press("right"), 2);
+    run(&mut screen, &cx, press("confirm"), 2);
+    run(&mut screen, &cx, press("left"), 2);
+    run(&mut screen, &cx, press("confirm"), 2);
+    assert_eq!(opt(&screen)[1], 0xF);
+    // The cancel key answers too, with Change.
+    let cancel = UiInput {
+        cancel: true,
+        ..UiInput::default()
+    };
+    assert_eq!(tick_cues(&mut screen, &cx, cancel), [UiCue::Core(6)]);
+    run(&mut screen, &cx, UiInput::default(), 5);
+    assert_eq!(opt(&screen)[1], 1);
+    open_key_page(&mut screen, &cx);
+    assert_eq!(kc(&screen).1, DEFAULT_KEYS);
+    assert_eq!(
+        key_glyphs(&screen),
+        [
+            "230:44", "230:16", "174:44", "202:44", "Xg", "C", "V", "Z", "8:176", "A"
+        ],
+        "the settings are the defaults now: nothing is red"
+    );
+    let _ = std::fs::remove_dir_all(&folder);
+    // A title opened anew finds the keys the last one changed, not the
+    // boot's.
+    let mut cx_open = context(&dir);
+    cx_open.statics = cx.statics;
+    let (key_def, joy_def) = own.definitions();
+    let mut again = LuaScreen::open_screen(
+        "title",
+        &[
+            ("key_def", ScreenArg::Str(key_def)),
+            ("joy_def", ScreenArg::Str(joy_def)),
+        ],
+        ScreenAction::Quit,
+        &mut cx_open,
+    )
+    .unwrap();
+    run(&mut again, &cx, UiInput::default(), 70);
+    for _ in 0..4 {
+        run(&mut again, &cx, press("down"), 20);
+    }
+    run(&mut again, &cx, press("confirm"), 16);
+    open_key_page(&mut again, &cx);
+    assert_eq!(kc(&again).1, DEFAULT_KEYS);
+}
+
+/// config.ini's `KeyDef` and `JoyDef_Emulated` in the install the
+/// recordings were made from.
+const RECORDED_KEYS: (&str, &str) = (
+    "68 62 64 66 00 4D 00 49 00 00 4F 4A 5A 4B 00 00 00 00 00 00 00 00 00 00 00 26 28 25 27 0D 20 1B",
+    "00 10 00 00 00 40 00 00 00 80 00 00 00 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+     80 00 00 00 00 08 00 00 44 00 00 00 00 00 00 00 00 01 00 00 10 00 00 00 02 00 00 00 00 00 00 00 \
+     00 00 00 00 08 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+);
+
+/// A key's letter is printed where the original's whole font cell puts its
+/// glyph (`title_option_key`'s frames): the print's width for a glyph is its
+/// ink and a pixel, and the glyph sits half of what that leaves of 15
+/// pixels in.
+#[test]
+fn a_keys_letter_sits_in_the_middle_of_its_cell() {
+    let dir = std::env::temp_dir();
+    let cx = context(&dir);
+    let (screen, dir) = open_option(&cx, "key-letter");
+    let place =
+        |width: i64| -> i64 { screen.test_eval(&format!("return M.option_key_x(0x9C, {width})")) };
+    // O, J, M and I as the recordings have them: ink 12, 12, 14 and 6 wide.
+    assert_eq!(
+        [place(13), place(13), place(15), place(7)],
+        [157, 157, 156, 160]
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 

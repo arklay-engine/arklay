@@ -1,0 +1,64 @@
+# The title from boot to OPTION and its KEYCONFIG page: the model's walk in and turn left to run, the keyboard's own arrows over the rows (one press, a held one, the sideways ones off the last row), the pad's buttons (nothing), the wrap at both ends, the choice on the last row, Exit's decide, and the menu's EXIT (oracle/re2.md, "The option screen").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+350 down
+353
+400 confirm
+403
+440 confirm
+443
+540 kbdown
+543
+560 kbdown
+590
+600 kbup
+603
+620 kbup
+650
+660 kbleft
+663
+670 kbright
+673
+700 confirm
+703
+710 cancel
+713
+720 start
+723
+730 kbup
+733
+740 kbup
+743
+750 kbup
+753
+760 kbup
+763
+770 kbup
+773
+780 kbdown
+783
+790 kbup
+793
+800 kbright
+803
+815 kbright
+818
+830 kbleft
+833
+845 kbleft
+848
+860 confirm
+863
+900 down
+903
+910 down
+913
+920 down
+923
+940 confirm
+943

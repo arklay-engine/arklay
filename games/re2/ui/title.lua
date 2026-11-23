@@ -1203,9 +1203,7 @@ end
 -- (0x44A0B0) with its draw (0x44B180), and step 2 the exit (0x44AED0).
 -- `Config_main`'s states: 0 the fade in, 1 the menu, 3 and 7 MONITOR
 -- TUNING's picture, 4 the SOUND page and 8 the wait after a change there, 6,
--- 0x16 and 0x17 the way out. KEYCONFIG (states 2 and 9 to 0x15, the keys'
--- page with the player's model) isn't ported: its row takes no decide
--- (oracle/re2-deviations.md, "The title"; #807).
+-- 0x16 and 0x17 the way out, and 2 and 9 to 0xF KEYCONFIG's page (below).
 --
 -- The sheets are textures 0x1B (`moji1.tim`, the words) and 0x1A
 -- (`parts.tim`, the arrows); the volumes' digits are the message font's.
@@ -1217,6 +1215,9 @@ local OPT_GREY, OPT_GREEN = { 0x80, 0x80, 0x80 }, { 0x00, 0xA0, 0x20 }
 -- The cursor's row in Classic REbirth's print, and in the digits, which
 -- take the sheets' green at the font's level.
 local OPT_TEXT_GREEN, OPT_DIGIT_GREEN = { colour = "#00C80A", row = 1 }, "#00FF40"
+-- A changed key's letter on KEYCONFIG's page: the sheets' red (0x80, 0x10,
+-- 0x10) at the font's level, as the digits take the green.
+local OPT_KEY_RED = "#FF2020"
 
 -- The sound settings, which outlast a visit: the speaker mode (1 monaural, 2
 -- stereo), the quality (`Config_get_squal`: 0 is 44.1 kHz at 16 bits) and
@@ -1373,8 +1374,383 @@ function M.option_digit_x(cell, digit, width, by_table)
     return cell + (15 - width) // 2 - (digit == "6" and 1 or 0)
 end
 
+-- Where the print puts a key's letter for the original's cell on
+-- KEYCONFIG's page: the font's glyphs sit in the middle of their 14-pixel
+-- cells, and the print's width for one is its ink and a pixel (the table's
+-- `O`, as wide as its ink, sits a pixel in like the rest), so a glyph is
+-- half of what its width leaves of 15 pixels in.
+function M.option_key_x(cell, width)
+    return cell + (15 - width) // 2
+end
+
 local OPT_SPEAKERS = { "MONO", "STEREO" }
 local OPT_QUALITIES = { [0] = "HIGH", "MEDIUM", "LOW" }
+
+-- ------------------------------------------------------- KEYCONFIG's page
+--
+-- `Config_main`'s states 2 and 9 to 0xF: 2 opens the page (a tick), 9 is
+-- the model's walk in (30 ticks, or the decide key), 10 the list's rows
+-- coming one every five ticks (54 ticks, or the decide key), 0xB the list
+-- with its cursor, 0xD the five ticks back to the menu, 0xE Default's
+-- tables, and 0xF the question when Exit finds the keys changed. Not ported
+-- (#807): the player's model beside the list (its walk in, its turn and what
+-- it acts out for each row), and state 0xC, which binds a key pressed on the
+-- keyboard or the joypad itself to the cursor's row, as a screen isn't
+-- given the devices' own keys.
+--
+-- The list is Classic REbirth's draw of the original's (`DrawConfigTim`,
+-- 0x44C5D0, which it replaces): the same places, with its own print for the
+-- words and its own pad glyphs in `parts.tim`, so the recordings are where
+-- the words and the pad's glyphs come from. The rows are the keyboard's own
+-- arrows and the joypad's directions in the original (`0x99CF64`'s fixed
+-- keys, not the keys the page binds); here they are the directions.
+
+-- The rows: the key table's entry each binds (`Config_main`'s state 0xC),
+-- the pad's word for it, its place (0x44C5D0's `y0`s) and its name.
+local KEY_ROWS = {
+    [0] = { key = 0, pad = 0x1000, y = 0x20, name = "Forward" },
+    { key = 1, pad = 0x4000, y = 0x30, name = "Backward" },
+    { key = 2, pad = 0x8000, y = 0x40, name = "Turn left" },
+    { key = 3, pad = 0x2000, y = 0x50, name = "Turn right" },
+    { key = 10, pad = 0x08, y = 0x64, name = "Get Ready" },
+    { key = 11, pad = 0x80, y = 0x75, name = "Fire/Confirm" },
+    { key = 5, pad = 0x44, y = 0x86, name = "Run/Cancel" },
+    { key = 13, pad = 0x800, y = 0x97, name = "Status" },
+    { key = 12, pad = 0x100, y = 0xAC, name = "Configure" },
+    { key = 7, pad = 0x10, y = 0xBC, name = "Map" },
+}
+-- The last row: Exit and Default, or under the question Change and Leave.
+local KEY_EXIT_ROW = 10
+local KEY_LAST_Y = 0xD1
+
+-- The key table's fixed entries (the input class's keys 25 to 31): the
+-- arrows, Enter, the space bar and Escape, which no row binds.
+local KEY_FIXED = { [25] = 0x26, [26] = 0x28, [27] = 0x25, [28] = 0x27, [29] = 0x0D, [30] = 0x20, [31] = 0x1B }
+
+-- Default's tables (`FUN_0044da40` and `FUN_0044dab0`): the number pad's
+-- 8, 2, 4 and 6, then X, C, V, Z, Ctrl and A; and the pad's buttons.
+local function key_defaults(fixed)
+    local keys = {}
+    for i = 0, 31 do
+        keys[i] = i >= 25 and fixed[i] or 0
+    end
+    keys[0], keys[1], keys[2], keys[3] = 0x68, 0x62, 0x64, 0x66
+    keys[10], keys[11], keys[5], keys[13], keys[12], keys[7] = 0x58, 0x43, 0x56, 0x5A, 0x11, 0x41
+    return keys
+end
+
+local function pad_defaults()
+    local pad = {}
+    for i = 0, 31 do
+        pad[i] = 0
+    end
+    pad[0], pad[1], pad[2], pad[3] = 0x1000, 0x4000, 0x8000, 0x2000
+    pad[8], pad[9], pad[10], pad[11], pad[12], pad[13], pad[14] = 0x80, 0x44, 0x08, 0x800, 0x10, 0x100, 0x02
+    return pad
+end
+
+-- The page's statics. `keys` and `pad` are the settings (`Data`, 0x524DE8,
+-- a virtual key for each of the input class's 32 keys, and `Joypad_data`,
+-- 0x524D68, a pad word for each of the joypad's 32 buttons), which
+-- config.ini's `KeyDef` and `JoyDef` fill at the boot (`M.open`'s `key_def`
+-- and `joy_def`); `edit` and `edit_pad` are the copies the page changes
+-- (0x99CF40 and 0x99CF80), which hold Default's tables until the page first
+-- opens. `count` is state 9's (0x99CF60), `slide` the panel's offset
+-- (0x99CF34) and `choice` the last row's or the question's (0x6893C8).
+local key_work = {
+    count = 0,
+    slide = 0,
+    choice = 0,
+    keys = key_defaults(KEY_FIXED),
+    pad = pad_defaults(),
+    edit = key_defaults(KEY_FIXED),
+    edit_pad = pad_defaults(),
+}
+
+local function copy_table(from, to)
+    for i = 0, 31 do
+        to[i] = from[i]
+    end
+end
+
+local function same_table(a, b)
+    for i = 0, 31 do
+        if a[i] ~= b[i] then
+            return false
+        end
+    end
+    return true
+end
+
+-- A table of 32 values of `bits` bits as integers of 64 bits, which
+-- `api:keep` holds, and back.
+local function pack_table(values, bits)
+    local per = 64 // bits
+    local out = {}
+    for i = 0, 31 do
+        local n = i // per + 1
+        out[n] = (out[n] or 0) | (values[i] << (i % per * bits))
+    end
+    return out
+end
+
+local function unpack_table(words, bits, into)
+    local per = 64 // bits
+    for i = 0, 31 do
+        into[i] = (words[i // per + 1] >> (i % per * bits)) & ((1 << bits) - 1)
+    end
+end
+
+-- The four tables as `api:keep`'s keys: their names and their values' bits.
+local KEY_KEPT = { { "keys", "key_data", 8 }, { "edit", "key_edit", 8 }, { "pad", "key_pad", 16 }, { "edit_pad", "key_edit_pad", 16 } }
+
+-- The count, the offset and the choice aren't kept: the page always leaves
+-- the first two at 0 (state 0xB sets the count, nothing but 0 is written to
+-- the offset), and `Config_set_data` clears the choice on every visit.
+local function key_restore(api)
+    for _, kept in ipairs(KEY_KEPT) do
+        local words, count = {}, 32 * kept[3] // 64
+        for n = 1, count do
+            words[n] = api:kept(kept[2] .. n)
+        end
+        if #words == count then
+            unpack_table(words, kept[3], key_work[kept[1]])
+        end
+    end
+end
+
+local function key_keep(api)
+    for _, kept in ipairs(KEY_KEPT) do
+        for n, word in ipairs(pack_table(key_work[kept[1]], kept[3])) do
+            api:keep(kept[2] .. n, word)
+        end
+    end
+end
+
+-- config.ini's `KeyDef` or `JoyDef` (`M.open`'s `key_def` and `joy_def`):
+-- bytes in hex, 32 keys or 32 words of four bytes, low byte first.
+local function key_definition(text, size, into)
+    local bytes = {}
+    for byte in text:gmatch("%x%x") do
+        bytes[#bytes + 1] = tonumber(byte, 16)
+    end
+    if #bytes ~= 32 * size then
+        return false
+    end
+    for i = 0, 31 do
+        local value = 0
+        for b = size, 1, -1 do
+            value = value << 8 | bytes[i * size + b]
+        end
+        into[i] = value & 0xFFFF
+    end
+    return true
+end
+
+-- The trace's `kc`: the count, the panel's offset and the choice, then the
+-- table being edited.
+local function key_trace()
+    local bytes = {}
+    for i = 0, 31 do
+        bytes[#bytes + 1] = string.format("%02x", key_work.edit[i])
+    end
+    return string.format("%d,%d,%d/%s", key_work.count, key_work.slide, key_work.choice, table.concat(bytes))
+end
+
+-- `parts.tim`'s glyphs, 14 by 14: the pad's by the joypad's button (the
+-- directions, then A, B, X, Y, the menu and the view buttons from 8, and
+-- the right trigger at 17), as they stand, lit under the cursor, and red
+-- when the page has changed them.
+local KEY_PAD_GLYPHS = {
+    [0] = { { 188, 72 }, { 223, 227 }, { 188, 156 } },
+    [1] = { { 146, 30 }, { 188, 183 }, { 146, 114 } },
+    [2] = { { 174, 72 }, { 209, 227 }, { 174, 156 } },
+    [3] = { { 202, 72 }, { 237, 227 }, { 202, 156 } },
+    [8] = { { 160, 30 }, { 13, 241 }, { 160, 114 } },
+    [9] = { { 174, 30 }, { 27, 241 }, { 174, 114 } },
+    [10] = { { 188, 30 }, { 41, 241 }, { 188, 114 } },
+    [11] = { { 202, 30 }, { 55, 241 }, { 202, 114 } },
+    [12] = { { 216, 30 }, { 69, 241 }, { 216, 114 } },
+    [13] = { { 230, 30 }, { 83, 241 }, { 230, 114 } },
+    [17] = { { 146, 183 }, { 160, 183 }, { 174, 183 } },
+}
+
+-- `Config_draw_key` (0x44CD40): the sheet's glyph for a virtual key that
+-- has one, `{u, v, w}`. The number pad's keys are the underlined digits
+-- and signs; a letter or a digit is the font's own cell.
+local KEY_GLYPHS = {
+    [0x08] = { 0x35, 0xB0, 15 },
+    [0x09] = { 0x17, 0xB0, 15 },
+    [0x10] = { 0x26, 0xB0, 15 },
+    [0x11] = { 0x08, 0xB0, 15 },
+    [0xF0] = { 0x44, 0xB0, 15 },
+    [0x6A] = { 0xD8, 0x56, 14 },
+    [0x6B] = { 0xD8, 0x48, 14 },
+    [0x6D] = { 0xE6, 0x48, 14 },
+    [0x6E] = { 0xA0, 0x48, 14 },
+    [0x6F] = { 0xE6, 0x56, 14 },
+    [0xBA] = { 0xE6, 0x3A, 14 },
+    [0xBB] = { 0x92, 0x2C, 14 },
+    [0xBC] = { 0x92, 0x56, 14 },
+    [0xBE] = { 0xA0, 0x56, 14 },
+    [0xC0] = { 0xAE, 0x56, 14 },
+    [0xDC] = { 0xBC, 0x56, 14 },
+    [0xDE] = { 0xCA, 0x56, 14 },
+    [0xE2] = { 0xD8, 0x3A, 14 },
+}
+for digit = 0, 9 do
+    local row = digit == 9 and 2 or digit < 3 and 0 or 1
+    KEY_GLYPHS[0x60 + digit] = { 0x92 + (digit + 4 + (digit > 2 and 1 or 0)) * 14 % 0x62, 0x10 + row * 28, 14 }
+end
+
+-- A changed key's colour, which the cursor's doesn't replace.
+local KEY_RED = { 0x80, 0x10, 0x10 }
+
+-- The pad's button whose word is `word` in the table being edited.
+local function key_pad_button(word)
+    for i = 0, 31 do
+        if key_work.edit_pad[i] == word then
+            return i
+        end
+    end
+end
+
+-- The list (0x44C5D0): the rows the count has reached, `type / 5` rows short
+-- of them all, the cursor's lit, and a changed key or button red.
+local function key_draw_list(rows_short, cursor)
+    local o = s.opt
+    option_sprt(OPT_WORDS, 0x8C, 0x14, 0xE2, 0, 0x1E, OPT_GREY)
+    s.sprites[#s.sprites].h = 12
+    for row = 0, 10 - rows_short do
+        local on = row == cursor
+        if row == KEY_EXIT_ROW then
+            local question = o.state == 0xF
+            s.opt_texts[#s.opt_texts + 1] = {
+                x = question and 0x98 or 0x8E,
+                y = KEY_LAST_Y,
+                text = question and "Change" or "Exit",
+                on = on and key_work.choice == 0,
+            }
+            s.opt_texts[#s.opt_texts + 1] = {
+                x = question and 0xE5 or 0xD4,
+                y = KEY_LAST_Y,
+                text = question and "Leave" or "Default",
+                on = on and key_work.choice == 1,
+            }
+        else
+            local entry = KEY_ROWS[row]
+            s.opt_texts[#s.opt_texts + 1] = { x = 0xAE, y = entry.y, text = entry.name, on = on }
+            local button = key_pad_button(entry.pad)
+            local glyph = button and KEY_PAD_GLYPHS[button]
+            if glyph then
+                local changed = key_work.pad[button] ~= key_work.edit_pad[button]
+                local at = glyph[changed and 3 or on and 2 or 1]
+                option_sprt(OPT_PARTS, 0x8C, entry.y, at[1], at[2], 14, OPT_GREY)
+            end
+            local key = key_work.edit[entry.key]
+            local changed = key ~= key_work.keys[entry.key]
+            local sheet = KEY_GLYPHS[key]
+            if sheet then
+                local colour = changed and KEY_RED or option_colour(on)
+                option_sprt(OPT_PARTS, 0xA2 - (sheet[3] == 15 and 7 or 6), entry.y, sheet[1], sheet[2], sheet[3], colour)
+            elseif key >= 0x30 and key <= 0x39 or key >= 0x41 and key <= 0x5A then
+                s.opt_texts[#s.opt_texts + 1] = { key = 0x9C, y = entry.y, text = string.char(key), on = on, red = changed }
+            end
+        end
+    end
+end
+
+-- The page's draw (0x44B180's cases 9 to 0xF): the panel (`FUN_0044c570`,
+-- a tile added at 0x19 a channel), and the list from state 10.
+local function key_draw()
+    local o = s.opt
+    s.key_panel = { x = key_work.slide + 0x88, y = 0x11, w = 0xB1, h = 0xD1 }
+    if o.state == 10 then
+        key_draw_list(o.type // 5, -1)
+    elseif o.state ~= 9 then
+        key_draw_list(0, o.type)
+    end
+end
+
+-- The page's ticks (`Config_main`'s cases 2 and 9 to 0xF).
+local function key_main()
+    local o = s.opt
+    local k = key_work
+    local trg = s.edge
+    if o.state == 2 then
+        copy_table(k.keys, k.edit)
+        copy_table(k.pad, k.edit_pad)
+        k.count = 0x1E
+        s.cue(8)
+        o.state = 9
+        k.choice = 0
+    elseif o.state == 9 then
+        k.count = k.count - 1
+        if k.count < 0 or trg & PAD_CONFIRM ~= 0 then
+            o.state = 10
+            k.slide = 0
+            o.type = 0x36
+        end
+    elseif o.state == 10 then
+        o.type = o.type - 1
+        if o.type == 0 or trg & PAD_CONFIRM ~= 0 then
+            o.type = 4
+            o.state = 0xB
+            k.count = 0
+        end
+    elseif o.state == 0xB then
+        if o.type == KEY_EXIT_ROW and s.key_trg & KEY_CONFIRM ~= 0 then
+            s.cue(SE_DECIDE)
+            if k.choice ~= 0 then
+                o.state = 0xE
+            elseif same_table(k.keys, k.edit) and same_table(k.pad, k.edit_pad) then
+                o.state = 0xD
+                o.wait = 5
+            else
+                o.state = 0xF
+            end
+        elseif trg & PAD_UP ~= 0 then
+            s.cue(SE_CURSOR)
+            o.type = o.type - 1
+            if o.type < 0 then
+                o.type = KEY_EXIT_ROW
+            end
+        elseif trg & PAD_DOWN ~= 0 then
+            s.cue(SE_CURSOR)
+            o.type = o.type + 1
+            if o.type > KEY_EXIT_ROW then
+                o.type = 0
+            end
+        elseif trg & (PAD_LEFT | PAD_RIGHT) ~= 0 and o.type == KEY_EXIT_ROW then
+            s.cue(SE_CURSOR)
+            k.choice = k.choice ~ 1
+        end
+    elseif o.state == 0xD then
+        o.wait = o.wait - 1
+        if o.wait == 0 then
+            o.state = 1
+            o.type = 0
+            o.cursor = 0
+        end
+    elseif o.state == 0xE then
+        copy_table(key_defaults(k.keys), k.edit)
+        copy_table(pad_defaults(), k.edit_pad)
+        o.state = 0xB
+    elseif o.state == 0xF then
+        if trg & (PAD_LEFT | PAD_RIGHT) ~= 0 then
+            s.cue(SE_CURSOR)
+            k.choice = k.choice ~ 1
+        elseif trg & (PAD_CONFIRM | PAD_CANCEL) ~= 0 then
+            s.cue(SE_DECIDE)
+            if k.choice == 0 then
+                copy_table(k.edit, k.keys)
+                copy_table(k.edit_pad, k.pad)
+            end
+            o.state = 0xD
+            o.wait = 5
+        end
+    end
+end
 
 -- The draw (0x44B180), by the state `Config_main` left.
 local function option_draw()
@@ -1399,6 +1775,8 @@ local function option_draw()
         option_exit(0x84, 0x9C, o.type == 4)
     elseif state == 7 then
         option_exit(0xF5, 0xCA, true)
+    elseif state >= 9 and state ~= 0xD and state <= 0xF then
+        key_draw()
     end
 end
 
@@ -1516,8 +1894,8 @@ local function option_main(api)
         end
         -- The decide adds the row to the state as it stands, which after a
         -- START on the same tick is a state the original has no case for;
-        -- here START's way out stands. KEYCONFIG's row takes no decide.
-        if trg & PAD_CONFIRM ~= 0 and o.state == 1 and o.cursor ~= 0 then
+        -- here START's way out stands.
+        if trg & PAD_CONFIRM ~= 0 and o.state == 1 then
             if o.cursor == 3 then
                 s.cue(SE_CANCEL)
                 o.state = 6
@@ -1530,6 +1908,8 @@ local function option_main(api)
             s.cue(SE_CANCEL)
             option_leave()
         end
+    elseif o.state == 2 or o.state >= 9 and o.state <= 0xF then
+        key_main()
     elseif o.state == 3 then
         s.background = api:picture("ui/option/color2")
         o.state = 7
@@ -1573,6 +1953,11 @@ local function option_task(api)
         -- screen's mask with its own delays, which the title keeps after.
         s.rep_mask, s.rep_delay = 0xF01C, 0x40C
         s.limiter = 2
+        key_work.choice = 0
+        -- `FUN_0044b100`, before it: the player KEYCONFIG's page shows is
+        -- Leon or Claire by the title's generator, a pick every visit, so
+        -- the title's later picks (its film, its demo) are one further on.
+        o.model = title_rnd(api, 2)
         s.background = api:picture("ui/option/room")
         fade_set(0x200, -0x1800)
         o.step = 1
@@ -1581,6 +1966,7 @@ local function option_task(api)
     elseif o.step == 1 then
         option_main(api)
         option_keep(api)
+        key_keep(api)
     else
         -- The exit: the task ends, and the title's wakes on the next tick.
         s.opt = nil
@@ -2249,6 +2635,8 @@ local function publish(api)
         api:set("opt_blink_se", o.blink.se)
         api:set("opt_blink_exit", o.blink.exit)
     end
+    -- The trace's `kc`, KEYCONFIG's page, while the option task runs.
+    s.kc = o and key_trace() or nil
 end
 
 local function any_saves(api, args)
@@ -2271,6 +2659,15 @@ function M.open(api, args)
     s = new_state()
     M.state = s
     option_restore(api)
+    -- The keys config.ini gives the boot, until the page has kept its own.
+    if args and args.key_def and not api:kept("key_data1") then
+        key_definition(args.key_def, 1, key_work.keys)
+        copy_table(key_defaults(key_work.keys), key_work.edit)
+    end
+    if args and args.joy_def and not api:kept("key_pad1") then
+        key_definition(args.joy_def, 4, key_work.pad)
+    end
+    key_restore(api)
     s.any_saves = any_saves(api, args or {})
     pages = {
         [0] = api:indexed_page("ui/title/tmoji_0"),
@@ -2323,6 +2720,7 @@ function M.update(api, input)
     s.bands = nil
     s.sleeping = false
     s.opt_texts = {}
+    s.key_panel = nil
     -- What the frame shows besides the tick's draw: "black" on a tick with
     -- no draw at all, "held" while the last presented frame stays up.
     s.frame = nil
@@ -2511,12 +2909,15 @@ local function lut_for(page, colour, tint)
         return lut
     end
     lut = {}
+    -- The option screen's tints round to the nearest level (its lit words'
+    -- blue is a level over the truncated product in the recordings).
+    local half = tint and 64 or 0
     for index = 1, 255 do
         local rgb = page.palette[index]
         if rgb and rgb ~= 0 then
-            local r = (expand((rgb >> 16) & 0xFF) * cr) >> 7
-            local g = (expand((rgb >> 8) & 0xFF) * cg) >> 7
-            local b = (expand(rgb & 0xFF) * cb) >> 7
+            local r = (expand((rgb >> 16) & 0xFF) * cr + half) >> 7
+            local g = (expand((rgb >> 8) & 0xFF) * cg + half) >> 7
+            local b = (expand(rgb & 0xFF) * cb + half) >> 7
             r = r > 255 and 255 or r
             g = g > 255 and 255 or g
             b = b > 255 and 255 or b
@@ -2565,6 +2966,11 @@ function M.draw(api)
             cache[k] = { page = pages[k], palette = api:page_palette(pages[k], 0) or {} }
         end
     end
+    -- KEYCONFIG's panel: a tile behind the sprites (depth 0xF), added.
+    if s.key_panel then
+        local p = s.key_panel
+        api:fade_tile(1, 0x19, ox + p.x, oy + p.y, p.w, p.h)
+    end
     -- By depth, the farthest first: the 4th Survivor's name (12) and logo
     -- (11), the words (10), then the title's logo (6). A depth's sprites go
     -- last-added first, as `AddPrimitiveFront` lists them.
@@ -2598,7 +3004,10 @@ function M.draw(api)
     -- about a word.
     for _, t in ipairs(s.opt_texts or {}) do
         local parts = cache[OPT_PARTS]
-        if t.cell then
+        if t.key then
+            local x = M.option_key_x(t.key, api:text_width(t.text))
+            api:text(ox + x, oy + t.y, t.text, { colour = t.red and OPT_KEY_RED or t.on and OPT_DIGIT_GREEN or nil })
+        elseif t.cell then
             local x = M.option_digit_x(t.cell, t.text, api:text_width(t.text), CrText.by_table(api))
             api:text(ox + x, oy + t.y, t.text, { colour = t.on and OPT_DIGIT_GREEN or nil })
         else

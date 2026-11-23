@@ -12171,6 +12171,11 @@ impl App {
         if let Some(seed) = self.player_options.title_seed {
             args.push(("seed", ScreenArg::Int(i64::from(seed))));
         }
+        if let Some(keys) = &self.player_options.title_keys {
+            let (key_def, joy_def) = keys.definitions();
+            args.push(("key_def", ScreenArg::Str(key_def)));
+            args.push(("joy_def", ScreenArg::Str(joy_def)));
+        }
         if let Some(after) = after {
             args.push(("after", ScreenArg::Str(after.to_owned())));
             // Fade 0's step is the game's last (a death's `0x200`), which
@@ -14334,6 +14339,12 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
             ));
         } else {
             line.push_str(" opt=-");
+        }
+        // KEYCONFIG's page, as `scripts/oracle-re2.py`'s `kc` has it: the
+        // script writes the field's value itself.
+        match screen.state_str("kc") {
+            Some(page) => line.push_str(&format!(" kc={page}")),
+            None => line.push_str(" kc=-"),
         }
         // The gallery's task, as `scripts/oracle-re2.py`'s `gal` and `galv`
         // have it.
