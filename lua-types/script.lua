@@ -319,6 +319,18 @@ function save_game(path) end
 ---@return { region: string, offset: integer, ours: string, theirs: string }[]? differ With `reference`: each region that differs, by name, with the offset of its first differing byte and both images' bytes from there to its last, in hex; empty when the two match.
 function re2_save_image(reference) end
 
+---The session's save folder read back with the engine's own reader, a row a
+---file in name order. A row is `{ name, count }` for an RE 2 save whose RE 2
+---trailer parses and applies (a supported older layout does), with `count`
+---its save count; `{ name, error }` for any other file. `references` maps a
+---save count to an original's `.BIOHAZARD2` file: a save of that count also
+---gets `differ`, the regions where the image of the game it holds (as a load
+---applies it) differs from that file under the image's mask, as
+---[`re2_save_image`](#re2_save_image) returns them.
+---@param references? table<integer, string>
+---@return { name: string, count?: integer, error?: string, differ?: { region: string, offset: integer, ours: string, theirs: string }[] }[]
+function re2_saves(references) end
+
 ---Start writing the oracle trace (`oracle/trace-v1.md`) to `path`: one line
 ---per gameplay tick from the next tick on. A trace already running is closed first.
 ---

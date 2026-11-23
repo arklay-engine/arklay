@@ -117,9 +117,10 @@ pub const REGIONS: &[Region] = &[
     // The new game's `DWORD_0098e9c4 = DWORD_0099c8a8 & 1`, and
     // `Flg_on(.., 0x12)` (0x2000) under `DWORD_00995b48 & 0x40`
     // (`FUN_004b73c0`). In play only the status screen's Konami code writes
-    // it (`Status`, `0x501BD0`: `| 0xFFFFFF00`, or back to bit 0 and
-    // 0x2000), which arklay doesn't port: a recording that enters it differs
-    // in the bits it sets.
+    // it (`Status`, `0x501BD0`), which arklay doesn't port: its first entry
+    // raises `0xFFFFFF00`, and its second puts the word back to bit 0 and
+    // raises 0x2000, both masked, so a recording's image differs only while
+    // the first entry's bits are up.
     masked_bits(
         "extras",
         0x228,
@@ -178,6 +179,23 @@ pub const REGIONS: &[Region] = &[
         "the memory past the work, the display environments (SetDefDispEnv at 0x98EF40), not saved state",
     ),
 ];
+
+/// The game an arklay save holds, as a load applies it (`SaveFile::apply_to`),
+/// for its image: an error unless the file has its RE 2 trailer and the
+/// trailer's state applies (a supported older layout does). Variable 27 is
+/// the save's own, before the load's `0x00FF`.
+pub fn saved_state(file: &crate::save::SaveFile) -> Result<GameState, String> {
+    let bytes = file.re2.as_deref().ok_or("no RE 2 trailer")?;
+    let mut saved = crate::scd2::host::Re2State::default();
+    saved
+        .load_save_bytes(bytes)
+        .ok_or("its RE 2 trailer's state has no supported length")?;
+    let mut game = GameState::new(file.room_id(), &crate::state::RoomState::default());
+    file.apply_to(&mut game);
+    let last = crate::scd2::host::VAR_LAST_RDT;
+    game.re2.vars[last] = saved.vars[last];
+    Ok(game)
+}
 
 /// `BYTE_00989e7e`, the row of `INIT_TBL.DAT` a new game copies: the
 /// character times two, plus one for scenario B.
@@ -553,5 +571,34 @@ mod tests {
         game.state_bytes[usize::from(crate::game::STATE_BYTE_SAVES)] = 1;
         game.re2.saves_high = 1;
         assert_eq!(u16_at(&build(&game, None), 0x220), 0x101);
+    }
+
+    #[test]
+    fn a_saved_state_needs_its_re2_trailer() {
+        let mut game = game();
+        game.state_bytes[usize::from(crate::game::STATE_BYTE_SAVES)] = 4;
+        game.re2.leave_room(RoomId::parse("1000").unwrap());
+        let file = crate::save::SaveFile::from_state(&game);
+        let saved = saved_state(&file).unwrap();
+        let image = build(&saved, None);
+        assert_eq!(u16_at(&image, 0x220), 4);
+        assert_eq!(
+            u16_at(&image, 0x348 + 27 * 2),
+            0x100,
+            "the save's own room left"
+        );
+        // An RE 1 block, and a trailer of no supported length.
+        let mut old = file.clone();
+        old.re2 = None;
+        assert!(saved_state(&old).is_err());
+        let mut cut = file.clone();
+        let bytes = cut.re2.as_mut().unwrap();
+        bytes.truncate(bytes.len() - 3);
+        assert!(saved_state(&cut).is_err());
+        // The layout from before the count's high byte still applies.
+        let mut older = file;
+        let bytes = older.re2.as_mut().unwrap();
+        bytes.truncate(bytes.len() - 1);
+        assert!(saved_state(&older).is_ok());
     }
 }
