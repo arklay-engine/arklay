@@ -57,6 +57,20 @@ pub struct TmdObject {
     pub prims: Vec<TmdPrim>,
 }
 
+impl TmdObject {
+    /// `Texture_Move`: the part's textured primitives go to page `page` of
+    /// the model's texture, counted from its first, each with the palette
+    /// row that goes with that page, as an RE 2 enemy's texture has one row
+    /// a page (a zombie's other clothes).
+    pub fn texture_move(&mut self, page: u8) {
+        for prim in self.prims.iter_mut().filter(|prim| prim.textured) {
+            let shift = i32::from(page & 0xF) - i32::from(prim.tsb & 0xF);
+            prim.tsb = (prim.tsb & !0xF) | u16::from(page & 0xF);
+            prim.clut = (i32::from(prim.clut) + (shift << 6)) as u16;
+        }
+    }
+}
+
 /// A parsed TMD mesh, usually one animated body part per object.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Tmd {
@@ -386,4 +400,48 @@ pub struct Emw {
     pub keyframes: Vec<Keyframe>,
     pub clips: Vec<Clip>,
     pub mesh: Tmd,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn prim(tsb: u16, clut: u16, textured: bool) -> TmdPrim {
+        TmdPrim {
+            vertices: [0; 3],
+            normals: [0; 3],
+            uv: [[0; 2]; 3],
+            clut,
+            tsb,
+            textured,
+            blend: false,
+            additive: false,
+            raw_y: false,
+            flat_color: None,
+            quad: None,
+            uv_nudge: [0; 3],
+        }
+    }
+
+    /// A zombie's part on page 1 (palette row 0x1E1) moved to page 3 takes
+    /// row 0x1E3, and one on page 0 moved to page 2 takes row 0x1E2, as
+    /// `Em10_Init` passes `Texture_Move` the page and its row; an
+    /// untextured primitive keeps its words.
+    #[test]
+    fn texture_move_takes_the_page_and_its_palette_row() {
+        let mut object = TmdObject {
+            prims: vec![
+                prim(0x81, 0x7840, true),
+                prim(0x80, 0x7800, true),
+                prim(0x81, 0x7840, false),
+            ],
+            ..TmdObject::default()
+        };
+        object.texture_move(3);
+        assert_eq!((object.prims[0].tsb, object.prims[0].clut), (0x83, 0x78C0));
+        assert_eq!((object.prims[1].tsb, object.prims[1].clut), (0x83, 0x78C0));
+        assert_eq!((object.prims[2].tsb, object.prims[2].clut), (0x81, 0x7840));
+        object.texture_move(2);
+        assert_eq!((object.prims[0].tsb, object.prims[0].clut), (0x82, 0x7880));
+    }
 }

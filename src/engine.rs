@@ -12160,10 +12160,15 @@ impl App {
         if let Some(after) = after {
             args.push(("after", ScreenArg::Str(after.to_owned())));
             // Fade 0's step is the game's last (a death's `0x200`), which
-            // nothing sets again before `Title_init`.
+            // nothing sets again before `Title_init`. `Rnd`'s state is the
+            // game's too, for the gallery's models to draw from.
             if let Mode::Play(session) = &self.mode {
                 let add = i64::from(session.room_fade.counter());
                 args.push(("fade_add", ScreenArg::Int(add)));
+                if session.game.is_re2_room {
+                    let rnd = i64::from(session.game.re2.rnd.0);
+                    args.push(("rnd", ScreenArg::Int(rnd)));
+                }
             }
         }
         self.sleeping_title = None;
@@ -14185,8 +14190,9 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
                 .and_then(|load| load.value("sv_fg_system"))
                 .unwrap_or(0) as u32;
         line.push_str(&format!(
-            " fgsys={:08x} ti={},{},{},{},{},{},{},{},{},{},{} tlogo={},{},{} tfade={},{},{},{},{} \
+            " rng={} fgsys={:08x} ti={},{},{},{},{},{},{},{},{},{},{} tlogo={},{},{} tfade={},{},{},{},{} \
              tsel={:x},{},{}",
+            v("ti_rnd"),
             fg_system,
             v("ti_mv"),
             v("ti_disp"),
@@ -40213,6 +40219,7 @@ off_0010:
             M.demo = args and args.after
             api:set('demo', M.demo == 'game' and 2 or M.demo == 'demo' and 1 or 0)
             api:set('fade_add', args and args.fade_add or -1)
+            api:set('rnd', args and args.rnd or -1)
         end
         function M.update(api, input)
             if not M.demo then
@@ -40704,8 +40711,8 @@ off_0010:
 
     /// A game of RE 2's goes back to a title that is told so
     /// (`Game_loop` chains it with `0x98F1BB` set, as after a demo a key
-    /// ended), with fade 0's step as the game left it. A title opened from
-    /// anywhere else isn't.
+    /// ended), with fade 0's step and `Rnd`'s state as the game left them.
+    /// A title opened from anywhere else isn't.
     #[test]
     fn re2s_title_after_a_game_is_told_so() {
         let dir = TempDir::new();
@@ -40720,12 +40727,15 @@ off_0010:
         };
         // A death's fade out.
         session.room_fade.set(2, 0x200, 0);
+        session.game.re2.rnd = crate::zombie2::Rnd(0x1234);
         app.apply(ScreenAction::Title).unwrap();
         assert_eq!(title_value(&app, "demo"), 2);
         assert_eq!(title_value(&app, "fade_add"), 0x200);
+        assert_eq!(title_value(&app, "rnd"), 0x1234);
         app.apply(ScreenAction::Title).unwrap();
         assert_eq!(title_value(&app, "demo"), 0, "from the title itself");
         assert_eq!(title_value(&app, "fade_add"), -1);
+        assert_eq!(title_value(&app, "rnd"), -1);
     }
 
     /// `Set_room`'s step 3 loads the stage's font and sleeps a tick when

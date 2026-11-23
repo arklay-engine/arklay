@@ -36,6 +36,8 @@
 -- boot" below).
 --
 -- args.folder_saves: a registered save screen lists the whole save folder.
+-- args.rnd: `Rnd`'s state as play left it (0x988610), which the gallery's
+-- models draw from; the boot's without it.
 
 local CrText = require("ui/cr_text")
 local Prologue = require("ui/prologue")
@@ -1054,7 +1056,12 @@ local function gallery()
             fade_off(2)
             -- `Task_execute(1, Gallery)`: the task's first step runs on
             -- this tick, and its menu from the next.
-            s.gal = Gallery.new(s.claire, s.gallery)
+            s.gal = Gallery.new(s.claire, s.gallery, {
+                rnd = s.rnd,
+                easy = s.fg_system & FG_EASY ~= 0,
+                censorship_off = s.censorship_off ~= 0,
+                hard_mode = s.hard_mode ~= 0,
+            })
             -- `Movie_set(1)`: this frame isn't presented, so the screen
             -- keeps the fade's last one.
             s.frame = "held"
@@ -2171,6 +2178,8 @@ end
 local function publish(api)
     Prologue.publish(api, s.pro)
     Gallery.publish(api, s.gal)
+    -- The trace's `rng`.
+    api:set("ti_rnd", s.rnd)
     if volumes_given then
         api:set("music_volume", sound.bgm)
         api:set("effects_volume", sound.se)
@@ -2281,6 +2290,7 @@ function M.open(api, args)
     s.open_choice = args and args.choice
     s.rep_mask, s.rep_delay = 0x5000, 0x20A
     s.seed = args and args.seed
+    s.rnd = (args and args.rnd or Gallery.RND_BOOT) & 0xFFFF
     -- After a game (`"game"`) or a demo played to its end (`"demo"`).
     if args and args.after then
         game_return(api, args.after == "demo", args.fade_add)
@@ -2328,6 +2338,7 @@ function M.update(api, input)
         -- The gallery's ticks: the title's task sleeps, through the tick
         -- the gallery closes on, which shows the title's picture alone.
         Gallery.tick(api, s.gal, s.edge, s.raw, s.cue)
+        s.rnd = s.gal.rnd
         s.sleeping = true
         if s.gal.film then
             -- A movie's film: the gallery runs on once it is over.

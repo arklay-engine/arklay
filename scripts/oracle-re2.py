@@ -2249,6 +2249,8 @@ def boot_trace_line(game: Game, tick: int, pad: int) -> str:
         f"t={tick}",
         f"room={game.u16(STAGE) + 1}:{game.u16(ROOM)}",
         f"pad={pad}",
+        # `Rnd`'s state, which the gallery's models draw from as they load.
+        f"rng={game.u32(RANDOM) & 0xFFFF}",
         f"fgsys={game.u32(FG_SYSTEM):08x}",
         title_trace(game),
         save_screen_trace(game),

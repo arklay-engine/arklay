@@ -28,6 +28,11 @@
 
 local M = {}
 
+-- What the boot leaves in `Rnd`'s state: `Init_main` seeds it as a new
+-- game's `Player_set` does, and the title draws nothing from it.
+local RND_BOOT = 0x6CA4
+M.RND_BOOT = RND_BOOT
+
 -- `Gallery_Padd`'s bits: the directions, and any button.
 local PAD_UP, PAD_RIGHT, PAD_DOWN, PAD_LEFT = 0x1000, 0x2000, 0x4000, 0x8000
 local PAD_BUTTONS = 0x0FFF
@@ -181,8 +186,18 @@ local ALL_OPEN = { 0xFFFFFFFF, 0xFFFFFFF0, 0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFF }
 -- words of what play has opened (`ALL_OPEN` without them). `clear` is the
 -- colour the renderer clears the next frame to, which stays as the last
 -- screen set it.
-function M.new(claire, open)
+--
+-- `game` is what the gallery reads of the game's state: `rnd`, `Rnd`'s
+-- state (0x988610), which the models' loads draw from and the title takes
+-- back when the gallery closes, and the flags those draws depend on,
+-- `easy` (`fg_system`'s 0x20), `censorship_off` and `hard_mode`.
+function M.new(claire, open, game)
+    game = game or {}
     return {
+        rnd = (game.rnd or RND_BOOT) & 0xFFFF,
+        easy = game.easy and true or false,
+        censorship_off = game.censorship_off and true or false,
+        hard_mode = game.hard_mode and true or false,
         task = 1,
         screen = 0,
         step = 0,
@@ -247,11 +262,93 @@ local function player(id)
     return ("player/%02x/model_1.pld"):format(id)
 end
 
+-- `Rnd` (0x4B2A90), on the game's state that `g.rnd` holds.
+local function rnd(g)
+    local x = g.rnd & 0xFFFF
+    local high = (x * 2 >> 8) & 0xFF
+    local low = (x + high) & 0xFF
+    g.rnd = high << 8 | low
+    return low
+end
+
+-- `n` draws whose numbers the gallery doesn't show: a life, a timer.
+local function draws(n)
+    return function(g)
+        for _ = 1, n do
+            rnd(g)
+        end
+        return {}
+    end
+end
+
+-- `Em10_Init`'s draws before the skins: the life (twice more on EASY),
+-- the walk, the stagger's count, ARRANGE MODE's roll for the quick step
+-- (and its count when it is taken) and HARD's count.
+local function em10_init(g)
+    draws(g.easy and 4 or 2)(g)
+    draws(3)(g)
+    if g.censorship_off then
+        local shift = rnd(g) & 3
+        if (rnd(g) >> shift) % 3 == 0 then
+            rnd(g)
+        end
+    end
+    if g.hard_mode then
+        rnd(g)
+    end
+end
+
+-- The parts `Em10_Init` moves to a zombie's other clothes: zombie 0x12's
+-- to its texture's fourth page but for two to its third, and zombie
+-- 0x1F's to its third.
+local SKIN_12 = { 0, 16, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14 }
+local SKIN_1F = { 0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 12, 13, 16 }
+
+-- What a zombie's load draws. Zombie 0x12 then draws twice for its skin:
+-- an odd first puts its head (part 8) on the third page, an even second
+-- its body on the fourth, its parts 11 and 14 on the third. Zombie 0x1F
+-- draws three times for one of its three skins, but the gallery's work
+-- has `Model_type` 2 (`GalleryLoadEm`), which picks the third page
+-- whatever they drew.
+local function em10(id)
+    return function(g)
+        em10_init(g)
+        local moves = {}
+        if id == 0x12 then
+            if rnd(g) & 1 ~= 0 then
+                moves[#moves + 1] = { 8, 2 }
+            end
+            if rnd(g) & 1 == 0 then
+                for _, part in ipairs(SKIN_12) do
+                    moves[#moves + 1] = { part, (part == 11 or part == 14) and 2 or 3 }
+                end
+            end
+        elseif id == 0x1F then
+            draws(3)(g)
+            for _, part in ipairs(SKIN_1F) do
+                moves[#moves + 1] = { part, 2 }
+            end
+        end
+        return { moves = moves }
+    end
+end
+
+-- `FUN_004b03d0`, enemy 0x3B's: it starts its first clip on a frame by
+-- one draw and faces by another (`Type` 0x1000's case, the default).
+local function em3b(g)
+    local frame = rnd(g) & 0xF
+    return { frame = frame, angle = rnd(g) << 4 }
+end
+
 -- A zombie as `Em10_Init` and its first tick leave it: on a frame of the
 -- zombies' shared animations, its head (part 8) a step of 96 round
 -- towards the player's work.
 local function zombie(id, height)
-    return { enemy(id), pose = { bank = 1, clip = 1, frame = 0, height = height, turn = { [8] = { 0, -96, 0 } } } }
+    return {
+        enemy(id),
+        pose = { bank = 1, clip = 1, frame = 0, height = height, turn = { [8] = { 0, -96, 0 } } },
+        init = em10(id),
+    }
 end
 
 -- The thirty-eight models (`model_tbl`, 0x523268), in order. A model
@@ -260,6 +357,11 @@ end
 -- view is the level one unless the table places it (`view`). The table's
 -- flag 8 tips a model forward (`pitch`), and its flag 0x10 swings one
 -- between two angles where the others turn (`swing`).
+--
+-- `init` is what the model's routine draws from `Rnd` as it loads (the
+-- enemy's routine, run once by `GalleryLoadEm`), and what of that shows: a
+-- zombie's skin (`moves`, for `api:character_model`), the first frame
+-- (`frame`) and the first angle (`angle`). Most draw nothing.
 --
 -- A pose's `turn` is what a routine's first tick adds to a part's angles:
 -- a neck's step towards the player's work, mostly. The short zombie's root
@@ -286,28 +388,35 @@ local MODELS = {
     zombie(0x17),
     zombie(0x18),
     zombie(0x1F),
-    { enemy(0x20), pose = { bank = 0, clip = 0, frame = 1 } },
+    { enemy(0x20), pose = { bank = 0, clip = 0, frame = 1 }, init = draws(2) },
     { enemy(0x21), pose = { bank = 0, clip = 0, frame = 0 }, view = before(250, 150, 2000) },
-    { enemy(0x22), pose = { bank = 0, clip = 1, frame = 0 }, view = before(700, 800, 5000) },
+    { enemy(0x22), pose = { bank = 0, clip = 1, frame = 0 }, view = before(700, 800, 5000), init = draws(1) },
     { enemy(0x23), pose = { bank = 0, clip = 1, frame = 0 }, view = before(100, 200, 13000), pitch = 150 },
-    { enemy(0x25), pose = { bank = 0, clip = 1, frame = 0 } },
-    { enemy(0x27), pose = { bank = 0, clip = 6, frame = 59 }, view = before(200, 200, 2000) },
-    { enemy(0x28), pose = { bank = 0, clip = 1, frame = 0, turn = { [4] = { 0, 10, 0 } } } },
+    { enemy(0x25), pose = { bank = 0, clip = 1, frame = 0 }, init = draws(2) },
+    { enemy(0x27), pose = { bank = 0, clip = 6, frame = 59 }, view = before(200, 200, 2000), init = draws(2) },
+    { enemy(0x28), pose = { bank = 0, clip = 1, frame = 0, turn = { [4] = { 0, 10, 0 } } }, init = draws(1) },
     { enemy(0x2A), view = before(600, 1800, 5000) },
     { enemy(0x2B), view = before(600, 2000, 6000) },
-    { enemy(0x2E), pose = { bank = 0, clip = 0, frame = 0 } },
+    { enemy(0x2E), pose = { bank = 0, clip = 0, frame = 0 }, init = draws(4) },
     { enemy(0x30), pose = { bank = 0, clip = 0, frame = 0 }, view = before(700, 1800, 5000) },
     { enemy(0x31) },
     {
         enemy(0x33),
         pose = { bank = 0, clip = 0, frame = 0, turn = { [3] = { 0, 64, 0 } } },
         view = before(600, 2000, 6200),
+        init = draws(1),
     },
-    { enemy(0x34), pose = { bank = 0, clip = 0, frame = 0, turn = { [26] = { 0, 16, -24 } } }, view = VIEW_HIGH },
+    {
+        enemy(0x34),
+        pose = { bank = 0, clip = 0, frame = 0, turn = { [26] = { 0, 16, -24 } } },
+        view = VIEW_HIGH,
+        init = draws(2),
+    },
     {
         enemy(0x36),
         view = before(1000, 2000, 12000),
         swing = { 600, 1700 },
+        init = draws(1),
         parts = {
             { 0, 1800, 4500, 0 },
             { 0, 800, 500, 0 },
@@ -317,7 +426,7 @@ local MODELS = {
         },
     },
     { enemy(0x3A), pose = { bank = 0, clip = 0, frame = 0 } },
-    { enemy(0x3B), pose = { bank = 0, clip = 0, frame = 11 }, view = before(250, 400, 2000) },
+    { enemy(0x3B), pose = { bank = 0, clip = 0, frame = 0 }, view = before(250, 400, 2000), init = em3b },
     { enemy(0x40) },
     { enemy(0x41) },
     { enemy(0x45) },
@@ -815,18 +924,34 @@ picture = function(api, g)
 end
 
 -- `GalleryLoadModel`: the model is loaded, the one before let go as a
--- picture is. An enemy's work is new, so it starts unturned; a player's is
--- the player's own.
+-- picture is, and its routine draws what it draws (`init`). An enemy's
+-- work is new, so it starts at the angle its routine sets, 0 for most; a
+-- player's is the player's own. A zombie's skin is a model of its own.
 model = function(api, g)
     local spec = MODELS[g.index + 1]
-    if held_model ~= spec[1] then
+    local loaded = spec.init and spec.init(g) or {}
+    local moves = loaded.moves or {}
+    local key = spec[1]
+    for _, move in ipairs(moves) do
+        key = key .. (" %d:%d"):format(move[1], move[2])
+    end
+    if held_model ~= key then
         if model_art then
             api:release(model_art)
         end
-        held_model = spec[1]
-        model_art = api:character_model(spec[1]) or false
+        held_model = key
+        model_art = api:character_model(spec[1], moves) or false
     end
-    g.turn = spec.player and player_turn or { y = 0 }
+    g.moves = moves
+    g.pose = spec.pose
+    if loaded.frame and spec.pose then
+        g.pose = {}
+        for key, value in pairs(spec.pose) do
+            g.pose[key] = value
+        end
+        g.pose.frame = loaded.frame
+    end
+    g.turn = spec.player and player_turn or { y = loaded.angle or 0 }
     g.swing = { at = 0, by = 5 }
 end
 
@@ -921,7 +1046,7 @@ local function draw_view(api, g, ox, oy, black)
         -- the frame is over it alone.
         local spec = MODELS[view.index + 1]
         api:draw_character(model_art, {
-            pose = spec.pose,
+            pose = g.pose,
             turn = view.model,
             view = spec.view or VIEW,
             parts = spec.parts,

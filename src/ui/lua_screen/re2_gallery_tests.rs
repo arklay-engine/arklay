@@ -1855,6 +1855,163 @@ fn one_model_is_tipped_forward_and_one_swings() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// `Rnd`'s state the title holds, which the gallery's loads draw from.
+fn rnd(screen: &LuaScreen) -> i64 {
+    screen.value("ti_rnd")
+}
+
+/// [`open_models`] with `Rnd`'s state at `seed` from the title's start, and
+/// the game's flags as `flags` (Lua assignments to the title's state) has
+/// them.
+fn open_models_from(
+    cx: &UiContext<'_>,
+    dir: &std::path::Path,
+    seed: u16,
+    flags: &str,
+) -> LuaScreen {
+    let mut screen = open_gallery_with(cx, dir, None);
+    let _: Option<bool> = screen.test_eval(&format!("M.state.rnd = {seed} {flags} return nil"));
+    run(&mut screen, cx, UiInput::default(), 20);
+    run(&mut screen, cx, press("right"), 5);
+    run(&mut screen, cx, press("confirm"), 18);
+    run(&mut screen, cx, UiInput::default(), 40);
+    run(&mut screen, cx, press("down"), 4);
+    run(&mut screen, cx, press("down"), 4);
+    run(&mut screen, cx, press("confirm"), 16);
+    run(&mut screen, cx, UiInput::default(), 2 + 32);
+    assert_eq!(screen.value("gal_screen"), 3);
+    screen
+}
+
+/// The parts the loaded model's skin moves, each `part:page`.
+fn moves(screen: &LuaScreen) -> String {
+    screen.test_eval(
+        "local out = {}
+        for _, move in ipairs(M.state.gal.moves) do
+            out[#out + 1] = move[1] .. ':' .. move[2]
+        end
+        return table.concat(out, ' ')",
+    )
+}
+
+#[test]
+fn each_models_load_draws_from_rnd_as_the_originals_routine_does() {
+    let dir = test_dir("gallery-model-rnd");
+    let cx = context(&dir);
+    let mut screen = open_models(&cx, &dir, None);
+    // From the boot `Rnd` is at 0x6CA4, which the title doesn't draw from.
+    assert_eq!(rnd(&screen), 0x6CA4);
+    // `gallery_claire_models_rnd`'s record, right round all thirty-eight
+    // from the first: the state after each load that drew, the others
+    // leaving it be. The zombies draw five, 0x12 seven and 0x1F eight.
+    let drawn: [(i64, i64); 19] = [
+        (5, 37614),
+        (6, 21100),
+        (7, 2520),
+        (8, 14645),
+        (9, 11546),
+        (10, 41475),
+        (11, 17993),
+        (12, 52564),
+        (13, 20568),
+        (14, 16697),
+        (16, 33467),
+        (18, 3019),
+        (19, 12049),
+        (20, 24175),
+        (23, 58231),
+        (26, 50749),
+        (27, 6626),
+        (28, 13077),
+        (30, 52295),
+    ];
+    let mut want = 0x6CA4;
+    for index in 1..=38 {
+        run(&mut screen, &cx, press("right"), 1);
+        assert_eq!(screen.value("gal_index"), index % 38);
+        if let Some(&(_, state)) = drawn.iter().find(|(at, _)| *at == index) {
+            want = state;
+        }
+        assert_eq!(rnd(&screen), want, "model {index}");
+    }
+    // The menu draws nothing from it.
+    run(&mut screen, &cx, press("down"), 1);
+    run(&mut screen, &cx, UiInput::default(), 40);
+    assert_eq!(screen.value("gal_screen"), 0);
+    assert_eq!(rnd(&screen), 52295);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_zombies_skins_and_model_30s_start_are_rnds() {
+    let dir = test_dir("gallery-model-skins");
+    let cx = context(&dir);
+    let body_on_page_3 = "0:3 16:3 1:3 2:3 3:3 4:3 5:3 6:3 7:3 9:3 10:3 11:2 12:3 13:3 14:2";
+    let turn_to = |screen: &mut LuaScreen, index: i64| {
+        while screen.value("gal_index") != index {
+            run(screen, &cx, press("right"), 1);
+        }
+    };
+    // From the boot, zombie 0x12's two draws are odd and even: its head on
+    // the third page and its body on the fourth, but for two parts.
+    let mut screen = open_models(&cx, &dir, None);
+    turn_to(&mut screen, 7);
+    assert_eq!(moves(&screen), format!("8:2 {body_on_page_3}"));
+    // Zombie 0x1F's body is on the third whatever it draws.
+    turn_to(&mut screen, 13);
+    assert_eq!(
+        moves(&screen),
+        "0:2 1:2 2:2 3:2 4:2 5:2 6:2 7:2 9:2 10:2 12:2 13:2 16:2"
+    );
+    // Model 30 (enemy 0x3B) starts on frame `Rnd() & 0xF` of its clip, at
+    // `Rnd() << 4`: from 13077, frame 11 at 1136, and 5 more on its tick.
+    turn_to(&mut screen, 30);
+    let frame: i64 = screen.test_eval("return M.state.gal.pose.frame");
+    assert_eq!(frame, 11);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(turned(&screen), Some([0, 1141, 0]));
+    // Other states, other skins: from 128 neither move, from 1 the head
+    // alone.
+    for (seed, want) in [(128, String::new()), (1, "8:2".to_string())] {
+        let mut screen = open_models_from(&cx, &dir, seed, "");
+        turn_to(&mut screen, 7);
+        assert_eq!(moves(&screen), want, "from {seed}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_zombies_load_draws_more_on_easy_arrange_and_hard() {
+    let dir = test_dir("gallery-model-flags");
+    let cx = context(&dir);
+    // Zombie 0x10 (model 5) from the boot's state draws five; EASY's life
+    // two more, HARD's count one more, and ARRANGE MODE's roll two (93
+    // shifted by 3 is no third of three, so no count after it).
+    let after = |flags: &str| {
+        let mut screen = open_models_from(&cx, &dir, 0x6CA4, flags);
+        for _ in 0..5 {
+            run(&mut screen, &cx, press("right"), 1);
+        }
+        assert_eq!(screen.value("gal_index"), 5);
+        rnd(&screen)
+    };
+    let after_draws = |n: usize| {
+        let mut rnd = crate::zombie2::Rnd(0x6CA4);
+        for _ in 0..n {
+            rnd.draw();
+        }
+        i64::from(rnd.0)
+    };
+    assert_eq!(after(""), after_draws(5));
+    assert_eq!(
+        after("M.state.fg_system = M.state.fg_system | 0x20"),
+        after_draws(7)
+    );
+    assert_eq!(after("M.state.hard_mode = 1"), after_draws(6));
+    assert_eq!(after("M.state.censorship_off = 1"), after_draws(7));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn a_model_draws_under_the_fade_and_only_while_it_is_shown() {
     let dir = test_dir("gallery-model-shown");
