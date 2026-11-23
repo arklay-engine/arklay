@@ -2677,10 +2677,15 @@ struct AuthorBaseline {
 }
 
 /// `boot`'s script variables with each one an edit changed (from `before`
-/// to `after`) taken from `after`.
-fn authored_vars(boot: [u16; 256], before: [u16; 256], after: [u16; 256]) -> [u16; 256] {
+/// to `after`) or `written` taken from `after`.
+fn authored_vars(
+    boot: [u16; 256],
+    before: [u16; 256],
+    after: [u16; 256],
+    written: &[bool; 256],
+) -> [u16; 256] {
     std::array::from_fn(|index| {
-        if after[index] == before[index] {
+        if after[index] == before[index] && !written[index] {
             boot[index]
         } else {
             after[index]
@@ -7767,7 +7772,8 @@ impl GameSession {
             // Nor with the variables the first pass wrote: the boot's, and
             // each one the edit changed.
             if let Some(boot_vars) = self.re2_boot_vars {
-                self.game.re2.vars = authored_vars(boot_vars, vars, self.game.re2.vars);
+                let written = authored.as_deref().map_or([false; 256], |log| log.vars);
+                self.game.re2.vars = authored_vars(boot_vars, vars, self.game.re2.vars, &written);
             }
             run_re2_init(
                 self.loaded.re2_vm.as_mut(),
@@ -27589,6 +27595,40 @@ mod tests {
         );
     }
 
+    /// `Set_door` keeps the room a door leaves in `scd_var_last_rdt`
+    /// (variable 27) as it places the player in the next.
+    #[test]
+    fn re2_a_door_keeps_the_room_it_left() {
+        let dir = TempDir::new();
+        let (pack, a, b) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        let pos = session.player.pos;
+        re2_area_at(&mut session, pos, true);
+        let door = session.game.doors[1].as_mut().unwrap();
+        door.next_room = b.room;
+        door.re2 = Some(crate::scd2::host::Re2Door {
+            stage: 1,
+            room: b.room,
+            cut: 0,
+        });
+        let var = crate::scd2::host::VAR_LAST_RDT;
+        session.game.re2.vars[var] = 0x1234;
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(session.transition.is_some(), "the door is taken");
+        for _ in 0..300 {
+            if session.game.id == b || session.transition.is_none() {
+                break;
+            }
+            session.tick_transition(&pack, false);
+        }
+        assert_eq!(session.game.id, b, "the door led into the other room");
+        assert_eq!(
+            session.game.re2.vars[var],
+            u16::from(a.stage) << 8 | u16::from(a.room)
+        );
+    }
+
     /// `Sce_Status` sets `Game` to 1: the status screen opens on the next
     /// tick, through START's open.
     #[test]
@@ -46769,6 +46809,16 @@ end
         session.finish_authoring(baseline, false);
         assert_eq!(session.game.re2.vars[4], 0, "the boot's");
         assert_eq!(session.game.re2.vars[5], 7, "the edit's");
+        // A setup that writes the first pass's own value keeps it.
+        session.game.re2.set_flag(4, 6, 0);
+        session.game.re2.vars[4] = 0;
+        session.enter_room(&pack, None, true, RoomBgmHandoff::Now);
+        assert_eq!(session.game.re2.vars[4], 100);
+        let baseline = session.author_baseline();
+        session.game.re2.set_flag(4, 6, 1);
+        session.game.re2.author_var(4, 100);
+        session.finish_authoring(baseline, false);
+        assert_eq!(session.game.re2.vars[4], 100, "the setup's write");
     }
 
     /// A flag the setup writes counts even where the first pass wrote it

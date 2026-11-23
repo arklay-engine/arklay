@@ -259,6 +259,9 @@ pub struct Re2State {
     /// and the save block keeps. Like the original's global it stays
     /// across rooms.
     pub save_place: u8,
+    /// The save count's high byte: `0x98E9BC`'s low word is the count, of
+    /// which the state byte [`crate::game::STATE_BYTE_SAVES`] is the low byte.
+    pub saves_high: u8,
 }
 
 /// `St_chenge_pl`'s and `Set_room`'s stash of the scenario's character: the
@@ -516,7 +519,9 @@ pub const NO_FILE: u8 = 0xFF;
 const RANDOM_START: u32 = 0x1382_01C3;
 
 /// The bytes of [`Re2State::to_save_bytes`].
-const SAVE_LEN: usize = SAVE_LEN_NO_PLACE + 1;
+const SAVE_LEN: usize = SAVE_LEN_NO_SAVES_HIGH + 1;
+/// A save from before the save count's high byte.
+const SAVE_LEN_NO_SAVES_HIGH: usize = SAVE_LEN_NO_PLACE + 1;
 /// A save from before the save place.
 const SAVE_LEN_NO_PLACE: usize = SAVE_LEN_NO_PLAYER + 2;
 /// A save from before the player's id and slot count.
@@ -997,6 +1002,7 @@ impl Default for Re2State {
             pl_stash: PlStash::default(),
             inventory_size: crate::game::INVENTORY_SLOTS_JILL as u8,
             save_place: 0,
+            saves_high: 0,
         }
     }
 }
@@ -1036,6 +1042,7 @@ impl Re2State {
         out.push(self.inventory_size);
         // `Save_push`'s save place.
         out.push(self.save_place);
+        out.push(self.saves_high);
         out
     }
 
@@ -1084,6 +1091,7 @@ impl Re2State {
     /// Restore [`Self::to_save_bytes`]; `None` for bytes of another length.
     pub fn load_save_bytes(&mut self, bytes: &[u8]) -> Option<()> {
         if bytes.len() != SAVE_LEN
+            && bytes.len() != SAVE_LEN_NO_SAVES_HIGH
             && bytes.len() != SAVE_LEN_NO_PLACE
             && bytes.len() != SAVE_LEN_NO_PLAYER
             && bytes.len() != SAVE_LEN_NO_PARTNER
@@ -1176,6 +1184,8 @@ impl Re2State {
         if let Some(&place) = bytes.get(SAVE_LEN_NO_PLACE) {
             self.save_place = place;
         }
+        // A save from before it has made fewer than 256 saves.
+        self.saves_high = bytes.get(SAVE_LEN_NO_SAVES_HIGH).copied().unwrap_or(0);
         Some(())
     }
 
@@ -1920,6 +1930,16 @@ impl Re2State {
         self.vars[ROOM_VARS[1]] = 0xFFFF;
     }
 
+    /// An authored write of script variable `index` (a setup's
+    /// `set_re2_var`): the variable, and the authoring log's note of it, so
+    /// a rerun keeps it even where the boot's first pass wrote the same.
+    pub fn author_var(&mut self, index: u8, value: u16) {
+        self.vars[usize::from(index)] = value;
+        if let Some(log) = self.authored_flags.as_deref_mut() {
+            log.vars[usize::from(index)] = true;
+        }
+    }
+
     /// `Set_door`'s `scd_var_last_rdt`, as it places the player: the room
     /// the door leaves, `room`, its 1-based stage times 0x100 plus its room.
     pub fn leave_room(&mut self, room: crate::state::RoomId) {
@@ -2032,6 +2052,9 @@ pub type FlagWords = ([[u32; 8]; BANKS], [u32; 2]);
 pub struct AuthoredFlags {
     pub written: FlagWords,
     pub values: FlagWords,
+    /// The script variables the setup wrote ([`Re2State::author_var`]),
+    /// whatever their value: the rerun keeps them over the boot's.
+    pub vars: [bool; 256],
 }
 
 impl Default for AuthoredFlags {
@@ -2039,6 +2062,7 @@ impl Default for AuthoredFlags {
         Self {
             written: ([[0; 8]; BANKS], [0; 2]),
             values: ([[0; 8]; BANKS], [0; 2]),
+            vars: [false; 256],
         }
     }
 }
@@ -5391,10 +5415,11 @@ mod tests {
         restored.load_save_bytes(&bytes).unwrap();
         assert_eq!(restored, state);
         // A length no version of the save has is refused (one byte fewer
-        // is the save from before the save place).
+        // is the save from before the count's high byte, four before the
+        // player's id).
         let longer = [bytes.as_slice(), &[0]].concat();
         assert!(restored.load_save_bytes(&longer).is_none());
-        assert!(restored.load_save_bytes(&bytes[4..]).is_none());
+        assert!(restored.load_save_bytes(&bytes[5..]).is_none());
     }
 
     /// Room 103's area 3 (`aot_set 3, 3, 66, 3, ...`, the enemy bit and the
@@ -7013,6 +7038,26 @@ mod tests {
         };
         old.load_save_bytes(&bytes[..SAVE_LEN_NO_PLACE]).unwrap();
         assert_eq!(old.save_place, 0x0F);
+    }
+
+    #[test]
+    fn the_save_counts_high_byte_survives_a_save() {
+        let state = Re2State {
+            saves_high: 2,
+            ..Default::default()
+        };
+        let bytes = state.to_save_bytes();
+        assert_eq!(bytes.len(), SAVE_LEN);
+        let mut loaded = Re2State::default();
+        loaded.load_save_bytes(&bytes).unwrap();
+        assert_eq!(loaded.saves_high, 2);
+        let mut old = Re2State {
+            saves_high: 5,
+            ..Default::default()
+        };
+        old.load_save_bytes(&bytes[..SAVE_LEN_NO_SAVES_HIGH])
+            .unwrap();
+        assert_eq!(old.saves_high, 0);
     }
 
     #[test]

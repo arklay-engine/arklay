@@ -129,10 +129,10 @@ impl GameState {
     /// whatever its count and the count goes down with no test, so a stack
     /// of 0 wraps to 255; at 0 the slot is cleared and `Sort_item` moves the
     /// slots after the first empty one up. The count is `0x98E9BC`'s low
-    /// word in the original and a byte here, wrapping the same way below
-    /// 256. Without a ribbon nothing is taken (the typewriter can't get
-    /// here without one); `ink_ribbon` false takes none either (a save the
-    /// debug menu opens).
+    /// word: the state byte and [`crate::scd2::host::Re2State::saves_high`].
+    /// Without a ribbon nothing is taken (the typewriter can't get here
+    /// without one); `ink_ribbon` false takes none either (a save the debug
+    /// menu opens).
     pub fn re2_typewriter_write(&mut self, ink_ribbon: bool) {
         if let Some(slot) = self.re2_item_slot(ITEM_INK_RIBBON).filter(|_| ink_ribbon) {
             let stack = &mut self.inventory[slot];
@@ -149,6 +149,15 @@ impl GameState {
         }
         let saves = &mut self.state_bytes[usize::from(super::STATE_BYTE_SAVES)];
         *saves = saves.wrapping_add(1);
+        if *saves == 0 {
+            self.re2.saves_high = self.re2.saves_high.wrapping_add(1);
+        }
+    }
+
+    /// `0x98E9BC`'s low word: the saves made.
+    pub fn re2_save_count(&self) -> u16 {
+        u16::from(self.re2.saves_high) << 8
+            | u16::from(self.state_bytes[usize::from(super::STATE_BYTE_SAVES)])
     }
 
     /// The oracle's `tw` field: slot 2's routine, its state byte and the
@@ -218,6 +227,16 @@ mod tests {
         game.re2_typewriter_write(true);
         assert_eq!(ribbons(&game), [(2, 18), (1, 1), (ITEM_INK_RIBBON, 255)]);
         assert_eq!(saves(&game), 1);
+    }
+
+    #[test]
+    fn the_save_count_is_a_word() {
+        let mut game = game(Some((2, 3)));
+        game.state_bytes[usize::from(crate::game::STATE_BYTE_SAVES)] = 255;
+        game.re2_typewriter_write(true);
+        assert_eq!(game.re2_save_count(), 0x100);
+        game.re2_typewriter_write(true);
+        assert_eq!(game.re2_save_count(), 0x101);
     }
 
     fn fg_stop(game: &mut GameState) -> u32 {

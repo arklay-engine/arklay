@@ -798,7 +798,7 @@ mod imp {
             // script's `save` does. Variable 32 picks the player the next
             // room's load makes.
             methods.add_method_mut("set_re2_var", |_lua, game, (index, value): (u8, u16)| {
-                game.re2.vars[usize::from(index)] = value;
+                game.re2.author_var(index, value);
                 Ok(())
             });
 

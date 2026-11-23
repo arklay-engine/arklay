@@ -1612,11 +1612,20 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                         "re2_save_image: the session isn't an RE 2 game".into(),
                     ));
                 }
-                let table = app.pack.read(crate::bgm2::INIT_TABLE_ENTRY).ok();
-                let record = table.as_deref().and_then(|table| {
-                    re2_image::init_record(table, re2_image::init_row(&session.game))
-                });
-                let image = re2_image::build(&session.game, record);
+                let entry = crate::bgm2::INIT_TABLE_ENTRY;
+                let table = app.pack.read(entry).map_err(|err| {
+                    mlua::Error::RuntimeError(format!(
+                        "re2_save_image: the pack has no {entry}, the record the image starts from: {err}"
+                    ))
+                })?;
+                let row = re2_image::init_row(&session.game);
+                let record = re2_image::init_record(&table, row).ok_or_else(|| {
+                    mlua::Error::RuntimeError(format!(
+                        "re2_save_image: {entry} has no row {row} ({} bytes)",
+                        table.len()
+                    ))
+                })?;
+                let image = re2_image::build(&session.game, Some(record));
                 let ours = lua.create_string(image)?;
                 let Some(reference) = reference else {
                     return Ok((ours, None));

@@ -303,7 +303,8 @@ function save_game(path) end
 ---The original RE 2's save image of the session's state: the 2048 bytes
 ---its save screen writes to a `.BIOHAZARD2` file on a save's write tick
 ---(`Save_push` and the save work at `0x98E79C`), built over the scenario's
----record of the pack's `INIT_TBL.DAT`, as a new game starts it. With
+---record of the pack's `INIT_TBL.DAT`, as a new game starts it (an
+---error when the pack has no such record, or the session isn't RE 2). With
 ---`reference`, the path of such a file, it also compares the two under the
 ---image's mask (the regions arklay doesn't hold, such as the play clock)
 ---and returns the unmasked regions that differ.

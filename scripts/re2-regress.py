@@ -98,7 +98,8 @@ def load_manifest(path: Path) -> tuple[dict, list[dict]]:
 
 def refs_dir(args) -> Path:
     text = args.refs or os.environ.get("ARKLAY_RE2_REFS") or DEFAULT_REFS
-    return Path(text).expanduser()
+    # Absolute: the driver scripts name reference files, and arklay runs them from the repo root.
+    return Path(text).expanduser().resolve()
 
 
 # ---------------------------------------------------------------- inputs
@@ -255,8 +256,8 @@ def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input
 # A run that keeps its saves (`saves = true`) compares the original's save image of each save arklay makes with the
 # reference's file of the same save count, under the image's mask (`src/save/re2_image.rs`): after every update the
 # driver reads the save count from arklay's image (`re2_save_image`, offset 0x220), and when it moves prints one
-# `save-image COUNT JSON` line, the regions that differ (`-` for a save the reference has no file of, one a later save
-# overwrote). `judge_save_images` reads the lines.
+# `save-image COUNT JSON` line, the regions that differ (`-` for a save the reference keeps no file of, one a later
+# save overwrote). `judge_save_images` reads the lines.
 SAVE_IMAGE_CHECK = """
 local saves_seen
 local function save_count(image)
@@ -278,9 +279,22 @@ end
 """
 
 
+def listed_saves(ref_dir: Path) -> list[tuple[str, str]] | None:
+    """The save files a reference's `meta.txt` lists (`save: NAME SHA256`, or `save: none`), or None when it lists
+    none at all (a reference recorded before `saves` kept them)."""
+    meta = ref_dir / "meta.txt"
+    lines = [line[len("save: "):] for line in meta.read_text().splitlines() if line.startswith("save: ")] \
+        if meta.exists() else []
+    if not lines:
+        return None
+    if lines == ["none"]:
+        return []
+    return [tuple(line.rsplit(" ", 1)) for line in lines]
+
+
 def reference_saves(ref_dir: Path) -> list[Path]:
-    """The original's save files a reference keeps (`saves = true`), by name."""
-    return sorted((ref_dir / "saves").glob("*.BIOHAZARD2"))
+    """The reference's save files that `meta.txt` lists and that are there."""
+    return [path for name, _ in listed_saves(ref_dir) or [] if (path := ref_dir / "saves" / name).is_file()]
 
 
 def save_count(path: Path) -> int | None:
@@ -289,37 +303,75 @@ def save_count(path: Path) -> int | None:
     return int.from_bytes(data[0x220:0x222], "little") if len(data) == 0x800 else None
 
 
-def judge_save_images(ref_dir: Path, out_text: str) -> tuple[str, list[str]]:
-    """The save images' verdict from arklay's `save-image` lines: each of the reference's files must have arklay's
-    image of the same save count matching it under the mask, and every save arklay made past the reference's last
-    is one the original didn't make."""
+def traced_writes(trace: Path) -> list[int]:
+    """The save counts the original wrote, in order, overwritten saves included: each rise of `sv`'s last value
+    (`0x98E9BC`'s low word) while the save screen runs."""
+    writes, last = [], None
+    with open(trace) as lines:
+        for line in lines:
+            found = re.search(r" sv=(\S+)", line)
+            if not found or found.group(1) == "-":
+                continue
+            count = int(found.group(1).split(",")[-1])
+            if last is not None and count != last:
+                writes.append(count)
+            last = count
+    return writes
+
+
+def judge_save_images(ref_dir: Path, out_text: str, saves_dir: Path) -> tuple[str, list[str]]:
+    """The save images' verdict. The original's writes are the save counts its trace's `sv` reaches; arklay's are
+    its `save-image` lines, and they must be the same. Each file `meta.txt` lists must be in the reference, with its
+    hash, and arklay's image of that count must match it under the mask. arklay's save folder must hold one save of
+    each listed file's count, and no other: a write the engine counted but couldn't make fails too."""
+    problems = []
+    listed = listed_saves(ref_dir)
+    if listed is None:
+        return "save images: meta.txt lists no saves", ["the reference's meta.txt lists no saves: record it again"]
     refs = {}
-    for path in reference_saves(ref_dir):
+    for name, digest in listed:
+        path = ref_dir / "saves" / name
+        if not path.is_file():
+            problems.append(f"the reference's {name} is missing")
+            continue
+        data = path.read_bytes()
+        if hashlib.sha256(data).hexdigest() != digest:
+            problems.append(f"the reference's {name} isn't the file meta.txt lists")
+            continue
         count = save_count(path)
         if count is None:
-            return f"save images: {path.name} isn't a save image", [f"{path.name} isn't 2048 bytes"]
-        refs[count] = path
+            problems.append(f"the reference's {name} isn't a 2048-byte save image")
+            continue
+        refs[count] = name
+    writes = traced_writes(ref_dir / "ref.trace")
     made = {}
     for line in out_text.splitlines():
         if line.startswith("save-image "):
             _, count, rest = line.split(" ", 2)
             made[int(count)] = None if rest == "-" else json.loads(rest)
-    problems = []
-    for count, path in sorted(refs.items()):
-        if count not in made:
-            problems.append(f"save {count}: arklay made no save {count} ({path.name})")
+    if sorted(made) != sorted(writes):
+        problems.append(f"arklay wrote saves {sorted(made)}, the original {writes}")
+    for count, name in sorted(refs.items()):
+        if count not in writes:
+            problems.append(f"the reference's {name} is save {count}, which its trace never writes")
+        elif count not in made:
+            continue
         elif made[count] is None:
             problems.append(f"save {count}: arklay's driver had no reference for it")
         elif made[count]:
             regions = ", ".join(f"{d['region']} at 0x{d['offset']:03x} (ours {d['ours']}, theirs {d['theirs']})"
                                 for d in made[count])
             problems.append(f"save {count}'s image differs: {regions}")
-    last = max(refs, default=None)
-    extra = [count for count in made if last is None or count > last]
-    if extra:
-        problems.append(f"arklay made saves the original didn't: {', '.join(str(count) for count in sorted(extra))}")
+    # Classic REbirth's names and arklay's carry the count: `Leon A_01_<date> <time>`.
+    def counts(names):
+        return sorted(int(found.group(1)) for name in names if (found := re.search(r"_(\d+)_", name)))
+    kept = counts(path.name for path in saves_dir.glob("*.dat")) if saves_dir.is_dir() else []
+    if kept != counts(name for name, _ in listed):
+        problems.append(f"arklay's save folder holds saves {kept}, the original's {counts(name for name, _ in listed)}")
     matched = sum(1 for count in refs if made.get(count) == [])
-    text = f"save images {matched}/{len(refs)} match" if refs else "no saves, as the original"
+    text = f"save images {matched}/{len(listed)} match" if listed else "no saves, as the original"
+    if len(writes) > len(listed):
+        text += f" ({len(writes)} written)"
     return text, problems
 
 
@@ -579,12 +631,73 @@ def self_test() -> int:
     if starts != [(344, None), (1818, None)] or None in bad or kept != (1818, None):
         print(f"re2-regress self-test FAILED: compare_from {starts} {bad}", file=sys.stderr)
         return 1
-    problem = self_test_fields() or self_test_gallery_hold() or self_test_pace() or self_test_pictures()
+    problem = (self_test_fields() or self_test_gallery_hold() or self_test_pace() or self_test_pictures()
+               or self_test_save_images())
     if problem:
         print(f"re2-regress self-test FAILED: {problem}", file=sys.stderr)
         return 1
     print("re2-regress self-test ok")
     return 0
+
+
+def self_test_save_images() -> str | None:
+    """The save images' judge (`judge_save_images`) on a fake reference: two writes of which the folder keeps the
+    second, against arklay's lines and save folder."""
+    with tempfile.TemporaryDirectory() as folder:
+        ref, saves = Path(folder) / "ref", Path(folder) / "ark"
+        (ref / "saves").mkdir(parents=True)
+        saves.mkdir()
+        # `sv`'s last value is the count: 0, then save 1, a screen later save 2.
+        counts = ["-", "0", "0", "1", "1", "-", "1", "2", "-"]
+        (ref / "ref.trace").write_text("".join(
+            f"t={tick} sv={count if count == '-' else '2,0,3,0,0,0,2,0,0,0,0,' + count}\n" for tick, count in enumerate(counts)))
+        image = bytearray(0x800)
+        image[0x220] = 2
+        name = "Leon A_02_2026-11-18 20^48.31.BIOHAZARD2"
+        (ref / "saves" / name).write_bytes(image)
+        meta = f"name: x\nsave: {name} {hashlib.sha256(bytes(image)).hexdigest()}\n"
+        (ref / "meta.txt").write_text(meta)
+        both = "save-image 1 -\nsave-image 2 []\n"
+        made = saves / "Leon A_02_2026-11-23 10^00.00.dat"
+        made.write_bytes(b"")
+        differ = 'save-image 1 -\nsave-image 2 [{"region": "Item_work", "offset": 1441, "ours": "01", "theirs": "02"}]\n'
+        cases = [
+            ("both writes, the second kept", both, True, None, True),
+            ("the first write missing", "save-image 2 []\n", True, None, False),
+            ("a write the original didn't make", both + "save-image 3 -\n", True, None, False),
+            ("the image differs", differ, True, None, False),
+            ("the write failed: no file", both, False, None, False),
+            ("the reference's file is missing", both, True, "missing", False),
+            ("the reference's file isn't meta.txt's", both, True, "changed", False),
+            ("meta.txt lists no saves", both, True, "unlisted", False),
+        ]
+        for label, lines, written, reference, ok in cases:
+            if not written:
+                made.unlink()
+            stored = ref / "saves" / name
+            if reference == "missing":
+                stored.unlink()
+            elif reference == "changed":
+                stored.write_bytes(bytes(image[:-1]) + b"\x01")
+            elif reference == "unlisted":
+                (ref / "meta.txt").write_text("name: x\n")
+            text, problems = judge_save_images(ref, lines, saves)
+            if (not problems) != ok:
+                return f"save images, {label}: {text} {problems}"
+            made.write_bytes(b"")
+            stored.write_bytes(image)
+            (ref / "meta.txt").write_text(meta)
+        # No saves on either side; then arklay making one.
+        (ref / "meta.txt").write_text("name: x\nsave: none\n")
+        (ref / "ref.trace").write_text("t=0 sv=2,0,2,0,0,0,2,0,0,0,0,0\n")
+        made.unlink()
+        text, problems = judge_save_images(ref, "", saves)
+        if problems or text != "no saves, as the original":
+            return f"save images, no saves: {text} {problems}"
+        text, problems = judge_save_images(ref, "save-image 1 -\n", saves)
+        if not problems:
+            return f"save images, a save the original didn't make: {text}"
+    return None
 
 
 def self_test_gallery_hold() -> str | None:
@@ -1312,7 +1425,7 @@ def run_one(run: dict, ctx: dict) -> dict:
                 result["problems"].append(why)
                 return result
         return finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks, offset, compare_from,
-                          ref_dir, ref_trace, ark_trace)
+                          ref_dir, ref_trace, ark_trace, saves_dir)
     finally:
         if not ctx["keep"]:
             shutil.rmtree(saves_dir, ignore_errors=True)
@@ -1345,7 +1458,7 @@ def wait_for(proc) -> None:
 
 
 def finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks, offset, compare_from, ref_dir,
-               ref_trace, ark_trace) -> dict:
+               ref_trace, ark_trace, saves_dir) -> dict:
     """The rest of `run_one`: play arklay (capturing frames), then compare the trace and the frames."""
     name = run["name"]
     out: Path = ctx["out"]
@@ -1411,7 +1524,7 @@ def finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks
         result["notes"] += cmp["detail"]
 
     if run.get("saves") and run.get("ui", "game") == "game":
-        saves_text, problems = judge_save_images(ref_dir, out_text)
+        saves_text, problems = judge_save_images(ref_dir, out_text, saves_dir)
         text += f"; {saves_text}"
         result["problems"].extend(problems)
 

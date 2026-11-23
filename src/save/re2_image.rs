@@ -37,6 +37,9 @@ pub struct Region {
     pub len: usize,
     /// Why the comparison leaves the region out, or `None` when it compares.
     pub masked: Option<&'static str>,
+    /// With [`Self::masked`], the bits it leaves out, a byte of them for each
+    /// of the region's bytes; `None` leaves out the whole region.
+    pub bits: Option<&'static [u8]>,
 }
 
 const fn region(name: &'static str, offset: usize, len: usize) -> Region {
@@ -45,6 +48,7 @@ const fn region(name: &'static str, offset: usize, len: usize) -> Region {
         offset,
         len,
         masked: None,
+        bits: None,
     }
 }
 
@@ -54,6 +58,22 @@ const fn masked(name: &'static str, offset: usize, len: usize, why: &'static str
         offset,
         len,
         masked: Some(why),
+        bits: None,
+    }
+}
+
+const fn masked_bits(
+    name: &'static str,
+    offset: usize,
+    bits: &'static [u8],
+    why: &'static str,
+) -> Region {
+    Region {
+        name,
+        offset,
+        len: bits.len(),
+        masked: Some(why),
+        bits: Some(bits),
     }
 }
 
@@ -94,11 +114,14 @@ pub const REGIONS: &[Region] = &[
     ),
     region("save count", 0x220, 2),
     region("position", 0x222, 6),
-    masked(
+    // The new game's `DWORD_0098e9c4 = DWORD_0099c8a8 & 1`, and
+    // `Flg_on(.., 0x12)` (0x2000) under `DWORD_00995b48 & 0x40`
+    // (`FUN_004b73c0`); nothing in play writes the word.
+    masked_bits(
         "extras",
         0x228,
-        4,
-        "0x98E9C4, the new game's extras from the clear records (infinite ammo, the unlocked weapons), which arklay doesn't keep",
+        &[0x01, 0x20, 0, 0],
+        "0x98E9C4's bits from the clear records (infinite ammo, 0x2000 the unlocked submachine gun), which arklay doesn't keep",
     ),
     region("bgm_tbl", 0x22C, 0x11C),
     region("scd_variables", 0x348, 0x48),
@@ -225,8 +248,10 @@ pub fn build(game: &GameState, record: Option<&[u8]>) -> [u8; IMAGE_LEN] {
     image[0x218] = game.equipped_weapon_id;
     image[0x219] = game.re2_equip_slot();
     put(&mut image, 0x21A, &player.health.to_le_bytes());
-    let saves = game.state_bytes[usize::from(crate::game::STATE_BYTE_SAVES)];
-    put(&mut image, 0x220, &u16::from(saves).to_le_bytes());
+    put(&mut image, 0x220, &game.re2_save_count().to_le_bytes());
+    // The extras word: arklay holds none of its bits (the new game's, from
+    // the clear records), and nothing in play writes it.
+    put(&mut image, 0x228, &0u32.to_le_bytes());
     for (axis, &value) in player.pos.iter().enumerate() {
         put(&mut image, 0x222 + axis * 2, &(value as i16).to_le_bytes());
     }
@@ -329,10 +354,11 @@ pub struct Difference {
 pub fn differences(ours: &[u8; IMAGE_LEN], theirs: &[u8; IMAGE_LEN]) -> Vec<Difference> {
     REGIONS
         .iter()
-        .filter(|region| region.masked.is_none())
+        .filter(|region| region.masked.is_none() || region.bits.is_some())
         .filter_map(|region| {
             let range = region.offset..region.offset + region.len;
-            let differ = |at: &usize| ours[*at] != theirs[*at];
+            let left_out = |at: usize| region.bits.map_or(0, |bits| bits[at - region.offset]);
+            let differ = |at: &usize| (ours[*at] ^ theirs[*at]) & !left_out(*at) != 0;
             let first = range.clone().find(differ)?;
             let last = range.rev().find(differ)?;
             Some(Difference {
@@ -490,8 +516,10 @@ mod tests {
         let ours = build(&game, None);
         let mut theirs = ours;
         for region in REGIONS.iter().filter(|region| region.masked.is_some()) {
-            theirs[region.offset] ^= 0xFF;
+            theirs[region.offset] ^= region.bits.map_or(0xFF, |bits| bits[0]);
         }
+        // The extras' 0x2000 too, which the record's saves have.
+        theirs[0x229] ^= 0x20;
         assert!(differences(&ours, &theirs).is_empty());
         theirs[0x5A1] ^= 3;
         theirs[0x5A3] ^= 1;
@@ -504,5 +532,23 @@ mod tests {
                 theirs: theirs[0x5A1..0x5A4].to_vec(),
             }]
         );
+    }
+
+    #[test]
+    fn the_extras_compare_but_for_the_clear_records_bits() {
+        let ours = build(&game(), None);
+        let mut theirs = ours;
+        theirs[0x228] |= 0x02;
+        let found = differences(&ours, &theirs);
+        assert_eq!(found.len(), 1);
+        assert_eq!((found[0].region, found[0].offset), ("extras", 0x228));
+    }
+
+    #[test]
+    fn the_save_count_is_the_whole_word() {
+        let mut game = game();
+        game.state_bytes[usize::from(crate::game::STATE_BYTE_SAVES)] = 1;
+        game.re2.saves_high = 1;
+        assert_eq!(u16_at(&build(&game, None), 0x220), 0x101);
     }
 }
