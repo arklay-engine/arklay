@@ -68,5 +68,8 @@ ticks = 900
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,fl,msg,snd,hk,fgstat,fgitem,fguse,scv"
 frames = [360, 899]
 frame_max_mean = 0.12
+# The photo's set-up tick and its first three draws, where a draw too many on
+# the set-up tick shows (1.13 before the fix) and the whole run's mean doesn't.
+frame_windows = [[469, 472, 0.30]]
 expect = "match"
 record = "--no-enemies --warp 208:-15505:0:-23800:0 --life 200 --give 2:0x44:1"
