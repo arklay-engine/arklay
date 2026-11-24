@@ -359,49 +359,54 @@ fn draw(
         [left + PATCH[0], top + PATCH[1], PATCH[2], PATCH[3]]
     });
     let saved = patch.and_then(|rect| framebuffer.save_rect(rect));
-    framebuffer.hold_depth();
-    let reflection = |framebuffer: &mut Framebuffer, slots| {
+    // Marni draws the page as play: on the 640x480 display, its depth each
+    // corner's `sz`.
+    let half = Some(crate::render::re2_near_clip(PAGE_FOV) as f32);
+    framebuffer.with_display(|framebuffer| {
+        framebuffer.hold_depth();
+        let reflection = |framebuffer: &mut Framebuffer, slots| {
+            framebuffer.draw_character_shaded(
+                &assets.body,
+                &joints,
+                &mirror,
+                offset,
+                &reflected,
+                true,
+                Slots::Parts(slots),
+            );
+        };
+        reflection(framebuffer, PATCH_SLOT + 1..=u32::MAX);
+        match (&saved, patch) {
+            (Some(saved), _) => framebuffer.restore_rect_at(saved, PATCH_Z as f32, half),
+            (None, Some(rect)) => redraw(framebuffer, rect),
+            (None, None) => {}
+        }
+        reflection(framebuffer, SHADOW_SLOT + 1..=PATCH_SLOT);
+        if let (Some(texture), Some(shadow)) = (kage, model.shadow(&joints)) {
+            let shadow = crate::render::Shadow {
+                texture,
+                pos: shadow.pos,
+                angle: shadow.angle,
+                half_x: shadow.half.0,
+                half_z: shadow.half.1,
+                shift: [0, 0],
+                lift: 0,
+                tint: crate::shadow::kage_tint(crate::shadow::PLAYER_COLOR),
+            };
+            framebuffer.draw_shadows(&[shadow], &second, offset, half);
+        }
+        reflection(framebuffer, 0..=SHADOW_SLOT);
+        framebuffer.release_depth();
         framebuffer.draw_character_shaded(
             &assets.body,
             &joints,
-            &mirror,
+            &main,
             offset,
-            &reflected,
+            &lit(MAIN_COLOUR, main_root),
             true,
-            Slots::Parts(slots),
+            Slots::All,
         );
-    };
-    reflection(framebuffer, PATCH_SLOT + 1..=u32::MAX);
-    match (&saved, patch) {
-        (Some(saved), _) => framebuffer.restore_rect_at(saved, PATCH_Z as f32),
-        (None, Some(rect)) => redraw(framebuffer, rect),
-        (None, None) => {}
-    }
-    reflection(framebuffer, SHADOW_SLOT + 1..=PATCH_SLOT);
-    if let (Some(texture), Some(shadow)) = (kage, model.shadow(&joints)) {
-        let shadow = crate::render::Shadow {
-            texture,
-            pos: shadow.pos,
-            angle: shadow.angle,
-            half_x: shadow.half.0,
-            half_z: shadow.half.1,
-            shift: [0, 0],
-            lift: 0,
-            tint: crate::shadow::kage_tint(crate::shadow::PLAYER_COLOR),
-        };
-        framebuffer.draw_shadows(&[shadow], &second, offset);
-    }
-    reflection(framebuffer, 0..=SHADOW_SLOT);
-    framebuffer.release_depth();
-    framebuffer.draw_character_shaded(
-        &assets.body,
-        &joints,
-        &main,
-        offset,
-        &lit(MAIN_COLOUR, main_root),
-        true,
-        Slots::All,
-    );
+    });
 }
 
 #[cfg(test)]
@@ -552,6 +557,7 @@ mod tests {
             }],
         };
         let body = crate::model::Emd {
+            marni: None,
             skeleton: skeleton.clone(),
             keyframes: keyframes.clone(),
             clips: vec![clip.clone(); 16],
@@ -598,11 +604,20 @@ mod tests {
         );
         let side = |range: std::ops::Range<usize>| {
             let mut found = std::collections::BTreeSet::new();
-            for y in 0..240 {
-                for x in range.clone() {
+            let painted = |x: usize, y: usize| {
+                let at = (y * 320 + x) * 4;
+                framebuffer.rgba[at..at + 3] != [0; 3]
+            };
+            for y in 1..239 {
+                for x in range.clone().filter(|x| (1..319).contains(x)) {
                     let at = (y * 320 + x) * 4;
                     let pixel = &framebuffer.rgba[at..at + 3];
-                    if pixel != [0; 3] {
+                    // A face's inside: on RE2's display its edges are halved
+                    // with what's beside them.
+                    let inside = [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)]
+                        .iter()
+                        .all(|&(x, y)| painted(x, y));
+                    if painted(x, y) && inside {
                         found.insert([pixel[0], pixel[1], pixel[2]]);
                     }
                 }
