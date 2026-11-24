@@ -28,7 +28,7 @@
 //!   painter's key, which is a view-Z in the same units.
 
 use crate::anim::Mat4x3;
-use crate::model::{Texture8, Tmd};
+use crate::model::{PacketMix, Texture8, Tmd};
 use crate::render::{
     self, ABE_BIT, Camera, EntityLight, EntityMesh, GameplayScene, LightSpace, MirrorPass,
     apply_matrix_sv, mul_matrix0, re2_light_row, stored_camera_matrix,
@@ -46,6 +46,9 @@ pub const MAX_JOINTS: usize = 32;
 /// `in_packed` bits 16..22: which of `MeshVertex::corners` are the
 /// triangle's three, two bits each (for its painter's key).
 const PACKED_TRIANGLE_SHIFT: u32 = 16;
+/// `in_packed` bit: a blending packet mixes by `source * source + destination
+/// * source` ([`PacketMix::SourceColour`]), drawn in the source-colour pass.
+pub const PACKED_SOURCE_COLOUR: u32 = 1 << 23;
 /// `in_packed` bit: the packet is semi-transparent (ABE or the TMD flag).
 const PACKED_BLEND: u32 = 1 << 24;
 /// `in_packed` bit: an untextured packet painting its colour word.
@@ -55,7 +58,7 @@ const PACKED_NUDGE_SHIFT: u32 = 26;
 /// `in_packed` bits 29..31: which of `MeshVertex::corners` the vertex is.
 const PACKED_CORNER_SHIFT: u32 = 29;
 /// `in_packed` bit: a blending packet adds to the background
-/// (`TmdPrim::additive`), drawn lit in the additive pass.
+/// ([`PacketMix::Add`]), drawn lit in the additive pass.
 pub const PACKED_ADDITIVE: u32 = 1 << 31;
 
 /// One mesh corner in the static vertex buffer (84 bytes).
@@ -93,8 +96,9 @@ pub struct MeshVertex {
     pub uv: [f32; 2],
     /// An untextured packet's colour word / 1024; white otherwise.
     pub colour: [f32; 3],
-    /// `joint | palette_row << 8 | triangle_corners << 16 | blend << 24 |
-    /// untextured << 25 | uv_nudge << 26 | corner << 29 | additive << 31`.
+    /// `joint | palette_row << 8 | triangle_corners << 16 | source_colour <<
+    /// 23 | blend << 24 | untextured << 25 | uv_nudge << 26 | corner << 29 |
+    /// additive << 31`.
     pub packed: u32,
 }
 
@@ -177,8 +181,12 @@ pub fn mesh_vertices(mesh: &Tmd) -> MeshVertices {
             if prim.flat_color.is_some() {
                 packed |= PACKED_UNTEXTURED;
             }
-            if blend && prim.additive {
-                packed |= PACKED_ADDITIVE;
+            if blend {
+                packed |= match prim.mix {
+                    PacketMix::Weighted => 0,
+                    PacketMix::Add => PACKED_ADDITIVE,
+                    PacketMix::SourceColour => PACKED_SOURCE_COLOUR,
+                };
             }
             let corners: [[f32; 3]; 4] = std::array::from_fn(|corner| {
                 let vertex = ring_positions[corner];
@@ -503,25 +511,47 @@ pub fn key_depth(key: u32) -> f32 {
 /// The fragment-stage uniform block of a mesh draw (`mesh.frag`'s
 /// `Material`): `x` the alpha of a blended texel, `render::blend_alpha`
 /// rounded to unorm8 as the software blend rounds it, `y` the pass (0
-/// opaque, 1 blend, 2 additive).
+/// opaque, 1 blend, 2 additive, 3 source colour).
 pub fn material(blend_weight: Option<u8>, pass: MeshPass) -> [f32; 4] {
     let alpha = (render::blend_alpha(blend_weight) * 255.0).round_ties_even() / 255.0;
     let pass = match pass {
         MeshPass::Opaque => 0.0,
         MeshPass::Blend => 1.0,
         MeshPass::Additive => 2.0,
+        MeshPass::SourceColour => 3.0,
     };
     [alpha, pass, 0.0, 0.0]
 }
 
 /// The passes of a mesh draw, in order: its opaque texels, then the STP
 /// texels of its blending packets, then those of its additive packets
-/// (`PACKED_ADDITIVE`).
+/// (`PACKED_ADDITIVE`), then those of its source-colour packets
+/// (`PACKED_SOURCE_COLOUR`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MeshPass {
     Opaque,
     Blend,
     Additive,
+    SourceColour,
+}
+
+/// The order of a frame's mesh draws, as `(pass, draw)`: every draw's opaque
+/// texels first, then the blended packets, which have no depth to settle
+/// their order: the painter's sort, farthest `keys` first, each draw's
+/// blending passes together so a farther mesh's never land over a nearer
+/// one's.
+pub fn pass_order(keys: &[f32]) -> Vec<(MeshPass, usize)> {
+    let mut ordered: Vec<usize> = (0..keys.len()).collect();
+    ordered.sort_by(|&a, &b| keys[b].total_cmp(&keys[a]));
+    let blending = [MeshPass::Blend, MeshPass::Additive, MeshPass::SourceColour];
+    (0..keys.len())
+        .map(|draw| (MeshPass::Opaque, draw))
+        .chain(
+            ordered
+                .into_iter()
+                .flat_map(|draw| blending.map(|pass| (pass, draw))),
+        )
+        .collect()
 }
 
 /// A light vector's `w` when its joint carries no `JointSetColorTint` colour.
@@ -939,7 +969,7 @@ pub fn mesh_fingerprint(mesh: &Tmd) -> u64 {
             object
                 .prims
                 .iter()
-                .map(|prim| u64::from(prim.blend) | u64::from(prim.additive) << 1),
+                .map(|prim| u64::from(prim.blend) | (prim.mix as u64) << 1),
         );
         for vertex in &object.vertices {
             parts.push(
@@ -995,7 +1025,7 @@ mod tests {
                 tsb,
                 textured: true,
                 blend,
-                additive: false,
+                mix: crate::model::PacketMix::Weighted,
                 raw_y: false,
                 flat_color: None,
                 quad: None,
@@ -1106,7 +1136,7 @@ mod tests {
             tsb: 0x11,
             textured: true,
             blend: false,
-            additive: false,
+            mix: crate::model::PacketMix::Weighted,
             raw_y: false,
             uv_nudge: [0; 3],
             flat_color: None,
@@ -1526,5 +1556,26 @@ mod tests {
         assert_eq!(pass_range(None, MeshPass::Additive, 6, 9), (6, 3));
         assert_eq!(pass_range(Some(0x80), MeshPass::Blend, 6, 9), (0, 9));
         assert_eq!(pass_range(Some(0), MeshPass::Blend, 6, 9), (0, 0));
+    }
+
+    /// Every opaque pass first, then each draw's blending passes together,
+    /// farthest first: a farther water mesh can't blend over a nearer
+    /// half-blended one.
+    #[test]
+    fn a_draws_blending_passes_go_together_farthest_first() {
+        use MeshPass::{Additive, Blend, Opaque, SourceColour};
+        assert_eq!(
+            pass_order(&[100.0, 300.0]),
+            [
+                (Opaque, 0),
+                (Opaque, 1),
+                (Blend, 1),
+                (Additive, 1),
+                (SourceColour, 1),
+                (Blend, 0),
+                (Additive, 0),
+                (SourceColour, 0),
+            ]
+        );
     }
 }

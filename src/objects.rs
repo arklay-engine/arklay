@@ -286,6 +286,10 @@ impl SuperParent {
     }
 }
 
+/// RE2's object `Type` (record `+0x08`) that `Om_trans` draws as water
+/// (`Mizu_trans`, 0x4C7DE0) rather than with `Om_disp`.
+pub const WATER_OBJECT: u8 = 1;
+
 /// One runtime object record. The original reuses a 0xA4-byte `Entity` head
 /// for these; the port keeps a named struct with only the fields the opcodes
 /// and the collision helpers address.
@@ -351,7 +355,8 @@ pub struct ObjectRecord {
     pub item_flags: u8,
     /// RE2's `Atd[0]`, from `Obj_model_set`.
     pub atd2: ObjectAtd,
-    /// RE2's `Id` (`+0x08`) from `Obj_model_set`: 2 for the boxes that fall.
+    /// RE2's `Id` (`+0x08`) from `Obj_model_set`: [`WATER_OBJECT`], or 2 for
+    /// the boxes that fall.
     pub id: u8,
     /// RE2's `Atd[0]` `X`, `Y` and `Z`, as `Oma_set_ofs` and the pushes leave
     /// them.
