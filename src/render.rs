@@ -9775,7 +9775,7 @@ mod tests {
             tsb,
             textured: true,
             blend: false,
-            additive: false,
+            mix: PacketMix::Weighted,
             raw_y: false,
             flat_color: None,
             quad: None,
@@ -10164,6 +10164,26 @@ mod tests {
         assert_eq!(shown(-32536), [0; 4]);
         // Nearer than `H / 2`: `sz` below 0.
         assert_eq!(shown(99), [0; 4]);
+    }
+
+    #[test]
+    fn a_water_object_is_queued_by_its_sz_and_scales_what_is_behind_it() {
+        let green = effect_image(&[[0, 255, 0, 255]; 4]);
+        // A blue `SRCCOLOR` object nearer than a red body, listed first.
+        let water = match re2_body(150.0, HALF, 2) {
+            SceneItem::Triangle(triangle) => SceneItem::Triangle(Triangle {
+                blend: true,
+                mix: PacketMix::SourceColour,
+                ..triangle
+            }),
+            _ => unreachable!(),
+        };
+        let (frame, depth) = re2_frame(&[water, re2_body(400.0, HALF, 1)], &green, HALF);
+        // Queued, it draws after the body and scales it by its own colour:
+        // red times blue is black, and blue times itself is blue ...
+        assert_eq!(framebuffer_pixel(&frame, 5, 5), [0, 0, 255, 255]);
+        // ... and writes no depth over it.
+        assert_eq!(depth[11 * 640 + 11], sz_depth(marni_sz(HALF, 400.0)));
     }
 
     #[test]
@@ -11624,6 +11644,11 @@ mod tests {
             mix: PacketMix::SourceColour,
             uv_nudge: [0; 3],
             view_depth: false,
+            filtered: false,
+            page_x: 0,
+            marni: None,
+            queue_key: 0.0,
+            marni_half: 0.0,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));

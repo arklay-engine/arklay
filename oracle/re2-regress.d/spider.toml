@@ -10,9 +10,9 @@ setup_script = "spider_302_wall.lua"
 input = "spider_shots.txt"
 input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,zm0,zm1,fgstat"
-# the light on the spiders draws differently (#668): 0.84 measured
+# the light on the spiders draws differently (#668): 0.76 measured
 frames = [360, 1399]
-frame_max_mean = 1.0
+frame_max_mean = 0.9
 expect = "match"
 record = "--warp 302:-12500:0:-13000:2048 --life 200 --give 0:2:200 --give 1:0x14:60 --equip 2"
 
@@ -24,9 +24,9 @@ ticks = 2400
 setup = { pos = [-2700, 0, -19832], angle = 2028, health = 200, rnd = 6114, camera = 0 }
 input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,zm0,zm1,fgstat"
-# room 407's steam draws darker than the original's (#671): 3.21 measured
+# room 407's steam draws darker than the original's (#671): 2.89 measured
 frames = [360, 2399]
-frame_max_mean = 3.4
+frame_max_mean = 3.05
 expect = "match"
 record = "--warp 407:-2700:0:-19832:2028 --life 200"
 
@@ -62,9 +62,9 @@ ticks = 2400
 setup = { pos = [-26394, 0, -1920], angle = 97, health = 200, rnd = 6114, camera = 0 }
 input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,zm0,zm1,fgstat"
-# 1.44 measured; the original draws no shadow for a spider over water (#686)
+# 1.04 measured; the original draws no shadow for a spider over water (#686)
 frames = [360, 2399]
-frame_max_mean = 1.6
+frame_max_mean = 1.2
 expect = "match"
 record = "--warp 405:-26394:0:-1920:97 --life 200"
 
