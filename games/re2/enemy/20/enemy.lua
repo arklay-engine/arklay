@@ -120,6 +120,12 @@ local function add_gravity(e)
     set_spd(e, nil, spd_y(e) + 0x28)
 end
 
+-- The top speed, 0xF0, or 0x118 under HARD (0x45C9C5, 0x45CB7E, 0x45CBF6,
+-- 0x45D09D, 0x45DE47, 0x45E53C, 0x45EDA0).
+local function top_speed(e)
+    return e:hard_mode() and 0x118 or 0xF0
+end
+
 -- `FUN_0045f5f0`.
 local function speed_up(e, by, top)
     local speed = spd_x(e)
@@ -278,7 +284,8 @@ local function bite_ck(e)
         return e:var(BIT)
     end
     e:set_var(ANNOY, 0)
-    local result = e:pl_life_down(0xC)
+    -- HARD bites for 0x18 (0x45F8A8).
+    local result = e:pl_life_down(e:hard_mode() and 0x18 or 0xC)
     local behind = e:cdir_player()
     if result == 2 and not behind and e:player_id() ~= 0xF then
         e:set_var(BIT, 2)
@@ -352,7 +359,7 @@ local function landing(e)
         end
     else
         e:add_speed_xz()
-        slow_down(e, 0x40, 0xF0)
+        slow_down(e, 0x40, top_speed(e))
         return e:joint(0x100)
     end
     return false
@@ -491,7 +498,7 @@ end
 
 -- `FUN_0045c9b0`.
 CHASE[1] = function(e)
-    speed_up(e, 0x28, 0xF0)
+    speed_up(e, 0x28, top_speed(e))
     local turn = 0
     local life
     if e:var(WAIT_CHASE) == 0 then
@@ -559,7 +566,7 @@ CHASE[2] = function(e)
             e:set_routine(3, e:routine(3) + 1)
         end
     else
-        speed_up(e, 6, 0xF0)
+        speed_up(e, 6, top_speed(e))
     end
     e:set_timer(0, e:timer(0) + turn)
     e:set_angle(e:angle() + turn)
@@ -577,7 +584,7 @@ CHASE[3] = function(e)
     if e:var(LEAP_WAIT) ~= 0 then
         e:set_var(LEAP_WAIT, e:var(LEAP_WAIT) - 1)
     end
-    speed_up(e, 0x28, 0xF0)
+    speed_up(e, 0x28, top_speed(e))
     local hit = e:root_ck_area(e:var(AREA))
     local dest_x, dest_z = e:dest()
     local toward = e:goto_ck(dest_x, dest_z, 0x40)
@@ -1070,7 +1077,7 @@ local function circling(e)
     local routine = e:routine(3)
     if routine == 0 then
         e:set_routine(3, 1)
-        e:set_speed_x(0xF0)
+        e:set_speed_x(top_speed(e))
         e:set_timer(0, PAUSE_SHORT[e:rnd() & 7])
         local rate = (e:rnd() & 1 ~= 0) and 0x7F or -0x7F
         if e:rnd() & 1 ~= 0 then
@@ -1457,7 +1464,7 @@ hurt_start = function(e)
     end
     if e:var(AIR) == 0 then
         sub(e, 2, 0)
-        e:set_speed_x(0xF0)
+        e:set_speed_x(top_speed(e))
         body_box(e, false)
     else
         e:set_speed_x(spd_x(e) >> 1)
@@ -1487,7 +1494,7 @@ local function blast_start(e)
     if e:be_flg() & (BE_HIGH | BE_AIR) ~= 0 and e:var(AIR) == 0 then
         e:set_var(AIR, 1)
         set_spd(e, nil, -140)
-        e:set_speed_x(0xF0)
+        e:set_speed_x(top_speed(e))
     end
     hurt_start(e)
 end
@@ -1774,6 +1781,10 @@ local function init(e)
     e:set_body_ofs_x(500)
     e:set_neck_flags(0)
     e:set_speed(0, 0, 0)
+    -- HARD doubles its life, in 16 bits (0x45C2C0).
+    if e:hard_mode() then
+        e:set_life(i16(e:life() * 2))
+    end
     local kind = e:kind()
     e:set_routine(1, FIRST_STATE[kind & 0x7F] or 0)
     if kind == 0x2003 then
