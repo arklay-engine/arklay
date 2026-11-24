@@ -951,6 +951,51 @@ fn to_fus_start_hands_over_tofus_game() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A boot whose film picked Claire, then 4TH, EXIT and 4TH's START again:
+/// EXIT's `Init_global` clears `fg_status`, the character's bit 31 with it,
+/// so the game is HUNK's on Leon's disc.
+#[test]
+fn an_extras_exit_drops_the_boots_character() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-4th-claire-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut screen = open_special(&cx, &dir, 15);
+    // The boot's film pick, `fg_status`'s bit 31.
+    assert!(screen.test_eval::<bool>("M.state.claire = true; return true"));
+    run(&mut screen, &cx, UiInput::default(), 20);
+    // 4TH, its build-up skipped, and EXIT.
+    run(&mut screen, &cx, press("confirm"), 30);
+    run(&mut screen, &cx, press("confirm"), 21);
+    run(&mut screen, &cx, press("down"), 5);
+    assert_eq!(screen.value("ti_cur"), 1);
+    run(&mut screen, &cx, press("confirm"), 1);
+    let mut ticks = 1;
+    while screen.value("ti_mv") != 1 {
+        run(&mut screen, &cx, UiInput::default(), 1);
+        ticks += 1;
+        assert!(ticks < 20);
+    }
+    assert!(!screen.test_eval::<bool>("return M.state.claire"));
+    // The title from black, SPECIAL (the fourth row) and 4TH again.
+    run(&mut screen, &cx, UiInput::default(), 200);
+    for _ in 0..3 {
+        run(&mut screen, &cx, press("down"), 30);
+    }
+    assert_eq!(screen.value("ti_cur"), 3);
+    run(&mut screen, &cx, press("confirm"), 20);
+    run(&mut screen, &cx, press("confirm"), 30);
+    run(&mut screen, &cx, press("confirm"), 21);
+    let mut action = done(screen.update(&cx, press("start")));
+    for _ in 0..400 {
+        if action.is_some() {
+            break;
+        }
+        action = done(screen.update(&cx, UiInput::default()));
+    }
+    assert_eq!(action, Some(extra_game(0xC)));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn the_4th_survivors_exit_goes_back_to_the_title_from_black() {
     let dir = std::env::temp_dir().join(format!("arklay-re2-4th-exit-{}", std::process::id()));

@@ -319,9 +319,11 @@ local PROLOGUE_FADES = {
 }
 
 -- `Init_global` (0x4C4D70) as the title sees it: the four fades off,
--- `fg_status` cleared and `fg_system` down to 0x1000899.
+-- `fg_status` cleared, the character's bit 31 with it, and `fg_system`
+-- down to 0x1000899.
 local function init_global()
     s.fg_status = 0
+    s.claire = false
     s.fg_system = s.fg_system & 0x1000899
     for n = 0, 3 do
         fade_off(n)

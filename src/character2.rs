@@ -648,13 +648,19 @@ pub(crate) fn run_esprs(
             let player = &game.entities[0];
             root_matrix(player.pos, player.angle)
         });
-        let at = call.at.map(i32::from);
-        let at = std::array::from_fn(|axis| {
-            let turned: i32 = (0..3).map(|i| i32::from(world.m[axis][i]) * at[i]).sum();
-            (world.t[axis] + (turned >> 12)) as i16
-        });
+        let at = place_on(&world, call.at);
         game.re2.effects.call_placed(EsprCall { at, ..call });
     }
+}
+
+/// `Get_matrix`'s matrix applied to the call's vector: where in the world
+/// the effect starts.
+fn place_on(world: &player2::Matrix, at: [i16; 3]) -> [i16; 3] {
+    let at = at.map(i32::from);
+    std::array::from_fn(|axis| {
+        let turned: i32 = (0..3).map(|i| i32::from(world.m[axis][i]) * at[i]).sum();
+        (world.t[axis] + (turned >> 12)) as i16
+    })
 }
 
 fn root_matrix(pos: [i32; 3], angle: u16) -> player2::Matrix {
@@ -2124,6 +2130,25 @@ fn keep_joints_with(
 mod tests {
     use super::*;
     use crate::state::RoomId;
+
+    /// Room 304's `sce_espr_on` on the player's part 8, at a vector off
+    /// it: the effect starts on the part's `Workm` as the last tick left
+    /// it (the neck's turn and all), the vector turned with the part.
+    #[test]
+    fn a_player_parts_effect_turns_its_vector_with_the_parts_workm() {
+        let turned = player2::Matrix {
+            m: player2::rot_matrix([0, 1024, 0]),
+            t: [100, -1500, 200],
+        };
+        let mut work = player2::Work::default();
+        assert_eq!(work.workm(8), None, "no tick has left one");
+        work.parts = vec![None; 9];
+        work.parts[8] = Some(turned);
+        let world = work.workm(8).unwrap();
+        assert_eq!(world, turned);
+        assert_eq!(place_on(&world, [0, 0, 100]), [200, -1500, 200]);
+        assert_eq!(place_on(&world, [100, 0, 0]), [100, -1500, 100]);
+    }
 
     /// `pl_mv05_w1_t2` calls `Shoot_camera` on the shot's first tick, before
     /// `Weapon_at_ck`: a handgun fired past the camera draws the spark's

@@ -656,8 +656,18 @@ impl Driver {
     }
 
     /// Start a booted session: drop what the last one left behind.
+    /// Forget the voice lengths a screen's trace held for the game that
+    /// screen starts: the trace or the screen is gone.
+    fn drop_pending_voice(&mut self) {
+        if let Some(app) = self.app.as_mut() {
+            app.pending_voice_ticks = None;
+        }
+    }
+
     fn start(&mut self, mut session: Box<GameSession>, arm: bool) -> mlua::Result<()> {
         let baseline = session.author_baseline();
+        // The script's game, not one a screen started.
+        self.drop_pending_voice();
         let app = self.app()?;
         app.start_session(session);
         app.pending_movie = None;
@@ -802,6 +812,9 @@ impl Driver {
 
     /// Close the running trace, if any.
     fn close_trace(&mut self) -> Result<()> {
+        // Voice lengths a screen's trace held for the game it starts go
+        // with the trace.
+        self.drop_pending_voice();
         match self.trace.take() {
             Some(trace) => trace.close(),
             None => Ok(()),
@@ -1455,7 +1468,9 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
             with(&shared, |driver| {
                 let app = driver.app()?;
                 let file = save::load_file(Path::new(&path)).map_err(engine_error)?;
-                let session = app.continue_session(&file, false).map_err(engine_error)?;
+                let session = app
+                    .continue_session(&file, false, false)
+                    .map_err(engine_error)?;
                 driver.start(session, true)?;
                 Ok(())
             })
@@ -1495,6 +1510,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
             };
             options.finish()?;
             with(&shared, |driver| {
+                driver.drop_pending_voice();
                 let app = driver.app()?;
                 app.open_title_from(boot, None, None)
                     .map_err(engine_error)?;
@@ -1527,6 +1543,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                         "open_ending: character {character} is not 0 (Chris) or 1 (Jill)"
                     )));
                 }
+                driver.drop_pending_voice();
                 let app = driver.app()?;
                 app.open_debug_ending(id, character).map_err(engine_error)?;
                 app.pending_movie = None;
@@ -1813,11 +1830,12 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                     .app
                     .as_ref()
                     .is_some_and(|app| !matches!(app.mode, Mode::Boot | Mode::Play(_)));
-                if let Some(ticks) = voice_ticks.as_ref().filter(|_| screen) {
-                    // On a screen: for the game it starts.
-                    driver.app()?.pending_voice_ticks = Some(ticks.clone().into());
-                }
-                let voice_ticks = voice_ticks.filter(|_| !screen);
+                // On a screen: for the game it starts, once the trace is made.
+                let (screen_voice, voice_ticks) = if screen {
+                    (voice_ticks, None)
+                } else {
+                    (None, voice_ticks)
+                };
                 if sound.unwrap_or(false)
                     || voice_ticks.is_some()
                     || sound_wav.is_some()
@@ -1854,6 +1872,9 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                     trace::TraceWriter::create(Path::new(&path))
                 }
                 .map_err(engine_error)?;
+                if let Some(ticks) = screen_voice {
+                    driver.app()?.pending_voice_ticks = Some(ticks.into());
+                }
                 let unpaced_voice = !sound.unwrap_or(false) && sound_wav.is_none();
                 driver.trace = Some(ScriptTrace {
                     writer,
@@ -2045,6 +2066,80 @@ mod tests {
             Mode::Play(session) => session,
             _ => panic!("no session"),
         }
+    }
+
+    /// Voice lengths a trace asks for on a screen wait for the game that
+    /// screen starts, and only while their trace runs: `trace_stop`, a
+    /// trace started over it, a failed `trace_start` and a script's own
+    /// title or game drop them.
+    #[test]
+    fn a_screens_voice_lengths_go_with_their_trace() {
+        let dir = TempDir::new();
+        let mut driver = playing_driver(&dir, true);
+        let stop = Rc::new(Stop {
+            exit: Cell::new(None),
+            timed_out: Cell::new(false),
+            deadline: None,
+            timeout: Duration::default(),
+        });
+        let lua = new_state(&stop).unwrap();
+        let options = ScriptOptions {
+            name: "test".into(),
+            source: Vec::new(),
+            args: Vec::new(),
+            headless: true,
+            timeout: None,
+        };
+        driver
+            .app
+            .as_mut()
+            .unwrap()
+            .open_debug_ending(1, 0)
+            .unwrap();
+        let shared: Shared = Rc::new(RefCell::new(driver));
+        lua.set_app_data(Rc::clone(&shared));
+        install(&lua, &shared, &options).unwrap();
+        let trace = dir
+            .0
+            .join("a.trace")
+            .display()
+            .to_string()
+            .replace('\\', "/");
+        let missing = dir
+            .0
+            .join("no/a.trace")
+            .display()
+            .to_string()
+            .replace('\\', "/");
+        let run = |code: String| lua.load(code).exec();
+        let pending = || {
+            shared
+                .borrow()
+                .app
+                .as_ref()
+                .unwrap()
+                .pending_voice_ticks
+                .clone()
+                .map(Vec::from)
+        };
+        let start = format!("trace_start({trace:?}, {{ voice_ticks = {{ 18, 22 }} }})");
+        run(start.clone()).unwrap();
+        assert_eq!(pending(), Some(vec![18, 22]), "held for the screen's game");
+        run("trace_stop()".into()).unwrap();
+        assert_eq!(pending(), None, "trace_stop");
+        run(start.clone()).unwrap();
+        run(format!("trace_start({trace:?})")).unwrap();
+        assert_eq!(pending(), None, "a trace started over it");
+        run(start.clone()).unwrap();
+        let failed = format!("trace_start({missing:?}, {{ voice_ticks = {{ 18 }} }})");
+        assert!(run(failed).is_err());
+        assert_eq!(pending(), None, "a trace that couldn't be made");
+        run(start.clone()).unwrap();
+        run("open_ending(1)".into()).unwrap();
+        assert_eq!(pending(), None, "the script's own screen");
+        run(start).unwrap();
+        run("new_game()".into()).unwrap();
+        assert_eq!(pending(), None, "the script's own game");
     }
 
     #[test]
