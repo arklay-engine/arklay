@@ -1,0 +1,29 @@
+# Room 212's two dogs under HARD (#862): `Em_20`'s top speed of 0x118 for 0xF0, the bite's 0x18 for 0xC and the life
+# doubled at init. HARD's title leaves `Rnd` at 58231, so each setup sets it.
+
+# Standing still until the dogs kill the player. Recorded for 2400 ticks; the game over returns to the title on 1502.
+[[run]]
+name = "dog_212_stand_hard"
+difficulty = "hard"
+room = "212"
+sound = false
+ticks = 1502
+setup_script = "dog_212_hard.lua"
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,fgstat"
+expect = "match"
+record = "--warp 212:-11250:0:-25692:3024 --flag 4:83 --life 200"
+
+# dog_shots.txt, a handgun shot every 30 ticks, until both dogs are dead.
+[[run]]
+name = "dog_212_shots_hard"
+difficulty = "hard"
+room = "212"
+sound = false
+ticks = 2400
+setup_script = "dog_212_shots_hard.lua"
+input = "dog_shots.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,zm0,zm1,fgstat"
+expect = "match"
+record = "--warp 212:-11250:0:-25692:3024 --flag 4:83 --life 200 --equip 2 --give 0:2:200 --give 1:0x14:60"

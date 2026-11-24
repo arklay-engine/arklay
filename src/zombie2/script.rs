@@ -6018,6 +6018,7 @@ mod tests {
                  function e:body_box() return 0, 0, 0, 0 end
                  function e:joint() return false end
                  function e:pos() return 0, 0, 0 end
+                 function e:hard_mode() return HARD or false end
                  {setup}
                  {script}
                  update(e)
@@ -6037,6 +6038,45 @@ mod tests {
         fn the_smg_throws_a_dog_into_the_air() {
             let r = dog_hit(2, crate::player2::SMG, 0, 1, "");
             assert_eq!(r, [0xF, 1, 0x78, -140, 1, 1, 0, 2, 1]);
+        }
+
+        /// HARD's top speed is 0x118 (0x45EDA0), halved in the air as 0xF0 is.
+        #[test]
+        fn the_smg_throws_a_hard_dog_faster() {
+            let r = dog_hit(2, crate::player2::SMG, 0, 1, "HARD = true");
+            assert_eq!((r[2], r[3]), (0x118 >> 1, -140));
+        }
+
+        /// `Em20_Init` (0x45C2C0): HARD doubles the life drawn from the table
+        /// and `Rnd & 3`.
+        #[test]
+        fn a_hard_dog_has_twice_the_life() {
+            for (hard, life) in [("false", 85 + 1), ("true", (85 + 1) * 2)] {
+                let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+                let script = include_str!("../../games/re2/enemy/20/enemy.lua");
+                let got: i64 = lua
+                    .load(format!(
+                        "local w = {{ r = {{ [0] = 0, 0, 0, 0 }}, life = 0 }}
+                         local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+                         function e:routine(i) return w.r[i] end
+                         function e:set_routine(i, v) w.r[i] = v end
+                         function e:routines(a, b, c, d) w.r = {{ [0] = a, b, c, d }} end
+                         function e:rnd() return 1 end
+                         function e:easy() return false end
+                         function e:hard_mode() return {hard} end
+                         function e:life() return w.life end
+                         function e:set_life(v) w.life = v end
+                         function e:body_box() return 0, 0, 0, 0 end
+                         function e:joint() return false end
+                         function e:pos() return 0, 0, 0 end
+                         {script}
+                         update(e)
+                         return w.life"
+                    ))
+                    .eval()
+                    .unwrap();
+                assert_eq!(got, life, "hard {hard}");
+            }
         }
 
         /// 0x10 is 0xA's case (0x45EBD0): `4 - Damage_no / 3` bloods, though
