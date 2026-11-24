@@ -1340,12 +1340,13 @@ local DrawOptions = {}
 local LutOptions = {}
 
 ---A new game's options, for `api:exit("new_game", character, choice)`. Each
----is set when `true` or a non-zero number; anything else but `nil` raises an
----error.
+---flag is set when `true` or a non-zero number; anything else but `nil` raises
+---an error.
 ---@class NewGameChoice
 ---@field easy? boolean|integer
 ---@field hard_mode? boolean|integer
 ---@field censorship_off? boolean|integer
+---@field extra_player? integer RE 2's extra modes (`Title_game_init`'s extras branch): `0xC` starts the 4th Survivor's game (HUNK) and `0xD` To-fu's (TOFU), in room 304 with no prologue, on the disc `character` picks. `nil` or `0` is the story's new game; any other value raises an error.
 local NewGameChoice = {}
 
 ---One file of the save directory.

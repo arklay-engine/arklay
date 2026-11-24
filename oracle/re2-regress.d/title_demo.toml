@@ -13,8 +13,6 @@ compare_from = 2125
 input = "title_demo.txt"
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,pl,bgm,snd,fgstat"
 frames = [2118, 2780]
-# arklay poses the player as the reel loads, the original on the first tick's move.
-ignore = [[2125, "mot"]]
 expect = "match"
 record = ""
 
@@ -47,8 +45,6 @@ compare_from = 2124
 input = "title_demo_abort.txt"
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,pl,bgm,snd,em,fgstat"
 frames = [2118, 2317]
-# arklay poses the player as the reel loads, the original on the first tick's move.
-ignore = [[2124, "mot"]]
 expect = "match"
 record = ""
 
@@ -84,7 +80,7 @@ compare_from = 4840
 input = "title_demo.txt"
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,pl,bgm,snd,em,fgstat"
 # The room's enemies draw from `Rnd` as it loads, which arklay's trace shows a tick later, as on a door's tick.
-ignore = [[4840, "mot"], [4840, "rng"]]
+ignore = [[4840, "rng"]]
 expect = "match"
 
 # The third.
@@ -98,6 +94,6 @@ ticks = 8356
 compare_from = 7626
 input = "title_demo.txt"
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,pl,bgm,snd,em,fgstat"
-ignore = [[7626, "mot"], [7626, "rng"]]
+ignore = [[7626, "rng"]]
 expect = "match"
 record = ""

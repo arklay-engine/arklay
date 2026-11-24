@@ -47,8 +47,6 @@ frames = [811, 1099]
 frame_max_mean = 0.05
 # The black frames and the fade in: 0.1 over the six, from the fade's two frames.
 frame_windows = [[818, 823, 0.2]]
-# arklay poses the player as the save loads, the original on the first tick's move.
-ignore = [[818, "mot"]]
 expect = "match"
 record = ""
 

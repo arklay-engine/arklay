@@ -574,6 +574,17 @@ pub const FG_SYSTEM_DIE: u8 = 5;
 /// `fg_system`'s `0x2000`: the attract demo. The music's calls do nothing
 /// under it ([`crate::bgm2`]).
 pub const FG_SYSTEM_DEMO: u8 = 18;
+/// `fg_system`'s `0x8`: the 4th Survivor's or To-fu's game (SPECIAL's
+/// extras), which `Title_game_init` starts with no prologue.
+pub const FG_SYSTEM_EXTRA: u8 = 28;
+/// `fg_system`'s `0x1`: To-fu's, with [`FG_SYSTEM_EXTRA`].
+pub const FG_SYSTEM_TOFU: u8 = 31;
+/// `fg_status`'s `0x2000000`: an extra mode's game (`Title_game_init`'s
+/// step 1 raises it with [`FG_SYSTEM_EXTRA`]).
+pub const FG_STATUS_EXTRA: u8 = 6;
+/// `fg_status`'s `0x8000000`: an extra mode's script map closed. The map
+/// page's cancel (`0x4FBE50`) raises it under [`FG_SYSTEM_EXTRA`].
+pub const FG_STATUS_EXTRA_MAP: u8 = 4;
 /// `fg_system`'s `0x8000`, which `Init_movie_work` clears. No reader is known.
 pub const FG_SYSTEM_8000: u8 = 16;
 /// `fg_status`'s `0x4000000`: EASY's.

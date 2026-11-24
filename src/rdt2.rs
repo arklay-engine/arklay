@@ -148,6 +148,16 @@ pub fn room_anim(data: &[u8]) -> Option<(&[u8], &[u8])> {
     room_anim_of(data, RBJ_PLAYER)
 }
 
+/// The bit of a bank's mask that gives it to the player of an extra mode's
+/// game (`fg_status`'s `0x2000000`), in place of [`RBJ_PLAYER`].
+const RBJ_EXTRA_PLAYER: u32 = 0x8000_0000;
+
+/// The room's player animations in the 4th Survivor's and To-fu's games:
+/// `Rbj_set` takes the bank whose mask has bit 31 instead of bit 0.
+pub fn extra_room_anim(data: &[u8]) -> Option<(&[u8], &[u8])> {
+    room_anim_of(data, RBJ_EXTRA_PLAYER)
+}
+
 /// The room animations of enemy slot `slot`, which `Rbj_set` looks for two
 /// bits above the player's. Its mask is 32 bits, so slots 30 and 31 have none.
 pub fn character_anim(data: &[u8], slot: u8) -> Option<(&[u8], &[u8])> {

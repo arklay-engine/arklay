@@ -1391,10 +1391,21 @@ fn new_game_choice(choice: Option<&Table>) -> mlua::Result<super::NewGameChoice>
         return Ok(super::NewGameChoice::default());
     };
     let set = |key: &str| exit_flag(choice, "new_game", key);
+    let extra_player = match choice.get::<Value>("extra_player")? {
+        Value::Nil => 0,
+        Value::Integer(0xC) => 0xC,
+        Value::Integer(0xD) => 0xD,
+        other => {
+            return Err(mlua::Error::RuntimeError(format!(
+                "api:exit(\"new_game\"): `extra_player` is {other:?}, not 0xC (HUNK) or 0xD (TOFU)"
+            )));
+        }
+    };
     Ok(super::NewGameChoice {
         easy: set("easy")?,
         hard_mode: set("hard_mode")?,
         censorship_off: set("censorship_off")?,
+        extra_player,
     })
 }
 

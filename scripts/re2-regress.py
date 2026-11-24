@@ -233,7 +233,11 @@ def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input
         lines.append(f"load_game_pack({lua_str(str(ctx['pack']))}, {{ {', '.join(options)} }})")
         # `boot = true`: from the game's boot, the warning before the title, as the record has it from its tick 0.
         lines.append("open_title({ boot = true })" if run.get("boot") else "open_title()")
-        lines.append(f"trace_start({lua_str(str(trace))})")
+        # The voice lines' lengths wait on the title for the game it starts.
+        if voice is not None:
+            lines.append(f"trace_start({lua_str(str(trace))}, {{ {voice_option(voice)} }})")
+        else:
+            lines.append(f"trace_start({lua_str(str(trace))})")
     else:
         options += choice_options(run)
         lines.append(f"load_game_pack({lua_str(str(ctx['pack']))}, {{ {', '.join(options)} }})")
@@ -250,7 +254,7 @@ def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input
         if run.get("sound", True):
             trace_options.append("sound = true")
             if voice is not None:
-                trace_options.append("voice_ticks = { " + ", ".join(str(held) for held in voice) + " }")
+                trace_options.append(voice_option(voice))
         if films is not None:
             trace_options.append("film_pads = { " + ", ".join(str(pads) for pads in films) + " }")
         lines.append(f"trace_start({lua_str(str(trace))}, {{ {', '.join(trace_options)} }})")
@@ -523,6 +527,11 @@ def film_pads(ref_dir: Path) -> list[int]:
     return [int(count) for count in re.findall(r"^a film ran (\d+) of its own Pad_sets before tick \d+$", log, re.M)]
 
 
+def voice_option(voice: list[int]) -> str:
+    """`trace_start`'s `voice_ticks` option for the lines' lengths `voice`."""
+    return "voice_ticks = { " + ", ".join(str(held) for held in voice) + " }"
+
+
 def voice_ticks(trace: Path) -> list[int]:
     """How long each voice line held `fg_status`'s voice bit (flag 1:26, `0x20`) in the recording, in order.
 
@@ -756,7 +765,7 @@ def self_test() -> int:
         print(f"re2-regress self-test FAILED: compare_from {starts} {bad}", file=sys.stderr)
         return 1
     problem = (self_test_fields() or self_test_gallery_hold() or self_test_pace() or self_test_pictures()
-               or self_test_save_images())
+               or self_test_save_images() or self_test_title_voice())
     if problem:
         print(f"re2-regress self-test FAILED: {problem}", file=sys.stderr)
         return 1
@@ -892,6 +901,26 @@ def self_test_save_images() -> str | None:
             os.utime(times / name, ns=(when * 1_000_000_000, when * 1_000_000_000))
         if [path.name for path in newest_first(sorted(times.iterdir()))] != ["b", "a", "c"]:
             return "newest_first doesn't order by write time"
+    return None
+
+
+def self_test_title_voice() -> str | None:
+    """A title run with `voice_from_ref` hands the record's voice lengths to its title's `trace_start`."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        trace = root / "ref.trace"
+        trace.write_text("t=0 fgstat=00000000\nt=1 fgstat=00000020\nt=3 fgstat=00000000\n"
+                         "t=5 fgstat=00000020\nt=9 fgstat=00000010\n")
+        voice = voice_ticks(trace)
+        if voice != [2, 4]:
+            return f"voice_ticks gave {voice}"
+        source = root / "input.txt"
+        source.write_text("0\n")
+        run = {"name": "t", "ui": "title", "boot": True, "voice_from_ref": True}
+        lua = driver_lua(run, {"pack": root / "re2.akpak"}, "title", 10, root / "a.trace", source, None, root,
+                         None, voice)
+        if "voice_ticks = { 2, 4 }" not in lua or "open_title({ boot = true })" not in lua:
+            return f"a title run's driver lacks its voice lengths:\n{lua}"
     return None
 
 
@@ -1655,7 +1684,8 @@ def run_one(run: dict, ctx: dict) -> dict:
         shutil.rmtree(saves_dir)
     saves_dir.mkdir(parents=True)
     voice = None
-    if screen == "game" and run.get("sound", True) and run.get("voice_from_ref"):
+    # A title run's lines are the game's the title starts (a `--boot` record has sound unless the run says not).
+    if screen in ("game", "title") and run.get("sound", True) and run.get("voice_from_ref"):
         voice = voice_ticks(ref_trace)
     driver = out / f"{name}.driver.lua"
     films = film_pads(ref_dir) if screen == "game" and run.get("films_from_ref") else None

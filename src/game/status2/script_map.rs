@@ -17,7 +17,8 @@
 //! | 12 on | `St_main04`: the page's routine (`0x53DB48`), then one draw |
 //!
 //! Page 2 (`0x4FBE50`) waits for `Key_trg & 0x6000` (cancel or START) or
-//! the PC's map key, then plays the cancel cue and goes to page 0, which
+//! the PC's map key, then plays the cancel cue (raising `fg_status`'s
+//! `0x8000000` in an extra mode's game) and goes to page 0, which
 //! starts the close (`St_fade_out_set`, then `St_fade_out_wait`).
 //!
 //! The draw (`0x4FB800`) steps the shared blink (`0x691F88`) as MAP's
@@ -125,9 +126,17 @@ impl GameState {
     }
 
     /// `St_init04`'s step 0, on the open's sixth tick after `Status`'s
-    /// start: the floor, the blink at 10 falling, and one draw.
+    /// start: the floor, the blink at 10 falling, and one draw. `Status`'s
+    /// start (`0x501D25`) clears the page's bytes (`0x691F60` to
+    /// `0x691F6D`) and raises the START gate (`0x691F76`) first.
     pub fn start_re2_script_map(&mut self) -> Option<ScriptMapOutcome> {
         let map = self.re2_script_map.as_mut()?;
+        let page = &mut self.re2_box_bytes;
+        page.routine = 0;
+        page.sub = 0;
+        page.count = 0;
+        page.cursor = 0;
+        page.gate = 1;
         map.floor = floor_for(map.target);
         map.fade_in = Some(0);
         map.drawn = true;
@@ -160,13 +169,13 @@ impl GameState {
             } else {
                 self.step_script_map_blink(&mut out);
             }
-            self.re2_script_map = Some(map);
+            self.keep_script_map(map);
             return Some(out);
         }
         self.step_script_map_routine(&mut map, cancel, &mut out);
         self.step_script_map_blink(&mut out);
         map.drawn = true;
-        self.re2_script_map = Some(map);
+        self.keep_script_map(map);
         Some(out)
     }
 
@@ -179,8 +188,18 @@ impl GameState {
             self.step_script_map_routine(&mut map, false, &mut out);
             self.step_script_map_blink(&mut out);
         }
-        self.re2_script_map = Some(map);
+        self.keep_script_map(map);
         Some(out)
+    }
+
+    /// The map's state after a tick, with its routine in the page's byte
+    /// (`0x691F61`), which outlasts the screen; `St_init04` sets it once
+    /// the fade in is done.
+    fn keep_script_map(&mut self, map: ScriptMap) {
+        if map.started {
+            self.re2_box_bytes.routine = map.routine;
+        }
+        self.re2_script_map = Some(map);
     }
 
     fn step_script_map_routine(
@@ -197,6 +216,10 @@ impl GameState {
                     out.sounds.push(Sound::Cancel);
                     map.routine = ROUTINE_FADE_SET;
                     out.close = true;
+                    use crate::scd2::host::{FG_STATUS_EXTRA_MAP, FG_SYSTEM_EXTRA, STATUS_BANK};
+                    if self.re2.flag(0, FG_SYSTEM_EXTRA) {
+                        self.re2.set_flag(STATUS_BANK, FG_STATUS_EXTRA_MAP, 1);
+                    }
                 }
             }
         }
@@ -382,5 +405,54 @@ mod tests {
         let map = game.re2_script_map.unwrap();
         assert_eq!(map.routine, ROUTINE_FADE_WAIT);
         assert_eq!(game.re2_file.blink.level, level + 4);
+    }
+
+    /// `special_4th_walk`'s cancel on 2690: in an extra mode's game the
+    /// page raises `fg_status`'s `0x8000000` on the press, before the
+    /// close; in the story's it doesn't.
+    #[test]
+    fn an_extra_modes_cancel_raises_its_status_bit() {
+        use crate::scd2::host::{FG_STATUS_EXTRA_MAP, FG_SYSTEM_EXTRA, STATUS_BANK};
+        for extra in [false, true] {
+            let mut game = game();
+            if extra {
+                game.re2.set_flag(0, FG_SYSTEM_EXTRA, 1);
+            }
+            game.request_re2_script_map(4);
+            game.start_re2_script_map();
+            for _ in 0..5 {
+                game.tick_re2_script_map(false);
+            }
+            assert!(!game.re2.flag(STATUS_BANK, FG_STATUS_EXTRA_MAP));
+            game.tick_re2_script_map(true);
+            assert_eq!(game.re2.flag(STATUS_BANK, FG_STATUS_EXTRA_MAP), extra);
+        }
+    }
+
+    /// `special_4th_walk`'s `ib`: `Status`'s start raises the gate with the
+    /// page's bytes cleared (2165), the fade's end sets routine 2 (2170),
+    /// the cancel 0 (2690) and the close's next tick 1 (2691), which stays
+    /// after the screen.
+    #[test]
+    fn the_page_bytes_follow_the_map() {
+        let mut game = game();
+        game.re2_box_bytes.routine = 3;
+        game.re2_box_bytes.cursor = 5;
+        game.request_re2_script_map(4);
+        game.start_re2_script_map();
+        let page = game.re2_box_bytes;
+        assert_eq!((page.routine, page.cursor, page.gate), (0, 0, 1));
+        for _ in 0..4 {
+            game.tick_re2_script_map(false);
+        }
+        assert_eq!(game.re2_box_bytes.routine, 0);
+        game.tick_re2_script_map(false);
+        assert_eq!(game.re2_box_bytes.routine, ROUTINE_WAIT);
+        game.tick_re2_script_map(true);
+        assert_eq!(game.re2_box_bytes.routine, ROUTINE_FADE_SET);
+        game.tick_re2_script_map_close();
+        assert_eq!(game.re2_box_bytes.routine, ROUTINE_FADE_WAIT);
+        game.re2_script_map = None;
+        assert_eq!(game.re2_box_bytes.trace(), "1,0,0,0,1,0,0,0");
     }
 }

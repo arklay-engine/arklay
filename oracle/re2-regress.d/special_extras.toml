@@ -40,3 +40,75 @@ fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
 frames = [189, 1309]
 expect = "match"
 record = ""
+
+
+# START on the 4th Survivor's title, on into its game: `Title_game_init`'s extras branch starts HUNK in room 304 with
+# no prologue, and the room's opening scene plays (oracle/re2.md, "The 4th Survivor and To-fu"). From the boot, for
+# the boot film's pick of the character, which the game keeps. Compared from `Game_loop`'s first tick, 1276.
+[[run]]
+name = "special_4th_play"
+ui = "title"
+boot = true
+# This record's boot film picked Leon (`fg_status` bit 31 down).
+seed = 0
+offset = 0
+ticks = 2000
+compare_from = 1276
+input = "special_4th_play.txt"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,esp,pl"
+frames = [1269, 1999]
+expect = "match"
+record = ""
+
+# The same for TO-FU: TOFU in room 304 with its knife and 400 life.
+[[run]]
+name = "special_tofu_play"
+ui = "title"
+boot = true
+# This record's boot film picked Claire: `fg_status` bit 31, under which room 304 is disc 1's.
+seed = 0x80000000
+offset = 0
+ticks = 2000
+compare_from = 1316
+input = "special_tofu_play.txt"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,esp,pl"
+frames = [1309, 1999]
+expect = "match"
+record = ""
+
+# The 4th Survivor's start on through the scene's two radio messages, each confirmed, and into play: a walk, a run,
+# turns and an aim.
+[[run]]
+name = "special_4th_walk"
+ui = "title"
+boot = true
+# This record's boot film picked Claire: `fg_status` bit 31, under which room 304 is disc 1's.
+seed = 0x80000000
+offset = 0
+ticks = 3200
+compare_from = 1276
+input = "special_4th_walk.txt"
+# The radio's voiced lines hold the record's ticks (oracle/re2-deviations.md, "Voice lines").
+voice_from_ref = true
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,esp,pl"
+frames = [1269, 3199]
+expect = "match"
+record = ""
+
+# The same for TO-FU.
+[[run]]
+name = "special_tofu_walk"
+ui = "title"
+boot = true
+# This record's boot film picked Claire: `fg_status` bit 31, under which room 304 is disc 1's.
+seed = 0x80000000
+offset = 0
+ticks = 3240
+compare_from = 1316
+input = "special_tofu_walk.txt"
+# The radio's voiced lines hold the record's ticks (oracle/re2-deviations.md, "Voice lines").
+voice_from_ref = true
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,esp,pl"
+frames = [1309, 3239]
+expect = { tick = 2748, fields = ["esp92", "espk", "espn", "rng"], note = "TO-FU running starts an effect of the player's own bank (kind 1, row 0x26) at head height, which arklay's player doesn't make for him" }
+record = ""

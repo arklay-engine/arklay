@@ -888,6 +888,57 @@ fn an_re2_rdt_converts_to_a_room_that_builds_the_same() {
     assert_eq!(snapshot(&loaded.state), snapshot(&expected.state));
 }
 
+/// Room 11C's only motion bank is an extra mode's (mask bit 31): the room's
+/// folder carries it as `anim/extra`, and a pack converted before it did
+/// reads it from the room's RDT as the original loads it (`heap/<id>.rdt`),
+/// when that RDT came with the room.
+#[test]
+fn an_re2_rooms_extra_mode_bank_survives_the_xml() {
+    let data = crate::rdt2::tests::sample_with_extra_bank_only();
+    let id = RoomId::parse("1000").unwrap();
+    let entries = convert_rdt2(&data, id, Vec::new()).unwrap();
+    let loaded = load(&pack_of(entries.clone()), id).unwrap();
+    assert!(loaded.state.room_anim.is_none());
+    assert!(loaded.state.extra_room_anim.is_some());
+    // An older pack: the folder without the bank, the RDT in the heap.
+    let older: Vec<_> = entries
+        .iter()
+        .filter(|(path, _)| !path.contains("/anim/"))
+        .cloned()
+        .collect();
+    let bare = load(&pack_of(older.clone()), id).unwrap();
+    assert!(bare.state.extra_room_anim.is_none());
+    assert!(
+        entries
+            .iter()
+            .any(|(path, _)| path.ends_with("/anim/extra.emr"))
+    );
+    let mut heap = older.clone();
+    heap.push((crate::heap2::rdt_entry(&id.code()), data));
+    let loaded = load(&pack_of(heap.clone()), id).unwrap();
+    assert!(loaded.state.extra_room_anim.is_some());
+    // A mod that replaces the room: the heap's RDT is the stock room's, so
+    // only a bank of the mod's own counts.
+    let xml = |entries: &[(String, Vec<u8>)]| {
+        entries
+            .iter()
+            .filter(|(path, _)| path.ends_with("/room.xml"))
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    let replaced = pack_of(heap.clone()).with_overlay(pack_of(xml(&older)));
+    assert!(load(&replaced, id).unwrap().state.extra_room_anim.is_none());
+    let mut own = xml(&older);
+    own.extend(
+        entries
+            .iter()
+            .filter(|(path, _)| path.contains("/anim/extra."))
+            .cloned(),
+    );
+    let replaced = pack_of(heap).with_overlay(pack_of(own));
+    assert!(load(&replaced, id).unwrap().state.extra_room_anim.is_some());
+}
+
 /// Rooms 30D0 and 6120 count object slots past their last model: the XML
 /// keeps the RDT's count rather than the files'.
 #[test]

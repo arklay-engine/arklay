@@ -61,7 +61,62 @@ pub const SHERRY_ITEMS: [[u8; 3]; 11] = [
     [0x31, 0x01, 0],
 ];
 
+/// The 4th Survivor's and To-fu's players: HUNK and TOFU.
+pub const HUNK: u8 = 0xC;
+pub const TOFU: u8 = 0xD;
+
+/// `Stage_init_item`'s table (`0x5401B8`), row 0x16, HUNK's: the handgun
+/// (item 2) with 18 rounds, the shotgun (7) with 5, the Magnum (5) with 8,
+/// 150 handgun bullets, 15 shells, 8 Magnum rounds, two of item 0x2B, and
+/// item 0x52 as the personal item.
+pub const HUNK_ITEMS: [[u8; 3]; 11] = [
+    [0x02, 0x12, 0],
+    [0x07, 0x05, 0],
+    [0x05, 0x08, 0],
+    [0x14, 0x96, 0],
+    [0x15, 0x0F, 0],
+    [0x16, 0x08, 0],
+    [0x2B, 0x01, 0],
+    [0x2B, 0x01, 0],
+    [0; 3],
+    [0; 3],
+    [0x52, 0x01, 0],
+];
+/// The same table's row 0x21, TOFU's: the knife, two green herbs (0x26),
+/// item 0x28, and item 0x52 as the personal item.
+pub const TOFU_ITEMS: [[u8; 3]; 11] = [
+    [0x01, 0x01, 0],
+    [0x26, 0x01, 0],
+    [0x26, 0x01, 0],
+    [0x28, 0x01, 0],
+    [0; 3],
+    [0; 3],
+    [0; 3],
+    [0; 3],
+    [0; 3],
+    [0; 3],
+    [0x52, 0x01, 0],
+];
+
 impl GameState {
+    /// The start `Title_game_init`'s extras branch (`0x506750`, `fg_system`'s
+    /// 8) and `Stage_init_item` give player `id`, [`HUNK`] or [`TOFU`]:
+    /// `pPl.Id`, the row's items with the first one equipped (`St+8` slot
+    /// 0), eight slots, `Player_set`'s `Max_life` and the life the branch
+    /// sets, 200 for HUNK and 400 for TOFU.
+    pub fn set_re2_extra_start(&mut self, id: u8) {
+        let table = if id == TOFU { &TOFU_ITEMS } else { &HUNK_ITEMS };
+        self.set_re2_player_id(id);
+        self.set_re2_item_work(table);
+        self.re2.personal_item = [table[10][0], table[10][1]];
+        self.re2.inventory_size = 8;
+        self.set_equipped(Some(table[0][0]));
+        self.equipped_slot = Some(0);
+        self.max_health = max_life(id);
+        self.entities[0].health = self.max_health;
+        self.set_health_copy(self.max_health);
+    }
+
     /// `St+8`'s low byte: the slot of the equipped item, 0x80 for none.
     pub fn re2_equip_slot(&self) -> u8 {
         self.equipped
@@ -287,6 +342,33 @@ mod tests {
         game.set_re2_player_id(0);
         game.entities[0].health = 90;
         game
+    }
+
+    #[test]
+    fn the_extras_start_with_their_own_player_items_and_life() {
+        // HUNK (`special_4th_play`'s `pl` and `inv` from its first tick).
+        let mut game = GameState {
+            is_re2_room: true,
+            ..GameState::default()
+        };
+        game.set_re2_extra_start(HUNK);
+        assert_eq!(game.re2.pl_id, HUNK);
+        assert_eq!(game.re2.vars[VAR_NEXT_PLD], u16::from(HUNK));
+        assert_eq!(game.re2_item_work(), HUNK_ITEMS);
+        assert_eq!(game.re2.inventory_size, 8);
+        assert_eq!((game.re2_equip_slot(), game.equipped_weapon_id), (0, 2));
+        assert_eq!((game.max_health, game.entities[0].health), (200, 200));
+        // TOFU: the knife equipped and 400 life.
+        let mut game = GameState {
+            is_re2_room: true,
+            ..GameState::default()
+        };
+        game.set_re2_extra_start(TOFU);
+        assert_eq!(game.re2.pl_id, TOFU);
+        assert_eq!(game.re2_item_work(), TOFU_ITEMS);
+        assert_eq!(game.re2.personal_item, [0x52, 1]);
+        assert_eq!((game.re2_equip_slot(), game.equipped_weapon_id), (0, 1));
+        assert_eq!((game.max_health, game.entities[0].health), (400, 400));
     }
 
     #[test]
