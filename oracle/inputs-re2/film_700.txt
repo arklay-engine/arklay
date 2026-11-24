@@ -1,0 +1,1 @@
+# room 700: the player stands in area 2, whose event (proc 7) fades out and plays film 12 (movie_on 12), whose attribute byte has 0x40 (Bg_set_mode(2, 0) after it), then sets 0:10 (oracle/re2.md, "Films")
