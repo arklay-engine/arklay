@@ -128,7 +128,7 @@ ticks = 1600
 sound = false
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 1599]
-# 1.00 measured, recorded under Wine; the worst, 1273 (6.3), is 200's load (#668)
+# 1.00 measured, recorded under Wine; the worst, 1273 (6.3), is 200's load (#672)
 frame_max_mean = 1.05
 ignore = [
   [344, 365, "pneck"],
@@ -148,7 +148,7 @@ ticks = 4150
 sound = false
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,ib,box,om0"
 frames = [360, 4149]
-# 0.88 measured, recorded under Wine; the worst, 612 (12.4), 3834 and 2414, are door loads (#668)
+# 0.88 measured, recorded under Wine; the worst, 612 (12.4), 3834 and 2414, are door loads (#672)
 frame_max_mean = 0.95
 ignore = [
   [344, 365, "pneck"],
@@ -170,7 +170,7 @@ ticks = 3110
 sound = false
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,om0"
 frames = [360, 3109]
-# 1.07 measured, recorded under Wine; the worst, 1025 (5.7), 2283 and 1181, are door loads (#668)
+# 1.07 measured, recorded under Wine; the worst, 1025 (5.7), 2283 and 1181, are door loads (#672)
 frame_max_mean = 1.10
 ignore = [
   [344, 365, "pneck"],
@@ -190,7 +190,7 @@ ticks = 3100
 sound = false
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 3099]
-# 0.99 measured, recorded under Wine; the worst, 483 (8.0), is 10C's load (#668)
+# 0.99 measured, recorded under Wine; the worst, 483 (8.0), is 10C's load (#672)
 frame_max_mean = 1.05
 ignore = [
   [344, 365, "pneck"],
@@ -210,7 +210,7 @@ ticks = 4730
 sound = false
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,om0"
 frames = [360, 4729]
-# 0.93 measured, recorded under Wine; the worst, 1697 (7.2), 4400 and 1169, are door loads (#668)
+# 0.93 measured, recorded under Wine; the worst, 1697 (7.2), 4400 and 1169, are door loads (#672)
 frame_max_mean = 1.0
 ignore = [
   [344, 365, "pneck"],
@@ -221,3 +221,25 @@ ignore = [
 ]
 expect = "match"
 record = "--warp 112:-17484:0:-26200:3128:1 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:36 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:75 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:51 --flag 6:52 --flag 6:54 --flag 6:55 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:82 --flag 6:83 --flag 6:85 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:114 --flag 6:115 --flag 6:116 --flag 6:131 --flag 6:133 --flag 6:148 --flag 6:157 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:31 --flag 8:32 --flag 8:34 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:188 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 30 --give 0:0x02:5 --give 2:0x33:1 --give 3:0x5C:2 --give 4:0x4A:1 --give 5:0x43:1 --give 6:0x33:1 --box 2:0x3C:1 --box 3:0x32:1 --box 4:0x1E:3"
+
+# From 111's door 0 in 117 (Leon as leon_a_112_117 leaves him) to 110 with the Bishop plug: door 1 back to 112's balcony, west onto the weak floor (area 9, main_11), which drops him into the shelves' section (4:53), the shelves' power switch (area 8, 4:23), the two south shelves slid one place north from the switches at their east ends (Right; the places 0, 3 and 6 become 1, 4 and 6, and 4:24 opens the case), the Bishop plug from the case (area 7, 8:21), and door 0 into 110's hand back
+[[run]]
+name = "leon_a_117_110"
+room = "117"
+setup_script = "leon_a_117_110.lua"
+input = "leon_a_117_110.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 3100
+sound = false
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,om0"
+frames = [360, 3099]
+# 1.58 measured, recorded under Wine. The windows: 117 and 112's fall, 0.89 (the worst, 530 (7.2), is 112's door, #672); 112's
+# shelves, 2.25, drawn bigger and offset (#889); the rest of 112, 0.35; and 110's door, 3.82 (2756 (10.9), then 4 to 6, #672)
+frame_max_mean = 1.65
+frame_windows = [[360, 1259, 0.95], [1260, 2159, 2.35], [2160, 2755, 0.40], [2756, 3099, 3.95]]
+ignore = [
+  [344, 365, "pneck"],
+]
+expect = "match"
+record = "--warp 117:-25979:-14400:-21180:3920:3 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:36 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:55 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:74 --flag 4:75 --flag 4:76 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 4:153 --flag 6:19 --flag 6:51 --flag 6:52 --flag 6:54 --flag 6:55 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:82 --flag 6:83 --flag 6:85 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:114 --flag 6:115 --flag 6:116 --flag 6:131 --flag 6:133 --flag 6:148 --flag 6:157 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:31 --flag 8:32 --flag 8:34 --flag 8:55 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:188 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 30 --give 0:0x02:5 --give 2:0x33:1 --give 3:0x5C:2 --give 4:0x33:1 --give 5:0x3D:1 --box 2:0x3C:1 --box 3:0x32:1 --box 4:0x1E:3"
