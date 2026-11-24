@@ -1681,6 +1681,12 @@ def finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks
         result["text"] = f"arklay exited {proc.returncode}: {err_text.strip()[-200:]}"
         result["problems"].append("arklay failed")
         return result
+    # `load_game_pack` warns of a pack converted from other sources than the binary's (a `--pack` made
+    # before a change to games/re2, say): the run would test that pack's scripts, not these.
+    if "was converted from other sources than this build's" in err_text:
+        result["text"] = "the pack was converted from other sources than this arklay's: convert it again"
+        result["problems"].append("stale pack")
+        return result
 
     ref_f, ark_f = out / f"{name}.ref.f", out / f"{name}.ark.f"
     if run.get("keep_sound_3"):
