@@ -102,6 +102,15 @@ fn parent(e: &mut Api) -> mlua::Result<&super::ParentView> {
         .ok_or_else(|| mlua::Error::RuntimeError("no parent".to_owned()))
 }
 
+/// Whether two points on the floor are less than `within` apart, by
+/// `SquareRoot0` of their wrapped sum of squares, compared unsigned
+/// (`FUN_004b25a0`): the root rounds down, so 700 apart is within 700.
+fn point_within([x0, z0]: [i32; 2], [x1, z1]: [i32; 2], within: i32) -> bool {
+    let (dx, dz) = (x1.wrapping_sub(x0), z1.wrapping_sub(z0));
+    let root = crate::sca::square_root0(dx.wrapping_mul(dx).wrapping_add(dz.wrapping_mul(dz)));
+    (root as u32) < within as u32
+}
+
 fn routine_index(index: i64) -> mlua::Result<usize> {
     usize::try_from(index)
         .ok()
@@ -1480,13 +1489,10 @@ impl UserData for Api {
             let [x, z] = e.em().work().dest;
             Ok((i32::from(x), i32::from(z)))
         });
-        // How far apart two points are, on the floor, against `within`.
         methods.add_method_mut(
             "point_within",
             |_, _, (x0, z0, x1, z1, within): (i32, i32, i32, i32, i32)| {
-                let (dx, dz) = (i64::from(x1 - x0), i64::from(z1 - z0));
-                let within = i64::from(within);
-                Ok(dx * dx + dz * dz < within * within)
+                Ok(point_within([x0, z0], [x1, z1], within))
             },
         );
         methods.add_method_mut("set_body_ofs_x", |_, e, ofs: i16| {
@@ -1925,6 +1931,17 @@ impl UserData for Api {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `FUN_004b25a0`'s root rounds 700 and 701 down to 698, so the vines'
+    /// 700 reaches them; 703 is out.
+    #[test]
+    fn point_within_takes_square_root0s_rounded_root() {
+        assert_eq!(crate::sca::square_root0(700 * 700), 698);
+        assert!(point_within([0, 0], [700, 0], 700));
+        assert!(point_within([0, 0], [0, -701], 700));
+        assert!(!point_within([0, 0], [703, 0], 700));
+        assert!(!point_within([5, 5], [5, 5], 0));
+    }
 
     /// The names a source registers through `add_method`, `add_function` or
     /// their `_mut` forms, in order.
@@ -6869,6 +6886,25 @@ mod tests {
             let out: (i64, i64, i64, i64, i64) =
                 eval(&lua, "return w.r[1], w.r[2], w.r[3], KIND, w.vars[6]");
             assert_eq!(out, (1, 0, 0, 7, 0x2D));
+        }
+
+        /// `FUN_00484c90`'s life: the EASY table's first 89 doubled under
+        /// HARD (`0x484d4c`, after either table) before 4:164's 0x14.
+        #[test]
+        fn a_hard_ivy_doubles_its_life_on_either_table() {
+            for (easy, hard, life) in [(true, false, 69), (true, true, 158), (false, true, 144)] {
+                let setup = format!(
+                    "w.r = {{ [0] = 0, 0, 0, 0 }} w.hard = {hard}
+                     function e:easy() return {easy} end
+                     function e:common_a4() return true end"
+                );
+                let (lua, _) = run(&ivy(), &setup, 1, &[]);
+                assert_eq!(
+                    eval::<i64>(&lua, "return w.life"),
+                    life,
+                    "easy {easy} hard {hard}"
+                );
+            }
         }
 
         /// The lash's whip takes 0xF, or under `hard_mode` 0x1E (`0x485c95`).

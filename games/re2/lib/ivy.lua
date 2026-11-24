@@ -1417,22 +1417,20 @@ local function init(e)
     e:set_damage_flg(0)
     e:routines(1, start, 0, 0)
     e:set_speed(0, 0, 0)
-    local life
+    -- The table by the EASY bit, its random 0 to 3, HARD's double
+    -- (`0x484d4c`, after either table), then 4:164's penalty by the table.
+    local life, penalty
     if e:easy() then
-        life = LIFE_EASY[(e:rnd() & 0xF) + 1]
-        life = life + (e:rnd() & 3)
-        if e:common_a4() then
-            life = life - 0x14
-        end
+        life, penalty = LIFE_EASY[(e:rnd() & 0xF) + 1], 0x14
     else
-        life = LIFE[(e:rnd() & 0xF) + 1]
-        life = life + (e:rnd() & 3)
-        if e:hard_mode() then
-            life = life * 2
-        end
-        if e:common_a4() then
-            life = life - 0x32
-        end
+        life, penalty = LIFE[(e:rnd() & 0xF) + 1], 0x32
+    end
+    life = life + (e:rnd() & 3)
+    if e:hard_mode() then
+        life = life * 2
+    end
+    if e:common_a4() then
+        life = life - penalty
     end
     e:set_life(life)
     e:set_d_life(0xD)

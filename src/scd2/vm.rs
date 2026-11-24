@@ -131,13 +131,21 @@ impl Vm {
     }
 
     fn start(&mut self, task: usize, proc: usize) {
+        // The init runs from its own list on task 0, but the original has the
+        // main list selected by then (`Sce_scheduler_set`), so a task the
+        // init starts elsewhere runs, and is bounded by, the main list.
+        let procs = if matches!(self.active, Active::Init) && task != 0 {
+            self.main.len()
+        } else {
+            self.list().len()
+        };
         self.tasks[task] = Task {
             frame: Frame {
                 proc,
                 ..Frame::default()
             },
             calls: Vec::new(),
-            running: proc < self.list().len(),
+            running: proc < procs,
         };
     }
 
@@ -785,8 +793,11 @@ mod tests {
     #[test]
     fn an_inits_evt_exec_onto_task_1_takes_main_00s_place() {
         let mut host = TestHost::default();
+        // The init's one procedure runs `evt_exec(1, 0, 1)`: event 1 is
+        // `main_01`, which the init's own list doesn't have.
         let mut vm = vm(vec![concat(&[&MARK_1, &END]), concat(&[&MARK_2, &END])]);
-        vm.start(MAIN_TASK, 1);
+        vm.init = vec![concat(&[&[0x04, 1, 0, 1], &END])];
+        vm.run_init(&mut host);
         vm.start_main();
         vm.tick(&mut host);
         assert_eq!(marks(&host), [2]);
