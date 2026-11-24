@@ -112,7 +112,7 @@ game = {}
 ---load_game_pack("re2.akpak", { difficulty = "hard", mods = { "mods/hd.akpak" } })
 ---```
 ---@param path string The game pack: the id of an installed pack (`"re1"`, `"re2"`), found under the data roots' `games/` folders as the launcher finds it, or a path to an `.akpak`.
----@param options? { mods?: string[], user_mods?: boolean, language?: string, save_dir?: string, quick_turn?: boolean, tactical_reload?: boolean, authentic?: boolean, auto_aim?: boolean, blood?: boolean, difficulty?: "normal"|"easy"|"hard", arrange?: boolean, title_special?: integer, title_gallery?: integer[], title_seed?: integer } `mods` are the mod layers to apply in order (none by default); `user_mods` also layers the user's installed mods under them, as `arklay.toml` selects them for a normal launch (default: on with a window, off with `--headless`); `language` the pack language to use; `save_dir` where in-game saves go (default: a scratch directory removed at exit). The rest are the run options: all off by default except `auto_aim` and `blood`, and `difficulty` defaults to `normal`. `title_special` is RE 2's config.ini `SPECIAL`, which picks the extras the title's SPECIAL shows (0 EXIT alone, 1 GALLERY, 2 or 3 EX.BATTLE, 4 to 7 the 4th Survivor, anything else all of them, To-fu too; default 15). `title_gallery` is its `GALLERY0` to `GALLERY4`, five 32-bit words of what play has opened in the gallery (default: all of it). `title_seed` is the first value, of 32 bits, of the generator RE 2's title picks Leon or Claire with for its film and its attract demo: Claire when the value's top bit is set, and each later pick from `value * 5 + 0x19573BA7` (default: from the clock, as the original's). An unknown key is an error.
+---@param options? { mods?: string[], user_mods?: boolean, language?: string, save_dir?: string, quick_turn?: boolean, tactical_reload?: boolean, authentic?: boolean, auto_aim?: boolean, blood?: boolean, difficulty?: "normal"|"easy"|"hard", arrange?: boolean, title_special?: integer, title_gallery?: integer[], title_seed?: integer, title_keys?: { keys: string, pad: string } } `mods` are the mod layers to apply in order (none by default); `user_mods` also layers the user's installed mods under them, as `arklay.toml` selects them for a normal launch (default: on with a window, off with `--headless`); `language` the pack language to use; `save_dir` where in-game saves go (default: a scratch directory removed at exit). The rest are the run options: all off by default except `auto_aim` and `blood`, and `difficulty` defaults to `normal`. `title_special` is RE 2's config.ini `SPECIAL`, which picks the extras the title's SPECIAL shows (0 EXIT alone, 1 GALLERY, 2 or 3 EX.BATTLE, 4 to 7 the 4th Survivor, anything else all of them, To-fu too; default 15). `title_gallery` is its `GALLERY0` to `GALLERY4`, five 32-bit words of what play has opened in the gallery (default: all of it). `title_seed` is the first value, of 32 bits, of the generator RE 2's title picks Leon or Claire with for its film and its attract demo: Claire when the value's top bit is set, and each later pick from `value * 5 + 0x19573BA7` (default: from the clock, as the original's). `title_keys` is its `KeyDef` and `JoyDef_Emulated`, the keys and the pad's buttons the option screen's KEYCONFIG page lists: each line's value as config.ini has it, 32 and 128 bytes in hex (default: the executable's own defaults). An unknown key is an error.
 function load_game_pack(path, options) end
 
 ---Boot a room directly, like `arklay --game PACK --room ROOM`: a fresh game state
@@ -299,6 +299,37 @@ function capture(path) end
 ---`load_save` and `--load` read back.
 ---@param path string
 function save_game(path) end
+
+---The original RE 2's save image of the session's state: the 2048 bytes
+---its save screen writes to a `.BIOHAZARD2` file on a save's write tick
+---(`Save_push` and the save work at `0x98E79C`), built over the scenario's
+---record of the pack's `INIT_TBL.DAT`, as a new game starts it (an
+---error when the pack has no such record, or the session isn't RE 2). With
+---`reference`, the path of such a file, it also compares the two under the
+---image's mask (the regions arklay doesn't hold, such as the play clock)
+---and returns the unmasked regions that differ.
+---
+---```lua
+---local image, differ = re2_save_image("Leon A_01_....BIOHAZARD2")
+---local count = image:byte(0x221) | image:byte(0x222) << 8 -- the save count
+---for _, d in ipairs(differ) do print(d.region, d.offset, d.ours, d.theirs) end
+---```
+---@param reference? string
+---@return string image The 2048 bytes.
+---@return { region: string, offset: integer, ours: string, theirs: string }[]? differ With `reference`: each region that differs, by name, with the offset of its first differing byte and both images' bytes from there to its last, in hex; empty when the two match.
+function re2_save_image(reference) end
+
+---The session's save folder read back with the engine's own reader, a row a
+---file in name order. A row is `{ name, count }` for an RE 2 save whose RE 2
+---trailer parses and applies (a supported older layout does), with `count`
+---its save count; `{ name, error }` for any other file. `references` maps a
+---save count to an original's `.BIOHAZARD2` file: a save of that count also
+---gets `differ`, the regions where the image of the game it holds (as a load
+---applies it) differs from that file under the image's mask, as
+---[`re2_save_image`](#re2_save_image) returns them.
+---@param references? table<integer, string>
+---@return { name: string, count?: integer, error?: string, differ?: { region: string, offset: integer, ours: string, theirs: string }[] }[]
+function re2_saves(references) end
 
 ---Start writing the oracle trace (`oracle/trace-v1.md`) to `path`: one line
 ---per gameplay tick from the next tick on. A trace already running is closed first.

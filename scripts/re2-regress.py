@@ -27,6 +27,7 @@ import functools
 import hashlib
 import importlib.util
 import io
+import json
 import multiprocessing
 import os
 import re
@@ -97,7 +98,8 @@ def load_manifest(path: Path) -> tuple[dict, list[dict]]:
 
 def refs_dir(args) -> Path:
     text = args.refs or os.environ.get("ARKLAY_RE2_REFS") or DEFAULT_REFS
-    return Path(text).expanduser()
+    # Absolute: the driver scripts name reference files, and arklay runs them from the repo root.
+    return Path(text).expanduser().resolve()
 
 
 # ---------------------------------------------------------------- inputs
@@ -156,6 +158,11 @@ def lua_str(text: str) -> str:
     return '"' + "".join(out) + '"'
 
 
+# The recorder's words for the keyboard's own arrows, which KEYCONFIG's page reads in place of the pad: arklay's
+# screens have one set of directions.
+KEYBOARD_BUTTONS = {"kbup": "up", "kbdown": "down", "kbleft": "left", "kbright": "right"}
+
+
 def input_entries(path: Path) -> dict[int, list[str]]:
     """An arklay input file (`<tick> <button>...` lines, `#` comments) as the buttons each line holds from its
     tick on; the last line at a tick wins."""
@@ -166,7 +173,7 @@ def input_entries(path: Path) -> dict[int, list[str]]:
             continue
         if not words[0].isdigit():
             raise SystemExit(f"re2-regress: {path}:{number}: `{words[0]}` is not a tick number")
-        held[int(words[0])] = words[1:]
+        held[int(words[0])] = [KEYBOARD_BUTTONS.get(word, word) for word in words[1:]]
     return dict(sorted(held.items()))
 
 
@@ -187,10 +194,12 @@ while trace_ticks() < ticks and updates < bound do
     end
     tick()
     updates = updates + 1
+    if after_tick then after_tick() end
     if frames and trace_ticks() > index then
         capture(frames .. string.format("/f%05d.bmp", index))
     end
 end
+if after_run then after_run() end
 """
 
 
@@ -213,6 +222,10 @@ def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input
             # The first value of the title's generator, which the record took from the clock: its pick of Leon or
             # Claire for the attract demo.
             options.append(f"title_seed = {int(run['seed'])}")
+        if "keys" in run:
+            # config.ini's `KeyDef` and `JoyDef_Emulated` in the install the reference was recorded from.
+            keys = run["keys"]
+            options.append(f"title_keys = {{ keys = {lua_str(keys['keys'])}, pad = {lua_str(keys['pad'])} }}")
         lines.append(f"load_game_pack({lua_str(str(ctx['pack']))}, {{ {', '.join(options)} }})")
         # `boot = true`: from the game's boot, the warning before the title, as the record has it from its tick 0.
         lines.append("open_title({ boot = true })" if run.get("boot") else "open_title()")
@@ -242,7 +255,220 @@ def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input
     lines.append(f"local held = {{ {held} }}")
     lines.append(f"local ticks = {ticks}")
     lines.append(f"local frames = {lua_str(str(frames_dir)) if frames_dir else 'nil'}")
+    if screen == "game" and run.get("saves"):
+        refs = {count: path for path in reference_saves(ctx["refs"] / run["ref"]) if (count := save_count(path)) is not None}
+        entries = ", ".join(f"[{count}] = {lua_str(str(path))}" for count, path in sorted(refs.items()))
+        lines.append(f"local save_refs = {{ {entries} }}")
+        lines.append(SAVE_IMAGE_CHECK)
     return "\n".join(lines) + "\n" + DRIVER_LOOP
+
+
+# A run that keeps its saves (`saves = true`) compares the original's save image of each save arklay makes with the
+# reference's file of the same save count, under the image's mask (`src/save/re2_image.rs`). After every update the
+# driver reads the save count from arklay's image (`re2_save_image`, offset 0x220), and when it moves prints
+# `save-image COUNT JSON`, the regions that differ (`-` for a save the reference keeps no file of, one a later save
+# overwrote), and `save-folder COUNT JSON`, the save folder as the engine reads it back (`re2_saves`). At the end it
+# prints `save-final JSON`, the folder again with each kept save's image (the game the file holds, as a load applies
+# it) compared with the reference's. `judge_save_images` reads the lines.
+SAVE_IMAGE_CHECK = """
+local saves_seen
+local function save_count(image)
+    return image:byte(0x221) | image:byte(0x222) << 8
+end
+function after_tick()
+    local count = save_count(re2_save_image())
+    if saves_seen == nil then saves_seen = count end
+    if count == saves_seen then return end
+    saves_seen = count
+    local ref = save_refs[count]
+    if ref then
+        local _, differ = re2_save_image(ref)
+        print("save-image " .. count .. " " .. json(differ))
+    else
+        print("save-image " .. count .. " -")
+    end
+    print("save-folder " .. count .. " " .. json(re2_saves()))
+end
+function after_run()
+    print("save-final " .. json(re2_saves(save_refs)))
+end
+"""
+
+
+def listed_saves(ref_dir: Path) -> list[tuple[str, str]] | None:
+    """The save files a reference's `meta.txt` lists (`save: NAME SHA256`, or `save: none`), or None when it lists
+    none at all (a reference recorded before `saves` kept them)."""
+    meta = ref_dir / "meta.txt"
+    lines = [line[len("save: "):] for line in meta.read_text().splitlines() if line.startswith("save: ")] \
+        if meta.exists() else []
+    if not lines:
+        return None
+    if lines == ["none"]:
+        return []
+    return [tuple(line.rsplit(" ", 1)) for line in lines]
+
+
+def reference_saves(ref_dir: Path) -> list[Path]:
+    """The reference's save files that `meta.txt` lists and that are there."""
+    return [path for name, _ in listed_saves(ref_dir) or [] if (path := ref_dir / "saves" / name).is_file()]
+
+
+def save_count(path: Path) -> int | None:
+    """The save count a save image holds (offset 0x220), or None for a file that isn't one."""
+    data = path.read_bytes()
+    return int.from_bytes(data[0x220:0x222], "little") if len(data) == 0x800 else None
+
+
+def newest_first(paths: list[Path]) -> list[Path]:
+    """Save files in the order the save screen lists them: by the file's write time, newest first (`Card_write`'s
+    sort on `Save_open_fp`'s `GetFileTime`), the name breaking a tie."""
+    return sorted(paths, key=lambda path: (-path.stat().st_mtime_ns, path.name))
+
+
+def traced_writes(trace: Path) -> list[tuple[int, int, int, int]]:
+    """The original's writes in order, overwritten saves included: each change of `sv`'s last value (`0x98E9BC`'s
+    low word, the count) while the save screen runs, as `(count, previous, state, picked)`. The write tick's state
+    is 0x22 for a new file and 0x20 for a save's row, and `picked` (`Cursor` plus the top row, `sv`'s fifth and
+    sixth values) is the row's place among the folder's saves, newest first, from 1."""
+    writes, last = [], None
+    with open(trace) as lines:
+        for line in lines:
+            found = re.search(r" sv=(\S+)", line)
+            if not found or found.group(1) == "-":
+                continue
+            values = found.group(1).split(",")
+            count = int(values[-1])
+            if last is not None and count != last:
+                writes.append((count, last, int(values[2], 16), int(values[4]) + int(values[5])))
+            last = count
+    return writes
+
+
+# The write tick's state: a new file's reveal, and a save's row's (`Card_access`, `oracle/re2.md`).
+WRITE_NEW, WRITE_OVER = 0x22, 0x20
+
+
+def folder_after_writes(writes: list[tuple[int, int, int, int]], start: list[int]) -> tuple[list[list[int]], list[str]]:
+    """The saves the folder holds after each of `writes`, newest first, from the folder's `start` (newest first): a
+    new file's write adds one, and a row's write replaces the save on that row. Also what doesn't add up: a write
+    that isn't the count before it plus one (`Card_access` raises the low word by one), or one whose count the
+    folder already holds."""
+    folder, after, problems = list(start), [], []
+    for count, previous, state, picked in writes:
+        if count != (previous + 1) & 0xFFFF:
+            problems.append(f"save {count} follows save {previous}: a write raises the count by one")
+        if state == WRITE_OVER:
+            if not 1 <= picked <= len(folder):
+                problems.append(f"save {count} overwrites row {picked} of a folder of {len(folder)}")
+            else:
+                del folder[picked - 1]
+        elif state != WRITE_NEW:
+            problems.append(f"save {count} is written in state {state:#x}, neither a new file's nor a row's")
+        if count in folder:
+            problems.append(f"save {count} is written while the folder holds a save {count}")
+        folder.insert(0, count)
+        after.append(list(folder))
+    return after, problems
+
+
+def json_lines(out_text: str, tag: str) -> list[tuple[int | None, object]]:
+    """arklay's `TAG [COUNT] JSON` lines, in order: the count (None where the tag has none) and the JSON, None for
+    `-`."""
+    found = []
+    for line in out_text.splitlines():
+        if not line.startswith(tag + " "):
+            continue
+        rest = line[len(tag) + 1:]
+        count = None
+        if tag != "save-final":
+            text, _, rest = rest.partition(" ")
+            count = int(text)
+        found.append((count, None if rest == "-" else json.loads(rest)))
+    return found
+
+
+def regions_text(differ: list[dict]) -> str:
+    return ", ".join(f"{d['region']} at 0x{d['offset']:03x} (ours {d['ours']}, theirs {d['theirs']})" for d in differ)
+
+
+def judge_save_images(ref_dir: Path, out_text: str, start: list[int] = ()) -> tuple[str, list[str]]:
+    """The save images' verdict.
+
+    - The original's writes are the changes of its trace's `sv` count, in order; each must raise the count by one.
+      arklay's `save-image` lines must be the same counts in the same order, each once.
+    - Which saves the folder holds after each write follows from the write's kind and row (`folder_after_writes`,
+      from `start`, the folder's saves before the run, newest first). arklay's folder after each write, as the
+      engine reads it back, must hold those counts, so a wrong row's file going fails as well as a missing write.
+    - `meta.txt` must list a file of each save kept at the end and no other, and they must be what the reference's
+      `saves/` holds, each with its listed hash. arklay's image of each kept save on its write tick, and the image
+      of the game its file holds at the end, must match the reference's under the mask.
+    - Every file in arklay's folder must be a usable RE 2 save: its RE 2 trailer parses and applies."""
+    problems = []
+    listed = listed_saves(ref_dir)
+    if listed is None:
+        return "save images: meta.txt lists no saves", ["the reference's meta.txt lists no saves: record it again"]
+    stored = sorted(path.name for path in (ref_dir / "saves").iterdir()) if (ref_dir / "saves").is_dir() else []
+    if sorted(name for name, _ in listed) != stored:
+        problems.append(f"the reference's saves/ holds {stored}, meta.txt lists {sorted(name for name, _ in listed)}")
+    refs = {}
+    for name, digest in listed:
+        path = ref_dir / "saves" / name
+        if not path.is_file():
+            problems.append(f"the reference's {name} is missing")
+            continue
+        data = path.read_bytes()
+        if hashlib.sha256(data).hexdigest() != digest:
+            problems.append(f"the reference's {name} isn't the file meta.txt lists")
+            continue
+        count = save_count(path)
+        if count is None:
+            problems.append(f"the reference's {name} isn't a 2048-byte save image")
+            continue
+        if count in refs:
+            problems.append(f"the reference keeps two files of save {count}")
+        refs[count] = name
+    writes = traced_writes(ref_dir / "ref.trace")
+    after, unfollowed = folder_after_writes(writes, list(start))
+    problems += unfollowed
+    survivors = after[-1] if after else list(start)
+    if sorted(survivors) != sorted(refs):
+        problems.append(f"the original's folder should keep saves {sorted(survivors)}, meta.txt lists {sorted(refs)}")
+    made = json_lines(out_text, "save-image")
+    folders = json_lines(out_text, "save-folder")
+    final = json_lines(out_text, "save-final")
+    wanted = [count for count, _, _, _ in writes]
+    if [count for count, _ in made] != wanted or [count for count, _ in folders] != wanted:
+        problems.append(f"arklay wrote saves {[count for count, _ in made]}, the original {wanted}")
+    else:
+        for (count, differ), (_, folder), expected in zip(made, folders, after):
+            held = sorted(row.get("count", -1) for row in folder)
+            if held != sorted(expected):
+                problems.append(f"after save {count} arklay's folder holds saves {held}, the original's {sorted(expected)}")
+            if count not in survivors:
+                continue
+            if differ is None:
+                problems.append(f"save {count}: arklay's driver had no reference for it")
+            elif differ:
+                problems.append(f"save {count}'s image differs: {regions_text(differ)}")
+    if len(final) != 1:
+        problems.append(f"arklay's run printed {len(final)} save-final lines")
+        final = [(None, [])]
+    rows = final[0][1]
+    for row in rows:
+        if "error" in row:
+            problems.append(f"arklay's {row['name']} isn't a usable RE 2 save: {row['error']}")
+        elif row.get("count") in refs and row.get("differ") is None:
+            problems.append(f"arklay's {row['name']} wasn't compared with the reference")
+        elif row.get("differ"):
+            problems.append(f"arklay's {row['name']} holds a game whose image differs: {regions_text(row['differ'])}")
+    counts = sorted(row["count"] for row in rows if "count" in row)
+    if counts != sorted(survivors):
+        problems.append(f"arklay's save folder holds saves {counts}, the original's {sorted(survivors)}")
+    matched = sum(1 for count, differ in made if count in refs and differ == [])
+    text = f"save images {matched}/{len(survivors)} match" if survivors else "no saves, as the original"
+    if len(writes) > len(survivors):
+        text += f" ({len(writes)} written)"
+    return text, problems
 
 
 def shift_input(source: Path, dest: Path, shift: int, drop_early: bool = False) -> None:
@@ -501,12 +727,143 @@ def self_test() -> int:
     if starts != [(344, None), (1818, None)] or None in bad or kept != (1818, None):
         print(f"re2-regress self-test FAILED: compare_from {starts} {bad}", file=sys.stderr)
         return 1
-    problem = self_test_fields() or self_test_gallery_hold() or self_test_pace() or self_test_pictures()
+    problem = (self_test_fields() or self_test_gallery_hold() or self_test_pace() or self_test_pictures()
+               or self_test_save_images())
     if problem:
         print(f"re2-regress self-test FAILED: {problem}", file=sys.stderr)
         return 1
     print("re2-regress self-test ok")
     return 0
+
+
+def self_test_save_images() -> str | None:
+    """The save images' judge (`judge_save_images`) on fake references and arklay's lines: the writes' counts, the
+    folder after each write, the files at the end and the reference's own files."""
+    with tempfile.TemporaryDirectory() as folder:
+        ref = Path(folder) / "ref"
+
+        def reference(svs, counts, extra=()):
+            # `sv`: step, init step, state, mode, cursor, top, rows, timer, choice, typed, cnt0, count.
+            if ref.exists():
+                shutil.rmtree(ref)
+            (ref / "saves").mkdir(parents=True)
+            (ref / "ref.trace").write_text("".join(f"t={tick} sv={sv}\n" for tick, sv in enumerate(svs)))
+            meta = "name: x\n" + ("" if counts else "save: none\n")
+            for count in counts:
+                image = bytearray(0x800)
+                image[0x220:0x222] = count.to_bytes(2, "little")
+                name = f"Leon A_{count:02}.BIOHAZARD2"
+                (ref / "saves" / name).write_bytes(image)
+                meta += f"save: {name} {hashlib.sha256(bytes(image)).hexdigest()}\n"
+            for name in extra:
+                (ref / "saves" / name).write_bytes(bytes(0x800))
+            (ref / "meta.txt").write_text(meta)
+
+        def sv(state, row, count):
+            return f"2,0,{state:x},0,{row},0,3,0,0,0,0,{count}"
+
+        def new(count):
+            return sv(WRITE_NEW, 0, count)
+
+        def over(row, count):
+            return sv(WRITE_OVER, row, count)
+
+        def row(count, differ=None):
+            found = {"name": f"Leon A_{count:02}.dat", "count": count}
+            if differ is not None:
+                found["differ"] = differ
+            return found
+
+        def lines(writes, final, kept):
+            # `writes`: (count, the folder's counts after it); the reference keeps the counts in `kept`.
+            text = ""
+            for count, held in writes:
+                text += f"save-image {count} " + ("[]" if count in kept else "-") + "\n"
+                text += f"save-folder {count} " + json.dumps([row(c) for c in held]) + "\n"
+            return text + "save-final " + json.dumps(final) + "\n"
+
+        def final(counts):
+            return [row(count, []) for count in counts]
+
+        differ = [{"region": "Player", "offset": 0x500, "ours": "c8", "theirs": "64"}]
+        new_then_over = [sv(2, 0, 0), new(1), sv(0x1F, 1, 1), over(1, 2), sv(0, 1, 2)]
+        good = lines([(1, [1]), (2, [2])], final([2]), [2])
+        three = [sv(2, 0, 0), new(1), new(2), new(3), over(2, 4), over(3, 5)]
+        cases = [
+            ("a new file then its row overwritten", new_then_over, [2], [], good, True),
+            ("the first write missing", new_then_over, [2], [], lines([(2, [2])], final([2]), [2]), False),
+            ("a write the original didn't make", new_then_over, [2], [],
+             lines([(1, [1]), (2, [2]), (3, [2, 3])], final([2, 3]), [2]), False),
+            ("the writes out of order", new_then_over, [2], [], lines([(2, [2]), (1, [1])], final([2]), [2]), False),
+            ("the image differs on its write", new_then_over, [2], [],
+             good.replace("save-image 2 []", "save-image 2 " + json.dumps(differ)), False),
+            ("a mismatch then a match of one count", new_then_over, [2], [],
+             good.replace("save-image 2 []", "save-image 2 " + json.dumps(differ) + "\nsave-image 2 []"), False),
+            ("the saved game's image differs (its health changed)", new_then_over, [2], [],
+             lines([(1, [1]), (2, [2])], [row(2, differ)], [2]), False),
+            ("the saved file wasn't compared", new_then_over, [2], [], lines([(1, [1]), (2, [2])], [row(2)], [2]), False),
+            ("the overwrite kept the old file too", new_then_over, [2], [],
+             lines([(1, [1]), (2, [1, 2])], final([1, 2]), [2]), False),
+            ("the write made no file", new_then_over, [2], [], lines([(1, [1]), (2, [])], [], [2]), False),
+            ("a file the engine can't load (its RE 2 trailer dropped)", new_then_over, [2], [],
+             lines([(1, [1]), (2, [2])], [{"name": "Leon A_02.dat", "error": "no RE 2 trailer"}], [2]), False),
+            ("a foreign file beside it", new_then_over, [2], [],
+             lines([(1, [1]), (2, [2])], final([2]) + [{"name": "notes.dat", "error": "not a save"}], [2]), False),
+            ("an unlisted file in the reference's saves/", new_then_over, [2], ["Leon A_09.BIOHAZARD2"], good, False),
+            ("meta.txt lists none of a kept write", new_then_over, [], [], lines([(1, [1]), (2, [2])], final([2]), []),
+             False),
+            ("three new files, then saves 2 and 1 overwritten", three, [3, 4, 5], [],
+             lines([(1, [1]), (2, [2, 1]), (3, [3, 2, 1]), (4, [4, 3, 1]), (5, [5, 4, 3])], final([3, 4, 5]),
+                   [3, 4, 5]), True),
+            ("the overwrites deleting the other rows", three, [3, 4, 5], [],
+             lines([(1, [1]), (2, [2, 1]), (3, [3, 2, 1]), (4, [4, 3, 2]), (5, [5, 4, 3])], final([3, 4, 5]),
+                   [3, 4, 5]), False),
+            ("a write repeating a count the folder holds", [sv(2, 0, 0), new(1), new(2), over(1, 1)], [1, 1], [],
+             lines([(1, [1]), (2, [2, 1]), (1, [1, 1])], final([1, 1]), [1]), False),
+            ("a write skipping a count", [sv(2, 0, 0), new(2)], [2], [], lines([(2, [2])], final([2]), [2]), False),
+            ("the 65536th write wraps to 0", [sv(2, 0, 65535), new(0)], [0], [],
+             lines([(0, [0])], final([0]), [0]), True),
+            ("no saves, as the original", [sv(2, 0, 0)], [], [], "save-final []\n", True),
+            ("no save-final line", [sv(2, 0, 0)], [], [], "", False),
+            ("a save the original didn't make", [sv(2, 0, 0)], [], [], lines([(1, [1])], final([1]), []), False),
+        ]
+        for label, svs, counts, extra, out_text, ok in cases:
+            reference(svs, counts, extra)
+            text, problems = judge_save_images(ref, out_text)
+            if (not problems) != ok:
+                return f"save images, {label}: {text} {problems}"
+        reference(new_then_over, [2])
+        for damage, label in ((lambda: (ref / "saves" / "Leon A_02.BIOHAZARD2").unlink(), "missing"),
+                              (lambda: (ref / "saves" / "Leon A_02.BIOHAZARD2").write_bytes(b"\x01" * 0x800),
+                               "not meta.txt's"),
+                              (lambda: (ref / "meta.txt").write_text("name: x\n"), "unlisted")):
+            reference(new_then_over, [2])
+            damage()
+            text, problems = judge_save_images(ref, good)
+            if not problems:
+                return f"save images, the reference's file {label}: {text}"
+        # A folder seeded with save 1 (`saves_from`), whose row the one write overwrites; and with saves 1 and 2 in
+        # the original's row order, 1 newer, so row 1 is save 1's.
+        reference([sv(0x1F, 1, 1), over(1, 2)], [2])
+        text, problems = judge_save_images(ref, lines([(2, [2])], final([2]), [2]), [1])
+        if problems:
+            return f"save images, an overwrite of a seeded save: {text} {problems}"
+        reference([sv(0x1F, 1, 2), over(1, 3)], [2, 3])
+        text, problems = judge_save_images(ref, lines([(3, [3, 2])], final([2, 3]), [2, 3]), [1, 2])
+        if problems:
+            return f"save images, seeded rows in write order: {text} {problems}"
+        text, problems = judge_save_images(ref, lines([(3, [3, 2])], final([2, 3]), [2, 3]), [2, 1])
+        if not problems:
+            return f"save images, seeded rows by count: {text}"
+        # The seeded start comes from the files' write times, newest first.
+        times = Path(folder) / "times"
+        times.mkdir()
+        for name, when in (("a", 2), ("b", 3), ("c", 1)):
+            (times / name).write_bytes(b"")
+            os.utime(times / name, ns=(when, when))
+        if [path.name for path in newest_first(sorted(times.iterdir()))] != ["b", "a", "c"]:
+            return "newest_first doesn't order by write time"
+    return None
 
 
 def self_test_gallery_hold() -> str | None:
@@ -1134,8 +1491,8 @@ def run_inputs(run: dict, out: Path, tag: str) -> tuple[Path | None, Path, str |
 def seed_saves(run: dict, ctx: dict, saves_dir: Path) -> str | None:
     """Fill `saves_dir` for a run with `saves_from`: arklay's own saves of the run it names, since the reference's are
     the original's `.BIOHAZARD2` files, which arklay doesn't read. arklay plays that run first, with no trace
-    compared and no frames, and each save it writes takes the name and the time of the reference's, in order, so the
-    list shows the rows the original's record shows. Returns why it couldn't."""
+    compared and no frames, and each save it keeps takes the name and the time of the reference's file of its count,
+    so the list shows the rows the original's record shows. Returns why it couldn't."""
     name, out = run["name"], ctx["out"]
     source = ctx["manifest"].get(run["saves_from"])
     if source is None or source.get("ui", "game") != "game" or not source.get("saves"):
@@ -1168,13 +1525,15 @@ def seed_saves(run: dict, ctx: dict, saves_dir: Path) -> str | None:
                 LIVE.discard(proc)
     if proc.returncode:
         return f"saves_from: arklay exited {proc.returncode} playing {source['name']} ({tag}.log)"
-    made = sorted(saves_dir.glob("*.dat"))
-    if len(made) != len(ref_saves):
-        return f"saves_from: arklay made {len(made)} saves playing {source['name']}, the reference has {len(ref_saves)}"
-    # The list is newest first, so each save takes the reference's time with its name.
-    for save, ref_save in zip(made, ref_saves):
-        named = save.with_name(ref_save.stem + ".dat")
-        save.rename(named)
+    final = json_lines((out / f"{tag}.log").read_text(errors="replace"), "save-final")
+    made = {row["count"]: row["name"] for row in final[-1][1] if "count" in row} if final else {}
+    by_count = {save_count(path): path for path in ref_saves}
+    if sorted(made) != sorted(by_count):
+        return f"saves_from: arklay kept saves {sorted(made)} playing {source['name']}, the reference {sorted(by_count)}"
+    # Each save takes the name and the time of the reference's of its count, so the list shows the original's rows.
+    for count, ref_save in by_count.items():
+        named = saves_dir / (ref_save.stem + ".dat")
+        (saves_dir / made[count]).rename(named)
         times = ref_save.stat()
         os.utime(named, ns=(times.st_atime_ns, times.st_mtime_ns))
     if not ctx["keep"]:
@@ -1234,7 +1593,7 @@ def run_one(run: dict, ctx: dict) -> dict:
                 result["problems"].append(why)
                 return result
         return finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks, offset, compare_from,
-                          ref_dir, ref_trace, ark_trace)
+                          ref_dir, ref_trace, ark_trace, saves_dir)
     finally:
         if not ctx["keep"]:
             shutil.rmtree(saves_dir, ignore_errors=True)
@@ -1267,7 +1626,7 @@ def wait_for(proc) -> None:
 
 
 def finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks, offset, compare_from, ref_dir,
-               ref_trace, ark_trace) -> dict:
+               ref_trace, ark_trace, saves_dir) -> dict:
     """The rest of `run_one`: play arklay (capturing frames), then compare the trace and the frames."""
     name = run["name"]
     out: Path = ctx["out"]
@@ -1331,6 +1690,16 @@ def finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks
     if why:
         result["problems"].append(why)
         result["notes"] += cmp["detail"]
+
+    if run.get("saves") and run.get("ui", "game") == "game":
+        start = []
+        if run.get("saves_from"):
+            source = ctx["manifest"][run["saves_from"]]
+            start = [count for path in newest_first(reference_saves(ctx["refs"] / source["ref"]))
+                     if (count := save_count(path)) is not None]
+        saves_text, problems = judge_save_images(ref_dir, out_text, start)
+        text += f"; {saves_text}"
+        result["problems"].extend(problems)
 
     if run.get("frames"):
         if not want_frames:

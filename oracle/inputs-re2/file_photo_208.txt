@@ -1,0 +1,19 @@
+# Room 208's darkroom (oracle/re2.md, "Picking up a file"): USE the film (0x44) at the trays, where the four film areas share one box and the player is in the last (15); main_01 sees variable 2 = 68 and event 9 drops the film and turns on photo A's area 6 (item 0x73, file 11, three pages, object 0xFF). START, down to slot 2, the menu, USE; right twice to the last page, right to the end marker, cancel files it, decide closes message 10.
+354 start
+358
+390 down
+394
+410 confirm
+414
+430 confirm
+434
+520 right
+522
+550 right
+552
+580 right
+582
+610 cancel
+612
+710 action
+712

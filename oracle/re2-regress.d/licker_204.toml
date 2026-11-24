@@ -9,8 +9,6 @@ setup_script = "licker_204_scene.lua"
 input = "licker_204_scene.txt"
 input_shift = 344
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,zm0,zm1,fgroom,fgstat"
-# the dead player's head on two ticks of its fall, a unit or two behind the body (oracle/re2-deviations.md, "What a climbing licker doesn't do")
-ignore = [[1587, "pneck"], [1588, "pneck"]]
 expect = "match"
 record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 200"
 
@@ -25,8 +23,6 @@ setup_script = "licker_204_scene.lua"
 input = "licker_204_scene.txt"
 input_shift = 344
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,zm0,zm1,fgroom,fgstat"
-# as in licker_204_scene
-ignore = [[1605, "pneck"], [1606, "pneck"], [1611, "pneck"], [1612, "pneck"]]
 expect = "match"
 record = "--start claire --warp 204:-15400:0:-8000:3072 --flag 4:85 --life 200"
 
@@ -69,3 +65,19 @@ input_shift = 344
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,zm0,zm1"
 expect = "match"
 record = "--start claire --warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip 3 --give 0:3:200"
+
+# licker_204_scene under HARD (`Rnd` 58231 as play begins, as the hard-mode runs have it): `Em22_Init`'s half again of
+# its life, and the slash's and the tongue's harder hits on a player who stands still (it doesn't jump at them)
+[[run]]
+name = "licker_204_scene_hard"
+difficulty = "hard"
+room = "204"
+# recorded for 1800 ticks; the player dies on 1389 and the game over's title is up from 1773
+ticks = 1773
+sound = false
+setup_script = "licker_204_scene_hard.lua"
+input = "licker_204_scene.txt"
+input_shift = 344
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,zm0,zm1,fgroom,fgstat"
+expect = "match"
+record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 200"

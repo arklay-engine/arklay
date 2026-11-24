@@ -322,11 +322,13 @@ end
 local function write(api, reveal, replaced)
     local pending = api:pending() or { character = 0, saves = 0 }
     local character = api:character()
-    s.name = M.save_name(character & 1, character & 2 ~= 0, pending.saves + 1, api:local_time())
+    -- `0x98E9BC`'s low word, raised before the name is made.
+    local count = (pending.saves + 1) & 0xFFFF
+    s.name = M.save_name(character & 1, character & 2 ~= 0, count, api:local_time())
     s.label = label_of(s.name)
     s.new = {
         character = character,
-        saves = pending.saves + 1,
+        saves = count,
         stage = pending.stage,
         room = pending.room,
     }

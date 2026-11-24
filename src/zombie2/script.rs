@@ -2152,6 +2152,118 @@ mod tests {
         );
     }
 
+    /// HARD (0x464CCA): `Em22_Init` adds half the drawn life again, rounded
+    /// toward 0.
+    #[test]
+    fn a_hard_licker_has_half_its_life_again() {
+        run_licker(
+            "",
+            "function e:hard_mode() return true end
+             function e:life() return w.life end
+             tick()
+             assert(VARIANT.life[2] == 81 and w.life == 121, w.life)",
+        );
+    }
+
+    /// HARD's half is of the life after `fg_common` 0xA4's cut: 10 for
+    /// `Em_22` (0x464CC2), 30 for `Em_24` (0x46D069), and a half rounds
+    /// toward 0.
+    #[test]
+    fn a_hard_lickers_half_comes_after_the_0xa4_cut() {
+        for (script, cut) in [
+            (include_str!("../../games/re2/enemy/22/enemy.lua"), 10),
+            (include_str!("../../games/re2/enemy/24/enemy.lua"), 30),
+        ] {
+            let (lua, budget) = crate::lua::new_sandboxed_state().unwrap();
+            budget.begin();
+            let licker: mlua::Table = lua
+                .load(include_str!("../../games/re2/lib/licker.lua"))
+                .eval()
+                .unwrap();
+            lua.globals().set("LICKER", licker).unwrap();
+            let life: i64 = lua
+                .load(format!(
+                    "local function require() return {{ run = function(e, v) VARIANT = v end }} end
+                     {script}
+                     update(nil)
+                     KIND = 0 RND = 2 CLIP_LEN = 1000 DIR = 0 SEES = false
+                     {LICKER_STUB}
+                     function e:hard_mode() return true end
+                     function e:common_a4() return true end
+                     function e:life() return w.life end
+                     tick()
+                     return w.life"
+                ))
+                .eval()
+                .unwrap();
+            let drawn = lua.load("return VARIANT.life[2]").eval::<i64>().unwrap() - cut;
+            assert_eq!(life, drawn + drawn / 2, "cut {cut}");
+        }
+    }
+
+    /// HARD's tongue takes 0x23 for 0x19 (0x463D54), at `Routine_3` 0x13,
+    /// inside `TONGUE_REACH`.
+    #[test]
+    fn a_hard_lickers_tongue_takes_more() {
+        for (hard, down) in [(false, 0x19), (true, 0x23)] {
+            run_licker(
+                "",
+                &format!(
+                    "tick()
+                     w.downs = {{}}
+                     function e:hard_mode() return {hard} end
+                     function e:pl_life_down(down) w.downs[#w.downs + 1] = down return 0 end
+                     function e:pl_damage_cnt() return 0 end
+                     function e:turn_to_player() return 0 end
+                     function e:distance() return 0x800 end
+                     function e:move_cnt() return w.move_cnt end
+                     w.r = {{ [0] = 1, 8, 2, 0x12 }}
+                     w.vars = {{}}
+                     tick()
+                     assert(#w.downs == 1 and w.downs[1] == {down}, tostring(w.downs[1]))"
+                ),
+            );
+        }
+    }
+
+    /// HARD's hits on the player: the slash takes 0x19 for 0xF (0x463F55),
+    /// and the jump's bite 0x78 over 0x82 life, else 100, for 100 over 0x6E,
+    /// else 0x50 (0x465F58).
+    #[test]
+    fn a_hard_lickers_slash_and_bite_take_more() {
+        for (hard, life, slash, bite) in [
+            (false, 200, 0xF, 100),
+            (false, 0x6E, 0xF, 0x50),
+            (true, 0x83, 0x19, 0x78),
+            (true, 0x82, 0x19, 100),
+        ] {
+            run_licker(
+                "",
+                &format!(
+                    "tick()
+                     w.downs = {{}}
+                     function e:hard_mode() return {hard} end
+                     function e:player_life() return {life} end
+                     function e:pl_life_down(down) w.downs[#w.downs + 1] = down return 0 end
+                     function e:own_part() return 0, 0, 0 end
+                     function e:pl_damage_cnt() return 0 end
+                     function e:turn_to_player() return 0 end
+                     function e:angle_to_player() return 0 end
+                     function e:move_cnt() return w.move_cnt end
+                     function e:distance() return 0x800 end
+                     w.r = {{ [0] = 1, 9, 2, 1 }}
+                     tick()
+                     assert(w.downs[1] == {slash}, tostring(w.downs[1]))
+                     w.r = {{ [0] = 1, 0xA, 5, 0 }}
+                     w.move_no = VARIANT.clips.flight w.move_cnt = 0xA w.frame = 0
+                     w.vars = {{}}
+                     tick()
+                     assert(w.downs[2] == {bite}, tostring(w.downs[2]))"
+                ),
+            );
+        }
+    }
+
     /// 0x10's `Routine_2` 0 (0x466B00): clip 3 by `Mot_play2_spxz` on the
     /// ceiling until `Sce_free0`, with the script's bit kept.
     #[test]
@@ -6023,6 +6135,7 @@ mod tests {
                  function e:body_box() return 0, 0, 0, 0 end
                  function e:joint() return false end
                  function e:pos() return 0, 0, 0 end
+                 function e:hard_mode() return HARD or false end
                  {setup}
                  {script}
                  update(e)
@@ -6042,6 +6155,99 @@ mod tests {
         fn the_smg_throws_a_dog_into_the_air() {
             let r = dog_hit(2, crate::player2::SMG, 0, 1, "");
             assert_eq!(r, [0xF, 1, 0x78, -140, 1, 1, 0, 2, 1]);
+        }
+
+        /// HARD's top speed is 0x118 (0x45EDA0), halved in the air as 0xF0 is.
+        #[test]
+        fn the_smg_throws_a_hard_dog_faster() {
+            let r = dog_hit(2, crate::player2::SMG, 0, 1, "HARD = true");
+            assert_eq!((r[2], r[3]), (0x118 >> 1, -140));
+        }
+
+        /// `Em20_Init` (0x45C2C0): HARD doubles the life drawn from the table
+        /// and `Rnd & 3`.
+        #[test]
+        fn a_hard_dog_has_twice_the_life() {
+            for (hard, life) in [("false", 85 + 1), ("true", (85 + 1) * 2)] {
+                let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+                let script = include_str!("../../games/re2/enemy/20/enemy.lua");
+                let got: i64 = lua
+                    .load(format!(
+                        "local w = {{ r = {{ [0] = 0, 0, 0, 0 }}, life = 0 }}
+                         local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+                         function e:routine(i) return w.r[i] end
+                         function e:set_routine(i, v) w.r[i] = v end
+                         function e:routines(a, b, c, d) w.r = {{ [0] = a, b, c, d }} end
+                         function e:rnd() return 1 end
+                         function e:easy() return false end
+                         function e:hard_mode() return {hard} end
+                         function e:life() return w.life end
+                         function e:set_life(v) w.life = v end
+                         function e:body_box() return 0, 0, 0, 0 end
+                         function e:joint() return false end
+                         function e:pos() return 0, 0, 0 end
+                         {script}
+                         update(e)
+                         return w.life"
+                    ))
+                    .eval()
+                    .unwrap();
+                assert_eq!(got, life, "hard {hard}");
+            }
+        }
+
+        /// Runs `body` after the dog's script, in its chunk, so it can call
+        /// the script's local functions; `e` answers 0 to all but the bite's
+        /// reads, and records `Pl_life_down`'s damage in `w.down`.
+        fn dog_locals(hard: bool, body: &str) -> Vec<i64> {
+            let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+            let script = include_str!("../../games/re2/enemy/20/enemy.lua");
+            lua.load(format!(
+                "local w = {{ spd = {{ 0, 0, 0 }}, timers = {{}}, r = {{ [0] = 0, 0, 0, 0 }} }}
+                 local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+                 function e:hard_mode() return {hard} end
+                 function e:routine(i) return w.r[i] end
+                 function e:set_routine(i, v) w.r[i] = v end
+                 function e:speed() return w.spd[1], w.spd[2], w.spd[3] end
+                 function e:speed_x() return w.spd[1] end
+                 function e:set_speed_x(v) w.spd[1] = v end
+                 function e:timer(i) return w.timers[i] or 0 end
+                 function e:set_timer(i, v) w.timers[i] = v end
+                 function e:same_floor() return true end
+                 function e:point_within() return true end
+                 function e:pos() return 0, 0, 0 end
+                 function e:cdir_player() return false end
+                 function e:player_life() return 200 end
+                 function e:pl_life_down(d) w.down = d return 1 end
+                 {script}
+                 {body}"
+            ))
+            .exec()
+            .unwrap();
+            lua.globals().get("R").unwrap()
+        }
+
+        /// The leap's bite (`FUN_0045f7f0`) takes 0xC, or 0x18 under HARD
+        /// (0x45F8A8).
+        #[test]
+        fn a_hard_dogs_bite_takes_twice_as_much() {
+            for (hard, down) in [(false, 0xC), (true, 0x18)] {
+                let r = dog_locals(hard, "R = { bite_ck(e), w.down }");
+                assert_eq!(r, [1, down], "hard {hard}");
+            }
+        }
+
+        /// The run's speed up to the top (0x45C9C5 and the others), the
+        /// landing's slow down to it (0x45D09D) and the circling's set
+        /// (0x45DE47) all take HARD's 0x118 for 0xF0.
+        #[test]
+        fn a_hard_dog_runs_up_to_0x118() {
+            let body = "w.spd[1] = 0x100; speed_up(e, 0x28, top_speed(e)); local up = w.spd[1]
+                        w.spd[1] = 0x130; slow_down(e, 0x40, top_speed(e)); local down = w.spd[1]
+                        w.spd[1] = 0; circling(e)
+                        R = { up, down, w.spd[1] }";
+            assert_eq!(dog_locals(false, body), [0x100, 0xF0, 0xF0]);
+            assert_eq!(dog_locals(true, body), [0x118, 0x118, 0x118]);
         }
 
         /// 0x10 is 0xA's case (0x45EBD0): `4 - Damage_no / 3` bloods, though
@@ -6178,6 +6384,52 @@ mod tests {
             let setup = format!("ROUTINES = {{ [0] = 2, {weapon}, 0, 0 }}");
             let hit = tick(CROW, ZEROS, &setup, &[]);
             (hit.clips, hit.effects)
+        }
+
+        /// The crow's init (0x45FD50): life 10, or 20 under HARD (0x45FDEA).
+        #[test]
+        fn a_hard_crow_has_twice_the_life() {
+            for (hard, life) in [(false, 10), (true, 20)] {
+                let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+                let got: i64 = lua
+                    .load(format!(
+                        "ROUTINES = {{ [0] = 0, 0, 0, 0 }}
+                         {ZEROS}
+                         local life
+                         function e:hard_mode() return {hard} end
+                         function e:set_life(v) life = v end
+                         {CROW}
+                         update(e)
+                         return life"
+                    ))
+                    .eval()
+                    .unwrap();
+                assert_eq!(got, life);
+            }
+        }
+
+        /// The owner's peck (0x4617A9): 5, or 10 under HARD.
+        #[test]
+        fn a_hard_crows_peck_takes_twice_as_much() {
+            for (hard, down) in [(false, 5), (true, 10)] {
+                let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+                let got: i64 = lua
+                    .load(format!(
+                        "ROUTINES = {{ [0] = 1, 14, 1, 0 }}
+                         VARS = {{ [13] = 4 }}
+                         DRAWS = setmetatable({{}}, {{ __index = function() return 0 end }})
+                         {ZEROS}
+                         local down
+                         function e:hard_mode() return {hard} end
+                         function e:pl_life_down(d) down = d return 0 end
+                         {CROW}
+                         update(e)
+                         return down"
+                    ))
+                    .eval()
+                    .unwrap();
+                assert_eq!(got, down);
+            }
         }
 
         /// `DAT_00527978[0xF]` and `[0x10]` are `FUN_00461a00`, the

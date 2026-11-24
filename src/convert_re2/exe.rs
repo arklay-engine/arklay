@@ -206,6 +206,29 @@ fn strings(exe: &[u8], table: &Table, end: u8) -> Result<Vec<Vec<u8>>> {
         .collect()
 }
 
+/// The smallest image [`ExeText::read`] reads: every name the knife, every
+/// system message the pick-up question's opening, every door message one
+/// letter, and the computer's title and one-letter strings.
+#[cfg(test)]
+pub(super) fn readable_image() -> Vec<u8> {
+    let mut exe = vec![0u8; ITEM_TABLE - IMAGE_BASE + ITEM_ROWS * 8];
+    let mut put = |address: usize, bytes: &[u8]| {
+        exe[address - IMAGE_BASE..address - IMAGE_BASE + bytes.len()].copy_from_slice(bytes);
+    };
+    // Each table's offsets are all 0, so every entry is the string at its base.
+    put(NAMES.base, &[0x27, 0x4A, 0x45, 0x42, 0x41, 0xF7]);
+    put(SYSTEM.base, &[FIRST_SYSTEM, &[0xFE, 0x00]].concat());
+    put(DOOR.base, &[0x2D, 0xFE, 0x00]);
+    put(COMPUTER[0], &[COMPUTER_TITLE, b"\0"].concat());
+    for &address in &COMPUTER[1..] {
+        put(address, b"a\0");
+    }
+    for item in 0..ITEM_ROWS {
+        exe[ITEM_TABLE - IMAGE_BASE + item * 8 + 1] = crate::message::re2_name_class(item as u8);
+    }
+    exe
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,6 +244,15 @@ mod tests {
         let base = CHECKED_NAMES.base - IMAGE_BASE;
         exe[base..base + 3].copy_from_slice(&[0x2D, 0x4B, 0xF7]);
         exe
+    }
+
+    #[test]
+    fn the_smallest_readable_image_reads() {
+        let text = ExeText::read(&readable_image()).unwrap();
+        assert_eq!(text.names.len(), NAMES.len);
+        assert_eq!(text.system.len(), SYSTEM.len);
+        assert_eq!(text.door.len(), DOOR.len);
+        assert!(text.checked_error.is_none());
     }
 
     #[test]

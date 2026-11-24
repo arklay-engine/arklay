@@ -381,40 +381,45 @@ fn find_ddraw(root: &Path, data: &Path) -> Option<(PathBuf, Vec<u8>)> {
 const EXE_NAMES: [&str; 2] = ["bio2 1.10.exe", "bio2.exe"];
 
 /// The English strings of the install's executable ([`exe::ExeText`]), or a
-/// warning when there is none to read.
+/// warning when there is none to read. Every candidate is tried in turn, so an
+/// unreadable copy (another build kept in the data directory, say) doesn't hide
+/// the real one above it.
 fn find_exe_text(root: &Path, data: &Path, warnings: &mut Vec<String>) -> Option<exe::ExeText> {
-    let Some(path) = data
+    let candidates: Vec<PathBuf> = data
         .ancestors()
         .take_while(|dir| dir.starts_with(root))
-        .find_map(|dir| EXE_NAMES.iter().find_map(|name| child(dir, name)))
-    else {
+        .flat_map(|dir| EXE_NAMES.iter().filter_map(move |name| child(dir, name)))
+        .collect();
+    if candidates.is_empty() {
         warnings.push(
             "no bio2 1.10.exe: the pack has no item names, descriptions or system messages"
                 .to_string(),
         );
         return None;
-    };
-    match fs::read(&path)
-        .map_err(anyhow::Error::from)
-        .and_then(|bytes| exe::ExeText::read(&bytes))
-    {
-        Ok(text) => {
-            if let Some(error) = &text.checked_error {
-                warnings.push(format!(
-                    "{}: no second names for the items CHECK names: {error}",
-                    path.display()
-                ));
+    }
+    let mut errors = Vec::new();
+    for path in candidates {
+        match fs::read(&path)
+            .map_err(anyhow::Error::from)
+            .and_then(|bytes| exe::ExeText::read(&bytes))
+        {
+            Ok(text) => {
+                if let Some(error) = &text.checked_error {
+                    warnings.push(format!(
+                        "{}: no second names for the items CHECK names: {error}",
+                        path.display()
+                    ));
+                }
+                return Some(text);
             }
-            Some(text)
-        }
-        Err(error) => {
-            warnings.push(format!(
+            Err(error) => errors.push(format!(
                 "{}: no item names or system messages: {error:#}",
                 path.display()
-            ));
-            None
+            )),
         }
     }
+    warnings.extend(errors);
+    None
 }
 
 /// The room names in Classic REbirth's debug room table in `dll`, keyed by

@@ -45,9 +45,12 @@ local KIND_ANGRY <const> = 0x40
 local KIND_SCENE <const> = 0x4000
 local ROOM_TAKEN <const> = 1
 
--- `hard_mode` doubles these, and is off here as it is for the zombies.
+-- Its life (0x45FD8C) and a peck's (0x461794); `hard_mode` doubles both
+-- (0x45FDEA, 0x4617A9).
 local LIFE <const> = 10
+local LIFE_HARD <const> = 20
 local PECK <const> = 5
+local PECK_HARD <const> = 10
 
 local PLAYER_BODY <const> = 0xFE
 local PERCH <const> = 0xFA
@@ -993,7 +996,7 @@ local function pecking(e)
                 feathers(e, 1)
             end
             e:sound(2)
-            local result = e:pl_life_down(PECK, e:var(NEXT) ~= 0)
+            local result = e:pl_life_down(e:hard_mode() and PECK_HARD or PECK, e:var(NEXT) ~= 0)
             if result == 1 then
                 leave = true
             elseif result == 2 then
@@ -1670,7 +1673,7 @@ local function init(e)
     e:set_damage_flg(0)
     e:set_sce_flg(0)
     e:set_speed(0, 0, 0)
-    e:set_life(LIFE)
+    e:set_life(e:hard_mode() and LIFE_HARD or LIFE)
     e:set_sce_free(0, 0)
     e:set_sce_free(1, 0)
     e:clip(0, 0, 0)

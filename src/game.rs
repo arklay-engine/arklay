@@ -9991,8 +9991,9 @@ impl GameState {
             phase => (phase, get.ticks),
         };
         // `St_init02`'s fade draws the page through `St_disp_file` on each
-        // of its ticks.
-        if phase == Re2ItemGetPhase::FileFade {
+        // of its sub 3's ticks, from the one after the file's set-up (its sub
+        // 0 sets the sprites up and draws nothing).
+        if phase == Re2ItemGetPhase::FileFade && ticks > 0 {
             self.re2_file.page_draws = self.re2_file.page_draws.saturating_add(1);
         }
         get.phase = phase;
@@ -10136,12 +10137,14 @@ impl GameState {
 
     /// The file page a file's get-item window draws this tick, while it is
     /// in its file phases: `St_init02`'s fade draws the page through
-    /// `St_disp_file` with the window's sub 0, so with no arrows, and
-    /// `St_get_file` through `St_disp_file2`.
+    /// `St_disp_file` with the window's sub 0, so with no arrows, from the
+    /// tick after the set-up, and `St_get_file` through `St_disp_file2`.
     pub fn re2_item_get_page(&self) -> Option<Vec<status2::files::PageSprite>> {
         let get = self.re2_item_get?;
         let page = get.file?;
         match get.phase {
+            // The set-up's tick draws no page.
+            Re2ItemGetPhase::FileFade if get.ticks == 0 => None,
             Re2ItemGetPhase::FileFade => {
                 let file = self.re2_item_get_file()?;
                 Some(status2::files::page_draw(
