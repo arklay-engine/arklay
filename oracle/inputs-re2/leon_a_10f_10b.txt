@@ -1,0 +1,697 @@
+# leon_a_10f_10b: Leon A from 110's door 0 in 10F: east along 10F to door 0, 10A's corridor past its two zombies without a shot to door 2, and in 10B a Red Jewel in each statue from the status screen, then the King plug from the middle
+345 up run
+346 up run left
+351 up run
+374 up run left
+375 up run
+377 up run right
+384 up run
+390 up run right
+391 up run left
+392 left
+394 right
+395 left
+396 right
+397 left
+398 right
+399 left
+400 right
+401 left
+402 right
+403 left
+404 right
+405 left
+406 right
+407 left
+408 right
+409 left
+410 right
+411 left
+412 right
+413 left
+414 right
+415 left
+416 right
+417 left
+418 right
+419 left
+420 right
+421 left
+422 right
+423 left
+424 right
+425 left
+426 right
+427 left
+428 right
+429 left
+430 right
+431 left
+432 right
+433 left
+434 right
+435 left
+436 right
+437 left
+438 right
+439 left
+440 right
+441 left
+442 right
+443 left
+444 right
+445 left
+446 right
+447 left
+448 right
+449 left
+450 right
+451 left
+452 right
+453 left
+454 right
+455 left
+456 right
+457 left
+458 right
+459 left
+460 right
+461 left
+462 right
+463 left
+464 right
+465 left
+466 right
+467 left
+468 right
+469 left
+470 right
+471 left
+472 right
+473 left
+474 right
+475 left
+476 right
+477 left
+478 right
+479 left
+480 right
+481 left
+482 right
+483 left
+484 right
+485 left
+486 right
+487 left
+488 right
+489 left
+490 right
+491 left
+492 right
+493 left
+494 right
+495 left
+496 right
+497 left
+498 right
+499 left
+500 right
+501 left
+502 right
+503 left
+504 right
+505 left
+506 right
+507 left
+508 right
+509 left
+510 right
+511 left
+512 right
+513 left
+514 right
+515 left
+516 right
+517 left
+518 right
+519 left
+520 right
+521 left
+522 right
+523 left
+524 right
+525 left
+526 right
+527 left
+528 right
+529 left
+530 right
+531 left
+532 right
+533 left
+534 right
+535 left
+536 right
+537 left
+538 right
+539 left
+540 right
+541 left
+542 right
+543 left
+544 right
+545 left
+546 right
+547 left
+548 right
+549 left
+550 right
+551 left
+552 right
+553 left
+554 right
+555 left
+556 right
+557 left
+558 right
+559 left
+560 right
+561 left
+562 right
+563 left
+564 right
+565 left
+566 right
+567 left
+568 right
+569 left
+570 right
+571 left
+572 right
+573 left
+574 right
+575 left
+576 right
+577 left
+578 right
+579 left
+580 right
+581 left
+582 right
+583 left
+584 right
+585 left
+586 right
+587 left
+588 right
+589 left
+590 right
+591 left
+592
+593 action
+595
+630 up
+936
+937 left
+943 up run left
+955 up run
+958 up run right
+959 up run
+971 up run left
+974 up run
+978 up run right
+980 up run
+981 up run right
+982 up run
+983 up run right
+985 up run
+990 right
+993 up run right
+1001 up run
+1005 up run right
+1006 up run
+1010 up run right
+1011 up run
+1014 up run right
+1015 up run
+1018 up run right
+1019 up run
+1027 up run right
+1028 up run
+1029 up run right
+1031 up run
+1048 up run right
+1049 up run
+1064 up
+1066 right
+1082
+1083 left
+1092
+1093 action
+1095
+1130 up
+1436
+1437 up run right
+1441 up run
+1452 up run right
+1453 up run
+1461 up run left
+1462 up run
+1463 up run left
+1464 up run
+1472 up run right
+1476 up run
+1491 up run right
+1492 up run
+1497 up run right
+1498 left
+1500 up left
+1508 up
+1509 up left
+1510 up
+1514 up left
+1515 up
+1516 up left
+1517 right
+1519
+1520 start
+1524
+1556 down
+1560
+1576 confirm
+1580
+1596 confirm
+1600
+1703 left
+1717 up run left
+1721 up run
+1724 up run right
+1725 up run
+1728 up run right
+1732 up run
+1734 up run right
+1735 up run
+1738 right
+1746 up right
+1762 left
+1767 right
+1768 left
+1769 right
+1770 left
+1771 right
+1772 left
+1773 right
+1774 left
+1775 right
+1776 left
+1777 right
+1778 left
+1779 right
+1780 left
+1781 right
+1782 left
+1783 right
+1784 left
+1785 right
+1786 left
+1787 right
+1788 left
+1789 right
+1790 left
+1791 right
+1792 left
+1793 right
+1794 left
+1795 right
+1796 left
+1797 right
+1798 left
+1799 right
+1800 left
+1801 right
+1802 left
+1803 right
+1804 left
+1805 right
+1806 left
+1807 right
+1808 left
+1809 right
+1810 left
+1811 right
+1812 left
+1813 right
+1814 left
+1815 right
+1816 left
+1817 right
+1818 left
+1819 right
+1820 left
+1821 right
+1822 left
+1823 right
+1824 left
+1825 right
+1826 left
+1827 right
+1828 left
+1829 right
+1830 left
+1831 right
+1832 left
+1833 right
+1834 left
+1835 right
+1836 left
+1837 right
+1838 left
+1839 right
+1840 left
+1841 right
+1842 left
+1843 right
+1844 left
+1845 right
+1846 left
+1847 right
+1848 left
+1849 right
+1850 left
+1851 right
+1852 left
+1853 right
+1854 left
+1855 right
+1856 left
+1857 right
+1858 left
+1859 right
+1860 left
+1861 right
+1862 left
+1863 right
+1864 left
+1865 right
+1866 left
+1867 right
+1868 left
+1869 right
+1870 left
+1871 right
+1872 left
+1873 right
+1874 left
+1875 right
+1876 left
+1877 right
+1878 left
+1879 right
+1880 left
+1881 right
+1882 left
+1883 right
+1884 left
+1885 right
+1886 left
+1887 right
+1888 left
+1889 right
+1890 left
+1891 right
+1892 left
+1893 right
+1894 left
+1895 right
+1896 left
+1897 right
+1898 left
+1899 right
+1900 left
+1901 right
+1902 left
+1903 right
+1904 left
+1905 right
+1906 left
+1907 right
+1908 left
+1909 right
+1910 left
+1911 right
+1912 left
+1913 right
+1914 left
+1915 right
+1916 left
+1917 right
+1918 left
+1919 right
+1920 left
+1921 right
+1922 left
+1923 right
+1924 left
+1925 right
+1926 left
+1927 right
+1928 left
+1929 right
+1930 left
+1931 right
+1932 left
+1933 right
+1934 left
+1935 right
+1936 left
+1937 right
+1938 left
+1939 right
+1940 left
+1941 right
+1942 left
+1943 right
+1944 left
+1945 right
+1946 left
+1947 right
+1948 left
+1949 right
+1950 left
+1951 right
+1952 left
+1953 right
+1954 left
+1955 right
+1956 left
+1957 right
+1958 left
+1959 right
+1960 left
+1961 right
+1962 start
+1966
+1998 down
+2002
+2018 right
+2022
+2038 confirm
+2042
+2058 confirm
+2062
+2167 right
+2181 up right
+2187 up
+2203 up left
+2204 up
+2212 up left
+2214 left
+2231 right
+2232 left
+2233 right
+2234 left
+2235 right
+2236 left
+2237 right
+2238 left
+2239 right
+2240 left
+2241 right
+2242 left
+2243 right
+2244 left
+2245 right
+2246 left
+2247 right
+2248 left
+2249 right
+2250 left
+2251 right
+2252 left
+2253 right
+2254 left
+2255 right
+2256 left
+2257 right
+2258 left
+2259 right
+2260 left
+2261 right
+2262 left
+2263 right
+2264 left
+2265 right
+2266 left
+2267 right
+2268 left
+2269 right
+2270 left
+2271 right
+2272 left
+2273 right
+2274 left
+2275 right
+2276 left
+2277 right
+2278 left
+2279 right
+2280 left
+2281 right
+2282 left
+2283 right
+2284 left
+2285 right
+2286 left
+2287 right
+2288 left
+2289 right
+2290 left
+2291 right
+2292 left
+2293 right
+2294 left
+2295 right
+2296 left
+2297 right
+2298 left
+2299 right
+2300 left
+2301 right
+2302 left
+2303 right
+2304 left
+2305 right
+2306 left
+2307 right
+2308 left
+2309 right
+2310 left
+2311 right
+2312 left
+2313 right
+2314 left
+2315 right
+2316 left
+2317 right
+2318 left
+2319 right
+2320 left
+2321 right
+2322 left
+2323 right
+2324 left
+2325 right
+2326 left
+2327 right
+2328 left
+2329 right
+2330 left
+2331 right
+2332 left
+2333 right
+2334 left
+2335 right
+2336 left
+2337 right
+2338 left
+2339 right
+2340 left
+2341 right
+2342 left
+2343 right
+2344 left
+2345 right
+2346 left
+2347 right
+2348 left
+2349 right
+2350 left
+2351 right
+2352 left
+2353 right
+2354 left
+2355 right
+2356 left
+2357 right
+2358 left
+2359 right
+2360 left
+2361 right
+2362 left
+2363 right
+2364 left
+2365 right
+2366 left
+2367 right
+2368 left
+2369 right
+2370 left
+2371 right
+2372 left
+2373 right
+2374 left
+2375 right
+2376 left
+2377 right
+2378 left
+2379 right
+2380 left
+2381 right
+2382 left
+2383 right
+2384 left
+2385 right
+2386 left
+2387 right
+2388 left
+2389 right
+2390 left
+2391 right
+2392 left
+2393 right
+2394 left
+2395 right
+2396 left
+2397 right
+2398 left
+2399 right
+2400 left
+2401 right
+2402 left
+2403 right
+2404 left
+2405 right
+2406 left
+2407 right
+2408 left
+2409 right
+2410 left
+2411 right
+2412 left
+2413 right
+2414 action
+2418
+2594 action
+2598
+2694 action
+2698
