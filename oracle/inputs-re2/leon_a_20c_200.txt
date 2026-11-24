@@ -1,0 +1,85 @@
+# leon_a_20c_200: Leon A from 20E's door 0 back in 20C, east along the north corridor and down the east arm to door 0, through 20A past its six zombies without a shot (along the corridor, round the north room's far side and down the passage's east side) to door 0 and 200's hand back on the balcony
+345 right
+347 up run right
+351 right
+353 up run right
+355 right
+358 up run right
+359 left
+363 up run left
+370 up run
+384 up run left
+385 up run
+428 up run left
+429 up run
+441 up run left
+442 right
+458 up run right
+466 up run
+526 up run right
+527 up run
+550 up run right
+551 up run
+555 up run right
+556 up run
+558 left
+561
+562 action
+564
+599 up
+905
+906 up run right
+915 up run
+940 up run right
+941 up run
+979 up run right
+980 up run
+988 up run right
+989 up run
+992 right
+995 up run right
+1008 up run
+1010 up run right
+1011 up run
+1026 up run right
+1027 up run
+1028 up run right
+1029 left
+1040 up run left
+1050 up run
+1065 up run left
+1066 up run
+1081 up run left
+1082 up run
+1083 left
+1092 up run left
+1102 up run
+1123 up run right
+1124 up run
+1125 left
+1129 up run left
+1140 up run
+1153 up run left
+1154 up run
+1156 up run left
+1157 up run
+1158 right
+1162 up run right
+1172 up run
+1198 up run right
+1209 up run
+1212 up run right
+1213 up run
+1216 up run right
+1217 up run
+1219 up left
+1223 left
+1226 up left
+1227 left
+1230 up left
+1231 left
+1236
+1237 action
+1239
+1274 up
+1590
