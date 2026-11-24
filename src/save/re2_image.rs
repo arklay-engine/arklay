@@ -93,11 +93,13 @@ pub const REGIONS: &[Region] = &[
     region("0x98E9A5", 0x209, 1),
     region("player_index", 0x20A, 1),
     region("save place", 0x20B, 1),
+    region("Sfx_vol", 0x20C, 1),
+    region("Bgm_vol", 0x20D, 1),
     masked(
-        "Sfx_vol, Bgm_vol, key type",
-        0x20C,
-        3,
-        "the options (config.ini's volumes and key type), which arklay keeps in its own settings",
+        "0x98E9AA",
+        0x20E,
+        1,
+        "BYTE_0098f1b6's copy, a static Init_system clears and only Load_pop sets, which arklay doesn't keep",
     ),
     region("poison_timer", 0x20F, 1),
     region("poison_status", 0x210, 2),
@@ -251,6 +253,11 @@ pub fn build(game: &GameState, record: Option<&[u8]>) -> [u8; IMAGE_LEN] {
     image[0x208] = re2.inventory_size;
     image[0x20A] = re2.pl_id;
     image[0x20B] = re2.save_place;
+    // The run's volumes, or `Init_system`'s 100 and 100 in a game given
+    // none.
+    let [music, effects] = re2.volumes.unwrap_or([100; 2]);
+    image[0x20C] = effects;
+    image[0x20D] = music;
     image[0x20F] = re2.player.poison_timer;
     let poison = if re2.player.poisoned {
         crate::game::pl_change2::POISON_STATUS
@@ -506,6 +513,16 @@ mod tests {
         assert_eq!(image[0x791], 0);
     }
 
+    /// `Save_push`'s `Sfx_vol` and `Bgm_vol`: the run's, or `Init_system`'s
+    /// 100 in a game given none.
+    #[test]
+    fn the_volumes_go_to_sfx_vol_and_bgm_vol() {
+        let mut game = game();
+        assert_eq!(build(&game, None)[0x20C..0x20E], [100, 100]);
+        game.re2.volumes = Some([40, 7]);
+        assert_eq!(build(&game, None)[0x20C..0x20E], [7, 40]);
+    }
+
     #[test]
     fn the_flag_banks_keep_their_addresses_and_lengths() {
         let mut game = game();
@@ -593,12 +610,15 @@ mod tests {
         assert!(saved_state(&old).is_err());
         let mut cut = file.clone();
         let bytes = cut.re2.as_mut().unwrap();
-        bytes.truncate(bytes.len() - 3);
-        assert!(saved_state(&cut).is_err());
-        // The layout from before the count's high byte still applies.
-        let mut older = file;
-        let bytes = older.re2.as_mut().unwrap();
         bytes.truncate(bytes.len() - 1);
-        assert!(saved_state(&older).is_ok());
+        assert!(saved_state(&cut).is_err());
+        // The layouts from before the volumes and before the count's high
+        // byte still apply.
+        for short in [2, 3] {
+            let mut older = file.clone();
+            let bytes = older.re2.as_mut().unwrap();
+            bytes.truncate(bytes.len() - short);
+            assert!(saved_state(&older).is_ok());
+        }
     }
 }

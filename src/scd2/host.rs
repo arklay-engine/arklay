@@ -262,6 +262,13 @@ pub struct Re2State {
     /// The save count's high byte: `0x98E9BC`'s low word is the count, of
     /// which the state byte [`crate::game::STATE_BYTE_SAVES`] is the low byte.
     pub saves_high: u8,
+    /// `Bgm_vol` and `Sfx_vol` as the save work holds them (`0x98E9A9` and
+    /// `0x98E9A8`), music first, in percent: the run's volumes, which a new
+    /// game copies in (`FUN_004b73c0`) and `Save_push` again on each save,
+    /// and which `Load_pop` gives back. `None` when the game wasn't given
+    /// them, and from a save from before them, whose load leaves the run's
+    /// volumes as they are.
+    pub volumes: Option<[u8; 2]>,
 }
 
 /// `St_chenge_pl`'s and `Set_room`'s stash of the scenario's character: the
@@ -524,8 +531,23 @@ pub fn saves_high_in(bytes: &[u8]) -> u8 {
     bytes.get(SAVE_LEN_NO_SAVES_HIGH).copied().unwrap_or(0)
 }
 
+/// The run's music and effects volumes in [`Re2State::to_save_bytes`]'s
+/// `bytes`: `None` in a save from before them, or from a game that had
+/// none.
+pub fn volumes_in(bytes: &[u8]) -> Option<[u8; 2]> {
+    match bytes.get(SAVE_LEN_NO_VOLUMES..)? {
+        &[music, effects, ..] if music <= 100 && effects <= 100 => Some([music, effects]),
+        _ => None,
+    }
+}
+
+/// A volume byte that is none: a volume is 0 to 100.
+const NO_VOLUME: u8 = 0xFF;
+
 /// The bytes of [`Re2State::to_save_bytes`].
-const SAVE_LEN: usize = SAVE_LEN_NO_SAVES_HIGH + 1;
+const SAVE_LEN: usize = SAVE_LEN_NO_VOLUMES + 2;
+/// A save from before the volumes.
+const SAVE_LEN_NO_VOLUMES: usize = SAVE_LEN_NO_SAVES_HIGH + 1;
 /// A save from before the save count's high byte.
 const SAVE_LEN_NO_SAVES_HIGH: usize = SAVE_LEN_NO_PLACE + 1;
 /// A save from before the save place.
@@ -1009,6 +1031,7 @@ impl Default for Re2State {
             inventory_size: crate::game::INVENTORY_SLOTS_JILL as u8,
             save_place: 0,
             saves_high: 0,
+            volumes: None,
         }
     }
 }
@@ -1049,6 +1072,8 @@ impl Re2State {
         // `Save_push`'s save place.
         out.push(self.save_place);
         out.push(self.saves_high);
+        // The volumes, or two bytes no volume is when the game has none.
+        out.extend_from_slice(&self.volumes.unwrap_or([NO_VOLUME; 2]));
         out
     }
 
@@ -1097,6 +1122,7 @@ impl Re2State {
     /// Restore [`Self::to_save_bytes`]; `None` for bytes of another length.
     pub fn load_save_bytes(&mut self, bytes: &[u8]) -> Option<()> {
         if bytes.len() != SAVE_LEN
+            && bytes.len() != SAVE_LEN_NO_VOLUMES
             && bytes.len() != SAVE_LEN_NO_SAVES_HIGH
             && bytes.len() != SAVE_LEN_NO_PLACE
             && bytes.len() != SAVE_LEN_NO_PLAYER
@@ -1192,6 +1218,7 @@ impl Re2State {
         }
         // A save from before it has made fewer than 256 saves.
         self.saves_high = bytes.get(SAVE_LEN_NO_SAVES_HIGH).copied().unwrap_or(0);
+        self.volumes = volumes_in(bytes);
         Some(())
     }
 
@@ -7111,6 +7138,32 @@ mod tests {
         };
         old.load_save_bytes(&bytes[..SAVE_LEN_NO_PLACE]).unwrap();
         assert_eq!(old.save_place, 0x0F);
+    }
+
+    /// The run's volumes go with a save and come back with its load; a
+    /// game with none, and a save from before them, load none.
+    #[test]
+    fn the_volumes_survive_a_save() {
+        let state = Re2State {
+            volumes: Some([40, 0]),
+            ..Default::default()
+        };
+        let bytes = state.to_save_bytes();
+        assert_eq!(bytes.len(), SAVE_LEN);
+        assert_eq!(volumes_in(&bytes), Some([40, 0]));
+        let mut loaded = Re2State::default();
+        loaded.load_save_bytes(&bytes).unwrap();
+        assert_eq!(loaded.volumes, Some([40, 0]));
+        let mut old = Re2State {
+            volumes: Some([70, 70]),
+            ..Default::default()
+        };
+        old.load_save_bytes(&bytes[..SAVE_LEN_NO_VOLUMES]).unwrap();
+        assert_eq!(old.volumes, None);
+        assert_eq!(volumes_in(&bytes[..SAVE_LEN_NO_VOLUMES]), None);
+        let none = Re2State::default().to_save_bytes();
+        assert_eq!(none.len(), SAVE_LEN);
+        assert_eq!(volumes_in(&none), None);
     }
 
     #[test]

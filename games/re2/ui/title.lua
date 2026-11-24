@@ -1221,8 +1221,9 @@ local OPT_KEY_RED = "#FF2020"
 
 -- The sound settings, which outlast a visit: the speaker mode (1 monaural, 2
 -- stereo), the quality (`Config_get_squal`: 0 is 44.1 kHz at 16 bits) and
--- the two volumes. The volumes are arklay's music and effects volumes when
--- the engine has settings to give (`M.on_volumes`); the rest is the
+-- the two volumes. The volumes are the run's, which the engine gives
+-- (`M.on_volumes`): arklay's music and effects volumes in the interactive
+-- game, and what a load took from its save (`Load_pop`); the rest is the
 -- screen's own (oracle/re2-deviations.md, "The title").
 local sound = { speaker = 2, quality = 0, bgm = 100, se = 100 }
 
@@ -2865,8 +2866,9 @@ function M.on_loaded(api)
     resume(api, true)
 end
 
--- arklay's music and effects volumes, in percent, as the title opens and
--- whenever the settings change: the SOUND page's two volumes are these,
+-- The run's music and effects volumes, in percent, as the title opens,
+-- whenever the settings change and when a load takes them from its save
+-- (`Load_pop`): the SOUND page's two volumes are these,
 -- held to the page's 1 to 100, and the engine takes a change of the page's
 -- from what is published.
 function M.on_volumes(api, music, effects)
