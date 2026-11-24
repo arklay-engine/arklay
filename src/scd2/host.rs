@@ -6767,6 +6767,73 @@ mod tests {
         assert!(game.inventory.is_empty());
     }
 
+    /// Room 208's darkroom: the film's event 9 (`main_09`) drops the film and
+    /// turns on photo A's area 6, which waits at (20000, 20000) with object
+    /// 0xFF and action 0. The photo is file `0x73 - 0x68` = 11, and its
+    /// take writes the area's item to variable 3 (`WORD_0098eaea`) and
+    /// raises `fg_item` 125, with no object and no inventory slot.
+    #[test]
+    fn a_developed_photo_goes_to_the_file_list() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.id.stage = 2;
+        game.inventory = stacks(&[(0x02, 18), (0x01, 1), (0x44, 1)]);
+        game.objects.records = vec![
+            crate::objects::ObjectRecord {
+                flag: 1,
+                be_flg: 0x11,
+                ..Default::default()
+            };
+            10
+        ];
+        exec(
+            &mut game,
+            "item_aot_set",
+            &[
+                6, 2, 49, 0, 0, 20000, 20000, 1000, 1000, 0x73, 1, 125, 0xFF, 0,
+            ],
+        );
+        exec(&mut game, "sce_item_lost", &[0x44]);
+        exec(&mut game, "aot_on", &[6]);
+        assert!(game.re2_item_get.is_some(), "the window opens at once");
+        assert_eq!(game.inventory, stacks(&[(0x02, 18), (0x01, 1)]));
+        file_it(&mut game);
+        assert_eq!(game.re2.files[0], 11);
+        assert_eq!(game.re2.files[1], NO_FILE);
+        assert_eq!(game.re2.vars[VAR_TAKEN_ITEM], 0x73);
+        assert!(game.re2.flag(crate::scd2::host::ITEM_BANK, 125));
+        assert_eq!(cleared_objects(&game), Vec::<usize>::new());
+        assert_eq!(game.room_actions[6].unwrap().sce, SCE_AUTO);
+        assert_eq!(game.inventory, stacks(&[(0x02, 18), (0x01, 1)]));
+    }
+
+    /// `St_init02`'s file case sets the sprites up on the window's sixth tick
+    /// and draws nothing; its sub 3 draws through `St_disp_file` from the
+    /// next tick, so a tall picture (photo A, file 11, 0x90 rows) is 0x10
+    /// rows up on the two ticks after the set-up, one per draw buffer, and
+    /// in place from the third (`file_photo_208`'s 470 and 471).
+    #[test]
+    fn a_tall_pick_up_is_raised_on_the_two_draws_after_its_set_up() {
+        use crate::game::status2::files::{PICTURE_Y, PageTexture};
+        let mut game = press_item_area(0x73, 125, 0xFF);
+        for _ in 0..6 {
+            game.tick_re2_item_get(crate::game::status2::Input::default());
+        }
+        assert_eq!(game.re2.files[0], 11, "the set-up's tick");
+        assert_eq!(game.re2_item_get_page(), None);
+        let mut ys = Vec::new();
+        for _ in 0..3 {
+            game.tick_re2_item_get(crate::game::status2::Input::default());
+            let page = game.re2_item_get_page().unwrap();
+            let picture = page
+                .iter()
+                .find(|sprite| sprite.texture == PageTexture::Chunk(1))
+                .unwrap();
+            ys.push(picture.y);
+        }
+        assert_eq!(ys, [PICTURE_Y - 0x10, PICTURE_Y - 0x10, PICTURE_Y]);
+    }
+
     #[test]
     fn an_item_area_still_asks() {
         let mut game = press_item_area(0x47, 104, 0xFF);
