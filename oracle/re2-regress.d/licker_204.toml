@@ -81,3 +81,99 @@ input_shift = 344
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,zm0,zm1,fgroom,fgstat"
 expect = "match"
 record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 200"
+
+# Claire's handgun (weapon 3) kills the scene's licker from the east wall: its hits, flinches and death on the floor
+[[run]]
+name = "licker_204_kill_claire"
+room = "204"
+player = 1
+character = 1
+ticks = 1800
+sound = false
+setup_script = "licker_204_kill_claire.lua"
+input = "licker_204_kill.txt"
+input_shift = 344
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,zm0,zm1"
+expect = "match"
+record = "--start claire --warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip 3 --give 0:3:200"
+
+[[run]]
+name = "esp_licker_204_kill_claire"
+ref = "licker_204_kill_claire"
+room = "204"
+player = 1
+character = 1
+ticks = 1800
+sound = false
+setup_script = "licker_204_kill_claire.lua"
+input = "licker_204_kill.txt"
+input_shift = 344
+fields = "esp"
+expect = { tick = 534, fields = ["esp84", "esp85", "esp86", "esp87", "esp88", "esp89", "esp90", "esp91", "esp92"], note = "the jump's bite's blood (FUN_00466100, kind 4 row 0 on the player's part 0) turns by the global word 0x98A048 << 11, which only a killing bite (0x465FED, 0x46D60F) and FUN_0049B130/FUN_0049B230 write; this bite is Claire's first hit, and the original's blood is arklay's turned by 0x800 about her, so the recording starts with its bit 0 set, where arklay's per-licker turn is 0" }
+record = "--start claire --warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip 3 --give 0:3:200"
+
+# Leon's shotgun (weapon 7) at the scene's licker, as licker_204_kill_claire: the shotgun's hits and death
+[[run]]
+name = "licker_204_shotgun"
+room = "204"
+ticks = 1800
+sound = false
+setup_script = "licker_204_shotgun.lua"
+input = "licker_204_kill.txt"
+input_shift = 344
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,zm0,zm1"
+expect = "match"
+record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip 7 --give 0:7:200"
+
+[[run]]
+name = "esp_licker_204_shotgun"
+ref = "licker_204_shotgun"
+room = "204"
+ticks = 1800
+sound = false
+setup_script = "licker_204_shotgun.lua"
+input = "licker_204_kill.txt"
+input_shift = 344
+fields = "esp"
+expect = { tick = 595, fields = ["esp81", "esp82", "esp83", "esp84", "esp85"], note = "the shotgun's hit on the licker: its five kind 1 row 2 slots (update 9) start on the hit point in arklay, where the original's sit 40 to 160 off it, each its own way, and stay there; the kinds, frames and the trace match" }
+record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip 7 --give 0:7:200"
+
+# The revisit's licker (flag 4:86): `main_02` hangs it from the corridor's ceiling (`Type` 0x0512, `Routine_1`
+# 0x0B); the aim's noise lets it go, and it is shot on the floor until it dies
+[[run]]
+name = "licker_204_ceiling"
+room = "204"
+ticks = 1800
+sound = false
+setup_script = "licker_204_ceiling.lua"
+input = "licker_204_ceiling.txt"
+input_shift = 344
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,zm0,zm1"
+expect = "match"
+record = "--warp 204:-16000:0:-10000:1024 --flag 4:85 --flag 4:86 --life 2000 --equip 2 --give 0:2:200"
+
+[[run]]
+name = "esp_licker_204_ceiling"
+ref = "licker_204_ceiling"
+room = "204"
+ticks = 1800
+sound = false
+setup_script = "licker_204_ceiling.lua"
+input = "licker_204_ceiling.txt"
+input_shift = 344
+fields = "esp"
+expect = "match"
+record = "--warp 204:-16000:0:-10000:1024 --flag 4:85 --flag 4:86 --life 2000 --equip 2 --give 0:2:200"
+
+# licker_204_scene with the sound and the frames: the window scene's `movie_on 10` (the oracle's films off), the
+# drop, and the fight with a player who stands still, to the game over's start
+[[run]]
+name = "licker_204_scene_sound"
+room = "204"
+ticks = 1800
+setup_script = "licker_204_scene.lua"
+input = "licker_204_scene.txt"
+input_shift = 344
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,snd,movie,zm0,zm1,fgroom,fgstat"
+expect = "match"
+record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 200"
