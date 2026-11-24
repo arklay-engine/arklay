@@ -1,0 +1,630 @@
+# leon_a_114_10f: Leon A from 115's door 0 in 114: south and round to door 0, 113's south corridor past its zombie to door 1, 112's ground floor to door 0 and 110, up the west corridor to where the licker (8:119's) comes round from the north corridor, shot from standing with the aim held down until it dies, then round the north and east corridors to door 0 into 10F's hand back
+345 left
+353 up run left
+359 up run
+377 up run left
+378 up run
+391 left
+396 up run left
+402 up run
+410 up run left
+411 up run
+421 up run left
+422 up run
+439 up run left
+440 up run
+464 up run left
+465 up run
+473 up run right
+474 up run
+475 up run left
+476 up run
+482 up run left
+483 up run
+488
+490 action
+492
+527 up
+833
+834 up run left
+835 left
+837 up run left
+840 left
+842 up run left
+844 left
+846 up run left
+853 up run
+856 up run left
+859 up run
+860 up run left
+861 up run
+863 up run right
+882 up run
+894 up run right
+895 up run
+902 up run right
+903 up run
+924 up run left
+925 up run
+926 left
+939
+941 action
+943
+978 up
+1282
+1283 right
+1285 up run right
+1291 up run
+1302 up run right
+1303 up run
+1334 up run right
+1344 right
+1347 up run right
+1348 up left
+1354 left
+1357 up left
+1358 left
+1362 up left
+1363 right
+1370 left
+1371 right
+1372 left
+1373 right
+1374 left
+1375 right
+1376 left
+1377 right
+1378 left
+1379 right
+1380 left
+1381 right
+1382 left
+1383 right
+1384 left
+1385 right
+1386 left
+1387 right
+1388 left
+1389 right
+1390 left
+1391 right
+1392 left
+1393 right
+1394 left
+1395 right
+1396 left
+1397 right
+1398 left
+1399 right
+1400 left
+1401 right
+1402 left
+1403 right
+1404 left
+1405 right
+1406 left
+1407 right
+1408 left
+1409 right
+1410 left
+1411 right
+1412 left
+1413 right
+1414 left
+1415 right
+1416 left
+1417 right
+1418 left
+1419 right
+1420 left
+1421 right
+1422 left
+1423 right
+1424 left
+1425 right
+1426 left
+1427 right
+1428 left
+1429 right
+1430 left
+1431 right
+1432 left
+1433 right
+1434 left
+1435 right
+1436 left
+1437 right
+1438 left
+1439 right
+1440 left
+1441 right
+1442 left
+1443 right
+1444 left
+1445 right
+1446 left
+1447 right
+1448 left
+1449 right
+1450 left
+1451 right
+1452 left
+1453 right
+1454 left
+1455 right
+1456 left
+1457 right
+1458 left
+1459 right
+1460 left
+1461 right
+1462 left
+1463 right
+1464 left
+1465 right
+1466 left
+1467 right
+1468 left
+1469 right
+1470 left
+1471 right
+1472 left
+1473 right
+1474 left
+1475 right
+1476 left
+1477 right
+1478 left
+1479 right
+1480 left
+1481 right
+1482 left
+1483 right
+1484 left
+1485 right
+1486 left
+1487 right
+1488 left
+1489 right
+1490 left
+1491 right
+1492 left
+1493 right
+1494 left
+1495 right
+1496 left
+1497 right
+1498 left
+1499 right
+1500 left
+1501 right
+1502 left
+1503 right
+1504 left
+1505 right
+1506 left
+1507 right
+1508 left
+1509 right
+1510 left
+1511 right
+1512 left
+1513 right
+1514 left
+1515 right
+1516 left
+1517 right
+1518 left
+1519 right
+1520 left
+1521 right
+1522 left
+1523 right
+1524 left
+1525 right
+1526 left
+1527 right
+1528 left
+1529 right
+1530 left
+1531 right
+1532 left
+1533 right
+1534 left
+1535 right
+1536 left
+1537 right
+1538 left
+1539 right
+1540 left
+1541 right
+1542 left
+1543 right
+1544 left
+1545 right
+1546 left
+1547 right
+1548 left
+1549 right
+1550 left
+1551 right
+1552 left
+1553 right
+1554 left
+1555 right
+1556 left
+1557 right
+1558 left
+1559 right
+1560 left
+1561 right
+1562 left
+1563
+1564 action
+1566
+1601 up
+1933
+1934 left
+1939 up run left
+1946 up run
+1947 up run left
+1948 up run
+1958 up run right
+1959 up run
+1960 left
+1962 up run left
+1968 up run
+1969 up run left
+1970 up run
+2000 up run right
+2001 up run
+2015 up run right
+2016 up run
+2026 up run right
+2027 right
+2035 aim down
+2246 aim down fire
+2248 aim down
+2252 aim down fire
+2254 aim down
+2258 aim down fire
+2260 aim down
+2264 aim down fire
+2266 aim down
+2270 aim down fire
+2272 aim down
+2276 aim down fire
+2278 aim down
+2282 aim down fire
+2284 aim down
+2288 aim down fire
+2290 aim down
+2294 aim down fire
+2296 aim down
+2300 aim down fire
+2302 aim down
+2306 aim down fire
+2308 aim down
+2312 aim down fire
+2314 aim down
+2318 aim down fire
+2320 aim down
+2324 aim down fire
+2326 aim down
+2330 aim down fire
+2332 aim down
+2336 aim down fire
+2338 aim down
+2342 aim down fire
+2344 aim down
+2348 aim down fire
+2350 aim down
+2354 aim down fire
+2356 aim down
+2360 aim down fire
+2362 aim down
+2366 aim down fire
+2368 aim down
+2372 aim down fire
+2374 aim down
+2378 aim down fire
+2380 aim down
+2384 aim down fire
+2386 aim down
+2390 aim down fire
+2392 aim down
+2396 aim down fire
+2398 aim down
+2402 aim down fire
+2404 aim down
+2408 aim down fire
+2410 aim down
+2414 aim down fire
+2416 aim down
+2420 aim down fire
+2422 aim down
+2426 aim down fire
+2428 aim down
+2432 aim down fire
+2434 aim down
+2438 aim down fire
+2440 aim down
+2444 aim down fire
+2446 aim down
+2450 aim down fire
+2452 aim down
+2456 aim down fire
+2458 aim down
+2462 aim down fire
+2464 aim down
+2468 aim down fire
+2470 aim down
+2474 aim down fire
+2476 aim down
+2480 aim down fire
+2482 aim down
+2486 aim down fire
+2488 aim down
+2492 aim down fire
+2494 aim down
+2498 aim down fire
+2500 aim down
+2504 aim down fire
+2506 aim down
+2510 aim down fire
+2512 aim down
+2516 aim down fire
+2518 aim down
+2522 aim down fire
+2524 aim down
+2528 aim down fire
+2530 aim down
+2534 aim down fire
+2536 aim down
+2540 aim down fire
+2542 aim down
+2546 aim down fire
+2548 aim down
+2552 aim down fire
+2554 aim down
+2558 aim down fire
+2560 aim down
+2561
+2571 up run
+2584 up run left
+2585 up run
+2600 right
+2607 up run right
+2613 up run
+2637 up run right
+2638 up run
+2642 up run right
+2644 up run
+2667 up run left
+2668 up run
+2684 up run left
+2685 up run right
+2686 up run
+2708 up run right
+2709 up run
+2722 up run right
+2723 up run
+2725 right
+2731 up run right
+2737 up run
+2740 up run right
+2741 up run
+2761 up run right
+2762 up run
+2764 up run right
+2765 up run
+2790 up run left
+2791 up run
+2798 up run left
+2799 up run
+2805 up run right
+2806 up run
+2832 up run right
+2833 up run
+2883 up run left
+2884 up run
+2885 up run left
+2890 up run
+2893 up run left
+2894 up run
+2906 up right
+2909 left
+2920 right
+2921 left
+2922 right
+2923 left
+2924 right
+2925 left
+2926 right
+2927 left
+2928 right
+2929 left
+2930 right
+2931 left
+2932 right
+2933 left
+2934 right
+2935 left
+2936 right
+2937 left
+2938 right
+2939 left
+2940 right
+2941 left
+2942 right
+2943 left
+2944 right
+2945 left
+2946 right
+2947 left
+2948 right
+2949 left
+2950 right
+2951 left
+2952 right
+2953 left
+2954 right
+2955 left
+2956 right
+2957 left
+2958 right
+2959 left
+2960 right
+2961 left
+2962 right
+2963 left
+2964 right
+2965 left
+2966 right
+2967 left
+2968 right
+2969 left
+2970 right
+2971 left
+2972 right
+2973 left
+2974 right
+2975 left
+2976 right
+2977 left
+2978 right
+2979 left
+2980 right
+2981 left
+2982 right
+2983 left
+2984 right
+2985 left
+2986 right
+2987 left
+2988 right
+2989 left
+2990 right
+2991 left
+2992 right
+2993 left
+2994 right
+2995 left
+2996 right
+2997 left
+2998 right
+2999 left
+3000 right
+3001 left
+3002 right
+3003 left
+3004 right
+3005 left
+3006 right
+3007 left
+3008 right
+3009 left
+3010 right
+3011 left
+3012 right
+3013 left
+3014 right
+3015 left
+3016 right
+3017 left
+3018 right
+3019 left
+3020 right
+3021 left
+3022 right
+3023 left
+3024 right
+3025 left
+3026 right
+3027 left
+3028 right
+3029 left
+3030 right
+3031 left
+3032 right
+3033 left
+3034 right
+3035 left
+3036 right
+3037 left
+3038 right
+3039 left
+3040 right
+3041 left
+3042 right
+3043 left
+3044 right
+3045 left
+3046 right
+3047 left
+3048 right
+3049 left
+3050 right
+3051 left
+3052 right
+3053 left
+3054 right
+3055 left
+3056 right
+3057 left
+3058 right
+3059 left
+3060 right
+3061 left
+3062 right
+3063 left
+3064 right
+3065 left
+3066 right
+3067 left
+3068 right
+3069 left
+3070 right
+3071 left
+3072 right
+3073 left
+3074 right
+3075 left
+3076 right
+3077 left
+3078 right
+3079 left
+3080 right
+3081 left
+3082 right
+3083 left
+3084 right
+3085 left
+3086 right
+3087 left
+3088 right
+3089 left
+3090 right
+3091 left
+3092 right
+3093 left
+3094 right
+3095 left
+3096 right
+3097 left
+3098 right
+3099 left
+3100 right
+3101 left
+3102 right
+3103 left
+3104 right
+3105 left
+3106 right
+3107 left
+3108 right
+3109
+3110 action
+3112
+3147 up
+3463
