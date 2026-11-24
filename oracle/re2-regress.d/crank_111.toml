@@ -10,9 +10,9 @@ ticks = 1100
 setup_script = "crank_111.lua"
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,ip,snd,bgm,msg,fguse,scv,atsce,fgstat"
 frames = [360, 1099]
-# Measured: 0.28, of which the scene's cut (8, on the frames from 510 to 573) is 2.2 a frame: the stairs are an object `Om_disp` draws unlit (`obj_model_set`'s
-# attribute 0x10), which the original shows 7 brighter a channel than arklay (#663). The room's other frames are under 0.45 and the status screen's own are 0.00.
-frame_max_mean = 0.35
-frame_windows = [[360, 442, 0.05], [443, 509, 0.45], [510, 573, 2.40], [574, 583, 0.55], [584, 590, 0.20], [591, 959, 0.05], [960, 1099, 0.55]]
+# Measured: 0.10, of which the scene's cut (8, on the frames from 510 to 573) is 0.55. The room's other frames are under 0.2 and the status screen's own are
+# 0.00.
+frame_max_mean = 0.15
+frame_windows = [[360, 442, 0.05], [443, 509, 0.2], [510, 573, 0.65], [574, 583, 0.25], [584, 590, 0.1], [591, 959, 0.05], [960, 1099, 0.25]]
 expect = "match"
 record = "--warp 111:-23154:0:-16272:3072 --life 200 --give 0:2:13 --give 2:0x43:1"
