@@ -483,6 +483,10 @@ pub const VINE_ID: u8 = 0x2F;
 /// The bodies in room 205's walls, `Em_2D`, whose script is
 /// `enemy/2d/enemy.lua`.
 pub const EM2D_ID: u8 = 0x2D;
+/// The giant moth, `Em_3A`, whose script is `enemy/3a/enemy.lua`.
+pub const MOTH_ID: u8 = 0x3A;
+/// The moth's larvae, `Em_3B`, whose script is `enemy/3b/enemy.lua`.
+pub const LARVA_ID: u8 = 0x3B;
 /// `0x529c24 + kind * 7`: `Em_2D`'s `Neck_no` by `Type & 1`.
 const EM2D_NECK: [usize; 2] = [1, 8];
 /// The poison ivy, which runs `Em_2E`'s code.
@@ -1638,6 +1642,21 @@ impl Em<'_, '_, '_> {
         self.oba_ck_em();
     }
 
+    /// `Em_3A` (`0x4acc70`) and `Em_3B` (`0x4b0370`): the script, then
+    /// `Oba_ck_em` and `Sca_ck_em` with `0x400`. `Damage_cnt`'s count down
+    /// is the script's, as the moth clears a field when it's already 0, and
+    /// so are the moth's own steps (its timers, its parts and its scales'
+    /// effects, and `Be_flg`'s bits for the shots).
+    fn run_moth(&mut self) {
+        if self.world.stopped {
+            return;
+        }
+        self.old_pos = self.mover.player.pos;
+        self.script();
+        self.oba_ck_em();
+        self.sca_ck_em();
+    }
+
     /// `Em_2E` and `Em_2F`, which leave the rest to their scripts. The ivy's
     /// `FUN_004886f0` composes its parts for its vines afterwards, and it
     /// counts the ticks it ends where it began.
@@ -1741,6 +1760,10 @@ impl Em<'_, '_, '_> {
         }
         if self.mover.tick.id == EM2D_ID {
             self.run_em2d();
+            return;
+        }
+        if matches!(self.mover.tick.id, MOTH_ID | LARVA_ID) {
+            self.run_moth();
             return;
         }
         if self.mover.tick.id == EMBRYO_ID {

@@ -2617,6 +2617,8 @@ impl GameHost<'_> {
             || id == crate::zombie2::SPIDER_ID
             || id == crate::zombie2::YOUNG_ID
             || id == crate::zombie2::EM2D_ID
+            || id == crate::zombie2::MOTH_ID
+            || id == crate::zombie2::LARVA_ID
             || id == crate::zombie2::ROACH_ID
             || id == crate::zombie2::EMBRYO_ID
             || id == crate::zombie2::ADULT_ID

@@ -945,6 +945,14 @@ const SCRIPTS: &[(&str, &str)] = &[
         include_str!("../games/re2/enemy/39/enemy.lua"),
     ),
     (
+        "enemy/3a/enemy.lua",
+        include_str!("../games/re2/enemy/3a/enemy.lua"),
+    ),
+    (
+        "enemy/3b/enemy.lua",
+        include_str!("../games/re2/enemy/3b/enemy.lua"),
+    ),
+    (
         "ui/char_select.lua",
         include_str!("../games/re2/ui/char_select.lua"),
     ),
