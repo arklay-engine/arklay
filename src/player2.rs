@@ -2041,6 +2041,36 @@ pub fn idle_pose<'k>(clips: &[Clip], keyframes: &'k [Keyframe]) -> Option<&'k Ke
     keyframes.get(usize::from(frame.keyframe))
 }
 
+/// The pose a room started on its own shows on its first tick: the original
+/// reached it by a load, whose `Pl_init` poses the idle's first frame
+/// ([`idle_pose`], `weapon`'s bank), and that tick's `Player_move`, which
+/// [`Work::default`] holds as run, blends one `J_seq` step from there toward
+/// the frame its clip played, in the weapon's bank or the player's own
+/// (`own`).
+pub fn start_pose(
+    work: &Work,
+    weapon: (&[Clip], &[Keyframe]),
+    own: (&[Clip], &[Keyframe]),
+) -> Option<Keyframe> {
+    let init = idle_pose(weapon.0, weapon.1)?;
+    let (clips, keyframes) = if work.bank == Bank::Weapon {
+        weapon
+    } else {
+        own
+    };
+    let frame = clips
+        .get(usize::from(work.move_no))?
+        .frames
+        .get(usize::from(work.move_cnt).checked_sub(1)?)?;
+    let target = keyframes.get(usize::from(frame.keyframe))?;
+    Some(crate::anim::blend_keyframes_re2(
+        init,
+        target,
+        u16::from(work.hokan) + 1,
+        BLEND_STEP,
+    ))
+}
+
 /// `Player_move`'s poison, before its routine: while `poison_status` is set,
 /// a life each time `poison_timer` runs out, never the last one.
 pub fn poison_tick(work: &mut Work, life: &mut i16) {
@@ -8538,6 +8568,43 @@ mod tests {
         let drawn = turn([1000, 0, 2000], Some([1000, -700, 2600]));
         assert_ne!(drawn, posed);
         assert_eq!(drawn, turn([1000, 0, 2600], None));
+    }
+
+    /// A room started on its own shows its first tick's pose: one `J_seq`
+    /// step (7 of 8 parts kept) from `Pl_init`'s idle toward the frame the
+    /// tick played, in the bank the routines hold.
+    #[test]
+    fn a_room_start_blends_one_step_from_pl_init_s_pose() {
+        let pose = |turn: i16| Keyframe {
+            offset: [0, -1700, 0],
+            vertex: [0; 3],
+            rotations: vec![[turn, 0, 0]],
+        };
+        let clip = |keyframe: u16| Clip {
+            frames: vec![ClipFrame {
+                keyframe,
+                ..ClipFrame::default()
+            }],
+        };
+        let keyframes = vec![pose(0), pose(0x100), pose(0x200)];
+        let none = Clip::default;
+        let weapon = vec![none(), none(), clip(0), none(), none(), clip(1)];
+        let own = vec![none(), none(), none(), none(), none(), clip(2)];
+        let mut work = Work {
+            bank: Bank::Weapon,
+            move_no: 5,
+            move_cnt: 1,
+            hokan: FULL_BLEND - 1,
+            ..Work::default()
+        };
+        let start = |work: &Work| {
+            start_pose(work, (&weapon, &keyframes), (&own, &keyframes))
+                .unwrap()
+                .rotations[0][0]
+        };
+        assert_eq!(start(&work), 0x20, "an eighth of the weapon bank's turn");
+        work.bank = Bank::Pld;
+        assert_eq!(start(&work), 0x40, "an eighth of the own bank's");
     }
 
     /// `Pl_init` stands the player on the weapon bank's idle, not the body's:

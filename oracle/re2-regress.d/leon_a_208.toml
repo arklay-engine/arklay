@@ -17,7 +17,6 @@ frame_max_mean = 0.75
 frame_windows = [[356, 699, 1.05], [700, 1249, 0.55]]
 expect = "match"
 # the warp's first ticks: the original's neck starts where the warp's load left the last pose, arklay's from the arrival's, and they meet by 356
-ignore = [[344, "pneck"], [345, "pneck"], [346, "pneck"], [347, "pneck"], [348, "pneck"], [349, "pneck"], [350, "pneck"], [351, "pneck"], [352, "pneck"], [353, "pneck"], [354, "pneck"], [355, "pneck"]]
 record = "--no-enemies --warp 207:-15328:0:-12706:990 --life 60 --give 0:2:10 --give 2:0x14:21"
 
 # The same walk and take from a warp to door 2's arrival in 208.
@@ -34,5 +33,4 @@ frames = [360, 899]
 frame_max_mean = 0.55
 expect = "match"
 # the warp's first ticks: the original's neck starts where the warp's load left the last pose, arklay's from the arrival's, and they meet by 356
-ignore = [[344, "pneck"], [345, "pneck"], [346, "pneck"], [347, "pneck"], [348, "pneck"], [349, "pneck"], [350, "pneck"], [351, "pneck"], [352, "pneck"], [353, "pneck"], [354, "pneck"], [355, "pneck"]]
 record = "--warp 208:-15462:0:-15336:1029:0 --life 60 --give 0:2:10 --give 2:0x14:21"

@@ -72,10 +72,6 @@ frames = [360, 1834]
 # 0.66 measured; the worst, 8.21 on 1814, is in 10A's blast
 frame_max_mean = 0.75
 expect = "match"
-ignore = [
-  # the warp's head on its first ticks (as leon_a_208's)
-  [344, 355, "pneck"],
-]
 record = "--start claire --warp 200:-22963:-1800:-3039:200:4 --flag 3:32 --flag 3:33 --flag 3:100 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:135 --flag 4:148 --flag 4:152 --flag 4:255 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:17 --flag 31:27 --life 69 --give 0:3:2 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x42:1 --give 7:0x14:15"
 
 # Rooms 10A, 21B, 10D and 10E: 10A's door 3 into 21B's first state (Irons's scene, area 13's event 10, 3:0), door 1 through 10D into 10E: Sherry's first sight (3:65), the light switch (4:71) and Sherry's scene on area 2 (3:64).
@@ -99,8 +95,6 @@ frame_max_mean = 3.0
 frame_windows = [[360, 802, 0.4], [3530, 4127, 0.4], [4255, 4732, 0.5], [5071, 7853, 0.9]]
 expect = "match"
 ignore = [
-  # the warp's head on its first ticks (as leon_a_208's)
-  [344, 353, "pneck"],
   # 10D's door 0 into 10E loads the room while the door plays on: the original's head is Claire's idle
   # at the facing from before the door until the door's end, arklay's the old one (#859)
   [4859, 5072, "pneck"],
@@ -126,8 +120,4 @@ frames = [360, 2288]
 frame_max_mean = 0.5
 frame_windows = [[360, 504, 0.4], [843, 1100, 0.4], [1439, 2288, 0.4]]
 expect = "match"
-ignore = [
-  # the warp's head on its first ticks (as leon_a_208's)
-  [344, 356, "pneck"],
-]
 record = "--start claire --warp 10E:-19655:0:-15994:720:5 --flag 3:0 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:17 --flag 31:18 --flag 31:27 --life 69 --give 0:3:2 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x14:15"
