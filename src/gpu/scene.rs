@@ -1062,6 +1062,8 @@ mod tests {
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
+            marni: None,
+            nearest: false,
             complex_object: None,
             view_z_shift: 0,
         };
@@ -1273,6 +1275,8 @@ mod tests {
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
+            marni: None,
+            nearest: false,
             complex_object: None,
             view_z_shift: 0,
         };
@@ -1361,6 +1365,8 @@ mod tests {
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
+            marni: None,
+            nearest: false,
             complex_object: None,
             view_z_shift: 0,
         };
@@ -1443,6 +1449,8 @@ mod tests {
             fixed_light: None,
             joint_colours,
             hd_name: None,
+            marni: None,
+            nearest: false,
             complex_object: Some(2),
             view_z_shift: 0,
         };
@@ -1489,6 +1497,8 @@ mod tests {
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
+            marni: None,
+            nearest: false,
             complex_object: None,
             view_z_shift: 0,
         };

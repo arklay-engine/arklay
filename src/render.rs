@@ -2109,19 +2109,21 @@ impl Framebuffer {
         joints: &[anim::Mat4x3],
         camera: &Camera,
     ) {
-        self.draw_objects_unlit(mesh.objects.iter().zip(joints), texture, camera);
+        self.draw_objects_unlit(mesh.objects.iter().zip(joints), texture, camera, false);
     }
 
     /// Draw one or more objects full-bright with one matrix per object.
     ///
     /// Every object's triangles are collected first and painter-sorted
     /// together, so overlapping door panels interleave by depth the way the
-    /// original's depth-keyed TMD queue does.
+    /// original's depth-keyed TMD queue does. `nearest` samples the texels
+    /// nearest under RE2's camera too, as a flat door's sprites are.
     pub fn draw_objects_unlit<'a>(
         &mut self,
         objects: impl IntoIterator<Item = (&'a TmdObject, &'a anim::Mat4x3)>,
         texture: &Texture8,
         camera: &Camera,
+        nearest: bool,
     ) {
         let mut triangles: Vec<Triangle> = Vec::new();
         for (object, joint) in objects {
@@ -2139,6 +2141,11 @@ impl Framebuffer {
                 false,
                 &mut triangles,
             );
+        }
+        if nearest {
+            for triangle in &mut triangles {
+                triangle.filtered = false;
+            }
         }
         self.rasterize_triangles(texture, triangles);
     }
@@ -2239,6 +2246,7 @@ impl Framebuffer {
                 page,
                 &mut triangles,
             );
+            MarniPart::mark(model.marni, index, object, &mut triangles, 0);
             triangles.sort_by(|a, b| b.depth.total_cmp(&a.depth));
             parts.push((slot, index, triangles));
         }
@@ -2388,6 +2396,7 @@ impl Framebuffer {
                     view_depth: false,
                     filtered: false,
                     page_x: 0,
+                    marni: None,
                 })
             })
             .collect();
@@ -2482,8 +2491,16 @@ impl Framebuffer {
         triangles.sort_by(|a, b| b.depth.total_cmp(&a.depth));
         let mut depth = self.depth_buffer();
         let mut twins = KnockoutTwins::default();
+        let mut queue = MarniQueue::default();
         for triangle in &triangles {
             let page = twins.get(texture, triangle);
+            if marni_queues(triangle, page) {
+                queue.push(marni_queue_key(triangle), (triangle, page));
+            } else {
+                self.rasterize(texture, triangle, page, &mut depth);
+            }
+        }
+        for (triangle, page) in queue.flush() {
             self.rasterize(texture, triangle, page, &mut depth);
         }
         recycle_depth(depth);
@@ -2532,6 +2549,7 @@ impl Framebuffer {
         // semi-transparent packet, or a texture with transparent texels,
         // blends and writes no depth (`FUN_0040EAF0`).
         let surface = marni_surface(triangle, texture);
+        let palette = MarniPalette::of(triangle);
         let queued = triangle.blend || (triangle.filtered && page.keyed);
         let scale = self.scale as f32;
         // Marni hands Direct3D the doubled positions as they are, and
@@ -2596,13 +2614,8 @@ impl Framebuffer {
                     Some(_) => ([255, 255, 255], triangle.blend, 255),
                     // RE2's Direct3D filters its models' textures.
                     None if triangle.filtered => {
-                        let (texel, stp) = sample_marni(
-                            texture,
-                            surface,
-                            triangle.palette_row,
-                            fragment.u,
-                            fragment.v,
-                        );
+                        let (texel, stp) =
+                            sample_marni(texture, surface, palette, fragment.u, fragment.v);
                         if !queued {
                             // No blend: the texel's colour, whatever its alpha.
                             ([texel[0], texel[1], texel[2]], false, 255)
@@ -2751,6 +2764,11 @@ impl Framebuffer {
     ) {
         let mut depth = self.depth_buffer();
         let mut twins = KnockoutTwins::default();
+        // RE2's alpha triangles, drawn after everything opaque. Marni queues
+        // its semi-transparent sprites too, at `MarniDrawPolyFT4`'s `sz` of
+        // 0.5; drawn so, room 100's fire covers the bodies the recording
+        // shows in front of it, so the sprites keep the painter's order.
+        let mut queue = MarniQueue::default();
         for item in items {
             match item {
                 SceneItem::Shadow(poly) => {
@@ -2759,7 +2777,11 @@ impl Framebuffer {
                 SceneItem::Triangle(triangle) => {
                     if let Some(texture) = textures.get(triangle.texture) {
                         let page = twins.get(texture, triangle);
-                        self.rasterize(texture, triangle, page, &mut depth);
+                        if marni_queues(triangle, page) {
+                            queue.push(marni_queue_key(triangle), (triangle, page));
+                        } else {
+                            self.rasterize(texture, triangle, page, &mut depth);
+                        }
                     }
                 }
                 SceneItem::Mask(quad) => {
@@ -2772,6 +2794,11 @@ impl Framebuffer {
                         self.rasterize_effect(page, quad);
                     }
                 }
+            }
+        }
+        for (triangle, page_flags) in queue.flush() {
+            if let Some(texture) = textures.get(triangle.texture) {
+                self.rasterize(texture, triangle, page_flags, &mut depth);
             }
         }
         recycle_depth(depth);
@@ -3000,7 +3027,7 @@ impl Framebuffer {
             for triangle in &triangles {
                 crate::raster::draw_triangle(triangle, self.width, self.height, |fragment| {
                     let texel = sample_bilinear(page, fragment.u, page_v(fragment.v));
-                    let target = fragment.y * target_stride * 4 + fragment.x * 4;
+                    let target = (fragment.y * target_stride + fragment.x) * 4;
                     let Some(slot) = rgba.get_mut(target..target + 4) else {
                         return;
                     };
@@ -3022,7 +3049,7 @@ impl Framebuffer {
                 let texel_x = clamp_texel(fragment.u, page.width);
                 let texel_y = top as usize + clamp_texel(fragment.v, sheet_height);
                 let source = texel_y * page_width * 4 + texel_x * 4;
-                let target = fragment.y * target_stride * 4 + fragment.x * 4;
+                let target = (fragment.y * target_stride + fragment.x) * 4;
                 let (Some(texel), Some(slot)) = (
                     page.rgba.get(source..source + 4),
                     rgba.get_mut(target..target + 4),
@@ -3066,6 +3093,53 @@ fn recycle_depth(depth: Vec<u32>) {
     DEPTH_POOL.with(|pool| pool.set(depth));
 }
 
+/// Marni's alpha queue (`FUN_0040E820`): what `TransObjectNgTin3_VinsNins`
+/// and `TransSprPoly` hold back from the opaque pass, kept in order of each
+/// triangle's mean `sz`, farthest first, a new entry after the ones it ties.
+/// `FUN_0040EC10` draws it once the opaque pass is done, depth tested and
+/// writing no depth (`FUN_0040EAF0`).
+struct MarniQueue<T> {
+    entries: Vec<(f64, T)>,
+}
+
+impl<T> Default for MarniQueue<T> {
+    fn default() -> Self {
+        Self {
+            entries: Vec::new(),
+        }
+    }
+}
+
+impl<T> MarniQueue<T> {
+    /// Queue `entry` under `key`, [`marni_queue_key`]'s: smaller is farther.
+    fn push(&mut self, key: f64, entry: T) {
+        self.entries.push((key, entry));
+    }
+
+    /// The entries in the order the flush draws them.
+    fn flush(mut self) -> impl Iterator<Item = T> {
+        self.entries.sort_by(|a, b| a.0.total_cmp(&b.0));
+        self.entries.into_iter().map(|(_, entry)| entry)
+    }
+}
+
+/// Whether Marni queues an RE2 model triangle: a semi-transparent packet, or
+/// one whose texture has a transparent texel (`+0x2C`).
+fn marni_queues(triangle: &Triangle, page: PageFlags) -> bool {
+    triangle.filtered && (triangle.blend || page.keyed)
+}
+
+/// A queued triangle's order: a vertex's `sz` is `1 - (h / 2) / z`, so the
+/// mean `sz` falls as the sum of `1 / z` rises, and the queue's farthest
+/// first is the smallest sum first.
+fn marni_queue_key(triangle: &Triangle) -> f64 {
+    triangle
+        .raster
+        .iter()
+        .map(|vertex| 1.0 / f64::from(vertex.w))
+        .sum()
+}
+
 /// The fragment value `a / 255 * (b / 255)` of two 8-bit levels as llvmpipe
 /// stores it, scaled by 255 and rounded: `a * b / 255` is never on a half
 /// (510 doesn't divide `2ab + 255`, an odd number) and `f32`'s error is far
@@ -3101,7 +3175,9 @@ pub fn draw_door_scene(
             framebuffer.clear();
             let camera = door_camera(frame);
             let objects = door_draws(frame).map(|(order, mesh)| (mesh, &order.matrix));
-            framebuffer.draw_objects_unlit(objects, texture, &camera);
+            // An RE2 door's full-bright parts are `Marni_door_disp1`'s
+            // sprites, their texels nearest.
+            framebuffer.draw_objects_unlit(objects, texture, &camera, true);
         } else {
             // An RE2 door draws through the same scene the GPU renders.
             let door = DoorScene::new(frame);
@@ -3262,7 +3338,7 @@ impl DoorScene {
     /// The door as two meshes over the same objects: the full-bright orders,
     /// then the lit ones.
     pub fn meshes<'a>(&'a self, texture: &'a Texture8) -> [EntityMesh<'a>; 2] {
-        let mesh = |hidden_joints, light| EntityMesh {
+        let mesh = |hidden_joints, light, nearest| EntityMesh {
             mesh: &self.mesh,
             texture,
             joints: &self.joints,
@@ -3278,10 +3354,13 @@ impl DoorScene {
             fixed_light: Some(light),
             joint_colours: NO_JOINT_COLOURS,
             hd_name: None,
+            marni: None,
+            nearest,
         };
         [
-            mesh(self.hidden | self.lit, FULL_BRIGHT_LIGHT),
-            mesh(self.hidden | !self.lit, re2_door_light(&self.camera)),
+            // The full-bright parts are `Marni_door_disp1`'s sprites.
+            mesh(self.hidden | self.lit, FULL_BRIGHT_LIGHT, true),
+            mesh(self.hidden | !self.lit, re2_door_light(&self.camera), false),
         ]
     }
 
@@ -3381,6 +3460,12 @@ pub struct EntityMesh<'a> {
     /// replacement (a room model's `room/<id>/object/<slot>`); the content hashes remain
     /// the fallback. `None` for a page with no stable name.
     pub hd_name: Option<&'a str>,
+    /// An RE 2 character's texture layout ([`crate::model::Emd::marni`]).
+    pub marni: Option<crate::model::MarniLayout>,
+    /// RE 2's texels nearest, where its models are filtered: a flat door's
+    /// parts, which `Marni_door_disp1` submits as sprites (type `0x1004D`)
+    /// through `SetFiltering(0)`.
+    pub nearest: bool,
 }
 
 /// The joint carries no `JointSetColorTint` colour.
@@ -3725,6 +3810,7 @@ fn draw_gameplay_scene_with_ribbon<'a>(
                 light
             };
             let light = mesh.primary_light(light);
+            let first = triangles.len();
             collect_triangles(
                 object,
                 joint,
@@ -3739,6 +3825,12 @@ fn draw_gameplay_scene_with_ribbon<'a>(
                 room_object,
                 &mut triangles,
             );
+            MarniPart::mark(mesh.marni, index, object, &mut triangles, first);
+            if mesh.nearest {
+                for triangle in &mut triangles[first..] {
+                    triangle.filtered = false;
+                }
+            }
         }
     }
     // The mirror copy is drawn through the reflected camera and submitted
@@ -3762,6 +3854,7 @@ fn draw_gameplay_scene_with_ribbon<'a>(
                 // usual back-face test would drop every front face; the
                 // reflection is submitted unculled (the original culls with
                 // the flipped scale baked into its projection).
+                let first = triangles.len();
                 collect_triangles(
                     object,
                     joint,
@@ -3776,6 +3869,7 @@ fn draw_gameplay_scene_with_ribbon<'a>(
                     false,
                     &mut triangles,
                 );
+                MarniPart::mark(mesh.marni, index, object, &mut triangles, first);
             }
         }
     }
@@ -4765,7 +4859,7 @@ struct RasterVertex {
 #[derive(Default)]
 struct KnockoutTwins {
     twins: std::collections::HashMap<(usize, usize), bool>,
-    keyed: std::collections::HashMap<(usize, usize, u32), bool>,
+    keyed: std::collections::HashMap<(usize, MarniPalette, u32), bool>,
 }
 
 /// What a triangle's page asks of [`Framebuffer::rasterize`].
@@ -4794,8 +4888,8 @@ impl KnockoutTwins {
             let surface = marni_surface(triangle, texture);
             *self
                 .keyed
-                .entry((ptr, triangle.palette_row, surface.base))
-                .or_insert_with(|| surface.keyed(texture, triangle.palette_row))
+                .entry((ptr, MarniPalette::of(triangle), surface.base))
+                .or_insert_with(|| surface.keyed(texture, MarniPalette::of(triangle)))
         };
         PageFlags { twin, keyed }
     }
@@ -4834,6 +4928,8 @@ struct Triangle {
     /// The packet's texture page's first column, which picks the Direct3D
     /// texture it samples ([`marni_surface`]).
     page_x: u16,
+    /// An RE 2 character's part: its texture's strips and surfaces.
+    marni: Option<MarniPart>,
 }
 
 /// A ground shadow's projected commands, ready for rasterization.
@@ -5262,6 +5358,7 @@ fn collect_triangles_with(
             view_depth: re2_near.is_some(),
             filtered: re2_near.is_some(),
             page_x: page_x as u16,
+            marni: None,
         };
         match re2_near {
             Some(near) => clip_triangle_near(
@@ -5492,6 +5589,7 @@ fn collect_complex_pool(
             view_depth: false,
             filtered: false,
             page_x: 0,
+            marni: None,
         });
     }
 }
@@ -6040,6 +6138,7 @@ fn collect_ivm_triangles(
                 view_depth: false,
                 filtered: false,
                 page_x: 0,
+                marni: None,
             });
         }
     }
@@ -6229,17 +6328,170 @@ struct MarniSurface {
     base: u32,
     /// Its width in texels.
     width: u32,
+    /// The TIM column the packet's coordinates count from: the surface's
+    /// first, or 256 for a character's packet past column 256 drawn through
+    /// its first surface, whose coordinates wrap into it.
+    origin: u32,
 }
 
 fn marni_surface(triangle: &Triangle, texture: &Texture8) -> MarniSurface {
-    let base = if u32::from(triangle.page_x) >= 256 && texture.width > 256 {
-        256
-    } else {
-        0
-    };
-    MarniSurface {
+    let surface = |base: u32, origin: u32| MarniSurface {
         base,
-        width: (texture.width - base).clamp(1, 256),
+        width: texture.width.saturating_sub(base).clamp(1, 256),
+        origin,
+    };
+    let past_256 = u32::from(triangle.page_x) >= 256 && texture.width > 256;
+    match triangle.marni.map(|part| part.surface) {
+        Some(MarniTexture::From128) if texture.width > 128 => surface(128, 128),
+        Some(MarniTexture::Second) if texture.width > 256 => surface(256, 256),
+        Some(_) => surface(0, if past_256 { 256 } else { 0 }),
+        None if past_256 => surface(256, 256),
+        None => surface(0, 0),
+    }
+}
+
+/// Which of `Pl_load_texture`'s Direct3D textures a character's packet
+/// samples.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum MarniTexture {
+    /// `textureHandle`, the first 256 columns.
+    First,
+    /// `textureHandle1`, the columns from 256.
+    Second,
+    /// `textureHandle2`, the 256 columns from 128.
+    From128,
+}
+
+/// An RE 2 character's packet as `Pl_load_texture` and `Marni_mapping_tmd`
+/// (`0x443620`) leave it for Direct3D.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct MarniPart {
+    /// The palette each 128-column strip of the texture is baked through.
+    strips: [u8; 4],
+    surface: MarniTexture,
+}
+
+/// The objects `Marni_mapping_tmd` makes of one of a model's parts, by its
+/// pages (bit `k` page `k`).
+enum MarniObjects {
+    /// The whole part as it is, and again with its coordinates 128 back.
+    Whole,
+    /// `FUN_00445bf0`'s: the packets on `first`'s pages, then a second
+    /// object of those on `second`'s pages that `MarniSortEmdGallery` draws
+    /// through `textureHandle1`. A packet on neither is drawn by neither.
+    Split { first: u32, second: u32 },
+}
+
+impl MarniPart {
+    /// `Marni_mapping_tmd`'s objects for part `part` of enemy `id`.
+    fn objects(id: Option<u8>, part: usize) -> MarniObjects {
+        match (id, part) {
+            (Some(0x30), 3 | 4) | (Some(0x31), 0 | 4) | (Some(0x33), 0xB) | (Some(0x34), 10) => {
+                MarniObjects::Split {
+                    first: 0b0011,
+                    second: 0b0100,
+                }
+            }
+            (Some(0x36), 2) => MarniObjects::Split {
+                first: 0b0011,
+                second: 0b1000,
+            },
+            (Some(0x34), 5) => MarniObjects::Split {
+                first: 0b0100,
+                second: 0,
+            },
+            _ => MarniObjects::Whole,
+        }
+    }
+
+    /// Mark the triangles from `first` that part `part` of a model laid out
+    /// as `layout`, `object`, gave, and drop those Marni draws in neither of
+    /// its objects. `FUN_004444b0` draws a part through the texture its
+    /// pages select (`FUN_00445b30`): pages 1 and 2 exactly, the column-128
+    /// texture with the coordinates 128 back; pages from 2 alone, the second;
+    /// anything else, the first, through which a packet past column 256
+    /// wraps.
+    fn mark(
+        layout: Option<crate::model::MarniLayout>,
+        part: usize,
+        object: &TmdObject,
+        triangles: &mut Vec<Triangle>,
+        first: usize,
+    ) {
+        let Some(layout) = layout else {
+            return;
+        };
+        let pages = object
+            .prims
+            .iter()
+            .filter(|prim| prim.textured)
+            .fold(0u32, |pages, prim| pages | 1 << (prim.tsb & 0xF));
+        let primary = if pages == 0b0110 {
+            MarniTexture::From128
+        } else if pages != 0 && pages & !0b1100 == 0 {
+            MarniTexture::Second
+        } else {
+            MarniTexture::First
+        };
+        let objects = Self::objects(layout.id, part);
+        let mut index = first;
+        while index < triangles.len() {
+            let page = 1u32 << (triangles[index].page_x / 128).min(31);
+            let surface = match objects {
+                MarniObjects::Whole => Some(primary),
+                MarniObjects::Split { first, second } => {
+                    if page & first != 0 {
+                        Some(if primary == MarniTexture::Second {
+                            MarniTexture::Second
+                        } else {
+                            MarniTexture::First
+                        })
+                    } else if page & second != 0 {
+                        Some(MarniTexture::Second)
+                    } else {
+                        None
+                    }
+                }
+            };
+            match surface {
+                Some(surface) => {
+                    triangles[index].marni = Some(Self {
+                        strips: layout.strips,
+                        surface,
+                    });
+                    index += 1;
+                }
+                None => {
+                    triangles.remove(index);
+                }
+            }
+        }
+    }
+}
+
+/// Which palette a texel of an RE 2 model's Direct3D texture went through:
+/// its packet's CLUT row, or a character's strip at its column.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum MarniPalette {
+    Row(usize),
+    Strips([u8; 4]),
+}
+
+impl MarniPalette {
+    fn of(triangle: &Triangle) -> Self {
+        match triangle.marni {
+            Some(part) => Self::Strips(part.strips),
+            None => Self::Row(triangle.palette_row),
+        }
+    }
+
+    /// The palette row of the texel at `column` of the TIM.
+    #[inline]
+    fn row(self, column: usize) -> usize {
+        match self {
+            Self::Row(row) => row,
+            Self::Strips(strips) => usize::from(strips[(column / 128).min(3)]),
+        }
     }
 }
 
@@ -6250,7 +6502,7 @@ impl MarniSurface {
     fn uv(self, vertex: &RasterVertex, texture: &Texture8) -> [f32; 2] {
         let scale = |size: u32| (size.max(2) - 1) as f32;
         [
-            (vertex.u - self.base as f32) / scale(self.width),
+            (vertex.u - self.origin as f32) / scale(self.width),
             vertex.v / scale(texture.height),
         ]
     }
@@ -6260,8 +6512,15 @@ impl MarniSurface {
     /// texel (alpha 0); `Pl_load_texture` first turns an STP black past entry
     /// 0 into 0x8001, so it stays opaque.
     #[inline]
-    fn texel(self, texture: &Texture8, row: usize, x: usize, y: usize) -> ([u8; 4], bool) {
+    fn texel(
+        self,
+        texture: &Texture8,
+        palette: MarniPalette,
+        x: usize,
+        y: usize,
+    ) -> ([u8; 4], bool) {
         let column = self.base as usize + x;
+        let row = palette.row(column);
         let width = texture.width as usize;
         let index = texture
             .indices
@@ -6278,9 +6537,9 @@ impl MarniSurface {
     }
 
     /// Whether any texel of the surface is transparent (Marni's `+0x2c`).
-    fn keyed(self, texture: &Texture8, row: usize) -> bool {
+    fn keyed(self, texture: &Texture8, palette: MarniPalette) -> bool {
         (0..texture.height as usize)
-            .any(|y| (0..self.width as usize).any(|x| self.texel(texture, row, x, y).0[3] == 0))
+            .any(|y| (0..self.width as usize).any(|x| self.texel(texture, palette, x, y).0[3] == 0))
     }
 }
 
@@ -6312,7 +6571,7 @@ fn wrapped_axis(coordinate: f32, size: u32) -> (usize, usize, u16) {
 fn sample_marni(
     texture: &Texture8,
     surface: MarniSurface,
-    row: usize,
+    palette: MarniPalette,
     u: f32,
     v: f32,
 ) -> ([u8; 4], bool) {
@@ -6321,7 +6580,7 @@ fn sample_marni(
     }
     let (x0, x1, fx) = wrapped_axis(u, surface.width);
     let (y0, y1, fy) = wrapped_axis(v, texture.height);
-    let texel = |x: usize, y: usize| surface.texel(texture, row, x, y);
+    let texel = |x: usize, y: usize| surface.texel(texture, palette, x, y);
     let corners = [texel(x0, y0), texel(x1, y0), texel(x0, y1), texel(x1, y1)];
     let channel = |index: usize| {
         let top = lerp_unorm8(fx, corners[0].0[index], corners[1].0[index]);
@@ -7321,6 +7580,7 @@ mod tests {
             view_depth: false,
             filtered: false,
             page_x: 0,
+            marni: None,
         })
     }
 
@@ -7360,6 +7620,8 @@ mod tests {
             fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
             hd_name: None,
+            marni: None,
+            nearest: false,
         };
         let dirs = [[1000, -2000, 3000], [-3000, 500, 1500], [200, 4000, -800]];
         let mut latched = dark_entity_light();
@@ -7472,6 +7734,8 @@ mod tests {
                 fixed_light: None,
                 joint_colours: NO_JOINT_COLOURS,
                 hd_name: None,
+                marni: None,
+                nearest: false,
             },
             EntityMesh {
                 mesh: &mesh1,
@@ -7489,6 +7753,8 @@ mod tests {
                 fixed_light: None,
                 joint_colours: NO_JOINT_COLOURS,
                 hd_name: None,
+                marni: None,
+                nearest: false,
             },
         ];
         let lighting = Lighting {
@@ -7569,6 +7835,8 @@ mod tests {
                 fixed_light: None,
                 joint_colours: NO_JOINT_COLOURS,
                 hd_name: None,
+                marni: None,
+                nearest: false,
             }
         }
         let lighting = Lighting {
@@ -7790,6 +8058,8 @@ mod tests {
             fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
             hd_name: None,
+            marni: None,
+            nearest: false,
         }];
         let lighting = Lighting {
             ambient: [4095; 3],
@@ -8782,29 +9052,34 @@ mod tests {
         )
     }
 
-    const WHOLE: MarniSurface = MarniSurface { base: 0, width: 2 };
+    const WHOLE: MarniSurface = MarniSurface {
+        base: 0,
+        width: 2,
+        origin: 0,
+    };
+    const ROW0: MarniPalette = MarniPalette::Row(0);
 
     #[test]
     fn a_marni_texel_is_transparent_only_where_its_colour_is_0() {
         let mut texture = marni_texture(vec![0, 1, 5, 5]);
         texture.stp = vec![false; crate::model::PALETTE_ROW_LEN];
-        assert_eq!(WHOLE.texel(&texture, 0, 0, 0), ([0, 0, 0, 0], false));
-        assert_eq!(WHOLE.texel(&texture, 0, 1, 0).0, [255, 0, 0, 255]);
+        assert_eq!(WHOLE.texel(&texture, ROW0, 0, 0), ([0, 0, 0, 0], false));
+        assert_eq!(WHOLE.texel(&texture, ROW0, 1, 0).0, [255, 0, 0, 255]);
         // Entry 5 is black: transparent as it is, 0x8001 when it is STP.
-        assert_eq!(WHOLE.texel(&texture, 0, 0, 1).0, [0, 0, 0, 0]);
+        assert_eq!(WHOLE.texel(&texture, ROW0, 0, 1).0, [0, 0, 0, 0]);
         texture.stp[5] = true;
-        assert_eq!(WHOLE.texel(&texture, 0, 0, 1), ([8, 0, 0, 255], true));
+        assert_eq!(WHOLE.texel(&texture, ROW0, 0, 1), ([8, 0, 0, 255], true));
         // Entry 0's STP black isn't turned.
         texture.stp[0] = true;
-        assert_eq!(WHOLE.texel(&texture, 0, 0, 0).0, [0, 0, 0, 0]);
-        assert!(WHOLE.keyed(&texture, 0));
-        assert!(!WHOLE.keyed(&marni_texture(vec![1, 2, 3, 4]), 0));
+        assert_eq!(WHOLE.texel(&texture, ROW0, 0, 0).0, [0, 0, 0, 0]);
+        assert!(WHOLE.keyed(&texture, ROW0));
+        assert!(!WHOLE.keyed(&marni_texture(vec![1, 2, 3, 4]), ROW0));
     }
 
     #[test]
     fn marni_sampling_is_exact_on_a_texel_centre() {
         let texture = marni_texture(vec![1, 2, 3, 4]);
-        let at = |u, v| sample_marni(&texture, WHOLE, 0, u, v).0;
+        let at = |u, v| sample_marni(&texture, WHOLE, ROW0, u, v).0;
         assert_eq!(at(0.25, 0.25), [255, 0, 0, 255]);
         assert_eq!(at(0.75, 0.25), [0, 0, 255, 255]);
         assert_eq!(at(0.25, 0.75), [0, 255, 0, 255]);
@@ -8814,7 +9089,7 @@ mod tests {
     #[test]
     fn marni_sampling_lerps_rows_then_columns_with_llvmpipes_rounding() {
         let texture = marni_texture(vec![1, 2, 3, 4]);
-        let at = |u, v| sample_marni(&texture, WHOLE, 0, u, v).0;
+        let at = |u, v| sample_marni(&texture, WHOLE, ROW0, u, v).0;
         // Halfway across: weight 128 of 256, `lp_build_lerp`'s rounding.
         assert_eq!(at(0.5, 0.25), [127, 0, 128, 255]);
         assert_eq!(lerp_unorm8(128, 255, 0), 127);
@@ -8832,7 +9107,7 @@ mod tests {
         let texture = marni_texture(vec![1, 2, 1, 2]);
         // u 0 is halfway between the last column and the first.
         assert_eq!(
-            sample_marni(&texture, WHOLE, 0, 0.0, 0.25).0,
+            sample_marni(&texture, WHOLE, ROW0, 0.0, 0.25).0,
             [128, 0, 127, 255]
         );
         assert_eq!(wrapped_axis(0.0, 2), (1, 0, 128));
@@ -8843,10 +9118,10 @@ mod tests {
     #[test]
     fn marni_sampling_filters_the_keys_alpha_with_its_colour() {
         let texture = marni_texture(vec![0, 1, 0, 1]);
-        assert_eq!(sample_marni(&texture, WHOLE, 0, 0.25, 0.25).0[3], 0);
+        assert_eq!(sample_marni(&texture, WHOLE, ROW0, 0.25, 0.25).0[3], 0);
         // Next to the key, its black and its alpha take half the weight.
         assert_eq!(
-            sample_marni(&texture, WHOLE, 0, 0.5, 0.25).0,
+            sample_marni(&texture, WHOLE, ROW0, 0.5, 0.25).0,
             [128, 0, 0, 128]
         );
     }
@@ -8876,7 +9151,8 @@ mod tests {
             marni_surface(&triangle(128), &texture),
             MarniSurface {
                 base: 0,
-                width: 256
+                width: 256,
+                origin: 0,
             }
         );
         let second = marni_surface(&triangle(256), &texture);
@@ -8884,7 +9160,8 @@ mod tests {
             second,
             MarniSurface {
                 base: 256,
-                width: 256
+                width: 256,
+                origin: 256,
             }
         );
         // Its UVs are over its own width less one, and it wraps at its own
@@ -8898,9 +9175,213 @@ mod tests {
         };
         assert_eq!(second.uv(&vertex, &texture), [1.0, 0.0]);
         assert_eq!(
-            sample_marni(&texture, second, 0, 1.0, 0.5).0,
+            sample_marni(&texture, second, ROW0, 1.0, 0.5).0,
             [lerp_unorm8(128, 255, 0), 255, lerp_unorm8(128, 255, 0), 255]
         );
+    }
+
+    /// A 512 x 1 character texture, every texel entry 1, which palette rows
+    /// 0 to 3 make red, blue, green and white.
+    fn character_texture() -> Texture8 {
+        let mut palettes = vec![[0u8; 4]; 4 * crate::model::PALETTE_ROW_LEN];
+        for (row, colour) in [
+            [255, 0, 0, 255],
+            [0, 0, 255, 255],
+            [0, 255, 0, 255],
+            [255; 4],
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            palettes[row * crate::model::PALETTE_ROW_LEN + 1] = colour;
+        }
+        Texture8 {
+            width: 512,
+            height: 1,
+            indices: vec![1; 512],
+            palettes,
+            stp: Vec::new(),
+        }
+    }
+
+    /// A triangle of a character's part laid out as `strips`, on `page_x`.
+    fn character_triangle(strips: [u8; 4], surface: MarniTexture, page_x: u16) -> Triangle {
+        Triangle {
+            page_x,
+            palette_row: 3,
+            marni: Some(MarniPart { strips, surface }),
+            ..match scene_triangle(1) {
+                SceneItem::Triangle(triangle) => triangle,
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    #[test]
+    fn a_characters_strips_take_their_own_palettes_whatever_the_packets_clut() {
+        let texture = character_texture();
+        let colour = |triangle: &Triangle, column: usize| {
+            let surface = marni_surface(triangle, &texture);
+            let x = column - surface.base as usize;
+            surface.texel(&texture, MarniPalette::of(triangle), x, 0).0
+        };
+        // Strip k through palette k, the packet's CLUT row (3) unused.
+        let triangle = character_triangle([0, 1, 2, 3], MarniTexture::First, 0);
+        assert_eq!(colour(&triangle, 127), [255, 0, 0, 255]);
+        assert_eq!(colour(&triangle, 128), [0, 0, 255, 255]);
+        // Id 0x36's strips: 0, 0, 1 and 2.
+        let g6 = character_triangle(
+            crate::model::MarniLayout::enemy(0x36).strips,
+            MarniTexture::First,
+            0,
+        );
+        assert_eq!(colour(&g6, 128), [255, 0, 0, 255]);
+        assert_eq!(colour(&g6, 255), [255, 0, 0, 255]);
+        // Filtering across the seam mixes the two strips' colours.
+        let surface = marni_surface(&triangle, &texture);
+        let at_seam = sample_marni(
+            &texture,
+            surface,
+            MarniPalette::of(&triangle),
+            128.0 / 256.0,
+            0.5,
+        );
+        assert_eq!(
+            at_seam.0,
+            [lerp_unorm8(128, 255, 0), 0, lerp_unorm8(128, 0, 255), 255]
+        );
+    }
+
+    #[test]
+    fn a_part_on_pages_1_and_2_samples_the_256_columns_from_128() {
+        let texture = character_texture();
+        let triangle = character_triangle([0, 1, 2, 3], MarniTexture::From128, 128);
+        let surface = marni_surface(&triangle, &texture);
+        assert_eq!(
+            surface,
+            MarniSurface {
+                base: 128,
+                width: 256,
+                origin: 128,
+            }
+        );
+        let palette = MarniPalette::of(&triangle);
+        // Columns 255 and 256 are neighbours in it, blue to green, ...
+        assert_eq!(
+            sample_marni(&texture, surface, palette, 128.0 / 256.0, 0.5).0,
+            [0, lerp_unorm8(128, 0, 255), lerp_unorm8(128, 255, 0), 255]
+        );
+        // ... and it wraps at its own edge: column 383's neighbour is 128.
+        assert_eq!(
+            sample_marni(&texture, surface, palette, 1.0, 0.5).0,
+            [0, lerp_unorm8(128, 255, 0), lerp_unorm8(128, 0, 255), 255]
+        );
+    }
+
+    #[test]
+    fn a_packet_past_column_256_of_a_part_with_low_pages_wraps_into_the_first_texture() {
+        let texture = character_texture();
+        let triangle = character_triangle([0, 1, 2, 3], MarniTexture::First, 256);
+        let surface = marni_surface(&triangle, &texture);
+        assert_eq!(
+            surface,
+            MarniSurface {
+                base: 0,
+                width: 256,
+                origin: 256,
+            }
+        );
+        // Column 300's coordinate is 44 in the first texture: red, strip 0.
+        let vertex = RasterVertex {
+            position: [0.0; 2],
+            w: 1.0,
+            u: 300.0,
+            v: 0.0,
+            shade: [1.0; 3],
+        };
+        let [u, _] = surface.uv(&vertex, &texture);
+        assert_eq!(u, 44.0 / 255.0);
+        let colour = sample_marni(&texture, surface, MarniPalette::of(&triangle), u, 0.5).0;
+        assert_eq!(colour[..3], [255, 0, 0]);
+    }
+
+    /// The textures `MarniPart::mark` gives the packets on `pages` of part
+    /// `part` of a model laid out as `layout`, a packet's `None` where it
+    /// isn't drawn.
+    fn marked(
+        layout: Option<crate::model::MarniLayout>,
+        part: usize,
+        pages: &[u16],
+    ) -> Vec<Option<MarniTexture>> {
+        let prim = |tsb: u16| TmdPrim {
+            vertices: [0, 1, 2],
+            normals: [0, 0, 0],
+            uv: [[0, 0]; 3],
+            clut: 0,
+            tsb,
+            textured: true,
+            blend: false,
+            additive: false,
+            raw_y: false,
+            flat_color: None,
+            quad: None,
+            uv_nudge: [0; 3],
+        };
+        let object = TmdObject {
+            vertices: vec![[0; 3]; 3],
+            normals: vec![[0, 0, 4096]],
+            prims: pages.iter().map(|&page| prim(page)).collect(),
+        };
+        let mut triangles: Vec<Triangle> = pages
+            .iter()
+            .map(|&page| Triangle {
+                marni: None,
+                // The page in `uv_nudge` too, to find it after a drop.
+                uv_nudge: [page as u8; 3],
+                ..character_triangle([0; 4], MarniTexture::First, page * 128)
+            })
+            .collect();
+        MarniPart::mark(layout, part, &object, &mut triangles, 0);
+        pages
+            .iter()
+            .map(|&page| {
+                let triangle = triangles.iter().find(|t| t.uv_nudge[0] == page as u8)?;
+                Some(triangle.marni?.surface)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_parts_pages_choose_its_texture() {
+        use MarniTexture::{First, From128, Second};
+        let player = Some(crate::model::MarniLayout::CHARACTER);
+        // Pages 1 and 2 exactly: the column-128 texture.
+        assert_eq!(marked(player, 0, &[1, 2]), [Some(From128); 2]);
+        // From page 2 alone: the second.
+        assert_eq!(marked(player, 0, &[2, 3]), [Some(Second); 2]);
+        // Anything else: the first, page 2 wrapping into it.
+        assert_eq!(marked(player, 0, &[0, 2]), [Some(First); 2]);
+        assert_eq!(marked(player, 0, &[1]), [Some(First)]);
+        // A model of another kind is left alone.
+        assert_eq!(marked(None, 0, &[1, 2]), [None, None]);
+    }
+
+    #[test]
+    fn a_split_parts_second_object_draws_through_the_second_texture() {
+        use MarniTexture::{First, Second};
+        let enemy = |id| Some(crate::model::MarniLayout::enemy(id));
+        // 0x34's part 10: pages 0 and 1 first, page 2 second, page 3 nowhere.
+        assert_eq!(
+            marked(enemy(0x34), 10, &[0, 1, 2, 3]),
+            [Some(First), Some(First), Some(Second), None]
+        );
+        // 0x36's part 2: page 3 second, page 2 nowhere.
+        assert_eq!(
+            marked(enemy(0x36), 2, &[0, 2, 3]),
+            [Some(First), None, Some(Second)]
+        );
+        // Its other parts are whole: page 2 wraps into the first.
+        assert_eq!(marked(enemy(0x36), 1, &[0, 2]), [Some(First); 2]);
     }
 
     /// A model triangle over the 2x2 page `indices`, its texels four times
@@ -8934,7 +9415,7 @@ mod tests {
     /// pixel on, so the pixel samples a quarter of a game pixel back.
     fn display_texel(indices: &[u8], x: f32, y: f32) -> [u8; 4] {
         let texture = marni_texture(indices.to_vec());
-        sample_marni(&texture, WHOLE, 0, (x - 0.25) / 8.0, (y - 0.25) / 8.0).0
+        sample_marni(&texture, WHOLE, ROW0, (x - 0.25) / 8.0, (y - 0.25) / 8.0).0
     }
 
     #[test]
@@ -8992,7 +9473,7 @@ mod tests {
         assert_eq!(fringe[1], 0);
         // Its texture has a transparent texel, so Marni queues it.
         let texture = marni_texture(vec![0, 1, 0, 1]);
-        assert!(WHOLE.keyed(&texture, 0));
+        assert!(WHOLE.keyed(&texture, ROW0));
         // No depth: an opaque triangle drawn after, behind it, still shows.
         let mut framebuffer = Framebuffer::new();
         let near = Triangle {
@@ -9097,6 +9578,60 @@ mod tests {
         assert_eq!(door_colours(false, DoorShading::FullBright), 1);
         assert!(door_colours(true, DoorShading::FullBright) > 1);
         assert!(door_colours(true, DoorShading::Lit) > 1);
+    }
+
+    /// The distinct colours other than black of `object` drawn full-bright
+    /// through an RE2 door's camera on the display, its texels nearest or not,
+    /// over an 8 x 8 checkerboard of red and blue.
+    fn checkered_door_colours(object: &TmdObject, nearest: bool) -> usize {
+        let mut palettes = vec![[0u8; 4]; crate::model::PALETTE_ROW_LEN];
+        palettes[1] = [255, 0, 0, 255];
+        palettes[2] = [0, 0, 255, 255];
+        let texture = Texture8 {
+            width: 8,
+            height: 8,
+            indices: (0..64).map(|i| 1 + ((i % 8 + i / 8) % 2) as u8).collect(),
+            palettes,
+            stp: Vec::new(),
+        };
+        let frame = door_frame(object, true, crate::door::vm::DoorShading::FullBright);
+        let camera = door_camera(&frame);
+        let mut framebuffer = Framebuffer::new();
+        framebuffer.with_display(|display| {
+            display.clear();
+            let objects = door_draws(&frame).map(|(order, mesh)| (mesh, &order.matrix));
+            display.draw_objects_unlit(objects, &texture, &camera, nearest);
+        });
+        let colours: std::collections::BTreeSet<[u8; 4]> = framebuffer
+            .rgba
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .copied()
+            .filter(|pixel| pixel[..3] != [0, 0, 0])
+            .collect();
+        colours.len()
+    }
+
+    #[test]
+    fn a_flat_doors_sprites_are_nearest_on_the_display() {
+        use crate::door::vm::DoorShading;
+        // Four texels magnified over the triangle: filtered, the red and blue
+        // squares shade into each other; nearest, the only colours are the
+        // two, their halved meeting and the edges' blends over black.
+        let mut object = triangle_object([[0, 0, 600], [0, -100, 600], [100, 0, 600]]);
+        object.prims[0].uv = [[0, 0], [0, 4], [4, 0]];
+        let nearest = checkered_door_colours(&object, true);
+        let filtered = checkered_door_colours(&object, false);
+        assert!(nearest <= 12, "{nearest}");
+        assert!(filtered > 3 * nearest, "{filtered} against {nearest}");
+        // `draw_door_scene` takes the nearest path for a door all of whose
+        // parts are flat, and a mixed door draws its flat parts nearest.
+        let frame = door_frame(&object, true, DoorShading::FullBright);
+        let door = DoorScene::new(&frame);
+        let texture = solid_texture([200, 150, 100, 255]);
+        let [flat, lit] = door.meshes(&texture);
+        assert!(flat.nearest && !lit.nearest);
     }
 
     #[test]
@@ -9222,6 +9757,8 @@ mod tests {
             fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
             hd_name: None,
+            marni: None,
+            nearest: false,
         }];
         let camera = straight_camera();
         let lighting = Lighting {
@@ -9730,6 +10267,8 @@ mod tests {
             fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
             hd_name: None,
+            marni: None,
+            nearest: false,
         }];
         let mut framebuffer = Framebuffer::new();
         draw_gameplay_scene(
@@ -9768,6 +10307,8 @@ mod tests {
             fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
             hd_name: None,
+            marni: None,
+            nearest: false,
         }];
         let mut framebuffer = Framebuffer::new();
         draw_gameplay_scene(
@@ -9835,6 +10376,8 @@ mod tests {
             fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
             hd_name: None,
+            marni: None,
+            nearest: false,
         }];
 
         let render = |mirror_from: usize, mirror: Option<&MirrorPass>| {
@@ -9889,6 +10432,8 @@ mod tests {
             fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
             hd_name: None,
+            marni: None,
+            nearest: false,
         }];
         let mut framebuffer = Framebuffer::new();
         draw_gameplay_scene(
@@ -9934,6 +10479,8 @@ mod tests {
             fixed_light: None,
             joint_colours,
             hd_name: None,
+            marni: None,
+            nearest: false,
         }];
         let mut framebuffer = Framebuffer::new();
         draw_gameplay_scene(
@@ -10068,6 +10615,7 @@ mod tests {
             view_depth: false,
             filtered: false,
             page_x: 0,
+            marni: None,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));
@@ -10229,6 +10777,8 @@ mod tests {
             fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
             hd_name: None,
+            marni: None,
+            nearest: false,
         };
         // An opaque joint stays on the per-packet path; each blending joint
         // takes its own ABR's weight, not the model's first.
@@ -10278,6 +10828,7 @@ mod tests {
             view_depth: false,
             filtered: false,
             page_x: 0,
+            marni: None,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));
@@ -10336,6 +10887,7 @@ mod tests {
             view_depth: false,
             filtered: false,
             page_x: 0,
+            marni: None,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));

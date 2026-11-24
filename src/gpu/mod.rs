@@ -3903,6 +3903,8 @@ mod tests {
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
+            marni: None,
+            nearest: false,
             complex_object: None,
             view_z_shift: 0,
         }];
@@ -4008,6 +4010,113 @@ mod tests {
         gpu.retire();
     }
 
+    /// [`re2_near_plane_scene_mesh`] over `texture` through the software
+    /// rasterizer, and which triangle each pixel shows.
+    fn software_near_plane(texture: &Texture8) -> Vec<Option<usize>> {
+        let mesh = re2_near_plane_scene_mesh();
+        let joints = [Mat4x3 {
+            r: [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]],
+            t: [0, 0, 0],
+        }];
+        let meshes = [EntityMesh {
+            mesh: &mesh,
+            texture,
+            joints: &joints,
+            tint: [255; 3],
+            blend_weight: None,
+            joint_blend: false,
+            hidden_joints: 0,
+            light_pos: None,
+            per_joint_light: false,
+            light_rotation: None,
+            fixed_light: None,
+            joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: None,
+            marni: None,
+            nearest: false,
+            complex_object: None,
+            view_z_shift: 0,
+        }];
+        let camera = Camera {
+            view: [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]],
+            trans: [0, 0, 0],
+            fov: 260,
+            roll: 0,
+            screen: [0, 0],
+            from: [0, 0, 0],
+            look_at: [0, 0, 100],
+            mirrored: false,
+            view_z_shift: 0,
+            near_clip: false,
+            stored: None,
+        };
+        let lighting = Lighting {
+            ambient: [4095; 3],
+            lights: [crate::state::Light {
+                re2_gain: Some(1),
+                ..crate::state::Light::default()
+            }; 3],
+        };
+        let scene = GameplayScene {
+            background: None,
+            origin: [0, 0],
+            colour: [0x80; 3],
+            meshes: &meshes,
+            shadows: &[],
+            ribbon: (&[], 0),
+            camera: &camera,
+            lighting: &lighting,
+            mask_layer: None,
+            effect_layer: None,
+            mirror_from: meshes.len(),
+            mirror: None,
+            debug: &[],
+        };
+        let mut software = Framebuffer::new();
+        scene.draw(&mut software);
+        software
+            .rgba
+            .chunks(4)
+            .map(|pixel| {
+                let top = (0..3).max_by_key(|&c| pixel[c])?;
+                (pixel[top] > 0 && pixel[..3].iter().filter(|&&c| c == pixel[top]).count() == 1)
+                    .then_some(top)
+            })
+            .collect()
+    }
+
+    /// [`re2_near_plane_scene_mesh`]'s scene when its texture has a
+    /// transparent texel, unused or not: Marni queues every triangle of it
+    /// (`+0x2C`), draws them after the opaque pass farthest mean `sz` first
+    /// and writes no depth, so at (210, 60), where depth gives the cut
+    /// triangle, the wall, which the queue draws after the cut triangle's
+    /// piece there, shows instead. The recoloured cube, with no transparent
+    /// texel, is the opaque control: depth decides.
+    #[test]
+    fn a_keyed_texture_queues_the_near_plane_scene_without_depth() {
+        let (_, opaque) = cube();
+        let mut keyed = opaque.clone();
+        // Cell 7 (unused by the three triangles) on entry 0, transparent.
+        for (i, index) in keyed.indices.iter_mut().enumerate() {
+            if i % keyed.width as usize / 8 == 7 {
+                *index = 0;
+            }
+        }
+        let at = |shown: &[Option<usize>], x: usize, y: usize| shown[y * 320 + x];
+        let opaque = software_near_plane(&opaque);
+        let keyed = software_near_plane(&keyed);
+        assert_eq!(at(&opaque, 210, 60), Some(0), "depth: the cut triangle");
+        assert_eq!(at(&keyed, 210, 60), Some(2), "the queue's order: the wall");
+        // Every triangle still shows.
+        for triangle in 0..3 {
+            let count = keyed
+                .iter()
+                .filter(|&&shown| shown == Some(triangle))
+                .count();
+            assert!(count > 200, "triangle {triangle}: {count}");
+        }
+    }
+
     /// The GPU scene agrees with the software rasterizer on a lit, rotated
     /// cube: same faces culled, same palette lookups, close shading. Skips
     /// when the machine has no SDL video or no SPIR-V capable GPU (CI).
@@ -4044,6 +4153,8 @@ mod tests {
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
+            marni: None,
+            nearest: false,
             complex_object: None,
             view_z_shift: 0,
         }];
@@ -4247,6 +4358,8 @@ mod tests {
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
+            marni: None,
+            nearest: false,
             complex_object: None,
             view_z_shift: 0,
         }];

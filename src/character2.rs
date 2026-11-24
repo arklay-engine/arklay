@@ -2255,6 +2255,7 @@ mod tests {
                 stp: Vec::new(),
             },
             morphs: Vec::new(),
+            marni: None,
         };
         assert_eq!(parts_num(&model), 17);
     }
@@ -2297,6 +2298,7 @@ mod tests {
                 stp: Vec::new(),
             },
             morphs: Vec::new(),
+            marni: None,
         }
     }
 

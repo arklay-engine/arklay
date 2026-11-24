@@ -9806,6 +9806,8 @@ impl GameSession {
                 fixed_light: None,
                 joint_colours: game.entities[0].mesh_joint_colours(),
                 hd_name: None,
+                marni: assets.emd.marni,
+                nearest: false,
             }];
             let scene = render::GameplayScene {
                 background: None,
@@ -23720,6 +23722,8 @@ fn render_frame_on(
                 .then_some(render::FULL_BRIGHT_LIGHT),
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: asset.hd_name.as_deref(),
+            marni: None,
+            nearest: false,
         });
     }
     for ((asset, _, _, _), joints) in visible_item_models.iter().zip(&item_joints) {
@@ -23739,6 +23743,8 @@ fn render_frame_on(
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: asset.hd_name.as_deref(),
+            marni: None,
+            nearest: false,
         });
     }
     // The Tyrant's claw ghosts and severed limbs queue before the body, as
@@ -23832,6 +23838,8 @@ fn render_frame_on(
             fixed_light: None,
             joint_colours: *joint_colours,
             hd_name: None,
+            marni: model.marni,
+            nearest: false,
         });
     }
 
@@ -23874,6 +23882,8 @@ fn render_frame_on(
             fixed_light: None,
             joint_colours: *joint_colours,
             hd_name: None,
+            marni: model.marni,
+            nearest: false,
         });
     }
     for (model, strips) in &trail_strips {
@@ -23893,6 +23903,8 @@ fn render_frame_on(
             fixed_light: None,
             joint_colours: strips.colours,
             hd_name: None,
+            marni: model.marni,
+            nearest: false,
         });
     }
     for (index, tongue, joints) in &npc_tongues {
@@ -23913,6 +23925,8 @@ fn render_frame_on(
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
+            marni: models[*index].marni,
+            nearest: false,
         });
     }
     // The held-weapon meshes of the scripted characters draw with the
@@ -23955,6 +23969,8 @@ fn render_frame_on(
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
+            marni: models[*index].marni,
+            nearest: false,
         });
     }
     if let Some((model, joints, pos)) = &viewer_pose {
@@ -23974,6 +23990,8 @@ fn render_frame_on(
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
+            marni: model.marni,
+            nearest: false,
         });
     }
     // The beretta's ejected magazine draws as the player EMD's own 16th mesh
@@ -24014,6 +24032,8 @@ fn render_frame_on(
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
+            marni: assets.emd.marni,
+            nearest: false,
         });
     }
     // RE2's `Joint_trans2` lights the player from its first part (the hips),
@@ -24057,6 +24077,8 @@ fn render_frame_on(
             fixed_light: None,
             joint_colours: game.entities[0].mesh_joint_colours(),
             hd_name: None,
+            marni: assets.emd.marni,
+            nearest: false,
         });
     }
 
@@ -24089,6 +24111,8 @@ fn render_frame_on(
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
+            marni: assets.emd.marni,
+            nearest: false,
         });
     }
 
@@ -24176,6 +24200,8 @@ fn render_frame_on(
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
+            marni: model.marni,
+            nearest: false,
         });
     }
 
@@ -24289,6 +24315,8 @@ fn render_frame_on(
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
+            marni: model.marni,
+            nearest: false,
         });
     }
 
@@ -32614,6 +32642,8 @@ mod tests {
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
+            marni: assets.emd.marni,
+            nearest: false,
         }];
         let camera = Camera::from_cut(cut);
         let lighting = Lighting::from_room(&loaded.room);
@@ -37679,6 +37709,7 @@ return M
                     stp: Vec::new(),
                 },
                 morphs: Vec::new(),
+                marni: None,
             },
             emw: Emw {
                 skeleton: Skeleton::default(),
@@ -47123,6 +47154,7 @@ end
                 stp: Vec::new(),
             },
             morphs: Vec::new(),
+            marni: None,
         }
     }
 

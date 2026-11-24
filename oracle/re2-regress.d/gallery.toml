@@ -273,9 +273,9 @@ input_shift = 189
 input_drop_early = true
 fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
 frames = [189, 1289]
-# A model's edges and texels differ, the more the nearer it is (0.41
-# measured).
-frame_max_mean = 0.45
+# A model's edges and texels differ, the more the nearer it is (0.40
+# measured; 0x34, posed apart, 6.05 over its own frames).
+frame_max_mean = 0.43
 frame_windows = [[737, 738, 0.1]]
 expect = "match"
 record = ""
@@ -291,8 +291,8 @@ input_drop_early = true
 fields = "rng,ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
 frames = [189, 1899]
 # `Rnd`'s state is compared on every tick. A model's edges and texels differ,
-# the more the nearer it is (0.38 measured).
-frame_max_mean = 0.42
+# the more the nearer it is (0.37 measured).
+frame_max_mean = 0.4
 frame_windows = [[737, 738, 0.1]]
 expect = "match"
 record = ""

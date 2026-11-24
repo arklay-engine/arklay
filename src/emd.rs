@@ -87,6 +87,7 @@ pub fn parse(data: &[u8]) -> Result<Emd> {
         mesh,
         texture,
         morphs: Vec::new(),
+        marni: None,
     })
 }
 

@@ -266,6 +266,8 @@ fn room_107_objects_render() {
             .iter()
             .zip(&joints)
             .map(|(asset, joints)| EntityMesh {
+                marni: None,
+                nearest: false,
                 view_z_shift: 0,
                 mesh: &asset.model,
                 texture: &asset.texture,
@@ -1092,6 +1094,8 @@ fn room_112_mirror_renders_reflection_pixels() {
         &arklay::anim::entity_matrix([7000, 0, 5690], 0),
     );
     let meshes = [EntityMesh {
+        marni: None,
+        nearest: false,
         view_z_shift: 0,
         mesh: &emd.mesh,
         texture: &emd.texture,
@@ -1119,6 +1123,8 @@ fn room_112_mirror_renders_reflection_pixels() {
     };
     let object_meshes = [
         EntityMesh {
+            marni: None,
+            nearest: false,
             view_z_shift: 0,
             mesh: &emd.mesh,
             texture: &blue,
@@ -1136,6 +1142,8 @@ fn room_112_mirror_renders_reflection_pixels() {
             hd_name: None,
         },
         EntityMesh {
+            marni: None,
+            nearest: false,
             view_z_shift: 0,
             mesh: &emd.mesh,
             texture: &emd.texture,
