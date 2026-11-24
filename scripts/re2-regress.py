@@ -119,6 +119,10 @@ def setup_lua(setup: dict) -> str:
     if "camera" in setup:
         lines.append(f"api:set_room_camera({setup['camera']})")
     for bank, index in setup.get("flags", []):
+        # A setup's bits in `fg_room`'s first word stand for play since the room's load, but these mirror the
+        # record's `--flag`s, which the original's load clears there.
+        if bank == 5 and index < 32:
+            raise SystemExit(f"setup flag 5:{index}: the room's load clears it in the original; set it in a setup script")
         lines.append(f"api:set_re2_flag({bank}, {index})")
     return "\n".join(lines) + "\n"
 
