@@ -1,0 +1,80 @@
+# Claire A from the Heart Key in Irons's office (21B) back out through door 0, 10A's corridor past the blasted wall, 109's door 2 unlocked from this side, 116's fire escape (its two flights taken with the action key; the herbs are left, as the pack is full), and 20B's Heart Key door into 20F (#765 Part 1)
+# made in arklay, silent: 21B: north to the wall at z -20206 and east along the north passage to door 0 (one press); 10A: south down the corridor, south-east through the blasted wall (area 5), west along z -7988, south-west to the west side, down it and south-east to door 0 (one press); 109: Leon's walk from leon_a_200_211 (east along the south wall; the first press unlocks door 2, the third opens it); 116: east, north along x -22000, east into the first flight (action), south into the second (action), west to door 0 (one press); 20B: north up the east side; at the Heart Key door the first press uses the key and the fourth opens it; each load holds the room for about 300 ticks and the walk waits for its hand back; the input ends with 20F's hand back (3283)
+344
+# 21B: north from the Heart Key's spot to the wall at z -20206, then east along the north passage to door 0 (x -9460 to -8070, z -21300 to -18600)
+350 right
+372
+374 up run
+388 up run right
+410 up run
+446
+# door 0 into 10A: one press
+448 action
+450
+# 10A: south down the corridor from door 3, south-east through the blasted wall (area 5), west along z -7988, south-west and down the west side, south-east to door 0 (x -23889 to -22089, z -26379 to -24179), facing east
+792 up run right
+807 up run
+840 up run left
+845 up run
+890 up run right
+904 up run
+1036 up run left
+1056 up run
+1072
+# door 0 into 109: one press
+1076 action
+1078
+# 109: east along the south wall to door 2 (Leon's walk): the first press unlocks it from this side, the third opens it
+1420 up run
+1473 up run right
+1474 up run
+1491 up run right
+1492 up run
+1526 up run left
+1527 up run
+1530 up run left
+1531 up run
+1548 up run left
+1553 right
+1557 up
+1587
+1588 action
+1590
+1630 action
+1632
+1672 action
+1674
+# 116: east, north along x -22000, east into the fire escape's first flight (action), south into the second (action), and west along z -25000 to door 0
+2014 up run
+2036 up run left
+2057 up run
+2068
+2069 right
+2090 up
+2120
+2121 action
+2123
+2183 right
+2221 up
+2261
+2262 action
+2264
+2334 right
+2355 up run
+2398
+# door 0 into 20B: one press
+2402 action
+2404
+# 20B: north up the east side to the Heart Key door (x -2881 to -881, z -11718 to -10468)
+2730 right
+2737 up run
+2816
+# the Heart Key door: the first press uses the key (its message and cue, 0x5B gone), the fourth opens it
+2818 action
+2820
+2860 action
+2862
+2902 action
+2904
+2944 action
+2946
