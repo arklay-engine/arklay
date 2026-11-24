@@ -2469,6 +2469,9 @@ struct GameSession {
     /// The film [`Self::film_pads`] plays this tick, with its `Pad_set`s:
     /// it ends after the tick's `Swap_Cbuff`.
     instant_film: Option<u32>,
+    /// Set as [`Self::instant_film`] ends: the script driver's pad latch
+    /// forgets what is held, as the film's `Pad_set`s saw nothing held.
+    film_ended: bool,
     transition: Option<TransitionMode>,
     transition_finished: bool,
     /// The ground/scripted item pick-up viewer. It is engine-driven because
@@ -3319,6 +3322,7 @@ impl GameSession {
             films: false,
             film_pads: None,
             instant_film: None,
+            film_ended: false,
             transition: None,
             transition_finished: false,
             pickup_view: None,
@@ -3848,6 +3852,7 @@ impl GameSession {
                 self.game.re2.set_key(0);
             }
             self.end_re2_movie();
+            self.film_ended = true;
             // The film's last pass leaves the screen held, as the window's does.
             self.present_held = true;
             return;
@@ -5189,7 +5194,8 @@ impl GameSession {
         }
         // A script's film (`film_pads`) plays after this tick's `Swap_Cbuff`
         // whatever else the tick asked for: `WinMain` runs `Movie` before the
-        // next `Psx_main`, a door's included.
+        // next `Psx_main`, a door's included. Only a room tick's scripts ask
+        // for one: no RE2 room's init runs `movie_on`.
         if self.film_pads.is_some() && self.game.re2.film.take().is_some() {
             self.instant_film = Some(self.next_film_pads());
         }
@@ -5781,6 +5787,33 @@ impl GameSession {
         Ok(())
     }
 
+    /// `SsInit2`: each group the close marked starts again from its first
+    /// sample while the music is on and its fade isn't running; false with
+    /// the music off.
+    fn re2_sound_init(&mut self) -> bool {
+        let music = self.game.re2_music_place().system & 0x2000 == 0;
+        let Some(mixer) = self.music.as_mut().filter(|_| music) else {
+            return false;
+        };
+        let groups: [&[usize]; 3] = [&[0, 1, 2], &[3], &[4]];
+        for (sequence, channels) in groups.into_iter().enumerate() {
+            if !self.re2_music_closed[sequence] || self.game.re2.music.fading(sequence) {
+                continue;
+            }
+            self.re2_music_closed[sequence] = false;
+            for &index in channels {
+                let channel = self.game.re2.music.channels[index];
+                if channel.track.is_some() {
+                    mixer.restart_bgm_channel(index);
+                    if let Some(sub) = index.checked_sub(3) {
+                        self.re2_sub_full[sub] = Some(channel.volume);
+                    }
+                }
+            }
+        }
+        true
+    }
+
     /// `Movie()`'s last state: `Movie_r0 = 0`, `SsInit2`, `fg_system &=
     /// ~0x200` and `Movie_set(1)`. Its last pass flips a cleared frame, which
     /// the held frame after it keeps on screen. `Bg_set_mode` from the film's
@@ -5792,7 +5825,14 @@ impl GameSession {
         self.game
             .re2
             .set_flag(0, crate::scd2::host::FG_SYSTEM_MOVIE, 0);
-        self.game.re2.sound_init = true;
+        // `SsInit2` runs now, before the next tick (a door's too), once
+        // `movie_on`'s close has: a close still to run (it needs the pack)
+        // runs it after itself.
+        if self.game.re2.sound_close.is_some() {
+            self.game.re2.sound_init = true;
+        } else {
+            self.re2_sound_init();
+        }
         self.present_skip.movie_set_black(1);
     }
 
@@ -5848,27 +5888,8 @@ impl GameSession {
                 }
             }
         }
-        if std::mem::take(&mut self.game.re2.sound_init) {
-            let music = self.game.re2_music_place().system & 0x2000 == 0;
-            let Some(mixer) = self.music.as_mut().filter(|_| music) else {
-                return;
-            };
-            let groups: [&[usize]; 3] = [&[0, 1, 2], &[3], &[4]];
-            for (sequence, channels) in groups.into_iter().enumerate() {
-                if !self.re2_music_closed[sequence] || self.game.re2.music.fading(sequence) {
-                    continue;
-                }
-                self.re2_music_closed[sequence] = false;
-                for &index in channels {
-                    let channel = self.game.re2.music.channels[index];
-                    if channel.track.is_some() {
-                        mixer.restart_bgm_channel(index);
-                        if let Some(sub) = index.checked_sub(3) {
-                            self.re2_sub_full[sub] = Some(channel.volume);
-                        }
-                    }
-                }
-            }
+        if std::mem::take(&mut self.game.re2.sound_init) && !self.re2_sound_init() {
+            return;
         }
         for (sub, full) in self.re2_sub_full.iter_mut().enumerate() {
             let volume = self.game.re2.music.channels[3 + sub].volume;
@@ -39524,7 +39545,10 @@ off_0010:
             assert!(ticks < 100, "the film ends");
         }
         assert!(!session.game.re2.flag(0, FG_SYSTEM_MOVIE));
-        assert!(session.game.re2.sound_init, "SsInit2 after the film");
+        assert!(
+            !session.game.re2.sound_init,
+            "SsInit2 ran as the film ended"
+        );
         assert!(
             session.present_held && session.present_skip.black(),
             "the film's last pass shows black"
@@ -39557,7 +39581,10 @@ off_0010:
         session.swap_cbuff();
         assert!(session.instant_film.is_none());
         assert!(!session.game.re2.flag(0, FG_SYSTEM_MOVIE));
-        assert!(session.game.re2.sound_init, "SsInit2 after the film");
+        assert!(
+            !session.game.re2.sound_init,
+            "SsInit2 ran as the film ended"
+        );
         assert!(!session.game.re2.bg_load, "BYTE_0098f07b = 0");
         assert_eq!(
             session.present_skip.left(),
@@ -39638,6 +39665,10 @@ off_0010:
         session.end_re2_movie();
         assert!(session.movie.is_none());
         assert!(!session.game.re2.flag(0, FG_SYSTEM_MOVIE));
+        assert!(!session.game.re2.sound_init, "SsInit2 ran");
+        // A close still to run runs the init after itself.
+        session.game.re2.sound_close = Some(0);
+        session.end_re2_movie();
         assert!(session.game.re2.sound_init);
     }
 

@@ -1885,6 +1885,39 @@ class WindowsSession:
 Session = WindowsSession if WINDOWS else WineSession
 
 
+class FilmPads:
+    """With the films on (`--config MovieEnable=1`): the game's ticks stand still under a film, which runs on the
+    wall clock, so its `Pad_set`s are no ticks. The pad is clear, so it plays to its end. With the films off no stop
+    is one."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self.started = 0.0
+
+    def take(self, game: "Game", regs) -> bool:
+        """Whether this stop is a film's own `Pad_set`, which is counted and given a clear pad."""
+        if game.u32(regs.rsp + FILM_PAD_RETURN_AT) != FILM_PAD_RETURN:
+            return False
+        if not self.calls:
+            self.started = time.monotonic()
+        self.calls += 1
+        regs.rax = 0
+        return True
+
+    def ended(self, where: str, tick: int, pace: "Pace", tick_log) -> None:
+        """At the first stop after a film: say how many `Pad_set`s it took, and when it ran in the traced `tick`
+        (the one this stop ends), leave its time out of the pace on both sides."""
+        if not self.calls:
+            return
+        print(f"a film ran {self.calls} of its own Pad_sets {where}", flush=True)
+        self.calls = 0
+        if tick >= 0:
+            seconds = time.monotonic() - self.started
+            pace.film(seconds)
+            if tick_log:
+                tick_log.write(f"film {tick} {seconds:.4f}\n")
+
+
 def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: float = 0.0) -> None:
     """Record `args.ticks` ticks of play from the title route `args.start`, `args.difficulty` and `args.arrange`."""
     route = title_route(args.start, args.difficulty, args.arrange)
@@ -1920,30 +1953,14 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
             held_keys = 0
             settled = 0
             tick = -1  # The trace's tick, once play has begun.
-            film_calls = 0
-            film_started = 0.0
+            films = FilmPads()
             while tick <= args.ticks:
                 tid, regs = game.run_to_break()
-                if game.u32(regs.rsp + FILM_PAD_RETURN_AT) == FILM_PAD_RETURN:
-                    # With the films on (`--config MovieEnable=1`): the game's ticks stand still under a film, which
-                    # runs on the wall clock, so its `Pad_set`s are no ticks. The pad is clear, so it plays to its
-                    # end. With the films off the loop never runs.
-                    if not film_calls:
-                        film_started = time.monotonic()
-                    film_calls += 1
-                    regs.rax = 0
+                if films.take(game, regs):
                     game.resume_from_break(tid, regs, original)
                     continue
-                if film_calls:
-                    where = f"before tick {tick}" if tick >= 0 else f"before boot tick {boot_tick}"
-                    print(f"a film ran {film_calls} of its own Pad_sets {where}", flush=True)
-                    film_calls = 0
-                    if tick > 0:
-                        # The film ran in the tick this stop ends: the pace leaves its time out on both sides.
-                        seconds = time.monotonic() - film_started
-                        pace.film(seconds)
-                        if tick_log:
-                            tick_log.write(f"film {tick - 1} {seconds:.4f}\n")
+                where = f"before tick {tick}" if tick >= 0 else f"before boot tick {boot_tick}"
+                films.ended(where, tick - 1 if tick > 0 else -1, pace, tick_log)
                 if music_log and music_state(game) != last_music:
                     last_music = music_state(game)
                     music_log.write(f"t={tick} boot={boot_tick} {last_music}\n")
@@ -2115,10 +2132,15 @@ class Pace:
         if path and not self.ticks:
             raise SystemExit(f"--pace: {path} holds no ticks")
         self.films = read_films(Path(path)) if path else {}
+        # The stored times with the films up to each tick taken out, which the ticks between are worked out from.
+        self.free = {
+            tick: at - sum(seconds for film, seconds in self.films.items() if film <= tick)
+            for tick, at in self.ticks.items()
+        }
         self.clock = clock
         self.known = sorted(self.ticks)
         steps = sorted(
-            (self.ticks[after] - self.ticks[before]) / (after - before)
+            (self.free[after] - self.free[before]) / (after - before)
             for before, after in zip(self.known, self.known[1:])
         )
         self.step = steps[len(steps) // 2] if steps else 0.0
@@ -2134,9 +2156,20 @@ class Pace:
         self.latest = 0.0
 
     def time(self, tick: int) -> float:
-        """The stored time of `tick`'s end, or the one its neighbours in the log give it, less the stored
-        films' time up to it."""
-        return self.logged(tick) - sum(seconds for at, seconds in self.films.items() if at <= tick)
+        """The stored time of `tick`'s end less the stored films' up to it, or the one its neighbours in the log
+        give it."""
+        if tick in self.free:
+            return self.free[tick]
+        at = bisect.bisect_left(self.known, tick)
+        if at == 0:
+            first = self.known[0]
+            return self.free[first] - (first - tick) * self.step
+        before = self.known[at - 1]
+        if at == len(self.known):
+            return self.free[before] + (tick - before) * self.step
+        after = self.known[at]
+        part = (tick - before) / (after - before)
+        return self.free[before] + part * (self.free[after] - self.free[before])
 
     def film(self, seconds: float) -> None:
         """A film of `seconds` ran in the tick whose end is the next `reached`: it's no wait and no run."""
@@ -2144,21 +2177,6 @@ class Pace:
             self.origin += seconds
         if self.released is not None:
             self.released += seconds
-
-    def logged(self, tick: int) -> float:
-        """The stored time of `tick`'s end, or the one its neighbours in the log give it."""
-        if tick in self.ticks:
-            return self.ticks[tick]
-        at = bisect.bisect_left(self.known, tick)
-        if at == 0:
-            first = self.known[0]
-            return self.ticks[first] - (first - tick) * self.step
-        before = self.known[at - 1]
-        if at == len(self.known):
-            return self.ticks[before] + (tick - before) * self.step
-        after = self.known[at]
-        part = (tick - before) / (after - before)
-        return self.ticks[before] + part * (self.ticks[after] - self.ticks[before])
 
     def reached(self, tick: int) -> None:
         """The break that ends `tick`."""
@@ -2168,7 +2186,7 @@ class Pace:
         if tick in self.ticks:
             self.shared += 1
             if self.origin is None:
-                self.origin = now - self.ticks[tick]
+                self.origin = now - self.time(tick)
 
     def run(self) -> float:
         """What a run takes here."""
@@ -2412,8 +2430,13 @@ def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
             pad = 0
             held_keys = 0
             tick = 0
+            films = FilmPads()
             while tick <= args.ticks:
                 tid, regs = game.run_to_break()
+                if films.take(game, regs):
+                    game.resume_from_break(tid, regs, original)
+                    continue
+                films.ended(f"before boot tick {tick}", tick - 1 if tick > 0 else -1, pace, tick_log)
                 # This stop is the end of the tick before it.
                 if tick > 0:
                     pace.reached(tick - 1)
