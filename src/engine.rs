@@ -8055,26 +8055,34 @@ impl GameSession {
 
     /// A room started on its own has no last room to keep the player's head
     /// from, where a door keeps it until the new room's first frame. The
-    /// original reached the same room by `--warp` has it where `Pl_init`'s
-    /// pose, the idle's first frame, puts it at the new place, as a door does
-    /// ([`GameSession::rest_re2_player`]), so the zombies' first `Root_ck` can
-    /// see it.
+    /// original reached the same room by `--warp`, a load whose `Pl_init`
+    /// poses the idle's first frame, as a door's does
+    /// ([`GameSession::rest_re2_player`]), and the first traced tick then
+    /// blends one step from it ([`crate::player2::start_pose`]): the joints
+    /// and the head start there, so the zombies' first `Root_ck` sees the
+    /// head and the next tick's blend eases on from it.
     fn place_re2_start_neck(&mut self) {
         let Some(assets) = self.loaded.player_assets.as_ref() else {
             return;
         };
+        self.game.re2.player.start_unblended =
+            crate::player2::idle_pose(&assets.emw.clips, &assets.emw.keyframes)
+                .cloned()
+                .map(Box::new);
         let relative = &assets.emd.skeleton.relative;
-        let rest = crate::player2::idle_pose(&assets.emw.clips, &assets.emw.keyframes)
-            .cloned()
-            .unwrap_or_else(|| crate::model::Keyframe {
-                offset: relative.first().copied().unwrap_or_default(),
-                vertex: [0; 3],
-                rotations: vec![[0; 3]; relative.len()],
-            });
-        let shown = self.player.anim.applied_pose();
+        let rest = crate::player2::start_pose(
+            &self.game.re2.player,
+            (&assets.emw.clips, &assets.emw.keyframes),
+            (&assets.emd.clips, &assets.emd.keyframes),
+        )
+        .unwrap_or_else(|| crate::model::Keyframe {
+            offset: relative.first().copied().unwrap_or_default(),
+            vertex: [0; 3],
+            rotations: vec![[0; 3]; relative.len()],
+        });
         self.player.anim.set_applied_pose(Some(rest));
         self.place_re2_door_neck();
-        self.player.anim.set_applied_pose(shown);
+        self.game.re2.player.posed = true;
     }
 
     /// Reload the pack's `lua/**.lua` hooks into a fresh VM.

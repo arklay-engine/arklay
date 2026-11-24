@@ -19,10 +19,6 @@ frames = [360, 3419]
 frame_max_mean = 0.8
 frame_windows = [[360, 447, 0.6], [786, 1075, 0.4], [1414, 1671, 0.4], [2010, 2401, 0.4], [2725, 2943, 0.4], [3282, 3419, 0.4]]
 expect = "match"
-ignore = [
-  # the warp's head on its first ticks (as leon_a_208's)
-  [344, 351, "pneck"],
-]
 record = "--start claire --warp 21B:-18109:0:-22751:2016:2 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:17 --flag 31:18 --flag 31:27 --flag 6:12 --flag 6:13 --life 69 --give 0:3:2 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x14:15 --give 7:0x5B:1"
 
 # Rooms 20F, 211 and 212: from 20F's arrival through the Heart Key door, north, east and round to door 1; 211 west, south and east past its two dogs (0x20) to door 2; 212's two dogs dropped from the walkway (4:83) and its manhole's question (Yes) into the sewer (307). No voice line, so it is recorded silent.
@@ -46,8 +42,6 @@ frame_max_mean = 3.0
 frame_windows = [[360, 535, 0.4], [738, 993, 0.4], [1342, 1513, 0.4], [1943, 2089, 0.4]]
 expect = "match"
 ignore = [
-  # the warp's head on its first ticks (as leon_a_208's)
-  [344, 352, "pneck"],
   # 212's walkway dog off the guide areas: the original's `kara_rootck2` leaves its stack in `Dest`,
   # arklay keeps the old one, and the dog's turn parts until the drop (#867)
   [1426, 1610, "zm1"],
@@ -75,8 +69,6 @@ frame_max_mean = 1.0
 frame_windows = [[360, 466, 0.4], [765, 867, 0.4], [1171, 2676, 0.4], [2960, 3099, 0.8]]
 expect = "match"
 ignore = [
-  # the warp's head on its first ticks (as leon_a_208's)
-  [344, 352, "pneck"],
   # 307's load under 30D's door: the original puts Sherry's head at her idle at the scene's
   # `pos_set` with the facing from before the door, arklay at the door's end (#859)
   [959, 1172, "pneck"],
