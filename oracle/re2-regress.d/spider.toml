@@ -24,9 +24,9 @@ ticks = 2400
 setup = { pos = [-2700, 0, -19832], angle = 2028, health = 200, rnd = 6114, camera = 0 }
 input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,zm0,zm1,fgstat"
-# room 407's steam draws darker than the original's (#671): held at the measured mean
+# room 407's steam draws darker than the original's (#671): 3.21 measured
 frames = [360, 2399]
-frame_max_mean = 7.4
+frame_max_mean = 3.4
 expect = "match"
 record = "--warp 407:-2700:0:-19832:2028 --life 200"
 
@@ -62,9 +62,9 @@ ticks = 2400
 setup = { pos = [-26394, 0, -1920], angle = 97, health = 200, rnd = 6114, camera = 0 }
 input = "none.txt"
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,zm0,zm1,fgstat"
-# room 405's floor water blends differently (#668): held at the measured mean (the original's water is darker; it draws no shadow for a spider over water, #686)
+# 1.44 measured; the original draws no shadow for a spider over water (#686)
 frames = [360, 2399]
-frame_max_mean = 4.95
+frame_max_mean = 1.6
 expect = "match"
 record = "--warp 405:-26394:0:-1920:97 --life 200"
 
