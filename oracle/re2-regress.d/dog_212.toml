@@ -41,3 +41,18 @@ fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,zm0,zm1,fgsta
 frames = [344, 2399]
 expect = "match"
 record = "--warp 212:-11250:0:-25692:3024 --flag 4:83 --life 200 --equip 2 --give 0:2:200 --give 1:0x14:60"
+
+# The magnum at the dogs once they are close (dog_212_magnum.txt), with every frame: the first dies at Leon's feet in
+# the cut's view on 923, and its shadow turns into its pool of blood and spreads (`Em20_Dead`).
+[[run]]
+name = "dog_212_magnum"
+room = "212"
+sound = false
+ticks = 1500
+setup_script = "dog_212_magnum.lua"
+input = "dog_212_magnum.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,zm0,zm1,fgstat"
+frames = [344, 1499]
+expect = "match"
+record = "--warp 212:-11250:0:-25692:3024 --flag 4:83 --life 200 --equip 5 --give 0:5:60 --give 1:0x14:60"
