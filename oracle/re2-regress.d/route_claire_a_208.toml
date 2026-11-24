@@ -204,6 +204,6 @@ frame_windows = [[14625, 15491, 0.6], [15858, 15982, 0.3], [16323, 17906, 0.55],
 expect = "match"
 record = "--start claire"
 ignore = [
-    # `zd` (oracle/re2-deviations.md, "What a zombie's slot held before"): the load's tick in room 100, room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load
+    # `zd` (oracle/re2-deviations.md, "What a zombie's slot held before"): room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load
     [482, 2751, "zd"], [8505, 9017, "zd"],
 ]
