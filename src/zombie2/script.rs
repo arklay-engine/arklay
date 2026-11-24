@@ -835,6 +835,14 @@ impl UserData for Api {
             e.em().z.pool = pool as u16;
             Ok(())
         });
+        methods.add_method_mut("own_pool", |_, e, ()| {
+            e.em().z.own_pool = true;
+            Ok(())
+        });
+        methods.add_method_mut("set_shadow_color", |_, e, rgb: Option<u32>| {
+            e.em().z.shadow_color = rgb;
+            Ok(())
+        });
         methods.add_method_mut("burn_parts", |_, e, ()| {
             crate::zombie2::burn_parts(&mut e.em().work().part_rgb);
             Ok(())
@@ -6248,6 +6256,87 @@ mod tests {
                         R = { up, down, w.spd[1] }";
             assert_eq!(dog_locals(false, body), [0x100, 0xF0, 0xF0]);
             assert_eq!(dog_locals(true, body), [0x118, 0x118, 0x118]);
+        }
+
+        /// `Em20_Dead` (0x45F470): on the first dead tick `Routine_1` goes to
+        /// 1, `Be_flg` takes 2 and `FUN_0045f490` colours the shadow, sets
+        /// `+0x221` (var 8) to 1 and `Timer3` to 0x5A; on that tick and each
+        /// after, both halves grow by 8 and `Timer3` counts down, and at 0
+        /// var 8 goes to 2 and the pool stays.
+        #[test]
+        fn a_dead_dogs_pool_spreads_for_0x5a_ticks() {
+            let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+            let script = include_str!("../../games/re2/enemy/20/enemy.lua");
+            let ticks: Vec<Vec<i64>> = lua
+                .load(format!(
+                    "local w = {{ r = {{ [0] = 7, 0, 0, 0 }}, vars = {{}}, timers = {{}}, pool = 0, be = 0, rgb = -1 }}
+                     local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+                     function e:routine(i) return w.r[i] end
+                     function e:set_routine(i, v) w.r[i] = v end
+                     function e:var(i) return w.vars[i] or 0 end
+                     function e:set_var(i, v) w.vars[i] = v end
+                     function e:timer(i) return w.timers[i] or 0 end
+                     function e:set_timer(i, v) w.timers[i] = v end
+                     function e:pool() return w.pool end
+                     function e:set_pool(v) w.pool = v end
+                     function e:be_flg() return w.be end
+                     function e:set_be_flg(v) w.be = v end
+                     function e:set_shadow_color(v) w.rgb = v end
+                     {script}
+                     local ticks = {{}}
+                     for _ = 1, 0x5A + 2 do
+                         update(e)
+                         ticks[#ticks + 1] = {{ w.pool, w.timers[3], w.vars[8], w.rgb, w.r[1], w.be }}
+                     end
+                     return ticks"
+                ))
+                .eval()
+                .unwrap();
+            assert_eq!(ticks.len(), 0x5A + 2);
+            for (tick, got) in ticks.iter().enumerate() {
+                let grown = (tick + 1).min(0x5A) as i64;
+                let state = if tick + 1 >= 0x5A { 2 } else { 1 };
+                assert_eq!(
+                    got,
+                    &[8 * grown, 0x5A - grown, state, 0xBF_BF10, 1, 2],
+                    "tick {tick}"
+                );
+            }
+        }
+
+        /// `Em20_Init` takes a new shadow (`Kage_work_set`, 0x45C1DD): a dog
+        /// put back in a work whose last dog spread its pool starts with its
+        /// shadow's own colour, no pool, and the pool's step at 0.
+        #[test]
+        fn a_new_dog_in_an_old_work_has_no_pool() {
+            let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+            let script = include_str!("../../games/re2/enemy/20/enemy.lua");
+            let got: Vec<i64> = lua
+                .load(format!(
+                    "local w = {{ r = {{ [0] = 0, 0, 0, 0 }}, vars = {{ [8] = 2 }}, pool = 720, rgb = 0xBFBF10, own = false }}
+                     local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+                     function e:routine(i) return w.r[i] end
+                     function e:set_routine(i, v) w.r[i] = v end
+                     function e:routines(a, b, c, d) w.r = {{ [0] = a, b, c, d }} end
+                     function e:var(i) return w.vars[i] or 0 end
+                     function e:set_var(i, v) w.vars[i] = v end
+                     function e:pool() return w.pool end
+                     function e:set_pool(v) w.pool = v end
+                     function e:own_pool() w.own = true end
+                     function e:set_shadow_color(v) w.rgb = v end
+                     function e:rnd() return 1 end
+                     function e:easy() return false end
+                     function e:hard_mode() return false end
+                     function e:body_box() return 0, 0, 0, 0 end
+                     function e:joint() return false end
+                     function e:pos() return 0, 0, 0 end
+                     {script}
+                     update(e)
+                     return {{ w.pool, w.vars[8], w.rgb == nil and 1 or 0, w.own and 1 or 0 }}"
+                ))
+                .eval()
+                .unwrap();
+            assert_eq!(got, [0, 0, 1, 1]);
         }
 
         /// 0x10 is 0xA's case (0x45EBD0): `4 - Damage_no / 3` bloods, though

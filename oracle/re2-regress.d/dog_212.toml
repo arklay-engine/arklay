@@ -1,5 +1,5 @@
-# Room 212's two dogs under HARD (#862): `Em_20`'s top speed of 0x118 for 0xF0, the bite's 0x18 for 0xC and the life
-# doubled at init. HARD's title leaves `Rnd` at 58231, so each setup sets it.
+# Room 212's two dogs (#862). Under HARD: `Em_20`'s top speed of 0x118 for 0xF0, the bite's 0x18 for 0xC and the life
+# doubled at init. HARD's title leaves `Rnd` at 58231, so each HARD setup sets it.
 
 # Standing still until the dogs kill the player. Recorded for 2400 ticks; the game over returns to the title on 1502.
 [[run]]
@@ -27,3 +27,41 @@ input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,zm0,zm1,fgstat"
 expect = "match"
 record = "--warp 212:-11250:0:-25692:3024 --flag 4:83 --life 200 --equip 2 --give 0:2:200 --give 1:0x14:60"
+
+# dog_shots.txt under NORMAL, with every frame: the deaths and the dead dogs' pools of blood.
+[[run]]
+name = "dog_212_shots"
+room = "212"
+sound = false
+ticks = 2400
+setup_script = "dog_212_shots.lua"
+input = "dog_shots.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,zm0,zm1,fgstat"
+frames = [344, 2399]
+# from the warp's first cut on, 0.19 measured: the bodies' shading at their edges and the shots' flashes. Both dogs
+# die out of the cut
+frame_windows = [[350, 2399, 0.25]]
+expect = "match"
+record = "--warp 212:-11250:0:-25692:3024 --flag 4:83 --life 200 --equip 2 --give 0:2:200 --give 1:0x14:60"
+
+# The magnum at the dogs once they are close (dog_212_magnum.txt), with every frame: the first dies at Leon's feet in
+# the cut's view on 923 (`Routine_0` 7 at the tick's end), and from 924 its shadow is its pool of blood, which spreads
+# to 1013 (`Em20_Dead`).
+[[run]]
+name = "dog_212_magnum"
+room = "212"
+sound = false
+ticks = 1500
+setup_script = "dog_212_magnum.lua"
+input = "dog_212_magnum.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,zm0,zm1,fgstat"
+frames = [344, 1499]
+# from the warp's first cut on, 0.26 measured: the bodies' shading at their edges and the shots' flashes; the pool's
+# near edge sits a few pixels short of the original's. The pool's spread (924 to 1013, 0.257 measured) and after it
+# (0.227) are judged closer: without the spread they measure 0.291 and 0.315. On 923 the shadow is still a shadow
+# (0.260; the pool's colour a tick early measures 0.294)
+frame_windows = [[350, 1499, 0.35], [923, 923, 0.275], [924, 1013, 0.27], [1014, 1499, 0.25]]
+expect = "match"
+record = "--warp 212:-11250:0:-25692:3024 --flag 4:83 --life 200 --equip 5 --give 0:5:60 --give 1:0x14:60"

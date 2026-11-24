@@ -7,8 +7,7 @@
 -- are the fields of the original's work that the engine doesn't read.
 --
 -- A partner to chase (`splayer_work`) isn't ported: the dog only goes after the
--- player. Nor are the parts that a burst dog throws, its colours in flames, or
--- the fading of a dead dog's shadow.
+-- player. Nor are the parts that a burst dog throws, or its colours in flames.
 
 local AREA <const> = 0 -- `+0x218`: the guide area it's heading for.
 local ANNOY <const> = 1 -- `+0x21a`: how long it's chased without biting.
@@ -18,6 +17,7 @@ local AIR <const> = 4 -- `+0x219`: it's off the ground.
 local BIT <const> = 5 -- `+0x21e`: 1 a bite, 2 one that took the player down.
 local BLEED <const> = 6 -- `+0x21f`: how much more blood.
 local LANDED <const> = 7 -- `+0x220`.
+local POOL <const> = 8 -- `+0x221`: the dead dog's pool, 1 while it spreads.
 local LEAPT <const> = 9 -- `+0x222`: this is a leap at the player.
 local HURT <const> = 10 -- `+0x223`: bits of the last hurt.
 local TURN_RATE <const> = 11 -- `+0x224`.
@@ -38,6 +38,9 @@ local BE_HIGH <const> = 0x8000000
 local BE_AIR <const> = 0x10000000
 
 local KIND_HELD <const> = 0x2000
+
+-- A dead dog's pool of blood (`FUN_0045f490`).
+local POOL_COLOR <const> = 0xBFBF10
 
 -- `fg_room_enemy`.
 local ROOM_HEARD <const> = 0x20
@@ -1770,6 +1773,11 @@ end
 
 -- `Em20_Init`.
 local function init(e)
+    -- `Kage_work_set` takes a new shadow, without a pool (0x45C1DD).
+    e:own_pool()
+    e:set_shadow_color(nil)
+    e:set_pool(0)
+    e:set_var(POOL, 0)
     e:routines(1, 0, 0, 0)
     e:set_damage_flg(0)
     e:set_sce_flg(0)
@@ -1816,6 +1824,26 @@ local function init(e)
     e:joint(0x100)
 end
 
+-- `FUN_0045f490`: on its first tick the dead dog's shadow becomes its pool of
+-- blood, 0xBFBF10 (0xBF10BF under `0x68059A`, which isn't read), and from
+-- then both halves grow by 8 a tick for 0x5A ticks (`Timer3`, `+0x16b`).
+local function spread_pool(e)
+    local step = e:var(POOL)
+    if step == 0 then
+        e:set_var(POOL, 1)
+        e:set_shadow_color(POOL_COLOR)
+        e:set_timer(3, 0x5A)
+    elseif step ~= 1 then
+        return
+    end
+    e:set_pool(e:pool() + 8)
+    local left = i8(e:timer(3) - 1)
+    e:set_timer(3, left)
+    if left == 0 then
+        e:set_var(POOL, 2)
+    end
+end
+
 function update(e)
     local zero = e:routine(0)
     if zero == 0 then
@@ -1833,9 +1861,11 @@ function update(e)
     elseif zero == 3 then
         die(e)
     elseif zero == 7 then
+        -- `Em20_Dead` (0x45F470).
         if e:routine(1) == 0 then
             e:set_be_flg(e:be_flg() | BE_NO_OBA)
             e:set_routine(1, 1)
         end
+        spread_pool(e)
     end
 end

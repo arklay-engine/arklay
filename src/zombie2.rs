@@ -600,6 +600,9 @@ pub struct Zombie {
     pub died: bool,
     /// How far the blood pool's `Half_x` and `Half_z` have grown.
     pub pool: u16,
+    /// Its code colours its own pool when it starts it (`Em20_Dead`), so
+    /// `Routine_0` 7 alone doesn't turn its shadow into the engine's pool.
+    pub own_pool: bool,
     /// `+0x150`: `Root_ck`'s turn, one tick in eight.
     sight_turn: u8,
     /// `Status_flg`.

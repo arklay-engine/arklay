@@ -22816,7 +22816,8 @@ fn render_frame_on(
                 continue;
             }
             let own_color = character.zombie.as_ref().and_then(|z| z.shadow_color);
-            let color = re2_shadow_color(own_color, pool.is_some(), kage.map(|kage| kage.color));
+            let body = pool.is_some() && !character.zombie.as_ref().is_some_and(|z| z.own_pool);
+            let color = re2_shadow_color(own_color, body, kage.map(|kage| kage.color));
             // The characters' grounds don't see the room objects yet.
             let shadow = re2_shadow(
                 room,
