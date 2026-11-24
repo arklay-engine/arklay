@@ -1,0 +1,17 @@
+# Claire A from 20F's door 0 into 20B: south down the east corridor, west through its opening into the office, round
+# its five zombies by the south wall and north up the west wall to door 0, and into 20A (#896 part 3)
+# made in arklay: no zombie reaches her; door 0 loads 20A at 685
+344
+# 20B: south down the corridor along x -2000 from the hand back
+346 up run
+# a running turn west through the opening (z -18000 to -20500), and west-south-west by the zombies' south
+380 up run right
+401 up run
+412 up run left
+416 up run
+# along the south wall (z -26346), a running turn north at x -25400, and up the west wall (x -26450)
+604 up run right
+629 up run
+# door 0 (x -28381 to -26381, z -20818 to -16718) into 20A: one press on the run
+650 up run action
+652 up run
