@@ -8420,9 +8420,9 @@ mod tests {
             seen.iter()
                 .all(|&(frame, ..)| !(0x3A..0x57).contains(&frame))
         );
-        // 0 draws 0: the clip plays on.
-        let (seen, rnd) = climb(0);
-        assert_eq!(rnd, crate::zombie2::Rnd(0));
+        // 0x0102 draws 4: the clip plays on, and the draw is kept.
+        let (seen, rnd) = climb(0x0102);
+        assert_eq!(rnd, crate::zombie2::Rnd(0x0204));
         let at = seen.iter().position(|&(frame, ..)| frame == 0x39).unwrap();
         assert_eq!(seen[at + 1].0, 0x3A, "{seen:?}");
         // The pass is skipped up to frame 0x77 and runs for the clip's rest.

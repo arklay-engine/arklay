@@ -1,5 +1,5 @@
 # Claire A's Sherry from 305's door 4 into 306: down its three ledges into the pit, the three boxes pushed into their row
-# along the south wall (main_0A's z >= -26081 tests), back up the ledges, the water switch (4:146 and 4:147, the boxes
+# along the south wall (main_0A's z <= -26081 tests), back up the ledges, the water switch (4:146 and 4:147, the boxes
 # rise to -3600), west across them, north to the Club Key (0x5C), and east along the south wall to door 0 into 305 (#765 part 4)
 # made in arklay: the warp puts her in play at once; the input ends with door 0's press (3625), which loads 305 at 3662
 344
