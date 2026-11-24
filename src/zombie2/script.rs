@@ -6250,6 +6250,43 @@ mod tests {
             assert_eq!(dog_locals(true, body), [0x118, 0x118, 0x118]);
         }
 
+        /// `Em20_Dead` (0x45F470): the pool grows by 8 a tick for 0x5A ticks
+        /// (`FUN_0045f490`), from the first dead tick, then stays.
+        #[test]
+        fn a_dead_dogs_pool_spreads_for_0x5a_ticks() {
+            let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+            let script = include_str!("../../games/re2/enemy/20/enemy.lua");
+            let got: Vec<i64> = lua
+                .load(format!(
+                    "local w = {{ r = {{ [0] = 7, 0, 0, 0 }}, vars = {{}}, timers = {{}}, pool = 0, be = 0 }}
+                     local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+                     function e:routine(i) return w.r[i] end
+                     function e:set_routine(i, v) w.r[i] = v end
+                     function e:var(i) return w.vars[i] or 0 end
+                     function e:set_var(i, v) w.vars[i] = v end
+                     function e:timer(i) return w.timers[i] or 0 end
+                     function e:set_timer(i, v) w.timers[i] = v end
+                     function e:pool() return w.pool end
+                     function e:set_pool(v) w.pool = v end
+                     function e:be_flg() return w.be end
+                     function e:set_be_flg(v) w.be = v end
+                     {script}
+                     local seen = {{}}
+                     for tick = 1, 0x5A + 2 do
+                         update(e)
+                         if tick == 1 or tick == 0x5A or tick == 0x5A + 2 then
+                             seen[#seen + 1] = w.pool
+                         end
+                     end
+                     seen[#seen + 1] = w.r[1]
+                     seen[#seen + 1] = w.be
+                     return seen"
+                ))
+                .eval()
+                .unwrap();
+            assert_eq!(got, [8, 8 * 0x5A, 8 * 0x5A, 1, 2]);
+        }
+
         /// 0x10 is 0xA's case (0x45EBD0): `4 - Damage_no / 3` bloods, though
         /// each takes one off the count it's checked against (`0x45f9a0`), so
         /// two; `Damage_cnt`'s 0x80 held, and on as `Routine_1` 1 to
