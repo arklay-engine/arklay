@@ -69,7 +69,7 @@ fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgk
 expect = "match"
 record = "--no-enemies --life 200 --warp 116:-26159:-7200:-25126:2048"
 
-# Sce_Door's partner test (0x4E9472): Claire with Sherry following and lost (her `+0x21D & 0x20`) presses room 21B's door 3,
+# Sce_Door's partner test (0x4E946F): Claire with Sherry following and lost (her `+0x21D & 0x20`) presses room 21B's door 3,
 # and the door puts up "I can't leave Sherry alone." (door message 8) and stays shut. sherry_21b_lost's warp and flags.
 [[run]]
 name = "sherry_21b_door"

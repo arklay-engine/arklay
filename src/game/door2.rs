@@ -35,7 +35,7 @@ impl GameState {
             .position(|stack| stack.id == key)
     }
 
-    /// `Sce_Door`'s partner test (`0x4E9472`): Claire (`fg_status`'s top
+    /// `Sce_Door`'s partner test (`0x4E946F`): Claire (`fg_status`'s top
     /// bit) with the partner present, and the partner's `Be_flg & 1` and her
     /// `+0x21D & 0x20`: she is lost, too far behind. `DAT_0098a0d4`, which
     /// `Sce_Door` tests first, is the player on an object (`pOn_om`).
