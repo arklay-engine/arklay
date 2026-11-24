@@ -1,0 +1,34 @@
+# Claire A from the Club Key's place in 307 (as claire_a_305_307 leaves her): south-east and down the passage to the
+# ladder at the south wall, up it into 212, east along the corridor and south down the passage past the two dogs to
+# door 0, and into 211 (#896 part 1)
+# made in arklay: the ladder's door loads 212 at 586 and hands Claire back by 706; a dog bites once (865); door 0 loads
+# 211 at 928
+344
+# 307: turned to the south-east, and on round the corner into the passage along x -1339
+345 left
+386
+387 up run
+# a running turn south-west into the passage's middle, down to the south wall at x -2977
+470 up run right
+485 up run
+516
+# turned square to the south: the ladder (aot 8, x -3382 to -1272, z -18666 to -17666) and its question, answered Yes
+517 left
+524
+526 action
+528
+538 action
+540
+550 action
+552
+562 action
+564
+# 212: east along the corridor at z -10545 from the hand back, a running turn south at x -12000, and down the passage
+# along x -10800
+700 up run
+774 up run right
+795 up run
+# door 0 (x -13633 to -9033, z -28415 to -26415) into 211: one press at the south wall
+891
+893 action
+895

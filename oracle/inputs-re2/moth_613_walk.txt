@@ -1,0 +1,4 @@
+# room 613: turn right a little and walk into area 3 (main_02, which wakes the moth), then stand
+360 right
+366 up
+520

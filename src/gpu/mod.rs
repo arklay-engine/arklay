@@ -131,6 +131,9 @@ enum Blend {
     Add,
     /// A premultiplied fragment over the target.
     Premultiplied,
+    /// The fragment times itself plus the target times the fragment
+    /// (`SRCCOLOR` on both sides); the target's alpha stays.
+    SourceColour,
 }
 
 /// One corner of a 2D pass item (`draw2d.vert`'s input, 96 bytes).
@@ -273,6 +276,9 @@ struct MeshBuffer {
     /// Some packet adds to the background (`scene::PACKED_ADDITIVE`), so the
     /// mesh draws an additive pass.
     additive: bool,
+    /// Some packet mixes by its own colour (`scene::PACKED_SOURCE_COLOUR`),
+    /// so the mesh draws a source-colour pass.
+    source_colour: bool,
     /// The CLUT rows its packets read, one bit each.
     rows: u32,
 }
@@ -306,6 +312,8 @@ struct Pipelines {
     /// The additive pass: `mesh.frag` writes alpha 0, so the premultiplied
     /// blend adds the fragment to the target.
     mesh_add: *mut SDL_GPUGraphicsPipeline,
+    /// The source-colour pass ([`Blend::SourceColour`]).
+    mesh_source_colour: *mut SDL_GPUGraphicsPipeline,
     /// The masks' keys into `mask_keys` (depth only).
     mask_keys: *mut SDL_GPUGraphicsPipeline,
     sprite: *mut SDL_GPUGraphicsPipeline,
@@ -633,6 +641,7 @@ impl GpuRenderer {
                 mesh_opaque: std::ptr::null_mut(),
                 mesh_blend: std::ptr::null_mut(),
                 mesh_add: std::ptr::null_mut(),
+                mesh_source_colour: std::ptr::null_mut(),
                 mask_keys: std::ptr::null_mut(),
                 sprite: std::ptr::null_mut(),
                 sprite_depth: std::ptr::null_mut(),
@@ -1039,6 +1048,16 @@ impl GpuRenderer {
                 enable_blend: true,
                 ..Default::default()
             },
+            Blend::SourceColour => SDL_GPUColorTargetBlendState {
+                src_color_blendfactor: SDL_GPU_BLENDFACTOR_SRC_COLOR,
+                dst_color_blendfactor: SDL_GPU_BLENDFACTOR_SRC_COLOR,
+                color_blend_op: SDL_GPU_BLENDOP_ADD,
+                src_alpha_blendfactor: SDL_GPU_BLENDFACTOR_ZERO,
+                dst_alpha_blendfactor: SDL_GPU_BLENDFACTOR_ONE,
+                alpha_blend_op: SDL_GPU_BLENDOP_ADD,
+                enable_blend: true,
+                ..Default::default()
+            },
             Blend::Alpha | Blend::Premultiplied => SDL_GPUColorTargetBlendState {
                 src_color_blendfactor: if blend == Blend::Alpha {
                     SDL_GPU_BLENDFACTOR_SRC_ALPHA
@@ -1207,6 +1226,7 @@ impl GpuRenderer {
         self.pipelines.mesh_opaque = mesh(self, Blend::None, true)?;
         self.pipelines.mesh_blend = mesh(self, Blend::Alpha, false)?;
         self.pipelines.mesh_add = mesh(self, Blend::Premultiplied, false)?;
+        self.pipelines.mesh_source_colour = mesh(self, Blend::SourceColour, false)?;
         self.pipelines.mask_keys = sprite(
             self,
             (SDL_GPU_TEXTUREFORMAT_D16_UNORM, true),
@@ -1507,6 +1527,10 @@ impl GpuRenderer {
                 .vertices
                 .iter()
                 .any(|vertex| vertex.packed & scene::PACKED_ADDITIVE != 0),
+            source_colour: built
+                .vertices
+                .iter()
+                .any(|vertex| vertex.packed & scene::PACKED_SOURCE_COLOUR != 0),
             rows,
         };
         self.fresh.push(Upload::Mesh(key));
@@ -2296,58 +2320,55 @@ impl GpuRenderer {
                     })
             })
             .collect();
-        for mesh_pass in [
-            scene::MeshPass::Opaque,
-            scene::MeshPass::Blend,
-            scene::MeshPass::Additive,
-        ] {
-            // The blended packets have no depth to settle their order: the
-            // painter's sort, by each draw's nearest stand-in, its root joint.
-            let mut ordered: Vec<_> = draws.iter().collect();
-            if mesh_pass != scene::MeshPass::Opaque {
-                ordered.sort_by(|a, b| b.2.joints[2][3].total_cmp(&a.2.joints[2][3]));
+        // The painter's key of a draw: its nearest stand-in, its root joint.
+        let keys: Vec<f32> = draws.iter().map(|draw| draw.2.joints[2][3]).collect();
+        for (mesh_pass, draw) in scene::pass_order(&keys) {
+            let (index, _, ref uniforms, blend_weight) = draws[draw];
+            let Some((buffer, page)) = meshes[index] else {
+                continue;
+            };
+            let drawn = match mesh_pass {
+                scene::MeshPass::Additive => buffer.additive,
+                scene::MeshPass::SourceColour => buffer.source_colour,
+                _ => true,
+            };
+            if !drawn {
+                continue;
             }
-            for &&(index, _, ref uniforms, blend_weight) in &ordered {
-                let Some((buffer, page)) = meshes[index] else {
-                    continue;
-                };
-                if mesh_pass == scene::MeshPass::Additive && !buffer.additive {
-                    continue;
-                }
-                let (first, count) = scene::pass_range(
-                    blend_weight,
-                    mesh_pass,
-                    buffer.blend_start,
-                    buffer.vertex_count,
-                );
-                if buffer.buffer.is_null() || count == 0 || uniforms.flags[0] == u32::MAX {
-                    continue;
-                }
-                let pipeline = match mesh_pass {
-                    scene::MeshPass::Opaque => self.pipelines.mesh_opaque,
-                    scene::MeshPass::Blend => self.pipelines.mesh_blend,
-                    scene::MeshPass::Additive => self.pipelines.mesh_add,
-                };
-                let mut material = scene::material(blend_weight, mesh_pass);
-                let hd = if page.hd.is_null() {
-                    [self.no_hd, self.no_hd_rows]
-                } else {
-                    material[2] = 1.0;
-                    [page.hd, page.hd_rows]
-                };
-                draw_mesh(
-                    command,
-                    pass,
-                    pipeline,
-                    uniforms,
-                    material,
-                    buffer.buffer,
-                    [page.indices, page.palette, hd[0], hd[1], self.mask_keys],
-                    self.sampler,
-                    first,
-                    count,
-                );
+            let (first, count) = scene::pass_range(
+                blend_weight,
+                mesh_pass,
+                buffer.blend_start,
+                buffer.vertex_count,
+            );
+            if buffer.buffer.is_null() || count == 0 || uniforms.flags[0] == u32::MAX {
+                continue;
             }
+            let pipeline = match mesh_pass {
+                scene::MeshPass::Opaque => self.pipelines.mesh_opaque,
+                scene::MeshPass::Blend => self.pipelines.mesh_blend,
+                scene::MeshPass::Additive => self.pipelines.mesh_add,
+                scene::MeshPass::SourceColour => self.pipelines.mesh_source_colour,
+            };
+            let mut material = scene::material(blend_weight, mesh_pass);
+            let hd = if page.hd.is_null() {
+                [self.no_hd, self.no_hd_rows]
+            } else {
+                material[2] = 1.0;
+                [page.hd, page.hd_rows]
+            };
+            draw_mesh(
+                command,
+                pass,
+                pipeline,
+                uniforms,
+                material,
+                buffer.buffer,
+                [page.indices, page.palette, hd[0], hd[1], self.mask_keys],
+                self.sampler,
+                first,
+                count,
+            );
         }
 
         for run in &sprites.after {
@@ -3662,6 +3683,7 @@ impl Drop for GpuRenderer {
                 self.pipelines.mesh_opaque,
                 self.pipelines.mesh_blend,
                 self.pipelines.mesh_add,
+                self.pipelines.mesh_source_colour,
                 self.pipelines.mask_keys,
                 self.pipelines.sprite,
                 self.pipelines.sprite_depth,
@@ -3769,7 +3791,7 @@ mod tests {
                     tsb: 0,
                     textured: true,
                     blend: false,
-                    additive: false,
+                    mix: crate::model::PacketMix::Weighted,
                     raw_y: false,
                     uv_nudge: [0; 3],
                     flat_color: None,
@@ -3835,7 +3857,7 @@ mod tests {
                 tsb: 0,
                 textured: true,
                 blend: false,
-                additive: false,
+                mix: crate::model::PacketMix::Weighted,
                 raw_y: false,
                 uv_nudge: [0; 3],
                 flat_color: None,

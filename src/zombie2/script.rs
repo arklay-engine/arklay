@@ -8106,4 +8106,189 @@ mod tests {
             assert_eq!(log, ["effect(0,9,4128,-1024,1,163,262,361)"]);
         }
     }
+
+    /// The giant moth's hits and death (`enemy/3a/enemy.lua`).
+    mod moth {
+        use super::smg_flame_tyrant_ivy::{eval, run};
+
+        /// The moth on the stub, with the fields its moves read.
+        fn moth() -> String {
+            format!(
+                "w.spd = w.spd or {{ 0, 0, 0 }} w.angle = w.angle or 0 w.y = w.y or 0
+                 function e:cdir() return 0, 0 end
+                 function e:speed() return w.spd[1], w.spd[2], w.spd[3] end
+                 function e:set_speed(x, y, z) w.spd = {{ x, y, z }} end
+                 function e:pos() return 0, w.y, 0 end
+                 function e:set_pos(x, y, z) w.y = y end
+                 function e:player_pos() return 0, 0, 0 end
+                 function e:angle() return w.angle end
+                 function e:set_angle(v) w.angle = v end
+                 function e:direction() return w.dir or 0 end
+                 function e:joint() return w.ended end
+                 function e:easy() return w.easy end
+                 function e:hard_mode() return w.hard end
+                 function e:status() return false end
+                 function e:move_no() return w.move_no or 0 end
+                 function e:distance() return 99999 end
+                 function e:rot_apply() return 0, 0, 0 end
+                 {}",
+                include_str!("../../games/re2/enemy/3a/enemy.lua")
+            )
+        }
+
+        /// `FUN_004aea70`: a handgun's hit restores the move it was in (here
+        /// the rest, `Routine_2` 1) and runs it on this tick, with the blood
+        /// at point 12 (effect 0, row 25) and sound 3. `FUN_004aeba0` counts
+        /// `B22D` down and wakes it below a third of 150 times `B22D`, also
+        /// on HARD; EASY's is of 100.
+        #[test]
+        fn a_handgun_hit_carries_on_the_move_and_wakes_it_by_thirds() {
+            let hit = |life: i64, difficulty: &str| {
+                let setup = format!(
+                    "w.r = {{ [0] = 2, 2, 0, 0 }} w.vars = {{ [3] = 1, [8] = 2, [15] = 1 }}
+                     w.timers[0] = 5 w.life = {life} {difficulty}"
+                );
+                let (lua, log) = run(&moth(), &setup, 1, &["effect", "sound"]);
+                let state: (Vec<i64>, i64, i64, i64) = eval(
+                    &lua,
+                    "return { w.r[0], w.r[1], w.r[2], w.r[3] }, w.timers[0],
+                            w.vars[8], w.vars[4] or 0",
+                );
+                (state, log)
+            };
+            let ((routines, timer0, left, shot), log) = hit(99, "");
+            assert_eq!((routines, timer0), (vec![1, 0, 1, 0], 4));
+            assert_eq!((left, shot), (1, 1));
+            assert_eq!(log, ["effect(0,25,8192,0,0,0,-300,0)", "sound(3)"]);
+            assert_eq!(hit(100, "").0.2, 2);
+            assert_eq!(hit(99, "w.hard = true").0.2, 1);
+            assert_eq!(hit(99, "w.easy = true").0.2, 2);
+        }
+
+        /// `FUN_004aec90`: a magnum's hit on the floor stops it to rest
+        /// (`B243`) with its wings beating (`+0x221`'s 0x80); in the air it's
+        /// knocked down, turned 0x100 away, its flight's steering and lunge
+        /// gone, with the hit's sound twice.
+        #[test]
+        fn a_heavy_hit_rests_it_on_the_floor_and_knocks_it_down_in_the_air() {
+            let setup = "w.r = { [0] = 2, 6, 0, 0 } w.vars = { [3] = 1, [14] = 5 }";
+            let (lua, log) = run(&moth(), setup, 1, &["clip", "sound"]);
+            let (routines, rest, flags): (Vec<i64>, i64, i64) = eval(
+                &lua,
+                "return { w.r[0], w.r[1], w.r[2], w.r[3] }, w.vars[29], w.vars[3]",
+            );
+            assert_eq!((routines, rest, flags), (vec![1, 0, 0, 0], 1, 0x81));
+            assert_eq!(log, ["sound(3)", "clip(3,0,0)"]);
+            let setup = "w.r = { [0] = 2, 6, 0, 0 } w.vars = { [2] = 1, [23] = 1, [24] = 1 }";
+            let (lua, log) = run(&moth(), setup, 1, &["clip", "sound", "goto_point"]);
+            let (routines, lunge, steer): (Vec<i64>, i64, i64) = eval(
+                &lua,
+                "return { w.r[0], w.r[1], w.r[2], w.r[3] }, w.vars[23], w.vars[24]",
+            );
+            assert_eq!((routines, lunge, steer), (vec![2, 6, 1, 0], 0, 0));
+            assert_eq!(
+                log,
+                [
+                    "sound(3)",
+                    "sound(3)",
+                    "goto_point(0,0,-256)",
+                    "clip(4,0,15)"
+                ]
+            );
+        }
+
+        /// `FUN_004af540` on the floor: the blood and sound 6, then clip 7;
+        /// at its end the body (`Routine_0` 7), which raises `Be_flg`'s 0x42
+        /// on its first tick.
+        #[test]
+        fn a_moth_killed_on_the_floor_lies_down_to_a_body() {
+            let setup = "w.r = { [0] = 3, 2, 0, 0 } w.ended = true";
+            let (lua, log) = run(
+                &moth(),
+                setup,
+                2,
+                &["call_effect", "sound", "clip", "set_died"],
+            );
+            let (routines, be): (Vec<i64>, i64) =
+                eval(&lua, "return { w.r[0], w.r[1], w.r[2], w.r[3] }, w.be");
+            assert_eq!(routines, [7, 1, 0, 0]);
+            assert_eq!(be & 0x42, 0x42);
+            assert_eq!(
+                log,
+                [
+                    "call_effect(0,25,8192,0,0,0,0)",
+                    "sound(6)",
+                    "clip(7,0,15)",
+                    "set_died()"
+                ]
+            );
+        }
+
+        /// `FUN_004af640`: a magnum's kill bleeds from part 2 and from the
+        /// head's points 14 to 17 (rows 1 and 12); 9's low hit (`Damage_no`
+        /// 3) only bleeds from part 0 (row 4) and part 2.
+        #[test]
+        fn a_heavy_kill_bleeds_from_the_head() {
+            let death = |weapon: u8, damage_no: u8| {
+                let setup =
+                    format!("w.r = {{ [0] = 3, {weapon}, 0, 0 }} w.damage_no = {damage_no}");
+                run(&moth(), &setup, 1, &["effect", "call_effect"]).1
+            };
+            let magnum = death(6, 0);
+            assert_eq!(magnum.len(), 10);
+            assert_eq!(magnum[0], "call_effect(0,25,10240,0,2,0,0)");
+            assert_eq!(magnum[1], "effect(0,25,10240,0,0,-500,-300,600)");
+            assert_eq!(magnum[2], "effect(0,9,10240,0,0,-500,-300,600)");
+            assert_eq!(magnum[8], "effect(0,9,10240,0,0,-1000,300,-700)");
+            assert_eq!(magnum[9], "call_effect(0,25,10240,0,0,0,0)");
+            assert_eq!(
+                death(9, 3),
+                [
+                    "effect(5,1,4096,0,0,0,0,0)",
+                    "call_effect(0,25,10240,0,2,0,0)",
+                    "effect(5,4,4096,0,0,0,0,0)"
+                ]
+            );
+        }
+
+        /// `FUN_004add20`: it turns its back on the target to the nearest
+        /// quarter (from 0x100, facing away at 0x200, to 0x400) at 0x30 a
+        /// tick, then hops (`Routine_1` 11, `HOP` 1) to climb (`B228`).
+        #[test]
+        fn a_shot_moth_turns_its_back_to_the_nearest_quarter() {
+            let turn = |ticks: usize| {
+                let setup = "w.r = { [0] = 1, 6, 0, 0 } w.angle = 0x100 w.dir = 0xA00";
+                let (lua, _) = run(&moth(), setup, ticks, &[]);
+                eval::<(i64, i64, i64, i64)>(
+                    &lua,
+                    "return w.r[1], w.angle, w.vars[21] or 0, w.vars[5] or 0",
+                )
+            };
+            assert_eq!(turn(15), (6, 0x100 + 15 * 0x30, 0, 0));
+            assert_eq!(turn(16), (11, 0x400, 1, 1));
+        }
+
+        /// `FUN_004b0e80` and `FUN_004b0fd0`: a shot larva (kind 0x2008's
+        /// `B224`) bleeds row 0 (effect 0, row 9) and raises its dead flag,
+        /// is a body after nine ticks, waits one (the handgun's) and goes
+        /// once its shadow (500, and 0x10 a tick of the death) has shrunk 12
+        /// a tick to nothing: 53 ticks.
+        #[test]
+        fn a_shot_larva_shrinks_away_with_its_shadow() {
+            let larva = format!(
+                "function e:pos() return 0, 0, 0 end
+                 function e:player_pos() return 0, 0, 0 end
+                 {}",
+                include_str!("../../games/re2/enemy/3b/enemy.lua")
+            );
+            let setup = "w.r = { [0] = 3, 2, 0, 0 } w.vars = { [5] = 1, [6] = 0x1F4 }";
+            let names = ["call_effect", "set_died", "kill"];
+            let (lua, log) = run(&larva, setup, 9, &names);
+            assert_eq!(log, ["call_effect(0,9,6144,0,0,0,0)", "set_died()"]);
+            let routines: Vec<i64> = eval(&lua, "return { w.r[0], w.r[1], w.r[2], w.r[3] }");
+            assert_eq!(routines, [7, 2, 0, 0]);
+            assert_eq!(run(&larva, setup, 62, &names).1.len(), 2);
+            assert_eq!(run(&larva, setup, 63, &names).1[2], "kill()");
+        }
+    }
 }

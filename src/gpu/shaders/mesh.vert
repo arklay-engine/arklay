@@ -14,9 +14,9 @@ layout(location = 3) in vec3 in_corner3;
 layout(location = 4) in vec3 in_normal;    // stored normal with Y negated
 layout(location = 5) in vec2 in_uv;        // texel coordinates with the page offset
 layout(location = 6) in vec3 in_colour;    // untextured packet colour / 1024, else 1
-// joint | row << 8 | triangle corners << 16 | blend << 24 | untextured << 25 |
-// nudge << 26 | corner << 29 | additive << 31 (bit 22 is set here for RE2's
-// near clip: the fragment's depth is its own view Z's)
+// joint | row << 8 | triangle corners << 16 | source colour << 23 | blend << 24
+// | untextured << 25 | nudge << 26 | corner << 29 | additive << 31 (bit 22 is
+// set here for RE2's near clip: the fragment's depth is its own view Z's)
 layout(location = 7) in uint in_packed;
 
 // Normalised texture coordinates and the shade in 0..1, both interpolated
