@@ -419,6 +419,7 @@ impl UserData for Api<'_> {
                         api.host.outcome = Some(SaveOutcome {
                             slot: None,
                             ink_ribbon: *ink_ribbon,
+                            file: Some(Box::new(file)),
                         });
                         api.host.rescan();
                         Ok((true, None))
@@ -428,6 +429,7 @@ impl UserData for Api<'_> {
                             api.host.outcome = Some(SaveOutcome {
                                 slot: None,
                                 ink_ribbon: *ink_ribbon,
+                                file: None,
                             });
                         }
                         Ok((false, Some(format!("{err:#}"))))
@@ -458,6 +460,7 @@ impl UserData for Api<'_> {
                     api.host.outcome = Some(SaveOutcome {
                         slot: Some(slot),
                         ink_ribbon: *ink_ribbon,
+                        file: None,
                     });
                     api.host.rescan();
                     let info = save::SaveSlotInfo::from_file(&file);

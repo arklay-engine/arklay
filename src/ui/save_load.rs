@@ -49,13 +49,17 @@ pub(crate) const SAVE_LOAD_ENTRY: &str = "ui/save_load.lua";
 
 /// A completed save: the slot that was written and whether the flow consumed
 /// an ink ribbon.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SaveOutcome {
     /// The zero-based slot `api:save_slot` wrote; `None` when the screen
     /// named its own file with `api:save`.
     pub slot: Option<usize>,
     /// Whether one ink ribbon must be consumed from the live game state.
     pub ink_ribbon: bool,
+    /// The block a write to a file the screen named wrote, for the in-game
+    /// menu's RESTART to reload; `None` for a slot's write (the slot is the
+    /// restart point) and for a failed write that still counts as a save.
+    pub file: Option<Box<crate::save::SaveFile>>,
 }
 
 /// A save/load screen the engine can open.
