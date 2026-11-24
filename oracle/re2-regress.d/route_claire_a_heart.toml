@@ -93,6 +93,10 @@ voice_from_ref = true
 ticks = 7854
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 7853]
+# 2.94 measured, most of it 21B up to Irons's scene's end (930 to 3429), where arklay doesn't draw his daughter on the
+# desk (#872; 28.24 at worst, 2207); 10A, 21B after the scene, 10D and 10E from their hand backs to the next press are 0.19 to 0.71
+frame_max_mean = 3.0
+frame_windows = [[360, 802, 0.4], [3530, 4127, 0.4], [4255, 4732, 0.5], [5071, 7853, 0.9]]
 expect = "match"
 ignore = [
   # the warp's head on its first ticks (as leon_a_208's)
@@ -117,6 +121,10 @@ voice_from_ref = true
 ticks = 2289
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 2288]
+# 0.43 measured; the rooms from each hand back to the next press are 0.20 to 0.26, and the worst is 21B's first frame
+# through 10D's door 1 (1137, 2.01)
+frame_max_mean = 0.5
+frame_windows = [[360, 504, 0.4], [843, 1100, 0.4], [1439, 2288, 0.4]]
 expect = "match"
 ignore = [
   # the warp's head on its first ticks (as leon_a_208's)
