@@ -38,7 +38,7 @@ use crate::anim;
 use crate::assets::Artwork;
 use crate::draw2d::DrawList;
 use crate::mask;
-use crate::model::{Texture8, Tmd, TmdObject, TmdPrim};
+use crate::model::{PacketMix, Texture8, Tmd, TmdObject, TmdPrim};
 use crate::state::{Cut, Image, Light, RoomId, RoomState};
 
 /// Default framebuffer width in pixels.
@@ -2114,7 +2114,7 @@ impl Framebuffer {
                     flat: None,
                     blend: false,
                     blend_weight: None,
-                    additive: false,
+                    mix: PacketMix::Weighted,
                     uv_nudge: [0; 3],
                     view_depth: false,
                 })
@@ -2322,10 +2322,11 @@ impl Framebuffer {
                 for (index, destination) in slot[..3].iter_mut().enumerate() {
                     let source =
                         unorm8(f32::from(texel[index]) * (1.0 / 255.0) * fragment.color[index]);
-                    *destination = if blend && triangle.additive {
-                        destination.saturating_add(source)
-                    } else {
-                        blend_unorm8(source, *destination, source_alpha)
+                    *destination = match triangle.mix {
+                        _ if !blend => source,
+                        PacketMix::Weighted => blend_unorm8(source, *destination, source_alpha),
+                        PacketMix::Add => destination.saturating_add(source),
+                        PacketMix::SourceColour => source_colour_unorm8(source, *destination),
                     };
                 }
                 slot[3] = 255;
@@ -2795,7 +2796,7 @@ impl DoorScene {
                     if order.shading == crate::door::vm::DoorShading::LitAdditive {
                         for prim in &mut object.prims {
                             prim.blend = true;
-                            prim.additive = true;
+                            prim.mix = PacketMix::Add;
                         }
                     }
                     if order.shading != crate::door::vm::DoorShading::FullBright {
@@ -4337,9 +4338,9 @@ struct Triangle {
     /// The record's background blend weight in 256ths. `None` is the M16
     /// per-packet half blend; see [`EntityMesh::blend_weight`].
     blend_weight: Option<u8>,
-    /// A blending texel adds to the background (`TmdPrim::additive`)
-    /// instead of mixing by `blend_weight`.
-    additive: bool,
+    /// How a blending texel meets the background (`TmdPrim::mix`); only
+    /// [`PacketMix::Weighted`] reads `blend_weight`.
+    mix: PacketMix,
     /// Per corner, `PSXObject_Store`'s degenerate-UV nudge: bit 0 adds
     /// `0.003` to the normalised u, bit 1 to v.
     uv_nudge: [u8; 3],
@@ -4620,7 +4621,7 @@ fn collect_triangles(
             None => prim.blend || prim.clut & ABE_BIT != 0,
         };
         // An additive packet (an RE2 door part) stays lit.
-        let full_bright = blend_weight.is_some() || (blend && !prim.additive);
+        let full_bright = blend_weight.is_some() || (blend && prim.mix != PacketMix::Add);
         let (page_x, page_y, palette_row) = match lighting {
             Some(_) => (
                 f64::from(u32::from(prim.tsb & 0xF) * 128),
@@ -4720,7 +4721,7 @@ fn collect_triangles(
             flat: prim.flat_color.map(|_| [255, 255, 255]),
             blend,
             blend_weight,
-            additive: blend && prim.additive,
+            mix: if blend { prim.mix } else { PacketMix::Weighted },
             uv_nudge: prim.uv_nudge,
             view_depth: re2_near.is_some(),
         };
@@ -4938,7 +4939,7 @@ fn collect_complex_pool(
             flat: None,
             blend: false,
             blend_weight: None,
-            additive: false,
+            mix: PacketMix::Weighted,
             uv_nudge: [0; 3],
             view_depth: false,
         });
@@ -5469,7 +5470,7 @@ fn collect_ivm_triangles(
                 flat,
                 blend: prim.blend,
                 blend_weight: None,
-                additive: false,
+                mix: PacketMix::Weighted,
                 uv_nudge: [0; 3],
                 view_depth: false,
             });
@@ -5605,6 +5606,12 @@ fn mul_unorm8(a: u8, b: u8) -> u32 {
 /// runs it on an RGBA8 target: both terms in unorm8, added with saturation.
 fn blend_unorm8(source: u8, destination: u8, alpha: u8) -> u8 {
     (mul_unorm8(source, alpha) + mul_unorm8(destination, 255 - alpha)).min(255) as u8
+}
+
+/// Marni's `0x700000` packet blend, `SRCCOLOR` on both sides: the source
+/// times itself plus the destination times the source, each term in unorm8.
+fn source_colour_unorm8(source: u8, destination: u8) -> u8 {
+    (mul_unorm8(source, source) + mul_unorm8(destination, source)).min(255) as u8
 }
 
 /// The nearest view depth of `meshes` at each pixel of a `width` x `height`
@@ -5922,7 +5929,7 @@ mod tests {
                     tsb: 0x80,
                     textured: true,
                     blend: false,
-                    additive: false,
+                    mix: PacketMix::Weighted,
                     raw_y: false,
                     flat_color: None,
                     quad: None,
@@ -6548,7 +6555,7 @@ mod tests {
             flat: None,
             blend: false,
             blend_weight: None,
-            additive: false,
+            mix: PacketMix::Weighted,
             uv_nudge: [0; 3],
             view_depth: false,
         })
@@ -8395,7 +8402,7 @@ mod tests {
             flat: None,
             blend: true,
             blend_weight: None,
-            additive: false,
+            mix: PacketMix::Weighted,
             uv_nudge: [0; 3],
             view_depth: false,
         };
@@ -8443,7 +8450,7 @@ mod tests {
             tsb,
             textured: true,
             blend: false,
-            additive: false,
+            mix: PacketMix::Weighted,
             raw_y: false,
             flat_color: None,
             quad: None,
@@ -8477,7 +8484,7 @@ mod tests {
                     tsb,
                     textured: true,
                     blend,
-                    additive: false,
+                    mix: PacketMix::Weighted,
                     raw_y: false,
                     flat_color: None,
                     quad: None,
@@ -8531,7 +8538,7 @@ mod tests {
                 tsb,
                 textured: true,
                 blend,
-                additive: false,
+                mix: PacketMix::Weighted,
                 raw_y: false,
                 flat_color: None,
                 quad: None,
@@ -8603,7 +8610,7 @@ mod tests {
             flat: None,
             blend: true,
             blend_weight,
-            additive: false,
+            mix: PacketMix::Weighted,
             uv_nudge: [0; 3],
             view_depth: false,
         };
@@ -8659,7 +8666,7 @@ mod tests {
             flat: None,
             blend: true,
             blend_weight: None,
-            additive: true,
+            mix: PacketMix::Add,
             uv_nudge: [0; 3],
             view_depth: false,
         };
@@ -8671,6 +8678,41 @@ mod tests {
             framebuffer_pixel(&framebuffer, 11, 11),
             [200, 160, 120, 255]
         );
+    }
+
+    #[test]
+    fn a_source_colour_packet_scales_the_background_by_its_texel() {
+        let mut texture = solid_texture([200, 120, 40, 255]);
+        texture.stp = vec![false, true];
+        let raster_vertex = |position: [f32; 2], u: f32, v: f32| RasterVertex {
+            position,
+            w: 1000.0,
+            u,
+            v,
+            shade: [1.0; 3],
+        };
+        let triangle = Triangle {
+            raster: [
+                raster_vertex([10.0, 10.0], 0.0, 0.0),
+                raster_vertex([20.0, 10.0], 2.0, 0.0),
+                raster_vertex([10.0, 20.0], 0.0, 0.0),
+            ],
+            depth: 1000.0,
+            key: 1000,
+            texture: 0,
+            palette_row: 0,
+            flat: None,
+            blend: true,
+            blend_weight: None,
+            mix: PacketMix::SourceColour,
+            uv_nudge: [0; 3],
+            view_depth: false,
+        };
+        let mut framebuffer = Framebuffer::new();
+        framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));
+        rasterize_alone(&mut framebuffer, &texture, &triangle);
+        // 200: 157 + 78; 120: 56 + 47; 40: 6 + 16.
+        assert_eq!(framebuffer_pixel(&framebuffer, 11, 11), [235, 103, 22, 255]);
     }
 
     #[test]
@@ -8833,7 +8875,7 @@ mod tests {
                     tsb: 0x80,
                     textured: true,
                     blend: false,
-                    additive: false,
+                    mix: PacketMix::Weighted,
                     raw_y: false,
                     flat_color: None,
                     quad: Some([0, 1, 3, 2]),

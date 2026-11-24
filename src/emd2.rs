@@ -854,7 +854,7 @@ fn prim(
         tsb: u16::from_le_bytes([texture[6], texture[7]]),
         textured: true,
         blend: false,
-        additive: false,
+        mix: crate::model::PacketMix::Weighted,
         raw_y: false,
         flat_color: None,
         quad,
