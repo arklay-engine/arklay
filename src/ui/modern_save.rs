@@ -152,6 +152,7 @@ impl ModernSaveScreen {
                 self.outcome = Some(SaveOutcome {
                     slot,
                     ink_ribbon: *ink_ribbon,
+                    file: slot.is_none().then(|| Box::new(file)),
                 });
                 self.result = Some(ScreenResult::Done(ScreenAction::Resume));
             }
@@ -641,6 +642,7 @@ mod tests {
             Some(SaveOutcome {
                 slot: Some(2),
                 ink_ribbon: false,
+                file: None,
             })
         );
     }

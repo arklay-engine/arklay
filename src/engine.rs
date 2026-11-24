@@ -2566,6 +2566,9 @@ struct GameSession {
     /// The slot the last typewriter save wrote, taken once by the app as
     /// the in-game menu's restart point.
     saved_slot: Option<usize>,
+    /// The block the last save to a named file wrote, taken once by the app
+    /// as the in-game menu's restart point.
+    saved_file: Option<Box<save::SaveFile>>,
     /// Saves this session's save screens wrote, and the slot of the last
     /// one: the player bot's read-only view of a completed save.
     saves_written: u32,
@@ -3355,6 +3358,7 @@ impl GameSession {
             system_menu_requested: false,
             load_from_system_menu: false,
             saved_slot: None,
+            saved_file: None,
             saves_written: 0,
             last_saved_slot: None,
             autosave_pending: false,
@@ -7889,11 +7893,15 @@ impl GameSession {
 
     /// A save screen wrote a save: the app's restart point and the player
     /// bot's read-only count of completed saves.
-    fn note_save_written(&mut self, slot: Option<usize>) {
+    fn note_save_written(&mut self, outcome: ui::save_load::SaveOutcome) {
         self.saves_written = self.saves_written.saturating_add(1);
-        if slot.is_some() {
-            self.saved_slot = slot;
-            self.last_saved_slot = slot;
+        if outcome.slot.is_some() {
+            self.saved_slot = outcome.slot;
+            self.last_saved_slot = outcome.slot;
+            self.saved_file = None;
+        } else if let Some(file) = outcome.file {
+            self.saved_file = Some(file);
+            self.saved_slot = None;
         }
     }
 
@@ -7939,7 +7947,7 @@ impl GameSession {
                 .and_then(|screen| screen.take_outcome())
             {
                 self.game.re2_typewriter_write(outcome.ink_ribbon);
-                self.note_save_written(outcome.slot);
+                self.note_save_written(outcome);
             }
         } else {
             self.play_ui_cue_names(pack, cues);
@@ -7979,7 +7987,7 @@ impl GameSession {
                 }
                 self.game.increment_saves();
             }
-            self.note_save_written(outcome.slot);
+            self.note_save_written(outcome);
         }
         self.save_screen = None;
         // Leaving the save screen runs `cut_set`, which rebuilds the room's
@@ -11450,10 +11458,17 @@ struct App {
     /// The stage RE 2's `Set_room` last set (`0x989E7D`), which outlasts the
     /// game: 1 from the boot, then the stage of every room a session loads.
     re2_stage: u8,
-    /// The settings' music and effects volumes in percent, for a title
-    /// whose own option screen shows and sets them (its `on_volumes`).
-    /// `None` in a run with no settings, where such a screen keeps its own.
-    screen_volumes: Option<[u8; 2]>,
+    /// The run's music and effects volumes in percent, the original's
+    /// `Bgm_vol` and `Sfx_vol`: what a title whose own option screen shows
+    /// and sets them is told (its `on_volumes`), what a game's saves keep
+    /// and what a load takes back from its save (`Load_pop`). 100 and 100
+    /// from the boot, as `Init_system` sets them, in a run with no
+    /// settings; the settings' music and effects volumes in the interactive
+    /// game ([`Self::volumes_are_settings`]).
+    screen_volumes: [u8; 2],
+    /// Whether [`Self::screen_volumes`] are the settings': a change to them
+    /// is then mixed with and saved ([`Self::volume_change`]).
+    volumes_are_settings: bool,
     /// What the title shows as its `music_volume` and `effects_volume`: the
     /// value it published from `on_volumes`, then each one taken from it
     /// since, to tell a change of its own from what it was told. `None`
@@ -11594,7 +11609,8 @@ impl App {
             next_demo: 0,
             pending_return_title: false,
             re2_stage: 1,
-            screen_volumes: None,
+            screen_volumes: [100; 2],
+            volumes_are_settings: false,
             screen_volumes_shown: [None; 2],
             volume_change: None,
             prologue_pending: false,
@@ -12104,9 +12120,9 @@ impl App {
     /// The interactive `AppBoot::Continue` arm.
     fn boot_continue(&mut self, path: &Path) -> Result<()> {
         let file = save::load_file(path)?;
-        let session =
-            GameSession::from_save_with(&self.pack, &file, &self.save_dir, self.player_options)?;
+        let session = self.continue_session(&file, true)?;
         self.start_narrated_session(session, game::MESSAGE_BOOT_CONTINUE);
+        self.restart_point = Some(RestartPoint::File(Box::new(file)));
         Ok(())
     }
 
@@ -12310,8 +12326,53 @@ impl App {
     /// The settings' music and effects volumes, in percent: a title that
     /// shows them is told now, and every title that opens after.
     fn set_screen_volumes(&mut self, music: u8, effects: u8) {
-        self.screen_volumes = Some([music.min(100), effects.min(100)]);
+        self.volumes_are_settings = true;
+        self.set_volumes([music.min(100), effects.min(100)]);
+    }
+
+    /// The interactive game's volumes are the settings' in `game`, unless
+    /// they are the settings' already: set before the app's boot, so that a
+    /// load the boot makes (`--load`) takes its save's over them, as a
+    /// later load does, and the window's loop doesn't put them back.
+    fn use_settings_volumes(&mut self, game: &crate::config::Game) {
+        if !self.volumes_are_settings {
+            self.set_screen_volumes(game.music_volume, game.effects_volume);
+        }
+    }
+
+    /// The run's volumes are `volumes`: a title that shows them is told,
+    /// and the game in play keeps them for its saves.
+    fn set_volumes(&mut self, volumes: [u8; 2]) {
+        self.screen_volumes = volumes;
         self.tell_screen_volumes();
+        if let Mode::Play(session) = &mut self.mode {
+            session.game.re2.volumes = Some(volumes);
+        }
+    }
+
+    /// Build the session a continue from `file` starts, and take the run's
+    /// volumes from its save once it builds, as `Load_pop` does: a save that
+    /// can't be continued from changes nothing, and one from before arklay
+    /// kept them (or whose RE 2 state doesn't apply) leaves them as they
+    /// are. In the interactive game the save's volumes are the settings'
+    /// from then on, as the SOUND page would set them; `persist` has the
+    /// window's loop mix with and save them ([`Self::volume_change`]).
+    fn continue_session(
+        &mut self,
+        file: &save::SaveFile,
+        persist: bool,
+    ) -> Result<Box<GameSession>> {
+        let session =
+            GameSession::from_save_with(&self.pack, file, &self.save_dir, self.player_options)?;
+        if let Some(volumes) = session.game.re2.volumes
+            && volumes != self.screen_volumes
+        {
+            if self.volumes_are_settings && persist {
+                self.volume_change = Some(volumes);
+            }
+            self.set_volumes(volumes);
+        }
+        Ok(session)
     }
 
     /// Tell the title the settings' volumes (`on_volumes(api, music,
@@ -12319,9 +12380,7 @@ impl App {
     /// a range of its own. From a script that publishes nothing from the
     /// hook nothing is taken.
     fn tell_screen_volumes(&mut self) {
-        let Some([music, effects]) = self.screen_volumes else {
-            return;
-        };
+        let [music, effects] = self.screen_volumes;
         // The screen is lent out of the mode while the app's context is.
         let mut mode = std::mem::replace(&mut self.mode, Mode::Boot);
         if let Mode::Title(screen) | Mode::Select(screen) = &mut mode
@@ -12344,9 +12403,8 @@ impl App {
     /// differently from the settings (a floor of 1) is no change, and a
     /// value no setting can hold, or none, leaves what it shows as it was.
     fn poll_screen_volumes(&mut self) {
-        let (Some(mut volumes), Mode::Title(screen) | Mode::Select(screen)) =
-            (self.screen_volumes, &self.mode)
-        else {
+        let mut volumes = self.screen_volumes;
+        let (Mode::Title(screen) | Mode::Select(screen)) = &self.mode else {
             return;
         };
         if !screen.shows_volumes() {
@@ -12361,9 +12419,11 @@ impl App {
                 volumes[index] = percent;
             }
         }
-        if self.screen_volumes != Some(volumes) {
-            self.screen_volumes = Some(volumes);
-            self.volume_change = Some(volumes);
+        if self.screen_volumes != volumes {
+            self.screen_volumes = volumes;
+            if self.volumes_are_settings {
+                self.volume_change = Some(volumes);
+            }
         }
     }
 
@@ -12519,6 +12579,12 @@ impl App {
         }
         session.subtitles_off = !self.subtitles;
         session.game.player_options = self.player_options;
+        // A new game copies the run's volumes into its save work
+        // (`FUN_004b73c0`); a load keeps its save's, which the run has
+        // taken ([`Self::continue_session`]).
+        if session.game.re2.volumes.is_none() {
+            session.game.re2.volumes = Some(self.screen_volumes);
+        }
         if self.audio {
             session.start_audio(&self.pack);
         }
@@ -12601,8 +12667,7 @@ impl App {
 
     /// Continue from a parsed save block (a Lua screen's chosen file).
     fn continue_from_file(&mut self, file: save::SaveFile) -> Result<()> {
-        let session =
-            GameSession::from_save_with(&self.pack, &file, &self.save_dir, self.player_options)?;
+        let session = self.continue_session(&file, true)?;
         self.start_narrated_session(session, game::MESSAGE_BOOT_CONTINUE);
         Ok(())
     }
@@ -13309,6 +13374,7 @@ impl App {
         let mut load_request = None;
         let mut clear_game = None;
         let mut saved_slot = None;
+        let mut saved_file = None;
         let mut autosave = None;
         {
             let App { pack, mode, .. } = self;
@@ -13338,6 +13404,7 @@ impl App {
                 }
                 load_request = session.take_load_request();
                 saved_slot = session.saved_slot.take();
+                saved_file = session.saved_file.take();
                 autosave = session.take_autosave();
                 clear_game = session
                     .take_clear_game_request()
@@ -13346,6 +13413,9 @@ impl App {
         }
         if let Some(slot) = saved_slot {
             self.restart_point = Some(RestartPoint::Slot(slot));
+        }
+        if let Some(file) = saved_file {
+            self.restart_point = Some(RestartPoint::File(file));
         }
         if let Some(stage) = re2_stage {
             self.re2_stage = stage;
@@ -13920,7 +13990,7 @@ fn start_capture_game(app: &mut App, character: u8, room: Option<RoomId>) -> Res
 /// Build the capture-path continue session and start it.
 fn start_capture_continue(app: &mut App, path: &Path) -> Result<()> {
     let file = save::load_file(path)?;
-    let session = GameSession::from_save_with(&app.pack, &file, &app.save_dir, app.player_options)?;
+    let session = app.continue_session(&file, false)?;
     app.start_session(session);
     Ok(())
 }
@@ -14135,6 +14205,9 @@ fn run_ui_impl(
     let mut app = App::new(pack, save_dir.to_path_buf(), true);
     app.configure_watch(mods.watch);
     app.player_options = player_options;
+    // The settings' volumes before the boot, which a `--load` takes its
+    // save's over.
+    app.use_settings_volumes(&crate::config::Config::load_default().0.game);
     app.boot(boot)?;
     if let Mode::Play(session) = &mut app.mode {
         session.run_setup_script(authoring.setup_script)?;
@@ -14676,9 +14749,8 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
     let mut event = SDL_Event::default();
     let mut clock = LoopClock::new(display.frame_rate(), stats);
     warm_gui_fonts(app.pack.language());
-    let game_options = crate::config::Config::load_default().0.game;
+    let game_options = settings_volumes(app, crate::config::Config::load_default().0.game);
     crate::audio::set_volumes(game_options.volumes());
-    app.set_screen_volumes(game_options.music_volume, game_options.effects_volume);
     ui::save_load::set_modern(game_options.modern_save_screen);
     app.set_subtitle_options(&game_options);
     let mut hud = debug_hud::DebugHud::new(game_options.ui_font);
@@ -15085,7 +15157,8 @@ fn menu_game_options(app: &App, mut game: crate::config::Game) -> crate::config:
     game.chris_ink_ribbons = !app.player_options.no_chris_ink_ribbons;
     game.jill_ink_ribbons = app.player_options.jill_ink_ribbons;
     game.autosave = !app.player_options.no_autosave;
-    if let Some([music, effects]) = app.screen_volumes {
+    if app.volumes_are_settings {
+        let [music, effects] = app.screen_volumes;
         game.music_volume = music;
         game.effects_volume = effects;
     }
@@ -15247,6 +15320,16 @@ pub(crate) fn persisted_options(
         file.language
     };
     (saved_graphics, language, saved_game)
+}
+
+/// The settings' `[game]` options as the window mixes with them: the run's
+/// music and effects volumes are the settings' ([`App::use_settings_volumes`]),
+/// or what a load the app's boot made took from its save over them, which
+/// the window's first tick then saves.
+fn settings_volumes(app: &mut App, mut game: crate::config::Game) -> crate::config::Game {
+    app.use_settings_volumes(&game);
+    [game.music_volume, game.effects_volume] = app.screen_volumes;
+    game
 }
 
 /// The values a title publishes for the volumes it shows and sets
@@ -29163,9 +29246,49 @@ mod tests {
             outcome: Some(ui::save_load::SaveOutcome {
                 slot: None,
                 ink_ribbon: true,
+                file: None,
             }),
             values: values.iter().copied().collect(),
         })
+    }
+
+    /// RESTART reloads the save last written, a named file's too: a write
+    /// to a file the screen named moves the restart point from the save
+    /// loaded before onto the block it wrote, with the volumes the game had
+    /// then. A failed write that still counts as a save leaves it.
+    #[test]
+    fn a_named_write_is_the_restart_point() {
+        for written in [true, false] {
+            let dir = TempDir::new();
+            let (pack, mut session) = re2_typewriter_session(&dir);
+            let loaded = save::SaveFile {
+                volumes: Some([40, 7]),
+                ..save::SaveFile::default()
+            };
+            let b = save::SaveFile {
+                volumes: Some([60, 50]),
+                health: 77,
+                ..save::SaveFile::default()
+            };
+            session.save_screen = Some(Box::new(WritingSaveScreen {
+                outcome: Some(ui::save_load::SaveOutcome {
+                    slot: None,
+                    ink_ribbon: false,
+                    file: written.then(|| Box::new(b.clone())),
+                }),
+                values: Default::default(),
+            }));
+            session.re2_save = Some(Re2Save::Screen);
+            let mut app = App::new(pack, dir.0.join("saves"), false);
+            app.start_session(session);
+            app.restart_point = Some(RestartPoint::File(Box::new(loaded.clone())));
+            idle(&mut app);
+            let expected = if written { b } else { loaded };
+            assert!(
+                matches!(&app.restart_point, Some(RestartPoint::File(file)) if **file == expected),
+                "written: {written}"
+            );
+        }
     }
 
     /// `Card_access`'s state 3 carries on after a failed write in save mode:
@@ -41243,8 +41366,9 @@ off_0010:
     /// A title that shows the settings' volumes: it is told them as it
     /// opens and when they change, and a change it publishes is taken once,
     /// for the window to apply and save. What it only shows differently (a
-    /// floor of 1 under a setting of 0) is no change, and a run with no
-    /// settings tells and takes nothing.
+    /// floor of 1 under a setting of 0) is no change. A run with no
+    /// settings tells the title the run's own volumes, 100 and 100 from the
+    /// boot, and takes its changes as the run's, with nothing to save.
     #[test]
     fn a_titles_volumes_are_the_settings_and_its_changes_are_taken() {
         // With `LATE` the script publishes from its `update` only.
@@ -41275,7 +41399,10 @@ off_0010:
             let pack_path = new_game_pack_with(&dir, &[("ui/title.lua", title.as_bytes())]);
             let open = |settings: Option<[u8; 2]>| {
                 let mut app = App::new(Pack::open(&pack_path).unwrap(), dir.0.join("saves"), false);
-                app.screen_volumes = settings;
+                if let Some([music, effects]) = settings {
+                    app.screen_volumes = [music, effects];
+                    app.volumes_are_settings = true;
+                }
                 app.boot(AppBoot::Title).unwrap();
                 app
             };
@@ -41284,13 +41411,13 @@ off_0010:
             idle(&mut app);
             assert_eq!(title_value(&app, "music_volume"), 40);
             assert_eq!(app.volume_change, None, "showing 1 for 0 is no change");
-            assert_eq!(app.screen_volumes, Some([40, 0]));
+            assert_eq!(app.screen_volumes, [40, 0]);
             app_press(&mut app, |ui| ui.left = true);
             if late {
                 // It published nothing from the hook, so what it shows of
                 // the settings isn't known and nothing is taken from it.
                 assert_eq!(app.volume_change, None);
-                assert_eq!(app.screen_volumes, Some([40, 0]));
+                assert_eq!(app.screen_volumes, [40, 0]);
                 continue;
             }
             assert_eq!(app.volume_change.take(), Some([35, 0]));
@@ -41303,14 +41430,14 @@ off_0010:
             app_press(&mut app, |ui| ui.cancel = true);
             idle(&mut app);
             assert_eq!(app.volume_change, None);
-            assert_eq!(app.screen_volumes, Some([35, 0]));
+            assert_eq!(app.screen_volumes, [35, 0]);
             // The settings change under the title (the launcher's menu), to
             // values it showed before and to a 0 it shows as 1.
             app.set_screen_volumes(80, 0);
             assert_eq!(title_value(&app, "told"), 2);
             idle(&mut app);
             assert_eq!(app.volume_change, None, "what it was told is no change");
-            assert_eq!(app.screen_volumes, Some([80, 0]));
+            assert_eq!(app.screen_volumes, [80, 0]);
             // The floored volume moves from what is shown.
             app_press(&mut app, |ui| ui.up = true);
             assert_eq!(app.volume_change.take(), Some([80, 2]));
@@ -41320,9 +41447,11 @@ off_0010:
             assert_eq!((game.music_volume, game.effects_volume), (80, 2));
 
             let mut app = open(None);
-            assert_eq!(title_value(&app, "told"), 0);
+            assert_eq!(title_value(&app, "told"), 1);
+            assert_eq!(title_value(&app, "music_volume"), 100);
             app_press(&mut app, |ui| ui.left = true);
-            assert_eq!(app.volume_change, None);
+            assert_eq!(app.volume_change, None, "no settings to save");
+            assert_eq!(app.screen_volumes, [95, 100]);
             let game = menu_game_options(&app, crate::config::Game::default());
             assert_eq!((game.music_volume, game.effects_volume), (100, 100));
         }
@@ -41338,12 +41467,218 @@ off_0010:
             return M";
         let pack_path = new_game_pack_with(&dir, &[("ui/title.lua", title.as_bytes())]);
         let mut app = App::new(Pack::open(&pack_path).unwrap(), dir.0.join("saves"), false);
-        app.screen_volumes = Some([40, 40]);
+        app.screen_volumes = [40, 40];
+        app.volumes_are_settings = true;
         app.boot(AppBoot::Title).unwrap();
         idle(&mut app);
         app_press(&mut app, |ui| ui.left = true);
         assert_eq!(app.volume_change, None);
-        assert_eq!(app.screen_volumes, Some([40, 40]));
+        assert_eq!(app.screen_volumes, [40, 40]);
+    }
+
+    /// `Load_pop`: a load takes the run's volumes from its save as the game
+    /// it continues builds, and the game keeps them for its saves. In the
+    /// interactive game they are a change of the settings, to mix with and
+    /// save, as the SOUND page's is; with no settings they are the run's
+    /// own. A save from before arklay kept them leaves the run's as they
+    /// were, and so does one whose RE 2 state doesn't apply.
+    #[test]
+    fn a_load_takes_the_runs_volumes_from_its_save() {
+        const TITLE: &str = "local M = {}
+            function M.on_volumes(api, music, effects)
+                api:set('music_volume', music)
+                api:set('effects_volume', effects)
+            end
+            function M.update(api, input)
+                if input.confirm then api:exit(M.loaded and 'continue' or 'save_load') end
+            end
+            function M.on_resume(api) end
+            function M.on_loaded(api) M.loaded = true end
+            function M.draw() end
+            return M";
+        const LOAD: &str = "local M = {}
+            function M.update(api, input)
+                if input.confirm then assert(api:load('chosen.dat')) end
+            end
+            function M.draw() end
+            return M";
+        // (settings, the save's volumes, whether its RE 2 state applies)
+        for (settings, saved, applies) in [
+            (false, Some([40, 7]), true),
+            (true, Some([40, 7]), true),
+            (true, None, true),
+            (true, Some([40, 7]), false),
+        ] {
+            let dir = TempDir::new();
+            let pack_path = new_game_pack_with(
+                &dir,
+                &[
+                    ("ui/title.lua", TITLE.as_bytes()),
+                    ("ui/save_load.lua", LOAD.as_bytes()),
+                ],
+            );
+            let saves = dir.0.join("saves");
+            std::fs::create_dir_all(&saves).unwrap();
+            let mut trailer = crate::scd2::host::Re2State::default().to_save_bytes();
+            if !applies {
+                trailer.push(0);
+            }
+            let file = save::SaveFile {
+                stage: 0,
+                room: NEW_GAME_ROOM,
+                health: 55,
+                re2: Some(trailer),
+                volumes: saved,
+                ..save::SaveFile::default()
+            };
+            save::save_to_path(&saves.join("chosen.dat"), &file).unwrap();
+            let mut app = App::new(Pack::open(&pack_path).unwrap(), saves, false);
+            if settings {
+                app.screen_volumes = [90, 80];
+                app.volumes_are_settings = true;
+            }
+            app.boot(AppBoot::Title).unwrap();
+            let before = app.screen_volumes;
+            app_press(&mut app, |ui| ui.confirm = true);
+            app_press(&mut app, |ui| ui.confirm = true);
+            assert_eq!(app.screen_volumes, before, "not before the game builds");
+            app_press(&mut app, |ui| ui.confirm = true);
+            let Mode::Play(session) = &app.mode else {
+                panic!("expected the game");
+            };
+            let expected = saved.filter(|_| applies).unwrap_or(before);
+            assert_eq!(app.screen_volumes, expected);
+            assert_eq!(
+                session.game.re2.volumes,
+                Some(expected),
+                "kept for its saves"
+            );
+            // (The test pack's rooms are RE 1's: saved as an RE 2 game's.)
+            let mut game = session.game.clone();
+            game.is_re2_room = true;
+            assert_eq!(
+                save::SaveFile::from_state(&game).volumes,
+                Some(expected),
+                "and saved again"
+            );
+            assert_eq!(
+                app.volume_change.take(),
+                saved.filter(|_| settings && applies),
+                "a change of the settings"
+            );
+            // A title opened after the game shows them.
+            app.open_title().unwrap();
+            assert_eq!(title_value(&app, "music_volume"), i64::from(expected[0]));
+            assert_eq!(title_value(&app, "effects_volume"), i64::from(expected[1]));
+        }
+    }
+
+    /// Every continue takes the save's volumes and keeps them for the game's
+    /// saves: the boot's, the capture path's and a script's `load_save`,
+    /// not only the title's load screen. A load whose game can't be built
+    /// (a room the pack lacks) changes neither the run's volumes nor the
+    /// settings.
+    #[test]
+    fn a_direct_continue_keeps_the_saves_volumes_and_a_failed_one_changes_nothing() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack_with(&dir, &[]);
+        let saves = dir.0.join("saves");
+        std::fs::create_dir_all(&saves).unwrap();
+        let path = saves.join("chosen.dat");
+        let file = save::SaveFile {
+            stage: 0,
+            room: NEW_GAME_ROOM,
+            re2: Some(crate::scd2::host::Re2State::default().to_save_bytes()),
+            volumes: Some([40, 7]),
+            ..save::SaveFile::default()
+        };
+        save::save_to_path(&path, &file).unwrap();
+        // The game saved again, as an RE 2 game's (the test pack's rooms
+        // are RE 1's).
+        let resaved = |app: &App| match &app.mode {
+            Mode::Play(session) => {
+                let mut game = session.game.clone();
+                game.is_re2_room = true;
+                save::SaveFile::from_state(&game).volumes
+            }
+            _ => panic!("expected the game"),
+        };
+        let open = || App::new(Pack::open(&pack_path).unwrap(), saves.clone(), false);
+
+        let mut app = open();
+        app.boot_continue(&path).unwrap();
+        assert_eq!(resaved(&app), Some([40, 7]));
+        assert_eq!(app.screen_volumes, [40, 7]);
+        assert_eq!(app.volume_change, None, "no settings to save");
+
+        let mut app = open();
+        start_capture_continue(&mut app, &path).unwrap();
+        assert_eq!(resaved(&app), Some([40, 7]));
+
+        let mut app = open();
+        app.screen_volumes = [90, 80];
+        app.volumes_are_settings = true;
+        app.continue_from_path(&path).unwrap();
+        assert_eq!(resaved(&app), Some([40, 7]));
+        assert_eq!(app.volume_change.take(), Some([40, 7]));
+
+        let missing = save::SaveFile {
+            stage: 6,
+            room: 0x7F,
+            volumes: Some([10, 20]),
+            ..file
+        };
+        let bad = saves.join("missing.dat");
+        save::save_to_path(&bad, &missing).unwrap();
+        assert!(app.continue_from_path(&bad).is_err());
+        assert_eq!(app.screen_volumes, [40, 7], "the live volumes stand");
+        assert_eq!(app.volume_change, None, "and no settings are written");
+    }
+
+    /// The interactive start-up's order: the settings' volumes are the
+    /// run's before the boot, so a `--load` takes its save's over them, and
+    /// the window's loop mixes with the save's, keeps them for the game's
+    /// saves and saves them to the settings on its first tick. RESTART
+    /// reloads that save.
+    #[test]
+    fn an_interactive_load_at_the_boot_keeps_the_saves_volumes() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack_with(&dir, &[]);
+        let saves = dir.0.join("saves");
+        std::fs::create_dir_all(&saves).unwrap();
+        let path = saves.join("chosen.dat");
+        let file = save::SaveFile {
+            stage: 0,
+            room: NEW_GAME_ROOM,
+            re2: Some(crate::scd2::host::Re2State::default().to_save_bytes()),
+            volumes: Some([40, 7]),
+            ..save::SaveFile::default()
+        };
+        save::save_to_path(&path, &file).unwrap();
+        let settings = crate::config::Game {
+            music_volume: 90,
+            effects_volume: 80,
+            ..crate::config::Game::default()
+        };
+        let mut app = App::new(Pack::open(&pack_path).unwrap(), saves, false);
+        app.use_settings_volumes(&settings);
+        app.boot(AppBoot::Continue { path }).unwrap();
+        let mixed = settings_volumes(&mut app, settings);
+        assert_eq!((mixed.music_volume, mixed.effects_volume), (40, 7));
+        assert_eq!(app.volume_change, Some([40, 7]), "saved on the first tick");
+        let Mode::Play(session) = &app.mode else {
+            panic!("expected the game");
+        };
+        assert_eq!(session.game.re2.volumes, Some([40, 7]));
+        assert!(
+            matches!(&app.restart_point, Some(RestartPoint::File(restart)) if restart.volumes == Some([40, 7])),
+            "RESTART reloads the save"
+        );
+        // Without a load the settings' stand.
+        let mut app = App::new(Pack::open(&pack_path).unwrap(), dir.0.join("saves"), false);
+        let mixed = settings_volumes(&mut app, settings);
+        assert_eq!((mixed.music_volume, mixed.effects_volume), (90, 80));
+        assert_eq!(app.volume_change, None);
     }
 
     /// The new-game choice's entry runs at the limiter its script asks for,

@@ -262,6 +262,14 @@ pub struct Re2State {
     /// The save count's high byte: `0x98E9BC`'s low word is the count, of
     /// which the state byte [`crate::game::STATE_BYTE_SAVES`] is the low byte.
     pub saves_high: u8,
+    /// `Bgm_vol` and `Sfx_vol` as the save work holds them (`0x98E9A9` and
+    /// `0x98E9A8`), music first, in percent: the run's volumes, which a new
+    /// game copies in (`FUN_004b73c0`) and `Save_push` again on each save,
+    /// and which `Load_pop` gives back. The save keeps them in its block
+    /// ([`crate::save::SaveFile::volumes`]), not in this state's bytes.
+    /// `None` when the game wasn't given them, and from a save from before
+    /// them, whose load leaves the run's volumes as they are.
+    pub volumes: Option<[u8; 2]>,
 }
 
 /// `St_chenge_pl`'s and `Set_room`'s stash of the scenario's character: the
@@ -1009,6 +1017,7 @@ impl Default for Re2State {
             inventory_size: crate::game::INVENTORY_SLOTS_JILL as u8,
             save_place: 0,
             saves_high: 0,
+            volumes: None,
         }
     }
 }
