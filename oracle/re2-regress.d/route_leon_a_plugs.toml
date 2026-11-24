@@ -177,3 +177,23 @@ ignore = [
 ]
 expect = "match"
 record = "--warp 204:-14423:0:-7289:2024:4 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:75 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:51 --flag 6:52 --flag 6:54 --flag 6:55 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:85 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:131 --flag 6:133 --flag 6:148 --flag 6:157 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:188 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 50 --give 0:0x02:18 --give 2:0x33:1 --give 3:0x5C:2 --give 4:0x4A:1 --give 5:0x43:1 --box 2:0x3C:1 --box 3:0x32:1 --box 4:0x1E:3"
+
+# From 205's door 2 in 207 (Leon as leon_a_204_207 leaves him) to 112: door 3 into 10C, up its stairs (up and action held), door 2 into 114, whose three zombies the route before has killed, door 0 into 113, three of its four zombies shot dead in the room by the door (the fourth is left on 1 life), and door 1 into 112's hand back with 30 life and 5 rounds
+[[run]]
+name = "leon_a_207_112"
+room = "207"
+setup_script = "leon_a_207_112.lua"
+input = "leon_a_207_112.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 3100
+sound = false
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 3099]
+# 0.99 measured, recorded under Wine; the worst, 483 (8.0), is 10C's load (#668)
+frame_max_mean = 1.05
+ignore = [
+  [344, 365, "pneck"],
+]
+expect = "match"
+record = "--warp 207:-25640:0:-16590:0:1 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:36 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:75 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:51 --flag 6:52 --flag 6:54 --flag 6:55 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:85 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:131 --flag 6:133 --flag 6:148 --flag 6:157 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:31 --flag 8:32 --flag 8:34 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:188 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 50 --give 0:0x02:18 --give 2:0x33:1 --give 3:0x5C:2 --give 4:0x4A:1 --give 5:0x43:1 --give 6:0x33:1 --box 2:0x3C:1 --box 3:0x32:1 --box 4:0x1E:3"

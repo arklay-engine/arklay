@@ -1,0 +1,311 @@
+# leon_a_207_112: Leon A from 205's door 2 in 207: door 3 into 10C, up its stairs, door 2 into 114 (its zombies dead from the route before), door 0 into 113, three of its four zombies shot dead on the way to door 1, and door 1 into 112's hand back
+345 left
+355 up run left
+365 up run
+382 up run left
+383 up run
+405 up run right
+406 up run
+407 right
+411 up right
+413 right
+417 up right
+418 right
+420 up right
+421 right
+424 up right
+425 right
+430 up right
+431
+432 action
+434
+471 up
+643
+644 right
+646
+647 up action
+703 right
+724 up run right
+734 up run
+779 up run right
+780 up run
+815 up run right
+816 up run
+875 up run right
+876 up run
+893 up run right
+894 up run
+896 up run right
+897 up run
+898 up run left
+899 up run
+930 up run left
+931 up run
+948 up run left
+949 up run
+951 left
+959 up run left
+973 up run
+979 up run right
+980 up run
+981 up run right
+982 up run
+991 up run right
+992 up right
+994 right
+996 up right
+1000 right
+1002 up right
+1004 right
+1007 up right
+1008 right
+1010 up right
+1012 right
+1020 up right
+1021 right
+1027 up right
+1028 left
+1037
+1038 action
+1040
+1075 up
+1381
+1382 left
+1395 up run left
+1407 up run
+1414 up run left
+1415 up run
+1419 up run left
+1420 up run
+1421 up run right
+1425 up run
+1482 up run right
+1483 up run
+1486 up run right
+1487 up run left
+1491 up run
+1495 up run left
+1496 up run
+1501 up run left
+1502 up run
+1505 up run left
+1506 up run
+1507 up run left
+1508 up run
+1509 up run left
+1510 up run
+1511 up run left
+1512 up run
+1513 up run left
+1515 up run
+1518 up run left
+1519 up run
+1521 up run left
+1522 up run
+1523 up run left
+1531 up run
+1537 up run left
+1538 up run
+1562 up run left
+1563 up run
+1571 up
+1580 right
+1582
+1583 action
+1585
+1620 up
+1926
+1927 left
+1933 up run left
+1942 aim
+1949 aim fire
+1951 aim
+1957 aim fire
+1959 aim
+1965 aim fire
+1967 aim
+1973 aim fire
+1975 aim
+1981 aim fire
+1983 aim
+1989 aim fire
+1991 aim
+1997 aim fire
+1999 aim
+2005 aim fire
+2007 aim
+2013 aim fire
+2015 aim
+2021 aim fire
+2023 aim
+2029 aim fire
+2031 aim
+2037 aim fire
+2039 aim
+2045 aim fire
+2047 aim
+2053 aim fire
+2055 aim
+2061 aim fire
+2063 aim
+2069 aim fire
+2071 aim
+2077 aim fire
+2079 aim
+2085 aim fire
+2087 aim
+2093 aim fire
+2095 aim
+2101 aim fire
+2103 aim
+2109 aim fire
+2111 aim
+2117 aim fire
+2119 aim
+2125 aim fire
+2127 aim
+2133 aim fire
+2135 aim
+2141 aim fire
+2143 aim
+2149 aim fire
+2151 aim
+2157 aim fire
+2159 aim
+2165 aim fire
+2167 aim
+2173 aim fire
+2175 aim
+2181 aim fire
+2183 aim
+2189 aim fire
+2191 aim
+2197 aim fire
+2199 aim
+2205 aim fire
+2207 up run
+2228 up run left
+2229 up run
+2236 up run left
+2237 up run
+2239 up run left
+2240 up run
+2242 up run left
+2244 up run
+2246 up run left
+2247 up run
+2248 aim
+2255 aim fire
+2257 up run left
+2261 aim
+2268 aim fire
+2270 aim
+2276 aim fire
+2278 aim
+2284 aim fire
+2286 aim
+2292 aim fire
+2294 aim
+2300 aim fire
+2302 aim
+2308 aim fire
+2310 aim
+2316 aim fire
+2318 aim
+2324 aim fire
+2326 aim
+2332 aim fire
+2334 aim
+2340 aim fire
+2342 aim
+2348 aim fire
+2350 aim
+2356 aim fire
+2358 aim
+2364 aim fire
+2366 aim
+2372 aim fire
+2374 aim
+2380 aim fire
+2382 aim
+2388 aim fire
+2390 aim
+2396 aim fire
+2398 aim
+2404 aim fire
+2406 aim
+2412 aim fire
+2414 aim
+2420 aim fire
+2422 aim
+2428 aim fire
+2430 aim
+2436 aim fire
+2438 aim
+2444 aim fire
+2446 aim
+2452 aim fire
+2454 aim
+2459 up run
+2477 up run left
+2481 up run
+2482 up run left
+2483 up run
+2489 up run right
+2491 aim
+2498 aim fire
+2500 aim
+2506 aim fire
+2508 aim
+2514 aim fire
+2516 aim
+2522 aim fire
+2524 aim
+2530 aim fire
+2532 aim
+2533 up run right
+2545 up run
+2555 aim
+2556 up run
+2557 aim
+2559 up run right
+2570 up run
+2574 aim
+2581 aim fire
+2583 aim
+2589 aim fire
+2591 aim
+2597 aim fire
+2599 aim
+2605 aim fire
+2607 aim
+2613 aim fire
+2615 up run right
+2628 up run
+2650 up run right
+2651 right
+2661 up run right
+2672 up run
+2673 up run right
+2674 up run
+2688 up run right
+2689 up run
+2690 up run left
+2691 up run
+2707 up run left
+2708 up run
+2719 up left
+2720 left
+2722 up left
+2723 left
+2725 up left
+2726 left
+2728 up left
+2729 left
+2732 up left
+2733 left
+2745
+2746 action
+2748
+2783 up
+3087
