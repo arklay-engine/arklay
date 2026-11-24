@@ -160,6 +160,7 @@ pub const MAX_FILE_NAME: usize = 255;
 pub const AUTOSAVE_COUNT: usize = 2;
 
 mod file;
+pub mod re2_image;
 pub use file::SaveFile;
 
 impl SaveFile {
@@ -417,6 +418,8 @@ impl SaveFile {
             // `Player_set` writes the id to `scd_var_next_pld`.
             let id = state.re2.pl_id;
             state.set_re2_player_id(id);
+            // `Title_game_init`'s load: no door led into the room.
+            state.re2.vars[crate::scd2::host::VAR_LAST_RDT] = 0xFF;
             // `Player_set`'s `Max_life`, the loaded player's.
             state.max_health = crate::game::pl_change2::max_life(id);
             state.re2.pl_stash.life = self.health;
@@ -922,8 +925,9 @@ pub fn default_save_dir() -> PathBuf {
 pub struct SaveSlotInfo {
     /// Character id (`0` Chris, `1` Jill).
     pub character: u8,
-    /// Save counter.
-    pub saves: u8,
+    /// Save counter: the block's byte, with an RE 2 trailer's high byte
+    /// over it (`0x98E9BC`'s low word).
+    pub saves: u16,
     /// The 1-based stage of the room the block was saved in.
     pub stage: u8,
     /// Room id.
@@ -943,7 +947,12 @@ impl SaveSlotInfo {
         let id = file.block_room();
         Self {
             character: file.character,
-            saves: file.saves,
+            saves: u16::from(
+                file.re2
+                    .as_deref()
+                    .map_or(0, crate::scd2::host::saves_high_in),
+            ) << 8
+                | u16::from(file.saves),
             stage: id.stage,
             room: id.room,
             mansion2: id.mansion2,
@@ -1472,6 +1481,20 @@ mod tests {
         assert!(restored.re2_typewriter_trace().ends_with(",1"));
     }
 
+    /// `Title_game_init`'s load sets `scd_var_last_rdt` to `0x00FF`, not
+    /// the room the save's last door left.
+    #[test]
+    fn an_re2_load_has_no_last_room() {
+        let mut state = GameState::new(RoomId::parse("200").unwrap(), &RoomState::default());
+        state.is_re2_room = true;
+        state.re2.leave_room(RoomId::parse("100").unwrap());
+        let file = SaveFile::from_bytes(&SaveFile::from_state(&state).to_file_bytes())
+            .expect("the save reads back");
+        let mut restored = GameState::default();
+        file.apply_to(&mut restored);
+        assert_eq!(restored.re2.vars[crate::scd2::host::VAR_LAST_RDT], 0xFF);
+    }
+
     /// A file from before the save place has a shorter RE 2 trailer, which
     /// loads with the place the game was started with. A newer file cut a
     /// byte short still says its full length, so its trailer isn't taken
@@ -1486,10 +1509,11 @@ mod tests {
         let current = saved.to_file_bytes();
         let payload = saved.re2.as_ref().expect("the RE 2 state").len();
 
+        // Before the save place and the save count's high byte after it.
         let mut older = saved.clone();
-        older.re2.as_mut().unwrap().truncate(payload - 1);
+        older.re2.as_mut().unwrap().truncate(payload - 2);
         let older = SaveFile::from_bytes(&older.to_file_bytes()).expect("the older save");
-        assert_eq!(older.re2.as_ref().map(Vec::len), Some(payload - 1));
+        assert_eq!(older.re2.as_ref().map(Vec::len), Some(payload - 2));
         let mut restored = GameState::default();
         restored.re2.save_place = 0x0F;
         older.apply_to(&mut restored);
@@ -1560,8 +1584,10 @@ mod tests {
         assert_eq!(restored.re2.pl_stash.life, 120);
         // A save from before the id was kept: Claire's scenario is Claire.
         let mut old = SaveFile::from_state(&state);
+        // (The id, the slot count, the place and the count's high byte
+        // came after it.)
         let bytes = old.re2.as_mut().unwrap();
-        bytes.truncate(bytes.len() - 2);
+        bytes.truncate(bytes.len() - 4);
         old.character = 1;
         let mut restored = GameState::default();
         old.apply_to(&mut restored);

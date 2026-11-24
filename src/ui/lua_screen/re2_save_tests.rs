@@ -1208,3 +1208,86 @@ fn only_re2_saves_are_listed_and_load_mode_adds_the_autosaves() {
         "4 rows and leave; cnt0 2"
     );
 }
+
+/// The save count is `0x98E9BC`'s whole low word: past the 255th save the
+/// name (Classic REbirth's last two digits), the footer's new save and the
+/// written file go on from 256, not from the low byte's 0.
+#[test]
+fn two_saves_across_the_256th_count_on() {
+    let dir = folder("count-word");
+    let mut game = GameState::new(RoomId::parse("2000").unwrap(), &RoomState::default());
+    game.is_re2_room = true;
+    game.state_bytes[usize::from(crate::game::STATE_BYTE_SAVES)] = 255;
+    let confirm = UiInput {
+        confirm: true,
+        ..UiInput::default()
+    };
+    for (count, digits) in [(256, "_56_"), (257, "_57_")] {
+        let context = || UiContext {
+            game: Some(&game),
+            ..context(&dir)
+        };
+        let mut cx = context();
+        let mut screen = LuaScreen::open_save(
+            "ui/save_load.lua",
+            &mut cx,
+            SaveFile::from_state(&game),
+            true,
+        )
+        .unwrap();
+        for input in std::iter::repeat_n(UiInput::default(), 8).chain([confirm, UiInput::default()])
+        {
+            screen.update(&context(), input);
+        }
+        let name: String = screen.test_eval("return M.state.name");
+        assert!(name.contains(digits), "save {count}: {name}");
+        let saves: i64 = screen.test_eval("return M.state.new.saves");
+        assert_eq!(saves, count, "the footer's new save");
+        let path = dir.join(format!("{name}.dat"));
+        let written = crate::save::load_file(&path).unwrap();
+        assert_eq!(
+            crate::save::SaveSlotInfo::from_file(&written).saves,
+            count as u16,
+            "the written file"
+        );
+        // The engine's write tick, as it applies it live.
+        assert!(screen.take_outcome().is_some());
+        game.re2_typewriter_write(true);
+        assert_eq!(i64::from(game.re2_save_count()), count);
+    }
+}
+
+/// At the word's end the count wraps once for the name and the footer:
+/// the save after the 65535th is 0, `_00_`, as the original raises the low
+/// word before it names the file.
+#[test]
+fn the_save_after_the_65535th_wraps_to_0() {
+    let dir = folder("count-wrap");
+    let mut game = GameState::new(RoomId::parse("2000").unwrap(), &RoomState::default());
+    game.is_re2_room = true;
+    game.state_bytes[usize::from(crate::game::STATE_BYTE_SAVES)] = 255;
+    game.re2.saves_high = 255;
+    let confirm = UiInput {
+        confirm: true,
+        ..UiInput::default()
+    };
+    let context = || UiContext {
+        game: Some(&game),
+        ..context(&dir)
+    };
+    let mut cx = context();
+    let mut screen = LuaScreen::open_save(
+        "ui/save_load.lua",
+        &mut cx,
+        SaveFile::from_state(&game),
+        true,
+    )
+    .unwrap();
+    for input in std::iter::repeat_n(UiInput::default(), 8).chain([confirm, UiInput::default()]) {
+        screen.update(&context(), input);
+    }
+    let name: String = screen.test_eval("return M.state.name");
+    assert!(name.contains("_00_"), "{name}");
+    let saves: i64 = screen.test_eval("return M.state.new.saves");
+    assert_eq!(saves, 0, "the footer's new save");
+}

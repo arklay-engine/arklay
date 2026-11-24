@@ -39,6 +39,32 @@ use mlua::{
 };
 
 use super::*;
+use crate::save::re2_image;
+
+/// The regions two RE 2 save images differ in under the mask
+/// ([`re2_image::differences`]), as the script functions return them.
+fn differences_table(
+    lua: &Lua,
+    ours: &[u8; re2_image::IMAGE_LEN],
+    theirs: &[u8; re2_image::IMAGE_LEN],
+) -> mlua::Result<Table> {
+    let hex = |bytes: &[u8]| {
+        bytes
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    };
+    let list = lua.create_table()?;
+    for difference in re2_image::differences(ours, theirs) {
+        let entry = lua.create_table()?;
+        entry.set("region", difference.region)?;
+        entry.set("offset", difference.offset)?;
+        entry.set("ours", hex(&difference.ours))?;
+        entry.set("theirs", hex(&difference.theirs))?;
+        list.push(entry)?;
+    }
+    Ok(list)
+}
 
 /// The allocation ceiling of a driver script's Lua state.
 const MEMORY_LIMIT: usize = 256 * 1024 * 1024;
@@ -1591,6 +1617,129 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                     .write_save(Path::new(&path))
                     .map_err(engine_error)?;
                 Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "re2_save_image",
+        lua.create_function(move |lua, reference: Option<String>| {
+            with(&shared, |driver| {
+                driver.settle_authoring()?;
+                let app = driver.app()?;
+                let Mode::Play(session) = &app.mode else {
+                    return Err(mlua::Error::RuntimeError(
+                        "re2_save_image: no game session is running".into(),
+                    ));
+                };
+                if !session.game.is_re2_room {
+                    return Err(mlua::Error::RuntimeError(
+                        "re2_save_image: the session isn't an RE 2 game".into(),
+                    ));
+                }
+                let entry = crate::bgm2::INIT_TABLE_ENTRY;
+                let table = app.pack.read(entry).map_err(|err| {
+                    mlua::Error::RuntimeError(format!(
+                        "re2_save_image: the pack has no {entry}, the record the image starts from: {err}"
+                    ))
+                })?;
+                let row = re2_image::init_row(&session.game);
+                let record = re2_image::init_record(&table, row).ok_or_else(|| {
+                    mlua::Error::RuntimeError(format!(
+                        "re2_save_image: {entry} has no row {row} ({} bytes)",
+                        table.len()
+                    ))
+                })?;
+                let image = re2_image::build(&session.game, Some(record));
+                let ours = lua.create_string(image)?;
+                let Some(reference) = reference else {
+                    return Ok((ours, None));
+                };
+                let theirs = std::fs::read(&reference)
+                    .with_context(|| format!("re2_save_image: reading {reference}"))
+                    .map_err(engine_error)?;
+                let theirs: [u8; re2_image::IMAGE_LEN] =
+                    theirs.try_into().map_err(|bytes: Vec<u8>| {
+                        mlua::Error::RuntimeError(format!(
+                            "re2_save_image: {reference} is {} bytes, not {}",
+                            bytes.len(),
+                            re2_image::IMAGE_LEN
+                        ))
+                    })?;
+                let list = differences_table(lua, &image, &theirs)?;
+                Ok((ours, Some(list)))
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "re2_saves",
+        lua.create_function(move |lua, references: Option<Table>| {
+            with(&shared, |driver| {
+                let app = driver.app()?;
+                let Mode::Play(session) = &app.mode else {
+                    return Err(mlua::Error::RuntimeError(
+                        "re2_saves: no game session is running".into(),
+                    ));
+                };
+                let table = app
+                    .pack
+                    .read(crate::bgm2::INIT_TABLE_ENTRY)
+                    .map_err(|err| {
+                        mlua::Error::RuntimeError(format!(
+                            "re2_saves: the pack has no {}: {err}",
+                            crate::bgm2::INIT_TABLE_ENTRY
+                        ))
+                    })?;
+                let mut paths: Vec<PathBuf> = std::fs::read_dir(&session.save_dir)
+                    .map(|entries| {
+                        entries
+                            .filter_map(|entry| Some(entry.ok()?.path()))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                paths.sort();
+                let list = lua.create_table()?;
+                for path in paths {
+                    let row = lua.create_table()?;
+                    row.set(
+                        "name",
+                        path.file_name()
+                            .map(|name| name.to_string_lossy().into_owned()),
+                    )?;
+                    let read = crate::save::load_file(&path)
+                        .map_err(|err| format!("{err:#}"))
+                        .and_then(|file| re2_image::saved_state(&file));
+                    match read {
+                        Err(why) => row.set("error", why)?,
+                        Ok(game) => {
+                            let record = re2_image::init_record(&table, re2_image::init_row(&game));
+                            let image = re2_image::build(&game, record);
+                            let count = u16::from_le_bytes([image[0x220], image[0x221]]);
+                            row.set("count", count)?;
+                            let reference = match &references {
+                                Some(refs) => refs.get::<Option<String>>(count)?,
+                                None => None,
+                            };
+                            if let Some(reference) = reference {
+                                let theirs = std::fs::read(&reference)
+                                    .with_context(|| format!("re2_saves: reading {reference}"))
+                                    .map_err(engine_error)?;
+                                let theirs: [u8; re2_image::IMAGE_LEN] =
+                                    theirs.try_into().map_err(|_| {
+                                        mlua::Error::RuntimeError(format!(
+                                            "re2_saves: {reference} isn't a save image"
+                                        ))
+                                    })?;
+                                row.set("differ", differences_table(lua, &image, &theirs)?)?;
+                            }
+                        }
+                    }
+                    list.push(row)?;
+                }
+                Ok(list)
             })
         })?,
     )?;

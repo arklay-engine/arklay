@@ -207,7 +207,8 @@ pub struct MapContext {
     /// Bit 0 of the player's `pld` (`0x989EF8`), which picks the column of
     /// [`MapRoom::scenario`].
     pub pld_odd: bool,
-    /// `scd_var_last_rdt` (`0x98EB1A`). Not modelled: always 0.
+    /// `scd_var_last_rdt` (`0x98EB1A`, script variable 27): the room the
+    /// last door left, its 1-based stage times 0x100 plus its room.
     pub word: u16,
     /// `0x692FAC`, whose writer isn't known. Always 0.
     pub byte: u8,
@@ -550,7 +551,7 @@ impl GameState {
             player: self.re2.player.floor,
             status: self.re2.banks[usize::from(crate::scd2::host::STATUS_BANK)][0],
             pld_odd: self.re2.pl_id & 1 != 0,
-            word: 0,
+            word: self.re2.vars[crate::scd2::host::VAR_LAST_RDT],
             byte: 0,
         }
     }
@@ -836,6 +837,27 @@ fn special_room(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `Check_room_no`: room 601 is floor 0xD when the door came from 602,
+    /// and 0x10 from anywhere else.
+    #[test]
+    fn room_601_s_floor_follows_the_room_the_door_left() {
+        let room = crate::state::RoomId::parse("6010").unwrap();
+        let mut game = GameState::new(room, &crate::state::RoomState::default());
+        game.is_re2_room = true;
+        game.re2
+            .leave_room(crate::state::RoomId::parse("6020").unwrap());
+        game.re2_room_set();
+        assert!(game.re2.flag(FLOOR_BANK, 0xD));
+        assert!(!game.re2.flag(FLOOR_BANK, 0x10));
+        let mut game = GameState::new(room, &crate::state::RoomState::default());
+        game.is_re2_room = true;
+        game.re2
+            .leave_room(crate::state::RoomId::parse("6030").unwrap());
+        game.re2_room_set();
+        assert!(game.re2.flag(FLOOR_BANK, 0x10));
+        assert!(!game.re2.flag(FLOOR_BANK, 0xD));
+    }
 
     #[test]
     fn the_visited_bits_count_from_each_stages_base() {
