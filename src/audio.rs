@@ -1360,6 +1360,16 @@ impl Mixer {
         self.state.bgm_channel_playing(index)
     }
 
+    /// BGM channel `index`'s gain, if it has a buffer.
+    #[cfg(test)]
+    pub fn bgm_channel_gain(&self, index: usize) -> Option<f32> {
+        self.state
+            .bgm_channels
+            .get(index)?
+            .as_ref()
+            .map(|channel| channel.gain)
+    }
+
     /// Whether BGM channel `index` has a loaded buffer.
     #[cfg(test)]
     pub(crate) fn bgm_channel_loaded(&self, index: usize) -> bool {

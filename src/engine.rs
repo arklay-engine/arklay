@@ -3850,9 +3850,9 @@ impl GameSession {
             }
             if pads > 0 {
                 self.game.re2.set_key(0);
+                self.film_ended = true;
             }
             self.end_re2_movie();
-            self.film_ended = true;
             // The film's last pass leaves the screen held, as the window's does.
             self.present_held = true;
             return;
@@ -5830,8 +5830,8 @@ impl GameSession {
         // runs it after itself.
         if self.game.re2.sound_close.is_some() {
             self.game.re2.sound_init = true;
-        } else {
-            self.re2_sound_init();
+        } else if self.re2_sound_init() {
+            self.re2_hold_sub_full();
         }
         self.present_skip.movie_set_black(1);
     }
@@ -5891,6 +5891,12 @@ impl GameSession {
         if std::mem::take(&mut self.game.re2.sound_init) && !self.re2_sound_init() {
             return;
         }
+        self.re2_hold_sub_full();
+    }
+
+    /// A sub `SsInit2` started plays at full level until the music next sets
+    /// its volume: the restart's `SsSetVol` takes a stale index.
+    fn re2_hold_sub_full(&mut self) {
         for (sub, full) in self.re2_sub_full.iter_mut().enumerate() {
             let volume = self.game.re2.music.channels[3 + sub].volume;
             if full.is_some_and(|level| level != volume) {
@@ -8913,6 +8919,7 @@ impl GameSession {
         // `Snd_se_call` goes on through a door, so the music fades.
         if self.game.is_re2_room {
             bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
+            self.re2_hold_sub_full();
         }
         let Some(mut session) = self.transition.take() else {
             return;
@@ -39580,6 +39587,7 @@ off_0010:
         session.instant_film = Some(3);
         session.swap_cbuff();
         assert!(session.instant_film.is_none());
+        assert!(session.film_ended, "the driver forgets what is held");
         assert!(!session.game.re2.flag(0, FG_SYSTEM_MOVIE));
         assert!(
             !session.game.re2.sound_init,
@@ -39625,11 +39633,13 @@ off_0010:
         film(&mut session);
         assert_eq!(left(&session), Some(0));
         let warnings = crate::logging::warnings_since(0).0;
+        session.film_ended = false;
         film(&mut session);
         assert!(
             crate::logging::warnings_since(0).0 > warnings,
             "the list ran out"
         );
+        assert!(!session.film_ended, "no Pad_set saw the keys clear");
     }
 
     #[test]
@@ -39723,6 +39733,34 @@ off_0010:
         session.game.re2.music.channels[4].volume = 65;
         session.re2_sound_close_and_init(&pack);
         assert_eq!(session.re2_sub_full, [None, None]);
+    }
+
+    /// A film's end runs `SsInit2` at once, before the next tick (a door's
+    /// too): the sub it starts plays at full level from then.
+    #[test]
+    fn a_film_s_end_starts_the_marked_music_at_once() {
+        let (_dir, _pack, mut session) = re2_film_session(&[]);
+        let mut mixer = Mixer::capture();
+        let samples: Vec<i16> = (0..4096).map(|n| (n % 64) as i16 * 100).collect();
+        mixer.load_bgm_channel(
+            4,
+            audio::Wav::from_s16(&samples, 1, audio::SAMPLE_RATE),
+            true,
+        );
+        mixer.set_bgm_channel_volume(4, 0.25);
+        session.game.re2.music.channels[4].track = Some(3);
+        session.game.re2.music.channels[4].volume = 65;
+        session.re2_music_closed = [false, false, true];
+        session.music = Some(mixer);
+        session.end_re2_movie();
+        assert!(!session.game.re2.sound_init);
+        let mixer = session.music.as_ref().unwrap();
+        assert!(mixer.bgm_channel_playing(4));
+        assert_eq!(
+            mixer.bgm_channel_gain(4),
+            Some(crate::sfx::volume_gain(0)),
+            "full level"
+        );
     }
 
     #[test]
