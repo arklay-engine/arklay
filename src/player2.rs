@@ -404,6 +404,14 @@ pub struct Work {
     /// The routines hold the first tick of `pl_mv_00` that a room started on
     /// its own assumes ([`Work::default`]), and no tick has run them yet.
     pub first_tick_assumed: bool,
+    /// A room started on its own: `Pl_init`'s pose and the head it places,
+    /// for a stop before the first `Player_move` ([`plc_stop_player`]),
+    /// whose routines then never blend from it ([`start_pose`]).
+    pub start_unblended: Option<Box<(Keyframe, Neck)>>,
+    /// The pose the joints take before the next tick's move: the start's
+    /// unblended one, once a stop has kept the first `Player_move` from
+    /// running ([`seed_pose`]).
+    pub restore_pose: Option<Box<Keyframe>>,
     /// `fg_status`'s `0x40`. The aim (`pl_mv_05`), a hit (`Pl_damage`), the
     /// death (`Pl_die`), `pl_mv_0b` and an enemy's hold (`Pl_Em_damage`,
     /// `Pl_Em_die`) raise it and leave it to the next routine's case 0, so it
@@ -1273,6 +1281,8 @@ impl Default for Work {
             posed: false,
             init_pose: false,
             first_tick_assumed: true,
+            start_unblended: None,
+            restore_pose: None,
             holds_game: false,
             routine: [MODE_MOVE, MOVE_IDLE, 1, 0],
             move_no: IDLE_CLIPS[0],
@@ -1383,6 +1393,7 @@ impl Work {
         self.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
         self.hokan = 0;
         self.first_tick_assumed = false;
+        self.start_unblended = None;
         self
     }
 
@@ -1886,6 +1897,9 @@ pub fn place_neck(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
 /// out of this pose: the new game's idle frame. Once per player; a door keeps
 /// the last room's pose ([`Work::entering_room`]).
 pub fn seed_pose(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
+    if let Some(pose) = work.restore_pose.take() {
+        player.anim.set_applied_pose(Some(*pose));
+    }
     if std::mem::replace(&mut work.posed, true) || work.move_cnt == 0 {
         return;
     }
@@ -1915,6 +1929,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         return None;
     }
     work.first_tick_assumed = false;
+    work.start_unblended = None;
     let held_game = work.holds_game_now();
     if work.routine[0] == MODE_MOVE && work.routine[1] <= MOVE_ROTATE && work.routine[2] == 0 {
         work.status_drop |= STATUS_GAME_HOLD;
@@ -7813,6 +7828,12 @@ pub fn plc_ret(work: &mut Work) {
 pub fn plc_stop_player(work: &mut Work) {
     if std::mem::take(&mut work.first_tick_assumed) {
         work.hokan = 0;
+        // A room started on its own shows `Pl_init`'s pose, unblended.
+        if let Some(start) = work.start_unblended.take() {
+            let (pose, neck) = *start;
+            work.neck = neck;
+            work.restore_pose = Some(Box::new(pose));
+        }
     }
     plc_stop(work);
 }
@@ -12493,6 +12514,38 @@ mod tests {
         let hokan = setup.work.hokan;
         plc_stop_player(&mut setup.work);
         assert_eq!(setup.work.hokan, hokan);
+    }
+
+    /// A room started on its own that a scene stops before the first
+    /// `Player_move` shows `Pl_init`'s pose and head, not the first tick's
+    /// blend: the next tick's joints take the pose, and the head is put back.
+    #[test]
+    fn a_stopped_start_keeps_pl_init_s_pose_unblended() {
+        let pose = Keyframe {
+            offset: [0, -1700, 0],
+            vertex: [0; 3],
+            rotations: vec![[0x40, 0, 0]],
+        };
+        let neck = Neck {
+            position: Some([1, 2, 3]),
+            ..Neck::default()
+        };
+        let mut work = Work {
+            start_unblended: Some(Box::new((pose.clone(), neck))),
+            ..Work::default()
+        };
+        work.neck.position = Some([7, 8, 9]);
+        plc_stop_player(&mut work);
+        assert_eq!(work.neck, neck);
+        assert_eq!(work.restore_pose.as_deref(), Some(&pose));
+        assert!(work.start_unblended.is_none());
+
+        // A stop once the first move has run leaves the pose alone.
+        let mut setup = Setup::new(0);
+        setup.tick(Input::default(), 200);
+        setup.work.start_unblended = Some(Box::new((pose, neck)));
+        plc_stop_player(&mut setup.work);
+        assert!(setup.work.restore_pose.is_none());
     }
 
     #[test]

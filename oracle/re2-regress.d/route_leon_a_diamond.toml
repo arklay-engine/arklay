@@ -104,7 +104,6 @@ frames = [360, 3779]
 frame_max_mean = 1.2
 # The two doors' loads are left out: 106's door 1 (1258) and 107's door 1 (2562).
 frame_windows = [[360, 1257, 0.55], [1600, 2561, 0.4], [2772, 3779, 1.25]]
-# The warp's head on its first ticks.
 expect = "match"
 record = "--warp 106:-17416:0:-559:1888:1 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 84 --give 0:2:16 --give 2:0x14:2 --give 3:0x1E:3 --give 4:0x33:1"
 
@@ -123,7 +122,6 @@ frames = [360, 2599]
 # a frame the original's capture repeated, as 10A's cut 9 comes up.
 frame_max_mean = 0.9
 frame_windows = [[360, 479, 0.35], [821, 1178, 0.25], [1522, 1970, 1.2], [2314, 2599, 0.65]]
-# The warp's head on its first ticks.
 expect = "match"
 record = "--warp 108:-19746:0:-21336:2048:15 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:93 --flag 8:104 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:5 --flag 31:9 --flag 31:17 --flag 31:27 --life 74 --give 0:2:13 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1"
 
