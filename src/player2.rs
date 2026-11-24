@@ -1938,6 +1938,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         MODE_SCENARIO => mover.scenario(),
         _ => {}
     }
+    // The jump down takes `nFloor` from the height.
     if mover.work.routine[0] == MODE_MOVE && mover.work.routine[1] == MOVE_JUMP_DOWN {
         mover.work.floor = crate::sca::floor_toward_zero(mover.player.pos[1]);
     }
@@ -7814,6 +7815,7 @@ pub fn member(work: &Work, member: u8) -> Option<i32> {
         1 => i32::from((work.be_flg >> 16) as u16),
         2..=5 => i32::from(work.routine[usize::from(member) - 2]),
         7 => i32::from(work.kind),
+        0x11 => i32::from(work.floor),
         0x14 | 0x19 => i32::from(work.dest[0]),
         0x15 | 0x1A => i32::from(work.dest[1]),
         0x16 => i32::from(work.sce_flg),
@@ -7835,6 +7837,9 @@ pub fn set_member(work: &mut Work, member: u8, value: i32) -> bool {
         1 => work.be_flg = (work.be_flg & 0xFFFF) | u32::from(value as u16) << 16,
         2..=5 => work.routine[usize::from(member) - 2] = value as u8,
         7 => work.kind = value as u16,
+        // `nFloor`: 112's weak floor drops the player a level and its script
+        // sets his floor where he lands (`main_11`'s `member_set(17, 0)`).
+        0x11 => work.floor = value as u8,
         0x14 | 0x19 => work.dest[0] = value as i16,
         0x15 | 0x1A => work.dest[1] = value as i16,
         0x16 => work.sce_flg = value as u16,
@@ -12435,6 +12440,26 @@ mod tests {
         assert_eq!(work.move_no, 3);
         plc_ret(&mut work);
         assert_eq!(work.routine, [MODE_MOVE, MOVE_IDLE, 0, 0]);
+    }
+
+    /// Room 112's weak floor drops the player from the balcony (`nFloor` 3)
+    /// under a script's motion: his floor stays the balcony's on the way
+    /// down, as `Spl_Scenario` leaves it, until the script sets it (member
+    /// 0x11) where he lands.
+    #[test]
+    fn a_script_sets_the_floor_and_its_motion_leaves_it() {
+        let mut setup = Setup::new(0);
+        setup.work.floor = 3;
+        plc_motion(&mut setup.work, 0, 0, 0);
+        setup.player.pos[1] = -1270;
+        setup.tick(input(false, false, false), 30);
+        assert_eq!(setup.work.floor, 3, "the fall keeps the balcony's floor");
+        assert_eq!(member(&setup.work, 0x11), Some(3));
+        assert!(set_member(&mut setup.work, 0x11, 0));
+        assert_eq!(setup.work.floor, 0);
+        plc_ret(&mut setup.work);
+        setup.tick(input(false, false, false), 30);
+        assert_eq!(setup.work.floor, 0);
     }
 
     #[test]
