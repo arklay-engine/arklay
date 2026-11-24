@@ -1,0 +1,303 @@
+# room 204: the walk of licker_204_scene, then as leon_a_204 after the window scene: turn east and run to the east wall, turn north and fire aimed down every 12 ticks, the aim held, until the licker dies (oracle/re2.md, "Room 204's licker")
+360 up
+420
+490 right
+506
+506 up run
+522
+522 left
+537
+538 aim down
+546 aim down fire
+550 aim down
+558 aim down fire
+562 aim down
+570 aim down fire
+574 aim down
+582 aim down fire
+586 aim down
+594 aim down fire
+598 aim down
+606 aim down fire
+610 aim down
+618 aim down fire
+622 aim down
+630 aim down fire
+634 aim down
+642 aim down fire
+646 aim down
+654 aim down fire
+658 aim down
+666 aim down fire
+670 aim down
+678 aim down fire
+682 aim down
+690 aim down fire
+694 aim down
+702 aim down fire
+706 aim down
+714 aim down fire
+718 aim down
+726 aim down fire
+730 aim down
+738 aim down fire
+742 aim down
+750 aim down fire
+754 aim down
+762 aim down fire
+766 aim down
+774 aim down fire
+778 aim down
+786 aim down fire
+790 aim down
+798 aim down fire
+802 aim down
+810 aim down fire
+814 aim down
+822 aim down fire
+826 aim down
+834 aim down fire
+838 aim down
+846 aim down fire
+850 aim down
+858 aim down fire
+862 aim down
+870 aim down fire
+874 aim down
+882 aim down fire
+886 aim down
+894 aim down fire
+898 aim down
+906 aim down fire
+910 aim down
+918 aim down fire
+922 aim down
+930 aim down fire
+934 aim down
+942 aim down fire
+946 aim down
+954 aim down fire
+958 aim down
+966 aim down fire
+970 aim down
+978 aim down fire
+982 aim down
+990 aim down fire
+994 aim down
+1002 aim down fire
+1006 aim down
+1014 aim down fire
+1018 aim down
+1026 aim down fire
+1030 aim down
+1038 aim down fire
+1042 aim down
+1050 aim down fire
+1054 aim down
+1062 aim down fire
+1066 aim down
+1074 aim down fire
+1078 aim down
+1086 aim down fire
+1090 aim down
+1098 aim down fire
+1102 aim down
+1110 aim down fire
+1114 aim down
+1122 aim down fire
+1126 aim down
+1134 aim down fire
+1138 aim down
+1146 aim down fire
+1150 aim down
+1158 aim down fire
+1162 aim down
+1170 aim down fire
+1174 aim down
+1182 aim down fire
+1186 aim down
+1194 aim down fire
+1198 aim down
+1206 aim down fire
+1210 aim down
+1218 aim down fire
+1222 aim down
+1230 aim down fire
+1234 aim down
+1242 aim down fire
+1246 aim down
+1254 aim down fire
+1258 aim down
+1266 aim down fire
+1270 aim down
+1278 aim down fire
+1282 aim down
+1290 aim down fire
+1294 aim down
+1302 aim down fire
+1306 aim down
+1314 aim down fire
+1318 aim down
+1326 aim down fire
+1330 aim down
+1338 aim down fire
+1342 aim down
+1350 aim down fire
+1354 aim down
+1362 aim down fire
+1366 aim down
+1374 aim down fire
+1378 aim down
+1386 aim down fire
+1390 aim down
+1398 aim down fire
+1402 aim down
+1410 aim down fire
+1414 aim down
+1422 aim down fire
+1426 aim down
+1434 aim down fire
+1438 aim down
+1446 aim down fire
+1450 aim down
+1458 aim down fire
+1462 aim down
+1470 aim down fire
+1474 aim down
+1482 aim down fire
+1486 aim down
+1494 aim down fire
+1498 aim down
+1506 aim down fire
+1510 aim down
+1518 aim down fire
+1522 aim down
+1530 aim down fire
+1534 aim down
+1542 aim down fire
+1546 aim down
+1554 aim down fire
+1558 aim down
+1566 aim down fire
+1570 aim down
+1578 aim down fire
+1582 aim down
+1590 aim down fire
+1594 aim down
+1602 aim down fire
+1606 aim down
+1614 aim down fire
+1618 aim down
+1626 aim down fire
+1630 aim down
+1638 aim down fire
+1642 aim down
+1650 aim down fire
+1654 aim down
+1662 aim down fire
+1666 aim down
+1674 aim down fire
+1678 aim down
+1686 aim down fire
+1690 aim down
+1698 aim down fire
+1702 aim down
+1710 aim down fire
+1714 aim down
+1722 aim down fire
+1726 aim down
+1734 aim down fire
+1738 aim down
+1746 aim down fire
+1750 aim down
+1758 aim down fire
+1762 aim down
+1770 aim down fire
+1774 aim down
+1782 aim down fire
+1786 aim down
+1794 aim down fire
+1798 aim down
+1806 aim down fire
+1810 aim down
+1818 aim down fire
+1822 aim down
+1830 aim down fire
+1834 aim down
+1842 aim down fire
+1846 aim down
+1854 aim down fire
+1858 aim down
+1866 aim down fire
+1870 aim down
+1878 aim down fire
+1882 aim down
+1890 aim down fire
+1894 aim down
+1902 aim down fire
+1906 aim down
+1914 aim down fire
+1918 aim down
+1926 aim down fire
+1930 aim down
+1938 aim down fire
+1942 aim down
+1950 aim down fire
+1954 aim down
+1962 aim down fire
+1966 aim down
+1974 aim down fire
+1978 aim down
+1986 aim down fire
+1990 aim down
+1998 aim down fire
+2002 aim down
+2010 aim down fire
+2014 aim down
+2022 aim down fire
+2026 aim down
+2034 aim down fire
+2038 aim down
+2046 aim down fire
+2050 aim down
+2058 aim down fire
+2062 aim down
+2070 aim down fire
+2074 aim down
+2082 aim down fire
+2086 aim down
+2094 aim down fire
+2098 aim down
+2106 aim down fire
+2110 aim down
+2118 aim down fire
+2122 aim down
+2130 aim down fire
+2134 aim down
+2142 aim down fire
+2146 aim down
+2154 aim down fire
+2158 aim down
+2166 aim down fire
+2170 aim down
+2178 aim down fire
+2182 aim down
+2190 aim down fire
+2194 aim down
+2202 aim down fire
+2206 aim down
+2214 aim down fire
+2218 aim down
+2226 aim down fire
+2230 aim down
+2238 aim down fire
+2242 aim down
+2250 aim down fire
+2254 aim down
+2262 aim down fire
+2266 aim down
+2274 aim down fire
+2278 aim down
+2286 aim down fire
+2290 aim down
+2298
