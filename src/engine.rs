@@ -8905,11 +8905,14 @@ impl GameSession {
                     .and_then(|stage| self.game.re2.bgm.get(stage, target.room))
             {
                 let system = self.game.re2_music_place().system;
-                self.game.re2.music.leave_room(word, system);
                 // `Snd_se_call` runs after `Set_door` in the frame, so the
                 // door's countdown starts on this tick; across a stage change
-                // `Snd_bgm_ck` comes a frame later, as the clear does.
-                if !session.stage_change {
+                // `Snd_bgm_ck` comes a frame later, as the clear does, still
+                // ahead of that frame's `Snd_se_call`.
+                if session.stage_change {
+                    self.game.re2.music.leave_room_next(word, system);
+                } else {
+                    self.game.re2.music.leave_room(word, system);
                     self.game.re2.music.tick();
                 }
             }
