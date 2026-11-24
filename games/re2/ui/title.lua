@@ -1696,6 +1696,7 @@ end
 local function key_draw(api)
     local o = s.opt
     s.key_panel = { x = key_work.slide + 0x88, y = 0x11, w = 0xB1, h = 0xD1 }
+    s.key_model = true
     if o.state == 9 then
         api:option_model("walk")
     elseif o.state == 10 then
@@ -2797,6 +2798,7 @@ function M.update(api, input)
     s.sleeping = false
     s.opt_texts = {}
     s.key_panel = nil
+    s.key_model = nil
     -- What the frame shows besides the tick's draw: "black" on a tick with
     -- no draw at all, "held" while the last presented frame stays up.
     s.frame = nil
@@ -3017,8 +3019,22 @@ function M.draw(api)
         Gallery.draw(api, s.gal, ox, oy)
         return
     end
+    -- `draw_background` centres the picture on a band itself: the origin
+    -- is the picture's, not the band's.
     if s.background then
-        api:draw_background(s.background, ox, oy)
+        api:draw_background(s.background, 0, 0)
+    end
+    -- KEYCONFIG's model (`FUN_0044db30`), its reflection and the picture's
+    -- patch between them (`FUN_00440950`: the strip at the mirror's left
+    -- edge drawn again at its slot, from the picture as it was just drawn),
+    -- behind the panel and the list.
+    if s.key_model then
+        -- With no room picture (a pack without it) there is no patch.
+        if s.background then
+            api:option_model("draw", s.background, 0, 0)
+        else
+            api:option_model("draw")
+        end
     end
     local function fade(n)
         local f = s.drawn_fades[n]

@@ -126,7 +126,7 @@ impl Statics {
 /// The model's files: the character's PLD (the `Main` bank) and the held
 /// weapon's PLW (`Sub0`), and an empty room for the routines' [`Tick`].
 pub struct PageAssets {
-    pub body: crate::model::Emd,
+    pub body: std::sync::Arc<crate::model::Emd>,
     pub weapon: crate::model::Emw,
     room: RoomState,
 }
@@ -154,7 +154,7 @@ impl PageAssets {
 
     pub fn new(body: crate::model::Emd, weapon: crate::model::Emw) -> Self {
         Self {
-            body,
+            body: std::sync::Arc::new(body),
             weapon,
             room: RoomState::default(),
         }
@@ -200,6 +200,10 @@ pub struct PageModel {
     /// The foot `Foot_set_pl` keeps planted, as the last draw left it (the
     /// first pass's `Workm`), by chain: the weapon's own, then the other.
     drawn_feet: Feet,
+    /// Part 0's world `Workm.t` as the last pass computed it, which the
+    /// next pass's lights are latched at (`FUN_0044d890`) before it
+    /// computes its own.
+    drawn_root: Option<[i32; 3]>,
     /// `DAT_0053A305`'s row for the weapon, as this visit's `Pl_weapon_ch`
     /// left it.
     frames: [u8; 3],
@@ -243,6 +247,7 @@ impl PageModel {
             id,
             statics,
             drawn_feet: [None; 2],
+            drawn_root: None,
             frames: page_frames((weapon & 0xFFF) as u8, handgun),
         }
     }
@@ -257,6 +262,13 @@ impl PageModel {
         model.work.move_cnt = self.work.move_cnt;
         model.work.hokan = self.work.hokan;
         model
+    }
+
+    /// A pass computing part 0 at `root`: the root the pass's lights are
+    /// latched at, the one the pass before it left (`root` itself for a
+    /// visit's first pass, which no pass precedes).
+    pub fn pass_root(&mut self, root: [i32; 3]) -> [i32; 3] {
+        self.drawn_root.replace(root).unwrap_or(root)
     }
 
     /// Run `f` on the model's [`Mover`], then latch the feet the draw
@@ -362,6 +374,36 @@ impl PageModel {
         });
     }
 
+    /// The parts' world matrices the draw poses the model by: `FUN_0044d890`'s
+    /// `Workm`s, each part on its parent's from the place and the turn. Both
+    /// passes draw these; only their views differ.
+    pub fn joints(&self, assets: &PageAssets) -> Vec<crate::anim::Mat4x3> {
+        let mut model = self.clone();
+        model
+            .with(assets, |mover, _| mover.posed_parts())
+            .into_iter()
+            .map(|part| {
+                part.map_or_else(crate::anim::Mat4x3::default, |part| crate::anim::Mat4x3 {
+                    r: part.m.map(|row| row.map(i32::from)),
+                    t: part.t,
+                })
+            })
+            .collect()
+    }
+
+    /// The reflection's shadow (`MulKage` then `FUN_00449c90`, through the
+    /// second view): under part 0 (`joints[0]`) at the place's height,
+    /// with its x negated, turned by `-Cdir_y`, at the sizes
+    /// `FUN_00447a20` gives the character. `None` before the model is posed.
+    pub fn shadow(&self, joints: &[crate::anim::Mat4x3]) -> Option<PageShadow> {
+        let root = joints.first()?;
+        Some(PageShadow {
+            pos: [root.t[0].wrapping_neg(), self.body.pos[1], root.t[2]],
+            angle: self.body.angle.wrapping_neg() & 0xFFF,
+            half: shadow_half(self.id),
+        })
+    }
+
     /// The trace's `kcm`: the routines in hex, the place, the turn, the
     /// motion's four bytes in hex and `Type`, then the statics.
     pub fn trace(&self) -> String {
@@ -389,6 +431,26 @@ impl PageModel {
             s.kept,
             s.row,
         )
+    }
+}
+
+/// Where the reflection's shadow goes ([`PageModel::shadow`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PageShadow {
+    pub pos: [i32; 3],
+    pub angle: u16,
+    /// The half sizes along x and z.
+    pub half: (i32, i32),
+}
+
+/// `FUN_00447a20`'s `Kage_work9_set` sizes, by `Id`: Claire and the other
+/// odd ids under 10 and Ada smaller, Sherry smaller still.
+pub fn shadow_half(id: u8) -> (i32, i32) {
+    match id {
+        SHERRY => (0x172, 0x1CC),
+        ADA => (0x1A4, 0x208),
+        id if id < 10 && id & 1 != 0 => (0x1A4, 0x208),
+        _ => (500, 600),
     }
 }
 
