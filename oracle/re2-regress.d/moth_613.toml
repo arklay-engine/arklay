@@ -25,6 +25,9 @@ input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,msg,zm*,fgstat"
 expect = "match"
 frames = [344, 1743]
+# from the warp's first cut on, from the Wine slot: 0.26 before the wake, 0.67 to 1343 and 1.17 after, the moth's
+# hover, grab and scales; its shadow, wings' beat and effect behaviour 0x4C (the scales' and dust's) aren't ported
+frame_windows = [[350, 543, 0.35], [544, 1343, 0.9], [1344, 1743, 1.5]]
 record = "--warp 613:-26300:0:-18000:0 --life 200"
 
 # The same under HARD.
@@ -53,6 +56,8 @@ input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,msg,inv,zm*,fgstat"
 expect = "match"
 frames = [344, 1343]
+# from the warp's first cut on, from the Wine slot: 0.26 before the shots, 0.56 through them, the death and the body
+frame_windows = [[350, 543, 0.35], [544, 1343, 0.75]]
 record = "--warp 613:-26300:0:-18000:0 --life 200 --equip 2 --give 0:2:200"
 
 # The same under HARD.
