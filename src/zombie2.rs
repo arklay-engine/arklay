@@ -1068,6 +1068,9 @@ pub struct World<'a> {
     pub status_and_not: u32,
     /// `Cut_change`: the camera cut a script switched to.
     pub cut: Option<u8>,
+    /// `BYTE_0098f07b = 1`: the cut's load, which `Swap_Cbuff` runs even
+    /// while the aim holds the view.
+    pub cut_load: bool,
     /// The room's objects' places (`obj_model_set`). Only the alligator's
     /// world has them.
     pub objects: Vec<[i32; 3]>,

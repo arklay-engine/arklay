@@ -499,6 +499,13 @@ pub fn run_with_options(
         let lua = load_lua(&pack);
         call_lua_init(lua.as_ref(), &mut game);
         call_lua_room_load(lua.as_ref(), &mut game, id);
+        // An RE 2 room tests its zones as it loads, before the setup, as the
+        // session's start does; the setup's camera is the first pass's
+        // `scd_var_cut` and the first tick's `Cut_check` takes it from there.
+        if game.is_re2_room {
+            apply_camera(&mut loaded.room, &mut game, Some(player_state.pos));
+        }
+        let cut = game.camera.current_cut;
         run_setup_chunk(lua.as_ref(), &mut game, authoring.setup_script)?;
         game.sync_player(&mut player_state);
         if let Some(view) = &authoring.model {
@@ -508,7 +515,11 @@ pub fn run_with_options(
             write_save_file(&game, path)?;
             return Ok(());
         }
-        apply_camera(&mut loaded.room, &mut game, Some(player_state.pos));
+        if !game.is_re2_room {
+            apply_camera(&mut loaded.room, &mut game, Some(player_state.pos));
+        } else if game.camera.current_cut != cut {
+            game.re2.authored_var_cut = u8::try_from(game.camera.current_cut).ok();
+        }
         drain_mask_toggles(&mut loaded.room, &mut game);
         bgm::update_room_bgm(&mut game, id, None);
         timings.phases.load = load_start.elapsed();
@@ -16957,6 +16968,7 @@ fn simulate_loaded_with(
             continue;
         }
         let message_before = game.message.menu_choice_id() & 0x80 != 0;
+        let tick_cut = Some((loaded.id, loaded.room.current_cut));
         begin_re2_var_cut(&mut game, &loaded.room);
         let requested = tick_room(
             &mut command_vm,
@@ -16974,6 +16986,14 @@ fn simulate_loaded_with(
         );
         run_lua_tick_hooks(lua.as_ref(), &mut game, message_before);
         game.drop_re2_scripted_status();
+        // `Swap_Cbuff`: the pending load, and the cut a `cut_chg` with bit 7
+        // leaves on screen (the frames it skips aren't modelled here).
+        swap_cbuff_view(
+            &mut game,
+            tick_cut,
+            (loaded.id, loaded.room.current_cut),
+            false,
+        );
         // A scripted door follows into its destination: the interactive engine
         // plays the `.dor` timeline and reboots the destination room.
         if let Some(request) = requested {
@@ -17018,19 +17038,22 @@ fn simulate_loaded_with(
         }
     }
 
-    render_frame(
-        &mut framebuffer,
-        pack,
-        loaded.id,
-        &loaded.room,
-        &player_state,
-        &mut game,
-        loaded.player_assets.as_ref(),
-        &mut npc_models,
-        &mut masks,
-        &mut shadows,
-        &mut effect_pages,
-    );
+    let (id, assets, view_cut) = (loaded.id, loaded.player_assets.as_ref(), game.re2.view_cut);
+    on_screen_cut(&mut loaded.room, view_cut, |room| {
+        render_frame(
+            &mut framebuffer,
+            pack,
+            id,
+            room,
+            &player_state,
+            &mut game,
+            assets,
+            &mut npc_models,
+            &mut masks,
+            &mut shadows,
+            &mut effect_pages,
+        );
+    });
     let frame = Image {
         width: framebuffer.width,
         height: framebuffer.height,
@@ -17045,19 +17068,22 @@ fn simulate_loaded_with(
         entity.set_active(false);
     }
     let mut baseline_framebuffer = Framebuffer::new();
-    render_frame(
-        &mut baseline_framebuffer,
-        pack,
-        loaded.id,
-        &loaded.room,
-        &player_state,
-        &mut game,
-        loaded.player_assets.as_ref(),
-        &mut npc_models,
-        &mut masks,
-        &mut shadows,
-        &mut effect_pages,
-    );
+    let (id, assets, view_cut) = (loaded.id, loaded.player_assets.as_ref(), game.re2.view_cut);
+    on_screen_cut(&mut loaded.room, view_cut, |room| {
+        render_frame(
+            &mut baseline_framebuffer,
+            pack,
+            id,
+            room,
+            &player_state,
+            &mut game,
+            assets,
+            &mut npc_models,
+            &mut masks,
+            &mut shadows,
+            &mut effect_pages,
+        );
+    });
     let baseline = Image {
         width: baseline_framebuffer.width,
         height: baseline_framebuffer.height,
@@ -20188,10 +20214,9 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     let raised = std::mem::take(&mut re2.player.status_raise);
     let status = &mut re2.banks[usize::from(crate::scd2::host::STATUS_BANK)][0];
     *status = (*status & !dropped) | raised;
-    crate::character2::shot_draws(
-        context.game,
-        context.room.cuts.get(context.room.current_cut),
-    );
+    // `Shoot_camera` places from `scd_var_cut` (`0x4DCB9C`).
+    let cut = usize::from(context.game.re2.scd_var_cut());
+    crate::character2::shot_draws(context.game, context.room.cuts.get(cut));
     if !tick.stopped {
         crate::character2::pl_bow(context.game, context.room.sca.as_ref());
         crate::character2::mag_down(context.game, context.player);
@@ -21106,11 +21131,12 @@ fn begin_re2_var_cut(game: &mut game::GameState, room: &RoomState) {
 }
 
 /// The cut `Swap_Cbuff` leaves as `scd_var_cut` (`0x4C448D`): the live cut,
-/// unless the aim holds the view (`fg_status`'s `0x80`). Then it is what a
-/// script's `cut_chg` or `cut_old` made it (they load through their own
-/// pending load, aim or not), else the tick's.
+/// unless the aim holds the view (`fg_status`'s `0x80`) and no load is
+/// pending. Then it is what a script's `cut_chg` made it, else the tick's. A
+/// pending load (a `cut_chg` or `cut_old`, the alligator's `Cut_change`s)
+/// loads the live cut, aim or not (`0x4C48B5`).
 fn re2_shown_cut(game: &game::GameState) -> usize {
-    if game.re2.view_held {
+    if game.re2.view_held && !game.re2.bg_load {
         usize::from(game.re2.scd_var_cut())
     } else {
         game.camera.current_cut
@@ -30080,6 +30106,14 @@ mod tests {
         game.set_camera_cut(0);
         show_re2_live_cut(&mut room, &game);
         assert_eq!(room.current_cut, 0);
+        // A `Cut_change` with its load (the alligator's) shows too
+        // (`0x4C48B5`).
+        game.set_camera_cut(1);
+        show_re2_live_cut(&mut room, &game);
+        assert_eq!(room.current_cut, 0, "no load: held");
+        game.re2.bg_load = true;
+        show_re2_live_cut(&mut room, &game);
+        assert_eq!(room.current_cut, 1);
     }
 
     #[test]

@@ -3123,11 +3123,14 @@ impl Host for GameHost<'_> {
             "cut_chg" => self.change_cut(at(0) as u8),
             "cut_old" => {
                 let cut = self.game.re2.cut_old;
+                // `Cut_old_0` goes through `FUN_004e5020` too, which keeps
+                // the cut it replaces and raises the load.
+                self.game.re2.cut_old = self.game.re2.scd_var_cut();
                 self.game.re2.var_cut = Some(cut);
                 self.game.camera.locked = false;
                 self.game.set_camera_cut(usize::from(cut));
-                // `Cut_old_0` goes through `FUN_004e5020` too.
                 self.game.re2.bg_load = true;
+                self.game.re2.cut_no_load = false;
             }
             "cut_auto" => self.game.camera.locked = at(0) == 0,
             "sce_scr_move" => self.game.re2.scroll = at(1) as i16,
@@ -4978,6 +4981,15 @@ mod tests {
         assert_eq!(GameHost { game: &mut game }.var(VAR_CUT), 7);
         exec(&mut game, "cut_old", &[]);
         assert_eq!(game.camera.current_cut, 1);
+        // `cut_old` keeps the cut it replaces as well, so a second goes back.
+        assert_eq!(game.re2.cut_old, 7);
+        exec(&mut game, "cut_old", &[]);
+        assert_eq!(game.camera.current_cut, 7);
+        // It loads, even after a `cut_chg` with bit 7 in the same pass.
+        exec(&mut game, "cut_chg", &[0x85]);
+        exec(&mut game, "cut_old", &[]);
+        assert_eq!(game.camera.current_cut, 7);
+        assert!(game.re2.bg_load && !game.re2.cut_no_load);
     }
 
     #[test]
