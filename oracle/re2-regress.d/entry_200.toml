@@ -1,0 +1,31 @@
+# Room 200's entry scene from a warp (oracle/re2.md): it stops the player on the room's first tick, before `Player_move`
+# has run, so the player keeps `Pl_init`'s state: its routines, its pose, clip 2 of the player's own bank and caution
+# level 0. At full life that is the idle the first tick would pick anyway; at 60 the first tick would pick the caution
+# idle, clip 5, which the stop keeps from playing until the scene hands the player back. Recorded natively, traces only.
+[[run]]
+name = "entry_200"
+room = "200"
+setup = { pos = [-21700, 0, -3700], angle = 1024, health = 200, rnd = 6114, camera = 0, flags = [[1, 1]] }
+input = "entry_200.txt"
+input_shift = 344
+ticks = 800
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck"
+expect = "match"
+# on the stopped first tick the original draws the head where the scene's `pos_set` and `dir_set` put the player;
+# arklay moves it with the body, without the turn
+ignore = [[344, "pneck"]]
+record = "--warp 200:-21700:0:-3700:1024 --flag 1:1 --life 200"
+
+[[run]]
+name = "entry_200_hurt"
+room = "200"
+setup = { pos = [-21700, 0, -3700], angle = 1024, health = 60, rnd = 6114, camera = 0, flags = [[1, 1]] }
+input = "entry_200.txt"
+input_shift = 344
+ticks = 800
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck"
+expect = "match"
+# on the stopped first tick the original draws the head where the scene's `pos_set` and `dir_set` put the player;
+# arklay moves it with the body, without the turn
+ignore = [[344, "pneck"]]
+record = "--warp 200:-21700:0:-3700:1024 --flag 1:1 --life 60"

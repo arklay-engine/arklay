@@ -1,0 +1,1 @@
+# room 200 from the warp with flag 1:1 and no input: the entry scene (the camera up the hall), which stops the player before the first Player_move (oracle/re2.md)

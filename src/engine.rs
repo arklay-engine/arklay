@@ -7923,16 +7923,10 @@ impl GameSession {
         let Some(assets) = self.loaded.player_assets.as_ref() else {
             return;
         };
-        let init = crate::player2::idle_pose(&assets.emw.clips, &assets.emw.keyframes).cloned();
-        if let Some(init) = init {
-            self.player.anim.set_applied_pose(Some(init.clone()));
-            self.place_re2_door_neck();
-            let neck = self.game.re2.player.neck;
-            self.game.re2.player.start_unblended = Some(Box::new((init, neck)));
-        }
-        let Some(assets) = self.loaded.player_assets.as_ref() else {
-            return;
-        };
+        self.game.re2.player.start_unblended =
+            crate::player2::idle_pose(&assets.emw.clips, &assets.emw.keyframes)
+                .cloned()
+                .map(Box::new);
         let relative = &assets.emd.skeleton.relative;
         let rest = crate::player2::start_pose(
             &self.game.re2.player,
