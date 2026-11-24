@@ -1569,12 +1569,54 @@ impl HandgunFrame {
     /// `weapon`: the handgun ORs in 0x80, then Leon's 8 and 0xA make it 0x03.
     #[must_use]
     pub fn equip(self, id: u8, weapon: u8) -> Self {
+        HandgunUpdate::equip(id, weapon).apply(self)
+    }
+}
+
+/// What a run of `Pl_weapon_ch`'s loads does to [`HandgunFrame`], whatever
+/// it was before: so loads made where the process's byte wasn't to hand (a
+/// session's room boot, before the app gives it its statics) can be put on
+/// it later, in order.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum HandgunUpdate {
+    /// No load of the handgun.
+    #[default]
+    Keep,
+    /// The handgun loaded, last by a character other than 8 or 0xA.
+    Mark,
+    /// The byte set outright: 0x03 by 8 or 0xA, 0x83 by another after them.
+    Set(u8),
+}
+
+impl HandgunUpdate {
+    /// One load of `weapon` by character `id`.
+    pub fn equip(id: u8, weapon: u8) -> Self {
         if weapon != 2 {
-            self
+            Self::Keep
         } else if matches!(id, 8 | 0xA) {
-            Self(0x03)
+            Self::Set(0x03)
         } else {
-            Self(self.0 | 0x80)
+            Self::Mark
+        }
+    }
+
+    /// This, then `next`.
+    #[must_use]
+    pub fn then(self, next: Self) -> Self {
+        match (self, next) {
+            (update, Self::Keep) => update,
+            (_, Self::Set(frame)) => Self::Set(frame),
+            (Self::Set(frame), Self::Mark) => Self::Set(frame | 0x80),
+            (_, Self::Mark) => Self::Mark,
+        }
+    }
+
+    /// The byte after these loads, from `frame`.
+    pub fn apply(self, frame: HandgunFrame) -> HandgunFrame {
+        match self {
+            Self::Keep => frame,
+            Self::Mark => HandgunFrame(frame.0 | 0x80),
+            Self::Set(set) => HandgunFrame(set),
         }
     }
 }

@@ -2513,7 +2513,8 @@ end
 -- The title's film (`Init_movie_work(0)`): Leon's or Claire's, by the
 -- title's generator. `FUN_00509CB0` keeps the pick as `fg_status`'s bit 31,
 -- the character, which a game started with no character page (SPECIAL's
--- extras) keeps: To-fu's room 304 is disc 1's after Claire's film.
+-- extras) keeps: To-fu's room 304 is disc 1's after Claire's film. OPTION's
+-- model reads that disc's files after it.
 local function boot_film(api)
     s.claire = title_rnd(api, 2) == 1
     return { id = 0, claire = s.claire }
@@ -2678,6 +2679,8 @@ local function publish(api)
     -- EX.BATTLE's level (`0x989E91`), which the boot leaves at 2.
     api:set("ti_level", 2)
     api:set("ti_fgstatus", s.fg_status)
+    -- `fg_status` bit 31, which the trace's `tx` leaves out.
+    api:set("ti_claire", s.claire and 1 or 0)
     api:set("ti_kido", s.kido)
     api:set("ti_add", s.add)
     api:set("ti_fgsys", s.fg_system)

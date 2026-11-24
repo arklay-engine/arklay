@@ -12850,7 +12850,10 @@ impl App {
         // and the cleared game's state with it.
         self.ending = None;
         self.stop_screen_music();
-        session.screen_statics = self.statics.clone();
+        // The room boot loaded the player into the session's own statics,
+        // so the process's take on its loads (`Pl_weapon_ch`'s handgun byte).
+        let booted = std::mem::replace(&mut session.screen_statics, self.statics.clone());
+        self.statics.re2_adopt(&booted);
         // A trace's voice lengths, asked for while the title was up.
         if let Some(ticks) = self.pending_voice_ticks.take() {
             session.game.re2.voice_ticks = ticks;
@@ -34745,6 +34748,33 @@ mod tests {
                 "a restart reloads the save"
             );
         }
+    }
+
+    /// A continued game whose player is Leon's alternate 8 holding the
+    /// handgun: the room boot's `Pl_weapon_ch` made the handgun's first
+    /// frame 0x03 in the session's own statics, before the app gave it its
+    /// own. The app takes that on, so the next OPTION visit's Leon reads
+    /// 0x83, as the original's does.
+    #[test]
+    fn a_continued_alternates_handgun_reaches_the_next_option_visit() {
+        use crate::player2::HandgunFrame;
+        let dir = TempDir::new();
+        let (pack, session) = re2_typewriter_session(&dir);
+        // What the room boot's load of PL08W02 did.
+        session.screen_statics.re2_equip(8, 2);
+        let mut app = App::new(pack, dir.0.join("saves"), false);
+        assert_eq!(app.statics.re2_handgun_frame(), HandgunFrame(0x85));
+        app.start_session(session);
+        assert_eq!(app.statics.re2_handgun_frame(), HandgunFrame(0x03));
+        // Back at the title, OPTION's `Pl_weapon_ch` for Leon.
+        assert_eq!(app.statics.re2_equip(0, 2), HandgunFrame(0x83));
+        let Mode::Play(session) = &app.mode else {
+            panic!("expected a session");
+        };
+        assert_eq!(
+            session.screen_statics.re2_handgun_frame(),
+            HandgunFrame(0x83)
+        );
     }
 
     /// What the screens keep is the process's in the original: a session

@@ -305,7 +305,9 @@ pub fn load_picture(
 #[derive(Debug, Clone, Default)]
 pub struct ScreenStatics(
     std::rc::Rc<std::cell::RefCell<std::collections::BTreeMap<(String, String), i64>>>,
-    std::rc::Rc<std::cell::Cell<crate::player2::HandgunFrame>>,
+    /// RE 2's handgun byte, and what this copy's own loads have done to it
+    /// since it was made ([`ScreenStatics::re2_adopt`]).
+    std::rc::Rc<std::cell::Cell<(crate::player2::HandgunFrame, crate::player2::HandgunUpdate)>>,
 );
 
 impl ScreenStatics {
@@ -344,15 +346,29 @@ impl ScreenStatics {
     /// left it ([`crate::player2::HandgunFrame`]), which play and the
     /// KEYCONFIG page share.
     pub fn re2_handgun_frame(&self) -> crate::player2::HandgunFrame {
-        self.1.get()
+        self.1.get().0
     }
 
     /// `Pl_weapon_ch`'s end for character `id` holding `weapon`
     /// ([`crate::player2::HandgunFrame::equip`]), returning the new byte.
     pub fn re2_equip(&self, id: u8, weapon: u8) -> crate::player2::HandgunFrame {
-        let frame = self.1.get().equip(id, weapon);
-        self.1.set(frame);
+        let update = crate::player2::HandgunUpdate::equip(id, weapon);
+        let (frame, since) = self.1.get();
+        let frame = update.apply(frame);
+        self.1.set((frame, since.then(update)));
         frame
+    }
+
+    /// Take on the loads `other` saw since it was made: a session's own
+    /// statics, which its room boot loaded the player into before the app
+    /// gave it these, the process's.
+    pub fn re2_adopt(&self, other: &ScreenStatics) {
+        if std::rc::Rc::ptr_eq(&self.1, &other.1) {
+            return;
+        }
+        let (frame, since) = self.1.get();
+        let update = other.1.get().1;
+        self.1.set((update.apply(frame), since.then(update)));
     }
 }
 
@@ -445,6 +461,37 @@ mod tests {
         assert_eq!(app.re2_equip(0, 2), HandgunFrame(0x83));
         assert_eq!(app.re2_equip(1, 3), HandgunFrame(0x83));
         assert_eq!(session.re2_handgun_frame(), HandgunFrame(0x83));
+    }
+
+    /// A session's room boot loads its player before the app gives it the
+    /// process's statics; the app takes on those loads, in order.
+    #[test]
+    fn the_app_takes_on_the_loads_a_sessions_boot_made() {
+        use crate::player2::HandgunFrame;
+        for (loads, after) in [
+            (&[][..], 0x85),
+            (&[(8, 2)][..], 0x03),
+            (&[(0xA, 2), (0, 2)][..], 0x83),
+            (&[(0, 2)][..], 0x85),
+            (&[(8, 3)][..], 0x85),
+        ] {
+            let app = ScreenStatics::default();
+            let boot = ScreenStatics::default();
+            for &(id, weapon) in loads {
+                boot.re2_equip(id, weapon);
+            }
+            app.re2_adopt(&boot);
+            assert_eq!(app.re2_handgun_frame(), HandgunFrame(after), "{loads:?}");
+            app.re2_adopt(&app.clone());
+            assert_eq!(app.re2_handgun_frame(), HandgunFrame(after));
+        }
+        // After 8's, the app's own 0x83 stays 0x83 on a later boot by Leon.
+        let app = ScreenStatics::default();
+        app.re2_equip(8, 2);
+        let boot = ScreenStatics::default();
+        boot.re2_equip(0, 2);
+        app.re2_adopt(&boot);
+        assert_eq!(app.re2_handgun_frame(), HandgunFrame(0x83));
     }
 
     #[test]
