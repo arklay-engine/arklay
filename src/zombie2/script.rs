@@ -6079,6 +6079,60 @@ mod tests {
             }
         }
 
+        /// Runs `body` after the dog's script, in its chunk, so it can call
+        /// the script's local functions; `e` answers 0 to all but the bite's
+        /// reads, and records `Pl_life_down`'s damage in `w.down`.
+        fn dog_locals(hard: bool, body: &str) -> Vec<i64> {
+            let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+            let script = include_str!("../../games/re2/enemy/20/enemy.lua");
+            lua.load(format!(
+                "local w = {{ spd = {{ 0, 0, 0 }}, timers = {{}}, r = {{ [0] = 0, 0, 0, 0 }} }}
+                 local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+                 function e:hard_mode() return {hard} end
+                 function e:routine(i) return w.r[i] end
+                 function e:set_routine(i, v) w.r[i] = v end
+                 function e:speed() return w.spd[1], w.spd[2], w.spd[3] end
+                 function e:speed_x() return w.spd[1] end
+                 function e:set_speed_x(v) w.spd[1] = v end
+                 function e:timer(i) return w.timers[i] or 0 end
+                 function e:set_timer(i, v) w.timers[i] = v end
+                 function e:same_floor() return true end
+                 function e:point_within() return true end
+                 function e:pos() return 0, 0, 0 end
+                 function e:cdir_player() return false end
+                 function e:player_life() return 200 end
+                 function e:pl_life_down(d) w.down = d return 1 end
+                 {script}
+                 {body}"
+            ))
+            .exec()
+            .unwrap();
+            lua.globals().get("R").unwrap()
+        }
+
+        /// The leap's bite (`FUN_0045f7f0`) takes 0xC, or 0x18 under HARD
+        /// (0x45F8A8).
+        #[test]
+        fn a_hard_dogs_bite_takes_twice_as_much() {
+            for (hard, down) in [(false, 0xC), (true, 0x18)] {
+                let r = dog_locals(hard, "R = { bite_ck(e), w.down }");
+                assert_eq!(r, [1, down], "hard {hard}");
+            }
+        }
+
+        /// The run's speed up to the top (0x45C9C5 and the others), the
+        /// landing's slow down to it (0x45D09D) and the circling's set
+        /// (0x45DE47) all take HARD's 0x118 for 0xF0.
+        #[test]
+        fn a_hard_dog_runs_up_to_0x118() {
+            let body = "w.spd[1] = 0x100; speed_up(e, 0x28, top_speed(e)); local up = w.spd[1]
+                        w.spd[1] = 0x130; slow_down(e, 0x40, top_speed(e)); local down = w.spd[1]
+                        w.spd[1] = 0; circling(e)
+                        R = { up, down, w.spd[1] }";
+            assert_eq!(dog_locals(false, body), [0x100, 0xF0, 0xF0]);
+            assert_eq!(dog_locals(true, body), [0x118, 0x118, 0x118]);
+        }
+
         /// 0x10 is 0xA's case (0x45EBD0): `4 - Damage_no / 3` bloods, though
         /// each takes one off the count it's checked against (`0x45f9a0`), so
         /// two; `Damage_cnt`'s 0x80 held, and on as `Routine_1` 1 to

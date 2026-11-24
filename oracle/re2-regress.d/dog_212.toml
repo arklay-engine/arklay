@@ -14,7 +14,7 @@ fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,fgstat"
 expect = "match"
 record = "--warp 212:-11250:0:-25692:3024 --flag 4:83 --life 200"
 
-# dog_shots.txt, a handgun shot every 30 ticks, until both dogs are dead.
+# dog_shots.txt, a handgun shot every 30 ticks to 2284; the dogs die on 1565 and 1595.
 [[run]]
 name = "dog_212_shots_hard"
 difficulty = "hard"

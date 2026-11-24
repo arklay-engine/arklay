@@ -120,13 +120,13 @@ local function add_gravity(e)
     set_spd(e, nil, spd_y(e) + 0x28)
 end
 
--- `FUN_0045f5f0`.
 -- The top speed, 0xF0, or 0x118 under HARD (0x45C9C5, 0x45CB7E, 0x45CBF6,
 -- 0x45D09D, 0x45DE47, 0x45E53C, 0x45EDA0).
 local function top_speed(e)
     return e:hard_mode() and 0x118 or 0xF0
 end
 
+-- `FUN_0045f5f0`.
 local function speed_up(e, by, top)
     local speed = spd_x(e)
     if speed < top then
