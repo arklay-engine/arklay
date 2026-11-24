@@ -343,10 +343,10 @@ impl GameState {
     /// (and clears it), so it composes every frame either way.
     pub fn om_trans_old(&mut self, player: ([i32; 3], u16)) {
         // Room 409's cut 12 turns slot 4 to -40 about z each frame it draws
-        // (`Get_room_id(1) == 0xC0409`).
+        // (`Get_room_id(1) == 0xC0409`, with `scd_var_cut` at `0x5033DC`).
         let room_409_cut_12 = self.is_re2_room
             && (self.id.stage, self.id.room) == (4, 9)
-            && self.camera.current_cut == 12;
+            && self.re2.scd_var_cut() == 12;
         for index in 0..self.objects.records.len() {
             let record = self.objects.records[index];
             if record.be_flg & BE_ACTIVE != 0 && record.be_flg & BE_HIDDEN == 0 {
@@ -1165,12 +1165,19 @@ mod tests {
             let mut game = objects(&records);
             game.id.stage = room.0;
             game.id.room = room.1;
-            game.camera.current_cut = cut;
+            game.re2.var_cut = Some(cut);
             game.om_trans_old(([0; 3], 0));
             let z = |slot: usize| game.objects.records[slot].rotation[2];
             assert_eq!(z(4), if turned { -40 } else { 0 }, "{room:?} cut {cut}");
             assert_eq!(z(3), 0);
             assert_eq!(z(5), 0);
         }
+        // `scd_var_cut`, not a live cut a zone has just switched to.
+        let mut game = objects(&records);
+        (game.id.stage, game.id.room) = (4, 9);
+        game.camera.current_cut = 12;
+        game.re2.var_cut = Some(11);
+        game.om_trans_old(([0; 3], 0));
+        assert_eq!(game.objects.records[4].rotation[2], 0);
     }
 }

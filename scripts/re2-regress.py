@@ -638,6 +638,19 @@ def judge_trace(run: dict, cmp: dict) -> str | None:
 # ---------------------------------------------------------------- frames
 
 
+def open_shared_image(path: Path):
+    """Open a frame arklay has just written. On Windows another process (the virus scanner) can hold a new
+    file for a moment, and the open is refused meanwhile: try again for up to two seconds."""
+    from PIL import Image
+
+    for _ in range(100):
+        try:
+            return Image.open(path)
+        except PermissionError:
+            time.sleep(0.02)
+    return Image.open(path)
+
+
 def frame_error(ref_png: Path, ark_bmp: Path, boxes_variants) -> list[float] | None:
     """Mean error of one tick: the original's 640x480 frame cropped to the game area and boxed down to 320x240, against arklay's.
 
@@ -648,7 +661,7 @@ def frame_error(ref_png: Path, ark_bmp: Path, boxes_variants) -> list[float] | N
     if not ref_png.exists():
         return None
     ref0 = Image.open(ref_png).convert("RGB").crop((3, 29, 643, 509)).resize((320, 240), Image.BOX)
-    ark0 = Image.open(ark_bmp).convert("RGB")
+    ark0 = open_shared_image(ark_bmp).convert("RGB")
     result = []
     for boxes in boxes_variants:
         ref, ark = ref0, ark0

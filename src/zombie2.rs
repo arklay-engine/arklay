@@ -1068,13 +1068,16 @@ pub struct World<'a> {
     pub status_and_not: u32,
     /// `Cut_change`: the camera cut a script switched to.
     pub cut: Option<u8>,
+    /// `BYTE_0098f07b = 1`: the cut's load, which `Swap_Cbuff` runs even
+    /// while the aim holds the view.
+    pub cut_load: bool,
     /// The room's objects' places (`obj_model_set`). Only the alligator's
     /// world has them.
     pub objects: Vec<[i32; 3]>,
     /// A script pointed the player's `pSub1_kan_t_ptr` at this body's
     /// model's clips (its second bank), for `Pl_damage`'s falls.
     pub sub1: bool,
-    /// `scd_var_cut`, the camera's cut as the tick began.
+    /// `scd_var_cut` as the characters' pass reads it.
     pub camera_cut: u8,
     /// Room objects a script took away.
     pub hidden_objects: Vec<usize>,

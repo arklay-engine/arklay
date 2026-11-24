@@ -526,12 +526,12 @@ fn save_writes_the_pending_block_and_records_the_outcome() {
     let written = save::load_file(&fixture.dir.path.join("new_01.dat")).unwrap();
     assert_eq!(written.player_slots[0].quantity, 1);
     assert_eq!(written.used_item, crate::items::ITEM_INK_RIBBONS);
+    // The outcome holds the block written, for RESTART to reload.
+    let outcome = screen.take_outcome().expect("the outcome");
+    assert_eq!((outcome.slot, outcome.ink_ribbon), (None, true));
     assert_eq!(
-        screen.take_outcome(),
-        Some(crate::ui::save_load::SaveOutcome {
-            slot: None,
-            ink_ribbon: true
-        })
+        outcome.file.map(|file| file.to_file_bytes()),
+        Some(std::fs::read(fixture.dir.path.join("new_01.dat")).unwrap())
     );
 
     // The scan saw the new file.

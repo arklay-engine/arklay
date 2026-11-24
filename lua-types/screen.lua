@@ -240,21 +240,27 @@ function ScreenModule.on_film(api, skipped, played) end
 function ScreenModule.on_boot(api) end
 
 ---Called on a title screen, or on the new-game choice's entry, with the
----player's music and effects volumes in percent (0 to 100): once as the
----screen opens and again whenever the settings change. For a title with an
----option screen of its own that shows and sets them. Such a screen
----publishes the two it shows as `music_volume` and `effects_volume`
+---run's music and effects volumes in percent (0 to 100): once as the
+---screen opens, again whenever the settings change, and when a load takes
+---them from its save while the screen is up (a save keeps the run's
+---volumes, as the original's does, and a load gives them back as the game
+---it continues starts; a title opened after it is told them). It is called
+---as the screen opens in every run, a headless one too, so a screen that
+---sets up its own interface from this hook does that on every open. For a
+---title with an option screen of its own that shows and sets them. Such a screen publishes the two it
+---shows as `music_volume` and `effects_volume`
 ---([`api:set`](#ScreenApi.set)) from this hook, and again whenever one
 ---changes: what it publishes from the hook is what it shows of what it was
 ---told, and when a published value changes to another from 0 to 100 the
----engine takes that as the player's new setting, mixes with it and saves
----it. A value the screen shows otherwise than it was told (a range of its
----own) is so no change until it moves. Both published values are forgotten
----as the hook is called, and nothing is taken of a volume the hook doesn't
----publish, or of a value outside 0 to 100. Not called in
----a run with no settings (a headless one), where the screen keeps its own
----values; a screen without the hook may publish what it likes under the
----two names.
+---engine takes that as the run's new volume. In the interactive game the
+---volumes are the player's settings, and a change is mixed with and saved;
+---in a run with no settings (a headless one) they are the run's own, 100
+---and 100 from the boot, and a change is only kept. A value the screen
+---shows otherwise than it was told (a range of its own) is so no change
+---until it moves. Both published values are forgotten as the hook is
+---called, and nothing is taken of a volume the hook doesn't publish, or of
+---a value outside 0 to 100. A screen without the hook may publish what it
+---likes under the two names.
 ---@param api ScreenApi
 ---@param music integer The music volume, 0 to 100.
 ---@param effects integer The effects volume, 0 to 100.

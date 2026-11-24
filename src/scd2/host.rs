@@ -94,6 +94,10 @@ pub struct Re2State {
     /// (`FUN_004e5020`). The player's cut check doesn't move it: `Swap_Cbuff`
     /// brings it up at the frame's end. `None` falls back to the tick's cut.
     pub var_cut: Option<u8>,
+    /// A cut a setup chose (`set_room_camera`): it is `scd_var_cut` until a
+    /// script pass has read it, as in a game that was playing on it, while
+    /// the load's cut stays on screen until the first tick's `Swap_Cbuff`.
+    pub authored_var_cut: Option<u8>,
     /// Camera-table edits waiting for the room (`cut_be_set`, `cut_replace`).
     pub pending_cuts: Vec<CutEdit>,
     /// Collision-record edits waiting for the room (`sca_id_set`).
@@ -262,6 +266,14 @@ pub struct Re2State {
     /// The save count's high byte: `0x98E9BC`'s low word is the count, of
     /// which the state byte [`crate::game::STATE_BYTE_SAVES`] is the low byte.
     pub saves_high: u8,
+    /// `Bgm_vol` and `Sfx_vol` as the save work holds them (`0x98E9A9` and
+    /// `0x98E9A8`), music first, in percent: the run's volumes, which a new
+    /// game copies in (`FUN_004b73c0`) and `Save_push` again on each save,
+    /// and which `Load_pop` gives back. The save keeps them in its block
+    /// ([`crate::save::SaveFile::volumes`]), not in this state's bytes.
+    /// `None` when the game wasn't given them, and from a save from before
+    /// them, whose load leaves the run's volumes as they are.
+    pub volumes: Option<[u8; 2]>,
 }
 
 /// `St_chenge_pl`'s and `Set_room`'s stash of the scenario's character: the
@@ -945,6 +957,7 @@ impl Default for Re2State {
             areas_stopped: false,
             stopped_door: false,
             var_cut: None,
+            authored_var_cut: None,
             pending_cuts: Vec::new(),
             pending_sca: Vec::new(),
             pending_flr: Vec::new(),
@@ -1009,11 +1022,20 @@ impl Default for Re2State {
             inventory_size: crate::game::INVENTORY_SLOTS_JILL as u8,
             save_place: 0,
             saves_high: 0,
+            volumes: None,
         }
     }
 }
 
 impl Re2State {
+    /// `scd_var_cut` (variable 26) as it stands: [`Self::var_cut`], else the
+    /// cut on screen as the tick began. `Cut_check` doesn't move it, so on
+    /// the tick of a zone's switch, or while the aim holds the view, it is
+    /// not the live cut.
+    pub fn scd_var_cut(&self) -> u8 {
+        self.var_cut.unwrap_or(self.shown_cut)
+    }
+
     /// The state a save keeps: the flags, variables, door locks and music
     /// table. The rest belongs to the room, and the room's init rebuilds it.
     pub fn to_save_bytes(&self) -> Vec<u8> {
@@ -2507,7 +2529,7 @@ impl GameHost<'_> {
 
     /// Queue a light's change, on `cut` or the camera in use (`scd_var_cut`).
     fn light_edit(&mut self, cut: Option<i64>, index: i64, change: LightChange) {
-        let cut = cut.map_or(self.game.camera.current_cut as u8, |cut| cut as u8);
+        let cut = cut.map_or(self.game.re2.scd_var_cut(), |cut| cut as u8);
         let index = index as u8;
         self.game
             .re2
@@ -2521,8 +2543,9 @@ impl GameHost<'_> {
     fn change_cut(&mut self, cut: u8) {
         // `FUN_004e5020` sets `scd_var_cut` at once, so every sound the
         // tick plays after it is placed from the new cut.
+        // `cut_old` keeps the `scd_var_cut` it replaces.
+        self.game.re2.cut_old = self.game.re2.scd_var_cut();
         self.game.re2.var_cut = Some(cut & 0x7F);
-        self.game.re2.cut_old = self.game.camera.current_cut as u8;
         self.game.camera.locked = true;
         self.game.set_camera_cut(usize::from(cut & 0x7F));
         self.game.re2.bg_load = cut & 0x80 == 0;
@@ -3100,7 +3123,7 @@ impl Host for GameHost<'_> {
 
     fn var(&self, index: u8) -> u16 {
         match index {
-            VAR_CUT => self.game.camera.current_cut as u16,
+            VAR_CUT => u16::from(self.game.re2.scd_var_cut()),
             // The scripts' stage and room are the origin's, as RE1's `B_STAGE`.
             VAR_STAGE => u16::from(self.game.origin().stage.saturating_sub(1)),
             VAR_ROOM => u16::from(self.game.origin().room),
@@ -3162,11 +3185,14 @@ impl Host for GameHost<'_> {
             "cut_chg" => self.change_cut(at(0) as u8),
             "cut_old" => {
                 let cut = self.game.re2.cut_old;
+                // `Cut_old_0` goes through `FUN_004e5020` too, which keeps
+                // the cut it replaces and raises the load.
+                self.game.re2.cut_old = self.game.re2.scd_var_cut();
                 self.game.re2.var_cut = Some(cut);
                 self.game.camera.locked = false;
                 self.game.set_camera_cut(usize::from(cut));
-                // `Cut_old_0` goes through `FUN_004e5020` too.
                 self.game.re2.bg_load = true;
+                self.game.re2.cut_no_load = false;
             }
             "cut_auto" => self.game.camera.locked = at(0) == 0,
             "sce_scr_move" => self.game.re2.scroll = at(1) as i16,
@@ -5001,10 +5027,39 @@ mod tests {
         assert_eq!(object.rotation[1], 99);
     }
 
+    /// On the tick of a zone's switch `Cut_check` has moved the live cut
+    /// before the scripts run, and `scd_var_cut` still has the cut on screen:
+    /// variable 26 reads it, and `cut_chg` keeps it for `cut_old`.
+    #[test]
+    fn the_scripts_read_scd_var_cut_not_the_live_cut() {
+        let mut game = GameState::default();
+        game.re2.shown_cut = 2;
+        game.camera.current_cut = 5;
+        assert_eq!(GameHost { game: &mut game }.var(VAR_CUT), 2);
+        game.re2.var_cut = Some(1);
+        assert_eq!(GameHost { game: &mut game }.var(VAR_CUT), 1);
+        exec(&mut game, "cut_chg", &[7]);
+        assert_eq!(game.re2.cut_old, 1);
+        assert_eq!(GameHost { game: &mut game }.var(VAR_CUT), 7);
+        exec(&mut game, "cut_old", &[]);
+        assert_eq!(game.camera.current_cut, 1);
+        // `cut_old` keeps the cut it replaces as well, so a second goes back.
+        assert_eq!(game.re2.cut_old, 7);
+        exec(&mut game, "cut_old", &[]);
+        assert_eq!(game.camera.current_cut, 7);
+        // It loads, even after a `cut_chg` with bit 7 in the same pass.
+        exec(&mut game, "cut_chg", &[0x85]);
+        exec(&mut game, "cut_old", &[]);
+        assert_eq!(game.camera.current_cut, 7);
+        assert!(game.re2.bg_load && !game.re2.cut_no_load);
+    }
+
     #[test]
     fn the_light_ops_name_the_camera_in_use_or_their_own() {
         let mut game = GameState::default();
-        game.camera.current_cut = 3;
+        // `scd_var_cut`, not the live cut a zone just switched to.
+        game.re2.var_cut = Some(3);
+        game.camera.current_cut = 4;
         exec(&mut game, "light_pos_set", &[0, 1, 0x0C, -900]);
         exec(&mut game, "light_kido_set", &[2, 20000]);
         exec(&mut game, "light_color_set", &[0, 10, 20, 30, 0]);

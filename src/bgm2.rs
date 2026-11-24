@@ -276,6 +276,9 @@ pub struct Music {
     /// `Snd_se_call`'s state 2: the fade stopped the music, and the next
     /// tick frees its banks.
     door_free: bool,
+    /// A door across a stage change: its `Snd_bgm_ck` runs on the next
+    /// frame, ahead of that frame's `Snd_se_call`.
+    ck_next: Option<(RoomMusic, u32)>,
     deferred: Vec<Deferred>,
     pub channels: [Channel; CHANNELS],
 }
@@ -299,6 +302,7 @@ impl Default for Music {
             door_fade: 0,
             door_wait: 0,
             door_free: false,
+            ck_next: None,
             deferred: Vec::new(),
             channels: Default::default(),
         }
@@ -485,10 +489,20 @@ impl Music {
         }
     }
 
+    /// [`Music::leave_room`] for a door across a stage change, whose
+    /// `Snd_bgm_ck` the original runs a frame after the door's: the next
+    /// [`Music::tick`] runs it before its own count, so a sub's fade shows
+    /// its state 0x32 on no tick.
+    pub fn leave_room_next(&mut self, word: RoomMusic, system: u32) {
+        if system & SYSTEM_NO_MUSIC == 0 {
+            self.ck_next = Some((word, system));
+        }
+    }
+
     /// `Snd_bgm_set` and `Snd_bgm_play_ck`, as a room loads: `word` is the
     /// table's word for it.
     pub fn enter_room(&mut self, word: RoomMusic, place: Place) {
-        if self.door_wait > 0 {
+        if self.waiting() {
             self.deferred.push(Deferred::Enter(word, place));
             return;
         }
@@ -501,7 +515,7 @@ impl Music {
 
     /// `Snd_bgm_ck`'s wait still holds what a room asks of the music.
     pub fn waiting(&self) -> bool {
-        self.door_wait > 0
+        self.door_wait > 0 || self.ck_next.is_some()
     }
 
     /// `Snd_bgm_set` alone, which a held door's `Set_room` gets through a
@@ -581,7 +595,7 @@ impl Music {
         if place.system & SYSTEM_NO_MUSIC != 0 {
             return;
         }
-        if self.door_wait > 0 {
+        if self.waiting() {
             self.deferred.push(Deferred::Control(operands, place));
             return;
         }
@@ -664,6 +678,9 @@ impl Music {
 
     /// One tick of `Snd_se_call`'s fades.
     pub fn tick(&mut self) {
+        if let Some((word, system)) = self.ck_next.take() {
+            self.leave_room(word, system);
+        }
         if std::mem::take(&mut self.door_free) {
             // The banks go and their names with them; the frame does nothing
             // else of the music's.
@@ -1119,6 +1136,26 @@ mod tests {
         assert!(music.fading(1));
         assert_eq!(music.sequences[2].state, STATE_PLAYING);
         assert!(!music.fading(2));
+    }
+
+    /// Across a stage change `Snd_bgm_ck` runs a frame after the door's,
+    /// ahead of that frame's `Snd_se_call`: the sub's fade state is first
+    /// seen counted once (21B's word 0xD1FF into 10D's 0xFFFF, at 0x31).
+    #[test]
+    fn a_stage_change_door_counts_its_sub_fade_from_the_next_frame() {
+        let tracks = sub_tracks(5);
+        assert!(tracks[0].is_some());
+        let mut music = Music::default();
+        music.enter_room(RoomMusic::from_word(0x05ff), Place::default());
+        music.leave_room_next(RoomMusic::from_word(0xffff), 0);
+        assert_eq!(music.sequences[1].state, STATE_PLAYING);
+        assert!(music.waiting());
+        music.control([1, 4, 0, 0, 0], Place::default());
+        assert_eq!(music.sequences[1].state, STATE_PLAYING, "held for the door");
+        music.tick();
+        assert_eq!(music.sequences[1].state, STATE_SCRIPT_FADE - 1);
+        assert!(music.fading(1));
+        assert!(music.waiting());
     }
 
     /// A sub `sce_bgm_control`'s op 3 started without its loop plays its

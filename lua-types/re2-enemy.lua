@@ -1889,6 +1889,10 @@ function Re2EnemyApi:cut() end
 ---@param cut integer
 function Re2EnemyApi:cut_change(cut) end
 
+---`BYTE_0098f07b = 1`: load the cut's background at the frame's end, even
+---while the player's aim holds the view.
+function Re2EnemyApi:cut_load() end
+
 ---Where one of the room's objects (`obj_model_set`) stands. Only the
 ---alligator's tick has them.
 ---@param index integer

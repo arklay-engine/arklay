@@ -19,7 +19,7 @@
 use anyhow::{Context, Result, bail};
 
 use crate::ivm::{Ivm, IvmObject, IvmPrim, IvmPrimKind};
-use crate::player2::{Matrix, rot_matrix};
+use crate::player2::{Matrix, rot_matrix, square_root0};
 use crate::render::ScreenPolygon;
 use crate::tim;
 
@@ -41,40 +41,6 @@ const QUAD_LEN: usize = 16;
 pub const EYE_Y: i32 = 0x226;
 const EYE_Z: i32 = 1600;
 
-/// `SquareRoot0`'s table (`0x5269F8`, from entry 0x40: the argument scaled
-/// to its top bits is 0x40 to 0xFF).
-const SQRT_TABLE: [u16; 192] = [
-    4096, 4127, 4159, 4190, 4222, 4252, 4283, 4314, 4344, 4374, 4404, 4434, 4463, 4492, 4521, 4550,
-    4579, 4608, 4636, 4664, 4692, 4720, 4748, 4775, 4802, 4830, 4857, 4884, 4910, 4937, 4964, 4990,
-    5016, 5042, 5068, 5094, 5120, 5145, 5170, 5196, 5221, 5246, 5271, 5296, 5320, 5345, 5369, 5394,
-    5418, 5442, 5466, 5490, 5514, 5538, 5561, 5585, 5608, 5632, 5655, 5678, 5701, 5724, 5747, 5769,
-    5792, 5815, 5837, 5860, 5882, 5904, 5926, 5948, 5970, 5992, 6014, 6036, 6058, 6079, 6101, 6122,
-    6144, 6165, 6186, 6207, 6228, 6249, 6270, 6291, 6312, 6333, 6353, 6374, 6394, 6415, 6435, 6456,
-    6476, 6496, 6516, 6536, 6556, 6576, 6596, 6616, 6636, 6656, 6675, 6695, 6714, 6734, 6753, 6773,
-    6792, 6811, 6830, 6850, 6869, 6888, 6907, 6926, 6945, 6963, 6982, 7001, 7020, 7038, 7057, 7075,
-    7094, 7112, 7131, 7149, 7168, 7186, 7204, 7222, 7240, 7258, 7276, 7294, 7312, 7330, 7348, 7366,
-    7384, 7401, 7419, 7437, 7454, 7472, 7489, 7507, 7524, 7542, 7559, 7576, 7594, 7611, 7628, 7645,
-    7662, 7680, 7697, 7714, 7731, 7747, 7764, 7781, 7798, 7815, 7832, 7848, 7865, 7882, 7898, 7915,
-    7931, 7948, 7964, 7981, 7997, 8014, 8030, 8046, 8062, 8079, 8095, 8111, 8127, 8143, 8159, 8175,
-];
-
-/// `SquareRoot0` (`0x451780`): the table's root of `value` scaled to its
-/// top six or seven bits, shifted back by half the scale.
-fn square_root(value: i32) -> i32 {
-    if value == 0 || value == -1 {
-        return 0;
-    }
-    let lead = 31 - value.unsigned_abs().leading_zeros() as i32;
-    let scale = (31 - lead) & !1;
-    let index = if scale < 24 {
-        value >> (24 - scale)
-    } else {
-        value << (scale - 24)
-    };
-    let root = u32::from(SQRT_TABLE[(index as usize).clamp(0x40, 0xFF) - 0x40]);
-    ((root << ((31 - scale) >> 1)) >> 12) as i32
-}
-
 /// `Set_view` (`0x502DB0`): the view from the eye at `(0, eye_y, 1600)` to
 /// the origin, a pitch and then a yaw onto the identity (`MulMatrix`,
 /// `0x450DD0`, reads both operands before writing), each term divided by
@@ -82,8 +48,8 @@ fn square_root(value: i32) -> i32 {
 pub(crate) fn view(eye_y: i32) -> Matrix {
     let (dx, dy, dz) = (0, -eye_y, -EYE_Z);
     let identity = [[0x1000, 0, 0], [0, 0x1000, 0], [0, 0, 0x1000]];
-    let length = square_root(dy * dy + dx * dx + dz * dz);
-    let flat = square_root(dx * dx + dz * dz);
+    let length = square_root0(dy * dy + dx * dx + dz * dz);
+    let flat = square_root0(dx * dx + dz * dz);
     let mut pitch = identity;
     pitch[1][1] = ((flat << 12) / length) as i16;
     pitch[2][1] = ((dy * 0x1000) / length) as i16;
@@ -500,8 +466,8 @@ mod tests {
             [[-4101, 0, 0], [0, 3877, -1336], [0, -1334, -3882]]
         );
         assert_eq!(at_rest.t, [0, 1, 1695]);
-        assert_eq!(square_root(1600 * 1600), 1598);
-        assert_eq!(square_root(0), 0);
+        assert_eq!(square_root0(1600 * 1600), 1598);
+        assert_eq!(square_root0(0), 0);
     }
 
     #[test]

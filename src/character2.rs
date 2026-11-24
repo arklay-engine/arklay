@@ -744,7 +744,9 @@ fn run_zombie(
         Vec::new()
     };
     let alligator = character.id == crate::zombie2::ALLIGATOR_ID;
-    let camera_cut = game.camera.current_cut as u8;
+    // `scd_var_cut` (the alligator's tests at `0x469D94` and `0x469EE4`),
+    // not the live cut a zone may have moved this tick.
+    let camera_cut = game.re2.scd_var_cut();
     let objects = if alligator {
         game.objects
             .records
@@ -853,6 +855,7 @@ fn run_zombie(
         flag_ops: Vec::new(),
         status_and_not: 0,
         cut: None,
+        cut_load: false,
         objects,
         sub1: false,
         camera_cut,
@@ -870,6 +873,7 @@ fn run_zombie(
     let status_and_not = world.status_and_not;
     let flag_ops = std::mem::take(&mut world.flag_ops);
     let cut = world.cut;
+    let cut_load = world.cut_load;
     let sub1 = world.sub1;
     let objects = std::mem::take(&mut world.objects);
     let hidden_objects = std::mem::take(&mut world.hidden_objects);
@@ -904,6 +908,9 @@ fn run_zombie(
     if let Some(cut) = cut {
         // `Cut_change`: the cut changes, and the zones carry on from it.
         game.set_camera_cut(usize::from(cut & 0x7F));
+    }
+    if cut_load {
+        game.re2.bg_load = true;
     }
     // `fg_status`'s `0x100` is the camera's lock, which `Cut_check` obeys.
     if status_or & 0x100 != 0 {

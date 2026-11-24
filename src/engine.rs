@@ -499,6 +499,15 @@ pub fn run_with_options(
         let lua = load_lua(&pack);
         call_lua_init(lua.as_ref(), &mut game);
         call_lua_room_load(lua.as_ref(), &mut game, id);
+        // An RE 2 room tests its zones as it loads, before the setup, as the
+        // session's start does; the setup's camera is the first pass's
+        // `scd_var_cut` and the first tick's `Cut_check` takes it from there.
+        if game.is_re2_room {
+            // From where the room's hook left the player.
+            game.sync_player(&mut player_state);
+            apply_camera(&mut loaded.room, &mut game, Some(player_state.pos));
+        }
+        let cut = game.camera.current_cut;
         run_setup_chunk(lua.as_ref(), &mut game, authoring.setup_script)?;
         game.sync_player(&mut player_state);
         if let Some(view) = &authoring.model {
@@ -508,7 +517,11 @@ pub fn run_with_options(
             write_save_file(&game, path)?;
             return Ok(());
         }
-        apply_camera(&mut loaded.room, &mut game, Some(player_state.pos));
+        if !game.is_re2_room {
+            apply_camera(&mut loaded.room, &mut game, Some(player_state.pos));
+        } else if game.camera.current_cut != cut {
+            game.re2.authored_var_cut = u8::try_from(game.camera.current_cut).ok();
+        }
         drain_mask_toggles(&mut loaded.room, &mut game);
         bgm::update_room_bgm(&mut game, id, None);
         timings.phases.load = load_start.elapsed();
@@ -585,6 +598,7 @@ pub fn run_with_options(
                 } else {
                     let message_before = game.message.menu_choice_id() & 0x80 != 0;
                     let tick_cut = Some((loaded.id, loaded.room.current_cut));
+                    begin_re2_var_cut(&mut game, &loaded.room);
                     let requested = tick_room_timed(
                         &mut command_vm,
                         &mut event_vm,
@@ -2575,6 +2589,9 @@ struct GameSession {
     /// The slot the last typewriter save wrote, taken once by the app as
     /// the in-game menu's restart point.
     saved_slot: Option<usize>,
+    /// The block the last save to a named file wrote, taken once by the app
+    /// as the in-game menu's restart point.
+    saved_file: Option<Box<save::SaveFile>>,
     /// Saves this session's save screens wrote, and the slot of the last
     /// one: the player bot's read-only view of a completed save.
     saves_written: u32,
@@ -2681,6 +2698,8 @@ struct AuthorBaseline {
     /// `fg_key`, which bank 31's flags are.
     door_locks: [u32; 2],
     rnd: crate::zombie2::Rnd,
+    /// The live cut.
+    cut: usize,
     /// The script variables, so an edit's own writes are kept over the boot's.
     vars: [u16; 256],
 }
@@ -3366,6 +3385,7 @@ impl GameSession {
             system_menu_requested: false,
             load_from_system_menu: false,
             saved_slot: None,
+            saved_file: None,
             saves_written: 0,
             last_saved_slot: None,
             autosave_pending: false,
@@ -3898,7 +3918,7 @@ impl GameSession {
         }
         self.re2_status_open_areas(pack);
         self.tick_cut = Some((self.loaded.id, self.loaded.room.current_cut));
-        self.game.re2.var_cut = u8::try_from(self.loaded.room.current_cut).ok();
+        begin_re2_var_cut(&mut self.game, &self.loaded.room);
         self.game.re2.films = self.films;
         self.buffer_half ^= 1;
         if self
@@ -4119,6 +4139,15 @@ impl GameSession {
                     .is_some_and(|burst| start.elapsed() >= burst)
             {
                 break;
+            }
+            if ran {
+                // `Swap_Cbuff` ends each of the burst's ticks; the last one's
+                // runs with the frame ([`GameSession::swap_cbuff`]).
+                let now = (self.loaded.id, self.loaded.room.current_cut);
+                let screen = self.re2_screen_clears_cut();
+                swap_cbuff_view(&mut self.game, self.tick_cut, now, screen);
+                self.tick_cut = Some(now);
+                begin_re2_var_cut(&mut self.game, &self.loaded.room);
             }
             ran = true;
             self.tween.advance();
@@ -7726,6 +7755,7 @@ impl GameSession {
             banks: self.game.re2.banks,
             door_locks: self.game.re2.door_locks,
             rnd: self.game.re2.rnd,
+            cut: self.game.camera.current_cut,
             vars: self.game.re2.vars,
         }
     }
@@ -7739,6 +7769,7 @@ impl GameSession {
             banks,
             door_locks,
             rnd,
+            cut,
             vars,
         } = baseline;
         let flags = (banks, door_locks);
@@ -7817,6 +7848,9 @@ impl GameSession {
         }
         if mirror {
             self.game.sync_player(&mut self.player);
+            if self.game.is_re2_room && self.game.camera.current_cut != cut {
+                self.game.re2.authored_var_cut = u8::try_from(self.game.camera.current_cut).ok();
+            }
             let life = self
                 .game
                 .entities
@@ -7914,11 +7948,15 @@ impl GameSession {
 
     /// A save screen wrote a save: the app's restart point and the player
     /// bot's read-only count of completed saves.
-    fn note_save_written(&mut self, slot: Option<usize>) {
+    fn note_save_written(&mut self, outcome: ui::save_load::SaveOutcome) {
         self.saves_written = self.saves_written.saturating_add(1);
-        if slot.is_some() {
-            self.saved_slot = slot;
-            self.last_saved_slot = slot;
+        if outcome.slot.is_some() {
+            self.saved_slot = outcome.slot;
+            self.last_saved_slot = outcome.slot;
+            self.saved_file = None;
+        } else if let Some(file) = outcome.file {
+            self.saved_file = Some(file);
+            self.saved_slot = None;
         }
     }
 
@@ -7964,7 +8002,7 @@ impl GameSession {
                 .and_then(|screen| screen.take_outcome())
             {
                 self.game.re2_typewriter_write(outcome.ink_ribbon);
-                self.note_save_written(outcome.slot);
+                self.note_save_written(outcome);
             }
         } else {
             self.play_ui_cue_names(pack, cues);
@@ -8004,7 +8042,7 @@ impl GameSession {
                 }
                 self.game.increment_saves();
             }
-            self.note_save_written(outcome.slot);
+            self.note_save_written(outcome);
         }
         self.save_screen = None;
         // Leaving the save screen runs `cut_set`, which rebuilds the room's
@@ -8935,11 +8973,14 @@ impl GameSession {
                     .and_then(|stage| self.game.re2.bgm.get(stage, target.room))
             {
                 let system = self.game.re2_music_place().system;
-                self.game.re2.music.leave_room(word, system);
                 // `Snd_se_call` runs after `Set_door` in the frame, so the
                 // door's countdown starts on this tick; across a stage change
-                // `Snd_bgm_ck` comes a frame later, as the clear does.
-                if !session.stage_change {
+                // `Snd_bgm_ck` comes a frame later, as the clear does, still
+                // ahead of that frame's `Snd_se_call`.
+                if session.stage_change {
+                    self.game.re2.music.leave_room_next(word, system);
+                } else {
+                    self.game.re2.music.leave_room(word, system);
                     self.game.re2.music.tick();
                 }
             }
@@ -11475,10 +11516,17 @@ struct App {
     /// The stage RE 2's `Set_room` last set (`0x989E7D`), which outlasts the
     /// game: 1 from the boot, then the stage of every room a session loads.
     re2_stage: u8,
-    /// The settings' music and effects volumes in percent, for a title
-    /// whose own option screen shows and sets them (its `on_volumes`).
-    /// `None` in a run with no settings, where such a screen keeps its own.
-    screen_volumes: Option<[u8; 2]>,
+    /// The run's music and effects volumes in percent, the original's
+    /// `Bgm_vol` and `Sfx_vol`: what a title whose own option screen shows
+    /// and sets them is told (its `on_volumes`), what a game's saves keep
+    /// and what a load takes back from its save (`Load_pop`). 100 and 100
+    /// from the boot, as `Init_system` sets them, in a run with no
+    /// settings; the settings' music and effects volumes in the interactive
+    /// game ([`Self::volumes_are_settings`]).
+    screen_volumes: [u8; 2],
+    /// Whether [`Self::screen_volumes`] are the settings': a change to them
+    /// is then mixed with and saved ([`Self::volume_change`]).
+    volumes_are_settings: bool,
     /// What the title shows as its `music_volume` and `effects_volume`: the
     /// value it published from `on_volumes`, then each one taken from it
     /// since, to tell a change of its own from what it was told. `None`
@@ -11619,7 +11667,8 @@ impl App {
             next_demo: 0,
             pending_return_title: false,
             re2_stage: 1,
-            screen_volumes: None,
+            screen_volumes: [100; 2],
+            volumes_are_settings: false,
             screen_volumes_shown: [None; 2],
             volume_change: None,
             prologue_pending: false,
@@ -12129,9 +12178,9 @@ impl App {
     /// The interactive `AppBoot::Continue` arm.
     fn boot_continue(&mut self, path: &Path) -> Result<()> {
         let file = save::load_file(path)?;
-        let session =
-            GameSession::from_save_with(&self.pack, &file, &self.save_dir, self.player_options)?;
+        let session = self.continue_session(&file, true)?;
         self.start_narrated_session(session, game::MESSAGE_BOOT_CONTINUE);
+        self.restart_point = Some(RestartPoint::File(Box::new(file)));
         Ok(())
     }
 
@@ -12335,8 +12384,53 @@ impl App {
     /// The settings' music and effects volumes, in percent: a title that
     /// shows them is told now, and every title that opens after.
     fn set_screen_volumes(&mut self, music: u8, effects: u8) {
-        self.screen_volumes = Some([music.min(100), effects.min(100)]);
+        self.volumes_are_settings = true;
+        self.set_volumes([music.min(100), effects.min(100)]);
+    }
+
+    /// The interactive game's volumes are the settings' in `game`, unless
+    /// they are the settings' already: set before the app's boot, so that a
+    /// load the boot makes (`--load`) takes its save's over them, as a
+    /// later load does, and the window's loop doesn't put them back.
+    fn use_settings_volumes(&mut self, game: &crate::config::Game) {
+        if !self.volumes_are_settings {
+            self.set_screen_volumes(game.music_volume, game.effects_volume);
+        }
+    }
+
+    /// The run's volumes are `volumes`: a title that shows them is told,
+    /// and the game in play keeps them for its saves.
+    fn set_volumes(&mut self, volumes: [u8; 2]) {
+        self.screen_volumes = volumes;
         self.tell_screen_volumes();
+        if let Mode::Play(session) = &mut self.mode {
+            session.game.re2.volumes = Some(volumes);
+        }
+    }
+
+    /// Build the session a continue from `file` starts, and take the run's
+    /// volumes from its save once it builds, as `Load_pop` does: a save that
+    /// can't be continued from changes nothing, and one from before arklay
+    /// kept them (or whose RE 2 state doesn't apply) leaves them as they
+    /// are. In the interactive game the save's volumes are the settings'
+    /// from then on, as the SOUND page would set them; `persist` has the
+    /// window's loop mix with and save them ([`Self::volume_change`]).
+    fn continue_session(
+        &mut self,
+        file: &save::SaveFile,
+        persist: bool,
+    ) -> Result<Box<GameSession>> {
+        let session =
+            GameSession::from_save_with(&self.pack, file, &self.save_dir, self.player_options)?;
+        if let Some(volumes) = session.game.re2.volumes
+            && volumes != self.screen_volumes
+        {
+            if self.volumes_are_settings && persist {
+                self.volume_change = Some(volumes);
+            }
+            self.set_volumes(volumes);
+        }
+        Ok(session)
     }
 
     /// Tell the title the settings' volumes (`on_volumes(api, music,
@@ -12344,9 +12438,7 @@ impl App {
     /// a range of its own. From a script that publishes nothing from the
     /// hook nothing is taken.
     fn tell_screen_volumes(&mut self) {
-        let Some([music, effects]) = self.screen_volumes else {
-            return;
-        };
+        let [music, effects] = self.screen_volumes;
         // The screen is lent out of the mode while the app's context is.
         let mut mode = std::mem::replace(&mut self.mode, Mode::Boot);
         if let Mode::Title(screen) | Mode::Select(screen) = &mut mode
@@ -12369,9 +12461,8 @@ impl App {
     /// differently from the settings (a floor of 1) is no change, and a
     /// value no setting can hold, or none, leaves what it shows as it was.
     fn poll_screen_volumes(&mut self) {
-        let (Some(mut volumes), Mode::Title(screen) | Mode::Select(screen)) =
-            (self.screen_volumes, &self.mode)
-        else {
+        let mut volumes = self.screen_volumes;
+        let (Mode::Title(screen) | Mode::Select(screen)) = &self.mode else {
             return;
         };
         if !screen.shows_volumes() {
@@ -12386,9 +12477,11 @@ impl App {
                 volumes[index] = percent;
             }
         }
-        if self.screen_volumes != Some(volumes) {
-            self.screen_volumes = Some(volumes);
-            self.volume_change = Some(volumes);
+        if self.screen_volumes != volumes {
+            self.screen_volumes = volumes;
+            if self.volumes_are_settings {
+                self.volume_change = Some(volumes);
+            }
         }
     }
 
@@ -12544,6 +12637,12 @@ impl App {
         }
         session.subtitles_off = !self.subtitles;
         session.game.player_options = self.player_options;
+        // A new game copies the run's volumes into its save work
+        // (`FUN_004b73c0`); a load keeps its save's, which the run has
+        // taken ([`Self::continue_session`]).
+        if session.game.re2.volumes.is_none() {
+            session.game.re2.volumes = Some(self.screen_volumes);
+        }
         if self.audio {
             session.start_audio(&self.pack);
         }
@@ -12626,8 +12725,7 @@ impl App {
 
     /// Continue from a parsed save block (a Lua screen's chosen file).
     fn continue_from_file(&mut self, file: save::SaveFile) -> Result<()> {
-        let session =
-            GameSession::from_save_with(&self.pack, &file, &self.save_dir, self.player_options)?;
+        let session = self.continue_session(&file, true)?;
         self.start_narrated_session(session, game::MESSAGE_BOOT_CONTINUE);
         Ok(())
     }
@@ -13334,6 +13432,7 @@ impl App {
         let mut load_request = None;
         let mut clear_game = None;
         let mut saved_slot = None;
+        let mut saved_file = None;
         let mut autosave = None;
         {
             let App { pack, mode, .. } = self;
@@ -13363,6 +13462,7 @@ impl App {
                 }
                 load_request = session.take_load_request();
                 saved_slot = session.saved_slot.take();
+                saved_file = session.saved_file.take();
                 autosave = session.take_autosave();
                 clear_game = session
                     .take_clear_game_request()
@@ -13371,6 +13471,9 @@ impl App {
         }
         if let Some(slot) = saved_slot {
             self.restart_point = Some(RestartPoint::Slot(slot));
+        }
+        if let Some(file) = saved_file {
+            self.restart_point = Some(RestartPoint::File(file));
         }
         if let Some(stage) = re2_stage {
             self.re2_stage = stage;
@@ -13945,7 +14048,7 @@ fn start_capture_game(app: &mut App, character: u8, room: Option<RoomId>) -> Res
 /// Build the capture-path continue session and start it.
 fn start_capture_continue(app: &mut App, path: &Path) -> Result<()> {
     let file = save::load_file(path)?;
-    let session = GameSession::from_save_with(&app.pack, &file, &app.save_dir, app.player_options)?;
+    let session = app.continue_session(&file, false)?;
     app.start_session(session);
     Ok(())
 }
@@ -14160,6 +14263,9 @@ fn run_ui_impl(
     let mut app = App::new(pack, save_dir.to_path_buf(), true);
     app.configure_watch(mods.watch);
     app.player_options = player_options;
+    // The settings' volumes before the boot, which a `--load` takes its
+    // save's over.
+    app.use_settings_volumes(&crate::config::Config::load_default().0.game);
     app.boot(boot)?;
     if let Mode::Play(session) = &mut app.mode {
         session.run_setup_script(authoring.setup_script)?;
@@ -14701,9 +14807,8 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
     let mut event = SDL_Event::default();
     let mut clock = LoopClock::new(display.frame_rate(), stats);
     warm_gui_fonts(app.pack.language());
-    let game_options = crate::config::Config::load_default().0.game;
+    let game_options = settings_volumes(app, crate::config::Config::load_default().0.game);
     crate::audio::set_volumes(game_options.volumes());
-    app.set_screen_volumes(game_options.music_volume, game_options.effects_volume);
     ui::save_load::set_modern(game_options.modern_save_screen);
     app.set_subtitle_options(&game_options);
     let mut hud = debug_hud::DebugHud::new(game_options.ui_font);
@@ -15110,7 +15215,8 @@ fn menu_game_options(app: &App, mut game: crate::config::Game) -> crate::config:
     game.chris_ink_ribbons = !app.player_options.no_chris_ink_ribbons;
     game.jill_ink_ribbons = app.player_options.jill_ink_ribbons;
     game.autosave = !app.player_options.no_autosave;
-    if let Some([music, effects]) = app.screen_volumes {
+    if app.volumes_are_settings {
+        let [music, effects] = app.screen_volumes;
         game.music_volume = music;
         game.effects_volume = effects;
     }
@@ -15272,6 +15378,16 @@ pub(crate) fn persisted_options(
         file.language
     };
     (saved_graphics, language, saved_game)
+}
+
+/// The settings' `[game]` options as the window mixes with them: the run's
+/// music and effects volumes are the settings' ([`App::use_settings_volumes`]),
+/// or what a load the app's boot made took from its save over them, which
+/// the window's first tick then saves.
+fn settings_volumes(app: &mut App, mut game: crate::config::Game) -> crate::config::Game {
+    app.use_settings_volumes(&game);
+    [game.music_volume, game.effects_volume] = app.screen_volumes;
+    game
 }
 
 /// The values a title publishes for the volumes it shows and sets
@@ -17024,6 +17140,8 @@ fn simulate_loaded_with(
             continue;
         }
         let message_before = game.message.menu_choice_id() & 0x80 != 0;
+        let tick_cut = Some((loaded.id, loaded.room.current_cut));
+        begin_re2_var_cut(&mut game, &loaded.room);
         let requested = tick_room(
             &mut command_vm,
             &mut event_vm,
@@ -17040,6 +17158,14 @@ fn simulate_loaded_with(
         );
         run_lua_tick_hooks(lua.as_ref(), &mut game, message_before);
         game.drop_re2_scripted_status();
+        // `Swap_Cbuff`: the pending load, and the cut a `cut_chg` with bit 7
+        // leaves on screen (the frames it skips aren't modelled here).
+        swap_cbuff_view(
+            &mut game,
+            tick_cut,
+            (loaded.id, loaded.room.current_cut),
+            false,
+        );
         // A scripted door follows into its destination: the interactive engine
         // plays the `.dor` timeline and reboots the destination room.
         if let Some(request) = requested {
@@ -17084,19 +17210,22 @@ fn simulate_loaded_with(
         }
     }
 
-    render_frame(
-        &mut framebuffer,
-        pack,
-        loaded.id,
-        &loaded.room,
-        &player_state,
-        &mut game,
-        loaded.player_assets.as_ref(),
-        &mut npc_models,
-        &mut masks,
-        &mut shadows,
-        &mut effect_pages,
-    );
+    let (id, assets, view_cut) = (loaded.id, loaded.player_assets.as_ref(), game.re2.view_cut);
+    on_screen_cut(&mut loaded.room, view_cut, |room| {
+        render_frame(
+            &mut framebuffer,
+            pack,
+            id,
+            room,
+            &player_state,
+            &mut game,
+            assets,
+            &mut npc_models,
+            &mut masks,
+            &mut shadows,
+            &mut effect_pages,
+        );
+    });
     let frame = Image {
         width: framebuffer.width,
         height: framebuffer.height,
@@ -17111,19 +17240,22 @@ fn simulate_loaded_with(
         entity.set_active(false);
     }
     let mut baseline_framebuffer = Framebuffer::new();
-    render_frame(
-        &mut baseline_framebuffer,
-        pack,
-        loaded.id,
-        &loaded.room,
-        &player_state,
-        &mut game,
-        loaded.player_assets.as_ref(),
-        &mut npc_models,
-        &mut masks,
-        &mut shadows,
-        &mut effect_pages,
-    );
+    let (id, assets, view_cut) = (loaded.id, loaded.player_assets.as_ref(), game.re2.view_cut);
+    on_screen_cut(&mut loaded.room, view_cut, |room| {
+        render_frame(
+            &mut baseline_framebuffer,
+            pack,
+            id,
+            room,
+            &player_state,
+            &mut game,
+            assets,
+            &mut npc_models,
+            &mut masks,
+            &mut shadows,
+            &mut effect_pages,
+        );
+    });
     let baseline = Image {
         width: baseline_framebuffer.width,
         height: baseline_framebuffer.height,
@@ -19742,6 +19874,7 @@ fn run_re2_init(
     game.re2.pending_flr.clear();
     game.re2.scroll = 0;
     game.re2.pending_player = Default::default();
+    game.re2.authored_var_cut = None;
     // `Set_room`'s case 10: a `save(32, N)` makes the player another
     // character before `Pl_init` and the room's scripts.
     crate::game::pl_change2::set_room_change(game);
@@ -19958,15 +20091,19 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
         // The hand-back tick itself still has `fg_stop`'s `0xEF000000` when
         // `Om_move` runs, and it is down by the next tick's.
         context.game.re2.objects_key_stop = true;
+        apply_re2_driver_warp(context.game, context.player);
         return;
     }
     // And doesn't run at all once the player's death has stopped the routines.
     if *context.game.re2.fg_stop_mut() & 0x0200_0000 != 0 {
+        apply_re2_driver_warp(context.game, context.player);
         return;
     }
     let Some(mut vm) = context.game.re2.vm.take() else {
         return;
     };
+    // A setup's cut has been read as `scd_var_cut` once this pass starts.
+    context.game.re2.authored_var_cut = None;
     context.game.re2.sce_rnd_set();
     // `Sce_scheduler` starts the room's second main procedure every tick.
     vm.exec_event(0, 1);
@@ -19987,6 +20124,14 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
     crate::character2::run_esprs(context.game, context.room, context.pack, context.npc_models);
     apply_re2_room_data(context.room, context.game);
     apply_re2_pending_player(context.game, context.player);
+}
+
+/// A driver's warp (`set_player_pos`) with no scheduler pass to wait for:
+/// the player is there now.
+fn apply_re2_driver_warp(game: &mut game::GameState, player: &mut player::PlayerState) {
+    if game.re2.pending_player.warp.is_some() {
+        apply_re2_pending_player(game, player);
+    }
 }
 
 /// A script's `pos_set` and `dir_set` on the player (and a driver's warp)
@@ -20241,10 +20386,9 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     let raised = std::mem::take(&mut re2.player.status_raise);
     let status = &mut re2.banks[usize::from(crate::scd2::host::STATUS_BANK)][0];
     *status = (*status & !dropped) | raised;
-    crate::character2::shot_draws(
-        context.game,
-        context.room.cuts.get(context.room.current_cut),
-    );
+    // `Shoot_camera` places from `scd_var_cut` (`0x4DCB9C`).
+    let cut = usize::from(context.game.re2.scd_var_cut());
+    crate::character2::shot_draws(context.game, context.room.cuts.get(cut));
     if !tick.stopped {
         crate::character2::pl_bow(context.game, context.room.sca.as_ref());
         crate::character2::mag_down(context.game, context.player);
@@ -20433,14 +20577,21 @@ fn tick_room_timed(
         return None;
     }
     let door_pending = context.game.transition_door.is_some();
-    // The original's `Cut_check` runs before `Sce_scheduler`, so a lock the
-    // scripts' `cut_auto` releases this tick still held the cut for this
-    // tick's check (room 303's plug panel: `cut_chg(3)`, `cut_auto(1)`).
-    let cut_locked_before = context.game.is_re2_room && context.game.camera.locked;
     // A message the tick's hook put up (`Key_lost`, a drawer), which the
     // scripts' own don't count as: theirs raise `fg_status`'s `0x40` where
     // the scripts can still clear it.
     let hook_message = !message_before && context.game.message.menu_choice_id() & 0x80 != 0;
+    // `Game_loop` runs `Cut_check(0)` after the hook and before
+    // `Sce_scheduler`, unless a drawer's hand-off holds the cut
+    // (`fg_status`'s `0x100`), so the zones see the place and the lock the
+    // tick began with.
+    if context.game.is_re2_room && !context.game.re2_hikidashi.holds_cut() {
+        // A driver's warp (`set_player_pos`) waits for the first pass's
+        // moves, but it stands for where the original's player stood before
+        // play began.
+        let pos = (context.game.re2.pending_player.warp).unwrap_or(context.game.entities[0].pos);
+        re2_cut_check(context.room, context.game, pos);
+    }
     tick_re2_scripts(&mut context);
     let script_message = context.game.is_re2_room
         && !message_before
@@ -20479,20 +20630,17 @@ fn tick_room_timed(
     // reprojection below.
     let previous_cut = context.room.current_cut;
     tick_interactive(&mut context, input.cancel_held);
-    // The original's `check_camera_switch(0)` runs after the scripts and
-    // BEFORE `update_entities`/`update_player_anim`, so it tests the position
-    // the scripts left rather than this tick's movement. That is what makes a
+    // RE 1's `check_camera_switch(0)` runs after the scripts and BEFORE
+    // `update_entities`/`update_player_anim`, so it tests the position the
+    // scripts left rather than this tick's movement. That is what makes a
     // cut change land one tick after the crossing frame, not on it.
     context.game.sync_player(context.player);
-    // A drawer's hand-off raises `fg_status`'s `0x100` until its close,
-    // and `Game_loop` skips `Cut_check` under it.
-    if !context.game.re2.script_door && !context.game.re2_hikidashi.holds_cut() {
-        apply_re2_tick_camera(
-            context.room,
-            context.game,
-            context.player.pos,
-            cut_locked_before,
-        );
+    if context.game.is_re2_room {
+        // RE 2 tested its zones before the scripts; what they leave of the
+        // live cut (a `cut_chg`, a `cut_old`) comes on screen here.
+        show_re2_live_cut(context.room, context.game);
+    } else {
+        apply_camera(context.room, context.game, Some(context.player.pos));
     }
     if context.room.current_cut != previous_cut {
         // The effects projected above under the pre-switch camera; recompute
@@ -20996,11 +21144,13 @@ fn tick_room_timed(
     if context.game.is_re2_room {
         context.game.re2.view_held = context.game.re2.player.holds_view();
     }
-    if context.game.camera.current_cut < context.room.cuts.len()
-        && context.room.current_cut != context.game.camera.current_cut
-        && !(context.game.is_re2_room && context.game.re2.view_held && !context.game.camera.locked)
-    {
-        context.room.current_cut = context.game.camera.current_cut;
+    let shown = if context.game.is_re2_room {
+        re2_shown_cut(context.game)
+    } else {
+        context.game.camera.current_cut
+    };
+    if shown < context.room.cuts.len() && context.room.current_cut != shown {
+        context.room.current_cut = shown;
         context.game.reproject_effects(context.room);
     }
     // The stair probe wrote `player.pos[1]`; mirror it onto entity 0 so the
@@ -21128,24 +21278,48 @@ fn apply_camera(room: &mut RoomState, game: &mut game::GameState, pos: Option<[i
     room.current_cut = selected;
 }
 
-/// The play tick's camera test for [`tick_room`]: an RE2 room's `Cut_check`
-/// runs before `Sce_scheduler`, so a lock that held when the tick began
-/// holds this tick's test even when the scripts' `cut_auto` let it go; the
-/// cut the scripts chose stays on screen, and the zones are tested from the
-/// next tick.
-fn apply_re2_tick_camera(
-    room: &mut RoomState,
-    game: &mut game::GameState,
-    pos: [i32; 3],
-    locked_before: bool,
-) {
-    let released = locked_before && !game.camera.locked;
-    if released {
-        game.camera.locked = true;
+/// RE 2's `Cut_check(0)` (`0x4C4DE0`) in play: unless `fg_status`'s `0x100`
+/// locks the cut (a script's `cut_chg` or `cut_auto(0)`), the first zone of
+/// the live cut's list that holds `pos` on the player's floor moves the live
+/// cut (`Cut_change`). The cut on screen waits for the frame's `Swap_Cbuff`
+/// ([`show_re2_live_cut`]).
+fn re2_cut_check(room: &RoomState, game: &mut game::GameState, pos: [i32; 3]) {
+    if game.camera.locked {
+        return;
     }
-    apply_camera(room, game, Some(pos));
-    if released {
-        game.camera.locked = false;
+    let cut =
+        player::camera_for_position_on(room, game.camera.current_cut, pos, game.re2.player.floor);
+    game.set_camera_cut(cut);
+}
+
+/// `scd_var_cut` as a tick begins: the cut the last frame's `Swap_Cbuff`
+/// left on screen, or a setup's cut until a script pass has read it
+/// ([`crate::scd2::host::Re2State::authored_var_cut`]).
+fn begin_re2_var_cut(game: &mut game::GameState, room: &RoomState) {
+    game.re2.var_cut = game
+        .re2
+        .authored_var_cut
+        .or_else(|| u8::try_from(room.current_cut).ok());
+}
+
+/// The cut `Swap_Cbuff` leaves as `scd_var_cut` (`0x4C448D`): the live cut,
+/// unless the aim holds the view (`fg_status`'s `0x80`) and no load is
+/// pending. Then it is what a script's `cut_chg` made it, else the tick's. A
+/// pending load (a `cut_chg` or `cut_old`, the alligator's `Cut_change`s)
+/// loads the live cut, aim or not (`0x4C48B5`).
+fn re2_shown_cut(game: &game::GameState) -> usize {
+    if game.re2.view_held && !game.re2.bg_load {
+        usize::from(game.re2.scd_var_cut())
+    } else {
+        game.camera.current_cut
+    }
+}
+
+/// [`re2_shown_cut`] on screen.
+fn show_re2_live_cut(room: &mut RoomState, game: &game::GameState) {
+    let cut = re2_shown_cut(game);
+    if cut < room.cuts.len() {
+        room.current_cut = cut;
     }
 }
 
@@ -29188,9 +29362,49 @@ mod tests {
             outcome: Some(ui::save_load::SaveOutcome {
                 slot: None,
                 ink_ribbon: true,
+                file: None,
             }),
             values: values.iter().copied().collect(),
         })
+    }
+
+    /// RESTART reloads the save last written, a named file's too: a write
+    /// to a file the screen named moves the restart point from the save
+    /// loaded before onto the block it wrote, with the volumes the game had
+    /// then. A failed write that still counts as a save leaves it.
+    #[test]
+    fn a_named_write_is_the_restart_point() {
+        for written in [true, false] {
+            let dir = TempDir::new();
+            let (pack, mut session) = re2_typewriter_session(&dir);
+            let loaded = save::SaveFile {
+                volumes: Some([40, 7]),
+                ..save::SaveFile::default()
+            };
+            let b = save::SaveFile {
+                volumes: Some([60, 50]),
+                health: 77,
+                ..save::SaveFile::default()
+            };
+            session.save_screen = Some(Box::new(WritingSaveScreen {
+                outcome: Some(ui::save_load::SaveOutcome {
+                    slot: None,
+                    ink_ribbon: false,
+                    file: written.then(|| Box::new(b.clone())),
+                }),
+                values: Default::default(),
+            }));
+            session.re2_save = Some(Re2Save::Screen);
+            let mut app = App::new(pack, dir.0.join("saves"), false);
+            app.start_session(session);
+            app.restart_point = Some(RestartPoint::File(Box::new(loaded.clone())));
+            idle(&mut app);
+            let expected = if written { b } else { loaded };
+            assert!(
+                matches!(&app.restart_point, Some(RestartPoint::File(file)) if **file == expected),
+                "written: {written}"
+            );
+        }
     }
 
     /// `Card_access`'s state 3 carries on after a failed write in save mode:
@@ -30029,8 +30243,9 @@ mod tests {
         assert_eq!(room.current_cut, 1);
     }
 
-    #[test]
-    fn an_re2_cut_auto_lets_the_zones_in_from_the_next_tick() {
+    /// Cut 2's list holds a zone to cut 1 over (0..100, 0..100), and cut 1's
+    /// a zone back to cut 2 over (200..300, 0..100).
+    fn re2_two_zone_room() -> (RoomState, game::GameState) {
         use crate::state::{Cut, Zone, ZoneGate};
 
         let mut room = RoomState {
@@ -30038,17 +30253,23 @@ mod tests {
             sca: Some(Default::default()),
             ..RoomState::default()
         };
-        // Cut 2's group holds a zone to cut 1 where the player stands.
+        let header = |cut| Zone {
+            cam_to: cut,
+            cam_from: cut,
+            corners: [[0; 2]; 4],
+        };
         room.zones = vec![
-            Zone {
-                cam_to: 2,
-                cam_from: 2,
-                corners: [[0; 2]; 4],
-            },
+            header(2),
             Zone {
                 cam_to: 1,
                 cam_from: 2,
                 corners: [[0, 0], [0, 100], [100, 100], [100, 0]],
+            },
+            header(1),
+            Zone {
+                cam_to: 2,
+                cam_from: 1,
+                corners: [[200, 0], [200, 100], [300, 100], [300, 0]],
             },
         ];
         room.zone_gates = vec![
@@ -30056,27 +30277,93 @@ mod tests {
                 flag: 1,
                 floor: 0xFF
             };
-            2
+            4
         ];
         let id = RoomId::parse("3030").unwrap();
         let mut game = game::GameState::new(id, &room);
         game.is_re2_room = true;
+        game.set_camera_cut(2);
+        room.current_cut = 2;
+        (room, game)
+    }
 
-        // Room 303's plug panel: the close-up's lock held when the tick
-        // began, and the scripts' `cut_chg(2)` and `cut_auto(1)` ran in it.
+    #[test]
+    fn an_re2_cut_auto_lets_the_zones_in_from_the_next_tick() {
+        let (mut room, mut game) = re2_two_zone_room();
+        // Room 303's plug panel: the close-up's lock holds as the tick
+        // begins, so `Cut_check` tests nothing; the scripts' `cut_chg(2)`
+        // and `cut_auto(1)` follow it.
+        game.camera.locked = true;
+        re2_cut_check(&room, &mut game, [50, 0, 50]);
         game.set_camera_cut(2);
         game.camera.locked = false;
-        apply_re2_tick_camera(&mut room, &mut game, [50, 0, 50], true);
-        assert_eq!(
-            game.camera.current_cut, 2,
-            "the scripts' cut shows this tick"
-        );
-        assert_eq!(room.current_cut, 2);
-        assert!(!game.camera.locked, "the lock stays released");
+        show_re2_live_cut(&mut room, &game);
+        assert_eq!(room.current_cut, 2, "the scripts' cut shows this tick");
 
         // The next tick's test starts unlocked and follows the zone.
-        apply_re2_tick_camera(&mut room, &mut game, [50, 0, 50], false);
+        re2_cut_check(&room, &mut game, [50, 0, 50]);
+        show_re2_live_cut(&mut room, &game);
         assert_eq!(game.camera.current_cut, 1);
+        assert_eq!(room.current_cut, 1);
+    }
+
+    #[test]
+    fn an_re2_lock_the_scripts_take_on_a_switch_keeps_the_switched_cut() {
+        let (mut room, mut game) = re2_two_zone_room();
+        // The player stands in cut 2's zone as the tick begins: `Cut_check`
+        // switches the live cut before the scripts' `cut_auto(0)` locks it.
+        re2_cut_check(&room, &mut game, [50, 0, 50]);
+        assert_eq!(game.camera.current_cut, 1, "the live cut moves");
+        assert_eq!(room.current_cut, 2, "`Swap_Cbuff` hasn't loaded it");
+        game.camera.locked = true;
+        show_re2_live_cut(&mut room, &game);
+        assert_eq!(room.current_cut, 1);
+
+        // Locked, the next tick tests no zone, even standing in cut 1's.
+        re2_cut_check(&room, &mut game, [250, 0, 50]);
+        assert_eq!(game.camera.current_cut, 1);
+    }
+
+    #[test]
+    fn an_re2_script_that_moves_the_player_into_a_zone_switches_a_tick_later() {
+        let (mut room, mut game) = re2_two_zone_room();
+        // The tick begins outside the zone; the scripts move the player in.
+        re2_cut_check(&room, &mut game, [500, 0, 50]);
+        show_re2_live_cut(&mut room, &game);
+        assert_eq!(room.current_cut, 2, "no switch on the move's tick");
+        re2_cut_check(&room, &mut game, [50, 0, 50]);
+        show_re2_live_cut(&mut room, &game);
+        assert_eq!(room.current_cut, 1, "the next tick's test takes it");
+    }
+
+    /// `Swap_Cbuff` loads a zone's cut only while `fg_status` has no `0x80`,
+    /// whatever the lock; a script's `cut_chg` loads through its own pending
+    /// load, aim or not.
+    #[test]
+    fn the_re2_aim_holds_a_zones_cut_off_screen_but_not_a_scripts() {
+        let (mut room, mut game) = re2_two_zone_room();
+        game.re2.view_held = true;
+        game.re2.var_cut = Some(2);
+        re2_cut_check(&room, &mut game, [50, 0, 50]);
+        show_re2_live_cut(&mut room, &game);
+        assert_eq!((game.camera.current_cut, room.current_cut), (1, 2));
+        // The tick's scripts lock the switched cut: the aim still holds it.
+        game.camera.locked = true;
+        show_re2_live_cut(&mut room, &game);
+        assert_eq!(room.current_cut, 2);
+        // A `cut_chg` while aiming moves `scd_var_cut` with the live cut
+        // (`FUN_004e5020`) and shows at once.
+        game.re2.var_cut = Some(0);
+        game.set_camera_cut(0);
+        show_re2_live_cut(&mut room, &game);
+        assert_eq!(room.current_cut, 0);
+        // A `Cut_change` with its load (the alligator's) shows too
+        // (`0x4C48B5`).
+        game.set_camera_cut(1);
+        show_re2_live_cut(&mut room, &game);
+        assert_eq!(room.current_cut, 0, "no load: held");
+        game.re2.bg_load = true;
+        show_re2_live_cut(&mut room, &game);
         assert_eq!(room.current_cut, 1);
     }
 
@@ -41299,8 +41586,9 @@ off_0010:
     /// A title that shows the settings' volumes: it is told them as it
     /// opens and when they change, and a change it publishes is taken once,
     /// for the window to apply and save. What it only shows differently (a
-    /// floor of 1 under a setting of 0) is no change, and a run with no
-    /// settings tells and takes nothing.
+    /// floor of 1 under a setting of 0) is no change. A run with no
+    /// settings tells the title the run's own volumes, 100 and 100 from the
+    /// boot, and takes its changes as the run's, with nothing to save.
     #[test]
     fn a_titles_volumes_are_the_settings_and_its_changes_are_taken() {
         // With `LATE` the script publishes from its `update` only.
@@ -41331,7 +41619,10 @@ off_0010:
             let pack_path = new_game_pack_with(&dir, &[("ui/title.lua", title.as_bytes())]);
             let open = |settings: Option<[u8; 2]>| {
                 let mut app = App::new(Pack::open(&pack_path).unwrap(), dir.0.join("saves"), false);
-                app.screen_volumes = settings;
+                if let Some([music, effects]) = settings {
+                    app.screen_volumes = [music, effects];
+                    app.volumes_are_settings = true;
+                }
                 app.boot(AppBoot::Title).unwrap();
                 app
             };
@@ -41340,13 +41631,13 @@ off_0010:
             idle(&mut app);
             assert_eq!(title_value(&app, "music_volume"), 40);
             assert_eq!(app.volume_change, None, "showing 1 for 0 is no change");
-            assert_eq!(app.screen_volumes, Some([40, 0]));
+            assert_eq!(app.screen_volumes, [40, 0]);
             app_press(&mut app, |ui| ui.left = true);
             if late {
                 // It published nothing from the hook, so what it shows of
                 // the settings isn't known and nothing is taken from it.
                 assert_eq!(app.volume_change, None);
-                assert_eq!(app.screen_volumes, Some([40, 0]));
+                assert_eq!(app.screen_volumes, [40, 0]);
                 continue;
             }
             assert_eq!(app.volume_change.take(), Some([35, 0]));
@@ -41359,14 +41650,14 @@ off_0010:
             app_press(&mut app, |ui| ui.cancel = true);
             idle(&mut app);
             assert_eq!(app.volume_change, None);
-            assert_eq!(app.screen_volumes, Some([35, 0]));
+            assert_eq!(app.screen_volumes, [35, 0]);
             // The settings change under the title (the launcher's menu), to
             // values it showed before and to a 0 it shows as 1.
             app.set_screen_volumes(80, 0);
             assert_eq!(title_value(&app, "told"), 2);
             idle(&mut app);
             assert_eq!(app.volume_change, None, "what it was told is no change");
-            assert_eq!(app.screen_volumes, Some([80, 0]));
+            assert_eq!(app.screen_volumes, [80, 0]);
             // The floored volume moves from what is shown.
             app_press(&mut app, |ui| ui.up = true);
             assert_eq!(app.volume_change.take(), Some([80, 2]));
@@ -41376,9 +41667,11 @@ off_0010:
             assert_eq!((game.music_volume, game.effects_volume), (80, 2));
 
             let mut app = open(None);
-            assert_eq!(title_value(&app, "told"), 0);
+            assert_eq!(title_value(&app, "told"), 1);
+            assert_eq!(title_value(&app, "music_volume"), 100);
             app_press(&mut app, |ui| ui.left = true);
-            assert_eq!(app.volume_change, None);
+            assert_eq!(app.volume_change, None, "no settings to save");
+            assert_eq!(app.screen_volumes, [95, 100]);
             let game = menu_game_options(&app, crate::config::Game::default());
             assert_eq!((game.music_volume, game.effects_volume), (100, 100));
         }
@@ -41394,12 +41687,218 @@ off_0010:
             return M";
         let pack_path = new_game_pack_with(&dir, &[("ui/title.lua", title.as_bytes())]);
         let mut app = App::new(Pack::open(&pack_path).unwrap(), dir.0.join("saves"), false);
-        app.screen_volumes = Some([40, 40]);
+        app.screen_volumes = [40, 40];
+        app.volumes_are_settings = true;
         app.boot(AppBoot::Title).unwrap();
         idle(&mut app);
         app_press(&mut app, |ui| ui.left = true);
         assert_eq!(app.volume_change, None);
-        assert_eq!(app.screen_volumes, Some([40, 40]));
+        assert_eq!(app.screen_volumes, [40, 40]);
+    }
+
+    /// `Load_pop`: a load takes the run's volumes from its save as the game
+    /// it continues builds, and the game keeps them for its saves. In the
+    /// interactive game they are a change of the settings, to mix with and
+    /// save, as the SOUND page's is; with no settings they are the run's
+    /// own. A save from before arklay kept them leaves the run's as they
+    /// were, and so does one whose RE 2 state doesn't apply.
+    #[test]
+    fn a_load_takes_the_runs_volumes_from_its_save() {
+        const TITLE: &str = "local M = {}
+            function M.on_volumes(api, music, effects)
+                api:set('music_volume', music)
+                api:set('effects_volume', effects)
+            end
+            function M.update(api, input)
+                if input.confirm then api:exit(M.loaded and 'continue' or 'save_load') end
+            end
+            function M.on_resume(api) end
+            function M.on_loaded(api) M.loaded = true end
+            function M.draw() end
+            return M";
+        const LOAD: &str = "local M = {}
+            function M.update(api, input)
+                if input.confirm then assert(api:load('chosen.dat')) end
+            end
+            function M.draw() end
+            return M";
+        // (settings, the save's volumes, whether its RE 2 state applies)
+        for (settings, saved, applies) in [
+            (false, Some([40, 7]), true),
+            (true, Some([40, 7]), true),
+            (true, None, true),
+            (true, Some([40, 7]), false),
+        ] {
+            let dir = TempDir::new();
+            let pack_path = new_game_pack_with(
+                &dir,
+                &[
+                    ("ui/title.lua", TITLE.as_bytes()),
+                    ("ui/save_load.lua", LOAD.as_bytes()),
+                ],
+            );
+            let saves = dir.0.join("saves");
+            std::fs::create_dir_all(&saves).unwrap();
+            let mut trailer = crate::scd2::host::Re2State::default().to_save_bytes();
+            if !applies {
+                trailer.push(0);
+            }
+            let file = save::SaveFile {
+                stage: 0,
+                room: NEW_GAME_ROOM,
+                health: 55,
+                re2: Some(trailer),
+                volumes: saved,
+                ..save::SaveFile::default()
+            };
+            save::save_to_path(&saves.join("chosen.dat"), &file).unwrap();
+            let mut app = App::new(Pack::open(&pack_path).unwrap(), saves, false);
+            if settings {
+                app.screen_volumes = [90, 80];
+                app.volumes_are_settings = true;
+            }
+            app.boot(AppBoot::Title).unwrap();
+            let before = app.screen_volumes;
+            app_press(&mut app, |ui| ui.confirm = true);
+            app_press(&mut app, |ui| ui.confirm = true);
+            assert_eq!(app.screen_volumes, before, "not before the game builds");
+            app_press(&mut app, |ui| ui.confirm = true);
+            let Mode::Play(session) = &app.mode else {
+                panic!("expected the game");
+            };
+            let expected = saved.filter(|_| applies).unwrap_or(before);
+            assert_eq!(app.screen_volumes, expected);
+            assert_eq!(
+                session.game.re2.volumes,
+                Some(expected),
+                "kept for its saves"
+            );
+            // (The test pack's rooms are RE 1's: saved as an RE 2 game's.)
+            let mut game = session.game.clone();
+            game.is_re2_room = true;
+            assert_eq!(
+                save::SaveFile::from_state(&game).volumes,
+                Some(expected),
+                "and saved again"
+            );
+            assert_eq!(
+                app.volume_change.take(),
+                saved.filter(|_| settings && applies),
+                "a change of the settings"
+            );
+            // A title opened after the game shows them.
+            app.open_title().unwrap();
+            assert_eq!(title_value(&app, "music_volume"), i64::from(expected[0]));
+            assert_eq!(title_value(&app, "effects_volume"), i64::from(expected[1]));
+        }
+    }
+
+    /// Every continue takes the save's volumes and keeps them for the game's
+    /// saves: the boot's, the capture path's and a script's `load_save`,
+    /// not only the title's load screen. A load whose game can't be built
+    /// (a room the pack lacks) changes neither the run's volumes nor the
+    /// settings.
+    #[test]
+    fn a_direct_continue_keeps_the_saves_volumes_and_a_failed_one_changes_nothing() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack_with(&dir, &[]);
+        let saves = dir.0.join("saves");
+        std::fs::create_dir_all(&saves).unwrap();
+        let path = saves.join("chosen.dat");
+        let file = save::SaveFile {
+            stage: 0,
+            room: NEW_GAME_ROOM,
+            re2: Some(crate::scd2::host::Re2State::default().to_save_bytes()),
+            volumes: Some([40, 7]),
+            ..save::SaveFile::default()
+        };
+        save::save_to_path(&path, &file).unwrap();
+        // The game saved again, as an RE 2 game's (the test pack's rooms
+        // are RE 1's).
+        let resaved = |app: &App| match &app.mode {
+            Mode::Play(session) => {
+                let mut game = session.game.clone();
+                game.is_re2_room = true;
+                save::SaveFile::from_state(&game).volumes
+            }
+            _ => panic!("expected the game"),
+        };
+        let open = || App::new(Pack::open(&pack_path).unwrap(), saves.clone(), false);
+
+        let mut app = open();
+        app.boot_continue(&path).unwrap();
+        assert_eq!(resaved(&app), Some([40, 7]));
+        assert_eq!(app.screen_volumes, [40, 7]);
+        assert_eq!(app.volume_change, None, "no settings to save");
+
+        let mut app = open();
+        start_capture_continue(&mut app, &path).unwrap();
+        assert_eq!(resaved(&app), Some([40, 7]));
+
+        let mut app = open();
+        app.screen_volumes = [90, 80];
+        app.volumes_are_settings = true;
+        app.continue_from_path(&path).unwrap();
+        assert_eq!(resaved(&app), Some([40, 7]));
+        assert_eq!(app.volume_change.take(), Some([40, 7]));
+
+        let missing = save::SaveFile {
+            stage: 6,
+            room: 0x7F,
+            volumes: Some([10, 20]),
+            ..file
+        };
+        let bad = saves.join("missing.dat");
+        save::save_to_path(&bad, &missing).unwrap();
+        assert!(app.continue_from_path(&bad).is_err());
+        assert_eq!(app.screen_volumes, [40, 7], "the live volumes stand");
+        assert_eq!(app.volume_change, None, "and no settings are written");
+    }
+
+    /// The interactive start-up's order: the settings' volumes are the
+    /// run's before the boot, so a `--load` takes its save's over them, and
+    /// the window's loop mixes with the save's, keeps them for the game's
+    /// saves and saves them to the settings on its first tick. RESTART
+    /// reloads that save.
+    #[test]
+    fn an_interactive_load_at_the_boot_keeps_the_saves_volumes() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack_with(&dir, &[]);
+        let saves = dir.0.join("saves");
+        std::fs::create_dir_all(&saves).unwrap();
+        let path = saves.join("chosen.dat");
+        let file = save::SaveFile {
+            stage: 0,
+            room: NEW_GAME_ROOM,
+            re2: Some(crate::scd2::host::Re2State::default().to_save_bytes()),
+            volumes: Some([40, 7]),
+            ..save::SaveFile::default()
+        };
+        save::save_to_path(&path, &file).unwrap();
+        let settings = crate::config::Game {
+            music_volume: 90,
+            effects_volume: 80,
+            ..crate::config::Game::default()
+        };
+        let mut app = App::new(Pack::open(&pack_path).unwrap(), saves, false);
+        app.use_settings_volumes(&settings);
+        app.boot(AppBoot::Continue { path }).unwrap();
+        let mixed = settings_volumes(&mut app, settings);
+        assert_eq!((mixed.music_volume, mixed.effects_volume), (40, 7));
+        assert_eq!(app.volume_change, Some([40, 7]), "saved on the first tick");
+        let Mode::Play(session) = &app.mode else {
+            panic!("expected the game");
+        };
+        assert_eq!(session.game.re2.volumes, Some([40, 7]));
+        assert!(
+            matches!(&app.restart_point, Some(RestartPoint::File(restart)) if restart.volumes == Some([40, 7])),
+            "RESTART reloads the save"
+        );
+        // Without a load the settings' stand.
+        let mut app = App::new(Pack::open(&pack_path).unwrap(), dir.0.join("saves"), false);
+        let mixed = settings_volumes(&mut app, settings);
+        assert_eq!((mixed.music_volume, mixed.effects_volume), (90, 80));
+        assert_eq!(app.volume_change, None);
     }
 
     /// The new-game choice's entry runs at the limiter its script asks for,
@@ -46928,6 +47427,141 @@ end
         session.game.re2.set_flag(4, 152, 1);
         session.finish_authoring(baseline, false);
         assert_eq!(session.loaded.room.zones[1].cam_to, 2, "not swapped");
+    }
+
+    /// The skip's fast-forward ends each of its ticks with `Swap_Cbuff`: a
+    /// scene that loads cut 1 and later moves to cut 2 with bit 7 (no load)
+    /// leaves cut 1's picture up, not the cut the burst began on.
+    #[test]
+    fn the_cutscene_skip_swaps_on_every_tick_of_its_burst() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1
+#game re2
+proc init_00 { evt_end(0); }
+proc main_00 { evt_end(0); }
+proc main_01 { evt_end(0); }
+proc main_02 { cut_chg(1); sleep(10, 3); cut_chg(0x82); evt_end(0); }",
+        )
+        .unwrap();
+        session.loaded.re2_vm = Some(crate::scd2::vm::Vm::new(&scripts));
+        session.enter_room(&pack, None, true, RoomBgmHandoff::Now);
+        session.loaded.room.cuts = vec![Default::default(); 3];
+        session.loaded.room.sca = Some(Default::default());
+        session.loaded.room.current_cut = 0;
+        session.game.set_camera_cut(0);
+        session.game.re2.view_cut = None;
+        session.game.re2.vm.as_mut().unwrap().exec_event(1, 2);
+        session.game.re2.set_flag(
+            crate::scd2::host::STATUS_BANK,
+            crate::scd2::host::STATUS_SCENE,
+            1,
+        );
+        session.cutscene_skip = Some(CutsceneSkip {
+            phase: CutsceneSkipPhase::FastForward,
+            ticks: 0,
+        });
+        session.cutscene_skip_burst = None;
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        assert_eq!(session.game.camera.current_cut, 2, "the scene ran");
+        assert_eq!(session.game.re2.view_cut, Some(1));
+    }
+
+    /// `Game_loop` runs `Cut_check` before `Sce_scheduler`: standing in a
+    /// zone of the live cut as the tick begins, the cut switches even though
+    /// the tick's scripts then lock it (`cut_auto(0)`), and the scripts read
+    /// `scd_var_cut`, the cut on screen, not the switched live cut.
+    #[test]
+    fn re2_the_zone_test_runs_before_the_tick_s_scripts() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1
+#game re2
+proc init_00 { evt_end(0); }
+proc main_00 { evt_end(0); }
+proc main_01 { save(10, 9); copy(10, 26); cut_auto(0); evt_end(0); }",
+        )
+        .unwrap();
+        session.loaded.re2_vm = Some(crate::scd2::vm::Vm::new(&scripts));
+        session.enter_room(&pack, None, true, RoomBgmHandoff::Now);
+        let room = &mut session.loaded.room;
+        room.cuts = vec![Default::default(); 3];
+        room.sca = Some(Default::default());
+        room.zones = vec![
+            crate::state::Zone {
+                cam_to: 0,
+                cam_from: 0,
+                corners: [[0; 2]; 4],
+            },
+            crate::state::Zone {
+                cam_to: 1,
+                cam_from: 0,
+                corners: [[0, 0], [0, 100], [100, 100], [100, 0]],
+            },
+        ];
+        room.zone_gates = vec![
+            crate::state::ZoneGate {
+                flag: 1,
+                floor: 0xFF
+            };
+            2
+        ];
+        room.current_cut = 0;
+        session.game.set_camera_cut(0);
+        session.game.camera.locked = false;
+        session.player.pos = [50, 0, 50];
+        session.game.sync_entity_from_player(&session.player);
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        assert!(session.game.is_re2_room);
+        assert!(session.game.camera.locked, "the scripts ran");
+        assert_eq!(
+            session.game.camera.current_cut, 1,
+            "switched before the lock"
+        );
+        assert_eq!(session.loaded.room.current_cut, 1);
+        assert_eq!(
+            session.game.re2.vars[10], 0,
+            "variable 26 was the cut on screen"
+        );
+    }
+
+    /// A setup's `set_room_camera` is the cut a game playing there has as
+    /// `scd_var_cut` too, so the first pass reads it (`door_101_102`'s room
+    /// 100 starts on cut 8, which its scripts test), while the load's cut
+    /// stays on screen until that tick's `Swap_Cbuff`.
+    #[test]
+    fn an_authored_cut_is_the_first_passs_scd_var_cut() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1
+#game re2
+proc init_00 { evt_end(0); }",
+        )
+        .unwrap();
+        session.loaded.re2_vm = Some(crate::scd2::vm::Vm::new(&scripts));
+        session.loaded.room.cuts = vec![Default::default(); 3];
+        session.enter_room(&pack, None, true, RoomBgmHandoff::Now);
+        session.loaded.room.current_cut = 0;
+        session.game.set_camera_cut(0);
+        // Untouched, the cut stays as the load left it.
+        let baseline = session.author_baseline();
+        session.finish_authoring(baseline, true);
+        assert_eq!(session.game.re2.authored_var_cut, None);
+        let baseline = session.author_baseline();
+        session.game.set_camera_cut(2);
+        session.finish_authoring(baseline, true);
+        assert_eq!(session.loaded.room.current_cut, 0, "the load's cut is up");
+        assert_eq!(session.game.re2.authored_var_cut, Some(2));
     }
 
     /// The rerun starts from the flags the boot found, not the ones its first

@@ -300,7 +300,7 @@ const SPL_DEST_ROTATE_TURN: [i16; 32] = [
     0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x58, 0x50,
 ];
 /// How close to a destination counts as being there (`Spl_sce_mv02`).
-const ARRIVE_DISTANCE: i64 = 100;
+const ARRIVE_DISTANCE: i32 = 100;
 /// How close the facing must be before a walk starts (`Spl_sce_mv01`).
 const FACING_TOLERANCE: i32 = 0x15E;
 /// How close the facing must be for `Spl_sce15`'s turn to end.
@@ -7173,9 +7173,11 @@ impl Mover<'_, '_> {
         let run = self.work.routine[1] == 5;
         self.footfall(u8::from(run), if run { NOISE_RUN } else { NOISE_STEP });
         self.joint_move();
-        let dx = i64::from(self.player.pos[0] - x);
-        let dz = i64::from(self.player.pos[2] - z);
-        dx * dx + dz * dz < ARRIVE_DISTANCE * ARRIVE_DISTANCE
+        let dx = self.player.pos[0].wrapping_sub(x);
+        let dz = self.player.pos[2].wrapping_sub(z);
+        // `0x4F6C57`: the 32-bit sum into `SquareRoot0`, whose table root
+        // of 10000 is 99, so a body 100 away is there.
+        square_root0(dx.wrapping_mul(dx).wrapping_add(dz.wrapping_mul(dz))) < ARRIVE_DISTANCE
     }
 }
 
@@ -7504,6 +7506,68 @@ pub(crate) fn rotate(angle: u16, x: i32, z: i32) -> (i32, i32) {
 pub(crate) fn catan(value: i32) -> i32 {
     const ONE_OVER_PI: f64 = 0.318_471_337_579_617_8;
     ((f64::from(value) * 0.000_244_140_625).atan() * 2048.0 * ONE_OVER_PI) as i32
+}
+
+/// `SquareRoot0`'s table (`0x5269F8`, from entry 0x40: the argument scaled
+/// to its top bits is 0x40 to 0xFF).
+const SQRT_TABLE: [u16; 192] = [
+    4096, 4127, 4159, 4190, 4222, 4252, 4283, 4314, 4344, 4374, 4404, 4434, 4463, 4492, 4521, 4550,
+    4579, 4608, 4636, 4664, 4692, 4720, 4748, 4775, 4802, 4830, 4857, 4884, 4910, 4937, 4964, 4990,
+    5016, 5042, 5068, 5094, 5120, 5145, 5170, 5196, 5221, 5246, 5271, 5296, 5320, 5345, 5369, 5394,
+    5418, 5442, 5466, 5490, 5514, 5538, 5561, 5585, 5608, 5632, 5655, 5678, 5701, 5724, 5747, 5769,
+    5792, 5815, 5837, 5860, 5882, 5904, 5926, 5948, 5970, 5992, 6014, 6036, 6058, 6079, 6101, 6122,
+    6144, 6165, 6186, 6207, 6228, 6249, 6270, 6291, 6312, 6333, 6353, 6374, 6394, 6415, 6435, 6456,
+    6476, 6496, 6516, 6536, 6556, 6576, 6596, 6616, 6636, 6656, 6675, 6695, 6714, 6734, 6753, 6773,
+    6792, 6811, 6830, 6850, 6869, 6888, 6907, 6926, 6945, 6963, 6982, 7001, 7020, 7038, 7057, 7075,
+    7094, 7112, 7131, 7149, 7168, 7186, 7204, 7222, 7240, 7258, 7276, 7294, 7312, 7330, 7348, 7366,
+    7384, 7401, 7419, 7437, 7454, 7472, 7489, 7507, 7524, 7542, 7559, 7576, 7594, 7611, 7628, 7645,
+    7662, 7680, 7697, 7714, 7731, 7747, 7764, 7781, 7798, 7815, 7832, 7848, 7865, 7882, 7898, 7915,
+    7931, 7948, 7964, 7981, 7997, 8014, 8030, 8046, 8062, 8079, 8095, 8111, 8127, 8143, 8159, 8175,
+];
+
+/// The 256 words before [`SQRT_TABLE`]'s base (`0x5267F8` to `0x5269F6`,
+/// the tail of the table before it in `.data`), which `SquareRoot0` reads
+/// for a negative argument: its scaled index is -0x100 to -0x40.
+const SQRT_TABLE_BEFORE: [u16; 256] = [
+    3624, 3627, 3630, 3633, 3636, 3639, 3642, 3644, 3647, 3650, 3653, 3656, 3659, 3661, 3664, 3667,
+    3670, 3673, 3675, 3678, 3681, 3684, 3686, 3689, 3692, 3695, 3697, 3700, 3703, 3705, 3708, 3711,
+    3713, 3716, 3719, 3721, 3724, 3727, 3729, 3732, 3734, 3737, 3739, 3742, 3745, 3747, 3750, 3752,
+    3755, 3757, 3760, 3762, 3765, 3767, 3770, 3772, 3775, 3777, 3779, 3782, 3784, 3787, 3789, 3791,
+    3794, 3796, 3798, 3801, 3803, 3805, 3808, 3810, 3812, 3815, 3817, 3819, 3822, 3824, 3826, 3828,
+    3831, 3833, 3835, 3837, 3839, 3842, 3844, 3846, 3848, 3850, 3852, 3854, 3857, 3859, 3861, 3863,
+    3865, 3867, 3869, 3871, 3873, 3875, 3877, 3879, 3881, 3883, 3885, 3887, 3889, 3891, 3893, 3895,
+    3897, 3899, 3901, 3903, 3905, 3907, 3909, 3910, 3912, 3914, 3916, 3918, 3920, 3921, 3923, 3925,
+    3927, 3929, 3930, 3932, 3934, 3936, 3937, 3939, 3941, 3943, 3944, 3946, 3948, 3949, 3951, 3953,
+    3954, 3956, 3958, 3959, 3961, 3962, 3964, 3965, 3967, 3969, 3970, 3972, 3973, 3975, 3976, 3978,
+    3979, 3981, 3982, 3984, 3985, 3987, 3988, 3989, 3991, 3992, 3994, 3995, 3996, 3998, 3999, 4001,
+    4002, 4003, 4005, 4006, 4007, 4008, 4010, 4011, 4012, 4014, 4015, 4016, 4017, 4019, 4020, 4021,
+    4022, 4023, 4024, 4026, 4027, 4028, 4029, 4030, 4031, 4032, 4034, 4035, 4036, 4037, 4038, 4039,
+    4040, 4041, 4042, 4043, 4044, 4045, 4046, 4047, 4048, 4049, 4050, 4051, 4052, 4053, 4053, 4054,
+    4055, 4056, 4057, 4058, 4059, 4060, 4060, 4061, 4062, 4063, 4064, 4064, 4065, 4066, 4067, 4067,
+    4068, 4069, 4070, 4070, 4071, 4072, 4072, 4073, 4074, 4074, 4075, 4076, 4076, 4077, 4077, 4078,
+];
+
+/// `SquareRoot0` (`0x451780`): the table's root of `value` scaled to its
+/// top six or seven bits, shifted back by half the scale. A negative value
+/// (a 32-bit sum of squares that wrapped) keeps its sign through the shift
+/// and reads before the table.
+pub(crate) fn square_root0(value: i32) -> i32 {
+    if value == 0 || value == -1 {
+        return 0;
+    }
+    let lead = 31 - value.unsigned_abs().leading_zeros() as i32;
+    let scale = (31 - lead) & !1;
+    let index = if scale < 24 {
+        value >> (24 - scale)
+    } else {
+        value << (scale - 24)
+    };
+    let root = u32::from(if index < 0 {
+        SQRT_TABLE_BEFORE[(index + 0x100).clamp(0, 0xFF) as usize]
+    } else {
+        SQRT_TABLE[(index as usize).clamp(0x40, 0xFF) - 0x40]
+    });
+    ((root << ((31 - scale) >> 1)) >> 12) as i32
 }
 
 /// `Direction_ck`: the 12-bit yaw from one point to another, as `i16`s.
@@ -9010,6 +9074,37 @@ mod tests {
             let key = key_word(&input);
             let key_trg = key & !std::mem::replace(&mut self.last_key, key);
             self.tick_trg(input, key_trg, life)
+        }
+
+        /// `f` on a [`Mover`] of this setup, on a tick with no input.
+        fn with_mover<R>(&mut self, f: impl FnOnce(&mut Mover<'_, '_>) -> R) -> R {
+            let bank = (self.clips.as_slice(), self.keyframes.as_slice());
+            let tick = Tick {
+                room: &self.room,
+                skeleton: &self.skeleton,
+                morphs: &[],
+                banks: Banks {
+                    pld: bank,
+                    weapon: bank,
+                    room: bank,
+                    held: bank,
+                },
+                input: Input::default(),
+                options: Options::default(),
+                id: 0,
+                life: 200,
+                poisoned: false,
+                stopped: false,
+                weapon: self.weapon,
+                necks: [None; NECK_WORKS],
+                targets: &self.targets,
+                neck_targets: &self.neck_targets,
+                enemies: 0,
+                pushing: false,
+                objects: &self.objects,
+                key_trg: 0,
+            };
+            f(&mut Mover::new(&mut self.work, &mut self.player, &tick))
         }
 
         /// A tick whose `Pad_set` gave `key_trg`.
@@ -12004,7 +12099,36 @@ mod tests {
         assert_eq!(raised, Some(7));
         assert_eq!(setup.work.routine[1], 6, "stands at the end");
         let (dx, dz) = (setup.player.pos[0] - 1000, setup.player.pos[2]);
-        assert!(dx * dx + dz * dz < 100 * 100, "{:?}", setup.player.pos);
+        assert!(
+            square_root0(dx * dx + dz * dz) < 100,
+            "{:?}",
+            setup.player.pos
+        );
+    }
+
+    /// `Spl_sce_mv02` measures with `SquareRoot0`, whose root of 10000 is
+    /// 99: a walk 100 short of its destination has arrived (Sherry's run in
+    /// 10E stops at z -16100 on her way to -16000), and 101 short hasn't.
+    #[test]
+    fn a_scripted_walk_arrives_within_the_table_roots_hundred() {
+        assert_eq!(square_root0(100 * 100), 99);
+        assert_eq!(square_root0(101 * 101), 100);
+        // A sum that wraps negative reads before the table: (46047, 46633)
+        // gives -4398, whose root is 62.
+        assert_eq!(
+            46047i32
+                .wrapping_mul(46047)
+                .wrapping_add(46633i32.wrapping_mul(46633)),
+            -4398
+        );
+        assert_eq!(square_root0(-4398), 62);
+        for (short, arrives) in [(100, true), (101, false)] {
+            let mut setup = Setup::new(0);
+            setup.player.pos = [0, 0, 0];
+            setup.work.dest = [0, short];
+            let there = setup.with_mover(|mover| mover.spl_sce_mv02());
+            assert_eq!(there, arrives, "{short} short");
+        }
     }
 
     #[test]

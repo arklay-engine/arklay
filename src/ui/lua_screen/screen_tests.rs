@@ -892,7 +892,8 @@ fn save_load_overwrite_confirm_yes_and_no_flow() {
         screen.take_outcome(),
         Some(SaveOutcome {
             slot: Some(0),
-            ink_ribbon: false
+            ink_ribbon: false,
+            file: None,
         })
     );
     assert!(save::read_slot_info(&harness.dir.0, 0).is_some());
@@ -921,7 +922,8 @@ fn save_load_saving_an_empty_slot_skips_the_confirm_and_consumes_the_ribbon() {
         screen.take_outcome(),
         Some(SaveOutcome {
             slot: Some(0),
-            ink_ribbon: true
+            ink_ribbon: true,
+            file: None,
         }),
         "the outcome is available while the reveal runs"
     );

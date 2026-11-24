@@ -153,8 +153,9 @@ impl GameState {
         if self.message.active {
             return;
         }
-        // A cut `Cut_check` changed this tick isn't on screen yet.
-        if self.camera.current_cut != usize::from(self.re2.shown_cut) {
+        // `BYTE_00989eea == scd_var_cut` (`0x4E9CE7`): a cut `Cut_check`
+        // changed this tick isn't loaded yet; a script's `cut_chg` moved both.
+        if self.camera.current_cut != usize::from(self.re2.scd_var_cut()) {
             return;
         }
         let area: [u8; 6] = std::array::from_fn(|index| action.params[index]);
