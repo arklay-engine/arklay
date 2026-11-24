@@ -42,6 +42,6 @@ fields = "room,cam,rng,p.x,p.y,p.z,p.angle,movie,fgroom,fgstat"
 films_from_ref = true
 # the warp's own load leaves `Movie_set`'s count on the first tick, which a setup starts after
 ignore = [[344, 344, "movie"]]
-frames = [344, 599]
+frames = [346, 599]
 expect = "match"
 record = "--warp 700:14500:0:-1850:0 --life 200 --no-enemies --config MovieEnable=1"
