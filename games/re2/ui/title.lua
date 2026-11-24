@@ -169,6 +169,10 @@ local function new_state()
         logo_count = 0,
         game_mode = 0,
         fg_system = 0,
+        -- `0x99CF6C`: a game's sound is on. `Title_game_init` sets it (but
+        -- for a demo) and `Title_init` clears it; while it is clear
+        -- `Snd_se_on` plays a core cue at 0x6E, else at its table's volume.
+        se_live = 0,
         censorship_off = 0,
         -- `Fade_set`'s four slots (0x98F07C, 0x4C bytes each): the level,
         -- its step and the blend. Slot 3 is drawn behind the sprites.
@@ -1123,24 +1127,31 @@ end
 -- `Init_global` leaves them, and `Title_init` sets them again 122 ticks on.
 local HANDED = {
     "mv", "disp", "menu", "step", "sel", "cur", "pulse", "slide", "demo", "flash", "logo", "logo_count", "kido",
-    "add",
+    "add", "dim",
 }
 
 -- The hand-over: those, the new-game page's slide count (`0x689B8C`) and
--- fade 3's mode (the prologue's), which `Title_init` leaves too.
+-- the modes of fades 2 and 3 (an extra's confirm's, the prologue's), which
+-- `Title_init` and `Fade_off` leave too.
 local function hand_over(api)
     for _, name in ipairs(HANDED) do
         api:keep("handed_" .. name, s[name])
     end
     api:keep("handed_b8c", s.b8c[0])
+    api:keep("handed_fade2", s.fades[2].mode)
     api:keep("handed_fade3", s.fades[3].mode)
 end
 
 -- The hand-over's statics, taken: they are one return's alone, so a game no
 -- title handed over (the script host's) comes back to a new title's.
 local function take_handed(api)
-    local handed = { b8c = api:kept("handed_b8c"), fade3 = api:kept("handed_fade3") }
+    local handed = {
+        b8c = api:kept("handed_b8c"),
+        fade2 = api:kept("handed_fade2"),
+        fade3 = api:kept("handed_fade3"),
+    }
     api:keep("handed_b8c", nil)
+    api:keep("handed_fade2", nil)
     api:keep("handed_fade3", nil)
     for _, name in ipairs(HANDED) do
         handed[name] = api:kept("handed_" .. name)
@@ -1150,6 +1161,7 @@ local function take_handed(api)
 end
 
 local function title_init()
+    s.se_live = 0
     -- `Title_bg_reload` (0x503880), on both branches: the option screen
     -- leaves its own picture behind.
     s.background = s.title_background
@@ -2645,6 +2657,7 @@ local function game_return(api, demo, fade_add, fg_system)
         s[name] = handed[name] or s[name]
     end
     s.b8c[0] = handed.b8c or s.b8c[0]
+    s.fades[2].mode = handed.fade2 or s.fades[2].mode
     s.fades[3].mode = handed.fade3 or s.fades[3].mode
     -- `Title_game_init` chose the game's limiter (`0x98F07A`), which
     -- stands until `Title_init`: the logo's wait runs at the game's pace.
@@ -2655,6 +2668,10 @@ local function game_return(api, demo, fade_add, fg_system)
     s.background = nil
     s.init, s.sub = 0, 0
     s.fg_system = ((fg_system or 0) & 0x1000899) | (demo and FG_FROM_LOGO or 0)
+    -- A game's `Title_game_init` left `0x99CF6C` set, a demo's (`fg_system`'s
+    -- 0x2000) clear: the mode's title an extra goes back to plays its cues
+    -- at their own volume, as no `Title_init` runs before it.
+    s.se_live = (not demo and (fg_system or 0) & 0x2000 == 0) and 1 or 0
     s.boot = { step = 3, sleep = 1, flag = 0, acks = demo }
 end
 
@@ -2705,6 +2722,7 @@ local function publish(api)
     api:set("ti_kido", s.kido)
     api:set("ti_add", s.add)
     api:set("ti_fgsys", s.fg_system)
+    api:set("ti_se_live", s.se_live)
     -- The frame limiter (`0x98F07A`): the title's own 60 ticks a second, or
     -- the game's 30 under the option screen and the load screen, until
     -- `Title_init` runs again.

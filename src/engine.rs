@@ -12349,6 +12349,9 @@ impl App {
         if core.is_empty() {
             return rest;
         }
+        // `0x99CF6C`, which the title publishes: set, `Snd_se_on` plays a
+        // core cue at its table's volume.
+        let se_live = matches!(&self.mode, Mode::Title(screen) if screen.value("ti_se_live") == 1);
         let App {
             pack,
             ui_banks,
@@ -12383,8 +12386,16 @@ impl App {
                 continue;
             }
             // `Snd_se_on` plays a core sound at 0x6E while `0x99CF6C` is
-            // clear, as `Title_init` leaves it until a game starts.
-            let volume = TITLE_CORE_VOLUME;
+            // clear, as `Title_init` leaves it until a game starts, and at
+            // its table's volume after a game that no `Title_init` followed.
+            let volume = if se_live {
+                match banks.volume(kind, slot) {
+                    Some(volume) => volume,
+                    None => continue,
+                }
+            } else {
+                TITLE_CORE_VOLUME
+            };
             ui_sounds.push((kind.index() as u8, slot, volume, 0));
             let (Some(mixer), Some(stem)) = (ui_music.as_mut(), banks.stem(kind, slot)) else {
                 continue;
