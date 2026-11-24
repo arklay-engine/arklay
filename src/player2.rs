@@ -14,7 +14,7 @@ use crate::player::{self, ClipSource, Input, Options, PlayerState};
 use crate::state::{RoomState, ScaRect};
 
 /// `Key`, the mapped pad word `pl_br_*` test.
-const KEY_FORWARD: u16 = 0x0001;
+pub(crate) const KEY_FORWARD: u16 = 0x0001;
 const KEY_RIGHT: u16 = 0x0002;
 const KEY_BACKWARD: u16 = 0x0004;
 const KEY_LEFT: u16 = 0x0008;
@@ -37,7 +37,7 @@ pub const KEY_MAP: u16 = 0x4000;
 pub const KEYS_IN_A_STOP: u16 = KEY_SIDE_LEFT | KEY_SIDE_RIGHT | KEY_CONFIRM | KEY_CANCEL;
 
 /// `routine[0]`: the pad's mode and the scripts' mode.
-const MODE_MOVE: u8 = 1;
+pub(crate) const MODE_MOVE: u8 = 1;
 const MODE_DAMAGE: u8 = 2;
 const MODE_DEAD: u8 = 3;
 /// `Pl_dead`.
@@ -404,6 +404,10 @@ pub struct Work {
     /// The routines hold the first tick of `pl_mv_00` that a room started on
     /// its own assumes ([`Work::default`]), and no tick has run them yet.
     pub first_tick_assumed: bool,
+    /// A game RE 2's title handed over: its first live tick runs
+    /// `Player_move` from `Pl_init`'s routines, where a door's settling tick
+    /// keeps the spawn's frame. Taken by that tick.
+    pub title_first_move: bool,
     /// `fg_status`'s `0x40`. The aim (`pl_mv_05`), a hit (`Pl_damage`), the
     /// death (`Pl_die`), `pl_mv_0b` and an enemy's hold (`Pl_Em_damage`,
     /// `Pl_Em_die`) raise it and leave it to the next routine's case 0, so it
@@ -1273,6 +1277,7 @@ impl Default for Work {
             posed: false,
             init_pose: false,
             first_tick_assumed: true,
+            title_first_move: false,
             holds_game: false,
             routine: [MODE_MOVE, MOVE_IDLE, 1, 0],
             move_no: IDLE_CLIPS[0],
@@ -1373,6 +1378,7 @@ impl Work {
                 position: self.neck.position,
                 ..Neck::default()
             },
+            title_first_move: self.title_first_move,
             ..Self::default()
         }
     }
@@ -2041,6 +2047,16 @@ pub fn pose_init(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
         player.anim.set_applied_pose(Some(pose.clone()));
     }
     place_neck(work, player, tick);
+    // The reset pose's draw leaves every part's `Workm` on it, which an
+    // `Esp_call` on a part copies before the next `Player_move`.
+    Mover {
+        work,
+        player,
+        tick,
+        arrived: None,
+        stairs: None,
+    }
+    .latch_parts();
 }
 
 /// The idle's first frame, clip 2 of the weapon's bank (`pSub0_kan_t_ptr`),
@@ -7758,6 +7774,14 @@ pub fn in_auto(work: &Work) -> bool {
     work.routine[0] == MODE_MOVE
 }
 
+impl Work {
+    /// A part's `Workm` as the last tick left it ([`Work::parts`]), the
+    /// neck's turn included, or `None` before any tick has left one.
+    pub(crate) fn workm(&self, part: usize) -> Option<Matrix> {
+        self.parts.get(part).copied().flatten()
+    }
+}
+
 /// `Workm` of a work's part, as the last tick left it.
 pub(crate) fn part_world(
     work: &mut Work,
@@ -8694,7 +8718,19 @@ mod tests {
             objects: &[],
             key_trg: 0,
         };
+        // A turned pose's `Workm`s, as the status screen's open left them.
+        let stale = Matrix {
+            m: rot_matrix([0, 1024, 0]),
+            t: [1, 2, 3],
+        };
+        setup.work.parts = vec![Some(stale); 16];
         pose_init(&mut setup.work, &mut setup.player, &tick);
+        assert_eq!(setup.work.parts_at, Some(setup.player.pos));
+        assert!(setup.work.parts.iter().flatten().next().is_some());
+        assert!(
+            !setup.work.parts.contains(&Some(stale)),
+            "the parts are on the reset pose"
+        );
         let [x, y, z] = setup.work.neck.position.expect("a head on the pose");
         // The original's at Claire's new game: 18841, -2346, -2932.
         assert_eq!((x - 18802, y, z), (39, -2346, -2932));

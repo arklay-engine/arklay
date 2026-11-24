@@ -740,6 +740,7 @@ fn arrange_mode_on_hard_hands_off_its_choice() {
                 easy: false,
                 hard_mode: true,
                 censorship_off: true,
+                extra_player: 0,
             },
         })
     );
@@ -853,7 +854,7 @@ fn special_case_moves() {
 }
 
 #[test]
-fn the_4th_survivors_title_builds_and_its_start_restarts_the_title() {
+fn the_4th_survivors_title_builds_and_its_start_hands_over_hunks_game() {
     let dir = std::env::temp_dir().join(format!("arklay-re2-4th-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let cx = context(&dir);
@@ -887,7 +888,8 @@ fn the_4th_survivors_title_builds_and_its_start_restarts_the_title() {
     assert_eq!(screen.value("ti_disp"), 1);
     assert_eq!(*cx.cues.borrow(), [UiCue::Core(6)]);
     // START: the confirm's two cues and the white flash on slot 0, then the
-    // fade to the hand-off on the 270th tick, where the title starts again.
+    // fade to the hand-off on the 270th tick, and on the next HUNK's game
+    // (`Title_game_init`'s extras branch).
     run(&mut screen, &cx, UiInput::default(), 10);
     cx.cues.borrow_mut().clear();
     run(&mut screen, &cx, press("start"), 1);
@@ -897,11 +899,100 @@ fn the_4th_survivors_title_builds_and_its_start_restarts_the_title() {
     assert_eq!(screen.value("ti_sub2"), 3);
     run(&mut screen, &cx, UiInput::default(), 1);
     assert_eq!((screen.value("ti_mv"), screen.value("ti_disp")), (2, 3));
-    cx.cues.borrow_mut().clear();
-    run(&mut screen, &cx, UiInput::default(), 1);
-    assert_eq!(screen.value("ti_mv"), 1);
-    assert_eq!(screen.value("ti_fgsys") & 9, 0);
-    assert_eq!(*cx.cues.borrow(), [UiCue::CoreBank(0x10)]);
+    assert_eq!(
+        done(screen.update(&cx, UiInput::default())),
+        Some(extra_game(0xC))
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The action an update finished with, if it did.
+fn done(result: crate::ui::ScreenResult) -> Option<ScreenAction> {
+    match result {
+        crate::ui::ScreenResult::Done(action) => Some(action),
+        _ => None,
+    }
+}
+
+/// The new game an extra's START hands over: player `player` (0xC HUNK,
+/// 0xD TOFU), with the title's character, Leon from the boot.
+fn extra_game(player: u8) -> ScreenAction {
+    ScreenAction::NewGame {
+        character: 0,
+        choice: crate::ui::NewGameChoice {
+            extra_player: player,
+            ..Default::default()
+        },
+    }
+}
+
+#[test]
+fn to_fus_start_hands_over_tofus_game() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-tofu-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut screen = open_special(&cx, &dir, 15);
+    run(&mut screen, &cx, UiInput::default(), 20);
+    run(&mut screen, &cx, press("right"), 10);
+    run(&mut screen, &cx, press("confirm"), 1);
+    run(&mut screen, &cx, UiInput::default(), 17);
+    assert_eq!(screen.value("ti_fgsys") & 9, 9);
+    // START once the logo is up (as `special_tofu`'s, 580 ticks after the
+    // confirm), then the hand-off and TOFU's game.
+    run(&mut screen, &cx, UiInput::default(), 562);
+    let mut action = done(screen.update(&cx, press("start")));
+    for _ in 0..400 {
+        if action.is_some() {
+            break;
+        }
+        action = done(screen.update(&cx, UiInput::default()));
+    }
+    assert_eq!(action, Some(extra_game(0xD)));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A boot whose film picked Claire, then 4TH, EXIT and 4TH's START again:
+/// EXIT's `Init_global` clears `fg_status`, the character's bit 31 with it,
+/// so the game is HUNK's on Leon's disc.
+#[test]
+fn an_extras_exit_drops_the_boots_character() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-4th-claire-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut screen = open_special(&cx, &dir, 15);
+    // The boot's film pick, `fg_status`'s bit 31.
+    assert!(screen.test_eval::<bool>("M.state.claire = true; return true"));
+    run(&mut screen, &cx, UiInput::default(), 20);
+    // 4TH, its build-up skipped, and EXIT.
+    run(&mut screen, &cx, press("confirm"), 30);
+    run(&mut screen, &cx, press("confirm"), 21);
+    run(&mut screen, &cx, press("down"), 5);
+    assert_eq!(screen.value("ti_cur"), 1);
+    run(&mut screen, &cx, press("confirm"), 1);
+    let mut ticks = 1;
+    while screen.value("ti_mv") != 1 {
+        run(&mut screen, &cx, UiInput::default(), 1);
+        ticks += 1;
+        assert!(ticks < 20);
+    }
+    assert!(!screen.test_eval::<bool>("return M.state.claire"));
+    // The title from black, SPECIAL (the fourth row) and 4TH again.
+    run(&mut screen, &cx, UiInput::default(), 200);
+    for _ in 0..3 {
+        run(&mut screen, &cx, press("down"), 30);
+    }
+    assert_eq!(screen.value("ti_cur"), 3);
+    run(&mut screen, &cx, press("confirm"), 20);
+    run(&mut screen, &cx, press("confirm"), 30);
+    run(&mut screen, &cx, press("confirm"), 21);
+    let mut action = done(screen.update(&cx, press("start")));
+    for _ in 0..400 {
+        if action.is_some() {
+            break;
+        }
+        action = done(screen.update(&cx, UiInput::default()));
+    }
+    assert_eq!(action, Some(extra_game(0xC)));
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -319,9 +319,11 @@ local PROLOGUE_FADES = {
 }
 
 -- `Init_global` (0x4C4D70) as the title sees it: the four fades off,
--- `fg_status` cleared and `fg_system` down to 0x1000899.
+-- `fg_status` cleared, the character's bit 31 with it, and `fg_system`
+-- down to 0x1000899.
 local function init_global()
     s.fg_status = 0
+    s.claire = false
     s.fg_system = s.fg_system & 0x1000899
     for n = 0, 3 do
         fade_off(n)
@@ -2083,7 +2085,10 @@ local function title_select(api)
             fade_set(0x200, 0)
             fade_adjust(0x7FFF)
             local cycle = api:kept("demo_cycle") or 0
-            s.reel = cycle * 2 + title_rnd(api, 2)
+            -- The pick is `fg_status`'s bit 31 too (`FUN_00509CB0`).
+            local pick = title_rnd(api, 2)
+            s.claire = pick == 1
+            s.reel = cycle * 2 + pick
             api:keep("demo_cycle", (cycle + 1) % 3)
             s.attract = true
             s.disp = 3
@@ -2166,14 +2171,12 @@ local function title_main(api)
     elseif s.disp == 3 and s.loaded then
         s.exit = "continue"
     elseif s.disp == 3 and s.fg_system & 8 ~= 0 then
-        -- The 4th Survivor's or To-fu's new game (`Title_game_init`'s
-        -- extras branch) isn't ported: the title starts again from
-        -- `Title_init`, as after OPTION (oracle/re2-deviations.md,
-        -- "The title").
-        s.fg_system = s.fg_system & ~(9 | FG_NEW_GAME)
-        init_global()
-        api:core_bank(0x10)
-        s.mv = 1
+        -- The 4th Survivor's or To-fu's game (`Title_game_init`'s extras
+        -- branch, 0x506750): no prologue, HUNK (0xC) or, with
+        -- `fg_system`'s 1, TOFU (0xD) in room 304.
+        s.exit = "new_game"
+        s.character = s.claire and 1 or 0
+        s.choice = { extra_player = s.fg_system & 1 ~= 0 and 0xD or 0xC }
     elseif s.disp == 3 then
         s.exit = s.attract and "attract" or "new_game"
         if not s.attract and s.prologue_art then
@@ -2479,9 +2482,12 @@ local function boot_warning()
 end
 
 -- The title's film (`Init_movie_work(0)`): Leon's or Claire's, by the
--- title's generator.
+-- title's generator. `FUN_00509CB0` keeps the pick as `fg_status`'s bit 31,
+-- the character, which a game started with no character page (SPECIAL's
+-- extras) keeps: To-fu's room 304 is disc 1's after Claire's film.
 local function boot_film(api)
-    return { id = 0, claire = title_rnd(api, 2) == 1 }
+    s.claire = title_rnd(api, 2) == 1
+    return { id = 0, claire = s.claire }
 end
 
 -- `Capcom_logo`'s end: the title's task starts at `Title_init` on the

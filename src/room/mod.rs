@@ -285,6 +285,8 @@ impl Loaded {
             state.room_anim = crate::rdt2::room_anim(&data)
                 .and_then(|(emr, edd)| crate::emd2::parse_room_anim(emr, edd).ok());
             state.character_anims = crate::rdt2::character_anims(&data);
+            state.extra_room_anim = crate::rdt2::extra_room_anim(&data)
+                .and_then(|(emr, edd)| crate::emd2::parse_room_anim(emr, edd).ok());
             state.omodel_slot_count = source::RE2_OBJECT_SLOTS;
             state.re2_object_count = data.get(2).copied().unwrap_or(0);
             state.object_models = crate::rdt2::object_models(&data)
