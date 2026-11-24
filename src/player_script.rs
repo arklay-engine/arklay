@@ -179,6 +179,30 @@ pub fn update(
     );
 }
 
+/// The one-frame spawn init: clear the behavior words and hand the player
+/// to the pad-driven state 1. The original runs this on the first update
+/// after a character setup.
+pub fn spawn_init(game: &mut GameState, player: &mut PlayerState) {
+    let entity = &mut game.entities[0];
+    entity.set_state(1);
+    entity.set_ignore(0);
+    entity.shadow_quad = true;
+    entity.action_behavior = 0;
+    entity.action_state = 0;
+    entity.animation_frame_id = 0;
+    entity.unk_bf = 0;
+    entity.unk_8c = 0;
+    entity.attack_anim = 0;
+    entity.animation_id = 0;
+    entity.move_speed_current = 0;
+    entity.is_being_attacked = 0;
+    // `ClearAnimTiming`: the spawn init switches the beretta's
+    // detached magazine off (`jointsStructs[15].velZ = 0`), so a clip
+    // still falling when a scripted reset re-runs the state never
+    // carries into the new state.
+    player.detached_clip = crate::weapons::DetachedClip::default();
+}
+
 /// [`update`] with the full animation banks: the scripted state-8 held-weapon
 /// anchor (`flags` bit 2) composes the selected bank's pose, so it needs the
 /// bank's keyframes and skeleton. The clip-only entry point leaves the anchor
@@ -193,29 +217,7 @@ pub fn update_banks(
     player.input.action_held = false;
     player.behavior = SCRIPTED_BEHAVIOR;
     match game.entities[0].state() {
-        0 => {
-            // The one-frame spawn init: clear the behavior words and hand the
-            // player to the pad-driven state 1. The original runs this on the
-            // first update after a character setup.
-            let entity = &mut game.entities[0];
-            entity.set_state(1);
-            entity.set_ignore(0);
-            entity.shadow_quad = true;
-            entity.action_behavior = 0;
-            entity.action_state = 0;
-            entity.animation_frame_id = 0;
-            entity.unk_bf = 0;
-            entity.unk_8c = 0;
-            entity.attack_anim = 0;
-            entity.animation_id = 0;
-            entity.move_speed_current = 0;
-            entity.is_being_attacked = 0;
-            // `ClearAnimTiming`: the spawn init switches the beretta's
-            // detached magazine off (`jointsStructs[15].velZ = 0`), so a clip
-            // still falling when a scripted reset re-runs the state never
-            // carries into the new state.
-            player.detached_clip = crate::weapons::DetachedClip::default();
-        }
+        0 => spawn_init(game, player),
         8 => scripted_animation(game, player, room, banks),
         // The original's state 4 suppresses every message/input flag.
         4 => game.message_flags = 0,

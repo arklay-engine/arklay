@@ -830,6 +830,21 @@ fn trace_sound_options_need_a_session_and_are_checked() {
         &[],
     );
     assert_failure(&output, "need a game session");
+    // Voice lengths on the title wait for the game it starts.
+    success(&script(
+        &dir,
+        &lenient(
+            r#"
+        load_game_pack("game.akpak")
+        open_title()
+        trace_start("a.trace", { voice_ticks = { 18, 18 } })
+        tick(2)
+        new_game{ room = "100" }
+        tick(2)
+        "#,
+        ),
+        &[],
+    ));
     let output = script(
         &dir,
         &lenient(
