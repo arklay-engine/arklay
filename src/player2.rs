@@ -2035,6 +2035,16 @@ pub fn pose_init(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
         player.anim.set_applied_pose(Some(pose.clone()));
     }
     place_neck(work, player, tick);
+    // The reset pose's draw leaves every part's `Workm` on it, which an
+    // `Esp_call` on a part copies before the next `Player_move`.
+    Mover {
+        work,
+        player,
+        tick,
+        arrived: None,
+        stairs: None,
+    }
+    .latch_parts();
 }
 
 /// The idle's first frame, clip 2 of the weapon's bank (`pSub0_kan_t_ptr`),
@@ -8621,7 +8631,19 @@ mod tests {
             objects: &[],
             key_trg: 0,
         };
+        // A turned pose's `Workm`s, as the status screen's open left them.
+        let stale = Matrix {
+            m: rot_matrix([0, 1024, 0]),
+            t: [1, 2, 3],
+        };
+        setup.work.parts = vec![Some(stale); 16];
         pose_init(&mut setup.work, &mut setup.player, &tick);
+        assert_eq!(setup.work.parts_at, Some(setup.player.pos));
+        assert!(setup.work.parts.iter().flatten().next().is_some());
+        assert!(
+            !setup.work.parts.contains(&Some(stale)),
+            "the parts are on the reset pose"
+        );
         let [x, y, z] = setup.work.neck.position.expect("a head on the pose");
         // The original's at Claire's new game: 18841, -2346, -2932.
         assert_eq!((x - 18802, y, z), (39, -2346, -2932));

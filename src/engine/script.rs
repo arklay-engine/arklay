@@ -812,9 +812,16 @@ impl Driver {
 
     /// Close the running trace, if any.
     fn close_trace(&mut self) -> Result<()> {
-        // Voice lengths a screen's trace held for the game it starts go
-        // with the trace.
+        // The voice lengths a trace gave, held for a screen's game or not yet
+        // used by the session's lines, go with the trace.
         self.drop_pending_voice();
+        if let Some(App {
+            mode: Mode::Play(session),
+            ..
+        }) = self.app.as_mut()
+        {
+            session.game.re2.voice_ticks.clear();
+        }
         match self.trace.take() {
             Some(trace) => trace.close(),
             None => Ok(()),
@@ -1857,9 +1864,6 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                         session.film_pads = Some(pads.into());
                     }
                     session.sound_device |= sound.unwrap_or(false);
-                    if let Some(ticks) = voice_ticks {
-                        session.game.re2.voice_ticks = ticks.into();
-                    }
                     if sound_wav.is_some() {
                         session.music = Some(Mixer::capture());
                         session.start_audio(&app.pack);
@@ -1872,8 +1876,13 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                     trace::TraceWriter::create(Path::new(&path))
                 }
                 .map_err(engine_error)?;
+                // The voice lengths go with the trace, so only once it is made.
+                let app = driver.app()?;
                 if let Some(ticks) = screen_voice {
-                    driver.app()?.pending_voice_ticks = Some(ticks.into());
+                    app.pending_voice_ticks = Some(ticks.into());
+                }
+                if let (Some(ticks), Mode::Play(session)) = (voice_ticks, &mut app.mode) {
+                    session.game.re2.voice_ticks = ticks.into();
                 }
                 let unpaced_voice = !sound.unwrap_or(false) && sound_wav.is_none();
                 driver.trace = Some(ScriptTrace {
@@ -2137,9 +2146,37 @@ mod tests {
         run(start.clone()).unwrap();
         run("open_ending(1)".into()).unwrap();
         assert_eq!(pending(), None, "the script's own screen");
-        run(start).unwrap();
+        run(start.clone()).unwrap();
         run("new_game()".into()).unwrap();
         assert_eq!(pending(), None, "the script's own game");
+        // The screen hands its game the lengths; the trace's end takes the
+        // ones its lines haven't used.
+        let session_voice = || match &shared.borrow().app.as_ref().unwrap().mode {
+            Mode::Play(session) => Vec::from(session.game.re2.voice_ticks.clone()),
+            _ => panic!("no session"),
+        };
+        run("open_ending(1)".into()).unwrap();
+        run(start).unwrap();
+        {
+            let mut driver = shared.borrow_mut();
+            let app = driver.app.as_mut().unwrap();
+            let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+            app.start_session(session);
+        }
+        assert_eq!(session_voice(), [18, 22]);
+        run("trace_stop()".into()).unwrap();
+        assert!(session_voice().is_empty(), "trace_stop in play");
+        // In play, a trace that can't be made sets none.
+        let failed = format!("trace_start({missing:?}, {{ voice_ticks = {{ 18 }} }})");
+        assert!(run(failed).is_err());
+        assert!(session_voice().is_empty(), "a failed trace_start in play");
+        run(format!(
+            "trace_start({trace:?}, {{ voice_ticks = {{ 30 }} }})"
+        ))
+        .unwrap();
+        assert_eq!(session_voice(), [30]);
+        run("trace_stop()".into()).unwrap();
+        assert!(session_voice().is_empty());
     }
 
     #[test]

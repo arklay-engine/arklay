@@ -42,6 +42,9 @@ const ENEMY_SLOTS: usize = crate::rdt2::ANIM_SLOTS as usize;
 /// `splayer_work`'s, after the enemy slots', which it keeps as
 /// [`crate::scd2::host::SPLAYER_SLOT`].
 const SPLAYER_ANIMATION: usize = ENEMY_SLOTS;
+/// RE2's player animations for an extra mode's game (`Rbj_set`'s bank with
+/// mask bit 31), after `splayer_work`'s.
+const EXTRA_PLAYER_ANIMATION: usize = CHARACTER_ANIMATIONS + SPLAYER_ANIMATION + 1;
 
 /// Free entry of the effect sprite index table.
 const FREE_SPRITE: u8 = 0xFF;
@@ -614,6 +617,26 @@ impl RoomSource {
             Vec::new()
         };
 
+        let extra_room_anim = if self.dialect == Dialect::Re2 {
+            let stem = slot_stem(&kind("anim"), EXTRA_PLAYER_ANIMATION);
+            if pack.contains(&format!("{stem}.emr")) {
+                build_anim(&stem, pack, self.dialect)
+                    .map_err(|error| model_warnings.push(format!("animation {stem}: {error:#}")))
+                    .ok()
+            } else {
+                // A pack converted before the folder carried the bank: the
+                // room's RDT as the original loads it holds it.
+                pack.read(&crate::heap2::rdt_entry(&id.code()))
+                    .ok()
+                    .and_then(|data| {
+                        crate::rdt2::extra_room_anim(&data)
+                            .and_then(|(emr, edd)| crate::emd2::parse_room_anim(emr, edd).ok())
+                    })
+            }
+        } else {
+            None
+        };
+
         Ok(RoomState {
             stage: id.stage,
             mansion2: id.mansion2,
@@ -658,7 +681,8 @@ impl RoomSource {
             item_models,
             room_anim,
             character_anims,
-            extra_room_anim: None,
+            extra_room_anim,
+            extra_room_anim_used: false,
             model_warnings,
         })
     }
@@ -1081,6 +1105,7 @@ pub(super) fn re2_anim_files(data: &[u8], id: RoomId) -> Vec<(String, Vec<u8>)> 
         crate::rdt2::splayer_anim(data),
         CHARACTER_ANIMATIONS + SPLAYER_ANIMATION,
     );
+    add(crate::rdt2::extra_room_anim(data), EXTRA_PLAYER_ANIMATION);
     files
 }
 

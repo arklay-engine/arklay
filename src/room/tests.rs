@@ -888,6 +888,30 @@ fn an_re2_rdt_converts_to_a_room_that_builds_the_same() {
     assert_eq!(snapshot(&loaded.state), snapshot(&expected.state));
 }
 
+/// Room 11C's only motion bank is an extra mode's (mask bit 31): the room's
+/// folder carries it, and a pack converted before it did reads it from the
+/// room's RDT as the original loads it (`heap/<id>.rdt`).
+#[test]
+fn an_re2_rooms_extra_mode_bank_survives_the_xml() {
+    let data = crate::rdt2::tests::sample_with_extra_bank_only();
+    let id = RoomId::parse("1000").unwrap();
+    let entries = convert_rdt2(&data, id, Vec::new()).unwrap();
+    let loaded = load(&pack_of(entries.clone()), id).unwrap();
+    assert!(loaded.state.room_anim.is_none());
+    assert!(loaded.state.extra_room_anim.is_some());
+    // An older pack: the folder without the bank, the RDT in the heap.
+    let older: Vec<_> = entries
+        .into_iter()
+        .filter(|(path, _)| !path.contains("/anim/"))
+        .collect();
+    let bare = load(&pack_of(older.clone()), id).unwrap();
+    assert!(bare.state.extra_room_anim.is_none());
+    let mut heap = older;
+    heap.push((crate::heap2::rdt_entry(&id.code()), data));
+    let loaded = load(&pack_of(heap), id).unwrap();
+    assert!(loaded.state.extra_room_anim.is_some());
+}
+
 /// Rooms 30D0 and 6120 count object slots past their last model: the XML
 /// keeps the RDT's count rather than the files'.
 #[test]

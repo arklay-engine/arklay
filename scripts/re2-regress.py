@@ -900,6 +900,8 @@ def self_test_save_images() -> str | None:
             os.utime(times / name, ns=(when, when))
         if [path.name for path in newest_first(sorted(times.iterdir()))] != ["b", "a", "c"]:
             return "newest_first doesn't order by write time"
+    return None
+
 
 def self_test_title_voice() -> str | None:
     """A title run with `voice_from_ref` hands the record's voice lengths to its title's `trace_start`."""
