@@ -1797,7 +1797,10 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                         ));
                     };
                     if let Some(pads) = film_pads {
+                        // The session's flag reaches the scripts as each tick
+                        // starts; an authored rerun before then sees it too.
                         session.films = true;
+                        session.game.re2.films = true;
                         session.film_pads = Some(pads.into());
                     }
                     session.sound_device |= sound.unwrap_or(false);

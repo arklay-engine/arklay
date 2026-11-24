@@ -3837,13 +3837,19 @@ impl GameSession {
             self.present_skip.movie_set(transition::RE2_CUT_LOAD_FRAMES);
         }
         // A script's film plays now, with no frame counted down under it, and
-        // its `Pad_set`s step the pad with nothing held, as the recorder
-        // feeds them.
+        // its `Pad_set`s see nothing held, as the recorder feeds them: the
+        // repeat steps with each, and the key word ends clear, so a key held
+        // through the film is pressed anew on the next tick (`Key_trg`).
         if let Some(pads) = self.instant_film.take() {
             for _ in 0..pads {
                 self.game.pad_repeat.step(0);
             }
+            if pads > 0 {
+                self.game.re2.set_key(0);
+            }
             self.end_re2_movie();
+            // The film's last pass leaves the screen held, as the window's does.
+            self.present_held = true;
             return;
         }
         // While a film plays `WinMain` doesn't count `Movie_idx` down.
@@ -5181,6 +5187,12 @@ impl GameSession {
                 }
             }
         }
+        // A script's film (`film_pads`) plays after this tick's `Swap_Cbuff`
+        // whatever else the tick asked for: `WinMain` runs `Movie` before the
+        // next `Psx_main`, a door's included.
+        if self.film_pads.is_some() && self.game.re2.film.take().is_some() {
+            self.instant_film = Some(self.next_film_pads());
+        }
         // A script's `movie_on` request takes over after this tick: the film
         // owns the next tick and the game sounds pause until it ends. A
         // pending door transition wins and leaves the request for after it.
@@ -5223,9 +5235,7 @@ impl GameSession {
             }
         } else if let Some(id) = self.game.re2.film.take() {
             let claire = self.game.re2.flag(1, crate::scd2::host::STATUS_PLAYER);
-            if let Some(pads) = self.film_pads.as_mut() {
-                self.instant_film = Some(pads.pop_front().unwrap_or(0));
-            } else if let Err(err) = self.start_re2_movie(pack, id, claire) {
+            if let Err(err) = self.start_re2_movie(pack, id, claire) {
                 // The original's `FileExists` fails with `error_no 0xB`, which
                 // is fatal; the port warns and ends the film at once.
                 eprintln!("warning: RE2 film {id} unavailable: {err:#}");
@@ -5784,6 +5794,17 @@ impl GameSession {
             .set_flag(0, crate::scd2::host::FG_SYSTEM_MOVIE, 0);
         self.game.re2.sound_init = true;
         self.present_skip.movie_set_black(1);
+    }
+
+    /// The next of [`Self::film_pads`]'s counts. A list that has run out is
+    /// warned of (the reference names fewer films than the run plays), and
+    /// the film then takes no `Pad_set`.
+    fn next_film_pads(&mut self) -> u32 {
+        let next = self.film_pads.as_mut().and_then(|pads| pads.pop_front());
+        if next.is_none() {
+            crate::warning!("warning: a film played with no count left in film_pads");
+        }
+        next.unwrap_or(0)
     }
 
     /// `SsClose` and `SsInit2`, which `movie_on` and a film's end ask for.
@@ -39523,8 +39544,12 @@ off_0010:
     #[test]
     fn a_script_s_film_plays_in_no_traced_tick() {
         use crate::scd2::host::FG_SYSTEM_MOVIE;
+        const CONFIRM: u16 = 0x1000;
         let (_dir, _pack, mut session) = re2_film_session(&[]);
         session.game.pad_repeat.step(crate::game::pad_repeat::UP);
+        session.game.re2.set_key(CONFIRM);
+        session.game.re2.set_key(CONFIRM);
+        assert_eq!(session.game.re2.key_trg, 0, "held, not pressed");
         session.game.re2.set_flag(0, FG_SYSTEM_MOVIE, 1);
         session.game.re2.movie_set = Some(2);
         session.game.re2.bg_load = true;
@@ -39539,10 +39564,44 @@ off_0010:
             1,
             "Movie_set(1), not counted yet"
         );
+        assert!(session.present_held && session.present_skip.black());
         session.game.pad_repeat.step(crate::game::pad_repeat::UP);
         assert!(
             session.game.pad_repeat.trace().starts_with("1,"),
             "pressed anew"
+        );
+        session.game.re2.set_key(CONFIRM);
+        assert_eq!(session.game.re2.key_trg, CONFIRM, "Key_trg anew");
+    }
+
+    /// Each of a script's films takes the next count on the tick that asks
+    /// for it, and a film past the list warns and takes none.
+    #[test]
+    fn a_script_s_films_take_the_counts_in_turn() {
+        use crate::scd2::host::FG_SYSTEM_MOVIE;
+        let (_dir, pack, mut session) = re2_film_session(&[]);
+        session.films = true;
+        session.film_pads = Some(vec![4, 2].into());
+        let left = |session: &GameSession| session.film_pads.as_ref().map(|pads| pads.len());
+        let film = |session: &mut GameSession| {
+            session.game.re2.set_flag(0, FG_SYSTEM_MOVIE, 1);
+            session.game.re2.film = Some(10);
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            assert!(session.game.re2.film.is_none());
+            assert!(!session.game.re2.flag(0, FG_SYSTEM_MOVIE), "it ended");
+            assert!(session.movie.is_none(), "no film is decoded");
+        };
+        film(&mut session);
+        assert_eq!(left(&session), Some(1));
+        film(&mut session);
+        assert_eq!(left(&session), Some(0));
+        let warnings = crate::logging::warnings_since(0).0;
+        film(&mut session);
+        assert!(
+            crate::logging::warnings_since(0).0 > warnings,
+            "the list ran out"
         );
     }
 

@@ -1921,12 +1921,15 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
             settled = 0
             tick = -1  # The trace's tick, once play has begun.
             film_calls = 0
+            film_started = 0.0
             while tick <= args.ticks:
                 tid, regs = game.run_to_break()
                 if game.u32(regs.rsp + FILM_PAD_RETURN_AT) == FILM_PAD_RETURN:
                     # With the films on (`--config MovieEnable=1`): the game's ticks stand still under a film, which
                     # runs on the wall clock, so its `Pad_set`s are no ticks. The pad is clear, so it plays to its
                     # end. With the films off the loop never runs.
+                    if not film_calls:
+                        film_started = time.monotonic()
                     film_calls += 1
                     regs.rax = 0
                     game.resume_from_break(tid, regs, original)
@@ -1935,6 +1938,12 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                     where = f"before tick {tick}" if tick >= 0 else f"before boot tick {boot_tick}"
                     print(f"a film ran {film_calls} of its own Pad_sets {where}", flush=True)
                     film_calls = 0
+                    if tick > 0:
+                        # The film ran in the tick this stop ends: the pace leaves its time out on both sides.
+                        seconds = time.monotonic() - film_started
+                        pace.film(seconds)
+                        if tick_log:
+                            tick_log.write(f"film {tick - 1} {seconds:.4f}\n")
                 if music_log and music_state(game) != last_music:
                     last_music = music_state(game)
                     music_log.write(f"t={tick} boot={boot_tick} {last_music}\n")
@@ -2055,9 +2064,22 @@ def read_pace(path: Path) -> dict[int, float]:
     """A `--sound` recording's `.ticks` log: each traced tick and when it was reached, in seconds."""
     pace = {}
     for line in path.read_text().splitlines():
+        if line.startswith("film "):
+            continue
         tick, seconds = line.split()
         pace[int(tick)] = float(seconds)
     return pace
+
+
+def read_films(path: Path) -> dict[int, float]:
+    """A films-on recording's `.ticks` log's films: the tick each ran in (`film TICK SECONDS`) and how long it
+    took on the wall clock, which that tick's end includes."""
+    films = {}
+    for line in path.read_text().splitlines():
+        if line.startswith("film "):
+            _, tick, seconds = line.split()
+            films[int(tick)] = films.get(int(tick), 0.0) + float(seconds)
+    return films
 
 
 class Pace:
@@ -2076,7 +2098,11 @@ class Pace:
     record can only wait for the stored pace, not catch up with it, so the ticks let go late are counted: a
     voice line that ends in one of them may hold for a tick less than it did in the stored recording. A run
     that takes much longer than the ones before it (a room's load) is late too, and the ticks after it until
-    the record has caught up."""
+    the record has caught up.
+
+    A film (with the films on) runs on the wall clock inside its tick, in both recordings: the stored log's
+    films are taken out of its times, and this record's out of its own clock (`film`), so neither is waited
+    for nor counted as a run."""
 
     # Later than this is a tick's worth at the pace `import` gave.
     LATE = 0.25
@@ -2088,6 +2114,7 @@ class Pace:
         self.ticks = read_pace(Path(path)) if path else {}
         if path and not self.ticks:
             raise SystemExit(f"--pace: {path} holds no ticks")
+        self.films = read_films(Path(path)) if path else {}
         self.clock = clock
         self.known = sorted(self.ticks)
         steps = sorted(
@@ -2107,6 +2134,18 @@ class Pace:
         self.latest = 0.0
 
     def time(self, tick: int) -> float:
+        """The stored time of `tick`'s end, or the one its neighbours in the log give it, less the stored
+        films' time up to it."""
+        return self.logged(tick) - sum(seconds for at, seconds in self.films.items() if at <= tick)
+
+    def film(self, seconds: float) -> None:
+        """A film of `seconds` ran in the tick whose end is the next `reached`: it's no wait and no run."""
+        if self.origin is not None:
+            self.origin += seconds
+        if self.released is not None:
+            self.released += seconds
+
+    def logged(self, tick: int) -> float:
         """The stored time of `tick`'s end, or the one its neighbours in the log give it."""
         if tick in self.ticks:
             return self.ticks[tick]

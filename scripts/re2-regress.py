@@ -1017,6 +1017,24 @@ def self_test_pace() -> str | None:
         play(pace, clock, [12])
         if pace.late != 1 or not 0.35 < pace.latest < 0.45:
             return f"a hold that overran by 0.4s: {pace.late} late by {pace.latest:.2f}"
+        # A film ran in the stored tick 7 for 19 s and runs here for 5 s: tick 7 still ends a tick after 6 plus
+        # this record's film, and the ticks after it 0.2 s apart again, with no wait for the stored film.
+        filmed = Path(folder) / "film.ticks"
+        filmed.write_text("".join(f"{tick} {10.0 + 0.2 * (tick - 5) + (19.0 if tick >= 7 else 0.0):.4f}\n"
+                                  for tick in range(5, 10)) + "film 7 19.0000\n")
+        clock = Clock()
+        films = recorder.Pace(str(filmed), clock)
+        ends = play(films, clock, range(5, 7))
+        films.release(clock, 0, 7)
+        clock.now += 0.01 + 5.0
+        films.film(5.0)
+        films.reached(7)
+        ends[7] = round(clock.now - 100.0, 3)
+        clock.now += 0.05
+        ends.update(play(films, clock, range(8, 10)))
+        gaps = [round(ends[tick] - ends[tick - 1], 3) for tick in range(6, 10)]
+        if gaps != [0.2, 5.2, 0.2, 0.2] or max(clock.waits) > 0.2:
+            return f"a film of 19 s stored and 5 s here gave the ticks around it {gaps}, waits {clock.waits}"
         # A tick missing inside the log has its neighbours' time in proportion, not a median tick after the last.
         sparse = Path(folder) / "sparse.ticks"
         sparse.write_text("0 0.0\n3 0.6\n4 0.7\n6 0.9\n")
