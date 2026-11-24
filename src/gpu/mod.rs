@@ -2320,65 +2320,71 @@ impl GpuRenderer {
                     })
             })
             .collect();
-        for mesh_pass in [
-            scene::MeshPass::Opaque,
+        // Every opaque texel first; then the blended packets, which have no
+        // depth to settle their order: the painter's sort, by each draw's
+        // nearest stand-in, its root joint, with each draw's blending passes
+        // together so a farther mesh's never land over a nearer one's.
+        let mut ordered: Vec<_> = draws.iter().collect();
+        ordered.sort_by(|a, b| b.2.joints[2][3].total_cmp(&a.2.joints[2][3]));
+        let blending = [
             scene::MeshPass::Blend,
             scene::MeshPass::Additive,
             scene::MeshPass::SourceColour,
-        ] {
-            // The blended packets have no depth to settle their order: the
-            // painter's sort, by each draw's nearest stand-in, its root joint.
-            let mut ordered: Vec<_> = draws.iter().collect();
-            if mesh_pass != scene::MeshPass::Opaque {
-                ordered.sort_by(|a, b| b.2.joints[2][3].total_cmp(&a.2.joints[2][3]));
+        ];
+        let passes = draws
+            .iter()
+            .map(|draw| (scene::MeshPass::Opaque, draw))
+            .chain(
+                ordered
+                    .iter()
+                    .flat_map(|&draw| blending.iter().map(move |&mesh_pass| (mesh_pass, draw))),
+            );
+        for (mesh_pass, &(index, _, ref uniforms, blend_weight)) in passes {
+            let Some((buffer, page)) = meshes[index] else {
+                continue;
+            };
+            let drawn = match mesh_pass {
+                scene::MeshPass::Additive => buffer.additive,
+                scene::MeshPass::SourceColour => buffer.source_colour,
+                _ => true,
+            };
+            if !drawn {
+                continue;
             }
-            for &&(index, _, ref uniforms, blend_weight) in &ordered {
-                let Some((buffer, page)) = meshes[index] else {
-                    continue;
-                };
-                let drawn = match mesh_pass {
-                    scene::MeshPass::Additive => buffer.additive,
-                    scene::MeshPass::SourceColour => buffer.source_colour,
-                    _ => true,
-                };
-                if !drawn {
-                    continue;
-                }
-                let (first, count) = scene::pass_range(
-                    blend_weight,
-                    mesh_pass,
-                    buffer.blend_start,
-                    buffer.vertex_count,
-                );
-                if buffer.buffer.is_null() || count == 0 || uniforms.flags[0] == u32::MAX {
-                    continue;
-                }
-                let pipeline = match mesh_pass {
-                    scene::MeshPass::Opaque => self.pipelines.mesh_opaque,
-                    scene::MeshPass::Blend => self.pipelines.mesh_blend,
-                    scene::MeshPass::Additive => self.pipelines.mesh_add,
-                    scene::MeshPass::SourceColour => self.pipelines.mesh_source_colour,
-                };
-                let mut material = scene::material(blend_weight, mesh_pass);
-                let hd = if page.hd.is_null() {
-                    [self.no_hd, self.no_hd_rows]
-                } else {
-                    material[2] = 1.0;
-                    [page.hd, page.hd_rows]
-                };
-                draw_mesh(
-                    command,
-                    pass,
-                    pipeline,
-                    uniforms,
-                    material,
-                    buffer.buffer,
-                    [page.indices, page.palette, hd[0], hd[1], self.mask_keys],
-                    self.sampler,
-                    first,
-                    count,
-                );
+            let (first, count) = scene::pass_range(
+                blend_weight,
+                mesh_pass,
+                buffer.blend_start,
+                buffer.vertex_count,
+            );
+            if buffer.buffer.is_null() || count == 0 || uniforms.flags[0] == u32::MAX {
+                continue;
             }
+            let pipeline = match mesh_pass {
+                scene::MeshPass::Opaque => self.pipelines.mesh_opaque,
+                scene::MeshPass::Blend => self.pipelines.mesh_blend,
+                scene::MeshPass::Additive => self.pipelines.mesh_add,
+                scene::MeshPass::SourceColour => self.pipelines.mesh_source_colour,
+            };
+            let mut material = scene::material(blend_weight, mesh_pass);
+            let hd = if page.hd.is_null() {
+                [self.no_hd, self.no_hd_rows]
+            } else {
+                material[2] = 1.0;
+                [page.hd, page.hd_rows]
+            };
+            draw_mesh(
+                command,
+                pass,
+                pipeline,
+                uniforms,
+                material,
+                buffer.buffer,
+                [page.indices, page.palette, hd[0], hd[1], self.mask_keys],
+                self.sampler,
+                first,
+                count,
+            );
         }
 
         for run in &sprites.after {

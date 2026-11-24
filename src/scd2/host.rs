@@ -373,8 +373,8 @@ pub struct PendingPlayer {
 /// An edit of the room's camera switch zones.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CutEdit {
-    /// `obj_model_set`'s attribute 2: the object's model blends, mixing
-    /// with the background by `mix`.
+    /// `obj_model_set`'s attribute 2, or a water object: the object's model
+    /// blends, mixing with the background by `mix`.
     BlendObject {
         slot: u8,
         mix: crate::model::PacketMix,
@@ -2977,10 +2977,14 @@ impl GameHost<'_> {
         let origin = self.game.origin();
         let stage_room = (origin.stage, origin.room);
         let attr = at(8) as u16;
-        if attr & 2 != 0 {
-            // `Om_disp` (0x43D5D0) sends the blending packets as Marni's
-            // `0x100000`, but `0x700000` in rooms 302 and 30A.
-            let mix = if matches!(stage_room, (3, 0x02 | 0x0A)) {
+        // `Om_trans` draws a water object (`Type` 1) with `Mizu_trans`
+        // (0x4C7DE0), which blends all of it as Marni's `0x700000`
+        // (0x43DAE0) whatever its attribute; the others with `Om_disp`
+        // (0x43D5D0), which blends one with attribute 2 as `0x100000`, but
+        // as `0x700000` in rooms 302 and 30A.
+        let water = at(1) == i64::from(crate::objects::WATER_OBJECT);
+        if water || attr & 2 != 0 {
+            let mix = if water || matches!(stage_room, (3, 0x02 | 0x0A)) {
                 crate::model::PacketMix::SourceColour
             } else {
                 crate::model::PacketMix::Weighted
@@ -5084,6 +5088,29 @@ mod tests {
         let sound = game.re2.sounds.last().unwrap();
         assert_eq!(sound.id, crate::se2::SoundId::decode(0x020A_0001).unwrap());
         assert_eq!(sound.pos, [100, -210, 300]);
+    }
+
+    /// A water object (`Type` 1) blends by its own colour in any room, with
+    /// or without attribute 2.
+    #[test]
+    fn a_water_object_blends_by_its_own_colour() {
+        use crate::model::PacketMix;
+        for attr in [0, 2, 0x10] {
+            let mut game = GameState::default();
+            game.id.stage = 3;
+            game.id.room = 0x06;
+            game.objects = crate::objects::ObjectTable::new(5);
+            let call = [3, 1, 0, 0, 0, 0, 0, 0, attr, 0, 0, 0, 0, 0, 0];
+            exec(&mut game, "obj_model_set", &call);
+            assert_eq!(
+                game.re2.pending_cuts,
+                vec![CutEdit::BlendObject {
+                    slot: 3,
+                    mix: PacketMix::SourceColour
+                }],
+                "attribute {attr:#x}"
+            );
+        }
     }
 
     #[test]
