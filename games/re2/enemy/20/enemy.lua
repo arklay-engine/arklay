@@ -39,6 +39,9 @@ local BE_AIR <const> = 0x10000000
 
 local KIND_HELD <const> = 0x2000
 
+-- A dead dog's pool of blood (`FUN_0045f490`).
+local POOL_COLOR <const> = 0xBFBF10
+
 -- `fg_room_enemy`.
 local ROOM_HEARD <const> = 0x20
 local ROOM_HAS_KILL <const> = 0x40
@@ -1770,6 +1773,7 @@ end
 
 -- `Em20_Init`.
 local function init(e)
+    e:own_pool()
     e:routines(1, 0, 0, 0)
     e:set_damage_flg(0)
     e:set_sce_flg(0)
@@ -1816,14 +1820,14 @@ local function init(e)
     e:joint(0x100)
 end
 
--- `FUN_0045f490`: the dead dog's shadow becomes its pool of blood (0xBFBF10,
--- the engine's colour for a dead body's shadow; 0xBF10BF with the blood
--- censored, `0x68059A`), and both halves grow by 8 a tick for 0x5A ticks
--- (`Timer3`, `+0x16b`).
+-- `FUN_0045f490`: on its first tick the dead dog's shadow becomes its pool of
+-- blood, 0xBFBF10 (0xBF10BF under `0x68059A`, which isn't read), and from
+-- then both halves grow by 8 a tick for 0x5A ticks (`Timer3`, `+0x16b`).
 local function spread_pool(e)
     local step = e:var(POOL)
     if step == 0 then
         e:set_var(POOL, 1)
+        e:set_shadow_color(POOL_COLOR)
         e:set_timer(3, 0x5A)
     elseif step ~= 1 then
         return

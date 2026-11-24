@@ -46,7 +46,8 @@ expect = "match"
 record = "--warp 212:-11250:0:-25692:3024 --flag 4:83 --life 200 --equip 2 --give 0:2:200 --give 1:0x14:60"
 
 # The magnum at the dogs once they are close (dog_212_magnum.txt), with every frame: the first dies at Leon's feet in
-# the cut's view on 923, and its shadow turns into its pool of blood and spreads (`Em20_Dead`).
+# the cut's view on 923 (`Routine_0` 7 at the tick's end), and from 924 its shadow is its pool of blood, which spreads
+# to 1013 (`Em20_Dead`).
 [[run]]
 name = "dog_212_magnum"
 room = "212"
@@ -57,8 +58,9 @@ input = "dog_212_magnum.txt"
 input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,zm0,zm1,fgstat"
 frames = [344, 1499]
-# from the warp's first cut on, 0.26 measured (0.26 too over the pool's spread, 923 to 1013): the bodies' shading at
-# their edges and the shots' flashes; the pool's near edge sits a few pixels short of the original's
-frame_windows = [[350, 1499, 0.35]]
+# from the warp's first cut on, 0.26 measured: the bodies' shading at their edges and the shots' flashes; the pool's
+# near edge sits a few pixels short of the original's. The pool's spread (924 to 1013, 0.257 measured) and after it
+# (0.227) are judged closer: without the spread they measure about 0.29
+frame_windows = [[350, 1499, 0.35], [924, 1013, 0.27], [1014, 1499, 0.25]]
 expect = "match"
 record = "--warp 212:-11250:0:-25692:3024 --flag 4:83 --life 200 --equip 5 --give 0:5:60 --give 1:0x14:60"

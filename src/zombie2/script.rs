@@ -835,6 +835,14 @@ impl UserData for Api {
             e.em().z.pool = pool as u16;
             Ok(())
         });
+        methods.add_method_mut("own_pool", |_, e, ()| {
+            e.em().z.own_pool = true;
+            Ok(())
+        });
+        methods.add_method_mut("set_shadow_color", |_, e, rgb: u32| {
+            e.em().z.shadow_color = Some(rgb);
+            Ok(())
+        });
         methods.add_method_mut("burn_parts", |_, e, ()| {
             crate::zombie2::burn_parts(&mut e.em().work().part_rgb);
             Ok(())
@@ -6250,15 +6258,18 @@ mod tests {
             assert_eq!(dog_locals(true, body), [0x118, 0x118, 0x118]);
         }
 
-        /// `Em20_Dead` (0x45F470): the pool grows by 8 a tick for 0x5A ticks
-        /// (`FUN_0045f490`), from the first dead tick, then stays.
+        /// `Em20_Dead` (0x45F470): on the first dead tick `Routine_1` goes to
+        /// 1, `Be_flg` takes 2 and `FUN_0045f490` colours the shadow, sets
+        /// `+0x221` (var 8) to 1 and `Timer3` to 0x5A; on that tick and each
+        /// after, both halves grow by 8 and `Timer3` counts down, and at 0
+        /// var 8 goes to 2 and the pool stays.
         #[test]
         fn a_dead_dogs_pool_spreads_for_0x5a_ticks() {
             let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
             let script = include_str!("../../games/re2/enemy/20/enemy.lua");
-            let got: Vec<i64> = lua
+            let ticks: Vec<Vec<i64>> = lua
                 .load(format!(
-                    "local w = {{ r = {{ [0] = 7, 0, 0, 0 }}, vars = {{}}, timers = {{}}, pool = 0, be = 0 }}
+                    "local w = {{ r = {{ [0] = 7, 0, 0, 0 }}, vars = {{}}, timers = {{}}, pool = 0, be = 0, rgb = -1 }}
                      local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
                      function e:routine(i) return w.r[i] end
                      function e:set_routine(i, v) w.r[i] = v end
@@ -6270,21 +6281,27 @@ mod tests {
                      function e:set_pool(v) w.pool = v end
                      function e:be_flg() return w.be end
                      function e:set_be_flg(v) w.be = v end
+                     function e:set_shadow_color(v) w.rgb = v end
                      {script}
-                     local seen = {{}}
-                     for tick = 1, 0x5A + 2 do
+                     local ticks = {{}}
+                     for _ = 1, 0x5A + 2 do
                          update(e)
-                         if tick == 1 or tick == 0x5A or tick == 0x5A + 2 then
-                             seen[#seen + 1] = w.pool
-                         end
+                         ticks[#ticks + 1] = {{ w.pool, w.timers[3], w.vars[8], w.rgb, w.r[1], w.be }}
                      end
-                     seen[#seen + 1] = w.r[1]
-                     seen[#seen + 1] = w.be
-                     return seen"
+                     return ticks"
                 ))
                 .eval()
                 .unwrap();
-            assert_eq!(got, [8, 8 * 0x5A, 8 * 0x5A, 1, 2]);
+            assert_eq!(ticks.len(), 0x5A + 2);
+            for (tick, got) in ticks.iter().enumerate() {
+                let grown = (tick + 1).min(0x5A) as i64;
+                let state = if tick + 1 >= 0x5A { 2 } else { 1 };
+                assert_eq!(
+                    got,
+                    &[8 * grown, 0x5A - grown, state, 0xBF_BF10, 1, 2],
+                    "tick {tick}"
+                );
+            }
         }
 
         /// 0x10 is 0xA's case (0x45EBD0): `4 - Damage_no / 3` bloods, though
