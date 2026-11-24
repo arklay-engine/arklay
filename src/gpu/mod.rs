@@ -2320,26 +2320,10 @@ impl GpuRenderer {
                     })
             })
             .collect();
-        // Every opaque texel first; then the blended packets, which have no
-        // depth to settle their order: the painter's sort, by each draw's
-        // nearest stand-in, its root joint, with each draw's blending passes
-        // together so a farther mesh's never land over a nearer one's.
-        let mut ordered: Vec<_> = draws.iter().collect();
-        ordered.sort_by(|a, b| b.2.joints[2][3].total_cmp(&a.2.joints[2][3]));
-        let blending = [
-            scene::MeshPass::Blend,
-            scene::MeshPass::Additive,
-            scene::MeshPass::SourceColour,
-        ];
-        let passes = draws
-            .iter()
-            .map(|draw| (scene::MeshPass::Opaque, draw))
-            .chain(
-                ordered
-                    .iter()
-                    .flat_map(|&draw| blending.iter().map(move |&mesh_pass| (mesh_pass, draw))),
-            );
-        for (mesh_pass, &(index, _, ref uniforms, blend_weight)) in passes {
+        // The painter's key of a draw: its nearest stand-in, its root joint.
+        let keys: Vec<f32> = draws.iter().map(|draw| draw.2.joints[2][3]).collect();
+        for (mesh_pass, draw) in scene::pass_order(&keys) {
+            let (index, _, ref uniforms, blend_weight) = draws[draw];
             let Some((buffer, page)) = meshes[index] else {
                 continue;
             };

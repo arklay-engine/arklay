@@ -535,6 +535,25 @@ pub enum MeshPass {
     SourceColour,
 }
 
+/// The order of a frame's mesh draws, as `(pass, draw)`: every draw's opaque
+/// texels first, then the blended packets, which have no depth to settle
+/// their order: the painter's sort, farthest `keys` first, each draw's
+/// blending passes together so a farther mesh's never land over a nearer
+/// one's.
+pub fn pass_order(keys: &[f32]) -> Vec<(MeshPass, usize)> {
+    let mut ordered: Vec<usize> = (0..keys.len()).collect();
+    ordered.sort_by(|&a, &b| keys[b].total_cmp(&keys[a]));
+    let blending = [MeshPass::Blend, MeshPass::Additive, MeshPass::SourceColour];
+    (0..keys.len())
+        .map(|draw| (MeshPass::Opaque, draw))
+        .chain(
+            ordered
+                .into_iter()
+                .flat_map(|draw| blending.map(|pass| (pass, draw))),
+        )
+        .collect()
+}
+
 /// A light vector's `w` when its joint carries no `JointSetColorTint` colour.
 pub const NOT_COLOURED: f32 = -1.0;
 
@@ -1537,5 +1556,26 @@ mod tests {
         assert_eq!(pass_range(None, MeshPass::Additive, 6, 9), (6, 3));
         assert_eq!(pass_range(Some(0x80), MeshPass::Blend, 6, 9), (0, 9));
         assert_eq!(pass_range(Some(0), MeshPass::Blend, 6, 9), (0, 0));
+    }
+
+    /// Every opaque pass first, then each draw's blending passes together,
+    /// farthest first: a farther water mesh can't blend over a nearer
+    /// half-blended one.
+    #[test]
+    fn a_draws_blending_passes_go_together_farthest_first() {
+        use MeshPass::{Additive, Blend, Opaque, SourceColour};
+        assert_eq!(
+            pass_order(&[100.0, 300.0]),
+            [
+                (Opaque, 0),
+                (Opaque, 1),
+                (Blend, 1),
+                (Additive, 1),
+                (SourceColour, 1),
+                (Blend, 0),
+                (Additive, 0),
+                (SourceColour, 0),
+            ]
+        );
     }
 }
