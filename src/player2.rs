@@ -5627,10 +5627,18 @@ impl Mover<'_, '_> {
 
     /// `FUN_00487c70`: the ivy's table, on its `pSub1` clips. `Routine_1` 0
     /// pulls the player in, 1 holds them while it squeezes, 2 lets them go.
+    /// Its three rows run on into `em_die_table[0x2e]`'s (`FUN_00487f10`,
+    /// `0x529fc8`), which the kill (`MODE_HELD_DIE`) takes from its own 0: 3
+    /// pulled in, 4 swallowed and 5 eaten.
     fn em2e_held(&mut self, held: &mut Held<'_>) {
         const LATE: u16 = 0x40;
         self.work.bank = Bank::Held;
-        match self.work.routine[1] {
+        let row = if self.work.routine[0] == MODE_HELD_DIE {
+            self.work.routine[1].wrapping_add(3)
+        } else {
+            self.work.routine[1]
+        };
+        match row {
             0 => {
                 if self.work.routine[2] == 0 {
                     self.work.routine[2] = 1;
@@ -5728,13 +5736,14 @@ impl Mover<'_, '_> {
                 self.work.routine[2] += u8::from(ended);
             }
             6..=8 => {}
+            // `0x487f70`: the first tick goes on into the swallow.
             _ => match self.work.routine[2] {
-                0 => {
-                    self.work.routine[2] = 1;
-                    self.held_clip(0, 0x3F);
-                    self.work.neck.flags |= 1;
-                }
-                1 => {
+                0 | 1 => {
+                    if self.work.routine[2] == 0 {
+                        self.work.routine[2] = 1;
+                        self.held_clip(0, 0x3F);
+                        self.work.neck.flags |= 1;
+                    }
                     self.null_pos_set(0x800);
                     if self.joint_move_late(LATE) {
                         self.work.routine[2] = 2;
@@ -9390,6 +9399,35 @@ mod tests {
         }
         assert_eq!(setup.work.sounds, [0x400_0001]);
         assert_eq!(life, 200);
+    }
+
+    /// The ivy's kill (`em_die_table[0x2e]`, `0x529fc8`) runs its hold
+    /// table's rows 3 to 5: pulled in on clip 3, then swallowed on clip 0,
+    /// whose first tick goes on into the frame (`0x487f70`), and clip 1, and
+    /// eaten on clip 2.
+    #[test]
+    fn an_ivy_eats_the_player_on_its_hold_tables_last_rows() {
+        let mut setup = Setup::new(0);
+        (setup.clips, setup.keyframes) = bank(4, 4, 0);
+        setup.work.routine = [MODE_HELD_DIE, 0, 0, 0];
+        let mut life = -1;
+        let ivy = crate::zombie2::IVY_ID;
+        run_held_by(&mut setup, &mut life, ivy, |_| true);
+        assert_eq!((setup.work.routine[2], setup.work.move_no), (1, 3));
+        setup.work.routine = [MODE_HELD_DIE, 1, 0, 0];
+        run_held_by(&mut setup, &mut life, ivy, |_| true);
+        let work = &setup.work;
+        assert_eq!(
+            (work.routine, work.move_no, work.move_cnt),
+            ([MODE_HELD_DIE, 1, 1, 0], 0, 1)
+        );
+        run_held_by(&mut setup, &mut life, ivy, |work| work.routine[2] == 2);
+        assert_eq!(setup.work.move_no, 1);
+        run_held_by(&mut setup, &mut life, ivy, |work| work.routine[1] == 2);
+        run_held_by(&mut setup, &mut life, ivy, |_| true);
+        assert_eq!((setup.work.routine[2], setup.work.move_no), (1, 2));
+        assert_ne!(setup.work.be_flg & 8, 0);
+        assert_eq!(life, -1);
     }
 
     #[test]

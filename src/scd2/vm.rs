@@ -11,6 +11,8 @@ use super::{ProcList, Scripts};
 
 /// The number of task slots (`get_max_tasks`).
 pub const TASKS: usize = 14;
+/// The task `main_00` runs on.
+const MAIN_TASK: usize = 1;
 /// The task slots a procedure can be auto-assigned to by `evt_exec`.
 const AUTO_TASKS: std::ops::Range<usize> = 2..10;
 /// The first task id `evt_exec` treats as "any free slot".
@@ -129,13 +131,21 @@ impl Vm {
     }
 
     fn start(&mut self, task: usize, proc: usize) {
+        // The init runs from its own list on task 0, but the original has the
+        // main list selected by then (`Sce_scheduler_set`), so a task the
+        // init starts elsewhere runs, and is bounded by, the main list.
+        let procs = if matches!(self.active, Active::Init) && task != 0 {
+            self.main.len()
+        } else {
+            self.list().len()
+        };
         self.tasks[task] = Task {
             frame: Frame {
                 proc,
                 ..Frame::default()
             },
             calls: Vec::new(),
-            running: proc < self.list().len(),
+            running: proc < procs,
         };
     }
 
@@ -155,11 +165,16 @@ impl Vm {
         // Tasks the init started index the main list from here on.
     }
 
-    /// Start the room's main procedure, as `room_set` does after the init.
+    /// Start the room's main procedure on task 1, as `Sce_scheduler_set`
+    /// does (`0x4E415C`): task 0 is the init's, and from then on each tick's
+    /// `main_01` (`Sce_scheduler`, `0x4E42FF`), so a `main_00` that waits at
+    /// an `evt_next` runs on (room 60B's under 4:106). The original sets
+    /// task 1 before the init's pass, so an init's `evt_exec` onto task 1
+    /// takes its place.
     pub fn start_main(&mut self) {
         self.active = Active::Main;
-        if !self.tasks[0].running && !self.main.is_empty() {
-            self.start(0, 0);
+        if !self.tasks[MAIN_TASK].running && !self.main.is_empty() {
+            self.start(MAIN_TASK, 0);
         }
     }
 
@@ -757,6 +772,35 @@ mod tests {
         host.flags.insert((0, 1));
         run(code, &mut host);
         assert_eq!(marks(&host), [1]);
+    }
+
+    #[test]
+    fn main_00_waits_on_task_1_past_each_ticks_main_01() {
+        // main_00: evt_next; mark1; end. main_01: mark2; end.
+        let main_00 = concat(&[&[0x02], &MARK_1, &END]);
+        let main_01 = concat(&[&MARK_2, &END]);
+        let mut host = TestHost::default();
+        let mut vm = vm(vec![main_00, main_01]);
+        vm.start_main();
+        vm.tick(&mut host);
+        assert!(marks(&host).is_empty());
+        // `Sce_scheduler` restarts task 0 only, and task 1 runs after it.
+        vm.exec_event(0, 1);
+        vm.tick(&mut host);
+        assert_eq!(marks(&host), [2, 1]);
+    }
+
+    #[test]
+    fn an_inits_evt_exec_onto_task_1_takes_main_00s_place() {
+        let mut host = TestHost::default();
+        // The init's one procedure runs `evt_exec(1, 0, 1)`: event 1 is
+        // `main_01`, which the init's own list doesn't have.
+        let mut vm = vm(vec![concat(&[&MARK_1, &END]), concat(&[&MARK_2, &END])]);
+        vm.init = vec![concat(&[&[0x04, 1, 0, 1], &END])];
+        vm.run_init(&mut host);
+        vm.start_main();
+        vm.tick(&mut host);
+        assert_eq!(marks(&host), [2]);
     }
 
     #[test]

@@ -8,9 +8,9 @@
 -- animation and `Oba_ck_em` and `Sca_ck_em` after `update`.
 --
 -- When its ivy dies the vine falls with it (`Routine_0` 2). The vines alone
--- (`Routine_1` 9 and `Routine_0` 3), their lash (`Routine_1` 3, and
--- `FUN_004898f0` once the ivy is dead) and the acid's and the grenades'
--- ends aren't ported: no run reaches them yet. Neither is a lone vine's death
+-- (`Routine_1` 9 and `Routine_0` 3), a dead ivy's vine's lash
+-- (`FUN_004898f0`) and the acid's and the grenades' ends aren't ported: no
+-- run reaches them yet. Neither is a lone vine's death
 -- by weapon (`DWORD_0052a0d4`: `FUN_00489d40` for most, the SMG's too, and
 -- `FUN_00489da0`'s burning shrink for 0xa and the flamethrower), nor
 -- `Em_2F`'s `FUN_0048a1c0`, which fades parts 0 to 2's `Poly_rgb` while the
@@ -197,7 +197,95 @@ local function drop(e)
     place(e)
 end
 
-local STATES <const> = { [0] = rest, rest, rest, nil, wrap, shaken, shake, hang, drop }
+-- `fg_room_enemy`'s bit for a hit that left the player on their last legs.
+local ROOM_SPAT <const> = 0x20
+
+-- `FUN_0048a050`, at the player (the ivy's target `+0x218` 0; the partner,
+-- 1, isn't ported): the vine's parts 1 and 2 within 700 of the player, on
+-- the player's floor, take `down` (`Pl_life_down` that can't kill) and send
+-- them into their hit, front or back (`FUN_004b2670`). -1 when the player is
+-- already reeling (`+0x1d3`'s 0x80).
+local function lash_hits(e, down)
+    local px, _, pz = e:player_pos()
+    for part = 1, 2 do
+        local x, _, z = e:own_part(part)
+        if e:player_life() >= 0 and e:point_within(px, pz, x, z, 700) and e:same_floor() then
+            if e:pl_damage_cnt() & 0x80 ~= 0 then
+                return -1
+            end
+            local result = e:pl_life_down(down, true)
+            if result == 2 then
+                e:pl_set_routine(3, 0, 0, 0)
+            else
+                if result == 1 then
+                    e:set_room_enemy(e:room_enemy() | ROOM_SPAT)
+                end
+                e:pl_set_routine(2, e:cdir_player() and 1 or 0, 0, 0)
+                e:pl_set_damage_cnt(e:pl_damage_cnt() | 0x80)
+            end
+            e:sound(0)
+            return 1
+        end
+    end
+    return 0
+end
+
+-- `FUN_00488db0`: `Routine_1` 3, the vine's own lash, by `Routine_2`.
+local function lash(e)
+    local two = e:routine(2)
+    if two == 0 then
+        -- `0x488e10`: a wait of 1 to 4 ticks, longer for the later vines.
+        e:set_routine(2, 1)
+        e:set_timer(0, (e:rnd() & 3) + e:var(INDEX) * 2 + 1)
+        e:joint(0x200)
+    elseif two == 1 then
+        -- `0x488e60`: then the swing's clip and its aim at the player.
+        local left = (e:timer(0) - 1) & 0xFFFF
+        e:set_timer(0, left)
+        if left == 0 then
+            e:set_routine(2, 2)
+            e:set_var(HIT, 0)
+            e:clip(4, 0, 7)
+            local aim = e:parent_angle()
+            local bits = e:var(BITS)
+            if bits == 3 then
+                aim = aim + ((e:rnd() & 1) << 11) + 0x400
+            else
+                aim = (bits & 2 ~= 0 and 0x800 or 0) - 0x400 + aim
+            end
+            local px, _, pz = e:player_pos()
+            e:set_timer(1, (aim + e:goto_ck(px, pz, 0x100)) & 0xFFFF)
+        end
+        e:joint(0x200)
+    elseif two == 2 then
+        -- `0x488f40`: the swing, rolling one way and then the other, and its
+        -- hit on the clip's `0x20000` frames.
+        e:set_var(YAW, i16(e:timer(1) - e:parent_angle()))
+        local done = e:joint(0x200)
+        e:seq_sound()
+        local seq = e:now_seq()
+        if seq & 0x20000 ~= 0 and e:var(HIT) == 0 then
+            e:set_var(HIT, lash_hits(e, 5) & 0xFF)
+        end
+        local away = e:var(BITS) & 1 ~= 0
+        if seq & 0x10000 == 0 then
+            e:set_var(ROLL, i16(e:var(ROLL) + (away and -0x14 or 0x14)))
+        else
+            e:set_var(ROLL, i16(e:var(ROLL) + (away and 0x14 or -0x14)))
+        end
+        -- `FUN_00489000`.
+        if done and e:routine(0) == 1 then
+            e:routines(1, 2, 0, 0)
+            e:set_var(CHOSEN, e:var(CHOSEN) & 0x7F)
+        end
+    end
+    if e:pl_damage_cnt() & 0x80 ~= 0 then
+        e:set_var(HIT, 1)
+    end
+    place(e)
+end
+
+local STATES <const> = { [0] = rest, rest, rest, lash, wrap, shaken, shake, hang, drop }
 
 -- `FUN_004894b0`'s `Routine_1` 0: falls with its dead ivy, rolling out to
 -- one side and down until part 2 meets the ivy's `Ground`.

@@ -1163,6 +1163,17 @@ mod tests {
         assert_eq!(at(vec![record(0)], -1000), 0);
     }
 
+    /// A triangle answers by whether the body is in it, wherever the point
+    /// in its outline is: room 60B's shape 4 under the ivy's whip.
+    #[test]
+    fn sca_ck_info_tests_a_triangle_on_the_body() {
+        let sca = room(vec![record(4)]);
+        let at = |body: [i32; 2]| info_flags_for(&sca, PLAYER_MASK, [1500, 1500], body, 0x28, 0);
+        // Shape 4 holds the near left corner, (1000, 1000).
+        assert_eq!(at([1100, 1100]), 1);
+        assert_eq!(at([1900, 1900]), 0);
+    }
+
     #[test]
     fn walking_into_a_box_stops_at_its_grown_edge() {
         let sca = room(vec![record(0)]);

@@ -1177,7 +1177,8 @@ function Re2EnemyApi:sca_ck_hit(x, y, z, radius, mask) end
 function Re2EnemyApi:sca_struck(x, y, z, radius, mask) end
 
 ---`Sca_ck_info` at a point on the body's floor: whether a record of `mask`,
----grown by `radius`, holds it.
+---grown by `radius`, holds it: a box by its outline, and a triangle, the
+---diamond or the circle by whether the body's `Atd[0]` is in it.
 ---@param x integer
 ---@param y integer
 ---@param z integer
@@ -1505,9 +1506,23 @@ function Re2EnemyApi:key_trg() end
 
 -- # Acting on the player
 
----Set the player's life.
+---Set the player's life. A life below 0 starts `Die` (`fg_system`'s
+---`0x4000000`) unless `die` is false.
 ---@param life integer Signed 16-bit.
-function Re2EnemyApi:set_player_life(life) end
+---@param die? boolean Default true.
+function Re2EnemyApi:set_player_life(life, die) end
+
+---Start `Die` (`fg_system`'s `0x4000000`).
+function Re2EnemyApi:pl_start_die() end
+
+---Set the player's `Spd_x` and `Spd_z`.
+---@param x integer
+---@param z integer
+function Re2EnemyApi:pl_set_speed_xz(x, z) end
+
+---Stop drawing one of the player's parts (0 to 31).
+---@param part integer
+function Re2EnemyApi:pl_hide_part(part) end
 
 ---`Pl_life_down`: take life off the player. Above 120 life a blow under 41 is
 ---made half as big again; one that would kill is turned to 0 life once, or
