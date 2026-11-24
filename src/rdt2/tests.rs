@@ -3,12 +3,17 @@ use super::*;
 /// A minimal RE2 RDT: the header, one camera, a two-record zone table, a
 /// one-record collision table and the camera's lights.
 pub(crate) fn sample() -> Vec<u8> {
+    sample_with_cameras(1)
+}
+
+/// [`sample`] with `cameras` cameras, each the first's, with its lights.
+pub(crate) fn sample_with_cameras(cameras: usize) -> Vec<u8> {
     let rid = 0x64;
-    let rvd = rid + CAMERA_SIZE;
+    let rvd = rid + cameras * CAMERA_SIZE;
     let sca = rvd + 2 * ZONE_SIZE + 4;
     let lit = sca + 2 * SCA_RECORD_SIZE;
-    let mut data = vec![0u8; lit + LIGHT_SIZE];
-    data[1] = 1;
+    let mut data = vec![0u8; lit + cameras * LIGHT_SIZE];
+    data[1] = cameras as u8;
     let mut put = |at: usize, bytes: &[u8]| data[at..at + bytes.len()].copy_from_slice(bytes);
     put(OFFSETS + SCA_SLOT * 4, &(sca as u32).to_le_bytes());
     put(OFFSETS + RID_SLOT * 4, &(rid as u32).to_le_bytes());
@@ -46,6 +51,10 @@ pub(crate) fn sample() -> Vec<u8> {
         put(lit + 16 + n * 2, &value.to_le_bytes());
     }
     put(lit + 34, &[0x00, 0x30, 0x00, 0x10, 0, 0]);
+    for camera in 1..cameras {
+        data.copy_within(rid..rid + CAMERA_SIZE, rid + camera * CAMERA_SIZE);
+        data.copy_within(lit..lit + LIGHT_SIZE, lit + camera * LIGHT_SIZE);
+    }
     data
 }
 
@@ -254,6 +263,46 @@ fn reads_the_last_room_animations_for_the_player() {
     let (emr, edd) = room_anim(&data).unwrap();
     assert_eq!(emr, [4u8; 4]);
     assert_eq!(edd, [5u8; 4]);
+}
+
+/// [`sample`] with one motion bank, for an extra mode's player alone (mask
+/// bit 31, as room 11C has): an empty pair, which parses.
+pub(crate) fn sample_with_extra_bank_only() -> Vec<u8> {
+    let mut data = sample();
+    let start = data.len();
+    data[OFFSETS + RBJ_SLOT * 4..][..4].copy_from_slice(&(start as u32).to_le_bytes());
+    // The table at 16, one bank: its mask at 8, the EMR's two bytes at 12,
+    // the EDD's two at 14.
+    for word in [16u32, 1, 0x8000_0000] {
+        data.extend(word.to_le_bytes());
+    }
+    data.extend([0u8; 4]);
+    for word in [8u32, 14] {
+        data.extend(word.to_le_bytes());
+    }
+    data
+}
+
+#[test]
+fn an_extra_modes_player_takes_the_bank_with_bit_31() {
+    let mut data = sample();
+    assert!(extra_room_anim(&data).is_none());
+    let start = data.len();
+    data[OFFSETS + RBJ_SLOT * 4..][..4].copy_from_slice(&(start as u32).to_le_bytes());
+    // The player's bank, then the extra modes' (room 304 has both).
+    for word in [32u32, 2] {
+        data.extend(word.to_le_bytes());
+    }
+    for (mask, emr, edd) in [(1u32, 1u8, 2u8), (0x8000_0000, 4, 5)] {
+        data.extend(mask.to_le_bytes());
+        data.extend([emr; 4]);
+        data.extend([edd; 4]);
+    }
+    for bank in [[8u32, 16], [20, 28]] {
+        data.extend(bank.iter().flat_map(|word| word.to_le_bytes()));
+    }
+    assert_eq!(room_anim(&data), Some((&[1u8; 4][..], &[2u8; 4][..])));
+    assert_eq!(extra_room_anim(&data), Some((&[4u8; 4][..], &[5u8; 4][..])));
 }
 
 #[test]

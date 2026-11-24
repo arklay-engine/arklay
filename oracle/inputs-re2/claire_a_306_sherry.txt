@@ -1,0 +1,189 @@
+# Claire A's Sherry from 305's door 4 into 306: down its three ledges into the pit, the three boxes pushed into their row
+# along the south wall (main_0A's z <= -26081 tests), back up the ledges, the water switch (4:146 and 4:147, the boxes
+# rise to -3600), west across them, north to the Club Key (0x5C), and east along the south wall to door 0 into 305 (#765 part 4)
+# made in arklay: the warp puts her in play at once; the input ends with door 0's press (3625), which loads 305 at 3662
+344
+# 306: east along the ledge at z -26203, then north to the first ledge's edge
+361 up run right
+366 up run
+368 up run right
+369 up run
+377 up run right
+378 up run
+382 up run right
+387 up run
+427
+# down the first ledge (-5400 to -3600)
+428 left
+435 action
+438
+# west along it to the second ledge and down (to -1800)
+488 up run
+506
+507 left
+520
+521 up
+546
+548 action
+550
+# west to the third ledge and down into the pit (y 0)
+621 up run
+645
+647 action
+649
+# round to box 0's north face and up onto it
+720 up run
+732
+733 left
+746
+747 up run
+778
+779 left
+792
+793 up
+817
+818 right
+831
+833 action
+835
+# off its south side
+968 up
+1000
+1002 action
+1004
+# box 1 pushed west to x -22467
+1073 right
+1087
+1088 up
+1135
+# round and up onto box 0 from the south, off its north side
+1151 right
+1176
+1177 up
+1192
+1193 left
+1205
+1206 up
+1211
+1213 action
+1215
+1348 up
+1380
+1382 action
+1384
+# box 0 pushed south to z -26078
+1453 right
+1479
+1480 up
+1606
+# north, then west to x -24234 (box 2's column), and box 2 pushed south to z -26083
+1608 right
+1634
+1635 up run
+1677
+1678 left
+1691
+1692 up run
+1719
+1720 left
+1733
+1734 up
+2001
+# north to the pit's north wall, east to the third ledge (x -19808) and up it
+2002 right
+2028
+2029 up run
+2094
+2095 right
+2109
+2110 up run
+2147
+2149 action
+2151
+# east to the second ledge (x -16498) and up it
+2284 up run
+2310
+2312 action
+2314
+# east to the wall, south to the first ledge (z -21512) and up it to -5400
+2447 up run
+2457
+2458 right
+2471
+2472 up run
+2498
+2500 action
+2502
+# west, then north into the corner by the water switch (-17109, -20412), turned east to face it
+2635 right
+2649
+2650 up run
+2673
+2674 right
+2688
+2689 up run
+2733
+2734 right
+2748
+# the switch: its message and the water's rise (cut 5, 2809 to 3067)
+2750 action
+2752
+2762 action
+2764
+2774 action
+2776
+2786 action
+2788
+2798 action
+2800
+# south to z -25882, then west across the risen boxes to the west wall
+3068 right
+3081
+3082 up run
+3127
+3128 right
+3142
+3143 up run
+3224
+# north to the Club Key at the north wall
+3225 right
+3239
+3240 up run
+3298
+# the key: its message and the question, through to the pick-up (3380)
+3300 action
+3302
+3312 action
+3314
+3324 action
+3326
+3336 action
+3338
+3348 action
+3350
+3360 action
+3362
+3372 action
+3374
+3384 action
+3386
+3396 action
+3398
+3408 action
+3410
+3420 action
+3422
+# south to the south wall, then east along it to door 0 (x -16878)
+3432 right
+3458
+3459 up run
+3524
+3525 left
+3537
+3538 up run
+3610
+# door 0 into 305: one press
+3611 right
+3623
+3625 action
+3627

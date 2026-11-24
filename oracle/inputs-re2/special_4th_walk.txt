@@ -1,0 +1,58 @@
+# The title from boot: SPECIAL, confirm on 4TH, START into the 4th Survivor's game: HUNK's opening scene in room 304, confirms through its two radio messages, then a walk, a run, turns and an aim (oracle/re2.md, "The 4th Survivor and To-fu").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 confirm
+443
+1000 start
+1003
+2000 confirm
+2003
+2030 confirm
+2033
+2060 confirm
+2063
+2090 confirm
+2093
+2120 confirm
+2123
+2150 confirm
+2153
+2180 confirm
+2183
+2210 confirm
+2213
+2240 confirm
+2243
+2270 confirm
+2273
+2300 confirm
+2303
+2330 confirm
+2333
+2360 confirm
+2363
+2390 confirm
+2393
+2420 confirm
+2423
+2450 confirm
+2453
+2480 confirm
+2483
+2600 up
+2670 right
+2690 up run
+2770 left
+2790 up
+2850
+2900 aim
+2960
+3000 down
+3030

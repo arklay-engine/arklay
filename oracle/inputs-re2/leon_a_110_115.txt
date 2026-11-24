@@ -1,0 +1,617 @@
+# leon_a_110_115: Leon A from 112's door 0 in 110: back through door 4 into 112 (110's north corridor holds the licker the Club Key (8:119) brings, past 30 life), the ground floor to door 1, 113's south corridor past its zombie to door 0, 114 south and round to door 1, 115's First Aid Spray (8:40) taken from the west of its desk and used at once (200 life), the 15 rounds on the desk north of it (8:101), and door 0 back into 114's hand back
+345 right
+389
+390 left
+394
+395 action
+397
+432 up
+764
+765 up run left
+770 up run
+772 up run left
+773 up run
+777 up run left
+783 up run
+793 up run left
+794 up run
+811 up run left
+812 up run
+813 up run left
+814 up run
+815 up run right
+818 up run
+824 up run right
+825 up run
+831 left
+844
+845 action
+847
+882 up
+1186
+1187 up run right
+1200 right
+1202 up run right
+1203 right
+1206 up run right
+1207 up run left
+1217 up run
+1225 up run left
+1226 up run
+1236 up run right
+1239 up run
+1240 up run right
+1241 up run
+1243 up run left
+1248 left
+1251 up run left
+1252 left
+1255 up run left
+1256 left
+1260 up run left
+1261 up run
+1263 up run left
+1275 right
+1279 up run right
+1291 up run
+1292 up run right
+1293 up run
+1296 up run right
+1297 up run
+1299 right
+1311
+1312 action
+1314
+1349 up
+1655
+1656 up run
+1666 up run left
+1667 up run
+1669 up run right
+1674 up run
+1684 up run right
+1685 up run
+1689 up run right
+1690 up run
+1693 up run right
+1694 up run
+1696 up run right
+1697 up run
+1700 up run right
+1701 up run
+1703 up run right
+1704 up run
+1706 up run right
+1707 up run
+1709 up run right
+1710 up run
+1711 up run right
+1712 up run
+1713 up run right
+1714 up run
+1716 up run right
+1717 up run
+1723 up run right
+1724 up run
+1726 up run right
+1727 up run
+1729 up run right
+1730 up run
+1733 up run right
+1734 up run
+1744 up run right
+1745 up run
+1750 up run right
+1751 up run
+1752 up run right
+1753 up run
+1754 up run left
+1755 up run
+1789 up
+1810 up right
+1812 right
+1832
+1833 action
+1835
+1870 up
+2174
+2175 up run
+2197 right
+2203 up run right
+2205 right
+2207 up run right
+2209 right
+2211 up run right
+2212 right
+2216 up run right
+2217 right
+2221 up run right
+2223 up run
+2234 up run right
+2235 up run
+2241 up run right
+2242 left
+2253 up run left
+2263 up run
+2264 up run left
+2265 up run
+2267 up left
+2270 up
+2273 up left
+2274 up
+2277 up left
+2278 up
+2279 up left
+2281 right
+2284
+2285 action
+2289
+2405 action
+2409
+2505 action
+2509
+2545 start
+2549
+2581 down
+2585
+2601 down
+2605
+2621 down
+2625
+2641 right
+2645
+2661 confirm
+2665
+2681 confirm
+2685
+2741 cancel
+2745
+2781 start
+2785
+2821 left
+2835 up run left
+2840 up run
+2853 up run right
+2854 up run
+2858 up run right
+2859 up run
+2861 up run right
+2862 up run
+2869 up run right
+2870 up run
+2882 up run right
+2883 up run
+2888 up run right
+2889 up run
+2894 up run right
+2895 up run
+2899 up run right
+2900 up run
+2902 up run right
+2903 up run
+2905 up run right
+2906 right
+2911 up right
+2921 up
+2933 up right
+2934 up
+2938 up right
+2939 up
+2940 up right
+2941 right
+2954 left
+2955 right
+2956 left
+2957 right
+2958 left
+2959 right
+2960 left
+2961 right
+2962 left
+2963 right
+2964 left
+2965 right
+2966 left
+2967 right
+2968 left
+2969 right
+2970 left
+2971 right
+2972 left
+2973 right
+2974 left
+2975 right
+2976 left
+2977 right
+2978 left
+2979 right
+2980 left
+2981 right
+2982 left
+2983 right
+2984 left
+2985 right
+2986 left
+2987 right
+2988 left
+2989 right
+2990 left
+2991 right
+2992 left
+2993 right
+2994 left
+2995 right
+2996 left
+2997 right
+2998 left
+2999 right
+3000 left
+3001 right
+3002 left
+3003 right
+3004 left
+3005 right
+3006 left
+3007 right
+3008 left
+3009 right
+3010 left
+3011 right
+3012 left
+3013 right
+3014 left
+3015 right
+3016 left
+3017 right
+3018 left
+3019 right
+3020 left
+3021 right
+3022 left
+3023 right
+3024 left
+3025 right
+3026 left
+3027 right
+3028 left
+3029 right
+3030 left
+3031 right
+3032 left
+3033 right
+3034 left
+3035 right
+3036 left
+3037 right
+3038 left
+3039 right
+3040 left
+3041 right
+3042 left
+3043 right
+3044 left
+3045 right
+3046 left
+3047 right
+3048 left
+3049 right
+3050 left
+3051 right
+3052 left
+3053 right
+3054 left
+3055 right
+3056 left
+3057 right
+3058 left
+3059 right
+3060 left
+3061 right
+3062 left
+3063 right
+3064 left
+3065 right
+3066 left
+3067 right
+3068 left
+3069 right
+3070 left
+3071 right
+3072 left
+3073 right
+3074 left
+3075 right
+3076 left
+3077 right
+3078 left
+3079 right
+3080 left
+3081 right
+3082 left
+3083 right
+3084 left
+3085 right
+3086 left
+3087 right
+3088 left
+3089 right
+3090 left
+3091 right
+3092 left
+3093 right
+3094 left
+3095 right
+3096 left
+3097 right
+3098 left
+3099 right
+3100 left
+3101 right
+3102 left
+3103 right
+3104 left
+3105 right
+3106 left
+3107 right
+3108 left
+3109 right
+3110 left
+3111 right
+3112 left
+3113 right
+3114 left
+3115 right
+3116 left
+3117 right
+3118 left
+3119 right
+3120 left
+3121 right
+3122 left
+3123 right
+3124 left
+3125 right
+3126 left
+3127 right
+3128 left
+3129 right
+3130 left
+3131 right
+3132 left
+3133 right
+3134 left
+3135 right
+3136 left
+3137 right
+3138 left
+3139 right
+3140 left
+3141 action
+3145
+3261 action
+3265
+3361 action
+3365
+3401 right
+3410 up run right
+3415 up run
+3418 up run right
+3419 up run
+3420 left
+3428 up run left
+3435 up run
+3442 up run left
+3443 up run
+3448 up run left
+3449 up run
+3450 up run left
+3451 up run
+3452 right
+3465 up run right
+3471 up run
+3476 up run right
+3477 up run
+3481 up run right
+3482 up run
+3483 up run right
+3484 left
+3489 right
+3490 left
+3491 right
+3492 left
+3493 right
+3494 left
+3495 right
+3496 left
+3497 right
+3498 left
+3499 right
+3500 left
+3501 right
+3502 left
+3503 right
+3504 left
+3505 right
+3506 left
+3507 right
+3508 left
+3509 right
+3510 left
+3511 right
+3512 left
+3513 right
+3514 left
+3515 right
+3516 left
+3517 right
+3518 left
+3519 right
+3520 left
+3521 right
+3522 left
+3523 right
+3524 left
+3525 right
+3526 left
+3527 right
+3528 left
+3529 right
+3530 left
+3531 right
+3532 left
+3533 right
+3534 left
+3535 right
+3536 left
+3537 right
+3538 left
+3539 right
+3540 left
+3541 right
+3542 left
+3543 right
+3544 left
+3545 right
+3546 left
+3547 right
+3548 left
+3549 right
+3550 left
+3551 right
+3552 left
+3553 right
+3554 left
+3555 right
+3556 left
+3557 right
+3558 left
+3559 right
+3560 left
+3561 right
+3562 left
+3563 right
+3564 left
+3565 right
+3566 left
+3567 right
+3568 left
+3569 right
+3570 left
+3571 right
+3572 left
+3573 right
+3574 left
+3575 right
+3576 left
+3577 right
+3578 left
+3579 right
+3580 left
+3581 right
+3582 left
+3583 right
+3584 left
+3585 right
+3586 left
+3587 right
+3588 left
+3589 right
+3590 left
+3591 right
+3592 left
+3593 right
+3594 left
+3595 right
+3596 left
+3597 right
+3598 left
+3599 right
+3600 left
+3601 right
+3602 left
+3603 right
+3604 left
+3605 right
+3606 left
+3607 right
+3608 left
+3609 right
+3610 left
+3611 right
+3612 left
+3613 right
+3614 left
+3615 right
+3616 left
+3617 right
+3618 left
+3619 right
+3620 left
+3621 right
+3622 left
+3623 right
+3624 left
+3625 right
+3626 left
+3627 right
+3628 left
+3629 right
+3630 left
+3631 right
+3632 left
+3633 right
+3634 left
+3635 right
+3636 left
+3637 right
+3638 left
+3639 right
+3640 left
+3641 right
+3642 left
+3643 right
+3644 left
+3645 right
+3646 left
+3647 right
+3648 left
+3649 right
+3650 left
+3651 right
+3652 left
+3653 right
+3654 left
+3655 right
+3656 left
+3657 right
+3658 left
+3659 right
+3660 left
+3661 right
+3662 left
+3663 right
+3664 left
+3665 right
+3666 left
+3667 right
+3668 left
+3669 right
+3670 left
+3671 right
+3672 left
+3673 right
+3674 left
+3675 right
+3676 left
+3677 right
+3678 left
+3679 right
+3680 left
+3681 right
+3682 left
+3683 right
+3684
+3685 action
+3687
+3722 up
+4028

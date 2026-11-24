@@ -1,0 +1,13 @@
+# Claire A's Sherry from 307's door 2 into 305, where its arrival drops her to the lower passage, west along it, north up the corridor past the first dog (one bite) to door 4 and into 306 (#765 Part 4)
+# made in arklay: the drop hands her back by 449; the input ends with 306's hand back (1055)
+344
+# 305: west along the passage at z -25249
+460 up run
+# north into the corridor (x -8657 to -5767) at x -7200; the dog waiting at its mouth bites once (560)
+540 up run right
+560 up run
+# up the corridor along x -6833 into door 4's area (x -8502 to -5852, z -9694 to -8204)
+712
+# door 4 into 306: one press
+714 action
+716

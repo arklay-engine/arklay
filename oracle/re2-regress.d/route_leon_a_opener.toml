@@ -16,10 +16,6 @@ frame_max_mean = 1.2
 # each room on its own, from its hand back to its door's press: 200 (the ladder's question), 110, 10F, 10A, 109, 116 (the fire escape and the herbs' inventory screens), 20B (the Heart Key's message), 20F, and 211 from its hand back
 frame_windows = [[360, 683, 0.7], [1057, 1910, 0.25], [2264, 2389, 0.3], [2733, 2854, 0.8], [3198, 3449, 0.25], [3793, 5961, 0.65], [6290, 6494, 0.3], [6836, 7053, 0.3], [7261, 7399, 0.25]]
 expect = "match"
-ignore = [
-  # the warp's head on its first ticks (oracle/re2.md)
-  [344, 352, "pneck"],
-]
 record = "--warp 200:-22894:-1800:-3071:200:4 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:17 --flag 31:27 --life 14 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x5B:1"
 
 # Rooms 211 and 216: from 20F's door 1 past 211's two dogs to door 6, 216's scene with Ada (aot 2), the van pushed from the north side of its area (from the east, Ada's body closes it off at x -14983, as in the original), Ada following Leon as the partner, and door 1 into 219
@@ -40,9 +36,6 @@ frame_max_mean = 1.7
 # 211 to door 6's press, 216 from its hand back to door 1's press (the scene, Ada's lines and the van), and 219 after its load
 frame_windows = [[360, 734, 0.5], [1077, 3352, 2.0], [3560, 3799, 1.0]]
 expect = "match"
-ignore = [
-  [344, 352, "pneck"],
-]
 record = "--warp 211:301:0:5863:2088:0 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:27 --life 164 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"
 
 # Rooms 219 and 301: from 216's door 1 through Ada's scene, west along the cells, door 3 to Ben's cell and the talk with Ben and Ada, which ends with the B1 map (`sce_84(2)`, 4552) until a cancel closes it (4877). The walk the recording plays after it starts while the map is up, so Leon doesn't reach the Manhole Opener
@@ -63,9 +56,6 @@ frame_max_mean = 1.45
 # the map from its first tick to the room's return (0.23 measured)
 frame_windows = [[4553, 4890, 0.3]]
 expect = "match"
-ignore = [
-  [344, 352, "pneck"],
-]
 record = "--warp 219:4809:0:-21018:2133:0 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:27 --flag 3:33 --life 110 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"
 
 # Rooms 219 and 301 again, the same input through the talk, then the B1 map closed as soon as it waits for a key (4570), Leon south-west into item aot 5 and the Manhole Opener (0x4B, 8:118) taken through the get-item window (slot 6, 4724) and the window closed (4800)
@@ -86,9 +76,6 @@ frame_max_mean = 1.65
 # the map from its second tick through its close (0.19 measured), the walk and the get-item window (0.91; the recording repeats frame 4802 on 4803, where the same close fades in route_200_opener, so that tick is left out, #682), and Leon at the bars after it (2.05)
 frame_windows = [[4554, 4590, 0.25], [4591, 4802, 1.0], [4804, 4811, 0.3], [4812, 4999, 2.3]]
 expect = "match"
-ignore = [
-  [344, 352, "pneck"],
-]
 record = "--warp 219:4809:0:-21018:2133:0 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:27 --flag 3:33 --life 110 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"
 
 # The whole route in one run, with no warp: route_200_heart carried on through route_leon_a_opener's rooms (the ladder up, 110, 10F, 10A, 109, 116, 20B, 20F, 211, 216, 219 and 301) to the Manhole Opener in Ben's cell
@@ -108,6 +95,7 @@ frame_max_mean = 1.1
 frame_windows = [[14475, 15335, 0.6], [15702, 15826, 0.3], [16167, 17654, 0.55], [17995, 18435, 0.25], [18776, 19722, 1.05], [20063, 20724, 0.5], [21065, 21215, 0.25], [21426, 23999, 0.6], [24342, 24434, 0.45], [24777, 25340, 0.35], [25341, 27081, 1.1], [27082, 27159, 0.45], [27501, 27601, 0.5], [27943, 28335, 0.35], [28541, 28632, 0.6], [28974, 29282, 0.45], [29624, 29818, 0.45], [30160, 30285, 0.4], [30653, 30741, 0.25], [30742, 30870, 0.85], [30871, 30976, 0.4], [30977, 31315, 0.7], [31316, 31428, 0.2], [31796, 31920, 0.7], [32262, 32880, 0.35], [33217, 33248, 0.2], [33590, 33665, 0.65], [34007, 34305, 0.35], [34647, 34735, 0.7], [34945, 35349, 0.3], [35691, 37549, 0.65], [37891, 38049, 0.95], [38391, 38486, 0.55], [38854, 39294, 0.2], [39646, 39712, 0.35], [40054, 40128, 0.45], [40470, 40796, 0.5], [41138, 41272, 0.8], [41478, 41963, 0.4], [42300, 43213, 0.55], [43555, 44449, 0.4], [44659, 45769, 1.15], [46111, 46468, 0.25], [46810, 47266, 0.9], [47608, 47945, 0.5], [47946, 48059, 0.25], [48400, 48585, 0.75], [48926, 49002, 0.3], [49355, 49983, 0.25], [50357, 50586, 0.5], [50955, 51062, 0.4], [51405, 51699, 0.45], [52042, 52883, 0.6], [53226, 53317, 0.35], [53660, 54199, 0.5], [54542, 54788, 0.3], [55126, 56052, 0.95], [56395, 57955, 0.75], [58298, 58399, 0.3], [58324, 58647, 0.65], [59021, 59874, 0.2], [60228, 60353, 0.3], [60697, 60818, 0.8], [61162, 61413, 0.2], [61757, 63925, 0.6], [64254, 64458, 0.3], [64800, 65017, 0.25], [65400, 65593, 0.4], [65960, 68233, 1.95], [68600, 69169, 0.2], [69530, 73299, 1.9]]
 expect = "match"
 record = ""
+# what arklay's model doesn't follow yet: the head through one door, the view's first tick, Ben's `em` and the zombies' `zd` over memory from before
 ignore = [
     # the head through 114's door 1 with the head turned toward a zombie (oracle/re2-deviations.md, "The head through a door")
     [24561, 24774, "pneck"],

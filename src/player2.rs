@@ -14,7 +14,7 @@ use crate::player::{self, ClipSource, Input, Options, PlayerState};
 use crate::state::{RoomState, ScaRect};
 
 /// `Key`, the mapped pad word `pl_br_*` test.
-const KEY_FORWARD: u16 = 0x0001;
+pub(crate) const KEY_FORWARD: u16 = 0x0001;
 const KEY_RIGHT: u16 = 0x0002;
 const KEY_BACKWARD: u16 = 0x0004;
 const KEY_LEFT: u16 = 0x0008;
@@ -37,7 +37,7 @@ pub const KEY_MAP: u16 = 0x4000;
 pub const KEYS_IN_A_STOP: u16 = KEY_SIDE_LEFT | KEY_SIDE_RIGHT | KEY_CONFIRM | KEY_CANCEL;
 
 /// `routine[0]`: the pad's mode and the scripts' mode.
-const MODE_MOVE: u8 = 1;
+pub(crate) const MODE_MOVE: u8 = 1;
 const MODE_DAMAGE: u8 = 2;
 const MODE_DEAD: u8 = 3;
 /// `Pl_dead`.
@@ -404,6 +404,18 @@ pub struct Work {
     /// The routines hold the first tick of `pl_mv_00` that a room started on
     /// its own assumes ([`Work::default`]), and no tick has run them yet.
     pub first_tick_assumed: bool,
+    /// A room started on its own: `Pl_init`'s pose, for a stop before the
+    /// first `Player_move` ([`plc_stop_player`]), whose routines then never
+    /// blend from it ([`start_pose`]).
+    pub start_unblended: Option<Box<Keyframe>>,
+    /// The pose the joints take, and the head is drawn from, on the next
+    /// player step: the start's unblended one, once a stop has kept the
+    /// first `Player_move` from running ([`seed_pose`]).
+    pub restore_pose: Option<Box<Keyframe>>,
+    /// A game RE 2's title handed over: its first live tick runs
+    /// `Player_move` from `Pl_init`'s routines, where a door's settling tick
+    /// keeps the spawn's frame. Taken by that tick.
+    pub title_first_move: bool,
     /// `fg_status`'s `0x40`. The aim (`pl_mv_05`), a hit (`Pl_damage`), the
     /// death (`Pl_die`), `pl_mv_0b` and an enemy's hold (`Pl_Em_damage`,
     /// `Pl_Em_die`) raise it and leave it to the next routine's case 0, so it
@@ -1273,6 +1285,9 @@ impl Default for Work {
             posed: false,
             init_pose: false,
             first_tick_assumed: true,
+            start_unblended: None,
+            restore_pose: None,
+            title_first_move: false,
             holds_game: false,
             routine: [MODE_MOVE, MOVE_IDLE, 1, 0],
             move_no: IDLE_CLIPS[0],
@@ -1373,6 +1388,7 @@ impl Work {
                 position: self.neck.position,
                 ..Neck::default()
             },
+            title_first_move: self.title_first_move,
             ..Self::default()
         }
     }
@@ -1383,6 +1399,7 @@ impl Work {
         self.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
         self.hokan = 0;
         self.first_tick_assumed = false;
+        self.start_unblended = None;
         self
     }
 
@@ -1416,12 +1433,14 @@ impl Work {
     }
 
     /// `Be_flg`'s bits 4 and 8: on the stairs, or going up or down a box and
-    /// off the ground, nothing collides.
+    /// off the ground, nothing collides. The climb drops them on its clip's
+    /// frame 0x31 (Sherry's 0x77), and the walls push again for the frames
+    /// her clip has left.
     pub fn climbing(&self) -> bool {
         self.routine[0] == MODE_MOVE
             && match self.routine[1] {
                 MOVE_STAIRS => true,
-                MOVE_CLIMB => matches!(self.routine[3], 1..=3),
+                MOVE_CLIMB => matches!(self.routine[3], 1..=3) && self.be_flg & BE_NO_PUSH != 0,
                 MOVE_JUMP_DOWN => self.routine[3] < 5,
                 _ => false,
             }
@@ -1872,6 +1891,7 @@ pub fn place_neck(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
         work,
         player,
         tick,
+        rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
     }
@@ -1886,6 +1906,12 @@ pub fn place_neck(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
 /// out of this pose: the new game's idle frame. Once per player; a door keeps
 /// the last room's pose ([`Work::entering_room`]).
 pub fn seed_pose(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
+    if let Some(pose) = work.restore_pose.take() {
+        // The stopped start's draw: the head where the joints put it at the
+        // place and facing the scene gave the player (room 200's entry).
+        player.anim.set_applied_pose(Some(*pose));
+        place_neck(work, player, tick);
+    }
     if std::mem::replace(&mut work.posed, true) || work.move_cnt == 0 {
         return;
     }
@@ -1900,7 +1926,12 @@ pub fn seed_pose(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
 }
 
 /// `Player_move`. The result is the room flag a finished scripted walk raises.
-pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -> Option<u8> {
+pub fn player_move(
+    work: &mut Work,
+    player: &mut PlayerState,
+    tick: &Tick<'_>,
+    rnd: &mut crate::zombie2::Rnd,
+) -> Option<u8> {
     work.key_trg = tick.key_trg;
     work.check = false;
     if tick.stopped {
@@ -1915,6 +1946,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         return None;
     }
     work.first_tick_assumed = false;
+    work.start_unblended = None;
     let held_game = work.holds_game_now();
     if work.routine[0] == MODE_MOVE && work.routine[1] <= MOVE_ROTATE && work.routine[2] == 0 {
         work.status_drop |= STATUS_GAME_HOLD;
@@ -1927,6 +1959,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         work,
         player,
         tick,
+        rnd: *rnd,
         arrived: None,
         stairs: None,
     };
@@ -1950,6 +1983,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
     mover.latch_parts();
     mover.work.holds_game =
         held_game || mover.work.holds_game_now() || mover.work.holds_game_in_routine();
+    *rnd = mover.rnd;
     mover.arrived
 }
 
@@ -1979,6 +2013,7 @@ fn latch_stopped(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
         work,
         player,
         tick,
+        rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
     }
@@ -2020,6 +2055,8 @@ pub fn pl_init(work: &mut Work) {
     work.neck.turn = [0; 2];
     work.neck.target = None;
     work.init_pose = true;
+    work.start_unblended = None;
+    work.restore_pose = None;
 }
 
 /// `Pl_init`'s `Joint_move`: the joints take clip 2's first frame, which the
@@ -2030,6 +2067,17 @@ pub fn pose_init(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
         player.anim.set_applied_pose(Some(pose.clone()));
     }
     place_neck(work, player, tick);
+    // The reset pose's draw leaves every part's `Workm` on it, which an
+    // `Esp_call` on a part copies before the next `Player_move`.
+    Mover {
+        work,
+        player,
+        tick,
+        rnd: crate::zombie2::Rnd::default(),
+        arrived: None,
+        stairs: None,
+    }
+    .latch_parts();
 }
 
 /// The idle's first frame, clip 2 of the weapon's bank (`pSub0_kan_t_ptr`),
@@ -2040,6 +2088,40 @@ pub fn pose_init(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
 pub fn idle_pose<'k>(clips: &[Clip], keyframes: &'k [Keyframe]) -> Option<&'k Keyframe> {
     let frame = clips.get(2)?.frames.first()?;
     keyframes.get(usize::from(frame.keyframe))
+}
+
+/// The pose a room started on its own shows on its first tick: the original
+/// reached it by a load, whose `Pl_init` poses the idle's first frame
+/// ([`idle_pose`], `weapon`'s bank), and that tick's `Player_move`, which
+/// [`Work::default`] holds as run, blends one `J_seq` step from there toward
+/// the frame its clip played, in the weapon's bank or the player's own
+/// (`own`). A game the title handed over leaves that tick to its first live
+/// one ([`Work::after_pl_init`]), so it shows `Pl_init`'s pose unblended.
+pub fn start_pose(
+    work: &Work,
+    weapon: (&[Clip], &[Keyframe]),
+    own: (&[Clip], &[Keyframe]),
+) -> Option<Keyframe> {
+    let init = idle_pose(weapon.0, weapon.1)?;
+    if !work.first_tick_assumed {
+        return Some(init.clone());
+    }
+    let (clips, keyframes) = if work.bank == Bank::Weapon {
+        weapon
+    } else {
+        own
+    };
+    let frame = clips
+        .get(usize::from(work.move_no))?
+        .frames
+        .get(usize::from(work.move_cnt).checked_sub(1)?)?;
+    let target = keyframes.get(usize::from(frame.keyframe))?;
+    Some(crate::anim::blend_keyframes_re2(
+        init,
+        target,
+        u16::from(work.hokan) + 1,
+        BLEND_STEP,
+    ))
 }
 
 /// `Player_move`'s poison, before its routine: while `poison_status` is set,
@@ -2126,6 +2208,9 @@ pub(crate) struct Mover<'a, 'b> {
     pub(crate) work: &'a mut Work,
     pub(crate) player: &'a mut PlayerState,
     pub(crate) tick: &'a Tick<'b>,
+    /// `Rnd`, which Sherry's climb draws (`pl_mv_08`): [`player_move`]
+    /// hands the game's in and takes it back.
+    rnd: crate::zombie2::Rnd,
     arrived: Option<u8>,
     /// `Sca_info`'s stairs: those last tick's end left in front of the player.
     stairs: Option<&'b ScaRect>,
@@ -2154,6 +2239,7 @@ impl<'a, 'b> Mover<'a, 'b> {
             work,
             player,
             tick,
+            rnd: crate::zombie2::Rnd::default(),
             arrived: None,
             stairs: None,
         }
@@ -2521,6 +2607,14 @@ impl Mover<'_, '_> {
             self.work.floor = self.work.floor.wrapping_add(1);
             self.work.be_flg |= BE_NO_SCA;
         }
+        // Sherry's clip skips from frame 0x39 to 0x56 three times in four,
+        // blending in again (`0x4DB7F9`).
+        if small && frame == 0x39 && self.rnd.draw() & 3 != 0 {
+            self.work.move_no = CLIMB_CLIP;
+            self.work.move_cnt = 0x56;
+            self.work.hokan = 5;
+        }
+        let frame = self.work.move_cnt;
         if frame == lift {
             self.work.spd[0] = reach;
             self.add_speed_xz();
@@ -7708,6 +7802,7 @@ pub fn spl_init(
         work,
         player,
         tick,
+        rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
     };
@@ -7734,6 +7829,14 @@ pub fn in_auto(work: &Work) -> bool {
     work.routine[0] == MODE_MOVE
 }
 
+impl Work {
+    /// A part's `Workm` as the last tick left it ([`Work::parts`]), the
+    /// neck's turn included, or `None` before any tick has left one.
+    pub(crate) fn workm(&self, part: usize) -> Option<Matrix> {
+        self.parts.get(part).copied().flatten()
+    }
+}
+
 /// `Workm` of a work's part, as the last tick left it.
 pub(crate) fn part_world(
     work: &mut Work,
@@ -7745,6 +7848,7 @@ pub(crate) fn part_world(
         work,
         player,
         tick,
+        rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
     };
@@ -7789,10 +7893,21 @@ pub fn plc_ret(work: &mut Work) {
 /// `Plc_stop` on the player. A scene that stops the player on a room's
 /// first tick, before `pl_mv_00` has run (room 200's entry), leaves
 /// `Pl_init`'s blend, 0, which nothing writes until the scene hands the
-/// player back.
+/// player back. A room started on its own keeps the rest of `Pl_init`'s
+/// state too: its routines, clip 2 of the player's own bank (not the
+/// caution idle a hurt player's first tick would pick) and its pose.
 pub fn plc_stop_player(work: &mut Work) {
     if std::mem::take(&mut work.first_tick_assumed) {
         work.hokan = 0;
+        if let Some(pose) = work.start_unblended.take() {
+            work.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
+            work.bank = Bank::Pld;
+            work.move_no = IDLE_CLIPS[0];
+            work.move_cnt = 1;
+            // The caution level the first tick would have set.
+            work.d_life_u = 0;
+            work.restore_pose = Some(pose);
+        }
     }
     plc_stop(work);
 }
@@ -8124,6 +8239,10 @@ mod tests {
         last_key: u16,
         /// The room's objects.
         objects: Vec<crate::objects::ObjectRecord>,
+        /// `Rnd`.
+        rnd: crate::zombie2::Rnd,
+        /// The character id, `Id`.
+        id: u8,
     }
 
     /// `angle` from the player, as far as `distance`.
@@ -8373,6 +8492,59 @@ mod tests {
         );
     }
 
+    /// Sherry's climb (`0x4DB7F9`): on frame 0x39 a draw of `Rnd` with either
+    /// of its low bits sends the clip on to 0x56, blended in over five
+    /// frames; the walls push again from frame 0x77, before her clip ends.
+    #[test]
+    fn sherrys_climb_skips_on_three_draws_in_four_and_is_pushed_before_its_end() {
+        let climb = |rnd: u16| {
+            let mut setup = Setup::new(0);
+            (setup.clips, setup.keyframes) = bank(10, 140, 0);
+            setup.id = SMALL_ID;
+            setup.rnd = crate::zombie2::Rnd(rnd);
+            setup.player.angle = 0;
+            setup.work.routine = [MODE_MOVE, MOVE_CLIMB, 0, 0];
+            let mut seen = Vec::new();
+            while setup.work.routine[1] == MOVE_CLIMB && seen.len() < 300 {
+                setup.tick(Input::default(), 200);
+                seen.push((
+                    setup.work.move_cnt,
+                    setup.work.hokan,
+                    setup.work.routine[3],
+                    setup.work.climbing(),
+                ));
+            }
+            (seen, setup.rnd)
+        };
+        // 0x6CA4 draws 0x7D: the skip.
+        let (seen, rnd) = climb(0x6CA4);
+        assert_ne!(rnd, crate::zombie2::Rnd(0x6CA4));
+        let at = seen.iter().position(|&(frame, ..)| frame == 0x39).unwrap();
+        assert_eq!(seen[at + 1].0, 0x57, "{seen:?}");
+        assert_eq!(seen[at + 1].1, 4, "{seen:?}");
+        assert!(
+            seen.iter()
+                .all(|&(frame, ..)| !(0x3A..0x57).contains(&frame))
+        );
+        // 0x0102 draws 4: the clip plays on, and the draw is kept.
+        let (seen, rnd) = climb(0x0102);
+        assert_eq!(rnd, crate::zombie2::Rnd(0x0204));
+        let at = seen.iter().position(|&(frame, ..)| frame == 0x39).unwrap();
+        assert_eq!(seen[at + 1].0, 0x3A, "{seen:?}");
+        // The pass is skipped up to frame 0x77 and runs for the clip's rest.
+        let end = seen.iter().position(|&(frame, ..)| frame == 0x78).unwrap();
+        assert!(
+            seen[..end].iter().all(|&(.., climbing)| climbing),
+            "{seen:?}"
+        );
+        assert!(
+            seen[end..]
+                .iter()
+                .any(|&(_, _, step, climbing)| step == 3 && !climbing),
+            "{seen:?}"
+        );
+    }
+
     /// `pl_br_03` (0x4DA6C0) asks for the check while backing up, and
     /// `pl_br_09` (0x4DB930) once the landing has run four frames.
     #[test]
@@ -8554,6 +8726,45 @@ mod tests {
         assert_eq!(drawn, turn([1000, 0, 2600], None));
     }
 
+    /// A room started on its own shows its first tick's pose: one `J_seq`
+    /// step (7 of 8 parts kept) from `Pl_init`'s idle toward the frame the
+    /// tick played, in the bank the routines hold.
+    #[test]
+    fn a_room_start_blends_one_step_from_pl_init_s_pose() {
+        let pose = |turn: i16| Keyframe {
+            offset: [0, -1700, 0],
+            vertex: [0; 3],
+            rotations: vec![[turn, 0, 0]],
+        };
+        let clip = |keyframe: u16| Clip {
+            frames: vec![ClipFrame {
+                keyframe,
+                ..ClipFrame::default()
+            }],
+        };
+        let keyframes = vec![pose(0), pose(0x100), pose(0x200)];
+        let none = Clip::default;
+        let weapon = vec![none(), none(), clip(0), none(), none(), clip(1)];
+        let own = vec![none(), none(), none(), none(), none(), clip(2)];
+        let mut work = Work {
+            bank: Bank::Weapon,
+            move_no: 5,
+            move_cnt: 1,
+            hokan: FULL_BLEND - 1,
+            ..Work::default()
+        };
+        let start = |work: &Work| {
+            start_pose(work, (&weapon, &keyframes), (&own, &keyframes))
+                .unwrap()
+                .rotations[0][0]
+        };
+        assert_eq!(start(&work), 0x20, "an eighth of the weapon bank's turn");
+        work.bank = Bank::Pld;
+        assert_eq!(start(&work), 0x40, "an eighth of the own bank's");
+        let work = work.after_pl_init();
+        assert_eq!(start(&work), 0, "the title's game: Pl_init's, unblended");
+    }
+
     /// `Pl_init` stands the player on the weapon bank's idle, not the body's:
     /// Claire's handgun's (keyframe 50) has her hips 15 units higher than
     /// her PLD's clip 2 and rolled, which puts her head where the original's
@@ -8612,7 +8823,19 @@ mod tests {
             objects: &[],
             key_trg: 0,
         };
+        // A turned pose's `Workm`s, as the status screen's open left them.
+        let stale = Matrix {
+            m: rot_matrix([0, 1024, 0]),
+            t: [1, 2, 3],
+        };
+        setup.work.parts = vec![Some(stale); 16];
         pose_init(&mut setup.work, &mut setup.player, &tick);
+        assert_eq!(setup.work.parts_at, Some(setup.player.pos));
+        assert!(setup.work.parts.iter().flatten().next().is_some());
+        assert!(
+            !setup.work.parts.contains(&Some(stale)),
+            "the parts are on the reset pose"
+        );
         let [x, y, z] = setup.work.neck.position.expect("a head on the pose");
         // The original's at Claire's new game: 18841, -2346, -2932.
         assert_eq!((x - 18802, y, z), (39, -2346, -2932));
@@ -9100,6 +9323,8 @@ mod tests {
                 pushing: false,
                 last_key: 0,
                 objects: Vec::new(),
+                rnd: crate::zombie2::Rnd::default(),
+                id: 0,
             }
         }
 
@@ -9157,7 +9382,7 @@ mod tests {
                 },
                 input,
                 options: Options::default(),
-                id: 0,
+                id: self.id,
                 life,
                 poisoned: false,
                 stopped: false,
@@ -9170,7 +9395,7 @@ mod tests {
                 objects: &self.objects,
                 key_trg,
             };
-            player_move(&mut self.work, &mut self.player, &tick)
+            player_move(&mut self.work, &mut self.player, &tick, &mut self.rnd)
         }
 
         /// [`seed_pose`] in this setup's banks.
@@ -9236,6 +9461,7 @@ mod tests {
                 work: &mut self.work,
                 player: &mut self.player,
                 tick: &tick,
+                rnd: crate::zombie2::Rnd::default(),
                 arrived: None,
                 stairs: None,
             };
@@ -11597,7 +11823,12 @@ mod tests {
             objects: &[],
             key_trg: KEY_FORWARD | KEY_TILT_UP,
         };
-        player_move(&mut setup.work, &mut setup.player, &tick);
+        player_move(
+            &mut setup.work,
+            &mut setup.player,
+            &tick,
+            &mut Default::default(),
+        );
         // `Key_trg` comes from the pad, which goes on being read.
         assert_eq!(setup.work.key_trg, KEY_FORWARD | KEY_TILT_UP);
         setup.work.key_trg = before.key_trg;
@@ -12010,7 +12241,12 @@ mod tests {
             objects: &[],
             key_trg: 0,
         };
-        player_move(&mut setup.work, &mut setup.player, &tick);
+        player_move(
+            &mut setup.work,
+            &mut setup.player,
+            &tick,
+            &mut Default::default(),
+        );
         assert_eq!(setup.work.neck.body, Some([5000, 0, 5000]));
         follow_pushes(&mut setup.work, [5000, 0, 5000]);
         assert_eq!(setup.work.neck.position, Some([100, -1700, 200]));
@@ -12489,6 +12725,47 @@ mod tests {
         let hokan = setup.work.hokan;
         plc_stop_player(&mut setup.work);
         assert_eq!(setup.work.hokan, hokan);
+    }
+
+    /// A room started on its own that a scene stops before the first
+    /// `Player_move` keeps `Pl_init`'s state, not the first tick's: its
+    /// routines and clip 2 of the player's own bank, even where the first
+    /// tick would have picked the caution idle, and its pose, which the next
+    /// player step puts on the joints. `Pl_init` (the status screen's
+    /// return) drops a pose still queued.
+    #[test]
+    fn a_stopped_start_keeps_pl_init_s_state() {
+        let pose = Keyframe {
+            offset: [0, -1700, 0],
+            vertex: [0; 3],
+            rotations: vec![[0x40, 0, 0]],
+        };
+        let mut work = Work {
+            start_unblended: Some(Box::new(pose.clone())),
+            bank: Bank::Weapon,
+            move_no: IDLE_CLIPS[1],
+            ..Work::default()
+        };
+        plc_stop_player(&mut work);
+        assert_eq!(work.routine, STOPPED_ROUTINE);
+        assert_eq!(work.stopped, [MODE_MOVE, MOVE_IDLE, 0, 0], "handed back");
+        assert_eq!(
+            (work.bank, work.move_no, work.move_cnt, work.hokan),
+            (Bank::Pld, IDLE_CLIPS[0], 1, 0)
+        );
+        assert_eq!(work.restore_pose.as_deref(), Some(&pose));
+        assert!(work.start_unblended.is_none());
+        pl_init(&mut work);
+        assert!(work.restore_pose.is_none(), "Pl_init poses afresh");
+
+        // A stop once the first move has run leaves the state alone.
+        let mut setup = Setup::new(0);
+        setup.tick(Input::default(), 200);
+        setup.work.start_unblended = Some(Box::new(pose));
+        let move_no = setup.work.move_no;
+        plc_stop_player(&mut setup.work);
+        assert!(setup.work.restore_pose.is_none());
+        assert_eq!(setup.work.move_no, move_no);
     }
 
     #[test]

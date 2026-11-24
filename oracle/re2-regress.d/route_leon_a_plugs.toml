@@ -14,9 +14,6 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,m
 frames = [360, 2157]
 # 0.28 measured, the doors' frames included (the worst, 21 and 17, are the 211 and 20F loads)
 frame_max_mean = 0.35
-ignore = [
-  [344, 351, "pneck"],
-]
 expect = "match"
 record = "--warp 21A:-6611:0:-3724:2016:3 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 90 --give 0:0x02:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x5C:3"
 
@@ -33,7 +30,6 @@ sound = false
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,om0,om1,om2,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 2142]
 frame_max_mean = 0.2
-ignore = [[344, 350, "pneck"]]
 expect = "match"
 record = "--warp 116:-20772:0:-25169:104:0 --flag 3:33 --flag 3:67 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 60 --give 0:0x02:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x5C:3"
 
@@ -50,10 +46,6 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,s
 frames = [360, 1149]
 # 1.04 measured; the worst, 380 (29), comes two ticks after the cut change on 378 (#668)
 frame_max_mean = 1.1
-ignore = [
-  # the warp's head on its first ticks, as leon_a_208's
-  [344, 354, "pneck"],
-]
 expect = "match"
 record = "--warp 20A:-13128:0:-9826:2177:1 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 90 --give 0:0x02:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x5C:3"
 
@@ -71,9 +63,6 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,m
 frames = [360, 1999]
 # 0.51 measured, the 20D door's frames included (#668)
 frame_max_mean = 0.6
-ignore = [
-  [344, 351, "pneck"],
-]
 expect = "match"
 record = "--warp 20C:-10200:0:-25900:3072:0 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 50 --give 0:0x02:18 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x5C:3 --give 7:0x14:30"
 
@@ -91,9 +80,6 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,m
 frames = [360, 2919]
 # 0.63 measured; the worst are 2610 (5.5) and 921 (3.4) (#668)
 frame_max_mean = 0.7
-ignore = [
-  [344, 351, "pneck"],
-]
 expect = "match"
 record = "--warp 20D:-26510:0:-24891:3752:6 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:148 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 50 --give 0:0x02:6 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x5C:2 --give 7:0x14:12"
 
@@ -111,9 +97,6 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,m
 frames = [360, 1729]
 # 0.79 measured; the worst, 706 (7.6) and 1412 (7.6), are the 20E and 20C loads; 20E's window doesn't reflect yet (#781) (#668)
 frame_max_mean = 0.85
-ignore = [
-  [344, 351, "pneck"],
-]
 record = "--warp 20C:-23222:0:-24944:2568:11 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:75 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:148 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 50 --give 0:0x02:18 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x5C:2 --give 7:0x4A:1"
 
 # From 20E's door 0 back in 20C (the Rook plug taken, the cog held, 50 life, the handgun loaded) round to door 0 and into 20A, past its six zombies without a shot: west along the corridor, round the north room's far side while they come for him, down the passage's east side past the one that wanders into it, and door 0 up to 200's balcony and its hand back
@@ -130,9 +113,6 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,m
 frames = [360, 1599]
 # 1.00 measured, recorded under Wine; the worst, 1273 (6.3), is 200's load (#672)
 frame_max_mean = 1.05
-ignore = [
-  [344, 365, "pneck"],
-]
 expect = "match"
 record = "--warp 20C:-25450:0:-7100:0:3 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:75 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:148 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 50 --give 0:0x02:18 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5C:2 --give 6:0x4A:1 --give 7:0x3C:1"
 
@@ -151,7 +131,6 @@ frames = [360, 4149]
 # 0.88 measured, recorded under Wine; the worst, 612 (12.4), 3834 and 2414, are door loads (#672)
 frame_max_mean = 0.95
 ignore = [
-  [344, 365, "pneck"],
   # over the Square Crank's get-item window, ib holds the status screen's own bytes (St_main01's routine), which arklay's ib models only for the box
   [3187, 3482, "ib"],
 ]
@@ -172,9 +151,6 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,m
 frames = [360, 3109]
 # 1.07 measured, recorded under Wine; the worst, 1025 (5.7), 2283 and 1181, are door loads (#672)
 frame_max_mean = 1.10
-ignore = [
-  [344, 365, "pneck"],
-]
 expect = "match"
 record = "--warp 204:-14423:0:-7289:2024:4 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:75 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:51 --flag 6:52 --flag 6:54 --flag 6:55 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:85 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:131 --flag 6:133 --flag 6:148 --flag 6:157 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:188 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 50 --give 0:0x02:18 --give 2:0x33:1 --give 3:0x5C:2 --give 4:0x4A:1 --give 5:0x43:1 --box 2:0x3C:1 --box 3:0x32:1 --box 4:0x1E:3"
 
@@ -192,9 +168,6 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,m
 frames = [360, 3099]
 # 0.99 measured, recorded under Wine; the worst, 483 (8.0), is 10C's load (#672)
 frame_max_mean = 1.05
-ignore = [
-  [344, 365, "pneck"],
-]
 expect = "match"
 record = "--warp 207:-25640:0:-16590:0:1 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:36 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:75 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:51 --flag 6:52 --flag 6:54 --flag 6:55 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:85 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:131 --flag 6:133 --flag 6:148 --flag 6:157 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:31 --flag 8:32 --flag 8:34 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:188 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 50 --give 0:0x02:18 --give 2:0x33:1 --give 3:0x5C:2 --give 4:0x4A:1 --give 5:0x43:1 --give 6:0x33:1 --box 2:0x3C:1 --box 3:0x32:1 --box 4:0x1E:3"
 
@@ -213,7 +186,6 @@ frames = [360, 4729]
 # 0.93 measured, recorded under Wine; the worst, 1697 (7.2), 4400 and 1169, are door loads (#672)
 frame_max_mean = 1.0
 ignore = [
-  [344, 365, "pneck"],
   # 112's window scene: arklay moves the scene's zombies by their motion where the original holds them (#885)
   [620, 661, "zm3"],
   [833, 897, "zm3"],
@@ -238,8 +210,39 @@ frames = [360, 3099]
 # shelves, 2.25, drawn bigger and offset (#889); the rest of 112, 0.35; and 110's door, 3.82 (2756 (10.9), then 4 to 6, #672)
 frame_max_mean = 1.65
 frame_windows = [[360, 1259, 0.95], [1260, 2159, 2.35], [2160, 2755, 0.40], [2756, 3099, 3.95]]
-ignore = [
-  [344, 365, "pneck"],
-]
 expect = "match"
 record = "--warp 117:-25979:-14400:-21180:3920:3 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:36 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:55 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:74 --flag 4:75 --flag 4:76 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 4:153 --flag 6:19 --flag 6:51 --flag 6:52 --flag 6:54 --flag 6:55 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:82 --flag 6:83 --flag 6:85 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:114 --flag 6:115 --flag 6:116 --flag 6:131 --flag 6:133 --flag 6:148 --flag 6:157 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:31 --flag 8:32 --flag 8:34 --flag 8:55 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:188 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 30 --give 0:0x02:5 --give 2:0x33:1 --give 3:0x5C:2 --give 4:0x33:1 --give 5:0x3D:1 --box 2:0x3C:1 --box 3:0x32:1 --box 4:0x1E:3"
+
+# From 112's door 0 in 110 (Leon as leon_a_117_110 leaves him) to 115 and back to 114: 110's north corridor holds the licker the Club Key (8:119) brings, which 30 life can't outlast, so Leon goes back through door 4 into 112, across its ground floor to door 1, along 113's south corridor past its zombie to door 0, south and round 114 to door 1, takes 115's First Aid Spray (8:40) from the west of its desk and uses it at once (200 life), takes the 15 rounds on the desk north of it (8:101), and goes through door 0 into 114's hand back
+[[run]]
+name = "leon_a_110_115"
+room = "110"
+setup_script = "leon_a_110_115.lua"
+input = "leon_a_110_115.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 4045
+sound = false
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,om0"
+frames = [360, 4044]
+# 0.90 measured, recorded under Wine; the worst, 431 (14.0), is 112's door load (#672)
+frame_max_mean = 1.0
+expect = "match"
+record = "--warp 110:-27937:-7200:-8044:151:8 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:23 --flag 4:24 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:36 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:53 --flag 4:55 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:74 --flag 4:75 --flag 4:76 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 4:153 --flag 6:19 --flag 6:51 --flag 6:52 --flag 6:54 --flag 6:55 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:82 --flag 6:83 --flag 6:85 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:114 --flag 6:115 --flag 6:116 --flag 6:131 --flag 6:133 --flag 6:148 --flag 6:157 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:21 --flag 8:31 --flag 8:32 --flag 8:34 --flag 8:55 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:188 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 30 --give 0:0x02:5 --give 2:0x33:1 --give 3:0x5C:2 --give 4:0x33:1 --give 5:0x3D:1 --give 6:0x3B:1 --box 2:0x3C:1 --box 3:0x32:1 --box 4:0x1E:3"
+
+# From 115's door 0 in 114 (Leon as leon_a_110_115 leaves him, 200 life and 20 rounds) to 10F: back through 113 past its zombie and across 112 to door 0, up 110's west corridor to meet the licker the Club Key (8:119) brings, which is shot from standing with the aim held down (its first two rounds miss, the next eight hit and kill it), then round the north and east corridors to door 0 into 10F's hand back
+[[run]]
+name = "leon_a_114_10f"
+room = "114"
+setup_script = "leon_a_114_10f.lua"
+input = "leon_a_114_10f.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 3480
+sound = false
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,om0"
+frames = [360, 3479]
+# 0.90 measured, recorded under Wine; the worst, 1600 (10.9), is 110's door load (#672)
+frame_max_mean = 1.0
+expect = "match"
+record = "--warp 114:-25248:0:-14463:1920:4 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:23 --flag 4:24 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:36 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:53 --flag 4:55 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:74 --flag 4:75 --flag 4:76 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 4:153 --flag 6:19 --flag 6:51 --flag 6:52 --flag 6:54 --flag 6:55 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:82 --flag 6:83 --flag 6:85 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:114 --flag 6:115 --flag 6:116 --flag 6:131 --flag 6:133 --flag 6:148 --flag 6:157 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:21 --flag 8:31 --flag 8:32 --flag 8:34 --flag 8:40 --flag 8:55 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:188 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 200 --give 0:0x02:5 --give 2:0x33:1 --give 3:0x5C:2 --give 4:0x33:1 --give 5:0x3D:1 --give 6:0x3B:1 --give 7:0x14:15 --box 2:0x3C:1 --box 3:0x32:1 --box 4:0x1E:3"
