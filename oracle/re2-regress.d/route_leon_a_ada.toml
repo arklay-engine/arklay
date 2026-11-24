@@ -81,9 +81,5 @@ frames = [360, 2399]
 # 0.54 measured, with 6.7 worst at 30B's load
 frame_max_mean = 0.6
 expect = "match"
-ignore = [
-  # door 1's own tick (303 to 30B, where Ada becomes the player) and the next door (30B to 305), and `hk` over each room's load
-  [392, "rng"], [392, "rseed"], [2247, "rng"], [2247, "rseed"], [427, 517, "hk"], [2282, 2372, "hk"],
-]
 record = "--warp 303:-24700:-5400:-25832:3808:0 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:8 --flag 31:9 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 90 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"
 

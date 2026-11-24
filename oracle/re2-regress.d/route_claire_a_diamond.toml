@@ -148,8 +148,8 @@ record = "--start claire"
 ignore = [
     # the view's load on the new game's first tick (`movie` 1 in the original, 0 in arklay), as route_200_spade's
     [0, "movie"],
-    # `zd` (oracle/re2-deviations.md, "What a zombie's slot held before"): the load's tick in room 100, room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load
-    [0, "zd"], [482, 2751, "zd"], [8505, 9017, "zd"],
-    # claire_a_10c_113's (warp ticks 344 on): the head through 10C's door 2 and 114's zombie's speeds until its first move
-    [35387, 35600, "pneck"], [35387, 35601, "zm0"],
+    # `zd` (oracle/re2-deviations.md, "What a zombie's slot held before"): room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load
+    [482, 2751, "zd"], [8505, 9017, "zd"],
+    # claire_a_10c_113's (warp ticks 344 on): the head through 10C's door 2
+    [35387, 35600, "pneck"],
 ]

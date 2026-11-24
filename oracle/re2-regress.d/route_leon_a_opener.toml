@@ -103,8 +103,8 @@ ignore = [
     [0, "movie"],
     # 301's Ben (0x46, a scene character in slot 0): the last four words of `em` (his work's `Dest` and the words after it) hold what the memory held before, as the zombies' `zd` does (oracle/re2-deviations.md, "What a zombie's slot held before")
     [69298, 73299, "em"],
-    # `zd` (oracle/re2-deviations.md, "What a zombie's slot held before"): the load's tick in room 100, room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load
-    [0, "zd"], [482, 2751, "zd"], [8397, 8909, "zd"],
+    # `zd` (oracle/re2-deviations.md, "What a zombie's slot held before"): room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load
+    [482, 2751, "zd"], [8397, 8909, "zd"],
     # and 209's slot 5 from its load to its first `Root_ck` (55128): the original's work sits on memory arklay's model doesn't follow, -12016, -1 (oracle/re2-deviations.md, "What a zombie's slot held before")
     [54915, 55128, "zd"],
 ]

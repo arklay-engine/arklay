@@ -203,42 +203,7 @@ frame_max_mean = 0.85
 frame_windows = [[14625, 15491, 0.6], [15858, 15982, 0.3], [16323, 17906, 0.55], [18247, 18684, 0.25], [19025, 20234, 1.25], [20575, 21299, 0.55]]
 expect = "match"
 record = "--start claire"
-# the doors' own ticks (oracle/re2.md, oracle/re2-deviations.md):
-# route_claire_a_card's ten, then 200, 201, 204, 205 and 207's
 ignore = [
-    [356, "rng"],
-    [356, "rseed"],
-    [2627, "rng"],
-    [2627, "rseed"],
-    [5527, "rng"],
-    [5527, "rseed"],
-    [6656, "rng"],
-    [6656, "rseed"],
-    [7008, "rng"],
-    [7008, "rseed"],
-    [8062, "rng"],
-    [8062, "rseed"],
-    [8379, "rng"],
-    [8379, "rseed"],
-    [8892, "rng"],
-    [8892, "rseed"],
-    [10086, "rng"],
-    [10086, "rseed"],
-    # route_claire_a_card's 12936: this recording's original drew the door's number 4 ticks sooner
-    [12932, "rng"],
-    [12932, "rseed"],
-    [15492, "rng"],
-    [15492, "rseed"],
-    [15983, "rng"],
-    [15983, "rseed"],
-    [17907, "rng"],
-    [17907, "rseed"],
-    [18685, "rng"],
-    [18685, "rseed"],
-    [20235, "rng"],
-    [20235, "rseed"],
-    # the drawers' trace (`hk`) lists the room's objects too, so it differs over each load as the objects do
-    [391, 481, "hk"], [2662, 2752, "hk"], [5562, 5652, "hk"], [7043, 7133, "hk"], [8097, 8187, "hk"], [8927, 9019, "hk"], [10121, 10211, "hk"], [12967, 13057, "hk"], [15527, 15617, "hk"], [16018, 16108, "hk"], [17942, 18032, "hk"], [18720, 18810, "hk"], [20270, 20360, "hk"],
-    # `zd` (oracle/re2-deviations.md, "What a zombie's slot held before"): the load's tick in room 100, room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load
-    [0, "zd"], [482, 2751, "zd"], [8505, 9017, "zd"],
+    # `zd` (oracle/re2-deviations.md, "What a zombie's slot held before"): room 101's slots 3 and 4, whose works sit on memory from before the new game, until room 102's load, and room 103's slots 5 and 6 until room 200's load
+    [482, 2751, "zd"], [8505, 9017, "zd"],
 ]
