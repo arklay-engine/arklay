@@ -1054,7 +1054,7 @@ impl GameState {
     pub fn re2_status_gate_shut(&self, hook_message: bool) -> bool {
         use crate::scd2::host::{FG_SYSTEM_DIE, FG_SYSTEM_MOVIE, STATUS_BANK, STATUS_HOLD};
         let re2 = &self.re2;
-        let var_cut = re2.var_cut.unwrap_or(re2.shown_cut);
+        let var_cut = re2.scd_var_cut();
         // The latch arklay keeps for `Die`'s start, while `Die` will start.
         let dying = re2.player.die_start && !re2.player.die_held_back && !self.debug.invincible;
         self.re2_status_request

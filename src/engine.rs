@@ -2424,6 +2424,11 @@ struct GameSession {
     /// sees a zone's cut change against it, and the tick's sounds are
     /// placed from it.
     tick_cut: Option<(RoomId, usize)>,
+    /// A cut a setup chose for an RE2 room (`set_room_camera`): the scripts'
+    /// first pass reads it as `scd_var_cut`, as in a game that was playing
+    /// on it, while the load's cut stays on screen until that tick's
+    /// `Swap_Cbuff`.
+    authored_var_cut: Option<u8>,
     /// RE2's `Movie_idx`, the frames `WinMain` skips after a `Bg_loadPC`:
     /// two after a cut's load, four (eight in room 301) after a door's. The
     /// screen keeps the last presented image through them.
@@ -2667,6 +2672,8 @@ struct AuthorBaseline {
     /// `fg_key`, which bank 31's flags are.
     door_locks: [u32; 2],
     rnd: crate::zombie2::Rnd,
+    /// The live cut.
+    cut: usize,
 }
 
 /// `boot`'s flags with each bit an edit changed (from `before` to `after`)
@@ -3259,6 +3266,7 @@ impl GameSession {
             gpu_backend: false,
             gpu_room: None,
             tick_cut: None,
+            authored_var_cut: None,
             present_skip: transition::PresentSkip::default(),
             present_held: false,
             re2_music_closed: [false; 3],
@@ -3851,7 +3859,10 @@ impl GameSession {
         }
         self.re2_status_open_areas(pack);
         self.tick_cut = Some((self.loaded.id, self.loaded.room.current_cut));
-        self.game.re2.var_cut = u8::try_from(self.loaded.room.current_cut).ok();
+        self.game.re2.var_cut = self
+            .authored_var_cut
+            .take()
+            .or_else(|| u8::try_from(self.loaded.room.current_cut).ok());
         self.game.re2.films = self.films;
         self.buffer_half ^= 1;
         if self
@@ -7675,6 +7686,7 @@ impl GameSession {
             banks: self.game.re2.banks,
             door_locks: self.game.re2.door_locks,
             rnd: self.game.re2.rnd,
+            cut: self.game.camera.current_cut,
         }
     }
 
@@ -7687,6 +7699,7 @@ impl GameSession {
             banks,
             door_locks,
             rnd,
+            cut,
         } = baseline;
         let flags = (banks, door_locks);
         let authored = self.game.re2.authored_flags.take();
@@ -7753,6 +7766,9 @@ impl GameSession {
         }
         if mirror {
             self.game.sync_player(&mut self.player);
+            if self.game.is_re2_room && self.game.camera.current_cut != cut {
+                self.authored_var_cut = u8::try_from(self.game.camera.current_cut).ok();
+            }
             let life = self
                 .game
                 .entities
@@ -20355,14 +20371,21 @@ fn tick_room_timed(
         return None;
     }
     let door_pending = context.game.transition_door.is_some();
-    // The original's `Cut_check` runs before `Sce_scheduler`, so a lock the
-    // scripts' `cut_auto` releases this tick still held the cut for this
-    // tick's check (room 303's plug panel: `cut_chg(3)`, `cut_auto(1)`).
-    let cut_locked_before = context.game.is_re2_room && context.game.camera.locked;
     // A message the tick's hook put up (`Key_lost`, a drawer), which the
     // scripts' own don't count as: theirs raise `fg_status`'s `0x40` where
     // the scripts can still clear it.
     let hook_message = !message_before && context.game.message.menu_choice_id() & 0x80 != 0;
+    // `Game_loop` runs `Cut_check(0)` after the hook and before
+    // `Sce_scheduler`, unless a drawer's hand-off holds the cut
+    // (`fg_status`'s `0x100`), so the zones see the place and the lock the
+    // tick began with.
+    if context.game.is_re2_room && !context.game.re2_hikidashi.holds_cut() {
+        // A driver's warp (`set_player_pos`) waits for the first pass's
+        // moves, but it stands for where the original's player stood before
+        // play began.
+        let pos = (context.game.re2.pending_player.warp).unwrap_or(context.game.entities[0].pos);
+        re2_cut_check(context.room, context.game, pos);
+    }
     tick_re2_scripts(&mut context);
     let script_message = context.game.is_re2_room
         && !message_before
@@ -20401,20 +20424,17 @@ fn tick_room_timed(
     // reprojection below.
     let previous_cut = context.room.current_cut;
     tick_interactive(&mut context, input.cancel_held);
-    // The original's `check_camera_switch(0)` runs after the scripts and
-    // BEFORE `update_entities`/`update_player_anim`, so it tests the position
-    // the scripts left rather than this tick's movement. That is what makes a
+    // RE 1's `check_camera_switch(0)` runs after the scripts and BEFORE
+    // `update_entities`/`update_player_anim`, so it tests the position the
+    // scripts left rather than this tick's movement. That is what makes a
     // cut change land one tick after the crossing frame, not on it.
     context.game.sync_player(context.player);
-    // A drawer's hand-off raises `fg_status`'s `0x100` until its close,
-    // and `Game_loop` skips `Cut_check` under it.
-    if !context.game.re2.script_door && !context.game.re2_hikidashi.holds_cut() {
-        apply_re2_tick_camera(
-            context.room,
-            context.game,
-            context.player.pos,
-            cut_locked_before,
-        );
+    if context.game.is_re2_room {
+        // RE 2 tested its zones before the scripts; what they leave of the
+        // live cut (a `cut_chg`, a `cut_old`) comes on screen here.
+        show_re2_live_cut(context.room, context.game);
+    } else {
+        apply_camera(context.room, context.game, Some(context.player.pos));
     }
     if context.room.current_cut != previous_cut {
         // The effects projected above under the pre-switch camera; recompute
@@ -21050,24 +21070,25 @@ fn apply_camera(room: &mut RoomState, game: &mut game::GameState, pos: Option<[i
     room.current_cut = selected;
 }
 
-/// The play tick's camera test for [`tick_room`]: an RE2 room's `Cut_check`
-/// runs before `Sce_scheduler`, so a lock that held when the tick began
-/// holds this tick's test even when the scripts' `cut_auto` let it go; the
-/// cut the scripts chose stays on screen, and the zones are tested from the
-/// next tick.
-fn apply_re2_tick_camera(
-    room: &mut RoomState,
-    game: &mut game::GameState,
-    pos: [i32; 3],
-    locked_before: bool,
-) {
-    let released = locked_before && !game.camera.locked;
-    if released {
-        game.camera.locked = true;
+/// RE 2's `Cut_check(0)` (`0x4C4DE0`) in play: unless `fg_status`'s `0x100`
+/// locks the cut (a script's `cut_chg` or `cut_auto(0)`), the first zone of
+/// the live cut's list that holds `pos` on the player's floor moves the live
+/// cut (`Cut_change`). The cut on screen waits for the frame's `Swap_Cbuff`
+/// ([`show_re2_live_cut`]).
+fn re2_cut_check(room: &RoomState, game: &mut game::GameState, pos: [i32; 3]) {
+    if game.camera.locked {
+        return;
     }
-    apply_camera(room, game, Some(pos));
-    if released {
-        game.camera.locked = false;
+    let cut =
+        player::camera_for_position_on(room, game.camera.current_cut, pos, game.re2.player.floor);
+    game.set_camera_cut(cut);
+}
+
+/// `Swap_Cbuff` brings the live cut on screen unless the aim holds the view
+/// (`fg_status`'s `0x80`), which a locked cut doesn't wait for.
+fn show_re2_live_cut(room: &mut RoomState, game: &game::GameState) {
+    if game.camera.current_cut < room.cuts.len() && !(game.re2.view_held && !game.camera.locked) {
+        room.current_cut = game.camera.current_cut;
     }
 }
 
@@ -29912,8 +29933,9 @@ mod tests {
         assert_eq!(room.current_cut, 1);
     }
 
-    #[test]
-    fn an_re2_cut_auto_lets_the_zones_in_from_the_next_tick() {
+    /// Cut 2's list holds a zone to cut 1 over (0..100, 0..100), and cut 1's
+    /// a zone back to cut 2 over (200..300, 0..100).
+    fn re2_two_zone_room() -> (RoomState, game::GameState) {
         use crate::state::{Cut, Zone, ZoneGate};
 
         let mut room = RoomState {
@@ -29921,17 +29943,23 @@ mod tests {
             sca: Some(Default::default()),
             ..RoomState::default()
         };
-        // Cut 2's group holds a zone to cut 1 where the player stands.
+        let header = |cut| Zone {
+            cam_to: cut,
+            cam_from: cut,
+            corners: [[0; 2]; 4],
+        };
         room.zones = vec![
-            Zone {
-                cam_to: 2,
-                cam_from: 2,
-                corners: [[0; 2]; 4],
-            },
+            header(2),
             Zone {
                 cam_to: 1,
                 cam_from: 2,
                 corners: [[0, 0], [0, 100], [100, 100], [100, 0]],
+            },
+            header(1),
+            Zone {
+                cam_to: 2,
+                cam_from: 1,
+                corners: [[200, 0], [200, 100], [300, 100], [300, 0]],
             },
         ];
         room.zone_gates = vec![
@@ -29939,28 +29967,77 @@ mod tests {
                 flag: 1,
                 floor: 0xFF
             };
-            2
+            4
         ];
         let id = RoomId::parse("3030").unwrap();
         let mut game = game::GameState::new(id, &room);
         game.is_re2_room = true;
+        game.set_camera_cut(2);
+        room.current_cut = 2;
+        (room, game)
+    }
 
-        // Room 303's plug panel: the close-up's lock held when the tick
-        // began, and the scripts' `cut_chg(2)` and `cut_auto(1)` ran in it.
+    #[test]
+    fn an_re2_cut_auto_lets_the_zones_in_from_the_next_tick() {
+        let (mut room, mut game) = re2_two_zone_room();
+        // Room 303's plug panel: the close-up's lock holds as the tick
+        // begins, so `Cut_check` tests nothing; the scripts' `cut_chg(2)`
+        // and `cut_auto(1)` follow it.
+        game.camera.locked = true;
+        re2_cut_check(&room, &mut game, [50, 0, 50]);
         game.set_camera_cut(2);
         game.camera.locked = false;
-        apply_re2_tick_camera(&mut room, &mut game, [50, 0, 50], true);
-        assert_eq!(
-            game.camera.current_cut, 2,
-            "the scripts' cut shows this tick"
-        );
-        assert_eq!(room.current_cut, 2);
-        assert!(!game.camera.locked, "the lock stays released");
+        show_re2_live_cut(&mut room, &game);
+        assert_eq!(room.current_cut, 2, "the scripts' cut shows this tick");
 
         // The next tick's test starts unlocked and follows the zone.
-        apply_re2_tick_camera(&mut room, &mut game, [50, 0, 50], false);
+        re2_cut_check(&room, &mut game, [50, 0, 50]);
+        show_re2_live_cut(&mut room, &game);
         assert_eq!(game.camera.current_cut, 1);
         assert_eq!(room.current_cut, 1);
+    }
+
+    #[test]
+    fn an_re2_lock_the_scripts_take_on_a_switch_keeps_the_switched_cut() {
+        let (mut room, mut game) = re2_two_zone_room();
+        // The player stands in cut 2's zone as the tick begins: `Cut_check`
+        // switches the live cut before the scripts' `cut_auto(0)` locks it.
+        re2_cut_check(&room, &mut game, [50, 0, 50]);
+        assert_eq!(game.camera.current_cut, 1, "the live cut moves");
+        assert_eq!(room.current_cut, 2, "`Swap_Cbuff` hasn't loaded it");
+        game.camera.locked = true;
+        show_re2_live_cut(&mut room, &game);
+        assert_eq!(room.current_cut, 1);
+
+        // Locked, the next tick tests no zone, even standing in cut 1's.
+        re2_cut_check(&room, &mut game, [250, 0, 50]);
+        assert_eq!(game.camera.current_cut, 1);
+    }
+
+    #[test]
+    fn an_re2_script_that_moves_the_player_into_a_zone_switches_a_tick_later() {
+        let (mut room, mut game) = re2_two_zone_room();
+        // The tick begins outside the zone; the scripts move the player in.
+        re2_cut_check(&room, &mut game, [500, 0, 50]);
+        show_re2_live_cut(&mut room, &game);
+        assert_eq!(room.current_cut, 2, "no switch on the move's tick");
+        re2_cut_check(&room, &mut game, [50, 0, 50]);
+        show_re2_live_cut(&mut room, &game);
+        assert_eq!(room.current_cut, 1, "the next tick's test takes it");
+    }
+
+    #[test]
+    fn the_re2_aim_holds_the_live_cut_off_screen_unless_the_cut_is_locked() {
+        let (mut room, mut game) = re2_two_zone_room();
+        game.re2.view_held = true;
+        re2_cut_check(&room, &mut game, [50, 0, 50]);
+        show_re2_live_cut(&mut room, &game);
+        assert_eq!((game.camera.current_cut, room.current_cut), (1, 2));
+        // A script's `cut_chg` while aiming shows at once.
+        game.camera.locked = true;
+        game.set_camera_cut(0);
+        show_re2_live_cut(&mut room, &game);
+        assert_eq!(room.current_cut, 0);
     }
 
     #[test]
@@ -46780,6 +46857,37 @@ end
         session.game.re2.set_flag(4, 152, 1);
         session.finish_authoring(baseline, false);
         assert_eq!(session.loaded.room.zones[1].cam_to, 2, "not swapped");
+    }
+
+    /// A setup's `set_room_camera` is the cut a game playing there has as
+    /// `scd_var_cut` too, so the first pass reads it (`door_101_102`'s room
+    /// 100 starts on cut 8, which its scripts test), while the load's cut
+    /// stays on screen until that tick's `Swap_Cbuff`.
+    #[test]
+    fn an_authored_cut_is_the_first_passs_scd_var_cut() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1
+#game re2
+proc init_00 { evt_end(0); }",
+        )
+        .unwrap();
+        session.loaded.re2_vm = Some(crate::scd2::vm::Vm::new(&scripts));
+        session.loaded.room.cuts = vec![Default::default(); 3];
+        session.enter_room(&pack, None, true, RoomBgmHandoff::Now);
+        session.loaded.room.current_cut = 0;
+        session.game.set_camera_cut(0);
+        // Untouched, the cut stays as the load left it.
+        let baseline = session.author_baseline();
+        session.finish_authoring(baseline, true);
+        assert_eq!(session.authored_var_cut, None);
+        let baseline = session.author_baseline();
+        session.game.set_camera_cut(2);
+        session.finish_authoring(baseline, true);
+        assert_eq!(session.loaded.room.current_cut, 0, "the load's cut is up");
+        assert_eq!(session.authored_var_cut, Some(2));
     }
 
     /// The rerun starts from the flags the boot found, not the ones its first

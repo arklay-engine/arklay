@@ -997,6 +997,14 @@ impl Default for Re2State {
 }
 
 impl Re2State {
+    /// `scd_var_cut` (variable 26) as it stands: [`Self::var_cut`], else the
+    /// cut on screen as the tick began. `Cut_check` doesn't move it, so on
+    /// the tick of a zone's switch, or while the aim holds the view, it is
+    /// not the live cut.
+    pub fn scd_var_cut(&self) -> u8 {
+        self.var_cut.unwrap_or(self.shown_cut)
+    }
+
     /// The state a save keeps: the flags, variables, door locks and music
     /// table. The rest belongs to the room, and the room's init rebuilds it.
     pub fn to_save_bytes(&self) -> Vec<u8> {
@@ -2454,7 +2462,7 @@ impl GameHost<'_> {
 
     /// Queue a light's change, on `cut` or the camera in use (`scd_var_cut`).
     fn light_edit(&mut self, cut: Option<i64>, index: i64, change: LightChange) {
-        let cut = cut.map_or(self.game.camera.current_cut as u8, |cut| cut as u8);
+        let cut = cut.map_or(self.game.re2.scd_var_cut(), |cut| cut as u8);
         let index = index as u8;
         self.game
             .re2
@@ -2468,8 +2476,9 @@ impl GameHost<'_> {
     fn change_cut(&mut self, cut: u8) {
         // `FUN_004e5020` sets `scd_var_cut` at once, so every sound the
         // tick plays after it is placed from the new cut.
+        // `cut_old` keeps the `scd_var_cut` it replaces.
+        self.game.re2.cut_old = self.game.re2.scd_var_cut();
         self.game.re2.var_cut = Some(cut & 0x7F);
-        self.game.re2.cut_old = self.game.camera.current_cut as u8;
         self.game.camera.locked = true;
         self.game.set_camera_cut(usize::from(cut & 0x7F));
         self.game.re2.bg_load = cut & 0x80 == 0;
@@ -3047,7 +3056,7 @@ impl Host for GameHost<'_> {
 
     fn var(&self, index: u8) -> u16 {
         match index {
-            VAR_CUT => self.game.camera.current_cut as u16,
+            VAR_CUT => u16::from(self.game.re2.scd_var_cut()),
             // The scripts' stage and room are the origin's, as RE1's `B_STAGE`.
             VAR_STAGE => u16::from(self.game.origin().stage.saturating_sub(1)),
             VAR_ROOM => u16::from(self.game.origin().room),
@@ -4948,10 +4957,30 @@ mod tests {
         assert_eq!(object.rotation[1], 99);
     }
 
+    /// On the tick of a zone's switch `Cut_check` has moved the live cut
+    /// before the scripts run, and `scd_var_cut` still has the cut on screen:
+    /// variable 26 reads it, and `cut_chg` keeps it for `cut_old`.
+    #[test]
+    fn the_scripts_read_scd_var_cut_not_the_live_cut() {
+        let mut game = GameState::default();
+        game.re2.shown_cut = 2;
+        game.camera.current_cut = 5;
+        assert_eq!(GameHost { game: &mut game }.var(VAR_CUT), 2);
+        game.re2.var_cut = Some(1);
+        assert_eq!(GameHost { game: &mut game }.var(VAR_CUT), 1);
+        exec(&mut game, "cut_chg", &[7]);
+        assert_eq!(game.re2.cut_old, 1);
+        assert_eq!(GameHost { game: &mut game }.var(VAR_CUT), 7);
+        exec(&mut game, "cut_old", &[]);
+        assert_eq!(game.camera.current_cut, 1);
+    }
+
     #[test]
     fn the_light_ops_name_the_camera_in_use_or_their_own() {
         let mut game = GameState::default();
-        game.camera.current_cut = 3;
+        // `scd_var_cut`, not the live cut a zone just switched to.
+        game.re2.var_cut = Some(3);
+        game.camera.current_cut = 4;
         exec(&mut game, "light_pos_set", &[0, 1, 0x0C, -900]);
         exec(&mut game, "light_kido_set", &[2, 20000]);
         exec(&mut game, "light_color_set", &[0, 10, 20, 30, 0]);
