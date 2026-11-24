@@ -94,6 +94,10 @@ pub struct Re2State {
     /// (`FUN_004e5020`). The player's cut check doesn't move it: `Swap_Cbuff`
     /// brings it up at the frame's end. `None` falls back to the tick's cut.
     pub var_cut: Option<u8>,
+    /// A cut a setup chose (`set_room_camera`): it is `scd_var_cut` until a
+    /// script pass has read it, as in a game that was playing on it, while
+    /// the load's cut stays on screen until the first tick's `Swap_Cbuff`.
+    pub authored_var_cut: Option<u8>,
     /// Camera-table edits waiting for the room (`cut_be_set`, `cut_replace`).
     pub pending_cuts: Vec<CutEdit>,
     /// Collision-record edits waiting for the room (`sca_id_set`).
@@ -929,6 +933,7 @@ impl Default for Re2State {
             areas_stopped: false,
             stopped_door: false,
             var_cut: None,
+            authored_var_cut: None,
             pending_cuts: Vec::new(),
             pending_sca: Vec::new(),
             pending_flr: Vec::new(),

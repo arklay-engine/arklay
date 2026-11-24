@@ -744,7 +744,9 @@ fn run_zombie(
         Vec::new()
     };
     let alligator = character.id == crate::zombie2::ALLIGATOR_ID;
-    let camera_cut = game.camera.current_cut as u8;
+    // `scd_var_cut` (the alligator's tests at `0x469D94` and `0x469EE4`),
+    // not the live cut a zone may have moved this tick.
+    let camera_cut = game.re2.scd_var_cut();
     let objects = if alligator {
         game.objects
             .records

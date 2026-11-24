@@ -1074,7 +1074,7 @@ pub struct World<'a> {
     /// A script pointed the player's `pSub1_kan_t_ptr` at this body's
     /// model's clips (its second bank), for `Pl_damage`'s falls.
     pub sub1: bool,
-    /// `scd_var_cut`, the camera's cut as the tick began.
+    /// `scd_var_cut` as the characters' pass reads it.
     pub camera_cut: u8,
     /// Room objects a script took away.
     pub hidden_objects: Vec<usize>,
