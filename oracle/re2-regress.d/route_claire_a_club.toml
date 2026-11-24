@@ -69,6 +69,10 @@ voice_from_ref = true
 ticks = 3100
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 3099]
+# 0.80 measured: the rooms from each hand back to the next press are 0.12 to 0.31, and 305's 0.66;
+# the worst are the first frames of 30D (468, 5.90) and of 307 on the way back (869, 6.98)
+frame_max_mean = 1.0
+frame_windows = [[360, 466, 0.4], [765, 867, 0.4], [1171, 2676, 0.4], [2960, 3099, 0.8]]
 expect = "match"
 ignore = [
   # the warp's head on its first ticks (as leon_a_208's)
