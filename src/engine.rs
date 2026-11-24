@@ -503,6 +503,8 @@ pub fn run_with_options(
         // session's start does; the setup's camera is the first pass's
         // `scd_var_cut` and the first tick's `Cut_check` takes it from there.
         if game.is_re2_room {
+            // From where the room's hook left the player.
+            game.sync_player(&mut player_state);
             apply_camera(&mut loaded.room, &mut game, Some(player_state.pos));
         }
         let cut = game.camera.current_cut;
@@ -4114,6 +4116,12 @@ impl GameSession {
                 break;
             }
             if ran {
+                // `Swap_Cbuff` ends each of the burst's ticks; the last one's
+                // runs with the frame ([`GameSession::swap_cbuff`]).
+                let now = (self.loaded.id, self.loaded.room.current_cut);
+                let screen = self.re2_screen_clears_cut();
+                swap_cbuff_view(&mut self.game, self.tick_cut, now, screen);
+                self.tick_cut = Some(now);
                 begin_re2_var_cut(&mut self.game, &self.loaded.room);
             }
             ran = true;
@@ -47020,6 +47028,48 @@ end
         session.game.re2.set_flag(4, 152, 1);
         session.finish_authoring(baseline, false);
         assert_eq!(session.loaded.room.zones[1].cam_to, 2, "not swapped");
+    }
+
+    /// The skip's fast-forward ends each of its ticks with `Swap_Cbuff`: a
+    /// scene that loads cut 1 and later moves to cut 2 with bit 7 (no load)
+    /// leaves cut 1's picture up, not the cut the burst began on.
+    #[test]
+    fn the_cutscene_skip_swaps_on_every_tick_of_its_burst() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1
+#game re2
+proc init_00 { evt_end(0); }
+proc main_00 { evt_end(0); }
+proc main_01 { evt_end(0); }
+proc main_02 { cut_chg(1); sleep(10, 3); cut_chg(0x82); evt_end(0); }",
+        )
+        .unwrap();
+        session.loaded.re2_vm = Some(crate::scd2::vm::Vm::new(&scripts));
+        session.enter_room(&pack, None, true, RoomBgmHandoff::Now);
+        session.loaded.room.cuts = vec![Default::default(); 3];
+        session.loaded.room.sca = Some(Default::default());
+        session.loaded.room.current_cut = 0;
+        session.game.set_camera_cut(0);
+        session.game.re2.view_cut = None;
+        session.game.re2.vm.as_mut().unwrap().exec_event(1, 2);
+        session.game.re2.set_flag(
+            crate::scd2::host::STATUS_BANK,
+            crate::scd2::host::STATUS_SCENE,
+            1,
+        );
+        session.cutscene_skip = Some(CutsceneSkip {
+            phase: CutsceneSkipPhase::FastForward,
+            ticks: 0,
+        });
+        session.cutscene_skip_burst = None;
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        assert_eq!(session.game.camera.current_cut, 2, "the scene ran");
+        assert_eq!(session.game.re2.view_cut, Some(1));
     }
 
     /// `Game_loop` runs `Cut_check` before `Sce_scheduler`: standing in a
