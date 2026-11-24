@@ -995,3 +995,28 @@ fn every_checked_in_file_is_packed_and_fingerprinted() {
     entries.dedup();
     assert_eq!(entries.len(), SCRIPTS.len(), "an entry is listed twice");
 }
+
+#[test]
+fn an_unreadable_exe_in_the_data_directory_does_not_hide_the_one_above_it() {
+    let root = TempDir::new("exe-fallback");
+    let data = root.path.join("data");
+    write(&data.join("bio2.exe"), b"not the game");
+    write(&root.path.join("bio2 1.10.exe"), b"nor this");
+    let mut warnings = Vec::new();
+    assert!(find_exe_text(&root.path, &data, &mut warnings).is_none());
+    // Both copies were tried, the data directory's first.
+    assert_eq!(warnings.len(), 2, "{warnings:?}");
+    assert!(warnings[0].contains("bio2.exe"), "{warnings:?}");
+    assert!(warnings[1].contains("bio2 1.10.exe"), "{warnings:?}");
+
+    // With a readable copy above the data directory, the unreadable one is passed over.
+    if let Some(game) = std::env::var_os("ARKLAY_RE2_ROOT").map(PathBuf::from) {
+        fs::copy(game.join("bio2 1.10.exe"), root.path.join("bio2 1.10.exe")).unwrap();
+        let mut warnings = Vec::new();
+        assert!(find_exe_text(&root.path, &data, &mut warnings).is_some());
+        assert!(
+            warnings.iter().all(|w| !w.contains("no item names")),
+            "{warnings:?}"
+        );
+    }
+}
