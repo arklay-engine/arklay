@@ -919,11 +919,11 @@ def remove_enemies(game: Game, keep: set[int]) -> None:
 
 def traced_enemy(entity_id: int) -> bool:
     """The enemies `zm` and `zp` list."""
-    return 0x10 <= entity_id <= 0x22 or entity_id in (0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x33, 0x39)
+    return 0x10 <= entity_id <= 0x22 or entity_id in (0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x33, 0x39, 0x3A, 0x3B)
 
 
 def zombie_trace(game: Game) -> str:
-    """The zombies, lickers, Mr. X, the plants, the spiders, the cockroaches, the G embryos and adult, the alligator, room 205's bodies (`Em_2D`), G1, G2 and G3 in play: slot, id, position, facing, routines, motion, `Type`, life and speed."""
+    """The zombies, lickers, Mr. X, the plants, the spiders, the cockroaches, the G embryos and adult, the alligator, room 205's bodies (`Em_2D`), G1, G2, G3, the giant moth and its larvae in play: slot, id, position, facing, routines, motion, `Type`, life and speed."""
     rows = []
     for slot, pointer in enumerate(enemy_slots(game)):
         if pointer == 0 or game.u32(pointer) & 1 == 0 or not traced_enemy(game.u8(pointer + ENTITY_ID)):
