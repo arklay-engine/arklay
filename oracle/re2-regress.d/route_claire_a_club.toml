@@ -97,6 +97,10 @@ input_drop_early = true
 ticks = 1100
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,om0,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,pl,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 1099]
+# 0.77 measured: 305 from the drop's hand back to door 4's press is 0.53, and 306 from its hand back 0.29;
+# the worst is the first frame of 306 through door 4 (750, 8.10)
+frame_max_mean = 0.9
+frame_windows = [[360, 713, 0.6], [1052, 1099, 0.4]]
 expect = "match"
 ignore = [
   # the warp's head on its first tick (as leon_a_ada_305's)
@@ -119,6 +123,12 @@ input_drop_early = true
 ticks = 3680
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,om0,om1,om2,pon,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,pl,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 3679]
+# 0.94 measured: 306's pit view (cut 4) draws Sherry and the boxes lighter (#688), and the raised water draws lighter
+# (#689), as leon_a_ada_306's; the worst are the first frames of 305 through door 0 (3663, 4.76)
+frame_max_mean = 1.05
+# the drained part, the boxes and the switch, to the water's rise (0.80); then the water up, across to the key and
+# back to door 0's press (1.35)
+frame_windows = [[360, 2808, 0.9], [2809, 3624, 1.5]]
 expect = "match"
 ignore = [
   # the warp's head on its first tick (as claire_a_305_sherry's)
@@ -142,6 +152,10 @@ voice_from_ref = true
 ticks = 2660
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,pl,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 2659]
+# 0.50 measured: 305 from the hand back to door 5's press is 0.47, and 307 from its hand back, the scene and the key,
+# 0.16; the worst are the first frames of 307 through door 5 (664, 4.15)
+frame_max_mean = 0.6
+frame_windows = [[360, 613, 0.55], [953, 2659, 0.25]]
 expect = "match"
 ignore = [
   # the warp's head on its first tick (as claire_a_305_sherry's)
