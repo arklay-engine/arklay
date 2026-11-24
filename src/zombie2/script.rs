@@ -2147,6 +2147,57 @@ mod tests {
         );
     }
 
+    /// HARD (0x464CCA): `Em22_Init` adds half the drawn life again, rounded
+    /// toward 0.
+    #[test]
+    fn a_hard_licker_has_half_its_life_again() {
+        run_licker(
+            "",
+            "function e:hard_mode() return true end
+             function e:life() return w.life end
+             tick()
+             assert(VARIANT.life[2] == 81 and w.life == 121, w.life)",
+        );
+    }
+
+    /// HARD's hits on the player: the slash takes 0x19 for 0xF (0x463F55),
+    /// and the jump's bite 0x78 over 0x82 life, else 100, for 100 over 0x6E,
+    /// else 0x50 (0x465F58).
+    #[test]
+    fn a_hard_lickers_slash_and_bite_take_more() {
+        for (hard, life, slash, bite) in [
+            (false, 200, 0xF, 100),
+            (false, 0x6E, 0xF, 0x50),
+            (true, 0x83, 0x19, 0x78),
+            (true, 0x82, 0x19, 100),
+        ] {
+            run_licker(
+                "",
+                &format!(
+                    "tick()
+                     w.downs = {{}}
+                     function e:hard_mode() return {hard} end
+                     function e:player_life() return {life} end
+                     function e:pl_life_down(down) w.downs[#w.downs + 1] = down return 0 end
+                     function e:own_part() return 0, 0, 0 end
+                     function e:pl_damage_cnt() return 0 end
+                     function e:turn_to_player() return 0 end
+                     function e:angle_to_player() return 0 end
+                     function e:move_cnt() return w.move_cnt end
+                     function e:distance() return 0x800 end
+                     w.r = {{ [0] = 1, 9, 2, 1 }}
+                     tick()
+                     assert(w.downs[1] == {slash}, tostring(w.downs[1]))
+                     w.r = {{ [0] = 1, 0xA, 5, 0 }}
+                     w.move_no = VARIANT.clips.flight w.move_cnt = 0xA w.frame = 0
+                     w.vars = {{}}
+                     tick()
+                     assert(w.downs[2] == {bite}, tostring(w.downs[2]))"
+                ),
+            );
+        }
+    }
+
     /// 0x10's `Routine_2` 0 (0x466B00): clip 3 by `Mot_play2_spxz` on the
     /// ceiling until `Sce_free0`, with the script's bit kept.
     #[test]
@@ -6173,6 +6224,28 @@ mod tests {
             let setup = format!("ROUTINES = {{ [0] = 2, {weapon}, 0, 0 }}");
             let hit = tick(CROW, ZEROS, &setup, &[]);
             (hit.clips, hit.effects)
+        }
+
+        /// The crow's init (0x45FD50): life 10, or 20 under HARD (0x45FDEA).
+        #[test]
+        fn a_hard_crow_has_twice_the_life() {
+            for (hard, life) in [(false, 10), (true, 20)] {
+                let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+                let got: i64 = lua
+                    .load(format!(
+                        "ROUTINES = {{ [0] = 0, 0, 0, 0 }}
+                         {ZEROS}
+                         local life
+                         function e:hard_mode() return {hard} end
+                         function e:set_life(v) life = v end
+                         {CROW}
+                         update(e)
+                         return life"
+                    ))
+                    .eval()
+                    .unwrap();
+                assert_eq!(got, life);
+            }
         }
 
         /// `DAT_00527978[0xF]` and `[0x10]` are `FUN_00461a00`, the
