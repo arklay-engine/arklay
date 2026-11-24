@@ -1,5 +1,6 @@
 -- arklay start for claire_a_20a_20c: where --start claire --warp 20A:-13128:0:-9826:2177:0 leaves the player: Claire, at 20A's arrival
--- from 20B's door 0 as claire_a_20b_20a leaves her, with 42 life
+-- from 20B's door 0 as claire_a_20b_20a leaves her, with 42 life; the door leaves cut 0, which the room's camera switch
+-- turns to cut 1 before play, as in the original
 local api = ...
 api:set_health(42)
 api:set_re2_rnd(6114)

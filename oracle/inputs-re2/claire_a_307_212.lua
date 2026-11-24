@@ -1,5 +1,6 @@
 -- arklay start for claire_a_307_212: where --start claire --warp 307:-7986:0:-3334:2512:3 leaves the player: Claire, at the Club Key's place
--- in 307 as claire_a_305_307 leaves her, with 307's scene done (3:130, 3:131) and the key taken (8:124, slot 7)
+-- in 307 as claire_a_305_307 leaves her, with 307's scene done (3:130, 3:131) and the key taken (8:124, slot 7); 305_307 ends on the
+-- key's screen at the scene's camera 0, and the warp starts play on camera 3, the camera of that place
 local api = ...
 api:set_health(69)
 api:set_re2_rnd(6114)

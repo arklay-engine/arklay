@@ -1,7 +1,7 @@
 # Claire A from 20B's door 0 into 20A: the Browning fired down its corridor at the six zombies coming south, which uses up
 # the bullets and frees their slot, north past the rest (one grab), the Green Herb taken and used, and east along the hall
 # to door 2 into 20C (#896 part 4)
-# made in arklay (steered by a script round the zombies): zombies 1 and 4 die (6:33, 6:205), zombie 3 bites once (950);
+# made in arklay (steered by a script round the zombies): zombies 1 and 4 die (6:33, 6:205), zombie 3 grabs at 949 and bites once (969);
 # door 2 loads 20C at 1940
 344
 # 20A: south-west from the hand back to the corridor's south end (-15500, -14000), turned north
@@ -107,7 +107,7 @@
 921 up run right
 922 up run left
 924 up run
-# zombie 3's grab (one bite, 42 to 22), shaken off with a press every tick
+# zombie 3's grab (949; one bite at 969, 42 to 22), shaken off with a press every tick
 950 left
 951 right
 952 left

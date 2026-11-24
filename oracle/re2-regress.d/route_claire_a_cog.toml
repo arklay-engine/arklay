@@ -17,9 +17,9 @@ input_drop_early = true
 ticks = 950
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 949]
-# the doors' frames (the ladder's, 586 to 719, and door 0's) count only in the whole run's mean; 0.92 measured
+# each room from its hand back to its door's press; the doors' frames (the ladder's from 587, and door 0's from 894) count only in the whole run's mean; 0.92 measured
 frame_max_mean = 1.1
-frame_windows = [[360, 599, 0.45], [720, 919, 0.55]]
+frame_windows = [[360, 586, 0.45], [720, 893, 0.55]]
 expect = "match"
 ignore = [
   # the warp's head on its first ticks (as leon_a_208's)
@@ -42,10 +42,10 @@ input_drop_early = true
 ticks = 1210
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 1209]
-# the doors' frames count only in the whole run's mean: door 7 is a stairs door (oracle/re2-deviations.md, "The stairs
+# each room from its hand back to its door's press; the doors' frames count only in the whole run's mean: door 7 is a stairs door (oracle/re2-deviations.md, "The stairs
 # door's frames"), 677 to 839; 3.68 measured
 frame_max_mean = 3.9
-frame_windows = [[360, 639, 0.6], [880, 1181, 0.6]]
+frame_windows = [[360, 641, 0.6], [880, 1147, 0.6]]
 expect = "match"
 ignore = [
   # the warp's head on its first ticks (as leon_a_208's)
@@ -67,9 +67,9 @@ input_drop_early = true
 ticks = 715
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 714]
-# door 0's frames count only in the whole run's mean; 0.49 measured
+# the room to door 0's press (650); the door's frames count only in the whole run's mean; 0.49 measured
 frame_max_mean = 0.65
-frame_windows = [[360, 679, 0.75]]
+frame_windows = [[360, 650, 0.75]]
 expect = "match"
 ignore = [
   # the warp's head on its first ticks (as leon_a_208's)
@@ -91,6 +91,10 @@ input_drop_early = true
 ticks = 1965
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 1964]
+# the room to door 2's press (1905), with zombie 3's grab on its own (its body against Claire's, 1.55 at most a 40-tick
+# stretch); the door's frames count only in the whole run's mean; 0.32 measured
+frame_max_mean = 0.45
+frame_windows = [[360, 919, 0.6], [920, 1079, 1.9], [1080, 1905, 0.3]]
 expect = "match"
 ignore = [
   # the warp's head on its first ticks (as leon_a_208's)
