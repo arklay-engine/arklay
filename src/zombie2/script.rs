@@ -8267,5 +8267,28 @@ mod tests {
             assert_eq!(turn(15), (6, 0x100 + 15 * 0x30, 0, 0));
             assert_eq!(turn(16), (11, 0x400, 1, 1));
         }
+
+        /// `FUN_004b0e80` and `FUN_004b0fd0`: a shot larva (kind 0x2008's
+        /// `B224`) bleeds row 0 (effect 0, row 9) and raises its dead flag,
+        /// is a body after nine ticks, waits one (the handgun's) and goes
+        /// once its shadow (500, and 0x10 a tick of the death) has shrunk 12
+        /// a tick to nothing: 53 ticks.
+        #[test]
+        fn a_shot_larva_shrinks_away_with_its_shadow() {
+            let larva = format!(
+                "function e:pos() return 0, 0, 0 end
+                 function e:player_pos() return 0, 0, 0 end
+                 {}",
+                include_str!("../../games/re2/enemy/3b/enemy.lua")
+            );
+            let setup = "w.r = { [0] = 3, 2, 0, 0 } w.vars = { [5] = 1, [6] = 0x1F4 }";
+            let names = ["call_effect", "set_died", "kill"];
+            let (lua, log) = run(&larva, setup, 9, &names);
+            assert_eq!(log, ["call_effect(0,9,6144,0,0,0,0)", "set_died()"]);
+            let routines: Vec<i64> = eval(&lua, "return { w.r[0], w.r[1], w.r[2], w.r[3] }");
+            assert_eq!(routines, [7, 2, 0, 0]);
+            assert_eq!(run(&larva, setup, 62, &names).1.len(), 2);
+            assert_eq!(run(&larva, setup, 63, &names).1[2], "kill()");
+        }
     }
 }

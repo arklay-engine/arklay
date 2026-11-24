@@ -19,7 +19,9 @@
 -- and the head's flight; the shadow's fade in state 7; the partner as the
 -- target; the wings' beat (`0x52bdf8`); the shadow (`Kage_work_set`); and the
 -- parts' draw words the init sets (part 0's from `+0x98`, and parts 13 to
--- 16's `0x4000`).
+-- 16's `0x4000`). Nor is `0x989eec`'s 0x20, which only `Routine_1` 9 (and the
+-- ivy's grab) sets: the move's 60 ticks of `B22C` while it's up, and the
+-- grab's drop and the body clearing it.
 
 local TARGET <const> = 0 -- `+0x218`: 1 while the partner is the target.
 local WINGS <const> = 1 -- `+0x21e`: the wings' beat, by `FUN_004afbf0`'s table.
@@ -28,7 +30,7 @@ local FLAGS <const> = 3 -- `+0x221`: 1 sheds scales as `SHED` counts; 0x80 beats
 local SHOT <const> = 4 -- `+0x227`: a hit that wakes it.
 local B228 <const> = 5 -- `+0x228`.
 local UP <const> = 6 -- `+0x229`: 1 while it hangs from the ceiling.
-local B22C <const> = 7 -- `+0x22c`: a count down; 0x3C while the player's `0x989eec` 0x20.
+local B22C <const> = 7 -- `+0x22c`: a count down.
 local B22D <const> = 8 -- `+0x22d`.
 local B22F <const> = 9 -- `+0x22f`.
 local SHED <const> = 10 -- `+0x230`: a count down; each odd tick sheds scales.
@@ -940,7 +942,6 @@ local function grab_drop(e)
         e:set_be_flg(e:be_flg() & ~2)
         e:set_var(HELD, 0)
         e:sound(7)
-        e:clear_status(0x20)
         if e:var(FLAGS) & 1 ~= 0 then
             e:routines(1, 1, 0, 0)
             e:set_var(B22C, 0x78)
@@ -1093,9 +1094,6 @@ local function move(e)
         step(e)
     end
     keep_move(e)
-    if e:status(0x20) then
-        e:set_var(B22C, 0x3C)
-    end
 end
 
 -- `FUN_004aeba0`: a hit wakes it on the ceiling, and while it sheds scales
@@ -1361,7 +1359,6 @@ local function dead(e)
     if e:routine(1) == 0 then
         e:set_routine(1, 1)
         e:set_be_flg(e:be_flg() | 0x42)
-        e:clear_status(0x20)
     end
 end
 
