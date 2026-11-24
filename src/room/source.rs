@@ -1047,11 +1047,15 @@ pub(super) fn re2_object_files(data: &[u8], id: RoomId) -> Vec<(String, Vec<u8>)
 pub(super) const RE2_OBJECT_SLOTS: u8 = 32;
 
 /// An RE2 object's model, of `Om_disp`'s first part.
+///
+/// Its texels are `8v + 7`, not the characters' `v * 255 / 31`: the
+/// original's frames show every object brighter by about 7 a channel on dark
+/// texels, lit or unlit, where its characters' don't change with the level.
 pub(super) fn re2_object(slot: usize, tim: &[u8], md1: &[u8]) -> Result<ObjectAsset> {
     Ok(ObjectAsset {
         pair_index: slot,
         model: crate::emd2::parse_md1(md1)?,
-        texture: crate::tim::decode_8bpp(tim)?,
+        texture: crate::tim::decode_8bpp_widened(tim, crate::tim::Widen::Seven)?,
         hd_name: None,
     })
 }

@@ -124,6 +124,31 @@ pub fn decode(data: &[u8]) -> Result<Image> {
 /// the player texture's CLUT row first, and each entry's bit 15 is kept in
 /// [`Texture8::stp`] as the semi-transparency selector.
 pub fn decode_8bpp(data: &[u8]) -> Result<Texture8> {
+    decode_8bpp_widened(data, Widen::Scaled)
+}
+
+/// How a CLUT's 5-bit channels become 8-bit ones.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Widen {
+    /// `v * 255 / 31`: 31 is 255.
+    Scaled,
+    /// `8v + 7`, with 0 kept: RE2's room objects, as the PC version's frames
+    /// show them (an unlit stair's level 2 texel is 23 there, 16 scaled).
+    Seven,
+}
+
+impl Widen {
+    fn channel(self, level: u16) -> u8 {
+        match self {
+            Self::Scaled => (level * 255 / 31) as u8,
+            Self::Seven if level == 0 => 0,
+            Self::Seven => (level * 8 + 7) as u8,
+        }
+    }
+}
+
+/// [`decode_8bpp`] with the CLUT's channels widened by `widen`.
+pub fn decode_8bpp_widened(data: &[u8], widen: Widen) -> Result<Texture8> {
     if data.len() < HEADER_LEN {
         bail!(
             "TIM is truncated: {} bytes, need at least {HEADER_LEN}",
@@ -183,7 +208,10 @@ pub fn decode_8bpp(data: &[u8]) -> Result<Texture8> {
         .iter()
         .map(|entry| u16::from_le_bytes([entry[0], entry[1]]))
         .collect();
-    let palettes = clut_words.iter().map(|&word| expand_bgr555(word)).collect();
+    let palettes = clut_words
+        .iter()
+        .map(|&word| expand_bgr555(word, widen))
+        .collect();
     let stp = clut_words.iter().map(|&word| word & STP_BIT != 0).collect();
 
     let image_start = HEADER_LEN
@@ -288,7 +316,7 @@ pub fn decode_4bpp(data: &[u8]) -> Result<Texture8> {
         for index in 0..clut_width.min(CLUT_ROW_LEN) {
             let offset = (row * clut_width + index) * PIXEL_BYTES;
             let entry = u16::from_le_bytes([clut_bytes[offset], clut_bytes[offset + 1]]);
-            palettes[row * PALETTE_ROW_LEN + index] = expand_bgr555(entry);
+            palettes[row * PALETTE_ROW_LEN + index] = expand_bgr555(entry, Widen::Scaled);
             stp[row * PALETTE_ROW_LEN + index] = entry & STP_BIT != 0;
         }
     }
@@ -426,16 +454,11 @@ fn image_block_offset(data: &[u8]) -> Result<usize> {
     Ok(offset)
 }
 
-fn expand_bgr555(value: u16) -> [u8; 4] {
+fn expand_bgr555(value: u16, widen: Widen) -> [u8; 4] {
     let r = value & 31;
     let g = (value >> 5) & 31;
     let b = (value >> 10) & 31;
-    [
-        (r * 255 / 31) as u8,
-        (g * 255 / 31) as u8,
-        (b * 255 / 31) as u8,
-        255,
-    ]
+    [widen.channel(r), widen.channel(g), widen.channel(b), 255]
 }
 
 #[cfg(test)]
@@ -620,6 +643,28 @@ mod tests {
         assert_eq!(texture.palettes[2], [0, 0, 0, 255]);
         assert_eq!(texture.palettes[3], [0, 0, 255, 255]);
         assert_eq!(texture.palette(0, 3), [0, 0, 255, 255]);
+    }
+
+    #[test]
+    fn seven_widens_each_level_to_eight_times_it_plus_seven() {
+        let palette = [
+            pixel(1, 2, 0),
+            pixel(31, 30, 4),
+            0x8000 | pixel(0, 16, 0),
+            0,
+        ];
+        let data = tim_8bpp(2, 2, &palette, 2, 1, &[0, 1, 2, 3]);
+
+        let seven = decode_8bpp_widened(&data, Widen::Seven).unwrap();
+        let scaled = decode_8bpp(&data).unwrap();
+
+        assert_eq!(seven.palettes[0], [15, 23, 0, 255]);
+        assert_eq!(seven.palettes[1], [255, 247, 39, 255]);
+        assert_eq!(seven.palettes[2], [0, 135, 0, 255]);
+        assert_eq!(seven.palettes[3], [0, 0, 0, 255]);
+        assert_eq!(seven.stp, scaled.stp);
+        assert_eq!(seven.indices, scaled.indices);
+        assert_eq!(scaled.palettes[0], [8, 16, 0, 255]);
     }
 
     #[test]

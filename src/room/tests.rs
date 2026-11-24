@@ -888,6 +888,21 @@ fn an_re2_rdt_converts_to_a_room_that_builds_the_same() {
     assert_eq!(snapshot(&loaded.state), snapshot(&expected.state));
 }
 
+/// An RE2 object's texels are `8v + 7` (0 kept), where a character's TIM
+/// decodes `v * 255 / 31`.
+#[test]
+fn an_re2_objects_texels_are_eight_times_the_level_plus_seven() {
+    // Entry `i` of the CLUT is BGR555 `i`.
+    let tim = crate::emd2::tests::tim(4, 1, 1, |x, _| x as u8);
+    let object = source::re2_object(0, &tim, &crate::emd2::tests::md1()).unwrap();
+    assert_eq!(object.texture.palette(0, 0), [0, 0, 0, 255]);
+    assert_eq!(object.texture.palette(0, 1), [15, 0, 0, 255]);
+    assert_eq!(object.texture.palette(0, 0x21), [15, 15, 0, 255]);
+    assert_eq!(object.texture.palette(0, 0x1F), [255, 0, 0, 255]);
+    let character = crate::tim::decode_8bpp(&tim).unwrap();
+    assert_eq!(character.palette(0, 1), [8, 0, 0, 255]);
+}
+
 /// Rooms 30D0 and 6120 count object slots past their last model: the XML
 /// keeps the RDT's count rather than the files'.
 #[test]

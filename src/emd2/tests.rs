@@ -88,7 +88,7 @@ fn emr(skeleton: bool) -> Vec<u8> {
 
 /// One part: three vertices and normals, a triangle on page 1 and a quad on
 /// page 0.
-fn md1() -> Vec<u8> {
+pub(crate) fn md1() -> Vec<u8> {
     md1_of(
         [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]],
         [0, 1, 2, 3],
