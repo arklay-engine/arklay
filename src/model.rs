@@ -125,6 +125,7 @@ pub struct Texture8 {
 
 impl Texture8 {
     /// Look up one palette entry; out-of-range lookups are black.
+    #[inline]
     pub fn palette(&self, row: usize, index: u8) -> [u8; 4] {
         self.palettes
             .get(row * PALETTE_ROW_LEN + index as usize)
@@ -133,6 +134,7 @@ impl Texture8 {
     }
 
     /// Whether one palette entry carries the STP bit; out-of-range is false.
+    #[inline]
     pub fn palette_stp(&self, row: usize, index: u8) -> bool {
         self.stp
             .get(row * PALETTE_ROW_LEN + index as usize)
@@ -227,6 +229,44 @@ pub struct Emd {
     pub texture: Texture8,
     /// An RE2 EMD's vertex animations (`pSa_dat`), from its first chunk.
     pub morphs: Vec<PartMorph>,
+    /// How RE 2 lays a character's texture out for Direct3D; `None` for a
+    /// model of any other kind.
+    pub marni: Option<MarniLayout>,
+}
+
+/// How RE 2's `Pl_load_texture` (`0x443F70`) lays a character's texture
+/// out under `Graphicsprdata` 2, the player's, an enemy's and the
+/// gallery's: each 128-column strip is baked through its own palette, so a
+/// texel's colour is its strip's whatever its packet's CLUT. A TIM wider
+/// than 256 is cut into surfaces as [`crate::render`]'s sampler models.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MarniLayout {
+    /// The palette each strip is baked through.
+    pub strips: [u8; 4],
+    /// The enemy's id, whose parts `Marni_mapping_tmd` may split; `None` for
+    /// a player.
+    pub id: Option<u8>,
+}
+
+impl MarniLayout {
+    /// A player's: strip `k` through palette `k`.
+    pub const CHARACTER: Self = Self {
+        strips: [0, 1, 2, 3],
+        id: None,
+    };
+
+    /// An enemy's: id 0x36 blits its first strip, then starts the strips'
+    /// loop at column 128 on the same palette.
+    pub fn enemy(id: u8) -> Self {
+        Self {
+            strips: if id == 0x36 {
+                [0, 0, 1, 2]
+            } else {
+                [0, 1, 2, 3]
+            },
+            id: Some(id),
+        }
+    }
 }
 
 impl Emd {

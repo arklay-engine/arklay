@@ -11,10 +11,10 @@ input_drop_early = true
 ticks = 1798
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,om0,om1,om2,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 1797]
-# 1.32 measured, the doors' frames included: the stairs door from 302 is 4.59 (oracle/re2-deviations.md, "The stairs door's frames") and 30B's door 1.46
-frame_max_mean = 1.45
-# each room on its own, from its hand back to its door's press: 302 (1.25 measured; #668: Leon and the spiders draw differently), 30B, and 303 with the plug panel's message
-frame_windows = [[360, 645, 1.4], [857, 935, 0.4], [1264, 1760, 0.25]]
+# 1.19 measured, the doors' frames included: the stairs door from 302 is 4.59 (oracle/re2-deviations.md, "The stairs door's frames") and 30B's door 1.46
+frame_max_mean = 1.3
+# each room on its own, from its hand back to its door's press: 302 (1.10 measured; #668: Leon and the spiders draw differently), 30B, and 303 with the plug panel's message
+frame_windows = [[360, 645, 1.25], [857, 935, 0.4], [1264, 1760, 0.25]]
 expect = "match"
 record = "--warp 302:-10280:0:-17211:2097:0 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:8 --flag 31:9 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 110 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"
 
@@ -47,9 +47,9 @@ input_drop_early = true
 ticks = 989
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,pl,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 988]
-# 1.36 measured, with 5.41 worst in the ladder's climb into 21A (#668)
-frame_max_mean = 1.5
-# 302 itself, 1.08 measured (#668)
-frame_windows = [[360, 848, 1.2]]
+# 1.22 measured, with 5.33 worst in the ladder's climb into 21A (#668)
+frame_max_mean = 1.35
+# 302 itself, 0.93 measured (#668)
+frame_windows = [[360, 848, 1.05]]
 expect = "match"
 record = "--warp 302:-8194:0:4890:893:4 --flag 3:128 --flag 3:129 --flag 4:146 --flag 4:147 --flag 6:103 --flag 6:104 --flag 3:130 --flag 3:131 --flag 8:119 --flag 8:124 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:8 --flag 31:9 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 90 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x5C:3"

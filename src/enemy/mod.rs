@@ -566,6 +566,7 @@ mod tests {
                 stp: Vec::new(),
             },
             morphs: Vec::new(),
+            marni: None,
         }
     }
 

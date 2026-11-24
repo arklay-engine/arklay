@@ -63,6 +63,7 @@ fn banks(
             .collect(),
     };
     let body = crate::model::Emd {
+        marni: None,
         skeleton: skeleton.clone(),
         keyframes: keyframes.clone(),
         clips: vec![clip.clone(); clips],

@@ -47,9 +47,9 @@ input_shift = 189
 input_drop_early = true
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,msg,fgstat,fgroom,zm0,zm1,zm2,zm3,zm4,zm5,zd,esp"
 frames = [1442, 1999]
-# Black until the room shows; from there the fires and the zombie close to the camera are smoother in the original
-# (#817).
-frame_max_mean = 3.5
+# Black until the room shows; from there 2.55 measured, most of it the fires' sprites, a pixel or two from the original's,
+# and the zombie close to the camera (#817).
+frame_max_mean = 2.65
 frame_windows = [[1442, 1448, 0.01]]
 expect = "match"
 record = ""

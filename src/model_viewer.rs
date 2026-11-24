@@ -32,7 +32,12 @@ pub fn load_with(pack: &Pack, entry: &str, data: &[u8]) -> Result<Emd> {
         Some("emd") if format::emd(data).dialect() == Some(Dialect::Re2) => {
             let texture =
                 enemy_texture(pack, entry).with_context(|| format!("the texture of {entry}"))?;
-            emd2::parse_emd_with(data, texture)
+            emd2::parse_emd_with(data, texture).map(|mut model| {
+                if let Some(id) = enemy_id(entry) {
+                    model.marni = Some(crate::model::MarniLayout::enemy(id));
+                }
+                model
+            })
         }
         Some("emd") => emd::parse(data),
         Some("pld") => emd2::parse_pld(data),
@@ -46,6 +51,13 @@ pub fn load_with(pack: &Pack, entry: &str, data: &[u8]) -> Result<Emd> {
         _ => bail!("{entry} is not a model (.emd, .pld or .plw)"),
     };
     model.with_context(|| format!("invalid model {entry}"))
+}
+
+/// The enemy id of an RE2 enemy's entry, `enemy/<id>/enemy_<disc>.emd`.
+fn enemy_id(entry: &str) -> Option<u8> {
+    let rest = entry.strip_prefix("enemy/")?;
+    let (id, _) = rest.split_once('/')?;
+    u8::from_str_radix(id, 16).ok()
 }
 
 /// An RE2 enemy EMD's texture: the `<stem>.bmp` page beside it with the
@@ -381,6 +393,7 @@ mod tests {
                 stp: Vec::new(),
             },
             morphs: Vec::new(),
+            marni: None,
         }
     }
 
