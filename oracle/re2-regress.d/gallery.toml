@@ -223,9 +223,9 @@ input_shift = 189
 input_drop_early = true
 fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
 frames = [189, 1469]
-# A model's edges and texels differ: the original draws it at 640 x 480 with
-# its textures filtered.
-frame_max_mean = 0.45
+# Drawn at 640 x 480 with its textures filtered, as the original draws it
+# (0.12 measured).
+frame_max_mean = 0.15
 frame_windows = [[737, 738, 0.1]]
 expect = "match"
 record = ""
@@ -240,8 +240,8 @@ input_shift = 189
 input_drop_early = true
 fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
 frames = [189, 1129]
-# A model's edges and texels differ (0.46 measured).
-frame_max_mean = 0.5
+# A model's edges and texels differ (0.16 measured).
+frame_max_mean = 0.2
 frame_windows = [[737, 738, 0.1]]
 expect = "match"
 gallery = [0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x50000001]
@@ -257,8 +257,8 @@ input_shift = 189
 input_drop_early = true
 fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
 frames = [189, 1289]
-# A model's edges and texels differ (0.51 measured).
-frame_max_mean = 0.55
+# A model's edges and texels differ (0.19 measured).
+frame_max_mean = 0.22
 frame_windows = [[737, 738, 0.1]]
 expect = "match"
 record = ""
@@ -273,9 +273,9 @@ input_shift = 189
 input_drop_early = true
 fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
 frames = [189, 1289]
-# A model's edges and texels differ, the more the nearer it is (0.78
-# measured).
-frame_max_mean = 0.85
+# A model's edges and texels differ, the more the nearer it is (0.40
+# measured; 0x34, posed apart, 6.05 over its own frames).
+frame_max_mean = 0.43
 frame_windows = [[737, 738, 0.1]]
 expect = "match"
 record = ""
@@ -291,8 +291,8 @@ input_drop_early = true
 fields = "rng,ti,tlogo,tfade,tx,tfade2,tfade3,snd,gal,galv"
 frames = [189, 1899]
 # `Rnd`'s state is compared on every tick. A model's edges and texels differ,
-# the more the nearer it is (0.86 measured).
-frame_max_mean = 0.9
+# the more the nearer it is (0.37 measured).
+frame_max_mean = 0.4
 frame_windows = [[737, 738, 0.1]]
 expect = "match"
 record = ""

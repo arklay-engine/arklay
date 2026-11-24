@@ -39,9 +39,9 @@ input = "zombies_207_fight.txt"
 input_shift = 344
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,zm0,zm1,zm2,zm3,zd,fgstat"
 frames = [650, 2059]
-# from the fight's start to the door's press. 0.84 measured: the zombies close to cut 1's camera, their shading and
+# from the fight's start to the door's press. 0.58 measured: the zombies close to cut 1's camera, their shading and
 # their blood's place (oracle/re2-deviations.md, "Zombies")
-frame_windows = [[650, 1976, 0.9]]
+frame_windows = [[650, 1976, 0.62]]
 expect = "match"
 record = "--warp 207:-25640:0:-16590:0:1 --life 200 --give 0:2:13 --give 2:0x14:39"
 

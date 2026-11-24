@@ -35,6 +35,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::budget;
 use crate::emd::{chunk_slice, parse_clips, parse_skeleton, read_u16, read_u32, vec3};
+use crate::model::MarniLayout;
 use crate::model::{
     AnimBank, Clip, ClipFrame, Emd, Emw, Keyframe, PALETTE_ROW_LEN, PartMorph, Plw, Skeleton,
     Texture8, Tmd, TmdObject, TmdPrim,
@@ -197,6 +198,7 @@ pub fn parse_emd_with(data: &[u8], texture: Texture8) -> Result<Emd> {
         mesh,
         texture,
         morphs,
+        marni: Some(MarniLayout::CHARACTER),
     })
 }
 
@@ -334,6 +336,7 @@ pub fn parse_pld(data: &[u8]) -> Result<Emd> {
         mesh,
         texture,
         morphs: Vec::new(),
+        marni: Some(MarniLayout::CHARACTER),
     })
 }
 
@@ -438,6 +441,7 @@ pub fn with_weapon(pld: &Emd, plw: &Plw) -> Emd {
         mesh,
         texture: weapon_texture(&pld.texture, &plw.texture),
         morphs: Vec::new(),
+        marni: pld.marni,
     }
 }
 
