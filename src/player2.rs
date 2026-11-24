@@ -634,6 +634,8 @@ pub const fn character_shadow(id: u8) -> (i32, i32) {
     match id {
         // `Em10_Init`'s.
         0x10..0x20 => (0x190, 0x258),
+        // `Em20_Init`'s (`0x45C1BC`).
+        0x20 => (0x4B0, 0x258),
         // `Em22_Init`'s, and `Em_24`'s copy.
         0x22 | 0x24 => (0x44C, 0x352),
         // `MrX_init`'s.
@@ -8846,6 +8848,14 @@ mod tests {
         assert_eq!(character_shadow(0x48), (500, 600));
         assert_eq!(character_shadow(0x41), (0x1A4, 0x208));
         assert_eq!(character_shadow(0x4F), (0x172, 0x1CC));
+    }
+
+    /// `Em20_Init` pushes `0x25804B0` to `Kage_work_set` (`0x45C1BC`): the
+    /// dog's halves are wider than the default's, as the zombie's
+    /// `0x2580190` (`0x451F8F`) gives it `(0x190, 0x258)`.
+    #[test]
+    fn a_dogs_shadow_is_em20_inits() {
+        assert_eq!(character_shadow(0x20), (0x4B0, 0x258));
     }
 
     /// `pSin_parts_ptr[0].Pos_y`, which `Em10Dm02`'s bounce reads, is the
