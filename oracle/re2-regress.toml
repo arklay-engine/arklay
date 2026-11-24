@@ -553,8 +553,6 @@ ticks = 3500
 setup_script = "door_101_102.lua"
 input = "door_101_102_arklay.txt"
 fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,rng,rseed,em,zm0,zm1,zm2,zm3,zm4,zm5,fgroom"
-# the door starts on tick 790 (oracle/re2.md)
-ignore = [[780, 825, "fgroom"]]
 expect = "match"
 record = "--no-enemies --no-enemies-room 0"
 
@@ -567,8 +565,6 @@ ticks = 4400
 setup_script = "door_101_102.lua"
 input = "walk_101_arklay.txt"
 fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,rng,rseed,em,zm0,zm1,zm2,zm3,zm4,zm5,fgroom"
-# the door starts on tick 790 (oracle/re2.md)
-ignore = [[780, 825, "fgroom"]]
 expect = "match"
 record = "--no-enemies --no-enemies-room 0"
 
@@ -581,8 +577,6 @@ ticks = 5400
 setup_script = "door_101_102.lua"
 input = "run_102_arklay.txt"
 fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,rng,rseed,em,zm0,zm1,zm2,zm3,zm4,zm5,fgroom"
-# the door starts on tick 790 (oracle/re2.md)
-ignore = [[780, 825, "fgroom"]]
 expect = "match"
 record = "--no-enemies --no-enemies-room 0"
 
@@ -598,8 +592,6 @@ input_shift = 780
 input_drop_early = true
 # no rng, mot or zombies: the original keeps only Kendo running (--keep-enemy 0), and the standing clip's speed differs (oracle/re2.md)
 fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,em,fgroom"
-# the door starts on tick 790 (oracle/re2.md)
-ignore = [[780, 825, "fgroom"]]
 expect = "match"
 record = "--no-enemies --keep-enemy 0"
 
@@ -614,8 +606,6 @@ input = "kendo_attacked.txt"
 input_shift = 780
 input_drop_early = true
 fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,rng,rseed,em,zm0,zm1,zm2,zm3,zm4,zm5,fgroom"
-# the door starts on tick 790 (oracle/re2.md)
-ignore = [[780, 825, "fgroom"]]
 expect = "match"
 record = "--no-enemies --no-enemies-room 0"
 
@@ -689,7 +679,6 @@ offset = 780
 setup_script = "door_101_102.lua"
 input = "door_101_102_arklay.txt"
 fields = "room,bgm,xavol,snd,fgroom"
-ignore = [[780, 915, "fgroom"]]
 expect = "match"
 record = "--no-enemies --no-enemies-room 0"
 

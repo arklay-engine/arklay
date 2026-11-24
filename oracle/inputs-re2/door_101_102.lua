@@ -8,3 +8,7 @@ api:set_re2_rnd(39135)
 api:set_re2_sce_rnd(2060504824)
 api:set_room_camera(8)
 for i = 35, 41 do api:set_re2_flag(6, i) end
+-- Room 100's fires at cut 20 (5:6) and the zone toggle at cut 38 (5:14), as
+-- its scripts have left them by then.
+api:set_re2_flag(5, 6)
+api:set_re2_flag(5, 14)

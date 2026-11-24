@@ -7782,6 +7782,11 @@ impl GameSession {
                 &mut self.game,
                 true,
             );
+            // `door_101_102` starts 780 ticks into room 100, after its
+            // scripts have raised 5:6 and 5:14.
+            if let Some(log) = authored.as_deref() {
+                log.restore_room_word(&mut self.game.re2.banks);
+            }
             apply_re2_room_data(&mut self.loaded.room, &mut self.game);
             self.game.re2.pending_player = placed;
         }
@@ -46942,6 +46947,32 @@ end
         session.game.re2.author_var(4, 100);
         session.finish_authoring(baseline, false);
         assert_eq!(session.game.re2.vars[4], 100, "the setup's write");
+    }
+
+    /// The room's script set-up clears `fg_room`'s first word before the
+    /// rerun's init; the setup's bits there stand for play since the load
+    /// and go back over it, and the init's own writes stay.
+    #[test]
+    fn a_setup_s_room_bits_outlast_the_rerun_s_clear() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1
+#game re2
+proc init_00 { set(5, 3, 1); set(5, 9, 1); evt_end(0); }
+proc main_00 { evt_end(0); }",
+        )
+        .unwrap();
+        session.loaded.re2_vm = Some(crate::scd2::vm::Vm::new(&scripts));
+        session.enter_room(&pack, None, true, RoomBgmHandoff::Now);
+        let baseline = session.author_baseline();
+        session.game.re2.set_flag(5, 6, 1);
+        session.game.re2.set_flag(5, 9, 0);
+        session.finish_authoring(baseline, false);
+        assert!(session.game.re2.flag(5, 6), "the setup's");
+        assert!(!session.game.re2.flag(5, 9), "the setup's clear");
+        assert!(session.game.re2.flag(5, 3), "the init's");
     }
 
     /// A flag the setup writes counts even where the first pass wrote it
