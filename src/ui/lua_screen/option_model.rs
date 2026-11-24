@@ -524,7 +524,7 @@ mod tests {
             tsb: 0x80,
             textured: true,
             blend: false,
-            additive: false,
+            mix: crate::model::PacketMix::Weighted,
             raw_y: false,
             flat_color: None,
             quad: None,
