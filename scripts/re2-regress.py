@@ -233,7 +233,11 @@ def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input
         lines.append(f"load_game_pack({lua_str(str(ctx['pack']))}, {{ {', '.join(options)} }})")
         # `boot = true`: from the game's boot, the warning before the title, as the record has it from its tick 0.
         lines.append("open_title({ boot = true })" if run.get("boot") else "open_title()")
-        lines.append(f"trace_start({lua_str(str(trace))})")
+        # The voice lines' lengths wait on the title for the game it starts.
+        if voice is not None:
+            lines.append(f"trace_start({lua_str(str(trace))}, {{ {voice_option(voice)} }})")
+        else:
+            lines.append(f"trace_start({lua_str(str(trace))})")
     else:
         options += choice_options(run)
         lines.append(f"load_game_pack({lua_str(str(ctx['pack']))}, {{ {', '.join(options)} }})")
@@ -250,7 +254,7 @@ def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input
         if run.get("sound", True):
             trace_options.append("sound = true")
             if voice is not None:
-                trace_options.append("voice_ticks = { " + ", ".join(str(held) for held in voice) + " }")
+                trace_options.append(voice_option(voice))
         if films is not None:
             trace_options.append("film_pads = { " + ", ".join(str(pads) for pads in films) + " }")
         lines.append(f"trace_start({lua_str(str(trace))}, {{ {', '.join(trace_options)} }})")
@@ -523,6 +527,11 @@ def film_pads(ref_dir: Path) -> list[int]:
     return [int(count) for count in re.findall(r"^a film ran (\d+) of its own Pad_sets before tick \d+$", log, re.M)]
 
 
+def voice_option(voice: list[int]) -> str:
+    """`trace_start`'s `voice_ticks` option for the lines' lengths `voice`."""
+    return "voice_ticks = { " + ", ".join(str(held) for held in voice) + " }"
+
+
 def voice_ticks(trace: Path) -> list[int]:
     """How long each voice line held `fg_status`'s voice bit (flag 1:26, `0x20`) in the recording, in order.
 
@@ -756,7 +765,7 @@ def self_test() -> int:
         print(f"re2-regress self-test FAILED: compare_from {starts} {bad}", file=sys.stderr)
         return 1
     problem = (self_test_fields() or self_test_gallery_hold() or self_test_pace() or self_test_pictures()
-               or self_test_save_images())
+               or self_test_save_images() or self_test_title_voice())
     if problem:
         print(f"re2-regress self-test FAILED: {problem}", file=sys.stderr)
         return 1
@@ -888,9 +897,30 @@ def self_test_save_images() -> str | None:
         times.mkdir()
         for name, when in (("a", 2), ("b", 3), ("c", 1)):
             (times / name).write_bytes(b"")
-            os.utime(times / name, ns=(when, when))
+            # Seconds apart: NTFS keeps a write time in units of 100 ns.
+            os.utime(times / name, ns=(when * 1_000_000_000, when * 1_000_000_000))
         if [path.name for path in newest_first(sorted(times.iterdir()))] != ["b", "a", "c"]:
             return "newest_first doesn't order by write time"
+    return None
+
+
+def self_test_title_voice() -> str | None:
+    """A title run with `voice_from_ref` hands the record's voice lengths to its title's `trace_start`."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        trace = root / "ref.trace"
+        trace.write_text("t=0 fgstat=00000000\nt=1 fgstat=00000020\nt=3 fgstat=00000000\n"
+                         "t=5 fgstat=00000020\nt=9 fgstat=00000010\n")
+        voice = voice_ticks(trace)
+        if voice != [2, 4]:
+            return f"voice_ticks gave {voice}"
+        source = root / "input.txt"
+        source.write_text("0\n")
+        run = {"name": "t", "ui": "title", "boot": True, "voice_from_ref": True}
+        lua = driver_lua(run, {"pack": root / "re2.akpak"}, "title", 10, root / "a.trace", source, None, root,
+                         None, voice)
+        if "voice_ticks = { 2, 4 }" not in lua or "open_title({ boot = true })" not in lua:
+            return f"a title run's driver lacks its voice lengths:\n{lua}"
     return None
 
 
@@ -1654,7 +1684,8 @@ def run_one(run: dict, ctx: dict) -> dict:
         shutil.rmtree(saves_dir)
     saves_dir.mkdir(parents=True)
     voice = None
-    if screen == "game" and run.get("sound", True) and run.get("voice_from_ref"):
+    # A title run's lines are the game's the title starts (a `--boot` record has sound unless the run says not).
+    if screen in ("game", "title") and run.get("sound", True) and run.get("voice_from_ref"):
         voice = voice_ticks(ref_trace)
     driver = out / f"{name}.driver.lua"
     films = film_pads(ref_dir) if screen == "game" and run.get("films_from_ref") else None
@@ -1983,6 +2014,12 @@ def record_run(run: dict, args, refs: Path, manifest: dict[str, dict]) -> int:
         return 1
 
 
+def is_path(part: str) -> bool:
+    """Whether a part of a shown record command names a file: a reference's or the work folder's (by the placeholders
+    standing for them) or one in the checkout, rather than a value such as a `--config` setting."""
+    return part.startswith(("$ARKLAY_RE2_REFS", "$WORK")) or (ROOT / part).exists()
+
+
 def record_reference(run: dict, args, refs: Path, manifest: dict[str, dict], game: str, dest: Path) -> int:
     """`record_run` once the reference is this record's to replace."""
     name = run["name"]
@@ -2026,12 +2063,15 @@ def record_reference(run: dict, args, refs: Path, manifest: dict[str, dict], gam
             # The stored log itself: the record writes its own in `stage`, and this one stands until that is whole.
             command += ["--pace", str(pace)]
         source = pace if pace.is_absolute() else ROOT / pace
-        named = source.relative_to(refs) if source.is_relative_to(refs) else pace
+        named = (source.relative_to(refs) if source.is_relative_to(refs) else pace).as_posix()
         digest = hashlib.sha256(source.read_bytes()).hexdigest() if source.is_file() else "unread"
         followed = f"pace: {named} sha256 {digest}"
     # As it reads once the record has taken the reference's place.
     shown = [part if part != game else "$ARKLAY_RE2_ROOT" for part in command]
     shown = [part.replace(str(stage), str(dest)).replace(str(refs), "$ARKLAY_RE2_REFS").replace(str(work), "$WORK") for part in shown]
+    # Written with `/` on every system, so that a reference's meta.txt reads the same wherever it was recorded.
+    if os.sep != "/":
+        shown = [part.replace(os.sep, "/") if is_path(part) else part for part in shown]
     shown[0] = "python3"
     shown[1] = "scripts/oracle-re2.py"
     print(f"{name}: " + " ".join(shlex.quote(part) for part in command), flush=True)
@@ -2070,7 +2110,15 @@ def reference_lock(dest: Path):
     runner ends, however it ends. A reference another record holds is refused."""
     path = dest.with_name(dest.name + ".lock")
     while True:
-        handle = open(path, "a+b")
+        try:
+            handle = open(path, "a+b")
+        except PermissionError:
+            if os.name != "nt":
+                raise
+            # Windows refuses to open a file whose removal by the last holder is still pending: it is gone a moment
+            # later.
+            time.sleep(0.01)
+            continue
         try:
             if os.name == "nt":
                 import msvcrt
@@ -2098,6 +2146,11 @@ def reference_lock(dest: Path):
         if os.name != "nt":
             path.unlink(missing_ok=True)
         handle.close()
+        if os.name == "nt":
+            # Removed once let go, unless another runner has opened it already: Windows refuses to remove a file
+            # that is open, so that runner's lock stands.
+            with contextlib.suppress(OSError):
+                path.unlink()
 
 
 def replaced_folder(dest: Path) -> Path:

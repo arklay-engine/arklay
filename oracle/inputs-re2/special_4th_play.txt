@@ -1,0 +1,24 @@
+# The title from boot: SPECIAL, confirm on 4TH: the fade to the 4th Survivor's title, its logo, then START into the 4th Survivor's game in room 304 and a few steps (oracle/re2.md, "The 4th Survivor and To-fu").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 confirm
+443
+1000 start
+1003
+1400 up
+1470 right
+1490 up run
+1570 left
+1590 up
+1650
+1700 aim
+1760
+1800 down
+1830

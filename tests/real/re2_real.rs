@@ -1341,8 +1341,12 @@ fn no_event_holds_the_player_for_good() {
                         objects: &[],
                         key_trg: 0,
                     };
-                    let arrived =
-                        arklay::player2::player_move(&mut game.re2.player, &mut player, &tick);
+                    let arrived = arklay::player2::player_move(
+                        &mut game.re2.player,
+                        &mut player,
+                        &tick,
+                        &mut game.re2.rnd,
+                    );
                     if let Some(flag) = arrived {
                         game.re2.raise_room_flag(flag);
                     }

@@ -1,0 +1,26 @@
+# The title from boot: SPECIAL, right to TO-FU and confirm: the fade to To-fu's title, its logo, then START into To-fu's game in room 304 and a few steps (oracle/re2.md, "The 4th Survivor and To-fu").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+420 right
+423
+460 confirm
+463
+1040 start
+1043
+1440 up
+1510 right
+1530 up run
+1610 left
+1630 up
+1690
+1740 aim
+1800
+1840 down
+1870

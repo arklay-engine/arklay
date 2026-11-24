@@ -574,6 +574,17 @@ pub const FG_SYSTEM_DIE: u8 = 5;
 /// `fg_system`'s `0x2000`: the attract demo. The music's calls do nothing
 /// under it ([`crate::bgm2`]).
 pub const FG_SYSTEM_DEMO: u8 = 18;
+/// `fg_system`'s `0x8`: the 4th Survivor's or To-fu's game (SPECIAL's
+/// extras), which `Title_game_init` starts with no prologue.
+pub const FG_SYSTEM_EXTRA: u8 = 28;
+/// `fg_system`'s `0x1`: To-fu's, with [`FG_SYSTEM_EXTRA`].
+pub const FG_SYSTEM_TOFU: u8 = 31;
+/// `fg_status`'s `0x2000000`: an extra mode's game (`Title_game_init`'s
+/// step 1 raises it with [`FG_SYSTEM_EXTRA`]).
+pub const FG_STATUS_EXTRA: u8 = 6;
+/// `fg_status`'s `0x8000000`: an extra mode's script map closed. The map
+/// page's cancel (`0x4FBE50`) raises it under [`FG_SYSTEM_EXTRA`].
+pub const FG_STATUS_EXTRA_MAP: u8 = 4;
 /// `fg_system`'s `0x8000`, which `Init_movie_work` clears. No reader is known.
 pub const FG_SYSTEM_8000: u8 = 16;
 /// `fg_status`'s `0x4000000`: EASY's.
@@ -2741,7 +2752,14 @@ impl GameHost<'_> {
         let Some(id) = crate::se2::SoundId::decode(id) else {
             return;
         };
-        let player = self.game.entities[0].pos;
+        // The original's `Pos`, as this pass has written it (112's landing
+        // sounds at the height `add_speed` took the player to).
+        let player = self
+            .game
+            .re2
+            .pending_player
+            .pos
+            .unwrap_or(self.game.entities[0].pos);
         let character = |slot: usize| {
             self.game
                 .re2
@@ -2781,8 +2799,17 @@ impl GameHost<'_> {
     fn super_on(&mut self, task: usize, operands: &[i64]) {
         let at = |index: usize| operands.get(index).copied().unwrap_or(0);
         let parent = crate::objects::SuperParent::decode(at(1) as u8, at(2) as u8);
-        let player = (self.game.entities[0].pos, self.game.entities[0].angle);
-        let parent = self.game.super_matrix(parent, player);
+        // The root matrix's translation is `Pos` itself, as this pass has
+        // written it; its turn is the last one `Pl_mat` built.
+        let pos = self
+            .game
+            .re2
+            .pending_player
+            .pos
+            .unwrap_or(self.game.entities[0].pos);
+        let parent = self
+            .game
+            .super_matrix(parent, (pos, self.game.entities[0].angle));
         let local = crate::anim::Mat4x3 {
             r: crate::anim::rotation_matrix(
                 i32::from(at(6) as i16),
@@ -2827,14 +2854,23 @@ impl GameHost<'_> {
         if !self.work_is_player(task) {
             return None;
         }
+        // The original's `Pos` and `Cdir_y`, which a script's `add_speed`,
+        // `member_set` and `pos_set` write at once: what this pass queued.
+        let pending = &self.game.re2.pending_player;
         if let Some(axis) = usize::from(member)
             .checked_sub(MEMBER_POS_X)
             .filter(|axis| *axis < 3)
         {
-            return self.game.entities[0].pos.get(axis).copied();
+            return pending
+                .pos
+                .unwrap_or(self.game.entities[0].pos)
+                .get(axis)
+                .copied();
         }
         match member {
-            MEMBER_ANGLE => Some(i32::from(self.game.entities[0].angle & 0x0FFF)),
+            MEMBER_ANGLE => Some(i32::from(
+                pending.angle.unwrap_or(self.game.entities[0].angle) & 0x0FFF,
+            )),
             MEMBER_AREA => Some(i32::from(self.game.re2.player.at_sce)),
             // `Type`'s low bits are the weapon in hand, which the engine keeps
             // with the inventory.
@@ -4033,6 +4069,13 @@ mod tests {
         game.objects.records[1].world = crate::anim::entity_matrix([5000, -100, 7000], 0);
         exec(&mut game, "super_on", &[0, 0xC1, 0, 0, 0, 0, 0, 0, 0]);
         assert_eq!(game.objects.record(2).unwrap().pos, [5000, -100, 7000]);
+        // On the player where this pass's `pos_set` put him.
+        game.entities[0].angle = 0;
+        exec(&mut game, "work_set", &[WK_PLAYER, 0]);
+        exec(&mut game, "pos_set", &[0, 3000, -50, 4000]);
+        exec(&mut game, "work_set", &[WK_OBJECT, 2]);
+        exec(&mut game, "super_on", &[0, 64, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(game.objects.record(2).unwrap().pos, [3000, -50, 4000]);
     }
 
     #[test]
@@ -4852,6 +4895,39 @@ mod tests {
         let jewel = game.room_actions[5].unwrap();
         assert_eq!(jewel.kind, RoomActionKind::Item);
         assert_eq!(jewel.params[0], 0x33, "the Red Jewel");
+    }
+
+    /// Room 112's weak floor (`main_11`) drops the player with `add_speed` in
+    /// `while (member_cmp(0, 12, 4, 0))`: the test reads the `Pos_y` this
+    /// pass wrote, so the loop ends on the tick the drop passes the floor.
+    #[test]
+    fn a_player_member_reads_what_the_pass_wrote() {
+        let mut game = GameState::default();
+        game.entities[0].pos = [-21427, -200, -12613];
+        game.entities[0].angle = 1952;
+        exec(&mut game, "work_set", &[WK_PLAYER, 0]);
+        exec(&mut game, "speed_set", &[1, 580]);
+        exec(&mut game, "add_speed", &[]);
+        let mut host = GameHost { game: &mut game };
+        assert_eq!(host.member(0, MEMBER_POS_X as u8 + 1), Some(380));
+        assert_eq!(host.member(0, MEMBER_POS_X as u8), Some(-21427));
+        exec(&mut game, "dir_set", &[0, 0, 2048, 0]);
+        let mut host = GameHost { game: &mut game };
+        assert_eq!(host.member(0, MEMBER_ANGLE), Some(2048));
+    }
+
+    /// Room 112's landing: `se_on` on the player after this pass's
+    /// `add_speed` sounds where the speed took him, not where he was drawn.
+    #[test]
+    fn se_on_of_the_player_sounds_where_the_pass_moved_him() {
+        let mut game = GameState::default();
+        game.entities[0].pos = [-21427, -200, -12613];
+        exec(&mut game, "work_set", &[WK_PLAYER, 0]);
+        exec(&mut game, "speed_set", &[1, 580]);
+        exec(&mut game, "add_speed", &[]);
+        exec(&mut game, "se_on", &[2, 0x10A, 1, 0, 0, 0]);
+        let sound = game.re2.sounds.last().unwrap();
+        assert_eq!(sound.pos, [-21427, 380, -12613]);
     }
 
     /// Room 205's `main_00` hangs object 3 on object 2 (`obj_model_set`

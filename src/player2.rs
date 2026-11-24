@@ -14,7 +14,7 @@ use crate::player::{self, ClipSource, Input, Options, PlayerState};
 use crate::state::{RoomState, ScaRect};
 
 /// `Key`, the mapped pad word `pl_br_*` test.
-const KEY_FORWARD: u16 = 0x0001;
+pub(crate) const KEY_FORWARD: u16 = 0x0001;
 const KEY_RIGHT: u16 = 0x0002;
 const KEY_BACKWARD: u16 = 0x0004;
 const KEY_LEFT: u16 = 0x0008;
@@ -37,7 +37,7 @@ pub const KEY_MAP: u16 = 0x4000;
 pub const KEYS_IN_A_STOP: u16 = KEY_SIDE_LEFT | KEY_SIDE_RIGHT | KEY_CONFIRM | KEY_CANCEL;
 
 /// `routine[0]`: the pad's mode and the scripts' mode.
-const MODE_MOVE: u8 = 1;
+pub(crate) const MODE_MOVE: u8 = 1;
 const MODE_DAMAGE: u8 = 2;
 const MODE_DEAD: u8 = 3;
 /// `Pl_dead`.
@@ -404,6 +404,10 @@ pub struct Work {
     /// The routines hold the first tick of `pl_mv_00` that a room started on
     /// its own assumes ([`Work::default`]), and no tick has run them yet.
     pub first_tick_assumed: bool,
+    /// A game RE 2's title handed over: its first live tick runs
+    /// `Player_move` from `Pl_init`'s routines, where a door's settling tick
+    /// keeps the spawn's frame. Taken by that tick.
+    pub title_first_move: bool,
     /// `fg_status`'s `0x40`. The aim (`pl_mv_05`), a hit (`Pl_damage`), the
     /// death (`Pl_die`), `pl_mv_0b` and an enemy's hold (`Pl_Em_damage`,
     /// `Pl_Em_die`) raise it and leave it to the next routine's case 0, so it
@@ -1273,6 +1277,7 @@ impl Default for Work {
             posed: false,
             init_pose: false,
             first_tick_assumed: true,
+            title_first_move: false,
             holds_game: false,
             routine: [MODE_MOVE, MOVE_IDLE, 1, 0],
             move_no: IDLE_CLIPS[0],
@@ -1373,6 +1378,7 @@ impl Work {
                 position: self.neck.position,
                 ..Neck::default()
             },
+            title_first_move: self.title_first_move,
             ..Self::default()
         }
     }
@@ -1416,12 +1422,14 @@ impl Work {
     }
 
     /// `Be_flg`'s bits 4 and 8: on the stairs, or going up or down a box and
-    /// off the ground, nothing collides.
+    /// off the ground, nothing collides. The climb drops them on its clip's
+    /// frame 0x31 (Sherry's 0x77), and the walls push again for the frames
+    /// her clip has left.
     pub fn climbing(&self) -> bool {
         self.routine[0] == MODE_MOVE
             && match self.routine[1] {
                 MOVE_STAIRS => true,
-                MOVE_CLIMB => matches!(self.routine[3], 1..=3),
+                MOVE_CLIMB => matches!(self.routine[3], 1..=3) && self.be_flg & BE_NO_PUSH != 0,
                 MOVE_JUMP_DOWN => self.routine[3] < 5,
                 _ => false,
             }
@@ -1872,6 +1880,7 @@ pub fn place_neck(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
         work,
         player,
         tick,
+        rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
     }
@@ -1900,7 +1909,12 @@ pub fn seed_pose(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
 }
 
 /// `Player_move`. The result is the room flag a finished scripted walk raises.
-pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -> Option<u8> {
+pub fn player_move(
+    work: &mut Work,
+    player: &mut PlayerState,
+    tick: &Tick<'_>,
+    rnd: &mut crate::zombie2::Rnd,
+) -> Option<u8> {
     work.key_trg = tick.key_trg;
     work.check = false;
     if tick.stopped {
@@ -1927,6 +1941,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         work,
         player,
         tick,
+        rnd: *rnd,
         arrived: None,
         stairs: None,
     };
@@ -1938,6 +1953,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         MODE_SCENARIO => mover.scenario(),
         _ => {}
     }
+    // The jump down takes `nFloor` from the height.
     if mover.work.routine[0] == MODE_MOVE && mover.work.routine[1] == MOVE_JUMP_DOWN {
         mover.work.floor = crate::sca::floor_toward_zero(mover.player.pos[1]);
     }
@@ -1949,6 +1965,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
     mover.latch_parts();
     mover.work.holds_game =
         held_game || mover.work.holds_game_now() || mover.work.holds_game_in_routine();
+    *rnd = mover.rnd;
     mover.arrived
 }
 
@@ -1978,6 +1995,7 @@ fn latch_stopped(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
         work,
         player,
         tick,
+        rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
     }
@@ -2029,6 +2047,17 @@ pub fn pose_init(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
         player.anim.set_applied_pose(Some(pose.clone()));
     }
     place_neck(work, player, tick);
+    // The reset pose's draw leaves every part's `Workm` on it, which an
+    // `Esp_call` on a part copies before the next `Player_move`.
+    Mover {
+        work,
+        player,
+        tick,
+        rnd: crate::zombie2::Rnd::default(),
+        arrived: None,
+        stairs: None,
+    }
+    .latch_parts();
 }
 
 /// The idle's first frame, clip 2 of the weapon's bank (`pSub0_kan_t_ptr`),
@@ -2125,6 +2154,9 @@ pub(crate) struct Mover<'a, 'b> {
     pub(crate) work: &'a mut Work,
     pub(crate) player: &'a mut PlayerState,
     pub(crate) tick: &'a Tick<'b>,
+    /// `Rnd`, which Sherry's climb draws (`pl_mv_08`): [`player_move`]
+    /// hands the game's in and takes it back.
+    rnd: crate::zombie2::Rnd,
     arrived: Option<u8>,
     /// `Sca_info`'s stairs: those last tick's end left in front of the player.
     stairs: Option<&'b ScaRect>,
@@ -2153,6 +2185,7 @@ impl<'a, 'b> Mover<'a, 'b> {
             work,
             player,
             tick,
+            rnd: crate::zombie2::Rnd::default(),
             arrived: None,
             stairs: None,
         }
@@ -2520,6 +2553,14 @@ impl Mover<'_, '_> {
             self.work.floor = self.work.floor.wrapping_add(1);
             self.work.be_flg |= BE_NO_SCA;
         }
+        // Sherry's clip skips from frame 0x39 to 0x56 three times in four,
+        // blending in again (`0x4DB7F9`).
+        if small && frame == 0x39 && self.rnd.draw() & 3 != 0 {
+            self.work.move_no = CLIMB_CLIP;
+            self.work.move_cnt = 0x56;
+            self.work.hokan = 5;
+        }
+        let frame = self.work.move_cnt;
         if frame == lift {
             self.work.spd[0] = reach;
             self.add_speed_xz();
@@ -7707,6 +7748,7 @@ pub fn spl_init(
         work,
         player,
         tick,
+        rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
     };
@@ -7733,6 +7775,14 @@ pub fn in_auto(work: &Work) -> bool {
     work.routine[0] == MODE_MOVE
 }
 
+impl Work {
+    /// A part's `Workm` as the last tick left it ([`Work::parts`]), the
+    /// neck's turn included, or `None` before any tick has left one.
+    pub(crate) fn workm(&self, part: usize) -> Option<Matrix> {
+        self.parts.get(part).copied().flatten()
+    }
+}
+
 /// `Workm` of a work's part, as the last tick left it.
 pub(crate) fn part_world(
     work: &mut Work,
@@ -7744,6 +7794,7 @@ pub(crate) fn part_world(
         work,
         player,
         tick,
+        rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
     };
@@ -7814,6 +7865,7 @@ pub fn member(work: &Work, member: u8) -> Option<i32> {
         1 => i32::from((work.be_flg >> 16) as u16),
         2..=5 => i32::from(work.routine[usize::from(member) - 2]),
         7 => i32::from(work.kind),
+        0x11 => i32::from(work.floor),
         0x14 | 0x19 => i32::from(work.dest[0]),
         0x15 | 0x1A => i32::from(work.dest[1]),
         0x16 => i32::from(work.sce_flg),
@@ -7835,6 +7887,9 @@ pub fn set_member(work: &mut Work, member: u8, value: i32) -> bool {
         1 => work.be_flg = (work.be_flg & 0xFFFF) | u32::from(value as u16) << 16,
         2..=5 => work.routine[usize::from(member) - 2] = value as u8,
         7 => work.kind = value as u16,
+        // `nFloor`: 112's weak floor drops the player a level and its script
+        // sets his floor where he lands (`main_11`'s `member_set(17, 0)`).
+        0x11 => work.floor = value as u8,
         0x14 | 0x19 => work.dest[0] = value as i16,
         0x15 | 0x1A => work.dest[1] = value as i16,
         0x16 => work.sce_flg = value as u16,
@@ -8119,6 +8174,10 @@ mod tests {
         last_key: u16,
         /// The room's objects.
         objects: Vec<crate::objects::ObjectRecord>,
+        /// `Rnd`.
+        rnd: crate::zombie2::Rnd,
+        /// The character id, `Id`.
+        id: u8,
     }
 
     /// `angle` from the player, as far as `distance`.
@@ -8368,6 +8427,59 @@ mod tests {
         );
     }
 
+    /// Sherry's climb (`0x4DB7F9`): on frame 0x39 a draw of `Rnd` with either
+    /// of its low bits sends the clip on to 0x56, blended in over five
+    /// frames; the walls push again from frame 0x77, before her clip ends.
+    #[test]
+    fn sherrys_climb_skips_on_three_draws_in_four_and_is_pushed_before_its_end() {
+        let climb = |rnd: u16| {
+            let mut setup = Setup::new(0);
+            (setup.clips, setup.keyframes) = bank(10, 140, 0);
+            setup.id = SMALL_ID;
+            setup.rnd = crate::zombie2::Rnd(rnd);
+            setup.player.angle = 0;
+            setup.work.routine = [MODE_MOVE, MOVE_CLIMB, 0, 0];
+            let mut seen = Vec::new();
+            while setup.work.routine[1] == MOVE_CLIMB && seen.len() < 300 {
+                setup.tick(Input::default(), 200);
+                seen.push((
+                    setup.work.move_cnt,
+                    setup.work.hokan,
+                    setup.work.routine[3],
+                    setup.work.climbing(),
+                ));
+            }
+            (seen, setup.rnd)
+        };
+        // 0x6CA4 draws 0x7D: the skip.
+        let (seen, rnd) = climb(0x6CA4);
+        assert_ne!(rnd, crate::zombie2::Rnd(0x6CA4));
+        let at = seen.iter().position(|&(frame, ..)| frame == 0x39).unwrap();
+        assert_eq!(seen[at + 1].0, 0x57, "{seen:?}");
+        assert_eq!(seen[at + 1].1, 4, "{seen:?}");
+        assert!(
+            seen.iter()
+                .all(|&(frame, ..)| !(0x3A..0x57).contains(&frame))
+        );
+        // 0x0102 draws 4: the clip plays on, and the draw is kept.
+        let (seen, rnd) = climb(0x0102);
+        assert_eq!(rnd, crate::zombie2::Rnd(0x0204));
+        let at = seen.iter().position(|&(frame, ..)| frame == 0x39).unwrap();
+        assert_eq!(seen[at + 1].0, 0x3A, "{seen:?}");
+        // The pass is skipped up to frame 0x77 and runs for the clip's rest.
+        let end = seen.iter().position(|&(frame, ..)| frame == 0x78).unwrap();
+        assert!(
+            seen[..end].iter().all(|&(.., climbing)| climbing),
+            "{seen:?}"
+        );
+        assert!(
+            seen[end..]
+                .iter()
+                .any(|&(_, _, step, climbing)| step == 3 && !climbing),
+            "{seen:?}"
+        );
+    }
+
     /// `pl_br_03` (0x4DA6C0) asks for the check while backing up, and
     /// `pl_br_09` (0x4DB930) once the landing has run four frames.
     #[test]
@@ -8607,7 +8719,19 @@ mod tests {
             objects: &[],
             key_trg: 0,
         };
+        // A turned pose's `Workm`s, as the status screen's open left them.
+        let stale = Matrix {
+            m: rot_matrix([0, 1024, 0]),
+            t: [1, 2, 3],
+        };
+        setup.work.parts = vec![Some(stale); 16];
         pose_init(&mut setup.work, &mut setup.player, &tick);
+        assert_eq!(setup.work.parts_at, Some(setup.player.pos));
+        assert!(setup.work.parts.iter().flatten().next().is_some());
+        assert!(
+            !setup.work.parts.contains(&Some(stale)),
+            "the parts are on the reset pose"
+        );
         let [x, y, z] = setup.work.neck.position.expect("a head on the pose");
         // The original's at Claire's new game: 18841, -2346, -2932.
         assert_eq!((x - 18802, y, z), (39, -2346, -2932));
@@ -9095,6 +9219,8 @@ mod tests {
                 pushing: false,
                 last_key: 0,
                 objects: Vec::new(),
+                rnd: crate::zombie2::Rnd::default(),
+                id: 0,
             }
         }
 
@@ -9152,7 +9278,7 @@ mod tests {
                 },
                 input,
                 options: Options::default(),
-                id: 0,
+                id: self.id,
                 life,
                 poisoned: false,
                 stopped: false,
@@ -9165,7 +9291,7 @@ mod tests {
                 objects: &self.objects,
                 key_trg,
             };
-            player_move(&mut self.work, &mut self.player, &tick)
+            player_move(&mut self.work, &mut self.player, &tick, &mut self.rnd)
         }
 
         /// [`seed_pose`] in this setup's banks.
@@ -9231,6 +9357,7 @@ mod tests {
                 work: &mut self.work,
                 player: &mut self.player,
                 tick: &tick,
+                rnd: crate::zombie2::Rnd::default(),
                 arrived: None,
                 stairs: None,
             };
@@ -11592,7 +11719,12 @@ mod tests {
             objects: &[],
             key_trg: KEY_FORWARD | KEY_TILT_UP,
         };
-        player_move(&mut setup.work, &mut setup.player, &tick);
+        player_move(
+            &mut setup.work,
+            &mut setup.player,
+            &tick,
+            &mut Default::default(),
+        );
         // `Key_trg` comes from the pad, which goes on being read.
         assert_eq!(setup.work.key_trg, KEY_FORWARD | KEY_TILT_UP);
         setup.work.key_trg = before.key_trg;
@@ -12005,7 +12137,12 @@ mod tests {
             objects: &[],
             key_trg: 0,
         };
-        player_move(&mut setup.work, &mut setup.player, &tick);
+        player_move(
+            &mut setup.work,
+            &mut setup.player,
+            &tick,
+            &mut Default::default(),
+        );
         assert_eq!(setup.work.neck.body, Some([5000, 0, 5000]));
         follow_pushes(&mut setup.work, [5000, 0, 5000]);
         assert_eq!(setup.work.neck.position, Some([100, -1700, 200]));
@@ -12435,6 +12572,26 @@ mod tests {
         assert_eq!(work.move_no, 3);
         plc_ret(&mut work);
         assert_eq!(work.routine, [MODE_MOVE, MOVE_IDLE, 0, 0]);
+    }
+
+    /// Room 112's weak floor drops the player from the balcony (`nFloor` 3)
+    /// under a script's motion: his floor stays the balcony's on the way
+    /// down, as `Spl_Scenario` leaves it, until the script sets it (member
+    /// 0x11) where he lands.
+    #[test]
+    fn a_script_sets_the_floor_and_its_motion_leaves_it() {
+        let mut setup = Setup::new(0);
+        setup.work.floor = 3;
+        plc_motion(&mut setup.work, 0, 0, 0);
+        setup.player.pos[1] = -1270;
+        setup.tick(input(false, false, false), 30);
+        assert_eq!(setup.work.floor, 3, "the fall keeps the balcony's floor");
+        assert_eq!(member(&setup.work, 0x11), Some(3));
+        assert!(set_member(&mut setup.work, 0x11, 0));
+        assert_eq!(setup.work.floor, 0);
+        plc_ret(&mut setup.work);
+        setup.tick(input(false, false, false), 30);
+        assert_eq!(setup.work.floor, 0);
     }
 
     #[test]

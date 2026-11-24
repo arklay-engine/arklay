@@ -124,6 +124,9 @@ pub struct NewGameChoice {
     pub hard_mode: bool,
     /// ARRANGE MODE's `censorship_off`.
     pub censorship_off: bool,
+    /// SPECIAL's extra mode, by its player: 0xC the 4th Survivor's HUNK,
+    /// 0xD To-fu's TOFU, 0 for a game of the scenario's character.
+    pub extra_player: u8,
 }
 
 /// A completed screen interaction, interpreted by the app's mode machine.
