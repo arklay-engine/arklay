@@ -67,7 +67,7 @@ expect = "match"
 record = "--start claire --warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip 3 --give 0:3:200"
 
 # licker_204_scene under HARD (`Rnd` 58231 as play begins, as the hard-mode runs have it): `Em22_Init`'s half again of
-# its life, and the slash's, the tongue's and the bite's harder hits on a player who stands still
+# its life, and the slash's and the tongue's harder hits on a player who stands still (it doesn't jump at them)
 [[run]]
 name = "licker_204_scene_hard"
 difficulty = "hard"

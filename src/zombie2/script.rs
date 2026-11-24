@@ -2160,6 +2160,67 @@ mod tests {
         );
     }
 
+    /// HARD's half is of the life after `fg_common` 0xA4's cut: 10 for
+    /// `Em_22` (0x464CC2), 30 for `Em_24` (0x46D069), and a half rounds
+    /// toward 0.
+    #[test]
+    fn a_hard_lickers_half_comes_after_the_0xa4_cut() {
+        for (script, cut) in [
+            (include_str!("../../games/re2/enemy/22/enemy.lua"), 10),
+            (include_str!("../../games/re2/enemy/24/enemy.lua"), 30),
+        ] {
+            let (lua, budget) = crate::lua::new_sandboxed_state().unwrap();
+            budget.begin();
+            let licker: mlua::Table = lua
+                .load(include_str!("../../games/re2/lib/licker.lua"))
+                .eval()
+                .unwrap();
+            lua.globals().set("LICKER", licker).unwrap();
+            let life: i64 = lua
+                .load(format!(
+                    "local function require() return {{ run = function(e, v) VARIANT = v end }} end
+                     {script}
+                     update(nil)
+                     KIND = 0 RND = 2 CLIP_LEN = 1000 DIR = 0 SEES = false
+                     {LICKER_STUB}
+                     function e:hard_mode() return true end
+                     function e:common_a4() return true end
+                     function e:life() return w.life end
+                     tick()
+                     return w.life"
+                ))
+                .eval()
+                .unwrap();
+            let drawn = lua.load("return VARIANT.life[2]").eval::<i64>().unwrap() - cut;
+            assert_eq!(life, drawn + drawn / 2, "cut {cut}");
+        }
+    }
+
+    /// HARD's tongue takes 0x23 for 0x19 (0x463D54), at `Routine_3` 0x13,
+    /// inside `TONGUE_REACH`.
+    #[test]
+    fn a_hard_lickers_tongue_takes_more() {
+        for (hard, down) in [(false, 0x19), (true, 0x23)] {
+            run_licker(
+                "",
+                &format!(
+                    "tick()
+                     w.downs = {{}}
+                     function e:hard_mode() return {hard} end
+                     function e:pl_life_down(down) w.downs[#w.downs + 1] = down return 0 end
+                     function e:pl_damage_cnt() return 0 end
+                     function e:turn_to_player() return 0 end
+                     function e:distance() return 0x800 end
+                     function e:move_cnt() return w.move_cnt end
+                     w.r = {{ [0] = 1, 8, 2, 0x12 }}
+                     w.vars = {{}}
+                     tick()
+                     assert(#w.downs == 1 and w.downs[1] == {down}, tostring(w.downs[1]))"
+                ),
+            );
+        }
+    }
+
     /// HARD's hits on the player: the slash takes 0x19 for 0xF (0x463F55),
     /// and the jump's bite 0x78 over 0x82 life, else 100, for 100 over 0x6E,
     /// else 0x50 (0x465F58).
@@ -6245,6 +6306,30 @@ mod tests {
                     .eval()
                     .unwrap();
                 assert_eq!(got, life);
+            }
+        }
+
+        /// The owner's peck (0x4617A9): 5, or 10 under HARD.
+        #[test]
+        fn a_hard_crows_peck_takes_twice_as_much() {
+            for (hard, down) in [(false, 5), (true, 10)] {
+                let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+                let got: i64 = lua
+                    .load(format!(
+                        "ROUTINES = {{ [0] = 1, 14, 1, 0 }}
+                         VARS = {{ [13] = 4 }}
+                         DRAWS = setmetatable({{}}, {{ __index = function() return 0 end }})
+                         {ZEROS}
+                         local down
+                         function e:hard_mode() return {hard} end
+                         function e:pl_life_down(d) down = d return 0 end
+                         {CROW}
+                         update(e)
+                         return down"
+                    ))
+                    .eval()
+                    .unwrap();
+                assert_eq!(got, down);
             }
         }
 

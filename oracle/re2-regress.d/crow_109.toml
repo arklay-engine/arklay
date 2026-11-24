@@ -5,12 +5,13 @@
 name = "crow_held_109_hard"
 difficulty = "hard"
 room = "109"
-# recorded for 1500 ticks; the player dies on 766 and the game over's title is up from 1274
+# recorded for 1500 ticks; the pecks take the player to 0 on 766, the death starts on 890 (-12), and the game over's
+# title is up from 1274
 ticks = 1274
 sound = false
 setup_script = "crow_held_109_hard.lua"
 input = "crow_held.txt"
 input_shift = 344
-fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,fgstat"
-expect = { tick = 1036, fields = ["zm6"], note = "with the player dead, crow 6 heads for guide area 0 from off the guides: the original's kara_rootck2 writes a destination from its stack on 1032, where arklay keeps the one it had, so the original's veer (Routine_1 8) ends on 1036 and arklay's flies on (oracle/re2-deviations.md, \"What a crow doesn't show\")" }
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,fgstat"
+expect = { tick = 1036, fields = ["zm6"], note = "with the player dead, crow 6 (slot 6) heads for guide area 0 from off the guides; the original's kara_rootck2 writes a destination from its stack (zd 3618,-11604 on 1005 to 1012, and again from 1033), where arklay keeps the one it had (-19850,-25305), so on 1036 the original's veer (Routine_1 8) ends in 4 and arklay's flies on (oracle/re2-deviations.md, \"What a crow doesn't show\")" }
 record = "--warp 109:-14000:0:-14800:1024 --flag 1:1 --equip 7 --give 0:7:200 --give 1:0x14:60"
