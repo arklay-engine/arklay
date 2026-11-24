@@ -3249,7 +3249,7 @@ fn pack_thumbnail(pack: &PackRow) -> Option<Picture> {
 }
 
 /// What this engine converts each game's pack with: [`Game::packed`].
-fn packed_by_game() -> HashMap<Game, (u32, String)> {
+pub(crate) fn packed_by_game() -> HashMap<Game, (u32, String)> {
     Game::ALL
         .into_iter()
         .map(|game| (game, game.packed()))
@@ -3262,7 +3262,10 @@ fn packed_by_game() -> HashMap<Game, (u32, String)> {
 /// `source_hash`, is not this engine's. A pack that is no game's own (a
 /// custom base, a seed) is held to RE1's, the game it is built for; a seed
 /// to RE1's revision and its generators', whatever its fingerprint.
-fn is_stale(manifest: &manifest::Manifest, packed: &HashMap<Game, (u32, String)>) -> bool {
+pub(crate) fn is_stale(
+    manifest: &manifest::Manifest,
+    packed: &HashMap<Game, (u32, String)>,
+) -> bool {
     let game = Game::from_id(&manifest.id).unwrap_or(Game::Re1);
     let Some((revision, source_hash)) = packed.get(&game) else {
         return true;

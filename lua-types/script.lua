@@ -107,9 +107,10 @@ game = {}
 
 ---Open a game pack, replacing any open one. A session starts with a boot
 ---call after it.
----A game's converted pack that this build would convert differently (its
+---A converted pack that this build would convert differently (its
 ---conversion revision or the fingerprint of the scripts and texts it packs
----isn't this build's) raises a warning: it plays its own scripts.
+---isn't this build's, or is missing), as the launcher marks it stale, prints
+---a warning, not counted for `strict`: it plays its own scripts.
 ---
 ---```lua
 ---load_game_pack("re2.akpak", { difficulty = "hard", mods = { "mods/hd.akpak" } })
