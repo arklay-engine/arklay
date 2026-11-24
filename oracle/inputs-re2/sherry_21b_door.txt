@@ -1,0 +1,10 @@
+# Claire A in room 21B from sherry_21b_lost's start, with Sherry lost: Claire turns round, walks to door 3 and presses it, and Sce_Door's partner test puts up "I can't leave Sherry alone." (door message 8); the press on 544 closes it
+344
+394 left
+420
+424 up
+432
+444 confirm
+445
+544 confirm
+545

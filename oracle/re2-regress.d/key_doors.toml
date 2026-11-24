@@ -68,3 +68,19 @@ ticks = 600
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgkey,fgstat"
 expect = "match"
 record = "--no-enemies --life 200 --warp 116:-26159:-7200:-25126:2048"
+
+# Sce_Door's partner test (0x4E9472): Claire with Sherry following and lost (her `+0x21D & 0x20`) presses room 21B's door 3,
+# and the door puts up "I can't leave Sherry alone." (door message 8) and stays shut. sherry_21b_lost's warp and flags.
+[[run]]
+name = "sherry_21b_door"
+room = "21B"
+player = 1
+character = 1
+sound = false
+ticks = 700
+input = "sherry_21b_door.txt"
+input_shift = 344
+setup = { pos = [-26159, 0, -18908], angle = 1024, health = 200, rnd = 6114, camera = 0, flags = [[3, 64], [3, 8], [3, 12]] }
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,es,spl,fgscn,fgstat,msg,fgkey"
+expect = "match"
+record = "--start claire --warp 21B:-26159:0:-18908:1024:0 --flag 3:64 --flag 3:8 --flag 3:12 --life 200"

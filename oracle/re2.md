@@ -515,6 +515,7 @@ The runs warp in front of each door with `--no-enemies --life 200`, press the ac
 - `locked_door_20B` (`--warp 20B:-1814:0:-12103:3029`): 0x16 at 364 and the heart lock's message on two pages, turned at 500 and closed at 650; no bit goes up.
 - `unlock_door_20A` (`--warp 20A:-15554:0:-15268:1866`): 0x26 at 364, on the message's tick, and bit 17 (`fgkey=0000400000000000`). The run doesn't go through: the door leads into room 200.
 - `locked_inside_116` (`--warp 116:-26159:-7200:-25126:2048`, floor 4): 0x16 at 364 and "It's locked from inside."; no bit goes up.
+- `sherry_21b_door` (`sherry_21b_lost`'s warp and flags, `--start claire`, recorded natively, traces only): with Sherry following and lost, Claire turns round, walks into door 3's reach and presses it at 444; door 3 has no lock, so the message that comes up is `Sce_Door`'s partner test's, "I can't leave Sherry alone." (door message 8), and the press at 544 closes it with the door shut. It matches on every tick, `spl`, `msg` and `fgkey` included.
 
 ## The typewriter
 
