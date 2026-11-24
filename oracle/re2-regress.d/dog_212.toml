@@ -60,7 +60,8 @@ fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,zm0,zm1,fgsta
 frames = [344, 1499]
 # from the warp's first cut on, 0.26 measured: the bodies' shading at their edges and the shots' flashes; the pool's
 # near edge sits a few pixels short of the original's. The pool's spread (924 to 1013, 0.257 measured) and after it
-# (0.227) are judged closer: without the spread they measure about 0.29
-frame_windows = [[350, 1499, 0.35], [924, 1013, 0.27], [1014, 1499, 0.25]]
+# (0.227) are judged closer: without the spread they measure 0.291 and 0.315. On 923 the shadow is still a shadow
+# (0.260; the pool's colour a tick early measures 0.294)
+frame_windows = [[350, 1499, 0.35], [923, 923, 0.275], [924, 1013, 0.27], [1014, 1499, 0.25]]
 expect = "match"
 record = "--warp 212:-11250:0:-25692:3024 --flag 4:83 --life 200 --equip 5 --give 0:5:60 --give 1:0x14:60"

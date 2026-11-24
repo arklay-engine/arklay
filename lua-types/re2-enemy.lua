@@ -1030,6 +1030,15 @@ function Re2EnemyApi:pool() end
 ---@param pool integer Truncated to 16 bits.
 function Re2EnemyApi:set_pool(pool) end
 
+---Colour its own pool when it starts it, so that `Routine_0` 7 alone doesn't
+---turn its shadow into the engine's pool of blood (`Em20_Dead`).
+function Re2EnemyApi:own_pool() end
+
+---Set the shadow's colour (`pKage_work`'s colour words), or `nil` for the
+---one it had before any was set.
+---@param rgb integer|nil `0xBBGGRR`.
+function Re2EnemyApi:set_shadow_color(rgb) end
+
 ---`FUN_00456780`: a burning body's darker parts, each part's `Poly_rgb`
 ---(`0x404040` for the first, `0x808080` lighting it as it is).
 function Re2EnemyApi:burn_parts() end

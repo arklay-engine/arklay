@@ -839,8 +839,8 @@ impl UserData for Api {
             e.em().z.own_pool = true;
             Ok(())
         });
-        methods.add_method_mut("set_shadow_color", |_, e, rgb: u32| {
-            e.em().z.shadow_color = Some(rgb);
+        methods.add_method_mut("set_shadow_color", |_, e, rgb: Option<u32>| {
+            e.em().z.shadow_color = rgb;
             Ok(())
         });
         methods.add_method_mut("burn_parts", |_, e, ()| {
@@ -6302,6 +6302,41 @@ mod tests {
                     "tick {tick}"
                 );
             }
+        }
+
+        /// `Em20_Init` takes a new shadow (`Kage_work_set`, 0x45C1DD): a dog
+        /// put back in a work whose last dog spread its pool starts with its
+        /// shadow's own colour, no pool, and the pool's step at 0.
+        #[test]
+        fn a_new_dog_in_an_old_work_has_no_pool() {
+            let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+            let script = include_str!("../../games/re2/enemy/20/enemy.lua");
+            let got: Vec<i64> = lua
+                .load(format!(
+                    "local w = {{ r = {{ [0] = 0, 0, 0, 0 }}, vars = {{ [8] = 2 }}, pool = 720, rgb = 0xBFBF10, own = false }}
+                     local e = setmetatable({{}}, {{ __index = function() return function() return 0 end end }})
+                     function e:routine(i) return w.r[i] end
+                     function e:set_routine(i, v) w.r[i] = v end
+                     function e:routines(a, b, c, d) w.r = {{ [0] = a, b, c, d }} end
+                     function e:var(i) return w.vars[i] or 0 end
+                     function e:set_var(i, v) w.vars[i] = v end
+                     function e:pool() return w.pool end
+                     function e:set_pool(v) w.pool = v end
+                     function e:own_pool() w.own = true end
+                     function e:set_shadow_color(v) w.rgb = v end
+                     function e:rnd() return 1 end
+                     function e:easy() return false end
+                     function e:hard_mode() return false end
+                     function e:body_box() return 0, 0, 0, 0 end
+                     function e:joint() return false end
+                     function e:pos() return 0, 0, 0 end
+                     {script}
+                     update(e)
+                     return {{ w.pool, w.vars[8], w.rgb == nil and 1 or 0, w.own and 1 or 0 }}"
+                ))
+                .eval()
+                .unwrap();
+            assert_eq!(got, [0, 0, 1, 1]);
         }
 
         /// 0x10 is 0xA's case (0x45EBD0): `4 - Damage_no / 3` bloods, though

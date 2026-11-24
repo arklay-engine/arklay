@@ -1773,7 +1773,11 @@ end
 
 -- `Em20_Init`.
 local function init(e)
+    -- `Kage_work_set` takes a new shadow, without a pool (0x45C1DD).
     e:own_pool()
+    e:set_shadow_color(nil)
+    e:set_pool(0)
+    e:set_var(POOL, 0)
     e:routines(1, 0, 0, 0)
     e:set_damage_flg(0)
     e:set_sce_flg(0)
