@@ -19834,7 +19834,7 @@ struct Re2RoomData {
     sca: Option<crate::state::Sca>,
     footstep_zones: Vec<crate::state::FootstepZone>,
     lights: Vec<Option<crate::state::CameraLight>>,
-    blends: Vec<Vec<Vec<bool>>>,
+    blends: Vec<Vec<Vec<(bool, crate::model::PacketMix)>>>,
 }
 
 impl Re2RoomData {
@@ -19853,7 +19853,13 @@ impl Re2RoomData {
                         .model
                         .objects
                         .iter()
-                        .map(|object| object.prims.iter().map(|prim| prim.blend).collect())
+                        .map(|object| {
+                            object
+                                .prims
+                                .iter()
+                                .map(|prim| (prim.blend, prim.mix))
+                                .collect()
+                        })
                         .collect()
                 })
                 .collect(),
@@ -19870,8 +19876,9 @@ impl Re2RoomData {
         }
         for (asset, blends) in room.object_models.iter_mut().zip(&self.blends) {
             for (object, blends) in asset.model.objects.iter_mut().zip(blends) {
-                for (prim, &blend) in object.prims.iter_mut().zip(blends) {
+                for (prim, &(blend, mix)) in object.prims.iter_mut().zip(blends) {
                     prim.blend = blend;
+                    prim.mix = mix;
                 }
             }
         }
@@ -20001,7 +20008,8 @@ fn apply_re2_cut_edit(room: &mut RoomState, edit: crate::scd2::host::CutEdit) {
                 zone.corners = corners;
             }
         }
-        // `Om_disp` with attribute 2: every packet of the model blends.
+        // `Om_disp` with attribute 2, or `Mizu_trans`: every packet of the
+        // model blends.
         CutEdit::BlendObject { slot, mix } => {
             for asset in &mut room.object_models {
                 if asset.pair_index == usize::from(slot) {
@@ -46509,6 +46517,56 @@ end
         let ids: Vec<_> = room.zones.iter().map(|z| (z.cam_from, z.cam_to)).collect();
         assert_eq!(ids, [(1, 4), (4, 3), (2, 0), (3, 2)]);
         assert!(room.zone_gates.iter().all(|g| g.flag == 2 && g.floor == 4));
+    }
+
+    /// A rerun of the room's init starts from its models as they loaded: an
+    /// object the first pass blended by its own colour goes back to opaque.
+    #[test]
+    fn the_room_data_restores_an_objects_blend_and_mix() {
+        use crate::model::{PacketMix, Tmd, TmdObject, TmdPrim};
+        use crate::scd2::host::CutEdit;
+        let prim = TmdPrim {
+            vertices: [0; 3],
+            normals: [0; 3],
+            uv: [[0; 2]; 3],
+            clut: 0,
+            tsb: 0,
+            textured: true,
+            blend: false,
+            mix: PacketMix::Weighted,
+            raw_y: false,
+            flat_color: None,
+            quad: None,
+            uv_nudge: [0; 3],
+        };
+        let mut room = RoomState {
+            object_models: vec![crate::objects::ObjectAsset {
+                pair_index: 0,
+                hd_name: None,
+                model: Tmd {
+                    objects: vec![TmdObject {
+                        prims: vec![prim.clone()],
+                        ..TmdObject::default()
+                    }],
+                },
+                texture: crate::model::Texture8 {
+                    width: 0,
+                    height: 0,
+                    indices: Vec::new(),
+                    palettes: Vec::new(),
+                    stp: Vec::new(),
+                },
+            }],
+            ..RoomState::default()
+        };
+        let loaded = Re2RoomData::of(&room);
+        let mix = PacketMix::SourceColour;
+        apply_re2_cut_edit(&mut room, CutEdit::BlendObject { slot: 0, mix });
+        let edited = &room.object_models[0].model.objects[0].prims[0];
+        assert!(edited.blend);
+        assert_eq!(edited.mix, mix);
+        loaded.restore(&mut room);
+        assert_eq!(room.object_models[0].model.objects[0].prims[0], prim);
     }
 
     /// A drawer's open overwrites the close-up's view quad, the first zone
