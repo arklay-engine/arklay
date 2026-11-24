@@ -158,6 +158,11 @@ def lua_str(text: str) -> str:
     return '"' + "".join(out) + '"'
 
 
+# The recorder's words for the keyboard's own arrows, which KEYCONFIG's page reads in place of the pad: arklay's
+# screens have one set of directions.
+KEYBOARD_BUTTONS = {"kbup": "up", "kbdown": "down", "kbleft": "left", "kbright": "right"}
+
+
 def input_entries(path: Path) -> dict[int, list[str]]:
     """An arklay input file (`<tick> <button>...` lines, `#` comments) as the buttons each line holds from its
     tick on; the last line at a tick wins."""
@@ -168,7 +173,7 @@ def input_entries(path: Path) -> dict[int, list[str]]:
             continue
         if not words[0].isdigit():
             raise SystemExit(f"re2-regress: {path}:{number}: `{words[0]}` is not a tick number")
-        held[int(words[0])] = words[1:]
+        held[int(words[0])] = [KEYBOARD_BUTTONS.get(word, word) for word in words[1:]]
     return dict(sorted(held.items()))
 
 
@@ -217,6 +222,10 @@ def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input
             # The first value of the title's generator, which the record took from the clock: its pick of Leon or
             # Claire for the attract demo.
             options.append(f"title_seed = {int(run['seed'])}")
+        if "keys" in run:
+            # config.ini's `KeyDef` and `JoyDef_Emulated` in the install the reference was recorded from.
+            keys = run["keys"]
+            options.append(f"title_keys = {{ keys = {lua_str(keys['keys'])}, pad = {lua_str(keys['pad'])} }}")
         lines.append(f"load_game_pack({lua_str(str(ctx['pack']))}, {{ {', '.join(options)} }})")
         # `boot = true`: from the game's boot, the warning before the title, as the record has it from its tick 0.
         lines.append("open_title({ boot = true })" if run.get("boot") else "open_title()")

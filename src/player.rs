@@ -214,6 +214,62 @@ pub struct Options {
     /// with, for its film and its attract demo (`0x689FB0`, which the
     /// original seeds from the clock). `None` is the clock's.
     pub title_seed: Option<u32>,
+    /// RE 2's config.ini `KeyDef` and `JoyDef_Emulated`, the keys and the
+    /// pad's buttons the option screen's KEYCONFIG page lists (`Data`,
+    /// `0x524DE8`, a virtual key for each of the input class's 32 keys, and
+    /// `Joypad_data`, `0x524D68`, 32 words). `None` is the executable's own
+    /// defaults.
+    pub title_keys: Option<TitleKeys>,
+}
+
+/// config.ini's key definitions ([`Options::title_keys`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TitleKeys {
+    pub keys: [u8; 32],
+    pub pad: [u32; 32],
+}
+
+impl TitleKeys {
+    /// `KeyDef`'s and `JoyDef_Emulated`'s values as config.ini has them:
+    /// 32 and 128 bytes in hex, a word's low byte first.
+    pub fn parse(key_def: &str, joy_def: &str) -> Result<Self, String> {
+        let keys = hex_bytes::<32>(key_def).ok_or("the keys are 32 bytes in hex")?;
+        let pad = hex_bytes::<128>(joy_def).ok_or("the pad's buttons are 128 bytes in hex")?;
+        Ok(Self {
+            keys,
+            pad: std::array::from_fn(|i| {
+                u32::from_le_bytes([pad[i * 4], pad[i * 4 + 1], pad[i * 4 + 2], pad[i * 4 + 3]])
+            }),
+        })
+    }
+
+    /// The two values in config.ini's form again.
+    pub fn definitions(&self) -> (String, String) {
+        let hex = |bytes: &mut dyn Iterator<Item = u8>| {
+            bytes
+                .map(|byte| format!("{byte:02X}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
+        (
+            hex(&mut self.keys.iter().copied()),
+            hex(&mut self.pad.iter().flat_map(|word| word.to_le_bytes())),
+        )
+    }
+}
+
+/// `N` bytes written as hex pairs with spaces between them.
+fn hex_bytes<const N: usize>(text: &str) -> Option<[u8; N]> {
+    let mut bytes = [0; N];
+    let mut words = text.split_whitespace();
+    for byte in &mut bytes {
+        let word = words.next()?;
+        if word.len() != 2 {
+            return None;
+        }
+        *byte = u8::from_str_radix(word, 16).ok()?;
+    }
+    words.next().is_none().then_some(bytes)
 }
 
 /// Keyboard state for one tick.
@@ -7143,5 +7199,44 @@ mod tests {
                 assert_eq!(entity.action_behavior, 0);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod title_keys_tests {
+    use super::TitleKeys;
+
+    const KEYS: &str = "68 62 64 66 00 4D 00 49 00 00 4F 4A 5A 4B 00 00 00 00 00 00 00 00 00 00 00 26 28 25 27 0D 20 1B";
+
+    fn pad() -> String {
+        let mut bytes = vec!["00"; 128];
+        bytes[1] = "10";
+        bytes[32] = "80";
+        bytes[69] = "01";
+        bytes.join(" ")
+    }
+
+    /// config.ini's two lines read as the page's tables, a word's low byte
+    /// first, and written back as config.ini has them.
+    #[test]
+    fn config_inis_key_lines_are_the_pages_tables() {
+        let keys = TitleKeys::parse(KEYS, &pad()).unwrap();
+        assert_eq!(keys.keys[..4], [0x68, 0x62, 0x64, 0x66]);
+        assert_eq!(keys.keys[31], 0x1B);
+        assert_eq!(
+            (keys.pad[0], keys.pad[8], keys.pad[17], keys.pad[1]),
+            (0x1000, 0x80, 0x100, 0)
+        );
+        assert_eq!(keys.definitions(), (KEYS.to_owned(), pad()));
+    }
+
+    /// A line of the wrong length, or one that isn't hex pairs, is refused.
+    #[test]
+    fn a_key_line_of_the_wrong_shape_is_refused() {
+        assert!(TitleKeys::parse(&KEYS[..KEYS.len() - 3], &pad()).is_err());
+        assert!(TitleKeys::parse(&format!("{KEYS} 00"), &pad()).is_err());
+        assert!(TitleKeys::parse(&KEYS.replace("4D", "4"), &pad()).is_err());
+        assert!(TitleKeys::parse(&KEYS.replace("4D", "XY"), &pad()).is_err());
+        assert!(TitleKeys::parse(KEYS, "00 10").is_err());
     }
 }

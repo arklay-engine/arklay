@@ -311,6 +311,19 @@ impl UserData for Api<'_> {
             },
         );
 
+        methods.add_method_mut(
+            "text_indent",
+            |_lua, api, (text, tight): (String, Option<bool>)| {
+                let Some(font) = api.cx.font else {
+                    api.host.note_missing_font();
+                    return Ok(0);
+                };
+                let mut bytes = Vec::new();
+                charset::encode(&text, api.host.script, &mut bytes);
+                Ok(font.indent(tight.unwrap_or(api.host.tight), &bytes))
+            },
+        );
+
         methods.add_method_mut("classic_rebirth_width", |_lua, api, text: String| {
             let Some(font) = api.cx.font else {
                 api.host.note_missing_font();

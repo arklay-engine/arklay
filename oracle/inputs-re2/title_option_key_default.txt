@@ -1,0 +1,90 @@
+# The title from boot to OPTION and its KEYCONFIG page: the decide key through the model's walk in and its turn, Default's decide (twice), Exit's with the keys changed and the question's Leave, the page a second time with the keys as they were, Default and the question's Change, the page a third time with the default keys, Exit's decide and START out of the menu (oracle/re2.md, "The option screen").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+350 down
+353
+400 confirm
+403
+440 confirm
+443
+455 confirm
+458
+470 confirm
+473
+480 kbdown
+483
+490 kbdown
+493
+500 kbdown
+503
+510 kbdown
+513
+520 kbdown
+523
+530 kbdown
+533
+550 kbright
+553
+565 confirm
+568
+600 confirm
+603
+620 kbleft
+623
+640 confirm
+643
+660 right
+663
+680 left
+683
+700 right
+703
+720 confirm
+723
+760 confirm
+763
+860 kbup
+863
+870 kbup
+873
+880 kbup
+883
+890 kbup
+893
+900 kbup
+903
+920 kbright
+923
+935 confirm
+938
+950 kbleft
+953
+965 confirm
+968
+985 confirm
+988
+1020 confirm
+1023
+1030 confirm
+1033
+1040 confirm
+1043
+1060 kbup
+1063
+1070 kbup
+1073
+1080 kbup
+1083
+1090 kbup
+1093
+1100 kbup
+1103
+1130 confirm
+1133
+1160 start
+1163

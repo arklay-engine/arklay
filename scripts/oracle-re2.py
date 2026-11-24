@@ -107,6 +107,20 @@ TITLE_B8C = 0x00691B8C  # the slide's second count (the 4TH title's logo level)
 TITLE_EF2 = 0x00691EF2  # EX.BATTLE's level page bytes
 # The option screen (`0x44A040`, `Config_main` 0x44A0B0), task 1 of `TASKS` while it runs.
 OPTION_TASK = 0x0044A040
+KEY_WORD = 0x0099CF64  # the input class's key word as `FUN_0043bb00` leaves it each tick
+# KEYCONFIG's page (`Config_main`'s states 2 and 9 to 0xF) and its model (`FUN_0044b3c0`).
+KEY_COUNT = 0x0099CF60
+KEY_SLIDE = 0x0099CF34
+KEY_CHOICE = 0x006893C8
+KEY_TABLE_TEMP = 0x0099CF40
+KEY_JOYPAD_TEMP = 0x0099CF80
+KEY_MODEL = 0x00988628  # the work the page moves and draws: `&pPl`
+KEY_TURNED = 0x006893D4
+KEY_TURNING = 0x006893CC
+KEY_DEMO_KEYS = 0x00689384
+KEY_DEMO_COUNT = 0x006893A0
+KEY_DEMO_STEP = 0x006893D8  # and the kept step after it (`0x6893DC`)
+KEY_DEMO_ROW = 0x00525AB4
 GAME_LOOP = 0x004BF810  # `Game_loop`, which the title's task chains to: play
 # `Prologue` (0x4CEFF0), task 1's routine from `Title_game_init`'s step 2 until it ends, and its work: the scroll's
 # and the zoom's waits, the sequence (`Prologue_mv`'s index), the step in it, its count, the sprites' mask, the
@@ -181,7 +195,16 @@ BUTTONS = {
     "inventory": 0x0800,
     # The PC's map key: `Pad_set`'s table maps it to `Key`'s 0x4000.
     "map": 0x0010,
+    # The keyboard's own arrows, bits 25 to 28 of the input class's key word, which KEYCONFIG's page reads
+    # (`KEY_WORD`), not the pad.
+    "kbup": 0x02000000,
+    "kbdown": 0x04000000,
+    "kbleft": 0x08000000,
+    "kbright": 0x10000000,
 }
+# The keys of an input line that are the keyboard's own (`KEY_WORD`'s fixed keys), and the pad's.
+KEY_WORD_KEYS = 0xFE000000
+PAD_KEYS = 0x01FFFFFF
 
 BOOT_TICKS = 3000
 # The ticks from the first with a live player to the first of play: `Pl_init`,
@@ -445,9 +468,16 @@ def write_config(game: Path, tree: Path, sound: bool) -> None:
         "CutsceneSkip": "0", "DebugMode": "0", "FocusIgnore": "1",
     } | CONFIG_OVERRIDES
     lines = []
+    present = set()
     for line in settings.splitlines():
         key = line.split("=", 1)[0].strip()
+        present.add(key)
         lines.append(f"{key} = {fixed[key]}" if key in fixed else line)
+    # A `--config` key the install's config.ini lacks would be dropped and the
+    # run recorded with the game's own value: refuse it instead.
+    missing = sorted(set(CONFIG_OVERRIDES) - present)
+    if missing:
+        raise SystemExit(f"--config: {game / 'config.ini'} has no {', '.join(missing)} to set")
     (tree / "config.ini").write_text("\n".join(lines) + "\n")
 
 
@@ -1880,6 +1910,7 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
             boot_tick = 0
             cursor = 0
             pad = 0
+            held_keys = 0
             settled = 0
             tick = -1  # The trace's tick, once play has begun.
             while tick <= args.ticks:
@@ -1978,7 +2009,11 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                         if at == tick:
                             game.write(ITEM_WORK + slot * 4, bytes((item_id, count, 0)))
                     tick += 1
-                regs.rax = pad
+                    if (pad | held_keys) & KEY_WORD_KEYS:
+                        # The keyboard's own keys, as `record_boot` puts them in.
+                        game.write(KEY_WORD, struct.pack("<I", pad & KEY_WORD_KEYS))
+                    held_keys = pad
+                regs.rax = pad & PAD_KEYS
                 if tick_delay:
                     game.hold(tid, tick_delay)
                 # The run after the last traced tick is no one's to pace.
@@ -2177,6 +2212,31 @@ def option_trace(game: Game) -> str:
     )
 
 
+def key_config_trace(game: Game) -> str:
+    """KEYCONFIG's page while the option task runs (`Config_main`'s states 2 and 9 to 0xF), as three fields. `kc`
+    is the page's own work: state 9's count (`0x99CF60`), the panel's offset (`0x99CF34`) and the choice on the
+    last row or under the question (`0x6893C8`), then the key table being edited (`0x99CF40`, a virtual key for
+    each of the input class's 32 keys). `kcj` is the joypad table being edited (`0x99CF80`, 32 words). `kcm` is the
+    model's: its work's four routine bytes, place, turn, four motion bytes and weapon type, then whether it has
+    turned (`0x6893D4`), whether it is turning back (`0x6893CC`), and `FUN_0044b3c0`'s pseudo keys (`0x689384`),
+    count (`0x6893A0`), step (`0x6893D8`), kept step (`0x6893DC`) and row (`0x525AB4`)."""
+    if game.u32(TASKS + 0x24 + 4) != OPTION_TASK:
+        return "kc=- kcj=- kcm=-"
+    page = ",".join(str(value) for value in (*game.i32s(KEY_COUNT, 1), *game.i32s(KEY_SLIDE, 1), game.u8(KEY_CHOICE)))
+    joypad = ",".join(f"{value & 0xFFFFFFFF:x}" for value in game.i32s(KEY_JOYPAD_TEMP, 32))
+    model = "-"
+    work = game.u32(KEY_MODEL)
+    if work:
+        place = ",".join(str(value) for value in game.i32s(work + ENTITY_POS, 3))
+        demo = ",".join(str(value) for value in game.i32s(KEY_DEMO_COUNT, 1) + game.i32s(KEY_DEMO_STEP, 2))
+        model = (
+            f"{game.read(work + ENTITY_ROUTINES, 4).hex()},{place},{game.u16(work + ENTITY_CDIR_Y)},"
+            f"{game.read(work + ENTITY_MOTION, 4).hex()},{game.u16(work + PL_WEAPON)},{game.u8(KEY_TURNED)},"
+            f"{game.u32(KEY_TURNING)},{game.u32(KEY_DEMO_KEYS):x},{demo},{game.i32s(KEY_DEMO_ROW, 1)[0]}"
+        )
+    return f"kc={page}/{game.read(KEY_TABLE_TEMP, 32).hex()} kcj={joypad} kcm={model}"
+
+
 def gallery_trace(game: Game) -> str:
     """The gallery's state while its task runs with its work (`Gallery`, `0x4BF760`, which makes the work on the
     tick it starts and frees it on the tick it ends): the task's step, the screen (`GalleryLoop`'s case), the
@@ -2261,6 +2321,7 @@ def boot_trace_line(game: Game, tick: int, pad: int) -> str:
         "snd=" + ("/".join(game.sounds) or "-"),
         "gal=" + gallery_trace(game),
         "galv=" + gallery_view_trace(game),
+        key_config_trace(game),
     ]
     game.sounds.clear()
     return " ".join(fields)
@@ -2290,6 +2351,7 @@ def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
             started = time.monotonic()
             cursor = 0
             pad = 0
+            held_keys = 0
             tick = 0
             while tick <= args.ticks:
                 tid, regs = game.run_to_break()
@@ -2307,7 +2369,11 @@ def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
                     cursor += 1
                 hold_gallery_flags(game)
                 tick += 1
-                regs.rax = pad
+                if (pad | held_keys) & KEY_WORD_KEYS:
+                    # After `FUN_0043bb00` wrote the word for this tick, before `Config_main` reads it.
+                    game.write(KEY_WORD, struct.pack("<I", pad & KEY_WORD_KEYS))
+                held_keys = pad
+                regs.rax = pad & PAD_KEYS
                 if tick <= args.ticks:
                     pace.release(game, tid, tick - 1)
                 game.resume_from_break(tid, regs, original)
