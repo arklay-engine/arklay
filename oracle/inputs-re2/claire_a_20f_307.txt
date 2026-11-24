@@ -1,0 +1,44 @@
+# Claire A from 20F's arrival (the Heart Key door) down to the basement: 20F, past 211's two dogs to door 2, and 212's dogs and manhole into the sewer (307) (#765 Part 2)
+# made in arklay, silent: 20F: north, east along the wall at z -22160, north up the east side and west to door 1 (one press); 211: west, south down the corridor, east along z -14500 and north up the east side to door 2 (one press), ahead of the dogs; 212: north and west along the corridor to the manhole (the dogs drop behind), its question answered Yes; each load holds the room for about 300 ticks and the walk waits for its hand back; the input ends with 307's hand back (1947)
+344
+# 20F: north from the arrival, east along the wall at z -22160, north up the east side and west to door 1 (x -21366 to -19566, z -3968 to -2168)
+346 up run
+358 up run right
+378 up run
+400 up run left
+421 up run
+512 up run left
+534
+# door 1 into 211: one press
+536 action
+538
+# 211: west from the arrival, south down the corridor along x -4845, east along z -14500 past the dogs' leap and north up the east side to door 2 (x 8788 to 12088, z -9066 to -7266)
+742 up run
+760 up run left
+781 up run
+866 up run left
+887 up run
+950 up run left
+973 up run
+992
+# door 2 into 212: one press, before the dog behind can bite
+994 action
+996
+# 212: north up the passage along x -11300 and west along the corridor (the two dogs drop from the walkway behind), to the manhole (area 2, x -26653 to -24483, z -10265 to -8985)
+1346 up run
+1430 up run left
+1451 up run
+1512
+# the manhole: a press for its text, then a press every 12 ticks finishes it and answers Yes to "Will you go down?"; door 1 (aot_on) loads 307
+1514 action
+1516
+1526 action
+1528
+1538 action
+1540
+1550 action
+1552
+1562 action
+1564
+1574 action
+1576
