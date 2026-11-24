@@ -1648,10 +1648,15 @@ impl Em<'_, '_, '_> {
     /// so are the moth's own steps (its timers, its parts and its scales'
     /// effects, and `Be_flg`'s bits for the shots). `Ground` (`e:ground`) is
     /// the floor under where the last tick left the body, as `Game_loop`'s
-    /// pass after the moves finds it.
+    /// pass after the moves finds it. The parts' `Workm` as the last draw left
+    /// them are what the effects start on (`e:own_part`), and part 0's, the
+    /// inits' `Neck_no`, is where `Weapon_at_ck` looks for the body.
     fn run_moth(&mut self) {
         if self.world.stopped {
             return;
+        }
+        if self.z.parts.is_empty() {
+            self.z.parts = self.mover.posed_parts();
         }
         self.old_pos = self.mover.player.pos;
         self.z.vars[DOG_GROUND] = self.mover.tick.room.sca.as_ref().map_or(0, |sca| {
@@ -1660,6 +1665,9 @@ impl Em<'_, '_, '_> {
         self.script();
         self.oba_ck_em();
         self.sca_ck_em();
+        self.z.parts = self.mover.posed_parts();
+        self.work().neck.joint = Some(0);
+        self.work().neck.position = self.z.parts.first().copied().flatten().map(|m| m.t);
     }
 
     /// `Em_2E` and `Em_2F`, which leave the rest to their scripts. The ivy's

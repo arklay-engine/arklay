@@ -6487,6 +6487,8 @@ impl Mover<'_, '_> {
                     self.work.routine[1] = 1;
                     self.work.bank = Bank::Held;
                     self.held_clip(1, 0xF);
+                    // The head follows the clips (`Neck_flg`'s 1).
+                    self.work.neck.flags |= 1;
                 }
                 if self.joint_move_late(LATE) {
                     self.work.routine[1] = 2;
@@ -6520,6 +6522,7 @@ impl Mover<'_, '_> {
                 }
                 if self.joint_move_late(LATE) {
                     self.work.bank = Bank::Weapon;
+                    self.work.neck.flags &= !1;
                     self.work.damage_cnt &= 0x7F;
                     self.work.be_flg &= !0x42;
                     self.work.routine = [MODE_MOVE, 0, 0, 0];
@@ -9436,6 +9439,25 @@ mod tests {
         setup.work.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
         setup.tick(Input::default(), 190);
         assert!(!setup.work.holds_game);
+    }
+
+    /// `FUN_004afac0`: the moth's grip raises `Neck_flg`'s 1 with clip 1, so
+    /// the head follows the clips, and drops it with the free at clip 3's end.
+    #[test]
+    fn the_moths_grip_keeps_the_head_on_the_clips() {
+        let mut setup = Setup::new(0);
+        (setup.clips, setup.keyframes) = bank(4, 4, 0);
+        setup.work.routine = [MODE_HELD, 0, 0, 0];
+        let mut life = 200;
+        let moth = crate::zombie2::MOTH_ID;
+        run_held_by(&mut setup, &mut life, moth, |work| work.routine[1] == 2);
+        assert_eq!(setup.work.neck.flags & 1, 1);
+        setup.work.routine[1] = 3;
+        run_held_by(&mut setup, &mut life, moth, |work| {
+            work.routine[0] == MODE_MOVE
+        });
+        assert_eq!(setup.work.neck.flags & 1, 0);
+        assert_eq!(setup.work.bank, Bank::Weapon);
     }
 
     /// `FUN_0047cf90`: a cockroach's landing starts clip 0 of the hold's bank

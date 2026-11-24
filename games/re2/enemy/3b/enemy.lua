@@ -74,7 +74,8 @@ local function wriggle(e)
     end
     local _, y = e:pos()
     if e:weapon() == 0x11 then
-        e:set_body_box(y, 100, -y, 200)
+        -- The words as the original stores them.
+        e:set_body_box(i16(y), 100, (-y) & 0xFFFF, 200)
     else
         e:set_body_box(-200, 100, 200, 200)
     end
