@@ -12584,6 +12584,11 @@ impl App {
                 if session.game.is_re2_room {
                     let rnd = i64::from(session.game.re2.rnd.0);
                     args.push(("rnd", ScreenArg::Int(rnd)));
+                    // `fg_system` as the game left it, of which `Init_global`
+                    // keeps `0x1000899`: an extra mode's bits (8, and To-fu's
+                    // 1) send `Capcom_logo` back to that mode's title.
+                    let fg_system = i64::from(session.game.re2.banks[0][0]);
+                    args.push(("fg_system", ScreenArg::Int(fg_system)));
                 }
             }
         }

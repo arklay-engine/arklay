@@ -2590,8 +2590,14 @@ local function boot_main(api)
         boot_end()
     elseif b.step == 6 and s.fg_system & FG_FROM_LOGO == 0 then
         -- Step 9, not from the logo (after a game, or a demo a key
-        -- ended): the title's picture, and no film.
+        -- ended): the title's picture, and no film. Under `fg_system`'s 8
+        -- (an extra mode's game) `title_mv_state` is 3, that mode's title,
+        -- whose load runs on the next tick; the title's image is drawn on
+        -- this one, as for any `title_mv_state` 3.
         boot_end()
+        if s.fg_system & 8 ~= 0 then
+            s.mv = 3
+        end
     else
         s.sub = 7
         b.step = 7
@@ -2630,8 +2636,10 @@ end
 -- the title's task starts from `Capcom_logo` again, with its statics as the
 -- hand-over left them. A demo played to its end comes back as from the logo
 -- (`fg_system`'s 2: the film on its turn, and the title's entry); a game,
--- and a demo a key ended (`0x98F1BB`), to the title's picture.
-local function game_return(api, demo, fade_add)
+-- and a demo a key ended (`0x98F1BB`), to the title's picture. `fg_system`
+-- is the game's, of which `Init_global` keeps `0x1000899`: an extra mode's
+-- game comes back to that mode's title (`Capcom_logo`'s step 9).
+local function game_return(api, demo, fade_add, fg_system)
     local handed = take_handed(api)
     for _, name in ipairs(HANDED) do
         s[name] = handed[name] or s[name]
@@ -2646,7 +2654,7 @@ local function game_return(api, demo, fade_add)
     s.fades[0].add = fade_add or 0
     s.background = nil
     s.init, s.sub = 0, 0
-    s.fg_system = demo and FG_FROM_LOGO or 0
+    s.fg_system = ((fg_system or 0) & 0x1000899) | (demo and FG_FROM_LOGO or 0)
     s.boot = { step = 3, sleep = 1, flag = 0, acks = demo }
 end
 
@@ -2783,7 +2791,7 @@ function M.open(api, args)
     s.rnd = (args and args.rnd or Gallery.RND_BOOT) & 0xFFFF
     -- After a game (`"game"`) or a demo played to its end (`"demo"`).
     if args and args.after then
-        game_return(api, args.after == "demo", args.fade_add)
+        game_return(api, args.after == "demo", args.fade_add, args.fg_system)
     end
     -- config.ini's SPECIAL, read as the signed byte it is.
     local special = args and args.special or 15
