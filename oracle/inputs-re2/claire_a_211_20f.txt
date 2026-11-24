@@ -1,0 +1,31 @@
+# Claire A from 212's door 0 into 211: south past the licker (one hit), west along the south passage, north up the
+# west passage and east along the north wall to door 7 into 20F, then south down 20F and west along its south wall
+# to door 0 into 20B (#896 part 2)
+# made in arklay: the licker strikes once (424); door 7 loads 20F at 676 and hands Claire back by 940; door 0 loads
+# 20B at 1182
+344
+# 211: south from the hand back, a running turn west at the corner, and west along z -15683
+346 up run
+376 up run right
+395 up run
+# a running turn north at x -4845, and up the west passage
+474 up run right
+495 up run
+# a running turn east at the north wall (z 6585), and east to door 7 (x 988 to 2788, z 4344 to 7544): one press
+598 up run right
+620 up run
+639
+641 action
+643
+# 20F: east from the hand back, a running turn south at x -17000, and down to the south wall (z -25950)
+940 up run
+948 up run right
+972 up run
+# a running turn west along the south wall to x -24542
+1080 up run right
+1097 up run
+1128 left
+1145
+# door 0 (x -26353 to -23943, z -28245 to -26345) into 20B: one press
+1147 action
+1149
