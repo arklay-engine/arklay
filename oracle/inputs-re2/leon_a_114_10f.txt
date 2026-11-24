@@ -1,4 +1,4 @@
-# leon_a_114_10f: Leon A from 115's door 0 in 114: south and round to door 0, 113's south corridor past its zombie to door 1, 112's ground floor to door 0 and 110, up the west corridor to where the licker (8:119's) comes round from the north corridor, shot from standing with the aim held down until it dies, then round the north and east corridors to door 6 into 10F's hand back
+# leon_a_114_10f: Leon A from 115's door 0 in 114: south and round to door 0, 113's south corridor past its zombie to door 1, 112's ground floor to door 0 and 110, up the west corridor to where the licker (8:119's) comes round from the north corridor, shot from standing with the aim held down until it dies, then round the north and east corridors to door 0 into 10F's hand back
 345 left
 353 up run left
 359 up run

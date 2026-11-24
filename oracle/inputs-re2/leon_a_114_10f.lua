@@ -132,5 +132,6 @@ api:set_re2_flag(4, 53)
 api:set_re2_flag(4, 23)
 api:set_re2_flag(4, 24)
 api:set_re2_flag(8, 21)
+-- 115's First Aid Spray and rounds
 api:set_re2_flag(8, 40)
 api:set_re2_flag(8, 101)
