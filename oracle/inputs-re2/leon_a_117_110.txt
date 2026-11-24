@@ -1,0 +1,211 @@
+# leon_a_117_110: Leon A from 111's door 0 in 117: door 1 back to 112's balcony, west onto the weak floor (area 9), which drops him into the shelves' section, the shelves' power switch (area 8), the two south shelves slid one place north from their ends' switches, the Bishop Plug from the case that opens (area 7), and door 0 into 110's hand back
+345 left
+356 up run left
+363 up run
+416 up run left
+417 up run
+456 up run left
+457 up run
+463 up run left
+464 up run
+467 up left
+478 up
+479 up left
+481 left
+493
+494 action
+496
+531 up
+847
+848 up run
+861 up run right
+862 up run
+873 up run right
+874 up run
+893 up run left
+894 up run
+926 up run left
+927 up run
+928 up run left
+929 up run
+1026
+1065 up run left
+1075 up run
+1081 up run left
+1082 up run
+1084 right
+1089 up right
+1100 up
+1106 up right
+1107 up
+1112 up right
+1113 up
+1116 up right
+1117 up
+1118 up right
+1119 left
+1122
+1123 action
+1127
+1183 action
+1187
+1243 action
+1247
+1313 left
+1345 up run left
+1353 up run
+1355 up run left
+1356 up run
+1367 up run left
+1368 up run
+1373 right
+1375 up run right
+1382 up run
+1387 up run right
+1388 up run
+1393 up run right
+1394 up run
+1400 up run right
+1401 up run
+1406 up run right
+1407 up run
+1412 up run right
+1413 up run
+1420 up run right
+1421 up run
+1444 up run right
+1445 up run
+1453 up run right
+1454 up run
+1461 right
+1479 up run right
+1489 right
+1492 up run right
+1493 up left
+1495 up
+1497 up left
+1498 up
+1499 up left
+1501 left
+1505
+1506 action
+1510
+1566 action
+1570
+1626 right
+1630
+1646 action
+1650
+1681 left
+1698 up run left
+1707 up run
+1708 up run left
+1709 up run
+1713 right
+1727 up right
+1729 right
+1731 up right
+1733 right
+1736 up right
+1737 right
+1739 up right
+1740 right
+1742 up right
+1743 right
+1746 up right
+1747 right
+1752 up right
+1753 left
+1760
+1761 action
+1765
+1821 action
+1825
+1881 right
+1885
+1901 action
+1905
+2016 right
+2034 up run right
+2041 up run
+2049 up run right
+2050 up run
+2078 up run right
+2079 up run
+2086 up run right
+2087 left
+2107 up run left
+2114 up run
+2136 up run left
+2137 up run
+2145 right
+2159 up run right
+2168 right
+2170 up run right
+2171 right
+2175 up run right
+2183 up run
+2186 up run right
+2187 up run
+2202 up run right
+2203 up run
+2205 up run right
+2206 left
+2213 up left
+2215 left
+2217 up left
+2219 left
+2222 up left
+2223 left
+2225 up left
+2226 left
+2228 up left
+2229 left
+2232 up left
+2233 left
+2238 up left
+2239 right
+2249
+2250 action
+2254
+2370 action
+2374
+2470 action
+2474
+2510 left
+2533 up run left
+2541 up run
+2544 up run left
+2545 up run
+2559 up run left
+2560 up run
+2563 up run left
+2564 left
+2567 up run left
+2577 left
+2580 up run left
+2581 left
+2590 up run left
+2597 up run
+2630 right
+2635 up run right
+2644 up run
+2647 up run right
+2649 up run
+2650 left
+2659 up run left
+2667 up run
+2682 up run left
+2683 up run
+2701 up run left
+2702 up run
+2704 up run left
+2705 up run
+2706 up run left
+2707 up right
+2716 left
+2719
+2720 action
+2722
+2757 up
+3089
