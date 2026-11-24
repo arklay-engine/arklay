@@ -61,6 +61,15 @@ local FLAG_JUMPING <const> = 0x200
 local FLAGS_KEPT <const> = 0xFD0F
 
 
+-- A value as the original's 16-bit work holds it.
+local function i16(value)
+    value = value & 0xFFFF
+    if value >= 0x8000 then
+        return value - 0x10000
+    end
+    return value
+end
+
 -- `WORD_00527c46`, by `Routine_3`: how far the tongue reaches as it goes out.
 local TONGUE_REACH <const> = {
     [0] = 3500, 4600, 4500, 4200, 3500, 3000, 2500, 2000,
@@ -713,7 +722,8 @@ local function tongue_attack(e)
         and e:turn_to_player(0x100) == 0
         and e:distance() < TONGUE_REACH[count - 0x12]
     then
-        hurt_player(e, 0x19)
+        -- HARD takes 0x23 (0x463D54, `Em_24`'s 0x46C0E4).
+        hurt_player(e, e:hard_mode() and 0x23 or 0x19)
     end
 end
 
@@ -755,7 +765,8 @@ local function slash(e)
         -- turned by the part.
         local x, y, z = e:own_part(13)
         e:call_effect(0, 0, 0x2400, 0, x, y + 200, z)
-        hurt_player(e, 0xF)
+        -- HARD takes 0x19 (0x463F55, `Em_24`'s 0x46C2E5).
+        hurt_player(e, e:hard_mode() and 0x19 or 0xF)
     end
 end
 
@@ -774,7 +785,12 @@ local function bite(e)
     e:set_var(COUNT, 0)
     e:set_var(TIMER0, 1)
     e:pl_hold()
-    e:pl_life_down(e:player_life() > 0x6E and 100 or 0x50)
+    -- HARD bites harder and from more life (0x465F58, `Em_24`'s 0x46D578).
+    if e:hard_mode() then
+        e:pl_life_down(e:player_life() > 0x82 and 0x78 or 100)
+    else
+        e:pl_life_down(e:player_life() > 0x6E and 100 or 0x50)
+    end
     e:sound(10)
     local behind = e:cdir_player()
     if e:player_life() < 0 then
@@ -2558,6 +2574,13 @@ local function init(e)
         down = easy and V.down_easy or V.down
     end
     e:set_life(life_table[e:rnd() & 0xF] - down)
+    -- HARD: half as much again, rounded toward 0 in 16 bits (0x464CCA, and
+    -- `Em_24`'s 0x46D071).
+    if e:hard_mode() then
+        local life = e:life()
+        local half = life >= 0 and life // 2 or -(-life // 2)
+        e:set_life(i16(life + half))
+    end
     e:set_var(TARGET, 1)
     e:set_reach(-500)
     e:set_be_flg(e:be_flg() & ~(BE_NO_OBA | BE_NO_SCA))
