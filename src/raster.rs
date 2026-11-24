@@ -262,6 +262,7 @@ struct Plane {
 impl Plane {
     /// The attribute at pixel `(x, y)` (`interp_attrib_linear`: two fused
     /// multiply-adds from the origin value).
+    #[inline]
     fn at(self, x: f32, y: f32) -> f32 {
         self.dady.mul_add(y, self.dadx.mul_add(x, self.a0))
     }
@@ -329,6 +330,7 @@ impl Edge {
         Self { c, dcdx, dcdy }
     }
 
+    #[inline]
     fn inside(&self, x: i64, y: i64) -> bool {
         self.c - self.dcdx * (x << FIXED_ORDER) + self.dcdy * (y << FIXED_ORDER) > 0
     }

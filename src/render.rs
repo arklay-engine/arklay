@@ -315,16 +315,26 @@ impl Framebuffer {
     /// Run `draw` on RE2's display: the original draws its 3D scene into a
     /// 640x480 surface over the 320x240 background doubled (`DisplayMode`
     /// in the recordings' `config.ini`), and the recordings halve that
-    /// frame. The display is this frame doubled, nearest, with the clip
+    /// frame (`scripts/re2-regress.py`'s `frame_error`, Pillow's box
+    /// reduction). The display is this frame doubled, nearest, with the clip
     /// doubled and [`Framebuffer::scale`] 2, so the rasterizers place their
-    /// game-pixel positions on it; afterwards each pixel here is the mean of
-    /// its four. A frame recording the GPU's 2D pass draws in place.
+    /// game-pixel positions on it; afterwards each pixel here is its four
+    /// reduced as Pillow reduces them ([`halve_block`]). A frame recording
+    /// the GPU's 2D pass, or one already on the display, draws in place.
+    /// The display's buffer is kept for the next frame.
     pub(crate) fn with_display<R>(&mut self, draw: impl FnOnce(&mut Framebuffer) -> R) -> R {
-        if self.list.is_some() {
+        if self.list.is_some() || self.scale != 1 {
             return draw(self);
         }
+        thread_local! {
+            static DISPLAY: std::cell::RefCell<Option<Framebuffer>> =
+                const { std::cell::RefCell::new(None) };
+        }
         let (width, height) = (self.width as usize, self.height as usize);
-        let mut display = Framebuffer::with_size(self.width * 2, self.height * 2);
+        let mut display = DISPLAY
+            .with(|cell| cell.borrow_mut().take())
+            .filter(|display| display.width == self.width * 2 && display.height == self.height * 2)
+            .unwrap_or_else(|| Framebuffer::with_size(self.width * 2, self.height * 2));
         display.scale = self.scale * 2;
         display.clip = self.clip.map(|rect| rect.map(|side| side * 2));
         for (row, line) in display.rgba.chunks_exact_mut(width * 8).enumerate() {
@@ -341,14 +351,15 @@ impl Framebuffer {
             for x in 0..width {
                 let top = y * 2 * stride + x * 8;
                 for channel in 0..4 {
-                    let sum: u32 = [top, top + 4, top + stride, top + stride + 4]
-                        .iter()
-                        .map(|&offset| u32::from(display.rgba[offset + channel]))
-                        .sum();
-                    self.rgba[(y * width + x) * 4 + channel] = mean_of_four(sum);
+                    let at = |offset: usize| display.rgba[offset + channel];
+                    self.rgba[(y * width + x) * 4 + channel] = halve_block([
+                        [at(top), at(top + 4)],
+                        [at(top + stride), at(top + stride + 4)],
+                    ]);
                 }
             }
         }
+        DISPLAY.with(|cell| *cell.borrow_mut() = Some(display));
         result
     }
 
@@ -2376,14 +2387,16 @@ impl Framebuffer {
                     uv_nudge: [0; 3],
                     view_depth: false,
                     filtered: false,
+                    page_x: 0,
                 })
             })
             .collect();
         if self.list.is_none() {
             let mut depth = self.depth_buffer();
             for triangle in &triangles {
-                self.rasterize(&ivm.texture, triangle, false, &mut depth);
+                self.rasterize(&ivm.texture, triangle, PageFlags::default(), &mut depth);
             }
+            recycle_depth(depth);
             return;
         }
         self.queue_model(
@@ -2470,14 +2483,22 @@ impl Framebuffer {
         let mut depth = self.depth_buffer();
         let mut twins = KnockoutTwins::default();
         for triangle in &triangles {
-            let twin = twins.get(texture, triangle);
-            self.rasterize(texture, triangle, twin, &mut depth);
+            let page = twins.get(texture, triangle);
+            self.rasterize(texture, triangle, page, &mut depth);
         }
+        recycle_depth(depth);
     }
 
-    /// A cleared 24-bit depth buffer covering the framebuffer.
+    /// A cleared 24-bit depth buffer covering the framebuffer, reusing the
+    /// allocation [`recycle_depth`] kept from an earlier draw.
     fn depth_buffer(&self) -> Vec<u32> {
-        vec![crate::raster::DEPTH_CLEAR; self.width as usize * self.height as usize]
+        let mut depth = DEPTH_POOL.with(|pool| pool.take());
+        depth.clear();
+        depth.resize(
+            self.width as usize * self.height as usize,
+            crate::raster::DEPTH_CLEAR,
+        );
+        depth
     }
 
     /// Draw one model triangle the way the reference's GL path does on
@@ -2492,7 +2513,7 @@ impl Framebuffer {
         &mut self,
         texture: &Texture8,
         triangle: &Triangle,
-        twin: bool,
+        page: PageFlags,
         depth: &mut [u32],
     ) {
         self.assert_software_3d();
@@ -2506,17 +2527,27 @@ impl Framebuffer {
         } else {
             1.0
         };
+        let twin = page.twin;
+        // RE2's Direct3D texture and whether Marni queues the triangle: a
+        // semi-transparent packet, or a texture with transparent texels,
+        // blends and writes no depth (`FUN_0040EAF0`).
+        let surface = marni_surface(triangle, texture);
+        let queued = triangle.blend || (triangle.filtered && page.keyed);
         let scale = self.scale as f32;
+        // Marni hands Direct3D the doubled positions as they are, and
+        // Direct3D's pixel centres are on whole coordinates where the
+        // rasterizer's are on halves: half a display pixel on.
+        let offset = if triangle.filtered { 0.5 } else { 0.0 };
         let vertices = std::array::from_fn(|corner| {
             let vertex = &triangle.raster[corner];
             let [u, v] = if triangle.filtered {
-                marni_uv(vertex, texture)
+                surface.uv(vertex, texture)
             } else {
                 stored_uv(vertex, triangle.uv_nudge[corner], texture)
             };
             crate::raster::GlVertex {
-                x: vertex.position[0] * scale,
-                y: vertex.position[1] * scale,
+                x: vertex.position[0] * scale + offset,
+                y: vertex.position[1] * scale + offset,
                 depth: depth_ndc(vertex.w),
                 w: vertex.w,
                 u,
@@ -2551,24 +2582,36 @@ impl Framebuffer {
                 // The blended pass and its knockout twin leave depth alone; an
                 // opaque triangle writes it even where its texel is transparent,
                 // since the shader never discards.
-                if !triangle.blend {
+                if !queued {
                     *stored = fragment.depth;
                 }
                 // An untextured packet samples the white texture; every other
                 // packet samples its page through the palette row. Palette entry
                 // zero is the PSX colour key (alpha 0), which leaves the pixel.
-                let (texel, blend) = match triangle.flat {
+                // `coverage` is the texel's own alpha, which RE2's
+                // `D3DTBLEND_MODULATEALPHA` multiplies into the blend.
+                let (texel, blend, coverage) = match triangle.flat {
                     // A blended record's weight applies to its untextured packets
                     // too.
-                    Some(_) => ([255, 255, 255], triangle.blend),
+                    Some(_) => ([255, 255, 255], triangle.blend, 255),
                     // RE2's Direct3D filters its models' textures.
                     None if triangle.filtered => {
-                        let Some((texel, stp)) =
-                            sample_marni(texture, triangle.palette_row, fragment.u, fragment.v)
-                        else {
+                        let (texel, stp) = sample_marni(
+                            texture,
+                            surface,
+                            triangle.palette_row,
+                            fragment.u,
+                            fragment.v,
+                        );
+                        if !queued {
+                            // No blend: the texel's colour, whatever its alpha.
+                            ([texel[0], texel[1], texel[2]], false, 255)
+                        } else if texel[3] == 0 {
                             return;
-                        };
-                        (texel, triangle.blend && (!twin || stp))
+                        } else {
+                            let blend = triangle.blend && (!twin || stp);
+                            ([texel[0], texel[1], texel[2]], blend, texel[3])
+                        }
                     }
                     None => {
                         let texel_u = clamp_texel(fragment.u, texture.width);
@@ -2585,7 +2628,7 @@ impl Framebuffer {
                         // knock-out twin paints its non-STP texels back opaque.
                         let blend = triangle.blend
                             && (!twin || texture.palette_stp(triangle.palette_row, palette_index));
-                        ([color[0], color[1], color[2]], blend)
+                        ([color[0], color[1], color[2]], blend, 255)
                     }
                 };
                 let offset = pixel * 4;
@@ -2593,18 +2636,24 @@ impl Framebuffer {
                     return;
                 };
                 let source_alpha = if blend {
-                    unorm8(fragment.color[3])
+                    mul_unorm8(unorm8(fragment.color[3]), coverage) as u8
                 } else {
-                    255
+                    coverage
                 };
                 for (index, destination) in slot[..3].iter_mut().enumerate() {
                     let source =
                         unorm8(f32::from(texel[index]) * (1.0 / 255.0) * fragment.color[index]);
+                    // Marni's packet modes: an additive part's texels are
+                    // scaled by their alpha (`SRCALPHA`, `ONE`); `SRCCOLOR` on
+                    // both sides reads no alpha at all.
                     *destination = match triangle.mix {
-                        _ if !blend => source,
-                        PacketMix::Weighted => blend_unorm8(source, *destination, source_alpha),
-                        PacketMix::Add => destination.saturating_add(source),
-                        PacketMix::SourceColour => source_colour_unorm8(source, *destination),
+                        PacketMix::Add if blend => {
+                            destination.saturating_add(mul_unorm8(source, coverage) as u8)
+                        }
+                        PacketMix::SourceColour if blend => {
+                            source_colour_unorm8(source, *destination)
+                        }
+                        _ => blend_unorm8(source, *destination, source_alpha),
                     };
                 }
                 slot[3] = 255;
@@ -2709,8 +2758,8 @@ impl Framebuffer {
                 }
                 SceneItem::Triangle(triangle) => {
                     if let Some(texture) = textures.get(triangle.texture) {
-                        let twin = twins.get(texture, triangle);
-                        self.rasterize(texture, triangle, twin, &mut depth);
+                        let page = twins.get(texture, triangle);
+                        self.rasterize(texture, triangle, page, &mut depth);
                     }
                 }
                 SceneItem::Mask(quad) => {
@@ -2725,6 +2774,7 @@ impl Framebuffer {
                 }
             }
         }
+        recycle_depth(depth);
     }
 
     /// Rasterize one ground shadow (`MarniDrawTrianglesPersp`): the model
@@ -2964,6 +3014,9 @@ impl Framebuffer {
             }
             return;
         }
+        // The colour and the level are whole 255ths (`EffectQuad::colour`).
+        let tint = color.map(|channel| (channel * 255.0).round() as u32);
+        let level = (alpha * 255.0).round() as u32;
         for triangle in &triangles {
             crate::raster::draw_triangle(triangle, self.width, self.height, |fragment| {
                 let texel_x = clamp_texel(fragment.u, page.width);
@@ -2983,12 +3036,10 @@ impl Framebuffer {
                 // and alpha. llvmpipe stores the fragment's texel-times-colour
                 // as bytes and blends them in 8-bit fixed point, rounding
                 // each `x * y / 255` product.
-                let unorm = |value: f32| (value * 255.0).round().clamp(0.0, 255.0) as u32;
-                let alpha = unorm(f32::from(texel[3]) / 255.0 * alpha);
-                for ((channel, &source), &color) in
-                    slot[..3].iter_mut().zip(&texel[..3]).zip(&color)
+                let alpha = unorm8_product(u32::from(texel[3]), level);
+                for ((channel, &source), &tint) in slot[..3].iter_mut().zip(&texel[..3]).zip(&tint)
                 {
-                    let source = unorm(f32::from(source) / 255.0 * color);
+                    let source = unorm8_product(u32::from(source), tint);
                     let frame = u32::from(*channel);
                     let blended = match quad.op {
                         EffectBlend::Normal => {
@@ -3005,8 +3056,28 @@ impl Framebuffer {
     }
 }
 
+thread_local! {
+    /// The last depth buffer a draw finished with ([`recycle_depth`]).
+    static DEPTH_POOL: std::cell::Cell<Vec<u32>> = const { std::cell::Cell::new(Vec::new()) };
+}
+
+/// Keep `depth`'s allocation for the next [`Framebuffer::depth_buffer`].
+fn recycle_depth(depth: Vec<u32>) {
+    DEPTH_POOL.with(|pool| pool.set(depth));
+}
+
+/// The fragment value `a / 255 * (b / 255)` of two 8-bit levels as llvmpipe
+/// stores it, scaled by 255 and rounded: `a * b / 255` is never on a half
+/// (510 doesn't divide `2ab + 255`, an odd number) and `f32`'s error is far
+/// below the 1/510 that leaves, so it is the exact product rounded.
+#[inline]
+fn unorm8_product(a: u32, b: u32) -> u32 {
+    (2 * a * b + 255) / 510
+}
+
 /// llvmpipe's `lp_build_mul` on 8-bit normalised values: `a * b / 255`,
 /// rounded to nearest.
+#[inline]
 fn unorm_mul(a: u32, b: u32) -> u32 {
     let product = a * b + 0x80;
     (product + (product >> 8)) >> 8
@@ -3023,20 +3094,29 @@ pub fn draw_door_scene(
     texture: &Texture8,
     frame: &crate::door::vm::Frame<'_>,
 ) {
-    let full_bright = door_draws(frame)
-        .all(|(order, _)| order.shading == crate::door::vm::DoorShading::FullBright);
-    if full_bright {
-        framebuffer.clear();
-        let camera = door_camera(frame);
-        let objects = door_draws(frame).map(|(order, mesh)| (mesh, &order.matrix));
-        framebuffer.draw_objects_unlit(objects, texture, &camera);
+    let draw = |framebuffer: &mut Framebuffer| {
+        let full_bright = door_draws(frame)
+            .all(|(order, _)| order.shading == crate::door::vm::DoorShading::FullBright);
+        if full_bright {
+            framebuffer.clear();
+            let camera = door_camera(frame);
+            let objects = door_draws(frame).map(|(order, mesh)| (mesh, &order.matrix));
+            framebuffer.draw_objects_unlit(objects, texture, &camera);
+        } else {
+            // An RE2 door draws through the same scene the GPU renders.
+            let door = DoorScene::new(frame);
+            let meshes = door.meshes(texture);
+            door.scene(&meshes).draw(framebuffer);
+        }
+        draw_fade_overlay(framebuffer, &frame.fade);
+    };
+    // RE2's door (its camera clips as its bodies' does) is drawn, faded and
+    // all, on the 640x480 display.
+    if frame.camera.near_clip {
+        framebuffer.with_display(draw);
     } else {
-        // An RE2 door draws through the same scene the GPU renders.
-        let door = DoorScene::new(frame);
-        let meshes = door.meshes(texture);
-        door.scene(&meshes).draw(framebuffer);
+        draw(framebuffer);
     }
-    draw_fade_overlay(framebuffer, &frame.fade);
 }
 
 /// The light an RE2 door part is drawn with through `camera`.
@@ -3729,8 +3809,9 @@ fn draw_gameplay_scene_with_ribbon<'a>(
             &items,
         );
     };
-    // RE2 draws its scene on its 640x480 display.
-    if lighting.is_re2() {
+    // RE2 draws its scene on its 640x480 display: a room's, lit by the room,
+    // or a door's, whose camera clips as RE2's does.
+    if lighting.is_re2() || camera.near_clip {
         framebuffer.with_display(draw);
     } else {
         draw(framebuffer);
@@ -4679,21 +4760,44 @@ struct RasterVertex {
     shade: [f32; 3],
 }
 
-/// Per draw, which (page, palette row) pairs have an STP knock-out twin.
+/// Per draw, each page's [`PageFlags`]: which (page, palette row) pairs have
+/// an STP knock-out twin, and which RE2 surfaces have keyed texels.
 #[derive(Default)]
-struct KnockoutTwins(std::collections::HashMap<(usize, usize), bool>);
+struct KnockoutTwins {
+    twins: std::collections::HashMap<(usize, usize), bool>,
+    keyed: std::collections::HashMap<(usize, usize, u32), bool>,
+}
+
+/// What a triangle's page asks of [`Framebuffer::rasterize`].
+#[derive(Debug, Clone, Copy, Default)]
+struct PageFlags {
+    /// The blend has a knock-out twin (RE1's reference).
+    twin: bool,
+    /// RE2's Direct3D texture has a texel whose alpha isn't full (Marni's
+    /// `+0x2c`, `FUN_0040FFD0`), so `TransObjectNgTin3_VinsNins` queues the
+    /// triangle: alpha-blended by the filtered texel's alpha, with no depth
+    /// write.
+    keyed: bool,
+}
 
 impl KnockoutTwins {
-    /// Whether `triangle` blends through a page with a knock-out twin.
-    fn get(&mut self, texture: &Texture8, triangle: &Triangle) -> bool {
-        if !triangle.blend || triangle.flat.is_some() {
-            return false;
-        }
-        let key = (texture.indices.as_ptr() as usize, triangle.palette_row);
-        *self
-            .0
-            .entry(key)
-            .or_insert_with(|| texture.has_knockout_twin(triangle.palette_row))
+    /// `triangle`'s page flags.
+    fn get(&mut self, texture: &Texture8, triangle: &Triangle) -> PageFlags {
+        let ptr = texture.indices.as_ptr() as usize;
+        let twin = triangle.blend
+            && triangle.flat.is_none()
+            && *self
+                .twins
+                .entry((ptr, triangle.palette_row))
+                .or_insert_with(|| texture.has_knockout_twin(triangle.palette_row));
+        let keyed = triangle.filtered && triangle.flat.is_none() && {
+            let surface = marni_surface(triangle, texture);
+            *self
+                .keyed
+                .entry((ptr, triangle.palette_row, surface.base))
+                .or_insert_with(|| surface.keyed(texture, triangle.palette_row))
+        };
+        PageFlags { twin, keyed }
     }
 }
 
@@ -4727,6 +4831,9 @@ struct Triangle {
     /// RE2's Direct3D model: bilinear-filtered at the 640x480 display and
     /// halved ([`sample_marni`]), where the others sample the nearest texel.
     filtered: bool,
+    /// The packet's texture page's first column, which picks the Direct3D
+    /// texture it samples ([`marni_surface`]).
+    page_x: u16,
 }
 
 /// A ground shadow's projected commands, ready for rasterization.
@@ -5154,6 +5261,7 @@ fn collect_triangles_with(
             uv_nudge: prim.uv_nudge,
             view_depth: re2_near.is_some(),
             filtered: re2_near.is_some(),
+            page_x: page_x as u16,
         };
         match re2_near {
             Some(near) => clip_triangle_near(
@@ -5383,6 +5491,7 @@ fn collect_complex_pool(
             uv_nudge: [0; 3],
             view_depth: false,
             filtered: false,
+            page_x: 0,
         });
     }
 }
@@ -5930,6 +6039,7 @@ fn collect_ivm_triangles(
                 uv_nudge: [0; 3],
                 view_depth: false,
                 filtered: false,
+                page_x: 0,
             });
         }
     }
@@ -5996,24 +6106,17 @@ fn stored_uv(vertex: &RasterVertex, nudge: u8, texture: &Texture8) -> [f32; 2] {
     [u, v]
 }
 
-/// `Marni::TransObjectNgTin3_VinsNins`' normalised texture coordinates of
-/// one corner: the texel position over one less than the texture's size,
-/// plus `Adjust_v` (0, `Marni::Init`).
-fn marni_uv(vertex: &RasterVertex, texture: &Texture8) -> [f32; 2] {
-    let scale = |size: u32| (size.max(2) - 1) as f32;
-    [
-        vertex.u / scale(texture.width),
-        vertex.v / scale(texture.height),
-    ]
-}
-
 /// GL_NEAREST under CLAMP_TO_EDGE: the texel under a normalised coordinate.
+#[inline]
 fn clamp_texel(coordinate: f32, size: u32) -> usize {
-    ((coordinate * size as f32).floor().max(0.0) as usize).min(size as usize - 1)
+    // A float to integer cast truncates and takes a negative (or NaN) to 0,
+    // which is the floor clamped at 0.
+    ((coordinate * size as f32) as usize).min(size as usize - 1)
 }
 
 /// llvmpipe's float to unorm8 conversion: clamp, scale by 255 and round to
 /// nearest even.
+#[inline]
 fn unorm8(value: f32) -> u8 {
     (value.clamp(0.0, 1.0) * 255.0).round_ties_even() as u8
 }
@@ -6115,10 +6218,77 @@ fn sample_bilinear(texture: &Image, u: f32, v: f32) -> [u8; 4] {
     })
 }
 
+/// The Direct3D texture an RE2 model triangle samples. `Pl_load_texture`
+/// (`0x443F70`) makes a TIM wider than 256 two textures, its first 256
+/// columns and the rest from column 256 (`textureHandle1`), so a packet on
+/// a page from column 256 samples the second; anything else is one texture
+/// as wide as its TIM, at most 256.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct MarniSurface {
+    /// The surface's first column in the TIM.
+    base: u32,
+    /// Its width in texels.
+    width: u32,
+}
+
+fn marni_surface(triangle: &Triangle, texture: &Texture8) -> MarniSurface {
+    let base = if u32::from(triangle.page_x) >= 256 && texture.width > 256 {
+        256
+    } else {
+        0
+    };
+    MarniSurface {
+        base,
+        width: (texture.width - base).clamp(1, 256),
+    }
+}
+
+impl MarniSurface {
+    /// `Marni::TransObjectNgTin3_VinsNins`' normalised texture coordinates of
+    /// one corner: the texel position in the surface over one less than its
+    /// size, plus `Adjust_v` (0, `Marni::Init`).
+    fn uv(self, vertex: &RasterVertex, texture: &Texture8) -> [f32; 2] {
+        let scale = |size: u32| (size.max(2) - 1) as f32;
+        [
+            (vertex.u - self.base as f32) / scale(self.width),
+            vertex.v / scale(texture.height),
+        ]
+    }
+
+    /// The surface's texel at `(x, y)` through CLUT `row` as its Direct3D
+    /// texture holds it, and its STP bit. A colour of 0 is the transparent
+    /// texel (alpha 0); `Pl_load_texture` first turns an STP black past entry
+    /// 0 into 0x8001, so it stays opaque.
+    #[inline]
+    fn texel(self, texture: &Texture8, row: usize, x: usize, y: usize) -> ([u8; 4], bool) {
+        let column = self.base as usize + x;
+        let width = texture.width as usize;
+        let index = texture
+            .indices
+            .get(y * width + column)
+            .copied()
+            .unwrap_or(0);
+        let colour = texture.palette(row, index);
+        let stp = texture.palette_stp(row, index);
+        match (colour[..3] == [0, 0, 0], stp && index != 0) {
+            (true, true) => ([8, 0, 0, 255], stp),
+            (true, false) => ([0, 0, 0, 0], stp),
+            _ => ([colour[0], colour[1], colour[2], 255], stp),
+        }
+    }
+
+    /// Whether any texel of the surface is transparent (Marni's `+0x2c`).
+    fn keyed(self, texture: &Texture8, row: usize) -> bool {
+        (0..texture.height as usize)
+            .any(|y| (0..self.width as usize).any(|x| self.texel(texture, row, x, y).0[3] == 0))
+    }
+}
+
 /// One axis of a bilinear fetch under `D3DTADDRESS_WRAP`: the two texels a
 /// normalised coordinate falls between and the second's weight in 256ths,
 /// from the coordinate in 8.8 fixed point centred on the texels,
 /// `round(c * size * 256) - 128`, as llvmpipe forms it.
+#[inline]
 fn wrapped_axis(coordinate: f32, size: u32) -> (usize, usize, u16) {
     let scaled = (coordinate * (size as f32 * 256.0)).round_ties_even();
     let fixed = scaled.clamp(-(1 << 24) as f32, (1 << 24) as f32) as i32 - 128;
@@ -6131,54 +6301,52 @@ fn wrapped_axis(coordinate: f32, size: u32) -> (usize, usize, u16) {
     )
 }
 
-/// RE2's model texel at a normalised `(u, v)`: `Marni::SetFiltering(1)` with
-/// `GraphicTextureInterpolation` on (the recordings' `config.ini`) sets
-/// `D3DFILTER_LINEAR` magnification and minification over a wrapped texture,
-/// which Wine's Direct3D runs on llvmpipe (the 8-bit AoS lerps of
-/// [`lerp_unorm8`]). Palette entry zero is the colour key: it takes part in
-/// the filter with its own colour, and a sample whose four weighted texels
-/// are all keyed is discarded (`None`). The STP bit is the nearest texel's.
-fn sample_marni(texture: &Texture8, row: usize, u: f32, v: f32) -> Option<([u8; 3], bool)> {
+/// RE2's model texel at a normalised `(u, v)` of its surface:
+/// `Marni::SetFiltering(1)` with `GraphicTextureInterpolation` on (the
+/// recordings' `config.ini`) sets `D3DFILTER_LINEAR` magnification and
+/// minification over a wrapped texture, which Wine's Direct3D runs on
+/// llvmpipe (the 8-bit AoS lerps of [`lerp_unorm8`]) over the texture's
+/// RGBA, its transparent texels' alpha included. The STP bit is the nearest
+/// texel's.
+#[inline]
+fn sample_marni(
+    texture: &Texture8,
+    surface: MarniSurface,
+    row: usize,
+    u: f32,
+    v: f32,
+) -> ([u8; 4], bool) {
     if texture.width == 0 || texture.height == 0 {
-        return None;
+        return ([0; 4], false);
     }
-    let (x0, x1, fx) = wrapped_axis(u, texture.width);
+    let (x0, x1, fx) = wrapped_axis(u, surface.width);
     let (y0, y1, fy) = wrapped_axis(v, texture.height);
-    let width = texture.width as usize;
-    let index = |x: usize, y: usize| texture.indices.get(y * width + x).copied().unwrap_or(0);
-    let corners = [index(x0, y0), index(x1, y0), index(x0, y1), index(x1, y1)];
-    // The top-left texel always carries weight; the others only off its
-    // centre line.
-    let weighted = [true, fx != 0, fy != 0, fx != 0 && fy != 0];
-    if !corners
-        .iter()
-        .zip(weighted)
-        .any(|(&entry, weighted)| weighted && entry != 0)
-    {
-        return None;
-    }
-    let colours = corners.map(|entry| texture.palette(row, entry));
+    let texel = |x: usize, y: usize| surface.texel(texture, row, x, y);
+    let corners = [texel(x0, y0), texel(x1, y0), texel(x0, y1), texel(x1, y1)];
     let channel = |index: usize| {
-        let top = lerp_unorm8(fx, colours[0][index], colours[1][index]);
-        let bottom = lerp_unorm8(fx, colours[2][index], colours[3][index]);
+        let top = lerp_unorm8(fx, corners[0].0[index], corners[1].0[index]);
+        let bottom = lerp_unorm8(fx, corners[2].0[index], corners[3].0[index]);
         lerp_unorm8(fy, top, bottom)
     };
-    let nearest = corners[usize::from(fx >= 0x80) + 2 * usize::from(fy >= 0x80)];
-    Some((
-        [channel(0), channel(1), channel(2)],
-        texture.palette_stp(row, nearest),
-    ))
+    let nearest = corners[usize::from(fx >= 0x80) + 2 * usize::from(fy >= 0x80)].1;
+    (std::array::from_fn(channel), nearest)
 }
 
-/// The mean of four 8-bit samples, rounded (PIL's box filter halving the
-/// recordings' 640x480 frames).
-fn mean_of_four(sum: u32) -> u8 {
-    ((sum + 2) / 4).min(255) as u8
+/// A 2x2 block of one channel reduced to one pixel as Pillow's box resize
+/// halves the recordings' 640x480 frames: each row's pair averaged and
+/// rounded, then the two rows'.
+fn halve_block(block: [[u8; 2]; 2]) -> u8 {
+    let pair = |a: u8, b: u8| ((u16::from(a) + u16::from(b) + 1) >> 1) as u8;
+    pair(
+        pair(block[0][0], block[0][1]),
+        pair(block[1][0], block[1][1]),
+    )
 }
 
 /// `lp_build_lerp` for normalised 8-bit values in 16-bit lanes: the weight
 /// times the wrapped difference, rounded by `0x7F` plus the product's bit 8,
 /// shifted down and added back modulo 256.
+#[inline]
 fn lerp_unorm8(weight: u16, from: u8, to: u8) -> u8 {
     let delta = u16::from(to).wrapping_sub(u16::from(from));
     let mut product = weight.wrapping_mul(delta);
@@ -6188,6 +6356,7 @@ fn lerp_unorm8(weight: u16, from: u8, to: u8) -> u8 {
 
 /// llvmpipe's 8-bit normalised multiply, `round(a * b / 255)` (the
 /// `lp_build_mul_norm` double-blend trick).
+#[inline]
 fn mul_unorm8(a: u8, b: u8) -> u32 {
     let product = u32::from(a) * u32::from(b) + 128;
     (product + (product >> 8)) >> 8
@@ -6195,6 +6364,7 @@ fn mul_unorm8(a: u8, b: u8) -> u32 {
 
 /// The reference's `GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA` blend as llvmpipe
 /// runs it on an RGBA8 target: both terms in unorm8, added with saturation.
+#[inline]
 fn blend_unorm8(source: u8, destination: u8, alpha: u8) -> u8 {
     (mul_unorm8(source, alpha) + mul_unorm8(destination, 255 - alpha)).min(255) as u8
 }
@@ -7150,14 +7320,15 @@ mod tests {
             uv_nudge: [0; 3],
             view_depth: false,
             filtered: false,
+            page_x: 0,
         })
     }
 
     /// Draw one triangle against a freshly cleared depth buffer.
     fn rasterize_alone(framebuffer: &mut Framebuffer, texture: &Texture8, triangle: &Triangle) {
         let mut depth = framebuffer.depth_buffer();
-        let twin = texture.has_knockout_twin(triangle.palette_row);
-        framebuffer.rasterize(texture, triangle, twin, &mut depth);
+        let page = KnockoutTwins::default().get(texture, triangle);
+        framebuffer.rasterize(texture, triangle, page, &mut depth);
     }
 
     fn framebuffer_pixel(framebuffer: &Framebuffer, x: usize, y: usize) -> [u8; 4] {
@@ -8535,60 +8706,134 @@ mod tests {
     }
 
     #[test]
-    fn a_mask_on_the_display_covers_its_pixels_whole() {
-        let page = solid_image(16, 16, [9, 8, 7, 255]);
+    fn a_mask_on_the_display_steps_its_page_once_a_frame_pixel() {
+        let mut page = solid_image(16, 16, [0, 0, 0, 255]);
+        for y in 0..16 {
+            for x in 0..16 {
+                let at = (y * 16 + x) * 4;
+                page.rgba[at..at + 3].copy_from_slice(&[x as u8 * 10, y as u8 * 10, 7]);
+            }
+        }
         let quad = MaskQuad {
             key: 0,
-            uv: (0, 0),
+            uv: (2, 3),
             pos: (5, 5),
             size: (4, 4),
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.with_display(|display| display.rasterize_mask(&page, &quad));
-        assert_eq!(framebuffer_pixel(&framebuffer, 5, 5), [9, 8, 7, 255]);
-        assert_eq!(framebuffer_pixel(&framebuffer, 8, 8), [9, 8, 7, 255]);
+        assert_eq!(framebuffer_pixel(&framebuffer, 5, 5), [20, 30, 7, 255]);
+        assert_eq!(framebuffer_pixel(&framebuffer, 8, 7), [50, 50, 7, 255]);
         assert_eq!(framebuffer_pixel(&framebuffer, 9, 8), [0, 0, 0, 0]);
     }
 
+    #[test]
+    fn an_effect_levels_product_is_the_float_one_rounded() {
+        for a in 0..=255u32 {
+            for b in 0..=255u32 {
+                let float = a as f32 / 255.0 * (b as f32 / 255.0);
+                let rounded = (float * 255.0).round().clamp(0.0, 255.0) as u32;
+                assert_eq!(unorm8_product(a, b), rounded, "{a} {b}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_texel_clamp_is_the_floor_held_to_the_texture() {
+        for coordinate in [
+            -1.5f32,
+            -0.001,
+            0.0,
+            0.124,
+            0.125,
+            0.5,
+            0.999,
+            1.0,
+            7.0,
+            f32::NAN,
+        ] {
+            let floor = ((coordinate * 8.0).floor().max(0.0) as usize).min(7);
+            assert_eq!(clamp_texel(coordinate, 8), floor, "{coordinate}");
+        }
+    }
+
+    #[test]
+    fn halving_rounds_each_row_then_the_rows_as_pillow_does() {
+        assert_eq!(halve_block([[0, 0], [0, 1]]), 1);
+        assert_eq!(halve_block([[0, 1], [0, 0]]), 1);
+        assert_eq!(halve_block([[10, 11], [12, 13]]), 12);
+        assert_eq!(halve_block([[255, 255], [255, 254]]), 255);
+        assert_eq!(halve_block([[0, 0], [1, 1]]), 1);
+        assert_eq!(halve_block([[1, 0], [0, 0]]), 1);
+    }
+
     /// A 2x2 page of `indices` under row 0: entry 0 the colour key (black),
-    /// 1 red and 2 blue.
+    /// 1 red, 2 blue, 3 green and 4 white.
     fn marni_texture(indices: Vec<u8>) -> Texture8 {
-        indexed_texture(indices, &[[0, 0, 0, 0], [255, 0, 0, 255], [0, 0, 255, 255]])
+        indexed_texture(
+            indices,
+            &[
+                [0, 0, 0, 255],
+                [255, 0, 0, 255],
+                [0, 0, 255, 255],
+                [0, 255, 0, 255],
+                [255, 255, 255, 255],
+            ],
+        )
+    }
+
+    const WHOLE: MarniSurface = MarniSurface { base: 0, width: 2 };
+
+    #[test]
+    fn a_marni_texel_is_transparent_only_where_its_colour_is_0() {
+        let mut texture = marni_texture(vec![0, 1, 5, 5]);
+        texture.stp = vec![false; crate::model::PALETTE_ROW_LEN];
+        assert_eq!(WHOLE.texel(&texture, 0, 0, 0), ([0, 0, 0, 0], false));
+        assert_eq!(WHOLE.texel(&texture, 0, 1, 0).0, [255, 0, 0, 255]);
+        // Entry 5 is black: transparent as it is, 0x8001 when it is STP.
+        assert_eq!(WHOLE.texel(&texture, 0, 0, 1).0, [0, 0, 0, 0]);
+        texture.stp[5] = true;
+        assert_eq!(WHOLE.texel(&texture, 0, 0, 1), ([8, 0, 0, 255], true));
+        // Entry 0's STP black isn't turned.
+        texture.stp[0] = true;
+        assert_eq!(WHOLE.texel(&texture, 0, 0, 0).0, [0, 0, 0, 0]);
+        assert!(WHOLE.keyed(&texture, 0));
+        assert!(!WHOLE.keyed(&marni_texture(vec![1, 2, 3, 4]), 0));
     }
 
     #[test]
     fn marni_sampling_is_exact_on_a_texel_centre() {
-        let texture = marni_texture(vec![1, 2, 1, 2]);
-        assert_eq!(
-            sample_marni(&texture, 0, 0.25, 0.25),
-            Some(([255, 0, 0], false))
-        );
-        assert_eq!(
-            sample_marni(&texture, 0, 0.75, 0.75),
-            Some(([0, 0, 255], false))
-        );
+        let texture = marni_texture(vec![1, 2, 3, 4]);
+        let at = |u, v| sample_marni(&texture, WHOLE, 0, u, v).0;
+        assert_eq!(at(0.25, 0.25), [255, 0, 0, 255]);
+        assert_eq!(at(0.75, 0.25), [0, 0, 255, 255]);
+        assert_eq!(at(0.25, 0.75), [0, 255, 0, 255]);
+        assert_eq!(at(0.75, 0.75), [255, 255, 255, 255]);
     }
 
     #[test]
-    fn marni_sampling_lerps_between_texels_with_llvmpipes_rounding() {
-        let texture = marni_texture(vec![1, 2, 1, 2]);
-        // Halfway: weight 128 of 256, `lp_build_lerp`'s rounding.
-        assert_eq!(
-            sample_marni(&texture, 0, 0.5, 0.25),
-            Some(([127, 0, 128], false))
-        );
+    fn marni_sampling_lerps_rows_then_columns_with_llvmpipes_rounding() {
+        let texture = marni_texture(vec![1, 2, 3, 4]);
+        let at = |u, v| sample_marni(&texture, WHOLE, 0, u, v).0;
+        // Halfway across: weight 128 of 256, `lp_build_lerp`'s rounding.
+        assert_eq!(at(0.5, 0.25), [127, 0, 128, 255]);
         assert_eq!(lerp_unorm8(128, 255, 0), 127);
         assert_eq!(lerp_unorm8(128, 0, 255), 128);
-        assert_eq!(lerp_unorm8(64, 0, 255), 64);
+        // Halfway down the left column, and in the middle of all four.
+        assert_eq!(at(0.25, 0.5), [127, 128, 0, 255]);
+        let top = [127u8, 0, 128];
+        let bottom = [lerp_unorm8(128, 0, 255), 255, lerp_unorm8(128, 0, 255)];
+        let mid: [u8; 3] = std::array::from_fn(|c| lerp_unorm8(128, top[c], bottom[c]));
+        assert_eq!(at(0.5, 0.5)[..3], mid);
     }
 
     #[test]
-    fn marni_sampling_wraps_at_the_texture_edge() {
+    fn marni_sampling_wraps_at_the_surface_edge() {
         let texture = marni_texture(vec![1, 2, 1, 2]);
         // u 0 is halfway between the last column and the first.
         assert_eq!(
-            sample_marni(&texture, 0, 0.0, 0.25),
-            Some(([128, 0, 127], false))
+            sample_marni(&texture, WHOLE, 0, 0.0, 0.25).0,
+            [128, 0, 127, 255]
         );
         assert_eq!(wrapped_axis(0.0, 2), (1, 0, 128));
         assert_eq!(wrapped_axis(0.25, 2), (0, 1, 0));
@@ -8596,28 +8841,73 @@ mod tests {
     }
 
     #[test]
-    fn marni_sampling_filters_the_colour_key_and_drops_it_alone() {
+    fn marni_sampling_filters_the_keys_alpha_with_its_colour() {
         let texture = marni_texture(vec![0, 1, 0, 1]);
-        assert_eq!(sample_marni(&texture, 0, 0.25, 0.25), None);
-        // Next to the key, its own black takes half the weight.
+        assert_eq!(sample_marni(&texture, WHOLE, 0, 0.25, 0.25).0[3], 0);
+        // Next to the key, its black and its alpha take half the weight.
         assert_eq!(
-            sample_marni(&texture, 0, 0.5, 0.25),
-            Some(([128, 0, 0], false))
+            sample_marni(&texture, WHOLE, 0, 0.5, 0.25).0,
+            [128, 0, 0, 128]
         );
     }
 
-    #[test]
-    fn the_mean_of_four_rounds_to_nearest() {
-        assert_eq!(mean_of_four(0), 0);
-        assert_eq!(mean_of_four(1), 0);
-        assert_eq!(mean_of_four(2), 1);
-        assert_eq!(mean_of_four(255 * 4), 255);
-        assert_eq!(mean_of_four(255 * 2), 128);
+    /// A 512 x 1 texture whose 128-column strips are entries 1 to 4 of
+    /// [`marni_texture`]'s CLUT: red, blue, green and white.
+    fn wide_texture() -> Texture8 {
+        Texture8 {
+            width: 512,
+            height: 1,
+            indices: (0..512).map(|column| (column / 128 + 1) as u8).collect(),
+            ..marni_texture(Vec::new())
+        }
     }
 
-    /// A triangle magnifying the 2x2 page four times across x 0 to 8.
-    fn magnified_triangle(filtered: bool) -> Framebuffer {
-        let texture = marni_texture(vec![1, 2, 1, 2]);
+    #[test]
+    fn a_wide_tim_is_two_surfaces_split_at_column_256() {
+        let texture = wide_texture();
+        let triangle = |page_x: u16| Triangle {
+            page_x,
+            ..match scene_triangle(1) {
+                SceneItem::Triangle(triangle) => triangle,
+                _ => unreachable!(),
+            }
+        };
+        assert_eq!(
+            marni_surface(&triangle(128), &texture),
+            MarniSurface {
+                base: 0,
+                width: 256
+            }
+        );
+        let second = marni_surface(&triangle(256), &texture);
+        assert_eq!(
+            second,
+            MarniSurface {
+                base: 256,
+                width: 256
+            }
+        );
+        // Its UVs are over its own width less one, and it wraps at its own
+        // edges: column 511's right neighbour is 256, green to white.
+        let vertex = RasterVertex {
+            position: [0.0; 2],
+            w: 1.0,
+            u: 511.0,
+            v: 0.0,
+            shade: [1.0; 3],
+        };
+        assert_eq!(second.uv(&vertex, &texture), [1.0, 0.0]);
+        assert_eq!(
+            sample_marni(&texture, second, 0, 1.0, 0.5).0,
+            [lerp_unorm8(128, 255, 0), 255, lerp_unorm8(128, 255, 0), 255]
+        );
+    }
+
+    /// A model triangle over the 2x2 page `indices`, its texels four times
+    /// magnified (u from 0 to 8 over 0 to 8 pixels, the page's size less one
+    /// being 1) and its hypotenuse at `x + y = edge`, drawn over blue.
+    fn magnified_triangle(filtered: bool, indices: Vec<u8>, edge: f32) -> Framebuffer {
+        let texture = marni_texture(indices);
         let corner = |x: f32, y: f32| RasterVertex {
             position: [x, y],
             w: 1.0,
@@ -8626,7 +8916,7 @@ mod tests {
             shade: [1.0; 3],
         };
         let triangle = Triangle {
-            raster: [corner(0.0, 0.0), corner(8.0, 0.0), corner(0.0, 8.0)],
+            raster: [corner(0.0, 0.0), corner(edge, 0.0), corner(0.0, edge)],
             filtered,
             ..match scene_triangle(1) {
                 SceneItem::Triangle(triangle) => triangle,
@@ -8634,45 +8924,179 @@ mod tests {
             }
         };
         let mut framebuffer = Framebuffer::new();
+        framebuffer.blit(&solid_image(320, 240, [0, 0, 255, 255]));
         framebuffer.rasterize_triangles(&texture, vec![triangle]);
         framebuffer
     }
 
-    #[test]
-    fn marni_uvs_normalise_by_one_less_than_the_size() {
-        let vertex = RasterVertex {
-            position: [0.0; 2],
-            w: 1.0,
-            u: 127.0,
-            v: 63.0,
-            shade: [1.0; 3],
-        };
-        let texture = Texture8 {
-            width: 128,
-            height: 64,
-            ..marni_texture(Vec::new())
-        };
-        assert_eq!(marni_uv(&vertex, &texture), [1.0, 1.0]);
+    /// The colour [`magnified_triangle`] gives the display pixel whose centre
+    /// is at game position `(x, y)`: the triangle is drawn half a display
+    /// pixel on, so the pixel samples a quarter of a game pixel back.
+    fn display_texel(indices: &[u8], x: f32, y: f32) -> [u8; 4] {
+        let texture = marni_texture(indices.to_vec());
+        sample_marni(&texture, WHOLE, 0, (x - 0.25) / 8.0, (y - 0.25) / 8.0).0
     }
 
     #[test]
     fn a_filtered_triangle_is_bilinear_on_the_display_and_halved() {
+        let indices = [1, 2, 3, 4];
         // Unfiltered: u over the size, the nearest texel, on the frame.
-        let nearest = magnified_triangle(false);
-        assert_eq!(framebuffer_pixel(&nearest, 3, 0), [255, 0, 0, 255]);
-        // Filtered: u over one less than the size, so 0 to 8 spans both
-        // texels' corners. Pixel 3's halves at 640 sample u 0.40625 and
-        // 0.46875 of the page: weights 80 and 112 toward blue.
-        let filtered = magnified_triangle(true);
-        let half = |weight: u16| [lerp_unorm8(weight, 255, 0), lerp_unorm8(weight, 0, 255)];
-        let [a, b] = [half(80), half(112)];
-        let mean = |x: u8, y: u8| mean_of_four(2 * u32::from(x) + 2 * u32::from(y));
-        assert_eq!(
-            framebuffer_pixel(&filtered, 3, 0),
-            [mean(a[0], b[0]), 0, mean(a[1], b[1]), 255]
+        let nearest = magnified_triangle(false, indices.to_vec(), 8.0);
+        assert_eq!(framebuffer_pixel(&nearest, 2, 1), [255, 0, 0, 255]);
+        // Filtered: each of pixel (2, 1)'s four display pixels samples at its
+        // own centre, a quarter pixel each way.
+        let filtered = magnified_triangle(true, indices.to_vec(), 8.0);
+        let quarters = [
+            [
+                display_texel(&indices, 2.25, 1.25),
+                display_texel(&indices, 2.75, 1.25),
+            ],
+            [
+                display_texel(&indices, 2.25, 1.75),
+                display_texel(&indices, 2.75, 1.75),
+            ],
+        ];
+        let expected: [u8; 3] = std::array::from_fn(|c| {
+            halve_block([
+                [quarters[0][0][c], quarters[0][1][c]],
+                [quarters[1][0][c], quarters[1][1][c]],
+            ])
+        });
+        assert_eq!(framebuffer_pixel(&filtered, 2, 1)[..3], expected);
+        // Red, blue and green all reach it.
+        assert!(expected.iter().all(|&channel| channel > 0), "{expected:?}");
+    }
+
+    #[test]
+    fn a_display_pixel_of_a_silhouette_weighs_a_quarter() {
+        // The hypotenuse at x + y = 7.25, drawn half a display pixel on, so at
+        // 7.75: of pixel (3, 4)'s display pixels only the top left's centre,
+        // (3.25, 4.25), is inside.
+        let indices = [1, 2, 3, 4];
+        let filtered = magnified_triangle(true, indices.to_vec(), 7.25);
+        let inside = display_texel(&indices, 3.25, 4.25);
+        let expected: [u8; 3] = std::array::from_fn(|c| {
+            halve_block([[inside[c], [0, 0, 255][c]], [[0, 0, 255][c]; 2]])
+        });
+        assert_eq!(framebuffer_pixel(&filtered, 3, 4)[..3], expected);
+    }
+
+    #[test]
+    fn a_keyed_texture_blends_its_fringe_over_the_frame_and_writes_no_depth() {
+        // Key on the left, red on the right, over blue.
+        let filtered = magnified_triangle(true, vec![0, 1, 0, 1], 8.0);
+        // Left of the texels' midline the key's half-alpha fringe shows the
+        // blue behind it, not black.
+        let fringe = framebuffer_pixel(&filtered, 3, 0);
+        assert!(fringe[0] > 0 && fringe[2] > 0, "{fringe:?}");
+        assert_eq!(fringe[1], 0);
+        // Its texture has a transparent texel, so Marni queues it.
+        let texture = marni_texture(vec![0, 1, 0, 1]);
+        assert!(WHOLE.keyed(&texture, 0));
+        // No depth: an opaque triangle drawn after, behind it, still shows.
+        let mut framebuffer = Framebuffer::new();
+        let near = Triangle {
+            raster: std::array::from_fn(|corner| RasterVertex {
+                position: [[0.0, 0.0], [8.0, 0.0], [0.0, 8.0]][corner],
+                w: 1.0,
+                u: [0.0, 1.0, 0.0][corner],
+                v: [0.0, 0.0, 1.0][corner],
+                shade: [1.0; 3],
+            }),
+            filtered: true,
+            ..match scene_triangle(1) {
+                SceneItem::Triangle(triangle) => triangle,
+                _ => unreachable!(),
+            }
+        };
+        let far = Triangle {
+            raster: near.raster.map(|vertex| RasterVertex { w: 4.0, ..vertex }),
+            filtered: false,
+            ..near
+        };
+        framebuffer.with_display(|display| {
+            let mut depth = display.depth_buffer();
+            let page = KnockoutTwins::default().get(&texture, &near);
+            display.rasterize(&texture, &near, page, &mut depth);
+            let opaque = marni_texture(vec![2, 2, 2, 2]);
+            display.rasterize(&opaque, &far, PageFlags::default(), &mut depth);
+        });
+        assert_eq!(framebuffer_pixel(&framebuffer, 1, 1), [0, 0, 255, 255]);
+    }
+
+    /// A one-order door frame: `object` in front of an RE2 or RE1
+    /// door camera, in `shading`.
+    fn door_frame(
+        object: &TmdObject,
+        near_clip: bool,
+        shading: crate::door::vm::DoorShading,
+    ) -> crate::door::vm::Frame<'_> {
+        crate::door::vm::Frame {
+            camera: crate::door::vm::DoorCamera {
+                from: [0, 0, 0],
+                to: [0, 0, 100],
+                focal: 200,
+                near_clip,
+            },
+            fade: crate::door::vm::Fade {
+                fade_type: 2,
+                counter: 0,
+                state: 0,
+            },
+            orders: vec![crate::door::vm::OrderFrame {
+                flags: 0x8001,
+                model: 0,
+                parent: None,
+                tpage: 0,
+                local: identity(),
+                matrix: identity(),
+                rotation: [0; 3],
+                velocity: [0; 3],
+                rot_velocity: [0; 3],
+                mesh: Some(object),
+                vertex_writes: Vec::new(),
+                shading,
+            }],
+            sfx: Vec::new(),
+            messages: Vec::new(),
+            done: false,
+            phase: 0,
+            frame: 0,
+            hold: 0,
+            black: false,
+        }
+    }
+
+    /// The distinct colours other than black of a door frame whose triangle,
+    /// 600 in front of the camera, has edges falling between pixels.
+    fn door_colours(near_clip: bool, shading: crate::door::vm::DoorShading) -> usize {
+        let object = triangle_object([[0, 0, 600], [0, -100, 600], [100, 0, 600]]);
+        let frame = door_frame(&object, near_clip, shading);
+        let mut framebuffer = Framebuffer::new();
+        draw_door_scene(
+            &mut framebuffer,
+            &solid_texture([200, 150, 100, 255]),
+            &frame,
         );
-        // Left of texel 0's centre the filter wraps to the last column.
-        assert_ne!(framebuffer_pixel(&filtered, 0, 0)[2], 0);
+        let colours: std::collections::BTreeSet<[u8; 4]> = framebuffer
+            .rgba
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .copied()
+            .filter(|pixel| pixel[..3] != [0, 0, 0])
+            .collect();
+        colours.len()
+    }
+
+    #[test]
+    fn an_re2_doors_lit_parts_are_drawn_on_the_display() {
+        use crate::door::vm::DoorShading;
+        // RE1's door draws one colour, edge pixels included; RE2's halves its
+        // display, so the pixels its edges cross are blends.
+        assert_eq!(door_colours(false, DoorShading::FullBright), 1);
+        assert!(door_colours(true, DoorShading::FullBright) > 1);
+        assert!(door_colours(true, DoorShading::Lit) > 1);
     }
 
     #[test]
@@ -9643,6 +10067,7 @@ mod tests {
             uv_nudge: [0; 3],
             view_depth: false,
             filtered: false,
+            page_x: 0,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));
@@ -9852,6 +10277,7 @@ mod tests {
             uv_nudge: [0; 3],
             view_depth: false,
             filtered: false,
+            page_x: 0,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));
@@ -9909,6 +10335,7 @@ mod tests {
             uv_nudge: [0; 3],
             view_depth: false,
             filtered: false,
+            page_x: 0,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));

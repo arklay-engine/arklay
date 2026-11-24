@@ -125,6 +125,7 @@ pub struct Texture8 {
 
 impl Texture8 {
     /// Look up one palette entry; out-of-range lookups are black.
+    #[inline]
     pub fn palette(&self, row: usize, index: u8) -> [u8; 4] {
         self.palettes
             .get(row * PALETTE_ROW_LEN + index as usize)
@@ -133,6 +134,7 @@ impl Texture8 {
     }
 
     /// Whether one palette entry carries the STP bit; out-of-range is false.
+    #[inline]
     pub fn palette_stp(&self, row: usize, index: u8) -> bool {
         self.stp
             .get(row * PALETTE_ROW_LEN + index as usize)

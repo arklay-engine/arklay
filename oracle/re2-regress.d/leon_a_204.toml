@@ -10,9 +10,8 @@ input_shift = 344
 ticks = 1700
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,zm0,zm1,zp,fgroom,fgstat"
 frames = [380, 1699]
-# 0.83 measured (0.98 before #551 drew the body's messages, a room's, where Mess_set puts them), 0.61 with the
-# message box blanked; the door's frames (model 9) are about 1.3
-frame_max_mean = 0.9
+# 0.44 measured, 0.31 with the message box blanked (0.53 and 0.38 drawn at 320x240)
+frame_max_mean = 0.5
 boxes = [[0, 170, 320, 222]]
 expect = "match"
 record = "--warp 201:-15773:0:-21630:2040:0 --life 200 --give 0:2:13 --give 2:0x14:39"
@@ -28,7 +27,9 @@ input_shift = 344
 ticks = 2600
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,zm0,zm1,zp"
 frames = [1700, 2599]
-# 0.42 measured; the worst, about 3.7, is the door's frame into room 205
-frame_max_mean = 0.55
+# 0.35 measured; the worst, about 3.8, is the door's first frame into room 205. The door's lit animation (from 2332)
+# is drawn on the 640x480 display: 0.84 there, 1.18 drawn at 320x240.
+frame_max_mean = 0.4
+frame_windows = [[1700, 2331, 0.15], [2332, 2599, 0.9]]
 expect = "match"
 record = "--warp 201:-15773:0:-21630:2040:0 --life 200 --give 0:2:13 --give 2:0x14:39"

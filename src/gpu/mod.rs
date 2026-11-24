@@ -3806,9 +3806,11 @@ mod tests {
                 prims,
             }],
         };
+        // Cells 6 and 7 repeat 0 and 1's colours: no texel is keyed, which
+        // would queue RE2's triangles without writing depth (`rasterize`).
         let (width, height) = (64u32, 8u32);
         let indices = (0..width * height)
-            .map(|i| ((i % width) / 8 + 1) as u8)
+            .map(|i| ((i % width) / 8 % 6 + 1) as u8)
             .collect();
         let mut palettes = vec![[0u8; 4]; crate::model::PALETTE_ROW_LEN];
         let colours = [
