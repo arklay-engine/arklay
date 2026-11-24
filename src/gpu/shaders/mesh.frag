@@ -29,7 +29,8 @@ layout(set = 2, binding = 3) uniform usampler2D hd_rows;
 layout(set = 2, binding = 4) uniform sampler2D mask_keys;
 
 layout(std140, set = 3, binding = 0) uniform Material {
-    // x = alpha of a blended texel, y = pass (0 opaque, 1 blend, 2 additive),
+    // x = alpha of a blended texel, y = pass (0 opaque, 1 blend, 2 additive,
+    // 3 source colour),
     // z = 1 when `hd` and `hd_rows` hold this page's replacements
     vec4 params;
 };
@@ -87,9 +88,12 @@ void main() {
         discard;
     }
     // An additive packet's blending texels draw in the additive pass alone,
-    // at alpha 0 so the premultiplied blend adds them.
+    // at alpha 0 so the premultiplied blend adds them; a source-colour
+    // packet's in the source-colour pass alone.
     bool additive = ((in_packed >> 31) & 1u) != 0u;
-    if (blend && additive != (params.y > 1.5)) {
+    bool source_colour = ((in_packed >> 23) & 1u) != 0u;
+    float packet_pass = additive ? 2.0 : (source_colour ? 3.0 : 1.0);
+    if (blend && abs(packet_pass - params.y) > 0.5) {
         discard;
     }
     // The target's unorm conversion rounds `texel * shade` like `unorm8`.

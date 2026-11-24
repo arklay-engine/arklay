@@ -20002,12 +20002,13 @@ fn apply_re2_cut_edit(room: &mut RoomState, edit: crate::scd2::host::CutEdit) {
             }
         }
         // `Om_disp` with attribute 2: every packet of the model blends.
-        CutEdit::BlendObject { slot } => {
+        CutEdit::BlendObject { slot, mix } => {
             for asset in &mut room.object_models {
                 if asset.pair_index == usize::from(slot) {
                     for object in &mut asset.model.objects {
                         for prim in &mut object.prims {
                             prim.blend = true;
+                            prim.mix = mix;
                         }
                     }
                 }
@@ -45820,7 +45821,7 @@ end
                         tsb: 0x80,
                         textured: true,
                         blend: false,
-                        additive: false,
+                        mix: crate::model::PacketMix::Weighted,
                         raw_y: false,
                         flat_color: None,
                         quad: None,
@@ -45921,7 +45922,7 @@ end
                 tsb: 0x80,
                 textured: true,
                 blend: false,
-                additive: false,
+                mix: crate::model::PacketMix::Weighted,
                 raw_y: false,
                 flat_color: None,
                 quad: None,
