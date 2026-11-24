@@ -7892,12 +7892,26 @@ impl GameSession {
                 log.restore_room_word(&mut self.game.re2.banks);
             }
             apply_re2_room_data(&mut self.loaded.room, &mut self.game);
-            self.game.re2.pending_player = placed;
+            // The original's `--warp` puts the player down with its door's
+            // record before the room's scripts run, so a `pos_set` or
+            // `dir_set` of the rerun (room 305's arrival from 307 puts Sherry
+            // on the ledge) moves her from the setup's place. Her first push
+            // still starts from the door's place (`Old_x`, `Old_z`).
+            let scripted = std::mem::replace(&mut self.game.re2.pending_player, placed);
+            let pending = &mut self.game.re2.pending_player;
+            pending.pos = scripted.pos.or(pending.pos);
+            pending.angle = scripted.angle.or(pending.angle);
         }
         if mirror {
             self.game.sync_player(&mut self.player);
             if self.game.is_re2_room && self.game.camera.current_cut != cut {
                 self.game.re2.authored_var_cut = u8::try_from(self.game.camera.current_cut).ok();
+            }
+            // `Pl_init`'s radius for a player the setup changed
+            // ([`Self::sync_re2_player`] has it from the first tick's end):
+            // Sherry's is smaller than the scenario's character's.
+            if self.game.is_re2_room && self.loaded.room.sca.is_some() {
+                self.player.radius = crate::sca::player_radius(self.game.re2.pl_id);
             }
             let life = self
                 .game
@@ -20440,7 +20454,12 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         crate::character2::player_held(context.game, context.player, &tick);
         None
     } else {
-        crate::player2::player_move(&mut context.game.re2.player, context.player, &tick)
+        crate::player2::player_move(
+            &mut context.game.re2.player,
+            context.player,
+            &tick,
+            &mut context.game.re2.rnd,
+        )
     };
     context.game.tick_re2_crouch();
     let re2 = &mut context.game.re2;
@@ -47806,6 +47825,67 @@ proc init_00 { evt_end(0); }",
         assert!(session.game.re2.flag(3, 67), "and set its flag again");
         assert!(session.game.re2.flag(6, 200), "the edit's set flag");
         assert!(!session.game.re2.flag(6, 201), "the edit's cleared flag");
+    }
+
+    /// Room 305's arrival from 307 (`main_0B`) puts the player on the ledge
+    /// with `pos_set`: through the original's `--warp` it runs after the
+    /// warp's door put her down, so the rerun's placement wins over the
+    /// setup's, while her first push starts from the setup's place.
+    #[test]
+    fn an_authored_reruns_pos_set_moves_the_player_from_the_setups_place() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1
+#game re2
+proc init_00 { evt_end(0); }
+proc main_00 { work_set(1, 0); pos_set(0, 3500, -3000, -25167); dir_set(0, 0, 2048, 0); evt_end(0); }",
+        )
+        .unwrap();
+        session.loaded.re2_vm = Some(crate::scd2::vm::Vm::new(&scripts));
+        session.enter_room(&pack, None, true, RoomBgmHandoff::Now);
+        let baseline = session.author_baseline();
+        // The setup's warp, and a flag that reruns the room.
+        let door = [2200, -5400, -25006];
+        session.game.re2.pending_player = crate::scd2::host::PendingPlayer {
+            pos: Some(door),
+            angle: Some(2008),
+            warp: Some(door),
+        };
+        session.game.re2.set_flag(4, 6, 1);
+        session.finish_authoring(baseline, false);
+        let pending = session.game.re2.pending_player;
+        assert_eq!(pending.pos, Some([3500, -3000, -25167]), "the rerun's");
+        assert_eq!(pending.angle, Some(2048));
+        assert_eq!(pending.warp, Some(door), "the push starts from the door");
+    }
+
+    /// A setup that makes Sherry the player collides with her radius from
+    /// the first tick, as `Set_room`'s change of player through a door does.
+    #[test]
+    fn an_authored_change_of_player_takes_its_radius_at_once() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        let scripts = crate::scd2::akscr::compile(
+            "#version 1
+#game re2
+proc init_00 { evt_end(0); }
+proc main_00 { evt_end(0); }",
+        )
+        .unwrap();
+        session.loaded.re2_vm = Some(crate::scd2::vm::Vm::new(&scripts));
+        session.enter_room(&pack, None, true, RoomBgmHandoff::Now);
+        session.loaded.room.sca = Some(Default::default());
+        // The change's flag and `Rnd` rerun the room, which would restore
+        // the boot's data over this collision.
+        session.re2_boot_room = None;
+        let baseline = session.author_baseline();
+        assert!(game::pl_change2::change_player(&mut session.game, 0xF));
+        session.finish_authoring(baseline, true);
+        assert_eq!(session.player.radius, crate::sca::player_radius(0xF));
+        assert_ne!(crate::sca::player_radius(0xF), crate::sca::player_radius(1));
     }
 
     /// Room 200's entry scene writes `save 4, 100` as it starts, under 4:6

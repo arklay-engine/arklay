@@ -1427,12 +1427,14 @@ impl Work {
     }
 
     /// `Be_flg`'s bits 4 and 8: on the stairs, or going up or down a box and
-    /// off the ground, nothing collides.
+    /// off the ground, nothing collides. The climb drops them on its clip's
+    /// frame 0x31 (Sherry's 0x77), and the walls push again for the frames
+    /// her clip has left.
     pub fn climbing(&self) -> bool {
         self.routine[0] == MODE_MOVE
             && match self.routine[1] {
                 MOVE_STAIRS => true,
-                MOVE_CLIMB => matches!(self.routine[3], 1..=3),
+                MOVE_CLIMB => matches!(self.routine[3], 1..=3) && self.be_flg & BE_NO_PUSH != 0,
                 MOVE_JUMP_DOWN => self.routine[3] < 5,
                 _ => false,
             }
@@ -1883,6 +1885,7 @@ pub fn place_neck(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
         work,
         player,
         tick,
+        rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
     }
@@ -1917,7 +1920,12 @@ pub fn seed_pose(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
 }
 
 /// `Player_move`. The result is the room flag a finished scripted walk raises.
-pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -> Option<u8> {
+pub fn player_move(
+    work: &mut Work,
+    player: &mut PlayerState,
+    tick: &Tick<'_>,
+    rnd: &mut crate::zombie2::Rnd,
+) -> Option<u8> {
     work.key_trg = tick.key_trg;
     work.check = false;
     if tick.stopped {
@@ -1945,6 +1953,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         work,
         player,
         tick,
+        rnd: *rnd,
         arrived: None,
         stairs: None,
     };
@@ -1968,6 +1977,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
     mover.latch_parts();
     mover.work.holds_game =
         held_game || mover.work.holds_game_now() || mover.work.holds_game_in_routine();
+    *rnd = mover.rnd;
     mover.arrived
 }
 
@@ -1997,6 +2007,7 @@ fn latch_stopped(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
         work,
         player,
         tick,
+        rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
     }
@@ -2176,6 +2187,9 @@ pub(crate) struct Mover<'a, 'b> {
     pub(crate) work: &'a mut Work,
     pub(crate) player: &'a mut PlayerState,
     pub(crate) tick: &'a Tick<'b>,
+    /// `Rnd`, which Sherry's climb draws (`pl_mv_08`): [`player_move`]
+    /// hands the game's in and takes it back.
+    rnd: crate::zombie2::Rnd,
     arrived: Option<u8>,
     /// `Sca_info`'s stairs: those last tick's end left in front of the player.
     stairs: Option<&'b ScaRect>,
@@ -2204,6 +2218,7 @@ impl<'a, 'b> Mover<'a, 'b> {
             work,
             player,
             tick,
+            rnd: crate::zombie2::Rnd::default(),
             arrived: None,
             stairs: None,
         }
@@ -2571,6 +2586,14 @@ impl Mover<'_, '_> {
             self.work.floor = self.work.floor.wrapping_add(1);
             self.work.be_flg |= BE_NO_SCA;
         }
+        // Sherry's clip skips from frame 0x39 to 0x56 three times in four,
+        // blending in again (`0x4DB7F9`).
+        if small && frame == 0x39 && self.rnd.draw() & 3 != 0 {
+            self.work.move_no = CLIMB_CLIP;
+            self.work.move_cnt = 0x56;
+            self.work.hokan = 5;
+        }
+        let frame = self.work.move_cnt;
         if frame == lift {
             self.work.spd[0] = reach;
             self.add_speed_xz();
@@ -7758,6 +7781,7 @@ pub fn spl_init(
         work,
         player,
         tick,
+        rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
     };
@@ -7795,6 +7819,7 @@ pub(crate) fn part_world(
         work,
         player,
         tick,
+        rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
     };
@@ -8185,6 +8210,10 @@ mod tests {
         last_key: u16,
         /// The room's objects.
         objects: Vec<crate::objects::ObjectRecord>,
+        /// `Rnd`.
+        rnd: crate::zombie2::Rnd,
+        /// The character id, `Id`.
+        id: u8,
     }
 
     /// `angle` from the player, as far as `distance`.
@@ -8431,6 +8460,59 @@ mod tests {
         assert!(
             pushed.iter().all(|&(step, bit)| (bit != 0) == held(step)),
             "{pushed:?}"
+        );
+    }
+
+    /// Sherry's climb (`0x4DB7F9`): on frame 0x39 a draw of `Rnd` with either
+    /// of its low bits sends the clip on to 0x56, blended in over five
+    /// frames; the walls push again from frame 0x77, before her clip ends.
+    #[test]
+    fn sherrys_climb_skips_on_three_draws_in_four_and_is_pushed_before_its_end() {
+        let climb = |rnd: u16| {
+            let mut setup = Setup::new(0);
+            (setup.clips, setup.keyframes) = bank(10, 140, 0);
+            setup.id = SMALL_ID;
+            setup.rnd = crate::zombie2::Rnd(rnd);
+            setup.player.angle = 0;
+            setup.work.routine = [MODE_MOVE, MOVE_CLIMB, 0, 0];
+            let mut seen = Vec::new();
+            while setup.work.routine[1] == MOVE_CLIMB && seen.len() < 300 {
+                setup.tick(Input::default(), 200);
+                seen.push((
+                    setup.work.move_cnt,
+                    setup.work.hokan,
+                    setup.work.routine[3],
+                    setup.work.climbing(),
+                ));
+            }
+            (seen, setup.rnd)
+        };
+        // 0x6CA4 draws 0x7D: the skip.
+        let (seen, rnd) = climb(0x6CA4);
+        assert_ne!(rnd, crate::zombie2::Rnd(0x6CA4));
+        let at = seen.iter().position(|&(frame, ..)| frame == 0x39).unwrap();
+        assert_eq!(seen[at + 1].0, 0x57, "{seen:?}");
+        assert_eq!(seen[at + 1].1, 4, "{seen:?}");
+        assert!(
+            seen.iter()
+                .all(|&(frame, ..)| !(0x3A..0x57).contains(&frame))
+        );
+        // 0x0102 draws 4: the clip plays on, and the draw is kept.
+        let (seen, rnd) = climb(0x0102);
+        assert_eq!(rnd, crate::zombie2::Rnd(0x0204));
+        let at = seen.iter().position(|&(frame, ..)| frame == 0x39).unwrap();
+        assert_eq!(seen[at + 1].0, 0x3A, "{seen:?}");
+        // The pass is skipped up to frame 0x77 and runs for the clip's rest.
+        let end = seen.iter().position(|&(frame, ..)| frame == 0x78).unwrap();
+        assert!(
+            seen[..end].iter().all(|&(.., climbing)| climbing),
+            "{seen:?}"
+        );
+        assert!(
+            seen[end..]
+                .iter()
+                .any(|&(_, _, step, climbing)| step == 3 && !climbing),
+            "{seen:?}"
         );
     }
 
@@ -9198,6 +9280,8 @@ mod tests {
                 pushing: false,
                 last_key: 0,
                 objects: Vec::new(),
+                rnd: crate::zombie2::Rnd::default(),
+                id: 0,
             }
         }
 
@@ -9255,7 +9339,7 @@ mod tests {
                 },
                 input,
                 options: Options::default(),
-                id: 0,
+                id: self.id,
                 life,
                 poisoned: false,
                 stopped: false,
@@ -9268,7 +9352,7 @@ mod tests {
                 objects: &self.objects,
                 key_trg,
             };
-            player_move(&mut self.work, &mut self.player, &tick)
+            player_move(&mut self.work, &mut self.player, &tick, &mut self.rnd)
         }
 
         /// [`seed_pose`] in this setup's banks.
@@ -9334,6 +9418,7 @@ mod tests {
                 work: &mut self.work,
                 player: &mut self.player,
                 tick: &tick,
+                rnd: crate::zombie2::Rnd::default(),
                 arrived: None,
                 stairs: None,
             };
@@ -11695,7 +11780,12 @@ mod tests {
             objects: &[],
             key_trg: KEY_FORWARD | KEY_TILT_UP,
         };
-        player_move(&mut setup.work, &mut setup.player, &tick);
+        player_move(
+            &mut setup.work,
+            &mut setup.player,
+            &tick,
+            &mut Default::default(),
+        );
         // `Key_trg` comes from the pad, which goes on being read.
         assert_eq!(setup.work.key_trg, KEY_FORWARD | KEY_TILT_UP);
         setup.work.key_trg = before.key_trg;
@@ -12108,7 +12198,12 @@ mod tests {
             objects: &[],
             key_trg: 0,
         };
-        player_move(&mut setup.work, &mut setup.player, &tick);
+        player_move(
+            &mut setup.work,
+            &mut setup.player,
+            &tick,
+            &mut Default::default(),
+        );
         assert_eq!(setup.work.neck.body, Some([5000, 0, 5000]));
         follow_pushes(&mut setup.work, [5000, 0, 5000]);
         assert_eq!(setup.work.neck.position, Some([100, -1700, 200]));
