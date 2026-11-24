@@ -1324,6 +1324,11 @@ impl UserData for Api {
             e.em().world.cut = Some(cut);
             Ok(())
         });
+        // `BYTE_0098f07b = 1`.
+        methods.add_method_mut("cut_load", |_, e, ()| {
+            e.em().world.cut_load = true;
+            Ok(())
+        });
         // Where object `index` of the room (`obj_model_set`) stands.
         methods.add_method_mut("object_pos", |_, e, index: usize| {
             let [x, y, z] = e.em().world.objects.get(index).copied().unwrap_or_default();

@@ -356,6 +356,7 @@ local function kill(e)
     if sub == 0 then
         e:set_status(0x100)
         e:cut_change(zapping(e) and 0xE or 7)
+        e:cut_load()
         e:hide_object(TANK_OBJECT)
         e:set_var(FLAGS, (e:var(FLAGS) | 2) & 0xFFFB)
         e:pl_set_routine(5, 0, 0, 0)
@@ -1011,6 +1012,7 @@ local function explode(e)
             e:set_var(FLAGS, e:var(FLAGS) | 0x40)
             e:pl_or_be_flg(0x80400)
             e:cut_change(5)
+            e:cut_load()
         else
             e:set_var(FLAGS, e:var(FLAGS) & 0xBF)
         end
@@ -1057,6 +1059,7 @@ local function explode(e)
         if e:var(FLAGS) & 0x40 ~= 0 then
             e:set_var(FLAGS, e:var(FLAGS) & 0xBF)
             e:cut_change(zapping(e) and 0xD or 6)
+            e:cut_load()
             e:pl_clear_be_flg(0x80400)
         end
         e:set_routine(2, e:routine(2) + 1)
@@ -1110,6 +1113,7 @@ local function dive(e)
         end
         e:pl_or_be_flg(0x80400)
         e:cut_change(9)
+        e:cut_load()
         if e:var(TURNING) == 0 then
             e:set_angle((e:angle() - 0x400) & 0xFFFF)
         else
@@ -1133,6 +1137,7 @@ local function dive(e)
         elseif ends == 5 then
             e:set_routine(2, 4)
             e:cut_change(8)
+            e:cut_load()
             e:clear_status(0x110)
             e:set_flag(STOP_BANK, STOP_INPUT, false)
             e:set_kind(e:kind() | 0x4000)
@@ -1175,6 +1180,7 @@ local function zap_dive(e)
         end
         e:pl_or_be_flg(0x80400)
         e:cut_change(zapping(e) and 0xE or 7)
+        e:cut_load()
         e:set_routine(2, 2)
         sub = 2
     end
@@ -1192,6 +1198,7 @@ local function zap_dive(e)
     if mot_play_sp(e, 8, 0) ~= 0 then
         e:set_kind(e:kind() | 0x4000)
         e:cut_change(8)
+        e:cut_load()
         e:clear_status(0x110)
         e:set_flag(STOP_BANK, STOP_INPUT, false)
         e:pl_clear_be_flg(0x80400)
