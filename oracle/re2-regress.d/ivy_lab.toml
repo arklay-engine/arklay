@@ -1,0 +1,90 @@
+# The lab's ivies (#876).
+
+# Room 60B on the first visit (flag 4:95 clear): two 0x2E ivies of kind 7 wait in state 11 until the panel's check
+# (area 5, `main_03`, with flag 4:106) shakes the room and sets 4:95; then they come out, their vines lashing first.
+# The player stands still and a whip takes their last life on 1265. Recorded for 2400 ticks; the game over returns to
+# the title on 1649.
+[[run]]
+name = "ivy_60b_panel"
+room = "60B"
+sound = false
+ticks = 1649
+setup_script = "ivy_60b.lua"
+input = "ivy_60b_panel.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,msg,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,fgstat"
+expect = "match"
+record = "--warp 60B:-14200:0:-21000:1536 --flag 4:106 --life 200"
+
+# The same under HARD: the ivies' life doubled at init and their whips' 0x1E for 0xF. The whips leave the player at 0
+# and ivy 1 eats them (state 6) from 972. HARD's title leaves `Rnd` at 58231. The game over returns to the title on
+# 1466.
+[[run]]
+name = "ivy_60b_panel_hard"
+difficulty = "hard"
+room = "60B"
+sound = false
+ticks = 1466
+setup_script = "ivy_60b_hard.lua"
+input = "ivy_60b_panel.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,msg,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,fgstat"
+expect = "match"
+record = "--warp 60B:-14200:0:-21000:1536 --flag 4:106 --life 200"
+
+# The panel, then the handgun (weapon 2) aimed at the ivies as they come and fired every 25 ticks: ivy 1 dies (1521 to
+# 1642), and ivy 2 eats the player, left at 0 by the whips, from 1652. The game over returns to the title on 2146.
+[[run]]
+name = "ivy_60b_shots"
+room = "60B"
+sound = false
+ticks = 2146
+setup_script = "ivy_60b_shots.lua"
+input = "ivy_60b_shots.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,msg,inv,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,fgstat"
+expect = "match"
+record = "--warp 60B:-14200:0:-21000:1536 --flag 4:106 --life 200 --equip 2 --give 0:2:200"
+
+# The same under HARD: a whip kills the player on 1096 with both ivies standing. The game over returns to the title on
+# 1480.
+[[run]]
+name = "ivy_60b_shots_hard"
+difficulty = "hard"
+room = "60B"
+sound = false
+ticks = 1480
+setup_script = "ivy_60b_shots_hard.lua"
+input = "ivy_60b_shots.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,msg,inv,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,fgstat"
+expect = "match"
+record = "--warp 60B:-14200:0:-21000:1536 --flag 4:106 --life 200 --equip 2 --give 0:2:200"
+
+# The panel, then the player turns to the ivies and walks into them: lashed, held (state 10) and squeezed, let go,
+# and held again by ivy 1, whose squeeze kills on 1041. The game over returns to the title on 1425.
+[[run]]
+name = "ivy_60b_grab"
+room = "60B"
+sound = false
+ticks = 1425
+setup_script = "ivy_60b.lua"
+input = "ivy_60b_grab.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,msg,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,fgstat"
+expect = "match"
+record = "--warp 60B:-14200:0:-21000:1536 --flag 4:106 --life 200"
+
+# The panel, then the player turns away as the ivies come out and runs west, to stand against the wall by door 1
+# from 720 while the ivies walk the length of the room after them.
+[[run]]
+name = "ivy_60b_walk"
+room = "60B"
+sound = false
+ticks = 2400
+setup_script = "ivy_60b.lua"
+input = "ivy_60b_walk.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,msg,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,fgstat"
+expect = "match"
+record = "--warp 60B:-14200:0:-21000:1536 --flag 4:106 --life 200"

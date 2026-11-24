@@ -1063,7 +1063,8 @@ pub struct World<'a> {
     pub killed: bool,
     /// The room's water areas, for `Water_ck`. Only a spider's world has them.
     pub water: Vec<WaterArea>,
-    /// The flag banks as the tick began. Only the alligator's world has them.
+    /// The flag banks as the tick began. Only the alligator's and the ivies'
+    /// worlds have them.
     pub banks: Vec<[u32; 8]>,
     /// Flags a script set or cleared: bank, index and `set`'s operation.
     pub flag_ops: Vec<(u8, u8, u8)>,

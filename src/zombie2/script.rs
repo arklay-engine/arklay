@@ -156,12 +156,13 @@ impl UserData for Api {
             e.em().work().move_cnt = count as u8;
             Ok(())
         });
+        // `Joint_move`'s flags above 0xFFFF play the clip from its end
+        // (`0x4C1C52`), as `reverse` does.
         methods.add_method_mut("joint", |_, e, (late, reverse): (i64, Option<bool>)| {
             let em = e.em();
             em.work().bank = Bank::Pld;
-            Ok(em
-                .mover
-                .joint_move_late_reversed(late as u16, reverse.unwrap_or(false)))
+            let reverse = reverse.unwrap_or(false) || late & 0xFFFF_0000 != 0;
+            Ok(em.mover.joint_move_late_reversed(late as u16, reverse))
         });
         methods.add_method_mut("spd", |_, e, ()| {
             e.em().spd(Bank::Pld);
@@ -634,13 +635,23 @@ impl UserData for Api {
 
         // The player.
         methods.add_method_mut("player_life", |_, e, ()| Ok(*e.em().world.player_life));
-        methods.add_method_mut("set_player_life", |_, e, life: i16| {
-            *e.em().world.player_life = life;
-            // The enemies that write the life as -1 do it with `fg_system`'s
-            // `0x4000000`.
-            if life < 0 {
-                e.em().world.pl.die_start = true;
-            }
+        // With `die` false, a life below 0 waits for `pl_start_die` (the
+        // ivy's kill writes -1 a step before it starts `Die`).
+        methods.add_method_mut(
+            "set_player_life",
+            |_, e, (life, die): (i16, Option<bool>)| {
+                *e.em().world.player_life = life;
+                // The enemies that write the life as -1 do it with `fg_system`'s
+                // `0x4000000`.
+                if life < 0 && die.unwrap_or(true) {
+                    e.em().world.pl.die_start = true;
+                }
+                Ok(())
+            },
+        );
+        // `fg_system`'s `0x4000000`: `Die` starts.
+        methods.add_method_mut("pl_start_die", |_, e, ()| {
+            e.em().world.pl.die_start = true;
             Ok(())
         });
         methods.add_method_mut("player_angle", |_, e, ()| Ok(e.em().world.player_angle));
@@ -652,6 +663,20 @@ impl UserData for Api {
             Ok(())
         });
         methods.add_method_mut("pl_damage_cnt", |_, e, ()| Ok(e.em().world.pl.damage_cnt));
+        // The player's `Spd_x` and `Spd_z`.
+        methods.add_method_mut("pl_set_speed_xz", |_, e, (x, z): (i16, i16)| {
+            let spd = &mut e.em().world.pl.spd;
+            spd[0] = x;
+            spd[2] = z;
+            Ok(())
+        });
+        // A part of the player's that isn't drawn (its `Be_flg`'s bit 0).
+        methods.add_method_mut("pl_hide_part", |_, e, part: u32| {
+            if part < 32 {
+                e.em().world.pl.hidden_parts |= 1 << part;
+            }
+            Ok(())
+        });
         // The player's `Spd_x`, `Spd_y` and `Spd_z`.
         methods.add_method_mut("pl_speed", |_, e, ()| {
             let [x, y, z] = e.em().world.pl.spd;
@@ -1470,14 +1495,17 @@ impl UserData for Api {
         });
         methods.add_method_mut("body_ofs_x", |_, e, ()| Ok(e.em().z.atd.ofs_x));
         // `Sca_ck_info` at a point, on this body's floor: whether a record of
-        // `mask`, grown by `radius`, holds it.
+        // `mask`, grown by `radius`, holds it, a box by its outline and a
+        // triangle, the diamond or the circle by whether the body's `Atd[0]`
+        // (`+0x84`) is in it (the ivy's `FUN_00488660`).
         methods.add_method_mut(
             "sca_touch",
-            |_, e, (x, y, z, radius, mask): (i32, i32, i32, i32, u16)| {
+            |_, e, (x, _y, z, radius, mask): (i32, i32, i32, i32, u16)| {
                 let em = e.em();
                 let floor = em.z.floor;
+                let [bx, _, bz] = em.z.atd.at;
                 Ok(em.mover.tick.room.sca.as_ref().is_some_and(|sca| {
-                    crate::sca::first_hit(sca, mask, [x, y, z], radius, floor).is_some()
+                    crate::sca::info_flags_for(sca, mask, [x, z], [bx, bz], radius, floor) != 0
                 }))
             },
         );
@@ -6748,6 +6776,9 @@ mod tests {
             function e:life() return w.life end
             function e:set_life(v) w.life = v end
             function e:own_part(p) return p, 0, 0 end
+            function e:hard_mode() return w.hard or false end
+            function e:censorship_off() return w.censorship_off or false end
+            function e:flag(bank, index) return (w.flags or {})[bank * 256 + index] or false end
         ";
 
         /// `script` (which defines `update`) on [`STUB`] after `setup`, for
@@ -6794,6 +6825,185 @@ mod tests {
             let setup = format!("w.r = {{ [0] = {zero}, {weapon}, 0, 0 }} {setup}");
             let (lua, log) = run(&ivy(), &setup, 1, &["call_effect", "sound"]);
             (log, eval(&lua, "return w.drawn"))
+        }
+
+        /// State 11 (`0x486ee0`): the ivy shuts in on clip 0xC played from
+        /// its end (`Joint_move`'s 0x10040) under the neck's 2, its vines on
+        /// command 8, until flag 4:95.
+        #[test]
+        fn a_shut_ivy_waits_for_flag_4_95() {
+            let (lua, log) = run(
+                &ivy(),
+                "w.r = { [0] = 1, 11, 0, 0 }",
+                1,
+                &["clip", "joint", "set_neck_flags"],
+            );
+            assert_eq!(log, ["set_neck_flags(2)", "clip(12,0,0)", "joint(65600)"]);
+            let shut: (i64, i64, i64, i64) =
+                eval(&lua, "return w.r[2], w.r[3], w.vars[8], w.vars[9]");
+            assert_eq!(shut, (0, 1, 8, 3));
+            let (lua, _) = run(
+                &ivy(),
+                "w.r = { [0] = 1, 11, 0, 1 } w.flags = { [4 * 256 + 0x5F] = true }",
+                1,
+                &[],
+            );
+            let out: (i64, i64) = eval(&lua, "return w.r[2], w.r[3]");
+            assert_eq!(out, (1, 0));
+        }
+
+        /// State 11's second step (`0x486f50`) waits for the scene's
+        /// `+0x1d4`, then walks (`Routine_1` 1) with the kind's top nibble
+        /// clear (`+0x10f &= 0xF`).
+        #[test]
+        fn a_let_out_ivy_walks_on_the_scenes_word() {
+            let setup = "w.r = { [0] = 1, 11, 1, 2 } KIND = 0x6007
+                         function e:kind() return KIND end
+                         function e:set_kind(v) KIND = v end
+                         function e:sce_free(i) return FREE end
+                         function e:joint() return false end";
+            let (lua, _) = run(&ivy(), &format!("{setup} FREE = 0"), 1, &[]);
+            let waiting: (i64, i64) = eval(&lua, "return w.r[1], KIND");
+            assert_eq!(waiting, (11, 0x6007));
+            let (lua, _) = run(&ivy(), &format!("{setup} FREE = 1"), 1, &[]);
+            let out: (i64, i64, i64, i64, i64) =
+                eval(&lua, "return w.r[1], w.r[2], w.r[3], KIND, w.vars[6]");
+            assert_eq!(out, (1, 0, 0, 7, 0x2D));
+        }
+
+        /// The lash's whip takes 0xF, or under `hard_mode` 0x1E (`0x485c95`).
+        #[test]
+        fn a_hard_ivys_lash_takes_twice_as_much() {
+            for (hard, whip) in [(false, 0xF), (true, 0x1E)] {
+                let setup = format!("w.r = {{ [0] = 1, 4, 0, 0 }} w.hard = {hard}");
+                let (lua, _) = run(&ivy(), &setup, 1, &[]);
+                assert_eq!(eval::<i64>(&lua, "return w.vars[13]"), whip);
+            }
+        }
+
+        /// A lash that takes the player's last life (`Pl_life_down`'s 2)
+        /// kills them (`FUN_0048a170`): the player's routines 3, 0, 0, 0.
+        #[test]
+        fn the_ivys_lash_kills() {
+            let setup = "w.r = { [0] = 1, 4, 1, 0 } w.vars[13] = 0xF
+                         function e:now_seq() return 0x10000 end
+                         function e:point_within() return true end
+                         function e:same_floor() return true end
+                         function e:pl_damage_cnt() return 0 end
+                         function e:player_life() return 0 end
+                         function e:pl_life_down() return 2 end
+                         function e:joint() return false end";
+            let (_, log) = run(&ivy(), setup, 1, &["pl_set_routine", "pl_set_damage_cnt"]);
+            assert_eq!(log, ["pl_set_routine(3,0,0,0)"]);
+        }
+
+        /// The walk's choice (`0x48577d`): a player on their last legs with
+        /// no life left, near and faced, is killed (state 6), their life -1
+        /// without `Die` yet.
+        #[test]
+        fn an_ivy_kills_a_player_left_at_0() {
+            let setup = "w.r = { [0] = 1, 1, 1, 0 } w.room_enemy = 0x20 w.vars[14] = 1
+                         function e:part_rot() return 0, 0, 0 end";
+            let (lua, log) = run(&ivy(), setup, 1, &["set_player_life", "set_damage_cnt"]);
+            assert_eq!(log, ["set_player_life(-1,false)", "set_damage_cnt(128)"]);
+            let state: (i64, i64, i64) = eval(&lua, "return w.r[1], w.r[2], w.r[3]");
+            assert_eq!(state, (6, 0, 0));
+        }
+
+        /// State 6's first step (`0x4861f0`) takes hold of the player
+        /// (`Routine_0` 6) at 0x64 a tick, and its third (`0x486430`) hides
+        /// their part 8 on clip 10's `0x10000` frame, with sound 7 and row 8
+        /// at it.
+        #[test]
+        fn the_ivys_kill_pulls_the_player_in_and_eats_them() {
+            let calls = [
+                "pl_set_routine",
+                "pl_set_speed_xz",
+                "sound",
+                "pl_hold",
+                "set_player_xz",
+            ];
+            let (lua, log) = run(
+                &ivy(),
+                "w.r = { [0] = 1, 6, 0, 0 } function e:distance() return 2000 end
+                 function e:player_pos() return 0, 0, 0 end function e:pos() return 3000, 0, 0 end
+                 function e:rotate() return 100, 0 end",
+                1,
+                &calls,
+            );
+            assert_eq!(
+                log[..4],
+                [
+                    "pl_hold()",
+                    "pl_set_routine(6,0,0,0)",
+                    "pl_set_speed_xz(100,0)",
+                    "sound(12)"
+                ]
+            );
+            assert!(log[4].starts_with("set_player_xz("), "{log:?}");
+            assert_eq!(
+                eval::<(i64, i64)>(&lua, "return w.vars[8], w.vars[9]"),
+                (5, 3)
+            );
+            let setup = "w.r = { [0] = 1, 6, 2, 0 } function e:now_seq() return 0x10000 end
+                         function e:joint() return false end";
+            let (_, log) = run(
+                &ivy(),
+                setup,
+                1,
+                &["clip", "pl_hide_part", "sound", "player_part_effect"],
+            );
+            assert_eq!(log[..3], ["clip(10,0,63)", "pl_hide_part(8)", "sound(7)"]);
+            assert_eq!(log[3], "player_part_effect(4,15,5120,0,8,0,0,0)");
+        }
+
+        /// The squeeze (`0x486b50`) of a player on their last legs eats them
+        /// (state 6's last step at once, theirs 6, 2), and under `hard_mode`
+        /// it takes 0x14, not 0x28.
+        #[test]
+        fn the_ivys_squeeze_eats_a_player_on_their_last_legs() {
+            let (lua, log) = run(
+                &ivy(),
+                "w.r = { [0] = 1, 10, 1, 2 } w.room_enemy = 0x20 function e:joint() return false end",
+                1,
+                &["pl_set_routine", "pl_start_die", "clip"],
+            );
+            assert_eq!(
+                log,
+                ["clip(10,0,63)", "pl_start_die()", "pl_set_routine(6,2,0,0)"]
+            );
+            let state: (i64, i64, i64) = eval(&lua, "return w.r[1], w.r[2], w.r[3]");
+            assert_eq!(state, (6, 2, 1));
+            for (hard, down) in [(false, 0x28), (true, 0x14)] {
+                let setup = format!(
+                    "w.r = {{ [0] = 1, 10, 1, 3 }} w.room_enemy = 0 w.hard = {hard} w.timers[2] = 1 w.timers[3] = 1"
+                );
+                let (_, log) = run(&ivy(), &setup, 1, &["pl_life_down"]);
+                assert_eq!(log, [format!("pl_life_down({down},false)")]);
+            }
+        }
+
+        /// Under `hard_mode` or `censorship_off` the hurt takes `0x529f14`,
+        /// where the shotguns and the magnum (5 to 8) hit as the handgun
+        /// does: no flinch.
+        #[test]
+        fn a_hard_ivy_takes_the_magnum_as_the_handgun() {
+            let hurt = |weapon: u8, extra: &str| {
+                let setup = format!(
+                    "w.r = {{ [0] = 2, {weapon}, 0, 0 }} w.vars[26] = 1 w.vars[27] = 4 {extra}"
+                );
+                let (lua, log) = run(&ivy(), &setup, 1, &["call_effect", "sound", "clip"]);
+                (
+                    log,
+                    eval::<(i64, i64, i64, i64)>(&lua, "return w.r[0], w.r[1], w.r[2], w.r[3]"),
+                )
+            };
+            assert_ne!(hurt(6, ""), hurt(2, ""));
+            assert_eq!(hurt(6, "w.hard = true"), hurt(2, "w.hard = true"));
+            assert_eq!(
+                hurt(6, "w.censorship_off = true"),
+                hurt(2, "w.censorship_off = true")
+            );
         }
 
         /// `funcs_487037`'s 0xF cell (`0x529f00`) is `caseD_5`, weapon 4's:

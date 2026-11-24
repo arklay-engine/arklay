@@ -757,7 +757,14 @@ fn run_zombie(
         Vec::new()
     };
     let re2 = &mut game.re2;
-    let banks = if alligator {
+    // The alligator's scene flags, and an ivy shut in until flag 4:95 lets it
+    // out (state 11, `0x486ee0`).
+    let reads_flags = alligator
+        || matches!(
+            character.id,
+            crate::zombie2::IVY_ID | crate::zombie2::POISON_IVY_ID
+        );
+    let banks = if reads_flags {
         re2.banks.to_vec()
     } else {
         Vec::new()
