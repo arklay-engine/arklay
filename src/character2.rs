@@ -1546,7 +1546,12 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
         }
         None
     } else if player2::in_scenario(&character.work) {
-        player2::player_move(&mut character.work, &mut character.body, tick)
+        player2::player_move(
+            &mut character.work,
+            &mut character.body,
+            tick,
+            &mut game.re2.rnd,
+        )
     } else if player2::in_auto(&character.work)
         && (sherry || ada)
         && let Some(words) = character.partner.as_deref_mut()
