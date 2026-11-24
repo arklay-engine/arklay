@@ -1932,6 +1932,12 @@ def record_run(run: dict, args, refs: Path, manifest: dict[str, dict]) -> int:
         return 1
 
 
+def is_path(part: str) -> bool:
+    """Whether a part of a shown record command names a file: a reference's or the work folder's (by the placeholders
+    standing for them) or one in the checkout, rather than a value such as a `--config` setting."""
+    return part.startswith(("$ARKLAY_RE2_REFS", "$WORK")) or (ROOT / part).exists()
+
+
 def record_reference(run: dict, args, refs: Path, manifest: dict[str, dict], game: str, dest: Path) -> int:
     """`record_run` once the reference is this record's to replace."""
     name = run["name"]
@@ -1983,7 +1989,7 @@ def record_reference(run: dict, args, refs: Path, manifest: dict[str, dict], gam
     shown = [part.replace(str(stage), str(dest)).replace(str(refs), "$ARKLAY_RE2_REFS").replace(str(work), "$WORK") for part in shown]
     # Written with `/` on every system, so that a reference's meta.txt reads the same wherever it was recorded.
     if os.sep != "/":
-        shown = [part.replace(os.sep, "/") for part in shown]
+        shown = [part.replace(os.sep, "/") if is_path(part) else part for part in shown]
     shown[0] = "python3"
     shown[1] = "scripts/oracle-re2.py"
     print(f"{name}: " + " ".join(shlex.quote(part) for part in command), flush=True)
@@ -2022,7 +2028,15 @@ def reference_lock(dest: Path):
     runner ends, however it ends. A reference another record holds is refused."""
     path = dest.with_name(dest.name + ".lock")
     while True:
-        handle = open(path, "a+b")
+        try:
+            handle = open(path, "a+b")
+        except PermissionError:
+            if os.name != "nt":
+                raise
+            # Windows refuses to open a file whose removal by the last holder is still pending: it is gone a moment
+            # later.
+            time.sleep(0.01)
+            continue
         try:
             if os.name == "nt":
                 import msvcrt
