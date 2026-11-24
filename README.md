@@ -114,8 +114,8 @@ cargo run -- pack convert game /path/to/steam/4249100_Biohazard --out re1.akpak
 # data/Common) into re2.akpak: rooms, backgrounds, models, audio and films.
 # You can play the RE2 pack as Leon or Claire, in either scenario: rooms, doors,
 # items, the typewriter, saves and the scripts' scenes with their characters and
-# voice lines work. The title (with its load and option screens, except the
-# option screen's key config page), the new-game choice and its prologue, the
+# voice lines work. The title (with its load and option screens; the key config
+# page lacks its player model and the rebinding itself), the new-game choice and its prologue, the
 # inventory, the status screen with its map, the save screen, the item box and
 # the special menu's gallery (pictures, movies and 3D models) are drawn from the
 # original's art. Leon A's route from
@@ -131,8 +131,9 @@ cargo run -- pack convert game /path/to/steam/4249100_Biohazard --out re1.akpak
 # as the player, to the Club Key, then back up to the police station for the
 # chess plugs (matched as far as 112, then 20A to 20E's Rook plug); Claire A is one
 # continuous run from the new game to the Diamond Key, and goes on in warp runs
-# from the Diamond Key down 110's ladder to 209 and 202's bomb half, and up to
-# 10A's wall. Both characters fire the knife and weapons 2
+# from the Diamond Key down 110's ladder to 209 and 202's bomb half, up to
+# 10A's wall and on to the Heart Key, then through the sewer with Sherry to her
+# door into 305. Both characters fire the knife and weapons 2
 # to 8 and the grenade launcher, bowgun, Colt S.A.A., spark shot, Beretta,
 # sub-machine gun, flamethrower, rocket launcher and gatling gun (weapons 9 to
 # 0x13). Zombies,
