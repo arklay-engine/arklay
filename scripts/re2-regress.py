@@ -877,7 +877,8 @@ def self_test_save_images() -> str | None:
         times.mkdir()
         for name, when in (("a", 2), ("b", 3), ("c", 1)):
             (times / name).write_bytes(b"")
-            os.utime(times / name, ns=(when, when))
+            # Seconds apart: NTFS keeps a write time in units of 100 ns.
+            os.utime(times / name, ns=(when * 1_000_000_000, when * 1_000_000_000))
         if [path.name for path in newest_first(sorted(times.iterdir()))] != ["b", "a", "c"]:
             return "newest_first doesn't order by write time"
     return None
@@ -1974,12 +1975,15 @@ def record_reference(run: dict, args, refs: Path, manifest: dict[str, dict], gam
             # The stored log itself: the record writes its own in `stage`, and this one stands until that is whole.
             command += ["--pace", str(pace)]
         source = pace if pace.is_absolute() else ROOT / pace
-        named = source.relative_to(refs) if source.is_relative_to(refs) else pace
+        named = (source.relative_to(refs) if source.is_relative_to(refs) else pace).as_posix()
         digest = hashlib.sha256(source.read_bytes()).hexdigest() if source.is_file() else "unread"
         followed = f"pace: {named} sha256 {digest}"
     # As it reads once the record has taken the reference's place.
     shown = [part if part != game else "$ARKLAY_RE2_ROOT" for part in command]
     shown = [part.replace(str(stage), str(dest)).replace(str(refs), "$ARKLAY_RE2_REFS").replace(str(work), "$WORK") for part in shown]
+    # Written with `/` on every system, so that a reference's meta.txt reads the same wherever it was recorded.
+    if os.sep != "/":
+        shown = [part.replace(os.sep, "/") for part in shown]
     shown[0] = "python3"
     shown[1] = "scripts/oracle-re2.py"
     print(f"{name}: " + " ".join(shlex.quote(part) for part in command), flush=True)
@@ -2046,6 +2050,11 @@ def reference_lock(dest: Path):
         if os.name != "nt":
             path.unlink(missing_ok=True)
         handle.close()
+        if os.name == "nt":
+            # Removed once let go, unless another runner has opened it already: Windows refuses to remove a file
+            # that is open, so that runner's lock stands.
+            with contextlib.suppress(OSError):
+                path.unlink()
 
 
 def replaced_folder(dest: Path) -> Path:
