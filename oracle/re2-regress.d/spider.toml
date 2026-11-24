@@ -10,9 +10,9 @@ setup_script = "spider_302_wall.lua"
 input = "spider_shots.txt"
 input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,snd,zm0,zm1,fgstat"
-# room 302's water surface and its light on the spiders draw differently (#668): held at the measured mean
+# the light on the spiders draws differently (#668): 0.84 measured
 frames = [360, 1399]
-frame_max_mean = 3.2
+frame_max_mean = 1.0
 expect = "match"
 record = "--warp 302:-12500:0:-13000:2048 --life 200 --give 0:2:200 --give 1:0x14:60 --equip 2"
 
