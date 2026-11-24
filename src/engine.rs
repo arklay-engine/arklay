@@ -19692,6 +19692,7 @@ fn build_effect_quads(
         ];
         tween.billboard(index, spawn, uv, &mut pos, &mut size);
         quads.push(EffectQuad {
+            z: None,
             key,
             page: quad_page,
             uv,

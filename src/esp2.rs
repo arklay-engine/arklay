@@ -2562,6 +2562,7 @@ impl Effects {
                         blend,
                         op,
                         sheet: [0, 0xffff],
+                        z: Some(key),
                     });
                 }
                 continue;
@@ -2602,6 +2603,7 @@ impl Effects {
                     op,
                     sheet: [0, 0xffff],
                     mirror: [false; 2],
+                    z: Some(depth.min(0x7fff) as u32),
                 });
             }
         }

@@ -4106,7 +4106,14 @@ mod tests {
         let opaque = software_near_plane(&opaque);
         let keyed = software_near_plane(&keyed);
         assert_eq!(at(&opaque, 210, 60), Some(0), "depth: the cut triangle");
-        assert_eq!(at(&keyed, 210, 60), Some(2), "the queue's order: the wall");
+        // Queued, the cut triangle sorts as the whole Marni queues before
+        // the device clips it: its mean `sz`, at Z 50, 300 and 300, is
+        // nearer than the wall's at 180, so it draws over the wall.
+        assert_eq!(
+            at(&keyed, 210, 60),
+            Some(0),
+            "the queue's order: the cut triangle"
+        );
         // Every triangle still shows.
         for triangle in 0..3 {
             let count = keyed

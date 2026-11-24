@@ -330,31 +330,40 @@ impl Framebuffer {
             static DISPLAY: std::cell::RefCell<Option<Framebuffer>> =
                 const { std::cell::RefCell::new(None) };
         }
-        let (width, height) = (self.width as usize, self.height as usize);
+        let width = self.width as usize;
         let mut display = DISPLAY
             .with(|cell| cell.borrow_mut().take())
             .filter(|display| display.width == self.width * 2 && display.height == self.height * 2)
             .unwrap_or_else(|| Framebuffer::with_size(self.width * 2, self.height * 2));
         display.scale = self.scale * 2;
         display.clip = self.clip.map(|rect| rect.map(|side| side * 2));
-        for (row, line) in display.rgba.chunks_exact_mut(width * 8).enumerate() {
-            let source = &self.rgba[row / 2 * width * 4..][..width * 4];
-            let pairs = line.as_chunks_mut::<8>().0.iter_mut();
+        let stride = width * 8;
+        for (rows, source) in display
+            .rgba
+            .chunks_exact_mut(stride * 2)
+            .zip(self.rgba.chunks_exact(width * 4))
+        {
+            let (top, bottom) = rows.split_at_mut(stride);
+            let pairs = top.as_chunks_mut::<8>().0.iter_mut();
             for (pair, pixel) in pairs.zip(source.as_chunks::<4>().0) {
                 pair[..4].copy_from_slice(pixel);
                 pair[4..].copy_from_slice(pixel);
             }
+            bottom.copy_from_slice(top);
         }
         let result = draw(&mut display);
-        let stride = width * 8;
-        for y in 0..height {
-            for x in 0..width {
-                let top = y * 2 * stride + x * 8;
+        for (rows, line) in display
+            .rgba
+            .chunks_exact(stride * 2)
+            .zip(self.rgba.chunks_exact_mut(width * 4))
+        {
+            let (top, bottom) = rows.split_at(stride);
+            let blocks = top.as_chunks::<8>().0.iter().zip(bottom.as_chunks::<8>().0);
+            for (pixel, (top, bottom)) in line.as_chunks_mut::<4>().0.iter_mut().zip(blocks) {
                 for channel in 0..4 {
-                    let at = |offset: usize| display.rgba[offset + channel];
-                    self.rgba[(y * width + x) * 4 + channel] = halve_block([
-                        [at(top), at(top + 4)],
-                        [at(top + stride), at(top + stride + 4)],
+                    pixel[channel] = halve_block([
+                        [top[channel], top[channel + 4]],
+                        [bottom[channel], bottom[channel + 4]],
                     ]);
                 }
             }
@@ -2246,7 +2255,11 @@ impl Framebuffer {
                 page,
                 &mut triangles,
             );
-            MarniPart::mark(model.marni, index, object, &mut triangles, 0);
+            // The GPU renderer samples the packets' own pages and rows, so it
+            // takes every packet; Marni's surfaces are the software's.
+            if self.list.is_none() {
+                MarniPart::mark(model.marni, index, object, &mut triangles, 0);
+            }
             triangles.sort_by(|a, b| b.depth.total_cmp(&a.depth));
             parts.push((slot, index, triangles));
         }
@@ -2397,6 +2410,7 @@ impl Framebuffer {
                     filtered: false,
                     page_x: 0,
                     marni: None,
+                    queue_key: 0.0,
                 })
             })
             .collect();
@@ -2491,18 +2505,19 @@ impl Framebuffer {
         triangles.sort_by(|a, b| b.depth.total_cmp(&a.depth));
         let mut depth = self.depth_buffer();
         let mut twins = KnockoutTwins::default();
-        let mut queue = MarniQueue::default();
-        for triangle in &triangles {
+        let mut queue = MarniQueue::take();
+        for (index, triangle) in triangles.iter().enumerate() {
             let page = twins.get(texture, triangle);
-            if marni_queues(triangle, page) {
-                queue.push(marni_queue_key(triangle), (triangle, page));
+            if marni_queues(triangle, &page) {
+                queue.push(triangle.queue_key, index, page);
             } else {
                 self.rasterize(texture, triangle, page, &mut depth);
             }
         }
-        for (triangle, page) in queue.flush() {
-            self.rasterize(texture, triangle, page, &mut depth);
+        for (_, index, page) in queue.sorted() {
+            self.rasterize(texture, &triangles[*index], page.clone(), &mut depth);
         }
+        queue.recycle();
         recycle_depth(depth);
     }
 
@@ -2549,7 +2564,14 @@ impl Framebuffer {
         // semi-transparent packet, or a texture with transparent texels,
         // blends and writes no depth (`FUN_0040EAF0`).
         let surface = marni_surface(triangle, texture);
-        let palette = MarniPalette::of(triangle);
+        let texels = match (&page.texels, triangle.filtered) {
+            (Some(texels), _) => Some(texels.clone()),
+            (None, true) => Some(std::rc::Rc::new(MarniTexels::new(
+                texture,
+                MarniPalette::of(triangle),
+            ))),
+            (None, false) => None,
+        };
         let queued = triangle.blend || (triangle.filtered && page.keyed);
         let scale = self.scale as f32;
         // Marni hands Direct3D the doubled positions as they are, and
@@ -2582,6 +2604,7 @@ impl Framebuffer {
             self.width,
             self.height,
             view_depth,
+            #[inline(always)]
             |fragment| {
                 if let Some([x, y, w, h]) = clip {
                     let (fx, fy) = (fragment.x as i64, fragment.y as i64);
@@ -2614,8 +2637,10 @@ impl Framebuffer {
                     Some(_) => ([255, 255, 255], triangle.blend, 255),
                     // RE2's Direct3D filters its models' textures.
                     None if triangle.filtered => {
-                        let (texel, stp) =
-                            sample_marni(texture, surface, palette, fragment.u, fragment.v);
+                        let Some(texels) = &texels else {
+                            return;
+                        };
+                        let (texel, stp) = texels.sample(texture, surface, fragment.u, fragment.v);
                         if !queued {
                             // No blend: the texel's colour, whatever its alpha.
                             ([texel[0], texel[1], texel[2]], false, 255)
@@ -2764,12 +2789,10 @@ impl Framebuffer {
     ) {
         let mut depth = self.depth_buffer();
         let mut twins = KnockoutTwins::default();
-        // RE2's alpha triangles, drawn after everything opaque. Marni queues
-        // its semi-transparent sprites too, at `MarniDrawPolyFT4`'s `sz` of
-        // 0.5; drawn so, room 100's fire covers the bodies the recording
-        // shows in front of it, so the sprites keep the painter's order.
-        let mut queue = MarniQueue::default();
-        for item in items {
+        // RE2's alpha queue: its keyed and semi-transparent model triangles
+        // and its semi-transparent sprites, drawn after everything opaque.
+        let mut queue = MarniQueue::take();
+        for (index, item) in items.iter().enumerate() {
             match item {
                 SceneItem::Shadow(poly) => {
                     self.rasterize_shadow(poly, &depth);
@@ -2777,8 +2800,8 @@ impl Framebuffer {
                 SceneItem::Triangle(triangle) => {
                     if let Some(texture) = textures.get(triangle.texture) {
                         let page = twins.get(texture, triangle);
-                        if marni_queues(triangle, page) {
-                            queue.push(marni_queue_key(triangle), (triangle, page));
+                        if marni_queues(triangle, &page) {
+                            queue.push(triangle.queue_key, index, page);
                         } else {
                             self.rasterize(texture, triangle, page, &mut depth);
                         }
@@ -2786,21 +2809,46 @@ impl Framebuffer {
                 }
                 SceneItem::Mask(quad) => {
                     if let Some(page) = page {
-                        self.rasterize_mask(page, quad);
+                        // `AddMask`'s opaque sprite (`0x1002C`) draws in its
+                        // place, depth tested and written.
+                        let depth = quad.z.map(|z| SpriteDepth::new(&mut depth, z, true));
+                        self.rasterize_mask(page, quad, depth);
                     }
                 }
                 SceneItem::Effect(quad) => {
-                    if let Some(page) = effect_pages.get(quad.page).copied().flatten() {
-                        self.rasterize_effect(page, quad);
+                    if effect_pages.get(quad.page).copied().flatten().is_none() {
+                        continue;
+                    }
+                    match quad.z {
+                        Some(z) if quad.semi_transparent() => {
+                            queue.push(1.0 / f64::from(z), index, PageFlags::default());
+                        }
+                        z => {
+                            let page = effect_pages[quad.page].expect("checked above");
+                            let depth = z.map(|z| SpriteDepth::new(&mut depth, z, true));
+                            self.rasterize_effect(page, quad, depth);
+                        }
                     }
                 }
             }
         }
-        for (triangle, page_flags) in queue.flush() {
-            if let Some(texture) = textures.get(triangle.texture) {
-                self.rasterize(texture, triangle, page_flags, &mut depth);
+        for (_, index, page_flags) in queue.sorted() {
+            match &items[*index] {
+                SceneItem::Triangle(triangle) => {
+                    if let Some(texture) = textures.get(triangle.texture) {
+                        self.rasterize(texture, triangle, page_flags.clone(), &mut depth);
+                    }
+                }
+                SceneItem::Effect(quad) => {
+                    if let (Some(Some(page)), Some(z)) = (effect_pages.get(quad.page), quad.z) {
+                        let depth = SpriteDepth::new(&mut depth, z, false);
+                        self.rasterize_effect(page, quad, Some(depth));
+                    }
+                }
+                SceneItem::Shadow(_) | SceneItem::Mask(_) => {}
             }
         }
+        queue.recycle();
         recycle_depth(depth);
     }
 
@@ -2840,7 +2888,12 @@ impl Framebuffer {
     /// every screen pixel maps to exactly one page texel. A transparent texel
     /// (zero alpha, the page's black key colour) is a hole: it leaves the
     /// framebuffer pixel underneath untouched.
-    fn rasterize_mask(&mut self, page: &Image, quad: &MaskQuad) {
+    fn rasterize_mask(
+        &mut self,
+        page: &Image,
+        quad: &MaskQuad,
+        mut depth: Option<SpriteDepth<'_>>,
+    ) {
         self.assert_software_3d();
         if page.width == 0 || page.height == 0 || quad.size.0 == 0 || quad.size.1 == 0 {
             return;
@@ -2884,6 +2937,11 @@ impl Framebuffer {
                 if texel[3] == 0 {
                     continue;
                 }
+                if let Some(depth) = depth.as_mut()
+                    && !depth.passes(y as usize * self.width as usize + x as usize)
+                {
+                    continue;
+                }
                 slot[0] = texel[0];
                 slot[1] = texel[1];
                 slot[2] = texel[2];
@@ -2904,7 +2962,7 @@ impl Framebuffer {
                 continue;
             };
             if self.list.is_none() {
-                self.rasterize_effect(page, quad);
+                self.rasterize_effect(page, quad, None);
                 continue;
             }
             let src = [
@@ -2957,7 +3015,12 @@ impl Framebuffer {
     /// framebuffer, with texture-entry-zero transparent (the page's zero
     /// alpha), an RGB multiply from the spawn's tint record and a half blend
     /// when the blend record calls for one.
-    fn rasterize_effect(&mut self, page: &Image, quad: &EffectQuad) {
+    fn rasterize_effect(
+        &mut self,
+        page: &Image,
+        quad: &EffectQuad,
+        mut depth: Option<SpriteDepth<'_>>,
+    ) {
         self.assert_software_3d();
         if page.width == 0 || page.height == 0 || quad.size[0] <= 0 || quad.size[1] <= 0 {
             return;
@@ -3025,8 +3088,13 @@ impl Framebuffer {
                 }
             };
             for triangle in &triangles {
-                crate::raster::draw_triangle(triangle, self.width, self.height, |fragment| {
+                crate::raster::draw_triangle_uv(triangle, self.width, self.height, |fragment| {
                     let texel = sample_bilinear(page, fragment.u, page_v(fragment.v));
+                    if let Some(depth) = depth.as_mut()
+                        && !depth.passes(fragment.y * target_stride + fragment.x)
+                    {
+                        return;
+                    }
                     let target = (fragment.y * target_stride + fragment.x) * 4;
                     let Some(slot) = rgba.get_mut(target..target + 4) else {
                         return;
@@ -3045,40 +3113,52 @@ impl Framebuffer {
         let tint = color.map(|channel| (channel * 255.0).round() as u32);
         let level = (alpha * 255.0).round() as u32;
         for triangle in &triangles {
-            crate::raster::draw_triangle(triangle, self.width, self.height, |fragment| {
-                let texel_x = clamp_texel(fragment.u, page.width);
-                let texel_y = top as usize + clamp_texel(fragment.v, sheet_height);
-                let source = texel_y * page_width * 4 + texel_x * 4;
-                let target = (fragment.y * target_stride + fragment.x) * 4;
-                let (Some(texel), Some(slot)) = (
-                    page.rgba.get(source..source + 4),
-                    rgba.get_mut(target..target + 4),
-                ) else {
-                    return;
-                };
-                if texel[3] == 0 {
-                    return;
-                }
-                // `FlushSpriteCommands` hands the GPU an 8-bit vertex colour
-                // and alpha. llvmpipe stores the fragment's texel-times-colour
-                // as bytes and blends them in 8-bit fixed point, rounding
-                // each `x * y / 255` product.
-                let alpha = unorm8_product(u32::from(texel[3]), level);
-                for ((channel, &source), &tint) in slot[..3].iter_mut().zip(&texel[..3]).zip(&tint)
-                {
-                    let source = unorm8_product(u32::from(source), tint);
-                    let frame = u32::from(*channel);
-                    let blended = match quad.op {
-                        EffectBlend::Normal => {
-                            unorm_mul(source, alpha) + unorm_mul(frame, 255 - alpha)
-                        }
-                        EffectBlend::Add => frame + unorm_mul(source, alpha),
-                        EffectBlend::Smooth => unreachable!("drawn above"),
+            crate::raster::draw_triangle_uv(
+                triangle,
+                self.width,
+                self.height,
+                #[inline(always)]
+                |fragment| {
+                    let texel_x = clamp_texel(fragment.u, page.width);
+                    let texel_y = top as usize + clamp_texel(fragment.v, sheet_height);
+                    let source = texel_y * page_width * 4 + texel_x * 4;
+                    let target = (fragment.y * target_stride + fragment.x) * 4;
+                    let (Some(texel), Some(slot)) = (
+                        page.rgba.get(source..source + 4),
+                        rgba.get_mut(target..target + 4),
+                    ) else {
+                        return;
                     };
-                    *channel = blended.min(255) as u8;
-                }
-                slot[3] = 255;
-            });
+                    if texel[3] == 0 {
+                        return;
+                    }
+                    if let Some(depth) = depth.as_mut()
+                        && !depth.passes(fragment.y * target_stride + fragment.x)
+                    {
+                        return;
+                    }
+                    // `FlushSpriteCommands` hands the GPU an 8-bit vertex colour
+                    // and alpha. llvmpipe stores the fragment's texel-times-colour
+                    // as bytes and blends them in 8-bit fixed point, rounding
+                    // each `x * y / 255` product.
+                    let alpha = unorm8_product(u32::from(texel[3]), level);
+                    for ((channel, &source), &tint) in
+                        slot[..3].iter_mut().zip(&texel[..3]).zip(&tint)
+                    {
+                        let source = unorm8_product(u32::from(source), tint);
+                        let frame = u32::from(*channel);
+                        let blended = match quad.op {
+                            EffectBlend::Normal => {
+                                unorm_mul(source, alpha) + unorm_mul(frame, 255 - alpha)
+                            }
+                            EffectBlend::Add => frame + unorm_mul(source, alpha),
+                            EffectBlend::Smooth => unreachable!("drawn above"),
+                        };
+                        *channel = blended.min(255) as u8;
+                    }
+                    slot[3] = 255;
+                },
+            );
         }
     }
 }
@@ -3095,49 +3175,96 @@ fn recycle_depth(depth: Vec<u32>) {
 
 /// Marni's alpha queue (`FUN_0040E820`): what `TransObjectNgTin3_VinsNins`
 /// and `TransSprPoly` hold back from the opaque pass, kept in order of each
-/// triangle's mean `sz`, farthest first, a new entry after the ones it ties.
+/// item's mean `sz`, farthest first, a new entry after the ones it ties.
 /// `FUN_0040EC10` draws it once the opaque pass is done, depth tested and
-/// writing no depth (`FUN_0040EAF0`).
-struct MarniQueue<T> {
-    entries: Vec<(f64, T)>,
+/// writing no depth (`FUN_0040EAF0`). An entry is the index of a queued item
+/// in its draw's list, with its page's flags.
+struct MarniQueue {
+    entries: Vec<(f64, usize, PageFlags)>,
 }
 
-impl<T> Default for MarniQueue<T> {
-    fn default() -> Self {
-        Self {
-            entries: Vec::new(),
-        }
+thread_local! {
+    /// The last queue's allocation ([`MarniQueue::recycle`]).
+    static QUEUE_POOL: std::cell::Cell<Vec<(f64, usize, PageFlags)>> =
+        const { std::cell::Cell::new(Vec::new()) };
+}
+
+impl MarniQueue {
+    /// An empty queue in the allocation the last one left.
+    fn take() -> Self {
+        let mut entries = QUEUE_POOL.with(|pool| pool.take());
+        entries.clear();
+        Self { entries }
     }
-}
 
-impl<T> MarniQueue<T> {
-    /// Queue `entry` under `key`, [`marni_queue_key`]'s: smaller is farther.
-    fn push(&mut self, key: f64, entry: T) {
-        self.entries.push((key, entry));
+    /// Queue item `index` under `key`, [`marni_queue_key`]'s: smaller is
+    /// farther.
+    fn push(&mut self, key: f64, index: usize, page: PageFlags) {
+        self.entries.push((key, index, page));
     }
 
     /// The entries in the order the flush draws them.
-    fn flush(mut self) -> impl Iterator<Item = T> {
+    fn sorted(&mut self) -> &[(f64, usize, PageFlags)] {
         self.entries.sort_by(|a, b| a.0.total_cmp(&b.0));
-        self.entries.into_iter().map(|(_, entry)| entry)
+        &self.entries
+    }
+
+    /// Keep the queue's allocation for the next one.
+    fn recycle(self) {
+        QUEUE_POOL.with(|pool| pool.set(self.entries));
+    }
+}
+
+/// An RE2 sprite against the scene's depth: `TransSprPoly` hands every
+/// corner the same `sz`, `1 - (h / 2) / z` of the `z` its caller gives it,
+/// tests it `LESS_EQUAL` and writes it where the sprite is opaque.
+struct SpriteDepth<'a> {
+    buffer: &'a mut [u32],
+    value: u32,
+    write: bool,
+}
+
+impl<'a> SpriteDepth<'a> {
+    fn new(buffer: &'a mut [u32], z: u32, write: bool) -> Self {
+        let value =
+            (depth_ndc(z as f32) * crate::raster::DEPTH_CLEAR as f32).round_ties_even() as u32;
+        Self {
+            buffer,
+            value,
+            write,
+        }
+    }
+
+    /// Whether the sprite's pixel at `pixel` passes, writing it if so.
+    #[inline]
+    fn passes(&mut self, pixel: usize) -> bool {
+        match self.buffer.get_mut(pixel) {
+            Some(stored) if self.value <= *stored => {
+                if self.write {
+                    *stored = self.value;
+                }
+                true
+            }
+            _ => false,
+        }
     }
 }
 
 /// Whether Marni queues an RE2 model triangle: a semi-transparent packet, or
 /// one whose texture has a transparent texel (`+0x2C`).
-fn marni_queues(triangle: &Triangle, page: PageFlags) -> bool {
+fn marni_queues(triangle: &Triangle, page: &PageFlags) -> bool {
     triangle.filtered && (triangle.blend || page.keyed)
 }
 
-/// A queued triangle's order: a vertex's `sz` is `1 - (h / 2) / z`, so the
-/// mean `sz` falls as the sum of `1 / z` rises, and the queue's farthest
-/// first is the smallest sum first.
-fn marni_queue_key(triangle: &Triangle) -> f64 {
-    triangle
-        .raster
+/// A queued item's order, the mean `sz` of its corners: a corner's `sz` is
+/// `1 - (h / 2) / z`, so the mean `sz` falls as the mean `1 / z` rises, and
+/// the queue's farthest first is the largest mean `1 / z` last.
+fn marni_queue_key(raster: &[RasterVertex; 3]) -> f64 {
+    raster
         .iter()
         .map(|vertex| 1.0 / f64::from(vertex.w))
-        .sum()
+        .sum::<f64>()
+        / 3.0
 }
 
 /// The fragment value `a / 255 * (b / 255)` of two 8-bit levels as llvmpipe
@@ -3964,6 +4091,7 @@ pub(crate) fn mask_quads(layer: &MaskLayer<'_>, offset: [i32; 2]) -> Vec<MaskQua
             continue;
         };
         quads.push(MaskQuad {
+            z: None,
             key,
             uv: (u32::from(sprite.uv.0), u32::from(sprite.uv.1)),
             pos: (sprite.pos.0 + offset[0], sprite.pos.1 + offset[1]),
@@ -3986,6 +4114,7 @@ fn re2_mask_quads(layer: &MaskLayer<'_>, offset: [i32; 2]) -> Vec<MaskQuad> {
             uv: (u32::from(sprite.uv.0), u32::from(sprite.uv.1)),
             pos: (sprite.pos.0 + offset[0], sprite.pos.1 + offset[1]),
             size: (u32::from(sprite.size.0), u32::from(sprite.size.1)),
+            z: Some(mask::re2_sprite_key(sprite, layer.cut.fov)),
         })
         .collect()
 }
@@ -4858,12 +4987,23 @@ struct RasterVertex {
 /// an STP knock-out twin, and which RE2 surfaces have keyed texels.
 #[derive(Default)]
 struct KnockoutTwins {
-    twins: std::collections::HashMap<(usize, usize), bool>,
-    keyed: std::collections::HashMap<(usize, MarniPalette, u32), bool>,
+    twins: Vec<((usize, usize), bool)>,
+    keyed: Vec<((usize, MarniPalette, u32), bool)>,
+    texels: Vec<((usize, MarniPalette), std::rc::Rc<MarniTexels>)>,
+}
+
+/// `key`'s entry in a draw's small cache, made by `make` the first time.
+fn cached<K: PartialEq, V: Clone>(cache: &mut Vec<(K, V)>, key: K, make: impl FnOnce() -> V) -> V {
+    if let Some((_, value)) = cache.iter().find(|(known, _)| *known == key) {
+        return value.clone();
+    }
+    let value = make();
+    cache.push((key, value.clone()));
+    value
 }
 
 /// What a triangle's page asks of [`Framebuffer::rasterize`].
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 struct PageFlags {
     /// The blend has a knock-out twin (RE1's reference).
     twin: bool,
@@ -4872,6 +5012,9 @@ struct PageFlags {
     /// triangle: alpha-blended by the filtered texel's alpha, with no depth
     /// write.
     keyed: bool,
+    /// An RE2 model's texels as its Direct3D texture holds them, made once
+    /// per draw.
+    texels: Option<std::rc::Rc<MarniTexels>>,
 }
 
 impl KnockoutTwins {
@@ -4880,18 +5023,28 @@ impl KnockoutTwins {
         let ptr = texture.indices.as_ptr() as usize;
         let twin = triangle.blend
             && triangle.flat.is_none()
-            && *self
-                .twins
-                .entry((ptr, triangle.palette_row))
-                .or_insert_with(|| texture.has_knockout_twin(triangle.palette_row));
-        let keyed = triangle.filtered && triangle.flat.is_none() && {
-            let surface = marni_surface(triangle, texture);
-            *self
-                .keyed
-                .entry((ptr, MarniPalette::of(triangle), surface.base))
-                .or_insert_with(|| surface.keyed(texture, MarniPalette::of(triangle)))
-        };
-        PageFlags { twin, keyed }
+            && cached(&mut self.twins, (ptr, triangle.palette_row), || {
+                texture.has_knockout_twin(triangle.palette_row)
+            });
+        if !triangle.filtered || triangle.flat.is_some() {
+            return PageFlags {
+                twin,
+                ..PageFlags::default()
+            };
+        }
+        let palette = MarniPalette::of(triangle);
+        let texels = cached(&mut self.texels, (ptr, palette), || {
+            std::rc::Rc::new(MarniTexels::new(texture, palette))
+        });
+        let surface = marni_surface(triangle, texture);
+        let keyed = cached(&mut self.keyed, (ptr, palette, surface.base), || {
+            texels.keyed(texture, surface)
+        });
+        PageFlags {
+            twin,
+            keyed,
+            texels: Some(texels),
+        }
     }
 }
 
@@ -4930,6 +5083,10 @@ struct Triangle {
     page_x: u16,
     /// An RE 2 character's part: its texture's strips and surfaces.
     marni: Option<MarniPart>,
+    /// Its place in Marni's alpha queue ([`marni_queue_key`]), taken before
+    /// the near clip, so every piece of a clipped triangle sorts as the
+    /// whole.
+    queue_key: f64,
 }
 
 /// A ground shadow's projected commands, ready for rasterization.
@@ -4954,6 +5111,8 @@ pub(crate) struct MaskQuad {
     pub(crate) pos: (i32, i32),
     /// Sprite size in pixels; equals the sampled region, so sampling is 1:1.
     pub(crate) size: (u32, u32),
+    /// RE2's `AddMask` depth: the sprite is depth tested and written there.
+    pub(crate) z: Option<u32>,
 }
 
 /// One decoded effect billboard, ready for rasterization.
@@ -4992,6 +5151,11 @@ pub struct EffectQuad {
     /// `[u, v]` flips: the header word's bits 7 and 6, which rounds of debris
     /// pick at random.
     pub mirror: [bool; 2],
+    /// The view Z RE2 hands Marni with the sprite (`Esp_trans_main`'s
+    /// `RotTransPers` depth, before its bucket): an opaque one is depth
+    /// tested and written in its place, a semi-transparent one goes into
+    /// the alpha queue. `None` keeps the painter's order with no depth.
+    pub z: Option<u32>,
 }
 
 /// How an effect billboard's texels meet the frame.
@@ -5009,6 +5173,12 @@ pub enum EffectBlend {
 }
 
 impl EffectQuad {
+    /// Whether `TransSprPoly` blends it, and so queues it: a semi-transparent
+    /// mode (`0x1002D` with its `DWORD_00524e24` bits).
+    pub(crate) fn semi_transparent(&self) -> bool {
+        self.op == EffectBlend::Add || (self.op == EffectBlend::Normal && self.blend != 0)
+    }
+
     /// `SubmitEffectSprite`'s vertex colour and alpha: the tint is scaled by
     /// 0x80 and `g_ColorScaleFactor / 255` and truncated to a byte, and the
     /// blend level becomes `blend / 256` (opaque when zero), truncated to a
@@ -5342,6 +5512,7 @@ fn collect_triangles_with(
             ((f64::from(depth0) + f64::from(depth1) + f64::from(depth2)) * f64::from(1.0f32 / 3.0))
                 as f32,
         );
+        let queue_key = marni_queue_key(&raster);
         let triangle = Triangle {
             raster,
             depth,
@@ -5359,6 +5530,7 @@ fn collect_triangles_with(
             filtered: re2_near.is_some(),
             page_x: page_x as u16,
             marni: None,
+            queue_key,
         };
         match re2_near {
             Some(near) => clip_triangle_near(
@@ -5590,6 +5762,7 @@ fn collect_complex_pool(
             filtered: false,
             page_x: 0,
             marni: None,
+            queue_key: 0.0,
         });
     }
 }
@@ -6139,6 +6312,7 @@ fn collect_ivm_triangles(
                 filtered: false,
                 page_x: 0,
                 marni: None,
+                queue_key: 0.0,
             });
         }
     }
@@ -6511,7 +6685,7 @@ impl MarniSurface {
     /// texture holds it, and its STP bit. A colour of 0 is the transparent
     /// texel (alpha 0); `Pl_load_texture` first turns an STP black past entry
     /// 0 into 0x8001, so it stays opaque.
-    #[inline]
+    #[cfg(test)]
     fn texel(
         self,
         texture: &Texture8,
@@ -6520,13 +6694,17 @@ impl MarniSurface {
         y: usize,
     ) -> ([u8; 4], bool) {
         let column = self.base as usize + x;
-        let row = palette.row(column);
         let width = texture.width as usize;
         let index = texture
             .indices
             .get(y * width + column)
             .copied()
             .unwrap_or(0);
+        Self::colour(texture, palette.row(column), index)
+    }
+
+    /// Entry `index` of CLUT `row` as `Pl_load_texture` bakes it.
+    fn colour(texture: &Texture8, row: usize, index: u8) -> ([u8; 4], bool) {
         let colour = texture.palette(row, index);
         let stp = texture.palette_stp(row, index);
         match (colour[..3] == [0, 0, 0], stp && index != 0) {
@@ -6537,6 +6715,7 @@ impl MarniSurface {
     }
 
     /// Whether any texel of the surface is transparent (Marni's `+0x2c`).
+    #[cfg(test)]
     fn keyed(self, texture: &Texture8, palette: MarniPalette) -> bool {
         (0..texture.height as usize)
             .any(|y| (0..self.width as usize).any(|x| self.texel(texture, palette, x, y).0[3] == 0))
@@ -6568,6 +6747,7 @@ fn wrapped_axis(coordinate: f32, size: u32) -> (usize, usize, u16) {
 /// RGBA, its transparent texels' alpha included. The STP bit is the nearest
 /// texel's.
 #[inline]
+#[cfg(test)]
 fn sample_marni(
     texture: &Texture8,
     surface: MarniSurface,
@@ -6575,25 +6755,87 @@ fn sample_marni(
     u: f32,
     v: f32,
 ) -> ([u8; 4], bool) {
-    if texture.width == 0 || texture.height == 0 {
-        return ([0; 4], false);
+    MarniTexels::new(texture, palette).sample(texture, surface, u, v)
+}
+
+/// An RE 2 model texture's colours through one [`MarniPalette`] as its
+/// Direct3D texture holds them ([`MarniSurface::texel`]), each palette entry
+/// of each strip once.
+#[derive(Debug)]
+struct MarniTexels {
+    /// 256 entries for each strip, a CLUT row's one strip for all columns.
+    entries: Vec<([u8; 4], bool)>,
+    strips: bool,
+}
+
+impl MarniTexels {
+    fn new(texture: &Texture8, palette: MarniPalette) -> Self {
+        let strips = matches!(palette, MarniPalette::Strips(_));
+        let entries = (0..if strips { 4 } else { 1 })
+            .flat_map(|strip| {
+                (0..=255u8).map(move |index| {
+                    MarniSurface::colour(texture, palette.row(strip * 128), index)
+                })
+            })
+            .collect();
+        Self { entries, strips }
     }
-    let (x0, x1, fx) = wrapped_axis(u, surface.width);
-    let (y0, y1, fy) = wrapped_axis(v, texture.height);
-    let texel = |x: usize, y: usize| surface.texel(texture, palette, x, y);
-    let corners = [texel(x0, y0), texel(x1, y0), texel(x0, y1), texel(x1, y1)];
-    let channel = |index: usize| {
-        let top = lerp_unorm8(fx, corners[0].0[index], corners[1].0[index]);
-        let bottom = lerp_unorm8(fx, corners[2].0[index], corners[3].0[index]);
-        lerp_unorm8(fy, top, bottom)
-    };
-    let nearest = corners[usize::from(fx >= 0x80) + 2 * usize::from(fy >= 0x80)].1;
-    (std::array::from_fn(channel), nearest)
+
+    /// The surface's texel at `(x, y)`, as [`MarniSurface::texel`] gives it.
+    #[inline]
+    fn texel(
+        &self,
+        texture: &Texture8,
+        surface: MarniSurface,
+        x: usize,
+        y: usize,
+    ) -> ([u8; 4], bool) {
+        let column = surface.base as usize + x;
+        let index = texture
+            .indices
+            .get(y * texture.width as usize + column)
+            .copied()
+            .unwrap_or(0);
+        let strip = if self.strips {
+            (column / 128).min(3)
+        } else {
+            0
+        };
+        self.entries[strip * 256 + usize::from(index)]
+    }
+
+    /// Whether any texel of `surface` is transparent (Marni's `+0x2c`).
+    fn keyed(&self, texture: &Texture8, surface: MarniSurface) -> bool {
+        (0..texture.height as usize).any(|y| {
+            (0..surface.width as usize).any(|x| self.texel(texture, surface, x, y).0[3] == 0)
+        })
+    }
+
+    /// The texel at a normalised `(u, v)` of `surface` ([`sample_marni`]'s
+    /// rules).
+    #[inline]
+    fn sample(&self, texture: &Texture8, surface: MarniSurface, u: f32, v: f32) -> ([u8; 4], bool) {
+        if texture.width == 0 || texture.height == 0 {
+            return ([0; 4], false);
+        }
+        let (x0, x1, fx) = wrapped_axis(u, surface.width);
+        let (y0, y1, fy) = wrapped_axis(v, texture.height);
+        let texel = |x: usize, y: usize| self.texel(texture, surface, x, y);
+        let corners = [texel(x0, y0), texel(x1, y0), texel(x0, y1), texel(x1, y1)];
+        let channel = |index: usize| {
+            let top = lerp_unorm8(fx, corners[0].0[index], corners[1].0[index]);
+            let bottom = lerp_unorm8(fx, corners[2].0[index], corners[3].0[index]);
+            lerp_unorm8(fy, top, bottom)
+        };
+        let nearest = corners[usize::from(fx >= 0x80) + 2 * usize::from(fy >= 0x80)].1;
+        (std::array::from_fn(channel), nearest)
+    }
 }
 
 /// A 2x2 block of one channel reduced to one pixel as Pillow's box resize
 /// halves the recordings' 640x480 frames: each row's pair averaged and
 /// rounded, then the two rows'.
+#[inline]
 fn halve_block(block: [[u8; 2]; 2]) -> u8 {
     let pair = |a: u8, b: u8| ((u16::from(a) + u16::from(b) + 1) >> 1) as u8;
     pair(
@@ -7581,6 +7823,7 @@ mod tests {
             filtered: false,
             page_x: 0,
             marni: None,
+            queue_key: 0.0,
         })
     }
 
@@ -7692,6 +7935,7 @@ mod tests {
             texture: &page,
         });
         let mask = SceneItem::Mask(MaskQuad {
+            z: None,
             key: 1000,
             uv: (0, 0),
             pos: (0, 0),
@@ -8854,6 +9098,7 @@ mod tests {
         blend: u8,
     ) -> EffectQuad {
         EffectQuad {
+            z: None,
             op: EffectBlend::Normal,
             key: 500,
             page,
@@ -8915,9 +9160,9 @@ mod tests {
             &[],
         );
         if display {
-            framebuffer.with_display(|display| display.rasterize_effect(page, &quad));
+            framebuffer.with_display(|display| display.rasterize_effect(page, &quad, None));
         } else {
-            framebuffer.rasterize_effect(page, &quad);
+            framebuffer.rasterize_effect(page, &quad, None);
         }
         framebuffer
     }
@@ -8985,13 +9230,14 @@ mod tests {
             }
         }
         let quad = MaskQuad {
+            z: None,
             key: 0,
             uv: (2, 3),
             pos: (5, 5),
             size: (4, 4),
         };
         let mut framebuffer = Framebuffer::new();
-        framebuffer.with_display(|display| display.rasterize_mask(&page, &quad));
+        framebuffer.with_display(|display| display.rasterize_mask(&page, &quad, None));
         assert_eq!(framebuffer_pixel(&framebuffer, 5, 5), [20, 30, 7, 255]);
         assert_eq!(framebuffer_pixel(&framebuffer, 8, 7), [50, 50, 7, 255]);
         assert_eq!(framebuffer_pixel(&framebuffer, 9, 8), [0, 0, 0, 0]);
@@ -9210,6 +9456,7 @@ mod tests {
             page_x,
             palette_row: 3,
             marni: Some(MarniPart { strips, surface }),
+            queue_key: 0.0,
             ..match scene_triangle(1) {
                 SceneItem::Triangle(triangle) => triangle,
                 _ => unreachable!(),
@@ -9250,6 +9497,41 @@ mod tests {
             at_seam.0,
             [lerp_unorm8(128, 255, 0), 0, lerp_unorm8(128, 0, 255), 255]
         );
+    }
+
+    #[test]
+    fn the_baked_texels_are_the_surfaces_texels() {
+        let mut texture = character_texture();
+        texture.stp = vec![false; texture.palettes.len()];
+        texture.stp[5] = true;
+        texture.indices[3] = 5;
+        for palette in [
+            MarniPalette::Row(1),
+            MarniPalette::Strips([0, 1, 2, 3]),
+            MarniPalette::Strips([0, 0, 1, 2]),
+        ] {
+            let texels = MarniTexels::new(&texture, palette);
+            for base in [0, 128, 256] {
+                let surface = MarniSurface {
+                    base,
+                    width: texture.width.saturating_sub(base).clamp(1, 256),
+                    origin: base,
+                };
+                for y in 0..texture.height as usize {
+                    for x in 0..surface.width as usize {
+                        assert_eq!(
+                            texels.texel(&texture, surface, x, y),
+                            surface.texel(&texture, palette, x, y),
+                            "{palette:?} {base} ({x}, {y})"
+                        );
+                    }
+                }
+                assert_eq!(
+                    texels.keyed(&texture, surface),
+                    surface.keyed(&texture, palette)
+                );
+            }
+        }
     }
 
     #[test]
@@ -9336,6 +9618,7 @@ mod tests {
             .iter()
             .map(|&page| Triangle {
                 marni: None,
+                queue_key: 0.0,
                 // The page in `uv_nudge` too, to find it after a drop.
                 uv_nudge: [page as u8; 3],
                 ..character_triangle([0; 4], MarniTexture::First, page * 128)
@@ -9364,6 +9647,67 @@ mod tests {
         assert_eq!(marked(player, 0, &[1]), [Some(First)]);
         // A model of another kind is left alone.
         assert_eq!(marked(None, 0, &[1, 2]), [None, None]);
+    }
+
+    #[test]
+    fn the_gpu_takes_the_packets_a_split_part_drops() {
+        // 0x36's part 2 draws pages 0, 1 and 3: a packet a replacement puts
+        // on page 2 is in neither of its objects.
+        let mut parts = vec![triangle_object([[0, 0, 600], [0, -100, 600], [100, 0, 600]]); 3];
+        parts[2].prims[0].tsb = 2;
+        let model = std::sync::Arc::new(crate::model::Emd {
+            skeleton: crate::model::Skeleton {
+                relative: vec![[0; 3]; 3],
+                children: vec![Vec::new(); 3],
+            },
+            keyframes: Vec::new(),
+            clips: Vec::new(),
+            damage_clips: Vec::new(),
+            damage_keyframes: Vec::new(),
+            banks: Vec::new(),
+            mesh: Tmd { objects: parts },
+            texture: character_texture(),
+            morphs: Vec::new(),
+            marni: Some(crate::model::MarniLayout::enemy(0x36)),
+        });
+        let joints = [identity(); 3];
+        let camera = straight_camera();
+        let drawn = |gpu: bool| {
+            let mut framebuffer = Framebuffer::new();
+            if gpu {
+                framebuffer.record();
+            }
+            framebuffer.draw_character_unlit(&model, &joints, &camera, [0, 0]);
+            framebuffer
+        };
+        // The software draws through Marni's surfaces, so it drops it ...
+        let software = drawn(false);
+        let mut alone = Framebuffer::new();
+        let mut first_two = (*model).clone();
+        first_two.mesh.objects.truncate(2);
+        alone.draw_character_unlit(&std::sync::Arc::new(first_two), &joints, &camera, [0, 0]);
+        assert!(software.rgba == alone.rgba);
+        assert!(
+            alone
+                .rgba
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|pixel| pixel[..3] != [0; 3])
+        );
+        // ... but the GPU samples the packets' own pages, so it draws it.
+        let gpu = drawn(true);
+        let models: Vec<usize> = gpu
+            .list()
+            .expect("recording")
+            .items
+            .iter()
+            .filter_map(|item| match &item.kind {
+                crate::draw2d::Kind::Model(model) => Some(model.vertices.len()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(models, [9]);
     }
 
     #[test]
@@ -9503,6 +9847,89 @@ mod tests {
             display.rasterize(&opaque, &far, PageFlags::default(), &mut depth);
         });
         assert_eq!(framebuffer_pixel(&framebuffer, 1, 1), [0, 0, 255, 255]);
+    }
+
+    /// An RE2 scene on the display: a keyed red body at view Z `body` over
+    /// game pixels 0 to 32, under `sprite`, over black. The sprite samples
+    /// a green page.
+    fn re2_scene(body: f32, sprite: SceneItem<'_>) -> [u8; 4] {
+        // Red, keyed by its far corner, sampled between texels 0 and 1.
+        let mut indices = vec![1; 16];
+        indices[15] = 0;
+        let texture = marni_texture(indices);
+        let corner = |x: f32, y: f32| RasterVertex {
+            position: [x, y],
+            w: body,
+            u: 1.0,
+            v: 1.0,
+            shade: [1.0; 3],
+        };
+        let raster = [corner(0.0, 0.0), corner(32.0, 0.0), corner(0.0, 32.0)];
+        let triangle = Triangle {
+            raster,
+            filtered: true,
+            queue_key: marni_queue_key(&raster),
+            ..match scene_triangle(1) {
+                SceneItem::Triangle(triangle) => triangle,
+                _ => unreachable!(),
+            }
+        };
+        let green = effect_image(&[[0, 255, 0, 255]; 4]);
+        let items = [sprite, SceneItem::Triangle(triangle)];
+        let mut framebuffer = Framebuffer::new();
+        framebuffer.with_display(|display| {
+            display.clear();
+            display.draw_scene(&[&texture], Some(&green), &[Some(&green)], &items);
+        });
+        framebuffer_pixel(&framebuffer, 6, 6)
+    }
+
+    #[test]
+    fn a_fire_shares_the_alpha_queue_with_the_keyed_bodies() {
+        let fire = |z| {
+            SceneItem::Effect(EffectQuad {
+                op: EffectBlend::Add,
+                z: Some(z),
+                ..effect_quad(0, [4, 4], [4, 4], [255; 3], 0)
+            })
+        };
+        // A farther keyed body draws first, and the fire adds over it ...
+        assert_eq!(re2_scene(400.0, fire(200)), [255, 255, 0, 255]);
+        // ... and a nearer one after, over the fire.
+        assert_eq!(re2_scene(100.0, fire(200)), [255, 0, 0, 255]);
+        // A fire behind the opaque depth is hidden: an opaque effect at 100
+        // writes its depth, and the fire at 200 queued after fails it.
+        let page = effect_image(&[[0, 0, 255, 255]; 4]);
+        let items = [
+            SceneItem::Effect(EffectQuad {
+                z: Some(100),
+                ..effect_quad(0, [4, 4], [4, 4], [255; 3], 0)
+            }),
+            fire(200),
+        ];
+        let mut framebuffer = Framebuffer::new();
+        framebuffer.with_display(|display| {
+            display.clear();
+            display.draw_scene(&[], None, &[Some(&page)], &items);
+        });
+        assert_eq!(framebuffer_pixel(&framebuffer, 6, 6), [0, 0, 255, 255]);
+    }
+
+    #[test]
+    fn an_re2_mask_writes_its_depth_over_a_farther_keyed_body() {
+        let mask = |z| {
+            SceneItem::Mask(MaskQuad {
+                key: 200,
+                uv: (0, 0),
+                pos: (5, 5),
+                size: (2, 2),
+                z,
+            })
+        };
+        // The body is queued, so it draws after the mask, but behind it.
+        assert_eq!(re2_scene(400.0, mask(Some(200))), [0, 255, 0, 255]);
+        // In front of it, it covers it.
+        assert_eq!(re2_scene(100.0, mask(Some(200))), [255, 0, 0, 255]);
     }
 
     /// A one-order door frame: `object` in front of an RE2 or RE1
@@ -9685,6 +10112,7 @@ mod tests {
         let mask_page = solid_image(1, 1, [0, 0, 255, 255]);
         let effect_page = effect_image(&[[255, 0, 0, 255]; 4]);
         let mask = SceneItem::Mask(MaskQuad {
+            z: None,
             key: 500,
             uv: (0, 0),
             pos: (10, 10),
@@ -10616,6 +11044,7 @@ mod tests {
             filtered: false,
             page_x: 0,
             marni: None,
+            queue_key: 0.0,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));
@@ -10829,6 +11258,7 @@ mod tests {
             filtered: false,
             page_x: 0,
             marni: None,
+            queue_key: 0.0,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));
@@ -10888,6 +11318,7 @@ mod tests {
             filtered: false,
             page_x: 0,
             marni: None,
+            queue_key: 0.0,
         };
         let mut framebuffer = Framebuffer::new();
         framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));

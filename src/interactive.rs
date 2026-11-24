@@ -653,6 +653,7 @@ impl InteractiveState {
         let size = [(x1 + 1 - x0).max(1), (y1 + 1 - y0).max(1)];
         let source = [(su1 + 1 - su0).max(0), (sv1 + 1 - sv0).max(0)];
         let quad = EffectQuad {
+            z: None,
             key,
             page,
             uv: [su0.min(255) as u8, sv0.min(255) as u8, 0, 0],
@@ -708,6 +709,7 @@ impl InteractiveState {
         for &ch in text {
             if ch != b' ' {
                 self.sprites.push(EffectQuad {
+                    z: None,
                     key: 0,
                     page,
                     uv: [
@@ -1159,6 +1161,7 @@ impl UserData for ScreenApi {
             let page = state.page_index(&entry);
             let corner = |x: i64, y: i64| [x as i32, y as i32];
             state.sprites.push(EffectQuad {
+                z: None,
                 key: *key as u32,
                 page,
                 uv: [*u as u8, *v as u8, 0, 0],

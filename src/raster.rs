@@ -262,7 +262,7 @@ struct Plane {
 impl Plane {
     /// The attribute at pixel `(x, y)` (`interp_attrib_linear`: two fused
     /// multiply-adds from the origin value).
-    #[inline]
+    #[inline(always)]
     fn at(self, x: f32, y: f32) -> f32 {
         self.dady.mul_add(y, self.dadx.mul_add(x, self.a0))
     }
@@ -330,9 +330,25 @@ impl Edge {
         Self { c, dcdx, dcdy }
     }
 
-    #[inline]
+    #[inline(always)]
     fn inside(&self, x: i64, y: i64) -> bool {
         self.c - self.dcdx * (x << FIXED_ORDER) + self.dcdy * (y << FIXED_ORDER) > 0
+    }
+
+    /// The pixels of row `y` inside the edge, `lo..=hi` ([`Edge::inside`]
+    /// solved for x): `c + dcdy * Y - dcdx * X > 0` is linear in x.
+    #[inline(always)]
+    fn span(&self, y: i64) -> (i64, i64) {
+        let k = self.c + self.dcdy * (y << FIXED_ORDER);
+        let d = self.dcdx << FIXED_ORDER;
+        match d.signum() {
+            0 if k > 0 => (i64::MIN, i64::MAX),
+            0 => (i64::MAX, i64::MIN),
+            // `d * x < k`.
+            1 => (i64::MIN, (k - 1).div_euclid(d)),
+            // `-d * x > -k`.
+            _ => ((-k).div_euclid(-d) + 1, i64::MAX),
+        }
     }
 }
 
@@ -357,6 +373,29 @@ pub fn draw_triangle_depth(
     width: u32,
     height: u32,
     view_depth: bool,
+    fragment: impl FnMut(Fragment),
+) {
+    draw::<true>(vertices, width, height, view_depth, fragment);
+}
+
+/// [`draw_triangle`] for a fragment that reads only `u` and `v`: its
+/// `depth` and `color` are left 0.
+pub fn draw_triangle_uv(
+    vertices: &[GlVertex; 3],
+    width: u32,
+    height: u32,
+    fragment: impl FnMut(Fragment),
+) {
+    draw::<false>(vertices, width, height, false, fragment);
+}
+
+/// [`draw_triangle_depth`], interpolating the depth and colour only when
+/// `FULL`.
+fn draw<const FULL: bool>(
+    vertices: &[GlVertex; 3],
+    width: u32,
+    height: u32,
+    view_depth: bool,
     mut fragment: impl FnMut(Fragment),
 ) {
     let transformed = vertices
@@ -365,7 +404,7 @@ pub fn draw_triangle_depth(
     let masks = transformed.map(|vertex| vertex.clipmask());
     let clipmask = masks[0] | masks[1] | masks[2];
     if clipmask == 0 {
-        rasterize(
+        rasterize::<FULL>(
             transformed.map(|vertex| vertex.setup()),
             width,
             height,
@@ -374,13 +413,48 @@ pub fn draw_triangle_depth(
         );
     } else if masks[0] & masks[1] & masks[2] == 0 {
         clip_triangle(transformed, clipmask, width, height, |setup| {
-            rasterize(setup, width, height, view_depth, &mut fragment);
+            rasterize::<FULL>(setup, width, height, view_depth, &mut fragment);
         });
     }
 }
 
 /// Triangle setup and rasterisation of one post-clip triangle.
-fn rasterize(
+///
+/// Its planes are fused multiply-adds, as llvmpipe's are: on a CPU with FMA
+/// it runs through a copy compiled for it, so they are single instructions
+/// rather than calls to `fmaf`. A fused multiply-add rounds once either way,
+/// so both copies give the same bits.
+fn rasterize<const FULL: bool>(
+    setup: [SetupVertex; 3],
+    width: u32,
+    height: u32,
+    view_depth: bool,
+    fragment: &mut impl FnMut(Fragment),
+) {
+    #[cfg(target_arch = "x86_64")]
+    if std::arch::is_x86_feature_detected!("fma") {
+        // SAFETY: the CPU has FMA.
+        unsafe { rasterize_fma::<FULL>(setup, width, height, view_depth, fragment) };
+        return;
+    }
+    rasterize_planes::<FULL>(setup, width, height, view_depth, fragment);
+}
+
+/// [`rasterize_planes`] compiled for FMA.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "fma")]
+unsafe fn rasterize_fma<const FULL: bool>(
+    setup: [SetupVertex; 3],
+    width: u32,
+    height: u32,
+    view_depth: bool,
+    fragment: &mut impl FnMut(Fragment),
+) {
+    rasterize_planes::<FULL>(setup, width, height, view_depth, fragment);
+}
+
+#[inline(always)]
+fn rasterize_planes<const FULL: bool>(
     mut setup: [SetupVertex; 3],
     width: u32,
     height: u32,
@@ -442,27 +516,39 @@ fn rasterize(
     let max_x = i64::from(max_x).min(i64::from(width) - 1);
     let max_y = i64::from(max_y).min(i64::from(height) - 1);
 
+    // A flat `w` (a sprite's) is the same at every pixel: its plane is its
+    // origin value exactly, so `1 / w` is worked out once.
+    let flat_recip = (w_plane.dadx == 0.0 && w_plane.dady == 0.0).then(|| 1.0 / w_plane.a0);
     for y in min_y..=max_y {
-        for x in min_x..=max_x {
-            if !edges.iter().all(|edge| edge.inside(x, y)) {
-                continue;
-            }
+        let (lo, hi) = edges.iter().fold((min_x, max_x), |(lo, hi), edge| {
+            let (from, to) = edge.span(y);
+            (lo.max(from), hi.min(to))
+        });
+        for x in lo..=hi {
+            debug_assert!(edges.iter().all(|edge| edge.inside(x, y)));
             let (fx, fy) = (x as f32, y as f32);
-            let w = w_plane.at(fx, fy);
-            let recip = 1.0 / w;
-            let depth = if view_depth {
-                crate::render::depth_ndc(recip)
-            } else {
-                depth_plane.at(fx, fy).clamp(0.0, 1.0)
-            };
+            let recip = flat_recip.unwrap_or_else(|| 1.0 / w_plane.at(fx, fy));
             let value = |index: usize| attribute_planes[index].at(fx, fy) * recip;
+            let (depth, color) = if FULL {
+                let depth = if view_depth {
+                    crate::render::depth_ndc(recip)
+                } else {
+                    depth_plane.at(fx, fy).clamp(0.0, 1.0)
+                };
+                (
+                    (depth * DEPTH_CLEAR as f32).round_ties_even() as u32,
+                    [value(2), value(3), value(4), value(5)],
+                )
+            } else {
+                (0, [0.0; 4])
+            };
             fragment(Fragment {
                 x: x as usize,
                 y: y as usize,
-                depth: (depth * DEPTH_CLEAR as f32).round_ties_even() as u32,
+                depth,
                 u: value(0),
                 v: value(1),
-                color: [value(2), value(3), value(4), value(5)],
+                color,
             });
         }
     }
@@ -523,6 +609,26 @@ mod tests {
         let surface = 1.0 / (1.0 / 130.0 + 0.5025 * (1.0 / 390.0 - 1.0 / 130.0));
         assert!((i64::from(at(true)) - scaled(surface)).abs() <= 2);
         assert!((i64::from(at(false)) - scaled(130.0 + 0.5025 * 260.0)).abs() <= 2);
+    }
+
+    #[test]
+    fn an_edges_span_is_the_pixels_inside_it() {
+        let mut seed = 0x2545_f491_4f6c_dd1du64;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed % 20_000) as i32 - 10_000
+        };
+        for _ in 0..2000 {
+            let edge = Edge::new([next(), next()], [next(), next()]);
+            for y in -40..40 {
+                let (lo, hi) = edge.span(y);
+                for x in -40..40 {
+                    assert_eq!(edge.inside(x, y), (lo..=hi).contains(&x), "({x}, {y})");
+                }
+            }
+        }
     }
 
     #[test]
