@@ -1,0 +1,49 @@
+# Claire A's Sherry from 306's door 0 into 305 with the Club Key: south down the corridor past the dogs (one bite) and
+# east along the lower passage into door 5's area, whose event (main_02: 3:130, save(32, 1)) makes Claire the player
+# again for 307. There 307's main_06 plays the scene with Sherry, which leaves the Club Key (0x5C) for Claire to pick up (#765 part 4)
+# made in arklay: door 5 loads 307 at 650 and the scene hands Claire back by 2304; her input starts 100 ticks after, as
+# slack for the pace of the scene's voice lines, and the key is hers by 2545
+344
+# 305: turned square to the south, and down the corridor along x -7480
+345 left
+347
+348 up run
+# east along the passage at z -24900; a dog bites once (487)
+470
+471 left
+485
+486 up run
+# door 5's area (x 2698 to 5348, z -26294 to -23904): one press
+613
+614 action
+616
+# 307 as Claire: north-west to the Club Key's place (x -8572 to -7492, z -3407 to -2287)
+2404 right
+2410
+2412 up
+2427
+# the key: its message and the question, through to the pick-up
+2429 action
+2431
+2441 action
+2443
+2453 action
+2455
+2465 action
+2467
+2477 action
+2479
+2489 action
+2491
+2501 action
+2503
+2513 action
+2515
+2525 action
+2527
+2537 action
+2539
+2549 action
+2551
+2561 action
+2563
