@@ -14,6 +14,10 @@ input_drop_early = true
 ticks = 3420
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 3419]
+# 0.69 measured: the rooms from each hand back to the next door's press are 0.10 to 0.41 (the windows);
+# the worst are the first frames of 116 through 109's door 2 (1708, 7.01) and of 20B through 116's door 0 (2438, 4.96)
+frame_max_mean = 0.8
+frame_windows = [[360, 447, 0.6], [786, 1075, 0.4], [1414, 1671, 0.4], [2010, 2401, 0.4], [2725, 2943, 0.4], [3282, 3419, 0.4]]
 expect = "match"
 ignore = [
   # the warp's head on its first ticks (as leon_a_208's)
@@ -35,6 +39,11 @@ input_drop_early = true
 ticks = 2090
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 2089]
+# 2.81 measured, all of it the doors' frames: 20F's door 1 into 211 is the stairs door (type 4), whose steps arklay
+# draws wider and brighter (oracle/re2-deviations.md, "The stairs door's frames"; 585, 20.73), and 211's door 2 and
+# 212's manhole are drawn larger than the original's (#672); the rooms from each hand back to the next press are 0.08 to 0.16
+frame_max_mean = 3.0
+frame_windows = [[360, 535, 0.4], [738, 993, 0.4], [1342, 1513, 0.4], [1943, 2089, 0.4]]
 expect = "match"
 ignore = [
   # the warp's head on its first ticks (as leon_a_208's)
