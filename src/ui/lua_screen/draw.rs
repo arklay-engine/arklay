@@ -222,7 +222,7 @@ impl Assets {
             .ok_or_else(|| mlua::Error::RuntimeError(format!("invalid art handle {handle}")))
     }
 
-    fn picture(&self, handle: usize) -> mlua::Result<&Image> {
+    pub(super) fn picture(&self, handle: usize) -> mlua::Result<&Image> {
         match self.get(handle)? {
             Asset::Picture(image) => Ok(image),
             _ => Err(mlua::Error::RuntimeError(format!(
@@ -818,12 +818,49 @@ pub(super) fn background_quad(
     )
 }
 
+/// The frame's `rect` of picture `handle` drawn again as `draw_background`
+/// draws the whole at `origin`: the same placement and sampling, and the
+/// same HD replacement over just that part.
+pub(super) fn draw_background_rect(
+    assets: &Assets,
+    pack: &Pack,
+    framebuffer: &mut Framebuffer,
+    handle: usize,
+    origin: [i32; 2],
+    rect: [i32; 4],
+) -> mlua::Result<()> {
+    let image = assets.picture(handle)?;
+    let draw = |framebuffer: &mut Framebuffer| {
+        framebuffer.draw_background_within(image, origin, [255; 3], rect);
+    };
+    match hd_art(assets, pack, framebuffer, handle, 0) {
+        Some(hd) => {
+            let (_, [u0, v0, u1, v1]) = background_quad(&hd, image, framebuffer, origin);
+            let (width, height) = (framebuffer.width as f32, framebuffer.height as f32);
+            let [x0, y0] = [rect[0] as f32, rect[1] as f32];
+            let [x1, y1] = [(rect[0] + rect[2]) as f32, (rect[1] + rect[3]) as f32];
+            let at = |from: f32, to: f32, t: f32, extent: f32| from + (to - from) * t / extent;
+            let uv = [
+                at(u0, u1, x0, width),
+                at(v0, v1, y0, height),
+                at(u0, u1, x1, width),
+                at(v0, v1, y1, height),
+            ];
+            let clip = framebuffer.clip.take();
+            framebuffer.draw_replaced(hd, [x0, y0, x1, y1], uv, [1.0; 3], draw);
+            framebuffer.clip = clip;
+        }
+        None => draw(framebuffer),
+    }
+    Ok(())
+}
+
 /// A screen camera's projection offset: the rasterizer projects about the
 /// 4:3 frame's centre, so a shorter layout band (a wider aspect) moves the
 /// centre up by half the rows it lost, and a wider canvas moves it right by
 /// half the columns it gained, keeping the model centred in the layout.
 /// `screen` is the script's own offset, held to the range of [`coord`].
-fn band_centre(framebuffer: &Framebuffer, screen: [i32; 2]) -> [i32; 2] {
+pub(super) fn band_centre(framebuffer: &Framebuffer, screen: [i32; 2]) -> [i32; 2] {
     let gained = framebuffer.width as i32 - crate::render::WIDTH as i32;
     let lost = crate::render::HEIGHT as i32 - framebuffer.height as i32;
     [coord(screen[0]) + gained / 2, coord(screen[1]) - lost / 2]
