@@ -218,6 +218,10 @@ pub struct Frame<'a> {
     pub hold: u8,
     /// The original draws the screen black for the first three frames.
     pub black: bool,
+    /// The ambient an RE2 door's lit parts are drawn with, on the 0..255
+    /// scale ([`crate::render::re2_door_light`]); RE1's doors draw
+    /// full-bright.
+    pub ambient: [u8; 3],
 }
 
 /// A script cursor: which script and byte offset.
@@ -530,6 +534,7 @@ impl Vm {
             frame,
             hold,
             black: frame < 3,
+            ambient: [0; 3],
         }
     }
 

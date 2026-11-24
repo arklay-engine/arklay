@@ -169,7 +169,7 @@ pub fn decode_adpcm(data: &[u8]) -> Vec<i16> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// A one-program VAB with tone 0 playing VAG 1 (one block).

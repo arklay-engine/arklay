@@ -2684,27 +2684,35 @@ pub fn draw_door_scene(
     draw_fade_overlay(framebuffer, &frame.fade);
 }
 
-/// The light an RE2 door part is drawn with through `camera`.
+/// The light an RE2 door part is drawn with through `camera`, over
+/// `ambient` (the leaving camera's, [`re2_door_ambient`]).
 ///
 /// `Door_Trans` sets `SetLightMatrix(door_ll * M)` and
 /// `SetColorMatrix(door_lc)`, with `M` the part's composite view matrix
 /// (`Sp_matrix` times its world matrix; the original reads the previous
 /// frame's, which this does not model). Marni (`FUN_004462e0`,
 /// `TransObject`) then colours a corner
-/// `min(255, sum_i (door_lc >> 4) * max(0, door_ll_i . (M n)))` with `n` the
-/// unit normal and no ambient: the back colour never reaches Marni. A source
-/// here adds `max(0, -(C R n) . (C dir) / 4096) * colour * 255 / 128` for the
-/// camera `C` and part rotation `R`, so each `door_ll` row goes through
-/// `C`'s transpose, negated and scaled by `(door_lc >> 4) / 128` at a colour
-/// of `0x80`: `Marni` draws a corner's colour doubled, as it does a body's,
-/// whose `0x80` is full.
-pub fn re2_door_light(camera: &Camera) -> EntityLight {
+/// `min(255, ambient + sum_i (door_lc >> 4) * max(0, l_i . n))` with `n` the
+/// unit normal, and multiplies it by the part's `0x80` doubled, which leaves
+/// it as it is. The back colour `Door_Trans` sets never reaches Marni, whose
+/// ambient is the one the last `Set_light` left (`0x4C05AD`: the camera's
+/// LIT ambient), so a door is lit over the ambient of the camera it was
+/// entered from. The rows `l_i` meet the normal through `M` mirrored in Y,
+/// `door_ll * S M S` with `S = diag(1, -1, 1)`: room 108's stairs door, a
+/// part turned about Z, draws its treads that way and only that way.
+///
+/// A source here adds `max(0, -(C R n) . (S C S dir) / 4096) * colour * 255
+/// / 128` for the camera `C` and part rotation `R` (with the vertices' Y
+/// flip on the normal), which is `door_ll_i . (S C R S n)` scaled when `dir`
+/// is the row through `C`'s transpose with its Y negated, scaled by
+/// `(door_lc >> 4) / 255` at a colour of `0x80`.
+pub fn re2_door_light(camera: &Camera, ambient: [u8; 3]) -> EntityLight {
     use crate::door2::vm::{COLOUR_MATRIX, LIGHT_MATRIX};
     let view = stored_camera_matrix(camera.from, camera.look_at);
     EntityLight {
-        ambient: [0.0; 3],
+        ambient: ambient.map(f64::from),
         sources: std::array::from_fn(|light| {
-            let scale = f64::from(COLOUR_MATRIX[0][light] >> 4) / 128.0;
+            let scale = f64::from(COLOUR_MATRIX[0][light] >> 4) / CHANNEL_MAX;
             let row = LIGHT_MATRIX[light];
             EntityLightSource {
                 dir: std::array::from_fn(|axis| {
@@ -2712,12 +2720,26 @@ pub fn re2_door_light(camera: &Camera) -> EntityLight {
                         .map(|k| f64::from(view[k][axis]) * f64::from(row[k]))
                         .sum::<f64>()
                         / 4096.0;
-                    (-world * scale).round() as i32
+                    let sign = if axis == 1 { 1.0 } else { -1.0 };
+                    (sign * world * scale).round() as i32
                 }),
                 color: [0x80; 3],
             }
         }),
     }
+}
+
+/// The ambient an RE2 door is lit over: the ambient `room`'s current camera
+/// lights with ([`re2_door_light`]), on the 0..255 scale.
+pub fn re2_door_ambient(room: &RoomState) -> [u8; 3] {
+    let lighting = Lighting::from_room(room);
+    if !lighting.is_re2() {
+        return [0; 3];
+    }
+    lighting
+        .latched([0; 3])
+        .ambient
+        .map(|channel| channel.clamp(0.0, CHANNEL_MAX) as u8)
 }
 
 /// The light of a full-bright door part: an ambient of 255 and no sources,
@@ -2768,6 +2790,8 @@ pub struct DoorScene {
     /// The drawing orders RE2's door light shades ([`re2_door_light`]); the
     /// others draw full-bright, as every RE1 door does.
     lit: u32,
+    /// The lit orders' ambient ([`crate::door::vm::Frame::ambient`]).
+    ambient: [u8; 3],
 }
 
 /// `mesh` with direct UVs and CLUT row: the door TIM is one 128x256 page
@@ -2821,6 +2845,7 @@ impl DoorScene {
             joints,
             hidden,
             lit,
+            ambient: frame.ambient,
         }
     }
 
@@ -2846,7 +2871,10 @@ impl DoorScene {
         };
         [
             mesh(self.hidden | self.lit, FULL_BRIGHT_LIGHT),
-            mesh(self.hidden | !self.lit, re2_door_light(&self.camera)),
+            mesh(
+                self.hidden | !self.lit,
+                re2_door_light(&self.camera, self.ambient),
+            ),
         ]
     }
 
@@ -8723,10 +8751,13 @@ mod tests {
             [0; 3],
             crate::door2::vm::FOCAL_LENGTH,
         );
-        let light = re2_door_light(&camera);
-        assert_eq!(light.ambient, [0.0; 3]);
+        let ambient = [63, 63, 73];
+        let light = re2_door_light(&camera, ambient);
+        assert_eq!(light.ambient, [63.0, 63.0, 73.0]);
         let stored = stored_camera_matrix(camera.from, camera.look_at);
-        for rotation in [[0, 0, 0], [0, 1024, 0], [300, -700, 90]] {
+        // Room 108's stairs part is turned about Z (`[[3802, 1520, 0],
+        // [-1520, 3802, 0], [0, 0, 4095]]`), which the mirror tells apart.
+        for rotation in [[0, 0, 0], [0, 1024, 0], [0, 0, 250], [300, -700, 90]] {
             let world = anim::rotation_matrix(rotation[0], rotation[1], rotation[2]);
             let draw_matrix = mul_matrix0(&stored, &world)
                 .map(|row| row.map(|entry| f32::from(entry as i16) / 4096.0));
@@ -8737,8 +8768,8 @@ mod tests {
                 [2896, -2896, 0],
             ] {
                 let shade = reference_vertex_shade(&stored, &draw_matrix, normal, &light, None);
-                // `door_ll * view * world`, applied to the normal the
-                // vertices' Y flip applies to as well.
+                // `door_ll * S M S` on the normal, `M` the view times the
+                // world.
                 let n = [
                     f64::from(normal[0]),
                     -f64::from(normal[1]),
@@ -8746,23 +8777,24 @@ mod tests {
                 ];
                 let composite = mul_matrix0(&stored, &world);
                 let view_normal: [f64; 3] = std::array::from_fn(|row| {
-                    (0..3)
+                    let sign = if row == 1 { -1.0 } else { 1.0 };
+                    sign * (0..3)
                         .map(|k| f64::from(composite[row][k]) * n[k])
                         .sum::<f64>()
                         / 4096.0
                 });
-                let expected = LIGHT_MATRIX
+                let lit = LIGHT_MATRIX
                     .iter()
                     .map(|row| {
                         let l = (0..3)
                             .map(|k| f64::from(row[k]) * view_normal[k])
                             .sum::<f64>()
                             / (4096.0 * 4096.0);
-                        200.0 * l.max(0.0)
+                        100.0 * l.max(0.0)
                     })
-                    .sum::<f64>()
-                    .min(CHANNEL_MAX);
-                for channel in shade {
+                    .sum::<f64>();
+                for (channel, ambient) in shade.into_iter().zip(ambient) {
+                    let expected = (f64::from(ambient) + lit).min(CHANNEL_MAX);
                     assert!(
                         (channel.min(CHANNEL_MAX) - expected).abs() < 1.0,
                         "{rotation:?} {normal:?}: {channel} vs {expected}"
@@ -8770,6 +8802,35 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// The tread of room 108's stairs door (the part turned about Z, its
+    /// normal up) takes only the ambient and the second light, where the
+    /// riser in front of it takes the first two.
+    #[test]
+    fn the_stairs_treads_are_lit_by_the_mirrored_rows() {
+        let camera = Camera::from_points(
+            crate::door2::vm::CAMERA_FROM,
+            [0; 3],
+            crate::door2::vm::FOCAL_LENGTH,
+        );
+        let light = re2_door_light(&camera, [0; 3]);
+        let stored = stored_camera_matrix(camera.from, camera.look_at);
+        let world = [[3802, 1520, 0], [-1520, 3802, 0], [0, 0, 4095]];
+        let draw_matrix = mul_matrix0(&stored, &world)
+            .map(|row| row.map(|entry| f32::from(entry as i16) / 4096.0));
+        let shade = |normal| reference_vertex_shade(&stored, &draw_matrix, normal, &light, None)[0];
+        // The unmirrored rows gave the tread 165 and the riser 74.
+        assert!(
+            (shade([0, -4096, 0]) - 47.0).abs() < 1.5,
+            "{}",
+            shade([0, -4096, 0])
+        );
+        assert!(
+            (shade([4096, 0, 0]) - 104.0).abs() < 1.5,
+            "{}",
+            shade([4096, 0, 0])
+        );
     }
 
     /// RE2 dots a part's normals with `llMatrix * Workm`, with no camera in

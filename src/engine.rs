@@ -615,6 +615,7 @@ pub fn run_with_options(
                             &record,
                             &request,
                             loaded.id,
+                            render::re2_door_ambient(&loaded.room),
                             &transition::Fade::inactive(),
                         )?);
                     }
@@ -5142,8 +5143,14 @@ impl GameSession {
             let record = self.game.transition_door.take().unwrap_or_default();
             let door_yield = self.game.door_yield.take();
             if self.transition.is_none() {
-                let mut mode =
-                    start_transition(pack, &record, &transition, self.loaded.id, &self.room_fade)?;
+                let mut mode = start_transition(
+                    pack,
+                    &record,
+                    &transition,
+                    self.loaded.id,
+                    render::re2_door_ambient(&self.loaded.room),
+                    &self.room_fade,
+                )?;
                 // `room_transition_load` runs `load_room_sfx` (DoorSystem.cpp,
                 // before `door_system_load_data`) ahead of the animation's
                 // first cue, on either kind of record.
@@ -15903,18 +15910,21 @@ const RE2_SOUND_HOLD_TICKS: u8 = 90;
 
 /// Start a transition for `record`'s destination: resolve and parse its
 /// `.dor`, create the VM and load the destination room behind the black.
+/// `ambient` is the light of the camera the door leaves
+/// ([`render::re2_door_ambient`]).
 fn start_transition(
     pack: &Pack,
     record: &game::Door,
     transition: &game::RoomTransition,
     source: RoomId,
+    ambient: [u8; 3],
     fade: &transition::Fade,
 ) -> Result<TransitionMode> {
     let camera_only = record.camera & 0x80 != 0;
     let silent = record.camera & 0x40 != 0;
     let entry_camera = record.camera & 0x3F;
     let animation = if record.re2.is_some() {
-        load_re2_door_animation(pack, record)
+        load_re2_door_animation(pack, record, ambient)
     } else {
         load_door_animation(pack, record, entry_camera)
     };
@@ -15996,8 +16006,9 @@ fn load_door_animation(pack: &Pack, record: &game::Door, entry_camera: u8) -> Do
 }
 
 /// An RE2 door's DO2 from the pack: its `door_type` holds the file, its
-/// `direction` the door type its script reads.
-fn load_re2_door_animation(pack: &Pack, record: &game::Door) -> DoorAnimation {
+/// `direction` the door type its script reads. `ambient` is the leaving
+/// camera's ([`render::re2_door_ambient`]).
+fn load_re2_door_animation(pack: &Pack, record: &game::Door, ambient: [u8; 3]) -> DoorAnimation {
     let path = door2::entry(record.door_type);
     let bytes = match pack.read(&path) {
         Ok(bytes) => bytes,
@@ -16018,6 +16029,7 @@ fn load_re2_door_animation(pack: &Pack, record: &game::Door) -> DoorAnimation {
         door2::vm::DoorParams {
             kind: record.direction,
             door: record.door_type,
+            ambient,
         },
     );
     DoorAnimation::new_re2(do2, vm, door_bank(pack, record.door_type))
@@ -16287,7 +16299,14 @@ pub fn simulate_do2(
         .read(&path)
         .with_context(|| format!("reading {path}"))?;
     let do2 = door2::parse(&bytes).with_context(|| format!("parsing {path}"))?;
-    let vm = door2::vm::Vm::new(&do2, door2::vm::DoorParams { kind, door: id });
+    let vm = door2::vm::Vm::new(
+        &do2,
+        door2::vm::DoorParams {
+            kind,
+            door: id,
+            ..Default::default()
+        },
+    );
     let mut transition =
         transition::Transition::new(DoorAnimation::new_re2(do2, vm, door_bank(pack, id)))
             .with_load(true, false)
@@ -16455,6 +16474,7 @@ fn simulate_door_with(
         &record,
         &request,
         loaded.id,
+        render::re2_door_ambient(&loaded.room),
         &transition::Fade::inactive(),
     )?;
     let mut mixer: Option<Mixer> = None;
@@ -17021,6 +17041,7 @@ fn simulate_loaded_with(
                 &record,
                 &request,
                 loaded.id,
+                render::re2_door_ambient(&loaded.room),
                 &transition::Fade::inactive(),
             )?);
         }

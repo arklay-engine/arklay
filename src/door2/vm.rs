@@ -87,6 +87,8 @@ pub struct DoorParams {
     pub kind: u8,
     /// The DO2 id (variable `0x0F`).
     pub door: u8,
+    /// The ambient of the camera the door leaves ([`Frame::ambient`]).
+    pub ambient: [u8; 3],
 }
 
 /// What a handler tells the scheduler.
@@ -143,6 +145,8 @@ pub struct Vm {
     procedures: Vec<usize>,
     mesh: Tmd,
     door: u8,
+    /// [`DoorParams::ambient`].
+    ambient: [u8; 3],
     tasks: [Task; TASK_COUNT],
     parts: [Part; PART_COUNT],
     vars: [i16; VARIABLE_COUNT],
@@ -169,6 +173,7 @@ impl Vm {
             procedures: do2.procedures.clone(),
             mesh: do2.mesh.clone(),
             door: params.door,
+            ambient: params.ambient,
             tasks: Default::default(),
             parts: [Part::default(); PART_COUNT],
             vars: [0; VARIABLE_COUNT],
@@ -267,6 +272,7 @@ impl Vm {
             frame: self.frame,
             hold: 0,
             black: !self.drawn,
+            ambient: self.ambient,
         }
     }
 
@@ -1014,7 +1020,14 @@ mod tests {
         let first = [model_set(0, 0x800, [10, 0, 0]), vec![0x01, 0x00]].concat();
         let second = [model_set(1, 0, [20, 0, 0]), vec![0x01, 0x00]].concat();
         for (kind, part) in [(0u8, 0usize), (1, 1)] {
-            let mut vm = Vm::new(&do2(&[main, &first, &second]), DoorParams { kind, door: 3 });
+            let mut vm = Vm::new(
+                &do2(&[main, &first, &second]),
+                DoorParams {
+                    kind,
+                    door: 3,
+                    ..DoorParams::default()
+                },
+            );
             let frame = vm.step();
             assert_eq!(frame.orders[part].flags, 0x8001, "variant {kind}");
             assert_eq!(frame.orders[1 - part].flags, 0);
@@ -1034,7 +1047,14 @@ mod tests {
         ]
         .concat();
         let shading = |door| {
-            let mut vm = Vm::new(&do2(&[&main]), DoorParams { kind: 0, door });
+            let mut vm = Vm::new(
+                &do2(&[&main]),
+                DoorParams {
+                    kind: 0,
+                    door,
+                    ..DoorParams::default()
+                },
+            );
             vm.step().orders[..3]
                 .iter()
                 .map(|order| order.shading)
@@ -1065,6 +1085,7 @@ mod tests {
             DoorParams {
                 kind: 0,
                 door: 0x2D,
+                ..DoorParams::default()
             },
         );
         assert!(vm.step().camera.near_clip);

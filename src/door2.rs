@@ -19,7 +19,8 @@
 //! procedure list (a `u16` offset table, then the procedures). The mesh is an
 //! RE2 MD1 (one object per triangle/quad pair, parsed by
 //! [`crate::emd2::parse_md1`]) and the texture a 128x256 8bpp TIM with one
-//! 256-colour CLUT row, decoded by [`crate::tim::decode_8bpp`].
+//! 256-colour CLUT row, decoded by [`crate::tim::decode_8bpp_widened`] as a
+//! room object's is.
 
 pub mod vab;
 pub mod vm;
@@ -139,7 +140,10 @@ pub fn parse(data: &[u8]) -> Result<Do2> {
         })
         .collect();
     let mesh = emd2::parse_md1(&block[mesh_at..texture_at]).context("DO2 mesh")?;
-    let texture = tim::decode_8bpp(&block[texture_at..]).context("DO2 texture")?;
+    // A door's texels are `8v + 7`, as a room object's are: the original's
+    // door frames are lit over that, not over `v * 255 / 31`.
+    let texture =
+        tim::decode_8bpp_widened(&block[texture_at..], tim::Widen::Seven).context("DO2 texture")?;
     Ok(Do2 {
         sounds,
         vab,
@@ -153,6 +157,33 @@ pub fn parse(data: &[u8]) -> Result<Do2> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A DO2 of no sounds, the one-program bank, a procedure that ends, the
+    /// fixture MD1 and a TIM whose entry `i` is BGR555 `i`.
+    fn do2_file() -> Vec<u8> {
+        let mut data = vec![0xFF; VAB_OFFSET];
+        data.extend(vab::tests::vab([0; 16]));
+        let base = (data.len() + 8).next_multiple_of(BLOCK_ALIGN);
+        data.resize(base, 0);
+        let scripts = [2u8, 0, 0x01, 0x00];
+        let md1 = crate::emd2::tests::md1();
+        let mesh_at = BLOCK_HEADER_LEN + scripts.len();
+        let texture_at = mesh_at + md1.len();
+        data.extend((mesh_at as u32).to_le_bytes());
+        data.extend((texture_at as u32).to_le_bytes());
+        data.extend(scripts);
+        data.extend(md1);
+        data.extend(crate::emd2::tests::tim(4, 1, 1, |x, _| x as u8));
+        data
+    }
+
+    #[test]
+    fn a_doors_texels_are_eight_times_the_level_plus_seven() {
+        let do2 = parse(&do2_file()).unwrap();
+        assert_eq!(do2.texture.palette(0, 0), [0, 0, 0, 255]);
+        assert_eq!(do2.texture.palette(0, 1), [15, 0, 0, 255]);
+        assert_eq!(do2.texture.palette(0, 0x1F), [255, 0, 0, 255]);
+    }
 
     #[test]
     fn shared_doors_take_the_bank_door_load_picks() {
