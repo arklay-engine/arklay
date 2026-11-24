@@ -461,11 +461,14 @@ CONFIG_OVERRIDES: dict[str, str] = {}
 def write_config(game: Path, tree: Path, sound: bool) -> None:
     settings = (game / "config.ini").read_text(errors="replace")
     # A fixed config: no dialogs or sound device to wait on, none of Classic
-    # Rebirth's optional gameplay changes, no optional art.
+    # Rebirth's optional gameplay changes, no optional art. The colour mode and
+    # the mixing rate are the stored references': with `ColorMode = legacy` every
+    # frame is about 5 levels brighter.
     fixed = {
         "BootConfig": "0", "MovieEnable": "0", "DirectSoundEnable": "1" if sound else "0",
         "QuickturnEnable": "0", "TacticalReloadEnable": "0", "AutoAimEnable": "0",
         "CutsceneSkip": "0", "DebugMode": "0", "FocusIgnore": "1",
+        "ColorMode": "full", "SoundFrequency": "44100",
     } | CONFIG_OVERRIDES
     lines = []
     present = set()
