@@ -2460,6 +2460,18 @@ struct GameSession {
     /// RE2's films play (the original's `MovieEnable == 0`): on for the
     /// interactive window, off for traces and captures, as the oracle runs.
     films: bool,
+    /// A script's films (`trace_start`'s `film_pads`), for a recording made
+    /// with the films on: each room film plays to its end in no traced tick,
+    /// over the next count's `Pad_set`s. Under a film the original's ticks
+    /// stand still (`WinMain` runs `Movie` in place of `Psx_main`), and only
+    /// the film's own `Pad_set` (`0x4CAFB3`) runs, on the wall clock.
+    film_pads: Option<std::collections::VecDeque<u32>>,
+    /// The film [`Self::film_pads`] plays this tick, with its `Pad_set`s:
+    /// it ends after the tick's `Swap_Cbuff`.
+    instant_film: Option<u32>,
+    /// Set as [`Self::instant_film`] ends: the script driver's pad latch
+    /// forgets what is held, as the film's `Pad_set`s saw nothing held.
+    film_ended: bool,
     transition: Option<TransitionMode>,
     transition_finished: bool,
     /// The ground/scripted item pick-up viewer. It is engine-driven because
@@ -3308,6 +3320,9 @@ impl GameSession {
             re2_music_closed: [false; 3],
             re2_sub_full: [None; 2],
             films: false,
+            film_pads: None,
+            instant_film: None,
+            film_ended: false,
             transition: None,
             transition_finished: false,
             pickup_view: None,
@@ -3824,6 +3839,23 @@ impl GameSession {
         let load = swap_cbuff_view(&mut self.game, self.tick_cut, now, screen);
         if load {
             self.present_skip.movie_set(transition::RE2_CUT_LOAD_FRAMES);
+        }
+        // A script's film plays now, with no frame counted down under it, and
+        // its `Pad_set`s see nothing held, as the recorder feeds them: the
+        // repeat steps with each, and the key word ends clear, so a key held
+        // through the film is pressed anew on the next tick (`Key_trg`).
+        if let Some(pads) = self.instant_film.take() {
+            for _ in 0..pads {
+                self.game.pad_repeat.step(0);
+            }
+            if pads > 0 {
+                self.game.re2.set_key(0);
+                self.film_ended = true;
+            }
+            self.end_re2_movie();
+            // The film's last pass leaves the screen held, as the window's does.
+            self.present_held = true;
+            return;
         }
         // While a film plays `WinMain` doesn't count `Movie_idx` down.
         if self.movie.is_some() && self.game.is_re2_room && script.is_none() && !load {
@@ -5160,6 +5192,13 @@ impl GameSession {
                 }
             }
         }
+        // A script's film (`film_pads`) plays after this tick's `Swap_Cbuff`
+        // whatever else the tick asked for: `WinMain` runs `Movie` before the
+        // next `Psx_main`, a door's included. Only a room tick's scripts ask
+        // for one: no RE2 room's init runs `movie_on`.
+        if self.film_pads.is_some() && self.game.re2.film.take().is_some() {
+            self.instant_film = Some(self.next_film_pads());
+        }
         // A script's `movie_on` request takes over after this tick: the film
         // owns the next tick and the game sounds pause until it ends. A
         // pending door transition wins and leaves the request for after it.
@@ -5748,17 +5787,64 @@ impl GameSession {
         Ok(())
     }
 
+    /// `SsInit2`: each group the close marked starts again from its first
+    /// sample while the music is on and its fade isn't running; false with
+    /// the music off.
+    fn re2_sound_init(&mut self) -> bool {
+        let music = self.game.re2_music_place().system & 0x2000 == 0;
+        let Some(mixer) = self.music.as_mut().filter(|_| music) else {
+            return false;
+        };
+        let groups: [&[usize]; 3] = [&[0, 1, 2], &[3], &[4]];
+        for (sequence, channels) in groups.into_iter().enumerate() {
+            if !self.re2_music_closed[sequence] || self.game.re2.music.fading(sequence) {
+                continue;
+            }
+            self.re2_music_closed[sequence] = false;
+            for &index in channels {
+                let channel = self.game.re2.music.channels[index];
+                if channel.track.is_some() {
+                    mixer.restart_bgm_channel(index);
+                    if let Some(sub) = index.checked_sub(3) {
+                        self.re2_sub_full[sub] = Some(channel.volume);
+                    }
+                }
+            }
+        }
+        true
+    }
+
     /// `Movie()`'s last state: `Movie_r0 = 0`, `SsInit2`, `fg_system &=
     /// ~0x200` and `Movie_set(1)`. Its last pass flips a cleared frame, which
     /// the held frame after it keeps on screen. `Bg_set_mode` from the film's
     /// attribute byte gives the room's own mode for every film a room plays
     /// but room 700's, which isn't modelled.
     fn end_re2_movie(&mut self) {
+        // `BYTE_0098f07b = 0` (`0x4CB213`): a pending cut load is dropped.
+        self.game.re2.bg_load = false;
         self.game
             .re2
             .set_flag(0, crate::scd2::host::FG_SYSTEM_MOVIE, 0);
-        self.game.re2.sound_init = true;
+        // `SsInit2` runs now, before the next tick (a door's too), once
+        // `movie_on`'s close has: a close still to run (it needs the pack)
+        // runs it after itself.
+        if self.game.re2.sound_close.is_some() {
+            self.game.re2.sound_init = true;
+        } else if self.re2_sound_init() {
+            self.re2_hold_sub_full();
+        }
         self.present_skip.movie_set_black(1);
+    }
+
+    /// The next of [`Self::film_pads`]'s counts. A list that has run out is
+    /// warned of (the reference names fewer films than the run plays), and
+    /// the film then takes no `Pad_set`.
+    fn next_film_pads(&mut self) -> u32 {
+        let next = self.film_pads.as_mut().and_then(|pads| pads.pop_front());
+        if next.is_none() {
+            crate::warning!("warning: a film played with no count left in film_pads");
+        }
+        next.unwrap_or(0)
     }
 
     /// `SsClose` and `SsInit2`, which `movie_on` and a film's end ask for.
@@ -5802,28 +5888,15 @@ impl GameSession {
                 }
             }
         }
-        if std::mem::take(&mut self.game.re2.sound_init) {
-            let music = self.game.re2_music_place().system & 0x2000 == 0;
-            let Some(mixer) = self.music.as_mut().filter(|_| music) else {
-                return;
-            };
-            let groups: [&[usize]; 3] = [&[0, 1, 2], &[3], &[4]];
-            for (sequence, channels) in groups.into_iter().enumerate() {
-                if !self.re2_music_closed[sequence] || self.game.re2.music.fading(sequence) {
-                    continue;
-                }
-                self.re2_music_closed[sequence] = false;
-                for &index in channels {
-                    let channel = self.game.re2.music.channels[index];
-                    if channel.track.is_some() {
-                        mixer.restart_bgm_channel(index);
-                        if let Some(sub) = index.checked_sub(3) {
-                            self.re2_sub_full[sub] = Some(channel.volume);
-                        }
-                    }
-                }
-            }
+        if std::mem::take(&mut self.game.re2.sound_init) && !self.re2_sound_init() {
+            return;
         }
+        self.re2_hold_sub_full();
+    }
+
+    /// A sub `SsInit2` started plays at full level until the music next sets
+    /// its volume: the restart's `SsSetVol` takes a stale index.
+    fn re2_hold_sub_full(&mut self) {
         for (sub, full) in self.re2_sub_full.iter_mut().enumerate() {
             let volume = self.game.re2.music.channels[3 + sub].volume;
             if full.is_some_and(|level| level != volume) {
@@ -8846,6 +8919,7 @@ impl GameSession {
         // `Snd_se_call` goes on through a door, so the music fades.
         if self.game.is_re2_room {
             bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
+            self.re2_hold_sub_full();
         }
         let Some(mut session) = self.transition.take() else {
             return;
@@ -39545,7 +39619,10 @@ off_0010:
             assert!(ticks < 100, "the film ends");
         }
         assert!(!session.game.re2.flag(0, FG_SYSTEM_MOVIE));
-        assert!(session.game.re2.sound_init, "SsInit2 after the film");
+        assert!(
+            !session.game.re2.sound_init,
+            "SsInit2 ran as the film ended"
+        );
         assert!(
             session.present_held && session.present_skip.black(),
             "the film's last pass shows black"
@@ -39555,6 +39632,81 @@ off_0010:
             0,
             "Movie_set(1), then WinMain's decrement"
         );
+    }
+
+    /// A script's film (`film_pads`) plays to its end after the tick's
+    /// `Swap_Cbuff`, in no traced tick: 0x200 comes down, the sound opens
+    /// again, `Movie_set(1)` is left for the next tick to count down, a
+    /// pending cut load is dropped, and the film's `Pad_set`s leave the pad
+    /// with nothing held, so a key still down reads as a new press.
+    #[test]
+    fn a_script_s_film_plays_in_no_traced_tick() {
+        use crate::scd2::host::FG_SYSTEM_MOVIE;
+        const CONFIRM: u16 = 0x1000;
+        let (_dir, _pack, mut session) = re2_film_session(&[]);
+        session.game.pad_repeat.step(crate::game::pad_repeat::UP);
+        session.game.re2.set_key(CONFIRM);
+        session.game.re2.set_key(CONFIRM);
+        assert_eq!(session.game.re2.key_trg, 0, "held, not pressed");
+        session.game.re2.set_flag(0, FG_SYSTEM_MOVIE, 1);
+        session.game.re2.movie_set = Some(2);
+        session.game.re2.bg_load = true;
+        session.instant_film = Some(3);
+        session.swap_cbuff();
+        assert!(session.instant_film.is_none());
+        assert!(session.film_ended, "the driver forgets what is held");
+        assert!(!session.game.re2.flag(0, FG_SYSTEM_MOVIE));
+        assert!(
+            !session.game.re2.sound_init,
+            "SsInit2 ran as the film ended"
+        );
+        assert!(!session.game.re2.bg_load, "BYTE_0098f07b = 0");
+        assert_eq!(
+            session.present_skip.left(),
+            1,
+            "Movie_set(1), not counted yet"
+        );
+        assert!(session.present_held && session.present_skip.black());
+        session.game.pad_repeat.step(crate::game::pad_repeat::UP);
+        assert!(
+            session.game.pad_repeat.trace().starts_with("1,"),
+            "pressed anew"
+        );
+        session.game.re2.set_key(CONFIRM);
+        assert_eq!(session.game.re2.key_trg, CONFIRM, "Key_trg anew");
+    }
+
+    /// Each of a script's films takes the next count on the tick that asks
+    /// for it, and a film past the list warns and takes none.
+    #[test]
+    fn a_script_s_films_take_the_counts_in_turn() {
+        use crate::scd2::host::FG_SYSTEM_MOVIE;
+        let (_dir, pack, mut session) = re2_film_session(&[]);
+        session.films = true;
+        session.film_pads = Some(vec![4, 2].into());
+        let left = |session: &GameSession| session.film_pads.as_ref().map(|pads| pads.len());
+        let film = |session: &mut GameSession| {
+            session.game.re2.set_flag(0, FG_SYSTEM_MOVIE, 1);
+            session.game.re2.film = Some(10);
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            assert!(session.game.re2.film.is_none());
+            assert!(!session.game.re2.flag(0, FG_SYSTEM_MOVIE), "it ended");
+            assert!(session.movie.is_none(), "no film is decoded");
+        };
+        film(&mut session);
+        assert_eq!(left(&session), Some(1));
+        film(&mut session);
+        assert_eq!(left(&session), Some(0));
+        let warnings = crate::logging::warnings_since(0).0;
+        session.film_ended = false;
+        film(&mut session);
+        assert!(
+            crate::logging::warnings_since(0).0 > warnings,
+            "the list ran out"
+        );
+        assert!(!session.film_ended, "no Pad_set saw the keys clear");
     }
 
     #[test]
@@ -39590,6 +39742,10 @@ off_0010:
         session.end_re2_movie();
         assert!(session.movie.is_none());
         assert!(!session.game.re2.flag(0, FG_SYSTEM_MOVIE));
+        assert!(!session.game.re2.sound_init, "SsInit2 ran");
+        // A close still to run runs the init after itself.
+        session.game.re2.sound_close = Some(0);
+        session.end_re2_movie();
         assert!(session.game.re2.sound_init);
     }
 
@@ -39644,6 +39800,34 @@ off_0010:
         session.game.re2.music.channels[4].volume = 65;
         session.re2_sound_close_and_init(&pack);
         assert_eq!(session.re2_sub_full, [None, None]);
+    }
+
+    /// A film's end runs `SsInit2` at once, before the next tick (a door's
+    /// too): the sub it starts plays at full level from then.
+    #[test]
+    fn a_film_s_end_starts_the_marked_music_at_once() {
+        let (_dir, _pack, mut session) = re2_film_session(&[]);
+        let mut mixer = Mixer::capture();
+        let samples: Vec<i16> = (0..4096).map(|n| (n % 64) as i16 * 100).collect();
+        mixer.load_bgm_channel(
+            4,
+            audio::Wav::from_s16(&samples, 1, audio::SAMPLE_RATE),
+            true,
+        );
+        mixer.set_bgm_channel_volume(4, 0.25);
+        session.game.re2.music.channels[4].track = Some(3);
+        session.game.re2.music.channels[4].volume = 65;
+        session.re2_music_closed = [false, false, true];
+        session.music = Some(mixer);
+        session.end_re2_movie();
+        assert!(!session.game.re2.sound_init);
+        let mixer = session.music.as_ref().unwrap();
+        assert!(mixer.bgm_channel_playing(4));
+        assert_eq!(
+            mixer.bgm_channel_gain(4),
+            Some(crate::sfx::volume_gain(0)),
+            "full level"
+        );
     }
 
     #[test]

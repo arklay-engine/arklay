@@ -718,6 +718,14 @@ impl Driver {
         {
             return Err(self.stop_on_quit());
         }
+        // A script's film (`film_pads`) ends with nothing held, as its
+        // `Pad_set`s saw: a key held through it is pressed anew on the next
+        // tick, the port's own (START, the map) as well as the game's.
+        if let Mode::Play(session) = &mut app.mode
+            && std::mem::take(&mut session.film_ended)
+        {
+            self.input.held = 0;
+        }
         // Films never play: the frames stay deterministic and audio-free, as
         // in a trace, and a film chain (the ending's) runs on to what follows
         // it. An attached bot sees them and skips them as a player would, as
@@ -1797,20 +1805,32 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                 let sound: Option<bool> = options.get("sound")?;
                 let voice_ticks: Option<Vec<u32>> = options.get("voice_ticks")?;
                 let sound_wav: Option<String> = options.get("sound_wav")?;
+                let film_pads: Option<Vec<u32>> = options.get("film_pads")?;
                 options.finish()?;
                 driver.close_trace().map_err(engine_error)?;
                 let screen = driver
                     .app
                     .as_ref()
                     .is_some_and(|app| !matches!(app.mode, Mode::Boot | Mode::Play(_)));
-                if sound.unwrap_or(false) || voice_ticks.is_some() || sound_wav.is_some() {
+                if sound.unwrap_or(false)
+                    || voice_ticks.is_some()
+                    || sound_wav.is_some()
+                    || film_pads.is_some()
+                {
                     let app = driver.app()?;
                     let Mode::Play(session) = &mut app.mode else {
                         return Err(mlua::Error::RuntimeError(
-                            "trace_start: sound, voice_ticks and sound_wav need a game session"
+                            "trace_start: sound, voice_ticks, sound_wav and film_pads need a game session"
                                 .into(),
                         ));
                     };
+                    if let Some(pads) = film_pads {
+                        // The session's flag reaches the scripts as each tick
+                        // starts; an authored rerun before then sees it too.
+                        session.films = true;
+                        session.game.re2.films = true;
+                        session.film_pads = Some(pads.into());
+                    }
                     session.sound_device |= sound.unwrap_or(false);
                     if let Some(ticks) = voice_ticks {
                         session.game.re2.voice_ticks = ticks.into();
@@ -2046,6 +2066,21 @@ mod tests {
         driver.trace = Some(trace(&dir, false, None));
         driver.tick().unwrap();
         assert!(!play_session(&mut driver).voice_cache.unpaced);
+    }
+
+    /// A script's film ends with nothing held: the next tick takes a key held
+    /// through it as a press, the port's own as well.
+    #[test]
+    fn a_key_held_through_a_script_s_film_is_pressed_anew() {
+        let dir = TempDir::new();
+        let mut driver = playing_driver(&dir, false);
+        driver.held = 1;
+        driver.tick().unwrap();
+        assert_eq!(driver.input.held, 1, "the next tick's edge leaves it out");
+        play_session(&mut driver).film_ended = true;
+        driver.tick().unwrap();
+        assert!(!play_session(&mut driver).film_ended);
+        assert_eq!(driver.input.held, 0, "the next tick's edge has it");
     }
 
     /// Three traced ticks with a sound capture, then the escape's clear:

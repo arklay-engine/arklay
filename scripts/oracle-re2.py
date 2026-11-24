@@ -45,6 +45,10 @@ from pathlib import Path
 BREAK_PAD = 0x004D0F58
 # Classic Rebirth doesn't patch this code. Refuse to run if it isn't what we expect.
 BREAK_PAD_BYTES = bytes.fromhex("8B0D6C9E9800")  # MOV ECX,[fg_system]
+# Where `Movie` (the film's loop, which `WinMain` runs in place of `Psx_main` while a film plays) returns to from its
+# `Pad_set`, at `[esp + 0x14]` on `BREAK_PAD` (`Pad_set` has pushed five words by then).
+FILM_PAD_RETURN = 0x004CAFB8
+FILM_PAD_RETURN_AT = 0x14
 
 # `SsPlay`: traced for the sound effects each tick plays (`snd=`).
 BREAK_SOUND = 0x004338F0
@@ -1881,6 +1885,39 @@ class WindowsSession:
 Session = WindowsSession if WINDOWS else WineSession
 
 
+class FilmPads:
+    """With the films on (`--config MovieEnable=1`): the game's ticks stand still under a film, which runs on the
+    wall clock, so its `Pad_set`s are no ticks. The pad is clear, so it plays to its end. With the films off no stop
+    is one."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self.started = 0.0
+
+    def take(self, game: "Game", regs) -> bool:
+        """Whether this stop is a film's own `Pad_set`, which is counted and given a clear pad."""
+        if game.u32(regs.rsp + FILM_PAD_RETURN_AT) != FILM_PAD_RETURN:
+            return False
+        if not self.calls:
+            self.started = time.monotonic()
+        self.calls += 1
+        regs.rax = 0
+        return True
+
+    def ended(self, where: str, tick: int, pace: "Pace", tick_log) -> None:
+        """At the first stop after a film: say how many `Pad_set`s it took, and when it ran in the traced `tick`
+        (the one this stop ends), leave its time out of the pace on both sides."""
+        if not self.calls:
+            return
+        print(f"a film ran {self.calls} of its own Pad_sets {where}", flush=True)
+        self.calls = 0
+        if tick >= 0:
+            seconds = time.monotonic() - self.started
+            pace.film(seconds)
+            if tick_log:
+                tick_log.write(f"film {tick} {seconds:.4f}\n")
+
+
 def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: float = 0.0) -> None:
     """Record `args.ticks` ticks of play from the title route `args.start`, `args.difficulty` and `args.arrange`."""
     route = title_route(args.start, args.difficulty, args.arrange)
@@ -1916,8 +1953,14 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
             held_keys = 0
             settled = 0
             tick = -1  # The trace's tick, once play has begun.
+            films = FilmPads()
             while tick <= args.ticks:
                 tid, regs = game.run_to_break()
+                if films.take(game, regs):
+                    game.resume_from_break(tid, regs, original)
+                    continue
+                where = f"before tick {tick}" if tick >= 0 else f"before boot tick {boot_tick}"
+                films.ended(where, tick - 1 if tick > 0 else -1, pace, tick_log)
                 if music_log and music_state(game) != last_music:
                     last_music = music_state(game)
                     music_log.write(f"t={tick} boot={boot_tick} {last_music}\n")
@@ -2038,9 +2081,22 @@ def read_pace(path: Path) -> dict[int, float]:
     """A `--sound` recording's `.ticks` log: each traced tick and when it was reached, in seconds."""
     pace = {}
     for line in path.read_text().splitlines():
+        if line.startswith("film "):
+            continue
         tick, seconds = line.split()
         pace[int(tick)] = float(seconds)
     return pace
+
+
+def read_films(path: Path) -> dict[int, float]:
+    """A films-on recording's `.ticks` log's films: the tick each ran in (`film TICK SECONDS`) and how long it
+    took on the wall clock, which that tick's end includes."""
+    films = {}
+    for line in path.read_text().splitlines():
+        if line.startswith("film "):
+            _, tick, seconds = line.split()
+            films[int(tick)] = films.get(int(tick), 0.0) + float(seconds)
+    return films
 
 
 class Pace:
@@ -2059,7 +2115,11 @@ class Pace:
     record can only wait for the stored pace, not catch up with it, so the ticks let go late are counted: a
     voice line that ends in one of them may hold for a tick less than it did in the stored recording. A run
     that takes much longer than the ones before it (a room's load) is late too, and the ticks after it until
-    the record has caught up."""
+    the record has caught up.
+
+    A film (with the films on) runs on the wall clock inside its tick, in both recordings: the stored log's
+    films are taken out of its times, and this record's out of its own clock (`film`), so neither is waited
+    for nor counted as a run."""
 
     # Later than this is a tick's worth at the pace `import` gave.
     LATE = 0.25
@@ -2071,10 +2131,16 @@ class Pace:
         self.ticks = read_pace(Path(path)) if path else {}
         if path and not self.ticks:
             raise SystemExit(f"--pace: {path} holds no ticks")
+        self.films = read_films(Path(path)) if path else {}
+        # The stored times with the films up to each tick taken out, which the ticks between are worked out from.
+        self.free = {
+            tick: at - sum(seconds for film, seconds in self.films.items() if film <= tick)
+            for tick, at in self.ticks.items()
+        }
         self.clock = clock
         self.known = sorted(self.ticks)
         steps = sorted(
-            (self.ticks[after] - self.ticks[before]) / (after - before)
+            (self.free[after] - self.free[before]) / (after - before)
             for before, after in zip(self.known, self.known[1:])
         )
         self.step = steps[len(steps) // 2] if steps else 0.0
@@ -2090,19 +2156,27 @@ class Pace:
         self.latest = 0.0
 
     def time(self, tick: int) -> float:
-        """The stored time of `tick`'s end, or the one its neighbours in the log give it."""
-        if tick in self.ticks:
-            return self.ticks[tick]
+        """The stored time of `tick`'s end less the stored films' up to it, or the one its neighbours in the log
+        give it."""
+        if tick in self.free:
+            return self.free[tick]
         at = bisect.bisect_left(self.known, tick)
         if at == 0:
             first = self.known[0]
-            return self.ticks[first] - (first - tick) * self.step
+            return self.free[first] - (first - tick) * self.step
         before = self.known[at - 1]
         if at == len(self.known):
-            return self.ticks[before] + (tick - before) * self.step
+            return self.free[before] + (tick - before) * self.step
         after = self.known[at]
         part = (tick - before) / (after - before)
-        return self.ticks[before] + part * (self.ticks[after] - self.ticks[before])
+        return self.free[before] + part * (self.free[after] - self.free[before])
+
+    def film(self, seconds: float) -> None:
+        """A film of `seconds` ran in the tick whose end is the next `reached`: it's no wait and no run."""
+        if self.origin is not None:
+            self.origin += seconds
+        if self.released is not None:
+            self.released += seconds
 
     def reached(self, tick: int) -> None:
         """The break that ends `tick`."""
@@ -2112,7 +2186,7 @@ class Pace:
         if tick in self.ticks:
             self.shared += 1
             if self.origin is None:
-                self.origin = now - self.ticks[tick]
+                self.origin = now - self.time(tick)
 
     def run(self) -> float:
         """What a run takes here."""
@@ -2356,8 +2430,13 @@ def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
             pad = 0
             held_keys = 0
             tick = 0
+            films = FilmPads()
             while tick <= args.ticks:
                 tid, regs = game.run_to_break()
+                if films.take(game, regs):
+                    game.resume_from_break(tid, regs, original)
+                    continue
+                films.ended(f"before boot tick {tick}", tick - 1 if tick > 0 else -1, pace, tick_log)
                 # This stop is the end of the tick before it.
                 if tick > 0:
                     pace.reached(tick - 1)

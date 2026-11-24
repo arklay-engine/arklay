@@ -12,3 +12,36 @@ frames = [360, 999]
 frame_max_mean = 0.4
 expect = "match"
 record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 200 --no-enemies --keep-enemy 1"
+
+# The same scene with the films on (`--config MovieEnable=1`): the film plays in no tick of the trace, since the game
+# stands still under it, and its own `Pad_set`s (`ref.log` counts them) step the pad's repeat (oracle/re2.md, "Films").
+[[run]]
+name = "film_204_on"
+room = "204"
+setup_script = "film_204.lua"
+input = "film_204.txt"
+input_shift = 344
+ticks = 1000
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm1,snd,movie,fgroom,fgstat,prep"
+films_from_ref = true
+# the repeat's count before the first press is the boot's, whose films ran on the wall clock
+ignore = [[344, 359, "prep"]]
+expect = "match"
+record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 200 --no-enemies --keep-enemy 1 --config MovieEnable=1"
+
+# Room 700's area 2 (event 7) with the films on: its fade, film 12 (whose attribute byte has `0x40`: `Bg_set_mode(2, 0)`
+# after it) and what follows.
+[[run]]
+name = "film_700_on"
+room = "700"
+setup = { pos = [14500, 0, -1850], angle = 0, health = 200, rnd = 6114, camera = 0 }
+input = "film_700.txt"
+input_shift = 344
+ticks = 600
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,movie,fgroom,fgstat"
+films_from_ref = true
+# the warp's own load leaves `Movie_set`'s count on the first tick, which a setup starts after
+ignore = [[344, 344, "movie"]]
+frames = [346, 599]
+expect = "match"
+record = "--warp 700:14500:0:-1850:0 --life 200 --no-enemies --config MovieEnable=1"
