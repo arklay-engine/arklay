@@ -90,7 +90,7 @@ fn banks(
 
 /// Claire holding her handgun, as the title makes her.
 fn claire() -> PageModel {
-    PageModel::new(1, 3, Statics::default())
+    PageModel::new(1, 3, Statics::default(), HandgunFrame::default())
 }
 
 /// The model walked in, turned and settled, as state 0xB finds it.
@@ -126,7 +126,7 @@ fn the_statics_outlive_the_model() {
         row: 5,
         ..Statics::default()
     };
-    let model = PageModel::new(0, 2, statics);
+    let model = PageModel::new(0, 2, statics, HandgunFrame::default());
     assert_eq!(model.statics, statics);
     assert!(model.trace().ends_with(",2,1,0,140,7,3,2,5"));
 }
@@ -149,7 +149,7 @@ fn the_walk_in_starts_off_to_the_left_with_two_steps() {
     assert_eq!(model.body.pos[1..], PLACE[1..]);
     assert!(model.body.pos[0] > START_X);
     // Sherry starts nearer.
-    let mut sherry = PageModel::new(SHERRY, 0, Statics::default());
+    let mut sherry = PageModel::new(SHERRY, 0, Statics::default(), HandgunFrame::default());
     sherry.start(&assets);
     assert!(sherry.body.pos[0] > model.body.pos[0]);
 }
@@ -442,7 +442,7 @@ fn the_planting_keeps_the_drawn_foot_where_it_was() {
     let mut model = settled(&assets);
     model.work.routine = [1, MOVE_AIM, 3, 0];
     model.work.move_no = 0xB;
-    let chain = page_foot_chain(model.id, 3);
+    let chain = page_foot_chain(model.id, model.frames);
     model.demonstrate(&assets, ROW_FORWARD);
     let drawn = model.drawn_feet[0].unwrap();
     model.demonstrate(&assets, ROW_FORWARD);
@@ -463,7 +463,7 @@ fn a_later_option_visit_keeps_the_routine_and_motion_bytes() {
     let routine = first.work.routine;
     let motion = (first.work.move_no, first.work.move_cnt, first.work.hokan);
     // OPTION left and entered again: Leon this time, placed and facing.
-    let again = first.again(0, 2);
+    let again = first.again(0, 2, HandgunFrame::default());
     assert_eq!((again.id, again.work.kind), (0, 2));
     assert_eq!((again.body.pos, again.body.angle), (PLACE, FACING));
     assert_eq!(again.work.routine, routine);
@@ -502,23 +502,76 @@ fn the_statics_survive_as_two_words() {
 fn leons_alternates_hold_eights_handgun_and_its_frame() {
     assert_eq!(plw_holder(0xA, 2), 8);
     assert_eq!(plw_holder(8, 2), 8);
-    assert_eq!(plw_holder(0, 2), 0);
-    assert_eq!(plw_holder(0xA, 3), 0xA);
     // `0x4D3010`: the handgun's first byte is 0x85, or 0x03 for 8 and 0xA.
-    assert_eq!(page_frames(0, 2), [0x85, 0x87, 8]);
-    assert_eq!(page_frames(1, 3), [0x85, 0x87, 8]);
-    assert_eq!(page_frames(8, 2), [0x03, 0x87, 8]);
-    assert_eq!(page_frames(0xA, 2), [0x03, 0x87, 8]);
-    assert_eq!(page_foot_chain(0, 2), &AIM_FOOT_CHAIN);
-    assert_eq!(page_foot_chain(8, 2), &AIM_OTHER_FOOT_CHAIN);
-    assert_eq!(page_foot_chain(0xA, 2), &AIM_OTHER_FOOT_CHAIN);
+    let fresh = HandgunFrame::default();
+    assert_eq!(page_frames(2, fresh.equip(0, 2)), [0x85, 0x87, 8]);
+    assert_eq!(page_frames(3, fresh.equip(1, 3)), [0x85, 0x87, 8]);
+    assert_eq!(page_frames(2, fresh.equip(8, 2)), [0x03, 0x87, 8]);
+    assert_eq!(page_frames(2, fresh.equip(0xA, 2)), [0x03, 0x87, 8]);
+    let frames = |id| page_frames(2, fresh.equip(id, 2));
+    assert_eq!(page_foot_chain(0, frames(0)), &AIM_FOOT_CHAIN);
+    assert_eq!(page_foot_chain(8, frames(8)), &AIM_OTHER_FOOT_CHAIN);
+    assert_eq!(page_foot_chain(0xA, frames(0xA)), &AIM_OTHER_FOOT_CHAIN);
+}
+
+#[test]
+fn pl_weapon_ch_reads_each_characters_plw_from_its_holders_folder() {
+    // `0x4D2D20`: even Ids up to 0xA are Leon's (0), odd ones up to 9
+    // Claire's (1), the rest their own; 8 and 0xA hold 8's handgun.
+    for (id, holder) in [
+        (0, 0),
+        (1, 1),
+        (2, 0),
+        (3, 1),
+        (4, 0),
+        (5, 1),
+        (6, 0),
+        (7, 1),
+        (8, 0),
+        (9, 1),
+        (0xA, 0),
+        (0xB, 0xB),
+        (0xC, 0xC),
+        (0xD, 0xD),
+        (ADA, ADA),
+        (SHERRY, SHERRY),
+    ] {
+        assert_eq!(plw_holder(id, 3), holder, "id {id:#x}");
+    }
+    assert_eq!(plw_holder(8, 2), 8);
+    assert_eq!(plw_holder(0xA, 2), 8);
+    assert_eq!(plw_holder(4, 2), 0);
+    assert_eq!(plw_holder(0xB, 2), 0xB);
+}
+
+#[test]
+fn the_handguns_first_frame_carries_from_one_load_to_the_next() {
+    let fresh = HandgunFrame::default();
+    assert_eq!(fresh, HandgunFrame(0x85));
+    // 8 or 0xA's handgun, then Leon's: 0x03 ORed with 0x80.
+    let after = fresh.equip(8, 2).equip(0, 2);
+    assert_eq!(after, HandgunFrame(0x83));
+    assert_eq!(page_frames(2, after), [0x83, 0x87, 8]);
+    // Another weapon leaves it, and 0x83 stays.
+    assert_eq!(fresh.equip(0xA, 2).equip(0, 3), HandgunFrame(0x03));
+    assert_eq!(after.equip(1, 2), HandgunFrame(0x83));
+    // The tilt down after it comes past frame 3, on the foot of 0x80.
+    assert_eq!(page_foot_chain(0, page_frames(2, after)), &AIM_FOOT_CHAIN);
 }
 
 #[test]
 fn leons_alternates_tilt_down_past_frame_three() {
     let assets = assets(16, 40, 0);
-    for (id, ticks) in [(0, 6), (8, 4), (0xA, 4)] {
-        let mut model = PageModel::new(id, 2, Statics::default());
+    let fresh = HandgunFrame::default();
+    // Leon after 8 or 0xA loaded the handgun reads 0x83, and tilts as soon.
+    let after = fresh.equip(8, 2).equip(0, 2);
+    for (id, handgun, ticks) in [
+        (0, fresh.equip(0, 2), 6),
+        (8, fresh.equip(8, 2), 4),
+        (0xA, fresh.equip(0xA, 2), 4),
+        (0, after, 4),
+    ] {
+        let mut model = PageModel::new(id, 2, Statics::default(), handgun);
         model.work.routine = [1, MOVE_AIM, 0, 0];
         model.statics.row = ROW_AIM;
         model.statics.step = 2;

@@ -1537,6 +1537,48 @@ pub type Necks = [Option<[i32; 3]>; NECK_WORKS];
 /// fills 24).
 pub const NECK_WORKS: usize = 34;
 
+/// The folder `Pl_weapon_ch` (`0x4D2D20`) reads character `id`'s PLW for
+/// weapon `weapon` (`Type & 0xFFF`) from: Leon's for his alternates up to
+/// 0xA, Claire's for hers up to 9, and the rest their own. Leon's 8 and 0xA
+/// hold 8's handgun.
+pub fn plw_holder(id: u8, weapon: u8) -> u8 {
+    if matches!(id, 8 | 0xA) && weapon == 2 {
+        8
+    } else if id <= 0xA {
+        id & 1
+    } else {
+        id
+    }
+}
+
+/// The handguns' row's first byte of the table at `0x53A305` (`0x53A30B`):
+/// 0x85 in the executable's data. The end of `Pl_weapon_ch` rewrites it on
+/// every load of the handgun ([`Self::equip`]), and nothing puts it back,
+/// so it lasts as long as the process.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HandgunFrame(pub u8);
+
+impl Default for HandgunFrame {
+    fn default() -> Self {
+        Self(0x85)
+    }
+}
+
+impl HandgunFrame {
+    /// `0x4D3010`, at the end of `Pl_weapon_ch` for character `id` holding
+    /// `weapon`: the handgun ORs in 0x80, then Leon's 8 and 0xA make it 0x03.
+    #[must_use]
+    pub fn equip(self, id: u8, weapon: u8) -> Self {
+        if weapon != 2 {
+            self
+        } else if matches!(id, 8 | 0xA) {
+            Self(0x03)
+        } else {
+            Self(self.0 | 0x80)
+        }
+    }
+}
+
 /// What the player's `Type` and the inventory say about the held weapon.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Weapon {

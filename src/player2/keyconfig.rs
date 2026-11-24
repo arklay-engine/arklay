@@ -133,14 +133,14 @@ pub struct PageAssets {
 
 impl PageAssets {
     /// `Player_set` and `Pl_weapon_ch`'s files for character `id` holding
-    /// weapon `weapon` (`Type & 0xFFF`), from the character's disc or else
-    /// the other's.
-    pub fn load(pack: &crate::pack::Pack, id: u8, weapon: u8) -> anyhow::Result<Self> {
+    /// weapon `weapon` (`Type & 0xFFF`), from disc `disc`'s folder
+    /// (`fg_status` bit 31) or else the other's.
+    pub fn load(pack: &crate::pack::Pack, id: u8, weapon: u8, disc: u8) -> anyhow::Result<Self> {
         let read = |path: &dyn Fn(u8) -> String| {
-            [id & 1, !id & 1]
+            [disc & 1, !disc & 1]
                 .into_iter()
                 .find_map(|disc| pack.read(&path(disc)).ok())
-                .ok_or_else(|| anyhow::anyhow!("no {}", path(id & 1)))
+                .ok_or_else(|| anyhow::anyhow!("no {}", path(disc & 1)))
         };
         let pld = read(&|disc| format!("player/{id:02x}/model_{disc}.pld"))?;
         let holder = plw_holder(id, weapon);
@@ -161,24 +161,18 @@ impl PageAssets {
     }
 }
 
-/// Whose folder `Pl_weapon_ch` reads weapon `weapon`'s PLW from for
-/// character `id`: Leon's alternate 0xA holds 0x8's handgun.
-pub fn plw_holder(id: u8, weapon: u8) -> u8 {
-    if weapon == 2 && id == 0xA { 8 } else { id }
-}
-
-/// `DAT_0053A305`'s row for `Type & 0xFFF` `weapon` as the weapon's set-up
-/// (`0x4D3010`) leaves it for character `id`: the handgun's first byte is
-/// 0x85, but 0x03 for Leon's alternates 8 and 0xA, which plant the other
-/// foot and may tilt down past frame 3.
-pub fn page_frames(id: u8, weapon: u8) -> [u8; 3] {
+/// `DAT_0053A305`'s row for `Type & 0xFFF` `weapon`, the handgun's first
+/// byte as the process's loads of it left it ([`HandgunFrame`]): 0x03 after
+/// Leon's alternates 8 and 0xA, which plants the other foot and may tilt
+/// down past frame 3, and 0x83 after anyone else loads it again.
+pub fn page_frames(weapon: u8, handgun: HandgunFrame) -> [u8; 3] {
     let frames = Weapon {
         id: weapon,
         ..Weapon::default()
     }
     .frames();
-    if weapon == 2 && matches!(id, 8 | 0xA) {
-        [0x03, frames[1], frames[2]]
+    if weapon == 2 {
+        [handgun.0, frames[1], frames[2]]
     } else {
         frames
     }
@@ -186,8 +180,8 @@ pub fn page_frames(id: u8, weapon: u8) -> [u8; 3] {
 
 /// `Foot_set_pl`'s chain for the weapon's frames: the leg the byte of the
 /// character's parity picks.
-fn page_foot_chain(id: u8, weapon: u8) -> &'static [usize; 5] {
-    if page_frames(id, weapon)[usize::from(id & 1)] & 0x80 != 0 {
+fn page_foot_chain(id: u8, frames: [u8; 3]) -> &'static [usize; 5] {
+    if frames[usize::from(id & 1)] & 0x80 != 0 {
         &AIM_FOOT_CHAIN
     } else {
         &AIM_OTHER_FOOT_CHAIN
@@ -206,6 +200,17 @@ pub struct PageModel {
     /// The foot `Foot_set_pl` keeps planted, as the last draw left it (the
     /// first pass's `Workm`), by chain: the weapon's own, then the other.
     drawn_feet: Feet,
+    /// `DAT_0053A305`'s row for the weapon, as this visit's `Pl_weapon_ch`
+    /// left it.
+    frames: [u8; 3],
+}
+
+/// What the page's routines read beyond `pPl`: the feet the last draw left
+/// and the weapon's row of `DAT_0053A305`.
+#[derive(Debug, Clone, Copy)]
+struct Page {
+    feet: Feet,
+    frames: [u8; 3],
 }
 
 /// The feet `Foot_set_pl` keeps planted, as the last draw left them: the
@@ -215,8 +220,10 @@ type Feet = [Option<[i32; 3]>; 2];
 impl PageModel {
     /// `FUN_0044b100` and `Config_set_data`: character `id` holding weapon
     /// `weapon` (`Type`), freshly set, standing at [`PLACE`] facing the
-    /// viewer. The statics are the executable's, which no visit resets.
-    pub fn new(id: u8, weapon: u16, statics: Statics) -> Self {
+    /// viewer. The statics are the executable's, which no visit resets, and
+    /// `handgun` is the handgun's first frame as this visit's `Pl_weapon_ch`
+    /// left it ([`HandgunFrame::equip`]).
+    pub fn new(id: u8, weapon: u16, statics: Statics, handgun: HandgunFrame) -> Self {
         let room = RoomState::default();
         let mut body = player::spawn(crate::state::RoomId::parse("1000").unwrap(), &room);
         body.pos = PLACE;
@@ -236,14 +243,15 @@ impl PageModel {
             id,
             statics,
             drawn_feet: [None; 2],
+            frames: page_frames((weapon & 0xFFF) as u8, handgun),
         }
     }
 
     /// `FUN_0044b100` and `Config_set_data` again on a later OPTION visit:
     /// a fresh character and weapon in the place, but the routine and motion
     /// bytes of `pPl` as the last visit left them, which neither writes.
-    pub fn again(&self, id: u8, weapon: u16) -> Self {
-        let mut model = Self::new(id, weapon, self.statics);
+    pub fn again(&self, id: u8, weapon: u16, handgun: HandgunFrame) -> Self {
+        let mut model = Self::new(id, weapon, self.statics, handgun);
         model.work.routine = self.work.routine;
         model.work.move_no = self.work.move_no;
         model.work.move_cnt = self.work.move_cnt;
@@ -289,10 +297,8 @@ impl PageModel {
         };
         let mut mover = Mover::new(&mut self.work, &mut self.body, &tick);
         let result = f(&mut mover, &mut self.statics);
-        let chains = [
-            page_foot_chain(self.id, mover.tick.weapon.id),
-            foot_chain_other(page_foot_chain(self.id, mover.tick.weapon.id)),
-        ];
+        let chain = page_foot_chain(self.id, self.frames);
+        let chains = [chain, foot_chain_other(chain)];
         self.drawn_feet = chains.map(|chain| mover.chain_position(chain));
         result
     }
@@ -346,9 +352,13 @@ impl PageModel {
 
     /// `FUN_0044b3c0(row)`: the draw of states 0xB to 0xF.
     pub fn demonstrate(&mut self, assets: &PageAssets, row: i32) {
-        let (id, feet) = (self.id, self.drawn_feet);
+        let id = self.id;
+        let page = Page {
+            feet: self.drawn_feet,
+            frames: self.frames,
+        };
         self.with(assets, |mover, statics| {
-            mover.page_demonstrate(id, row, statics, feet);
+            mover.page_demonstrate(id, row, statics, page);
         });
     }
 
@@ -481,7 +491,7 @@ impl Mover<'_, '_> {
     /// `FUN_0044b3c0(row)` (0x44B3C0, read from its assembly): the model put
     /// back in its place, turned back first if it has to be, then the row's
     /// pseudo keys played through `FUN_00447df0`.
-    fn page_demonstrate(&mut self, id: u8, row: i32, s: &mut Statics, feet: Feet) {
+    fn page_demonstrate(&mut self, id: u8, row: i32, s: &mut Statics, page: Page) {
         let kind = self.work.kind;
         // The shotguns' kick and the magnums' walk the body on rows 5 and 7.
         if !(matches!(kind & 0xFFF, 6 | 8) && matches!(row, 5 | 7)) {
@@ -574,7 +584,7 @@ impl Mover<'_, '_> {
             }
             _ => s.key = 0,
         }
-        self.page_move(s.key, s, feet);
+        self.page_move(s.key, s, page);
     }
 
     /// Row 5's steps: the action key held, let go, the aim raised, fired,
@@ -654,7 +664,7 @@ impl Mover<'_, '_> {
     /// `FUN_00447df0(pl, key)` (0x447DF0): the routine's branch on `key`,
     /// with its low byte as `Key_trg`, then its move, by the routine the
     /// branch left.
-    fn page_move(&mut self, key: u16, s: &mut Statics, feet: Feet) {
+    fn page_move(&mut self, key: u16, s: &mut Statics, page: Page) {
         let trg = key as u8 as i8;
         match self.work.routine[1] {
             MOVE_IDLE => self.page_br_idle(key),
@@ -672,7 +682,7 @@ impl Mover<'_, '_> {
             MOVE_RUN => self.page_mv_run(),
             MOVE_BACKWARD => self.page_mv_back(),
             MOVE_ROTATE => self.page_mv_rotate(),
-            MOVE_AIM => self.page_mv_weapon(key, feet),
+            MOVE_AIM => self.page_mv_weapon(key, page),
             MOVE_ITEM => self.page_mv_crouch(),
             _ => {}
         }
@@ -878,11 +888,11 @@ impl Mover<'_, '_> {
 
     /// `0x448B30`: the weapon's stage by `Type & 0xFFF` (table 0x525904),
     /// then `Foot_set_pl`.
-    fn page_mv_weapon(&mut self, key: u16, feet: Feet) {
+    fn page_mv_weapon(&mut self, key: u16, page: Page) {
         let weapon = self.work.kind & 0xFFF;
         match weapon {
             0 => self.page_mv_crouch(),
-            2 | 3 | 5..=0xD | 0x11 | 0x13 => self.page_handgun(key),
+            2 | 3 | 5..=0xD | 0x11 | 0x13 => self.page_handgun(key, page.frames),
             // The knife's, the custom handgun's, Ada's, the flamethrower's
             // and the gatling's tables aren't ported.
             _ => {}
@@ -891,12 +901,12 @@ impl Mover<'_, '_> {
         let chain = if matches!(weapon, 6 | 8) && id != 0xB && self.work.routine[2] == 2 {
             Some(&AIM_OTHER_FOOT_CHAIN)
         } else if self.work.spd[0] == 0 && (self.work.routine[2] != 0 || self.work.hokan == 0) {
-            Some(page_foot_chain(id, self.tick.weapon.id))
+            Some(page_foot_chain(id, page.frames))
         } else {
             None
         };
         if let Some(chain) = chain {
-            let planted = feet[usize::from(chain != page_foot_chain(id, self.tick.weapon.id))];
+            let planted = page.feet[usize::from(chain != page_foot_chain(id, page.frames))];
             if let (Some(planted), Some(foot)) = (planted, self.chain_position(chain)) {
                 self.player.pos[0] += planted[0] - foot[0];
                 self.player.pos[2] += planted[2] - foot[2];
@@ -905,11 +915,11 @@ impl Mover<'_, '_> {
     }
 
     /// `0x4486F0`: the handguns' and the rest's stages (table 0x525A10).
-    fn page_handgun(&mut self, key: u16) {
+    fn page_handgun(&mut self, key: u16, frames: [u8; 3]) {
         match self.work.routine[2] {
-            0 | 6 => self.page_raise(key),
+            0 | 6 => self.page_raise(key, frames),
             1 => self.page_hold(key),
-            2 => self.page_fire(key),
+            2 => self.page_fire(key, frames),
             3 => self.page_lower(),
             // `0x448C80`, `0x448D50` and `0x448E20`: the hold never picks
             // them on the page.
@@ -919,7 +929,7 @@ impl Mover<'_, '_> {
 
     /// `0x448710`: the raise, turning toward [`FACING`], which may tilt once
     /// it is far enough up.
-    fn page_raise(&mut self, key: u16) {
+    fn page_raise(&mut self, key: u16, frames: [u8; 3]) {
         let kind = self.work.kind & 0xFFF;
         match self.work.routine[3] {
             0 => {
@@ -948,7 +958,6 @@ impl Mover<'_, '_> {
         if matches!(kind, 0xE | 0x11) {
             return;
         }
-        let frames = page_frames(self.tick.id, self.tick.weapon.id);
         if self.work.move_cnt > frames[0] & 0x7F && key & KEY_TILT_DOWN != 0 {
             self.aim_stage(1);
             self.set_tilt(TILT_DOWN);
@@ -993,12 +1002,11 @@ impl Mover<'_, '_> {
 
     /// `0x4489A0`: the shot, with no flash, cartridge, sound or kick's move.
     /// Its `hit_scan_ck` reads and finds nobody on the page.
-    fn page_fire(&mut self, key: u16) {
+    fn page_fire(&mut self, key: u16, frames: [u8; 3]) {
         if self.work.routine[3] == 0 {
             self.aim_clip(self.tilt_clip(AIM_FIRE_CLIPS));
             self.work.spd = [0; 3];
         }
-        let frames = page_frames(self.tick.id, self.tick.weapon.id);
         if key & KEY_AIM == 0 && self.work.move_cnt > frames[2] & 0x7F {
             self.aim_stage(1);
             self.work.spd = [0; 3];

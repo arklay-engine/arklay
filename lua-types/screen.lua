@@ -809,8 +809,10 @@ function ScreenApi:character_model(entry, moves) end
 ---page does. The model's demonstration counters outlive every model the
 ---screen makes, as the original's do.
 ---
----- `"make", id, type`: a fresh model of character `id` holding weapon
----  `type`, standing in its place facing the viewer. False when the pack
+---- `"make", id, type, disc`: a fresh model of character `id` (0 to 15)
+---  holding weapon `type` (a 16-bit word whose low 12 bits are a weapon up
+---  to 0x13), from disc `disc`'s (0 or 1) player files or else the other
+---  disc's, standing in its place facing the viewer. False when the pack
 ---  has no such player files, and every later call then does nothing.
 ---- `"start"`: the model back off to the left with its first step in.
 ---- `"walk"`: a step of the walk in.
@@ -822,11 +824,13 @@ function ScreenApi:character_model(entry, moves) end
 ---  viewer first.
 ---- `"row", row`: the list's row `row` (0 to 10) acted out for a tick.
 ---- `"trace"`: the model as the trace's `kcm` shows it; nil with no model.
+---
+---The arguments must be Lua integers, exactly as many as the operation
+---takes; anything else raises an error before the model changes.
 ---@param op string
----@param a? integer
----@param b? integer
+---@param ... integer
 ---@return boolean|string|nil
-function ScreenApi:option_model(op, a, b) end
+function ScreenApi:option_model(op, ...) end
 
 ---Load RE 2's FILE binders model (`ui/status/st_file.ts`), for
 ---[`api:draw_re2_binders`](#ScreenApi.draw_re2_binders).

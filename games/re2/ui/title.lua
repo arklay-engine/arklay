@@ -2021,8 +2021,10 @@ local function option_task(api)
         -- the title's later picks (its film, its demo) are one further on.
         o.model = title_rnd(api, 2)
         -- The model is the character's, holding their handgun (`Type`
-        -- `Id + 2`); the page's statics outlive it.
-        api:option_model("make", o.model, o.model + 2)
+        -- `Id + 2`), from the files of the disc `fg_status` bit 31 names
+        -- (Claire's after her new game or gallery); the page's statics
+        -- outlive it.
+        api:option_model("make", o.model, o.model + 2, s.claire and 1 or 0)
         s.background = api:picture("ui/option/room")
         fade_set(0x200, -0x1800)
         o.step = 1

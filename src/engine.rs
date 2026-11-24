@@ -5510,6 +5510,7 @@ impl GameSession {
         assets.re2_weapon = Some(weapon);
         if let Some(changed) = load_re2_player_with(pack, character, weapon, disc) {
             *assets = changed;
+            self.screen_statics.re2_equip(character, weapon);
         }
     }
 
@@ -5537,7 +5538,10 @@ impl GameSession {
         assets.re2_character = character;
         assets.re2_weapon = Some(weapon);
         match load_re2_player_with(pack, character, weapon, disc) {
-            Some(changed) => *assets = changed,
+            Some(changed) => {
+                *assets = changed;
+                self.screen_statics.re2_equip(character, weapon);
+            }
             None => {
                 crate::warning!("warning: no RE2 player {character:#x} holding weapon {weapon:#x}")
             }
@@ -24840,7 +24844,8 @@ fn read_re2_player_file<'a>(
 type Re2PlayerFiles<'a> = (std::borrow::Cow<'a, [u8]>, std::borrow::Cow<'a, [u8]>);
 
 /// `Player_set`'s PLD and `Pl_weapon_ch`'s PLW for character `character`
-/// holding `weapon`, each from disc `disc` or else the other disc.
+/// holding `weapon` (the PLW from [`crate::player2::plw_holder`]'s folder),
+/// each from disc `disc` or else the other disc.
 fn re2_player_files(
     pack: &Pack,
     character: u8,
@@ -24850,8 +24855,9 @@ fn re2_player_files(
     let pld = read_re2_player_file(pack, disc, |disc| {
         format!("player/{character:02x}/model_{disc}.pld")
     })?;
+    let holder = crate::player2::plw_holder(character, weapon);
     let plw = read_re2_player_file(pack, disc, |disc| {
-        format!("player/{character:02x}/weapon/{weapon:02x}_{disc}.plw")
+        format!("player/{holder:02x}/weapon/{weapon:02x}_{disc}.plw")
     })?;
     Some((pld, plw))
 }

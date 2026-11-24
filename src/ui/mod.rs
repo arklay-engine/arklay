@@ -305,6 +305,7 @@ pub fn load_picture(
 #[derive(Debug, Clone, Default)]
 pub struct ScreenStatics(
     std::rc::Rc<std::cell::RefCell<std::collections::BTreeMap<(String, String), i64>>>,
+    std::rc::Rc<std::cell::Cell<crate::player2::HandgunFrame>>,
 );
 
 impl ScreenStatics {
@@ -337,6 +338,21 @@ impl ScreenStatics {
             }
         }
         true
+    }
+
+    /// RE 2's handgun row's first byte as the process's loads of it have
+    /// left it ([`crate::player2::HandgunFrame`]), which play and the
+    /// KEYCONFIG page share.
+    pub fn re2_handgun_frame(&self) -> crate::player2::HandgunFrame {
+        self.1.get()
+    }
+
+    /// `Pl_weapon_ch`'s end for character `id` holding `weapon`
+    /// ([`crate::player2::HandgunFrame::equip`]), returning the new byte.
+    pub fn re2_equip(&self, id: u8, weapon: u8) -> crate::player2::HandgunFrame {
+        let frame = self.1.get().equip(id, weapon);
+        self.1.set(frame);
+        frame
     }
 }
 
@@ -416,6 +432,20 @@ pub trait Screen {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_handguns_first_frame_is_the_processs_and_shared() {
+        use crate::player2::HandgunFrame;
+        let app = ScreenStatics::default();
+        // The session's copy is the app's: play's loads reach the title.
+        let session = app.clone();
+        assert_eq!(app.re2_handgun_frame(), HandgunFrame(0x85));
+        assert_eq!(session.re2_equip(8, 2), HandgunFrame(0x03));
+        assert_eq!(app.re2_handgun_frame(), HandgunFrame(0x03));
+        assert_eq!(app.re2_equip(0, 2), HandgunFrame(0x83));
+        assert_eq!(app.re2_equip(1, 3), HandgunFrame(0x83));
+        assert_eq!(session.re2_handgun_frame(), HandgunFrame(0x83));
+    }
 
     #[test]
     fn cue_names_resolve_to_pack_sounds() {
