@@ -1,0 +1,25 @@
+# Claire A in the sewer from 307's arrival down 212's manhole to Sherry's run into 305: 307's door 0 into 30D (3:128), back through 30D's door 0, Sherry's scene (she is the player from its end), and her door 2 into 305 (#765 Part 3)
+# made in arklay: 307: north from the arrival, west and north to door 0 (one press); 30D: east and north back to door 0 (one press); 307: the scene runs from the load (Sherry walks up the slope and jumps down by script) and hands Sherry back at 2461; her walk waits about 100 ticks past that for the voice lines' pace; door 2 (x -18180 to -15870, z 6850 to 9550) into 305, whose arrival drops her into the lower passage
+344
+# 307: north from the arrival, west and north to door 0 (x -4572 to -3302, z -10039 to -7879)
+346 up run
+384 left
+404 up
+430
+# door 0 into 30D: one press
+432 action
+434
+# 30D: east and north back to door 0 (x -12952 to -12052, z -17094 to -15014)
+760 right
+811 up
+830
+# door 0 into 307: one press
+832 action
+834
+# 307: Sherry, after the scene: north-east and north up the passage to door 2
+2560 up run right
+2578 up run
+2640
+# door 2 into 305: one press
+2642 action
+2644

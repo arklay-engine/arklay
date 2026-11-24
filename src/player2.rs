@@ -245,11 +245,17 @@ const SCE_BACK_SPEED: [i16; 16] = [
 const SCE_BACK_RUN_SPEED: [i16; 16] = [
     0x28, 0x2D, 0x28, 0x2D, 0x28, 0x2D, 0x28, 0x2D, 0x28, 0x2D, 0x28, 0x28, 0x28, 0x28, 0x2D, 0x1E,
 ];
-/// `Plc_dest`'s turn rates for the walks, by routine; the character only
-/// changes the last.
-const DEST_WALK_TURN: i16 = 0x30;
-const DEST_RUN_TURN: i16 = 0x48;
-const DEST_BACK_TURN: i16 = 0x30;
+/// `Plc_dest`'s turn rates for the walks, by routine, for the players' ids
+/// (`0x53B2D8` on): the walks' are the same for all, and Sherry's (0xF) runs
+/// and rotations turn slower.
+const DEST_WALK_TURN: [i16; 16] = [0x30; 16];
+const DEST_RUN_TURN: [i16; 16] = [
+    0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x40,
+];
+const DEST_BACK_TURN: [i16; 16] = [0x30; 16];
+const DEST_BACK_RUN_TURN: [i16; 16] = [
+    0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x28,
+];
 const DEST_ROTATE_TURN: [i16; 16] = [
     0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x58, 0x50,
 ];
@@ -7617,14 +7623,11 @@ pub fn plc_dest(work: &mut Work, id: u8, routine: u8, flag: u8, x: i16, z: i16) 
     if work.sce_flg & 4 == 0 || work.routine[1] != routine {
         work.routine = [MODE_SCENARIO, routine, 0, 0];
     }
-    let low = [DEST_WALK_TURN; 16];
-    let run = [DEST_RUN_TURN; 16];
-    let back = [DEST_BACK_TURN; 16];
     match routine {
-        0x04 | 0x12 => work.sce_free[0] = by_id(id, &low, &SPL_DEST_WALK_TURN),
-        0x05 => work.sce_free[0] = by_id(id, &run, &SPL_DEST_RUN_TURN),
-        0x07 => work.sce_free[0] = by_id(id, &back, &SPL_DEST_BACK_TURN),
-        0x08 => work.sce_free[0] = by_id(id, &back, &SPL_DEST_BACK_RUN_TURN),
+        0x04 | 0x12 => work.sce_free[0] = by_id(id, &DEST_WALK_TURN, &SPL_DEST_WALK_TURN),
+        0x05 => work.sce_free[0] = by_id(id, &DEST_RUN_TURN, &SPL_DEST_RUN_TURN),
+        0x07 => work.sce_free[0] = by_id(id, &DEST_BACK_TURN, &SPL_DEST_BACK_TURN),
+        0x08 => work.sce_free[0] = by_id(id, &DEST_BACK_RUN_TURN, &SPL_DEST_BACK_RUN_TURN),
         0x09 => work.sce_free[0] = by_id(id, &DEST_ROTATE_TURN, &SPL_DEST_ROTATE_TURN),
         _ => {}
     }
@@ -8066,15 +8069,23 @@ mod tests {
     #[test]
     fn plc_dest_turn_by_id() {
         // Routine 9's turn: Leon's 96, Ada's 88, Sherry's 80; the walks'
-        // are everyone's.
-        for (id, rotate) in [(0, 96), (1, 96), (0xE, 88), (0xF, 80)] {
-            let mut work = Work::default();
-            plc_dest(&mut work, id, 9, 0, 100, 200);
-            assert_eq!(work.sce_free[0], rotate, "id {id:#x}");
-            plc_dest(&mut work, id, 4, 0, 100, 200);
-            assert_eq!(work.sce_free[0], 48);
-            plc_dest(&mut work, id, 5, 0, 100, 200);
-            assert_eq!(work.sce_free[0], 72);
+        // are everyone's, and Sherry's runs (5, and 8 backwards) turn slower.
+        for (id, rotate, run, back_run) in [
+            (0, 96, 72, 48),
+            (1, 96, 72, 48),
+            (0xE, 88, 72, 48),
+            (0xF, 80, 64, 40),
+        ] {
+            let turn = |routine| {
+                let mut work = Work::default();
+                plc_dest(&mut work, id, routine, 0, 100, 200);
+                work.sce_free[0]
+            };
+            assert_eq!(turn(9), rotate, "id {id:#x}");
+            assert_eq!(turn(4), 48);
+            assert_eq!(turn(7), 48);
+            assert_eq!(turn(5), run, "id {id:#x}");
+            assert_eq!(turn(8), back_run, "id {id:#x}");
         }
     }
 

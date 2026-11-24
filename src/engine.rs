@@ -9160,7 +9160,7 @@ impl GameSession {
         // `fg_system`'s `0x2000000` go: the arrival's zones are first tested
         // here, not while the room loads under the door.
         if session.entered && session.door.re2.is_some() {
-            apply_camera(&mut self.loaded.room, &mut self.game, Some(self.player.pos));
+            apply_door_end_camera(&mut self.loaded.room, &mut self.game, self.player.pos);
         }
         if session.entered {
             self.arm_room_entry_fade();
@@ -16634,7 +16634,12 @@ fn simulate_door_with(
     // groups, camera locks and scripted entity moves included).
     run_room_init(&mut loaded, &mut game);
     game.sync_player(&mut player_state);
-    apply_camera(&mut loaded.room, &mut game, Some(player_state.pos));
+    // The door's end tests the zones as `end_transition_after_bgm` does.
+    if session.entered && session.door.re2.is_some() {
+        apply_door_end_camera(&mut loaded.room, &mut game, player_state.pos);
+    } else {
+        apply_camera(&mut loaded.room, &mut game, Some(player_state.pos));
+    }
     drain_mask_toggles(&mut loaded.room, &mut game);
     // `room_transition_load` runs the handoff after the destination's init and
     // camera setup and before the close SE, so the headless seam exposes the
@@ -21210,6 +21215,23 @@ fn arrival_cut_kept(re2_door: bool, cut: usize, cuts: usize) -> Option<usize> {
 }
 
 fn apply_camera(room: &mut RoomState, game: &mut game::GameState, pos: Option<[i32; 3]>) {
+    apply_camera_under_lock(room, game, pos, true);
+}
+
+/// [`apply_camera`] for `Set_door`'s `Cut_check(1)` at an RE2 door's end,
+/// which nothing guards with `fg_status`'s `0x100` (only `Game_loop`'s own
+/// test is): a scene that locked the camera while the room loaded under the
+/// door still has the zones' cut put up there (`0x4C0AEE`).
+fn apply_door_end_camera(room: &mut RoomState, game: &mut game::GameState, pos: [i32; 3]) {
+    apply_camera_under_lock(room, game, Some(pos), false);
+}
+
+fn apply_camera_under_lock(
+    room: &mut RoomState,
+    game: &mut game::GameState,
+    pos: Option<[i32; 3]>,
+    honour_lock: bool,
+) {
     // `game_loop` consumes a pending deferred redisplay before it tests the
     // zones: the cut the previous frame's walk chose is the one drawn this
     // frame, and no new switch is tested until the frame after.
@@ -21218,7 +21240,8 @@ fn apply_camera(room: &mut RoomState, game: &mut game::GameState, pos: Option<[i
         room.current_cut = game.camera.current_cut;
         return;
     }
-    let selected = if game.camera.locked && game.camera.current_cut < room.cuts.len() {
+    let selected = if honour_lock && game.camera.locked && game.camera.current_cut < room.cuts.len()
+    {
         game.camera.current_cut
     } else if let Some(pos) = pos {
         let floor = if game.is_re2_room {
@@ -30166,6 +30189,49 @@ mod tests {
         game.set_camera_cut(0);
         apply_camera(&mut room, &mut game, Some([50, 0, 50]));
         assert_eq!(game.camera.current_cut, 1, "the zone switch still works");
+    }
+
+    #[test]
+    fn a_doors_end_tests_the_zones_under_a_scenes_camera_lock() {
+        use crate::state::{Cut, Zone};
+
+        let mut room = RoomState {
+            cuts: vec![Cut::default(); 3],
+            ..RoomState::default()
+        };
+        room.zones = vec![
+            Zone {
+                cam_to: 2,
+                cam_from: 2,
+                corners: [[0; 2]; 4],
+            },
+            Zone {
+                cam_to: 1,
+                cam_from: 2,
+                corners: [[0, 0], [0, 100], [100, 100], [100, 0]],
+            },
+        ];
+        let id = RoomId {
+            stage: 3,
+            room: 7,
+            player_flag: 0,
+            mansion2: false,
+        };
+        let mut game = game::GameState::new(id, &room);
+        // A scene under the door put up cut 2 and locked the camera.
+        game.set_camera_cut(2);
+        room.current_cut = 2;
+        game.camera.locked = true;
+        apply_camera(&mut room, &mut game, Some([50, 0, 50]));
+        assert_eq!(
+            game.camera.current_cut, 2,
+            "`Game_loop`'s test obeys the lock"
+        );
+        // `Set_door`'s `Cut_check(1)` doesn't.
+        apply_door_end_camera(&mut room, &mut game, [50, 0, 50]);
+        assert_eq!(game.camera.current_cut, 1);
+        assert_eq!(room.current_cut, 1);
+        assert!(game.camera.locked, "and leaves the lock");
     }
 
     #[test]

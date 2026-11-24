@@ -75,7 +75,9 @@ pub(crate) fn area(sca: &Sca, x: i32, z: i32) -> u16 {
 fn applies(record: &ScaRect, mask: u16, area: u16, pos: [i32; 3], radius: i32, floor: u8) -> bool {
     record.kind & area != 0
         && record.id & mask != 0
-        && record.floor & (1u32 << floor) != 0
+        // `shl` takes the count mod 32, so a floor of 255 (a slope's
+        // `-y / 1800` at the foot of one below floor 0) tests bit 31.
+        && record.floor & 1u32.wrapping_shl(u32::from(floor)) != 0
         && inside_grown(record, pos[0], pos[2], radius)
 }
 
@@ -692,13 +694,17 @@ fn push_slope(
     } else {
         (x..=x + width).contains(&pos[0])
     };
-    if on_slope {
+    *floor = Some(if on_slope {
         pos[1] = slope_height(record, pos[0], pos[2]);
+        // On it, the floor the height is in, toward zero, so the whole of
+        // the rise but its top is the lower floor (`0x4E2603`).
+        floor_toward_zero(pos[1])
     } else {
-        // Off either end: settle on the floor there.
-        pos[1] = i32::from(floor_of(pos[1])) * -FLOOR_HEIGHT;
-    }
-    *floor = Some(floor_of(pos[1]));
+        // Off either end: settle on the nearest floor there.
+        let nearest = floor_of(pos[1]);
+        pos[1] = i32::from(nearest) * -FLOOR_HEIGHT;
+        nearest
+    });
     true
 }
 
@@ -1289,7 +1295,43 @@ mod tests {
         let half = resolve(&sca, [1500, 0, 1400], [1500, 0, 1500], PLAYER_RADIUS);
         assert_eq!(half.pos[1], 900);
         assert!(half.hit);
-        assert_eq!(half.floor, Some(floor_of(900)), "it writes `Floor`");
+        assert_eq!(half.floor, Some(0), "it writes `Floor`");
+    }
+
+    #[test]
+    fn a_body_on_a_slope_is_on_its_lower_floor_until_the_top() {
+        let mut slope = record(11);
+        // From floor 1 at its near end down to floor 0 at its far end.
+        slope.kind = 0xF | (3 << 4) | (1 << 6);
+        slope.floor = 0b11;
+        let sca = room(vec![slope]);
+        let at = |z| resolve(&sca, [1500, 0, z + 100], [1500, 0, z], PLAYER_RADIUS);
+        let high = at(1050);
+        assert_eq!(high.pos[1], -1710);
+        assert_eq!(high.floor, Some(0), "not the floor nearest the height");
+        let top = at(1000);
+        assert_eq!(top.pos[1], -FLOOR_HEIGHT);
+        assert_eq!(top.floor, Some(1));
+        // Off the end, the floor nearest the height.
+        let off = resolve(&sca, [1500, -1000, 1100], [1500, -1000, 990], PLAYER_RADIUS);
+        assert_eq!(off.pos[1], -FLOOR_HEIGHT);
+        assert_eq!(off.floor, Some(1));
+    }
+
+    #[test]
+    fn the_foot_of_a_slope_below_floor_0_is_floor_255_as_the_originals_byte() {
+        let mut slope = record(11);
+        // Rising along z to floor 0 at its far end, from 1800 below it.
+        slope.kind = 0xF | (3 << 4);
+        slope.floor = 1 | 1 << 31;
+        let sca = room(vec![slope]);
+        let at = [1500, 0, 2000];
+        let foot = resolve_on_floor(&sca, PLAYER_MASK, [1500, 0, 1900], at, PLAYER_RADIUS, 0);
+        assert_eq!(foot.pos[1], FLOOR_HEIGHT);
+        assert_eq!(foot.floor, Some(255));
+        // And a pass on that floor tests the record's bit 31.
+        let next = resolve_on_floor(&sca, PLAYER_MASK, foot.pos, foot.pos, PLAYER_RADIUS, 255);
+        assert!(next.hit);
     }
 
     #[test]
