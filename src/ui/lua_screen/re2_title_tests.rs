@@ -3356,6 +3356,13 @@ fn the_boots_film_is_the_generators_first_pick() {
             _ => None,
         });
         assert_eq!(film, Some(claire), "seed {seed:#x}");
+        // `0x509CB0` sets `fg_status` bit 31 by the pick, which OPTION's
+        // model then reads its files by.
+        assert_eq!(
+            screen.value("ti_claire"),
+            i64::from(claire),
+            "seed {seed:#x}"
+        );
         assert_eq!(statics.get("ui/title.lua", "rnd"), Some(seed));
         assert_eq!(statics.get("ui/title.lua", "films"), Some(1));
         assert_eq!(statics.get("ui/title.lua", "demo_cycle"), None);

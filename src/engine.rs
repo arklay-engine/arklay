@@ -5510,6 +5510,7 @@ impl GameSession {
         assets.re2_weapon = Some(weapon);
         if let Some(changed) = load_re2_player_with(pack, character, weapon, disc) {
             *assets = changed;
+            self.screen_statics.re2_equip(character, weapon);
         }
     }
 
@@ -5537,7 +5538,10 @@ impl GameSession {
         assets.re2_character = character;
         assets.re2_weapon = Some(weapon);
         match load_re2_player_with(pack, character, weapon, disc) {
-            Some(changed) => *assets = changed,
+            Some(changed) => {
+                *assets = changed;
+                self.screen_statics.re2_equip(character, weapon);
+            }
             None => {
                 crate::warning!("warning: no RE2 player {character:#x} holding weapon {weapon:#x}")
             }
@@ -12846,7 +12850,10 @@ impl App {
         // and the cleared game's state with it.
         self.ending = None;
         self.stop_screen_music();
-        session.screen_statics = self.statics.clone();
+        // The room boot loaded the player into the session's own statics,
+        // so the process's take on its loads (`Pl_weapon_ch`'s handgun byte).
+        let booted = std::mem::replace(&mut session.screen_statics, self.statics.clone());
+        self.statics.re2_adopt(&booted);
         // A trace's voice lengths, asked for while the title was up.
         if let Some(ticks) = self.pending_voice_ticks.take() {
             session.game.re2.voice_ticks = ticks;
@@ -14765,6 +14772,11 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
         match screen.state_str("kc") {
             Some(page) => line.push_str(&format!(" kc={page}")),
             None => line.push_str(" kc=-"),
+        }
+        // Its model, as the oracle's `kcm` has it.
+        match screen.state_str("kcm") {
+            Some(model) => line.push_str(&format!(" kcm={model}")),
+            None => line.push_str(" kcm=-"),
         }
         // The gallery's task, as `scripts/oracle-re2.py`'s `gal` and `galv`
         // have it.
@@ -24844,7 +24856,8 @@ fn read_re2_player_file<'a>(
 type Re2PlayerFiles<'a> = (std::borrow::Cow<'a, [u8]>, std::borrow::Cow<'a, [u8]>);
 
 /// `Player_set`'s PLD and `Pl_weapon_ch`'s PLW for character `character`
-/// holding `weapon`, each from disc `disc` or else the other disc.
+/// holding `weapon` (the PLW from [`crate::player2::plw_holder`]'s folder),
+/// each from disc `disc` or else the other disc.
 fn re2_player_files(
     pack: &Pack,
     character: u8,
@@ -24854,8 +24867,9 @@ fn re2_player_files(
     let pld = read_re2_player_file(pack, disc, |disc| {
         format!("player/{character:02x}/model_{disc}.pld")
     })?;
+    let holder = crate::player2::plw_holder(character, weapon);
     let plw = read_re2_player_file(pack, disc, |disc| {
-        format!("player/{character:02x}/weapon/{weapon:02x}_{disc}.plw")
+        format!("player/{holder:02x}/weapon/{weapon:02x}_{disc}.plw")
     })?;
     Some((pld, plw))
 }
@@ -34743,6 +34757,33 @@ mod tests {
                 "a restart reloads the save"
             );
         }
+    }
+
+    /// A continued game whose player is Leon's alternate 8 holding the
+    /// handgun: the room boot's `Pl_weapon_ch` made the handgun's first
+    /// frame 0x03 in the session's own statics, before the app gave it its
+    /// own. The app takes that on, so the next OPTION visit's Leon reads
+    /// 0x83, as the original's does.
+    #[test]
+    fn a_continued_alternates_handgun_reaches_the_next_option_visit() {
+        use crate::player2::HandgunFrame;
+        let dir = TempDir::new();
+        let (pack, session) = re2_typewriter_session(&dir);
+        // What the room boot's load of PL08W02 did.
+        session.screen_statics.re2_equip(8, 2);
+        let mut app = App::new(pack, dir.0.join("saves"), false);
+        assert_eq!(app.statics.re2_handgun_frame(), HandgunFrame(0x85));
+        app.start_session(session);
+        assert_eq!(app.statics.re2_handgun_frame(), HandgunFrame(0x03));
+        // Back at the title, OPTION's `Pl_weapon_ch` for Leon.
+        assert_eq!(app.statics.re2_equip(0, 2), HandgunFrame(0x83));
+        let Mode::Play(session) = &app.mode else {
+            panic!("expected a session");
+        };
+        assert_eq!(
+            session.screen_statics.re2_handgun_frame(),
+            HandgunFrame(0x83)
+        );
     }
 
     /// What the screens keep is the process's in the original: a session

@@ -1690,19 +1690,33 @@ local function key_draw_list(rows_short, cursor)
 end
 
 -- The page's draw (0x44B180's cases 9 to 0xF): the panel (`FUN_0044c570`,
--- a tile added at 0x19 a channel), and the list from state 10.
-local function key_draw()
+-- a tile added at 0x19 a channel), the list from state 10, and the
+-- player's model: its walk in (`FUN_0044d990(1)`), its turn to face the
+-- viewer, then the row under the cursor acted out (`FUN_0044b3c0`).
+local function key_draw(api)
     local o = s.opt
     s.key_panel = { x = key_work.slide + 0x88, y = 0x11, w = 0xB1, h = 0xD1 }
-    if o.state == 10 then
+    if o.state == 9 then
+        api:option_model("walk")
+    elseif o.state == 10 then
         key_draw_list(o.type // 5, -1)
-    elseif o.state ~= 9 then
+        api:option_model("face")
+    else
         key_draw_list(0, o.type)
+        api:option_model("row", o.type)
+    end
+end
+
+-- A move onto the back step's or the aim's row turns the model back to
+-- face the viewer before it acts the row out (`0x6893CC`).
+local function key_turn_back(api)
+    if s.opt.type == 1 or s.opt.type == 4 then
+        api:option_model("turn_back")
     end
 end
 
 -- The page's ticks (`Config_main`'s cases 2 and 9 to 0xF).
-local function key_main()
+local function key_main(api)
     local o = s.opt
     local k = key_work
     local trg = s.edge
@@ -1713,6 +1727,8 @@ local function key_main()
         s.cue(8)
         o.state = 9
         k.choice = 0
+        -- `FUN_0044d990(0)`: the model starts off to the left.
+        api:option_model("start")
     elseif o.state == 9 then
         k.count = k.count - 1
         if k.count < 0 or trg & PAD_CONFIRM ~= 0 then
@@ -1720,6 +1736,12 @@ local function key_main()
             k.slide = 0
             o.type = 0x36
         end
+        -- The decide puts the model in its place at once; and every tick
+        -- its routine is the walk's.
+        if trg & PAD_CONFIRM ~= 0 then
+            api:option_model("place")
+        end
+        api:option_model("walk_on")
     elseif o.state == 10 then
         k.held = 0
         o.type = o.type - 1
@@ -1753,12 +1775,14 @@ local function key_main()
             if o.type < 0 then
                 o.type = KEY_EXIT_ROW
             end
+            key_turn_back(api)
         elseif trg & PAD_DOWN ~= 0 then
             s.cue(SE_CURSOR)
             o.type = o.type + 1
             if o.type > KEY_EXIT_ROW then
                 o.type = 0
             end
+            key_turn_back(api)
         elseif trg & (PAD_LEFT | PAD_RIGHT) ~= 0 and o.type == KEY_EXIT_ROW then
             s.cue(SE_CURSOR)
             k.choice = k.choice ~ 1
@@ -1791,7 +1815,7 @@ local function key_main()
 end
 
 -- The draw (0x44B180), by the state `Config_main` left.
-local function option_draw()
+local function option_draw(api)
     local o = s.opt
     local state = o.state
     if state == 1 or state == 3 then
@@ -1814,7 +1838,7 @@ local function option_draw()
     elseif state == 7 then
         option_exit(0xF5, 0xCA, true)
     elseif state >= 9 and state ~= 0xD and state <= 0xF then
-        key_draw()
+        key_draw(api)
     end
 end
 
@@ -1947,7 +1971,7 @@ local function option_main(api)
             option_leave()
         end
     elseif o.state == 2 or o.state >= 9 and o.state <= 0xF then
-        key_main()
+        key_main(api)
     elseif o.state == 3 then
         s.background = api:picture("ui/option/color2")
         o.state = 7
@@ -1979,7 +2003,7 @@ local function option_main(api)
         s.frame = "held"
         return
     end
-    option_draw()
+    option_draw(api)
 end
 
 -- One tick of the option task.
@@ -1996,6 +2020,11 @@ local function option_task(api)
         -- Leon or Claire by the title's generator, a pick every visit, so
         -- the title's later picks (its film, its demo) are one further on.
         o.model = title_rnd(api, 2)
+        -- The model is the character's, holding their handgun (`Type`
+        -- `Id + 2`), from the files of the disc `fg_status` bit 31 names
+        -- (Claire's after her new game or gallery); the page's statics
+        -- outlive it.
+        api:option_model("make", o.model, o.model + 2, s.claire and 1 or 0)
         s.background = api:picture("ui/option/room")
         fade_set(0x200, -0x1800)
         o.step = 1
@@ -2484,7 +2513,8 @@ end
 -- The title's film (`Init_movie_work(0)`): Leon's or Claire's, by the
 -- title's generator. `FUN_00509CB0` keeps the pick as `fg_status`'s bit 31,
 -- the character, which a game started with no character page (SPECIAL's
--- extras) keeps: To-fu's room 304 is disc 1's after Claire's film.
+-- extras) keeps: To-fu's room 304 is disc 1's after Claire's film. OPTION's
+-- model reads that disc's files after it.
 local function boot_film(api)
     s.claire = title_rnd(api, 2) == 1
     return { id = 0, claire = s.claire }
@@ -2649,6 +2679,8 @@ local function publish(api)
     -- EX.BATTLE's level (`0x989E91`), which the boot leaves at 2.
     api:set("ti_level", 2)
     api:set("ti_fgstatus", s.fg_status)
+    -- `fg_status` bit 31, which the trace's `tx` leaves out.
+    api:set("ti_claire", s.claire and 1 or 0)
     api:set("ti_kido", s.kido)
     api:set("ti_add", s.add)
     api:set("ti_fgsys", s.fg_system)
@@ -2679,6 +2711,8 @@ local function publish(api)
     end
     -- The trace's `kc`, KEYCONFIG's page, while the option task runs.
     s.kc = o and key_trace() or nil
+    -- The trace's `kcm`, the page's model, while the option task runs.
+    s.kcm = o and api:option_model("trace") or nil
 end
 
 local function any_saves(api, args)

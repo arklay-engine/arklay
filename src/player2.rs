@@ -13,6 +13,8 @@ use crate::model::{Clip, ClipFrame, Keyframe, Skeleton};
 use crate::player::{self, ClipSource, Input, Options, PlayerState};
 use crate::state::{RoomState, ScaRect};
 
+pub mod keyconfig;
+
 /// `Key`, the mapped pad word `pl_br_*` test.
 pub(crate) const KEY_FORWARD: u16 = 0x0001;
 const KEY_RIGHT: u16 = 0x0002;
@@ -1534,6 +1536,90 @@ pub type Necks = [Option<[i32; 3]>; NECK_WORKS];
 /// `player_work`, `splayer_work` and `enemy_work`'s 32 (room 40B's swarm
 /// fills 24).
 pub const NECK_WORKS: usize = 34;
+
+/// The folder `Pl_weapon_ch` (`0x4D2D20`) reads character `id`'s PLW for
+/// weapon `weapon` (`Type & 0xFFF`) from: Leon's for his alternates up to
+/// 0xA, Claire's for hers up to 9, and the rest their own. Leon's 8 and 0xA
+/// hold 8's handgun.
+pub fn plw_holder(id: u8, weapon: u8) -> u8 {
+    if matches!(id, 8 | 0xA) && weapon == 2 {
+        8
+    } else if id <= 0xA {
+        id & 1
+    } else {
+        id
+    }
+}
+
+/// The handguns' row's first byte of the table at `0x53A305` (`0x53A30B`):
+/// 0x85 in the executable's data. The end of `Pl_weapon_ch` rewrites it on
+/// every load of the handgun ([`Self::equip`]), and nothing puts it back,
+/// so it lasts as long as the process.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HandgunFrame(pub u8);
+
+impl Default for HandgunFrame {
+    fn default() -> Self {
+        Self(0x85)
+    }
+}
+
+impl HandgunFrame {
+    /// `0x4D3010`, at the end of `Pl_weapon_ch` for character `id` holding
+    /// `weapon`: the handgun ORs in 0x80, then Leon's 8 and 0xA make it 0x03.
+    #[must_use]
+    pub fn equip(self, id: u8, weapon: u8) -> Self {
+        HandgunUpdate::equip(id, weapon).apply(self)
+    }
+}
+
+/// What a run of `Pl_weapon_ch`'s loads does to [`HandgunFrame`], whatever
+/// it was before: so loads made where the process's byte wasn't to hand (a
+/// session's room boot, before the app gives it its statics) can be put on
+/// it later, in order.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum HandgunUpdate {
+    /// No load of the handgun.
+    #[default]
+    Keep,
+    /// The handgun loaded, last by a character other than 8 or 0xA.
+    Mark,
+    /// The byte set outright: 0x03 by 8 or 0xA, 0x83 by another after them.
+    Set(u8),
+}
+
+impl HandgunUpdate {
+    /// One load of `weapon` by character `id`.
+    pub fn equip(id: u8, weapon: u8) -> Self {
+        if weapon != 2 {
+            Self::Keep
+        } else if matches!(id, 8 | 0xA) {
+            Self::Set(0x03)
+        } else {
+            Self::Mark
+        }
+    }
+
+    /// This, then `next`.
+    #[must_use]
+    pub fn then(self, next: Self) -> Self {
+        match (self, next) {
+            (update, Self::Keep) => update,
+            (_, Self::Set(frame)) => Self::Set(frame),
+            (Self::Set(frame), Self::Mark) => Self::Set(frame | 0x80),
+            (_, Self::Mark) => Self::Mark,
+        }
+    }
+
+    /// The byte after these loads, from `frame`.
+    pub fn apply(self, frame: HandgunFrame) -> HandgunFrame {
+        match self {
+            Self::Keep => frame,
+            Self::Mark => HandgunFrame(frame.0 | 0x80),
+            Self::Set(set) => HandgunFrame(set),
+        }
+    }
+}
 
 /// What the player's `Type` and the inventory say about the held weapon.
 #[derive(Debug, Default, Clone, Copy)]
