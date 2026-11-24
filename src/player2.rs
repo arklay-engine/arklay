@@ -2053,6 +2053,7 @@ pub fn pose_init(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
         work,
         player,
         tick,
+        rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
     }
