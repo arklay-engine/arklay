@@ -5527,6 +5527,10 @@ impl Mover<'_, '_> {
             self.em29_held();
             return;
         }
+        if held.holder_id == crate::zombie2::MOTH_ID {
+            self.em3a_held(held);
+            return;
+        }
         if self.work.routine[0] == MODE_HELD_DIE {
             self.held_dying(held);
             return;
@@ -6466,6 +6470,66 @@ impl Mover<'_, '_> {
                 self.joint_move_late(LATE);
             }
             _ => {}
+        }
+    }
+
+    /// `FUN_004afac0`, the moth's `em_damage_table[0x3a]` (its init sets it,
+    /// at `0x9886e0`): in its grip on its clips, by `Routine_1`. 0 and 1 play
+    /// clip 1 into clip 2, which 2 holds while the moth squeezes, now and
+    /// then raising scales at part 8, 9 or 12; the moth's 3 plays clip 3 to the
+    /// player's own move. The moth's `Routine_2` 1 plays the grip's sound.
+    fn em3a_held(&mut self, held: &mut Held<'_>) {
+        const LATE: u16 = 0x100;
+        const PARTS: [usize; 4] = [8, 9, 8, 12];
+        match self.work.routine[1] {
+            0 | 1 => {
+                if self.work.routine[1] == 0 {
+                    self.work.routine[1] = 1;
+                    self.work.bank = Bank::Held;
+                    self.held_clip(1, 0xF);
+                }
+                if self.joint_move_late(LATE) {
+                    self.work.routine[1] = 2;
+                    self.held_clip(2, 0xF);
+                }
+            }
+            2 => {
+                self.joint_move_late(LATE);
+                if held.rnd.draw() & 7 == 0 {
+                    let part = PARTS[usize::from(held.rnd.draw() & 3)];
+                    // `FUN_004b0080`'s row 2 at the part as last drawn, its
+                    // way from the player's place to the player's: 0x400.
+                    if let Some(drawn) = self.drawn_part(part) {
+                        self.work.effects.push(EffectCall {
+                            kind: 0,
+                            row: 1,
+                            size: 0x1800,
+                            dir: 0x400,
+                            at: drawn.t.map(|axis| axis as i16),
+                            motion: None,
+                            on: None,
+                            turn: None,
+                        });
+                    }
+                }
+            }
+            3 | 4 => {
+                if self.work.routine[1] == 3 {
+                    self.work.routine[1] = 4;
+                    self.held_clip(3, 0xF);
+                }
+                if self.joint_move_late(LATE) {
+                    self.work.bank = Bank::Weapon;
+                    self.work.damage_cnt &= 0x7F;
+                    self.work.be_flg &= !0x42;
+                    self.work.routine = [MODE_MOVE, 0, 0, 0];
+                }
+            }
+            _ => {}
+        }
+        if self.work.routine[2] != 0 {
+            self.work.routine[2] = 0;
+            self.work.sounds.push(0x402_0001);
         }
     }
 

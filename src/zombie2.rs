@@ -1646,12 +1646,17 @@ impl Em<'_, '_, '_> {
     /// `Oba_ck_em` and `Sca_ck_em` with `0x400`. `Damage_cnt`'s count down
     /// is the script's, as the moth clears a field when it's already 0, and
     /// so are the moth's own steps (its timers, its parts and its scales'
-    /// effects, and `Be_flg`'s bits for the shots).
+    /// effects, and `Be_flg`'s bits for the shots). `Ground` (`e:ground`) is
+    /// the floor under where the last tick left the body, as `Game_loop`'s
+    /// pass after the moves finds it.
     fn run_moth(&mut self) {
         if self.world.stopped {
             return;
         }
         self.old_pos = self.mover.player.pos;
+        self.z.vars[DOG_GROUND] = self.mover.tick.room.sca.as_ref().map_or(0, |sca| {
+            crate::sca::ground_at(sca, self.old_pos, 0, MASK).height
+        });
         self.script();
         self.oba_ck_em();
         self.sca_ck_em();
