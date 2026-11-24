@@ -131,7 +131,6 @@ frames = [360, 4149]
 # 0.88 measured, recorded under Wine; the worst, 612 (12.4), 3834 and 2414, are door loads (#672)
 frame_max_mean = 0.95
 ignore = [
-  [344, 365, "pneck"],
   # over the Square Crank's get-item window, ib holds the status screen's own bytes (St_main01's routine), which arklay's ib models only for the box
   [3187, 3482, "ib"],
 ]
@@ -187,7 +186,6 @@ frames = [360, 4729]
 # 0.93 measured, recorded under Wine; the worst, 1697 (7.2), 4400 and 1169, are door loads (#672)
 frame_max_mean = 1.0
 ignore = [
-  [344, 365, "pneck"],
   # 112's window scene: arklay moves the scene's zombies by their motion where the original holds them (#885)
   [620, 661, "zm3"],
   [833, 897, "zm3"],
