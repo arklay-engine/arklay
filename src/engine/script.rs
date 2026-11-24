@@ -1783,20 +1783,29 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                 let sound: Option<bool> = options.get("sound")?;
                 let voice_ticks: Option<Vec<u32>> = options.get("voice_ticks")?;
                 let sound_wav: Option<String> = options.get("sound_wav")?;
+                let film_pads: Option<Vec<u32>> = options.get("film_pads")?;
                 options.finish()?;
                 driver.close_trace().map_err(engine_error)?;
                 let screen = driver
                     .app
                     .as_ref()
                     .is_some_and(|app| !matches!(app.mode, Mode::Boot | Mode::Play(_)));
-                if sound.unwrap_or(false) || voice_ticks.is_some() || sound_wav.is_some() {
+                if sound.unwrap_or(false)
+                    || voice_ticks.is_some()
+                    || sound_wav.is_some()
+                    || film_pads.is_some()
+                {
                     let app = driver.app()?;
                     let Mode::Play(session) = &mut app.mode else {
                         return Err(mlua::Error::RuntimeError(
-                            "trace_start: sound, voice_ticks and sound_wav need a game session"
+                            "trace_start: sound, voice_ticks, sound_wav and film_pads need a game session"
                                 .into(),
                         ));
                     };
+                    if let Some(pads) = film_pads {
+                        session.films = true;
+                        session.film_pads = Some(pads.into());
+                    }
                     session.sound_device |= sound.unwrap_or(false);
                     if let Some(ticks) = voice_ticks {
                         session.game.re2.voice_ticks = ticks.into();

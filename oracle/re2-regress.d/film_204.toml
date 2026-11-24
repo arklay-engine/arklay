@@ -12,3 +12,19 @@ frames = [360, 999]
 frame_max_mean = 0.4
 expect = "match"
 record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 200 --no-enemies --keep-enemy 1"
+
+# The same scene with the films on (`--config MovieEnable=1`): the film plays in no tick of the trace, since the game
+# stands still under it, and its own `Pad_set`s (`ref.log` counts them) step the pad's repeat (oracle/re2.md, "Films").
+[[run]]
+name = "film_204_on"
+room = "204"
+setup_script = "film_204.lua"
+input = "film_204.txt"
+input_shift = 344
+ticks = 1000
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,zm1,snd,movie,fgroom,fgstat,prep"
+films_from_ref = true
+# the repeat's count before the first press is the boot's, whose films ran on the wall clock
+ignore = [[344, 359, "prep"]]
+expect = "match"
+record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 200 --no-enemies --keep-enemy 1 --config MovieEnable=1"

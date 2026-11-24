@@ -45,6 +45,10 @@ from pathlib import Path
 BREAK_PAD = 0x004D0F58
 # Classic Rebirth doesn't patch this code. Refuse to run if it isn't what we expect.
 BREAK_PAD_BYTES = bytes.fromhex("8B0D6C9E9800")  # MOV ECX,[fg_system]
+# Where `Movie` (the film's loop, which `WinMain` runs in place of `Psx_main` while a film plays) returns to from its
+# `Pad_set`, at `[esp + 0x14]` on `BREAK_PAD` (`Pad_set` has pushed five words by then).
+FILM_PAD_RETURN = 0x004CAFB8
+FILM_PAD_RETURN_AT = 0x14
 
 # `SsPlay`: traced for the sound effects each tick plays (`snd=`).
 BREAK_SOUND = 0x004338F0
@@ -1916,8 +1920,21 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
             held_keys = 0
             settled = 0
             tick = -1  # The trace's tick, once play has begun.
+            film_calls = 0
             while tick <= args.ticks:
                 tid, regs = game.run_to_break()
+                if game.u32(regs.rsp + FILM_PAD_RETURN_AT) == FILM_PAD_RETURN:
+                    # With the films on (`--config MovieEnable=1`): the game's ticks stand still under a film, which
+                    # runs on the wall clock, so its `Pad_set`s are no ticks. The pad is clear, so it plays to its
+                    # end. With the films off the loop never runs.
+                    film_calls += 1
+                    regs.rax = 0
+                    game.resume_from_break(tid, regs, original)
+                    continue
+                if film_calls:
+                    where = f"before tick {tick}" if tick >= 0 else f"before boot tick {boot_tick}"
+                    print(f"a film ran {film_calls} of its own Pad_sets {where}", flush=True)
+                    film_calls = 0
                 if music_log and music_state(game) != last_music:
                     last_music = music_state(game)
                     music_log.write(f"t={tick} boot={boot_tick} {last_music}\n")
