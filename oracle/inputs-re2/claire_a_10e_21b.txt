@@ -1,0 +1,178 @@
+# Claire A from 10E's Sherry scene back out through 10D into 21B's second state: Irons's radio call and the Heart Key (#685 Part 6) (oracle/re2.md, "Claire A to the Heart Key")
+# made in arklay: 10E: east out of the dead-end by the gap at x -18700, north-west along the wall at z -18966, north up the west passage to door 0 (one press); 10D: south along the corridor, east to door 1 (one press); each load holds the room for the music (--sound) and the walk waits for it; 21B: the radio call (event 39, 3:12, one voice line) plays out from the arrival, then back across the room to the Heart Key at (-20226, -24016), standing at (-18109, -22751) facing west: a press every 12 ticks takes it (the question, Yes, the "taken" window); no press follows the call sooner than 30 ticks after its hand back; the call ends on 1652, the window closes on 2272, play is back on 2284 and the input ends on 2288
+344
+# 10E: out by the gap at x -18700, along the wall at z -18966 and up the west passage to door 0 (x -26700 to -24900, z -25700 to -23900), facing west
+344
+348 left
+353 up run left
+359 right
+371 up run right
+375 up run
+378 up run right
+380 up run
+381 up run right
+383 up run
+384 up run right
+385 right
+399 up run right
+403 up run
+416 up run right
+417 up run
+428 up run right
+429 up run
+430 left
+446 up run left
+450 left
+452 up run left
+453 left
+455 up run left
+456 up run
+480 up run right
+483 right
+485 up run right
+486 right
+490 up run right
+491 right
+504
+# door 0 into 10D: one press
+505 action
+507
+# 10D: south along the corridor, east along z -11974 to door 1 (x -11780 to -9980, z -9531 to -8331), facing south
+852 right
+870 up run right
+873 right
+875 up run right
+876 up run
+878 up run left
+879 up run
+947 up run right
+948 up run
+949 up run right
+950 up run
+957 up run right
+958 up run
+967 up run right
+968 up run
+973 up run right
+974 up run
+976 up run right
+977 up run
+980 up run right
+981 up run
+983 up run right
+984 up run
+985 up run right
+986 up run
+987 up run right
+989 up run
+990 up run right
+994 up run
+995 up run right
+996 up run
+997 up run right
+998 up run
+999 up run right
+1000 up run
+1002 up run right
+1003 up run
+1005 up run right
+1006 up run
+1009 up run right
+1010 up run
+1013 up run right
+1014 up run
+1055 up run left
+1057 up run
+1061 up run left
+1062 up run
+1075 up run left
+1076 up run
+1080 up run left
+1081 left
+1088 up run left
+1094 up run
+1095 up run left
+1097 left
+1100
+# door 1 into 21B: one press
+1101 action
+1103
+# 21B: the radio call is over (event 39: 3:12 set, one voice line); round the desk by the south passage back to the Heart Key
+1683 up run
+1692 up run right
+1693 left
+1709 up run left
+1715 up run
+1718 right
+1734 up run right
+1738 up run
+1742 up run right
+1743 up run
+2018 left
+2026 up run left
+2030 up run
+2036 up run right
+2037 up run
+2039 up run right
+2040 up run
+2042 up run right
+2043 up run
+2044 up run right
+2045 up run
+2047 up run right
+2048 up run
+2051 up run right
+2052 up run
+2054 up run right
+2055 up run
+2057 up run right
+2058 up run
+2059 up run right
+2060 up run
+2061 up run right
+2062 up run
+2063 up run right
+2064 up run
+2065 up run right
+2067 up run
+2068 up run right
+2069 up run
+2070 up run right
+2072 up run
+2073 up run right
+2074 up run
+2075 up run right
+2077 up run
+2078 up run right
+2079 up run
+2080 left
+2106 up run left
+2112 left
+2122 up run left
+2129 up run
+2130 up run left
+2132 right
+# the Heart Key (item 0x5B, 8:12) at (-20226, -24016): a press every 12 ticks finishes the question's text, Yes, finishes the item window and closes "taken" (2272)
+2151
+2152 action
+2154
+2164 action
+2166
+2176 action
+2178
+2188 action
+2190
+2200 action
+2202
+2212 action
+2214
+2224 action
+2226
+2236 action
+2238
+2248 action
+2250
+2260 action
+2262
+2272 action
+2274

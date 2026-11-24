@@ -1,0 +1,234 @@
+# Claire A from 10A's blast scene through door 3 into 21B (Irons's scene), 10D and 10E: Sherry's first sight, the light switch and Sherry's scene (#685 Part 5) (oracle/re2.md, "Claire A to the Heart Key")
+# made in arklay: down 10A's corridor to door 3 on its west wall (one press); 21B: north-west across the room into area 13, which starts Irons's scene (event 10, 3:0; 13 voice lines), then east to door 1 on the north wall (one press); 10D: west, south-west and north along the corridor to door 0 (one press); 10E: out of the entry scene, down the west passage and east along the north wall to camera 8 (Sherry's first sight, 3:65), round the passage at the east end to the switch (area 1: a press, then a press for Yes, 4:71) and west across area 2 (Sherry's scene, 3:64, 19 voice lines); each load holds the room for the music (--sound) and the walk waits for it; no press follows a scene sooner than 30 ticks after its hand back; the scene ends on 7849 and the input ends on 7853
+344
+344 right
+352 up run right
+410 up run
+413 up run right
+415 up run
+417 up run right
+418 up run
+420 up run right
+421 up run
+424 up run right
+425 up run
+447 up run right
+448 up run
+452 up run left
+453 up run
+485 up run right
+486 up run
+492 up run left
+493 up run
+525 up run right
+526 up run
+532 up run left
+533 up run
+565 up run right
+566 up run
+572 up run left
+573 up run
+605 up run right
+606 up run
+611 up run left
+612 up run
+630 up run right
+631 up run
+634 up run left
+635 up run
+644 left
+647 up run left
+695 up run
+707 up run right
+712 up run
+740 up run right
+741 up run
+742 up run right
+743 up run
+781 left
+802
+# door 3 on 10A's west wall (no lock): one press
+803 action
+805
+# 21B: from door 3's arrival north-west to area 13 (-16030 to -14180, z from -26355 to -23255)
+928 up run left
+936 up run
+942 up run left
+943 up run
+951 up run right
+952 up run
+957 up run left
+958 up run right
+960 up run
+964 up run left
+965 up run
+966 up run left
+967 up run
+968 up run left
+986 left
+988 up run left
+# area 13 starts Irons's scene (event 10; 3:0 set, a voice line each few seconds, cut changes, the music); nothing is held until its hand back
+1003
+# east along the south passage and north to door 1 (x -11460 to -9660, z -27700 to -26300)
+3404 right
+3406 up run right
+3481 up run
+3485 left
+3489 up run left
+3546 up run
+3611 up run left
+3612 up run
+3624 up run right
+3625 up run
+3674 up run left
+3675 up run
+3685 up run right
+3686 up run
+3734 up run left
+3735 up run
+3745 up run right
+3746 up run
+3785 up run right
+3797 up run
+3798 up run left
+3802 up run
+4085 up run right
+4111 up run left
+4112 up run
+4113 up run left
+4115 right
+4127
+# door 1 into 10D: one press
+4128 action
+4130
+# 10D: west along the corridor, south-west and then north to door 0
+4253 up run right
+4273 up run
+4328 up run left
+4349 up run
+4390 up run left
+4391 up run
+4397 up run left
+4398 up run
+4400 up run left
+4401 up run
+4402 up run left
+4403 up run
+4404 up run left
+4409 up run
+4410 up run left
+4430 up run right
+4444 up run left
+4451 up run right
+4453 up run
+4458 up run left
+4459 up run
+4466 up run right
+4467 up run
+4479 up run left
+4480 up run
+4487 up run right
+4488 up run
+4499 up run left
+4500 up run
+4507 up run right
+4508 up run
+4519 up run left
+4520 up run
+4527 up run right
+4528 up run
+4534 up run right
+4535 up run
+4536 up run left
+4537 up run
+4538 up run left
+4539 up run
+4548 up run right
+4549 up run
+4554 up run right
+4555 up run
+4556 up run left
+4557 up run
+4558 up run left
+4559 up run
+4568 up run right
+4569 up run
+4574 up run right
+4575 up run
+4576 up run left
+4577 up run
+4578 up run left
+4579 up run
+4587 up run right
+4588 up run
+4599 up run left
+4600 up run
+4607 up run right
+4608 up run
+4619 up run left
+4620 up run
+4627 up run right
+4628 up run
+4634 up run right
+4635 up run
+4636 up run left
+4637 up run
+4638 up run left
+4639 up run
+4648 up run right
+4649 up run
+4654 up run right
+4655 up run
+4656 up run left
+4657 up run
+4658 up run left
+4659 up run
+4668 up run right
+4669 up run
+4674 up run right
+4675 up run
+4676 up run left
+4677 up run
+4678 up run left
+4679 up run
+4688 up run right
+4689 up run
+4694 up run right
+4695 up run
+4696 up run left
+4697 up run
+4698 up run left
+4699 up run
+4707 up run right
+4708 up run
+4710 right
+4732
+# door 0 into 10E: one press
+4733 action
+4735
+# 10E: the entry scene is over; down the west passage to the wall at z -18966, then east: camera 8 at x -22300 starts Sherry's first sight (3:65)
+5167 up run left
+5209 up run right
+5234 up run
+5236 up run right
+5237 up run
+5238 up run left
+5244 up run right
+5263
+# east along the wall, through the gap at the east end and back west to the switch (area 1, -19840 to -19240, z -18000 to -17400), facing north
+5362 up run right
+5364 up run
+5380 up run left
+5474 left
+5480 up run left
+5551 up run
+5557 right
+5579
+# the light switch: a press for the question, a press for Yes (4:71 set, camera 5)
+5580 action
+5582
+5612 confirm
+5614
+# west across area 2 (x -21000 to -20200): Sherry's scene (3:64 set, 19 voice lines, plc_dest, cuts 5 and 6, the music); nothing is held until its hand back
+5644 up run right
+5654
