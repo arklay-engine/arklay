@@ -1,0 +1,5 @@
+# room 60B: check the panel (area 5) and answer its message, then stand still while the ivies come out
+360 action
+366
+400 action
+406

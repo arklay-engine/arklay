@@ -1,0 +1,235 @@
+# leon_a_200_crank: Leon A from 20A's door 0 on 200's balcony: the jump down by the stairs, door 1 into 201, the item box (the Rook plug, the valve handle and the ink ribbons go in), door 1 into 204, round to door 2 into 203, 203's box pushed to the shelf and climbed, the Square Crank taken from its top, the jump down, and door 0 back to 204's hand back
+345 up run
+379 up run right
+380 up run
+395 up run right
+396 up run
+398 up run right
+399 up run
+400 right
+408 up right
+410 right
+412 up right
+414 right
+416 up right
+418 right
+422 up right
+423 right
+425 up right
+426 right
+430 up right
+431 right
+435 up right
+436 left
+447
+448 action
+450
+490 left
+496 up run left
+510 up run
+561 up run left
+562 up run
+563 up left
+565 up
+566 up left
+567 up
+570 up left
+571 up
+572 up left
+573 right
+575
+576 action
+578
+613 up
+945
+946 left
+968
+969 up
+994 left
+1016
+1017 up
+1042 right
+1064
+1071 action
+1074
+1131 down
+1134
+1161 down
+1164
+1191 down
+1194
+1221 right
+1224
+1251 confirm
+1254
+1281 confirm
+1284
+1311 up
+1314
+1341 left
+1344
+1371 confirm
+1374
+1401 down
+1404
+1431 confirm
+1434
+1461 up
+1464
+1491 confirm
+1494
+1521 down
+1524
+1551 confirm
+1554
+1581 up
+1584
+1611 up
+1614
+1641 confirm
+1644
+1716 right
+1738 up run right
+1748 up run
+1750 up run right
+1751 up run
+1767 left
+1770 up run left
+1781 up run
+1794 up run left
+1795 up run
+1797 up run left
+1803 left
+1805 up run left
+1807 left
+1809 up run left
+1811 left
+1814 up run left
+1815 left
+1818 up run left
+1819 up run right
+1821 up run
+1826 up run right
+1827 up run
+1834 up run right
+1835 up run
+1839 up right
+1842 up
+1843 up right
+1845 right
+1860
+1861 action
+1863
+1898 up
+2204
+2205 up run
+2245 up run right
+2246 up run
+2263 up run right
+2264 up run
+2306 up run right
+2307 up run
+2311 right
+2320 up run right
+2330 up run
+2336 up run right
+2337 up run
+2351 up run right
+2352 up
+2355 up left
+2356 right
+2377
+2378 action
+2380
+2415 up
+2716
+2717 up run left
+2722 up run
+2725 up run left
+2726 up run
+2729 left
+2733 up run left
+2744 up run
+2757 up run left
+2758 up run
+2759 right
+2769 up run right
+2786 up right
+2796 up
+2806 up right
+2807 up
+2819 up right
+2820 up
+2825 up right
+2826 up
+2827 up right
+2829 right
+2836
+2841 up
+3071
+3091 action
+3095
+3151 up
+3171
+3181 action
+3185
+3417 action
+3421
+3481 action
+3485
+3501 right
+3545
+3548 up
+3574
+3583 action
+3587
+3617 up run left
+3627 up run
+3628 up run left
+3629 up run
+3632 up run right
+3641 up run
+3645 up run right
+3646 up run
+3655 up run right
+3656 up run
+3657 left
+3669 up run left
+3683 up run
+3686 up run left
+3687 left
+3693 up run left
+3704 up run
+3712 up run left
+3713 up run
+3716 up run left
+3717 right
+3721 up run right
+3728 right
+3730 up run right
+3731 right
+3733 up run right
+3734 right
+3736 up run right
+3737 right
+3739 up run right
+3740 right
+3742 up right
+3746 right
+3748 up right
+3750 right
+3752 up right
+3754 right
+3759 up right
+3760 right
+3762 up right
+3763 right
+3767 up right
+3768 right
+3773 up right
+3774 left
+3797
+3798 action
+3800
+3835 up
+4141

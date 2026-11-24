@@ -98,3 +98,131 @@ frames = [360, 1729]
 # 0.79 measured; the worst, 706 (7.6) and 1412 (7.6), are the 20E and 20C loads; 20E's window doesn't reflect yet (#781) (#668)
 frame_max_mean = 0.85
 record = "--warp 20C:-23222:0:-24944:2568:11 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:75 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:148 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 50 --give 0:0x02:18 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x5C:2 --give 7:0x4A:1"
+
+# From 20E's door 0 back in 20C (the Rook plug taken, the cog held, 50 life, the handgun loaded) round to door 0 and into 20A, past its six zombies without a shot: west along the corridor, round the north room's far side while they come for him, down the passage's east side past the one that wanders into it, and door 0 up to 200's balcony and its hand back
+[[run]]
+name = "leon_a_20c_200"
+room = "20C"
+setup_script = "leon_a_20c_200.lua"
+input = "leon_a_20c_200.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1600
+sound = false
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 1599]
+# 1.00 measured, recorded under Wine; the worst, 1273 (6.3), is 200's load (#672)
+frame_max_mean = 1.05
+ignore = [
+  [344, 365, "pneck"],
+]
+expect = "match"
+record = "--warp 20C:-25450:0:-7100:0:3 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:75 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:148 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 50 --give 0:0x02:18 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5C:2 --give 6:0x4A:1 --give 7:0x3C:1"
+
+# From 20A's door 0 on 200's balcony (Leon as leon_a_20c_200 leaves him) to the Square Crank, which 111's stairs need: the jump down by the stairs, door 1 into 201, the item box (the Rook plug, the valve handle and the ink ribbons go in, which leaves three slots), door 1 into 204, round to door 2 into 203, its box pushed to the shelf and climbed as box_203 does, the Crank taken from the top, the jump down, and door 0 back to 204's hand back. 204's one zombie is the dead one from the route before
+[[run]]
+name = "leon_a_200_crank"
+room = "200"
+setup_script = "leon_a_200_crank.lua"
+input = "leon_a_200_crank.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 4150
+sound = false
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,ib,box,om0"
+frames = [360, 4149]
+# 0.88 measured, recorded under Wine; the worst, 612 (12.4), 3834 and 2414, are door loads (#672)
+frame_max_mean = 0.95
+ignore = [
+  [344, 365, "pneck"],
+  # over the Square Crank's get-item window, ib holds the status screen's own bytes (St_main01's routine), which arklay's ib models only for the box
+  [3187, 3482, "ib"],
+]
+expect = "match"
+record = "--warp 200:-3010:-1800:-24100:2048:9 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:75 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:148 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 50 --give 0:0x02:18 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5C:2 --give 6:0x4A:1 --give 7:0x3C:1"
+
+# From 203's door 0 in 204 (Leon as leon_a_200_crank leaves him) to 207 with both Red Jewels: door 1 into 205, door 1 into 206, the lighter used on 206's fireplace from the status screen and the Red Jewel taken from it, door 0 back to 205, and door 2 into 207's hand back. The kills route_200_302 has made that the earlier warps leave out (102's, 114's, 204's crow, 110's and 211's) are set here; none of them is in these rooms
+[[run]]
+name = "leon_a_204_207"
+room = "204"
+setup_script = "leon_a_204_207.lua"
+input = "leon_a_204_207.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 3110
+sound = false
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,om0"
+frames = [360, 3109]
+# 1.07 measured, recorded under Wine; the worst, 1025 (5.7), 2283 and 1181, are door loads (#672)
+frame_max_mean = 1.10
+ignore = [
+  [344, 365, "pneck"],
+]
+expect = "match"
+record = "--warp 204:-14423:0:-7289:2024:4 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:75 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:51 --flag 6:52 --flag 6:54 --flag 6:55 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:85 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:131 --flag 6:133 --flag 6:148 --flag 6:157 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:188 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 50 --give 0:0x02:18 --give 2:0x33:1 --give 3:0x5C:2 --give 4:0x4A:1 --give 5:0x43:1 --box 2:0x3C:1 --box 3:0x32:1 --box 4:0x1E:3"
+
+# From 205's door 2 in 207 (Leon as leon_a_204_207 leaves him) to 112: door 3 into 10C, up its stairs (up and action held), door 2 into 114, whose three zombies the route before has killed, door 0 into 113, three of its four zombies shot dead in the room by the door (the fourth is left on 1 life), and door 1 into 112's hand back with 30 life and 5 rounds
+[[run]]
+name = "leon_a_207_112"
+room = "207"
+setup_script = "leon_a_207_112.lua"
+input = "leon_a_207_112.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 3100
+sound = false
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 3099]
+# 0.99 measured, recorded under Wine; the worst, 483 (8.0), is 10C's load (#672)
+frame_max_mean = 1.05
+ignore = [
+  [344, 365, "pneck"],
+]
+expect = "match"
+record = "--warp 207:-25640:0:-16590:0:1 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:36 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:75 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:51 --flag 6:52 --flag 6:54 --flag 6:55 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:85 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:115 --flag 6:116 --flag 6:131 --flag 6:133 --flag 6:148 --flag 6:157 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:31 --flag 8:32 --flag 8:34 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:188 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 50 --give 0:0x02:18 --give 2:0x33:1 --give 3:0x5C:2 --give 4:0x4A:1 --give 5:0x43:1 --give 6:0x33:1 --box 2:0x3C:1 --box 3:0x32:1 --box 4:0x1E:3"
+
+# From 113's door 1 in 112 (Leon as leon_a_207_112 leaves him) to 117 with the Knight plug: 112's scene of the zombies at the windows (main_1E, 4:153), which its four zombies leave hidden, the stairs by the south wall (up and action held), the balcony to door 2 into 117, south to door 2 into 111, the Square Crank used at area 7 from the status screen (whose scene reopens the screen), the west stairs up, round to the clock, the cog used at area 6 and its switch pushed (4:55), the Knight plug taken at the west end (8:55) and the dust chute that follows refused, then down the stairs and door 0 back to 117's hand back. 113's three dead zombies are set (bank 6 is not traced)
+[[run]]
+name = "leon_a_112_117"
+room = "112"
+setup_script = "leon_a_112_117.lua"
+input = "leon_a_112_117.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 4730
+sound = false
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,om0"
+frames = [360, 4729]
+# 0.93 measured, recorded under Wine; the worst, 1697 (7.2), 4400 and 1169, are door loads (#672)
+frame_max_mean = 1.0
+ignore = [
+  [344, 365, "pneck"],
+  # 112's window scene: arklay moves the scene's zombies by their motion where the original holds them (#885)
+  [620, 661, "zm3"],
+  [833, 897, "zm3"],
+  [800, 897, "zm0"],
+]
+expect = "match"
+record = "--warp 112:-17484:0:-26200:3128:1 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:36 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:75 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:51 --flag 6:52 --flag 6:54 --flag 6:55 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:82 --flag 6:83 --flag 6:85 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:114 --flag 6:115 --flag 6:116 --flag 6:131 --flag 6:133 --flag 6:148 --flag 6:157 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:31 --flag 8:32 --flag 8:34 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:188 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 30 --give 0:0x02:5 --give 2:0x33:1 --give 3:0x5C:2 --give 4:0x4A:1 --give 5:0x43:1 --give 6:0x33:1 --box 2:0x3C:1 --box 3:0x32:1 --box 4:0x1E:3"
+
+# From 111's door 0 in 117 (Leon as leon_a_112_117 leaves him) to 110 with the Bishop plug: door 1 back to 112's balcony, west onto the weak floor (area 9, main_11), which drops him into the shelves' section (4:53), the shelves' power switch (area 8, 4:23), the two south shelves slid one place north from the switches at their east ends (Right; the places 0, 3 and 6 become 1, 4 and 6, and 4:24 opens the case), the Bishop plug from the case (area 7, 8:21), and door 0 into 110's hand back
+[[run]]
+name = "leon_a_117_110"
+room = "117"
+setup_script = "leon_a_117_110.lua"
+input = "leon_a_117_110.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 3100
+sound = false
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9,om0"
+frames = [360, 3099]
+# 1.58 measured, recorded under Wine. The windows: 117 and 112's fall, 0.89 (the worst, 530 (7.2), is 112's door, #672); 112's
+# shelves, 2.25, drawn bigger and offset (#889); the rest of 112, 0.35; and 110's door, 3.82 (2756 (10.9), then 4 to 6, #672)
+frame_max_mean = 1.65
+frame_windows = [[360, 1259, 0.95], [1260, 2159, 2.35], [2160, 2755, 0.40], [2756, 3099, 3.95]]
+ignore = [
+  [344, 365, "pneck"],
+]
+expect = "match"
+record = "--warp 117:-25979:-14400:-21180:3920:3 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:36 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:55 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:74 --flag 4:75 --flag 4:76 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 4:153 --flag 6:19 --flag 6:51 --flag 6:52 --flag 6:54 --flag 6:55 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:82 --flag 6:83 --flag 6:85 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:114 --flag 6:115 --flag 6:116 --flag 6:131 --flag 6:133 --flag 6:148 --flag 6:157 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:31 --flag 8:32 --flag 8:34 --flag 8:55 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:188 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 30 --give 0:0x02:5 --give 2:0x33:1 --give 3:0x5C:2 --give 4:0x33:1 --give 5:0x3D:1 --box 2:0x3C:1 --box 3:0x32:1 --box 4:0x1E:3"

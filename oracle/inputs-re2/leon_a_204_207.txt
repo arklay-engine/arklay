@@ -1,0 +1,168 @@
+# leon_a_204_207: Leon A from 203's door 0 in 204: door 1 into 205, door 1 into 206, the lighter on 206's fireplace and the Red Jewel taken from it, door 0 back to 205, and door 2 into 207's hand back
+345 right
+355 up run right
+364 up run
+365 up run right
+366 up run
+395 up run right
+396 up run
+408 up run right
+409 up run
+410 up right
+414 up
+415 up right
+416 left
+419
+420 action
+422
+457 up
+763
+764 up run
+822 up run right
+833 up run
+837 up run left
+842 up run
+844 up run left
+846 up run
+847 up run left
+852 up run
+857 right
+862 up run right
+876 right
+878 up run right
+879 right
+882 up run right
+883 up run
+917 up run right
+918 right
+927 up run right
+937 right
+940 up run right
+941 right
+944 up run right
+945 up right
+950 right
+953 up right
+954 right
+956 up right
+957 right
+959 up right
+960 right
+966 up right
+967 left
+988
+989 action
+991
+1026 up
+1322
+1323 up run
+1356 up run left
+1357 up run
+1362 up run left
+1372 up run
+1389 up run left
+1390 up run
+1393 right
+1395 up run right
+1408 up run
+1410 up run right
+1411 up run
+1413 up run right
+1425 up run
+1430 up run right
+1431 up run
+1437 up run right
+1438 up left
+1439 left
+1441 up left
+1443 left
+1445 up left
+1447 left
+1451 up left
+1453 left
+1461 up left
+1462 left
+1468 up left
+1469 right
+1477
+1482 start
+1486
+1516 up
+1520
+1536 confirm
+1540
+1556 confirm
+1560
+1776 up
+1812 up right
+1814 up
+1815 up right
+1816 left
+1819
+1824 action
+1828
+1948 action
+1952
+2052 action
+2056
+2096 left
+2116 up run left
+2127 up run
+2140 up run left
+2141 left
+2143 up run left
+2156 up run
+2161 up run left
+2169 up run
+2179 up run left
+2180 up run
+2189 up run left
+2190 up run
+2192 right
+2195 up run right
+2205 up run
+2220 up run right
+2221 up run
+2229 up run right
+2230 up run
+2233 up
+2243 left
+2246
+2247 action
+2249
+2284 up
+2600
+2601 up run right
+2617 right
+2619 up run right
+2623 up run
+2626 up run right
+2630 right
+2632 up run right
+2636 up run
+2637 up run left
+2646 up run
+2654 up run left
+2655 up run
+2657 up run left
+2658 right
+2671 up run right
+2681 up run
+2688 up run right
+2689 up run
+2704 up run right
+2705 left
+2711 up run left
+2722 up run
+2731 up run left
+2732 up run
+2739 up run left
+2740 up run
+2744 up
+2749 up right
+2750 left
+2756
+2757 action
+2759
+2794 up
+3100

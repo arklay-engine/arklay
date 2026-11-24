@@ -1,0 +1,143 @@
+# room 60B: check the panel (area 5) and answer its message, then aim at the ivies as they come out and fire every 25 ticks
+360 action
+366
+400 action
+406
+600 aim
+620 aim fire
+625 aim
+645 aim fire
+650 aim
+670 aim fire
+675 aim
+695 aim fire
+700 aim
+720 aim fire
+725 aim
+745 aim fire
+750 aim
+770 aim fire
+775 aim
+795 aim fire
+800 aim
+820 aim fire
+825 aim
+845 aim fire
+850 aim
+870 aim fire
+875 aim
+895 aim fire
+900 aim
+920 aim fire
+925 aim
+945 aim fire
+950 aim
+970 aim fire
+975 aim
+995 aim fire
+1000 aim
+1020 aim fire
+1025 aim
+1045 aim fire
+1050 aim
+1070 aim fire
+1075 aim
+1095 aim fire
+1100 aim
+1120 aim fire
+1125 aim
+1145 aim fire
+1150 aim
+1170 aim fire
+1175 aim
+1195 aim fire
+1200 aim
+1220 aim fire
+1225 aim
+1245 aim fire
+1250 aim
+1270 aim fire
+1275 aim
+1295 aim fire
+1300 aim
+1320 aim fire
+1325 aim
+1345 aim fire
+1350 aim
+1370 aim fire
+1375 aim
+1395 aim fire
+1400 aim
+1420 aim fire
+1425 aim
+1445 aim fire
+1450 aim
+1470 aim fire
+1475 aim
+1495 aim fire
+1500 aim
+1520 aim fire
+1525 aim
+1545 aim fire
+1550 aim
+1570 aim fire
+1575 aim
+1595 aim fire
+1600 aim
+1620 aim fire
+1625 aim
+1645 aim fire
+1650 aim
+1670 aim fire
+1675 aim
+1695 aim fire
+1700 aim
+1720 aim fire
+1725 aim
+1745 aim fire
+1750 aim
+1770 aim fire
+1775 aim
+1795 aim fire
+1800 aim
+1820 aim fire
+1825 aim
+1845 aim fire
+1850 aim
+1870 aim fire
+1875 aim
+1895 aim fire
+1900 aim
+1920 aim fire
+1925 aim
+1945 aim fire
+1950 aim
+1970 aim fire
+1975 aim
+1995 aim fire
+2000 aim
+2020 aim fire
+2025 aim
+2045 aim fire
+2050 aim
+2070 aim fire
+2075 aim
+2095 aim fire
+2100 aim
+2120 aim fire
+2125 aim
+2145 aim fire
+2150 aim
+2170 aim fire
+2175 aim
+2195 aim fire
+2200 aim
+2220 aim fire
+2225 aim
+2245 aim fire
+2250 aim
+2270 aim fire
+2275 aim
+2295 aim fire
+2300 aim
+2300

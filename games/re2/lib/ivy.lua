@@ -15,12 +15,15 @@
 --
 -- State 5's spit is `Esp_call` kind 0x1D, whose `Esp_20` hits and poisons
 -- the player (`esp2.rs`). A hit (`Routine_0` 2) and the death (3, then 7)
--- are ported for the weapons arklay fires, 2 to 8 and 0xD to 0x13,
--- with `censorship_off` and `hard_mode` clear, and so is the retreat at half
--- its life (state 7). Only
--- the player as the target is ported (`FUN_004881c0` can pick the partner
--- too), and neither are the other weapons' entries, the spit at close range
--- (state 6), states 8, 9 and 11, the head's twist on parts 11 to 13
+-- are ported for the weapons arklay fires, 2 to 8 and 0xD to 0x13, and so
+-- is the retreat at half its life (state 7). A lash or a squeeze that takes
+-- the last life kills, and it eats a player left at 0, or on their last legs
+-- in its hold (state 6). `hard_mode` doubles its life, its lash and halves
+-- its squeeze, and with `censorship_off` it takes the second hurt table.
+-- State 11 shuts it in until flag 4:95 (room 60B's ivies until the panel).
+-- Only the player as the target is ported (`FUN_004881c0` can pick the
+-- partner too), and neither are the other weapons' entries, the squeeze's
+-- spit, states 8 and 9, the head's twist on parts 11 to 13
 -- (`FUN_004883d0`), the parts' colours (the flame's death fades them,
 -- `FUN_00487b90`) and the dead ivy's shadow.
 
@@ -221,7 +224,14 @@ local function choose(e)
     local _, neck = e:part_rot(9)
     neck = i16(neck)
     if e:var(TARGET) == 0 and room & ROOM_SPAT ~= 0 and e:var(F239) & 0x80 == 0 and side(e) == 0 then
-        -- The spit (state 6) isn't ported.
+        -- Facing a player on their last legs with none left (`0x48577d`):
+        -- the kill (state 6), their life -1 with `Die` still to start.
+        local px, pz = player_xz(e)
+        if distance <= 0xA8C and e:goto_ck(px, pz, 0x100) == 0 and e:player_life() == 0 then
+            routines(e, 6)
+            e:set_player_life(-1, false)
+            e:set_damage_cnt(e:damage_cnt() | 0x80)
+        end
         return
     end
     -- Another ivy on its first side, with the player hurt, holds off.
@@ -304,7 +314,7 @@ local function wait(e)
     local two = e:routine(2)
     if two == 0 then
         if e:kind() == 0x6002 then
-            if e:sce_free() == 0 then
+            if e:sce_free(0) == 0 then
                 return
             end
             e:set_kind(2)
@@ -343,7 +353,7 @@ local function walk(e)
     local two = e:routine(2)
     if two == 0 then
         if e:kind() == 0x6002 then
-            if e:sce_free() == 0 then
+            if e:sce_free(0) == 0 then
                 return
             end
             e:set_kind(2)
@@ -473,7 +483,10 @@ local function whip_hits(e, part, within)
         if result == 1 then
             e:set_room_enemy(e:room_enemy() | ROOM_SPAT)
         end
-        if result ~= 2 then
+        if result == 2 then
+            -- `FUN_0048a170`: the lash kills.
+            e:pl_set_routine(3, 0, 0, 0)
+        else
             local behind = e:cdir_player() and 1 or 0
             e:pl_set_routine(2, (behind ~ side(e)) + 2, 0, 0)
             e:pl_set_damage_cnt(e:pl_damage_cnt() | 0x80)
@@ -514,7 +527,7 @@ local WHIP_STEPS <const> = {
         e:set_routine(2, 1)
         side_clip(e, 2)
         e:set_neck_flags(e:neck_flags() & ~2)
-        e:set_var(WHIP, 0xF)
+        e:set_var(WHIP, e:hard_mode() and 0x1E or 0xF)
         e:spd()
         e:joint(0x40)
         local _, sy = e:speed()
@@ -572,6 +585,145 @@ local function lash(e)
     hit_hard(e)
 end
 
+-- State 6, `FUN_004861c0`: the kill, by `Routine_2`.
+-- `0x4861f0`: it takes hold of the player (theirs `Routine_0` 6, the ivy's
+-- bank theirs) and pulls them in at 0x64 a tick while turning them to it,
+-- until they face it within 0x5DC.
+local function kill_pull(e)
+    if e:routine(3) == 0 then
+        e:set_neck_flags(e:neck_flags() | 2)
+        e:set_be_flg(e:be_flg() | 2)
+        e:set_routine(3, 1)
+        e:set_var(COMMAND, 5)
+        e:set_var(COMMAND_TO, 3)
+        side_clip(e, 0)
+        e:set_room_enemy(e:room_enemy() | ROOM_LASHING)
+        e:set_be_flg(e:be_flg() & ~4)
+        e:pl_hold()
+        e:pl_set_routine(6, 0, 0, 0)
+        e:pl_or_be_flg(0x42)
+        e:pl_set_damage_cnt(e:pl_damage_cnt() | 0x80)
+        e:pl_set_speed_xz(0x64, 0)
+        e:sound(0xC)
+    end
+    e:joint(0x40)
+    local px, _, pz = e:player_pos()
+    local bx, _, bz = e:pos()
+    local there = 0
+    local by = e:goto_ck_at(px, pz, e:player_angle(), bx, bz, 0x100)
+    if by ~= 0 then
+        e:set_player_angle(e:player_angle() + by)
+    else
+        there = 1
+    end
+    if e:distance() > 0x5DC then
+        -- `0x4b21d0`: along the player's speed, toward the ivy.
+        local dx, dz = e:rotate(e:direction(px, pz, bx, bz), 0x64, 0)
+        e:set_player_xz(px + dx, pz + dz)
+    else
+        there = there | 2
+    end
+    if there == 3 then
+        e:set_routine(2, 1)
+        e:set_routine(3, 0)
+        e:set_var(COMMAND_TO, 0xFF)
+    end
+end
+
+-- `0x486350`: it turns to its first side and swallows them (clips 8 and 9),
+-- from one base (`FUN_004b2710`), and `Die` starts.
+local function kill_swallow(e)
+    local three = e:routine(3)
+    if three == 0 then
+        e:set_angle((e:angle() + side(e) * 0x800) & 0xFFFF)
+        e:set_routine(3, 1)
+        e:clip(8, 0, 0x3F)
+        e:set_var(HELD, 0)
+        e:pl_set_base()
+        e:set_player_angle(e:angle() + 0x800)
+        e:pl_set_routine_at(1, 1)
+        e:pl_set_routine_at(2, 0)
+        e:pl_set_routine_at(3, 0)
+        e:pl_start_die()
+        three = 1
+    end
+    if three == 1 then
+        if e:joint(0x40) then
+            e:set_routine(3, 2)
+            e:clip(9, 0, 0x3F)
+        end
+    elseif three == 2 then
+        if e:joint(0x40) then
+            e:set_routine(2, 2)
+            e:set_routine(3, 0)
+        end
+    end
+end
+
+-- A head part's effect (`FUN_00488570` at parts 11 to 13).
+local function head_spit(e, row)
+    blood(e, e:rnd() % 3 + 0xB, row)
+end
+
+-- `0x486430`: it chews (clips 10 and 0): on the clip's `0x10000` frame the
+-- player's part 8 goes (and Claire's 15 to 18), with sound 7 and row 8 at
+-- it; `0x20000` spits from the head, `0x40000` bleeds the player again. Then
+-- it holds, the head turned, spitting now and then.
+local function kill_chew(e)
+    local three = e:routine(3)
+    if three == 0 then
+        e:set_routine(3, 1)
+        e:clip(10, 0, 0x3F)
+        three = 1
+    end
+    if three == 1 then
+        if e:joint(0x40) then
+            e:set_routine(3, 2)
+            e:clip(0, 0, 0x3F)
+        end
+        local seq = e:now_seq()
+        local px, _, pz = e:player_pos()
+        local toward = e:direction(px, pz, px, pz)
+        if seq & 0x10000 ~= 0 then
+            e:pl_hide_part(8)
+            if e:player_id() & 1 ~= 0 then
+                for part = 15, 18 do
+                    e:pl_hide_part(part)
+                end
+            end
+            e:sound(7)
+            e:player_part_effect(4, 0xF, 0x1400, toward, 8, 0, 0, 0)
+        end
+        if seq & 0x20000 ~= 0 then
+            head_spit(e, 4)
+            if e:rnd() & 3 == 0 then
+                head_spit(e, 5)
+            end
+        end
+        if seq & 0x40000 ~= 0 then
+            e:player_part_effect(4, 0xF, 0x1400, toward, 8, 0, 0, 0)
+        end
+    elseif three == 2 then
+        e:set_var(HELD, 1)
+        e:set_var(TWIST, 0x100)
+        if e:rnd() & 0xF == 0 then
+            head_spit(e, 4)
+        end
+        e:joint(0x40)
+    end
+end
+
+local KILL_STEPS <const> = { [0] = kill_pull, kill_swallow, kill_chew }
+
+local function kill(e)
+    local step = KILL_STEPS[e:routine(2)]
+    if step then
+        step(e)
+    end
+    e:set_var(T23A, 1)
+    e:set_var(T23B, 1)
+end
+
 -- State 10, `FUN_004869d0`: the hold.
 local function hold_start(e)
     if e:routine(3) == 0 then
@@ -625,7 +777,18 @@ local function hold_squeeze(e)
         end
     elseif three == 2 or three == 3 then
         if three == 2 then
-            -- The poison spit (`Routine_1` 6) isn't ported.
+            -- A player on their last legs, on its first side, it eats
+            -- (`0x486bc5`): state 6's last step at once, `Die` and theirs 6, 2.
+            if e:room_enemy() & ROOM_SPAT ~= 0 and side(e) == 0 then
+                routines(e, 6, 2, 0)
+                e:pl_set_base()
+                kill_chew(e)
+                e:pl_start_die()
+                e:pl_set_routine(6, 2, 0, 0)
+                return
+            end
+            -- The spit at the held player's head (`Esp_call` 0x1d030c00) isn't
+            -- ported.
             e:set_routine(3, 3)
             e:set_timer(2, 3)
             e:set_timer(3, 1)
@@ -640,9 +803,15 @@ local function hold_squeeze(e)
             if t2 == 0 then
                 e:set_routine(3, 1)
                 e:set_timer(1, 0x19)
-                local result = e:pl_life_down(0x28, false)
+                local result = e:pl_life_down(e:hard_mode() and 0x14 or 0x28, false)
                 if result == 2 then
-                    -- The player's death in the hold isn't ported.
+                    -- The squeeze kills (`FUN_0048a170`), and it lets go. Its
+                    -- `+0x9c`, 300 with `at_w`, isn't modelled.
+                    e:pl_clear_be_flg(0x42)
+                    e:pl_set_routine(3, 0, 0, 0)
+                    local ofs_y, _, at_h, w = e:body_box()
+                    e:set_body_box(ofs_y, 300, at_h, w)
+                    e:set_be_flg((e:be_flg() & ~2) | 4)
                     e:set_routine(2, 2)
                     e:set_routine(3, 0)
                 else
@@ -791,7 +960,67 @@ local function retreat(e)
     e:joint(0x40)
 end
 
-local STATES <const> = { [0] = wait, walk, turn, stuck, lash, spit, [7] = retreat, [10] = hold }
+-- State 11, `FUN_00486ec0`'s first step (`0x486ee0`): shut in (room 60B's
+-- kind 7) on clip 0xC's first frame, its vines on command 8, until flag 4:95
+-- (`0x98EB4C`'s bit 0x5F) lets it out.
+local function shut_in(e)
+    if e:routine(3) == 0 then
+        e:set_neck_flags(e:neck_flags() | 2)
+        e:set_routine(3, 1)
+        e:clip(0xC, 0, 0)
+        e:joint(0x10040)
+        e:set_var(COMMAND, 8)
+        e:set_var(COMMAND_TO, 3)
+    end
+    if e:flag(4, 0x5F) then
+        e:set_routine(2, 1)
+        e:set_routine(3, 0)
+    end
+end
+
+-- State 11's second step (`0x486f50`): it plays clip 0xC out, its vines on
+-- command 4 for the first 0x33 ticks (`Timer0`), then rests on clip 0 until
+-- the scene lets it go (`+0x1d4`), and walks, the kind's top nibble clear.
+local function let_out(e)
+    local three = e:routine(3)
+    if three == 0 then
+        e:set_routine(3, 1)
+        e:set_timer(0, 0x33)
+        three = 1
+    end
+    if three == 1 then
+        if e:joint(0x10040) then
+            e:clip(0, 0, 0x7F)
+            e:set_routine(3, 2)
+        end
+        local left = e:timer(0)
+        if left ~= 0 then
+            e:set_timer(0, left - 1)
+            e:set_var(COMMAND, 4)
+            e:set_var(COMMAND_TO, 3)
+        end
+    elseif three == 2 then
+        e:joint(0x20)
+        if e:sce_free(0) ~= 0 then
+            e:set_kind(e:kind() & 0x0FFF)
+            routines(e, 1)
+            e:set_var(STUCK, 0)
+            e:set_var(T222, 0x2D)
+        end
+    end
+end
+
+local function shut(e)
+    if e:routine(2) == 0 then
+        shut_in(e)
+    elseif e:routine(2) == 1 then
+        let_out(e)
+    end
+end
+
+local STATES <const> = {
+    [0] = wait, walk, turn, stuck, lash, spit, kill, retreat, [10] = hold, [11] = shut,
+}
 
 -- `FUN_00488160` and `FUN_00488190`, from `FUN_00488140`: the head twists
 -- one way and back for the spit.
@@ -943,7 +1172,8 @@ local function spark(e)
 end
 
 -- `funcs_487037` (`0x529ec4`), by weapon, with `censorship_off` and
--- `hard_mode` clear. Only the weapons arklay fires are ported.
+-- `hard_mode` clear. Only the weapons arklay fires are ported, and 9's and
+-- 0xA's `hard_mode` readers (`0x4873ad`, `0x487402`) aren't.
 local HURTS <const> = {
     resume, resume, resume, bleed, flinch, flinch, flinch, flinch,
     [0xD] = resume, -- `0x529ef8`: the Colt's, the handguns'.
@@ -955,9 +1185,20 @@ local HURTS <const> = {
     [0x13] = flinch, -- `0x529f10`: the Beretta's, the table's last, 0x11's.
 }
 
+-- `0x529f14`, for `censorship_off` or `hard_mode`: the shotguns' and the
+-- magnum's (5 to 8) are the handgun's. 0xB's (`0x4874e0`) isn't ported.
+local HURTS_HARD <const> = {}
+for weapon, entry in pairs(HURTS) do
+    HURTS_HARD[weapon] = entry
+end
+for weapon = 5, 8 do
+    HURTS_HARD[weapon] = resume
+end
+
 -- `FUN_00487010`: `Routine_0` 2.
 local function hurt(e)
-    local entry = HURTS[e:routine(1)]
+    local table = (e:censorship_off() or e:hard_mode()) and HURTS_HARD or HURTS
+    local entry = table[e:routine(1)]
     if entry then
         entry(e)
     end
@@ -1176,19 +1417,20 @@ local function init(e)
     e:set_damage_flg(0)
     e:routines(1, start, 0, 0)
     e:set_speed(0, 0, 0)
-    local life
+    -- The table by the EASY bit, its random 0 to 3, HARD's double
+    -- (`0x484d4c`, after either table), then 4:164's penalty by the table.
+    local life, penalty
     if e:easy() then
-        life = LIFE_EASY[(e:rnd() & 0xF) + 1]
-        life = life + (e:rnd() & 3)
-        if e:common_a4() then
-            life = life - 0x14
-        end
+        life, penalty = LIFE_EASY[(e:rnd() & 0xF) + 1], 0x14
     else
-        life = LIFE[(e:rnd() & 0xF) + 1]
-        life = life + (e:rnd() & 3)
-        if e:common_a4() then
-            life = life - 0x32
-        end
+        life, penalty = LIFE[(e:rnd() & 0xF) + 1], 0x32
+    end
+    life = life + (e:rnd() & 3)
+    if e:hard_mode() then
+        life = life * 2
+    end
+    if e:common_a4() then
+        life = life - penalty
     end
     e:set_life(life)
     e:set_d_life(0xD)
