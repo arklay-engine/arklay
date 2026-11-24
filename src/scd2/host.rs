@@ -2090,6 +2090,15 @@ impl AuthoredFlags {
             std::array::from_fn(|at| over(flags.1[at], self.written.1[at], self.values.1[at])),
         )
     }
+
+    /// `fg_room`'s first word with the setup's bits back over what the
+    /// room's script set-up (`Sce_work_clr_set`, [`Re2State::reset_mask_groups`])
+    /// cleared: a setup's bits there stand for the play since the room's load.
+    pub fn restore_room_word(&self, banks: &mut [[u32; 8]; BANKS]) {
+        let bank = usize::from(ROOM_BANK);
+        let written = self.written.0[bank][0];
+        banks[bank][0] = banks[bank][0] & !written | self.values.0[bank][0] & written;
+    }
 }
 
 pub const KEY_BANK: u8 = 31;
