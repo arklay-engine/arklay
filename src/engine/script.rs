@@ -940,6 +940,19 @@ fn open_pack(
     Ok(pack)
 }
 
+/// Whether a converted pack holds what another build would pack, as the
+/// launcher judges it stale: its conversion revision or the fingerprint of
+/// the engine's own sources it packs (`games/re2`'s scripts, say) is not this
+/// build's, or is missing, so a run of it plays those, not the ones under
+/// test. A pack no conversion wrote (neither field) is left alone.
+fn converted_by_another_build(manifest: &crate::manifest::Manifest) -> bool {
+    if manifest.convert_version.is_none() && manifest.source_hash.is_none() {
+        return false;
+    }
+    let game = crate::convert::Game::from_id(&manifest.id).unwrap_or(crate::convert::Game::Re1);
+    crate::launcher::is_stale(manifest, &[(game, game.packed())].into())
+}
+
 /// `load_game_pack`'s `title_keys`: config.ini's `KeyDef` and
 /// `JoyDef_Emulated` as `{ keys = "...", pad = "..." }`, each the line's
 /// value. Anything else is an error, since a table that isn't what was meant
@@ -1299,6 +1312,13 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                 let user_mods = user_mods.unwrap_or(!driver.headless);
                 let pack = open_pack(Path::new(&path), &mods, user_mods, language.as_deref())
                     .map_err(engine_error)?;
+                // Printed, not counted: a strict script still runs the pack.
+                if pack.manifest().is_some_and(converted_by_another_build) {
+                    eprintln!(
+                        "warning: {path} was converted from other sources than this build's \
+                         (its scripts, language or converter): convert it again"
+                    );
+                }
                 let (saves, save_dir) = match save_dir {
                     Some(dir) => (None, PathBuf::from(dir)),
                     None => {
@@ -1868,6 +1888,25 @@ mod tests {
         let lua = Lua::new();
         let value: Value = lua.load(source).eval().unwrap();
         serde_json::to_string(&to_json(&value).unwrap()).unwrap()
+    }
+
+    /// A pack this build would convert as it is passes; one with another
+    /// fingerprint or revision, or with only one of them, is another
+    /// build's; one with neither (no conversion's) is left alone.
+    #[test]
+    fn a_pack_from_other_sources_is_another_builds() {
+        let (revision, hash) = crate::convert::Game::Re2.packed();
+        let mut manifest = crate::manifest::Manifest::base("re2");
+        assert!(!converted_by_another_build(&manifest), "no conversion's");
+        manifest.convert_version = Some(revision);
+        assert!(converted_by_another_build(&manifest), "no fingerprint");
+        manifest.source_hash = Some(hash.clone());
+        assert!(!converted_by_another_build(&manifest));
+        manifest.source_hash = Some("0123456789abcdef".into());
+        assert!(converted_by_another_build(&manifest), "other scripts");
+        manifest.source_hash = Some(hash);
+        manifest.convert_version = Some(revision + 1);
+        assert!(converted_by_another_build(&manifest), "another revision");
     }
 
     #[test]

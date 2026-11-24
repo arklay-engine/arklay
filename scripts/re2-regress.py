@@ -1313,6 +1313,10 @@ BACKLOG_HIGH, BACKLOG_LOW = 48, 16
 # and the three worst.
 RETAIN_FRAMES = 32
 FRAME_BYTES = 320 * 240 * 3 + 54
+# What `load_game_pack` prints of a pack converted from other sources than the binary's (a `--pack` made before a
+# change to games/re2, say): the run would test that pack's scripts, not these.
+STALE_PACK = "was converted from other sources than this build's"
+STALE_PACK_TEXT = "the pack was converted from other sources than this arklay's: convert it again"
 # Set on Ctrl-C, SIGTERM or SIGHUP: every run kills its arklay and stops.
 STOP = threading.Event()
 LIVE: set = set()  # the arklay processes running now
@@ -1540,9 +1544,12 @@ def seed_saves(run: dict, ctx: dict, saves_dir: Path) -> str | None:
         finally:
             with LIVE_LOCK:
                 LIVE.discard(proc)
+    log_text = (out / f"{tag}.log").read_text(errors="replace")
+    if STALE_PACK in log_text:
+        return STALE_PACK_TEXT
     if proc.returncode:
         return f"saves_from: arklay exited {proc.returncode} playing {source['name']} ({tag}.log)"
-    final = json_lines((out / f"{tag}.log").read_text(errors="replace"), "save-final")
+    final = json_lines(log_text, "save-final")
     made = {row["count"]: row["name"] for row in final[-1][1] if "count" in row} if final else {}
     by_count = {save_count(path): path for path in ref_saves}
     if sorted(made) != sorted(by_count):
@@ -1607,7 +1614,7 @@ def run_one(run: dict, ctx: dict) -> dict:
             why = seed_saves(run, ctx, saves_dir)
             if why:
                 result["text"] = why
-                result["problems"].append(why)
+                result["problems"].append("stale pack" if why == STALE_PACK_TEXT else why)
                 return result
         return finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks, offset, compare_from,
                           ref_dir, ref_trace, ark_trace, saves_dir)
@@ -1654,7 +1661,9 @@ def finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks
     if want_frames:
         prepare_capture(frames_dir)
     # The output goes to files, not pipes, so that polling for frames can't leave arklay blocked on a full pipe.
-    with tempfile.TemporaryFile("w+") as stdout, tempfile.TemporaryFile("w+") as stderr:
+    # arklay writes UTF-8 (a pack's path in a warning, say), whatever the locale's encoding.
+    output = {"mode": "w+", "encoding": "utf-8", "errors": "replace"}
+    with tempfile.TemporaryFile(**output) as stdout, tempfile.TemporaryFile(**output) as stderr:
         if STOP.is_set():
             raise Interrupted()
         proc = subprocess.Popen(command, cwd=ROOT, stdout=stdout, stderr=stderr, text=True)
@@ -1676,7 +1685,12 @@ def finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks
         stdout.seek(0)
         stderr.seek(0)
         out_text, err_text = stdout.read(), stderr.read()
-    (out / f"{name}.log").write_text(out_text + err_text)
+    (out / f"{name}.log").write_text(out_text + err_text, encoding="utf-8")
+    # Checked first, as a stale pack's other scripts can be why arklay failed.
+    if STALE_PACK in err_text:
+        result["text"] = STALE_PACK_TEXT
+        result["problems"].append("stale pack")
+        return result
     if proc.returncode:
         result["text"] = f"arklay exited {proc.returncode}: {err_text.strip()[-200:]}"
         result["problems"].append("arklay failed")
