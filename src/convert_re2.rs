@@ -781,7 +781,7 @@ fn copy_text(
 /// own code (the font's widths and colours, the message codes). A change to
 /// what [`packed_source_hash`] covers needs no bump. It carries on from the
 /// revision the two converters shared.
-pub const CONVERT_VERSION: u32 = 27;
+pub const CONVERT_VERSION: u32 = 28;
 
 /// The checked-in scripts the pack takes as they are: each entry and its
 /// source.

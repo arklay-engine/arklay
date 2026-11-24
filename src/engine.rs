@@ -21156,10 +21156,11 @@ fn tick_room_timed(
     // A game RE 2's title handed over has no spawn state: its first live
     // tick runs `Player_move` from `Pl_init`'s routines. A door's settling
     // tick keeps the spawn's frame, the door's stop still up.
-    // The title's dispatch is the first live tick's alone, whatever it
-    // finds.
+    // The title's dispatch is the first tick's that runs `Player_move`,
+    // whatever it finds: a scene's `fg_stop` player bit keeps it waiting.
     let title_first = context.game.is_re2_room
         && !frozen
+        && !context.game.re2.player_stopped()
         && std::mem::take(&mut context.game.re2.player.title_first_move);
     let re2_spawn = title_first && state == 0;
     if re2_spawn {
@@ -41258,6 +41259,31 @@ off_0010:
         assert!(session.game.re2.player.title_first_move);
         let from = RoomId::parse("100").unwrap();
         session.enter_room(&pack, Some(from), false, RoomBgmHandoff::Now);
+        assert!(!session.game.re2.player.title_first_move);
+    }
+
+    /// The title's first-move dispatch waits for `Player_move`: while a
+    /// scene holds `fg_stop`'s player bit up, no tick takes it.
+    #[test]
+    fn the_titles_first_move_waits_for_the_players_stop() {
+        let pack = re2_demo_pack(&[0; 8]);
+        let tick = |session: &mut GameSession| {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        };
+        // Without the stop, the first tick takes it.
+        let mut session = re2_demo_session(&pack, player::Options::default());
+        tick(&mut session);
+        assert!(!session.game.re2.player.title_first_move);
+        let mut session = re2_demo_session(&pack, player::Options::default());
+        for _ in 0..3 {
+            *session.game.re2.fg_stop_mut() |= 0x8000_0000;
+            tick(&mut session);
+            assert!(session.game.re2.player.title_first_move);
+        }
+        *session.game.re2.fg_stop_mut() &= !0x8000_0000;
+        tick(&mut session);
         assert!(!session.game.re2.player.title_first_move);
     }
 

@@ -43,8 +43,8 @@ const ENEMY_SLOTS: usize = crate::rdt2::ANIM_SLOTS as usize;
 /// [`crate::scd2::host::SPLAYER_SLOT`].
 const SPLAYER_ANIMATION: usize = ENEMY_SLOTS;
 /// RE2's player animations for an extra mode's game (`Rbj_set`'s bank with
-/// mask bit 31), after `splayer_work`'s.
-const EXTRA_PLAYER_ANIMATION: usize = CHARACTER_ANIMATIONS + SPLAYER_ANIMATION + 1;
+/// mask bit 31): `anim/extra`, apart from the numbered slots `<slots>` binds.
+const EXTRA_PLAYER_ANIMATION: &str = "extra";
 
 /// Free entry of the effect sprite index table.
 const FREE_SPRITE: u8 = 0xFF;
@@ -618,20 +618,22 @@ impl RoomSource {
         };
 
         let extra_room_anim = if self.dialect == Dialect::Re2 {
-            let stem = slot_stem(&kind("anim"), EXTRA_PLAYER_ANIMATION);
+            let stem = format!("{}/{EXTRA_PLAYER_ANIMATION}", kind("anim"));
+            let rdt = crate::heap2::rdt_entry(&id.code());
             if pack.contains(&format!("{stem}.emr")) {
                 build_anim(&stem, pack, self.dialect)
                     .map_err(|error| model_warnings.push(format!("animation {stem}: {error:#}")))
                     .ok()
-            } else {
+            } else if pack.depth_of(&format!("{dir}/{XML_FILE}")) == pack.depth_of(&rdt) {
                 // A pack converted before the folder carried the bank: the
-                // room's RDT as the original loads it holds it.
-                pack.read(&crate::heap2::rdt_entry(&id.code()))
-                    .ok()
-                    .and_then(|data| {
-                        crate::rdt2::extra_room_anim(&data)
-                            .and_then(|(emr, edd)| crate::emd2::parse_room_anim(emr, edd).ok())
-                    })
+                // room's RDT as the original loads it holds it, when it came
+                // with the room. A room a mod replaces ships its own bank.
+                pack.read(&rdt).ok().and_then(|data| {
+                    crate::rdt2::extra_room_anim(&data)
+                        .and_then(|(emr, edd)| crate::emd2::parse_room_anim(emr, edd).ok())
+                })
+            } else {
+                None
             }
         } else {
             None
@@ -1085,27 +1087,32 @@ pub(super) fn re2_object(slot: usize, tim: &[u8], md1: &[u8]) -> Result<ObjectAs
 pub(super) fn re2_anim_files(data: &[u8], id: RoomId) -> Vec<(String, Vec<u8>)> {
     let dir = format!("{}/anim", id.rdt_dir());
     let mut files = Vec::new();
-    let mut add = |pair: Option<(&[u8], &[u8])>, slot: usize| {
+    let mut add = |pair: Option<(&[u8], &[u8])>, stem: String| {
         if let Some((emr, edd)) =
             pair.filter(|(emr, edd)| crate::emd2::parse_room_anim(emr, edd).is_ok())
         {
-            let stem = slot_stem(&dir, slot);
             files.push((format!("{stem}.emr"), emr.to_vec()));
             files.push((format!("{stem}.edd"), edd.to_vec()));
         }
     };
-    add(crate::rdt2::room_anim(data), PLAYER_ANIMATION);
+    add(
+        crate::rdt2::room_anim(data),
+        slot_stem(&dir, PLAYER_ANIMATION),
+    );
     for slot in 0..ENEMY_SLOTS {
         add(
             crate::rdt2::character_anim(data, slot as u8),
-            CHARACTER_ANIMATIONS + slot,
+            slot_stem(&dir, CHARACTER_ANIMATIONS + slot),
         );
     }
     add(
         crate::rdt2::splayer_anim(data),
-        CHARACTER_ANIMATIONS + SPLAYER_ANIMATION,
+        slot_stem(&dir, CHARACTER_ANIMATIONS + SPLAYER_ANIMATION),
     );
-    add(crate::rdt2::extra_room_anim(data), EXTRA_PLAYER_ANIMATION);
+    add(
+        crate::rdt2::extra_room_anim(data),
+        format!("{dir}/{EXTRA_PLAYER_ANIMATION}"),
+    );
     files
 }
 

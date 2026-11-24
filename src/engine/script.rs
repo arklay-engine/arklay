@@ -1877,11 +1877,12 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                 }
                 .map_err(engine_error)?;
                 // The voice lengths go with the trace, so only once it is made.
-                let app = driver.app()?;
                 if let Some(ticks) = screen_voice {
-                    app.pending_voice_ticks = Some(ticks.into());
+                    driver.app()?.pending_voice_ticks = Some(ticks.into());
                 }
-                if let (Some(ticks), Mode::Play(session)) = (voice_ticks, &mut app.mode) {
+                if let Some(ticks) = voice_ticks
+                    && let Mode::Play(session) = &mut driver.app()?.mode
+                {
                     session.game.re2.voice_ticks = ticks.into();
                 }
                 let unpaced_voice = !sound.unwrap_or(false) && sound_wav.is_none();
@@ -2075,6 +2076,38 @@ mod tests {
             Mode::Play(session) => session,
             _ => panic!("no session"),
         }
+    }
+
+    /// A trace without voice or sound options starts before any pack is
+    /// open, as `load_game_pack` comes after it.
+    #[test]
+    fn a_trace_starts_before_a_pack_is_open() {
+        let dir = TempDir::new();
+        let stop = Rc::new(Stop {
+            exit: Cell::new(None),
+            timed_out: Cell::new(false),
+            deadline: None,
+            timeout: Duration::default(),
+        });
+        let lua = new_state(&stop).unwrap();
+        let options = ScriptOptions {
+            name: "test".into(),
+            source: Vec::new(),
+            args: Vec::new(),
+            headless: true,
+            timeout: None,
+        };
+        let shared: Shared = Rc::new(RefCell::new(Driver::new(true, stop)));
+        lua.set_app_data(Rc::clone(&shared));
+        install(&lua, &shared, &options).unwrap();
+        let path = dir
+            .0
+            .join("run.trace")
+            .display()
+            .to_string()
+            .replace('\\', "/");
+        lua.load(format!("trace_start({path:?})")).exec().unwrap();
+        assert!(shared.borrow().trace.is_some());
     }
 
     /// Voice lengths a trace asks for on a screen wait for the game that

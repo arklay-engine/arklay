@@ -48,7 +48,8 @@ camera 10.
 | `object/<nn>.tmd`, `object/<nn>` | the room's object models and their texture pages | TMD; indexed `bmp`, `tim` |
 | `item/<nn>.tmd`, `item/<nn>` | the models of the items lying in the room, and their pages | TMD; indexed `bmp`, `tim` |
 | `effect/<nn>.xml`, `effect/<nn>` | the room's effect sprites (see [Effects](effects.md#a-rooms-effect-sprites)) | XML; `bmp`, `tim` |
-| `anim/<nn>.emr`, `.edd` | the player's animations for the room's own actions: pushing, climbing. In an RE 2 room `anim/00` is the player's, `anim/01` to `anim/11` the room's characters' (`01` to `10` by enemy slot, `11` the partner's), and `anim/12` the player's in an extra mode's game (The 4th Survivor, To-fu) | EMR, EDD |
+| `anim/<nn>.emr`, `.edd` | the player's animations for the room's own actions: pushing, climbing. In an RE 2 room `anim/00` is the player's, `anim/01` to `anim/11` the room's characters' (`01` to `10` by enemy slot, `11` the partner's) | EMR, EDD |
+| `anim/extra.emr`, `.edd` | RE 2 only: the player's animations for the room's own actions in an extra mode's game (The 4th Survivor, To-fu), in place of `anim/00`. `<slots>` does not bind it | EMR, EDD |
 | `sound.edh`, `sound.vb` | the room's sound table and sound bank | EDH, VB |
 | `esp.bin` | the room's effect sprites, in the RE 2 format | |
 
@@ -66,7 +67,11 @@ work memory, as they are: each room's RDT (`heap/<id>.rdt`), each enemy's TIM
 `heap/sub_<nn>.bgm`). The engine reads them only to know what a new enemy's
 memory holds before its init sets it (see "What a zombie's slot held before"
 in `oracle/re2-deviations.md`); a pack without them plays the same,
-except that those leftover values start at 0.
+except that those leftover values start at 0. A pack converted before room
+folders carried `anim/extra` also reads an extra mode's animations from the
+room's RDT there, when the RDT is in the same layer as the room's
+`room.xml`: without `heap/`, such a pack's extra modes lose those
+animations. A mod that replaces a room ships its own `anim/extra`.
 
 ## The room definition
 
