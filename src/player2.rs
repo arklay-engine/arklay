@@ -7173,8 +7173,8 @@ impl Mover<'_, '_> {
         let run = self.work.routine[1] == 5;
         self.footfall(u8::from(run), if run { NOISE_RUN } else { NOISE_STEP });
         self.joint_move();
-        let dx = self.player.pos[0] - x;
-        let dz = self.player.pos[2] - z;
+        let dx = self.player.pos[0].wrapping_sub(x);
+        let dz = self.player.pos[2].wrapping_sub(z);
         // `0x4F6C57`: the 32-bit sum into `SquareRoot0`, whose table root
         // of 10000 is 99, so a body 100 away is there.
         square_root0(dx.wrapping_mul(dx).wrapping_add(dz.wrapping_mul(dz))) < ARRIVE_DISTANCE
@@ -7525,8 +7525,32 @@ const SQRT_TABLE: [u16; 192] = [
     7931, 7948, 7964, 7981, 7997, 8014, 8030, 8046, 8062, 8079, 8095, 8111, 8127, 8143, 8159, 8175,
 ];
 
+/// The 256 words before [`SQRT_TABLE`]'s base (`0x5267F8` to `0x5269F6`,
+/// the tail of the table before it in `.data`), which `SquareRoot0` reads
+/// for a negative argument: its scaled index is -0x100 to -0x40.
+const SQRT_TABLE_BEFORE: [u16; 256] = [
+    3624, 3627, 3630, 3633, 3636, 3639, 3642, 3644, 3647, 3650, 3653, 3656, 3659, 3661, 3664, 3667,
+    3670, 3673, 3675, 3678, 3681, 3684, 3686, 3689, 3692, 3695, 3697, 3700, 3703, 3705, 3708, 3711,
+    3713, 3716, 3719, 3721, 3724, 3727, 3729, 3732, 3734, 3737, 3739, 3742, 3745, 3747, 3750, 3752,
+    3755, 3757, 3760, 3762, 3765, 3767, 3770, 3772, 3775, 3777, 3779, 3782, 3784, 3787, 3789, 3791,
+    3794, 3796, 3798, 3801, 3803, 3805, 3808, 3810, 3812, 3815, 3817, 3819, 3822, 3824, 3826, 3828,
+    3831, 3833, 3835, 3837, 3839, 3842, 3844, 3846, 3848, 3850, 3852, 3854, 3857, 3859, 3861, 3863,
+    3865, 3867, 3869, 3871, 3873, 3875, 3877, 3879, 3881, 3883, 3885, 3887, 3889, 3891, 3893, 3895,
+    3897, 3899, 3901, 3903, 3905, 3907, 3909, 3910, 3912, 3914, 3916, 3918, 3920, 3921, 3923, 3925,
+    3927, 3929, 3930, 3932, 3934, 3936, 3937, 3939, 3941, 3943, 3944, 3946, 3948, 3949, 3951, 3953,
+    3954, 3956, 3958, 3959, 3961, 3962, 3964, 3965, 3967, 3969, 3970, 3972, 3973, 3975, 3976, 3978,
+    3979, 3981, 3982, 3984, 3985, 3987, 3988, 3989, 3991, 3992, 3994, 3995, 3996, 3998, 3999, 4001,
+    4002, 4003, 4005, 4006, 4007, 4008, 4010, 4011, 4012, 4014, 4015, 4016, 4017, 4019, 4020, 4021,
+    4022, 4023, 4024, 4026, 4027, 4028, 4029, 4030, 4031, 4032, 4034, 4035, 4036, 4037, 4038, 4039,
+    4040, 4041, 4042, 4043, 4044, 4045, 4046, 4047, 4048, 4049, 4050, 4051, 4052, 4053, 4053, 4054,
+    4055, 4056, 4057, 4058, 4059, 4060, 4060, 4061, 4062, 4063, 4064, 4064, 4065, 4066, 4067, 4067,
+    4068, 4069, 4070, 4070, 4071, 4072, 4072, 4073, 4074, 4074, 4075, 4076, 4076, 4077, 4077, 4078,
+];
+
 /// `SquareRoot0` (`0x451780`): the table's root of `value` scaled to its
-/// top six or seven bits, shifted back by half the scale.
+/// top six or seven bits, shifted back by half the scale. A negative value
+/// (a 32-bit sum of squares that wrapped) keeps its sign through the shift
+/// and reads before the table.
 pub(crate) fn square_root0(value: i32) -> i32 {
     if value == 0 || value == -1 {
         return 0;
@@ -7538,7 +7562,11 @@ pub(crate) fn square_root0(value: i32) -> i32 {
     } else {
         value << (scale - 24)
     };
-    let root = u32::from(SQRT_TABLE[(index as usize).clamp(0x40, 0xFF) - 0x40]);
+    let root = u32::from(if index < 0 {
+        SQRT_TABLE_BEFORE[(index + 0x100).clamp(0, 0xFF) as usize]
+    } else {
+        SQRT_TABLE[(index as usize).clamp(0x40, 0xFF) - 0x40]
+    });
     ((root << ((31 - scale) >> 1)) >> 12) as i32
 }
 
@@ -12085,6 +12113,15 @@ mod tests {
     fn a_scripted_walk_arrives_within_the_table_roots_hundred() {
         assert_eq!(square_root0(100 * 100), 99);
         assert_eq!(square_root0(101 * 101), 100);
+        // A sum that wraps negative reads before the table: (46047, 46633)
+        // gives -4398, whose root is 62.
+        assert_eq!(
+            46047i32
+                .wrapping_mul(46047)
+                .wrapping_add(46633i32.wrapping_mul(46633)),
+            -4398
+        );
+        assert_eq!(square_root0(-4398), 62);
         for (short, arrives) in [(100, true), (101, false)] {
             let mut setup = Setup::new(0);
             setup.player.pos = [0, 0, 0];
