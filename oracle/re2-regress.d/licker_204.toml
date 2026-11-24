@@ -95,8 +95,8 @@ input = "licker_204_kill.txt"
 input_shift = 344
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,zm0,zm1"
 frames = [344, 1799]
-# from the warp's first cut on. 0.68 measured: Claire's and the body's shading at their edges; the licker dies out of
-# the cut, so Em22_before's shadow fade is not in view
+# from the warp's first cut on, 0.67 measured: Claire's and the body's shading at their edges. The licker's death is in
+# view (741 to 746), then the body slides below the cut, so Em22_before's later shadow fade is not
 frame_windows = [[350, 1799, 0.8]]
 expect = "match"
 record = "--start claire --warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip 3 --give 0:3:200"
@@ -127,8 +127,8 @@ input = "licker_204_kill.txt"
 input_shift = 344
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,zm0,zm1"
 frames = [344, 1799]
-# from the warp's first cut on. 0.79 measured: Leon's and the body's shading at their edges and the shots' flashes;
-# the licker dies out of the cut
+# from the warp's first cut on, 0.78 measured: Leon's and the body's shading at their edges, the shots' flashes and the
+# killing shot's blood (674, 675). The death is in view (669 to 677), then the body slides below the cut
 frame_windows = [[350, 1799, 0.9]]
 expect = "match"
 record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip 7 --give 0:7:200"
@@ -158,7 +158,7 @@ input = "licker_204_ceiling.txt"
 input_shift = 344
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,zm0,zm1"
 frames = [344, 1799]
-# from the warp's first cut on: the cut is an empty corner, 0.01 measured
+# from the warp's first cut on, 0.00 measured: the cut is an empty corner, the licker out of view
 frame_windows = [[350, 1799, 0.05]]
 expect = "match"
 record = "--warp 204:-16000:0:-10000:1024 --flag 4:85 --flag 4:86 --life 2000 --equip 2 --give 0:2:200"
@@ -187,7 +187,7 @@ input = "licker_204_scene.txt"
 input_shift = 344
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,snd,movie,zm0,zm1,fgroom,fgstat"
 frames = [344, 1799]
-# from the warp's first cut on. 0.43 measured: the player's and the licker's shading at their edges
+# from the warp's first cut on, 0.42 measured: the player's and the licker's shading at their edges
 frame_windows = [[350, 1799, 0.5]]
 expect = "match"
 record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 200"
