@@ -316,10 +316,11 @@ fn shot_records(weapon: u8) -> Option<&'static [Record; 3]> {
 /// `Wp_dmg_tbl`'s entry for the target.
 fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
     // The Colt's and the Beretta's rows are the handgun's but for `Em_30`'s
-    // Colt (`0x5369d0`'s fourteenth). `Em_3B`'s Beretta row has the lower
-    // heights, but arklay has no `Em_3B`.
+    // Colt (`0x5369d0`'s fourteenth) and `Em_3B`'s Beretta, which has the
+    // lower heights.
     let weapon = match (id, weapon) {
         (G1_ID, COLT) => return Some(&G1_COLT),
+        (LARVA_ID, BERETTA) => return Some(&LARVA_BERETTA),
         (_, SMG) => return smg_damage(id),
         (_, GATLING) => return gatling_damage(id),
         (_, SPARK) => return spark_damage(id),
@@ -340,6 +341,8 @@ fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
         SPIDER_ID | YOUNG_ID => &SPIDER_DAMAGE,
         ALLIGATOR_ID => &ALLIGATOR_DAMAGE,
         IVY_ID | VINE_ID | POISON_IVY_ID => &PLANT_DAMAGE,
+        MOTH_ID => &MOTH_DAMAGE,
+        LARVA_ID => &LARVA_DAMAGE,
         _ => &DAMAGE,
     };
     table.get(usize::from(weapon).checked_sub(2)?)
@@ -576,6 +579,8 @@ fn smg_damage(id: u8) -> Option<&'static Damage> {
         0x0081_020A,
         [-3000, -2000, -3000, 2000, -500, 3000],
     );
+    const MOTH: Damage = row(0x00A0_280A, 0x0285_0A0A, MOTH_HEIGHTS);
+    const LARVA: Damage = row(0x0070_1C07, 0x0285_0A0A, LARVA_HEIGHTS);
     Some(match id {
         LICKER_ID | LICKER_24_ID => &LICKER,
         DOG_ID => &DOG,
@@ -590,6 +595,8 @@ fn smg_damage(id: u8) -> Option<&'static Damage> {
         crate::zombie2::EMBRYO_ID => &EMBRYO,
         crate::zombie2::ROACH_ID => &ROACH,
         crate::zombie2::EM2D_ID => &EM2D,
+        MOTH_ID => &MOTH,
+        LARVA_ID => &LARVA,
         // The zombies' two tables (`0x535350`, `0x5354D0`) share the row.
         _ => &ZOMBIE,
     })
@@ -657,6 +664,13 @@ fn gatling_damage(id: u8) -> Option<&'static Damage> {
         0x0081_020A,
         [-3000, -2000, -3000, 2000, -500, 3000],
     );
+    const MOTH: Damage = row(0x0140_5014, 0x0285_0A0A, MOTH_HEIGHTS);
+    // The larva's row has 5000 where its others have 500.
+    const LARVA: Damage = row(
+        0x00E0_380E,
+        0x0285_0A0A,
+        [-5000, -2000, -4000, 5000, -500, 2000],
+    );
     Some(match id {
         LICKER_ID | LICKER_24_ID => &LICKER,
         DOG_ID => &DOG,
@@ -672,6 +686,8 @@ fn gatling_damage(id: u8) -> Option<&'static Damage> {
         0x28 => &EM28,
         crate::zombie2::ROACH_ID => &ROACH,
         crate::zombie2::EM2D_ID => &EM2D,
+        MOTH_ID => &MOTH,
+        LARVA_ID => &LARVA,
         // The zombies' two tables (`0x535350`, `0x5354D0`) share the row.
         _ => &ZOMBIE,
     })
@@ -697,6 +713,8 @@ fn spark_damage(id: u8) -> Option<&'static Damage> {
     const SPIDER: Damage = row([-7000, -2000, -6000, 6000, -500, 500]);
     const MRX: Damage = row([-3200, 100, -2000, 1600, -1000, 2600]);
     const G2: Damage = row([-4000, -2000, -6000, 2000, -500, 3000]);
+    const MOTH: Damage = row([-3000, -2000, -4000, -500, -500, 500]);
+    const LARVA: Damage = row([-3000, -2000, -2500, -500, -1300, 500]);
     Some(match id {
         DOG_ID | crate::zombie2::ROACH_ID => &DOG,
         CROW_ID => &CROW,
@@ -704,11 +722,101 @@ fn spark_damage(id: u8) -> Option<&'static Damage> {
         SPIDER_ID | YOUNG_ID => &SPIDER,
         MRX_ID => &MRX,
         G2_ID => &G2,
+        MOTH_ID => &MOTH,
+        LARVA_ID => &LARVA,
         // The zombies', the alligator's, the embryo's, room 205's bodies',
         // the plants', G1's and G3's.
         _ => &ZOMBIE,
     })
 }
+
+const MOTH_ID: u8 = crate::zombie2::MOTH_ID;
+const MOTH_HEIGHTS: [i32; 6] = [-5000, -2000, -4000, 500, -500, 2000];
+/// The same rows for `Em_3A` (`0x5372d0`).
+const MOTH_DAMAGE: [Damage; 7] = [
+    Damage {
+        damage: 0x0090_280B,
+        stun: 0x078F_1E0A,
+        heights: MOTH_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0090_280B,
+        stun: 0x078F_1E0A,
+        heights: MOTH_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0090_280B,
+        stun: 0x0081_020A,
+        heights: MOTH_HEIGHTS,
+    },
+    Damage {
+        damage: 0x03C0_F03C,
+        stun: 0x078F_1E0A,
+        heights: MOTH_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0641_9064,
+        stun: 0x078F_1E0A,
+        heights: MOTH_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0230_9828,
+        stun: 0x078F_1E0A,
+        heights: MOTH_HEIGHTS,
+    },
+    Damage {
+        damage: 0x03C1_0446,
+        stun: 0x078F_1E0A,
+        heights: MOTH_HEIGHTS,
+    },
+];
+
+const LARVA_ID: u8 = crate::zombie2::LARVA_ID;
+const LARVA_HEIGHTS: [i32; 6] = [-5000, -2000, -3500, 500, -1300, 2000];
+/// The same rows for `Em_3B` (`0x537450`).
+const LARVA_DAMAGE: [Damage; 7] = [
+    Damage {
+        damage: 0x00F0_3C0F,
+        stun: 0x078F_1E0A,
+        heights: LARVA_HEIGHTS,
+    },
+    Damage {
+        damage: 0x00F0_3C0F,
+        stun: 0x078F_1E0A,
+        heights: LARVA_HEIGHTS,
+    },
+    Damage {
+        damage: 0x00F0_3C0F,
+        stun: 0x078F_1E0A,
+        heights: LARVA_HEIGHTS,
+    },
+    Damage {
+        damage: 0x03C0_F03C,
+        stun: 0x078F_1E0A,
+        heights: LARVA_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0641_9064,
+        stun: 0x078F_1E0A,
+        heights: LARVA_HEIGHTS,
+    },
+    Damage {
+        damage: 0x01E0_A03C,
+        stun: 0x078F_1E0A,
+        heights: LARVA_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0320_F050,
+        stun: 0x078F_1E0A,
+        heights: LARVA_HEIGHTS,
+    },
+];
+/// `Em_3B`'s Beretta row (`0x537450`'s nineteenth).
+const LARVA_BERETTA: Damage = Damage {
+    damage: 0x00F0_3C0F,
+    stun: 0x078F_1E0A,
+    heights: [-5000, -2000, -4000, 500, -500, 2000],
+};
 
 /// `Em_30`'s Colt row, harder than its handgun's.
 const G1_COLT: Damage = Damage {
@@ -1928,6 +2036,26 @@ mod tests {
             let hit = weapon_at_ck(&shooter, &[body], &[]);
             assert_eq!(hit.map(|hit| hit.slot), found.then_some(4), "at {x}");
         }
+    }
+
+    /// `Em_3A`'s rows (`0x5372d0`): the handgun does 11 in the first band and
+    /// the magnum (6) 100, with the moth's heights; `Em_3B`'s (`0x537450`)
+    /// do 15, and its Beretta row alone has the lower heights.
+    #[test]
+    fn the_moth_and_its_larvae_take_their_own_rows() {
+        let moth = damage_table(MOTH_ID, 2).unwrap();
+        assert_eq!((moth.damage & 0x3FF, moth.heights), (11, MOTH_HEIGHTS));
+        assert_eq!(damage_table(MOTH_ID, 6).unwrap().damage & 0x3FF, 100);
+        assert_eq!(damage_table(MOTH_ID, COLT).unwrap().damage, moth.damage);
+        assert_eq!(damage_table(MOTH_ID, SMG).unwrap().damage, 0x00A0_280A);
+        assert_eq!(damage_table(MOTH_ID, GATLING).unwrap().damage, 0x0140_5014);
+        let larva = damage_table(LARVA_ID, 2).unwrap();
+        assert_eq!((larva.damage & 0x3FF, larva.heights), (15, LARVA_HEIGHTS));
+        let beretta = damage_table(LARVA_ID, BERETTA).unwrap();
+        assert_eq!(beretta.damage, larva.damage);
+        assert_eq!(beretta.heights, MOTH_HEIGHTS);
+        assert_eq!(damage_table(LARVA_ID, GATLING).unwrap().heights[3], 5000);
+        assert_eq!(damage_table(LARVA_ID, SPARK).unwrap().heights[4], -1300);
     }
 
     /// `Wp_dmg_tbl`'s fifteenth rows: the sub-machine gun's, its own for

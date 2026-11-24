@@ -413,14 +413,6 @@ pub fn targets_of(re2: &crate::scd2::host::Re2State) -> Vec<crate::weapon2::Targ
         .filter(|(slot, _)| *slot != SPLAYER_SLOT)
         .filter_map(|(slot, character)| {
             let character = character.as_deref()?;
-            // The moth's and the larvae's hits (`Routine_0` 2 and 3) aren't
-            // ported yet.
-            if matches!(
-                character.id,
-                crate::zombie2::MOTH_ID | crate::zombie2::LARVA_ID
-            ) {
-                return None;
-            }
             let zombie = character.zombie.as_ref()?;
             let pos = character.body.pos;
             Some(crate::weapon2::Target {
@@ -439,6 +431,12 @@ pub fn targets_of(re2: &crate::scd2::host::Re2State) -> Vec<crate::weapon2::Targ
                 } else if character.id == crate::zombie2::ALLIGATOR_ID {
                     // `FUN_00468a10`.
                     0x44C
+                } else if character.id == crate::zombie2::MOTH_ID {
+                    // `FUN_004acd70`.
+                    0x384
+                } else if character.id == crate::zombie2::LARVA_ID {
+                    // `FUN_004b03d0`, for the kinds it ports.
+                    200
                 } else if matches!(
                     character.id,
                     crate::zombie2::CROW_ID

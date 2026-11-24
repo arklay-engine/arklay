@@ -24,4 +24,47 @@ input = "moth_613_walk.txt"
 input_shift = 344
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,msg,zm*,fgstat"
 expect = "match"
+frames = [344, 1743]
 record = "--warp 613:-26300:0:-18000:0 --life 200"
+
+# The same under HARD.
+[[run]]
+name = "moth_613_walk_hard"
+difficulty = "hard"
+room = "613"
+sound = false
+ticks = 2400
+setup_script = "moth_613_hard.lua"
+input = "moth_613_walk.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,msg,zm*,fgstat"
+expect = "match"
+record = "--warp 613:-26300:0:-18000:0 --life 200"
+
+# The walk in, then the handgun (weapon 2) aimed at the moth and fired every 25 ticks.
+[[run]]
+name = "moth_613_shots"
+room = "613"
+sound = false
+ticks = 2400
+setup_script = "moth_613_shots.lua"
+input = "moth_613_shots.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,msg,inv,zm*,fgstat"
+expect = "match"
+frames = [344, 1343]
+record = "--warp 613:-26300:0:-18000:0 --life 200 --equip 2 --give 0:2:200"
+
+# The same under HARD.
+[[run]]
+name = "moth_613_shots_hard"
+difficulty = "hard"
+room = "613"
+sound = false
+ticks = 2400
+setup_script = "moth_613_shots_hard.lua"
+input = "moth_613_shots.txt"
+input_shift = 344
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,msg,inv,zm*,fgstat"
+expect = "match"
+record = "--warp 613:-26300:0:-18000:0 --life 200 --equip 2 --give 0:2:200"

@@ -11,12 +11,15 @@
 -- turns to the target bobbing (4), crawls toward it (5), takes off and flies
 -- at it in a hop (11, and 2), hovers shedding scales (8), and grabs the player
 -- to squeeze them (3), whose side of it is `0x4afac0`, the hook the init sets
--- at `0x9886e0` (`Mover::em3a_held`).
+-- at `0x9886e0` (`Mover::em3a_held`). Shot while it sheds scales, it turns
+-- its back (6) and hops off to climb the wall it meets to the ceiling (7).
 --
--- Not ported yet: `Routine_1` 6, 7, 9 and 12, the hit, the death, state 7,
--- the partner as the target, the wings' beat (`0x52bdf8`), the shadow
--- (`Kage_work_set`), and the parts' draw words the init sets (part 0's from
--- `+0x98`, and parts 13 to 16's `0x4000`).
+-- Not ported yet: `Routine_1` 9 and 12; the hits and deaths of weapons 0,
+-- 0xA, 0xB, 0xE and 0x10 (taken as the handgun's); the deaths' burnt parts
+-- and the head's flight; the shadow's fade in state 7; the partner as the
+-- target; the wings' beat (`0x52bdf8`); the shadow (`Kage_work_set`); and the
+-- parts' draw words the init sets (part 0's from `+0x98`, and parts 13 to
+-- 16's `0x4000`).
 
 local TARGET <const> = 0 -- `+0x218`: 1 while the partner is the target.
 local WINGS <const> = 1 -- `+0x21e`: the wings' beat, by `FUN_004afbf0`'s table.
@@ -50,6 +53,7 @@ local FROM_X <const> = 26 -- `+0x23e`: where the hop began.
 local FROM_Z <const> = 27 -- `+0x240`.
 local SAME <const> = 28 -- `+0x242`: the hops in a row that came down where they began.
 local B243 <const> = 29 -- `+0x243`: a short rest.
+local B23B <const> = 30 -- `+0x23b`: 1 keeps the next hit's sound off.
 
 local TYPE_CEILING <const> = 0x10
 
@@ -99,7 +103,18 @@ local POINTS <const> = {
     { 3, 500, -100, -1400 },
     { 5, 700, -300, 1500 },
     { 5, -400, -200, 1600 },
+    { 0, 0, -300, 0 },
+    { 0, 0, -290, 0 },
+    { 0, -500, -300, 600 },
+    { 0, -750, 50, -450 },
+    { 0, -900, -50, 200 },
+    { 0, -1000, 300, -700 },
 }
+
+-- `0x52bd2b` and `0x52bd3f`: a hit's row of `ROWS`, and its point of
+-- `POINTS` (0 for none), by the weapon.
+local HIT_ROWS <const> = { [0] = 0, 0, 0, 0, 0, 1, 1, 1, 1, 3, 3, 9, 1, 1, 11, 0, 3, 3, 0, 3 }
+local HIT_POINTS <const> = { [0] = 0, 0, 12, 12, 12, 12, 12, 12, 12, 12, 0, 0, 0, 12, 0, 12, 0, 12, 0, 0 }
 
 -- The target's place: the player, or with `TARGET` the partner.
 local function target_xz(e)
@@ -949,6 +964,99 @@ local function grab(e)
     end
 end
 
+-- `FUN_004add20`, `Routine_1` 6: shot while it sheds scales, it turns its
+-- back on the target, to the nearest quarter, 0x30 a tick bobbing, and hops
+-- off (11) to climb the first wall it meets (`B228`).
+local function turn_away(e)
+    if e:routine(2) == 0 then
+        e:set_angle(e:angle() & 0xFFF)
+        e:set_routine(2, 1)
+        local mx, _, mz = e:pos()
+        local tx, tz = target_xz(e)
+        local dir = (e:direction(mx, mz, tx, tz) - 0x800) & 0xFFF
+        local to = (dir & ~0x3FF) + (dir & 0x200) * 2
+        e:set_timer(0, to)
+        local angle = i16(e:angle())
+        local gap = abs(angle - to)
+        local rate = angle >= to and -0x30 or 0x30
+        if gap & 0x800 ~= 0 then
+            gap = 0xFFF - gap
+            rate = -rate
+        end
+        e:set_timer(1, gap)
+        e:set_timer(2, rate)
+        e:set_timer(3, 0)
+        e:clip(3, 0, 0xF)
+    end
+    e:set_angle(e:angle() + i8(e:timer(2)))
+    local bob = e:timer(3) & 0xFF
+    local _, roll = e:cdir()
+    e:set_cdir(BOBS[bob & 7], roll)
+    e:set_timer(3, bob + 1)
+    e:set_timer(1, e:timer(1) - 0x30)
+    if i16(e:timer(1)) <= 0 then
+        e:set_var(B228, 1)
+        e:set_angle(e:timer(0))
+        e:routines(1, 11, 0, 0)
+        e:set_var(HOP, 1)
+    end
+    e:joint(0x100)
+end
+
+-- `FUN_004ade90`: up onto the ceiling (clip 5), then hanging there (8).
+local function climb_up(e)
+    if e:routine(3) == 0 then
+        e:set_routine(3, 1)
+        e:clip(5, 0, 0xF)
+        box(e, true)
+        e:set_var(UP, 1)
+        local _, roll = e:cdir()
+        e:set_cdir(0, roll)
+    end
+    if e:joint(0x100) then
+        e:set_be_flg(e:be_flg() | 4)
+        e:set_routine(2, 1)
+        e:set_routine(3, 0)
+        box(e, true)
+        local _, sy, sz = e:speed()
+        e:set_speed(0x30F, sy, sz)
+        e:add_speed_xz()
+        local pitch, roll = e:cdir()
+        e:set_cdir(pitch, i16(roll - 0x400))
+        e:clip(8, 0, 0)
+        e:joint(0x100)
+    end
+end
+
+-- `0x52bcb8`: the spread of the wait on the ceiling.
+local CLING <const> = { [0] = 0, 15, 0, -15, 0, 15, 0, -15 }
+
+-- `FUN_004adf30`: 150 ticks or so on the ceiling, or until a hit.
+local function cling(e)
+    if e:routine(3) == 0 then
+        e:set_routine(3, 1)
+        e:set_timer(0, CLING[e:rnd() & 7] + 0x96)
+        e:set_var(SHOT, 0)
+    end
+    e:set_timer(0, e:timer(0) - 1)
+    if e:timer(0) == 0 or e:var(SHOT) ~= 0 then
+        e:set_routine(2, 2)
+        e:set_routine(3, 0)
+    end
+    e:joint(0x100)
+end
+
+local CLIMB <const> = { [0] = climb_up, cling, ceiling_drop }
+
+-- `FUN_004ade70`, `Routine_1` 7: up the wall to the ceiling, a wait, and the
+-- drop.
+local function climb(e)
+    local step = CLIMB[e:routine(2)]
+    if step then
+        step(e)
+    end
+end
+
 local MOVES <const> = {
     [0] = rest,
     [1] = choose,
@@ -956,10 +1064,23 @@ local MOVES <const> = {
     [3] = grab,
     [4] = turn,
     [5] = crawl,
+    [6] = turn_away,
+    [7] = climb,
     [8] = hover,
     [10] = ceiling,
     [11] = hop,
 }
+
+-- The routines and the speed as the move left them, for a hit to go back to.
+local function keep_move(e)
+    e:set_var(LAST_R1, e:routine(1))
+    e:set_var(LAST_R2, e:routine(2))
+    e:set_var(LAST_R3, e:routine(3))
+    local sx, sy, sz = e:speed()
+    e:set_var(LAST_SX, sx)
+    e:set_var(LAST_SY, sy)
+    e:set_var(LAST_SZ, sz)
+end
 
 -- `FUN_004acfa0`.
 local function move(e)
@@ -971,19 +1092,280 @@ local function move(e)
     if step then
         step(e)
     end
-    e:set_var(LAST_R1, e:routine(1))
-    e:set_var(LAST_R2, e:routine(2))
-    e:set_var(LAST_R3, e:routine(3))
-    local sx, sy, sz = e:speed()
-    e:set_var(LAST_SX, sx)
-    e:set_var(LAST_SY, sy)
-    e:set_var(LAST_SZ, sz)
+    keep_move(e)
     if e:status(0x20) then
         e:set_var(B22C, 0x3C)
     end
 end
 
-local STATES <const> = { [0] = init, [1] = move }
+-- `FUN_004aeba0`: a hit wakes it on the ceiling, and while it sheds scales
+-- each third of its life it loses (of 150, EASY 100, even on HARD's 200)
+-- counts down `B22D` and makes it turn away (`shot_turn`).
+local function wake(e)
+    if e:var(UP) ~= 0 then
+        e:set_var(SHOT, 1)
+    end
+    local left = e:var(B22D)
+    if left == 0 or e:var(SHOT) ~= 0 or e:var(FLAGS) & 1 == 0 then
+        return
+    end
+    local life = e:life()
+    if life >= 0 and life < (e:easy() and 100 or 150) * left // 3 then
+        e:set_var(B22D, left - 1)
+        e:set_var(SHOT, 1)
+    end
+end
+
+-- `FUN_004aea70`, `Routine_0` 2 for the handgun's kind (weapons 1 to 4 and
+-- 0xD): the blood, the sound (unless `B23B`), `wake`, and the move it was in
+-- carries on this tick.
+local function hit_light(e)
+    local weapon = e:routine(1)
+    local row, point = HIT_ROWS[weapon], HIT_POINTS[weapon]
+    if point ~= 0 and e:var(UP) == 0 then
+        effect_at_point(e, row, point)
+    else
+        effect_at_part(e, 0, row)
+    end
+    if e:var(B23B) == 0 then
+        e:sound(3)
+    end
+    e:set_var(B23B, 0)
+    wake(e)
+    e:set_var(B23A, weapon)
+    e:routines(1, e:var(LAST_R1), e:var(LAST_R2), e:var(LAST_R3))
+    e:set_speed(e:var(LAST_SX), e:var(LAST_SY), e:var(LAST_SZ))
+    local step = MOVES[e:routine(1)]
+    if step then
+        step(e)
+    end
+    keep_move(e)
+end
+
+-- `FUN_004aed90`: knocked out of the air, it turns 0x100 away from the target
+-- and falls (clip 4).
+local function knocked(e)
+    local sy = i16(e:var(LAST_SY))
+    if sy < 0 then
+        sy = 0x28
+    end
+    e:set_speed(0, sy, e:var(LAST_SZ))
+    e:set_timer(0, 0x28)
+    local tx, tz = target_xz(e)
+    e:goto_point(tx, tz, -0x100)
+    e:set_var(STEER, 0)
+    e:set_var(LUNGE, 0)
+    e:set_var(B228, 0)
+    wake(e)
+    e:set_var(B23A, e:routine(1))
+    if e:move_no() ~= 4 then
+        e:clip(4, 0, 0xF)
+    end
+    e:joint(0x100)
+    e:set_var(B23B, 0)
+end
+
+-- `FUN_004aec90`: a heavy hit's first tick. On the floor it stops to rest
+-- (`B243`) beating its wings; on the ceiling it's a light hit; in the air
+-- it's knocked down.
+local function hit_heavy_start(e)
+    e:sound(3)
+    e:set_var(SAME, 0)
+    if e:var(HELD) == 0 then
+        e:set_var(FLAGS, e:var(FLAGS) | 0x80)
+        e:set_var(WINGS, 0)
+        e:clip(3, 0, 0)
+        e:joint(0x100)
+        e:routines(1, 0, 0, 0)
+        e:set_var(B243, 1)
+        e:set_var(B22C, 0)
+        e:set_var(LAST_R1, 0)
+        e:set_var(LAST_R2, 0)
+        e:set_var(LAST_R3, 0)
+        return
+    end
+    if e:var(UP) ~= 0 then
+        hit_light(e)
+        return
+    end
+    e:set_routine(2, 1)
+    if e:var(B23B) == 0 then
+        e:sound(3)
+    end
+    e:set_var(B23B, 0)
+    effect_at_part(e, 0, HIT_ROWS[e:routine(1)])
+    knocked(e)
+end
+
+-- `0x52bd54`: a heavy hit's steps, the fall as a flight's.
+local HEAVY <const> = { [0] = hit_heavy_start, fly, land, landed }
+
+-- `FUN_004aec20`, for the magnums and the shotguns (5 to 8, and 0xC).
+local function hit_heavy(e)
+    local step = HEAVY[e:routine(2)]
+    if step then
+        step(e)
+    end
+    if e:routine(2) ~= 0 then
+        e:joint(0x100)
+    end
+    local sx, sy, sz = e:speed()
+    e:set_var(LAST_SX, sx)
+    e:set_var(LAST_SY, sy)
+    e:set_var(LAST_SZ, sz)
+end
+
+-- `FUN_004aee90`, for 9, 0x11 and 0x13: row 7's blood, then the heavy hit.
+local function hit_burst(e)
+    if e:routine(2) == 0 then
+        effect_at_part(e, 0, 7)
+        hit_heavy_start(e)
+        return
+    end
+    local step = HEAVY[e:routine(2)]
+    if step then
+        step(e)
+    end
+    e:joint(0x100)
+end
+
+-- `FUN_004aee60`, for the sub-machine gun and the gatling gun: row 0's blood
+-- on part 0 or 1 too.
+local function hit_spray(e)
+    effect_at_part(e, (e:rnd() - 1) & 1, 0)
+    hit_light(e)
+end
+
+-- `0x52bcdc`, by the weapon. 0xA's (`FUN_004aeef0`), 0xB's, 0xE's and
+-- 0x10's aren't ported: they take it as a light hit.
+local HITS <const> = {
+    [5] = hit_heavy,
+    [6] = hit_heavy,
+    [7] = hit_heavy,
+    [8] = hit_heavy,
+    [9] = hit_burst,
+    [0xC] = hit_heavy,
+    [0xF] = hit_spray,
+    [0x11] = hit_burst,
+    [0x12] = hit_spray,
+    [0x13] = hit_burst,
+}
+
+-- `FUN_004aea50`, `Routine_0` 2.
+local function hit(e)
+    local _, roll = e:cdir()
+    e:set_cdir(0, roll)
+    local step = HITS[e:routine(1)] or hit_light
+    step(e)
+end
+
+-- `FUN_004af5f0`: on the floor, it lies down (clip 7) and is a body
+-- (`Routine_0` 7) at the clip's end.
+local function lie(e)
+    if e:routine(3) == 0 then
+        e:set_routine(3, 1)
+        local x, _, z = e:pos()
+        e:set_pos(x, e:ground(), z)
+        e:clip(7, 0, 0xF)
+    end
+    if e:joint(0x100) then
+        e:routines(7, 0, 0, 0)
+    end
+end
+
+-- `FUN_004af540`: the blood and the death's sound; in the air (`HELD`), off
+-- the ceiling and knocked down, else it lies down at once.
+local function die_start(e)
+    effect_at_part(e, 0, HIT_ROWS[e:routine(1)])
+    e:sound(6)
+    if e:var(HELD) == 0 then
+        e:set_routine(2, 2)
+        e:set_routine(3, 0)
+        lie(e)
+        return
+    end
+    if e:var(UP) ~= 0 then
+        e:set_cdir(0, 0)
+        box(e, false)
+    end
+    e:set_routine(2, 1)
+    e:set_routine(3, 0)
+    knocked(e)
+end
+
+-- `FUN_004af5c0`: the fall, as a flight's, to the floor.
+local function die_fall(e)
+    fly(e)
+    e:joint(0x100)
+end
+
+local DIE <const> = { [0] = die_start, die_fall, lie }
+
+-- `FUN_004af520`.
+local function die_light(e)
+    local step = DIE[e:routine(2)]
+    if step then
+        step(e)
+    end
+end
+
+-- `FUN_004af640`, for 5 to 9, 0x11 and 0x13: more blood, and unless 9's hit
+-- was low (`Damage_no` 3 or more) the head goes. The parts' burn and the
+-- head's flight aren't ported.
+local function die_heavy(e)
+    if e:routine(2) ~= 0 then
+        die_light(e)
+        return
+    end
+    local weapon = e:routine(1)
+    if weapon == 9 then
+        effect_at_part(e, 0, 4)
+    end
+    effect_at_part(e, 2, 1)
+    if weapon ~= 9 or e:damage_no() < 3 then
+        if weapon == 9 or weapon == 0x11 or weapon == 0x13 then
+            effect_at_part(e, 0, 0xD)
+        end
+        for point = 0xE, 0x11 do
+            effect_at_point(e, 1, point)
+            effect_at_point(e, 0xC, point)
+        end
+    end
+    die_start(e)
+end
+
+-- `0x52bd8c`, by the weapon. 0's, 0xA's, 0xB's, 0xE's and 0x10's aren't
+-- ported: they die as the handgun's.
+local DIES <const> = {
+    [5] = die_heavy,
+    [6] = die_heavy,
+    [7] = die_heavy,
+    [8] = die_heavy,
+    [9] = die_heavy,
+    [0x11] = die_heavy,
+    [0x13] = die_heavy,
+}
+
+-- `FUN_004af4f0`, `Routine_0` 3.
+local function die(e)
+    local _, roll = e:cdir()
+    e:set_cdir(0, roll)
+    local step = DIES[e:routine(1)] or die_light
+    step(e)
+    e:set_died()
+end
+
+-- `FUN_004afa20`, `Routine_0` 7: the body. Its shadow's fade (`FUN_004afa50`)
+-- isn't ported.
+local function dead(e)
+    if e:routine(1) == 0 then
+        e:set_routine(1, 1)
+        e:set_be_flg(e:be_flg() | 0x42)
+        e:clear_status(0x20)
+    end
+end
+
+local STATES <const> = { [0] = init, [1] = move, [2] = hit, [3] = die, [7] = dead }
 
 -- `FUN_004afbf0`: the scales a shedding moth drops on its odd ticks, and the
 -- wings' beat, which isn't ported.
