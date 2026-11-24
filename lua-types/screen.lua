@@ -242,10 +242,12 @@ function ScreenModule.on_boot(api) end
 ---Called on a title screen, or on the new-game choice's entry, with the
 ---run's music and effects volumes in percent (0 to 100): once as the
 ---screen opens, again whenever the settings change, and when a load takes
----them from its save (a save keeps the run's volumes, as the original's
----does, and a load gives them back to a title that slept under the load
----screen before it starts the game). For a title with an option screen of
----its own that shows and sets them. Such a screen publishes the two it
+---them from its save while the screen is up (a save keeps the run's
+---volumes, as the original's does, and a load gives them back as the game
+---it continues starts; a title opened after it is told them). It is called
+---as the screen opens in every run, a headless one too, so a screen that
+---sets up its own interface from this hook does that on every open. For a
+---title with an option screen of its own that shows and sets them. Such a screen publishes the two it
 ---shows as `music_volume` and `effects_volume`
 ---([`api:set`](#ScreenApi.set)) from this hook, and again whenever one
 ---changes: what it publishes from the hook is what it shows of what it was

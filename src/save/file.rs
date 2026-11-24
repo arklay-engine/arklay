@@ -101,6 +101,12 @@ pub struct SaveFile {
     /// the room's origin. `None` for every retail room. Its player digit is
     /// unused (the character byte is the player).
     pub room_ext: Option<RoomId>,
+    /// Port-only: the run's music and effects volumes when the save was
+    /// written, in percent, music first, for an RE 2 save (the original's
+    /// `Save_push` keeps `Bgm_vol` and `Sfx_vol`); `None` in a save from
+    /// before them or from a game that had none. They sit in the block's
+    /// padding ([`super::VOLUMES_TAG`]), which older readers ignore.
+    pub volumes: Option<[u8; 2]>,
 }
 
 impl Default for SaveFile {
@@ -145,6 +151,7 @@ impl Default for SaveFile {
             partner_slots: None,
             partner_backup_health: None,
             room_ext: None,
+            volumes: None,
         }
     }
 }

@@ -520,7 +520,17 @@ mod tests {
         let mut game = game();
         assert_eq!(build(&game, None)[0x20C..0x20E], [100, 100]);
         game.re2.volumes = Some([40, 7]);
-        assert_eq!(build(&game, None)[0x20C..0x20E], [7, 40]);
+        let image = build(&game, None);
+        assert_eq!(image[0x20C..0x20E], [7, 40]);
+        // They compare: each is a difference of its own.
+        let mut theirs = image;
+        theirs[0x20C] = 100;
+        theirs[0x20D] = 100;
+        let differ: Vec<_> = differences(&image, &theirs)
+            .into_iter()
+            .map(|difference| difference.region)
+            .collect();
+        assert_eq!(differ, ["Sfx_vol", "Bgm_vol"]);
     }
 
     #[test]
@@ -610,15 +620,12 @@ mod tests {
         assert!(saved_state(&old).is_err());
         let mut cut = file.clone();
         let bytes = cut.re2.as_mut().unwrap();
-        bytes.truncate(bytes.len() - 1);
+        bytes.truncate(bytes.len() - 3);
         assert!(saved_state(&cut).is_err());
-        // The layouts from before the volumes and before the count's high
-        // byte still apply.
-        for short in [2, 3] {
-            let mut older = file.clone();
-            let bytes = older.re2.as_mut().unwrap();
-            bytes.truncate(bytes.len() - short);
-            assert!(saved_state(&older).is_ok());
-        }
+        // The layout from before the count's high byte still applies.
+        let mut older = file;
+        let bytes = older.re2.as_mut().unwrap();
+        bytes.truncate(bytes.len() - 1);
+        assert!(saved_state(&older).is_ok());
     }
 }

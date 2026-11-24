@@ -44,6 +44,15 @@ use crate::state::RoomId;
 pub const SAVE_BLOCK_SIZE: usize = 0x800;
 /// Bytes of the block the field layout actually uses (0x000..=0x41B).
 pub const SAVE_LAYOUT_SIZE: usize = 0x41C;
+/// Port-only: the tag of the run's volumes ([`SaveFile::volumes`]) in the
+/// block's padding at [`VOLUMES_OFFSET`], followed by the music and effects
+/// volumes. Readers from before it ignore the padding, so a save with it
+/// keeps every trailer for them; a block without the tag (an older save, an
+/// original's file) has none.
+pub const VOLUMES_TAG: [u8; 4] = *b"AKY\x07";
+/// Where [`VOLUMES_TAG`] and its two volumes sit: the block's last eight
+/// bytes, the last two reserved zero.
+pub const VOLUMES_OFFSET: usize = SAVE_BLOCK_SIZE - 8;
 /// Port-only: the magic of the player-height trailer appended after the
 /// 0x800 block (`AKY`, version 1), followed by the height as a little-endian
 /// `i16` and two reserved zero bytes. The original stores only X and Z and
@@ -278,6 +287,7 @@ impl SaveFile {
             item_box: state.item_box,
             room_bgm: state.room_bgm,
             re2: state.is_re2_room.then(|| state.re2.to_save_bytes()),
+            volumes: state.re2.volumes.filter(|_| state.is_re2_room),
             ..Self::default()
         };
         file.scenario.copy_from_slice(&state.flags[0].bytes()[..16]);
@@ -410,8 +420,13 @@ impl SaveFile {
             // A save from before `player_index` was kept plays the
             // scenario's character.
             state.re2.pl_id = self.character & 1;
+            // The volumes go with the RE 2 state: a trailer that doesn't
+            // apply gives none.
+            state.re2.volumes = None;
             if state.re2.load_save_bytes(re2).is_none() {
                 crate::warning!("warning: the save's RE2 state has the wrong size; ignoring it");
+            } else {
+                state.re2.volumes = self.volumes;
             }
             // `Title_game_init`'s load: `pPl.Id` is `player_index`, the life
             // comes from the stashed word (`Save_push` wrote it), and
@@ -592,6 +607,10 @@ impl SaveFile {
             bytes[0x324 + index * 2 + 1] = slot.quantity;
         }
         bytes[0x33C..SAVE_LAYOUT_SIZE].copy_from_slice(&self.room_bgm);
+        if let Some(volumes) = self.volumes {
+            bytes[VOLUMES_OFFSET..VOLUMES_OFFSET + 4].copy_from_slice(&VOLUMES_TAG);
+            bytes[VOLUMES_OFFSET + 4..VOLUMES_OFFSET + 6].copy_from_slice(&volumes);
+        }
         bytes
     }
 
@@ -637,6 +656,7 @@ impl SaveFile {
             partner_slots: trailers.partner,
             partner_backup_health: trailers.partner_backup_health,
             room_ext: trailers.room,
+            volumes: volumes_in(bytes),
             angle: get_i16(bytes, 0x230),
             health_status: bytes[0x232],
             ..Self::default()
@@ -662,6 +682,16 @@ impl SaveFile {
         // own 0x200 byte read above is the original's 0-based `g_stageId`.
         file.state_bytes[0] = file.block_stage();
         Ok(file)
+    }
+}
+
+/// The run's volumes in a block's padding ([`VOLUMES_TAG`]): `None`
+/// without the tag, or with a value no volume is.
+fn volumes_in(bytes: &[u8]) -> Option<[u8; 2]> {
+    let field = bytes.get(VOLUMES_OFFSET..SAVE_BLOCK_SIZE)?;
+    match field.strip_prefix(&VOLUMES_TAG)? {
+        &[music, effects, ..] if music <= 100 && effects <= 100 => Some([music, effects]),
+        _ => None,
     }
 }
 
@@ -1495,6 +1525,62 @@ mod tests {
         assert_eq!(restored.re2.vars[crate::scd2::host::VAR_LAST_RDT], 0xFF);
     }
 
+    /// An RE 2 game's volumes go with its save and come back with its load.
+    /// They sit in the block's padding, so the file's trailers are what they
+    /// would be without them, as a reader from before them reads them; a
+    /// block without the tag, and an RE 2 state that doesn't apply, load
+    /// none.
+    #[test]
+    fn the_volumes_survive_a_save_in_the_blocks_padding() {
+        let mut state = GameState::new(RoomId::parse("200").unwrap(), &RoomState::default());
+        state.is_re2_room = true;
+        state.re2.volumes = Some([40, 0]);
+        let saved = SaveFile::from_state(&state);
+        assert_eq!(saved.volumes, Some([40, 0]));
+        let bytes = saved.to_file_bytes();
+        let without = SaveFile {
+            volumes: None,
+            ..saved.clone()
+        }
+        .to_file_bytes();
+        assert_eq!(bytes.len(), without.len());
+        let differ: Vec<usize> = (0..bytes.len())
+            .filter(|&at| bytes[at] != without[at])
+            .collect();
+        assert!(
+            differ
+                .iter()
+                .all(|at| (VOLUMES_OFFSET..SAVE_BLOCK_SIZE).contains(at)),
+            "only the padding holds them: {differ:x?}"
+        );
+        assert_eq!(&bytes[VOLUMES_OFFSET..VOLUMES_OFFSET + 4], &VOLUMES_TAG);
+        let parsed = SaveFile::from_bytes(&bytes).unwrap();
+        assert_eq!(parsed, saved);
+        let mut restored = GameState::default();
+        restored.re2.volumes = Some([90, 90]);
+        parsed.apply_to(&mut restored);
+        assert_eq!(restored.re2.volumes, Some([40, 0]));
+        // A block without them.
+        let mut restored = GameState::default();
+        SaveFile::from_bytes(&without)
+            .unwrap()
+            .apply_to(&mut restored);
+        assert_eq!(restored.re2.volumes, None);
+        // A value no volume is.
+        let mut odd = bytes.clone();
+        odd[VOLUMES_OFFSET + 4] = 101;
+        assert_eq!(SaveFile::from_bytes(&odd).unwrap().volumes, None);
+        // An RE 2 state that doesn't apply gives none.
+        let mut long = parsed;
+        long.re2.as_mut().unwrap().push(0);
+        let mut restored = GameState::default();
+        long.apply_to(&mut restored);
+        assert_eq!(restored.re2.volumes, None);
+        // An RE 1 game keeps none.
+        state.is_re2_room = false;
+        assert_eq!(SaveFile::from_state(&state).volumes, None);
+    }
+
     /// A file from before the save place has a shorter RE 2 trailer, which
     /// loads with the place the game was started with. A newer file cut a
     /// byte short still says its full length, so its trailer isn't taken
@@ -1509,12 +1595,11 @@ mod tests {
         let current = saved.to_file_bytes();
         let payload = saved.re2.as_ref().expect("the RE 2 state").len();
 
-        // Before the save place, and the save count's high byte and the
-        // volumes after it.
+        // Before the save place and the save count's high byte after it.
         let mut older = saved.clone();
-        older.re2.as_mut().unwrap().truncate(payload - 4);
+        older.re2.as_mut().unwrap().truncate(payload - 2);
         let older = SaveFile::from_bytes(&older.to_file_bytes()).expect("the older save");
-        assert_eq!(older.re2.as_ref().map(Vec::len), Some(payload - 4));
+        assert_eq!(older.re2.as_ref().map(Vec::len), Some(payload - 2));
         let mut restored = GameState::default();
         restored.re2.save_place = 0x0F;
         older.apply_to(&mut restored);
@@ -1585,10 +1670,10 @@ mod tests {
         assert_eq!(restored.re2.pl_stash.life, 120);
         // A save from before the id was kept: Claire's scenario is Claire.
         let mut old = SaveFile::from_state(&state);
-        // (The id, the slot count, the place, the count's high byte and
-        // the volumes came after it.)
+        // (The id, the slot count, the place and the count's high byte
+        // came after it.)
         let bytes = old.re2.as_mut().unwrap();
-        bytes.truncate(bytes.len() - 6);
+        bytes.truncate(bytes.len() - 4);
         old.character = 1;
         let mut restored = GameState::default();
         old.apply_to(&mut restored);

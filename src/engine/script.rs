@@ -1426,13 +1426,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
             with(&shared, |driver| {
                 let app = driver.app()?;
                 let file = save::load_file(Path::new(&path)).map_err(engine_error)?;
-                let session = GameSession::from_save_with(
-                    &app.pack,
-                    &file,
-                    &app.save_dir,
-                    app.player_options,
-                )
-                .map_err(engine_error)?;
+                let session = app.continue_session(&file, false).map_err(engine_error)?;
                 driver.start(session, true)?;
                 Ok(())
             })
