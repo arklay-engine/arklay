@@ -1010,13 +1010,9 @@ fn an_unreadable_exe_in_the_data_directory_does_not_hide_the_one_above_it() {
     assert!(warnings[1].contains("bio2 1.10.exe"), "{warnings:?}");
 
     // With a readable copy above the data directory, the unreadable one is passed over.
-    if let Some(game) = std::env::var_os("ARKLAY_RE2_ROOT").map(PathBuf::from) {
-        fs::copy(game.join("bio2 1.10.exe"), root.path.join("bio2 1.10.exe")).unwrap();
-        let mut warnings = Vec::new();
-        assert!(find_exe_text(&root.path, &data, &mut warnings).is_some());
-        assert!(
-            warnings.iter().all(|w| !w.contains("no item names")),
-            "{warnings:?}"
-        );
-    }
+    write(&root.path.join("bio2 1.10.exe"), &exe::readable_image());
+    let mut warnings = Vec::new();
+    let text = find_exe_text(&root.path, &data, &mut warnings).expect("the copy above data");
+    assert_eq!(text.names[1], [0x27, 0x4A, 0x45, 0x42, 0x41, 0xF7]);
+    assert!(warnings.is_empty(), "{warnings:?}");
 }
