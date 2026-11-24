@@ -8076,17 +8076,16 @@ mod tests {
             (0xE, 88, 72, 48),
             (0xF, 80, 64, 40),
         ] {
-            let mut work = Work::default();
-            plc_dest(&mut work, id, 9, 0, 100, 200);
-            assert_eq!(work.sce_free[0], rotate, "id {id:#x}");
-            plc_dest(&mut work, id, 4, 0, 100, 200);
-            assert_eq!(work.sce_free[0], 48);
-            plc_dest(&mut work, id, 7, 0, 100, 200);
-            assert_eq!(work.sce_free[0], 48);
-            plc_dest(&mut work, id, 5, 0, 100, 200);
-            assert_eq!(work.sce_free[0], run, "id {id:#x}");
-            plc_dest(&mut work, id, 8, 0, 100, 200);
-            assert_eq!(work.sce_free[0], back_run, "id {id:#x}");
+            let turn = |routine| {
+                let mut work = Work::default();
+                plc_dest(&mut work, id, routine, 0, 100, 200);
+                work.sce_free[0]
+            };
+            assert_eq!(turn(9), rotate, "id {id:#x}");
+            assert_eq!(turn(4), 48);
+            assert_eq!(turn(7), 48);
+            assert_eq!(turn(5), run, "id {id:#x}");
+            assert_eq!(turn(8), back_run, "id {id:#x}");
         }
     }
 

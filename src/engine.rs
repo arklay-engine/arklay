@@ -16634,7 +16634,12 @@ fn simulate_door_with(
     // groups, camera locks and scripted entity moves included).
     run_room_init(&mut loaded, &mut game);
     game.sync_player(&mut player_state);
-    apply_camera(&mut loaded.room, &mut game, Some(player_state.pos));
+    // The door's end tests the zones as `end_transition_after_bgm` does.
+    if session.entered && session.door.re2.is_some() {
+        apply_door_end_camera(&mut loaded.room, &mut game, player_state.pos);
+    } else {
+        apply_camera(&mut loaded.room, &mut game, Some(player_state.pos));
+    }
     drain_mask_toggles(&mut loaded.room, &mut game);
     // `room_transition_load` runs the handoff after the destination's init and
     // camera setup and before the close SE, so the headless seam exposes the

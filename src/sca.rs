@@ -75,7 +75,9 @@ pub(crate) fn area(sca: &Sca, x: i32, z: i32) -> u16 {
 fn applies(record: &ScaRect, mask: u16, area: u16, pos: [i32; 3], radius: i32, floor: u8) -> bool {
     record.kind & area != 0
         && record.id & mask != 0
-        && record.floor & (1u32 << floor) != 0
+        // `shl` takes the count mod 32, so a floor of 255 (a slope's
+        // `-y / 1800` at the foot of one below floor 0) tests bit 31.
+        && record.floor & 1u32.wrapping_shl(u32::from(floor)) != 0
         && inside_grown(record, pos[0], pos[2], radius)
 }
 
@@ -1314,6 +1316,22 @@ mod tests {
         let off = resolve(&sca, [1500, -1000, 1100], [1500, -1000, 990], PLAYER_RADIUS);
         assert_eq!(off.pos[1], -FLOOR_HEIGHT);
         assert_eq!(off.floor, Some(1));
+    }
+
+    #[test]
+    fn the_foot_of_a_slope_below_floor_0_is_floor_255_as_the_originals_byte() {
+        let mut slope = record(11);
+        // Rising along z to floor 0 at its far end, from 1800 below it.
+        slope.kind = 0xF | (3 << 4);
+        slope.floor = 1 | 1 << 31;
+        let sca = room(vec![slope]);
+        let at = [1500, 0, 2000];
+        let foot = resolve_on_floor(&sca, PLAYER_MASK, [1500, 0, 1900], at, PLAYER_RADIUS, 0);
+        assert_eq!(foot.pos[1], FLOOR_HEIGHT);
+        assert_eq!(foot.floor, Some(255));
+        // And a pass on that floor tests the record's bit 31.
+        let next = resolve_on_floor(&sca, PLAYER_MASK, foot.pos, foot.pos, PLAYER_RADIUS, 255);
+        assert!(next.hit);
     }
 
     #[test]
