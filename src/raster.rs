@@ -418,6 +418,13 @@ fn draw<const FULL: bool>(
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Walk each row's whole bounding box and test every pixel against the
+    /// edges, the reference the row spans are checked against.
+    static PER_PIXEL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// Triangle setup and rasterisation of one post-clip triangle.
 ///
 /// Its planes are fused multiply-adds, as llvmpipe's are: on a CPU with FMA
@@ -524,7 +531,17 @@ fn rasterize_planes<const FULL: bool>(
             let (from, to) = edge.span(y);
             (lo.max(from), hi.min(to))
         });
+        #[cfg(test)]
+        let (lo, hi) = if PER_PIXEL.get() {
+            (min_x, max_x)
+        } else {
+            (lo, hi)
+        };
         for x in lo..=hi {
+            #[cfg(test)]
+            if PER_PIXEL.get() && !edges.iter().all(|edge| edge.inside(x, y)) {
+                continue;
+            }
             debug_assert!(edges.iter().all(|edge| edge.inside(x, y)));
             let (fx, fy) = (x as f32, y as f32);
             let recip = flat_recip.unwrap_or_else(|| 1.0 / w_plane.at(fx, fy));
@@ -629,6 +646,56 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn the_row_spans_cover_what_the_per_pixel_test_does() {
+        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+        let mut next = move |range: f32| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed >> 11) as f32 / (1u64 << 53) as f32 * 2.0 * range - range
+        };
+        let fragments = |vertices: &[GlVertex; 3], per_pixel: bool| {
+            PER_PIXEL.set(per_pixel);
+            let mut out = Vec::new();
+            draw_triangle_depth(vertices, 160, 120, false, |f| {
+                out.push((
+                    f.x,
+                    f.y,
+                    f.depth,
+                    f.u.to_bits(),
+                    f.v.to_bits(),
+                    f.color.map(f32::to_bits),
+                ));
+            });
+            PER_PIXEL.set(false);
+            out
+        };
+        let mut drawn = 0;
+        for case in 0..3000 {
+            // Small, large, off-screen and behind-the-eye corners, so the
+            // clipper's pieces are walked too.
+            let range = [40.0, 200.0, 2000.0][case % 3];
+            let vertices = std::array::from_fn(|_| GlVertex {
+                x: 80.0 + next(range),
+                y: 60.0 + next(range),
+                depth: 0.5 + next(0.5),
+                w: if case % 7 == 0 {
+                    next(500.0)
+                } else {
+                    1.0 + next(0.5).abs() * 500.0
+                },
+                u: next(1.0),
+                v: next(1.0),
+                color: [0.5 + next(0.5), 1.0, 0.25, 1.0],
+            });
+            let spans = fragments(&vertices, false);
+            assert_eq!(spans, fragments(&vertices, true), "case {case}");
+            drawn += spans.len();
+        }
+        assert!(drawn > 100_000, "{drawn}");
     }
 
     #[test]

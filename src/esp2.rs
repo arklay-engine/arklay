@@ -2544,7 +2544,7 @@ impl Effects {
             };
             if slot.flags & FLAG_3D != 0 {
                 for tile in sprite.tiles.iter().skip(first).take(count) {
-                    let Some((corners, key)) = corners_3d(slot, camera, tile, size, depth_bias)
+                    let Some((corners, key, z)) = corners_3d(slot, camera, tile, size, depth_bias)
                     else {
                         break;
                     };
@@ -2562,7 +2562,9 @@ impl Effects {
                         blend,
                         op,
                         sheet: [0, 0xffff],
-                        z: Some(key),
+                        // `FUN_00440B70` keeps the depth in a short: a biased one past
+                        // 0x7FFF wraps negative, behind Marni's far plane.
+                        z: Some(i32::from(z as i16)),
                     });
                 }
                 continue;
@@ -2591,7 +2593,7 @@ impl Effects {
                 let (x0, y0) = ((left >> 16) as i32, (top >> 16) as i32);
                 let (x1, y1) = (((left + width) >> 16) as i32, ((top + height) >> 16) as i32);
                 quads.push(EffectQuad {
-                    key: ((depth.min(0x7fff) as u32) >> 5) << 5,
+                    key: (sprite_z(depth) as u32 >> 5) << 5,
                     page,
                     uv: [tile[0], v, 0, 0],
                     source: [source[0] as u8, source[1] as u8],
@@ -2603,7 +2605,7 @@ impl Effects {
                     op,
                     sheet: [0, 0xffff],
                     mirror: [false; 2],
-                    z: Some(depth.min(0x7fff) as u32),
+                    z: Some(sprite_z(depth)),
                 });
             }
         }
@@ -2663,7 +2665,15 @@ fn page_index(pages: &mut Vec<Page>, page: Page) -> usize {
         })
 }
 
-/// `Esp_trans_3d` on one tile: its corners on the screen, and its depth key.
+/// The depth `Esp_trans_main` hands Marni with a billboard at view Z
+/// `depth`: `RotTransPers`' ordering depth, a quarter of it truncated, times
+/// 4, capped at 0x7FFF.
+fn sprite_z(depth: i32) -> i32 {
+    ((depth >> 2) << 2).min(0x7fff)
+}
+
+/// `Esp_trans_3d` on one tile: its corners on the screen, its depth key and
+/// the depth it hands `FUN_00440B70`, before that keeps it in a short.
 /// `None` where the original stops drawing the slot, too near the camera.
 fn corners_3d(
     slot: &Slot,
@@ -2671,7 +2681,7 @@ fn corners_3d(
     tile: &[u8; 4],
     size: u32,
     depth_bias: i32,
-) -> Option<([[i32; 2]; 4], u32)> {
+) -> Option<([[i32; 2]; 4], u32, i32)> {
     let per_size = u32::from(slot.size).wrapping_mul(camera.fov as u32 >> 4) as i32;
     let width = (i64::from(slot.scale[0]) * i64::from(per_size)) as i32 >> 12;
     let height = (i64::from(slot.scale[1]) * i64::from(per_size)) as i32 >> 12;
@@ -2703,7 +2713,8 @@ fn corners_3d(
     if depth < 0x100 {
         return None;
     }
-    Some((corners, (depth_bias + depth * 4).max(0) as u32))
+    let biased = depth_bias + depth * 4;
+    Some((corners, biased.max(0) as u32, biased))
 }
 
 /// The record lengths of a set: each runs up to the next, in file order, and
@@ -4256,19 +4267,42 @@ mod tests {
             ..Slot::default()
         };
         let tile = [0, 0, 0xf0, 0xf0];
-        let (flat, key) = corners_3d(&slot, &camera, &tile, 32, 0).unwrap();
+        let (flat, key, _) = corners_3d(&slot, &camera, &tile, 32, 0).unwrap();
         assert_ne!(flat[0][0], flat[1][0]);
         assert_eq!(flat[0][1], flat[1][1]);
         assert!((7990..=8000).contains(&key), "{key}");
-        let (_, biased) = corners_3d(&slot, &camera, &tile, 32, 2000).unwrap();
+        let (_, biased, _) = corners_3d(&slot, &camera, &tile, 32, 2000).unwrap();
         assert_eq!(biased, key + 2000);
         let edge_on = Slot {
             rotation: [0, 0x400, 0],
             ..slot
         };
-        let (turned, _) = corners_3d(&edge_on, &camera, &tile, 32, 0).unwrap();
+        let (turned, _, _) = corners_3d(&edge_on, &camera, &tile, 32, 0).unwrap();
         assert!((turned[0][0] - turned[1][0]).abs() <= 8);
         assert!((flat[0][0] - flat[1][0]).abs() > 8);
+    }
+
+    #[test]
+    fn a_billboards_depth_is_rot_trans_pers_truncated() {
+        // `RotTransPers` returns a quarter of the depth, truncated.
+        assert_eq!(sprite_z(515), 512);
+        assert_eq!(sprite_z(519), 516);
+        assert_eq!(sprite_z(0x9000), 0x7fff);
+    }
+
+    #[test]
+    fn a_biased_3d_effects_depth_wraps_in_its_short() {
+        let camera = Camera::from_points([0, 0, -31000], [0, 0, 0], 208);
+        let slot = Slot {
+            scale: [4096, 4096],
+            size: 0x1000,
+            ..Slot::default()
+        };
+        let tile = [0, 0, 0xf0, 0xf0];
+        let (_, _, z) = corners_3d(&slot, &camera, &tile, 32, 2000).unwrap();
+        assert!(z > 0x7fff, "{z}");
+        // `FUN_00440B70`'s short: negative, behind the far plane.
+        assert!(i32::from(z as i16) < 0);
     }
 
     #[test]
