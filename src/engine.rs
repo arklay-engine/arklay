@@ -21087,7 +21087,8 @@ fn re2_cut_check(room: &RoomState, game: &mut game::GameState, pos: [i32; 3]) {
 /// `Swap_Cbuff` brings the live cut on screen unless the aim holds the view
 /// (`fg_status`'s `0x80`), which a locked cut doesn't wait for.
 fn show_re2_live_cut(room: &mut RoomState, game: &game::GameState) {
-    if game.camera.current_cut < room.cuts.len() && !(game.re2.view_held && !game.camera.locked) {
+    let held = game.re2.view_held && !game.camera.locked;
+    if !held && game.camera.current_cut < room.cuts.len() {
         room.current_cut = game.camera.current_cut;
     }
 }
