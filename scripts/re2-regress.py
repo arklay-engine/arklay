@@ -1661,7 +1661,9 @@ def finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks
     if want_frames:
         prepare_capture(frames_dir)
     # The output goes to files, not pipes, so that polling for frames can't leave arklay blocked on a full pipe.
-    with tempfile.TemporaryFile("w+") as stdout, tempfile.TemporaryFile("w+") as stderr:
+    # arklay writes UTF-8 (a pack's path in a warning, say), whatever the locale's encoding.
+    output = {"mode": "w+", "encoding": "utf-8", "errors": "replace"}
+    with tempfile.TemporaryFile(**output) as stdout, tempfile.TemporaryFile(**output) as stderr:
         if STOP.is_set():
             raise Interrupted()
         proc = subprocess.Popen(command, cwd=ROOT, stdout=stdout, stderr=stderr, text=True)
@@ -1683,7 +1685,7 @@ def finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks
         stdout.seek(0)
         stderr.seek(0)
         out_text, err_text = stdout.read(), stderr.read()
-    (out / f"{name}.log").write_text(out_text + err_text)
+    (out / f"{name}.log").write_text(out_text + err_text, encoding="utf-8")
     # Checked first, as a stale pack's other scripts can be why arklay failed.
     if STALE_PACK in err_text:
         result["text"] = STALE_PACK_TEXT
