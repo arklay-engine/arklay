@@ -4249,6 +4249,7 @@ impl GameSession {
             || self.typewriter_open.is_some()
             || self.re2_save.is_some()
             || self.itembox_open_delay > 0
+            || self.game.re2_result.is_some()
     }
 
     /// Start a cutscene skip: silence the voice and the one-shots and park the
@@ -5969,7 +5970,9 @@ impl GameSession {
     /// `Card_access` runs at the game's 30 Hz (`Cardaccess_init` keeps
     /// `bVSyncRate`, `0x98F07A`, at 2).
     fn ui_tick_rate(&self) -> bool {
-        self.room_frozen() && self.re2_save != Some(Re2Save::Screen)
+        // The results run on `Result_init`'s limiter 0, the 16 ms one.
+        (self.room_frozen() && self.re2_save != Some(Re2Save::Screen))
+            || self.game.re2_result.is_some()
     }
 
     /// Whether a pause-menu screen owns the tick, so the room is frozen and
@@ -6662,6 +6665,19 @@ impl GameSession {
             if !self.game.re2.flag(0, FG_SYSTEM_RESULT) || !self.game.re2.flag(1, FG_STATUS_EXTRA) {
                 return false;
             }
+            // `Game_loop` tests the flag in its step 2, the room's own tick:
+            // not under a screen, a door or a film, which run in its place.
+            if self.room_frozen()
+                || self.re2_save.is_some()
+                || self.re2_config.is_some()
+                || self.transition.is_some()
+                || self.movie.is_some()
+            {
+                return false;
+            }
+            // The trace's `snd` is this tick's `SsPlay`s: the results play
+            // none.
+            self.re2_sounds.played.clear();
             // The rest of the chain's tick: `System_trans` and the music.
             self.room_fade.tick();
             let fade = crate::result2::Fade {
@@ -6688,8 +6704,11 @@ impl GameSession {
         if self.re2_result_over {
             return true;
         }
+        self.re2_sounds.played.clear();
         // The raw pad's buttons `Pad_set` reads, START's (`0x800`) with them.
-        let raw = re2_live_pad(ui, input) | if ui.start { 0x0800 } else { 0 };
+        let raw = re2_live_pad(ui, input)
+            | if ui.start { 0x0800 } else { 0 }
+            | if ui.option { 0x0100 } else { 0 };
         let mut music = Re2ResultMusic {
             system: self.game.re2.banks[0][0],
             place: self.game.re2_music_place(),
@@ -12855,6 +12874,8 @@ impl App {
                         let (step, sub) = result.task();
                         args.push(("task_step", ScreenArg::Int(i64::from(step))));
                         args.push(("task_sub", ScreenArg::Int(i64::from(sub))));
+                        // `Result_init` chose the title's limiter (0).
+                        args.push(("limiter", ScreenArg::Int(0)));
                         self.re2_result_title = true;
                         i64::from(result.fade().add)
                     }
@@ -13190,6 +13211,8 @@ impl App {
 
     /// Enter a gameplay session, opening audio on the interactive path.
     fn start_session(&mut self, mut session: Box<GameSession>) {
+        // A new game's trace is its own, not the title's after its results.
+        self.re2_result_title = false;
         // A session started from under the load screen (the script host's
         // can be) leaves no title asleep, and its screens keep their work
         // where the title's do, as the original's statics are the

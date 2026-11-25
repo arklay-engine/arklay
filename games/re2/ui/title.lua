@@ -3122,7 +3122,7 @@ end
 -- and a demo a key ended (`0x98F1BB`), to the title's picture. `fg_system`
 -- is the game's, of which `Init_global` keeps `0x1000899`: an extra mode's
 -- game comes back to that mode's title (`Capcom_logo`'s step 9).
-local function game_return(api, demo, fade_add, fg_system, task_step, task_sub)
+local function game_return(api, demo, fade_add, fg_system, task_step, task_sub, limiter)
     local handed = take_handed(api)
     for _, name in ipairs(HANDED) do
         s[name] = handed[name] or s[name]
@@ -3132,7 +3132,8 @@ local function game_return(api, demo, fade_add, fg_system, task_step, task_sub)
     s.fades[3].mode = handed.fade3 or s.fades[3].mode
     -- `Title_game_init` chose the game's limiter (`0x98F07A`), which
     -- stands until `Title_init`: the logo's wait runs at the game's pace.
-    s.limiter = 2
+    -- The results' `Result_init` chose the title's (0) before they ran.
+    s.limiter = limiter or 2
     -- Fade 0 is the game's, done: its step is what the game last set.
     s.fades[0].mode = 2
     s.fades[0].add = fade_add or 0
@@ -3282,7 +3283,7 @@ function M.open(api, args)
     s.rnd = (args and args.rnd or Gallery.RND_BOOT) & 0xFFFF
     -- After a game (`"game"`) or a demo played to its end (`"demo"`).
     if args and args.after then
-        game_return(api, args.after == "demo", args.fade_add, args.fg_system, args.task_step, args.task_sub)
+        game_return(api, args.after == "demo", args.fade_add, args.fg_system, args.task_step, args.task_sub, args.limiter)
     end
     -- config.ini's SPECIAL, read as the signed byte it is.
     local special = args and args.special or 15

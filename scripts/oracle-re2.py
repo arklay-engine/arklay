@@ -2147,7 +2147,7 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                     if tick > 0:
                         pace.reached(tick - 1)
                         line = trace_line(game, tick - 1, pad)
-                        if game.u32(TASKS + 4) not in (GAME_LOOP, RESULT):
+                        if game.u32(TASKS + 4) == TITLE:
                             # Task 0 has left the game for the title (the results' `Result_exit` chains it).
                             line += " " + title_trace(game)
                         trace.write(line + "\n")

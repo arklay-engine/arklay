@@ -26,7 +26,7 @@ const FADE_IN: u8 = 4;
 const FADE_OUT: u8 = 8;
 /// A piece's colour at full (`0x808080`), and the highest a fade leaves it.
 const FULL: u32 = 0x80_8080;
-const FULL_LIMIT: u32 = 0x80_807F;
+const FULL_LIMIT: i32 = 0x80_807F;
 /// The pieces' colours as the executable's data holds them: what the first
 /// results after the boot start from.
 const COLOURS: [u32; PIECES] = {
@@ -190,6 +190,9 @@ fn clear_time(seconds: u32, saves: u32) -> ([u8; 10], [u8; 4]) {
         digits[6] = digit(rest / 10);
         digits[7] = digit(rest);
     } else {
+        // The original leaves `Reslt`'s minutes and seconds as the last
+        // results did; they start at 0 here, and only the main game's
+        // records read them.
         digits[..2].copy_from_slice(&[GLYPH_NINE; 2]);
         digits[3..5].copy_from_slice(&[GLYPH_FIVE, GLYPH_NINE]);
         digits[6..8].copy_from_slice(&[GLYPH_FIVE, GLYPH_NINE]);
@@ -666,8 +669,9 @@ impl Result {
     }
 
     /// `Result_draw_quads`'s steps of the pieces' colours: a piece fading
-    /// out darkens by the step and is hidden once it has wrapped below 0, one
-    /// fading in brightens to full.
+    /// out darkens by the step, one fading in brightens to full. Both test
+    /// the colour signed (`jl`), so a piece fading out is hidden only on
+    /// reaching full, never on wrapping below 0.
     fn draw_quads(&mut self) {
         for (flags, colour) in self.piece_flags.iter_mut().zip(self.colours.iter_mut()) {
             if *flags & SHOWN == 0 {
@@ -675,14 +679,14 @@ impl Result {
             }
             if *flags & FADE_OUT != 0 {
                 *colour = colour.wrapping_sub(self.piece_step);
-                if *colour > FULL_LIMIT {
+                if *colour as i32 > FULL_LIMIT {
                     *flags = 0;
                     *colour = 0;
                 }
             }
             if *flags & FADE_IN != 0 {
                 *colour = colour.wrapping_add(self.piece_step);
-                if *colour > FULL_LIMIT {
+                if *colour as i32 > FULL_LIMIT {
                     *colour = FULL;
                     *flags &= !FADE_IN;
                 }
