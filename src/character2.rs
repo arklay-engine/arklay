@@ -564,19 +564,16 @@ pub(crate) fn twinkle_points(game: &GameState) -> Vec<Option<[i16; 3]>> {
 }
 
 /// Each room object's `Work_m` (`+0x54`), by slot, for the effects started on
-/// one: `CompM` of its parent's matrix and `RotMatrix` of `Cdir` with `Pos`.
-/// On the world's matrix that is the object's own. An object on another
-/// matrix (`Super_set`) takes its own turn at its composed place.
+/// one: the matrix `Obj_model_set` composed and `Om_trans` composes again each
+/// frame it draws the object, kept as it was while the object isn't drawn.
+/// [`crate::objects::ObjectRecord::world`] keeps its turn with Y flipped.
 pub(crate) fn object_worlds(game: &GameState) -> Vec<player2::Matrix> {
     game.objects
         .records
         .iter()
         .map(|record| player2::Matrix {
-            m: player2::rot_matrix(record.rotation),
-            t: match record.super_parent {
-                crate::objects::SuperParent::World => record.pos,
-                _ => record.world.t,
-            },
+            m: player2::flip_y(record.world.r).map(|row| row.map(|value| value as i16)),
+            t: record.world.t,
         })
         .collect()
 }
@@ -642,12 +639,6 @@ pub(crate) fn run_esprs(
 ) {
     let scenario = game.id.player_flag & 1;
     for (call, matrix) in std::mem::take(&mut game.re2.pending_esprs) {
-        if let Some(object) = matrix.object {
-            if let Some(&world) = object_worlds(game).get(usize::from(object)) {
-                game.re2.effects.call_placed_on_object(call, object, world);
-            }
-            continue;
-        }
         let world = match matrix.slot {
             None => matrix.part.and_then(|part| {
                 player_parts
@@ -679,7 +670,13 @@ pub(crate) fn run_esprs(
             root_matrix(player.pos, player.angle)
         });
         let at = place_on(&world, call.at);
-        game.re2.effects.call_placed(EsprCall { at, ..call });
+        let work = crate::esp2::WorkMatrix {
+            slot: matrix.slot,
+            part: matrix.part,
+        };
+        game.re2
+            .effects
+            .call_placed_on_work(EsprCall { at, ..call }, work);
     }
 }
 

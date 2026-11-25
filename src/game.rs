@@ -10347,7 +10347,9 @@ impl GameState {
             && let Some(record) = self.objects.record_mut(model)
         {
             if let Some((row, _)) = crate::objects::twinkle(record) {
-                self.re2.effects.kill_on_object(5, row, model as u8);
+                self.re2
+                    .effects
+                    .kill_on(5, row, crate::esp2::MatrixKey::Twinkle(model as u8));
             }
             record.be_flg = 0;
             record.flag = 0;
@@ -10380,7 +10382,9 @@ impl GameState {
         // with no `.max(1)` on the size, unlike `St_get_item`'s.
         if flags & 0x80 != 0 {
             let row = ((flags >> 5) & 3) * 8 + 7;
-            self.re2.effects.kill_on_object(5, row, model);
+            self.re2
+                .effects
+                .kill_on(5, row, crate::esp2::MatrixKey::Twinkle(model));
         }
         if let Some(entry) = self.room_actions[usize::from(action.slot)].as_mut() {
             entry.sce = crate::scd2::host::SCE_AUTO;
