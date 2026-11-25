@@ -2105,7 +2105,8 @@ mod tests {
             timeout: Duration::default(),
         });
         let mut driver = Driver::new(true, stop);
-        // Other tests' warnings share the counter.
+        // The pack has no player model, weapon clips or music, and the
+        // engine warns of each as a game starts in it.
         driver.strict = false;
         driver.app = Some(app);
         driver
