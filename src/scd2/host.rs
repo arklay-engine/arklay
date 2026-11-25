@@ -213,8 +213,12 @@ pub struct Re2State {
     /// The room's load has yet to finish: its last pass runs `Esp_move`.
     pub load_pass: bool,
     /// `Sce_espr_on`s whose `Get_matrix` is someone's, for the characters' models
-    /// to answer.
-    pub pending_esprs: Vec<(EsprCall, EsprMatrix)>,
+    /// to answer. The player's own `M` (selector 1) comes with the position and
+    /// facing it had at the opcode: its translation is `Pos` itself, which the
+    /// pass's `pos_set` and `add_speed` write at once, and its rotation is the
+    /// last `Joint_trans2`'s (the facing on the surface it stands on), which a
+    /// `dir_set` doesn't reach until the draw.
+    pub(crate) pending_esprs: Vec<(EsprCall, EsprMatrix, Option<crate::player2::Matrix>)>,
     /// `Sce_fade_set`s and `Sce_fade_adjust`s to fade 0, the session's own,
     /// for the end of the tick.
     pub screen_fades: Vec<FadeWrite>,
@@ -3621,7 +3625,16 @@ impl Host for GameHost<'_> {
                             effects.call_placed_on_object(call, object, world);
                         }
                     }
-                    Some(matrix) => self.game.re2.pending_esprs.push((call, matrix)),
+                    Some(matrix) => {
+                        let root = (matrix.slot.is_none() && matrix.part.is_none()).then(|| {
+                            let player = &self.game.entities[0];
+                            crate::player2::Matrix {
+                                m: self.game.re2.player.body_rotation(player.angle),
+                                t: self.game.re2.pending_player.pos.unwrap_or(player.pos),
+                            }
+                        });
+                        self.game.re2.pending_esprs.push((call, matrix, root));
+                    }
                     None => {
                         self.game.re2.effects.call_placed(call);
                     }
@@ -3630,7 +3643,7 @@ impl Host for GameHost<'_> {
             "sce_espr_kill2" => {
                 let group = at(0) as u8;
                 let re2 = &mut self.game.re2;
-                re2.pending_esprs.retain(|(call, _)| call.group != group);
+                re2.pending_esprs.retain(|(call, ..)| call.group != group);
                 re2.effects.kill_group(group);
             }
             // `Sce_82` (`0x4E7160`): 6 kills every effect (room 613's
@@ -3647,7 +3660,7 @@ impl Host for GameHost<'_> {
                     let matrix = EsprMatrix::of(at(0) as i8, at(1) as u8);
                     let key = matrix.map_or(crate::esp2::MatrixKey::Identity, EsprMatrix::key);
                     re2.pending_esprs
-                        .retain(|(_, pending)| Some(*pending) != matrix);
+                        .retain(|(_, pending, _)| Some(*pending) != matrix);
                     re2.effects.kill_matrix(key);
                 }
             }
@@ -3693,7 +3706,7 @@ impl Host for GameHost<'_> {
                 let matrix = EsprMatrix::of(at(2) as i8, at(3) as u8);
                 let key = matrix.map_or(crate::esp2::MatrixKey::Identity, EsprMatrix::key);
                 let re2 = &mut self.game.re2;
-                re2.pending_esprs.retain(|(call, pending)| {
+                re2.pending_esprs.retain(|(call, pending, _)| {
                     (call.kind, call.row, Some(*pending)) != (kind, row, matrix)
                 });
                 re2.effects.kill_on(kind, row, key);
@@ -5600,6 +5613,34 @@ mod tests {
         );
         exec(&mut game, "sce_82", &[4, 0]);
         assert_eq!(game.re2.effects.trace_field(), "0/-");
+    }
+
+    /// `Get_matrix(1)` is the player's `M`, whose translation is `Pos`: an
+    /// effect on it starts where the pass had put the player at the opcode,
+    /// not where a later `pos_set` in the same pass leaves him.
+    #[test]
+    fn an_effect_on_the_players_root_starts_where_the_opcode_saw_him() {
+        let mut game = GameState::default();
+        game.re2.effects.test_enter_room_with(7, 0);
+        game.entities[0].pos = [100, 0, 200];
+        game.entities[0].angle = 0;
+        exec(&mut game, "work_set", &[WK_PLAYER, 0]);
+        exec(&mut game, "pos_set", &[0, 3000, -50, 4000]);
+        exec(&mut game, "sce_espr_on", &[0, 7, 0x01, 0x800, 0, 0, 10, 0]);
+        exec(&mut game, "pos_set", &[0, -9000, 0, -9000]);
+        let moved = std::mem::take(&mut game.re2.pending_player);
+        game.entities[0].pos = moved.pos.unwrap();
+        crate::character2::run_esprs(
+            &mut game,
+            &crate::state::RoomState::default(),
+            &crate::pack::Pack::from_bytes(crate::pack::PackWriter::new().to_bytes().unwrap())
+                .unwrap(),
+            &mut crate::enemy::EntityModelCache::default(),
+            &[],
+        );
+        game.re2.effects.tick(&mut Default::default(), None);
+        let trace = game.re2.effects.trace_field();
+        assert!(trace.ends_with(",3000,-50,4010"), "{trace}");
     }
 
     /// A call on a character's matrix waits for its pose, but `sce_espr_kill2`
