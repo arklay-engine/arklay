@@ -2700,7 +2700,7 @@ local function title_main(api)
         -- scenario's start (0xF or 0x10, the save a main game's results
         -- write), whose sequence then runs before the game starts.
         local mv = s.load and Prologue.sequence(s.load.status, s.load.place)
-        if mv and s.prologue_art then
+        if mv and s.prologue_art[mv] then
             s.game_init = 0
             s.pro_mv = mv
         else
@@ -2715,7 +2715,7 @@ local function title_main(api)
         s.choice = { extra_player = s.fg_system & 1 ~= 0 and 0xD or 0xC }
     elseif s.disp == 3 then
         s.exit = s.attract and "attract" or "new_game"
-        if not s.attract and s.prologue_art then
+        if not s.attract and s.prologue_art[s.claire and 1 or 0] then
             -- `Title_game_init`'s step 2 starts the prologue's task on the
             -- next tick (0x506750) and the game waits for it to end. A new
             -- game is always a first scenario's.
@@ -3286,7 +3286,10 @@ function M.open(api, args)
     s.background = s.title_background
     Prologue.reset()
     Gallery.reset()
-    s.prologue_art = api:has_image("ui/prologue/open10")
+    s.prologue_art = {}
+    for mv = 0, 3 do
+        s.prologue_art[mv] = Prologue.has_art(api, mv)
+    end
     -- The title starts at `Title_init`, or, from the boot, 189 ticks before
     -- it with the warning (`M.on_boot`).
     s.mv = 1

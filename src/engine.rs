@@ -13984,11 +13984,12 @@ impl App {
 
     /// Put the title that slept under the load screen back in charge,
     /// `loaded` when that screen chose a save for it to start.
-    /// `loaded` is the save the load screen chose, `None` without one.
+    /// `loaded` is whether the load screen chose a save, with its RE 2
+    /// start ([`crate::scd2::host::start_in`]) when it has one.
     fn wake_title(
         &mut self,
         mut title: Box<ui::lua_screen::LuaScreen>,
-        loaded: Option<&save::SaveFile>,
+        loaded: Option<Option<(u8, u32)>>,
     ) {
         // The load screen's own music ends with it; the title's plays on.
         if self.screen_music != Some(true) {
@@ -13996,10 +13997,7 @@ impl App {
         }
         let cx = self.context();
         match loaded {
-            Some(file) => title.resume_loaded(
-                &cx,
-                file.re2.as_deref().and_then(crate::scd2::host::start_in),
-            ),
+            Some(start) => title.resume_loaded(&cx, start),
             None => title.resume(&cx),
         }
         let cues = cx.cues.into_inner();
@@ -14164,7 +14162,21 @@ impl App {
                 Some(title) if matches!(self.mode, Mode::Load(_)) && title.continues() => {
                     match save::load_file(&path) {
                         Ok(file) => {
-                            self.wake_title(title, Some(&file));
+                            // An autosave (port-only) keeps the place of the
+                            // last typewriter, or of the game's start before
+                            // one: it is no scenario's start, which only the
+                            // results' save is, so it runs no prologue.
+                            let autosave = path
+                                .file_name()
+                                .and_then(|name| name.to_str())
+                                .and_then(save::autosave_index)
+                                .is_some();
+                            let start = file
+                                .re2
+                                .as_deref()
+                                .and_then(crate::scd2::host::start_in)
+                                .filter(|_| !autosave);
+                            self.wake_title(title, Some(start));
                             self.pending_load = Some(Box::new(file));
                         }
                         Err(err) => {

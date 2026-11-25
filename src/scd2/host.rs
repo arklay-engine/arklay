@@ -563,14 +563,15 @@ pub fn saves_high_in(bytes: &[u8]) -> u8 {
     bytes.get(SAVE_LEN_NO_SAVES_HIGH).copied().unwrap_or(0)
 }
 
-/// The save place and `fg_status` in [`Re2State::to_save_bytes`]'s
-/// `bytes`, which the title's prologue chooses its sequence by
-/// (`Prologue_load`); `None` for a save from before the save place.
+/// The save place and `fg_status` of the game [`Re2State::to_save_bytes`]'s
+/// `bytes` load, which the title's prologue chooses its sequence by
+/// (`Prologue_load`); `None` for bytes a load rejects, and for a save from
+/// before the save place.
 pub fn start_in(bytes: &[u8]) -> Option<(u8, u32)> {
-    let place = *bytes.get(SAVE_LEN_NO_PLACE)?;
-    let at = usize::from(STATUS_BANK) * 8 * 4;
-    let status = u32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?);
-    Some((place, status))
+    bytes.get(SAVE_LEN_NO_PLACE)?;
+    let mut state = Re2State::default();
+    state.load_save_bytes(bytes)?;
+    Some((state.save_place, state.banks[usize::from(STATUS_BANK)][0]))
 }
 
 /// The bytes of [`Re2State::to_save_bytes`].
@@ -7640,6 +7641,8 @@ mod tests {
         let bytes = state.to_save_bytes();
         assert_eq!(start_in(&bytes), Some((0x10, 0xC000_0010)));
         assert_eq!(start_in(&bytes[..SAVE_LEN_NO_PLACE]), None);
+        // A length no load takes chooses nothing.
+        assert_eq!(start_in(&bytes[..SAVE_LEN - 1]), None);
     }
 
     /// The kills, the clears and `nExtremeLv` are saved; a save from before

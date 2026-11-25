@@ -108,10 +108,10 @@ local PICTURE_A, PICTURE_B = "ui/prologue/open10", "ui/prologue/open11"
 local PICTURE_LEON_B, PICTURE_CLAIRE_B = "ui/prologue/open13", "ui/prologue/open12"
 local PICTURE_B2 = "ui/prologue/open14"
 
--- The buttons that skip (the raw pad's `0x9F0`): decide, cancel, START and
--- the PC's map key.
+-- The buttons that skip (the raw pad's `0x9F0`): decide, cancel, START,
+-- the PC's map key and the option key.
 local function skip_pressed(keys)
-    return keys.confirm or keys.cancel or keys.start or keys.map
+    return keys.confirm or keys.cancel or keys.start or keys.map or keys.option
 end
 
 -- A sequence's steps from 1 to its last fade's: at each count, in the
@@ -252,11 +252,12 @@ local STEPS_CLAIRE_B = {
 -- `Prologue_mv`'s entries: each sequence's sprites, steps, the step its
 -- last fade is in (and its count), the step that starts the films (which
 -- a skip comes back into), the second film (`Init_movie_work`) and the
--- main music `Prologue_load` loads.
+-- main music `Prologue_load` loads, and the pictures a pack must have for
+-- the sequence to run.
 local SEQUENCES = {
-    [0] = { sprites = SPRITES_A, count = 28, steps = STEPS_A, leave = 5, leave_count = 445, films = 6, film2 = 0xF, music = 0x2B },
-    [2] = { sprites = SPRITES_LEON_B, count = 12, steps = STEPS_LEON_B, leave = 6, leave_count = 517, films = 7, film2 = 0x10, music = 0x2C },
-    [3] = { sprites = SPRITES_CLAIRE_B, count = 18, steps = STEPS_CLAIRE_B, leave = 9, leave_count = 595, films = 10, film2 = 0x10, music = 0x2C },
+    [0] = { sprites = SPRITES_A, count = 28, steps = STEPS_A, leave = 5, leave_count = 445, films = 6, film2 = 0xF, music = 0x2B, art = { PICTURE_A } },
+    [2] = { sprites = SPRITES_LEON_B, count = 12, steps = STEPS_LEON_B, leave = 6, leave_count = 517, films = 7, film2 = 0x10, music = 0x2C, art = { PICTURE_LEON_B, PICTURE_B2 } },
+    [3] = { sprites = SPRITES_CLAIRE_B, count = 18, steps = STEPS_CLAIRE_B, leave = 9, leave_count = 595, films = 10, film2 = 0x10, music = 0x2C, art = { PICTURE_CLAIRE_B, PICTURE_B2 } },
 }
 SEQUENCES[1] = SEQUENCES[0]
 
@@ -283,6 +284,17 @@ function M.sequence(status, place)
         return claire | 2
     end
     return nil
+end
+
+-- Whether the pack has the pictures `Prologue_mv`'s entry `mv` shows:
+-- one without them hands the game over with no prologue.
+function M.has_art(api, mv)
+    for _, picture in ipairs(SEQUENCES[mv].art) do
+        if not api:has_image(picture) then
+            return false
+        end
+    end
+    return true
 end
 
 -- A prologue as `Prologue_load` leaves it for `Prologue_mv`'s entry `mv`

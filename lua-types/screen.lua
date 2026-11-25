@@ -1407,6 +1407,7 @@ function ScreenApi:re2_slot(slot) end
 ---@field page_right boolean R1.
 ---@field start boolean
 ---@field map boolean The map key.
+---@field option boolean RE 2's option key (Ctrl or F5 by default).
 ---@field any boolean Any button was pressed.
 ---@field return_title boolean The return-to-title key (F9).
 ---@field pad integer The edge word of the fields above.

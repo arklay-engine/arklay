@@ -1033,6 +1033,7 @@ fn input_table(lua: &Lua, input: UiInput) -> mlua::Result<Table> {
     table.set("page_right", input.page_right)?;
     table.set("start", input.start)?;
     table.set("map", input.map)?;
+    table.set("option", input.option)?;
     table.set("any", input.any)?;
     table.set("return_title", input.return_title)?;
     table.set("pad", pad_word(input))?;

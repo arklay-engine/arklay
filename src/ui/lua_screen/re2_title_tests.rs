@@ -2969,13 +2969,14 @@ fn claires_prologue_is_entry_1_with_her_lines_and_films() {
 /// over. Films are over at once, a press ending none.
 fn run_load(
     dir: &std::path::Path,
+    pack: &'static Pack,
     place: u8,
     status: u32,
     presses: &[(u32, UiInput)],
     mut each: impl FnMut(u32, &LuaScreen, &[UiCue]),
 ) -> Prologue {
-    let cx = context_over(prologue_pack(), dir);
-    let mut cx_open = context_over(prologue_pack(), dir);
+    let cx = context_over(pack, dir);
+    let mut cx_open = context_over(pack, dir);
     let mut screen =
         LuaScreen::open_screen("title", &[], ScreenAction::Quit, &mut cx_open).unwrap();
     let mut films = Vec::new();
@@ -3055,25 +3056,32 @@ fn a_load_of_claire_bs_start_runs_her_second_scenarios_prologue() {
     let dir = prologue_dir("pro-claire-b");
     let mut voices = Vec::new();
     let mut music = Vec::new();
-    let run = run_load(&dir, 0x10, 0xC000_0000, &[], |tick, screen, cues| {
-        match tick {
-            811 => assert_eq!(screen.value("pro_on"), 0),
-            813 => {
-                assert_eq!(pro(screen), [3, 1, 1, 1, 0]);
-                assert_eq!(screen.value("pro_sprites"), 18);
-            }
-            1336 => assert_eq!(pro(screen)[..3], [3, 2, 1]),
-            3943 => assert_eq!(pro(screen)[..3], [3, 9, 1]),
-            _ => {}
-        }
-        for cue in cues {
-            match cue {
-                UiCue::Voice { player, line } => voices.push((tick, *player, *line)),
-                UiCue::Music(_) | UiCue::MusicFade => music.push((tick, *cue)),
+    let run = run_load(
+        &dir,
+        prologue_pack(),
+        0x10,
+        0xC000_0000,
+        &[],
+        |tick, screen, cues| {
+            match tick {
+                811 => assert_eq!(screen.value("pro_on"), 0),
+                813 => {
+                    assert_eq!(pro(screen), [3, 1, 1, 1, 0]);
+                    assert_eq!(screen.value("pro_sprites"), 18);
+                }
+                1336 => assert_eq!(pro(screen)[..3], [3, 2, 1]),
+                3943 => assert_eq!(pro(screen)[..3], [3, 9, 1]),
                 _ => {}
             }
-        }
-    });
+            for cue in cues {
+                match cue {
+                    UiCue::Voice { player, line } => voices.push((tick, *player, *line)),
+                    UiCue::Music(_) | UiCue::MusicFade => music.push((tick, *cue)),
+                    _ => {}
+                }
+            }
+        },
+    );
     assert_eq!(
         voices,
         [
@@ -3110,34 +3118,62 @@ fn a_load_picks_its_prologue_by_the_saves_place() {
     let dir = prologue_dir("pro-load");
     let mut voices = Vec::new();
     let presses = [(1500, confirm())];
-    let run = run_load(&dir, 0x10, 0x4000_0000, &presses, |tick, screen, cues| {
-        match tick {
-            813 => assert_eq!(pro(screen), [2, 1, 1, 1, 0]),
-            1500 => assert_eq!(pro(screen)[..2], [4, 7]),
-            _ => {}
-        }
-        voices.extend(cues.iter().filter_map(|cue| match cue {
-            UiCue::Voice { player, line } => Some((tick, *player, *line)),
-            _ => None,
-        }));
-    });
+    let run = run_load(
+        &dir,
+        prologue_pack(),
+        0x10,
+        0x4000_0000,
+        &presses,
+        |tick, screen, cues| {
+            match tick {
+                813 => assert_eq!(pro(screen), [2, 1, 1, 1, 0]),
+                1500 => assert_eq!(pro(screen)[..2], [4, 7]),
+                _ => {}
+            }
+            voices.extend(cues.iter().filter_map(|cue| match cue {
+                UiCue::Voice { player, line } => Some((tick, *player, *line)),
+                _ => None,
+            }));
+        },
+    );
     assert_eq!(voices, [(813 + 240, 0, 6), (1336 + 1, 0, 7)]);
     assert!(matches!(run.films[..], [(_, 3, false), (_, 0x10, false)]));
     assert_eq!(run.action, ScreenAction::Continue { prologue: true });
 
-    let run = run_load(&dir, 0x0B, 0xC000_0000, &[], |_, screen, _| {
+    let run = run_load(
+        &dir,
+        prologue_pack(),
+        0x0B,
+        0xC000_0000,
+        &[],
+        |_, screen, _| {
+            assert_eq!(screen.value("pro_on"), 0);
+        },
+    );
+    assert_eq!(run.end, 811);
+    assert_eq!(run.action, ScreenAction::Continue { prologue: false });
+
+    let run = run_load(
+        &dir,
+        prologue_pack(),
+        0x0F,
+        0x8000_0000,
+        &presses,
+        |tick, screen, _| {
+            if tick == 813 {
+                assert_eq!(pro(screen), [1, 1, 1, 1, 0]);
+            }
+        },
+    );
+    assert!(matches!(run.films[..], [(_, 3, true), (_, 0xF, true)]));
+    assert_eq!(run.action, ScreenAction::Continue { prologue: true });
+
+    // A pack without the sequence's pictures hands the game over at once.
+    let run = run_load(&dir, pack(), 0x10, 0xC000_0000, &[], |_, screen, _| {
         assert_eq!(screen.value("pro_on"), 0);
     });
     assert_eq!(run.end, 811);
     assert_eq!(run.action, ScreenAction::Continue { prologue: false });
-
-    let run = run_load(&dir, 0x0F, 0x8000_0000, &presses, |tick, screen, _| {
-        if tick == 813 {
-            assert_eq!(pro(screen), [1, 1, 1, 1, 0]);
-        }
-    });
-    assert!(matches!(run.films[..], [(_, 3, true), (_, 0xF, true)]));
-    assert_eq!(run.action, ScreenAction::Continue { prologue: true });
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -3147,11 +3183,12 @@ fn a_load_picks_its_prologue_by_the_saves_place() {
 #[test]
 fn a_press_skips_the_prologue_to_its_films() {
     let dir = prologue_dir("pro-skip");
-    let keys: [fn(&mut UiInput); 4] = [
+    let keys: [fn(&mut UiInput); 5] = [
         |input| input.confirm = true,
         |input| input.cancel = true,
         |input| input.start = true,
         |input| input.map = true,
+        |input| input.option = true,
     ];
     for key in keys {
         let mut press = UiInput::default();
