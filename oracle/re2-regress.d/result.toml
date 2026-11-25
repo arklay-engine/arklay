@@ -18,7 +18,7 @@ fields = "res,rest,rfade,rmus,bgm,snd"
 # (`fade` isn't compared in any run); `Result_init` puts it off on tick 1, keeping its step and blend.
 ignore = [[0, "rfade"]]
 frames = [0, 3800]
-frame_max_mean = 0.7
+frame_max_mean = 0.1
 expect = "match"
 record = "--flag 0:28 --flag 1:6 --flag 0:10 --var 35:330"
 
@@ -56,7 +56,7 @@ fields = "res,rest,rfade,rmus,bgm,snd"
 # As result_4th's.
 ignore = [[0, "rfade"]]
 frames = [0, 3800]
-frame_max_mean = 0.7
+frame_max_mean = 0.1
 expect = "match"
 record = "--flag 0:28 --flag 0:31 --flag 1:6 --flag 0:10 --var 35:330"
 
@@ -95,7 +95,7 @@ fields = "res,rest,rfade,rmus,bgm,snd"
 # As result_4th's.
 ignore = [[0, "rfade"]]
 frames = [0, 2398]
-frame_max_mean = 0.7
+frame_max_mean = 0.1
 expect = "match"
 record = "--flag 0:28 --flag 1:6 --flag 0:10 --var 35:330"
 
@@ -122,8 +122,7 @@ expect = "match"
 # with `fg_system`'s 0x200000 and no extra's bit, as Leon or Claire (arklay starts Claire's game for her runs: a room's
 # start writes `fg_status`'s character bit from the game's) and in scenario A or B (flag 1:1). The clear time is
 # `GameSeconds`, 0 on the first tick of a new game, so the time's and the saves' scores are 100 and the rank S.
-# The frames differ where the original's Classic REbirth draws its own English words for the pieces (the character's
-# name, the weapons' words) over the executable's Japanese `end00.adt`.
+# The pieces' words are Classic REbirth's English ones (its patched tables, `games/re2/ui/result.lua`).
 
 # Leon A's: the film's 300 ticks, the picture with the rank, then the rocket launcher the time's score earns (step 6),
 # up to the save screen's wait.
@@ -138,7 +137,7 @@ fields = "res,rest,rfade,rmus,bgm,snd,sv"
 # As result_4th's.
 ignore = [[0, "rfade"]]
 frames = [0, 3299]
-frame_max_mean = 2.0
+frame_max_mean = 0.2
 expect = "match"
 record = "--flag 0:10"
 
@@ -156,7 +155,7 @@ input = "result_leon_a_save.txt"
 fields = "res,rest,rfade,rmus,bgm,snd,sv"
 ignore = [[0, "rfade"]]
 frames = [0, 4243]
-frame_max_mean = 2.5
+frame_max_mean = 0.4
 saves = true
 expect = "match"
 record = "--flag 0:10"
@@ -176,7 +175,7 @@ input = "result_claire_a_hard.txt"
 fields = "res,rest,rfade,rmus,bgm,snd,sv"
 ignore = [[0, "rfade"]]
 frames = [0, 1408]
-frame_max_mean = 0.3
+frame_max_mean = 0.1
 expect = "match"
 record = "--flag 0:10 --flag 1:0"
 
@@ -194,7 +193,7 @@ input = "result_leon_b_hard.txt"
 fields = "res,rest,rfade,rmus,bgm,snd,sv"
 ignore = [[0, "rfade"]]
 frames = [0, 1437]
-frame_max_mean = 0.3
+frame_max_mean = 0.1
 expect = "match"
 record = "--flag 0:10 --flag 1:1"
 
@@ -212,7 +211,7 @@ input = "result_claire_b_bonus.txt"
 fields = "res,rest,rfade,rmus,bgm,snd,sv"
 ignore = [[0, "rfade"]]
 frames = [0, 4337]
-frame_max_mean = 2.7
+frame_max_mean = 0.55
 expect = "match"
 record = "--flag 0:10 --flag 1:0 --flag 1:1 --flag 29:18"
 
