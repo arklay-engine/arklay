@@ -1595,11 +1595,12 @@ mod tests {
         let current = saved.to_file_bytes();
         let payload = saved.re2.as_ref().expect("the RE 2 state").len();
 
-        // Before the save place and the save count's high byte after it.
+        // Before the save place, and the save count's high byte and the
+        // extras word after it.
         let mut older = saved.clone();
-        older.re2.as_mut().unwrap().truncate(payload - 2);
+        older.re2.as_mut().unwrap().truncate(payload - 6);
         let older = SaveFile::from_bytes(&older.to_file_bytes()).expect("the older save");
-        assert_eq!(older.re2.as_ref().map(Vec::len), Some(payload - 2));
+        assert_eq!(older.re2.as_ref().map(Vec::len), Some(payload - 6));
         let mut restored = GameState::default();
         restored.re2.save_place = 0x0F;
         older.apply_to(&mut restored);
@@ -1670,10 +1671,10 @@ mod tests {
         assert_eq!(restored.re2.pl_stash.life, 120);
         // A save from before the id was kept: Claire's scenario is Claire.
         let mut old = SaveFile::from_state(&state);
-        // (The id, the slot count, the place and the count's high byte
-        // came after it.)
+        // (The id, the slot count, the place, the count's high byte and the
+        // extras word came after it.)
         let bytes = old.re2.as_mut().unwrap();
-        bytes.truncate(bytes.len() - 4);
+        bytes.truncate(bytes.len() - 8);
         old.character = 1;
         let mut restored = GameState::default();
         old.apply_to(&mut restored);

@@ -330,6 +330,14 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         Ok(mlua::Value::Table(table))
     });
 
+    // `re2_infinite(item)`: whether the item record's count shows the
+    // infinity sign by the extras word (`0x98E9C4`): `Status` copies the
+    // word's bits for items 1 to 0x13 into their records' `0x10` at its start
+    // and after the Konami code.
+    methods.add_method("re2_infinite", |_lua, api, item: u8| {
+        Ok((1..=0x13).contains(&item) && api.game().is_some_and(|game| game.re2.infinite(item)))
+    });
+
     // `re2_slot(slot)`: the id and count of RE2's `Item_work` slot `slot`;
     // 10 is the personal item.
     methods.add_method("re2_slot", |_lua, api, slot: u8| {

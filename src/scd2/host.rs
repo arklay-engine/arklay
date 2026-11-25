@@ -259,6 +259,18 @@ pub struct Re2State {
     pub pl_stash: PlStash,
     /// `inventory_size` (`0x98E9A4`): the inventory's slots.
     pub inventory_size: u8,
+    /// The extras word (`0x98E9C4`), a flag word read as the banks are
+    /// ([`Self::infinite`]): a weapon whose bit is up never runs out
+    /// (`Tama_ck_i`, `Tama_decrease_i`) and its count shows the infinity
+    /// sign. The status screen's Konami code sets it
+    /// ([`Self::step_konami_code`]); `Save_push` keeps it.
+    pub extras: u32,
+    /// `St_code_pos` (`0x689EAC`): how much of the Konami code the status
+    /// screen has seen. `Stage_init_item` clears it.
+    pub konami_pos: u8,
+    /// `BYTE_00691F40`: the code's last entry was its first, so the next one
+    /// puts the extras word back.
+    pub konami_on: bool,
     /// The save place (`0x98E9A7`), which `Sce_Save` copies from its area
     /// and the save block keeps. Like the original's global it stays
     /// across rooms.
@@ -541,7 +553,9 @@ pub fn saves_high_in(bytes: &[u8]) -> u8 {
 }
 
 /// The bytes of [`Re2State::to_save_bytes`].
-const SAVE_LEN: usize = SAVE_LEN_NO_SAVES_HIGH + 1;
+const SAVE_LEN: usize = SAVE_LEN_NO_EXTRAS + 4;
+/// A save from before the extras word.
+const SAVE_LEN_NO_EXTRAS: usize = SAVE_LEN_NO_SAVES_HIGH + 1;
 /// A save from before the save count's high byte.
 const SAVE_LEN_NO_SAVES_HIGH: usize = SAVE_LEN_NO_PLACE + 1;
 /// A save from before the save place.
@@ -1038,6 +1052,9 @@ impl Default for Re2State {
             pl_id: 0,
             pl_stash: PlStash::default(),
             inventory_size: crate::game::INVENTORY_SLOTS_JILL as u8,
+            extras: 0,
+            konami_pos: 0,
+            konami_on: false,
             save_place: 0,
             saves_high: 0,
             volumes: None,
@@ -1089,7 +1106,46 @@ impl Re2State {
         // `Save_push`'s save place.
         out.push(self.save_place);
         out.push(self.saves_high);
+        out.extend_from_slice(&self.extras.to_le_bytes());
         out
+    }
+
+    /// Whether `item`'s bit of the extras word is up (`Flg_ck(&0x98E9C4,
+    /// item)`): a weapon that never runs out.
+    pub fn infinite(&self, item: u8) -> bool {
+        self.extras & (0x8000_0000 >> (item & 31)) != 0
+    }
+
+    /// `St_ck_konamicode` (`0x502CB0`), which `Status` (`0x501BD0`) runs on
+    /// every tick of the status task from its start, with `Pad_set`'s
+    /// trigger word: up, up, down, down, left, right, left, right and the
+    /// aim key, each a press of its own; any other press starts it over. Its
+    /// first entry raises the extras word's bits 0 to 23 (`| 0xFFFFFF00`:
+    /// every weapon never runs out), the next puts the word back to its 0x1
+    /// with the gatling gun's (0x12) raised, and so on in turn.
+    pub fn step_konami_code(&mut self, trigger: u16) {
+        const CODE: [u16; 9] = [
+            0x1000, 0x1000, 0x4000, 0x4000, 0x8000, 0x2000, 0x8000, 0x2000, 0x0008,
+        ];
+        const GATLING: u8 = 0x12;
+        if trigger & CODE[usize::from(self.konami_pos)] == 0 {
+            if trigger != 0 {
+                self.konami_pos = 0;
+            }
+            return;
+        }
+        self.konami_pos += 1;
+        if usize::from(self.konami_pos) < CODE.len() {
+            return;
+        }
+        self.konami_pos = 0;
+        if self.konami_on {
+            self.extras &= 1;
+            self.extras |= 0x8000_0000 >> GATLING;
+        } else {
+            self.extras |= 0xFFFF_FF00;
+        }
+        self.konami_on = !self.konami_on;
     }
 
     /// `Sce_heal_partner` (opcode 0x89, `0x4e8d70`): the partner's poison
@@ -1137,6 +1193,7 @@ impl Re2State {
     /// Restore [`Self::to_save_bytes`]; `None` for bytes of another length.
     pub fn load_save_bytes(&mut self, bytes: &[u8]) -> Option<()> {
         if bytes.len() != SAVE_LEN
+            && bytes.len() != SAVE_LEN_NO_EXTRAS
             && bytes.len() != SAVE_LEN_NO_SAVES_HIGH
             && bytes.len() != SAVE_LEN_NO_PLACE
             && bytes.len() != SAVE_LEN_NO_PLAYER
@@ -1232,6 +1289,11 @@ impl Re2State {
         }
         // A save from before it has made fewer than 256 saves.
         self.saves_high = bytes.get(SAVE_LEN_NO_SAVES_HIGH).copied().unwrap_or(0);
+        // A save from before it has none of the word's bits.
+        self.extras = bytes
+            .get(SAVE_LEN_NO_EXTRAS..SAVE_LEN)
+            .and_then(|raw| raw.try_into().ok())
+            .map_or(0, u32::from_le_bytes);
         Some(())
     }
 
@@ -5618,12 +5680,12 @@ mod tests {
         let mut restored = Re2State::default();
         restored.load_save_bytes(&bytes).unwrap();
         assert_eq!(restored, state);
-        // A length no version of the save has is refused (one byte fewer
-        // is the save from before the count's high byte, four before the
-        // player's id).
+        // A length no version of the save has is refused (four bytes fewer
+        // is the save from before the extras word, five before the count's
+        // high byte, eight before the player's id).
         let longer = [bytes.as_slice(), &[0]].concat();
         assert!(restored.load_save_bytes(&longer).is_none());
-        assert!(restored.load_save_bytes(&bytes[5..]).is_none());
+        assert!(restored.load_save_bytes(&bytes[3..]).is_none());
     }
 
     /// Room 103's area 3 (`aot_set 3, 3, 66, 3, ...`, the enemy bit and the
@@ -7352,6 +7414,67 @@ mod tests {
         };
         old.load_save_bytes(&bytes[..SAVE_LEN_NO_PARTNER]).unwrap();
         assert_eq!((old.partner_life, old.partner_poisoned), (200, false));
+    }
+
+    /// `St_ck_konamicode` (`0x502CB0`) and `Status`'s entries: up, up,
+    /// down, down, left, right, left, right, aim. The first entry raises the
+    /// extras word's `0xFFFFFF00`, the second leaves its 0x1 and the gatling
+    /// gun's 0x2000; a press of another key starts over, a tick with none
+    /// doesn't.
+    #[test]
+    fn the_konami_code_toggles_the_extras_word() {
+        const CODE: [u16; 9] = [
+            0x1000, 0x1000, 0x4000, 0x4000, 0x8000, 0x2000, 0x8000, 0x2000, 0x0008,
+        ];
+        let mut state = Re2State {
+            extras: 1,
+            ..Default::default()
+        };
+        let enter = |state: &mut Re2State| {
+            for key in CODE {
+                state.step_konami_code(key);
+                state.step_konami_code(0);
+            }
+        };
+        enter(&mut state);
+        assert_eq!(state.extras, 0xFFFF_FF01);
+        assert!(state.infinite(3) && state.infinite(0x13) && !state.infinite(0x18));
+        assert_eq!(state.konami_pos, 0);
+        enter(&mut state);
+        assert_eq!(state.extras, 0x2001);
+        assert!(state.infinite(0x12) && !state.infinite(3));
+        // A wrong key (the action key) partway through starts it over.
+        for key in &CODE[..5] {
+            state.step_konami_code(*key);
+        }
+        assert_eq!(state.konami_pos, 5);
+        state.step_konami_code(0x80);
+        assert_eq!(state.konami_pos, 0);
+        // A press of the next key with another counts: only the next key is
+        // tested.
+        state.step_konami_code(0x1000 | 0x80);
+        assert_eq!(state.konami_pos, 1);
+    }
+
+    /// The extras word goes in the save, and a save from before it loads
+    /// with none of its bits.
+    #[test]
+    fn the_extras_word_survives_a_save() {
+        let state = Re2State {
+            extras: 0xFFFF_FF00,
+            ..Default::default()
+        };
+        let bytes = state.to_save_bytes();
+        assert_eq!(bytes.len(), SAVE_LEN);
+        let mut loaded = Re2State::default();
+        loaded.load_save_bytes(&bytes).unwrap();
+        assert_eq!(loaded.extras, 0xFFFF_FF00);
+        let mut old = Re2State {
+            extras: 5,
+            ..Default::default()
+        };
+        old.load_save_bytes(&bytes[..SAVE_LEN_NO_EXTRAS]).unwrap();
+        assert_eq!(old.extras, 0);
     }
 
     #[test]

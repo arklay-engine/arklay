@@ -1,0 +1,83 @@
+# room 102 (status_start_102's warp): START, then the Konami code (up, up, down, down, left, right, left, right, aim), whose first entry gives every weapon infinite rounds; START closes, and six shots spend none. START again, the code's second entry puts the rounds back, and six more shots spend them (oracle/re2.md, "The Konami code")
+364 start
+368
+420 up
+424
+440 up
+444
+460 down
+464
+480 down
+484
+500 left
+504
+520 right
+524
+540 left
+544
+560 right
+564
+580 aim
+584
+620 start
+624
+700 aim
+720 aim fire
+724 aim
+730 aim
+750 aim fire
+754 aim
+760 aim
+780 aim fire
+784 aim
+790 aim
+810 aim fire
+814 aim
+820 aim
+840 aim fire
+844 aim
+850 aim
+870 aim fire
+874 aim
+890
+940 start
+944
+996 up
+1000
+1016 up
+1020
+1036 down
+1040
+1056 down
+1060
+1076 left
+1080
+1096 right
+1100
+1116 left
+1120
+1136 right
+1140
+1156 aim
+1160
+1196 start
+1200
+1276 aim
+1296 aim fire
+1300 aim
+1306 aim
+1326 aim fire
+1330 aim
+1336 aim
+1356 aim fire
+1360 aim
+1366 aim
+1386 aim fire
+1390 aim
+1396 aim
+1416 aim fire
+1420 aim
+1426 aim
+1446 aim fire
+1450 aim
+1466

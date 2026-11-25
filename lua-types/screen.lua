@@ -1330,6 +1330,12 @@ function ScreenApi:re2_script_map() end
 ---@return Re2Computer? view `nil` while no computer runs.
 function ScreenApi:re2_computer() end
 
+---Whether RE 2's item's count shows the infinity sign by the extras word
+---(the status screen's Konami code): weapons 1 to 0x13 only.
+---@param item integer
+---@return boolean
+function ScreenApi:re2_infinite(item) end
+
 ---The id and count of RE 2's `Item_work` slot.
 ---@param slot integer `10` is the personal item.
 ---@return integer id
