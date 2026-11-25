@@ -551,6 +551,9 @@ pub struct Work {
     pub joint_offsets: Vec<(u8, [i16; 3])>,
     /// `Parts0_pos_y`: the scale of the first part's height, `0x1000` being 1.
     parts0_y: i32,
+    /// The first part's `Pos_y` as a routine wrote it over the pose, until the
+    /// next `J_seq` writes it again: `Spl_in4b`'s 0.
+    pub part0_y: Option<i16>,
     /// How far a hit has the body leaning: the extra turn `Em10Dm00` gives the
     /// first part, and takes from the second.
     pub lean: i16,
@@ -954,6 +957,9 @@ impl Work {
     /// ([`crate::anim::AnimPlayer::scaled_root_y`]) when the body is scaled,
     /// or `height` scaled.
     pub(crate) fn root_height(&self, anim: &crate::anim::AnimPlayer, height: i16) -> i16 {
+        if let Some(height) = self.part0_y {
+            return height;
+        }
         anim.scaled_root_y(self.parts0_y)
             .unwrap_or_else(|| self.scaled_height(height))
     }
@@ -1306,6 +1312,7 @@ impl Default for Work {
             part_rgb: [DEFAULT_PART_RGB; 32],
             joint_offsets: Vec::new(),
             parts0_y: 0x1000,
+            part0_y: None,
             lean: 0,
             lean_yaw: 0,
             jseq2: None,
@@ -3496,7 +3503,12 @@ impl Mover<'_, '_> {
 
     pub(crate) fn rot_neck(&mut self) {
         if self.work.neck.flags & 1 != 0 {
-            self.work.neck.position = self.chain_position(&[0, NECK_JOINT]);
+            // The head is part `Neck_no` (`Spl_in4b`'s 0) all the same, for
+            // another's aim at it.
+            self.work.neck.position = match self.work.neck.joint {
+                Some(0) => self.chain_position(&[0]),
+                _ => self.chain_position(&[0, NECK_JOINT]),
+            };
             return;
         }
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
@@ -5541,6 +5553,7 @@ impl Mover<'_, '_> {
     }
 
     pub(crate) fn joint_move_late_reversed(&mut self, late: u16, reverse: bool) -> bool {
+        self.work.part0_y = None;
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
         let Some(clip) = clips.get(usize::from(self.work.move_no)) else {
             return true;

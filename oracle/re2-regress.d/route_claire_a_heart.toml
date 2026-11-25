@@ -89,10 +89,10 @@ voice_from_ref = true
 ticks = 7854
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 7853]
-# 2.94 measured, most of it 21B up to Irons's scene's end (930 to 3429), where arklay doesn't draw his daughter on the
-# desk (#872; 28.24 at worst, 2207); 10A, 21B after the scene, 10D and 10E from their hand backs to the next press are 0.19 to 0.71
-frame_max_mean = 3.0
-frame_windows = [[360, 802, 0.4], [3530, 4127, 0.4], [4255, 4732, 0.5], [5071, 7853, 0.9]]
+# 0.71 measured. 21B up to Irons's scene's end (930 to 3429) is 1.29, its close-ups 1.1 to 1.5 (3.13 at worst, 2243); 10A,
+# 21B after the scene, 10D and 10E from their hand backs to the next press are 0.13 to 0.53
+frame_max_mean = 0.75
+frame_windows = [[360, 802, 0.4], [930, 3429, 1.35], [3530, 4127, 0.4], [4255, 4732, 0.5], [5071, 7853, 0.9]]
 expect = "match"
 ignore = [
   # 10D's door 0 into 10E loads the room while the door plays on: the original's head is Claire's idle
