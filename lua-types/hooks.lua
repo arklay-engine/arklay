@@ -421,11 +421,14 @@ function HookApi:set_re2_sce_rnd(value) end
 ---@param count integer
 function HookApi:set_re2_neck_wait(count) end
 
----The oracle's `--no-enemies`: switch off every enemy slot at the top of each
----tick (bit 0 of `be_flg`) except the kept pairs, so a long route compares
----the player alone.
----@param keep? string[] `"ROOM:SLOT"` pairs to keep, the room in three hex digits, e.g. `"101:0"`.
-function HookApi:set_re2_no_enemies(keep) end
+---The oracle's `--no-enemies`: switch off every enemy slot (`enemy_work`'s,
+---not the partner's) at the top of each tick and before a trace's line (bit 0
+---of `be_flg`) except the kept ones, so a long route compares
+---the player alone. The regression runner makes this call itself for a run
+---recorded with `--no-enemies`.
+---@param keep? string[] Slots to keep: `"ROOM:SLOT"` in that room only, the room in three hex digits, e.g. `"101:0"` (`--keep-enemy-in`), or `"SLOT"` in every room (`--keep-enemy`).
+---@param room? integer Only in the rooms of this number, the room within its stage whatever the stage (`--no-enemies-room`).
+function HookApi:set_re2_no_enemies(keep, room) end
 
 ---Set the `Dest` the next zombie placed in that slot of that room starts
 ---with, which the original takes from whatever its new work's memory held.

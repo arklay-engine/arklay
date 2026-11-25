@@ -9,7 +9,7 @@ setup_script = "status_start_102.lua"
 input = "status_start_102.txt"
 input_shift = 344
 ticks = 760
-fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,snd,fgstat"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,snd,fgstat"
 frames = [360, 759]
 # Measured: 0.02. The ten slots' frame drawn as eight's gives 0.60.
 frame_max_mean = 0.10
@@ -23,7 +23,7 @@ setup_script = "status_start_102.lua"
 input = "item_take_102.txt"
 input_shift = 344
 ticks = 1000
-fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat,fgitem"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat,fgitem"
 frames = [360, 999]
 # Measured: 0.02, as item_take.
 frame_max_mean = 0.10
@@ -39,7 +39,7 @@ input = "box_sidepack_201.txt"
 input_shift = 344
 input_drop_early = true
 ticks = 950
-fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,ib,box,snd,fgstat"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,ib,box,snd,fgstat"
 frames = [360, 949]
 expect = "match"
 record = "--no-enemies --warp 201:-14471:0:-24100:1024 --flag 8:63 --give 2:0x14:30 --give 3:0x26:1 --give 4:0x26:1 --give 5:0x14:20 --give 6:0x26:1 --give 7:0x14:10 --box 0:0x26:1 --box 1:0x14:15"
@@ -52,7 +52,7 @@ setup_script = "status_start_102.lua"
 input = "status_konami_102.txt"
 input_shift = 344
 ticks = 1560
-fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,snd,fgstat"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,snd,fgstat"
 frames = [360, 1559]
 # 0.02 measured
 frame_max_mean = 0.05

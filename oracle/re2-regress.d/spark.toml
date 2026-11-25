@@ -28,6 +28,6 @@ ticks = 1800
 setup_script = "spark_equip_118.lua"
 input = "spark_equip_118.txt"
 input_shift = 344
-fields = "esp"
+fields = "rng,esp"
 expect = "match"
 record = "--start claire --warp 118:-24617:0:-24996:1024 --life 200 --give 2:0xE:100"

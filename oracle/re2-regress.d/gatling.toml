@@ -23,6 +23,6 @@ ticks = 1400
 setup_script = "gatling_equip_118.lua"
 input = "gatling_equip_118.txt"
 input_shift = 344
-fields = "esp"
+fields = "rng,esp"
 expect = "match"
 record = "--warp 118:-24617:0:-24996:1024 --life 200 --give 2:0x12:100"

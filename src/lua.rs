@@ -832,29 +832,33 @@ mod imp {
                 Ok(())
             });
 
-            // `set_re2_no_enemies({"101:0", ...})`: the oracle's `--no-enemies`,
-            // switching off every enemy slot at the top of each tick (bit 0 of
-            // `be_flg`) but the kept `"ROOM:SLOT"` pairs (room in three hex
-            // digits), so a long route compares the player alone.
+            // `set_re2_no_enemies({"101:0", "1", ...}, room)`: the oracle's
+            // `--no-enemies`, switching off every enemy slot before each tick
+            // (`GameState::apply_re2_no_enemies`) but the kept `"ROOM:SLOT"`
+            // pairs (room in three hex digits, `--keep-enemy-in`) and bare `"SLOT"`s
+            // (in every room, `--keep-enemy`), and with `room`
+            // (`--no-enemies-room`) only in the rooms of that number, so a
+            // long route compares the player alone.
             methods.add_method_mut(
                 "set_re2_no_enemies",
-                |_lua, game, keep: Option<Vec<String>>| {
+                |_lua, game, (keep, room): (Option<Vec<String>>, Option<u8>)| {
                     let mut kept = Vec::new();
-                    for pair in keep.unwrap_or_default() {
-                        let parsed = pair.split_once(':').and_then(|(room, slot)| {
-                            Some((
-                                u16::from_str_radix(room, 16).ok()?,
-                                slot.parse::<usize>().ok()?,
-                            ))
-                        });
-                        let Some((room, slot)) = parsed else {
+                    for entry in keep.unwrap_or_default() {
+                        let parsed = match entry.split_once(':') {
+                            Some((room, slot)) => u16::from_str_radix(room, 16)
+                                .ok()
+                                .zip(slot.parse::<usize>().ok())
+                                .map(|(room, slot)| (Some(room), slot)),
+                            None => entry.parse::<usize>().ok().map(|slot| (None, slot)),
+                        };
+                        let Some(parsed) = parsed else {
                             return Err(mlua::Error::RuntimeError(format!(
-                                "set_re2_no_enemies: {pair:?} is not ROOM:SLOT"
+                                "set_re2_no_enemies: {entry:?} is not ROOM:SLOT or SLOT"
                             )));
                         };
-                        kept.push((room, slot));
+                        kept.push(parsed);
                     }
-                    game.re2_no_enemies = Some(kept);
+                    game.re2_no_enemies = Some(crate::game::Re2NoEnemies { keep: kept, room });
                     Ok(())
                 },
             );
@@ -1844,5 +1848,39 @@ end
             second_vm.call_tick(&mut second, tick);
         }
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn set_re2_no_enemies_takes_the_recorders_keeps_and_room() {
+        let vm = LuaVm::empty().unwrap();
+        let mut game = GameState::default();
+        vm.run_setup(
+            &mut game,
+            br#"local api = ... api:set_re2_no_enemies({"101:0", "3"}, 0)"#,
+            "setup",
+        )
+        .unwrap();
+        assert_eq!(
+            game.re2_no_enemies,
+            Some(crate::game::Re2NoEnemies {
+                keep: vec![(Some(0x101), 0), (None, 3)],
+                room: Some(0),
+            })
+        );
+        vm.run_setup(
+            &mut game,
+            b"local api = ... api:set_re2_no_enemies()",
+            "setup",
+        )
+        .unwrap();
+        assert_eq!(game.re2_no_enemies, Some(Default::default()));
+        assert!(
+            vm.run_setup(
+                &mut game,
+                br#"local api = ... api:set_re2_no_enemies({"x"})"#,
+                "setup"
+            )
+            .is_err()
+        );
     }
 }

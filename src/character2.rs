@@ -2580,7 +2580,10 @@ mod tests {
             "no setup leaves them alone"
         );
 
-        game.re2_no_enemies = Some(vec![(0x101, 0), (0x102, 2)]);
+        game.re2_no_enemies = Some(crate::game::Re2NoEnemies {
+            keep: vec![(Some(0x101), 0), (Some(0x102), 2)],
+            room: None,
+        });
         game.apply_re2_no_enemies();
         assert_eq!(
             flags(&game),
@@ -2588,11 +2591,60 @@ mod tests {
             "slot 0 is kept in room 101 only"
         );
 
+        let reset = |game: &mut GameState| {
+            for character in game.re2.characters.0.iter_mut().flatten() {
+                character.be_flg = 1;
+            }
+        };
         game.id = RoomId::parse("1020").unwrap();
-        game.re2.characters.0[0].as_mut().unwrap().be_flg = 1;
-        game.re2.characters.0[2].as_mut().unwrap().be_flg = 1;
+        reset(&mut game);
         game.apply_re2_no_enemies();
         assert_eq!(flags(&game), [Some(0), None, Some(1)]);
+
+        // `--keep-enemy 2`: slot 2 in every room.
+        game.re2_no_enemies = Some(crate::game::Re2NoEnemies {
+            keep: vec![(None, 2)],
+            room: None,
+        });
+        reset(&mut game);
+        game.apply_re2_no_enemies();
+        assert_eq!(flags(&game), [Some(0), None, Some(1)], "kept in room 102");
+        game.id = RoomId::parse("2030").unwrap();
+        reset(&mut game);
+        game.apply_re2_no_enemies();
+        assert_eq!(flags(&game), [Some(0), None, Some(1)], "and in room 203");
+
+        // `--no-enemies-room 0`: rooms 100, 200 and so on, and no other.
+        game.re2_no_enemies = Some(crate::game::Re2NoEnemies {
+            keep: Vec::new(),
+            room: Some(0),
+        });
+        reset(&mut game);
+        game.apply_re2_no_enemies();
+        assert_eq!(
+            flags(&game),
+            [Some(1), None, Some(1)],
+            "room 203 is left alone"
+        );
+        game.id = RoomId::parse("2000").unwrap();
+        game.apply_re2_no_enemies();
+        assert_eq!(
+            flags(&game),
+            [Some(0), None, Some(0)],
+            "room 200 is cleared"
+        );
+
+        // The partner isn't in `enemy_work`: `remove_enemies` leaves it.
+        let splayer = crate::scd2::host::SPLAYER_SLOT;
+        let mut partner = game.re2.characters.0[0].clone();
+        partner.as_mut().unwrap().be_flg = 1;
+        game.re2.characters.0.resize(splayer + 1, None);
+        game.re2.characters.0[splayer] = partner;
+        game.apply_re2_no_enemies();
+        assert_eq!(
+            game.re2.characters.0[splayer].as_ref().map(|c| c.be_flg),
+            Some(1)
+        );
     }
 
     #[test]

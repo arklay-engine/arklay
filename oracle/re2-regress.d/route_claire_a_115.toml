@@ -15,7 +15,7 @@ input_drop_early = true
 ticks = 900
 frames = [360, 899]
 frame_max_mean = 0.1
-fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,snd,fgcom,om1,om2"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,snd,fgcom,om1,om2"
 expect = "match"
 record = "--start claire --no-enemies --warp 10C:-22905:-3600:-11900:1024 --life 200"
 

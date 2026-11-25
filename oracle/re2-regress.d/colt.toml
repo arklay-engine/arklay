@@ -23,7 +23,7 @@ ticks = 1800
 setup_script = "colt_118.lua"
 input = "colt_118.txt"
 input_shift = 344
-fields = "esp"
+fields = "rng,esp"
 expect = "match"
 record = "--warp 118:-24617:0:-24996:1024 --life 200 --equip-load 0xD --give 0:0xD:6 --give 1:0x14:60"
 
@@ -48,6 +48,6 @@ ticks = 2400
 setup_script = "colt_licker_204.lua"
 input = "licker_204_fight.txt"
 input_shift = 344
-fields = "esp"
+fields = "rng,esp"
 expect = "match"
 record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip-load 0xD --give 0:0xD:6 --give 1:0x14:200"

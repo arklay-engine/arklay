@@ -8,7 +8,7 @@ setup_script = "question_110.lua"
 input = "question_110.txt"
 input_shift = 344
 ticks = 1400
-fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgstat"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgstat"
 frames = [360, 1399]
 # 0.07 measured: the messages and their choices, and the ladder's scene, land on the original's pixels
 frame_max_mean = 0.15
@@ -24,7 +24,7 @@ setup_script = "question_306.lua"
 input = "question_306.txt"
 input_shift = 344
 ticks = 1400
-fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgstat"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgstat"
 frames = [360, 1399]
 # 0.43 measured, the question and its choices on the original's pixels
 frame_max_mean = 0.50

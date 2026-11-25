@@ -226,6 +226,41 @@ if after_run then after_run() end
 """
 
 
+# `redirect_stderr` swaps the process's `sys.stderr`: the replays' threads parse one at a time.
+RECORDER_PARSE = threading.Lock()
+
+
+def record_args(run: dict) -> argparse.Namespace:
+    """The run's `record` arguments as the recorder reads them (its own parser, which takes an option abbreviated and
+    the last of one given twice)."""
+    said = io.StringIO()
+    try:
+        with RECORDER_PARSE, contextlib.redirect_stderr(said):
+            return load_recorder().build_parser().parse_args(
+                ["record", "--ticks", str(run.get("ticks", 1)), "--trace", "ref.trace", *shlex.split(run["record"])])
+    except SystemExit:
+        reason = (said.getvalue().strip().splitlines() or ["no reason given"])[-1]
+        raise SystemExit(f"re2-regress: {run['name']}: the recorder refuses the record's arguments ({reason})") from None
+
+
+def no_enemies_lua(run: dict) -> str | None:
+    """The setup call that switches arklay's enemies off as the record's `--no-enemies` switches off the original's
+    (`remove_enemies` at the top of every tick, from before the run's first), its kept slots and room with it; None
+    for a run whose record leaves the enemies on, a `--boot` record (the title's route never applies it) or one whose
+    `--no-enemies-room` no `ROOM` can be."""
+    if "record" not in run or run.get("ui", "game") != "game":
+        return None
+    record = record_args(run)
+    if not record.no_enemies or not 0 <= (record.no_enemies_room or 0) <= 0xFF:
+        return None
+    # A slot or room no enemy is in keeps nothing.
+    keep = [str(slot) for slot in record.keep_enemy if slot >= 0]
+    keep += [f"{room:03X}:{slot}" for room, slot in record.keep_enemy_in if 0 <= room <= 0xFFF and slot >= 0]
+    room = "" if record.no_enemies_room is None else f", {record.no_enemies_room}"
+    kept = "{ " + ", ".join(lua_str(entry) for entry in keep) + " }" if keep else "{}"
+    return f"game:set_re2_no_enemies({kept}{room})"
+
+
 def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input_path: Path, setup: Path | None,
                saves_dir: Path, frames_dir: Path | None, voice: list[int] | None, films: list[int] | None = None) -> str:
     """The arklay driver script of one run: the boot, the setup, the trace and the scripted input."""
@@ -270,8 +305,13 @@ def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input
         lines.append(f"new_game({{ {', '.join(boot)} }})")
         # The setup chunk takes the game state as its argument (`local api = ...`).
         chunk = setup.read_text().replace("local api = ...", "local api = game")
+        lines += ["do", chunk.rstrip("\n"), "end"]
+        switch = no_enemies_lua(run)
+        if switch:
+            # After the chunk, so the record's switch is the one followed, whether or not the setup makes the call.
+            lines.append(switch)
         # Settled as an authored start, as the original's `--warp` is, though the chunk may edit nothing.
-        lines += ["do", chunk.rstrip("\n"), "end", "mark_authored()"]
+        lines.append("mark_authored()")
         trace_options = ["all_frames = true"]
         if run.get("sound", True):
             trace_options.append("sound = true")
@@ -791,7 +831,7 @@ def self_test() -> int:
         print(f"re2-regress self-test FAILED: compare_from {starts} {bad}", file=sys.stderr)
         return 1
     problem = (self_test_fields() or self_test_gallery_hold() or self_test_pace() or self_test_pictures()
-               or self_test_save_images() or self_test_title_voice())
+               or self_test_save_images() or self_test_title_voice() or self_test_no_enemies())
     if problem:
         print(f"re2-regress self-test FAILED: {problem}", file=sys.stderr)
         return 1
@@ -927,6 +967,45 @@ def self_test_save_images() -> str | None:
             os.utime(times / name, ns=(when * 1_000_000_000, when * 1_000_000_000))
         if [path.name for path in newest_first(sorted(times.iterdir()))] != ["b", "a", "c"]:
             return "newest_first doesn't order by write time"
+    return None
+
+
+def self_test_no_enemies() -> str | None:
+    """A run recorded with `--no-enemies` switches arklay's enemies off after its setup, a table's or a script's (one
+    that makes the call too stays valid), with the record's kept slots and room; one recorded without leaves them on."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        source = root / "input.txt"
+        source.write_text("0\n")
+        script = root / "setup.lua"
+        script.write_text('local api = ...\napi:set_re2_no_enemies({"303:1"})\n')
+        table = root / "table.lua"
+        table.write_text(setup_lua({"pos": [0, 0, 0]}))
+        cases = [
+            ({"record": "--warp 102:0:0:0:0"}, table, None),
+            ({"record": "--no-enemies --warp 102:0:0:0:0"}, table, "game:set_re2_no_enemies({})"),
+            ({"record": "--no-enemies --keep-enemy 1 --keep-enemy-in 101:0 --no-enemies-room 0"}, script,
+             'game:set_re2_no_enemies({ "1", "101:0" }, 0)'),
+            # The recorder's parser takes an option abbreviated.
+            ({"record": "--no-enemies --keep-enemy-i 11a:2"}, script, 'game:set_re2_no_enemies({ "11A:2" })'),
+            # A slot no enemy is in keeps nothing, and a room no `ROOM` is clears nothing.
+            ({"record": "--no-enemies --keep-enemy -1"}, table, "game:set_re2_no_enemies({})"),
+            ({"record": "--no-enemies --no-enemies-room 0x100"}, table, None),
+        ]
+        for extra, setup, want in cases:
+            run = {"name": "n", "room": "102", "ticks": 400, **extra}
+            lua = driver_lua(run, {"pack": root / "re2.akpak"}, "game", 56, root / "a.trace", source, setup, root, None,
+                             None)
+            lines = lua.splitlines()
+            calls = [line for line in lines if line.startswith("game:set_re2_no_enemies")]
+            if calls != ([want] if want else []):
+                return f"{extra['record']!r} gave the calls {calls}, not {want}:\n{lua}"
+            # Before the first tick, after the setup's own call.
+            if want and not lines.index("end") < lines.index(want) < lines.index("mark_authored()"):
+                return f"{extra['record']!r}: the switch is not between the setup and the start:\n{lua}"
+        # The title's route never applies `--no-enemies` to a `--boot` record.
+        if no_enemies_lua({"name": "t", "ui": "title", "record": "--no-enemies"}) is not None:
+            return "a title run's record switches its enemies off"
     return None
 
 
@@ -1946,7 +2025,7 @@ def recorder_options(command: list[str]) -> tuple[bool, str | None]:
     recorder's own parser, which takes an option abbreviated and the last of one given twice."""
     said = io.StringIO()
     try:
-        with contextlib.redirect_stderr(said):
+        with RECORDER_PARSE, contextlib.redirect_stderr(said):
             args = load_recorder().build_parser().parse_args(command[2:])
     except SystemExit:
         reason = (said.getvalue().strip().splitlines() or ["no reason given"])[-1]

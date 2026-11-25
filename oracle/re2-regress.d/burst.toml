@@ -25,7 +25,7 @@ ticks = 1800
 setup_script = "smg_equip_118.lua"
 input = "smg_equip_118.txt"
 input_shift = 344
-fields = "esp"
+fields = "rng,esp"
 expect = "match"
 record = "--warp 118:-24617:0:-24996:1024 --life 200 --give 2:0xF:100 --give 3:0x1B:100"
 
@@ -52,6 +52,6 @@ ticks = 1800
 setup_script = "flame_equip_118.lua"
 input = "flame_equip_118.txt"
 input_shift = 344
-fields = "esp"
+fields = "rng,esp"
 expect = "match"
 record = "--warp 118:-24617:0:-24996:1024 --life 200 --give 2:0x10:100 --give 3:0x17:100"

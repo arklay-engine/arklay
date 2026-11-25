@@ -976,6 +976,20 @@ pub struct FmvState {
     pub taken: u64,
 }
 
+/// The oracle's `--no-enemies` (`remove_enemies`, run at its stop in
+/// `Pad_set`, before it writes the tick before it): at the top of every tick
+/// and before a tick's trace line, bit 0 of each enemy slot's `be_flg` is
+/// cleared, so nothing runs, draws or touches it, but for the slots kept.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Re2NoEnemies {
+    /// `--keep-enemy-in ROOM:SLOT` (room as `0xSRR`, stage digit and room),
+    /// or `--keep-enemy SLOT` in every room with `None`.
+    pub keep: Vec<(Option<u16>, usize)>,
+    /// `--no-enemies-room`: only in the rooms of this number (`ROOM`, the
+    /// room within its stage, whatever the stage).
+    pub room: Option<u8>,
+}
+
 /// RE2's get-item window (`0x4FD560`, game mode 2 from `Sce_Item`). The
 /// world holds from the tick after the pick-up until the window closes; only
 /// the window and its message run.
@@ -3783,12 +3797,9 @@ pub struct GameState {
     /// The `pG + 0x82B0` hook while a key turn armed `Key_lost`. It is not
     /// saved: it is only armed while a door message holds the game.
     pub re2_key_lost: Option<door2::KeyLost>,
-    /// The oracle's `--no-enemies` for a setup script (`set_re2_no_enemies`):
-    /// at the top of every tick, bit 0 of each enemy slot's `be_flg` is
-    /// cleared, so nothing runs, draws or touches it, but for the
-    /// `(room, slot)` pairs kept (room as `0xSRR`, stage digit and room).
+    /// The oracle's `--no-enemies` for a setup script (`set_re2_no_enemies`).
     /// `None` leaves the enemies alone.
-    pub re2_no_enemies: Option<Vec<(u16, usize)>>,
+    pub re2_no_enemies: Option<Re2NoEnemies>,
     /// A setup script's `Dest` for the next zombie a room's `sce_em_set` puts
     /// in a slot (`set_re2_enemy_dest`), as `(room, slot, [x, z])` with the
     /// room as in `re2_no_enemies`. Neither `Sce_em_set` nor `Em10_Init` sets
@@ -9748,13 +9759,25 @@ impl GameState {
     /// The oracle's `remove_enemies`, run where its stop in `Pad_set` falls:
     /// every enemy slot's `be_flg` bit 0 cleared but for the kept ones.
     pub fn apply_re2_no_enemies(&mut self) {
-        let Some(keep) = self.re2_no_enemies.as_ref() else {
+        let Some(switch) = self.re2_no_enemies.as_ref() else {
             return;
         };
+        if switch.room.is_some_and(|room| room != self.id.room) {
+            return;
+        }
         let room = u16::from(self.id.stage) << 8 | u16::from(self.id.room);
-        for (slot, character) in self.re2.characters.0.iter_mut().enumerate() {
+        // `enemy_work`'s slots only: the partner (`splayer_work`) runs on.
+        let enemies = self
+            .re2
+            .characters
+            .0
+            .iter_mut()
+            .take(crate::scd2::host::SPLAYER_SLOT);
+        for (slot, character) in enemies.enumerate() {
             if let Some(character) = character.as_deref_mut()
-                && !keep.contains(&(room, slot))
+                && !switch.keep.iter().any(|&(kept, kept_slot)| {
+                    kept_slot == slot && kept.is_none_or(|kept| kept == room)
+                })
             {
                 character.be_flg &= !1;
             }

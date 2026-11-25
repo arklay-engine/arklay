@@ -8,12 +8,12 @@
 [[run]]
 name = "pause_arrange_102"
 arrange = true
-setup_script = "item_102.lua"
+setup_script = "item_102_arrange.lua"
 input = "pause_102.txt"
 input_shift = 344
 input_drop_early = true
 ticks = 1250
-fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat"
 frames = [360, 1249]
 frame_max_mean = 0.05
 expect = "match"
@@ -26,7 +26,7 @@ input = "pause_102.txt"
 input_shift = 344
 input_drop_early = true
 ticks = 1250
-fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat"
 frames = [360, 1249]
 frame_max_mean = 0.05
 expect = "match"
