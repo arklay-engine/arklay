@@ -1017,10 +1017,16 @@ impl Config {
         })
     }
 
-    /// Persist RE 2's gallery bits (config.ini's `GALLERY0` to `GALLERY4`)
-    /// a clear's results raised, rewritten like [`Config::save_bindings`].
-    pub fn save_re2_gallery(path: &Path, words: [u32; 5]) -> Result<()> {
-        Self::update(path, |config| config.game.re2_gallery = words)
+    /// Persist the RE 2 gallery bits (config.ini's `GALLERY0` to `GALLERY4`)
+    /// a clear's results opened, ORed into the file's as it is now (another
+    /// window's clear may have opened others since), rewritten like
+    /// [`Config::save_bindings`].
+    pub fn save_re2_gallery(path: &Path, opened: [u32; 5]) -> Result<()> {
+        Self::update(path, |config| {
+            for (word, bits) in config.game.re2_gallery.iter_mut().zip(opened) {
+                *word |= bits;
+            }
+        })
     }
 
     /// Persist the speaker mode and the quality a title's own option
@@ -2460,9 +2466,14 @@ menu_text_size = \"huge\"
             std::env::temp_dir().join(format!("arklay-config-{}-records", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("arklay.toml");
-        fs::write(&path, "[game]\nre2_special = 1\nmusic_volume = 40\n").unwrap();
-        let words = [0x8000_0000, 0, 0x30, 0xFFFF_0000, 1];
-        Config::save_re2_gallery(&path, words).unwrap();
+        fs::write(
+            &path,
+            "[game]\nre2_special = 1\nmusic_volume = 40\nre2_gallery = \"0 0 10 0 0\"\n",
+        )
+        .unwrap();
+        // The opened bits go into the file's, which keep their own.
+        let opened = [0x8000_0000, 0, 0x20, 0xFFFF_0000, 1];
+        Config::save_re2_gallery(&path, opened).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         assert!(
             text.contains("re2_gallery = \"80000000 00000000 00000030 ffff0000 00000001\""),
@@ -2470,9 +2481,13 @@ menu_text_size = \"huge\"
         );
         let (saved, warnings) = Config::load(&path);
         assert!(warnings.is_empty(), "{warnings:?}");
-        assert_eq!(saved.game.re2_gallery, words);
+        assert_eq!(
+            saved.game.re2_gallery,
+            [0x8000_0000, 0, 0x30, 0xFFFF_0000, 1]
+        );
         assert_eq!(saved.game.re2_special, 1);
         assert_eq!(saved.game.music_volume, 40);
+        // All open is the default, which isn't written.
         Config::save_re2_gallery(&path, [u32::MAX; 5]).unwrap();
         assert!(!fs::read_to_string(&path).unwrap().contains("re2_gallery"));
         for bad in ["\"ffffffff\"", "\"zz 0 0 0 0\"", "5"] {

@@ -836,6 +836,7 @@ pub fn run_with_options(
     let mut app = App::new(pack, save_dir, true);
     app.configure_watch(mods.watch);
     app.player_options = player_options;
+    app.use_settings_records(&crate::config::Config::load_default().0.game);
     app.start_session(session);
     run_app_loop(&mut app, &mut display, stats.is_some())
 }
@@ -12443,8 +12444,8 @@ struct App {
     /// `SPECIAL` are the settings' ([`App::use_settings_records`]): the
     /// interactive game's, where a headless run gives its own or none.
     records_are_settings: bool,
-    /// The gallery bits a clear's results raised, for the window's loop to
-    /// save to the settings when they are the settings'.
+    /// The gallery bits a clear's results newly opened, for the window's
+    /// loop to OR into the settings' when they are the settings'.
     gallery_change: Option<[u32; 5]>,
     /// Whether the prologue film (id 1) is playing for a pending new game:
     /// the follow-up `NewGame` action then builds the session instead of
@@ -13202,22 +13203,13 @@ impl App {
         if let Mode::Play(session) = &self.mode
             && let Some(result) = &session.game.re2_result
             && let Some(words) = self.player_options.title_gallery.as_mut()
-            && let Some(changed) =
+            && let Some(opened) =
                 merge_result_gallery(words, result.gallery(), self.records_are_settings)
         {
-            self.gallery_change = Some(changed);
+            self.queue_gallery_save(opened);
         }
-        let special = i64::from(self.player_options.title_special.unwrap_or(15));
-        let mut args = vec![
-            ("folder_saves", ScreenArg::Bool(folder_saves)),
-            ("special", ScreenArg::Int(special)),
-        ];
-        if let Some(gallery) = self.player_options.title_gallery {
-            const NAMES: [&str; 5] = ["gallery0", "gallery1", "gallery2", "gallery3", "gallery4"];
-            for (name, word) in NAMES.into_iter().zip(gallery) {
-                args.push((name, ScreenArg::Int(i64::from(word))));
-            }
-        }
+        let mut args = vec![("folder_saves", ScreenArg::Bool(folder_saves))];
+        args.extend(self.records_args());
         if let Some(seed) = self.player_options.title_seed {
             args.push(("seed", ScreenArg::Int(i64::from(seed))));
         }
@@ -13321,9 +13313,10 @@ impl App {
     fn open_select(&mut self) -> Result<()> {
         self.stop_screen_music();
         let mut cx = self.context();
+        let args = self.records_args();
         let screen = ui::lua_screen::LuaScreen::open_screen(
             "char_select",
-            &[],
+            &args,
             ScreenAction::Title,
             &mut cx,
         )?;
@@ -13332,6 +13325,31 @@ impl App {
         self.play_ui_cues(cues);
         self.tell_screen_volumes();
         Ok(())
+    }
+
+    /// The screen arguments of RE 2's clear records: `special` (config.ini's
+    /// `SPECIAL`, 15 when the run has none) and `gallery0` to `gallery4`
+    /// when it has the gallery's words.
+    fn records_args(&self) -> Vec<(&'static str, ScreenArg)> {
+        let special = i64::from(self.player_options.title_special.unwrap_or(15));
+        let mut args = vec![("special", ScreenArg::Int(special))];
+        if let Some(gallery) = self.player_options.title_gallery {
+            const NAMES: [&str; 5] = ["gallery0", "gallery1", "gallery2", "gallery3", "gallery4"];
+            for (name, word) in NAMES.into_iter().zip(gallery) {
+                args.push((name, ScreenArg::Int(i64::from(word))));
+            }
+        }
+        args
+    }
+
+    /// Queue the gallery's `opened` bits for the window's loop to save,
+    /// with any it has queued and not yet saved.
+    fn queue_gallery_save(&mut self, opened: [u32; 5]) {
+        let mut words = self.gallery_change.unwrap_or_default();
+        for (word, bits) in words.iter_mut().zip(opened) {
+            *word |= bits;
+        }
+        self.gallery_change = Some(words);
     }
 
     /// RE 2's gallery bits and `SPECIAL` are the settings' in `game`, as
@@ -15976,6 +15994,8 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
     display.set_title(&window_title(app.pack.manifest()))?;
     // An F12 press waits here for the next presented frame.
     let mut screenshot = false;
+    // Gallery bits a failed write left, for the next save's.
+    let mut gallery_unsaved = [0u32; 5];
     loop {
         let mut keys = PortKeys::default();
         if poll_events(&mut event, &mut input, &mut keys, Some(display)) {
@@ -16009,13 +16029,20 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
             if let Some(sound) = app.sound_change.take() {
                 save_screen_sound(&crate::config::Config::default_path(), sound);
             }
-            if let Some(words) = app.gallery_change.take()
-                && let Err(err) = crate::config::Config::save_re2_gallery(
-                    &crate::config::Config::default_path(),
-                    words,
-                )
-            {
-                crate::warning!("warning: the gallery's records not saved: {err:#}");
+            // A clear opened gallery bits: they go into the file's, and a
+            // failed write keeps them for the next clear's.
+            if let Some(mut words) = app.gallery_change.take() {
+                for (word, unsaved) in words.iter_mut().zip(gallery_unsaved) {
+                    *word |= unsaved;
+                }
+                let path = crate::config::Config::default_path();
+                gallery_unsaved = match crate::config::Config::save_re2_gallery(&path, words) {
+                    Ok(()) => [0; 5],
+                    Err(err) => {
+                        crate::warning!("warning: the gallery's records not saved: {err:#}");
+                        words
+                    }
+                };
             }
             clock.ticked(tick_ms);
             // The tick may have changed the screen and with it the limiter,
@@ -21191,15 +21218,17 @@ fn carry_re2_counts(
 }
 
 /// OR the gallery's bits a clear's results set (`Set_registry_flg`) into
-/// the title's (config.ini's `GALLERY0` to `GALLERY4`). Returns the words
-/// to save when they changed and are the settings' (`settings`): the
-/// original's `ConfigWrite` keeps them in config.ini.
+/// the title's (config.ini's `GALLERY0` to `GALLERY4`). Returns the bits
+/// newly opened, to OR into the settings' file, when there are some and
+/// the words are the settings' (`settings`): the original's `ConfigWrite`
+/// keeps them in config.ini.
 fn merge_result_gallery(words: &mut [u32; 5], bits: [u32; 5], settings: bool) -> Option<[u32; 5]> {
-    let before = *words;
-    for (word, bits) in words.iter_mut().zip(bits) {
+    let mut opened = [0; 5];
+    for ((word, bits), opened) in words.iter_mut().zip(bits).zip(&mut opened) {
+        *opened = bits & !*word;
         *word |= bits;
     }
-    (settings && *words != before).then_some(*words)
+    (settings && opened != [0; 5]).then_some(opened)
 }
 
 fn seed_re2_music_table(pack: &Pack, game: &mut game::GameState, scenario_b: bool) {
@@ -26458,8 +26487,10 @@ mod tests {
         let bits = [0x8000_0000, 0, 0x10, 0, 0];
         assert_eq!(
             merge_result_gallery(&mut words, bits, true),
-            Some([0x8000_0000, 0, 0x10, 0, 0])
+            Some([0x8000_0000, 0, 0, 0, 0]),
+            "only the new bits"
         );
+        assert_eq!(words, [0x8000_0000, 0, 0x10, 0, 0]);
         assert_eq!(
             merge_result_gallery(&mut words, bits, true),
             None,
@@ -26656,6 +26687,8 @@ mod tests {
         };
         file.game.quick_turn = true;
         file.graphics.vsync = true;
+        file.game.re2_gallery = [1, 2, 3, 4, 5];
+        file.game.re2_special = 2;
         // The run overrode quick turn, the language and the renderer.
         let mut before = gui::Settings {
             graphics: file.graphics,
@@ -26668,11 +26701,19 @@ mod tests {
         };
         before.game.quick_turn = false;
         before.graphics.renderer = RendererKind::Software;
+        // The menu's copy of the clear records is older than the file's.
+        before.game.re2_gallery = [0; 5];
+        before.game.re2_special = 15;
         let mut after = before.clone();
         after.game.music_volume = 40;
         after.graphics.vsync = false;
         let (graphics, language, game) =
             persisted_options(file.clone(), &before, &after, after.graphics);
+        assert_eq!(
+            (game.re2_gallery, game.re2_special),
+            ([1, 2, 3, 4, 5], 2),
+            "the file's records stand"
+        );
         assert!(game.quick_turn);
         assert_eq!(game.music_volume, 40);
         assert_eq!(language.as_deref(), Some("en"));
@@ -43968,6 +44009,65 @@ off_0010:
         session.game.re2.rnd = crate::zombie2::Rnd(0x1111);
         app.apply(ScreenAction::Title).unwrap();
         assert_eq!(title_value(&app, "rnd"), 0x1111, "the new game's");
+    }
+
+    /// The title a clear's results go to has the gallery's bits they
+    /// opened, and the window's loop is given only the new ones to save,
+    /// with those of a save it hasn't made yet; a run's own records are
+    /// never saved.
+    #[test]
+    fn a_clears_results_queue_their_new_gallery_bits() {
+        let clear = |app: &mut App, bits: [u32; 5]| {
+            app.apply(ScreenAction::NewGame {
+                character: 0,
+                choice: Default::default(),
+            })
+            .unwrap();
+            let Mode::Play(session) = &mut app.mode else {
+                panic!("the game started");
+            };
+            let fade = crate::result2::Fade {
+                level: 0,
+                add: 0,
+                mode: 0,
+            };
+            let mut result = crate::result2::Result::new(
+                crate::result2::Clear::default(),
+                crate::result2::Result::boot_colours(),
+                fade,
+            );
+            result.set_gallery(bits);
+            session.game.re2_result = Some(Box::new(result));
+            app.apply(ScreenAction::Title).unwrap();
+        };
+        let dir = TempDir::new();
+        let mut app = App::new(re2_demo_pack(&[0x1000; 20]), dir.0.clone(), false);
+        app.use_settings_records(&crate::config::Game {
+            re2_gallery: [0x8000_0000, 0, 0, 0, 0],
+            ..Default::default()
+        });
+        clear(&mut app, [0xC000_0000, 0, 0, 0, 0]);
+        assert_eq!(
+            app.player_options.title_gallery,
+            Some([0xC000_0000, 0, 0, 0, 0])
+        );
+        assert_eq!(app.gallery_change, Some([0x4000_0000, 0, 0, 0, 0]));
+        clear(&mut app, [0, 0, 0, 0, 1]);
+        assert_eq!(
+            app.gallery_change,
+            Some([0x4000_0000, 0, 0, 0, 1]),
+            "with the unsaved"
+        );
+        app.gallery_change = None;
+        clear(&mut app, [0xC000_0000, 0, 0, 0, 1]);
+        assert_eq!(app.gallery_change, None, "nothing new");
+
+        let mut app = App::new(re2_demo_pack(&[0x1000; 20]), dir.0.clone(), false);
+        app.player_options.title_gallery = Some([0; 5]);
+        app.use_settings_records(&crate::config::Game::default());
+        clear(&mut app, [1, 0, 0, 0, 0]);
+        assert_eq!(app.player_options.title_gallery, Some([1, 0, 0, 0, 0]));
+        assert_eq!(app.gallery_change, None, "a run's own");
     }
 
     #[test]

@@ -668,6 +668,12 @@ impl Result {
         self.gallery
     }
 
+    /// Results that have set the gallery's `bits`.
+    #[cfg(test)]
+    pub fn set_gallery(&mut self, bits: [u32; 5]) {
+        self.gallery = bits;
+    }
+
     /// What `FUN_004b73c0` gives the next scenario's game from this clear:
     /// `0x995B48`'s weapons' bits and the records, once `Result_retrieve`
     /// has run in the main game.
