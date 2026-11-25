@@ -1,0 +1,54 @@
+# status_sherry_21b: Claire in room 21B with Sherry following (sherry_21b_follow's warp): START, the cursor over the slots, CHECK on slot 0 and on the personal item, up to the tab bar, MAP and FILE, and START to close
+344
+400 start
+404
+440 right
+444
+480 down
+484
+520 down
+524
+560 down
+564
+600 left
+604
+640 up
+644
+680 up
+684
+720 up
+724
+760 confirm
+764
+800 down
+804
+840 confirm
+844
+960 confirm
+964
+1040 up
+1044
+1080 confirm
+1084
+1120 down
+1124
+1160 confirm
+1164
+1280 confirm
+1284
+1360 up
+1364
+1400 left
+1404
+1440 confirm
+1444
+1520 cancel
+1524
+1560 left
+1564
+1600 confirm
+1604
+1680 cancel
+1684
+1740 start
+1744

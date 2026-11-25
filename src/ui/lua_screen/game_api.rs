@@ -89,18 +89,21 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
     // `command_cursor`, `result`, `follow`, the condition panel's
     // `panel_mode`, `panel_sweep`, `panel_cure` and `panel_done`, whether
     // the player is `poisoned`, the screen's shared `blink` and
-    // `blink_falling`, FILE's `binder`, `slot`, `page_index`, `zoom`,
+    // `blink_falling`, while a partner follows the player (`fg_status`'s
+    // `0x10000000`) her panel's x offset from its place, `partner_dx`,
+    // FILE's `binder`, `slot`, `page_index`, `zoom`,
     // `view_zoom`, `spin`, `file_x`, the `shown_page`, the 24 `files` held,
     // 0xFF for none, the `file` in the binder's slot and, in the reader's
     // subs 0xD to 0x12, the `file_page`'s sprites), or nil when it isn't up. The engine runs it; the script only
     // draws it.
     methods.add_method("re2_items", |lua, api, ()| {
-        let Some((page, poisoned, work, held)) = api.game().and_then(|game| {
+        let Some((page, poisoned, work, held, partner)) = api.game().and_then(|game| {
             Some((
                 game.re2_items?,
                 game.re2.player.poisoned,
                 game.re2_file,
                 game.re2.files,
+                game.re2.partner_bit(),
             ))
         }) else {
             return Ok(mlua::Value::Nil);
@@ -114,6 +117,9 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         table.set("panel_cure", page.panel.cure)?;
         table.set("panel_done", page.panel.done)?;
         table.set("poisoned", poisoned)?;
+        if partner {
+            table.set("partner_dx", crate::game::status2::partner_dx(&page))?;
+        }
         table.set("page", page.page)?;
         table.set("sub", page.sub)?;
         table.set("command", page.command)?;
