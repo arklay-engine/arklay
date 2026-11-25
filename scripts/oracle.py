@@ -111,6 +111,8 @@ PLAYER_FIELDS = ["x", "y", "z", "angle", "beh", "as", "hp"]
 # Fields compared only when `--fields` names them.
 OPT_IN_FIELDS = {
     "atsce",
+    "die",
+    "dieview",
     "box",
     "fgcom",
     "fgitem",
@@ -175,6 +177,8 @@ OPT_IN_FIELDS = {
 # runs name it.
 SCREEN_FIELDS = (
     "atsce",
+    "die",
+    "dieview",
     "box",
     "fgcom",
     "fgitem",
@@ -353,6 +357,8 @@ def parse_trace(path: str) -> list[Tick]:
                     screen={
                         **{key: fields[key] for key in SCREEN_FIELDS if key in fields},
                         **({"fgstat": status_flags(fields)} if "fgstat" in fields else {}),
+                        # `Spiral_move`'s eye and target: the original's field goes on with the `Be_flg`s.
+                        **({"dieview": ",".join(fields["dieview"].split(",")[:6])} if "dieview" in fields else {}),
                     },
                 )
             )

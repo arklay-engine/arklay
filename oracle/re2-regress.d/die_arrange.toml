@@ -1,0 +1,18 @@
+# ARRANGE MODE's game over (`censorship_off`): room 11B's zombies kill the player, held, on tick 893. `Die_move_fade_out`
+# skips `Die_move_timer` for a held death, so `Die` holds the world from 894, and the game over shows the room's models
+# from `Spiral_move`'s camera (`die`, `dieview`) until `Die_move_end` on tick 1341 (oracle/re2.md, "The game over"). The run
+# stops there: a script session started in a room has no title to go back to; `title_after_death` covers the hand-off.
+# The frames lack `Die_blood_move_main`'s blood and `Die_light_set`'s light (oracle/re2-deviations.md).
+[[run]]
+name = "die_11b_arrange"
+arrange = true
+room = "11B"
+sound = false
+ticks = 1342
+setup = { pos = [8000, 0, -19500], angle = 0, health = 200, rnd = 52295, camera = 0 }
+input = "none.txt"
+fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,zm2,zm3,zm4,zm5,die,dieview"
+frames = [880, 1340]
+frame_max_mean = 3.5
+expect = "match"
+record = "--warp 11B:8000:0:-19500:0 --life 200"

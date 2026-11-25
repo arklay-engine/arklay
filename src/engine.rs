@@ -5829,6 +5829,37 @@ impl GameSession {
         }
     }
 
+    /// What `Die`'s camera reads of the bodies: the player's `Cdir_y` and
+    /// parts, and the angle of whatever holds them.
+    fn re2_die_bodies(&self) -> crate::die2::DieBodies {
+        let re2 = &self.game.re2;
+        let killer = re2
+            .player
+            .held_by
+            .and_then(|slot| re2.characters.0.get(slot))
+            .and_then(|character| character.as_deref());
+        crate::die2::DieBodies {
+            player_angle: self.player.angle,
+            player_parts: re2
+                .player
+                .parts
+                .iter()
+                .map(|part| part.map(|matrix| matrix.t))
+                .collect(),
+            killer_angle: killer.map(|character| character.body.angle),
+            killer_parts: killer
+                .and_then(|character| character.zombie.as_ref())
+                .map(|zombie| {
+                    zombie
+                        .drawn
+                        .iter()
+                        .map(|part| part.map(|matrix| matrix.t))
+                        .collect()
+                })
+                .unwrap_or_default(),
+        }
+    }
+
     /// RE2's game over, after the tick's routines: `Game_loop` starts `Die`
     /// on the tick the player's life falls below zero.
     fn tick_re2_die(&mut self, pack: &Pack) {
@@ -5854,17 +5885,22 @@ impl GameSession {
                     .and_then(|character| character.as_deref())
                     .map_or(0x10, |character| character.id)
             });
-            self.re2_die = Some(crate::die2::Die::new(killer));
+            self.re2_die = Some(crate::die2::Die::new(killer, self.game.re2.censorship_off));
         }
         if self.re2_die.is_some() {
             // `Game_loop` clears `0x4000000` as it starts `Die`; an enemy's
             // later write of it while `Die` runs is spent.
             self.game.re2.player.die_start = false;
         }
+        if self.re2_die.is_none() {
+            self.game.re2_die_camera = None;
+            return;
+        }
+        let bodies = self.re2_die_bodies();
         let Some(die) = self.re2_die.as_mut() else {
             return;
         };
-        let out = die.tick(&mut self.game.re2);
+        let out = die.tick(&mut self.game.re2, &bodies);
         if out.lock_cut {
             self.game.camera.locked = true;
         }
@@ -5882,6 +5918,7 @@ impl GameSession {
         if out.set_enemies {
             // `Die_vcut_set`, in `Die_move_wait` with `Die_enemy_set`.
             self.loaded.room.die_view = true;
+            self.loaded.room.die_view_all = self.game.re2.censorship_off;
             let killer_id = self
                 .game
                 .re2
@@ -5911,6 +5948,15 @@ impl GameSession {
                 character.be_flg = character.be_flg & !crate::die2::BE_HIDDEN | 8;
             }
         }
+        // Only over the room `Die_vcut_set` set its quad on: a room loaded
+        // since (F1's jump) has its own cuts and background.
+        let room = &self.loaded.room;
+        self.game.re2_die_camera = self
+            .re2_die
+            .as_ref()
+            .filter(|die| die.blackout() && room.die_view && room.die_view_all)
+            .and_then(crate::die2::Die::view)
+            .map(|view| (view.eye, view.target));
         if out.load_sounds {
             let player = self.game.re2.pl_id;
             self.re2_sounds
@@ -10173,8 +10219,12 @@ impl GameSession {
             self.framebuffer.width as i32,
             self.framebuffer.height as i32,
         );
-        self.framebuffer
-            .fill_rect([0, 0, width, height], [0, 0, 0, 255]);
+        // ARRANGE MODE's game over draws the room's models from the spiral
+        // ([`game::GameState::re2_die_camera`]) on the black.
+        if self.game.re2_die_camera.is_none() {
+            self.framebuffer
+                .fill_rect([0, 0, width, height], [0, 0, 0, 255]);
+        }
         let (Some(text), Some(sheet)) = (die.text(), self.re2_die_sheet.as_ref()) else {
             return;
         };
@@ -10660,10 +10710,14 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.game.re2.music.trace_field()),
-            re2_die: self
-                .re2_die
-                .as_ref()
-                .and_then(crate::die2::Die::trace_field),
+            // `die`, then `dieview` (`Spiral_move`'s camera) once it has one.
+            re2_die: self.re2_die.as_ref().and_then(|die| {
+                let phase = die.trace_field()?;
+                Some(match die.view_trace() {
+                    Some(view) => format!("{phase} dieview={view}"),
+                    None => phase,
+                })
+            }),
             re2_neck: self.game.is_re2_room.then(|| {
                 let neck = &self.game.re2.player.neck;
                 format!(
@@ -24134,6 +24188,12 @@ fn render_frame_on(
     let mut camera = Camera::from_cut(cut);
     camera.screen = game.screen_offset();
     let camera = debug_view::camera(camera, id);
+    // ARRANGE MODE's game over: `Spiral_move`'s `Set_view` and
+    // `SetGeomScreen(0xD0)`.
+    let camera = match game.re2_die_camera {
+        Some((eye, target)) => Camera::from_set_view(eye, target, 0xD0),
+        None => camera,
+    };
     let lighting = Lighting::from_room(room);
 
     let borrowed = (id != loaded_id)
@@ -25443,14 +25503,17 @@ fn render_frame_on(
         None => Vec::new(),
     };
     let scrolled = scrolled_background(cut, game);
-    let background = if render_mode.background() {
+    let background = if game.re2_die_camera.is_some() {
+        // `Bg_set_mode(2, 0)`: no background, and so no masks.
+        None
+    } else if render_mode.background() {
         cut_background(cut, borrowed.as_ref(), &scrolled)
     } else if render_mode.collision().is_some() {
         Some(debug_view::collision_backdrop())
     } else {
         None
     };
-    let layer = layer.filter(|_| render_mode.masks());
+    let layer = layer.filter(|_| render_mode.masks() && game.re2_die_camera.is_none());
     let scene = render::GameplayScene {
         background,
         origin: display_origin,
@@ -29682,7 +29745,7 @@ mod tests {
         let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
         session.game.is_re2_room = true;
         session.game.message_flags |= START_MESSAGE_BITS;
-        session.re2_die = Some(crate::die2::Die::new(None));
+        session.re2_die = Some(crate::die2::Die::new(None, false));
         let start = UiInput {
             start: true,
             any: true,
@@ -29839,6 +29902,29 @@ mod tests {
         re2_pause_tick(&mut session, &pack, false, none);
         re2_pause_tick(&mut session, &pack, true, none);
         assert!(session.re2_pause.is_some(), "still paused under the menu");
+    }
+
+    /// ARRANGE MODE's game over draws from the spiral only over the room
+    /// `Die_vcut_set` set its quad on: F1's jump to another room drops it.
+    #[test]
+    fn re2_the_die_camera_stays_in_its_room() {
+        let dir = TempDir::new();
+        let (pack, a, b) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.re2.censorship_off = true;
+        session.re2_die = Some(crate::die2::Die::new(None, true));
+        let mut ticks = 0;
+        while session.game.re2_die_camera.is_none() {
+            ticks += 1;
+            assert!(ticks < 1000, "the spiral never started");
+            re2_tick(&mut session, &pack, UiInput::default());
+        }
+        assert!(session.loaded.room.die_view_all);
+        session.debug_jump(&pack, b).unwrap();
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(session.re2_die.is_some(), "Die runs on");
+        assert_eq!(session.game.re2_die_camera, None);
     }
 
     /// A tick with the map key down in the pad (`Key`'s `0x4000`), pressed

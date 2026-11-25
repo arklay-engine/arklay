@@ -1,9 +1,11 @@
 //! RE2's game over: the `Die` task (`Die_demo_move`'s phases).
 //!
-//! The white-out, the strobing stops, the sequence's length and the `Die_spr_*`
-//! text are the original's. With `censorship_off` clear, `Die_vcut_set` culls
-//! everything the room would draw, so `Die_move_set_cut`'s spiralling camera and
-//! the room's lights have nothing to show and aren't ported: see
+//! The white-out, the strobing stops, the sequence's length, the `Die_spr_*`
+//! text and `Die_move_set_cut`'s spiralling camera (`Spiral_move`) are the
+//! original's. With `censorship_off` clear, `Die_vcut_set` culls everything
+//! the room would draw, so the camera has nothing to show; ARRANGE MODE
+//! (`censorship_off`) shows the room's models from it. `Die_light_set`'s
+//! light and `Die_blood_move_main`'s blood aren't ported: see
 //! `oracle/re2-deviations.md`.
 
 use crate::player2::{rcos, rsin};
@@ -26,6 +28,118 @@ const HELD_WAITS: [i16; 15] = [180, 95, 10, 90, 145, 145, 0, 84, 81, 0, 0, 90, 9
 const PAUSES: [i16; 15] = [
     91, 91, 96, 86, 150, 120, 120, 86, 82, 75, 83, 81, 81, 85, 96,
 ];
+/// `Die_move_set_cut`'s rows (`DWORD_00525b38`, 0x1C bytes a killer), less
+/// the pause ([`PAUSES`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SpiralRow {
+    /// `+0`: the circle's radius (`DWORD_0099cf08`).
+    radius: i32,
+    /// `+4`: what it shrinks by each tick (`DWORD_0099cf10`).
+    shrink: i32,
+    /// `+8`: the eye's first fall (`WORD_0099cee0`).
+    fall: i16,
+    /// `+0xA`, `+0xC`: the turn each tick and the start past the player's
+    /// facing, with the killer facing the same way as the player
+    /// (`Cdir_ck`).
+    turn_with: i16,
+    start_with: i16,
+    /// `+0xE`, `+0x10`: the same, facing the other way.
+    turn_against: i16,
+    start_against: i16,
+    /// `+0x12`: the eye's height on the target.
+    height: i16,
+    /// `+0x16`: whose part the camera follows: 0 the player, 1 the killer.
+    killer: bool,
+    /// `+0x18`: the part.
+    part: usize,
+}
+
+const fn row(
+    radius: i32,
+    shrink: i32,
+    fall: i16,
+    with: (i16, i16),
+    against: (i16, i16),
+    height: i16,
+    (killer, part): (bool, usize),
+) -> SpiralRow {
+    SpiralRow {
+        radius,
+        shrink,
+        fall,
+        turn_with: with.0,
+        start_with: with.1,
+        turn_against: against.0,
+        start_against: against.1,
+        height,
+        killer,
+        part,
+    }
+}
+
+#[rustfmt::skip]
+const SPIRAL_ROWS: [SpiralRow; 15] = [
+    row(3000, 8, -5, (2, 600), (2, 1500), -1000, (false, 0)),
+    row(3000, 8, -5, (2, 600), (2, 1500), -1000, (false, 0)),
+    row(3500, 8, -4, (7, 0), (-7, 2048), -1000, (false, 0)),
+    row(3500, 10, 20, (4, 600), (-4, 1500), -600, (false, 2)),
+    row(3000, 8, 2, (4, 600), (-4, 1500), -600, (false, 1)),
+    row(3000, 8, 2, (4, 600), (-4, 1500), -600, (false, 8)),
+    row(3000, 8, 2, (4, 600), (-4, 1500), -600, (false, 8)),
+    row(3600, 8, 2, (4, 600), (-4, 1500), -600, (false, 0)),
+    row(3000, -6, 8, (8, 600), (-8, 1500), -600, (false, 0)),
+    row(4000, 8, -10, (12, 600), (12, 1500), -2000, (false, 0)),
+    row(3000, 8, -10, (2, 600), (2, 1500), -600, (false, 0)),
+    row(3000, 8, -10, (2, 600), (2, 1500), -600, (false, 0)),
+    row(3500, 8, -10, (2, 600), (2, 1500), -600, (false, 0)),
+    row(8600, 4, -10, (2, 2148), (-2, 1948), 1800, (true, 0)),
+    row(3500, 8, -4, (7, 0), (-7, 2048), -1000, (false, 0)),
+];
+
+/// Where the spiral looks from and at: `pVp`, `DWORD_0099cef0` and
+/// `DWORD_0099cef4`, then `pVr`, `DWORD_0099cefc` and `DWORD_0099cf00`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DieView {
+    pub eye: [i32; 3],
+    pub target: [i32; 3],
+}
+
+/// The spiral's state past `WORD_0099cee0` ([`Die::speed`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Spiral {
+    row: usize,
+    /// `DWORD_0099cf08`, `DWORD_0099cf10`.
+    radius: i32,
+    shrink: i32,
+    /// `WORD_0099cf16`: what the fall grows by each tick.
+    fall_step: i16,
+    /// `WORD_0099cf0c`, `WORD_0099cf0e`.
+    angle: u16,
+    turn: i16,
+    view: DieView,
+}
+
+/// What [`Die::tick`] reads of the bodies: `Cdir_y`s and the parts' `Workm`
+/// places, as the tick's draw left them.
+#[derive(Debug, Clone, Default)]
+pub struct DieBodies {
+    pub player_angle: u16,
+    pub player_parts: Vec<Option<[i32; 3]>>,
+    pub killer_angle: Option<u16>,
+    pub killer_parts: Vec<Option<[i32; 3]>>,
+}
+
+impl DieBodies {
+    fn part(&self, killer: bool, part: usize) -> [i32; 3] {
+        let parts = if killer {
+            &self.killer_parts
+        } else {
+            &self.player_parts
+        };
+        parts.get(part).copied().flatten().unwrap_or_default()
+    }
+}
+
 /// What a killer below `0x20` waits, whichever zombie it is.
 const ZOMBIE_ROW: usize = 1;
 const MAIN: i16 = 0xAA;
@@ -153,6 +267,12 @@ pub struct Die {
     white_done: bool,
     /// `DWORD_0099cec8`, from `Die_spr_init` on.
     text: Option<Box<DieText>>,
+    /// ARRANGE MODE (`censorship_off`).
+    arrange: bool,
+    /// The killer's row of the tables.
+    row: usize,
+    /// From `Die_move_set_cut` on.
+    spiral: Option<Spiral>,
 }
 
 /// The killer's row: a search from the end, which stops at the first when
@@ -168,7 +288,7 @@ fn killer_row(id: u8) -> usize {
 impl Die {
     /// `killer` is the id of whatever had hold of the player, when something
     /// did: `fg_system`'s `0x100`.
-    pub fn new(killer: Option<u8>) -> Self {
+    pub fn new(killer: Option<u8>, arrange: bool) -> Self {
         let held = killer.is_some();
         let (wait, pause) = killer.map_or((0, PAUSES[ZOMBIE_ROW]), |id| {
             let row = killer_row(id);
@@ -187,7 +307,103 @@ impl Die {
             sleep: 0,
             white_done: false,
             text: None,
+            arrange,
+            row: killer.map_or(0, killer_row),
+            spiral: None,
         }
+    }
+
+    /// `Spiral_move`'s camera, from `Die_move_set_cut` on.
+    pub fn view(&self) -> Option<DieView> {
+        self.spiral.map(|spiral| spiral.view)
+    }
+
+    /// The trace's `dieview`: the eye, then the target.
+    pub fn view_trace(&self) -> Option<String> {
+        self.trace_field()?;
+        let view = self.view()?;
+        let values: Vec<String> = view
+            .eye
+            .iter()
+            .chain(&view.target)
+            .map(i32::to_string)
+            .collect();
+        Some(values.join(","))
+    }
+
+    /// `Die_move_set_cut_usual` (`0x44E4B0`), or `Die_move_set_cut`
+    /// (`0x44E300`) for a death in a killer's hands, then the first
+    /// `Spiral_move`. `Die_move_wait` has just zeroed `BYTE_0099cf14`, so the
+    /// player's part is the target, not the partner's.
+    fn set_cut(&mut self, bodies: &DieBodies) {
+        self.count = 0;
+        let spiral = if self.held {
+            let row = SPIRAL_ROWS[self.row];
+            // `Cdir_ck(pPl, killer)`.
+            let with = bodies.killer_angle.is_some_and(|killer| {
+                killer.wrapping_sub(bodies.player_angle).wrapping_add(0x400) & 0xFFF < 0x800
+            });
+            let (turn, start) = if with {
+                (row.turn_with, row.start_with)
+            } else {
+                (row.turn_against, row.start_against)
+            };
+            let part = bodies.part(row.killer, row.part);
+            self.speed = row.fall;
+            Spiral {
+                row: self.row,
+                radius: row.radius,
+                shrink: row.shrink,
+                fall_step: 0,
+                angle: (bodies.player_angle & 0xFFF).wrapping_add(start as u16),
+                turn,
+                view: DieView {
+                    eye: [0, i32::from(row.height) + part[1], 0],
+                    target: [part[0], part[1] - 300, part[2]],
+                },
+            }
+        } else {
+            let part = bodies.part(false, 0);
+            self.speed = 8;
+            Spiral {
+                row: 0,
+                radius: 3000,
+                shrink: 0,
+                fall_step: 1,
+                angle: bodies.player_angle,
+                turn: 0x10,
+                view: DieView {
+                    eye: [0, part[1] - 1000, 0],
+                    target: [part[0], part[1] - 300, part[2]],
+                },
+            }
+        };
+        self.spiral = Some(spiral);
+        self.spiral_move(bodies);
+    }
+
+    /// `Spiral_move` (`0x44E9D0`): the circle shrinks and turns about the
+    /// row's part, the eye falls, and the target closes on the part, a
+    /// thirtieth of the way across and a fifth of the way down (to 300
+    /// above it) each tick.
+    fn spiral_move(&mut self, bodies: &DieBodies) {
+        let Some(spiral) = self.spiral.as_mut() else {
+            return;
+        };
+        let row = SPIRAL_ROWS[spiral.row];
+        let part = bodies.part(row.killer, row.part);
+        spiral.radius = spiral.radius.wrapping_sub(spiral.shrink);
+        let fall = self.speed;
+        self.speed = self.speed.wrapping_add(spiral.fall_step);
+        let view = &mut spiral.view;
+        view.eye[1] = view.eye[1].wrapping_sub(i32::from(fall));
+        let angle = i32::from(spiral.angle as i16);
+        view.eye[0] = (rcos(angle).wrapping_mul(spiral.radius) >> 12).wrapping_add(part[0]);
+        view.eye[2] = part[2].wrapping_sub(rsin(angle).wrapping_mul(spiral.radius) >> 12);
+        spiral.angle = spiral.angle.wrapping_sub(spiral.turn as u16) & 0xFFF;
+        view.target[0] += (part[0] - view.target[0]) / 30;
+        view.target[2] += (part[2] - view.target[2]) / 30;
+        view.target[1] += (part[1] - view.target[1] - 300) / 5;
     }
 
     /// `Bg_set_mode(2, 0)` and `Die_vcut_set`: nothing of the room is drawn.
@@ -224,7 +440,7 @@ impl Die {
     }
 
     /// One tick of `Die`, run after the tick's routines.
-    pub fn tick(&mut self, re2: &mut Re2State) -> DieTick {
+    pub fn tick(&mut self, re2: &mut Re2State, bodies: &DieBodies) -> DieTick {
         let mut out = DieTick::default();
         if self.sleep > 0 {
             self.sleep -= 1;
@@ -243,7 +459,8 @@ impl Die {
                     re2.set_flag(STATUS_BANK, FG_STATUS_EXTRA_MAP, 0);
                 }
                 out.lock_cut = true;
-                self.phase = if self.held { 1 } else { 2 };
+                // ARRANGE MODE's held death has no `Die_move_timer`.
+                self.phase = if self.held && !self.arrange { 1 } else { 2 };
             }
             // `Die_move_timer`.
             1 => {
@@ -252,13 +469,19 @@ impl Die {
                     self.phase = 2;
                 }
             }
-            2 => self.wait_white(re2, &mut out),
+            2 => self.wait_white(re2, bodies, &mut out),
             // `Die_move_pause`.
             3 => {
+                self.spiral_move(bodies);
                 self.count += 1;
                 if self.count > self.pause {
                     self.phase = 4;
                     self.count = 0;
+                    self.speed = 0;
+                    if let Some(spiral) = self.spiral.as_mut() {
+                        spiral.shrink = 0;
+                        spiral.turn = 0;
+                    }
                 }
             }
             // `Die_move_main`.
@@ -268,15 +491,22 @@ impl Die {
                     self.text = Some(Box::new(DieText::new(self.held)));
                 }
                 self.move_text(re2, &mut out);
+                self.spiral_move(bodies);
                 self.count += 1;
                 if self.count == MAIN {
                     self.phase = 5;
                     self.count = 0;
+                    self.speed = 10;
+                    if let Some(spiral) = self.spiral.as_mut() {
+                        spiral.fall_step = 2;
+                        spiral.turn = 0x10;
+                    }
                 }
             }
             // `Die_move_out`.
             5 => {
                 self.move_text(re2, &mut out);
+                self.spiral_move(bodies);
                 self.count += 1;
                 if self.count == OUT_FADE {
                     out.fade = Some(DieFade::Black);
@@ -295,7 +525,7 @@ impl Die {
     }
 
     /// `Die_move_wait`.
-    fn wait_white(&mut self, re2: &mut Re2State, out: &mut DieTick) {
+    fn wait_white(&mut self, re2: &mut Re2State, bodies: &DieBodies, out: &mut DieTick) {
         if self.white_done {
             self.count = 0;
             self.phase = if self.held { 3 } else { 4 };
@@ -331,6 +561,7 @@ impl Die {
         re2.effects.die();
         re2.player.be_flg |= crate::player2::BE_NO_SCA;
         out.set_enemies = true;
+        self.set_cut(bodies);
         self.sleep = 1;
     }
 }
@@ -736,14 +967,14 @@ mod tests {
 
     #[test]
     fn the_killer_picks_the_wait_and_the_pause() {
-        let zombie = Die::new(Some(0x10));
+        let zombie = Die::new(Some(0x10), false);
         assert_eq!((zombie.wait, zombie.pause), (95, 91));
         // A zombie this table has no row for waits as the others do.
-        let other = Die::new(Some(0x1E));
+        let other = Die::new(Some(0x1E), false);
         assert_eq!((other.wait, other.pause), (95, 91));
-        let licker = Die::new(Some(0x22));
+        let licker = Die::new(Some(0x22), false);
         assert_eq!((licker.wait, licker.pause), (10, 96));
-        let none = Die::new(None);
+        let none = Die::new(None, false);
         assert_eq!((none.wait, none.held), (0, false));
     }
 
@@ -752,12 +983,12 @@ mod tests {
     #[test]
     fn a_held_death_stops_the_routines_when_the_original_does() {
         let mut re2 = Re2State::default();
-        let mut die = Die::new(Some(0x10));
+        let mut die = Die::new(Some(0x10), false);
         let mut changes = Vec::new();
         let mut last = 0;
         let mut end = None;
         for tick in 0..1000 {
-            let out = die.tick(&mut re2);
+            let out = die.tick(&mut re2, &DieBodies::default());
             let stop = *re2.fg_stop_mut();
             if stop != last {
                 changes.push((tick, stop));
@@ -778,6 +1009,114 @@ mod tests {
 
     /// `Die_move_fade_out` takes down `fg_status`'s `0x8000000` (an extra
     /// mode's map closed) on its tick, but under `fg_system`'s `0x4`.
+    /// The tick `Die` finishes on.
+    fn end_of(mut die: Die) -> usize {
+        let mut re2 = Re2State::default();
+        (0..2000)
+            .find(|_| die.tick(&mut re2, &DieBodies::default()).finished)
+            .expect("Die finishes")
+    }
+
+    #[test]
+    fn arrange_modes_held_death_has_no_timer() {
+        // `Die_move_fade_out` goes straight to `Die_move_wait` under
+        // `censorship_off`, so the zombie's timer (its wait of 95, and the
+        // tick that passes it) is skipped.
+        assert_eq!(end_of(Die::new(Some(0x10), false)), 545);
+        assert_eq!(end_of(Die::new(Some(0x10), true)), 545 - 96);
+        // A death outside a killer's hands has no timer either way.
+        assert_eq!(end_of(Die::new(None, true)), end_of(Die::new(None, false)));
+    }
+
+    fn bodies(player: [i32; 3], angle: u16) -> DieBodies {
+        DieBodies {
+            player_angle: angle,
+            player_parts: vec![Some(player)],
+            ..DieBodies::default()
+        }
+    }
+
+    #[test]
+    fn the_usual_spiral_circles_the_player_and_falls_faster() {
+        let body = bodies([1000, -500, 2000], 0);
+        let mut die = Die::new(None, true);
+        die.white_done = true;
+        die.phase = 2;
+        die.spiral = None;
+        // `Die_move_set_cut_usual` then the first `Spiral_move`: 3000 out
+        // along the player's facing, 1000 up and the first fall of 8.
+        die.set_cut(&body);
+        let view = die.view().unwrap();
+        assert_eq!(view.eye, [4000, -1508, 2000]);
+        assert_eq!(view.target, [1000, -800, 2000]);
+        // Each `Spiral_move` turns 0x10 the other way and falls one more.
+        die.spiral_move(&body);
+        let view = die.view().unwrap();
+        let angle = i32::from(0u16.wrapping_sub(0x10) & 0xFFF);
+        assert_eq!(view.eye[0], ((rcos(angle) * 3000) >> 12) + 1000);
+        assert_eq!(view.eye[1], -1508 - 9);
+        assert_eq!(view.eye[2], 2000 - ((rsin(angle) * 3000) >> 12));
+        assert_eq!(view.target, [1000, -800, 2000]);
+    }
+
+    #[test]
+    fn the_target_closes_on_the_part_by_a_thirtieth_and_a_fifth() {
+        let mut die = Die::new(None, true);
+        die.set_cut(&bodies([0, 0, 0], 0));
+        let moved = bodies([3000, -1000, -600], 0);
+        die.spiral_move(&moved);
+        let view = die.view().unwrap();
+        // 300 above the part, a fifth of the way at a time.
+        assert_eq!(view.target, [100, -300 + (-1000 + 300 - 300) / 5, -20]);
+    }
+
+    #[test]
+    fn a_held_spiral_takes_its_killers_row_and_facing() {
+        // Room 11B's zombie (0x10), row 1: 3000 out, shrinking 8, from 600
+        // past the player's facing when the zombie faces the same way, and
+        // 1000 above the player's part.
+        let mut with = bodies([0, 0, 0], 0x100);
+        with.killer_angle = Some(0x100);
+        let mut die = Die::new(Some(0x10), true);
+        die.set_cut(&with);
+        let spiral = die.spiral.unwrap();
+        assert_eq!((spiral.radius, spiral.shrink), (3000 - 8, 8));
+        assert_eq!(spiral.angle, (0x100 + 600 - 2) & 0xFFF);
+        assert_eq!(die.view().unwrap().eye[1], -1000 + 5);
+        // Facing the player, it starts 1500 past.
+        let mut against = with.clone();
+        against.killer_angle = Some(0x900);
+        let mut die = Die::new(Some(0x10), true);
+        die.set_cut(&against);
+        assert_eq!(die.spiral.unwrap().angle, (0x100 + 1500 - 2) & 0xFFF);
+    }
+
+    #[test]
+    fn the_pause_stills_the_spiral_and_main_sets_it_falling() {
+        let body = bodies([0, 0, 0], 0);
+        let mut re2 = Re2State::default();
+        let mut die = Die::new(Some(0x10), true);
+        die.white_done = true;
+        die.phase = 2;
+        die.set_cut(&body);
+        die.phase = 3;
+        // `Die_move_pause`'s last tick zeroes the shrink, the turn and the
+        // fall.
+        for _ in 0..=die.pause {
+            die.tick(&mut re2, &body);
+        }
+        assert_eq!(die.phase, 4);
+        let spiral = die.spiral.unwrap();
+        assert_eq!((spiral.shrink, spiral.turn, die.speed), (0, 0, 0));
+        // `Die_move_main`'s 0xAA'th tick sets 10, growing 2, turning 0x10.
+        for _ in 0..MAIN {
+            die.tick(&mut re2, &body);
+        }
+        assert_eq!(die.phase, 5);
+        let spiral = die.spiral.unwrap();
+        assert_eq!((spiral.fall_step, spiral.turn, die.speed), (2, 0x10, 10));
+    }
+
     #[test]
     fn the_fade_out_takes_down_the_extras_map_bit() {
         use crate::scd2::host::{FG_STATUS_EXTRA_MAP, STATUS_BANK};
@@ -785,8 +1124,8 @@ mod tests {
             let mut re2 = Re2State::default();
             re2.banks[0][0] = system;
             re2.set_flag(STATUS_BANK, FG_STATUS_EXTRA_MAP, 1);
-            let mut die = Die::new(Some(0x10));
-            die.tick(&mut re2);
+            let mut die = Die::new(Some(0x10), false);
+            die.tick(&mut re2, &DieBodies::default());
             assert_eq!(
                 re2.flag(STATUS_BANK, FG_STATUS_EXTRA_MAP),
                 kept,
@@ -798,11 +1137,11 @@ mod tests {
     #[test]
     fn the_white_climbs_to_full_then_clears_and_ends_in_black() {
         let mut re2 = Re2State::default();
-        let mut die = Die::new(Some(0x10));
+        let mut die = Die::new(Some(0x10), false);
         let mut whites = Vec::new();
         let mut others = Vec::new();
         for tick in 0..546 {
-            match die.tick(&mut re2).fade {
+            match die.tick(&mut re2, &DieBodies::default()).fade {
                 Some(DieFade::White(level)) => whites.push(level),
                 Some(other) => others.push((tick, other)),
                 None => {}
@@ -817,9 +1156,9 @@ mod tests {
     #[test]
     fn a_death_outside_a_zombies_hands_has_no_wait_or_pause() {
         let mut re2 = Re2State::default();
-        let mut die = Die::new(None);
-        die.tick(&mut re2);
-        die.tick(&mut re2);
+        let mut die = Die::new(None, false);
+        die.tick(&mut re2, &DieBodies::default());
+        die.tick(&mut re2, &DieBodies::default());
         assert_eq!(*re2.fg_stop_mut(), 0xFF00_0000);
     }
 }

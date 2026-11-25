@@ -3967,6 +3967,9 @@ pub struct GameState {
     /// The self-destruct clock this tick draws, if it ran. Cleared at the top
     /// of the session tick: a menu or a door draws no clock.
     pub countdown_hud: Option<CountdownHud>,
+    /// ARRANGE MODE's game over: `Spiral_move`'s eye and target, which the
+    /// room's models draw from with no background (`Bg_set_mode(2, 0)`).
+    pub re2_die_camera: Option<([i32; 3], [i32; 3])>,
     /// Direction bits a state-5/6 message dismissal cleared from the original's
     /// previous-pad word: the next tick reads a still-held one as a new press.
     pub dpad_blanked: u16,
@@ -4477,6 +4480,7 @@ impl Default for GameState {
             dpad_pressed: 0,
             countdown_frame: 0,
             countdown_hud: None,
+            re2_die_camera: None,
             dpad_blanked: 0,
             zone_edits: Vec::new(),
             room_light_edits: Vec::new(),
@@ -5862,6 +5866,8 @@ impl GameState {
         // (room 210's bit 15) would start room 106's Barry scenes with no
         // Barry in the room and hold the player in state 8 for good.
         self.flags[usize::from(BANK_SYSTEM)].bytes_mut()[0..4].fill(0);
+        // `Die`'s spiral is over the room it started in (F1's jump).
+        self.re2_die_camera = None;
         self.interactive.room_reset();
         // `room_set` parks the special-room-light state at -1 (no overlay) and
         // clears the delta and the scripted channel masks.

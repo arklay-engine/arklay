@@ -119,6 +119,7 @@ pub fn parse(data: &[u8], id: RoomId) -> Result<RoomState> {
         cuts,
         current_cut: 0,
         die_view: false,
+        die_view_all: false,
         mask_table_cut: None,
         zone_group: None,
         // A freshly parsed room boots with the wooden-door pair; a door

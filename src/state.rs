@@ -882,6 +882,9 @@ pub struct RoomState {
     /// `Die_vcut_set` has put the game over's view quad in place of the
     /// cut's, which holds no point.
     pub die_view: bool,
+    /// ARRANGE MODE's quad (`censorship_off`): every corner 0, which every
+    /// point passes `Hit_ck_point4`'s tests on.
+    pub die_view_all: bool,
     /// The cut whose mask groups were last rebuilt for the screen. `None`
     /// until the room's first camera goes up.
     pub mask_table_cut: Option<usize>,
@@ -961,6 +964,9 @@ impl RoomState {
     /// `Hit_ck_point4` on the view quad `Ccut_searc` finds for the current cut.
     /// `None` if the cut has none.
     pub fn in_cut_view(&self, x: i32, z: i32) -> Option<bool> {
+        if self.die_view && self.die_view_all {
+            return Some(true);
+        }
         if self.die_view {
             // `DAT_0099cf20` with `censorship_off` clear.
             let quad = Zone {
@@ -1074,6 +1080,19 @@ mod tests {
         assert_eq!(room.in_cut_view(50, 50), Some(false));
         assert_eq!(room.in_cut_view(0, 0), Some(false));
         assert_eq!(room.in_cut_view(-1, 1), Some(false));
+        // ARRANGE MODE's: every corner 0, which every point is in.
+        let all = RoomState {
+            die_view_all: true,
+            ..room
+        };
+        assert_eq!(all.in_cut_view(50, 50), Some(true));
+        assert_eq!(all.in_cut_view(-3000, 7), Some(true));
+        let zero = Zone {
+            cam_from: 0,
+            cam_to: 0,
+            corners: [[0, 0]; 4],
+        };
+        assert!(zero.contains_signed(-3000, 7));
     }
 
     #[test]
