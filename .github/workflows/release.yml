@@ -92,13 +92,16 @@ jobs:
             libusb-1.0-0-dev libegl1-mesa-dev libgles2-mesa-dev
       - name: Build SDL3
         run: |
+          # The build directory must not start with the source directory's name:
+          # SDL's sdl_source_group tests the prefix as a string, and CMake then
+          # refuses the generated Wayland sources as outside the tree.
           git clone --depth 1 --branch release-3.4.16 https://github.com/libsdl-org/SDL sdl
-          cmake -S sdl -B sdl-build -G Ninja \
+          cmake -S sdl -B build-sdl -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=/usr/local \
             -DSDL_SHARED=ON -DSDL_STATIC=OFF
-          cmake --build sdl-build
-          sudo cmake --install sdl-build
+          cmake --build build-sdl
+          sudo cmake --install build-sdl
           sudo ldconfig
       - name: Build arklay
         env:
