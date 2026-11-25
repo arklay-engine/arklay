@@ -22587,7 +22587,10 @@ fn tick_room_timed(
     // The stairway (`action_behavior` 0x11) skips both passes as well: its
     // clip carries the player through the stairs' own collision volume.
     // `Sca_ck_em` clears `Sca_info` before it looks, and doesn't look at all
-    // on these paths.
+    // on these paths. A climb up a box isn't one of them: `Sca_ck_em` skips
+    // the walls only once `pl_mv_08` raises `Be_flg & 8` on clip frame 0x11
+    // ([`re2_walls_skipped`]), and `Oba_ck_em2`'s bit 4 is the RE2 body
+    // push's own (`character2::oba_ck_em2`).
     context.game.re2.player.sca_hit = false;
     if context.game.re2.player.climbing() {
         context.player.collision_mirror = [context.player.pos[0], context.player.pos[2]];
@@ -29447,6 +29450,26 @@ mod tests {
         session.game.re2.player.on_object = Some(0);
         session.push_re2_start_out_of_walls();
         assert_eq!(session.player.pos, start);
+    }
+
+    /// `pl_mv_08` raises `Be_flg & 4` as the climb starts and `& 8` only on
+    /// clip frame 0x11: until then the collision tail runs the walls on the
+    /// climbing player, and from then on it skips them.
+    #[test]
+    fn a_climbs_first_frames_meet_the_walls() {
+        use crate::player2::{BE_NO_PUSH, BE_NO_SCA, MODE_MOVE, MOVE_CLIMB, MOVE_STAIRS};
+        let mut game = game::GameState::default();
+        game.is_re2_room = true;
+        game.re2.player.routine = [MODE_MOVE, MOVE_CLIMB, 0, 1];
+        game.re2.player.be_flg |= BE_NO_PUSH;
+        assert!(!game.re2.player.climbing());
+        assert!(!re2_walls_skipped(&game), "the walls push");
+        game.re2.player.be_flg |= BE_NO_SCA;
+        assert!(re2_walls_skipped(&game));
+        // The stairs skip both whatever the bits.
+        game.re2.player.be_flg &= !(BE_NO_PUSH | BE_NO_SCA);
+        game.re2.player.routine = [MODE_MOVE, MOVE_STAIRS, 0, 0];
+        assert!(game.re2.player.climbing());
     }
 
     /// `Sca_ck_em` takes no walls while the player stands on an object.
