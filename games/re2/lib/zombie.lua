@@ -53,6 +53,8 @@ local FLAG_BURNING <const> = 0x1000
 -- The walk's extra step (`FUN_00452ba0`, `FUN_00453240`): id 0x11's, and
 -- `Em10_Init`'s under ARRANGE MODE's roll and under HARD.
 local FLAG_QUICK_STEP <const> = 0x8000
+-- `Em10_Die` has counted the body among the game's kills (`0x98E9B8`).
+local FLAG_COUNTED <const> = 0x4000
 
 -- `Now_seq`'s bits.
 local SEQ_SOUND <const> = 0x8000000
@@ -1453,6 +1455,10 @@ end)()
 
 -- `Em10_Die`.
 local function em10_die(e)
+    if not has_flag(e, FLAG_COUNTED) then
+        e:count_kill()
+        raise_flag(e, FLAG_COUNTED)
+    end
     e:let_go()
     drop_flag(e, FLAG_NECK_STILL)
     if e:kind() & 1 ~= 0 then

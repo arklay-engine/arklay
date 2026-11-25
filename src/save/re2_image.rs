@@ -112,7 +112,7 @@ pub const REGIONS: &[Region] = &[
         "kills, sprays",
         0x21C,
         4,
-        "the results screen's counts (Em10_Die's kills, St_com_use_equip's sprays), which arklay doesn't keep",
+        "the results screen's counts: Em10_Die's kills, which arklay counts only for the bodies its zombies' script ports, and St_com_use_equip's sprays, which it doesn't keep",
     ),
     region("save count", 0x220, 2),
     region("position", 0x222, 6),
@@ -156,12 +156,10 @@ pub const REGIONS: &[Region] = &[
     region("Item_boxwork", 0x5C4, 0x100),
     region("File_tag_bk", 0x6C4, 0x18),
     region("angle", 0x6DC, 2),
-    masked(
-        "0x98EE7A",
-        0x6DE,
-        1,
-        "set by the new game from the clear records (BYTE_0099cd5e), which arklay doesn't keep",
-    ),
+    // The clears before the game: 0 in a new game (`Init_global` clears
+    // it and every `INIT_TBL.DAT` row holds 0), the cleared game's in the
+    // next scenario's (`FUN_004b73c0`, from `BYTE_0099cd5e`).
+    region("0x98EE7A", 0x6DE, 1),
     region("partner poison", 0x6DF, 1),
     region("saved_splayer_health", 0x6E0, 2),
     region("0x98EE7E", 0x6E2, 2),
@@ -267,8 +265,9 @@ pub fn build(game: &GameState, record: Option<&[u8]>) -> [u8; IMAGE_LEN] {
         0
     };
     put(&mut image, 0x210, &poison.to_le_bytes());
-    // Extreme Battle's level, which a scenario's game leaves at 0.
-    put(&mut image, 0x212, &0u16.to_le_bytes());
+    // `nExtremeLv`: the cleared game's save count in the next scenario's
+    // game (`FUN_004b73c0`), else 0.
+    put(&mut image, 0x212, &re2.extreme_level.to_le_bytes());
     let status = saved_status(
         re2.banks[0][0],
         re2.banks[usize::from(crate::scd2::host::STATUS_BANK)][0],
@@ -278,6 +277,7 @@ pub fn build(game: &GameState, record: Option<&[u8]>) -> [u8; IMAGE_LEN] {
     image[0x218] = game.equipped_weapon_id;
     image[0x219] = game.re2_equip_slot();
     put(&mut image, 0x21A, &player.health.to_le_bytes());
+    put(&mut image, 0x21C, &re2.kills.to_le_bytes());
     put(&mut image, 0x220, &game.re2_save_count().to_le_bytes());
     // The extras word, as the status screen's Konami code left it (the new
     // game's bits from the clear records aren't kept).
@@ -347,6 +347,7 @@ pub fn build(game: &GameState, record: Option<&[u8]>) -> [u8; IMAGE_LEN] {
     put(&mut image, 0x6C4, &re2.files);
     // `Save_push`'s `pPl.Cdir.y`.
     put(&mut image, 0x6DC, &player.angle.to_le_bytes());
+    image[0x6DE] = re2.clears;
     image[0x6DF] = (image[0x6DF] & !1) | u8::from(re2.partner_poisoned);
     put(&mut image, 0x6E0, &re2.partner_life.to_le_bytes());
     image[0x790] = u8::from(re2.hard_mode);
@@ -484,6 +485,9 @@ mod tests {
         game.re2.hard_mode = true;
         game.re2.vars[29] = 0xCE7F;
         game.re2.vars[32] = 1;
+        game.re2.kills = 12;
+        game.re2.clears = 1;
+        game.re2.extreme_level = 5;
         game.play_timer_frozen = false;
         game.set_play_timer(31 * 15 + 30);
         let image = build(&game, None);
@@ -497,6 +501,9 @@ mod tests {
         assert_eq!(image[0x218], 2);
         assert_eq!(image[0x219], 0);
         assert_eq!(u16_at(&image, 0x21A), 150);
+        assert_eq!(u16_at(&image, 0x212), 5);
+        assert_eq!(u16_at(&image, 0x21C), 12);
+        assert_eq!(image[0x6DE], 1);
         assert_eq!(u16_at(&image, 0x220), 3);
         assert_eq!(image[0x222..0x228], [0x58, 0xD0, 0xF8, 0xF8, 0x94, 0xF8]);
         assert_eq!(u16_at(&image, 0x348 + 29 * 2), 0xCE7F);

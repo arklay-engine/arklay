@@ -1,0 +1,116 @@
+# The second scenarios' prologues (`Prologue_mv01`, `Prologue_mv02`), which `Prologue_load` runs for a load of the save a
+# main game's results write (the save place 0x10; oracle/re2.md, "The prologue").
+
+# Claire B's (`Prologue_mv02`), from result_leon_a_save's save loaded at 800 and left to run: the task's first tick is
+# 813 and its last 4768, the tick arklay's title hands over on.
+[[run]]
+name = "prologue_claire_b"
+ui = "title"
+offset = 189
+# recorded for 6000 ticks
+ticks = 4768
+compare_from = 811
+frames = [811, 4767]
+input = "title_load_b.txt"
+input_shift = 189
+input_drop_early = true
+saves_from = "result_leon_a_save"
+fields = "pro,prs,prz,tfade,tfade3,snd"
+frame_max_mean = 0.01
+expect = "match"
+record = ""
+
+# The game the prologue starts: Claire B in room 104. `Game_loop`'s first tick is 4773, where the original has already
+# set the room's effects and arklay sets them on that tick, so the comparison starts a tick on, as in
+# prologue_leon_skip_play.
+[[run]]
+name = "prologue_claire_b_play"
+ref = "prologue_claire_b"
+ui = "title"
+offset = 189
+ticks = 6000
+compare_from = 4774
+input = "title_load_b.txt"
+input_shift = 189
+input_drop_early = true
+saves_from = "result_leon_a_save"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,msg,fgstat,fgroom,zm0,zm1,zm2,zm3,zm4,zm5,zd,esp"
+frames = [4768, 5999]
+# The room from 4768: 1.90 measured, the display's differences (#817).
+frame_max_mean = 2.0
+expect = "match"
+record = ""
+
+# The same, skipped with confirm on 1500, in step 2: the task ends on 1641.
+[[run]]
+name = "prologue_claire_b_skip"
+ui = "title"
+offset = 189
+# recorded for 3500 ticks
+ticks = 1641
+compare_from = 811
+frames = [811, 1640]
+input = "prologue_claire_b_skip.txt"
+input_shift = 189
+input_drop_early = true
+saves_from = "result_leon_a_save"
+fields = "pro,prs,prz,tfade,tfade3,snd"
+frame_max_mean = 0.02
+expect = "match"
+record = ""
+
+# The game the skipped prologue starts, from the tick after `Game_loop`'s first (1646).
+[[run]]
+name = "prologue_claire_b_skip_play"
+ref = "prologue_claire_b_skip"
+ui = "title"
+offset = 189
+ticks = 3500
+compare_from = 1647
+input = "prologue_claire_b_skip.txt"
+input_shift = 189
+input_drop_early = true
+saves_from = "result_leon_a_save"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,msg,fgstat,fgroom,zm0,zm1,zm2,zm3,zm4,zm5,zd,esp"
+frames = [1641, 3499]
+# As prologue_claire_b_play's: 1.72 measured.
+frame_max_mean = 1.8
+expect = "match"
+record = ""
+
+# Leon B's (`Prologue_mv01`), from result_claire_a_save's save loaded at 800 and left to run: the task ends on 3394.
+[[run]]
+name = "prologue_leon_b"
+ui = "title"
+offset = 189
+# recorded for 4500 ticks
+ticks = 3394
+compare_from = 811
+frames = [811, 3393]
+input = "title_load_b.txt"
+input_shift = 189
+input_drop_early = true
+saves_from = "result_claire_a_save"
+fields = "pro,prs,prz,tfade,tfade3,snd"
+frame_max_mean = 0.01
+expect = "match"
+record = ""
+
+# The game it starts: Leon B in room 104, from the tick after `Game_loop`'s first (3399).
+[[run]]
+name = "prologue_leon_b_play"
+ref = "prologue_leon_b"
+ui = "title"
+offset = 189
+ticks = 4500
+compare_from = 3400
+input = "title_load_b.txt"
+input_shift = 189
+input_drop_early = true
+saves_from = "result_claire_a_save"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,msg,fgstat,fgroom,zm0,zm1,zm2,zm3,zm4,zm5,zd,esp"
+frames = [3394, 4499]
+# As prologue_claire_b_play's: 1.87 measured.
+frame_max_mean = 2.0
+expect = "match"
+record = ""

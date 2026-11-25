@@ -943,6 +943,7 @@ fn run_zombie(
         spawns: Vec::new(),
         freed: Vec::new(),
         killed: false,
+        kills: 0,
         water,
         banks,
         flag_ops: Vec::new(),
@@ -961,6 +962,7 @@ fn run_zombie(
     let spawns = std::mem::take(&mut world.spawns);
     let freed = std::mem::take(&mut world.freed);
     let killed = world.killed;
+    let kills = world.kills;
     let moved = world.player_moved.then_some(world.player);
     let status_or = world.status_or;
     let status_and_not = world.status_and_not;
@@ -989,6 +991,7 @@ fn run_zombie(
     for (bank, index, op) in flag_ops {
         re2.set_flag(bank, index, op);
     }
+    re2.kills = re2.kills.wrapping_add(kills);
     // The alligator moves the gas tank it bites (`FUN_004697f0`).
     for (record, pos) in game.objects.records.iter_mut().zip(objects) {
         record.pos = pos;

@@ -177,8 +177,10 @@ pub enum ScreenAction {
     /// Continue from an explicit save file, the file a Lua screen chose.
     LoadFile(std::path::PathBuf),
     /// Continue from the save the load screen chose while the title that
-    /// opened it slept (its `on_loaded`): the title's hand-over.
-    Continue,
+    /// opened it slept (its `on_loaded`): the title's hand-over, after the
+    /// prologue the save's start runs (RE 2's `Prologue_load`) when
+    /// `prologue`.
+    Continue { prologue: bool },
     /// Play an attract-demo reel (`demo/<hex>.dat`), then return to the
     /// title: reel `reel` where the title picks its own, as RE 2's does,
     /// else the next of the pack's.

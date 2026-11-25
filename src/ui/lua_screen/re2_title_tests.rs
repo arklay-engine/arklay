@@ -142,7 +142,7 @@ fn build_pack(prologue_art: bool, gallery_art: GalleryArt) -> Pack {
         writer.add("player/0b/model_1.pld", triangle).unwrap();
     }
     if prologue_art {
-        for stem in ["open10", "open11"] {
+        for stem in ["open10", "open11", "open12", "open13", "open14"] {
             let picture = super::tests::solid_bmp(4, 4, [0x40; 3]);
             writer
                 .add(&format!("ui/prologue/{stem}.bmp"), picture)
@@ -602,7 +602,7 @@ fn a_load_wakes_the_title_into_its_hand_over() {
     let mut screen = asleep_under_the_load_screen(&dir);
     let asleep = ti(&screen);
     assert!(screen.continues());
-    screen.resume_loaded(&cx);
+    screen.resume_loaded(&cx, None);
     assert_eq!(ti(&screen), asleep, "809: its work stands");
     assert_eq!(screen.value("ti_fgsys") & 0x400, 0);
     assert_eq!(
@@ -613,7 +613,7 @@ fn a_load_wakes_the_title_into_its_hand_over() {
     assert_eq!(screen.value("ti_fgsys") & 0x20000, 0);
     assert_eq!(
         screen.update(&cx, UiInput::default()),
-        ScreenResult::Done(ScreenAction::Continue)
+        ScreenResult::Done(ScreenAction::Continue { prologue: false })
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -2963,17 +2963,232 @@ fn claires_prologue_is_entry_1_with_her_lines_and_films() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A title over the prologue's art, through LOAD GAME (`title_load_b`'s
+/// confirms on 260 and, under the load screen, 800) to a save at `place`
+/// whose `fg_status` is `status`, then `presses`, until it hands the game
+/// over. Films are over at once, a press ending none.
+fn run_load(
+    dir: &std::path::Path,
+    pack: &'static Pack,
+    place: u8,
+    status: u32,
+    presses: &[(u32, UiInput)],
+    mut each: impl FnMut(u32, &LuaScreen, &[UiCue]),
+) -> Prologue {
+    let cx = context_over(pack, dir);
+    let mut cx_open = context_over(pack, dir);
+    let mut screen =
+        LuaScreen::open_screen("title", &[], ScreenAction::Quit, &mut cx_open).unwrap();
+    let mut films = Vec::new();
+    for tick in 189..9000 {
+        let input = if tick == 260 {
+            confirm()
+        } else {
+            presses
+                .iter()
+                .find(|(at, _)| *at == tick)
+                .map_or_else(UiInput::default, |(_, input)| *input)
+        };
+        cx.cues.borrow_mut().clear();
+        let result = screen.update(&cx, input);
+        each(tick, &screen, &cx.cues.borrow());
+        match result {
+            ScreenResult::Continue => {}
+            ScreenResult::Done(ScreenAction::SaveLoad) => {
+                // `title_load_b`'s load screen chooses on 800 and the title
+                // wakes on 809.
+                assert_eq!(tick, 531);
+                screen.resume_loaded(&cx, Some((place, status)));
+                return run_from(screen, &cx, 810, presses, &mut films, each);
+            }
+            ScreenResult::Done(action) => panic!("{tick}: {action:?}"),
+        }
+    }
+    panic!("the title never opened the load screen");
+}
+
+fn run_from(
+    mut screen: LuaScreen,
+    cx: &UiContext<'_>,
+    from: u32,
+    presses: &[(u32, UiInput)],
+    films: &mut Vec<(u32, u8, bool)>,
+    mut each: impl FnMut(u32, &LuaScreen, &[UiCue]),
+) -> Prologue {
+    for tick in from..9000 {
+        let input = presses
+            .iter()
+            .find(|(at, _)| *at == tick)
+            .map_or_else(UiInput::default, |(_, input)| *input);
+        cx.cues.borrow_mut().clear();
+        let result = screen.update(cx, input);
+        each(tick, &screen, &cx.cues.borrow());
+        match result {
+            ScreenResult::Continue => {}
+            ScreenResult::Done(ScreenAction::Film {
+                id,
+                claire,
+                gallery: false,
+            }) => {
+                films.push((tick, id, claire));
+                screen.resume_film(cx, false, true);
+            }
+            ScreenResult::Done(action) => {
+                return Prologue {
+                    end: tick,
+                    action,
+                    films: std::mem::take(films),
+                };
+            }
+        }
+    }
+    panic!("the title never handed over");
+}
+
+/// `title_load_b`: the save a Leon A clear writes is Claire B's start
+/// (place 0x10, `fg_status`'s bits 31 and 30), and `Prologue_load` takes
+/// it for `Prologue_mv`'s entry 3, `Prologue_mv02`: the task's first tick
+/// is 813, its narration's lines are 6 to 14 in Claire's bank, its music
+/// main 0x2C, and the films 3 and 0x10 before the game, which then starts
+/// as after a new game's prologue.
+#[test]
+fn a_load_of_claire_bs_start_runs_her_second_scenarios_prologue() {
+    let dir = prologue_dir("pro-claire-b");
+    let mut voices = Vec::new();
+    let mut music = Vec::new();
+    let run = run_load(
+        &dir,
+        prologue_pack(),
+        0x10,
+        0xC000_0000,
+        &[],
+        |tick, screen, cues| {
+            match tick {
+                811 => assert_eq!(screen.value("pro_on"), 0),
+                813 => {
+                    assert_eq!(pro(screen), [3, 1, 1, 1, 0]);
+                    assert_eq!(screen.value("pro_sprites"), 18);
+                }
+                1336 => assert_eq!(pro(screen)[..3], [3, 2, 1]),
+                3943 => assert_eq!(pro(screen)[..3], [3, 9, 1]),
+                _ => {}
+            }
+            for cue in cues {
+                match cue {
+                    UiCue::Voice { player, line } => voices.push((tick, *player, *line)),
+                    UiCue::Music(_) | UiCue::MusicFade => music.push((tick, *cue)),
+                    _ => {}
+                }
+            }
+        },
+    );
+    assert_eq!(
+        voices,
+        [
+            (813 + 240, 1, 6),
+            (1336 + 1, 1, 7),
+            (1774 + 10, 1, 8),
+            (1914 + 1, 1, 9),
+            (2236 + 128, 1, 14),
+            (2573 + 90, 1, 10),
+            (2909 + 1, 1, 11),
+            (3175 + 1, 1, 12),
+            (3943 + 1, 1, 13),
+        ]
+    );
+    assert_eq!(
+        music,
+        [(813, UiCue::Music(0x2C)), (3943 + 595, UiCue::MusicFade)]
+    );
+    let [(film, 3, true), (second, 0x10, true)] = run.films[..] else {
+        panic!("{:?}", run.films);
+    };
+    assert_eq!(second, film + 1);
+    assert_eq!(run.end, second + 2);
+    assert_eq!(run.action, ScreenAction::Continue { prologue: true });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Leon B's start (place 0x10, `fg_status`'s bit 30) is entry 2,
+/// `Prologue_mv01`, with lines 6 to 12 in Leon's bank; a skip takes it to
+/// its films' step 7. A save at any other place has no prologue, and one
+/// at 0xF (a scenario A's start) runs the first scenarios'.
+#[test]
+fn a_load_picks_its_prologue_by_the_saves_place() {
+    let dir = prologue_dir("pro-load");
+    let mut voices = Vec::new();
+    let presses = [(1500, confirm())];
+    let run = run_load(
+        &dir,
+        prologue_pack(),
+        0x10,
+        0x4000_0000,
+        &presses,
+        |tick, screen, cues| {
+            match tick {
+                813 => assert_eq!(pro(screen), [2, 1, 1, 1, 0]),
+                1500 => assert_eq!(pro(screen)[..2], [4, 7]),
+                _ => {}
+            }
+            voices.extend(cues.iter().filter_map(|cue| match cue {
+                UiCue::Voice { player, line } => Some((tick, *player, *line)),
+                _ => None,
+            }));
+        },
+    );
+    assert_eq!(voices, [(813 + 240, 0, 6), (1336 + 1, 0, 7)]);
+    assert!(matches!(run.films[..], [(_, 3, false), (_, 0x10, false)]));
+    assert_eq!(run.action, ScreenAction::Continue { prologue: true });
+
+    let run = run_load(
+        &dir,
+        prologue_pack(),
+        0x0B,
+        0xC000_0000,
+        &[],
+        |_, screen, _| {
+            assert_eq!(screen.value("pro_on"), 0);
+        },
+    );
+    assert_eq!(run.end, 811);
+    assert_eq!(run.action, ScreenAction::Continue { prologue: false });
+
+    let run = run_load(
+        &dir,
+        prologue_pack(),
+        0x0F,
+        0x8000_0000,
+        &presses,
+        |tick, screen, _| {
+            if tick == 813 {
+                assert_eq!(pro(screen), [1, 1, 1, 1, 0]);
+            }
+        },
+    );
+    assert!(matches!(run.films[..], [(_, 3, true), (_, 0xF, true)]));
+    assert_eq!(run.action, ScreenAction::Continue { prologue: true });
+
+    // A pack without the sequence's pictures hands the game over at once.
+    let run = run_load(&dir, pack(), 0x10, 0xC000_0000, &[], |_, screen, _| {
+        assert_eq!(screen.value("pro_on"), 0);
+    });
+    assert_eq!(run.end, 811);
+    assert_eq!(run.action, ScreenAction::Continue { prologue: false });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// `prologue_leon_skip`: a confirm on 1300 stops the line, fades the music
 /// and the frame out and takes the sequence to its films' step, and the
 /// game starts on 1442. The pad's other skip keys do the same.
 #[test]
 fn a_press_skips_the_prologue_to_its_films() {
     let dir = prologue_dir("pro-skip");
-    let keys: [fn(&mut UiInput); 4] = [
+    let keys: [fn(&mut UiInput); 5] = [
         |input| input.confirm = true,
         |input| input.cancel = true,
         |input| input.start = true,
         |input| input.map = true,
+        |input| input.option = true,
     ];
     for key in keys {
         let mut press = UiInput::default();
@@ -3287,11 +3502,11 @@ fn the_title_after_a_game_starts_as_it_handed_over() {
         ScreenResult::Continue => None,
     });
     assert_eq!(asleep, Some(ScreenAction::SaveLoad));
-    screen.resume_loaded(&cx);
+    screen.resume_loaded(&cx, None);
     screen.update(&cx, UiInput::default());
     assert_eq!(
         screen.update(&cx, UiInput::default()),
-        ScreenResult::Done(ScreenAction::Continue)
+        ScreenResult::Done(ScreenAction::Continue { prologue: false })
     );
     let handed = ti(&screen);
     assert_eq!(handed[..2], [2, 3]);

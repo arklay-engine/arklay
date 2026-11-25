@@ -1,0 +1,10 @@
+# The main game's results (oracle/re2-regress.d/result.toml), Claire A: keys in step 5 reveal and end it, a key ends the special weapon's page, then decide on the save screen's new file writes the next scenario's save (Leon B's).
+0
+800 confirm
+803
+900 confirm
+903
+1500 confirm
+1503
+1800 confirm
+1803

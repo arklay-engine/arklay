@@ -278,6 +278,14 @@ pub struct Re2State {
     /// The save count's high byte: `0x98E9BC`'s low word is the count, of
     /// which the state byte [`crate::game::STATE_BYTE_SAVES`] is the low byte.
     pub saves_high: u8,
+    /// The zombies killed (`0x98E9B8`): `Em10_Die` counts each body once.
+    pub kills: u16,
+    /// The clears before this game (`0x98EE7A`), which the next scenario's
+    /// game takes from the cleared one's (`FUN_004b73c0`).
+    pub clears: u8,
+    /// `nExtremeLv` (`0x98E9AE`): the next scenario's game takes the
+    /// cleared one's save count into it (`FUN_004b73c0`).
+    pub extreme_level: u16,
     /// `Bgm_vol` and `Sfx_vol` as the save work holds them (`0x98E9A9` and
     /// `0x98E9A8`), music first, in percent: the run's volumes, which a new
     /// game copies in (`FUN_004b73c0`) and `Save_push` again on each save,
@@ -555,8 +563,21 @@ pub fn saves_high_in(bytes: &[u8]) -> u8 {
     bytes.get(SAVE_LEN_NO_SAVES_HIGH).copied().unwrap_or(0)
 }
 
+/// The save place and `fg_status` of the game [`Re2State::to_save_bytes`]'s
+/// `bytes` load, which the title's prologue chooses its sequence by
+/// (`Prologue_load`); `None` for bytes a load rejects, and for a save from
+/// before the save place.
+pub fn start_in(bytes: &[u8]) -> Option<(u8, u32)> {
+    bytes.get(SAVE_LEN_NO_PLACE)?;
+    let mut state = Re2State::default();
+    state.load_save_bytes(bytes)?;
+    Some((state.save_place, state.banks[usize::from(STATUS_BANK)][0]))
+}
+
 /// The bytes of [`Re2State::to_save_bytes`].
-const SAVE_LEN: usize = SAVE_LEN_NO_EXTRAS + 4;
+const SAVE_LEN: usize = SAVE_LEN_NO_COUNTS + 5;
+/// A save from before the kills, the clears and `nExtremeLv`.
+const SAVE_LEN_NO_COUNTS: usize = SAVE_LEN_NO_EXTRAS + 4;
 /// A save from before the extras word.
 const SAVE_LEN_NO_EXTRAS: usize = SAVE_LEN_NO_SAVES_HIGH + 1;
 /// A save from before the save count's high byte.
@@ -1063,6 +1084,9 @@ impl Default for Re2State {
             konami_on: false,
             save_place: 0,
             saves_high: 0,
+            kills: 0,
+            clears: 0,
+            extreme_level: 0,
             volumes: None,
             mono: false,
         }
@@ -1114,6 +1138,9 @@ impl Re2State {
         out.push(self.save_place);
         out.push(self.saves_high);
         out.extend_from_slice(&self.extras.to_le_bytes());
+        out.extend_from_slice(&self.kills.to_le_bytes());
+        out.push(self.clears);
+        out.extend_from_slice(&self.extreme_level.to_le_bytes());
         out
     }
 
@@ -1200,6 +1227,7 @@ impl Re2State {
     /// Restore [`Self::to_save_bytes`]; `None` for bytes of another length.
     pub fn load_save_bytes(&mut self, bytes: &[u8]) -> Option<()> {
         if bytes.len() != SAVE_LEN
+            && bytes.len() != SAVE_LEN_NO_COUNTS
             && bytes.len() != SAVE_LEN_NO_EXTRAS
             && bytes.len() != SAVE_LEN_NO_SAVES_HIGH
             && bytes.len() != SAVE_LEN_NO_PLACE
@@ -1298,9 +1326,20 @@ impl Re2State {
         self.saves_high = bytes.get(SAVE_LEN_NO_SAVES_HIGH).copied().unwrap_or(0);
         // A save from before it has none of the word's bits.
         self.extras = bytes
-            .get(SAVE_LEN_NO_EXTRAS..SAVE_LEN)
+            .get(SAVE_LEN_NO_EXTRAS..SAVE_LEN_NO_COUNTS)
             .and_then(|raw| raw.try_into().ok())
             .map_or(0, u32::from_le_bytes);
+        // A save from before them has none of these counts.
+        let counts = bytes.get(SAVE_LEN_NO_COUNTS..SAVE_LEN).unwrap_or(&[]);
+        if let [k0, k1, clears, e0, e1] = *counts {
+            self.kills = u16::from_le_bytes([k0, k1]);
+            self.clears = clears;
+            self.extreme_level = u16::from_le_bytes([e0, e1]);
+        } else {
+            self.kills = 0;
+            self.clears = 0;
+            self.extreme_level = 0;
+        }
         Some(())
     }
 
@@ -7588,6 +7627,48 @@ mod tests {
         };
         old.load_save_bytes(&bytes[..SAVE_LEN_NO_PLACE]).unwrap();
         assert_eq!(old.save_place, 0x0F);
+    }
+
+    /// The title reads a save's place and `fg_status` from its bytes to
+    /// choose the prologue a load runs (`Prologue_load`).
+    #[test]
+    fn a_saves_start_is_its_place_and_status() {
+        let mut state = Re2State {
+            save_place: 0x10,
+            ..Default::default()
+        };
+        state.banks[usize::from(STATUS_BANK)][0] = 0xC000_0010;
+        let bytes = state.to_save_bytes();
+        assert_eq!(start_in(&bytes), Some((0x10, 0xC000_0010)));
+        assert_eq!(start_in(&bytes[..SAVE_LEN_NO_PLACE]), None);
+        // A length no load takes chooses nothing.
+        assert_eq!(start_in(&bytes[..SAVE_LEN - 1]), None);
+    }
+
+    /// The kills, the clears and `nExtremeLv` are saved; a save from before
+    /// them has none.
+    #[test]
+    fn the_carried_counts_survive_a_save() {
+        let state = Re2State {
+            kills: 0x123,
+            clears: 2,
+            extreme_level: 7,
+            ..Default::default()
+        };
+        let bytes = state.to_save_bytes();
+        assert_eq!(bytes.len(), SAVE_LEN);
+        let mut loaded = Re2State::default();
+        loaded.load_save_bytes(&bytes).unwrap();
+        assert_eq!(
+            (loaded.kills, loaded.clears, loaded.extreme_level),
+            (0x123, 2, 7)
+        );
+        let mut old = Re2State {
+            kills: 9,
+            ..Default::default()
+        };
+        old.load_save_bytes(&bytes[..SAVE_LEN_NO_COUNTS]).unwrap();
+        assert_eq!((old.kills, old.clears, old.extreme_level), (0, 0, 0));
     }
 
     #[test]
