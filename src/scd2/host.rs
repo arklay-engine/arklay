@@ -3579,12 +3579,30 @@ impl Host for GameHost<'_> {
                     }
                 }
             }
-            "sce_espr_kill2" => self.game.re2.effects.kill_group(at(0) as u8),
+            "sce_espr_kill2" => {
+                let group = at(0) as u8;
+                let re2 = &mut self.game.re2;
+                re2.pending_esprs.retain(|(call, _)| call.group != group);
+                re2.effects.kill_group(group);
+            }
             // `Sce_82` (`0x4E7160`): 6 kills every effect (room 613's
             // terminal, before it puts the screen's glow back). Any other
-            // kills the ones on `Get_matrix(a, b)`'s matrix, which isn't
-            // ported.
-            "sce_82" if at(0) == 6 => self.game.re2.effects.kill_all(),
+            // kills every one on `Get_matrix(a, b)`'s matrix (room 617's
+            // `sce_82(0, 0)` before its glow), those this pass asked for
+            // included.
+            "sce_82" => {
+                let re2 = &mut self.game.re2;
+                if at(0) == 6 {
+                    re2.pending_esprs.clear();
+                    re2.effects.kill_all();
+                } else {
+                    let matrix = EsprMatrix::of(at(0) as i8, at(1) as u8);
+                    let key = matrix.map_or(crate::esp2::MatrixKey::Identity, EsprMatrix::key);
+                    re2.pending_esprs
+                        .retain(|(_, pending)| Some(*pending) != matrix);
+                    re2.effects.kill_matrix(key);
+                }
+            }
             // `Sce_shake_on`: `SetGeomOffset`, which holds until the next one.
             "sce_shake_on" => {
                 let shake = [-(at(0) as i8 as i32), -(at(1) as i8 as i32)];
@@ -5447,15 +5465,8 @@ mod tests {
         };
         glow(&mut game);
         assert!(game.re2.pending_esprs.is_empty());
-        let on = |at: [i32; 3]| {
-            crate::anim::compose(&game.objects.records[0].world, &{
-                crate::anim::Mat4x3 {
-                    r: [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]],
-                    t: at,
-                }
-            })
-        };
-        let expected = on([100, 0, 50]).t.map(|v| v as i16);
+        // `RotMatrix`'s quarter turn, `CompM`'d: the original's exact place.
+        let expected = [1050i16, 0, 1900];
         game.re2.effects.tick(&mut Default::default(), None);
         let trace = game.re2.effects.trace_field();
         let [x, y, z] = expected;
@@ -5487,6 +5498,35 @@ mod tests {
         game.re2.effects.tick(&mut Default::default(), None);
         let trace = game.re2.effects.trace_field();
         assert!(trace.ends_with(",-21420,-2250,-23250"), "{trace}");
+        // `Sce_82(4, 0)`: every effect on object 0's `Work_m`, any kind.
+        exec(&mut game, "sce_82", &[4, 1]);
+        assert_ne!(
+            game.re2.effects.trace_field(),
+            "0/-",
+            "object 1's is another"
+        );
+        exec(&mut game, "sce_82", &[4, 0]);
+        assert_eq!(game.re2.effects.trace_field(), "0/-");
+    }
+
+    /// A call on a character's matrix waits for its pose, but `sce_espr_kill2`
+    /// and `sce_82` later in the same pass take it as the original's would
+    /// the slot it had made.
+    #[test]
+    fn a_kill_takes_the_calls_on_a_character_this_pass_asked_for() {
+        let mut game = GameState::default();
+        // `sce_espr_on2`: group 3, on the player's part 11.
+        let on_hand = [3, 7, 0x8B, 0x800, 0, 0, 0, 0];
+        exec(&mut game, "sce_espr_on2", &on_hand);
+        exec(&mut game, "sce_espr_kill2", &[2]);
+        assert_eq!(game.re2.pending_esprs.len(), 1, "another group");
+        exec(&mut game, "sce_espr_kill2", &[3]);
+        assert!(game.re2.pending_esprs.is_empty());
+        exec(&mut game, "sce_espr_on2", &on_hand);
+        exec(&mut game, "sce_82", &[0, 0]);
+        assert_eq!(game.re2.pending_esprs.len(), 1, "the world's is another");
+        exec(&mut game, "sce_82", &[0x8B, 0]);
+        assert!(game.re2.pending_esprs.is_empty());
     }
 
     /// Room 202's scene with Marvin reads the player's `Type & 0xFF` to choose

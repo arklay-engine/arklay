@@ -421,6 +421,9 @@ struct Slot {
     /// `+0x6c` when a script started it on a character's matrix that it
     /// doesn't follow: whose, for `Esp_kill`.
     work: Option<WorkMatrix>,
+    /// `+0x6c` when `Esp_0E` or `Esp_3E` started it on its parent's copy of
+    /// a matrix (`+0x4c`), which no script's `Get_matrix` names.
+    on_slot_copy: bool,
 }
 
 /// A character's matrix a script's `Get_matrix` gives: `None` for the
@@ -444,6 +447,8 @@ pub enum MatrixKey {
     /// Room object n's matrix at `+0x24`, which `Sce_kirakira_set`'s
     /// twinkles are on.
     Twinkle(u8),
+    /// Another slot's copy of its matrix (`+0x4c`).
+    SlotCopy,
 }
 
 /// A body's part whose `Workm` an effect was started on (`Esp_call`'s matrix).
@@ -481,6 +486,9 @@ impl Slot {
 
     /// The matrix it was started on (`+0x6c`), as `Esp_kill` matches it.
     fn matrix(&self) -> MatrixKey {
+        if self.on_slot_copy {
+            return MatrixKey::SlotCopy;
+        }
         if let Some(object) = self.object {
             return MatrixKey::Twinkle(object);
         }
@@ -897,13 +905,20 @@ impl Effects {
         dir: i16,
         point: [i16; 3],
     ) -> Option<usize> {
-        match (parent.anchor, parent.hand) {
+        let first = match (parent.anchor, parent.hand) {
             (Some(anchor), Some((m, t))) => {
                 let matrix = crate::player2::Matrix { m, t };
                 self.call_anchored(kind, row, size, dir, anchor, matrix, point, true)
             }
             _ => self.call(kind, row, size, dir, parent.base, true),
+        }?;
+        for (index, slot) in self.slots.iter_mut().enumerate() {
+            if index == first || slot.flags != 0 && first != 0 && usize::from(slot.parent) == first
+            {
+                slot.on_slot_copy = true;
+            }
         }
+        Some(first)
     }
 
     /// The parts the live slots were started on, each once: the `anchors` a
@@ -918,6 +933,15 @@ impl Effects {
             }
         }
         anchors
+    }
+
+    /// `Sce_82` with a matrix: every slot started on it.
+    pub fn kill_matrix(&mut self, matrix: MatrixKey) {
+        for slot in &mut self.slots {
+            if slot.matrix() == matrix {
+                slot.kill();
+            }
+        }
     }
 
     /// `Esp_kill`: the slots of `kind` and `row` started on `matrix`.
@@ -3233,18 +3257,23 @@ mod tests {
             part: None,
         };
         let on_zombie = effects.call_placed_on_work(call([0; 3]), zombie).unwrap();
+        // `Esp_0E`'s spark, on the hand effect's copy of the hand (`+0x4c`).
+        let parent = effects.slots[on_hand];
+        let spark = effects
+            .call_on_slot_matrix(&parent, 7, 0, 0x800, 0, [0; 3])
+            .unwrap();
         effects.object_worlds = vec![Default::default(), shelf];
         effects.tick(&mut Default::default(), None);
         assert_eq!(effects.slots[on_shelf].pos, [-21420, -2250, -23250]);
         assert_eq!(effects.slots[world].pos, [-26900, -2250, -15000]);
-        let all = [world, on_shelf, twinkle, on_hand, on_zombie];
+        let all = [world, on_shelf, twinkle, on_hand, on_zombie, spark];
         let live = |effects: &Effects| all.map(|slot| effects.slots[slot].live());
         effects.kill_on(7, 0, MatrixKey::Object(1));
-        assert_eq!(live(&effects), [true, false, true, true, true]);
+        assert_eq!(live(&effects), [true, false, true, true, true, true]);
         effects.kill_on(7, 0, MatrixKey::Identity);
-        assert_eq!(live(&effects), [false, false, true, true, true]);
+        assert_eq!(live(&effects), [false, false, true, true, true, true]);
         effects.kill_on(7, 0, MatrixKey::Twinkle(1));
-        assert_eq!(live(&effects), [false, false, false, true, true]);
+        assert_eq!(live(&effects), [false, false, false, true, true, true]);
         effects.kill_on(
             7,
             0,
@@ -3253,9 +3282,9 @@ mod tests {
                 part: Some(11),
             }),
         );
-        assert_eq!(live(&effects), [false, false, false, false, true]);
-        effects.kill_on(7, 0, MatrixKey::Work(zombie));
-        assert_eq!(live(&effects), [false; 5]);
+        assert_eq!(live(&effects), [false, false, false, false, true, true]);
+        effects.kill_matrix(MatrixKey::Work(zombie));
+        assert_eq!(live(&effects), [false, false, false, false, false, true]);
     }
 
     /// `Eff_sprt_trans` draws a 3D slot (`0x200`) through `CompM` of its

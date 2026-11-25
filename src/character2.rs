@@ -566,35 +566,63 @@ pub(crate) fn twinkle_points(game: &GameState) -> Vec<Option<[i16; 3]>> {
 /// Each room object's `Work_m` (`+0x54`), by slot, for the effects started on
 /// one: the matrix `Obj_model_set` composed and `Om_trans` composes again each
 /// frame it draws the object, kept as it was while the object isn't drawn.
-/// [`crate::objects::ObjectRecord::world`] keeps its turn with Y flipped, from
-/// the draw's builder; on the world, while it is the object's own `Cdir`,
-/// the turn is `RotMatrix`'s, as the original's place on it is.
+/// [`crate::objects::ObjectRecord::world`] keeps it with the draw's builder
+/// and its turn with Y flipped. While that is still the object's `Cdir` and
+/// `Pos` on the world or on another object, it is composed again as the
+/// original does it, with `RotMatrix` and `CompM` ([`pc_work_m`]).
 pub(crate) fn object_worlds(game: &GameState) -> Vec<player2::Matrix> {
+    let records = &game.objects.records;
+    (0..records.len())
+        .map(|index| {
+            pc_work_m(records, index, 0).unwrap_or_else(|| player2::Matrix {
+                m: player2::flip_y(records[index].world.r).map(|row| row.map(|v| v as i16)),
+                t: records[index].world.t,
+            })
+        })
+        .collect()
+}
+
+/// `CompM(+0x80, RotMatrix(Cdir) at Pos)` for an object on the world or on
+/// another object, when [`crate::objects::ObjectRecord::world`] shows it is
+/// what `Om_trans` last composed: `None` for one on a character, or one
+/// whose `Pos`, `Cdir` or parent has changed since (a hidden object keeps
+/// its old `Work_m`) or that `Om_trans` changed after (a box's lift).
+fn pc_work_m(
+    records: &[crate::objects::ObjectRecord],
+    index: usize,
+    depth: usize,
+) -> Option<player2::Matrix> {
+    use crate::objects::SuperParent;
+    let record = records.get(index)?;
     let identity = crate::anim::Mat4x3 {
         r: [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]],
         t: [0; 3],
     };
-    game.objects
-        .records
-        .iter()
-        .map(|record| {
-            let own = crate::anim::Mat4x3 {
-                r: crate::objects::rotation(record),
-                t: record.pos,
-            };
-            let on_the_world = record.super_parent == crate::objects::SuperParent::World
-                && crate::anim::compose(&identity, &own).r == record.world.r;
-            let m = if on_the_world {
-                player2::rot_matrix(record.rotation)
-            } else {
-                player2::flip_y(record.world.r).map(|row| row.map(|value| value as i16))
-            };
+    let (drawn_parent, parent) = match record.super_parent {
+        SuperParent::World => (
+            identity,
             player2::Matrix {
-                m,
-                t: record.world.t,
-            }
-        })
-        .collect()
+                m: [[0x1000, 0, 0], [0, 0x1000, 0], [0, 0, 0x1000]],
+                t: [0; 3],
+            },
+        ),
+        SuperParent::Object(of) if depth < 0x14 => {
+            let of = usize::from(of);
+            (records.get(of)?.world, pc_work_m(records, of, depth + 1)?)
+        }
+        _ => return None,
+    };
+    let own = crate::anim::Mat4x3 {
+        r: crate::objects::rotation(record),
+        t: record.pos,
+    };
+    if crate::anim::compose(&drawn_parent, &own) != record.world {
+        return None;
+    }
+    Some(parent.comp(&player2::Matrix {
+        m: player2::rot_matrix(record.rotation),
+        t: record.pos,
+    }))
 }
 
 /// The water areas (`aot_set` kind 7) in `aot_table`'s order, for `Water_ck`.
