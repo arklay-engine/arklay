@@ -15994,11 +15994,14 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
     display.set_title(&window_title(app.pack.manifest()))?;
     // An F12 press waits here for the next presented frame.
     let mut screenshot = false;
-    // Gallery bits a failed write left, for the next save's.
-    let mut gallery_unsaved = [0u32; 5];
+    let mut gallery = GallerySaver::default();
+    let save_gallery = |words| {
+        crate::config::Config::save_re2_gallery(&crate::config::Config::default_path(), words)
+    };
     loop {
         let mut keys = PortKeys::default();
         if poll_events(&mut event, &mut input, &mut keys, Some(display)) {
+            gallery.flush(save_gallery);
             return clock.report();
         }
         // Hot reload happens between frames, never in the middle of a tick.
@@ -16015,6 +16018,7 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
         while clock.accumulator >= tick_ms {
             let tick = input.tick();
             if let AppFlow::Quit = app.update(tick.ui, tick.player, tick.action)? {
+                gallery.flush(save_gallery);
                 return clock.report();
             }
             if let Some([music, effects]) = app.volume_change.take() {
@@ -16029,21 +16033,7 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
             if let Some(sound) = app.sound_change.take() {
                 save_screen_sound(&crate::config::Config::default_path(), sound);
             }
-            // A clear opened gallery bits: they go into the file's, and a
-            // failed write keeps them for the next clear's.
-            if let Some(mut words) = app.gallery_change.take() {
-                for (word, unsaved) in words.iter_mut().zip(gallery_unsaved) {
-                    *word |= unsaved;
-                }
-                let path = crate::config::Config::default_path();
-                gallery_unsaved = match crate::config::Config::save_re2_gallery(&path, words) {
-                    Ok(()) => [0; 5],
-                    Err(err) => {
-                        crate::warning!("warning: the gallery's records not saved: {err:#}");
-                        words
-                    }
-                };
-            }
+            gallery.tick(app.gallery_change.take(), save_gallery);
             clock.ticked(tick_ms);
             // The tick may have changed the screen and with it the limiter,
             // which the original reads after each pass of its scheduler:
@@ -21215,6 +21205,60 @@ fn carry_re2_counts(
     next.kills = cleared.re2.kills;
     next.clears = cleared.re2.clears.wrapping_add(u8::from(!scenario_b));
     next.extreme_level = cleared.re2_save_count();
+}
+
+/// The window loop's saves of the gallery bits clears opened: a failed
+/// write keeps its bits and tries again, at first a second later and then
+/// at twice the wait each time up to [`Self::MAX_WAIT`], and once more
+/// when the window closes.
+#[derive(Debug, Default)]
+struct GallerySaver {
+    unsaved: [u32; 5],
+    /// Ticks before the next try, and the wait after a failed one.
+    retry_in: u32,
+    wait: u32,
+}
+
+impl GallerySaver {
+    const FIRST_WAIT: u32 = 30;
+    const MAX_WAIT: u32 = 30 * 60;
+
+    /// One tick of the loop, with the bits a clear queued on it.
+    fn tick(&mut self, opened: Option<[u32; 5]>, save: impl FnOnce([u32; 5]) -> Result<()>) {
+        if let Some(opened) = opened {
+            for (word, bits) in self.unsaved.iter_mut().zip(opened) {
+                *word |= bits;
+            }
+            self.retry_in = 0;
+        } else if self.unsaved == [0; 5] {
+            return;
+        } else if self.retry_in > 0 {
+            self.retry_in -= 1;
+            return;
+        }
+        self.save(save);
+    }
+
+    /// The window is closing: one last try.
+    fn flush(&mut self, save: impl FnOnce([u32; 5]) -> Result<()>) {
+        if self.unsaved != [0; 5] {
+            self.save(save);
+        }
+    }
+
+    fn save(&mut self, save: impl FnOnce([u32; 5]) -> Result<()>) {
+        match save(self.unsaved) {
+            Ok(()) => {
+                self.unsaved = [0; 5];
+                self.wait = 0;
+            }
+            Err(err) => {
+                crate::warning!("warning: the gallery's records not saved: {err:#}");
+                self.wait = (self.wait * 2).clamp(Self::FIRST_WAIT, Self::MAX_WAIT);
+                self.retry_in = self.wait;
+            }
+        }
+    }
 }
 
 /// OR the gallery's bits a clear's results set (`Set_registry_flg`) into
@@ -26524,6 +26568,56 @@ mod tests {
         assert_eq!(app.player_options.title_gallery, Some([0; 5]));
         assert_eq!(app.player_options.title_special, Some(15));
         assert!(!app.records_are_settings);
+    }
+
+    /// A failed save of a clear's gallery bits tries again on its own, at
+    /// a growing wait, and when the window closes; the bits of a later
+    /// clear go with it.
+    #[test]
+    fn a_failed_gallery_save_tries_again() {
+        let saved = std::cell::RefCell::new(Vec::new());
+        let fail = |words| {
+            saved.borrow_mut().push(words);
+            Err(anyhow::anyhow!("read-only"))
+        };
+        let ok = |words| {
+            saved.borrow_mut().push(words);
+            Ok(())
+        };
+        let mut saver = GallerySaver::default();
+        saver.tick(None, fail);
+        assert!(saved.borrow().is_empty(), "nothing to save");
+        saver.tick(Some([1, 0, 0, 0, 0]), fail);
+        for _ in 0..GallerySaver::FIRST_WAIT {
+            saver.tick(None, fail);
+        }
+        assert_eq!(saved.borrow().len(), 1, "a wait before the next try");
+        saver.tick(None, fail);
+        assert_eq!(saved.borrow().len(), 2);
+        assert_eq!(
+            saver.retry_in,
+            GallerySaver::FIRST_WAIT * 2,
+            "a longer wait"
+        );
+        saver.tick(Some([0, 2, 0, 0, 0]), ok);
+        assert_eq!(
+            saved.borrow().last(),
+            Some(&[1, 2, 0, 0, 0]),
+            "with the unsaved"
+        );
+        saver.tick(None, fail);
+        saver.flush(fail);
+        assert_eq!(saved.borrow().len(), 3, "nothing left after a save");
+
+        let mut saver = GallerySaver::default();
+        saver.tick(Some([4, 0, 0, 0, 0]), fail);
+        saver.flush(ok);
+        assert_eq!(
+            saved.borrow().last(),
+            Some(&[4, 0, 0, 0, 0]),
+            "the close's try"
+        );
+        assert_eq!(saver.unsaved, [0; 5]);
     }
 
     /// The save place a new game starts with (`0x4B73C0`): `0x0F` for a
