@@ -1,0 +1,97 @@
+# The title from boot: SPECIAL, confirm on 4TH, START into the 4th Survivor's game, HUNK's opening scene and its radio messages as special_4th_walk has them, then up onto room 304's ledge and stairs, through the platform's door into room 303, and toward its zombies, who kill HUNK; the game over, and the title the game goes back to (oracle/re2.md, "The 4th Survivor and To-fu").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 confirm
+443
+1000 start
+1003
+2000 confirm
+2003
+2030 confirm
+2033
+2060 confirm
+2063
+2090 confirm
+2093
+2120 confirm
+2123
+2150 confirm
+2153
+2180 confirm
+2183
+2210 confirm
+2213
+2240 confirm
+2243
+2270 confirm
+2273
+2300 confirm
+2303
+2330 confirm
+2333
+2360 confirm
+2363
+2390 confirm
+2393
+2420 confirm
+2423
+2450 confirm
+2453
+2480 confirm
+2483
+2600 up
+2670 right
+2690 up run
+2700
+2710 up run right
+2714 up run
+2721 up run right
+2722 up run
+2733 up run left
+2734 up run
+2736 right
+2738 up run right
+2739 right
+2747
+2757 action
+2767
+2768 up run
+2812 left
+2818 up run left
+2822 up run
+2827 up run left
+2828 up run
+2829 up run left
+2834 up run
+2841 up run left
+2842 up run
+2843
+2853 action
+2863
+2864 up run
+2871 up run left
+2935 left
+2942 up run left
+2947 up run
+2977 up run right
+2978 up run
+2980 left
+2982
+2992 action
+3002
+3013 action
+3023
+3024 left
+3324 up run left
+3328 up run
+3342 up run right
+3343 up run
+3344 action
+3345

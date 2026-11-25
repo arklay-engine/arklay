@@ -112,3 +112,72 @@ fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgst
 frames = [1309, 3239]
 expect = { tick = 2748, fields = ["esp92", "espk", "espn", "rng"], note = "TO-FU running starts an effect of the player's own bank (kind 1, row 0x26) at head height, which arklay's player doesn't make for him" }
 record = ""
+
+# An extra mode's death and the title after it (oracle/re2.md, "The 4th Survivor and To-fu"): special_4th_walk's start,
+# then up room 304's ledge and stairs and through the platform's door into room 303, whose zombies kill HUNK. The game
+# over ends as a game's does (`Game_loop`'s `0x4BFE5D`), and `Init_global` keeps `fg_system`'s 8, so `Capcom_logo`
+# goes back to the 4th Survivor's title (`title_mv_state` 3), not to `Title_init`.
+[[run]]
+name = "special_4th_die"
+ui = "title"
+boot = true
+# This record's boot film picked Claire: `fg_status` bit 31, under which room 304 is disc 1's.
+seed = 0x80000000
+offset = 0
+ticks = 5700
+compare_from = 5110
+input = "special_4th_die.txt"
+voice_from_ref = true
+fields = "ti,tlogo,tfade,tsel,tx,tfade2,tfade3,snd"
+frames = [1269, 5699]
+expect = "match"
+record = ""
+
+# The same record's game, from `Game_loop`'s first tick to the game over's end.
+[[run]]
+name = "special_4th_die_play"
+ref = "special_4th_die"
+ui = "title"
+boot = true
+seed = 0x80000000
+offset = 0
+ticks = 5110
+compare_from = 1276
+input = "special_4th_die.txt"
+voice_from_ref = true
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,zm0,zm1,zm2,zm3,zm4,zd,esp,pl"
+# Room 303's slot 4 is put past every byte this game loaded, on memory the title left, which arklay doesn't follow
+# (oracle/re2-deviations.md, "What a zombie's slot held before", as room 101's slots 3 and 4 after the prologue): its
+# `Dest` is 1, 1 in the original and 0 in arklay until its first `Root_ck`.
+ignore = [[3119, 3321, "zd"]]
+expect = "match"
+
+# The same for TO-FU: TOFU's 400 life last longer, and `fg_system`'s 9 brings back To-fu's title.
+[[run]]
+name = "special_tofu_die"
+ui = "title"
+boot = true
+seed = 0x80000000
+offset = 0
+ticks = 6500
+compare_from = 5805
+input = "special_tofu_die.txt"
+voice_from_ref = true
+fields = "ti,tlogo,tfade,tsel,tx,tfade2,tfade3,snd"
+frames = [1309, 6499]
+expect = { tick = 5805, fields = ["tfade", "tfade3", "ti", "tx"], note = "special_tofu_die_play diverges on 2756 (TO-FU running starts an effect of the player's own bank, which arklay doesn't make), so arklay's zombies kill TOFU 269 ticks sooner and its title is that far ahead" }
+record = ""
+
+[[run]]
+name = "special_tofu_die_play"
+ref = "special_tofu_die"
+ui = "title"
+boot = true
+seed = 0x80000000
+offset = 0
+ticks = 5805
+compare_from = 1316
+input = "special_tofu_die.txt"
+voice_from_ref = true
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,zm0,zm1,zm2,zm3,zm4,zd,esp,pl"
+expect = { tick = 2756, fields = ["esp92", "espk", "espn", "rng"], note = "TO-FU running starts an effect of the player's own bank (kind 1, row 0x26) at head height, which arklay's player doesn't make for him (as special_tofu_walk on 2748)" }

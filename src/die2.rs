@@ -234,6 +234,14 @@ impl Die {
             // `Die_move_fade_out`.
             0 => {
                 *re2.fg_stop_mut() |= 0x0200_0000;
+                // `fg_status`'s `0x8000000` comes down, unless `fg_system`'s
+                // `0x4` is up (whose branch plays XA 1, which isn't ported);
+                // its `0x140` is the camera's lock and the hold, which
+                // arklay keeps outside the bank.
+                if re2.banks[0][0] & 0x4 == 0 {
+                    use crate::scd2::host::{FG_STATUS_EXTRA_MAP, STATUS_BANK};
+                    re2.set_flag(STATUS_BANK, FG_STATUS_EXTRA_MAP, 0);
+                }
                 out.lock_cut = true;
                 self.phase = if self.held { 1 } else { 2 };
             }
@@ -766,6 +774,25 @@ mod tests {
         assert_eq!(changes[3], (100, 0xFF00_0000));
         assert_eq!(*changes.last().unwrap(), (119, 0x4300_0000));
         assert_eq!(end, Some(545));
+    }
+
+    /// `Die_move_fade_out` takes down `fg_status`'s `0x8000000` (an extra
+    /// mode's map closed) on its tick, but under `fg_system`'s `0x4`.
+    #[test]
+    fn the_fade_out_takes_down_the_extras_map_bit() {
+        use crate::scd2::host::{FG_STATUS_EXTRA_MAP, STATUS_BANK};
+        for (system, kept) in [(0, false), (0x4, true)] {
+            let mut re2 = Re2State::default();
+            re2.banks[0][0] = system;
+            re2.set_flag(STATUS_BANK, FG_STATUS_EXTRA_MAP, 1);
+            let mut die = Die::new(Some(0x10));
+            die.tick(&mut re2);
+            assert_eq!(
+                re2.flag(STATUS_BANK, FG_STATUS_EXTRA_MAP),
+                kept,
+                "{system:#x}"
+            );
+        }
     }
 
     #[test]

@@ -1,0 +1,99 @@
+# The same for TO-FU: special_tofu_walk's start, then special_4th_die's route 40 ticks later, to TOFU's death in room 303 and the title after it (oracle/re2.md, "The 4th Survivor and To-fu").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+420 right
+423
+460 confirm
+463
+1040 start
+1043
+2040 confirm
+2043
+2070 confirm
+2073
+2100 confirm
+2103
+2130 confirm
+2133
+2160 confirm
+2163
+2190 confirm
+2193
+2220 confirm
+2223
+2250 confirm
+2253
+2280 confirm
+2283
+2310 confirm
+2313
+2340 confirm
+2343
+2370 confirm
+2373
+2400 confirm
+2403
+2430 confirm
+2433
+2460 confirm
+2463
+2490 confirm
+2493
+2520 confirm
+2523
+2640 up
+2710 right
+2730 up run
+2740
+2750 up run right
+2754 up run
+2761 up run right
+2762 up run
+2773 up run left
+2774 up run
+2776 right
+2778 up run right
+2779 right
+2787
+2797 action
+2807
+2808 up run
+2852 left
+2858 up run left
+2862 up run
+2867 up run left
+2868 up run
+2869 up run left
+2874 up run
+2881 up run left
+2882 up run
+2883
+2893 action
+2903
+2904 up run
+2911 up run left
+2975 left
+2982 up run left
+2987 up run
+3017 up run right
+3018 up run
+3020 left
+3022
+3032 action
+3042
+3053 action
+3063
+3064 left
+3364 up run left
+3368 up run
+3382 up run right
+3383 up run
+3384 action
+3385

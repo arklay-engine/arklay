@@ -3338,6 +3338,64 @@ fn the_title_after_a_game_starts_as_it_handed_over() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The title after an extra mode's game (`Game_loop`'s `0x4BFE5D`):
+/// `Init_global` keeps `fg_system`'s `0x1000899`, the extra's 8 and
+/// To-fu's 1 with it, so after the logo's sleep `Capcom_logo`'s step 9 sets
+/// `title_mv_state` 3, that mode's title, whose load runs on the next tick
+/// with the mode's core bank. The game's other bits are dropped, and the
+/// hand-over's dim count and fade 2's mode are as the extra's START left
+/// them. `Title_game_init` left `0x99CF6C` set, so the mode's title plays
+/// its cues at their own volume; `Title_init` clears it.
+#[test]
+fn the_title_after_an_extra_modes_game_is_that_modes_title() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-after-extra-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    for (fg_system, bank) in [(0x4002_0008i64, 0x12), (0x4002_0009, 0x13)] {
+        let statics = crate::ui::ScreenStatics::default();
+        // The extra's START left SPECIAL's dim count up and fade 2 in the
+        // confirm's mode, which nothing sets again before the game.
+        statics.set("ui/title.lua", "handed_dim", Some(0x80));
+        statics.set("ui/title.lua", "handed_fade2", Some(2));
+        let game = [
+            ("after", ScreenArg::Str("game".to_owned())),
+            ("fade_add", ScreenArg::Int(0x200)),
+            ("fg_system", ScreenArg::Int(fg_system)),
+        ];
+        let (mut screen, cx) = open_kept(&statics, &dir, &game);
+        assert_eq!(screen.value("ti_fgsys"), fg_system & 9, "{fg_system:#x}");
+        assert_eq!(screen.value("ti_dim"), 0x80);
+        assert_eq!(screen.value("ti_fade2_mode"), 2);
+        assert_eq!(screen.value("ti_se_live"), 1, "the game's `0x99CF6C`");
+        run(&mut screen, &cx, UiInput::default(), 122);
+        assert_eq!(screen.value("ti_mv"), 3, "{fg_system:#x}: step 9");
+        cx.cues.borrow_mut().clear();
+        screen.update(&cx, UiInput::default());
+        assert_eq!(screen.value("ti_mv"), 4, "`Load_title_survivor`");
+        assert_eq!(screen.value("ti_disp"), 0);
+        assert_eq!(screen.value("ti_fade3_level"), 0x7C00);
+        assert_eq!(*cx.cues.borrow(), [UiCue::CoreBank(bank)]);
+    }
+    // A game of ORIGINAL MODE's comes back to `Title_init`.
+    let statics = crate::ui::ScreenStatics::default();
+    let game = [
+        ("after", ScreenArg::Str("game".to_owned())),
+        ("fg_system", ScreenArg::Int(0x4002_0000)),
+    ];
+    let (mut screen, cx) = open_kept(&statics, &dir, &game);
+    assert_eq!(screen.value("ti_se_live"), 1);
+    run(&mut screen, &cx, UiInput::default(), 123);
+    assert_eq!(screen.value("ti_mv"), 2, "`Title_init`");
+    assert_eq!(screen.value("ti_se_live"), 0, "`Title_init` clears it");
+    // A demo a key ended: its branch of `Title_game_init` left it clear.
+    let demo = [
+        ("after", ScreenArg::Str("game".to_owned())),
+        ("fg_system", ScreenArg::Int(0x4000_2000)),
+    ];
+    let (screen, _) = open_kept(&statics, &dir, &demo);
+    assert_eq!(screen.value("ti_se_live"), 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// The boot's film is Leon's or Claire's by the generator's first value,
 /// and the boot starts the generator, the film's count and the reels'
 /// cycle over.

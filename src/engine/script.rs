@@ -661,6 +661,7 @@ impl Driver {
     fn drop_pending_voice(&mut self) {
         if let Some(app) = self.app.as_mut() {
             app.pending_voice_ticks = None;
+            app.pending_sound = false;
         }
     }
 
@@ -1843,6 +1844,11 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                 } else {
                     (None, voice_ticks)
                 };
+                let (screen_sound, sound) = if screen {
+                    (sound.unwrap_or(false), None)
+                } else {
+                    (false, sound)
+                };
                 if sound.unwrap_or(false)
                     || voice_ticks.is_some()
                     || sound_wav.is_some()
@@ -1852,7 +1858,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                     let Mode::Play(session) = &mut app.mode else {
                         return Err(mlua::Error::RuntimeError(
                             "trace_start: sound, voice_ticks, sound_wav and film_pads need a game \
-                             session (voice_ticks a screen too)"
+                             session (sound and voice_ticks a screen too)"
                                 .into(),
                         ));
                     };
@@ -1880,12 +1886,15 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                 if let Some(ticks) = screen_voice {
                     driver.app()?.pending_voice_ticks = Some(ticks.into());
                 }
+                if screen_sound {
+                    driver.app()?.pending_sound = true;
+                }
                 if let Some(ticks) = voice_ticks
                     && let Mode::Play(session) = &mut driver.app()?.mode
                 {
                     session.game.re2.voice_ticks = ticks.into();
                 }
-                let unpaced_voice = !sound.unwrap_or(false) && sound_wav.is_none();
+                let unpaced_voice = !sound.unwrap_or(screen_sound) && sound_wav.is_none();
                 driver.trace = Some(ScriptTrace {
                     writer,
                     all_frames: all_frames.unwrap_or(false),
@@ -2110,10 +2119,10 @@ mod tests {
         assert!(shared.borrow().trace.is_some());
     }
 
-    /// Voice lengths a trace asks for on a screen wait for the game that
-    /// screen starts, and only while their trace runs: `trace_stop`, a
-    /// trace started over it, a failed `trace_start` and a script's own
-    /// title or game drop them.
+    /// Voice lengths and `sound` a trace asks for on a screen wait for the
+    /// game that screen starts, and only while their trace runs:
+    /// `trace_stop`, a trace started over it, a failed `trace_start` and a
+    /// script's own title or game drop them.
     #[test]
     fn a_screens_voice_lengths_go_with_their_trace() {
         let dir = TempDir::new();
@@ -2197,8 +2206,32 @@ mod tests {
             app.start_session(session);
         }
         assert_eq!(session_voice(), [18, 22]);
+        let sound_device = || match &shared.borrow().app.as_ref().unwrap().mode {
+            Mode::Play(session) => session.sound_device,
+            _ => panic!("no session"),
+        };
+        assert!(!sound_device(), "no `sound` asked for");
         run("trace_stop()".into()).unwrap();
         assert!(session_voice().is_empty(), "trace_stop in play");
+        // `sound` on a screen is the game's that screen starts, and goes
+        // with its trace as the lengths do.
+        let pending_sound = || shared.borrow().app.as_ref().unwrap().pending_sound;
+        run("open_ending(1)".into()).unwrap();
+        let sounded = format!("trace_start({trace:?}, {{ sound = true }})");
+        run(sounded.clone()).unwrap();
+        assert!(pending_sound(), "held for the screen's game");
+        run("trace_stop()".into()).unwrap();
+        assert!(!pending_sound(), "trace_stop");
+        run(sounded).unwrap();
+        {
+            let mut driver = shared.borrow_mut();
+            let app = driver.app.as_mut().unwrap();
+            let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+            app.start_session(session);
+        }
+        assert!(sound_device(), "the screen's game has a sound device");
+        assert!(!pending_sound());
+        run("trace_stop()".into()).unwrap();
         // In play, a trace that can't be made sets none.
         let failed = format!("trace_start({missing:?}, {{ voice_ticks = {{ 18 }} }})");
         assert!(run(failed).is_err());
