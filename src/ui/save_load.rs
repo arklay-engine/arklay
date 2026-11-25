@@ -214,6 +214,26 @@ pub fn open_save_screen(
     )?))
 }
 
+/// RE 2's save screen as a main game's results open it for the next
+/// scenario (`Mem_card` in save mode under `fg_system`'s `0x200000`): the
+/// script's screen told `ending`, whose leave asks before it goes (state
+/// 0x60). Its write takes a ribbon as any save's does, though the next
+/// scenario's game holds none ([`crate::game::GameState::re2_typewriter_write`]).
+pub fn open_ending_save_screen(
+    entry: Option<&str>,
+    cx: &mut UiContext<'_>,
+    file: SaveFile,
+) -> Result<Box<dyn SaveScreen>> {
+    let args = [("ending", crate::ui::lua_screen::ScreenArg::Bool(true))];
+    Ok(Box::new(LuaScreen::open_save_with(
+        entry.unwrap_or(SAVE_LOAD_ENTRY),
+        cx,
+        file,
+        true,
+        &args,
+    )?))
+}
+
 /// Remove one ink ribbon from the block the screen is about to write, the way
 /// the original's `use_room_action_item` does before assembling the file.
 pub(crate) fn consume_snapshot_ribbon(file: &mut SaveFile) {

@@ -184,8 +184,8 @@ pub const REGIONS: &[Region] = &[
 
 /// The game an arklay save holds, as a load applies it (`SaveFile::apply_to`),
 /// for its image: an error unless the file has its RE 2 trailer and the
-/// trailer's state applies (a supported older layout does). Variable 27 is
-/// the save's own, before the load's `0x00FF`.
+/// trailer's state applies (a supported older layout does). Variables 27
+/// and 32 are the save's own, before the load's `0x00FF` and player id.
 pub fn saved_state(file: &crate::save::SaveFile) -> Result<GameState, String> {
     let bytes = file.re2.as_deref().ok_or("no RE 2 trailer")?;
     let mut saved = crate::scd2::host::Re2State::default();
@@ -196,6 +196,8 @@ pub fn saved_state(file: &crate::save::SaveFile) -> Result<GameState, String> {
     file.apply_to(&mut game);
     let last = crate::scd2::host::VAR_LAST_RDT;
     game.re2.vars[last] = saved.vars[last];
+    // Variable 32 is the save's own too, before the load's player id.
+    game.re2.vars[32] = saved.vars[32];
     Ok(game)
 }
 

@@ -117,8 +117,8 @@ cargo run -- pack convert game /path/to/steam/4249100_Biohazard --out re1.akpak
 # voice lines work. The title (with its load and option screens; the key config
 # page lists and rebinds arklay's own controls), the new-game choice and its prologue, the
 # inventory, the status screen with its map, the save screen, the item box,
-# the special menu's gallery (pictures, movies and 3D models) and an extra mode's
-# results (the main game's aren't ported yet) are drawn from the original's art. Leon A's route from
+# the special menu's gallery (pictures, movies and 3D models) and the results
+# after a cleared game (with the next scenario's save) are drawn from the original's art. Leon A's route from
 # the new game through Marvin's room 202, the Blue Card Key, the darkroom (208),
 # the S.T.A.R.S. office (115), the Spade Key and its doors, the Diamond Key in
 # 10B, and back down 110's ladder, through 203's rounds, 207's Diamond door and

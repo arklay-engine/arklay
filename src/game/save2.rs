@@ -130,10 +130,21 @@ impl GameState {
     /// of 0 wraps to 255; at 0 the slot is cleared and `Sort_item` moves the
     /// slots after the first empty one up. The count is `0x98E9BC`'s low
     /// word: the state byte and [`crate::scd2::host::Re2State::saves_high`].
-    /// Without a ribbon nothing is taken (the typewriter can't get here
-    /// without one); `ink_ribbon` false takes none either (a save the debug
-    /// menu opens).
+    /// Without a ribbon (the results' save for the next scenario; the
+    /// typewriter can't get here without one) `Search_item_id` gives -1, and
+    /// the count it takes one off is the byte before `Item_work`, `fg_key`'s
+    /// sixth (`0x98ED31`): 0 wraps to 255. `ink_ribbon` false takes nothing
+    /// (a save the debug menu opens).
     pub fn re2_typewriter_write(&mut self, ink_ribbon: bool) {
+        if ink_ribbon && self.re2_item_slot(ITEM_INK_RIBBON).is_none() {
+            let word = &mut self.re2.door_locks[1];
+            let count = ((*word >> 8) as u8).wrapping_sub(1);
+            *word = (*word & !0xFF00) | u32::from(count) << 8;
+            if count == 0 {
+                // `Item_work[-1]`'s id and its third byte go too.
+                *word &= !0x00FF_00FF;
+            }
+        }
         if let Some(slot) = self.re2_item_slot(ITEM_INK_RIBBON).filter(|_| ink_ribbon) {
             let stack = &mut self.inventory[slot];
             stack.quantity = stack.quantity.wrapping_sub(1);
@@ -371,5 +382,19 @@ mod tests {
         answer(&mut game, 1);
         game.tick_re2_save();
         assert_eq!(game.re2_typewriter_trace(), "tw=0,0,1");
+    }
+
+    #[test]
+    fn a_write_with_no_ribbon_takes_one_off_the_byte_before_the_items() {
+        let mut game = game(None);
+        game.re2_typewriter_write(true);
+        // `Search_item_id` gives -1: `fg_key`'s sixth byte goes from 0 to 255.
+        assert_eq!(game.re2.door_locks[1], 0xFF00);
+        assert_eq!(game.re2_save_count(), 1);
+        game.re2_typewriter_write(false);
+        assert_eq!(
+            game.re2.door_locks[1], 0xFF00,
+            "no ribbon asked, none taken"
+        );
     }
 }

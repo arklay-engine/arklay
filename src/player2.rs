@@ -1689,10 +1689,11 @@ impl Weapon {
         self.tilts() && self.id != GATLING
     }
 
-    /// `Tama_ck_i`'s `fg_status |= 0x800000`: the rocket launcher at a count
-    /// of `0xFF`, and the gatling gun, whose flag is always up.
+    /// `Tama_ck_i`'s `fg_status |= 0x800000`: the sub-machine gun and the
+    /// rocket launcher at a count of `0xFF`, and the gatling gun, whose flag
+    /// is always up.
     fn endless_flag(&self) -> bool {
-        (self.id == ROCKET && self.rounds == ENDLESS) || self.id == GATLING
+        (matches!(self.id, SMG | ROCKET) && self.rounds == ENDLESS) || self.id == GATLING
     }
 
     /// `pl_mv05_w1_t0` and `pl_mv05_w1_t1` never tilt the spark shot or the
@@ -11511,6 +11512,17 @@ mod tests {
             ..Weapon::default()
         };
         assert_eq!(gatling.burst_sequence(), pairs.as_slice());
+    }
+
+    #[test]
+    fn an_endless_sub_machine_gun_raises_the_results_penalty() {
+        let gun = |rounds| Weapon {
+            id: SMG,
+            rounds,
+            ..Weapon::default()
+        };
+        assert!(gun(ENDLESS).endless_flag());
+        assert!(!gun(100).endless_flag());
     }
 
     #[test]

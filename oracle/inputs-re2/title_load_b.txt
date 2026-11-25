@@ -1,0 +1,6 @@
+# The title from boot: LOAD GAME with one save, the next scenario's that Leon A's results wrote (result_leon_a_save, Claire B's), the decide on it at 800, then no key while Claire B's game starts.
+0
+260 confirm
+263
+800 confirm
+803

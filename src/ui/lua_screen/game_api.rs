@@ -53,10 +53,17 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
     });
 
     // `character()`: the character byte's low two bits (`0` Chris, `1`
-    // Jill, `2`/`3` the alternates), which pick the portrait.
+    // Jill, `2`/`3` the alternates), which pick the portrait. An RE 2 game
+    // has no alternates: bit 1 is its scenario B (`fg_status`'s
+    // `0x40000000`).
     methods.add_method("character", |_lua, api, ()| {
         Ok(api.game().map_or(0, |game| {
-            game.state_bytes[usize::from(STATE_BYTE_CHARACTER)] & 3
+            let byte = game.state_bytes[usize::from(STATE_BYTE_CHARACTER)];
+            if game.is_re2_room {
+                byte & 1 | u8::from(game.re2.scenario_b) << 1
+            } else {
+                byte & 3
+            }
         }))
     });
 
@@ -346,7 +353,8 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
 
     // `re2_result()`: what RE 2's results draw this tick (`result2::View`):
     // each piece's `flags` and `colour` (`pieces[n + 1]` for piece `n`),
-    // whether the pieces are `drawn`, the `picture` last loaded and whether
+    // whether the pieces are `drawn`, the `picture` last loaded (its index,
+    // and `picture_name`, its name under `ui/result/`) and whether
     // the `background` shows it, the time's ten `digits` (glyphs), and fade
     // slot 0 as drawn (`fade = {level, mode}`), or nil while none run.
     methods.add_method("re2_result", |lua, api, ()| {
@@ -369,6 +377,7 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         table.set("drawn", view.drawn)?;
         if let Some(picture) = view.picture {
             table.set("picture", picture)?;
+            table.set("picture_name", crate::result2::picture_name(picture))?;
         }
         table.set("background", view.background)?;
         table.set("digits", view.digits.to_vec())?;

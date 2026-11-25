@@ -2382,6 +2382,9 @@ struct GameSession {
     re2_result_screen: Option<Box<LuaScreen>>,
     /// The results' `Result_exit` has run: the title owns the next update.
     re2_result_over: bool,
+    /// The next scenario's game the results' save writes (`FUN_004b73c0`
+    /// over the save work), while that save screen runs.
+    re2_next_game: Option<Box<game::GameState>>,
     /// The ticks since the get-item window's first, 1 on it: its open fade
     /// runs on these whatever the window's phase.
     re2_item_ticks: u8,
@@ -2886,10 +2889,11 @@ fn re2_live_pad(ui: &UiInput, input: &player::Input) -> u16 {
         | held(input.lock_drop || input.lock_pressed, 0x0004)
 }
 
-/// The music RE 2's results drive ([`crate::result2::MusicHost`]): the
-/// game's, with `fg_system` and the place as the results' tick started.
+/// What RE 2's results drive ([`crate::result2::MusicHost`]): the game's
+/// music, with `fg_system` and the place as the results' tick started, and
+/// its films.
 struct Re2ResultMusic<'a> {
-    music: &'a mut crate::bgm2::Music,
+    re2: &'a mut crate::scd2::host::Re2State,
     system: u32,
     place: crate::bgm2::Place,
     sound: bool,
@@ -2900,21 +2904,88 @@ impl crate::result2::MusicHost for Re2ResultMusic<'_> {
         if !self.sound {
             return;
         }
+        let bgm = &mut self.re2.music;
         match music {
-            crate::result2::Music::FadeOut(time) => self.music.fade_on(time, self.system),
-            crate::result2::Music::Main(id) => self.music.play_main(id, self.system),
+            crate::result2::Music::FadeOut(time) => bgm.fade_on(time, self.system),
+            crate::result2::Music::Main(id) => bgm.play_main(id, self.system),
+            crate::result2::Music::Sub(id) => bgm.play_sub(id, self.place),
             crate::result2::Music::Control(word) => {
                 // `Snd_bgm_ctr`'s word: the target and the operation in the
                 // top byte's nibbles, then the channel, the volume, the pan.
                 let [pan, volume, channel, top] = word.to_le_bytes();
-                self.music
-                    .control([top >> 4, top & 0xF, channel, volume, pan], self.place);
+                bgm.control([top >> 4, top & 0xF, channel, volume, pan], self.place);
             }
         }
     }
 
     fn fading(&self) -> bool {
-        self.music.fade_rtn().0 != 0
+        self.re2.music.fade_rtn().0 != 0
+    }
+
+    /// `Init_movie_work`: `fg_system`'s `0x8000` down and `0x200` up; with
+    /// the films off `SsInit2` and the drop of `0x200` within the call, with
+    /// them on the film plays after the tick ([`GameSession::tick_re2_result`]).
+    /// The results' music has been freed by then, so `SsClose` and
+    /// `SsInit2` find nothing to stop or start.
+    fn film(&mut self, id: u8) {
+        use crate::scd2::host::{FG_SYSTEM_8000, FG_SYSTEM_MOVIE};
+        self.re2.set_flag(0, FG_SYSTEM_8000, 0);
+        if self.re2.films {
+            self.re2.set_flag(0, FG_SYSTEM_MOVIE, 1);
+            self.re2.film = Some(id);
+        }
+    }
+
+    fn film_playing(&self) -> bool {
+        self.re2.flag(0, crate::scd2::host::FG_SYSTEM_MOVIE)
+    }
+}
+
+/// What RE 2's results read of the game they end ([`crate::result2::Clear`]).
+fn re2_clear(game: &game::GameState, special: u8) -> crate::result2::Clear {
+    use crate::scd2::host::{FG_STATUS_EXTRA, FG_SYSTEM_TOFU, STATUS_BANK};
+    let re2 = &game.re2;
+    let status = |bit: u8| re2.flag(STATUS_BANK, bit);
+    let extra = status(FG_STATUS_EXTRA);
+    let seconds = if extra {
+        i32::from(re2.vars[RESULT_TIME_VAR] as i16) as u32
+    } else {
+        // `GameSeconds`, as the save's image counts it.
+        game.play_timer() / 31
+    };
+    // `Item_work`'s ten slots and the personal one, then the box.
+    let slots: Vec<[u8; 2]> = (0..10)
+        .map(|slot| {
+            let stack = game.inventory.get(slot).copied().unwrap_or_default();
+            [stack.id, stack.quantity]
+        })
+        .chain([re2.personal_item])
+        .chain(re2.item_box.iter().map(|entry| [entry[0], entry[1]]))
+        .collect();
+    let held = [
+        crate::result2::SUBMACHINE,
+        crate::result2::ROCKET,
+        crate::result2::GATLING,
+    ]
+    .map(|id| crate::result2::holds(slots.iter().copied(), id));
+    crate::result2::Clear {
+        extra,
+        tofu: re2.flag(0, FG_SYSTEM_TOFU),
+        claire: status(0),
+        scenario_b: status(1),
+        penalty: status(8),
+        no_records: status(5),
+        hard: re2.hard_mode,
+        seconds,
+        saves: u32::from(game.re2_save_count()),
+        // The sprays count (`0x98E9BA`) and the clears (`0x98EE7A`) aren't
+        // kept (oracle/re2-deviations.md).
+        third: 0,
+        item_9c: re2.flag(8, 0x9C),
+        zapping: [re2.banks[29][0], re2.banks[29][1]],
+        clears: 0,
+        special,
+        held,
     }
 }
 
@@ -3566,6 +3637,7 @@ impl GameSession {
             re2_computer_screen: None,
             re2_result_screen: None,
             re2_result_over: false,
+            re2_next_game: None,
             re2_item_ticks: 0,
             menu_fade_pending: false,
             menu_fade_draw: None,
@@ -4521,6 +4593,12 @@ impl GameSession {
     ) -> Result<()> {
         // The native in-game menu owns the frozen tick; the app drives it.
         if self.system_menu_open {
+            return Ok(());
+        }
+        // An ending film the results started runs in place of their task,
+        // which waits on `fg_system`'s 0x200 until the film's end clears it.
+        if self.game.is_re2_room && self.game.re2_result.is_some() && self.movie.is_some() {
+            self.tick_movie(ui, input);
             return Ok(());
         }
         // RE 2's results own task 0 from the tick `Game_loop` chains them.
@@ -6060,7 +6138,8 @@ impl GameSession {
         debug_assert!(
             crate::movie::RE2_ATTR
                 .get(usize::from(id))
-                .is_none_or(|attr| attr & 0x40 == 0 || id == 12),
+                .is_none_or(|attr| attr & 0x40 == 0 || id == 12)
+                || self.game.re2_result.is_some(),
             "a room's film keeps the room's background mode"
         );
         self.restore_cutscene_skip_music();
@@ -6667,13 +6746,14 @@ impl GameSession {
     /// RE 2's results (`Result`, [`crate::result2`]) on a tick of the game:
     /// `Game_loop`'s step 2 chains them on `fg_system`'s `0x200000`, in
     /// place of the game, on the tick it sees the bit, and from the next
-    /// they run as task 0, with `Snd_se_call`'s music after them. Only an
-    /// extra mode's (`fg_status`'s `0x2000000`) are ported; the main game's
-    /// bit does nothing yet. Returns whether the results own the tick.
+    /// they run as task 0, with `Snd_se_call`'s music after them. While the
+    /// save screen they start for the next scenario runs (`Mem_card`, task
+    /// 1), task 0 is suspended: the screen alone runs. Returns whether the
+    /// results own the tick.
     fn tick_re2_result(&mut self, pack: &Pack, ui: &UiInput, input: &player::Input) -> bool {
-        use crate::scd2::host::{FG_STATUS_EXTRA, FG_SYSTEM_RESULT, FG_SYSTEM_TOFU};
+        use crate::scd2::host::FG_SYSTEM_RESULT;
         if self.game.re2_result.is_none() {
-            if !self.game.re2.flag(0, FG_SYSTEM_RESULT) || !self.game.re2.flag(1, FG_STATUS_EXTRA) {
+            if !self.game.re2.flag(0, FG_SYSTEM_RESULT) {
                 return false;
             }
             // `Game_loop` tests the flag in its step 2, the room's own tick:
@@ -6698,17 +6778,17 @@ impl GameSession {
             };
             self.room_fade = transition::Fade::inactive();
             self.room_fade_draw = None;
-            let tofu = self.game.re2.flag(0, FG_SYSTEM_TOFU);
-            let seconds = self.game.re2.vars[RESULT_TIME_VAR] as i16;
+            let special = self.game.player_options.title_special.unwrap_or(15) as u8;
+            let clear = re2_clear(&self.game, special);
             self.game.re2_result = Some(Box::new(crate::result2::Result::new(
-                true,
-                tofu,
-                seconds,
-                0,
+                clear,
                 crate::result2::Result::boot_colours(),
                 fade,
             )));
             self.open_re2_result_screen(pack);
+            // `Result_init`'s `Snd_room_load`: the room's banks give way to
+            // the results' own.
+            self.re2_sounds.results_room = true;
             bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
             return true;
         }
@@ -6720,19 +6800,52 @@ impl GameSession {
         let raw = re2_live_pad(ui, input)
             | if ui.start { 0x0800 } else { 0 }
             | if ui.option { 0x0100 } else { 0 };
-        let mut music = Re2ResultMusic {
-            system: self.game.re2.banks[0][0],
-            place: self.game.re2_music_place(),
-            // `DirectSoundEnable`: with no sound device the music's calls
-            // return.
-            sound: self.sound_device,
-            music: &mut self.game.re2.music,
-        };
+        if self.re2_save == Some(Re2Save::Screen) {
+            // The pad's shared buttons, as the typewriter's screen takes
+            // them: fire confirms and run cancels.
+            let mut ui = *ui;
+            ui.confirm |= input.fire_pressed;
+            ui.cancel |= input.run_pressed;
+            self.tick_save_screen(pack, ui);
+            self.sleep_re2_result(raw);
+            if self.re2_save != Some(Re2Save::Screen) {
+                // `Mem_card`'s `Task_signal(0)`: the results run from the
+                // next tick.
+                self.re2_save = None;
+            }
+            self.tick_re2_fades();
+            bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
+            return true;
+        }
+        let system = self.game.re2.banks[0][0];
+        let place = self.game.re2_music_place();
         let Some(result) = self.game.re2_result.as_mut() else {
             return false;
         };
+        let mut music = Re2ResultMusic {
+            system,
+            place,
+            // `DirectSoundEnable`: with no sound device the music's calls
+            // return.
+            sound: self.sound_device,
+            re2: &mut self.game.re2,
+        };
         let out = result.tick(raw, &mut music);
+        let earned = result.next_game();
         bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
+        if let Some(id) = self.game.re2.film.take() {
+            let claire = self.game.re2.flag(1, crate::scd2::host::STATUS_PLAYER);
+            if let Err(err) = self.start_re2_movie(pack, id, claire) {
+                eprintln!("warning: RE2 film {id} unavailable: {err:#}");
+                self.end_re2_movie();
+            }
+        }
+        if out.save {
+            self.open_re2_next_scenario_save(pack, earned);
+            // `Mem_card` runs after task 0 on this tick: its first call
+            // sets fade 0 (`Cardaccess_init`).
+            self.sleep_re2_result(raw);
+        }
         if out.exit {
             // `Result_exit` chains the title on this tick, which the title
             // opens on as it chained it: its task runs from the next.
@@ -6740,6 +6853,59 @@ impl GameSession {
             self.return_title_requested = true;
         }
         true
+    }
+
+    /// A tick RE 2's results sleep under their save screen: `Pad_set` goes
+    /// on, and fade 0 is the screen's (`Cardaccess_exit` leaves it black at
+    /// `0x7FFF`).
+    fn sleep_re2_result(&mut self, raw: u16) {
+        let value = |key: &str| {
+            self.save_screen
+                .as_ref()
+                .and_then(|screen| screen.value(key))
+        };
+        let fade = crate::result2::Fade {
+            level: value("sv_fade_level").unwrap_or(0x7FFF) as i16,
+            add: value("sv_fade_add").unwrap_or(0) as i16,
+            mode: 2,
+        };
+        if let Some(result) = self.game.re2_result.as_mut() {
+            result.sleep(raw, fade);
+        }
+    }
+
+    /// Step 7 of the main game's results: `FUN_004b73c0` makes the next
+    /// scenario's game over the save work (the other character's other
+    /// scenario, [`re2_next_scenario_game`]), and `Task_execute(1,
+    /// Mem_card)` the save screen that writes it, in save mode under
+    /// `fg_system`'s `0x200000` (its leave asks first, state 0x60).
+    fn open_re2_next_scenario_save(&mut self, pack: &Pack, earned: Option<crate::result2::Earned>) {
+        let next = match re2_next_scenario_game(pack, &self.game, earned, self.game.player_options)
+        {
+            Ok(next) => next,
+            Err(err) => {
+                crate::warning!("warning: the next scenario's game can't be made: {err:#}");
+                // The screen can't open: the results go on as after it.
+                return;
+            }
+        };
+        let file = save::SaveFile::from_state(&next);
+        self.re2_next_game = Some(Box::new(next));
+        let mut cx = self.ui_context(pack);
+        let screen =
+            ui::save_load::open_ending_save_screen(self.game.save_screen.as_deref(), &mut cx, file);
+        let cues = cx.cues.into_inner();
+        match screen {
+            Ok(screen) => {
+                self.save_screen = Some(screen);
+                self.re2_save = Some(Re2Save::Screen);
+            }
+            Err(err) => {
+                crate::warning!("warning: save screen unavailable: {err:#}");
+                self.re2_next_game = None;
+            }
+        }
+        self.play_re2_screen_cues(pack, cues);
     }
 
     /// Open RE 2's results' screen (`ui/result.lua`), which draws what the
@@ -6774,10 +6940,13 @@ impl GameSession {
         }
     }
 
-    /// Draw RE 2's results' screen over a black frame.
+    /// Draw RE 2's results' screen over a black frame, or the save screen
+    /// that runs in their place.
     fn draw_re2_result(&mut self, pack: &Pack) {
+        let saving = self.re2_save == Some(Re2Save::Screen);
         let Self {
             re2_result_screen,
+            save_screen,
             save_dir,
             screen_statics,
             font,
@@ -6787,6 +6956,22 @@ impl GameSession {
             ..
         } = self;
         framebuffer.clear();
+        if saving && let Some(screen) = save_screen.as_mut() {
+            let cx = UiContext {
+                statics: Some(screen_statics),
+                authentic: game.player_options.authentic,
+                pack,
+                save_dir,
+                font: font.as_ref(),
+                text: Some(text),
+                ticks: game.frame,
+                cues: std::cell::RefCell::new(Vec::new()),
+                game: Some(game),
+            };
+            screen.draw(&cx, framebuffer);
+            framebuffer.fade_overlay(screen.overlay());
+            return;
+        }
         if let Some(screen) = re2_result_screen.as_mut() {
             let cx = UiContext {
                 statics: Some(screen_statics),
@@ -8178,7 +8363,11 @@ impl GameSession {
             value("sv_choice"),
             value("sv_typed"),
             value("sv_saves"),
-            self.game.re2_save_count(),
+            // The save work's count: the next scenario's under the results.
+            self.re2_next_game
+                .as_deref()
+                .unwrap_or(&self.game)
+                .re2_save_count(),
         )
     }
 
@@ -8476,19 +8665,24 @@ impl GameSession {
                 text,
                 game,
                 screen_statics,
+                re2_next_game,
                 ..
             } = self;
             let Some(screen) = save_screen.as_mut() else {
                 return;
             };
+            let authentic = game.player_options.authentic;
+            let frame = game.frame;
+            // The results' save writes the next scenario's game.
+            let game = re2_next_game.as_deref_mut().unwrap_or(game);
             let cx = UiContext {
                 statics: Some(screen_statics),
-                authentic: game.player_options.authentic,
+                authentic,
                 pack,
                 save_dir,
                 font: font.as_ref(),
                 text: Some(text),
-                ticks: game.frame,
+                ticks: frame,
                 cues: std::cell::RefCell::new(Vec::new()),
                 game: Some(game),
             };
@@ -8505,7 +8699,10 @@ impl GameSession {
                 .as_mut()
                 .and_then(|screen| screen.take_outcome())
             {
-                self.game.re2_typewriter_write(outcome.ink_ribbon);
+                self.re2_next_game
+                    .as_deref_mut()
+                    .unwrap_or(&mut self.game)
+                    .re2_typewriter_write(outcome.ink_ribbon);
                 self.note_save_written(outcome);
             }
         } else {
@@ -8556,7 +8753,11 @@ impl GameSession {
         // `BYTE_0098f07b = 2` has this tick's `Swap_Cbuff` load the view;
         // `Game_loop`'s step 9 runs on the next tick.
         if self.re2_save == Some(Re2Save::Screen) {
-            self.game.re2.bg_load = true;
+            // `Cardaccess_exit`'s state 2 loads the view only outside the
+            // results (`fg_system`'s `0x200000`).
+            if self.re2_next_game.take().is_none() {
+                self.game.re2.bg_load = true;
+            }
             self.re2_save = Some(Re2Save::Closed);
             return;
         }
@@ -9407,7 +9608,9 @@ impl GameSession {
             if session.door.re2.is_some()
                 && let Some(volume) = session.transition.stepper().re2_sound_volume(effect)
             {
-                self.re2_sounds.played.push((0, effect.id, volume, 0));
+                self.re2_sounds
+                    .played
+                    .push((0, effect.id, u16::from(volume), 0));
             }
             play_door_animation_sfx(
                 &mut self.music,
@@ -10668,8 +10871,9 @@ impl GameSession {
                 }
             };
         }
-        // RE 2's results draw their own screen in place of the room.
-        if self.game.re2_result.is_some() {
+        // RE 2's results draw their own screen in place of the room, and
+        // an ending film in place of them.
+        if self.game.re2_result.is_some() && self.movie.is_none() {
             self.framebuffer.view = video::View::default();
             self.gpu_scene_visible = false;
             self.draw_re2_result(pack);
@@ -11622,6 +11826,10 @@ const RE2_EXTRA_ANGLE: u16 = 0x800;
 /// `BYTE_00989e7e` to 4 under `fg_system`'s 8.
 const RE2_EXTRA_INIT_ROW: usize = 4;
 
+/// Where a scenario A's player starts as `FUN_004b73c0` sets it for the
+/// next scenario's save, before room 100's push out of the wall.
+const RE2_SCENARIO_A_POS: [i32; 3] = [0x4972, 0, -0xC5C];
+const RE2_SCENARIO_A_ANGLE: u16 = 0x800;
 /// Where Scenario B starts (`Title_game_init`).
 const RE2_SCENARIO_B_ROOM: &str = "104";
 const RE2_SCENARIO_B_POS: [i32; 3] = [-0x4600, 0, -0x54DA];
@@ -12868,6 +13076,16 @@ impl App {
             .save_screen
             .as_deref()
             .is_some_and(|entry| self.pack.contains(entry));
+        // The gallery's bits a game's results opened (`Set_registry_flg`),
+        // which config.ini's `GALLERY0` to `GALLERY4` keep.
+        if let Mode::Play(session) = &self.mode
+            && let Some(result) = &session.game.re2_result
+            && let Some(words) = self.player_options.title_gallery.as_mut()
+        {
+            for (word, bits) in words.iter_mut().zip(result.gallery()) {
+                *word |= bits;
+            }
+        }
         let special = i64::from(self.player_options.title_special.unwrap_or(15));
         let mut args = vec![
             ("folder_saves", ScreenArg::Bool(folder_saves)),
@@ -18543,11 +18761,33 @@ struct Re2Sounds {
     banks: crate::se2::Banks,
     /// The room's PlayStation VAB, for a room without a PC bank.
     vab: Option<door2::vab::Vab>,
-    /// This tick's `SsPlay`s, for the trace: `(type, index, volume, pan)`.
-    played: Vec<(u8, u8, u8, i32)>,
+    /// This tick's `SsPlay`s, for the trace: `(type, index, volume, pan)`,
+    /// the volume as `Vol_3D_l` holds it (a tone's level sign-extended).
+    played: Vec<(u8, u8, u16, i32)>,
+    /// The results' room is loaded (`Result_init`'s `Snd_room_load` of a
+    /// room header at `0x995BA0` whose sound tables point into the data
+    /// `end00.adt` was loaded to, `Mem_top`).
+    results_room: bool,
 }
 
 impl Re2Sounds {
+    /// `Snd_se_on`'s level (`Vol_3D_l`, the tone's byte sign-extended) for
+    /// the room's `slot` while the results' room is loaded: what the
+    /// picture's memory gives the save screen's two keys, as the recordings
+    /// have it (`result_leon_a_save`); the bytes are the sheets' after the
+    /// load made surfaces of them, which arklay doesn't hold. No sound is
+    /// heard. `None` outside the results.
+    fn results_room_level(&self, slot: u8) -> Option<u16> {
+        if !self.results_room {
+            return None;
+        }
+        match slot {
+            0x22 => Some(0xFFFA),
+            0x24 => Some(1),
+            _ => None,
+        }
+    }
+
     /// `scenario` picks the room's folder; `player`, `pPl.Id`, the core
     /// bank (`Snd_load_core`).
     fn load(
@@ -18657,6 +18897,13 @@ fn play_re2_sounds(
                     forced: Option<(u8, i32)>,
                     placed: Option<u8>,
                     enemy: bool| {
+        // The results' room: its level is logged, and nothing is heard.
+        if id.kind == Kind::Room
+            && let Some(level) = sounds.results_room_level(id.slot)
+        {
+            played.push((id.kind.index() as u8, id.slot, level, 0));
+            return None;
+        }
         let cut = re2
             .placement_cut(placed)
             .and_then(|placed| room.cuts.get(usize::from(placed)))
@@ -18692,7 +18939,7 @@ fn play_re2_sounds(
         } else {
             (tone_volume, 0)
         };
-        played.push((id.kind.index() as u8, id.slot, volume, pan));
+        played.push((id.kind.index() as u8, id.slot, u16::from(volume), pan));
         let logged = Some((volume, pan));
         let Some(mixer) = music.as_mut() else {
             return logged;
@@ -20605,6 +20852,125 @@ fn new_game_state(
 }
 
 /// A new RE2 game's room music, from `INIT_TBL.DAT`.
+/// `FUN_004b73c0` (`0x4B73C0`) after a main game's results: the next
+/// scenario's game, the other character's other scenario (`fg_status`'s
+/// `0x80000000` and `0x40000000` both turned), as a new game of it starts
+/// (its `INIT_TBL.DAT` row, `Stage_init_item`, the start room and place),
+/// with what the clear carries over: `hard_mode` and `censorship_off`,
+/// the records (`fg_zapping`: all of a scenario A's to a B, a B's 0x13 and
+/// 0x14 to an A), the extras word's 0x1, the special weapons `earned` puts
+/// in the box from its third slot (`0x995B48`'s 0x10, 0x20 and 0x40, the
+/// last also the extras word's 0x12), and the save count at `0xFFFF`, so
+/// that the save's write makes it 0. The kills (`0x98E9B8`), the clears
+/// (`0x98EE7A`) and `nExtremeLv` (the cleared game's saves) aren't kept.
+fn re2_next_scenario_game(
+    pack: &Pack,
+    cleared: &game::GameState,
+    earned: Option<crate::result2::Earned>,
+    options: player::Options,
+) -> Result<game::GameState> {
+    use crate::scd2::host::STATUS_BANK;
+    let claire = !cleared.re2.flag(STATUS_BANK, 0);
+    let scenario_b = !cleared.re2.flag(STATUS_BANK, 1);
+    let character = u8::from(claire);
+    let id = if scenario_b {
+        RoomId::from_room_and_player(RE2_SCENARIO_B_ROOM, character)?
+    } else {
+        new_game_id(pack, character)
+    };
+    let loaded = load_room(pack, id)?;
+    let mut options = options;
+    options.new_game = crate::ui::NewGameChoice {
+        // `fg_status & 0xC4000000` keeps EASY's bit for `Stage_init_item`.
+        easy: cleared.re2.easy(),
+        hard_mode: cleared.re2.hard_mode,
+        censorship_off: cleared.re2.censorship_off,
+        extra_player: 0,
+    };
+    let mut game = new_game_state(pack, id, &loaded, options);
+    game.is_re2_room = loaded.re2_vm.is_some();
+    game.re2.scenario_b = scenario_b;
+    game.re2.save_place = game::save2::new_game_place(character, scenario_b);
+    seed_re2_music_table(pack, &mut game, scenario_b);
+    let re2 = game.is_re2_room;
+    seed_new_game(pack, &mut game, character, re2);
+    seed_re2_save_count(&mut game, re2);
+    seed_new_game_choice(&mut game, options, re2);
+    apply_pack_setup(pack, &mut game);
+    game.re2.hard_mode = cleared.re2.hard_mode;
+    game.re2.censorship_off = cleared.re2.censorship_off;
+    game.re2.set_flag(STATUS_BANK, 0, u8::from(claire));
+    game.re2.set_flag(STATUS_BANK, 1, u8::from(scenario_b));
+    // `FUN_004b7860`: the save work is the row's record, where neither
+    // `FUN_004b73c0` nor `Stage_init_item` writes over it: the script
+    // variables, `Pri_be_flg` and `fg_key`.
+    let table = pack.read(crate::bgm2::INIT_TABLE_ENTRY)?;
+    let row = save::re2_image::init_row(&game);
+    if let Some(record) = save::re2_image::init_record(&table, row) {
+        let word = |offset: usize| {
+            u32::from_le_bytes(record[offset..offset + 4].try_into().unwrap_or_default())
+        };
+        for (index, var) in game.re2.vars.iter_mut().take(0x24).enumerate() {
+            *var = u16::from_le_bytes([record[0x348 + index * 2], record[0x349 + index * 2]]);
+        }
+        for camera in 0..16 {
+            for (index, flags) in game.re2.banks[13 + camera].iter_mut().take(4).enumerate() {
+                *flags = word(0x484 + camera * 0x10 + index * 4);
+            }
+        }
+        game.re2.door_locks = [word(0x590), word(0x594)];
+    }
+    let player = &mut game.entities[0];
+    // `DAT_0098a046`, which `Save_push` saves as the life.
+    player.health = 200;
+    if scenario_b {
+        player.pos = RE2_SCENARIO_B_POS;
+        player.angle = RE2_SCENARIO_B_ANGLE;
+    } else {
+        player.pos = RE2_SCENARIO_A_POS;
+        player.angle = RE2_SCENARIO_A_ANGLE;
+    }
+    // The save count, which the save's write raises to 0.
+    game.state_bytes[usize::from(game::STATE_BYTE_SAVES)] = 0xFF;
+    game.re2.saves_high = 0xFF;
+    let zapping = earned.map_or(
+        [cleared.re2.banks[29][0], cleared.re2.banks[29][1]],
+        |earned| earned.zapping,
+    );
+    if scenario_b {
+        game.re2.banks[29][0] = zapping[0];
+        game.re2.banks[29][1] = zapping[1];
+    } else {
+        // `Flg_on(fg_zapping, 0x14)` and `0x13` from the clear's records.
+        game.re2.banks[29][0] |= zapping[0] & (0x8000_0000 >> 0x13 | 0x8000_0000 >> 0x14);
+    }
+    // `& 1`: the extras word keeps its lowest bit alone.
+    game.re2.extras = cleared.re2.extras & 1;
+    let flags = earned.map_or(0, |earned| earned.flags);
+    let mut slot = 2;
+    for (flag, id, count) in [
+        (
+            crate::result2::FLAG_SUBMACHINE,
+            crate::result2::SUBMACHINE,
+            0xFF,
+        ),
+        (crate::result2::FLAG_ROCKET, crate::result2::ROCKET, 0xFF),
+        (crate::result2::FLAG_GATLING, crate::result2::GATLING, 1),
+    ] {
+        if flags & flag == 0 {
+            continue;
+        }
+        if id == crate::result2::GATLING {
+            game.re2.extras |= 0x8000_0000 >> crate::result2::GATLING;
+        }
+        if let Some(entry) = game.re2.item_box.get_mut(slot) {
+            *entry = [id, count, 1];
+        }
+        slot += 1;
+    }
+    Ok(game)
+}
+
 fn seed_re2_music_table(pack: &Pack, game: &mut game::GameState, scenario_b: bool) {
     let row = usize::from(game.id.player_flag & 1) * 2 + usize::from(scenario_b);
     if let Some(table) = pack

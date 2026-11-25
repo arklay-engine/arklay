@@ -1216,7 +1216,8 @@ function ScreenApi:item_box(slot) end
 function ScreenApi:player_health() end
 
 ---The character byte's low two bits, which pick the portrait: `0` Chris,
----`1` Jill, `2`/`3` the alternates.
+---`1` Jill, `2`/`3` the alternates. In an RE 2 game bit 0 is Claire and
+---bit 1 the scenario B.
 ---@return integer
 function ScreenApi:character() end
 
@@ -1627,7 +1628,8 @@ local Re2Computer = {}
 ---@class Re2Result
 ---@field pieces { flags: integer, colour: integer }[] The executable's 33 pieces (`pieces[n + 1]` is piece `n`): bit 0 of `flags` shows it, 4 and 8 fade it in and out; `colour` is `0xRRGGBB`, `0x808080` the art's own.
 ---@field drawn boolean `Result_draw_quads` drew the pieces this tick.
----@field picture? integer The picture `Result_load_bg` last loaded, `ui/result/end1<n>`.
+---@field picture? integer The picture last loaded: `n` of `Result_load_bg`'s `ui/result/end1<n>`, or 9 for HARD's `sp_e`.
+---@field picture_name? string That picture's name under `ui/result/`: `end1<n>` or `sp_e`.
 ---@field background boolean The background shows the picture (`Bg_set_mode(0, 0)`) rather than black.
 ---@field digits integer[] The clear time's ten glyphs, `HH:MM:SS` and the saves.
 ---@field fade? { level: integer, mode: integer } Fade slot 0 as `System_trans` drew it.

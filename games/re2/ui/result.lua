@@ -6,9 +6,9 @@
 --
 -- The art is the original's: `end00.adt`'s four sheets (textures 0x12 to
 -- 0x15, `ui/result/end00_<k>`), and the pictures `Result_load_bg` loads
--- (`ui/result/end1<n>`). The pieces' strings, places and glyphs are the
--- executable's tables: `text_result_0` (0x52D178), `text_result` (0x52D308)
--- and `glyph_map` (0x52CF08).
+-- (`ui/result/end1<n>`) and HARD's (`ui/result/sp_e`). The pieces'
+-- strings, places and glyphs are the executable's tables: `text_result_0`
+-- (0x52D178), `text_result` (0x52D308) and `glyph_map` (0x52CF08).
 --
 -- Every piece and digit is a `POLY_FT4` on the same depth (10), and Marni
 -- draws a depth's primitives last-added first: the digits under the pieces,
@@ -133,11 +133,11 @@ function M.draw(api)
         return
     end
     local ox, oy = api:width() // 2 - 160, api:height() // 2 - 120
-    if view.background and view.picture then
+    if view.background and view.picture_name then
         s.pictures = s.pictures or {}
-        local p = view.picture
+        local p = view.picture_name
         if s.pictures[p] == nil then
-            s.pictures[p] = api:picture("ui/result/end1" .. p) or false
+            s.pictures[p] = api:picture("ui/result/" .. p) or false
         end
         if s.pictures[p] then
             api:draw_background(s.pictures[p], ox, oy)
