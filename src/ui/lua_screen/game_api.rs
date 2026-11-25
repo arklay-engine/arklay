@@ -344,6 +344,43 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         Ok((1..=0x13).contains(&item) && api.game().is_some_and(|game| game.re2.infinite(item)))
     });
 
+    // `re2_result()`: what RE 2's results draw this tick (`result2::View`):
+    // each piece's `flags` and `colour` (`pieces[n + 1]` for piece `n`),
+    // whether the pieces are `drawn`, the `picture` last loaded and whether
+    // the `background` shows it, the time's ten `digits` (glyphs), and fade
+    // slot 0 as drawn (`fade = {level, mode}`), or nil while none run.
+    methods.add_method("re2_result", |lua, api, ()| {
+        let Some(view) = api
+            .game()
+            .and_then(|game| game.re2_result.as_deref())
+            .map(crate::result2::Result::view)
+        else {
+            return Ok(mlua::Value::Nil);
+        };
+        let table = lua.create_table()?;
+        let pieces = lua.create_table()?;
+        for (index, (flags, colour)) in view.flags.iter().zip(view.colours).enumerate() {
+            let piece = lua.create_table()?;
+            piece.set("flags", *flags)?;
+            piece.set("colour", colour)?;
+            pieces.set(index + 1, piece)?;
+        }
+        table.set("pieces", pieces)?;
+        table.set("drawn", view.drawn)?;
+        if let Some(picture) = view.picture {
+            table.set("picture", picture)?;
+        }
+        table.set("background", view.background)?;
+        table.set("digits", view.digits.to_vec())?;
+        if let Some((level, mode)) = view.fade {
+            let fade = lua.create_table()?;
+            fade.set("level", level)?;
+            fade.set("mode", mode)?;
+            table.set("fade", fade)?;
+        }
+        Ok(mlua::Value::Table(table))
+    });
+
     // `re2_slot(slot)`: the id and count of RE2's `Item_work` slot `slot`;
     // 10 is the personal item.
     methods.add_method("re2_slot", |_lua, api, slot: u8| {

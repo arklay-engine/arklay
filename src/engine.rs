@@ -228,6 +228,9 @@ const RE2_DEMO_KEY_FADE: i32 = 0x800;
 /// `Game_loop`'s mode 2 on the tick the fade is done, and its
 /// `Task_sleep(2)`.
 const RE2_DEMO_BLACK_TICKS: u8 = 2;
+/// The script variable an extra mode's game counts its clear time in
+/// (`0x98EB2A`), which `Result_retrieve` reads.
+const RESULT_TIME_VAR: usize = 35;
 /// `Cd_vol_0` as RE 2's prologue sets it for its narration (`0x6B`).
 const PROLOGUE_VOICE_LEVEL: u8 = 0x6B;
 /// How long a screen's music fade takes: the prologue's
@@ -747,6 +750,7 @@ pub fn run_with_options(
                         re2_scene: None,
                         re2_banks: None,
                         re2_typewriter: None,
+                        re2_result: None,
                         re2_game_mode: None,
                         re2_option: None,
                         re2_save_screen: None,
@@ -2367,6 +2371,11 @@ struct GameSession {
     re2_item_screen: Option<Box<LuaScreen>>,
     /// RE2's computer console (`ui/computer.lua`), while game mode 7 runs.
     re2_computer_screen: Option<Box<LuaScreen>>,
+    /// RE2's results' screen (`ui/result.lua`), which draws what the
+    /// results' task leaves each tick.
+    re2_result_screen: Option<Box<LuaScreen>>,
+    /// The results' `Result_exit` has run: the title owns the next update.
+    re2_result_over: bool,
     /// The ticks since the get-item window's first, 1 on it: its open fade
     /// runs on these whatever the window's phase.
     re2_item_ticks: u8,
@@ -2869,6 +2878,38 @@ fn re2_live_pad(ui: &UiInput, input: &player::Input) -> u16 {
         | held(input.map_held || ui.map, 0x0010)
         | held(input.aim || input.aim_pressed, 0x0008)
         | held(input.lock_drop || input.lock_pressed, 0x0004)
+}
+
+/// The music RE 2's results drive ([`crate::result2::MusicHost`]): the
+/// game's, with `fg_system` and the place as the results' tick started.
+struct Re2ResultMusic<'a> {
+    music: &'a mut crate::bgm2::Music,
+    system: u32,
+    place: crate::bgm2::Place,
+    sound: bool,
+}
+
+impl crate::result2::MusicHost for Re2ResultMusic<'_> {
+    fn call(&mut self, music: crate::result2::Music) {
+        if !self.sound {
+            return;
+        }
+        match music {
+            crate::result2::Music::FadeOut(time) => self.music.fade_on(time, self.system),
+            crate::result2::Music::Main(id) => self.music.play_main(id, self.system),
+            crate::result2::Music::Control(word) => {
+                // `Snd_bgm_ctr`'s word: the target and the operation in the
+                // top byte's nibbles, then the channel, the volume, the pan.
+                let [pan, volume, channel, top] = word.to_le_bytes();
+                self.music
+                    .control([top >> 4, top & 0xF, channel, volume, pan], self.place);
+            }
+        }
+    }
+
+    fn fading(&self) -> bool {
+        self.music.fade_rtn().0 != 0
+    }
 }
 
 /// A press that ends RE 2's demo whatever the reel holds: START and the
@@ -3514,6 +3555,8 @@ impl GameSession {
             re2_stopped_frame_draws: Vec::new(),
             re2_item_screen: None,
             re2_computer_screen: None,
+            re2_result_screen: None,
+            re2_result_over: false,
             re2_item_ticks: 0,
             menu_fade_pending: false,
             menu_fade_draw: None,
@@ -4206,6 +4249,7 @@ impl GameSession {
             || self.typewriter_open.is_some()
             || self.re2_save.is_some()
             || self.itembox_open_delay > 0
+            || self.game.re2_result.is_some()
     }
 
     /// Start a cutscene skip: silence the voice and the one-shots and park the
@@ -4468,6 +4512,10 @@ impl GameSession {
     ) -> Result<()> {
         // The native in-game menu owns the frozen tick; the app drives it.
         if self.system_menu_open {
+            return Ok(());
+        }
+        // RE 2's results own task 0 from the tick `Game_loop` chains them.
+        if self.game.is_re2_room && self.tick_re2_result(pack, &ui, &input) {
             return Ok(());
         }
         // RE2's pad has one button for the confirm and the shot (raw 0x80,
@@ -5924,7 +5972,9 @@ impl GameSession {
     /// `Card_access` runs at the game's 30 Hz (`Cardaccess_init` keeps
     /// `bVSyncRate`, `0x98F07A`, at 2).
     fn ui_tick_rate(&self) -> bool {
-        self.room_frozen() && self.re2_save != Some(Re2Save::Screen)
+        // The results run on `Result_init`'s limiter 0, the 16 ms one.
+        (self.room_frozen() && self.re2_save != Some(Re2Save::Screen))
+            || self.game.re2_result.is_some()
     }
 
     /// Whether a pause-menu screen owns the tick, so the room is frozen and
@@ -6602,6 +6652,145 @@ impl GameSession {
         ) {
             Ok(screen) => *re2_item_screen = Some(Box::new(screen)),
             Err(err) => crate::warning!("warning: get-item window's art unavailable: {err:#}"),
+        }
+    }
+
+    /// RE 2's results (`Result`, [`crate::result2`]) on a tick of the game:
+    /// `Game_loop`'s step 2 chains them on `fg_system`'s `0x200000`, in
+    /// place of the game, on the tick it sees the bit, and from the next
+    /// they run as task 0, with `Snd_se_call`'s music after them. Only an
+    /// extra mode's (`fg_status`'s `0x2000000`) are ported; the main game's
+    /// bit does nothing yet. Returns whether the results own the tick.
+    fn tick_re2_result(&mut self, pack: &Pack, ui: &UiInput, input: &player::Input) -> bool {
+        use crate::scd2::host::{FG_STATUS_EXTRA, FG_SYSTEM_RESULT, FG_SYSTEM_TOFU};
+        if self.game.re2_result.is_none() {
+            if !self.game.re2.flag(0, FG_SYSTEM_RESULT) || !self.game.re2.flag(1, FG_STATUS_EXTRA) {
+                return false;
+            }
+            // `Game_loop` tests the flag in its step 2, the room's own tick:
+            // not under a screen, a door or a film, which run in its place.
+            if self.room_frozen()
+                || self.re2_save.is_some()
+                || self.re2_config.is_some()
+                || self.transition.is_some()
+                || self.movie.is_some()
+            {
+                return false;
+            }
+            // The trace's `snd` is this tick's `SsPlay`s: the results play
+            // none.
+            self.re2_sounds.played.clear();
+            // The rest of the chain's tick: `System_trans` and the music.
+            self.room_fade.tick();
+            let fade = crate::result2::Fade {
+                level: self.room_fade.state(),
+                add: self.room_fade.counter() as i16,
+                mode: self.room_fade.fade_type(),
+            };
+            self.room_fade = transition::Fade::inactive();
+            self.room_fade_draw = None;
+            let tofu = self.game.re2.flag(0, FG_SYSTEM_TOFU);
+            let seconds = self.game.re2.vars[RESULT_TIME_VAR] as i16;
+            self.game.re2_result = Some(Box::new(crate::result2::Result::new(
+                true,
+                tofu,
+                seconds,
+                0,
+                crate::result2::Result::boot_colours(),
+                fade,
+            )));
+            self.open_re2_result_screen(pack);
+            bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
+            return true;
+        }
+        if self.re2_result_over {
+            return true;
+        }
+        self.re2_sounds.played.clear();
+        // The raw pad's buttons `Pad_set` reads, START's (`0x800`) with them.
+        let raw = re2_live_pad(ui, input)
+            | if ui.start { 0x0800 } else { 0 }
+            | if ui.option { 0x0100 } else { 0 };
+        let mut music = Re2ResultMusic {
+            system: self.game.re2.banks[0][0],
+            place: self.game.re2_music_place(),
+            // `DirectSoundEnable`: with no sound device the music's calls
+            // return.
+            sound: self.sound_device,
+            music: &mut self.game.re2.music,
+        };
+        let Some(result) = self.game.re2_result.as_mut() else {
+            return false;
+        };
+        let out = result.tick(raw, &mut music);
+        bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
+        if out.exit {
+            // `Result_exit` chains the title on this tick, which the title
+            // opens on as it chained it: its task runs from the next.
+            self.re2_result_over = true;
+            self.return_title_requested = true;
+        }
+        true
+    }
+
+    /// Open RE 2's results' screen (`ui/result.lua`), which draws what the
+    /// results' task leaves each tick.
+    fn open_re2_result_screen(&mut self, pack: &Pack) {
+        let Self {
+            re2_result_screen,
+            save_dir,
+            screen_statics,
+            font,
+            text,
+            game,
+            ..
+        } = self;
+        let mut cx = UiContext {
+            statics: Some(screen_statics),
+            authentic: game.player_options.authentic,
+            pack,
+            save_dir,
+            font: font.as_ref(),
+            text: Some(text),
+            ticks: game.frame,
+            cues: std::cell::RefCell::new(Vec::new()),
+            game: None,
+        };
+        match LuaScreen::open_screen_with_game("result", &[], ScreenAction::Resume, &mut cx, game) {
+            Ok(screen) => *re2_result_screen = Some(Box::new(screen)),
+            Err(err) => {
+                *re2_result_screen = None;
+                crate::warning!("warning: the results' screen is unavailable: {err:#}");
+            }
+        }
+    }
+
+    /// Draw RE 2's results' screen over a black frame.
+    fn draw_re2_result(&mut self, pack: &Pack) {
+        let Self {
+            re2_result_screen,
+            save_dir,
+            screen_statics,
+            font,
+            text,
+            game,
+            framebuffer,
+            ..
+        } = self;
+        framebuffer.clear();
+        if let Some(screen) = re2_result_screen.as_mut() {
+            let cx = UiContext {
+                statics: Some(screen_statics),
+                authentic: game.player_options.authentic,
+                pack,
+                save_dir,
+                font: font.as_ref(),
+                text: Some(text),
+                ticks: game.frame,
+                cues: std::cell::RefCell::new(Vec::new()),
+                game: Some(game),
+            };
+            screen.draw(&cx, framebuffer);
         }
     }
 
@@ -10292,6 +10481,13 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.game.re2_typewriter_trace()),
+            // Task 0 runs the title from `Result_exit`'s tick.
+            re2_result: self.game.is_re2_room.then(|| match &self.game.re2_result {
+                Some(result) if !self.re2_result_over => {
+                    result.trace_fields(self.game.re2.music.fade_rtn())
+                }
+                _ => "res=- rest=- rfade=- rmus=-".to_string(),
+            }),
             // The typewriter's hand-off and the option screen's set a game
             // mode so far, and the option key's press.
             re2_game_mode: self.game.is_re2_room.then(|| {
@@ -10462,6 +10658,13 @@ impl GameSession {
                     None => self.view,
                 }
             };
+        }
+        // RE 2's results draw their own screen in place of the room.
+        if self.game.re2_result.is_some() {
+            self.framebuffer.view = video::View::default();
+            self.gpu_scene_visible = false;
+            self.draw_re2_result(pack);
+            return Ok(());
         }
         // The cutscene skip's fast-forward shows only black: the scene is
         // not drawn at all while its ticks run back to back.
@@ -11857,6 +12060,9 @@ struct App {
     /// opens the title instead of running another gameplay tick, so the tick
     /// that finished the death is still traced with the session's final state.
     pending_return_title: bool,
+    /// The title was opened by RE 2's results: a game's trace goes on with
+    /// the title's lines.
+    re2_result_title: bool,
     /// The stage RE 2's `Set_room` last set (`0x989E7D`), which outlasts the
     /// game: 1 from the boot, then the stage of every room a session loads.
     re2_stage: u8,
@@ -12024,6 +12230,7 @@ impl App {
             demos,
             next_demo: 0,
             pending_return_title: false,
+            re2_result_title: false,
             re2_stage: 1,
             pending_voice_ticks: None,
             pending_sound: false,
@@ -12663,7 +12870,20 @@ impl App {
             // nothing sets again before `Title_init`. `Rnd`'s state is the
             // game's too, for the gallery's models to draw from.
             if let Mode::Play(session) = &self.mode {
-                let add = i64::from(session.room_fade.counter());
+                // After the results it is theirs, as `Result_exit` left it,
+                // and so are the task's steps.
+                let add = match &session.game.re2_result {
+                    Some(result) => {
+                        let (step, sub) = result.task();
+                        args.push(("task_step", ScreenArg::Int(i64::from(step))));
+                        args.push(("task_sub", ScreenArg::Int(i64::from(sub))));
+                        // `Result_init` chose the title's limiter (0).
+                        args.push(("limiter", ScreenArg::Int(0)));
+                        self.re2_result_title = true;
+                        i64::from(result.fade().add)
+                    }
+                    None => i64::from(session.room_fade.counter()),
+                };
                 args.push(("fade_add", ScreenArg::Int(add)));
                 if session.game.is_re2_room {
                     let rnd = i64::from(session.game.re2.rnd.0);
@@ -12994,6 +13214,8 @@ impl App {
 
     /// Enter a gameplay session, opening audio on the interactive path.
     fn start_session(&mut self, mut session: Box<GameSession>) {
+        // A new game's trace is its own, not the title's after its results.
+        self.re2_result_title = false;
         // A session started from under the load screen (the script host's
         // can be) leaves no title asleep, and its screens keep their work
         // where the title's do, as the original's statics are the

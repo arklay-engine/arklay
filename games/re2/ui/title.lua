@@ -3122,7 +3122,7 @@ end
 -- and a demo a key ended (`0x98F1BB`), to the title's picture. `fg_system`
 -- is the game's, of which `Init_global` keeps `0x1000899`: an extra mode's
 -- game comes back to that mode's title (`Capcom_logo`'s step 9).
-local function game_return(api, demo, fade_add, fg_system)
+local function game_return(api, demo, fade_add, fg_system, task_step, task_sub, limiter)
     local handed = take_handed(api)
     for _, name in ipairs(HANDED) do
         s[name] = handed[name] or s[name]
@@ -3132,12 +3132,15 @@ local function game_return(api, demo, fade_add, fg_system)
     s.fades[3].mode = handed.fade3 or s.fades[3].mode
     -- `Title_game_init` chose the game's limiter (`0x98F07A`), which
     -- stands until `Title_init`: the logo's wait runs at the game's pace.
-    s.limiter = 2
+    -- The results' `Result_init` chose the title's (0) before they ran.
+    s.limiter = limiter or 2
     -- Fade 0 is the game's, done: its step is what the game last set.
     s.fades[0].mode = 2
     s.fades[0].add = fade_add or 0
     s.background = nil
-    s.init, s.sub = 0, 0
+    -- The task's steps as the game left them: `Game_loop` puts its step to 0
+    -- as it chains the title, `Result_exit` leaves the results' (3 and 5).
+    s.init, s.sub = task_step or 0, task_sub or 0
     s.fg_system = ((fg_system or 0) & 0x1000899) | (demo and FG_FROM_LOGO or 0)
     -- A game's `Title_game_init` left `0x99CF6C` set, a demo's (`fg_system`'s
     -- 0x2000) clear: the mode's title an extra goes back to plays its cues
@@ -3280,7 +3283,7 @@ function M.open(api, args)
     s.rnd = (args and args.rnd or Gallery.RND_BOOT) & 0xFFFF
     -- After a game (`"game"`) or a demo played to its end (`"demo"`).
     if args and args.after then
-        game_return(api, args.after == "demo", args.fade_add, args.fg_system)
+        game_return(api, args.after == "demo", args.fade_add, args.fg_system, args.task_step, args.task_sub, args.limiter)
     end
     -- config.ini's SPECIAL, read as the signed byte it is.
     local special = args and args.special or 15

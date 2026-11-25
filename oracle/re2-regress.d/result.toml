@@ -1,0 +1,119 @@
+# The results after a cleared game (`Result`, 0x4B57C0; oracle/re2.md, "The results"). `Game_loop` chains `Result` on
+# `fg_system`'s 0x200000, which room 11C's `main_02` raises at the end of the game. These runs raise it from the start
+# of a new game in room 100, with the bits of the game they stand for, and compare the results' tick by tick, then the
+# title `Result_exit` chains.
+
+# An extra's results: `fg_status`'s 0x2000000 (flag 1:6) takes `Result_01`'s step 0x11, and `fg_system`'s 8 the 4th
+# Survivor's title after it. The clear time is script variable 35.
+[[run]]
+name = "result_4th"
+room = "new"
+offset = 0
+# recorded for 4500 ticks; `Result_exit` chains the title on 3801 (result_4th_title)
+ticks = 3801
+setup_script = "result_4th.lua"
+input = "none.txt"
+fields = "res,rest,rfade,rmus,bgm,snd"
+# Tick 0 is the game's, whose room fade arklay keeps a tick apart from the original's on a new game's first ticks
+# (`fade` isn't compared in any run); `Result_init` puts it off on tick 1, keeping its step and blend.
+ignore = [[0, "rfade"]]
+frames = [0, 3800]
+frame_max_mean = 0.7
+expect = "match"
+record = "--flag 0:28 --flag 1:6 --flag 0:10 --var 35:330"
+
+# The title after it, from the tick `Result_exit` chains it: `Init_global` keeps `fg_system`'s 8, so `Capcom_logo`
+# goes back to the 4th Survivor's title, as after an extra's death (special_4th_die).
+[[run]]
+name = "result_4th_title"
+ref = "result_4th"
+room = "new"
+offset = 0
+ticks = 4500
+compare_from = 3801
+setup_script = "result_4th.lua"
+input = "none.txt"
+# `ti` isn't compared, nor `tlogo` and `tx` before the mode's title loads: they hold the title's statics as its new
+# game handed them over (the menu's row, the slide, the logo's place), which the record's title route set and arklay's
+# scripted new game, which has no title, doesn't. The task's steps, the fades, the logo's wait and the mode's title
+# match.
+fields = "tlogo,tfade,tsel,tx,tfade2,tfade3,snd"
+ignore = [[3801, 3923, "tlogo"], [3801, 3923, "tx"]]
+frames = [3801, 4499]
+frame_max_mean = 0.1
+expect = "match"
+
+# The same for TO-FU (`fg_system`'s 1): its picture and its name.
+[[run]]
+name = "result_tofu"
+room = "new"
+offset = 0
+# recorded for 4500 ticks; `Result_exit` chains the title on 3801
+ticks = 3801
+setup_script = "result_tofu.lua"
+input = "none.txt"
+fields = "res,rest,rfade,rmus,bgm,snd"
+# As result_4th's.
+ignore = [[0, "rfade"]]
+frames = [0, 3800]
+frame_max_mean = 0.7
+expect = "match"
+record = "--flag 0:28 --flag 0:31 --flag 1:6 --flag 0:10 --var 35:330"
+
+# To-fu's title after it (`fg_system`'s 9).
+[[run]]
+name = "result_tofu_title"
+ref = "result_tofu"
+room = "new"
+offset = 0
+ticks = 4500
+compare_from = 3801
+setup_script = "result_tofu.lua"
+input = "none.txt"
+# `ti` isn't compared, nor `tlogo` and `tx` before the mode's title loads: they hold the title's statics as its new
+# game handed them over (the menu's row, the slide, the logo's place), which the record's title route set and arklay's
+# scripted new game, which has no title, doesn't. The task's steps, the fades, the logo's wait and the mode's title
+# match.
+fields = "tlogo,tfade,tsel,tx,tfade2,tfade3,snd"
+ignore = [[3801, 3923, "tlogo"], [3801, 3923, "tx"]]
+frames = [3801, 4499]
+frame_max_mean = 0.1
+expect = "match"
+
+
+# The 4th Survivor's results with the skip: a key before step 0x13's count of 300 reveals at once, one after it ends
+# the results.
+[[run]]
+name = "result_4th_skip"
+room = "new"
+offset = 0
+# recorded for 3000 ticks; `Result_exit` chains the title on 2399
+ticks = 2399
+setup_script = "result_4th.lua"
+input = "result_skip.txt"
+fields = "res,rest,rfade,rmus,bgm,snd"
+# As result_4th's.
+ignore = [[0, "rfade"]]
+frames = [0, 2398]
+frame_max_mean = 0.7
+expect = "match"
+record = "--flag 0:28 --flag 1:6 --flag 0:10 --var 35:330"
+
+[[run]]
+name = "result_4th_skip_title"
+ref = "result_4th_skip"
+room = "new"
+offset = 0
+ticks = 3000
+compare_from = 2399
+setup_script = "result_4th.lua"
+input = "result_skip.txt"
+# `ti` isn't compared, nor `tlogo` and `tx` before the mode's title loads: they hold the title's statics as its new
+# game handed them over (the menu's row, the slide, the logo's place), which the record's title route set and arklay's
+# scripted new game, which has no title, doesn't. The task's steps, the fades, the logo's wait and the mode's title
+# match.
+fields = "tlogo,tfade,tsel,tx,tfade2,tfade3,snd"
+ignore = [[2399, 2521, "tlogo"], [2399, 2521, "tx"]]
+frames = [2399, 2999]
+frame_max_mean = 0.1
+expect = "match"

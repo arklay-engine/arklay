@@ -129,6 +129,28 @@ KEY_DEMO_COUNT = 0x006893A0
 KEY_DEMO_STEP = 0x006893D8  # and the kept step after it (`0x6893DC`)
 KEY_DEMO_ROW = 0x00525AB4
 GAME_LOOP = 0x004BF810  # `Game_loop`, which the title's task chains to: play
+TITLE = 0x005035B0  # `Title`, task 0's routine on the title
+RESULT = 0x004B57C0  # `Result`, which `Game_loop` chains on `fg_system`'s 0x200000: a cleared game's results
+# `Result`'s work: the routine `Result_mvtbl` runs (`0x995B80`: 0 `Result_00`'s fade in, 1 `Result_01`, 2 `Result_02`'s
+# fade out), `Result_01`'s step (`0x995C24`) and count (`0x995C38`), the flags (`0x995B48`), the pieces' fade step
+# (`0x995B84`), the skip's state (`0x99C870`), the rank (`0x99CE20`) and the three scores (`0x995B45` time, `0x995B44`
+# saves, `0x99CE18` the scenario's), the digits `Result_retrieve` writes (`Reslt`, `0x995B30`, ten glyphs) and the
+# clear time and saves it read (`0x99CE22`, four bytes).
+RESULT_MV = 0x00995B80
+RESULT_STEP = 0x00995C24
+RESULT_COUNT = 0x00995C38
+RESULT_FLAGS = 0x00995B48
+RESULT_FADE_STEP = 0x00995B84
+RESULT_SKIP = 0x0099C870
+RESULT_RANK = 0x0099CE20
+RESULT_DIGITS = 0x00995B30
+RESULT_TIME = 0x0099CE22
+# The pieces `Result_draw_quads` draws (`text_result_0`, 33 of 12 bytes): the flags (bit 0 shown, 4 fading in, 8
+# fading out), the depth, the string, the place and, at +8, the colour.
+RESULT_PIECES = 0x0052D178
+RESULT_PIECE_COUNT = 33
+MUSIC_FADE_RTN = 0x00693E8C  # `Fade_rtn`: `Snd_bgm_fade_ON`'s fade of the music, 0 when none runs
+MUSIC_FADE_TIME = 0x0069346F  # `Fade_time`, its count
 # `Prologue` (0x4CEFF0), task 1's routine from `Title_game_init`'s step 2 until it ends, and its work: the scroll's
 # and the zoom's waits, the sequence (`Prologue_mv`'s index), the step in it, its count, the sprites' mask, the
 # routine (`Prologue_r`'s index), the fade's flags and slot, the skip's gate and state, the frames drawn, the
@@ -1401,6 +1423,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     fields.append("scv=" + ",".join(f"{game.u16(SCD_VARIABLES + 2 * n):04x}" for n in range(4)))
     fields.append(player_trace(game))
     fields.append(f"atsce={game.u8(PL_AT_SCE):02x}")
+    fields.append(result_trace(game))
     fields.append("snd=" + ("/".join(game.sounds) or "-"))
     game.sounds.clear()
     if game.u32(FG_SYSTEM) & 0x100000:
@@ -1417,6 +1440,27 @@ def player_trace(game: Game) -> str:
         game.u8(EQUIPPED), game.u8(EQUIPPED + 2), game.u8(PL_STASH), game.u8(PL_STASH + 1),
         struct.unpack("<h", game.read(LIFE_STASH, 2))[0], game.u16(POISON_STATUS), game.u8(POISON_TIMER),
     ))
+
+
+def result_trace(game: Game) -> str:
+    """The results' state while task 0 runs `Result`: `res` (see `RESULT_MV`), `rest` the pieces shown (index, flags
+    and colour), `rfade` fade slot 0 and `rmus` the music's fade (`Fade_rtn`, `Fade_time`). `-` on other ticks."""
+    if game.u32(TASKS + 4) != RESULT:
+        return "res=- rest=- rfade=- rmus=-"
+    task = game.read(TASKS, 0x14)
+    pieces = game.read(RESULT_PIECES, RESULT_PIECE_COUNT * 12)
+    shown = [
+        f"{index}:{pieces[index * 12]:x}:{struct.unpack_from('<I', pieces, index * 12 + 8)[0]:x}"
+        for index in range(RESULT_PIECE_COUNT) if pieces[index * 12]
+    ]
+    return (
+        f"res={task[8]},{task[9]},{game.u8(RESULT_MV)},{game.u32(RESULT_STEP):x},{game.u32(RESULT_COUNT)},"
+        f"{game.u32(RESULT_FLAGS):x},{game.u32(RESULT_FADE_STEP):x},{game.u8(RESULT_SKIP)},{game.u16(RESULT_RANK)},"
+        f"{game.u8(0x995B45)},{game.u8(0x995B44)},{game.u8(0x99CE18)},"
+        f"{game.read(RESULT_DIGITS, 10).hex()},{game.read(RESULT_TIME, 4).hex()} "
+        f"rest={'/'.join(shown) or '-'} rfade={fade_slot(game, 0)} "
+        f"rmus={game.u8(MUSIC_FADE_RTN)},{game.u8(MUSIC_FADE_TIME)}"
+    )
 
 
 def die_trace(game: Game) -> str:
@@ -2102,7 +2146,11 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                     # This stop is the end of the tick before it.
                     if tick > 0:
                         pace.reached(tick - 1)
-                        trace.write(trace_line(game, tick - 1, pad) + "\n")
+                        line = trace_line(game, tick - 1, pad)
+                        if game.u32(TASKS + 4) == TITLE:
+                            # Task 0 has left the game for the title (the results' `Result_exit` chains it).
+                            line += " " + title_trace(game)
+                        trace.write(line + "\n")
                         if tick_log:
                             tick_log.write(f"{tick - 1} {time.monotonic() - session.capture_started:.4f}\n")
                         if args.shot_dir and args.shot_every and (tick - 1) % args.shot_every == 0:
@@ -2462,6 +2510,7 @@ def boot_trace_line(game: Game, tick: int, pad: int) -> str:
         "gal=" + gallery_trace(game),
         "galv=" + gallery_view_trace(game),
         key_config_trace(game),
+        result_trace(game),
     ]
     game.sounds.clear()
     return " ".join(fields)

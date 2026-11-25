@@ -87,6 +87,7 @@ pub mod raster;
 pub mod rdt;
 pub mod rdt2;
 pub mod render;
+pub mod result2;
 pub mod room;
 pub mod sap;
 pub mod save;

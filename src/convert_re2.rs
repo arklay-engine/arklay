@@ -22,6 +22,7 @@
 //! | `Common/Data/tmoji.bin` (TIM `k`) | `ui/title/tmoji_<k>.tim` |
 //! | `Common/Data/Title_o.adt`, `Title_o2.adt` | `ui/title/title_o.bmp`, `ui/title/title_o2.bmp` |
 //! | `Common/Data/open0<n>.adt` (TIM `k`), `open1<n>.adt` | `ui/prologue/open0<n>_<k>.tim`, `ui/prologue/open1<n>.bmp` |
+//! | `Common/Data/end00.adt` (TIM `k`), `end1<n>.adt`, `sp_e.adt` | `ui/result/end00_<k>.tim`, `ui/result/end1<n>.bmp`, `ui/result/sp_e.bmp` |
 //! | `Common/Data/room.adt`, `color2.adt` | `ui/option/room.bmp`, `ui/option/color2.bmp` |
 //! | `Common/Data/parts.tim`, `moji1.tim` | `ui/option/parts.tim`, `ui/option/moji1.tim` |
 //! | `Common/Data/spy_logo.tim`, `tofulogo.tim` | `ui/title/spy_logo.tim`, `ui/title/tofulogo.tim` |
@@ -593,6 +594,7 @@ pub(crate) fn convert(
         &mut warnings,
     )?;
     copy_prologue_art(&layout, &mut writer, &mut tally, &mut warnings)?;
+    copy_result_art(&layout, &mut writer, &mut tally, &mut warnings)?;
     copy_gallery_art(&layout, &mut writer, &mut tally, &mut warnings)?;
     copy_option_art(
         &layout,
@@ -790,7 +792,7 @@ fn copy_text(
 /// own code (the font's widths and colours, the message codes). A change to
 /// what [`packed_source_hash`] covers needs no bump. It carries on from the
 /// revision the two converters shared.
-pub const CONVERT_VERSION: u32 = 28;
+pub const CONVERT_VERSION: u32 = 29;
 
 /// The checked-in scripts the pack takes as they are: each entry and its
 /// source.
@@ -815,6 +817,7 @@ const SCRIPTS: &[(&str, &str)] = &[
         "ui/computer.lua",
         include_str!("../games/re2/ui/computer.lua"),
     ),
+    ("ui/result.lua", include_str!("../games/re2/ui/result.lua")),
     ("ui/title.lua", include_str!("../games/re2/ui/title.lua")),
     (
         "ui/save_load.lua",
@@ -2136,6 +2139,55 @@ fn copy_prologue_art(
             "no Common/Data/{}.adt; the prologue lacks its art",
             missing.join(", ").to_lowercase()
         ));
+    }
+    Ok(())
+}
+
+/// The results' art (`Result_init`, `Result_load_bg`, `0x4B5840`,
+/// `0x4B78B0`): `Common/Data/end00.adt`, an ADT stream of the four sheets of
+/// its words and pieces (textures 0x12 to 0x15), as
+/// `ui/result/end00_<k>.tim`; its full-screen pictures, `end10.adt` to
+/// `end18.adt` (`Result_load_bg`'s index: the character, the special
+/// weapon's, the 4th Survivor's and To-fu's), as `ui/result/end1<n>.bmp`;
+/// and HARD's, `sp_e.adt`, as `ui/result/sp_e.bmp`.
+fn copy_result_art(
+    layout: &Layout,
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let data_files = files_in(layout.common(&["Data"]))?;
+    let find = |stem: &str| {
+        data_files
+            .iter()
+            .find(|path| upper_parts(path).is_some_and(|(name, ext)| name == stem && ext == "ADT"))
+    };
+    match find("END00") {
+        Some(path) => {
+            let decoded =
+                adt::decode_sheets(&read(path)?).with_context(|| format!("{}", path.display()))?;
+            let tims = split_tims(&decoded).with_context(|| format!("{}", path.display()))?;
+            for (index, tim) in tims.into_iter().enumerate() {
+                let entry = format!("ui/result/end00_{index}.tim");
+                tally.add(writer, "ui", &entry, tim.to_vec())?;
+            }
+        }
+        None if layout.common.is_some() => {
+            warnings.push("no Common/Data/end00.adt; the results have no words".into());
+        }
+        None => {}
+    }
+    let pictures = (0..9)
+        .map(|n| (format!("END1{n}"), format!("end1{n}")))
+        .chain([("SP_E".to_string(), "sp_e".to_string())]);
+    for (stem, name) in pictures {
+        let Some(path) = find(&stem) else {
+            continue;
+        };
+        let decoded = adt::decode(&read(path)?).with_context(|| format!("{}", path.display()))?;
+        let image = adt::frame_image(&decoded).with_context(|| format!("{}", path.display()))?;
+        let entry = format!("ui/result/{name}.bmp");
+        tally.add(writer, "ui", &entry, bmp::encode_to_vec(&image)?)?;
     }
     Ok(())
 }

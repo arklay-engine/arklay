@@ -166,6 +166,8 @@ pub const CHANNELS: usize = 3 + SUB_CHANNELS;
 const SEQUENCES: usize = 1 + SUB_CHANNELS;
 /// A sequence's volume until a script changes it (`Snd_sys_init_sub2`).
 const SEQUENCE_VOLUME: u8 = 0x6e;
+/// The main's volume the results play theirs at.
+const RESULT_VOLUME: u8 = 100;
 /// `Seq_ctr[0]`, a sequence stopped by `sce_bgm_control`.
 const STATE_STOPPED: u8 = 2;
 /// `Seq_ctr[0]`, a sequence playing.
@@ -511,6 +513,63 @@ impl Music {
         }
         self.set_room(word, place);
         self.play_ck();
+    }
+
+    /// `Snd_bgm_fade_ON(time, 0x18)` (`0x4ED260`), as the results start: the
+    /// sequences that play fade, and `Snd_se_call` stops them all once
+    /// `Fade_time` is down to 1 and frees their banks a tick later. Nothing
+    /// under the demo's bit, or with no sound device (the caller's).
+    pub fn fade_on(&mut self, time: u8, system: u32) {
+        if system & SYSTEM_NO_MUSIC != 0 {
+            return;
+        }
+        self.door_fade = time;
+        for sequence in 0..SEQUENCES {
+            if self.sequences[sequence].state == STATE_PLAYING {
+                self.fade(sequence);
+            }
+        }
+    }
+
+    /// `Fade_rtn` and `Fade_time`: 1 while `Snd_bgm_fade_ON`'s fade counts,
+    /// 2 on the tick it has stopped the music and frees its banks next, 0
+    /// otherwise.
+    pub fn fade_rtn(&self) -> (u8, u8) {
+        if self.door_fade > 0 {
+            (1, self.door_fade)
+        } else if self.door_free {
+            (2, 1)
+        } else {
+            (0, 0)
+        }
+    }
+
+    /// `Snd_bgm_main` with a table word of its own (`pBgm_table`'s
+    /// `0xFF00 | id`) and `Seq_ctr[1]` 0, as the results play their music:
+    /// what is loaded stops and goes, main `id` loads with no sub, and its
+    /// sequence takes hold 0. The room's word (`Bgm`) stays.
+    pub fn play_main(&mut self, id: u8, system: u32) {
+        if system & SYSTEM_NO_MUSIC != 0 {
+            return;
+        }
+        if self.sequences[0].state != 0 {
+            self.stop(0);
+            self.sequences[0].state = 0;
+        }
+        for sequence in 1..SEQUENCES {
+            if self.sequences[sequence].loaded {
+                if self.sequences[sequence].state != 0 {
+                    self.stop(sequence);
+                    self.sequences[sequence].state = 0;
+                }
+                self.load(2 + sequence, None, 0);
+                self.sequences[sequence].loaded = false;
+            }
+        }
+        // `Seq_ctr[0]`'s volumes, 100 each.
+        self.sequences[0].volume = RESULT_VOLUME;
+        self.load_main(id, system);
+        self.sequences[0].hold = 0;
     }
 
     /// `Snd_bgm_ck`'s wait still holds what a room asks of the music.
@@ -927,6 +986,41 @@ mod tests {
         assert_eq!(music.channels[0].volume, 119);
         assert_eq!(music.channels[0].pan, 50);
         assert_eq!(music.channels[1].volume, 0);
+    }
+
+    /// The results' music (`result_4th`): `Snd_bgm_fade_ON(0xB4)` counts
+    /// 180 ticks, stops every sequence on the tick `Fade_time` reaches 1
+    /// (`Fade_rtn` 2) and frees the banks on the next (0); then their main
+    /// loads alone, takes hold 0 and plays, and the room's word stays.
+    #[test]
+    fn the_results_fade_the_music_out_then_play_their_main() {
+        let mut music = Music::default();
+        music.enter_room(word(0, 1), street());
+        music.fade_on(0xB4, 0);
+        let mut rtn = Vec::new();
+        for _ in 0..180 {
+            music.tick();
+            rtn.push(music.fade_rtn());
+        }
+        assert_eq!(rtn[0], (1, 179));
+        assert_eq!(rtn[178], (2, 1));
+        assert!(music.sequences.iter().all(|sequence| sequence.state == 0));
+        assert_eq!(rtn[179], (0, 0));
+        assert!(music.channels.iter().all(|channel| channel.track.is_none()));
+        music.play_main(0x30, 0);
+        music.control([0, 1, 0, 0, 0], street());
+        assert_eq!(music.sequences[0].state, STATE_PLAYING);
+        assert_eq!(music.sequences[0].hold, 0);
+        assert_eq!(
+            music.channels[0].track,
+            crate::convert_re2::bgm_track("main30")
+        );
+        assert!(
+            music.channels[3..]
+                .iter()
+                .all(|channel| channel.track.is_none())
+        );
+        assert_eq!(music.current, word(0, 1));
     }
 
     #[test]
