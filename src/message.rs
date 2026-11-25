@@ -72,14 +72,15 @@
 //! a second message while one is up is refused, exactly like the original's
 //! `set_message_display`.
 
-use crate::font::{ChoiceLayout, Font};
+use crate::font::Font;
 use crate::items;
 use crate::render::{Framebuffer, Tint};
 use crate::text::Text;
 
 /// What a yes/no did on a tick, for the cue RE2's message plays with it
 /// (`0x4C9600`): moving the choice plays the cursor cue, a yes the decide cue
-/// and a no the cancel cue.
+/// and a no the cancel cue. An RE2 selection's later choices play the
+/// decide cue (`Yes`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChoiceCue {
     Move,
@@ -287,6 +288,85 @@ pub fn examined_bit(examined: &[u8; 4], class: u8) -> bool {
 /// cursor. Upper and lower case exactly match the original's string.
 const YES_NO: &[u8] = &[0x35, 0x41, 0x4F, 0x00, 0x00, 0x2A, 0x4B];
 
+/// One of RE2's selections (`BRANCH_DATA`): how many choices it has, the
+/// first one's x and the step to the next, as `Branch_disp` (`0x4C9593`)
+/// lays them out on the line under the message's first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChoiceForm {
+    pub count: u8,
+    pub x: i32,
+    pub step: i32,
+}
+
+/// RE2's selections by the low four bits of a question's argument (the byte
+/// after `0xFB`), Classic REbirth's `choice_data_e` (`0x52E554`): Yes/No,
+/// Left/Right/No (room 112's shelves), the six digits (room 20B's keypad),
+/// Up/Down (room 213), Left/Right/Cancel and Yes/No/Original (room 208's
+/// lockers) and Machine Gun/Side Pack (room 214). The converter checks the
+/// executable's table against these and writes their strings as
+/// [`re2_choice_key`]'s.
+pub const RE2_CHOICE_FORMS: [ChoiceForm; 7] = [
+    ChoiceForm {
+        count: 2,
+        x: 210,
+        step: 50,
+    },
+    ChoiceForm {
+        count: 3,
+        x: 126,
+        step: 70,
+    },
+    ChoiceForm {
+        count: 6,
+        x: 132,
+        step: 28,
+    },
+    ChoiceForm {
+        count: 2,
+        x: 196,
+        step: 42,
+    },
+    ChoiceForm {
+        count: 3,
+        x: 90,
+        step: 70,
+    },
+    ChoiceForm {
+        count: 3,
+        x: 112,
+        step: 56,
+    },
+    ChoiceForm {
+        count: 2,
+        x: 48,
+        step: 144,
+    },
+];
+
+/// The language key of choice `index` of [`RE2_CHOICE_FORMS`]' `form`.
+pub fn re2_choice_key(form: usize, index: usize) -> String {
+    format!("UI_CHOICE_{form}_{index}")
+}
+
+/// The form a question's argument picks, and its index: its low four bits.
+/// The original reads past its table for a higher one, which no message
+/// has; this takes the first form.
+fn re2_choice_form(argument: u8) -> (usize, ChoiceForm) {
+    let index = usize::from(argument & 0xF);
+    match RE2_CHOICE_FORMS.get(index) {
+        Some(form) => (index, *form),
+        None => (0, RE2_CHOICE_FORMS[0]),
+    }
+}
+
+/// The digit `1` in RE2's message bytes, which numbers a choice whose
+/// string the pack lacks.
+const CHOICE_NUMBER_ONE: u8 = 0x0D;
+
+/// Where the in-play choices' cursor draws against its label: the font's
+/// get-item choice has it there ([`crate::font::ChoiceLayout::cursor_dx`]).
+const RE2_CURSOR_DX: i32 = -18;
+
 /// Blink period of both cursors: the timer bits the original tests, doubled
 /// while the game is inactive.
 const BLINK_BITS: u8 = 0x18;
@@ -337,9 +417,10 @@ pub struct MessageWindow {
     /// Where the message draws, when its request says rather than the
     /// font: the first line's x and y (`Mess_set`'s `Pos_xy`).
     origin: Option<(i32, i32)>,
-    /// Where a yes/no's choice draws, when its request says (`Branch_disp`'s
-    /// table entry), rather than the font.
-    choice_at: Option<ChoiceLayout>,
+    /// The message was placed in play ([`Self::place`]), so a question's
+    /// choices draw where its form says (`Branch_disp`) rather than where
+    /// the font's [`crate::font::ChoiceLayout`] does.
+    in_play: bool,
     /// The yes/no's cue this tick, for RE2: the answer's or the choice's move.
     choice_cue: Option<ChoiceCue>,
     previous: MessageInput,
@@ -400,7 +481,7 @@ impl Default for MessageWindow {
             menu_choice: 0,
             typed: false,
             origin: None,
-            choice_at: None,
+            in_play: false,
             choice_cue: None,
             previous: MessageInput::default(),
             actions: Vec::new(),
@@ -428,12 +509,13 @@ impl MessageWindow {
         self.menu_choice | if self.typed { 0x40 } else { 0 }
     }
 
-    /// Place the requested message at `origin` (its first line's x and y)
-    /// and its yes/no's choice at `choice`, for a request whose position
-    /// isn't the font's (RE2's door messages, `Mess_set`'s attr `0x100`).
-    pub fn place(&mut self, origin: (i32, i32), choice: ChoiceLayout) {
+    /// Place the requested message at `origin` (its first line's x and y),
+    /// with a question's choices where its form puts them, for a request
+    /// whose position isn't the font's (RE2's in-play messages, `Mess_set`'s
+    /// attrs `0x100` and `0x300`).
+    pub fn place(&mut self, origin: (i32, i32)) {
         self.origin = Some(origin);
-        self.choice_at = Some(choice);
+        self.in_play = true;
     }
 
     /// Where [`MessageWindow::place`] put the message, or `None` for the
@@ -506,7 +588,7 @@ impl MessageWindow {
         self.menu_choice = 0x80;
         self.typed = false;
         self.origin = None;
-        self.choice_at = None;
+        self.in_play = false;
         self.id = Some(id);
         self.id_high = 0;
         self.pause = pause;
@@ -1006,25 +1088,27 @@ impl MessageWindow {
         }
     }
 
-    /// `Mess_disp`'s state 4 (`0x4C9593`): the answer counts once the
-    /// lockout has run out, and the choice moves on the direction keys
-    /// meanwhile. The yes plays the decide cue unless the argument's `0x20`
-    /// silences it, the no the cancel cue, both only for a message that
-    /// always cues or whose argument has `0x60`; a move always plays the
-    /// cursor cue.
+    /// `Mess_disp`'s state 4 (`Branch_disp`, `0x4C9593`): the answer
+    /// counts once the lockout has run out, and the choice moves on the
+    /// direction keys meanwhile, right to the next and left to the one
+    /// before, round the form's count. The answer is the choice's index in
+    /// the low four bits of the menu-choice byte. The first choice plays the
+    /// decide cue unless the argument's `0x20` silences it, the second the
+    /// cancel cue and any later one the decide cue, all only for a message
+    /// that always cues or whose argument has `0x60`; a move always plays
+    /// the cursor cue.
     fn update_re2_yes_no(&mut self, pressed_action: bool, left: bool, right: bool) {
         self.yes_no_shown = true;
         self.answer_lock = self.answer_lock.saturating_sub(1);
+        let argument = self.re2_choice_argument();
+        let count = re2_choice_form(argument).1.count;
+        let mut choice = self.menu_choice & 0xF;
         if pressed_action && self.answer_lock == 0 {
-            let argument = self.re2_choice_argument();
-            let yes = self.menu_choice & 1 == 0;
             if self.re2_cues || argument & 0x60 != 0 {
-                self.choice_cue = if !yes {
-                    Some(ChoiceCue::No)
-                } else if argument & 0x20 == 0 {
-                    Some(ChoiceCue::Yes)
-                } else {
-                    None
+                self.choice_cue = match choice {
+                    0 if argument & 0x20 != 0 => None,
+                    1 => Some(ChoiceCue::No),
+                    _ => Some(ChoiceCue::Yes),
                 };
             }
             self.menu_choice &= 0x7F;
@@ -1035,14 +1119,18 @@ impl MessageWindow {
             return;
         }
         if !pressed_action {
-            for pressed in [right, left] {
-                if pressed {
-                    self.menu_choice ^= 1;
-                    self.char_timer = 0;
-                    self.choice_cue = Some(ChoiceCue::Move);
-                }
+            if right {
+                choice = if choice + 1 >= count { 0 } else { choice + 1 };
+                self.char_timer = 0;
+                self.choice_cue = Some(ChoiceCue::Move);
+            }
+            if left {
+                choice = if choice == 0 { count - 1 } else { choice - 1 };
+                self.char_timer = 0;
+                self.choice_cue = Some(ChoiceCue::Move);
             }
         }
+        self.menu_choice = (self.menu_choice & 0xF0) | choice;
         self.char_timer = self.char_timer.wrapping_sub(1);
     }
 
@@ -1201,24 +1289,9 @@ impl MessageWindow {
                 }
             }
             MessagePhase::YesNo
-                if self.yes_no_shown && self.choice_at.or(metrics.choice).is_some() =>
+                if self.yes_no_shown && (self.in_play || metrics.choice.is_some()) =>
             {
-                // RE2's choice, on the line the question ended on.
-                let Some(choice) = self.choice_at.or(metrics.choice) else {
-                    return;
-                };
-                if self.char_timer & blink != 0 {
-                    let label = if self.menu_choice & 1 == 0 {
-                        choice.yes_x
-                    } else {
-                        choice.no_x
-                    };
-                    let x = label + choice.cursor_dx;
-                    font.draw_text(framebuffer, x, y, Tint::White, 2, &[0x02], false);
-                }
-                for (x, label) in [(choice.yes_x, &YES_NO[..3]), (choice.no_x, &YES_NO[5..])] {
-                    font.draw_text(framebuffer, x, y, Tint::White, 2, label, tight);
-                }
+                self.draw_re2_choices(framebuffer, font, text, (base_y, y), tight);
             }
             MessagePhase::YesNo if self.yes_no_shown => {
                 let cursor_x = if glyph_w > 8 { 0xA0 } else { 0xD0 };
@@ -1247,6 +1320,61 @@ impl MessageWindow {
                 );
             }
             _ => {}
+        }
+    }
+
+    /// RE2's choices (`Branch_disp`, `0x4C9593`), each its form's string at
+    /// its x and the blinking cursor before the one chosen. A message placed
+    /// in play draws them where its form says, on the line under its first
+    /// (`Pos_y + 0x10`) whatever line its text ended on; a question whose
+    /// argument has `0x80` draws them on the line its text ended on, from
+    /// where the text ended, which the font's [`crate::font::ChoiceLayout`] gives (the
+    /// status screen's and the get-item window's). `lines` is the first
+    /// line's y and the last's.
+    fn draw_re2_choices(
+        &self,
+        framebuffer: &mut Framebuffer,
+        font: &Font,
+        text: &Text,
+        (first_y, last_y): (i32, i32),
+        tight: bool,
+    ) {
+        // RE 1's questions, drawn here by a font with a choice layout, are
+        // its yes/no whatever their tag's third byte.
+        let argument = if self.re2_timing {
+            self.re2_choice_argument()
+        } else {
+            0
+        };
+        let (form_index, form) = re2_choice_form(argument);
+        let (x, step, y, cursor_dx) = match font.metrics.choice {
+            Some(layout) if argument & 0x80 != 0 || !self.in_play => (
+                layout.yes_x,
+                layout.no_x - layout.yes_x,
+                last_y,
+                layout.cursor_dx,
+            ),
+            _ => (form.x, form.step, first_y + 16, RE2_CURSOR_DX),
+        };
+        let blink = BLINK_BITS << u8::from(self.shifted());
+        if self.char_timer & blink != 0 {
+            let chosen = i32::from(self.menu_choice & 0xF);
+            let cursor_x = x + step * chosen + cursor_dx;
+            font.draw_text(framebuffer, cursor_x, y, Tint::White, 2, &[0x02], false);
+        }
+        for index in 0..usize::from(form.count) {
+            // A pack without the choices' strings (its executable's table
+            // didn't read) has the first form spelt by the window and every
+            // other choice numbered, so each one it can take shows.
+            let number = [CHOICE_NUMBER_ONE + index as u8];
+            let label = match (text.ui(&re2_choice_key(form_index, index)), form_index) {
+                ([], 0) if index == 0 => &YES_NO[..3],
+                ([], 0) => &YES_NO[5..],
+                ([], _) => &number[..],
+                (label, _) => label,
+            };
+            let label_x = x + step * index as i32;
+            font.draw_text(framebuffer, label_x, y, Tint::White, 2, label, tight);
         }
     }
 
@@ -2358,6 +2486,139 @@ mod tests {
         assert_eq!(answer(&mut window, &text), None);
         let (text, mut window) = re2_question("Take?{branch 0 0 64}", false);
         assert_eq!(answer(&mut window, &text), Some(ChoiceCue::Yes));
+    }
+
+    fn press(right: bool, left: bool) -> MessageInput {
+        MessageInput {
+            right,
+            left,
+            ..MessageInput::default()
+        }
+    }
+
+    /// Room 112's shelves ask with form 1, Left/Right/No: the cursor steps
+    /// round its three choices, and the answer is the choice's index.
+    #[test]
+    fn an_re2_selection_steps_round_its_choices() {
+        let (text, mut window) = re2_question("Push?{branch 0 0 1}", true);
+        let mut chosen = Vec::new();
+        for input in [press(true, false), press(true, false), press(true, false)] {
+            window.update(input, &text, 0);
+            assert_eq!(window.choice_cue(), Some(ChoiceCue::Move));
+            chosen.push(window.menu_choice_id() & 0xF);
+            window.update(MessageInput::default(), &text, 0);
+        }
+        window.update(press(false, true), &text, 0);
+        chosen.push(window.menu_choice_id() & 0xF);
+        assert_eq!(chosen, [1, 2, 0, 2]);
+        // Both keys on one tick: right steps on and left back.
+        window.update(MessageInput::default(), &text, 0);
+        window.update(press(true, true), &text, 0);
+        assert_eq!(window.menu_choice_id() & 0xF, 2);
+        // A later choice than the second answers with the decide cue.
+        assert_eq!(answer(&mut window, &text), Some(ChoiceCue::Yes));
+        assert_eq!(window.menu_choice_id(), 2);
+
+        let (text, mut window) = re2_question("Push?{branch 0 0 1}", true);
+        window.update(press(true, false), &text, 0);
+        assert_eq!(answer(&mut window, &text), Some(ChoiceCue::No));
+        assert_eq!(window.menu_choice_id(), 1);
+        // The six digits wrap from the first to the last.
+        let (text, mut window) = re2_question("Digit?{branch 0 0 2}", true);
+        window.update(press(false, true), &text, 0);
+        assert_eq!(window.menu_choice_id() & 0xF, 5);
+    }
+
+    /// A question placed in play draws its form's choices at the form's x,
+    /// on the line under its first, even when its text is one line: `A`,
+    /// `B` and `C` for form 1 at 126, 196 and 266, and the cursor before the
+    /// chosen one.
+    #[test]
+    fn an_re2_selection_in_play_draws_its_forms_choices_under_the_first_line() {
+        let mut writer = PackWriter::new();
+        writer
+            .add(
+                "language/en-US.txt",
+                b"MESSAGE_00 = \"A{branch 0 0 1}\"\nUI_CHOICE_1_0 = \"A\"\n\
+                  UI_CHOICE_1_1 = \"B\"\nUI_CHOICE_1_2 = \"C\"\n"
+                    .to_vec(),
+            )
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let text = Text::load(&pack, Some("en-US"));
+        let bytes = text.global(0).unwrap().to_vec();
+        let font = font_for(&[0x1D, 0x1E, 0x1F, 0x02]);
+        let mut window = MessageWindow::default();
+        window.set_re2_timing(false, false);
+        assert!(window.start(0x40, 0, &bytes, false));
+        window.place((34, 185));
+        run_until(&mut window, &text, |w| w.phase() == MessagePhase::YesNo);
+        window.update(MessageInput::default(), &text, 0);
+        window.update(press(true, false), &text, 0);
+        window.update(MessageInput::default(), &text, 0);
+        window.update(press(true, false), &text, 0);
+        assert_eq!(window.menu_choice_id() & 0xF, 2);
+        let mut framebuffer = Framebuffer::new();
+        window.draw(&mut framebuffer, &font, &text);
+        let lit = |x: i32, y: i32| pixel(&framebuffer, x, y)[3] != 0;
+        // The question's own letter, on the first line.
+        // Each glyph's ink starts a row under its line's y.
+        assert!(lit(34, 186));
+        for x in [126, 196, 266] {
+            assert!(lit(x, 202), "a choice at {x}");
+            assert!(!lit(x, 186), "nothing at {x} on the first line");
+        }
+        assert!(lit(266 + RE2_CURSOR_DX, 202), "the cursor before `C`");
+        assert!(!lit(126 + RE2_CURSOR_DX, 202), "no cursor before `A`");
+    }
+
+    /// The columns of row `y` that hold ink.
+    fn lit_columns(framebuffer: &Framebuffer, y: i32) -> Vec<i32> {
+        (0..320)
+            .filter(|&x| pixel(framebuffer, x, y)[3] != 0)
+            .collect()
+    }
+
+    /// Without the choices' strings in the pack, a selection past the first
+    /// numbers its choices, so each one the cursor can take shows.
+    #[test]
+    fn a_selection_without_its_strings_numbers_its_choices() {
+        let (text, mut window) = re2_question("Digit?{branch 0 0 2}", true);
+        window.place((34, 185));
+        window.update(MessageInput::default(), &text, 0);
+        // Only the digits' cells are lit, so each drawn number shows.
+        let digits: Vec<u8> = (0..6).map(|index| CHOICE_NUMBER_ONE + index).collect();
+        let font = font_for(&digits);
+        let mut framebuffer = Framebuffer::new();
+        window.draw(&mut framebuffer, &font, &text);
+        let lit = lit_columns(&framebuffer, 202);
+        for index in 0..6 {
+            let x = 132 + 28 * index;
+            assert!(lit.contains(&x), "choice {index} at {x}: {lit:?}");
+        }
+    }
+
+    /// An RE 1 question drawn by a font with a choice layout is a yes/no,
+    /// whatever its tag's third byte.
+    #[test]
+    fn an_re1_question_under_a_choice_layout_draws_two_choices() {
+        let (text, bytes) = latin_message("Take?{branch 0 0 1}");
+        let mut def = crate::font::FontDef::japanese();
+        def.metrics.choice = Some(crate::font::ChoiceLayout {
+            yes_x: 100,
+            no_x: 150,
+            cursor_dx: -18,
+        });
+        let font = Font::new(sheet(&[cell(0x35), cell(0x2A)]), def);
+        let mut window = MessageWindow::default();
+        assert!(window.start(0x40, 0, &bytes, false));
+        run_until(&mut window, &text, |w| w.phase() == MessagePhase::YesNo);
+        window.update(MessageInput::default(), &text, 0);
+        let mut framebuffer = Framebuffer::new();
+        window.draw(&mut framebuffer, &font, &text);
+        let lit = lit_columns(&framebuffer, 186);
+        assert!(lit.contains(&100) && lit.contains(&150), "{lit:?}");
+        assert!(!lit.contains(&200), "no third choice: {lit:?}");
     }
 
     #[test]

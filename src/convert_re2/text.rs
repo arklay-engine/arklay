@@ -276,6 +276,12 @@ fn exe_lines(exe: &super::exe::ExeText, text: &mut String) {
         let id = usize::from(crate::scd2::host::DOOR_MESSAGES) + index;
         let _ = writeln!(text, "MESSAGE_{id:02X} = \"{}\"", decode_message(message));
     }
+    for (form, choices) in exe.choices.iter().enumerate() {
+        for (index, choice) in choices.iter().enumerate() {
+            let key = crate::message::re2_choice_key(form, index);
+            let _ = writeln!(text, "{key} = \"{}\"", decode_message(choice));
+        }
+    }
 }
 
 #[cfg(test)]
@@ -556,6 +562,26 @@ mod tests {
         let door = |id: usize| decode_message(&exe.door[id]);
         assert_eq!(door(0xA), "\\nYou unlocked it.");
         assert_eq!(door(0xC), "\\nIt's locked.");
+        // The selections' choices, by form (`choice_data_e`).
+        assert_eq!(exe.choice_error, None);
+        let choices: Vec<Vec<String>> = exe
+            .choices
+            .iter()
+            .map(|form| form.iter().map(|choice| decode_message(choice)).collect())
+            .collect();
+        assert_eq!(
+            choices,
+            [
+                &["Yes", "No"][..],
+                &["Left", "Right", "No"],
+                &["1", "2", "3", "4", "5", "6"],
+                &["Up", "Down"],
+                &["Left", "Right", "Cancel"],
+                &["Yes", "No", "Original"],
+                &["Machine Gun", "Side Pack"],
+            ]
+        );
+        assert!(lines.contains("UI_CHOICE_1_0 = \"Left\"\n"));
         let mut text = String::new();
         exe_lines(&exe, &mut text);
         crate::language::Language::parse(&text).unwrap();
