@@ -23,7 +23,7 @@ use super::text::Fonts;
 use super::theme::{Theme, palette};
 use super::widgets::Painter;
 use crate::config::ControlType;
-use crate::controls::Bindings;
+use crate::controls::{Action, Bindings};
 
 /// What the menu asks its owner to do.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,6 +96,9 @@ pub struct SystemMenu {
     /// applies the button-style setting.
     device: Device,
     recording: bool,
+    /// Actions the running game doesn't read, which its key configuration
+    /// leaves off.
+    hidden_actions: Vec<Action>,
 }
 
 impl SystemMenu {
@@ -108,6 +111,7 @@ impl SystemMenu {
             key_config: None,
             device: Device::Keyboard,
             recording: false,
+            hidden_actions: Vec::new(),
         };
         menu.refresh_options();
         menu.ui.open("menu")?;
@@ -280,6 +284,12 @@ impl SystemMenu {
         .collect()
     }
 
+    /// Leave `actions` off the key configuration: the running game doesn't
+    /// read them.
+    pub fn hide_actions(&mut self, actions: &[Action]) {
+        self.hidden_actions = actions.to_vec();
+    }
+
     /// Open the key configuration, or its gamepad mode for `pad`.
     fn open_key_config(&mut self, pad: bool) -> Result<()> {
         let bindings = self.settings.bindings.clone();
@@ -289,6 +299,7 @@ impl SystemMenu {
             KeyConfigScreen::new(bindings, self.text.clone())
         };
         screen.set_device(self.shown_device());
+        screen.hide(&self.hidden_actions);
         let mut canvas = Canvas::new(1, 1);
         canvas.set_recording(self.recording);
         self.key_config = Some(KeyConfig {

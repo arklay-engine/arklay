@@ -116,6 +116,28 @@ fn a_new_model_stands_in_its_place_with_the_executables_statics() {
     );
 }
 
+/// From play the model is `pPl`: the player's routines and motion, in the
+/// page's place with the handgun (option_from_play_key_201's 406).
+#[test]
+fn a_model_from_play_is_the_players_work_in_the_place() {
+    let player = Work {
+        routine: [1, 0, 1, 0],
+        move_no: 2,
+        move_cnt: 6,
+        hokan: 0,
+        d_life_u: 3,
+        spd: [80, 0, -4],
+        kind: 1,
+        ..Work::default()
+    };
+    let model = PageModel::from_play(0, 2, Statics::default(), HandgunFrame::default(), &player);
+    assert_eq!(
+        model.trace(),
+        "01000100,-1530,2020,2700,3072,02060000,2,0,0,0,0,0,0,99"
+    );
+    assert_eq!((model.work.d_life_u, model.work.spd), (3, [80, 0, -4]));
+}
+
 #[test]
 fn the_statics_outlive_the_model() {
     let statics = Statics {

@@ -40,10 +40,11 @@ use sdl3_sys::keyboard::{SDL_GetScancodeFromName, SDL_GetScancodeName};
 use sdl3_sys::scancode::{
     SDL_SCANCODE_0, SDL_SCANCODE_1, SDL_SCANCODE_A, SDL_SCANCODE_BACKSPACE, SDL_SCANCODE_COUNT,
     SDL_SCANCODE_D, SDL_SCANCODE_DOWN, SDL_SCANCODE_ESCAPE, SDL_SCANCODE_F, SDL_SCANCODE_F1,
-    SDL_SCANCODE_F9, SDL_SCANCODE_I, SDL_SCANCODE_LEFT, SDL_SCANCODE_LEFTBRACKET,
-    SDL_SCANCODE_LSHIFT, SDL_SCANCODE_M, SDL_SCANCODE_Q, SDL_SCANCODE_R, SDL_SCANCODE_RETURN,
-    SDL_SCANCODE_RIGHT, SDL_SCANCODE_RIGHTBRACKET, SDL_SCANCODE_RSHIFT, SDL_SCANCODE_S,
-    SDL_SCANCODE_TAB, SDL_SCANCODE_UNKNOWN, SDL_SCANCODE_UP, SDL_SCANCODE_W, SDL_Scancode,
+    SDL_SCANCODE_F5, SDL_SCANCODE_F9, SDL_SCANCODE_I, SDL_SCANCODE_LCTRL, SDL_SCANCODE_LEFT,
+    SDL_SCANCODE_LEFTBRACKET, SDL_SCANCODE_LSHIFT, SDL_SCANCODE_M, SDL_SCANCODE_Q, SDL_SCANCODE_R,
+    SDL_SCANCODE_RCTRL, SDL_SCANCODE_RETURN, SDL_SCANCODE_RIGHT, SDL_SCANCODE_RIGHTBRACKET,
+    SDL_SCANCODE_RSHIFT, SDL_SCANCODE_S, SDL_SCANCODE_TAB, SDL_SCANCODE_UNKNOWN, SDL_SCANCODE_UP,
+    SDL_SCANCODE_W, SDL_Scancode,
 };
 
 /// One logical action.
@@ -94,10 +95,14 @@ pub enum Action {
     EquipSlot8,
     EquipSlot9,
     EquipSlot10,
+    /// RE 2's option key, the raw pad's `0x100`: `Game_loop` opens the
+    /// option screen on it in play (`Config`, `0x449FD0`). Nothing else
+    /// reads it.
+    Option,
 }
 
 /// Every action, in the order the rebind screen and the config file list them.
-pub const ACTIONS: [Action; 29] = [
+pub const ACTIONS: [Action; 30] = [
     Action::Up,
     Action::Down,
     Action::Left,
@@ -127,6 +132,7 @@ pub const ACTIONS: [Action; 29] = [
     Action::EquipSlot8,
     Action::EquipSlot9,
     Action::EquipSlot10,
+    Action::Option,
 ];
 
 /// The slot-equip actions, slot 1 first.
@@ -191,6 +197,7 @@ impl Action {
             Action::EquipSlot8 => "equip_8",
             Action::EquipSlot9 => "equip_9",
             Action::EquipSlot10 => "equip_10",
+            Action::Option => "option",
         }
     }
 
@@ -231,6 +238,7 @@ impl Action {
             Action::EquipSlot8 => "UI_CONTROLS_EQUIP_8",
             Action::EquipSlot9 => "UI_CONTROLS_EQUIP_9",
             Action::EquipSlot10 => "UI_CONTROLS_EQUIP_10",
+            Action::Option => "UI_CONTROLS_OPTION",
         }
     }
 
@@ -661,6 +669,20 @@ impl Default for Bindings {
                     pad(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER),
                 ],
             ),
+            // RE 2's two option keys: Ctrl, the keyboard's `KeyDef` entry 12
+            // by default (`FUN_0044da40`, `0x44DA40`: virtual key 0x11, either
+            // Ctrl), and F5, which the executable's own `WndProc` (`0x441A00`,
+            // virtual key 0x74) turns into `Vk_press`'s 0x02 for `Game_loop`
+            // to raise the raw pad's 0x100 from. The pad's is the menu
+            // button, arklay's in-game menu here, so it has none.
+            (
+                Action::Option,
+                vec![
+                    key(SDL_SCANCODE_LCTRL),
+                    key(SDL_SCANCODE_RCTRL),
+                    key(SDL_SCANCODE_F5),
+                ],
+            ),
         ] {
             bindings.sources[action as usize] = sources;
         }
@@ -971,6 +993,18 @@ mod tests {
         assert_eq!(names(Action::WeaponNext), ["wheel:down"]);
         assert_eq!(names(Action::TargetPrev), ["mouse:x1"]);
         assert_eq!(names(Action::TargetNext), ["mouse:x2"]);
+        // RE 2's option key: Ctrl, `KeyDef`'s default, and F5, the
+        // executable's own; no gamepad button.
+        assert_eq!(
+            names(Action::Option),
+            ["key:Left Ctrl", "key:Right Ctrl", "key:F5"]
+        );
+        assert!(
+            bindings
+                .get(Action::Option)
+                .iter()
+                .all(|source| !source.is_pad())
+        );
         let slots: Vec<String> = EQUIP_SLOTS.into_iter().flat_map(names).collect();
         assert_eq!(
             slots,

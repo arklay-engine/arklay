@@ -3763,6 +3763,13 @@ pub struct GameState {
     /// The status screen in the map key's mode (`Game_loop`'s `Key_trg &
     /// 0x4000`), from the press until the screen closes.
     pub re2_key_map: Option<status2::key_map::KeyMap>,
+    /// The option key opened RE2's option screen this tick (`Game_loop`'s
+    /// `0x9885FE & 0x100`, under START's gate): START's request is the
+    /// option screen's, from the press until the open starts.
+    pub re2_config_request: bool,
+    /// START came with the option key, so a refused option key leaves
+    /// START's request standing.
+    pub re2_config_start_too: bool,
     /// The `pG + 0x82B0` hook while a key turn armed `Key_lost`. It is not
     /// saved: it is only armed while a door message holds the game.
     pub re2_key_lost: Option<door2::KeyLost>,
@@ -4355,6 +4362,8 @@ impl Default for GameState {
             re2_status_request: false,
             re2_script_map: None,
             re2_key_map: None,
+            re2_config_request: false,
+            re2_config_start_too: false,
             re2_key_lost: None,
             re2_no_enemies: None,
             re2_enemy_dest: Vec::new(),

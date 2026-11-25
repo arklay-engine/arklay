@@ -264,6 +264,27 @@ impl PageModel {
         model
     }
 
+    /// From play (`FUN_0044af00` in `FUN_0044b100`'s place): the page's
+    /// model is `pPl` itself, so its routine and motion bytes, its
+    /// `D_life_u` and its speed are the player's as play left them, which
+    /// `Config_set_data` doesn't write either.
+    pub fn from_play(
+        id: u8,
+        weapon: u16,
+        statics: Statics,
+        handgun: HandgunFrame,
+        player: &Work,
+    ) -> Self {
+        let mut model = Self::new(id, weapon, statics, handgun);
+        model.work.routine = player.routine;
+        model.work.move_no = player.move_no;
+        model.work.move_cnt = player.move_cnt;
+        model.work.hokan = player.hokan;
+        model.work.d_life_u = player.d_life_u;
+        model.work.spd = player.spd;
+        model
+    }
+
     /// A pass computing part 0 at `root`: the root the pass's lights are
     /// latched at, the one the pass before it left (`root` itself for a
     /// visit's first pass, which no pass precedes).

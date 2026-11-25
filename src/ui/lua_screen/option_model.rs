@@ -4,8 +4,8 @@
 
 use mlua::{IntoLuaMulti, UserDataMethods};
 
-use crate::player2::HandgunFrame;
 use crate::player2::keyconfig::{PageAssets, PageModel, Statics};
+use crate::player2::{HandgunFrame, Work};
 use crate::render::{Camera, CharacterShade, EntityLight, Framebuffer, Lighting, Slots};
 use crate::state::Image;
 use crate::state::Light;
@@ -86,6 +86,21 @@ pub(super) struct OptionModel {
     model: Option<(PageModel, PageAssets, (u8, u8, u8))>,
     /// The pack's shadow page (`shadow/kage`), once looked for.
     kage: Option<Option<Image>>,
+    /// The player's work when the screen is play's (`Config`): the next
+    /// `make` is `pPl` as play left it ([`PageModel::from_play`]).
+    player: Option<Box<Work>>,
+}
+
+impl OptionModel {
+    /// The screen is play's: the page's model will be the player's `work`.
+    pub(super) fn set_player(&mut self, work: &Work) {
+        self.player = Some(Box::new(work.clone()));
+    }
+
+    /// The model, once made.
+    pub(super) fn model(&self) -> Option<&PageModel> {
+        self.model.as_ref().map(|(model, _, _)| model)
+    }
 }
 
 /// An `option_model` call, checked before it touches the model.
@@ -241,9 +256,16 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
                     Some(statics) => statics.re2_equip(id, weapon),
                     None => HandgunFrame::default().equip(id, weapon),
                 };
-                let model = match &last {
-                    Some(model) => model.again(id, kind, handgun),
-                    None => PageModel::new(
+                let model = match (&last, page.player.as_deref()) {
+                    (Some(model), _) => model.again(id, kind, handgun),
+                    (None, Some(player)) => PageModel::from_play(
+                        id,
+                        kind,
+                        kept(cx.statics, entry).unwrap_or_default(),
+                        handgun,
+                        player,
+                    ),
+                    (None, None) => PageModel::new(
                         id,
                         kind,
                         kept(cx.statics, entry).unwrap_or_default(),

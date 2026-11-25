@@ -1,0 +1,23 @@
+# room 201: the option key opens the option screen from play (`Config`, 0x449FD0) and its KEYCONFIG page, whose model is the player as play has them; the walk in and the list (the keyboard's arrows reach the pad too, as a real keyboard's do: `kbdown` with `down`), Fire's demonstration, Run's, down to the last row and Exit's decide, the cancel key out of the menu, and a walk in play again (oracle/re2.md, "The option screen")
+400 option
+404
+440 confirm
+444
+540 kbdown down
+544
+780 kbdown down
+784
+840 kbdown down
+844
+850 kbdown down
+854
+860 kbdown down
+864
+870 kbdown down
+874
+900 confirm
+904
+940 cancel
+944
+1010 up
+1060

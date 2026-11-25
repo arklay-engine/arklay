@@ -3391,3 +3391,69 @@ fn title_init_clears_hard_mode_and_arrange_mode() {
     assert_eq!(screen.value("ti_rnd"), 0x1234);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The option screen opened from play (`Config`, `args.config`): its step 0
+/// on the first tick, with no title under it and no draw from the title's
+/// generator for the page's model, which is the player as play has them;
+/// `Config_main` as from the title, and its way out leaves for play.
+#[test]
+fn the_option_screen_from_play_runs_from_its_step_0_and_resumes_play() {
+    let dir = std::env::temp_dir();
+    let statics = crate::ui::ScreenStatics::default();
+    let args = [
+        ("config", ScreenArg::Bool(true)),
+        ("id", ScreenArg::Int(1)),
+        ("weapon", ScreenArg::Int(3)),
+        ("disc", ScreenArg::Int(1)),
+    ];
+    let (mut screen, cx) = open_kept(&statics, &dir, &args);
+    assert_eq!(
+        screen.update(&cx, UiInput::default()),
+        ScreenResult::Continue
+    );
+    assert_eq!(opt(&screen), [1, 0, 0, 0, 0, 2, 0, 100, 100]);
+    assert_eq!(frame(&screen).as_deref(), Some("black"));
+    assert_eq!(screen.value("ti_fade_level"), 0x5000);
+    let (room, title) = backgrounds(&screen);
+    assert!(room.is_some() && room != title, "the room's picture is up");
+    // `FUN_0044af00` replaces `FUN_0044b100`: no pick from the title's
+    // generator, which nothing has drawn from.
+    assert_eq!(
+        screen.test_eval::<Option<i64>>("return M.state.opt.model"),
+        None
+    );
+    assert_eq!(statics.get("ui/title.lua", "rnd"), None);
+    assert_eq!(
+        screen.test_eval::<i64>("return M.state.opt.player.id * 100 + M.state.opt.player.weapon * 10 + M.state.opt.player.disc"),
+        131
+    );
+    run(&mut screen, &cx, UiInput::default(), 5);
+    assert_eq!(screen.value("opt_state"), 1, "the menu");
+    // SOUND's page and back, then the cancel key's way out: 32 ticks of
+    // fade, 0x17, and step 2's tick resumes play.
+    run(&mut screen, &cx, press("down"), 2);
+    run(&mut screen, &cx, press("down"), 2);
+    run(&mut screen, &cx, press("confirm"), 2);
+    assert_eq!(screen.value("opt_state"), 4, "the SOUND page");
+    run(&mut screen, &cx, press("cancel"), 2);
+    assert_eq!(screen.value("opt_state"), 1);
+    assert_eq!(
+        tick_cues(&mut screen, &cx, press("cancel")),
+        [UiCue::Core(5)]
+    );
+    assert_eq!(screen.value("opt_state"), 0x16);
+    let mut ticks = 0;
+    let action = loop {
+        ticks += 1;
+        assert!(ticks < 60, "the screen never ended");
+        if let ScreenResult::Done(action) = screen.update(&cx, UiInput::default()) {
+            break action;
+        }
+        assert_eq!(screen.value("opt_on"), 1, "tick {ticks}");
+    };
+    assert_eq!(action, ScreenAction::Resume);
+    // `title_option_menu`'s 660 to 694: 0x16 for 32 ticks, 0x17, step 2.
+    assert_eq!(ticks, 34);
+    assert_eq!(screen.value("opt_on"), 0);
+    assert_eq!(frame(&screen).as_deref(), Some("black"));
+}

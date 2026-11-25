@@ -477,6 +477,7 @@ byte-identical.
 | `Tab`, `I` | North (Y / Triangle) | START: open/close the inventory (pause menu), cycle the top tabs |
 | `M` | Back (Select) | Open the map; again (or Cancel) closes it |
 | `Esc` | Start | Open/close the in-game menu (restart, load game, options, quit) |
+| `Ctrl`, `F5` | | RE 2: open the original's option screen from play (its option key); RE 1 has none |
 | `[`, `]` | Left / right shoulder | L1/R1: page the item box |
 | `Esc`, `Backspace` | East (B / Circle) | Cancel (menus, character select, load screen) |
 | `Shift` | West (X / Square) | Run (hold) |
@@ -530,7 +531,7 @@ Sources are `key:<SDL key name>`, `mouse:left|middle|right|x1|x2`,
 number (`key:#N`, `mouse:N`, `pad:#N`, `axis:#N+`). The actions are `up`, `down`, `left`, `right`,
 `confirm`, `cancel`, `run`, `aim`, `fire`, `start`, `page_left`,
 `page_right`, `quick_turn`, `reload`, `map`, `weapon_prev`, `weapon_next`,
-`target_prev`, `target_next` and `equip_1` to `equip_10`. Saving rewrites the file in canonical form (comments are not
+`target_prev`, `target_next`, `equip_1` to `equip_10` and `option`. Saving rewrites the file in canonical form (comments are not
 kept). A bad line or value in `arklay.toml` (an unknown key, `msaa = 3`, a
 binding to a key that does not exist) never stops the game: it is reported
 as a warning and that setting keeps its default. The file is not rewritten

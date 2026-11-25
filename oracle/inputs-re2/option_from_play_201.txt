@@ -1,0 +1,25 @@
+# room 201: the option key opens the option screen from play (`Config`, 0x449FD0), down to SOUND, its page, the music's volume down with left held, the cancel key back to the menu and out of it; play again, a walk, then the option key and START on one tick (the option screen wins) and START out of its menu (oracle/re2.md, "The option screen")
+400 option
+404
+450 down
+454
+480 down
+484
+510 confirm
+514
+550 down
+554
+570 down
+574
+600 left
+630
+650 cancel
+654
+690 cancel
+694
+800 up
+830
+900 option start
+904
+960 start
+964
