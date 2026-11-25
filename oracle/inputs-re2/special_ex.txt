@@ -1,0 +1,34 @@
+# The title from boot: SPECIAL, down to EX.BATTLE and confirm: the fade to Extreme Battle's title, its fade in and logo, then down to START, the level page, the level to 2 and back to 1, down to EXIT and up again, and the confirm on level 1: the flash and fade to the hand-off, then the character's choice (`ExBattle`) and its confirm on its first character, and the game (oracle/re2.md, "The title").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+420 down
+423
+450 confirm
+453
+640 down
+643
+680 confirm
+683
+740 right
+743
+770 right
+773
+800 right
+803
+830 left
+833
+860 down
+863
+890 up
+893
+920 confirm
+923
+1300 confirm
+1303

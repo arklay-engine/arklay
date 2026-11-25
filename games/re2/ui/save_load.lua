@@ -96,6 +96,7 @@ local function publish(api)
     api:set("sv_blink", s.blink)
     -- The saves made (`0x98EB20`'s count), which a load takes from the save.
     api:set("sv_count", s.loaded and s.loaded.saves or 0)
+    api:set("sv_loaded", s.loaded and 1 or 0)
     -- Fade 0 as the original's slot stands after the tick's step: a step on
     -- from the level drawn, and left where the fade in ended until the
     -- fade out is set.

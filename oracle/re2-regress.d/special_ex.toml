@@ -1,0 +1,89 @@
+# SPECIAL's EX.BATTLE on the title (oracle/re2.md, "The title"): the fade to Extreme Battle's title, its fade in and logo, its rows and level page, and each of its ways out. Boot records, compared from the title's first tick.
+
+# Down to START, the level page, the level to 2 and back to 1, its EXIT and up again, and the confirm on level 1: the flash and fade to the hand-off on 1163. The record goes on through the character's choice (`ExBattle`, its first character confirmed on 1300) into room 612 from 1346, which arklay doesn't port.
+[[run]]
+name = "special_ex"
+ui = "title"
+offset = 189
+# recorded for 2300 ticks
+ticks = 1164
+input = "special_ex.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
+frames = [189, 1163]
+expect = "match"
+record = ""
+
+# A confirm in the fade in, the level page's EXIT and its cancel key, then EXIT: the title again from black on 889.
+[[run]]
+name = "special_ex_back"
+ui = "title"
+offset = 189
+ticks = 1300
+input = "special_ex_back.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
+frames = [189, 1299]
+expect = "match"
+record = ""
+
+# RESULT: the fade to black and `title_mv_state` 7 on 708, RESULT's records from 709 (`FUN_00507AB0`), which arklay doesn't port.
+[[run]]
+name = "special_ex_result"
+ui = "title"
+offset = 189
+# recorded for 1100 ticks: the records' cancel on 900, Extreme Battle's title again from 933
+ticks = 709
+input = "special_ex_result.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
+frames = [189, 708]
+expect = "match"
+record = ""
+
+# LOAD GAME with no saves: the flash and fade, the load screen from 884, its cancel, and Extreme Battle's title loaded again on 1009.
+[[run]]
+name = "special_ex_load"
+ui = "title"
+offset = 189
+ticks = 1400
+input = "special_ex_load.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd,sv,svs"
+frames = [189, 1399]
+expect = "match"
+record = ""
+
+# 4TH, and a confirm on the tick its logo is done (741): EX.BATTLE's fade in and rows run in `title_mv_state` 4, and START on level 1 hands off on 1113 to the 4th Survivor's game.
+[[run]]
+name = "special_4th_ex"
+ui = "title"
+offset = 189
+# recorded for 1800 ticks
+ticks = 1114
+input = "special_4th_ex.txt"
+input_shift = 189
+input_drop_early = true
+fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
+frames = [189, 1113]
+expect = "match"
+record = ""
+
+# The same record's game: HUNK in room 304 from `Game_loop`'s first tick, 1120. From the boot, for the boot film's pick, Leon's (`fg_status` bit 31 down).
+[[run]]
+name = "special_4th_ex_play"
+ref = "special_4th_ex"
+ui = "title"
+boot = true
+seed = 0
+offset = 0
+ticks = 1800
+compare_from = 1120
+input = "special_4th_ex.txt"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,esp,pl"
+frames = [1113, 1799]
+expect = "match"
