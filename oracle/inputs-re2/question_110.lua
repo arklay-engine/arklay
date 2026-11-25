@@ -2,6 +2,10 @@
 -- --warp 110:-13889:-7200:7096:1024 leaves the player on the original's
 -- tick 344, in the emergency ladder button's area on floor 4.
 local api = ...
+-- --no-enemies: room 110's zombies are switched off. Left on, slot 2, which
+-- comes along the north corridor, reaches Leon once the ladder's scene lets
+-- the enemies go (main_02's gosub(4)) and grabs him (#926).
+api:set_re2_no_enemies()
 api:set_player_pos(-13889, -7200, 7096)
 api:set_player_angle(1024)
 api:set_health(200)
