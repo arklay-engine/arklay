@@ -1,0 +1,60 @@
+# The status screen with Ada or Sherry as the player (Set_room's case 10 from the warp, as leon_a_ada_306's and claire_a_306_sherry's): St_init_disp_face's portrait for ids from 0xE, their eight slots, CHECK, COMBN, MAP and FILE (oracle/re2.md, "Status screen")
+
+[[run]]
+name = "status_ada_306"
+room = "306"
+setup_script = "leon_a_ada_306.lua"
+input = "status_ada_306.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1960
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,snd,fgstat,pl"
+frames = [360, 1959]
+# 0.02 measured
+frame_max_mean = 0.1
+expect = "match"
+ignore = [
+  # the warp's head on its first tick (as leon_a_ada_306's)
+  [344, "pneck"],
+]
+record = "--var 32:14 --warp 306:-16547:-5400:-26203:2976:0 --flag 3:128 --flag 3:129 --flag 6:103 --flag 6:104 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:32 --flag 8:34 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:113 --flag 8:118 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:8 --flag 31:9 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 90 --give 0:2:0 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1"
+
+[[run]]
+name = "status_sherry_306"
+room = "306"
+player = 1
+character = 1
+setup_script = "claire_a_306_sherry.lua"
+input = "status_sherry_306.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1800
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,snd,fgstat,pl"
+frames = [360, 1799]
+# 0.06 measured; the worst are FILE's binders (0.83, as status_file's)
+frame_max_mean = 0.15
+expect = "match"
+ignore = [
+  # the warp's head on its first tick (as claire_a_306_sherry's)
+  [344, "pneck"],
+]
+record = "--start claire --var 32:15 --warp 306:-16547:-5400:-26203:2976:0 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:148 --flag 4:152 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 6:12 --flag 6:13 --life 69 --give 0:3:2 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x14:15"
+
+# HUNK's status screen in the 4th Survivor (id 0xC: St_init_disp_face's own column of the portrait sheet), from the boot as special_4th_walk's; START at 2620 takes down the script's map the radio's messages leave up
+[[run]]
+name = "special_4th_status"
+ui = "title"
+boot = true
+# This record's boot film picked Leon (`fg_status` bit 31 down).
+seed = 0
+offset = 0
+ticks = 3540
+compare_from = 1276
+input = "special_4th_status.txt"
+voice_from_ref = true
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,snd,fgstat,pl"
+frames = [2600, 3539]
+# 0.23 measured; the worst are play's (1.2 at 2651 and 3500)
+frame_max_mean = 0.3
+expect = "match"
+record = ""

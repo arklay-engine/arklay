@@ -1,0 +1,61 @@
+# status_ada_306: Ada in room 306 at its arrival from 305: START, the cursor over her eight slots, CHECK on the First Aid Spray, COMBN of the bullets onto her handgun, up past the personal slot to the tab bar, MAP and FILE, and START to close
+400 start
+404
+440 right
+444
+480 down
+484
+520 down
+524
+560 down
+564
+600 down
+604
+640 left
+644
+680 up
+684
+720 up
+724
+760 confirm
+764
+800 down
+804
+840 confirm
+844
+960 confirm
+964
+1040 up
+1044
+1080 right
+1084
+1120 confirm
+1124
+1160 down
+1164
+1200 down
+1204
+1240 confirm
+1244
+1280 left
+1284
+1320 confirm
+1324
+1440 up
+1444
+1480 up
+1484
+1520 left
+1524
+1560 confirm
+1564
+1640 cancel
+1644
+1680 left
+1684
+1720 confirm
+1724
+1800 cancel
+1804
+1860 start
+1864

@@ -110,7 +110,8 @@ local CHECK_FILL = { 12, 36, 24 }
 local MESSAGE_FILL = { 12, 12, 24 }
 
 -- The portrait (texture 0x13) and the condition word (texture 0x16, one
--- 11-row band per condition).
+-- 11-row band per condition). The portrait's texels are the scenario
+-- character's here; `api:re2_portrait()` gives the player's.
 local PORTRAIT = {
     { 11, 20, 39, 10, 0, 72 },
     { 11, 31, 39, 20, 0, 86 },
@@ -506,6 +507,17 @@ local function sprite(api, d, texture, x, y, w, h, u, v, rgb, clut)
     end
     local widen = texture >= ICONS and WIDEN.icons or WIDEN[texture - ST]
     api:page_sprite_modulated(handle, u, v, w, h, d.ox + x, d.oy + y, w, h, clut or 0, rgb, widen)
+end
+
+-- The portrait's rows, `dx` right of their place, at the texels
+-- `St_init_disp_face` picks by the character the player is (Ada's and
+-- Sherry's faces beside the scenario's on its sheet).
+function PORTRAIT.draw(api, d, dx)
+    local texels = api:re2_portrait()
+    for index, p in ipairs(PORTRAIT) do
+        local t = texels[index]
+        sprite(api, d, ST + 1, p[1] + dx, p[2], p[3], p[4], t and t.u or p[5], t and t.v or p[6])
+    end
 end
 
 local function pieces(api, d, list, dx, dy)
@@ -1148,9 +1160,7 @@ local function draw_get(api)
     for tab = 0, 3 do
         sprite(api, d, ST + 5, TAB_X + 49 * tab, TAB_Y, TAB_W, TAB_H, 0, TAB_H * tab, TAB_DIM)
     end
-    for _, p in ipairs(PORTRAIT) do
-        sprite(api, d, ST + 1, p[1], p[2], p[3], p[4], p[5], p[6])
-    end
+    PORTRAIT.draw(api, d, 0)
     local page = { poisoned = get.poisoned }
     local cond = condition(api, page)
     sprite(api, d, ST + 4, CONDITION_X, CONDITION_Y, 46, 11, 0, 11 * cond)
@@ -1548,9 +1558,7 @@ function M.draw(api)
     end
 
     -- The portrait, the condition and the slots' icons.
-    for _, p in ipairs(PORTRAIT) do
-        sprite(api, d, ST + 1, p[1] + L, p[2], p[3], p[4], p[5], p[6])
-    end
+    PORTRAIT.draw(api, d, L)
     local cond = condition(api, page)
     sprite(api, d, ST + 4, CONDITION_X + L, CONDITION_Y, 46, 11, 0, 11 * cond)
     slot_icon(api, d, PERSONAL_SLOT, PERSONAL_X + R, PERSONAL_Y)

@@ -1410,3 +1410,19 @@ fn equip_compares_slots_not_ids() {
         "the equipped slot's rounds"
     );
 }
+
+/// `St_init_disp_face`'s rows by the player's id (`0x4FE8C0`).
+#[test]
+fn the_portraits_texels_follow_the_players_id() {
+    use super::portrait_texels;
+    let rows = |u| [(u, 0x48), (u, 0x56), (u, 0x6B)];
+    for id in [0, 1, 2, 7, 0xB] {
+        assert_eq!(portrait_texels(id), rows(0), "id {id:#x}");
+    }
+    assert_eq!(portrait_texels(0xC), rows(0x58));
+    assert_eq!(portrait_texels(0xD), [(0x2A, 0x34), (0, 0x34), (0, 0x34)]);
+    assert_eq!(portrait_texels(0xE), rows(0x2C));
+    for id in 0xE..=0xFF {
+        assert_eq!(portrait_texels(id), rows(0x2C), "id {id:#x}");
+    }
+}

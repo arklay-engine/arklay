@@ -149,6 +149,24 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         Ok(mlua::Value::Table(table))
     });
 
+    // `re2_portrait()`: the status screen's portrait rows' texels on the
+    // portrait sheet by the player's id (`St_init_disp_face`), a sequence of
+    // three `{ u, v }`.
+    methods.add_method("re2_portrait", |lua, api, ()| {
+        let id = api.game().map_or(0, |game| game.re2.pl_id);
+        let rows = lua.create_table()?;
+        for (index, (u, v)) in crate::game::status2::portrait_texels(id)
+            .into_iter()
+            .enumerate()
+        {
+            let row = lua.create_table()?;
+            row.set("u", u)?;
+            row.set("v", v)?;
+            rows.set(index + 1, row)?;
+        }
+        Ok(rows)
+    });
+
     // `re2_item_get()`: RE2's get-item window while it is up: its `item`
     // and, on the ticks it flies to its slot, the picture's `fly` (`x`, `y`,
     // `w`, `h`, from the window's origin), whether the player is
