@@ -3904,8 +3904,9 @@ pub(crate) fn become_zombie(character: &mut Character, slot: u8) {
     if !(0x10..=0x21).contains(&id) || character.zombie.is_some() {
         return;
     }
-    let (floor, model_type, dead) = character.em_set;
-    let mut zombie = crate::zombie2::spawned(slot, floor, model_type);
+    // The same work: `nFloor` is `sce_em_set`'s or what a script set since.
+    let (_, model_type, dead) = character.em_set;
+    let mut zombie = crate::zombie2::spawned(slot, character.work.floor, model_type);
     zombie.dead_flag = dead;
     // The work is the scene character's, so `Root_ck` goes on from its turn.
     zombie.set_sight_turn(character.work.root_turn);
@@ -4458,9 +4459,25 @@ mod tests {
         exec(&mut game, "sce_em_set", &zombie);
         exec(&mut game, "work_set", &[WK_ENEMY, 3]);
         exec(&mut game, "member_set", &[17, 10]);
-        let character = game.re2.characters.0[3].as_ref().unwrap();
+        let character = game.re2.characters.0[3].as_mut().unwrap();
         assert_eq!(character.zombie.as_ref().unwrap().floor, 10);
+        character.work.floor = 3;
         assert_eq!(character_member(character, MEMBER_FLOOR), Some(10));
+    }
+
+    /// A scene character a script makes a zombie (room 202's Marvin) is
+    /// the same work: its `nFloor` is the one a script set before.
+    #[test]
+    fn a_scene_character_made_a_zombie_keeps_its_floor() {
+        let mut game = GameState::default();
+        let marvin = [0, 3, 0x50, 0, 0x40, 2, 0, 1, 255, 32000, 0, 29000, 0, 0, 0];
+        exec(&mut game, "sce_em_set", &marvin);
+        exec(&mut game, "work_set", &[WK_ENEMY, 3]);
+        exec(&mut game, "member_set", &[17, 10]);
+        exec(&mut game, "member_set", &[i64::from(MEMBER_ID), 0x10]);
+        let character = game.re2.characters.0[3].as_mut().unwrap();
+        become_zombie(character, 3);
+        assert_eq!(character.zombie.as_ref().unwrap().floor, 10);
     }
 
     /// Room 20E's licker from door 2 (`Type` 0x4013): `Sce_em_set` leaves
