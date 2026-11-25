@@ -15737,7 +15737,13 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
                 value("sv_choice"),
                 value("sv_typed"),
                 value("sv_saves"),
-                value("sv_count"),
+                // The save work's count: a loaded save's once the screen
+                // has read it, else what the title left in the work.
+                if value("sv_loaded") != 0 {
+                    value("sv_count")
+                } else {
+                    title.map_or(0, |title| title.value("ti_save_count"))
+                },
             ));
         }
         None => line.push_str(" sv=-"),

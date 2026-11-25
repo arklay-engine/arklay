@@ -1030,6 +1030,336 @@ fn the_4th_survivors_exit_goes_back_to_the_title_from_black() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// SPECIAL with every extra, its cursor on EX.BATTLE and confirmed, to the
+/// tick `Load_title_extreme` runs on, then through its 62-tick fade in.
+fn open_extreme(cx: &UiContext<'_>, dir: &std::path::Path) -> LuaScreen {
+    let mut screen = open_special(cx, dir, 15);
+    run(&mut screen, cx, UiInput::default(), 20);
+    run(&mut screen, cx, press("down"), 10);
+    assert_eq!(screen.value("ti_cur"), 2);
+    cx.cues.borrow_mut().clear();
+    run(&mut screen, cx, press("confirm"), 1);
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(6)]);
+    // Slot 2's fade, done on the 17th tick: Extreme Battle's flags and
+    // `title_mv_state` 5.
+    run(&mut screen, cx, UiInput::default(), 17);
+    assert_eq!(screen.value("ti_mv"), 5);
+    assert_eq!(screen.value("ti_fgsys") & 0x0100_0009, 0x0100_0000);
+    assert_eq!(screen.value("ti_fgstatus"), 0x4000);
+    assert_eq!(screen.value("ti_save_count"), 0xFFFF, "`FUN_004B73C0`");
+    // `Load_title_extreme` in one tick: core bank 0x14, slot 3 at 0x7C00
+    // and `Ti_kido` at 0xF8.
+    cx.cues.borrow_mut().clear();
+    run(&mut screen, cx, UiInput::default(), 1);
+    assert_eq!(*cx.cues.borrow(), [UiCue::CoreBank(0x14)]);
+    assert_eq!((screen.value("ti_mv"), screen.value("ti_disp")), (6, 0));
+    assert_eq!(screen.value("ti_fade3_level"), 0x7C00);
+    assert_eq!(screen.value("ti_kido"), 0xF8);
+    screen
+}
+
+fn work_x(screen: &LuaScreen, entry: usize) -> i64 {
+    screen.test_eval::<i64>(&format!("return M.state.work[{entry}].x"))
+}
+
+#[test]
+fn extreme_battles_title_fades_in_then_slides_its_logo_in() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-ex-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut screen = open_extreme(&cx, &dir);
+    // Slot 3 lifts by 4 << 7 a tick for 62 ticks, then the logo's count.
+    run(&mut screen, &cx, UiInput::default(), 2);
+    assert_eq!(screen.value("ti_fade3_level"), 0x7C00 - 0x200);
+    run(&mut screen, &cx, UiInput::default(), 59);
+    assert_eq!(screen.value("ti_disp"), 0);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(screen.value("ti_disp"), 1);
+    assert_eq!(screen.value("ti_demo"), 0x20);
+    assert_eq!(screen.value("ti_fade3_level"), -1);
+    // The logo's halves slide in from either side: at n = 31, 31² * 128
+    // / 1024 = 120.
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(screen.value("ti_demo"), 31);
+    assert_eq!(
+        [29, 30, 31, 32].map(|entry| work_x(&screen, entry)),
+        [-120, 0xBC - 120, 120, 0xBC + 120]
+    );
+    run(&mut screen, &cx, UiInput::default(), 31);
+    assert_eq!(screen.value("ti_demo"), 0);
+    assert_eq!(screen.value("ti_step"), 0);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(screen.value("ti_step"), 1);
+    // The right half's second copy fades by 8 a tick.
+    assert_eq!(screen.test_eval::<i64>("return M.state.work[32].r"), 0x78);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_button_in_extreme_battles_fade_in_shows_its_logo_at_once() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-ex-skip-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut screen = open_extreme(&cx, &dir);
+    run(&mut screen, &cx, UiInput::default(), 10);
+    // `special_ex_back`'s press on the fade in's twelfth tick: 0xF8 - 44
+    // left, by 0x20 a tick, 7 ticks, the logo drawn from the press and its
+    // count started on it. The last tick draws nothing: the page is back at
+    // 0.
+    run(&mut screen, &cx, UiInput::default(), 1);
+    run(&mut screen, &cx, press("confirm"), 1);
+    assert_eq!(
+        (screen.value("ti_menu"), screen.value("ti_demo")),
+        (1, 0x1F)
+    );
+    run(&mut screen, &cx, UiInput::default(), 5);
+    assert_eq!(screen.value("ti_disp"), 0);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!((screen.value("ti_disp"), screen.value("ti_menu")), (1, 0));
+    assert_eq!(screen.value("ti_demo"), 0x1F - 5);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Extreme Battle's title with its rows up and the cursor on LOAD GAME.
+fn extreme_rows(cx: &UiContext<'_>, dir: &std::path::Path) -> LuaScreen {
+    let mut screen = open_extreme(cx, dir);
+    run(&mut screen, cx, UiInput::default(), 62 + 33 + 5);
+    assert_eq!((screen.value("ti_step"), screen.value("ti_cur")), (1, 0));
+    screen
+}
+
+#[test]
+fn extreme_battles_level_page_chooses_a_level_and_starts() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-ex-level-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut screen = extreme_rows(&cx, &dir);
+    run(&mut screen, &cx, press("down"), 5);
+    assert_eq!(screen.value("ti_cur"), 1);
+    cx.cues.borrow_mut().clear();
+    run(&mut screen, &cx, press("confirm"), 1);
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(6)]);
+    assert_eq!(screen.value("ti_step"), 2);
+    // The level page's slide: 8 ticks, the digits at 0x60, 0x90 and 0xC0
+    // with all three levels open.
+    run(&mut screen, &cx, UiInput::default(), 7);
+    assert_eq!(screen.value("ti_page2"), 1);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(screen.value("ti_page2"), 2);
+    assert_eq!(
+        [33, 34, 35].map(|entry| work_x(&screen, entry)),
+        [0x60, 0x90, 0xC0]
+    );
+    // Right up to level 2 (the third), each with the cursor cue, and no
+    // further; left back to 1.
+    for (direction, level, cued) in [
+        ("right", 1, true),
+        ("right", 2, true),
+        ("right", 2, false),
+        ("left", 1, true),
+    ] {
+        cx.cues.borrow_mut().clear();
+        run(&mut screen, &cx, press(direction), 3);
+        assert_eq!(screen.value("ti_ef3"), level, "{direction}");
+        assert_eq!(cx.cues.borrow().contains(&UiCue::Core(4)), cued);
+    }
+    // The confirm on the level: the confirm's two cues and white flash on
+    // the next tick, then the fade from 0x1000, and the hand-off.
+    cx.cues.borrow_mut().clear();
+    run(&mut screen, &cx, press("confirm"), 1);
+    assert_eq!(screen.value("ti_page2"), 4);
+    assert!(cx.cues.borrow().is_empty());
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(0), UiCue::Core(1)]);
+    run(&mut screen, &cx, UiInput::default(), 17);
+    assert_eq!(screen.value("ti_ef2"), 3);
+    assert_eq!(screen.value("ti_fade_level"), 0x1000 + 0x80);
+    run(&mut screen, &cx, UiInput::default(), 224);
+    assert_eq!(screen.value("ti_page2"), 5);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!((screen.value("ti_mv"), screen.value("ti_disp")), (2, 3));
+    assert_eq!(screen.value("ti_fgsys") & 0x0102_0000, 0x0102_0000);
+    // The character's choice and the game aren't ported: the title starts
+    // again from black.
+    cx.cues.borrow_mut().clear();
+    assert_eq!(done(screen.update(&cx, UiInput::default())), None);
+    assert_eq!(screen.value("ti_mv"), 1);
+    assert_eq!(*cx.cues.borrow(), [UiCue::CoreBank(0x10)]);
+    assert_eq!(screen.value("ti_fgsys") & 0x0100_0000, 0);
+    assert_eq!(screen.value("ti_fgstatus"), 0);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!((screen.value("ti_mv"), screen.value("ti_disp")), (2, 1));
+    assert_eq!(screen.value("ti_kido"), 0x7C00);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn extreme_battles_level_page_exit_and_cancel_slide_back_to_start() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-ex-back-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut screen = extreme_rows(&cx, &dir);
+    run(&mut screen, &cx, press("down"), 5);
+    for leave in [&["down", "confirm"][..], &["cancel"][..]] {
+        run(&mut screen, &cx, press("confirm"), 10);
+        assert_eq!(screen.value("ti_page2"), 2);
+        cx.cues.borrow_mut().clear();
+        for key in leave {
+            run(&mut screen, &cx, press(key), 1);
+        }
+        assert_eq!(screen.value("ti_page2"), 3);
+        assert_eq!(cx.cues.borrow().last(), Some(&UiCue::Core(5)));
+        run(&mut screen, &cx, UiInput::default(), 7);
+        assert_eq!(screen.value("ti_page2"), 3);
+        run(&mut screen, &cx, UiInput::default(), 1);
+        assert_eq!(
+            [
+                screen.value("ti_page2"),
+                screen.value("ti_step"),
+                screen.value("ti_cur")
+            ],
+            [0, 1, 1]
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn extreme_battles_exit_goes_back_to_the_title_from_black() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-ex-exit-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut screen = extreme_rows(&cx, &dir);
+    for _ in 0..3 {
+        run(&mut screen, &cx, press("down"), 5);
+    }
+    assert_eq!(screen.value("ti_cur"), 3);
+    cx.cues.borrow_mut().clear();
+    run(&mut screen, &cx, press("confirm"), 1);
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(5)]);
+    // A fade to black by 0x1800 a tick from 0x200 on the next tick: done on
+    // the seventh.
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(screen.value("ti_fade_level"), 0x200 + 0x1800);
+    run(&mut screen, &cx, UiInput::default(), 5);
+    assert_eq!(screen.value("ti_step"), 1);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(screen.value("ti_step"), 2);
+    cx.cues.borrow_mut().clear();
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(screen.value("ti_mv"), 1);
+    assert_eq!(*cx.cues.borrow(), [UiCue::CoreBank(0x10)]);
+    assert_eq!(screen.value("ti_fgsys") & 0x0100_0000, 0);
+    assert_eq!(screen.value("ti_fgstatus"), 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn extreme_battles_result_loads_its_title_again() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-ex-result-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut screen = extreme_rows(&cx, &dir);
+    for _ in 0..2 {
+        run(&mut screen, &cx, press("down"), 5);
+    }
+    cx.cues.borrow_mut().clear();
+    run(&mut screen, &cx, press("confirm"), 1);
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(6)]);
+    run(&mut screen, &cx, UiInput::default(), 7);
+    assert_eq!(screen.value("ti_step"), 2);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(screen.value("ti_mv"), 7);
+    // RESULT's records aren't ported: `title_mv_state` 5 on the next tick,
+    // and the title loaded again on the one after.
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(screen.value("ti_mv"), 5);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!((screen.value("ti_mv"), screen.value("ti_disp")), (6, 0));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn extreme_battles_load_game_comes_back_to_its_title() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-ex-load-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut screen = extreme_rows(&cx, &dir);
+    cx.cues.borrow_mut().clear();
+    let mut action = done(screen.update(&cx, press("confirm")));
+    for _ in 0..300 {
+        if action.is_some() {
+            break;
+        }
+        action = done(screen.update(&cx, UiInput::default()));
+    }
+    assert_eq!(action, Some(ScreenAction::SaveLoad));
+    assert_eq!(*cx.cues.borrow(), [UiCue::Core(0), UiCue::Core(1)]);
+    // A load reads a game's save, which clears Extreme Battle's bits.
+    {
+        let mut other = extreme_rows(&cx, &dir);
+        let mut action = done(other.update(&cx, press("confirm")));
+        for _ in 0..300 {
+            if action.is_some() {
+                break;
+            }
+            action = done(other.update(&cx, UiInput::default()));
+        }
+        assert_eq!(action, Some(ScreenAction::SaveLoad));
+        other.resume_loaded(&cx, None);
+        assert_eq!(other.value("ti_fgsys") & 0x0100_0000, 0);
+        assert_eq!(other.value("ti_fgstatus") & 0x4000, 0);
+    }
+    // The load screen cancelled: Extreme Battle's title again.
+    screen.resume(&cx);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!(screen.value("ti_mv"), 5);
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!((screen.value("ti_mv"), screen.value("ti_disp")), (6, 0));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A skip on the tick the 4th Survivor's logo is done runs on past its
+/// two-entry table into EX.BATTLE's fade in and rows, still in
+/// `title_mv_state` 4, where START starts the 4th Survivor's game.
+#[test]
+fn a_skip_on_the_4th_survivors_last_logo_tick_runs_into_extreme_battles_rows() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-4th-ex-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut screen = open_special(&cx, &dir, 15);
+    run(&mut screen, &cx, UiInput::default(), 20);
+    run(&mut screen, &cx, press("confirm"), 19);
+    assert_eq!(screen.value("ti_mv"), 4);
+    run(&mut screen, &cx, UiInput::default(), 64 + 128 + 90);
+    assert_eq!(screen.value("ti_disp"), 0);
+    run(&mut screen, &cx, press("confirm"), 1);
+    assert_eq!(screen.value("ti_disp"), 2);
+    // EX.BATTLE's fade in, done at once, and the logo's count from what the
+    // title's idle count left (17, from the ticks of SPECIAL's fade).
+    run(&mut screen, &cx, UiInput::default(), 1);
+    assert_eq!((screen.value("ti_mv"), screen.value("ti_disp")), (4, 3));
+    let count = screen.value("ti_demo");
+    assert_eq!(count, 17);
+    run(&mut screen, &cx, UiInput::default(), 18);
+    assert_eq!(screen.value("ti_step"), 1);
+    // The cursor is the 4th Survivor's START (`Ti_Cur` 0): LOAD GAME here.
+    run(&mut screen, &cx, press("down"), 5);
+    assert_eq!(screen.value("ti_cur"), 1);
+    run(&mut screen, &cx, press("confirm"), 1);
+    assert_eq!(screen.value("ti_step"), 2);
+    run(&mut screen, &cx, UiInput::default(), 10);
+    let mut action = done(screen.update(&cx, press("confirm")));
+    for _ in 0..300 {
+        if action.is_some() {
+            break;
+        }
+        action = done(screen.update(&cx, UiInput::default()));
+    }
+    assert_eq!(action, Some(extra_game(0xC)));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// SPECIAL with every extra, its cursor taken to GALLERY and confirmed: the
 /// tick of the confirm, with the cues it played.
 pub(super) fn open_gallery(cx: &UiContext<'_>, dir: &std::path::Path) -> LuaScreen {

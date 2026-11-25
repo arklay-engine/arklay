@@ -1,0 +1,20 @@
+# The title from boot: SPECIAL, 4TH, and a confirm on the tick its logo is done (741): the 4th Survivor's title runs on into EX.BATTLE's fade in and rows through its two-entry table, where down to START, the level page and its confirm start the 4th Survivor's game (oracle/re2.md, "The title").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 confirm
+443
+741 confirm
+744
+800 down
+803
+830 confirm
+833
+870 confirm
+873

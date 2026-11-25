@@ -26,6 +26,7 @@
 //! | `Common/Data/room.adt`, `color2.adt` | `ui/option/room.bmp`, `ui/option/color2.bmp` |
 //! | `Common/Data/parts.tim`, `moji1.tim` | `ui/option/parts.tim`, `ui/option/moji1.tim` |
 //! | `Common/Data/spy_logo.tim`, `tofulogo.tim` | `ui/title/spy_logo.tim`, `ui/title/tofulogo.tim` |
+//! | `Common/Data/EXTITLE.adt`, `EXTITLE1.adt` (an ADT stream holding a TIM) | `ui/title/extitle.bmp`, `ui/title/extitle1.tim` |
 //! | `Gallery/TITLE<n>.dat`, `Moji.dat` (each a TIM) | `ui/gallery/title<n>.tim`, `ui/gallery/moji.tim` |
 //! | `Gallery/ROUGH<nn>.dat`, `ILLUST<nn>.dat`, `LEFT01.dat`, `LEFT02.dat`, `GNUM2.dat`, `movie64.dat` (each a TIM) | `ui/gallery/<stem>.tim` |
 //! | `Common/Data/font0.tim` | `font/00.bmp`, `font/00.xml` (moved onto the Western cells, `convert_re2/font.rs`) |
@@ -798,7 +799,7 @@ fn copy_text(
 /// own code (the font's widths and colours, the message codes). A change to
 /// what [`packed_source_hash`] covers needs no bump. It carries on from the
 /// revision the two converters shared.
-pub const CONVERT_VERSION: u32 = 30;
+pub const CONVERT_VERSION: u32 = 31;
 
 /// The checked-in scripts the pack takes as they are: each entry and its
 /// source.
@@ -2073,6 +2074,27 @@ fn copy_title_art(
                 "no Common/Data/{entry}.tim; SPECIAL's title has no logo"
             ));
         }
+    }
+    // Extreme Battle's title (`Load_title_extreme`): its background, and its
+    // logo's sheet (texture 0x16), an ADT stream holding a TIM.
+    if let Some(path) = find("EXTITLE") {
+        let decoded = adt::decode(&read(path)?).with_context(|| format!("{}", path.display()))?;
+        let image = adt::frame_image(&decoded).with_context(|| format!("{}", path.display()))?;
+        tally.add(
+            writer,
+            "ui",
+            "ui/title/extitle.bmp",
+            bmp::encode_to_vec(&image)?,
+        )?;
+    } else if layout.common.is_some() {
+        warnings.push("no Common/Data/EXTITLE.adt; EX.BATTLE's title has no background".into());
+    }
+    if let Some(path) = find("EXTITLE1") {
+        let decoded =
+            adt::decode_sheets(&read(path)?).with_context(|| format!("{}", path.display()))?;
+        tally.add(writer, "ui", "ui/title/extitle1.tim", decoded)?;
+    } else if layout.common.is_some() {
+        warnings.push("no Common/Data/EXTITLE1.adt; EX.BATTLE's title has no logo".into());
     }
     let bytes = match archived(TITLE_MOJI_7Z, warnings) {
         Some(bytes) => bytes,

@@ -20,13 +20,16 @@
 -- config.ini's `SPECIAL` opens (`args.special`, 15 by default), where 4TH
 -- and TO-FU fade to their own title (`title_mv_state` 3 and 4, with
 -- `title_o.adt`, `title_o2.adt` and the logos `spy_logo.tim` and
--- `tofulogo.tim` as texture 0x15) whose START isn't ported past its fade
--- (the title starts again) and whose EXIT goes back to `Title_init`,
--- GALLERY opens its character's choice (page 7), whose confirm fades to
--- the gallery (`ui/gallery.lua`), a task the title sleeps under until its
+-- `tofulogo.tim` as texture 0x15) whose START starts that mode's game and
+-- whose EXIT goes back to `Title_init`, EX.BATTLE fades to Extreme
+-- Battle's title (`title_mv_state` 5 and 6, with `extitle.adt` and the logo
+-- `extitle1.adt` as texture 0x16) with its level page, whose START isn't
+-- ported past its hand-off (the title starts again, as the character's
+-- choice that follows in the original, `ExBattle`, isn't ported), GALLERY
+-- opens its character's choice (page 7), whose confirm fades to the
+-- gallery (`ui/gallery.lua`), a task the title sleeps under until its
 -- EXIT, with config.ini's `GALLERY0` to `GALLERY4` (`args.gallery0` to
--- `args.gallery4`, everything opened without them), and EX.BATTLE's
--- confirm does nothing; OPTION fades out into the
+-- `args.gallery4`, everything opened without them); OPTION fades out into the
 -- option screen, which runs here as a task of its own ("the option screen"
 -- below) and gives the title back at `Title_init`. An idle title fades into
 -- the attract demo after 0x708 ticks.
@@ -118,6 +121,12 @@ local FG_EASY = 0x20
 local FG_NEW_GAME = 0x20000
 -- Up while the load screen has loaded nothing (`Title_main_load`).
 local FG_NO_LOAD = 0x400
+-- The 4th Survivor's and To-fu's modes (8, and 1 with it for To-fu), and
+-- Extreme Battle's.
+-- `fg_status`'s Extreme Battle flag (1:17) is `FS_EXTREME`. Extreme
+-- Battle's title is `ex` below.
+local FG_EXTRA, FG_EXTREME, FS_EXTREME = 0x8, 0x1000000, 0x4000
+local ex = {}
 
 local s
 local pages
@@ -189,8 +198,21 @@ local function new_state()
         special = 15,
         -- Task 0's second sub-step (+0xA), the 4th Survivor's title's.
         sub2 = 0,
-        -- `fg_status`'s bits the extras set (flag 1:6, `0x02000000`).
+        -- `fg_status`'s bits the extras set (flag 1:6, `0x02000000`, and
+        -- Extreme Battle's 1:17, `0x4000`).
         fg_status = 0,
+        -- Extreme Battle's title: the level page's step (`0x691B84`), the
+        -- fade's step (`0x691EF2`), the level chosen (`0x691EF3`), the
+        -- levels open (`0x989E91`, which `Title_init` sets to 2: all three)
+        -- and the rows' slide flag (`0x689F08`).
+        page2 = 0,
+        ef2 = 0,
+        -- The save work's count of saves made (`0x98E9BC`), which the load
+        -- screen shows: `FUN_004B73C0` sets it to 0xFFFF for an extra.
+        save_count = 0,
+        level = 0,
+        levels = 2,
+        ex_back = 0,
         -- The frame limiter's choice (`0x98F07A`): 0 the title's, 2 the
         -- game's.
         limiter = 0,
@@ -716,11 +738,11 @@ end
 
 -- SPECIAL (`0x504900`): its row slides up by 37 over the others' fade, and
 -- the choices `Special` opens show below it and take the directions. EXIT
--- and the cancel slide back to the rows. A confirm on 4TH or TO-FU fades
--- slot 2 to black (steps 4 and 5) and, on the tick it is done, starts that
--- mode's title (`title_mv_state` 3). GALLERY's confirm opens its
--- character's choice (page 7) on the next tick. EX.BATTLE's confirm isn't
--- ported and does nothing.
+-- and the cancel slide back to the rows. A confirm on 4TH, TO-FU or
+-- EX.BATTLE fades slot 2 to black (steps 4 and 5) and, on the tick it is
+-- done, starts that mode's title (`title_mv_state` 3, or 5 for EX.BATTLE).
+-- GALLERY's confirm opens its character's choice (page 7) on the next
+-- tick.
 local function special()
     local stepped = s.step
     local case = special_case()
@@ -745,7 +767,7 @@ local function special()
             if s.cur == SPECIAL_EXIT then
                 s.cue(SE_CANCEL)
                 s.step = 3
-            elseif s.cur == 0 or s.cur == 1 then
+            elseif s.cur <= 2 then
                 s.cue(SE_DECIDE)
                 s.step = 4
             elseif s.cur == 4 then
@@ -769,6 +791,21 @@ local function special()
         if fade_done(2) then
             fade_set(0x202, 0)
             fade_adjust(0x7FFF, 2)
+            if s.cur == 2 then
+                -- EX.BATTLE: `FUN_004B73C0` keeps the flag it raises (1:17),
+                -- and the step draws the title's logo itself, as
+                -- `title_mv_state` 5 has no draw of it after the step.
+                s.fg_system = s.fg_system | FG_EXTREME
+                -- Flag 1:6 too while a mode's 8 or 1 stands (an EXIT from
+                -- EX.BATTLE's rows in the 4th Survivor's title keeps them).
+                s.fg_status = FS_EXTREME | (s.fg_system & 9 ~= 0 and 0x02000000 or 0)
+                s.save_count = 0xFFFF
+                s.mv = 5
+                title_image()
+                s.menu = 0
+                s.step = 0
+                return
+            end
             if s.cur == 0 then
                 s.fg_system = (s.fg_system & ~1) | 8
             else
@@ -776,6 +813,7 @@ local function special()
             end
             -- `FUN_004B73C0`: the new game's work, with flag 1:6.
             s.fg_status = 0x02000000
+            s.save_count = 0xFFFF
             s.mv = 3
             s.menu = 0
             s.step = 0
@@ -1132,7 +1170,7 @@ end
 -- `Init_global` leaves them, and `Title_init` sets them again 122 ticks on.
 local HANDED = {
     "mv", "disp", "menu", "step", "sel", "cur", "pulse", "slide", "demo", "flash", "logo", "logo_count", "kido",
-    "add", "dim",
+    "add", "dim", "page2", "ef2", "level",
 }
 
 -- The hand-over: those, the new-game page's slide count (`0x689B8C`) and
@@ -1185,6 +1223,7 @@ local function title_init()
     s.b8c[1] = 0
     s.b8c[2] = 0
     s.easy = 0
+    s.levels = 2
     s.logo = i16(0xFFD2)
     s.flash = 0
     s.logo_count = -1
@@ -2689,9 +2728,18 @@ local function title_main(api)
             s.disp = 3
             s.sub = 0
         else
+            -- Without a load: the extra's title the load came from (the
+            -- 4th Survivor's under `fg_system`'s 8, Extreme Battle's under
+            -- 0x1000000), loaded again, or the title's.
             s.fg_system = s.fg_system & ~FG_NO_LOAD
-            s.background = s.title_background
-            s.mv = 1
+            if s.fg_system & FG_EXTRA ~= 0 then
+                s.mv = 3
+            elseif s.fg_system & FG_EXTREME ~= 0 then
+                s.mv = 5
+            else
+                s.background = s.title_background
+                s.mv = 1
+            end
             s.sub = 0
         end
     elseif s.disp == 3 and s.loaded then
@@ -2706,6 +2754,13 @@ local function title_main(api)
         else
             s.exit = "continue"
         end
+    elseif s.disp == 3 and s.fg_system & FG_EXTREME ~= 0 then
+        -- Extreme Battle's game: `Title_game_init`'s step 1 starts the
+        -- character's choice (`ExBattle`, 0x4EA320, task 1) under
+        -- `fg_system`'s 0x1000000, whatever its 8, and then the game (room
+        -- 612, or the 4th Survivor's room 304 with both). Neither is ported:
+        -- the title starts again, from black, as the title's EXIT leaves it.
+        ex.leave(api)
     elseif s.disp == 3 and s.fg_system & 8 ~= 0 then
         -- The 4th Survivor's or To-fu's game (`Title_game_init`'s extras
         -- branch, 0x506750): no prologue, HUNK (0xC) or, with
@@ -2968,14 +3023,449 @@ local function survivor_menu(api)
 end
 
 -- `FUN_00505670` (`title_mv_state` 4). A skip on the logo's last tick
--- leaves `Ti_Disp_add` at 2, which the original's two-entry table sends
--- into EX.BATTLE's title; that isn't ported, and the title holds.
+-- leaves `Ti_Disp_add` at 2, past the end of the original's two-entry
+-- table (`0x5409EC`), whose next words are EX.BATTLE's (`0x5409F4`): its
+-- fade in (0x507110) then runs, which steps `Ti_Disp_add` to 3, and its
+-- rows (0x5071C0), all in `title_mv_state` 4, over the 4th Survivor's
+-- background, without EX.BATTLE's logo's texture, and with its
+-- `fg_system`'s 8 still up, so that START there starts the 4th Survivor's
+-- game.
 local function survivor_main(api)
     if s.disp == 0 then
         survivor_build()
     elseif s.disp == 1 then
         survivor_menu(api)
+    elseif s.disp == 2 then
+        ex.fade_in()
+    elseif s.disp == 3 then
+        ex.menu(api)
     end
+end
+
+-- ---------------------------------------------- Extreme Battle's title
+
+-- Texture 0x16, the logo's sheet (`extitle1.adt`).
+ex.PAGE = 6
+
+function ex.i32(v)
+    v = v & 0xFFFFFFFF
+    return v >= 0x80000000 and v - 0x100000000 or v
+end
+
+-- C's division by 1024, toward zero.
+function ex.div1024(v)
+    return v >= 0 and v // 1024 or -((-v) // 1024)
+end
+
+-- A word of the work as `AddSprt` draws it, at the work's place and colour,
+-- once with the table's blend.
+function ex.add_work(entry, page)
+    local m = MOJI[entry]
+    local w = s.work[entry]
+    s.sprites[#s.sprites + 1] = {
+        page = page, u = m[5], v = m[6], w = m[3], h = m[4],
+        x = w.x, y = w.y, colour = w.r, blend = m[7], depth = 10,
+    }
+end
+
+-- `FUN_00507770(row, parts, dis, flg)`: with `parts`' 1 the logo, words 29
+-- to 32, which slide in from both sides while `demo_countdown` counts down
+-- and then fade the second copy of its right half (words 32 and 33, by 8
+-- a tick); with its 2 once the count is out the rows, words 25 to 28
+-- (LOAD GAME, START, RESULT and EXIT), drawn as `Moji_SelectMode` draws
+-- the title's.
+function ex.draw(row, parts, dis, flg)
+    local work = s.work
+    if parts & 1 ~= 0 then
+        if s.demo == 0 then
+            if work[32].r ~= 0 then
+                work[32].r = u8(work[32].r - 8)
+                work[33].r = u8(work[33].r - 8)
+            end
+        else
+            s.demo = (s.demo - 1) & 0xFFFF
+            local n = s.demo
+            if n ~= 0 then
+                local square = ex.i32(n * n)
+                local left = ex.div1024(ex.i32(square * -0x80))
+                local right = ex.div1024(ex.i32(square * 0x80))
+                work[29].x = i16(left)
+                work[31].x = i16(right)
+                work[30].x = i16(0xBC - right)
+                work[32].x = i16(right + 0xBC)
+            end
+            for entry = 29, 32 do
+                work[entry].r = 0x80
+            end
+        end
+        for entry = 29, 32 do
+            ex.add_work(entry, ex.PAGE)
+        end
+    end
+    if s.demo == 0 and parts & 2 ~= 0 then
+        local n = flg == 0 and 8 - s.slide or s.slide
+        for k = 0, 3 do
+            local entry = 25 + k
+            local colour = 0x20
+            local y = MOJI[entry][2]
+            if s.slide ~= 0 then
+                if k == row then
+                    local q = (n * n * n * n * dis) >> 12
+                    if flg == 0 then
+                        y = i16(q - dis + y)
+                    else
+                        y = i16(y - q)
+                    end
+                else
+                    local d = 0x80 - s.dim
+                    colour = u8(0x20 - ((d + ((d >> 31) & 3)) >> 2))
+                end
+            end
+            if k == row and s.slide ~= 8 then
+                colour = u8(s.pulse + 0x20)
+            end
+            work[entry].r = colour
+            work[entry].y = y
+            if colour ~= 0 then
+                draw_word_at(entry, colour, work[entry].x, y)
+            end
+        end
+    end
+end
+
+-- `FUN_005079E0(cur, level)`: the level's digits (words 33 to 35) and EXIT
+-- (36), dimmed by the slide's `0x691B8C`, the lit one EXIT when `cur` is 1
+-- or else the level's digit.
+function ex.levels_draw(cur, level)
+    for k = 0, 3 do
+        local entry = 33 + k
+        local w = s.work[entry]
+        local d = 0x80 - s.b8c[0]
+        local colour = u8(0x20 - ((d + ((d >> 31) & 3)) >> 2))
+        if (cur == 1 and k == 3) or (cur == 0 and k == level) then
+            colour = u8(s.pulse + 0x20)
+        end
+        w.r = colour
+        draw_word_at(entry, colour, w.x, w.y)
+    end
+end
+
+-- `FUN_00507AF0(black)`, a step of the way out, by `0x691EF2`: `true` once
+-- the screen is black. With `black` a fade to black; without, the
+-- confirm's two cues and white flash, then a fade from 0x1000.
+function ex.fade_out(black)
+    if black then
+        if s.ef2 == 0 then
+            fade_set(0x200, 0x1800)
+            fade_adjust(0x200)
+            s.ef2 = 1
+        elseif s.ef2 ~= 1 then
+            return false
+        end
+    else
+        if s.ef2 == 0 then
+            s.cue(SE_CONFIRM_A)
+            s.cue(SE_CONFIRM_B)
+            fade_set(0x100, -0x800)
+            s.ef2 = 1
+        end
+        if s.ef2 == 1 then
+            if fade_done(0) then
+                s.ef2 = 2
+            end
+            return false
+        end
+        if s.ef2 == 2 then
+            fade_set(0x200, 0x80)
+            fade_adjust(0x1000)
+            s.ef2 = 3
+        elseif s.ef2 ~= 3 then
+            return false
+        end
+    end
+    if fade_done(0) then
+        fade_set(0x200, 0)
+        fade_adjust(0x7FFF)
+        return true
+    end
+    return false
+end
+
+-- `Load_title_extreme` (0x506F90, `title_mv_state` 5), in one tick: the
+-- mode's flags, its core bank (0x14), the logo's sheet as texture 0x16,
+-- slot 3 at 0x7C00 over its background, and the counts for its fade in.
+function ex.load(api)
+    s.fg_system = s.fg_system | FG_EXTREME
+    s.fg_status = s.fg_status | FS_EXTREME
+    s.limiter = 0
+    api:core_bank(0x14)
+    if api:has_image("ui/title/extitle1") then
+        pages[ex.PAGE] = api:indexed_page("ui/title/extitle1")
+    end
+    fade_set(0x203, 0)
+    fade_adjust(0x7C00, 3)
+    if api:has_image("ui/title/extitle") then
+        s.background = api:picture("ui/title/extitle")
+    end
+    moji_set_work()
+    s.mv = s.mv + 1
+    s.cur = 0
+    s.add = 0
+    s.kido = 0xF8
+    s.pulse = 0
+    s.pulse_step = 2
+    s.disp = 0
+    s.menu = 0
+    s.step = 0
+    s.page2 = 0
+    s.dim = 0x80
+    s.b8c[0] = 0
+    s.logo = 0xF0
+    s.flash = 0
+    s.logo_count = -1
+    s.slide = 0
+    fade_off(0)
+    fade_off(1)
+    fade_off(2)
+    fade_set(0x203, 0)
+    fade_adjust(0x7C00, 3)
+end
+
+-- `FUN_00507100`'s `Ti_Disp_add` 0 (0x507110): slot 3 lifts off the
+-- background over 62 ticks, or 8 once a button shows the logo; then the
+-- logo's slide (`demo_countdown` 0x20) and the rows.
+function ex.fade_in()
+    fade_adjust(i16(s.kido) << 7, 3)
+    if s.edge & 0x9FF ~= 0 then
+        s.demo = 0x20
+        s.menu = 1
+    end
+    s.kido = (s.kido + (s.menu == 0 and -4 or -0x20)) & 0xFFFF
+    if i16(s.kido) <= 0 then
+        if s.menu == 0 then
+            s.demo = 0x20
+        end
+        s.disp = s.disp + 1
+        s.kido = 0
+        s.menu = 0
+        fade_off(3)
+    end
+    ex.draw(0, s.menu, 0, 0)
+end
+
+-- The level page (`FUN_00507100`'s rows, step 2, by `0x691B84`): the
+-- digits slide in over the rows (but START's), the sideways keys choose
+-- the level up to `0x989E91`, and the confirm on it fades to the new game.
+-- EXIT and the cancel slide back to the rows, on START.
+function ex.level_page()
+    local page = s.page2
+    if page == 0 or page == 1 then
+        if page == 0 then
+            s.ef2 = 0
+            s.dim = 0x80
+            s.b8c[0] = 0
+            s.pulse = 0
+            s.pulse_step = 2
+            s.cur = 0
+            s.level = 0
+            s.ex_back = 0
+            s.page2 = 1
+            local x = s.levels > 1 and { 0x60, 0x90, 0xC0 } or { 0x78, 0xA8, 0x140 }
+            for k = 1, 3 do
+                s.work[32 + k].x = x[k]
+            end
+            s.slide = 0
+        end
+        s.dim = u8(s.dim - 0x10)
+        s.b8c[0] = u8(s.b8c[0] + 0x10)
+        s.slide = u8(s.slide + 1)
+        if s.slide == 8 then
+            s.dim = 0
+            s.b8c[0] = 0x80
+            s.page2 = s.page2 + 1
+        end
+    elseif page == 2 then
+        if s.cur == 0 then
+            if s.edge & PAD_LEFT ~= 0 and s.level > 0 then
+                s.cue(SE_CURSOR)
+                s.level = s.level - 1
+            end
+            if s.edge & PAD_RIGHT ~= 0 and s.level < s.levels then
+                s.cue(SE_CURSOR)
+                s.level = s.level + 1
+            end
+        end
+        if s.edge & PAD_UP ~= 0 and s.cur > 0 then
+            s.cue(SE_CURSOR)
+            s.cur = s.cur - 1
+        end
+        if s.edge & PAD_DOWN ~= 0 and s.cur < 1 then
+            s.cue(SE_CURSOR)
+            s.cur = s.cur + 1
+        end
+        if confirm() then
+            if s.cur == 0 then
+                s.page2 = 4
+            else
+                s.cue(SE_CANCEL)
+                s.page2 = 3
+            end
+        else
+            if s.key_trg & KEY_CANCEL ~= 0 then
+                s.cue(SE_CANCEL)
+                s.page2 = 3
+            end
+            pulse()
+        end
+    elseif page == 3 then
+        s.dim = u8(s.dim + 0x10)
+        s.b8c[0] = u8(s.b8c[0] - 0x10)
+        s.slide = u8(s.slide - 1)
+        s.ex_back = 1
+        s.pulse = 0
+        s.pulse_step = 2
+        if s.slide == 0 then
+            s.dim = 0x80
+            s.b8c[0] = 0
+            s.cur = 1
+            s.step = 1
+            s.page2 = 0
+        end
+    elseif page == 4 then
+        if ex.fade_out(false) then
+            s.page2 = 5
+        end
+    elseif page == 5 then
+        -- The new game's hand-off (`Title_main`'s step 3).
+        s.mv = 2
+        s.fg_system = s.fg_system | FG_NEW_GAME
+        s.disp = 3
+    end
+    ex.levels_draw(s.cur, s.level)
+    ex.draw(1, 3, 0x18, s.ex_back)
+end
+
+-- The rows (0x5071D0, page 0): once the logo is in, the cursor on the
+-- repeat; LOAD GAME, RESULT and EXIT leave by page 1, and START opens the
+-- level page (step 2) while a level is open.
+function ex.rows()
+    if s.step == 0 then
+        if s.demo == 0 then
+            s.step = 1
+        end
+        ex.draw(s.cur, 3, 0, 0)
+        return
+    elseif s.step == 2 then
+        ex.level_page()
+        return
+    elseif s.step ~= 1 then
+        return
+    end
+    if repeating() then
+        if s.edge & PAD_UP ~= 0 and s.cur > 0 then
+            s.cue(SE_CURSOR)
+            s.cur = s.cur - 1
+        end
+        if s.edge & PAD_DOWN ~= 0 and s.cur < 3 then
+            s.cue(SE_CURSOR)
+            s.cur = s.cur + 1
+        end
+    end
+    if confirm() then
+        if s.cur == 1 then
+            if s.levels < 1 then
+                s.level = 0
+                s.menu = 1
+                s.step = 0
+            else
+                s.cue(SE_DECIDE)
+                s.step = 2
+            end
+        else
+            if s.cur == 2 then
+                s.cue(SE_DECIDE)
+            elseif s.cur == 3 then
+                s.cue(SE_CANCEL)
+            end
+            s.menu = 1
+            s.step = 0
+        end
+    end
+    pulse()
+    ex.draw(s.cur, 3, 0, 0)
+end
+
+-- The way out (0x507620, page 1): LOAD GAME and START through the
+-- confirm's flash and fade, RESULT and EXIT through a fade to black, then
+-- on the next tick LOAD GAME's load screen (`Ti_Disp_add` 2), START's new
+-- game, RESULT's records (`title_mv_state` 7) or EXIT's title, from black.
+function ex.leave_page(api)
+    if s.step == 0 then
+        s.ef2 = 0
+        s.step = 1
+    end
+    if s.step == 1 then
+        if ex.fade_out(s.cur ~= 0 and s.cur ~= 1) then
+            s.step = 2
+        end
+    elseif s.step == 2 then
+        if s.cur == 0 then
+            s.mv = 2
+            s.disp = 2
+        elseif s.cur == 1 then
+            s.mv = 2
+            s.fg_system = s.fg_system | FG_NEW_GAME
+            s.disp = 3
+        elseif s.cur == 2 then
+            s.mv = 7
+        elseif s.cur == 3 then
+            ex.leave(api)
+        end
+    end
+    ex.draw(s.cur, 3, 0, 0)
+end
+
+-- EXIT's way back to the title (`FUN_00507100`'s page 1, step 2, with
+-- `Ti_Cur` 3): `fg_status` cleared, `Init_global`, the mode's flags down,
+-- the title's core bank and picture, and `Title_init` on the next tick
+-- under slot 0 at 0x7C00.
+function ex.leave(api)
+    s.fg_status = 0
+    init_global()
+    s.fg_system = s.fg_system & ~FG_EXTREME
+    api:core_bank(0x10)
+    s.background = s.title_background
+    fade_set(0x200, 0)
+    fade_adjust(0x7C00)
+    s.mv = 1
+end
+
+-- `FUN_00507100`'s `Ti_Disp_add` 1 (0x5071C0), by the page. A page past 1
+-- is past the end of its table in the original.
+function ex.menu(api)
+    if s.menu == 0 then
+        ex.rows()
+    elseif s.menu == 1 then
+        ex.leave_page(api)
+    end
+end
+
+-- `FUN_00507100` (`title_mv_state` 6).
+function ex.main(api)
+    if s.disp == 0 then
+        ex.fade_in()
+    elseif s.disp == 1 then
+        ex.menu(api)
+    end
+end
+
+-- `FUN_00507AB0` (`title_mv_state` 7): RESULT's records (`Load_ex_result`
+-- and its task, 0x4DD4F0) aren't ported; the title goes straight to what
+-- follows them, Extreme Battle's title loaded again.
+function ex.result()
+    s.mv = 5
+    s.flash = 0
+    s.logo_count = 0
 end
 
 -- ---------------------------------------------------------------- the screen
@@ -3093,7 +3583,9 @@ local function boot_main(api)
         -- whose load runs on the next tick; the title's image is drawn on
         -- this one, as for any `title_mv_state` 3.
         boot_end()
-        if s.fg_system & 8 ~= 0 then
+        if s.fg_system & FG_EXTREME ~= 0 then
+            s.mv = 5
+        elseif s.fg_system & 8 ~= 0 then
             s.mv = 3
         end
     else
@@ -3198,16 +3690,17 @@ local function publish(api)
         api:set("ti_fade" .. n .. "_mode", s.fades[n].mode)
     end
     -- The trace's `tx`: task 0's +0xA, the page bytes, the slide's two
-    -- counts, EX.BATTLE's level page (not ported) and `fg_status`'s bits.
+    -- counts, EX.BATTLE's level page and `fg_status`'s bits.
     api:set("ti_sub2", s.sub2)
-    api:set("ti_page2", 0)
+    api:set("ti_page2", s.page2)
     api:set("ti_dim", s.dim)
     api:set("ti_b8c", s.b8c[0])
-    api:set("ti_ef2", 0)
-    api:set("ti_ef3", 0)
-    -- EX.BATTLE's level (`0x989E91`), which the boot leaves at 2.
-    api:set("ti_level", 2)
+    api:set("ti_ef2", s.ef2)
+    api:set("ti_ef3", s.level)
+    -- The levels EX.BATTLE opens (`0x989E91`), which the boot leaves at 2.
+    api:set("ti_level", s.levels)
     api:set("ti_fgstatus", s.fg_status)
+    api:set("ti_save_count", s.save_count)
     -- `fg_status` bit 31, which the trace's `tx` leaves out.
     api:set("ti_claire", s.claire and 1 or 0)
     api:set("ti_kido", s.kido)
@@ -3383,6 +3876,12 @@ function M.update(api, input)
         survivor_load(api)
     elseif s.mv == 4 then
         survivor_main(api)
+    elseif s.mv == 5 then
+        ex.load(api)
+    elseif s.mv == 6 then
+        ex.main(api)
+    elseif s.mv == 7 then
+        ex.result()
     end
     if not s.sleeping and (s.mv == 2 or s.mv == 3) then
         title_image()
@@ -3449,6 +3948,12 @@ local function resume(api, loaded, place, status)
     s.load = loaded and place and { place = place, status = status or 0 } or nil
     if not loaded then
         s.fg_system = s.fg_system | FG_NO_LOAD
+    else
+        -- `Card_access` takes the mode from the save it read: a game's save
+        -- (arklay makes no other) clears Extreme Battle's `fg_system` bit,
+        -- and `fg_status` is the save's, without its flag.
+        s.fg_system = s.fg_system & ~FG_EXTREME
+        s.fg_status = s.fg_status & ~FS_EXTREME
     end
     publish(api)
 end
@@ -3633,7 +4138,7 @@ function M.draw(api)
     fade(3)
     local cache = M.cache or {}
     M.cache = cache
-    for k = 0, OPT_PARTS do
+    for k = 0, ex.PAGE do
         if pages[k] and (not cache[k] or cache[k].page ~= pages[k]) then
             cache[k] = { page = pages[k], palette = api:page_palette(pages[k], 0) or {} }
         end

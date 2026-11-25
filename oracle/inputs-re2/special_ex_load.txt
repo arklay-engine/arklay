@@ -1,0 +1,18 @@
+# The title from boot: SPECIAL, EX.BATTLE, LOAD GAME with no saves: the flash and fade to the load screen, its cancel key, and Extreme Battle's title again (oracle/re2.md, "The title").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+420 down
+423
+450 confirm
+453
+640 confirm
+643
+1000 cancel
+1003

@@ -1,0 +1,34 @@
+# The title from boot: SPECIAL, EX.BATTLE, a confirm in its fade in (the logo at once), START and the level page, its EXIT, START again and the cancel key, then down to EXIT and its confirm: the title again from black (oracle/re2.md, "The title").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+420 down
+423
+450 confirm
+453
+480 confirm
+483
+560 down
+563
+600 confirm
+603
+640 down
+643
+670 confirm
+673
+720 confirm
+723
+770 cancel
+773
+820 down
+823
+850 down
+853
+880 confirm
+883
