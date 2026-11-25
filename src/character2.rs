@@ -685,7 +685,7 @@ pub(crate) fn run_esprs(
     player_parts: &[(usize, player2::Matrix)],
 ) {
     let scenario = game.id.player_flag & 1;
-    for (call, matrix) in std::mem::take(&mut game.re2.pending_esprs) {
+    for (call, matrix, root) in std::mem::take(&mut game.re2.pending_esprs) {
         let world = match matrix.slot {
             None => matrix.part.and_then(|part| {
                 player_parts
@@ -712,7 +712,8 @@ pub(crate) fn run_esprs(
                     world.unwrap_or_else(|| root_matrix(root.0, root.1))
                 }),
         };
-        let world = world.unwrap_or_else(|| {
+        // The player's `M` as the opcode read it, not where the pass left him.
+        let world = world.or(root).unwrap_or_else(|| {
             let player = &game.entities[0];
             root_matrix(player.pos, player.angle)
         });

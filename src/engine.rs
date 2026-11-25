@@ -21710,8 +21710,8 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
         .re2
         .pending_esprs
         .iter()
-        .filter(|(_, matrix)| matrix.slot.is_none())
-        .filter_map(|(_, matrix)| matrix.part)
+        .filter(|(_, matrix, _)| matrix.slot.is_none())
+        .filter_map(|(_, matrix, _)| matrix.part)
         .collect();
     let mut player_parts: Vec<(usize, crate::player2::Matrix)> = Vec::new();
     for part in parts {
