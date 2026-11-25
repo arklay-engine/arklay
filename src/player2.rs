@@ -62,8 +62,8 @@ const MOVE_ROTATE: u8 = 4;
 const MOVE_AIM: u8 = 5;
 /// `pl_mv06`, the crouching pick-up `Sce_Item` starts.
 pub(crate) const MOVE_ITEM: u8 = 6;
-const MOVE_STAIRS: u8 = 7;
-const MOVE_CLIMB: u8 = 8;
+pub(crate) const MOVE_STAIRS: u8 = 7;
+pub(crate) const MOVE_CLIMB: u8 = 8;
 const MOVE_JUMP_DOWN: u8 = 9;
 /// `pl_mv_0a`: pushing a room object.
 const MOVE_PUSH: u8 = 10;
@@ -1445,15 +1445,15 @@ impl Work {
             && matches!(self.routine[1], MOVE_ITEM | MOVE_STAIRS | MOVE_CLIMB)
     }
 
-    /// `Be_flg`'s bits 4 and 8: on the stairs, or going up or down a box and
-    /// off the ground, nothing collides. The climb drops them on its clip's
-    /// frame 0x31 (Sherry's 0x77), and the walls push again for the frames
-    /// her clip has left.
+    /// On the stairs or jumping down off a box the collision tail runs
+    /// neither the bodies' push nor the room's walls. A climb up a box is
+    /// gated by its bits instead: `pl_mv_08` (`0x4DB670`) raises `Be_flg`'s
+    /// 4 (no body push) as it starts and 8 (no walls) on clip frame 0x11,
+    /// and drops both on 0x31 (Sherry's 0x77).
     pub fn climbing(&self) -> bool {
         self.routine[0] == MODE_MOVE
             && match self.routine[1] {
                 MOVE_STAIRS => true,
-                MOVE_CLIMB => matches!(self.routine[3], 1..=3) && self.be_flg & BE_NO_PUSH != 0,
                 MOVE_JUMP_DOWN => self.routine[3] < 5,
                 _ => false,
             }
@@ -8720,7 +8720,7 @@ mod tests {
                     setup.work.move_cnt,
                     setup.work.hokan,
                     setup.work.routine[3],
-                    setup.work.climbing(),
+                    setup.work.be_flg & BE_NO_SCA != 0,
                 ));
             }
             (seen, setup.rnd)
@@ -8740,18 +8740,13 @@ mod tests {
         assert_eq!(rnd, crate::zombie2::Rnd(0x0204));
         let at = seen.iter().position(|&(frame, ..)| frame == 0x39).unwrap();
         assert_eq!(seen[at + 1].0, 0x3A, "{seen:?}");
-        // The pass is skipped up to frame 0x77 and runs for the clip's rest.
+        // The walls are skipped from frame 0x11 up to 0x77 and push for the
+        // clip's rest.
+        let from = seen.iter().position(|&(frame, ..)| frame == 0x12).unwrap();
         let end = seen.iter().position(|&(frame, ..)| frame == 0x78).unwrap();
-        assert!(
-            seen[..end].iter().all(|&(.., climbing)| climbing),
-            "{seen:?}"
-        );
-        assert!(
-            seen[end..]
-                .iter()
-                .any(|&(_, _, step, climbing)| step == 3 && !climbing),
-            "{seen:?}"
-        );
+        assert!(seen[..from].iter().all(|&(.., walls)| !walls), "{seen:?}");
+        assert!(seen[from..end].iter().all(|&(.., walls)| walls), "{seen:?}");
+        assert!(!seen[end].3, "{seen:?}");
     }
 
     /// `pl_br_03` (0x4DA6C0) asks for the check while backing up, and
