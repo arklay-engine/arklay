@@ -11032,6 +11032,8 @@ impl GameSession {
         if let Some(transition) = self.transition.as_ref().filter(|_| self.door_on_screen()) {
             self.gpu_scene_visible =
                 render_transition_on(&mut self.framebuffer, pass, pack, transition)?;
+            let line = transition.transition.stepper().re2_wait_line();
+            self.draw_re2_wait_line(line);
             return Ok(());
         }
         // The DIED screen owns the frame while it is up: the static backdrop,
@@ -17097,12 +17099,38 @@ impl DoorAnimation {
         std::mem::take(&mut self.messages)
     }
 
+    /// The line an RE2 door's `Door_move` printed over its load this frame.
+    fn re2_wait_line(&self) -> Option<door2::vm::WaitLine> {
+        match &self.art {
+            DoorArt::Re2(_, vm, _) => vm.wait_line(),
+            _ => None,
+        }
+    }
+
     /// The door texture and a renderable snapshot of the current VM state.
     fn render_frame(&self) -> Option<(&Texture8, door::vm::Frame<'_>)> {
         match &self.art {
             DoorArt::Re1(dor, vm) => Some((&dor.texture, vm.frame())),
             DoorArt::Re2(do2, vm, _) => Some((&do2.texture, vm.frame())),
             DoorArt::Missing => None,
+        }
+    }
+}
+
+impl GameSession {
+    /// The line an RE2 door's `Door_move` printed over its load
+    /// ([`door2::vm::WaitLine`]): `Mess_print`'s sprites in the message font,
+    /// colour row 0, drawn by `Moji_trans_main` over the door's frame.
+    fn draw_re2_wait_line(&mut self, line: Option<door2::vm::WaitLine>) {
+        let (Some(line), Some(font)) = (line, &self.font) else {
+            return;
+        };
+        for &(x, y, text) in line.lines() {
+            let mut bytes = Vec::new();
+            crate::charset::encode(text, font.script(), &mut bytes);
+            self.framebuffer.with_screen(|screen| {
+                font.draw_text(screen, x, y, font::Tint::White, 2, &bytes, true);
+            });
         }
     }
 }

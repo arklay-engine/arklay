@@ -76,6 +76,50 @@ pub const LIGHT_MATRIX: [[i16; 3]; 3] =
     [[400, 800, -500], [-1800, -1000, -2700], [3500, 6700, 1200]];
 /// `door_lc` (bio2.exe `0x525F7C`): every light white at `1600`.
 pub const COLOUR_MATRIX: [[i16; 3]; 3] = [[1600; 3]; 3];
+/// Variable `0x0F`, `scd_var_temp`: `Door_init`'s DO2 id, which picks the
+/// line `Door_move` prints over a load.
+const VAR_DOOR: usize = 0x0F;
+/// `Door_move` prints its line while the door's count (`pDoor + 0x22E`) is
+/// past 0x28 and below 0x104.
+const WAIT_COUNTS: std::ops::Range<u16> = 0x29..0x104;
+
+/// The line `Door_move` (`0x450120`) prints over a load, `Mess_print(0x20,
+/// 200, ..)`, by `scd_var_temp`. Under Classic REbirth (its hooks at
+/// `ddraw.dll`'s `0x10082420` and `0x10082440`) they are `exe/sys.tex`'s
+/// strings 61 to 63 in place of the executable's Japanese
+/// `str_please_wait`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WaitLine {
+    /// Door 0x32, the costume change: " Please wait a minute." at (0x20,
+    /// 200).
+    Costume,
+    /// Door 0x34, the side pack: "The side pack is being" at (0x20, 184)
+    /// and "equipped." at (0x20, 200).
+    SidePack,
+}
+
+impl WaitLine {
+    /// `Door_move`'s line for `scd_var_temp`.
+    fn for_door(door: i16) -> Option<Self> {
+        match door {
+            0x32 => Some(Self::Costume),
+            0x34 => Some(Self::SidePack),
+            _ => None,
+        }
+    }
+
+    /// The lines, each at its `(x, y)` on the 320 by 240 screen.
+    pub fn lines(self) -> &'static [(i32, i32, &'static str)] {
+        match self {
+            Self::Costume => &[(0x20, 200, " Please wait a minute.")],
+            Self::SidePack => &[
+                (0x20, 200 - 16, "The side pack is being"),
+                (0x20, 200, "equipped."),
+            ],
+        }
+    }
+}
+
 /// The `se_on` sound type of the door's own bank.
 const DOOR_SOUND_TYPE: u8 = 0;
 
@@ -151,6 +195,10 @@ pub struct Vm {
     exit_sound: bool,
     sfx: Vec<Sfx>,
     frame: u32,
+    /// `Door_move`'s count of its runs (`pDoor + 0x22E`, from `Door_init`'s
+    /// 0), and the line its last run printed.
+    moves: u16,
+    wait_line: Option<WaitLine>,
     ended: bool,
     /// `Door_move` has seen task 10 gone: it returns without sleeping, so
     /// `Door_main` moves on to `Door_exit`, which runs from the next frame.
@@ -181,6 +229,8 @@ impl Vm {
             exit_sound: false,
             sfx: Vec::new(),
             frame: 0,
+            moves: 0,
+            wait_line: None,
             ended: false,
             exiting: false,
             drawn: false,
@@ -198,6 +248,7 @@ impl Vm {
     /// `Door_move` and `Door_Trans` for one 30 Hz frame.
     pub fn step(&mut self) -> Frame<'_> {
         self.sfx.clear();
+        self.wait_line = None;
         if !self.done {
             self.drawn = !self.ended;
             if self.exiting {
@@ -215,6 +266,10 @@ impl Vm {
                     }
                 }
                 self.transform();
+                if WAIT_COUNTS.contains(&self.moves) {
+                    self.wait_line = WaitLine::for_door(self.vars[VAR_DOOR]);
+                }
+                self.moves = self.moves.wrapping_add(1);
                 if !self.tasks[0].active {
                     self.ended = true;
                 }
@@ -279,6 +334,11 @@ impl Vm {
         } else {
             DoorShading::Lit
         }
+    }
+
+    /// The line `Door_move` printed on the last step, if any.
+    pub fn wait_line(&self) -> Option<WaitLine> {
+        self.wait_line
     }
 
     /// The number of `sce_fade_set`/`sce_fade_adjust` ops run so far.
@@ -1164,6 +1224,64 @@ mod tests {
         let frame = vm.step();
         assert!(frame.done);
         assert_eq!(frame.sfx.len(), 1);
+    }
+
+    #[test]
+    fn the_costume_door_prints_its_line_from_its_42nd_move_to_its_260th() {
+        // A long sleep, so task 10 outlives the line.
+        let script = [vec![0x09, 0x0A, 0xFF, 0x7F, 0x01, 0x00]].concat();
+        for (door, line) in [
+            (0x32, Some(WaitLine::Costume)),
+            (0x34, Some(WaitLine::SidePack)),
+            (0x33, None),
+        ] {
+            let mut vm = Vm::new(&do2(&[&script]), DoorParams { kind: 0, door });
+            let printed: Vec<_> = (0..300)
+                .map(|_| {
+                    vm.step();
+                    vm.wait_line()
+                })
+                .collect();
+            assert!(printed[..0x29].iter().all(Option::is_none));
+            assert!(printed[0x29..0x104].iter().all(|printed| *printed == line));
+            assert!(printed[0x104..].iter().all(Option::is_none));
+        }
+    }
+
+    #[test]
+    fn the_wait_line_stops_with_the_door() {
+        let script = [vec![0x09, 0x0A, 0xFF, 0x7F, 0x01, 0x00]].concat();
+        let mut vm = Vm::new(
+            &do2(&[&script]),
+            DoorParams {
+                kind: 0,
+                door: 0x32,
+            },
+        );
+        for _ in 0..0x30 {
+            vm.step();
+        }
+        assert_eq!(vm.wait_line(), Some(WaitLine::Costume));
+        // The skip comes after the frame's print, which stays drawn.
+        vm.finish();
+        assert_eq!(vm.wait_line(), Some(WaitLine::Costume));
+        vm.step();
+        assert_eq!(vm.wait_line(), None);
+        // Task 10 ending inside the window still prints on its last run.
+        let script = [vec![0x09, 0x0A, 0x30, 0x00], vec![0x01, 0x00]].concat();
+        let mut vm = Vm::new(
+            &do2(&[&script]),
+            DoorParams {
+                kind: 0,
+                door: 0x32,
+            },
+        );
+        while !vm.ended {
+            vm.step();
+        }
+        assert_eq!(vm.wait_line(), Some(WaitLine::Costume));
+        vm.step();
+        assert_eq!(vm.wait_line(), None);
     }
 
     #[test]
