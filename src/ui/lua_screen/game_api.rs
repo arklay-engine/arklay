@@ -295,10 +295,13 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         }
     });
 
-    // `re2_computer()`: what room 200's computer draws this tick: the
-    // `frame` `Wframe_set` drew (`{x0, y0, x1, y1}`, inclusive), whether
-    // the console `drawn`, its glyph `cells` (`{x, y, u, v}` in record
-    // order) and the `cursor` (`{x, y}`), or nil while no computer runs.
+    // `re2_computer()`: what the computer draws this tick: its `mode` (0
+    // room 200's console, 1 room 613's terminal), the `frame` `Wframe_set`
+    // drew (`{x0, y0, x1, y1}`, inclusive), whether the console `drawn`,
+    // its glyph `cells` (`{x, y, u, v}` in record order), the `cursor`
+    // (`{x, y}`) and room 613's `keyboard` (`picture` and `cursor`, each
+    // `{x, y, w, h, u, v}`, and the cursor's `grey`), or nil while no
+    // computer runs.
     methods.add_method("re2_computer", |lua, api, ()| {
         let Some(view) = api
             .game()
@@ -315,6 +318,14 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         table.set("cells", view.cells)?;
         if let Some(cursor) = view.cursor {
             table.set("cursor", cursor)?;
+        }
+        table.set("mode", view.mode)?;
+        if let Some(keyboard) = view.keyboard {
+            let entry = lua.create_table()?;
+            entry.set("picture", keyboard.picture)?;
+            entry.set("cursor", keyboard.cursor)?;
+            entry.set("grey", keyboard.grey)?;
+            table.set("keyboard", entry)?;
         }
         Ok(mlua::Value::Table(table))
     });

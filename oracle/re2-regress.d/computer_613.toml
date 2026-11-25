@@ -1,0 +1,29 @@
+# Room 613's terminal (game mode 7, Sce_Windows mode 1, Computer600) from a warp in front of it (oracle/re2.md, "Room 613's terminal").
+# The moth and its larvae are dead (7:16, 7:33 to 7:37, 7:46), so the room has no enemies and event 3 raises 4:90, which lets the terminal be used.
+# The console, the keyboard and its cursor are drawn over the cut's background. Each frame_max_mean leaves room above the first passing compare (0.27, 0.54): the rest is the warp's first frame and the message window's "Will you use the computer?" (about 7.8 a frame), which the cancel run opens twice.
+
+[[run]]
+name = "computer_613_guest"
+room = "613"
+setup_script = "computer_613.lua"
+input = "computer_613_guest.txt"
+input_shift = 344
+ticks = 1700
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgcom,pc,fgscn,fgstat,prep,msg,esp"
+frames = [344, 1699]
+frame_max_mean = 0.4
+expect = "match"
+record = "--warp 613:-11300:0:-17300:0 --flag 7:16 --flag 7:33 --flag 7:34 --flag 7:35 --flag 7:36 --flag 7:37 --flag 7:46 --life 200"
+
+[[run]]
+name = "computer_613_cancel"
+room = "613"
+setup_script = "computer_613.lua"
+input = "computer_613_cancel.txt"
+input_shift = 344
+ticks = 1300
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgcom,pc,fgscn,fgstat,prep,msg,esp"
+frames = [344, 1299]
+frame_max_mean = 0.7
+expect = "match"
+record = "--warp 613:-11300:0:-17300:0 --flag 7:16 --flag 7:33 --flag 7:34 --flag 7:35 --flag 7:36 --flag 7:37 --flag 7:46 --life 200"

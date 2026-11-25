@@ -1,0 +1,25 @@
+# room 613: the lab terminal (oracle/re2.md, "Room 613's terminal"): to the keyboard, a letter, then ESC; the terminal again, and cancel at the keyboard
+364 action
+368
+410 action
+414
+530 action
+534
+680 action
+684
+705 action
+706
+709 left
+710
+712 action
+713
+800 action
+804
+846 action
+850
+966 action
+970
+1116 action
+1120
+1140 run
+1142

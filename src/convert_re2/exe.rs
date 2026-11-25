@@ -65,12 +65,16 @@ const FIRST_SYSTEM: &[u8] = &[
     0x33, 0x45, 0x48, 0x48, 0x00, 0x55, 0x4B, 0x51, 0x00, 0x50, 0x3D, 0x47, 0x41,
 ];
 
-/// Room 200's computer's strings (`Computer200`, `0x4D1170`): ASCII with
-/// `Cprint`'s control codes, each ending at a NUL. In the order of
+/// The computers' strings: ASCII with `Cprint`'s control codes, each ending
+/// at a NUL. Room 200's (`Computer200`, `0x4D1170`) in the order of
 /// [`crate::game::computer2::Strings`]: the title, `RELEASED`, `LOCKED`, the
-/// card's line, the newline, `Checking up ID CARD` and the `OK!`.
-const COMPUTER: [usize; 7] = [
-    0x53_3AD0, 0x53_3AAC, 0x53_3A88, 0x53_3A58, 0x53_3A54, 0x53_3A28, 0x53_3A04,
+/// card's line, the newline, `Checking up ID CARD` and the `OK!`. Then room
+/// 613's (`Computer600`, `0x4D1820`) in the order of
+/// [`crate::game::computer2::TerminalStrings::lines`].
+const COMPUTER: [usize; 18] = [
+    0x53_3AD0, 0x53_3AAC, 0x53_3A88, 0x53_3A58, 0x53_3A54, 0x53_3A28, 0x53_3A04, 0x53_3C70,
+    0x53_3C38, 0x53_3C0C, 0x53_3BE4, 0x53_3BCC, 0x53_3BC4, 0x53_3B90, 0x53_3B74, 0x53_3B4C,
+    0x53_3B30, 0x53_3B04,
 ];
 
 /// The computer's title, which tells [`COMPUTER`] points at its strings.
@@ -93,7 +97,7 @@ pub(super) struct ExeText {
     pub system: Vec<Vec<u8>>,
     /// Door messages by id.
     pub door: Vec<Vec<u8>>,
-    /// Room 200's computer's strings, without their NULs ([`COMPUTER`]).
+    /// The computers' strings, without their NULs ([`COMPUTER`]).
     pub computer: Vec<Vec<u8>>,
 }
 

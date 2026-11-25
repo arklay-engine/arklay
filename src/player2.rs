@@ -30,8 +30,8 @@ const KEY_ACTION: u16 = 0x0080;
 const KEY_AIM: u16 = 0x0100;
 const KEY_SIDE_LEFT: u16 = 0x0400;
 const KEY_SIDE_RIGHT: u16 = 0x0800;
-const KEY_CONFIRM: u16 = 0x1000;
-const KEY_CANCEL: u16 = 0x2000;
+pub(crate) const KEY_CONFIRM: u16 = 0x1000;
+pub(crate) const KEY_CANCEL: u16 = 0x2000;
 /// The PC's map key (the raw pad's `0x10`): `Game_loop` opens the map on its
 /// `Key_trg`, and a stop leaves it out of the word.
 pub const KEY_MAP: u16 = 0x4000;

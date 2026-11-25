@@ -619,6 +619,9 @@ const CHARACTER_SIZES: [u16; 28] = [
 ];
 /// `fg_status`'s bank, whose bit picks the second `fg_enemy`.
 pub const STATUS_BANK: u8 = 1;
+/// `fg_status`'s `0x200`: room 613's terminal took the name, and the
+/// fingerprint is next (`Computer600`).
+pub const STATUS_REGISTERED: u8 = 22;
 /// `fg_status`'s `0x8000`: a status task's window is up (`Sce_Item`,
 /// `0x4E96C0`, raises it as it opens the get-item window).
 pub const STATUS_WINDOW: u8 = 16;
@@ -3477,6 +3480,11 @@ impl Host for GameHost<'_> {
                 }
             }
             "sce_espr_kill2" => self.game.re2.effects.kill_group(at(0) as u8),
+            // `Sce_82` (`0x4E7160`): 6 kills every effect (room 613's
+            // terminal, before it puts the screen's glow back). Any other
+            // kills the ones on `Get_matrix(a, b)`'s matrix, which isn't
+            // ported.
+            "sce_82" if at(0) == 6 => self.game.re2.effects.kill_all(),
             // `Sce_shake_on`: `SetGeomOffset`, which holds until the next one.
             "sce_shake_on" => {
                 let shake = [-(at(0) as i8 as i32), -(at(1) as i8 as i32)];
@@ -7446,7 +7454,8 @@ mod tests {
             if game.re2_computer.is_none() {
                 break;
             }
-            cuts.extend(game.tick_re2_computer(true));
+            game.re2.key = 0x1000;
+            cuts.extend(game.tick_re2_computer());
             // The question closes with its default, yes.
             game.message.active = false;
         }

@@ -492,8 +492,26 @@ impl Heap {
         }
     }
 
+    /// The byte at `Mem_top + offset`, when it's known.
+    pub fn top_byte(&self, offset: usize) -> Option<u8> {
+        let at = self.top? + offset;
+        self.image
+            .known
+            .get(at)
+            .copied()
+            .unwrap_or(false)
+            .then(|| self.image.bytes[at])
+    }
+
+    /// Write `byte` at `Mem_top + offset`, when `Mem_top` is known.
+    pub fn write_top_byte(&mut self, offset: usize, byte: u8) {
+        if let Some(top) = self.top {
+            Arc::make_mut(&mut self.image).write(top + offset, &[byte]);
+        }
+    }
+
     /// Something writes `len` bytes the model doesn't follow at `Mem_top` and gives them back
-    /// (`Computer200`'s work).
+    /// (the computer's work).
     pub fn scratch(&mut self, len: usize) {
         if let Some(top) = self.top {
             Arc::make_mut(&mut self.image).forget(top, len);

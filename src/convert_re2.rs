@@ -628,34 +628,43 @@ pub(crate) fn convert(
     finish_pack(writer, out, jobs, progress, &warnings, &summary, verbose)
 }
 
-/// Room 200's computer console page: object slot 0's TIM in `ROOM2000.RDT`
-/// (`ROOM2001.RDT`'s is the same), which `Sce_model_init` uploads as texture
-/// page 0x11 for `Computer200`'s sprites.
+/// The computers' console pages: object slot 0's TIM in `ROOM2000.RDT` and
+/// `ROOM6130.RDT` (Claire's rooms' are the same), which `Sce_model_init`
+/// uploads as texture page 0x11 for `Computer200`'s and `Computer600`'s
+/// sprites.
 fn copy_computer_page(
     rooms: &[Room],
     writer: &mut PackWriter,
     tally: &mut Tally,
     warnings: &mut Vec<String>,
 ) -> Result<()> {
-    let page = ["2000", "2001"].iter().find_map(|folder| {
-        let room = rooms.iter().find(|room| room.id.folder() == *folder)?;
-        crate::rdt2::object_texture(&room.bytes, 0)
-    });
-    let Some(page) = page else {
-        warnings.push(format!(
-            "room 200 has no console page; {COMPUTER_PAGE} not written"
-        ));
-        return Ok(());
-    };
-    ensure!(
-        tim_8bpp_size(page) == Some((256, 256)),
-        "room 200's console page isn't an 8 bpp 256 by 256 TIM"
-    );
-    tally.add(writer, "ui", COMPUTER_PAGE, page.to_vec())
+    for (number, folders, entry) in COMPUTER_PAGES {
+        let page = folders.iter().find_map(|folder| {
+            let room = rooms.iter().find(|room| room.id.folder() == *folder)?;
+            crate::rdt2::object_texture(&room.bytes, 0)
+        });
+        let Some(page) = page else {
+            warnings.push(format!(
+                "room {number} has no console page; {entry} not written"
+            ));
+            continue;
+        };
+        ensure!(
+            tim_8bpp_size(page) == Some((256, 256)),
+            "room {number}'s console page isn't an 8 bpp 256 by 256 TIM"
+        );
+        tally.add(writer, "ui", entry, page.to_vec())?;
+    }
+    Ok(())
 }
 
-/// Room 200's computer console page in the pack.
-const COMPUTER_PAGE: &str = "ui/computer/rc200.tim";
+/// The computers' console pages in the pack, each its room's object slot 0
+/// (Leon's room, or Claire's): room 200's, and room 613's, which has the
+/// keyboard too.
+const COMPUTER_PAGES: [(&str, [&str; 2], &str); 2] = [
+    ("200", ["2000", "2001"], "ui/computer/rc200.tim"),
+    ("613", ["6130", "6131"], "ui/computer/rc600.tim"),
+];
 
 /// The size of an 8 bpp TIM with a CLUT, or `None` for any other TIM.
 fn tim_8bpp_size(tim: &[u8]) -> Option<(u32, u32)> {
