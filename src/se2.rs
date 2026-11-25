@@ -608,14 +608,25 @@ impl Banks {
 }
 
 /// What `Snd_se_3D` hears of a sound at `sound`, from a camera at `from`
-/// looking at `to`: its volume (0-127) and `SsSetPan`'s argument. It is the
-/// stereo case: the distance leaves out the x axis.
-pub fn place(from: [i32; 3], to: [i32; 3], sound: [i32; 3]) -> (u8, i32) {
+/// looking at `to`: its volume (0-127) and `SsSetPan`'s argument. In
+/// stereo the distance leaves out the x axis; under MONO (`SpeakerConfig`
+/// 1) it is the whole distance, and the pan is 0.
+pub fn place(from: [i32; 3], to: [i32; 3], sound: [i32; 3], mono: bool) -> (u8, i32) {
+    let dx = (from[0] - sound[0]).abs();
     let dy = (from[1] - sound[1]).abs();
     let dz = (from[2] - sound[2]).abs();
-    let squared = dz.wrapping_mul(dz).wrapping_add(dy.wrapping_mul(dy));
-    let distance = (crate::sca::square_root0(squared) / 250).min(127);
+    let root = crate::sca::square_root0;
+    let squared = if mono {
+        let flat = root(dz.wrapping_mul(dz).wrapping_add(dx.wrapping_mul(dx)));
+        flat.wrapping_mul(flat).wrapping_add(dy.wrapping_mul(dy))
+    } else {
+        dz.wrapping_mul(dz).wrapping_add(dy.wrapping_mul(dy))
+    };
+    let distance = (root(squared) / 250).min(127);
     let volume = 127 - distance * 77 / 127;
+    if mono {
+        return (volume as u8, 0);
+    }
     let to_sound = se_dir_ck(from[0], from[2], sound[0], sound[2]);
     let to_look = se_dir_ck(from[0], from[2], to[0], to[2]);
     let turn = (to_sound - to_look) & 0xfff;
@@ -632,6 +643,12 @@ pub fn place(from: [i32; 3], to: [i32; 3], sound: [i32; 3]) -> (u8, i32) {
         (f64::from(distance) * angle.cos() * sign) as i32
     };
     (volume as u8, pan)
+}
+
+/// What a wall between the sound and the camera leaves of `Snd_se_3D`'s
+/// volume: 85% in stereo, 65% under MONO.
+pub fn muffled(volume: u8, mono: bool) -> u8 {
+    (u32::from(volume) * if mono { 0x41 } else { 0x55 } / 100) as u8
 }
 
 /// What `Snd_se_on` (`0x4ED950`) adds to `Snd_se_3D`'s volume of a
@@ -853,14 +870,30 @@ mod tests {
     #[test]
     fn a_sound_fades_with_distance_and_pans_to_its_side() {
         let (from, to) = ([0, 0, 0], [0, 0, 10_000]);
-        assert_eq!(place(from, to, [0, 0, 0]).0, 127);
-        let (far, _) = place(from, to, [0, 0, 40_000]);
+        assert_eq!(place(from, to, [0, 0, 0], false).0, 127);
+        let (far, _) = place(from, to, [0, 0, 40_000], false);
         assert_eq!(far, 127 - 77);
         // Ahead of the camera, nothing to either side.
-        assert_eq!(place(from, to, [0, 0, 5000]).1, 0);
-        let left = place(from, to, [-5000, 0, 5000]).1;
-        let right = place(from, to, [5000, 0, 5000]).1;
+        assert_eq!(place(from, to, [0, 0, 5000], false).1, 0);
+        let left = place(from, to, [-5000, 0, 5000], false).1;
+        let right = place(from, to, [5000, 0, 5000], false).1;
         assert!(left != 0 && right != 0 && left.signum() != right.signum());
+    }
+
+    /// Under MONO a sound is heard by its whole distance, x included, with
+    /// no pan, and a wall takes more of it (`Snd_se_3D`'s `SpeakerConfig`
+    /// 1 branch).
+    #[test]
+    fn mono_hears_the_whole_distance_and_no_pan() {
+        let (from, to) = ([0, 0, 0], [0, 0, 10_000]);
+        // 12500 to the side: nothing in stereo, and in mono 49 steps of 250
+        // by `square_root0`'s root (127 - 49 * 77 / 127); 5000 up and ahead is
+        // 19 (127 - 19 * 77 / 127).
+        assert_eq!(place(from, to, [12_500, 0, 0], false).0, 127);
+        assert_eq!(place(from, to, [12_500, 0, 0], true), (98, 0));
+        assert_eq!(place(from, to, [-5000, 0, 5000], true).1, 0);
+        assert_eq!(place(from, to, [0, 3000, 4000], true).0, 116);
+        assert_eq!((muffled(100, false), muffled(100, true)), (85, 65));
     }
 
     #[test]

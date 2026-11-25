@@ -189,6 +189,7 @@ impl GameSession {
             ),
         ];
         let volumes = self.game.re2.volumes.unwrap_or([100, 100]);
+        let [speaker, quality] = self.screen_sound;
         let work = self.game.re2.player.clone();
         let opened = {
             let mut cx = self.ui_context(pack);
@@ -199,7 +200,12 @@ impl GameSession {
                     screen.set_option_player(&work);
                     screen.signal_with(
                         "on_volumes",
-                        (i64::from(volumes[0]), i64::from(volumes[1])),
+                        (
+                            i64::from(volumes[0]),
+                            i64::from(volumes[1]),
+                            i64::from(speaker),
+                            i64::from(quality),
+                        ),
                         &cx,
                     );
                     (screen, cx.cues.into_inner())
@@ -225,6 +231,7 @@ impl GameSession {
                 }
                 self.re2_config_shown =
                     SCREEN_VOLUME_KEYS.map(|key| screen_volume(screen.published(key)));
+                self.re2_config_sound_shown = screen_sound_shown(&screen);
                 self.re2_config_screen = Some(Box::new(screen));
                 self.play_re2_screen_cues(pack, cues);
                 self.re2_config = Some(Re2Config::Screen);
@@ -330,6 +337,22 @@ impl GameSession {
         if changed {
             self.game.re2.volumes = Some(volumes);
             self.re2_config_volumes = Some(volumes);
+        }
+        // The mode and the quality are the run's too, not the save's.
+        let mut sound = self.screen_sound;
+        for (index, now) in screen_sound_shown(screen).into_iter().enumerate() {
+            let shown = &mut self.re2_config_sound_shown[index];
+            if let (Some(before), Some(now)) = (*shown, now)
+                && before != now
+            {
+                *shown = Some(now);
+                sound[index] = now;
+            }
+        }
+        if sound != self.screen_sound {
+            self.screen_sound = sound;
+            self.game.re2.mono = sound[0] == 1;
+            self.re2_config_sound = Some(sound);
         }
     }
 

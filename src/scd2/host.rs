@@ -286,6 +286,9 @@ pub struct Re2State {
     /// `None` when the game wasn't given them, and from a save from before
     /// them, whose load leaves the run's volumes as they are.
     pub volumes: Option<[u8; 2]>,
+    /// The run's speaker mode is MONO (`SpeakerConfig` 1): `Snd_se_3D`
+    /// hears a sound by its whole distance, with no pan.
+    pub mono: bool,
 }
 
 /// `St_chenge_pl`'s and `Set_room`'s stash of the scenario's character: the
@@ -1061,6 +1064,7 @@ impl Default for Re2State {
             save_place: 0,
             saves_high: 0,
             volumes: None,
+            mono: false,
         }
     }
 }
