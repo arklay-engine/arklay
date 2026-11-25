@@ -57,6 +57,10 @@
 //! effects_volume = 100
 //! voice_volume = 100
 //! menu_volume = 100
+//! speaker_mode = "stereo" # "stereo" or "mono": mono mixes both channels
+//!                        # down and centres every sound (RE 2's SOUND page)
+//! sound_quality = "high" # "high", "medium" or "low": what RE 2's SOUND page
+//!                        # shows; arklay mixes the same at each
 //! subtitles = true       # the voiced lines' subtitles, drawn by the GUI
 //! subtitle_size = "standard"   # "small", "standard" or "large"
 //! subtitle_background = 50     # the band's opacity in percent
@@ -306,6 +310,56 @@ pub trait Named: Copy + PartialEq + Sized + 'static {
     }
 }
 
+/// The speakers the sound is mixed for: RE 2's SOUND page's MODE
+/// (config.ini's `SoundChannels`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SpeakerMode {
+    #[default]
+    Stereo,
+    /// Both channels mixed down, every sound centred.
+    Mono,
+}
+
+impl Named for SpeakerMode {
+    const NAMES: &'static [(Self, &'static str)] =
+        &[(SpeakerMode::Stereo, "stereo"), (SpeakerMode::Mono, "mono")];
+}
+
+/// RE 2's SOUND page's QUALITY (config.ini's `SoundDepth` and
+/// `SoundFrequency`): kept to show, not mixed with.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SoundQuality {
+    /// 44.1 kHz at 16 bits.
+    #[default]
+    High,
+    /// 22 kHz at 16 bits.
+    Medium,
+    /// 22 kHz at 8 bits.
+    Low,
+}
+
+impl Named for SoundQuality {
+    const NAMES: &'static [(Self, &'static str)] = &[
+        (SoundQuality::High, "high"),
+        (SoundQuality::Medium, "medium"),
+        (SoundQuality::Low, "low"),
+    ];
+}
+
+impl SoundQuality {
+    /// `Config_get_squal`'s number: 0 high, 1 medium, 2 low.
+    pub fn index(self) -> u8 {
+        self as u8
+    }
+
+    /// The quality for `Config_get_squal`'s number.
+    pub fn from_index(index: u8) -> Option<Self> {
+        [Self::High, Self::Medium, Self::Low]
+            .get(usize::from(index))
+            .copied()
+    }
+}
+
 /// How strongly the controller rumbles.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Vibration {
@@ -486,6 +540,10 @@ pub struct Game {
     pub voice_volume: u8,
     /// The menus' cursor, confirm and cancel sounds, 0..=100 percent.
     pub menu_volume: u8,
+    /// Stereo, or mono: both channels mixed down.
+    pub speaker_mode: SpeakerMode,
+    /// What RE 2's SOUND page shows as the quality.
+    pub sound_quality: SoundQuality,
     /// Show the subtitles of voiced lines (see [`crate::gui::subtitles`]).
     /// Off hides them; their timing still runs.
     pub subtitles: bool,
@@ -521,6 +579,8 @@ impl Default for Game {
             effects_volume: 100,
             voice_volume: 100,
             menu_volume: 100,
+            speaker_mode: SpeakerMode::Stereo,
+            sound_quality: SoundQuality::High,
             subtitles: true,
             subtitle_size: SubtitleSize::Standard,
             subtitle_background: 50,
@@ -940,6 +1000,16 @@ impl Config {
         Self::update(path, |config| {
             config.game.music_volume = music.min(100);
             config.game.effects_volume = effects.min(100);
+        })
+    }
+
+    /// Persist the speaker mode and the quality a title's own option
+    /// screen set (RE 2's SOUND page), rewritten like
+    /// [`Config::save_bindings`].
+    pub fn save_screen_sound(path: &Path, mode: SpeakerMode, quality: SoundQuality) -> Result<()> {
+        Self::update(path, |config| {
+            config.game.speaker_mode = mode;
+            config.game.sound_quality = quality;
         })
     }
 
@@ -1406,6 +1476,8 @@ fn parse_game_line(
         "effects_volume" => game.effects_volume = percent()?,
         "voice_volume" => game.voice_volume = percent()?,
         "menu_volume" => game.menu_volume = percent()?,
+        "speaker_mode" => game.speaker_mode = named(key, value, line)?,
+        "sound_quality" => game.sound_quality = named(key, value, line)?,
         "subtitles" => game.subtitles = boolean()?,
         "subtitle_size" => game.subtitle_size = named(key, value, line)?,
         "subtitle_background" => game.subtitle_background = percent()?,
@@ -1506,6 +1578,18 @@ fn render_game(game: &Game) -> String {
         if volume != default {
             out.push_str(&format!("{key} = {volume}\n"));
         }
+    }
+    if game.speaker_mode != defaults.speaker_mode {
+        out.push_str(&format!(
+            "speaker_mode = \"{}\"\n",
+            game.speaker_mode.name()
+        ));
+    }
+    if game.sound_quality != defaults.sound_quality {
+        out.push_str(&format!(
+            "sound_quality = \"{}\"\n",
+            game.sound_quality.name()
+        ));
     }
     if game.subtitles != defaults.subtitles {
         out.push_str(&format!("subtitles = {}\n", game.subtitles));
@@ -2266,6 +2350,8 @@ menu_text_size = \"huge\"
             effects_volume: 100,
             voice_volume: 85,
             menu_volume: 0,
+            speaker_mode: SpeakerMode::Mono,
+            sound_quality: SoundQuality::Low,
             subtitles: false,
             subtitle_size: SubtitleSize::Large,
             subtitle_background: 0,
@@ -2283,6 +2369,34 @@ menu_text_size = \"huge\"
         assert_eq!(saved.game, game);
         assert_eq!(saved.save_dir.as_deref(), Some(Path::new("/tmp/saves")));
         assert_eq!(saved.mods.disabled, ["x"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// RE 2's SOUND page's mode and quality are kept in `[game]`, from one
+    /// run to the next as config.ini keeps them, and nothing else moves.
+    #[test]
+    fn the_screens_sound_mode_and_quality_are_saved() {
+        let dir = std::env::temp_dir().join(format!("arklay-config-{}-sound", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("arklay.toml");
+        fs::write(&path, "[game]\nmusic_volume = 40\n").unwrap();
+        Config::save_screen_sound(&path, SpeakerMode::Mono, SoundQuality::Medium).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains("speaker_mode = \"mono\""), "{text}");
+        assert!(text.contains("sound_quality = \"medium\""), "{text}");
+        let (saved, warnings) = Config::load(&path);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(saved.game.speaker_mode, SpeakerMode::Mono);
+        assert_eq!(saved.game.sound_quality, SoundQuality::Medium);
+        assert_eq!(saved.game.music_volume, 40);
+        Config::save_screen_sound(&path, SpeakerMode::Stereo, SoundQuality::High).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(
+            !text.contains("speaker_mode") && !text.contains("sound_quality"),
+            "{text}"
+        );
+        fs::write(&path, "[game]\nspeaker_mode = \"surround\"\n").unwrap();
+        assert!(!Config::load(&path).1.is_empty(), "an unknown mode warns");
         let _ = fs::remove_dir_all(&dir);
     }
 

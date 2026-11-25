@@ -107,6 +107,22 @@ pub fn set_volumes(volumes: Volumes) {
     }
 }
 
+/// Whether every mixer renders for one speaker: the original's MONO
+/// (`SsSetStereoMono(1)`, a primary buffer of one channel), off until
+/// [`set_mono`].
+static MONO: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Mix for one speaker from the next update, or for two again: as the
+/// original's MONO does, every pan is centred (`SsSetPan` takes 0 under it)
+/// and the two channels are mixed down into both.
+pub fn set_mono(mono: bool) {
+    MONO.store(mono, Ordering::Relaxed);
+}
+
+fn mono() -> bool {
+    MONO.load(Ordering::Relaxed)
+}
+
 fn volumes() -> Volumes {
     let gain = |index: usize| f32::from_bits(VOLUMES[index].load(Ordering::Relaxed));
     Volumes {
@@ -640,6 +656,8 @@ pub(crate) struct MixState {
     /// The player's levels; [`Mixer::update`] refreshes them before each
     /// render.
     volumes: Volumes,
+    /// The speakers' mode as of the last update ([`set_mono`]).
+    mono: bool,
     /// The DirectSound volume and pan each one-shot bank holds. A
     /// `Play3DSnd` or `PlayEntitySnd` sets the volume, a `Snd_em` the pan, a
     /// fade steps the volume, and every cue plays at whatever the bank holds
@@ -663,6 +681,7 @@ impl MixState {
             paused_bgm: [false; 3],
             paused_voice: false,
             volumes: Volumes::default(),
+            mono: false,
             banks: HashMap::new(),
             bank_loads: [0; 4],
         }
@@ -1091,6 +1110,9 @@ impl MixState {
     /// still renders the film.
     pub(crate) fn render(&mut self, frames: usize, out: &mut Vec<u8>) {
         let volumes = self.volumes;
+        let mono = self.mono;
+        // Under MONO every pan is centred.
+        let pan_gains = |pan: f32| if mono { (1.0, 1.0) } else { pan_gains(pan) };
         for _ in 0..frames {
             let mut left = 0.0f32;
             let mut right = 0.0f32;
@@ -1171,6 +1193,10 @@ impl MixState {
                 }
             }
 
+            if mono {
+                let mid = (left + right) * 0.5;
+                (left, right) = (mid, mid);
+            }
             push_sample(out, left * volumes.master);
             push_sample(out, right * volumes.master);
         }
@@ -1600,6 +1626,7 @@ impl Mixer {
 
         let mut pcm = Vec::with_capacity(frames * BYTES_PER_FRAME);
         self.state.volumes = volumes();
+        self.state.mono = mono();
         self.state.render(frames, &mut pcm);
         let Ok(len) = c_int::try_from(pcm.len()) else {
             return;
@@ -2010,6 +2037,21 @@ mod tests {
         state.stop_bgm();
         assert!(!state.bgm_channel_playing(0));
         assert!(state.is_silent());
+    }
+
+    /// MONO centres every pan and mixes the two channels down into both.
+    #[test]
+    fn mono_centres_the_pans_and_mixes_the_channels_down() {
+        let mut state = MixState::new();
+        state.mono = true;
+        state.load_bgm_channel_stereo(0, vec![100, -40, 60, 20], true);
+        state.restart_bgm_channel(0);
+        state.set_bgm_channel_pan(0, 1.0);
+        state.play_sfx(vec![200, 200], 1.0, -1.0);
+        let mut out = Vec::new();
+        state.render(2, &mut out);
+        // (100 - 40) / 2 + 200, then (60 + 20) / 2 + 200, in both.
+        assert_eq!(out_samples(&out), vec![230, 230, 240, 240]);
     }
 
     #[test]

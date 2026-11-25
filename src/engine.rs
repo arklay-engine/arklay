@@ -2352,6 +2352,12 @@ struct GameSession {
     screen_bindings: Option<(controls::Bindings, bool)>,
     /// What the screen asked of the bindings, for the app to take.
     re2_config_bindings: Option<ui::lua_screen::BindingsRequest>,
+    /// The run's speaker mode and quality ([`App::screen_sound`]), which
+    /// the screen shows, and what it last published of them.
+    screen_sound: [u8; 2],
+    re2_config_sound_shown: [Option<u8>; 2],
+    /// A mode or quality the screen changed, for the app to take.
+    re2_config_sound: Option<[u8; 2]>,
     /// What the screens keep past a screen (`api:keep`): the app's, shared
     /// with it once the app starts the session.
     screen_statics: ui::ScreenStatics,
@@ -3507,6 +3513,9 @@ impl GameSession {
             re2_config_volumes: None,
             screen_bindings: None,
             re2_config_bindings: None,
+            screen_sound: SCREEN_SOUND_BOOT,
+            re2_config_sound_shown: [None; 2],
+            re2_config_sound: None,
             screen_statics: ui::ScreenStatics::default(),
             #[cfg(test)]
             re2_stopped_enemy_passes: 0,
@@ -11890,6 +11899,17 @@ struct App {
     /// Bindings a screen changed, for the window's loop to apply to its
     /// input and save.
     bindings_change: Option<controls::Bindings>,
+    /// The run's speaker mode and sound quality as RE 2's SOUND page holds
+    /// them: `SpeakerConfig` (1 mono, 2 stereo) and `Config_get_squal` (0
+    /// high, 1 medium, 2 low). Stereo and high from the boot in a run with
+    /// no settings, as config.ini's defaults; the settings' in the
+    /// interactive game, which keep them as config.ini does.
+    screen_sound: [u8; 2],
+    /// What the title shows of [`Self::screen_sound`], as it published it
+    /// from `on_volumes` and since.
+    screen_sound_shown: [Option<u8>; 2],
+    /// A change the title made to them, for the window's loop to save.
+    sound_change: Option<[u8; 2]>,
     /// Whether the prologue film (id 1) is playing for a pending new game:
     /// the follow-up `NewGame` action then builds the session instead of
     /// queueing the film again. A later confirm queues the prologue anew,
@@ -12030,6 +12050,9 @@ impl App {
             volume_change: None,
             bindings_are_settings: false,
             bindings_change: None,
+            screen_sound: SCREEN_SOUND_BOOT,
+            screen_sound_shown: [None; 2],
+            sound_change: None,
             prologue_pending: false,
             film_title: None,
             film_title_is_select: false,
@@ -12762,6 +12785,7 @@ impl App {
     /// later load does, and the window's loop doesn't put them back.
     fn use_settings_volumes(&mut self, game: &crate::config::Game) {
         if !self.volumes_are_settings {
+            self.screen_sound = screen_sound_of(game);
             self.set_screen_volumes(game.music_volume, game.effects_volume);
         }
     }
@@ -12824,9 +12848,23 @@ impl App {
                 screen.forget(key);
             }
             let cx = self.context();
-            screen.signal_with("on_volumes", (i64::from(music), i64::from(effects)), &cx);
+            for key in SCREEN_SOUND_KEYS {
+                screen.forget(key);
+            }
+            let [speaker, quality] = self.screen_sound;
+            screen.signal_with(
+                "on_volumes",
+                (
+                    i64::from(music),
+                    i64::from(effects),
+                    i64::from(speaker),
+                    i64::from(quality),
+                ),
+                &cx,
+            );
             self.screen_volumes_shown =
                 SCREEN_VOLUME_KEYS.map(|key| screen_volume(screen.published(key)));
+            self.screen_sound_shown = screen_sound_shown(screen);
         }
         self.mode = mode;
     }
@@ -12856,6 +12894,28 @@ impl App {
             self.screen_volumes = volumes;
             if self.volumes_are_settings {
                 self.volume_change = Some(volumes);
+            }
+        }
+        let mut sound = self.screen_sound;
+        for (index, now) in screen_sound_shown(screen).into_iter().enumerate() {
+            let shown = &mut self.screen_sound_shown[index];
+            if let (Some(before), Some(now)) = (*shown, now)
+                && before != now
+            {
+                *shown = Some(now);
+                sound[index] = now;
+            }
+        }
+        self.take_screen_sound(sound);
+    }
+
+    /// The SOUND page's mode or quality changed: the run's, and in the
+    /// interactive game the settings' to mix with and save.
+    fn take_screen_sound(&mut self, sound: [u8; 2]) {
+        if self.screen_sound != sound {
+            self.screen_sound = sound;
+            if self.volumes_are_settings {
+                self.sound_change = Some(sound);
             }
         }
     }
@@ -13847,12 +13907,14 @@ impl App {
         let mut autosave = None;
         let mut volumes = None;
         let mut bindings_request = None;
+        let mut sound = None;
         {
             let App {
                 pack,
                 mode,
                 bindings,
                 bindings_are_settings,
+                screen_sound,
                 ..
             } = self;
             let Mode::Play(session) = mode else {
@@ -13862,6 +13924,10 @@ impl App {
             if *bindings_are_settings {
                 session.set_screen_bindings(bindings, false);
             }
+            // The run's speaker mode, which `Snd_se_3D` reads, and which
+            // the option screen from play shows.
+            session.screen_sound = *screen_sound;
+            session.game.re2.mono = screen_sound[0] == 1;
             if !session.transition_finished {
                 if session.transition.is_some() {
                     // The original's `room_transition_load` blocks the gameplay
@@ -13889,6 +13955,7 @@ impl App {
                 autosave = session.take_autosave();
                 volumes = session.take_re2_config_volumes();
                 bindings_request = session.re2_config_bindings.take();
+                sound = session.re2_config_sound.take();
                 clear_game = session
                     .take_clear_game_request()
                     .map(|id| (id, session.ending_flow(id)));
@@ -13923,6 +13990,9 @@ impl App {
             if let Mode::Play(session) = &mut self.mode {
                 session.set_screen_bindings(&self.bindings, true);
             }
+        }
+        if let Some(sound) = sound {
+            self.take_screen_sound(sound);
         }
         if demo_over {
             // The demo's last tick is still the game's: the title opens on
@@ -15290,6 +15360,7 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
     warm_gui_fonts(app.pack.language());
     let game_options = settings_volumes(app, crate::config::Config::load_default().0.game);
     crate::audio::set_volumes(game_options.volumes());
+    crate::audio::set_mono(game_options.speaker_mode == crate::config::SpeakerMode::Mono);
     ui::save_load::set_modern(game_options.modern_save_screen);
     app.set_subtitle_options(&game_options);
     let mut hud = debug_hud::DebugHud::new(game_options.ui_font);
@@ -15325,6 +15396,9 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
             // reads them from now on, and `arklay.toml` keeps them.
             if let Some(bindings) = app.bindings_change.take() {
                 input.apply_bindings_change(bindings);
+            }
+            if let Some(sound) = app.sound_change.take() {
+                save_screen_sound(&crate::config::Config::default_path(), sound);
             }
             clock.ticked(tick_ms);
             // The tick may have changed the screen and with it the limiter,
@@ -15705,6 +15779,13 @@ fn menu_game_options(app: &App, mut game: crate::config::Game) -> crate::config:
         let [music, effects] = app.screen_volumes;
         game.music_volume = music;
         game.effects_volume = effects;
+        let [speaker, quality] = app.screen_sound;
+        game.speaker_mode = if speaker == 1 {
+            crate::config::SpeakerMode::Mono
+        } else {
+            crate::config::SpeakerMode::Stereo
+        };
+        game.sound_quality = crate::config::SoundQuality::from_index(quality).unwrap_or_default();
     }
     game
 }
@@ -15817,6 +15898,8 @@ pub(crate) fn persisted_options(
         effects_volume: _,
         voice_volume: _,
         menu_volume: _,
+        speaker_mode: _,
+        sound_quality: _,
         subtitles: _,
         subtitle_size: _,
         subtitle_background: _,
@@ -15850,6 +15933,8 @@ pub(crate) fn persisted_options(
             effects_volume,
             voice_volume,
             menu_volume,
+            speaker_mode,
+            sound_quality,
             subtitles,
             subtitle_size,
             subtitle_background,
@@ -15879,6 +15964,47 @@ fn settings_volumes(app: &mut App, mut game: crate::config::Game) -> crate::conf
 /// The values a title publishes for the volumes it shows and sets
 /// ([`App::screen_volumes`]): the music's and the effects', in percent.
 const SCREEN_VOLUME_KEYS: [&str; 2] = ["music_volume", "effects_volume"];
+
+/// The values a title publishes for the speaker mode and the quality it
+/// shows and sets ([`App::screen_sound`]).
+const SCREEN_SOUND_KEYS: [&str; 2] = ["speaker_mode", "sound_quality"];
+
+/// Stereo and high, as config.ini has them by default.
+const SCREEN_SOUND_BOOT: [u8; 2] = [2, 0];
+
+/// The settings' speaker mode and quality as the SOUND page holds them.
+fn screen_sound_of(game: &crate::config::Game) -> [u8; 2] {
+    let speaker = match game.speaker_mode {
+        crate::config::SpeakerMode::Mono => 1,
+        crate::config::SpeakerMode::Stereo => 2,
+    };
+    [speaker, game.sound_quality.index()]
+}
+
+/// The speaker mode and quality a title publishes, each `None` when it
+/// publishes none or a value the page has none for.
+fn screen_sound_shown(screen: &LuaScreen) -> [Option<u8>; 2] {
+    let [speaker, quality] = SCREEN_SOUND_KEYS.map(|key| screen.published(key));
+    [
+        speaker.filter(|v| matches!(v, 1 | 2)).map(|v| v as u8),
+        quality.filter(|v| (0..=2).contains(v)).map(|v| v as u8),
+    ]
+}
+
+/// The title's speaker mode and quality changed: save them, and mix for
+/// one speaker or two from now on.
+fn save_screen_sound(path: &Path, [speaker, quality]: [u8; 2]) {
+    let mode = if speaker == 1 {
+        crate::config::SpeakerMode::Mono
+    } else {
+        crate::config::SpeakerMode::Stereo
+    };
+    let quality = crate::config::SoundQuality::from_index(quality).unwrap_or_default();
+    if let Err(err) = crate::config::Config::save_screen_sound(path, mode, quality) {
+        crate::warning!("warning: sound mode not saved: {err:#}");
+    }
+    crate::audio::set_mono(mode == crate::config::SpeakerMode::Mono);
+}
 
 /// A published volume as a setting: a percent from 0 to 100.
 fn screen_volume(published: Option<i64>) -> Option<u8> {
@@ -15980,6 +16106,8 @@ fn apply_menu_settings(
     }
     app.set_language(settings.language.as_deref());
     crate::audio::set_volumes(settings.game.volumes());
+    crate::audio::set_mono(settings.game.speaker_mode == crate::config::SpeakerMode::Mono);
+    app.screen_sound = screen_sound_of(&settings.game);
     app.set_screen_volumes(settings.game.music_volume, settings.game.effects_volume);
     app.set_subtitle_options(&settings.game);
     let path = crate::config::Config::default_path();
@@ -18310,14 +18438,14 @@ fn play_re2_sounds(
         let (volume, pan) = if let Some(level) = forced {
             level
         } else if id.positional {
-            let (mut volume, pan) = se2::place(cut.pos, cut.look_at, pos);
+            let (mut volume, pan) = se2::place(cut.pos, cut.look_at, pos, re2.mono);
             let ear = [pos[0], pos[1] - 0x5DC, pos[2]];
             if id.muffled
                 && room.sca.as_ref().is_some_and(|sca| {
                     crate::zombie2::sca_ck_line(&sca.records, cut.pos, ear, 0x8400)
                 })
             {
-                volume = (u32::from(volume) * 0x55 / 100) as u8;
+                volume = se2::muffled(volume, re2.mono);
             }
             // The weapon's own sounds, of its first program, are louder.
             let louder = id.kind == Kind::Arms
@@ -43231,6 +43359,76 @@ off_0010:
         app_press(&mut app, |ui| ui.left = true);
         assert_eq!(app.bindings_change, None);
         assert_eq!(app.bindings, controls::Bindings::default());
+    }
+
+    /// The speaker mode and quality come with the volumes: a title is told
+    /// the settings' and a change it publishes is taken once, for the window
+    /// to save; a value the page has none for is left out. With no settings
+    /// they are the run's own, stereo and high from the boot.
+    #[test]
+    fn a_titles_sound_mode_and_quality_are_the_settings() {
+        const TITLE: &str = "local M = {}
+            local function publish(api)
+                api:set('speaker_mode', M.speaker)
+                api:set('sound_quality', M.quality)
+            end
+            function M.on_volumes(api, music, effects, speaker, quality)
+                M.speaker, M.quality = speaker, quality
+                api:set('told_speaker', speaker)
+                api:set('told_quality', quality)
+                publish(api)
+            end
+            function M.update(api, input)
+                if input.left then M.speaker = 1 end
+                if input.right then M.quality = 5 end
+                if input.up then M.quality = 2 end
+                publish(api)
+            end
+            function M.draw() end
+            return M";
+        let dir = TempDir::new();
+        let pack_path = new_game_pack_with(&dir, &[("ui/title.lua", TITLE.as_bytes())]);
+        let open = |settings: Option<[u8; 2]>| {
+            let mut app = App::new(Pack::open(&pack_path).unwrap(), dir.0.join("saves"), false);
+            if let Some(sound) = settings {
+                app.screen_sound = sound;
+                app.volumes_are_settings = true;
+            }
+            app.boot(AppBoot::Title).unwrap();
+            app
+        };
+        let mut app = open(Some([2, 1]));
+        assert_eq!(
+            (
+                title_value(&app, "told_speaker"),
+                title_value(&app, "told_quality")
+            ),
+            (2, 1)
+        );
+        idle(&mut app);
+        assert_eq!(app.sound_change, None);
+        app_press(&mut app, |ui| ui.left = true);
+        assert_eq!(app.sound_change.take(), Some([1, 1]));
+        idle(&mut app);
+        assert_eq!(app.sound_change, None, "taken once");
+        app_press(&mut app, |ui| ui.right = true);
+        assert_eq!(app.sound_change, None, "no such quality");
+        app_press(&mut app, |ui| ui.up = true);
+        assert_eq!(app.sound_change.take(), Some([1, 2]));
+        let game = menu_game_options(&app, crate::config::Game::default());
+        assert_eq!(game.speaker_mode, crate::config::SpeakerMode::Mono);
+
+        let mut app = open(None);
+        assert_eq!(
+            (
+                title_value(&app, "told_speaker"),
+                title_value(&app, "told_quality")
+            ),
+            (2, 0)
+        );
+        app_press(&mut app, |ui| ui.left = true);
+        assert_eq!(app.sound_change, None, "no settings to save");
+        assert_eq!(app.screen_sound, [1, 0]);
     }
 
     /// `Load_pop`: a load takes the run's volumes from its save as the game

@@ -261,10 +261,20 @@ function ScreenModule.on_boot(api) end
 ---called, and nothing is taken of a volume the hook doesn't publish, or of
 ---a value outside 0 to 100. A screen without the hook may publish what it
 ---likes under the two names.
+---
+---The speaker mode and the sound quality come with them, and are taken
+---back the same way from `speaker_mode` (1 or 2) and `sound_quality` (0 to
+---2). In the interactive game they are the player's settings: mono mixes
+---every sound to both speakers alike, and places a 3D sound by its whole
+---distance with no pan; the quality is kept in the settings but doesn't
+---change the mix. In a headless run they are the run's own, stereo and high
+---from the boot.
 ---@param api ScreenApi
 ---@param music integer The music volume, 0 to 100.
 ---@param effects integer The effects volume, 0 to 100.
-function ScreenModule.on_volumes(api, music, effects) end
+---@param speaker integer The speaker mode: 1 mono, 2 stereo.
+---@param quality integer The sound quality: 0 high (44.1 kHz, 16 bits), 1 middle (22 kHz, 16 bits), 2 low (22 kHz, 8 bits).
+function ScreenModule.on_volumes(api, music, effects, speaker, quality) end
 
 ---Called on a title screen in the interactive game with the player's
 ---bindings: as the screen opens, and again whenever they change (the in-game
