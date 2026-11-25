@@ -912,9 +912,7 @@ impl Work {
     }
 
     pub fn apply_to_pose(&self, anim: &crate::anim::AnimPlayer, pose: &mut Keyframe) {
-        pose.offset[1] = self
-            .part0_y
-            .unwrap_or_else(|| self.root_height(anim, pose.offset[1]));
+        pose.offset[1] = self.root_height(anim, pose.offset[1]);
         self.neck.apply(pose);
     }
 
@@ -959,6 +957,9 @@ impl Work {
     /// ([`crate::anim::AnimPlayer::scaled_root_y`]) when the body is scaled,
     /// or `height` scaled.
     pub(crate) fn root_height(&self, anim: &crate::anim::AnimPlayer, height: i16) -> i16 {
+        if let Some(height) = self.part0_y {
+            return height;
+        }
         anim.scaled_root_y(self.parts0_y)
             .unwrap_or_else(|| self.scaled_height(height))
     }
@@ -3502,7 +3503,12 @@ impl Mover<'_, '_> {
 
     pub(crate) fn rot_neck(&mut self) {
         if self.work.neck.flags & 1 != 0 {
-            self.work.neck.position = self.chain_position(&[0, NECK_JOINT]);
+            // The head is part `Neck_no` (`Spl_in4b`'s 0) all the same, for
+            // another's aim at it.
+            self.work.neck.position = match self.work.neck.joint {
+                Some(0) => self.chain_position(&[0]),
+                _ => self.chain_position(&[0, NECK_JOINT]),
+            };
             return;
         }
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);

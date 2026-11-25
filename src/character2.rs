@@ -1385,11 +1385,13 @@ const SCE_STILL: u8 = 0x14;
 
 /// `Spl_in4b` (`0x4f02b0`), after `Spl_Init`: the part keeps the clip's first
 /// frame but for its height, which goes to 0, and the routine does nothing
-/// from then on. `Neck_flg`'s 1 holds the head (`Rot_neck`), and `Be_flg`'s
-/// 8 keeps it out of `Sca_ck_em`.
+/// from then on. `Neck_flg`'s 1 holds the head (`Rot_neck`) and `Neck_no` 0
+/// makes the one part the head, and `Be_flg`'s 8 keeps it out of
+/// `Sca_ck_em`.
 fn spl_in4b(character: &mut Character) {
     character.work.part0_y = Some(0);
     character.work.neck.flags = 1;
+    character.work.neck.joint = Some(0);
     character.be_flg |= 0xA;
     character.work.routine = [player2::MODE_SCENARIO, SCE_STILL, 0, 0];
 }
@@ -2852,17 +2854,32 @@ mod tests {
             partner: None,
             ..sherry(0)
         };
-        let tick = spl_tick(&RoomState::default(), &Default::default());
+        // Her model: one part and one clip of one frame, in the body's own bank.
+        let mut tick = spl_tick(&RoomState::default(), &Default::default());
+        let clips: &'static [Clip] = Box::leak(Box::new([Clip {
+            frames: vec![crate::model::ClipFrame::default()],
+        }]));
+        let keyframes: &'static [Keyframe] = Box::leak(Box::new([Keyframe {
+            offset: [10, -1810, 20],
+            rotations: vec![[0; 3]],
+            ..Default::default()
+        }]));
+        tick.banks.pld = (clips, keyframes);
+        tick.id = DESK_BODY;
         spl(&mut game, &mut character, &tick);
         assert_eq!(character.work.routine, [4, SCE_STILL, 0, 0]);
         assert_eq!(character.work.neck.flags, 1);
+        assert_eq!(character.work.neck.joint, Some(0));
         assert_eq!(character.be_flg & 0xB, 0xB);
         spl(&mut game, &mut character, &tick);
         assert_eq!(character.work.routine, [4, SCE_STILL, 0, 0]);
-        let mut pose = Keyframe {
-            offset: [10, -900, 20],
-            ..Default::default()
-        };
+        // Drawn: her own bank's first frame, at height 0.
+        let (clips, keyframes) = tick.banks.get(character.work.bank);
+        let mut pose = character
+            .body
+            .anim
+            .pose_keyframe(clips, keyframes)
+            .expect("a pose to draw");
         character
             .work
             .apply_to_pose(&character.body.anim, &mut pose);
