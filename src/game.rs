@@ -5429,11 +5429,18 @@ impl GameState {
     }
 
     /// Mirror the visible player back onto entity 0 after physics moved it, so
-    /// the next script tick sees the current position.
+    /// the next script tick sees the current position. RE2's `Cdir_y` is a
+    /// signed word nothing masks, so a script's turn past 4096 stays there
+    /// for the next pass's `member_cmp`.
     pub fn sync_entity_from_player(&mut self, player: &PlayerState) {
+        let is_re2_room = self.is_re2_room;
         let entity = &mut self.entities[0];
         entity.pos = player.pos;
-        entity.angle = player.angle & 0x0FFF;
+        entity.angle = if is_re2_room {
+            player.angle
+        } else {
+            player.angle & 0x0FFF
+        };
     }
 
     /// `evt_tween_begin`: reset the selected entity as it enters the movement
