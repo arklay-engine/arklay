@@ -3519,11 +3519,23 @@ fn the_option_screen_from_play_runs_from_its_step_0_and_resumes_play() {
 /// A key (`key:X`) or a pad source newly down on a tick, as the page reads
 /// it (`input.key`, `input.button`).
 fn press_source(name: &str) -> UiInput {
-    UiInput {
-        captured: Some(crate::controls::Source::parse(name).unwrap()),
+    press_sources(&[name])
+}
+
+/// The sources newly down together on one tick.
+fn press_sources(names: &[&str]) -> UiInput {
+    let mut input = UiInput {
+        captured: Some(crate::controls::Source::parse(names[0]).unwrap()),
         any: true,
         ..UiInput::default()
+    };
+    for name in names {
+        crate::ui::push_newly_down(
+            &mut input.newly_down,
+            crate::controls::Source::parse(name).unwrap(),
+        );
     }
+    input
 }
 
 /// The pad table the page edits, by the joypad's button: each word.
@@ -3542,17 +3554,22 @@ fn edit_pad(screen: &LuaScreen) -> Vec<i64> {
 /// A key newly down on a row is the decide cue and state 0xC, which binds
 /// it to the row on the next tick: the row's old key goes to the entry that
 /// held the new one, the last of them (`Config_main`'s 0x44A622). A key
-/// `Kb_get_state`'s table hasn't (F5, the arrows) is no press.
+/// `Kb_get_state`'s table hasn't (F5, Enter) is no press; the arrows, the
+/// page's fixed keys, move the cursor.
 #[test]
 fn keyconfig_binds_a_key_pressed_on_a_row() {
     let dir = std::env::temp_dir();
     let cx = context(&dir);
     let (mut screen, dir) = open_option(&cx, "key-bind");
     open_key_page(&mut screen, &cx);
-    for ignored in ["key:F5", "key:Down", "key:Return"] {
+    for ignored in ["key:F5", "key:Return"] {
         assert!(tick_cues(&mut screen, &cx, press_source(ignored)).is_empty());
         assert_eq!(opt(&screen)[1..4], [0xB, 0, 4], "{ignored}");
     }
+    run(&mut screen, &cx, press_source("key:Down"), 2);
+    assert_eq!(opt(&screen)[3], 5);
+    run(&mut screen, &cx, press_source("key:Up"), 2);
+    assert_eq!(opt(&screen)[3], 4);
     // Q on Get Ready (entry 10), which no row holds.
     assert_eq!(
         tick_cues(&mut screen, &cx, press_source("key:Q")),
@@ -3755,5 +3772,188 @@ fn keyconfigs_default_is_arklays_defaults() {
         .apply(&bindings)
         .unwrap();
     assert_eq!(applied, defaults);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// With no arrows or Enter bound (the player moved to WASD), the page's
+/// fixed keys still move its cursor and answer it, as the original's do.
+#[test]
+fn keyconfig_moves_and_answers_on_its_fixed_keys() {
+    use crate::controls::{Action, Bindings, Source};
+    let dir = std::env::temp_dir();
+    let cx = context(&dir);
+    let (mut screen, dir) = open_option(&cx, "key-fixed");
+    let defaults = Bindings::default();
+    let mut bindings = Bindings::default();
+    for (action, key) in [
+        (Action::Up, "key:W"),
+        (Action::Down, "key:S"),
+        (Action::Left, "key:A"),
+        (Action::Right, "key:D"),
+        (Action::Confirm, "key:F"),
+    ] {
+        bindings.set(action, vec![Source::parse(key).unwrap()]);
+    }
+    screen.tell_bindings(&bindings, &defaults, &cx);
+    open_key_page(&mut screen, &cx);
+    for _ in 0..6 {
+        run(&mut screen, &cx, press_source("key:Down"), 2);
+    }
+    assert_eq!(opt(&screen)[1..4], [0xB, 0, 10]);
+    run(&mut screen, &cx, press_source("key:Right"), 2);
+    run(&mut screen, &cx, press_source("key:Return"), 2);
+    // Default, then the question, answered No by Escape.
+    run(&mut screen, &cx, press_source("key:Left"), 2);
+    run(&mut screen, &cx, press_source("key:Space"), 2);
+    assert_eq!(opt(&screen)[1], 0xF);
+    run(&mut screen, &cx, press_source("key:Right"), 1);
+    run(&mut screen, &cx, press_source("key:Escape"), 1);
+    assert_eq!(opt(&screen)[1], 0xD);
+    assert!(screen.take_bindings_request().is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Of keys newly down together the page takes the lowest virtual key, as
+/// `Kb_get_state` looks through its table; a key that comes while the row
+/// binds (state 0xC), when the page doesn't read the keyboard, is lost.
+#[test]
+fn keyconfig_takes_the_lowest_key_and_none_while_it_binds() {
+    let dir = std::env::temp_dir();
+    let cx = context(&dir);
+    let (mut screen, dir) = open_option(&cx, "key-several");
+    open_key_page(&mut screen, &cx);
+    run(&mut screen, &cx, press_sources(&["key:Z", "key:Q"]), 1);
+    assert_eq!(opt(&screen)[1], 0xC);
+    screen.update(&cx, press_source("key:Z"));
+    assert_eq!(opt(&screen)[1..4], [0xB, 0, 4]);
+    let edit =
+        |screen: &LuaScreen| -> String { screen.test_eval("return tostring(M.key_work.edit[10])") };
+    assert_eq!(edit(&screen), "81");
+    run(&mut screen, &cx, UiInput::default(), 2);
+    assert_eq!(opt(&screen)[1..4], [0xB, 0, 4]);
+    assert_eq!(edit(&screen), "81");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A fixed key is the page's whatever it is also bound to: the left arrow
+/// bound to Backward toggles Exit's choice, and Return bound to Turn left
+/// answers the question.
+#[test]
+fn keyconfigs_fixed_keys_win_over_what_they_are_bound_to() {
+    use crate::controls::{Action, Bindings, Source};
+    let dir = std::env::temp_dir();
+    let cx = context(&dir);
+    let (mut screen, dir) = open_option(&cx, "key-fixed-bound");
+    let defaults = Bindings::default();
+    let bindings = Bindings::default();
+    screen.tell_bindings(&bindings, &defaults, &cx);
+    open_key_page(&mut screen, &cx);
+    run(&mut screen, &cx, press_source("key:Q"), 2);
+    for _ in 0..6 {
+        run(&mut screen, &cx, press("down"), 2);
+    }
+    let both = |screen: &mut LuaScreen, name: &str, direction: &str| {
+        let mut input = press(direction);
+        crate::ui::push_newly_down(&mut input.newly_down, Source::parse(name).unwrap());
+        run(screen, &cx, input, 2);
+    };
+    both(&mut screen, "key:Left", "down");
+    assert_eq!(opt(&screen)[3], 10, "still on the last row");
+    let choice: i64 = screen.test_eval("return M.key_work.choice");
+    assert_eq!(choice, 1);
+    both(&mut screen, "key:Right", "down");
+    run(&mut screen, &cx, press("confirm"), 2);
+    assert_eq!(opt(&screen)[1], 0xF);
+    both(&mut screen, "key:Return", "left");
+    assert_eq!(opt(&screen)[1], 0xD);
+    let applied = screen
+        .take_bindings_request()
+        .expect("Change asks")
+        .apply(&bindings)
+        .unwrap();
+    assert_eq!(applied.get(Action::Aim)[0], Source::parse("key:Q").unwrap());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Fire/Confirm's and Run/Cancel's keys are the menus' decide and cancel
+/// too; a key moved off another row comes off that row's action, which,
+/// left with none, keeps its other keys.
+#[test]
+fn keyconfig_binds_confirm_with_fire_and_takes_a_moved_key_off() {
+    use crate::controls::{Action, Bindings, Source};
+    let dir = std::env::temp_dir();
+    let cx = context(&dir);
+    let (mut screen, dir) = open_option(&cx, "key-pairs");
+    let defaults = Bindings::default();
+    let bindings = Bindings::default();
+    screen.tell_bindings(&bindings, &defaults, &cx);
+    open_key_page(&mut screen, &cx);
+    let before = key_glyphs(&screen);
+    let edit = |screen: &LuaScreen, entry: usize| -> String {
+        screen.test_eval(&format!("return tostring(M.key_work.edit[{entry}])"))
+    };
+    // Status's key on Get Ready, which has none: Status is left with none.
+    let status = edit(&screen, 13);
+    assert_eq!(edit(&screen, 10), "0");
+    run(&mut screen, &cx, press_source(&status), 2);
+    assert_eq!(edit(&screen, 13), "0");
+    // K on Fire.
+    run(&mut screen, &cx, press("down"), 2);
+    run(&mut screen, &cx, press_source("key:K"), 2);
+    assert_ne!(before, key_glyphs(&screen), "the page shows the change");
+    for _ in 0..5 {
+        run(&mut screen, &cx, press("down"), 2);
+    }
+    run(&mut screen, &cx, press("confirm"), 2);
+    run(&mut screen, &cx, press("confirm"), 1);
+    let applied = screen
+        .take_bindings_request()
+        .expect("Change asks")
+        .apply(&bindings)
+        .unwrap();
+    let key = |name: &str| Source::parse(name).unwrap();
+    assert_eq!(applied.get(Action::Fire)[0], key("key:K"));
+    assert_eq!(applied.get(Action::Confirm)[0], key("key:K"));
+    assert_eq!(applied.get(Action::Aim)[0], key(&status));
+    let start: Vec<_> = bindings
+        .get(Action::Start)
+        .iter()
+        .copied()
+        .filter(|source| *source != key(&status))
+        .collect();
+    assert_eq!(applied.get(Action::Start), start);
+    assert!(!start.is_empty(), "Status had another source");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A key two rows show, moved off one of them, stays on the other: the
+/// player saw it there when they took the change.
+#[test]
+fn keyconfig_keeps_a_moved_key_on_a_row_that_still_shows_it() {
+    use crate::controls::{Action, Bindings, Source};
+    let dir = std::env::temp_dir();
+    let cx = context(&dir);
+    let (mut screen, dir) = open_option(&cx, "key-shared");
+    let defaults = Bindings::default();
+    let mut bindings = Bindings::default();
+    let j = Source::parse("key:J").unwrap();
+    bindings.set(Action::Option, vec![j]);
+    bindings.set(Action::Map, vec![j]);
+    screen.tell_bindings(&bindings, &defaults, &cx);
+    open_key_page(&mut screen, &cx);
+    run(&mut screen, &cx, press_source("key:J"), 2);
+    for _ in 0..6 {
+        run(&mut screen, &cx, press("down"), 2);
+    }
+    run(&mut screen, &cx, press("confirm"), 2);
+    run(&mut screen, &cx, press("confirm"), 1);
+    let applied = screen
+        .take_bindings_request()
+        .expect("Change asks")
+        .apply(&bindings)
+        .unwrap();
+    assert_eq!(applied.get(Action::Aim)[0], j);
+    assert_eq!(applied.get(Action::Map), [j]);
+    assert!(!applied.get(Action::Option).contains(&j));
     let _ = std::fs::remove_dir_all(&dir);
 }

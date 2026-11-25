@@ -1021,9 +1021,9 @@ fn input_table(lua: &Lua, input: UiInput) -> mlua::Result<Table> {
     table.set("return_title", input.return_title)?;
     table.set("pad", pad_word(input))?;
     table.set("held", held_word(input))?;
-    let (key, button) = bindings::captured_names(input.captured);
-    table.set("key", key)?;
-    table.set("button", button)?;
+    let (keys, buttons) = bindings::pressed_names(&input.newly_down);
+    table.set("keys", keys)?;
+    table.set("buttons", buttons)?;
     Ok(table)
 }
 

@@ -385,9 +385,9 @@ struct Driver {
     held: u64,
     /// The keys held for the next tick only (`press`).
     pressed: u64,
-    /// The physical key or pad button newly down on the next tick only
-    /// (`press_key`), as a screen that binds keys reads it.
-    pressed_source: Option<crate::controls::Source>,
+    /// The physical keys and pad buttons newly down on the next tick only
+    /// (`press_key`), as a screen that binds keys reads them.
+    pressed_sources: [Option<crate::controls::Source>; crate::ui::NEWLY_DOWN],
     /// The booted session has not ticked yet: what its state was before
     /// the script's `game` edits, so the first tick (or a `save_game` or
     /// `capture`) reruns what they invalidate once, as an authored setup does.
@@ -422,7 +422,7 @@ impl Driver {
             input: InputState::default(),
             held: 0,
             pressed: 0,
-            pressed_source: None,
+            pressed_sources: Default::default(),
             baseline: None,
             edited: false,
             arm: false,
@@ -722,8 +722,12 @@ impl Driver {
         };
         let mut traced = None;
         let mut tick = self.input.tick_scripted(word);
-        if let Some(source) = self.pressed_source.take() {
-            tick.ui.captured = Some(source);
+        for source in std::mem::take(&mut self.pressed_sources)
+            .into_iter()
+            .flatten()
+        {
+            tick.ui.captured.get_or_insert(source);
+            crate::ui::push_newly_down(&mut tick.ui.newly_down, source);
         }
         if let Some(window) = self.window.as_mut() {
             // The player's host keys reach the game; their other game keys
@@ -1621,7 +1625,7 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
                         "press_key: `{name}` is not a keyboard key or a gamepad source"
                     )));
                 }
-                driver.pressed_source = Some(source);
+                crate::ui::push_newly_down(&mut driver.pressed_sources, source);
                 Ok(())
             })
         })?,

@@ -105,6 +105,34 @@ pub struct UiInput {
     /// The first bindable input pressed this tick, whatever it is bound to:
     /// the rebind screen's capture.
     pub captured: Option<crate::controls::Source>,
+    /// The keys and gamepad sources pressed this tick, in order, whatever
+    /// they are bound to (the first [`NEWLY_DOWN`]; mouse buttons and the
+    /// wheel aren't kept): RE 2's KEYCONFIG page reads
+    /// the keyboard's and the gamepad's apart, as the original does.
+    pub newly_down: [Option<crate::controls::Source>; NEWLY_DOWN],
+}
+
+/// How many of a tick's presses [`UiInput::newly_down`] keeps.
+pub const NEWLY_DOWN: usize = 8;
+
+/// Add `source` to a tick's presses, once, while there is room: a mouse
+/// button or the wheel isn't one.
+pub fn push_newly_down(
+    list: &mut [Option<crate::controls::Source>; NEWLY_DOWN],
+    source: crate::controls::Source,
+) {
+    if matches!(
+        source,
+        crate::controls::Source::Mouse(_) | crate::controls::Source::Wheel(_)
+    ) {
+        return;
+    }
+    if list.contains(&Some(source)) {
+        return;
+    }
+    if let Some(slot) = list.iter_mut().find(|slot| slot.is_none()) {
+        *slot = Some(source);
+    }
 }
 
 /// What a screen reports after one tick.

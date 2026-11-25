@@ -431,6 +431,8 @@ def parse_input(path: Path | None) -> list[tuple[int, int]]:
         for word in words[1:]:
             vk = key_word(word)
             if vk is not None:
+                if pad >> KB_KEY_SHIFT:
+                    raise SystemExit(f"{path}: {words[0]}: one key per line, as `Kb_get_state` returns one")
                 pad |= vk << KB_KEY_SHIFT
                 continue
             if word not in BUTTONS:

@@ -1392,8 +1392,8 @@ function ScreenApi:re2_slot(slot) end
 ---@field return_title boolean The return-to-title key (F9).
 ---@field pad integer The edge word of the fields above.
 ---@field held integer The held confirm, directions and L1/R1.
----@field key? string The keyboard key that went down on the tick, by its `device:name` (`key:Q`), whatever it is bound to; `nil` for none, a reserved key (F1, F9) or a mouse button.
----@field button? string The gamepad button or axis that went down on the tick (`pad:a`, `axis:lefttrigger+`), whatever it is bound to; `nil` for none or the pad's start.
+---@field keys? string[] The keyboard keys that went down on the tick, by their `device:name` (`key:Q`), whatever they are bound to, in the order they went down (up to eight with the buttons); reserved keys (F1, F9) and mouse buttons aren't listed.
+---@field buttons? string[] The gamepad buttons and axes that went down on the tick (`pad:a`, `axis:lefttrigger+`), whatever they are bound to, in the order they went down; the pad's start isn't listed.
 local ScreenInput = {}
 
 ---The options table the entry-drawn methods take. An unknown colour or

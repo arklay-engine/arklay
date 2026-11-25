@@ -1,8 +1,9 @@
 //! A screen that shows and sets the player's bindings (RE 2's KEYCONFIG
 //! page): `on_bindings(api, bindings, defaults)` tells it every action's
 //! keyboard keys and gamepad sources, `api:set_bindings(changes)` asks for
-//! some of them to be replaced, and the `input` table's `key` and `button`
-//! name the keyboard key and the gamepad button newly down on a tick.
+//! some of them to be replaced, and the `input` table's `keys` and
+//! `buttons` name the keyboard keys and the gamepad sources newly down on a
+//! tick.
 
 use mlua::{IntoLuaMulti, Lua, MultiValue, Table, UserDataMethods, Value};
 
@@ -111,6 +112,25 @@ impl BindingsRequest {
         Ok(Self(changes))
     }
 
+    /// Two requests on one tick are one: for each action and device the
+    /// later's list, where it gives one, wins.
+    fn merge(&mut self, later: Self) {
+        for (action, keys, pads) in later.0 {
+            match self.0.iter_mut().find(|(a, ..)| *a == action) {
+                Some((_, held_keys, held_pads)) => {
+                    if keys.is_some() {
+                        *held_keys = keys;
+                    }
+                    if pads.is_some() {
+                        *held_pads = pads;
+                    }
+                }
+                None => self.0.push((action, keys, pads)),
+            }
+        }
+        self.0.sort_by_key(|(action, ..)| *action);
+    }
+
     /// `bindings` with the request applied: each listed device's sources
     /// replaced by the request's (an action's mouse buttons and wheel stay,
     /// ahead of its gamepad sources as the shipped layout lists them).
@@ -153,17 +173,24 @@ impl BindingsRequest {
     }
 }
 
-/// The `input` table's `key` and `button`: the keyboard key, and the
-/// gamepad button or axis, that went down on the tick (the first bindable
-/// input pressed, [`crate::ui::UiInput::captured`]), by `device:name`. A
+/// The `input` table's `keys` and `buttons`: the keyboard keys, and the
+/// gamepad buttons and axes, that went down on the tick
+/// ([`crate::ui::UiInput::newly_down`]), in order, by `device:name`. A
 /// reserved input (F1, F9, the pad's start) and the mouse are neither.
-pub(crate) fn captured_names(captured: Option<Source>) -> (Option<String>, Option<String>) {
-    match captured {
-        Some(source) if source.reserved_bit().is_some() => (None, None),
-        Some(source @ Source::Key(_)) => (Some(source.to_string()), None),
-        Some(source) if source.is_pad() => (None, Some(source.to_string())),
-        _ => (None, None),
+pub(crate) fn pressed_names(pressed: &[Option<Source>]) -> (Vec<String>, Vec<String>) {
+    let mut keys = Vec::new();
+    let mut buttons = Vec::new();
+    for &source in pressed.iter().flatten() {
+        if source.reserved_bit().is_some() {
+            continue;
+        }
+        if matches!(source, Source::Key(_)) {
+            keys.push(source.to_string());
+        } else if source.is_pad() {
+            buttons.push(source.to_string());
+        }
     }
+    (keys, buttons)
 }
 
 pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
@@ -175,16 +202,11 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
             )));
         };
         let request = BindingsRequest::from_table(table)?;
-        // Two requests on one tick are one: the later's devices win.
         let pending = api
             .host
             .bindings_request
             .get_or_insert_with(Default::default);
-        for change in request.0 {
-            pending.0.retain(|(action, ..)| *action != change.0);
-            pending.0.push(change);
-        }
-        pending.0.sort_by_key(|(action, ..)| *action);
+        pending.merge(request);
         Ok(())
     });
 }
@@ -314,29 +336,50 @@ mod tests {
     }
 
     #[test]
-    fn a_captured_input_is_a_key_or_a_button() {
-        assert_eq!(
-            captured_names(Some(Source::key(SDL_SCANCODE_K))),
-            (Some("key:K".to_string()), None)
-        );
-        assert_eq!(
-            captured_names(Some(Source::PadButton(SDL_GAMEPAD_BUTTON_SOUTH.0))),
-            (None, Some("pad:a".to_string()))
-        );
-        assert_eq!(
-            captured_names(Some(Source::PadAxis(
-                SDL_GAMEPAD_AXIS_RIGHT_TRIGGER.0,
-                true
-            ))),
-            (None, Some("axis:righttrigger+".to_string()))
-        );
-        for none in [
-            None,
+    fn a_ticks_presses_are_keys_and_buttons_in_order() {
+        let pressed = [
             Some(Source::Mouse(1)),
+            Some(Source::PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER.0, true)),
+            Some(Source::key(SDL_SCANCODE_K)),
             Some(Source::key(SDL_SCANCODE_F1)),
             Some(Source::PadButton(SDL_GAMEPAD_BUTTON_START.0)),
-        ] {
-            assert_eq!(captured_names(none), (None, None), "{none:?}");
-        }
+            Some(Source::PadButton(SDL_GAMEPAD_BUTTON_SOUTH.0)),
+            Some(Source::key(SDL_SCANCODE_I)),
+            None,
+        ];
+        assert_eq!(
+            pressed_names(&pressed),
+            (
+                vec!["key:K".to_string(), "key:I".to_string()],
+                vec!["axis:righttrigger+".to_string(), "pad:a".to_string()]
+            )
+        );
+    }
+
+    #[test]
+    fn two_requests_on_a_tick_merge_by_device() {
+        let lua = Lua::new();
+        let mut held = request(
+            &lua,
+            r#"return { fire = { keys = { "key:K" } }, up = { keys = { "key:W" } } }"#,
+        )
+        .unwrap();
+        held.merge(
+            request(
+                &lua,
+                r#"return { fire = { pads = { "pad:y" } }, up = { keys = { "key:Up" } } }"#,
+            )
+            .unwrap(),
+        );
+        let applied = held.apply(&Bindings::default()).unwrap();
+        assert_eq!(
+            applied.get(Action::Fire),
+            [
+                Source::key(SDL_SCANCODE_K),
+                Source::Mouse(1),
+                Source::PadButton(SDL_GAMEPAD_BUTTON_NORTH.0)
+            ]
+        );
+        assert_eq!(applied.get(Action::Up)[0], Source::key(SDL_SCANCODE_UP));
     }
 }

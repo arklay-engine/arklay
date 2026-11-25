@@ -185,7 +185,7 @@ function press(...) end
 
 ---Press a physical key or gamepad source for the next tick only, by its
 ---`[bindings]` source name (`key:Q`, `pad:y`), as a screen that binds keys
----reads it ([`input.key` and `input.button`](screen.md#ScreenInput)): RE 2's
+---reads it ([`input.keys` and `input.buttons`](screen.md#ScreenInput)): RE 2's
 ---KEYCONFIG page binds it to the row under its cursor. It drives no action,
 ---whatever the key is bound to. A reserved input (F1, F9) or a mouse button
 ---is an error.

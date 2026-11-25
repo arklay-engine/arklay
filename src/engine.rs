@@ -22158,6 +22158,9 @@ struct InputState {
     /// The first bindable source pressed since the last tick, for the rebind
     /// screen's capture.
     captured: Option<controls::Source>,
+    /// The bindable sources pressed since the last tick, in order (the
+    /// first few): what RE 2's KEYCONFIG page binds.
+    newly_down: [Option<controls::Source>; ui::NEWLY_DOWN],
     /// The open gamepads (none for a scripted or test latch).
     pads: Gamepads,
     /// Navigation and pointer events for the native GUI, in arrival order
@@ -22299,6 +22302,9 @@ impl InputState {
             if self.captured.is_none() && (source.reserved_bit().is_none() || pad_start) {
                 self.captured = Some(source);
             }
+            if source.reserved_bit().is_none() {
+                ui::push_newly_down(&mut self.newly_down, source);
+            }
         }
     }
 
@@ -22399,6 +22405,7 @@ impl InputState {
         self.pressed = 0;
         self.any_pressed = false;
         self.captured = None;
+        self.newly_down = Default::default();
     }
 
     /// Latch a source going up. A pending press is left alone: a tap released
@@ -22580,6 +22587,7 @@ impl InputState {
         self.pressed = 0;
         self.any_pressed = false;
         self.captured = None;
+        self.newly_down = Default::default();
         self.gui_events.clear();
         // The button's release may never arrive once focus is gone; a held
         // slider drag must not outlive it.
@@ -22679,6 +22687,7 @@ impl InputState {
                     .map(|slot| slot as u8),
                 any: std::mem::take(&mut self.any_pressed),
                 captured: self.captured.take(),
+                newly_down: std::mem::take(&mut self.newly_down),
             },
         }
     }
@@ -29293,9 +29302,14 @@ mod tests {
         re2_tick(
             &mut session,
             &pack,
-            key(UiInput {
-                captured: Some(controls::Source::parse("key:Q").unwrap()),
-                ..UiInput::default()
+            key({
+                let q = controls::Source::parse("key:Q").unwrap();
+                let mut input = UiInput {
+                    captured: Some(q),
+                    ..UiInput::default()
+                };
+                crate::ui::push_newly_down(&mut input.newly_down, q);
+                input
             }),
         );
         re2_tick(&mut session, &pack, UiInput::default());
@@ -34402,6 +34416,7 @@ mod tests {
             let mut expected = expected;
             expected.any = true;
             expected.captured = Some(controls::Source::key(scancode));
+            ui::push_newly_down(&mut expected.newly_down, controls::Source::key(scancode));
             assert_eq!(input.tick().ui, expected, "scancode {}", scancode.0);
         }
 

@@ -164,7 +164,8 @@ def lua_str(text: str) -> str:
 
 # The recorder's words for the keyboard's own arrows, which KEYCONFIG's page reads in place of the pad: arklay's
 # screens have one set of directions. A key by its name (`key:X`, a letter or a digit) is handed to arklay with
-# `press_key` on its line's first tick, as the recorder hands it to `Kb_get_state`.
+# `press_key` on its line's first tick when the line before held another, as the recorder hands it to
+# `Kb_get_state`.
 KEYBOARD_BUTTONS = {"kbup": "up", "kbdown": "down", "kbleft": "left", "kbright": "right"}
 
 
@@ -178,14 +179,19 @@ def input_entries(path: Path) -> dict[int, list[str]]:
             continue
         if not words[0].isdigit():
             raise SystemExit(f"re2-regress: {path}:{number}: `{words[0]}` is not a tick number")
-        held[int(words[0])] = [KEYBOARD_BUTTONS.get(word, word) for word in words[1:]]
+        # `key:q` is `key:Q`, as the recorder's virtual key is one.
+        buttons = [KEYBOARD_BUTTONS.get(word, "key:" + word[4:].upper() if word.startswith("key:") and len(word) == 5 else word)
+                   for word in words[1:]]
+        if sum(":" in button for button in buttons) > 1:
+            raise SystemExit(f"re2-regress: {path}:{number}: one key per line, as the recorder hands one over")
+        held[int(words[0])] = buttons
     return dict(sorted(held.items()))
 
 
 # The loop of every run's driver script: the input's buttons from their traced tick on, a frame after each traced
 # tick, until `ticks` ticks are traced or the bound is spent (the trace then ends early, which the judge reports).
 DRIVER_LOOP = """
-local applied
+local applied, keys_held
 local updates, bound = 0, ticks * 2 + 10000
 while trace_ticks() < ticks and updates < bound do
     local index = trace_ticks()
@@ -194,11 +200,18 @@ while trace_ticks() < ticks and updates < bound do
         local buttons = held[index]
         if buttons then
             release()
-            -- A key by its name (`key:X`) is pressed on the line's first tick, as KEYCONFIG's page reads it.
-            local plain = {}
+            -- A key by its name (`key:X`) is pressed on the line's first tick, as KEYCONFIG's page reads it,
+            -- unless the line before held it already.
+            local plain, keys = {}, {}
             for _, button in ipairs(buttons) do
-                if button:find(":", 1, true) then press_key(button) else plain[#plain + 1] = button end
+                if button:find(":", 1, true) then
+                    keys[button] = true
+                    if not (keys_held and keys_held[button]) then press_key(button) end
+                else
+                    plain[#plain + 1] = button
+                end
             end
+            keys_held = keys
             if #plain > 0 then hold(table.unpack(plain)) end
         end
     end
