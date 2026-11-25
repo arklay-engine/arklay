@@ -12439,6 +12439,13 @@ struct App {
     screen_sound_shown: [Option<u8>; 2],
     /// A change the title made to them, for the window's loop to save.
     sound_change: Option<[u8; 2]>,
+    /// RE 2's gallery bits (config.ini's `GALLERY0` to `GALLERY4`) and
+    /// `SPECIAL` are the settings' ([`App::use_settings_records`]): the
+    /// interactive game's, where a headless run gives its own or none.
+    records_are_settings: bool,
+    /// The gallery bits a clear's results raised, for the window's loop to
+    /// save to the settings when they are the settings'.
+    gallery_change: Option<[u32; 5]>,
     /// Whether the prologue film (id 1) is playing for a pending new game:
     /// the follow-up `NewGame` action then builds the session instead of
     /// queueing the film again. A later confirm queues the prologue anew,
@@ -12583,6 +12590,8 @@ impl App {
             screen_sound: SCREEN_SOUND_BOOT,
             screen_sound_shown: [None; 2],
             sound_change: None,
+            records_are_settings: false,
+            gallery_change: None,
             prologue_pending: false,
             film_title: None,
             film_title_is_select: false,
@@ -13193,10 +13202,10 @@ impl App {
         if let Mode::Play(session) = &self.mode
             && let Some(result) = &session.game.re2_result
             && let Some(words) = self.player_options.title_gallery.as_mut()
+            && let Some(changed) =
+                merge_result_gallery(words, result.gallery(), self.records_are_settings)
         {
-            for (word, bits) in words.iter_mut().zip(result.gallery()) {
-                *word |= bits;
-            }
+            self.gallery_change = Some(changed);
         }
         let special = i64::from(self.player_options.title_special.unwrap_or(15));
         let mut args = vec![
@@ -13323,6 +13332,19 @@ impl App {
         self.play_ui_cues(cues);
         self.tell_screen_volumes();
         Ok(())
+    }
+
+    /// RE 2's gallery bits and `SPECIAL` are the settings' in `game`, as
+    /// config.ini's are the original's, unless the run already has its own
+    /// (`load_game_pack`'s `title_gallery` and `title_special`).
+    fn use_settings_records(&mut self, game: &crate::config::Game) {
+        if self.player_options.title_gallery.is_none() {
+            self.player_options.title_gallery = Some(game.re2_gallery);
+            self.records_are_settings = true;
+        }
+        if self.player_options.title_special.is_none() {
+            self.player_options.title_special = Some(game.re2_special);
+        }
     }
 
     /// The settings' music and effects volumes, in percent: a title that
@@ -15423,8 +15445,10 @@ fn run_ui_impl(
     app.configure_watch(mods.watch);
     app.player_options = player_options;
     // The settings' volumes before the boot, which a `--load` takes its
-    // save's over.
-    app.use_settings_volumes(&crate::config::Config::load_default().0.game);
+    // save's over, and RE 2's clear records.
+    let settings = crate::config::Config::load_default().0.game;
+    app.use_settings_volumes(&settings);
+    app.use_settings_records(&settings);
     app.boot(boot)?;
     if let Mode::Play(session) = &mut app.mode {
         session.run_setup_script(authoring.setup_script)?;
@@ -15985,6 +16009,14 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
             if let Some(sound) = app.sound_change.take() {
                 save_screen_sound(&crate::config::Config::default_path(), sound);
             }
+            if let Some(words) = app.gallery_change.take()
+                && let Err(err) = crate::config::Config::save_re2_gallery(
+                    &crate::config::Config::default_path(),
+                    words,
+                )
+            {
+                crate::warning!("warning: the gallery's records not saved: {err:#}");
+            }
             clock.ticked(tick_ms);
             // The tick may have changed the screen and with it the limiter,
             // which the original reads after each pass of its scheduler:
@@ -16491,6 +16523,9 @@ pub(crate) fn persisted_options(
         subtitle_color: _,
         speaker_names: _,
         speaker_name_color: _,
+        // Not the menu's: the file's stand.
+        re2_gallery: _,
+        re2_special: _,
     } = after.game;
     let mut saved_game = file.game;
     take_changed!(
@@ -21153,6 +21188,18 @@ fn carry_re2_counts(
     next.kills = cleared.re2.kills;
     next.clears = cleared.re2.clears.wrapping_add(u8::from(!scenario_b));
     next.extreme_level = cleared.re2_save_count();
+}
+
+/// OR the gallery's bits a clear's results set (`Set_registry_flg`) into
+/// the title's (config.ini's `GALLERY0` to `GALLERY4`). Returns the words
+/// to save when they changed and are the settings' (`settings`): the
+/// original's `ConfigWrite` keeps them in config.ini.
+fn merge_result_gallery(words: &mut [u32; 5], bits: [u32; 5], settings: bool) -> Option<[u32; 5]> {
+    let before = *words;
+    for (word, bits) in words.iter_mut().zip(bits) {
+        *word |= bits;
+    }
+    (settings && *words != before).then_some(*words)
 }
 
 fn seed_re2_music_table(pack: &Pack, game: &mut game::GameState, scenario_b: bool) {
@@ -26400,6 +26447,52 @@ mod tests {
         // A scenario B's clear counts one more into the A after it.
         carry_re2_counts(&mut next, &cleared, false);
         assert_eq!(next.clears, 3);
+    }
+
+    /// A clear's gallery bits go into the title's, and are saved only when
+    /// they are the settings' and something new opened; the settings give
+    /// a run its records only where it has none of its own.
+    #[test]
+    fn a_clears_gallery_bits_are_saved_to_the_settings() {
+        let mut words = [0, 0, 0x10, 0, 0];
+        let bits = [0x8000_0000, 0, 0x10, 0, 0];
+        assert_eq!(
+            merge_result_gallery(&mut words, bits, true),
+            Some([0x8000_0000, 0, 0x10, 0, 0])
+        );
+        assert_eq!(
+            merge_result_gallery(&mut words, bits, true),
+            None,
+            "nothing new"
+        );
+        let mut run = [0; 5];
+        assert_eq!(
+            merge_result_gallery(&mut run, bits, false),
+            None,
+            "a run's own"
+        );
+        assert_eq!(run, bits);
+
+        let dir = TempDir::new();
+        let (pack, _) = re2_typewriter_session(&dir);
+        let settings = crate::config::Game {
+            re2_gallery: [1, 2, 3, 4, 5],
+            re2_special: 2,
+            ..Default::default()
+        };
+        let mut app = App::new(pack, dir.0.join("saves"), false);
+        app.use_settings_records(&settings);
+        assert_eq!(app.player_options.title_gallery, Some([1, 2, 3, 4, 5]));
+        assert_eq!(app.player_options.title_special, Some(2));
+        assert!(app.records_are_settings);
+        let (pack, _) = re2_typewriter_session(&dir);
+        let mut app = App::new(pack, dir.0.join("saves"), false);
+        app.player_options.title_gallery = Some([0; 5]);
+        app.player_options.title_special = Some(15);
+        app.use_settings_records(&settings);
+        assert_eq!(app.player_options.title_gallery, Some([0; 5]));
+        assert_eq!(app.player_options.title_special, Some(15));
+        assert!(!app.records_are_settings);
     }
 
     /// The save place a new game starts with (`0x4B73C0`): `0x0F` for a

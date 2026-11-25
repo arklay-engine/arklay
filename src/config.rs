@@ -67,6 +67,12 @@
 //! subtitle_color = "white"     # "white", "red", "blue", "green", "yellow"
 //! speaker_names = false
 //! speaker_name_color = "yellow"
+//! re2_gallery = "ffffffff ffffffff ffffffff ffffffff ffffffff"
+//!                        # RE 2's config.ini GALLERY0 to GALLERY4: what the
+//!                        # gallery opens; a clear's results raise its bits.
+//!                        # "00000000 ..." starts it closed, as the original
+//! re2_special = 15       # RE 2's config.ini SPECIAL: which of the extras
+//!                        # the title's SPECIAL shows, more the higher
 //!
 //! # The interactive window (see `crate::video`); a key left out keeps its
 //! # default. F8 and Alt+Enter rewrite `fullscreen` and the window size, and
@@ -554,6 +560,12 @@ pub struct Game {
     /// Show the speaker's name with a subtitle.
     pub speaker_names: bool,
     pub speaker_name_color: TextColor,
+    /// RE 2's config.ini `GALLERY0` to `GALLERY4` (`0x68059C`): the bits of
+    /// what the gallery opens, which a clear's results raise
+    /// (`Set_registry_flg`) and the title reads. All open by default.
+    pub re2_gallery: [u32; 5],
+    /// RE 2's config.ini `SPECIAL` (`Special`): the extras SPECIAL shows.
+    pub re2_special: i8,
 }
 
 impl Default for Game {
@@ -587,6 +599,8 @@ impl Default for Game {
             subtitle_color: TextColor::White,
             speaker_names: false,
             speaker_name_color: TextColor::Yellow,
+            re2_gallery: [u32::MAX; 5],
+            re2_special: 15,
         }
     }
 }
@@ -1001,6 +1015,12 @@ impl Config {
             config.game.music_volume = music.min(100);
             config.game.effects_volume = effects.min(100);
         })
+    }
+
+    /// Persist RE 2's gallery bits (config.ini's `GALLERY0` to `GALLERY4`)
+    /// a clear's results raised, rewritten like [`Config::save_bindings`].
+    pub fn save_re2_gallery(path: &Path, words: [u32; 5]) -> Result<()> {
+        Self::update(path, |config| config.game.re2_gallery = words)
     }
 
     /// Persist the speaker mode and the quality a title's own option
@@ -1484,6 +1504,24 @@ fn parse_game_line(
         "subtitle_color" => game.subtitle_color = named(key, value, line)?,
         "speaker_names" => game.speaker_names = boolean()?,
         "speaker_name_color" => game.speaker_name_color = named(key, value, line)?,
+        "re2_gallery" => {
+            let text = parse_quoted(value, line)?;
+            let words: Vec<u32> = text
+                .split_whitespace()
+                .map(|word| u32::from_str_radix(word, 16))
+                .collect::<Result<_, _>>()
+                .map_err(|_| {
+                    anyhow::anyhow!("line {line}: `re2_gallery` expects five hex words")
+                })?;
+            game.re2_gallery = words.try_into().map_err(|_| {
+                anyhow::anyhow!("line {line}: `re2_gallery` expects five hex words")
+            })?;
+        }
+        "re2_special" => {
+            game.re2_special = value
+                .parse::<i8>()
+                .map_err(|_| anyhow::anyhow!("line {line}: `re2_special` expects -128 to 127"))?;
+        }
         other => bail!("line {line}: unknown key `{other}`"),
     }
     Ok(())
@@ -1620,6 +1658,17 @@ fn render_game(game: &Game) -> String {
             "speaker_name_color = \"{}\"\n",
             game.speaker_name_color.name()
         ));
+    }
+    if game.re2_gallery != defaults.re2_gallery {
+        let words: Vec<String> = game
+            .re2_gallery
+            .iter()
+            .map(|word| format!("{word:08x}"))
+            .collect();
+        out.push_str(&format!("re2_gallery = \"{}\"\n", words.join(" ")));
+    }
+    if game.re2_special != defaults.re2_special {
+        out.push_str(&format!("re2_special = {}\n", game.re2_special));
     }
     out
 }
@@ -2358,6 +2407,8 @@ menu_text_size = \"huge\"
             subtitle_color: TextColor::Green,
             speaker_names: true,
             speaker_name_color: TextColor::Red,
+            re2_gallery: [0, 1, 2, 3, 0xF000_0000],
+            re2_special: 3,
         };
         Config::save_options(&path, &graphics, Some("ja-JP"), game).unwrap();
         let text = fs::read_to_string(&path).unwrap();
@@ -2397,6 +2448,37 @@ menu_text_size = \"huge\"
         );
         fs::write(&path, "[game]\nspeaker_mode = \"surround\"\n").unwrap();
         assert!(!Config::load(&path).1.is_empty(), "an unknown mode warns");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// RE 2's gallery bits (config.ini's `GALLERY0` to `GALLERY4`) a clear
+    /// opened are kept in `[game]` from one run to the next, and `SPECIAL`
+    /// is read from there; the defaults (all open, 15) aren't written.
+    #[test]
+    fn re2s_clear_records_are_saved() {
+        let dir =
+            std::env::temp_dir().join(format!("arklay-config-{}-records", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("arklay.toml");
+        fs::write(&path, "[game]\nre2_special = 1\nmusic_volume = 40\n").unwrap();
+        let words = [0x8000_0000, 0, 0x30, 0xFFFF_0000, 1];
+        Config::save_re2_gallery(&path, words).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(
+            text.contains("re2_gallery = \"80000000 00000000 00000030 ffff0000 00000001\""),
+            "{text}"
+        );
+        let (saved, warnings) = Config::load(&path);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(saved.game.re2_gallery, words);
+        assert_eq!(saved.game.re2_special, 1);
+        assert_eq!(saved.game.music_volume, 40);
+        Config::save_re2_gallery(&path, [u32::MAX; 5]).unwrap();
+        assert!(!fs::read_to_string(&path).unwrap().contains("re2_gallery"));
+        for bad in ["\"ffffffff\"", "\"zz 0 0 0 0\"", "5"] {
+            fs::write(&path, format!("[game]\nre2_gallery = {bad}\n")).unwrap();
+            assert!(!Config::load(&path).1.is_empty(), "{bad} warns");
+        }
         let _ = fs::remove_dir_all(&dir);
     }
 
