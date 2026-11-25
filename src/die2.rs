@@ -4,9 +4,9 @@
 //! text and `Die_move_set_cut`'s spiralling camera (`Spiral_move`) are the
 //! original's. With `censorship_off` clear, `Die_vcut_set` culls everything
 //! the room would draw, so the camera has nothing to show; ARRANGE MODE
-//! (`censorship_off`) shows the room's models from it. `Die_light_set`'s
-//! light and `Die_blood_move_main`'s blood aren't ported: see
-//! `oracle/re2-deviations.md`.
+//! (`censorship_off`) shows the room's models from it, under
+//! `Die_light_set`'s light ([`DieLight`]), and a held death's blood
+//! (`Die_blood_move_main`, [`DieText::blood`]) under the text.
 
 use crate::player2::{rcos, rsin};
 use crate::scd2::host::Re2State;
@@ -117,6 +117,59 @@ struct Spiral {
     angle: u16,
     turn: i16,
     view: DieView,
+}
+
+/// The game over's light: what `Die_light_set` (`0x44E690`) writes into the
+/// cut's LIT record (`rdt + 0x2C`, 0x28 bytes a cut), and what
+/// `Die_move_main` and `Die_move_out` change of it after. Light 0 is a
+/// point (`+1` 0) 300 above the player's part 0, light 1 black, light 2 at
+/// the spiral's target, 500 across, 3000 down and 500 along. The bytes are
+/// the record's own; [`DieLight::apply`] takes them to the parsed record's
+/// scales.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DieLight {
+    /// `+0x10`, `+0x1C`: lights 0's and 2's places.
+    positions: [[i16; 3]; 2],
+    /// `+4`, `+0xA`: their colours (light 1's, `+7`, is 0).
+    colours: [[u8; 3]; 2],
+    /// `+0x22`, `+0x26`: their reach.
+    radii: [u16; 2],
+}
+
+impl DieLight {
+    /// `Die_light_set`, from the player's part 0 and the spiral's target.
+    fn set(part: [i32; 3], target: [i32; 3]) -> Self {
+        Self {
+            positions: [
+                [
+                    part[0] as i16,
+                    (part[1] as i16).wrapping_sub(300),
+                    part[2] as i16,
+                ],
+                [
+                    (target[0] as i16).wrapping_add(500),
+                    (target[1] as i16).wrapping_add(3000),
+                    (target[2] as i16).wrapping_add(500),
+                ],
+            ],
+            colours: [[0x78; 3], [0x84; 3]],
+            radii: [4000, 8000],
+        }
+    }
+
+    /// The cut's record `base` as the game over has changed it.
+    pub fn apply(&self, mut base: crate::state::CameraLight) -> crate::state::CameraLight {
+        let colour = |bytes: [u8; 3]| bytes.map(crate::rdt2::light_colour);
+        for (light, index) in [0, 2].into_iter().enumerate() {
+            let target = &mut base.lights[index];
+            target.pos = self.positions[light].map(i32::from);
+            target.color = colour(self.colours[light]);
+            target.radius = self.radii[light];
+        }
+        base.lights[0].kind = 0;
+        base.lights[1].color = [0; 3];
+        base
+    }
 }
 
 /// What [`Die::tick`] reads of the bodies: `Cdir_y`s and the parts' `Workm`
@@ -273,6 +326,8 @@ pub struct Die {
     row: usize,
     /// From `Die_move_set_cut` on.
     spiral: Option<Spiral>,
+    /// `Die_light_set`'s light, from `Die_move_set_cut` on.
+    light: Option<DieLight>,
 }
 
 /// The killer's row: a search from the end, which stops at the first when
@@ -310,12 +365,19 @@ impl Die {
             arrange,
             row: killer.map_or(0, killer_row),
             spiral: None,
+            light: None,
         }
     }
 
     /// `Spiral_move`'s camera, from `Die_move_set_cut` on.
     pub fn view(&self) -> Option<DieView> {
         self.spiral.map(|spiral| spiral.view)
+    }
+
+    /// The cut's light as the game over has set it, from `Die_move_set_cut`
+    /// on.
+    pub fn light(&self) -> Option<DieLight> {
+        self.light
     }
 
     /// The trace's `dieview`: the eye, then the target.
@@ -378,8 +440,44 @@ impl Die {
                 },
             }
         };
+        self.light = Some(DieLight::set(bodies.part(false, 0), spiral.view.target));
         self.spiral = Some(spiral);
         self.spiral_move(bodies);
+    }
+
+    /// `Die_move_main`'s changes to the light, on its count before the
+    /// tick's: a held death's light 2 flashes red on counts 6 to 9 and
+    /// fades back over 10 to 20, and light 0 is 0x3C from the first tick.
+    fn main_light(&mut self) {
+        let (held, count) = (self.held, self.count);
+        let Some(light) = self.light.as_mut() else {
+            return;
+        };
+        if held {
+            if (6..=9).contains(&count) {
+                light.colours[1] = [0xFF, 0, 0];
+                light.radii[1] = 20000;
+            } else if (10..0x15).contains(&count) {
+                let [r, g, b] = &mut light.colours[1];
+                *r = r.wrapping_sub(0xC);
+                *g = g.wrapping_add(0xD);
+                *b = b.wrapping_add(0xD);
+                light.radii[1] = light.radii[1].wrapping_sub(0x4B0);
+            }
+        }
+        light.colours[0] = [0x3C; 3];
+    }
+
+    /// `Die_move_out`'s dimming: light 0's colour down by one a tick to 0,
+    /// and its reach by 100 while it's over 100.
+    fn out_light(&mut self) {
+        let Some(light) = self.light.as_mut() else {
+            return;
+        };
+        light.colours[0] = light.colours[0].map(|channel| channel.saturating_sub(1));
+        if light.radii[0] > 100 {
+            light.radii[0] -= 100;
+        }
     }
 
     /// `Spiral_move` (`0x44E9D0`): the circle shrinks and turns about the
@@ -434,8 +532,7 @@ impl Die {
         };
         text.tick(&mut re2.rnd);
         if self.held {
-            out.cry |= !text.cried;
-            text.cried = true;
+            out.cry |= text.bleed(self.arrange);
         }
     }
 
@@ -486,6 +583,7 @@ impl Die {
             }
             // `Die_move_main`.
             4 => {
+                self.main_light();
                 if self.count == 0 {
                     out.load_sounds = true;
                     self.text = Some(Box::new(DieText::new(self.held)));
@@ -508,6 +606,7 @@ impl Die {
                 self.move_text(re2, &mut out);
                 self.spiral_move(bodies);
                 self.count += 1;
+                self.out_light();
                 if self.count == OUT_FADE {
                     out.fade = Some(DieFade::Black);
                 }
@@ -605,8 +704,10 @@ pub struct DieText {
     front: usize,
     /// Whether this tick's state submitted the mesh.
     drawn: bool,
-    /// `Die_blood_move_main` has played its sound (`+6`).
-    cried: bool,
+    /// `Die_blood_move_main`'s count (`+6`), and the count this tick drew
+    /// its blood at.
+    bleeding: i16,
+    blood_drawn: Option<i16>,
 }
 
 impl DieText {
@@ -637,7 +738,8 @@ impl DieText {
             colours: [[[[COLOUR_START; 4]; CELLS]; CELLS]; 2],
             front: 0,
             drawn: false,
-            cried: false,
+            bleeding: 0,
+            blood_drawn: None,
         }
     }
 
@@ -756,11 +858,109 @@ impl DieText {
     }
 
     fn screen(&self, column: usize, row: usize) -> [i32; 2] {
-        let depth = EYE[1] - i32::from(self.y[column][row]);
-        let x = column as i32 * 30 - EYE[0];
-        let z = i32::from(self.z[column][row]) - EYE[2];
-        let scale = |at: i32| at * FOCAL / depth.max(1);
-        [160 + scale(x), 120 + scale(z)]
+        project([
+            column as i32 * 30,
+            i32::from(self.y[column][row]),
+            i32::from(self.z[column][row]),
+        ])
+    }
+
+    /// `Die_blood_move_main` (`0x44F860`), after the text's state, in a held
+    /// death: its sound on its count's first tick, and under ARRANGE MODE its
+    /// blood while the count is 100 or less (the count stops there).
+    /// Censored, the count runs on and nothing is drawn. Returns whether the
+    /// sound plays.
+    fn bleed(&mut self, arrange: bool) -> bool {
+        let cry = self.bleeding == 0;
+        self.blood_drawn = None;
+        if arrange {
+            if self.bleeding > BLOOD_END {
+                return cry;
+            }
+            self.blood_drawn = Some(self.bleeding);
+        }
+        self.bleeding += 1;
+        cry
+    }
+
+    /// The blood this tick drew, as `AddPolyFT4_2` adds it: each layer's
+    /// eight strips (the last layer is drawn first), on the
+    /// [`SpriteBlend`](crate::render::SpriteBlend) its count gives.
+    pub fn blood(&self, sheet: &Image) -> Option<(Vec<Image>, BloodBlend)> {
+        let count = self.blood_drawn?;
+        let left = BLOOD_END - count;
+        let blend = if left >= 0x29 {
+            BloodBlend::Opaque
+        } else {
+            BloodBlend::Half
+        };
+        let layers = BLOOD_LAYERS
+            .iter()
+            .enumerate()
+            .rev()
+            .filter_map(|(layer, row)| {
+                let mut image = Image {
+                    width: 320,
+                    height: 240,
+                    rgba: vec![0; 320 * 240 * 4],
+                };
+                let step = count - row.start;
+                if step < 0 {
+                    return None;
+                }
+                let (mut red, depth) = if step < row.ramp {
+                    (step * 40, (row.depth)(step))
+                } else {
+                    (200, row.held)
+                };
+                if red == 0 {
+                    return None;
+                }
+                if left < 0x29 {
+                    red = left * 12 / 2;
+                    if left < 0x14 {
+                        red = left * 12 / 4;
+                    }
+                }
+                for strip in 0..8 {
+                    let column = strip * 2;
+                    let corner = |column: usize, row_: usize, lower: bool| {
+                        let mut z = i32::from(self.z[column][row_]) + row.offset[1];
+                        z = (z as i16).wrapping_mul(2) as i32;
+                        if count > 0x14 {
+                            let wave = (rcos(((layer * 0x400 + column) * 0x40) as i32)
+                                + 0x1000
+                                + rcos(((layer * 7 + column) * 0x100) as i32))
+                                / 0x140;
+                            let drip = i32::from(count - 0x14) * wave;
+                            z += if lower { drip * 2 / 0x28 } else { drip / 0x28 };
+                        }
+                        if lower {
+                            z += 0xF0;
+                        }
+                        let x = column as i32 * 30 + row.offset[0];
+                        project([x, i32::from(depth), z])
+                    };
+                    let u0 = (strip * 32) as f32;
+                    let u1 = u0 + if strip == 7 { 31.0 } else { 32.0 };
+                    let corners = [
+                        (corner(column, 0, false), [u0, 64.0]),
+                        (corner(column + 2, 0, false), [u1, 64.0]),
+                        (corner(column, 1, true), [u0, 192.0]),
+                        (corner(column + 2, 1, true), [u1, 192.0]),
+                    ]
+                    .map(|(at, uv)| Corner {
+                        at,
+                        uv,
+                        red: red as f32,
+                    });
+                    blood_triangle(&mut image, sheet, [corners[0], corners[1], corners[2]]);
+                    blood_triangle(&mut image, sheet, [corners[1], corners[3], corners[2]]);
+                }
+                Some(image)
+            })
+            .collect();
+        Some((layers, blend))
     }
 
     /// `AddPolyGT4`'s sum of the mesh on the `sheet` (`died*.die`'s texture),
@@ -786,6 +986,121 @@ impl DieText {
                 add_triangle(image, sheet, [corners[0], corners[1], corners[2]]);
                 add_triangle(image, sheet, [corners[1], corners[3], corners[2]]);
             }
+        }
+    }
+}
+
+/// `Die_spr_move`'s projection of a mesh point `(x, y, z)`, `y` its depth.
+fn project([x, y, z]: [i32; 3]) -> [i32; 2] {
+    let depth = EYE[1] - y;
+    let scale = |at: i32| at * FOCAL / depth.max(1);
+    [160 + scale(x - EYE[0]), 120 + scale(z - EYE[2])]
+}
+
+/// `Die_blood_move_main`'s count past which it draws nothing more.
+const BLOOD_END: i16 = 100;
+
+/// One of `Die_blood_move_main`'s three splashes: the count it starts on,
+/// the ticks it takes to come close (its red 40 a tick till then, then
+/// 200), its depth meanwhile and after, and its offset on the text's mesh
+/// (`x`, and `z` before it is doubled).
+struct BloodLayer {
+    start: i16,
+    ramp: i16,
+    depth: fn(i16) -> i16,
+    held: i16,
+    offset: [i32; 2],
+}
+
+const BLOOD_LAYERS: [BloodLayer; 3] = [
+    BloodLayer {
+        start: 0,
+        ramp: 5,
+        depth: |step| step * step * 0xE + 0x168,
+        held: 600,
+        offset: [0x5A, 0],
+    },
+    BloodLayer {
+        start: 4,
+        ramp: 5,
+        depth: |step| step * step * 0xE + 200,
+        held: 0x1B8,
+        offset: [0x104, -0x70],
+    },
+    BloodLayer {
+        start: 9,
+        ramp: 3,
+        depth: |step| (step * step + 0x10) * 10,
+        held: 0x140,
+        offset: [-0x10E, -0x54],
+    },
+];
+
+/// How the blood's strips meet the frame: `code` 0, then `code` 2 as it
+/// fades. `AddPolyFT4_2` (`0x440FF0`) takes Marni's blend from `tag & 3`,
+/// which is 0 (`0x100000`, half), so the late `tpage` 0xB5 changes nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BloodBlend {
+    Opaque,
+    Half,
+}
+
+/// One triangle of a blood strip: the sheet's texel under the strip's red
+/// alone (`r0`; its green and blue are 0), over what the layer has.
+fn blood_triangle(image: &mut Image, sheet: &Image, corners: [Corner; 3]) {
+    let [a, b, c] = corners.map(|corner| corner.at);
+    let area = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    if area == 0 {
+        return;
+    }
+    let (width, height) = (image.width as i32, image.height as i32);
+    let (left, right) = (
+        a[0].min(b[0]).min(c[0]).max(0),
+        a[0].max(b[0]).max(c[0]).min(width - 1),
+    );
+    let (top, bottom) = (
+        a[1].min(b[1]).min(c[1]).max(0),
+        a[1].max(b[1]).max(c[1]).min(height - 1),
+    );
+    let whole = area as f32;
+    for y in top..=bottom {
+        for x in left..=right {
+            let (px, py) = (x as f32 + 0.5, y as f32 + 0.5);
+            let edge = |from: [i32; 2], to: [i32; 2]| {
+                (to[0] - from[0]) as f32 * (py - from[1] as f32)
+                    - (to[1] - from[1]) as f32 * (px - from[0] as f32)
+            };
+            let weights = [edge(b, c), edge(c, a), edge(a, b)].map(|w| w / whole);
+            if weights.iter().any(|&w| w < 0.0) {
+                continue;
+            }
+            let mix = |value: fn(&Corner) -> f32| {
+                weights
+                    .iter()
+                    .zip(&corners)
+                    .map(|(&weight, corner)| weight * value(corner))
+                    .sum::<f32>()
+            };
+            let (u, v) = (mix(|corner| corner.uv[0]), mix(|corner| corner.uv[1]));
+            let texel = (v as usize).min(sheet.height as usize - 1) * sheet.width as usize
+                + (u as usize).min(sheet.width as usize - 1);
+            let Some(colour) = sheet.rgba.get(texel * 4..texel * 4 + 4) else {
+                continue;
+            };
+            if colour[3] == 0 {
+                continue;
+            }
+            let at = (y as usize * image.width as usize + x as usize) * 4;
+            // `AddPolyFT4_2` caps the red at 0x80; Marni draws the texel's
+            // level as `c * 8 + 7`, as the recordings show.
+            let level = colour[0] >> 3;
+            let texel = if level == 0 {
+                0.0
+            } else {
+                f32::from(level * 8 + 7)
+            };
+            let red = (texel * corners[0].red.min(128.0) / 128.0) as u8;
+            image.rgba[at..at + 4].copy_from_slice(&[red, 0, 0, 0xFF]);
         }
     }
 }
@@ -1115,6 +1430,226 @@ mod tests {
         assert_eq!(die.phase, 5);
         let spiral = die.spiral.unwrap();
         assert_eq!((spiral.fall_step, spiral.turn, die.speed), (2, 0x10, 10));
+    }
+
+    #[test]
+    fn the_light_is_set_on_the_player_and_the_target() {
+        let mut die = Die::new(None, true);
+        die.set_cut(&bodies([1000, -500, 2000], 0));
+        let light = die.light().unwrap();
+        // `Die_light_set` reads the target before the first `Spiral_move`.
+        assert_eq!(light.positions, [[1000, -800, 2000], [1500, 2200, 2500]]);
+        assert_eq!(light.colours, [[0x78; 3], [0x84; 3]]);
+        assert_eq!(light.radii, [4000, 8000]);
+        let base = crate::state::CameraLight {
+            ambient: [7; 3],
+            lights: [crate::state::Light {
+                kind: 1,
+                color: [9; 3],
+                re2_gain: Some(3),
+                ..Default::default()
+            }; 3],
+        };
+        let lit = light.apply(base);
+        assert_eq!(lit.ambient, [7; 3]);
+        assert_eq!(lit.lights[0].kind, 0);
+        assert_eq!(lit.lights[0].pos, [1000, -800, 2000]);
+        assert_eq!(lit.lights[0].color, [crate::rdt2::light_colour(0x78); 3]);
+        assert_eq!(lit.lights[1].color, [0; 3]);
+        assert_eq!(lit.lights[1].kind, 1);
+        assert_eq!(lit.lights[2].kind, 1);
+        assert_eq!(lit.lights[2].radius, 8000);
+        assert_eq!(lit.lights[2].re2_gain, Some(3));
+    }
+
+    #[test]
+    fn a_held_deaths_light_flashes_red_and_the_out_dims_it() {
+        let body = bodies([0, 0, 0], 0);
+        let mut re2 = Re2State::default();
+        let mut die = Die::new(Some(0x10), true);
+        die.white_done = true;
+        die.set_cut(&body);
+        die.phase = 4;
+        die.count = 0;
+        let mut seen = Vec::new();
+        for _ in 0..0x16 {
+            die.tick(&mut re2, &body);
+            let light = die.light().unwrap();
+            seen.push((light.colours, light.radii));
+        }
+        // Counts 0 to 5 keep light 2; light 0 is 0x3C from the first.
+        assert_eq!(seen[5], ([[0x3C; 3], [0x84; 3]], [4000, 8000]));
+        // 6 to 9: red, reaching 20000.
+        assert_eq!(seen[9], ([[0x3C; 3], [0xFF, 0, 0]], [4000, 20000]));
+        // 10 to 20: 12 less red, 13 more green and blue, 1200 less reach.
+        assert_eq!(seen[10].0[1], [0xF3, 0x0D, 0x0D]);
+        assert_eq!(seen[20].0[1], [0xFF - 11 * 0xC, 11 * 0xD, 11 * 0xD]);
+        assert_eq!(seen[20].1[1], 20000 - 11 * 1200);
+        assert_eq!(seen[21], seen[20]);
+        // `Die_move_out` takes light 0 down a step and its reach by 100.
+        die.phase = 5;
+        die.count = 0;
+        die.tick(&mut re2, &body);
+        let light = die.light().unwrap();
+        assert_eq!((light.colours[0], light.radii[0]), ([0x3B; 3], 3900));
+        // Unheld, light 2 stays as set.
+        let mut die = Die::new(None, true);
+        die.white_done = true;
+        die.set_cut(&body);
+        die.phase = 4;
+        for _ in 0..0x16 {
+            die.tick(&mut re2, &body);
+        }
+        assert_eq!(die.light().unwrap().colours[1], [0x84; 3]);
+    }
+
+    /// A sheet whose blood rows (v 64 to 191) are red level 8.
+    fn blood_sheet() -> Image {
+        let mut rgba = vec![0; 256 * 256 * 4];
+        for texel in rgba
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .skip(256 * 64)
+            .take(256 * 128)
+        {
+            texel.copy_from_slice(&[(8 << 3) | 2, 0, 0, 0xFF]);
+        }
+        Image {
+            width: 256,
+            height: 256,
+            rgba,
+        }
+    }
+
+    #[test]
+    fn the_blood_cries_once_and_only_draws_under_arrange_mode() {
+        let sheet = blood_sheet();
+        let mut censored = DieText::new(true);
+        assert!(censored.bleed(false));
+        for _ in 0..200 {
+            assert!(!censored.bleed(false));
+            assert!(censored.blood(&sheet).is_none());
+        }
+        let mut text = DieText::new(true);
+        assert!(text.bleed(true));
+        // Count 0: the first layer's red is still 0, so nothing shows.
+        let (layers, _) = text.blood(&sheet).unwrap();
+        assert!(layers.is_empty());
+        let mut counts = Vec::new();
+        for _ in 0..110 {
+            assert!(!text.bleed(true));
+            counts.push(
+                text.blood(&sheet)
+                    .map(|(layers, blend)| (layers.len(), blend)),
+            );
+        }
+        // Counts 1 to 4 one layer, 5 to 9 two, then three.
+        assert_eq!(counts[0], Some((1, BloodBlend::Opaque)));
+        assert_eq!(counts[4], Some((2, BloodBlend::Opaque)));
+        assert_eq!(counts[9], Some((3, BloodBlend::Opaque)));
+        // From count 60 it blends by half (`tag` 0, whatever its `tpage`),
+        // and past 100 it's gone, its count held there.
+        assert_eq!(counts[58], Some((3, BloodBlend::Opaque)));
+        assert_eq!(counts[59], Some((3, BloodBlend::Half)));
+        assert_eq!(counts[80], Some((3, BloodBlend::Half)));
+        assert_eq!(counts[99], Some((3, BloodBlend::Half)));
+        assert_eq!(counts[100], None);
+        assert_eq!(text.bleeding, BLOOD_END + 1);
+    }
+
+    /// A sheet whose blood rows' red level is `u / 8` (at least 1), so a
+    /// drawn pixel tells which texel column it came from.
+    fn columned_sheet() -> Image {
+        let mut sheet = blood_sheet();
+        for (texel, colour) in sheet.rgba.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+            if colour[3] != 0 {
+                colour[0] = ((texel % 256 / 8).max(1) as u8) << 3;
+            }
+        }
+        sheet
+    }
+
+    /// The first splash's image (the last drawn) at `count`.
+    fn first_splash(count: i16, sheet: &Image) -> Image {
+        let mut text = DieText::new(true);
+        for _ in 0..=count {
+            text.bleed(true);
+        }
+        text.blood(sheet).unwrap().0.pop().unwrap()
+    }
+
+    fn level(image: &Image, [x, y]: [i32; 2]) -> u8 {
+        let at = (y as usize * image.width as usize + x as usize) * 4;
+        image.rgba[at] >> 3
+    }
+
+    #[test]
+    fn the_blood_strips_sit_on_the_texts_mesh_with_their_texels() {
+        let sheet = columned_sheet();
+        // Count 10: the first splash held at depth 600, no drip yet. The
+        // mesh's rows 0 and 1 sit at `z` 8 and 19 (`rcos` of whole turns
+        // `>> 9`), doubled, the lower 0xF0 further: 16 to 278. Strip `j`
+        // spans `x` 60j to 60j + 60, 0x5A along, and `u` 32j to 32j + 32.
+        let image = first_splash(10, &sheet);
+        for strip in 0..8 {
+            let left = strip * 60 + 0x5A;
+            for (across, u) in [(15, 8), (45, 24)] {
+                let at = project([left + across, 600, (16 + 278) / 2]);
+                if at[0] >= 320 {
+                    continue;
+                }
+                let u = strip * 32 + u;
+                assert_eq!(
+                    level(&image, at),
+                    (u / 8) as u8,
+                    "strip {strip} at {across}"
+                );
+            }
+        }
+        // Past count 20 the strips drip: the lower corners twice as far as
+        // the upper. Strip 0's bottom moves down by its wave.
+        let wave = (rcos(0) + 0x1000 + rcos(0)) / 0x140;
+        let bottom = |image: &Image| {
+            let x = project([0x5A + 2, 600, 0])[0];
+            (0..240).rev().find(|&y| level(image, [x, y]) != 0).unwrap()
+        };
+        let before = bottom(&first_splash(20, &sheet));
+        let after = bottom(&first_splash(40, &sheet));
+        let drop = project([0, 600, 278 + 20 * wave * 2 / 0x28])[1] - project([0, 600, 278])[1];
+        assert!(
+            (after - before - drop).abs() <= 1,
+            "{before} {after} {drop}"
+        );
+    }
+
+    #[test]
+    fn the_blood_shows_the_texels_level_up_to_a_red_of_0x80() {
+        let sheet = blood_sheet();
+        let mut text = DieText::new(true);
+        let reds = |text: &DieText| -> Vec<u8> {
+            let (layers, _) = text.blood(&sheet).unwrap();
+            let mut reds: Vec<u8> = layers
+                .iter()
+                .flat_map(|layer| layer.rgba.as_chunks::<4>().0.iter().map(|texel| texel[0]))
+                .filter(|&red| red != 0)
+                .collect();
+            reds.dedup();
+            reds
+        };
+        // Count 1: red 40 of 0x80 over level 8's 71, 22.
+        text.bleed(true);
+        text.bleed(true);
+        assert_eq!(reds(&text), [22]);
+        // Count 5 on: 200, which shows as 0x80 would.
+        for _ in 0..4 {
+            text.bleed(true);
+        }
+        assert!(reds(&text).iter().all(|&red| red == 71 || red == 22));
+        for _ in 0..10 {
+            text.bleed(true);
+        }
+        assert_eq!(reds(&text), [71]);
     }
 
     #[test]
