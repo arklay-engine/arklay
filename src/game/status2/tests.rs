@@ -1426,3 +1426,61 @@ fn the_portraits_texels_follow_the_players_id() {
         assert_eq!(portrait_texels(id), rows(0x2C), "id {id:#x}");
     }
 }
+
+/// The partner's panel (`0x691FA0`) by `inv_check`'s ticks: CHECK's steps 1
+/// and 2 move it 6 left a tick, ten ticks in all (`St_com_inspect`'s cases 1
+/// and 2), and 11 and 12 bring it back (cases 0xB and 0xC); FILE's slide in
+/// moves it 6 left a tick for 13 ticks and its slide out back.
+#[test]
+fn the_partners_panel_moves_out_for_check_and_file() {
+    let mut run = Run::new(game(&[(0x02, 18), (0x01, 1), (0x26, 1), (0x27, 1)]), 399);
+    let mut moves = Vec::new();
+    let mut last = 0;
+    for to in 400..=640 {
+        run.until(
+            to,
+            &[
+                (400, DOWN),
+                (420, CONFIRM),
+                (440, DOWN),
+                (460, CONFIRM),
+                (600, CONFIRM),
+            ],
+        );
+        let dx = partner_dx(&run.game.re2_items.unwrap());
+        if dx != last {
+            moves.push((to, dx - last));
+            last = dx;
+        }
+        if [461, 465, 470, 601, 618, 623, 628, 629].contains(&to) {
+            let expected = match to {
+                461 => -6,
+                465 => -30,
+                623 => -30,
+                628 | 629 => 0,
+                _ => -60,
+            };
+            assert_eq!(dx, expected, "tick {to}");
+        }
+    }
+    let out: Vec<_> = (461..=470).map(|tick| (tick, -6)).collect();
+    let back: Vec<_> = (619..=628).map(|tick| (tick, 6)).collect();
+    assert_eq!(moves, [out, back].concat());
+
+    let mut game = game(&[(0x02, 18)]);
+    on(&mut game, PAGE_FILE, FILE_LOAD);
+    let mut xs = Vec::new();
+    while page(&game).sub != FILE_SHOWN {
+        tick(&mut game, NONE);
+        xs.push(partner_dx(&page(&game)));
+    }
+    assert_eq!(xs, (1..=13).map(|k| -6 * k).collect::<Vec<_>>());
+    tick(&mut game, CANCEL);
+    assert_eq!(partner_dx(&page(&game)), -78, "the cancel's tick");
+    xs.clear();
+    while page(&game).page != PAGE_TABS {
+        tick(&mut game, NONE);
+        xs.push(partner_dx(&page(&game)));
+    }
+    assert_eq!(xs, (1..=13).map(|k| -78 + 6 * k).collect::<Vec<_>>());
+}

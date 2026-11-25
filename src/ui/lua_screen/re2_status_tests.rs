@@ -10,14 +10,16 @@ use crate::ui::{Screen, ScreenAction};
 
 /// The frame's sheet (texture 0x12) with only the item grid's pieces and the
 /// command menu's top on it: the grid's bottom (u 0, v 143, 90 by 4) and its
-/// two sides (u 113 and 118, from v 92), and the menu's top piece (u 0,
-/// v 176, 56 by 13), index 1; index 0, transparent, elsewhere.
+/// two sides (u 113 and 118, from v 92), the menu's top piece (u 0,
+/// v 176, 56 by 13) and the portraits' rails (u 106, v 92 to 211, 4 wide),
+/// index 1; index 0, transparent, elsewhere.
 fn sheet() -> Vec<u8> {
     sheet_marking(|u, v| {
         let bottom = u < 90 && (143..147).contains(&v);
         let side = (113..123).contains(&u) && v >= 92;
         let menu = u < 56 && (176..189).contains(&v);
-        bottom || side || menu
+        let rail = (106..110).contains(&u) && (92..211).contains(&v);
+        bottom || side || menu || rail
     })
 }
 
@@ -91,12 +93,18 @@ fn context<'a>(dir: &'a std::path::Path, game: Option<&'a GameState>) -> UiConte
 /// The get-item window's frame with an inventory of `before` slots when it
 /// opened and `slots` when it is drawn.
 fn get_window(before: u8, slots: u8) -> Framebuffer {
+    get_window_with(before, slots, false)
+}
+
+/// [`get_window`], with a partner following the player or not.
+fn get_window_with(before: u8, slots: u8, partner: bool) -> Framebuffer {
     use crate::state::{RoomId, RoomState};
     let dir = std::env::temp_dir().join(format!("arklay-re2-status-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let mut game = GameState::new(RoomId::parse("1020").unwrap(), &RoomState::default());
     game.is_re2_room = true;
     game.re2.inventory_size = before;
+    game.re2.set_partner_bit(partner);
     game.re2_item_get = Some(Re2ItemGet {
         // Handgun rounds, as room 102's.
         action: RoomAction {
@@ -255,5 +263,79 @@ fn the_portrait_is_the_face_of_the_character_the_player_is() {
                 "id {id:#x}: the row at y {y}"
             );
         }
+    }
+}
+
+/// `St_disp_face` (`0x4FEA30`) draws the partner's face (u 0x2C, v 0x56,
+/// 39 by 40, at x 11 and y 81), name band and frame below the portrait in the screen's mode 0
+/// while `fg_status`'s `0x10000000` is up, moved by `0x691FA0` (CHECK's
+/// step 1 has it 6 left a tick); the get-item window (mode 2) doesn't.
+#[test]
+fn the_partners_face_is_below_the_players_while_she_follows() {
+    use crate::game::status2::{COMMAND_CHECK, ItemPage, SUB_COMMAND};
+    use crate::state::{RoomId, RoomState};
+    let dir =
+        std::env::temp_dir().join(format!("arklay-re2-status-partner-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut game = GameState::new(RoomId::parse("3060").unwrap(), &RoomState::default());
+    game.is_re2_room = true;
+    game.re2_items = Some(ItemPage::default());
+    let mut screen = {
+        let mut cx = context(&dir, None);
+        LuaScreen::open_screen_with_game("main_menu", &[], ScreenAction::Resume, &mut cx, &mut game)
+            .unwrap()
+    };
+    let check = ItemPage {
+        sub: SUB_COMMAND,
+        command: COMMAND_CHECK,
+        step: 1,
+        count: 3,
+        ..ItemPage::default()
+    };
+    for (partner, page, left, right) in [
+        (false, ItemPage::default(), false, false),
+        (true, ItemPage::default(), true, true),
+        (true, check, true, false),
+    ] {
+        game.re2.set_partner_bit(partner);
+        game.re2_items = Some(page);
+        let cx = context(&dir, Some(&game));
+        screen.signal_with("animate", (20u8, None::<u8>), &cx);
+        let mut framebuffer = Framebuffer::new();
+        screen.draw(&cx, &mut framebuffer);
+        let step = page.step;
+        // The face (y 81 to 120) and the name band (y 123 to 132) at x 25
+        // and 40, which CHECK's step has moved 18 left.
+        for y in [100, 128] {
+            assert_eq!(
+                framed(&framebuffer, 25, y),
+                left,
+                "partner {partner}, step {step}: (25, {y})"
+            );
+            assert_eq!(
+                framed(&framebuffer, 40, y),
+                right,
+                "partner {partner}, step {step}: (40, {y})"
+            );
+        }
+        // The rails (x 7 to 10 and 49 to 52, y 78 to 136), here above
+        // and beside the face.
+        for (x, y) in [(8, 80), (50, 100)] {
+            assert_eq!(
+                framed(&framebuffer, x, y),
+                right,
+                "partner {partner}, step {step}: the rail at ({x}, {y})"
+            );
+        }
+        // The player's portrait is Leon's, at u 0, which the sheet leaves
+        // blank.
+        assert!(
+            !framed(&framebuffer, 30, 40),
+            "partner {partner}: the player's face"
+        );
+    }
+    let frame = get_window_with(8, 8, true);
+    for (x, y) in [(30, 100), (30, 128), (8, 80), (50, 100)] {
+        assert!(!framed(&frame, x, y), "the get-item window at ({x}, {y})");
     }
 }

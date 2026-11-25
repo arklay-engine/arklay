@@ -118,6 +118,27 @@ local PORTRAIT = {
     { 11, 51, 39, 20, 0, 107 },
 }
 local CONDITION_X, CONDITION_Y = 105, 54
+-- The partner's panel below the portrait (`St_disp_face`, `0x4FEA30`, with
+-- the texels `0x53F034` and places `0x53F090`), in paint order: the
+-- original adds them last first, each at the head of its ordering-table
+-- bucket, so the rails paint over the bars. Its frame (texture 0x12), then
+-- her name band and face (texture 0x13), beside the scenario character's
+-- on the sheet: Ada on Leon's, Sherry on Claire's. The screen's mode 0
+-- draws it while a partner follows the player (`re2_items().partner_dx`).
+PORTRAIT.PARTNER_FRAME = {
+    { 11, 78, 39, 4, 56, 164 },
+    { 11, 121, 39, 2, 56, 168 },
+    { 11, 133, 39, 4, 56, 171 },
+    { 7, 78, 4, 59, 106, 92 },
+    { 49, 78, 4, 59, 106, 152 },
+    { -9, 96, 16, 14, 107, 242 },
+    { -9, 110, 16, 14, 107, 242 },
+    { -9, 124, 16, 14, 107, 242 },
+}
+PORTRAIT.PARTNER_FACE = {
+    { 11, 123, 39, 10, 44, 72 },
+    { 11, 81, 39, 40, 44, 86 },
+}
 
 -- The tab labels (texture 0x17, `0x4FEF70`): the page's tab is red on the
 -- item page, white on the tab bar and while the screen closes.
@@ -523,6 +544,17 @@ end
 local function pieces(api, d, list, dx, dy)
     for _, p in ipairs(list) do
         sprite(api, d, ST, p[1] + dx, p[2] + dy, p[3], p[4], p[5], p[6])
+    end
+end
+
+-- One part of the partner's panel (`list`, on `texture`), `dx` right of
+-- its place, when a partner follows the player.
+function PORTRAIT.partner(api, d, page, list, texture, dx)
+    if page.partner_dx == nil then
+        return
+    end
+    for _, p in ipairs(list) do
+        sprite(api, d, texture, p[1] + dx + page.partner_dx, p[2], p[3], p[4], p[5], p[6])
     end
 end
 
@@ -1543,6 +1575,7 @@ function M.draw(api)
         local x, y, w, h, u, v = frame_piece(index)
         sprite(api, d, ST, x + (index <= FRAME_LEFT and L or R), y, w, h, u, v)
     end
+    PORTRAIT.partner(api, d, page, PORTRAIT.PARTNER_FRAME, ST, L)
     if file_top ~= nil then
         pieces(api, d, FILE_PANEL, 0, file_top)
     end
@@ -1559,6 +1592,7 @@ function M.draw(api)
 
     -- The portrait, the condition and the slots' icons.
     PORTRAIT.draw(api, d, L)
+    PORTRAIT.partner(api, d, page, PORTRAIT.PARTNER_FACE, ST + 1, L)
     local cond = condition(api, page)
     sprite(api, d, ST + 4, CONDITION_X + L, CONDITION_Y, 46, 11, 0, 11 * cond)
     slot_icon(api, d, PERSONAL_SLOT, PERSONAL_X + R, PERSONAL_Y)

@@ -1520,6 +1520,7 @@ local ScreenLightSource = {}
 ---@field panel_cure integer
 ---@field panel_done boolean
 ---@field poisoned boolean Whether the player is poisoned.
+---@field partner_dx? integer While a partner follows the player (`fg_status`'s `0x10000000`): her panel's x offset from its place below the portrait (`0x691FA0`, 0 or less).
 ---@field file integer The file in FILE's binder and slot, 0xFF for none.
 ---@field shown_page integer The page whose picture the reader's page texture holds: a turn changes it on its slide out's last tick.
 ---@field file_page? Re2FilePageSprite[] In the reader's subs 0xD to 0x12: the page's sprites in paint order, by the sub the tick left.

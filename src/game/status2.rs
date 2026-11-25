@@ -466,6 +466,35 @@ pub fn portrait_texels(pl_id: u8) -> [(u8, u8); 3] {
     [(u, 0x48), (u, 0x56), (u, 0x6B)]
 }
 
+/// The x offset from its place of the partner's panel (`0x691FA0`), which
+/// `St_disp_face` (`0x4FEA30`) draws below the portrait while `fg_status`'s
+/// `0x10000000` is up. `Status`'s start clears it, and it moves 6 a tick
+/// in the steps that move it: left in CHECK's steps 1 and 2 and back in 11
+/// and 12 (`St_com_inspect`, `0x4F9260`), out in FILE's slide in and back in
+/// its slide out (`St_menu0_file`, `0x4F95B0`, 13 ticks each).
+pub fn partner_dx(page: &ItemPage) -> i16 {
+    const STEP: i16 = 6;
+    const CHECK_OUT: i16 = 10 * STEP;
+    const FILE_AWAY: i16 = 13 * STEP;
+    let c = i16::from(page.count);
+    match (page.page, page.sub) {
+        (PAGE_ITEMS, SUB_COMMAND) if page.command == COMMAND_CHECK => match page.step {
+            0 => 0,
+            1 => -STEP * c,
+            2 => -CHECK_OUT / 2 - STEP * c,
+            3..=10 => -CHECK_OUT,
+            11 => -CHECK_OUT + STEP * c,
+            12 => -CHECK_OUT / 2 + STEP * c,
+            _ => 0,
+        },
+        (PAGE_FILE, FILE_LOAD) => 0,
+        (PAGE_FILE, FILE_IN) => -STEP * i16::from(page.command),
+        (PAGE_FILE, FILE_OUT) => -FILE_AWAY + STEP * i16::from(page.command),
+        (PAGE_FILE, _) => -FILE_AWAY,
+        _ => 0,
+    }
+}
+
 /// The record for `item` onto `target`, if the table has one.
 pub fn recipe(item: u8, target: u8) -> Option<Recipe> {
     RECIPES
