@@ -1,0 +1,8 @@
+# The title from boot: LOAD GAME with the next scenario's save that Leon A's results wrote (result_leon_a_save, Claire B's), the decide on it at 800, then confirm on 1500, in the B prologue's second line, which skips it (oracle/re2.md, "The prologue").
+0
+260 confirm
+263
+800 confirm
+803
+1500 confirm
+1503

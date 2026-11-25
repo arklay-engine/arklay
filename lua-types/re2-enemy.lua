@@ -934,6 +934,10 @@ function Re2EnemyApi:sca_info() end
 ---again.
 function Re2EnemyApi:set_died() end
 
+---`Em10_Die`'s count: one more body among the game's kills (`0x98E9B8`),
+---which the next scenario's game carries.
+function Re2EnemyApi:count_kill() end
+
 ---`Kill_enemy_work`: take the body out of play. `Be_flg` and the routines go
 ---to 0, and the room counts one enemy fewer.
 function Re2EnemyApi:kill() end

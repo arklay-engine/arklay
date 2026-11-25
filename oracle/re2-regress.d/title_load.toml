@@ -73,17 +73,18 @@ expect = "match"
 record = ""
 
 # The save a main game's results write for the next scenario (result_leon_a_save's, Claire B's), loaded from the
-# title: the B scenario's start.
+# title: the B scenario's start, whose place (0x10) `Prologue_load` takes for a second scenario's start, so Claire B's
+# prologue (`Prologue_mv02`) runs from 813 (prologue_b.toml has the rest of it and the game).
 [[run]]
 name = "title_load_b"
 ui = "title"
 offset = 189
-ticks = 900
-compare_from = 818
+ticks = 2500
+compare_from = 811
 input = "title_load_b.txt"
 input_shift = 189
 input_drop_early = true
 saves_from = "result_leon_a_save"
-fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,msg,fgstat,tw"
-expect = { tick = 818, fields = ["fgstat", "mot", "p.angle", "p.beh", "p.x", "p.z", "rng", "rseed"], note = "Claire's B from the results' save: the original's Prologue_load takes the save's place 0xF/0x10 as a second scenario's start and runs Prologue_mv02 (fg_status 0x10 from 813), where arklay ends the prologue on any load and starts the room; the second scenarios' prologues are not ported (oracle/re2-deviations.md)" }
+fields = "pro,prs,prz,tfade,tfade3,snd"
+expect = "match"
 record = ""

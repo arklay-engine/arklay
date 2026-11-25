@@ -1724,6 +1724,12 @@ impl UserData for Api {
                 })
                 .count())
         });
+        // `Em10_Die`'s `0x98E9B8 += 1`: one more body among the kills.
+        methods.add_method_mut("count_kill", |_, e, ()| {
+            let world = &mut e.em().world;
+            world.kills = world.kills.wrapping_add(1);
+            Ok(())
+        });
         // `Kill_enemy_work`: `Be_flg` and the routines go to 0, and the room
         // counts one enemy fewer.
         methods.add_method_mut("kill", |_, e, ()| {
@@ -5913,6 +5919,26 @@ mod tests {
                 "w.kind, w.flags & 0x800, w.burns",
             );
             assert_eq!(r, [0x80, 0, 0]);
+        }
+
+        /// `Em10_Die` counts the body among the kills (`0x98E9B8`) on its
+        /// first tick alone: `+0x21a`'s 0x4000 marks it counted.
+        #[test]
+        fn a_dying_zombie_is_counted_once() {
+            let (lua, _budget) = crate::lua::new_sandboxed_state().unwrap();
+            let library = include_str!("../../games/re2/lib/zombie.lua");
+            lua.load(format!(
+                "{STUB}\nw.r = {{ [0] = 3, 0x10, 0, 0 }}; w.kills = 0
+                 function e:count_kill() w.kills = w.kills + 1 end
+                 local zombie = (function() {library} end)()
+                 zombie.run(e, {{}})
+                 zombie.run(e, {{}})
+                 R = {{ w.kills, w.flags & 0x4000 }}"
+            ))
+            .exec()
+            .unwrap();
+            let r: Vec<i64> = lua.globals().get("R").unwrap();
+            assert_eq!(r, [1, 0x4000]);
         }
     }
 

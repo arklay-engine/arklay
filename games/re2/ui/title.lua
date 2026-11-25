@@ -2695,7 +2695,17 @@ local function title_main(api)
             s.sub = 0
         end
     elseif s.disp == 3 and s.loaded then
-        s.exit = "continue"
+        -- `Title_game_init` starts the prologue's task for a load too, and
+        -- `Prologue_load` ends it at once unless the save's place is a
+        -- scenario's start (0xF or 0x10, the save a main game's results
+        -- write), whose sequence then runs before the game starts.
+        local mv = s.load and Prologue.sequence(s.load.status, s.load.place)
+        if mv and s.prologue_art then
+            s.game_init = 0
+            s.pro_mv = mv
+        else
+            s.exit = "continue"
+        end
     elseif s.disp == 3 and s.fg_system & 8 ~= 0 then
         -- The 4th Survivor's or To-fu's game (`Title_game_init`'s extras
         -- branch, 0x506750): no prologue, HUNK (0xC) or, with
@@ -2707,9 +2717,11 @@ local function title_main(api)
         s.exit = s.attract and "attract" or "new_game"
         if not s.attract and s.prologue_art then
             -- `Title_game_init`'s step 2 starts the prologue's task on the
-            -- next tick (0x506750) and the game waits for it to end.
+            -- next tick (0x506750) and the game waits for it to end. A new
+            -- game is always a first scenario's.
             s.exit = nil
             s.game_init = 0
+            s.pro_mv = s.claire and 1 or 0
         end
         s.character = s.claire and 1 or 0
         -- What the game starts with besides the character: the difficulty
@@ -2731,23 +2743,25 @@ local function title_main(api)
 end
 
 -- `Title_game_init` (0x506750) from the tick after the hand-over, for a
--- new game: its step 2 starts the prologue's task (`Prologue`, 0x4CEFF0),
--- which runs from the next tick, and its step 3 waits for that task's end,
--- the tick the game is started on.
+-- new game or the load of a scenario's start: its step 2 starts the
+-- prologue's task (`Prologue`, 0x4CEFF0), which runs from the next tick,
+-- and its step 3 waits for that task's end, the tick the game is started
+-- on.
 local function game_init(api, input)
     s.game_init = s.game_init + 1
     if s.game_init == 1 then
         s.init, s.sub = 0, 2
         fade_off(0)
         s.background = nil
-        s.pro = Prologue.new(PROLOGUE_FADES, s.claire)
+        s.pro = Prologue.new(PROLOGUE_FADES, s.pro_mv)
         return
     end
     s.sub = 3
     Prologue.tick(s.pro, input)
-    Prologue.sound(api, s.pro, s.claire and 1 or 0)
+    -- The narration is the sequence's character's: bit 31 of the entry.
+    Prologue.sound(api, s.pro, s.pro_mv & 1)
     if s.pro.done then
-        s.exit = "new_game"
+        s.exit = s.loaded and "continue_prologue" or "new_game"
     elseif s.pro.film then
         -- The title sleeps while the film plays (`M.on_film`).
         s.exit = "film"
@@ -3396,17 +3410,21 @@ function M.update(api, input)
     if s.exit then
         local exit = s.exit
         s.exit = nil
-        if exit == "new_game" or exit == "attract" or exit == "continue" then
+        if exit == "new_game" or exit == "attract" or exit == "continue" or exit == "continue_prologue" then
             hand_over(api)
         end
-        if exit == "new_game" then
+        if exit == "continue_prologue" then
+            -- The game the save holds starts after the prologue, as a new
+            -- game's does.
+            api:exit("continue", 1)
+        elseif exit == "new_game" then
             api:exit("new_game", s.character or 0, s.choice)
         elseif exit == "attract" then
             api:exit("attract", s.reel)
         elseif exit == "film" then
             -- The boot's film, the gallery's, or the one the prologue asks
             -- for.
-            local film = s.film or { id = s.pro.film, claire = s.claire }
+            local film = s.film or { id = s.pro.film, claire = s.pro_mv & 1 == 1 }
             s.film = nil
             Gallery.open_film(s.gallery, film.claire, film.id)
             api:exit("film", film.id, { claire = film.claire, gallery = film.gallery })
@@ -3420,10 +3438,12 @@ end
 -- stood, wakes on its next tick (`Title_main_load`'s second step). The
 -- screen leaves fade 3 off in the mode `Cardaccess_init` set it to, and,
 -- without a load, `fg_system`'s 0x400 up for that step to find and clear.
-local function resume(api, loaded)
+local function resume(api, loaded, place, status)
     local fade = s.fades[3]
     fade.level, fade.add, fade.mode = -1, 0, 1
     s.loaded = loaded
+    -- What the save holds of the game's start: its place and `fg_status`.
+    s.load = loaded and place and { place = place, status = status or 0 } or nil
     if not loaded then
         s.fg_system = s.fg_system | FG_NO_LOAD
     end
@@ -3434,8 +3454,10 @@ function M.on_resume(api)
     resume(api, false)
 end
 
-function M.on_loaded(api)
-    resume(api, true)
+-- A save was chosen: `place` and `status` are its save place and
+-- `fg_status`, when the engine knows them.
+function M.on_loaded(api, place, status)
+    resume(api, true, place, status)
 end
 
 -- The run's music and effects volumes, in percent, as the title opens,

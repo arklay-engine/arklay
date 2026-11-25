@@ -212,9 +212,13 @@ function ScreenModule.on_resume(api) end
 ---([`api:load`](#ScreenApi.load)): the title wakes as it stood and starts
 ---the game from that save when it is ready, by exiting with `continue`.
 ---Any other exit forgets the save. A title without it is dropped, and the
----game starts at once.
+---game starts at once. For an RE 2 save, `place` is its save place and
+---`status` its `fg_status`, by which RE 2's title chooses the prologue the
+---load runs; both are nil for any other save.
 ---@param api ScreenApi
-function ScreenModule.on_loaded(api) end
+---@param place integer?
+---@param status integer?
+function ScreenModule.on_loaded(api, place, status) end
 
 ---Called on a title screen when a film it left for
 ---([`api:exit("film", id)`](#ScreenApi.exit)) is over: the title wakes as
@@ -1695,7 +1699,9 @@ local Re2MapSprite = {}
 ---An [`api:exit`](#ScreenApi.exit) action: where the game goes next.
 ---`new_game` takes the character, `load_game` the slot. `continue` is a
 ---title's, after its [`on_loaded`](#ScreenModule.on_loaded): the game
----continues from the save the load screen chose. `film` is a title's with
+---continues from the save the load screen chose, as after a prologue the
+---title ran (RE 2's game starts three ticks after it) when its argument is
+---1. `film` is a title's with
 ---[`on_film`](#ScreenModule.on_film): it takes one of RE 2's film ids,
 ---sleeps while the film plays and wakes after it. Without `on_film` it
 ---raises an error, and from a screen that isn't the title it is dropped.

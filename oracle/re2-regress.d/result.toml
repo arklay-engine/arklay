@@ -161,6 +161,23 @@ saves = true
 expect = "match"
 record = "--flag 0:10"
 
+# Claire A's to the save screen, whose new file writes the next scenario's game: Leon B's, with the rocket launcher in
+# the box. Keys end steps 5 and 6.
+[[run]]
+name = "result_claire_a_save"
+character = 1
+room = "new"
+offset = 0
+# recorded for 2400 ticks; `Result_exit` chains the title on 2034
+ticks = 2034
+setup_script = "result_claire_a.lua"
+input = "result_claire_a_save.txt"
+fields = "res,rest,rfade,rmus,bgm,snd,sv"
+ignore = [[0, "rfade"]]
+saves = true
+expect = "match"
+record = "--flag 0:10 --flag 1:0"
+
 # Claire A's on HARD, which earns no weapon: keys in step 5 reveal and end it, and the save screen's leave asks
 # (state 0x60): No goes back to the list, Yes leaves without a save.
 [[run]]

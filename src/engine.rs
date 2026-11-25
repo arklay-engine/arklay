@@ -2993,12 +2993,12 @@ fn re2_clear(game: &game::GameState, special: u8) -> crate::result2::Clear {
         hard: re2.hard_mode,
         seconds,
         saves: u32::from(game.re2_save_count()),
-        // The sprays count (`0x98E9BA`) and the clears (`0x98EE7A`) aren't
-        // kept (oracle/re2-deviations.md).
+        // The sprays count (`0x98E9BA`) isn't kept
+        // (oracle/re2-deviations.md).
         third: 0,
         item_9c: re2.flag(8, 0x9C),
         zapping: [re2.banks[29][0], re2.banks[29][1]],
-        clears: 0,
+        clears: re2.clears,
         special,
         held,
     }
@@ -13984,16 +13984,23 @@ impl App {
 
     /// Put the title that slept under the load screen back in charge,
     /// `loaded` when that screen chose a save for it to start.
-    fn wake_title(&mut self, mut title: Box<ui::lua_screen::LuaScreen>, loaded: bool) {
+    /// `loaded` is the save the load screen chose, `None` without one.
+    fn wake_title(
+        &mut self,
+        mut title: Box<ui::lua_screen::LuaScreen>,
+        loaded: Option<&save::SaveFile>,
+    ) {
         // The load screen's own music ends with it; the title's plays on.
         if self.screen_music != Some(true) {
             self.stop_screen_music();
         }
         let cx = self.context();
-        if loaded {
-            title.resume_loaded(&cx);
-        } else {
-            title.resume(&cx);
+        match loaded {
+            Some(file) => title.resume_loaded(
+                &cx,
+                file.re2.as_deref().and_then(crate::scd2::host::start_in),
+            ),
+            None => title.resume(&cx),
         }
         let cues = cx.cues.into_inner();
         self.mode = Mode::Title(title);
@@ -14109,6 +14116,9 @@ impl App {
                 claire,
                 gallery,
             } => {
+                // The save a load chose waits through the prologue's films
+                // for the title's hand-over.
+                self.pending_load = pending_load;
                 // Checked above: the title is up, or the choice's entry.
                 let title = match std::mem::replace(&mut self.mode, Mode::Boot) {
                     Mode::Title(title) => {
@@ -14154,22 +14164,28 @@ impl App {
                 Some(title) if matches!(self.mode, Mode::Load(_)) && title.continues() => {
                     match save::load_file(&path) {
                         Ok(file) => {
-                            self.wake_title(title, true);
+                            self.wake_title(title, Some(&file));
                             self.pending_load = Some(Box::new(file));
                         }
                         Err(err) => {
                             crate::warning!("warning: cannot load {}: {err:#}", path.display());
-                            self.wake_title(title, false);
+                            self.wake_title(title, None);
                         }
                     }
                 }
                 _ => self.continue_from_path(&path)?,
             },
-            ScreenAction::Continue => match pending_load {
+            ScreenAction::Continue { prologue } => match pending_load {
                 Some(file) => {
                     self.continue_from_file((*file).clone(), true)?;
                     self.restart_point = Some(RestartPoint::File(file));
-                    self.start_from_re2_title(RE2_TITLE_START_TICKS);
+                    // After the prologue a scenario's start runs, the game
+                    // starts as a new game's does.
+                    self.start_from_re2_title(if prologue {
+                        RE2_TITLE_NEW_GAME_TICKS
+                    } else {
+                        RE2_TITLE_START_TICKS
+                    });
                 }
                 None => {
                     crate::warning!("warning: a screen continued with no save chosen");
@@ -14177,7 +14193,7 @@ impl App {
                 }
             },
             ScreenAction::Title => match sleeping_title {
-                Some(title) if matches!(self.mode, Mode::Load(_)) => self.wake_title(title, false),
+                Some(title) if matches!(self.mode, Mode::Load(_)) => self.wake_title(title, None),
                 _ => self.open_title_after_game()?,
             },
             ScreenAction::Attract { reel } => {
@@ -20892,9 +20908,10 @@ fn new_game_state(
 /// the records (`fg_zapping`: all of a scenario A's to a B, a B's 0x13 and
 /// 0x14 to an A), the extras word's 0x1, the special weapons `earned` puts
 /// in the box from its third slot (`0x995B48`'s 0x10, 0x20 and 0x40, the
-/// last also the extras word's 0x12), and the save count at `0xFFFF`, so
-/// that the save's write makes it 0. The kills (`0x98E9B8`), the clears
-/// (`0x98EE7A`) and `nExtremeLv` (the cleared game's saves) aren't kept.
+/// last also the extras word's 0x12), the save count at `0xFFFF`, so
+/// that the save's write makes it 0, and the counts: the kills
+/// (`0x98E9B8`), the clears (`0x98EE7A`, one more into a scenario A) and
+/// `nExtremeLv`, which takes the cleared game's save count.
 fn re2_next_scenario_game(
     pack: &Pack,
     cleared: &game::GameState,
@@ -20978,6 +20995,7 @@ fn re2_next_scenario_game(
     }
     // `& 1`: the extras word keeps its lowest bit alone.
     game.re2.extras = cleared.re2.extras & 1;
+    carry_re2_counts(&mut game.re2, cleared, scenario_b);
     let flags = earned.map_or(0, |earned| earned.flags);
     let mut slot = 2;
     for (flag, id, count) in [
@@ -21001,6 +21019,20 @@ fn re2_next_scenario_game(
         slot += 1;
     }
     Ok(game)
+}
+
+/// The counts `FUN_004b73c0` carries from the `cleared` game into the next
+/// scenario's (`next`, a scenario B's when `scenario_b`): the kills
+/// (`0x98E9B8`), the clears (`0x98EE7A`), one more into a scenario A, and
+/// `nExtremeLv`, which takes the cleared game's save count.
+fn carry_re2_counts(
+    next: &mut crate::scd2::host::Re2State,
+    cleared: &game::GameState,
+    scenario_b: bool,
+) {
+    next.kills = cleared.re2.kills;
+    next.clears = cleared.re2.clears.wrapping_add(u8::from(!scenario_b));
+    next.extreme_level = cleared.re2_save_count();
 }
 
 fn seed_re2_music_table(pack: &Pack, game: &mut game::GameState, scenario_b: bool) {
@@ -26218,6 +26250,27 @@ mod tests {
             mansion2: false,
         };
         assert_eq!(new_game_id(&with(None), 0), main_hall);
+    }
+
+    /// `FUN_004b73c0` carries the kills, the clears and, as `nExtremeLv`,
+    /// the save count into the next scenario's game.
+    #[test]
+    fn the_next_scenarios_game_carries_the_counts() {
+        let id = RoomId::parse("100").unwrap();
+        let mut cleared = game::GameState::new(id, &RoomState::default());
+        cleared.re2.kills = 31;
+        cleared.re2.clears = 2;
+        cleared.re2.saves_high = 1;
+        cleared.state_bytes[usize::from(game::STATE_BYTE_SAVES)] = 4;
+        let mut next = crate::scd2::host::Re2State::default();
+        carry_re2_counts(&mut next, &cleared, true);
+        assert_eq!(
+            (next.kills, next.clears, next.extreme_level),
+            (31, 2, 0x104)
+        );
+        // A scenario B's clear counts one more into the A after it.
+        carry_re2_counts(&mut next, &cleared, false);
+        assert_eq!(next.clears, 3);
     }
 
     /// The save place a new game starts with (`0x4B73C0`): `0x0F` for a
@@ -36401,6 +36454,66 @@ mod tests {
         }
     }
 
+    /// A title that plays a film between the load and its hand-over (RE 2's
+    /// prologue for a scenario's start) still starts the game from the
+    /// save the load screen chose.
+    #[test]
+    fn app_title_keeps_its_load_through_a_film() {
+        const TITLE: &str = "local M = {}
+            function M.update(api, input)
+                if not input.confirm then return end
+                if not M.loaded then
+                    api:exit('save_load')
+                elseif not M.filmed then
+                    api:exit('film', 3, { claire = false })
+                else
+                    api:exit('continue', 1)
+                end
+            end
+            function M.draw() end
+            function M.on_resume(api) end
+            function M.on_loaded(api) M.loaded = true end
+            function M.on_film(api) M.filmed = true end
+            return M";
+        const LOAD: &str = "local M = {}
+            function M.update(api, input)
+                if input.confirm then assert(api:load('chosen.dat')) end
+            end
+            function M.draw() end
+            return M";
+        let dir = TempDir::new();
+        let pack_path = new_game_pack_with(
+            &dir,
+            &[
+                ("ui/title.lua", TITLE.as_bytes()),
+                ("ui/save_load.lua", LOAD.as_bytes()),
+            ],
+        );
+        let saves = dir.0.join("saves");
+        std::fs::create_dir_all(&saves).unwrap();
+        let file = save::SaveFile {
+            stage: 0,
+            room: NEW_GAME_ROOM,
+            health: 55,
+            ..save::SaveFile::default()
+        };
+        save::save_to_path(&saves.join("chosen.dat"), &file).unwrap();
+        let mut app = App::new(Pack::open(&pack_path).unwrap(), saves, false);
+        app.boot(AppBoot::Title).unwrap();
+        app_press(&mut app, |ui| ui.confirm = true);
+        app_press(&mut app, |ui| ui.confirm = true);
+        assert!(app.pending_load.is_some());
+        // The film: none plays here, so the title wakes from it at once.
+        app_press(&mut app, |ui| ui.confirm = true);
+        assert!(matches!(app.mode, Mode::Title(_)));
+        assert!(app.pending_load.is_some(), "the film keeps the load");
+        app_press(&mut app, |ui| ui.confirm = true);
+        let Mode::Play(session) = &app.mode else {
+            panic!("expected the game");
+        };
+        assert_eq!(session.game.entities[0].health, 55);
+    }
+
     /// A continued game whose player is Leon's alternate 8 holding the
     /// handgun: the room boot's `Pl_weapon_ch` made the handgun's first
     /// frame 0x03 in the session's own statics, before the app gave it its
@@ -44492,13 +44605,13 @@ off_0010:
         app.play_music_cues(vec![UiCue::Music(0x2B)]);
         assert_eq!(app.screen_music, Some(true));
         let title = take_title(&mut app);
-        app.wake_title(title, false);
+        app.wake_title(title, None);
         assert_eq!(app.screen_music, Some(true));
         // Another screen's doesn't outlive it.
         let title = take_title(&mut app);
         app.play_music_cues(vec![UiCue::Voice { player: 0, line: 1 }]);
         assert_eq!(app.screen_music, Some(false));
-        app.wake_title(title, false);
+        app.wake_title(title, None);
         assert_eq!(app.screen_music, None);
         // Nor does the title's outlive it into a game or a new title.
         app.play_music_cues(vec![UiCue::Music(0x2B)]);

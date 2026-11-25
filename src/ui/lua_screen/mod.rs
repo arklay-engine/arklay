@@ -654,11 +654,16 @@ impl LuaScreen {
     }
 
     /// [`LuaScreen::resume`] after the screen it left for chose a save,
-    /// calling its `on_loaded(api)` instead.
-    pub fn resume_loaded(&mut self, cx: &UiContext<'_>) {
+    /// calling its `on_loaded(api, place, status)` instead, with the save's
+    /// place and `fg_status` when the save has them (`start`).
+    pub fn resume_loaded(&mut self, cx: &UiContext<'_>, start: Option<(u8, u32)>) {
         self.host.exited = false;
         self.host.action = None;
-        self.signal("on_loaded", cx);
+        self.signal_with(
+            "on_loaded",
+            start.map_or((None, None), |(place, status)| (Some(place), Some(status))),
+            cx,
+        );
     }
 }
 
@@ -1391,7 +1396,9 @@ fn action_of(name: &str, arg: Option<i64>, choice: Option<&Table>) -> mlua::Resu
         "title" => ScreenAction::Title,
         "char_select" => ScreenAction::CharSelect,
         "save_load" => ScreenAction::SaveLoad,
-        "continue" => ScreenAction::Continue,
+        "continue" => ScreenAction::Continue {
+            prologue: given.is_some_and(|ran| ran != 0),
+        },
         "attract" => ScreenAction::Attract {
             reel: given
                 .map(|reel| {

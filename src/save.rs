@@ -1595,12 +1595,12 @@ mod tests {
         let current = saved.to_file_bytes();
         let payload = saved.re2.as_ref().expect("the RE 2 state").len();
 
-        // Before the save place, and the save count's high byte and the
-        // extras word after it.
+        // Before the save place, and the save count's high byte, the extras
+        // word and the carried counts after it.
         let mut older = saved.clone();
-        older.re2.as_mut().unwrap().truncate(payload - 6);
+        older.re2.as_mut().unwrap().truncate(payload - 11);
         let older = SaveFile::from_bytes(&older.to_file_bytes()).expect("the older save");
-        assert_eq!(older.re2.as_ref().map(Vec::len), Some(payload - 6));
+        assert_eq!(older.re2.as_ref().map(Vec::len), Some(payload - 11));
         let mut restored = GameState::default();
         restored.re2.save_place = 0x0F;
         older.apply_to(&mut restored);

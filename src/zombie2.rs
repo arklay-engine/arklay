@@ -1065,6 +1065,8 @@ pub struct World<'a> {
     pub freed: Vec<usize>,
     /// The script took its own work out of play (`Kill_enemy_work`).
     pub killed: bool,
+    /// The bodies `Em10_Die` counted this tick (`0x98E9B8`, the kills).
+    pub kills: u16,
     /// The room's water areas, for `Water_ck`. Only a spider's world has them.
     pub water: Vec<WaterArea>,
     /// The flag banks as the tick began. Only the alligator's and the ivies'
