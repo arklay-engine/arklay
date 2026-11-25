@@ -12,6 +12,6 @@ frames = [360, 1159]
 # Measured: 0.01 a frame outside the Crank's question and item view (697 to 997: 0.08, as in the item runs); 0.04 in all. The windows hold the push, the climb, the box top and the jump down at 0.06, so a draw regression there can't hide in the whole run's mean.
 frame_max_mean = 0.14
 frame_windows = [[360, 696, 0.06], [697, 997, 0.18], [998, 1159, 0.06]]
-fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgcom,om0,om3,om4,pon"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgcom,om0,om3,om4,pon"
 expect = "match"
 record = "--no-enemies --warp 203:-18700:0:-19000:1024 --life 200"

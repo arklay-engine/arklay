@@ -48,7 +48,7 @@ sound = false
 setup_script = "licker_204_fight.lua"
 input = "licker_204_fight.txt"
 input_shift = 344
-fields = "esp"
+fields = "rng,esp"
 expect = "match"
 record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip 2 --give 0:2:200"
 
@@ -112,7 +112,7 @@ sound = false
 setup_script = "licker_204_kill_claire.lua"
 input = "licker_204_kill.txt"
 input_shift = 344
-fields = "esp"
+fields = "rng,esp"
 expect = { tick = 534, fields = ["esp84", "esp85", "esp86", "esp87", "esp88", "esp89", "esp90", "esp91", "esp92"], note = "the jump's bite's blood (FUN_00466100, kind 4 row 0 on the player's part 0) turns by the global word 0x98A048 << 11 (read at 0x466187); a licker's killing bite (0x465FED, Em_24's 0x46D60D), FUN_0049B130 and FUN_0049B230 and the alligator's FUN_004691C0 (0x469316, a 1) write it, and none of them runs before this bite, Claire's first hit. The original's blood is arklay's turned by 0x800 about her, which implies an odd value there on 534; arklay's per-licker turn is 0" }
 record = "--start claire --warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip 3 --give 0:3:200"
 
@@ -142,7 +142,7 @@ sound = false
 setup_script = "licker_204_shotgun.lua"
 input = "licker_204_kill.txt"
 input_shift = 344
-fields = "esp"
+fields = "rng,esp"
 expect = { tick = 595, fields = ["esp81", "esp82", "esp83", "esp84", "esp85"], note = "the shotgun's hit on the licker: its five kind 1 row 2 slots (update 9) start on the hit point in arklay, where the original's sit 71 to 111 off it, each its own way, and stay there; the kinds, frames and the trace match" }
 record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip 7 --give 0:7:200"
 
@@ -172,7 +172,7 @@ sound = false
 setup_script = "licker_204_ceiling.lua"
 input = "licker_204_ceiling.txt"
 input_shift = 344
-fields = "esp"
+fields = "rng,esp"
 expect = "match"
 record = "--warp 204:-16000:0:-10000:1024 --flag 4:85 --flag 4:86 --life 2000 --equip 2 --give 0:2:200"
 

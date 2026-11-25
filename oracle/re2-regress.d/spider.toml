@@ -38,7 +38,7 @@ ticks = 1400
 setup_script = "spider_302_wall.lua"
 input = "spider_shots.txt"
 input_shift = 344
-fields = "esp"
+fields = "rng,esp"
 expect = "match"
 record = "--warp 302:-12500:0:-13000:2048 --life 200 --give 0:2:200 --give 1:0x14:60 --equip 2"
 
@@ -50,7 +50,7 @@ ticks = 1400
 setup_script = "spider_302_wall.lua"
 input = "spider_shots.txt"
 input_shift = 344
-fields = "espn,espk,fgstat"
+fields = "rng,espn,espk,fgstat"
 expect = "match"
 record = "--warp 302:-12500:0:-13000:2048 --life 200 --give 0:2:200 --give 1:0x14:60 --equip 2"
 
@@ -88,7 +88,7 @@ room = "407"
 ticks = 2400
 setup = { pos = [-2700, 0, -19832], angle = 2028, health = 200, rnd = 6114, camera = 0 }
 input = "none.txt"
-fields = "esp"
+fields = "rng,esp"
 expect = "match"
 record = "--warp 407:-2700:0:-19832:2028 --life 200"
 
@@ -99,7 +99,7 @@ room = "407"
 ticks = 2400
 setup = { pos = [-2700, 0, -19832], angle = 2028, health = 200, rnd = 6114, camera = 0 }
 input = "none.txt"
-fields = "espn,espk,fgstat"
+fields = "rng,espn,espk,fgstat"
 expect = "match"
 record = "--warp 407:-2700:0:-19832:2028 --life 200"
 
@@ -110,7 +110,7 @@ room = "405"
 ticks = 2400
 setup = { pos = [-26394, 0, -1920], angle = 97, health = 200, rnd = 6114, camera = 0 }
 input = "none.txt"
-fields = "esp"
+fields = "rng,esp"
 expect = "match"
 record = "--warp 405:-26394:0:-1920:97 --life 200"
 
@@ -121,7 +121,7 @@ room = "405"
 ticks = 2400
 setup = { pos = [-26394, 0, -1920], angle = 97, health = 200, rnd = 6114, camera = 0 }
 input = "none.txt"
-fields = "espn,espk,fgstat"
+fields = "rng,espn,espk,fgstat"
 expect = "match"
 record = "--warp 405:-26394:0:-1920:97 --life 200"
 
@@ -133,7 +133,7 @@ ticks = 2400
 setup_script = "spider_405_up_w5.lua"
 input = "spider_up_shots.txt"
 input_shift = 344
-fields = "esp"
+fields = "rng,esp"
 expect = "match"
 record = "--warp 405:-26394:0:-1920:97 --life 200 --give 0:5:200 --give 1:0x14:60 --equip 5"
 
@@ -145,6 +145,6 @@ ticks = 2400
 setup_script = "spider_405_up_w5.lua"
 input = "spider_up_shots.txt"
 input_shift = 344
-fields = "espn,espk,fgstat"
+fields = "rng,espn,espk,fgstat"
 expect = "match"
 record = "--warp 405:-26394:0:-1920:97 --life 200 --give 0:5:200 --give 1:0x14:60 --equip 5"

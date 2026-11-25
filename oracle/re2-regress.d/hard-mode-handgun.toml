@@ -26,7 +26,7 @@ ticks = 3344
 setup_script = "handgun_11b_hard.lua"
 input = "handgun_11b_hard.txt"
 input_shift = 344
-fields = "esp"
+fields = "rng,esp"
 expect = "match"
 record = "--warp 11B:8000:0:-19500:0 --life 2000 --give 0:2:18 --give 2:0x14:250"
 
@@ -57,7 +57,7 @@ ticks = 3344
 setup_script = "clairegun_118_hard.lua"
 input = "clairegun_118_hard.txt"
 input_shift = 344
-fields = "esp"
+fields = "rng,esp"
 expect = { tick = 977, fields = ["esp93", "esp94", "esp95"], note = "at the end of a zombie's bite the three free blood effects (kind 0, row 1) are about 20 off, for 67 ticks; the pool matches before and after, the two weapon 6 hits on 2292 and 2412 included (#792)" }
 record = "--start claire --warp 118:-24617:0:-24996:1024 --life 2000 --give 2:0x14:250"
 
@@ -88,7 +88,7 @@ ticks = 3344
 setup_script = "colt_118_hard.lua"
 input = "colt_118_hard.txt"
 input_shift = 344
-fields = "esp"
+fields = "rng,esp"
 expect = "match"
 record = "--start claire --warp 118:-24617:0:-24996:1024 --life 2000 --give 2:0xD:6 --give 3:0x14:200"
 
@@ -115,6 +115,6 @@ ticks = 2344
 setup_script = "handgun_103_hard.lua"
 input = "handgun_103_hard.txt"
 input_shift = 344
-fields = "esp"
+fields = "rng,esp"
 expect = "match"
 record = "--warp 103:2000:0:-14478:2048:3 --life 2000 --give 0:2:18 --give 2:0x14:250"

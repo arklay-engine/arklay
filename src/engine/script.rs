@@ -768,6 +768,14 @@ impl Driver {
         if self.drawn {
             app.draw();
         }
+        // The oracle's `--no-enemies` clears the enemies at its stop in
+        // `Pad_set`, before it writes the tick before it: one a script or a
+        // load placed this tick has run and drawn, and is off in the line.
+        if self.trace.is_some()
+            && let Mode::Play(session) = &mut app.mode
+        {
+            session.game.apply_re2_no_enemies();
+        }
         if let Some(trace) = self.trace.as_mut() {
             if trace.screen {
                 // A screen's trace that goes on into play (a new game's
