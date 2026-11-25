@@ -1366,6 +1366,10 @@ function ScreenApi:re2_computer() end
 ---@return boolean
 function ScreenApi:re2_infinite(item) end
 
+---What RE 2's results after a cleared game draw this tick (`Result`).
+---@return Re2Result? view `nil` while no results run.
+function ScreenApi:re2_result() end
+
 ---The id and count of RE 2's `Item_work` slot.
 ---@param slot integer `10` is the personal item.
 ---@return integer id
@@ -1608,6 +1612,16 @@ local Re2Box = {}
 ---@field cells integer[][] The non-space glyphs, each `{x, y, u, v}` on the console page, in record order.
 ---@field cursor? integer[] `{x, y}`: the cursor's place, when it shows.
 local Re2Computer = {}
+
+---RE 2's results' view, from [`api:re2_result`](#ScreenApi.re2_result).
+---@class Re2Result
+---@field pieces { flags: integer, colour: integer }[] The executable's 33 pieces (`pieces[n + 1]` is piece `n`): bit 0 of `flags` shows it, 4 and 8 fade it in and out; `colour` is `0xRRGGBB`, `0x808080` the art's own.
+---@field drawn boolean `Result_draw_quads` drew the pieces this tick.
+---@field picture? integer The picture `Result_load_bg` last loaded, `ui/result/end1<n>`.
+---@field background boolean The background shows the picture (`Bg_set_mode(0, 0)`) rather than black.
+---@field digits integer[] The clear time's ten glyphs, `HH:MM:SS` and the saves.
+---@field fade? { level: integer, mode: integer } Fade slot 0 as `System_trans` drew it.
+local Re2Result = {}
 
 ---RE 2's MAP page view, from [`api:re2_map`](#ScreenApi.re2_map).
 ---@class Re2Map

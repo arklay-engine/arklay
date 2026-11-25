@@ -921,6 +921,31 @@ fn the_prologues_art_is_converted() {
     assert!(pack.contains("ui/prologue.lua"));
 }
 
+/// The results' art (`Result_init`, `Result_load_bg`): `end00.adt` is a
+/// stream of TIMs, split into its sheets, and `end1<n>.adt` and `sp_e.adt`
+/// full-screen pictures.
+#[test]
+fn the_results_art_is_converted() {
+    let root = TempDir::new("result-art");
+    make_install(&root.path);
+    let data = root.path.join("data");
+    let (first, second) = (tiny_tim(2, 1), tiny_tim(3, 2));
+    let sheets = crate::adt::fixture::literals(&[first.clone(), second.clone()].concat());
+    write(&data.join("Common/Data/end00.adt"), &sheets);
+    let picture = crate::adt::fixture::uniform_background(0x21);
+    write(&data.join("Common/Data/END15.adt"), &picture);
+    write(&data.join("Common/Data/sp_e.adt"), &picture);
+    let out = root.path.join("out.akpak");
+    convert_game(&root.path, &out).unwrap();
+    let pack = Pack::open(&out).unwrap();
+    assert_eq!(read(&pack, "ui/result/end00_0.tim"), first);
+    assert_eq!(read(&pack, "ui/result/end00_1.tim"), second);
+    let image = crate::bmp::decode(&read(&pack, "ui/result/end15.bmp")).unwrap();
+    assert_eq!((image.width, image.height), (320, 240));
+    assert!(pack.contains("ui/result/sp_e.bmp"));
+    assert!(!pack.contains("ui/result/end16.bmp"));
+}
+
 /// The pack says what it was converted with, so the launcher can tell a pack
 /// from before a script changed: RE2's own revision and fingerprint, not
 /// RE1's.

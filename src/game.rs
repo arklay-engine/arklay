@@ -3686,6 +3686,9 @@ pub struct GameState {
     pub re2_computer_request: Option<u8>,
     /// RE2's computer while game mode 7 runs it.
     pub re2_computer: Option<computer2::Computer>,
+    /// RE2's results after a cleared game (`Result`), from the tick
+    /// `Game_loop` chains them in place of the game.
+    pub re2_result: Option<Box<crate::result2::Result>>,
     /// `printed` and `confirmed`, globals of each computer mode
     /// (`0x689B6C`/`0x689B68`, `0x689B78`/`0x689B74`) a work leaves.
     pub re2_computer_latches: [[bool; 2]; 2],
@@ -4340,6 +4343,7 @@ impl Default for GameState {
             re2_item_get: None,
             re2_computer_request: None,
             re2_computer: None,
+            re2_result: None,
             re2_computer_latches: [[false; 2]; 2],
             re2_crouch_item: None,
             re2_crouch_start: false,

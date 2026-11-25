@@ -609,9 +609,12 @@ pub const FG_SYSTEM_8000: u8 = 16;
 const FG_STATUS_EASY: u8 = 5;
 /// `fg_status`'s `0x40000000`: scenario B.
 const FG_STATUS_SCENARIO_B: u8 = 1;
-/// `fg_system`'s `0x200000`, which `Stage_init_item` tests before it gives
-/// EASY's hint file. No writer is known.
-const FG_SYSTEM_200000: u8 = 10;
+/// `fg_system`'s `0x200000`: the game is cleared. Room 11C's `main_02`
+/// raises it (`set(0, 10, 1)`), and `Game_loop` chains the results on it
+/// (`Result`, [`crate::result2`]). `Stage_init_item` tests it before it
+/// gives EASY's hint file, which a new game after the clear's save doesn't
+/// get.
+pub const FG_SYSTEM_RESULT: u8 = 10;
 
 /// The script's task slots.
 const TASK_SLOTS: usize = super::vm::TASKS;
@@ -1334,7 +1337,7 @@ impl Re2State {
     /// not in scenario B (`fg_status`'s `0x40000000`).
     pub fn gets_hint_file(&self) -> bool {
         self.easy()
-            && !self.flag(0, FG_SYSTEM_200000)
+            && !self.flag(0, FG_SYSTEM_RESULT)
             && !self.scenario_b
             && !self.flag(STATUS_BANK, FG_STATUS_SCENARIO_B)
     }

@@ -1,0 +1,6 @@
+# The extras' results (oracle/re2-regress.d/result.toml) with two keys in step 0x13: the first, before its count's 300, reveals the rank and the time at once; the second, past 300, takes the count to 0x4B2, past the fade out, and the results end 98 ticks on.
+0
+2000 confirm
+2003
+2300 confirm
+2303

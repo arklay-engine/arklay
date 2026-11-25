@@ -266,6 +266,21 @@ fn read_symbol_table(reader: &mut BitReader, small: &Huffman, table: &mut Huffma
 /// Reading stops at the stream's zero block length, so `data` may run on
 /// past it (to the end of `roomcut.bin`).
 pub fn decode(data: &[u8]) -> Result<Vec<u8>> {
+    decode_up_to(data, MAX_OUTPUT)
+}
+
+/// The most [`decode_sheets`] makes: `Load_ADT` itself has no limit, and the
+/// largest stream of sheets the game loads, the results' `end00.adt`, is
+/// four 256 x 256 TIMs (`0x40880` bytes).
+pub const MAX_SHEETS_OUTPUT: usize = 0x10_0000;
+
+/// [`decode`] for a stream `Load_ADT` reads whole into memory, such as a
+/// stream of TIM sheets, which may be larger than a background.
+pub fn decode_sheets(data: &[u8]) -> Result<Vec<u8>> {
+    decode_up_to(data, MAX_SHEETS_OUTPUT)
+}
+
+fn decode_up_to(data: &[u8], limit: usize) -> Result<Vec<u8>> {
     ensure!(data.len() >= 4, "ADT stream is shorter than its header");
     let mut reader = BitReader::new(&data[4..]);
     let mut history = vec![0u8; HISTORY];
@@ -308,8 +323,8 @@ pub fn decode(data: &[u8]) -> Result<Vec<u8>> {
                 }
             }
             ensure!(
-                out.len() < MAX_OUTPUT,
-                "ADT stream decodes to {MAX_OUTPUT} bytes or more"
+                out.len() < limit,
+                "ADT stream decodes to {limit} bytes or more"
             );
         }
     }

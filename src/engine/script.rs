@@ -788,11 +788,18 @@ impl Driver {
                 && was_play
                 && ((!in_transition && !screen_before) || trace.all_frames)
             {
+                app.ui_sounds.clear();
                 traced = Some(trace.writer.tick_index());
                 trace
                     .writer
                     .write_tick(&session.trace_tick(&app.framebuffer))
                     .map_err(engine_error)?;
+            } else if app.re2_result_title && !matches!(app.mode, Mode::Play(_)) {
+                // A game's trace goes on through the title RE 2's results
+                // hand over to, as the original's does: task 0's title.
+                let sounds = std::mem::take(&mut app.ui_sounds);
+                let line = screen_trace_line(app, trace.writer.tick_index(), word, &sounds);
+                trace.writer.write_line(&line).map_err(engine_error)?;
             }
         }
         if self.window.is_some() {
