@@ -433,6 +433,8 @@ pub enum Body {
     Player,
     /// An enemy slot of `Em_work`.
     Enemy(u8),
+    /// A room object, on its `Work_m` (`Get_matrix`'s case 4); the part is 0.
+    Object(u8),
 }
 
 /// What `FUN_004d6150` writes over a grenade's first block, and the hand's
@@ -449,6 +451,18 @@ pub struct Launch {
 impl Slot {
     fn live(&self) -> bool {
         self.flags & FLAG_LIVE != 0
+    }
+
+    /// The room object whose matrix it was started on (`+0x6c`), if any: a
+    /// twinkle's or a script's.
+    fn on_object(&self) -> Option<u8> {
+        self.object.or(match self.anchor {
+            Some(Anchor {
+                body: Body::Object(object),
+                ..
+            }) => Some(object),
+            _ => None,
+        })
     }
 
     /// The first half of a slot's death: `Esp_kill`.
@@ -508,6 +522,9 @@ pub struct Effects {
     /// Where each room object's twinkle sits on its matrix now, by slot: the
     /// caller sets them before a tick, for the slots that follow an object.
     pub objects: Vec<Option<[i16; 3]>>,
+    /// Each room object's `Work_m` now, by slot, for the slots started on one
+    /// ([`Body::Object`]): the caller sets them before a tick.
+    pub(crate) object_worlds: Vec<crate::player2::Matrix>,
     /// The parts' `Workm` as this tick's `Joint_trans2` left them, for the
     /// slots on a part ([`Self::anchors_in_use`]): the caller sets them before
     /// a tick. `Game_loop` draws every body before `Esp_move`.
@@ -705,6 +722,32 @@ impl Effects {
         Some(first)
     }
 
+    /// A script's `Esp_call` on room object `object`'s `Work_m` (`matrix`, as
+    /// it is now): the slot and those that die with it keep the object, and
+    /// with [`FLAG_FOLLOW`] take its matrix again on every tick.
+    pub(crate) fn call_placed_on_object(
+        &mut self,
+        call: EsprCall,
+        object: u8,
+        matrix: crate::player2::Matrix,
+    ) -> Option<usize> {
+        let anchor = Anchor {
+            body: Body::Object(object),
+            part: 0,
+        };
+        let first = self.call_anchored(
+            call.kind, call.row, call.size, call.dir, anchor, matrix, call.at, false,
+        )?;
+        for (index, slot) in self.slots.iter_mut().enumerate() {
+            if index == first || slot.flags != 0 && first != 0 && usize::from(slot.parent) == first
+            {
+                slot.rotation = call.rotation;
+                slot.group = call.group;
+            }
+        }
+        Some(first)
+    }
+
     /// `Esp_call` on a body's part: `matrix` is the part's `Workm` as the
     /// call finds it and `point` the vector on it. The slot and those that die
     /// with it keep the part, and with [`FLAG_FOLLOW`] take its `Workm` again
@@ -806,10 +849,20 @@ impl Effects {
         anchors
     }
 
+    /// `Esp_kill` with any matrix but an object's: the slots on no object, by
+    /// kind and row alone.
+    pub fn kill_off_objects(&mut self, kind: u8, row: u8) {
+        for slot in &mut self.slots {
+            if slot.kind == kind && slot.row == row && slot.on_object().is_none() {
+                slot.kill();
+            }
+        }
+    }
+
     /// `Esp_kill` with an object's matrix: only the slots on that object.
     pub fn kill_on_object(&mut self, kind: u8, row: u8, object: u8) {
         for slot in &mut self.slots {
-            if slot.kind == kind && slot.row == row && slot.object == Some(object) {
+            if slot.kind == kind && slot.row == row && slot.on_object() == Some(object) {
                 slot.kill();
             }
         }
@@ -3058,6 +3111,48 @@ mod tests {
         effects.kill_on_object(7, 0, 1);
         assert!(!effects.slots[on_object].live());
         assert!(effects.slots[other].live());
+    }
+
+    /// Room 112's shelves (`main_04` to `main_06`): `sce_espr3d_on` on an
+    /// object's `Work_m` (`Get_matrix`'s case 4) starts the switch's glow on
+    /// the shelf, turned with it, and `sce_espr_kill` on that matrix takes
+    /// only that shelf's, leaving `main_02`'s on the world's.
+    #[test]
+    fn an_effect_on_an_objects_matrix_sits_on_it_and_dies_with_it_alone() {
+        let mut block = [0u8; BLOCK_LEN];
+        block[18..20].copy_from_slice(&0x8001u16.to_le_bytes());
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[block]));
+        let call = |at| EsprCall {
+            kind: 7,
+            row: 0,
+            size: 0x800,
+            dir: 0,
+            at,
+            rotation: [0; 3],
+            group: 0,
+        };
+        let world = effects.call_placed(call([-26900, -2250, -15000])).unwrap();
+        let shelf = crate::player2::Matrix {
+            m: crate::player2::rot_matrix([0, 3072, 0]),
+            t: [-21500, 0, -22800],
+        };
+        let on_shelf = effects
+            .call_placed_on_object(call([-450, -2250, -80]), 1, shelf)
+            .unwrap();
+        effects.object_worlds = vec![Default::default(), shelf];
+        effects.tick(&mut Default::default(), None);
+        assert_eq!(effects.slots[on_shelf].pos, [-21420, -2250, -23250]);
+        assert_eq!(effects.slots[world].pos, [-26900, -2250, -15000]);
+        effects.kill_on_object(7, 0, 1);
+        assert!(!effects.slots[on_shelf].live());
+        assert!(effects.slots[world].live());
+        let on_shelf = effects
+            .call_placed_on_object(call([-450, -2250, -80]), 1, shelf)
+            .unwrap();
+        effects.kill_off_objects(7, 0);
+        assert!(!effects.slots[world].live());
+        assert!(effects.slots[on_shelf].live());
     }
 
     /// `pl_w02_t2_move`'s flash (kind 1, row 0) in `spider_shots_302`: on

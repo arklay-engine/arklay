@@ -563,6 +563,24 @@ pub(crate) fn twinkle_points(game: &GameState) -> Vec<Option<[i16; 3]>> {
         .collect()
 }
 
+/// Each room object's `Work_m` (`+0x54`), by slot, for the effects started on
+/// one: `CompM` of its parent's matrix and `RotMatrix` of `Cdir` with `Pos`.
+/// On the world's matrix that is the object's own. An object on another
+/// matrix (`Super_set`) takes its own turn at its composed place.
+pub(crate) fn object_worlds(game: &GameState) -> Vec<player2::Matrix> {
+    game.objects
+        .records
+        .iter()
+        .map(|record| player2::Matrix {
+            m: player2::rot_matrix(record.rotation),
+            t: match record.super_parent {
+                crate::objects::SuperParent::World => record.pos,
+                _ => record.world.t,
+            },
+        })
+        .collect()
+}
+
 /// The water areas (`aot_set` kind 7) in `aot_table`'s order, for `Water_ck`.
 pub(crate) fn water_areas(game: &GameState) -> Vec<crate::zombie2::WaterArea> {
     game.room_actions
@@ -624,6 +642,12 @@ pub(crate) fn run_esprs(
 ) {
     let scenario = game.id.player_flag & 1;
     for (call, matrix) in std::mem::take(&mut game.re2.pending_esprs) {
+        if let Some(object) = matrix.object {
+            if let Some(&world) = object_worlds(game).get(usize::from(object)) {
+                game.re2.effects.call_placed_on_object(call, object, world);
+            }
+            continue;
+        }
         let world = match matrix.slot {
             None => matrix.part.and_then(|part| {
                 player_parts
@@ -1257,6 +1281,7 @@ pub fn init(
         game.re2.tick_before();
         game.re2.effects.water = water_areas(game);
         game.re2.effects.objects = twinkle_points(game);
+        game.re2.effects.object_worlds = object_worlds(game);
         game.re2.effects.weapon = game.equipped_weapon_id;
         let player = game
             .entities

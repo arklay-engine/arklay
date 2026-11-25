@@ -1877,6 +1877,9 @@ impl Re2State {
                         .and_then(Option::as_deref)
                         .and_then(|character| character.zombie.as_ref())
                         .and_then(|zombie| zombie.drawn.get(part).copied().flatten()),
+                    Body::Object(slot) => {
+                        self.effects.object_worlds.get(usize::from(slot)).copied()
+                    }
                 }?;
                 Some((anchor, matrix))
             })
@@ -2320,18 +2323,28 @@ fn probe_flags(sat: u8) -> u8 {
 
 pub use crate::esp2::EsprCall;
 
-/// `Get_matrix`: whose, and which of its parts, or the work's own `M`.
+/// `Get_matrix`: whose, and which of its parts, or the work's own `M`, or a
+/// room object's `Work_m`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EsprMatrix {
     /// `None` for the player, else the slot in `Characters`.
     pub slot: Option<usize>,
     pub part: Option<usize>,
+    /// Case 4: room object `n`'s `Work_m` (`+0x54`); `slot` and `part` are
+    /// then unused.
+    pub object: Option<u8>,
 }
 
 impl EsprMatrix {
-    /// `None` for `GsIdMatrix`, and for an object's, which still spawns at the
-    /// origin.
+    /// `None` for `GsIdMatrix`.
     fn of(matrix: i8, id: u8) -> Option<Self> {
+        if matrix == 4 {
+            return Some(Self {
+                slot: None,
+                part: None,
+                object: Some(id),
+            });
+        }
         let slot = |who| match who {
             0 => Some(None),
             1 => Some(Some(SPLAYER_SLOT)),
@@ -2343,12 +2356,14 @@ impl EsprMatrix {
             return Some(Self {
                 slot: slot((matrix >> 5) & 3)?,
                 part,
+                object: None,
             });
         }
         match matrix {
             1..=3 => Some(Self {
                 slot: slot(matrix - 1)?,
                 part: None,
+                object: None,
             }),
             _ => None,
         }
@@ -3582,8 +3597,15 @@ impl Host for GameHost<'_> {
                     });
                 }
             }
+            // `Esp_kill` on `Get_matrix`'s matrix: only the effects started on
+            // it. An object's are its own; the others, whose matrix isn't
+            // kept, go on kind and row alone.
             "sce_espr_kill" => {
-                self.game.re2.effects.kill(at(0) as u8, at(1) as u8);
+                let (kind, row) = (at(0) as u8, at(1) as u8);
+                match EsprMatrix::of(at(2) as i8, at(3) as u8).and_then(|m| m.object) {
+                    Some(object) => self.game.re2.effects.kill_on_object(kind, row, object),
+                    None => self.game.re2.effects.kill_off_objects(kind, row),
+                }
             }
             "sce_bgm_control" => {
                 let place = self.game.re2_music_place();
@@ -5348,22 +5370,30 @@ mod tests {
         };
         assert_eq!(of(0), None);
         assert_eq!(of(0x300), None);
-        assert_eq!(of(0x304), None);
         let enemy = EsprMatrix {
             slot: Some(1),
             part: Some(11),
+            object: None,
         };
         assert_eq!(of(459), Some(enemy));
         let splayer = EsprMatrix {
             slot: Some(SPLAYER_SLOT),
             part: Some(11),
+            object: None,
         };
         assert_eq!(of(171), Some(splayer));
         let root = EsprMatrix {
             slot: Some(0),
             part: None,
+            object: None,
         };
         assert_eq!(of(3), Some(root));
+        let object = EsprMatrix {
+            slot: None,
+            part: None,
+            object: Some(2),
+        };
+        assert_eq!(of(0x204), Some(object));
     }
 
     /// Room 202's scene with Marvin reads the player's `Type & 0xFF` to choose
