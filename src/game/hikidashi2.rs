@@ -467,7 +467,7 @@ mod tests {
         assert!(!game.re2_hikidashi.active);
         // `Mess_disp` raises `fg_stop`'s top byte at the end of the tick,
         // after the moves.
-        assert_eq!(game.re2_message_stop_pending, 0xFF00);
+        assert_eq!(game.re2_message_stop_pending, Some(0xFF00));
     }
 
     #[test]

@@ -5389,7 +5389,9 @@ impl GameSession {
         // `Esp_move` ends `Game_loop`, before the message task: a message's
         // dismissal puts `fg_stop` back after the effects have moved under it
         // (room 306's console light starts again on the tick after the water
-        // switch's message closes).
+        // switch's message closes), and a new message's first pass raises its
+        // stop word after they have moved without it (room 200's typewriter
+        // with no ribbon).
         let effects_stopped_before = self.game.re2.effects_stopped();
         // The message window advances after the script/entity task pass,
         // exactly like the original's `main_loop`: a request a script raised
@@ -5415,7 +5417,7 @@ impl GameSession {
             self.swallow_action = true;
         }
         let effects_stopped = esp_move_stopped(
-            dismissed,
+            dismissed || self.game.re2_message_stop_raised,
             effects_stopped_before,
             self.game.re2.effects_stopped(),
         );
@@ -21635,9 +21637,14 @@ fn apply_re2_room_data(room: &mut RoomState, game: &mut game::GameState) {
 
 /// Whether this tick's `Esp_move` runs under `fg_stop`'s effects bit:
 /// `Game_loop` ends in it, before the message task, so a message dismissed
-/// this tick (which puts `fg_stop` back) still held the effects.
-fn esp_move_stopped(dismissed: bool, before_message: bool, now: bool) -> bool {
-    if dismissed { before_message } else { now }
+/// this tick (which puts `fg_stop` back) still held the effects, and one whose
+/// first pass raised its stop word this tick didn't yet.
+fn esp_move_stopped(message_moved_stop: bool, before_message: bool, now: bool) -> bool {
+    if message_moved_stop {
+        before_message
+    } else {
+        now
+    }
 }
 
 /// One tick of an RE2 room's scripts: the events the areas raised last tick
@@ -50500,6 +50507,9 @@ end
             "no dismissal: as now"
         );
         assert!(esp_move_stopped(false, false, true));
+        // Room 200's typewriter without a ribbon: the message's first pass
+        // raised its stop word after `Esp_move`.
+        assert!(!esp_move_stopped(true, false, true));
     }
 
     #[test]
