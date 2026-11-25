@@ -5901,6 +5901,15 @@ impl GameSession {
             return;
         };
         let out = die.tick(&mut self.game.re2, &bodies);
+        // `Die_light_set` and the phases after it write the cut's LIT
+        // record, which the room's models are lit from.
+        if let Some(light) = die.light() {
+            let room = &mut self.loaded.room;
+            let cut = room.current_cut;
+            if let Some(record) = room.cuts.get_mut(cut).and_then(|cut| cut.light.as_mut()) {
+                *record = light.apply(*record);
+            }
+        }
         if out.lock_cut {
             self.game.camera.locked = true;
         }
@@ -10228,13 +10237,30 @@ impl GameSession {
         let (Some(text), Some(sheet)) = (die.text(), self.re2_die_sheet.as_ref()) else {
             return;
         };
+        let left = (width - 320) / 2;
+        // `Die_blood_move_main`'s strips go in at depth 1, the text's at 0,
+        // so they are drawn under it.
+        if let Some((layers, blend)) = text.blood(sheet) {
+            let blend = match blend {
+                crate::die2::BloodBlend::Opaque => render::SpriteBlend::Opaque,
+                crate::die2::BloodBlend::Half => render::SpriteBlend::Half,
+            };
+            for layer in &layers {
+                self.framebuffer.draw_rgba_sprite_blended(
+                    layer,
+                    [0, 0, 320, 240],
+                    [left, 0, 320, 240],
+                    0,
+                    blend,
+                );
+            }
+        }
         let mut image = Image {
             width: 320,
             height: 240,
             rgba: vec![0; 320 * 240 * 4],
         };
         text.draw(sheet, &mut image);
-        let left = (width - 320) / 2;
         self.framebuffer.draw_rgba_sprite_blended(
             &image,
             [0, 0, 320, 240],
