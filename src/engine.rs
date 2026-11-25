@@ -15281,7 +15281,7 @@ fn run_game_trace(app: &mut App, options: &trace::TraceOptions<'_>) -> Result<()
             sound_due += frame_ms * f64::from(audio::SAMPLE_RATE) / 1000.0;
             let frames = sound_due.floor();
             sound_due -= frames;
-            mixer.capture_frames(frames as usize);
+            mixer.capture_frames(frames as usize, session.game.re2.mono);
             if let Some(index) = traced.take() {
                 let mixed = mixer.captured().map_or(0, |pcm| pcm.len() / 4);
                 let seconds = mixed as f64 / f64::from(audio::SAMPLE_RATE);
@@ -16106,8 +16106,13 @@ fn apply_menu_settings(
     }
     app.set_language(settings.language.as_deref());
     crate::audio::set_volumes(settings.game.volumes());
-    crate::audio::set_mono(settings.game.speaker_mode == crate::config::SpeakerMode::Mono);
-    app.screen_sound = screen_sound_of(&settings.game);
+    // The menu's mode and quality are the run's only when the menu changed
+    // them: a run with no settings keeps what its title set.
+    let menu_sound = screen_sound_of(&settings.game);
+    if menu_sound != screen_sound_of(&before.game) {
+        app.screen_sound = menu_sound;
+    }
+    crate::audio::set_mono(app.screen_sound[0] == 1);
     app.set_screen_volumes(settings.game.music_volume, settings.game.effects_volume);
     app.set_subtitle_options(&settings.game);
     let path = crate::config::Config::default_path();

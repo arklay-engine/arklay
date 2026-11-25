@@ -808,7 +808,7 @@ impl Driver {
             wav.due += frame_ms * f64::from(audio::SAMPLE_RATE) / 1000.0;
             let frames = wav.due.floor();
             wav.due -= frames;
-            mixer.capture_frames(frames as usize);
+            mixer.capture_frames(frames as usize, session.game.re2.mono);
             if let Some(pcm) = mixer.take_captured() {
                 wav.pcm.extend_from_slice(&pcm);
             }

@@ -1254,9 +1254,11 @@ impl Mixer {
     }
 
     /// Render `frames` stereo frames into a capture mixer's output, at the
-    /// default levels. A device mixer ignores it.
-    pub fn capture_frames(&mut self, frames: usize) {
+    /// default levels, for one speaker under the run's MONO (`mono`) as a
+    /// device mixer is under the settings'. A device mixer ignores it.
+    pub fn capture_frames(&mut self, frames: usize, mono: bool) {
         if let Some(out) = &mut self.capture {
+            self.state.mono = mono;
             self.state.render(frames, out);
             self.written_frames += frames as u64;
         }
@@ -2707,7 +2709,7 @@ mod tests {
         let samples: Vec<i16> = (0..64).flat_map(|_| [1000, -3000]).collect();
         let track = || Wav::from_s16(&samples, 2, SAMPLE_RATE);
         let played = |mixer: &mut Mixer| {
-            mixer.capture_frames(64);
+            mixer.capture_frames(64, false);
             mixer
                 .captured()
                 .expect("a capture mixer keeps its output")
