@@ -84,3 +84,53 @@ setup = { pos = [-26159, 0, -18908], angle = 1024, health = 200, rnd = 6114, cam
 fields = "room,cam,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,es,spl,fgscn,fgstat,msg,fgkey"
 expect = "match"
 record = "--start claire --warp 21B:-26159:0:-18908:1024:0 --flag 3:64 --flag 3:8 --flag 3:12 --life 200"
+
+# The three door messages without a key turn again, with their frames: the lock's message on two pages, "You unlocked
+# it." and "It's locked from inside." are drawn where Mess_set's attr 0x100 puts them (oracle/re2-deviations.md, "Messages").
+[[run]]
+name = "locked_door_20B_draw"
+room = "20B"
+setup_script = "locked_door_20B.lua"
+input = "locked_door_20B.txt"
+input_shift = 344
+ticks = 800
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgkey,fgstat"
+frames = [360, 799]
+# 0.13 measured, the messages on the original's pixels
+frame_max_mean = 0.20
+# The message on screen (365 to 650): 0.14
+frame_windows = [[365, 650, 0.20]]
+expect = "match"
+record = "--no-enemies --life 200 --warp 20B:-1814:0:-12103:3029"
+
+[[run]]
+name = "unlock_door_20A_draw"
+room = "20A"
+setup_script = "unlock_door_20A.lua"
+input = "unlock_door_20A.txt"
+input_shift = 344
+ticks = 600
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgkey,fgstat"
+frames = [360, 599]
+# 0.23 measured, the message on the original's pixels
+frame_max_mean = 0.30
+# The message on screen (365 to 500): 0.22
+frame_windows = [[365, 500, 0.27]]
+expect = "match"
+record = "--no-enemies --life 200 --warp 20A:-15554:0:-15268:1866"
+
+[[run]]
+name = "locked_inside_116_draw"
+room = "116"
+setup_script = "locked_inside_116.lua"
+input = "locked_inside_116.txt"
+input_shift = 344
+ticks = 600
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgkey,fgstat"
+frames = [360, 599]
+# 0.08 measured, the message on the original's pixels
+frame_max_mean = 0.15
+# The message on screen (365 to 500): 0.08
+frame_windows = [[365, 500, 0.13]]
+expect = "match"
+record = "--no-enemies --life 200 --warp 116:-26159:-7200:-25126:2048"

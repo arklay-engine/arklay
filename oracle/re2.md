@@ -541,6 +541,14 @@ The key and lock runs warp in front of each door with `--no-enemies --life 200`,
 - `unlock_door_20A` (`--warp 20A:-15554:0:-15268:1866`): 0x26 at 364, on the message's tick, and bit 17 (`fgkey=0000400000000000`). The run doesn't go through: the door leads into room 200.
 - `locked_inside_116` (`--warp 116:-26159:-7200:-25126:2048`, floor 4): 0x16 at 364 and "It's locked from inside."; no bit goes up.
 - `sherry_21b_door` (`sherry_21b_lost`'s warp and flags, `--start claire`, recorded natively, traces only): with Sherry following and lost, Claire turns round, walks into door 3's reach and presses it at 444; door 3 has no lock, so the only message `Sce_Door` can put up there is the partner test's, "I can't leave Sherry alone." (door message 8); it comes up on 445, and the press at 544 closes it with the door shut. It matches on every tick, `spl`, `msg` and `fgkey` included (`msg` is the message's state, not its number).
+- `locked_door_20B_draw`, `unlock_door_20A_draw` and `locked_inside_116_draw` are `locked_door_20B`, `unlock_door_20A` and `locked_inside_116` recorded again with their frames: the lock's message on its two pages, "You unlocked it." and "It's locked from inside." land on the original's pixels (frame means 0.13, 0.23 and 0.08), and the traces match on every tick.
+
+## Room questions
+
+A room's question (`message_on`, `Mess_set`'s attr `0x300`) cues its answer by the argument after `0xFB` alone (`Branch_disp`, `oracle/re2-deviations.md`, "Messages"). Two runs (`oracle/re2-regress.d/room_questions.toml`) warp into a question's area with `--no-enemies --life 200`, press at 364, turn the first page at 430, move right to No at 480 (the cursor cue, 4:4), answer at 500, press again at 600 and 660, and answer Yes at 720. Both match on every tick, `snd` and `msg` included, and the question's frames land on the original's pixels.
+
+- `question_110` (`--warp 110:-13889:-7200:7096:1024`, in the emergency ladder button's area on floor 4): "An emergency ladder." and "Will you push the button?", argument `0x40`. No plays the cancel cue (4:5) at 500 and Yes the decide cue (4:6) at 720, and the ladder's scene runs from 721 (cut 14, then 13). The run stops at 1204: there arklay's Leon is knocked down after the scene, where the original's stands on (#926).
+- `question_306` (`--warp 306:-17309:-5400:-20592:0`, the warp leaves Leon at `z` -20612 facing the water lever's area on floor 3): "A lever to fill and drain water." and "Will you move it?", argument `0x20`. No plays the cancel cue at 500, as `0x20` is inside `0x60`, and Yes plays none; the lever's own sound (2:a) follows at 721.
 
 ## The typewriter
 
