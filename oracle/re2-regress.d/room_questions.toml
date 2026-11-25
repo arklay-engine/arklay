@@ -7,14 +7,12 @@ room = "110"
 setup_script = "question_110.lua"
 input = "question_110.txt"
 input_shift = 344
-# The reference goes on to 1400: on 1204, after the ladder's scene, arklay's Leon is knocked down where the original's
-# stands on (#926).
-ticks = 1204
+ticks = 1400
 fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgstat"
-frames = [360, 1203]
-# 0.30 measured: the messages and their choices land on the original's pixels (0.09 in the text's band)
-frame_max_mean = 0.35
-# The questions on screen (365 to 520 and 601 to 720): 0.08 and 0.11; a choice row or page drawn wrong adds about 0.4
+frames = [360, 1399]
+# 0.07 measured: the messages and their choices, and the ladder's scene, land on the original's pixels
+frame_max_mean = 0.15
+# The questions on screen (365 to 520 and 601 to 720): 0.05 each; a choice row or page drawn wrong adds about 0.4
 frame_windows = [[365, 520, 0.15], [601, 720, 0.15]]
 expect = "match"
 record = "--no-enemies --life 200 --warp 110:-13889:-7200:7096:1024"
