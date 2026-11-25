@@ -159,6 +159,18 @@ PROLOGUE = 0x004CEFF0
 # The gallery (`Gallery`, 0x4BF760), task 1 of `TASKS` while it runs, and its work (`pGallery`).
 GALLERY_TASK = 0x004BF760
 GALLERY = 0x0066BEC8
+# Extreme Battle's character choice (`ExBattle`, 0x4EA320), task 1 from `Title_game_init`'s step 1 until it ends, and its
+# work: the routine (`0x694260`'s low byte) and the text's step (its third), the cursor (`0x6949E4`, 0 Ada, 1 Leon, 2
+# Claire, 3 Chris), the arrows' pulse and its way (`0x6949E5`, `0x6949E6`), the flags (`0x6949E7`, 1 while the four turn),
+# the text's done flag (`0x689DB0`) and its work (`0x6949EC`: +0 the column, +1 the row, +3 the caret's count, +0x11C
+# the wait), and the four players' works (`player_work`, 0x248 bytes each from the pointer at 0x98A10C).
+EXBATTLE_TASK = 0x004EA320
+EXBATTLE_STATE = 0x00694260
+EXBATTLE_CURSOR = 0x006949E4
+EXBATTLE_TEXT_DONE = 0x00689DB0
+EXBATTLE_TEXT = 0x006949EC
+EXBATTLE_WORKS = 0x0098A10C
+EXBATTLE_WORK = 0x248
 # config.ini's GALLERY0 to GALLERY4: the bits of what play has opened in the gallery.
 GALLERY_FLAGS = 0x0068059C
 PROLOGUE_SCROLL_WAIT = 0x009800A4
@@ -2356,7 +2368,42 @@ def title_trace(game: Game) -> str:
         f"tx={task[0xA]},{game.u8(TITLE_MENU_2)},{game.u8(TITLE_DIM)},{game.u8(TITLE_B8C)},"
         f"{game.u8(TITLE_EF2)},{game.u8(TITLE_EF2 + 1)},{game.u8(EX_LEVEL)},"
         f"{game.u32(FG_SYSTEM) & 0x01020009:x},{game.u32(FG_STATUS) & 0x02004000:x} "
-        f"tfade2={fade_slot(game, 2)} tfade3={fade_slot(game, 3)} opt={option_trace(game)} {prologue_trace(game)}"
+        f"tfade2={fade_slot(game, 2)} tfade3={fade_slot(game, 3)} opt={option_trace(game)} {prologue_trace(game)} "
+        f"{exbattle_trace(game)}"
+    )
+
+
+def exbattle_trace(game: Game) -> str:
+    """Extreme Battle's character choice while its task runs (`ExBattle`, `0x4EA320`). `exb`: the task's two steps,
+    the routine, the text's step, the cursor, the arrows' pulse and its way, the flags and the text's done flag, then
+    the text's column, row, caret count and wait, then each player's turn (`+0x1F0`) and its target (`+0x1F4`), x and z
+    (`+0x38`, `+0x40`), facing (`Cdir_y`, `+0x76`), its target (`+0x15E`) and step (`+0x146`). `exbm`: each player's
+    `Routine_2` and its motion's four bytes (`+0x14C`)."""
+    task = TASKS + 0x24
+    if game.u32(task + 4) != EXBATTLE_TASK:
+        return "exb=- exbm=-"
+    steps = game.read(task + 8, 2)
+    state = game.read(EXBATTLE_STATE, 4)
+    flags = game.read(EXBATTLE_CURSOR, 4)
+    text = "-"
+    if work := game.u32(EXBATTLE_TEXT):
+        head = game.read(work, 4)
+        text = f"{head[0]},{head[1]},{head[3]},{game.u8(work + 0x11C)}"
+    players, motions = [], []
+    base = game.u32(EXBATTLE_WORKS)
+    for slot in range(4):
+        if not base:
+            break
+        work = base + slot * EXBATTLE_WORK
+        x, _, z = game.i32s(work + ENTITY_POS, 3)
+        players.append(
+            f"{game.u32(work + 0x1F0)},{game.u32(work + 0x1F4)},{x},{z},{game.u16(work + ENTITY_CDIR_Y)},"
+            f"{game.u16(work + 0x15E)},{game.i16(work + 0x146)}"
+        )
+        motions.append(f"{game.u8(work + 6)},{game.read(work + ENTITY_MOTION, 4).hex()}")
+    return (
+        f"exb={steps[0]},{steps[1]},{state[0]},{state[2]},{flags[0]},{flags[1]},{flags[2]},{flags[3]},"
+        f"{game.u32(EXBATTLE_TEXT_DONE)}/{text}/{';'.join(players) or '-'} exbm={';'.join(motions) or '-'}"
     )
 
 

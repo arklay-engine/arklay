@@ -23,9 +23,9 @@
 -- `tofulogo.tim` as texture 0x15) whose START starts that mode's game and
 -- whose EXIT goes back to `Title_init`, EX.BATTLE fades to Extreme
 -- Battle's title (`title_mv_state` 5 and 6, with `extitle.adt` and the logo
--- `extitle1.adt` as texture 0x16) with its level page, whose START isn't
--- ported past its hand-off (the title starts again, as the character's
--- choice that follows in the original, `ExBattle`, isn't ported), GALLERY
+-- `extitle1.adt` as texture 0x16) with its level page, whose START runs
+-- the character's choice (`ui/exbattle.lua`, a task the title sleeps
+-- under) and then starts Extreme Battle's game, GALLERY
 -- opens its character's choice (page 7), whose confirm fades to the
 -- gallery (`ui/gallery.lua`), a task the title sleeps under until its
 -- EXIT, with config.ini's `GALLERY0` to `GALLERY4` (`args.gallery0` to
@@ -46,6 +46,7 @@
 local CrText = require("ui/cr_text")
 local Prologue = require("ui/prologue")
 local Gallery = require("ui/gallery")
+local ExBattle = require("ui/exbattle")
 
 local M = {}
 
@@ -2757,10 +2758,10 @@ local function title_main(api)
     elseif s.disp == 3 and s.fg_system & FG_EXTREME ~= 0 then
         -- Extreme Battle's game: `Title_game_init`'s step 1 starts the
         -- character's choice (`ExBattle`, 0x4EA320, task 1) under
-        -- `fg_system`'s 0x1000000, whatever its 8, and then the game (room
-        -- 612, or the 4th Survivor's room 304 with both). Neither is ported:
-        -- the title starts again, from black, as the title's EXIT leaves it.
-        ex.leave(api)
+        -- `fg_system`'s 0x1000000, whatever its 8, and its step 2, once
+        -- the choice has woken the title's task, the game in room 612.
+        s.game_init = 0
+        s.exb_start = true
     elseif s.disp == 3 and s.fg_system & 8 ~= 0 then
         -- The 4th Survivor's or To-fu's game (`Title_game_init`'s extras
         -- branch, 0x506750): no prologue, HUNK (0xC) or, with
@@ -2804,6 +2805,10 @@ end
 -- on.
 local function game_init(api, input)
     s.game_init = s.game_init + 1
+    if s.exb_start then
+        ex.choice(api, input)
+        return
+    end
     if s.game_init == 1 then
         s.init, s.sub = 0, 2
         fade_off(0)
@@ -3459,6 +3464,72 @@ function ex.main(api)
     end
 end
 
+-- The choice's view of the title: its fades and its cue.
+ex.FX = {
+    set = fade_set,
+    adjust = function(level, n)
+        fade_adjust(level, n)
+    end,
+    done = fade_done,
+    cue = function(slot)
+        s.cue(slot)
+    end,
+}
+
+-- `Title_game_init` from the tick after Extreme Battle's hand-over: its
+-- default step and step 1 (`Fade_off(0)`, then `Task_execute(1,
+-- ExBattle)`, which runs from this tick), the choice's ticks while the
+-- title's task sleeps, and on the tick after the choice ends steps 2 and
+-- 3, where the game's start is the engine's: the player the choice names
+-- (`0x989EF8`), the level (`0x691EF3`) and the levels open (`0x989E91`).
+function ex.choice(api, input)
+    if s.game_init == 1 then
+        s.init, s.sub = 0, 2
+        fade_off(0)
+        s.background = nil
+        s.exb = ExBattle.new(ex.FX)
+        pages[ExBattle.PAGE_W] = api:has_image("ui/exbattle/select_w") and api:indexed_page("ui/exbattle/select_w") or nil
+        pages[ExBattle.PAGE_I] = api:has_image("ui/exbattle/select_i") and api:indexed_page("ui/exbattle/select_i") or nil
+        if api:has_image("ui/exbattle/select_b") then
+            s.exb_background = api:picture("ui/exbattle/select_b")
+        end
+    end
+    local c = s.exb
+    if c.ended then
+        -- Steps 2 and 3: no prologue under 0x1000000; the game starts,
+        -- and step 3 leaves step 4 next.
+        s.sub = 4
+        s.se_live = 1
+        s.exb_start = nil
+        s.exb = nil
+        s.exit = "new_game"
+        s.character = s.claire and 1 or 0
+        local bits
+        bits, s.rnd = ExBattle.placement(s.rnd)
+        s.choice = {
+            exbattle = c.player,
+            exbattle_level = s.level + 1,
+            exbattle_levels = s.levels,
+            exbattle_bits = bits,
+        }
+        return
+    end
+    ExBattle.tick(api, c, { confirm = confirm(), raw = s.raw or 0 })
+    if c.limiter then
+        s.limiter = c.limiter
+    end
+    if c.music == "fade" then
+        api:music_fade()
+    elseif c.music then
+        api:music(c.music)
+    end
+    s.background = not c.ended and s.exb_background or nil
+    for _, sp in ipairs(c.sprites) do
+        s.sprites[#s.sprites + 1] = sp
+    end
+    s.sleeping = true
+end
+
 -- `FUN_00507AB0` (`title_mv_state` 7): RESULT's records (`Load_ex_result`
 -- and its task, 0x4DD4F0) aren't ported; the title goes straight to what
 -- follows them, Extreme Battle's title loaded again.
@@ -3736,6 +3807,8 @@ local function publish(api)
     s.kc = o and key_trace() or nil
     -- The trace's `kcm`, the page's model, while the option task runs.
     s.kcm = o and api:option_model("trace") or nil
+    -- The trace's `exb` and `exbm`, while Extreme Battle's choice runs.
+    s.exb_trace, s.exbm_trace = ExBattle.trace(s.exb)
 end
 
 local function any_saves(api, args)
@@ -4138,7 +4211,7 @@ function M.draw(api)
     fade(3)
     local cache = M.cache or {}
     M.cache = cache
-    for k = 0, ex.PAGE do
+    for k = 0, ExBattle.PAGE_I do
         if pages[k] and (not cache[k] or cache[k].page ~= pages[k]) then
             cache[k] = { page = pages[k], palette = api:page_palette(pages[k], 0) or {} }
         end

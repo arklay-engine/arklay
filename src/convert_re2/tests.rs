@@ -826,6 +826,7 @@ fn the_gallerys_art_is_converted() {
         );
     }
     assert!(pack.contains("ui/gallery.lua"));
+    assert!(pack.contains("ui/exbattle.lua"));
     let layout = Layout::discover(&root.path).unwrap();
     let mut warnings = Vec::new();
     let (mut writer, mut tally) = (PackWriter::new(), Tally::default());

@@ -356,6 +356,13 @@ impl UserData for Api<'_> {
             api.cx.play_cue(UiCue::Core(slot));
             Ok(())
         });
+        // RE 2's `rsin` and `rcos` (4096 the unit, 0x1000 a turn).
+        methods.add_method("rsin", |_lua, _api, angle: i32| {
+            Ok(crate::player2::rsin(angle))
+        });
+        methods.add_method("rcos", |_lua, _api, angle: i32| {
+            Ok(crate::player2::rcos(angle))
+        });
         // `Snd_load_core(id)`: the core bank the later `core_sound`s play from.
         methods.add_method("core_bank", |_lua, api, id: u8| {
             api.cx.play_cue(UiCue::CoreBank(id));

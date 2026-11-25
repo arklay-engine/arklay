@@ -433,6 +433,18 @@ impl RoomId {
     pub fn stage_index(self) -> u8 {
         self.stage.saturating_sub(1)
     }
+
+    /// RE 2's 1-based `scd_var_stage` for the room: a letter stage's
+    /// `ROOM` file is its stage's (`Set_room` adds `DWORD_0098E798`'s 9 to
+    /// `scd_var_stage` for the file's letter under Extreme Battle), so
+    /// stage `F` (15) is the sixth, as the scripts and the trace read it.
+    pub fn re2_stage(self) -> u8 {
+        if self.stage >= 10 {
+            self.stage - 9
+        } else {
+            self.stage
+        }
+    }
 }
 
 /// Where each room of a pack was made from: a room's *origin* is the
@@ -1247,6 +1259,10 @@ mod tests {
             assert_eq!(id.rdt_dir(), format!("room/{:04x}", id.rdt_number()));
             assert_eq!(id.code(), format!("{:04x}", id.rdt_number()));
         }
+        // RE 2's `scd_var_stage` for a letter stage is its file's less 9:
+        // Extreme Battle's F12 is the sixth stage's room 0x12.
+        assert_eq!(RoomId::parse("f121").unwrap().re2_stage(), 6);
+        assert_eq!(RoomId::parse("6121").unwrap().re2_stage(), 6);
         // `G` is only a stage digit, and no stage lies past it.
         assert!(RoomId::parse("1G00").is_err());
         assert!(RoomId::parse("H000").is_err());
