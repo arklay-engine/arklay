@@ -1377,6 +1377,23 @@ fn spl_in4a(character: &mut Character) {
     }
 }
 
+/// The body on Irons's desk in room 21B, one part with one clip.
+const DESK_BODY: u8 = 0x4B;
+
+/// `Spl_Scenario`'s routine `0x14`, `nullsub_1`: the body stays as it is.
+const SCE_STILL: u8 = 0x14;
+
+/// `Spl_in4b` (`0x4f02b0`), after `Spl_Init`: the part keeps the clip's first
+/// frame but for its height, which goes to 0, and the routine does nothing
+/// from then on. `Neck_flg`'s 1 holds the head (`Rot_neck`), and `Be_flg`'s
+/// 8 keeps it out of `Sca_ck_em`.
+fn spl_in4b(character: &mut Character) {
+    character.work.part0_y = Some(0);
+    character.work.neck.flags = 1;
+    character.be_flg |= 0xA;
+    character.work.routine = [player2::MODE_SCENARIO, SCE_STILL, 0, 0];
+}
+
 /// `Spl_mv4a`'s `Spl_chenge00`: with `Type`'s `0x200`, the fade to the other
 /// set of arms, which clears the bit at its end. Room 202's script waits for
 /// that before it makes Marvin a zombie. A fade that has run doesn't run again.
@@ -1562,6 +1579,9 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
         }
         if character.id == MARVIN {
             spl_in4a(character);
+        }
+        if character.id == DESK_BODY {
+            spl_in4b(character);
         }
         // `Spl_in41` ends as `Spl_in45` does.
         if (sherry || ada)
@@ -2818,6 +2838,35 @@ mod tests {
         spl(&mut game, &mut character, &tick);
         assert!(game.re2.partner_bit());
         assert_eq!(character.work.routine, [1, 0, 0, 0]);
+    }
+
+    /// Room 21B's body on the desk (`Spl_in4b`) keeps its first pose, at the
+    /// height of its place, rather than starting `Spl_sce06`'s idle, whose
+    /// clip her one-clip model doesn't have (and which drew nothing).
+    #[test]
+    fn the_desk_body_holds_its_first_pose_with_its_part_at_height_0() {
+        let mut game = GameState::default();
+        let mut character = Character {
+            id: DESK_BODY,
+            model: DESK_BODY,
+            partner: None,
+            ..sherry(0)
+        };
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        spl(&mut game, &mut character, &tick);
+        assert_eq!(character.work.routine, [4, SCE_STILL, 0, 0]);
+        assert_eq!(character.work.neck.flags, 1);
+        assert_eq!(character.be_flg & 0xB, 0xB);
+        spl(&mut game, &mut character, &tick);
+        assert_eq!(character.work.routine, [4, SCE_STILL, 0, 0]);
+        let mut pose = Keyframe {
+            offset: [10, -900, 20],
+            ..Default::default()
+        };
+        character
+            .work
+            .apply_to_pose(&character.body.anim, &mut pose);
+        assert_eq!(pose.offset, [10, 0, 20]);
     }
 
     #[test]

@@ -551,6 +551,9 @@ pub struct Work {
     pub joint_offsets: Vec<(u8, [i16; 3])>,
     /// `Parts0_pos_y`: the scale of the first part's height, `0x1000` being 1.
     parts0_y: i32,
+    /// The first part's `Pos_y` as a routine wrote it over the pose, until the
+    /// next `J_seq` writes it again: `Spl_in4b`'s 0.
+    pub part0_y: Option<i16>,
     /// How far a hit has the body leaning: the extra turn `Em10Dm00` gives the
     /// first part, and takes from the second.
     pub lean: i16,
@@ -909,7 +912,9 @@ impl Work {
     }
 
     pub fn apply_to_pose(&self, anim: &crate::anim::AnimPlayer, pose: &mut Keyframe) {
-        pose.offset[1] = self.root_height(anim, pose.offset[1]);
+        pose.offset[1] = self
+            .part0_y
+            .unwrap_or_else(|| self.root_height(anim, pose.offset[1]));
         self.neck.apply(pose);
     }
 
@@ -1306,6 +1311,7 @@ impl Default for Work {
             part_rgb: [DEFAULT_PART_RGB; 32],
             joint_offsets: Vec::new(),
             parts0_y: 0x1000,
+            part0_y: None,
             lean: 0,
             lean_yaw: 0,
             jseq2: None,
@@ -5541,6 +5547,7 @@ impl Mover<'_, '_> {
     }
 
     pub(crate) fn joint_move_late_reversed(&mut self, late: u16, reverse: bool) -> bool {
+        self.work.part0_y = None;
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
         let Some(clip) = clips.get(usize::from(self.work.move_no)) else {
             return true;
