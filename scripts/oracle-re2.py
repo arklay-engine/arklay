@@ -109,8 +109,11 @@ TITLE_MENU_2 = 0x00691B84  # the title's second page byte (the 4TH title's)
 TITLE_DIM = 0x00691B8B  # the slide's dim
 TITLE_B8C = 0x00691B8C  # the slide's second count (the 4TH title's logo level)
 TITLE_EF2 = 0x00691EF2  # EX.BATTLE's level page bytes
-# The option screen (`0x44A040`, `Config_main` 0x44A0B0), task 1 of `TASKS` while it runs.
+# The option screen (`0x44A040`, `Config_main` 0x44A0B0), task 1 of `TASKS` while it runs, and the same screen as
+# `Game_loop` starts it from play (`Config`, 0x449FD0).
 OPTION_TASK = 0x0044A040
+CONFIG_TASK = 0x00449FD0
+OPTION_TASKS = (OPTION_TASK, CONFIG_TASK)
 KEY_WORD = 0x0099CF64  # the input class's key word as `FUN_0043bb00` leaves it each tick
 # KEYCONFIG's page (`Config_main`'s states 2 and 9 to 0xF) and its model (`FUN_0044b3c0`).
 KEY_COUNT = 0x0099CF60
@@ -199,6 +202,9 @@ BUTTONS = {
     "inventory": 0x0800,
     # The PC's map key: `Pad_set`'s table maps it to `Key`'s 0x4000.
     "map": 0x0010,
+    # The PC's option key: `Pad_set` maps it to no `Key` bit, and `Game_loop` opens the option screen in play on
+    # its edge (`0x9885FE`'s 0x100).
+    "option": 0x0100,
     # The keyboard's own arrows, bits 25 to 28 of the input class's key word, which KEYCONFIG's page reads
     # (`KEY_WORD`), not the pad.
     "kbup": 0x02000000,
@@ -1328,6 +1334,9 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     fields.append(f"fgkey={game.u32(FG_KEY):08x}{game.u32(FG_KEY + 4):08x}")
     # Slot 2's back routine (`Sce_Save_backfunc` 0x4E9930 or `Item_box_entrance` 0x4E9A20), its state and the save place.
     fields.append(f"tw={game.u32(BACK_ROUTINE):x},{game.u8(ITEM_BOX_ENTRANCE)},{game.u8(SAVE_PLACE)}")
+    # The option screen from play (`Config`), and its KEYCONFIG page.
+    fields.append(f"opt={option_trace(game)}")
+    fields.append(key_config_trace(game))
     fields.append(save_screen_trace(game))
     fields.append(f"svs={game.i32s(CARD_SCROLL, 1)[0]}")
     # The answers' blink count: the state word's third byte, which `Card_Mess_disp` steps.
@@ -2278,7 +2287,7 @@ def option_trace(game: Game) -> str:
     menu's row, the sound page's row, a change's wait, the speaker mode, the sound quality (`Config_get_squal`), the
     two volumes and the arrows' five blink counts."""
     task = TASKS + 0x24
-    if game.u32(task + 4) != OPTION_TASK:
+    if game.u32(task + 4) not in OPTION_TASKS:
         return "-"
     frequency, depth = game.u32(SOUND_FREQUENCY), game.u32(SOUND_DEPTH)
     quality = {(0xAC44, 16): 0, (0x5622, 16): 1, (0x5622, 8): 2}.get((frequency, depth), -1)
@@ -2297,7 +2306,7 @@ def key_config_trace(game: Game) -> str:
     model's: its work's four routine bytes, place, turn, four motion bytes and weapon type, then whether it has
     turned (`0x6893D4`), whether it is turning back (`0x6893CC`), and `FUN_0044b3c0`'s pseudo keys (`0x689384`),
     count (`0x6893A0`), step (`0x6893D8`), kept step (`0x6893DC`) and row (`0x525AB4`)."""
-    if game.u32(TASKS + 0x24 + 4) != OPTION_TASK:
+    if game.u32(TASKS + 0x24 + 4) not in OPTION_TASKS:
         return "kc=- kcj=- kcm=-"
     page = ",".join(str(value) for value in (*game.i32s(KEY_COUNT, 1), *game.i32s(KEY_SLIDE, 1), game.u8(KEY_CHOICE)))
     joypad = ",".join(f"{value & 0xFFFFFFFF:x}" for value in game.i32s(KEY_JOYPAD_TEMP, 32))

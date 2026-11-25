@@ -114,6 +114,7 @@ fn action_keys(action: Action) -> &'static [&'static str] {
         Action::QuickTurn => &["keys.quick_turn"],
         Action::Reload => &["keys.reload"],
         Action::Map => &["keys.map"],
+        Action::Option => &["keys.option"],
         Action::WeaponPrev => &["keys.weapon_prev"],
         Action::WeaponNext => &["keys.weapon_next"],
         Action::TargetPrev => &["keys.target_prev"],

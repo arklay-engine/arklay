@@ -38,6 +38,7 @@
 mod bot;
 mod debug_hud;
 mod debug_view;
+mod re2_config;
 mod script;
 mod watch;
 
@@ -735,6 +736,7 @@ pub fn run_with_options(
                         re2_banks: None,
                         re2_typewriter: None,
                         re2_game_mode: None,
+                        re2_option: None,
                         re2_save_screen: None,
                         re2_save_scroll: None,
                         re2_save_blink: None,
@@ -2323,6 +2325,16 @@ struct GameSession {
     /// The `fg_stop` the hand-off puts back on R+1 (`0x6897C8`): the word
     /// `Sce_Save` saved before its prompt, and whatever the screen set.
     re2_save_stop: u32,
+    /// RE2's option screen entered from play ([`re2_config::Re2Config`]).
+    re2_config: Option<re2_config::Re2Config>,
+    /// That screen while it runs (`ui/title.lua`'s option task).
+    re2_config_screen: Option<Box<LuaScreen>>,
+    /// What `FUN_0044af00` kept of the player for the screen's end.
+    re2_config_player: Option<re2_config::KeptPlayer>,
+    /// The volumes the screen shows, as it last published them.
+    re2_config_shown: [Option<u8>; 2],
+    /// Volumes the screen changed, for the app to take.
+    re2_config_volumes: Option<[u8; 2]>,
     /// What the screens keep past a screen (`api:keep`): the app's, shared
     /// with it once the app starts the session.
     screen_statics: ui::ScreenStatics,
@@ -2844,10 +2856,12 @@ fn re2_live_pad(ui: &UiInput, input: &player::Input) -> u16 {
 
 /// A press that ends RE 2's demo whatever the reel holds: START and the
 /// port's own buttons, which have no held level and no reel's word has,
-/// and F9, whose `Vk_press` bit (`0x40`) `Pad_set` takes as a key in a
-/// demo.
+/// F9, whose `Vk_press` bit (`0x40`) `Pad_set` takes as a key in a demo,
+/// and the option key, the live pad's `0x100` (Ctrl's; arklay's F5 is the
+/// same action).
 fn re2_demo_press(ui: &UiInput, input: &player::Input) -> bool {
     ui.start
+        || ui.option
         || ui.return_title
         || ui.system_menu
         || ui.page_left
@@ -3469,6 +3483,11 @@ impl GameSession {
             re2_status_return: None,
             re2_save: None,
             re2_save_stop: 0,
+            re2_config: None,
+            re2_config_screen: None,
+            re2_config_player: None,
+            re2_config_shown: [None; 2],
+            re2_config_volumes: None,
             screen_statics: ui::ScreenStatics::default(),
             #[cfg(test)]
             re2_stopped_enemy_passes: 0,
@@ -3800,6 +3819,7 @@ impl GameSession {
             .map(|ticks| ticks + 1)
             .filter(|&ticks| re2_status_return_alpha(ticks).is_some());
         self.step_re2_save();
+        self.step_re2_config();
         let result = self.tick_session(pack, ui, input, action);
         self.swap_cbuff();
         if start_box {
@@ -4026,8 +4046,10 @@ impl GameSession {
             // of the tick a START was pressed on.
             // The word was never masked for it, so nothing is put back.
             self.menu_request = None;
-            // The map key is tested with START, so it is dropped with it.
+            // The map key is tested with START, so it is dropped with it,
+            // and the option key too.
             self.game.re2_key_map = None;
+            self.game.re2_config_request = false;
         }
         if !self.re2_start_waits() {
             self.finish_menu_request(pack);
@@ -4674,6 +4696,11 @@ impl GameSession {
         if self.tick_re2_save_hand_off(pack) {
             return Ok(());
         }
+        // RE2's option screen from play (`Config`): START's open, the
+        // screen, and `Game_loop`'s steps 8 and 0xB back.
+        if self.tick_re2_config(pack, ui) {
+            return Ok(());
+        }
         if self.save_screen.is_some() {
             self.step_sound_fade();
             self.tick_save_screen(pack, ui);
@@ -4961,7 +4988,10 @@ impl GameSession {
             // (`Key_trg & 0x4000`, `0x4C0379`): the status screen opens in
             // its mode 3, the map key's map, also with START on the tick.
             let re2_map = self.game.is_re2_room && ui.map;
-            let request = if ui.start || re2_map {
+            // And the option key, before both (`0x9885FE`'s `0x100`): the
+            // option screen opens where START's would.
+            let re2_option = self.wants_re2_config(ui);
+            let request = if ui.start || re2_map || re2_option {
                 Some(MenuRequest::Menu)
             } else if ui.map {
                 // The port's map button opens the map straight from free play,
@@ -4984,6 +5014,8 @@ impl GameSession {
                 if re2_map {
                     self.game.request_re2_key_map(ui.start);
                 }
+                self.game.re2_config_request = re2_option;
+                self.game.re2_config_start_too = ui.start;
                 // RE2's `Game_loop` takes START after the scripts: it plays
                 // the decide cue and leaves for game mode 1 before anyone
                 // moves (`0x4C0379`). The room's tick plays the cue, after
@@ -6673,6 +6705,9 @@ impl GameSession {
         if let Some(save) = self.re2_save.filter(|_| self.game.is_re2_room) {
             return save.view();
         }
+        if let Some(config) = self.re2_config.filter(|_| self.game.is_re2_room) {
+            return config.view();
+        }
         if self.menu.is_none() || !self.game.is_re2_room {
             return None;
         }
@@ -6735,9 +6770,11 @@ impl GameSession {
         self.game.message_flags = message_flags;
         if self.transition.is_some() || self.movie.is_some() || !self.death.is_idle() {
             self.game.re2_key_map = None;
+            self.game.re2_config_request = false;
             return;
         }
         match kind {
+            MenuRequest::Menu if self.game.re2_config_request => self.begin_re2_config_open(),
             MenuRequest::Menu if self.game.re2_key_map.is_some() => {
                 self.begin_re2_key_map_open(pack);
             }
@@ -8109,6 +8146,11 @@ impl GameSession {
     /// screen writes, so the file loads through `--load` and the reference's
     /// `--test-load`.
     fn write_save(&self, path: &Path) -> Result<()> {
+        if self.re2_config.is_some() {
+            // The player stands in the option screen's place until
+            // `FUN_0044b020` puts them back.
+            bail!("no save while RE 2's option screen from play is up");
+        }
         write_save_file(&self.game, path)
     }
 
@@ -9442,6 +9484,8 @@ impl GameSession {
         let flags = &self.game.flags[5];
         !self.room_boot_gate
             && self.cutscene_skip.is_none()
+            // RE 2's option screen has the player in its own place.
+            && self.re2_config.is_none()
             && !self.in_demo()
             && !self.cutscene_skip_taken_over()
             && !self.return_title_requested
@@ -10181,11 +10225,18 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.game.re2_typewriter_trace()),
-            // Only the typewriter's hand-off sets a game mode so far.
-            re2_game_mode: self
-                .game
-                .is_re2_room
-                .then(|| self.re2_save.map_or(0, Re2Save::game_mode)),
+            // The typewriter's hand-off and the option screen's set a game
+            // mode so far, and the option key's press.
+            re2_game_mode: self.game.is_re2_room.then(|| {
+                if self.game.re2_config_request {
+                    1
+                } else if let Some(config) = self.re2_config {
+                    config.game_mode()
+                } else {
+                    self.re2_save.map_or(0, Re2Save::game_mode)
+                }
+            }),
+            re2_option: self.game.is_re2_room.then(|| self.re2_config_trace()),
             re2_save_screen: self.game.is_re2_room.then(|| self.re2_save_screen_trace()),
             re2_save_scroll: self.game.is_re2_room.then(|| self.re2_save_scroll_trace()),
             re2_save_blink: self
@@ -10453,7 +10504,9 @@ impl GameSession {
             // The get-item window's screen and its black cover the room.
             self.framebuffer.clear();
             self.gpu_scene_visible = false;
-        } else if self.re2_save.and_then(Re2Save::view) == Some(Re2StatusView::Black) {
+        } else if self.re2_save.and_then(Re2Save::view) == Some(Re2StatusView::Black)
+            || self.re2_config.and_then(re2_config::Re2Config::view) == Some(Re2StatusView::Black)
+        {
             // The typewriter hand-off's black, and the save screen over it.
             self.framebuffer.clear();
             self.gpu_scene_visible = false;
@@ -10749,6 +10802,7 @@ impl GameSession {
                 screen.draw(&cx, framebuffer);
             }
         }
+        self.draw_re2_config(pack);
         if self.save_screen.is_some() {
             let Self {
                 save_screen,
@@ -13289,6 +13343,10 @@ impl App {
     fn open_system_menu(&mut self, mut menu: gui::SystemMenu) {
         if let Mode::Play(session) = &mut self.mode {
             menu.set_play_time(session.game.play_timer());
+            // Only RE 2's `Game_loop` reads the option key.
+            if !session.game.is_re2_room {
+                menu.hide_actions(&[Action::Option]);
+            }
             session.open_system_menu();
             self.system_menu = Some(Box::new(menu));
         }
@@ -13698,6 +13756,7 @@ impl App {
         let mut saved_slot = None;
         let mut saved_file = None;
         let mut autosave = None;
+        let mut volumes = None;
         {
             let App { pack, mode, .. } = self;
             let Mode::Play(session) = mode else {
@@ -13728,6 +13787,7 @@ impl App {
                 saved_slot = session.saved_slot.take();
                 saved_file = session.saved_file.take();
                 autosave = session.take_autosave();
+                volumes = session.take_re2_config_volumes();
                 clear_game = session
                     .take_clear_game_request()
                     .map(|id| (id, session.ending_flow(id)));
@@ -13741,6 +13801,17 @@ impl App {
         }
         if let Some(stage) = re2_stage {
             self.re2_stage = stage;
+        }
+        // The option screen from play changed the volumes: they are the
+        // run's, and the settings' in the interactive game, as the title's
+        // page makes them.
+        if let Some(volumes) = volumes
+            && self.screen_volumes != volumes
+        {
+            self.screen_volumes = volumes;
+            if self.volumes_are_settings {
+                self.volume_change = Some(volumes);
+            }
         }
         if demo_over {
             // The demo's last tick is still the game's: the title opens on
@@ -14756,38 +14827,10 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
         } else {
             line.push_str(" pro=- prs=- prz=-");
         }
-        if v("opt_on") != 0 {
-            line.push_str(&format!(
-                " opt={},{},{},{},{},{},{},{},{},{},{},{},{},{}",
-                v("opt_step"),
-                v("opt_state"),
-                v("opt_cursor"),
-                v("opt_type"),
-                v("opt_wait"),
-                v("opt_speaker"),
-                v("opt_quality"),
-                v("opt_bgm"),
-                v("opt_se"),
-                v("opt_blink_mode"),
-                v("opt_blink_quality"),
-                v("opt_blink_bgm"),
-                v("opt_blink_se"),
-                v("opt_blink_exit"),
-            ));
-        } else {
-            line.push_str(" opt=-");
-        }
-        // KEYCONFIG's page, as `scripts/oracle-re2.py`'s `kc` has it: the
-        // script writes the field's value itself.
-        match screen.state_str("kc") {
-            Some(page) => line.push_str(&format!(" kc={page}")),
-            None => line.push_str(" kc=-"),
-        }
-        // Its model, as the oracle's `kcm` has it.
-        match screen.state_str("kcm") {
-            Some(model) => line.push_str(&format!(" kcm={model}")),
-            None => line.push_str(" kcm=-"),
-        }
+        // The option screen, KEYCONFIG's page and its model, as
+        // `scripts/oracle-re2.py`'s `opt`, `kc` and `kcm` have them.
+        line.push(' ');
+        line.push_str(&re2_config::option_trace_fields(screen));
         // The gallery's task, as `scripts/oracle-re2.py`'s `gal` and `galv`
         // have it.
         if v("gal_on") != 0 {
@@ -18875,7 +18918,7 @@ fn movie_buttons(ui: UiInput, input: player::Input) -> u16 {
     if input.fire || input.fire_pressed {
         word |= crate::movie::FIRE_BUTTON;
     }
-    if ui.system_menu {
+    if ui.system_menu || ui.option {
         word |= crate::movie::OPTION_BUTTON;
     }
     word
@@ -18923,7 +18966,7 @@ fn movie_buttons_held(active: u64) -> u16 {
     if active & KEY_FIRE != 0 {
         word |= crate::movie::FIRE_BUTTON;
     }
-    if active & KEY_SYSTEM != 0 {
+    if active & (KEY_SYSTEM | KEY_OPTION) != 0 {
         word |= crate::movie::OPTION_BUTTON;
     }
     word
@@ -21135,12 +21178,28 @@ fn tick_room_timed(
         raised = false;
     }
     if start || raised {
-        // The map key's `Key_trg`, as this tick's `Pad_set` left it.
-        let asked = start && context.game.confirm_re2_key_map();
         let shut = context.game.re2_status_gate_shut(hook_message);
+        // The option key is tested first, on the raw pad's edge, which a
+        // stop doesn't mask: under the gate alone (no scene's bars test) and
+        // only with `fg_status`'s `0x8000` still down, so a script's raised
+        // bit keeps its status screen. Its screen wins over the map key's
+        // and START's.
+        let option = start && context.game.re2_config_request;
+        let config = option && !raised && !shut;
+        if option && !config {
+            context.game.re2_config_request = false;
+        }
+        // START and the map key: the map key's `Key_trg`, as this tick's
+        // `Pad_set` left it.
+        let others = start
+            && (!option || context.game.re2_config_start_too || context.game.re2_key_map.is_some());
+        let asked = others && context.game.confirm_re2_key_map();
+        if config {
+            context.game.re2_key_map = None;
+        }
         // The keys want no scene's bars either; the bit wants the rest of
         // the gate, which START's press was asked under.
-        let key = asked && !shut && !context.game.scene_bars();
+        let key = config || (asked && !shut && !context.game.scene_bars());
         let bit = raised
             && !shut
             && !context.game.re2_status_gate_held
@@ -21758,6 +21817,7 @@ const KEY_WEAPON_PREV: u64 = Action::WeaponPrev.bit();
 const KEY_WEAPON_NEXT: u64 = Action::WeaponNext.bit();
 const KEY_TARGET_PREV: u64 = Action::TargetPrev.bit();
 const KEY_TARGET_NEXT: u64 = Action::TargetNext.bit();
+const KEY_OPTION: u64 = Action::Option.bit();
 /// F1, or the gamepad's back and start pressed together.
 const KEY_F1: u64 = controls::DEBUG_MENU_BIT;
 const KEY_F9: u64 = controls::RETURN_TITLE_BIT;
@@ -22420,6 +22480,7 @@ impl InputState {
                 return_title: pressed & KEY_F9 != 0,
                 system_menu: pressed & KEY_SYSTEM != 0,
                 map: pressed & KEY_MAP != 0,
+                option: pressed & KEY_OPTION != 0,
                 weapon_step: step(KEY_WEAPON_PREV, KEY_WEAPON_NEXT),
                 equip_slot: controls::EQUIP_SLOTS
                     .iter()
@@ -28683,6 +28744,332 @@ mod tests {
             ..player::Input::default()
         };
         session.tick(pack, ui, pad, false).unwrap();
+    }
+
+    /// [`debug_menu_pack`] with RE 2's title script, whose option task is
+    /// the option screen from play.
+    fn re2_config_pack(dir: &TempDir) -> (Pack, RoomId) {
+        let (pack, a, _) = debug_menu_pack(dir);
+        let mut writer = PackWriter::new();
+        for path in pack.paths() {
+            writer
+                .add(path, pack.read(path).unwrap().into_owned())
+                .unwrap();
+        }
+        for (path, source) in [
+            (
+                "ui/cr_text.lua",
+                include_str!("../games/re2/ui/cr_text.lua"),
+            ),
+            (
+                "ui/prologue.lua",
+                include_str!("../games/re2/ui/prologue.lua"),
+            ),
+            (
+                "ui/gallery.lua",
+                include_str!("../games/re2/ui/gallery.lua"),
+            ),
+            ("ui/title.lua", include_str!("../games/re2/ui/title.lua")),
+        ] {
+            writer.add(path, source.as_bytes().to_vec()).unwrap();
+        }
+        let path = dir.0.join("config.akpak");
+        writer.write(&path).unwrap();
+        (Pack::open(&path).unwrap(), a)
+    }
+
+    /// An RE 2 room in play with START's gate open.
+    fn re2_config_session(pack: &Pack, room: RoomId) -> Box<GameSession> {
+        let mut session = GameSession::from_room(pack, room, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.message_flags |= START_MESSAGE_BITS;
+        session
+    }
+
+    fn re2_option_press() -> UiInput {
+        UiInput {
+            option: true,
+            any: true,
+            ..UiInput::default()
+        }
+    }
+
+    /// From the option key's press to the tick the screen's menu reads the
+    /// pad: the press asks for START's request with the decide cue, the
+    /// open runs START's five ticks, and step 5 starts `Config` on the
+    /// sixth, with the player in the page's place.
+    fn re2_open_config(session: &mut GameSession, pack: &Pack, press: UiInput) {
+        re2_tick(session, pack, press);
+        assert!(session.menu_request.is_some(), "the screen is asked for");
+        assert!(session.game.re2_config_request);
+        assert!(session.re2_config.is_none(), "game mode 1");
+        for open in 1..re2_config::RE2_CONFIG_START {
+            re2_tick(session, pack, UiInput::default());
+            assert_eq!(session.re2_config, Some(re2_config::Re2Config::Open(open)));
+            assert!(session.menu.is_none(), "no status screen");
+            assert_eq!(
+                session.re2_status_view(),
+                Some(re2_status_open_view(open)),
+                "START's open"
+            );
+        }
+        re2_tick(session, pack, UiInput::default());
+        assert_eq!(session.re2_config, Some(re2_config::Re2Config::Screen));
+        let screen = session.re2_config_screen.as_ref().expect("the screen runs");
+        assert_eq!(screen.value("opt_step"), 1, "its step 0 ran");
+        assert_eq!(session.game.entities[0].pos, [-1530, 2020, 2700]);
+        assert_eq!(session.game.entities[0].angle, 0xC00);
+        assert!(session.re2_config_trace().starts_with("opt=1,0,"));
+        let repeat = session.game.pad_repeat;
+        assert_eq!(
+            (repeat.mask, repeat.delays),
+            (0xF01C, 0x040C),
+            "`Pad_rep_set`"
+        );
+        // `Config_main`'s state 0 waits out the fade in.
+        for _ in 0..5 {
+            re2_tick(session, pack, UiInput::default());
+        }
+        let screen = session.re2_config_screen.as_ref().unwrap();
+        assert_eq!(screen.value("opt_state"), 1, "the menu");
+    }
+
+    /// `Game_loop` opens the option screen on the option key (`0x9885FE &
+    /// 0x100`) where it opens the status screen on START, and puts play
+    /// back through steps 8 and 0xB: the screen's step 2 puts the player
+    /// back and loads the room's picture, the next tick is step 8's and
+    /// the one after it game mode 3's, which hands the room back.
+    #[test]
+    fn re2_option_key_opens_the_option_screen_and_play_resumes() {
+        let dir = TempDir::new();
+        let (pack, a) = re2_config_pack(&dir);
+        let mut session = re2_config_session(&pack, a);
+        let place = session.game.entities[0].pos;
+        let angle = session.game.entities[0].angle;
+        session.game.re2.player.routine = [1, 0, 1, 0];
+        session.game.re2.player.move_no = 2;
+        re2_open_config(&mut session, &pack, re2_option_press());
+        // KEYCONFIG's model is `pPl`: what the page does to it,
+        // `FUN_0044b020` puts back.
+        session.game.re2.player.routine = [1, 6, 0, 0];
+        session.game.re2.player.move_no = 0xA;
+        // The cancel key leaves: 0x16's fade, 0x17, then step 2.
+        let cancel = UiInput {
+            cancel: true,
+            any: true,
+            ..UiInput::default()
+        };
+        re2_tick(&mut session, &pack, cancel);
+        let mut ticks = 0;
+        while session.re2_config == Some(re2_config::Re2Config::Screen) {
+            ticks += 1;
+            assert!(ticks < 60, "the screen never ended");
+            assert_eq!(session.game.entities[0].pos, [-1530, 2020, 2700]);
+            re2_tick(&mut session, &pack, UiInput::default());
+        }
+        assert_eq!(ticks, 34, "as the title's way out");
+        assert_eq!(session.re2_config, Some(re2_config::Re2Config::Closed));
+        assert!(session.re2_config_screen.is_none());
+        assert_eq!(session.re2_config_trace(), "opt=- kc=- kcm=-");
+        assert_eq!(session.game.entities[0].pos, place, "the player is back");
+        assert_eq!(session.game.entities[0].angle, angle);
+        assert_eq!(session.game.re2.player.routine, [1, 0, 1, 0]);
+        assert_eq!(session.game.re2.player.move_no, 2);
+        assert_eq!(session.re2_status_view(), Some(Re2StatusView::Black));
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert_eq!(session.re2_config, Some(re2_config::Re2Config::Woken));
+        assert!(session.re2_status_return.is_none(), "step 8");
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert_eq!(session.re2_config, Some(re2_config::Re2Config::Return));
+        assert_eq!(session.re2_status_return, Some(1), "game mode 3 fades in");
+        assert_eq!(re2_config::Re2Config::Return.game_mode(), 5);
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(session.re2_config.is_none());
+        assert!(session.menu.is_none() && session.menu_request.is_none());
+    }
+
+    /// `Game_loop` tests the option key under the gate alone: a scene's
+    /// bars (`fg_status & 0x10`), which refuse START and the map key, don't
+    /// refuse it. With a script's `fg_status & 0x8000` already up it sets
+    /// nothing, and the bit's status screen opens.
+    #[test]
+    fn re2_option_key_takes_the_bars_and_leaves_a_scripts_status_bit() {
+        let dir = TempDir::new();
+        let (pack, a) = re2_config_pack(&dir);
+        let mut session = re2_config_session(&pack, a);
+        session
+            .game
+            .re2
+            .set_flag(1, crate::scd2::host::STATUS_SCENE, 1);
+        re2_open_config(&mut session, &pack, re2_option_press());
+
+        let mut session = re2_config_session(&pack, a);
+        session.game.re2_status_raised = true;
+        re2_tick(&mut session, &pack, re2_option_press());
+        assert!(!session.game.re2_config_request, "no option screen");
+        assert!(session.menu_request.is_some(), "the status screen's");
+        for _ in 0..re2_config::RE2_CONFIG_START {
+            re2_tick(&mut session, &pack, UiInput::default());
+        }
+        assert!(session.re2_config.is_none());
+        assert!(session.menu.is_some());
+    }
+
+    /// A pack whose title doesn't take `config` (one built before the
+    /// option screen from play) would run its own title over play: the
+    /// open hands the room back instead, with the player where they were.
+    #[test]
+    fn re2_option_key_on_an_older_title_hands_the_room_back() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut writer = PackWriter::new();
+        for path in pack.paths() {
+            writer
+                .add(path, pack.read(path).unwrap().into_owned())
+                .unwrap();
+        }
+        let title = "local M = {}
+            function M.update(api, input) end
+            function M.draw() end
+            return M";
+        writer
+            .add("ui/title.lua", title.as_bytes().to_vec())
+            .unwrap();
+        let path = dir.0.join("old.akpak");
+        writer.write(&path).unwrap();
+        let pack = Pack::open(&path).unwrap();
+        let mut session = re2_config_session(&pack, a);
+        let place = session.game.entities[0].pos;
+        re2_tick(&mut session, &pack, re2_option_press());
+        for _ in 0..re2_config::RE2_CONFIG_START {
+            re2_tick(&mut session, &pack, UiInput::default());
+        }
+        assert!(session.re2_config_screen.is_none(), "no screen");
+        assert_eq!(session.re2_config, Some(re2_config::Re2Config::Closed));
+        assert_eq!(session.game.entities[0].pos, place);
+        for _ in 0..3 {
+            re2_tick(&mut session, &pack, UiInput::default());
+        }
+        assert!(session.re2_config.is_none(), "play again");
+    }
+
+    /// The option key is tested before the map key and START, and step 5
+    /// tests its `fg_system` bit before it starts `Status`: with all three
+    /// on one tick the option screen opens, and neither the status screen
+    /// nor the map key's map.
+    #[test]
+    fn re2_option_key_wins_over_start_and_the_map_key() {
+        let dir = TempDir::new();
+        let (pack, a) = re2_config_pack(&dir);
+        let mut session = re2_config_session(&pack, a);
+        let press = UiInput {
+            start: true,
+            map: true,
+            ..re2_option_press()
+        };
+        re2_open_config(&mut session, &pack, press);
+        assert!(session.game.re2_key_map.is_none());
+        assert!(session.game.re2_items.is_none());
+    }
+
+    /// No option key opens the screen while a demo owns the pad: the
+    /// executable's `Vk_press & 2` is skipped under `fg_system & 0x2000`,
+    /// and a reel's pad is the recorded one.
+    #[test]
+    fn re2_option_key_opens_nothing_in_a_demo() {
+        let dir = TempDir::new();
+        let (pack, a) = re2_config_pack(&dir);
+        let mut session = re2_config_session(&pack, a);
+        assert!(session.wants_re2_config(re2_option_press()));
+        session.re2_demo = Some(Re2Demo::new(crate::demo2::Reel {
+            entry: String::new(),
+            stage: 0,
+            room: 0,
+            cut: 0,
+            equipped: 0,
+            equipped_slot: 0,
+            key_type: 0,
+            player: 0,
+            items: [[0; 4]; crate::demo2::ITEM_SLOTS],
+            pos: [0; 3],
+            angle: 0,
+            pads: vec![0; 100],
+        }));
+        assert!(!session.wants_re2_config(re2_option_press()));
+        // The live pad's `0x100` is a key that ends the demo.
+        assert!(re2_demo_press(
+            &re2_option_press(),
+            &player::Input::default()
+        ));
+        session.re2_demo = None;
+        session.game.is_re2_room = false;
+        assert!(
+            !session.wants_re2_config(re2_option_press()),
+            "RE 1 has none"
+        );
+    }
+
+    /// A volume the SOUND page changes is the run's: the save's, and the
+    /// app's to take once.
+    #[test]
+    fn re2_option_screen_from_play_writes_its_volumes_back() {
+        let dir = TempDir::new();
+        let (pack, a) = re2_config_pack(&dir);
+        let mut session = re2_config_session(&pack, a);
+        session.game.re2.volumes = Some([80, 60]);
+        re2_open_config(&mut session, &pack, re2_option_press());
+        let screen = session.re2_config_screen.as_ref().unwrap();
+        assert_eq!(screen.value("opt_bgm"), 80, "the page shows the run's");
+        assert_eq!(screen.value("opt_se"), 60);
+        let down = UiInput {
+            down: true,
+            held_down: true,
+            any: true,
+            ..UiInput::default()
+        };
+        let confirm = UiInput {
+            confirm: true,
+            any: true,
+            ..UiInput::default()
+        };
+        re2_tick(&mut session, &pack, down);
+        re2_tick(&mut session, &pack, UiInput::default());
+        re2_tick(&mut session, &pack, down);
+        re2_tick(&mut session, &pack, UiInput::default());
+        re2_tick(&mut session, &pack, confirm);
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert_eq!(
+            session
+                .re2_config_screen
+                .as_ref()
+                .unwrap()
+                .value("opt_state"),
+            4,
+            "the SOUND page"
+        );
+        // Down to BGM VOLUME, then left: one step down.
+        for _ in 0..2 {
+            re2_tick(&mut session, &pack, down);
+            re2_tick(&mut session, &pack, UiInput::default());
+        }
+        assert_eq!(session.take_re2_config_volumes(), None);
+        let left = UiInput {
+            left: true,
+            held_left: true,
+            any: true,
+            ..UiInput::default()
+        };
+        re2_tick(&mut session, &pack, left);
+        assert_eq!(session.take_re2_config_volumes(), Some([79, 60]));
+        assert_eq!(session.take_re2_config_volumes(), None, "taken once");
+        assert_eq!(session.game.re2.volumes, Some([79, 60]));
+    }
+
+    /// `FUN_0044af00`'s handgun for each `Id`.
+    #[test]
+    fn re2_option_screens_model_holds_the_players_handgun() {
+        let weapons: Vec<u16> = (0..=15).map(re2_config::page_weapon).collect();
+        assert_eq!(weapons, [2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 0x13, 2, 1, 3, 0]);
     }
 
     /// The map key's press, with START too or without.
@@ -40367,6 +40754,16 @@ off_0010:
             crate::movie::OPTION_BUTTON
         );
         assert_eq!(movie_buttons_held(KEY_SYSTEM), crate::movie::OPTION_BUTTON);
+        // The option action is that key too.
+        let option = UiInput {
+            option: true,
+            ..UiInput::default()
+        };
+        assert_eq!(
+            movie_buttons(option, player::Input::default()),
+            crate::movie::OPTION_BUTTON
+        );
+        assert_eq!(movie_buttons_held(KEY_OPTION), crate::movie::OPTION_BUTTON);
     }
 
     #[test]

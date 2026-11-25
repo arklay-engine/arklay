@@ -152,6 +152,9 @@ pub struct TraceTick<'a> {
     /// RE2's game mode (`Game`), the oracle's `gm` (`gi`'s first value).
     /// arklay follows it only on the typewriter's path.
     pub re2_game_mode: Option<u8>,
+    /// RE2's option screen from play, the oracle's `opt`, `kc` and `kcm`
+    /// fields, written as they are.
+    pub re2_option: Option<String>,
     /// RE2's save screen, the oracle's `sv` field: `Card_access`'s work
     /// while the typewriter's screen runs, `-` otherwise.
     pub re2_save_screen: Option<String>,
@@ -428,6 +431,9 @@ impl TraceWriter {
         if let Some(mode) = tick.re2_game_mode {
             write!(self.out, " gm={mode}")?;
         }
+        if let Some(fields) = &tick.re2_option {
+            write!(self.out, " {fields}")?;
+        }
         if let Some(screen) = &tick.re2_save_screen {
             write!(self.out, " sv={screen}")?;
         }
@@ -585,6 +591,7 @@ mod tests {
             re2_banks: None,
             re2_typewriter: None,
             re2_game_mode: None,
+            re2_option: None,
             re2_save_screen: None,
             re2_save_scroll: None,
             re2_save_blink: None,
@@ -663,6 +670,7 @@ mod tests {
                 re2_banks: None,
                 re2_typewriter: None,
                 re2_game_mode: None,
+                re2_option: None,
                 re2_save_screen: None,
                 re2_save_scroll: None,
                 re2_save_blink: None,
@@ -737,6 +745,7 @@ mod tests {
                 re2_banks: None,
                 re2_typewriter: None,
                 re2_game_mode: None,
+                re2_option: None,
                 re2_save_screen: None,
                 re2_save_scroll: None,
                 re2_save_blink: None,
@@ -809,6 +818,7 @@ mod tests {
                 re2_banks: None,
                 re2_typewriter: None,
                 re2_game_mode: None,
+                re2_option: None,
                 re2_save_screen: None,
                 re2_save_scroll: None,
                 re2_save_blink: None,
@@ -881,6 +891,7 @@ mod tests {
             re2_banks: None,
             re2_typewriter: None,
             re2_game_mode: None,
+            re2_option: None,
             re2_save_screen: None,
             re2_save_scroll: None,
             re2_save_blink: None,
@@ -964,6 +975,7 @@ mod tests {
             re2_banks: None,
             re2_typewriter: None,
             re2_game_mode: None,
+            re2_option: None,
             re2_save_screen: None,
             re2_save_scroll: None,
             re2_save_blink: None,
@@ -1057,6 +1069,7 @@ mod tests {
             re2_banks: None,
             re2_typewriter: Some("tw=4e9930,1,1".to_string()),
             re2_game_mode: Some(0),
+            re2_option: None,
             re2_save_screen: Some("-".to_string()),
             re2_save_scroll: None,
             re2_save_blink: None,
@@ -1130,6 +1143,7 @@ mod tests {
             re2_banks: None,
             re2_typewriter: None,
             re2_game_mode: None,
+            re2_option: None,
             re2_save_screen: None,
             re2_save_scroll: None,
             re2_save_blink: None,

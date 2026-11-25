@@ -24,6 +24,10 @@ pub const TITLE_SETTING: (u16, u16) = (0x5000, 0x020A);
 /// and the aim key's neighbours, a first delay of 10 and a period of 6. The
 /// flag is up on the press, 11 ticks after it, then every 7.
 pub const STATUS_SETTING: (u16, u16) = (0xF01C, 0x060A);
+/// The setting the option screen gives (`Config_set_data`, `0x44AD40`): the
+/// status screen's mask with a first delay of 12 and a period of 4. It
+/// outlasts the screen, as the status screen's does.
+pub const CONFIG_SETTING: (u16, u16) = (0xF01C, 0x040C);
 
 /// `Pad_set`'s repeat state: the mask and delays (`0x98F074`, `0x98F078`),
 /// the counter (`0x533938`), the flag and the pad it saw.

@@ -2017,15 +2017,22 @@ local function option_task(api)
         s.rep_mask, s.rep_delay = 0xF01C, 0x40C
         s.limiter = 2
         key_work.choice = 0
-        -- `FUN_0044b100`, before it: the player KEYCONFIG's page shows is
-        -- Leon or Claire by the title's generator, a pick every visit, so
-        -- the title's later picks (its film, its demo) are one further on.
-        o.model = title_rnd(api, 2)
-        -- The model is the character's, holding their handgun (`Type`
-        -- `Id + 2`), from the files of the disc `fg_status` bit 31 names
-        -- (Claire's after her new game or gallery); the page's statics
-        -- outlive it.
-        api:option_model("make", o.model, o.model + 2, s.claire and 1 or 0)
+        if o.player then
+            -- From play `FUN_0044af00` runs in its place: the page's model
+            -- is the player as play has them, given the handgun it names.
+            api:option_model("make", o.player.id, o.player.weapon, o.player.disc)
+        else
+            -- `FUN_0044b100`, before it: the player KEYCONFIG's page shows
+            -- is Leon or Claire by the title's generator, a pick every
+            -- visit, so the title's later picks (its film, its demo) are
+            -- one further on.
+            o.model = title_rnd(api, 2)
+            -- The model is the character's, holding their handgun (`Type`
+            -- `Id + 2`), from the files of the disc `fg_status` bit 31
+            -- names (Claire's after her new game or gallery); the page's
+            -- statics outlive it.
+            api:option_model("make", o.model, o.model + 2, s.claire and 1 or 0)
+        end
         s.background = api:picture("ui/option/room")
         fade_set(0x200, -0x1800)
         o.step = 1
@@ -2036,7 +2043,12 @@ local function option_task(api)
         option_keep(api)
         key_keep(api)
     else
-        -- The exit: the task ends, and the title's wakes on the next tick.
+        -- The exit: the task ends, and the title's wakes on the next tick;
+        -- from play, `FUN_0044b020` puts the player back and `Game_loop`
+        -- wakes instead.
+        if o.player then
+            s.exit = "resume"
+        end
         s.opt = nil
         s.frame = "black"
     end
@@ -2783,6 +2795,21 @@ function M.open(api, args)
         for n = 0, 4 do
             s.gallery[n + 1] = args["gallery" .. n] or 0
         end
+    end
+    -- The same screen entered from play (`Config`, 0x449FD0), which
+    -- `Game_loop` starts on the option key with no title running:
+    -- `args.config` holds the player as `FUN_0044af00` leaves them, their
+    -- `id`, the handgun's `weapon` it gives them and the `disc` their files
+    -- come from. The screen runs from its step 0 on the first tick, and its
+    -- exit leaves for play (`"resume"`).
+    if args and args.config then
+        s.mv, s.init, s.fg_system = 0, 0, 0
+        s.background = nil
+        s.opt = option_new()
+        s.opt.player = { id = args.id or 0, weapon = args.weapon or 0, disc = args.disc or 0 }
+        -- The engine runs the screen from play only on a title that says
+        -- it took `config`: an older pack's title would start itself.
+        api:set("opt_config", 1)
     end
     moji_set_work()
     publish(api)

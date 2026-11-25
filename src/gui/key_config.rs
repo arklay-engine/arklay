@@ -58,6 +58,7 @@ const TABS: [Tab; 2] = [
                     ("interact", Action::Confirm),
                     ("inventory", Action::Start),
                     ("map", Action::Map),
+                    ("option", Action::Option),
                 ],
             ),
             (
@@ -164,6 +165,8 @@ pub struct KeyConfigScreen {
     dialog: Option<Dialog>,
     pub(super) device: Device,
     text: Locale,
+    /// Actions the running game doesn't read, left off the tabs.
+    hidden: Vec<Action>,
 }
 
 impl KeyConfigScreen {
@@ -182,7 +185,32 @@ impl KeyConfigScreen {
             dialog: None,
             device: Device::Keyboard,
             text,
+            hidden: Vec::new(),
         }
+    }
+
+    /// Leave `actions` off the tabs: the running game doesn't read them.
+    pub fn hide(&mut self, actions: &[Action]) {
+        self.hidden = actions.to_vec();
+        self.row = 0;
+        self.scroll = 0.0;
+    }
+
+    /// `tab`'s shown rows, by group.
+    fn groups(&self, tab: usize) -> impl Iterator<Item = (&'static str, Vec<Row>)> + '_ {
+        TABS[tab].1.iter().filter_map(|&(group, rows)| {
+            let rows: Vec<Row> = rows
+                .iter()
+                .copied()
+                .filter(|(_, action)| !self.hidden.contains(action))
+                .collect();
+            (!rows.is_empty()).then_some((group, rows))
+        })
+    }
+
+    /// `tab`'s shown rows in order.
+    fn tab_rows(&self, tab: usize) -> impl Iterator<Item = Row> + '_ {
+        self.groups(tab).flat_map(|(_, rows)| rows)
     }
 
     /// The screen for the gamepad's buttons, drawing `style`'s controller
@@ -220,18 +248,14 @@ impl KeyConfigScreen {
 
     /// The tab's rows in order.
     fn rows(&self) -> Vec<Row> {
-        TABS[self.tab]
-            .1
-            .iter()
-            .flat_map(|(_, rows)| rows.iter().copied())
-            .collect()
+        self.tab_rows(self.tab).collect()
     }
 
     /// The tab's list with its group headers.
     fn lines(&self) -> Vec<Line> {
         let mut lines = Vec::new();
         let mut row = 0;
-        for &(group, rows) in TABS[self.tab].1 {
+        for (group, rows) in self.groups(self.tab) {
             lines.push(Line::Group(group));
             for _ in rows {
                 lines.push(Line::Row(row));
@@ -274,12 +298,9 @@ impl KeyConfigScreen {
     /// The name an action goes by: its row on this tab, else the other's.
     fn action_label(&self, action: Action) -> String {
         let on = |tab: usize| {
-            TABS[tab]
-                .1
-                .iter()
-                .flat_map(|(_, rows)| rows.iter())
-                .find(|(_, a)| *a == action)
-                .map(|(key, _)| *key)
+            self.tab_rows(tab)
+                .find(|&(_, a)| a == action)
+                .map(|(key, _)| key)
         };
         let key = on(self.tab).or_else(|| on(1 - self.tab)).unwrap_or("");
         self.text.get(&format!("keys.{key}")).to_string()
@@ -349,16 +370,15 @@ impl KeyConfigScreen {
         let mut bindings = self.bindings.clone();
         let mut moved = Vec::new();
         let mut shared = Vec::new();
-        let on_tab = |tab: usize, action: Action| {
-            TABS[tab]
-                .1
-                .iter()
-                .flat_map(|(_, rows)| rows.iter())
-                .any(|&(_, a)| a == action)
-        };
+        let on_tab = |tab: usize, action: Action| self.tab_rows(tab).any(|(_, a)| a == action);
         let other_tab = 1 - self.tab;
         for other in ACTIONS {
-            if other == action || !bindings.get(other).contains(&source) {
+            // A hidden action keeps its keys: the running game doesn't
+            // read it, so sharing one is no clash.
+            if other == action
+                || !bindings.get(other).contains(&source)
+                || self.hidden.contains(&other)
+            {
                 continue;
             }
             if self.pad || (!on_tab(self.tab, other) && !on_tab(other_tab, action)) {
@@ -636,11 +656,7 @@ impl KeyConfigScreen {
             palette::TEXT,
             self.text.get(&format!("keys.{key}_note")),
         );
-        let other = TABS[1 - self.tab]
-            .1
-            .iter()
-            .flat_map(|(_, rows)| rows.iter())
-            .find(|(_, a)| *a == action);
+        let other = self.tab_rows(1 - self.tab).find(|&(_, a)| a == action);
         if let Some((other, _)) = other {
             let shared = self
                 .text
@@ -1440,6 +1456,30 @@ mod tests {
                 "{action:?}"
             );
         }
+    }
+
+    /// A game that doesn't read an action leaves its row off, and a key
+    /// bound to it stays bound when another row takes it.
+    #[test]
+    fn a_hidden_action_has_no_row_and_keeps_its_keys() {
+        let mut screen = screen();
+        let shown = screen.rows().len();
+        assert!(screen.rows().iter().any(|&(_, a)| a == Action::Option));
+        screen.hide(&[Action::Option]);
+        let rows = screen.rows();
+        assert_eq!(rows.len(), shown - 1);
+        assert!(rows.iter().all(|&(_, a)| a != Action::Option));
+        assert_eq!(
+            screen.lines().len(),
+            rows.len() + TABS[0].1.len(),
+            "every group still has its header"
+        );
+        screen.row = rows.iter().position(|&(_, a)| a == Action::Run).unwrap();
+        screen.capturing = true;
+        let ctrl = Source::key(SDL_SCANCODE_LCTRL);
+        let bindings = changed(screen.capture(ctrl, None));
+        assert!(keys(&bindings, Action::Run).contains(&ctrl));
+        assert!(keys(&bindings, Action::Option).contains(&ctrl));
     }
 
     #[test]

@@ -91,6 +91,9 @@ pub struct UiInput {
     /// Port-only: the map button's edge (M / the gamepad's back by default):
     /// opens the map straight from free play and closes it again.
     pub map: bool,
+    /// RE 2's option key's edge (the raw pad's `0x100`; Ctrl or F5 by
+    /// default): opens the option screen in play.
+    pub option: bool,
     /// Port-only: the weapon cycle's edge during free play (the mouse
     /// wheel by default): `-1` the previous weapon, `1` the next, `0` none.
     pub weapon_step: i8,

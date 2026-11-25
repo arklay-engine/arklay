@@ -338,6 +338,17 @@ impl LuaScreen {
         self.host.values.get(key).copied()
     }
 
+    /// RE 2's option screen opened from play: KEYCONFIG's model is the
+    /// player, `work` as play left it.
+    pub fn set_option_player(&mut self, work: &crate::player2::Work) {
+        self.host.option_model.set_player(work);
+    }
+
+    /// KEYCONFIG's model, once the page made it.
+    pub fn option_model(&self) -> Option<&crate::player2::keyconfig::PageModel> {
+        self.host.option_model.model()
+    }
+
     /// Drop a published value, as if the script never set it.
     pub fn forget(&mut self, key: &str) {
         self.host.values.remove(key);
