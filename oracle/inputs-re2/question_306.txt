@@ -1,0 +1,16 @@
+# room 306: the water lever, a room's question with argument 0x20 (the no cues, the yes is silent): its first page,
+# then right to No and the answer; the question again, answered Yes, and the water's scene (oracle/re2.md, "Room questions")
+364 action
+368
+430 action
+434
+480 right
+484
+500 action
+504
+600 action
+604
+660 action
+664
+720 action
+724

@@ -483,6 +483,33 @@ mod tests {
         );
     }
 
+    /// RE 2 has no loading narration: the session's request for RE 1's
+    /// narration finds no text in the pack (a global message, looked up by
+    /// its low six bits) and closes on its first tick.
+    #[test]
+    fn the_language_file_has_no_loading_narration() {
+        let exe = super::super::exe::ExeText::read(&super::super::exe::readable_image()).unwrap();
+        let file = language_file(&[], Some(&exe), &HashMap::new());
+        let mut writer = crate::pack::PackWriter::new();
+        let manifest = crate::manifest::Manifest::base(crate::convert_re2::BASE_PACK_ID);
+        writer
+            .add(crate::manifest::ENTRY, manifest.render().into_bytes())
+            .unwrap();
+        writer.add("language/en-US.txt", file.into_bytes()).unwrap();
+        let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let text = crate::text::Text::load(&pack, Some("en-US"));
+        let room = crate::state::RoomState::default();
+        // The same lookup finds the executable's first system message.
+        assert!(text.message(&room, 0x40).is_some());
+        for id in [
+            crate::game::MESSAGE_BOOT_NEW_GAME,
+            crate::game::MESSAGE_BOOT_CONTINUE,
+        ] {
+            let found = text.message(&room, u16::from(id)).map(|b| text.decode(b));
+            assert!(found.is_none(), "{id:#x}: {found:?}");
+        }
+    }
+
     /// The executable of the install `ARKLAY_RE2_ROOT` names, when it is set.
     fn installed_exe() -> Option<super::super::exe::ExeText> {
         let root = std::path::PathBuf::from(std::env::var_os("ARKLAY_RE2_ROOT")?);

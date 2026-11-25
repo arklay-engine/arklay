@@ -1,0 +1,36 @@
+# A room's questions (message_on, Mess_set's attr 0x300): their cues follow the argument after 0xFB, 0x60 for both
+# answers and 0x20 to silence the yes (Branch_disp, oracle/re2-deviations.md, "Messages").
+
+[[run]]
+name = "question_110"
+room = "110"
+setup_script = "question_110.lua"
+input = "question_110.txt"
+input_shift = 344
+# The reference goes on to 1400: on 1204, after the ladder's scene, arklay's Leon is knocked down where the original's
+# stands on (#926).
+ticks = 1204
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgstat"
+frames = [360, 1203]
+# 0.30 measured: the messages and their choices land on the original's pixels (0.09 in the text's band)
+frame_max_mean = 0.35
+# The questions on screen (365 to 520 and 601 to 720): 0.08 and 0.11; a choice row or page drawn wrong adds about 0.4
+frame_windows = [[365, 520, 0.15], [601, 720, 0.15]]
+expect = "match"
+record = "--no-enemies --life 200 --warp 110:-13889:-7200:7096:1024"
+
+[[run]]
+name = "question_306"
+room = "306"
+setup_script = "question_306.lua"
+input = "question_306.txt"
+input_shift = 344
+ticks = 1400
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgstat"
+frames = [360, 1399]
+# 0.43 measured, the question and its choices on the original's pixels
+frame_max_mean = 0.50
+# The questions on screen (365 to 520 and 601 to 720): 0.24 each; a choice row or page drawn wrong adds about 0.4
+frame_windows = [[365, 520, 0.30], [601, 720, 0.30]]
+expect = "match"
+record = "--no-enemies --life 200 --warp 306:-17309:-5400:-20592:0"
