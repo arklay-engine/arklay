@@ -34,3 +34,107 @@ frame_max_mean = 0.50
 frame_windows = [[365, 520, 0.30], [601, 720, 0.30]]
 expect = "match"
 record = "--no-enemies --life 200 --warp 306:-17309:-5400:-20592:0"
+
+# Room 20B's safe: its keypad asks for four digits, each a question of form 2 (the digits 1 to 6, argument 2, so no cue
+# for the answer), and main_02 cues each answer itself (main_03's se_on 266). The first try steers the first digit
+# right round past 6 and back left past 1, and enters 2-2-1-6: the wrong code takes the safe's cut away (main_02's
+# else). The second enters 2-2-3-6, which raises 4:37 and opens the safe (main_04): the Shotgun Shells' get-item
+# window and the police station map's question, both answered Yes.
+[[run]]
+name = "question_20b"
+room = "20B"
+setup_script = "question_20b.lua"
+input = "question_20b.txt"
+input_shift = 344
+ticks = 2000
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,mapfg,snd,msg,fgstat,fgcom,fgitem"
+frames = [360, 1999]
+frame_max_mean = 0.10
+# 0.04 measured; the two tries' questions on screen (365 to 830 and 961 to 1348) 0.01 each
+frame_windows = [[365, 830, 0.10], [961, 1348, 0.10]]
+expect = "match"
+record = "--no-enemies --life 200 --warp 20B:-11732:0:-10700:1024"
+
+# Room 214's weapons locker (aot 7, main_03): after its pages, "Will you equip it?" with form 6, Machine Gun/Side Pack
+# (argument 6, so no cue for the answer; main_03 plays the decide cue itself). The Side Pack, steered round both ends,
+# asks again (message 5, Yes/No, argument 0x40): No, with the cancel cue, leaves the locker as it was. The second visit takes the Machine Gun (aot 6, 0x0F
+# with 100 rounds, two slots) through the get-item window. A Yes to the Side Pack raises 29:1 and 8:63, makes the
+# player the next room's other id (save(32, 2)) and leaves by door 13, which no run takes.
+[[run]]
+name = "question_214"
+room = "214"
+setup_script = "question_214.lua"
+input = "question_214.txt"
+input_shift = 344
+ticks = 1300
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,mapfg,snd,msg,fgstat,fgcom,fgitem,pl"
+frames = [360, 1299]
+# 0.23 measured; the first question with its pages (405 to 580) 0.23, the Side Pack's (581 to 660) 0.22, and the second
+# visit's question and the get-item window to its close (801 to 1106) 0.13
+frame_max_mean = 0.30
+frame_windows = [[405, 580, 0.30], [581, 660, 0.30], [801, 1106, 0.30]]
+expect = "match"
+record = "--no-enemies --life 200 --warp 214:-14355:0:-7100:3072"
+
+# Room 213's reserve power panel (aot 3, main_04): its pages, then a question of form 3, Up/Down (argument 3, so no cue
+# for the answer; main_04 plays 266 with each lever's move), for each of five switches. Up adds 36 to variable 5 (to 100
+# at most) and Down takes 14 (to 0 at least); 80 is "Power supply OK". The first try steers the first switch round both
+# ends and answers Up, Up, Up, Down, Down (72, "Power supply slightly low."); the second, from a step back, answers Up,
+# Up, Down, Down, Up (80): 4:60, the sparks' sprites (sce_espr_on2) and cut 8. The gauge (object 2, which main_04 moves
+# with each answer) is compared; the levers' turns (objects 3 to 7, about z) aren't in the trace and are left to the frames.
+[[run]]
+name = "question_213"
+room = "213"
+setup_script = "question_213.lua"
+input = "question_213.txt"
+input_shift = 344
+ticks = 2800
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,mapfg,snd,msg,fgstat,fgcom,om2"
+frames = [360, 2799]
+# 0.26 measured; the two tries, each from the panel's first page to the power message's close (1472 and 2612), 0.27
+# and 0.28
+frame_max_mean = 0.35
+frame_windows = [[365, 1472, 0.35], [1473, 2612, 0.35]]
+expect = "match"
+record = "--no-enemies --life 200 --warp 213:-23900:0:-10725:2048"
+
+# Room 208's costume locker (aot 5, main_0D and main_0E for Leon): the Special Key's question (Yes) opens it (4:175),
+# then "There are two outfits that should fit you." and "Will you change your clothes?" (Yes/No), and Yes asks which:
+# Left/Right/Cancel (form 4, argument 4; main_0E plays the cues). The first visit steers round both ends and answers
+# Cancel (main_15's fade back), the second answers No, and the third Right: 4:173, save(32, 8) and door 30 back into
+# 208, which loads the room again with the player as id 8. From 1558 the original draws "Please wait a minute." over
+# that load, where arklay draws black (#933).
+[[run]]
+name = "question_208"
+room = "208"
+setup_script = "question_208.lua"
+input = "question_208.txt"
+input_shift = 344
+ticks = 1700
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,mapfg,snd,msg,fgstat,fgcom,pl"
+frames = [360, 1699]
+# 0.19 measured; the three visits' questions (441 to 680, 826 to 1040 and 1216 to 1481) 0.00 to 0.01, and #933's
+# load 1.58
+frame_max_mean = 0.25
+frame_windows = [[441, 680, 0.10], [826, 1040, 0.10], [1216, 1481, 0.10], [1558, 1699, 2.0]]
+expect = "match"
+record = "--life 200 --warp 208:-19900:0:-15500:3072 --give 2:0x53:1"
+
+# The same locker as after a costume change (4:173 and 4:175 given; the player stays Leon in his own clothes, id 0):
+# "Will you change your clothes?" with Yes/No/Original (form 5, argument 5). The first visit steers round both ends and
+# answers No; the second answers Original, which clears 4:173 and takes door 30 back into 208 with id 0 (main_12's
+# save(32, 0)), over the load #933 draws black. No model changes back from a costume here.
+[[run]]
+name = "question_208_original"
+room = "208"
+setup_script = "question_208_original.lua"
+input = "question_208_original.txt"
+input_shift = 344
+ticks = 1100
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,mapfg,snd,msg,fgstat,fgcom,pl"
+frames = [360, 1099]
+# 0.43 measured; the two questions 0.00, and the door and #933's load 1.13
+frame_max_mean = 0.5
+frame_windows = [[395, 520, 0.10], [731, 830, 0.10], [831, 1099, 1.5]]
+expect = "match"
+record = "--life 200 --warp 208:-19900:0:-15500:3072 --flag 4:173 --flag 4:175"

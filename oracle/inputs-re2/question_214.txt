@@ -1,0 +1,42 @@
+364 action
+368
+400 action
+404
+420 action
+424
+440 action
+444
+460 action
+464
+480 action
+484
+520 right
+524
+532 right
+536
+544 left
+548
+580 action
+584
+630 right
+634
+660 action
+664
+760 action
+764
+796 action
+800
+816 action
+820
+836 action
+840
+856 action
+860
+876 action
+880
+936 action
+940
+1026 action
+1030
+1106 action
+1110
