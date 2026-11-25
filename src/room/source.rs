@@ -665,6 +665,7 @@ impl RoomSource {
             cuts,
             current_cut: 0,
             die_view: false,
+            die_view_all: false,
             mask_table_cut: None,
             zone_group: None,
             room_sfx: 0,
