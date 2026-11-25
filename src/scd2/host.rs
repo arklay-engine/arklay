@@ -5478,6 +5478,15 @@ mod tests {
             "0/-",
             "killed in the same pass"
         );
+        // Room 112's middle shelf, on the world: `RotMatrix`'s whole 4096s.
+        game.objects.records[0].rotation = [0, 0xc00, 0];
+        game.objects.records[0].pos = [-21500, 0, -22800];
+        game.compose_object_world(0, ([0; 3], 0));
+        let shelf_glow = [0, 7, 0x004, 0x800, -450, -2250, -80, 0, 0, 0, 0];
+        exec(&mut game, "sce_espr3d_on", &shelf_glow);
+        game.re2.effects.tick(&mut Default::default(), None);
+        let trace = game.re2.effects.trace_field();
+        assert!(trace.ends_with(",-21420,-2250,-23250"), "{trace}");
     }
 
     /// Room 202's scene with Marvin reads the player's `Type & 0xFF` to choose

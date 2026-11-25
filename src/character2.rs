@@ -566,14 +566,33 @@ pub(crate) fn twinkle_points(game: &GameState) -> Vec<Option<[i16; 3]>> {
 /// Each room object's `Work_m` (`+0x54`), by slot, for the effects started on
 /// one: the matrix `Obj_model_set` composed and `Om_trans` composes again each
 /// frame it draws the object, kept as it was while the object isn't drawn.
-/// [`crate::objects::ObjectRecord::world`] keeps its turn with Y flipped.
+/// [`crate::objects::ObjectRecord::world`] keeps its turn with Y flipped, from
+/// the draw's builder; on the world, while it is the object's own `Cdir`,
+/// the turn is `RotMatrix`'s, as the original's place on it is.
 pub(crate) fn object_worlds(game: &GameState) -> Vec<player2::Matrix> {
+    let identity = crate::anim::Mat4x3 {
+        r: [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]],
+        t: [0; 3],
+    };
     game.objects
         .records
         .iter()
-        .map(|record| player2::Matrix {
-            m: player2::flip_y(record.world.r).map(|row| row.map(|value| value as i16)),
-            t: record.world.t,
+        .map(|record| {
+            let own = crate::anim::Mat4x3 {
+                r: crate::objects::rotation(record),
+                t: record.pos,
+            };
+            let on_the_world = record.super_parent == crate::objects::SuperParent::World
+                && crate::anim::compose(&identity, &own).r == record.world.r;
+            let m = if on_the_world {
+                player2::rot_matrix(record.rotation)
+            } else {
+                player2::flip_y(record.world.r).map(|row| row.map(|value| value as i16))
+            };
+            player2::Matrix {
+                m,
+                t: record.world.t,
+            }
         })
         .collect()
 }
