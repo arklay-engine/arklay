@@ -445,6 +445,27 @@ pub const RECIPES: &[Recipe] = &[
     r(0x41, 0x40, STEP_COMBINE, 0x42),
 ];
 
+/// The portrait's three rows (`0x53F000`, 39 texels wide and 10, 20 and 20
+/// high) on the portrait sheet (texture 0x13, the character's
+/// `st<n>_jp.tim` TIM 1), as `St_init_disp_face` (`0x4FE8C0`) sets their
+/// texels by the player's id (`pPl.Id`) each time `Status` starts: the
+/// scenario's character at u 0, HUNK (0xC) at u 0x58, Ada and Sherry (0xE
+/// up) at u 0x2C, all from v 0x48, 0x56 and 0x6B; and TO-FU (0xD) at
+/// (0x2A, 0x34) for the first row and (0, 0x34) for the other two. The
+/// sheet is the scenario's (`St_load_gfx` by `St_is_leon`), so Ada's face is
+/// on Leon's sheet and Sherry's on Claire's.
+pub fn portrait_texels(pl_id: u8) -> [(u8, u8); 3] {
+    if pl_id == 0xD {
+        return [(0x2A, 0x34), (0, 0x34), (0, 0x34)];
+    }
+    let u = match pl_id {
+        0xC => 0x58,
+        id if id >= 0xE => 0x2C,
+        _ => 0,
+    };
+    [(u, 0x48), (u, 0x56), (u, 0x6B)]
+}
+
 /// The record for `item` onto `target`, if the table has one.
 pub fn recipe(item: u8, target: u8) -> Option<Recipe> {
     RECIPES

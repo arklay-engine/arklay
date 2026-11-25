@@ -1,0 +1,86 @@
+# special_4th_status: special_4th_walk's boot into the 4th Survivor's game and through its radio messages; START at 2620 takes the script's map down, then HUNK's status screen: START, the cursor over his slots, up to the tab bar, MAP and FILE, and START to close
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+440 confirm
+443
+1000 start
+1003
+2000 confirm
+2003
+2030 confirm
+2033
+2060 confirm
+2063
+2090 confirm
+2093
+2120 confirm
+2123
+2150 confirm
+2153
+2180 confirm
+2183
+2210 confirm
+2213
+2240 confirm
+2243
+2270 confirm
+2273
+2300 confirm
+2303
+2330 confirm
+2333
+2360 confirm
+2363
+2390 confirm
+2393
+2420 confirm
+2423
+2450 confirm
+2453
+2480 confirm
+2483
+2620 start
+2624
+2700 start
+2704
+2740 right
+2744
+2780 down
+2784
+2820 down
+2824
+2860 down
+2864
+2900 left
+2904
+2940 up
+2944
+2980 up
+2984
+3020 up
+3024
+3060 up
+3064
+3100 up
+3104
+3140 left
+3144
+3180 confirm
+3184
+3260 cancel
+3264
+3300 left
+3304
+3340 confirm
+3344
+3420 cancel
+3424
+3460 start
+3464

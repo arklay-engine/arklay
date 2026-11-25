@@ -1298,6 +1298,11 @@ function ScreenApi:re2_items() end
 ---@return Re2ItemGet? window `nil` when it is not up.
 function ScreenApi:re2_item_get() end
 
+---RE 2's status screen portrait: its three rows' texels on the portrait sheet
+---(the `st<n>_jp` sheet's TIM 1) for the character the player is.
+---@return { u: integer, v: integer }[] rows top to bottom.
+function ScreenApi:re2_portrait() end
+
 ---RE 2's item box page while its screen is up.
 ---@return Re2Box? page `nil` otherwise.
 function ScreenApi:re2_box() end

@@ -13,6 +13,24 @@ use crate::ui::{Screen, ScreenAction};
 /// two sides (u 113 and 118, from v 92), and the menu's top piece (u 0,
 /// v 176, 56 by 13), index 1; index 0, transparent, elsewhere.
 fn sheet() -> Vec<u8> {
+    sheet_marking(|u, v| {
+        let bottom = u < 90 && (143..147).contains(&v);
+        let side = (113..123).contains(&u) && v >= 92;
+        let menu = u < 56 && (176..189).contains(&v);
+        bottom || side || menu
+    })
+}
+
+/// The portrait's sheet (texture 0x13) with only the columns of the faces
+/// beside the scenario's (Ada's or Sherry's from u 0x2C, HUNK's from 0x58,
+/// 39 wide, from v 0x48) on it.
+fn portrait_sheet() -> Vec<u8> {
+    sheet_marking(|u, v| ((0x2C..0x53).contains(&u) || (0x58..0x7F).contains(&u)) && v >= 0x48)
+}
+
+/// A 256 by 256 8-bit TIM whose texels are index 1 (white) where `marked`
+/// and index 0 (transparent) elsewhere.
+fn sheet_marking(marked: impl Fn(usize, usize) -> bool) -> Vec<u8> {
     let mut out = Vec::new();
     out.extend_from_slice(&0x10u32.to_le_bytes());
     out.extend_from_slice(&(1u32 | 8).to_le_bytes());
@@ -29,10 +47,7 @@ fn sheet() -> Vec<u8> {
     out.extend_from_slice(&256u16.to_le_bytes());
     for v in 0..256usize {
         for u in 0..256usize {
-            let bottom = u < 90 && (143..147).contains(&v);
-            let side = (113..123).contains(&u) && v >= 92;
-            let menu = u < 56 && (176..189).contains(&v);
-            out.push(u8::from(bottom || side || menu));
+            out.push(u8::from(marked(u, v)));
         }
     }
     out
@@ -52,6 +67,9 @@ fn pack() -> &'static Pack {
             )
             .unwrap();
         writer.add("ui/status/st0_jp_0.tim", sheet()).unwrap();
+        writer
+            .add("ui/status/st0_jp_1.tim", portrait_sheet())
+            .unwrap();
         Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
     })
 }
@@ -195,4 +213,47 @@ fn the_command_menu_draws_on_the_tick_a_command_leaves_the_item_page() {
         "the tick USE closes the screen"
     );
     assert!(!menu_drawn(&game, 22, Some(1)), "the tick after");
+}
+
+/// `St_init_disp_face` (`0x4FE8C0`) picks the portrait's texels by the
+/// player's id when `Status` starts: Ada (0xE) and Sherry (0xF) show the
+/// faces at u 0x2C of the scenario's sheet and HUNK (0xC) the one at 0x58;
+/// Leon and Claire the ones at u 0, and TO-FU (0xD) rows of his own, from
+/// v 0x34, which the marked columns don't reach.
+#[test]
+fn the_portrait_is_the_face_of_the_character_the_player_is() {
+    use crate::game::status2::ItemPage;
+    use crate::state::{RoomId, RoomState};
+    let dir = std::env::temp_dir().join(format!("arklay-re2-status-face-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut game = GameState::new(RoomId::parse("3060").unwrap(), &RoomState::default());
+    game.is_re2_room = true;
+    game.re2_items = Some(ItemPage::default());
+    let mut screen = {
+        let mut cx = context(&dir, None);
+        LuaScreen::open_screen_with_game("main_menu", &[], ScreenAction::Resume, &mut cx, &mut game)
+            .unwrap()
+    };
+    for (id, face) in [
+        (0, false),
+        (1, false),
+        (0xC, true),
+        (0xD, false),
+        (0xE, true),
+        (0xF, true),
+    ] {
+        game.re2.pl_id = id;
+        let cx = context(&dir, Some(&game));
+        screen.signal_with("animate", (20u8, None::<u8>), &cx);
+        let mut framebuffer = Framebuffer::new();
+        screen.draw(&cx, &mut framebuffer);
+        // The three rows: y 20 to 29, 31 to 50 and 51 to 70, from x 11.
+        for y in [25, 40, 60] {
+            assert_eq!(
+                framed(&framebuffer, 30, y),
+                face,
+                "id {id:#x}: the row at y {y}"
+            );
+        }
+    }
 }
