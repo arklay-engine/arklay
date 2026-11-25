@@ -233,11 +233,14 @@ def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input
         lines.append(f"load_game_pack({lua_str(str(ctx['pack']))}, {{ {', '.join(options)} }})")
         # `boot = true`: from the game's boot, the warning before the title, as the record has it from its tick 0.
         lines.append("open_title({ boot = true })" if run.get("boot") else "open_title()")
-        # The voice lines' lengths wait on the title for the game it starts.
+        # The sound device and the voice lines' lengths wait on the title for the game it starts: a `--boot`
+        # record has sound unless the run says not, and its doors hold for the music.
+        trace_options = []
+        if run.get("sound", True):
+            trace_options.append("sound = true")
         if voice is not None:
-            lines.append(f"trace_start({lua_str(str(trace))}, {{ {voice_option(voice)} }})")
-        else:
-            lines.append(f"trace_start({lua_str(str(trace))})")
+            trace_options.append(voice_option(voice))
+        lines.append(f"trace_start({lua_str(str(trace))}, {{ {', '.join(trace_options)} }})")
     else:
         options += choice_options(run)
         lines.append(f"load_game_pack({lua_str(str(ctx['pack']))}, {{ {', '.join(options)} }})")
@@ -905,7 +908,8 @@ def self_test_save_images() -> str | None:
 
 
 def self_test_title_voice() -> str | None:
-    """A title run with `voice_from_ref` hands the record's voice lengths to its title's `trace_start`."""
+    """A title run with `voice_from_ref` hands the record's voice lengths to its title's `trace_start`, and one with sound
+    (the default) its sound device."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         trace = root / "ref.trace"
@@ -921,6 +925,13 @@ def self_test_title_voice() -> str | None:
                          None, voice)
         if "voice_ticks = { 2, 4 }" not in lua or "open_title({ boot = true })" not in lua:
             return f"a title run's driver lacks its voice lengths:\n{lua}"
+        if "sound = true" not in lua:
+            return f"a title run's driver gives its game no sound device:\n{lua}"
+        run = {"name": "t", "ui": "title", "sound": False}
+        lua = driver_lua(run, {"pack": root / "re2.akpak"}, "title", 10, root / "a.trace", source, None, root,
+                         None, None)
+        if "sound = true" in lua:
+            return f"a silent title run's driver gives its game a sound device:\n{lua}"
     return None
 
 

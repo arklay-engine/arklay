@@ -146,7 +146,11 @@ compare_from = 1276
 input = "special_4th_die.txt"
 voice_from_ref = true
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,zm0,zm1,zm2,zm3,zm4,zd,esp,pl"
-expect = { tick = 3029, fields = ["mot", "rng", "rseed", "zm0", "zm1", "zm2", "zm3", "zm4", "zd"], note = "The door into room 303 changes the music: with sound the original holds Set_room for Snd_bgm_ck's 90 ticks, and arklay holds a door so only with a sound device, which a title run's driver can't give the game the title starts (trace_start's sound needs a game session). The room's first-tick state (Pl_init's motion, the zombies and their Rnd draws) shows 90 ticks early, and every field matches again from the original's load on 3119" }
+# Room 303's slot 4 is put past every byte this game loaded, on memory the title left, which arklay doesn't follow
+# (oracle/re2-deviations.md, "What a zombie's slot held before", as room 101's slots 3 and 4 after the prologue): its
+# `Dest` is 1, 1 in the original and 0 in arklay until its first `Root_ck`.
+ignore = [[3119, 3321, "zd"]]
+expect = "match"
 
 # The same for TO-FU: TOFU's 400 life last longer, and `fg_system`'s 9 brings back To-fu's title.
 [[run]]
@@ -155,13 +159,13 @@ ui = "title"
 boot = true
 seed = 0x80000000
 offset = 0
-ticks = 6200
-compare_from = 5536
+ticks = 6500
+compare_from = 5805
 input = "special_tofu_die.txt"
 voice_from_ref = true
 fields = "ti,tlogo,tfade,tsel,tx,tfade2,tfade3,snd"
-frames = [1309, 6199]
-expect = "match"
+frames = [1309, 6499]
+expect = { tick = 5805, fields = ["tfade", "tfade3", "ti", "tx"], note = "special_tofu_die_play diverges on 2756 (TO-FU running starts an effect of the player's own bank, which arklay doesn't make), so arklay's zombies kill TOFU 269 ticks sooner and its title is that far ahead" }
 record = ""
 
 [[run]]
@@ -171,9 +175,9 @@ ui = "title"
 boot = true
 seed = 0x80000000
 offset = 0
-ticks = 5536
+ticks = 5805
 compare_from = 1316
 input = "special_tofu_die.txt"
 voice_from_ref = true
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,zm0,zm1,zm2,zm3,zm4,zd,esp,pl"
-expect = "match"
+expect = { tick = 2756, fields = ["esp92", "espk", "espn", "rng"], note = "TO-FU running starts an effect of the player's own bank (kind 1, row 0x26) at head height, which arklay's player doesn't make for him (as special_tofu_walk on 2748)" }

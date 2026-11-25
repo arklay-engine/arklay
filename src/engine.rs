@@ -178,6 +178,18 @@ const PLANT42_ID: u8 = 0x08;
 const TITLE_CORE_BANK: u8 = 0x10;
 /// The volume `Snd_se_on` gives a core sound on the title (`0x4EDA1E`).
 const TITLE_CORE_VOLUME: u8 = 0x6E;
+
+/// `Snd_se_on`'s volume for a core cue on the title: 0x6E while `0x99CF6C`
+/// is clear, as `Title_init` leaves it until a game starts, and the table's
+/// (`table`, none for a slot it lacks) after a game that no `Title_init`
+/// followed (an extra mode's death, back to that mode's title).
+fn core_cue_volume(se_live: bool, table: Option<u8>) -> Option<u8> {
+    if se_live {
+        table
+    } else {
+        Some(TITLE_CORE_VOLUME)
+    }
+}
 /// The original's non-gameplay frame-limiter period in milliseconds.
 ///
 /// The original paces at 33 ms while the game is active and at 16 ms while
@@ -11807,6 +11819,10 @@ struct App {
     /// RE 2's voice lines' lengths a trace started on a screen asked for
     /// (`trace_start`'s `voice_ticks`), for the game the screen starts.
     pending_voice_ticks: Option<std::collections::VecDeque<u32>>,
+    /// A trace started on a screen asked for a sound device (`trace_start`'s
+    /// `sound`), for the game the screen starts: its doors hold for the music
+    /// as a game with sound does.
+    pending_sound: bool,
     /// What the title shows as its `music_volume` and `effects_volume`: the
     /// value it published from `on_volumes`, then each one taken from it
     /// since, to tell a change of its own from what it was told. `None`
@@ -11948,6 +11964,7 @@ impl App {
             pending_return_title: false,
             re2_stage: 1,
             pending_voice_ticks: None,
+            pending_sound: false,
             screen_volumes: [100; 2],
             volumes_are_settings: false,
             screen_volumes_shown: [None; 2],
@@ -12385,16 +12402,8 @@ impl App {
             if banks.stem(kind, slot).is_none() {
                 continue;
             }
-            // `Snd_se_on` plays a core sound at 0x6E while `0x99CF6C` is
-            // clear, as `Title_init` leaves it until a game starts, and at
-            // its table's volume after a game that no `Title_init` followed.
-            let volume = if se_live {
-                match banks.volume(kind, slot) {
-                    Some(volume) => volume,
-                    None => continue,
-                }
-            } else {
-                TITLE_CORE_VOLUME
+            let Some(volume) = core_cue_volume(se_live, banks.volume(kind, slot)) else {
+                continue;
             };
             ui_sounds.push((kind.index() as u8, slot, volume, 0));
             let (Some(mixer), Some(stem)) = (ui_music.as_mut(), banks.stem(kind, slot)) else {
@@ -12938,6 +12947,7 @@ impl App {
         if let Some(ticks) = self.pending_voice_ticks.take() {
             session.game.re2.voice_ticks = ticks;
         }
+        session.sound_device |= std::mem::take(&mut self.pending_sound);
         #[cfg(feature = "bot")]
         self.start_bot_session(&mut session);
         session.set_debug_menu(self.debug_menu);
@@ -34621,6 +34631,17 @@ mod tests {
             session.debug_menu_enabled,
             "start_session propagates the enabled overlay"
         );
+    }
+
+    /// The title's core cues play at 0x6E until a game sets `0x99CF6C`, and
+    /// at their table's volume on the title after that game, which no
+    /// `Title_init` cleared it for.
+    #[test]
+    fn a_title_core_cue_plays_at_its_tables_volume_after_a_game() {
+        assert_eq!(core_cue_volume(false, Some(90)), Some(0x6E));
+        assert_eq!(core_cue_volume(false, None), Some(0x6E));
+        assert_eq!(core_cue_volume(true, Some(90)), Some(90));
+        assert_eq!(core_cue_volume(true, None), None);
     }
 
     /// Voice lengths a trace asked for while a screen was up go to the game
