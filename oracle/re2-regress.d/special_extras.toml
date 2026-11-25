@@ -110,7 +110,7 @@ input = "special_tofu_walk.txt"
 voice_from_ref = true
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,esp,pl"
 frames = [1309, 3239]
-expect = { tick = 2748, fields = ["esp92", "espk", "espn", "rng"], note = "TO-FU running starts an effect of the player's own bank (kind 1, row 0x26) at head height, which arklay's player doesn't make for him" }
+expect = "match"
 record = ""
 
 # An extra mode's death and the title after it (oracle/re2.md, "The 4th Survivor and To-fu"): special_4th_walk's start,
@@ -165,7 +165,7 @@ input = "special_tofu_die.txt"
 voice_from_ref = true
 fields = "ti,tlogo,tfade,tsel,tx,tfade2,tfade3,snd"
 frames = [1309, 6499]
-expect = { tick = 5805, fields = ["tfade", "tfade3", "ti", "tx"], note = "special_tofu_die_play diverges on 2756 (TO-FU running starts an effect of the player's own bank, which arklay doesn't make), so arklay's zombies kill TOFU 269 ticks sooner and its title is that far ahead" }
+expect = "match"
 record = ""
 
 [[run]]
@@ -180,4 +180,6 @@ compare_from = 1316
 input = "special_tofu_die.txt"
 voice_from_ref = true
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,zm0,zm1,zm2,zm3,zm4,zd,esp,pl"
-expect = { tick = 2756, fields = ["esp92", "espk", "espn", "rng"], note = "TO-FU running starts an effect of the player's own bank (kind 1, row 0x26) at head height, which arklay's player doesn't make for him (as special_tofu_walk on 2748)" }
+# Slot 4's `Dest` on the title's memory, as in special_4th_die_play.
+ignore = [[3159, 3361, "zd"]]
+expect = { tick = 4085, fields = ["esp93", "esp94", "esp95"], note = "In a zombie's hold (routine 5) the original makes three effects of kind 0, row 1 for TOFU that arklay doesn't; HUNK's same death in special_4th_die_play matches" }

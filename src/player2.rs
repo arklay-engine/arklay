@@ -698,6 +698,10 @@ const GRENADES: u8 = 9;
 /// handguns.
 pub const COLT: u8 = 0xD;
 pub const BERETTA: u8 = 0x13;
+/// TOFU's `Id`, whose run and knife slash drop [`TOFU_DROP`].
+const TOFU: u8 = 0xD;
+/// TOFU's drop: the player's own bank's row 0x26.
+const TOFU_DROP: u32 = 0x126_2000;
 /// The spark shot, Claire's (`pl_mv05_w3`).
 pub const SPARK: u8 = 0xE;
 /// `pl_mv05_w3_t2`'s clips: the shot, and the hold on the body it found.
@@ -4953,11 +4957,39 @@ impl Mover<'_, '_> {
         }
         self.footstep(1);
         self.wading_splashes(drawn);
+        // A sub other than 1 skips the clip and the drop (`LAB_004da65a`),
+        // which only a script's `Routine_2` reaches.
+        if self.tick.id == TOFU && self.work.routine[2] == 1 && self.work.move_cnt & 7 == 7 {
+            self.tofu_drop();
+        }
         if self.work.d_life_u < 2 {
             self.work.spd[0] = self.work.spd[0].wrapping_sub(RUN_SLOWDOWN);
         }
         self.slow_in_deep_water();
         self.add_speed_xz();
+    }
+
+    /// TOFU's run's drop (`pl_mv_02`, `0x4DA440`, on every eighth frame):
+    /// `Esp_call(0x1262000)`, kind 1 (the player's own bank) row 0x26, on
+    /// part 0's `Workm` as the last draw left it, at a point and a turn each
+    /// drawn from `Rnd`. The run's splashes draw theirs first, so the ones
+    /// [`Work::water_draws`] holds are drawn here.
+    fn tofu_drop(&mut self) {
+        let rnd = &mut self.rnd;
+        self.work.water_draws(rnd);
+        let mut draw = || u16::from(rnd.draw()) * 2;
+        let x = 0x100u16.wrapping_sub(draw());
+        let y = 0u16.wrapping_sub(0x2E8).wrapping_sub(draw());
+        let z = 0x100u16.wrapping_sub(draw());
+        let dir = self.player.angle.wrapping_add(0x900).wrapping_sub(draw());
+        self.part_effect(
+            (TOFU_DROP >> 24) as u8,
+            (TOFU_DROP >> 16) as u8,
+            TOFU_DROP as u16,
+            dir as i16,
+            0,
+            [x, y, z].map(|axis| i32::from(axis as i16)),
+        );
     }
 
     /// `pl_mv03` (`0x4da7c0`). Every 15 ticks, unhurt, it swaps to the clip
@@ -11963,6 +11995,76 @@ mod tests {
         slow.tick(input(true, false, true), 200);
         slow.tick(input(true, true, true), 200);
         assert_eq!(slow.player.angle, 0);
+    }
+
+    /// TOFU's run (`pl_mv_02`) drops kind 1's row 0x26 on part 0 on every
+    /// eighth frame, on the part's `Workm` as the last tick drew it, at a
+    /// point and a turn drawn from `Rnd` (four draws), after the wading
+    /// splashes' draws; another player's run draws nothing for it.
+    #[test]
+    fn tofus_run_drops_its_own_effect_on_every_eighth_frame() {
+        // Dry, and wading with both hands in the water.
+        for (water, splashes) in [(0, 0), (-800, 2)] {
+            for (id, drops) in [(TOFU, true), (0xC, false)] {
+                let mut setup = wading(water, -900, -900);
+                setup.id = id;
+                let mut made = 0;
+                for tick in 0..24 {
+                    // A new facing each tick: the drop is on last tick's
+                    // `Workm`, but turned by this one's `Cdir_y`.
+                    setup.player.angle = (tick as u16 * 0x40) & 0xFFF;
+                    let part = setup.with_mover(|mover| mover.drawn_part(0));
+                    let before = setup.rnd;
+                    setup.tick(input(true, false, true), 200);
+                    assert_eq!(setup.work.routine[1], MOVE_RUN);
+                    let mut effects = std::mem::take(&mut setup.work.effects);
+                    let mut rnd = setup.rnd;
+                    setup.work.water_draws(&mut rnd);
+                    let mut replay = before;
+                    let wet = if setup.work.move_cnt & 1 != 0 {
+                        splashes
+                    } else {
+                        0
+                    };
+                    if !drops || setup.work.move_cnt & 7 != 7 {
+                        assert!(effects.iter().all(|effect| effect.kind == 0x1A));
+                        assert_eq!(effects.len(), wet, "{id:#x}, tick {tick}");
+                        continue;
+                    }
+                    made += 1;
+                    for splash in &effects[..wet] {
+                        let size = u16::from(replay.draw()) * 4 + 0x60C;
+                        assert_eq!(splash.size, size, "the splashes draw first");
+                    }
+                    let mut draw = || u16::from(replay.draw()) * 2;
+                    let point = [
+                        0x100u16.wrapping_sub(draw()) as i16,
+                        0xFD18u16.wrapping_sub(draw()) as i16,
+                        0x100u16.wrapping_sub(draw()) as i16,
+                    ];
+                    let dir = setup.player.angle.wrapping_add(0x900).wrapping_sub(draw()) as i16;
+                    assert_eq!(replay, setup.rnd, "the move took every draw");
+                    assert_eq!(rnd, setup.rnd, "and left none for the owner");
+                    let part = part.expect("part 0");
+                    let drop = effects.split_off(wet);
+                    assert_eq!(
+                        drop,
+                        [EffectCall {
+                            kind: 1,
+                            row: 0x26,
+                            size: 0x2000,
+                            dir,
+                            at: crate::esp2::apply_matrix(&part, point),
+                            motion: None,
+                            on: Some((0, part, point)),
+                            turn: None,
+                        }],
+                        "water {water}, tick {tick}"
+                    );
+                }
+                assert_eq!(made, if drops { 3 } else { 0 }, "{id:#x}");
+            }
+        }
     }
 
     #[test]
