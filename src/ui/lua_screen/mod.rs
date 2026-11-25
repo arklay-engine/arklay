@@ -1487,6 +1487,8 @@ mod re2_computer_tests;
 #[cfg(test)]
 mod re2_gallery_tests;
 #[cfg(test)]
+mod re2_result_tests;
+#[cfg(test)]
 mod re2_save_tests;
 #[cfg(test)]
 mod re2_status_tests;

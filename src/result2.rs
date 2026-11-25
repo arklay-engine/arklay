@@ -1283,6 +1283,27 @@ impl Result {
         }
     }
 
+    /// A drawn tick showing `pieces` at full colour and nothing else, for
+    /// the screen's tests.
+    #[cfg(test)]
+    pub fn showing(pieces: &[usize]) -> Self {
+        let mut result = Self::new(
+            Clear::default(),
+            [0; PIECES],
+            Fade {
+                level: 0,
+                add: 0,
+                mode: 0,
+            },
+        );
+        for &piece in pieces {
+            result.piece_flags[piece] = 1;
+            result.colours[piece] = 0x80_8080;
+        }
+        result.drawn = true;
+        result
+    }
+
     pub fn view(&self) -> View {
         View {
             flags: self.piece_flags,
