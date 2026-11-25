@@ -84,13 +84,54 @@ fn append(path: &Path, message: &str) {
     let _ = writeln!(file, "{message}");
 }
 
-/// How many engine warnings [`warning!`](crate::warning) has printed.
-static WARNINGS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-/// The most recent warnings, each with its number (counting from 1).
-static RECENT: Mutex<std::collections::VecDeque<(u64, String)>> =
-    Mutex::new(std::collections::VecDeque::new());
-/// How many warnings [`RECENT`] keeps.
+/// The engine warnings [`warning!`](crate::warning) has printed: how many,
+/// and the most recent with their numbers (counting from 1).
+struct Warnings {
+    count: u64,
+    recent: std::collections::VecDeque<(u64, String)>,
+}
+
+impl Warnings {
+    const fn new() -> Self {
+        Self {
+            count: 0,
+            recent: std::collections::VecDeque::new(),
+        }
+    }
+}
+
+/// How many warnings [`Warnings::recent`] keeps.
 const RECENT_WARNINGS: usize = 32;
+
+/// The process's warnings.
+#[cfg(not(test))]
+static WARNINGS: Mutex<Warnings> = Mutex::new(Warnings::new());
+
+// A test's warnings are its own thread's. The test harness runs every test
+// of the crate in one process, each on a thread of its own, so with the
+// process's count a strict script driver in one test would fail on a warning
+// another test raised meanwhile.
+#[cfg(test)]
+thread_local! {
+    static WARNINGS: std::cell::RefCell<Warnings> =
+        const { std::cell::RefCell::new(Warnings::new()) };
+}
+
+/// Run `f` on the warnings [`warning!`](crate::warning) counts into.
+#[cfg(not(test))]
+fn with_warnings<R>(f: impl FnOnce(&mut Warnings) -> R) -> R {
+    // A panic under the lock leaves the count as it was: go on counting.
+    let mut warnings = WARNINGS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    f(&mut warnings)
+}
+
+/// Run `f` on the warnings [`warning!`](crate::warning) counts into.
+#[cfg(test)]
+fn with_warnings<R>(f: impl FnOnce(&mut Warnings) -> R) -> R {
+    WARNINGS.with_borrow_mut(f)
+}
 
 /// Print an engine warning to stderr and count it.
 ///
@@ -108,29 +149,26 @@ macro_rules! warning {
 /// [`warning!`](crate::warning)'s body: print `message` and count it.
 pub fn note_warning(message: String) {
     eprintln!("{message}");
-    if let Ok(mut recent) = RECENT.lock() {
-        let number = WARNINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-        if recent.len() == RECENT_WARNINGS {
-            recent.pop_front();
+    with_warnings(|warnings| {
+        warnings.count += 1;
+        if warnings.recent.len() == RECENT_WARNINGS {
+            warnings.recent.pop_front();
         }
-        recent.push_back((number, message));
-    } else {
-        WARNINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    }
+        warnings.recent.push_back((warnings.count, message));
+    });
 }
 
 /// The number of warnings printed so far, and the text of the first one
 /// after the `seen`th if it is still remembered.
 pub fn warnings_since(seen: u64) -> (u64, Option<String>) {
-    let recent = RECENT.lock();
-    let count = WARNINGS.load(std::sync::atomic::Ordering::Relaxed);
-    let first = recent.ok().and_then(|recent| {
-        recent
+    with_warnings(|warnings| {
+        let first = warnings
+            .recent
             .iter()
             .find(|(number, _)| *number > seen)
-            .map(|(_, message)| message.clone())
-    });
-    (count, first)
+            .map(|(_, message)| message.clone());
+        (warnings.count, first)
+    })
 }
 
 /// Seconds since the Unix epoch, for the session header.
@@ -228,6 +266,22 @@ fn hook_std_handles(_log: Option<&Path>) {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A test's warnings are its own: one another thread raises (another
+    /// test's, under the harness) is neither counted nor remembered here.
+    #[test]
+    fn a_tests_warnings_are_its_threads_own() {
+        let (before, _) = warnings_since(0);
+        std::thread::spawn(|| note_warning("another test's".into()))
+            .join()
+            .unwrap();
+        assert_eq!(warnings_since(before), (before, None));
+        note_warning("this test's".into());
+        assert_eq!(
+            warnings_since(before),
+            (before + 1, Some("this test's".into()))
+        );
+    }
 
     #[test]
     fn writing_before_init_is_harmless() {
