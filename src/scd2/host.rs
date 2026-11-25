@@ -3013,8 +3013,11 @@ impl GameHost<'_> {
                 .copied();
         }
         match member {
+            // `Cdir_y` as the signed word it is: nothing masks it on the
+            // way in or out, so a script that turns the player past 4096
+            // reads 4100, not 4.
             MEMBER_ANGLE => Some(i32::from(
-                pending.angle.unwrap_or(self.game.entities[0].angle) & 0x0FFF,
+                pending.angle.unwrap_or(self.game.entities[0].angle) as i16,
             )),
             MEMBER_AREA => Some(i32::from(self.game.re2.player.at_sce)),
             // `Type`'s low bits are the weapon in hand, which the engine keeps
@@ -3041,7 +3044,8 @@ impl GameHost<'_> {
             pos[axis] = value;
             self.game.re2.pending_player.pos = Some(pos);
         } else if member == MEMBER_ANGLE {
-            self.game.re2.pending_player.angle = Some(value as u16 & 0x0FFF);
+            // `Member_set_branch`'s case 0xF stores the word as it is.
+            self.game.re2.pending_player.angle = Some(value as u16);
         } else {
             crate::player2::set_member(&mut self.game.re2.player, member, value);
         }
@@ -3106,8 +3110,8 @@ impl GameHost<'_> {
                     .pending_player
                     .angle
                     .unwrap_or(self.game.entities[0].angle);
-                self.game.re2.pending_player.angle =
-                    Some(angle.wrapping_add(speeds[4] as u16) & 0x0FFF);
+                // `Add_speed` adds the word with no mask.
+                self.game.re2.pending_player.angle = Some(angle.wrapping_add(speeds[4] as u16));
             }
         }
     }
@@ -3993,7 +3997,7 @@ fn character_member(character: &Character, member: u8) -> Option<i32> {
         1 => Some(i32::from((character.be_flg >> 16) as u16)),
         MEMBER_ID => Some(i32::from(character.id)),
         MEMBER_AREA => Some(i32::from(character.area)),
-        MEMBER_ANGLE => Some(i32::from(character.body.angle & 0x0FFF)),
+        MEMBER_ANGLE => Some(i32::from(character.body.angle as i16)),
         MEMBER_ZOMBIE_FLAGS => character
             .zombie
             .as_ref()
@@ -5159,6 +5163,35 @@ mod tests {
         exec(&mut game, "dir_set", &[0, 0, 2048, 0]);
         let mut host = GameHost { game: &mut game };
         assert_eq!(host.member(0, MEMBER_ANGLE), Some(2048));
+    }
+
+    /// Room 704's `main_06` turns the player 150 a pass with `add_speed`
+    /// and leaves once `member_cmp` sees `Cdir_y` past 4096: the word is
+    /// signed and nothing masks it, so the loop ends at 4100.
+    #[test]
+    fn the_players_cdir_y_is_a_signed_word_a_script_reads_unmasked() {
+        let mut game = GameState::default();
+        game.entities[0].angle = 3950;
+        exec(&mut game, "work_set", &[WK_PLAYER, 0]);
+        exec(&mut game, "speed_set", &[4, 150]);
+        exec(&mut game, "add_speed", &[]);
+        let mut host = GameHost { game: &mut game };
+        assert_eq!(host.member(0, MEMBER_ANGLE), Some(4100));
+        exec(&mut game, "member_set", &[i64::from(MEMBER_ANGLE), 0xF000]);
+        let mut host = GameHost { game: &mut game };
+        assert_eq!(host.member(0, MEMBER_ANGLE), Some(-4096));
+        assert_eq!(game.re2.pending_player.angle, Some(0xF000));
+        // The pass ends and the player takes the word; the next pass reads
+        // it back as it was.
+        game.is_re2_room = true;
+        let mut player = crate::player::spawn(
+            crate::state::RoomId::parse("2000").unwrap(),
+            &crate::state::RoomState::default(),
+        );
+        player.angle = game.re2.pending_player.angle.take().unwrap();
+        game.sync_entity_from_player(&player);
+        let mut host = GameHost { game: &mut game };
+        assert_eq!(host.member(0, MEMBER_ANGLE), Some(-4096));
     }
 
     /// Room 112's landing: `se_on` on the player after this pass's
