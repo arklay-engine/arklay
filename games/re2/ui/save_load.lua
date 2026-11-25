@@ -39,6 +39,7 @@ local M = {}
 local STATE_FONT, STATE_LIST, STATE_BROWSE, STATE_WRITE, STATE_LOAD = 0, 1, 2, 3, 10
 local STATE_REVEAL, STATE_WAIT, STATE_DONE, STATE_CANCEL = 0x22, 0x24, 0x61, 99
 local STATE_ASK, STATE_OVERWRITE, STATE_RETYPE, STATE_REWAIT = 0x1E, 0x1F, 0x20, 0x21
+local STATE_UNSAVED = 0x60
 
 local FADE_STEP, FADE_FULL = 0x1800, 0x8000
 
@@ -297,6 +298,31 @@ local function ask(api, input)
     end
 end
 
+-- State 0x60, the results' question when their save screen is left
+-- without a save: left and right (edges) move between Yes (0) and No (1)
+-- with the move cue; decide on Yes plays the cancel cue and leaves at once
+-- (the exit's first step on this tick); decide on No, or cancel, plays the
+-- decide cue and goes back to the list.
+local function unsaved(api, input)
+    if input.left or input.right then
+        s.choice = 1 - s.choice
+        api:core_sound(CUE_MOVE)
+    end
+    if input.confirm or input.start then
+        if s.choice == 0 then
+            api:core_sound(CUE_CANCEL)
+            start_exit()
+            return
+        end
+        api:core_sound(CUE_DECIDE)
+        s.state = STATE_BROWSE
+    end
+    if input.cancel then
+        api:core_sound(CUE_DECIDE)
+        s.state = STATE_BROWSE
+    end
+end
+
 -- Whether the save `old` is a file of its own beside the new `file`. Two
 -- names that differ only in case are one file where the folder folds case,
 -- and that one must stay.
@@ -414,12 +440,18 @@ local function step(api, input)
         write(api, STATE_RETYPE, s.saves[s.picked])
     elseif state == STATE_RETYPE then
         reveal(api, STATE_REWAIT)
+    elseif state == STATE_CANCEL and s.mode == 0 and s.ending then
+        -- 99 under the results (`fg_system`'s 0x200000) asks first, No lit.
+        s.state = STATE_UNSAVED
+        s.choice = 1
+    elseif state == STATE_UNSAVED then
+        unsaved(api, input)
     elseif state == STATE_DONE or state == STATE_CANCEL then
         start_exit()
     end
 end
 
-function M.open(api)
+function M.open(api, args)
     local err
     background, err = api:picture("ui/type00")
     if not background then
@@ -429,6 +461,8 @@ function M.open(api)
         s[key] = nil
     end
     s.mode = api:mode() == "load" and 1 or 0
+    -- The main game's results' save for the next scenario.
+    s.ending = args and args.ending or false
     s.state = STATE_FONT
     s.cursor, s.top, s.timer, s.choice, s.typed, s.count = 0, 0, 0, 0, 0, 0
     -- Static in the original, so the last screen's until this one sets
@@ -466,7 +500,7 @@ function M.update(api, input)
         end
     elseif s.sub == 2 then
         step(api, input)
-        if s.sub == 2 and s.state == STATE_ASK then
+        if s.sub == 2 and (s.state == STATE_ASK or s.state == STATE_UNSAVED) then
             -- `Card_Mess_disp` steps the answers' blink (the state word's
             -- third byte) as it draws them: 32 ticks, the first 15 lit,
             -- from the start again when the choice isn't the one it last
@@ -560,6 +594,18 @@ local function draw_ask(api)
     end
 end
 
+-- State 0x60's question, its answers placed as the frames have them.
+local UNSAVED_X = { [0] = 94, 179 }
+
+local function draw_unsaved(api)
+    centred(api, ASK_Y, "Leave without saving?")
+    save_print(api, UNSAVED_X[0], ANSWER_Y, "Yes", s.choice == 0 and GREEN or nil)
+    save_print(api, UNSAVED_X[1], ANSWER_Y, "No", s.choice == 1 and GREEN or nil)
+    if s.blink < 0xF then
+        draw_arrow(api, UNSAVED_X[s.choice] + ARROW_DX, ANSWER_Y + ARROW_DY)
+    end
+end
+
 function M.draw(api)
     api:clear()
     if background then
@@ -610,6 +656,8 @@ function M.draw(api)
         draw_footer(api, s.new)
     elseif state == STATE_ASK then
         draw_ask(api)
+    elseif state == STATE_UNSAVED then
+        draw_unsaved(api)
     elseif state ~= STATE_OVERWRITE then
         local i = s.cursor + s.top
         if i > -s.mode and i <= s.count - s.mode then

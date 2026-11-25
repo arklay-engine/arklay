@@ -1,0 +1,14 @@
+# The main game's results (oracle/re2-regress.d/result.toml), Leon B on HARD: the reveal and the end of step 5 by keys, the save screen left through its question's Yes, then HARD's picture ended by a key.
+0
+330 confirm
+333
+420 confirm
+423
+700 cancel
+703
+750 left
+753
+800 confirm
+803
+1100 confirm
+1103

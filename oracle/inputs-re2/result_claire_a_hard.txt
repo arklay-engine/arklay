@@ -1,0 +1,16 @@
+# The main game's results (oracle/re2-regress.d/result.toml), Claire A on HARD: a key at once in step 5 reveals the rank, a second ends it; then on the save screen cancel asks whether to go on without saving, decide on its No goes back to the list, cancel asks again, left moves to Yes and decide leaves without a save.
+0
+800 confirm
+803
+900 confirm
+903
+1200 cancel
+1203
+1250 confirm
+1253
+1300 cancel
+1303
+1350 left
+1353
+1400 confirm
+1403

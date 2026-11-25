@@ -266,13 +266,24 @@ impl LuaScreen {
         file: SaveFile,
         ink_ribbon: bool,
     ) -> Result<Self> {
+        Self::open_save_with(entry, cx, file, ink_ribbon, &[])
+    }
+
+    /// [`LuaScreen::open_save`] with `args` for the script's `open`.
+    pub fn open_save_with(
+        entry: &str,
+        cx: &mut UiContext<'_>,
+        file: SaveFile,
+        ink_ribbon: bool,
+        args: &[(&str, ScreenArg)],
+    ) -> Result<Self> {
         Self::open(
             entry,
             Mode::Save {
                 file: Box::new(file),
                 ink_ribbon,
             },
-            &[],
+            args,
             cx,
             None,
         )

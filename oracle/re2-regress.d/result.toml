@@ -117,3 +117,139 @@ ignore = [[2399, 2521, "tlogo"], [2399, 2521, "tx"]]
 frames = [2399, 2999]
 frame_max_mean = 0.1
 expect = "match"
+
+# The main game's results (`Result_01`'s steps 0 to 7, and a B's 8 to 0x17 after the save): a new game in room 100
+# with `fg_system`'s 0x200000 and no extra's bit, as Leon or Claire (arklay starts Claire's game for her runs: a room's
+# start writes `fg_status`'s character bit from the game's) and in scenario A or B (flag 1:1). The clear time is
+# `GameSeconds`, 0 on the first tick of a new game, so the time's and the saves' scores are 100 and the rank S.
+# The frames differ where the original's Classic REbirth draws its own English words for the pieces (the character's
+# name, the weapons' words) over the executable's Japanese `end00.adt`.
+
+# Leon A's: the film's 300 ticks, the picture with the rank, then the rocket launcher the time's score earns (step 6),
+# up to the save screen's wait.
+[[run]]
+name = "result_leon_a"
+room = "new"
+offset = 0
+ticks = 3300
+setup_script = "result_main.lua"
+input = "none.txt"
+fields = "res,rest,rfade,rmus,bgm,snd,sv"
+# As result_4th's.
+ignore = [[0, "rfade"]]
+frames = [0, 3299]
+frame_max_mean = 2.0
+expect = "match"
+record = "--flag 0:10"
+
+# Leon A's to the save screen, whose new file writes the next scenario's game: Claire B's, with the rocket launcher in
+# the box and the records' 0x12, the save count at 0xFFFF and its write taking a ribbon that isn't there (`fg_key`'s
+# sixth byte). Then `Result_exit`.
+[[run]]
+name = "result_leon_a_save"
+room = "new"
+offset = 0
+# recorded for 4700 ticks; `Result_exit` chains the title on 4244
+ticks = 4244
+setup_script = "result_main.lua"
+input = "result_leon_a_save.txt"
+fields = "res,rest,rfade,rmus,bgm,snd,sv"
+ignore = [[0, "rfade"]]
+frames = [0, 4243]
+frame_max_mean = 2.5
+saves = true
+expect = "match"
+record = "--flag 0:10"
+
+# Claire A's on HARD, which earns no weapon: keys in step 5 reveal and end it, and the save screen's leave asks
+# (state 0x60): No goes back to the list, Yes leaves without a save.
+[[run]]
+name = "result_claire_a_hard"
+character = 1
+room = "new"
+offset = 0
+# recorded for 1900 ticks; `Result_exit` chains the title on 1409
+ticks = 1409
+difficulty = "hard"
+setup_script = "result_claire_a.lua"
+input = "result_claire_a_hard.txt"
+fields = "res,rest,rfade,rmus,bgm,snd,sv"
+ignore = [[0, "rfade"]]
+frames = [0, 1408]
+frame_max_mean = 0.3
+expect = "match"
+record = "--flag 0:10 --flag 1:0"
+
+# Leon B's on HARD: film 0xE at once, the keys in step 5, the save left through its question, then the credits' sub,
+# HARD's picture (`sp_e`) ended by a key, and the end.
+[[run]]
+name = "result_leon_b_hard"
+room = "new"
+offset = 0
+# recorded for 1700 ticks; `Result_exit` chains the title on 1438
+ticks = 1438
+difficulty = "hard"
+setup_script = "result_leon_b.lua"
+input = "result_leon_b_hard.txt"
+fields = "res,rest,rfade,rmus,bgm,snd,sv"
+ignore = [[0, "rfade"]]
+frames = [0, 1437]
+frame_max_mean = 0.3
+expect = "match"
+record = "--flag 0:10 --flag 1:1"
+
+# Claire B's with the records' 0x12 (flag 29:18, a scenario A cleared before): the submachine gun, the rocket launcher
+# and the gatling gun earned, the first S's record, the save left through its question, then the bonus picture.
+[[run]]
+name = "result_claire_b_bonus"
+character = 1
+room = "new"
+offset = 0
+# recorded for 4800 ticks; `Result_exit` chains the title on 4338
+ticks = 4338
+setup_script = "result_claire_b.lua"
+input = "result_claire_b_bonus.txt"
+fields = "res,rest,rfade,rmus,bgm,snd,sv"
+ignore = [[0, "rfade"]]
+frames = [0, 4337]
+frame_max_mean = 2.7
+expect = "match"
+record = "--flag 0:10 --flag 1:0 --flag 1:1 --flag 29:18"
+
+# The title after the main game's results, from the tick `Result_exit` chains it: `Capcom_logo`, then the title.
+[[run]]
+name = "result_claire_a_hard_title"
+ref = "result_claire_a_hard"
+character = 1
+room = "new"
+offset = 0
+ticks = 1900
+compare_from = 1409
+difficulty = "hard"
+setup_script = "result_claire_a.lua"
+input = "result_claire_a_hard.txt"
+# As the extras' title runs: `ti` isn't compared, nor `tlogo` and `tsel` before the title loads, nor `tx` and
+# `tfade3`, which keep the title's statics as the record's title route left them (the logo's colour, fade 3's blend)
+# and arklay's scripted new game, which has no title, doesn't. The task's steps, the fades and the logo's wait match.
+fields = "tlogo,tfade,tsel,tfade2,snd"
+ignore = [[1409, 1531, "tlogo"], [1409, 1531, "tsel"]]
+frames = [1409, 1899]
+expect = "match"
+
+[[run]]
+name = "result_leon_b_hard_title"
+ref = "result_leon_b_hard"
+room = "new"
+offset = 0
+ticks = 1700
+compare_from = 1438
+difficulty = "hard"
+setup_script = "result_leon_b.lua"
+input = "result_leon_b_hard.txt"
+# As the extras' title runs: `ti` isn't compared, nor `tlogo` and `tsel` before the title loads, nor `tx` and
+# `tfade3`, which keep the title's statics as the record's title route left them (the logo's colour, fade 3's blend)
+# and arklay's scripted new game, which has no title, doesn't. The task's steps, the fades and the logo's wait match.
+fields = "tlogo,tfade,tsel,tfade2,snd"
+ignore = [[1438, 1560, "tlogo"], [1438, 1560, "tsel"]]
+frames = [1438, 1699]
+expect = "match"

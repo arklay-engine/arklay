@@ -547,7 +547,9 @@ impl Music {
     /// `Snd_bgm_main` with a table word of its own (`pBgm_table`'s
     /// `0xFF00 | id`) and `Seq_ctr[1]` 0, as the results play their music:
     /// what is loaded stops and goes, main `id` loads with no sub, and its
-    /// sequence takes hold 0. The room's word (`Bgm`) stays.
+    /// sequence takes hold 0. The room's word (`Bgm`) stays. Main `0xFF`
+    /// only stops and frees the main: `Snd_bgm_main` returns before the
+    /// subs.
     pub fn play_main(&mut self, id: u8, system: u32) {
         if system & SYSTEM_NO_MUSIC != 0 {
             return;
@@ -555,6 +557,13 @@ impl Music {
         if self.sequences[0].state != 0 {
             self.stop(0);
             self.sequences[0].state = 0;
+        }
+        if id == 0xFF {
+            for channel in 0..3 {
+                self.load(channel, None, 0);
+            }
+            self.sequences[0].loaded = false;
+            return;
         }
         for sequence in 1..SEQUENCES {
             if self.sequences[sequence].loaded {
@@ -570,6 +579,29 @@ impl Music {
         self.sequences[0].volume = RESULT_VOLUME;
         self.load_main(id, system);
         self.sequences[0].hold = 0;
+    }
+
+    /// `Snd_bgm_sub` with a table word of its own (the word's second byte,
+    /// `id`) and `Seq_ctr[1]` and `[2]` at 0 with holds of 0 and volumes of 100, as a
+    /// scenario B's results play the credits: the subs stop and go, and sub
+    /// `id` loads, audible in rooms 0 and 4 of the first stage
+    /// (`Bgm_ck_room`).
+    pub fn play_sub(&mut self, id: u8, place: Place) {
+        if place.system & SYSTEM_NO_MUSIC != 0 {
+            return;
+        }
+        for sequence in 1..SEQUENCES {
+            if self.sequences[sequence].state != 0 {
+                self.stop(sequence);
+                self.sequences[sequence].state = 0;
+            }
+            self.sequences[sequence].volume = RESULT_VOLUME;
+            // `Result_01` zeroes both holds (`0x693809`, `0x693811`), which
+            // `Snd_bgm_sub` leaves: a last room with no sub bank doesn't
+            // keep the credits from playing.
+            self.sequences[sequence].hold = 0;
+        }
+        self.load_sub(id, place);
     }
 
     /// `Snd_bgm_ck`'s wait still holds what a room asks of the music.
@@ -1021,6 +1053,18 @@ mod tests {
                 .all(|channel| channel.track.is_none())
         );
         assert_eq!(music.current, word(0, 1));
+    }
+
+    /// A scenario B's credits (sub 0x33) after a last room with no sub
+    /// bank: `Result_01` zeroes the holds the room left at `0xFF`.
+    #[test]
+    fn the_credits_sub_takes_holds_of_0_after_a_room_with_no_sub() {
+        let mut music = Music::default();
+        music.enter_room(word(0, 0xff), street());
+        assert_eq!(music.sequences[1].hold, HOLD_NOTHING);
+        music.play_sub(0x33, street());
+        assert_eq!(music.sequences[1].hold, 0);
+        assert_eq!(music.sequences[2].hold, 0);
     }
 
     #[test]

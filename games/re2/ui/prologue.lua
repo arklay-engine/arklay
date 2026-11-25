@@ -4,7 +4,8 @@
 --
 -- The executable has three sequences: Leon's and Claire's first scenario
 -- (`Prologue_mv00`, 0x4CF990), ported here, and the two a second scenario
--- starts with (`Prologue_mv01`, `Prologue_mv02`), which nothing reaches yet.
+-- starts with (`Prologue_mv01`, `Prologue_mv02`), not yet ported: a load of
+-- the results' save for the next scenario starts its room at once.
 --
 -- A sprite is a record of `intro_sprt0` (0x533600): a mode byte, a kind, a
 -- depth, an entry of `intromap_gfx` (0x533490) or `intromap_sub` (0x533520),

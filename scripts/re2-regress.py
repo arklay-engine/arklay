@@ -297,7 +297,7 @@ def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input
 
 # A run that keeps its saves (`saves = true`) compares the original's save image of each save arklay makes with the
 # reference's file of the same save count, under the image's mask (`src/save/re2_image.rs`). After every update the
-# driver reads the save count from arklay's image (`re2_save_image`, offset 0x220), and when it moves prints
+# driver reads the save count from arklay's image (`re2_save_image`, offset 0x220), and when a save raises it by one prints
 # `save-image COUNT JSON`, the regions that differ (`-` for a save the reference keeps no file of, one a later save
 # overwrote), and `save-folder COUNT JSON`, the save folder as the engine reads it back (`re2_saves`). At the end it
 # prints `save-final JSON`, the folder again with each kept save's image (the game the file holds, as a load applies
@@ -311,7 +311,11 @@ function after_tick()
     local count = save_count(re2_save_image())
     if saves_seen == nil then saves_seen = count end
     if count == saves_seen then return end
+    -- A save raises the count by one; any other change is the work replaced
+    -- (the main game's results make the next scenario's, at 0xFFFF).
+    local raised = (count - saves_seen) & 0xFFFF == 1
     saves_seen = count
+    if not raised then return end
     local ref = save_refs[count]
     if ref then
         local _, differ = re2_save_image(ref)
