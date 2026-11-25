@@ -185,12 +185,6 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,m
 frames = [360, 4729]
 # 0.93 measured, recorded under Wine; the worst, 1697 (7.2), 4400 and 1169, are door loads (#672)
 frame_max_mean = 1.0
-ignore = [
-  # 112's window scene: arklay moves the scene's zombies by their motion where the original holds them (#885)
-  [620, 661, "zm3"],
-  [833, 897, "zm3"],
-  [800, 897, "zm0"],
-]
 expect = "match"
 record = "--warp 112:-17484:0:-26200:3128:1 --flag 3:33 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:36 --flag 4:38 --flag 4:39 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:75 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:19 --flag 6:51 --flag 6:52 --flag 6:54 --flag 6:55 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:82 --flag 6:83 --flag 6:85 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:114 --flag 6:115 --flag 6:116 --flag 6:131 --flag 6:133 --flag 6:148 --flag 6:157 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:31 --flag 8:32 --flag 8:34 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:97 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:188 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 30 --give 0:0x02:5 --give 2:0x33:1 --give 3:0x5C:2 --give 4:0x4A:1 --give 5:0x43:1 --give 6:0x33:1 --box 2:0x3C:1 --box 3:0x32:1 --box 4:0x1E:3"
 

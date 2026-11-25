@@ -2365,6 +2365,8 @@ const WK_OBJECT: i64 = 4;
 const MEMBER_POS_X: usize = 0x0B;
 /// The member that reads and writes `cdir.y`.
 const MEMBER_ANGLE: u8 = 0x0F;
+/// `nFloor` (`+0x106`).
+const MEMBER_FLOOR: u8 = 0x11;
 /// `Id`.
 const MEMBER_ID: u8 = 6;
 /// `+0xB`, the enemy's last area ([`Character::area`]).
@@ -3885,6 +3887,10 @@ fn character_member(character: &Character, member: u8) -> Option<i32> {
             .zombie
             .as_ref()
             .map(|zombie| i32::from(zombie.flags)),
+        MEMBER_FLOOR if character.zombie.is_some() => character
+            .zombie
+            .as_ref()
+            .map(|zombie| i32::from(zombie.floor)),
         _ => crate::player2::member(&character.work, member),
     }
 }
@@ -3922,6 +3928,15 @@ fn set_character_member(character: &mut Character, member: u8, value: i32) {
         MEMBER_ID => character.id = value as u8,
         MEMBER_AREA => character.area = value as u8,
         MEMBER_ANGLE => character.body.angle = value as u16,
+        // `nFloor`, which a zombie's `Sca_ck_em` takes its floor's bit from:
+        // room 112's window zombies get 10 (`main_27`, `main_2C`), which no
+        // wall by the windows has.
+        MEMBER_FLOOR if character.zombie.is_some() => {
+            if let Some(zombie) = character.zombie.as_mut() {
+                zombie.floor = value as u8;
+            }
+            crate::player2::set_member(&mut character.work, member, value);
+        }
         MEMBER_ZOMBIE_FLAGS => {
             if let Some(zombie) = character.zombie.as_mut() {
                 zombie.flags = value as u16;
@@ -4431,6 +4446,21 @@ mod tests {
         assert_eq!(character.body.pos, [-14869, -5700, -3479]);
         assert_eq!(character.work.sce_free[0], 1);
         assert_eq!(character.body.angle, angle);
+    }
+
+    /// Room 112's window scene (`main_27`, `main_2C`) gives each zombie
+    /// `nFloor` 10 with `member_set(17, 10)`: its `Sca_ck_em` then takes floor
+    /// 10's bit, which no wall by the windows has.
+    #[test]
+    fn member_17_sets_a_zombies_floor() {
+        let mut game = GameState::default();
+        let zombie = [0, 3, 0x1F, 10, 0x40, 0, 0, 1, 255, 32000, 0, 29000, 0, 0, 0];
+        exec(&mut game, "sce_em_set", &zombie);
+        exec(&mut game, "work_set", &[WK_ENEMY, 3]);
+        exec(&mut game, "member_set", &[17, 10]);
+        let character = game.re2.characters.0[3].as_ref().unwrap();
+        assert_eq!(character.zombie.as_ref().unwrap().floor, 10);
+        assert_eq!(character_member(character, MEMBER_FLOOR), Some(10));
     }
 
     /// Room 20E's licker from door 2 (`Type` 0x4013): `Sce_em_set` leaves
