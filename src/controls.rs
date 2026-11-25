@@ -41,10 +41,10 @@ use sdl3_sys::scancode::{
     SDL_SCANCODE_0, SDL_SCANCODE_1, SDL_SCANCODE_A, SDL_SCANCODE_BACKSPACE, SDL_SCANCODE_COUNT,
     SDL_SCANCODE_D, SDL_SCANCODE_DOWN, SDL_SCANCODE_ESCAPE, SDL_SCANCODE_F, SDL_SCANCODE_F1,
     SDL_SCANCODE_F5, SDL_SCANCODE_F9, SDL_SCANCODE_I, SDL_SCANCODE_LCTRL, SDL_SCANCODE_LEFT,
-    SDL_SCANCODE_LEFTBRACKET, SDL_SCANCODE_LSHIFT, SDL_SCANCODE_M, SDL_SCANCODE_Q, SDL_SCANCODE_R,
-    SDL_SCANCODE_RCTRL, SDL_SCANCODE_RETURN, SDL_SCANCODE_RIGHT, SDL_SCANCODE_RIGHTBRACKET,
-    SDL_SCANCODE_RSHIFT, SDL_SCANCODE_S, SDL_SCANCODE_TAB, SDL_SCANCODE_UNKNOWN, SDL_SCANCODE_UP,
-    SDL_SCANCODE_W, SDL_Scancode,
+    SDL_SCANCODE_LEFTBRACKET, SDL_SCANCODE_LSHIFT, SDL_SCANCODE_M, SDL_SCANCODE_PAUSE,
+    SDL_SCANCODE_Q, SDL_SCANCODE_R, SDL_SCANCODE_RCTRL, SDL_SCANCODE_RETURN, SDL_SCANCODE_RIGHT,
+    SDL_SCANCODE_RIGHTBRACKET, SDL_SCANCODE_RSHIFT, SDL_SCANCODE_S, SDL_SCANCODE_TAB,
+    SDL_SCANCODE_UNKNOWN, SDL_SCANCODE_UP, SDL_SCANCODE_W, SDL_Scancode,
 };
 
 /// One logical action.
@@ -99,10 +99,14 @@ pub enum Action {
     /// option screen on it in play (`Config`, `0x449FD0`). Nothing else
     /// reads it.
     Option,
+    /// RE 2's ARRANGE MODE pause, the raw pad's `0x2`: `Psx_main`
+    /// (`0x4C3C70`) pauses and resumes the game on its edge. `Pad_set` maps
+    /// it to no `Key` bit.
+    Pause,
 }
 
 /// Every action, in the order the rebind screen and the config file list them.
-pub const ACTIONS: [Action; 30] = [
+pub const ACTIONS: [Action; 31] = [
     Action::Up,
     Action::Down,
     Action::Left,
@@ -133,6 +137,7 @@ pub const ACTIONS: [Action; 30] = [
     Action::EquipSlot9,
     Action::EquipSlot10,
     Action::Option,
+    Action::Pause,
 ];
 
 /// The slot-equip actions, slot 1 first.
@@ -198,6 +203,7 @@ impl Action {
             Action::EquipSlot9 => "equip_9",
             Action::EquipSlot10 => "equip_10",
             Action::Option => "option",
+            Action::Pause => "pause",
         }
     }
 
@@ -239,6 +245,7 @@ impl Action {
             Action::EquipSlot9 => "UI_CONTROLS_EQUIP_9",
             Action::EquipSlot10 => "UI_CONTROLS_EQUIP_10",
             Action::Option => "UI_CONTROLS_OPTION",
+            Action::Pause => "UI_CONTROLS_PAUSE",
         }
     }
 
@@ -683,6 +690,12 @@ impl Default for Bindings {
                     key(SDL_SCANCODE_F5),
                 ],
             ),
+            // ARRANGE MODE's pause: the executable binds no key to it
+            // (`KeyDef`'s entry 6 is 0, `FUN_0044da40`) and the pad's table
+            // puts it on button 16 (`Joypad_data`, `0x524D68`), which no
+            // pad of arklay's has; the Pause key here, which nothing else
+            // binds.
+            (Action::Pause, vec![key(SDL_SCANCODE_PAUSE)]),
         ] {
             bindings.sources[action as usize] = sources;
         }
@@ -999,6 +1012,8 @@ mod tests {
             names(Action::Option),
             ["key:Left Ctrl", "key:Right Ctrl", "key:F5"]
         );
+        // ARRANGE MODE's pause: no key of the executable's; Pause.
+        assert_eq!(names(Action::Pause), ["key:Pause"]);
         assert!(
             bindings
                 .get(Action::Option)

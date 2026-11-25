@@ -78,6 +78,10 @@ pub const STATE_BYTE_PICKED_AOT: u8 = 20;
 /// original's `g_gameTimerSnapshot`. It ticks at 30 Hz and is read by the
 /// RESULT screen and the next-cycle grant.
 pub const STATE_BYTE_PLAY_TIMER: u8 = 0x24;
+/// The frames of RE 2's play timer to a second of `GameSeconds`:
+/// `WinMain` adds 2 to `FrameCurrent` each frame at 30 fps and steps the
+/// seconds past 60.
+pub const RE2_FRAMES_A_SECOND: u32 = 31;
 /// State byte holding the save counter (BioCard 0x228).
 pub const STATE_BYTE_SAVES: u8 = 40;
 /// State byte holding the equipped item (BioCard 0x229).
@@ -4954,6 +4958,24 @@ impl GameState {
                 .try_into()
                 .expect("the state image holds the timer"),
         )
+    }
+
+    /// RE 2's `GameSeconds` (`0x98E99C`), which `WinMain` steps every 31
+    /// frames of the play timer.
+    pub fn re2_game_seconds(&self) -> u32 {
+        self.play_timer() / RE2_FRAMES_A_SECOND
+    }
+
+    /// `SetGameSeconds(seconds)` (`0x4428F0`), which the pause's resume
+    /// calls with the seconds its press read: `WinMain`'s count to the next
+    /// second (`FrameCurrent`) runs on. 1 is the call's read, not a value,
+    /// so seconds of 1 are left as they stand.
+    pub fn set_re2_game_seconds(&mut self, seconds: u32) {
+        if seconds == 1 {
+            return;
+        }
+        let frames = self.play_timer() % RE2_FRAMES_A_SECOND;
+        self.set_play_timer(seconds * RE2_FRAMES_A_SECOND + frames);
     }
 
     /// Store the 30 Hz play timer (BioCard 0x224).
@@ -13990,6 +14012,24 @@ mod tests {
         );
         assert_eq!(host.state().voice, before);
         assert!(!host.state().voice_playing());
+    }
+
+    /// `SetGameSeconds` from the pause's resume: the seconds go back and
+    /// the count to the next one runs on; 1 is the call's read, which
+    /// leaves the seconds as they stand.
+    #[test]
+    fn re2_game_seconds_go_back_with_the_frames_to_the_next_kept() {
+        let mut state = GameState::default();
+        state.set_play_timer(31 * 7 + 4);
+        assert_eq!(state.re2_game_seconds(), 7);
+        state.set_play_timer(31 * 9 + 12);
+        state.set_re2_game_seconds(7);
+        assert_eq!(state.play_timer(), 31 * 7 + 12);
+        state.set_re2_game_seconds(0);
+        assert_eq!(state.play_timer(), 12);
+        state.set_play_timer(31 * 5 + 3);
+        state.set_re2_game_seconds(1);
+        assert_eq!(state.play_timer(), 31 * 5 + 3);
     }
 
     #[test]

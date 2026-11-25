@@ -227,6 +227,10 @@ BUTTONS = {
     # The PC's option key: `Pad_set` maps it to no `Key` bit, and `Game_loop` opens the option screen in play on
     # its edge (`0x9885FE`'s 0x100).
     "option": 0x0100,
+    # ARRANGE MODE's pause key: `Pad_set`'s table maps it to no `Key` bit, and `Psx_main` (0x4C3C70) pauses and
+    # resumes the game on its edge (`0x9885F8`'s 0x2). The executable's keys leave it unbound (`KeyDef` entry 6);
+    # a pad button raises it.
+    "pause": 0x0002,
     # The keyboard's own arrows, bits 25 to 28 of the input class's key word, which KEYCONFIG's page reads
     # (`KEY_WORD`), not the pad.
     "kbup": 0x02000000,
