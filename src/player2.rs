@@ -2122,6 +2122,13 @@ fn latch_stopped(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
     .latch_parts();
 }
 
+/// `Joint_trans2`'s draw of a scene character: every part's `Workm` on the
+/// pose as its tick and the pushes left it, what another work hung on one of
+/// its parts composes on (G1's part 0x12 on Ben's part 8).
+pub(crate) fn latch_drawn(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
+    latch_stopped(work, player, tick);
+}
+
 /// The parts' `Workm` move with the body to `pos`, as the draw after the
 /// pushes and the scripts composes them there: what an effect on a part
 /// follows (`Effects::anchors`).
@@ -7405,10 +7412,15 @@ impl Mover<'_, '_> {
         }
     }
 
-    /// `Spl_sce07` and `08`: a scripted walk backwards.
+    /// `Spl_sce07` and `08`: a scripted walk backwards. `Spl_sce08`'s run
+    /// writes the speed as a dword (`0x4f64eb`), so the negated byte's sign
+    /// fills `Spd_y` too: -1 for any speed but 0.
     fn spl_back(&mut self, speed: i16, clip: u8) {
         if self.work.routine[2] == 0 {
             self.work.spd[0] = speed.wrapping_neg();
+            if clip == 1 {
+                self.work.spd[1] = -i16::from(speed != 0);
+            }
             self.work.spd[2] = 0;
             self.start_motion(Bank::Pld, clip);
         } else if self.work.routine[2] != 1 {
@@ -12727,6 +12739,24 @@ mod tests {
             "{:?}",
             setup.player.pos
         );
+    }
+
+    /// `Spl_sce08`, the scripted run backwards, writes its speed as a dword:
+    /// `Spd_y` takes the negated byte's sign, -1 (219's landing walks Leon
+    /// back to (1706, -22016) on it). `Spl_sce07`'s walk writes a word and
+    /// leaves `Spd_y` as it was.
+    #[test]
+    fn a_scripted_run_backwards_sets_speed_y_to_its_sign() {
+        for (routine, spd) in [(8, [-0x28, -1, 0]), (7, [-0x46, 5, 0])] {
+            let mut setup = Setup::new(50);
+            setup.player.pos = [0, 0, 0];
+            setup.player.angle = 0;
+            setup.work.spd = [0, 5, 7];
+            plc_dest(&mut setup.work, 0, routine, 7, -1000, 0);
+            setup.tick(Input::default(), 200);
+            assert_eq!(setup.work.routine[1], routine);
+            assert_eq!(setup.work.spd, spd, "routine {routine}");
+        }
     }
 
     /// `Spl_sce_mv02` measures with `SquareRoot0`, whose root of 10000 is

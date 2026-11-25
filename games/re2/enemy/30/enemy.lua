@@ -38,6 +38,30 @@ local SPURT_DIR <const> = 14 -- `+0x22a`: the way it spurts.
 local EYE <const> = 15
 local EYE_STEP <const> = 16
 local EYE_COUNT <const> = 17
+-- Routine 11's (room 219's landing): part 0x12's `Timer0` to `Timer3` and
+-- `Size_x` (`FUN_0048d4a0`), and the dropped part 0x11's height (its
+-- `Workm`'s `t[1]`) and its morph's two weights. The init doesn't clear them.
+local SPRAY_T0 <const> = 18
+local SPRAY_T1 <const> = 19
+local SPRAY_T2 <const> = 20
+local SPRAY_T3 <const> = 21
+local SPRAY_SIZE <const> = 22
+local DROP_Y <const> = 23
+local DROP_W3 <const> = 24
+local DROP_W4 <const> = 25
+-- The first weights (`pSa_dat_head`'s words at 3) of parts 1, 2, 4 and 5,
+-- whose morphs place their children: the init sets them, routine 10 takes
+-- them down over its scene, and routine 11 swells 1 and 2. Part 4's second
+-- weight is `EYE`.
+local W1 <const> = 26
+local W2 <const> = 27
+local W4 <const> = 28
+local W5 <const> = 29
+
+-- Part 4, the eye.
+local EYE_PART <const> = 4
+-- Part 0x12, hung on `enemy_work[0]`'s part 8, which room 219's landing sprays.
+local SPRAY_PART <const> = 0x12
 
 -- The init's life: normal, with `fg_system`'s `0x20`, and in hard mode.
 local LIFE <const> = 500
@@ -53,6 +77,46 @@ local function i16(value)
     value = value & 0xFFFF
     return value >= 0x8000 and value - 0x10000 or value
 end
+
+-- `Sa_parts_allmv` on `part` with its first weight `first` (and its second
+-- `second`), the others as the model's data holds them; then, with `all`,
+-- `FUN_004e0070`, every part by the same weights.
+local function part_weights(e, part, first, second)
+    local weights = { e:morph_weights(part) }
+    weights[1] = i16(first)
+    if second then
+        weights[2] = i16(second)
+    end
+    return weights
+end
+
+local function morph_part(e, part, first, second, all)
+    local weights = part_weights(e, part, first, second)
+    e:morph(part, table.unpack(weights))
+    if all then
+        e:morph_all(part, table.unpack(weights))
+    end
+end
+
+-- Parts 1's and 2's morphs from `W1` and `W2`.
+local function morph_body(e)
+    morph_part(e, 1, e:var(W1))
+    morph_part(e, 2, e:var(W2))
+end
+
+-- `Timer2` as the original's `char`.
+local function timer2_signed(e)
+    local value = e:timer(2)
+    return value >= 0x80 and value - 0x100 or value
+end
+
+-- `BYTE_0052a350`, by `+0x21e` (0 to 63): parts 1's and 2's swell.
+local SWELL <const> = {
+    [0] = 12, 23, 35, 43, 51, 60, 66, 71, 75, 79, 82, 86, 89, 92, 94, 96,
+    97, 98, 99, 100, 99, 98, 97, 96, 94, 92, 89, 87, 85, 83, 80, 78,
+    75, 72, 68, 65, 62, 58, 54, 49, 44, 39, 34, 29, 24, 19, 13, 7,
+    0, -6, -15, -11, -26, -30, -32, -34, -35, -35, -34, -31, -25, -20, -10, 0,
+}
 
 local function count_down(e, index)
     local value = e:var(index)
@@ -123,11 +187,52 @@ local function init(e)
     -- The parts start smaller (`Size_x` to `_z` 0xc28, 0xeb8 and 0xc28) and
     -- grow in the scene; arklay draws them at their own size.
     e:set_parts0_y(0xEB8)
+    -- Parts 1, 2, 4 (with `FUN_004e0070`, every part by 4's) and 5 on their
+    -- first weights, 0x1000, and 4's second 0.
+    for _, index in ipairs({ W1, W2, W4, W5 }) do
+        e:set_var(index, 0x1000)
+    end
+    morph_body(e)
+    morph_part(e, EYE_PART, 0x1000, 0, true)
+    morph_part(e, 5, 0x1000)
+    -- Part 0x12's `Be_flg` is 0 here, and only `Type` 2 (0x4401) and 5 (1)
+    -- put it in play: `Joint_trans2` composes no other type's.
+    local spray_in_play = low == 2 or low == 5
+    -- With `enemy_work[0]` in play, part 0x12 hangs on its part 8 (`+0xcac`
+    -- and `+0xc8c`), at (0xeb, -0xb7, 0), or (0xf6, -0xfb, 0) on Ben (0x44):
+    -- room 219's spray starts from Ben's chest. In 303 the G1 is slot 0
+    -- and hangs it on its own part 8.
+    if e:slot_in_play(0) then
+        if e:slot_id(0) == 0x44 then
+            e:hang_part(SPRAY_PART, 0, 8, 0xF6, -0xFB, 0, spray_in_play)
+        else
+            e:hang_part(SPRAY_PART, 0, 8, 0xEB, -0xB7, 0, spray_in_play)
+        end
+    end
     if START[low] then
         e:set_routine(1, START[low])
     end
+    -- Room 219's landing (`Type` 2): routine 11 (`START`) starts on clip 20,
+    -- played once from its start (the word write of `Move_no` clears
+    -- `Move_cnt`, `Hokan_flg` and `Mplay_flg`), with `Timer3` 0. The part
+    -- the landing drops isn't drawn.
+    if low == 2 then
+        e:set_timer(3, 0)
+        e:clip(0x14, 0, 0)
+        e:joint(0x100)
+        -- Part 0x12's `Size_x` (`+0xca4`).
+        e:set_var(SPRAY_SIZE, 0x1000)
+    end
     if low == 4 then
         e:set_kind(kind & 0xF000)
+    end
+    -- `Type` 5 hangs part 0x12 back on its own part 0 at (0, 0, 0), in play,
+    -- on its first weights (0x1000 and 0). Its `Be_flg |= 0xa`, the 0x4000
+    -- it gives its first sixteen parts and the byte it clears at
+    -- `+0x16c`'s `+0xe` aren't ported: no room in the runs has a `Type` 5.
+    if low == 5 then
+        e:hang_part(SPRAY_PART, e:slot(), 0, 0, 0, 0, true)
+        e:morph(SPRAY_PART, 0x1000, 0)
     end
 end
 
@@ -139,6 +244,13 @@ end
 -- its blood at clip 15's frame 15 aren't drawn.
 local function scene(e)
     local sub = e:routine(2)
+    -- Until it changes, parts 1 and 2 swell by `BYTE_0052a350`.
+    if sub < 4 then
+        local weight = 0x1000 - SWELL[e:var(WAVE)] * 5
+        e:set_var(W1, weight)
+        e:set_var(W2, weight)
+        morph_body(e)
+    end
     if sub == 0 then
         set_clip(e, 0xE)
         e:set_timer(0, 0x78)
@@ -174,12 +286,37 @@ local function scene(e)
         end
         if now < 0x28 then
             -- Its arm shakes, wider each tick.
+            e:set_var(W2, i16(e:var(W2) + timer2_signed(e) * e:timer(1)))
             e:set_timer(1, e:timer(1) + 5)
             flip_timer2(e)
+            morph_part(e, 2, e:var(W2))
         end
     elseif sub == 4 then
         e:set_parts0_y(0x1000)
+        -- Its body's weights go down to rest, the eye's second to 0x1000.
+        if e:move_cnt() > 0x14 then
+            for _, index in ipairs({ W1, W2, W4 }) do
+                e:set_var(index, i16(e:var(index) - 200))
+                if index ~= W4 and e:var(index) < 0 then
+                    e:set_var(index, 0)
+                end
+            end
+            e:set_var(EYE, i16(e:var(EYE) + 200))
+            if e:var(W4) < 0 then
+                e:set_var(W4, 0)
+                e:set_var(EYE, 0x1000)
+            end
+            morph_body(e)
+            morph_part(e, EYE_PART, e:var(W4), e:var(EYE))
+        end
+        e:set_var(W2, i16(e:var(W2) + e:timer(1) * timer2_signed(e)))
         flip_timer2(e)
+        morph_part(e, 2, e:var(W2))
+        e:set_var(W5, i16(e:var(W5) - 100))
+        if e:var(W5) < 0 then
+            e:set_var(W5, 0)
+        end
+        morph_part(e, 5, e:var(W5), nil, true)
         e:spd()
         if e:joint(0x80) then
             e:set_routine(2, 5)
@@ -196,12 +333,25 @@ local function scene(e)
             e:set_var(FLAGS, e:var(FLAGS) | 0x40)
             e:set_var(TEXTURE, 0)
         end
+        -- Parts 1 and 2 swell about rest now.
+        local weight = -SWELL[e:var(WAVE)] * 5
+        e:set_var(W1, weight)
+        e:set_var(W2, weight)
+        morph_body(e)
         if i16(e:timer(1)) > 0 then
+            e:set_var(W2, i16(e:var(W2) + timer2_signed(e) * e:timer(1)))
             e:set_timer(1, e:timer(1) - 10)
             flip_timer2(e)
+            morph_part(e, 2, e:var(W2))
         end
         if i16(e:timer(0)) < 0x46 then
+            local eye_weight = i16(e:var(EYE) - e:timer(3) * 10)
             e:set_timer(3, e:timer(3) + 1)
+            if eye_weight < 0 then
+                eye_weight = 0
+            end
+            e:set_var(EYE, eye_weight)
+            morph_part(e, EYE_PART, e:var(W4), eye_weight)
         end
     elseif sub == 6 then
         e:spd()
@@ -213,12 +363,14 @@ local function scene(e)
             e:set_var(TEXTURE, 0)
         end
         e:add_speed_xz()
+        e:morph_all(5, table.unpack(part_weights(e, 5, e:var(W5))))
     elseif sub == 7 then
         if play(e) then
             e:set_kind(e:kind() & ~TYPE_SCENE)
             e:set_var(FLAGS, e:var(FLAGS) & ~0x40)
             e:routines(1, 1, 0, 0)
         end
+        e:morph_all(5, table.unpack(part_weights(e, 5, e:var(W5))))
     end
 end
 
@@ -972,7 +1124,6 @@ end
 -- arm, moves toward its place under the swollen eye by the eye's weight (the
 -- second of its three targets), which shortens the arm's reach. The eye's
 -- own shape isn't drawn swollen.
-local EYE_PART <const> = 4
 
 local function eye_morph(e, weight)
     e:morph(EYE_PART, 0, weight, 0)
@@ -1251,6 +1402,267 @@ local function dying(e)
     death(e)
 end
 
+-- The parts routine 11 morphs, by `pSa_dat_head`'s words at 3 and 4.
+local DROP_PART <const> = 0x11
+local DROP_PARENT <const> = 6
+local DROP_AT <const> = { 0xC, 0x86, 0x1E }
+
+local function drop_morph(e)
+    e:morph(DROP_PART, i16(e:var(DROP_W3)), i16(e:var(DROP_W4)))
+end
+
+-- `FUN_0048d4a0`: part 0x12, which routine 11 shows once its case 5 has set
+-- `+0x218` to 1: it swells and shrinks between 0 and 0x1000 by 0x400 a tick,
+-- turning back after one to four ticks (`Rnd & 3`) or at either end, with a
+-- drop of blood (`Esp_call` kind 0, row 0x14, at (0x10, 0x70, 0) on it as it
+-- hangs on `enemy_work[0]`'s part 8, sized `Rnd + 0xddc`) at each turn; after 30 ticks it narrows by 0x14 a tick for
+-- 60 more, then by 0x200 until its width is gone, and hides.
+local function spray(e)
+    local state = e:var(CNT_218)
+    if state == 0 then
+        e:set_hidden_parts(e:hidden_parts() | 1 << SPRAY_PART)
+        return
+    elseif state == 2 then
+        return
+    end
+    local step = e:var(CNT_219)
+    if step == 0 then
+        e:set_var(SPRAY_T0, 0x1000)
+        e:set_var(CNT_219, 1)
+        e:set_var(SPRAY_T2, 1)
+        e:set_var(SPRAY_T1, 0x1E)
+        e:set_var(SPRAY_T3, (e:rnd() & 3) + 1)
+        e:set_hidden_parts(e:hidden_parts() & ~(1 << SPRAY_PART))
+        step = 1
+    end
+    if step == 1 then
+        local was = e:var(SPRAY_T1)
+        e:set_var(SPRAY_T1, (was - 1) & 0xFF)
+        if was == 0 then
+            e:set_var(CNT_219, 2)
+            e:set_var(SPRAY_T1, 0x3C)
+        end
+    elseif step == 2 then
+        local was = e:var(SPRAY_T1)
+        e:set_var(SPRAY_SIZE, i16(e:var(SPRAY_SIZE) - 0x14))
+        e:set_var(SPRAY_T1, (was - 1) & 0xFF)
+        if was == 0 then
+            e:set_var(CNT_219, 3)
+        end
+    elseif step == 3 then
+        local size = i16(e:var(SPRAY_SIZE) - 0x200)
+        e:set_var(SPRAY_SIZE, size)
+        if size < 0 then
+            e:set_var(CNT_219, 4)
+            e:set_hidden_parts(e:hidden_parts() | 1 << SPRAY_PART)
+        end
+    end
+    local weight = e:var(SPRAY_T0)
+    e:morph(SPRAY_PART, i16(0x1000 - weight), i16(weight))
+    local function turn()
+        e:set_var(SPRAY_T3, (e:rnd() & 3) + 1)
+        e:effect(0, 0x14, e:rnd() + 0xDDC, 0, SPRAY_PART, 0x10, 0x70, 0)
+    end
+    e:set_var(SPRAY_T0, i16(weight + e:var(SPRAY_T2) * 0x400))
+    if e:var(CNT_219) >= 4 then
+        return
+    end
+    local count = e:var(SPRAY_T3)
+    e:set_var(SPRAY_T3, i16(count - 1))
+    if count == 0 then
+        e:set_var(SPRAY_T2, -e:var(SPRAY_T2))
+        turn()
+    end
+    if e:var(SPRAY_T0) < 0 then
+        e:set_var(SPRAY_T2, 1)
+        e:set_var(SPRAY_T0, i16(e:var(SPRAY_T0) + 0x400))
+        turn()
+    end
+    if e:var(SPRAY_T0) > 0x1000 then
+        e:set_var(SPRAY_T2, -1)
+        e:set_var(SPRAY_T0, i16(e:var(SPRAY_T0) - 0x400))
+        turn()
+    end
+end
+
+-- The parts routine 11's case 0 hides: of the first sixteen, all but 4 to 6
+-- and 10 to 15.
+local LANDING_HIDDEN <const> = 0xFFFF & ~(0x70 | 0xFC00)
+
+-- Routine 11 (`0x48ccb0`): room 219's landing (`Type` 2), which the room's
+-- script drives through `Sce_free0`. It holds clip 20's first frame until
+-- bit 0 (with `Spd_x` at `Timer2 >> 2`, which nothing adds), plays the clip
+-- once, shakes part 0x11
+-- loose and drops it (it falls from where it was last drawn and bounces four
+-- times on the floor, 0, or 0x96 below where it hung while slot 0 isn't Ben,
+-- id 0x44), then holds clip 1, nodding part 0x11, and plays it while bit 2.
+-- Bits 1 and 8 shrink and swell the eye (part 4); 0x20, 0x40 and 0x80 move
+-- its pupil (`Em30_me_yoko_a`, `Em30_me_tate_d`), which isn't drawn. Every
+-- tick ends with part 0x12 (`FUN_0048d4a0`). The dropped part's own matrix,
+-- its turn and its width, and parts 1's and 2's swell, aren't drawn.
+local function landing(e)
+    local sub = e:routine(2)
+    local free = e:sce_free(0)
+    if sub == 0 then
+        e:clip(0x14, 0, 0)
+        e:set_timer(2, 0x3C)
+        e:set_routine(2, 1)
+        e:set_var(CNT_218, 0)
+        e:set_var(CNT_219, 0)
+        e:set_var(SPRAY_T0, 0)
+        e:set_var(SPRAY_T1, 0)
+        e:set_hidden_parts(e:hidden_parts() & ~0xFFFF | LANDING_HIDDEN)
+        e:set_var(W4, 0)
+        e:set_var(EYE, 0x1000)
+        -- Words 3 and 4 only: the model's word 5 stays.
+        morph_part(e, EYE_PART, 0, 0x1000)
+        sub = 1
+    end
+    if sub == 1 then
+        e:set_speed_z(0)
+        e:set_speed_x(timer2_signed(e) // 4)
+        if free & 1 ~= 0 then
+            e:set_routine(2, 2)
+            e:set_timer(3, 1)
+        end
+    elseif sub == 2 then
+        if e:joint(0x100) then
+            e:set_routine(2, 3)
+        end
+        local shake = e:timer(3)
+        e:set_var(DROP_W3, i16(0x1000 - shake * 0x1000))
+        e:set_var(DROP_W4, i16(shake * 0x1000))
+        drop_morph(e)
+        e:set_timer(3, (shake - 1) & 1)
+    elseif sub == 3 or sub == 4 then
+        if sub == 3 then
+            e:set_routine(2, 4)
+            e:set_timer(1, 0x80)
+            e:set_timer(2, 6)
+            e:set_timer(0, 0)
+        end
+        e:set_var(DROP_W3, i16(e:var(DROP_W3) - e:timer(1)))
+        drop_morph(e)
+        local count = e:timer(2)
+        e:set_timer(2, count - 1)
+        if count == 0 then
+            e:set_timer(2, 6)
+            e:set_timer(1, -i16(e:timer(1)))
+        end
+        if timer0_down(e) then
+            e:set_routine(2, 5)
+            e:set_timer(0, 0)
+        end
+    elseif sub == 5 then
+        if i16(e:timer(0)) < 0x10 then
+            e:set_var(DROP_W3, i16(e:var(DROP_W3) + 0x100))
+        else
+            e:set_var(DROP_W3, i16(e:var(DROP_W3) - 0x200))
+        end
+        drop_morph(e)
+        if timer0_down(e) then
+            e:set_routine(2, 6)
+            e:set_timer(0, 0x1E)
+            e:set_timer(1, 0)
+            e:set_var(CNT_218, 1)
+            e:set_var(CNT_219, 0)
+            e:set_var(SPRAY_T0, 0)
+            e:set_var(SPRAY_T1, 0)
+        end
+    elseif sub == 6 then
+        e:set_var(DROP_W4, i16(e:var(DROP_W4) + 0x100))
+        drop_morph(e)
+        e:set_timer(1, e:timer(1) + 3)
+        if i16(e:timer(0)) < 5 then
+            e:set_timer(1, e:timer(1) - 6)
+        end
+        if timer0_down(e) then
+            -- The part comes loose where the last draw left it: the init
+            -- hangs it on part 6, the arm, at (0xc, 0x86, 0x1e) (its `Pos_x`
+            -- to `_z` and `pOya_parts`, `+0xb98` to `+0xc00`).
+            local _, y = e:drawn_part_point(DROP_PARENT, DROP_AT[1], DROP_AT[2], DROP_AT[3])
+            e:set_var(DROP_Y, y or 0)
+            local hung = e:slot_id(0) ~= 0x44
+            e:set_timer(3, hung and 1 or 0)
+            e:set_routine(2, 7)
+            e:set_timer(0, 0x1E)
+            e:set_timer(2, 3)
+            e:clip(0, 0, 0x1F)
+            if hung then
+                e:set_var(DROP_Y, e:var(DROP_Y) - 2000)
+            end
+        end
+    elseif sub == 7 then
+        e:joint(0x80)
+        e:set_timer(1, e:timer(1) - 2)
+        local y = e:var(DROP_Y) + i16(e:timer(0))
+        e:set_timer(0, e:timer(0) + 9)
+        local floor = e:timer(3) ~= 0 and 0x96 or 0
+        if y > floor then
+            y = floor
+            local bounces = e:timer(2)
+            e:set_timer(0, -(i16(e:timer(0)) // 8))
+            e:set_timer(2, bounces - 1)
+            if bounces == 0 then
+                e:clip(1, 0, 0x1F)
+                e:set_routine(2, 8)
+                e:set_timer(0, 8)
+                e:set_timer(3, 0)
+                e:set_timer(2, 0)
+            end
+            e:set_var(DROP_W4, i16(e:var(DROP_W4) - 0x100))
+        end
+        e:set_var(DROP_Y, y)
+        e:set_var(DROP_W4, i16(e:var(DROP_W4) - 0x100))
+        drop_morph(e)
+        e:set_speed_x(-20)
+        e:set_speed_z(0)
+        e:add_speed_xz()
+    elseif sub == 8 or sub == 9 then
+        local was = e:timer(0)
+        e:set_timer(0, was - 1)
+        if was == 0 then
+            e:set_routine(2, sub == 8 and 9 or 8)
+            e:set_timer(0, 8)
+        end
+        e:set_var(DROP_W4, i16(e:var(DROP_W4) + (sub == 8 and 0x40 or -0x40)))
+        drop_morph(e)
+        if free & 2 ~= 0 then
+            local count = e:timer(3)
+            local eye_weight = i16(e:var(EYE) - count * 10)
+            if count < 0x5A then
+                e:set_timer(3, count + 1)
+            end
+            if eye_weight < 0 then
+                eye_weight = 0
+            end
+            e:set_var(EYE, eye_weight)
+            eye_morph(e, eye_weight)
+        end
+        if free & 4 ~= 0 then
+            play(e)
+        end
+    end
+    if free & 0x100 ~= 0 then
+        local count = timer2_signed(e)
+        local eye_weight = i16(e:var(EYE) + count * 10)
+        if count < 0x5A then
+            e:set_timer(2, count + 1)
+        end
+        if eye_weight > 0x1000 then
+            eye_weight = 0x1000
+        end
+        e:set_var(EYE, eye_weight)
+        eye_morph(e, eye_weight)
+    end
+    spray(e)
+    -- Parts 1 and 2 swell by `BYTE_0052a350` on `+0x21e`'s count.
+    local weight = 0x1000 - SWELL[e:var(WAVE)] * 5
+    e:set_var(W1, weight)
+    e:set_var(W2, weight)
+    morph_body(e)
+end
+
 -- `funcs_48AB5B` (before the clip) and `funcs_48AB72` (after it), by
 -- `Routine_1`.
 local BEFORE <const> = { [1] = fight_ck, [5] = back_off_ck }
@@ -1265,6 +1677,7 @@ local AFTER <const> = {
     [8] = rear,
     [9] = escape,
     [10] = scene,
+    [11] = landing,
 }
 
 -- `FUN_0048ab30`.

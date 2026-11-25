@@ -1696,6 +1696,30 @@ function Re2EnemyApi:pull_part(part, behind) end
 ---@return integer? slot `nil` if none.
 function Re2EnemyApi:other_of(id) end
 
+---`enemy_work[slot]`'s id, whether the body is in play or not.
+---@param slot integer
+---@return integer? id `nil` for an empty slot.
+function Re2EnemyApi:slot_id(slot) end
+
+---Whether `enemy_work[slot]` is in play: bit 0 of its `Be_flg`.
+---@param slot integer
+---@return boolean
+function Re2EnemyApi:slot_in_play(slot) end
+
+---Hang `part`, a part off the skeleton, on work `slot`'s part `on_part`
+---at (x, y, z) there, unturned: from now on, while it is in play, the draw
+---composes its `Workm` on that part as the frame draws it, hidden or not,
+---and an effect on `part` starts there. A part out of play keeps the
+---`Workm` it had.
+---@param part integer
+---@param slot integer
+---@param on_part integer
+---@param x integer
+---@param y integer
+---@param z integer
+---@param in_play boolean bit 0 of the part's `Be_flg`.
+function Re2EnemyApi:hang_part(part, slot, on_part, x, y, z, in_play) end
+
 ---`Ck_em_id(work, 0, id, 0)`: how many other bodies in play have an id.
 ---@param id integer
 ---@return integer count

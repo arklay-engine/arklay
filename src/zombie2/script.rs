@@ -1535,6 +1535,40 @@ impl UserData for Api {
                 .find(|&&(other, ..)| other == world.slot)
                 .and_then(|&(_, id, _)| id))
         });
+        // `enemy_work[slot]`'s id, in play or not: nil for an empty slot.
+        methods.add_method_mut("slot_id", |_, e, slot: usize| {
+            let world = &*e.em().world;
+            Ok(world
+                .works
+                .iter()
+                .find(|&&(other, ..)| other == slot)
+                .and_then(|&(_, id, _)| id))
+        });
+        // Whether that work is in play: bit 0 of its `Be_flg`, where
+        // `0x48a540` tests the whole dword (`*(int *)enemy_work[slot] != 0`).
+        methods.add_method_mut("slot_in_play", |_, e, slot: usize| {
+            let world = &*e.em().world;
+            Ok(world
+                .works
+                .iter()
+                .any(|&(other, _, in_play)| other == slot && in_play))
+        });
+        // Hang `part` (off the skeleton) on work `slot`'s part `on_part` at
+        // (x, y, z) there, as the draw composes it from now on while it's in
+        // play.
+        methods.add_method_mut(
+            "hang_part",
+            |_, e, (part, slot, on_part, x, y, z, in_play): (u8, u8, u8, i32, i32, i32, bool)| {
+                e.em().z.hung = Some(super::Hung {
+                    part,
+                    on_slot: slot,
+                    on_part,
+                    at: [x, y, z],
+                    in_play,
+                });
+                Ok(())
+            },
+        );
         // Where the jaw was when this tick began.
         methods.add_method_mut("jaw", |_, e, ()| {
             let em = e.em();
@@ -8315,6 +8349,404 @@ mod tests {
             assert_eq!(routines, [7, 2, 0, 0]);
             assert_eq!(run(&larva, setup, 62, &names).1.len(), 2);
             assert_eq!(run(&larva, setup, 63, &names).1[2], "kill()");
+        }
+    }
+
+    /// G1 in room 219 (`Type` 2): the init's start and routine 11, the landing.
+    mod g1_landing {
+        use super::smg_flame_tyrant_ivy::{eval, run};
+
+        /// G1 on the stub, with `Timer0` to `Timer3` kept to their widths,
+        /// `Sce_free0` in `w.free`, the dropped part's last drawn height in
+        /// `w.drop_y` (where part 6 takes it: `(0xc, 0x86, 0x1e)` on the
+        /// arm) and slot 0's id in `w.slot0`.
+        fn g1() -> String {
+            format!(
+                "w.kind = w.kind or 2 w.hidden = w.hidden or 0
+                 function e:kind() return w.kind end
+                 function e:set_kind(v) w.kind = v end
+                 function e:sce_free(i) return w.free or 0 end
+                 function e:set_timer(i, v)
+                     if i < 2 then v = v & 0xFFFF
+                     elseif i == 2 then v = v & 0xFF
+                     else v = ((v + 0x80) & 0xFF) - 0x80 end
+                     w.timers[i] = v
+                 end
+                 function e:clip(c, n, h)
+                     w.clip = c
+                     LOG[#LOG + 1] = 'clip(' .. c .. ',' .. n .. ',' .. h .. ')'
+                 end
+                 function e:joint(flags)
+                     LOG[#LOG + 1] = 'joint(' .. flags .. ')'
+                     return w.ended or false
+                 end
+                 function e:hidden_parts() return w.hidden end
+                 function e:set_hidden_parts(v) w.hidden = v end
+                 function e:drawn_part_point(part, x, y, z)
+                     if part == 6 and x == 0xC and y == 0x86 and z == 0x1E then
+                         return 0, w.drop_y, 0
+                     end
+                 end
+                 function e:slot_id(slot) if slot == 0 then return w.slot0 end end
+                 function e:slot_in_play(slot) return slot == 0 and w.slot0 ~= nil end
+                 function e:set_speed_x(v) w.spd_x = v end
+                 function e:neck_flags() return 0 end
+                 {}",
+                include_str!("../../games/re2/enemy/30/enemy.lua")
+            )
+        }
+
+        /// `FUN_0048a540`'s `Type` 2: routine 11 on clip 20 from its start
+        /// (`+0x14c`'s word write), played once more by `Joint_move` 0x100.
+        #[test]
+        fn the_init_starts_room_219s_landing_on_clip_20() {
+            let (lua, log) = run(&g1(), "", 1, &["clip", "joint"]);
+            assert_eq!(
+                log,
+                ["clip(0,0,0)", "joint(256)", "clip(20,0,0)", "joint(256)"]
+            );
+            let state: (i64, i64, i64, i64) = eval(&lua, "return w.r[0], w.r[1], w.r[2], w.kind");
+            assert_eq!(state, (1, 11, 0, 0x4002));
+        }
+
+        /// Case 0 and 1 (`0x48ccb0`): clip 20 again, `Timer2` 0x3c and a drift
+        /// of `Timer2 >> 2` until `Sce_free0`'s bit 0, with all but parts 4
+        /// to 6 and 10 to 15 hidden, and part 0x12 hidden while `+0x218` is 0.
+        #[test]
+        fn the_landing_holds_until_the_scene_s_bit_0() {
+            let (lua, _) = run(&g1(), "", 2, &[]);
+            let held: (i64, i64, i64) = eval(&lua, "return w.r[2], w.spd_x, w.hidden");
+            assert_eq!(held, (1, 15, 0x038F | 1 << 0x12));
+            let (lua, _) = run(&g1(), "w.free = 1", 2, &[]);
+            let freed: (i64, i64) = eval(&lua, "return w.r[2], w.timers[3]");
+            assert_eq!(freed, (2, 1));
+        }
+
+        /// Case 6's end and case 7: the part drops from where it was last
+        /// drawn, 30 down and 9 faster each tick, and its fourth bounce on the
+        /// floor (0 with Ben, id 0x44, in slot 0) starts clip 1 (case 8). From
+        /// -2400 that is 34 ticks, as in the original's `leon_a_112_219`.
+        #[test]
+        fn the_dropped_part_bounces_four_times_before_clip_1() {
+            let setup = "w.r = { [0] = 1, 11, 6, 0 } w.drop_y = -2400 w.slot0 = 0x44";
+            let (lua, _) = run(&g1(), setup, 1, &[]);
+            let dropped: (i64, i64, i64, i64) =
+                eval(&lua, "return w.r[2], w.clip, w.timers[0], w.timers[3]");
+            assert_eq!(dropped, (7, 0, 0x1E, 0));
+            let (lua, _) = run(&g1(), setup, 34, &[]);
+            assert_eq!(eval::<i64>(&lua, "return w.r[2]"), 7);
+            let (lua, _) = run(&g1(), setup, 35, &[]);
+            let landed: (i64, i64, i64) = eval(&lua, "return w.r[2], w.clip, w.vars[23]");
+            assert_eq!(landed, (8, 1, 0));
+            // Without Ben it hangs 2000 higher and lands at 0x96, a tick later.
+            let setup = "w.r = { [0] = 1, 11, 6, 0 } w.drop_y = -400";
+            assert_eq!(
+                eval::<i64>(&run(&g1(), setup, 35, &[]).0, "return w.r[2]"),
+                7
+            );
+            let (lua, _) = run(&g1(), setup, 36, &[]);
+            let landed: (i64, i64) = eval(&lua, "return w.r[2], w.vars[23]");
+            assert_eq!(landed, (8, 0x96));
+        }
+
+        /// Cases 8 and 9 nod the dropped part every 9 ticks; `Sce_free0`'s
+        /// bit 1 shrinks the eye (part 4's weight) by 10 more each tick down
+        /// to 0, bit 8 swells it by 10 more each tick up to 0x1000, and bit 2
+        /// plays clip 1.
+        #[test]
+        fn the_scene_s_bits_drive_the_eye_and_the_walk() {
+            let setup =
+                "w.r = { [0] = 1, 11, 8, 0 } w.timers[0] = 0 w.timers[3] = 5 w.vars[15] = 0x1000";
+            let (lua, log) = run(&g1(), &format!("{setup} w.free = 2"), 1, &["joint"]);
+            assert!(log.is_empty());
+            let shrunk: (i64, i64, i64, i64) =
+                eval(&lua, "return w.r[2], w.timers[0], w.vars[15], w.timers[3]");
+            assert_eq!(shrunk, (9, 8, 0x1000 - 50, 6));
+            let (lua, _) = run(
+                &g1(),
+                &format!("{setup} w.free = 2 w.vars[15] = 20"),
+                1,
+                &[],
+            );
+            assert_eq!(eval::<i64>(&lua, "return w.vars[15]"), 0);
+            let (lua, _) = run(
+                &g1(),
+                &format!("{setup} w.free = 0x100 w.timers[2] = 3 w.vars[15] = 0xFF0"),
+                1,
+                &[],
+            );
+            let swollen: (i64, i64) = eval(&lua, "return w.vars[15], w.timers[2]");
+            assert_eq!(swollen, (0x1000, 4));
+            let (_, log) = run(&g1(), &format!("{setup} w.free = 4"), 1, &["joint"]);
+            assert_eq!(log, ["joint(128)"]);
+        }
+
+        /// Case 5's end sets `+0x218` to 1, which starts part 0x12
+        /// (`FUN_0048d4a0`) on the same tick: shown, `Timer3` from a `Rnd`,
+        /// and its swell past 0x1000 turns it back with another `Rnd` and a
+        /// drop of blood (kind 0, row 0x14, at (0x10, 0x70, 0), `Rnd + 0xddc`).
+        #[test]
+        fn part_0x12_starts_with_three_draws_and_a_drop() {
+            let setup = "w.r = { [0] = 1, 11, 5, 0 } w.draws = { 2, 5, 7 } w.hidden = 1 << 0x12";
+            let (lua, log) = run(&g1(), setup, 1, &["effect"]);
+            assert_eq!(log, ["effect(0,20,3555,0,18,16,112,0)"]);
+            let state: (i64, i64, i64, i64, i64, i64, i64, i64) = eval(
+                &lua,
+                "return w.r[2], w.drawn, w.vars[0], w.vars[1], w.vars[18], w.vars[20], w.vars[21], w.hidden",
+            );
+            assert_eq!(state, (6, 3, 1, 1, 0x1000, -1, 2, 0));
+        }
+
+        /// `FUN_0048a540` for every `Type` but 1 and 3: parts 1, 2, 4 (and
+        /// every part by 4's, `FUN_004e0070`) and 5 on their first weights,
+        /// 0x1000, 4's second 0; then, with `enemy_work[0]` in play, part 0x12
+        /// hung on its part 8 at (0xf6, -0xfb, 0) on Ben, (0xeb, -0xb7, 0)
+        /// on anyone else, in play for `Type` 2 only; `Type` 5 hangs it back
+        /// on its own part 0 at (0, 0, 0), in play, on weights 0x1000 and 0.
+        #[test]
+        fn the_init_morphs_the_body_and_hangs_part_0x12() {
+            let (_, log) = run(
+                &g1(),
+                "w.slot0 = 0x44",
+                1,
+                &["morph(", "morph_all", "hang_part"],
+            );
+            assert_eq!(
+                log,
+                [
+                    "morph(1,4096)",
+                    "morph(2,4096)",
+                    "morph(4,4096,0)",
+                    "morph_all(4,4096,0)",
+                    "morph(5,4096)",
+                    "hang_part(18,0,8,246,-251,0,true)",
+                ]
+            );
+            let (_, log) = run(&g1(), "w.slot0 = 0x30 w.kind = 0", 1, &["hang_part"]);
+            assert_eq!(log, ["hang_part(18,0,8,235,-183,0,false)"], "out of play");
+            let (_, log) = run(&g1(), "w.slot0 = 0x30 w.kind = 4", 1, &["hang_part"]);
+            assert_eq!(log, ["hang_part(18,0,8,235,-183,0,false)"], "Type 4");
+            let (_, log) = run(
+                &g1(),
+                "w.slot0 = 0x30 w.kind = 5",
+                1,
+                &["hang_part", "morph(18"],
+            );
+            assert_eq!(
+                log,
+                [
+                    "hang_part(18,0,8,235,-183,0,true)",
+                    "hang_part(18,0,0,0,0,0,true)",
+                    "morph(18,4096,0)",
+                ],
+                "Type 5 on its own part 0"
+            );
+            let (_, log) = run(&g1(), "", 1, &["hang_part"]);
+            assert!(log.is_empty(), "no enemy_work[0]");
+            for kind in [1, 3] {
+                let (_, log) = run(
+                    &g1(),
+                    &format!("w.kind = {kind} w.slot0 = 0x44"),
+                    1,
+                    &["morph(", "morph_all", "hang_part"],
+                );
+                assert!(log.is_empty(), "Type {kind}");
+            }
+            let (lua, _) = run(&g1(), "w.timers[3] = 9", 1, &[]);
+            assert_eq!(
+                eval::<i64>(&lua, "return w.timers[3]"),
+                0,
+                "Type 2's Timer3"
+            );
+        }
+
+        /// The first scene (routine 10) up to sub 4 swells parts 1 and 2 by
+        /// `BYTE_0052a350` at the tick's `+0x21e` (it steps first: 4 to 5, 60).
+        #[test]
+        fn the_scene_swells_parts_1_and_2_until_sub_4() {
+            let setup = "w.kind = 0x4000 w.r = { [0] = 1, 10, 0, 0 } w.vars[4] = 4";
+            let (lua, log) = run(&g1(), setup, 1, &["morph(", "morph_all"]);
+            assert_eq!(log, ["morph(1,3796)", "morph(2,3796)"]);
+            assert_eq!(
+                eval::<(i64, i64)>(&lua, "return w.vars[26], w.vars[27]"),
+                (3796, 3796)
+            );
+        }
+
+        /// Sub 3 shakes part 2 from under 0x28 ticks left: `Timer2` (a
+        /// signed byte) times `Timer1` on `W2`, `Timer1` 5 more, `Timer2`'s
+        /// sign flipped.
+        #[test]
+        fn the_scene_s_sub_3_shakes_part_2_wider_each_tick() {
+            let setup = "w.kind = 0x4000 w.r = { [0] = 1, 10, 3, 0 } w.vars[4] = 4
+                         w.timers[0] = 0x20 w.timers[1] = 5 w.timers[2] = 1";
+            let (lua, log) = run(&g1(), setup, 1, &["morph(", "morph_all"]);
+            assert_eq!(log, ["morph(1,3796)", "morph(2,3796)", "morph(2,3801)"]);
+            assert_eq!(
+                eval::<(i64, i64)>(&lua, "return w.timers[1], w.timers[2]"),
+                (10, 0xFF)
+            );
+            let (_, log) = run(
+                &g1(),
+                &setup.replace("0x20", "0x30"),
+                1,
+                &["morph(", "morph_all"],
+            );
+            assert_eq!(log, ["morph(1,3796)", "morph(2,3796)"], "40 or more left");
+        }
+
+        /// Sub 4 past frame 0x14: `W1`, `W2` and `W4` down by 200 (`W1` and
+        /// `W2` no lower than 0), the eye's second weight up by 200, and with
+        /// `W4` below 0 it is 0 and the eye's 0x1000; then part 2's shake,
+        /// and part 5 down by 100 to 0, every part by it.
+        #[test]
+        fn the_scene_s_sub_4_takes_the_weights_down_to_rest() {
+            let setup = "w.kind = 0x4000 w.r = { [0] = 1, 10, 4, 0 }
+                         function e:move_cnt() return 0x15 end
+                         w.vars[26] = 100 w.vars[27] = 300 w.vars[28] = 150 w.vars[15] = 0xF00
+                         w.vars[29] = 50 w.timers[1] = 3 w.timers[2] = 2";
+            let (_, log) = run(&g1(), setup, 1, &["morph(", "morph_all"]);
+            assert_eq!(
+                log,
+                [
+                    "morph(1,0)",
+                    "morph(2,100)",
+                    "morph(4,0,4096)",
+                    "morph(2,106)",
+                    "morph(5,0)",
+                    "morph_all(5,0)",
+                ]
+            );
+            let (lua, log) = run(
+                &g1(),
+                &format!("{setup} w.vars[28] = 300 w.vars[15] = 0x800 w.vars[29] = 450"),
+                1,
+                &["morph(4", "morph(5", "morph_all"],
+            );
+            assert_eq!(
+                log,
+                ["morph(4,100,2248)", "morph(5,350)", "morph_all(5,350)"]
+            );
+            assert_eq!(eval::<i64>(&lua, "return w.vars[28]"), 100);
+            let (_, log) = run(
+                &g1(),
+                &setup.replace("return 0x15", "return 0x14"),
+                1,
+                &["morph(", "morph_all"],
+            );
+            assert_eq!(
+                log,
+                ["morph(2,306)", "morph(5,0)", "morph_all(5,0)"],
+                "frame 0x14"
+            );
+        }
+
+        /// Sub 5: parts 1 and 2 swell about rest (`-BYTE_0052a350 * 5`),
+        /// part 2 shakes while `Timer1` is above 0 (10 less each tick), and
+        /// under 0x46 ticks left the eye's second weight falls by `Timer3 * 10`
+        /// (`Timer3` one more each tick), no lower than 0.
+        #[test]
+        fn the_scene_s_sub_5_swells_about_rest_and_closes_the_eye() {
+            let setup = "w.kind = 0x4000 w.r = { [0] = 1, 10, 5, 0 } w.vars[4] = 0
+                         w.timers[0] = 0x40 w.timers[3] = 2 w.vars[15] = 100 w.vars[28] = 7";
+            let (lua, log) = run(&g1(), setup, 1, &["morph(", "morph_all"]);
+            assert_eq!(log, ["morph(1,-115)", "morph(2,-115)", "morph(4,7,80)"]);
+            assert_eq!(eval::<i64>(&lua, "return w.timers[3]"), 3);
+            let (lua, log) = run(
+                &g1(),
+                &format!("{setup} w.timers[1] = 20 w.timers[2] = 1 w.vars[15] = 10"),
+                1,
+                &["morph(", "morph_all"],
+            );
+            assert_eq!(
+                log,
+                [
+                    "morph(1,-115)",
+                    "morph(2,-115)",
+                    "morph(2,-95)",
+                    "morph(4,7,0)"
+                ]
+            );
+            assert_eq!(eval::<i64>(&lua, "return w.timers[1]"), 10);
+            let (_, log) = run(&g1(), &setup.replace("0x40", "0x50"), 1, &["morph(4"]);
+            assert!(log.is_empty(), "0x46 or more left");
+        }
+
+        /// Subs 6 and 7 hold every part on part 5's weight.
+        #[test]
+        fn the_scene_s_last_subs_hold_every_part_on_part_5() {
+            for sub in [6, 7] {
+                let setup =
+                    format!("w.kind = 0x4000 w.r = {{ [0] = 1, 10, {sub}, 0 }} w.vars[29] = 300");
+                let (_, log) = run(&g1(), &setup, 1, &["morph(", "morph_all"]);
+                assert_eq!(log, ["morph_all(5,300)"], "sub {sub}");
+            }
+        }
+
+        /// Routine 11's sub 2 shakes the part to drop between its two
+        /// weights, 0 and 0x1000, `Timer3` flipping; every tick that breaks
+        /// out of the switch ends with parts 1's and 2's swell.
+        #[test]
+        fn the_landing_shakes_the_part_loose_and_swells_the_body() {
+            let setup = "w.r = { [0] = 1, 11, 2, 0 } w.timers[3] = 1 w.vars[4] = 4";
+            let (lua, log) = run(&g1(), setup, 2, &["morph(", "morph_all"]);
+            assert_eq!(
+                log,
+                [
+                    "morph(17,0,4096)",
+                    "morph(1,3796)",
+                    "morph(2,3796)",
+                    "morph(17,4096,0)",
+                    "morph(1,3766)",
+                    "morph(2,3766)",
+                ]
+            );
+            assert_eq!(
+                eval::<(i64, i64)>(&lua, "return w.r[2], w.timers[3]"),
+                (2, 1)
+            );
+        }
+
+        /// Sub 3 sets `Timer1` 0x80, `Timer2` 6 and `Timer0` 0 and falls into
+        /// 4, which takes `Timer1` off the first weight, flips `Timer1` when
+        /// `Timer2` runs out (every seventh tick), and with `Timer0` out goes
+        /// to 5; 5 adds 0x100 under 0x10 ticks left, else takes 0x200 off.
+        #[test]
+        fn the_landing_s_subs_3_to_5_step_the_dropped_part() {
+            let setup = "w.r = { [0] = 1, 11, 3, 0 } w.vars[24] = 0x1000";
+            let (lua, log) = run(&g1(), setup, 1, &["morph(17"]);
+            assert_eq!(log, ["morph(17,3968,0)"]);
+            let state: (i64, i64, i64, i64) =
+                eval(&lua, "return w.r[2], w.timers[0], w.timers[1], w.timers[2]");
+            assert_eq!(state, (5, 0, 0x80, 5));
+            let setup = "w.r = { [0] = 1, 11, 4, 0 } w.vars[24] = 0x1000 w.timers[0] = 9
+                         w.timers[1] = 0x80 w.timers[2] = 0";
+            let (lua, _) = run(&g1(), setup, 1, &[]);
+            let state: (i64, i64, i64, i64) =
+                eval(&lua, "return w.r[2], w.vars[24], w.timers[1], w.timers[2]");
+            assert_eq!(state, (4, 0x1000 - 0x80, -0x80 & 0xFFFF, 6));
+            for (left, weight) in [(0xF, 0x1100), (0x10, 0xE00)] {
+                let setup = format!(
+                    "w.r = {{ [0] = 1, 11, 5, 0 }} w.vars[24] = 0x1000 w.timers[0] = {left}"
+                );
+                let (lua, _) = run(&g1(), &setup, 1, &[]);
+                assert_eq!(
+                    eval::<(i64, i64)>(&lua, "return w.r[2], w.vars[24]"),
+                    (5, weight)
+                );
+            }
+        }
+
+        /// Its width gone (`Size_x` below 0), part 0x12 hides and draws no
+        /// more.
+        #[test]
+        fn part_0x12_hides_once_its_width_is_gone() {
+            let setup = "w.r = { [0] = 1, 11, 8, 0 } w.timers[0] = 5
+                         w.vars[0] = 1 w.vars[1] = 3 w.vars[22] = 0x100 w.vars[21] = 0";
+            let (lua, log) = run(&g1(), setup, 1, &["effect"]);
+            assert!(log.is_empty());
+            let state: (i64, i64, i64) = eval(&lua, "return w.drawn, w.vars[1], w.hidden");
+            assert_eq!(state, (0, 4, 1 << 0x12));
         }
     }
 }

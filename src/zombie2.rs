@@ -657,6 +657,22 @@ pub struct Zombie {
     pub bolt_part: u8,
     /// Its `+0x9a`: the way it flew.
     pub bolt_yaw: i16,
+    /// A part off the skeleton that the draw composes on another work's
+    /// part (its `+0x94` pointing into that work's parts): G1's part 0x12
+    /// on `enemy_work[0]`'s part 8.
+    pub hung: Option<Hung>,
+}
+
+/// A part hung on another work's part, at `at` there and unturned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Hung {
+    pub part: u8,
+    pub on_slot: u8,
+    pub on_part: u8,
+    pub at: [i32; 3],
+    /// Bit 0 of the part's `Be_flg`: `Joint_trans2` composes only a part in
+    /// play.
+    pub in_play: bool,
 }
 
 impl Zombie {
@@ -714,7 +730,47 @@ impl Zombie {
         let thrown = self.thrown.iter().map(|part| (part.part, part.matrix));
         let head = self.head.iter().map(|head| (HEAD_PART, head.matrix));
         let detached: Vec<_> = pulled.chain(thrown).chain(head).collect();
-        self.drawn = self.pose_tree.compose_drawn(&detached, hidden, &self.drawn);
+        let drawn = self.pose_tree.compose_drawn(&detached, hidden, &self.drawn);
+        // A hung part is off the skeleton: [`Self::draw_hung`] draws it.
+        let hung = self.hung.and_then(|hung| {
+            let part = usize::from(hung.part);
+            Some((part, self.drawn.get(part).copied().flatten()?))
+        });
+        self.drawn = drawn;
+        if let Some((part, matrix)) = hung {
+            if self.drawn.len() <= part {
+                self.drawn.resize(part + 1, None);
+            }
+            self.drawn[part] = Some(matrix);
+        }
+    }
+
+    /// `Joint_trans2` on [`Self::hung`]: the part's `Workm` is the part it
+    /// hangs on (`on`, or this body's own when it hangs on its own slot)
+    /// with the offset, hidden or not: room 219's first drop of blood, on
+    /// the tick part 0x12 shows, starts from Ben's part.
+    /// A part out of play isn't composed: its `Workm` stays as it was.
+    pub(crate) fn draw_hung(&mut self, slot: usize, on: Option<player2::Matrix>) {
+        let Some(hung) = self.hung.filter(|hung| hung.in_play) else {
+            return;
+        };
+        let part = usize::from(hung.part);
+        let parent = if usize::from(hung.on_slot) == slot {
+            self.drawn.get(usize::from(hung.on_part)).copied().flatten()
+        } else {
+            on
+        };
+        let Some(parent) = parent else {
+            return;
+        };
+        let local = player2::Matrix {
+            m: [[0x1000, 0, 0], [0, 0x1000, 0], [0, 0, 0x1000]],
+            t: hung.at,
+        };
+        if self.drawn.len() <= part {
+            self.drawn.resize(part + 1, None);
+        }
+        self.drawn[part] = Some(parent.comp(&local));
     }
 
     /// Where an embryo's `Ground` is read this tick, and part 0 as `redraw`
@@ -1055,6 +1111,9 @@ pub struct World<'a> {
     pub lua: Option<&'a mut crate::enemy::LuaEnemyHost>,
     /// The ivy this vine grew from.
     pub parent: Option<ParentView>,
+    /// The `Workm` of the part [`Zombie::hung`] hangs on, when it is
+    /// another work's, as this frame draws it.
+    pub(crate) hung_on: Option<player2::Matrix>,
     /// The works `Set_enemy_work` walks, in `player_work`'s order of the enemy
     /// slots: each one's id and whether it's in play.
     pub works: Vec<(usize, Option<u8>, bool)>,
@@ -1253,6 +1312,9 @@ pub fn em_zombie(
     em.z.pose_tree = em.mover.pose_tree(turn);
     let hidden = em.mover.work.hidden_parts;
     em.z.redraw(hidden);
+    let own = em.world.slot;
+    let hung_on = em.world.hung_on;
+    em.z.draw_hung(own, hung_on);
 }
 
 impl Em<'_, '_, '_> {
@@ -3204,6 +3266,125 @@ mod tests {
         assert_eq!(
             zombie.drawn[10].map(|matrix| matrix.t),
             Some([1000, 0, 2000])
+        );
+    }
+
+    /// G1's part 0x12 hangs on `enemy_work[0]`'s part 8 at its offset,
+    /// unturned: on Ben's part as the frame draws it, or on its own part 8
+    /// when it is slot 0 itself.
+    #[test]
+    fn a_hung_part_is_drawn_on_the_part_it_hangs_on() {
+        // Ben's part 8 turned a quarter round: x goes to -z.
+        let turned = player2::Matrix {
+            m: player2::rot_matrix([0, 0x400, 0]),
+            t: [1000, -500, 2000],
+        };
+        let mut zombie = Zombie {
+            hung: Some(Hung {
+                part: 0x12,
+                on_slot: 0,
+                on_part: 8,
+                at: [0xF6, -0xFB, 0],
+                in_play: true,
+            }),
+            ..Zombie::default()
+        };
+        zombie.draw_hung(1, Some(turned));
+        let drawn = zombie.drawn[0x12].unwrap();
+        assert_eq!(drawn.m, turned.m);
+        assert_eq!(drawn.t, [1000, -500 - 0xFB, 2000 - 0xF6]);
+        zombie.drawn = vec![None; 9];
+        zombie.drawn[8] = Some(turned);
+        zombie.draw_hung(0, None);
+        assert_eq!(zombie.drawn[0x12], Some(drawn), "its own part 8 in slot 0");
+        // A redraw from the skeleton keeps it.
+        zombie.pose_tree = player2::PoseTree::chain(9);
+        zombie.redraw(0);
+        assert_eq!(zombie.drawn[0x12], Some(drawn), "kept by the redraw");
+        zombie.drawn.truncate(8);
+        zombie.draw_hung(1, None);
+        assert_eq!(
+            zombie.drawn.get(0x12).copied().flatten(),
+            None,
+            "nothing to hang on"
+        );
+    }
+
+    /// A hung part out of play (bit 0 of its `Be_flg` clear) isn't composed:
+    /// its `Workm` stays as it was.
+    #[test]
+    fn a_hung_part_out_of_play_keeps_its_workm() {
+        let on = player2::Matrix {
+            m: player2::rot_matrix([0; 3]),
+            t: [1000, -500, 2000],
+        };
+        let mut zombie = Zombie {
+            hung: Some(Hung {
+                part: 0x12,
+                on_slot: 0,
+                on_part: 8,
+                at: [0xEB, -0xB7, 0],
+                in_play: false,
+            }),
+            ..Zombie::default()
+        };
+        zombie.draw_hung(1, Some(on));
+        assert_eq!(zombie.drawn.get(0x12).copied().flatten(), None);
+        let before = player2::Matrix {
+            m: player2::rot_matrix([0; 3]),
+            t: [7, 8, 9],
+        };
+        zombie.drawn = vec![None; 0x13];
+        zombie.drawn[0x12] = Some(before);
+        zombie.draw_hung(1, Some(on));
+        assert_eq!(zombie.drawn[0x12], Some(before));
+    }
+
+    /// The spray's drop of blood on part 0x12 (`Esp_call` kind 0 at (0x10,
+    /// 0x70, 0) on it) starts on the part it hangs on, as the draw left it.
+    #[test]
+    fn an_effect_on_a_hung_part_starts_on_the_part_it_hangs_on() {
+        let ben = player2::Matrix {
+            m: player2::rot_matrix([0, 0x400, 0]),
+            t: [-25000, -1200, -12000],
+        };
+        let mut zombie = Zombie {
+            hung: Some(Hung {
+                part: 0x12,
+                on_slot: 0,
+                on_part: 8,
+                at: [0xF6, -0xFB, 0],
+                in_play: true,
+            }),
+            ..Zombie::default()
+        };
+        zombie.draw_hung(1, Some(ben));
+        let mut block = [0u8; crate::esp2::BLOCK_LEN];
+        block[1] = 1;
+        let mut effects = crate::esp2::Effects::default();
+        effects.enter_room(crate::esp2::tests::bank_of(0, &[block]));
+        let anchor = crate::esp2::Anchor {
+            body: crate::esp2::Body::Enemy(1),
+            part: 0x12,
+        };
+        part_effect(
+            &mut effects,
+            EffectCall {
+                kind: 0,
+                row: 0,
+                size: 0xDDC,
+                dir: 0,
+            },
+            anchor,
+            zombie.drawn[0x12],
+            [0x10, 0x70, 0],
+            [0; 3],
+        );
+        // Ben's part, then the hang's (0xf6, -0xfb, 0), then the drop's
+        // (0x10, 0x70, 0), each turned a quarter round.
+        assert_eq!(
+            effects.live_bases(),
+            [[-25000, -1200 - 0xFB + 0x70, -12000 - 0xF6 - 0x10]]
         );
     }
 

@@ -1,4 +1,4 @@
-# From 110's door 4 in 112 (Leon as leon_a_10b_112 leaves him, 156 life, 10 rounds and the four plugs) to 111's dust chute: across 112's ground floor to the stairs by the south wall, along the balcony to door 2 and 117, through 117's door 2 into 111, up the west stairs and round to the west end, where area 5 (main_16, with the Knight plug taken) asks again about the dust chute: Yes opens door 1, and the run ends on the tick before 219 loads. 219's landing is the next run's: its G1 (Em_30, slot 1, Type 2) runs routine 11, which arklay hasn't ported
+# From 110's door 4 in 112 (Leon as leon_a_10b_112 leaves him, 156 life, 10 rounds and the four plugs) to 111's dust chute: across 112's ground floor to the stairs by the south wall, along the balcony to door 2 and 117, through 117's door 2 into 111, up the west stairs and round to the west end, where area 5 (main_16, with the Knight plug taken) asks again about the dust chute: Yes opens door 1, and the run ends on the tick before 219 loads. 219's landing is leon_a_112_219's
 [[run]]
 name = "leon_a_112_chute"
 room = "112"
