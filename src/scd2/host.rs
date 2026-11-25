@@ -967,7 +967,7 @@ const VAR_CUT: u8 = 26;
 pub const SCE_AUTO: u8 = 0;
 const SCE_DOOR: u8 = 1;
 const SCE_ITEM: u8 = 2;
-const SCE_MESSAGE: u8 = 4;
+pub const SCE_MESSAGE: u8 = 4;
 pub const SCE_EVENT: u8 = 5;
 /// `Sce_Flg_chg`'s area (`0x4E9830`): sets or clears a flag while the probe
 /// is inside it.
@@ -3363,16 +3363,18 @@ impl Host for GameHost<'_> {
             "message_on" => {
                 let up = self.game.message.menu_choice_id() & 0x80 != 0;
                 self.game.show_re2_message(at(1) as u8);
-                // `Mess_set` raises `fg_status`'s `0x40` with a message it
-                // takes; `Mess_disp` drops it at the tick's end.
-                if !up && self.game.message.menu_choice_id() & 0x80 != 0 {
-                    self.game.re2.set_flag(STATUS_BANK, STATUS_HOLD, 1);
-                }
                 // Its last two bytes, a word, are the `fg_stop` bits the
                 // message holds up while it shows: `0xFFFF` on a check in
-                // play, none in a scene.
+                // play, none in a scene. `Message_on` (`0x4E5170`) raises
+                // them itself after `Mess_set`, so they hold the rest of the
+                // tick's moves. `Mess_set` raises `fg_status`'s `0x40` with
+                // a message it takes ([`GameState::set_re2_message_stop`]).
                 let stop = u16::from_le_bytes([at(3) as u8, at(4) as u8]);
-                self.game.hold_re2_message_stop(stop);
+                if !up && self.game.message.active {
+                    self.game.set_re2_message_stop(stop);
+                }
+                // Even when `Mess_set` refused it, a message being up.
+                *self.game.re2.fg_stop_mut() |= u32::from(stop) << 16;
             }
             "cut_chg" => self.change_cut(at(0) as u8),
             "cut_old" => {
@@ -6546,6 +6548,23 @@ mod tests {
         assert!(game.re2.player_stopped());
         game.cancel_message();
         assert_eq!(*game.re2.fg_stop_mut(), 0x0100_0000);
+    }
+
+    /// `Message_on` ORs its stop word into `fg_stop` after `Mess_set`
+    /// returns, whether or not it took the message: a check under a scene's
+    /// line still stops the world, and the line's dismissal puts it back.
+    #[test]
+    fn a_refused_message_on_still_raises_its_stop_word() {
+        use crate::scd2::opcode::lookup;
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, lookup(0x2B).unwrap(), &[0, 0, 0, 0, 0]);
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, lookup(0x2B).unwrap(), &[0, 18, 0, 255, 255]);
+        assert_eq!(*game.re2.fg_stop_mut(), 0xFFFF_0000);
+        game.cancel_message();
+        assert_eq!(*game.re2.fg_stop_mut(), 0);
     }
 
     /// `Mess_set` raises `fg_status`'s `0x40` with a message it takes,

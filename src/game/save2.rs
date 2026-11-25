@@ -58,10 +58,6 @@ pub fn new_game_place(character: u8, scenario_b: bool) -> u8 {
     NEW_GAME_PLACES[2 * usize::from(character & 1) + usize::from(scenario_b)]
 }
 
-/// The stop word the two messages hold the world with (`Stop_data`
-/// `0xFF000000`).
-const MESSAGE_STOP: u16 = 0xFF00;
-
 impl GameState {
     /// `Sce_Save` (`0x4E98F0`): set the back routine, hold the player, the
     /// enemies and the scripts, and keep the area's place for the save.
@@ -95,13 +91,16 @@ impl GameState {
         match self.re2_box_entrance.state {
             0 => {
                 if self.re2_item_slot(ITEM_INK_RIBBON).is_some() {
+                    // `Mess_set(0, 0x100, 1, 0xFF000000)`: `Sce_Save`'s hold
+                    // is already up.
                     self.show_re2_door_message(door_message(MESSAGE_PROMPT));
-                    self.hold_re2_message_stop(MESSAGE_STOP);
                     self.re2_box_entrance.state = 1;
                 } else {
                     *self.re2.fg_stop_mut() = self.re2_box_entrance.saved_stop;
+                    // `Mess_set(0, 0x100, 0, 0xFF000000)`: the world moves
+                    // for the rest of the tick, `Esp_move` too, and the
+                    // message holds it from `Mess_disp` on.
                     self.show_re2_door_message(door_message(MESSAGE_NO_RIBBON));
-                    self.hold_re2_message_stop(MESSAGE_STOP);
                     self.re2_back = BackRoutine::None;
                 }
                 false
@@ -301,7 +300,13 @@ mod tests {
         assert_eq!(game.message.id, Some(door_message(0) | 0x40));
         assert_eq!(game.re2_back, BackRoutine::None);
         assert_eq!(game.re2_box_entrance.state, 0);
-        // `Mess_disp` holds the world again until the window closes.
+        // `Mess_set` only keeps the stop word: the rest of the tick, its
+        // `Esp_move` too, runs with the hold down.
+        assert_eq!(fg_stop(&mut game), HELD);
+        assert!(!game.re2.effects_stopped());
+        // `Mess_disp`'s first pass, after the tick, holds the world again
+        // until the window closes.
+        assert!(game.raise_re2_message_stop());
         assert_eq!(fg_stop(&mut game), 0xFF00_0000 | HELD);
         answer(&mut game, 0);
         assert_eq!(fg_stop(&mut game), HELD);

@@ -3718,11 +3718,14 @@ pub struct GameState {
     /// tick's move.
     pub re2_crouch_start: bool,
     /// What `fg_stop` was before a message's stop word went up, until the
-    /// message is dismissed ([`GameState::hold_re2_message_stop`]).
+    /// message is dismissed ([`GameState::set_re2_message_stop`]).
     pub re2_message_stop: Option<u32>,
-    /// A door message's stop word, which `Mess_disp`'s first pass raises
-    /// ([`GameState::update_message`]).
-    pub re2_message_stop_pending: u16,
+    /// A message's stop word, which `Mess_set` keeps and `Mess_disp`'s first
+    /// pass raises ([`GameState::set_re2_message_stop`]).
+    pub re2_message_stop_pending: Option<u16>,
+    /// [`GameState::update_message`] raised a message's stop word: `Mess_disp`
+    /// runs after `Esp_move`, so the tick's effects move without it.
+    pub re2_message_stop_raised: bool,
     /// RE2's status screen's item page while the screen is up.
     pub re2_items: Option<status2::ItemPage>,
     /// The item page's bytes as the trace's `ip` shows them; like the
@@ -4366,7 +4369,8 @@ impl Default for GameState {
             re2_crouch_item: None,
             re2_crouch_start: false,
             re2_message_stop: None,
-            re2_message_stop_pending: 0,
+            re2_message_stop_pending: None,
+            re2_message_stop_raised: false,
             re2_items: None,
             re2_items_trace: status2::ItemPage::CLEARED_TRACE.to_string(),
             re2_file: status2::files::FileWork::default(),
@@ -9706,7 +9710,16 @@ impl GameState {
                 self.try_door(slot);
             }
             RoomActionKind::Item => self.pick_up_re2_item(action),
-            RoomActionKind::Message => self.show_re2_message(action.params[0]),
+            RoomActionKind::Message => {
+                // `Sce_Message` (`0x4E97D0`): `Mess_set` with the area's
+                // third word as `Stop_data`'s top half.
+                let up = self.message.menu_choice_id() & 0x80 != 0;
+                self.show_re2_message(action.params[0]);
+                if !up && self.message.active {
+                    let stop = u16::from_le_bytes([action.params[4], action.params[5]]);
+                    self.set_re2_message_stop(stop);
+                }
+            }
             RoomActionKind::Event => {
                 // `Sce_event`: `[task (u16), pad, event]`.
                 let event = (action.params[0], action.params[3]);
@@ -10155,6 +10168,7 @@ impl GameState {
                     self.show_re2_global(crate::scd2::host::door_message(DOOR_MESSAGE_USE));
                     if shown && self.message.active {
                         self.place_re2_in_play();
+                        self.set_re2_message_stop(0xFF00);
                     }
                 }
                 Effect::FadeOff => self
@@ -10460,20 +10474,42 @@ impl GameState {
         }
     }
 
-    /// `message_on`'s stop word: while the message shows, `fg_stop` has it
-    /// in its top half, so the player, the enemies and the scripts wait, and
-    /// its dismissal puts back what `fg_stop` was.
-    pub fn hold_re2_message_stop(&mut self, stop: u16) {
-        if stop == 0 || !self.message.active || self.re2_message_stop.is_some() {
+    /// `Mess_set`'s part in a message's stop word (`Stop_data`'s top half),
+    /// for a message it has just taken: it keeps what `fg_stop` is now for
+    /// the dismissal to put back, whatever the word, raises `fg_status`'s
+    /// `0x40`, and leaves the word for `Mess_disp`'s first pass, which raises
+    /// it at the tick's end, after `Esp_move` ([`Self::update_message`]). A
+    /// caller that holds the world at once (`Message_on`, `Key_lost`) raises
+    /// `fg_stop` itself.
+    pub fn set_re2_message_stop(&mut self, stop: u16) {
+        if !self.message.active {
             return;
         }
-        let fg_stop = self.re2.fg_stop_mut();
-        self.re2_message_stop = Some(*fg_stop);
-        *fg_stop |= u32::from(stop) << 16;
+        self.re2_message_stop = Some(*self.re2.fg_stop_mut());
+        self.re2_message_stop_pending = Some(stop);
+        use crate::scd2::host::{STATUS_BANK, STATUS_HOLD};
+        self.re2.set_flag(STATUS_BANK, STATUS_HOLD, 1);
     }
 
-    /// The end of a message's [`Self::hold_re2_message_stop`].
+    /// `Mess_disp`'s case 0 (`0x4C8DCE`): `fg_status &= ~0x40` and
+    /// `fg_stop |= Stop_data`. Returns whether a stop word went up.
+    fn raise_re2_message_stop(&mut self) -> bool {
+        let Some(stop) = self.re2_message_stop_pending.take() else {
+            return false;
+        };
+        if !self.message.active {
+            return false;
+        }
+        use crate::scd2::host::{STATUS_BANK, STATUS_HOLD};
+        self.re2.set_flag(STATUS_BANK, STATUS_HOLD, 0);
+        *self.re2.fg_stop_mut() |= u32::from(stop) << 16;
+        stop != 0
+    }
+
+    /// The end of a message's [`Self::set_re2_message_stop`]: the dismissal
+    /// puts back what `fg_stop` was at `Mess_set`.
     fn release_re2_message_stop(&mut self) {
+        self.re2_message_stop_pending = None;
         if let Some(saved) = self.re2_message_stop.take() {
             *self.re2.fg_stop_mut() = saved;
         }
@@ -10606,7 +10642,7 @@ impl GameState {
         self.show_message_word(u16::from(id) | 0x40, RE2_MESSAGE_PAUSE);
         if shown && self.message.active {
             self.place_re2_in_play();
-            self.re2_message_stop_pending = 0xFF00;
+            self.set_re2_message_stop(0xFF00);
         }
     }
 
@@ -10844,8 +10880,7 @@ impl GameState {
             let bytes = text.message(room, id).unwrap_or(&[]).to_vec();
             self.message.feed_source(&bytes);
         }
-        let stop = std::mem::take(&mut self.re2_message_stop_pending);
-        self.hold_re2_message_stop(stop);
+        self.re2_message_stop_raised = self.raise_re2_message_stop();
         let selected = self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)];
         self.message.re2_names = self.is_re2_room;
         self.message.update(input, text, selected);
@@ -22532,6 +22567,85 @@ mod tests {
         assert_eq!(state.scaled_down_dist, 0);
         assert_eq!(state.hunter_scream_latch, 0);
         assert_eq!(state.hunter_intro_jump_kind, 0);
+    }
+
+    /// `Sce_Message` (`0x4E97D0`) passes `Mess_set` the area's third word as
+    /// the stop word, which `Mess_disp`'s first pass raises after the tick's
+    /// moves and the dismissal takes down.
+    #[test]
+    fn an_area_message_holds_the_world_from_mess_disp_until_it_closes() {
+        let mut state = GameState::new(RoomId::parse("2000").unwrap(), &RoomState::default());
+        state.is_re2_room = true;
+        *state.re2.fg_stop_mut() = 0x0100_0000;
+        state.fire_re2_area(RoomAction {
+            slot: 2,
+            kind: RoomActionKind::Message,
+            zone: [0, 0, 2000, 2000],
+            sce: crate::scd2::host::SCE_MESSAGE,
+            handler: 0,
+            flags: 0,
+            params: [3, 0, 0, 0, 0xFF, 0xFF, 0, 0],
+            item_data: None,
+            room_items_flag: 0xFF,
+            reach_animation: false,
+        });
+        assert!(state.message.active);
+        // The rest of `Game_loop`, `Esp_move` too, runs without it.
+        assert_eq!(*state.re2.fg_stop_mut(), 0x0100_0000);
+        assert!(!state.re2.effects_stopped());
+        assert!(state.raise_re2_message_stop());
+        assert_eq!(*state.re2.fg_stop_mut(), 0xFFFF_0000 | 0x0100_0000);
+        assert!(!state.raise_re2_message_stop(), "once");
+        state.message.active = false;
+        state.release_re2_message_stop();
+        assert_eq!(*state.re2.fg_stop_mut(), 0x0100_0000);
+    }
+
+    /// `update_message` is `Mess_disp`: its first pass raises the stop word
+    /// `Mess_set` kept and drops `fg_status`'s `0x40`, and says so, so the
+    /// tick's `Esp_move` still runs without it; it doesn't raise it again.
+    #[test]
+    fn the_message_windows_first_pass_raises_the_stop_word_once() {
+        use crate::scd2::host::{STATUS_BANK, STATUS_HOLD};
+        let room = room_with_messages(&[&[0x0C, 0x01, 0x00]]);
+        let text = Text::default();
+        let mut state = GameState::new(RoomId::parse("2000").unwrap(), &RoomState::default());
+        state.is_re2_room = true;
+        *state.re2.fg_stop_mut() = 0x0100_0000;
+        state.show_re2_message(0);
+        state.set_re2_message_stop(0xFF00);
+        assert!(state.re2.flag(STATUS_BANK, STATUS_HOLD));
+        assert_eq!(*state.re2.fg_stop_mut(), 0x0100_0000);
+        state.update_message(MessageInput::default(), &room, &text);
+        assert!(state.re2_message_stop_raised);
+        assert!(!state.re2.flag(STATUS_BANK, STATUS_HOLD));
+        assert_eq!(*state.re2.fg_stop_mut(), 0xFF00_0000 | 0x0100_0000);
+        state.update_message(MessageInput::default(), &room, &text);
+        assert!(!state.re2_message_stop_raised);
+    }
+
+    /// `Mess_set` keeps `fg_stop` for every message it takes, a stop word of
+    /// 0 too, and the dismissal puts it back; a message cancelled before its
+    /// first pass leaves no word for the next.
+    #[test]
+    fn a_message_without_a_stop_word_still_puts_fg_stop_back() {
+        let mut state = GameState::new(RoomId::parse("2000").unwrap(), &RoomState::default());
+        state.is_re2_room = true;
+        state.show_re2_message(3);
+        state.set_re2_message_stop(0);
+        // A script holds its own scheduler while the line shows.
+        *state.re2.fg_stop_mut() = 0x0200_0000;
+        state.cancel_message();
+        assert_eq!(*state.re2.fg_stop_mut(), 0);
+        state.show_re2_message(3);
+        state.set_re2_message_stop(0xFFFF);
+        state.cancel_message();
+        state.show_re2_message(3);
+        assert!(
+            !state.raise_re2_message_stop(),
+            "the cancelled word is gone"
+        );
+        assert_eq!(*state.re2.fg_stop_mut(), 0);
     }
 
     /// `Mess_set` puts every in-play message at `0xB90022` (x 34, y 185):
