@@ -650,7 +650,9 @@ local function slot_icon(api, d, slot, x, y)
 end
 
 -- A count (`0x4FE3B0`): its digits from the left, no leading zeros, then
--- a percent sign; nothing for an item that shows no count.
+-- a percent sign; nothing for an item that shows no count; the infinity
+-- sign for a count of 0xFF, or for a weapon whose bit of the extras word
+-- `Status` copied into the record's `0x10` (`api:re2_infinite`).
 local function count(api, d, item, quantity, x, y)
     local flags = COUNT_FLAGS[item] or 0x04
     local clut = flags & 0x0F
@@ -658,7 +660,7 @@ local function count(api, d, item, quantity, x, y)
         return
     end
     local glyphs = {}
-    if quantity == INFINITE and flags & 0x10 ~= 0 then
+    if quantity == INFINITE or api:re2_infinite(item) then
         glyphs = { 11, 12 }
     else
         local hundreds, tens, units = quantity // 100, quantity // 10 % 10, quantity % 10

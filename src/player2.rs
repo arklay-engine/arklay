@@ -1647,6 +1647,10 @@ pub struct Weapon {
     pub spare: bool,
     /// The rounds in it, for the bursts' `Tama_decrease_i`.
     pub rounds: u8,
+    /// Its bit of the extras word (`0x98E9C4`) is up, with a slot holding
+    /// it: `Tama_ck_i` finds it loaded and `Tama_decrease_i` takes nothing,
+    /// the bursts' counter (`WORD_00691f8c`) untouched.
+    pub infinite: bool,
 }
 
 impl Weapon {
@@ -4461,6 +4465,11 @@ impl Mover<'_, '_> {
     /// ([`Work::tama_count`]), and the eighth takes two rounds, or finds the
     /// gun empty after one.
     fn tama_decrease(&mut self) -> bool {
+        // Its first tests: the weapon's bit of the extras word, then a count
+        // of 0xFF, take nothing and leave the counter.
+        if self.tick.weapon.infinite || self.tick.weapon.rounds == 0xFF {
+            return true;
+        }
         let count = self.work.tama_count.wrapping_add(1);
         if count < 8 {
             self.work.tama_count = count;
@@ -8168,6 +8177,7 @@ mod weapon_tests {
             loaded: true,
             spare: true,
             rounds: 100,
+            infinite: false,
         }
     }
 
@@ -10308,6 +10318,7 @@ mod tests {
             loaded,
             spare,
             rounds: u8::from(loaded) * 18,
+            infinite: false,
         };
         setup
     }
@@ -10852,6 +10863,22 @@ mod tests {
         assert_eq!(setup.work.tama_count, 0);
     }
 
+    /// `Tama_decrease_i` returns before the bursts' counter for a gun at
+    /// 0xFF (the unlocked sub-machine gun's) or with its bit of the extras
+    /// word up: no call takes a round or steps the counter.
+    #[test]
+    fn a_burst_at_0xff_or_infinite_spends_nothing() {
+        for (rounds, infinite) in [(0xFF, false), (50, true)] {
+            let mut setup = bursting(SMG, rounds);
+            setup.weapon.infinite = infinite;
+            for _ in 1..=24u8 {
+                setup.tick(aiming(true, false), 200);
+            }
+            assert_eq!(setup.work.spent, 0, "{rounds} rounds, infinite {infinite}");
+            assert_eq!(setup.work.tama_count, 0);
+        }
+    }
+
     /// `pl_mv05_w2_t2` with the flamethrower: `Tama_decrease_i` on every
     /// tick, `pl_w10_t2_move`'s flame along the body on every third frame,
     /// and its sounds on the first and the eleventh.
@@ -11150,6 +11177,7 @@ mod tests {
             loaded: rounds != 0,
             spare: false,
             rounds,
+            infinite: false,
         };
         setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];
         setup.work.status_flg = TILT_LEVEL;
@@ -11289,6 +11317,7 @@ mod tests {
             loaded: true,
             spare: false,
             rounds: 100,
+            infinite: false,
         };
         setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];
         setup.work.status_flg = TILT_LEVEL;

@@ -3822,9 +3822,33 @@ impl GameSession {
             }
         }
         self.step_re2_pad_repeat(&input);
+        if self.game.is_re2_room {
+            // The whole pad for `Pad_set`'s trigger word: the directions and
+            // the keys `Pad_repeat` holds, the action and run keys as the
+            // demo's end reads them, and START (0x800) on its press.
+            let whole = self.game.pad_repeat.raw
+                | re2_live_pad(&ui, &input)
+                | if ui.start { 0x800 } else { 0 };
+            self.game.pad_repeat.step_trigger(whole);
+        }
         let start_box = self.re2_status_open == Some(RE2_BOX_START);
         if self.re2_status_open == Some(RE2_STATUS_INIT) {
             self.game.init_re2_status();
+        }
+        // `Status` checks the Konami code on every tick of its task from its
+        // start, before the screen's own routine.
+        // `St_exit` ends the task on the close's `RE2_STATUS_UNCUT_TICK`,
+        // which this tick's close steps to.
+        if self.game.is_re2_room
+            && self.menu.is_some()
+            && self
+                .re2_status_open
+                .is_some_and(|ticks| ticks >= RE2_STATUS_INIT)
+            && self
+                .re2_status_close
+                .is_none_or(|ticks| ticks < RE2_STATUS_UNCUT_TICK)
+        {
+            self.game.step_re2_konami_code();
         }
         self.re2_status_return = self
             .re2_status_return

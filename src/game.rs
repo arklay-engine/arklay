@@ -9873,6 +9873,15 @@ impl GameState {
         if get.phase == Re2ItemGetPhase::Close && get.ticks == ITEM_GET_UNCUT_TICK {
             self.re2.bg_load = true;
         }
+        // `Status`'s Konami code, on the ticks its task runs the window.
+        let task = match get.phase {
+            Re2ItemGetPhase::Open => get.ticks >= ITEM_GET_CUT_TICK,
+            Re2ItemGetPhase::Close => get.ticks <= ITEM_GET_UNCUT_TICK,
+            _ => true,
+        };
+        if task {
+            self.step_re2_konami_code();
+        }
         let item = get.action.params[0];
         if get.phase == Re2ItemGetPhase::Open && get.ticks == ITEM_GET_CUT_TICK {
             // `Status`'s start, on the window's sixth tick: `Pad_rep_set(0xF01C,
@@ -10155,6 +10164,12 @@ impl GameState {
         }
     }
 
+    /// `Status`'s `St_ck_konamicode` with this tick's trigger word, every
+    /// key `Pad_set` found newly down ([`pad_repeat::PadRepeat::trigger`]).
+    pub fn step_re2_konami_code(&mut self) {
+        self.re2.step_konami_code(self.pad_repeat.trigger);
+    }
+
     /// Whether the get-item window has `Cut_no` at 0 this tick: from the
     /// open's `ITEM_GET_CUT_TICK` to the close's `ITEM_GET_UNCUT_TICK`.
     pub fn re2_item_get_clears_cut(&self) -> bool {
@@ -10409,11 +10424,14 @@ impl GameState {
     pub fn re2_weapon(&self) -> crate::player2::Weapon {
         let id = self.equipped_weapon_id;
         // The rounds in the equipped slot (`0x4F8620` equips by slot).
-        let rounds = self
-            .weapon_slot(id)
-            .map_or(0, |slot| u32::from(self.inventory[slot].quantity));
+        let slot = self.weapon_slot(id);
+        let rounds = slot.map_or(0, |slot| u32::from(self.inventory[slot].quantity));
+        // `Tama_ck_i` and `Tama_decrease_i` read the weapon's bit of the
+        // extras word first, with a slot equipped (`0x691F68` isn't 0x80).
+        let infinite = slot.is_some() && self.re2.infinite(id);
         crate::player2::Weapon {
             id,
+            infinite,
             // `Tama_ck_i` wants more than two in the spark shot, so a shot
             // that strikes has its three.
             // The gatling gun's flag in `DWORD_0098e9c4`, which `Tama_ck_i`
@@ -10423,7 +10441,9 @@ impl GameState {
             // status screen's toggle raises it; `Stage_init_item` raises it
             // but `FUN_004b73c0` then clears it (`DWORD_0099c8a8 & 1`). A
             // player who holds the gun has it, so it's taken as up.
-            loaded: if id == crate::player2::SPARK {
+            loaded: if infinite {
+                true
+            } else if id == crate::player2::SPARK {
                 rounds > 2
             } else if id == crate::player2::GATLING {
                 true
@@ -10445,6 +10465,17 @@ impl GameState {
         if std::mem::take(&mut self.re2.player.fired) {
             // `FUN_004d58c0`: the bowgun's shot takes three.
             spent = spent.saturating_add(if weapon == crate::bow2::BOW { 3 } else { 1 });
+        }
+        // `Tama_decrease_i` takes nothing from a weapon whose bit of the
+        // extras word is up, or whose count is 0xFF.
+        if held.is_some_and(|index| {
+            self.re2.infinite(weapon)
+                || self
+                    .inventory
+                    .get(index)
+                    .is_some_and(|slot| slot.quantity == 0xFF)
+        }) {
+            spent = 0;
         }
         if spent != 0
             && let Some(index) = held.filter(|&index| index < self.inventory.len())
@@ -12612,6 +12643,35 @@ mod tests {
         assert_eq!(game.item_count(3), 20);
         assert_eq!(game.inventory.len(), 1, "the empty stack is gone");
         assert!(!game.re2_weapon().spare);
+    }
+
+    /// `Tama_ck_i` and `Tama_decrease_i` with the weapon's bit of the extras
+    /// word up (the status screen's Konami code): an empty handgun is
+    /// loaded and a shot takes nothing; with the bit down it spends.
+    #[test]
+    fn a_re2_weapon_with_its_extras_bit_never_runs_out() {
+        let mut game = GameState {
+            equipped_weapon_id: 3,
+            inventory: vec![InventoryItem { id: 3, quantity: 0 }],
+            ..Default::default()
+        };
+        assert!(!game.re2_weapon().loaded);
+        game.re2.extras = 0xFFFF_FF00;
+        assert!(game.re2_weapon().loaded && game.re2_weapon().infinite);
+        game.inventory[0].quantity = 5;
+        game.re2.player.fired = true;
+        game.re2_settle_ammo();
+        assert_eq!(game.item_count(3), 5);
+        // The code's second entry: the word's 0x1 and the gatling gun's.
+        game.re2.extras = 1 | 0x2000;
+        assert!(!game.re2_weapon().infinite);
+        game.re2.player.fired = true;
+        game.re2_settle_ammo();
+        assert_eq!(game.item_count(3), 4);
+        // No slot holds the weapon: `0x691F68` is 0x80, so the bit isn't read.
+        game.re2.extras = 0xFFFF_FF00;
+        game.inventory.clear();
+        assert!(!game.re2_weapon().loaded);
     }
 
     /// `Tama_reload` with `Item_data_tbl`'s loads: six for the Colt and

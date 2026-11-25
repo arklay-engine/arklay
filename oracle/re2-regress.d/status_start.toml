@@ -43,3 +43,18 @@ fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,ib,box,s
 frames = [360, 949]
 expect = "match"
 record = "--no-enemies --warp 201:-14471:0:-24100:1024 --flag 8:63 --give 2:0x14:30 --give 3:0x26:1 --give 4:0x26:1 --give 5:0x14:20 --give 6:0x26:1 --give 7:0x14:10 --box 0:0x26:1 --box 1:0x14:15"
+
+# The status screen's Konami code (`St_ck_konamicode` in `Status`): its first entry raises the extras word's weapon bits, so the handgun spends no rounds and its counts show the infinity sign; its second puts them back
+[[run]]
+name = "status_konami_102"
+room = "102"
+setup_script = "status_start_102.lua"
+input = "status_konami_102.txt"
+input_shift = 344
+ticks = 1560
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,snd,fgstat"
+frames = [360, 1559]
+# 0.02 measured
+frame_max_mean = 0.05
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0 --give 10:0x52:1 --flag 3:162 --flag 8:63 --life 200"

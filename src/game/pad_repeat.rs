@@ -44,7 +44,12 @@ pub struct PadRepeat {
     pub flag: bool,
     /// The raw pad as of the last step.
     pub raw: u16,
+    /// The keys [`Self::step_trigger`] last found newly down
+    /// (`em_damage_table`, `Pad_set`'s trigger word, `0x9885F8`), of the
+    /// whole pad: the action, run and START keys too.
+    pub trigger: u16,
     last_raw: u16,
+    last_whole: u16,
 }
 
 impl Default for PadRepeat {
@@ -57,7 +62,9 @@ impl Default for PadRepeat {
             count: 1,
             flag: false,
             raw: 0,
+            trigger: 0,
             last_raw: 0,
+            last_whole: 0,
         }
     }
 }
@@ -88,6 +95,12 @@ impl PadRepeat {
             }
             self.flag = false;
         }
+    }
+
+    /// `Pad_set`'s trigger word from the whole raw pad, every tick.
+    pub fn step_trigger(&mut self, whole: u16) {
+        self.trigger = whole & !self.last_whole;
+        self.last_whole = whole;
     }
 
     /// The flag with `bit` held: what a gated test reads.
@@ -204,5 +217,18 @@ mod tests {
         pad.set(STATUS_SETTING);
         assert_eq!((pad.mask, pad.delays, pad.count), (0xF01C, 0x060A, count));
         assert_eq!(pad.trace(), format!("0,{count},61468,1546"));
+    }
+
+    /// `Pad_set`'s trigger word: the keys of the whole pad down this tick
+    /// and not the last, held ones once.
+    #[test]
+    fn the_trigger_is_the_newly_down_keys() {
+        let mut pad = PadRepeat::default();
+        let mut triggers = Vec::new();
+        for whole in [UP, UP, UP | 0x80, 0x80, 0, 0x800, AIM] {
+            pad.step_trigger(whole);
+            triggers.push(pad.trigger);
+        }
+        assert_eq!(triggers, [UP, 0, 0x80, 0, 0, 0x800, AIM]);
     }
 }

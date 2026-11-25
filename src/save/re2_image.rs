@@ -118,11 +118,11 @@ pub const REGIONS: &[Region] = &[
     region("position", 0x222, 6),
     // The new game's `DWORD_0098e9c4 = DWORD_0099c8a8 & 1`, and
     // `Flg_on(.., 0x12)` (0x2000) under `DWORD_00995b48 & 0x40`
-    // (`FUN_004b73c0`). In play only the status screen's Konami code writes
-    // it (`Status`, `0x501BD0`), which arklay doesn't port: its first entry
-    // raises `0xFFFFFF00`, and its second puts the word back to bit 0 and
-    // raises 0x2000, both masked, so a recording's image differs only while
-    // the first entry's bits are up.
+    // (`FUN_004b73c0`), which arklay doesn't keep, so those two bits are
+    // masked. In play only the status screen's Konami code writes it
+    // (`Status`, `0x501BD0`, [`crate::scd2::host::Re2State::extras`]): its
+    // first entry raises `0xFFFFFF00`, and its second puts the word back to
+    // bit 0 and raises 0x2000.
     masked_bits(
         "extras",
         0x228,
@@ -277,9 +277,9 @@ pub fn build(game: &GameState, record: Option<&[u8]>) -> [u8; IMAGE_LEN] {
     image[0x219] = game.re2_equip_slot();
     put(&mut image, 0x21A, &player.health.to_le_bytes());
     put(&mut image, 0x220, &game.re2_save_count().to_le_bytes());
-    // The extras word: arklay holds none of its bits (the new game's, from
-    // the clear records, and the status screen's Konami code, not ported).
-    put(&mut image, 0x228, &0u32.to_le_bytes());
+    // The extras word, as the status screen's Konami code left it (the new
+    // game's bits from the clear records aren't kept).
+    put(&mut image, 0x228, &game.re2.extras.to_le_bytes());
     for (axis, &value) in player.pos.iter().enumerate() {
         put(&mut image, 0x222 + axis * 2, &(value as i16).to_le_bytes());
     }
@@ -622,10 +622,11 @@ mod tests {
         let bytes = cut.re2.as_mut().unwrap();
         bytes.truncate(bytes.len() - 3);
         assert!(saved_state(&cut).is_err());
-        // The layout from before the count's high byte still applies.
+        // The layout from before the count's high byte (and the extras word
+        // after it) still applies.
         let mut older = file;
         let bytes = older.re2.as_mut().unwrap();
-        bytes.truncate(bytes.len() - 1);
+        bytes.truncate(bytes.len() - 5);
         assert!(saved_state(&older).is_ok());
     }
 }
