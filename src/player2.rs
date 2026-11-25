@@ -7585,7 +7585,7 @@ pub(crate) fn rot_matrix(angle: [i16; 3]) -> [[i16; 3]; 3] {
 
 /// A turn seen with Y flipped (`F·M·F`, `F` = diag(1, -1, 1)): between the
 /// game's matrices and the draw's.
-fn flip_y(m: [[i32; 3]; 3]) -> [[i32; 3]; 3] {
+pub(crate) fn flip_y(m: [[i32; 3]; 3]) -> [[i32; 3]; 3] {
     std::array::from_fn(|row| {
         std::array::from_fn(|column| {
             let value = m[row][column];

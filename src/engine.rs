@@ -5322,11 +5322,13 @@ impl GameSession {
             self.tick_re2_weapon(pack);
             let water = crate::character2::water_areas(&self.game);
             let objects = crate::character2::twinkle_points(&self.game);
+            let object_worlds = crate::character2::object_worlds(&self.game);
             let weapon = self.game.equipped_weapon_id;
             let re2 = &mut self.game.re2;
             re2.tick_before();
             re2.effects.water = water;
             re2.effects.objects = objects;
+            re2.effects.object_worlds = object_worlds;
             re2.effects.weapon = weapon;
             let player = self
                 .game
@@ -8995,6 +8997,7 @@ impl GameSession {
         #[cfg(test)]
         self.re2_stopped_frame_draws.push(stopped);
         self.game.re2.effects.objects = crate::character2::twinkle_points(&self.game);
+        self.game.re2.effects.object_worlds = crate::character2::object_worlds(&self.game);
         self.game.re2.tick_before();
         let player = self
             .game

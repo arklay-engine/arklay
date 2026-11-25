@@ -1877,6 +1877,9 @@ impl Re2State {
                         .and_then(Option::as_deref)
                         .and_then(|character| character.zombie.as_ref())
                         .and_then(|zombie| zombie.drawn.get(part).copied().flatten()),
+                    Body::Object(slot) => {
+                        self.effects.object_worlds.get(usize::from(slot)).copied()
+                    }
                 }?;
                 Some((anchor, matrix))
             })
@@ -2320,18 +2323,39 @@ fn probe_flags(sat: u8) -> u8 {
 
 pub use crate::esp2::EsprCall;
 
-/// `Get_matrix`: whose, and which of its parts, or the work's own `M`.
+/// `Get_matrix`: whose, and which of its parts, or the work's own `M`, or a
+/// room object's `Work_m`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EsprMatrix {
     /// `None` for the player, else the slot in `Characters`.
     pub slot: Option<usize>,
     pub part: Option<usize>,
+    /// Case 4: room object `n`'s `Work_m` (`+0x54`); `slot` and `part` are
+    /// then unused.
+    pub object: Option<u8>,
 }
 
 impl EsprMatrix {
-    /// `None` for `GsIdMatrix`, and for an object's, which still spawns at the
-    /// origin.
+    /// The matrix as `Esp_kill` matches it.
+    fn key(self) -> crate::esp2::MatrixKey {
+        match self.object {
+            Some(object) => crate::esp2::MatrixKey::Object(object),
+            None => crate::esp2::MatrixKey::Work(crate::esp2::WorkMatrix {
+                slot: self.slot,
+                part: self.part,
+            }),
+        }
+    }
+
+    /// `None` for `GsIdMatrix`.
     fn of(matrix: i8, id: u8) -> Option<Self> {
+        if matrix == 4 {
+            return Some(Self {
+                slot: None,
+                part: None,
+                object: Some(id),
+            });
+        }
         let slot = |who| match who {
             0 => Some(None),
             1 => Some(Some(SPLAYER_SLOT)),
@@ -2343,12 +2367,14 @@ impl EsprMatrix {
             return Some(Self {
                 slot: slot((matrix >> 5) & 3)?,
                 part,
+                object: None,
             });
         }
         match matrix {
             1..=3 => Some(Self {
                 slot: slot(matrix - 1)?,
                 part: None,
+                object: None,
             }),
             _ => None,
         }
@@ -3535,20 +3561,50 @@ impl Host for GameHost<'_> {
                         0
                     },
                 };
+                // A character's matrix waits for its pose (`run_esprs`); an
+                // object's `Work_m` and the world's are there now.
                 let [matrix, id] = (at(2) as u16).to_le_bytes();
                 match EsprMatrix::of(matrix as i8, id) {
+                    Some(EsprMatrix {
+                        object: Some(object),
+                        ..
+                    }) => {
+                        let worlds = crate::character2::object_worlds(self.game);
+                        if let Some(&world) = worlds.get(usize::from(object)) {
+                            let effects = &mut self.game.re2.effects;
+                            effects.call_placed_on_object(call, object, world);
+                        }
+                    }
                     Some(matrix) => self.game.re2.pending_esprs.push((call, matrix)),
                     None => {
                         self.game.re2.effects.call_placed(call);
                     }
                 }
             }
-            "sce_espr_kill2" => self.game.re2.effects.kill_group(at(0) as u8),
+            "sce_espr_kill2" => {
+                let group = at(0) as u8;
+                let re2 = &mut self.game.re2;
+                re2.pending_esprs.retain(|(call, _)| call.group != group);
+                re2.effects.kill_group(group);
+            }
             // `Sce_82` (`0x4E7160`): 6 kills every effect (room 613's
             // terminal, before it puts the screen's glow back). Any other
-            // kills the ones on `Get_matrix(a, b)`'s matrix, which isn't
-            // ported.
-            "sce_82" if at(0) == 6 => self.game.re2.effects.kill_all(),
+            // kills every one on `Get_matrix(a, b)`'s matrix (room 617's
+            // `sce_82(0, 0)` before its glow), those this pass asked for
+            // included.
+            "sce_82" => {
+                let re2 = &mut self.game.re2;
+                if at(0) == 6 {
+                    re2.pending_esprs.clear();
+                    re2.effects.kill_all();
+                } else {
+                    let matrix = EsprMatrix::of(at(0) as i8, at(1) as u8);
+                    let key = matrix.map_or(crate::esp2::MatrixKey::Identity, EsprMatrix::key);
+                    re2.pending_esprs
+                        .retain(|(_, pending)| Some(*pending) != matrix);
+                    re2.effects.kill_matrix(key);
+                }
+            }
             // `Sce_shake_on`: `SetGeomOffset`, which holds until the next one.
             "sce_shake_on" => {
                 let shake = [-(at(0) as i8 as i32), -(at(1) as i8 as i32)];
@@ -3584,8 +3640,17 @@ impl Host for GameHost<'_> {
                     });
                 }
             }
+            // `Esp_kill` on `Get_matrix`'s matrix: only the effects started on
+            // it, those this pass asked for on a character's included.
             "sce_espr_kill" => {
-                self.game.re2.effects.kill(at(0) as u8, at(1) as u8);
+                let (kind, row) = (at(0) as u8, at(1) as u8);
+                let matrix = EsprMatrix::of(at(2) as i8, at(3) as u8);
+                let key = matrix.map_or(crate::esp2::MatrixKey::Identity, EsprMatrix::key);
+                let re2 = &mut self.game.re2;
+                re2.pending_esprs.retain(|(call, pending)| {
+                    (call.kind, call.row, Some(*pending)) != (kind, row, matrix)
+                });
+                re2.effects.kill_on(kind, row, key);
             }
             "sce_bgm_control" => {
                 let place = self.game.re2_music_place();
@@ -5395,22 +5460,120 @@ mod tests {
         };
         assert_eq!(of(0), None);
         assert_eq!(of(0x300), None);
-        assert_eq!(of(0x304), None);
         let enemy = EsprMatrix {
             slot: Some(1),
             part: Some(11),
+            object: None,
         };
         assert_eq!(of(459), Some(enemy));
         let splayer = EsprMatrix {
             slot: Some(SPLAYER_SLOT),
             part: Some(11),
+            object: None,
         };
         assert_eq!(of(171), Some(splayer));
         let root = EsprMatrix {
             slot: Some(0),
             part: None,
+            object: None,
         };
         assert_eq!(of(3), Some(root));
+        let object = EsprMatrix {
+            slot: None,
+            part: None,
+            object: Some(2),
+        };
+        assert_eq!(of(0x204), Some(object));
+    }
+
+    /// Room 112's shelf glows (`sce_espr3d_on` on `Get_matrix`'s case 4):
+    /// `Esp_call` copies the object's `Work_m` as the opcode runs, so an
+    /// `sce_espr_kill` later in the same pass finds the slot. A shelf hung
+    /// on a turned object (`Super_set`) has its parent's turn in it.
+    #[test]
+    fn an_effect_on_an_objects_matrix_starts_on_its_work_m_at_once() {
+        use crate::objects::SuperParent;
+        let mut game = GameState::default();
+        game.re2.effects.test_enter_room_with(7, 0);
+        game.objects.records = vec![crate::objects::ObjectRecord::default(); 2];
+        game.objects.records[0].rotation = [0, 0x400, 0];
+        game.objects.records[0].pos = [1000, 0, 2000];
+        game.objects.records[1].set_super_parent(SuperParent::Object(0));
+        game.objects.records[1].pos = [100, 0, 0];
+        for index in 0..2 {
+            game.compose_object_world(index, ([0; 3], 0));
+        }
+        let glow = |game: &mut GameState| {
+            exec(
+                game,
+                "sce_espr3d_on",
+                &[0, 7, 0x104, 0x800, 0, 0, 50, 0, 0, 0, 0],
+            );
+        };
+        glow(&mut game);
+        assert!(game.re2.pending_esprs.is_empty());
+        // `RotMatrix`'s quarter turn, `CompM`'d: the original's exact place.
+        let expected = [1050i16, 0, 1900];
+        game.re2.effects.tick(&mut Default::default(), None);
+        let trace = game.re2.effects.trace_field();
+        let [x, y, z] = expected;
+        assert!(
+            trace.ends_with(&format!(",{x},{y},{z}")),
+            "{trace} at {expected:?}"
+        );
+        exec(&mut game, "sce_espr_kill", &[7, 0, 4, 0]);
+        assert_ne!(
+            game.re2.effects.trace_field(),
+            "0/-",
+            "object 0's is another"
+        );
+        exec(&mut game, "sce_espr_kill", &[7, 0, 4, 1]);
+        assert_eq!(game.re2.effects.trace_field(), "0/-");
+        glow(&mut game);
+        exec(&mut game, "sce_espr_kill", &[7, 0, 4, 1]);
+        assert_eq!(
+            game.re2.effects.trace_field(),
+            "0/-",
+            "killed in the same pass"
+        );
+        // Room 112's middle shelf, on the world: `RotMatrix`'s whole 4096s.
+        game.objects.records[0].rotation = [0, 0xc00, 0];
+        game.objects.records[0].pos = [-21500, 0, -22800];
+        game.compose_object_world(0, ([0; 3], 0));
+        let shelf_glow = [0, 7, 0x004, 0x800, -450, -2250, -80, 0, 0, 0, 0];
+        exec(&mut game, "sce_espr3d_on", &shelf_glow);
+        game.re2.effects.tick(&mut Default::default(), None);
+        let trace = game.re2.effects.trace_field();
+        assert!(trace.ends_with(",-21420,-2250,-23250"), "{trace}");
+        // `Sce_82(4, 0)`: every effect on object 0's `Work_m`, any kind.
+        exec(&mut game, "sce_82", &[4, 1]);
+        assert_ne!(
+            game.re2.effects.trace_field(),
+            "0/-",
+            "object 1's is another"
+        );
+        exec(&mut game, "sce_82", &[4, 0]);
+        assert_eq!(game.re2.effects.trace_field(), "0/-");
+    }
+
+    /// A call on a character's matrix waits for its pose, but `sce_espr_kill2`
+    /// and `sce_82` later in the same pass take it as the original's would
+    /// the slot it had made.
+    #[test]
+    fn a_kill_takes_the_calls_on_a_character_this_pass_asked_for() {
+        let mut game = GameState::default();
+        // `sce_espr_on2`: group 3, on the player's part 11.
+        let on_hand = [3, 7, 0x8B, 0x800, 0, 0, 0, 0];
+        exec(&mut game, "sce_espr_on2", &on_hand);
+        exec(&mut game, "sce_espr_kill2", &[2]);
+        assert_eq!(game.re2.pending_esprs.len(), 1, "another group");
+        exec(&mut game, "sce_espr_kill2", &[3]);
+        assert!(game.re2.pending_esprs.is_empty());
+        exec(&mut game, "sce_espr_on2", &on_hand);
+        exec(&mut game, "sce_82", &[0, 0]);
+        assert_eq!(game.re2.pending_esprs.len(), 1, "the world's is another");
+        exec(&mut game, "sce_82", &[0x8B, 0]);
+        assert!(game.re2.pending_esprs.is_empty());
     }
 
     /// Room 202's scene with Marvin reads the player's `Type & 0xFF` to choose

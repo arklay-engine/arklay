@@ -563,6 +563,68 @@ pub(crate) fn twinkle_points(game: &GameState) -> Vec<Option<[i16; 3]>> {
         .collect()
 }
 
+/// Each room object's `Work_m` (`+0x54`), by slot, for the effects started on
+/// one: the matrix `Obj_model_set` composed and `Om_trans` composes again each
+/// frame it draws the object, kept as it was while the object isn't drawn.
+/// [`crate::objects::ObjectRecord::world`] keeps it with the draw's builder
+/// and its turn with Y flipped. While that is still the object's `Cdir` and
+/// `Pos` on the world or on another object, it is composed again as the
+/// original does it, with `RotMatrix` and `CompM` ([`pc_work_m`]).
+pub(crate) fn object_worlds(game: &GameState) -> Vec<player2::Matrix> {
+    let records = &game.objects.records;
+    (0..records.len())
+        .map(|index| {
+            pc_work_m(records, index, 0).unwrap_or_else(|| player2::Matrix {
+                m: player2::flip_y(records[index].world.r).map(|row| row.map(|v| v as i16)),
+                t: records[index].world.t,
+            })
+        })
+        .collect()
+}
+
+/// `CompM(+0x80, RotMatrix(Cdir) at Pos)` for an object on the world or on
+/// another object, when [`crate::objects::ObjectRecord::world`] shows it is
+/// what `Om_trans` last composed: `None` for one on a character, or one
+/// whose `Pos`, `Cdir` or parent has changed since (a hidden object keeps
+/// its old `Work_m`) or that `Om_trans` changed after (a box's lift).
+fn pc_work_m(
+    records: &[crate::objects::ObjectRecord],
+    index: usize,
+    depth: usize,
+) -> Option<player2::Matrix> {
+    use crate::objects::SuperParent;
+    let record = records.get(index)?;
+    let identity = crate::anim::Mat4x3 {
+        r: [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]],
+        t: [0; 3],
+    };
+    let (drawn_parent, parent) = match record.super_parent {
+        SuperParent::World => (
+            identity,
+            player2::Matrix {
+                m: [[0x1000, 0, 0], [0, 0x1000, 0], [0, 0, 0x1000]],
+                t: [0; 3],
+            },
+        ),
+        SuperParent::Object(of) if depth < 0x14 => {
+            let of = usize::from(of);
+            (records.get(of)?.world, pc_work_m(records, of, depth + 1)?)
+        }
+        _ => return None,
+    };
+    let own = crate::anim::Mat4x3 {
+        r: crate::objects::rotation(record),
+        t: record.pos,
+    };
+    if crate::anim::compose(&drawn_parent, &own) != record.world {
+        return None;
+    }
+    Some(parent.comp(&player2::Matrix {
+        m: player2::rot_matrix(record.rotation),
+        t: record.pos,
+    }))
+}
+
 /// The water areas (`aot_set` kind 7) in `aot_table`'s order, for `Water_ck`.
 pub(crate) fn water_areas(game: &GameState) -> Vec<crate::zombie2::WaterArea> {
     game.room_actions
@@ -655,7 +717,13 @@ pub(crate) fn run_esprs(
             root_matrix(player.pos, player.angle)
         });
         let at = place_on(&world, call.at);
-        game.re2.effects.call_placed(EsprCall { at, ..call });
+        let work = crate::esp2::WorkMatrix {
+            slot: matrix.slot,
+            part: matrix.part,
+        };
+        game.re2
+            .effects
+            .call_placed_on_work(EsprCall { at, ..call }, work);
     }
 }
 
@@ -1257,6 +1325,7 @@ pub fn init(
         game.re2.tick_before();
         game.re2.effects.water = water_areas(game);
         game.re2.effects.objects = twinkle_points(game);
+        game.re2.effects.object_worlds = object_worlds(game);
         game.re2.effects.weapon = game.equipped_weapon_id;
         let player = game
             .entities
