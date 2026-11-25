@@ -219,6 +219,10 @@ impl GameSession {
         });
         match opened {
             Ok((screen, cues)) => {
+                // A new screen is told the bindings on its first tick.
+                if let Some((_, told)) = &mut self.screen_bindings {
+                    *told = false;
+                }
                 self.re2_config_shown =
                     SCREEN_VOLUME_KEYS.map(|key| screen_volume(screen.published(key)));
                 self.re2_config_screen = Some(Box::new(screen));
@@ -244,6 +248,8 @@ impl GameSession {
                 text,
                 game,
                 screen_statics,
+                screen_bindings,
+                re2_config_bindings,
                 ..
             } = self;
             let Some(screen) = re2_config_screen.as_mut() else {
@@ -260,7 +266,16 @@ impl GameSession {
                 cues: std::cell::RefCell::new(Vec::new()),
                 game: Some(game),
             };
+            if let Some((bindings, told)) = screen_bindings.as_mut()
+                && !*told
+            {
+                *told = true;
+                screen.tell_bindings(bindings, &controls::Bindings::default(), &cx);
+            }
             let result = screen.update(&cx, ui);
+            if let Some(request) = screen.take_bindings_request() {
+                *re2_config_bindings = Some(request);
+            }
             (result, cx.cues.into_inner())
         };
         self.play_re2_screen_cues(pack, cues);
@@ -337,6 +352,15 @@ impl GameSession {
         self.game.re2.bg_load = true;
         self.game.mask_reload = true;
         self.re2_config = Some(Re2Config::Closed);
+    }
+
+    /// The settings' bindings, for the screen's KEYCONFIG page: told to an
+    /// open screen on its next tick when they changed, or with `again`.
+    pub(super) fn set_screen_bindings(&mut self, bindings: &controls::Bindings, again: bool) {
+        match &mut self.screen_bindings {
+            Some((current, told)) if current == bindings => *told &= !again,
+            _ => self.screen_bindings = Some((bindings.clone(), false)),
+        }
     }
 
     /// The volumes the screen changed, once, for the app's settings.

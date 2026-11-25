@@ -385,6 +385,9 @@ struct Driver {
     held: u64,
     /// The keys held for the next tick only (`press`).
     pressed: u64,
+    /// The physical keys and pad buttons newly down on the next tick only
+    /// (`press_key`), as a screen that binds keys reads them.
+    pressed_sources: [Option<crate::controls::Source>; crate::ui::NEWLY_DOWN],
     /// The booted session has not ticked yet: what its state was before
     /// the script's `game` edits, so the first tick (or a `save_game` or
     /// `capture`) reruns what they invalidate once, as an authored setup does.
@@ -419,6 +422,7 @@ impl Driver {
             input: InputState::default(),
             held: 0,
             pressed: 0,
+            pressed_sources: Default::default(),
             baseline: None,
             edited: false,
             arm: false,
@@ -718,6 +722,13 @@ impl Driver {
         };
         let mut traced = None;
         let mut tick = self.input.tick_scripted(word);
+        for source in std::mem::take(&mut self.pressed_sources)
+            .into_iter()
+            .flatten()
+        {
+            tick.ui.captured.get_or_insert(source);
+            crate::ui::push_newly_down(&mut tick.ui.newly_down, source);
+        }
         if let Some(window) = self.window.as_mut() {
             // The player's host keys reach the game; their other game keys
             // do not.
@@ -1597,6 +1608,24 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
         lua.create_function(move |_lua, names: Variadic<String>| {
             with(&shared, |driver| {
                 driver.pressed |= buttons(&names)?;
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "press_key",
+        lua.create_function(move |_lua, name: String| {
+            with(&shared, |driver| {
+                let source = crate::controls::Source::parse(&name)
+                    .map_err(|err| mlua::Error::RuntimeError(format!("press_key: {err:#}")))?;
+                if !matches!(source, crate::controls::Source::Key(_)) && !source.is_pad() {
+                    return Err(mlua::Error::RuntimeError(format!(
+                        "press_key: `{name}` is not a keyboard key or a gamepad source"
+                    )));
+                }
+                crate::ui::push_newly_down(&mut driver.pressed_sources, source);
                 Ok(())
             })
         })?,

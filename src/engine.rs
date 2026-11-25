@@ -2347,6 +2347,11 @@ struct GameSession {
     re2_config_shown: [Option<u8>; 2],
     /// Volumes the screen changed, for the app to take.
     re2_config_volumes: Option<[u8; 2]>,
+    /// The settings' bindings in the interactive game, which the screen's
+    /// KEYCONFIG page lists, and whether the screen is yet to be told them.
+    screen_bindings: Option<(controls::Bindings, bool)>,
+    /// What the screen asked of the bindings, for the app to take.
+    re2_config_bindings: Option<ui::lua_screen::BindingsRequest>,
     /// What the screens keep past a screen (`api:keep`): the app's, shared
     /// with it once the app starts the session.
     screen_statics: ui::ScreenStatics,
@@ -3500,6 +3505,8 @@ impl GameSession {
             re2_config_player: None,
             re2_config_shown: [None; 2],
             re2_config_volumes: None,
+            screen_bindings: None,
+            re2_config_bindings: None,
             screen_statics: ui::ScreenStatics::default(),
             #[cfg(test)]
             re2_stopped_enemy_passes: 0,
@@ -11876,6 +11883,13 @@ struct App {
     /// A change the title made, for the window's loop to apply and save
     /// ([`save_screen_volumes`]).
     volume_change: Option<[u8; 2]>,
+    /// Whether [`Self::bindings`] are the settings' (the interactive
+    /// game's): a title that shows them is told them, and a change it asks
+    /// for is applied and saved ([`Self::bindings_change`]).
+    bindings_are_settings: bool,
+    /// Bindings a screen changed, for the window's loop to apply to its
+    /// input and save.
+    bindings_change: Option<controls::Bindings>,
     /// Whether the prologue film (id 1) is playing for a pending new game:
     /// the follow-up `NewGame` action then builds the session instead of
     /// queueing the film again. A later confirm queues the prologue anew,
@@ -12014,6 +12028,8 @@ impl App {
             volumes_are_settings: false,
             screen_volumes_shown: [None; 2],
             volume_change: None,
+            bindings_are_settings: false,
+            bindings_change: None,
             prologue_pending: false,
             film_title: None,
             film_title_is_select: false,
@@ -12692,6 +12708,7 @@ impl App {
         self.mode = Mode::Title(screen);
         self.play_ui_cues(cues);
         self.tell_screen_volumes();
+        self.tell_screen_bindings();
         if boot && self.films && !own_boot {
             match self.open_movie(TITLE_OPENING_ID, 0) {
                 Ok(session) => self.queue_movie(session, Some(ScreenAction::Title)),
@@ -13813,6 +13830,7 @@ impl App {
         };
         self.play_ui_cues(cues);
         self.poll_screen_volumes();
+        self.poll_screen_bindings();
         result
     }
 
@@ -13828,11 +13846,22 @@ impl App {
         let mut saved_file = None;
         let mut autosave = None;
         let mut volumes = None;
+        let mut bindings_request = None;
         {
-            let App { pack, mode, .. } = self;
+            let App {
+                pack,
+                mode,
+                bindings,
+                bindings_are_settings,
+                ..
+            } = self;
             let Mode::Play(session) = mode else {
                 return Ok(AppFlow::Continue);
             };
+            // The option screen from play lists the settings' bindings.
+            if *bindings_are_settings {
+                session.set_screen_bindings(bindings, false);
+            }
             if !session.transition_finished {
                 if session.transition.is_some() {
                     // The original's `room_transition_load` blocks the gameplay
@@ -13859,6 +13888,7 @@ impl App {
                 saved_file = session.saved_file.take();
                 autosave = session.take_autosave();
                 volumes = session.take_re2_config_volumes();
+                bindings_request = session.re2_config_bindings.take();
                 clear_game = session
                     .take_clear_game_request()
                     .map(|id| (id, session.ending_flow(id)));
@@ -13882,6 +13912,16 @@ impl App {
             self.screen_volumes = volumes;
             if self.volumes_are_settings {
                 self.volume_change = Some(volumes);
+            }
+        }
+        // Its KEYCONFIG page changed them: they are the settings', and the
+        // page is told them as they now stand.
+        if let Some(request) = bindings_request
+            && self.bindings_are_settings
+        {
+            self.take_bindings_request(&request);
+            if let Mode::Play(session) = &mut self.mode {
+                session.set_screen_bindings(&self.bindings, true);
             }
         }
         if demo_over {
@@ -14132,8 +14172,66 @@ impl App {
     }
 
     /// The action map the window reads, for the in-game menu's settings.
+    /// A screen that shows them is told when they are the settings'.
     fn set_bindings(&mut self, bindings: controls::Bindings) {
         self.bindings = bindings;
+        self.tell_screen_bindings();
+    }
+
+    /// The interactive game's bindings are the settings': a title that
+    /// shows them (RE 2's KEYCONFIG page) lists them and changes them.
+    fn use_settings_bindings(&mut self, bindings: controls::Bindings) {
+        self.bindings_are_settings = true;
+        self.set_bindings(bindings);
+    }
+
+    /// Tell a title that shows the bindings the settings' and the shipped
+    /// ones (`on_bindings`); a run with no settings tells it nothing, and
+    /// its page lists its own keys.
+    fn tell_screen_bindings(&mut self) {
+        if !self.bindings_are_settings {
+            return;
+        }
+        let mut mode = std::mem::replace(&mut self.mode, Mode::Boot);
+        if let Mode::Title(screen) | Mode::Select(screen) = &mut mode {
+            let cx = self.context();
+            screen.tell_bindings(&self.bindings, &controls::Bindings::default(), &cx);
+        }
+        self.mode = mode;
+    }
+
+    /// Take a change a title asked of the bindings: applied and handed to
+    /// the window's loop to save, or, when it would leave a menu without a
+    /// key of its own, refused. Either way the title is told the bindings
+    /// as they now stand. A run with no settings takes none.
+    fn poll_screen_bindings(&mut self) {
+        let (Mode::Title(screen) | Mode::Select(screen)) = &mut self.mode else {
+            return;
+        };
+        let Some(request) = screen.take_bindings_request() else {
+            return;
+        };
+        if self.bindings_are_settings {
+            self.take_bindings_request(&request);
+            self.tell_screen_bindings();
+        }
+    }
+
+    /// Apply `request` to the settings' bindings, for the window's loop to
+    /// save ([`Self::bindings_change`]).
+    fn take_bindings_request(&mut self, request: &ui::lua_screen::BindingsRequest) {
+        match request.apply(&self.bindings) {
+            Ok(bindings) => {
+                if bindings != self.bindings {
+                    self.bindings = bindings.clone();
+                    self.bindings_change = Some(bindings);
+                }
+            }
+            Err(action) => crate::warning!(
+                "warning: bindings not changed: `{}` would have no key of its own",
+                action.name()
+            ),
+        }
     }
 
     /// Step the camera cut when playing.
@@ -15186,7 +15284,7 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
     app.enable_skips();
     app.enable_films();
     app.enable_autosave();
-    app.set_bindings(input.bindings().clone());
+    app.use_settings_bindings(input.bindings().clone());
     let mut event = SDL_Event::default();
     let mut clock = LoopClock::new(display.frame_rate(), stats);
     warm_gui_fonts(app.pack.language());
@@ -15222,6 +15320,11 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
             if let Some([music, effects]) = app.volume_change.take() {
                 let path = crate::config::Config::default_path();
                 crate::audio::set_volumes(save_screen_volumes(&path, music, effects).volumes());
+            }
+            // A title's KEYCONFIG page changed the bindings: the window
+            // reads them from now on, and `arklay.toml` keeps them.
+            if let Some(bindings) = app.bindings_change.take() {
+                input.apply_bindings_change(bindings);
             }
             clock.ticked(tick_ms);
             // The tick may have changed the screen and with it the limiter,
@@ -22055,6 +22158,9 @@ struct InputState {
     /// The first bindable source pressed since the last tick, for the rebind
     /// screen's capture.
     captured: Option<controls::Source>,
+    /// The bindable sources pressed since the last tick, in order (the
+    /// first few): what RE 2's KEYCONFIG page binds.
+    newly_down: [Option<controls::Source>; ui::NEWLY_DOWN],
     /// The open gamepads (none for a scripted or test latch).
     pads: Gamepads,
     /// Navigation and pointer events for the native GUI, in arrival order
@@ -22196,6 +22302,9 @@ impl InputState {
             if self.captured.is_none() && (source.reserved_bit().is_none() || pad_start) {
                 self.captured = Some(source);
             }
+            if source.reserved_bit().is_none() {
+                ui::push_newly_down(&mut self.newly_down, source);
+            }
         }
     }
 
@@ -22296,6 +22405,7 @@ impl InputState {
         self.pressed = 0;
         self.any_pressed = false;
         self.captured = None;
+        self.newly_down = Default::default();
     }
 
     /// Latch a source going up. A pending press is left alone: a tap released
@@ -22477,6 +22587,7 @@ impl InputState {
         self.pressed = 0;
         self.any_pressed = false;
         self.captured = None;
+        self.newly_down = Default::default();
         self.gui_events.clear();
         // The button's release may never arrive once focus is gone; a held
         // slider drag must not outlive it.
@@ -22576,6 +22687,7 @@ impl InputState {
                     .map(|slot| slot as u8),
                 any: std::mem::take(&mut self.any_pressed),
                 captured: self.captured.take(),
+                newly_down: std::mem::take(&mut self.newly_down),
             },
         }
     }
@@ -29153,6 +29265,72 @@ mod tests {
         assert_eq!(session.game.re2.volumes, Some([79, 60]));
     }
 
+    /// KEYCONFIG from play lists the settings' bindings, which the screen
+    /// is told on its first tick, and the question's Change is a request
+    /// the app takes once.
+    #[test]
+    fn re2_option_screen_from_play_asks_for_its_bindings() {
+        let dir = TempDir::new();
+        let (pack, a) = re2_config_pack(&dir);
+        let mut session = re2_config_session(&pack, a);
+        session.set_screen_bindings(&controls::Bindings::default(), false);
+        re2_open_config(&mut session, &pack, re2_option_press());
+        let screen = session.re2_config_screen.as_ref().unwrap();
+        let told: bool = screen.test_eval("return M.key_work.bound ~= nil");
+        assert!(told, "told on the screen's first tick");
+        let key = |ui: UiInput| UiInput { any: true, ..ui };
+        let confirm = key(UiInput {
+            confirm: true,
+            ..UiInput::default()
+        });
+        let down = key(UiInput {
+            down: true,
+            held_down: true,
+            ..UiInput::default()
+        });
+        // KEYCONFIG, through the walk in and the rows, to the list.
+        for _ in 0..3 {
+            re2_tick(&mut session, &pack, confirm);
+            re2_tick(&mut session, &pack, UiInput::default());
+        }
+        let state = |session: &GameSession| {
+            let screen = session.re2_config_screen.as_ref().unwrap();
+            (screen.value("opt_state"), screen.value("opt_type"))
+        };
+        assert_eq!(state(&session), (0xB, 4));
+        // Q on Get Ready, then down to the last row and Change.
+        re2_tick(
+            &mut session,
+            &pack,
+            key({
+                let q = controls::Source::parse("key:Q").unwrap();
+                let mut input = UiInput {
+                    captured: Some(q),
+                    ..UiInput::default()
+                };
+                crate::ui::push_newly_down(&mut input.newly_down, q);
+                input
+            }),
+        );
+        re2_tick(&mut session, &pack, UiInput::default());
+        for _ in 0..6 {
+            re2_tick(&mut session, &pack, down);
+            re2_tick(&mut session, &pack, UiInput::default());
+        }
+        assert_eq!(state(&session), (0xB, 10));
+        re2_tick(&mut session, &pack, confirm);
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert_eq!(state(&session).0, 0xF);
+        assert!(session.re2_config_bindings.is_none());
+        re2_tick(&mut session, &pack, confirm);
+        let request = session.re2_config_bindings.take().expect("Change asks");
+        let applied = request.apply(&controls::Bindings::default()).unwrap();
+        assert_eq!(
+            applied.get(controls::Action::Aim)[0],
+            controls::Source::parse("key:Q").unwrap()
+        );
+    }
+
     /// `FUN_0044af00`'s handgun for each `Id`.
     #[test]
     fn re2_option_screens_model_holds_the_players_handgun() {
@@ -34238,6 +34416,7 @@ mod tests {
             let mut expected = expected;
             expected.any = true;
             expected.captured = Some(controls::Source::key(scancode));
+            ui::push_newly_down(&mut expected.newly_down, controls::Source::key(scancode));
             assert_eq!(input.tick().ui, expected, "scancode {}", scancode.0);
         }
 
@@ -42990,6 +43169,68 @@ off_0010:
         app_press(&mut app, |ui| ui.left = true);
         assert_eq!(app.volume_change, None);
         assert_eq!(app.screen_volumes, [40, 40]);
+    }
+
+    /// A title that shows the bindings (`on_bindings`) is told the settings'
+    /// as it opens and when they change, in the interactive game alone; a
+    /// change it asks for is applied and handed to the window to save, a
+    /// change that would lock a menu out is refused, and either way the
+    /// title is told the bindings as they stand. A run with no settings
+    /// tells it nothing and takes nothing.
+    #[test]
+    fn a_titles_binding_change_is_the_settings() {
+        use controls::{Action, Source};
+        const TITLE: &str = "local M = {}
+            function M.on_bindings(api, bindings, defaults)
+                M.told = (M.told or 0) + 1
+                api:set('told', M.told)
+                api:set('fire_keys', #bindings.fire.keys)
+                api:set('default_fire_keys', #defaults.fire.keys)
+            end
+            function M.update(api, input)
+                if input.left then api:set_bindings({ fire = { keys = { 'key:K' } } }) end
+                if input.right then api:set_bindings({ start = { keys = {} } }) end
+            end
+            function M.draw() end
+            return M";
+        let dir = TempDir::new();
+        let pack_path = new_game_pack_with(&dir, &[("ui/title.lua", TITLE.as_bytes())]);
+        let open = |settings: bool| {
+            let mut app = App::new(Pack::open(&pack_path).unwrap(), dir.0.join("saves"), false);
+            if settings {
+                app.bindings_are_settings = true;
+            }
+            app.boot(AppBoot::Title).unwrap();
+            app
+        };
+        let mut app = open(true);
+        assert_eq!(title_value(&app, "told"), 1);
+        assert_eq!(title_value(&app, "fire_keys"), 2);
+        app_press(&mut app, |ui| ui.left = true);
+        let changed = app.bindings_change.take().expect("taken for the window");
+        assert_eq!(
+            changed.get(Action::Fire)[0],
+            Source::parse("key:K").unwrap()
+        );
+        assert_eq!(app.bindings, changed);
+        assert_eq!(title_value(&app, "told"), 2);
+        assert_eq!(title_value(&app, "fire_keys"), 1);
+        assert_eq!(title_value(&app, "default_fire_keys"), 2);
+        // START left with no key: refused, and told again as they stand.
+        app_press(&mut app, |ui| ui.right = true);
+        assert_eq!(app.bindings_change, None);
+        assert_eq!(app.bindings, changed);
+        assert_eq!(title_value(&app, "told"), 3);
+        // The in-game menu's controls change under the title.
+        app.set_bindings(controls::Bindings::default());
+        assert_eq!(title_value(&app, "told"), 4);
+        assert_eq!(title_value(&app, "fire_keys"), 2);
+
+        let mut app = open(false);
+        assert_eq!(title_value(&app, "told"), 0, "a run with no settings");
+        app_press(&mut app, |ui| ui.left = true);
+        assert_eq!(app.bindings_change, None);
+        assert_eq!(app.bindings, controls::Bindings::default());
     }
 
     /// `Load_pop`: a load takes the run's volumes from its save as the game

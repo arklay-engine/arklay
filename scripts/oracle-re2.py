@@ -215,6 +215,43 @@ BUTTONS = {
 # The keys of an input line that are the keyboard's own (`KEY_WORD`'s fixed keys), and the pad's.
 KEY_WORD_KEYS = 0xFE000000
 PAD_KEYS = 0x01FFFFFF
+# A key by its name (`key:X`, a letter or a digit), which KEYCONFIG's page binds (`Config_main`'s states 0xB and 0xF
+# read it from `Kb_get_state`): its virtual key, above the line's 32 bits of pad and key word.
+KB_KEY_SHIFT = 32
+# `Kb_get_state` (0x4354D0): `GetKeyboardState` over its table of 0x43 virtual keys, the first newly down returned.
+# On the tick a line's key goes down the recorder makes it return that key (`MOV EAX, vk; RET`) and puts the code
+# back on the next stop, so the page sees the key on that tick alone, as a real key's edge. Only `Config_main` calls
+# it.
+KB_GET_STATE = 0x004354D0
+KB_GET_STATE_BYTES = bytes.fromhex("81EC00010000")  # SUB ESP,0x100
+
+
+def key_word(word: str) -> int | None:
+    """An input word's virtual key (`key:X`), or None for a word that names no key."""
+    if not word.startswith("key:"):
+        return None
+    name = word[4:]
+    if len(name) == 1 and (name.isdigit() or "A" <= name.upper() <= "Z"):
+        return ord(name.upper())
+    raise SystemExit(f"unknown key {word!r}: a letter or a digit")
+
+
+class KbPress:
+    """An input line's key to `Kb_get_state`, on the tick it goes down."""
+
+    def __init__(self) -> None:
+        self.patched = False
+
+    def tick(self, game: "Game", pad: int, held: int) -> None:
+        vk = pad >> KB_KEY_SHIFT & 0xFF
+        if vk and vk != held >> KB_KEY_SHIFT & 0xFF:
+            if not self.patched and game.read(KB_GET_STATE, len(KB_GET_STATE_BYTES)) != KB_GET_STATE_BYTES:
+                raise SystemExit("Kb_get_state isn't the code the recorder expects")
+            game.write(KB_GET_STATE, bytes((0xB8, vk, 0, 0, 0, 0xC3)))
+            self.patched = True
+        elif self.patched:
+            game.write(KB_GET_STATE, KB_GET_STATE_BYTES)
+            self.patched = False
 
 BOOT_TICKS = 3000
 # The ticks from the first with a live player to the first of play: `Pl_init`,
@@ -392,6 +429,12 @@ def parse_input(path: Path | None) -> list[tuple[int, int]]:
             continue
         pad = 0
         for word in words[1:]:
+            vk = key_word(word)
+            if vk is not None:
+                if pad >> KB_KEY_SHIFT:
+                    raise SystemExit(f"{path}: {words[0]}: one key per line, as `Kb_get_state` returns one")
+                pad |= vk << KB_KEY_SHIFT
+                continue
             if word not in BUTTONS:
                 raise SystemExit(f"{path}: unknown button {word!r}")
             pad |= BUTTONS[word]
@@ -1282,7 +1325,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
             f"{game.i16(pointer + ENTITY_LIFE)},0,0,0"
         )
     fields.append("f=0")
-    fields.append(f"pad={pad}")
+    fields.append(f"pad={pad & 0xFFFFFFFF}")
     fields.append(f"fgsys={game.u32(FG_SYSTEM):08x}")
     fields.append(f"fgstat={game.u32(FG_STATUS):08x}")
     fields.append(f"fgstop={game.u32(FG_STOP):08x}")
@@ -1969,6 +2012,7 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
             cursor = 0
             pad = 0
             held_keys = 0
+            kb_press = KbPress()
             settled = 0
             tick = -1  # The trace's tick, once play has begun.
             films = FilmPads()
@@ -2076,6 +2120,7 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                     if (pad | held_keys) & KEY_WORD_KEYS:
                         # The keyboard's own keys, as `record_boot` puts them in.
                         game.write(KEY_WORD, struct.pack("<I", pad & KEY_WORD_KEYS))
+                    kb_press.tick(game, pad, held_keys)
                     held_keys = pad
                 regs.rax = pad & PAD_KEYS
                 if tick_delay:
@@ -2403,7 +2448,7 @@ def boot_trace_line(game: Game, tick: int, pad: int) -> str:
     fields = [
         f"t={tick}",
         f"room={game.u16(STAGE) + 1}:{game.u16(ROOM)}",
-        f"pad={pad}",
+        f"pad={pad & 0xFFFFFFFF}",
         # `Rnd`'s state, which the gallery's models draw from as they load.
         f"rng={game.u32(RANDOM) & 0xFFFF}",
         f"fgsys={game.u32(FG_SYSTEM):08x}",
@@ -2447,6 +2492,7 @@ def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
             cursor = 0
             pad = 0
             held_keys = 0
+            kb_press = KbPress()
             tick = 0
             films = FilmPads()
             while tick <= args.ticks:
@@ -2472,6 +2518,7 @@ def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
                 if (pad | held_keys) & KEY_WORD_KEYS:
                     # After `FUN_0043bb00` wrote the word for this tick, before `Config_main` reads it.
                     game.write(KEY_WORD, struct.pack("<I", pad & KEY_WORD_KEYS))
+                kb_press.tick(game, pad, held_keys)
                 held_keys = pad
                 regs.rax = pad & PAD_KEYS
                 if tick <= args.ticks:

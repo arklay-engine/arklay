@@ -1,4 +1,4 @@
-# The option screen's KEYCONFIG page (`Config_main`'s states 2 and 9 to 0xF; oracle/re2.md, "The option screen"). `kc` is the page's trace: state 9's count, the panel's offset, the choice, and the key table being edited; `kcm` is the player's model beside the list: its routines, place, turn, motion and weapon, and the page's statics that drive it. The keyboard's own arrows (`kbup` and the rest in the inputs) are arklay's directions, and `keys` is config.ini's `KeyDef` and `JoyDef_Emulated` in the install the references were recorded from, which the page lists. `seed` is the title generator's first value, which the records took from the clock: OPTION's draw picks the model's character from it, Claire in the first run and Leon in the second. On the page the list and the panel are the original's pixels (a mean of 0.01 inside the panel), and what differs is the model: it's lit by the page's own lights and drawn on the 640 x 480 display, filtered, as the original's (1.06 and 1.16 measured, from 1.12 and 1.25 at 320 x 240 unfiltered), and Claire's hair isn't ported (#807). Without the model the page's windows were 2.05 and 2.50.
+# The option screen's KEYCONFIG page (`Config_main`'s states 2 and 9 to 0xF; oracle/re2.md, "The option screen"). `kc` is the page's trace: state 9's count, the panel's offset, the choice, and the key table being edited; `kcm` is the player's model beside the list: its routines, place, turn, motion and weapon, and the page's statics that drive it. The keyboard's own arrows (`kbup` and the rest in the inputs) are arklay's directions, and `keys` is config.ini's `KeyDef` and `JoyDef_Emulated` in the install the references were recorded from, which the page lists. `seed` is the title generator's first value, which the records took from the clock: OPTION's draw picks the model's character from it, Claire in the first run and Leon in the second. On the page the list and the panel are the original's pixels (a mean of 0.01 inside the panel), and what differs is the model: it's lit by the page's own lights and drawn on the 640 x 480 display, filtered, as the original's (1.06 and 1.16 measured, from 1.12 and 1.25 at 320 x 240 unfiltered), and Claire's hair isn't ported (#807). Without the model the page's windows were 2.05 and 2.50. The last two runs bind keys from the keyboard itself (state 0xC): an input line's `key:X` is that key on the line's first tick, which the recorder has `Kb_get_state` return and the runner hands arklay with `press_key`. `title_option_key_bind` binds Q and 5 on rows no key of theirs is on, takes a key on the last row as the decide and one under the question as the answer, and sees the page again with them as the settings; `title_option_key_swap` binds Get Ready's key and then Fire's on Forward, each swapping with Forward's, and leaves them.
 
 [[run]]
 name = "title_option_key"
@@ -30,6 +30,40 @@ fields = "ti,tlogo,tfade,snd,opt,kc,kcm"
 frames = [189, 1279]
 frame_max_mean = 1.01
 frame_windows = [[189, 439, 0.15], [440, 1279, 1.26]]
+expect = "match"
+keys = { keys = "68 62 64 66 00 4D 00 49 00 00 4F 4A 5A 4B 00 00 00 00 00 00 00 00 00 00 00 26 28 25 27 0D 20 1B", pad = "00 10 00 00 00 40 00 00 00 80 00 00 00 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 00 00 00 00 08 00 00 44 00 00 00 00 00 00 00 00 01 00 00 10 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 08 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00" }
+record = "--config 'KeyDef=68 62 64 66 00 4D 00 49 00 00 4F 4A 5A 4B 00 00 00 00 00 00 00 00 00 00 00 26 28 25 27 0D 20 1B' --config 'JoyDef_Emulated=00 10 00 00 00 40 00 00 00 80 00 00 00 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 00 00 00 00 08 00 00 44 00 00 00 00 00 00 00 00 01 00 00 10 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 08 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00'"
+
+[[run]]
+name = "title_option_key_bind"
+ui = "title"
+offset = 189
+ticks = 1000
+input = "title_option_key_bind.txt"
+input_shift = 189
+input_drop_early = true
+seed = 0x80000000
+fields = "ti,tlogo,tfade,snd,opt,kc,kcm"
+frames = [189, 999]
+frame_max_mean = 0.68
+frame_windows = [[189, 439, 0.15], [440, 999, 0.95]]
+expect = "match"
+keys = { keys = "68 62 64 66 00 4D 00 49 00 00 4F 4A 5A 4B 00 00 00 00 00 00 00 00 00 00 00 26 28 25 27 0D 20 1B", pad = "00 10 00 00 00 40 00 00 00 80 00 00 00 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 00 00 00 00 08 00 00 44 00 00 00 00 00 00 00 00 01 00 00 10 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 08 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00" }
+record = "--config 'KeyDef=68 62 64 66 00 4D 00 49 00 00 4F 4A 5A 4B 00 00 00 00 00 00 00 00 00 00 00 26 28 25 27 0D 20 1B' --config 'JoyDef_Emulated=00 10 00 00 00 40 00 00 00 80 00 00 00 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 00 00 00 00 08 00 00 44 00 00 00 00 00 00 00 00 01 00 00 10 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 08 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00'"
+
+[[run]]
+name = "title_option_key_swap"
+ui = "title"
+offset = 189
+ticks = 1000
+input = "title_option_key_swap.txt"
+input_shift = 189
+input_drop_early = true
+seed = 0x80000000
+fields = "ti,tlogo,tfade,snd,opt,kc,kcm"
+frames = [189, 999]
+frame_max_mean = 0.76
+frame_windows = [[189, 439, 0.15], [440, 999, 1.07]]
 expect = "match"
 keys = { keys = "68 62 64 66 00 4D 00 49 00 00 4F 4A 5A 4B 00 00 00 00 00 00 00 00 00 00 00 26 28 25 27 0D 20 1B", pad = "00 10 00 00 00 40 00 00 00 80 00 00 00 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 00 00 00 00 08 00 00 44 00 00 00 00 00 00 00 00 01 00 00 10 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 08 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00" }
 record = "--config 'KeyDef=68 62 64 66 00 4D 00 49 00 00 4F 4A 5A 4B 00 00 00 00 00 00 00 00 00 00 00 26 28 25 27 0D 20 1B' --config 'JoyDef_Emulated=00 10 00 00 00 40 00 00 00 80 00 00 00 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 00 00 00 00 08 00 00 44 00 00 00 00 00 00 00 00 01 00 00 10 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 08 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00'"
