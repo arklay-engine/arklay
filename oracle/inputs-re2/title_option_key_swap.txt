@@ -1,0 +1,58 @@
+# The title from boot to OPTION and its KEYCONFIG page, binding keys already on other rows (`Config_main`'s state 0xC): up to Forward, O there (Get Ready's: Get Ready takes the number pad's 8), J there (Fire's: Fire takes O), up to the last row, Exit's decide with the keys changed, the question's Leave, the page again with the keys as they were, Exit's decide and START out of the menu (oracle/re2.md, "The option screen").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+350 down
+353
+400 confirm
+403
+440 confirm
+443
+455 confirm
+458
+470 confirm
+473
+500 kbup
+503
+510 kbup
+513
+520 kbup
+523
+530 kbup
+533
+560 key:O
+564
+590 key:J
+594
+620 kbup
+623
+640 confirm
+643
+660 right
+663
+680 confirm
+683
+720 confirm
+723
+735 confirm
+738
+750 confirm
+753
+780 kbup
+783
+790 kbup
+793
+800 kbup
+803
+810 kbup
+813
+820 kbup
+823
+850 confirm
+853
+900 start
+903

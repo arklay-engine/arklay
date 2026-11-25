@@ -163,7 +163,8 @@ def lua_str(text: str) -> str:
 
 
 # The recorder's words for the keyboard's own arrows, which KEYCONFIG's page reads in place of the pad: arklay's
-# screens have one set of directions.
+# screens have one set of directions. A key by its name (`key:X`, a letter or a digit) is handed to arklay with
+# `press_key` on its line's first tick, as the recorder hands it to `Kb_get_state`.
 KEYBOARD_BUTTONS = {"kbup": "up", "kbdown": "down", "kbleft": "left", "kbright": "right"}
 
 
@@ -193,7 +194,12 @@ while trace_ticks() < ticks and updates < bound do
         local buttons = held[index]
         if buttons then
             release()
-            if #buttons > 0 then hold(table.unpack(buttons)) end
+            -- A key by its name (`key:X`) is pressed on the line's first tick, as KEYCONFIG's page reads it.
+            local plain = {}
+            for _, button in ipairs(buttons) do
+                if button:find(":", 1, true) then press_key(button) else plain[#plain + 1] = button end
+            end
+            if #plain > 0 then hold(table.unpack(plain)) end
         end
     end
     tick()

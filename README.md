@@ -115,7 +115,7 @@ cargo run -- pack convert game /path/to/steam/4249100_Biohazard --out re1.akpak
 # You can play the RE2 pack as Leon or Claire, in either scenario: rooms, doors,
 # items, the typewriter, saves and the scripts' scenes with their characters and
 # voice lines work. The title (with its load and option screens; the key config
-# page lacks its player model and the rebinding itself), the new-game choice and its prologue, the
+# page lists and rebinds arklay's own controls), the new-game choice and its prologue, the
 # inventory, the status screen with its map, the save screen, the item box and
 # the special menu's gallery (pictures, movies and 3D models) are drawn from the
 # original's art. Leon A's route from

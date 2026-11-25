@@ -47,8 +47,10 @@ use crate::transition::FadeColor;
 use crate::ui::save_load::{SaveOutcome, consume_snapshot_ribbon};
 use crate::ui::{Screen, ScreenAction, ScreenResult, UiContext, UiCue, UiInput};
 
+pub use bindings::BindingsRequest;
 use sources::{Loader, Sources};
 
+mod bindings;
 mod draw;
 mod game_api;
 mod option_model;
@@ -129,6 +131,11 @@ struct Host {
     shows_volumes: bool,
     /// Whether the script has `on_boot`: it runs the game's boot itself.
     boots: bool,
+    /// Whether the script has `on_bindings`: it shows and sets the
+    /// player's bindings.
+    shows_bindings: bool,
+    /// What `api:set_bindings` asked for since the owner last took it.
+    bindings_request: Option<BindingsRequest>,
     images: HashMap<String, Decoded>,
     /// The layout space the script lays itself out in (`api:width()`).
     layout: (u32, u32),
@@ -298,6 +305,8 @@ impl LuaScreen {
             plays_films: false,
             shows_volumes: false,
             boots: false,
+            shows_bindings: false,
+            bindings_request: None,
             images: HashMap::new(),
             layout: (crate::render::WIDTH, crate::video::aspect().height()),
             action: None,
@@ -311,6 +320,7 @@ impl LuaScreen {
         host.plays_films = vm.has_function("on_film");
         host.shows_volumes = vm.has_function("on_volumes");
         host.boots = vm.has_function("on_boot");
+        host.shows_bindings = vm.has_function("on_bindings");
         host.rescan();
         vm.call_open(&mut host, cx, game, args)
             .with_context(|| format!("screen script {entry} open failed"))?;
@@ -359,6 +369,35 @@ impl LuaScreen {
     /// it and takes back from what it publishes.
     pub fn shows_volumes(&self) -> bool {
         !self.host.failed && self.host.shows_volumes
+    }
+
+    /// Whether the script has `on_bindings`: it shows the player's
+    /// bindings and may ask for them changed ([`Self::take_bindings_request`]).
+    pub fn shows_bindings(&self) -> bool {
+        !self.host.failed && self.host.shows_bindings
+    }
+
+    /// Tell the script the settings' bindings and the shipped ones
+    /// (`on_bindings(api, bindings, defaults)`).
+    pub fn tell_bindings(
+        &mut self,
+        bindings: &crate::controls::Bindings,
+        defaults: &crate::controls::Bindings,
+        cx: &UiContext<'_>,
+    ) {
+        if self.shows_bindings() {
+            self.signal_with(
+                "on_bindings",
+                bindings::BindingsArg { bindings, defaults },
+                cx,
+            );
+        }
+    }
+
+    /// What the script asked of the bindings (`api:set_bindings`) since
+    /// the last call.
+    pub fn take_bindings_request(&mut self) -> Option<BindingsRequest> {
+        self.host.bindings_request.take()
     }
 
     /// What the screen shows a player, as its script's `view()` publishes
@@ -982,6 +1021,9 @@ fn input_table(lua: &Lua, input: UiInput) -> mlua::Result<Table> {
     table.set("return_title", input.return_title)?;
     table.set("pad", pad_word(input))?;
     table.set("held", held_word(input))?;
+    let (key, button) = bindings::captured_names(input.captured);
+    table.set("key", key)?;
+    table.set("button", button)?;
     Ok(table)
 }
 

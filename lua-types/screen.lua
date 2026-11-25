@@ -266,6 +266,20 @@ function ScreenModule.on_boot(api) end
 ---@param effects integer The effects volume, 0 to 100.
 function ScreenModule.on_volumes(api, music, effects) end
 
+---Called on a title screen in the interactive game with the player's
+---bindings: as the screen opens, and again whenever they change (the in-game
+---menu's controls, or the screen's own [`api:set_bindings`](#ScreenApi.set_bindings)).
+---Both tables hold every action by its `[bindings]` name, each as
+---`{ keys = {...}, pads = {...} }`: its keyboard keys and its gamepad buttons
+---and axes by their `device:name` (`key:W`, `pad:a`, `axis:lefttrigger+`),
+---in the order the settings list them. `bindings` is the settings',
+---`defaults` the shipped layout's. A run with no settings (a headless one)
+---never calls it. RE 2's title lists the bindings on its KEYCONFIG page.
+---@param api ScreenApi
+---@param bindings table<string, { keys: string[], pads: string[] }>
+---@param defaults table<string, { keys: string[], pads: string[] }>
+function ScreenModule.on_bindings(api, bindings, defaults) end
+
 ---The published view: what the screen shows a player, as a table of
 ---integers, numbers, strings, booleans and nested tables of them, for
 ---observers such as the player bot. It is the screen's contract with them:
@@ -345,7 +359,7 @@ function ScreenModule.cursor_shown(api, shown) end
 ---@param cursor integer The item box cursor's slot.
 function ScreenModule.move_cursor(api, cursor) end
 
--- source: src/ui/lua_screen/methods.rs#Api src/ui/lua_screen/draw/methods.rs src/ui/lua_screen/game_api.rs src/ui/lua_screen/option_model.rs
+-- source: src/ui/lua_screen/methods.rs#Api src/ui/lua_screen/draw/methods.rs src/ui/lua_screen/game_api.rs src/ui/lua_screen/option_model.rs src/ui/lua_screen/bindings.rs
 ---The screen surface, passed to every entry point and signal. Only these
 ---methods exist; call them with Lua colon syntax (`api:width()`).
 ---
@@ -386,6 +400,22 @@ function ScreenApi:height() end
 ---@param key string
 ---@param value integer|boolean|nil An integer, a boolean (stored as 1 or 0), or `nil` to clear the key. A float or any other type raises an error.
 function ScreenApi:set(key, value) end
+
+---Ask for the player's bindings to change, from a screen that shows them
+---([`on_bindings`](#ScreenModule.on_bindings)). Each key is an action's
+---`[bindings]` name and each value `{ keys = {...}, pads = {...} }`: a list
+---given replaces the action's keyboard keys (`keys`) or its gamepad buttons
+---and axes (`pads`), by their `device:name`; a list left out keeps that
+---device's as it is, and the action's mouse buttons and wheel always stay.
+---The engine applies the change after the tick and tells the screen the
+---bindings again with `on_bindings`. In the interactive game the change is
+---saved to `arklay.toml`, unless it would leave a menu action without a key
+---of its own (then nothing changes and a warning is logged); in a run with no
+---settings (a headless one) it is ignored. An unknown action, a name that
+---isn't a source, a source on the other device or a reserved input (F1, F9,
+---the pad's start) raises an error.
+---@param changes table<string, { keys?: string[], pads?: string[] }>
+function ScreenApi:set_bindings(changes) end
 
 ---Keep a value past this screen: the engine holds it for as long as it
 ---runs and gives it back to this script's next opening, in a session or
@@ -1362,6 +1392,8 @@ function ScreenApi:re2_slot(slot) end
 ---@field return_title boolean The return-to-title key (F9).
 ---@field pad integer The edge word of the fields above.
 ---@field held integer The held confirm, directions and L1/R1.
+---@field key? string The keyboard key that went down on the tick, by its `device:name` (`key:Q`), whatever it is bound to; `nil` for none, a reserved key (F1, F9) or a mouse button.
+---@field button? string The gamepad button or axis that went down on the tick (`pad:a`, `axis:lefttrigger+`), whatever it is bound to; `nil` for none or the pad's start.
 local ScreenInput = {}
 
 ---The options table the entry-drawn methods take. An unknown colour or

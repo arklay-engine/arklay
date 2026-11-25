@@ -229,6 +229,11 @@ local function pad_set(input)
     end
     -- The decide key's level, which only the option screen reads.
     s.held_confirm = held & 1 ~= 0
+    -- The keyboard's key and the pad's button newly down this tick, by
+    -- their names, which only KEYCONFIG's page reads (`Kb_get_state` and
+    -- `FUN_0043bb80`).
+    s.key_down = input.key
+    s.button_down = input.button
     if input.start then
         raw = raw | PAD_START
     end
@@ -1406,11 +1411,10 @@ local OPT_QUALITIES = { [0] = "HIGH", "MEDIUM", "LOW" }
 -- the model's walk in (30 ticks, or the decide key), 10 the list's rows
 -- coming one every five ticks (54 ticks, or the decide key), 0xB the list
 -- with its cursor, 0xD the five ticks back to the menu, 0xE Default's
--- tables, and 0xF the question when Exit finds the keys changed. Not ported
--- (#807): the player's model beside the list (its walk in, its turn and what
--- it acts out for each row), and state 0xC, which binds a key pressed on the
--- keyboard or the joypad itself to the cursor's row, as a screen isn't
--- given the devices' own keys.
+-- tables, 0xC the key or pad button pressed on a row bound to it (a key
+-- from the keyboard itself, `input.key`, and the pad's, `input.button`),
+-- and 0xF the question when Exit finds the keys changed. In the interactive
+-- game the rows are arklay's actions (`M.on_bindings`).
 --
 -- The list is Classic REbirth's draw of the original's (`DrawConfigTim`,
 -- 0x44C5D0, which it replaces): the same places, with its own print for the
@@ -1420,19 +1424,133 @@ local OPT_QUALITIES = { [0] = "HIGH", "MEDIUM", "LOW" }
 -- keys, not the keys the page binds); here they are the directions.
 
 -- The rows: the key table's entry each binds (`Config_main`'s state 0xC),
--- the pad's word for it, its place (0x44C5D0's `y0`s) and its name.
+-- the pad's word for it, its place (0x44C5D0's `y0`s), its name, and the
+-- arklay action it stands for when the page lists the player's bindings
+-- (`M.on_bindings`).
 local KEY_ROWS = {
-    [0] = { key = 0, pad = 0x1000, y = 0x20, name = "Forward" },
-    { key = 1, pad = 0x4000, y = 0x30, name = "Backward" },
-    { key = 2, pad = 0x8000, y = 0x40, name = "Turn left" },
-    { key = 3, pad = 0x2000, y = 0x50, name = "Turn right" },
-    { key = 10, pad = 0x08, y = 0x64, name = "Get Ready" },
-    { key = 11, pad = 0x80, y = 0x75, name = "Fire/Confirm" },
-    { key = 5, pad = 0x44, y = 0x86, name = "Run/Cancel" },
-    { key = 13, pad = 0x800, y = 0x97, name = "Status" },
-    { key = 12, pad = 0x100, y = 0xAC, name = "Configure" },
-    { key = 7, pad = 0x10, y = 0xBC, name = "Map" },
+    [0] = { key = 0, pad = 0x1000, y = 0x20, name = "Forward", action = "up" },
+    { key = 1, pad = 0x4000, y = 0x30, name = "Backward", action = "down" },
+    { key = 2, pad = 0x8000, y = 0x40, name = "Turn left", action = "left" },
+    { key = 3, pad = 0x2000, y = 0x50, name = "Turn right", action = "right" },
+    { key = 10, pad = 0x08, y = 0x64, name = "Get Ready", action = "aim" },
+    { key = 11, pad = 0x80, y = 0x75, name = "Fire/Confirm", action = "fire" },
+    { key = 5, pad = 0x44, y = 0x86, name = "Run/Cancel", action = "run" },
+    { key = 13, pad = 0x800, y = 0x97, name = "Status", action = "start" },
+    { key = 12, pad = 0x100, y = 0xAC, name = "Configure", action = "option" },
+    { key = 7, pad = 0x10, y = 0xBC, name = "Map", action = "map" },
 }
+
+-- `Kb_get_state`'s table (0x5227E8): the virtual keys a row can bind, which
+-- the keyboard's own arrows, Enter, the space bar and Escape aren't.
+local KB_KEYS = {}
+for _, range in ipairs({ { 0x08, 0x11 }, { 0x30, 0x39 }, { 0x41, 0x5A }, { 0x60, 0x6B }, { 0x6D, 0x6F }, { 0xBA, 0xC0 }, { 0xDB, 0xDE }, { 0xE2, 0xE2 } }) do
+    for vk = range[1], range[2] do
+        KB_KEYS[vk] = true
+    end
+end
+for vk = 0x0A, 0x0F do
+    KB_KEYS[vk] = nil
+end
+
+-- arklay's keys by name (`key:<SDL's name>`) as the virtual keys the
+-- original's tables hold: the letters, the digits, the number pad, Shift,
+-- Ctrl, Tab, Backspace and the punctuation keys, and the fixed keys.
+local KEY_VK = {
+    ["key:Backspace"] = 0x08,
+    ["key:Tab"] = 0x09,
+    ["key:Left Shift"] = 0x10,
+    ["key:Right Shift"] = 0x10,
+    ["key:Left Ctrl"] = 0x11,
+    ["key:Right Ctrl"] = 0x11,
+    ["key:Return"] = 0x0D,
+    ["key:Escape"] = 0x1B,
+    ["key:Space"] = 0x20,
+    ["key:Left"] = 0x25,
+    ["key:Up"] = 0x26,
+    ["key:Right"] = 0x27,
+    ["key:Down"] = 0x28,
+    ["key:Keypad *"] = 0x6A,
+    ["key:Keypad +"] = 0x6B,
+    ["key:Keypad -"] = 0x6D,
+    ["key:Keypad ."] = 0x6E,
+    ["key:Keypad /"] = 0x6F,
+    ["key:;"] = 0xBA,
+    ["key:="] = 0xBB,
+    ["key:,"] = 0xBC,
+    ["key:-"] = 0xBD,
+    ["key:."] = 0xBE,
+    ["key:/"] = 0xBF,
+    ["key:`"] = 0xC0,
+    ["key:["] = 0xDB,
+    ["key:\\"] = 0xDC,
+    ["key:]"] = 0xDD,
+    ["key:'"] = 0xDE,
+    -- The key beside the left Shift on a European keyboard, which SDL
+    -- doesn't name.
+    ["key:#100"] = 0xE2,
+}
+for vk = 0x30, 0x39 do
+    KEY_VK["key:" .. string.char(vk)] = vk
+    KEY_VK["key:Keypad " .. string.char(vk)] = vk + 0x30
+end
+for vk = 0x41, 0x5A do
+    KEY_VK["key:" .. string.char(vk)] = vk
+end
+
+-- The keys the page moves and answers with, the original's fixed entries
+-- (the arrows, Enter, the space bar and Escape), which no row binds: with
+-- the player's bindings a row's key is its first other key, and a change
+-- keeps these.
+local KEY_FIXED_NAMES = {
+    ["key:Up"] = true,
+    ["key:Down"] = true,
+    ["key:Left"] = true,
+    ["key:Right"] = true,
+    ["key:Return"] = true,
+    ["key:Space"] = true,
+    ["key:Escape"] = true,
+}
+
+-- The joypad's buttons by arklay's names, in the order of Classic REbirth's
+-- table: the directions, then A, B, X and Y from 8, the view and the menu
+-- buttons, the sticks' buttons, the left and right triggers, and the rest
+-- with no glyph. The left stick's directions are directions too (below 8,
+-- which `Config_main` doesn't bind).
+local PAD_BUTTONS = {
+    [0] = "pad:dpup",
+    "pad:dpdown",
+    "pad:dpleft",
+    "pad:dpright",
+    "axis:lefty-",
+    "axis:lefty+",
+    "axis:leftx-",
+    "axis:leftx+",
+    "pad:a",
+    "pad:b",
+    "pad:x",
+    "pad:y",
+    "pad:back",
+    "pad:start",
+    "pad:leftstick",
+    "pad:rightstick",
+    "axis:lefttrigger+",
+    "axis:righttrigger+",
+    "pad:leftshoulder",
+    "pad:rightshoulder",
+    "pad:guide",
+    "pad:misc1",
+    "pad:right_paddle1",
+    "pad:left_paddle1",
+    "pad:right_paddle2",
+    "pad:left_paddle2",
+    "pad:touchpad",
+}
+local PAD_INDEX = {}
+for index = 0, #PAD_BUTTONS do
+    PAD_INDEX[PAD_BUTTONS[index]] = index
+end
+-- What the page writes for a pad source with no glyph.
+local PAD_LABELS = { ["pad:leftshoulder"] = "LB", ["pad:rightshoulder"] = "RB" }
 -- The last row: Exit and Default, or under the question Change and Leave.
 local KEY_EXIT_ROW = 10
 local KEY_LAST_Y = 0xD1
@@ -1484,6 +1602,9 @@ local key_work = {
     edit = key_defaults(KEY_FIXED),
     edit_pad = pad_defaults(),
 }
+
+-- For the tests: the page's work.
+M.key_work = key_work
 
 local function copy_table(from, to)
     for i = 0, 31 do
@@ -1568,12 +1689,136 @@ local function key_definition(text, size, into)
     return true
 end
 
+-- The player's bindings as the page lists them (`M.on_bindings`): each
+-- row's key in the key table, the action's first key that isn't one of the
+-- page's fixed keys, and each row's word in the pad table, at the button
+-- of the action's first pad source the table has. 0 is none.
+local function key_row_key(list)
+    for _, name in ipairs(list.keys) do
+        if not KEY_FIXED_NAMES[name] then
+            return name
+        end
+    end
+    return 0
+end
+
+local function key_row_pad(list)
+    for _, name in ipairs(list.pads) do
+        if PAD_INDEX[name] then
+            return name
+        end
+    end
+end
+
+local function key_bound_tables(lists, keys, pad)
+    for i = 0, 31 do
+        keys[i] = 0
+        pad[i] = 0
+    end
+    for row = 0, KEY_EXIT_ROW - 1 do
+        local entry = KEY_ROWS[row]
+        local list = lists[entry.action]
+        keys[entry.key] = key_row_key(list)
+        local button = key_row_pad(list)
+        if button then
+            pad[PAD_INDEX[button]] = entry.pad
+        end
+    end
+end
+
+-- The pad source a row's word is on in `pad`: the first button from 8, as
+-- state 0xC looks for it, or nil.
+local function key_word_button(pad, word)
+    for i = 8, 31 do
+        if pad[i] == word then
+            return PAD_BUTTONS[i]
+        end
+    end
+end
+
+-- The question's Change with the player's bindings: each row's action
+-- whose key or pad button the page changed gets the page's, which replaces
+-- its others on that device. The keyboard's fixed keys stay, and a row
+-- set back to the shipped binding takes all of the shipped ones on that
+-- device. Rows 0 to 3's pad buttons are the directions, which the page
+-- doesn't bind.
+local function key_send_bindings(api)
+    local k = key_work
+    local changes, any = {}, false
+    for row = 0, KEY_EXIT_ROW - 1 do
+        local entry = KEY_ROWS[row]
+        local now, shipped = k.bound.now[entry.action], k.bound.defaults[entry.action]
+        local change = {}
+        local key = k.edit[entry.key]
+        if key ~= k.keys[entry.key] then
+            if key ~= 0 and key == key_row_key(shipped) then
+                change.keys = shipped.keys
+            else
+                local keys = {}
+                if key ~= 0 then
+                    keys[1] = key
+                end
+                for _, name in ipairs(now.keys) do
+                    if KEY_FIXED_NAMES[name] and name ~= key then
+                        keys[#keys + 1] = name
+                    end
+                end
+                change.keys = keys
+            end
+        end
+        if row >= 4 then
+            local button = key_word_button(k.edit_pad, entry.pad)
+            if button ~= key_word_button(k.pad, entry.pad) then
+                if button and button == key_row_pad(shipped) then
+                    change.pads = shipped.pads
+                else
+                    change.pads = { button }
+                end
+            end
+        end
+        if change.keys or change.pads then
+            changes[entry.action] = change
+            any = true
+        end
+    end
+    if any then
+        api:set_bindings(changes)
+    end
+end
+
+-- The key newly down on the tick as the page's tables hold one: with the
+-- player's bindings its name, unless it is one of the page's fixed keys;
+-- otherwise its virtual key when `Kb_get_state`'s table has it. And the
+-- pad's button as the joypad's (`FUN_0043bb80`'s bit), when it is one from
+-- 8 (the directions below aren't read). Nil for none.
+local function key_pressed()
+    local name = s.key_down
+    if not name then
+        return nil
+    end
+    if key_work.bound then
+        return not KEY_FIXED_NAMES[name] and name or nil
+    end
+    local vk = KEY_VK[name]
+    return vk and KB_KEYS[vk] and vk or nil
+end
+
+local function key_button_pressed()
+    local index = s.button_down and PAD_INDEX[s.button_down]
+    return index and index >= 8 and index or nil
+end
+
 -- The trace's `kc`: the count, the panel's offset and the choice, then the
--- table being edited.
+-- table being edited (a key of the player's bindings as its virtual key,
+-- or 0 for one the original has none for).
 local function key_trace()
     local bytes = {}
     for i = 0, 31 do
-        bytes[#bytes + 1] = string.format("%02x", key_work.edit[i])
+        local key = key_work.edit[i]
+        if type(key) == "string" then
+            key = KEY_VK[key] or 0
+        end
+        bytes[#bytes + 1] = string.format("%02x", key)
     end
     return string.format("%d,%d,%d/%s", key_work.count, key_work.slide, key_work.choice, table.concat(bytes))
 end
@@ -1681,14 +1926,36 @@ local function key_draw_list(rows_short, cursor)
             local entry = KEY_ROWS[row]
             s.opt_texts[#s.opt_texts + 1] = { x = 0xAE, y = entry.y, text = entry.name, on = on }
             local button = key_pad_button(entry.pad)
+            -- With the player's bindings a button Classic REbirth's table
+            -- has no glyph for is written by its name.
             local glyph = button and KEY_PAD_GLYPHS[button]
+            if key_work.bound and button and button >= 4 and button < 8 then
+                glyph = nil
+            end
+            local changed = button and key_work.pad[button] ~= key_work.edit_pad[button]
             if glyph then
-                local changed = key_work.pad[button] ~= key_work.edit_pad[button]
                 local at = glyph[changed and 3 or on and 2 or 1]
                 option_sprt(OPT_PARTS, 0x8C, entry.y, at[1], at[2], 14, OPT_GREY)
+            elseif button and key_work.bound then
+                local name = PAD_BUTTONS[button]
+                s.opt_texts[#s.opt_texts + 1] = {
+                    key = 0x8C,
+                    y = entry.y,
+                    text = PAD_LABELS[name] or name:match(":(.*)"),
+                    on = on,
+                    red = changed,
+                }
             end
             local key = key_work.edit[entry.key]
             local changed = key ~= key_work.keys[entry.key]
+            -- A key of the player's bindings is drawn as its virtual key,
+            -- or, when the original has no glyph for it, written by its
+            -- name with the page's font.
+            local name
+            if type(key) == "string" then
+                name = key
+                key = KEY_VK[key] or -1
+            end
             local sheet = KEY_GLYPHS[key]
             if sheet then
                 local colour = changed and KEY_RED or option_colour(on)
@@ -1696,6 +1963,8 @@ local function key_draw_list(rows_short, cursor)
             elseif key >= 0x30 and key <= 0x39 or key >= 0x41 and key <= 0x5A or KEY_FONT_CELLS[key] then
                 local text = KEY_FONT_CELLS[key] or string.char(key)
                 s.opt_texts[#s.opt_texts + 1] = { key = 0x9C, y = entry.y, text = text, on = on, red = changed }
+            elseif name then
+                s.opt_texts[#s.opt_texts + 1] = { key = 0x9C, y = entry.y, text = name:match(":(.*)"), on = on, red = changed }
             end
         end
     end
@@ -1718,6 +1987,44 @@ local function key_draw(api)
         key_draw_list(0, o.type)
         api:option_model("row", o.type)
     end
+end
+
+-- State 0xC (`Config_main`): the key state 0xB took becomes the row's, and
+-- the row's old key goes to whichever entry of the table held the new one
+-- (the last); the pad's button takes the row's word, and the button that
+-- had the word takes the new button's old one (the first from 8). The
+-- directions' rows take no pad button. Either way the list is back on the
+-- next tick.
+local function key_bind(row)
+    local o, k = s.opt, key_work
+    local entry = KEY_ROWS[row]
+    if k.key_down then
+        local found
+        for i = 0, 31 do
+            if k.edit[i] == k.key_down then
+                found = i
+            end
+        end
+        if found then
+            k.edit[found] = k.edit[entry.key]
+        end
+        k.edit[entry.key] = k.key_down
+        o.state = 0xB
+    end
+    if not k.button_down then
+        return
+    end
+    o.state = 0xB
+    if row < 4 then
+        return
+    end
+    for i = 8, 31 do
+        if k.edit_pad[i] == entry.pad then
+            k.edit_pad[i] = k.edit_pad[k.button_down]
+            break
+        end
+    end
+    k.edit_pad[k.button_down] = entry.pad
 end
 
 -- A move onto the back step's or the aim's row turns the model back to
@@ -1772,9 +2079,16 @@ local function key_main(api)
         local held = s.raw & dirs
         trg = (held & ~k.held) | (s.edge & ~s.raw & dirs)
         k.held = held
-        if o.type == KEY_EXIT_ROW and s.key_trg & KEY_CONFIRM ~= 0 then
+        -- A key or a pad button newly down (`0x689388`, `0x68939c`), which
+        -- state 0xC binds to the row on the next tick; on the last row it
+        -- is the decide key.
+        k.key_down = key_pressed()
+        k.button_down = key_button_pressed()
+        if k.key_down or k.button_down or o.type == KEY_EXIT_ROW and s.key_trg & KEY_CONFIRM ~= 0 then
             s.cue(SE_DECIDE)
-            if k.choice ~= 0 then
+            if o.type ~= KEY_EXIT_ROW then
+                o.state = 0xC
+            elseif k.choice ~= 0 then
                 o.state = 0xE
             elseif same_table(k.keys, k.edit) and same_table(k.pad, k.edit_pad) then
                 o.state = 0xD
@@ -1800,6 +2114,8 @@ local function key_main(api)
             s.cue(SE_CURSOR)
             k.choice = k.choice ~ 1
         end
+    elseif o.state == 0xC then
+        key_bind(o.type)
     elseif o.state == 0xD then
         o.wait = o.wait - 1
         if o.wait == 0 then
@@ -1808,16 +2124,27 @@ local function key_main(api)
             o.cursor = 0
         end
     elseif o.state == 0xE then
-        copy_table(key_defaults(k.keys), k.edit)
-        copy_table(pad_defaults(), k.edit_pad)
+        if k.bound then
+            -- arklay's own defaults for the rows' actions.
+            key_bound_tables(k.bound.defaults, k.edit, k.edit_pad)
+        else
+            copy_table(key_defaults(k.keys), k.edit)
+            copy_table(pad_defaults(), k.edit_pad)
+        end
         o.state = 0xB
     elseif o.state == 0xF then
+        -- Any key or pad button answers too, as the decide key does.
         if trg & (PAD_LEFT | PAD_RIGHT) ~= 0 then
             s.cue(SE_CURSOR)
             k.choice = k.choice ~ 1
-        elseif trg & (PAD_CONFIRM | PAD_CANCEL) ~= 0 then
+        elseif trg & (PAD_CONFIRM | PAD_CANCEL) ~= 0 or key_pressed() or key_button_pressed() then
             s.cue(SE_DECIDE)
             if k.choice == 0 then
+                -- With the player's bindings the change is theirs: applied
+                -- at once and saved.
+                if k.bound then
+                    key_send_bindings(api)
+                end
                 copy_table(k.edit, k.keys)
                 copy_table(k.edit_pad, k.pad)
             end
@@ -2053,7 +2380,10 @@ local function option_task(api)
     elseif o.step == 1 then
         option_main(api)
         option_keep(api)
-        key_keep(api)
+        -- The player's bindings are the settings', not the page's to keep.
+        if not key_work.bound then
+            key_keep(api)
+        end
     else
         -- The exit: the task ends, and the title's wakes on the next tick;
         -- from play, `FUN_0044b020` puts the player back and `Game_loop`
@@ -2972,6 +3302,22 @@ function M.on_volumes(api, music, effects)
     sound.se = option_volume_range(effects)
     api:set("music_volume", sound.bgm)
     api:set("effects_volume", sound.se)
+end
+
+-- The player's bindings, as the title opens and whenever they change, in
+-- the interactive game (a headless run is told none): KEYCONFIG's rows are
+-- then arklay's actions (`KEY_ROWS`), each listing its first key and pad
+-- button, Default sets them back to `defaults`, and the question's Change
+-- asks for the page's (`api:set_bindings`). Each table holds every action
+-- by its `[bindings]` name, as `{ keys = {...}, pads = {...} }`.
+function M.on_bindings(api, bindings, defaults)
+    local k = key_work
+    k.bound = { now = bindings, defaults = defaults }
+    key_bound_tables(bindings, k.keys, k.pad)
+    -- The page's edit holds what it last listed until the page opens.
+    if not s.opt then
+        key_bound_tables(defaults, k.edit, k.edit_pad)
+    end
 end
 
 -- The title is the boot's first: it starts with `Init_main`, before the

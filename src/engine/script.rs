@@ -385,6 +385,9 @@ struct Driver {
     held: u64,
     /// The keys held for the next tick only (`press`).
     pressed: u64,
+    /// The physical key or pad button newly down on the next tick only
+    /// (`press_key`), as a screen that binds keys reads it.
+    pressed_source: Option<crate::controls::Source>,
     /// The booted session has not ticked yet: what its state was before
     /// the script's `game` edits, so the first tick (or a `save_game` or
     /// `capture`) reruns what they invalidate once, as an authored setup does.
@@ -419,6 +422,7 @@ impl Driver {
             input: InputState::default(),
             held: 0,
             pressed: 0,
+            pressed_source: None,
             baseline: None,
             edited: false,
             arm: false,
@@ -718,6 +722,9 @@ impl Driver {
         };
         let mut traced = None;
         let mut tick = self.input.tick_scripted(word);
+        if let Some(source) = self.pressed_source.take() {
+            tick.ui.captured = Some(source);
+        }
         if let Some(window) = self.window.as_mut() {
             // The player's host keys reach the game; their other game keys
             // do not.
@@ -1597,6 +1604,24 @@ fn install(lua: &Lua, driver: &Shared, options: &ScriptOptions) -> mlua::Result<
         lua.create_function(move |_lua, names: Variadic<String>| {
             with(&shared, |driver| {
                 driver.pressed |= buttons(&names)?;
+                Ok(())
+            })
+        })?,
+    )?;
+
+    let shared = Rc::clone(driver);
+    globals.set(
+        "press_key",
+        lua.create_function(move |_lua, name: String| {
+            with(&shared, |driver| {
+                let source = crate::controls::Source::parse(&name)
+                    .map_err(|err| mlua::Error::RuntimeError(format!("press_key: {err:#}")))?;
+                if !matches!(source, crate::controls::Source::Key(_)) && !source.is_pad() {
+                    return Err(mlua::Error::RuntimeError(format!(
+                        "press_key: `{name}` is not a keyboard key or a gamepad source"
+                    )));
+                }
+                driver.pressed_source = Some(source);
                 Ok(())
             })
         })?,

@@ -1,0 +1,58 @@
+# The title from boot to OPTION and its KEYCONFIG page, binding keys from the keyboard itself (`Config_main`'s state 0xC): a key under the list's rows coming (state 10 takes it and nothing binds), Q on Get Ready, which no row holds, up to Turn right and 5 there, up to the last row and a key there (the decide: the keys changed, so the question), a key under the question (Change), the page again with Q and 5 as the settings, Exit's decide and START out of the menu (oracle/re2.md, "The option screen").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+350 down
+353
+400 confirm
+403
+440 confirm
+443
+455 confirm
+458
+462 key:W
+466
+470 confirm
+473
+500 key:Q
+504
+520 kbup
+523
+540 key:5
+544
+560 kbup
+563
+570 kbup
+573
+580 kbup
+583
+590 kbup
+593
+620 key:Z
+624
+650 key:Z
+654
+700 confirm
+703
+715 confirm
+718
+730 confirm
+733
+760 kbup
+763
+770 kbup
+773
+780 kbup
+783
+790 kbup
+793
+800 kbup
+803
+830 confirm
+833
+880 start
+883
