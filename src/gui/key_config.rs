@@ -59,6 +59,7 @@ const TABS: [Tab; 2] = [
                     ("inventory", Action::Start),
                     ("map", Action::Map),
                     ("option", Action::Option),
+                    ("pause", Action::Pause),
                 ],
             ),
             (

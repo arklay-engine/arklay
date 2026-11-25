@@ -251,7 +251,7 @@ pub fn build(game: &GameState, record: Option<&[u8]>) -> [u8; IMAGE_LEN] {
     image[0x209] = 0;
     // `Save_push`, with the play clock arklay keeps: `WinMain` adds 2 a
     // frame at 30 fps and a second past 60, so 31 frames a second.
-    put(&mut image, 0x200, &(game.play_timer() / 31).to_le_bytes());
+    put(&mut image, 0x200, &(game.re2_game_seconds()).to_le_bytes());
     image[0x208] = re2.inventory_size;
     image[0x20A] = re2.pl_id;
     image[0x20B] = re2.save_place;

@@ -39,6 +39,7 @@ mod bot;
 mod debug_hud;
 mod debug_view;
 mod re2_config;
+mod re2_pause;
 mod script;
 mod watch;
 
@@ -2579,6 +2580,19 @@ struct GameSession {
     re2_die: Option<crate::die2::Die>,
     /// `Die_sprt_load`'s texture.
     re2_die_sheet: Option<Image>,
+    /// ARRANGE MODE's pause (`Psx_main`'s `bPause`, `0x98F1BA`): the play
+    /// clock's seconds the press read (`SetGameSeconds(1)`, kept at
+    /// `0x689800`), which the resume puts back.
+    re2_pause: Option<u32>,
+    /// The pause's press tick, whose frame `Psx_main` adds the dim tile and
+    /// the word to, until the game runs again.
+    re2_pause_shown: bool,
+    /// That frame has been drawn, so the paused ticks hold it.
+    re2_pause_drawn: bool,
+    /// `fg_status`'s `0x100000` at the top of a tick: the last tick's
+    /// `Swap_Cbuff` loaded a cut. `Psx_main` clears it after the tasks and
+    /// `Swap_Cbuff` raises it with a load.
+    re2_cut_loaded: bool,
     room_fade: transition::Fade,
     /// The alpha the room fade draws this frame: the accumulator *before* the
     /// tick's step, since the original draws and only then adds the counter
@@ -2887,6 +2901,7 @@ fn re2_live_pad(ui: &UiInput, input: &player::Input) -> u16 {
         | held(input.map_held || ui.map, 0x0010)
         | held(input.aim || input.aim_pressed, 0x0008)
         | held(input.lock_drop || input.lock_pressed, 0x0004)
+        | held(ui.held_pause, re2_pause::RE2_PAUSE_KEY)
 }
 
 /// What RE 2's results drive ([`crate::result2::MusicHost`]): the game's
@@ -3603,6 +3618,10 @@ impl GameSession {
             cutscene_skip_burst: Some(CUTSCENE_SKIP_BURST),
             re2_die: None,
             re2_die_sheet: None,
+            re2_pause: None,
+            re2_pause_shown: false,
+            re2_pause_drawn: false,
+            re2_cut_loaded: false,
             room_fade: transition::Fade::inactive(),
             room_fade_draw: None,
             tween: Tween::default(),
@@ -3953,14 +3972,9 @@ impl GameSession {
             }
         }
         self.step_re2_pad_repeat(&input);
-        if self.game.is_re2_room {
-            // The whole pad for `Pad_set`'s trigger word: the directions and
-            // the keys `Pad_repeat` holds, the action and run keys as the
-            // demo's end reads them, and START (0x800) on its press.
-            let whole = self.game.pad_repeat.raw
-                | re2_live_pad(&ui, &input)
-                | if ui.start { 0x800 } else { 0 };
-            self.game.pad_repeat.step_trigger(whole);
+        self.step_re2_pad_trigger(&ui, &input);
+        if self.step_re2_pause(&input) {
+            return Ok(());
         }
         let start_box = self.re2_status_open == Some(RE2_BOX_START);
         if self.re2_status_open == Some(RE2_STATUS_INIT) {
@@ -4129,6 +4143,19 @@ impl GameSession {
         );
     }
 
+    /// `Pad_set`'s trigger word (`0x9885F8`), every frame, doors' too: the
+    /// whole pad's new presses, the directions and the keys `Pad_repeat`
+    /// holds, the action and run keys as the demo's end reads them, and
+    /// START (0x800) on its press.
+    fn step_re2_pad_trigger(&mut self, ui: &UiInput, input: &player::Input) {
+        if !self.game.is_re2_room {
+            return;
+        }
+        let whole =
+            self.game.pad_repeat.raw | re2_live_pad(ui, input) | if ui.start { 0x800 } else { 0 };
+        self.game.pad_repeat.step_trigger(whole);
+    }
+
     /// The end of `Psx_main`'s tick: `Swap_Cbuff` loads a cut's view and
     /// background when one is pending (`BYTE_0098f07b`) and sets two frames
     /// to skip (`Movie_set(2)`), and `WinMain` then presents the tick's frame
@@ -4147,6 +4174,7 @@ impl GameSession {
         let now = (self.loaded.id, self.loaded.room.current_cut);
         let screen = self.re2_screen_clears_cut();
         let load = swap_cbuff_view(&mut self.game, self.tick_cut, now, screen);
+        self.re2_cut_loaded = load;
         if load {
             self.present_skip.movie_set(transition::RE2_CUT_LOAD_FRAMES);
         }
@@ -4157,6 +4185,7 @@ impl GameSession {
         if let Some(pads) = self.instant_film.take() {
             for _ in 0..pads {
                 self.game.pad_repeat.step(0);
+                self.game.pad_repeat.step_trigger(0);
             }
             if pads > 0 {
                 self.game.re2.set_key(0);
@@ -11042,6 +11071,7 @@ impl GameSession {
             // which `System_trans` draws outside the suspended game task.
             self.draw_re2_computer(pack);
             self.draw_re2_die();
+            self.draw_re2_pause();
             self.draw_room_fade();
             self.draw_screen_intensity_bars();
             self.draw_death_fade();
@@ -13934,9 +13964,10 @@ impl App {
     fn open_system_menu(&mut self, mut menu: gui::SystemMenu) {
         if let Mode::Play(session) = &mut self.mode {
             menu.set_play_time(session.game.play_timer());
-            // Only RE 2's `Game_loop` reads the option key.
+            // Only RE 2 reads the option key (`Game_loop`) and the pause
+            // (`Psx_main`).
             if !session.game.is_re2_room {
-                menu.hide_actions(&[Action::Option]);
+                menu.hide_actions(&[Action::Option, Action::Pause]);
             }
             session.open_system_menu();
             self.system_menu = Some(Box::new(menu));
@@ -14382,6 +14413,7 @@ impl App {
                     let (ui, input, _) = session.re2_demo_pad(ui, input, action);
                     let skip = session.transition_skip(&ui, &input);
                     session.step_re2_pad_repeat(&input);
+                    session.step_re2_pad_trigger(&ui, &input);
                     session.tick_transition(pack, skip);
                 } else {
                     session.tick(pack, ui, input, action)?;
@@ -22733,6 +22765,7 @@ const KEY_WEAPON_NEXT: u64 = Action::WeaponNext.bit();
 const KEY_TARGET_PREV: u64 = Action::TargetPrev.bit();
 const KEY_TARGET_NEXT: u64 = Action::TargetNext.bit();
 const KEY_OPTION: u64 = Action::Option.bit();
+const KEY_PAUSE: u64 = Action::Pause.bit();
 /// F1, or the gamepad's back and start pressed together.
 const KEY_F1: u64 = controls::DEBUG_MENU_BIT;
 const KEY_F9: u64 = controls::RETURN_TITLE_BIT;
@@ -23404,6 +23437,7 @@ impl InputState {
                 system_menu: pressed & KEY_SYSTEM != 0,
                 map: pressed & KEY_MAP != 0,
                 option: pressed & KEY_OPTION != 0,
+                held_pause: active & KEY_PAUSE != 0,
                 weapon_step: step(KEY_WEAPON_PREV, KEY_WEAPON_NEXT),
                 equip_slot: controls::EQUIP_SLOTS
                     .iter()
@@ -29658,6 +29692,153 @@ mod tests {
         assert!(session.menu_request.is_none());
         assert!(!session.game.re2_status_start);
         assert!(session.menu.is_none());
+    }
+
+    /// An RE 2 session in ARRANGE MODE (`censorship_off`), in play.
+    fn re2_arrange_session(pack: &Pack, room: RoomId) -> Box<GameSession> {
+        let mut session = GameSession::from_room(pack, room, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        session.game.re2.censorship_off = true;
+        session.game.message_flags |= START_MESSAGE_BITS;
+        session
+    }
+
+    /// A tick with the pause key held (`held`) and the player's `pad`.
+    fn re2_pause_tick(session: &mut GameSession, pack: &Pack, held: bool, pad: player::Input) {
+        let ui = UiInput {
+            held_pause: held,
+            ..UiInput::default()
+        };
+        session.tick(pack, ui, pad, false).unwrap();
+    }
+
+    /// ARRANGE MODE's pause (`Psx_main`, `0x4C3C70`): the press's tick runs
+    /// and shows the overlay; the ticks after it run nothing but hold the
+    /// frame and count the clock, a held key presses nothing again, and
+    /// the next press resumes on a tick that is still paused.
+    #[test]
+    fn re2_arrange_mode_pauses_on_the_key_and_resumes_on_the_next_press() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = re2_arrange_session(&pack, a);
+        let none = player::Input::default();
+        re2_pause_tick(&mut session, &pack, false, none);
+        let frame = session.game.frame;
+        let clock = session.game.play_timer();
+
+        re2_pause_tick(&mut session, &pack, true, none);
+        assert!(session.re2_pause.is_some(), "the press pauses");
+        assert!(session.re2_pause_shown, "and its frame has the overlay");
+        assert_eq!(session.game.frame, frame + 1, "the press's tick runs");
+
+        // Two ticks in one pass of the loop: the press's frame isn't drawn
+        // yet, so the paused tick draws it rather than hold the one before.
+        re2_pause_tick(&mut session, &pack, true, none);
+        assert!(!session.present_held);
+        session.draw_re2_pause();
+        for held in [true, false, false] {
+            re2_pause_tick(&mut session, &pack, held, none);
+            assert!(session.re2_pause.is_some(), "a held key is no new press");
+            assert!(session.re2_pause_shown, "the overlay stays in the frame");
+            assert_eq!(session.game.frame, frame + 1, "nothing runs");
+            assert!(session.present_held, "`Movie_set(1)`: the frame holds");
+        }
+        assert_eq!(session.game.play_timer(), clock + 5, "`WinMain` counts");
+
+        re2_pause_tick(&mut session, &pack, true, none);
+        assert!(session.re2_pause.is_none(), "the next press resumes");
+        assert_eq!(session.game.frame, frame + 1, "on a tick still paused");
+        re2_pause_tick(&mut session, &pack, true, none);
+        assert_eq!(session.game.frame, frame + 2, "the game runs again");
+        assert!(session.re2_pause.is_none(), "and the held key is no press");
+    }
+
+    /// The paused ticks run `Pad_set`: `Key` follows the pad, so a key
+    /// pressed under the pause and held past it is no new press after.
+    #[test]
+    fn re2_the_paused_ticks_keep_the_key_word() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = re2_arrange_session(&pack, a);
+        let none = player::Input::default();
+        let action = player::Input {
+            action_held: true,
+            ..player::Input::default()
+        };
+        re2_pause_tick(&mut session, &pack, true, none);
+        re2_pause_tick(&mut session, &pack, false, action);
+        let key = crate::player2::key_word(&action);
+        assert_eq!(session.game.re2.key, key);
+        assert_eq!(session.game.re2.key_trg, key, "its press, on a paused tick");
+        re2_pause_tick(&mut session, &pack, false, action);
+        re2_pause_tick(&mut session, &pack, true, action);
+        assert!(session.re2_pause.is_none());
+        assert_eq!(session.game.re2.key_trg, 0, "held: no press");
+    }
+
+    /// The pause is ARRANGE MODE's alone, and `Psx_main`'s gate refuses it
+    /// under a hold, the scene bars, a cut the last tick loaded and START's
+    /// request.
+    #[test]
+    fn re2_the_pause_key_is_refused_outside_its_gate() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let refused = |change: &dyn Fn(&mut GameSession)| {
+            let mut session = re2_arrange_session(&pack, a);
+            re2_pause_tick(&mut session, &pack, false, player::Input::default());
+            change(&mut session);
+            let shut = !session.re2_pause_gate();
+            re2_pause_tick(&mut session, &pack, true, player::Input::default());
+            assert_eq!(session.re2_pause.is_none(), shut);
+            shut
+        };
+        assert!(!refused(&|_| {}), "the bare gate takes it");
+        assert!(refused(&|session| session.game.re2.censorship_off = false));
+        assert!(refused(&|session| session.game.re2.set_input_stop(true)));
+        assert!(refused(&|session| {
+            session.game.re2.set_flag(
+                crate::scd2::host::STATUS_BANK,
+                crate::scd2::host::STATUS_SCENE,
+                1,
+            )
+        }));
+        assert!(refused(&|session| session.re2_cut_loaded = true));
+        assert!(refused(&|session| {
+            session.menu_request = Some((MenuRequest::Menu, session.game.message_flags))
+        }));
+        assert!(refused(&|session| {
+            session
+                .game
+                .re2
+                .set_flag(0, crate::scd2::host::FG_SYSTEM_MOVIE, 1)
+        }));
+        assert!(refused(
+            &|session| session.game.re2.banks[0][0] |= 0x0200_0000
+        ));
+        assert!(refused(
+            &|session| session.game.re2.banks[1][0] |= 0x0010_0000
+        ));
+    }
+
+    /// arklay's own overlays sit over the game: the key neither pauses
+    /// under the in-game menu nor ends a pause there.
+    #[test]
+    fn re2_the_pause_waits_out_the_hosts_menu() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = re2_arrange_session(&pack, a);
+        let none = player::Input::default();
+        session.system_menu_open = true;
+        re2_pause_tick(&mut session, &pack, true, none);
+        assert!(session.re2_pause.is_none());
+        session.system_menu_open = false;
+        re2_pause_tick(&mut session, &pack, false, none);
+        re2_pause_tick(&mut session, &pack, true, none);
+        assert!(session.re2_pause.is_some());
+        session.system_menu_open = true;
+        re2_pause_tick(&mut session, &pack, false, none);
+        re2_pause_tick(&mut session, &pack, true, none);
+        assert!(session.re2_pause.is_some(), "still paused under the menu");
     }
 
     /// A tick with the map key down in the pad (`Key`'s `0x4000`), pressed

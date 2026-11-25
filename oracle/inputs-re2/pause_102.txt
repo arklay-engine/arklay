@@ -1,0 +1,22 @@
+# room 102: ARRANGE MODE's pause (`Psx_main`, 0x4C3C70; oracle/re2.md, "The pause"): the key under the pickup's message, which holds `fg_stop`'s 0x1000000 and refuses it, the take, then a pause while walking with the direction held through it, a pause while standing, and the action key held across the press that resumes, which is no new press after it
+364 action
+368
+400 pause
+404
+600 action
+604
+800 action
+804
+850 up
+880 up pause
+884 up
+930 up pause
+934 up
+960
+1000 pause
+1004
+1040 action
+1090 action pause
+1094 action
+1120
+1200

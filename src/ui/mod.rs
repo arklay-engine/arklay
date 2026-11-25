@@ -94,6 +94,9 @@ pub struct UiInput {
     /// RE 2's option key's edge (the raw pad's `0x100`; Ctrl or F5 by
     /// default): opens the option screen in play.
     pub option: bool,
+    /// RE 2's ARRANGE MODE pause key's held level (the raw pad's `0x2`;
+    /// Pause by default), whose edge `Psx_main` pauses and resumes on.
+    pub held_pause: bool,
     /// Port-only: the weapon cycle's edge during free play (the mouse
     /// wheel by default): `-1` the previous weapon, `1` the next, `0` none.
     pub weapon_step: i8,

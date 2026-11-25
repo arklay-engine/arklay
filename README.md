@@ -478,6 +478,7 @@ byte-identical.
 | `M` | Back (Select) | Open the map; again (or Cancel) closes it |
 | `Esc` | Start | Open/close the in-game menu (restart, load game, options, quit) |
 | `Ctrl`, `F5` | | RE 2: open the original's option screen from play (its option key); RE 1 has none |
+| `Pause` | | RE 2, ARRANGE MODE: pause the game and resume it (the original's pause, which its keys leave unbound); RE 1 has none |
 | `[`, `]` | Left / right shoulder | L1/R1: page the item box |
 | `Esc`, `Backspace` | East (B / Circle) | Cancel (menus, character select, load screen) |
 | `Shift` | West (X / Square) | Run (hold) |

@@ -1,0 +1,33 @@
+# ARRANGE MODE's pause (`Psx_main`, 0x4C3C70; oracle/re2.md, "The pause"): the raw pad's 0x2 edge pauses the game
+# under `Psx_main`'s gate (`censorship_off`, a game in play, `Game` 0, no `fg_stop` 0x1000000, no door, film, demo
+# or results, no scene bars and no cut loaded on the tick before). The paused ticks run `Pad_set` and nothing else,
+# hold the presented frame (`Movie_set(1)`) and keep the play clock's seconds (`SetGameSeconds`), and the next edge
+# resumes. The first run pauses twice in play and once refused under the pickup's message; the second is the same
+# input in ORIGINAL MODE, where the key does nothing.
+
+[[run]]
+name = "pause_arrange_102"
+arrange = true
+setup_script = "item_102.lua"
+input = "pause_102.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1250
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat"
+frames = [360, 1249]
+frame_max_mean = 0.05
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0"
+
+[[run]]
+name = "pause_original_102"
+setup_script = "item_102.lua"
+input = "pause_102.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 1250
+fields = "room,cam,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat"
+frames = [360, 1249]
+frame_max_mean = 0.05
+expect = "match"
+record = "--no-enemies --warp 102:-11378:0:-4587:0"
