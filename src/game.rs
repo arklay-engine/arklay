@@ -10564,19 +10564,11 @@ impl GameState {
     /// typewriter, room 200's computer) and `0x300` (the room's messages)
     /// both force `Pos_xy` to `0xB90022` (x 34, y 185); only the status
     /// screen and the get-item window pass their own `0xAF0010` (x 16,
-    /// y 175), the font's place. A `{branch 0}` takes `choice_data_e`'s
-    /// first entry (`0x52E554`): `Yes` at 210 and `No` 50 to its right,
-    /// each cursor cell where the font's get-item choice has it against its
-    /// label.
+    /// y 175), the font's place. A question's choices draw where its form
+    /// in `choice_data_e` (`0x52E554`) says
+    /// ([`crate::message::RE2_CHOICE_FORMS`]).
     fn place_re2_in_play(&mut self) {
-        self.message.place(
-            (34, 185),
-            crate::font::ChoiceLayout {
-                yes_x: 210,
-                no_x: 260,
-                cursor_dx: -18,
-            },
-        );
+        self.message.place((34, 185));
     }
 
     /// Restore the message word a door zeroed. The original's gameplay loop

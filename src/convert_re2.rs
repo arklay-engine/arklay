@@ -411,6 +411,12 @@ fn find_exe_text(root: &Path, data: &Path, warnings: &mut Vec<String>) -> Option
                         path.display()
                     ));
                 }
+                if let Some(error) = &text.choice_error {
+                    warnings.push(format!(
+                        "{}: no choices for the rooms' questions: {error}",
+                        path.display()
+                    ));
+                }
                 return Some(text);
             }
             Err(error) => errors.push(format!(
@@ -792,7 +798,7 @@ fn copy_text(
 /// own code (the font's widths and colours, the message codes). A change to
 /// what [`packed_source_hash`] covers needs no bump. It carries on from the
 /// revision the two converters shared.
-pub const CONVERT_VERSION: u32 = 29;
+pub const CONVERT_VERSION: u32 = 30;
 
 /// The checked-in scripts the pack takes as they are: each entry and its
 /// source.

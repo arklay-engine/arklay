@@ -77,6 +77,20 @@ const COMPUTER: [usize; 18] = [
     0x53_3B30, 0x53_3B04,
 ];
 
+/// The selections' table Classic REbirth's `Mess_disp` reads, `choice_data_e`
+/// (`0x52E554`): six bytes a form, its count, its first choice's x, the step
+/// to the next and its first string in [`CHOICE_STRINGS`].
+const CHOICE_FORMS: usize = 0x52_E554;
+
+/// The choices' strings (`choice_ptr`, `0x5326A0`, from `choice_txt`): a pair
+/// of offsets a string, the Japanese one and the English one, which
+/// `Branch_disp` reads (its last argument, 1 in Classic REbirth's build).
+const CHOICE_STRINGS: Table = Table {
+    offsets: 0x53_26A0,
+    base: 0x53_25C0,
+    len: 2 * 21,
+};
+
 /// The computer's title, which tells [`COMPUTER`] points at its strings.
 const COMPUTER_TITLE: &[u8] = b"DOOR LOCK SERVICE]";
 
@@ -99,6 +113,12 @@ pub(super) struct ExeText {
     pub door: Vec<Vec<u8>>,
     /// The computers' strings, without their NULs ([`COMPUTER`]).
     pub computer: Vec<Vec<u8>>,
+    /// Each selection's English choices with their `0xFE` ends, by form
+    /// ([`CHOICE_FORMS`]); empty when [`ExeText::choice_error`] says why.
+    pub choices: Vec<Vec<Vec<u8>>>,
+    /// Why the pack gets no choices: the executable's forms aren't the
+    /// engine's ([`crate::message::RE2_CHOICE_FORMS`]), or don't read.
+    pub choice_error: Option<String>,
 }
 
 impl ExeText {
@@ -110,6 +130,10 @@ impl ExeText {
             Ok((names, classes)) => (names, classes, None),
             Err(error) => (Vec::new(), Vec::new(), Some(format!("{error:#}"))),
         };
+        let (choices, choice_error) = match choices(exe) {
+            Ok(choices) => (choices, None),
+            Err(error) => (Vec::new(), Some(format!("{error:#}"))),
+        };
         let text = Self {
             names: strings(exe, &NAMES, 0xF7).context("the item names")?,
             checked_names,
@@ -118,6 +142,8 @@ impl ExeText {
             system: strings(exe, &SYSTEM, 0xFE).context("the system messages")?,
             door: strings(exe, &DOOR, 0xFE).context("the door messages")?,
             computer: computer_strings(exe).context("the computer's strings")?,
+            choices,
+            choice_error,
         };
         ensure!(
             text.computer[0].starts_with(COMPUTER_TITLE),
@@ -156,6 +182,42 @@ fn checked_names(exe: &[u8]) -> Result<(Vec<Vec<u8>>, Vec<u8>)> {
     }
     let names = strings(exe, &CHECKED_NAMES, 0xF7).context("the checked names")?;
     Ok((names, classes))
+}
+
+/// The English choices of each selection in [`CHOICE_FORMS`], when the forms
+/// are the ones the engine lays out ([`crate::message::RE2_CHOICE_FORMS`]).
+fn choices(exe: &[u8]) -> Result<Vec<Vec<Vec<u8>>>> {
+    let strings = strings(exe, &CHOICE_STRINGS, 0xFE).context("the choices' strings")?;
+    crate::message::RE2_CHOICE_FORMS
+        .iter()
+        .enumerate()
+        .map(|(index, form)| {
+            let at = CHOICE_FORMS - IMAGE_BASE + 6 * index;
+            let entry = exe
+                .get(at..at + 6)
+                .context("the selections' table is outside the executable")?;
+            let first = usize::from(u16::from_le_bytes([entry[4], entry[5]]));
+            ensure!(
+                (entry[0], i32::from(entry[1]), i32::from(entry[2]))
+                    == (form.count, form.x, form.step),
+                "selection {index} is {} choices from {} by {}, not the engine's {} from {} by {}",
+                entry[0],
+                entry[1],
+                entry[2],
+                form.count,
+                form.x,
+                form.step
+            );
+            (0..usize::from(form.count))
+                .map(|choice| {
+                    strings
+                        .get(2 * (first + choice) + 1)
+                        .cloned()
+                        .with_context(|| format!("selection {index} has no string {choice}"))
+                })
+                .collect()
+        })
+        .collect()
 }
 
 /// [`COMPUTER`]'s strings, each up to its NUL. They are printable ASCII, so
@@ -230,7 +292,22 @@ pub(super) fn readable_image() -> Vec<u8> {
     for item in 0..ITEM_ROWS {
         exe[ITEM_TABLE - IMAGE_BASE + item * 8 + 1] = crate::message::re2_name_class(item as u8);
     }
+    put_choices(&mut exe);
     exe
+}
+
+/// The engine's selections into `exe`, every choice the string `No`.
+#[cfg(test)]
+fn put_choices(exe: &mut [u8]) {
+    let mut first = 0u16;
+    for (index, form) in crate::message::RE2_CHOICE_FORMS.iter().enumerate() {
+        let at = CHOICE_FORMS - IMAGE_BASE + 6 * index;
+        let [low, high] = first.to_le_bytes();
+        exe[at..at + 6].copy_from_slice(&[form.count, form.x as u8, form.step as u8, 0, low, high]);
+        first += u16::from(form.count);
+    }
+    let base = CHOICE_STRINGS.base - IMAGE_BASE;
+    exe[base..base + 4].copy_from_slice(&[0x2A, 0x4B, 0xFE, 0x00]);
 }
 
 #[cfg(test)]
@@ -257,6 +334,7 @@ mod tests {
         assert_eq!(text.system.len(), SYSTEM.len);
         assert_eq!(text.door.len(), DOOR.len);
         assert!(text.checked_error.is_none());
+        assert!(text.choice_error.is_none());
     }
 
     #[test]
@@ -266,6 +344,31 @@ mod tests {
         assert!(names.iter().all(|name| name == &[0x2D, 0x4B, 0xF7]));
         assert_eq!(classes.len(), ITEM_ROWS);
         assert_eq!((classes[0x59], classes[0x5E], classes[0x58]), (1, 9, 0));
+    }
+
+    #[test]
+    fn the_choices_read_by_the_engines_forms() {
+        let choices = choices(&readable_image()).unwrap();
+        let counts: Vec<usize> = choices.iter().map(Vec::len).collect();
+        assert_eq!(counts, [2, 3, 6, 2, 3, 3, 2]);
+        assert!(
+            choices
+                .iter()
+                .flatten()
+                .all(|choice| choice == &[0x2A, 0x4B, 0xFE, 0x00])
+        );
+    }
+
+    /// Another build's forms would lay the choices out wrong: it gets none.
+    #[test]
+    fn other_forms_give_no_choices() {
+        let mut exe = readable_image();
+        exe[CHOICE_FORMS - IMAGE_BASE + 6 + 1] = 0x7F;
+        let error = choices(&exe).unwrap_err();
+        assert!(format!("{error:#}").contains("selection 1"), "{error:#}");
+        let text = ExeText::read(&exe).unwrap();
+        assert!(text.choices.is_empty());
+        assert!(text.choice_error.is_some());
     }
 
     /// Another build's classes would name the wrong items: it gets none.
