@@ -29,6 +29,11 @@ pub const STATUS_SETTING: (u16, u16) = (0xF01C, 0x060A);
 /// outlasts the screen, as the status screen's does.
 pub const CONFIG_SETTING: (u16, u16) = (0xF01C, 0x040C);
 
+/// The setting room 613's keyboard gives on each of its passes
+/// (`Keyboard`, `0x4D2240`): the four directions, a first delay of 10 and a
+/// period of 2. It holds after the terminal, until another `Pad_rep_set`.
+pub const KEYBOARD_SETTING: (u16, u16) = (0xF000, 0x020A);
+
 /// `Pad_set`'s repeat state: the mask and delays (`0x98F074`, `0x98F078`),
 /// the counter (`0x533938`), the flag and the pad it saw.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

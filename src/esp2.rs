@@ -858,6 +858,13 @@ impl Effects {
         }
     }
 
+    /// `Die_4B9350`: every slot dies, as `Esp_kill2` kills a group's.
+    pub fn kill_all(&mut self) {
+        for slot in &mut self.slots {
+            slot.kill();
+        }
+    }
+
     /// `Esp_kill2`.
     pub fn kill_group(&mut self, group: u8) {
         for slot in &mut self.slots {
@@ -4256,6 +4263,30 @@ mod tests {
         effects.kill_group(2);
         assert!(!effects.slots[one].live());
         assert!(effects.slots[other].live());
+    }
+
+    /// `Sce_82(6)`: every slot dies, whatever its group.
+    #[test]
+    fn kill_all_takes_every_group() {
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[fire_block(), [0; BLOCK_LEN]]));
+        let slots: Vec<usize> = [0, 3]
+            .into_iter()
+            .filter_map(|group| {
+                effects.call_placed(EsprCall {
+                    kind: 7,
+                    row: 0,
+                    size: 0x1000,
+                    dir: 0,
+                    at: [0; 3],
+                    rotation: [0; 3],
+                    group,
+                })
+            })
+            .collect();
+        assert_eq!(slots.len(), 2);
+        effects.kill_all();
+        assert!(slots.iter().all(|&slot| !effects.slots[slot].live()));
     }
 
     #[test]

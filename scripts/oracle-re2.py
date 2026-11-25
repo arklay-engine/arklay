@@ -1169,6 +1169,7 @@ def map_flags_trace(game: Game) -> str:
 
 
 COMPUTER_TASK = 0x68A244  # task 1: +2 its sleep count, +4 its function, +8..+0xA R0..R2
+COMPUTER_REQUEST = 0x989E74  # `Sce_Windows`' request: the mode in its low two bits, the cut above
 COMPUTER_WINDOWS = 0x4D1F50  # `Windows`, the function task 1 runs in game mode 7
 COMPUTER_WORK = 0x9800A0  # `pCom_work`: +0 col, +1 row, +0x2DC the frame's step
 
@@ -1196,16 +1197,24 @@ def save_screen_trace(game: Game) -> str:
 
 
 def computer_trace(game: Game) -> str:
-    """Room 200's computer (`Windows`, `Computer200`): task 1's R0, R1, R2 and sleep count, `c_mode`, the frame's direction and step, `printed`, `confirmed`, and the console's column and row; `-` unless task 1 runs `Windows`."""
+    """The computer (`Windows`, then `Computer200` or room 613's `Computer600`): task 1's R0, R1, R2 and sleep count, `c_mode`, the frame's direction and step, `printed`, `confirmed`, and the console's column and row; in room 613 then the keyboard's frame mode (`Wframe_in_out`'s), its column and row, the key `Keyboard` read and how many letters are typed. `-` unless task 1 runs `Windows`."""
     if game.u32(COMPUTER_TASK + 4) != COMPUTER_WINDOWS:
         return "pc=-"
     work = game.u32(COMPUTER_WORK)
     step, col, row = (game.u8(work + 0x2DC), game.u8(work), game.u8(work + 1)) if work else (0, 0, 0)
-    return (
+    terminal = game.u8(COMPUTER_REQUEST) & 3 == 1
+    printed, confirmed = (0x689B78, 0x689B74) if terminal else (0x689B6C, 0x689B68)
+    text = (
         f"pc={game.u8(COMPUTER_TASK + 8)},{game.u8(COMPUTER_TASK + 9)},{game.u8(COMPUTER_TASK + 10)},"
         f"{game.u16(COMPUTER_TASK + 2)},{game.u8(0x98E52D)},{game.u8(0x98E52F)},{step},"
-        f"{game.u32(0x689B6C)},{game.u32(0x689B68)},{col},{row}"
+        f"{game.u32(printed)},{game.u32(confirmed)},{col},{row}"
     )
+    if terminal:
+        key_col, key_row, key, typed = (
+            (game.u8(work + 2), game.u8(work + 3), game.u8(work + 0x2D9), game.u8(work + 0x2D8)) if work else (0, 0, 0, 0)
+        )
+        text += f",{game.u8(0x98E52E)},{key_col},{key_row},{key},{typed}"
+    return text
 
 
 HOOK = 0x98E790  # `pG + 0x82B0`: the per-tick hook Sce_Door's `Key_lost` and Sce_Hikidashi's `Hikidashi_entrance` share

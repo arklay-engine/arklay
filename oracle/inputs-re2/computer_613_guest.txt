@@ -1,0 +1,119 @@
+# room 613: the lab terminal (oracle/re2.md, "Room 613's terminal"): action at the terminal, the yes, the registry's lines confirmed, the name ADA (a held left repeats), refused, then GUEST with a BS, the fingerprint and the second visit
+364 action
+368
+410 action
+414
+530 action
+534
+680 action
+684
+705 action
+706
+709 right
+710
+712 right
+713
+715 right
+716
+718 action
+719
+722 left
+737
+739 action
+740
+743 down
+744
+746 left
+747
+749 left
+750
+752 action
+753
+860 action
+864
+910 action
+914
+935 right
+959
+961 action
+962
+965 down
+966
+968 down
+969
+971 left
+972
+974 left
+975
+977 left
+978
+980 left
+981
+983 action
+984
+987 down
+988
+990 right
+991
+993 right
+994
+996 action
+997
+1000 down
+1001
+1003 down
+1004
+1006 left
+1007
+1009 left
+1010
+1012 left
+1013
+1015 left
+1016
+1018 action
+1019
+1022 action
+1023
+1026 down
+1027
+1029 left
+1030
+1032 left
+1033
+1035 action
+1036
+1039 down
+1040
+1042 down
+1043
+1045 right
+1046
+1048 right
+1049
+1051 right
+1052
+1054 action
+1055
+1058 left
+1059
+1061 left
+1062
+1064 left
+1065
+1067 action
+1068
+1130 action
+1134
+1300 action
+1304
+1330 action
+1334
+1360 action
+1364
+1390 action
+1394
+1420 action
+1424
+1450 action
+1454

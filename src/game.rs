@@ -3686,6 +3686,9 @@ pub struct GameState {
     pub re2_computer_request: Option<u8>,
     /// RE2's computer while game mode 7 runs it.
     pub re2_computer: Option<computer2::Computer>,
+    /// `printed` and `confirmed`, globals of each computer mode
+    /// (`0x689B6C`/`0x689B68`, `0x689B78`/`0x689B74`) a work leaves.
+    pub re2_computer_latches: [[bool; 2]; 2],
     /// The item a crouching pick-up is for, until its crouch opens the
     /// get-item window (`0x9888D0`, which `Sce_Item` set).
     pub re2_crouch_item: Option<RoomAction>,
@@ -4337,6 +4340,7 @@ impl Default for GameState {
             re2_item_get: None,
             re2_computer_request: None,
             re2_computer: None,
+            re2_computer_latches: [[false; 2]; 2],
             re2_crouch_item: None,
             re2_crouch_start: false,
             re2_message_stop: None,
@@ -10011,15 +10015,27 @@ impl GameState {
         cues
     }
 
-    /// One tick of game mode 7's computer, with confirm held or not. Returns
-    /// the cut it showed, if it changed one; the computer is dropped once
-    /// its task exits.
-    pub fn tick_re2_computer(&mut self, confirm: bool) -> Option<u8> {
+    /// One tick of game mode 7's computer, on this tick's `Key` and
+    /// `Key_trg` and the key repeat. Returns the cut it showed, if it
+    /// changed one; the computer is dropped once its task exits.
+    pub fn tick_re2_computer(&mut self) -> Option<u8> {
         use computer2::Effect;
         let mut computer = self.re2_computer.take()?;
         let capacity = self.inventory_capacity();
+        let (key, key_trg) = (self.re2.key, self.re2.key_trg);
         let world = computer2::World {
-            confirm,
+            confirm: key & crate::player2::KEY_CONFIRM != 0,
+            confirm_pressed: key_trg & crate::player2::KEY_CONFIRM != 0,
+            cancel_pressed: key_trg & crate::player2::KEY_CANCEL != 0,
+            repeat: if self.pad_repeat.flag {
+                self.pad_repeat.raw
+            } else {
+                0
+            },
+            registered: self.re2.flag(
+                crate::scd2::host::STATUS_BANK,
+                crate::scd2::host::STATUS_REGISTERED,
+            ),
             scenario_b: self.re2.flag(1, 1),
             unlocked: self.re2.flag(4, 70),
             key17: self.re2.flag(crate::scd2::host::KEY_BANK, 17),
@@ -10045,8 +10061,10 @@ impl GameState {
                     }
                 }
                 Effect::Cut(next) => {
-                    // `Bg_loadPC` doesn't touch `Cut_old`.
+                    // `Bg_loadPC` doesn't touch `Cut_old`. The load is
+                    // pending (`BYTE_0098F07B`) even for the cut on screen.
                     self.set_camera_cut(usize::from(next));
+                    self.re2.bg_load = true;
                     cut = Some(next);
                 }
                 Effect::Unlock => self.re2.set_flag(4, 70, 1),
@@ -10079,10 +10097,25 @@ impl GameState {
                     .re2
                     .screen_fades
                     .push(crate::scd2::host::FadeWrite::Adjust(-1)),
+                Effect::PadRepeat => self.pad_repeat.set(pad_repeat::KEYBOARD_SETTING),
+                Effect::Registered(on) => self.re2.set_flag(
+                    crate::scd2::host::STATUS_BANK,
+                    crate::scd2::host::STATUS_REGISTERED,
+                    u8::from(on),
+                ),
+                Effect::Common(index) => self.re2.set_flag(4, index, 1),
                 Effect::Resume => {}
             }
         }
-        if !computer.done() {
+        if computer.done() {
+            if let Some(latches) = self.re2_computer_latches.get_mut(computer.mode()) {
+                *latches = computer.latches();
+            }
+            if let Some(key) = computer.key() {
+                self.re2_heap
+                    .write_top_byte(computer2::Computer::KEY_OFFSET, key);
+            }
+        } else {
             self.re2_computer = Some(computer);
         }
         cut

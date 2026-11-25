@@ -126,17 +126,17 @@ fn cprint_rate_zero_prints_the_rest_at_once() {
 fn wframe_opens_in_thirteen_ticks_and_closes() {
     let mut computer = Computer::new(0xF0, strings());
     for s in 0..=12 {
-        assert!(computer.wframe_move());
+        assert!(computer.wframe_move(FRAME));
         assert_eq!(
             computer.view.frame,
             Some([12, 10, 12 + 21 * s, 10 + 11 * s])
         );
     }
-    assert!(!computer.wframe_move());
+    assert!(!computer.wframe_move(FRAME));
     assert_eq!(computer.step, 0);
     computer.frame_dir = 1;
     let mut rects = Vec::new();
-    while computer.wframe_move() {
+    while computer.wframe_move(FRAME) {
         rects.push(computer.view.frame.unwrap());
     }
     assert_eq!(rects.len(), 13);
@@ -324,8 +324,8 @@ fn scenario_b_shows_three_doors_and_key17_starts_at_door_two() {
 }
 
 #[test]
-fn other_modes_resume_at_once() {
-    let mut computer = Computer::new(0x61, strings());
+fn modes_2_and_3_resume_at_once() {
+    let mut computer = Computer::new(0x62, strings());
     assert_eq!(
         computer.tick(&World::default()),
         [Effect::FadeOff, Effect::Resume]

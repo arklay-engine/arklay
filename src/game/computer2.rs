@@ -1,6 +1,8 @@
 //! RE2's computer: game mode 7 (`Sce_Windows`, `0x4EA0B0`), the `Windows`
-//! task (`0x4D1F50`) and room 200's `Computer200` (`0x4D1170`), the counter's
-//! DOOR LOCK SERVICE console that takes the Blue Card Key.
+//! task (`0x4D1F50`), room 200's `Computer200` (`0x4D1170`), the counter's
+//! DOOR LOCK SERVICE console that takes the Blue Card Key, and room 613's
+//! `Computer600` (`0x4D1820`, in `terminal.rs`), the lab's staff registry with
+//! its on-screen keyboard.
 //!
 //! The original runs it as task 1 while task 0, the room, is suspended, so
 //! [`Computer::tick`] is one scheduler pass of that task: it holds through
@@ -9,12 +11,13 @@
 //! sleep count, `c_mode` (`0x98E52D`), the frame (`Wframe_move`) and the
 //! console `Cprint` types into (`pCom_work`). It knows nothing of the game,
 //! which hands it a [`World`] each tick, so it can be tested on its own.
-//!
-//! Mode 1 (`Computer600`, room 613's terminal with its keyboard) isn't
-//! ported: it resumes at once.
 
-/// The pack entry the converter writes the console's strings to, one a line
-/// (`0x533AD0` and on, [`Strings`]).
+mod terminal;
+
+pub use terminal::KeyboardView;
+
+/// The pack entry the converter writes the consoles' strings to, one a line
+/// (`0x533AD0` and on, then `0x533C70` and on, [`Strings`]).
 pub const TEXT_ENTRY: &str = "ui/computer/rc200.txt";
 
 /// The console's rows and columns (`pCom_work`'s `+4` chars, 12 rows of 30).
@@ -58,6 +61,78 @@ pub struct Strings {
     pub checking: Vec<u8>,
     /// `OK! Hall side doors lock released.`
     pub ok: Vec<u8>,
+    /// Room 613's terminal (`Computer600`), from `0x533C70` down. Empty in
+    /// a pack converted before it was ported, which leaves the terminal
+    /// unported.
+    pub terminal: TerminalStrings,
+}
+
+/// `Computer600`'s strings.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TerminalStrings {
+    /// `Register your fingerprint.]`, printed at once on the second visit.
+    pub register_newline: Vec<u8>,
+    /// `UMBRELLA "RODEM" SYSTEM` and its version.
+    pub umbrella: Vec<u8>,
+    /// `Culture Experiment Room Staff Registry.`
+    pub culture: Vec<u8>,
+    /// `Accessing.....`
+    pub accessing: Vec<u8>,
+    /// `Enter your user name.]>`
+    pub enter_name: Vec<u8>,
+    /// `GUEST`, the one name the registry knows.
+    pub guest: Vec<u8>,
+    /// `This name is not in the researcher data base.`
+    pub not_found: Vec<u8>,
+    /// `Register your fingerprint.`
+    pub register: Vec<u8>,
+    /// `Please wait.....`
+    pub please_wait: Vec<u8>,
+    /// `Registration complete.`
+    pub complete: Vec<u8>,
+    /// `Guest registration is valid for 24 hours.`
+    pub valid: Vec<u8>,
+}
+
+impl TerminalStrings {
+    /// The strings in the order the pack holds them, one a line.
+    pub fn lines(&self) -> [&[u8]; 11] {
+        [
+            &self.register_newline,
+            &self.umbrella,
+            &self.culture,
+            &self.accessing,
+            &self.enter_name,
+            &self.guest,
+            &self.not_found,
+            &self.register,
+            &self.please_wait,
+            &self.complete,
+            &self.valid,
+        ]
+    }
+
+    /// The strings from [`Self::lines`]' order, or `None` short of 11.
+    pub fn from_lines(mut lines: impl Iterator<Item = Vec<u8>>) -> Option<Self> {
+        let mut next = || lines.next().filter(|line| !line.is_empty());
+        Some(Self {
+            register_newline: next()?,
+            umbrella: next()?,
+            culture: next()?,
+            accessing: next()?,
+            enter_name: next()?,
+            guest: next()?,
+            not_found: next()?,
+            register: next()?,
+            please_wait: next()?,
+            complete: next()?,
+            valid: next()?,
+        })
+    }
+
+    fn is_empty(&self) -> bool {
+        self.guest.is_empty()
+    }
 }
 
 /// Which string Cprint is typing (`pCom_work+0x2F8`).
@@ -70,6 +145,16 @@ enum Text {
     Newline,
     Checking,
     Ok,
+    RegisterNewline,
+    Umbrella,
+    Culture,
+    Accessing,
+    EnterName,
+    NotFound,
+    Register,
+    PleaseWait,
+    Complete,
+    Valid,
 }
 
 impl Strings {
@@ -82,6 +167,16 @@ impl Strings {
             Text::Newline => &self.newline,
             Text::Checking => &self.checking,
             Text::Ok => &self.ok,
+            Text::RegisterNewline => &self.terminal.register_newline,
+            Text::Umbrella => &self.terminal.umbrella,
+            Text::Culture => &self.terminal.culture,
+            Text::Accessing => &self.terminal.accessing,
+            Text::EnterName => &self.terminal.enter_name,
+            Text::NotFound => &self.terminal.not_found,
+            Text::Register => &self.terminal.register,
+            Text::PleaseWait => &self.terminal.please_wait,
+            Text::Complete => &self.terminal.complete,
+            Text::Valid => &self.terminal.valid,
         }
     }
 }
@@ -105,6 +200,16 @@ pub struct World {
     pub message_no: bool,
     /// `scd_var_cut`, the cut on screen.
     pub cut: u8,
+    /// `fg_status & 0x200`: the terminal's name was taken, and the
+    /// fingerprint is next (1:22).
+    pub registered: bool,
+    /// `Key_trg & 0x1000` and `Key_trg & 0x2000`: confirm and cancel
+    /// pressed this tick.
+    pub confirm_pressed: bool,
+    pub cancel_pressed: bool,
+    /// The directions the keyboard moves on: `0x9885FC`'s while the repeat
+    /// flag (`fg_system`'s bit 31) is up, else none.
+    pub repeat: u16,
 }
 
 /// What a pass asks of the game.
@@ -128,6 +233,13 @@ pub enum Effect {
     /// `Task_signal(0); Task_exit()`: the room's task runs again from the
     /// next tick.
     Resume,
+    /// `Pad_rep_set(0xF000, 0x20A)`: the keyboard's key repeat, for the
+    /// next tick's `Pad_set` on.
+    PadRepeat,
+    /// `fg_status`'s `0x200` raised or lowered.
+    Registered(bool),
+    /// `Flg_on(fg_common, n)`: 4:n.
+    Common(u8),
 }
 
 /// `pCom_work`'s console: `Cprint`'s cursor, colour and delay, and the
@@ -186,6 +298,14 @@ impl Console {
         self.attrs.copy_within(1.., 0);
         self.chars[ROWS - 1] = [b' '; COLUMNS];
         self.attrs[ROWS - 1] = [0; COLUMNS];
+    }
+
+    /// `Console_put` (`0x4D29C0`): `c` at the cursor, its colour kept.
+    fn put(&mut self, c: u8) {
+        let (row, col) = (usize::from(self.row), usize::from(self.col));
+        if let Some(cell) = self.chars.get_mut(row).and_then(|row| row.get_mut(col)) {
+            *cell = c;
+        }
     }
 
     /// `Console_trans`'s cursor: the blink counter steps, and the cursor
@@ -282,9 +402,10 @@ fn cprint(
     }
 }
 
-/// The hint lines `Mess_print` draws (offsets into the table at
-/// `0x5339E0`), kept for the trace and the art; the English build's text
-/// for them isn't drawn.
+/// The hint lines `Mess_print` draws, kept for the art: offsets into the
+/// table at `0x5339E0` in room 200, the room's first message table
+/// (`rdt + 0x3C`, the Japanese one) in room 613. The English build shows
+/// neither.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Hint(pub u8);
 
@@ -300,9 +421,14 @@ pub struct View {
     pub cells: Vec<[i32; 4]>,
     /// The cursor's place, when it shows.
     pub cursor: Option<[i32; 2]>,
-    /// The hint lines `Mess_print` draws at the top and bottom (indices into
-    /// `0x5339E0`'s table); the art doesn't draw them.
+    /// The hint lines `Mess_print` draws at the top and bottom; the art
+    /// doesn't draw them.
     pub hints: [Option<Hint>; 2],
+    /// `Windows`' mode: 0 room 200's console, 1 room 613's terminal, whose
+    /// page has the keyboard.
+    pub mode: u8,
+    /// Room 613's keyboard, while its sprites are on.
+    pub keyboard: Option<KeyboardView>,
 }
 
 /// Room 200's computer while game mode 7 runs it.
@@ -321,6 +447,10 @@ pub struct Computer {
     /// (`0x689B5C`).
     c_mode: u8,
     prev_mode: u8,
+    /// `0x98E52E`: `Wframe_in_out`'s mode, the keyboard's frame.
+    kb_mode: u8,
+    /// Room 613's keyboard, in `pCom_work`.
+    keyboard: terminal::Keyboard,
     /// `0x98E52F`: 0 opens the frame, 1 closes it.
     frame_dir: u8,
     /// `pCom_work+0x2DC`, the frame's step.
@@ -329,7 +459,7 @@ pub struct Computer {
     saved_cut: u8,
     /// `0x689B50`, the cut saved for the door shots.
     door_cut: u8,
-    /// `0x689B6C` and `0x689B68`.
+    /// `0x689B6C` and `0x689B68` (`0x689B78` and `0x689B74` in room 613).
     printed: bool,
     confirmed: bool,
     /// `0x689B64`: the card's search at state 4.
@@ -365,6 +495,8 @@ impl Computer {
             sleep: 1,
             c_mode: 0,
             prev_mode: 0,
+            kb_mode: 0,
+            keyboard: terminal::Keyboard::default(),
             frame_dir: 0,
             step: 0,
             saved_cut: 0,
@@ -379,6 +511,44 @@ impl Computer {
             strings,
             done: false,
         }
+    }
+
+    /// `pCom_work+0x2D9`, the key room 613's keyboard last read, which
+    /// nothing clears: a new work at the same `Mem_top` finds it, and an
+    /// ESC there (1) leaves on its first pass.
+    pub const KEY_OFFSET: usize = 0x2D9;
+
+    /// The key byte the work's memory held before this computer, when it
+    /// is known (0 when it isn't).
+    pub fn with_key(mut self, key: Option<u8>) -> Self {
+        self.keyboard.key = key.unwrap_or(0);
+        self.keyboard.key_known = key.is_some();
+        self
+    }
+
+    /// `printed` and `confirmed` as the last computer of this mode left
+    /// them: they are globals, which only the tail and the open clear, so a
+    /// confirmed last line that exits keeps them up.
+    pub fn with_latches(mut self, [printed, confirmed]: [bool; 2]) -> Self {
+        self.printed = printed;
+        self.confirmed = confirmed;
+        self
+    }
+
+    /// `printed` and `confirmed` as this computer leaves them.
+    pub fn latches(&self) -> [bool; 2] {
+        [self.printed, self.confirmed]
+    }
+
+    /// `Sce_Windows`' mode, 0 to 3.
+    pub fn mode(&self) -> usize {
+        usize::from(self.request & 3)
+    }
+
+    /// The key byte the work leaves in memory, when it is known: it was,
+    /// or the keyboard read one.
+    pub fn key(&self) -> Option<u8> {
+        self.keyboard.key_known.then_some(self.keyboard.key)
     }
 
     /// Whether `Task_exit` has run: the room's task runs again.
@@ -430,10 +600,11 @@ impl Computer {
         }
         match self.request & 3 {
             0 => self.computer200(world, effects),
+            1 if !self.strings.terminal.is_empty() => self.computer600(world, effects),
             mode => {
                 if mode == 1 {
                     crate::logging::write(
-                        "warning: RE2's Computer600 (room 613's terminal) isn't ported; it resumes at once",
+                        "warning: the pack has no strings for RE2's Computer600 (room 613's terminal); it resumes at once",
                     );
                 }
                 self.r0 = 0;
@@ -478,7 +649,7 @@ impl Computer {
                 return false;
             }
             7 => {
-                if self.computer_init(world, effects) {
+                if self.computer_init(world, effects, true) {
                     return true;
                 }
                 self.printed = false;
@@ -486,7 +657,7 @@ impl Computer {
                 self.c_mode = 1;
                 return self.inner(world, effects);
             }
-            8 => return self.computer_exit(effects),
+            8 => return self.computer_exit(effects, true),
             _ => {}
         }
         // `Wframe_in_out` is always 0 here: only state 10 sets its mode.
@@ -605,7 +776,7 @@ impl Computer {
             }
             0xB => {
                 self.r1 = 8;
-                return self.computer_exit(effects);
+                return self.computer_exit(effects, true);
             }
             _ => {}
         }
@@ -628,8 +799,12 @@ impl Computer {
     /// `Computer200`'s tail (`0x4D13FB`): the reset after a confirm or a
     /// change of state, then `Console_trans(1)` and `Sprite_Trans(0x16C)`.
     fn tail(&mut self) {
-        // `pCom_work+0x2D9`, the abort flag, is only written by
-        // `Keyboard_Input`, which room 200 never reaches.
+        // `pCom_work+0x2D9`, the key room 613's keyboard last read: room
+        // 200 writes it never, but an ESC (1) the memory holds leaves.
+        if self.keyboard.key == 1 {
+            self.keyboard.key = 0;
+            self.c_mode = 0xB;
+        }
         if (self.printed && self.confirmed) || self.prev_mode != self.c_mode {
             self.printed = false;
             self.confirmed = false;
@@ -641,37 +816,46 @@ impl Computer {
         self.r1 = 0;
     }
 
-    /// `Computer_init` (`0x4D1D60`). Returns whether it slept.
-    fn computer_init(&mut self, world: &World, effects: &mut Vec<Effect>) -> bool {
-        if self.r2 == 0 {
+    /// `Computer_init` (`0x4D1D60`), which opens the frame when `frame` is
+    /// set. Returns whether it slept.
+    fn computer_init(&mut self, world: &World, effects: &mut Vec<Effect>, frame: bool) -> bool {
+        if self.r2 == 1 {
+            if !frame {
+                self.r2 = 0;
+                return false;
+            }
+            effects.push(Effect::Sound(SOUND_OPEN));
+            self.frame_dir = 0;
+            self.r2 = 2;
+        } else if self.r2 != 2 {
+            // `Set_sp_work` copies the sprite table, every sprite off; the
+            // key `Keyboard` last read (`+0x2D9`) and the typed name stay.
             self.console.clear();
             self.console.blink = 0;
+            self.keyboard.init();
             self.step = 0;
             self.saved_cut = world.cut;
             effects.push(Effect::Cut(self.request >> 4));
             self.r2 = 1;
             return self.task_sleep(1);
         }
-        if self.r2 == 1 {
-            effects.push(Effect::Sound(SOUND_OPEN));
-            self.frame_dir = 0;
-            self.r2 = 2;
-        }
-        if self.wframe_move() {
+        // The pass's `Sprite_Trans` draws nothing: every sprite is off.
+        if self.wframe_move(FRAME) {
             return self.task_sleep(1);
         }
         self.r2 = 0;
         false
     }
 
-    /// `Computer_exit` (`0x4D1E90`). Returns whether it slept.
-    fn computer_exit(&mut self, effects: &mut Vec<Effect>) -> bool {
-        if self.r2 != 1 {
+    /// `Computer_exit` (`0x4D1E90`), which closes the frame first when
+    /// `frame` is set. Returns whether it slept.
+    fn computer_exit(&mut self, effects: &mut Vec<Effect>, frame: bool) -> bool {
+        if self.r2 != 1 && frame {
             effects.push(Effect::Sound(SOUND_CLOSE));
             self.frame_dir = 1;
             self.r2 = 1;
         }
-        if self.wframe_move() {
+        if self.r2 == 1 && self.wframe_move(FRAME) {
             return self.task_sleep(1);
         }
         self.c_mode = 0;
@@ -681,10 +865,9 @@ impl Computer {
         false
     }
 
-    /// `Wframe_move` (`0x4D2690`): the frame's rectangle for this step, or
-    /// `false` once it has run its 13 steps.
-    fn wframe_move(&mut self) -> bool {
-        let [x, y, w, h] = FRAME;
+    /// `Wframe_move` (`0x4D2690`): the rectangle `[x, y, w, h]`'s frame for
+    /// this step, or `false` once it has run its 13 steps.
+    fn wframe_move(&mut self, [x, y, w, h]: [i32; 4]) -> bool {
         let s = i32::from(self.step);
         if self.step > FRAME_STEPS {
             self.step = 0;
@@ -706,7 +889,9 @@ impl Computer {
     pub fn view(&self) -> View {
         let mut view = self.view.clone();
         view.hints = [self.hint_top, self.hint_bottom];
+        view.mode = self.request & 3;
         if view.drawn {
+            view.keyboard = self.keyboard.view();
             for (row, chars) in self.console.chars.iter().enumerate() {
                 for (col, &c) in chars.iter().enumerate() {
                     let code = i32::from(c.wrapping_sub(0x20));
@@ -728,9 +913,11 @@ impl Computer {
     }
 
     /// The oracle's `pc` field: `R0,R1,R2,sleep,c_mode,frame_dir,step,
-    /// printed,confirmed,col,row`.
+    /// printed,confirmed,col,row`, and in room 613 then the keyboard's
+    /// frame mode, its column and row, the key it read and how many letters
+    /// are typed.
     pub fn trace(&self) -> String {
-        format!(
+        let base = format!(
             "{},{},{},{},{},{},{},{},{},{},{}",
             self.r0,
             self.r1,
@@ -743,7 +930,12 @@ impl Computer {
             u8::from(self.confirmed),
             self.console.col,
             self.console.row
-        )
+        );
+        if self.request & 3 == 1 {
+            format!("{base},{},{}", self.kb_mode, self.keyboard.trace())
+        } else {
+            base
+        }
     }
 }
 
@@ -758,6 +950,19 @@ pub(crate) fn test_strings() -> Strings {
         newline: b"]".to_vec(),
         checking: b"]Checking up ID CARD[025.[025.[025.[025.".to_vec(),
         ok: b"]OK!]Hall side doors lock released.".to_vec(),
+        terminal: TerminalStrings {
+            register_newline: b"Register your fingerprint.]".to_vec(),
+            umbrella: b"UMBRELLA \"RODEM\" SYSTEM]                      Ver 5.0]".to_vec(),
+            culture: b"Culture Experiment Room Staff Registry.]]".to_vec(),
+            accessing: b"Accessing[020.[020.[020.[020.[020.]]".to_vec(),
+            enter_name: b"Enter your user name.]>".to_vec(),
+            guest: b"GUEST".to_vec(),
+            not_found: b"|1This name is not in the]researcher data base.|0]".to_vec(),
+            register: b"Register your fingerprint.".to_vec(),
+            please_wait: b"Please wait[025.[025.[025.[025.[025.]".to_vec(),
+            complete: b"Registration complete.]]".to_vec(),
+            valid: b"Guest registration is valid]for 24 hours.]".to_vec(),
+        },
     }
 }
 

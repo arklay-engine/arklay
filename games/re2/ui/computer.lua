@@ -1,5 +1,5 @@
--- Room 200's computer console (`Computer200`'s draw, game mode 7), over the
--- cut's background and under the message window.
+-- The computers' consoles (`Computer200`'s and `Computer600`'s draw, game
+-- mode 7), over the cut's background and under the message window.
 --
 -- What one tick draws comes from `api:re2_computer()` (`computer2::View`).
 -- The original's order, back to front:
@@ -9,15 +9,19 @@
 --      last added first);
 --   3. the panel, record 3 (its cell area is transparent, so it never covers
 --      a glyph);
---   4. the cursor, record 2, added first and so drawn last;
---   5. `Wframe_set`'s four `LINE_F2` at otag 6, in front of the sprites.
--- Every sprite is on room 200's object page with clut 0 at grey 0x80, so the
--- texture's own colours, which the PC renderer expands from 5 bits as
--- 8v + 7 (arklay's decoder gives v * 255 / 31), as the title's sheets.
+--   4. the cursor, record 2;
+--   5. room 613's keyboard, record 0, added first and so drawn last;
+--   6. `Wframe_set`'s four `LINE_F2` at otag 6, in front of the sprites;
+--   7. room 613's key under the cursor, record 1, at otag 0 since its grey
+--      isn't 0x80: the key's own cell again, darkened by the pulse.
+-- Every sprite is on the room's object page (room 200's, or room 613's with
+-- the keyboard) with clut 0 at grey 0x80 unless said, so the texture's own
+-- colours, which the PC renderer expands from 5 bits as 8v + 7 (arklay's
+-- decoder gives v * 255 / 31), as the title's sheets.
 
 local M = {}
 
-local PAGE = "ui/computer/rc200"
+local PAGES = { [0] = "ui/computer/rc200", [1] = "ui/computer/rc600" }
 local PANEL = { u = 0, v = 117, x = 12, y = 10, w = 252, h = 139 }
 local CURSOR = { u = 224, v = 10 }
 local CELL_W, CELL_H = 8, 10
@@ -35,15 +39,21 @@ local function expand(c)
     return v == 0 and 0 or 8 * v + 7
 end
 
--- The page's clut 0 at grey 0x80; colour 0 stays transparent.
-local function lut_of(palette)
+-- The page's clut 0 at `grey` (0x80 is the texture's own colours); colour 0
+-- stays transparent.
+local function lut_of(palette, grey)
     local lut = {}
+    local function channel(c)
+        -- The PC modulates by grey * 2 / 255, rounded (0x80 keeps the colour).
+        local v = (expand(c) * grey * 2 + 127) // 255
+        return v > 255 and 255 or v
+    end
     for index = 1, 255 do
         local rgb = palette[index]
         if rgb and rgb ~= 0 then
-            lut[index] = (expand((rgb >> 16) & 0xFF) << 16)
-                | (expand((rgb >> 8) & 0xFF) << 8)
-                | expand(rgb & 0xFF)
+            lut[index] = (channel((rgb >> 16) & 0xFF) << 16)
+                | (channel((rgb >> 8) & 0xFF) << 8)
+                | channel(rgb & 0xFF)
         end
     end
     return lut
@@ -69,9 +79,13 @@ function M.draw(api)
     if view == nil then
         return
     end
-    if s.page == nil then
-        s.page = api:indexed_page(PAGE) or false
-        s.lut = s.page and lut_of(api:page_palette(s.page, 0) or {}) or {}
+    local mode = view.mode or 0
+    if s.mode ~= mode then
+        s.mode = mode
+        s.page = PAGES[mode] and api:indexed_page(PAGES[mode]) or false
+        s.palette = s.page and api:page_palette(s.page, 0) or {}
+        s.lut = lut_of(s.palette, 0x80)
+        s.greys = {}
     end
     local d = { page = s.page, lut = s.lut, ox = api:width() // 2 - 160, oy = api:height() // 2 - 120 }
     if view.drawn and d.page then
@@ -85,9 +99,20 @@ function M.draw(api)
         if view.cursor then
             sprite(api, d, CURSOR.u, CURSOR.v, CELL_W, CELL_H, view.cursor[1], view.cursor[2])
         end
+        local keyboard = view.keyboard
+        if keyboard then
+            local p = keyboard.picture
+            sprite(api, d, p[5], p[6], p[3], p[4], p[1], p[2])
+        end
     end
     if view.frame then
         frame(api, d, view.frame)
+    end
+    if view.drawn and d.page and view.keyboard then
+        local c, grey = view.keyboard.cursor, view.keyboard.grey
+        s.greys[grey] = s.greys[grey] or lut_of(s.palette, grey)
+        local dark = { page = d.page, lut = s.greys[grey], ox = d.ox, oy = d.oy }
+        sprite(api, dark, c[5], c[6], c[3], c[4], c[1], c[2])
     end
 end
 

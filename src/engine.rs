@@ -4838,8 +4838,23 @@ impl GameSession {
         if let Some(request) = self.game.re2_computer_request.take() {
             match re2_computer_strings(pack) {
                 Some(strings) => {
-                    self.game.re2_computer = Some(game::computer2::Computer::new(request, strings));
-                    // Its work goes at `Mem_top` until `Computer_exit`.
+                    // Its work goes at `Mem_top` until `Computer_exit`,
+                    // over what the memory held there.
+                    let key = self
+                        .game
+                        .re2_heap
+                        .top_byte(game::computer2::Computer::KEY_OFFSET);
+                    let latches = self
+                        .game
+                        .re2_computer_latches
+                        .get(usize::from(request & 3))
+                        .copied()
+                        .unwrap_or_default();
+                    self.game.re2_computer = Some(
+                        game::computer2::Computer::new(request, strings)
+                            .with_key(key)
+                            .with_latches(latches),
+                    );
                     self.game.re2_heap.scratch(crate::heap2::COMPUTER_SIZE);
                     self.open_re2_computer_screen(pack);
                 }
@@ -4854,9 +4869,15 @@ impl GameSession {
                 self.swallow_action = false;
             }
             let was_active = self.game.message.active;
-            // The confirm `Computer200` reads is the held one (`Key & 0x1000`),
-            // which fire raises too.
-            if let Some(cut) = self.game.tick_re2_computer(input.action_held || input.fire) {
+            // `Psx_main`'s `Pad_set` reads the pad before the task runs: the
+            // computers read `Key` (fire raises its confirm too) and
+            // `Key_trg`, and the keyboard the repeat. The original's run and
+            // cancel are one button (`Key`'s 0x2000), which arklay's cancel
+            // binding raises too.
+            if !std::mem::replace(&mut self.game.re2.key_read, true) {
+                self.game.re2.set_key(re2_computer_key_word(&input, &ui));
+            }
+            if let Some(cut) = self.game.tick_re2_computer() {
                 // `Bg_loadPC` loads the cut in this tick's `Swap_Cbuff`.
                 let cut = usize::from(cut);
                 if cut < self.loaded.room.cuts.len() {
@@ -18252,12 +18273,23 @@ fn play_re2_sounds(
     sounds.played = played;
 }
 
+/// The `Key` word the computers read: the pad's, with arklay's cancel
+/// binding as the original's run-and-cancel button (`0x2000`).
+fn re2_computer_key_word(input: &player::Input, ui: &UiInput) -> u16 {
+    let cancel = if ui.cancel {
+        crate::player2::KEY_CANCEL
+    } else {
+        0
+    };
+    crate::player2::key_word(input) | cancel
+}
+
 /// Room 200's computer's strings, from [`game::computer2::TEXT_ENTRY`].
 fn re2_computer_strings(pack: &Pack) -> Option<game::computer2::Strings> {
     let bytes = pack.read(game::computer2::TEXT_ENTRY).ok()?;
     let mut lines = bytes.split(|&b| b == b'\n').map(<[u8]>::to_vec);
     let mut next = || lines.next().filter(|line| !line.is_empty());
-    Some(game::computer2::Strings {
+    let mut strings = game::computer2::Strings {
         title: next()?,
         released: next()?,
         locked: next()?,
@@ -18265,7 +18297,13 @@ fn re2_computer_strings(pack: &Pack) -> Option<game::computer2::Strings> {
         newline: next()?,
         checking: next()?,
         ok: next()?,
-    })
+        terminal: Default::default(),
+    };
+    // Room 613's follow; a pack converted before they were has none.
+    if let Some(terminal) = game::computer2::TerminalStrings::from_lines(lines) {
+        strings.terminal = terminal;
+    }
+    Some(strings)
 }
 
 /// The player's shadow in an RE2 room: `Kage_work9_set`'s quad from `Pl_init`.
@@ -30845,6 +30883,39 @@ mod tests {
     }
 
     #[test]
+    fn the_cancel_binding_is_the_computers_cancel() {
+        let ui = UiInput {
+            cancel: true,
+            ..UiInput::default()
+        };
+        let word = re2_computer_key_word(&player::Input::default(), &ui);
+        assert_eq!(word & 0x2000, 0x2000);
+        let none = re2_computer_key_word(&player::Input::default(), &UiInput::default());
+        assert_eq!(none, 0);
+    }
+
+    /// `Computer_init` raises the load (`BYTE_0098F07B`) whatever the cut:
+    /// the cut on screen loads again.
+    #[test]
+    fn the_computers_cut_loads_even_when_it_is_on_screen() {
+        let id = RoomId {
+            stage: 1,
+            room: 0,
+            player_flag: 0,
+            mansion2: false,
+        };
+        let mut game = game::GameState::new(id, &RoomState::default());
+        game.set_camera_cut(15);
+        game.re2_computer = Some(game::computer2::Computer::new(
+            0xF0,
+            game::computer2::test_strings(),
+        ));
+        assert!(!game.re2.bg_load);
+        game.tick_re2_computer();
+        assert!(game.re2.bg_load);
+    }
+
+    #[test]
     fn windows_turns_a_running_fade_0_off() {
         let id = RoomId {
             stage: 1,
@@ -30857,7 +30928,7 @@ mod tests {
             0xF0,
             game::computer2::test_strings(),
         ));
-        game.tick_re2_computer(false);
+        game.tick_re2_computer();
         // A fade 0 left running when the computer starts.
         let mut fade = transition::Fade::fade_out(8, 0x2000, 0);
         assert!(fade.overlay().is_some());
@@ -30869,7 +30940,7 @@ mod tests {
         fade.tick();
         assert_eq!(fade.overlay(), None);
         // Only the first pass writes it.
-        game.tick_re2_computer(false);
+        game.tick_re2_computer();
         assert!(game.re2.screen_fades.is_empty());
     }
 
