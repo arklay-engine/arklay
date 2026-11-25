@@ -100,8 +100,8 @@ record = "--no-enemies --life 200 --warp 213:-23900:0:-10725:2048"
 # then "There are two outfits that should fit you." and "Will you change your clothes?" (Yes/No), and Yes asks which:
 # Left/Right/Cancel (form 4, argument 4; main_0E plays the cues). The first visit steers round both ends and answers
 # Cancel (main_15's fade back), the second answers No, and the third Right: 4:173, save(32, 8) and door 30 back into
-# 208, which loads the room again with the player as id 8. From 1558 the original draws "Please wait a minute." over
-# that load, where arklay draws black (#933).
+# 208, which loads the room again with the player as id 8. From 1558 `Door_move` prints "Please wait a minute." over
+# that load (door 0x32's line).
 [[run]]
 name = "question_208"
 room = "208"
@@ -111,17 +111,17 @@ input_shift = 344
 ticks = 1700
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,mapfg,snd,msg,fgstat,fgcom,pl"
 frames = [360, 1699]
-# 0.19 measured; the three visits' questions (441 to 680, 826 to 1040 and 1216 to 1481) 0.00 to 0.01, and #933's
-# load 1.58
-frame_max_mean = 0.25
-frame_windows = [[441, 680, 0.10], [826, 1040, 0.10], [1216, 1481, 0.10], [1558, 1699, 2.0]]
+# 0.03 measured; the three visits' questions (441 to 680, 826 to 1040 and 1216 to 1481) 0.00 to 0.01, and the load's
+# line 0.00
+frame_max_mean = 0.1
+frame_windows = [[441, 680, 0.10], [826, 1040, 0.10], [1216, 1481, 0.10], [1558, 1699, 0.10]]
 expect = "match"
 record = "--life 200 --warp 208:-19900:0:-15500:3072 --give 2:0x53:1"
 
 # The same locker as after a costume change (4:173 and 4:175 given; the player stays Leon in his own clothes, id 0):
 # "Will you change your clothes?" with Yes/No/Original (form 5, argument 5). The first visit steers round both ends and
 # answers No; the second answers Original, which clears 4:173 and takes door 30 back into 208 with id 0 (main_12's
-# save(32, 0)), over the load #933 draws black. No model changes back from a costume here.
+# save(32, 0)), over the load and its line. No model changes back from a costume here.
 [[run]]
 name = "question_208_original"
 room = "208"
@@ -131,8 +131,8 @@ input_shift = 344
 ticks = 1100
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,mapfg,snd,msg,fgstat,fgcom,pl"
 frames = [360, 1099]
-# 0.43 measured; the two questions 0.00, and the door and #933's load 1.13
-frame_max_mean = 0.5
-frame_windows = [[395, 520, 0.10], [731, 830, 0.10], [831, 1099, 1.5]]
+# 0.02 measured; the two questions, and the door and the load's line, 0.00
+frame_max_mean = 0.1
+frame_windows = [[395, 520, 0.10], [731, 830, 0.10], [831, 1099, 0.10]]
 expect = "match"
 record = "--life 200 --warp 208:-19900:0:-15500:3072 --flag 4:173 --flag 4:175"
