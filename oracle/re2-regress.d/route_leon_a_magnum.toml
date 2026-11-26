@@ -1,0 +1,20 @@
+# Leon A's route from Ben's cell (301) back down to 302, armed on the way for 303's G adult (4:55 set): 210's magnum, behind the Club Key's second door (oracle/re2.md, "Leon A to the magnum")
+
+# Rooms 219, 216, 211, 20F and 210: from 301's door 0, 219's 15 rounds (8:117) and east to door 0, through 216 and 211 to 20F, where two of the five zombies `main_0B` places once 112's window scene has set 4:153 are shot (slots 2 and 1, 6:171 and 6:170) on the way along its middle corridor to door 2 (the Club Key's second use), and 210's magnum (item 5, 8 rounds, 8:85) past the dead officer
+[[run]]
+name = "leon_a_219_210"
+room = "219"
+setup_script = "leon_a_219_210.lua"
+input = "leon_a_219_210.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 3700
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,om0,om1,om2,fgstat,fgitem,fgroom,fgcom,fgkey,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 3699]
+# 0.94 measured, recorded under Wine with sound, the doors' frames included (the worst, 1884, 21.6, is 211's door into 20F)
+frame_max_mean = 1.05
+# each room from its hand back to its door's press: 219 0.07, 216 0.29, 211 0.13, 20F 0.30, 210 0.13
+frame_windows = [[360, 939, 0.15], [1129, 1308, 0.4], [1504, 1825, 0.2], [2021, 2640, 0.4], [2864, 3699, 0.2]]
+expect = "match"
+record = "--warp 219:-25000:0:-14600:3072:5 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:66 --flag 3:67 --flag 3:98 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:18 --flag 4:19 --flag 4:23 --flag 4:24 --flag 4:26 --flag 4:27 --flag 4:33 --flag 4:36 --flag 4:38 --flag 4:39 --flag 4:43 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:53 --flag 4:55 --flag 4:59 --flag 4:69 --flag 4:70 --flag 4:72 --flag 4:74 --flag 4:75 --flag 4:76 --flag 4:84 --flag 4:85 --flag 4:86 --flag 4:89 --flag 4:102 --flag 4:129 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 4:153 --flag 6:19 --flag 6:51 --flag 6:52 --flag 6:54 --flag 6:55 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:81 --flag 6:82 --flag 6:83 --flag 6:85 --flag 6:91 --flag 6:92 --flag 6:93 --flag 6:103 --flag 6:104 --flag 6:112 --flag 6:114 --flag 6:115 --flag 6:116 --flag 6:131 --flag 6:133 --flag 6:148 --flag 6:157 --flag 6:207 --flag 6:208 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:9 --flag 8:20 --flag 8:21 --flag 8:31 --flag 8:32 --flag 8:34 --flag 8:40 --flag 8:44 --flag 8:55 --flag 8:56 --flag 8:57 --flag 8:58 --flag 8:59 --flag 8:93 --flag 8:95 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:108 --flag 8:113 --flag 8:118 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:188 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:12 --flag 31:13 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:23 --flag 31:27 --flag 31:28 --flag 31:29 --life 156 --give 0:0x02:10 --give 2:0x5C:2 --give 3:0x3D:1 --give 4:0x3B:1 --give 5:0x3E:1 --give 6:0x3C:1 --box 3:0x32:1 --box 4:0x1E:3"
+

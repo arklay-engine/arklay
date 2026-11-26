@@ -1,0 +1,243 @@
+# leon_a_219_210: Leon A from 301's door 0 in 219 (Ben dead, his file read) to 210's magnum: 219's rounds, east to door 0, through 216 and 211 to 20F, two of its zombies shot, door 2 with the Club Key (its second use), and the magnum
+# 219: west to the rounds by 301's door (8:117, slot 7), then east along the north corridor, south and east to door 0
+345
+365 up left
+383 right
+392 action
+394
+452 action
+454
+524 action
+526
+573 action
+575
+603 action
+605
+633 action
+635
+663 action
+665
+705 right
+719 up run left
+728 up run right
+738 up run
+813 up run right
+814 up run
+818 up run right
+838 up run
+855 up run right
+856 up run
+862 up run left
+885 up run
+917 up run left
+918 up run
+922 up run left
+923 up right
+927 up
+940 action
+942
+962 action
+964
+984 action
+986
+1006 action
+1008
+# 216: east along the corridor to door 0
+1129 up run
+1206 up run right
+1207 up run
+1213 up run left
+1214 up run
+1280 up run right
+1281 up run
+1294 up left
+1296 up
+1297 up left
+1298 up
+1309 action
+1311
+1331 action
+1333
+1353 action
+1355
+# 211: north up the west side, east along the corridor and north to door 7
+1498 up run left
+1518 up run
+1529 up run left
+1530 up run
+1531 up run right
+1534 up run
+1537 up run right
+1538 up run
+1561 up run right
+1579 up run
+1647 up run right
+1648 up run
+1672 up run right
+1673 up run
+1675 up run left
+1696 up run
+1710 up run left
+1711 up run
+1740 up run right
+1741 up run
+1749 up run left
+1750 up run
+1753 up run right
+1756 up run
+1773 up run right
+1774 up run
+1777 up run right
+1789 up run
+1791 up run right
+1792 up run
+1798 up run right
+1799 up run
+1807 up
+1809 up right
+1810 up
+1816 right
+1818 up
+1826 action
+1828
+1848 action
+1850
+1870 action
+1872
+# 20F: zombies 2 and 1 shot (main_0B's, placed since 112's window scene set 4:153), west along the middle corridor to door 2, whose third press uses the Club Key and the fifth opens it (the last two land in the door)
+2015 up run right
+2025 up run
+2027 right
+2040 aim
+2054 aim fire
+2056 aim
+2069 aim fire
+2071 aim
+2084 aim fire
+2086 aim
+2099 aim fire
+2101 aim
+2114 aim fire
+2116 aim
+2129 aim fire
+2131 aim
+2144 aim fire
+2146
+2147 up run
+2178 right
+2192 aim
+2206 aim fire
+2208 aim
+2221 aim fire
+2223 aim
+2236 aim fire
+2238 aim
+2251 aim fire
+2253 aim
+2266 aim fire
+2268 aim
+2281 aim fire
+2283 aim
+2296 aim fire
+2298 aim
+2311 aim fire
+2313 aim
+2326 aim fire
+2328 aim
+2341 aim fire
+2343 aim
+2356 aim fire
+2358 aim
+2371 aim fire
+2373 aim
+2386 aim fire
+2388 aim
+2401 aim fire
+2403 aim
+2416 aim fire
+2418 aim
+2431 aim fire
+2433 aim
+2446 aim fire
+2448 aim
+2461 aim fire
+2463 aim
+2476 aim fire
+2478 aim
+2491 aim fire
+2493 aim
+2506 aim fire
+2508 aim
+2521 aim fire
+2523 aim
+2536 aim fire
+2538 aim
+2551 aim fire
+2553
+2554 up run
+2591 up run left
+2592 up run
+2606 up
+2619 up left
+2621 left
+2633 up
+2641 action
+2643
+2673 action
+2675
+2705 action
+2707
+2737 action
+2739
+2769 action
+2771
+2801 action
+2803
+2833 action
+2835
+# 210: east, south past the lockers, through the arch and west past the dead officer to the magnum (8:85, slot 7)
+2905 left
+2918 up right
+2920 up
+2926 up right
+2927 up
+2963 right
+2975 up left
+2976 up
+3006 up right
+3007 up
+3040 left
+3053 up left
+3055 up
+3059 up left
+3060 up
+3069 right
+3084 up
+3125 up left
+3126 up
+3129 up right
+3134 up
+3145 up right
+3146 up
+3150 right
+3161 up
+3192 up right
+3193 up
+3222 up right
+3223 up
+3227 up right
+3228 left
+3230 action
+3232
+3290 action
+3292
+3362 action
+3364
+3411 action
+3413
+3441 action
+3443
+3471 action
+3473
+3501 action
+3503
