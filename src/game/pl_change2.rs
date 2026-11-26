@@ -98,7 +98,105 @@ pub const TOFU_ITEMS: [[u8; 3]; 11] = [
     [0x52, 0x01, 0],
 ];
 
+/// `Stage_init_item`'s rows for Extreme Battle (`0x5401B8`, by
+/// `WORD_0098EB20`): Leon's (0x2C), Claire's (0x37), Ada's (0x42) and
+/// Chris's (0x4D). The first slot is equipped; a third byte of 1 and 2
+/// marks the two slots of one large weapon.
+pub const EXBATTLE_ITEMS: [[[u8; 3]; 11]; 4] = [
+    [
+        [0x02, 0x12, 0],
+        [0x07, 0x05, 0],
+        [0x05, 0x08, 0],
+        [0x1E, 0xFF, 0],
+        [0x23, 0x01, 0],
+        [0x28, 0x01, 0],
+        [0; 3],
+        [0; 3],
+        [0; 3],
+        [0; 3],
+        [0x2F, 0x01, 0],
+    ],
+    [
+        [0x09, 0x06, 0],
+        [0x19, 0x06, 0],
+        [0x1A, 0x06, 0],
+        [0x1E, 0xFF, 0],
+        [0x23, 0x01, 0],
+        [0x28, 0x01, 0],
+        [0; 3],
+        [0; 3],
+        [0; 3],
+        [0; 3],
+        [0x30, 0x01, 0],
+    ],
+    [
+        [0x0F, 0x64, 1],
+        [0x0F, 0x64, 2],
+        [0x0D, 0x06, 0],
+        [0x1E, 0xFF, 0],
+        [0x0C, 0x12, 0],
+        [0x2E, 0x01, 0],
+        [0; 3],
+        [0; 3],
+        [0; 3],
+        [0; 3],
+        [0x57, 0x01, 0],
+    ],
+    [
+        [0x11, 0x05, 1],
+        [0x11, 0x05, 2],
+        [0x08, 0x07, 0],
+        [0x1E, 0xFF, 0],
+        [0x13, 0x0F, 0],
+        [0x23, 0x01, 0],
+        [0; 3],
+        [0; 3],
+        [0; 3],
+        [0; 3],
+        [0x2F, 0x01, 0],
+    ],
+];
+
+/// Extreme Battle's characters by `0x540780[Id]` (`WORD_0098EB20`): Leon,
+/// Claire, Ada and Chris.
+pub fn exbattle_character(id: u8) -> u16 {
+    match id {
+        0xE => 2,
+        0xB => 3,
+        id => u16::from(id & 1),
+    }
+}
+
 impl GameState {
+    /// The start `Title_game_init`'s Extreme Battle branch (`0x506750`,
+    /// `fg_system`'s `0x1000000`) and `Stage_init_item` give player `id`
+    /// (0 Leon, 1 Claire, 0xE Ada, 0xB Chris): `pPl.Id`, its row of
+    /// [`EXBATTLE_ITEMS`] with the first slot equipped (the third for Ada
+    /// and Chris, whose first two are one large weapon), the ink ribbons
+    /// by `level` (5, 3 or 1), eight slots and `Player_set`'s `Max_life`,
+    /// which is its life.
+    pub fn set_re2_exbattle_start(&mut self, id: u8, level: u8) {
+        let character = exbattle_character(id);
+        let mut table = EXBATTLE_ITEMS[usize::from(character)];
+        table[3][1] = match level {
+            2 => 3,
+            3 => 1,
+            _ => 5,
+        };
+        self.set_re2_player_id(id);
+        self.set_re2_item_work(&table);
+        self.re2.personal_item = [table[10][0], table[10][1]];
+        self.re2.inventory_size = 8;
+        let slot = if character > 1 { 2 } else { 0 };
+        self.set_equipped(Some(table[slot][0]));
+        self.equipped_slot = Some(slot);
+        self.max_health = max_life(id);
+        self.entities[0].health = self.max_health;
+        self.set_health_copy(self.max_health);
+        // And a knife in the item box's third slot, whoever the character.
+        self.re2.item_box[2] = [0x01, 0x01, 0];
+    }
+
     /// The start `Title_game_init`'s extras branch (`0x506750`, `fg_system`'s
     /// 8) and `Stage_init_item` give player `id`, [`HUNK`] or [`TOFU`]:
     /// `pPl.Id`, the row's items with the first one equipped (`St+8` slot
@@ -326,6 +424,41 @@ pub fn change_player(game: &mut GameState, id: u8) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn extreme_battles_start_gives_the_characters_row_and_ribbons_by_level() {
+        let mut game = GameState {
+            is_re2_room: true,
+            ..GameState::default()
+        };
+        game.set_re2_exbattle_start(0, 2);
+        let items: Vec<_> = game
+            .inventory
+            .iter()
+            .map(|item| (item.id, item.quantity))
+            .collect();
+        assert_eq!(
+            items[..6],
+            [(2, 18), (7, 5), (5, 8), (0x1E, 3), (0x23, 1), (0x28, 1)]
+        );
+        assert_eq!(game.re2.personal_item, [0x2F, 1]);
+        assert_eq!(game.equipped_slot, Some(0));
+        assert_eq!(game.re2.pl_id, 0);
+        for (level, ribbons) in [(1, 5), (2, 3), (3, 1)] {
+            game.set_re2_exbattle_start(1, level);
+            assert_eq!(game.inventory[3].quantity, ribbons, "level {level}");
+        }
+        // Ada and Chris hold the third slot: their first two are one gun.
+        game.set_re2_exbattle_start(0xB, 1);
+        assert_eq!(game.equipped_slot, Some(2));
+        assert_eq!(game.inventory[2].id, 0x08);
+        assert_eq!(game.re2.personal_item, [0x2F, 1]);
+        assert_eq!(game.max_health, 200);
+        assert_eq!(exbattle_character(0xE), 2);
+        assert_eq!(exbattle_character(0xB), 3);
+        assert_eq!(exbattle_character(1), 1);
+        assert_eq!(game.re2.item_box[2], [0x01, 0x01, 0], "the knife");
+    }
 
     fn leon() -> GameState {
         let mut game = GameState {

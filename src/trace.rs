@@ -271,7 +271,7 @@ impl TraceWriter {
             // that share a number with an RE1 second-visit room (119, 200)
             // keep their stage.
             if tick.re2_player.is_some() {
-                usize::from(tick.room.stage)
+                usize::from(tick.room.re2_stage())
             } else {
                 tick.room.table_row() + 1
             },

@@ -589,6 +589,10 @@ pub fn character_max_health(character: u8) -> i16 {
 
 /// RE 2's maximum health, for both characters: the cap a heal stops at
 /// (measured: a herb at 190 gives 200 for Leon and Claire).
+/// What Extreme Battle (`fg_system`'s `0x1000000`) adds to a room's stage
+/// for its file (`DWORD_0098E798`'s 9): stage 6's room 0x12 is `F12`. The
+/// reverse is [`RoomId::re2_stage`].
+pub const RE2_EXTREME_STAGES: u8 = 9;
 pub const RE2_MAX_HEALTH: i16 = 200;
 
 /// A decoded door lock byte ([`GameState::door_lock`]).
@@ -9527,11 +9531,22 @@ impl GameState {
     ///
     /// Camera-only doors (record byte `+0x0B` bit `0x80`) keep the current room
     /// as the target: the transition re-aims the camera without a reload.
+    /// The file stage of a door's `scd_var_stage`: `Set_door` keeps it as
+    /// the script names it, and under Extreme Battle `Set_room` adds
+    /// `DWORD_0098E798`'s 9 for the letter stage.
+    fn re2_door_stage(&self, stage: u8) -> u8 {
+        if self.re2.flag(0, crate::scd2::host::FG_SYSTEM_EXTREME) {
+            stage + RE2_EXTREME_STAGES
+        } else {
+            stage
+        }
+    }
+
     fn begin_transition(&mut self, door: &Door) -> bool {
         let camera_only = door.camera & 0x80 != 0;
         let target = if let Some(re2) = door.re2 {
             RoomId {
-                stage: re2.stage,
+                stage: self.re2_door_stage(re2.stage),
                 room: re2.room,
                 ..self.id
             }
@@ -10416,7 +10431,7 @@ impl GameState {
         // pass's `Sce_work_clr` sets back to 0xFFFF.
         self.re2.vars[crate::scd2::host::VAR_TAKEN_ITEM] = u16::from(item);
         self.re2
-            .set_flag(crate::scd2::host::item_bank(self.id.stage), flag, 1);
+            .set_flag(crate::scd2::host::item_bank(self.id.re2_stage()), flag, 1);
         // `St_get_item`: its object goes, and the twinkle with it.
         let model = usize::from(action.params[3]);
         if model < 0x20
@@ -10447,7 +10462,7 @@ impl GameState {
         let [_, _, flag, model, flags, ..] = action.params;
         self.re2.vars[crate::scd2::host::VAR_TAKEN_ITEM] = u16::from(action.params[0]);
         self.re2
-            .set_flag(crate::scd2::host::item_bank(self.id.stage), flag, 1);
+            .set_flag(crate::scd2::host::item_bank(self.id.re2_stage()), flag, 1);
         if model != 0xFF
             && let Some(record) = self.objects.record_mut(usize::from(model))
         {
@@ -12394,6 +12409,20 @@ fn operand_i16(operands: &[Operand], index: usize) -> i16 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn extreme_battles_doors_lead_to_the_letter_stages() {
+        let mut game = GameState::default();
+        assert_eq!(game.re2_door_stage(6), 6);
+        game.re2
+            .set_flag(0, crate::scd2::host::FG_SYSTEM_EXTREME, 1);
+        let to = RoomId {
+            stage: game.re2_door_stage(6),
+            room: 0x14,
+            ..game.id
+        };
+        assert_eq!((to.stage_char(), to.re2_stage()), ('f', 6));
+    }
     use crate::scd::ir::{Decoded, Insn, Scripts, Stream, StreamKind};
     use crate::scd::opcode::{actor_op, command_op, event_control_op, event_top_op, tween_op};
     use crate::scd::vm::EventVm;

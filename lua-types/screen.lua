@@ -493,6 +493,17 @@ function ScreenApi:bank_sound(bank, slot) end
 ---@param slot integer The core-bank slot.
 function ScreenApi:core_sound(slot) end
 
+---RE 2's `rsin`: the sine of `angle` (0x1000 a turn) times 4096, from the
+---original's table.
+---@param angle integer
+---@return integer
+function ScreenApi:rsin(angle) end
+
+---RE 2's `rcos`: the cosine of `angle` (0x1000 a turn) times 4096.
+---@param angle integer
+---@return integer
+function ScreenApi:rcos(angle) end
+
 ---Load RE 2's core bank `id` for the later `core_sound` cues, the
 ---original's `Snd_load_core(id)` (the 4th Survivor's title loads 0x12,
 ---To-fu's 0x13, and the title's own is 0x10).

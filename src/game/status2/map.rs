@@ -562,7 +562,7 @@ impl GameState {
     /// first script tick, so the bits are set a little earlier here; nothing
     /// in `Em_init_move` reads either bank.
     pub fn re2_room_set(&mut self) {
-        let stage = self.id.stage.saturating_sub(1);
+        let stage = self.id.re2_stage().saturating_sub(1);
         let room = self.id.room;
         let context = self.re2_map_context();
         let floor = floor_of(stage, room, &context, |bank, index| {

@@ -1,0 +1,34 @@
+# EX.BATTLE's START on level 3 (right three times on the level page), the hand-off, then left to Ada (1250) and the confirm on her (1320); then the game in room 612 and Extreme Battle's opening, with no key (oracle/re2.md, "The title").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+420 down
+423
+450 confirm
+453
+640 down
+643
+680 confirm
+683
+740 right
+743
+770 right
+773
+800 right
+803
+860 down
+863
+890 up
+893
+920 confirm
+923
+1250 left
+1253
+1320 confirm
+1323

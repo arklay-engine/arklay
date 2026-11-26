@@ -631,6 +631,21 @@ pub const FG_STATUS_EXTRA: u8 = 6;
 /// `fg_status`'s `0x8000000`: an extra mode's script map closed. The map
 /// page's cancel (`0x4FBE50`) raises it under [`FG_SYSTEM_EXTRA`].
 pub const FG_STATUS_EXTRA_MAP: u8 = 4;
+/// `fg_system`'s `0x1000000`: Extreme Battle's game (`FUN_004B73C0` raises
+/// it on SPECIAL's EX.BATTLE).
+pub const FG_SYSTEM_EXTREME: u8 = 7;
+/// `fg_status`'s `0x4000` (flag 1:17), which Extreme Battle's confirm
+/// raises with [`FG_SYSTEM_EXTREME`].
+pub const FG_STATUS_EXTREME: u8 = 17;
+/// `scd_variables[30]` and `[31]` (`WORD_0098EB20`, `WORD_0098EB22`):
+/// Extreme Battle's character (0 Leon, 1 Claire, 2 Ada, 3 Chris) and its
+/// level, 1 to 3.
+pub const VAR_EX_CHARACTER: usize = 30;
+pub const VAR_EX_LEVEL: usize = 31;
+/// The banks `FUN_004E3A20`'s placement is kept in: bank 8's last byte
+/// (`DWORD_0098EBD0`) and its complement in bank 36's (`BYTE_0098EE9C`).
+pub const EX_PLACEMENT_BANK: u8 = 8;
+pub const EX_PLACEMENT_NOT_BANK: u8 = 36;
 /// `fg_system`'s `0x8000`, which `Init_movie_work` clears. No reader is known.
 pub const FG_SYSTEM_8000: u8 = 16;
 /// `fg_status`'s `0x4000000`: EASY's.
@@ -1219,8 +1234,15 @@ impl Re2State {
         self.random = RANDOM_START;
     }
 
-    /// `Sce_rnd_set`. Extreme Battle's `Rnd` branch isn't ported.
+    /// `Sce_rnd_set`: `Random_base`'s step, or under Extreme Battle
+    /// (`fg_system`'s `0x1000000`) a draw of `Rnd`, which leaves
+    /// `Random_base` as it is.
     pub fn sce_rnd_set(&mut self) {
+        if self.flag(0, FG_SYSTEM_EXTREME) {
+            let draw = self.rnd.draw();
+            self.vars[usize::from(crate::scd2::vm::RANDOM_VAR)] = u16::from(draw);
+            return;
+        }
         let base = self.random;
         let twice = base.wrapping_mul(2);
         let sum = ((base & 0x7FFF_FFFF) >> 15).wrapping_add(base);
@@ -2104,7 +2126,7 @@ impl Re2State {
     /// `Set_door`'s `scd_var_last_rdt`, as it places the player: the room
     /// the door leaves, `room`, its 1-based stage times 0x100 plus its room.
     pub fn leave_room(&mut self, room: crate::state::RoomId) {
-        self.vars[VAR_LAST_RDT] = u16::from(room.stage) << 8 | u16::from(room.room);
+        self.vars[VAR_LAST_RDT] = u16::from(room.re2_stage()) << 8 | u16::from(room.room);
     }
 
     /// The room's script set-up (`0x4E3F12`, from the room load's
@@ -2590,7 +2612,7 @@ impl GameHost<'_> {
             at(rest + 3) as u8,
             at(rest + 4) as u8,
         );
-        let bank = item_bank(self.game.id.stage);
+        let bank = item_bank(self.game.id.re2_stage());
         let sce = if self.game.re2.flag(bank, flag) {
             SCE_AUTO
         } else {
@@ -2739,7 +2761,10 @@ impl GameHost<'_> {
         }
         // Someone already dead stays so.
         let dead = at(8) as u8;
-        let bank = self.game.re2.enemy_flag_bank(self.game.origin().stage);
+        let bank = self
+            .game
+            .re2
+            .enemy_flag_bank(self.game.origin().re2_stage());
         if dead != NO_ENEMY_FLAG && self.game.re2.flag(bank, dead) {
             return;
         }
@@ -3325,7 +3350,7 @@ impl Host for GameHost<'_> {
         match index {
             VAR_CUT => u16::from(self.game.re2.scd_var_cut()),
             // The scripts' stage and room are the origin's, as RE1's `B_STAGE`.
-            VAR_STAGE => u16::from(self.game.origin().stage.saturating_sub(1)),
+            VAR_STAGE => u16::from(self.game.origin().re2_stage().saturating_sub(1)),
             VAR_ROOM => u16::from(self.game.origin().room),
             _ => self.game.re2.vars[usize::from(index)],
         }
@@ -3341,7 +3366,7 @@ impl Host for GameHost<'_> {
 
     fn random(&mut self) -> u16 {
         self.game.re2.sce_rnd_set();
-        self.game.re2.random as u16
+        self.game.re2.vars[usize::from(crate::scd2::vm::RANDOM_VAR)]
     }
 
     fn take_events(&mut self) -> Vec<(u8, u8)> {
@@ -5544,6 +5569,18 @@ mod tests {
         let expected = ((((base >> 15) + base) ^ (base * 2)) & 0xFFFF) ^ (base * 2);
         assert_eq!(state.random, expected);
         assert_eq!(state.vars[29], expected as u16);
+    }
+
+    #[test]
+    fn extreme_battles_sce_rnd_set_draws_rnd_and_keeps_the_base() {
+        let mut state = Re2State::default();
+        state.set_flag(0, FG_SYSTEM_EXTREME, 1);
+        state.rnd = crate::zombie2::Rnd(0x6CA4);
+        state.sce_rnd_set();
+        // `special_ex_leon`'s `Game_loop` first tick: 27812 to 55677.
+        assert_eq!(state.rnd.0, 55677);
+        assert_eq!(state.vars[29], 125);
+        assert_eq!(state.random, 0x1382_01C3);
     }
 
     #[test]

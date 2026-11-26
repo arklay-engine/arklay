@@ -215,6 +215,13 @@ const RE2_TITLE_NEW_GAME_TICKS: u8 = 3;
 /// 304, of another stage than the title's, is played from the seventh tick
 /// after the hand-over (`special_4th_play`'s 1276, with `fg_stop` held).
 const RE2_TITLE_EXTRA_TICKS: u8 = RE2_TITLE_DEMO_TICKS;
+/// The same for Extreme Battle's game, whose session starts on
+/// `Title_game_init`'s steps 2 and 3, the tick after the character's choice
+/// ends: `Player_set` on the next, then `Set_room`'s wait for room F12's
+/// music, as a sound record has it, and `Game_loop`'s first tick 32 ticks
+/// after the choice's last (`special_ex_leon_play`'s 1375 to 1407, the
+/// same in all five records).
+const RE2_TITLE_EXBATTLE_TICKS: u8 = 30;
 /// The same for the attract demo, a tick under a load's, which starts the
 /// prologue's task first: room 10C's reel from the boot plays from the
 /// sixth tick (`title_demo_abort`'s 2119 to 2123), room 203's from the
@@ -3400,6 +3407,90 @@ impl GameSession {
         let mut session =
             Self::from_loaded(pack, loaded, game, player_state, save_dir, options, title)?;
         // `Cut_change(scd_var_cut)`, then `Cut_check`'s zones from there.
+        session.loaded.room.current_cut = cut;
+        session.game.set_camera_cut(cut);
+        apply_camera(
+            &mut session.loaded.room,
+            &mut session.game,
+            Some(session.player.pos),
+        );
+        Ok(session)
+    }
+
+    /// Extreme Battle's game, which `Title_game_init`'s branch (`0x506750`,
+    /// `fg_system`'s `0x1000000`) starts once the character's choice has
+    /// ended, with no prologue: `ex.player` in room F12 (`scd_var_stage` 5
+    /// and room 0x12, which `DWORD_0098E798`'s 9 takes to the letter
+    /// stage's file), cut 1, at -0x450A, 0, -0x1EF3 facing 0xF955, with
+    /// `INIT_TBL.DAT`'s row 5, `Stage_init_item`'s row for the character,
+    /// the character's index and the level in `scd_variables[30]` and
+    /// `[31]`, and `FUN_004E3A20`'s placement. `claire` is `fg_status`'s
+    /// top bit, which picks the room's disc.
+    fn new_re2_exbattle(
+        pack: &Pack,
+        ex: crate::ui::ExBattleChoice,
+        claire: bool,
+        save_dir: &Path,
+        options: player::Options,
+        title: bool,
+    ) -> Result<Box<Self>> {
+        use crate::scd2::host::{
+            EX_PLACEMENT_BANK, EX_PLACEMENT_NOT_BANK, FG_STATUS_EXTREME, FG_SYSTEM_EXTREME,
+            STATUS_BANK, VAR_EX_CHARACTER, VAR_EX_LEVEL,
+        };
+        let options = player::Options {
+            new_game: Default::default(),
+            ..options
+        };
+        let character = u8::from(claire);
+        let id = RoomId {
+            stage: RE2_EXBATTLE_STAGE,
+            room: RE2_EXBATTLE_ROOM,
+            player_flag: character,
+            mansion2: false,
+        };
+        let loaded = load_room(pack, id)?;
+        let mut game = new_game_state(pack, id, &loaded, options);
+        game.is_re2_room = true;
+        game.re2.save_place = 0;
+        if let Some(table) = pack
+            .read(crate::bgm2::INIT_TABLE_ENTRY)
+            .ok()
+            .and_then(|data| crate::bgm2::BgmTable::from_init_table(&data, RE2_EXBATTLE_INIT_ROW))
+        {
+            game.re2.bgm = table;
+        }
+        seed_new_game(pack, &mut game, character, true);
+        seed_re2_save_count(&mut game, true);
+        game.re2.set_flag(0, FG_SYSTEM_EXTREME, 1);
+        game.re2.set_flag(STATUS_BANK, FG_STATUS_EXTREME, 1);
+        game.set_re2_exbattle_start(ex.player, ex.level);
+        game.re2.vars[VAR_EX_CHARACTER] = game::pl_change2::exbattle_character(ex.player);
+        game.re2.vars[VAR_EX_LEVEL] = u16::from(ex.level);
+        // `FUN_004E3A20`: each byte the last of its bank's eight words.
+        let low = |word: u32, byte: u8| (word & !0xFF) | u32::from(byte);
+        let banks = &mut game.re2.banks;
+        let placement = usize::from(EX_PLACEMENT_BANK);
+        banks[placement][7] = low(banks[placement][7], ex.bits);
+        let not = usize::from(EX_PLACEMENT_NOT_BANK);
+        banks[not][7] = low(banks[not][7], !ex.bits);
+        // The branch leaves the stashed life (`WORD_0098e9b6`) as row 5
+        // has it, as the 4th Survivor's does.
+        game.re2.pl_stash.life = 0;
+        let mut player_state = player::spawn(id, &loaded.room);
+        player_state.pos = RE2_EXBATTLE_POS;
+        player_state.collision_mirror = [RE2_EXBATTLE_POS[0], RE2_EXBATTLE_POS[2]];
+        player_state.angle = RE2_EXBATTLE_ANGLE;
+        game.sync_entity_from_player(&player_state);
+        let cut = RE2_EXBATTLE_CUT;
+        if cut >= loaded.room.cuts.len() {
+            bail!(
+                "room {} has no cut {cut} to start Extreme Battle on",
+                id.code()
+            );
+        }
+        let mut session =
+            Self::from_loaded(pack, loaded, game, player_state, save_dir, options, title)?;
         session.loaded.room.current_cut = cut;
         session.game.set_camera_cut(cut);
         apply_camera(
@@ -11941,6 +12032,16 @@ const RE2_EXTRA_ANGLE: u16 = 0x800;
 /// `BYTE_00989e7e` to 4 under `fg_system`'s 8.
 const RE2_EXTRA_INIT_ROW: usize = 4;
 
+/// Where Extreme Battle's game starts (`Title_game_init`'s branch): room
+/// F12 (`scd_var_stage` 5, the letter stage `F` by `DWORD_0098E798`'s 9),
+/// on cut 1, facing 0xF955, with `INIT_TBL.DAT`'s row 5.
+const RE2_EXBATTLE_STAGE: u8 = 0xF;
+const RE2_EXBATTLE_ROOM: u8 = 0x12;
+const RE2_EXBATTLE_CUT: usize = 1;
+const RE2_EXBATTLE_POS: [i32; 3] = [-0x450A, 0, -0x1EF3];
+const RE2_EXBATTLE_ANGLE: u16 = 0x955;
+const RE2_EXBATTLE_INIT_ROW: usize = 5;
+
 /// Where a scenario A's player starts as `FUN_004b73c0` sets it for the
 /// next scenario's save, before room 100's push out of the wall.
 const RE2_SCENARIO_A_POS: [i32; 3] = [0x4972, 0, -0xC5C];
@@ -13721,7 +13822,16 @@ impl App {
             new_game: choice,
             ..self.player_options
         };
-        let session = if choice.extra_player != 0 {
+        let session = if let Some(ex) = choice.exbattle {
+            GameSession::new_re2_exbattle(
+                &self.pack,
+                ex,
+                character & 1 != 0,
+                &self.save_dir,
+                self.player_options,
+                title,
+            )?
+        } else if choice.extra_player != 0 {
             // SPECIAL's extra modes (`Title_game_init`'s extras branch).
             GameSession::new_re2_extra(
                 &self.pack,
@@ -14226,7 +14336,9 @@ impl App {
                     self.start_new_game(character, choice, true)?;
                     // RE 2's title has run its prologue, or an extra mode
                     // has none: the game starts as the original's does.
-                    self.start_from_re2_title(if choice.extra_player != 0 {
+                    self.start_from_re2_title(if choice.exbattle.is_some() {
+                        RE2_TITLE_EXBATTLE_TICKS
+                    } else if choice.extra_player != 0 {
                         RE2_TITLE_EXTRA_TICKS
                     } else {
                         RE2_TITLE_NEW_GAME_TICKS
@@ -15717,8 +15829,14 @@ fn screen_trace_line(app: &App, tick: u32, pad: u64, sounds: &[(u8, u8, u8, i32)
         } else {
             line.push_str(" gal=- galv=-");
         }
+        // Extreme Battle's character choice, as `scripts/oracle-re2.py`'s
+        // `exb` and `exbm` have it: the script writes the fields' values.
+        for (field, key) in [("exb", "exb_trace"), ("exbm", "exbm_trace")] {
+            let value = screen.state_str(key);
+            line.push_str(&format!(" {field}={}", value.as_deref().unwrap_or("-")));
+        }
     } else {
-        line.push_str(" ti=- gal=- galv=-");
+        line.push_str(" ti=- gal=- galv=- exb=- exbm=-");
     }
     // `sv`, as a session's trace has it (`re2_save_screen_trace`): no saves
     // made before play, and a loaded save's count once the screen has read
@@ -19033,7 +19151,7 @@ impl Re2Sounds {
             return;
         }
         self.loaded = Some(key);
-        let folder = format!("room/{}{:02x}{}", id.stage, id.room, scenario);
+        let folder = format!("room/{}{:02x}{}", id.stage_char(), id.room, scenario);
         let edh = pack
             .read(&format!("{folder}/{}", se2::ROOM_EDH_NAME))
             .ok()
@@ -19045,7 +19163,7 @@ impl Re2Sounds {
             door2::vab::Vab::parse(&vab).ok()
         });
         self.banks
-            .load_room(pack, id.stage.saturating_sub(1), id.room, edh);
+            .load_room(pack, id.re2_stage().saturating_sub(1), id.room, edh);
         self.banks.load_core(pack, player);
         // `Snd_load_arms`: bare hands use the first bank.
         self.banks.load_arms(pack, weapon.max(1));
@@ -21115,6 +21233,7 @@ fn re2_next_scenario_game(
         hard_mode: cleared.re2.hard_mode,
         censorship_off: cleared.re2.censorship_off,
         extra_player: 0,
+        exbattle: None,
     };
     let mut game = new_game_state(pack, id, &loaded, options);
     game.is_re2_room = loaded.re2_vm.is_some();
@@ -21454,7 +21573,7 @@ fn run_re2_init(
     // `Set_room` runs `Esp_init_R` and `Snd_bgm_set` and `Snd_bgm_play_ck` before the scripts.
     let origin = game.origin();
     let word = origin
-        .stage
+        .re2_stage()
         .checked_sub(1)
         .and_then(|stage| game.re2.bgm.get(stage, origin.room))
         .unwrap_or(crate::bgm2::RoomMusic::from_word(0xffff));
@@ -26747,6 +26866,7 @@ mod tests {
                 hard_mode: true,
                 censorship_off: true,
                 extra_player: 0,
+                exbattle: None,
             },
             ..player::Options::default()
         };
@@ -30342,6 +30462,10 @@ mod tests {
             (
                 "ui/gallery.lua",
                 include_str!("../games/re2/ui/gallery.lua"),
+            ),
+            (
+                "ui/exbattle.lua",
+                include_str!("../games/re2/ui/exbattle.lua"),
             ),
             ("ui/title.lua", include_str!("../games/re2/ui/title.lua")),
         ] {
@@ -43576,6 +43700,7 @@ off_0010:
                 hard_mode: true,
                 censorship_off: true,
                 extra_player: 0,
+                exbattle: None,
             },
             ..player::Options::default()
         };

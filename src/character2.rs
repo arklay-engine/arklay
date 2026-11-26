@@ -1065,7 +1065,7 @@ fn run_zombie(
     }
     let re2 = &mut game.re2;
     if std::mem::take(&mut zombie.died) && zombie.dead_flag != NO_ENEMY_FLAG {
-        let bank = re2.enemy_flag_bank(stage);
+        let bank = re2.enemy_flag_bank(origin.re2_stage());
         re2.set_flag(bank, zombie.dead_flag, 1);
     }
     // `Snd_se_enem`, always in 3D.

@@ -1477,11 +1477,36 @@ fn new_game_choice(choice: Option<&Table>) -> mlua::Result<super::NewGameChoice>
             )));
         }
     };
+    let exbattle = match choice.get::<Value>("exbattle")? {
+        Value::Nil => None,
+        Value::Integer(player @ (0 | 1 | 0xB | 0xE)) => {
+            let byte = |key: &str, range: std::ops::RangeInclusive<i64>| -> mlua::Result<u8> {
+                match choice.get::<Value>(key)? {
+                    Value::Integer(n) if range.contains(&n) => Ok(n as u8),
+                    other => Err(mlua::Error::RuntimeError(format!(
+                        "api:exit(\"new_game\"): `{key}` is {other:?}, not in {range:?}"
+                    ))),
+                }
+            };
+            Some(super::ExBattleChoice {
+                player: player as u8,
+                level: byte("exbattle_level", 1..=3)?,
+                levels: byte("exbattle_levels", 0..=255)?,
+                bits: byte("exbattle_bits", 0..=255)?,
+            })
+        }
+        other => {
+            return Err(mlua::Error::RuntimeError(format!(
+                "api:exit(\"new_game\"): `exbattle` is {other:?}, not 0 (Leon), 1 (Claire), 0xB (Chris) or 0xE (Ada)"
+            )));
+        }
+    };
     Ok(super::NewGameChoice {
         easy: set("easy")?,
         hard_mode: set("hard_mode")?,
         censorship_off: set("censorship_off")?,
         extra_player,
+        exbattle,
     })
 }
 

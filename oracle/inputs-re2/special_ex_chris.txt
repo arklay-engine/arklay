@@ -1,0 +1,36 @@
+# EX.BATTLE's START on level 2, the hand-off, then left to Ada (1250) and left again past her to Chris (1290), and the confirm on him (1350); then the game in room 612, a skip of Extreme Battle's opening (1600) and a walk forward (oracle/re2.md, "The title").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+420 down
+423
+450 confirm
+453
+640 down
+643
+680 confirm
+683
+740 right
+743
+860 down
+863
+890 up
+893
+920 confirm
+923
+1250 left
+1253
+1290 left
+1293
+1350 confirm
+1353
+1600 confirm
+1603
+1700 up
+1760

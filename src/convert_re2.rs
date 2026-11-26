@@ -27,6 +27,7 @@
 //! | `Common/Data/parts.tim`, `moji1.tim` | `ui/option/parts.tim`, `ui/option/moji1.tim` |
 //! | `Common/Data/spy_logo.tim`, `tofulogo.tim` | `ui/title/spy_logo.tim`, `ui/title/tofulogo.tim` |
 //! | `Common/Data/EXTITLE.adt`, `EXTITLE1.adt` (an ADT stream holding a TIM) | `ui/title/extitle.bmp`, `ui/title/extitle1.tim` |
+//! | `Common/Data/SELECT_B.adt`, `Select_i.tim`, `SELECT_W.TIM` | `ui/exbattle/select_b.bmp`, `ui/exbattle/select_i.tim`, `ui/exbattle/select_w.tim` |
 //! | `Gallery/TITLE<n>.dat`, `Moji.dat` (each a TIM) | `ui/gallery/title<n>.tim`, `ui/gallery/moji.tim` |
 //! | `Gallery/ROUGH<nn>.dat`, `ILLUST<nn>.dat`, `LEFT01.dat`, `LEFT02.dat`, `GNUM2.dat`, `movie64.dat` (each a TIM) | `ui/gallery/<stem>.tim` |
 //! | `Common/Data/font0.tim` | `font/00.bmp`, `font/00.xml` (moved onto the Western cells, `convert_re2/font.rs`) |
@@ -799,7 +800,7 @@ fn copy_text(
 /// own code (the font's widths and colours, the message codes). A change to
 /// what [`packed_source_hash`] covers needs no bump. It carries on from the
 /// revision the two converters shared.
-pub const CONVERT_VERSION: u32 = 31;
+pub const CONVERT_VERSION: u32 = 32;
 
 /// The checked-in scripts the pack takes as they are: each entry and its
 /// source.
@@ -841,6 +842,10 @@ const SCRIPTS: &[(&str, &str)] = &[
     (
         "ui/gallery.lua",
         include_str!("../games/re2/ui/gallery.lua"),
+    ),
+    (
+        "ui/exbattle.lua",
+        include_str!("../games/re2/ui/exbattle.lua"),
     ),
     (
         "lib/zombie.lua",
@@ -2095,6 +2100,36 @@ fn copy_title_art(
         tally.add(writer, "ui", "ui/title/extitle1.tim", decoded)?;
     } else if layout.common.is_some() {
         warnings.push("no Common/Data/EXTITLE1.adt; EX.BATTLE's title has no logo".into());
+    }
+    // Extreme Battle's character choice (`ExBattle_load`): its background,
+    // and its two sheets, the start items' pictures (texture 0x19) and the
+    // frame, the arrows and the font (0x18).
+    if let Some(path) = find("SELECT_B") {
+        let decoded = adt::decode(&read(path)?).with_context(|| format!("{}", path.display()))?;
+        let image = adt::frame_image(&decoded).with_context(|| format!("{}", path.display()))?;
+        tally.add(
+            writer,
+            "ui",
+            "ui/exbattle/select_b.bmp",
+            bmp::encode_to_vec(&image)?,
+        )?;
+    } else if layout.common.is_some() {
+        warnings
+            .push("no Common/Data/SELECT_B.adt; Extreme Battle's choice has no background".into());
+    }
+    for (stem, entry) in [("SELECT_I", "select_i"), ("SELECT_W", "select_w")] {
+        if let Some(path) = find(stem) {
+            tally.add(
+                writer,
+                "ui",
+                &format!("ui/exbattle/{entry}.tim"),
+                read(path)?,
+            )?;
+        } else if layout.common.is_some() {
+            warnings.push(format!(
+                "no Common/Data/{entry}.tim; Extreme Battle's choice has no sheet"
+            ));
+        }
     }
     let bytes = match archived(TITLE_MOJI_7Z, warnings) {
         Some(bytes) => bytes,

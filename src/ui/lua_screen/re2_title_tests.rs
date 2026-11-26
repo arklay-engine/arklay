@@ -36,6 +36,10 @@ fn build_pack(prologue_art: bool, gallery_art: GalleryArt) -> Pack {
             include_str!("../../../games/re2/ui/gallery.lua"),
         ),
         (
+            "ui/exbattle.lua",
+            include_str!("../../../games/re2/ui/exbattle.lua"),
+        ),
+        (
             "ui/title.lua",
             include_str!("../../../games/re2/ui/title.lua"),
         ),
@@ -741,6 +745,7 @@ fn arrange_mode_on_hard_hands_off_its_choice() {
                 hard_mode: true,
                 censorship_off: true,
                 extra_player: 0,
+                exbattle: None,
             },
         })
     );
@@ -921,6 +926,7 @@ fn extra_game(player: u8) -> ScreenAction {
         character: 0,
         choice: crate::ui::NewGameChoice {
             extra_player: player,
+            exbattle: None,
             ..Default::default()
         },
     }
@@ -1179,17 +1185,125 @@ fn extreme_battles_level_page_chooses_a_level_and_starts() {
     run(&mut screen, &cx, UiInput::default(), 1);
     assert_eq!((screen.value("ti_mv"), screen.value("ti_disp")), (2, 3));
     assert_eq!(screen.value("ti_fgsys") & 0x0102_0000, 0x0102_0000);
-    // The character's choice and the game aren't ported: the title starts
-    // again from black.
+    // `Title_game_init` from the next tick: the character's choice, whose
+    // confirm on Leon starts Extreme Battle's game on level 2.
+    let (choice, _) = choose_extreme(&mut screen, &cx, &[]);
+    assert_eq!(
+        choice.map(|choice| (choice.player, choice.level, choice.levels)),
+        Some((0, 2, 2))
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// From the tick after Extreme Battle's hand-off: `Title_game_init`'s
+/// first tick, then the character's choice, with `moves` pressed for 3
+/// ticks each once the choice reads its keys, a confirm, and the ticks to
+/// the new game the title hands over, with the choice's trace on the tick
+/// of the first move.
+fn choose_extreme(
+    screen: &mut LuaScreen,
+    cx: &UiContext<'_>,
+    moves: &[&str],
+) -> (Option<crate::ui::ExBattleChoice>, Option<String>) {
+    let exb = |screen: &LuaScreen| screen.state_str("exb_trace");
+    // `Title_main`'s step 3, then `Title_game_init`'s default step and step
+    // 1, which starts the choice: its init on the same tick.
+    assert_eq!(done(screen.update(cx, UiInput::default())), None);
+    assert_eq!(exb(screen), None);
     cx.cues.borrow_mut().clear();
-    assert_eq!(done(screen.update(&cx, UiInput::default())), None);
-    assert_eq!(screen.value("ti_mv"), 1);
-    assert_eq!(*cx.cues.borrow(), [UiCue::CoreBank(0x10)]);
-    assert_eq!(screen.value("ti_fgsys") & 0x0100_0000, 0);
-    assert_eq!(screen.value("ti_fgstatus"), 0);
-    run(&mut screen, &cx, UiInput::default(), 1);
-    assert_eq!((screen.value("ti_mv"), screen.value("ti_disp")), (2, 1));
-    assert_eq!(screen.value("ti_kido"), 0x7C00);
+    assert_eq!(done(screen.update(cx, UiInput::default())), None);
+    // Core bank 0x15 and the music table's stub, main 0x39.
+    assert_eq!(
+        *cx.cues.borrow(),
+        [UiCue::CoreBank(0x15), UiCue::Music(0x39)]
+    );
+    assert_eq!((screen.value("ti_init"), screen.value("ti_sub")), (0, 2));
+    assert_eq!(
+        exb(screen).as_deref(),
+        Some(
+            "1,0,1,1,1,8,0,0,0/0,0,1,50/2048,2048,0,-2250,0,0,0;1024,1024,2250,0,3584,3584,0;\
+             0,0,0,2250,3904,3904,0;3072,3072,-2250,0,2048,2048,0"
+        ),
+        "the choice as `special_ex_leon` has it on its first tick"
+    );
+    assert_eq!(screen.value("ti_fade_level"), 0x7400 - 0xC00);
+    // The fade in is done on the tenth tick, and the keys are read from the
+    // eleventh.
+    run(screen, cx, UiInput::default(), 9);
+    assert!(exb(screen).unwrap().starts_with("1,0,1,"));
+    run(screen, cx, UiInput::default(), 1);
+    assert!(exb(screen).unwrap().starts_with("1,0,2,"));
+    let mut first = None;
+    for direction in moves {
+        cx.cues.borrow_mut().clear();
+        run(screen, cx, press(direction), 1);
+        assert!(cx.cues.borrow().contains(&UiCue::Core(4)), "{direction}");
+        first.get_or_insert_with(|| exb(screen).unwrap());
+        // The four turn for 16 ticks, and a key in that time does nothing.
+        run(screen, cx, press(direction), 2);
+        run(screen, cx, UiInput::default(), 15);
+    }
+    cx.cues.borrow_mut().clear();
+    run(screen, cx, press("confirm"), 1);
+    assert!(cx.cues.borrow().contains(&UiCue::Core(6)));
+    for _ in 0..100 {
+        if let Some(ScreenAction::NewGame { choice, .. }) =
+            done(screen.update(cx, UiInput::default()))
+        {
+            return (choice.exbattle, first);
+        }
+    }
+    (None, first)
+}
+
+#[test]
+fn extreme_battles_choice_turns_the_four_and_wraps_past_ada_to_chris() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-ex-choice-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let mut screen = extreme_rows(&cx, &dir);
+    run(&mut screen, &cx, press("down"), 5);
+    run(&mut screen, &cx, press("confirm"), 1);
+    run(&mut screen, &cx, UiInput::default(), 8);
+    // Level 3.
+    run(&mut screen, &cx, press("right"), 3);
+    run(&mut screen, &cx, press("right"), 3);
+    run(&mut screen, &cx, press("confirm"), 1);
+    run(&mut screen, &cx, UiInput::default(), 243);
+    assert_eq!((screen.value("ti_mv"), screen.value("ti_disp")), (2, 3));
+    let (choice, first) = choose_extreme(&mut screen, &cx, &["left", "left"]);
+    // The first move's tick, from Leon to Ada: every player 0x40 round the
+    // circle at radius 0x8CA and a sixteenth of its turn toward its target.
+    let first = first.unwrap();
+    // `special_ex_ada`'s 1250 has them so.
+    let players = first.rsplit('/').next().unwrap();
+    assert_eq!(
+        players,
+        "1984,1024,220,-2240,4064,3584,-32;960,0,2239,220,3604,3904,20;\
+         4032,3072,-221,2239,3788,2048,-116;3008,2048,-2240,-221,1920,0,-128"
+    );
+    assert!(first.starts_with("1,0,2,1,0,0,0,1,0/0,0,1,"), "{first}");
+    assert_eq!(
+        choice.map(|choice| (choice.player, choice.level)),
+        Some((0xB, 3)),
+        "left from Ada wraps round to Chris"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn extreme_battles_placement_draws_four_of_eight_from_rnd() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-ex-rnd-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let screen = open_special(&cx, &dir, 15);
+    // `special_ex`'s: `Rnd` at 0x6CA4 gives 0x27 and leaves 9491 (0x2513).
+    assert_eq!(
+        screen.test_eval::<(i64, i64)>(
+            "local ExBattle = require('ui/exbattle') return ExBattle.placement(0x6CA4)"
+        ),
+        (0x27, 0x2513)
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 

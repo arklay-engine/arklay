@@ -161,6 +161,24 @@ pub struct NewGameChoice {
     /// SPECIAL's extra mode, by its player: 0xC the 4th Survivor's HUNK,
     /// 0xD To-fu's TOFU, 0 for a game of the scenario's character.
     pub extra_player: u8,
+    /// Extreme Battle's game, as its character's choice left it.
+    pub exbattle: Option<ExBattleChoice>,
+}
+
+/// What Extreme Battle's title and its character's choice (`ExBattle`)
+/// hand `Title_game_init`'s new game.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExBattleChoice {
+    /// The player (`0x989EF8`): 0 Leon, 1 Claire, 0xE Ada or 0xB Chris.
+    pub player: u8,
+    /// The level, 1 to 3 (`WORD_0098EB22`, the level page's `0x691EF3` + 1).
+    pub level: u8,
+    /// The levels open (`0x989E91`, which `WORD_0098EE7E` takes).
+    pub levels: u8,
+    /// `FUN_004E3A20`'s placement: which four of eight places (`DWORD_0098EBD0`'s
+    /// low byte, `BYTE_0098EE9C` its complement), drawn from `Rnd` as the
+    /// title left it.
+    pub bits: u8,
 }
 
 /// A completed screen interaction, interpreted by the app's mode machine.
