@@ -1424,14 +1424,15 @@ impl Effects {
                 this.velocity[0] = this.velocity[0].wrapping_neg();
                 self.bounce(index);
             }
-            // `Esp_08`: the next block, scattered. `+0x44` and `+0x46` aren't
-            // used by anything drawn, but drawing them moves the stream.
+            // `Esp_08`: the next block, scattered, and turned (`+0x44` and
+            // `+0x46`, a 3D slot's turn) from the new block's `+0x12` and
+            // `+0x14`.
             8 => {
                 self.next_block(index, false);
                 let wider = u16::from(self.rnd() % 5) << 9;
                 let on = self.rnd() & 1;
-                self.rnd();
-                self.rnd();
+                let turn_x = u16::from(self.rnd()) % 5 * 3;
+                let turn_y = u16::from(self.rnd()) % 5 * 3;
                 let this = self.slots[index];
                 let frame = this.frame.wrapping_add(on);
                 let delay = self
@@ -1452,6 +1453,8 @@ impl Effects {
                 for (point, by) in point.iter_mut().zip(by) {
                     *point = point.wrapping_add(i16::from(by as i8));
                 }
+                this.rotation[0] = turn_x.wrapping_add(this.next_flags) as i16;
+                this.rotation[1] = turn_y.wrapping_add(this.next_tpage) as i16;
             }
             // `Esp_09`: wider as it falls, gone on touching the ground.
             9 => {
@@ -3412,6 +3415,11 @@ pub(crate) mod tests {
         effects.tick(&mut Default::default(), None);
         effects.tick(&mut Default::default(), None);
         let scattered = [0x4e5 + 100, 0x852 - 58, -20];
+        // The default `Rnd`'s third and fourth draws, `% 5 * 3`, on the new
+        // block's `+0x12` and `+0x14` (both 0 here).
+        let mut rnd = crate::zombie2::Rnd::default();
+        let draws: Vec<i16> = (0..4).map(|_| i16::from(rnd.draw()) % 5 * 3).collect();
+        assert_eq!(effects.slots[flash].rotation[..2], draws[2..]);
         assert_eq!(effects.slots[flash].local, scattered);
         assert_eq!(effects.slots[flash].pos, apply_matrix(&gun, scattered));
         // On the world's matrix, the point is the world's.
