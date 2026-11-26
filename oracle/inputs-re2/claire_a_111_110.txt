@@ -1,0 +1,260 @@
+# claire_a_111_110: Claire A from 111's clock gallery with the Blue Stone (#896): down the stairs, door 0 into 117, door
+# 1 back to 112's balcony, west onto the weak floor (area 9), which drops her into the shelves' section, the shelves'
+# power switch (area 8), the two south shelves slid one place north from their ends' switches, the Serpent Stone (8:21)
+# from the case that opens (area 7), and door 0 into 110's hand back
+354 left
+370 left up run
+373 left
+375 left up run
+377 left
+379 left up run
+381 left
+383 left up run
+387 up run
+398 right up run
+399 up run
+405 left up run
+406 up run
+411 left
+413 left up run
+427 up run
+439 left up run
+440 up run
+448 right up run
+449 up run
+456 left up run
+457 up run
+463 left up run
+481 up run
+496 left up
+509 left
+514 left up
+515 left
+517 up action
+591 left
+608 left up run
+625 up run
+626 left up run
+627 up run
+634 up
+654 right up
+655 up
+672 right
+678
+684 action
+685
+721 up
+1037 left
+1040 left up run
+1057 up run
+1058 right up run
+1063 up run
+1074 right up run
+1075 up run
+1088 left up run
+1089 up run
+1093 right up run
+1094 up run
+1098 left up run
+1099 up run
+1122 left up run
+1123 up run
+1125 left up
+1127 up
+1162 left up
+1163 up
+1179 right up
+1180 left
+1192
+1198 action
+1199
+1235 up
+1551 right up run
+1552 up run
+1606 right up run
+1607 up run
+1616 left up run
+1617 up run
+1623 right up run
+1624 up run
+1760 right up run
+1761
+1862 up
+1863 left up run
+1880 right up
+1881 right
+1883 right up
+1907 right
+1910 right up
+1911 right
+1916 right up
+1917 left
+1929
+1933 action
+1934
+1995 action
+1996
+2057 action
+2058
+2129 left
+2140 left up run
+2143 left
+2145 left up run
+2147 left
+2149 left up run
+2151 left
+2153 left up run
+2155 left
+2158 left up run
+2159 left
+2161 left up run
+2162 left
+2165 left up run
+2166 right up run
+2172 up run
+2182 left up run
+2183 up run
+2191 left up run
+2192 up run
+2196 right up run
+2197 up run
+2200 right up run
+2204 up run
+2205 right up run
+2211 up run
+2212 right up run
+2214 up run
+2215 right up run
+2216 up run
+2229 left up run
+2230 right up run
+2232 up run
+2239 right up run
+2240 up run
+2243 right
+2249 right up
+2273 up
+2278 right up
+2279 up
+2281 left
+2286
+2290 action
+2291
+2352 action
+2353
+2414 right
+2418
+2434 action
+2435
+2546 left
+2551 left up run
+2555 left
+2557 left up run
+2559 left
+2561 left up run
+2563 left
+2565 left up run
+2566 left
+2568 left up run
+2569 left
+2572 left up run
+2573 right up run
+2575 up run
+2579 right
+2585 right up
+2587 right
+2589 right up
+2591 right
+2594 right up
+2595 right
+2597 right up
+2598 right
+2601 right up
+2602 right
+2605 right up
+2606 right
+2611 right up
+2612 left
+2619
+2623 action
+2624
+2685 action
+2686
+2747 right
+2751
+2767 action
+2768
+2879 right
+2885 right up run
+2899 up run
+2913 left up run
+2914 up run
+2922 right up run
+2923 up run
+2927 left up run
+2928 up run
+2931 left
+2937 left up run
+2951 up run
+2971 right
+2973 right up run
+2976 right
+2978 right up run
+2981 right
+2983 right up run
+2984 right
+2986 right up run
+2987 right
+2989 right up run
+2990 right
+2992 right up run
+3004 up run
+3012 left up run
+3013 left up
+3016 up
+3045 left
+3053
+3057 action
+3058
+3179 action
+3180
+3281 action
+3282
+3403 left
+3413 left up run
+3423 left
+3425 left up run
+3428 left
+3430 left up run
+3432 left
+3434 left up run
+3435 left
+3437 left up run
+3438 right up run
+3451 left up run
+3459 left
+3461 left up run
+3462 left
+3464 left up run
+3465 left
+3467 left up run
+3468 left
+3471 left up run
+3483 up run
+3487 right up run
+3488 up run
+3505 right up run
+3515 up run
+3520 left up run
+3530 up run
+3533 left up run
+3534 up run
+3536 up
+3607 left up
+3608 up
+3621 left up
+3622 right
+3624
+3630 action
+3631
+3973
