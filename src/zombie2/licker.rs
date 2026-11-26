@@ -72,6 +72,13 @@ pub struct Licker {
 }
 
 impl Licker {
+    /// `+0x1EE`, which widens the box a shot or a blast tests it with:
+    /// 700 from `Em22_Atd_set_1` on the floor, 0x1E4 from `Em22_Atd_set_2`
+    /// on a wall or the ceiling, the set that gives it a back box.
+    pub fn widen(&self) -> u16 {
+        if self.back.is_some() { 0x1E4 } else { 700 }
+    }
+
     /// A new work, with `Sca_old_x` and `Sca_old_z` as `Sce_em_set` leaves them.
     pub fn placed(sca_old: [i16; 2]) -> Self {
         Self {

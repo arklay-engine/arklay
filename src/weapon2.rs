@@ -37,8 +37,10 @@ pub struct Target {
     /// `Atd[0]`'s `Y`, where the spark shot's strike (`Esp_0E`) ends.
     pub at_y: i32,
     pub at_w: u16,
-    /// `Atd[1]`'s `At_w`.
-    pub at_w1: u16,
+    /// `+0x1EE`: how much wider (a quarter of it) a shot's first box
+    /// (`Weapon_at_ck`) and a blast's (`FUN_004d7e30`) are for this body.
+    /// Each kind's init sets it; a licker's box sets change it.
+    pub widen: u16,
     /// `Workm.t[1]` of its neck.
     pub neck_y: i32,
     /// `Atd[0]`'s `Ofs_y` (`+0x98`) and `At_h` (`+0x9e`), and `Cdir_y`, for
@@ -1306,7 +1308,7 @@ pub fn blast_ck(blast: &Blast, rect: &mut [i16; 4], targets: &mut [Target]) -> V
         {
             continue;
         }
-        let wide = (target.at_w1 as i16) >> 2;
+        let wide = (target.widen as i16) >> 2;
         rect[2] = rect[2].wrapping_add(wide);
         rect[3] = rect[3].wrapping_add(wide);
         if !attack_r_ck0(blast.at, blast.dir as u16, *rect, target.at) {
@@ -1738,7 +1740,7 @@ pub fn weapon_at_ck(shooter: &Shooter, targets: &[Target], sca: &[ScaRect]) -> O
                 let mut rect = *rect;
                 rect[3] += (target.at_w >> 2) as i16;
                 if index == 0 {
-                    rect[2] += (target.at_w1 >> 2) as i16;
+                    rect[2] += (target.widen >> 2) as i16;
                 }
                 if !attack_r_ck0(shooter.pos, shooter.angle, rect, target.at) {
                     continue;
@@ -2309,7 +2311,7 @@ mod tests {
     }
 
     #[test]
-    fn the_first_box_of_a_shot_is_wider_by_a_bodys_at_w1() {
+    fn the_first_box_of_a_shot_is_wider_by_a_bodys_widen() {
         let shooter = Shooter {
             pos: [0; 3],
             neck: [0, -2000, 0],
@@ -2317,13 +2319,13 @@ mod tests {
             weapon: 5,
             level: 0,
         };
-        let hits = |at_w1: u16| {
+        let hits = |widen: u16| {
             (0..8000)
                 .step_by(100)
                 .flat_map(|x| (-4000..4000).step_by(50).map(move |z| (x, z)))
                 .filter(|&(x, z)| {
                     let target = Target {
-                        at_w1,
+                        widen,
                         ..zombie(0, x, z)
                     };
                     weapon_at_ck(&shooter, &[target], &[]).is_some()
@@ -2394,7 +2396,7 @@ mod tests {
     #[test]
     fn a_body_just_hit_is_passed_by_and_the_box_stays_wide() {
         let mut targets = [Target {
-            at_w1: 400,
+            widen: 400,
             ..standing(1, -700, 0)
         }];
         let blast = Blast {
