@@ -463,7 +463,10 @@ pub struct Work {
     pub d_life_u: u8,
     pub spd: [i16; 3],
     pub(crate) spd_base: [i16; 3],
-    timer0: u16,
+    pub(crate) timer0: u16,
+    /// `Poison_timer` (`+0x214`): `Oma_Spl_updown_ck` keeps the facing
+    /// there for a scene's climb (`Aida_mv08`).
+    pub(crate) climb_dir: u16,
     /// `Sca_info`'s 1: whether `Sca_ck_em` pushed the player out of a wall
     /// on the last tick, which `pl_dm02`'s slide reads.
     pub sca_hit: bool,
@@ -1384,6 +1387,7 @@ impl Default for Work {
             spd: [0; 3],
             spd_base: [0; 3],
             timer0: 0,
+            climb_dir: 0,
             sca_hit: false,
             timer1: 0,
             timer2: 0,
@@ -2055,6 +2059,7 @@ pub fn place_neck(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
         rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
+        scene_climb: None,
     }
     .place_neck();
     work.neck.body = Some(pos);
@@ -2093,6 +2098,18 @@ pub fn player_move(
     tick: &Tick<'_>,
     rnd: &mut crate::zombie2::Rnd,
 ) -> Option<u8> {
+    player_move_with(work, player, tick, rnd, None)
+}
+
+/// [`player_move`] for a scene character whose `Spl_Scenario` states can
+/// climb and jump down (`scene_climb`).
+pub(crate) fn player_move_with<'a>(
+    work: &'a mut Work,
+    player: &'a mut PlayerState,
+    tick: &'a Tick<'_>,
+    rnd: &mut crate::zombie2::Rnd,
+    scene_climb: Option<&'a mut dyn SceneClimb>,
+) -> Option<u8> {
     work.key_trg = tick.key_trg;
     work.check = false;
     if tick.stopped {
@@ -2123,6 +2140,7 @@ pub fn player_move(
         rnd: *rnd,
         arrived: None,
         stairs: None,
+        scene_climb,
     };
     match mover.work.routine[0] {
         MODE_MOVE => mover.pl_move(),
@@ -2177,6 +2195,7 @@ fn latch_stopped(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
         rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
+        scene_climb: None,
     }
     .latch_parts();
 }
@@ -2244,6 +2263,7 @@ pub fn pose_init(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
         rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
+        scene_climb: None,
     }
     .latch_parts();
 }
@@ -2396,6 +2416,23 @@ pub(crate) struct Mover<'a, 'b> {
     arrived: Option<u8>,
     /// `Sca_info`'s stairs: those last tick's end left in front of the player.
     stairs: Option<&'b ScaRect>,
+    /// A scene character's own climb and jump down, for one that has them.
+    scene_climb: Option<&'a mut dyn SceneClimb>,
+}
+
+/// What a scene character's `Spl_Scenario` states reach of its own words
+/// beyond the player's (Sherry's and Ada's, `crate::partner2`):
+/// `Oma_Spl_updown_ck` in `Spl_sce04`'s and `Spl_sce05`'s walk, and the climb
+/// and jump down it sends the body to (`Routine_1` 0x16 to 0x19, `Aida_mv08`
+/// and `Aida_mv09`).
+pub(crate) trait SceneClimb {
+    /// `Oma_Spl_updown_ck`: whether it found a box to climb or an edge to
+    /// jump down from, and sent the body there.
+    fn updown_ck(&mut self, mover: &mut Mover<'_, '_>) -> bool;
+    /// `Aida_mv08`.
+    fn climb(&mut self, mover: &mut Mover<'_, '_>);
+    /// `Aida_mv09`.
+    fn jump_down(&mut self, mover: &mut Mover<'_, '_>);
 }
 
 /// `Pad_set`'s word, whose bits are each a column of the table it maps the
@@ -2442,6 +2479,7 @@ impl<'a, 'b> Mover<'a, 'b> {
             rnd: crate::zombie2::Rnd::default(),
             arrived: None,
             stairs: None,
+            scene_climb: None,
         }
     }
 }
@@ -2632,8 +2670,19 @@ impl Mover<'_, '_> {
         // player's own height there. `Sca_ck_hit` has just put every
         // object's box on its position (`Oma_set_ofs`).
         down[1] = landing;
-        let in_the_way = self
-            .tick
+        if self.object_in_the_way(down, y, radius) {
+            return false;
+        }
+        self.work.on_object = None;
+        self.work.routine = [MODE_MOVE, MOVE_CLIMB, CLIMB_IS_DROP, 0];
+        true
+    }
+
+    /// The drop's `Omd_in_check`s: an object in play (other than the one
+    /// the body stands on, `pOn_om`) at the landing `down` or at the body's
+    /// own height `y` there.
+    pub(crate) fn object_in_the_way(&self, down: [i32; 3], y: i32, radius: i32) -> bool {
+        self.tick
             .objects
             .iter()
             .enumerate()
@@ -2647,17 +2696,11 @@ impl Mover<'_, '_> {
                 obj.set_ofs();
                 crate::objects::omd_in_check(down, &obj, radius, true)
                     || crate::objects::omd_in_check([down[0], y, down[2]], &obj, radius, true)
-            });
-        if in_the_way {
-            return false;
-        }
-        self.work.on_object = None;
-        self.work.routine = [MODE_MOVE, MOVE_CLIMB, CLIMB_IS_DROP, 0];
-        true
+            })
     }
 
     /// `Sca_ck_hit` with the room objects' tops (`param_4` 0) at `pos`.
-    fn object_ground(&self, pos: [i32; 3], radius: i32) -> crate::sca::Ground {
+    pub(crate) fn object_ground(&self, pos: [i32; 3], radius: i32) -> crate::sca::Ground {
         crate::objects::sca_ck_hit(
             self.tick.room.sca.as_ref(),
             self.tick.objects,
@@ -2902,7 +2945,7 @@ impl Mover<'_, '_> {
 
     /// `Ground` as `Game_loop` left it after the last tick: `Sca_ck_hit`
     /// with no reach at the shadow's probe, `Kage_ofs` along the body.
-    fn drawn_ground(&self) -> i32 {
+    pub(crate) fn drawn_ground(&self) -> i32 {
         let (Some(_), Some(probe)) = (self.tick.room.sca.as_ref(), self.work.kage_probe) else {
             return self.ground();
         };
@@ -7521,6 +7564,7 @@ impl Mover<'_, '_> {
             0x0C | 0x0D => self.spl_sce_mv04(Bank::Weapon),
             0x15 => self.spl_sce15(),
             SCE_STAIRS => self.aida_mv07(),
+            0x16..=0x19 => self.scene_climb_step(),
             0x20 => self.spl_sce20(),
             _ => {}
         }
@@ -7620,7 +7664,15 @@ impl Mover<'_, '_> {
     /// clip, then go there on `clip`, and `Flg_on` at the end.
     fn spl_walk(&mut self, speed: i16, clip: u8) {
         if self.work.routine[2] == 2 {
+            // `Spl_sce04` and `05` look for a box or an edge first, and walk
+            // on this tick whatever it found; an arrival writes their own
+            // `Routine_1` back.
+            let walk = self.work.routine[1];
+            let found = matches!(walk, 4 | 5) && self.scene_updown_ck();
             if self.spl_sce_mv02() {
+                if found {
+                    self.work.routine[1] = walk;
+                }
                 self.arrive();
             }
             return;
@@ -7640,6 +7692,30 @@ impl Mover<'_, '_> {
                 self.work.hokan = FULL_BLEND;
             }
         }
+    }
+
+    /// `Oma_Spl_updown_ck` for a scene character that has it.
+    fn scene_updown_ck(&mut self) -> bool {
+        let Some(hook) = self.scene_climb.take() else {
+            return false;
+        };
+        let found = hook.updown_ck(self);
+        self.scene_climb = Some(hook);
+        found
+    }
+
+    /// `Routine_1` 0x16 and 0x18 (`Aida_mv08`), 0x17 and 0x19 (`Aida_mv09`),
+    /// for a scene character that has them: nothing for any other.
+    fn scene_climb_step(&mut self) {
+        let Some(hook) = self.scene_climb.take() else {
+            return;
+        };
+        if self.work.routine[1] & 1 == 0 {
+            hook.climb(self);
+        } else {
+            hook.jump_down(self);
+        }
+        self.scene_climb = Some(hook);
     }
 
     /// `Spl_sce07` and `08`: a scripted walk backwards. `Spl_sce08`'s run
@@ -8328,6 +8404,7 @@ pub fn spl_init(
         rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
+        scene_climb: None,
     };
     mover.joint_move_late(SPL_INIT_STEP);
     // `_Spl` turns the head after whichever routine ran.
@@ -8395,6 +8472,7 @@ pub(crate) fn part_world(
         rnd: crate::zombie2::Rnd::default(),
         arrived: None,
         stairs: None,
+        scene_climb: None,
     };
     mover.part_matrix(part)
 }
@@ -10025,6 +10103,7 @@ mod tests {
                 rnd: crate::zombie2::Rnd::default(),
                 arrived: None,
                 stairs: None,
+                scene_climb: None,
             };
             mover.joint_trans2(hidden, parts);
         }

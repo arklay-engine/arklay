@@ -238,8 +238,10 @@ const MV_FACE_POINT: u8 = 0xD;
 const MV_CLIMB: u8 = 8;
 const MV_JUMP_DOWN: u8 = 9;
 
-/// How a partner climbs and jumps by `Id`: Sherry's (0x45 and 0x4F) are her
-/// own, everyone else's (Ada's) the others'.
+/// How a body climbs and jumps by `Id` (`Oma_Spl_updown_ck`, `Aida_mv08`,
+/// `Aida_mv09`): Sherry's (0x45 and 0x4F) are her own, everyone else's
+/// (Ada's and the player's) the others', but the player's Sherry (0xF)
+/// reaches and checks as Sherry does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct ClimbBy {
     /// `Oma_Spl_updown_ck`'s reach to a box (`0x533368` by `Id`) and to an
@@ -247,8 +249,8 @@ struct ClimbBy {
     up: i32,
     down: i32,
     /// `Sca_ck_info`'s mask for the climb's and the edge's records: 0x800
-    /// for Sherry's ids, 0x1000 for the others. (`Oma_Spl_updown_ck` also
-    /// gives the player's Sherry, 0xF, 0x800, but she isn't a partner.)
+    /// for Sherry's ids and the player's Sherry (0xF), 0x1000 for the
+    /// others.
     mask: u16,
     /// `Aida_mv08`'s lift and the end of its hold, and `Aida_mv09`'s frame
     /// leaving the edge.
@@ -274,12 +276,18 @@ const OTHER_CLIMB: ClimbBy = ClimbBy {
     jump: 0xE,
 };
 
-/// [`ClimbBy`] for a partner's `Id`.
+/// [`ClimbBy`] for an `Id`: the player's Sherry (0xF) reaches and checks
+/// as Sherry does but climbs and jumps on the others' frames.
 fn climb_by(id: u8) -> ClimbBy {
-    if matches!(id, 0x45 | 0x4F) {
-        SHERRY_CLIMB
-    } else {
-        OTHER_CLIMB
+    match id {
+        0x45 | 0x4F => SHERRY_CLIMB,
+        0xF => ClimbBy {
+            up: SHERRY_CLIMB.up,
+            down: SHERRY_CLIMB.down,
+            mask: SHERRY_CLIMB.mask,
+            ..OTHER_CLIMB
+        },
+        _ => OTHER_CLIMB,
     }
 }
 /// `Routine_2`'s bit for a jump down: `Aida_mv08` squares up and hands over
@@ -542,8 +550,117 @@ pub(crate) fn spl_auto(
         kind,
         w: world,
         ada,
+        scene: false,
+        objects: false,
     };
     auto.sherry_move();
+}
+
+/// Sherry's or Ada's words for her `Spl_Scenario` states while she is a
+/// scene character (`fg_status`'s partner bit clear): `Oma_Spl_updown_ck`
+/// in the scene's walk and run, and `Aida_mv08` and `Aida_mv09`, which go
+/// back to the walk or the run when done.
+pub(crate) struct SceneClimb<'r, 'w> {
+    pub partner: &'r mut Partner,
+    pub kind: &'r mut u16,
+    pub world: &'r mut PartnerWorld<'w>,
+}
+
+impl<'w> SceneClimb<'_, 'w> {
+    fn auto<'s, 'a, 'b>(&'s mut self, mover: &'s mut Mover<'a, 'b>) -> Auto<'s, 'a, 'b, 'w> {
+        Auto {
+            m: mover,
+            p: self.partner,
+            kind: self.kind,
+            w: self.world,
+            ada: false,
+            scene: true,
+            objects: false,
+        }
+    }
+}
+
+impl crate::player2::SceneClimb for SceneClimb<'_, '_> {
+    fn updown_ck(&mut self, mover: &mut Mover<'_, '_>) -> bool {
+        self.auto(mover).updown_ck()
+    }
+
+    fn climb(&mut self, mover: &mut Mover<'_, '_>) {
+        self.auto(mover).aida_mv08();
+    }
+
+    /// The jump's fall counts in `Timer0`, the one word that her
+    /// `Spl_Scenario` states and `Spl_Auto`'s share.
+    fn jump_down(&mut self, mover: &mut Mover<'_, '_>) {
+        self.partner.timer0 = mover.work.timer0 as i16;
+        self.auto(mover).aida_mv09();
+        mover.work.timer0 = self.partner.timer0 as u16;
+    }
+}
+
+/// The player's own words for the same states in a scene (`Player_move`'s
+/// `Routine_0` 4 runs `Spl_Scenario` too): `Poison_timer` and `Timer0` on
+/// its work, `Be_flg`'s 4, the player's noise, and `Ground` as `Game_loop`
+/// finds it for the player (under its shadow's probe, with the objects'
+/// tops). `pOn_om` stays as it was: neither state writes it.
+pub(crate) struct PlayerSceneClimb;
+
+impl PlayerSceneClimb {
+    fn with<T>(mover: &mut Mover<'_, '_>, f: impl FnOnce(&mut Auto<'_, '_, '_, '_>) -> T) -> T {
+        let mut partner = Partner {
+            climb_dir: mover.work.climb_dir,
+            timer0: mover.work.timer0 as i16,
+            ..Partner::default()
+        };
+        let ground = mover.drawn_ground() as i16;
+        let mut rnd = Rnd::default();
+        let mut timer = 0;
+        let mut world = PartnerWorld {
+            player: [0; 3],
+            player_angle: 0,
+            player_routine: 0,
+            distance: 0,
+            nearest: [None; 3],
+            nearest_dist: [0; 3],
+            rnd: &mut rnd,
+            pos_ck_timer: &mut timer,
+            ground,
+            be_flg: mover.work.be_flg,
+            noise: 0,
+            player_noise: 0,
+            player_spd_x: 0,
+            poisoned: false,
+        };
+        let mut kind = 0;
+        let out = f(&mut Auto {
+            m: mover,
+            p: &mut partner,
+            kind: &mut kind,
+            w: &mut world,
+            ada: false,
+            scene: true,
+            objects: true,
+        });
+        mover.work.climb_dir = partner.climb_dir;
+        mover.work.timer0 = partner.timer0 as u16;
+        mover.work.be_flg = world.be_flg;
+        mover.work.noise |= world.noise;
+        out
+    }
+}
+
+impl crate::player2::SceneClimb for PlayerSceneClimb {
+    fn updown_ck(&mut self, mover: &mut Mover<'_, '_>) -> bool {
+        Self::with(mover, |auto| auto.updown_ck())
+    }
+
+    fn climb(&mut self, mover: &mut Mover<'_, '_>) {
+        Self::with(mover, |auto| auto.aida_mv08());
+    }
+
+    fn jump_down(&mut self, mover: &mut Mover<'_, '_>) {
+        Self::with(mover, |auto| auto.aida_mv09());
+    }
 }
 
 struct Auto<'r, 'a, 'b, 'w> {
@@ -553,6 +670,13 @@ struct Auto<'r, 'a, 'b, 'w> {
     w: &'r mut PartnerWorld<'w>,
     /// `Ada_move`: the same as `Sherry_move` but for its two tables.
     ada: bool,
+    /// A scene character's (`Spl_Scenario`'s) climb and jump down rather
+    /// than the partner's: `fg_status`'s partner bit is clear, or the body
+    /// isn't `splayer_work` (the player's).
+    scene: bool,
+    /// The player's: `Oma_Spl_updown_ck`'s ground probes take the room
+    /// objects' tops and its jump down looks for objects in the way.
+    objects: bool,
 }
 
 impl Auto<'_, '_, '_, '_> {
@@ -1388,6 +1512,11 @@ impl Auto<'_, '_, '_, '_> {
     /// and the edge's records are those of her `ClimbBy::mask`, and the ground under the points is `Sc_id`'s `0x8000`, as the
     /// player's. The edge's ground isn't held under the ceiling, as the
     /// player's is. Either sends her to `Aida_mv08` and keeps her facing.
+    /// For the player in a scene ([`Auto::objects`]) the ground takes the
+    /// room objects' tops, and an object (other than the one it stands on)
+    /// at the landing or at its own height there keeps it from jumping, as
+    /// for the player's own check; `Oma_obj_ck_all` (the other characters)
+    /// and the climb's `DWORD_00695e84` aren't looked at.
     fn updown_ck(&mut self) -> bool {
         use crate::sca::{FLOOR_HEIGHT, INFO_DOWN, INFO_UP, PLAYER_MASK};
         let by = climb_by(self.m.tick.id);
@@ -1400,8 +1529,16 @@ impl Auto<'_, '_, '_, '_> {
         let radius = self.m.player.radius;
         let (dx, dz) = crate::player2::rotate(facing, by.up, 0);
         let up = [x + dx, y - FLOOR_HEIGHT, z + dz];
+        let objects = self.objects;
+        let ground_at = |m: &Mover<'_, '_>, at: [i32; 3]| {
+            if objects {
+                m.object_ground(at, radius)
+            } else {
+                crate::sca::ground_at(sca, at, radius, PLAYER_MASK)
+            }
+        };
         if crate::sca::info_at(sca, by.mask, up, floor) & INFO_UP != 0 && floor < 31 {
-            let ground = crate::sca::ground_at(sca, up, radius, PLAYER_MASK);
+            let ground = ground_at(self.m, up);
             if i32::from(ground.height as i16) <= up[1] && !ground.blocked {
                 self.start_climb(0);
                 return true;
@@ -1409,8 +1546,11 @@ impl Auto<'_, '_, '_, '_> {
         }
         let (dx, dz) = crate::player2::rotate(facing, by.down, 0);
         let mut down = [x + dx, y, z + dz];
-        down[1] = i32::from(crate::sca::ground_at(sca, down, radius, PLAYER_MASK).height as i16);
-        if y < down[1] && crate::sca::info_at(sca, by.mask, down, floor) & INFO_DOWN != 0 {
+        down[1] = i32::from(ground_at(self.m, down).height as i16);
+        if y < down[1]
+            && crate::sca::info_at(sca, by.mask, down, floor) & INFO_DOWN != 0
+            && !(objects && self.m.object_in_the_way(down, y, radius))
+        {
             self.start_climb(CLIMB_IS_DROP);
             return true;
         }
@@ -1419,9 +1559,34 @@ impl Auto<'_, '_, '_, '_> {
 
     /// `Routine_1` 8 for the partner (the player's 0x16 and 0x17), `Routine_3`
     /// 0, and her facing in `Poison_timer`.
+    /// In a scene, `Routine_1` 0x16 to 0x19 instead: 0x16 and 0x17 from
+    /// `Spl_sce04`'s walk, 0x18 and 0x19 from `Spl_sce05`'s run, the odd ones
+    /// to jump down; `Routine_0` stays.
     fn start_climb(&mut self, two: u8) {
-        self.set(MV_CLIMB, two);
+        if self.scene {
+            let walk = self.routine1();
+            let one = 0x16 + 2 * u8::from(walk != 4) + u8::from(two & CLIMB_IS_DROP != 0);
+            self.m.work.routine[1] = one;
+            self.m.work.routine[2] = two;
+            self.m.work.routine[3] = 0;
+        } else {
+            self.set(MV_CLIMB, two);
+        }
         self.p.climb_dir = self.m.player.angle;
+    }
+
+    /// The climb's or the jump's end: the partner stands; a scene character
+    /// goes back to `Spl_sce04`'s walk (from 0x16 or 0x17) or `Spl_sce05`'s
+    /// run, from their start.
+    fn end_climb(&mut self, walk: u8) {
+        if self.scene {
+            let one = 4 + u8::from(self.routine1() != walk);
+            self.m.work.routine[1] = one;
+            self.m.work.routine[2] = 0;
+            self.m.work.routine[3] = 0;
+        } else {
+            self.set(MV_STAND, 0);
+        }
     }
 
     fn joint_step(&mut self, bank: Bank, step: u16) -> bool {
@@ -1512,7 +1677,7 @@ impl Auto<'_, '_, '_, '_> {
                 self.m.work.routine[3] += u8::from(ended);
                 self.climb_footfall();
             }
-            4 => self.set(MV_STAND, 0),
+            4 => self.end_climb(0x16),
             _ => self.climb_footfall(),
         }
     }
@@ -1592,7 +1757,7 @@ impl Auto<'_, '_, '_, '_> {
                 let ended = self.joint_step(Bank::Room, STEP);
                 self.m.work.routine[3] += u8::from(ended);
             }
-            6 => self.set(MV_STAND, 0),
+            6 => self.end_climb(0x17),
             _ => {}
         }
     }
@@ -1682,7 +1847,11 @@ mod tests {
         noise: u8,
         /// `Ada_move` rather than `Sherry_move`.
         ada: bool,
+        /// A scene character's climb and jump down.
+        scene: bool,
         player_spd_x: i16,
+        /// The room's objects.
+        objects: Vec<crate::objects::ObjectRecord>,
     }
 
     impl Rig {
@@ -1719,7 +1888,9 @@ mod tests {
                 be_flg: 1,
                 noise: 0,
                 ada: false,
+                scene: false,
                 player_spd_x: 0,
+                objects: Vec::new(),
             }
         }
 
@@ -1762,7 +1933,7 @@ mod tests {
                 neck_targets: &[],
                 enemies: 0,
                 pushing: false,
-                objects: &[],
+                objects: &self.objects,
                 key_trg: 0,
             };
             let mut world = PartnerWorld {
@@ -1788,6 +1959,8 @@ mod tests {
                 kind: &mut self.kind,
                 w: &mut world,
                 ada: self.ada,
+                scene: self.scene,
+                objects: false,
             };
             let answer = f(&mut auto);
             self.be_flg = world.be_flg;
@@ -2646,6 +2819,110 @@ mod tests {
         assert_eq!(rig.work.floor, 0);
         assert_eq!(rig.be_flg & BE_CLIMBING, 0);
         assert_eq!(noise, NOISE_CLIMB, "the landing's footfall");
+    }
+
+    /// A scene's Sherry (`Spl_Scenario`, `Routine_0` 4) in `Spl_sce05`'s run
+    /// at an edge jumps down on `Routine_1` 0x19 with no turn first, and
+    /// goes back to the run from its start (room 30A's lift); in
+    /// `Spl_sce04`'s walk at a box she climbs on 0x16 and goes back to the
+    /// walk.
+    #[test]
+    fn a_scene_s_sherry_jumps_down_and_climbs_back_to_her_walk() {
+        let east = facing_x(1);
+        let mut rig = climb_rig([-18000, -1800, -10000], east, 1);
+        rig.scene = true;
+        rig.work.routine = [4, 5, 2, 0];
+        assert!(rig.with_auto(|auto| auto.updown_ck()));
+        assert_eq!(rig.routine(), [4, 0x19, CLIMB_IS_DROP, 0]);
+        rig.ground = 0;
+        for _ in 0..200 {
+            if rig.routine()[1] != 0x19 {
+                break;
+            }
+            rig.with_auto(|auto| auto.aida_mv09());
+        }
+        assert_eq!(rig.routine(), [4, 5, 0, 0]);
+        assert_eq!(rig.body.pos, [-18000 + 600, 0, -10000]);
+        assert_eq!(rig.be_flg & BE_CLIMBING, 0);
+
+        let west = facing_x(-1);
+        let mut rig = climb_rig([-17300, 0, -10000], west, 0);
+        rig.scene = true;
+        rig.work.routine = [4, 4, 2, 0];
+        assert!(rig.with_auto(|auto| auto.updown_ck()));
+        assert_eq!(rig.routine(), [4, 0x16, 0, 0]);
+        for _ in 0..400 {
+            if rig.routine()[1] != 0x16 {
+                break;
+            }
+            rig.with_auto(|auto| auto.aida_mv08());
+        }
+        assert_eq!(rig.routine(), [4, 4, 0, 0]);
+        assert_eq!(rig.body.pos[1], -1800);
+    }
+
+    /// The player in a scene (`Player_move`'s `Spl_Scenario`, room 30A's
+    /// lift) takes the same check on its own words: Claire's walk
+    /// (`Routine_1` 4) at an edge jumps down on 0x17 by the others' reach,
+    /// her fall counting in her work's `Timer0` and `Be_flg`'s 4 on her work,
+    /// and goes back to the walk.
+    #[test]
+    fn a_scene_s_player_jumps_down_on_its_own_words() {
+        use crate::player2::SceneClimb as _;
+        let east = facing_x(1);
+        let mut rig = climb_rig([-18000, -1800, -10000], east, 1);
+        rig.id = 1;
+        rig.work.routine = [4, 4, 2, 0];
+        let mut climb = PlayerSceneClimb;
+        assert!(rig.with_auto(|auto| climb.updown_ck(auto.m)));
+        assert_eq!(rig.routine(), [4, 0x17, CLIMB_IS_DROP, 0]);
+        assert_eq!(rig.work.climb_dir, east);
+        let mut falling = Vec::new();
+        let mut held = false;
+        for _ in 0..200 {
+            if rig.routine()[1] != 0x17 {
+                break;
+            }
+            rig.with_auto(|auto| climb.jump_down(auto.m));
+            held |= rig.work.be_flg & BE_CLIMBING != 0;
+            if rig.routine()[3] == 3 {
+                falling.push(rig.work.timer0);
+            }
+        }
+        assert!(held);
+        assert_eq!(falling.first(), Some(&(JUMP_FALL_START as u16 + 1)));
+        assert!(falling.windows(2).all(|pair| pair[1] == pair[0] + 1));
+        assert_eq!(rig.routine(), [4, 4, 0, 0]);
+        assert_eq!(rig.body.pos, [-18000 + 1000, 0, -10000]);
+        assert_eq!(rig.work.be_flg & BE_CLIMBING, 0);
+
+        // The player's ground takes the objects' tops: one standing taller
+        // than the edge where it would land keeps it on the walk.
+        let mut rig = climb_rig([-18000, -1800, -10000], east, 1);
+        rig.id = 1;
+        rig.work.routine = [4, 4, 2, 0];
+        let mut pillar = crate::objects::ObjectRecord {
+            flag: crate::objects::OBJECT_FLAG_ACTIVE,
+            pos: [-17000, 0, -10000],
+            be_flg: 1,
+            atd2: crate::objects::ObjectAtd {
+                ofs: [0, 0, 0],
+                at_w: 300,
+                at_h: 2400,
+                at_d: 300,
+            },
+            ..crate::objects::ObjectRecord::default()
+        };
+        pillar.set_ofs();
+        rig.objects = vec![pillar];
+        assert!(!rig.with_auto(|auto| climb.updown_ck(auto.m)));
+        assert_eq!(rig.routine(), [4, 4, 2, 0]);
+        // A scene's Sherry doesn't look at the objects.
+        rig.id = 0x45;
+        rig.scene = true;
+        rig.body.pos = [-18000 + 400, -1800, -10000];
+        rig.objects[0].pos = [-17000, 0, -10000];
+        assert!(rig.with_auto(|auto| auto.updown_ck()));
     }
 
     /// Ada (0x41) jumps further than Sherry: `Oma_Spl_updown_ck` finds the
