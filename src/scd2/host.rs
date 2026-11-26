@@ -3549,8 +3549,18 @@ impl Host for GameHost<'_> {
                 }
             }
             "pos_set" if self.task_object(task).is_some() => {
+                // `Pos_set` (0x4E6150) moves room 303's first four objects
+                // 0x28 toward -x too, as `Obj_model_set` places them, unless
+                // the new `Pos_x` is 0.
+                let origin = self.game.origin();
+                let first_four =
+                    matches!(self.game.re2.work.get(task), Some(Work::Object(slot)) if *slot < 4);
+                let mut x = at(1) as i32;
+                if (origin.stage, origin.room) == (3, 3) && first_four && x != 0 {
+                    x -= 0x28;
+                }
                 if let Some(object) = self.task_object(task) {
-                    object.pos = [at(1) as i32, at(2) as i32, at(3) as i32];
+                    object.pos = [x, at(2) as i32, at(3) as i32];
                 }
             }
             // `Super_set` (`0x4E59E0`): the object hangs on a parent, and its
@@ -4319,6 +4329,31 @@ mod tests {
                 "{stage}:{room}"
             );
             assert_eq!(x(4), 1000, "{stage}:{room}");
+        }
+    }
+
+    /// `Pos_set` moves room 303's first four objects 0x28 toward -x as
+    /// `Obj_model_set` does, but not to an x of 0, nor another room's.
+    #[test]
+    fn pos_set_shifts_room_303s_first_four_objects() {
+        for ((stage, room), shifted) in [((3, 3), true), ((2, 3), false), ((3, 4), false)] {
+            let mut game = GameState::default();
+            game.id.stage = stage;
+            game.id.room = room;
+            game.objects.records = vec![crate::objects::ObjectRecord::default(); 6];
+            let place = |game: &mut GameState, slot: i64, x: i64| {
+                exec(game, "work_set", &[WK_OBJECT, slot]);
+                exec(game, "pos_set", &[0, x, -7970, -12532]);
+                game.objects.record(slot as usize).unwrap().pos
+            };
+            let want = if shifted { -23153 - 0x28 } else { -23153 };
+            assert_eq!(
+                place(&mut game, 2, -23153),
+                [want, -7970, -12532],
+                "{stage}:{room}"
+            );
+            assert_eq!(place(&mut game, 3, 0)[0], 0, "{stage}:{room}");
+            assert_eq!(place(&mut game, 4, -23153)[0], -23153, "{stage}:{room}");
         }
     }
 
