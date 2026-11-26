@@ -126,10 +126,7 @@ impl GameSession {
             match effect {
                 Effect::Begin => {
                     *self.game.re2.fg_stop_mut() |= 0x0200_0000;
-                    self.game
-                        .re2
-                        .screen_fades
-                        .push(FadeWrite::Adjust(-1));
+                    self.game.re2.screen_fades.push(FadeWrite::Adjust(-1));
                     for fade in &mut self.game.re2.fades {
                         fade.set_state(-1);
                     }
@@ -144,8 +141,7 @@ impl GameSession {
                     re2.set_flag(STATUS_BANK, STATUS_VOICE, 1);
                 }
                 Effect::Cue(slot) => {
-                    if let Some(id) =
-                        crate::se2::SoundId::decode(CUE_TYPE | u32::from(slot) << 16)
+                    if let Some(id) = crate::se2::SoundId::decode(CUE_TYPE | u32::from(slot) << 16)
                     {
                         self.game
                             .re2
@@ -158,11 +154,7 @@ impl GameSession {
                     .re2
                     .screen_fades
                     .push(FadeWrite::Set { kind: 2, add: 0 }),
-                Effect::Fade(level) => self
-                    .game
-                    .re2
-                    .screen_fades
-                    .push(FadeWrite::Adjust(level)),
+                Effect::Fade(level) => self.game.re2.screen_fades.push(FadeWrite::Adjust(level)),
                 Effect::End => {
                     let re2 = &mut self.game.re2;
                     // `Xa_stop`, while the line's bit is up.

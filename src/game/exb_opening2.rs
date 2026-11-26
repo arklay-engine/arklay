@@ -215,14 +215,54 @@ pub const STATIC_TEXELS: [i32; 2] = [120, 180];
 
 /// Sprites 12 to 19.
 pub const STATICS: [Static; 8] = [
-    Static { x: 5, y: 15, u: 0, v: 0 },
-    Static { x: 0x50, y: 15, u: 3, v: 20 },
-    Static { x: 0xA0, y: 15, u: 5, v: 30 },
-    Static { x: 0xEB, y: 15, u: 7, v: 0 },
-    Static { x: 5, y: 0x69, u: 0, v: 75 },
-    Static { x: 0x50, y: 0x69, u: 5, v: 50 },
-    Static { x: 0xA0, y: 0x69, u: 3, v: 40 },
-    Static { x: 0xEB, y: 0x69, u: 7, v: 75 },
+    Static {
+        x: 5,
+        y: 15,
+        u: 0,
+        v: 0,
+    },
+    Static {
+        x: 0x50,
+        y: 15,
+        u: 3,
+        v: 20,
+    },
+    Static {
+        x: 0xA0,
+        y: 15,
+        u: 5,
+        v: 30,
+    },
+    Static {
+        x: 0xEB,
+        y: 15,
+        u: 7,
+        v: 0,
+    },
+    Static {
+        x: 5,
+        y: 0x69,
+        u: 0,
+        v: 75,
+    },
+    Static {
+        x: 0x50,
+        y: 0x69,
+        u: 5,
+        v: 50,
+    },
+    Static {
+        x: 0xA0,
+        y: 0x69,
+        u: 3,
+        v: 40,
+    },
+    Static {
+        x: 0xEB,
+        y: 0x69,
+        u: 7,
+        v: 75,
+    },
 ];
 
 /// What a pass asks of the game.
@@ -471,11 +511,7 @@ impl Opening {
         };
         self.typed = Some((index as u8, self.column as u8 + 1));
         if self.ticks == 0 {
-            effects.push(Effect::Cue(if code == 0 {
-                CUE_SPACE
-            } else {
-                CUE_LETTER
-            }));
+            effects.push(Effect::Cue(if code == 0 { CUE_SPACE } else { CUE_LETTER }));
         }
         self.ticks += 1;
         let wait = DELAYS.get(self.delay as usize).copied().unwrap_or(0);

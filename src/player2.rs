@@ -82,6 +82,12 @@ const FRAME_SKIPPED: u32 = 0x8000;
 
 /// A clip by health (`D_life_u`), `pl_mv_00`..`04`.
 const IDLE_CLIPS: [u8; 3] = [2, 5, 8];
+/// Chris (`Id` 0xB): `pl_mv_00`'s wait before his own idle, the weapons
+/// (`Type & 0xFFF`) he plays it with, and its two clips of the weapon's bank.
+const CHRIS_ID: u8 = 0xB;
+const CHRIS_IDLE_WAIT: i16 = 300;
+const CHRIS_IDLE_WEAPONS: [u16; 4] = [0x13, 1, 0, 8];
+const CHRIS_IDLE_CLIPS: [u8; 2] = [0x11, 0x12];
 /// `pl_mv06`'s crouch, a clip of the PLD's own.
 const ITEM_CLIP: u8 = 6;
 const WALK_CLIPS: [u8; 3] = [0, 3, 6];
@@ -4954,12 +4960,41 @@ impl Mover<'_, '_> {
         clips[usize::from(self.work.d_life_u)]
     }
 
+    /// `pl_mv_00`: standing. Chris (`Id` 0xB) stands for 300 ticks with
+    /// one of his idle's weapons, then plays clip 0x11 and holds clip 0x12.
     fn pl_mv_idle(&mut self) {
-        if self.work.routine[2] == 0 {
-            self.start_motion(Bank::Weapon, self.life_clip(&IDLE_CLIPS));
-            self.work.timer0 = 0;
+        match self.work.routine[2] {
+            0 | 1 => {
+                if self.work.routine[2] == 0 {
+                    self.start_motion(Bank::Weapon, self.life_clip(&IDLE_CLIPS));
+                    self.work.timer0 = 0;
+                }
+                self.joint_move();
+                self.work.timer0 = self.work.timer0.wrapping_add(1);
+                if self.work.timer0 as i16 > CHRIS_IDLE_WAIT
+                    && self.tick.id == CHRIS_ID
+                    && CHRIS_IDLE_WEAPONS.contains(&(self.work.kind & 0x0FFF))
+                {
+                    self.next_idle_clip(CHRIS_IDLE_CLIPS[0], 2);
+                }
+            }
+            2 => {
+                if self.joint_move() {
+                    self.next_idle_clip(CHRIS_IDLE_CLIPS[1], 3);
+                }
+            }
+            _ => {
+                self.joint_move();
+            }
         }
-        self.joint_move();
+    }
+
+    /// `pl_mv_00`'s change to Chris's next idle clip, blended in.
+    fn next_idle_clip(&mut self, clip: u8, routine: u8) {
+        self.work.move_no = clip;
+        self.work.move_cnt = 0;
+        self.work.hokan = FULL_BLEND;
+        self.work.routine[2] = routine;
     }
 
     fn pl_mv_forward(&mut self, drawn: Option<&DrawnParts>) {
@@ -13153,6 +13188,45 @@ mod tests {
         plc_stop_player(&mut setup.work);
         assert!(setup.work.restore_pose.is_none());
         assert_eq!(setup.work.move_no, move_no);
+    }
+
+    /// `pl_mv_00`: Chris (`Id` 0xB) with his idle's weapons plays clip
+    /// 0x11 once he has stood past 300 ticks, then clip 0x12 from its end
+    /// (`special_ex_chris`, 300 ticks after his walk); Leon never does.
+    #[test]
+    fn chris_plays_his_own_idle_after_standing_300_ticks() {
+        let stand = |id: u8, kind: u16| {
+            let mut setup = Setup::new(0);
+            (setup.clips, setup.keyframes) = bank(0x13, 8, 0);
+            setup.id = id;
+            setup.work.kind = kind;
+            setup.tick(Input::default(), 200);
+            for _ in 0..300 {
+                setup.tick(Input::default(), 200);
+            }
+            setup
+        };
+        let mut chris = stand(CHRIS_ID, 0x13);
+        assert_eq!(
+            (
+                chris.work.routine[2],
+                chris.work.move_no,
+                chris.work.move_cnt
+            ),
+            (2, 0x11, 0)
+        );
+        assert_eq!(chris.work.hokan, FULL_BLEND);
+        for _ in 0..8 {
+            chris.tick(Input::default(), 200);
+        }
+        assert_eq!((chris.work.routine[2], chris.work.move_no), (3, 0x12));
+        let leon = stand(0, 0x13);
+        assert_eq!(
+            (leon.work.routine[2], leon.work.move_no),
+            (1, IDLE_CLIPS[0])
+        );
+        let other_weapon = stand(CHRIS_ID, 0x11);
+        assert_eq!(other_weapon.work.routine[2], 1);
     }
 
     #[test]

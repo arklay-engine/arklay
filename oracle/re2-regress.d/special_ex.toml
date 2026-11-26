@@ -212,7 +212,7 @@ frames = [189, 1395]
 expect = "match"
 record = ""
 
-# The same record's game, from `Game_loop`'s first tick (1427): room F12 and Extreme Battle's opening from 1428, its skip on 1600 and its end on 1631, then the room. This record's boot film picked Claire: `fg_status` bit 31, under which room F12 is disc 1's.
+# The same record's game, from `Game_loop`'s first tick (1427): room F12 and Extreme Battle's opening from 1428, its skip on 1600 and its end on 1631, then the room, where Chris (player 0xB) stands past 300 ticks into his own idle (`pl_mv_00`'s clips 0x11 and 0x12, from 2060). This record's boot film picked Claire: `fg_status` bit 31, under which room F12 is disc 1's.
 [[run]]
 name = "special_ex_chris_play"
 ref = "special_ex_chris"

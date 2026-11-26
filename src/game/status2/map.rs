@@ -586,7 +586,8 @@ impl GameState {
         let visited = self
             .re2
             .flag(VISITED_BANK, visited_index(stage, self.id.room));
-        self.re2.set_flag(COMMON_BANK, EXTREME_NEW_ROOM, u8::from(!visited));
+        self.re2
+            .set_flag(COMMON_BANK, EXTREME_NEW_ROOM, u8::from(!visited));
     }
 
     /// The trace's `mapfg`: `fg_map`'s five words (`0x98EC04` to
