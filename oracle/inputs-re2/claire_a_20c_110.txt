@@ -1,0 +1,131 @@
+# Claire A from 20C's arrival for 10F's Lighter, which 20D's fireplace needs (#896): door 0 into 20A and round its four
+# live zombies to door 0 as claire_a_20c_200 does, 200's jump down by the stairs, west across the hall and up the west
+# stairs to the ladder (door 17), the First Aid Spray used from the status screen at its foot (200 life, to outrun the
+# licker that the Club Key brings into 110), and the ladder's three presses up into 110
+# made in arklay (steered by a script round the zombies): 20A loads at 424, 200 at 1006, 110 at 2067, which hands back on
+# 2403
+344 left
+389 confirm
+390
+676 right up run
+690 up run
+691 right up run
+692 up run
+715 right up run
+716 up run
+729 left up run
+730 up run
+731 right up run
+732 up run
+738 right up run
+739 up run
+765 left up run
+766 up run
+768 right up run
+789 up run
+794 left
+798 left up run
+818 up run
+836 left up run
+840 up run
+845 left up run
+860 up run
+865 left up run
+866 up run
+871 left up run
+872 up run
+881 left up run
+893 up run
+901 right up run
+916 left up run
+917 up run
+927 left up run
+928 up run
+933 right up run
+934 up run
+936 right up run
+943 up run
+952 right up run
+953 up run
+955 right up run
+957 up run
+960 left up run
+961 left
+971 confirm
+972
+1008 up
+1324 up run
+1358 right up run
+1359 up run
+1374 right up run
+1375 up run
+1377 right up run
+1380 right
+1385 right up run
+1386 right
+1391 right up run
+1392 right
+1397 right up run
+1398 right
+1404 right up run
+1405 left
+1411
+1417 confirm
+1418
+1477 left up run
+1478 left
+1481 left up run
+1505 right up run
+1514 up run
+1517 right up run
+1518 up run
+1536 right up run
+1552 up run
+1575 right up run
+1576 up run
+1588 left up run
+1589 up run
+1611 right up run
+1612 up run
+1631 left up run
+1632 up run
+1637 right up run
+1638 up run
+1640 left up run
+1642 up run
+1650 left up run
+1651 up run
+1653 left up run
+1654 up run
+1661 right
+1668 right up run
+1692 left up run
+1697 up run
+1715 up
+1730 left up
+1731 up
+1741 left up
+1742 left
+1763
+1771 start
+1772
+1807 down
+1808
+1827 down
+1828
+1847 confirm
+1848
+1867 confirm
+1868
+1927 cancel
+1928
+1967 start
+1968
+2007 action
+2009
+2019 action
+2021
+2031 action
+2033
+2071 up
+2405
