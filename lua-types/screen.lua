@@ -373,7 +373,7 @@ function ScreenModule.cursor_shown(api, shown) end
 ---@param cursor integer The item box cursor's slot.
 function ScreenModule.move_cursor(api, cursor) end
 
--- source: src/ui/lua_screen/methods.rs#Api src/ui/lua_screen/draw/methods.rs src/ui/lua_screen/game_api.rs src/ui/lua_screen/option_model.rs src/ui/lua_screen/bindings.rs
+-- source: src/ui/lua_screen/methods.rs#Api src/ui/lua_screen/draw/methods.rs src/ui/lua_screen/game_api.rs src/ui/lua_screen/option_model.rs src/ui/lua_screen/ex_models.rs src/ui/lua_screen/bindings.rs
 ---The screen surface, passed to every entry point and signal. Only these
 ---methods exist; call them with Lua colon syntax (`api:width()`).
 ---
@@ -891,6 +891,33 @@ function ScreenApi:character_model(entry, moves) end
 ---@param ... integer
 ---@return boolean|string|nil
 function ScreenApi:option_model(op, ...) end
+
+---RE 2's Extreme Battle character choice's four players (Ada, Leon, Claire
+---and Chris, works 0 to 3), which the engine animates, lights and draws;
+---the screen turns the stage and calls the steps where the original's
+---choice does.
+---
+---- `"load", disc`: the four works in their places, their motions and
+---  lights at rest, and their models read from disc `disc`'s (0 or 1)
+---  player files or else the other disc's. False when one is missing,
+---  which is then not drawn.
+---- `"place", work, x, z, turn`: the work's place on the stage and its
+---  turn (x and z within 0x8000 of the centre).
+---- `"confirm", work`: the chosen work's motion.
+---- `"tick", cursor`: a tick of the motions, then each work's light, which
+---  comes up on the work `cursor` names and goes down on the others, and
+---  their sort.
+---- `"trace"`: the works' motions as the trace's `exbm` shows them; nil
+---  before a load.
+---- `"draw"`: in a draw, the four as the last tick sorted them.
+---
+---The arguments must be Lua integers, exactly as many as the operation
+---takes; anything else raises an error before the works change. The steps
+---do nothing before a load.
+---@param op string
+---@param ... integer
+---@return boolean|string|nil
+function ScreenApi:ex_models(op, ...) end
 
 ---Load RE 2's FILE binders model (`ui/status/st_file.ts`), for
 ---[`api:draw_re2_binders`](#ScreenApi.draw_re2_binders).

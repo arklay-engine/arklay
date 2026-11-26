@@ -13,6 +13,7 @@ use crate::model::{Clip, ClipFrame, Keyframe, Skeleton};
 use crate::player::{self, ClipSource, Input, Options, PlayerState};
 use crate::state::{RoomState, ScaRect};
 
+pub mod exbattle;
 pub mod keyconfig;
 
 /// `Key`, the mapped pad word `pl_br_*` test.
