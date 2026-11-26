@@ -1,4 +1,4 @@
--- arklay start for leon_a_304_403: where --warp 304:-25115:-7200:-25982:3096:0 leaves the player: Leon as leon_a_302_303 leaves him (141 life, 10 rounds in the handgun, the knife, the Club Key and the magnum with 1 round; nothing held, as the recorder's --equip can only hold slot 0), in 304 by door 3, with 303's plugs in (4:58) and its G adult dead (6:98)
+-- arklay start for leon_a_304_404: where --warp 304:-25115:-7200:-25982:3096:0 leaves the player: Leon as leon_a_302_303 leaves him (141 life, 10 rounds in the handgun, the knife, the Club Key and the magnum with 1 round; nothing held, as nothing on the way needs a weapon), in 304 by door 3, with 303's plugs in (4:58) and its G adult dead (6:98)
 local api = ...
 api:set_health(141)
 api:set_re2_rnd(6114)

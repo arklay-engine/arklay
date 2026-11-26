@@ -1,0 +1,119 @@
+# leon_a_304_404: Leon A from 304's door 3 through Ada's rejoin, down off the walkway to door 4, through 402 and up its step to door 2, through 403 and down its lift to 404's ambush, where Ada becomes the player
+# 304: north into area 5, where `main_06` (3:97) runs Ada's rejoin: the scene walks Leon to the stairs on `plc_dest`'s routine 0x12, which takes them by `Aida_mv07` (routine 0x1A from 610 to 680, up the steps 618 to 681), and hands him back on 1497 with Ada as the partner
+345
+346 up
+400 up left
+406 up right
+494
+# east along the walkway and south off its edge (record 7, a jump down: 1545 to 1566) to floor 0, Ada jumping after him on 1603, then east to door 4 (pressed on 1661, 402 on 1697); the presses after it land in the door
+1508 up run right
+1511 up run
+1522 up run right
+1524 right
+1535 up
+1545 action
+1547
+1617 up run left
+1647 up run
+1653 up run right
+1654 left
+1661 action
+1663
+1683 action
+1685
+1705 action
+1707
+1727 action
+1729
+1749 action
+1751
+1771 action
+1773
+# 402: north up the channel, west onto the step (record 8, climbed on 2003), and west to door 2 (pressed on 2128, 403 on 2163), Ada starting her climb onto the step on 2125; the presses after it land in the door, and Leon stands in 403
+1833 right
+1835 up run
+1889 up run right
+1890 up run
+1920 up run left
+1921 up run
+1953 left
+1967 up right
+1968 up
+1995 left
+1997 up
+2003 action
+2005
+2075 up run
+2114 right
+2128 action
+2130
+2150 action
+2152
+2172 action
+2174
+2194 action
+2196
+2216 action
+2218
+2238 action
+2240
+# 403: west and south down the corridor to the handgun rounds by the west wall (30, taken on 2572, 8:173), back east and north to the lift (area 9): the second press (2898) runs `main_12`, which clears 1:3 and has `aot_reset` move door 1's target to (-12262, 0, -1096), and the lift goes down (404 on 2934, live on 3025)
+# 404: `main_04` runs the ambush (`evt_exec 8`), where Annette shoots Leon and Ada becomes the player (3024), with 404's player bank as `main_02`'s `rbj_reset` leaves it; the scene hands Ada back on 3577 with Leon wounded (4:68). The presses after the lift's land in the scene
+2262 left
+2276 up run
+2281 up run left
+2282 up run
+2285 up run left
+2286 up run
+2289 up run left
+2290 up run
+2298 up run left
+2299 up run
+2302 right
+2318 up run
+2353 up run right
+2354 up run
+2357 up run left
+2385 up run
+2386 up run right
+2390 up run
+2393 up run right
+2394 right
+2411 up left
+2416 right
+2420 action
+2422
+2480 action
+2482
+2552 action
+2554
+2601 action
+2603
+2631 action
+2633
+2661 action
+2663
+2691 action
+2693
+2733 right
+2746 up run
+2754 up run right
+2755 up run
+2757 up run right
+2776 up run
+2839 up run right
+2840 up run
+2851 up run left
+2852 up run right
+2866 action
+2868
+2898 action
+2900
+2930 action
+2932
+2962 action
+2964
+2994 action
+2996
+3026 action
+3028
