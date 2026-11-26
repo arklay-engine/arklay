@@ -97,6 +97,9 @@ impl GameSession {
         let effects = opening.tick(self.game.pad_repeat.trigger);
         self.re2_exb_view = Some(opening.view());
         let done = opening.done();
+        // `Psx_main`'s `Swap_Cbuff` ends every frame, the room's task
+        // suspended or not.
+        self.game.re2.draw_buffer ^= 1;
         self.apply_re2_exb_opening(effects);
         let cut = self.sound_cut();
         play_re2_sounds(
@@ -131,12 +134,12 @@ impl GameSession {
                         fade.set_state(-1);
                     }
                 }
-                Effect::Voice(line) => {
-                    // `Xa_play(0, line)` with `scd_var_stage` 7: the bank of
-                    // stage 7 + 1, by `fg_status`'s bit 31.
+                Effect::Voice { line, stage } => {
+                    // `Xa_play(0, line)`: the bank of `scd_var_stage` + 1, by
+                    // `fg_status`'s bit 31.
+                    let stage = stage.map_or(self.game.origin().stage, |stage| stage + 1);
                     let re2 = &mut self.game.re2;
                     let player = u8::from(re2.flag(STATUS_BANK, STATUS_PLAYER));
-                    let stage = game::exb_opening2::VOICE_STAGE + 1;
                     re2.voice.request = Some(format!("voice/{player}/{stage:02}_{line:02x}.wav"));
                     re2.set_flag(STATUS_BANK, STATUS_VOICE, 1);
                 }
@@ -166,6 +169,10 @@ impl GameSession {
                     let place = self.game.re2_music_place();
                     let re2 = &mut self.game.re2;
                     *re2.fg_stop_mut() = 0;
+                    // The entry's stop, which the room's tick would have
+                    // taken down: the next tick's `Pad_set` reads the pad.
+                    re2.door_key_stop = false;
+                    re2.objects_key_stop = false;
                     // `BYTE_0098F07B`: the cut's background again.
                     re2.bg_load = true;
                     // `Snd_bgm_ctr(0x1000000)`, the main played, and

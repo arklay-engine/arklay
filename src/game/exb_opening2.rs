@@ -28,8 +28,8 @@
 //! first twelve for a while: the Japanese text's lines from `OPEN05.TIM`
 //! (kind 0, and kind 1, which draws nothing), which Classic REbirth's build
 //! never shows (no recording's frame does). After 0x9DD, its second phase
-//! (no skip from then), it plays voice line 100 (`Xa_play(0, 100)`, which
-//! the install lacks) and flashes the static (kind 0x10, the last eight: a
+//! (no skip from then), it plays voice line 100 (`Xa_play(0, 100)`, from
+//! the room's stage, `scd_var_stage` being back) and flashes the static (kind 0x10, the last eight: a
 //! grid of four by two from `OPEN07a.tim` or `OPEN07b.tim` by the frame, a
 //! new frame every tick) until the second page's fade ends it.
 //!
@@ -58,11 +58,13 @@ const FADE_SLOW: u16 = 0x80;
 pub const CUE_LETTER: u8 = 0x22;
 pub const CUE_SPACE: u8 = 0x24;
 pub const CUE_LINE: u8 = 0x23;
-/// The voice lines `Xa_play(0, n)` plays with `scd_var_stage` 7: the
-/// opening's, and the static's, which the install lacks.
+/// The voice lines `Xa_play(0, n)` plays: the opening's, with
+/// `scd_var_stage` [`VOICE_STAGE`] around the call, and the static's, with
+/// the room's stage (stage 6's `v100.sap` for F12).
 pub const VOICE_OPENING: u8 = 2;
 pub const VOICE_STATIC: u8 = 100;
-/// The stage whose voice bank `Load_open5_7` plays from (`scd_var_stage`).
+/// The stage `Load_open5_7` sets `scd_var_stage` to for its line, and puts
+/// back after it.
 pub const VOICE_STAGE: u8 = 7;
 /// The task's sprites (`WORD_0099DA8C`).
 pub const SPRITES: usize = 20;
@@ -272,8 +274,9 @@ pub enum Effect {
     /// `0x2000000`, the background black, and the four fades off
     /// (`Fade_adjust(n, -1)`).
     Begin,
-    /// `Xa_play(0, n)` with `scd_var_stage` [`VOICE_STAGE`].
-    Voice(u8),
+    /// `Xa_play(0, line)`: from `stage`'s bank (`scd_var_stage`), or the
+    /// room's where `None`.
+    Voice { line: u8, stage: Option<u8> },
     /// `Snd_se_on(0x2NN0000)`: a sound of the room's bank, not placed.
     Cue(u8),
     /// `Fade_set(0x200, 0, 7, 0)`: fade 0 clear, its step 0.
@@ -406,7 +409,10 @@ impl Opening {
             }
         } else {
             effects.push(Effect::Begin);
-            effects.push(Effect::Voice(VOICE_OPENING));
+            effects.push(Effect::Voice {
+                line: VOICE_OPENING,
+                stage: Some(VOICE_STAGE),
+            });
             *self = Self {
                 step: 1,
                 wait: LOAD_WAIT,
@@ -536,7 +542,10 @@ impl Opening {
         } else {
             self.frame = (self.frame + 1) & 3;
             if self.count == 1 {
-                effects.push(Effect::Voice(VOICE_STATIC));
+                effects.push(Effect::Voice {
+                    line: VOICE_STATIC,
+                    stage: None,
+                });
             }
             if let Some(&(_, mask, on)) = SECOND_PHASE.iter().find(|(at, ..)| *at == self.count) {
                 self.show(mask, on);
@@ -686,7 +695,16 @@ mod tests {
     fn the_first_pass_suspends_plays_the_line_and_waits() {
         let mut opening = Opening::new();
         let effects = opening.tick(0);
-        assert_eq!(effects, [Effect::Begin, Effect::Voice(VOICE_OPENING)]);
+        assert_eq!(
+            effects,
+            [
+                Effect::Begin,
+                Effect::Voice {
+                    line: VOICE_OPENING,
+                    stage: Some(VOICE_STAGE)
+                }
+            ]
+        );
         assert_eq!(opening.trace(), "0,1,89,0,0,0,0,0,0,0,0,0,0,0,0,0,0");
         assert!(opening.holds_room());
         assert!(opening.view().lines.is_empty());
@@ -747,7 +765,10 @@ mod tests {
         assert!(at(2846).contains(&Effect::Fade(0x400)));
         assert!(at(2845).contains(&Effect::Fade(0)));
         assert!(at(2877).contains(&Effect::FadeClear));
-        assert!(at(4024).contains(&Effect::Voice(VOICE_STATIC)));
+        assert!(at(4024).contains(&Effect::Voice {
+            line: VOICE_STATIC,
+            stage: None
+        }));
         assert_eq!(first + passes - 1, 4300);
         assert_eq!(effects.last().unwrap().last(), Some(&Effect::End));
     }
@@ -770,7 +791,10 @@ mod tests {
         // The pass that turned the phase: count 1 next, which shows the top
         // row and plays line 100.
         let effects = opening.tick(0);
-        assert!(effects.contains(&Effect::Voice(VOICE_STATIC)));
+        assert!(effects.contains(&Effect::Voice {
+            line: VOICE_STATIC,
+            stage: None
+        }));
         let view = opening.view();
         assert_eq!(view.statics, STATICS[..4]);
         assert_eq!(view.frame, 1);
