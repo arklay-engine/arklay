@@ -22,8 +22,10 @@
 -- isn't reached.
 --
 -- `Type` 2, the embryos the G adult (`Em_28`) spits, take state 6 (`FUN_00476060`).
--- Not ported: `Type` 1 and state 3 (it stands hidden), the
--- shot's hits,
+-- `Type` 1 takes state 3 (`FUN_00474b80`): it rides in the body in
+-- `enemy_work[0]` (Ben in room 301, the G adult in its birth) until the
+-- scene lets it out.
+-- Not ported: the shot's hits,
 -- `Routine_0` 3's `Routine_1` 0x13, and the parts'
 -- squash and colours as drawn (only their counts are kept, in vars).
 
@@ -81,6 +83,7 @@ local function init(e)
     e:set_life((e:rnd() & 1) + 1)
     e:set_kind(e:kind() | 0x2000)
     e:set_atd(0, 0, -200, 200, 200, 200)
+    e:set_oba_count(1)
     local _, sy, sz = e:speed()
     e:set_speed(0x50, sy, sz)
     e:set_be_flg(e:be_flg() | 0x4400002)
@@ -91,8 +94,8 @@ local function init(e)
     e:set_var(RGB, RGB_LOADED)
     local low = e:kind() & 0xFFF
     if low == 0 or low == 1 or low == 2 then
-        -- The template, the ones on the G adult's back during its birth
-        -- (`Type` 1, not ported: they stand hidden), and the ones it spits.
+        -- The template, the one inside a host (`Type` 1), and the ones the G
+        -- adult spits.
         if low == 1 then
             e:set_routine(1, 3)
         elseif low == 2 then
@@ -100,6 +103,9 @@ local function init(e)
         end
         if low ~= 2 then
             e:set_kind(e:kind() | 0x4000)
+            -- `nOba` 0: its `Atd[0]` stays where it was, so the walls are
+            -- tested there (room 301's crawls through the north wall).
+            e:set_oba_count(0)
         end
         e:set_be_flg(e:be_flg() & ~0x4000000)
         e:set_shadow(0)
@@ -855,8 +861,150 @@ local function mouth(e)
     end
 end
 
--- `funcs_528938`, by `Routine_1` (3 isn't ported).
-local STATES <const> = { [1] = crawl, [2] = jump, [4] = latch, [5] = slide, [6] = mouth, [7] = rest }
+-- State 3's twitches: the clips `Rnd & 7` picks.
+local TWITCHES <const> = { [0] = 4, 4, 5, 4, 5, 5, 4, 5 }
+
+-- Parts 5 to 9, which show while it twitches in its host.
+local TWITCH_PARTS <const> = 0x3E0
+
+-- Where it sits on `enemy_work[0]`'s part 0 (`ApplyMatrixSV` of the point
+-- plus the part's place), facing as the host does.
+local function ride_on(e, x, y, z)
+    local px, py, pz = e:work0_point(0, x, y, z)
+    if px then
+        e:set_pos(px, py, pz)
+    end
+    local angle = e:work0_angle()
+    if angle then
+        e:set_angle(angle)
+    end
+end
+
+-- `FUN_00474b80`, state 3: an embryo inside the body in `enemy_work[0]`
+-- (`Type` 1: Ben in room 301). It waits hidden on clip 4 until the scene's
+-- `Sce_free0` bit 0, then sets its host's routines to 8, 0, 0 (Ben's death,
+-- `Spl_sp44_00`) and twitches on its host's part 0, a clip `Rnd` picks
+-- every `Rnd & 7` + 8 ticks with a drop of blood (kind 0, row 1) at its
+-- part 4. When the host's death lets it out (`Routine_2` 5) it shows,
+-- bleeds (kind 0, row 2), climbs out on clip 6 by its speeds, leaps (clip
+-- 3, kind 0 rows 1 and 0) and falls to `Ground`, then crawls on clip 0 to
+-- the point in `Sce_free0` and `Sce_free1`, along its facing of six ticks
+-- ago, its speed surging every ten ticks.
+local function ride(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:clip(4, 0, 7)
+        e:set_routine(2, 1)
+        e:set_timer(0, 5)
+        sub = 1
+    end
+    if sub == 1 then
+        e:joint(0x200)
+        if e:sce_free(0) & 1 ~= 0 then
+            e:set_work0_routines(8, 0, 0)
+            e:set_routine(2, 2)
+            e:set_hidden_parts(e:hidden_parts() & ~TWITCH_PARTS)
+        end
+    elseif sub == 2 then
+        local was = e:timer(0)
+        e:set_timer(0, was - 1)
+        if was == 0 then
+            e:set_hokan(7)
+            e:set_move_no(TWITCHES[e:rnd() & 7])
+            e:set_timer(0, (e:rnd() & 7) + 8)
+            e:effect(0, 1, 0x7D0, i16(e:angle()), 4, 0, 0, 0)
+        end
+        e:joint(0x200)
+        ride_on(e, 0, -400, -200)
+    elseif sub == 3 then
+        e:set_hidden_parts(e:hidden_parts() | TWITCH_PARTS)
+        e:set_routine(2, 4)
+        e:clip(0, 0, 0)
+        e:joint(0x200)
+    elseif sub >= 5 and sub <= 7 then
+        if sub == 5 then
+            e:set_routine(2, 6)
+            e:clip(6, 0, 7)
+            e:set_timer(0, 0)
+            e:set_timer(1, 0)
+            e:set_hidden_parts(e:hidden_parts() & ~0x3FF)
+            e:effect(0, 2, 0xFA0, i16(e:angle()), 0, 0, 0, 0)
+            sub = 6
+        end
+        if sub == 6 then
+            e:spd()
+            if e:joint(0x200) then
+                e:clip(0xE, 0, 7)
+                e:set_routine(2, 8)
+            end
+            local sx, sy = e:speed()
+            e:set_timer(0, e:timer(0) + sx)
+            e:set_timer(1, e:timer(1) + sy)
+        else
+            e:joint(0x200)
+        end
+        ride_on(e, i16(e:timer(0) + 100), i16(e:timer(1)), -100)
+    elseif sub >= 8 and sub <= 9 then
+        if sub == 8 then
+            e:set_speed(300, 100, 0)
+            e:set_timer(0, 0)
+            e:set_routine(2, 9)
+            e:clip(3, 0, 7)
+            local dir = i16(e:angle())
+            e:effect(0, 1, 0xFA0, dir, 0, 0, 0, 0)
+            e:effect(0, 0, 0x1388, dir, 0, 0, 0, 0)
+        end
+        e:joint(0x200)
+        e:add_speed_xyz()
+        local sx, sy, sz = e:speed()
+        local count = e:timer(0)
+        e:set_speed(sx, i16(sy + count * 0xF), sz)
+        e:set_timer(0, count + 1)
+        local ground = i16(e:var(GROUND))
+        local _, y = e:pos()
+        if ground < y then
+            e:set_pos_y(ground)
+            e:set_routine(2, 10)
+        end
+    elseif sub >= 10 and sub <= 11 then
+        if sub == 10 then
+            e:clip(0, 0, 0xF)
+            e:set_routine(2, 11)
+            e:set_speed(0x50, 0, 0)
+            e:set_timer(1, 0)
+            e:set_timer(2, 0)
+            e:set_timer(0, (e:rnd() & 0x1F) + 0x14)
+        end
+        e:goto_point(i16(e:sce_free(0)), i16(e:sce_free(1)), 0x10)
+        local speed = speed_x(e)
+        if speed < 0x3C then
+            speed = 0x3C
+        end
+        if speed > 0x96 then
+            speed = speed - 0x1E
+        end
+        local count = e:timer(2)
+        e:set_timer(2, count - 1)
+        if count == 0 then
+            e:set_timer(2, 10)
+            e:set_timer(3, 5)
+        end
+        local surge = i8(e:timer(2))
+        if i8(e:timer(3)) < surge then
+            speed = speed + surge * 4
+        else
+            speed = speed - 0x28
+        end
+        set_speed_x(e, speed)
+        player_turn(e, 0x10)
+        local dx, _, dz = e:rot_apply(0, e:var(HISTORY), 0, speed_x(e), 0, 0)
+        e:joint(0x100)
+        e:add_pos(dx, 0, dz)
+    end
+end
+
+-- `funcs_528938`, by `Routine_1`.
+local STATES <const> = { [1] = crawl, [2] = jump, [3] = ride, [4] = latch, [5] = slide, [6] = mouth, [7] = rest }
 
 -- `FUN_00474660`: the pre, then the state of `Routine_1` as the pre left it.
 local function move(e)

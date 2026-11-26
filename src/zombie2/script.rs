@@ -364,6 +364,17 @@ impl UserData for Api {
                 Ok(())
             },
         );
+        // `nOba`: 0 leaves `Atd[0]` where it was (`Oba_set_ofs` writes no
+        // box), and gives the others no box of this body. Where it was is
+        // the work's memory, which arklay doesn't keep: it is put where
+        // `Oba_set_ofs` would put it now.
+        methods.add_method_mut("set_oba_count", |_, e, count: u8| {
+            let em = e.em();
+            let ahead = em.atd_ahead();
+            let pos = em.mover.player.pos;
+            em.z.set_oba_count(count, pos, ahead);
+            Ok(())
+        });
         methods.add_method_mut("clear_back_atd", |_, e, ()| {
             e.l()?.back = None;
             Ok(())
@@ -1734,6 +1745,36 @@ impl UserData for Api {
             }
             Ok(())
         });
+        // A point on `enemy_work[0]`'s part `part`, as its last draw left it:
+        // `ApplyMatrixSV` of the point (in shorts) plus the part's place. Nils
+        // when there's no such part or no view of the work.
+        methods.add_method_mut(
+            "work0_point",
+            |_, e, (part, x, y, z): (usize, i16, i16, i16)| {
+                let world = &*e.em().world;
+                let matrix = world
+                    .work0
+                    .as_ref()
+                    .and_then(|work0| work0.parts.get(part).copied().flatten());
+                let Some(matrix) = matrix else {
+                    return Ok((None, None, None));
+                };
+                let [x, y, z] = super::point_on(&matrix, [x, y, z]);
+                Ok((Some(x), Some(y), Some(z)))
+            },
+        );
+        // `enemy_work[0]`'s `Cdir_y`.
+        methods.add_method_mut("work0_angle", |_, e, ()| {
+            Ok(e.em().world.work0.as_ref().map(|work0| work0.angle))
+        });
+        // `enemy_work[0]`'s `Routine_0` to `Routine_2`, for after this tick.
+        methods.add_method_mut(
+            "set_work0_routines",
+            |_, e, (zero, one, two): (u8, u8, u8)| {
+                e.em().world.work0_routines = Some([zero, one, two]);
+                Ok(())
+            },
+        );
         // `ApplyMatrixSV` of a point on the parent's part `part`, as drawn.
         methods.add_method_mut(
             "parent_apply",
@@ -4025,6 +4066,8 @@ mod tests {
         w.spd = SPEED or w.spd
         w.move_no, w.move_cnt, w.hokan, w.xz, w.hidden, w.shadow = 0, 0, 0, 0, HIDDEN or 0, -1
         w.rot_by = -1
+        w.oba = -1
+        function e:set_oba_count(n) w.oba = n end
         function e:hidden_parts() return w.hidden end
         function e:parent_apply(part, x, y, z) return x, y, z end
         function e:parent_part(part) return 0, 0, 0 end
@@ -4107,13 +4150,13 @@ mod tests {
                  pos_y = w.pos[2], effects = w.bloods, squash_effects = w.blown,
                  died = w.died, move_no = w.move_no, move_cnt = w.move_cnt,
                  hokan = w.hokan, frame = w.frame, clips = #w.clips, xz = w.xz,
-                 hidden = w.hidden, shadow = w.shadow, rot_by = w.rot_by }}"
+                 hidden = w.hidden, shadow = w.shadow, rot_by = w.rot_by, oba = w.oba }}"
         ))
         .eval::<mlua::Table>()
         .map(|table| {
             let fields = "r0 r1 r2 r3 life be kind angle spd spd_y timer0 timer1 timer2 \
                 timer3 drawn h0 h5 rgb pos_x pos_y effects squash_effects died move_no \
-                move_cnt hokan frame clips xz hidden shadow rot_by"
+                move_cnt hokan frame clips xz hidden shadow rot_by oba"
                 .split_whitespace()
                 .map(|name| (name.to_string(), table.get::<i64>(name).unwrap()))
                 .collect();
@@ -4165,17 +4208,23 @@ mod tests {
 
     /// `FUN_004742e0`: a free embryo (`Type` 3) draws its life twice and
     /// crawls; the room's template (`Type` 0) draws once, hides and does
-    /// nothing after.
+    /// nothing after. The init gives every embryo `nOba` 1, and then the
+    /// template and the rider in a host (`Type` 1) 0, so a slot's next
+    /// embryo doesn't keep the last one's 0.
     #[test]
     fn an_embryos_init() {
         let embryo = run_embryo(3, &[1, 0], 1, "");
         assert_eq!(routines(&embryo), (1, 1, 0, 0));
+        assert_eq!(embryo.get("oba"), 1);
+        assert_eq!(run_embryo(2, &[1], 1, "").get("oba"), 1);
+        assert_eq!(run_embryo(1, &[1], 1, "").get("oba"), 0);
         assert_eq!((embryo.get("life"), embryo.get("kind")), (2, 0x2003));
         assert_eq!(embryo.get("be") & 0x440_0002, 0x440_0002);
         assert_eq!((embryo.get("spd"), embryo.get("drawn")), (0x50, 2));
         assert_eq!((embryo.get("shadow"), embryo.get("rgb")), (400, 0x80_8080));
         let template = run_embryo(0, &[1], 1, "");
         assert_eq!(routines(&template), (1, 0, 0, 0));
+        assert_eq!(template.get("oba"), 0);
         assert_eq!((template.get("life"), template.get("kind")), (2, 0x6000));
         assert_eq!(template.get("be") & 0x400_0000, 0);
         assert_eq!((template.get("hidden"), template.get("shadow")), (0x3FF, 0));
@@ -8747,6 +8796,162 @@ mod tests {
             assert!(log.is_empty());
             let state: (i64, i64, i64) = eval(&lua, "return w.drawn, w.vars[1], w.hidden");
             assert_eq!(state, (0, 4, 1 << 0x12));
+        }
+    }
+
+    /// The G embryo inside a host (`Type` 1, state 3, `FUN_00474b80`).
+    mod embryo_ride {
+        use super::smg_flame_tyrant_ivy::{eval, run};
+
+        /// The embryo on the stub, `Sce_free0` in `w.free`, its host's part 0
+        /// at `(1000, -500, 2000)` unturned and facing 0x300.
+        fn embryo() -> String {
+            format!(
+                "w.hidden = w.hidden or 0x3FF
+                 function e:sce_free(i) return i == 0 and (w.free or 0) or 0 end
+                 function e:joint() return w.ended or false end
+                 function e:hidden_parts() return w.hidden end
+                 function e:set_hidden_parts(v) w.hidden = v end
+                 function e:work0_point(part, x, y, z) return 1000 + x, -500 + y, 2000 + z end
+                 function e:work0_angle() return 0x300 end
+                 function e:angle() return w.angle or 0 end
+                 function e:set_angle(v) w.angle = v end
+                 function e:set_pos(x, y, z) w.pos = {{ x, y, z }} end
+                 function e:speed() return w.sx or 0, w.sy or 0, w.sz or 0 end
+                 function e:set_speed(x, y, z) w.sx, w.sy, w.sz = x, y, z end
+                 function e:pos() local p = w.pos or {{ 0, 0, 0 }} return p[1], p[2], p[3] end
+                 function e:set_pos_y(y) w.pos[2] = y end
+                 {}",
+                include_str!("../../games/re2/enemy/27/enemy.lua")
+            )
+        }
+
+        /// Hidden on clip 4 until the scene's bit 0, which starts the host's
+        /// death (its routines 8, 0, 0) and shows parts 5 to 9.
+        #[test]
+        fn the_embryo_waits_in_its_host_for_the_scene() {
+            let setup = "w.r = { [0] = 1, 3, 0, 0 }";
+            let (lua, log) = run(&embryo(), setup, 2, &["clip", "set_work0"]);
+            assert_eq!(log, ["clip(4,0,7)"]);
+            assert_eq!(
+                eval::<(i64, i64)>(&lua, "return w.r[2], w.timers[0]"),
+                (1, 5)
+            );
+            let (lua, log) = run(&embryo(), &format!("{setup} w.free = 1"), 1, &["set_work0"]);
+            assert_eq!(log, ["set_work0_routines(8,0,0)"]);
+            assert_eq!(
+                eval::<(i64, i64)>(&lua, "return w.r[2], w.hidden"),
+                (2, 0x1F)
+            );
+        }
+
+        /// It twitches on its host's part 0, 400 up and 200 back, facing as
+        /// the host does; when `Timer0` runs out a clip from `Rnd & 7` (4 or
+        /// 5), `Rnd & 7` + 8 ticks more, and a drop of blood (kind 0, row 1,
+        /// 0x7d0) at its part 4.
+        #[test]
+        fn the_embryo_twitches_on_its_hosts_part_0() {
+            let setup = "w.r = { [0] = 1, 3, 2, 0 } w.draws = { 5, 3 }";
+            let (lua, log) = run(&embryo(), setup, 1, &["set_move_no", "effect"]);
+            assert_eq!(log, ["set_move_no(5)", "effect(0,1,2000,0,4,0,0,0)"]);
+            let state: (i64, i64, i64, i64, i64) = eval(
+                &lua,
+                "return w.timers[0], w.pos[1], w.pos[2], w.pos[3], w.angle",
+            );
+            assert_eq!(state, (11, 1000, -900, 1800, 0x300));
+            let (lua, log) = run(
+                &embryo(),
+                "w.r = { [0] = 1, 3, 2, 0 } w.timers[0] = 4",
+                1,
+                &["effect"],
+            );
+            assert!(log.is_empty());
+            assert_eq!(eval::<i64>(&lua, "return w.timers[0]"), 3);
+        }
+
+        /// Let out (`Routine_2` 5), it shows whole, bleeds (kind 0, row 2) and
+        /// climbs out on clip 6.
+        #[test]
+        fn the_embryo_comes_out_on_clip_6() {
+            let setup = "w.r = { [0] = 1, 3, 5, 0 }";
+            let (lua, log) = run(&embryo(), setup, 1, &["clip", "effect"]);
+            assert_eq!(log, ["clip(6,0,7)", "effect(0,2,4000,0,0,0,0,0)"]);
+            assert_eq!(eval::<(i64, i64)>(&lua, "return w.r[2], w.hidden"), (6, 0));
+        }
+
+        /// Coming out (case 6) its `Timer0` and `Timer1` add up its speeds
+        /// (`Spd_get`), and it sits at (`Timer0` + 100, `Timer1`, -100) on its
+        /// host's part 0; the clip's end goes on to clip 0xe and case 8.
+        /// Case 7 sits there without adding.
+        #[test]
+        fn the_embryo_climbs_out_by_its_speeds() {
+            let setup =
+                "w.r = { [0] = 1, 3, 6, 0 } w.timers[0] = 10 w.timers[1] = 20 w.sx = 5 w.sy = -3";
+            let (lua, log) = run(&embryo(), setup, 1, &["clip"]);
+            assert!(log.is_empty());
+            let state: (i64, i64, i64, i64, i64, i64) = eval(
+                &lua,
+                "return w.timers[0], w.timers[1], w.pos[1], w.pos[2], w.pos[3], w.angle",
+            );
+            assert_eq!(state, (15, 17, 1115, -483, 1900, 0x300));
+            let (lua, log) = run(&embryo(), &format!("{setup} w.ended = true"), 1, &["clip"]);
+            assert_eq!(log, ["clip(14,0,7)"]);
+            assert_eq!(eval::<i64>(&lua, "return w.r[2]"), 8);
+            let setup = "w.r = { [0] = 1, 3, 7, 0 } w.timers[0] = 10 w.timers[1] = 20 w.sx = 5";
+            let (lua, _) = run(&embryo(), setup, 1, &[]);
+            let state: (i64, i64, i64) = eval(&lua, "return w.timers[0], w.pos[1], w.pos[2]");
+            assert_eq!(state, (10, 1110, -480));
+        }
+
+        /// The leap (case 8): speeds 300 and 100, clip 3, blood (kind 0, rows 1
+        /// and 0) at its part 0, then the fall (case 9) at once: `Spd_y` grows
+        /// by `Timer0 * 0xf` a tick, and below `Ground` it lands there (case 10).
+        #[test]
+        fn the_embryo_leaps_and_falls_to_its_ground() {
+            let setup = "w.r = { [0] = 1, 3, 8, 0 } w.pos = { 0, -1000, 0 } w.vars[30] = 0";
+            let (lua, log) = run(&embryo(), setup, 1, &["clip", "effect"]);
+            assert_eq!(
+                log,
+                [
+                    "clip(3,0,7)",
+                    "effect(0,1,4000,0,0,0,0,0)",
+                    "effect(0,0,5000,0,0,0,0,0)"
+                ]
+            );
+            let state: (i64, i64, i64, i64) = eval(&lua, "return w.r[2], w.sx, w.sy, w.timers[0]");
+            assert_eq!(state, (9, 300, 100, 1));
+            let setup = "w.r = { [0] = 1, 3, 9, 0 } w.sx = 300 w.sy = 200 w.timers[0] = 4
+                         w.pos = { 0, 0, 0 } w.vars[30] = -100";
+            let (lua, _) = run(&embryo(), setup, 1, &[]);
+            let state: (i64, i64, i64, i64) =
+                eval(&lua, "return w.r[2], w.sy, w.timers[0], w.pos[2]");
+            assert_eq!(state, (10, 260, 5, -100));
+            let (lua, _) = run(&embryo(), &setup.replace("-100", "100"), 1, &[]);
+            assert_eq!(eval::<i64>(&lua, "return w.r[2]"), 9);
+        }
+
+        /// The crawl to the scene's point (cases 10 and 11): clip 0, `Spd_x`
+        /// 0x50 and `Timer0` `(Rnd & 0x1f) + 0x14`; each tick `Spd_x` is kept
+        /// from 0x3c and over 0x96 drops by 0x1e, and every tenth tick
+        /// (`Timer2` round to 10, `Timer3` 5) it surges by `Timer2 * 4` while
+        /// `Timer3` is under `Timer2`, else slows by 0x28.
+        #[test]
+        fn the_embryo_crawls_to_the_scenes_point_in_surges() {
+            let setup = "w.r = { [0] = 1, 3, 10, 0 } w.draws = { 5 }";
+            let (lua, log) = run(&embryo(), setup, 1, &["clip", "goto_point"]);
+            assert_eq!(log, ["clip(0,0,15)", "goto_point(0,0,16)"]);
+            let state: (i64, i64, i64, i64, i64) = eval(
+                &lua,
+                "return w.r[2], w.timers[0], w.timers[2], w.timers[3], w.sx",
+            );
+            assert_eq!(state, (11, 25, 10, 5, 0x50 + 40));
+            for (speed, timer3, after) in [(0x10, 5, 20), (0xA0, 0, 138)] {
+                let setup = format!(
+                    "w.r = {{ [0] = 1, 3, 11, 0 }} w.sx = {speed} w.timers[2] = 3 w.timers[3] = {timer3}"
+                );
+                let (lua, _) = run(&embryo(), &setup, 1, &[]);
+                assert_eq!(eval::<i64>(&lua, "return w.sx"), after, "{speed:#x}");
+            }
         }
     }
 }

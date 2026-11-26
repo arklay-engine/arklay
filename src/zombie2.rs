@@ -626,6 +626,9 @@ pub struct Zombie {
     /// `Floor` at `sce_em_set`.
     pub floor: u8,
     pub atd: Atd,
+    /// `nOba` is 0: `Oba_set_ofs` leaves `Atd[0]` where it was, so
+    /// `Sca_ck_em` tests it there, and the others have no box of it.
+    pub no_oba: bool,
     /// `Model_type`.
     pub model_type: u8,
     /// `Em10_Init`'s skin, from 0: `Texture_Move`'s page.
@@ -743,6 +746,21 @@ impl Zombie {
             }
             self.drawn[part] = Some(matrix);
         }
+    }
+
+    /// `nOba`: 0 leaves `Atd[0]` where it was. Where it was is the work's
+    /// memory, which arklay doesn't keep: as `nOba` turns 0 it is put where
+    /// `Oba_set_ofs` would put it for a body at `pos`, `ahead` its `Ofs_x`
+    /// turned, and a later 0 leaves it.
+    pub(crate) fn set_oba_count(&mut self, count: u8, pos: [i32; 3], [ahead_x, ahead_z]: [i32; 2]) {
+        if count == 0 && !self.no_oba {
+            self.atd.at = [
+                pos[0] + ahead_x,
+                pos[1] + i32::from(self.atd.ofs_y),
+                pos[2] + ahead_z,
+            ];
+        }
+        self.no_oba = count == 0;
     }
 
     /// `Joint_trans2` on [`Self::hung`]: the part's `Workm` is the part it
@@ -1017,6 +1035,15 @@ pub struct ParentView {
     pub be_flg: u32,
 }
 
+/// What a script reads of `enemy_work[0]`, whoever is in it (a scene
+/// character, such as Ben, or an enemy).
+#[derive(Debug, Clone, Default)]
+pub struct Work0View {
+    pub(crate) parts: Vec<Option<player2::Matrix>>,
+    /// `Cdir_y`.
+    pub angle: u16,
+}
+
 /// A work `Set_enemy_work` gave a script: its slot, and what the script set
 /// in it before its first run.
 #[derive(Debug, Clone)]
@@ -1114,6 +1141,11 @@ pub struct World<'a> {
     /// The `Workm` of the part [`Zombie::hung`] hangs on, when it is
     /// another work's, as this frame draws it.
     pub(crate) hung_on: Option<player2::Matrix>,
+    /// `enemy_work[0]` for the G embryo, which rides on it (`FUN_00474b80`):
+    /// its parts as the last draw left them and its facing.
+    pub work0: Option<Work0View>,
+    /// `Routine_0` to `Routine_2` a script wrote in `enemy_work[0]`.
+    pub work0_routines: Option<[u8; 3]>,
     /// The works `Set_enemy_work` walks, in `player_work`'s order of the enemy
     /// slots: each one's id and whether it's in play.
     pub works: Vec<(usize, Option<u8>, bool)>,
@@ -1249,6 +1281,25 @@ impl World<'_> {
         entry.1 = Some(id);
         entry.2 = true;
         Some((entry.0, false))
+    }
+}
+
+/// `ApplyMatrixSV` of `point` (shorts) on `matrix`'s turn, plus its place:
+/// where the G embryo sits on its host's part.
+pub(crate) fn point_on(matrix: &player2::Matrix, point: [i16; 3]) -> [i32; 3] {
+    let mut turn = *matrix;
+    turn.t = [0; 3];
+    let turned = crate::esp2::apply_matrix(&turn, point);
+    std::array::from_fn(|axis| i32::from(turned[axis]) + matrix.t[axis])
+}
+
+/// Where `Sca_ck_em` tests a body at `pos`: `Atd[0]`'s `X` and `Z`, which
+/// `Oba_set_ofs` puts `ahead` of it, or where they were when `nOba` is 0.
+fn sca_point(z: &Zombie, pos: [i32; 3], [ahead_x, ahead_z]: [i32; 2]) -> [i32; 2] {
+    if z.no_oba {
+        [z.atd.at[0], z.atd.at[2]]
+    } else {
+        [pos[0] + ahead_x, pos[2] + ahead_z]
     }
 }
 
@@ -2093,6 +2144,10 @@ impl Em<'_, '_, '_> {
     fn oba_ck(&mut self, player: bool) {
         self.oba_set_ofs();
         self.z.at_em_no = NO_BODY;
+        // `Oba_ck_hit` loops over this body's `nOba` boxes too: none, no push.
+        if self.z.no_oba {
+            return;
+        }
         let old = Some(self.old_pos);
         for other in self.world.bodies {
             let body = &mut self.mover.player.pos;
@@ -2111,6 +2166,9 @@ impl Em<'_, '_, '_> {
 
     /// `Oba_set_ofs`: `Atd[0]` placed on the body.
     fn oba_set_ofs(&mut self) {
+        if self.z.no_oba {
+            return;
+        }
         let pos = self.mover.player.pos;
         let [ahead_x, ahead_z] = self.atd_ahead();
         self.z.atd.at = [
@@ -2149,7 +2207,8 @@ impl Em<'_, '_, '_> {
             *self.be_flg &= !BE_PUSHED_Z;
             let [old_x, old_z] = body.collision_mirror;
             let prev = [old_x, body.pos[1], old_z];
-            let at = [body.pos[0] + ahead_x, body.pos[1], body.pos[2] + ahead_z];
+            let [at_x, at_z] = sca_point(self.z, body.pos, [ahead_x, ahead_z]);
+            let at = [at_x, body.pos[1], at_z];
             let floor = self.z.floor;
             if keeps_hit {
                 self.z.sca_hit =
@@ -2187,7 +2246,7 @@ impl Em<'_, '_, '_> {
             body.pos[2] += dz;
             self.z.sca_info = u32::from(resolved.hit);
         }
-        body.collision_mirror = [body.pos[0] + ahead_x, body.pos[2] + ahead_z];
+        body.collision_mirror = sca_point(self.z, body.pos, [ahead_x, ahead_z]);
     }
 
     /// `Root_ck`, toward the player.
@@ -3385,6 +3444,89 @@ mod tests {
         assert_eq!(
             effects.live_bases(),
             [[-25000, -1200 - 0xFB + 0x70, -12000 - 0xF6 - 0x10]]
+        );
+    }
+
+    /// The embryo's point on its host's part: turned by the part's matrix
+    /// (a quarter turn about y here) and added to its place.
+    #[test]
+    fn the_embryo_sits_on_its_hosts_part_turned() {
+        let matrix = player2::Matrix {
+            m: player2::rot_matrix([0, 0x400, 0]),
+            t: [1000, -500, 2000],
+        };
+        let [x, y, z] = point_on(&matrix, [0, -400, -200]);
+        assert_eq!(y, -900);
+        assert_ne!([x, z], [1000, 1800], "turned, not just added");
+        assert_eq!((x - 1000).abs() + (z - 2000).abs(), 200);
+    }
+
+    /// `nOba` 0 pins `Atd[0]` where `Oba_set_ofs` would put it as it turns
+    /// 0 (with `Ofs_y`), and a second 0 or the body's moves leave it; 1
+    /// lets `Oba_set_ofs` move it again.
+    #[test]
+    fn oba_count_0_pins_atd_where_it_turns_0() {
+        let mut zombie = Zombie::default();
+        zombie.atd.ofs_y = -200;
+        zombie.set_oba_count(0, [-24000, 0, -12000], [10, -20]);
+        assert_eq!(zombie.atd.at, [-23990, -200, -12020]);
+        assert!(zombie.no_oba);
+        zombie.set_oba_count(0, [0, 0, 0], [0, 0]);
+        assert_eq!(
+            zombie.atd.at,
+            [-23990, -200, -12020],
+            "a second 0 leaves it"
+        );
+        zombie.set_oba_count(1, [0, 0, 0], [0, 0]);
+        assert!(!zombie.no_oba);
+    }
+
+    /// `Sca_ck_em` tests `Atd[0]`: on the body (and `Ofs_x` ahead of it)
+    /// as `Oba_set_ofs` puts it, or, with `nOba` 0, wherever it last was,
+    /// however far the body has gone: room 301's embryo crawls through the
+    /// north wall that would stop it at its own place.
+    #[test]
+    fn sca_ck_em_tests_atd_where_oba_set_ofs_left_it() {
+        let mut zombie = Zombie::default();
+        zombie.atd.at = [0, -200, 0];
+        let body = [-25124, 0, -15469];
+        assert_eq!(sca_point(&zombie, body, [30, -40]), [-25094, -15509]);
+        zombie.no_oba = true;
+        assert_eq!(sca_point(&zombie, body, [30, -40]), [0, 0]);
+        // The init's place in room 301, -24000, -12000: out of the wall.
+        let wall = crate::state::Sca {
+            cell_x: -22100,
+            cell_z: -21401,
+            records: vec![crate::state::ScaRect {
+                x: -29071,
+                z: -15427,
+                width: 20290,
+                depth: 2550,
+                id: 0xFC80,
+                kind: 0x90C3,
+                floor: 0xF,
+            }],
+            ..crate::state::Sca::default()
+        };
+        let pushed = |[x, z]: [i32; 2], prev: [i32; 2]| {
+            crate::sca::resolve_with_offset(
+                &wall,
+                EMBRYO_MASK,
+                [prev[0], 0, prev[1]],
+                [x, 0, z],
+                200,
+                0,
+                [0, 0],
+            )
+            .pos
+        };
+        assert_eq!(
+            pushed([-25124, -15469], [-25116, -15634]),
+            [-25124, 0, -15628]
+        );
+        assert_eq!(
+            pushed([-24000, -12000], [-24000, -12000]),
+            [-24000, 0, -12000]
         );
     }
 

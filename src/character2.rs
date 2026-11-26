@@ -55,6 +55,9 @@ pub fn tick(
         }
         let model = npc_models.get(pack, character.model, scenario);
         if let Some(mut zombie) = character.zombie.take() {
+            // Its parts as the last frame drew them, for a work that reads
+            // them through its `pSin_parts_ptr` after this one's tick.
+            character.work.drawn_parts.clone_from(&zombie.drawn);
             let mut sent = Vec::new();
             if let Some(model) = model.filter(|_| moves(&character)) {
                 sent = run_zombie(
@@ -79,7 +82,13 @@ pub fn tick(
             let held = character.held_bank.clone();
             let tick = tick_of(room, game, &character, slot, &model, held.as_deref());
             let old = character.body.pos;
-            let arrived = spl(game, &mut character, &tick);
+            character.work.drawn_parts.clone_from(&character.work.parts);
+            let arrived = if player2::in_special(&character.work) {
+                spl_sp_move(game, &mut character, &tick, slot);
+                None
+            } else {
+                spl(game, &mut character, &tick)
+            };
             if let Some(flag) = arrived {
                 game.re2.raise_room_flag(flag);
             }
@@ -161,6 +170,8 @@ pub(crate) fn re2_slot_bodies(re2: &crate::scd2::host::Re2State) -> Vec<crate::z
     in_play
         .filter_map(|(slot, other)| Some((slot, other.as_deref()?)))
         .filter(|(_, other)| other.be_flg & 1 != 0)
+        // `nOba` 0: no box to push the others out of.
+        .filter(|(_, other)| !other.zombie.as_ref().is_some_and(|z| z.no_oba))
         .flat_map(|(slot, other)| {
             let atd = body_atd(other);
             // A licker has a second box for its head and, on a wall or
@@ -886,6 +897,16 @@ fn run_zombie(
     let hung_on = zombie
         .hung
         .and_then(|hung| hung_on(&re2.characters.0, slot, hung));
+    // The G embryo rides on `enemy_work[0]` (Ben in 301): its parts as the
+    // last frame's `Joint_trans2` left them (Ben has moved this tick), and
+    // its facing now.
+    let work0 = (character.id == crate::zombie2::EMBRYO_ID && slot != 0)
+        .then(|| re2.characters.0.first().and_then(Option::as_deref))
+        .flatten()
+        .map(|other| crate::zombie2::Work0View {
+            parts: other.work.drawn_parts.clone(),
+            angle: other.body.angle,
+        });
     let works = (0..SPLAYER_SLOT)
         .map(|other| {
             if other == slot {
@@ -945,6 +966,8 @@ fn run_zombie(
         lua,
         parent,
         hung_on,
+        work0,
+        work0_routines: None,
         works,
         spawns: Vec::new(),
         freed: Vec::new(),
@@ -980,6 +1003,7 @@ fn run_zombie(
     let hidden_objects = std::mem::take(&mut world.hidden_objects);
     let knocks = std::mem::take(&mut world.knocks);
     let kin = std::mem::take(&mut world.kin);
+    let work0_routines = world.work0_routines.take();
     if let Some(angle) = world.turn_player {
         re2.player.turn_to = Some(angle);
     }
@@ -1039,6 +1063,21 @@ fn run_zombie(
         if let Some(other) = re2.characters.0.get_mut(freed).and_then(Option::as_mut) {
             other.be_flg = 0;
             re2.enemies = re2.enemies.wrapping_sub(1);
+        }
+    }
+    if let Some(routines) = work0_routines {
+        // `enemy_work[0]`, which is this work when it runs in slot 0.
+        let work0 = if slot == 0 {
+            Some(&mut character.work)
+        } else {
+            re2.characters
+                .0
+                .first_mut()
+                .and_then(Option::as_mut)
+                .map(|other| &mut other.work)
+        };
+        if let Some(work0) = work0 {
+            work0.routine[..3].copy_from_slice(&routines);
         }
     }
     let mut run_now = Vec::new();
@@ -1631,6 +1670,156 @@ fn hung_on(
         Some(z) => z.drawn.get(part).copied().flatten(),
         None => other.work.parts.get(part).copied().flatten(),
     }
+}
+
+/// Ben's ids, whose `Spl_Sp_Move` is his death in room 301: 0x44 and the
+/// other Ben, 0x46, which `_Spl`'s tables run alike.
+const BEN: u8 = 0x44;
+const BEN_ALT: u8 = 0x46;
+
+/// `Spl_Sp_Move` (`0x4f6e50`, `_Spl`'s `Routine_0` 8): a character's own
+/// scene, from the table at `0x53d6e8` by `Id` and `Routine_1`. Only `Routine_1`
+/// 0 has entries: 0x40's (`0x4f6e70`, not ported) and Ben's, 0x44's and
+/// 0x46's (`Spl_sp44_00`). Anyone else stands still.
+fn spl_sp_move(game: &mut GameState, character: &mut Character, tick: &Tick<'_>, slot: usize) {
+    if character.work.routine[1] != 0 || !matches!(character.id, BEN | BEN_ALT) {
+        return;
+    }
+    let effects = player2::spl_special(&mut character.work, &mut character.body, tick, |mover| {
+        spl_sp44_00(mover)
+    });
+    let anchor = crate::esp2::Anchor {
+        body: crate::esp2::Body::Enemy(slot as u8),
+        part: 0,
+    };
+    for (kind, row, size, dir, matrix, point) in effects.calls {
+        game.re2
+            .effects
+            .call_on_part(kind, row, size, dir, anchor, matrix, point);
+    }
+    if effects.burst
+        && let Some(embryo) = game.re2.characters.0.get_mut(1).and_then(Option::as_mut)
+    {
+        embryo.work.routine[2] = 5;
+    }
+}
+
+/// What Ben's death did this tick: the `Esp_call`s on his part 0 (kind, row,
+/// size, direction, the part's `Workm` as the last draw left it, and the
+/// point on it), and whether it let the embryo out of him.
+#[derive(Debug, Default)]
+struct Sp44 {
+    calls: Vec<(u8, u8, u16, i16, player2::Matrix, [i16; 3])>,
+    burst: bool,
+}
+
+/// `Spl_sp44_00` (`0x4f7690`): Ben's death, which the G embryo in him starts
+/// (`FUN_00474b80` sets his routines to 8, 0, 0). Clip 0 plays once, through
+/// `Hokan_flg` 0xf, with his blood on part 0: two drops at the start, two
+/// every fourth frame below 0x2a further down his body each time (`Timer0`,
+/// `+0x158`), and kind 0 row 2 every fourth frame from 0x24 to 0x36; on
+/// frame 0x46 the embryo comes out (`enemy_work[1]`'s `Routine_2` 5). What
+/// the death does to his parts as drawn (part 15 shown, parts 0's and 15's
+/// swell, the textures' moves) isn't drawn.
+fn spl_sp44_00(mover: &mut player2::Mover<'_, '_>) -> Sp44 {
+    let mut out = Sp44::default();
+    let dir = mover.player.angle as i16;
+    let part0 = mover.work.workm(0);
+    let call = |out: &mut Sp44, row: u8, size: u16, dir: i16, point: [i16; 3]| {
+        if let Some(matrix) = part0 {
+            out.calls.push((0, row, size, dir, matrix, point));
+        }
+    };
+    let work = &mut *mover.work;
+    let step = work.routine[2];
+    if step == 0 {
+        // `+0x14c`'s dword: clip 0 from its start, `Hokan_flg` 0xf, of the
+        // room's bank (`pRoom_kan_t_ptr`, `Joint_move`'s).
+        work.bank = player2::Bank::Room;
+        work.move_no = 0;
+        work.move_cnt = 0;
+        work.hokan = 0xF;
+        work.routine[2] = 1;
+        call(&mut out, 0, 0x1770, dir, [200, -400, -200]);
+        call(
+            &mut out,
+            0,
+            0x1770,
+            dir.wrapping_add(0x800),
+            [0x96, -0x15E, -200],
+        );
+        work.timers[0] = 0;
+        work.timers[2] = 5;
+        work.sp_timer3 = 0;
+        work.sp_weight = 0x200;
+    }
+    match work.routine[2] {
+        1 => {
+            let frame = work.move_cnt;
+            if frame < 0x2A && frame & 3 == 0 {
+                let count = work.timers[0] as i16;
+                call(
+                    &mut out,
+                    1,
+                    0xBB8,
+                    dir,
+                    [
+                        200,
+                        count.wrapping_mul(0x1E).wrapping_sub(400),
+                        count.wrapping_mul(0xF).wrapping_sub(200),
+                    ],
+                );
+                call(
+                    &mut out,
+                    0,
+                    0x1388,
+                    dir.wrapping_add(0x800),
+                    [
+                        100,
+                        count.wrapping_mul(5).wrapping_sub(0x46).wrapping_mul(5),
+                        count.wrapping_mul(0xF).wrapping_sub(200),
+                    ],
+                );
+                work.timers[0] = count.wrapping_add(1) as u16;
+            }
+            // Below 0x2a part 0 shrinks by 0x50 while `Timer2` (a signed
+            // byte, 5 down to 0 and round) is under 4, else swells by 200;
+            // past 0x32 it swells by 200 to 0x1000, which sets `Timer3`.
+            if frame < 0x2A {
+                let count = work.timers[2] as u8 as i8;
+                work.sp_weight = work
+                    .sp_weight
+                    .wrapping_add(if count < 4 { -0x50 } else { 200 });
+                work.timers[2] = if count == 0 {
+                    5
+                } else {
+                    u16::from(count.wrapping_sub(1) as u8)
+                };
+            }
+            if frame > 0x32 && work.sp_timer3 == 0 {
+                work.sp_weight = work.sp_weight.wrapping_add(200);
+                if work.sp_weight > 0x1000 {
+                    work.sp_weight = 0x1000;
+                    work.sp_timer3 = 1;
+                }
+            }
+            if frame > 0x23 && frame < 0x37 && frame & 3 == 0 {
+                call(&mut out, 2, 0x1770, dir, [0; 3]);
+            }
+            if frame == 0x46 {
+                out.burst = true;
+            }
+            if mover.joint_move_late(0x100) {
+                mover.work.routine[2] += 1;
+            }
+        }
+        2 => {
+            work.timers[0] = 0x96;
+            work.routine[2] = 3;
+        }
+        _ => {}
+    }
+    out
 }
 
 /// `Game_loop` and `Em_init_move` start at `splayer_work`.
@@ -2869,6 +3058,144 @@ mod tests {
         }
     }
 
+    /// Ben in his death (`Spl_sp44_00`, `Routine_0` 8) on `frame` of clip 0
+    /// at `step`, with his part 0 drawn at (100, 200, 300) unturned.
+    fn ben_dying(step: u8, frame: u8) -> Character {
+        let mut ben = sherry(0);
+        ben.id = BEN;
+        ben.model = BEN;
+        ben.partner = None;
+        ben.work.routine = [player2::MODE_SPECIAL, 0, step, 0];
+        ben.work.move_cnt = frame;
+        ben.body.angle = 0x400;
+        ben.work.parts = vec![Some(player2::Matrix {
+            m: [[0x1000, 0, 0], [0, 0x1000, 0], [0, 0, 0x1000]],
+            t: [100, 200, 300],
+        })];
+        ben
+    }
+
+    /// `Spl_sp44_00`'s start: clip 0 from its start through `Hokan_flg` 0xf,
+    /// two drops of blood (kind 0, row 0, 0x1770) on part 0, the second
+    /// turned half round, and then the first frame's two (rows 1 and 0)
+    /// with `Timer0` 0.
+    #[test]
+    fn bens_death_starts_clip_0_with_his_blood() {
+        let mut ben = ben_dying(0, 9);
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        let out = player2::spl_special(&mut ben.work, &mut ben.body, &tick, spl_sp44_00);
+        let calls: Vec<_> = out
+            .calls
+            .iter()
+            .map(|&(kind, row, size, dir, _, point)| (kind, row, size, dir, point))
+            .collect();
+        assert_eq!(
+            calls,
+            [
+                (0, 0, 0x1770, 0x400, [200, -400, -200]),
+                (0, 0, 0x1770, 0xC00, [0x96, -0x15E, -200]),
+                (0, 1, 0xBB8, 0x400, [200, -400, -200]),
+                (0, 0, 0x1388, 0xC00, [100, -0x15E, -200]),
+            ]
+        );
+        assert_eq!((ben.work.move_no, ben.work.hokan), (0, 0xF));
+        assert_eq!(ben.work.timers[0], 1);
+        assert!(!out.burst);
+    }
+
+    /// On clip 0's frame 0x46 the embryo comes out of him: `enemy_work[1]`'s
+    /// `Routine_2` 5. Off the fourth frames he doesn't bleed, and from 0x24 to
+    /// 0x36 every fourth frame bleeds row 2 at part 0 itself.
+    #[test]
+    fn bens_death_lets_the_embryo_out_on_frame_0x46() {
+        let mut game = GameState::default();
+        game.re2.characters.0 = vec![None; 3];
+        let mut embryo = sherry(0);
+        embryo.id = crate::zombie2::EMBRYO_ID;
+        embryo.work.routine = [1, 3, 2, 0];
+        game.re2.characters.0[1] = Some(Box::new(embryo));
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        let mut ben = ben_dying(1, 0x45);
+        spl_sp_move(&mut game, &mut ben, &tick, 0);
+        let routine = |game: &GameState| game.re2.characters.0[1].as_ref().unwrap().work.routine[2];
+        assert_eq!(routine(&game), 2);
+        let mut ben = ben_dying(1, 0x46);
+        spl_sp_move(&mut game, &mut ben, &tick, 0);
+        assert_eq!(routine(&game), 5);
+        let mut ben = ben_dying(1, 0x28);
+        let out = player2::spl_special(&mut ben.work, &mut ben.body, &tick, spl_sp44_00);
+        let rows: Vec<u8> = out.calls.iter().map(|call| call.1).collect();
+        assert_eq!(rows, [1, 0, 2]);
+        let mut ben = ben_dying(1, 0x29);
+        let out = player2::spl_special(&mut ben.work, &mut ben.body, &tick, spl_sp44_00);
+        assert!(out.calls.is_empty());
+    }
+
+    /// `Spl_sp44_00`'s timers: step 0 sets `Timer2` 5 and `Timer3` 0 and
+    /// part 0's weight 0x200 on the room's bank; below frame 0x2a `Timer2`
+    /// counts down as a byte and round from 0 to 5, part 0 shrinking by 0x50
+    /// while it's under 4 and swelling by 200 from 4; past frame 0x32 it
+    /// swells by 200 until it passes 0x1000, which sets `Timer3`. Step 2
+    /// sets `Timer0` 0x96 and goes on to 3.
+    #[test]
+    fn bens_death_counts_its_timers_and_part_0s_weight() {
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        let mut ben = ben_dying(0, 0);
+        ben.work.bank = player2::Bank::Weapon;
+        player2::spl_special(&mut ben.work, &mut ben.body, &tick, spl_sp44_00);
+        assert_eq!(ben.work.bank, player2::Bank::Room);
+        // Step 0 falls into 1 on frame 0: `Timer2` 5 (swell), then 4.
+        assert_eq!((ben.work.timers[2], ben.work.sp_timer3), (4, 0));
+        assert_eq!(ben.work.sp_weight, 0x200 + 200);
+        let mut ben = ben_dying(1, 1);
+        ben.work.timers[2] = 3;
+        ben.work.sp_weight = 0x400;
+        player2::spl_special(&mut ben.work, &mut ben.body, &tick, spl_sp44_00);
+        assert_eq!((ben.work.timers[2], ben.work.sp_weight), (2, 0x400 - 0x50));
+        let mut ben = ben_dying(1, 1);
+        ben.work.timers[2] = 0;
+        player2::spl_special(&mut ben.work, &mut ben.body, &tick, spl_sp44_00);
+        assert_eq!(ben.work.timers[2], 5);
+        for (frame, weight, timer3) in [(0x32, 0xF80, 0), (0x33, 0xF00, 0), (0x33, 0xF80, 1)] {
+            let mut ben = ben_dying(1, frame);
+            ben.work.sp_weight = weight;
+            player2::spl_special(&mut ben.work, &mut ben.body, &tick, spl_sp44_00);
+            let swollen = if frame == 0x32 {
+                weight
+            } else {
+                (weight + 200).min(0x1000)
+            };
+            assert_eq!(
+                (ben.work.sp_weight, ben.work.sp_timer3),
+                (swollen, timer3),
+                "{frame:#x} {weight:#x}"
+            );
+        }
+        let mut ben = ben_dying(2, 0);
+        player2::spl_special(&mut ben.work, &mut ben.body, &tick, spl_sp44_00);
+        assert_eq!((ben.work.timers[0], ben.work.routine[2]), (0x96, 3));
+    }
+
+    /// `Spl_Sp_Move`'s table has Ben's death for ids 0x44 and 0x46, on
+    /// `Routine_1` 0 only; anyone else in it stands still.
+    #[test]
+    fn spl_sp_move_runs_ben_s_death_for_both_his_ids() {
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        for (id, one, runs) in [
+            (BEN, 0, true),
+            (BEN_ALT, 0, true),
+            (BEN, 1, false),
+            (0x41, 0, false),
+        ] {
+            let mut game = GameState::default();
+            let mut ben = ben_dying(0, 0);
+            ben.id = id;
+            ben.work.routine[1] = one;
+            spl_sp_move(&mut game, &mut ben, &tick, 0);
+            assert_eq!(ben.work.routine[2] != 0, runs, "{id:#x} {one}");
+        }
+    }
+
     #[test]
     fn a_partner_sherry_raises_the_partner_bit_and_keeps_routine_1() {
         let mut game = GameState::default();
@@ -2895,6 +3222,21 @@ mod tests {
             model: 0x41,
             ..sherry(kind)
         }
+    }
+
+    /// `Oba_ck_hit` and `Oba_ck_esp` take `nOba` boxes of each body: one
+    /// with none (room 301's embryo in Ben) has nothing to push against.
+    #[test]
+    fn a_body_with_no_oba_has_no_box_for_the_others() {
+        let mut game = GameState::default();
+        let mut embryo = sherry(0);
+        embryo.id = crate::zombie2::EMBRYO_ID;
+        embryo.zombie = Some(Default::default());
+        game.re2.characters.0 = vec![None, Some(Box::new(embryo))];
+        assert_eq!(slot_bodies(&game).len(), 1);
+        let embryo = game.re2.characters.0[1].as_deref_mut().unwrap();
+        embryo.zombie.as_mut().unwrap().no_oba = true;
+        assert!(slot_bodies(&game).is_empty());
     }
 
     /// `Sca_ck_em` leaves a character with `Be_flg`'s 8 where it stands:
